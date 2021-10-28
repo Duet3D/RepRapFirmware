@@ -98,7 +98,7 @@ public:
 	uint32_t GetSpindleRpm() const noexcept { return spindleRpm; }
 	void SetSpindleRpm(uint32_t rpm) THROWS(GCodeException);
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteSettings(FileStore *f) const noexcept;							// write the tool's settings to file
 #endif
 

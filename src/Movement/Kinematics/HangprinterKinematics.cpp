@@ -437,7 +437,7 @@ AxesBitmap HangprinterKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 	return axesMoving;
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Write the parameters to a file, returning true if success
 bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const noexcept

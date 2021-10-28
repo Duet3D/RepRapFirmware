@@ -68,7 +68,7 @@ public:
 	void OnEndstopOrZProbeStatesChanged() noexcept;
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteZProbeParameters(FileStore *f, bool includingG31) const noexcept;
 #endif
 

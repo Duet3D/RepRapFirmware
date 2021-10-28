@@ -42,12 +42,12 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 #if defined(USE_SBC)
 # define HAS_WIFI_NETWORKING	0
 # define HAS_W5500_NETWORKING	0
-# define HAS_LINUX_INTERFACE	1
+# define HAS_SBC_INTERFACE		1
 # define HAS_MASS_STORAGE		0
 #else
 # define HAS_WIFI_NETWORKING	1
 # define HAS_W5500_NETWORKING	1
-# define HAS_LINUX_INTERFACE	0
+# define HAS_SBC_INTERFACE		0
 #endif
 
 #define HAS_CPU_TEMP_SENSOR		1
@@ -561,7 +561,7 @@ constexpr Pin SbcTfrReadyPin = PortDPin(31);
 #define STEP_TC_ID			ID_TC2
 
 // DMA channel allocation
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 constexpr DmaChannel DmacChanSbcTx = 1;
 constexpr DmaChannel DmacChanSbcRx = 2;
 #endif

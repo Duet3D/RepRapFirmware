@@ -46,8 +46,8 @@
 # include "Display/Display.h"
 #endif
 
-#if HAS_LINUX_INTERFACE
-# include "Linux/LinuxInterface.h"
+#if HAS_SBC_INTERFACE
+# include "SBC/SbcInterface.h"
 #endif
 
 #ifdef DUET3_ATE
@@ -249,7 +249,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. MachineModel root
 	{ "boards",					OBJECT_MODEL_FUNC_NOSELF(&boardsArrayDescriptor),						ObjectModelEntryFlags::live },
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "directories",			OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::none },
 #endif
 	{ "fans",					OBJECT_MODEL_FUNC_NOSELF(&fansArrayDescriptor),							ObjectModelEntryFlags::live },
@@ -272,7 +272,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF(&volumesArrayDescriptor),						ObjectModelEntryFlags::none },
 
 	// 1. MachineModel.directories
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "filaments",				OBJECT_MODEL_FUNC_NOSELF(FILAMENTS_DIRECTORY),							ObjectModelEntryFlags::verbose },
 	{ "firmware",				OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_DIRECTORY),							ObjectModelEntryFlags::verbose },
 	{ "gCodes",					OBJECT_MODEL_FUNC(self->platform->GetGCodeDir()),						ObjectModelEntryFlags::verbose },
@@ -367,7 +367,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 
 	// 6. MachineModel.seqs
 	{ "boards",					OBJECT_MODEL_FUNC((int32_t)self->boardsSeq),							ObjectModelEntryFlags::live },
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "directories",			OBJECT_MODEL_FUNC((int32_t)self->directoriesSeq),						ObjectModelEntryFlags::live },
 #endif
 	{ "fans",					OBJECT_MODEL_FUNC((int32_t)self->fansSeq),								ObjectModelEntryFlags::live },
@@ -398,8 +398,8 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 {
 	7,																						// number of sub-tables
-	15 + SUPPORT_SCANNER + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_LINUX_INTERFACE),	// root
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
+	15 + SUPPORT_SCANNER + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),		// root
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	8, 																						// directories
 #else
 	0,																						// directories
@@ -409,7 +409,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	2,																						// state.beep
 	6,																						// state.messageBox
 	12 + HAS_NETWORKING + SUPPORT_SCANNER +
-	2 * HAS_MASS_STORAGE + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_LINUX_INTERFACE)	// seqs
+	2 * HAS_MASS_STORAGE + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE)		// seqs
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
@@ -432,8 +432,8 @@ RepRap::RepRap() noexcept
 	  previousToolNumber(-1),
 	  diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
 	  spinningModule(noModule), stopped(false), active(false), processingConfig(true)
-#if HAS_LINUX_INTERFACE
-	  , usingLinuxInterface(false)						// default to not using the SBC interface until we have checked for config.g on an SD card,
+#if HAS_SBC_INTERFACE
+	  , usingSbcInterface(false)						// default to not using the SBC interface until we have checked for config.g on an SD card,
 														// because a disconnected SBC interface can generate noise which may trigger interrupts and DMA
 #endif
 {
@@ -473,8 +473,8 @@ void RepRap::Init() noexcept
 {
 	OutputBuffer::Init();
 	platform = new Platform();
-#if HAS_LINUX_INTERFACE
-	linuxInterface = new LinuxInterface();				// needs to be allocated early on Duet 2 so as to avoid using any of the last 64K of RAM
+#if HAS_SBC_INTERFACE
+	sbcInterface = new SbcInterface();				// needs to be allocated early on Duet 2 so as to avoid using any of the last 64K of RAM
 #endif
 	network = new Network(*platform);
 	gCodes = new GCodes(*platform);
@@ -535,7 +535,7 @@ void RepRap::Init() noexcept
 #ifdef DUET3_ATE
 	Duet3Ate::Init();
 #endif
-	// linuxInterface is not initialised until we know we are using it, to prevent a disconnected SBC interface generating interrupts and DMA
+	// sbcInterface is not initialised until we know we are using it, to prevent a disconnected SBC interface generating interrupts and DMA
 
 	// Set up the timeout of the regular watchdog, and set up the backup watchdog if there is one.
 #if SAME5x
@@ -585,9 +585,9 @@ void RepRap::Init() noexcept
 
 	platform->MessageF(UsbMessage, "%s\n", VersionText);
 
-#if HAS_LINUX_INTERFACE && !HAS_MASS_STORAGE
-	usingLinuxInterface = true;
-	linuxInterface->Init();
+#if HAS_SBC_INTERFACE && !HAS_MASS_STORAGE
+	usingSbcInterface = true;
+	sbcInterface->Init();
 	FileWriteBuffer::UsingSbcMode();
 #endif
 
@@ -611,10 +611,10 @@ void RepRap::Init() noexcept
 				platform->Message(AddWarning(UsbMessage), "no configuration file found\n");
 			}
 		}
-# if HAS_LINUX_INTERFACE
+# if HAS_SBC_INTERFACE
 		else if (!MassStorage::IsCardDetected(0))		// if we failed to mount the SD card because there was no card in the slot
 		{
-			usingLinuxInterface = true;
+			usingSbcInterface = true;
 			FileWriteBuffer::UsingSbcMode();
 		}
 # endif
@@ -623,17 +623,17 @@ void RepRap::Init() noexcept
 			delay(3000);								// Wait a few seconds so users have a chance to see this
 			platform->MessageF(AddWarning(UsbMessage), "%s\n", reply.c_str());
 		}
-# if HAS_LINUX_INTERFACE
-		linuxInterface->Init();
+# if HAS_SBC_INTERFACE
+		sbcInterface->Init();
 # endif
 	}
 #endif
 
-#if HAS_LINUX_INTERFACE
-	if (usingLinuxInterface)
+#if HAS_SBC_INTERFACE
+	if (usingSbcInterface)
 	{
 		// Keep spinning until the SBC connects
-		while (!linuxInterface->IsConnected())
+		while (!sbcInterface->IsConnected())
 		{
 			Spin();
 		}
@@ -763,13 +763,13 @@ void RepRap::Spin() noexcept
 	display->Spin();
 #endif
 
-#if HAS_LINUX_INTERFACE
-	// Keep the Linux task spinning from the main task in standalone mode to respond to a SBC if necessary
-	if (!UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	// Keep the SBC task spinning from the main task in standalone mode to respond to a SBC if necessary
+	if (!UsingSbcInterface())
 	{
 		ticksInSpinState = 0;
-		spinningModule = moduleLinuxInterface;
-		linuxInterface->Spin();
+		spinningModule = moduleSbcInterface;
+		sbcInterface->Spin();
 	}
 #endif
 
@@ -874,7 +874,7 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 #ifdef __LPC17xx__
 		" at %uMhz"										// clock speed
 #endif
-#if HAS_LINUX_INTERFACE || SUPPORT_REMOTE_COMMANDS
+#if HAS_SBC_INTERFACE || SUPPORT_REMOTE_COMMANDS
 		" (%s mode)"									// standalone, SBC or expansion mode
 #endif
 		"\n",
@@ -892,13 +892,13 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 #ifdef __LPC17xx__
 		, (unsigned int)(SystemCoreClock/1000000)
 #endif
-#if HAS_LINUX_INTERFACE || SUPPORT_REMOTE_COMMANDS
+#if HAS_SBC_INTERFACE || SUPPORT_REMOTE_COMMANDS
 		,
 # if SUPPORT_REMOTE_COMMANDS
 						(CanInterface::InExpansionMode()) ? "expansion" :
 # endif
-# if HAS_LINUX_INTERFACE
-						(UsingLinuxInterface()) ? "SBC" :
+# if HAS_SBC_INTERFACE
+						(UsingSbcInterface()) ? "SBC" :
 # endif
 							"standalone"
 #endif
@@ -935,10 +935,10 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 #if SUPPORT_CAN_EXPANSION
 	CanInterface::Diagnostics(mtype);
 #endif
-#if HAS_LINUX_INTERFACE
-	if (usingLinuxInterface)
+#if HAS_SBC_INTERFACE
+	if (usingSbcInterface)
 	{
-		linuxInterface->Diagnostics(mtype);
+		sbcInterface->Diagnostics(mtype);
 	}
 	else
 #endif
@@ -2511,7 +2511,7 @@ void RepRap::ClearAlert() noexcept
 size_t RepRap::GetStatusIndex() const noexcept
 {
 	return    (processingConfig)										? 0		// Reading the configuration file
-#if HAS_LINUX_INTERFACE && SUPPORT_CAN_EXPANSION
+#if HAS_SBC_INTERFACE && SUPPORT_CAN_EXPANSION
 			: (gCodes->IsFlashing() || expansion->IsFlashing())			? 1		// Flashing a new firmware binary
 #else
 			: (gCodes->IsFlashing())									? 1		// Flashing a new firmware binary
@@ -2654,7 +2654,7 @@ GCodeResult RepRap::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& 
 	return rslt;
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Save some resume information, returning true if successful
 // We assume that the tool configuration doesn't change, only the temperatures and the mix

@@ -47,7 +47,7 @@ public:
 	GCodeResult SetFanSpeed(const CanMessageSetFanSpeed& msg, const StringRef& reply) noexcept;
 	unsigned int PopulateFansReport(CanMessageFansReport& msg) noexcept;
 #endif
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteFanSettings(FileStore *f) const noexcept;
 #endif
 

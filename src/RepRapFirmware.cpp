@@ -197,7 +197,7 @@ static const char * const moduleName[] =
 	"FilamentSensors",
 	"WiFi",
 	"Display",
-	"LinuxInterface",
+	"SbcInterface",
 	"CAN",
 	"none"
 };

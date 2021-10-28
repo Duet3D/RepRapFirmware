@@ -144,7 +144,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 
 	// 6. move.compensation members
 	{ "fadeHeight",				OBJECT_MODEL_FUNC((self->useTaper) ? self->taperHeight : std::numeric_limits<float>::quiet_NaN(), 1),	ObjectModelEntryFlags::none },
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	{ "file",					OBJECT_MODEL_FUNC_IF(self->usingMesh, self->heightMap.GetFileName()),							ObjectModelEntryFlags::none },
 #endif
 	{ "liveGrid",				OBJECT_MODEL_FUNC_IF(self->usingMesh, (const GridDefinition *)&self->GetGrid()),				ObjectModelEntryFlags::none },
@@ -179,7 +179,7 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 	3,
 	2,
 	2,
-	6 + (HAS_MASS_STORAGE || HAS_LINUX_INTERFACE),
+	6 + (HAS_MASS_STORAGE || HAS_SBC_INTERFACE),
 	2,
 	4,
 #if SUPPORT_COORDINATE_ROTATION
@@ -773,7 +773,7 @@ bool Move::SaveHeightMapToFile(FileStore *f, const char *fname) noexcept
 
 #endif
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
 // Save the height map Z coordinates to an array
 void Move::SaveHeightMapToArray(float *arr) const noexcept
@@ -980,7 +980,7 @@ void Move::SetIdleTimeout(float timeout) noexcept
 	reprap.MoveUpdated();
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Write settings for resuming the print
 // The GCodes module deals with the head position so all we need worry about is the bed compensation

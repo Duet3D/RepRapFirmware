@@ -560,7 +560,7 @@ void RotaryDeltaKinematics::PrintParameters(const StringRef& reply) const noexce
 		(double)angleCorrections[DELTA_A_AXIS], (double)angleCorrections[DELTA_B_AXIS], (double)angleCorrections[DELTA_C_AXIS]);
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Add a space, character, and 3-element vector to the string
 static void CatVector3(const StringRef& str, char c, const float vec[3]) noexcept

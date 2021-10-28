@@ -79,7 +79,7 @@ public:
 		return f->Read(buf, nBytes);
 	}
 
-# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+# if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool Write(char b) noexcept
 	{
 		return f->Write(b);

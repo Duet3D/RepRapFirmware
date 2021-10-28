@@ -179,8 +179,8 @@ void PrintMonitor::SetSlicerTimeLeft(float seconds) noexcept
 
 void PrintMonitor::Spin() noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
 		if (!printingFileParsed)
 		{
@@ -292,8 +292,8 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	WriteLocker locker(printMonitorLock);
 	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
-# if HAS_LINUX_INTERFACE
-	if (!reprap.UsingLinuxInterface())
+# if HAS_SBC_INTERFACE
+	if (!reprap.UsingSbcInterface())
 # endif
 	{
 		printingFileParsed = false;

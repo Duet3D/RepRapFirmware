@@ -10,7 +10,7 @@
 
 #include <cstdint>
 
-// Supported message destinations. This is now a bitmap. Note that this type is used by the Linux service as well
+// Supported message destinations. This is now a bitmap. Note that this type is used by the SBC service as well
 enum MessageType : uint32_t
 {
 	// Destinations (bytes 1-2)

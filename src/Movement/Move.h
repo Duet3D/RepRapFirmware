@@ -152,7 +152,7 @@ public:
 	bool SaveHeightMapToFile(FileStore *f, const char *fname) noexcept;						// Save the height map to a file returning true if an error occurred
 #endif
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	void SaveHeightMapToArray(float *arr) const noexcept;									// Save the height map Z coordinates to an array
 #endif
 
@@ -168,7 +168,7 @@ public:
 
 	int32_t GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept;				// Return and reset the accumulated commanded extrusion amount
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept;									// Write settings for resuming the print
 #endif
 

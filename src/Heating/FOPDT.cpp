@@ -7,7 +7,7 @@
 
 #include "FOPDT.h"
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 # include "Storage/FileStore.h"
 #endif
 
@@ -151,7 +151,7 @@ void FopDt::SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcep
 	pidParametersOverridden = true;
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Write the model parameters to file returning true if no error
 bool FopDt::WriteParameters(FileStore *f, size_t heater) const noexcept

@@ -73,7 +73,7 @@ public:
 		return (forLoadChange) ? loadChangeParams : setpointChangeParams;
 	}
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteParameters(FileStore *f, size_t heater) const noexcept;		// erite the model parameters to file returning true if no error
 #endif
 

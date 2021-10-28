@@ -169,8 +169,8 @@
 # define SUPPORT_TELNET			HAS_NETWORKING
 #endif
 
-#ifndef HAS_LINUX_INTERFACE
-# define HAS_LINUX_INTERFACE	0
+#ifndef HAS_SBC_INTERFACE
+# define HAS_SBC_INTERFACE		0
 #endif
 
 #ifndef HAS_MASS_STORAGE
@@ -181,7 +181,7 @@
 # define HAS_EMBEDDED_FILES		0
 #endif
 
-#if !HAS_MASS_STORAGE && !HAS_LINUX_INTERFACE
+#if !HAS_MASS_STORAGE && !HAS_SBC_INTERFACE
 # if SUPPORT_12864_LCD
 #  error "12864 LCD support requires mass storage or SBC interface"
 # endif

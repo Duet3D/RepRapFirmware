@@ -42,7 +42,7 @@ void Filament::Unload() noexcept
 
 void Filament::LoadAssignment() noexcept
 {
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	FileStore * const file = reprap.GetPlatform().OpenSysFile(FilamentAssignmentFile, OpenMode::read);
 	if (file == nullptr)
 	{
@@ -84,7 +84,7 @@ void Filament::LoadAssignment() noexcept
 	// Update the OM when the filament has been changed
 	reprap.MoveUpdated();
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	FileStore * const file = reprap.GetPlatform().OpenSysFile(FilamentAssignmentFile, OpenMode::write);
 	if (file == nullptr)
 	{

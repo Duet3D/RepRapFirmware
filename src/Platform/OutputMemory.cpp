@@ -540,7 +540,7 @@ MessageType OutputStack::GetFirstItemType() const volatile noexcept
 	return (count == 0) ? MessageType::NoDestinationMessage : types[0];
 }
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
 // Update the first item of the stack
 void OutputStack::SetFirstItem(OutputBuffer *buffer) volatile noexcept

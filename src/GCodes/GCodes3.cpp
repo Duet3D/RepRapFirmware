@@ -204,7 +204,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 	return GCodeResult::ok;
 }
 
-# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+# if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Save all the workplace coordinate offsets to file returning true if successful. Used by M500 and by SaveResumeInfo.
 bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const noexcept
@@ -405,7 +405,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 }
 
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 // Handle M37 to simulate a whole file
 GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile)
@@ -418,8 +418,8 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 
 # if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	if (
-#  if HAS_LINUX_INTERFACE
-		reprap.UsingLinuxInterface() ||
+#  if HAS_SBC_INTERFACE
+		reprap.UsingSbcInterface() ||
 #  endif
 		QueueFileToPrint(file.c_str(), reply))
 # endif
@@ -432,8 +432,8 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 		}
 		simulationTime = 0.0;
 		exitSimulationWhenFileComplete = true;
-# if HAS_LINUX_INTERFACE
-		updateFileWhenSimulationComplete = updateFile && !reprap.UsingLinuxInterface();
+# if HAS_SBC_INTERFACE
+		updateFileWhenSimulationComplete = updateFile && !reprap.UsingSbcInterface();
 # else
 		updateFileWhenSimulationComplete = updateFile;
 # endif

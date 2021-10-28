@@ -15,8 +15,8 @@ static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
 static_assert(SD_MMC_MEM_CNT == NumSdCards);
 #endif
 
-#if HAS_LINUX_INTERFACE
-# include <Linux/LinuxInterface.h>
+#if HAS_SBC_INTERFACE
+# include <SBC/SbcInterface.h>
 #endif
 
 // A note on using mutexes:
@@ -126,11 +126,11 @@ static Mutex dirMutex;
 static FileInfoParser infoParser;
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 static FileWriteBuffer *freeWriteBuffers;
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 static Mutex fsMutex;
 static FileStore files[MAX_FILES];
 #endif
@@ -184,8 +184,8 @@ uint16_t MassStorage::GetVolumeSeq(unsigned int volume) noexcept
 static bool VolumeUpdated(const char *path) noexcept
 {
 	if (!StringEndsWithIgnoreCase(path, ".part")
-#if HAS_LINUX_INTERFACE
-		&& !reprap.UsingLinuxInterface()
+#if HAS_SBC_INTERFACE
+		&& !reprap.UsingSbcInterface()
 #endif
 	   )
 	{
@@ -275,7 +275,7 @@ static const char* TranslateCardError(sd_mmc_err_t err) noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 void MassStorage::Init() noexcept
 {
@@ -285,7 +285,7 @@ void MassStorage::Init() noexcept
 	dirMutex.Create("DirSearch");
 #endif
 
-# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+# if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	freeWriteBuffers = nullptr;
 	for (size_t i = 0; i < NumFileWriteBuffers; ++i)
 	{
@@ -470,7 +470,7 @@ bool MassStorage::DirectoryExists(const StringRef& path) noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Static helper functions
 size_t FileWriteBuffer::fileWriteBufLen = FileWriteBufLen;
@@ -496,7 +496,7 @@ void MassStorage::ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept
 	freeWriteBuffers = buffer;
 }
 
-# if HAS_LINUX_INTERFACE
+# if HAS_SBC_INTERFACE
 
 // Return true if any files are open on the file system
 bool MassStorage::AnyFileOpen() noexcept
@@ -587,10 +587,10 @@ static bool InternalDelete(const char* filePath, bool messageIfFailed) noexcept
 // Delete a file or directory and update the volume sequence number returning true if successful
 bool MassStorage::Delete(const char* filePath, bool messageIfFailed) noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
-		if (reprap.GetLinuxInterface().DeleteFileOrDirectory(filePath))
+		if (reprap.GetSbcInterface().DeleteFileOrDirectory(filePath))
 		{
 			return true;
 		}
@@ -728,8 +728,8 @@ const char* MassStorage::GetMonthName(const uint8_t month) noexcept
 // Ensure that the path up to the last '/' (excluding trailing '/' characters) in filePath exists, returning true if successful
 bool MassStorage::EnsurePath(const char* filePath, bool messageIfFailed) noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
 		// This isn't needed in SBC mode because DSF does it automatically
 		return true;
@@ -837,15 +837,15 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename, bool 
 }
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Check if the specified file exists
 bool MassStorage::FileExists(const char *filePath) noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
-		return reprap.GetLinuxInterface().FileExists(filePath);
+		return reprap.GetSbcInterface().FileExists(filePath);
 	}
 #endif
 

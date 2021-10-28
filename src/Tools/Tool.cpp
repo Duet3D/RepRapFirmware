@@ -581,7 +581,7 @@ void Tool::DefineMix(const float m[]) noexcept
 	reprap.ToolsUpdated();
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Write the tool's settings to file returning true if successful. The settings written leave the tool selected unless it is off.
 bool Tool::WriteSettings(FileStore *f) const noexcept

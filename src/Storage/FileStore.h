@@ -7,7 +7,7 @@
 #if HAS_MASS_STORAGE
 # include "Libraries/Fatfs/ff.h"
 #endif
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 # include "CRC32.h"
 #endif
 
@@ -18,7 +18,7 @@ class FileWriteBuffer;
 typedef int32_t FileIndex;
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 enum class OpenMode : uint8_t
 {
@@ -59,7 +59,7 @@ public:
 	FilePosition Position() const noexcept;						// Return the current position in the file, assuming we are reading the file
 	void Duplicate() noexcept;									// Create a second reference to this file
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	FileWriteBuffer *GetWriteBuffer() const noexcept;			// Return a pointer to the remaining space for writing
 	bool Write(char b) noexcept;								// Write 1 byte
 	bool Write(const char *s, size_t len) noexcept;				// Write a block of len bytes
@@ -70,7 +70,7 @@ public:
 	uint32_t GetCRC32() const noexcept;
 #endif
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	void Invalidate() noexcept;									// Invalidate the file
 #endif
 
@@ -94,7 +94,7 @@ private:
 
 	volatile unsigned int openCount;
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	FileWriteBuffer *writeBuffer;
 	CRC32 crc;
 #endif
@@ -104,7 +104,7 @@ private:
 	static uint32_t longestWriteTime;
 #endif
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	FileHandle handle;
 	FilePosition length;
 #endif
@@ -113,19 +113,19 @@ private:
 	FileIndex fileIndex;
 #endif
 
-#if HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
+#if HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	FilePosition offset;
 #endif
 
 	volatile bool closeRequested;
 	FileUseMode usageMode;
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool calcCrc;
 #endif
 };
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 inline FileWriteBuffer *FileStore::GetWriteBuffer() const noexcept { return writeBuffer; }
 
@@ -138,6 +138,6 @@ inline uint32_t FileStore::GetCRC32() const noexcept
 
 #endif
 
-#endif	// HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#endif	// HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 #endif	// #ifndef FILESTORE_H

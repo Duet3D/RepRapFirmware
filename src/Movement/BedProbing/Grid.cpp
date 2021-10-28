@@ -527,7 +527,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 
 #endif
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
 // Update the filename
 void HeightMap::SetFileName(const char *name) noexcept

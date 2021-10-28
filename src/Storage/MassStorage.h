@@ -42,7 +42,7 @@ namespace MassStorage
 	bool CombineName(const StringRef& outbuf, const char* directory, const char* fileName) noexcept;	// returns false if error i.e. filename too long
 	const char* GetMonthName(const uint8_t month) noexcept;
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	void Init() noexcept;
 	FileStore* OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept;
 	bool FileExists(const char *filePath) noexcept;
@@ -50,14 +50,14 @@ namespace MassStorage
 	void Spin() noexcept;
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	FileWriteBuffer *AllocateWriteBuffer() noexcept;
 	size_t GetFileWriteBufferLength() noexcept;
 	void ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept;
 	bool Delete(const char* filePath, bool messageIfFailed) noexcept;
 #endif
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	bool AnyFileOpen() noexcept;															// Return true if any files are open on the file system
 	void InvalidateAllFiles() noexcept;
 #endif

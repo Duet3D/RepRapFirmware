@@ -1,14 +1,14 @@
 /*
- * MessageFormats.h
+ * SbcMessageFormats.h
  *
  *  Created on: 29 Mar 2019
  *      Author: Christian
  */
 
-#ifndef SRC_LINUX_MESSAGEFORMATS_H_
-#define SRC_LINUX_MESSAGEFORMATS_H_
+#ifndef SRC_SBC_MESSAGEFORMATS_H_
+#define SRC_SBC_MESSAGEFORMATS_H_
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
 #include <cstddef>
 #include <cstdint>
@@ -16,14 +16,14 @@
 
 #include <RepRapFirmware.h>
 
-constexpr uint8_t LinuxFormatCode = 0x5F;			// standard format code for RRF SPI protocol
-constexpr uint8_t LinuxFormatCodeStandalone = 0x60;	// used to indicate that RRF is running in stand-alone mode
+constexpr uint8_t SbcFormatCode = 0x5F;				// standard format code for RRF SPI protocol
+constexpr uint8_t SbcFormatCodeStandalone = 0x60;	// used to indicate that RRF is running in stand-alone mode
 constexpr uint8_t InvalidFormatCode = 0xC9;			// must be different from any other format code
 
-constexpr uint16_t LinuxProtocolVersion = 6;
+constexpr uint16_t SbcProtocolVersion = 6;
 
-constexpr size_t LinuxTransferBufferSize = 8192;	// maximum length of a data transfer. Must be a multiple of 4 and kept in sync with Duet Control Server!
-static_assert(LinuxTransferBufferSize % sizeof(uint32_t) == 0, "LinuxTransferBufferSize must be a whole number of dwords");
+constexpr size_t SbcTransferBufferSize = 8192;		// maximum length of a data transfer. Must be a multiple of 4 and kept in sync with Duet Control Server!
+static_assert(SbcTransferBufferSize % sizeof(uint32_t) == 0, "SbcTransferBufferSize must be a whole number of dwords");
 
 constexpr size_t MaxCodeBufferSize = 256;			// maximum length of a G/M/T-code in binary encoding
 static_assert(MaxCodeBufferSize % sizeof(uint32_t) == 0, "MaxCodeBufferSize must be a whole number of dwords");
@@ -34,6 +34,7 @@ constexpr uint32_t SpiEventsRequired = 4;			// number of events required to happ
 
 constexpr uint32_t SpiMacroRequestTimeout = 3000;	// maximum time to wait a macro file
 constexpr uint32_t SpiTransferTimeout = 500;		// maximum allowed delay between data exchanges during a full transfer (in ms)
+constexpr uint32_t SpiMaxTransferTime = 50;			// maximum allowed time for a single SPI transfer
 constexpr uint32_t SpiConnectionTimeout = 4000;		// maximum time to wait for the next transfer (in ms)
 constexpr uint16_t SpiCodeBufferSize = 4096;		// number of bytes available for G-code caching
 
@@ -121,7 +122,7 @@ enum TransferResponse : uint32_t
 	BadResponse = 0xFEFEFEFE
 };
 
-// RepRapFirmware to Linux
+// RepRapFirmware to Sbc
 struct AbortFileHeader
 {
 	uint8_t channel;
@@ -245,8 +246,8 @@ struct PrintPausedHeader
 	uint16_t paddingB;
 };
 
-// Linux to RepRapFirmware
-enum class LinuxRequest : uint16_t
+// Sbc to RepRapFirmware
+enum class SbcRequest : uint16_t
 {
     EmergencyStop = 0,							// Perform immediate emergency stop
     Reset = 1,									// Reset the controller
@@ -419,4 +420,4 @@ struct SetVariableHeader
 
 #endif
 
-#endif /* SRC_LINUX_MESSAGEFORMATS_H_ */
+#endif /* SRC_SBC_MESSAGEFORMATS_H_ */

@@ -215,7 +215,7 @@ GCodeResult Fan::Configure(const CanMessageFanParameters& msg, const StringRef& 
 
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Save the settings of this fan if it isn't thermostatic
 bool Fan::WriteSettings(FileStore *f, size_t fanNum) const noexcept

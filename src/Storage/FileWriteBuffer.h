@@ -13,23 +13,23 @@
 #if SAM4E || SAM4S || SAME70 || SAME5x
 constexpr size_t NumFileWriteBuffers = 2;					// Number of write buffers
 constexpr size_t FileWriteBufLen = 8192;					// Size of each write buffer
-constexpr size_t LinuxFileWriteBufLen = 4192;				// Available size of each write buffer in SBC mode
+constexpr size_t SbcFileWriteBufLen = 4192;					// Available size of each write buffer in SBC mode
 #elif defined(__LPC17xx__)
 # if HAS_WIFI_NETWORKING
 constexpr size_t NumFileWriteBuffers = 1;
 constexpr size_t FileWriteBufLen = 1024;
-constexpr size_t LinuxFileWriteBufLen = 768;
+constexpr size_t SbcFileWriteBufLen = 768;
 # else
 constexpr size_t NumFileWriteBuffers = 1;
 constexpr size_t FileWriteBufLen = 512;
-constexpr size_t LinuxFileWriteBufLen = 468;
+constexpr size_t SbcFileWriteBufLen = 468;
 # endif
 #else
 constexpr size_t NumFileWriteBuffers = 1;
 constexpr size_t FileWriteBufLen = 4096;
-constexpr size_t LinuxFileWriteBufLen = 3072;
+constexpr size_t SbcFileWriteBufLen = 3072;
 #endif
-static_assert(FileWriteBufLen >= LinuxFileWriteBufLen, "File write buffer must be at least as big as the configured Linux threshold");
+static_assert(FileWriteBufLen >= SbcFileWriteBufLen, "File write buffer must be at least as big as the configured SBC threshold");
 
 // Class to cache data that is about to be written to the SD card. This is NOT a ring buffer,
 // instead it just provides simple interfaces to cache a certain amount of data so that fewer
@@ -42,7 +42,7 @@ public:
 #else
 	FileWriteBuffer(FileWriteBuffer *n) noexcept : next(n), index(0) { }
 #endif
-	static void UsingSbcMode() { fileWriteBufLen = LinuxFileWriteBufLen; }	// only called by RepRap on startup
+	static void UsingSbcMode() { fileWriteBufLen = SbcFileWriteBufLen; }	// only called by RepRap on startup
 
 	FileWriteBuffer *Next() const noexcept { return next; }
 	void SetNext(FileWriteBuffer *n) noexcept { next = n; }

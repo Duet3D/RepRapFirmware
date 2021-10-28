@@ -747,7 +747,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		break;
 
 	case TypeCode::Special:
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 		switch ((ExpressionValue::SpecialType)val.param)
 		{
 		case ExpressionValue::SpecialType::sysDir:

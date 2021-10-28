@@ -42,8 +42,8 @@
 # include <Fans/LedStripDriver.h>
 #endif
 
-#if HAS_LINUX_INTERFACE
-# include <Linux/LinuxInterface.h>
+#if HAS_SBC_INTERFACE
+# include <SBC/SbcInterface.h>
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -81,19 +81,18 @@ GCodes::GCodes(Platform& p) noexcept :
 #endif
 	fileGCode = new GCodeBuffer(GCodeChannel::File, nullptr, fileInput, GenericMessage);
 
-# if SUPPORT_HTTP || HAS_LINUX_INTERFACE
+# if SUPPORT_HTTP || HAS_SBC_INTERFACE
 	httpInput = new NetworkGCodeInput();
 	httpGCode = new GCodeBuffer(GCodeChannel::HTTP, httpInput, fileInput, HttpMessage);
 # else
 	httpGCode = nullptr;
-# endif // SUPPORT_HTTP || HAS_LINUX_INTERFACE
-# if SUPPORT_TELNET || HAS_LINUX_INTERFACE
+# endif // SUPPORT_HTTP || HAS_SBC_INTERFACE
+# if SUPPORT_TELNET || HAS_SBC_INTERFACE
 	telnetInput = new NetworkGCodeInput();
 	telnetGCode = new GCodeBuffer(GCodeChannel::Telnet, telnetInput, fileInput, TelnetMessage, Compatibility::Marlin);
 # else
 	telnetGCode = nullptr;
-# endif // SUPPORT_TELNET || HAS_LINUX_INTERFACE
-
+# endif // SUPPORT_TELNET || HAS_SBC_INTERFACE
 #if defined(SERIAL_MAIN_DEVICE)
 # if SAME5x
 	// SAME5x USB driver already uses an efficient buffer for receiving data from USB
@@ -103,7 +102,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	BufferedStreamGCodeInput * const usbInput = new BufferedStreamGCodeInput(SERIAL_MAIN_DEVICE);
 # endif
 	usbGCode = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
-#elif HAS_LINUX_INTERFACE
+#elif HAS_SBC_INTERFACE
 	usbGCode = new GCodeBuffer(GCodeChannel::USB, nullptr, fileInput, UsbMessage, Compatbility::marlin);
 #else
 	usbGCode = nullptr;
@@ -112,7 +111,7 @@ GCodes::GCodes(Platform& p) noexcept :
 #if HAS_AUX_DEVICES
 	StreamGCodeInput * const auxInput = new StreamGCodeInput(SERIAL_AUX_DEVICE);
 	auxGCode = new GCodeBuffer(GCodeChannel::Aux, auxInput, fileInput, AuxMessage);
-#elif HAS_LINUX_INTERFACE
+#elif HAS_SBC_INTERFACE
 	auxGCode = new GCodeBuffer(GCodeChannel::Aux, nullptr, fileInput, AuxMessage);
 #else
 	auxGCode = nullptr;
@@ -123,13 +122,13 @@ GCodes::GCodes(Platform& p) noexcept :
 	codeQueue = new GCodeQueue();
 	queuedGCode = new GCodeBuffer(GCodeChannel::Queue, codeQueue, fileInput, GenericMessage);
 
-#if SUPPORT_12864_LCD || HAS_LINUX_INTERFACE
+#if SUPPORT_12864_LCD || HAS_SBC_INTERFACE
 	lcdGCode = new GCodeBuffer(GCodeChannel::LCD, nullptr, fileInput, LcdMessage);
 #else
 	lcdGCode = nullptr;
 #endif
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	spiGCode = new GCodeBuffer(GCodeChannel::SBC, nullptr, fileInput, GenericMessage);
 #else
 	spiGCode = nullptr;
@@ -138,7 +137,7 @@ GCodes::GCodes(Platform& p) noexcept :
 #if defined(SERIAL_AUX2_DEVICE)
 	StreamGCodeInput * const aux2Input = new StreamGCodeInput(SERIAL_AUX2_DEVICE);
 	aux2GCode = new GCodeBuffer(GCodeChannel::Aux2, aux2Input, fileInput, Aux2Message);
-#elif HAS_LINUX_INTERFACE
+#elif HAS_SBC_INTERFACE
 	aux2GCode = new GCodeBuffer(GCodeChannel::Aux2, nullptr, fileInput, Aux2Message);
 #else
 	aux2GCode = nullptr;
@@ -292,7 +291,7 @@ void GCodes::Reset() noexcept
 #endif
 	doingToolChange = false;
 	doingManualBedProbe = false;
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	fileOffsetToPrint = 0;
 	restartMoveFractionDone = 0.0;
 #endif
@@ -346,8 +345,8 @@ bool GCodes::WaitingForAcknowledgement() const noexcept
 // May return noFilePosition if allowNoFilePos is true
 FilePosition GCodes::GetFilePosition(bool allowNoFilePos) const noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (!reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (!reprap.UsingSbcInterface())
 #endif
 	{
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -359,7 +358,7 @@ FilePosition GCodes::GetFilePosition(bool allowNoFilePos) const noexcept
 #endif
 	}
 
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	const FilePosition pos = (fileGCode->IsDoingFileMacro())
 			? printFilePositionAtMacroStart						// the position before we started executing the macro
 				: fileGCode->GetFilePosition();					// the actual position, allowing for bytes cached but not yet processed
@@ -441,7 +440,7 @@ void GCodes::Spin() noexcept
 	// Get the GCodeBuffer that we want to process a command from. Use round-robin scheduling but give priority to auto-pause.
 	GCodeBuffer *gbp = autoPauseGCode;
 	if (!autoPauseGCode->IsCompletelyIdle()
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 		|| autoPauseGCode->LatestMachineState().DoingFile()
 #endif
 	   )	// if autoPause is active
@@ -474,9 +473,9 @@ void GCodes::Spin() noexcept
 	}
 
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	// Need to check if the print has been stopped by the SBC
-	if (reprap.UsingLinuxInterface() && reprap.GetLinuxInterface().IsPrintAborted())
+	if (reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsPrintAborted())
 	{
 		StopPrint(StopPrintReason::abort);
 	}
@@ -535,8 +534,11 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 		result = true;													// assume we did something useful (not necessarily true, e.g. could be waiting for movement to stop)
 	}
 
-	if (   gb.IsExecuting()
-		|| (isWaiting && !cancelWait)									// this is needed to get reports sent during M109 commands
+	if ((gb.IsExecuting()
+#if HAS_SBC_INTERFACE
+		 && !gb.IsSendRequested()
+#endif
+		) || (isWaiting && !cancelWait)									// this is needed to get reports sent during M109 commands
 	   )
 	{
 		CheckReportDue(gb, reply.GetRef());
@@ -614,10 +616,10 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 				return true;
 			}
 		}
-#if HAS_LINUX_INTERFACE
-		else if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+		else if (reprap.UsingSbcInterface())
 		{
-			return reprap.GetLinuxInterface().FillBuffer(gb);
+			return reprap.GetSbcInterface().FillBuffer(gb);
 		}
 #endif
 	}
@@ -627,8 +629,8 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 // Try to continue with a print from file, returning true if we did anything significant
 bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
 		if (gb.IsFileFinished())
 		{
@@ -680,7 +682,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					return true;
 				}
 			}
-			return reprap.GetLinuxInterface().FillBuffer(gb);
+			return reprap.GetSbcInterface().FillBuffer(gb);
 		}
 	}
 	else
@@ -948,15 +950,15 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 			pauseRestorePoint.moveCoords[axis] = moveState.currentUserPosition[axis];
 		}
 
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+		if (reprap.UsingSbcInterface())
 		{
 			fileGCode->Init();															// clear the next move
 			UnlockAll(*fileGCode);														// release any locks it had
 		}
 		else
-		{
 #endif
+		{
 #if HAS_MASS_STORAGE
 			// If we skipped any moves, reset the file pointer to the start of the first move we need to replay
 			// The following could be delayed until we resume the print
@@ -970,9 +972,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 				}
 			}
 #endif
-#if HAS_LINUX_INTERFACE
 		}
-#endif
 
 		codeQueue->PurgeEntries();
 
@@ -992,7 +992,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 	pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
 	pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	if (!IsSimulating())
 	{
 		SaveResumeInfo(false);															// create the resume file so that we can resume after power down
@@ -1027,8 +1027,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 	gb.SetState(newState, param);
 	pauseState = PauseState::pausing;
 
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
 		// Get the print pause reason that is compatible with the API
 		PrintPausedReason pauseReason = PrintPausedReason::user;
@@ -1059,8 +1059,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 			break;
 		}
 
-		// Prepare notification for the Linux side
-		reprap.GetLinuxInterface().SetPauseReason(pauseRestorePoint.filePos, pauseReason);
+		// Prepare notification for the SBC
+		reprap.GetSbcInterface().SetPauseReason(pauseRestorePoint.filePos, pauseReason);
 	}
 #endif
 
@@ -1168,11 +1168,11 @@ bool GCodes::DoEmergencyPause() noexcept
 #endif
 	}
 
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
 		PrintPausedReason reason = platform.IsPowerOk() ? PrintPausedReason::stall : PrintPausedReason::lowVoltage;
-		reprap.GetLinuxInterface().SetEmergencyPauseReason(pauseRestorePoint.filePos, reason);
+		reprap.GetSbcInterface().SetEmergencyPauseReason(pauseRestorePoint.filePos, reason);
 	}
 #endif
 
@@ -1331,7 +1331,7 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 {
@@ -2780,8 +2780,8 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 		printFilePositionAtMacroStart = gb.GetFilePosition();
 	}
 
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
 		if (!gb.RequestMacroFile(fileName, gb.IsBinary() && codeRunning != AsyncSystemMacroCode))
 		{
@@ -2842,7 +2842,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 #endif
 	}
 
-#if HAS_LINUX_INTERFACE || HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_SBC_INTERFACE || HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	gb.LatestMachineState().doingFileMacro = true;
 
 	// The following three flags need to be inherited in the case that a system macro calls another macro, e.g.homeall.g calls homez.g. The Push call copied them over already.
@@ -2873,8 +2873,8 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 	gb.SetState(GCodeState::normal);
 	gb.Init();
 
-# if HAS_LINUX_INTERFACE
-	if (!reprap.UsingLinuxInterface() && codeRunning != AsyncSystemMacroCode)
+# if HAS_SBC_INTERFACE
+	if (!reprap.UsingSbcInterface() && codeRunning != AsyncSystemMacroCode)
 # endif
 	{
 		// Don't notify DSF when files are requested asynchronously, it creates excessive traffic
@@ -2895,8 +2895,8 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb) noexcept
 {
 	if (gb.IsDoingFileMacro())
 	{
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+		if (reprap.UsingSbcInterface())
 		{
 			gb.AbortFile(false);
 		}
@@ -3117,9 +3117,9 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 
 GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 {
-#if HAS_LINUX_INTERFACE
-	// If we have a Linux interface and we're using it, the Linux components will take care of file I/O and this should not be called.
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	// If we have an SBC interface and we're using it, the SBC service will take care of file I/O and this should not be called
+	if (reprap.UsingSbcInterface())
 	{
 		reply.copy("Cannot use height map on local SD card when SBC interface is used");
 		return GCodeResult::error;
@@ -3169,9 +3169,9 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 // Save the height map and append the success or error message to 'reply', returning true if an error occurred
 bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept
 {
-#if HAS_LINUX_INTERFACE
-	// If we have a Linux interface and we're using it, the Linux components will take care of file I/O.
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	// If we have an SBC connected, the SBC service will take care of heightmap-related file I/O
+	if (reprap.UsingSbcInterface())
 	{
 		reply.copy("Cannot use height map on local SD card when SBC interface is used");
 		return true;
@@ -3209,7 +3209,7 @@ GCodeResult GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 {
 	ReadLocker locker(reprap.GetMove().heightMapLock);
 
-	// No need to check if we're using the Linux interface here, because TrySaveHeightMap does that
+	// No need to check if we're using the SBC interface here, because TrySaveHeightMap does that already
 	if (gb.Seen('P'))
 	{
 		String<MaxFilenameLength> heightMapFileName;
@@ -3312,8 +3312,8 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	rawExtruderTotal = 0.0;
 	reprap.GetMove().ResetExtruderPositions();
 
-#if HAS_LINUX_INTERFACE
-	if (!reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (!reprap.UsingSbcInterface())
 #endif
 	{
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -3755,8 +3755,8 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply) n
 // Note that 'reply' may be empty. If it isn't, then we need to append newline when sending it.
 void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept
 {
-#if HAS_LINUX_INTERFACE
-	// Deal with replies to the Linux interface
+#if HAS_SBC_INTERFACE
+	// Deal with replies to the SBC
 	if (gb.LatestMachineState().lastCodeFromSbc)
 	{
 		MessageType type = gb.GetResponseMessageType();
@@ -3859,8 +3859,8 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 		return;
 	}
 
-#if HAS_LINUX_INTERFACE
-	// Deal with replies to the Linux interface
+#if HAS_SBC_INTERFACE
+	// Deal with replies to the SBC
 	if (gb.IsBinary())
 	{
 		platform.Message(gb.GetResponseMessageType(), reply);
@@ -4136,8 +4136,8 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 	deferredPauseCommandPending = nullptr;
 	pauseState = PauseState::notPaused;
 
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
 		fileGCode->LatestMachineState().CloseFile();
 		fileGCode->Init();
@@ -4250,7 +4250,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 		platform.MessageF(LoggedGenericMessage, "%s printing file %s, print time was %" PRIu32 "h %" PRIu32 "m\n",
 			(reason == StopPrintReason::normalCompletion) ? "Finished" : "Cancelled",
 			printingFilename, printMinutes/60u, printMinutes % 60u);
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 		if (reason == StopPrintReason::normalCompletion && !IsSimulating())
 		{
 			platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
@@ -4527,7 +4527,7 @@ void GCodes::SetAllAxesNotHomed() noexcept
 	}
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Write the config-override file returning true if an error occurred
 GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const noexcept
@@ -4995,9 +4995,9 @@ void GCodes::ActivateHeightmap(bool activate) noexcept
 		reprap.GetMove().GetCurrentUserPosition(moveState.coords, 0, reprap.GetCurrentTool());
 		ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);	// update user coordinates to reflect any height map offset at the current position
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 		// Set a dummy heightmap filename
-		if (reprap.UsingLinuxInterface())
+		if (reprap.UsingSbcInterface())
 		{
 			HeightMap& map = reprap.GetMove().AccessHeightMap();
 			map.SetFileName(DefaultHeightMapFile);
@@ -5016,8 +5016,8 @@ bool GCodes::CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply,
 		return false;							// just ignore the command but report success
 	}
 
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
 		// Networking is disabled when using the SBC interface, to save RAM
 		reply.copy("Network-related commands are not supported when using an attached Single Board Computer");

@@ -26,8 +26,8 @@
 #include <ClosedLoop/ClosedLoop.h>
 
 
-#if HAS_LINUX_INTERFACE
-# include "Linux/LinuxInterface.h"
+#if HAS_SBC_INTERFACE
+# include "SBC/SbcInterface.h"
 #endif
 
 #include <memory>

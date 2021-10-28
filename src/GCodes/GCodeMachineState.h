@@ -117,7 +117,7 @@ enum class GCodeState : uint8_t
 	timingSDread,
 #endif
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	waitingForAcknowledgement,
 #endif
 
@@ -139,7 +139,7 @@ enum class BlockType : uint8_t
 	loop						// block inside a 'while' command
 };
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 typedef uint8_t FileId;
 
 constexpr FileId NoFileId = 0;
@@ -203,7 +203,7 @@ public:
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileData fileState;
 #endif
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	FileId fileId;													// virtual ID to distinguish files in different stack levels (only unique per GB)
 #endif
 	ResourceBitmap lockedResources;
@@ -229,7 +229,7 @@ public:
 		macroRestartable : 1,					// true if the current macro has used M98 R1 to say that it can be interrupted and restarted
 		firstCommandAfterRestart : 1,			// true if this is the first command after restarting a macro that was interrupted
 		commandRepeated : 1						// true if the current command is being repeated because it returned GCodeResult::notFinished the first time
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 		, lastCodeFromSbc : 1,
 		macroStartedByCode : 1,
 		fileFinished : 1
@@ -244,7 +244,7 @@ public:
 
 	void WaitForAcknowledgement() noexcept;
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	void SetFileExecuting() noexcept;
 #endif
 

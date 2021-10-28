@@ -27,7 +27,7 @@ public:
 	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept override;
 	void SetCalibrationDefaults() noexcept override { Init(); }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteCalibrationParameters(FileStore *f) const noexcept override;
 #endif
 
@@ -44,7 +44,7 @@ public:
 	bool QueryTerminateHomingMove(size_t axis) const noexcept override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept override;
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
 

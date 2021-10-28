@@ -398,10 +398,10 @@ public:
 #endif
 
 	// File functions
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	FileStore* OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
 	bool FileExists(const char* folder, const char *filename) const noexcept;
-# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+# if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool Delete(const char* folder, const char *filename) const noexcept;
 #endif
 
@@ -413,7 +413,7 @@ public:
 	GCodeResult SetSysDir(const char* dir, const StringRef& reply) noexcept;				// Set the system files path
 	bool SysFileExists(const char *filename) const noexcept;
 	FileStore* OpenSysFile(const char *filename, OpenMode mode) const noexcept;
-# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+# if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool DeleteSysFile(const char *filename) const noexcept;
 # endif
 	bool MakeSysFileName(const StringRef& result, const char *filename) const noexcept;
@@ -522,7 +522,7 @@ public:
 	const volatile ZProbeAveragingFilter& GetZProbeOnFilter() const noexcept { return zProbeOnFilter; }
 	const volatile ZProbeAveragingFilter& GetZProbeOffFilter() const noexcept{ return zProbeOffFilter; }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WritePlatformParameters(FileStore *f, bool includingG31) const noexcept;
 #endif
 
@@ -799,7 +799,7 @@ private:
 	float axisMinima[MaxAxes];
 	AxesBitmap axisMinimaProbed, axisMaximaProbed;
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam) noexcept;
 #endif
 
@@ -819,7 +819,7 @@ private:
 #endif
 
 	// Files
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	const char *sysDir;
 	mutable ReadWriteLock sysDirLock;
 #endif
@@ -891,7 +891,7 @@ private:
 	static bool deliberateError;						// true if we deliberately caused an exception for testing purposes. Must be static in case of exception during startup.
 };
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 // Where the htm etc files are
 inline const char* Platform::GetWebDir() const noexcept

@@ -129,7 +129,7 @@ public:
 	void FeedForwardAdjustment(unsigned int heater, float fanPwmChange, float extrusionChange) const noexcept;
 	void SetExtrusionFeedForward(unsigned int heater, float pwm) const noexcept;
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteModelParameters(FileStore *f) const noexcept;				// Write heater model parameters to file returning true if no error
 	bool WriteBedAndChamberTempSettings(FileStore *f) const noexcept;	// Save some resume information
 #endif

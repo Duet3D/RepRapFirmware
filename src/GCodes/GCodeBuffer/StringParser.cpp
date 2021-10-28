@@ -785,13 +785,13 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 {
 	SkipWhiteSpace();
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	FileData outputFile;
 #endif
 
 	if (gb.buffer[readPointer] == '>')
 	{
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 		// Redirect the line to file
 		++readPointer;
 		OpenMode openMode;
@@ -843,7 +843,7 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 		}
 	}
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	if (outputFile.IsLive())
 	{
 		reply.cat('\n');
@@ -1062,8 +1062,8 @@ FilePosition StringParser::GetFilePosition() const noexcept
 {
 #if HAS_MASS_STORAGE
 	if (gb.LatestMachineState().DoingFile()
-# if HAS_LINUX_INTERFACE
-		&& !reprap.UsingLinuxInterface()
+# if HAS_SBC_INTERFACE
+		&& !reprap.UsingSbcInterface()
 # endif
 	   )
 	{

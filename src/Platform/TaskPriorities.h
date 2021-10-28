@@ -13,7 +13,7 @@ namespace TaskPriority
 {
 	constexpr unsigned int IdlePriority = 0;
 	constexpr unsigned int SpinPriority = 1;						// priority for tasks that rarely block
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	constexpr unsigned int SbcPriority = 2;							// priority for SBC task
 #endif
 #if defined(LPC_NETWORKING)

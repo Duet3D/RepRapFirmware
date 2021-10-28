@@ -1,23 +1,23 @@
 /*
- * LinuxInterface.h
+ * SbcInterface.h
  *
  *  Created on: 29 Mar 2019
  *      Authors: Christian
  */
 
-#ifndef SRC_LINUX_LINUXINTERFACE_H_
-#define SRC_LINUX_LINUXINTERFACE_H_
+#ifndef SRC_SBC_SBCINTERFACE_H_
+#define SRC_SBC_SBCINTERFACE_H_
 
 #include <RepRapFirmware.h>
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
 #include "RTOSIface/RTOSIface.h"
 
 #include "GCodes/GCodes.h"
 #include "GCodes/GCodeChannel.h"
 #include "GCodes/GCodeFileInfo.h"
-#include "LinuxMessageFormats.h"
+#include "SbcMessageFormats.h"
 #include "DataTransfer.h"
 
 class Platform;
@@ -30,18 +30,17 @@ class OutputStack;
 //#define TRACK_FILE_CODES			// Uncomment this to enable code <-> code reply tracking for the file G-code channel
 
 // G-Code input class for an SPI channel
-class LinuxInterface
+class SbcInterface
 {
 public:
-	LinuxInterface() noexcept;
+	SbcInterface() noexcept;
 
-	// The Init method must be called prior to calling any of the other methods. Use reprap.UsingLinuxInterface() to guard calls to other members.
+	// The Init method must be called prior to calling any of the other methods. Use reprap.UsingSbcInterface() to guard calls to other members.
 	// OTOH, calling Init when we don't have a SBC connected may cause problems due to noise pickup on the SPI CS and clock inputs
 	void Init() noexcept;
 	void Spin() noexcept;														// Only called in standalone mode by the main loop
 	[[noreturn]] void TaskLoop() noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
-	bool IsWritingIap() const noexcept { return writingIap; }
 	bool IsConnected() const noexcept { return isConnected; }
 
 	void EventOccurred(bool timeCritical = false) noexcept;						// Called when a new event has happened. It can optionally start off a new transfer immediately
@@ -71,10 +70,12 @@ public:
 
 private:
 	DataTransfer transfer;
-	bool isConnected;
+	volatile bool isConnected;
+	TransferState state;
 	uint32_t numDisconnects, numTimeouts;
 
 	uint32_t maxDelayBetweenTransfers, maxFileOpenDelay, numMaxEvents;
+	bool skipNextDelay;
 	volatile bool delaying;
 	volatile uint32_t numEvents;
 
@@ -87,8 +88,6 @@ private:
 	volatile uint16_t rxPointer, txPointer, txEnd;
 	volatile bool sendBufferUpdate;
 
-	bool writingIap;
-	uint32_t iapWritePointer;
 	uint32_t iapRamAvailable;											// must be at least 32Kb otherwise the SPI IAP can't work
 
 	// Data needed when a CAN expansion board requests a firmware file chunk
@@ -130,16 +129,19 @@ private:
 	FilePosition fileOffset;
 
 	static volatile OutputStack gcodeReply;
-	static Mutex gcodeReplyMutex;											// static so that the LinuxInterface is safe to delete even is the mutex is linked into the mutex chain or is in use
+	static Mutex gcodeReplyMutex;											// static so that the SbcInterface is safe to delete even is the mutex is linked into the mutex chain or is in use
 
 #ifdef TRACK_FILE_CODES
 	volatile size_t fileCodesRead, fileCodesHandled, fileMacrosRunning, fileMacrosClosing;
 #endif
 
-	void InvalidateBufferedCodes(GCodeChannel channel) noexcept;            // Invalidate every buffered G-code of the corresponding channel from the buffer ring
+	void ExchangeData() noexcept;											// Exchange data between RRF and the SBC
+	[[noreturn]] void ReceiveAndStartIap(const char *iapChunk, size_t length) noexcept;	// Receive and start the IAP binary
+	void InvalidateResources() noexcept;									// Invalidate local resources on connection errors
+	void InvalidateBufferedCodes(GCodeChannel channel) noexcept;           	// Invalidate every buffered G-code of the corresponding channel from the buffer ring
 };
 
-inline void LinuxInterface::SetPauseReason(FilePosition position, PrintPausedReason reason) noexcept
+inline void SbcInterface::SetPauseReason(FilePosition position, PrintPausedReason reason) noexcept
 {
 	TaskCriticalSectionLocker locker;
 	pauseFilePosition = position;
@@ -147,7 +149,7 @@ inline void LinuxInterface::SetPauseReason(FilePosition position, PrintPausedRea
 	reportPauseWritten = false;
 }
 
-inline void LinuxInterface::SetEmergencyPauseReason(FilePosition position, PrintPausedReason reason) noexcept
+inline void SbcInterface::SetEmergencyPauseReason(FilePosition position, PrintPausedReason reason) noexcept
 {
 	pauseFilePosition = position;
 	pauseReason = reason;
@@ -155,12 +157,12 @@ inline void LinuxInterface::SetEmergencyPauseReason(FilePosition position, Print
 	reportPause = true;
 }
 
-inline void LinuxInterface::ReportPause() noexcept
+inline void SbcInterface::ReportPause() noexcept
 {
 	reportPause = true;
 }
 
-inline bool LinuxInterface::IsPrintAborted() noexcept
+inline bool SbcInterface::IsPrintAborted() noexcept
 {
 	TaskCriticalSectionLocker locker;
 	if (printAborted)

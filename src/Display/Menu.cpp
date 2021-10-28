@@ -657,8 +657,8 @@ void Menu::EncoderAction(int action) noexcept
 void Menu::Refresh() noexcept
 {
 	if (
-#if HAS_LINUX_INTERFACE
-		!reprap.UsingLinuxInterface() &&
+#if HAS_SBC_INTERFACE
+		!reprap.UsingSbcInterface() &&
 #endif
 #if HAS_MASS_STORAGE
 		!MassStorage::IsDriveMounted(0)

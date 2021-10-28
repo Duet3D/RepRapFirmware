@@ -565,7 +565,7 @@ GCodeResult EndstopsManager::ProgramZProbe(GCodeBuffer& gb, const StringRef& rep
 	return GCodeResult::error;
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) const noexcept
 {

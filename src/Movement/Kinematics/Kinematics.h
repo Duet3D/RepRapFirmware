@@ -124,7 +124,7 @@ public:
 	// Do nothing if auto calibration is not supported.
 	virtual void SetCalibrationDefaults() noexcept { }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	// Write the parameters that are set by auto calibration to the config-override.g file, returning true if success
 	// Just return true if auto calibration is not supported.
 	virtual bool WriteCalibrationParameters(FileStore *f) const noexcept { return true; }
@@ -186,7 +186,7 @@ public:
 	// This default is good for Cartesian and Core printers, but not deltas or SCARA
 	virtual AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const noexcept { return (disallowMovesBeforeHoming) ? axesMoving : AxesBitmap(); }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	// Write any calibration data that we need to resume a print after power fail, returning true if successful. Override where necessary.
 	virtual bool WriteResumeSettings(FileStore *f) const noexcept { return true; }
 #endif

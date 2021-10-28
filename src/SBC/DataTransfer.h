@@ -5,16 +5,16 @@
  *      Author: Christian
  */
 
-#ifndef SRC_LINUX_DATATRANSFER_H_
-#define SRC_LINUX_DATATRANSFER_H_
+#ifndef SRC_SBC_DATATRANSFER_H_
+#define SRC_SBC_DATATRANSFER_H_
 
 #include "RepRapFirmware.h"
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
 #include <GCodes/GCodeFileInfo.h>
 #include <GCodes/GCodeChannel.h>
-#include "LinuxMessageFormats.h"
+#include "SbcMessageFormats.h"
 #include <RTOSIface/RTOSIface.h>
 
 class BinaryGCodeBuffer;
@@ -25,6 +25,16 @@ class HeightMap;
 
 struct ExpressionValue;
 
+enum class TransferState
+{
+	doingFullTransfer,
+	doingPartialTransfer,
+	finishingTransfer,
+	connectionTimeout,
+	connectionReset,
+	finished
+};
+
 class DataTransfer
 {
 public:
@@ -33,11 +43,9 @@ public:
 	void InitFromTask() noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 
-	bool IsConnected() const noexcept;														// Check if the connection to DCS is live
-	bool IsReady() noexcept;																// Returns true when data can be read
+	TransferState DoTransfer() noexcept;													// Try to finish the current transfer
 	void StartNextTransfer() noexcept;														// Kick off the next transfer
-	void ResetConnection() noexcept;														// Reset the connection after a longer timeout
-	bool LinuxHadReset() const noexcept;													// Check if the remote end reset
+	void ResetConnection(bool fullReset) noexcept;											// Reset the connection after a longer timeout
 
 	size_t PacketsToRead() const noexcept;
 	const PacketHeader *ReadPacket() noexcept;												// Attempt to read the next packet header or return null. Advances the read pointer to the next packet or the packet's data
@@ -85,7 +93,7 @@ public:
 	bool WriteCloseFile(FileHandle handle) noexcept;
 
 private:
-	enum class SpiState
+	enum class InternalTransferState
 	{
 		ExchangingHeader,
 		ExchangingHeaderResponse,
@@ -96,12 +104,10 @@ private:
 	} state;
 
 	// Transfer properties
-	uint32_t lastTransferTime;
 	uint16_t lastTransferNumber;
 	unsigned int failedTransfers, checksumErrors;
 
 	// Transfer buffers
-
 #if SAME70
 	// SAME70 has a write-back cache, so these must be in non-cached memory because we DMA to/from them.
 	// See http://ww1.microchip.com/downloads/en/DeviceDoc/Managing-Cache-Coherency-on-Cortex-M7-Based-MCUs-DS90003195A.pdf
@@ -110,8 +116,8 @@ private:
 	static __nocache TransferHeader txHeader;
 	static __nocache uint32_t rxResponse;
 	static __nocache uint32_t txResponse;
-	alignas(4) static __nocache char rxBuffer[LinuxTransferBufferSize];
-	alignas(4) static __nocache char txBuffer[LinuxTransferBufferSize];
+	alignas(4) static __nocache char rxBuffer[SbcTransferBufferSize];
+	alignas(4) static __nocache char txBuffer[SbcTransferBufferSize];
 #else
 	// The other processors we support have write-through cache
 	// Allocate the buffers in the object so that we can delete the object and recycle the memory if the SBC interface is not being used
@@ -123,24 +129,23 @@ private:
 	char *rxBuffer;				// not allocated until we know we need it
 	char *txBuffer;				// not allocated until we know we need it
 #endif
-
 	size_t rxPointer, txPointer;
 
 	// Packet properties
 	uint16_t packetId;
 
+	bool IsConnectionReset() const noexcept;
+
 	void ExchangeHeader() noexcept;
 	void ExchangeResponse(uint32_t response) noexcept;
 	void ExchangeData() noexcept;
-	void ResetTransfer() noexcept;
-	void StatefulTransferReset(bool ownRequest) noexcept;
+	void ResetTransfer(bool ownRequest) noexcept;
 	uint32_t CalcCRC32(const char *buffer, size_t length) const noexcept;
 
 	template<typename T> const T *ReadDataHeader() noexcept;
 
-	// Always keep enough tx space to allow resend requests in case RRF runs out of
-	// resources and cannot process an incoming request right away
-	size_t FreeTxSpace() const noexcept { return LinuxTransferBufferSize - AddPadding(txPointer) - rxHeader.numPackets * sizeof(PacketHeader); }
+	// Always keep enough tx space to allow resend requests in case RRF runs out of resources and cannot process an incoming request right away
+	size_t FreeTxSpace() const noexcept { return SbcTransferBufferSize - AddPadding(txPointer) - rxHeader.numPackets * sizeof(PacketHeader); }
 
 	bool CanWritePacket(size_t dataLength = 0) const noexcept;
 	PacketHeader *WritePacketHeader(FirmwareRequest request, size_t dataLength = 0, uint16_t resendPacktId = 0) noexcept;
@@ -150,12 +155,7 @@ private:
 	size_t AddPadding(size_t length) const noexcept;
 };
 
-inline bool DataTransfer::IsConnected() const noexcept
-{
-	return lastTransferTime != 0 && (millis() - lastTransferTime < SpiConnectionTimeout);
-}
-
-inline bool DataTransfer::LinuxHadReset() const noexcept
+inline bool DataTransfer::IsConnectionReset() const noexcept
 {
 	uint16_t nextTransferNumber = lastTransferNumber + 1;
 	return lastTransferNumber != 0 && (nextTransferNumber != rxHeader.sequenceNumber);
@@ -181,6 +181,6 @@ inline size_t DataTransfer::AddPadding(size_t length) const noexcept
 	size_t extraBytes = (length & 3);
 	return (extraBytes == 0) ? length : length + 4 - extraBytes;
 }
-#endif	// HAS_LINUX_INTERFACE
+#endif	// HAS_SBC_INTERFACE
 
-#endif /* SRC_LINUX_DATATRANSFER_H_ */
+#endif /* SRC_SBC_DATATRANSFER_H_ */

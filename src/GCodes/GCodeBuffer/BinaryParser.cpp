@@ -7,7 +7,7 @@
 
 #include "BinaryParser.h"
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
 #include "GCodeBuffer.h"
 #include "ExpressionParser.h"

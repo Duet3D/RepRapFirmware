@@ -234,10 +234,10 @@ void GCodeQueue::Diagnostics(MessageType mtype) noexcept
 		const QueuedCode *item = queuedItems;
 		do
 		{
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 			// The following may output binary gibberish if this code is stored in binary.
 			// We could restore this message by using GCodeBuffer::AppendFullCommand but there is probably no need to
-			if (!reprap.UsingLinuxInterface())
+			if (!reprap.UsingSbcInterface())
 #endif
 			{
 				reprap.GetPlatform().MessageF(mtype, "Queued '%.*s' for move %" PRIu32 "\n", item->dataLength, item->data, item->executeAtMove);
@@ -250,7 +250,7 @@ void GCodeQueue::Diagnostics(MessageType mtype) noexcept
 
 void QueuedCode::AssignFrom(GCodeBuffer &gb) noexcept
 {
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	isBinary = gb.IsBinary();
 #endif
 	memcpy(data, gb.DataStart(), gb.DataLength());
@@ -259,7 +259,7 @@ void QueuedCode::AssignFrom(GCodeBuffer &gb) noexcept
 
 void QueuedCode::AssignTo(GCodeBuffer *gb) noexcept
 {
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	if (isBinary)
 	{
 		// Note that the data has to remain on a 4-byte boundary for this to work

@@ -134,7 +134,7 @@ float ZProbe::GetActualTriggerHeight() const noexcept
 	return -offsets[Z_AXIS];
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept
 {

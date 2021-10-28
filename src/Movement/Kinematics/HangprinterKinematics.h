@@ -24,7 +24,7 @@ public:
 	bool SupportsAutoCalibration() const noexcept override { return true; }
 	bool IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept override;
 	void SetCalibrationDefaults() noexcept override { Init(); }
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteCalibrationParameters(FileStore *f) const noexcept override;
 #endif
 	LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords, size_t numAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept override;
@@ -37,7 +37,7 @@ public:
 	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept override;
 	bool QueryTerminateHomingMove(size_t axis) const noexcept override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept override;
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
 #if DUAL_CAN

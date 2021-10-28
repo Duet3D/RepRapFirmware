@@ -246,16 +246,8 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 	reply.Clear();
 	firmwareFilename.cat(".bin");
 
-	// Do not ask Linux for a file here because that would create a deadlock.
-	// If blocking calls to Linux are supposed to be made from the Spin loop, the Linux interface,
-	// or at least the code doing SPI data transfers, has to be moved to a separate task first
-#if HAS_MASS_STORAGE
-	// It's fine to check if the file exists on the local SD though
-	if (
-# if HAS_LINUX_INTERFACE
-			!reprap.UsingLinuxInterface() &&
-# endif
-			!reprap.GetPlatform().FileExists(FIRMWARE_DIRECTORY, firmwareFilename.c_str()))
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+	if (!reprap.GetPlatform().FileExists(FIRMWARE_DIRECTORY, firmwareFilename.c_str()))
 	{
 		reply.printf("Firmware file %s not found", firmwareFilename.c_str());
 		return GCodeResult::error;

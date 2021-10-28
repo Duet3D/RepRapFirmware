@@ -11,8 +11,8 @@
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 # include <GCodes/GCodeInput.h>
 #endif
-#if HAS_LINUX_INTERFACE
-# include <Linux/LinuxInterface.h>
+#if HAS_SBC_INTERFACE
+# include <SBC/SbcInterface.h>
 #endif
 #include "BinaryParser.h"
 #include "StringParser.h"
@@ -22,7 +22,7 @@
 #include <Movement/StepTimer.h>
 
 // Macros to reduce the amount of explicit conditional compilation in this file
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
 # define PARSER_OPERATION(_x)	((isBinaryBuffer) ? (binaryParser._x) : (stringParser._x))
 # define IS_BINARY_OR(_x)		((isBinaryBuffer) || (_x))
@@ -93,16 +93,16 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 	  fileInput(fileIn),
 #endif
 	  responseMessageType(mt), lastResult(GCodeResult::ok),
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	  binaryParser(*this),
 #endif
 	  stringParser(*this),
 	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()),
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	  isBinaryBuffer(false),
 #endif
 	  timerRunning(false), motionCommanded(false)
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	  , isWaitingForMacro(false), invalidated(false)
 #endif
 {
@@ -114,7 +114,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 // Reset it to its state after start-up
 void GCodeBuffer::Reset() noexcept
 {
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	if (isWaitingForMacro)
 	{
 		ResolveMacroRequest(true, false);
@@ -123,7 +123,7 @@ void GCodeBuffer::Reset() noexcept
 
 	while (PopState()) { }
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	isBinaryBuffer = false;
 	requestedMacroFile.Clear();
 	isWaitingForMacro = macroFileClosed = false;
@@ -136,7 +136,7 @@ void GCodeBuffer::Reset() noexcept
 // Set it up to parse another G-code
 void GCodeBuffer::Init() noexcept
 {
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	sendToSbc = false;
 	binaryParser.Init();
 #endif
@@ -190,7 +190,7 @@ void GCodeBuffer::Diagnostics(MessageType mtype) noexcept
 {
 	String<StringLength256> scratchString;
 	scratchString.copy(codeChannel.ToString());
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	scratchString.cat(IsBinary() ? "* " : " ");
 #else
 	scratchString.cat(" ");
@@ -235,7 +235,7 @@ void GCodeBuffer::Diagnostics(MessageType mtype) noexcept
 // Add a character to the end
 bool GCodeBuffer::Put(char c) noexcept
 {
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	machineState->lastCodeFromSbc = false;
 	isBinaryBuffer = false;
 #endif
@@ -254,7 +254,7 @@ bool GCodeBuffer::CheckMetaCommand(const StringRef& reply)
 	return NOT_BINARY_AND(stringParser.CheckMetaCommand(reply));
 }
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
 // Add an entire binary G-Code, overwriting any existing content
 // CAUTION! This may be called with the task scheduler suspended, so don't do anything that might block or take more than a few microseconds to execute
@@ -271,7 +271,7 @@ void GCodeBuffer::PutBinary(const uint32_t *data, size_t len) noexcept
 // Add an entire G-Code, overwriting any existing content
 void GCodeBuffer::PutAndDecode(const char *str, size_t len) noexcept
 {
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	machineState->lastCodeFromSbc = false;
 	isBinaryBuffer = false;
 #endif
@@ -281,7 +281,7 @@ void GCodeBuffer::PutAndDecode(const char *str, size_t len) noexcept
 // Add a null-terminated string, overwriting any existing content
 void GCodeBuffer::PutAndDecode(const char *str) noexcept
 {
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	machineState->lastCodeFromSbc = false;
 	isBinaryBuffer = false;
 #endif
@@ -290,7 +290,7 @@ void GCodeBuffer::PutAndDecode(const char *str) noexcept
 
 void GCodeBuffer::StartNewFile() noexcept
 {
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	machineState->SetFileExecuting();
 #endif
 	machineState->lineNumber = 0;						// reset line numbering when M32 is run
@@ -740,7 +740,7 @@ void GCodeBuffer::SetFinished(bool f) noexcept
 {
 	if (f)
 	{
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 		sendToSbc = false;
 #endif
 		LatestMachineState().firstCommandAfterRestart = false;
@@ -861,8 +861,8 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
 			if (machineState->DoingFile())
 			{
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-# if HAS_LINUX_INTERFACE
-				if (!reprap.UsingLinuxInterface())
+# if HAS_SBC_INTERFACE
+				if (!reprap.UsingSbcInterface())
 # endif
 				{
 					fileInput->Reset(machineState->fileState);
@@ -872,7 +872,7 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
 			}
 		} while (PopState() && (abortAll || !machineState->DoingFile()));
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 		abortFile = requestAbort;
 		abortAllFiles = requestAbort && abortAll;
 	}
@@ -883,7 +883,7 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
 	}
 }
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
 void GCodeBuffer::SetFileFinished() noexcept
 {
@@ -912,7 +912,7 @@ void GCodeBuffer::SetFileFinished() noexcept
 
 	if (macroFileId != NoFileId)
 	{
-		reprap.GetLinuxInterface().EventOccurred();
+		reprap.GetSbcInterface().EventOccurred();
 	}
 }
 
@@ -929,14 +929,14 @@ void GCodeBuffer::SetPrintFinished() noexcept
 				ms->fileFinished = true;
 			}
 		}
-		reprap.GetLinuxInterface().EventOccurred();
+		reprap.GetSbcInterface().EventOccurred();
 	}
 }
 
-// This is only called when using the Linux interface and returns if the macro file could be opened
+// This is only called when using the SBC interface and returns if the macro file could be opened
 bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 {
-	if (!reprap.GetLinuxInterface().IsConnected())
+	if (!reprap.GetSbcInterface().IsConnected())
 	{
 		// Don't wait for a macro file if no SBC is connected
 		return false;
@@ -953,7 +953,7 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 	{
 		// Wait for a response (but not forever)
 		isWaitingForMacro = true;
-		reprap.GetLinuxInterface().EventOccurred(true);
+		reprap.GetSbcInterface().EventOccurred(true);
 		if (!macroSemaphore.Take(SpiMacroRequestTimeout))
 		{
 			isWaitingForMacro = false;
@@ -962,7 +962,7 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 		}
 	}
 
-	// When we get here we expect the Linux interface to have set the variables above for us
+	// When we get here we expect the SBC interface to have set the variables above for us
 	if (!macroFileError)
 	{
 		macroJustStarted = true;
@@ -984,7 +984,7 @@ void GCodeBuffer::MacroFileClosed() noexcept
 	machineState->CloseFile();
 	macroJustStarted = false;
 	macroFileClosed = true;
-	reprap.GetLinuxInterface().EventOccurred();
+	reprap.GetSbcInterface().EventOccurred();
 }
 
 #endif
@@ -1000,9 +1000,9 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled) noexcept
 			ms->waitingForAcknowledgement = false;
 			ms->messageAcknowledged = true;
 			ms->messageCancelled = cancelled;
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 			messageAcknowledged = !cancelled;
-			reprap.GetLinuxInterface().EventOccurred();
+			reprap.GetSbcInterface().EventOccurred();
 #endif
 		}
 	}
@@ -1010,7 +1010,7 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled) noexcept
 
 MessageType GCodeBuffer::GetResponseMessageType() const noexcept
 {
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	if (machineState->lastCodeFromSbc)
 	{
 		return (MessageType)((1u << codeChannel.ToBaseType()) | BinaryCodeReplyFlag);
@@ -1027,8 +1027,8 @@ FilePosition GCodeBuffer::GetFilePosition() const noexcept
 void GCodeBuffer::WaitForAcknowledgement() noexcept
 {
 	machineState->WaitForAcknowledgement();
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
 		messagePromptPending = true;
 	}

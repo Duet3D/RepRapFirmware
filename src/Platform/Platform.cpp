@@ -86,9 +86,9 @@ using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have 
 # include "PortControl.h"
 #endif
 
-#if HAS_LINUX_INTERFACE
-# include "Linux/LinuxInterface.h"
-# include "Linux/DataTransfer.h"
+#if HAS_SBC_INTERFACE
+# include "SBC/SbcInterface.h"
+# include "SBC/DataTransfer.h"
 #endif
 
 #if HAS_NETWORKING
@@ -227,7 +227,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
 	{ "firmwareName",		OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_NAME),															ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(VERSION),																	ObjectModelEntryFlags::none },
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	{ "iapFileNameSBC",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE_SBC),														ObjectModelEntryFlags::none },
 #endif
 #if HAS_MASS_STORAGE
@@ -342,7 +342,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
 	10,																		// number of sections
-	9 + SUPPORT_ACCELEROMETERS + HAS_LINUX_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR + SUPPORT_CAN_EXPANSION + SUPPORT_12864_LCD + MCU_HAS_UNIQUE_ID,		// section 0: boards[0]
+	9 + SUPPORT_ACCELEROMETERS + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR + SUPPORT_CAN_EXPANSION + SUPPORT_12864_LCD + MCU_HAS_UNIQUE_ID,		// section 0: boards[0]
 #if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
 #else
@@ -413,7 +413,7 @@ Platform::Platform() noexcept :
 #if HAS_AUX_DEVICES
 	panelDueUpdater(nullptr),
 #endif
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	sysDir(nullptr),
 #endif
 	tickState(0), debugCode(0),
@@ -500,7 +500,7 @@ void Platform::Init() noexcept
 		pinMode(SdCardDetectPins[i], INPUT_PULLUP);
 	}
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	MassStorage::Init();
 #endif
 
@@ -1022,7 +1022,7 @@ void Platform::Spin() noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	MassStorage::Spin();
 #endif
 
@@ -1472,8 +1472,8 @@ bool Platform::IsPowerOk() const noexcept
 {
 	// FIXME Implement auto-save for the SBC
 	return (   !autoSaveEnabled
-#if HAS_LINUX_INTERFACE
-			|| reprap.UsingLinuxInterface()
+#if HAS_SBC_INTERFACE
+			|| reprap.UsingSbcInterface()
 #endif
 		   )
 		|| currentVin > autoPauseReading;
@@ -2254,17 +2254,17 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 	case (unsigned int)DiagnosticTestType::PrintObjectAddresses:
 		MessageF(MessageType::GenericMessage,
 					"Platform %08" PRIx32 "-%08" PRIx32
-#if HAS_LINUX_INTERFACE
-					"\nLinuxInterface %08" PRIx32 "-%08" PRIx32
+#if HAS_SBC_INTERFACE
+					"\nSbcInterface %08" PRIx32 "-%08" PRIx32
 #endif
 					"\nNetwork %08" PRIx32 "-%08" PRIx32
 					"\nGCodes %08" PRIx32 "-%08" PRIx32
 					"\nMove %08" PRIx32 "-%08" PRIx32
 					"\nHeat %08" PRIx32 "-%08" PRIx32
 					, reinterpret_cast<uint32_t>(this), reinterpret_cast<uint32_t>(this) + sizeof(Platform) - 1
-#if HAS_LINUX_INTERFACE
-					, reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface())
-					, (reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()) == 0) ? 0 : reinterpret_cast<uint32_t>(&reprap.GetLinuxInterface()) + sizeof(LinuxInterface)
+#if HAS_SBC_INTERFACE
+					, reinterpret_cast<uint32_t>(&reprap.GetSbcInterface())
+					, (reinterpret_cast<uint32_t>(&reprap.GetSbcInterface()) == 0) ? 0 : reinterpret_cast<uint32_t>(&reprap.GetSbcInterface()) + sizeof(SbcInterface)
 #endif
 					, reinterpret_cast<uint32_t>(&reprap.GetNetwork()), reinterpret_cast<uint32_t>(&reprap.GetNetwork()) + sizeof(Network) - 1
 					, reinterpret_cast<uint32_t>(&reprap.GetGCodes()), reinterpret_cast<uint32_t>(&reprap.GetGCodes()) + sizeof(GCodes) - 1
@@ -2443,7 +2443,7 @@ int Platform::GetAveragingFilterIndex(const IoPort& port) const noexcept
 	return -1;
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Write the platform parameters to file
 bool Platform::WritePlatformParameters(FileStore *f, bool includingG31) const noexcept
@@ -3367,8 +3367,8 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 	{
 		++numDestinations;
 	}
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
 	{
 		++numDestinations;
 	}
@@ -3413,10 +3413,10 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 			AppendUsbReply(buffer);
 		}
 
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
+#if HAS_SBC_INTERFACE
+		if (reprap.UsingSbcInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
 		{
-			reprap.GetLinuxInterface().HandleGCodeReply(type, buffer);
+			reprap.GetSbcInterface().HandleGCodeReply(type, buffer);
 		}
 #endif
 	}
@@ -3425,11 +3425,11 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 void Platform::MessageF(MessageType type, const char *fmt, va_list vargs) noexcept
 {
 	String<FormatStringLength> formatString;
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
 	{
 		formatString.vprintf(fmt, vargs);
-		reprap.GetLinuxInterface().HandleGCodeReply(type, formatString.c_str());
+		reprap.GetSbcInterface().HandleGCodeReply(type, formatString.c_str());
 		if ((type & BinaryCodeReplyFlag) != 0)
 		{
 			return;
@@ -3465,11 +3465,11 @@ void Platform::MessageF(MessageType type, const char *fmt, ...) noexcept
 
 void Platform::Message(MessageType type, const char *message) noexcept
 {
-#if HAS_LINUX_INTERFACE
-	if (reprap.UsingLinuxInterface() &&
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface() &&
 		((type & BinaryCodeReplyFlag) != 0 || (type & GenericMessage) == GenericMessage || (type & LogOff) != LogOff))
 	{
-		reprap.GetLinuxInterface().HandleGCodeReply(type, message);
+		reprap.GetSbcInterface().HandleGCodeReply(type, message);
 		if ((type & BinaryCodeReplyFlag) != 0)
 		{
 			return;
@@ -3979,7 +3979,7 @@ bool Platform::IsDuetWiFi() const noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 bool Platform::Delete(const char* folder, const char *filename) const noexcept
 {
@@ -3995,7 +3995,7 @@ bool Platform::DeleteSysFile(const char *filename) const noexcept
 
 #endif
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE || HAS_EMBEDDED_FILES
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 // Open a file
 FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize) const noexcept

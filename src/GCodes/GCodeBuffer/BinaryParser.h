@@ -10,9 +10,9 @@
 
 #include <RepRapFirmware.h>
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
-#include <Linux/LinuxMessageFormats.h>
+#include <SBC/SbcMessageFormats.h>
 #include <GCodes/GCodeException.h>
 #include <GCodes/GCodeMachineState.h>
 

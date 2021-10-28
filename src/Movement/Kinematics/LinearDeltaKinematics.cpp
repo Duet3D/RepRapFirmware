@@ -785,7 +785,7 @@ void LinearDeltaKinematics::PrintParameters(const StringRef& reply) const noexce
 		(double)(xTilt * 100.0), (double)(yTilt * 100.0));
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Write the parameters that are set by auto calibration to a file, returning true if success
 bool LinearDeltaKinematics::WriteCalibrationParameters(FileStore *f) const noexcept

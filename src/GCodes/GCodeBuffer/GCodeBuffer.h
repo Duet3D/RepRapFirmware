@@ -14,7 +14,9 @@
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeChannel.h>
 #include <GCodes/GCodeMachineState.h>
-#include <Linux/LinuxMessageFormats.h>
+#if HAS_SBC_INTERFACE
+# include <SBC/SbcMessageFormats.h>
+#endif
 #include <ObjectModel/ObjectModel.h>
 
 class FileGCodeInput;
@@ -48,7 +50,7 @@ public:
 	void Diagnostics(MessageType mtype) noexcept;								// Write some debug info
 
 	bool Put(char c) noexcept SPEED_CRITICAL;									// Add a character to the end
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	void PutBinary(const uint32_t *data, size_t len) noexcept;					// Add an entire binary G-Code, overwriting any existing content
 #endif
 	void PutAndDecode(const char *data, size_t len) noexcept;					// Add an entire G-Code, overwriting any existing content
@@ -150,7 +152,7 @@ public:
 
 	void WaitForAcknowledgement() noexcept;						// Flag that we are waiting for acknowledgement
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	bool IsBinary() const noexcept { return isBinaryBuffer; }	// Return true if the code is in binary format
 
 	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
@@ -269,7 +271,7 @@ private:
 
 	GCodeResult lastResult;
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	BinaryParser binaryParser;
 #endif
 
@@ -282,20 +284,20 @@ private:
 	uint32_t whenReportDueTimerStarted;					// When the report-due-timer has been started
 	static constexpr uint32_t reportDueInterval = 1000;	// Interval in which we send in ms
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	bool isBinaryBuffer;
 #endif
 	bool timerRunning;									// True if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	alignas(4) char buffer[MaxCodeBufferSize];			// must be aligned because we do dword fetches from it
 #else
 	char buffer[GCODE_LENGTH];
 #endif
 
-#if HAS_LINUX_INTERFACE
-	// Accessed by both the Main and Linux tasks
+#if HAS_SBC_INTERFACE
+	// Accessed by both the Main and SBC tasks
 	BinarySemaphore macroSemaphore;
 	volatile bool isWaitingForMacro;	// Is this GB waiting in DoFileMacro?
 	volatile bool macroFileClosed;		// Last macro file has been closed in RRF, tell the SBC
@@ -312,21 +314,21 @@ private:
 		messagePromptPending : 1,	// Has the SBC been notified about a message waiting for acknowledgement?
 		messageAcknowledged : 1;	// Last message has been acknowledged
 
-	// Accessed only by the Linux task
+	// Accessed only by the SBC task
 	bool invalidated;				// Set to true if the GB content is not valid and about to be cleared
 #endif
 };
 
 inline bool GCodeBuffer::IsDoingFileMacro() const noexcept
 {
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	return machineState->doingFileMacro || IsMacroRequestPending();
 #else
 	return machineState->doingFileMacro;
 #endif
 }
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 
 inline bool GCodeBuffer::IsFileFinished() const noexcept
 {
@@ -369,7 +371,7 @@ inline bool GCodeBuffer::CanQueueCodes() const noexcept
 
 inline bool GCodeBuffer::IsDoingFile() const noexcept
 {
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	return machineState->DoingFile() || IsMacroRequestPending();
 #else
 	return machineState->DoingFile();
@@ -389,7 +391,7 @@ inline bool GCodeBuffer::IsExecuting() const noexcept
 // Return true if this source is executing a file from the local SD card
 inline bool GCodeBuffer::IsDoingLocalFile() const noexcept
 {
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	return !IsBinary() && IsDoingFile();
 #else
 	return IsDoingFile();

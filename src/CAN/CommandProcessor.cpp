@@ -37,8 +37,8 @@
 # include <Accelerometers/Accelerometers.h>
 #endif
 
-#if HAS_LINUX_INTERFACE
-# include "Linux/LinuxInterface.h"
+#if HAS_SBC_INTERFACE
+# include "SBC/SbcInterface.h"
 
 constexpr size_t MaxFileChunkSize = 448;	// Maximum size of file chunks for reading files from the SBC. Should be a multiple of sizeof(CanMessageFirmwareUpdateResponse::data) for best CAN performance
 char sbcFirmwareChunk[MaxFileChunkSize];
@@ -62,12 +62,12 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 		uint32_t fileOffset = msg.fileOffset, fileLength = 0;
 		uint32_t lreq = msg.lengthRequested;
 
-#if HAS_LINUX_INTERFACE
-		if (reprap.UsingLinuxInterface())
+#if HAS_SBC_INTERFACE
+		if (reprap.UsingSbcInterface())
 		{
 			// Fetch the firmware file from the SBC
 			uint32_t bytesRead = min<uint32_t>(lreq, MaxFileChunkSize);
-			if (reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, sbcFirmwareChunk, bytesRead, fileLength))
+			if (reprap.GetSbcInterface().GetFileChunk(fname.c_str(), fileOffset, sbcFirmwareChunk, bytesRead, fileLength))
 			{
 				if (fileOffset >= fileLength)
 				{
@@ -114,7 +114,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 						if (bytesSent == (size_t)bytesRead)
 						{
 							bytesRead = min<uint32_t>(lreq, MaxFileChunkSize);
-							if (!reprap.GetLinuxInterface().GetFileChunk(fname.c_str(), fileOffset, sbcFirmwareChunk, bytesRead, fileLength))
+							if (!reprap.GetSbcInterface().GetFileChunk(fname.c_str(), fileOffset, sbcFirmwareChunk, bytesRead, fileLength))
 							{
 								msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
 								msgp->dataLength = 0;

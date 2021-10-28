@@ -31,8 +31,8 @@
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <General/Vector.hpp>
-#if HAS_LINUX_INTERFACE
-# include <Linux/LinuxInterface.h>
+#if HAS_SBC_INTERFACE
+# include <SBC/SbcInterface.h>
 #endif
 
 void Flasher::erase(uint32_t foffset) THROWS(GCodeException)

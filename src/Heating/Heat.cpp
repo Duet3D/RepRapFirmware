@@ -889,7 +889,7 @@ float Heat::GetHighestTemperatureLimit() const noexcept
 	return limit;
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Write heater model parameters to file returning true if no error
 bool Heat::WriteModelParameters(FileStore *f) const noexcept
@@ -1255,7 +1255,7 @@ void Heat::InsertSensor(TemperatureSensor *newSensor) noexcept
 	}
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Save some resume information returning true if successful.
 // We assume that the bed and chamber heaters are either on and active, or off (not on standby).

@@ -58,7 +58,7 @@ public:
 	unsigned int GetNumber() const { return fanNumber; }
 	const char *GetName() const noexcept { return name.c_str(); }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteSettings(FileStore *f, size_t fanNum) const noexcept;	// save the settings of this fan if it isn't thermostatic
 #endif
 

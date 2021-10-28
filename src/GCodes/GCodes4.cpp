@@ -8,8 +8,8 @@
 #include <Heating/Heat.h>
 #include <Endstops/ZProbe.h>
 
-#if HAS_LINUX_INTERFACE
-# include <Linux/LinuxInterface.h>
+#if HAS_SBC_INTERFACE
+# include <SBC/SbcInterface.h>
 #endif
 
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
@@ -22,9 +22,9 @@
 // So any large local objects allocated here increase the amount of MAIN stack size needed.
 void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	// Wait for the G-code replies and abort requests to go before anything else is done in the state machine
-	if (reprap.UsingLinuxInterface() && (gb.IsAbortRequested() || gb.IsAbortAllRequested()))
+	if (reprap.UsingSbcInterface() && (gb.IsAbortRequested() || gb.IsAbortAllRequested()))
 	{
 		return;
 	}
@@ -499,8 +499,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			platform.MessageF(LogWarn, "%s\n", reply.c_str());
 			pauseState = PauseState::paused;
-#if HAS_LINUX_INTERFACE
-			reportPause = reprap.UsingLinuxInterface();
+#if HAS_SBC_INTERFACE
+			reportPause = reprap.UsingSbcInterface();
 #endif
 			gb.SetState(GCodeState::normal);
 		}
@@ -909,8 +909,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				reply.printf("%" PRIu32 " points probed, min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
 								numPointsProbed, (double)minError, (double)maxError, (double)deviation.GetMean(), (double)deviation.GetDeviationFromMean());
 #if HAS_MASS_STORAGE
-# if HAS_LINUX_INTERFACE
-				if (!reprap.UsingLinuxInterface())
+# if HAS_SBC_INTERFACE
+				if (!reprap.UsingSbcInterface())
 # endif
 				{
 					if (TrySaveHeightMap(DefaultHeightMapFile, reply))
@@ -1440,7 +1440,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		else
 		{
-# if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+# if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 			SaveResumeInfo(true);											// create the resume file so that we can resume after power down
 # endif
 			platform.Message(LoggedGenericMessage, "Print auto-paused due to low voltage\n");
@@ -1521,7 +1521,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 #endif
 
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 	case GCodeState::waitingForAcknowledgement:	// finished M291 and the SBC expects a response next
 #endif
 	case GCodeState::checkError:				// we return to this state after running the retractprobe macro when there may be a stored error message
@@ -1543,11 +1543,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		HandleReply(gb, stateMachineResult, reply.c_str());
 
 		CheckForDeferredPause(gb);
-#if HAS_LINUX_INTERFACE
+#if HAS_SBC_INTERFACE
 		if (reportPause)
 		{
 			fileGCode->Invalidate();
-			reprap.GetLinuxInterface().ReportPause();
+			reprap.GetSbcInterface().ReportPause();
 		}
 #endif
 	}

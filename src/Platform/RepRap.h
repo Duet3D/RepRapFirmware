@@ -126,9 +126,9 @@ public:
  	const char *GetLatestMessage(uint16_t& sequence) const noexcept;
  	const MessageBox& GetMessageBox() const noexcept { return mbox; }
 #endif
-#if HAS_LINUX_INTERFACE
- 	bool UsingLinuxInterface() const noexcept { return usingLinuxInterface; }
- 	LinuxInterface& GetLinuxInterface() const noexcept { return *linuxInterface; }
+#if HAS_SBC_INTERFACE
+ 	bool UsingSbcInterface() const noexcept { return usingSbcInterface; }
+ 	SbcInterface& GetSbcInterface() const noexcept { return *sbcInterface; }
 #endif
 #if SUPPORT_CAN_EXPANSION
  	ExpansionManager& GetExpansion() const noexcept { return *expansion; }
@@ -161,7 +161,7 @@ public:
 	void SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls) noexcept;
 	void ClearAlert() noexcept;
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteToolSettings(FileStore *f) noexcept;						// save some information for the resume file
 	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noexcept;	// save some information in config-override.g
 #endif
@@ -248,8 +248,8 @@ private:
  	Display *display;
 #endif
 
-#if HAS_LINUX_INTERFACE
- 	LinuxInterface *linuxInterface;
+#if HAS_SBC_INTERFACE
+ 	SbcInterface *sbcInterface;
 #endif
 
 #if SUPPORT_ROLAND
@@ -304,8 +304,8 @@ private:
 	bool stopped;
 	bool active;
 	bool processingConfig;
-#if HAS_LINUX_INTERFACE
- 	bool usingLinuxInterface;
+#if HAS_SBC_INTERFACE
+ 	bool usingSbcInterface;
 #endif
 };
 

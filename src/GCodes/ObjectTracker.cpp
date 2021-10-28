@@ -265,7 +265,7 @@ void ObjectTracker::ResumePrinting(GCodeBuffer& gb) noexcept
 	}
 }
 
-#if HAS_MASS_STORAGE || HAS_LINUX_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Write the object details to file, returning true if successful
 bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
