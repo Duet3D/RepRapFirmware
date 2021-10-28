@@ -388,7 +388,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 			// It's an extruder drive. We defer calculating the steps because they may be affected by nonlinear extrusion, which we can't calculate until we
 			// know the speed of the move, and because extruder movement is relative so we need to accumulate fractions of a whole step between moves.
 			const float movement = nextMove.coords[drive];
-			directionVector[drive] = movement;
+			endCoordinates[drive] = directionVector[drive] = movement;			// for an extruder, endCoordinates is the amount of movement
 			if (movement != 0.0)
 			{
 				extrudersMoving = true;
