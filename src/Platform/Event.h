@@ -10,8 +10,8 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <CoreTypes.h>
 #include <RRF3Common.h>
-#include <CanId.h>
 #include <General/FreelistManager.h>
 #include <General/StringRef.h>
 

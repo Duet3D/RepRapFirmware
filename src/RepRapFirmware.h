@@ -128,8 +128,6 @@ namespace CanInterface
 
 #else
 
-typedef uint8_t CanAddress;
-
 namespace CanInterface
 {
 	inline CanAddress GetCanAddress() noexcept { return 0; }
