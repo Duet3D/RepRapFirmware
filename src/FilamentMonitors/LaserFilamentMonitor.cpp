@@ -54,6 +54,7 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::live },
 
 	// 2. LaserFilamentMonitor.configured members
+	{ "allMoves",			OBJECT_MODEL_FUNC(self->checkNonPrintingMoves), 														ObjectModelEntryFlags::none },
 	{ "calibrationFactor",	OBJECT_MODEL_FUNC(self->calibrationFactor, 3), 															ObjectModelEntryFlags::none },
 	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementAllowed)), 											ObjectModelEntryFlags::none },
 	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementAllowed)), 											ObjectModelEntryFlags::none },
@@ -69,7 +70,7 @@ constexpr uint8_t LaserFilamentMonitor::objectModelTableDescriptor[] =
 	5,
 #endif
 	4,
-	4
+	5
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(LaserFilamentMonitor)
@@ -164,10 +165,11 @@ GCodeResult LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& re
 		{
 			reply.printf("Duet3D laser filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
 			GetPort().AppendPinName(reply);
-			reply.catf(", %s, allow %ld%% to %ld%%, check every %.1fmm, calibration factor %.3f, ",
+			reply.catf(", %s, allow %ld%% to %ld%%, check %s moves every %.1fmm, calibration factor %.3f, ",
 						(comparisonEnabled) ? "enabled" : "disabled",
 						ConvertToPercent(minMovementAllowed),
 						ConvertToPercent(maxMovementAllowed),
+						(checkNonPrintingMoves) ? "all" : "printing",
 						(double)minimumExtrusionCheckLength,
 						(double)calibrationFactor);
 

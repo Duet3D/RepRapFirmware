@@ -54,6 +54,7 @@ constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[
 	{ "totalDistance",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1), 													ObjectModelEntryFlags::live },
 
 	// 2. RotatingMagnetFilamentMonitor.configured members
+	{ "allMoves",			OBJECT_MODEL_FUNC(self->checkNonPrintingMoves), 														ObjectModelEntryFlags::none },
 	{ "mmPerRev",			OBJECT_MODEL_FUNC(self->mmPerRev, 2), 																	ObjectModelEntryFlags::none },
 	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementAllowed)), 											ObjectModelEntryFlags::none },
 	{ "percentMin",			OBJECT_MODEL_FUNC(ConvertToPercent(self->minMovementAllowed)), 											ObjectModelEntryFlags::none },
@@ -69,7 +70,7 @@ constexpr uint8_t RotatingMagnetFilamentMonitor::objectModelTableDescriptor[] =
 	5,
 #endif
 	4,
-	4
+	5
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RotatingMagnetFilamentMonitor)
@@ -166,11 +167,12 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const Stri
 		{
 			reply.printf("Duet3D rotating magnet filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
 			GetPort().AppendPinName(reply);
-			reply.catf(", %s, sensitivity %.2fmm/rev, allow %ld%% to %ld%%, check every %.1fmm, ",
+			reply.catf(", %s, sensitivity %.2fmm/rev, allow %ld%% to %ld%%, check %s moves every %.1fmm, ",
 						(comparisonEnabled) ? "enabled" : "disabled",
 						(double)mmPerRev,
 						ConvertToPercent(minMovementAllowed),
 						ConvertToPercent(maxMovementAllowed),
+						(checkNonPrintingMoves) ? "all" : "printing",
 						(double)minimumExtrusionCheckLength);
 
 			if (!dataReceived)
