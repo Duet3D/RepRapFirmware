@@ -1294,7 +1294,7 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::MacAddress_tc:
 	case TypeCode::DateTime_tc:
 	case TypeCode::Port:
-	case TypeCode::UniqueId:
+	case TypeCode::UniqueId_tc:
 		// All these types are represented as strings
 		value.AppendAsString(rslt.GetRef());
 		payloadLength = expressionLength + rslt.strlen();
@@ -1375,7 +1375,7 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::MacAddress_tc:
 	case TypeCode::IPAddress_tc:
 	case TypeCode::Port:
-	case TypeCode::UniqueId:
+	case TypeCode::UniqueId_tc:
 	default:
 		// We have already converted the value to a string in 'rslt'
 		header->dataType = (value.GetType() == TypeCode::DateTime_tc) ? DataType::DateTime : DataType::String;

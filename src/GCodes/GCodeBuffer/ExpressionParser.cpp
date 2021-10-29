@@ -699,11 +699,11 @@ void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2
 	}
 
 	// Convert any port or unique ID values to string
-	if (val1.GetType() == TypeCode::Port || val1.GetType() == TypeCode::UniqueId)
+	if (val1.GetType() == TypeCode::Port || val1.GetType() == TypeCode::UniqueId_tc)
 	{
 		ConvertToString(val1, evaluate);
 	}
-	if (val2.GetType() == TypeCode::Port || val2.GetType() == TypeCode::UniqueId)
+	if (val2.GetType() == TypeCode::Port || val2.GetType() == TypeCode::UniqueId_tc)
 	{
 		ConvertToString(val2, evaluate);
 	}

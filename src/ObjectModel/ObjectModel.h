@@ -44,7 +44,7 @@ enum class TypeCode : uint8_t
 	MacAddress_tc,		// renamed for eCv to avoid clash with class MacAddress
 	Special,
 	Port,
-	UniqueId,
+	UniqueId_tc,
 #if SUPPORT_CAN_EXPANSION
 	CanExpansionBoardDetails
 #endif
@@ -143,7 +143,7 @@ struct ExpressionValue
 	explicit ExpressionValue(SpecialType s, uint32_t u) noexcept : type((uint32_t)TypeCode::Special), param((uint32_t)s), uVal(u) { }
 	explicit ExpressionValue(StringHandle h) noexcept : type((uint32_t)TypeCode::HeapString), param(0), shVal(h) { }
 	explicit ExpressionValue(const IoPort& p) noexcept : type((uint32_t)TypeCode::Port), param(0), iopVal(&p) { }
-	explicit ExpressionValue(const UniqueId& id) noexcept : type((uint32_t)TypeCode::UniqueId), param(0), uniqueIdVal(&id) { }
+	explicit ExpressionValue(const UniqueId& id) noexcept : type((uint32_t)TypeCode::UniqueId_tc), param(0), uniqueIdVal(&id) { }
 #if SUPPORT_CAN_EXPANSION
 	ExpressionValue(const char*s, ExpansionDetail p) noexcept : type((uint32_t)TypeCode::CanExpansionBoardDetails), param((uint32_t)p), sVal(s) { }
 #endif
