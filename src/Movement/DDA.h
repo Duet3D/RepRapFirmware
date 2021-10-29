@@ -439,6 +439,13 @@ inline bool DDA::CanPauseAfter() const noexcept
 		;
 }
 
+// Return the number of net steps already taken in this move by a particular drive
+inline int32_t DDA::GetStepsTaken(size_t drive) const noexcept
+{
+	const DriveMovement * const dmp = FindDM(drive);
+	return (dmp != nullptr) ? dmp->GetNetStepsTaken() : 0;
+}
+
 #if SUPPORT_CAN_EXPANSION
 
 // Insert a hiccup, returning the amount of time inserted
