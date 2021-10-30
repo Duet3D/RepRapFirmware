@@ -62,7 +62,7 @@ void DDARing::Init1(unsigned int numDdas) noexcept
 	getPointer = checkPointer = addPointer;
 	currentDda = nullptr;
 
-	timer.SetCallback(DDARing::TimerCallback, static_cast<void*>(this));
+	timer.SetCallback(DDARing::TimerCallback, CallbackParameter(this));
 }
 
 // This must be called from Move::Init, not from the Move constructor, because it indirectly refers to the GCodes module which must therefore be initialised first

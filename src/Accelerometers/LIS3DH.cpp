@@ -179,7 +179,7 @@ bool LIS3DH:: StartCollecting(uint8_t axes) noexcept
 
 	totalNumRead = 0;
 	const bool ok = WriteRegister(LisRegister::Ctrl_0x20, ctrlReg_0x20 | (axes & 7));
-	return ok && attachInterrupt(int1Pin, Int1Interrupt, InterruptMode::rising, this);
+	return ok && attachInterrupt(int1Pin, Int1Interrupt, InterruptMode::rising, CallbackParameter(this));
 }
 
 // Collect some data from the FIFO, suspending until the data is available

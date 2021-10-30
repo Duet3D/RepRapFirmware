@@ -226,7 +226,7 @@ static void EspTransferRequestIsr(CallbackParameter) noexcept
 
 static inline void EnableEspInterrupt() noexcept
 {
-	attachInterrupt(EspDataReadyPin, EspTransferRequestIsr, InterruptMode::rising, nullptr);
+	attachInterrupt(EspDataReadyPin, EspTransferRequestIsr, InterruptMode::rising, CallbackParameter(nullptr));
 }
 
 static inline void DisableEspInterrupt() noexcept
