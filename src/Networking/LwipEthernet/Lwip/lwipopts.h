@@ -42,6 +42,10 @@
 #ifndef __LWIPOPTS_H__
 #define __LWIPOPTS_H__
 
+#include <ecv.h>
+#undef array
+#undef out
+
 /* Include ethernet configuration first */
 #include "conf_eth.h"
 

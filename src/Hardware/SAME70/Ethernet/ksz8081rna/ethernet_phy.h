@@ -47,6 +47,10 @@
 #ifndef ETHERNET_PHY_H_INCLUDED
 #define ETHERNET_PHY_H_INCLUDED
 
+#include <ecv.h>
+#undef array
+#undef out
+
 #include "compiler.h"
 
 // IEEE defined Registers
@@ -115,7 +119,7 @@
 #define GMII_RF               (1 << 13) // Remote Fault
 //      Reserved               12       // Write as 0, ignore on read
 #define GMII_PAUSE_MASK       (3 << 10) // 0,0 = No Pause 1,0 = Asymmetric Pause(link partner)
-                                        // 0,1 = Symmetric Pause 1,1 = Symmetric&Asymmetric Pause(local device)   
+                                        // 0,1 = Symmetric Pause 1,1 = Symmetric&Asymmetric Pause(local device)
 #define GMII_100T4               (1 << 9)  // 100BASE-T4 Support
 #define GMII_100TX_FDX           (1 << 8)  // 100BASE-TX Full Duplex Support
 #define GMII_100TX_HDX           (1 << 7)  // 100BASE-TX Half Duplex Support

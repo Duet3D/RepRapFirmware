@@ -41,6 +41,10 @@
  *
  */
 
+#include <ecv.h>
+#undef array
+#undef out
+
 #include "compiler.h"
 #include "diskio.h"
 
