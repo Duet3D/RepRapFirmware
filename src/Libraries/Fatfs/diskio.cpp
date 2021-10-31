@@ -41,9 +41,7 @@
  *
  */
 
-#include <ecv.h>
-#undef array
-#undef out
+#include <ecv_duet3d.h>
 
 #include "compiler.h"
 #include "diskio.h"

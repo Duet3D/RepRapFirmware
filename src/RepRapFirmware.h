@@ -22,6 +22,8 @@ Licence: GPL
 #ifndef REPRAPFIRMWARE_H
 #define REPRAPFIRMWARE_H
 
+#include <ecv_duet3d.h>
+
 #include <cstddef>		// for size_t
 #include <cfloat>
 #include <cstdarg>
@@ -31,20 +33,6 @@ Licence: GPL
 [[deprecated("use gmtime_r instead for thread-safety")]] tm* gmtime(const time_t* t);
 [[deprecated("use SafeStrptime instead")]] char * strptime (const char *buf, const char *format, struct tm *timeptr);
 const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr) noexcept;
-
-#include "ecv.h"
-#ifdef value
-# undef value			// needed because some files include include <optional>
-#endif
-#ifdef array
-# undef array			// needed because some files include <functional>
-#endif
-#ifdef assert
-# undef assert
-#endif
-#ifdef result
-# undef result
-#endif
 
 #include <Core.h>
 
@@ -79,7 +67,7 @@ constexpr unsigned int ApiLevel = 1;
 // Logical pins used for general output, servos, CCN and laser control
 typedef uint8_t LogicalPin;				// type used to represent logical pin numbers
 constexpr LogicalPin NoLogicalPin = 0xFF;
-constexpr const char *NoPinName = "nil";
+constexpr const char * _ecv_array NoPinName = "nil";
 
 // Enumeration to describe what we want to do with a pin
 enum class PinAccess : int

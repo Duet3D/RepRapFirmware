@@ -1350,10 +1350,10 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 		reply.copy("[");
 	}
 
-	// Hangprinter needs M569 to support multiple P parameters in M569.3. This poses a problem for other uses of M569 because the output may be too long
+	// Hangprinter needs M569 to support multiple P parameters in M569.3 and M569.4. This poses a problem for other uses of M569 because the output may be too long
 	// to fit in the reply buffer, and we can only use an OutputBuffer instead if the overall result is success.
-	// Therefore we only support multiple P parameters for subfunction 3.
-	GCodeResult res;
+	// Therefore we only support multiple P parameters for subfunctions 3 and 4.
+	GCodeResult res = GCodeResult::ok;
 	for (size_t i = 0; i < drivesCount; ++i)
 	{
 		DriverId const id = driverIds[i];
