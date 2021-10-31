@@ -106,7 +106,7 @@ public:
 		return lastStandbyTools[heater];
 	}
 
-	bool IsHeaterEnabled(size_t heater)	const noexcept;					// Is this heater enabled?
+	bool IsHeaterEnabled(size_t heater)	const noexcept					// Is this heater enabled?
 	pre(heater < MaxHeaters);
 
 	float GetActiveTemperature(int heater) const noexcept;

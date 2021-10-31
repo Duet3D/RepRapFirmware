@@ -1395,7 +1395,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				reprap.GetMove().GetCurrentUserPosition(moveState.coords, 0, tool);
 				for (size_t i = 0; i < tool->DriveCount(); ++i)
 				{
-					moveState.coords[ExtruderToLogicalDrive(tool->Drive(i))] = tool->GetRetractLength() + tool->GetRetractExtra();
+					moveState.coords[ExtruderToLogicalDrive(tool->GetDrive(i))] = tool->GetRetractLength() + tool->GetRetractExtra();
 				}
 				moveState.feedRate = tool->GetUnRetractSpeed() * tool->DriveCount();
 				moveState.filePos = (&gb == fileGCode) ? gb.GetFilePosition() : noFilePosition;

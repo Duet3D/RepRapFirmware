@@ -303,11 +303,11 @@ public:
 	void ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS(GCodeException);
 
 	// Get the value of an object via the table
-	ExpressionValue GetObjectValueUsingTableNumber(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber) const THROWS(GCodeException);
+	ExpressionValue GetObjectValueUsingTableNumber(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *_ecv_array idString, uint8_t tableNumber) const THROWS(GCodeException);
 
 	// Function to report a value or object as JSON. This does not need to handle 'var' or 'global' because those are checked for before this is called.
 	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
-							const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
+							const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException);
 
 	// Skip the current element in the ID or filter string
 	static const char* GetNextElement(const char *id) noexcept;
@@ -315,16 +315,16 @@ public:
 protected:
 	// Construct a JSON representation of those parts of the object model requested by the user
 	// Overridden in class GlobalVariables
-	virtual void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, uint8_t tableNumber, const char *filter) const THROWS(GCodeException);
+	virtual void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, uint8_t tableNumber, const char *_ecv_array filter) const THROWS(GCodeException);
 
 	// Report an entire array as JSON
-	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS(GCodeException);
+	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModelArrayDescriptor *omad, const char *_ecv_array filter) const THROWS(GCodeException);
 
 	// Get the value of an object that we hold
-	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *idString) const THROWS(GCodeException);
+	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *_ecv_array idString) const THROWS(GCodeException);
 
 	// Get the object model table entry for the current level object in the query
-	const ObjectModelTableEntry *FindObjectModelTableEntry(const ObjectModelClassDescriptor *classDescriptor, uint8_t tableNumber, const char *idString) const noexcept;
+	const ObjectModelTableEntry *FindObjectModelTableEntry(const ObjectModelClassDescriptor *classDescriptor, uint8_t tableNumber, const char *_ecv_array idString) const noexcept;
 
 	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
 
@@ -360,7 +360,7 @@ class ObjectModelTableEntry
 public:
 	// Type declarations
 	// Type of the function pointer in the table entry, that returns the data
-	typedef ExpressionValue(*DataFetchPtr_t)(const ObjectModel*, ObjectExplorationContext&) noexcept;
+	typedef ExpressionValue(*DataFetchPtr_t)(const ObjectModel *_ecv_from, ObjectExplorationContext&) noexcept;
 
 	// Member data. This must be public so that we can brace-initialise table entries.
 	const char *_ecv_array name;		// name of this field

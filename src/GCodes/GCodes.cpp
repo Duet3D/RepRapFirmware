@@ -1711,7 +1711,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 					if (thisMix != 0.0)
 					{
 						totalMix += thisMix;
-						const int extruder = tool->Drive(eDrive);
+						const int extruder = tool->GetDrive(eDrive);
 						float extrusionAmount = requestedExtrusionAmount * thisMix;
 						if (gb.LatestMachineState().volumetricExtrusion)
 						{
@@ -1742,7 +1742,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 				{
 					for (size_t eDrive = 0; eDrive < mc; eDrive++)
 					{
-						const int extruder = tool->Drive(eDrive);
+						const int extruder = tool->GetDrive(eDrive);
 						float extrusionAmount = gb.ConvertDistance(eMovement[eDrive]);
 						if (extrusionAmount != 0.0)
 						{
@@ -3992,7 +3992,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 				{
 					for (size_t i = 0; i < tool->DriveCount(); ++i)
 					{
-						moveState.coords[ExtruderToLogicalDrive(tool->Drive(i))] = -currentTool->GetRetractLength();
+						moveState.coords[ExtruderToLogicalDrive(tool->GetDrive(i))] = -currentTool->GetRetractLength();
 					}
 					moveState.feedRate = currentTool->GetRetractSpeed() * tool->DriveCount();
 					moveState.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
@@ -4021,7 +4021,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 				{
 					for (size_t i = 0; i < tool->DriveCount(); ++i)
 					{
-						moveState.coords[ExtruderToLogicalDrive(tool->Drive(i))] = currentTool->GetRetractLength() + currentTool->GetRetractExtra();
+						moveState.coords[ExtruderToLogicalDrive(tool->GetDrive(i))] = currentTool->GetRetractLength() + currentTool->GetRetractExtra();
 					}
 					moveState.feedRate = currentTool->GetUnRetractSpeed() * tool->DriveCount();
 					moveState.canPauseAfter = true;
@@ -4271,7 +4271,7 @@ bool GCodes::ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling
 	{
 		for (size_t i = 0; i < tool->HeaterCount(); ++i)
 		{
-			if (!reprap.GetHeat().HeaterAtSetTemperature(tool->Heater(i), waitWhenCooling, tolerance))
+			if (!reprap.GetHeat().HeaterAtSetTemperature(tool->GetHeater(i), waitWhenCooling, tolerance))
 			{
 				return false;
 			}
@@ -5087,7 +5087,7 @@ int GCodes::GetHeaterNumber(unsigned int itemNumber) const noexcept
 	if (itemNumber < 80)
 	{
 		ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? reprap.GetLockedCurrentTool() : reprap.GetTool(itemNumber);
-		return (tool.IsNotNull() && tool->HeaterCount() != 0) ? tool->Heater(0) : -1;
+		return (tool.IsNotNull() && tool->HeaterCount() != 0) ? tool->GetHeater(0) : -1;
 	}
 	if (itemNumber < 90)
 	{

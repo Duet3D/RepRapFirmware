@@ -16,7 +16,7 @@ class SwitchEndstop : public Endstop
 public:
 	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<SwitchEndstop>(); }
 	void operator delete(void* p) noexcept { FreelistManager::Release<SwitchEndstop>(p); }
-	~SwitchEndstop() noexcept override;
+	~SwitchEndstop() override;
 
 	SwitchEndstop(uint8_t p_axis, EndStopPosition pos) noexcept;
 

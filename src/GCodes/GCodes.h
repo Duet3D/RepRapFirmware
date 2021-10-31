@@ -368,8 +368,8 @@ private:
 	bool HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do an M code
 	bool HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do a T code
 	bool HandleQcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do an internal code
-	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply, OutputBuffer *outBuf)
-		pre(outBuf == nullptr || rslt == GCodeResult::ok) noexcept;
+	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply, OutputBuffer *outBuf) noexcept
+		pre(outBuf == nullptr || rslt == GCodeResult::ok);
 
 	void HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept;
 	void HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept;	// Handle G-Code replies
@@ -456,7 +456,7 @@ private:
 	void DoEmergencyStop() noexcept;											// Execute an emergency stop
 
 	void DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint16_t param = 0) noexcept	// Pause the print
-		pre(resourceOwners[movementResource] = &gb);
+		pre(resourceOwners[movementResource] == &gb);
 	void CheckForDeferredPause(GCodeBuffer& gb) noexcept;						// Check if a pause is pending, action it if so
 
 #if HAS_VOLTAGE_MONITOR || HAS_SMART_DRIVERS

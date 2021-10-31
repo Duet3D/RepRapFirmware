@@ -132,7 +132,7 @@ public:
 	//  width = width of bitmap in pixels. Currently, must be a multiple of 8.
 	//  rows = height of bitmap in pixels
 	//  data = bitmap image, must be ((width/8) * rows) bytes long
-	void Bitmap(PixelNumber top, PixelNumber left, PixelNumber height, PixelNumber width, const uint8_t data[]) noexcept;
+	void BitmapImage(PixelNumber top, PixelNumber left, PixelNumber height, PixelNumber width, const uint8_t data[]) noexcept;
 
 	// Draw a bitmap row
 	//  x0 = x-coordinate of the top left, measured from left hand edge of the display

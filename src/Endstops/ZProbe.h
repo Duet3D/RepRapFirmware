@@ -109,7 +109,7 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<MotorStallZProbe>(p); }
 
 	MotorStallZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::zMotorStall) { }
-	~MotorStallZProbe() noexcept override { }
+	~MotorStallZProbe() override { }
 	void SetIREmitter(bool on) const noexcept override { }
 	uint16_t GetRawReading() const noexcept override { return 4000; }
 	bool SetProbing(bool isProbing) noexcept override { return true; }

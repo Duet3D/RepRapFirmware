@@ -973,7 +973,7 @@ GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCo
 		}
 		else
 		{
-			heaterNumber = tool->Heater(0);
+			heaterNumber = tool->GetHeater(0);
 		}
 		fans = tool->GetFanMapping();
 	}

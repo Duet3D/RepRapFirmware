@@ -622,7 +622,7 @@ bool ValueMenuItem::Adjust_AlterHelper(int clicks) noexcept
 				{
 					currentValue.f = 95.0 - 1.0;
 				}
-				currentValue.f = min<int>(currentValue.f + (float)clicks, reprap.GetHeat().GetHighestTemperatureLimit(reprap.GetTool(itemNumber)->Heater(0)));
+				currentValue.f = min<int>(currentValue.f + (float)clicks, reprap.GetHeat().GetHighestTemperatureLimit(reprap.GetTool(itemNumber)->GetHeater(0)));
 			}
 		}
 		else

@@ -51,7 +51,7 @@ public:
 
 	static Tool *Create(
 			unsigned int toolNumber,
-			const char *toolName,
+			const char *_ecv_array toolName,
 			int32_t d[], size_t dCount,
 			int32_t h[], size_t hCount,
 			AxesBitmap xMap,
@@ -70,21 +70,21 @@ public:
 	void SetOffset(size_t axis, float offs, bool byProbing) noexcept pre(axis < MaxAxes);
 	AxesBitmap GetAxisOffsetsProbed() const noexcept { return axisOffsetsProbed; }
 	size_t DriveCount() const noexcept;
-	int Drive(size_t driveNumber) const noexcept;
+	int GetDrive(size_t driveNumber) const noexcept pre(driverNumber < DriveCount());
 	bool ToolCanDrive(bool extrude) noexcept;
 	size_t HeaterCount() const noexcept;
-	int Heater(size_t heaterNumber) const noexcept;
-	const char *GetName() const noexcept;
+	int GetHeater(size_t heaterNumber) const noexcept pre(heaterNumber < HeaterCount());
+	const char *_ecv_array GetName() const noexcept;
 	int Number() const noexcept;
 	void DefineMix(const float m[]) noexcept;
-	const float* GetMix() const noexcept;
+	const float *_ecv_array GetMix() const noexcept;
 	void Print(const StringRef& reply) const noexcept;
 	AxesBitmap GetXAxisMap() const noexcept { return axisMapping[0]; }
 	AxesBitmap GetYAxisMap() const noexcept { return axisMapping[1]; }
 	FansBitmap GetFanMapping() const noexcept { return fanMapping; }
 	Filament *GetFilament() const noexcept { return filament; }
 	const char *GetFilamentName() const noexcept;
-	Tool *Next() const noexcept { return next; }
+	Tool *null Next() const noexcept { return next; }
 	ToolState GetState() const noexcept { return state; }
 
 	bool IsRetracted() const noexcept { return isRetracted; }
@@ -151,10 +151,10 @@ private:
 
 	static void ToolUpdated() noexcept { reprap.ToolsUpdated(); }	// call this whenever we change a variable that is reported in the OM as non-live
 
-	Tool* next;
+	Tool* null next;
 	Filament *filament;
 	int filamentExtruder;
-	const char *name;
+	const char *_ecv_array name;
 	float offset[MaxAxes];
 	float mix[MaxExtrudersPerTool];
 	float activeTemperatures[MaxHeatersPerTool];
@@ -186,7 +186,7 @@ private:
 	volatile bool displayColdExtrudeWarning;
 };
 
-inline int Tool::Drive(size_t driveNumber) const noexcept
+inline int Tool::GetDrive(size_t driveNumber) const noexcept
 {
 	return drives[driveNumber];
 }
@@ -196,7 +196,7 @@ inline size_t Tool::HeaterCount() const noexcept
 	return heaterCount;
 }
 
-inline int Tool::Heater(size_t heaterNumber) const noexcept
+inline int Tool::GetHeater(size_t heaterNumber) const noexcept
 {
 	return heaters[heaterNumber];
 }

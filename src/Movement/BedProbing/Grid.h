@@ -31,7 +31,7 @@ public:
 
 	uint32_t NumAxisPoints(size_t axis) const noexcept pre(axis < 2) { return nums[axis]; }
 	uint32_t NumPoints() const noexcept { return nums[0] * nums[1]; }
-	float GetCoordinate(size_t axis, size_t coordinateIndex) pre(axis < 2) const noexcept { return mins[axis] + (coordinateIndex * spacings[axis]); }
+	float GetCoordinate(size_t axis, size_t coordinateIndex) const noexcept pre(axis < 2) { return mins[axis] + (coordinateIndex * spacings[axis]); }
 	bool IsInRadius(float x, float y) const noexcept;
 	bool IsValid() const noexcept { return isValid; }
 

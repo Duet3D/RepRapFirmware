@@ -1070,7 +1070,7 @@ void RepRap::DeleteTool(int toolNumber) noexcept
 			// Switch off any associated heaters
 			for (size_t i = 0; i < tool->HeaterCount(); i++)
 			{
-				heat->SwitchOff(tool->Heater(i));
+				heat->SwitchOff(tool->GetHeater(i));
 			}
 
 			break;
@@ -1190,7 +1190,7 @@ bool RepRap::IsHeaterAssignedToTool(int8_t heater) const noexcept
 	{
 		for (size_t i = 0; i < tool->HeaterCount(); i++)
 		{
-			if (tool->Heater(i) == heater)
+			if (tool->GetHeater(i) == heater)
 			{
 				// It's already in use by some tool
 				return true;
@@ -1234,7 +1234,7 @@ void RepRap::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bo
 		char sep = ':';
 		for (size_t i = 0; i < tool->HeaterCount(); ++i)
 		{
-			const int heater = tool->Heater(i);
+			const int heater = tool->GetHeater(i);
 			reply.catf("%c%.1f /%.1f", sep, (double)heat.GetHeaterTemperature(heater), (double)heat.GetTargetTemperature(heater));
 			sep = ' ';
 		}
@@ -1717,11 +1717,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 				}
 
 				// Heaters
-				AppendIntArray(response, "heaters", tool->HeaterCount(), [tool](size_t heater) noexcept { return tool->Heater(heater); });
+				AppendIntArray(response, "heaters", tool->HeaterCount(), [tool](size_t heater) noexcept { return tool->GetHeater(heater); });
 
 				// Extruder drives
 				response->cat(',');
-				AppendIntArray(response, "drives", tool->DriveCount(), [tool](size_t drive) noexcept { return tool->Drive(drive); });
+				AppendIntArray(response, "drives", tool->DriveCount(), [tool](size_t drive) noexcept { return tool->GetDrive(drive); });
 
 				// Axis mapping
 				response->cat(",\"axisMap\":[[");
@@ -2613,7 +2613,7 @@ unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, uns
 	unsigned int result = 0;
 	for (size_t driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
 	{
-		const unsigned int extruderDrive = (unsigned int)(tool->Drive(driveNum));
+		const unsigned int extruderDrive = (unsigned int)(tool->GetDrive(driveNum));
 		const unsigned int mask = 1 << extruderDrive;
 		if (extrusions & mask)
 		{
