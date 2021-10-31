@@ -21,44 +21,44 @@ const size_t OUTPUT_STACK_DEPTH = 4;	// Number of OutputBuffer chains that can b
 class OutputBuffer
 {
 public:
-	OutputBuffer(OutputBuffer *n) noexcept : next(n) { }
+	explicit OutputBuffer(OutputBuffer *null n) noexcept : next(n) { }
 	OutputBuffer(const OutputBuffer&) = delete;
 
 	void Append(OutputBuffer *other) noexcept;
-	OutputBuffer *Next() const noexcept { return next; }
+	OutputBuffer *null Next() const noexcept { return next; }
 	bool IsReferenced() const noexcept { return isReferenced; }
 	bool HadOverflow() const noexcept { return hadOverflow; }
 	void IncreaseReferences(size_t refs) noexcept;
 
-	const char *Data() const noexcept { return data; }
-	const char *UnreadData() const noexcept { return data + bytesRead; }
+	const char *_ecv_array Data() const noexcept { return data; }
+	const char *_ecv_array UnreadData() const noexcept { return data + bytesRead; }
 	size_t DataLength() const noexcept { return dataLength; }	// How many bytes have been written to this instance?
 	size_t Length() const noexcept;								// How many bytes have been written to the whole chain?
 
 	char& operator[](size_t index) noexcept;
 	char operator[](size_t index) const noexcept;
-	const char *Read(size_t len) noexcept;
+	const char *_ecv_array Read(size_t len) noexcept;
 	void Taken(size_t len) noexcept { bytesRead += len; }
 	size_t BytesLeft() const noexcept { return dataLength - bytesRead; }	// How many bytes have not been sent yet?
 
 	uint32_t WhenQueued() const noexcept { return whenQueued; }
 	void UpdateWhenQueued() noexcept;
 
-	size_t vprintf(const char *fmt, va_list vargs) noexcept;
-	size_t printf(const char *fmt, ...) noexcept __attribute__ ((format (printf, 2, 3)));
-	size_t vcatf(const char *fmt, va_list vargs) noexcept;
-	size_t catf(const char *fmt, ...) noexcept __attribute__ ((format (printf, 2, 3)));
-	size_t lcatf(const char *fmt, ...) noexcept __attribute__ ((format (printf, 2, 3)));
+	size_t vprintf(const char *_ecv_array fmt, va_list vargs) noexcept;
+	size_t printf(const char *_ecv_array fmt, ...) noexcept __attribute__ ((format (printf, 2, 3)));
+	size_t vcatf(const char *_ecv_array fmt, va_list vargs) noexcept;
+	size_t catf(const char *_ecv_array fmt, ...) noexcept __attribute__ ((format (printf, 2, 3)));
+	size_t lcatf(const char *_ecv_array fmt, ...) noexcept __attribute__ ((format (printf, 2, 3)));
 
 	size_t copy(const char c) noexcept;
-	size_t copy(const char *src) noexcept;
-	size_t copy(const char *src, size_t len) noexcept;
+	size_t copy(const char *_ecv_array src) noexcept;
+	size_t copy(const char *_ecv_array src, size_t len) noexcept;
 
 	size_t cat(const char c) noexcept;
-	size_t cat(const char *src) noexcept;
-	size_t lcat(const char *src) noexcept;
-	size_t cat(const char *src, size_t len) noexcept;
-	size_t lcat(const char *src, size_t len) noexcept;
+	size_t cat(const char *_ecv_array src) noexcept;
+	size_t lcat(const char *_ecv_array src) noexcept;
+	size_t cat(const char *_ecv_array src, size_t len) noexcept;
+	size_t lcat(const char *_ecv_array src, size_t len) noexcept;
 	size_t cat(StringRef &str) noexcept;
 
 	size_t EncodeChar(char c) noexcept;
@@ -96,7 +96,7 @@ public:
 private:
 	void Clear() noexcept;
 
-	OutputBuffer *next;
+	OutputBuffer *null next;
 	OutputBuffer *last;
 
 	uint32_t whenQueued;									// milliseconds timer when this buffer was filled in

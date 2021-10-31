@@ -23,7 +23,7 @@ Licence: GPL
 #include <cstring>			// for strlen
 
 // Axes
-constexpr float DefaultXYMaxFeedrate = 100;				// mm/sec
+constexpr float DefaultXYMaxFeedrate = 100.0;			// mm/sec
 constexpr float DefaultZMaxFeedrate = 5.0;
 constexpr float DefaultEMaxFeedrate = 20.0;
 
@@ -213,7 +213,7 @@ constexpr size_t ObjectNamesStringSpace = 500;			// How much space we reserve fo
 
 // Move system
 constexpr float DefaultFeedRate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min
-constexpr float DefaultG0FeedRate = 18000;				// The initial feed rate for G0 commands after resetting the printer, in mm/min
+constexpr float DefaultG0FeedRate = 18000.0;			// The initial feed rate for G0 commands after resetting the printer, in mm/min
 constexpr float MinRetractSpeed = 60.0;					// The minimum firmware retraction/un-retraction speed in mm/min
 constexpr float DefaultRetractSpeed = 1000.0;			// The default firmware retraction and un-retraction speed, in mm/min
 constexpr float DefaultRetractLength = 2.0;
@@ -221,8 +221,8 @@ constexpr float DefaultRetractLength = 2.0;
 constexpr float MaxArcDeviation = 0.005;				// maximum deviation from ideal arc due to segmentation
 constexpr float MinArcSegmentLength = 0.1;				// G2 and G3 arc movement commands get split into segments at least this long
 constexpr float MaxArcSegmentLength = 1.0;				// G2 and G3 arc movement commands get split into segments at most this long
-constexpr float MinArcSegmentsPerSec = 200;
-constexpr float SegmentsPerFulArcCalculation = 8;		// we do the full sine/cosine calculation every this number of segments
+constexpr float MinArcSegmentsPerSec = 200.0;
+constexpr float SegmentsPerFulArcCalculation = 8.0;		// we do the full sine/cosine calculation every this number of segments
 
 constexpr uint32_t DefaultIdleTimeout = 30000;			// Milliseconds
 constexpr float DefaultIdleCurrentFactor = 0.3;			// Proportion of normal motor current that we use for idle hold

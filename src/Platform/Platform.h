@@ -364,7 +364,7 @@ public:
 	time_t GetDateTime() const noexcept { return realTime; }		// Retrieves the current RTC datetime
 	bool GetDateTime(tm& rslt) const noexcept { return gmtime_r(&realTime, &rslt) != nullptr && realTime != 0; }
 																	// Retrieves the broken-down current RTC datetime and returns true if it's valid
-	bool SetDateTime(time_t time) noexcept;							// Sets the current RTC date and time or returns false on error
+	bool SetDateTime(time_t t) noexcept;							// Sets the current RTC date and time or returns false on error
 
   	// Communications and data storage
 	void AppendUsbReply(OutputBuffer *buffer) noexcept;
@@ -405,9 +405,9 @@ public:
 	bool Delete(const char* folder, const char *filename) const noexcept;
 #endif
 
-	const char* GetWebDir() const noexcept; 					// Where the html etc files are
-	const char* GetGCodeDir() const noexcept; 					// Where the gcodes are
-	const char* GetMacroDir() const noexcept;					// Where the user-defined macros are
+	const char *_ecv_array GetWebDir() const noexcept; 					// Where the html etc files are
+	const char *_ecv_array GetGCodeDir() const noexcept; 				// Where the gcodes are
+	const char *_ecv_array GetMacroDir() const noexcept;				// Where the user-defined macros are
 
 	// Functions to work with the system files folder
 	GCodeResult SetSysDir(const char* dir, const StringRef& reply) noexcept;				// Set the system files path
@@ -422,13 +422,13 @@ public:
 #endif
 
 	// Message output (see MessageType for further details)
-	void Message(MessageType type, const char *message) noexcept;
+	void Message(MessageType type, const char *_ecv_array message) noexcept;
 	void Message(MessageType type, OutputBuffer *buffer) noexcept;
-	void MessageF(MessageType type, const char *fmt, ...) noexcept __attribute__ ((format (printf, 3, 4)));
-	void MessageF(MessageType type, const char *fmt, va_list vargs) noexcept;
-	void DebugMessage(const char *fmt, va_list vargs) noexcept;
+	void MessageF(MessageType type, const char *_ecv_array fmt, ...) noexcept __attribute__ ((format (printf, 3, 4)));
+	void MessageF(MessageType type, const char *_ecv_array fmt, va_list vargs) noexcept;
+	void DebugMessage(const char *_ecv_array fmt, va_list vargs) noexcept;
 	bool FlushMessages() noexcept;								// Flush messages to USB and aux, returning true if there is more to send
-	void SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls) noexcept;
+	void SendAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls) noexcept;
 	void StopLogging() noexcept;
 
 	// Movement
@@ -448,7 +448,7 @@ public:
 	void EmergencyDisableDrivers() noexcept;
 	void SetDriversIdle() noexcept;
 	GCodeResult ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
-		pre(drive < GetNumActualDirectDrivers());
+		pre(driver < GetNumActualDirectDrivers());
 	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
 	int GetMotorCurrent(size_t axisOrExtruder, int code) const noexcept;
 	void SetIdleCurrentFactor(float f) noexcept;
@@ -459,14 +459,14 @@ public:
 	void SetDriverStepTiming(size_t driver, const float microseconds[4]) noexcept;
 	bool GetDriverStepTiming(size_t driver, float microseconds[4]) const noexcept;
 	float DriveStepsPerUnit(size_t axisOrExtruder) const noexcept;
-	const float *GetDriveStepsPerUnit() const noexcept
+	const float *_ecv_array GetDriveStepsPerUnit() const noexcept
 		{ return driveStepsPerUnit; }
 	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept;
 	float Acceleration(size_t axisOrExtruder) const noexcept;
-	const float* Accelerations() const noexcept;
+	const float *_ecv_array Accelerations() const noexcept;
 	void SetAcceleration(size_t axisOrExtruder, float value) noexcept;
 	float MaxFeedrate(size_t axisOrExtruder) const noexcept;
-	const float* MaxFeedrates() const noexcept { return maxFeedrates; }
+	const float *_ecv_array MaxFeedrates() const noexcept { return maxFeedrates; }
 	void SetMaxFeedrate(size_t axisOrExtruder, float value) noexcept;
 	float MinMovementSpeed() const noexcept { return minimumMovementSpeed; }
 	void SetMinMovementSpeed(float value) noexcept;
@@ -499,7 +499,7 @@ public:
 	void SetExtruderDriver(size_t extruder, DriverId driver) noexcept
 		pre(extruder < MaxExtruders);
 	uint32_t GetDriversBitmap(size_t axisOrExtruder) const noexcept	// get the bitmap of driver step bits for this axis or extruder
-		pre(axisOrExtruder < MaxAxesPlusExtruders + NumLocalDrivers)
+		pre(axisOrExtruder < MaxAxesPlusExtruders + NumDirectDrivers)
 		{ return driveDriverBits[axisOrExtruder]; }
 	uint32_t GetSlowDriversBitmap() const noexcept { return slowDriversBitmap; }
 	uint32_t GetSlowDriverStepHighClocks() const noexcept { return slowDriverStepTimingClocks[0]; }
@@ -508,7 +508,7 @@ public:
 	uint32_t GetSlowDriverDirHoldClocks() const noexcept { return slowDriverStepTimingClocks[3]; }
 	uint32_t GetSteppingEnabledDrivers() const noexcept { return steppingEnabledDriversBitmap; }
 	void DisableSteppingDriver(uint8_t driver) noexcept { steppingEnabledDriversBitmap &= ~StepPins::CalcDriverBitmap(driver); }
-	void EnableAllSteppingDrivers() noexcept { steppingEnabledDriversBitmap = 0xFFFFFFFF; }
+	void EnableAllSteppingDrivers() noexcept { steppingEnabledDriversBitmap = 0xFFFFFFFFu; }
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 	bool GetExtrusionCoefficients(size_t extruder, float& a, float& b, float& limit) const noexcept;
@@ -616,7 +616,7 @@ public:
 	GCodeResult ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 	GpOutputPort& GetGpOutPort(size_t gpoutPortNumber) noexcept
-		pre(gpioPortNumber < MaxGpOutPorts)	{ return gpoutPorts[gpoutPortNumber]; }
+		pre(gpoutPortNumber < MaxGpOutPorts)	{ return gpoutPorts[gpoutPortNumber]; }
 	const GpInputPort& GetGpInPort(size_t gpinPortNumber) const noexcept
 		pre(gpinPortNumber < MaxGpInPorts) 	{ return gpinPorts[gpinPortNumber]; }
 
@@ -705,7 +705,7 @@ private:
 	// Drives
 	void UpdateMotorCurrent(size_t driver, float current) noexcept;
 	void SetDriverDirection(uint8_t driver, bool direction) noexcept
-	pre(driver < DRIVES);
+	pre(driver < NumDirectDrivers);
 
 #if VARIABLE_NUM_DRIVERS && SUPPORT_12864_LCD
 	size_t numActualDirectDrivers;
@@ -894,18 +894,18 @@ private:
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 // Where the htm etc files are
-inline const char* Platform::GetWebDir() const noexcept
+inline const char *_ecv_array Platform::GetWebDir() const noexcept
 {
 	return WEB_DIR;
 }
 
 // Where the gcodes are
-inline const char* Platform::GetGCodeDir() const noexcept
+inline const char *_ecv_array Platform::GetGCodeDir() const noexcept
 {
 	return GCODE_DIR;
 }
 
-inline const char* Platform::GetMacroDir() const noexcept
+inline const char *_ecv_array Platform::GetMacroDir() const noexcept
 {
 	return MACRO_DIR;
 }
@@ -926,7 +926,7 @@ inline float Platform::Acceleration(size_t drive) const noexcept
 	return accelerations[drive];
 }
 
-inline const float* Platform::Accelerations() const noexcept
+inline const float *_ecv_array Platform::Accelerations() const noexcept
 {
 	return accelerations;
 }

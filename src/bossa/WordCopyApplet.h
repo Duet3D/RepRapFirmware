@@ -35,8 +35,8 @@
 class WordCopyApplet : public Applet
 {
 public:
-    WordCopyApplet(Samba& samba, uint32_t addr) THROWS(GCodeException);
-    virtual ~WordCopyApplet();
+    WordCopyApplet(Samba& samba, uint32_t p_addr) THROWS(GCodeException);
+    ~WordCopyApplet() override;
 
     void setDstAddr(uint32_t dstAddr) THROWS(GCodeException);
     void setSrcAddr(uint32_t srcAddr) THROWS(GCodeException);

@@ -32,7 +32,7 @@ Licence: GPL
 #include <ctime>
 [[deprecated("use gmtime_r instead for thread-safety")]] tm* gmtime(const time_t* t);
 [[deprecated("use SafeStrptime instead")]] char * strptime (const char *buf, const char *format, struct tm *timeptr);
-const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr) noexcept;
+const char *_ecv_array SafeStrptime(const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept;
 
 #include <Core.h>
 
@@ -50,7 +50,7 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
 # define __nocache		// nothing
 #endif
 
-# include <CoreIO.h>
+#include <CoreIO.h>
 # include <Devices.h>
 
 // The following are needed by many other files, so include them here
@@ -192,12 +192,12 @@ struct DriverId
 	DriverId() noexcept : localDriver(0)  { }
 
 	// Constructor used by object model
-	DriverId(uint8_t drv) noexcept : localDriver(drv) { }
+	explicit DriverId(uint8_t drv) noexcept : localDriver(drv) { }
 
 	// Set the driver ID from the binary value, returning true if there was a nonzero board number so that the caller knows the address is not valid
 	bool SetFromBinary(uint32_t val) noexcept
 	{
-		localDriver = val & 0x000000FF;
+		localDriver = val & 0x000000FFu;
 		const uint32_t brdNum = val >> 16;
 		return (brdNum != 0);
 	}
@@ -262,7 +262,7 @@ enum Module : uint8_t
 	noModule = numModules
 };
 
-const char *GetModuleName(uint8_t module) noexcept;
+const char *_ecv_array GetModuleName(uint8_t module) noexcept;
 
 // Warn of what's to come, so we can use pointers and references to classes without including the entire header files
 class Network;
@@ -391,7 +391,7 @@ void ListDrivers(const StringRef& str, DriversBitmap drivers) noexcept;
 template<class T> class SimpleRangeIterator
 {
 public:
-	SimpleRangeIterator(T value_) noexcept : val(value_) {}
+	explicit SimpleRangeIterator(T value_) noexcept : val(value_) {}
     bool operator != (SimpleRangeIterator<T> const& other) const noexcept { return val != other.val;     }
     T const& operator*() const noexcept { return val; }
     SimpleRangeIterator<T>& operator++() noexcept { ++val; return *this; }
@@ -403,7 +403,7 @@ private:
 template<class T> class SimpleRange
 {
 public:
-	SimpleRange(T limit) noexcept : _end(limit) {}
+	explicit SimpleRange(T limit) noexcept : _end(limit) {}
 	SimpleRangeIterator<T> begin() const noexcept { return SimpleRangeIterator<T>(0); }
 	SimpleRangeIterator<T> end() const noexcept { return SimpleRangeIterator<T>(_end); 	}
 
@@ -482,7 +482,7 @@ constexpr float SecondsToMillis = 1000.0;
 constexpr float MillisToSeconds = 0.001;
 constexpr float InchToMm = 25.4;
 constexpr float Pi = 3.141592653589793;
-constexpr float TwoPi = 3.141592653589793 * 2;
+constexpr float TwoPi = 3.141592653589793 * 2.0;
 constexpr float DegreesToRadians = 3.141592653589793/180.0;
 constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 
@@ -503,46 +503,46 @@ constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
 // Functions to convert speeds and accelerations between seconds and step clocks
 static inline constexpr float ConvertSpeedFromMmPerSec(float speed) noexcept
 {
-	return speed * 1.0/StepClockRate;
+	return speed * 1.0/(float)StepClockRate;
 }
 
 static inline constexpr float ConvertSpeedFromMmPerMin(float speed) noexcept
 {
-	return speed * (1.0/(StepClockRate * iMinutesToSeconds));
+	return speed * (1.0/(float)(StepClockRate * iMinutesToSeconds));
 }
 
 static inline constexpr float ConvertSpeedFromMm(float speed, bool useSeconds) noexcept
 {
-	return speed * ((useSeconds) ? 1.0/StepClockRate : 1.0/(StepClockRate * iMinutesToSeconds));
+	return speed * ((useSeconds) ? 1.0/(float)StepClockRate : 1.0/(float)(StepClockRate * iMinutesToSeconds));
 }
 
 static inline constexpr float InverseConvertSpeedToMmPerSec(float speed) noexcept
 {
-	return speed * StepClockRate;
+	return speed * (float)StepClockRate;
 }
 
 static inline constexpr float InverseConvertSpeedToMmPerMin(float speed) noexcept
 {
-	return speed * (StepClockRate * iMinutesToSeconds);
+	return speed * (float)(StepClockRate * iMinutesToSeconds);
 }
 
 static inline constexpr float InverseConvertSpeedToMm(float speed, bool useSeconds) noexcept
 {
-	return speed * ((useSeconds) ? StepClockRate : StepClockRate * iMinutesToSeconds);
+	return speed * (float)((useSeconds) ? StepClockRate : StepClockRate * iMinutesToSeconds);
 }
 
 static inline constexpr float ConvertAcceleration(float accel) noexcept
 {
-	return accel * (1.0/StepClockRateSquared);
+	return accel * (1.0/(float)StepClockRateSquared);
 }
 
 static inline constexpr float InverseConvertAcceleration(float accel) noexcept
 {
-	return accel * StepClockRateSquared;
+	return accel * (float)StepClockRateSquared;
 }
 
 constexpr unsigned int MaxFloatDigitsDisplayedAfterPoint = 7;
-const char *GetFloatFormatString(unsigned int numDigitsAfterPoint) noexcept;
+const char *_ecv_array GetFloatFormatString(unsigned int numDigitsAfterPoint) noexcept;
 
 #if SUPPORT_WORKPLACE_COORDINATES
 constexpr size_t NumCoordinateSystems = 9;							// G54 up to G59.3
@@ -559,7 +559,7 @@ const FileHandle noFileHandle = 0;
 
 // Type of an offset in a file
 typedef uint32_t FilePosition;
-const FilePosition noFilePosition = 0xFFFFFFFF;
+const FilePosition noFilePosition = 0xFFFFFFFFu;
 
 //-------------------------------------------------------------------------------------------------
 // Interrupt priorities - must be chosen with care! 0 is the highest priority, 7 or 15 is the lowest.

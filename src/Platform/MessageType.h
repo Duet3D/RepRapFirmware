@@ -45,7 +45,7 @@ enum MessageType : uint32_t
 	LogMessageHighBit =		0x80000000u,	// Log level consists of two bits this is the high bit
 
 	// Common combinations
-	NoDestinationMessage = 0,												// A message that is going nowhere
+	NoDestinationMessage = 0u,												// A message that is going nowhere
 	GenericMessage = UsbMessage | AuxMessage | HttpMessage | TelnetMessage,	// A message that is to be sent to the web, Telnet, USB and panel
 	LogOff = LogMessageLowBit | LogMessageHighBit,							// Log level "off (3): do not log this message
 	LogWarn = LogMessageHighBit,											// Log level "warn" (2): all messages of type Error and Warning are logged

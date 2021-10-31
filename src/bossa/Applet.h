@@ -37,9 +37,9 @@ class Applet
 {
 public:
     Applet(Samba& samba,
-           uint32_t addr,
+           uint32_t p_addr,
            const uint8_t* code,
-           uint32_t size,
+           uint32_t p_size,
            uint32_t start,
            uint32_t stack,
            uint32_t reset) THROWS(GCodeException);

@@ -25,7 +25,7 @@ class StringHandle
 {
 public:
 	StringHandle() noexcept { slotPtr = nullptr; }
-	StringHandle(const char *s) noexcept;
+	explicit StringHandle(const char *s) noexcept;
 	StringHandle(const char *s, size_t len) noexcept;
 
 #if 0	// unused
@@ -55,7 +55,7 @@ protected:
 	static void GarbageCollectInternal() noexcept;
 	static void AdjustHandles(char *startAddr, char *endAddr, size_t moveDown, unsigned int numHandles) noexcept;
 
-	IndexSlot *slotPtr;
+	IndexSlot * null slotPtr;
 
 	static ReadWriteLock heapLock;
 	static IndexBlock *indexRoot;
@@ -73,7 +73,7 @@ class AutoStringHandle : public StringHandle
 {
 public:
 	AutoStringHandle() noexcept : StringHandle() { }
-	AutoStringHandle(const char *s) noexcept : StringHandle(s) { }
+	explicit AutoStringHandle(const char *s) noexcept : StringHandle(s) { }
 	AutoStringHandle(const char *s, size_t len) noexcept : StringHandle(s, len) { }
 	AutoStringHandle(const AutoStringHandle& other) noexcept;
 	AutoStringHandle(AutoStringHandle&& other) noexcept;

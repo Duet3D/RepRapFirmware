@@ -19,7 +19,7 @@ namespace StackUsage
 class GCodeException
 {
 public:
-	GCodeException(const char *msg) noexcept: line(-1), column(-1), message(msg), haveStringParam(false) { }
+	explicit GCodeException(const char *msg) noexcept: line(-1), column(-1), message(msg), haveStringParam(false) { }
 
 	GCodeException(int lin, int col, const char *msg) noexcept : line(lin), column(col), message(msg), haveStringParam(false)  { }
 

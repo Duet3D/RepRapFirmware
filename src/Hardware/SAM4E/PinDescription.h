@@ -40,10 +40,10 @@ constexpr inline PinCapability operator|(PinCapability a, PinCapability b) noexc
 struct PinDescription : public PinDescriptionBase
 {
 	PinCapability cap;
-	const char* pinNames;
+	const char* _ecv_array null pinNames;
 
 	PinCapability GetCapability() const noexcept { return cap; }
-	const char* GetNames() const noexcept { return pinNames; }
+	const char* _ecv_array null GetNames() const noexcept { return pinNames; }
 };
 
 #endif /* SRC_HARDWARE_SAM4E_PINDESCRIPTION_H_ */

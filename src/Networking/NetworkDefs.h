@@ -45,7 +45,7 @@ constexpr TcpPort DefaultFtpPort = 21;
 constexpr TcpPort DefaultTelnetPort = 23;
 
 constexpr TcpPort DefaultPortNumbers[NumProtocols] = { DefaultHttpPort, DefaultFtpPort, DefaultTelnetPort };
-constexpr const char * ProtocolNames[NumProtocols] = { "HTTP", "FTP", "TELNET" };
+constexpr const char *_ecv_array ProtocolNames[NumProtocols] = { "HTTP", "FTP", "TELNET" };
 
 constexpr uint8_t MdnsMacAddress[6] = { 0x01, 0x00, 0x5E, 0x00, 0x00, 0xFB };
 constexpr uint8_t MdnsIPAddress[4] = { 224, 0, 0, 251 };

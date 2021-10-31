@@ -183,7 +183,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
 
 				// If we reset immediately then the user area write doesn't complete and the bits get set to all 1s.
 				delayMicroseconds(10000);
-				Reset();
+				ResetProcessor();
 			}
 		}
 	}

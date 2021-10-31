@@ -46,14 +46,14 @@ public:
     Samba() noexcept;
     virtual ~Samba();
 
-    bool connect(SerialPort* port, int bps = 115200) noexcept;
+    bool connect(SerialPort *_ecv_from port, int bps = 115200) noexcept;
     void disconnect() noexcept;
 
     void writeWord(uint32_t addr, uint32_t value) THROWS(GCodeException);
     uint32_t readWord(uint32_t addr) THROWS(GCodeException);
 
-    void write(uint32_t addr, const uint8_t* buffer, int size) THROWS(GCodeException);
-    void read(uint32_t addr, uint8_t* buffer, int size) THROWS(GCodeException);
+    void write(uint32_t addr, const uint8_t *_ecv_array buffer, int size) THROWS(GCodeException);
+    void read(uint32_t addr, uint8_t *_ecv_array buffer, int size) THROWS(GCodeException);
 
     void go(uint32_t addr) THROWS(GCodeException);
 
@@ -71,7 +71,7 @@ public:
 
     bool canChecksumBuffer() noexcept { return _canChecksumBuffer; }
     uint32_t checksumBufferSize() noexcept { return 4096; }
-    uint16_t crc16Calc(const uint8_t *data, int len) noexcept;
+    uint16_t crc16Calc(const uint8_t *_ecv_array data, int len) noexcept;
 
 private:
     bool _canChipErase;
@@ -81,12 +81,12 @@ private:
 #if DEBUG_BOSSA
     bool _debug;
 #endif
-    SerialPort* _port;
+    SerialPort *_ecv_from _port;
 
     bool init() noexcept;
 
-    void writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException);
-    void readXmodem(uint8_t* buffer, int size) THROWS(GCodeException);
+    void writeXmodem(const uint8_t *_ecv_array buffer, int size) THROWS(GCodeException);
+    void readXmodem(uint8_t *_ecv_array buffer, int size) THROWS(GCodeException);
 
 };
 

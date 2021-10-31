@@ -26,7 +26,7 @@ public:
 		f = other.f;
 		if (f != nullptr)
 		{
-			f->Duplicate();
+			not_null(f)->Duplicate();
 		}
 	}
 
@@ -62,7 +62,7 @@ public:
 	{
 		if (f != nullptr)
 		{
-			bool ok = f->Close();
+			bool ok = not_null(f)->Close();
 			f = nullptr;
 			return ok;
 		}
@@ -70,61 +70,72 @@ public:
 	}
 
 	bool Read(char& b) noexcept
+	pre(IsLive())
 	{
-		return f->Read(b);
+		return not_null(f)->Read(b);
 	}
 
 	int Read(char *buf, size_t nBytes) noexcept
+	pre(IsLive())
 	{
-		return f->Read(buf, nBytes);
+		return not_null(f)->Read(buf, nBytes);
 	}
 
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool Write(char b) noexcept
+	pre(IsLive())
 	{
-		return f->Write(b);
+		return not_null(f)->Write(b);
 	}
 
-	bool Write(const char *s) noexcept
+	bool Write(const char *_ecv_array s) noexcept
+	pre(IsLive())
 	{
-		return f->Write(s, strlen(s));
+		return not_null(f)->Write(s, strlen(s));
 	}
 
-	bool Write(const char *s, size_t len) noexcept
+	bool Write(const char *_ecv_array s, size_t len) noexcept
+	pre(IsLive())
 	{
-		return f->Write(s, len);
+		return not_null(f)->Write(s, len);
 	}
 
-	bool Write(const uint8_t *s, size_t len) noexcept
+	bool Write(const uint8_t *_ecv_array s, size_t len) noexcept
+	pre(IsLive())
 	{
-		return f->Write(s, len);
+		return not_null(f)->Write(s, len);
 	}
 
 	// This returns the CRC32 of data written to a newly-created file. It does not calculate the CRC of an existing file.
 	uint32_t GetCrc32() const noexcept
+	pre(IsLive())
 	{
-		return f->GetCRC32();
+		return not_null(f)->GetCRC32();
 	}
 
 	bool Flush() noexcept
+	pre(IsLive())
 	{
-		return f->Flush();
+		return not_null(f)->Flush();
 	}
 # endif
 
 	FilePosition GetPosition() const noexcept
+	pre(IsLive())
 	{
-		return f->Position();
+		return not_null(f)->Position();
 	}
 
 	bool Seek(FilePosition position) noexcept
+	pre(IsLive())
 	{
-		return f->Seek(position);
+		return not_null(f)->Seek(position);
 	}
 
 	FilePosition Length() const noexcept
+	pre(IsLive())
 	{
-		return f->Length();
+		return not_null(f)->Length();
 	}
 
 	// Move operator
@@ -142,12 +153,12 @@ public:
 		f = other.f;
 		if (f != nullptr)
 		{
-			f->Duplicate();
+			not_null(f)->Duplicate();
 		}
 	}
 
 private:
-	FileStore *f;
+	FileStore * null f;
 
 	void Init() noexcept
 	{

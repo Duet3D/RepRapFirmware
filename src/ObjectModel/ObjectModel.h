@@ -67,7 +67,7 @@ class ObjectModelArrayDescriptor;	// forward declaration
 // Encapsulated time_t, used to facilitate overloading the ExpressionValue constructor
 struct DateTime
 {
-	DateTime(time_t t) : tim(t) { }
+	explicit DateTime(time_t t) : tim(t) { }
 
 	time_t tim;
 };
@@ -91,8 +91,8 @@ struct ExpressionValue
 		float fVal;
 		int32_t iVal;
 		uint32_t uVal;								// used for enumerations, bitmaps and IP addresses (not for integers, we always use int32_t for those)
-		const char *sVal;
-		const ObjectModel *omVal;					// object of some class derived form ObjectModel
+		const char *_ecv_array sVal;
+		const ObjectModel *omVal;					// object of some class derived from ObjectModel
 		const ObjectModelArrayDescriptor *omadVal;
 		StringHandle shVal;
 		const IoPort *iopVal;
@@ -117,8 +117,8 @@ struct ExpressionValue
 	explicit constexpr ExpressionValue(int32_t i) noexcept : type((uint32_t)TypeCode::Int32), param(0), iVal(i) { }
 	explicit constexpr ExpressionValue(FilePosition p) noexcept : type((uint32_t)TypeCode::Uint32), param(0), uVal(p) { }
 	explicit ExpressionValue(uint64_t u) noexcept : type((uint32_t)TypeCode::Uint64) { Set56BitValue(u); }
-	explicit constexpr ExpressionValue(const ObjectModel *om) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(0), omVal(om) { }
-	constexpr ExpressionValue(const ObjectModel *om, uint8_t tableNumber) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(tableNumber), omVal(om) { }
+	explicit constexpr ExpressionValue(const ObjectModel* null om) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(0), omVal(om) { }
+	constexpr ExpressionValue(const ObjectModel *null om, uint8_t tableNumber) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(tableNumber), omVal(om) { }
 	explicit constexpr ExpressionValue(const char *s) noexcept : type((uint32_t)TypeCode::CString), param(0), sVal(s) { }
 	explicit constexpr ExpressionValue(const ObjectModelArrayDescriptor *omad) noexcept : type((uint32_t)TypeCode::Array), param(0), omadVal(omad) { }
 	explicit constexpr ExpressionValue(IPAddress ip) noexcept : type((uint32_t)TypeCode::IPAddress_tc), param(0), uVal(ip.GetV4LittleEndian()) { }
@@ -140,7 +140,7 @@ struct ExpressionValue
 	explicit ExpressionValue(Bitmap<uint32_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap32), param(0), uVal(bm.GetRaw()) { }
 	explicit ExpressionValue(Bitmap<uint64_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap64) { Set56BitValue(bm.GetRaw()); }
 	explicit ExpressionValue(const MacAddress& mac) noexcept;
-	explicit ExpressionValue(SpecialType s, uint32_t u) noexcept : type((uint32_t)TypeCode::Special), param((uint32_t)s), uVal(u) { }
+	ExpressionValue(SpecialType s, uint32_t u) noexcept : type((uint32_t)TypeCode::Special), param((uint32_t)s), uVal(u) { }
 	explicit ExpressionValue(StringHandle h) noexcept : type((uint32_t)TypeCode::HeapString), param(0), shVal(h) { }
 	explicit ExpressionValue(const IoPort& p) noexcept : type((uint32_t)TypeCode::Port), param(0), iopVal(&p) { }
 	explicit ExpressionValue(const UniqueId& id) noexcept : type((uint32_t)TypeCode::UniqueId_tc), param(0), uniqueIdVal(&id) { }
@@ -163,7 +163,7 @@ struct ExpressionValue
 	void Set(int32_t i) noexcept { Release(); type = (uint32_t)TypeCode::Int32; iVal = i; }
 	void Set(float f) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = MaxFloatDigitsDisplayedAfterPoint; }
 	void Set(float f, uint32_t digits) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = digits; }
-	void Set(const char *s) noexcept { Release(); type = (uint32_t)TypeCode::CString; sVal = s; }
+	void Set(const char *_ecv_array s) noexcept { Release(); type = (uint32_t)TypeCode::CString; sVal = s; }
 	void Set(DriverId did) noexcept
 	{
 		Release();
@@ -180,7 +180,7 @@ struct ExpressionValue
 	void Set(nullptr_t dummy) noexcept { Release();  type = (uint32_t)TypeCode::None; }
 
 	// Store a 56-bit value
-	void Set56BitValue(uint64_t v) { Release(); param = (uint32_t)(v >> 32) & 0x00FFFFFF; uVal = (uint32_t)v; }
+	void Set56BitValue(uint64_t v) { Release(); param = (uint32_t)(v >> 32) & 0x00FFFFFFu; uVal = (uint32_t)v; }
 
 	// Extract a 56-bit value that we have stored. Used to retrieve date/times and large bitmaps.
 	uint64_t Get56BitValue() const noexcept { return ((uint64_t)param << 32) | uVal; }
@@ -194,7 +194,7 @@ struct ExpressionValue
 #endif
 
 	// Get the format string to use assuming this is a floating point number
-	const char *GetFloatFormatString() const noexcept;
+	const char *_ecv_array GetFloatFormatString() const noexcept;
 
 	// Append a string representation of this value to a string
 	void AppendAsString(const StringRef& str) const noexcept;
@@ -285,7 +285,7 @@ private:
 class ObjectModelArrayDescriptor
 {
 public:
-	ReadWriteLock *lockPointer;
+	ReadWriteLock *null lockPointer;
 	size_t (*GetNumElements)(const ObjectModel*, const ObjectExplorationContext&) noexcept;
 	ExpressionValue (*GetElement)(const ObjectModel*, ObjectExplorationContext&) noexcept;
 };
@@ -347,7 +347,7 @@ private:
 };
 
 // Function used for compile-time check for the correct number of entries in an object model table
-static inline constexpr size_t ArraySum(const uint8_t *arr, size_t numEntries) noexcept
+static inline constexpr size_t ArraySum(const uint8_t *_ecv_array arr, size_t numEntries) noexcept
 {
 	return (numEntries == 0) ? 0 : arr[0] + ArraySum(arr + 1, numEntries - 1);
 }
@@ -363,9 +363,9 @@ public:
 	typedef ExpressionValue(*DataFetchPtr_t)(const ObjectModel*, ObjectExplorationContext&) noexcept;
 
 	// Member data. This must be public so that we can brace-initialise table entries.
-	const char * name;				// name of this field
-	DataFetchPtr_t func;			// function that yields this value
-	ObjectModelEntryFlags flags;	// information about this value
+	const char *_ecv_array name;		// name of this field
+	DataFetchPtr_t func;				// function that yields this value
+	ObjectModelEntryFlags flags;		// information about this value
 
 	// Member functions. These must all be 'const'.
 
@@ -379,25 +379,25 @@ public:
 	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *self, const char* filter, bool first) const noexcept;
 
 	// Return the name of this field
-	const char* GetName() const noexcept { return name; }
+	const char *_ecv_array  GetName() const noexcept { return name; }
 
 	// Compare the name of this field with the filter string that we are trying to match
 	int IdCompare(const char *id) const noexcept;
 
 	// Return true if a section of the OMT is ordered
-	static inline constexpr bool IsOrdered(const ObjectModelTableEntry *omt, size_t len) noexcept
+	static inline constexpr bool IsOrdered(const ObjectModelTableEntry *_ecv_array omt, size_t len) noexcept
 	{
 		return len <= 1 || (strcmp(omt[1].name, omt[0].name) == 1 && IsOrdered(omt + 1, len - 1));
 	}
 
 	// Return true if a section of the OMT specified by the descriptor is ordered
-	static inline constexpr bool IsOrdered(uint8_t sectionsLeft, const uint8_t *descriptorSection, const ObjectModelTableEntry *omt) noexcept
+	static inline constexpr bool IsOrdered(uint8_t sectionsLeft, const uint8_t *_ecv_array descriptorSection, const ObjectModelTableEntry *_ecv_array omt) noexcept
 	{
 		return sectionsLeft == 0 || (IsOrdered(omt, *descriptorSection) && IsOrdered(sectionsLeft - 1, descriptorSection + 1, omt + *descriptorSection));
 	}
 
 	// Return true if the whole OMT is ordered
-	static inline constexpr bool IsOrdered(const uint8_t *descriptor, const ObjectModelTableEntry *omt) noexcept
+	static inline constexpr bool IsOrdered(const uint8_t *_ecv_array descriptor, const ObjectModelTableEntry *_ecv_array omt) noexcept
 	{
 		return IsOrdered(descriptor[0], descriptor + 1, omt);
 	}
@@ -410,7 +410,7 @@ struct ObjectModelClassDescriptor
 	const ObjectModelClassDescriptor *parent;
 };
 
-// Use this macro to inherit form ObjectModel
+// Use this macro to inherit from ObjectModel
 #define INHERIT_OBJECT_MODEL	: public ObjectModel
 
 // Use this macro in the 'protected' section of every class declaration that derived from ObjectModel

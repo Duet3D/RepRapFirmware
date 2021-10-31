@@ -64,30 +64,30 @@ namespace MassStorage
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	bool DirectoryExists(const StringRef& path) noexcept;									// Warning: if 'path' has a trailing '/' or '\\' character, it will be removed!
-	bool DirectoryExists(const char *path) noexcept;
+	bool DirectoryExists(const char *_ecv_array path) noexcept;
 	unsigned int GetNumFreeFiles() noexcept;
 	bool IsDriveMounted(size_t drive) noexcept;
-	bool FindFirst(const char *directory, FileInfo &file_info) noexcept;
+	bool FindFirst(const char *_ecv_array directory, FileInfo &file_info) noexcept;
 	bool FindNext(FileInfo &file_info) noexcept;
 	void AbandonFindNext() noexcept;
-	GCodeResult GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
+	GCodeResult GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
 	GCodeResult Mount(size_t card, const StringRef& reply, bool reportSuccess) noexcept;
 	GCodeResult Unmount(size_t card, const StringRef& reply) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 #endif
 
 #if HAS_MASS_STORAGE
-	bool EnsurePath(const char* filePath, bool messageIfFailed) noexcept;
-	bool MakeDirectory(const char *directory, bool messageIfFailed) noexcept;
-	bool Rename(const char *oldFilePath, const char *newFilePath, bool deleteExisting, bool messageIfFailed) noexcept;
-	time_t GetLastModifiedTime(const char *filePath) noexcept;
-	bool SetLastModifiedTime(const char *file, time_t time) noexcept;
+	bool EnsurePath(const char *_ecv_array filePath, bool messageIfFailed) noexcept;
+	bool MakeDirectory(const char *_ecv_array directory, bool messageIfFailed) noexcept;
+	bool Rename(const char *_ecv_array oldFilePath, const char *_ecv_array newFilePath, bool deleteExisting, bool messageIfFailed) noexcept;
+	time_t GetLastModifiedTime(const char *_ecv_array filePath) noexcept;
+	bool SetLastModifiedTime(const char *_ecv_array file, time_t t) noexcept;
 	bool CheckDriveMounted(const char* path) noexcept;
 	bool IsCardDetected(size_t card) noexcept;
 	unsigned int InvalidateFiles(const FATFS *fs, bool doClose) noexcept;					// Invalidate all open files on the specified file system, returning the number of files invalidated
 	bool AnyFileOpen(const FATFS *fs) noexcept;												// Return true if any files are open on the file system
 	Mutex& GetVolumeMutex(size_t vol) noexcept;
-	void RecordSimulationTime(const char *printingFilePath, uint32_t simSeconds) noexcept;	// Append the simulated printing time to the end of the file
+	void RecordSimulationTime(const char *_ecv_array printingFilePath, uint32_t simSeconds) noexcept;	// Append the simulated printing time to the end of the file
 	uint16_t GetVolumeSeq(unsigned int volume) noexcept;
 
 	enum class InfoResult : uint8_t
@@ -101,7 +101,7 @@ namespace MassStorage
 
 # if SUPPORT_OBJECT_MODEL
 	inline size_t GetNumVolumes() noexcept { return NumSdCards; }
-	const ObjectModel *GetVolume(size_t vol) noexcept;
+	const ObjectModel *_ecv_from GetVolume(size_t vol) noexcept;
 # endif
 
 #endif

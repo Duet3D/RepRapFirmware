@@ -21,7 +21,7 @@ class GCodeBuffer;
 class Fan INHERIT_OBJECT_MODEL
 {
 public:
-	Fan(unsigned int fanNum) noexcept;
+	explicit Fan(unsigned int fanNum) noexcept;
 	Fan(const Fan&) = delete;
 
 	virtual ~Fan() noexcept { }
@@ -56,7 +56,7 @@ public:
 	GCodeResult SetPwm(float speed, const StringRef& reply) noexcept;
 	bool HasMonitoredSensors() const noexcept { return sensorsMonitored.IsNonEmpty(); }
 	unsigned int GetNumber() const { return fanNumber; }
-	const char *GetName() const noexcept { return name.c_str(); }
+	const char *_ecv_array GetName() const noexcept { return name.c_str(); }
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteSettings(FileStore *f, size_t fanNum) const noexcept;	// save the settings of this fan if it isn't thermostatic

@@ -83,7 +83,7 @@
 #elif !SAME5x
 	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD;			// ignore any signal on the NRST pin for now so that the reset reason will show as Software
 #endif
-	Reset();
+	ResetProcessor();
 	for(;;) {}
 }
 

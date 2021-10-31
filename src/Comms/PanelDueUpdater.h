@@ -23,8 +23,8 @@
 
 constexpr uint32_t RequiredBaudRate = 115200;
 
-constexpr const char * panelDueCommandEraseAndReset	= "{\"controlCommand\":\"eraseAndReset\"}\n";
-constexpr const char * panelDueCommandReset 		= "{\"controlCommand\":\"reset\"}\n";
+constexpr const char *_ecv_array panelDueCommandEraseAndReset	= "{\"controlCommand\":\"eraseAndReset\"}\n";
+constexpr const char *_ecv_array panelDueCommandReset 		= "{\"controlCommand\":\"reset\"}\n";
 
 constexpr uint16_t WaitMsAfterEraseAndReset = 2000;			// How long to wait in ms after eraseAndReset
 

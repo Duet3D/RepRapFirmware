@@ -76,20 +76,20 @@ public:
 #endif
     };
 
-    Device(Samba& samba) noexcept : _samba(samba), _flash(nullptr), _family(FAMILY_NONE) {}
+    explicit Device(Samba& samba) noexcept : _samba(samba), _flash(nullptr), _family(FAMILY_NONE) {}
     virtual ~Device() {  delete _flash; }
 
     void create() THROWS(GCodeException);
 
     Family getFamily() noexcept { return _family; }
 
-    BossaFlash* getFlash() noexcept { return _flash; }
+    BossaFlash* null getFlash() noexcept { return _flash; }
 
     void reset() THROWS(GCodeException);
 
 private:
     Samba& _samba;
-    BossaFlash* _flash;
+    BossaFlash* null _flash;
     Family _family;
 
 #if ORIGINAL_BOSSA_CODE

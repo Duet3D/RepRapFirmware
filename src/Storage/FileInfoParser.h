@@ -47,18 +47,18 @@ public:
 	// The following method needs to be called repeatedly until it doesn't return GCodeResult::notFinished - this may take a few runs
 	GCodeResult GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
 
-	static constexpr const char* SimulatedTimeString = "\n; Simulated print time";	// used by FileInfoParser and MassStorage
+	static constexpr const char *_ecv_array SimulatedTimeString = "\n; Simulated print time";	// used by FileInfoParser and MassStorage
 
 private:
 
 	// G-Code parser methods
-	bool FindHeight(const char* bufp, size_t len) noexcept;
-	bool FindLayerHeight(const char* bufp) noexcept;
-	bool FindSlicerInfo(const char* bufp) noexcept;
-	bool FindPrintTime(const char* bufp) noexcept;
-	bool FindSimulatedTime(const char* bufp) noexcept;
-	unsigned int FindFilamentUsed(const char* bufp) noexcept;
-	void FindFilamentUsedEmbedded(const char* p, const char *s1, const char *s2, unsigned int &filamentsFound) noexcept;
+	bool FindHeight(const char *_ecv_array bufp, size_t len) noexcept;
+	bool FindLayerHeight(const char *_ecv_array bufp) noexcept;
+	bool FindSlicerInfo(const char *_ecv_array bufp) noexcept;
+	bool FindPrintTime(const char *_ecv_array bufp) noexcept;
+	bool FindSimulatedTime(const char *_ecv_array bufp) noexcept;
+	unsigned int FindFilamentUsed(const char *_ecv_array bufp) noexcept;
+	void FindFilamentUsedEmbedded(const char *_ecv_array p, const char *_ecv_array s1, const char *_ecv_array s2, unsigned int &filamentsFound) noexcept;
 
 	// We parse G-Code files in multiple stages. These variables hold the required information
 	Mutex parserMutex;

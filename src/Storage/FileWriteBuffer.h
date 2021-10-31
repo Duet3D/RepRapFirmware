@@ -40,15 +40,15 @@ public:
 #if SAME70
 	FileWriteBuffer(FileWriteBuffer *n, char *storage) noexcept : next(n), index(0), buf(storage) { }
 #else
-	FileWriteBuffer(FileWriteBuffer *n) noexcept : next(n), index(0) { }
+	explicit FileWriteBuffer(FileWriteBuffer *n) noexcept : next(n), index(0) { }
 #endif
 	static void UsingSbcMode() { fileWriteBufLen = SbcFileWriteBufLen; }	// only called by RepRap on startup
 
 	FileWriteBuffer *Next() const noexcept { return next; }
 	void SetNext(FileWriteBuffer *n) noexcept { next = n; }
 
-	char *Data() noexcept { return buf; }
-	const char *Data() const noexcept { return buf; }
+	char *_ecv_array Data() noexcept { return buf; }
+	const char *_ecv_array Data() const noexcept { return buf; }
 	const size_t BytesStored() const noexcept { return index; }
 	const size_t BytesLeft() const noexcept { return fileWriteBufLen - index; }
 
@@ -62,7 +62,7 @@ private:
 
 	size_t index;
 #if SAME70
-	char *buf;
+	char *_ecv_array buf;
 #else
 	alignas(4) char buf[FileWriteBufLen];								// 32-bit aligned buffer for better HSMCI performance
 #endif

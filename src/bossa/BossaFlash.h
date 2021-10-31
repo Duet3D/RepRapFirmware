@@ -64,17 +64,17 @@ class BossaFlash	// manuel: required to rename to avoid clash with CoreN2G names
 {
 public:
 	BossaFlash(Samba& samba,
-          const char* name,
+          const char *_ecv_array p_name,
           uint32_t addr,                 // Flash base address
           uint32_t pages,                // Number of pages
           uint32_t size,                 // Page size in bytes
           uint32_t planes,               // Number of flash planes
-          uint32_t lockRegions,          // Number of flash lock regions
+          uint32_t p_lockRegions,        // Number of flash lock regions
           uint32_t user,                 // Address in SRAM where the applet and buffers will be placed
           uint32_t stack) THROWS(GCodeException);               // Address in SRAM where the applet stack will be placed
     virtual ~BossaFlash() {}
 
-    const char* name() noexcept { return _name; }
+    const char *_ecv_array name() noexcept { return _name; }
 
     virtual uint32_t address() noexcept { return _addr; }
     virtual uint32_t pageSize() noexcept { return _size; }
@@ -119,7 +119,7 @@ public:
 
 protected:
     Samba& _samba;
-    const char* _name;
+    const char *_ecv_array _name;
     uint32_t _addr;
     uint32_t _pages;
     uint32_t _size;

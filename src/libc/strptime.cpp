@@ -37,6 +37,7 @@
  */
 
 #define _GNU_SOURCE
+#include <ecv_duet3d.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <time.h>
@@ -91,7 +92,7 @@ static int first_day (int year) noexcept
 #define strtol_l(_b, _s, _n, _l)	StrToI32(_b, _s)
 #define strptime_l(_b, _f, _t, _l)	strptime_dc(_b, _f, _t)
 
-const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr) noexcept
+const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept
 {
     char c;
     int ymd = 0;
@@ -288,7 +289,7 @@ const char *SafeStrptime(const char *buf, const char *format, struct tm *timeptr
     return buf;
 }
 
-extern "C" char * strptime (const char *buf, const char *format, struct tm *timeptr) noexcept
+extern "C" char * strptime (const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept
 {
 	return const_cast<char *>(SafeStrptime (buf, format, timeptr));
 }

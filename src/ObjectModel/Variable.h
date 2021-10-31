@@ -18,7 +18,7 @@
 class Variable
 {
 public:
-	Variable(const char *str, ExpressionValue pVal, int8_t pScope) noexcept;
+	Variable(const char *_ecv_array str, ExpressionValue pVal, int8_t pScope) noexcept;
 	~Variable();
 
 	ReadLockedPointer<const char> GetName() const noexcept { return name.Get(); }
@@ -44,8 +44,8 @@ public:
 
 	void AssignFrom(VariableSet& other) noexcept;
 
-	Variable *Lookup(const char *str) noexcept;
-	const Variable *Lookup(const char *str) const noexcept;
+	Variable *Lookup(const char *_ecv_array str) noexcept;
+	const Variable *Lookup(const char *_ecv_array str) const noexcept;
 	void InsertNew(const char *str, ExpressionValue pVal, int8_t pScope) noexcept;
 	void EndScope(uint8_t blockNesting) noexcept;
 	void Delete(const char *str) noexcept;
@@ -59,13 +59,13 @@ private:
 		void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<LinkedVariable>(); }
 		void operator delete(void* p) noexcept { FreelistManager::Release<LinkedVariable>(p); }
 
-		LinkedVariable(const char *str, ExpressionValue pVal, int8_t pScope, LinkedVariable *p_next) : next(p_next), v(str, pVal, pScope) {}
+		LinkedVariable(const char *_ecv_array str, ExpressionValue pVal, int8_t pScope, LinkedVariable *p_next) : next(p_next), v(str, pVal, pScope) {}
 
-		LinkedVariable *next;
+		LinkedVariable * null next;
 		Variable v;
 	};
 
-	LinkedVariable *root;
+	LinkedVariable * null root;
 };
 
 #endif /* SRC_GCODES_VARIABLE_H_ */
