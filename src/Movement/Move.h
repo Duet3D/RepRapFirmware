@@ -192,7 +192,7 @@ public:
 	static float MotorStepsToMovement(size_t drive, int32_t endpoint) noexcept;				// Convert number of motor steps to motor position
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
-	void LaserTaskRun() noexcept;
+	[[noreturn]] void LaserTaskRun() noexcept;
 
 	static void CreateLaserTask() noexcept;													// create the laser task if we haven't already
 	static void WakeLaserTask() noexcept;													// wake up the laser task, called at the start of a new move

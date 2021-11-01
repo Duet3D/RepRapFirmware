@@ -1194,7 +1194,7 @@ void Move::WakeMoveTaskFromISR() noexcept
 
 Task<Move::LaserTaskStackWords> *Move::laserTask = nullptr;		// the task used to manage laser power or IOBits
 
-extern "C" void LaserTaskStart(void * pvParameters) noexcept
+extern "C" [[noreturn]] void LaserTaskStart(void * pvParameters) noexcept
 {
 	reprap.GetMove().LaserTaskRun();
 }
@@ -1242,7 +1242,7 @@ void Move::LaserTaskRun() noexcept
 			uint32_t ticks;
 			while ((ticks = mainDDARing.ManageLaserPower()) != 0)
 			{
-				delay(ticks);
+				(void)TaskBase::Take(ticks);
 			}
 # endif
 		}
@@ -1253,7 +1253,7 @@ void Move::LaserTaskRun() noexcept
 			uint32_t ticks;
 			while ((ticks = reprap.GetPortControl().UpdatePorts()) != 0)
 			{
-				delay(ticks);
+				(void)TaskBase::Take(ticks);
 			}
 # endif
 		}
