@@ -611,10 +611,9 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 	// If it is a motor stall endstop, there should not be a port specified, but we can ignore the port if it is present
 	uint32_t probeType = (uint32_t)ZProbeType::none;
 	bool seenType = false;
-	gb.TryGetUIValue('P', probeType, seenType);
+	gb.TryGetLimitedUIValue('P', probeType, seenType, (uint32_t)ZProbeType::numTypes);
 	if (   seenType
-		&& (   probeType >= (uint32_t)ZProbeType::numTypes
-			|| probeType == (uint32_t)ZProbeType::e1Switch_obsolete
+		&& (   probeType == (uint32_t)ZProbeType::e1Switch_obsolete
 			|| probeType == (uint32_t)ZProbeType::endstopSwitch_obsolete
 			|| probeType == (uint32_t)ZProbeType::zSwitch_obsolete
 		   )
@@ -682,6 +681,16 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 				}
 				else
 #endif
+					if (   probeNumber != 0
+						&& (   probeType == (unsigned int)ZProbeType::analog || probeType == (unsigned int)ZProbeType::alternateAnalog
+							|| probeType == (unsigned int)ZProbeType::dumbModulated || probeType == (unsigned int)ZProbeType::digital
+						   )
+					   )
+				{
+					reply.copy("Types 1,2,3 and 5 are available for Z probe 0 only");
+					return GCodeResult::error;
+				}
+				else
 				{
 					newProbe = new LocalZProbe(probeNumber);
 				}
