@@ -49,7 +49,7 @@ extern "C" [[noreturn]] void SBCTaskStart(void * pvParameters) noexcept
 	reprap.GetSbcInterface().TaskLoop();
 }
 
-SbcInterface::SbcInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0),
+SbcInterface::SbcInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0), lastTransferTime(0),
 	maxDelayBetweenTransfers(SpiTransferDelay), maxFileOpenDelay(SpiFileOpenDelay), numMaxEvents(SpiEventsRequired),
 	delaying(false), numEvents(0), reportPause(false), reportPauseWritten(false), printAborted(false),
 	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true),
@@ -87,10 +87,18 @@ void SbcInterface::Init() noexcept
 
 void SbcInterface::Spin() noexcept
 {
-	if (transfer.DoTransfer() != TransferState::finishingTransfer)
+	state = transfer.DoTransfer();
+	if (state == TransferState::connectionTimeout || (lastTransferTime != 0 && millis() - lastTransferTime > SpiTransferTimeout) ||
+		state == TransferState::connectionReset || state == TransferState::finished)
 	{
 		// Don't process anything, just kick off the next transfer to report we're operating in standalone mode
-		transfer.StartNextTransfer();
+		transfer.ResetConnection(true);
+		lastTransferTime = 0;
+	}
+	else if (state == TransferState::doingPartialTransfer && lastTransferTime == 0)
+	{
+		// Make sure the full transfer is restarted if a timeout occurs
+		lastTransferTime = millis();
 	}
 }
 
