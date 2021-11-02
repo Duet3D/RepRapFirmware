@@ -143,7 +143,6 @@ public:
 	uint32_t GetCompletedMoves() const noexcept { return mainDDARing.GetCompletedMoves(); }	// How many moves have been completed?
 	void ResetMoveCounters() noexcept { mainDDARing.ResetMoveCounters(); }
 
-	ReadWriteLock heightMapLock;
 	HeightMap& AccessHeightMap() noexcept { return heightMap; }								// Access the bed probing grid
 	const GridDefinition& GetGrid() const noexcept { return heightMap.GetGrid(); }			// Get the grid definition
 
