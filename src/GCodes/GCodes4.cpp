@@ -727,7 +727,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 				else if (zp->Stopped())
 				{
-					reprap.GetMove().heightMapLock.ReleaseWriter();
 					reprap.GetHeat().SuspendHeaters(false);
 					gb.LatestMachineState().SetError("Probe already triggered before probing move started");
 					gb.SetState(GCodeState::checkError);
@@ -740,7 +739,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					SetMoveBufferDefaults();
 					if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
 					{
-						reprap.GetMove().heightMapLock.ReleaseWriter();
 						gb.LatestMachineState().SetError("Failed to enable probe");
 						gb.SetState(GCodeState::checkError);
 						RetractZProbe(gb);
@@ -774,7 +772,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				zp->SetProbing(false);
 				if (!zProbeTriggered)
 				{
-					reprap.GetMove().heightMapLock.ReleaseWriter();
 					gb.LatestMachineState().SetError("Probe was not triggered during probing move");
 					gb.SetState(GCodeState::checkError);
 					RetractZProbe(gb);
@@ -848,7 +845,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			else
 			{
-				reprap.GetMove().heightMapLock.ReleaseWriter();
 				gb.LatestMachineState().SetError("Z probe readings not consistent");
 				gb.SetState(GCodeState::checkError);
 				RetractZProbe(gb);
@@ -909,14 +905,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				reply.printf("%" PRIu32 " points probed, min error %.3f, max error %.3f, mean %.3f, deviation %.3f\n",
 								numPointsProbed, (double)minError, (double)maxError, (double)deviation.GetMean(), (double)deviation.GetDeviationFromMean());
 #if HAS_MASS_STORAGE
-# if HAS_SBC_INTERFACE
-				if (!reprap.UsingSbcInterface())
-# endif
+				if (TrySaveHeightMap(DefaultHeightMapFile, reply))
 				{
-					if (TrySaveHeightMap(DefaultHeightMapFile, reply))
-					{
-						stateMachineResult = GCodeResult::error;
-					}
+					stateMachineResult = GCodeResult::error;
 				}
 #endif
 				reprap.GetMove().AccessHeightMap().ExtrapolateMissing();
@@ -931,7 +922,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				gb.LatestMachineState().SetError("Too few points probed");
 			}
-			reprap.GetMove().heightMapLock.ReleaseWriter();
 		}
 		if (stateMachineResult == GCodeResult::ok)
 		{

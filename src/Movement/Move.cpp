@@ -747,7 +747,7 @@ void Move::SetIdentityTransform() noexcept
 	reprap.MoveUpdated();
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Load the height map from file, returning true if an error occurred with the error reason appended to the buffer
 bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
@@ -769,16 +769,6 @@ bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRe
 bool Move::SaveHeightMapToFile(FileStore *f, const char *fname) noexcept
 {
 	return heightMap.SaveToFile(f, fname, zShift);
-}
-
-#endif
-
-#if HAS_SBC_INTERFACE
-
-// Save the height map Z coordinates to an array
-void Move::SaveHeightMapToArray(float *arr) const noexcept
-{
-	return heightMap.SaveToArray(arr, zShift);
 }
 
 #endif

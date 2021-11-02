@@ -147,13 +147,9 @@ public:
 	HeightMap& AccessHeightMap() noexcept { return heightMap; }								// Access the bed probing grid
 	const GridDefinition& GetGrid() const noexcept { return heightMap.GetGrid(); }			// Get the grid definition
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept;	// Load the height map from a file returning true if an error occurred
 	bool SaveHeightMapToFile(FileStore *f, const char *fname) noexcept;						// Save the height map to a file returning true if an error occurred
-#endif
-
-#if HAS_SBC_INTERFACE
-	void SaveHeightMapToArray(float *arr) const noexcept;									// Save the height map Z coordinates to an array
 #endif
 
 	const RandomProbePointSet& GetProbePoints() const noexcept { return probePoints; }		// Return the probe point set constructed from G30 commands

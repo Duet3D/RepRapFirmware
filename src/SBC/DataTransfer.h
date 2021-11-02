@@ -55,7 +55,6 @@ public:
 	void ReadPrintStartedInfo(size_t packetLength, const StringRef& filename, GCodeFileInfo &info) noexcept;	// Read info about the started file print
 	PrintStoppedReason ReadPrintStoppedInfo() noexcept;										// Read info about why the print has been stopped
 	GCodeChannel ReadMacroCompleteInfo(bool &error) noexcept;								// Read info about a completed macro file
-	bool ReadHeightMap() noexcept;															// Read heightmap parameters
 	GCodeChannel ReadCodeChannel() noexcept;												// Read a code channel
 	void ReadFileChunk(char *buffer, int32_t& dataLength, uint32_t& fileLength) noexcept;	// Read another chunk of a file
 	GCodeChannel ReadEvaluateExpression(size_t packetLength, const StringRef& expression) noexcept;	// Read an expression request
@@ -73,7 +72,6 @@ public:
 	bool WriteAbortFileRequest(GCodeChannel channel, bool abortAll) noexcept;
 	bool WriteMacroFileClosed(GCodeChannel channel) noexcept;
 	bool WritePrintPaused(FilePosition position, PrintPausedReason reason) noexcept;
-	bool WriteHeightMap() noexcept;
 	bool WriteLocked(GCodeChannel channel) noexcept;
 	bool WriteFileChunkRequest(const char *filename, uint32_t offset, uint32_t maxLength) noexcept;
 	bool WriteEvaluationResult(const char *expression, const ExpressionValue& value) noexcept;

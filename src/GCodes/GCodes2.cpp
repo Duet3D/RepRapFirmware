@@ -280,16 +280,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 29: // Grid-based bed probing
-
-#if HAS_SBC_INTERFACE
-			// Pass file- and system-related commands to the SBC service if they came from anywhere else.
-			// They will be passed back to us via a binary buffer or separate SPI message if necessary.
-			if (reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected() && !gb.IsBinary())
-			{
-				gb.SendToSbc();
-				return false;
-			}
-#endif
 			if (!LockMovementAndWaitForStandstill(gb))			// do this first to make sure that a new grid isn't being defined
 			{
 				return false;
@@ -316,7 +306,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					break;
 
 				case 1:		// load height map file
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 					result = LoadHeightMap(gb, reply);
 #else
 					result = GCodeResult::errorNotSupported;
@@ -328,7 +318,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					break;
 
 				case 3:		// save height map to names file
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 					result = SaveHeightMap(gb, reply);
 #else
 					result = GCodeResult::errorNotSupported;
@@ -476,10 +466,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	// They will be passed back to us via a binary buffer or separate SPI message if necessary.
 	if (   reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected() && !gb.IsBinary()
 		&& (   code == 0 || code == 1
-			|| code == 20 || code == 21 || code == 22 || code == 23 || code == 24 || code == 26 || code == 27 || code == 28 || code == 29
+			|| code == 20 || code == 21 || code == 22 || code == 23 || code == 24 || code == 26 || code == 27 || code == 28
 			|| code == 30 || code == 32 || code == 36 || code == 37 || code == 38 || code == 39
 			|| code == 112
-			|| code == 374 || code == 375
 			|| code == 470 || code == 471
 			|| code == 503 || code == 505
 			|| code == 540 || code == 550 || code == 552 || code == 586 || (code >= 587 && code <= 589)
@@ -2759,7 +2748,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 			case 374: // Save grid and height map to file
 				result = SaveHeightMap(gb, reply);
 				break;

@@ -222,7 +222,6 @@ public:
 	void EmergencyStop() noexcept;												// Cancel everything
 
 	const GridDefinition& GetDefaultGrid() const { return defaultGrid; };		// Get the default grid definition
-	bool AssignGrid(const char axesLetters[2], const float axis0Range[2], const float axis1Range[2], float radius, float spacing[2]) noexcept;	// Assign the heightmap using the given parameters
 	void ActivateHeightmap(bool activate) noexcept;								// (De-)Activate the height map
 
 	int GetNewToolNumber() const noexcept { return newToolNumber; }
@@ -466,7 +465,7 @@ private:
 	bool IsMappedFan(unsigned int fanNumber) noexcept;							// Return true if this fan number is currently being used as a print cooling fan
 
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);	// Define the probing grid, returning true if error
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load the height map from file
 	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept;	// Save the height map to the specified file
 	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;	// Save the height map to the file specified by P parameter
