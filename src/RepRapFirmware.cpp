@@ -240,7 +240,7 @@ bool MillisTimer::CheckAndStop(uint32_t timeoutMillis) noexcept
 // Utilities and storage not part of any class
 
 // For debug use
-void debugPrintf(const char* fmt, ...) noexcept
+void debugPrintf(const char *_ecv_array fmt, ...) noexcept
 {
 	// Calls to debugPrintf() from with ISRs are unsafe, both because of timing issues and because the call to Platform::MessageF tries to acquire a mutex.
 	// So ignore the call if we are coming from within an ISR.
@@ -262,7 +262,7 @@ double HideNan(float val) noexcept
 // Append a list of driver numbers to a string, with a space before each one
 void ListDrivers(const StringRef& str, DriversBitmap drivers) noexcept
 {
-	drivers.Iterate([&str](unsigned int d, unsigned int) noexcept { str.catf(" %u", d); });
+	drivers.Iterate([&str](unsigned int d, unsigned int) noexcept -> void { str.catf(" %u", d); });
 }
 
 // End

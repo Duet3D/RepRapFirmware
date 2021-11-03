@@ -54,9 +54,9 @@ private:
 	uint8_t serialChannel;
 	size_t currentBaudRate;
 	Samba* samba;
-	SerialPort* serialPort;
+	SerialPort *_ecv_from serialPort;
 	Device* device;
-	FlasherObserver* flasherObserver;
+	FlasherObserver *_ecv_from flasherObserver;
 	Flasher* flasher;
 	AsyncSerial::InterruptCallbackFn currentInterruptCallbackFn;
 	uint32_t offset;

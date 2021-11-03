@@ -194,7 +194,7 @@ void ExpressionValue::Release() noexcept
 }
 
 // Get the format string to use assuming this is a floating point number
-const char *ExpressionValue::GetFloatFormatString() const noexcept
+const char *_ecv_array ExpressionValue::GetFloatFormatString() const noexcept
 {
 	float f = 1.0;
 	unsigned int digitsAfterPoint = param;
@@ -403,8 +403,8 @@ GCodeException ObjectExplorationContext::ConstructParseException(const char *msg
 // Call this before making a recursive call, or before calling a function that needs a lot of stack from a recursive function
 void ObjectExplorationContext::CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException)
 {
-	register const char * stackPtr asm ("sp");
-	const char *stackLimit = (const char*)TaskBase::GetCallerTaskHandle() + sizeof(TaskBase);
+	const char *_ecv_array stackPtr = (const char*_ecv_array)GetStackPointer();
+	const char *_ecv_array stackLimit = (const char*_ecv_array)TaskBase::GetCallerTaskHandle() + sizeof(TaskBase);
 	if (stackLimit + calledFunctionStackUsage + (StackUsage::Throw + StackUsage::Margin) < stackPtr)
 	{
 		return;
@@ -422,7 +422,7 @@ void ObjectExplorationContext::CheckStack(uint32_t calledFunctionStackUsage) con
 
 // Report this object
 void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor,
-								uint8_t tableNumber, const char* filter) const THROWS(GCodeException)
+								uint8_t tableNumber, const char *_ecv_array filter) const THROWS(GCodeException)
 {
 	if (context.IncreaseDepth())
 	{
@@ -484,7 +484,7 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 }
 
 // Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
-void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS(GCodeException)
+void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *_ecv_array filter, const char *_ecv_array reportFlags, bool wantArrayLength) const THROWS(GCodeException)
 {
 	const unsigned int defaultMaxDepth = (wantArrayLength) ? 99 : (filter[0] == 0) ? 1 : 99;
 	ObjectExplorationContext context(wantArrayLength, reportFlags, defaultMaxDepth, buf->Length());
@@ -500,7 +500,7 @@ void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *filter, const char
 // Most recursive calls are for non-array object values, so handle object values inline to reduce stack usage.
 // This saves about 240 bytes of stack space but costs 272 bytes of flash memory.
 inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
-											const ExpressionValue& val, const char *filter) const THROWS(GCodeException)
+											const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException)
 {
 	if (context.WantArrayLength() && *filter == 0)
 	{
@@ -562,7 +562,7 @@ void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationCo
 
 // Function to report a value or object as JSON
 // This function is recursive, so keep its stack usage low
-void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
 										const ExpressionValue& val, const char *filter) const THROWS(GCodeException)
 {
 	switch (val.GetType())
@@ -801,8 +801,8 @@ void ObjectModel::ReportPinNameAsJson(OutputBuffer *buf, const ExpressionValue& 
 }
 
 // Report an entire array as JSON
-void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
-										const ObjectModelArrayDescriptor *omad, const char *filter) const THROWS(GCodeException)
+void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
+										const ObjectModelArrayDescriptor *omad, const char *_ecv_array filter) const THROWS(GCodeException)
 {
 	const bool isRootArray = (buf->Length() == context.GetInitialBufferOffset());		// it's a root array if we haven't started writing to the buffer yet
 	ReadLocker lock(omad->lockPointer);
@@ -836,7 +836,7 @@ void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext&
 }
 
 // Find the requested entry
-const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(const ObjectModelClassDescriptor *classDescriptor, uint8_t tableNumber, const char* idString) const noexcept
+const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(const ObjectModelClassDescriptor *classDescriptor, uint8_t tableNumber, const char *_ecv_array idString) const noexcept
 {
 	const uint8_t * const descriptor = classDescriptor->omd;
 	if (tableNumber >= descriptor[0])
@@ -929,7 +929,7 @@ int ObjectModelTableEntry::IdCompare(const char *id) const noexcept
 }
 
 // Get the value of an object
-ExpressionValue ObjectModel::GetObjectValueUsingTableNumber(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *idString, uint8_t tableNumber) const THROWS(GCodeException)
+ExpressionValue ObjectModel::GetObjectValueUsingTableNumber(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *_ecv_array idString, uint8_t tableNumber) const THROWS(GCodeException)
 decrease(strlen(idString))	// recursion variant
 {
 	if (classDescriptor == nullptr)
@@ -966,7 +966,7 @@ decrease(strlen(idString))	// recursion variant
 	throw context.ConstructParseException("unknown value '%s'", idString);
 }
 
-ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *idString) const THROWS(GCodeException)
+ExpressionValue ObjectModel::GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *_ecv_array idString) const THROWS(GCodeException)
 decrease(strlen(idString))	// recursion variant
 {
 	if (*idString == 0 && context.WantExists() && val.GetType() != TypeCode::None)

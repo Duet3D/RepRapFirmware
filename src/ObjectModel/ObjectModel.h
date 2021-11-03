@@ -300,7 +300,7 @@ public:
 	virtual ~ObjectModel() { }
 
 	// Construct a JSON representation of those parts of the object model requested by the user. This version is called only on the root of the tree.
-	void ReportAsJson(OutputBuffer *buf, const char *filter, const char *reportFlags, bool wantArrayLength) const THROWS(GCodeException);
+	void ReportAsJson(OutputBuffer *buf, const char *_ecv_array filter, const char *_ecv_array reportFlags, bool wantArrayLength) const THROWS(GCodeException);
 
 	// Get the value of an object via the table
 	ExpressionValue GetObjectValueUsingTableNumber(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *_ecv_array idString, uint8_t tableNumber) const THROWS(GCodeException);
@@ -318,7 +318,7 @@ protected:
 	virtual void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, uint8_t tableNumber, const char *_ecv_array filter) const THROWS(GCodeException);
 
 	// Report an entire array as JSON
-	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModelArrayDescriptor *omad, const char *_ecv_array filter) const THROWS(GCodeException);
+	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor, const ObjectModelArrayDescriptor *omad, const char *_ecv_array filter) const THROWS(GCodeException);
 
 	// Get the value of an object that we hold
 	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *_ecv_array idString) const THROWS(GCodeException);
@@ -328,7 +328,7 @@ protected:
 
 	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
 
-	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
 															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 private:
 	// These functions have been separated from ReportItemAsJson to avoid high stack usage in the recursive functions, therefore they must not be inlined

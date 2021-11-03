@@ -102,7 +102,7 @@ void SoftwareResetData::Populate(uint16_t reason, const uint32_t *stk) noexcept
 	}
 }
 
-void SoftwareResetData::Print(MessageType mtype, unsigned int slot) const noexcept
+void SoftwareResetData::Printit(MessageType mtype, unsigned int slot) const noexcept
 {
 	String<StringLength256> scratchString;		// long enough to print 28 stack entries @ 9 bytes each, but not 29
 	scratchString.copy("Last software reset ");

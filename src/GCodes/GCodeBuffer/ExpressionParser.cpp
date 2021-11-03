@@ -1432,8 +1432,8 @@ void ExpressionParser::ThrowParseException(const char *str, uint32_t param) cons
 // Call this before making a recursive call, or before calling a function that needs a lot of stack from a recursive function
 void ExpressionParser::CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException)
 {
-	register const char * stackPtr asm ("sp");									// get the current stack pointer
-	const char *stackLimit = (const char*)TaskBase::GetCurrentTaskStackBase();	// get the base (lowest available address) of the stack for this task
+	const char *_ecv_array stackPtr = (const char *_ecv_array)GetStackPointer();
+	const char *_ecv_array stackLimit = (const char *_ecv_array)TaskBase::GetCurrentTaskStackBase();	// get the base (lowest available address) of the stack for this task
 
 	//debugPrintf("Margin: %u\n", stackPtr - stackLimit);
 	if (stackLimit + calledFunctionStackUsage + (StackUsage::Throw + StackUsage::Margin) <= stackPtr)
