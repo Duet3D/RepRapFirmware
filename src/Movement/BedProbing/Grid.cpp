@@ -372,7 +372,7 @@ unsigned int HeightMap::GetMinimumSegments(float deltaAxis0, float deltaAxis1) c
 	return max<unsigned int>(axis0Segments, axis1Segments);
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Save the grid to file returning true if an error occurred
 bool HeightMap::SaveToFile(FileStore *f, const char *fname, float zOffset) noexcept
@@ -523,30 +523,6 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 		return false;										// success!
 	}
 	return true;											// an error occurred
-}
-
-#endif
-
-#if HAS_SBC_INTERFACE
-
-// Update the filename
-void HeightMap::SetFileName(const char *name) noexcept
-{
-	fileName.copy(name);
-}
-
-// Save the grid to a sequential array in the same way as to a regular CSV file
-void HeightMap::SaveToArray(float *arr, float zOffset) const noexcept
-{
-	size_t index = 0;
-	for (size_t i = 0; i < def.nums[1]; ++i)
-	{
-		for (size_t j = 0; j < def.nums[0]; ++j)
-		{
-			arr[index] = gridHeightSet.IsBitSet(index) ? (gridHeights[index] + zOffset) : std::numeric_limits<float>::quiet_NaN();
-			index++;
-		}
-	}
 }
 
 #endif

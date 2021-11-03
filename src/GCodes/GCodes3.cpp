@@ -304,8 +304,6 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 
 	if (!axesSeen && !seenR && !seenS && !seenP)
 	{
-		ReadLocker rlocker(reprap.GetMove().heightMapLock);
-
 		// Just print the existing grid parameters
 		if (defaultGrid.IsValid())
 		{
@@ -389,7 +387,6 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 		}
 	}
 
-	WriteLocker locker(reprap.GetMove().heightMapLock);
 	const bool ok = defaultGrid.Set(axesLetters, axis0Values, axis1Values, radius, spacings);
 	reprap.MoveUpdated();
 	if (ok)
