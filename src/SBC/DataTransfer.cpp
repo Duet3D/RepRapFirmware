@@ -601,48 +601,6 @@ GCodeChannel DataTransfer::ReadMacroCompleteInfo(bool &error) noexcept
 	return GCodeChannel(header->channel);
 }
 
-bool DataTransfer::ReadHeightMap() noexcept
-{
-	// Read height map header
-	const HeightMapHeader * const header = ReadDataHeader<HeightMapHeader>();
-	char axesLetter[2] 		= { 'X', 'Y' };
-	float axis0Range[2]		= { header->xMin, header->xMax };
-	float axis1Range[2]		= { header->yMin, header->yMax };
-	float spacing[2]		= { header->xSpacing, header->ySpacing };
-	const bool ok = reprap.GetGCodes().AssignGrid(axesLetter, axis0Range, axis1Range, header->radius, spacing);
-	if (ok)
-	{
-		// Read Z coordinates
-		const size_t numPoints = header->numX * header->numY;
-		const float *points = reinterpret_cast<const float *>(ReadData(sizeof(float) * numPoints));
-
-		HeightMap& map = reprap.GetMove().AccessHeightMap();
-		map.ClearGridHeights();
-		for (size_t i = 0; i < numPoints; i++)
-		{
-			if (!std::isnan(points[i]))
-			{
-				map.SetGridHeight(i, points[i]);
-			}
-		}
-
-		map.ExtrapolateMissing();
-
-		// Activate it
-		reprap.GetGCodes().ActivateHeightmap(true);
-
-		// Recalculate the deviations
-		float minError, maxError;
-		Deviation deviation;
-		const uint32_t numPointsProbed = reprap.GetMove().AccessHeightMap().GetStatistics(deviation, minError, maxError);
-		if (numPointsProbed >= 4)
-		{
-			reprap.GetMove().SetLatestMeshDeviation(deviation);
-		}
-	}
-	return ok;
-}
-
 GCodeChannel DataTransfer::ReadCodeChannel() noexcept
 {
 	const CodeChannelHeader *header = ReadDataHeader<CodeChannelHeader>();
@@ -1189,42 +1147,6 @@ bool DataTransfer::WritePrintPaused(FilePosition position, PrintPausedReason rea
 	header->pauseReason = reason;
 	header->paddingA = 0;
 	header->paddingB = 0;
-	return true;
-}
-
-bool DataTransfer::WriteHeightMap() noexcept
-{
-	const GridDefinition& grid = reprap.GetMove().GetGrid();
-
-	size_t numPoints = reprap.GetMove().AccessHeightMap().UsingHeightMap() ? grid.NumPoints() : 0;
-	size_t bytesToWrite = sizeof(HeightMapHeader) + numPoints * sizeof(float);
-	if (!CanWritePacket(bytesToWrite))
-	{
-		return false;
-	}
-
-	// Write packet header
-	(void)WritePacketHeader(FirmwareRequest::HeightMap, bytesToWrite);
-
-	// Write heightmap header
-	HeightMapHeader *header = WriteDataHeader<HeightMapHeader>();
-	header->xMin = grid.GetMin(0);
-	header->xMax = grid.GetMax(0);
-	header->xSpacing = grid.GetSpacing(0);
-	header->yMin = grid.GetMin(1);
-	header->yMax = grid.GetMax(1);
-	header->ySpacing = grid.GetSpacing(1);
-	header->radius = grid.radius;
-	header->numX = grid.NumAxisPoints(0);
-	header->numY = grid.NumAxisPoints(1);
-
-	// Write Z points
-	if (numPoints != 0)
-	{
-		float *zPoints = reinterpret_cast<float*>(txBuffer + txPointer);
-		reprap.GetMove().SaveHeightMapToArray(zPoints);
-		txPointer += numPoints * sizeof(float);
-	}
 	return true;
 }
 

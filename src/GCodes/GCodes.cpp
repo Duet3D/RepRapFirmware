@@ -2141,7 +2141,6 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		}
 		if (reprap.GetMove().IsUsingMesh() && (moveState.isCoordinated || machineType == MachineType::fff))
 		{
-			ReadLocker locker(reprap.GetMove().heightMapLock);
 			const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
 			const GridDefinition& grid = heightMap.GetGrid();
 			const unsigned int minMeshSegments = max<unsigned int>(
@@ -3083,18 +3082,14 @@ void GCodes::DoManualBedProbe(GCodeBuffer& gb)
 // Prior to calling this the movement system must be locked.
 GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 {
-	reprap.GetMove().heightMapLock.LockForWriting();
-
 	if (!defaultGrid.IsValid())
 	{
-		reprap.GetMove().heightMapLock.ReleaseWriter();
 		reply.copy("No valid grid defined for bed probing");
 		return GCodeResult::error;
 	}
 
 	if (!AllAxesAreHomed())
 	{
-		reprap.GetMove().heightMapLock.ReleaseWriter();
 		reply.copy("Must home printer before bed probing");
 		return GCodeResult::error;
 	}
@@ -3113,19 +3108,10 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 	return GCodeResult::ok;
 }
 
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 {
-#if HAS_SBC_INTERFACE
-	// If we have an SBC interface and we're using it, the SBC service will take care of file I/O and this should not be called
-	if (reprap.UsingSbcInterface())
-	{
-		reply.copy("Cannot use height map on local SD card when SBC interface is used");
-		return GCodeResult::error;
-	}
-#endif
-
 	ClearBedMapping();
 
 	String<MaxFilenameLength> heightMapFileName;
@@ -3146,7 +3132,6 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 	}
 	reply.printf("Failed to load height map from file %s: ", fullName.c_str());	// set up error message to append to
 
-	WriteLocker locker(reprap.GetMove().heightMapLock);
 	const bool err = reprap.GetMove().LoadHeightMapFromFile(f, fullName.c_str(), reply);
 	f->Close();
 
@@ -3169,15 +3154,6 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 // Save the height map and append the success or error message to 'reply', returning true if an error occurred
 bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept
 {
-#if HAS_SBC_INTERFACE
-	// If we have an SBC connected, the SBC service will take care of heightmap-related file I/O
-	if (reprap.UsingSbcInterface())
-	{
-		reply.copy("Cannot use height map on local SD card when SBC interface is used");
-		return true;
-	}
-#endif
-
 	String<MaxFilenameLength> fullName;
 	platform.MakeSysFileName(fullName.GetRef(), filename);
 	FileStore * const f = MassStorage::OpenFile(fullName.c_str(), OpenMode::write, 0);
@@ -3207,8 +3183,6 @@ bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) cons
 // Save the height map to the file specified by P parameter
 GCodeResult GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 {
-	ReadLocker locker(reprap.GetMove().heightMapLock);
-
 	// No need to check if we're using the SBC interface here, because TrySaveHeightMap does that already
 	if (gb.Seen('P'))
 	{
@@ -4975,17 +4949,6 @@ Pwm_t GCodes::ConvertLaserPwm(float reqVal) const noexcept
 	return (uint16_t)constrain<long>(lrintf((reqVal * 65535)/laserMaxPower), 0, 65535);
 }
 
-// Assign the heightmap using the given parameters, returning true if they were valid
-bool GCodes::AssignGrid(const char axesLetters[2], const float axis0Range[2], const float axis1Range[2], float radius, float spacing[2]) noexcept
-{
-	const bool ok = defaultGrid.Set(axesLetters, axis0Range, axis1Range, radius, spacing);
-	if (ok)
-	{
-		reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);
-	}
-	return ok;
-}
-
 void GCodes::ActivateHeightmap(bool activate) noexcept
 {
 	reprap.GetMove().UseMesh(activate);
@@ -4994,15 +4957,6 @@ void GCodes::ActivateHeightmap(bool activate) noexcept
 		// Update the current position to allow for any bed compensation at the current XY coordinates
 		reprap.GetMove().GetCurrentUserPosition(moveState.coords, 0, reprap.GetCurrentTool());
 		ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);	// update user coordinates to reflect any height map offset at the current position
-
-#if HAS_SBC_INTERFACE
-		// Set a dummy heightmap filename
-		if (reprap.UsingSbcInterface())
-		{
-			HeightMap& map = reprap.GetMove().AccessHeightMap();
-			map.SetFileName(DefaultHeightMapFile);
-		}
-#endif
 	}
 }
 
