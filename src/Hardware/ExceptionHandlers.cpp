@@ -89,8 +89,7 @@
 
 [[noreturn]] void OutOfMemoryHandler() noexcept
 {
-	register const uint32_t * stack_ptr asm ("sp");
-	SoftwareReset(SoftwareResetReason::outOfMemory, stack_ptr);
+	SoftwareReset(SoftwareResetReason::outOfMemory, GetStackPointer());
 }
 
 // Exception handlers
@@ -284,8 +283,7 @@ namespace std
 // The default terminate handler pulls in sprintf and lots of other functions, which makes the binary too large. So we replace it.
 [[noreturn]] void Terminate() noexcept
 {
-	register const uint32_t * stack_ptr asm ("sp");
-	SoftwareReset(SoftwareResetReason::terminateCalled, stack_ptr);
+	SoftwareReset(SoftwareResetReason::terminateCalled, GetStackPointer());
 }
 
 namespace __cxxabiv1
@@ -295,14 +293,12 @@ namespace __cxxabiv1
 
 extern "C" [[noreturn]] void __cxa_pure_virtual() noexcept
 {
-	register const uint32_t * stack_ptr asm ("sp");
-	SoftwareReset(SoftwareResetReason::pureOrDeletedVirtual, stack_ptr);
+	SoftwareReset(SoftwareResetReason::pureOrDeletedVirtual, GetStackPointer());
 }
 
 extern "C" [[noreturn]] void __cxa_deleted_virtual() noexcept
 {
-	register const uint32_t * stack_ptr asm ("sp");
-	SoftwareReset(SoftwareResetReason::pureOrDeletedVirtual, stack_ptr);
+	SoftwareReset(SoftwareResetReason::pureOrDeletedVirtual, GetStackPointer());
 }
 
 // End

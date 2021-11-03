@@ -158,8 +158,8 @@ void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
 #endif	// !defined(DEBUG) && !defined(__LPC17xx__)
 
 	// Fill the free memory with a pattern so that we can check for stack usage and memory corruption
-	char* heapend = heapTop;
-	register const char * stack_ptr asm ("sp");
+	char *_ecv_array heapend = heapTop;
+	const char *_ecv_array stack_ptr = (const char*_ecv_array)GetStackPointer();
 	while (heapend + 16 < stack_ptr)
 	{
 		*heapend++ = memPattern;
