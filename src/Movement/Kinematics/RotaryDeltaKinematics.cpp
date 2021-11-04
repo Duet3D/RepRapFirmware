@@ -154,7 +154,8 @@ bool RotaryDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			}
 			else if (!seenNonGeometry && !gb.Seen('K'))
 			{
-				reply.printf("Kinematics is rotary delta, arms (%.3f,%.2f,%.3f)mm, rods (%.3f,%.3f,%.3f)mm, bearingHeights (%.3f,%.2f,%.3f)mm"
+				Kinematics::Configure(mCode, gb, reply, error);
+				reply.catf(", arms (%.3f,%.2f,%.3f)mm, rods (%.3f,%.3f,%.3f)mm, bearingHeights (%.3f,%.2f,%.3f)mm"
 							 ", arm movement %.1f to %.1f" DEGREE_SYMBOL
 							 ", delta radius %.3f, bed radius %.1f"
 							 ", angle corrections (%.3f,%.3f,%.3f)" DEGREE_SYMBOL ,

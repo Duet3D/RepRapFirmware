@@ -96,9 +96,9 @@ bool PolarKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 		}
 		else if (!seenNonGeometry && !gb.Seen('K'))
 		{
-			reply.printf("Kinematics is Polar with radius %.1f to %.1fmm, homed radius %.1fmm, segments/sec %d, min. segment length %.2f",
-							(double)minRadius, (double)maxRadius, (double)homedRadius,
-							(int)GetSegmentsPerSecond(), (double)GetMinSegmentLength());
+			Kinematics::Configure(mCode, gb, reply, error);
+			reply.catf(", radius %.1f to %.1fmm, homed radius %.1fmm",
+							(double)minRadius, (double)maxRadius, (double)homedRadius);
 		}
 		return seen;
 	}

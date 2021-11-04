@@ -223,7 +223,7 @@ public:
 	float GetReciprocalMinSegmentLength() const noexcept pre(UseSegmentation()) { return reciprocalMinSegmentLength; }
 
 protected:
-	DECLARE_OBJECT_MODEL_VIRTUAL
+	DECLARE_OBJECT_MODEL
 
 	Kinematics(KinematicsType t, SegmentationType segType) noexcept;
 

@@ -709,7 +709,8 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		else if (!seenNonGeometry && !gb.Seen('K'))
 		{
 			//TODO print all the parameters here
-			reply.printf("Kinematics is FiveBarScara, documented in https://duet3d.dozuki.com/Guide/Five+Bar+Parallel+SCARA/24?lang=en");
+			Kinematics::Configure(mCode, gb, reply, error);
+			reply.catf(", documented in https://duet3d.dozuki.com/Guide/Five+Bar+Parallel+SCARA/24?lang=en");
 		}
 
 		return seen;

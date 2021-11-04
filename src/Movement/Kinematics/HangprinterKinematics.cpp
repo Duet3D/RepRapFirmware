@@ -56,7 +56,7 @@ constexpr ObjectModelTableEntry HangprinterKinematics::objectModelTable[] =
 
 constexpr uint8_t HangprinterKinematics::objectModelTableDescriptor[] = { 1, 3 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE(HangprinterKinematics)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(HangprinterKinematics, Kinematics)
 
 #endif
 
@@ -182,20 +182,18 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		}
 		else if (!seenNonGeometry && !gb.Seen('K'))
 		{
-			reply.printf("Hangprinter\n"
+			Kinematics::Configure(mCode, gb, reply, error);
+			reply.lcatf(
 				"A:%.2f, %.2f, %.2f\n"
 				"B:%.2f, %.2f, %.2f\n"
 				"C:%.2f, %.2f, %.2f\n"
 				"D:%.2f, %.2f, %.2f\n"
-				"P:Print radius: %.1f\n"
-				"S:Segments/s: %d\n"
-				"T:Min segment length: %.2f\n",
+				"P:Print radius: %.1f",
 				(double)anchors[A_AXIS][X_AXIS], (double)anchors[A_AXIS][Y_AXIS], (double)anchors[A_AXIS][Z_AXIS],
 				(double)anchors[B_AXIS][X_AXIS], (double)anchors[B_AXIS][Y_AXIS], (double)anchors[B_AXIS][Z_AXIS],
 				(double)anchors[C_AXIS][X_AXIS], (double)anchors[C_AXIS][Y_AXIS], (double)anchors[C_AXIS][Z_AXIS],
 				(double)anchors[D_AXIS][X_AXIS], (double)anchors[D_AXIS][Y_AXIS], (double)anchors[D_AXIS][Z_AXIS],
-				(double)printRadius,
-				(int)GetSegmentsPerSecond(), (double)GetMinSegmentLength()
+				(double)printRadius
 				);
 		}
 	}

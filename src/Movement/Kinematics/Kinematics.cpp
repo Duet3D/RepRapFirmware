@@ -22,6 +22,33 @@
 
 const char * const Kinematics::HomeAllFileName = "homeall.g";
 
+#if SUPPORT_OBJECT_MODEL
+
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Kinematics, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(Kinematics, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry Kinematics::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. kinematics members
+	{ "segmentation",		OBJECT_MODEL_FUNC_IF(self->segmentationType.useSegmentation, self, 1), 	ObjectModelEntryFlags::none },
+
+	// 1. segmentation members
+	{ "minSegLength",		OBJECT_MODEL_FUNC(self->minSegmentLength, 2), 							ObjectModelEntryFlags::none },
+	{ "segmentsPerSec",		OBJECT_MODEL_FUNC(self->segmentsPerSecond, 1), 							ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t Kinematics::objectModelTableDescriptor[] = { 2, 1, 2 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(Kinematics)
+
+#endif
+
 // Constructor. Pass segsPerSecond <= 0.0 to get non-segmented kinematics.
 Kinematics::Kinematics(KinematicsType t, SegmentationType segType) noexcept
 	: segmentsPerSecond(DefaultSegmentsPerSecond), minSegmentLength(DefaultMinSegmentLength), reciprocalMinSegmentLength(1.0/DefaultMinSegmentLength),
@@ -37,7 +64,15 @@ bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef&
 	{
 		if (!gb.Seen('K'))
 		{
-			reply.printf("Kinematics is %s", GetName());
+			reply.printf("Kinematics is %s, ", GetName());
+			if (segmentationType.useSegmentation)
+			{
+				reply.catf("%d segments/sec, min. segment length %.2fmm", (int)segmentsPerSecond, (double)minSegmentLength);
+			}
+			else
+			{
+				reply.cat("no segmentation");
+			}
 		}
 	}
 	else
