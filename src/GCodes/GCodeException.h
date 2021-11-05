@@ -50,7 +50,7 @@ private:
 		uint32_t u;
 	} param;
 	bool haveStringParam;
-	String<StringLength20> stringParam;
+	String<StringLength50> stringParam;
 };
 
 #endif /* SRC_GCODES_GCODEEXCEPTION_H_ */
