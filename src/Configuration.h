@@ -23,22 +23,22 @@ Licence: GPL
 #include <cstring>			// for strlen
 
 // Axes
-constexpr float DefaultXYMaxFeedrate = 100.0;			// mm/sec
+constexpr float DefaultAxisMaxFeedrate = 100.0;			// mm/sec
 constexpr float DefaultZMaxFeedrate = 5.0;
 constexpr float DefaultEMaxFeedrate = 20.0;
 
-constexpr float DefaultXYAcceleration = 500.0;			// mm/sec^2
+constexpr float DefaultAxisAcceleration = 500.0;		// mm/sec^2
 constexpr float DefaultZAcceleration = 20.0;
 constexpr float DefaultEAcceleration = 250.0;
 
-constexpr float XYStallEndstopMaxAcceleration = 1000.0;	// Maximum XY acceleration to use at the start of a homing move if stall endstops are being used
-constexpr float ZProbeMaxAcceleration = 250.0;			// Maximum Z acceleration to use at the start of a probing or stall endstop move
+constexpr float DefaultReducedAxisAcceleration = 1000.0;	// Maximum XY acceleration to use at the start of a homing move if stall endstops are being used
+constexpr float DefaultReducedZAcceleration = 250.0;		// Maximum Z acceleration to use at the start of a probing or stall endstop move
 
-constexpr float DefaultXYDriveStepsPerUnit = 80.0;		// steps/mm
+constexpr float DefaultAxisDriveStepsPerUnit = 80.0;	// steps/mm
 constexpr float DefaultZDriveStepsPerUnit = 4000.0;
 constexpr float DefaultEDriveStepsPerUnit = 420.0;
 
-constexpr float DefaultXYInstantDv = 15.0;				// mm/sec
+constexpr float DefaultAxisInstantDv = 15.0;			// mm/sec
 constexpr float DefaultZInstantDv = 0.2;
 constexpr float DefaultEInstantDv = 2.0;
 

@@ -463,8 +463,8 @@ public:
 		{ return driveStepsPerUnit; }
 	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept;
 	float Acceleration(size_t axisOrExtruder) const noexcept;
-	const float *_ecv_array Accelerations() const noexcept;
-	void SetAcceleration(size_t axisOrExtruder, float value) noexcept;
+	const float *_ecv_array Accelerations(bool useReduced) const noexcept;
+	void SetAcceleration(size_t axisOrExtruder, float value, bool reduced) noexcept;
 	float MaxFeedrate(size_t axisOrExtruder) const noexcept;
 	const float *_ecv_array MaxFeedrates() const noexcept { return maxFeedrates; }
 	void SetMaxFeedrate(size_t axisOrExtruder, float value) noexcept;
@@ -722,7 +722,8 @@ private:
 
 	volatile DriverStatus driverState[MaxAxesPlusExtruders];
 	float maxFeedrates[MaxAxesPlusExtruders];				// max feed rates in mm per step clock
-	float accelerations[MaxAxesPlusExtruders];				// max accelerations in mm per step clock squared
+	float normalAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for normal moves
+	float reducedAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for probing and stall detection moves
 	float driveStepsPerUnit[MaxAxesPlusExtruders];
 	float instantDvs[MaxAxesPlusExtruders];					// max jerk in mm per step clock
 	uint32_t driveDriverBits[MaxAxesPlusExtruders + NumDirectDrivers];
@@ -923,17 +924,17 @@ inline float Platform::DriveStepsPerUnit(size_t drive) const noexcept
 
 inline float Platform::Acceleration(size_t drive) const noexcept
 {
-	return accelerations[drive];
+	return normalAccelerations[drive];
 }
 
-inline const float *_ecv_array Platform::Accelerations() const noexcept
+inline const float *_ecv_array Platform::Accelerations(bool useReduced) const noexcept
 {
-	return accelerations;
+	return (useReduced) ? reducedAccelerations : normalAccelerations;
 }
 
-inline void Platform::SetAcceleration(size_t drive, float value) noexcept
+inline void Platform::SetAcceleration(size_t drive, float value, bool reduced) noexcept
 {
-	accelerations[drive] = max<float>(value, ConvertAcceleration(MinimumAcceleration));	// don't allow zero or negative
+	((reduced) ? reducedAccelerations : normalAccelerations)[drive] = max<float>(value, ConvertAcceleration(MinimumAcceleration));	// don't allow zero or negative
 }
 
 inline float Platform::MaxFeedrate(size_t drive) const noexcept

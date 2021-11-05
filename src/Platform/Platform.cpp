@@ -609,25 +609,27 @@ void Platform::Init() noexcept
 		axisMinima[axis] = DefaultAxisMinimum;
 		axisMaxima[axis] = DefaultAxisMaximum;
 
-		maxFeedrates[axis] = DefaultXYMaxFeedrate;
-		accelerations[axis] = DefaultXYAcceleration;
-		driveStepsPerUnit[axis] = DefaultXYDriveStepsPerUnit;
-		instantDvs[axis] = DefaultXYInstantDv;
+		maxFeedrates[axis] = ConvertSpeedFromMmPerSec(DefaultAxisMaxFeedrate);
+		normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
+		reducedAccelerations[axis] = ConvertAcceleration(DefaultReducedAxisAcceleration);
+		driveStepsPerUnit[axis] = DefaultAxisDriveStepsPerUnit;
+		instantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
 	}
 
 	// We use different defaults for the Z axis
-	maxFeedrates[Z_AXIS] = DefaultZMaxFeedrate;
-	accelerations[Z_AXIS] = DefaultZAcceleration;
+	maxFeedrates[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZMaxFeedrate);
+	normalAccelerations[Z_AXIS] = ConvertAcceleration(DefaultZAcceleration);
+	reducedAccelerations[Z_AXIS] = ConvertAcceleration(DefaultReducedZAcceleration);
 	driveStepsPerUnit[Z_AXIS] = DefaultZDriveStepsPerUnit;
-	instantDvs[Z_AXIS] = DefaultZInstantDv;
+	instantDvs[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZInstantDv);
 
 	// Extruders
 	for (size_t drive = MaxAxes; drive < MaxAxesPlusExtruders; ++drive)
 	{
-		maxFeedrates[drive] = DefaultEMaxFeedrate;
-		accelerations[drive] = DefaultEAcceleration;
+		maxFeedrates[drive] = ConvertSpeedFromMmPerSec(DefaultEMaxFeedrate);
+		normalAccelerations[drive] = reducedAccelerations[drive] = ConvertAcceleration(DefaultEAcceleration);
 		driveStepsPerUnit[drive] = DefaultEDriveStepsPerUnit;
-		instantDvs[drive] = DefaultEInstantDv;
+		instantDvs[drive] = ConvertSpeedFromMmPerSec(DefaultEInstantDv);
 	}
 
 	minimumMovementSpeed = ConvertSpeedFromMmPerSec(DefaultMinFeedrate);

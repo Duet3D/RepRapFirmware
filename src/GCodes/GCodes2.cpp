@@ -496,7 +496,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		GCodeResult result;
 		if (gb.GetCommandFraction() > 0
-			&& code != 569												// these are the only M-codes we implement that can have fractional parts
+			&& code != 569	&& code != 201							// these are the only M-codes we implement that can have fractional parts
 		   )
 		{
 			result = TryMacroFile(gb);
@@ -2122,12 +2122,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 201: // Set/print axis accelerations
 				{
+					const int frac = gb.GetCommandFraction();
+					if (frac > 1)
+					{
+						result = GCodeResult::errorNotSupported;
+						break;
+					}
+
 					bool seen = false;
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							platform.SetAcceleration(axis, gb.GetAcceleration());
+							platform.SetAcceleration(axis, gb.GetAcceleration(), frac == 1);
 							seen = true;
 						}
 					}
@@ -2140,7 +2147,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetFloatArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
-							platform.SetAcceleration(ExtruderToLogicalDrive(e), ConvertAcceleration(eVals[e]));
+							platform.SetAcceleration(ExtruderToLogicalDrive(e), ConvertAcceleration(eVals[e]), frac == 1);
 						}
 					}
 
@@ -2150,16 +2157,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else
 					{
-						reply.copy("Accelerations (mm/sec^2): ");
+						reply.copy((frac == 1) ? "Reduced accelerations (mm/sec^2): " : "Accelerations (mm/sec^2): ");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertAcceleration(platform.Acceleration(axis)));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertAcceleration(platform.Accelerations(frac == 1)[axis]));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(platform.Acceleration(ExtruderToLogicalDrive(extruder))));
+							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(platform.Accelerations(frac == 1)[ExtruderToLogicalDrive(extruder)]));
 							sep = ':';
 						}
 					}

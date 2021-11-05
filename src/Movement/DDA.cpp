@@ -325,7 +325,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	bool extrudersMoving = false;
 	bool forwardExtruding = false;
 	float accelerations[MaxAxesPlusExtruders];
-	const float * const normalAccelerations = reprap.GetPlatform().Accelerations();
+	const float * const normalAccelerations = reprap.GetPlatform().Accelerations(nextMove.reduceAcceleration);
 
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
@@ -457,23 +457,6 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 		laserPwmOrIoBits.Clear();
 	}
 #endif
-
-	// If it's a Z probing move, limit the Z acceleration to better handle nozzle-contact probes
-	if (nextMove.reduceAcceleration)
-	{
-		if (accelerations[X_AXIS] > XYStallEndstopMaxAcceleration)
-		{
-			accelerations[X_AXIS] = XYStallEndstopMaxAcceleration;
-		}
-		if (accelerations[Y_AXIS] > XYStallEndstopMaxAcceleration)
-		{
-			accelerations[Y_AXIS] = XYStallEndstopMaxAcceleration;
-		}
-		if (accelerations[Z_AXIS] > ZProbeMaxAcceleration)
-		{
-			accelerations[Z_AXIS] = ZProbeMaxAcceleration;
-		}
-	}
 
 	// 4. Normalise the direction vector and compute the amount of motion.
 	// NIST standard section 2.1.2.5 rule A: if any of XYZ is moving then the feed rate specifies the linear XYZ movement
@@ -609,7 +592,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	tool = nullptr;
 	filePos = prev->filePos;
 	flags.endCoordinatesValid = prev->flags.endCoordinatesValid;
-	acceleration = deceleration = reprap.GetPlatform().Accelerations()[Z_AXIS];
+	acceleration = deceleration = reprap.GetPlatform().Acceleration(Z_AXIS);
 
 #if SUPPORT_LASER && SUPPORT_IOBITS
 	if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
