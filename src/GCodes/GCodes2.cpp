@@ -436,7 +436,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 92: // Set position
-			result = SetPositions(gb);
+			result = SetPositions(gb, reply);
 			break;
 
 		default:

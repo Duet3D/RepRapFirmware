@@ -346,7 +346,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (oldTool != nullptr)
 			{
 				reprap.StandbyTool(oldTool->Number(), IsSimulating());
-				UpdateCurrentUserPosition();			// the tool offset may have changed, so get the current position
+				UpdateCurrentUserPosition(gb);			// the tool offset may have changed, so get the current position
 			}
 			gb.AdvanceState();
 			if (reprap.GetTool(newToolNumber).IsNotNull() && (toolChangeParam & TPreBit) != 0)	// 2020-04-29: run tpre file even if not all axes have been homed
@@ -363,7 +363,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tpre.g to finish executing
 		{
 			reprap.SelectTool(newToolNumber, IsSimulating());
-			UpdateCurrentUserPosition();				// get the actual position of the new tool
+			UpdateCurrentUserPosition(gb);				// get the actual position of the new tool
 
 			gb.AdvanceState();
 			if (machineType != MachineType::fff || toolChangeParam == 0)

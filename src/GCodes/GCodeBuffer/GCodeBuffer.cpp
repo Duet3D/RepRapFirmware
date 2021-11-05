@@ -1115,4 +1115,13 @@ VariableSet& GCodeBuffer::GetVariables() const noexcept
 	return mc->variables;
 }
 
+#if SUPPORT_COORDINATE_ROTATION
+
+bool GCodeBuffer::DoingCoordinateRotation() const noexcept
+{
+	return !LatestMachineState().g53Active && !LatestMachineState().runningSystemMacro && LatestMachineState().selectedPlane == 0;
+}
+
+#endif
+
 // End

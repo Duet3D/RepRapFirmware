@@ -240,6 +240,10 @@ public:
 	void AddParameters(VariableSet& vars, int codeRunning) noexcept;
 	VariableSet& GetVariables() const noexcept;
 
+#if SUPPORT_COORDINATE_ROTATION
+	bool DoingCoordinateRotation() const noexcept;
+#endif
+
 	Mutex mutex;
 
 protected:

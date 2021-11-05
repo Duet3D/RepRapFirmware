@@ -269,7 +269,7 @@ public:
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 
 # if HAS_VOLTAGE_MONITOR
-	const char *GetPowerFailScript() const noexcept { return powerFailScript; }
+	const char *_ecv_array null GetPowerFailScript() const noexcept { return powerFailScript; }
 # endif
 
 # if SUPPORT_LASER
@@ -385,7 +385,7 @@ private:
 	GCodeResult DoDwell(GCodeBuffer& gb) THROWS(GCodeException);														// Wait for a bit
 	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);									// Home some axes
 	GCodeResult SetOrReportOffsets(GCodeBuffer& gb, const StringRef& reply, int code) THROWS(GCodeException);			// Deal with a G10/M568
-	GCodeResult SetPositions(GCodeBuffer& gb) THROWS(GCodeException);													// Deal with a G92
+	GCodeResult SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);							// Deal with a G92
 	GCodeResult StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);							// Deal with a G38.x
 	GCodeResult DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);							// Deal with a M584
 	GCodeResult ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);								// Deal with a M585
@@ -439,7 +439,7 @@ private:
 
 	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept;		// Restore user position from a restore point
 
-	void UpdateCurrentUserPosition() noexcept;									// Get the current position from the Move class
+	void UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept;				// Get the current position from the Move class
 	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
 																				// Convert user coordinates to head reference point coordinates
 	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept;	// Convert head reference point coordinates to user coordinates
@@ -575,7 +575,7 @@ private:
 	MachineType machineType;					// whether FFF, laser or CNC
 	bool active;								// Live and running?
 	FilePosition printFilePositionAtMacroStart;
-	const char *deferredPauseCommandPending;
+	const char *_ecv_array null deferredPauseCommandPending;
 	PauseState pauseState;						// whether the machine is running normally or is pausing, paused or resuming
 	bool pausedInMacro;							// if we are paused then this is true if we paused while fileGCode was executing a macro
 	bool runningConfigFile;						// We are running config.g during the startup process
@@ -583,13 +583,12 @@ private:
 
 #if HAS_VOLTAGE_MONITOR
 	bool isPowerFailPaused;						// true if the print was paused automatically because of a power failure
-	char *powerFailScript;						// the commands run when there is a power failure
+	char *_ecv_array null powerFailScript;		// the commands run when there is a power failure
 #endif
 
 	// The following contain the details of moves that the Move module fetches
-	// CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
 	MovementState moveState;					// Move details
-	bool updateUserPosition;
+	GCodeBuffer *null updateUserPositionGb;		// if this is non-null then we need to update the user position from he machine position
 
 	unsigned int segmentsLeftToStartAt;
 	float moveFractionToSkip;

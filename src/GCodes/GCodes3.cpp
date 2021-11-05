@@ -59,8 +59,16 @@ GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply) THROWS
 }
 
 // This handles G92. Return true if completed, false if it needs to be called again.
-GCodeResult GCodes::SetPositions(GCodeBuffer& gb) THROWS(GCodeException)
+GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+#if SUPPORT_COORDINATE_ROTATION
+	if (g68Angle != 0.0 && gb.SeenAny("XY") && gb.DoingCoordinateRotation())
+	{
+		reply.copy("not supported when coordinate rotation is in effect");
+		return GCodeResult::error;
+	}
+#endif
+
 	// Don't wait for the machine to stop if only extruder drives are being reset.
 	// This avoids blobs and seams when the gcode uses absolute E coordinates and periodically includes G92 E0.
 	AxesBitmap axesIncluded;
@@ -90,6 +98,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb) THROWS(GCodeException)
 	if (axesIncluded.IsNonEmpty())
 	{
 		ToolOffsetTransform(moveState.currentUserPosition, moveState.coords);
+
 		if (reprap.GetMove().GetKinematics().LimitPosition(moveState.coords, nullptr, numVisibleAxes, axesIncluded, false, limitAxes) != LimitPositionResult::ok)
 		{
 			ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);	// make sure the limits are reflected in the user position
@@ -1666,17 +1675,14 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	return GCodeResult::ok;
 }
 
-// Account for coordinate rotation
+// Account for coordinate rotation. Only called wheh the angle to rotate is nonzero, so we don't check that here.
 void GCodes::RotateCoordinates(float angleDegrees, float coords[2]) const noexcept
 {
-	if (angleDegrees != 0.0)
-	{
-		const float angle = angleDegrees * DegreesToRadians;
-		const float newX = (coords[0] - g68Centre[0]) * cosf(angle)    + (coords[1] - g68Centre[1]) * sinf(angle) + g68Centre[0];
-		const float newY = (coords[0] - g68Centre[0]) * (-sinf(angle)) + (coords[1] - g68Centre[1]) * cosf(angle) + g68Centre[1];
-		coords[0] = newX;
-		coords[1] = newY;
-	}
+	const float angle = angleDegrees * DegreesToRadians;
+	const float newX = (coords[0] - g68Centre[0]) * cosf(angle)    + (coords[1] - g68Centre[1]) * sinf(angle) + g68Centre[0];
+	const float newY = (coords[0] - g68Centre[0]) * (-sinf(angle)) + (coords[1] - g68Centre[1]) * cosf(angle) + g68Centre[1];
+	coords[0] = newX;
+	coords[1] = newY;
 }
 
 #endif

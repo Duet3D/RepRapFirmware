@@ -239,7 +239,7 @@ void GCodes::Reset() noexcept
 	}
 
 #if SUPPORT_COORDINATE_ROTATION
-	g68Angle = g68Centre[0] = g68Centre[1] = 0.0;			// no coordinate rotation
+	g68Angle = g68Centre[0] = g68Centre[1] = 0.0;		// no coordinate rotation
 #endif
 
 	moveState.currentCoordinateSystem = 0;
@@ -266,7 +266,7 @@ void GCodes::Reset() noexcept
 #endif
 	reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveState.coords);
 	ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);
-	updateUserPosition = false;
+	updateUserPositionGb = nullptr;
 
 	for (RestorePoint& rp : numberedRestorePoints)
 	{
@@ -427,10 +427,10 @@ void GCodes::Spin() noexcept
 	}
 #endif
 
-	if (updateUserPosition)
+	if (updateUserPositionGb != nullptr)
 	{
-		UpdateCurrentUserPosition();
-		updateUserPosition = false;
+		UpdateCurrentUserPosition(*updateUserPositionGb);
+		updateUserPositionGb = nullptr;
 	}
 
 	CheckTriggers();
@@ -1587,12 +1587,12 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 	if (RTOSIface::GetCurrentTask() == Tasks::GetMainTask())
 	{
 		// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
-		UpdateCurrentUserPosition();
+		UpdateCurrentUserPosition(gb);
 	}
 	else
 	{
 		// Cannot update the user position from external tasks. Do it later
-		updateUserPosition = true;
+		updateUserPositionGb = &gb;
 	}
 	return true;
 }
@@ -1968,13 +1968,6 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		}
 	}
 
-#if SUPPORT_COORDINATE_ROTATION
-	if (moveState.moveType == 0 && rp == nullptr && !gb.LatestMachineState().g53Active && !gb.LatestMachineState().runningSystemMacro)
-	{
-		RotateCoordinates(g68Angle, moveState.currentUserPosition);
-	}
-#endif
-
 	// Check enough axes have been homed
 	switch (moveState.moveType)
 	{
@@ -2054,7 +2047,19 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	}
 	else
 	{
-		ToolOffsetTransform(moveState.currentUserPosition, moveState.coords, axesMentioned);
+#if SUPPORT_COORDINATE_ROTATION
+		if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
+		{
+			float coords[MaxAxes];
+			memcpyf(coords, moveState.currentUserPosition, MaxAxes);
+			RotateCoordinates(g68Angle, coords);
+			ToolOffsetTransform(coords, moveState.coords, axesMentioned);
+		}
+		else
+#endif
+		{
+			ToolOffsetTransform(moveState.currentUserPosition, moveState.coords, axesMentioned);
+		}
 																				// apply tool offset, baby stepping, Z hop and axis scaling
 		AxesBitmap effectiveAxesHomed = axesVirtuallyHomed;
 		if (doingManualBedProbe)
@@ -2311,15 +2316,6 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	// Save the arc centre user coordinates for later
 	float userArcCentre[2] = { moveState.initialUserC0 + iParam, moveState.initialUserC1 + jParam };
 
-#if SUPPORT_COORDINATE_ROTATION
-	// Apply coordinate rotation to the final and the centre coordinates
-	if (!gb.LatestMachineState().g53Active && !gb.LatestMachineState().runningSystemMacro && gb.LatestMachineState().selectedPlane == 0)
-	{
-		RotateCoordinates(g68Angle, newAxisPos);
-		RotateCoordinates(g68Angle, userArcCentre);
-	}
-#endif
-
 	// Set the new user position
 	moveState.currentUserPosition[axis0] = newAxisPos[0];
 	moveState.currentUserPosition[axis1] = newAxisPos[1];
@@ -2364,16 +2360,35 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		return true;
 	}
 
+	// Compute the initial and final angles. Do this before we possible rotate the coordinates of the arc centre.
+	float finalTheta = atan2(moveState.currentUserPosition[axis1] - userArcCentre[1], moveState.currentUserPosition[axis0] - userArcCentre[0]);
+	moveState.arcRadius = fastSqrtf(iParam * iParam + jParam * jParam);
+	moveState.arcCurrentAngle = atan2(-jParam, -iParam);
+
 	// Transform to machine coordinates and check that it is within limits
-	ToolOffsetTransform(moveState.currentUserPosition, moveState.coords, axesMentioned);		// set the final position
+#if SUPPORT_COORDINATE_ROTATION
+	// Apply coordinate rotation to the final and the centre coordinates
+	if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
+	{
+		float coords[MaxAxes];
+		memcpyf(coords, moveState.currentUserPosition, MaxAxes);
+		RotateCoordinates(g68Angle, coords);
+		ToolOffsetTransform(coords, moveState.coords, axesMentioned);								// set the final position
+		RotateCoordinates(g68Angle, userArcCentre);
+		finalTheta -= g68Angle * DegreesToRadians;
+		moveState.arcCurrentAngle -= g68Angle * DegreesToRadians;
+	}
+	else
+#endif
+	{
+		ToolOffsetTransform(moveState.currentUserPosition, moveState.coords, axesMentioned);		// set the final position
+	}
+
 	if (reprap.GetMove().GetKinematics().LimitPosition(moveState.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok)
 	{
 		err = "G2/G3: outside machine limits";				// abandon the move
 		return true;
 	}
-
-	// Compute the angle at which we stop
-	const float finalTheta = atan2(moveState.currentUserPosition[axis1] - userArcCentre[1], moveState.currentUserPosition[axis0] - userArcCentre[0]);
 
 	// Set up default move parameters
 	moveState.checkEndstops = false;
@@ -2465,9 +2480,6 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 #endif
 
 	moveState.usePressureAdvance = moveState.hasPositiveExtrusion;
-
-	moveState.arcRadius = fastSqrtf(iParam * iParam + jParam * jParam);
-	moveState.arcCurrentAngle = atan2(-jParam, -iParam);
 
 	// Calculate the total angle moved, which depends on which way round we are going
 	float totalArc;
@@ -4255,10 +4267,16 @@ bool GCodes::ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling
 }
 
 // Get the current position from the Move class
-void GCodes::UpdateCurrentUserPosition() noexcept
+void GCodes::UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept
 {
 	reprap.GetMove().GetCurrentUserPosition(moveState.coords, 0, reprap.GetCurrentTool());
 	ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);
+#if SUPPORT_COORDINATE_ROTATION
+	if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
+	{
+		RotateCoordinates(-g68Angle, moveState.currentUserPosition);
+	}
+#endif
 }
 
 // Save position etc. to a restore point.
@@ -4393,14 +4411,6 @@ float GCodes::GetCurrentToolOffset(size_t axis) const noexcept
 // Get the current user coordinate and remove the coordinate rotation and workplace offset
 float GCodes::GetUserCoordinate(size_t axis) const noexcept
 {
-#if SUPPORT_COORDINATE_ROTATION
-	if (g68Angle != 0.0 && axis < 2)
-	{
-		float temp[2] = { moveState.currentUserPosition[0], moveState.currentUserPosition[1] };
-		RotateCoordinates(-g68Angle, temp);
-		return temp[axis] - GetWorkplaceOffset(axis);
-	}
-#endif
 	return (axis < numTotalAxes) ? moveState.currentUserPosition[axis] - GetWorkplaceOffset(axis) : 0.0;
 }
 

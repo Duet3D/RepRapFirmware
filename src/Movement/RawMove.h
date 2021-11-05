@@ -56,6 +56,7 @@ enum class SegmentedMoveState : uint8_t
 };
 
 // Details of a move that are needed only by GCodes
+// CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
 struct MovementState : public RawMove
 {
 	// The current user position now holds the requested user position after applying workplace coordinate offsets.
