@@ -238,7 +238,7 @@ constexpr float AxisRoundingError = 0.02;				// Maximum possible error when we r
 constexpr float NOZZLE_DIAMETER = 0.5;					// Millimetres
 constexpr float FILAMENT_WIDTH = 1.75;					// Millimetres
 
-constexpr unsigned int MaxStackDepth = 7;				// Maximum depth of stack (was 5 in 3.01-RC2, increased to 7 for 3.01-RC3)
+constexpr unsigned int MaxStackDepth = 10;				// Maximum depth of stack (was 5 in 3.01-RC2, increased to 7 for 3.01-RC3, 10 for 3.4.0beta6)
 
 // CNC and laser support
 constexpr int32_t DefaultMinSpindleRpm = 60;			// Default minimum available spindle RPM
