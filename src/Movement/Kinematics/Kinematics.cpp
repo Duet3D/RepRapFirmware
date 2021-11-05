@@ -207,6 +207,22 @@ bool Kinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 	return false;
 }
 
+// Limit the speed and acceleration of a move to values that the mechanics can handle.
+// The speeds in Cartesian space have already been limited.
+// The default implementation in this class just limits the combined XY speed to the lower of the individual X and Y limits. This is appropriate for
+// many types of kinematics, but not for Cartesian.
+void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
+{
+	const float xyFactor = fastSqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
+	if (xyFactor > 0.01)
+	{
+		const Platform& platform = reprap.GetPlatform();
+		const float maxSpeed = min<float>(platform.MaxFeedrate(X_AXIS), platform.MaxFeedrate(Y_AXIS));
+		const float maxAcceleration = min<float>(platform.Acceleration(X_AXIS), platform.Acceleration(Y_AXIS));
+		dda.LimitSpeedAndAcceleration(maxSpeed/xyFactor, maxAcceleration/xyFactor);
+	}
+}
+
 /*static*/ Kinematics *Kinematics::Create(KinematicsType k) noexcept
 {
 	switch (k)

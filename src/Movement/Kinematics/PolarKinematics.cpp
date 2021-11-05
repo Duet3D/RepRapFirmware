@@ -39,7 +39,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(PolarKinematics)
 PolarKinematics::PolarKinematics() noexcept
 	: Kinematics(KinematicsType::polar, SegmentationType(true, false, false)),
 	  minRadius(0.0), maxRadius(DefaultMaxRadius), homedRadius(0.0),
-	  maxTurntableSpeed(DefaultMaxTurntableSpeed), maxTurntableAcceleration(DefaultMaxTurntableAcceleration)
+	  maxTurntableSpeed(ConvertSpeedFromMmPerSec(DefaultMaxTurntableSpeed)), maxTurntableAcceleration(ConvertAcceleration(DefaultMaxTurntableAcceleration))
 {
 	Recalc();
 }
@@ -87,8 +87,16 @@ bool PolarKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 		gb.TryGetFValue('H', homedRadius, seen);
 
 		bool seenNonGeometry = TryConfigureSegmentation(gb);
-		gb.TryGetFValue('A', maxTurntableAcceleration, seenNonGeometry);
-		gb.TryGetFValue('F', maxTurntableSpeed, seenNonGeometry);
+		if (gb.Seen('A'))
+		{
+			maxTurntableAcceleration = gb.GetAcceleration();
+			seenNonGeometry = true;
+		}
+		if (gb.Seen('F'))
+		{
+			maxTurntableSpeed = gb.GetSpeedFromMm(true);
+			seenNonGeometry = true;
+		}
 
 		if (seen)
 		{
@@ -97,8 +105,9 @@ bool PolarKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 		else if (!seenNonGeometry && !gb.Seen('K'))
 		{
 			Kinematics::Configure(mCode, gb, reply, error);
-			reply.catf(", radius %.1f to %.1fmm, homed radius %.1fmm",
-							(double)minRadius, (double)maxRadius, (double)homedRadius);
+			reply.catf(", radius %.1f to %.1fmm, homed radius %.1fmm, max table acc. %.1fdeg/sec^2, max table speed %.1fdeg/sec",
+							(double)minRadius, (double)maxRadius, (double)homedRadius,
+							(double)InverseConvertAcceleration(maxTurntableAcceleration), (double)InverseConvertSpeedToMmPerSec(maxTurntableSpeed));
 		}
 		return seen;
 	}
@@ -224,9 +233,9 @@ AxesBitmap PolarKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const noexcept
 // Return the set of axes that must be homed prior to regular movement of the specified axes
 AxesBitmap PolarKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const noexcept
 {
-	if (axesMoving.Intersects(XyzAxes))
+	if (axesMoving.Intersects(XyAxes))
 	{
-		axesMoving |= XyzAxes;
+		axesMoving |= XyAxes;
 	}
 	return axesMoving;
 }

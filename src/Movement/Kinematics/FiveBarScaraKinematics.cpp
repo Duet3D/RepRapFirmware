@@ -922,22 +922,6 @@ void FiveBarScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, 
 	}
 }
 
-// Limit the speed and acceleration of a move to values that the mechanics can handle. The speeds in Cartesian space have already been limited.
-void FiveBarScaraKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
-{
-	//TODO should we make use of numVisibleAxes and/or continuousRotationShortcut?
-	// For now we limit the speed in the XY plane to the lower of the X and Y maximum speeds, and similarly for the acceleration.
-	// Limiting the angular rates of the arms would be better.
-	const float xyFactor = fastSqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
-	if (xyFactor > 0.01)
-	{
-		const Platform& platform = reprap.GetPlatform();
-		const float maxSpeed = min<float>(platform.MaxFeedrate(X_AXIS), platform.MaxFeedrate(Y_AXIS));
-		const float maxAcceleration = min<float>(platform.Acceleration(X_AXIS), platform.Acceleration(Y_AXIS));
-		dda.LimitSpeedAndAcceleration(maxSpeed/xyFactor, maxAcceleration/xyFactor);
-	}
-}
-
 // Return true if the specified axis is a continuous rotation axis
 bool FiveBarScaraKinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 {
