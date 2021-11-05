@@ -45,14 +45,12 @@ enum class GCodeState : uint8_t
 	toolChange0,
 	toolChange1,
 	toolChange2,
-	toolChange3,
 	toolChangeComplete,
 
 	// These next 6 must be contiguous
 	m109ToolChange0,
 	m109ToolChange1,
 	m109ToolChange2,
-	m109ToolChange3,
 	m109ToolChangeComplete,
 	m109WaitForTemperature,
 
