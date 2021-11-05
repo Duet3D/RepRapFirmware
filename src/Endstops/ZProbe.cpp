@@ -109,8 +109,8 @@ void ZProbe::SetDefaults() noexcept
 		tc = 0.0;
 	}
 	diveHeight = DefaultZDive;
-	probeSpeeds[0] = probeSpeeds[1] = DefaultProbingSpeed;
-	travelSpeed = DefaultZProbeTravelSpeed;
+	probeSpeeds[0] = probeSpeeds[1] = ConvertSpeedFromMmPerSec(DefaultProbingSpeed);
+	travelSpeed = ConvertSpeedFromMmPerSec(DefaultZProbeTravelSpeed);
 	recoveryTime = 0.0;
 	tolerance = DefaultZProbeTolerance;
 	misc.parts.maxTaps = DefaultZProbeTaps;
