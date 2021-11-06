@@ -331,7 +331,7 @@ public:
 	GCodeResult HandleM80(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void AtxPowerOff() noexcept;
-	bool IsAtxPowerControlled() const noexcept { return atxPowerControlled; }
+	bool IsAtxPowerControlled() const noexcept { return PsOnPort.IsValid(); }
 	const IoPort& GetAtxPowerPort() const noexcept { return PsOnPort; }
 
 	BoardType GetBoardType() const noexcept { return board; }
@@ -885,7 +885,6 @@ private:
 
 	// Power on/off
 	IoPort PsOnPort;
-	bool atxPowerControlled;
 	bool deferredPowerDown;
 
 	// Misc

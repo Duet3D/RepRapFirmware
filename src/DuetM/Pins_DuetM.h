@@ -32,7 +32,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
-#define HAS_DEFAULT_PSON_PIN	1
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill

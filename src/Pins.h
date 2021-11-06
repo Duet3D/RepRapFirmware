@@ -126,10 +126,6 @@
 # define ENFORCE_MIN_V12		0
 #endif
 
-#ifndef HAS_DEFAULT_PSON_PIN
-# define HAS_DEFAULT_PSON_PIN	0
-#endif
-
 #if !HAS_VOLTAGE_MONITOR
 # define ENFORCE_MAX_VIN		0
 #endif

@@ -61,7 +61,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			1
 #define HAS_VREF_MONITOR		0
-#define HAS_DEFAULT_PSON_PIN	1
 #define ACTIVE_LOW_HEAT_ON		1
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
