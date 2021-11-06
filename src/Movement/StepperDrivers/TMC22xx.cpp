@@ -889,7 +889,8 @@ void TmcDriverState::UpdateRegister(size_t regIndex, uint32_t regVal) noexcept
 // Calculate the chopper control register and flag it for sending
 void TmcDriverState::UpdateChopConfRegister() noexcept
 {
-	UpdateRegister(WriteChopConf, (enabled) ? configuredChopConfReg : configuredChopConfReg & ~CHOPCONF_TOFF_MASK);
+	// It's critical that CHOPCONF_VSENSE_HIGH is always set, so we or-it in here just in case
+	UpdateRegister(WriteChopConf, ((enabled) ? configuredChopConfReg : configuredChopConfReg & ~CHOPCONF_TOFF_MASK) | CHOPCONF_VSENSE_HIGH);
 }
 
 #if RESET_MICROSTEP_COUNTERS_AT_INIT

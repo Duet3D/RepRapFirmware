@@ -635,7 +635,8 @@ void TmcDriverState::Enable(bool en) noexcept
 
 void TmcDriverState::UpdateChopConfRegister() noexcept
 {
-	registers[ChopperControl] = (enabled) ? configuredChopConfReg : (configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK);
+	// It's critical that TMC_DRVCONF_VSENSE is always set, so we or-it in here just in case
+	registers[ChopperControl] = ((enabled) ? configuredChopConfReg : (configuredChopConfReg & ~TMC_CHOPCONF_TOFF_MASK)) | TMC_DRVCONF_VSENSE;
 	registersToUpdate |= (1u << ChopperControl);
 }
 
