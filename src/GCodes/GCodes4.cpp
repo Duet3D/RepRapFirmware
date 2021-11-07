@@ -366,11 +366,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			UpdateCurrentUserPosition(gb);				// get the actual position of the new tool
 
 			gb.AdvanceState();
-			if (machineType != MachineType::fff || toolChangeParam == 0)
-			{
-				gb.AdvanceState();						// skip moving tool to the new height if not a 3D printer or Tn P0 was given
-			}
-
 			if (reprap.GetCurrentTool() != nullptr && (toolChangeParam & TPostBit) != 0)	// 2020-04-29: run tpost file even if not all axes have been homed
 			{
 				String<StringLength20> scratchString;
