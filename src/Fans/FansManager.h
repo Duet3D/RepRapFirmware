@@ -60,7 +60,7 @@ public:
 private:
 	LocalFan *CreateLocalFan(uint32_t fanNum, const char *pinNames, PwmFrequency freq, const StringRef& reply) noexcept;
 
-	Fan *fans[MaxFans];
+	Fan *_ecv_from fans[MaxFans];
 };
 
 #endif /* SRC_FANS_FANSMANAGER_H_ */

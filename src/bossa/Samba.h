@@ -61,7 +61,7 @@ public:
     void setDebug(bool debug) noexcept { _debug = debug; }
 #endif
 
-    const SerialPort& getSerialPort() noexcept { return *_port; }
+    const SerialPort &_ecv_from getSerialPort() noexcept { return *_port; }
 
     // Extended SAM-BA functions
     bool canChipErase() noexcept { return _canChipErase; }
