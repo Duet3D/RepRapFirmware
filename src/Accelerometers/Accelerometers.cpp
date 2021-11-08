@@ -605,7 +605,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			if (msg.lastPacket)
 			{
 				String<StringLength50> temp;
-				temp.printf("Rate %u, overflows %u\n", msg.actualSampleRate, numRemoteOverflows);
+				temp.printf("Rate %u, overflows %u\n", (unsigned int)msg.actualSampleRate, numRemoteOverflows);
 				f->Write(temp.c_str());
 				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();

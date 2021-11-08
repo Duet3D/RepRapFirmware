@@ -52,7 +52,7 @@ public:
 class Flasher
 {
 public:
-    Flasher(Samba& samba, Device& device, FlasherObserver& observer) noexcept
+    Flasher(Samba& samba, Device& device, FlasherObserver &_ecv_from observer) noexcept
     	: _samba(samba), _flash(device.getFlash()), _observer(observer), pageNum(0)
     {}
     virtual ~Flasher() {}
@@ -65,7 +65,7 @@ public:
 private:
     Samba& _samba;
     BossaFlash *_ecv_from _flash;
-    FlasherObserver& _observer;
+    FlasherObserver &_ecv_from _observer;
 
     uint32_t pageNum;
 };
