@@ -490,7 +490,9 @@ bool HangprinterKinematics::WriteResumeSettings(FileStore *f) const noexcept
  * Basic idea is to subtract squared line lengths to get linear equations,
  * and then to solve with variable substitution.
  *
- * If we assume anchor location norms are followed, then
+ * If we assume anchor location norms are followed
+ * Ax=0 Dx=0 Dy=0
+ * then
  * we get a fairly clean derivation by
  * subtracting d*d from a*a, b*b, and c*c:
  *
@@ -517,29 +519,59 @@ bool HangprinterKinematics::WriteResumeSettings(FileStore *f) const noexcept
  */
 void HangprinterKinematics::ForwardTransform(float const a, float const b, float const c, float const d, float machinePos[3]) const noexcept
 {
-	// Anchor location norms
-	if (fabsf(anchors[D_AXIS][X_AXIS]) > 0.1F ||
-		fabsf(anchors[D_AXIS][Y_AXIS]) > 0.1F ||
-		fabsf(anchors[A_AXIS][X_AXIS]) > 0.1F ||
-		fabsf(anchors[B_AXIS][X_AXIS]) < 0.1F ||
-		fabsf(anchors[C_AXIS][X_AXIS]) < 0.1F ||
-		fabsf(anchors[A_AXIS][Y_AXIS]) < 0.1F) {
-		return;
+	// Force the anchor location norms Ax=0, Dx=0, Dy=0
+	// through a series of rotations.
+	float const x_angle = atan(anchors[D_AXIS][Y_AXIS]/anchors[D_AXIS][Z_AXIS]);
+	float const rxt[3][3] = {{1, 0, 0}, {0, cosf(x_angle), sinf(x_angle)}, {0, -sinf(x_angle), cosf(x_angle)}};
+	float anchors_tmp0[4][3] = { 0 };
+	for (size_t row{0}; row < 4; ++row) {
+		for (size_t col{0}; col < 3; ++col) {
+			anchors_tmp0[row][col] = rxt[0][col]*anchors[row][0] + rxt[1][col]*anchors[row][1] + rxt[2][col]*anchors[row][2];
+		}
 	}
+	float const y_angle = atan(-anchors_tmp0[D_AXIS][X_AXIS]/anchors_tmp0[D_AXIS][Z_AXIS]);
+	float const ryt[3][3] = {{cosf(y_angle), 0, -sinf(y_angle)}, {0, 1, 0}, {sinf(y_angle), 0, cosf(y_angle)}};
+	float anchors_tmp1[4][3] = { 0 };
+	for (size_t row{0}; row < 4; ++row) {
+		for (size_t col{0}; col < 3; ++col) {
+			anchors_tmp1[row][col] = ryt[0][col]*anchors_tmp0[row][0] + ryt[1][col]*anchors_tmp0[row][1] + ryt[2][col]*anchors_tmp0[row][2];
+		}
+	}
+	float const z_angle = atan(anchors_tmp1[A_AXIS][X_AXIS]/anchors_tmp1[A_AXIS][Y_AXIS]);
+	float const rzt[3][3] = {{cosf(z_angle), sinf(z_angle), 0}, {-sinf(z_angle), cosf(z_angle), 0}, {0, 0, 1}};
+	for (size_t row{0}; row < 4; ++row) {
+		for (size_t col{0}; col < 3; ++col) {
+			anchors_tmp0[row][col] = rzt[0][col]*anchors_tmp1[row][0] + rzt[1][col]*anchors_tmp1[row][1] + rzt[2][col]*anchors_tmp1[row][2];
+		}
+	}
+
 	const float Asq = fsquare(lineLengthsOrigin[A_AXIS]);
 	const float Bsq = fsquare(lineLengthsOrigin[B_AXIS]);
 	const float Csq = fsquare(lineLengthsOrigin[C_AXIS]);
 	const float Dsq = fsquare(lineLengthsOrigin[D_AXIS]);
 	const float aa = fsquare(a);
 	const float dd = fsquare(d);
-	const float k0b = (-fsquare(b) + Bsq - Dsq + dd) / (2.0 * anchors[B_AXIS][X_AXIS]) + (anchors[B_AXIS][Y_AXIS] / (2.0 * anchors[A_AXIS][Y_AXIS] * anchors[B_AXIS][X_AXIS])) * (Dsq - Asq + aa - dd);
-	const float k0c = (-fsquare(c) + Csq - Dsq + dd) / (2.0 * anchors[C_AXIS][X_AXIS]) + (anchors[C_AXIS][Y_AXIS] / (2.0 * anchors[A_AXIS][Y_AXIS] * anchors[C_AXIS][X_AXIS])) * (Dsq - Asq + aa - dd);
-	const float k1b = (anchors[B_AXIS][Y_AXIS] * (anchors[A_AXIS][Z_AXIS] - anchors[D_AXIS][Z_AXIS])) / (anchors[A_AXIS][Y_AXIS] * anchors[B_AXIS][X_AXIS]) + (anchors[D_AXIS][Z_AXIS] - anchors[B_AXIS][Z_AXIS]) / anchors[B_AXIS][X_AXIS];
-	const float k1c = (anchors[C_AXIS][Y_AXIS] * (anchors[A_AXIS][Z_AXIS] - anchors[D_AXIS][Z_AXIS])) / (anchors[A_AXIS][Y_AXIS] * anchors[C_AXIS][X_AXIS]) + (anchors[D_AXIS][Z_AXIS] - anchors[C_AXIS][Z_AXIS]) / anchors[C_AXIS][X_AXIS];
+	const float k0b = (-fsquare(b) + Bsq - Dsq + dd) / (2.0 * anchors_tmp0[B_AXIS][X_AXIS]) + (anchors_tmp0[B_AXIS][Y_AXIS] / (2.0 * anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[B_AXIS][X_AXIS])) * (Dsq - Asq + aa - dd);
+	const float k0c = (-fsquare(c) + Csq - Dsq + dd) / (2.0 * anchors_tmp0[C_AXIS][X_AXIS]) + (anchors_tmp0[C_AXIS][Y_AXIS] / (2.0 * anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[C_AXIS][X_AXIS])) * (Dsq - Asq + aa - dd);
+	const float k1b = (anchors_tmp0[B_AXIS][Y_AXIS] * (anchors_tmp0[A_AXIS][Z_AXIS] - anchors_tmp0[D_AXIS][Z_AXIS])) / (anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[B_AXIS][X_AXIS]) + (anchors_tmp0[D_AXIS][Z_AXIS] - anchors_tmp0[B_AXIS][Z_AXIS]) / anchors_tmp0[B_AXIS][X_AXIS];
+	const float k1c = (anchors_tmp0[C_AXIS][Y_AXIS] * (anchors_tmp0[A_AXIS][Z_AXIS] - anchors_tmp0[D_AXIS][Z_AXIS])) / (anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[C_AXIS][X_AXIS]) + (anchors_tmp0[D_AXIS][Z_AXIS] - anchors_tmp0[C_AXIS][Z_AXIS]) / anchors_tmp0[C_AXIS][X_AXIS];
 
-	machinePos[Z_AXIS] = (k0b - k0c) / (k1c - k1b);
-	machinePos[X_AXIS] = k0c + k1c * machinePos[Z_AXIS];
-	machinePos[Y_AXIS] = (Asq - Dsq - aa + dd) / (2.0 * anchors[A_AXIS][Y_AXIS]) + ((anchors[D_AXIS][Z_AXIS] - anchors[A_AXIS][Z_AXIS]) / anchors[A_AXIS][Y_AXIS]) * machinePos[Z_AXIS];
+	float machinePos_tmp0[3];
+	machinePos_tmp0[Z_AXIS] = (k0b - k0c) / (k1c - k1b);
+	machinePos_tmp0[X_AXIS] = k0c + k1c * machinePos_tmp0[Z_AXIS];
+	machinePos_tmp0[Y_AXIS] = (Asq - Dsq - aa + dd) / (2.0 * anchors_tmp0[A_AXIS][Y_AXIS]) + ((anchors_tmp0[D_AXIS][Z_AXIS] - anchors_tmp0[A_AXIS][Z_AXIS]) / anchors_tmp0[A_AXIS][Y_AXIS]) * machinePos_tmp0[Z_AXIS];
+
+	//// Rotate machinePos_tmp back to original coordinate system
+	float machinePos_tmp1[3];
+	for (size_t row{0}; row < 3; ++row) {
+		machinePos_tmp1[row] = rzt[row][0]*machinePos_tmp0[0] + rzt[row][1]*machinePos_tmp0[1] + rzt[row][2]*machinePos_tmp0[2];
+	}
+	for (size_t row{0}; row < 3; ++row) {
+		machinePos_tmp0[row] = ryt[row][0]*machinePos_tmp1[0] + ryt[row][1]*machinePos_tmp1[1] + ryt[row][2]*machinePos_tmp1[2];
+	}
+	for (size_t row{0}; row < 3; ++row) {
+		machinePos[row] = rxt[row][0]*machinePos_tmp0[0] + rxt[row][1]*machinePos_tmp0[1] + rxt[row][2]*machinePos_tmp0[2];
+	}
 }
 
 // Print all the parameters for debugging
