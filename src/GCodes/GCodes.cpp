@@ -158,7 +158,7 @@ void GCodes::Init() noexcept
 	axisLetters[1] = 'Y';
 	axisLetters[2] = 'Z';
 
-	numExtruders = NumDefaultExtruders;
+	numExtruders = 0;
 
 	Reset();
 

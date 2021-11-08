@@ -455,7 +455,6 @@ constexpr size_t U_AXIS = 3;										// The assumed index of the U axis when ex
 constexpr size_t NO_AXIS = 0x3F;									// A value to represent no axis, must fit in 6 bits (see EndstopHitDetails and RemoteInputHandle) and not be a valid axis number
 
 static_assert(MaxAxesPlusExtruders <= MaxAxes + MaxExtruders);
-static_assert(MaxAxesPlusExtruders >= MinAxes + NumDefaultExtruders);
 
 #if SUPPORT_CAN_EXPANSION
 constexpr size_t MaxTotalDrivers = NumDirectDrivers + MaxCanDrivers;
