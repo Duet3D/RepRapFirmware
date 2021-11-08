@@ -258,7 +258,7 @@ void SbcInterface::ExchangeData() noexcept
 			// Make sure no existing codes are overwritten
 			uint16_t bufferedCodeSize = sizeof(BufferedCodeHeader) + packet->length;
 			if ((txEnd == 0 && bufferedCodeSize > max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer)) ||
-					(txEnd != 0 && bufferedCodeSize > rxPointer - txPointer))
+				(txEnd != 0 && bufferedCodeSize > rxPointer - txPointer))
 			{
 #if false
 				// This isn't enabled because the debug call plus critical section would lead to software resets
@@ -968,6 +968,7 @@ void SbcInterface::ExchangeData() noexcept
 			break;
 
 		default:
+			fileOperationPending = false;
 			REPORT_INTERNAL_ERROR;
 			break;
 		}
@@ -1160,6 +1161,7 @@ void SbcInterface::InvalidateResources() noexcept
 
 	if (fileOperation != FileOperation::none)
 	{
+		fileOperationPending = false;
 		fileOperation = FileOperation::none;
 		fileSemaphore.Give();
 	}
@@ -1648,6 +1650,12 @@ void SbcInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer) noexce
 // This method returns true on success and false if an error occurred (e.g. file not found)
 bool SbcInterface::GetFileChunk(const char *filename, uint32_t offset, char *buffer, uint32_t& bufferLength, uint32_t& fileLength) noexcept
 {
+	// Don't do anything if the SBC is not connected
+	if (!IsConnected())
+	{
+		return false;
+	}
+
 	if (waitingForFileChunk)
 	{
 		reprap.GetPlatform().Message(ErrorMessage, "Trying to request a file chunk from two independent tasks\n");
