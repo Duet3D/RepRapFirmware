@@ -88,7 +88,7 @@ namespace CanInterface
 
 #if DUAL_CAN
 	uint32_t SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t timeout = UsualSendTimeout) noexcept;
-	bool ReceivePlainMessage(CanMessageBuffer *buf, uint32_t timeout = UsualResponseTimeout, bool fillBuf = true) noexcept;
+	bool ReceivePlainMessage(CanMessageBuffer *buf, uint32_t timeout = UsualResponseTimeout) noexcept;
 #endif
 
 #if !SAME70

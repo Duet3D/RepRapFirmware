@@ -815,9 +815,9 @@ uint32_t CanInterface::SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t co
 	return (can1dev != nullptr) ? can1dev->SendMessage(CanDevice::TxBufferNumber::fifo, timeout, buf) : 0;
 }
 
-bool CanInterface::ReceivePlainMessage(CanMessageBuffer *buf, uint32_t const timeout, bool fillBuf) noexcept
+bool CanInterface::ReceivePlainMessage(CanMessageBuffer *buf, uint32_t const timeout) noexcept
 {
-	return can1dev != nullptr && can1dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo0, timeout, buf, fillBuf);
+	return can1dev != nullptr && can1dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo0, timeout, buf);
 }
 
 #endif
@@ -1480,7 +1480,7 @@ CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const dri
 	// Find the correct arbitration id
 
  	// Flush CAN receive hardware
-	while (CanInterface::ReceivePlainMessage(buf , 0, false)) { }
+	while (CanInterface::ReceivePlainMessage(nullptr, 0)) { }
 
 	// Build the message
 	buf->id = ArbitrationId(driver, cmd);
