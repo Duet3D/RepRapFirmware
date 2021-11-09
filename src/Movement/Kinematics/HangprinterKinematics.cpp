@@ -580,11 +580,15 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 		}
 	}
 
-	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, cmd, reply);
+	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
 	if (buf == nullptr)
 	{
 		return {};
 	}
+
+	buf->id = CanInterface::ODrive::ArbitrationId(driver, cmd);
+	buf->remote = true; // Indicates that we expect an answer
+	CanInterface::ODrive::FlushCanReceiveHardware();
 
 	CanInterface::SendPlainMessageNoFree(buf);
 
@@ -612,6 +616,7 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 			reply.printf("Unexpected response length: %d", buf->dataLength);
 		}
 	}
+	CanMessageBuffer::Free(buf);
 
 	if (newOne && !ok)
 	{
@@ -619,7 +624,6 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 		numSeenDrives--;
 	}
 
-	CanMessageBuffer::Free(buf);
 	if (ok)
 	{
 		return {true, encoderEstimate};
@@ -650,12 +654,15 @@ GCodeResult HangprinterKinematics::ReadODrive3Encoder(DriverId const driver, GCo
 #if DUAL_CAN
 GCodeResult HangprinterKinematics::SetODrive3TorqueModeInner(DriverId const driver, float const torque, const StringRef& reply) noexcept
 {
-	// Set the right target torque
-	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, CANSimple::MSG_SET_INPUT_TORQUE, reply);
+	// Get a buffer
+	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
 	if (buf == nullptr)
 	{
 		return GCodeResult::error;
 	}
+
+	// Set the right target torque
+	buf->id = CanInterface::ODrive::ArbitrationId(driver, CANSimple::MSG_SET_INPUT_TORQUE);
 	buf->dataLength = 4;
 	buf->remote = false;
 	memcpy(buf->msg.raw, &torque, sizeof(torque));
@@ -681,11 +688,12 @@ GCodeResult HangprinterKinematics::SetODrive3PosMode(DriverId const driver, cons
 	if (estimate.valid)
 	{
 		float const desiredPos = estimate.value;
-		CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, CANSimple::MSG_SET_INPUT_POS, reply);
+		CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
 		if (buf == nullptr)
 		{
 			return GCodeResult::error;
 		}
+		buf->id = CanInterface::ODrive::ArbitrationId(driver, CANSimple::MSG_SET_INPUT_POS);
 		buf->dataLength = 8;
 		buf->remote = false;
 		memset(buf->msg.raw32, 0, buf->dataLength); // four last bytes are velocity and torque setpoints. Zero them.

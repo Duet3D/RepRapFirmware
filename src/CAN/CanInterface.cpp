@@ -1458,16 +1458,11 @@ CanId CanInterface::ODrive::ArbitrationId(DriverId const driver, uint8_t const c
 #endif
 
 #if DUAL_CAN
-CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const driver, uint8_t const cmd, const StringRef& reply) noexcept
+CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const driver, const StringRef& reply) noexcept
 {
 	// Detect any early return conditions
 	if (can1dev == nullptr)
 	{
-		return nullptr;
-	}
-	if (cmd & 0xE0) // Top three bits must be zero
-	{
-		reply.copy("Simple CAN command not supported");
 		return nullptr;
 	}
 	CanMessageBuffer * buf = CanMessageBuffer::Allocate();
@@ -1477,24 +1472,25 @@ CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const dri
 		return nullptr;
 	}
 
-	// Find the correct arbitration id
-
- 	// Flush CAN receive hardware
-	while (CanInterface::ReceivePlainMessage(nullptr, 0)) { }
-
 	// Build the message
-	buf->id = ArbitrationId(driver, cmd);
 	buf->marker = 0;
 	buf->extId = false; // ODrive uses 11-bit IDs
 	buf->fdMode = false;
 	buf->useBrs = false;
 	buf->dataLength = 0;
-	buf->remote = true; // set RTR bit
 	buf->reportInFifo = false;
 
 	return buf;
 }
 #endif
+
+#if DUAL_CAN
+void CanInterface::ODrive::FlushCanReceiveHardware() noexcept
+{
+	while (CanInterface::ReceivePlainMessage(nullptr, 0)) { }
+}
+#endif
+
 
 #if DUAL_CAN
 bool CanInterface::ODrive::GetExpectedSimpleMessage(CanMessageBuffer *buf, DriverId const driver, uint8_t const cmd, const StringRef& reply) noexcept
