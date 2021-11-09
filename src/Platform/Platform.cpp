@@ -205,7 +205,7 @@ constexpr ObjectModelArrayDescriptor Platform::workplaceOffsetsArrayDescriptor =
 			{ return ExpressionValue(reprap.GetGCodes().GetWorkplaceOffset(context.GetIndex(1), context.GetIndex(0)), 3); }
 };
 
-static inline const char* GetFilamentName(size_t extruder) noexcept
+static inline const char *_ecv_array GetFilamentName(size_t extruder) noexcept
 {
 	const Filament *fil = Filament::GetFilamentByExtruder(extruder);
 	return (fil == nullptr) ? "" : fil->GetName();
@@ -215,7 +215,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 {
 	// 0. boards[0] members
 #if SUPPORT_ACCELEROMETERS
-	{ "accelerometer",		OBJECT_MODEL_FUNC_IF(Accelerometers::HasLocalAccelerometer(), self, 9),							ObjectModelEntryFlags::none },
+	{ "accelerometer",		OBJECT_MODEL_FUNC_IF(Accelerometers::HasLocalAccelerometer(), self, 9),								ObjectModelEntryFlags::none },
 #endif
 #if SUPPORT_CAN_EXPANSION
 	{ "canAddress",			OBJECT_MODEL_FUNC_NOSELF((int32_t)CanInterface::GetCanAddress()),									ObjectModelEntryFlags::none },
@@ -872,7 +872,7 @@ void Platform::PanelDueBeep(int freq, int ms) noexcept
 }
 
 // Send a short message to the aux channel. There is no flow control on this port, so it can't block for long.
-void Platform::SendPanelDueMessage(size_t auxNumber, const char* msg) noexcept
+void Platform::SendPanelDueMessage(size_t auxNumber, const char *_ecv_array msg) noexcept
 {
 #if HAS_AUX_DEVICES
 	// Don't send anything to PanelDue while we are flashing it
@@ -1428,7 +1428,7 @@ void Platform::Spin() noexcept
 
 // Report driver status conditions that require attention.
 // Sets 'reported' if we reported anything, else leaves 'reported' alone.
-void Platform::ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char* text, bool& reported) noexcept
+void Platform::ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept
 {
 	if (whichDrivers.IsNonEmpty())
 	{
@@ -1696,7 +1696,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 
 	Message(mtype, "\n");
 #else
-	const char* resetReasons[8] = { "power up", "backup", "watchdog", "software",
+	const char *_ecv_array resetReasons[8] = { "power up", "backup", "watchdog", "software",
 # ifdef DUET_NG
 	// On the SAM4E a watchdog reset may be reported as a user reset because of the capacitor on the NRST pin.
 	// The SAM4S is the same but the Duet M has a diode in the reset circuit to avoid this problem.
@@ -2315,9 +2315,9 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			uint32_t now1 = SysTick->VAL;
 			crc.Update(
 #if SAME5x
-						reinterpret_cast<const char*>(HSRAM_ADDR),
+						reinterpret_cast<const char *_ecv_array>(HSRAM_ADDR),
 #else
-						reinterpret_cast<const char*>(IRAM_ADDR),		// for the SAME70 this is in the non-cacheable RAM, which is the usual case when computing a CRC
+						reinterpret_cast<const char *_ecv_array>(IRAM_ADDR),		// for the SAME70 this is in the non-cacheable RAM, which is the usual case when computing a CRC
 #endif
 						length);
 			uint32_t now2 = SysTick->VAL;
@@ -3217,7 +3217,7 @@ void Platform::InitPanelDueUpdater() noexcept
 }
 #endif
 
-void Platform::AppendAuxReply(size_t auxNumber, const char *msg, bool rawMessage) noexcept
+void Platform::AppendAuxReply(size_t auxNumber, const char *_ecv_array msg, bool rawMessage) noexcept
 {
 #if HAS_AUX_DEVICES
 	if (auxNumber < ARRAY_SIZE(auxDevices))
@@ -3253,7 +3253,7 @@ void Platform::AppendAuxReply(size_t auxNumber, OutputBuffer *reply, bool rawMes
 }
 
 // Send the specified message to the specified destinations. The Error and Warning flags have already been handled.
-void Platform::RawMessage(MessageType type, const char *message) noexcept
+void Platform::RawMessage(MessageType type, const char *_ecv_array message) noexcept
 {
 #if HAS_MASS_STORAGE
 	// Deal with logging
@@ -3292,7 +3292,7 @@ void Platform::RawMessage(MessageType type, const char *message) noexcept
 	{
 		// Debug output sends messages in blocking mode. We now give up sending if we are close to software watchdog timeout.
 		MutexLocker lock(usbMutex);
-		const char *p = message;
+		const char *_ecv_array p = message;
 		size_t len = strlen(p);
 		while (SERIAL_MAIN_DEVICE.IsConnected() && len != 0 && !reprap.SpinTimeoutImminent())
 		{
@@ -3417,7 +3417,7 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 	}
 }
 
-void Platform::MessageF(MessageType type, const char *fmt, va_list vargs) noexcept
+void Platform::MessageV(MessageType type, const char *_ecv_array fmt, va_list vargs) noexcept
 {
 	String<FormatStringLength> formatString;
 #if HAS_SBC_INTERFACE
@@ -3450,15 +3450,15 @@ void Platform::MessageF(MessageType type, const char *fmt, va_list vargs) noexce
 	RawMessage((MessageType)(type & ~(ErrorMessageFlag | WarningMessageFlag)), formatString.c_str());
 }
 
-void Platform::MessageF(MessageType type, const char *fmt, ...) noexcept
+void Platform::MessageF(MessageType type, const char *_ecv_array fmt, ...) noexcept
 {
 	va_list vargs;
 	va_start(vargs, fmt);
-	MessageF(type, fmt, vargs);
+	MessageV(type, fmt, vargs);
 	va_end(vargs);
 }
 
-void Platform::Message(MessageType type, const char *message) noexcept
+void Platform::Message(MessageType type, const char *_ecv_array message) noexcept
 {
 #if HAS_SBC_INTERFACE
 	if (reprap.UsingSbcInterface() &&
@@ -3499,7 +3499,7 @@ void Platform::Message(MessageType type, const char *message) noexcept
 }
 
 // Send a debug message to USB using minimal stack
-void Platform::DebugMessage(const char *fmt, va_list vargs) noexcept
+void Platform::DebugMessage(const char *_ecv_array fmt, va_list vargs) noexcept
 {
 	MutexLocker lock(usbMutex);
 	vuprintf([](char c) -> bool
@@ -3527,7 +3527,7 @@ void Platform::DebugMessage(const char *fmt, va_list vargs) noexcept
 // sParam = 1 As for 0 but display a Close button as well
 // sParam = 2 Display the message box with an OK button, wait for acknowledgement (waiting is set up by the caller)
 // sParam = 3 As for 2 but also display a Cancel button
-void Platform::SendAlert(MessageType mt, const char *message, const char *title, int sParam, float tParam, AxesBitmap controls) noexcept
+void Platform::SendAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls) noexcept
 {
 	if ((mt & (HttpMessage | AuxMessage | LcdMessage | BinaryCodeReplyFlag)) != 0)
 	{
@@ -3605,14 +3605,14 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) 
 }
 
 // Return the log file name, or nullptr if logging is not active
-const char *Platform::GetLogFileName() const noexcept
+const char *_ecv_array null Platform::GetLogFileName() const noexcept
 {
 	return (logger == nullptr) ? nullptr : logger->GetFileName();
 }
 
 #endif
 
-const char *Platform::GetLogLevel() const noexcept
+const char *_ecv_array Platform::GetLogLevel() const noexcept
 {
 	static const LogLevel off = LogLevel::off;	// need to have an instance otherwise it will fail .ToString() below
 #if HAS_MASS_STORAGE
@@ -3864,7 +3864,7 @@ void Platform::SetBoardType(BoardType bt) noexcept
 }
 
 // Get a string describing the electronics
-const char* Platform::GetElectronicsString() const noexcept
+const char *_ecv_array Platform::GetElectronicsString() const noexcept
 {
 	switch (board)
 	{
@@ -3908,7 +3908,7 @@ const char* Platform::GetElectronicsString() const noexcept
 }
 
 // Get the board string
-const char* Platform::GetBoardString() const noexcept
+const char *_ecv_array Platform::GetBoardString() const noexcept
 {
 	switch (board)
 	{
@@ -3959,14 +3959,14 @@ bool Platform::IsDuetWiFi() const noexcept
 	return board == BoardType::DuetWiFi_10 || board == BoardType::DuetWiFi_102;
 }
 
-const char *Platform::GetBoardName() const noexcept
+const char *_ecv_array Platform::GetBoardName() const noexcept
 {
 	return (board == BoardType::Duet2SBC_10 || board == BoardType::Duet2SBC_102)
 			? BOARD_NAME_SBC
 			: (IsDuetWiFi()) ? BOARD_NAME_WIFI : BOARD_NAME_ETHERNET;
 }
 
-const char *Platform::GetBoardShortName() const noexcept
+const char *_ecv_array Platform::GetBoardShortName() const noexcept
 {
 	return (board == BoardType::Duet2SBC_10 || board == BoardType::Duet2SBC_102)
 			? BOARD_SHORT_NAME_SBC
@@ -3987,13 +3987,13 @@ bool Platform::IsDuetWiFi() const noexcept
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
-bool Platform::Delete(const char* folder, const char *filename) const noexcept
+bool Platform::Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
 }
 
-bool Platform::DeleteSysFile(const char *filename) const noexcept
+bool Platform::DeleteSysFile(const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.c_str(), true);
@@ -4004,7 +4004,7 @@ bool Platform::DeleteSysFile(const char *filename) const noexcept
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 // Open a file
-FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode mode, uint32_t preAllocSize) const noexcept
+FileStore* Platform::OpenFile(const char *_ecv_array folder, const char *_ecv_array fileName, OpenMode mode, uint32_t preAllocSize) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return (MassStorage::CombineName(location.GetRef(), folder, fileName))
@@ -4012,25 +4012,25 @@ FileStore* Platform::OpenFile(const char* folder, const char* fileName, OpenMode
 				: nullptr;
 }
 
-bool Platform::FileExists(const char* folder, const char *filename) const noexcept
+bool Platform::FileExists(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::FileExists(location.c_str());
 }
 
 // Return a pointer to a string holding the directory where the system files are. Lock the sysdir lock before calling this.
-const char* Platform::InternalGetSysDir() const noexcept
+const char *_ecv_array Platform::InternalGetSysDir() const noexcept
 {
 	return (sysDir != nullptr) ? sysDir : DEFAULT_SYS_DIR;
 }
 
-bool Platform::SysFileExists(const char *filename) const noexcept
+bool Platform::SysFileExists(const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return MakeSysFileName(location.GetRef(), filename) && MassStorage::FileExists(location.c_str());
 }
 
-FileStore* Platform::OpenSysFile(const char *filename, OpenMode mode) const noexcept
+FileStore* Platform::OpenSysFile(const char *_ecv_array filename, OpenMode mode) const noexcept
 {
 	String<MaxFilenameLength> location;
 	return (MakeSysFileName(location.GetRef(), filename))
@@ -4038,7 +4038,7 @@ FileStore* Platform::OpenSysFile(const char *filename, OpenMode mode) const noex
 				: nullptr;
 }
 
-bool Platform::MakeSysFileName(const StringRef& result, const char *filename) const noexcept
+bool Platform::MakeSysFileName(const StringRef& result, const char *_ecv_array filename) const noexcept
 {
 	return MassStorage::CombineName(result, GetSysDir().Ptr(), filename);
 }
@@ -4059,7 +4059,7 @@ ReadLockedPointer<const char> Platform::GetSysDir() const noexcept
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 // Set the system files path
-GCodeResult Platform::SetSysDir(const char* dir, const StringRef& reply) noexcept
+GCodeResult Platform::SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept
 {
 	String<MaxFilenameLength> newSysDir;
 	WriteLocker lock(sysDirLock);

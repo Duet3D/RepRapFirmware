@@ -904,7 +904,7 @@ void LocalHeater::RaiseHeaterFault(const char *format, ...) noexcept
 		mode = HeaterMode::fault;
 		va_list vargs;
 		va_start(vargs, format);
-		reprap.GetPlatform().MessageF(ErrorMessage, format, vargs);
+		reprap.GetPlatform().MessageV(ErrorMessage, format, vargs);
 		va_end(vargs);
 	}
 	reprap.GetGCodes().HandleHeaterFault();
