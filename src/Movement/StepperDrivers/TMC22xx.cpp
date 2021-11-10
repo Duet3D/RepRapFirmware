@@ -535,9 +535,9 @@ private:
 	static constexpr unsigned int WriteSpecial = NumWriteRegisters;
 
 #if HAS_STALL_DETECT
-	static constexpr unsigned int NumReadRegisters = 7;			// the number of registers that we read from on a TMC2209
+	static constexpr unsigned int NumReadRegisters = 8;			// the number of registers that we read from on a TMC2209
 #else
-	static constexpr unsigned int NumReadRegisters = 6;			// the number of registers that we read from on a TMC2208/2224
+	static constexpr unsigned int NumReadRegisters = 7;			// the number of registers that we read from on a TMC2208/2224
 #endif
 	static const uint8_t ReadRegNumbers[NumReadRegisters];		// the register numbers that we read from
 
@@ -546,10 +546,11 @@ private:
 	static constexpr unsigned int ReadGStat = 1;			// global status
 	static constexpr unsigned int ReadDrvStat = 2;			// drive status
 	static constexpr unsigned int ReadMsCnt = 3;			// microstep counter
-	static constexpr unsigned int ReadPwmScale = 4;			// PWM scaling
-	static constexpr unsigned int ReadPwmAuto = 5;			// PWM scaling
+	static constexpr unsigned int ReadChopConf = 4;			// chopper control register - we read it to detect the VSENSE bit getting cleared
+	static constexpr unsigned int ReadPwmScale = 5;			// PWM scaling
+	static constexpr unsigned int ReadPwmAuto = 6;			// PWM scaling
 #if HAS_STALL_DETECT
-	static constexpr unsigned int ReadSgResult = 6;			// stallguard result, TMC2209 only
+	static constexpr unsigned int ReadSgResult = 7;			// stallguard result, TMC2209 only
 #endif
 	static constexpr unsigned int ReadSpecial = NumReadRegisters;
 
@@ -598,6 +599,7 @@ private:
 	uint16_t numWrites;										// how many successful writes we had
 	uint16_t numTimeouts;									// how many times a transfer timed out
 	uint16_t numDmaErrors;
+	uint16_t badChopConfErrors;
 
 #if TMC22xx_HAS_ENABLE_PINS
 	Pin enablePin;											// the enable pin of this driver, if it has its own
@@ -691,6 +693,7 @@ constexpr uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 	REGNUM_GSTAT,
 	REGNUM_DRV_STATUS,
 	REGNUM_MSCNT,
+	REGNUM_CHOPCONF,
 	REGNUM_PWM_SCALE,
 	REGNUM_PWM_AUTO,
 #if HAS_STALL_DETECT
@@ -878,8 +881,12 @@ void TmcDriverState::UpdateMaxOpenLoadStepInterval() noexcept
 // Set a register value and flag it for updating
 void TmcDriverState::UpdateRegister(size_t regIndex, uint32_t regVal) noexcept
 {
-	writeRegisters[regIndex] = regVal;
-	registersToUpdate |= (1u << regIndex);								// flag it for sending
+	{
+		AtomicCriticalSectionLocker lock;
+		writeRegisters[regIndex] = regVal;
+		registersToUpdate |= (1u << regIndex);								// flag it for sending
+	}
+
 	if (regIndex == WriteGConf || regIndex == WriteTpwmthrs)
 	{
 		UpdateMaxOpenLoadStepInterval();
@@ -976,7 +983,7 @@ pre(!driversPowered)
 	failedOp = 0xFF;
 	registerToRead = 0;
 	lastIfCount = 0;
-	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = 0;
+	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = badChopConfErrors = 0;
 #if HAS_STALL_DETECT
 	ResetLoadRegisters();
 #endif
@@ -1301,14 +1308,14 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 	ResetLoadRegisters();
 #endif
 
-	reply.catf(", read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u",
-					readErrors, writeErrors, lastIfCount, numReads, numWrites, numTimeouts, numDmaErrors);
+	reply.catf(", read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u, CC errors %u",
+					readErrors, writeErrors, lastIfCount, numReads, numWrites, numTimeouts, numDmaErrors, badChopConfErrors);
 	if (failedOp != 0xFF)
 	{
 		reply.catf(", failedOp 0x%02x", failedOp);
 		failedOp = 0xFF;
 	}
-	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = 0;
+	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = badChopConfErrors = 0;
 }
 
 // This is called by the ISR when the SPI transfer has completed
@@ -1362,6 +1369,15 @@ inline void TmcDriverState::TransferDone() noexcept
 				   )
 				{
 					regVal &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds
+				}
+			}
+			else if (registerToRead == ReadChopConf)
+			{
+				// Sometimes the CHOPCONF register VSENSE bit gets cleared unexpectedly. Now we monitor it to check that the register has the correct value.
+				if (regVal != writeRegisters[WriteChopConf] && (registersToUpdate & (1u << WriteChopConf)) == 0)
+				{
+					registersToUpdate |= (1u << WriteChopConf);
+					++badChopConfErrors;
 				}
 			}
 #if HAS_STALL_DETECT
