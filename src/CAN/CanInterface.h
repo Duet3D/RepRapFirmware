@@ -144,7 +144,8 @@ namespace CanInterface
 #if DUAL_CAN
 namespace ODrive {
 	CanId ArbitrationId(DriverId driver, uint8_t cmd) noexcept;
-	CanMessageBuffer * PrepareSimpleMessage(DriverId const driver, uint8_t const cmd, const StringRef& reply) noexcept;
+	CanMessageBuffer * PrepareSimpleMessage(DriverId const driver, const StringRef& reply) noexcept;
+	void FlushCanReceiveHardware() noexcept;
 	bool GetExpectedSimpleMessage(CanMessageBuffer *buf, DriverId const driver, uint8_t const cmd, const StringRef& reply) noexcept;
 }
 #endif
