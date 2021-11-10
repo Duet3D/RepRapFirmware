@@ -43,6 +43,9 @@ public:
 	// Used by the ISR
 	void Int1Isr() noexcept;
 
+	// Used by diagnostics
+	bool HasInterruptError() const noexcept { return interruptError; }
+
 private:
 	enum class LisRegister : uint8_t
 	{
@@ -65,6 +68,7 @@ private:
 	uint32_t lastInterruptTime;
 	uint32_t totalNumRead;
 	bool is3DSH;
+	bool interruptError;
 	uint8_t currentAxis;
 	uint8_t ctrlReg_0x20;
 	Pin int1Pin;
