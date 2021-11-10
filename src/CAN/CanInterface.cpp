@@ -61,7 +61,7 @@ constexpr float MinJumpWidth = 0.05;
 constexpr float MaxJumpWidth = 0.5;
 constexpr float DefaultJumpWidth = 0.25;
 
-constexpr const char *NoCanBufferMessage = "no CAN buffer available";
+constexpr const char *_ecv_array NoCanBufferMessage = "no CAN buffer available";
 
 static Mutex transactionMutex;
 
@@ -815,7 +815,7 @@ uint32_t CanInterface::SendPlainMessageNoFree(CanMessageBuffer *buf, uint32_t co
 	return (can1dev != nullptr) ? can1dev->SendMessage(CanDevice::TxBufferNumber::fifo, timeout, buf) : 0;
 }
 
-bool CanInterface::ReceivePlainMessage(CanMessageBuffer *buf, uint32_t const timeout) noexcept
+bool CanInterface::ReceivePlainMessage(CanMessageBuffer *null buf, uint32_t const timeout) noexcept
 {
 	return can1dev != nullptr && can1dev->ReceiveMessage(CanDevice::RxBufferNumber::fifo0, timeout, buf);
 }
@@ -1127,7 +1127,7 @@ void CanInterface::WakeAsyncSenderFromIsr() noexcept
 }
 
 // Remote handle functions
-GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *pinName, uint16_t threshold, uint16_t minInterval,
+GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandle h, const char *_ecv_array pinName, uint16_t threshold, uint16_t minInterval,
 										bool& currentState, const StringRef& reply) noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
