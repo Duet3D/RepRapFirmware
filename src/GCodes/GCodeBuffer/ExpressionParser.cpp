@@ -913,7 +913,11 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 			}
 			if (index.GetType() != TypeCode::Int32)
 			{
-				ThrowParseException("expected integer expression");
+				if (evaluate)
+				{
+					ThrowParseException("expected integer expression");
+				}
+				index.Set((int32_t)0);
 			}
 			AdvancePointer();										// skip the ']'
 			context.ProvideIndex(index.iVal);
