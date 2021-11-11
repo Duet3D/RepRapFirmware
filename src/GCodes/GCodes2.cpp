@@ -3729,8 +3729,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else
 					{
-						platform.GetExtrusionCoefficients(extruder, a, b, limit);
-						reply.printf("Drive %u nonlinear extrusion coefficients: A=%.3f, B=%.4f, limit=%.2f", extruder, (double)a, (double)b, (double)limit);
+						const NonlinearExtrusion& nl = platform.GetExtrusionCoefficients(extruder);
+						reply.printf("Drive %u nonlinear extrusion coefficients: A=%.3f, B=%.4f, limit=%.2f", extruder, (double)nl.A, (double)nl.B, (double)nl.limit);
 					}
 				}
 				break;

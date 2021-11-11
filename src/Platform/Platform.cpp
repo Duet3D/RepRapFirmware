@@ -313,9 +313,9 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->driveStepsPerUnit[ExtruderToLogicalDrive(context.GetLastIndex())], 2),											ObjectModelEntryFlags::none },
 
 	// 5. move.extruders[].nonlinear members
-	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionA[context.GetLastIndex()], 3),									ObjectModelEntryFlags::none },
-	{ "b",					OBJECT_MODEL_FUNC(self->nonlinearExtrusionB[context.GetLastIndex()], 3),									ObjectModelEntryFlags::none },
-	{ "upperLimit",			OBJECT_MODEL_FUNC(self->nonlinearExtrusionLimit[context.GetLastIndex()], 2),								ObjectModelEntryFlags::none },
+	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].A, 3),									ObjectModelEntryFlags::none },
+	{ "b",					OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].B, 3),									ObjectModelEntryFlags::none },
+	{ "upperLimit",			OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].limit, 2),								ObjectModelEntryFlags::none },
 
 #if HAS_12V_MONITOR
 	// 6. v12 members
@@ -694,8 +694,8 @@ void Platform::Init() noexcept
 		extruderDrivers[extr].SetLocal(extr + MinAxes);			// set up default extruder drive mapping
 		driveDriverBits[ExtruderToLogicalDrive(extr)] = StepPins::CalcDriverBitmap(extr + MinAxes);
 #if SUPPORT_NONLINEAR_EXTRUSION
-		nonlinearExtrusionA[extr] = nonlinearExtrusionB[extr] = 0.0;
-		nonlinearExtrusionLimit[extr] = DefaultNonlinearExtrusionLimit;
+		nonlinearExtrusion[extr].A = nonlinearExtrusion[extr].B = 0.0;
+		nonlinearExtrusion[extr].limit = DefaultNonlinearExtrusionLimit;
 #endif
 	}
 
@@ -3709,25 +3709,13 @@ void Platform::AtxPowerOff() noexcept
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 
-bool Platform::GetExtrusionCoefficients(size_t extruder, float& a, float& b, float& limit) const noexcept
-{
-	if (extruder < MaxExtruders)
-	{
-		a = nonlinearExtrusionA[extruder];
-		b = nonlinearExtrusionB[extruder];
-		limit = nonlinearExtrusionLimit[extruder];
-		return true;
-	}
-	return false;
-}
-
 void Platform::SetNonlinearExtrusion(size_t extruder, float a, float b, float limit) noexcept
 {
-	if (extruder < MaxExtruders && nonlinearExtrusionLimit[extruder] > 0.0)
+	if (extruder < MaxExtruders && limit > 0.0)
 	{
-		nonlinearExtrusionLimit[extruder] = limit;
-		nonlinearExtrusionA[extruder] = a;
-		nonlinearExtrusionB[extruder] = b;
+		nonlinearExtrusion[extruder].limit = limit;
+		nonlinearExtrusion[extruder].A = a;
+		nonlinearExtrusion[extruder].B = b;
 	}
 }
 

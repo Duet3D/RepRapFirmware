@@ -303,6 +303,17 @@ struct AxisDriversConfig
 	DriverId driverNumbers[MaxDriversPerAxis];		// The driver numbers assigned - only the first numDrivers are meaningful
 };
 
+#if SUPPORT_NONLINEAR_EXTRUSION
+
+struct NonlinearExtrusion
+{
+	float A;
+	float B;
+	float limit;
+};
+
+#endif
+
 // The main class that defines the RepRap machine for the benefit of the other classes
 class Platform INHERIT_OBJECT_MODEL
 {
@@ -511,7 +522,7 @@ public:
 	void EnableAllSteppingDrivers() noexcept { steppingEnabledDriversBitmap = 0xFFFFFFFFu; }
 
 #if SUPPORT_NONLINEAR_EXTRUSION
-	bool GetExtrusionCoefficients(size_t extruder, float& a, float& b, float& limit) const noexcept;
+	const NonlinearExtrusion& GetExtrusionCoefficients(size_t extruder) const noexcept pre(extruder < MaxExtruders) { return nonlinearExtrusion[extruder]; }
 	void SetNonlinearExtrusion(size_t extruder, float a, float b, float limit) noexcept;
 #endif
 
@@ -737,7 +748,7 @@ private:
 #endif
 
 #if SUPPORT_NONLINEAR_EXTRUSION
-	float nonlinearExtrusionA[MaxExtruders], nonlinearExtrusionB[MaxExtruders], nonlinearExtrusionLimit[MaxExtruders];
+	NonlinearExtrusion nonlinearExtrusion[MaxExtruders];	// nonlinear extrusion coefficients
 #endif
 
 	DriverId extruderDrivers[MaxExtruders];					// the driver number assigned to each extruder

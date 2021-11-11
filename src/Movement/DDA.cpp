@@ -1527,17 +1527,15 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 					platform.EnableDrivers(drive, false);
 					const size_t extruder = LogicalDriveToExtruder(drive);
 #if SUPPORT_NONLINEAR_EXTRUSION
-					// Add the nonlinear extrusion correction to totalExtrusion
-					if (flags.isPrintingMove)
+					// Add the nonlinear extrusion correction to totalExtrusion.
+					// If we are given a stupidly short move to execute then clocksNeeded can be zero, which leads to NaNs in this code; so we need to guard against that.
+					if (flags.isPrintingMove && clocksNeeded != 0)
 					{
-						float a, b, limit;
-						if (platform.GetExtrusionCoefficients(extruder, a, b, limit))
-						{
-							float& dv = directionVector[drive];
-							const float averageExtrusionSpeed = (totalDistance * dv)/clocksNeeded;
-							const float factor = 1.0 + min<float>((averageExtrusionSpeed * a) + (averageExtrusionSpeed * averageExtrusionSpeed * b), limit);
-							dv *= factor;
-						}
+						const NonlinearExtrusion& nl = platform.GetExtrusionCoefficients(extruder);
+						float& dv = directionVector[drive];
+						const float averageExtrusionSpeed = (totalDistance * dv)/clocksNeeded;
+						const float factor = 1.0 + min<float>((averageExtrusionSpeed * nl.A) + (averageExtrusionSpeed * averageExtrusionSpeed * nl.B), nl.limit);
+						dv *= factor;
 					}
 #endif
 
