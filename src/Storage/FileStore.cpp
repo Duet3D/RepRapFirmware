@@ -51,7 +51,7 @@ void FileStore::Init() noexcept
 
 // Open a local file (for example on an SD card).
 // This is protected - only Platform can access it.
-bool FileStore::Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
+bool FileStore::Open(const char *_ecv_array filePath, OpenMode mode, uint32_t preAllocSize) noexcept
 {
 	const bool writing = (mode == OpenMode::write || mode == OpenMode::writeWithCrc || mode == OpenMode::append);
 #if HAS_EMBEDDED_FILES
@@ -373,7 +373,7 @@ bool FileStore::Truncate() noexcept
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 // Returns the number of bytes read or -1 if the read process failed
-int FileStore::Read(char* extBuf, size_t nBytes) noexcept
+int FileStore::Read(char *_ecv_array extBuf, size_t nBytes) noexcept
 {
 	switch (usageMode)
 	{
@@ -427,7 +427,7 @@ int FileStore::Read(char* extBuf, size_t nBytes) noexcept
 // As Read but stop after '\n' or '\r\n' and null-terminate the string.
 // If the next line is too long to fit in the buffer then the line will be split.
 // Return the number of characters in the line excluding the null terminator, or -1 if end of file or a read error occurs.
-int FileStore::ReadLine(char* buf, size_t nBytes) noexcept
+int FileStore::ReadLine(char *_ecv_array buf, size_t nBytes) noexcept
 {
 	const FilePosition lineStart = Position();
 	const int r = Read(buf, nBytes);
@@ -532,7 +532,7 @@ void FileStore::Duplicate() noexcept
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
-bool FileStore::Store(const char *s, size_t len, size_t *bytesWritten) noexcept
+bool FileStore::Store(const char *_ecv_array s, size_t len, size_t *bytesWritten) noexcept
 {
 	if (calcCrc)
 	{
@@ -572,12 +572,12 @@ bool FileStore::Write(char b) noexcept
 	return Write(&b, sizeof(char));
 }
 
-bool FileStore::Write(const char* b) noexcept
+bool FileStore::Write(const char *_ecv_array b) noexcept
 {
 	return Write(b, strlen(b));
 }
 
-bool FileStore::Write(const char *s, size_t len) noexcept
+bool FileStore::Write(const char *_ecv_array s, size_t len) noexcept
 {
 	switch (usageMode)
 	{

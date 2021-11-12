@@ -43,12 +43,12 @@ public:
 
     bool Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept;
 	bool Read(char& b) noexcept
-		{ return Read(&b, sizeof(char)); }						// Read 1 character
+		{ return Read((char *_ecv_array)&b, sizeof(char)); }						// Read 1 character
 	bool Read(uint8_t& b) noexcept
 		{ return Read((char&)b); }								// Read 1 byte
-	int Read(char* buf, size_t nBytes) noexcept;				// Read a block of nBytes length
-	int Read(uint8_t* buf, size_t nBytes) noexcept
-		{ return Read((char*)buf, nBytes); }					// Read a block of nBytes length
+	int Read(char *_ecv_array buf, size_t nBytes) noexcept;				// Read a block of nBytes length
+	int Read(uint8_t *_ecv_array buf, size_t nBytes) noexcept
+		{ return Read((char *_ecv_array)buf, nBytes); }					// Read a block of nBytes length
 	int ReadLine(char* buf, size_t nBytes) noexcept;			// As Read but stop after '\n' or '\r\n' and null-terminate
 	bool Close() noexcept;										// Shut the file and tidy up
 	bool ForceClose() noexcept;
@@ -62,9 +62,9 @@ public:
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	FileWriteBuffer *GetWriteBuffer() const noexcept;			// Return a pointer to the remaining space for writing
 	bool Write(char b) noexcept;								// Write 1 byte
-	bool Write(const char *s, size_t len) noexcept;				// Write a block of len bytes
-	bool Write(const uint8_t *s, size_t len) noexcept;			// Write a block of len bytes
-	bool Write(const char* s) noexcept;							// Write a string
+	bool Write(const char *_ecv_array s, size_t len) noexcept;				// Write a block of len bytes
+	bool Write(const uint8_t *_ecv_array s, size_t len) noexcept;			// Write a block of len bytes
+	bool Write(const char *_ecv_array s) noexcept;							// Write a string
 	bool Flush() noexcept;										// Write remaining buffer data
 	bool Truncate() noexcept;									// Truncate file at current file pointer
 	uint32_t GetCRC32() const noexcept;
@@ -90,7 +90,7 @@ public:
 
 private:
 	void Init() noexcept;
-	bool Store(const char *s, size_t len, size_t *bytesWritten) noexcept;	// Write data to the non-volatile storage
+	bool Store(const char *_ecv_array s, size_t len, size_t *bytesWritten) noexcept;	// Write data to the non-volatile storage
 
 	volatile unsigned int openCount;
 
@@ -129,7 +129,7 @@ private:
 
 inline FileWriteBuffer *FileStore::GetWriteBuffer() const noexcept { return writeBuffer; }
 
-inline bool FileStore::Write(const uint8_t *s, size_t len) noexcept { return Write(reinterpret_cast<const char *>(s), len); }
+inline bool FileStore::Write(const uint8_t *_ecv_array s, size_t len) noexcept { return Write(reinterpret_cast<const char *_ecv_array>(s), len); }
 
 inline uint32_t FileStore::GetCRC32() const noexcept
 {

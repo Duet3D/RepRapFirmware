@@ -75,7 +75,7 @@ public:
 		return not_null(f)->Read(b);
 	}
 
-	int Read(char *buf, size_t nBytes) noexcept
+	int Read(char *_ecv_array buf, size_t nBytes) noexcept
 	pre(IsLive())
 	{
 		return not_null(f)->Read(buf, nBytes);

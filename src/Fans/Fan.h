@@ -22,7 +22,7 @@ class Fan INHERIT_OBJECT_MODEL
 {
 public:
 	explicit Fan(unsigned int fanNum) noexcept;
-	Fan(const Fan&) = delete;
+	Fan(const Fan& _ecv_from) = delete;
 
 	virtual ~Fan() noexcept override { }
 	virtual bool Check(bool checkSensors) noexcept = 0;						// update the fan PWM returning true if it is a thermostatic fan that is on
