@@ -61,8 +61,12 @@ enum class ExpansionDetail : uint32_t
 
 #endif
 
-class ObjectModel;					// forward declaration
-class ObjectModelArrayDescriptor;	// forward declaration
+// Forward declarations
+class ObjectModel;
+class ObjectModelArrayDescriptor;
+class ObjectModelTableEntry;
+class IoPort;
+class UniqueId;
 
 // Encapsulated time_t, used to facilitate overloading the ExpressionValue constructor
 struct DateTime
@@ -71,12 +75,6 @@ struct DateTime
 
 	time_t tim;
 };
-
-// Forward declarations
-class ObjectModelTableEntry;
-class ObjectModel;
-class IoPort;
-class UniqueId;
 
 // Struct used to hold the expressions with polymorphic types
 struct ExpressionValue
@@ -119,7 +117,7 @@ struct ExpressionValue
 	explicit ExpressionValue(uint64_t u) noexcept : type((uint32_t)TypeCode::Uint64) { Set56BitValue(u); }
 	explicit constexpr ExpressionValue(const ObjectModel* null om) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(0), omVal(om) { }
 	constexpr ExpressionValue(const ObjectModel *null om, uint8_t tableNumber) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(tableNumber), omVal(om) { }
-	explicit constexpr ExpressionValue(const char *s) noexcept : type((uint32_t)TypeCode::CString), param(0), sVal(s) { }
+	explicit constexpr ExpressionValue(const char *_ecv_array s) noexcept : type((uint32_t)TypeCode::CString), param(0), sVal(s) { }
 	explicit constexpr ExpressionValue(const ObjectModelArrayDescriptor *omad) noexcept : type((uint32_t)TypeCode::Array), param(0), omadVal(omad) { }
 	explicit constexpr ExpressionValue(IPAddress ip) noexcept : type((uint32_t)TypeCode::IPAddress_tc), param(0), uVal(ip.GetV4LittleEndian()) { }
 	explicit constexpr ExpressionValue(nullptr_t dummy) noexcept : type((uint32_t)TypeCode::None), param(0), uVal(0) { }
