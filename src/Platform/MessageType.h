@@ -32,7 +32,7 @@ enum MessageType : uint32_t
 	BlockingUsbMessage =	   0x10000u,	// A message that is to be sent to USB in blocking mode
 	ImmediateAuxMessage =	   0x20000u,	// A message that is to be sent to LCD in immediate mode
 
-	DestinationsMask =		   0x308FFu, // Mask for all the destinations
+	DestinationsMask =		   0x308FFu, 	// Mask for all the destinations
 
 	// Special indicators (byte 4)
 	// The first two are not processed when calling the version of Platform::Message that takes an OutputBuffer.

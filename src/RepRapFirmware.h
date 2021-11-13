@@ -431,17 +431,17 @@ private:
 };
 
 // Function to delete an object and clear the pointer. Safe to call even if the pointer is already null.
-template <typename T> void DeleteObject(T*& ptr) noexcept
+template <typename T> void DeleteObject(T *null & ptr) noexcept
 {
-	T* p2 = nullptr;
+	T *null p2 = nullptr;
 	std::swap(ptr, p2);
 	delete p2;
 }
 
 // Function to make a pointer point to a new object and delete the existing object, if any. T2 must be the same as T or derived from it.
-template <typename T, typename T2> void ReplaceObject(T*& ptr, T2* pNew) noexcept
+template <typename T, typename T2> void ReplaceObject(T *null & ptr, T2* pNew) noexcept
 {
-	T* p2 = pNew;
+	T *null p2 = static_cast<T *null>(pNew);
 	std::swap(ptr, p2);
 	delete p2;
 }

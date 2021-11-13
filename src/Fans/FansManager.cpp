@@ -42,7 +42,7 @@ ReadLockedPointer<Fan> FansManager::FindFan(size_t fanNum) const noexcept
 }
 
 // Create and return a local fan. if it fails, return nullptr with the error message in 'reply'.
-LocalFan *FansManager::CreateLocalFan(uint32_t fanNum, const char *pinNames, PwmFrequency freq, const StringRef& reply) noexcept
+LocalFan *FansManager::CreateLocalFan(uint32_t fanNum, const char *_ecv_array pinNames, PwmFrequency freq, const StringRef& reply) noexcept
 {
 	LocalFan *newFan = new LocalFan(fanNum);
 	if (!newFan->AssignPorts(pinNames, reply))
@@ -219,7 +219,7 @@ bool FansManager::IsFanControllable(size_t fanNum) const noexcept
 }
 
 // Return the fan's name
-const char *FansManager::GetFanName(size_t fanNum) const noexcept
+const char *_ecv_array FansManager::GetFanName(size_t fanNum) const noexcept
 {
 	auto fan = FindFan(fanNum);
 	return (fan.IsNull()) ? "" : fan->GetName();
