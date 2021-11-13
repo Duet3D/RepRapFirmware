@@ -962,7 +962,7 @@ bool Platform::FlushMessages() noexcept
 			const size_t bytesToWrite = min<size_t>(SERIAL_MAIN_DEVICE.canWrite(), usbOutputBuffer->BytesLeft());
 			if (bytesToWrite != 0)
 			{
-				SERIAL_MAIN_DEVICE.write(usbOutputBuffer->Read(bytesToWrite), bytesToWrite);
+				SERIAL_MAIN_DEVICE.print(usbOutputBuffer->Read(bytesToWrite), bytesToWrite);
 			}
 
 			if (usbOutputBuffer->BytesLeft() == 0)
@@ -3296,7 +3296,7 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 		size_t len = strlen(p);
 		while (SERIAL_MAIN_DEVICE.IsConnected() && len != 0 && !reprap.SpinTimeoutImminent())
 		{
-			const size_t written = SERIAL_MAIN_DEVICE.write(p, len);
+			const size_t written = SERIAL_MAIN_DEVICE.print(p, len);
 			len -= written;
 			p += written;
 		}

@@ -159,7 +159,7 @@ void PanelDueUpdater::Spin() noexcept
 				// Since writing messages via AppendAuxReply is disabled while flashing we need to send it directly
 				auto auxPort = GetAuxPort();
 				auxPort->write('\n');			// Make sure the previous message is regarded as terminated by PanelDue
-				auxPort->write(panelDueCommandEraseAndReset);
+				auxPort->print(panelDueCommandEraseAndReset);
 				auxPort->flush();
 				state = FlashState::waitAfterEraseAndReset;
 				erasedAndResetAt = millis();
