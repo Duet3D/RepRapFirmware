@@ -32,7 +32,7 @@ constexpr uint32_t SpiTransferDelay = 25;			// default time to wait after a tran
 constexpr uint32_t SpiFileOpenDelay = 5;			// same as above but when a file is open
 constexpr uint32_t SpiEventsRequired = 4;			// number of events required to happen in RRF before the delay is skipped
 
-constexpr uint32_t SpiMacroRequestTimeout = 3000;	// maximum time to wait a macro file
+constexpr uint32_t SpiMaxRequestTime = 3000;		// maximum time to wait a blocking request (like macros or file requests, in ms)
 constexpr uint32_t SpiTransferTimeout = 500;		// maximum allowed delay between data exchanges during a full transfer (in ms)
 constexpr uint32_t SpiMaxTransferTime = 50;			// maximum allowed time for a single SPI transfer
 constexpr uint32_t SpiConnectionTimeout = 4000;		// maximum time to wait for the next transfer (in ms)

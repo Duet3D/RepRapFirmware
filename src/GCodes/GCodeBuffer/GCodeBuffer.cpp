@@ -954,10 +954,10 @@ bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 		// Wait for a response (but not forever)
 		isWaitingForMacro = true;
 		reprap.GetSbcInterface().EventOccurred(true);
-		if (!macroSemaphore.Take(SpiMacroRequestTimeout))
+		if (!macroSemaphore.Take(SpiMaxRequestTime))
 		{
 			isWaitingForMacro = false;
-			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to get macro response within %" PRIu32 "ms from SBC (channel %s)\n", SpiMacroRequestTimeout, GetChannel().ToString());
+			reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while waiting for macro file %s (channel %s)\n", filename, GetChannel().ToString());
 			return false;
 		}
 	}
