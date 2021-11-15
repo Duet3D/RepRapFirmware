@@ -42,14 +42,14 @@ static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned 
 		String<StringLength500> temp;
 		temp.copy("Sample,Timestamp");
 		if (filterRequested & CL_RECORD_RAW_ENCODER_READING)	{temp.cat(",Raw Encoder Reading");}
-		if (filterRequested & CL_RECORD_CURRENT_MOTOR_STEPS)  	{temp.cat(",Current Motor Steps");}
+		if (filterRequested & CL_RECORD_CURRENT_MOTOR_STEPS)  	{temp.cat(",Measured Motor Steps");}
 		if (filterRequested & CL_RECORD_TARGET_MOTOR_STEPS)  	{temp.cat(",Target Motor Steps");}
 		if (filterRequested & CL_RECORD_CURRENT_ERROR) 			{temp.cat(",Current Error");}
 		if (filterRequested & CL_RECORD_PID_CONTROL_SIGNAL)  	{temp.cat(",PID Control Signal");}
 		if (filterRequested & CL_RECORD_PID_P_TERM)  			{temp.cat(",PID P Term");}
 		if (filterRequested & CL_RECORD_PID_I_TERM)  			{temp.cat(",PID I Term");}
 		if (filterRequested & CL_RECORD_PID_D_TERM)  			{temp.cat(",PID D Term");}
-		if (filterRequested & CL_RECORD_STEP_PHASE)  			{temp.cat(",Step Phase");}
+		if (filterRequested & CL_RECORD_STEP_PHASE)  			{temp.cat(",Measured Step Phase");}
 		if (filterRequested & CL_RECORD_DESIRED_STEP_PHASE)  	{temp.cat(",Desired Step Phase");}
 		if (filterRequested & CL_RECORD_PHASE_SHIFT)  			{temp.cat(",Phase Shift");}
 		if (filterRequested & CL_RECORD_COIL_A_CURRENT) 		{temp.cat(",Coil A Current");}
