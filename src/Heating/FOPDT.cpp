@@ -8,7 +8,7 @@
 #include "FOPDT.h"
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-# include "Storage/FileStore.h"
+# include <Storage/FileStore.h>
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -29,16 +29,17 @@ constexpr ObjectModelTableEntry FopDt::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. FopDt members
+	{ "coolingExp",			OBJECT_MODEL_FUNC(self->coolingRateExponent, 1),									ObjectModelEntryFlags::none },
 	{ "deadTime",			OBJECT_MODEL_FUNC(self->deadTime, 1),												ObjectModelEntryFlags::none },
 	{ "enabled",			OBJECT_MODEL_FUNC(self->enabled),													ObjectModelEntryFlags::none },
-	{ "gain",				OBJECT_MODEL_FUNC(self->GetGainFanOff(), 1),										ObjectModelEntryFlags::none },	// legacy, to be removed
+//	{ "gain",				OBJECT_MODEL_FUNC(self->GetGainFanOff(), 1),										ObjectModelEntryFlags::none },	// legacy, to be removed
 	{ "heatingRate",		OBJECT_MODEL_FUNC(self->heatingRate, 3),											ObjectModelEntryFlags::none },
 	{ "inverted",			OBJECT_MODEL_FUNC(self->inverted),													ObjectModelEntryFlags::none },
 	{ "maxPwm",				OBJECT_MODEL_FUNC(self->maxPwm, 2),													ObjectModelEntryFlags::none },
 	{ "pid",				OBJECT_MODEL_FUNC(self, 1),															ObjectModelEntryFlags::none },
 	{ "standardVoltage",	OBJECT_MODEL_FUNC(self->standardVoltage, 1),										ObjectModelEntryFlags::none },
-	{ "timeConstant",		OBJECT_MODEL_FUNC(self->GetTimeConstantFanOff(), 1),								ObjectModelEntryFlags::none },
-	{ "timeConstantFansOn",	OBJECT_MODEL_FUNC(self->GetTimeConstantFanOn(), 1),									ObjectModelEntryFlags::none },
+//	{ "timeConstant",		OBJECT_MODEL_FUNC(self->GetTimeConstantFanOff(), 1),								ObjectModelEntryFlags::none },	// legacy, to be removed
+//	{ "timeConstantFansOn",	OBJECT_MODEL_FUNC(self->GetTimeConstantFanOn(), 1),									ObjectModelEntryFlags::none },	// legacy, to be removed
 
 	// 1. PID members
 	{ "d",					OBJECT_MODEL_FUNC(self->loadChangeParams.tD * self->loadChangeParams.kP, 1),		ObjectModelEntryFlags::none },
@@ -48,7 +49,7 @@ constexpr ObjectModelTableEntry FopDt::objectModelTable[] =
 	{ "used",				OBJECT_MODEL_FUNC(self->usePid),													ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 10, 5 };
+constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 8, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(FopDt)
 
@@ -57,17 +58,19 @@ DEFINE_GET_OBJECT_MODEL_TABLE(FopDt)
 // The heater model is disabled until the user declares the heater to be a bed, chamber or tool heater
 FopDt::FopDt() noexcept
 {
-	Clear();
+	Reset();
 }
 
 // Check the model parameters are sensible, if they are then save them and return true.
-bool FopDt::SetParameters(float phr, float pcrFanOff, float pcrFanOn, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted) noexcept
+bool FopDt::SetParameters(float phr, float pcrFanOff, float pcrFanOn, float pcrExponent, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted) noexcept
 {
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
 	const float maxTempIncrease = max<float>(1500.0, temperatureLimit + 500.0);
 	if (   phr/pcrFanOff > 10.0						// minimum 10C temperature rise (same as with earlier heater model)
 		&& phr/pcrFanOff <= maxTempIncrease			// max temperature increase within limits
 		&& pcrFanOn >= pcrFanOff
+		&& pcrExponent >= 1.0
+		&& pcrExponent <= 1.6
 		&& pdt > 0.099
 		&& 0.5 >= pdt * pcrFanOn					// dead time less then cooling time constant
 		&& pMaxPwm > 0.0099
@@ -89,7 +92,7 @@ bool FopDt::SetParameters(float phr, float pcrFanOff, float pcrFanOn, float pdt,
 	return false;
 }
 
-void FopDt::Clear() noexcept
+void FopDt::Reset() noexcept
 {
 	SetDefaultToolParameters();						// set some values so that we don't report rubbish in the OM
 	enabled = false;								// heater is disabled until the parameters are set
@@ -102,6 +105,7 @@ void FopDt::SetDefaultToolParameters() noexcept
 	coolingRateFanOff = DefaultHotEndHeaterCoolingRate;
 	deadTime = DefaultHotEndHeaterDeadTime;
 	coolingRateChangeFanOn = 0.0;
+	coolingRateExponent = DefaultHotEndHeaterCoolingRateExponent;
 	maxPwm = 1.0;
 	standardVoltage = 0.0;
 	usePid = true;
@@ -117,6 +121,7 @@ void FopDt::SetDefaultBedOrChamberParameters() noexcept
 	coolingRateFanOff = DefaultBedHeaterCoolingRate;
 	deadTime = DefaultBedHeaterDeadTime;
 	coolingRateChangeFanOn = 0.0;
+	coolingRateExponent = DefaultBedHeaterCoolingRateExponent;
 	maxPwm = 1.0;
 	standardVoltage = 0.0;
 	usePid = false;
@@ -223,16 +228,80 @@ void FopDt::CalcPidConstants() noexcept
 	pidParametersOverridden = false;
 }
 
+// Adjust the actual heater PWM for supply voltage
+float FopDt::CorrectPwm(float requiredPwm, float actualVoltage) const noexcept
+{
+	if (requiredPwm < maxPwm && standardVoltage >= 10.0 && actualVoltage >= 10.0)
+	{
+		requiredPwm *= fsquare(standardVoltage/actualVoltage);
+	}
+	return max<float>(requiredPwm, maxPwm);
+}
+
+// Calculate the expected cooling rate for a given temperature rise abiie ambient
+float FopDt::GetCoolingRate(float temperatureRise, float fanPwm) const noexcept
+{
+	return coolingRateFanOff * powf(temperatureRise, coolingRateExponent) + temperatureRise * coolingRateChangeFanOn;
+}
+
+// Get an estimate of the expected heating rate at the specified temperature rise and PWM. The result may be negative.
+float FopDt::GetNetHeatingRate(float temperatureRise, float fanPwm, float heaterPwm) const noexcept
+{
+	return heatingRate * heaterPwm - GetCoolingRate(temperatureRise, fanPwm);
+}
+
+// Get an estimate of the heater PWM required to maintain a specified temperature
+float FopDt::EstimateRequiredPwm(float temperatureRise, float fanPwm) const noexcept
+{
+	return GetCoolingRate(temperatureRise, fanPwm)/heatingRate;
+}
+
 #if SUPPORT_CAN_EXPANSION
 
-void FopDt::SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModelNew& msg) const noexcept
+bool FopDt::SetParameters(const CanMessageHeaterModelNewNew& msg, float temperatureLimit) noexcept
+{
+	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
+	const float maxTempIncrease = max<float>(1500.0, temperatureLimit + 500.0);
+	if (   msg.heatingRate/msg.coolingRate > 10.0									// minimum 10C temperature rise (same as with earlier heater model)
+		&& msg.heatingRate/msg.coolingRate <= maxTempIncrease						// max temperature increase within limits
+		&& msg.coolingRateChangeFanOn >= 0.0
+		&& msg.coolingRateExponent >= 1.0
+		&& msg.coolingRateExponent <= 1.6
+		&& msg.deadTime > 0.099
+		&& 0.5 >= msg.deadTime * (msg.coolingRate + msg.coolingRateChangeFanOn)		// dead time less then cooling time constant
+		&& msg.maxPwm > 0.0099
+		&& msg.maxPwm <= 1.0
+	   )
+	{
+		heatingRate = msg.heatingRate;
+		coolingRateFanOff = msg.coolingRate;
+		coolingRateChangeFanOn = msg.coolingRateChangeFanOn;
+		coolingRateExponent = msg.coolingRateExponent;
+		deadTime = msg.deadTime;
+		maxPwm = msg.maxPwm;
+		standardVoltage = msg.standardVoltage;
+		usePid = msg.usePid;
+		inverted = msg.inverted;
+		enabled = true;
+		CalcPidConstants();
+
+		if (msg.pidParametersOverridden)
+		{
+			SetRawPidParameters(msg.kP, msg.recipTi, msg.tD);
+		}
+		return true;
+	}
+	return false;
+}
+
+void FopDt::SetupCanMessage(unsigned int heater, CanMessageHeaterModelNewNew& msg) const noexcept
 {
 	msg.heater = heater;
 	msg.heatingRate = heatingRate;
 	msg.coolingRate = coolingRateFanOff;
 	msg.coolingRateChangeFanOn = coolingRateChangeFanOn;
 	msg.coolingRateChangeExtruding = 0.0;
-	msg.zero2 = 0.0;
+	msg.coolingRateExponent = coolingRateExponent;
 	msg.deadTime = deadTime;
 	msg.maxPwm = maxPwm;
 	msg.standardVoltage = standardVoltage;

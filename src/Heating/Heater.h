@@ -28,7 +28,7 @@ struct CanMessageHeaterTuningReport;
 struct CanHeaterReport;
 
 #if SUPPORT_REMOTE_COMMANDS
-struct CanMessageUpdateHeaterModelNew;
+struct CanMessageHeaterModelNewNew;
 struct CanMessageSetHeaterTemperature;
 struct CanMessageSetHeaterMonitors;
 struct CanMessageHeaterTuningCommand;
@@ -91,7 +91,7 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	virtual GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept = 0;
-	GCodeResult SetOrReportModelNew(unsigned int heater, const CanMessageUpdateHeaterModelNew& msg, const StringRef& reply) noexcept;
+	GCodeResult SetModel(unsigned int heater, const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept;
 	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
 #endif
@@ -119,7 +119,10 @@ protected:
 		float heatingRate;
 		float coolingRate;
 		float deadTime;
+		float gain;
 		unsigned int numCycles;
+
+		float GetNormalGain() const noexcept { return heatingRate/coolingRate; }
 	};
 
 	virtual void ResetHeater() noexcept = 0;
@@ -135,7 +138,7 @@ protected:
 	float GetMaxTemperatureExcursion() const noexcept { return maxTempExcursion; }
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
 	float GetTargetTemperature() const noexcept { return (active) ? activeTemperature : standbyTemperature; }
-	GCodeResult SetModel(float hr, float coolingRateFanOff, float coolingRateFanOn, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;
+	GCodeResult SetModel(float hr, float coolingRateFanOff, float coolingRateFanOn, float coolingRateExponent, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;
 															// set the process model
 	void ReportTuningUpdate() noexcept;						// tell the user what's happening
 	void CalculateModel(HeaterParameters& params) noexcept;	// calculate G, td and tc from the accumulated readings

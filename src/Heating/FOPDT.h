@@ -34,7 +34,7 @@ class FileStore;
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-struct CanMessageUpdateHeaterModelNew;
+struct CanMessageHeaterModelNewNew;
 #endif
 
 class FopDt INHERIT_OBJECT_MODEL
@@ -42,8 +42,8 @@ class FopDt INHERIT_OBJECT_MODEL
 public:
 	FopDt() noexcept;
 
-	void Clear() noexcept;
-	bool SetParameters(float phr, float pcrFanOff, float pcrFanOn, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted) noexcept;
+	void Reset() noexcept;
+	bool SetParameters(float phr, float pcrFanOff, float pcrFanOn, float pcrExponent, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted) noexcept;
 	void SetDefaultToolParameters() noexcept;
 	void SetDefaultBedOrChamberParameters() noexcept;
 
@@ -55,6 +55,12 @@ public:
 	float GetDeadTime() const noexcept { return deadTime; }
 	float GetMaxPwm() const noexcept { return maxPwm; }
 	float GetVoltage() const noexcept { return standardVoltage; }
+	float EstimateRequiredPwm(float temperatureRise, float fanPwm) const noexcept;
+	float GetCoolingRate(float temperatureRise, float fanPwm) const noexcept;
+	float GetNetHeatingRate(float temperatureRise, float fanPwm, float heaterPwm) const noexcept;
+	float CorrectPwm(float requiredPwm, float actualVoltage) const noexcept;
+	void AppendM307Command(unsigned int heaterNumber, const StringRef& str) const noexcept;
+	void AppendParameters(const StringRef& str) const noexcept;
 	bool UsePid() const noexcept { return usePid; }
 	bool IsInverted() const noexcept { return inverted; }
 	bool IsEnabled() const noexcept { return enabled; }
@@ -74,11 +80,12 @@ public:
 	}
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	bool WriteParameters(FileStore *f, size_t heater) const noexcept;		// erite the model parameters to file returning true if no error
+	bool WriteParameters(FileStore *f, size_t heater) const noexcept;		// write the model parameters to file returning true if no error
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void SetupCanMessage(unsigned int heater, CanMessageUpdateHeaterModelNew& msg) const noexcept;
+	bool SetParameters(const CanMessageHeaterModelNewNew& msg, float temperatureLimit) noexcept;
+	void SetupCanMessage(unsigned int heater, CanMessageHeaterModelNewNew& msg) const noexcept;
 #endif
 
 protected:
@@ -90,6 +97,7 @@ private:
 	float heatingRate;
 	float coolingRateFanOff;
 	float coolingRateChangeFanOn;
+	float coolingRateExponent;
 	float deadTime;
 	float maxPwm;
 	float standardVoltage;					// power voltage reading at which tuning was done, or 0 if unknown

@@ -142,7 +142,7 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult ConfigureHeater(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
-	GCodeResult ProcessM307New(const CanMessageUpdateHeaterModelNew& msg, const StringRef& reply) noexcept;
+	GCodeResult ProcessM307New(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept;
 	GCodeResult ProcessM308(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	GCodeResult SetFaultDetection(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept;
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;

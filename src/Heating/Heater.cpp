@@ -173,7 +173,7 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 	{
 		// Set the model
 		const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
-		const GCodeResult rslt = SetModel(heatingRate, coolingRates[0], coolingRates[1], td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl, reply);
+		const GCodeResult rslt = SetModel(heatingRate, coolingRates[0], coolingRates[1], 1.0, td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl, reply);
 		if (rslt <= GCodeResult::warning)
 		{
 			modelSetByUser = true;
@@ -213,10 +213,10 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 }
 
 // Set the process model returning true if successful
-GCodeResult Heater::SetModel(float hr, float coolingRateFanOff, float coolingRateFanOn, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
+GCodeResult Heater::SetModel(float hr, float coolingRateFanOff, float coolingRateFanOn, float coolingRateExponent, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
 {
 	GCodeResult rslt;
-	if (model.SetParameters(hr, coolingRateFanOff, coolingRateFanOn, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
+	if (model.SetParameters(hr, coolingRateFanOff, coolingRateFanOn, coolingRateExponent, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
 	{
 		if (model.IsEnabled())
 		{
@@ -372,6 +372,7 @@ void Heater::CalculateModel(HeaterParameters& params) noexcept
 	params.deadTime = (((dHigh.GetMean() * tOff.GetMean()) + (dLow.GetMean() * tOn.GetMean())) * MillisToSeconds)/cycleTime;	// in seconds
 	params.coolingRate = coolingRate.GetMean()/averageTemperatureRiseCooling;			// in seconds
 	params.heatingRate = (heatingRate.GetMean() + (coolingRate.GetMean() * averageTemperatureRiseHeating/averageTemperatureRiseCooling)) / tuningPwm;
+	params.gain = (tOn.GetMean() + tOff.GetMean()) * averageTemperatureRiseHeating/tOn.GetMean();
 	params.numCycles = dHigh.GetNumSamples();
 }
 
@@ -397,6 +398,7 @@ void Heater::SetAndReportModel(bool usingFans) noexcept
 	String<StringLength256> str;
 	const GCodeResult rslt = SetModel(	hRate,
 										fanOffParams.coolingRate, fanOnCoolingRate,
+										1.0,
 										deadTime,
 										tuningPwm,
 #if HAS_VOLTAGE_MONITOR
@@ -408,7 +410,7 @@ void Heater::SetAndReportModel(bool usingFans) noexcept
 	if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
 	{
 		tuned = true;
-		str.printf("Auto tuning heater %u completed after %u idle and %u tuning cycles in %" PRIu32 " seconds. This heater needs the following M307 command:\n"
+		str.printf(	"Auto tuning heater %u completed after %u idle and %u tuning cycles in %" PRIu32 " seconds. This heater needs the following M307 command:\n"
 					" M307 H%u B0 R%.3f C%.1f",
 					GetHeaterNumber(),
 					idleCyclesDone,
@@ -422,6 +424,13 @@ void Heater::SetAndReportModel(bool usingFans) noexcept
 		}
 		str.catf(" D%.2f S%.2f V%.1f\n", (double)GetModel().GetDeadTime(), (double)GetModel().GetMaxPwm(), (double)GetModel().GetVoltage());
 		reprap.GetPlatform().Message(LoggedGenericMessage, str.c_str());
+		str.printf("Gain %.1f/%.1f", (double)fanOffParams.GetNormalGain(), (double)fanOffParams.gain);
+		if (usingFans)
+		{
+			str.catf(" : %.1f/.1%f", (double)fanOnParams.GetNormalGain(), (double)fanOnParams.gain);
+		}
+		str.cat('\n');
+		reprap.GetPlatform().Message(GenericMessage, str.c_str());
 		if (reprap.GetGCodes().SawM501InConfigFile())
 		{
 			reprap.GetPlatform().Message(GenericMessage, "Send M500 to save this command in config-override.g\n");
@@ -602,7 +611,7 @@ void Heater::SetTemperature(float t, bool activeNotStandby) THROWS(GCodeExceptio
 // This is called when config.g is about to be re-run
 void Heater::ClearModelAndMonitors() noexcept
 {
-	model.Clear();
+	model.Reset();
 	for (HeaterMonitor& hm : monitors)
 	{
 		hm.Disable();
@@ -647,14 +656,25 @@ GCodeResult Heater::SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, co
 	return GCodeResult::ok;
 }
 
-GCodeResult Heater::SetOrReportModelNew(unsigned int heater, const CanMessageUpdateHeaterModelNew& msg, const StringRef& reply) noexcept
+GCodeResult Heater::SetModel(unsigned int heater, const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept
 {
-	const GCodeResult rslt = SetModel(msg.heatingRate, msg.coolingRate, msg.coolingRateChangeFanOn, msg.deadTime, msg.maxPwm, msg.standardVoltage, msg.usePid, msg.inverted, reply);
-	if (msg.pidParametersOverridden && (rslt == GCodeResult::ok || rslt == GCodeResult::warning))
+	const float temperatureLimit = GetHighestTemperatureLimit();
+	const bool rslt = model.SetParameters(msg, temperatureLimit);
+	if (rslt)
 	{
-		SetRawPidParameters(msg.kP, msg.recipTi, msg.tD);
+		if (model.IsEnabled())
+		{
+			return UpdateModel(reply);
+		}
+		else
+		{
+			ResetHeater();
+		}
+		return GCodeResult::ok;
 	}
-	return rslt;
+
+	reply.copy("bad model parameters");
+	return GCodeResult::error;
 }
 
 GCodeResult Heater::SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept
