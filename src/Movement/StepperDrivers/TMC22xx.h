@@ -13,7 +13,6 @@
 #if SUPPORT_TMC22xx
 
 #include "DriverMode.h"
-#include <GCodes/GCodeResult.h>
 
 namespace SmartDrivers
 {

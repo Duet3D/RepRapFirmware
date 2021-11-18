@@ -51,11 +51,17 @@ const char *_ecv_array SafeStrptime(const char *_ecv_array buf, const char *_ecv
 #endif
 
 #include <CoreIO.h>
-# include <Devices.h>
+#include <Devices.h>
 
 // The following are needed by many other files, so include them here
-# include <Platform/MessageType.h>
-# include <GCodes/GCodeResult.h>
+#include <Platform/MessageType.h>
+#include <GCodeResult.h>
+
+// Convert an error or warning result into a suitable generic message type. Should only be called with GCodeResult::warning or GCodeResult::error.
+inline MessageType GetGenericMessageType(GCodeResult rslt)
+{
+	return (rslt == GCodeResult::warning) ? WarningMessage : ErrorMessage;
+}
 
 #define SPEED_CRITICAL	__attribute__((optimize("O2")))
 
