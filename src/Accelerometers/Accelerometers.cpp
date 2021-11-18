@@ -64,7 +64,7 @@ static Task<AccelerometerTaskStackWords> *accelerometerTask;
 static LIS3DH *accelerometer = nullptr;
 
 static uint16_t samplingRate = 0;							// 0 means use the default
-static volatile uint16_t numSamplesRequested;
+static volatile uint32_t numSamplesRequested;
 static uint8_t resolution = DefaultResolution;
 static uint8_t orientation = 20;							// +Z -> +Z, +X -> +X
 static volatile uint8_t axesRequested;
@@ -388,7 +388,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	gb.MustSee('P');
 	const DriverId device = gb.GetDriverId();
 	gb.MustSee('S');
-	const uint16_t numSamples = min<uint32_t>(gb.GetUIValue(), 65535);
+	const uint32_t numSamples = min<uint32_t>(gb.GetUIValue(), 65535);
 	gb.MustSee('A');
 	const uint8_t mode = gb.GetUIValue();
 
