@@ -388,7 +388,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	gb.MustSee('P');
 	const DriverId device = gb.GetDriverId();
 	gb.MustSee('S');
-	const uint32_t numSamples = min<uint32_t>(gb.GetUIValue(), 65535);
+	const uint32_t numSamples = gb.GetUIValue();
 	gb.MustSee('A');
 	const uint8_t mode = gb.GetUIValue();
 
