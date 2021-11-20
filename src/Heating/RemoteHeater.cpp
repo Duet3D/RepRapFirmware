@@ -152,7 +152,7 @@ void RemoteHeater::Spin() noexcept
 						CalculateModel(fanOffParams);
 						if (tuningFans.IsEmpty())
 						{
-							SetAndReportModel(false);
+							SetAndReportModelAfterTuning(false);
 							StopTuning();
 							break;
 						}
@@ -182,7 +182,7 @@ void RemoteHeater::Spin() noexcept
 					{
 						reprap.GetFansManager().SetFansValue(tuningFans, 0.0);					// turn fans off
 						CalculateModel(fanOnParams);
-						SetAndReportModel(true);
+						SetAndReportModelAfterTuning(true);
 						StopTuning();
 						break;
 					}

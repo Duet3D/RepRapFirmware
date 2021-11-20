@@ -138,15 +138,11 @@ protected:
 	float GetMaxTemperatureExcursion() const noexcept { return maxTempExcursion; }
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
 	float GetTargetTemperature() const noexcept { return (active) ? activeTemperature : standbyTemperature; }
-	GCodeResult SetModel(float hr, float coolingRateFanOff, float coolingRateFanOn, float coolingRateExponent, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;
+	GCodeResult SetModel(float hr, float bcr, float fcr, float coolingRateExponent, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;
 															// set the process model
 	void ReportTuningUpdate() noexcept;						// tell the user what's happening
 	void CalculateModel(HeaterParameters& params) noexcept;	// calculate G, td and tc from the accumulated readings
-	void SetAndReportModel(bool usingFans) noexcept;
-
-#if SUPPORT_REMOTE_COMMANDS
-	void SetRawPidParameters(float p_kP, float p_recipTi, float p_tD) noexcept { model.SetRawPidParameters(p_kP, p_recipTi, p_tD); }
-#endif
+	void SetAndReportModelAfterTuning(bool usingFans) noexcept;
 
 	HeaterMonitor monitors[MaxMonitorsPerHeater];			// embedding them in the Heater uses less memory than dynamic allocation
 	bool tuned;												// true if tuning was successful

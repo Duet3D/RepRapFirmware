@@ -132,37 +132,57 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 	float heatingRate = model.GetHeatingRate();
 	float td = model.GetDeadTime(),
 		maxPwm = model.GetMaxPwm(),
-		voltage = model.GetVoltage();
-	float coolingRates[2] = { model.GetCoolingRateFanOff(), model.GetCoolingRateFanOn() };
+		voltage = model.GetVoltage(),
+		coolingRateExponent = model.GetCoolingRateExponent(),
+		basicCoolingRate = model.GetBasicCoolingRate(),
+		fanCoolingRate = model.GetFanCoolingRate();
 	int32_t dontUsePid = model.UsePid() ? 0 : 1;
 	int32_t inversionParameter = 0;
 
-	// Get the cooling time constant(s) first
-	float timeConstants[2];
-	size_t numValues = 2;
-	if (gb.TryGetFloatArray('C', numValues, timeConstants, reply, seen, true))
+	if (gb.Seen('K'))
 	{
-		return GCodeResult::error;
+		// New style model parameters
+		seen = true;
+		float coolingRates[2];
+		size_t numValues = 2;
+		gb.GetFloatArray(coolingRates, numValues, false);
+		basicCoolingRate = coolingRates[0];
+		fanCoolingRate = (numValues == 2) ? coolingRates[1] : 0.0;
+		if (gb.Seen('R'))
+		{
+			seen = true;
+			heatingRate = gb.GetFValue();
+		}
+		gb.TryGetFValue('E', coolingRateExponent, seen);
 	}
-	else if (seen)
+	else if (gb.Seen('C'))
 	{
-		coolingRates[0] = 1.0/timeConstants[0];
-		coolingRates[1] = 1.0/timeConstants[1];
+		// Old style model parameters
+		seen = true;
+		float timeConstants[2];
+		size_t numValues = 2;
+		gb.GetFloatArray(timeConstants, numValues, true);
+		basicCoolingRate = 100.0/timeConstants[0];
+		fanCoolingRate = 100.0/timeConstants[1] - basicCoolingRate;
+		coolingRateExponent = 1.0;
 	}
 
-	if (gb.Seen('R'))
+	if (gb.TryGetFValue('R', heatingRate, seen))
 	{
-		// New style heater model. R = heating rate, C[2] = cooling rates
-		seen = true;
-		heatingRate = gb.GetFValue();
+		// We have the heating rate
 	}
-	else if (gb.Seen('A'))
+	else
 	{
-		// Old style heating model. A = gain, C = cooling time constant
-		seen = true;
-		const float gain = gb.GetFValue();
-		heatingRate = gain * coolingRates[0];
+		float gain;
+		if (gb.TryGetFValue('A', gain, seen))
+		{
+			// Old style heating model. A = gain, C = cooling time constant
+			seen = true;
+			const float gain = gb.GetFValue();
+			heatingRate = gain * basicCoolingRate * 100.0;
+		}
 	}
+
 	gb.TryGetFValue('D', td, seen);
 	gb.TryGetIValue('B', dontUsePid, seen);
 	gb.TryGetFValue('S', maxPwm, seen);
@@ -173,7 +193,7 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 	{
 		// Set the model
 		const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
-		const GCodeResult rslt = SetModel(heatingRate, coolingRates[0], coolingRates[1], 1.0, td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl, reply);
+		const GCodeResult rslt = SetModel(heatingRate, basicCoolingRate, fanCoolingRate, coolingRateExponent, td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl, reply);
 		if (rslt <= GCodeResult::warning)
 		{
 			modelSetByUser = true;
@@ -188,46 +208,27 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 	}
 	else
 	{
-		const char* const mode = (!model.UsePid()) ? "bang-bang"
-									: (model.ArePidParametersOverridden()) ? "custom PID"
-										: "PID";
-		reply.printf("Heater %u model: heating rate %.3f, cooling time constant %.1f", heater, (double)model.GetHeatingRate(), (double)model.GetTimeConstantFanOff());
-		if (model.GetCoolingRateChangeFanOn() > 0.0)
-		{
-			reply.catf("/%.1f", (double)model.GetTimeConstantFanOn());
-		}
-		reply.catf(", dead time %.2f, max PWM %.2f, calibration voltage %.1f, mode %s", (double)model.GetDeadTime(), (double)model.GetMaxPwm(), (double)model.GetVoltage(), mode);
-		if (model.IsInverted())
-		{
-			reply.cat(", inverted control");
-		}
-		if (model.UsePid())
-		{
-			M301PidParameters params = model.GetM301PidParameters(false);
-			reply.catf("\nComputed PID parameters: setpoint change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
-			params = model.GetM301PidParameters(true);
-			reply.catf(", load change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
-		}
+		model.AppendModelParameters(heater, reply, !reprap.GetHeat().IsBedOrChamberHeater(heater));
 	}
 	return GCodeResult::ok;
 }
 
 // Set the process model returning true if successful
-GCodeResult Heater::SetModel(float hr, float coolingRateFanOff, float coolingRateFanOn, float coolingRateExponent, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
+GCodeResult Heater::SetModel(float hr, float bcr, float fcr, float coolingRateExponent, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
 {
 	GCodeResult rslt;
-	if (model.SetParameters(hr, coolingRateFanOff, coolingRateFanOn, coolingRateExponent, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
+	if (model.SetParameters(hr, bcr, fcr, coolingRateExponent, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
 	{
 		if (model.IsEnabled())
 		{
 			rslt = UpdateModel(reply);
 			if (rslt == GCodeResult::ok)
 			{
-				const float predictedMaxTemp = hr/coolingRateFanOff + NormalAmbientTemperature;
+				const float predictedMaxTemp = GetModel().EstimateMaxTemperatureRise() + NormalAmbientTemperature;
 				const float noWarnTemp = (GetHighestTemperatureLimit() - NormalAmbientTemperature) * 1.5 + 50.0;		// allow 50% extra power plus enough for an extra 50C
+				reply.printf("Heater %u predicted maximum temperature at full power is %d" DEGREE_SYMBOL "C", GetHeaterNumber(), (int)predictedMaxTemp);
 				if (predictedMaxTemp > noWarnTemp)
 				{
-					reply.printf("Heater %u appears to be over-powered. If left on at full power, its temperature is predicted to reach %dC", GetHeaterNumber(), (int)predictedMaxTemp);
 					rslt = GCodeResult::warning;
 				}
 			}
@@ -304,12 +305,12 @@ const char *const Heater::TuningPhaseText[] =
 {
 	"checking temperature is stable",
 	"heating up",
-	"heating system settling",
-	"tuning with fan off",
+	"settling",
+	"measuring",
 #if TUNE_WITH_HALF_FAN
-	"tuning with 50% fan",
+	"measuring with 50% fan",
 #endif
-	"tuning with fan on"
+	"measuring with fan on"
 };
 
 // Get the auto tune status or last result
@@ -336,7 +337,7 @@ void Heater::ReportTuningUpdate() noexcept
 {
 	if (tuningPhase < ARRAY_SIZE(TuningPhaseText))
 	{
-		reprap.GetPlatform().MessageF(GenericMessage, "Auto tune starting phase %u, %s\n", tuningPhase + 1, TuningPhaseText[tuningPhase]);
+		reprap.GetPlatform().MessageF(GenericMessage, "Auto tune starting phase %u, %s\n", tuningPhase, TuningPhaseText[tuningPhase]);
 	}
 }
 
@@ -369,25 +370,28 @@ void Heater::CalculateModel(HeaterParameters& params) noexcept
 	const float cycleTime = tOn.GetMean() + tOff.GetMean();		// in milliseconds
 	const float averageTemperatureRiseHeating = tuningTargetTemp - 0.5 * (tuningHysteresis - TuningPeakTempDrop) - tuningStartTemp.GetMean();
 	const float averageTemperatureRiseCooling = tuningTargetTemp - TuningPeakTempDrop - 0.5 * tuningHysteresis - tuningStartTemp.GetMean();
+	const float averageTemperatureRise = (averageTemperatureRiseHeating * tOn.GetMean() + averageTemperatureRiseCooling * tOff.GetMean()) / cycleTime;
 	params.deadTime = (((dHigh.GetMean() * tOff.GetMean()) + (dLow.GetMean() * tOn.GetMean())) * MillisToSeconds)/cycleTime;	// in seconds
-	params.coolingRate = coolingRate.GetMean()/averageTemperatureRiseCooling;			// in seconds
+	params.coolingRate = coolingRate.GetMean();
 	params.heatingRate = (heatingRate.GetMean() + (coolingRate.GetMean() * averageTemperatureRiseHeating/averageTemperatureRiseCooling)) / tuningPwm;
-	params.gain = (tOn.GetMean() + tOff.GetMean()) * averageTemperatureRiseHeating/tOn.GetMean();
+	params.gain = (tOn.GetMean() + tOff.GetMean()) * averageTemperatureRise/tOn.GetMean();
 	params.numCycles = dHigh.GetNumSamples();
 }
 
-void Heater::SetAndReportModel(bool usingFans) noexcept
+void Heater::SetAndReportModelAfterTuning(bool usingFans) noexcept
 {
 	const float hRate = (usingFans) ? (fanOffParams.heatingRate + fanOnParams.heatingRate) * 0.5 : fanOffParams.heatingRate;
 	const float deadTime = (usingFans) ? (fanOffParams.deadTime + fanOnParams.deadTime) * 0.5 : fanOffParams.deadTime;
-
-	float fanOnCoolingRate = fanOffParams.coolingRate;
+	const float coolingRateExponent = (reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber())) ? DefaultBedHeaterCoolingRateExponent : DefaultToolHeaterCoolingRateExponent;
+	const float averageTemperatureRiseCooling = tuningTargetTemp - TuningPeakTempDrop - 0.5 * tuningHysteresis - tuningStartTemp.GetMean();
+	const float basicCoolingRate = fanOffParams.coolingRate/powf(averageTemperatureRiseCooling * 0.01, coolingRateExponent);
+	float fanOnCoolingRate = 0.0;
 	if (usingFans)
 	{
 		// Sometimes the print cooling fan makes no difference to the cooling rate. The SetModel call will fail if the rate with fan on is lower than the rate with fan off.
 		if (fanOnParams.coolingRate > fanOffParams.coolingRate)
 		{
-			fanOnCoolingRate = fanOffParams.coolingRate + (fanOnParams.coolingRate - fanOffParams.coolingRate)/tuningFanPwm;
+			fanOnCoolingRate = ((fanOnParams.coolingRate - fanOffParams.coolingRate) * 100.0)/(averageTemperatureRiseCooling * tuningFanPwm);
 		}
 		else
 		{
@@ -397,8 +401,9 @@ void Heater::SetAndReportModel(bool usingFans) noexcept
 
 	String<StringLength256> str;
 	const GCodeResult rslt = SetModel(	hRate,
-										fanOffParams.coolingRate, fanOnCoolingRate,
-										1.0,
+										basicCoolingRate,
+										fanOnCoolingRate,
+										coolingRateExponent,
 										deadTime,
 										tuningPwm,
 #if HAS_VOLTAGE_MONITOR
@@ -410,27 +415,25 @@ void Heater::SetAndReportModel(bool usingFans) noexcept
 	if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
 	{
 		tuned = true;
-		str.printf(	"Auto tuning heater %u completed after %u idle and %u tuning cycles in %" PRIu32 " seconds. This heater needs the following M307 command:\n"
-					" M307 H%u B0 R%.3f C%.1f",
+		str.printf(	"Auto tuning heater %u completed after %u idle and %u tuning cycles in %" PRIu32 " seconds. This heater needs the following M307 command:\n ",
 					GetHeaterNumber(),
 					idleCyclesDone,
 					(usingFans) ? fanOffParams.numCycles + fanOnParams.numCycles : fanOffParams.numCycles,
-					(millis() - tuningBeginTime)/(uint32_t)SecondsToMillis,
-					GetHeaterNumber(), (double)GetModel().GetHeatingRate(), (double)(1.0/GetModel().GetCoolingRateFanOff())
+					(millis() - tuningBeginTime)/(uint32_t)SecondsToMillis
 				  );
-		if (usingFans)
-		{
-			str.catf(":%.1f", (double)(1.0/GetModel().GetCoolingRateFanOn()));
-		}
-		str.catf(" D%.2f S%.2f V%.1f\n", (double)GetModel().GetDeadTime(), (double)GetModel().GetMaxPwm(), (double)GetModel().GetVoltage());
+		GetModel().AppendM307Command(GetHeaterNumber(), str.GetRef(), !reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber()));
 		reprap.GetPlatform().Message(LoggedGenericMessage, str.c_str());
-		str.printf("Gain %.1f/%.1f", (double)fanOffParams.GetNormalGain(), (double)fanOffParams.gain);
-		if (usingFans)
+		if (reprap.Debug(moduleHeat))
 		{
-			str.catf(" : %.1f/.1%f", (double)fanOnParams.GetNormalGain(), (double)fanOnParams.gain);
+			str.printf("Long term gain %.1f/%.1f", (double)fanOffParams.GetNormalGain(), (double)fanOffParams.gain);
+			if (usingFans)
+			{
+				str.catf(" : %.1f/.1%f", (double)fanOnParams.GetNormalGain(), (double)fanOnParams.gain);
+			}
+			str.cat('\n');
+			reprap.GetPlatform().Message(GenericMessage, str.c_str());
 		}
-		str.cat('\n');
-		reprap.GetPlatform().Message(GenericMessage, str.c_str());
+
 		if (reprap.GetGCodes().SawM501InConfigFile())
 		{
 			reprap.GetPlatform().Message(GenericMessage, "Send M500 to save this command in config-override.g\n");
@@ -442,10 +445,10 @@ void Heater::SetAndReportModel(bool usingFans) noexcept
 	}
 	else
 	{
-		reprap.GetPlatform().MessageF(WarningMessage, "Auto tune of heater %u failed due to bad curve fit (R=%.3f, 1/C=%.4f:%.4f, D=%.1f)\n",
+		reprap.GetPlatform().MessageF(WarningMessage, "Auto tune of heater %u failed due to bad curve fit (R=%.3f K=%.3f:%.3f D=%.2f)\n",
 										GetHeaterNumber(), (double)hRate,
-										(double)fanOffParams.coolingRate, (double)fanOnCoolingRate,
-										(double)fanOffParams.deadTime);
+										(double)basicCoolingRate, (double)fanOnCoolingRate,
+										(double)deadTime);
 	}
 }
 

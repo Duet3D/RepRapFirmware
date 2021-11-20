@@ -904,7 +904,10 @@ bool Heat::WriteModelParameters(FileStore *f) const noexcept
 			const FopDt& model = heaters[h]->GetModel();
 			if (model.IsEnabled())
 			{
-				ok = model.WriteParameters(f, h);
+				String<StringLength256> scratchString;
+				model.AppendM307Command(h, scratchString.GetRef(), !IsBedOrChamberHeater(h));
+				model.AppendM301Command(h, scratchString.GetRef());
+				ok = f->Write(scratchString.c_str());
 			}
 		}
 	}

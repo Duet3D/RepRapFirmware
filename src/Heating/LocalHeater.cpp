@@ -176,29 +176,38 @@ TemperatureError LocalHeater::ReadTemperature() noexcept
 // This must be called whenever the heater is turned on, and any time the heater is active and the target temperature is changed
 GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 {
-	if (mode == HeaterMode::fault)
+	if (!GetModel().IsEnabled())
 	{
-		reply.printf("Heater %u not switched on due to temperature fault\n", GetHeaterNumber());
-		return GCodeResult::warning;
+		reply.printf("Heater %u not switched on due to bad model", GetHeaterNumber());
+		return GCodeResult::error;
 	}
 
-	//debugPrintf("Heater %d on, temp %.1f\n", heater, temperature);
-	const float target = GetTargetTemperature();
-	const HeaterMode oldMode = mode;
-	mode = (temperature + TEMPERATURE_CLOSE_ENOUGH < target) ? HeaterMode::heating
-			: (temperature > target + TEMPERATURE_CLOSE_ENOUGH) ? HeaterMode::cooling
-				: HeaterMode::stable;
-	if (mode != oldMode)
+	if (mode == HeaterMode::fault)
 	{
-		heatingFaultCount = 0;
-		if (mode == HeaterMode::heating)
-		{
-			timeSetHeating = millis();
-		}
-		if (reprap.Debug(Module::moduleHeat) && oldMode == HeaterMode::off)
+		reply.printf("Heater %u not switched on due to temperature fault", GetHeaterNumber());
+		return GCodeResult::error;
+	}
+
+	const float target = GetTargetTemperature();
+	const HeaterMode newMode = (temperature + TEMPERATURE_CLOSE_ENOUGH < target) ? HeaterMode::heating
+								: (temperature > target + TEMPERATURE_CLOSE_ENOUGH) ? HeaterMode::cooling
+									: HeaterMode::stable;
+	if (newMode != mode)
+	{
+		if (reprap.Debug(Module::moduleHeat) && mode == HeaterMode::off)
 		{
 			reprap.GetPlatform().MessageF(GenericMessage, "Heater %u switched on\n", GetHeaterNumber());
 		}
+
+		// The Heat task can preempt the GCodes task that calls this, so lock out the Heat task while we update multiple variables
+		TaskCriticalSectionLocker lock;
+		if (newMode == HeaterMode::heating)
+		{
+			lastTemperatureValue = temperature;
+			lastTemperatureMillis = timeSetHeating = millis();
+		}
+		heatingFaultCount = 0;
+		mode = newMode;
 	}
 	return GCodeResult::ok;
 }
@@ -285,27 +294,42 @@ void LocalHeater::Spin() noexcept
 						mode = HeaterMode::stable;
 						heatingFaultCount = 0;
 					}
-					else if (gotDerivative)
-					{
-						const float expectedRate = GetExpectedHeatingRate();
-						if (derivative + AllowedTemperatureDerivativeNoise < expectedRate * 0.7
-							&& (float)(millis() - timeSetHeating) > GetModel().GetDeadTime() * SecondsToMillis * 2)
-						{
-							++heatingFaultCount;
-							if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
-							{
-								RaiseHeaterFault("Heater %u fault: at %.1f" DEGREE_SYMBOL "C temperature is rising at %.1f" DEGREE_SYMBOL "C/sec, well below the expected %.1f" DEGREE_SYMBOL "C/sec\n",
-													GetHeaterNumber(), (double)temperature, (double)derivative, (double)expectedRate);
-							}
-						}
-						else if (heatingFaultCount != 0)
-						{
-							--heatingFaultCount;
-						}
-					}
 					else
 					{
-						// Leave the heating fault count alone
+						const uint32_t now = millis();
+						if ((float)(millis() - timeSetHeating) < GetModel().GetDeadTime() * SecondsToMillis * 1.5)
+						{
+							// Record the temperature for when we are past the dead time
+							lastTemperatureValue = temperature;
+							lastTemperatureMillis = now;
+						}
+						else if (gotDerivative)												// this is a check in case we just had a temperature spike
+						{
+							const float expectedRate = GetExpectedHeatingRate();
+							const float minSamplingInterval = 3.0/expectedRate;				// check the temperature if we expect a 3C rise since last time
+							const float actualInterval = (float)(now - lastTemperatureMillis) * MillisToSeconds;
+							if (actualInterval >= minSamplingInterval)
+							{
+								// Check that we are heating fast enough, and if so, take another sample
+								const float expectedTemperatureRise = expectedRate * actualInterval;
+								const float actualTemperatureRise = temperature - lastTemperatureValue;
+								if (actualTemperatureRise < expectedTemperatureRise * 0.7)
+								{
+									++heatingFaultCount;
+									if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
+									{
+										RaiseHeaterFault("Heater %u fault: at %.1f" DEGREE_SYMBOL "C temperature is rising at %.1f" DEGREE_SYMBOL "C/sec, well below the expected %.1f" DEGREE_SYMBOL "C/sec\n",
+															GetHeaterNumber(), (double)temperature, (double)derivative, (double)expectedRate);
+									}
+								}
+								else if (heatingFaultCount != 0)
+								{
+									--heatingFaultCount;
+								}
+								lastTemperatureValue = temperature;
+								lastTemperatureMillis = now;
+							}
+						}
 					}
 				}
 				break;
@@ -391,7 +415,7 @@ void LocalHeater::Spin() noexcept
 					// Scale the PID based on the current voltage vs. the calibration voltage
 					if (!reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber()))
 					{
-						lastPwm = GetModel().CorrectPwm(lastPwm, reprap.GetPlatform().GetCurrentPowerVoltage());
+						lastPwm = GetModel().CorrectPwmForVoltage(lastPwm, reprap.GetPlatform().GetCurrentPowerVoltage());
 					}
 #endif
 				}
@@ -524,8 +548,7 @@ void LocalHeater::FeedForwardAdjustment(float fanPwmChange, float extrusionChang
 {
 	if (mode == HeaterMode::stable)
 	{
-		const float coolingRateIncrease = GetModel().GetCoolingRateChangeFanOn() * fanPwmChange;
-		const float boost = (coolingRateIncrease * (GetTargetTemperature() - NormalAmbientTemperature) * FeedForwardMultiplier)/GetModel().GetHeatingRate();
+		const float boost = GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, fanPwmChange) * FeedForwardMultiplier;
 #if 0
 		if (reprap.Debug(moduleHeat))
 		{
@@ -598,7 +621,8 @@ void LocalHeater::DoTuningStep() noexcept
 			lastPwm = tuningPwm;										// turn on heater at specified power
 			mode = HeaterMode::tuning1;
 
-			reprap.GetPlatform().Message(GenericMessage, "Auto tune starting phase 1, heater on\n");
+			tuningPhase = 1;
+			ReportTuningUpdate();
 			return;
 		}
 
@@ -631,7 +655,6 @@ void LocalHeater::DoTuningStep() noexcept
 			return;
 		}
 #endif
-		tuningPhase = 1;
 		{
 			const bool isBedOrChamberHeater = reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber());
 			const uint32_t heatingTime = now - timeSetHeating;
@@ -748,7 +771,7 @@ void LocalHeater::DoTuningStep() noexcept
 						CalculateModel(fanOffParams);
 						if (tuningFans.IsEmpty())
 						{
-							SetAndReportModel(false);
+							SetAndReportModelAfterTuning(false);
 							break;
 						}
 						else
@@ -777,7 +800,7 @@ void LocalHeater::DoTuningStep() noexcept
 					{
 						reprap.GetFansManager().SetFansValue(tuningFans, 0.0);					// turn fans off
 						CalculateModel(fanOnParams);
-						SetAndReportModel(true);
+						SetAndReportModelAfterTuning(true);
 						break;
 					}
 				}
