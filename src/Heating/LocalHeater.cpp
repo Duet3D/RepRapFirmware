@@ -297,7 +297,7 @@ void LocalHeater::Spin() noexcept
 					else
 					{
 						const uint32_t now = millis();
-						if ((float)(millis() - timeSetHeating) < GetModel().GetDeadTime() * SecondsToMillis * 1.5)
+						if ((float)(now - timeSetHeating) < GetModel().GetDeadTime() * SecondsToMillis * 1.5)
 						{
 							// Record the temperature for when we are past the dead time
 							lastTemperatureValue = temperature;
@@ -322,12 +322,15 @@ void LocalHeater::Spin() noexcept
 															GetHeaterNumber(), (double)temperature, (double)derivative, (double)expectedRate);
 									}
 								}
-								else if (heatingFaultCount != 0)
+								else
 								{
-									--heatingFaultCount;
+									lastTemperatureValue = temperature;
+									lastTemperatureMillis = now;
+									if (heatingFaultCount != 0)
+									{
+										--heatingFaultCount;
+									}
 								}
-								lastTemperatureValue = temperature;
-								lastTemperatureMillis = now;
 							}
 						}
 					}

@@ -226,9 +226,9 @@ GCodeResult Heater::SetModel(float hr, float bcr, float fcr, float coolingRateEx
 			{
 				const float predictedMaxTemp = GetModel().EstimateMaxTemperatureRise() + NormalAmbientTemperature;
 				const float noWarnTemp = (GetHighestTemperatureLimit() - NormalAmbientTemperature) * 1.5 + 50.0;		// allow 50% extra power plus enough for an extra 50C
-				reply.printf("Heater %u predicted maximum temperature at full power is %d" DEGREE_SYMBOL "C", GetHeaterNumber(), (int)predictedMaxTemp);
 				if (predictedMaxTemp > noWarnTemp)
 				{
+					reply.printf("Heater %u predicted maximum temperature at full power is %d" DEGREE_SYMBOL "C", GetHeaterNumber(), (int)predictedMaxTemp);
 					rslt = GCodeResult::warning;
 				}
 			}

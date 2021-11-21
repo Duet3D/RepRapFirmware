@@ -241,7 +241,7 @@ void FopDt::AppendModelParameters(unsigned int heaterNumber, const StringRef& st
 	const char* const mode = (!usePid) ? "bang-bang"
 								: (pidParametersOverridden) ? "custom PID"
 									: "PID";
-	str.catf("Heater %u model: heating rate %.3f, basic cooling rate %.3f", heaterNumber, (double)heatingRate, (double)basicCoolingRate);
+	str.catf("Heater %u: heating rate %.3f, cooling rate %.3f", heaterNumber, (double)heatingRate, (double)basicCoolingRate);
 	if (fanCoolingRate > 0.0)
 	{
 		str.catf("/%.3f", (double)fanCoolingRate);
@@ -249,18 +249,19 @@ void FopDt::AppendModelParameters(unsigned int heaterNumber, const StringRef& st
 	str.catf(", dead time %.2f, max PWM %.2f, mode %s", (double)deadTime, (double)maxPwm, mode);
 	if (inverted)
 	{
-		str.cat(", inverted control");
+		str.cat(", reverse control");
 	}
 	if (includeVoltage)
 	{
-		str.catf(", calibration voltage %.1f", (double)standardVoltage);
+		str.catf(", calibrated at %.1fV", (double)standardVoltage);
 	}
+	str.lcatf("Predicted max temperature rise %d" DEGREE_SYMBOL "C", (int)EstimateMaxTemperatureRise());
 	if (usePid)
 	{
 		M301PidParameters params = GetM301PidParameters(false);
-		str.catf("\nComputed PID parameters: setpoint change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
+		str.lcatf("PID parameters: heating P%.1f I%.3f D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
 		params = GetM301PidParameters(true);
-		str.catf(", load change: P%.1f, I%.3f, D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
+		str.catf(", steady P%.1f I%.3f D%.1f", (double)params.kP, (double)params.kI, (double)params.kD);
 	}
 }
 
