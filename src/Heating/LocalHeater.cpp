@@ -319,7 +319,7 @@ void LocalHeater::Spin() noexcept
 									if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
 									{
 										RaiseHeaterFault("Heater %u fault: at %.1f" DEGREE_SYMBOL "C temperature is rising at %.1f" DEGREE_SYMBOL "C/sec, well below the expected %.1f" DEGREE_SYMBOL "C/sec\n",
-															GetHeaterNumber(), (double)temperature, (double)derivative, (double)expectedRate);
+															GetHeaterNumber(), (double)temperature, (double)(actualTemperatureRise/actualInterval), (double)expectedRate);
 									}
 								}
 								else
