@@ -1381,12 +1381,10 @@ static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
 
 #endif
 
+#if !USE_PDC
+
 static inline void spi_rx_dma_enable() noexcept
 {
-#if USE_PDC
-	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_RXTEN);
-#endif
-
 #if USE_DMAC
 	dmac_channel_enable(DMAC, DmacChanWiFiRx);
 #endif
@@ -1402,10 +1400,6 @@ static inline void spi_rx_dma_enable() noexcept
 
 static inline void spi_tx_dma_enable() noexcept
 {
-#if USE_PDC
-	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN);
-#endif
-
 #if USE_DMAC
 	dmac_channel_enable(DMAC, DmacChanWiFiTx);
 #endif
@@ -1421,10 +1415,6 @@ static inline void spi_tx_dma_enable() noexcept
 
 static inline void spi_rx_dma_disable() noexcept
 {
-#if USE_PDC
-	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_RXTDIS);
-#endif
-
 #if USE_DMAC
 	dmac_channel_disable(DMAC, DmacChanWiFiRx);
 #endif
@@ -1440,10 +1430,6 @@ static inline void spi_rx_dma_disable() noexcept
 
 static inline void spi_tx_dma_disable() noexcept
 {
-#if USE_PDC
-	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS);
-#endif
-
 #if USE_DMAC
 	dmac_channel_disable(DMAC, DmacChanWiFiTx);
 #endif
@@ -1457,19 +1443,23 @@ static inline void spi_tx_dma_disable() noexcept
 #endif
 }
 
+#endif
+
 static void spi_dma_disable() noexcept
 {
+#if USE_PDC
+	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS | PERIPH_PTCR_RXTDIS);
+#else
 	spi_tx_dma_disable();
 	spi_rx_dma_disable();
+#endif
 }
 
 static inline void spi_dma_enable() noexcept
 {
 #if USE_PDC
 	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN | PERIPH_PTCR_RXTEN);
-#endif
-
-#if USE_DMAC || USE_XDMAC || USE_DMAC_MANAGER
+#else
 	spi_rx_dma_enable();
 	spi_tx_dma_enable();
 #endif
@@ -1643,19 +1633,10 @@ static void spi_rx_dma_setup(void *buf, uint32_t transferLength) noexcept
  */
 void WiFiInterface::spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept
 {
-#if USE_PDC
-	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS | PERIPH_PTCR_RXTDIS);
-	spi_rx_dma_setup(&bufferIn, dataInSize + sizeof(MessageHeaderEspToSam));
-	spi_tx_dma_setup(&bufferOut, dataOutSize + sizeof(MessageHeaderSamToEsp));
-#endif
-
-#if USE_DMAC || USE_XDMAC || USE_DMAC_MANAGER
 	spi_dma_disable();					// if we don't do this we get strange crashes on the Duet 3 Mini
 	DisableSpi();
 	spi_rx_dma_setup(bufferIn, dataInSize + sizeof(MessageHeaderEspToSam));
 	spi_tx_dma_setup(bufferOut, dataOutSize + sizeof(MessageHeaderSamToEsp));
-#endif
-
 	spi_dma_enable();
 }
 
