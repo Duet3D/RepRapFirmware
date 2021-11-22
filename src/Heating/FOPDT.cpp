@@ -317,7 +317,7 @@ float FopDt::CorrectPwmForVoltage(float requiredPwm, float actualVoltage) const 
 	{
 		requiredPwm *= fsquare(standardVoltage/actualVoltage);
 	}
-	return max<float>(requiredPwm, maxPwm);
+	return min<float>(requiredPwm, maxPwm);
 }
 
 float FopDt::GetPwmCorrectionForFan(float temperatureRise, float fanPwmChange) const noexcept
