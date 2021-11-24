@@ -1363,8 +1363,9 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 			{
 				// Write a G92 command to say where the head is. This is useful if we can't Z-home the printer with a print on the bed and the Z steps/mm is high.
 				// The paused coordinates include any tool offsets and baby step offsets, so remove those.
-				// Also ensure that no tool is selected, in case config.g selects one and it has an offset.
-				buf.copy("T-1 P0\nG92");
+				// We used to send T-1 here ensure that no tool is selected, in case config.g selects one and it has an offset.
+				// We no longer do that because on some tool changers it is possible to home X and Y with a tool loaded.
+				buf.copy("G92");
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
 					const float totalOffset = currentBabyStepOffsets[axis] - GetCurrentToolOffset(axis);
