@@ -1088,6 +1088,8 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 			}
 		}
 
+		reprap.MoveUpdated();
+
 #if SUPPORT_CAN_EXPANSION
 		return max(rslt, CanInterface::SetRemotePressureAdvance(canDriversToUpdate, reply));
 #else
