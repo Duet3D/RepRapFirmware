@@ -30,16 +30,15 @@ constexpr ObjectModelTableEntry FopDt::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. FopDt members
 	{ "coolingExp",			OBJECT_MODEL_FUNC(self->coolingRateExponent, 1),									ObjectModelEntryFlags::none },
+	{ "coolingRate",		OBJECT_MODEL_FUNC(self->basicCoolingRate, 3),										ObjectModelEntryFlags::none },
 	{ "deadTime",			OBJECT_MODEL_FUNC(self->deadTime, 1),												ObjectModelEntryFlags::none },
 	{ "enabled",			OBJECT_MODEL_FUNC(self->enabled),													ObjectModelEntryFlags::none },
-//	{ "gain",				OBJECT_MODEL_FUNC(self->GetGainFanOff(), 1),										ObjectModelEntryFlags::none },	// legacy, to be removed
+	{ "fanCoolingRate",		OBJECT_MODEL_FUNC(self->fanCoolingRate, 3),											ObjectModelEntryFlags::none },
 	{ "heatingRate",		OBJECT_MODEL_FUNC(self->heatingRate, 3),											ObjectModelEntryFlags::none },
 	{ "inverted",			OBJECT_MODEL_FUNC(self->inverted),													ObjectModelEntryFlags::none },
 	{ "maxPwm",				OBJECT_MODEL_FUNC(self->maxPwm, 2),													ObjectModelEntryFlags::none },
 	{ "pid",				OBJECT_MODEL_FUNC(self, 1),															ObjectModelEntryFlags::none },
 	{ "standardVoltage",	OBJECT_MODEL_FUNC(self->standardVoltage, 1),										ObjectModelEntryFlags::none },
-//	{ "timeConstant",		OBJECT_MODEL_FUNC(self->GetTimeConstantFanOff(), 1),								ObjectModelEntryFlags::none },	// legacy, to be removed
-//	{ "timeConstantFansOn",	OBJECT_MODEL_FUNC(self->GetTimeConstantFanOn(), 1),									ObjectModelEntryFlags::none },	// legacy, to be removed
 
 	// 1. PID members
 	{ "d",					OBJECT_MODEL_FUNC(self->loadChangeParams.tD * self->loadChangeParams.kP, 1),		ObjectModelEntryFlags::none },
@@ -49,7 +48,7 @@ constexpr ObjectModelTableEntry FopDt::objectModelTable[] =
 	{ "used",				OBJECT_MODEL_FUNC(self->usePid),													ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 8, 5 };
+constexpr uint8_t FopDt::objectModelTableDescriptor[] = { 2, 10, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(FopDt)
 
