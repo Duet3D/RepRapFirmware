@@ -470,7 +470,19 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 		const float drev = ((dda.directionVector[Z_AXIS] * fastSqrtf(params.a2plusb2 * params.dparams->GetDiagonalSquared(drive) - fsquare(A * dda.directionVector[Y_AXIS] - B * dda.directionVector[X_AXIS])))
 							- aAplusbB)/params.a2plusb2;
 		mp.delta.reverseStartDistance = drev;
-		if (drev > 0.0 && drev < dda.totalDistance)								// if the reversal point is within range
+		if (drev <= 0.0)
+		{
+			// No reversal, going down
+			reverseStartStep = totalSteps + 1;
+			direction = false;
+		}
+		else if (drev >= dda.totalDistance)
+		{
+			// No reversal, going up
+			reverseStartStep = totalSteps + 1;
+			direction = true;
+		}
+		else																	// the reversal point is within range
 		{
 			// Calculate how many steps we need to move up before reversing
 			const float hrev = dda.directionVector[Z_AXIS] * drev + fastSqrtf(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - params.a2plusb2 * fsquare(drev));
@@ -516,12 +528,6 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 					totalSteps = (2 * (uint32_t)numStepsUp) + totalSteps;
 				}
 			}
-		}
-		else
-		{
-			// No reversal
-			reverseStartStep = totalSteps + 1;
-			direction = (drev >= 0.0);
 		}
 	}
 
