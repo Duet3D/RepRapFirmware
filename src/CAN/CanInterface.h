@@ -72,6 +72,10 @@ namespace CanInterface
 #if SUPPORT_REMOTE_COMMANDS
 	bool InExpansionMode() noexcept;
 	void SwitchToExpansionMode(CanAddress addr) noexcept;
+
+	void SendAnnounce(CanMessageBuffer *buf) noexcept;
+	void RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *format, va_list vargs) noexcept;
+	void MainBoardAcknowledgedAnnounce() noexcept;
 #endif
 
 	CanRequestId AllocateRequestId(CanAddress destination, CanMessageBuffer *buf) noexcept;

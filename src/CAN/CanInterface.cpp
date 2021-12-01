@@ -30,6 +30,10 @@
 # include "SBC/SbcInterface.h"
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <Version.h>
+#endif
+
 #include <memory>
 
 #define SUPPORT_CAN		1				// needed by CanDevice.h
@@ -95,6 +99,7 @@ static uint8_t currentTimeSyncMarker = 0xFF;
 
 #if SUPPORT_REMOTE_COMMANDS
 static bool inExpansionMode = false;
+static bool mainBoardAcknowledgedAnnounce = false;
 #endif
 
 //#define CAN_DEBUG
@@ -166,7 +171,7 @@ constexpr auto TxBufferIndexBroadcast = CanDevice::TxBufferNumber::buffer4;
 #if USE_TX_FIFO
 constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::fifo;				// we send lots of movement messages so use the FIFO for them
 #else
-constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::buffer5;				// we send lots of movement messages so use the FIFO for them
+constexpr auto TxBufferIndexMotion = CanDevice::TxBufferNumber::buffer5;
 #endif
 
 // Receive buffer/FIFO usage. All dedicated buffer numbers must be < Can0Config.numRxBuffers.
@@ -220,17 +225,6 @@ static void InitReceiveFilters() noexcept
 										(CanId::BoardAddressMask << CanId::DstAddressShift) | CanId::ResponseBit);
 # endif
 }
-
-#if SUPPORT_REMOTE_COMMANDS
-
-static void ReInit() noexcept
-{
-	can0dev->Disable();
-	InitReceiveFilters();
-	can0dev->Enable();
-}
-
-#endif
 
 // This is the function called by the transmit event handler when the message marker is nonzero
 void TxCallback(uint8_t marker, CanId id, uint16_t timeStamp) noexcept
@@ -317,6 +311,13 @@ bool CanInterface::InExpansionMode() noexcept
 	return inExpansionMode;
 }
 
+static void ReInit() noexcept
+{
+	can0dev->Disable();
+	InitReceiveFilters();
+	can0dev->Enable();
+}
+
 void CanInterface::SwitchToExpansionMode(CanAddress addr) noexcept
 {
 	TaskCriticalSectionLocker lock;
@@ -325,6 +326,43 @@ void CanInterface::SwitchToExpansionMode(CanAddress addr) noexcept
 	inExpansionMode = true;
 	reprap.GetGCodes().SwitchToExpansionMode();
 	ReInit();										// reset the CAN filters to account for our new CAN address
+}
+
+// Send an announcement message if we haven't had an announce acknowledgement from a main board. On return the buffer is available to use again.
+void CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
+{
+	if (inExpansionMode && !mainBoardAcknowledgedAnnounce)
+	{
+		auto msg = buf->SetupBroadcastMessage<CanMessageAnnounceNew>(myAddress);
+		msg->timeSinceStarted = millis();
+		msg->numDrivers = NumDirectDrivers;
+		msg->zero = 0;
+		memcpy(msg->uniqueId, reprap.GetPlatform().GetUniqueId().GetRaw(), sizeof(msg->uniqueId));
+		// Note, board type name, firmware version, firmware date and firmware time are limited to 43 characters in the new
+		// We use vertical-bar to separate the three fields: board type, firmware version, date/time
+		SafeSnprintf(msg->boardTypeAndFirmwareVersion, ARRAY_SIZE(msg->boardTypeAndFirmwareVersion), "%s|%s|%s%.6s", BOARD_SHORT_NAME, VERSION, IsoDate, TIME_SUFFIX);
+		buf->dataLength = msg->GetActualDataLength();
+		SendMessageNoReplyNoFree(buf);
+	}
+}
+
+// Send an event. The text will be truncated if it is longer than 55 characters.
+void CanInterface::RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *format, va_list vargs) noexcept
+{
+	CanMessageBuffer buf(nullptr);
+	auto msg = buf.SetupStatusMessage<CanMessageEvent>(CanInterface::GetCanAddress(), CanId::MasterAddress);
+	msg->eventType = EventType::heater_fault;
+	msg->deviceNumber = device;
+	msg->eventParam = param;
+	msg->zero = 0;
+	SafeVsnprintf(msg->text, ARRAY_SIZE(msg->text), format, vargs);
+	buf.dataLength = msg->GetActualDataLength();
+	CanInterface::SendMessageNoReplyNoFree(&buf);
+}
+
+void CanInterface::MainBoardAcknowledgedAnnounce() noexcept
+{
+	mainBoardAcknowledgedAnnounce = true;
 }
 
 #endif
@@ -1230,18 +1268,28 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 
 void CanInterface::Diagnostics(MessageType mtype) noexcept
 {
-	unsigned int messagesQueuedForSending, messagesReceived, messagesLost, busOffCount;
-	can0dev->GetAndClearStats(messagesQueuedForSending, messagesReceived, messagesLost, busOffCount);
-	reprap.GetPlatform().MessageF(mtype,
-				"=== CAN ===\nMessages queued %u, received %u, lost %u, longest wait %" PRIu32 "ms for reply type %u"
-				", peak Tx sync delay %" PRIu32
+	Platform& p = reprap.GetPlatform();
+	p.Message(mtype, "=== CAN ===\n");
+	// If the user runs M122 after an emergency stop, can0dev will be null
+	if (can0dev == nullptr)
+	{
+		p.Message(mtype, "Disabled\n");
+	}
+	else
+	{
+		unsigned int messagesQueuedForSending, messagesReceived, messagesLost, busOffCount;
+		can0dev->GetAndClearStats(messagesQueuedForSending, messagesReceived, messagesLost, busOffCount);
+		p.MessageF(mtype, "Messages queued %u, received %u, lost %u, boc %u\n", messagesQueuedForSending, messagesReceived, messagesLost, busOffCount);
+	}
+
+	p.MessageF(mtype,
+				"Longest wait %" PRIu32 "ms for reply type %u, peak Tx sync delay %" PRIu32
 				", free buffers %u (min %u)"
 	//debug
 				", ts %u/%u/%u"
 	//end debug
 				"\n",
-					messagesQueuedForSending, messagesReceived, messagesLost, longestWaitTime, longestWaitMessageType,
-					peakTimeSyncTxDelay,
+					longestWaitTime, longestWaitMessageType, peakTimeSyncTxDelay,
 					CanMessageBuffer::GetFreeBuffers(), CanMessageBuffer::GetAndClearMinFreeBuffers()
 	//debug
 					, timeSyncMessagesSent, goodTimeStamps, badTimeStamps
