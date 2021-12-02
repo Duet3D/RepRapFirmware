@@ -752,12 +752,13 @@ bool FileInfoParser::FindPrintTime(const char* bufp) noexcept
 	static const char* const PrintTimeStrings[] =
 	{
 		// Note: if a string in this table is a leading or embedded substring of another, the longer one must come first
-		" estimated printing time (normal mode)",	// slic3r PE later versions	"; estimated printing time (normal mode) = 1h 5m 24s"
-		" estimated printing time",					// slic3r PE older versions	"; estimated printing time = 1h 5m 24s"
-		";TIME",									// Cura						";TIME:38846"
-		" Build time",								// S3D						";   Build time: 0 hours 42 minutes"
-		" Build Time",								// KISSlicer				"; Estimated Build Time:   332.83 minutes"
-													// also KISSSlicer 2 alpha	"; Calculated-during-export Build Time: 130.62 minutes"
+		" estimated printing time (normal mode)",	// slic3r PE later versions			"; estimated printing time (normal mode) = 2d 1h 5m 24s"
+		" estimated printing time",					// slic3r PE older versions			"; estimated printing time = 1h 5m 24s"
+		";TIME",									// Cura								";TIME:38846"
+		" Build time",								// S3D								";   Build time: 0 hours 42 minutes"
+													// also REALvisionCore/F3 Reactor	"; Build time: 2:11:47" (we don't currently parse this correctly)
+		" Build Time",								// KISSlicer						"; Estimated Build Time:   332.83 minutes"
+													// also KISSSlicer 2 alpha			"; Calculated-during-export Build Time: 130.62 minutes"
 		";Print Time:",								// Ideamaker
 		";PRINT.TIME:",								// Patio
 		";Print time:",								// Fusion 360
@@ -775,7 +776,7 @@ bool FileInfoParser::FindPrintTime(const char* bufp) noexcept
 				++pos;
 			}
 			const char * const q = pos;
-			float hours = 0.0, minutes = 0.0;
+			float days = 0.0, hours = 0.0, minutes = 0.0;
 			float secs = SafeStrtof(pos, &pos);
 			if (q != pos)
 			{
@@ -783,16 +784,37 @@ bool FileInfoParser::FindPrintTime(const char* bufp) noexcept
 				{
 					++pos;
 				}
+				if (*pos == 'd')
+				{
+					days = secs;
+					if (StringStartsWithIgnoreCase(pos, "day"))			// not sure if any slicer needs this, but include it j.i.c.
+					{
+						pos += 3;
+						if (*pos == 's')
+						{
+							++pos;
+						}
+					}
+					else
+					{
+						++pos;
+					}
+					secs = SafeStrtof(pos, &pos);
+					while (*pos == ' ' || *pos == ':')
+					{
+						++pos;
+					}
+				}
 				if (*pos == 'h')
 				{
 					hours = secs;
-					if (StringStartsWithIgnoreCase(pos, "hours"))		// S3D
-					{
-						pos += 5;
-					}
-					else if (StringStartsWithIgnoreCase(pos, "hour"))	// S3D now prints "1 hour 42 minutes"
+					if (StringStartsWithIgnoreCase(pos, "hour"))		// S3D
 					{
 						pos += 4;
+						if (*pos == 's')
+						{
+							++pos;
+						}
 					}
 					else
 					{
@@ -807,13 +829,13 @@ bool FileInfoParser::FindPrintTime(const char* bufp) noexcept
 				if (*pos == 'm')
 				{
 					minutes = secs;
-					if (StringStartsWithIgnoreCase(pos, "minutes"))
-					{
-						pos += 7;
-					}
-					else if (StringStartsWithIgnoreCase(pos, "minute"))	// assume S3D also prints "1 minute"
+					if (StringStartsWithIgnoreCase(pos, "minute"))
 					{
 						pos += 6;
+						if (*pos == 's')
+						{
+							++pos;
+						}
 					}
 					else if (StringStartsWithIgnoreCase(pos, "min"))	// Fusion 360
 					{
@@ -826,7 +848,7 @@ bool FileInfoParser::FindPrintTime(const char* bufp) noexcept
 					secs = SafeStrtof(pos, &pos);
 				}
 			}
-			parsedFileInfo.printTime = lrintf((hours * 60.0 + minutes) * 60.0 + secs);
+			parsedFileInfo.printTime = lrintf(((days * 24.0 + hours) * 60.0 + minutes) * 60.0 + secs);
 			return true;
 		}
 	}
