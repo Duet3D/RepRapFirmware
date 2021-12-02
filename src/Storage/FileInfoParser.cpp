@@ -756,7 +756,7 @@ bool FileInfoParser::FindPrintTime(const char* bufp) noexcept
 		" estimated printing time",					// slic3r PE older versions			"; estimated printing time = 1h 5m 24s"
 		";TIME",									// Cura								";TIME:38846"
 		" Build time",								// S3D								";   Build time: 0 hours 42 minutes"
-													// also REALvisionCore/F3 Reactor	"; Build time: 2:11:47" (we don't currently parse this correctly)
+													// also REALvision					"; Build time: 2:11:47"
 		" Build Time",								// KISSlicer						"; Estimated Build Time:   332.83 minutes"
 													// also KISSSlicer 2 alpha			"; Calculated-during-export Build Time: 130.62 minutes"
 		";Print Time:",								// Ideamaker
@@ -784,68 +784,83 @@ bool FileInfoParser::FindPrintTime(const char* bufp) noexcept
 				{
 					++pos;
 				}
-				if (*pos == 'd')
-				{
-					days = secs;
-					if (StringStartsWithIgnoreCase(pos, "day"))			// not sure if any slicer needs this, but include it j.i.c.
-					{
-						pos += 3;
-						if (*pos == 's')
-						{
-							++pos;
-						}
-					}
-					else
-					{
-						++pos;
-					}
-					secs = SafeStrtof(pos, &pos);
-					while (*pos == ' ' || *pos == ':')
-					{
-						++pos;
-					}
-				}
-				if (*pos == 'h')
-				{
-					hours = secs;
-					if (StringStartsWithIgnoreCase(pos, "hour"))		// S3D
-					{
-						pos += 4;
-						if (*pos == 's')
-						{
-							++pos;
-						}
-					}
-					else
-					{
-						++pos;
-					}
-					secs = SafeStrtof(pos, &pos);
-					while (*pos == ' ' || *pos == ':')					// Fusion 360 gives e.g. ";Print time: 40m:36s"
-					{
-						++pos;
-					}
-				}
-				if (*pos == 'm')
+				if (*pos == ':')											// special code for REALvision
 				{
 					minutes = secs;
-					if (StringStartsWithIgnoreCase(pos, "minute"))
+					secs = SafeStrtof(pos + 1, &pos);
+					if (*pos == ':')
 					{
-						pos += 6;
-						if (*pos == 's')
+						hours = minutes;
+						minutes = secs;
+						secs = SafeStrtof(pos + 1, &pos);
+						// I am assuming that it stops at hours
+					}
+				}
+				else
+				{
+					if (*pos == 'd')
+					{
+						days = secs;
+						if (StringStartsWithIgnoreCase(pos, "day"))			// not sure if any slicer needs this, but include it j.i.c.
+						{
+							pos += 3;
+							if (*pos == 's')
+							{
+								++pos;
+							}
+						}
+						else
+						{
+							++pos;
+						}
+						secs = SafeStrtof(pos, &pos);
+						while (*pos == ' ' || *pos == ':')
 						{
 							++pos;
 						}
 					}
-					else if (StringStartsWithIgnoreCase(pos, "min"))	// Fusion 360
+					if (*pos == 'h')
 					{
-						pos += 3;
+						hours = secs;
+						if (StringStartsWithIgnoreCase(pos, "hour"))		// S3D
+						{
+							pos += 4;
+							if (*pos == 's')
+							{
+								++pos;
+							}
+						}
+						else
+						{
+							++pos;
+						}
+						secs = SafeStrtof(pos, &pos);
+						while (*pos == ' ' || *pos == ':')					// Fusion 360 gives e.g. ";Print time: 40m:36s"
+						{
+							++pos;
+						}
 					}
-					else
+					if (*pos == 'm')
 					{
-						++pos;
+						minutes = secs;
+						if (StringStartsWithIgnoreCase(pos, "minute"))
+						{
+							pos += 6;
+							if (*pos == 's')
+							{
+								++pos;
+							}
+						}
+						else if (StringStartsWithIgnoreCase(pos, "min"))	// Fusion 360
+						{
+							pos += 3;
+						}
+						else
+						{
+							++pos;
+						}
+						secs = SafeStrtof(pos, &pos);
 					}
-					secs = SafeStrtof(pos, &pos);
 				}
 			}
 			parsedFileInfo.printTime = lrintf(((days * 24.0 + hours) * 60.0 + minutes) * 60.0 + secs);
