@@ -296,7 +296,7 @@ void PolarKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 // The speeds in Cartesian space have already been limited.
 void PolarKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
 {
-	int32_t turntableMovement = labs(dda.DriveCoordinates()[1] - dda.GetPrevious()->DriveCoordinates()[1]);
+	int32_t turntableMovement = dda.DriveCoordinates()[1] - dda.GetPrevious()->DriveCoordinates()[1];
 	if (turntableMovement != 0)
 	{
 		const float stepsPerDegree = reprap.GetPlatform().DriveStepsPerUnit(1);
@@ -314,7 +314,7 @@ void PolarKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalise
 		}
 		if (turntableMovement != 0)
 		{
-			const float stepRatio = dda.GetTotalDistance() * stepsPerDegree/abs(turntableMovement);
+			const float stepRatio = dda.GetTotalDistance() * stepsPerDegree/labs(turntableMovement);
 			dda.LimitSpeedAndAcceleration(stepRatio * maxTurntableSpeed, stepRatio * maxTurntableAcceleration);
 		}
 	}
