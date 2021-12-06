@@ -159,8 +159,8 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 
 			// Allocate the extra DMs
 			DriveMovement::InitialAllocate(numDMsWanted);		// this will only create any extra ones wanted
-			reprap.MoveUpdated();
 		}
+		reprap.MoveUpdated();
 	}
 	else
 	{
