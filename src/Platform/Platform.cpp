@@ -3866,12 +3866,13 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
 #elif defined(DUET_NG)
+	// This is the string that the Duet 2 ATE uses to identify the board. The version number must be at the end.
 	case BoardType::DuetWiFi_10:			return "Duet WiFi 1.0 or 1.01";
 	case BoardType::DuetWiFi_102:			return "Duet WiFi 1.02 or later";
 	case BoardType::DuetEthernet_10:		return "Duet Ethernet 1.0 or 1.01";
 	case BoardType::DuetEthernet_102:		return "Duet Ethernet 1.02 or later";
-	case BoardType::Duet2SBC_10:			return "Duet 2 1.0 or 1.01 + SBC";
-	case BoardType::Duet2SBC_102:			return "Duet 2 1.02 or later + SBC";
+	case BoardType::Duet2SBC_10:			return "Duet 2 + SBC 1.0 or 1.01";
+	case BoardType::Duet2SBC_102:			return "Duet 2 + SBC 1.02 or later";
 #elif defined(DUET_M)
 	case BoardType::DuetM_10:				return "Duet Maestro 1.0";
 #elif defined(DUET_06_085)
