@@ -23,10 +23,6 @@
 
 namespace FirmwareUpdater
 {
-	const unsigned int WifiFirmwareModule = 1;
-	// Module 2 used to be the DWC binary file but is no longer used
-	const unsigned int WifiExternalFirmwareModule = 3;
-
 	// Check that the prerequisites are satisfied.
 	// Return true if yes, else print a message and return false.
 	GCodeResult CheckFirmwareUpdatePrerequisites(
