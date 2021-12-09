@@ -15,7 +15,6 @@
 #define FIRMWARE_NAME			"RepRapFirmware for Duet 2 Maestro"
 #define DEFAULT_BOARD_TYPE		 BoardType::DuetM_10
 
-constexpr size_t NumFirmwareUpdateModules = 5;		// 0 = mainboard, 4 = PanelDue, values in between unused
 #define IAP_FIRMWARE_FILE		"DuetMaestroFirmware.bin"
 #define IAP_UPDATE_FILE			"Duet2_SDiap32_Maestro.bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20018000;

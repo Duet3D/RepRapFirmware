@@ -25,7 +25,6 @@
 # error Unknown board
 #endif
 
-constexpr size_t NumFirmwareUpdateModules = 1;		// 1 module
 #define IAP_FIRMWARE_FILE		"PccbFirmware.bin"
 #define IAP_UPDATE_FILE			"PccbIAP.bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20010000;
