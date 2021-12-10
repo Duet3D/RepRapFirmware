@@ -56,7 +56,7 @@ public:
 	TemperatureError GetLastError() const noexcept { return lastRealError; }
 
 	// Configure the sensor name, if it is provided
-	void TryConfigureSensorName(GCodeBuffer& gb, bool& seen);
+	void TryConfigureSensorName(GCodeBuffer& gb, bool& seen) THROWS(GCodeException);
 
 	// Set the name - normally called only once
 	void SetSensorName(const char *newName) noexcept;

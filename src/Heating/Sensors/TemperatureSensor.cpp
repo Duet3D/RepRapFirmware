@@ -92,7 +92,7 @@ void TemperatureSensor::SetSensorName(const char *newName) noexcept
 }
 
 // Default implementation of Configure, for sensors that have no configurable parameters
-GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
+GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
 	TryConfigureSensorName(gb, changed);
 	if (!changed && !gb.Seen('Y'))
@@ -129,7 +129,7 @@ void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 }
 
 // Configure then heater name, if it is provided
-void TemperatureSensor::TryConfigureSensorName(GCodeBuffer& gb, bool& seen)
+void TemperatureSensor::TryConfigureSensorName(GCodeBuffer& gb, bool& seen) THROWS(GCodeException)
 {
 	String<MaxHeaterNameLength> buf;
 	bool localSeen = false;
