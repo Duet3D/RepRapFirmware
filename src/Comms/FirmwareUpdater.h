@@ -22,7 +22,7 @@ namespace FirmwareUpdater
 #if HAS_AUX_DEVICES
 		PanelDueFirmwareModule = 4,
 #endif
-		UpdateModuleMax
+		NumUpdateModules
 	};
 
 	GCodeResult CheckFirmwareUpdatePrerequisites(
