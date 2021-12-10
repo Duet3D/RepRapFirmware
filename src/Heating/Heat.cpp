@@ -358,6 +358,11 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 		// Check whether it is time to poll sensors and PIDs and send regular messages
 		if ((int32_t)(millis() - nextWakeTime) >= 0)
 		{
+#if SUPPORT_REMOTE_COMMANDS
+			// Announce ourselves to the main board, if it hasn't acknowledged us already
+			CanInterface::SendAnnounce(&buf);
+#endif
+
 			// Walk the sensor list and poll all sensors. The list is in increasing sensor number order.
 			{
 #if SUPPORT_CAN_EXPANSION
@@ -1082,16 +1087,24 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROW
 		}
 
 		bool changed = false;
-		const GCodeResult rslt = newSensor->Configure(gb, reply, changed);
-		if (rslt == GCodeResult::ok)
+		try
 		{
-			InsertSensor(newSensor);
+			const GCodeResult rslt = newSensor->Configure(gb, reply, changed);
+			if (rslt == GCodeResult::ok)
+			{
+				InsertSensor(newSensor);
+			}
+			else
+			{
+				delete newSensor;
+			}
+			return rslt;
 		}
-		else
+		catch (const GCodeException&)
 		{
 			delete newSensor;
+			throw;
 		}
-		return rslt;
 	}
 
 	// Modifying or reporting on an existing sensor
