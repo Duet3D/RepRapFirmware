@@ -1863,4 +1863,14 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 	return true;
 }
 
-// End
+#if !HAS_MASS_STORAGE && !HAS_EMBEDDED_FILES && defined(DUET_NG)
+
+// Function called by RepRap.cpp to enable PanelDue by default in the Duet 2 SBC build
+void GCodes::SetAux0CommsProperties(uint32_t mode) const noexcept
+{
+	auxGCode->SetCommsProperties(mode);
+}
+
+#endif
+
+	// End

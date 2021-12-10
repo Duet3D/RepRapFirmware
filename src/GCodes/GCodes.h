@@ -281,6 +281,11 @@ public:
 # endif
 #endif
 
+#if !HAS_MASS_STORAGE && !HAS_EMBEDDED_FILES && defined(DUET_NG)
+	// Function called by RepRap.cpp to enable PanelDue by default in the Duet 2 SBC build
+	void SetAux0CommsProperties(uint32_t mode) const noexcept;
+#endif
+
 #if SUPPORT_REMOTE_COMMANDS
 	void SwitchToExpansionMode() noexcept;
 	void SetRemotePrinting(bool isPrinting) noexcept { isRemotePrinting = isPrinting; }
