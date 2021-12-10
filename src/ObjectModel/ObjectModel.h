@@ -206,15 +206,12 @@ struct ExpressionValue
 enum class ObjectModelEntryFlags : uint8_t
 {
 	// none, live and verbose are alternatives occupying the bottom 2 bits
-	none = 0,				// nothing special
-	live = 1,				// fast changing data, included in common status response
-	verbose = 2,			// omit reporting this value by default
-
-	// canAlter can be or'ed in
-	canAlter = 4,			// we can alter this value
-	liveCanAlter = 5,		// we can alter this value
-
-	obsolete = 8			// entry is deprecated and should not be used any more
+	none = 0,					// nothing special
+	live = 1,					// fast changing data, included in common status response
+	important = 2,				// important when it is present, so include in unsolicited responses to PanelDue
+	liveOrImportantMask = 3,	// mask to select values flagged as either live or important
+	verbose = 4,				// omit reporting this value by default
+	obsolete = 8				// entry is deprecated and should not be used any more
 };
 
 // Context passed to object model functions
@@ -245,6 +242,7 @@ public:
 	bool WantArrayLength() const noexcept { return wantArrayLength; }
 	bool WantExists() const noexcept { return wantExists; }
 	bool ShouldIncludeNulls() const noexcept { return includeNulls; }
+	bool ShouldIncludeImportant() const noexcept { return includeImportant; }
 	uint64_t GetStartMillis() const { return startMillis; }
 	size_t GetInitialBufferOffset() const noexcept { return initialBufOffset; }
 
@@ -270,13 +268,14 @@ private:
 	int line;
 	int column;
 	unsigned int shortForm : 1,
-				onlyLive : 1,
-				includeVerbose : 1,
 				wantArrayLength : 1,
+				wantExists : 1,
+				includeNonLive : 1,
+				includeImportant : 1,
 				includeNulls : 1,
-				includeObsolete : 1,
-				obsoleteFieldQueried : 1,
-				wantExists : 1;
+				excludeVerbose : 1,
+				excludeObsolete : 1,
+				obsoleteFieldQueried : 1;
 };
 
 // Entry to describe an array of objects or values. These must be brace-initializable into flash memory.

@@ -308,7 +308,10 @@ ObjectModel::ObjectModel() noexcept
 ObjectExplorationContext::ObjectExplorationContext(bool wal, const char *reportFlags, unsigned int initialMaxDepth, size_t initialBufferOffset) noexcept
 	: startMillis(millis()), initialBufOffset(initialBufferOffset), maxDepth(initialMaxDepth), currentDepth(0), startElement(0), nextElement(-1), numIndicesProvided(0), numIndicesCounted(0),
 	  line(-1), column(-1),
-	  shortForm(false), onlyLive(false), includeVerbose(false), wantArrayLength(wal), includeNulls(false), includeObsolete(false), obsoleteFieldQueried(false), wantExists(false)
+	  shortForm(false), wantArrayLength(wal), wantExists(false),
+	  includeNonLive(true), includeImportant(false), includeNulls(false),
+	  excludeVerbose(true), excludeObsolete(true),
+	  obsoleteFieldQueried(false)
 {
 	while (true)
 	{
@@ -317,19 +320,22 @@ ObjectExplorationContext::ObjectExplorationContext(bool wal, const char *reportF
 		case '\0':
 			return;
 		case 'v':
-			includeVerbose = true;
+			excludeVerbose = false;
 			break;
 		case 's':
 			shortForm = true;
 			break;
 		case 'f':
-			onlyLive = true;
+			includeNonLive = false;
+			break;
+		case 'i':
+			includeImportant = true;
 			break;
 		case 'n':
 			includeNulls = true;
 			break;
 		case 'o':
-			includeObsolete = true;
+			excludeObsolete = false;
 			break;
 		case 'd':
 			maxDepth = 0;
@@ -361,7 +367,10 @@ ObjectExplorationContext::ObjectExplorationContext(bool wal, const char *reportF
 ObjectExplorationContext::ObjectExplorationContext(bool wal, bool wex, int p_line, int p_col) noexcept
 	: startMillis(millis()), initialBufOffset(0), maxDepth(99), currentDepth(0), startElement(0), nextElement(-1), numIndicesProvided(0), numIndicesCounted(0),
 	  line(p_line), column(p_col),
-	  shortForm(false), onlyLive(false), includeVerbose(true), wantArrayLength(wal), includeNulls(false), includeObsolete(true), obsoleteFieldQueried(false), wantExists(wex)
+	  shortForm(false), wantArrayLength(wal), wantExists(wex),
+	  includeNonLive(true), includeImportant(false), includeNulls(false),
+	  excludeVerbose(false), excludeObsolete(false),
+	  obsoleteFieldQueried(false)
 {
 }
 
@@ -385,9 +394,12 @@ int32_t ObjectExplorationContext::GetLastIndex() const THROWS(GCodeException)
 
 bool ObjectExplorationContext::ShouldReport(const ObjectModelEntryFlags f) const noexcept
 {
-	return (!onlyLive || ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::live) != 0)
-		&& (includeVerbose || ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::verbose) == 0)
-		&& (includeObsolete || ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::obsolete) == 0);
+	const bool wanted = includeNonLive
+					 || ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::live) != 0
+					 || (includeImportant && ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::important) != 0);
+	return wanted
+		&& (!excludeVerbose  || ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::verbose) == 0)
+		&& (!excludeObsolete || ((uint8_t)f & (uint8_t)ObjectModelEntryFlags::obsolete) == 0);
 }
 
 GCodeException ObjectExplorationContext::ConstructParseException(const char *msg) const noexcept
@@ -895,7 +907,9 @@ bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationCon
 {
 	const char * nextElement = ObjectModel::GetNextElement(filter);
 	const ExpressionValue val = func(self, context);
-	if (val.GetType() != TypeCode::None || context.ShouldIncludeNulls())
+	// We include nulls if either the "include nulls" flag is set or the "include important" flag is set and the field is flagged important.
+	// The latter is so that field state.messageBox gets reported to PanelDue even if null when the "important" flag is set, so that PanelDue knows when a message has been cleared.
+	if (val.GetType() != TypeCode::None || context.ShouldIncludeNulls() || (context.ShouldIncludeImportant() && ((uint8_t)flags & (uint8_t)ObjectModelEntryFlags::important)))
 	{
 		if (*filter == 0)
 		{

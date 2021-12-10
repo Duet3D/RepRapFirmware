@@ -341,7 +341,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "logLevel",				OBJECT_MODEL_FUNC(self->platform->GetLogLevel()),						ObjectModelEntryFlags::none },
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
 	{ "macroRestarted",			OBJECT_MODEL_FUNC(self->gCodes->GetMacroRestarted()),					ObjectModelEntryFlags::none },
-	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::none },
+	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::important },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
 	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetNewToolNumber()),			ObjectModelEntryFlags::live },
 #if HAS_VOLTAGE_MONITOR
@@ -358,12 +358,12 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "frequency",				OBJECT_MODEL_FUNC((int32_t)self->beepFrequency),						ObjectModelEntryFlags::none },
 
 	// 5. MachineModel.state.messageBox (FIXME acquire MutexLocker when accessing the following)
-	{ "axisControls",			OBJECT_MODEL_FUNC((int32_t)self->mbox.controls.GetRaw()),				ObjectModelEntryFlags::none },
-	{ "message",				OBJECT_MODEL_FUNC(self->mbox.message.c_str()),							ObjectModelEntryFlags::none },
-	{ "mode",					OBJECT_MODEL_FUNC((int32_t)self->mbox.mode),							ObjectModelEntryFlags::none },
-	{ "seq",					OBJECT_MODEL_FUNC((int32_t)self->mbox.seq),								ObjectModelEntryFlags::none },
-	{ "timeout",				OBJECT_MODEL_FUNC((int32_t)self->mbox.timeout),							ObjectModelEntryFlags::none },
-	{ "title",					OBJECT_MODEL_FUNC(self->mbox.title.c_str()),							ObjectModelEntryFlags::none },
+	{ "axisControls",			OBJECT_MODEL_FUNC((int32_t)self->mbox.controls.GetRaw()),				ObjectModelEntryFlags::important },
+	{ "message",				OBJECT_MODEL_FUNC(self->mbox.message.c_str()),							ObjectModelEntryFlags::important },
+	{ "mode",					OBJECT_MODEL_FUNC((int32_t)self->mbox.mode),							ObjectModelEntryFlags::important },
+	{ "seq",					OBJECT_MODEL_FUNC((int32_t)self->mbox.seq),								ObjectModelEntryFlags::important },
+	{ "timeout",				OBJECT_MODEL_FUNC((int32_t)self->mbox.timeout),							ObjectModelEntryFlags::important },
+	{ "title",					OBJECT_MODEL_FUNC(self->mbox.title.c_str()),							ObjectModelEntryFlags::important },
 
 	// 6. MachineModel.seqs
 	{ "boards",					OBJECT_MODEL_FUNC((int32_t)self->boardsSeq),							ObjectModelEntryFlags::live },
@@ -627,6 +627,13 @@ void RepRap::Init() noexcept
 		sbcInterface->Init();
 # endif
 	}
+#elif defined(DUET_NG)
+	// It's the SBC build of Duet 2 firmware. Enable the PanelDue port so that the ATE can test it.
+	platform->SetBaudRate(1, 57600);
+	platform->SetCommsProperties(1, 1);
+	gCodes->SetAux0CommsProperties(1);
+	platform->SetAuxRaw(0, false);
+	platform->EnableAux(0);
 #endif
 
 #if HAS_SBC_INTERFACE
