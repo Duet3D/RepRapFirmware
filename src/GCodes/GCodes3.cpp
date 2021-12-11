@@ -1166,7 +1166,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 			for (size_t i = 0; i < numUpdateModules; ++i)
 			{
 				uint32_t t = modulesToUpdate[i];
-				if (t >= NumFirmwareUpdateModules)
+				if (t >= FirmwareUpdater::NumUpdateModules)
 				{
 					reply.printf("Invalid module number '%" PRIu32 "'\n", t);
 					firmwareUpdateModuleMap.Clear();

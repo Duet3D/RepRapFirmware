@@ -544,7 +544,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
 			}
 			catch (const GCodeException&) { }
-			for (unsigned int module = 1; module < NumFirmwareUpdateModules; ++module)
+			for (unsigned int module = 1; module < FirmwareUpdater::NumUpdateModules; ++module)
 			{
 				if (firmwareUpdateModuleMap.IsBitSet(module))
 				{
