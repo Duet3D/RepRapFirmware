@@ -20,8 +20,6 @@
 #define IAP_FIRMWARE_FILE		"Duet2Firmware_SBC.bin"
 #define IAP_UPDATE_FILE_SBC		"Duet2_SBCiap32_SBC.bin"
 
-constexpr size_t NumFirmwareUpdateModules = 5;		// 0 = mainboard, 4 = PanelDue, values in between unused
-
 #else
 
 #define FIRMWARE_NAME			"RepRapFirmware for Duet 2 WiFi/Ethernet"
@@ -29,8 +27,6 @@ constexpr size_t NumFirmwareUpdateModules = 5;		// 0 = mainboard, 4 = PanelDue, 
 #define IAP_FIRMWARE_FILE		"Duet2CombinedFirmware.bin"
 #define IAP_UPDATE_FILE			"Duet2_SDiap32_WiFiEth.bin"	// using the same IAP file for both Duet WiFi and Duet Ethernet
 #define WIFI_FIRMWARE_FILE		"DuetWiFiServer.bin"
-
-constexpr size_t NumFirmwareUpdateModules = 5;		// 4 modules, plus one for manual upload to WiFi module (module 2 is now unused)
 
 #endif
 
