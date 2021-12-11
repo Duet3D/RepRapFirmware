@@ -1914,7 +1914,7 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
 											ev.Set(nullptr);
 										}
 										char paramName[2] = { letter, 0 };
-										vs.InsertNew(paramName, ev, -1);
+										vs.InsertNewParameter(paramName, ev);
 									}
 								}
 							  );

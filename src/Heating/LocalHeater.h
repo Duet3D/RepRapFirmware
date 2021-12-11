@@ -66,7 +66,7 @@ private:
 	TemperatureError ReadTemperature() noexcept;			// Read and store the temperature of this heater
 	void DoTuningStep() noexcept;							// Called on each temperature sample when auto tuning
 	float GetExpectedHeatingRate() const noexcept;			// Get the minimum heating rate we expect
-	void RaiseHeaterFault(const char *format, ...) noexcept;
+	void RaiseHeaterFault(HeaterFaultType type, const char *_ecv_array format, ...) noexcept;
 
 	PwmPort ports[MaxPortsPerHeater];						// The port(s) that drive the heater
 	float temperature;										// The current temperature

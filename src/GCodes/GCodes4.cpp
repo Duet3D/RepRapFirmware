@@ -3,6 +3,7 @@
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
 #include <Platform/RepRap.h>
+#include <Platform/Event.h>
 #include <Movement/Move.h>
 #include <Tools/Tool.h>
 #include <Heating/Heat.h>
@@ -1479,6 +1480,40 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::waitingForAcknowledgement:	// finished M291 and the SBC expects a response next
 #endif
 	case GCodeState::checkError:				// we return to this state after running the retractprobe macro when there may be a stored error message
+		gb.SetState(GCodeState::normal);
+		break;
+
+	// Here when we need to execute the default action for an event because the macro file was not found. We have already sent a message and logged the event.
+	case GCodeState::processingEvent:
+		{
+			const Event::DefaultAction action = Event::GetDefaultAction();
+			if (action == Event::DefaultAction::none)
+			{
+				// Nothing more to do
+				gb.SetState(GCodeState::finishedProcessingEvent);
+			}
+			else
+			{
+				// We are going to pause
+				if (pauseState != PauseState::resuming)			// if we are resuming, wait for the resume to complete
+				{
+					if (pauseState != PauseState::notPaused)
+					{
+						gb.SetState(GCodeState::finishedProcessingEvent);	// already paused
+					}
+					else if (LockMovementAndWaitForStandstill(gb))
+					{
+						gb.SetState(GCodeState::finishedProcessingEvent);
+						DoPause(gb, qq);
+					}
+				}
+			}
+		}
+		break;
+
+	// Here when we have finished processing an event
+	case GCodeState::finishedProcessingEvent:
+		Event::FinishedProcessing();
 		gb.SetState(GCodeState::normal);
 		break;
 

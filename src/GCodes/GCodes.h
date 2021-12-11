@@ -462,6 +462,7 @@ private:
 	void DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint16_t param = 0) noexcept	// Pause the print
 		pre(resourceOwners[movementResource] == &gb);
 	void CheckForDeferredPause(GCodeBuffer& gb) noexcept;						// Check if a pause is pending, action it if so
+	void ProcessEvent(GCodeBuffer& gb) noexcept;								// Start processing a new event
 
 #if HAS_VOLTAGE_MONITOR || HAS_SMART_DRIVERS
 	bool DoEmergencyPause() noexcept;											// Do an emergency pause following loss of power or a motor stall

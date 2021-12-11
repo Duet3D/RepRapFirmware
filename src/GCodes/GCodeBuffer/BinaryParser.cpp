@@ -873,7 +873,7 @@ void BinaryParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
 				if (ev.GetType() != TypeCode::None)
 				{
 					char paramName[2] = { param->letter, 0 };
-					vs.InsertNew(paramName, ev, -1);
+					vs.InsertNewParameter(paramName, ev);
 				}
 			}
 

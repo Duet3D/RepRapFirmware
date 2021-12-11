@@ -419,6 +419,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				return;							// no reply needed
 #endif
 
+			case CanMessageType::acknowledgeAnnounce:
+				CanInterface::MainBoardAcknowledgedAnnounce();
+				return;
+
 			case CanMessageType::returnInfo:
 				requestId = buf->msg.getInfo.requestId;
 				rslt = EutGetInfo(buf->msg.getInfo, replyRef, extra);

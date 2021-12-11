@@ -12,6 +12,7 @@
 #include <Heating/Heat.h>
 #include <Movement/Move.h>
 #include <Platform/RepRap.h>
+#include <Platform/Event.h>
 #include <Tools/Tool.h>
 #include <Endstops/ZProbe.h>
 #include <PrintMonitor/PrintMonitor.h>
@@ -1863,6 +1864,37 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 	return true;
 }
 
+// Process and event. The autoPauseGCode buffer calls this when there is a new event to be processed.
+// This is a separate function because it allocates strings on the stack.
+void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
+{
+	// Get the event message
+	String<StringLength100> eventText;
+	const MessageType mt = Event::GetTextDescription(eventText.GetRef());
+	platform.Message(mt, eventText.c_str());							// tell the user about the event and log it
+
+	// Get the name of the macro file that we should look for
+	String<StringLength50> macroName;
+	Event::GetMacroFileName(macroName.GetRef());
+	if (platform.SysFileExists(macroName.c_str()))
+	{
+		// Set up the macro parameters
+		VariableSet vars;
+		Event::GetParameters(vars);
+		vars.InsertNewParameter("S", ExpressionValue(StringHandle(eventText.c_str())));
+
+		// Run the macro
+		gb.SetState(GCodeState::finishedProcessingEvent);				// cancel the event when we have finished processing it
+		if (DoFileMacro(gb, macroName.c_str(), false, AsyncSystemMacroCode, vars))
+		{
+			return;
+		}
+	}
+
+	// We didn't execute the macro, so do the default action. It may need to wait for the movement lock, so do it in a new state.
+	gb.SetState(GCodeState::processingEvent);
+}
+
 #if !HAS_MASS_STORAGE && !HAS_EMBEDDED_FILES && defined(DUET_NG)
 
 // Function called by RepRap.cpp to enable PanelDue by default in the Duet 2 SBC build
@@ -1873,4 +1905,4 @@ void GCodes::SetAux0CommsProperties(uint32_t mode) const noexcept
 
 #endif
 
-	// End
+// End

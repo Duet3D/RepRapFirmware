@@ -41,8 +41,11 @@ enum MessageType : uint32_t
 	RawMessageFlag =		 0x8000000u,	// Do not encapsulate this message
 	BinaryCodeReplyFlag =	0x10000000u,	// This message comes from a binary G-Code buffer
 	PushFlag =				0x20000000u,	// There is more to come; the message has been truncated
+
 	LogMessageLowBit =		0x40000000u,	// Log level consists of two bits this is the low bit
 	LogMessageHighBit =		0x80000000u,	// Log level consists of two bits this is the high bit
+	LogLevelMask =			0xC0000000u,	// Mask for all the log level bits
+	LogLevelShift = 30,						// How many bits we have to shift a MessageType right by to get the logging level
 
 	// Common combinations
 	NoDestinationMessage = 0u,												// A message that is going nowhere

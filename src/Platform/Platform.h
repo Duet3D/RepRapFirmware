@@ -31,7 +31,6 @@ Licence: GPL
 #include <Heating/TemperatureError.h>
 #include "OutputMemory.h"
 #include "UniqueId.h"
-#include "EventManager.h"
 #include <Storage/FileStore.h>
 #include <Storage/FileData.h>
 #include <Storage/MassStorage.h>	// must be after Pins.h because it needs NumSdCards defined
@@ -873,7 +872,6 @@ private:
 #endif
 
 	// Event handling
-	EventManager eventManager;
 	uint32_t lastDriverPollMillis;						// when we last checked the drivers and voltage monitoring
 
 #ifdef DUET3MINI

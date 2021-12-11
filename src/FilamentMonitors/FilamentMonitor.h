@@ -164,6 +164,7 @@ private:
 	bool haveIsrStepsCommanded;
 	FilamentSensorStatus lastStatus;
 #if SUPPORT_CAN_EXPANSION
+	FilamentSensorStatus lastRemoteStatus;
 	bool hasRemote;
 #endif
 };

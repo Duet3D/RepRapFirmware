@@ -12,6 +12,7 @@
 #include "HeaterMonitor.h"
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
+#include <Platform/Event.h>
 #include <Tools/Tool.h>
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -252,7 +253,7 @@ void LocalHeater::Spin() noexcept
 			badTemperatureCount++;
 			if (badTemperatureCount > MaxBadTemperatureCount)
 			{
-				RaiseHeaterFault("Temperature reading fault on heater %u: %s\n", GetHeaterNumber(), TemperatureErrorString(err));
+				RaiseHeaterFault(HeaterFaultType::failedToReadSensor, "%s", TemperatureErrorString(err));
 			}
 		}
 		// We leave lastPWM alone if we have a temporary temperature reading error
@@ -297,7 +298,7 @@ void LocalHeater::Spin() noexcept
 					else
 					{
 						const uint32_t now = millis();
-						if ((float)(now - timeSetHeating) < GetModel().GetDeadTime() * SecondsToMillis * 1.5)
+						if ((float)(now - timeSetHeating) < GetModel().GetDeadTime() * SecondsToMillis * 2)		// wait for twice the dead time before we start looking at the temperature rise
 						{
 							// Record the temperature for when we are past the dead time
 							lastTemperatureValue = temperature;
@@ -313,13 +314,14 @@ void LocalHeater::Spin() noexcept
 								// Check that we are heating fast enough, and if so, take another sample
 								const float expectedTemperatureRise = expectedRate * actualInterval;
 								const float actualTemperatureRise = temperature - lastTemperatureValue;
-								if (actualTemperatureRise < expectedTemperatureRise * 0.7)
+								if (actualTemperatureRise < expectedTemperatureRise * 0.5)
 								{
 									++heatingFaultCount;
 									if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
 									{
-										RaiseHeaterFault("Heater %u fault: at %.1f" DEGREE_SYMBOL "C temperature is rising at %.1f" DEGREE_SYMBOL "C/sec, well below the expected %.1f" DEGREE_SYMBOL "C/sec\n",
-															GetHeaterNumber(), (double)temperature, (double)(actualTemperatureRise/actualInterval), (double)expectedRate);
+										RaiseHeaterFault(HeaterFaultType::temperatureRisingTooSlowly,
+															"expected %.2f" DEGREE_SYMBOL "C/sec measured %.2f" DEGREE_SYMBOL "C/sec",
+																(double)expectedRate, (double)(actualTemperatureRise/actualInterval));
 									}
 								}
 								else
@@ -343,8 +345,9 @@ void LocalHeater::Spin() noexcept
 					++heatingFaultCount;
 					if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
 					{
-						RaiseHeaterFault("Heater %u fault: temperature excursion exceeded %.1f" DEGREE_SYMBOL "C (target %.1f" DEGREE_SYMBOL "C, actual %.1f" DEGREE_SYMBOL "C)\n",
-											GetHeaterNumber(), (double)GetMaxTemperatureExcursion(), (double)targetTemperature, (double)temperature);
+						RaiseHeaterFault(HeaterFaultType::exceededAllowedExcursion,
+											"target %.1f" DEGREE_SYMBOL "C actual %.1f" DEGREE_SYMBOL "C",
+												(double)targetTemperature, (double)temperature);
 					}
 				}
 				else if (heatingFaultCount != 0)
@@ -450,7 +453,7 @@ void LocalHeater::Spin() noexcept
 						break;
 
 					case HeaterMonitorAction::GenerateFault:
-						RaiseHeaterFault("Heater %u fault: heater monitor %u was triggered\n", GetHeaterNumber(), i);
+						RaiseHeaterFault(HeaterFaultType::monitorTriggered, "monitor %u was triggered", i);
 						break;
 
 					case HeaterMonitorAction::TemporarySwitchOff:
@@ -910,20 +913,31 @@ void LocalHeater::Suspend(bool sus) noexcept
 	}
 }
 
-void LocalHeater::RaiseHeaterFault(const char *format, ...) noexcept
+void LocalHeater::RaiseHeaterFault(HeaterFaultType type, const char *_ecv_array format, ...) noexcept
 {
 	lastPwm = 0.0;
 	SetHeater(0.0);
 	if (mode != HeaterMode::fault)
 	{
 		mode = HeaterMode::fault;
+		reprap.FlagTemperatureFault(GetHeaterNumber());
+
 		va_list vargs;
 		va_start(vargs, format);
-		reprap.GetPlatform().MessageV(ErrorMessage, format, vargs);
+
+#if SUPPORT_REMOTE_COMMANDS
+		if (CanInterface::InExpansionMode())
+		{
+			CanInterface::RaiseEvent(EventType::heater_fault, (uint16_t)type, GetHeaterNumber(), format, vargs);
+		}
+		else
+#endif
+		{
+			Event::AddEvent(EventType::heater_fault, (uint16_t)type, GetHeaterNumber(), CanInterface::GetCanAddress(), format, vargs);
+		}
 		va_end(vargs);
+//		reprap.GetGCodes().HandleHeaterFault();
 	}
-	reprap.GetGCodes().HandleHeaterFault();
-	reprap.FlagTemperatureFault(GetHeaterNumber());
 }
 
 #if SUPPORT_REMOTE_COMMANDS

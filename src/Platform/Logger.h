@@ -40,7 +40,7 @@ public:
 
 private:
 	NamedEnum(MessageLogLevel, uint8_t, debug, info, warn, off);
-	MessageLogLevel GetMessageLogLevel(MessageType mt) const noexcept { return (MessageLogLevel) ((mt & MessageType::LogOff)>>30); }
+	MessageLogLevel GetMessageLogLevel(MessageType mt) const noexcept { return (MessageLogLevel) ((mt & MessageType::LogLevelMask) >> MessageType::LogLevelShift); }
 
 	static const uint8_t LogEnabledThreshold = 3;
 

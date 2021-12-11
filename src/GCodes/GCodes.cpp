@@ -34,6 +34,7 @@
 #include <PrintMonitor/PrintMonitor.h>
 #include <Platform/RepRap.h>
 #include <Platform/Tasks.h>
+#include <Platform/Event.h>
 #include <Tools/Tool.h>
 #include <Endstops/ZProbe.h>
 #include <ObjectModel/Variable.h>
@@ -573,6 +574,13 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 		return DoFilePrint(gb, reply);
 	}
+	else if (&gb == autoPauseGCode)
+	{
+		if (Event::StartProcessing())
+		{
+			ProcessEvent(gb);								// call out to separate function to avoid increasing stack usage of this function
+		}
+	}
 	else if (&gb == daemonGCode
 #if SUPPORT_REMOTE_COMMANDS
 			 && !CanInterface::InExpansionMode()			// looking for the daemon.g file increases the loop time too much
@@ -967,8 +975,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 				FileData& fdata = fileGCode->LatestMachineState().fileState;
 				if (fdata.IsLive())
 				{
-					fileGCode->RestartFrom(pauseRestorePoint.filePos);						// TODO we ought to restore the line number too, but currently we don't save it
-					UnlockAll(*fileGCode);													// release any locks it had
+					fileGCode->RestartFrom(pauseRestorePoint.filePos);					// TODO we ought to restore the line number too, but currently we don't save it
+					UnlockAll(*fileGCode);												// release any locks it had
 				}
 			}
 #endif
@@ -1317,7 +1325,7 @@ bool GCodes::ReHomeOnStall(DriversBitmap stalledDrivers) noexcept
 			if (cfg.driverNumbers[i].IsLocal() && stalledDrivers.IsBitSet(cfg.driverNumbers[i].localDriver))
 			{
 				char str[2] = { axisLetters[axis], 0 };
-				vars.InsertNew(str, ExpressionValue((int32_t)1), -1);		// create a parameter with value 1 for the axis
+				vars.InsertNewParameter(str, ExpressionValue((int32_t)1));		// create a parameter with value 1 for the axis
 				break;
 			}
 		}
@@ -3357,7 +3365,7 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 	}
 #endif
 
-	if (   IsSimulating()														// if we are simulating then simulate the G4...
+	if (   IsSimulating()															// if we are simulating then simulate the G4...
 		&& &gb != daemonGCode														// ...unless it comes from the daemon...
 		&& &gb != triggerGCode														// ...or a trigger...
 		&& (&gb == fileGCode || !exitSimulationWhenFileComplete)					// ...or we are simulating a file and this command doesn't come from the file
@@ -4689,7 +4697,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 			// Send a standard status response for PanelDue
 			OutputBuffer * const statusBuf =
 									(lastAuxStatusReportType == ObjectModelAuxStatusReportType)		// PanelDueFirmware v3.2 or later, using M409 to retrieve object model
-										? reprap.GetModelResponse("", "d99f")
+										? reprap.GetModelResponse("", "d99fi")
 										: GenerateJsonStatusResponse(lastAuxStatusReportType, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
 			if (statusBuf != nullptr)
 			{
@@ -4891,7 +4899,7 @@ void GCodes::HandleHeaterFault() noexcept
 	}
 }
 
-// Check for and respond to a heater fault, returning true if we should exit
+// Check for and respond to a heater fault
 void GCodes::CheckHeaterFault() noexcept
 {
 	switch (heaterFaultState)
