@@ -371,26 +371,6 @@ AxesBitmap ScaraKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool disallow
 	return axesMoving;
 }
 
-size_t ScaraKinematics::NumHomingButtons(size_t numVisibleAxes) const noexcept
-{
-#if HAS_MASS_STORAGE
-	const Platform& platform = reprap.GetPlatform();
-	if (!platform.SysFileExists(HomeProximalFileName))
-	{
-		return 0;
-	}
-	if (!platform.SysFileExists(HomeDistalFileName))
-	{
-		return 1;
-	}
-	if (!platform.SysFileExists("homez.g"))
-	{
-		return 2;
-	}
-#endif
-	return numVisibleAxes;
-}
-
 // This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 // If we can proceed with homing some axes, return the name of the homing file to be called.
 // If we can't proceed because other axes need to be homed first, return nullptr and pass those axes back in 'mustBeHomedFirst'.

@@ -155,12 +155,6 @@ public:
 	// Override this one if any axes do not use the linear motion code (e.g. for segmentation-free delta motion)
 	virtual MotionType GetMotionType(size_t axis) const noexcept { return MotionType::linear; }
 
-	// Override this if the number of homing buttons (excluding the home all button) is not the same as the number of visible axes (e.g. on a delta printer)
-	virtual size_t NumHomingButtons(size_t numVisibleAxes) const noexcept { return numVisibleAxes; }
-
-	// Override this if the homing buttons are not named after the axes (e.g. SCARA printer)
-	virtual const char* HomingButtonNames() const noexcept { return "XYZUVWABC"; }
-
 	// This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 	// If we can't proceed because other axes need to be homed first, return those axes.
 	// If we can proceed with homing some axes, set 'filename' to the name of the homing file to be called and return 0. Optionally, update 'alreadyHomed' to indicate
