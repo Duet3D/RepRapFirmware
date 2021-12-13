@@ -33,6 +33,7 @@
 #include "RepRap.h"
 #include "Heap.h"
 #include "Scanner.h"
+#include "Event.h"
 #include <Version.h>
 #include "Logger.h"
 #include "Tasks.h"
@@ -733,11 +734,7 @@ void Platform::Init() noexcept
 #if HAS_STALL_DETECT
 	stalledDrivers.Clear();
 	logOnStallDrivers.Clear();
-	pauseOnStallDrivers.Clear();
-	rehomeOnStallDrivers.Clear();
-	stalledDriversToLog.Clear();
-	stalledDriversToPause.Clear();
-	stalledDriversToRehome.Clear();
+	eventOnStallDrivers.Clear();
 #endif
 
 #if HAS_VOLTAGE_MONITOR
@@ -1153,20 +1150,23 @@ void Platform::Spin() noexcept
 # if HAS_STALL_DETECT
 				if (stat.stall)
 				{
-					if (stalledDrivers.Disjoint(mask))
+					if (stalledDrivers.Disjoint(mask) && reprap.GetGCodes().IsReallyPrinting())
 					{
 						// This stall is new so check whether we need to perform some action in response to the stall
-						if (rehomeOnStallDrivers.Intersects(mask))
+#  if SUPPORT_REMOTE_COMMANDS
+						if (CanInterface::InExpansionMode())
 						{
-							stalledDriversToRehome |= mask;
+							CanInterface::RaiseEvent(EventType::driver_stall, 0, nextDriveToPoll, "", va_list());
 						}
-						else if (pauseOnStallDrivers.Intersects(mask))
+						else
+#  endif
+						if (eventOnStallDrivers.Intersects(mask))
 						{
-							stalledDriversToPause |= mask;
+							Event::AddEvent(EventType::driver_stall, 0, CanInterface::GetCanAddress(), nextDriveToPoll, "", va_list());
 						}
 						else if (logOnStallDrivers.Intersects(mask))
 						{
-							stalledDriversToLog |= mask;
+							MessageF(WarningMessage, "Driver %u stalled at Z height %.2f", nextDriveToPoll, (double)reprap.GetMove().LiveCoordinate(Z_AXIS, reprap.GetCurrentTool()));
 						}
 					}
 					stalledDrivers |= mask;
@@ -1178,23 +1178,6 @@ void Platform::Spin() noexcept
 # endif
 			}
 
-# if HAS_STALL_DETECT
-			// Action any pause or rehome actions due to motor stalls. This may have to be done more than once.
-			if (stalledDriversToRehome.IsNonEmpty())
-			{
-				if (reprap.GetGCodes().ReHomeOnStall(stalledDriversToRehome))
-				{
-					stalledDriversToRehome.Clear();
-				}
-			}
-			else if (stalledDriversToPause.IsNonEmpty())
-			{
-				if (reprap.GetGCodes().PauseOnStall(stalledDriversToPause))
-				{
-					stalledDriversToPause.Clear();
-				}
-			}
-# endif
 			// Advance drive number ready for next time
 			++nextDriveToPoll;
 			if (nextDriveToPoll == numSmartDrivers)
@@ -1301,18 +1284,6 @@ void Platform::Spin() noexcept
 					}
 				}
 				ReportDrivers(WarningMessage, temperatureWarningDrivers, "high temperature", reported);
-			}
-#endif
-
-#if HAS_STALL_DETECT
-			// Check for stalled drivers that need to be reported and logged
-			if (stalledDriversToLog.IsNonEmpty() && reprap.GetGCodes().IsReallyPrinting())
-			{
-				String<StringLength100> scratchString;
-				ListDrivers(scratchString.GetRef(), stalledDriversToLog);
-				stalledDriversToLog.Clear();
-				MessageF(WarningMessage, "Driver(s)%s stalled at Z height %.2f", scratchString.c_str(), (double)reprap.GetMove().LiveCoordinate(Z_AXIS, reprap.GetCurrentTool()));
-				reported = true;
 			}
 #endif
 
@@ -4386,26 +4357,18 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 		case 0:
 		default:
 			logOnStallDrivers &= ~drivers;
-			pauseOnStallDrivers &= ~drivers;
-			rehomeOnStallDrivers &= ~drivers;
+			eventOnStallDrivers &= ~drivers;
 			break;
 
 		case 1:
-			rehomeOnStallDrivers &= ~drivers;
-			pauseOnStallDrivers &= ~drivers;
+			eventOnStallDrivers &= ~drivers;
 			logOnStallDrivers |= drivers;
 			break;
 
 		case 2:
-			logOnStallDrivers &= ~drivers;
-			rehomeOnStallDrivers &= ~drivers;
-			pauseOnStallDrivers |= drivers;
-			break;
-
 		case 3:
 			logOnStallDrivers &= ~drivers;
-			pauseOnStallDrivers &= ~drivers;
-			rehomeOnStallDrivers |= drivers;
+			eventOnStallDrivers &= ~drivers;
 			break;
 		}
 	}
@@ -4446,10 +4409,9 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 				SmartDrivers::AppendStallConfig(drive, reply);
 				buf->cat(reply.c_str());
 				buf->catf(", action on stall: %s",
-							(rehomeOnStallDrivers.IsBitSet(drive)) ? "rehome"
-								: (pauseOnStallDrivers.IsBitSet(drive)) ? "pause"
-									: (logOnStallDrivers.IsBitSet(drive)) ? "log"
-										: "none"
+							(eventOnStallDrivers.IsBitSet(drive)) ? "run macro"
+								: (logOnStallDrivers.IsBitSet(drive)) ? "log"
+									: "none"
 						  );
 			}
 		);

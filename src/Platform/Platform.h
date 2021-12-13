@@ -773,12 +773,12 @@ private:
 #endif
 
 #if HAS_STALL_DETECT
-	DriversBitmap logOnStallDrivers, pauseOnStallDrivers, rehomeOnStallDrivers;
-	DriversBitmap stalledDrivers, stalledDriversToLog, stalledDriversToPause, stalledDriversToRehome;
+	DriversBitmap logOnStallDrivers, eventOnStallDrivers;
+	DriversBitmap stalledDrivers;
 #endif
 
 #if defined(__LPC17xx__)
-	MCP4461 mcp4451;// works for 5561 (only volatile setting commands)
+	MCP4461 mcp4451;	// works for 5561 (only volatile setting commands)
 #endif
 
 	// Endstops
