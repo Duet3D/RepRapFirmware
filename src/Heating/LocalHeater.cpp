@@ -933,10 +933,9 @@ void LocalHeater::RaiseHeaterFault(HeaterFaultType type, const char *_ecv_array 
 		else
 #endif
 		{
-			Event::AddEvent(EventType::heater_fault, (uint16_t)type, GetHeaterNumber(), CanInterface::GetCanAddress(), format, vargs);
+			Event::AddEventV(EventType::heater_fault, (uint16_t)type, GetHeaterNumber(), CanInterface::GetCanAddress(), format, vargs);
 		}
 		va_end(vargs);
-//		reprap.GetGCodes().HandleHeaterFault();
 	}
 }
 

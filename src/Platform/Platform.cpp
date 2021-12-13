@@ -1162,7 +1162,7 @@ void Platform::Spin() noexcept
 #  endif
 						if (eventOnStallDrivers.Intersects(mask))
 						{
-							Event::AddEvent(EventType::driver_stall, 0, CanInterface::GetCanAddress(), nextDriveToPoll, "", va_list());
+							Event::AddEvent(EventType::driver_stall, 0, CanInterface::GetCanAddress(), nextDriveToPoll, "");
 						}
 						else if (logOnStallDrivers.Intersects(mask))
 						{

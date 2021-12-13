@@ -18,9 +18,19 @@ inline Event::Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, uint
 	text.vprintf(format, vargs);
 }
 
+// Queue an event, or release it if we have a similar event pending already. Returns true if the event was added, false if it was released.
+/*static*/ bool Event::AddEvent(EventType et, uint16_t p_param, CanAddress p_ba, uint8_t devNum, const char *_ecv_array format, ...) noexcept
+{
+	va_list vargs;
+	va_start(vargs, format);
+	const bool ret = AddEventV(et, p_param, p_ba, devNum, format, vargs);
+	va_end(vargs);
+	return ret;
+}
+
 // Queue an event unless we have a similar event pending already. Returns true if the event was added.
 // The event list is held in priority order, lowest numbered (highest priority) events first.
-/*static*/ bool Event::AddEvent(EventType et, uint16_t p_param, uint8_t devNum, CanAddress p_ba, const char *_ecv_array format, va_list vargs) noexcept
+/*static*/ bool Event::AddEventV(EventType et, uint16_t p_param, uint8_t devNum, CanAddress p_ba, const char *_ecv_array format, va_list vargs) noexcept
 {
 	// Search for similar events already pending or being processed.
 	// An event is 'similar' if it has the same type, device number and parameter even if the text is different.

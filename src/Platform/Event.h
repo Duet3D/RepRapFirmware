@@ -43,7 +43,10 @@ public:
 	static MessageType GetTextDescription(const StringRef& str) noexcept;
 
 	// Queue an event, or release it if we have a similar event pending already. Returns true if the event was added, false if it was released.
-	static bool AddEvent(EventType et, uint16_t p_param, CanAddress p_ba, uint8_t devNum, const char *_ecv_array format, va_list vargs) noexcept;
+	static bool AddEvent(EventType et, uint16_t p_param, CanAddress p_ba, uint8_t devNum, const char *_ecv_array format, ...) noexcept;
+
+	// Queue an event, or release it if we have a similar event pending already. Returns true if the event was added, false if it was released.
+	static bool AddEventV(EventType et, uint16_t p_param, CanAddress p_ba, uint8_t devNum, const char *_ecv_array format, va_list vargs) noexcept;
 
 	// Get the highest priority event if there is one start processing it
 	static bool StartProcessing() noexcept;

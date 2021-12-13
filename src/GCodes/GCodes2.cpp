@@ -4515,14 +4515,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 #if SUPPORT_ACCELEROMETERS
-			case 955:
+			case 955:	// configure accelerometer
 				result = Accelerometers::ConfigureAccelerometer(gb, reply);
 				break;
 
-			case 956:
+			case 956:	// start accelerometer
 				result = Accelerometers::StartAccelerometer(gb, reply);
 				break;
 #endif
+
+			case 957:	// raise event
+				result = RaiseEvent(gb, reply);
+				break;
 
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 			case 997:	// Perform firmware update

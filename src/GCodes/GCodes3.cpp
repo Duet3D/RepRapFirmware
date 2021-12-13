@@ -1868,7 +1868,38 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 	return true;
 }
 
-// Process and event. The autoPauseGCode buffer calls this when there is a new event to be processed.
+// Handle M957
+GCodeResult GCodes::RaiseEvent(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
+{
+	String<StringLength50> temp;
+	gb.MustSee('E');
+	gb.GetQuotedString(temp.GetRef(), false);
+	const EventType et(temp.c_str());
+	if (!et.IsValid())
+	{
+		reply.copy("Invalid event type");
+		return GCodeResult::error;
+	}
+
+	const unsigned int devNum = gb.GetLimitedUIValue('D', 256);
+	const unsigned int param = (gb.Seen('P')) ? gb.GetUIValue() : 0;
+	const unsigned int boardAddress = (gb.Seen('B')) ? gb.GetUIValue() : CanInterface::GetCanAddress();
+	temp.Clear();
+	if (gb.Seen('S'))
+	{
+		gb.GetQuotedString(temp.GetRef(), true);
+	}
+
+	const bool added = Event::AddEvent(et, param, boardAddress, devNum, "%s", temp.c_str());
+	if (added)
+	{
+		return GCodeResult::ok;
+	}
+	reply.copy("a similar event is already queued");
+	return GCodeResult::warning;
+}
+
+// Process an event. The autoPauseGCode buffer calls this when there is a new event to be processed.
 // This is a separate function because it allocates strings on the stack.
 void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 {
