@@ -69,7 +69,7 @@ GCodes::GCodes(Platform& p) noexcept :
 #if HAS_VOLTAGE_MONITOR
 	, powerFailScript(nullptr)
 #endif
-	, isFlashing(false), isFlashingPanelDue(false), lastFilamentError(FilamentSensorStatus::ok), lastWarningMillis(0)
+	, isFlashing(false), isFlashingPanelDue(false), lastWarningMillis(0)
 #if HAS_MASS_STORAGE
 	, sdTimingFile(nullptr)
 #endif
@@ -183,8 +183,6 @@ void GCodes::Init() noexcept
 	laserMaxPower = DefaultMaxLaserPower;
 	laserPowerSticky = false;
 
-	heaterFaultState = HeaterFaultState::noFault;
-	heaterFaultTime = 0;
 	heaterFaultTimeout = DefaultHeaterFaultTimeout;
 
 #if SUPPORT_SCANNER
@@ -302,7 +300,6 @@ void GCodes::Reset() noexcept
 	firmwareUpdateModuleMap.Clear();
 	isFlashing = false;
 	isFlashingPanelDue = false;
-	lastFilamentError = FilamentSensorStatus::ok;
 	currentZProbeNumber = 0;
 
 	buildObjects.Init();
@@ -435,8 +432,6 @@ void GCodes::Spin() noexcept
 	}
 
 	CheckTriggers();
-	CheckHeaterFault();
-	CheckFilament();
 
 	// Get the GCodeBuffer that we want to process a command from. Use round-robin scheduling but give priority to auto-pause.
 	GCodeBuffer *gbp = autoPauseGCode;
@@ -849,7 +844,8 @@ void GCodes::CheckTriggers() noexcept
 				else if (LockMovement(*triggerGCode))				// need to lock movement before executing the pause macro
 				{
 					triggersPending.ClearBit(lowestTriggerPending);	// clear the trigger
-					DoPause(*triggerGCode, PauseReason::trigger, "Print paused by external trigger");
+					DoPause(*triggerGCode, PrintPausedReason::trigger, GCodeState::pausing1);
+					platform.SendAlert(GenericMessage, "Print paused by external trigger", "Printing paused", 1, 0.0, AxesBitmap());
 				}
 			}
 			else
@@ -863,34 +859,6 @@ void GCodes::CheckTriggers() noexcept
 	}
 }
 
-// Check for and respond to filament errors
-void GCodes::CheckFilament() noexcept
-{
-	if (   lastFilamentError != FilamentSensorStatus::ok			// check for a filament error
-		&& IsReallyPrinting()
-		&& autoPauseGCode->IsCompletelyIdle()
-		&& LockMovement(*autoPauseGCode)							// need to lock movement before executing the pause macro
-	   )
-	{
-		String<StringLength50> filamentErrorString;
-		filamentErrorString.printf("Extruder %u reported '%s'", lastFilamentErrorExtruder, lastFilamentError.ToString());
-		DoPause(*autoPauseGCode, PauseReason::filamentError, filamentErrorString.c_str(), (uint16_t)lastFilamentErrorExtruder);
-		lastFilamentError = FilamentSensorStatus::ok;
-		filamentErrorString.cat('\n');
-		platform.Message(LogWarn, filamentErrorString.c_str());
-	}
-}
-
-// Log a filament error. Called by Platform when a filament sensor reports an incorrect status and a print is in progress.
-void GCodes::FilamentError(size_t extruder, FilamentSensorStatus fstat) noexcept
-{
-	if (lastFilamentError == FilamentSensorStatus::ok)
-	{
-		lastFilamentErrorExtruder = extruder;
-		lastFilamentError = fstat;
-	}
-}
-
 // Execute an emergency stop
 void GCodes::DoEmergencyStop() noexcept
 {
@@ -899,8 +867,9 @@ void GCodes::DoEmergencyStop() noexcept
 	platform.Message(GenericMessage, "Emergency Stop! Reset the controller to continue.\n");
 }
 
-// Pause the print. Before calling this, check that we are doing a file print that isn't already paused and get the movement lock.
-void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint16_t param) noexcept
+// Pause the print
+// Before calling this, check that we are doing a file print that isn't already paused and get the movement lock.
+void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept
 {
 	pausedInMacro = false;
 	if (&gb == fileGCode)
@@ -1007,68 +976,14 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 	}
 #endif
 
-	GCodeState newState;
-	switch (reason)
-	{
-	case PauseReason::filamentChange:					// M600 command
-		newState = GCodeState::filamentChangePause1;
-		break;
-
-	case PauseReason::filamentError:					// filament monitor
-		newState = GCodeState::filamentErrorPause1;
-		break;
-
-	case PauseReason::user:								// M25 command received
-	case PauseReason::gcode:							// M25 or M226 command encountered in the file being printed
-		newState = (gb.Seen('P') && gb.GetUIValue() == 0) ? GCodeState::pausing2 : GCodeState::pausing1;
-		break;
-
-	case PauseReason::trigger:							// external switch
-	case PauseReason::heaterFault:						// heater fault detected
-#if HAS_SMART_DRIVERS
-	case PauseReason::stall:							// motor stall detected
-#endif
-	default:
-		newState = GCodeState::pausing1;
-		break;
-	}
-	gb.SetState(newState, param);
+	gb.SetState(newState);
 	pauseState = PauseState::pausing;
 
 #if HAS_SBC_INTERFACE
 	if (reprap.UsingSbcInterface())
 	{
-		// Get the print pause reason that is compatible with the API
-		PrintPausedReason pauseReason = PrintPausedReason::user;
-		switch (reason)
-		{
-		case PauseReason::gcode:
-			pauseReason = PrintPausedReason::gcode;
-			break;
-		case PauseReason::filamentChange:
-			pauseReason = PrintPausedReason::filamentChange;
-			break;
-		case PauseReason::trigger:
-			pauseReason = PrintPausedReason::trigger;
-			break;
-		case PauseReason::heaterFault:
-			pauseReason = PrintPausedReason::heaterFault;
-			break;
-		case PauseReason::filamentError:
-			pauseReason = PrintPausedReason::filamentError;
-			break;
-# if HAS_SMART_DRIVERS
-		case PauseReason::stall:
-			pauseReason = PrintPausedReason::stall;
-			break;
-# endif
-		default:
-			pauseReason = PrintPausedReason::user;
-			break;
-		}
-
 		// Prepare notification for the SBC
-		reprap.GetSbcInterface().SetPauseReason(pauseRestorePoint.filePos, pauseReason);
+		reprap.GetSbcInterface().SetPauseReason(pauseRestorePoint.filePos, reason);
 	}
 #endif
 
@@ -1076,11 +991,6 @@ void GCodes::DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint1
 	{
 		// Make sure we expose usable values (which noFilePosition is not)
 		pauseRestorePoint.filePos = 0;
-	}
-
-	if (msg != nullptr)
-	{
-		platform.SendAlert(GenericMessage, msg, "Printing paused", 1, 0.0, AxesBitmap());
 	}
 }
 
@@ -1296,7 +1206,8 @@ bool GCodes::PauseOnStall(DriversBitmap stalledDrivers) noexcept
 	String<StringLength50> stallErrorString;
 	stallErrorString.printf("Stall detected on driver(s)");
 	ListDrivers(stallErrorString.GetRef(), stalledDrivers);
-	DoPause(*autoPauseGCode, PauseReason::stall, stallErrorString.c_str());
+	DoPause(*autoPauseGCode, PrintPausedReason::stall, GCodeState::pausing1);
+	platform.SendAlert(GenericMessage, stallErrorString.c_str(), "Printing paused", 1, 0.0, AxesBitmap());
 	stallErrorString.cat('\n');
 	platform.Message(LogWarn, stallErrorString.c_str());
 	return true;
@@ -3318,7 +3229,6 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	}
 	fileGCode->StartNewFile();
 
-	lastFilamentError = FilamentSensorStatus::ok;
 	reprap.GetPrintMonitor().StartedPrint();
 	platform.MessageF(LogWarn,
 						(IsSimulating()) ? "Started simulating printing file %s\n" : "Started printing file %s\n",
@@ -4888,63 +4798,6 @@ const char* GCodes::GetMachineModeString() const noexcept
 	}
 }
 
-// Respond to a heater fault. The heater has already been turned off and its status set to 'fault' when this is called from the Heat module.
-// The Heat module will generate an appropriate error message, so no need to do that here.
-void GCodes::HandleHeaterFault() noexcept
-{
-	if (heaterFaultState == HeaterFaultState::noFault && fileGCode->OriginalMachineState().DoingFile())
-	{
-		heaterFaultState = HeaterFaultState::pausePending;
-		heaterFaultTime = millis();
-	}
-}
-
-// Check for and respond to a heater fault
-void GCodes::CheckHeaterFault() noexcept
-{
-	switch (heaterFaultState)
-	{
-	case HeaterFaultState::noFault:
-	default:
-		break;
-
-	case HeaterFaultState::pausePending:
-		if (   IsReallyPrinting()
-			&& autoPauseGCode->IsCompletelyIdle()
-			&& LockMovement(*autoPauseGCode)							// need to lock movement before executing the pause macro
-		   )
-		{
-			reprap.GetHeat().SwitchOffAll(false);						// turn off all extruder heaters
-			DoPause(*autoPauseGCode, PauseReason::heaterFault, "Heater fault");
-			heaterFaultState = HeaterFaultState::timing;
-		}
-		else if (pauseState == PauseState::pausing || pauseState == PauseState::paused)
-		{
-			heaterFaultState = HeaterFaultState::timing;
-		}
-		// no break
-
-	case HeaterFaultState::timing:
-		if (millis() - heaterFaultTime >= heaterFaultTimeout)
-		{
-			StopPrint(StopPrintReason::abort);
-			reprap.GetHeat().SwitchOffAll(true);
-			platform.MessageF(ErrorMessage, "Shutting down due to un-cleared heater fault after %lu seconds\n", heaterFaultTimeout/1000);
-			heaterFaultState = HeaterFaultState::stopping;
-			heaterFaultTime = millis();
-		}
-		break;
-
-	case HeaterFaultState::stopping:
-		if (millis() - heaterFaultTime >= 1000)			// wait 1 second for the message to be picked up by DWC and PanelDue
-		{
-			platform.AtxPowerOff();
-			heaterFaultState = HeaterFaultState::stopped;
-		}
-		break;
-	}
-}
-
 // Return a current extrusion factor as a fraction
 float GCodes::GetExtrusionFactor(size_t extruder) noexcept
 {
@@ -4986,7 +4839,7 @@ bool GCodes::CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply,
 {
 	if (gb.LatestMachineState().runningM502)			// when running M502 we don't execute network-related commands
 	{
-		return false;							// just ignore the command but report success
+		return false;									// just ignore the command but report success
 	}
 
 #if HAS_SBC_INTERFACE

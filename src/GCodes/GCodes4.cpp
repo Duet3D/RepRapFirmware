@@ -409,6 +409,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::pausing1:
+	case GCodeState::eventPausing1:
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			gb.AdvanceState();
@@ -433,28 +434,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		break;
 
-	case GCodeState::filamentErrorPause1:
-		if (LockMovementAndWaitForStandstill(gb))
-		{
-			gb.AdvanceState();
-			if (AllAxesAreHomed())
-			{
-				String<StringLength20> macroName;
-				macroName.printf(FILAMENT_ERROR "%u.g", gb.LatestMachineState().stateParameter);
-				if (!DoFileMacro(gb, macroName.c_str(), false, AsyncSystemMacroCode))
-				{
-					if (!DoFileMacro(gb, FILAMENT_ERROR ".g", false, AsyncSystemMacroCode))
-					{
-						DoFileMacro(gb, PAUSE_G, true, AsyncSystemMacroCode);
-					}
-				}
-			}
-		}
-		break;
-
 	case GCodeState::pausing2:
 	case GCodeState::filamentChangePause2:
-	case GCodeState::filamentErrorPause2:
 		if (LockMovementAndWaitForStandstill(gb))
 		{
 			reply.printf((gb.GetState() == GCodeState::filamentChangePause2) ? "Printing paused for filament change at" : "Printing paused at");
@@ -468,6 +449,17 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			reportPause = reprap.UsingSbcInterface();
 #endif
 			gb.SetState(GCodeState::normal);
+		}
+		break;
+
+	case GCodeState::eventPausing2:
+		if (LockMovementAndWaitForStandstill(gb))
+		{
+			pauseState = PauseState::paused;
+#if HAS_SBC_INTERFACE
+			reportPause = reprap.UsingSbcInterface();
+#endif
+			gb.SetState(GCodeState::finishedProcessingEvent);
 		}
 		break;
 
@@ -1483,30 +1475,20 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		gb.SetState(GCodeState::normal);
 		break;
 
-	// Here when we need to execute the default action for an event because the macro file was not found. We have already sent a message and logged the event.
+	// Here when we need to execute the default action for an event because the macro file was not found, the the default action involves pausing the print.
+	// We have already sent an alert.
 	case GCodeState::processingEvent:
+		if (pauseState != PauseState::resuming)						// if we are resuming, wait for the resume to complete
 		{
-			const Event::DefaultAction action = Event::GetDefaultAction();
-			if (action == Event::DefaultAction::none)
+			if (pauseState != PauseState::notPaused)
 			{
-				// Nothing more to do
-				gb.SetState(GCodeState::finishedProcessingEvent);
+				gb.SetState(GCodeState::finishedProcessingEvent);	// already paused or pausing
 			}
-			else
+			else if (LockMovementAndWaitForStandstill(gb))
 			{
-				// We are going to pause
-				if (pauseState != PauseState::resuming)			// if we are resuming, wait for the resume to complete
-				{
-					if (pauseState != PauseState::notPaused)
-					{
-						gb.SetState(GCodeState::finishedProcessingEvent);	// already paused
-					}
-					else if (LockMovementAndWaitForStandstill(gb))
-					{
-						gb.SetState(GCodeState::finishedProcessingEvent);
-						DoPause(gb, qq);
-					}
-				}
+				const PrintPausedReason pauseReason = Event::GetDefaultPauseReason();
+				gb.SetState(GCodeState::finishedProcessingEvent);
+				DoPause(gb, pauseReason, (pauseReason == PrintPausedReason::driverError) ? GCodeState::eventPausing2 : GCodeState::eventPausing1);
 			}
 		}
 		break;

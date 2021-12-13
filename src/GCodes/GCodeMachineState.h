@@ -54,14 +54,15 @@ enum class GCodeState : uint8_t
 	m109ToolChangeComplete,
 	m109WaitForTemperature,
 
+	// These pairs must be contiguous
 	pausing1,
 	pausing2,
 
+	eventPausing1,
+	eventPausing2,
+
 	filamentChangePause1,
 	filamentChangePause2,
-
-	filamentErrorPause1,
-	filamentErrorPause2,
 
 	resuming1,
 	resuming2,

@@ -29,20 +29,13 @@
 #include <General/String.h>
 #include <General/SafeVsnprintf.h>
 #include <Platform/MessageType.h>
+#include <Platform/PrintPausedReason.h>
 
 class VariableSet;
 
 class Event
 {
 public:
-	// Type of default action for when there is no macro file to process the event
-	enum class DefaultAction
-	{
-		none, 						// do nothing other than logging ir
-		pauseNoMacro, 				// pause, but don't run pause.g
-		pauseWithMacro				// pause, running pause.g
-	};
-
 	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<Event>(); }
 	void operator delete(void* p) noexcept { FreelistManager::Release<Event>(p); }
 
@@ -62,7 +55,7 @@ public:
 	static void GetParameters(VariableSet& vars) noexcept;
 
 	// Get the default action for the current event
-	static DefaultAction GetDefaultAction() noexcept;
+	static PrintPausedReason GetDefaultPauseReason() noexcept;
 
 	// Mark the highest priority event as completed
 	static void FinishedProcessing() noexcept;

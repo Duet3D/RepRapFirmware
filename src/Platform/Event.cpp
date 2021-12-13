@@ -85,7 +85,7 @@ inline Event::Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, uint
 }
 
 // Get the default action for the current event
-/*static*/ Event::DefaultAction Event::GetDefaultAction() noexcept
+/*static*/ PrintPausedReason Event::GetDefaultPauseReason() noexcept
 {
 	const Event * const ep = eventsPending;
 	if (ep != nullptr && ep->isBeingProcessed)
@@ -93,17 +93,19 @@ inline Event::Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, uint
 		switch (ep->type.RawValue())
 		{
 		case EventType::heater_fault:
+			return PrintPausedReason::heaterFault;
+
 		case EventType::filament_error:
-			return DefaultAction::pauseWithMacro;
+			return PrintPausedReason::filamentError;
 
 		case EventType::driver_error:
-			return DefaultAction::pauseNoMacro;
+			return PrintPausedReason::driverError;
 
 		default:
 			break;
 		}
 	}
-	return DefaultAction::none;
+	return PrintPausedReason::dontPause;
 }
 
 // Mark the highest priority event as completed
@@ -142,7 +144,7 @@ inline Event::Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, uint
 #if SUPPORT_CAN_EXPANSION
 			str.printf("Driver %u.%u error: %s", ep->boardAddress, ep->deviceNumber, ep->text.c_str());
 #else
-			str.printf("Driver %u error: %s", deviceNumber, ep->text.c_str());
+			str.printf("Driver %u error: %s", ep->deviceNumber, ep->text.c_str());
 #endif
 			return ErrorMessage;
 
@@ -150,7 +152,7 @@ inline Event::Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, uint
 #if SUPPORT_CAN_EXPANSION
 			str.printf("Driver %u.%u warning: %s", ep->boardAddress, ep->deviceNumber, ep->text.c_str());
 #else
-			str.printf("Driver %u warning: %s", deviceNumber, ep->text.c_str());
+			str.printf("Driver %u warning: %s", ep->deviceNumber, ep->text.c_str());
 #endif
 			return WarningMessage;
 

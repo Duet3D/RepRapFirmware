@@ -7,7 +7,8 @@
 
 #include "FirmwareUpdater.h"
 
-#include <RepRapFirmware.h>
+#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
@@ -140,5 +141,7 @@ namespace FirmwareUpdater
 #endif
 	}
 }
+
+#endif
 
 // End

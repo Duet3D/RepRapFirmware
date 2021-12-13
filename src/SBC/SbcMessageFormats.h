@@ -15,6 +15,7 @@
 #include <ctime>
 
 #include <RepRapFirmware.h>
+#include <Platform/PrintPausedReason.h>
 
 constexpr uint8_t SbcFormatCode = 0x5F;				// standard format code for RRF SPI protocol
 constexpr uint8_t SbcFormatCodeStandalone = 0x60;	// used to indicate that RRF is running in stand-alone mode
@@ -224,18 +225,6 @@ enum class FirmwareRequest : uint16_t
 	SeekFile = 22,						// Seek in a file
 	TruncateFile = 23,					// Truncate a file
 	CloseFile = 24						// Close a file again
-};
-
-enum class PrintPausedReason : uint8_t
-{
-	user = 1,
-	gcode = 2,
-	filamentChange = 3,
-	trigger = 4,
-	heaterFault = 5,
-	filamentError = 6,
-	stall = 7,
-	lowVoltage = 8
 };
 
 struct PrintPausedHeader

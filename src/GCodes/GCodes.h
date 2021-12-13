@@ -28,8 +28,10 @@ Licence: GPL
 #include <Movement/RawMove.h>
 #include <Libraries/sha1/sha1.h>
 #include <Platform/Platform.h>		// for type EndStopHit
+#include <Platform/PrintPausedReason.h>
 #include "GCodeChannel.h"
 #include "GCodeInput.h"
+#include "GCodeMachineState.h"
 #include "Trigger.h"
 #include <Tools/Filament.h>
 #include <FilamentMonitors/FilamentMonitor.h>
@@ -54,21 +56,7 @@ enum class MachineType : uint8_t
 	cnc = 2
 };
 
-enum class PauseReason
-{
-	user,			// M25 command received
-	gcode,			// M25 or M226 command encountered in the file being printed
-	filamentChange,	// M600 command
-	trigger,		// external switch
-	heaterFault,	// heater fault detected
-	filamentError,	// filament monitor
-#if HAS_SMART_DRIVERS
-	stall,			// motor stall detected
-#endif
-};
-
-// Keep this in sync with PrintStopReason in SBC/SbcMessageFormats.h
-enum class StopPrintReason
+enum class StopPrintReason : uint8_t
 {
 	normalCompletion,
 	userCancelled,
@@ -189,7 +177,6 @@ public:
 
 	const char* GetMachineModeString() const noexcept;							// Get the name of the current machine mode
 
-	void FilamentError(size_t extruder, FilamentSensorStatus fstat) noexcept;
 	void HandleHeaterFault() noexcept;											// Respond to a heater fault
 
 #if HAS_VOLTAGE_MONITOR
@@ -437,62 +424,64 @@ private:
 	GCodeResult ManageTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Create a new tool definition
 	void SetToolHeaters(Tool *tool, float temperature, bool both) THROWS(GCodeException);	// Set all a tool's heaters to the temperature, for M104/M109
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance) const noexcept;
-																				// Wait for the heaters associated with the specified tool to reach their set temperatures
-	void GenerateTemperatureReport(const StringRef& reply) const noexcept;		// Store a standard-format temperature report in reply
+																							// Wait for the heaters associated with the specified tool to reach their set temperatures
+	void GenerateTemperatureReport(const StringRef& reply) const noexcept;					// Store a standard-format temperature report in reply
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
 	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexcept;			// Check whether we need to report temperatures or status
 
-	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept;		// Restore user position from a restore point
+	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept;					// Restore user position from a restore point
 
-	void UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept;				// Get the current position from the Move class
+	void UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept;							// Get the current position from the Move class
 	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
-																				// Convert user coordinates to head reference point coordinates
+																							// Convert user coordinates to head reference point coordinates
 	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept;	// Convert head reference point coordinates to user coordinates
-	float GetCurrentToolOffset(size_t axis) const noexcept;						// Get an axis offset of the current tool
+	float GetCurrentToolOffset(size_t axis) const noexcept;									// Get an axis offset of the current tool
 
-	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);					// Retract or un-retract filaments
-	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Load the specified filament into a tool
-	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Unload the current filament from a tool
+	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);								// Retract or un-retract filaments
+	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load the specified filament into a tool
+	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Unload the current filament from a tool
 	bool ChangeMicrostepping(size_t axisOrExtruder, unsigned int microsteps, bool interp, const StringRef& reply) const noexcept; // Change microstepping on the specified drive
-	void CheckTriggers() noexcept;												// Check for and execute triggers
-	void CheckFilament() noexcept;												// Check for and respond to filament errors
-	void CheckHeaterFault() noexcept;											// Check for and respond to a heater fault, returning true if we should exit
-	void DoEmergencyStop() noexcept;											// Execute an emergency stop
+	void CheckTriggers() noexcept;															// Check for and execute triggers
+	void DoEmergencyStop() noexcept;														// Execute an emergency stop
 
-	void DoPause(GCodeBuffer& gb, PauseReason reason, const char *msg, uint16_t param = 0) noexcept	// Pause the print
+	void DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept	// Pause the print
 		pre(resourceOwners[movementResource] == &gb);
-	void CheckForDeferredPause(GCodeBuffer& gb) noexcept;						// Check if a pause is pending, action it if so
-	void ProcessEvent(GCodeBuffer& gb) noexcept;								// Start processing a new event
+	void CheckForDeferredPause(GCodeBuffer& gb) noexcept;									// Check if a pause is pending, action it if so
+	void ProcessEvent(GCodeBuffer& gb) noexcept;											// Start processing a new event
 
 #if HAS_VOLTAGE_MONITOR || HAS_SMART_DRIVERS
-	bool DoEmergencyPause() noexcept;											// Do an emergency pause following loss of power or a motor stall
+	bool DoEmergencyPause() noexcept;														// Do an emergency pause following loss of power or a motor stall
 #endif
 
-	bool IsMappedFan(unsigned int fanNumber) noexcept;							// Return true if this fan number is currently being used as a print cooling fan
+	bool IsMappedFan(unsigned int fanNumber) noexcept;										// Return true if this fan number is currently being used as a print cooling fan
 
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);	// Define the probing grid, returning true if error
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load the height map from file
-	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept;	// Save the height map to the specified file
-	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;	// Save the height map to the file specified by P parameter
+	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept;		// Save the height map to the specified file
+	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;				// Save the height map to the file specified by P parameter
 #endif
-	void ClearBedMapping();														// Stop using bed compensation
+	void ClearBedMapping();																	// Stop using bed compensation
 	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Start probing the grid, returning true if we didn't because of an error
 	ReadLockedPointer<ZProbe> SetZProbeNumber(GCodeBuffer& gb, char probeLetter) THROWS(GCodeException);		// Set up currentZProbeNumber and return the probe
 	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Probes at a given position - see the comment at the head of the function itself
-	void InitialiseTaps(bool fastThenSlow) noexcept;								// Set up to do the first of a possibly multi-tap probe
-	void SetBedEquationWithProbe(int sParam, const StringRef& reply);			// Probes a series of points and sets the bed equation
+	void InitialiseTaps(bool fastThenSlow) noexcept;										// Set up to do the first of a possibly multi-tap probe
+	void SetBedEquationWithProbe(int sParam, const StringRef& reply);						// Probes a series of points and sets the bed equation
 
 	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M581
 	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M582
-	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// Handle M997
 	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M260
 	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M261
+	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M577
+
+#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// Handle M997
+#endif
+
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	GCodeResult SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile) THROWS(GCodeException);	// Handle M37 to simulate a whole file
 	GCodeResult ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply, SimulationMode newSimMode) THROWS(GCodeException);		// Handle M37 to change the simulation mode
 #endif
-	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M577
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const noexcept; // Write the config-override file
@@ -695,17 +684,11 @@ private:
 	GCodeResult AdvanceHash(const StringRef &reply) noexcept;
 #endif
 
-	// Filament monitoring
-	FilamentSensorStatus lastFilamentError;
-	size_t lastFilamentErrorExtruder;
-
 	// Laser
 	float laserMaxPower;
 	bool laserPowerSticky;						// true if G1 S parameters are remembered across G1 commands
 
 	// Heater fault handler
-	HeaterFaultState heaterFaultState;			// whether there is a heater fault and what we have done about it so far
-	uint32_t heaterFaultTime;					// when the heater fault occurred
 	uint32_t heaterFaultTimeout;				// how long we wait for the user to fix it before turning everything off
 
 	// Object cancellation

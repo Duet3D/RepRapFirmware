@@ -19,7 +19,7 @@
 #include <Platform/Tasks.h>
 #include <Hardware/I2C.h>
 
-#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES
+#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 # include <Comms/FirmwareUpdater.h>
 #endif
 
@@ -1123,6 +1123,8 @@ GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply) THROWS(
 	return GCodeResult::ok;
 }
 
+#if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+
 // Handle M997
 GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 {
@@ -1232,6 +1234,8 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 	gb.SetState(GCodeState::flashing1);
 	return GCodeResult::ok;
 }
+
+#endif
 
 // Handle M260 - send and possibly receive via I2C
 GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
@@ -1891,8 +1895,21 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 		}
 	}
 
-	// We didn't execute the macro, so do the default action. It may need to wait for the movement lock, so do it in a new state.
-	gb.SetState(GCodeState::processingEvent);
+	// We didn't execute the macro, so do the default action
+	if (Event::GetDefaultPauseReason() == PrintPausedReason::dontPause)
+	{
+		Event::FinishedProcessing();									// nothing more to do
+	}
+	else
+	{
+		// It's a serious event that causes the print to pause by default, so send an alert
+		String<StringLength100> eventText;
+		Event::GetTextDescription(eventText.GetRef());
+		platform.SendAlert(GenericMessage, eventText.c_str(), "Printing paused", 1, 0.0, AxesBitmap());
+
+		// We are going to pause. It may need to wait for the movement lock, so do it in a new state.
+		gb.SetState(GCodeState::processingEvent);
+	}
 }
 
 #if !HAS_MASS_STORAGE && !HAS_EMBEDDED_FILES && defined(DUET_NG)
