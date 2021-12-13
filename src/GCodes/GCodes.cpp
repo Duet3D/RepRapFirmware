@@ -433,40 +433,29 @@ void GCodes::Spin() noexcept
 
 	CheckTriggers();
 
-	// Get the GCodeBuffer that we want to process a command from. Use round-robin scheduling but give priority to auto-pause.
-	GCodeBuffer *gbp = autoPauseGCode;
-	if (!autoPauseGCode->IsCompletelyIdle()
-#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-		|| autoPauseGCode->LatestMachineState().DoingFile()
-#endif
-	   )	// if autoPause is active
+	// The autoPause buffer has priority, so spin that one first. It may have to wait for other buffers to release locks etc.
+	(void)SpinGCodeBuffer(*autoPauseGCode);
+
+	// Use round-robin scheduling for the other input sources
+	// Scan the GCode input channels until we find one that we can do some useful work with, or we have scanned them all.
+	// The idea is that when a single GCode input channel is active, we do some useful work every time we come through this polling loop, not once every N times (N = number of input channels)
+	const size_t originalNextGCodeSource = nextGcodeSource;
+	do
 	{
-		(void)SpinGCodeBuffer(*autoPauseGCode);
-		(void)SpinGCodeBuffer(*queuedGCode);						// autopause sometimes to wait for queued GCodes to complete, so spin queuedGCodes too to avoid lockup
-	}
-	else
-	{
-		// Scan the GCode input channels until we find one that we can do some useful work with, or we have scanned them all.
-		// The idea is that when a single GCode input channel is active, we do some useful work every time we come through this polling loop, not once every N times (N = number of input channels)
-		const size_t originalNextGCodeSource = nextGcodeSource;
-		do
+		GCodeBuffer * const gbp = gcodeSources[nextGcodeSource];
+		++nextGcodeSource;													// move on to the next gcode source ready for next time
+		if (nextGcodeSource == ARRAY_SIZE(gcodeSources) - 1)				// the last one is autoPauseGCode, so don't do it again
 		{
-			gbp = gcodeSources[nextGcodeSource];
-			++nextGcodeSource;										// move on to the next gcode source ready for next time
-			if (nextGcodeSource == ARRAY_SIZE(gcodeSources) - 1)	// the last one is autoPauseGCode, so don't do it again
-			{
-				nextGcodeSource = 0;
-			}
-			if (isFlashingPanelDue && gbp == auxGCode)				// Skip auxGCode while flashing PanelDue is in progress
-			{
-				continue;
-			}
-			if (gbp != nullptr && SpinGCodeBuffer(*gbp))			// if we did something useful
+			nextGcodeSource = 0;
+		}
+		if (gbp != nullptr && (gbp != auxGCode || !isFlashingPanelDue))		// skip auxGCode while flashing PanelDue is in progress
+		{
+			if (SpinGCodeBuffer(*gbp))										// if we did something useful
 			{
 				break;
 			}
-		} while (nextGcodeSource != originalNextGCodeSource);
-	}
+		}
+	} while (nextGcodeSource != originalNextGCodeSource);
 
 
 #if HAS_SBC_INTERFACE

@@ -1936,10 +1936,17 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 		// It's a serious event that causes the print to pause by default, so send an alert
 		String<StringLength100> eventText;
 		Event::GetTextDescription(eventText.GetRef());
-		platform.SendAlert(GenericMessage, eventText.c_str(), "Printing paused", 1, 0.0, AxesBitmap());
-
-		// We are going to pause. It may need to wait for the movement lock, so do it in a new state.
-		gb.SetState(GCodeState::processingEvent);
+		const bool isPrinting = IsReallyPrinting();
+		platform.SendAlert(GenericMessage, eventText.c_str(), (isPrinting) ? "Printing paused" : "Event notification", 1, 0.0, AxesBitmap());
+		if (IsReallyPrinting())
+		{
+			// We are going to pause. It may need to wait for the movement lock, so do it in a new state.
+			gb.SetState(GCodeState::processingEvent);
+		}
+		else
+		{
+			Event::FinishedProcessing();
+		}
 	}
 }
 

@@ -486,7 +486,7 @@ size_t StringHandle::GetLength() const noexcept
 	return strlen(slotPtr->storage->data);
 }
 
-/*static*/ void StringHandle::Diagnostics(MessageType mt) noexcept
+/*static*/ void StringHandle::Diagnostics(MessageType mt, Platform& p) noexcept
 {
 	String<StringLength256> temp;
 	const bool ok = CheckIntegrity(temp.GetRef());
@@ -496,7 +496,7 @@ size_t StringHandle::GetLength() const noexcept
 	}
 	temp.catf(", handles allocated/used %u/%u, heap memory allocated/used/recyclable %u/%u/%u, gc cycles %u\n",
 					handlesAllocated, (unsigned int)handlesUsed, heapAllocated, heapUsed, (unsigned int)heapToRecycle, gcCyclesDone);
-	reprap.GetPlatform().Message(mt, temp.c_str());
+	p.Message(mt, temp.c_str());
 }
 
 // AutoStringHandle members

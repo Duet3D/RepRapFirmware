@@ -1756,7 +1756,8 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 
 	ResetVoltageMonitors();
 
-	StringHandle::Diagnostics(mtype);
+	StringHandle::Diagnostics(mtype, *this);
+	Event::Diagnostics(mtype, *this);
 
 	// Show the motor position and stall status
 	for (size_t drive = 0; drive < NumDirectDrivers; ++drive)

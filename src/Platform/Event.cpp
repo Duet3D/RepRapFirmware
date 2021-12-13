@@ -5,15 +5,19 @@
  *      Author: David
  */
 
+#include <Platform/Platform.h>
 #include <Platform/Event.h>
 #include <RepRapFirmware.h>
 #include <ObjectModel/ObjectModel.h>
 #include <ObjectModel/Variable.h>
 
 Event *_ecv_null Event::eventsPending = nullptr;
+unsigned int Event::eventsQueued = 0;
+unsigned int Event::eventsProcessed = 0;
 
-inline Event::Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, uint8_t devNum, CanAddress p_ba, const char *_ecv_array format, va_list vargs) noexcept
-	: next(pnext), param(p_param), type(et), boardAddress(p_ba), deviceNumber(devNum), isBeingProcessed(false)
+// Private constructor, inline because it is only called from one place
+inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, uint8_t devNum, CanAddress p_ba, const char *_ecv_array format, va_list vargs) noexcept
+	: next(p_next), param(p_param), type(et), boardAddress(p_ba), deviceNumber(devNum), isBeingProcessed(false)
 {
 	text.vprintf(format, vargs);
 }
@@ -33,17 +37,17 @@ inline Event::Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, uint
 /*static*/ bool Event::AddEventV(EventType et, uint16_t p_param, uint8_t devNum, CanAddress p_ba, const char *_ecv_array format, va_list vargs) noexcept
 {
 	// Search for similar events already pending or being processed.
-	// An event is 'similar' if it has the same type, device number and parameter even if the text is different.
+	// An event is 'similar' if it has the same type, device number, CAN address and parameter even if the text is different.
 	TaskCriticalSectionLocker lock;
 
 	Event** pe = &eventsPending;
 	while (*pe != nullptr && (et >= (*pe)->type || (*pe)->isBeingProcessed))		// while the next event in the list has same or higher priority than the new one
 	{
-		if (et == (*pe)->type && devNum == (*pe)->deviceNumber
+		if (et == (*pe)->type && devNum == (*pe)->deviceNumber &&(*pe)->param == p_param
 #if SUPPORT_CAN_EXPANSION
 			 && p_ba == (*pe)->boardAddress
 #endif
-			)
+		   )
 		{
 			return false;						// there is a similar event already in the queue
 		}
@@ -52,6 +56,7 @@ inline Event::Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, uint
 
 	// We didn't find a similar event, so add the new one
 	*pe = new Event(*pe, et, p_param, p_ba, devNum, format, vargs);
+	++eventsQueued;
 	return true;
 }
 
@@ -128,6 +133,7 @@ inline Event::Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, uint
 	{
 		eventsPending = ev->next;
 		delete ev;
+		++eventsProcessed;
 	}
 }
 
@@ -141,7 +147,7 @@ inline Event::Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, uint
 		{
 		case EventType::heater_fault:
 			{
-				const char *_ecv_array heaterFaultText = HeaterFaultText[max<size_t>(ep->param, ARRAY_SIZE(HeaterFaultText) - 1)];
+				const char *_ecv_array heaterFaultText = HeaterFaultText[min<size_t>(ep->param, ARRAY_SIZE(HeaterFaultText) - 1)];
 				str.printf("Heater %u fault: %s%s", ep->deviceNumber, heaterFaultText, ep->text.c_str());
 			}
 			return ErrorMessage;
@@ -189,6 +195,12 @@ inline Event::Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, uint
 	}
 	str.copy("Internal error in Event");
 	return ErrorMessage;
+}
+
+// Generate diagnostic data
+/*static*/ void Event::Diagnostics(MessageType mt, Platform& p) noexcept
+{
+	p.MessageF(mt, "Events: %u queued, %u completed\n", eventsQueued, eventsProcessed);
 }
 
 // End

@@ -44,7 +44,7 @@ public:
 //	static size_t GetIndexSpace() noexcept { return totalIndexSpace; }
 //	static size_t GetHeapSpace() noexcept { return totalHeapSpace; }
 	static bool CheckIntegrity(const StringRef& errmsg) noexcept;
-	static void Diagnostics(MessageType mt) noexcept;
+	static void Diagnostics(MessageType mt, Platform& p) noexcept;
 
 protected:
 	void InternalAssign(const char *s, size_t len) noexcept;

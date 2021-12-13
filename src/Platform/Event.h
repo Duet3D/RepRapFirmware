@@ -63,6 +63,9 @@ public:
 	// Mark the highest priority event as completed
 	static void FinishedProcessing() noexcept;
 
+	// Generate diagnostic data
+	static void Diagnostics(MessageType mt, Platform& p) noexcept;
+
 private:
 	Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, uint8_t devNum, CanAddress p_ba, const char *_ecv_array format, va_list vargs) noexcept;
 
@@ -75,6 +78,8 @@ private:
 	String<50> text;						// additional info to display to the user
 
 	static Event * _ecv_null eventsPending;	// linked list of events waiting to be processed
+	static unsigned int eventsQueued;
+	static unsigned int eventsProcessed;
 };
 
 #endif /* SRC_PLATFORM_EVENT_H_ */
