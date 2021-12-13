@@ -558,7 +558,7 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 		return DoFilePrint(gb, reply);
 	}
-	else if (&gb == autoPauseGCode)
+	else if (&gb == autoPauseGCode && !gb.LatestMachineState().waitingForAcknowledgement)
 	{
 		if (Event::StartProcessing())
 		{

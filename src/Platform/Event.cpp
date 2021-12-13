@@ -92,9 +92,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, uin
 	if (ep != nullptr && ep->isBeingProcessed)
 	{
 		vars.InsertNewParameter("D", ExpressionValue((int32_t)(ep->deviceNumber)));
-#if SUPPORT_CAN_EXPANSION
-		vars.InsertNewParameter("B", ExpressionValue((int32_t)(ep->boardAddress)));
-#endif
+		vars.InsertNewParameter("B", ExpressionValue((int32_t)(ep->boardAddress)));		// always include B so that the same macros can be used on all Duets
 		vars.InsertNewParameter("P", ExpressionValue((int32_t)(ep->param)));
 	}
 }
