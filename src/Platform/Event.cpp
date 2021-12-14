@@ -156,18 +156,22 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, uin
 
 		case EventType::driver_error:
 #if SUPPORT_CAN_EXPANSION
-			str.printf("Driver %u.%u error: %s", ep->boardAddress, ep->deviceNumber, ep->text.c_str());
+			str.printf("Driver %u.%u error: ", ep->boardAddress, ep->deviceNumber);
 #else
-			str.printf("Driver %u error: %s", ep->deviceNumber, ep->text.c_str());
+			str.printf("Driver %u error: ", ep->deviceNumber);
 #endif
+			StandardDriverStatus(ep->param).AppendText(str, 2);
+			str.cat(ep->text.c_str());
 			return ErrorMessage;
 
 		case EventType::driver_warning:
 #if SUPPORT_CAN_EXPANSION
-			str.printf("Driver %u.%u warning: %s", ep->boardAddress, ep->deviceNumber, ep->text.c_str());
+			str.printf("Driver %u.%u warning: ", ep->boardAddress, ep->deviceNumber);
 #else
-			str.printf("Driver %u warning: %s", ep->deviceNumber, ep->text.c_str());
+			str.printf("Driver %u warning: ", ep->deviceNumber);
 #endif
+			StandardDriverStatus(ep->param).AppendText(str, 1);
+			str.cat(ep->text.c_str());
 			return WarningMessage;
 
 		case EventType::driver_stall:

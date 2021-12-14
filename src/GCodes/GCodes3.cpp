@@ -1906,7 +1906,7 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 	// Get the event message
 	String<StringLength100> eventText;
 	const MessageType mt = Event::GetTextDescription(eventText.GetRef());
-	platform.Message(mt, eventText.c_str());							// tell the user about the event and log it
+	platform.MessageF(mt, "%s\n", eventText.c_str());					// tell the user about the event and log it
 
 	// Get the name of the macro file that we should look for
 	String<StringLength50> macroName;
