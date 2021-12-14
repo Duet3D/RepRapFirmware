@@ -13,6 +13,7 @@
 #include <CanMessageBuffer.h>
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
+#include <Platform/Event.h>
 #include <Heating/Heat.h>
 #include "ExpansionManager.h"
 # include <ClosedLoop/ClosedLoop.h>
@@ -653,6 +654,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			case CanMessageType::closedLoopData:
 				ClosedLoop::ProcessReceivedData(buf->id.Src(), buf->msg.closedLoopData, buf->dataLength);
+				break;
+
+			case CanMessageType::event:
+				Event::Add(buf->msg.event, buf->id.Src(), buf->dataLength);
 				break;
 
 #if SUPPORT_ACCELEROMETERS

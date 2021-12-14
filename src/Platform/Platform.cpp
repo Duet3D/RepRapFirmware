@@ -725,14 +725,9 @@ void Platform::Init() noexcept
 	temperatureShutdownDrivers.Clear();
 	temperatureWarningDrivers.Clear();
 	shortToGroundDrivers.Clear();
-	openLoadADrivers.Clear();
-	openLoadBDrivers.Clear();
-	notOpenLoadADrivers.Clear();
-	notOpenLoadBDrivers.Clear();
 #endif
 
 #if HAS_STALL_DETECT
-	stalledDrivers.Clear();
 	logOnStallDrivers.Clear();
 	eventOnStallDrivers.Clear();
 #endif
@@ -1088,16 +1083,25 @@ void Platform::Spin() noexcept
 			// Check one TMC2660 or TMC2224 for temperature warning or temperature shutdown
 			if (enableValues[nextDriveToPoll] >= 0)					// don't poll driver if it is flagged "no poll"
 			{
-				const StandardDriverStatus stat = SmartDrivers::GetStatus(nextDriveToPoll, true, true);
+				StandardDriverStatus stat = SmartDrivers::GetStatus(nextDriveToPoll, true, true);
 				const DriversBitmap mask = DriversBitmap::MakeFromBits(nextDriveToPoll);
 				if (stat.ot)
 				{
 					temperatureShutdownDrivers |= mask;
 				}
-				else if (stat.otpw)
+				else
 				{
-					temperatureWarningDrivers |= mask;
+					temperatureShutdownDrivers &= ~mask;
+					if (stat.otpw)
+					{
+						temperatureWarningDrivers |= mask;
+					}
+					else
+					{
+						temperatureWarningDrivers &= ~mask;
+					}
 				}
+
 				if (stat.s2ga || stat.s2gb || stat.s2vsa || stat.s2vsb)
 				{
 					shortToGroundDrivers |= mask;
@@ -1107,73 +1111,80 @@ void Platform::Spin() noexcept
 					shortToGroundDrivers &= ~mask;
 				}
 
+				// Deal with the open load bits
 				// The driver often produces a transient open-load error, especially in stealthchop mode, so we require the condition to persist before we report it.
-				// Also, false open load indications persist when in standstill, if the phase has zero current in that position
-				if (stat.ola)
+				// So clear them unless they have been active for the minimum time.
+				MillisTimer& timer = openLoadTimers[nextDriveToPoll];
+				if (stat.IsAnyOpenLoadBitSet())
 				{
-					if (!openLoadATimer.IsRunning())
+					if (timer.IsRunning())
 					{
-						openLoadATimer.Start();
-						openLoadADrivers.Clear();
-						notOpenLoadADrivers.Clear();
+						if (!timer.Check(OpenLoadTimeout))
+						{
+							stat.ClearOpenLoadBits();
+						}
 					}
-					openLoadADrivers |= mask;
+					else
+					{
+						timer.Start();
+						stat.ClearOpenLoadBits();
+					}
 				}
-				else if (openLoadATimer.IsRunning())
+				else
 				{
-					notOpenLoadADrivers |= mask;
-					if (openLoadADrivers.Disjoint(~notOpenLoadADrivers))
-					{
-						openLoadATimer.Stop();
-					}
+					timer.Stop();
 				}
 
-				if (stat.olb)
+				const StandardDriverStatus oldStatus = lastEventStatus[nextDriveToPoll];
+				lastEventStatus[nextDriveToPoll] = stat;
+				if (stat.HasNewErrorSince(oldStatus))
 				{
-					if (!openLoadBTimer.IsRunning())
+					// It's a new error
+# if SUPPORT_REMOTE_COMMANDS
+					if (CanInterface::InExpansionMode())
 					{
-						openLoadBTimer.Start();
-						openLoadBDrivers.Clear();
-						notOpenLoadBDrivers.Clear();
+						CanInterface::RaiseEvent(EventType::driver_error, stat.AsU16(), nextDriveToPoll, "", va_list());
 					}
-					openLoadBDrivers |= mask;
-				}
-				else if (openLoadBTimer.IsRunning())
-				{
-					notOpenLoadBDrivers |= mask;
-					if (openLoadBDrivers.Disjoint(~notOpenLoadBDrivers))
+					else
+#endif
 					{
-						openLoadBTimer.Stop();
+						Event::AddEvent(EventType::driver_error, stat.AsU16(), CanInterface::GetCanAddress(), nextDriveToPoll, "");
+					}
+				}
+				else if (stat.HasNewWarningSince(oldStatus))
+				{
+					// It's a new warning
+# if SUPPORT_REMOTE_COMMANDS
+					if (CanInterface::InExpansionMode())
+					{
+						CanInterface::RaiseEvent(EventType::driver_warning, stat.AsU16(), nextDriveToPoll, "", va_list());
+					}
+					else
+#endif
+					{
+						Event::AddEvent(EventType::driver_warning, stat.AsU16(), CanInterface::GetCanAddress(), nextDriveToPoll, "");
 					}
 				}
 
 # if HAS_STALL_DETECT
-				if (stat.stall)
+				if (stat.HasNewStallSince(oldStatus) && reprap.GetGCodes().IsReallyPrinting())
 				{
-					if (stalledDrivers.Disjoint(mask) && reprap.GetGCodes().IsReallyPrinting())
-					{
-						// This stall is new so check whether we need to perform some action in response to the stall
+					// This stall is new so check whether we need to perform some action in response to the stall
 #  if SUPPORT_REMOTE_COMMANDS
-						if (CanInterface::InExpansionMode())
-						{
-							CanInterface::RaiseEvent(EventType::driver_stall, 0, nextDriveToPoll, "", va_list());
-						}
-						else
-#  endif
-						if (eventOnStallDrivers.Intersects(mask))
-						{
-							Event::AddEvent(EventType::driver_stall, 0, CanInterface::GetCanAddress(), nextDriveToPoll, "");
-						}
-						else if (logOnStallDrivers.Intersects(mask))
-						{
-							MessageF(WarningMessage, "Driver %u stalled at Z height %.2f", nextDriveToPoll, (double)reprap.GetMove().LiveCoordinate(Z_AXIS, reprap.GetCurrentTool()));
-						}
+					if (CanInterface::InExpansionMode())
+					{
+						CanInterface::RaiseEvent(EventType::driver_stall, 0, nextDriveToPoll, "", va_list());
 					}
-					stalledDrivers |= mask;
-				}
-				else
-				{
-					stalledDrivers &= ~mask;
+					else
+#  endif
+					if (eventOnStallDrivers.Intersects(mask))
+					{
+						Event::AddEvent(EventType::driver_stall, 0, CanInterface::GetCanAddress(), nextDriveToPoll, "");
+					}
+					else if (logOnStallDrivers.Intersects(mask))
+					{
+						MessageF(WarningMessage, "Driver %u stalled at Z height %.2f", nextDriveToPoll, (double)reprap.GetMove().LiveCoordinate(Z_AXIS, reprap.GetCurrentTool()));
+					}
 				}
 # endif
 			}
@@ -1207,15 +1218,13 @@ void Platform::Spin() noexcept
 	{
 		driversPowered = true;
 #if HAS_SMART_DRIVERS
-		openLoadATimer.Stop();
-		openLoadBTimer.Stop();
+		for (size_t i= 0; i < MaxSmartDrivers; ++i)
+		{
+			openLoadTimers[i].Stop();
+		}
 		temperatureShutdownDrivers.Clear();
 		temperatureWarningDrivers.Clear();
 		shortToGroundDrivers.Clear();
-		openLoadADrivers.Clear();
-		openLoadBDrivers.Clear();
-		notOpenLoadADrivers.Clear();
-		notOpenLoadBDrivers.Clear();
 #endif
 	}
 
@@ -1249,43 +1258,6 @@ void Platform::Spin() noexcept
 		if (now - lastDriverPollMillis > MinimumWarningInterval)
 		{
 			bool reported = false;
-#if HAS_SMART_DRIVERS
-			ReportDrivers(ErrorMessage, shortToGroundDrivers, "short-to-ground", reported);
-			ReportDrivers(ErrorMessage, temperatureShutdownDrivers, "over temperature shutdown", reported);
-			if (openLoadATimer.CheckAndStop(OpenLoadTimeout))
-			{
-				ReportDrivers(WarningMessage, openLoadADrivers, "motor phase A may be disconnected", reported);
-			}
-			if (openLoadBTimer.CheckAndStop(OpenLoadTimeout))
-			{
-				ReportDrivers(WarningMessage, openLoadBDrivers, "motor phase B may be disconnected", reported);
-			}
-
-			// Don't warn about a hot driver if we recently turned on a fan to cool it
-			if (temperatureWarningDrivers.IsNonEmpty())
-			{
-				const DriversBitmap driversMonitored[NumTmcDriversSenseChannels] =
-# ifdef DUET_NG
-					{ DriversBitmap::MakeLowestNBits(5), DriversBitmap::MakeLowestNBits(5).ShiftUp(5) };			// first channel is Duet, second is DueX5
-# elif defined(DUET_M)
-					{ DriversBitmap::MakeLowestNBits(5), DriversBitmap::MakeLowestNBits(2).ShiftUp(5) };			// first channel is Duet, second is daughter board
-# else
-					{ DriversBitmap::MakeLowestNBits(NumDirectDrivers) };
-# endif
-				for (unsigned int i = 0; i < NumTmcDriversSenseChannels; ++i)
-				{
-					if (driversFanTimers[i].IsRunning())
-					{
-						const bool timedOut = driversFanTimers[i].CheckAndStop(DriverCoolingTimeout);
-						if (!timedOut)
-						{
-							temperatureWarningDrivers &= ~driversMonitored[i];
-						}
-					}
-				}
-				ReportDrivers(WarningMessage, temperatureWarningDrivers, "high temperature", reported);
-			}
-#endif
 
 #if HAS_VOLTAGE_MONITOR
 			if (numVinOverVoltageEvents != previousVinOverVoltageEvents)
@@ -2374,28 +2346,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 	return GCodeResult::ok;
 }
 
-#if HAS_SMART_DRIVERS
-
-// This is called when a fan that monitors driver temperatures is turned on when it was off
-void Platform::DriverCoolingFansOnOff(DriverChannelsBitmap driverChannelsMonitored, bool on) noexcept
-{
-	driverChannelsMonitored.Iterate
-		([this, on](unsigned int i, unsigned int) noexcept
-			{
-				if (on)
-				{
-					this->driversFanTimers[i].Start();
-				}
-				else
-				{
-					this->driversFanTimers[i].Stop();
-				}
-			}
-		);
-}
-
-#endif
-
 // Get the index of the averaging filter for an analog port.
 // Note, the Thermistor code assumes that this is also the thermistor input number
 int Platform::GetAveragingFilterIndex(const IoPort& port) const noexcept
@@ -3005,8 +2955,10 @@ void Platform::SetEnableValue(size_t driver, int8_t eVal) noexcept
 			temperatureShutdownDrivers &= mask;
 			temperatureWarningDrivers &= mask;
 			shortToGroundDrivers &= mask;
-			openLoadADrivers &= mask;
-			openLoadBDrivers &= mask;
+			if (driver < MaxSmartDrivers)
+			{
+				openLoadTimers[driver].Stop();
+			}
 		}
 #endif
 	}
@@ -5044,7 +4996,7 @@ void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
 	msg->SetStandardFields(MaxSmartDrivers);
 	for (size_t driver = 0; driver < MaxSmartDrivers; ++driver)
 	{
-		msg->data[driver] = SmartDrivers::GetStatus(driver);
+		msg->data[driver] = SmartDrivers::GetStatus(driver).AsU32();
 	}
 # else
 	msg->SetStandardFields(NumDrivers);

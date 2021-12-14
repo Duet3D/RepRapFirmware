@@ -583,7 +583,6 @@ public:
 
 #if HAS_SMART_DRIVERS
 	float GetTmcDriversTemperature(unsigned int boardNumber) const noexcept;
-	void DriverCoolingFansOnOff(DriverChannelsBitmap driverChannelsMonitored, bool on) noexcept;
 	unsigned int GetNumSmartDrivers() const noexcept { return numSmartDrivers; }
 #endif
 
@@ -758,11 +757,10 @@ private:
 	float minimumMovementSpeed;								// minimum allowed movement speed in mm per step clock
 
 #if HAS_SMART_DRIVERS
-	size_t numSmartDrivers;									// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
+	size_t numSmartDrivers;											// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
 	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers;
-	DriversBitmap openLoadADrivers, openLoadBDrivers, notOpenLoadADrivers, notOpenLoadBDrivers;
-	MillisTimer openLoadATimer, openLoadBTimer;
-	MillisTimer driversFanTimers[NumTmcDriversSenseChannels];		// driver cooling fan timers
+	MillisTimer openLoadTimers[MaxSmartDrivers];
+	StandardDriverStatus lastEventStatus[MaxSmartDrivers];
 	uint8_t nextDriveToPoll;
 #endif
 
@@ -774,7 +772,6 @@ private:
 
 #if HAS_STALL_DETECT
 	DriversBitmap logOnStallDrivers, eventOnStallDrivers;
-	DriversBitmap stalledDrivers;
 #endif
 
 #if defined(__LPC17xx__)

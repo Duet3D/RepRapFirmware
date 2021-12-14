@@ -32,6 +32,7 @@
 #include <Platform/PrintPausedReason.h>
 
 class VariableSet;
+class CanMessageEvent;
 
 class Event
 {
@@ -47,6 +48,11 @@ public:
 
 	// Queue an event, or release it if we have a similar event pending already. Returns true if the event was added, false if it was released.
 	static bool AddEventV(EventType et, uint16_t p_param, CanAddress p_ba, uint8_t devNum, const char *_ecv_array format, va_list vargs) noexcept;
+
+#if SUPPORT_CAN_EXPANSION
+	// Queue an event received via CAN
+	static void Add(const CanMessageEvent& msg, CanAddress src, size_t msgLen) noexcept;
+#endif
 
 	// Get the highest priority event if there is one start processing it
 	static bool StartProcessing() noexcept;

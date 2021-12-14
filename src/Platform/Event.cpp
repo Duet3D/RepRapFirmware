@@ -60,6 +60,19 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, uin
 	return true;
 }
 
+#if SUPPORT_CAN_EXPANSION
+
+// Queue an event received via CAN
+/*static*/ void Event::Add(const CanMessageEvent& msg, CanAddress src, size_t msgLen) noexcept
+{
+	// We need to make sure that the text is null terminated
+	String<StringLength100> msgText;
+	msgText.copy(msg.text, msg.GetMaxTextLength(msgLen));
+	(void)AddEvent((EventType)msg.eventType, msg.eventParam, src, msg.deviceNumber, "%s", msgText.c_str());
+}
+
+#endif
+
 // Get the highest priority event and mark it as being serviced
 /*static*/ bool Event::StartProcessing() noexcept
 {

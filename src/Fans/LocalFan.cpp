@@ -70,9 +70,6 @@ void LocalFan::SetHardwarePwm(float pwmVal) noexcept
 void LocalFan::InternalRefresh(bool checkSensors) noexcept
 {
 	float reqVal;
-#if HAS_SMART_DRIVERS
-	DriverChannelsBitmap driverChannelsMonitored;
-#endif
 
 	if (sensorsMonitored.IsEmpty())
 	{
@@ -87,11 +84,7 @@ void LocalFan::InternalRefresh(bool checkSensors) noexcept
 		reqVal = 0.0;
 		const bool bangBangMode = (triggerTemperatures[1] <= triggerTemperatures[0]);
 		sensorsMonitored.Iterate
-		([&reqVal, bangBangMode, this
-#if HAS_SMART_DRIVERS
-		  , &driverChannelsMonitored
-#endif
-		 ](unsigned int sensorNum, unsigned int) noexcept
+		([&reqVal, bangBangMode, this](unsigned int sensorNum, unsigned int) noexcept
 			{
 				const auto sensor = reprap.GetHeat().FindSensor(sensorNum);
 				if (sensor.IsNotNull())
@@ -120,13 +113,6 @@ void LocalFan::InternalRefresh(bool checkSensors) noexcept
 							reqVal = newVal;
 						}
 					}
-#if HAS_SMART_DRIVERS
-					const int channel = sensor->GetSmartDriversChannel();
-					if (channel >= 0)
-					{
-						driverChannelsMonitored.SetBit((unsigned int)channel);
-					}
-#endif
 				}
 			}
 		);
@@ -137,12 +123,6 @@ void LocalFan::InternalRefresh(bool checkSensors) noexcept
 		if (lastVal <= 0.0)
 		{
 			// We are turning this fan on
-#if HAS_SMART_DRIVERS
-			if (driverChannelsMonitored.IsNonEmpty())
-			{
-				reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, true);		// tell Platform that we have started a fan that cools drivers
-			}
-#endif
 			if (reqVal < 1.0 && blipTime != 0)
 			{
 				// Starting the fan from standstill, so blip the fan
@@ -158,12 +138,6 @@ void LocalFan::InternalRefresh(bool checkSensors) noexcept
 	else
 	{
 		blipping = false;
-#if HAS_SMART_DRIVERS
-		if (driverChannelsMonitored.IsNonEmpty() && lastVal > 0.0)
-		{
-			reprap.GetPlatform().DriverCoolingFansOnOff(driverChannelsMonitored, false);	// tell Platform that we have stopped a fan that cools drivers
-		}
-#endif
 	}
 
 	lastVal = reqVal;
