@@ -630,6 +630,8 @@ void Heater::SetAsToolHeater() noexcept
 	if (!modelSetByUser)
 	{
 		model.SetDefaultToolParameters();
+		String<1> dummy;
+		(void)UpdateModel(dummy.GetRef());
 	}
 	if (!monitorsSetByUser && sensorNumber >= 0 && sensorNumber < (int)MaxSensors)
 	{
@@ -643,6 +645,8 @@ void Heater::SetAsBedOrChamberHeater() noexcept
 	if (!modelSetByUser)
 	{
 		model.SetDefaultBedOrChamberParameters();
+		String<1> dummy;
+		(void)UpdateModel(dummy.GetRef());
 	}
 	if (!monitorsSetByUser &&sensorNumber >= 0 && sensorNumber < (int)MaxSensors)
 	{
