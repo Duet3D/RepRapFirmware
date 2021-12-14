@@ -421,24 +421,30 @@ bool Tool::AllHeatersAtHighTemperature(bool forExtrusion) const noexcept
 	return true;
 }
 
+// Activate this tool
 void Tool::Activate() noexcept
 {
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
+		String<StringLength100> message;
+		GCodeResult ret;
 		try
 		{
 			reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
 			reprap.GetHeat().SetStandbyTemperature(heaters[heater], standbyTemperatures[heater]);
+			ret = reprap.GetHeat().Activate(heaters[heater], message.GetRef());
 		}
 		catch (const GCodeException& exc)
 		{
-			String<StringLength100> message;
 			exc.GetMessage(message.GetRef(), nullptr);
-			reprap.GetPlatform().Message(ErrorMessage, message.c_str());
+			ret = GCodeResult::error;
 		}
-		String<1> dummy;
-		(void)reprap.GetHeat().Activate(heaters[heater], dummy.GetRef());
+		if (ret != GCodeResult::ok)
+		{
+			reprap.GetPlatform().MessageF((ret == GCodeResult::warning) ? WarningMessage : ErrorMessage, "%s\n", message.c_str());
+		}
 	}
+
 	if (spindleNumber > -1)
 	{
 		Spindle& spindle = reprap.GetPlatform().AccessSpindle(spindleNumber);
@@ -483,17 +489,21 @@ void Tool::HeatersToActive() const noexcept
 		// Don't switch a heater to active if the active tool is using it and is different from this tool
 		if (currentTool == this || currentTool == nullptr || !currentTool->UsesHeater(heater))
 		{
+			String<StringLength100> message;
+			GCodeResult ret;
 			try
 			{
 				reprap.GetHeat().SetActiveTemperature(heaters[heater], activeTemperatures[heater]);
-				String<1> dummy;
-				(void)reprap.GetHeat().Activate(heaters[heater], dummy.GetRef());
+				ret = reprap.GetHeat().Activate(heaters[heater], message.GetRef());
 			}
 			catch (const GCodeException& exc)
 			{
-				String<StringLength100> message;
 				exc.GetMessage(message.GetRef(), nullptr);
-				reprap.GetPlatform().Message(ErrorMessage, message.c_str());
+				ret = GCodeResult::error;
+			}
+			if (ret != GCodeResult::ok)
+			{
+				reprap.GetPlatform().MessageF((ret == GCodeResult::warning) ? WarningMessage : ErrorMessage, "%s\n", message.c_str());
 			}
 		}
 	}

@@ -604,8 +604,11 @@ void Heater::SetTemperature(float t, bool activeNotStandby) THROWS(GCodeExceptio
 		((activeNotStandby) ? activeTemperature : standbyTemperature) = t;
 		if (GetMode() > HeaterMode::suspended && active == activeNotStandby)
 		{
-			String<1> dummy;
-			(void)SwitchOn(dummy.GetRef());
+			String<StringLength100> reply;
+			if (SwitchOn(reply.GetRef()) > GCodeResult::warning)
+			{
+				throw GCodeException(-1, 1, reply.c_str());
+			}
 		}
 	}
 }
