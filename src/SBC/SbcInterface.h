@@ -101,6 +101,7 @@ private:
 
 	// File I/O
 	Mutex fileMutex;													// locked while a file operation is performed
+	unsigned int numOpenFiles;
 	BinarySemaphore fileSemaphore;										// resolved when the requested file operation has finished
 
 	enum class FileOperation {
