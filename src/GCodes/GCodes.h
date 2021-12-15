@@ -184,11 +184,6 @@ public:
 	bool LowVoltageResume() noexcept;
 #endif
 
-#if HAS_SMART_DRIVERS
-	bool PauseOnStall(DriversBitmap stalledDrivers) noexcept;
-	bool ReHomeOnStall(DriversBitmap stalledDrivers) noexcept;
-#endif
-
 	const char *GetAxisLetters() const noexcept { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
 	size_t GetAxisNumberForLetter(const char axisLetter) const noexcept;
 	MachineType GetMachineType() const noexcept { return machineType; }
@@ -308,14 +303,9 @@ public:
 	static constexpr const char* FILAMENT_CHANGE_G = "filament-change.g";
 	static constexpr const char* DAEMON_G = "daemon.g";
 	static constexpr const char* RUNONCE_G = "runonce.g";
-#if HAS_SMART_DRIVERS
-	static constexpr const char* REHOME_G = "rehome.g";
-#endif
 
 private:
 	GCodes(const GCodes&) = delete;
-
-	enum class HeaterFaultState : uint8_t { noFault, pausePending, timing, stopping, stopped };
 
 	// Resources that can be locked.
 	// To avoid deadlock, if you need multiple resources then you must lock them in increasing numerical order.
