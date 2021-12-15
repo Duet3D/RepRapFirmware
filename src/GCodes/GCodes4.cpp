@@ -1514,14 +1514,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		HandleReply(gb, stateMachineResult, reply.c_str());
 
 		CheckForDeferredPause(gb);
-#if HAS_SBC_INTERFACE
-		if (reportPause)
-		{
-			fileGCode->Invalidate();
-			reprap.GetSbcInterface().ReportPause();
-		}
-#endif
 	}
+
+#if HAS_SBC_INTERFACE
+	if (reportPause)
+	{
+		fileGCode->Invalidate();
+		reprap.GetSbcInterface().ReportPause();
+	}
+#endif
 }
 
 // Do a manual probe. This is in its own function to reduce the amount of stack space needed by RunStateMachine(). See the comment at the top of that function.

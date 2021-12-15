@@ -89,9 +89,29 @@ bool MenuItem::IsVisible() const noexcept
 					return ps == PauseState::pausing || ps == PauseState::paused;
 				}
 	case 7:		return reprap.GetGCodes().IsReallyPrintingOrResuming();
-#if HAS_MASS_STORAGE
-	case 10:	return MassStorage::IsDriveMounted(0);
-	case 11:	return !MassStorage::IsDriveMounted(0);
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+	case 10:	return
+# if HAS_MASS_STORAGE
+					MassStorage::IsDriveMounted(0)
+# endif
+# if HAS_MASS_STORAGE && HAS_SBC_INTERFACE
+					||
+# endif
+# if HAS_SBC_INTERFACE
+					reprap.UsingSbcInterface()
+# endif
+					;
+	case 11:	return
+# if HAS_MASS_STORAGE
+					!MassStorage::IsDriveMounted(0)
+# endif
+# if HAS_MASS_STORAGE && HAS_SBC_INTERFACE
+					&&
+# endif
+# if HAS_SBC_INTERFACE
+					!reprap.UsingSbcInterface()
+# endif
+					;
 #endif
 	case 20:
 		{		const auto tool = reprap.GetCurrentOrDefaultTool();			// this can be null, especially during startup
@@ -865,7 +885,7 @@ void FilesMenuItem::ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight,
 			}
 			--dirEntriesToSkip;
 		}
-		gotFileInfo =  MassStorage::FindNext(oFileInfo);
+		gotFileInfo = MassStorage::FindNext(oFileInfo);
 	}
 
 	// We always iterate the entire viewport so that old listing lines that may not be overwritten are cleared

@@ -698,6 +698,7 @@ bool MassStorage::FindNext(FileInfo &file_info) noexcept
 		return true;
 	}
 #endif
+	// TODO implement SBC interface for this
 
 	dirMutex.Release();
 	return false;
