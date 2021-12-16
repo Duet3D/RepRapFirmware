@@ -127,6 +127,11 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const Stri
 	const GCodeResult rslt = CommonConfigure(gb, reply, InterruptMode::change, seen);
 	if (rslt <= GCodeResult::warning)
 	{
+		if (seen)
+		{
+			Init();				// Init() resets dataReceived and version, so only do it if the port has been configured
+		}
+
 		gb.TryGetFValue('L', mmPerRev, seen);
 		gb.TryGetFValue('E', minimumExtrusionCheckLength, seen);
 
@@ -160,7 +165,6 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const Stri
 
 		if (seen)
 		{
-			Init();
 			reprap.SensorsUpdated();
 		}
 		else
