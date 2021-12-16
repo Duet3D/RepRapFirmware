@@ -609,6 +609,7 @@ void Heater::SetTemperature(float t, bool activeNotStandby) THROWS(GCodeExceptio
 			{
 				throw GCodeException(-1, 1, reply.c_str());
 			}
+			model.CalcPidConstants(activeTemperature);
 		}
 	}
 }
@@ -692,19 +693,23 @@ GCodeResult Heater::SetTemperature(const CanMessageSetHeaterTemperature& msg, co
 	{
 	case CanMessageSetHeaterTemperature::commandNone:
 		activeTemperature = standbyTemperature = msg.setPoint;
+		model.CalcPidConstants(activeTemperature);
 		return GCodeResult::ok;
 
 	case CanMessageSetHeaterTemperature::commandOff:
 		activeTemperature = standbyTemperature = msg.setPoint;
+		model.CalcPidConstants(activeTemperature);
 		SwitchOff();
 		return GCodeResult::ok;
 
 	case CanMessageSetHeaterTemperature::commandOn:
 		activeTemperature = standbyTemperature = msg.setPoint;
+		model.CalcPidConstants(activeTemperature);
 		return SwitchOn(reply);
 
 	case CanMessageSetHeaterTemperature::commandResetFault:
 		activeTemperature = standbyTemperature = msg.setPoint;
+		model.CalcPidConstants(activeTemperature);
 		return ResetFault(reply);
 
 	case CanMessageSetHeaterTemperature::commandSuspend:
@@ -713,6 +718,7 @@ GCodeResult Heater::SetTemperature(const CanMessageSetHeaterTemperature& msg, co
 
 	case CanMessageSetHeaterTemperature::commandUnsuspend:
 		activeTemperature = standbyTemperature = msg.setPoint;
+		model.CalcPidConstants(activeTemperature);
 		Suspend(false);
 		return GCodeResult::ok;
 
