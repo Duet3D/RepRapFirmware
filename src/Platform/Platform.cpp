@@ -4507,7 +4507,7 @@ GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply
 	if (!seen)
 	{
 		reply.copy("Extrusion ancillary PWM");
-		extrusionAncilliaryPwmPort.AppendDetails(reply);
+		extrusionAncilliaryPwmPort.AppendFullDetails(reply);
 	}
 	return GCodeResult::ok;
 }

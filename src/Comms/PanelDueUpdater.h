@@ -34,7 +34,7 @@ public:
 	virtual ~PanelDueUpdater() noexcept;
 	void Spin() noexcept;
 	void Start(const StringRef& filenameRef, const uint32_t serialChan = 1) noexcept;
-	bool Idle() const noexcept { return state == FlashState::idle; }
+	bool Idle() const noexcept { return state.RawValue() == FlashState::idle; }
 
 private:
 	NamedEnum(FlashState, uint8_t,

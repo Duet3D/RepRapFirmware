@@ -22,7 +22,7 @@ public:
 
 	bool SetMode(PinAccess access) noexcept;
 	void Release() noexcept;
-	void AppendDetails(const StringRef& str) const noexcept;
+	void AppendBasicDetails(const StringRef& str) const noexcept;
 
 	static size_t AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort * const ports[], const PinAccess access[]) THROWS(GCodeException);
 	bool AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, PinAccess access) THROWS(GCodeException);
@@ -102,7 +102,7 @@ class PwmPort : public IoPort
 public:
 	PwmPort() noexcept;
 
-	void AppendDetails(const StringRef& str) const noexcept;		// hides the one in IoPort
+	void AppendFullDetails(const StringRef& str) const noexcept;
 	void AppendFrequency(const StringRef& str) const noexcept;		// append the frequency if the port is valid
 	void SetFrequency(PwmFrequency freq) noexcept { frequency = freq; }
 	PwmFrequency GetFrequency() const noexcept { return frequency; }
