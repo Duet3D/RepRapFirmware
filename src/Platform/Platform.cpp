@@ -522,14 +522,17 @@ void Platform::Init() noexcept
 #if HAS_SMART_DRIVERS
 # if defined(DUET_NG)
 	// Test for presence of a DueX2 or DueX5 expansion board and work out how many TMC2660 drivers we have
+	// Call this before set set up the direction pins, because we use pulldown resistors on direction pins to specify the DueXn version.
 	expansionBoard = DuetExpansion::DueXnInit();
 
 	switch (expansionBoard)
 	{
 	case ExpansionBoardType::DueX2:
+	case ExpansionBoardType::DueX2_v0_11:
 		numSmartDrivers = 7;
 		break;
 	case ExpansionBoardType::DueX5:
+	case ExpansionBoardType::DueX5_v0_11:
 		numSmartDrivers = 10;
 		break;
 	case ExpansionBoardType::none:
@@ -645,7 +648,7 @@ void Platform::Init() noexcept
 		driveDriverBits[driver + MaxAxesPlusExtruders] = StepPins::CalcDriverBitmap(driver);
 	}
 
-	// Set up the local drivers
+	// Set up the local drivers. Do this after we have read any direction pins that specify the board type.
 	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
 		directions[driver] = true;								// drive moves forwards by default

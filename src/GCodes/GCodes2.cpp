@@ -1651,7 +1651,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 115: // Print firmware version or set hardware type
-#if defined(DUET_NG) || defined(DUET_06_85)
+#ifdef DUET_NG
 				if (gb.Seen('P'))
 				{
 					if (runningConfigFile)

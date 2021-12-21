@@ -359,9 +359,16 @@ public:
 #endif
 
 #ifdef DUET_NG
-	bool IsDueXPresent() const noexcept { return expansionBoard != ExpansionBoardType::none; }
 	const char *_ecv_array GetBoardName() const noexcept;
 	const char *_ecv_array GetBoardShortName() const noexcept;
+
+	const float GetDefaultThermistorSeriesR(size_t inputNumber) const noexcept
+	{
+		// This is only called from one place so we may as well inline it
+		return (inputNumber >= 3 && (expansionBoard == ExpansionBoardType::DueX5_v0_11 || expansionBoard == ExpansionBoardType::DueX2_v0_11))
+			? DefaultThermistorSeriesR_DueX_v0_11
+				: DefaultThermistorSeriesR;
+	}
 #endif
 
 	const MacAddress& GetDefaultMacAddress() const noexcept { return defaultMacAddress; }

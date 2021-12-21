@@ -197,6 +197,7 @@ constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] =
 
 // Thermistor series resistor value in Ohms
 constexpr float DefaultThermistorSeriesR = 4700.0;
+constexpr float DefaultThermistorSeriesR_DueX_v0_11 = 2200.0;
 
 // Digital pins the 31855s have their select lines tied to
 constexpr Pin SpiTempSensorCsPins[] =
