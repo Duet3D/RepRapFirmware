@@ -14,11 +14,11 @@
 class LocalZProbe final : public ZProbe
 {
 public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<LocalZProbe>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<LocalZProbe>(p); }
+	DECLARE_FREELIST_NEW_DELETE(LocalZProbe)
 
 	LocalZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::none) { }
 	~LocalZProbe() noexcept override;
+
 	void SetIREmitter(bool on) const noexcept override;
 	uint16_t GetRawReading() const noexcept override;
 	bool SetProbing(bool isProbing) noexcept override;

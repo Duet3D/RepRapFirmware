@@ -44,8 +44,7 @@ class Tool INHERIT_OBJECT_MODEL
 public:
 	friend class RepRap;
 
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<Tool>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<Tool>(p); }
+	DECLARE_FREELIST_NEW_DELETE(Tool)
 
 	~Tool() override { delete name; }
 

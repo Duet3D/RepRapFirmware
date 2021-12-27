@@ -17,11 +17,11 @@
 class RemoteZProbe final : public ZProbe
 {
 public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<RemoteZProbe>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<RemoteZProbe>(p); }
+	DECLARE_FREELIST_NEW_DELETE(RemoteZProbe)
 
 	RemoteZProbe(unsigned int num, CanAddress bn, ZProbeType p_type) noexcept : ZProbe(num, p_type), boardAddress(bn), state(false) { }
 	~RemoteZProbe() noexcept override;
+
 	void SetIREmitter(bool on) const noexcept override { }
 	uint16_t GetRawReading() const noexcept override;
 	bool SetProbing(bool isProbing) noexcept override;

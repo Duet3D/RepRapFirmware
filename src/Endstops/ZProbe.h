@@ -105,11 +105,11 @@ protected:
 class MotorStallZProbe final : public ZProbe
 {
 public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<MotorStallZProbe>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<MotorStallZProbe>(p); }
+	DECLARE_FREELIST_NEW_DELETE(MotorStallZProbe)
 
 	MotorStallZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::zMotorStall) { }
 	~MotorStallZProbe() override { }
+
 	void SetIREmitter(bool on) const noexcept override { }
 	uint16_t GetRawReading() const noexcept override { return 4000; }
 	bool SetProbing(bool isProbing) noexcept override { return true; }
@@ -122,11 +122,11 @@ private:
 class DummyZProbe final : public ZProbe
 {
 public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<DummyZProbe>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<DummyZProbe>(p); }
+	DECLARE_FREELIST_NEW_DELETE(DummyZProbe)
 
 	DummyZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::none) { }
 	~DummyZProbe() noexcept override { }
+
 	void SetIREmitter(bool on) const noexcept override { }
 	uint16_t GetRawReading() const noexcept override { return 4000; }
 	bool SetProbing(bool isProbing) noexcept override { return true; }
