@@ -1969,7 +1969,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 						else
 						{
-							if (temperature < NEARLY_ABS_ZERO)
+							if (temperature <= NEARLY_ABS_ZERO)
 							{
 								heat.SwitchOff(currentHeater);
 							}

@@ -657,7 +657,7 @@ void Tool::SetToolHeaterActiveTemperature(size_t heaterNumber, float temp) THROW
 		const int8_t heater = heaters[heaterNumber];
 		const Tool * const currentTool = reprap.GetCurrentTool();
 		const bool setHeater = (currentTool == nullptr || currentTool == this);
-		if (temp < NEARLY_ABS_ZERO)								// temperatures close to ABS_ZERO turn off the heater
+		if (temp <= NEARLY_ABS_ZERO)								// temperatures close to ABS_ZERO turn off the heater
 		{
 			activeTemperatures[heaterNumber] = 0;
 			if (setHeater)
@@ -688,7 +688,7 @@ void Tool::SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp) THRO
 		const Tool * const currentTool = reprap.GetCurrentTool();
 		const Tool * const lastStandbyTool = reprap.GetHeat().GetLastStandbyTool(heater);
 		const bool setHeater = (currentTool == nullptr || currentTool == this || lastStandbyTool == nullptr || lastStandbyTool == this);
-		if (temp < NEARLY_ABS_ZERO)								// temperatures close to ABS_ZERO turn off the heater
+		if (temp <= NEARLY_ABS_ZERO)								// temperatures close to ABS_ZERO turn off the heater
 		{
 			standbyTemperatures[heaterNumber] = 0;
 			if (setHeater)
