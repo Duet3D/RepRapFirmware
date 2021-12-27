@@ -12,29 +12,44 @@
 #include <CanMessageBuffer.h>
 #include <CanMessageFormats.h>
 #include "CanInterface.h"
+#include <General/FreelistManager.h>
 
-static CanMessageBuffer *movementBufferList = nullptr;
-static CanMessageBuffer *urgentMessageBuffer = nullptr;
-static uint32_t currentMoveClocks;
+namespace CanMotion
+{
+	enum class DriverStopState : uint8_t { inactive = 0, active, stopRequested, stopSent };
 
-#if 0
-static unsigned int numMotionMessagesSentLast = 0;
-#endif
+	// Class to record drivers active and requests to stop them
+	class DriversStopList
+	{
+	public:
+		DECLARE_FREELIST_NEW_DELETE(DriversStopList)
 
-static volatile uint32_t hiccupToInsert = 0;
-static CanDriversList driversToStop[2];
-static size_t driversToStopIndexBeingFilled = 0;
-static size_t indexOfNextDriverToStop = 0;
-static volatile bool stopAllFlag = false;
-static bool doingStopAll = false;
-static LargeBitmap<CanId::MaxCanAddress + 1> boardsActiveInLastMove;
-static uint8_t nextSeq[CanId::MaxCanAddress + 1] = { 0 };
+		DriversStopList(DriversStopList *p_next, CanAddress p_ba) noexcept : next(p_next), boardAddress(p_ba) { }
+
+		DriversStopList *next;
+		CanAddress boardAddress;
+		uint8_t numDrivers;
+		volatile DriverStopState stopStates[MaxLinearDriversPerCanSlave];
+		volatile int32_t stopSteps[MaxLinearDriversPerCanSlave];
+	};
+
+	static CanMessageBuffer urgentMessageBuffer(nullptr);
+	static CanMessageBuffer *movementBufferList = nullptr;
+	static DriversStopList *volatile stopList = nullptr;
+	static uint32_t currentMoveClocks;
+	static volatile uint32_t hiccupToInsert = 0;
+	static Mutex stopListMutex;
+	static uint8_t nextSeq[CanId::MaxCanAddress + 1] = { 0 };
+
+	static CanMessageBuffer *GetBuffer(const PrepParams& params, DriverId canDriver) noexcept;
+	static void InternalStopDriverWhenProvisional(DriverId driver) noexcept;
+	static bool InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noexcept;
+}
 
 void CanMotion::Init() noexcept
 {
 	movementBufferList = nullptr;
-	urgentMessageBuffer = CanMessageBuffer::Allocate();
-	boardsActiveInLastMove.ClearAll();
+	stopListMutex.Create("stopList");
 }
 
 // This is called by DDA::Prepare at the start of preparing a movement
@@ -51,9 +66,23 @@ void CanMotion::StartMovement() noexcept
 		movementBufferList = p->next;
 		CanMessageBuffer::Free(p);
 	}
+
+	// Free up any stop list items left over from the previous move
+	MutexLocker lock(stopListMutex);
+
+	for (;;)
+	{
+		DriversStopList *p = stopList;
+		if (p == nullptr)
+		{
+			break;
+		}
+		stopList = p->next;
+		delete p;
+	}
 }
 
-CanMessageBuffer *GetBuffer(const PrepParams& params, DriverId canDriver) noexcept
+CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDriver) noexcept
 {
 	if (canDriver.localDriver >= MaxLinearDriversPerCanSlave)
 	{
@@ -178,34 +207,18 @@ void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver
 #endif
 
 // This is called by DDA::Prepare when all DMs for CAN drives have been processed. Return the calculated move time in steps, or 0 if there are no CAN moves
-uint32_t CanMotion::FinishMovement(uint32_t moveStartTime, bool simulating) noexcept
+uint32_t CanMotion::FinishMovement(uint32_t moveStartTime, bool simulating, bool checkingEndstops) noexcept
 {
-	boardsActiveInLastMove.ClearAll();
 	CanMessageBuffer *buf = movementBufferList;
 	if (buf == nullptr)
 	{
 		return 0;
 	}
 
-#if 0
-	numMotionMessagesSentLast = 0;
-#endif
+	MutexLocker lock(stopListMutex);
+
 	do
 	{
-		boardsActiveInLastMove.SetBit(buf->id.Dst());					//TODO should we set this if there were no steps for drives on the board, just drives to be enabled?
-#if USE_REMOTE_INPUT_SHAPING
-		buf->msg.moveLinearShaped.whenToExecute = moveStartTime;
-		uint8_t& seq = nextSeq[buf->id.Dst()];
-		buf->msg.moveLinearShaped.seq = seq;
-		seq = (seq + 1) & 0x7F;
-		buf->dataLength = buf->msg.moveLinearShaped.GetActualDataLength();
-#else
-		buf->msg.moveLinear.whenToExecute = moveStartTime;
-		uint8_t& seq = nextSeq[buf->id.Dst()];
-		buf->msg.moveLinear.seq = seq;
-		seq = (seq + 1) & 0x7F;
-		buf->dataLength = buf->msg.moveLinear.GetActualDataLength();
-#endif
 		CanMessageBuffer * const nextBuffer = buf->next;				// must get this before sending the buffer, because sending the buffer releases it
 		if (simulating)
 		{
@@ -213,11 +226,30 @@ uint32_t CanMotion::FinishMovement(uint32_t moveStartTime, bool simulating) noex
 		}
 		else
 		{
+#if USE_REMOTE_INPUT_SHAPING
+			CanMessageMovementLinear& msg = buf->msg.moveLinearShaped;
+#else
+			CanMessageMovementLinear& msg = buf->msg.moveLinear;
+#endif
+			msg.whenToExecute = moveStartTime;
+			uint8_t& seq = nextSeq[buf->id.Dst()];
+			msg.seq = seq;
+			seq = (seq + 1) & 0x7F;
+			buf->dataLength = msg.GetActualDataLength();
+			if (checkingEndstops)
+			{
+				// Set up the stop list
+				DriversStopList * const sl = new DriversStopList(stopList, buf->id.Dst());
+				const size_t nd = msg.numDrivers;
+				sl->numDrivers = (uint8_t)nd;
+				for (size_t i = 0; i < nd; ++i)
+				{
+					sl->stopStates[i] = (msg.perDrive[i].steps != 0) ? DriverStopState::active : DriverStopState::inactive;
+				}
+				stopList = sl;
+			}
 			CanInterface::SendMotion(buf);								// queues the buffer for sending and frees it when done
 		}
-#if 0
-		++numMotionMessagesSentLast;
-#endif
 		buf = nextBuffer;
 	} while (buf != nullptr);
 
@@ -231,51 +263,31 @@ bool CanMotion::CanPrepareMove() noexcept
 }
 
 // This is called by the CanSender task to check if we have any urgent messages to send
+// The only urgent messages we may have currently are messages to stop drivers.
 CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 {
-	if (stopAllFlag)
-	{
-		// Send a broadcast Stop All message first, followed by individual ones
-		driversToStop[driversToStopIndexBeingFilled].Clear();
-		driversToStop[driversToStopIndexBeingFilled ^ 1].Clear();
-		auto msg = urgentMessageBuffer->SetupBroadcastMessage<CanMessageStopMovement>(CanInterface::GetCanAddress());
-		msg->whichDrives = 0xFFFF;
-		doingStopAll = true;
-		stopAllFlag = false;
-		indexOfNextDriverToStop = 0;
-		return urgentMessageBuffer;
-	}
+	MutexLocker lock(stopListMutex);			// make sure the list isn't being changed while we traverse it
 
-	if (doingStopAll)
+	for (DriversStopList *sl = stopList; sl != nullptr; sl = sl->next)
 	{
-		const unsigned int nextBoard = boardsActiveInLastMove.FindLowestSetBit();
-		if (nextBoard < boardsActiveInLastMove.NumBits())
+		auto msg = urgentMessageBuffer.SetupRequestMessage<CanMessageStopMovement>(0, CanInterface::GetCanAddress(), sl->boardAddress);
+		uint16_t driversBeingStopped = 0;
+		size_t numDriversStopped = 0;
+		for (size_t driver = 0; driver < sl->numDrivers; ++driver)
 		{
-			boardsActiveInLastMove.ClearBit(nextBoard);
-			auto msg = urgentMessageBuffer->SetupRequestMessage<CanMessageStopMovement>(0, CanInterface::GetCanAddress(), nextBoard);
-			msg->whichDrives = 0xFFFF;
-			return urgentMessageBuffer;
+			if (sl->stopStates[driver] == DriverStopState::stopRequested)
+			{
+				driversBeingStopped |= 1u << driver;
+				msg->finalStepCounts[numDriversStopped++] = sl->stopSteps[driver];
+				sl->stopStates[driver] = DriverStopState::stopSent;
+			}
 		}
-		doingStopAll = false;
-	}
-
-	if (driversToStop[driversToStopIndexBeingFilled ^ 1].GetNumEntries() == 0 && driversToStop[driversToStopIndexBeingFilled].GetNumEntries() != 0)
-	{
-		driversToStopIndexBeingFilled  = driversToStopIndexBeingFilled ^ 1;
-	}
-
-	if (driversToStop[driversToStopIndexBeingFilled ^ 1].GetNumEntries() != 0)
-	{
-		CanDriversBitmap drivers;
-		const CanAddress board = driversToStop[driversToStopIndexBeingFilled ^ 1].GetNextBoardDriverBitmap(indexOfNextDriverToStop, drivers);
-		if (board != CanId::NoAddress)
+		if (driversBeingStopped != 0)
 		{
-			auto msg = urgentMessageBuffer->SetupRequestMessage<CanMessageStopMovement>(0, CanInterface::GetCanAddress(), board);
-			msg->whichDrives = drivers.GetRaw();
-			return urgentMessageBuffer;
+			msg->whichDrives = driversBeingStopped;
+			urgentMessageBuffer.dataLength = msg->GetActualDataLength(numDriversStopped);
+			return &urgentMessageBuffer;
 		}
-		driversToStop[driversToStopIndexBeingFilled ^ 1].Clear();
-		indexOfNextDriverToStop = 0;
 	}
 
 	return nullptr;
@@ -289,64 +301,116 @@ void CanMotion::InsertHiccup(uint32_t numClocks) noexcept
 	CanInterface::WakeAsyncSenderFromIsr();
 }
 
-void CanMotion::StopDriver(bool isBeingPrepared, DriverId driver) noexcept
+void CanMotion::InternalStopDriverWhenProvisional(DriverId driver) noexcept
 {
-	if (isBeingPrepared)
+	// Search for the correct movement buffer
+	CanMessageBuffer* buf = movementBufferList;
+	while (buf != nullptr && buf->id.Dst() != driver.boardAddress)
 	{
-		// Search for the correct movement buffer
-		CanMessageBuffer* buf = movementBufferList;
-		while (buf != nullptr && buf->id.Dst() != driver.boardAddress)
-		{
-			buf = buf->next;
-		}
+		buf = buf->next;
+	}
 
-		if (buf != nullptr)
-		{
+	if (buf != nullptr)
+	{
 #if USE_REMOTE_INPUT_SHAPING
-			buf->msg.moveLinearShaped.perDrive[driver.localDriver].steps = 0;
+		buf->msg.moveLinearShaped.perDrive[driver.localDriver].steps = 0;
 #else
-			buf->msg.moveLinear.perDrive[driver.localDriver].steps = 0;
+		buf->msg.moveLinear.perDrive[driver.localDriver].steps = 0;
 #endif
+	}
+}
+
+bool CanMotion::InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noexcept
+{
+	DriversStopList *sl = stopList;
+	while (sl != nullptr)
+	{
+		if (sl->boardAddress == driver.boardAddress)
+		{
+			if (sl->stopStates[driver.localDriver] == DriverStopState::active)			// if active and stop not yet requested
+			{
+				sl->stopSteps[driver.localDriver] = steps;								// must assign this one first
+				sl->stopStates[driver.localDriver] = DriverStopState::stopRequested;
+				return true;
+			}
+			break;																		// we found the right board, no point in searching further
+		}
+		sl = sl->next;
+	}
+	return false;
+}
+
+// This is called from the step ISR with isBeingPrepared false, or from the Move task with isBeingPrepared true
+void CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcept
+{
+	if (dda.GetState() == DDA::DDAState::provisional)
+	{
+		InternalStopDriverWhenProvisional(driver);
+	}
+	else
+	{
+		const DriveMovement * const dm = dda.FindDM(axis);
+		if (dm != nullptr)
+		{
+			if (InternalStopDriverWhenMoving(driver, dm->GetNetStepsTaken()))
+			{
+				CanInterface::WakeAsyncSenderFromIsr();
+			}
+		}
+	}
+}
+
+// This is called from the step ISR with isBeingPrepared false, or from the Move task with isBeingPrepared true
+void CanMotion::StopAxis(const DDA& dda, size_t axis) noexcept
+{
+	const Platform& p = reprap.GetPlatform();
+	if (axis < reprap.GetGCodes().GetTotalAxes())
+	{
+		const AxisDriversConfig& cfg = p.GetAxisDriversConfig(axis);
+		if (dda.GetState() == DDA::DDAState::provisional)
+		{
+			for (size_t i = 0; i < cfg.numDrivers; ++i)
+			{
+				const DriverId driver = cfg.driverNumbers[i];
+				if (driver.IsRemote())
+				{
+					InternalStopDriverWhenProvisional(driver);
+				}
+			}
+		}
+		else
+		{
+			const DriveMovement * const dm = dda.FindDM(axis);
+			if (dm != nullptr)
+			{
+				bool somethingStopped = false;
+				const uint32_t steps = dm->GetNetStepsTaken();
+				for (size_t i = 0; i < cfg.numDrivers; ++i)
+				{
+					const DriverId driver = cfg.driverNumbers[i];
+					if (driver.IsRemote() && InternalStopDriverWhenMoving(driver, steps))
+					{
+						somethingStopped = true;
+					}
+				}
+				if (somethingStopped)
+				{
+					CanInterface::WakeAsyncSenderFromIsr();
+				}
+			}
 		}
 	}
 	else
 	{
-		driversToStop[driversToStopIndexBeingFilled].AddEntry(driver);
-		CanInterface::WakeAsyncSenderFromIsr();
+		const DriverId driver = p.GetExtruderDriver(LogicalDriveToExtruder(axis));
+		StopDriver(dda, axis, driver);
 	}
 }
 
-void CanMotion::StopAxis(bool isBeingPrepared, size_t axis) noexcept
+// This is called from the step ISR with isBeingPrepared false, or from the Move task with isBeingPrepared true
+void CanMotion::StopAll(const DDA& dda) noexcept
 {
-	const AxisDriversConfig& cfg = reprap.GetPlatform().GetAxisDriversConfig(axis);
-	if (isBeingPrepared)
-	{
-		for (size_t i = 0; i < cfg.numDrivers; ++i)
-		{
-			const DriverId driver = cfg.driverNumbers[i];
-			if (driver.IsRemote())
-			{
-				StopDriver(true, driver);
-			}
-		}
-	}
-	else if (!stopAllFlag)
-	{
-		for (size_t i = 0; i < cfg.numDrivers; ++i)
-		{
-			const DriverId driver = cfg.driverNumbers[i];
-			if (driver.IsRemote())
-			{
-				driversToStop[driversToStopIndexBeingFilled].AddEntry(driver);
-			}
-		}
-		CanInterface::WakeAsyncSenderFromIsr();
-	}
-}
-
-void CanMotion::StopAll(bool isBeingPrepared) noexcept
-{
-	if (isBeingPrepared)
+	if (dda.GetState() == DDA::DDAState::provisional)
 	{
 		// We still send the messages so that the drives get enabled, but we set the steps to zero
 		for (CanMessageBuffer *buf = movementBufferList; buf != nullptr; buf = buf->next)
@@ -368,8 +432,49 @@ void CanMotion::StopAll(bool isBeingPrepared) noexcept
 	}
 	else
 	{
-		stopAllFlag = true;
-		CanInterface::WakeAsyncSenderFromIsr();
+		// Loop through the axes that are actually moving
+		const GCodes& gc = reprap.GetGCodes();
+		const size_t totalAxes = gc.GetTotalAxes();
+		const Platform& p = reprap.GetPlatform();
+		bool somethingStopped = false;
+		for (size_t axis = 0; axis < totalAxes; ++axis)
+		{
+			const DriveMovement* const dm = dda.FindDM(axis);
+			if (dm != nullptr)
+			{
+				const uint32_t steps = dm->GetNetStepsTaken();
+				const AxisDriversConfig& cfg = p.GetAxisDriversConfig(axis);
+				for (size_t i = 0; i < cfg.numDrivers; ++i)
+				{
+					const DriverId driver = cfg.driverNumbers[i];
+					if (driver.IsRemote() && InternalStopDriverWhenMoving(driver, steps))
+					{
+						somethingStopped = true;
+					}
+				}
+			}
+		}
+		const size_t numExtruders = gc.GetNumExtruders();
+		for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+		{
+			const DriverId driver = p.GetExtruderDriver(extruder);
+			if (driver.IsRemote())
+			{
+				const DriveMovement* const dm = dda.FindDM(extruder);
+				if (dm != nullptr)
+				{
+					if (InternalStopDriverWhenMoving(driver, dm->GetNetStepsTaken()))
+					{
+						somethingStopped = true;
+					}
+				}
+			}
+		}
+
+		if (somethingStopped)
+		{
+			CanInterface::WakeAsyncSenderFromIsr();
+		}
 	}
 }
 
