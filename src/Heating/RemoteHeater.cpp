@@ -238,6 +238,7 @@ void RemoteHeater::SwitchOff() noexcept
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
 		auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanInterface::GetCanAddress(), boardAddress);
 		msg->heaterNumber = GetHeaterNumber();
+		msg->isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber());
 		msg->setPoint = GetTargetTemperature();
 		msg->command = CanMessageSetHeaterTemperature::commandOff;
 		String<StringLength100> reply;
@@ -260,6 +261,7 @@ GCodeResult RemoteHeater::ResetFault(const StringRef& reply) noexcept
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
 	auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanInterface::GetCanAddress(), boardAddress);
 	msg->heaterNumber = GetHeaterNumber();
+	msg->isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber());
 	msg->setPoint = GetTargetTemperature();
 	msg->command = CanMessageSetHeaterTemperature::commandResetFault;
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
@@ -357,6 +359,7 @@ void RemoteHeater::Suspend(bool sus) noexcept
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
 		auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanInterface::GetCanAddress(), boardAddress);
 		msg->heaterNumber = GetHeaterNumber();
+		msg->isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber());
 		msg->setPoint = GetTargetTemperature();
 		msg->command = (sus) ? CanMessageSetHeaterTemperature::commandSuspend : CanMessageSetHeaterTemperature::commandUnsuspend;
 		String<1> dummy;
@@ -384,6 +387,7 @@ GCodeResult RemoteHeater::SwitchOn(const StringRef& reply) noexcept
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
 	auto msg = buf->SetupRequestMessage<CanMessageSetHeaterTemperature>(rid, CanInterface::GetCanAddress(), boardAddress);
 	msg->heaterNumber = GetHeaterNumber();
+	msg->isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber());
 	msg->setPoint = GetTargetTemperature();
 	msg->command = CanMessageSetHeaterTemperature::commandOn;
 	const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);

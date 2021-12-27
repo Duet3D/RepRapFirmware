@@ -138,6 +138,8 @@ protected:
 	float GetMaxTemperatureExcursion() const noexcept { return maxTempExcursion; }
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
 	float GetTargetTemperature() const noexcept { return (active) ? activeTemperature : standbyTemperature; }
+	bool IsBedOrChamber() const noexcept { return isBedOrChamber; }
+
 	GCodeResult SetModel(float hr, float bcr, float fcr, float coolingRateExponent, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept;
 															// set the process model
 	void ReportTuningUpdate() noexcept;						// tell the user what's happening
@@ -195,12 +197,13 @@ private:
 	FopDt model;
 	unsigned int heaterNumber;
 	int sensorNumber;								// the sensor number used by this heater
-	float activeTemperature;						// The required active temperature
-	float standbyTemperature;						// The required standby temperature
-	float maxTempExcursion;							// The maximum temperature excursion permitted while maintaining the setpoint
-	float maxHeatingFaultTime;						// How long a heater fault is permitted to persist before a heater fault is raised
+	float activeTemperature;						// the required active temperature
+	float standbyTemperature;						// the required standby temperature
+	float maxTempExcursion;							// the maximum temperature excursion permitted while maintaining the setpoint
+	float maxHeatingFaultTime;						// how long a heater fault is permitted to persist before a heater fault is raised
 
-	bool active;									// Are we active or standby?
+	bool isBedOrChamber;							// true if this was a bed or chamber heater when we were switched on
+	bool active;									// are we active or standby?
 	bool modelSetByUser;
 	bool monitorsSetByUser;
 };
