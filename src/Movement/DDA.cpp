@@ -1813,14 +1813,7 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 		case EndstopHitAction::stopAxis:
 			StopDrive(hitDetails.axis);								// we must stop the drive before we mess with its coordinates
 #if SUPPORT_CAN_EXPANSION
-			if (state == completed)									// if the call to StopDrive flagged the move as completed
-			{
-				CanMotion::StopAll(*this);
-			}
-			else
-			{
-				CanMotion::StopAxis(*this, hitDetails.axis);
-			}
+			CanMotion::StopAxis(*this, hitDetails.axis);
 #endif
 			if (hitDetails.setAxisLow)
 			{
@@ -1861,34 +1854,6 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 			return;
 		}
 	}
-
-#if DDA_LOG_PROBE_CHANGES
-	else if ((endStopsToCheck & LogProbeChanges) != 0)
-	{
-		switch (platform.GetZProbeResult())
-		{
-		case EndStopHit::lowHit:
-			if (!probeTriggered)
-			{
-				probeTriggered = true;
-				LogProbePosition();
-			}
-			break;
-
-		case EndStopHit::nearStop:
-		case EndStopHit::noStop:
-			if (probeTriggered)
-			{
-				probeTriggered = false;
-				LogProbePosition();
-			}
-			break;
-
-		default:
-			break;
-		}
-	}
-#endif
 }
 
 // Start executing this move. Must be called with interrupts disabled or basepri >= set interrupt priority, to avoid a race condition.

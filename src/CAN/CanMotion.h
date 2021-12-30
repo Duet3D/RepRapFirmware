@@ -34,6 +34,8 @@ namespace CanMotion
 	void StopAxis(const DDA& dda, size_t axis) noexcept;
 	void StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcept
 		pre(driver.IsRemote());
+	void FinishMoveUsingEndstops() noexcept;
+	bool FinishedReverting() noexcept;
 }
 
 #endif

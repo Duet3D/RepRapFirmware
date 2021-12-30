@@ -24,11 +24,12 @@ namespace CanMotion
 	public:
 		DECLARE_FREELIST_NEW_DELETE(DriversStopList)
 
-		DriversStopList(DriversStopList *p_next, CanAddress p_ba) noexcept : next(p_next), boardAddress(p_ba) { }
+		DriversStopList(DriversStopList *p_next, CanAddress p_ba) noexcept : next(p_next), boardAddress(p_ba), sentRevertRequest(0) { }
 
 		DriversStopList *next;
 		CanAddress boardAddress;
 		uint8_t numDrivers;
+		bool sentRevertRequest;
 		volatile DriverStopState stopStates[MaxLinearDriversPerCanSlave];
 		volatile int32_t stopSteps[MaxLinearDriversPerCanSlave];
 	};
@@ -38,6 +39,9 @@ namespace CanMotion
 	static DriversStopList *volatile stopList = nullptr;
 	static uint32_t currentMoveClocks;
 	static volatile uint32_t hiccupToInsert = 0;
+	static volatile bool revertAll = false;
+	static volatile bool revertedAll = false;
+	static volatile uint32_t whenRevertedAll;
 	static Mutex stopListMutex;
 	static uint8_t nextSeq[CanId::MaxCanAddress + 1] = { 0 };
 
@@ -70,6 +74,7 @@ void CanMotion::StartMovement() noexcept
 	// Free up any stop list items left over from the previous move
 	MutexLocker lock(stopListMutex);
 
+	revertAll = revertedAll = false;
 	for (;;)
 	{
 		DriversStopList *p = stopList;
@@ -263,33 +268,64 @@ bool CanMotion::CanPrepareMove() noexcept
 }
 
 // This is called by the CanSender task to check if we have any urgent messages to send
-// The only urgent messages we may have currently are messages to stop drivers.
+// The only urgent messages we may have currently are messages to stop drivers, or to tell them that all drivers have now been stopped and they need to revert to the requested stop position.
 CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 {
-	MutexLocker lock(stopListMutex);			// make sure the list isn't being changed while we traverse it
-
-	for (DriversStopList *sl = stopList; sl != nullptr; sl = sl->next)
+	if (!revertedAll)
 	{
-		auto msg = urgentMessageBuffer.SetupRequestMessage<CanMessageStopMovement>(0, CanInterface::GetCanAddress(), sl->boardAddress);
-		uint16_t driversBeingStopped = 0;
-		size_t numDriversStopped = 0;
-		for (size_t driver = 0; driver < sl->numDrivers; ++driver)
+		MutexLocker lock(stopListMutex);					// make sure the list isn't being changed while we traverse it
+
+		// We have to be careful of race conditions here. The stop list links won't change while we are scanning it because we hold the mutex,
+		// but ISR may change the stop states to StopRequested up until the time at which it changes revertAll from false to true.
+		const bool revertingAll = revertAll;
+		for (DriversStopList *sl = stopList; sl != nullptr; sl = sl->next)
 		{
-			if (sl->stopStates[driver] == DriverStopState::stopRequested)
+			if (!sl->sentRevertRequest)						// if we've already reverted the drivers on this board, no more to do
 			{
-				driversBeingStopped |= 1u << driver;
-				msg->finalStepCounts[numDriversStopped++] = sl->stopSteps[driver];
-				sl->stopStates[driver] = DriverStopState::stopSent;
+				// Set up a reversion message in case we are going to revert the drivers on this board
+				auto revertMsg = urgentMessageBuffer.SetupRequestMessage<CanMessageRevertPosition>(0, CanInterface::GetCanAddress(), sl->boardAddress);
+				uint16_t driversToStop = 0, driversToRevert = 0;
+				size_t numDriversReverted = 0;
+				for (size_t driver = 0; driver < sl->numDrivers; ++driver)
+				{
+					const DriverStopState ss = sl->stopStates[driver];
+					if (ss == DriverStopState::stopRequested)
+					{
+						driversToStop |= 1u << driver;
+						sl->stopStates[driver] = DriverStopState::stopSent;
+					}
+					else if (revertingAll && ss == DriverStopState::stopSent)
+					{
+						driversToRevert |= 1u << driver;
+						revertMsg->finalStepCounts[numDriversReverted++] = sl->stopSteps[driver];
+					}
+				}
+
+				if (driversToStop != 0)
+				{
+					auto stopMsg = urgentMessageBuffer.SetupRequestMessage<CanMessageStopMovement>(0, CanInterface::GetCanAddress(), sl->boardAddress);
+					stopMsg->whichDrives = driversToStop;
+					return &urgentMessageBuffer;
+				}
+
+				if (driversToRevert != 0)
+				{
+					sl->sentRevertRequest = true;
+					revertMsg->whichDrives = driversToRevert;
+					urgentMessageBuffer.dataLength = revertMsg->GetActualDataLength(numDriversReverted);
+					return &urgentMessageBuffer;
+				}
 			}
 		}
-		if (driversBeingStopped != 0)
+
+		// We found nothing to send
+		if (revertingAll)
 		{
-			msg->whichDrives = driversBeingStopped;
-			urgentMessageBuffer.dataLength = msg->GetActualDataLength(numDriversStopped);
-			return &urgentMessageBuffer;
+			// All drivers have been stopped and reverted where requested
+			whenRevertedAll = millis();
+			revertedAll = true;
 		}
 	}
-
 	return nullptr;
 }
 
@@ -430,13 +466,12 @@ void CanMotion::StopAll(const DDA& dda) noexcept
 #endif
 		}
 	}
-	else
+	else if (stopList != nullptr)
 	{
 		// Loop through the axes that are actually moving
 		const GCodes& gc = reprap.GetGCodes();
 		const size_t totalAxes = gc.GetTotalAxes();
 		const Platform& p = reprap.GetPlatform();
-		bool somethingStopped = false;
 		for (size_t axis = 0; axis < totalAxes; ++axis)
 		{
 			const DriveMovement* const dm = dda.FindDM(axis);
@@ -447,9 +482,9 @@ void CanMotion::StopAll(const DDA& dda) noexcept
 				for (size_t i = 0; i < cfg.numDrivers; ++i)
 				{
 					const DriverId driver = cfg.driverNumbers[i];
-					if (driver.IsRemote() && InternalStopDriverWhenMoving(driver, steps))
+					if (driver.IsRemote())
 					{
-						somethingStopped = true;
+						(void)InternalStopDriverWhenMoving(driver, steps);
 					}
 				}
 			}
@@ -463,19 +498,31 @@ void CanMotion::StopAll(const DDA& dda) noexcept
 				const DriveMovement* const dm = dda.FindDM(extruder);
 				if (dm != nullptr)
 				{
-					if (InternalStopDriverWhenMoving(driver, dm->GetNetStepsTaken()))
-					{
-						somethingStopped = true;
-					}
+					(void)InternalStopDriverWhenMoving(driver, dm->GetNetStepsTaken());
 				}
 			}
 		}
 
-		if (somethingStopped)
-		{
-			CanInterface::WakeAsyncSenderFromIsr();
-		}
+		revertAll = true;
+		CanInterface::WakeAsyncSenderFromIsr();
 	}
+}
+
+// This is called by the step ISR when a movement that uses endstops or a probe has completed.
+// We must make sure that all boards have been told to adjust their stepper motor positions to the points at which we wanted them to stop.
+void CanMotion::FinishMoveUsingEndstops() noexcept
+{
+	if (!revertAll)
+	{
+		revertAll = true;
+		CanInterface::WakeAsyncSenderFromIsr();
+	}
+}
+
+// This is called by the main task when it is waiting for the move to complete, after checking that the DDA ring is empty and there is no current move
+bool CanMotion::FinishedReverting() noexcept
+{
+	return !revertAll || (revertedAll && millis() - whenRevertedAll >= AllowedDriverPositionRevertMillis);
 }
 
 #endif
