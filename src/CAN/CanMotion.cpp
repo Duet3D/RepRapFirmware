@@ -312,6 +312,7 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 				{
 					sl->sentRevertRequest = true;
 					revertMsg->whichDrives = driversToRevert;
+					revertMsg->clocksAllowed = (StepClockRate * BasicDriverPositionRevertMillis)/1000;
 					urgentMessageBuffer.dataLength = revertMsg->GetActualDataLength(numDriversReverted);
 					return &urgentMessageBuffer;
 				}
@@ -522,7 +523,7 @@ void CanMotion::FinishMoveUsingEndstops() noexcept
 // This is called by the main task when it is waiting for the move to complete, after checking that the DDA ring is empty and there is no current move
 bool CanMotion::FinishedReverting() noexcept
 {
-	return !revertAll || (revertedAll && millis() - whenRevertedAll >= AllowedDriverPositionRevertMillis);
+	return !revertAll || (revertedAll && millis() - whenRevertedAll >= TotalDriverPositionRevertMillis);
 }
 
 #endif
