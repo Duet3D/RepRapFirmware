@@ -182,6 +182,7 @@ public:
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
 #endif
 
+	DriveMovement *FindDM(size_t drive) const noexcept;								// find the DM for a drive if there is one even if it is completed
 	void CheckEndstops(Platform& platform) noexcept;
 
 	void DebugPrint(const char *tag) const noexcept;								// print the DDA only
@@ -231,7 +232,6 @@ public:
 #endif
 
 private:
-	DriveMovement *FindDM(size_t drive) const noexcept;						// find the DM for a drive if there is one even if it is completed
 	DriveMovement *FindActiveDM(size_t drive) const noexcept;				// find the DM for a drive if there is one but only if it is active
 	void RecalculateMove(DDARing& ring) noexcept SPEED_CRITICAL;
 	void MatchSpeeds() noexcept SPEED_CRITICAL;
@@ -351,7 +351,7 @@ private:
 	// These three could possibly be moved into afterPrepare
 	DriveMovement* activeDMs;						// list of associated DMs that need steps, in step time order
 	DriveMovement* completedDMs;					// list of associated DMs that don't need any more steps
-	MoveSegment* shapedSegments;						// linked list of move segments used by axis DMs
+	MoveSegment* shapedSegments;					// linked list of move segments used by axis DMs
 	MoveSegment* unshapedSegments;					// linked list of move segments used by extruder DMs
 };
 

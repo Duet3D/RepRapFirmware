@@ -376,10 +376,9 @@ void Move::Exit() noexcept
 		}
 
 		// We need to be woken when one of the following is true:
-		// 1. If noMoveAvailable is true, when a new move becomes available.
-		// 2. If moves are being executed and there are unprepared moves in the queue, when it is time to prepare more moves.
-		// 3. If the queue was full and all moves in it were prepared and noMoveAvailable is false, when we have completed one or more moves.
-		// 4. In order to implement idle timeout, we must wake up regularly anyway, say every half second
+		// 1. If moves are being executed and there are unprepared moves in the queue, when it is time to prepare more moves.
+		// 2. If the queue was full and all moves in it were prepared, when we have completed one or more moves.
+		// 3. In order to implement idle timeout, we must wake up regularly anyway, say every half second
 		if (!moveRead && nextPrepareDelay != 0)
 		{
 			TaskBase::Take(min<uint32_t>(nextPrepareDelay, 500));

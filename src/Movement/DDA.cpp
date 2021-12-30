@@ -1374,7 +1374,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 #if SUPPORT_CAN_EXPANSION
 						if (driver.IsRemote())
 						{
-							CanMotion::AddMovement(params, driver, delta);
+							CanMotion::AddMovement(params, driver, delta, false);
 						}
 						else
 #endif
@@ -1444,7 +1444,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 					const DriverId driver = config.driverNumbers[i];
 					if (driver.IsRemote())
 					{
-						CanMotion::AddMovement(params, driver, delta);
+						CanMotion::AddMovement(params, driver, delta, false);
 					}
 				}
 #endif
@@ -1510,7 +1510,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 						const DriverId driver = config.driverNumbers[i];
 						if (driver.IsRemote())
 						{
-							CanMotion::AddMovement(params, driver, delta);
+							CanMotion::AddMovement(params, driver, delta, false);
 						}
 					}
 #endif
@@ -1614,7 +1614,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 		}
 
 #if SUPPORT_CAN_EXPANSION
-		const uint32_t canClocksNeeded = CanMotion::FinishMovement(afterPrepare.moveStartTime, simMode != SimulationMode::off);
+		const uint32_t canClocksNeeded = CanMotion::FinishMovement(afterPrepare.moveStartTime, simMode != SimulationMode::off, flags.checkEndstops);
 		if (canClocksNeeded > clocksNeeded)
 		{
 			// Due to rounding error in the calculations, we quite often calculate the CAN move as being longer than our previously-calculated value, normally by just one clock.
@@ -1784,10 +1784,6 @@ float DDA::NormaliseLinearMotion(AxesBitmap linearAxes) noexcept
 // Either this move is currently executing (DDARing.currentDDA == this) and the state is 'executing', or we have almost finished preparing it and the state is 'provisional'.
 void DDA::CheckEndstops(Platform& platform) noexcept
 {
-#if SUPPORT_CAN_EXPANSION
-	const bool fromPrepare = (state == DDAState::provisional);		// determine this before anything sets the state to 'completed'
-#endif
-
 	for (;;)
 	{
 		const EndstopHitDetails hitDetails = platform.GetEndstops().CheckEndstops();
@@ -1796,7 +1792,7 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 		case EndstopHitAction::stopAll:
 			MoveAborted();											// set the state to completed and recalculate the endpoints
 #if SUPPORT_CAN_EXPANSION
-			CanMotion::StopAll(fromPrepare);
+			CanMotion::StopAll(*this);
 #endif
 			if (hitDetails.isZProbe)
 			{
@@ -1817,14 +1813,7 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 		case EndstopHitAction::stopAxis:
 			StopDrive(hitDetails.axis);								// we must stop the drive before we mess with its coordinates
 #if SUPPORT_CAN_EXPANSION
-			if (state == completed)									// if the call to StopDrive flagged the move as completed
-			{
-				CanMotion::StopAll(fromPrepare);
-			}
-			else
-			{
-				CanMotion::StopAxis(fromPrepare, hitDetails.axis);
-			}
+			CanMotion::StopAxis(*this, hitDetails.axis);
 #endif
 			if (hitDetails.setAxisLow)
 			{
@@ -1842,7 +1831,7 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 #if SUPPORT_CAN_EXPANSION
 			if (hitDetails.driver.IsRemote())
 			{
-				CanMotion::StopDriver(fromPrepare, hitDetails.driver);
+				CanMotion::StopDriver(*this, hitDetails.axis, hitDetails.driver);
 			}
 			else
 #endif
@@ -1865,34 +1854,6 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 			return;
 		}
 	}
-
-#if DDA_LOG_PROBE_CHANGES
-	else if ((endStopsToCheck & LogProbeChanges) != 0)
-	{
-		switch (platform.GetZProbeResult())
-		{
-		case EndStopHit::lowHit:
-			if (!probeTriggered)
-			{
-				probeTriggered = true;
-				LogProbePosition();
-			}
-			break;
-
-		case EndStopHit::nearStop:
-		case EndStopHit::noStop:
-			if (probeTriggered)
-			{
-				probeTriggered = false;
-				LogProbePosition();
-			}
-			break;
-
-		default:
-			break;
-		}
-	}
-#endif
 }
 
 // Start executing this move. Must be called with interrupts disabled or basepri >= set interrupt priority, to avoid a race condition.

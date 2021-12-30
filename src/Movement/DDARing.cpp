@@ -341,6 +341,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 	if (   shouldStartMove											// if the Move code told us that we should start a move in any case...
 		|| waitingForSpace											// ...or the Move code told us it was waiting for space in the ring...
 		|| waitingForRingToEmpty									// ...or GCodes is waiting for all moves to finish...
+		|| dda->IsCheckingEndstops()								// ...or checking endstops, so we can't schedule the following move
 #if SUPPORT_REMOTE_COMMANDS
 		|| dda->GetState() == DDA::frozen							// ...or the move has already been frozen (it's probably a remote move)
 #endif
@@ -455,7 +456,7 @@ float DDARing::PushBabyStepping(size_t axis, float amount) noexcept
 // ISR for the step interrupt
 void DDARing::Interrupt(Platform& p) noexcept
 {
-	DDA* cdda = currentDda;								// capture volatile variable
+	DDA* cdda = currentDda;										// capture volatile variable
 	if (cdda != nullptr)
 	{
 		uint32_t now = StepTimer::GetTimerTicks();
@@ -463,9 +464,15 @@ void DDARing::Interrupt(Platform& p) noexcept
 		for (;;)
 		{
 			// Generate a step for the current move
-			cdda->StepDrivers(p, now);						// check endstops if necessary and step the drivers
+			cdda->StepDrivers(p, now);							// check endstops if necessary and step the drivers
 			if (cdda->GetState() == DDA::completed)
 			{
+#if SUPPORT_CAN_EXPANSION
+				if (cdda->IsCheckingEndstops())
+				{
+					CanMotion::FinishMoveUsingEndstops();		// Tell CAN-connected drivers to revert their position
+				}
+#endif
 				OnMoveCompleted(cdda, p);
 				cdda = currentDda;
 				if (cdda == nullptr)

@@ -9,6 +9,10 @@
 #include <Heating/Heat.h>
 #include <Endstops/ZProbe.h>
 
+#if SUPPORT_CAN_EXPANSION
+# include <CAN/CanMotion.h>
+#endif
+
 #if HAS_SBC_INTERFACE
 # include <SBC/SbcInterface.h>
 #endif
@@ -40,7 +44,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 	case GCodeState::waitingForSpecialMoveToComplete:
 	case GCodeState::abortWhenMovementFinished:
-		if (LockMovementAndWaitForStandstill(gb))		// movement should already be locked, but we need to wait for standstill and fetch the current position
+		if (   LockMovementAndWaitForStandstill(gb)		// movement should already be locked, but we need to wait for standstill and fetch the current position
+#if SUPPORT_CAN_EXPANSION
+			&& CanMotion::FinishedReverting()
+#endif
+		   )
 		{
 			// Check whether we made any G1 S3 moves and need to set the axis limits
 			axesToSenseLength.Iterate([this](unsigned int axis, unsigned int)
