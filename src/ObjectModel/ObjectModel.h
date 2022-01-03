@@ -120,7 +120,7 @@ struct ExpressionValue
 	explicit constexpr ExpressionValue(const char *_ecv_array s) noexcept : type((uint32_t)TypeCode::CString), param(0), sVal(s) { }
 	explicit constexpr ExpressionValue(const ObjectModelArrayDescriptor *omad) noexcept : type((uint32_t)TypeCode::Array), param(0), omadVal(omad) { }
 	explicit constexpr ExpressionValue(IPAddress ip) noexcept : type((uint32_t)TypeCode::IPAddress_tc), param(0), uVal(ip.GetV4LittleEndian()) { }
-	explicit constexpr ExpressionValue(nullptr_t dummy) noexcept : type((uint32_t)TypeCode::None), param(0), uVal(0) { }
+	explicit constexpr ExpressionValue(std::nullptr_t dummy) noexcept : type((uint32_t)TypeCode::None), param(0), uVal(0) { }
 	explicit ExpressionValue(DateTime t) noexcept : type((t.tim == 0) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::DateTime_tc) { Set56BitValue(t.tim); }
 
 	explicit ExpressionValue(DriverId id) noexcept
@@ -175,7 +175,7 @@ struct ExpressionValue
 	}
 
 	void Set(StringHandle sh) noexcept { Release(); type = (uint32_t)TypeCode::HeapString; shVal = sh; }
-	void Set(nullptr_t dummy) noexcept { Release();  type = (uint32_t)TypeCode::None; }
+	void Set(std::nullptr_t dummy) noexcept { Release();  type = (uint32_t)TypeCode::None; }
 
 	// Store a 56-bit value
 	void Set56BitValue(uint64_t v) { Release(); param = (uint32_t)(v >> 32) & 0x00FFFFFFu; uVal = (uint32_t)v; }

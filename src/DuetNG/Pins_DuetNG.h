@@ -464,7 +464,7 @@ constexpr GpioPinFunction USARTSPISckPeriphMode = GpioPinFunction::C;
 // SD Card
 constexpr Pin HsmciClockPin = PortAPin(29);
 constexpr Pin HsmciOtherPins[] = { PortAPin(28), PortAPin(30), PortAPin(31), PortAPin(26), PortAPin(27) };
-constexpr auto HsmciPinsFunction = GpioPinFunction::C;
+constexpr GpioPinFunction HsmciPinsFunction = GpioPinFunction::C;
 
 /*
  * TWI Interfaces
