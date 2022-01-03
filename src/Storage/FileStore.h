@@ -43,12 +43,12 @@ public:
 
     bool Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept;
 	bool Read(char& b) noexcept
-		{ return Read((char *_ecv_array)&b, sizeof(char)); }						// Read 1 character
+		{ return Read((char *_ecv_array)&b, sizeof(char)); }					// Read 1 character
 	bool Read(uint8_t& b) noexcept
-		{ return Read((char&)b); }								// Read 1 byte
-	int Read(char *_ecv_array buf, size_t nBytes) noexcept;				// Read a block of nBytes length
+		{ return Read(reinterpret_cast<char&>(b)); }							// Read 1 byte
+	int Read(char *_ecv_array buf, size_t nBytes) noexcept;						// Read a block of nBytes length
 	int Read(uint8_t *_ecv_array buf, size_t nBytes) noexcept
-		{ return Read((char *_ecv_array)buf, nBytes); }					// Read a block of nBytes length
+		{ return Read(reinterpret_cast<char *_ecv_array>(buf), nBytes); }		// Read a block of nBytes length
 	int ReadLine(char* buf, size_t nBytes) noexcept;			// As Read but stop after '\n' or '\r\n' and null-terminate
 	bool Close() noexcept;										// Shut the file and tidy up
 	bool ForceClose() noexcept;
