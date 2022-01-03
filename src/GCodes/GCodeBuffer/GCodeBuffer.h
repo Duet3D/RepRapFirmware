@@ -158,6 +158,7 @@ public:
 	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
 	void SetFileFinished() noexcept;							// Mark the current file as finished
 	void SetPrintFinished() noexcept;							// Mark the current print file as finished
+	void ClosePrintFile() noexcept;								// Close the print file
 
 	bool RequestMacroFile(const char *filename, bool fromCode) noexcept;	// Request execution of a file macro
 	volatile bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened

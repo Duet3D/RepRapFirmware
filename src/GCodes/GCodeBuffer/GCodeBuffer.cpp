@@ -933,6 +933,21 @@ void GCodeBuffer::SetPrintFinished() noexcept
 	}
 }
 
+void GCodeBuffer::ClosePrintFile() noexcept
+{
+	FileId printFileId = OriginalMachineState().fileId;
+	if (printFileId != NoFileId)
+	{
+		for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+		{
+			if (ms->fileId == printFileId)
+			{
+				ms->fileId = NoFileId;
+			}
+		}
+	}
+}
+
 // This is only called when using the SBC interface and returns if the macro file could be opened
 bool GCodeBuffer::RequestMacroFile(const char *filename, bool fromCode) noexcept
 {

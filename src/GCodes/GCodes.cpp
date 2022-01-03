@@ -3968,7 +3968,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 #if HAS_SBC_INTERFACE
 	if (reprap.UsingSbcInterface())
 	{
-		fileGCode->LatestMachineState().CloseFile();
+		fileGCode->ClosePrintFile();
 		fileGCode->Init();
 	}
 	else
