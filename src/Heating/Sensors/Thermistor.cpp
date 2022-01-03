@@ -182,10 +182,14 @@ bool Thermistor::ConfigureLParam(int lVal, const StringRef& reply) noexcept
 void Thermistor::InitPort() noexcept
 {
 	adcLowOffset = adcHighOffset = 0;
-	adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
+	Platform& p = reprap.GetPlatform();
+	adcFilterChannel = p.GetAveragingFilterIndex(port);
 	if (adcFilterChannel >= 0)
 	{
-		reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init((1u << AdcBits) - 1);
+		p.GetAdcFilter(adcFilterChannel).Init((1u << AdcBits) - 1);
+#ifdef DUET_NG
+		seriesR = p.GetDefaultThermistorSeriesR(adcFilterChannel);
+#endif
 #if HAS_VREF_MONITOR
 		// Default the H and L parameters to the values from nonvolatile memory
 		NonVolatileMemory mem;

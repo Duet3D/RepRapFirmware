@@ -37,8 +37,7 @@ class CanMessageEvent;
 class Event
 {
 public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<Event>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<Event>(p); }
+	DECLARE_FREELIST_NEW_DELETE(Event)
 
 	// Get a description of the current event and return the appropriate message type
 	static MessageType GetTextDescription(const StringRef& str) noexcept;

@@ -106,6 +106,7 @@ Heater::HeaterParameters Heater::fanOffParams, Heater::fanOnParams;
 Heater::Heater(unsigned int num) noexcept
 	: tuned(false), heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
 	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime),
+	  isBedOrChamber(false),
 	  active(false), modelSetByUser(false), monitorsSetByUser(false)
 {
 }
@@ -573,6 +574,7 @@ GCodeResult Heater::Activate(const StringRef& reply) noexcept
 	if (GetMode() != HeaterMode::fault)
 	{
 		active = true;
+		isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(heaterNumber);
 		return SwitchOn(reply);
 	}
 	reply.printf("Can't activate heater %u while in fault state", heaterNumber);
@@ -585,6 +587,7 @@ void Heater::Standby() noexcept
 	{
 		active = false;
 		String<1> dummy;
+		isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(heaterNumber);
 		(void)SwitchOn(dummy.GetRef());
 	}
 }
@@ -605,10 +608,12 @@ void Heater::SetTemperature(float t, bool activeNotStandby) THROWS(GCodeExceptio
 		if (GetMode() > HeaterMode::suspended && active == activeNotStandby)
 		{
 			String<StringLength100> reply;
+			isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(heaterNumber);
 			if (SwitchOn(reply.GetRef()) > GCodeResult::warning)
 			{
 				throw GCodeException(-1, 1, reply.c_str());
 			}
+			model.CalcPidConstants(activeTemperature);
 		}
 	}
 }
@@ -692,19 +697,24 @@ GCodeResult Heater::SetTemperature(const CanMessageSetHeaterTemperature& msg, co
 	{
 	case CanMessageSetHeaterTemperature::commandNone:
 		activeTemperature = standbyTemperature = msg.setPoint;
+		model.CalcPidConstants(activeTemperature);
 		return GCodeResult::ok;
 
 	case CanMessageSetHeaterTemperature::commandOff:
 		activeTemperature = standbyTemperature = msg.setPoint;
+		model.CalcPidConstants(activeTemperature);
 		SwitchOff();
 		return GCodeResult::ok;
 
 	case CanMessageSetHeaterTemperature::commandOn:
+		isBedOrChamber = msg.isBedOrChamber;
 		activeTemperature = standbyTemperature = msg.setPoint;
+		model.CalcPidConstants(activeTemperature);
 		return SwitchOn(reply);
 
 	case CanMessageSetHeaterTemperature::commandResetFault:
 		activeTemperature = standbyTemperature = msg.setPoint;
+		model.CalcPidConstants(activeTemperature);
 		return ResetFault(reply);
 
 	case CanMessageSetHeaterTemperature::commandSuspend:
@@ -713,6 +723,7 @@ GCodeResult Heater::SetTemperature(const CanMessageSetHeaterTemperature& msg, co
 
 	case CanMessageSetHeaterTemperature::commandUnsuspend:
 		activeTemperature = standbyTemperature = msg.setPoint;
+		model.CalcPidConstants(activeTemperature);
 		Suspend(false);
 		return GCodeResult::ok;
 

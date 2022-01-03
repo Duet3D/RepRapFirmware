@@ -299,13 +299,14 @@ void FopDt::CalcPidConstants(float targetTemperature) noexcept
 	if (!pidParametersOverridden)
 	{
 		// Calculate the cooling rate per degC at this temperature. We assume the fan is off because that is the worst case i.e. longest time constant and less stable.
-		const float averageCoolingRatePerDegc = basicCoolingRate * 0.01 * powf((targetTemperature - NormalAmbientTemperature) * 0.01, coolingRateExponent - 1.0);
+		const float temperatureRise = targetTemperature - NormalAmbientTemperature;
+		const float averageCoolingRatePerDegC = GetCoolingRate(temperatureRise, 0.2)/temperatureRise;
 		loadChangeParams.kP = 0.7/(heatingRate * deadTime);
-		loadChangeParams.recipTi = powf(averageCoolingRatePerDegc, 0.25)/(1.14 * powf(deadTime, 0.75));		// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
+		loadChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.25)/(1.14 * powf(deadTime, 0.75));	// Ti = 1.14 * timeConstant^0.25 * deadTime^0.75 (Ho et al)
 		loadChangeParams.tD = deadTime * 0.7;
 
 		setpointChangeParams.kP = 0.7/(heatingRate * deadTime);
-		setpointChangeParams.recipTi = powf(averageCoolingRatePerDegc, 0.5)/powf(deadTime, 0.5);			// Ti = timeConstant^0.5 * deadTime^0.5
+		setpointChangeParams.recipTi = powf(averageCoolingRatePerDegC, 0.5)/powf(deadTime, 0.5);	// Ti = timeConstant^0.5 * deadTime^0.5
 		setpointChangeParams.tD = deadTime * 0.7;
 	}
 }

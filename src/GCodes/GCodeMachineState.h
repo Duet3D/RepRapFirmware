@@ -179,8 +179,7 @@ public:
 		BlockType blockType;										// the type of this block
 	};
 
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<GCodeMachineState>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<GCodeMachineState>(p); }
+	DECLARE_FREELIST_NEW_DELETE(GCodeMachineState)
 
 	GCodeMachineState() noexcept;
 	GCodeMachineState(GCodeMachineState&, bool withinSameFile) noexcept;	// this chains the new one to the previous one

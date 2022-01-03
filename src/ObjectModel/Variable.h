@@ -57,8 +57,7 @@ public:
 private:
 	struct LinkedVariable
 	{
-		void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<LinkedVariable>(); }
-		void operator delete(void* p) noexcept { FreelistManager::Release<LinkedVariable>(p); }
+		DECLARE_FREELIST_NEW_DELETE(LinkedVariable)
 
 		LinkedVariable(const char *_ecv_array str, ExpressionValue pVal, int8_t pScope, LinkedVariable *p_next) : next(p_next), v(str, pVal, pScope) {}
 

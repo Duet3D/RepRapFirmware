@@ -144,7 +144,7 @@ GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuff
 		}
 #endif
 		reply.printf("GPIO/servo port %" PRIu32, gpioNumber);
-		port.AppendDetails(reply);
+		port.AppendFullDetails(reply);
 	}
 	return GCodeResult::ok;
 }
@@ -207,7 +207,7 @@ GCodeResult GpOutputPort::AssignFromRemote(uint32_t gpioPortNumber, const CanMes
 		else
 		{
 			reply.printf("GPIO/servo port %" PRIu32, gpioPortNumber);
-			port.AppendDetails(reply);
+			port.AppendFullDetails(reply);
 		}
 		return GCodeResult::ok;
 	}

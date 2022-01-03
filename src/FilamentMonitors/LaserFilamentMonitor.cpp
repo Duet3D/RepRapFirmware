@@ -125,6 +125,11 @@ GCodeResult LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& re
 	const GCodeResult rslt = CommonConfigure(gb, reply, InterruptMode::change, seen);
 	if (rslt <= GCodeResult::warning)
 	{
+		if (seen)
+		{
+			Init();				// Init() resets dataReceived and version, so only do it if the port has been configured
+		}
+
 		gb.TryGetFValue('L', calibrationFactor, seen);
 		gb.TryGetFValue('E', minimumExtrusionCheckLength, seen);
 
@@ -158,7 +163,6 @@ GCodeResult LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& re
 
 		if (seen)
 		{
-			Init();
 			reprap.SensorsUpdated();
 		}
 		else

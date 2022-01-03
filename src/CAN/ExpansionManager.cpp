@@ -140,6 +140,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 		UpdateBoardState(src, BoardState::unknown);
 		if (board.typeName == nullptr || strcmp(board.typeName, boardTypeAndFirmwareVersion.c_str()) != 0)
 		{
+			// To save memory, see if we already have another board with the same type name
 			const char *newTypeName = nullptr;
 			for (const ExpansionBoardData& data : boards)
 			{
@@ -149,12 +150,14 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 					break;
 				}
 			}
+
 			if (newTypeName == nullptr)
 			{
 				char * const temp = new char[boardTypeAndFirmwareVersion.strlen() + 1];
 				strcpy(temp, boardTypeAndFirmwareVersion.c_str());
 				newTypeName = temp;
 			}
+
 			board.typeName = newTypeName;
 			if (isNewFormat)
 			{
@@ -168,9 +171,11 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 			}
 		}
 		UpdateBoardState(src, BoardState::running);
+
+		// Tell the sending board that we don't need any more announcements from it
+		buf->SetupResponseMessage<CanMessageAcknowledgeAnnounce>(0, CanInterface::GetCanAddress(), src);
+		CanInterface::SendResponseNoFree(buf);
 	}
-	buf->SetupResponseMessage<CanMessageAcknowledgeAnnounce>(0, CanInterface::GetCanAddress(), src);
-	CanInterface::SendResponseNoFree(buf);
 }
 
 // Process a board status report

@@ -38,11 +38,11 @@ LocalFan::~LocalFan() noexcept
 GCodeResult LocalFan::ReportPortDetails(const StringRef& str) const noexcept
 {
 	str.printf("Fan %u", fanNumber);
-	port.AppendDetails(str);
+	port.AppendFullDetails(str);
 	if (tachoPort.IsValid())
 	{
 		str.cat(" tacho");
-		tachoPort.AppendDetails(str);
+		tachoPort.AppendBasicDetails(str);
 	}
 	return GCodeResult::ok;
 }
