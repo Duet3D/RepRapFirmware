@@ -29,6 +29,7 @@ public:
 	bool IsUnused() const noexcept;
 	GCodeResult WriteAnalog(uint32_t gpioPortNumber, bool isServo, float pwm, const GCodeBuffer& gb, const StringRef& reply) noexcept;
 	GCodeResult Configure(uint32_t gpioNumber, bool isServo, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	PwmFrequency GetPwmFrequency() const noexcept { return port.GetFrequency(); }
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult AssignFromRemote(uint32_t gpioPortNumber, const CanMessageGenericParser& parser, const StringRef& reply) noexcept;

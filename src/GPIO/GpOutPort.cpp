@@ -85,7 +85,7 @@ GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuff
 
 		if (!seenFreq)
 		{
-			freq = (isServo) ? ServoRefreshFrequency : DefaultPinWritePwmFreq;
+			freq = (isServo) ? DefaultServoRefreshFrequency : DefaultPinWritePwmFreq;
 		}
 
 		GCodeResult rslt;
@@ -176,7 +176,7 @@ GCodeResult GpOutputPort::AssignFromRemote(uint32_t gpioPortNumber, const CanMes
 	const bool seenFreq = parser.GetUintParam('Q', freq);
 	if (!seenFreq)
 	{
-		freq = (isServo) ? ServoRefreshFrequency : DefaultPinWritePwmFreq;
+		freq = (isServo) ? DefaultServoRefreshFrequency : DefaultPinWritePwmFreq;
 	}
 
 	String<StringLength50> pinName;

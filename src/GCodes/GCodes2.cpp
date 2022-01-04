@@ -2419,8 +2419,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						angleOrWidth = MaxServoPulseWidth;
 					}
 
-					const float pwm = angleOrWidth * (ServoRefreshFrequency/1e6);
-					result = platform.GetGpOutPort(gpioPortNumber).WriteAnalog(gpioPortNumber, true, pwm, gb, reply);
+					GpOutputPort& port = platform.GetGpOutPort(gpioPortNumber);
+					const float pwm = angleOrWidth * 1.0e-6 * port.GetPwmFrequency();
+					result = port.WriteAnalog(gpioPortNumber, true, pwm, gb, reply);
 				}
 				break;
 
