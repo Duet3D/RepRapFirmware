@@ -315,7 +315,7 @@ void LocalHeater::Spin() noexcept
 								const float expectedTemperatureRise = expectedRate * actualInterval;
 								const float actualTemperatureRise = temperature - lastTemperatureValue;
 								// Bed heaters sometimes have much slower long term heating rates than their short term heating rates, so allow them a lower measured heating rate
-								if (actualTemperatureRise < expectedTemperatureRise * ((IsBedOrChamber()) ? 0.35 : 0.6))
+								if (actualTemperatureRise < expectedTemperatureRise * ((IsBedOrChamber()) ? MinBedTemperatureRiseFactor : MinToolTemperatureRiseFactor))
 								{
 									++heatingFaultCount;
 									if (heatingFaultCount * HeatSampleIntervalMillis > GetMaxHeatingFaultTime() * SecondsToMillis)
