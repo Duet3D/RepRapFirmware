@@ -783,7 +783,7 @@ GCodeResult Heat::Activate(int heater, const StringRef& reply) noexcept
 	{
 		return h->Activate(reply);
 	}
-	reply.copy("Heater %d not found", heater);
+	reply.printf("Heater %d not found", heater);
 	return GCodeResult::error;
 }
 
