@@ -2331,7 +2331,22 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 				ch = ',';
 			}
 		}
-		response->cat("]");
+		response->cat(']');
+
+		// See if we have any thumbnails
+		if (info.thumbnails[0].IsValid())
+		{
+			response->cat(",\"thumbnails\":");
+			size_t index = 0;
+			do
+			{
+				response->catf("%c{\"w\":%u,\"h\":%u,\"f\":\"%s\"}",
+								((index == 0) ? '[' : ','), info.thumbnails[index].height, info.thumbnails[index].width, info.thumbnails[index].format.ToString());
+				++index;
+			}
+			while (index < GCodeFileInfo::MaxThumbnails && info.thumbnails[index].IsValid());
+			response->cat(']');
+		}
 
 		if (!specificFile)
 		{

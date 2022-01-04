@@ -59,6 +59,7 @@ private:
 	bool FindSimulatedTime(const char *_ecv_array bufp) noexcept;
 	unsigned int FindFilamentUsed(const char *_ecv_array bufp) noexcept;
 	void FindFilamentUsedEmbedded(const char *_ecv_array p, const char *_ecv_array s1, const char *_ecv_array s2, unsigned int &filamentsFound) noexcept;
+	bool FindThumbnails(const char *_ecv_array bufp, FilePosition bufferStartFilePosition) noexcept;
 
 	// We parse G-Code files in multiple stages. These variables hold the required information
 	Mutex parserMutex;
