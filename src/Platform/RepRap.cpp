@@ -2340,7 +2340,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 			size_t index = 0;
 			do
 			{
-				response->catf("%c{\"w\":%u,\"h\":%u,\"f\":\"%s\"}",
+				response->catf("%c{\"w\":%u,\"h\":%u,\"fmt\":\"%s\"}",
 								((index == 0) ? '[' : ','), info.thumbnails[index].height, info.thumbnails[index].width, info.thumbnails[index].format.ToString());
 				++index;
 			}
