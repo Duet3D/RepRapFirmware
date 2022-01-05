@@ -1090,7 +1090,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROW
 		try
 		{
 			const GCodeResult rslt = newSensor->Configure(gb, reply, changed);
-			if (rslt == GCodeResult::ok)
+			if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
 			{
 				InsertSensor(newSensor);
 			}

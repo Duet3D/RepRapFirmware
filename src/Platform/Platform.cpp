@@ -2353,9 +2353,9 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 // Note, the Thermistor code assumes that this is also the thermistor input number
 int Platform::GetAveragingFilterIndex(const IoPort& port) const noexcept
 {
-	for (size_t i = 0; i < NumAdcFilters; ++i)
+	for (size_t i = 0; i < ARRAY_SIZE(TEMP_SENSE_PINS); ++i)
 	{
-		if (port.GetAnalogChannel() == filteredAdcChannels[i])
+		if (port.GetPin() == TEMP_SENSE_PINS[i])
 		{
 			return (int)i;
 		}
