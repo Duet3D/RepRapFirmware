@@ -742,7 +742,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* bufp) noexcept
 			const float filamentCMM = SafeStrtof(p + strlen(filamentVolumeStr), nullptr) * multipler;
 			if (!std::isnan(filamentCMM) && !std::isinf(filamentCMM))
 			{
-				parsedFileInfo.filamentNeeded[filamentsFound++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() / 2.0));
+				parsedFileInfo.filamentNeeded[filamentsFound++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() * 0.5));
 			}
 		}
 	}
