@@ -2277,7 +2277,7 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 		return nullptr;
 	}
 
-	response->printf("{\"name\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
+	response->printf("{\"fileName\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
 	FileStore *const f = platform->OpenFile(platform->GetGCodeDir(), filename, OpenMode::read);
 	unsigned int err = 0;
 	if (f != nullptr)
@@ -2376,7 +2376,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 
 	if (info.isValid)
 	{
-		response->printf("{\"err\":0,\"name\":\"%.s\",\"size\":%lu,", ((specificFile) ? filename : printMonitor->GetPrintingFilename()), info.fileSize);
+		response->printf("{\"err\":0,\"fileName\":\"%.s\",\"size\":%lu,", ((specificFile) ? filename : printMonitor->GetPrintingFilename()), info.fileSize);
 		tm timeInfo;
 		gmtime_r(&info.lastModifiedTime, &timeInfo);
 		if (timeInfo.tm_year > /*19*/80)
@@ -2411,6 +2411,11 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 		}
 		response->cat(']');
 
+		if (!specificFile)
+		{
+			response->catf(",\"printDuration\":%d", (int)printMonitor->GetPrintDuration());
+		}
+
 		// See if we have any thumbnails
 		if (info.thumbnails[0].IsValid())
 		{
@@ -2425,11 +2430,6 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 			}
 			while (index < GCodeFileInfo::MaxThumbnails && info.thumbnails[index].IsValid());
 			response->cat(']');
-		}
-
-		if (!specificFile)
-		{
-			response->catf(",\"printDuration\":%d,\"fileName\":\"%.s\"", (int)printMonitor->GetPrintDuration(), printMonitor->GetPrintingFilename());
 		}
 
 		response->catf(",\"generatedBy\":\"%.s\"}\n", info.generatedBy.c_str());
