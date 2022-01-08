@@ -2262,6 +2262,84 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 
 #endif
 
+#if HAS_MASS_STORAGE
+
+// Get thumbnail data
+// 'offset' is the offset into the file of the thumbnail data that the caller wants.
+// It is up to the caller to get the offset right, however we must fail gracefully if the caller passes us a bad offset.
+// The offset should always be either the initial offset or the 'next' value passed in a previous call, so it should always be the start of a line.
+OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition offset) noexcept
+{
+	// Need something to write to...
+	OutputBuffer *response;
+	if (!OutputBuffer::Allocate(response))
+	{
+		return nullptr;
+	}
+
+	response->printf("{\"name\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
+	FileStore *const f = platform->OpenFile(platform->GetGCodeDir(), filename, OpenMode::read);
+	unsigned int err = 0;
+	if (f != nullptr)
+	{
+		if (f->Seek(offset))
+		{
+			response->cat("\"data\":\"");
+			for (unsigned int charsWritten = 0; charsWritten < 2500;)
+			{
+				// Read a line
+				char lineBuffer[GCODE_LENGTH];
+				const int charsRead = f->ReadLine(lineBuffer, ARRAY_SIZE(lineBuffer));
+				if (charsRead < 2)
+				{
+					err = 1;
+					break;
+				}
+
+				// Check it is a comment line
+				const char *p = lineBuffer;
+				if (*p != ';')
+				{
+					err = 1;
+					break;
+				}
+
+				// Update the file offset for returning 'next'
+				offset = f->Position();
+
+				// Skip white space
+				do
+				{
+					++p;
+				} while (*p == ' ' || *p == '\t');
+
+				// Check for end of thumbnail
+				const unsigned int charsLeft = (unsigned int)charsRead - (p - lineBuffer);
+				if (charsLeft == 0 || StringStartsWith(p, "thumbnail end"))
+				{
+					offset = 0;				// reached end of encoded thumbnail, so return 0 for 'next'
+					break;
+				}
+
+				// Copy the data
+				response->cat(p, charsLeft);
+				charsWritten += charsLeft;
+			}
+			response->catf("\",\"next\":%" PRIu32 ",", offset);
+		}
+		f->Close();
+	}
+	else
+	{
+		err = 1;
+	}
+
+	response->catf("\"err\":%u}\n", err);
+	return response;
+}
+
+#endif
+
 // Get information for the specified file, or the currently printing file (if 'filename' is null or empty), in JSON format
 // Return GCodeResult::Warning if the file doesn't exist, else GCodeResult::ok or GCodeResult::notFinished
 GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept
@@ -2298,7 +2376,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 
 	if (info.isValid)
 	{
-		response->printf("{\"err\":0,\"size\":%lu,",info.fileSize);
+		response->printf("{\"err\":0,\"name\":\"%.s\",\"size\":%lu,", ((specificFile) ? filename : printMonitor->GetPrintingFilename()), info.fileSize);
 		tm timeInfo;
 		gmtime_r(&info.lastModifiedTime, &timeInfo);
 		if (timeInfo.tm_year > /*19*/80)
