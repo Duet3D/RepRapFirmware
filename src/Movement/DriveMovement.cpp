@@ -69,8 +69,8 @@ void DriveMovement::DebugPrint() const noexcept
 	if (state != DMState::idle)
 	{
 #if MS_USE_FPU
-		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " psl=%" PRIu32 " A=%.4e B=%.4e C=%.4e dsf=%.4e tsf=%.1f",
-						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, phaseStepLimit,
+		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " ssl=%" PRIu32 " A=%.4e B=%.4e C=%.4e dsf=%.4e tsf=%.1f",
+						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, segmentStepLimit,
 							(double)pA, (double)pB, (double)pC, (double)distanceSoFar, (double)timeSoFar);
 		if (isDelta)
 		{
@@ -86,8 +86,8 @@ void DriveMovement::DebugPrint() const noexcept
 			debugPrintf("\n");
 		}
 #else
-		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " psl=%" PRIu32 " A=%" PRIi64 " B=%" PRIi32 " C=%" PRIi32 " dsf=%" PRIu32 " tsf=%" PRIu32,
-						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, phaseStepLimit,
+		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " ssl=%" PRIu32 " A=%" PRIi64 " B=%" PRIi32 " C=%" PRIi32 " dsf=%" PRIu32 " tsf=%" PRIu32,
+						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, segmentStepLimit,
 							iA, iB, iC, iDistanceSoFar, iTimeSoFar);
 		if (isDelta)
 		{
@@ -140,7 +140,7 @@ bool DriveMovement::NewCartesianSegment() noexcept
 		distanceSoFar += currentSegment->GetSegmentLength();
 		timeSoFar += currentSegment->GetSegmentTime();
 
-		phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
+		segmentStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 #else
 		iC = currentSegment->CalcC(mp.cart.iEffectiveMmPerStepTimesK);
 		if (currentSegment->IsLinear())
@@ -160,10 +160,10 @@ bool DriveMovement::NewCartesianSegment() noexcept
 		iDistanceSoFar += currentSegment->GetSegmentLength();
 		iTimeSoFar += currentSegment->GetSegmentTime();
 
-		phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(((iDistanceSoFar * (uint64_t)mp.cart.iEffectiveStepsPerMmTimesK)) >> MoveSegment::SFstepsPerMm) + 1;
+		segmentStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(((iDistanceSoFar * (uint64_t)mp.cart.iEffectiveStepsPerMmTimesK)) >> MoveSegment::SFstepsPerMm) + 1;
 #endif
 
-		if (nextStep < phaseStepLimit)
+		if (nextStep < segmentStepLimit)
 		{
 			return true;
 		}
@@ -211,7 +211,7 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 		if (currentSegment->GetNext() == nullptr)
 		{
 			// This is the last segment, so the phase step limit is the number of total steps, and we can avoid some calculation
-			phaseStepLimit = totalSteps + 1;
+			segmentStepLimit = totalSteps + 1;
 			state = (reverseStartStep <= totalSteps && nextStep < reverseStartStep) ? DMState::deltaForwardsReversing : DMState::deltaNormal;
 		}
 		else
@@ -234,7 +234,7 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 			{
 				// We are going down so any reversal has already happened
 				state = DMState::deltaNormal;
-				phaseStepLimit = (nextStep >= reverseStartStep)
+				segmentStepLimit = (nextStep >= reverseStartStep)
 									? (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd)		// we went up (reverseStartStep-1) steps, now we are going down to netStepsAtEnd
 										: (uint32_t)(-netStepsAtEnd);									// we are just going down to netStepsAtEnd
 			}
@@ -242,12 +242,12 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 			{
 				// This segment is purely upwards motion of the tower
 				state = DMState::deltaNormal;
-				phaseStepLimit = (uint32_t)(netStepsAtEnd + 1);
+				segmentStepLimit = (uint32_t)(netStepsAtEnd + 1);
 			}
 			else
 			{
 				// This segment ends with reverse motion
-				phaseStepLimit = (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
+				segmentStepLimit = (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
 				state = DMState::deltaForwardsReversing;
 			}
 		}
@@ -284,7 +284,7 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 				directionChanged = true;
 			}
 			state = DMState::deltaReverse;
-			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1
+			segmentStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1
 								: (reverseStartStep <= totalSteps) ? (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd)
 									: 1 - netStepsAtEnd;
 		}
@@ -292,17 +292,17 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 		{
 			// This segment is purely upwards motion of the tower and we want the lower quadratic solution
 			state = DMState::deltaForwardsNoReverse;
-			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(netStepsAtEnd + 1);
+			segmentStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(netStepsAtEnd + 1);
 		}
 		else
 		{
 			// This segment ends with reverse motion. We want the lower quadratic solution initially.
-			phaseStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
+			segmentStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
 			state = DMState::deltaForwardsReversing;
 		}
 #endif
 
-		if (phaseStepLimit > nextStep)
+		if (segmentStepLimit > nextStep)
 		{
 			return true;
 		}
@@ -354,7 +354,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 		}
 
 		// Work out the movement limit in steps
-		phaseStepLimit = ((currentSegment->GetNext() == nullptr) ? totalSteps : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm)) + 1;
+		segmentStepLimit = ((currentSegment->GetNext() == nullptr) ? totalSteps : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm)) + 1;
 #else
 		const uint32_t startDistance = iDistanceSoFar;
 		const uint32_t startTime = iTimeSoFar;
@@ -388,10 +388,10 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			}
 		}
 
-		phaseStepLimit = ((currentSegment->GetNext() == nullptr) ? totalSteps : (uint32_t)((iDistanceSoFar * (uint64_t)mp.cart.iEffectiveStepsPerMmTimesK)) >> MoveSegment::SFstepsPerMm) + 1;
+		segmentStepLimit = ((currentSegment->GetNext() == nullptr) ? totalSteps : (uint32_t)((iDistanceSoFar * (uint64_t)mp.cart.iEffectiveStepsPerMmTimesK)) >> MoveSegment::SFstepsPerMm) + 1;
 #endif
 
-		if (nextStep < phaseStepLimit)
+		if (nextStep < segmentStepLimit)
 		{
 			return true;
 		}
@@ -431,7 +431,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 
 	// Prepare for the first step
 	nextStepTime = 0;
-	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
+	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
 	reverseStartStep = totalSteps + 1;				// no reverse phase
 	return CalcNextStepTime(dda);
@@ -611,7 +611,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 
 	// Prepare for the first step
 	nextStepTime = 0;
-	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
+	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
 	return CalcNextStepTime(dda);
 }
@@ -866,7 +866,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 
 	// Prepare for the first step
 	nextStepTime = 0;
-	stepInterval = 999999;							// initialise to a large value so that we will calculate the time for just one step
+	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
 	return CalcNextStepTime(dda);
 }
@@ -897,8 +897,8 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	uint32_t shiftFactor = 0;									// assume single stepping
 
 	{
-		uint32_t stepsToLimit = phaseStepLimit - nextStep;
-		// If there are no more steps left in this segment, skip to the next segment
+		uint32_t stepsToLimit = segmentStepLimit - nextStep;
+		// If there are no more steps left in this segment, skip to the next segment and use single stepping
 		if (stepsToLimit == 0)
 		{
 			currentSegment = currentSegment->GetNext();
@@ -912,10 +912,21 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 				return false;
 			}
 			// Leave shiftFactor set to 0 so that we compute a single step time, because the interval will have changed
+			stepsTakenThisSegment = 1;							// this will be the first step in this segment
+		}
+		else if (stepsTakenThisSegment < 2)
+		{
+			// Reasons why we always use single stepping until we are on the third step in a segment:
+			// 1. On the very first step of a move we don't know what the step interval is, so we must use single stepping for the first step.
+			// 2. For extruders the step interval calculated for the very first step may be very small because of overdue extrusion,
+			//    so we don't have a reliable step interval until we have calculated 2 steps.
+			// 3. When starting a subsequent segment there may be a discontinuity due to rounding error,
+			//    so the step interval calculated after the first step in a subsequent phase is not reliable.
+			++stepsTakenThisSegment;
 		}
 		else
 		{
-			if (reverseStartStep < phaseStepLimit && nextStep < reverseStartStep)
+			if (reverseStartStep < segmentStepLimit && nextStep < reverseStartStep)
 			{
 				stepsToLimit = reverseStartStep - nextStep;
 			}
@@ -1112,6 +1123,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	stepInterval = (iNextCalcStepTime > nextStepTime)
 					? (iNextCalcStepTime - nextStepTime) >> shiftFactor	// calculate the time per step, ready for next time
 					: 0;
+
 #if 0	//DEBUG
 	if (isExtruder && stepInterval < 20 /*&& nextStep + stepsTillRecalc + 1 < totalSteps*/)
 	{
