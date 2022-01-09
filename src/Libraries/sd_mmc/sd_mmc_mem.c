@@ -88,10 +88,12 @@ Ctrl_status sd_mmc_read_capacity(uint8_t slot, uint32_t *nb_sector)
 	return sd_mmc_test_unit_ready(slot);
 }
 
+#if SUPPORT_WRITE_PROTECT
 bool sd_mmc_wr_protect(uint8_t slot)
 {
 	return sd_mmc_is_write_protected(slot);
 }
+#endif
 
 /**
  * \name MEM <-> RAM Interface

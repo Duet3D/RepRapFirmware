@@ -80,7 +80,11 @@ uint8_t mem_sector_size(uint8_t lun)
 
 bool mem_wr_protect(uint8_t lun)
 {
-	return (lun < MAX_LUN) ? sd_mmc_wr_protect(lun) : true;
+#if SUPPORT_WRITE_PROTECT
+	return (lun >= MAX_LUN) || sd_mmc_wr_protect(lun)e;
+#else
+	return false;
+#endif
 }
 
 Ctrl_status memory_2_ram(uint8_t lun, uint32_t addr, void *ram, uint32_t numBlocks)
