@@ -243,6 +243,9 @@ typedef void (*spiIdleFunc_t)(uint32_t, uint32_t) noexcept;
 // Set the idle function and return the old one
 spiIdleFunc_t sd_mmc_spi_set_idle_func(spiIdleFunc_t) noexcept;
 
+// This function is used by the Duet 3 MB6HC to enable support for a second SD card
+void sd_mmc_spi_change_cs_pin(uint8_t spiSlot, Pin csPin) noexcept;
+
 #endif
 //! @}
 

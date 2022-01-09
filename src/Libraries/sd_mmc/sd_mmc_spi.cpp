@@ -70,7 +70,7 @@ extern void debugPrintf(const char* fmt, ...) noexcept;
 static sd_mmc_spi_errno_t sd_mmc_spi_err;
 
 //! Slot array of SPI structures
-static SharedSpiClient *sd_mmc_spi_devices[SD_MMC_SPI_MEM_CNT];
+static SharedSpiClient *sd_mmc_spi_devices[SD_MMC_SPI_MEM_CNT] = { 0 };
 static SharedSpiClient *currentSpiClient = nullptr;
 
 //! 32 bits response of the last command
@@ -108,7 +108,11 @@ static uint8_t sd_mmc_spi_crc7(uint8_t * buf, uint8_t size) noexcept
 		value = *buf++;
 		for (i = 0; i < 8; i++) {
 			crc <<= 1;
+#if 1	// DC
+			if ((value ^ crc) & 0x80)
+#else
 			if ((value & 0x80) ^ (crc & 0x80))
+#endif
 			{
 				crc ^= 0x09;
 			}
@@ -347,6 +351,19 @@ void sd_mmc_spi_init(const Pin csPins[SD_MMC_SPI_MEM_CNT]) noexcept
 		sd_mmc_spi_devices[i] = new SharedSpiClient(SharedSpiDevice::GetMainSharedSpiDevice(), SD_MMC_SPI_MAX_CLOCK, SpiMode::mode0, csPins[i], false);
 	}
 }
+
+#if 1
+
+// This function is used by the Duet 3 MB6HC to enable support for a second SD card
+void sd_mmc_spi_change_cs_pin(uint8_t spiSlot, Pin csPin) noexcept
+{
+	if (spiSlot < SD_MMC_SPI_MEM_CNT)
+	{
+		sd_mmc_spi_devices[spiSlot]->SetCsPin(csPin);
+	}
+}
+
+#endif
 
 // Note, every call to sd_mmc_spi_select_device must be matched to a call to sd_mmc_spi_deselect_device so that the SPI mutex gets released!
 // Unfortunately, sd_mmc.c calls this more than one without deselecting it in between. So check whether it is already selected.

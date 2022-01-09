@@ -4404,7 +4404,13 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 {
 	// Exactly one of FHJPSR is allowed
 	unsigned int charsPresent = 0;
-	for (char c : (const char[]){'R', 'J', 'F', 'H', 'P', 'S'})
+	for (char c :
+#ifdef DUET3_V06
+		(const char[]){'D', 'R', 'J', 'F', 'H', 'P', 'S'}
+#else
+		(const char[]){'R', 'J', 'F', 'H', 'P', 'S'}
+#endif
+		)
 	{
 		charsPresent <<= 1;
 		if (gb.Seen(c))
@@ -4443,6 +4449,10 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 			const uint32_t slot = gb.GetLimitedUIValue('R', MaxSpindles);
 			return spindles[slot].Configure(gb, reply);
 		}
+#ifdef DUET3_V06
+	case 64:	// D
+		return MassStorage::ConfigureSdCard(gb, reply);
+#endif
 
 	default:
 		reply.copy("exactly one of FHJPSR must be given");

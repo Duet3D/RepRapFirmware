@@ -1928,6 +1928,19 @@ uint32_t sd_mmc_get_interface_speed(uint8_t slot)
 
 #endif
 
+#if SD_MMC_SPI_MEM_CNT != 0
+
+// Change the CS pin used by an SPI-connected card slot. Only used by the Duet 3 MB6HC. Linker garbage collection will eliminate this function in other builds.
+void sd_mmc_change_cs_pin(uint8_t slot, Pin csPin) noexcept
+{
+	if (slot >= SD_MMC_HSMCI_MEM_CNT)
+	{
+		sd_mmc_spi_change_cs_pin(slot - SD_MMC_HSMCI_MEM_CNT, csPin);
+	}
+}
+
+#endif
+
 // Initialise for reading blocks
 // On entry the card is not selected
 // If SD_MMC_OK is returned then the card is selected, otherwise it is not selected

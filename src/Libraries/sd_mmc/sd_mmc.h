@@ -177,6 +177,9 @@ void sd_mmc_unmount(uint8_t slot) noexcept;
 // Get the interface speed in bytes/sec
 uint32_t sd_mmc_get_interface_speed(uint8_t slot) noexcept;
 
+// Change the CS pin used by an SPI-connected card slot. Only used by the Duet 3 MB6HC. Linker garbage collection will eliminate this function in other builds.
+void sd_mmc_change_cs_pin(uint8_t slot, Pin csPin) noexcept;
+
 #endif
 
 /**

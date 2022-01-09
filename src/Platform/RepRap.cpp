@@ -238,7 +238,7 @@ constexpr ObjectModelArrayDescriptor RepRap::volumesArrayDescriptor =
 constexpr ObjectModelArrayDescriptor RepRap::volChangesArrayDescriptor =
 {
 	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return NumSdCards; },
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MassStorage::GetNumVolumes(); },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 																		{ return ExpressionValue((int32_t)MassStorage::GetVolumeSeq(context.GetLastIndex())); }
 };
@@ -314,7 +314,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "trackedObjects",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxTrackedObjects),					ObjectModelEntryFlags::verbose },
 	{ "triggers",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxTriggers),							ObjectModelEntryFlags::verbose },
 #if HAS_MASS_STORAGE
-	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)NumSdCards),							ObjectModelEntryFlags::verbose },
+	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MassStorage::GetNumVolumes()),		ObjectModelEntryFlags::verbose },
 #else
 	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)0),									ObjectModelEntryFlags::verbose },
 #endif
@@ -1688,14 +1688,14 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 #if HAS_MASS_STORAGE
 		// Total and mounted volumes
 		size_t mountedCards = 0;
-		for (size_t i = 0; i < NumSdCards; i++)
+		for (size_t i = 0; i < MassStorage::GetNumVolumes(); i++)
 		{
 			if (MassStorage::IsDriveMounted(i))
 			{
-				mountedCards |= (1 << i);
+				mountedCards |= (1u << i);
 			}
 		}
-		response->catf(",\"volumes\":%u,\"mountedVolumes\":%u", NumSdCards, mountedCards);
+		response->catf(",\"volumes\":%u,\"mountedVolumes\":%u", MassStorage::GetNumVolumes(), mountedCards);
 #endif
 
 		// Machine mode and name
@@ -2079,7 +2079,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 	{
 		// Add the static fields
 		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":\"%.s\",\"firmwareName\":\"%.s\"",
-						move->GetGeometryString(), numVisibleAxes, gCodes->GetTotalAxes(), gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools(), myName.c_str(), FIRMWARE_NAME);
+						move->GetGeometryString(), numVisibleAxes, gCodes->GetTotalAxes(), gCodes->GetAxisLetters(), MassStorage::GetNumVolumes(), GetNumberOfContiguousTools(), myName.c_str(), FIRMWARE_NAME);
 	}
 
 	response->cat("}\n");			// include a newline to help PanelDue resync

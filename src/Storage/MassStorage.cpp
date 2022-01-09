@@ -19,6 +19,10 @@ static_assert(SD_MMC_MEM_CNT == NumSdCards);
 # include <SBC/SbcInterface.h>
 #endif
 
+#ifdef DUET3_V06
+# include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#endif
+
 // A note on using mutexes:
 // Each SD card volume has its own mutex. There is also one for the file table, and one for the find first/find next buffer.
 // The FatFS subsystem locks and releases the appropriate volume mutex when it is called.
@@ -92,6 +96,10 @@ static uint64_t GetFreeSpace(size_t slot)
 
 static const char * const VolPathNames[] = { "0:/", "1:/" };
 static_assert(ARRAY_SIZE(VolPathNames) >= NumSdCards, "Incorrect VolPathNames array");
+
+#ifdef DUET3_V06
+static IoPort sd1Ports[2];		// first element is CS port, second is CD port
+#endif
 
 constexpr ObjectModelTableEntry SdCardInfo::objectModelTable[] =
 {
@@ -172,6 +180,41 @@ static FileStore files[MAX_FILES];
 }
 
 #if HAS_MASS_STORAGE
+
+# ifdef DUET3_V06
+
+// Return the number of volumes, which on the 6HC is normally 1 but can be increased to 2
+size_t MassStorage::GetNumVolumes() noexcept
+{
+	return (sd1Ports[0].IsValid()) ? 2 : 1;		// we have 2 slots if the second one has a valid CS pin, else 1
+}
+
+// Configure additional SD card slots
+// The card detect pin may be NoPin if the SD card slot doesn't support card detect
+GCodeResult MassStorage::ConfigureSdCard(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	(void)gb.GetLimitedUIValue('D', 1, 2);		// only slot 1 may be configured
+	IoPort * const portAddresses[2] = { &sd1Ports[0], &sd1Ports[1] };
+	if (gb.Seen('C'))
+	{
+		const PinAccess accessNeeded[2] = { PinAccess::write1, PinAccess::read };
+		if (IoPort::AssignPorts(gb, reply, PinUsedBy::sdCard, 2, portAddresses, accessNeeded) == 0)
+		{
+			return GCodeResult::error;
+		}
+		sd_mmc_change_cs_pin(1, sd1Ports[0].GetPin());
+		info[1].cdPin = sd1Ports[1].GetPin();
+		reprap.VolumesUpdated();
+	}
+	else
+	{
+		reply.copy("SD card 1 uses pins ");
+		IoPort::AppendPinNames(reply, 2, portAddresses);
+	}
+	return GCodeResult::ok;
+}
+
+# endif
 
 // Sequence number management
 uint16_t MassStorage::GetVolumeSeq(unsigned int volume) noexcept
@@ -895,7 +938,7 @@ bool MassStorage::CheckDriveMounted(const char* path) noexcept
 	const size_t card = (strlen(path) >= 2 && path[1] == ':' && isDigit(path[0]))
 						? path[0] - '0'
 						: 0;
-	return card < NumSdCards && info[card].isMounted;
+	return card < GetNumVolumes() && info[card].isMounted;
 }
 
 // Return true if any files are open on the file system
@@ -941,7 +984,7 @@ bool MassStorage::IsCardDetected(size_t card) noexcept
 // This may only be called to mount one card at a time.
 GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportSuccess) noexcept
 {
-	if (card >= NumSdCards)
+	if (card >= GetNumVolumes())
 	{
 		reply.copy("SD card number out of range");
 		return GCodeResult::error;
@@ -1037,7 +1080,7 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 // If an error occurs, return true with the error message in 'reply'.
 GCodeResult MassStorage::Unmount(size_t card, const StringRef& reply) noexcept
 {
-	if (card >= NumSdCards)
+	if (card >= GetNumVolumes())
 	{
 		reply.copy("SD card number out of range");
 		return GCodeResult::error;
@@ -1058,7 +1101,7 @@ GCodeResult MassStorage::Unmount(size_t card, const StringRef& reply) noexcept
 
 bool MassStorage::IsDriveMounted(size_t drive) noexcept
 {
-	return drive < NumSdCards
+	return drive < GetNumVolumes()
 #if HAS_MASS_STORAGE
 		&& info[drive].isMounted
 #endif
@@ -1166,7 +1209,7 @@ void MassStorage::RecordSimulationTime(const char *printingFilePath, uint32_t si
 // Get information about the SD card and interface speed
 MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed, uint32_t& clSize) noexcept
 {
-	if (slot >= NumSdCards)
+	if (slot >= GetNumVolumes())
 	{
 		return InfoResult::badSlot;
 	}

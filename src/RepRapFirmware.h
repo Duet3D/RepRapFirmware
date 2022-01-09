@@ -101,7 +101,8 @@ enum class PinUsedBy : uint8_t
 	gpout,
 	filamentMonitor,
 	temporaryInput,
-	sensor
+	sensor,
+	sdCard
 };
 
 #include "Pins.h"
