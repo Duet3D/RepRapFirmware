@@ -4449,10 +4449,17 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 			const uint32_t slot = gb.GetLimitedUIValue('R', MaxSpindles);
 			return spindles[slot].Configure(gb, reply);
 		}
+
 #ifdef DUET3_V06
 	case 64:	// D
-		return MassStorage::ConfigureSdCard(gb, reply);
+# if HAS_SBC_INTERFACE
+		if (!reprap.UsingSbcInterface())
+# endif
+		{
+			return MassStorage::ConfigureSdCard(gb, reply);
+		}
 #endif
+		//no break
 
 	default:
 		reply.copy("exactly one of FHJPSR must be given");
