@@ -342,6 +342,7 @@ public:
 	GCodeResult HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void AtxPowerOff() noexcept;
 	bool IsAtxPowerControlled() const noexcept { return PsOnPort.IsValid(); }
+	bool IsDeferredPowerDown() const noexcept { return deferredPowerDown; }
 	const IoPort& GetAtxPowerPort() const noexcept { return PsOnPort; }
 
 	BoardType GetBoardType() const noexcept { return board; }
