@@ -5,7 +5,6 @@
 
 #if SUPPORT_12864_LCD
 
-#include "Pins.h"
 #include <Hardware/SharedSpi/SharedSpiDevice.h>
 
 Lcd::Lcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode) noexcept

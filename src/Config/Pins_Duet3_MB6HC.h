@@ -1,5 +1,5 @@
-#ifndef PINS_DUET3_V06_H__
-#define PINS_DUET3_V06_H__
+#ifndef PINS_DUET3_MB6HC_H__
+#define PINS_DUET3_MB6HC_H__
 
 #include <PinDescription.h>
 
@@ -436,4 +436,4 @@ namespace StepPins
 	}
 }
 
-#endif
+#endif	//ifndef PINS_DUET3_MB6HC_H__

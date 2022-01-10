@@ -5,8 +5,6 @@
 
 #if SUPPORT_12864_LCD
 
-#include "Pins.h"
-
 // LCD basic instructions. These all take 72us to execute except LcdDisplayClear, which takes 1.6ms
 constexpr uint8_t LcdDisplayClear = 0x01;
 constexpr uint8_t LcdHome = 0x02;

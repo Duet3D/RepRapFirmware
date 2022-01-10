@@ -2,8 +2,7 @@
 
 #if SUPPORT_12864_LCD
 
-#include "Pins.h"
-#include "Hardware/IoPorts.h"
+#include <Hardware/IoPorts.h>
 
 RotaryEncoder::RotaryEncoder(Pin p0, Pin p1, Pin pb) noexcept
 	: pin0(p0), pin1(p1), pinButton(pb), ppc(1), encoderChange(0), encoderState(0), newPress(false), reverseDirection(false) {}

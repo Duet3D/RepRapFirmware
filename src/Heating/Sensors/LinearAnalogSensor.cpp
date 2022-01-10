@@ -7,7 +7,6 @@
 
 #include "LinearAnalogSensor.h"
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
-#include <Pins.h>
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 

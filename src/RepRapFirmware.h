@@ -105,8 +105,8 @@ enum class PinUsedBy : uint8_t
 	sdCard
 };
 
-#include "Pins.h"
-#include "Configuration.h"
+#include <Config/Pins.h>
+#include <Config/Configuration.h>
 
 static_assert(MinVisibleAxes <= MinAxes);
 static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logical pin numbers");

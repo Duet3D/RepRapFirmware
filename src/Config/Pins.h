@@ -6,9 +6,12 @@
 #if !defined(PLATFORM)
 # if defined(__SAM4E8E__)
 #  define PLATFORM DuetNG
-# elif defined(__SAME70Q20B__) || defined(__SAME70Q21B__)
-#  if defined(DUET3_V06)
-#   define PLATFORM Duet3_V06
+# elif defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__)
+#  if defined(DUET3_MB6HC)
+#   define PLATFORM Duet3_MB6HC
+#   define DUET3		1
+#  elif defined(DUET3_MB6XD)
+#   define PLATFORM Duet3_MB6XD
 #   define DUET3		1
 #  else
 #   error Unknown platform
@@ -32,7 +35,7 @@
 # define P_CONCAT(x,y) P_EXPAND(x)y
 # define P_STR(x) #x
 # define P_XSTR(x) P_STR(x)
-# define P_INCLUDE_FILE P_XSTR(P_CONCAT(PLATFORM,P_CONCAT(/Pins_,P_CONCAT(PLATFORM,.h))))
+# define P_INCLUDE_FILE P_XSTR(P_CONCAT(Pins_,P_CONCAT(PLATFORM,.h)))
 #endif
 
 #include P_INCLUDE_FILE

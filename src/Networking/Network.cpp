@@ -86,7 +86,7 @@ Network::Network(Platform& p) noexcept : platform(p)
 #if defined(DUET3_V03)
 	interfaces[0] = new LwipEthernetInterface(p);
 	interfaces[1] = new WiFiInterface(p);
-#elif defined(SAME70XPLD) || defined(DUET3_V05) || defined(DUET3_V06)
+#elif defined(DUET3_MB6HC) || defined(DUET3_MB6XD)
 	interfaces[0] = new LwipEthernetInterface(p);
 #elif defined(DUET_NG) || defined(DUET3MINI)
 	interfaces[0] = nullptr;			// we set this up in Init()

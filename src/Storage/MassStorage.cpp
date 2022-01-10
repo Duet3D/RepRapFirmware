@@ -19,7 +19,7 @@ static_assert(SD_MMC_MEM_CNT == NumSdCards);
 # include <SBC/SbcInterface.h>
 #endif
 
-#ifdef DUET3_V06
+#ifdef DUET3_MB6HC
 # include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #endif
 
@@ -97,7 +97,7 @@ static uint64_t GetFreeSpace(size_t slot)
 static const char * const VolPathNames[] = { "0:/", "1:/" };
 static_assert(ARRAY_SIZE(VolPathNames) >= NumSdCards, "Incorrect VolPathNames array");
 
-#ifdef DUET3_V06
+#ifdef DUET3_MB6HC
 static IoPort sd1Ports[2];		// first element is CS port, second is CD port
 #endif
 
@@ -181,7 +181,7 @@ static FileStore files[MAX_FILES];
 
 #if HAS_MASS_STORAGE
 
-# ifdef DUET3_V06
+# ifdef DUET3_MB6HC
 
 // Return the number of volumes, which on the 6HC is normally 1 but can be increased to 2
 size_t MassStorage::GetNumVolumes() noexcept

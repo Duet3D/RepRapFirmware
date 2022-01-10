@@ -12,7 +12,6 @@
 
 #include <RepRapFirmware.h>
 #include "DriverMode.h"
-#include <Pins.h>
 
 namespace SmartDrivers
 {

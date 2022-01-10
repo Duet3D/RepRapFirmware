@@ -15,8 +15,8 @@
 #include <GCodes/GCodes.h>
 
 // Define which types of LED strip this hardware supports
-#define SUPPORT_DMA_NEOPIXEL		(defined(DUET3_V06) || defined(DUET3MINI) || defined(PCCB_10))
-#define SUPPORT_DMA_DOTSTAR			(defined(DUET3_V06) || defined(PCCB_10))
+#define SUPPORT_DMA_NEOPIXEL		(defined(DUET3_MB6HC) || defined(DUET3_MB6XD) || defined(DUET3MINI) || defined(PCCB_10))
+#define SUPPORT_DMA_DOTSTAR			(defined(DUET3_MB6HC) || defined(DUET3_MB6XD) || defined(PCCB_10))
 #define SUPPORT_BITBANG_NEOPIXEL	(defined(DUET3MINI) || defined(DUET_NG))
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
@@ -56,7 +56,7 @@ namespace LedStripDriver
 	constexpr uint32_t MinNeoPixelResetTicks = (250 * StepClockRate)/1000000;	// 250us minimum Neopixel reset time on later chips
 
 	// Define the size of the buffer used to accumulate a sequence of colours to send to the string
-#if defined(DUET3_V06)
+#if defined(DUET3_MB6HC) || defined(DUET3_MB6XD)
 	// We have plenty of non-cached RAM left on Duet 3
 	constexpr size_t ChunkBufferSize = 240 * 16;						// DotStar LEDs use 4 bytes/LED, NeoPixel RGBW use 16 bytes/LED
 #elif defined(DUET3MINI)
@@ -457,7 +457,7 @@ void LedStripDriver::Init() noexcept
 	hri_mclk_set_AHBMASK_QSPI_bit(MCLK);
 	hri_mclk_clear_AHBMASK_QSPI_2X_bit(MCLK);			// we don't need the 2x clock
 	hri_mclk_set_APBCMASK_QSPI_bit(MCLK);
-#elif defined(DUET3_V06) || defined(PCCB_10)
+#elif defined(DUET3_MB6HC) || defined(DUET3_MB6XD) || defined(PCCB_10)
 	SetPinFunction(DotStarMosiPin, DotStarPinMode);
 	SetPinFunction(DotStarSclkPin, DotStarPinMode);
 	pmc_enable_periph_clk(DotStarClockId);				// enable the clock to the USART or SPI peripheral

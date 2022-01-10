@@ -4405,7 +4405,7 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 	// Exactly one of FHJPSR is allowed
 	unsigned int charsPresent = 0;
 	for (char c :
-#ifdef DUET3_V06
+#ifdef DUET3_MB6HC
 		(const char[]){'D', 'R', 'J', 'F', 'H', 'P', 'S'}
 #else
 		(const char[]){'R', 'J', 'F', 'H', 'P', 'S'}
@@ -4450,7 +4450,7 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 			return spindles[slot].Configure(gb, reply);
 		}
 
-#ifdef DUET3_V06
+#ifdef DUET3_MB6HC
 	case 64:	// D
 # if HAS_SBC_INTERFACE
 		if (!reprap.UsingSbcInterface())
