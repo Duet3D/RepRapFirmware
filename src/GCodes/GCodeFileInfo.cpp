@@ -22,6 +22,10 @@ void GCodeFileInfo::Init() noexcept
 	{
 		f = 0.0;
 	}
+	for (ThumbnailInfo& th : thumbnails)
+	{
+		th.Invalidate();
+	}
 }
 
 // End

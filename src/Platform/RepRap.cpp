@@ -238,7 +238,7 @@ constexpr ObjectModelArrayDescriptor RepRap::volumesArrayDescriptor =
 constexpr ObjectModelArrayDescriptor RepRap::volChangesArrayDescriptor =
 {
 	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return NumSdCards; },
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MassStorage::GetNumVolumes(); },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 																		{ return ExpressionValue((int32_t)MassStorage::GetVolumeSeq(context.GetLastIndex())); }
 };
@@ -314,7 +314,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "trackedObjects",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxTrackedObjects),					ObjectModelEntryFlags::verbose },
 	{ "triggers",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxTriggers),							ObjectModelEntryFlags::verbose },
 #if HAS_MASS_STORAGE
-	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)NumSdCards),							ObjectModelEntryFlags::verbose },
+	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MassStorage::GetNumVolumes()),		ObjectModelEntryFlags::verbose },
 #else
 	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)0),									ObjectModelEntryFlags::verbose },
 #endif
@@ -327,6 +327,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),	ObjectModelEntryFlags::none },
 	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::none },
 	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),				ObjectModelEntryFlags::live },
+	{ "deferredPowerDown",		OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), (int32_t)self->platform->IsDeferredPowerDown()),	ObjectModelEntryFlags::none },
 	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),								ObjectModelEntryFlags::none },
 	{ "gpOut",					OBJECT_MODEL_FUNC_NOSELF(&gpoutArrayDescriptor),						ObjectModelEntryFlags::live },
 #if SUPPORT_LASER
@@ -405,7 +406,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	0,																						// directories
 #endif
 	25,																						// limits
-	18 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
+	19 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
 	2,																						// state.beep
 	6,																						// state.messageBox
 	12 + HAS_NETWORKING + SUPPORT_SCANNER +
@@ -1687,14 +1688,14 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 #if HAS_MASS_STORAGE
 		// Total and mounted volumes
 		size_t mountedCards = 0;
-		for (size_t i = 0; i < NumSdCards; i++)
+		for (size_t i = 0; i < MassStorage::GetNumVolumes(); i++)
 		{
 			if (MassStorage::IsDriveMounted(i))
 			{
-				mountedCards |= (1 << i);
+				mountedCards |= (1u << i);
 			}
 		}
-		response->catf(",\"volumes\":%u,\"mountedVolumes\":%u", NumSdCards, mountedCards);
+		response->catf(",\"volumes\":%u,\"mountedVolumes\":%u", MassStorage::GetNumVolumes(), mountedCards);
 #endif
 
 		// Machine mode and name
@@ -2078,7 +2079,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 	{
 		// Add the static fields
 		response->catf(",\"geometry\":\"%s\",\"axes\":%u,\"totalAxes\":%u,\"axisNames\":\"%s\",\"volumes\":%u,\"numTools\":%u,\"myName\":\"%.s\",\"firmwareName\":\"%.s\"",
-						move->GetGeometryString(), numVisibleAxes, gCodes->GetTotalAxes(), gCodes->GetAxisLetters(), NumSdCards, GetNumberOfContiguousTools(), myName.c_str(), FIRMWARE_NAME);
+						move->GetGeometryString(), numVisibleAxes, gCodes->GetTotalAxes(), gCodes->GetAxisLetters(), MassStorage::GetNumVolumes(), GetNumberOfContiguousTools(), myName.c_str(), FIRMWARE_NAME);
 	}
 
 	response->cat("}\n");			// include a newline to help PanelDue resync
@@ -2262,6 +2263,84 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 
 #endif
 
+#if HAS_MASS_STORAGE
+
+// Get thumbnail data
+// 'offset' is the offset into the file of the thumbnail data that the caller wants.
+// It is up to the caller to get the offset right, however we must fail gracefully if the caller passes us a bad offset.
+// The offset should always be either the initial offset or the 'next' value passed in a previous call, so it should always be the start of a line.
+OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition offset) noexcept
+{
+	// Need something to write to...
+	OutputBuffer *response;
+	if (!OutputBuffer::Allocate(response))
+	{
+		return nullptr;
+	}
+
+	response->printf("{\"fileName\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
+	FileStore *const f = platform->OpenFile(platform->GetGCodeDir(), filename, OpenMode::read);
+	unsigned int err = 0;
+	if (f != nullptr)
+	{
+		if (f->Seek(offset))
+		{
+			response->cat("\"data\":\"");
+			for (unsigned int charsWritten = 0; charsWritten < 2500;)
+			{
+				// Read a line
+				char lineBuffer[GCODE_LENGTH];
+				const int charsRead = f->ReadLine(lineBuffer, ARRAY_SIZE(lineBuffer));
+				if (charsRead < 2)
+				{
+					err = 1;
+					break;
+				}
+
+				// Check it is a comment line
+				const char *p = lineBuffer;
+				if (*p != ';')
+				{
+					err = 1;
+					break;
+				}
+
+				// Update the file offset for returning 'next'
+				offset = f->Position();
+
+				// Skip white space
+				do
+				{
+					++p;
+				} while (*p == ' ' || *p == '\t');
+
+				// Check for end of thumbnail
+				const unsigned int charsLeft = (unsigned int)charsRead - (p - lineBuffer);
+				if (charsLeft == 0 || StringStartsWith(p, "thumbnail end"))
+				{
+					offset = 0;				// reached end of encoded thumbnail, so return 0 for 'next'
+					break;
+				}
+
+				// Copy the data
+				response->cat(p, charsLeft);
+				charsWritten += charsLeft;
+			}
+			response->catf("\",\"next\":%" PRIu32 ",", offset);
+		}
+		f->Close();
+	}
+	else
+	{
+		err = 1;
+	}
+
+	response->catf("\"err\":%u}\n", err);
+	return response;
+}
+
+#endif
+
 // Get information for the specified file, or the currently printing file (if 'filename' is null or empty), in JSON format
 // Return GCodeResult::Warning if the file doesn't exist, else GCodeResult::ok or GCodeResult::notFinished
 GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept
@@ -2298,7 +2377,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 
 	if (info.isValid)
 	{
-		response->printf("{\"err\":0,\"size\":%lu,",info.fileSize);
+		response->printf("{\"err\":0,\"fileName\":\"%.s\",\"size\":%lu,", ((specificFile) ? filename : printMonitor->GetPrintingFilename()), info.fileSize);
 		tm timeInfo;
 		gmtime_r(&info.lastModifiedTime, &timeInfo);
 		if (timeInfo.tm_year > /*19*/80)
@@ -2331,11 +2410,27 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 				ch = ',';
 			}
 		}
-		response->cat("]");
+		response->cat(']');
 
 		if (!specificFile)
 		{
-			response->catf(",\"printDuration\":%d,\"fileName\":\"%.s\"", (int)printMonitor->GetPrintDuration(), printMonitor->GetPrintingFilename());
+			response->catf(",\"printDuration\":%d", (int)printMonitor->GetPrintDuration());
+		}
+
+		// See if we have any thumbnails
+		if (info.thumbnails[0].IsValid())
+		{
+			response->cat(",\"thumbnails\":");
+			size_t index = 0;
+			do
+			{
+				const GCodeFileInfo::ThumbnailInfo& inf = info.thumbnails[index];
+				response->catf("%c{\"width\":%u,\"height\":%u,\"format\":\"%s\",\"offset\":%" PRIu32 ",\"size\":%" PRIu32 "}",
+								((index == 0) ? '[' : ','), inf.height, inf.width, inf.format.ToString(), inf.offset, inf.size);
+				++index;
+			}
+			while (index < GCodeFileInfo::MaxThumbnails && info.thumbnails[index].IsValid());
+			response->cat(']');
 		}
 
 		response->catf(",\"generatedBy\":\"%.s\"}\n", info.generatedBy.c_str());

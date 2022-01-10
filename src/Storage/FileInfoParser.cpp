@@ -126,6 +126,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 				}
 
 				uint32_t startTime = millis();
+				const FilePosition bufferStartFileOffset = fileBeingParsed->Position() - fileOverlapLength;
 				const int nbytes = fileBeingParsed->Read(&buf[fileOverlapLength], sizeToRead);
 				if (nbytes != (int)sizeToRead)
 				{
@@ -166,6 +167,9 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 				{
 					headerInfoComplete &= FindPrintTime(buf);
 				}
+
+				// Look for thumbnail images
+				headerInfoComplete &= FindThumbnails(buf, bufferStartFileOffset);
 
 				// Keep track of the time stats
 				accumulatedParseTime += millis() - startTime;
@@ -738,7 +742,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* bufp) noexcept
 			const float filamentCMM = SafeStrtof(p + strlen(filamentVolumeStr), nullptr) * multipler;
 			if (!std::isnan(filamentCMM) && !std::isinf(filamentCMM))
 			{
-				parsedFileInfo.filamentNeeded[filamentsFound++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() / 2.0));
+				parsedFileInfo.filamentNeeded[filamentsFound++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() * 0.5));
 			}
 		}
 	}
@@ -890,6 +894,94 @@ bool FileInfoParser::FindSimulatedTime(const char* bufp) noexcept
 		}
 	}
 	return false;
+}
+
+// Search for embedded thumbnail images that start in the buffer
+// Subsequent calls pass a buffer that overlaps with the previous one, so take care to avoid finding the same one twice.
+// The overlap is small enough that we can discount the possibility of finding more than one thumbnail header in the overlap area.
+// Return true if we have no room to store further thumbnails, or we are certain that we have found all the thumbnails in the file.
+// Thumbnail data is preceded by comment lines of the following form:
+//	; QOI thumbnail begin 32x32 2140
+// or
+//	; thumbnail begin 32x32 2140
+bool FileInfoParser::FindThumbnails(const char *_ecv_array bufp, FilePosition bufferStartFilePosition) noexcept
+{
+	// Find the next free slot in which to store thumbnail data
+	size_t thumbnailIndex = 0;
+	for (thumbnailIndex = 0; parsedFileInfo.thumbnails[thumbnailIndex].IsValid(); )
+	{
+		++thumbnailIndex;
+		if (thumbnailIndex == GCodeFileInfo::MaxThumbnails)
+		{
+			return true;		// no more space to store thumbnail info
+		}
+	}
+
+	constexpr const char * PngThumbnailBegin = "; thumbnail begin ";
+	constexpr const char * QoiThumbnailBegin = "; QOI thumbnail begin ";
+	const char *_ecv_array pos = bufp;
+	while (true)
+	{
+		const char *_ecv_array qoiPos = strstr(pos, QoiThumbnailBegin);
+		const char *_ecv_array pngPos = strstr(pos, PngThumbnailBegin);
+		GCodeFileInfo::ThumbnailInfo::Format fmt(GCodeFileInfo::ThumbnailInfo::Format::qoi);
+		if (qoiPos != nullptr && (pngPos == nullptr || qoiPos < pngPos))
+		{
+			// found a QOI thumbnail
+			pos = qoiPos + strlen(QoiThumbnailBegin);
+			fmt = GCodeFileInfo::ThumbnailInfo::Format::qoi;
+		}
+		else if (pngPos != nullptr)
+		{
+			// found a PNG thumbnail
+			pos = pngPos + strlen(PngThumbnailBegin);
+			fmt = GCodeFileInfo::ThumbnailInfo::Format::png;
+		}
+		else
+		{
+			return false;		// no more thumbnails in this buffer, but we have room to save more thumbnail details
+		}
+
+		// Store this thumbnail data
+		const char *_ecv_array npos;
+		const uint32_t w = StrToU32(pos, &npos);
+		if (w >= 16 && w <= 500 && *npos == 'x')
+		{
+			pos = npos + 1;
+			const uint32_t h = StrToU32(pos, &npos);
+			if (h >= 16 && h <= 500 && *npos == ' ')
+			{
+				pos = npos + 1;
+				const uint32_t size = StrToU32(pos, &npos);
+				if (size >= 10)
+				{
+					pos = npos;
+					while (*pos == ' ' || *pos == '\r' || *pos == '\n')
+					{
+						++pos;
+					}
+					if (*pos == ';')
+					{
+						const FilePosition offset = bufferStartFilePosition + (pos - bufp);
+						if (thumbnailIndex == 0 || offset != parsedFileInfo.thumbnails[thumbnailIndex - 1].offset)
+						{
+							GCodeFileInfo::ThumbnailInfo& th = parsedFileInfo.thumbnails[thumbnailIndex];
+							th.width = w;
+							th.height = h;
+							th.size = size;
+							th.format = fmt;
+							th.offset = offset;
+							++thumbnailIndex;
+							if (thumbnailIndex == GCodeFileInfo::MaxThumbnails)
+							{
+								return true;		// no more space to store thumbnail info
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 #endif

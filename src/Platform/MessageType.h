@@ -66,7 +66,7 @@ inline constexpr MessageType AddLogDebug(MessageType mt) noexcept
 {
 	// Debug level has no flags set such that any non-flagged message automatically
 	// is part of this log level - force it by removing the existing flags
-	return (MessageType)(mt & ~(LogMessageLowBit | LogMessageHighBit));
+	return (MessageType)((uint32_t)mt & ~((uint32_t)LogMessageLowBit | (uint32_t)LogMessageHighBit));
 }
 
 inline constexpr MessageType AddLogWarn(MessageType mt) noexcept
@@ -74,7 +74,7 @@ inline constexpr MessageType AddLogWarn(MessageType mt) noexcept
 	// Since increasing log levels have lower numbers we need to delete
 	// any existing log flags first - otherwise this could lead to MessageLogLevel
 	// rising to 3 which is equivalent to OFF
-	return (MessageType)(AddLogDebug(mt) | LogWarn);
+	return (MessageType)((uint32_t)AddLogDebug(mt) | (uint32_t)LogWarn);
 }
 
 inline constexpr MessageType AddLogInfo(MessageType mt) noexcept
@@ -82,22 +82,22 @@ inline constexpr MessageType AddLogInfo(MessageType mt) noexcept
 	// Since increasing log levels have lower numbers we need to delete
 	// any existing log flags first - otherwise this could lead to MessageLogLevel
 	// rising to 3 which is equivalent to OFF
-	return (MessageType)(AddLogDebug(mt) | LogInfo);
+	return (MessageType)((uint32_t)AddLogDebug(mt) | (uint32_t)LogInfo);
 }
 
 inline constexpr MessageType RemoveLogging(MessageType mt) noexcept
 {
-	return (MessageType)(mt | LogOff);
+	return (MessageType)((uint32_t)mt | (uint32_t)LogOff);
 }
 
 inline constexpr MessageType AddError(MessageType mt) noexcept
 {
-	return AddLogWarn((MessageType)(mt | ErrorMessageFlag));
+	return AddLogWarn((MessageType)((uint32_t)mt | (uint32_t)ErrorMessageFlag));
 }
 
 inline constexpr MessageType AddWarning(MessageType mt) noexcept
 {
-	return AddLogWarn((MessageType)(mt | WarningMessageFlag));
+	return AddLogWarn((MessageType)((uint32_t)mt | (uint32_t)WarningMessageFlag));
 }
 
 #endif /* MESSAGETYPE_H_ */

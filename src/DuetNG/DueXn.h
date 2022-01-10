@@ -15,9 +15,9 @@ enum class ExpansionBoardType : uint8_t
 	none,
 	DueX0,
 	DueX2,
-	DueX2_v0_11 = DueX2 + 1,
+	DueX2_v0_11 = (uint8_t)DueX2 + 1,
 	DueX5,
-	DueX5_v0_11 = DueX5 + 1
+	DueX5_v0_11 = (uint8_t)DueX5 + 1
 };
 
 namespace DuetExpansion

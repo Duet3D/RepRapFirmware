@@ -2353,9 +2353,9 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 // Note, the Thermistor code assumes that this is also the thermistor input number
 int Platform::GetAveragingFilterIndex(const IoPort& port) const noexcept
 {
-	for (size_t i = 0; i < NumAdcFilters; ++i)
+	for (size_t i = 0; i < ARRAY_SIZE(TEMP_SENSE_PINS); ++i)
 	{
-		if (port.GetAnalogChannel() == filteredAdcChannels[i])
+		if (port.GetPin() == TEMP_SENSE_PINS[i])
 		{
 			return (int)i;
 		}
@@ -4404,7 +4404,13 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 {
 	// Exactly one of FHJPSR is allowed
 	unsigned int charsPresent = 0;
-	for (char c : (const char[]){'R', 'J', 'F', 'H', 'P', 'S'})
+	for (char c :
+#ifdef DUET3_V06
+		(const char[]){'D', 'R', 'J', 'F', 'H', 'P', 'S'}
+#else
+		(const char[]){'R', 'J', 'F', 'H', 'P', 'S'}
+#endif
+		)
 	{
 		charsPresent <<= 1;
 		if (gb.Seen(c))
@@ -4443,6 +4449,17 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 			const uint32_t slot = gb.GetLimitedUIValue('R', MaxSpindles);
 			return spindles[slot].Configure(gb, reply);
 		}
+
+#ifdef DUET3_V06
+	case 64:	// D
+# if HAS_SBC_INTERFACE
+		if (!reprap.UsingSbcInterface())
+# endif
+		{
+			return MassStorage::ConfigureSdCard(gb, reply);
+		}
+#endif
+		//no break
 
 	default:
 		reply.copy("exactly one of FHJPSR must be given");

@@ -342,6 +342,7 @@ public:
 	GCodeResult HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void AtxPowerOff() noexcept;
 	bool IsAtxPowerControlled() const noexcept { return PsOnPort.IsValid(); }
+	bool IsDeferredPowerDown() const noexcept { return deferredPowerDown; }
 	const IoPort& GetAtxPowerPort() const noexcept { return PsOnPort; }
 
 	BoardType GetBoardType() const noexcept { return board; }
@@ -416,7 +417,7 @@ public:
 
 	// File functions
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	FileStore* OpenFile(const char *_ecv_array folder, const char* fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
+	FileStore* OpenFile(const char *_ecv_array folder, const char *_ecv_array fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
 	bool FileExists(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;

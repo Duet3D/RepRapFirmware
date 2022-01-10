@@ -220,7 +220,9 @@ struct sd_mmc_card {
 	const struct DriverInterface *iface;	// Pointer to driver interface functions
 	uint32_t clock;				//!< Card access clock
 	uint32_t capacity;			//!< Card capacity in KBytes
+#if SUPPORT_WRITE_PROTECT
 	Pin wp_gpio;				//!< Card write protection pin number, or -1 if none present
+#endif
 	uint16_t rca;				//!< Relative card address
 	enum card_state state;		//!< Card state
 	card_type_t type;			//!< Card type
@@ -1800,11 +1802,13 @@ void sd_mmc_init(const Pin wpPins[], const Pin spiCsPins[])
 	{
 		struct sd_mmc_card *card = &sd_mmc_cards[slot];
 		card->state = SD_MMC_CARD_STATE_NO_CARD;
+#if SUPPORT_WRITE_PROTECT
 		card->wp_gpio = wpPins[slot];
 		if (card->wp_gpio != NoPin)
 		{
 			pinMode(card->wp_gpio, INPUT_PULLUP);
 		}
+#endif
 #if SD_MMC_HSMCI_MEM_CNT != 0
 		if (slot < SD_MMC_HSMCI_MEM_CNT)
 		{
@@ -1901,10 +1905,12 @@ uint32_t sd_mmc_get_capacity(uint8_t slot)
 #endif
 }
 
+#if SUPPORT_WRITE_PROTECT
 bool sd_mmc_is_write_protected(uint8_t slot)
 {
 	return sd_mmc_cards[slot].wp_gpio != NoPin && digitalRead(sd_mmc_cards[slot].wp_gpio) == SD_MMC_WP_DETECT_VALUE;
 }
+#endif
 
 #if 1	// dc42
 
@@ -1918,6 +1924,19 @@ void sd_mmc_unmount(uint8_t slot)
 uint32_t sd_mmc_get_interface_speed(uint8_t slot)
 {
 	return sd_mmc_cards[slot].iface->getInterfaceSpeed();
+}
+
+#endif
+
+#if SD_MMC_SPI_MEM_CNT != 0
+
+// Change the CS pin used by an SPI-connected card slot. Only used by the Duet 3 MB6HC. Linker garbage collection will eliminate this function in other builds.
+void sd_mmc_change_cs_pin(uint8_t slot, Pin csPin) noexcept
+{
+	if (slot >= SD_MMC_HSMCI_MEM_CNT)
+	{
+		sd_mmc_spi_change_cs_pin(slot - SD_MMC_HSMCI_MEM_CNT, csPin);
+	}
 }
 
 #endif
@@ -2040,10 +2059,13 @@ sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_
 	if (sd_mmc_err != SD_MMC_OK) {
 		return sd_mmc_err;
 	}
+
+#if SUPPORT_WRITE_PROTECT
 	if (sd_mmc_is_write_protected(slot)) {
 		sd_mmc_deselect_slot(slot);
 		return SD_MMC_ERR_WP;
 	}
+#endif
 
 	if (nb_block > 1) {
 		cmd = SDMMC_CMD25_WRITE_MULTIPLE_BLOCK;

@@ -49,10 +49,16 @@ GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& repl
 
 	if (changed)
 	{
+		const bool wasFiltered = filtered;
 		CalcDerivedParameters();
 		if (adcFilterChannel >= 0)
 		{
 			reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init(0);
+		}
+		else if (wasFiltered)
+		{
+			reply.copy("filtering not supported on this port");
+			return GCodeResult::warning;
 		}
 	}
 	else
@@ -87,6 +93,10 @@ void LinearAnalogSensor::Poll() noexcept
 void LinearAnalogSensor::CalcDerivedParameters() noexcept
 {
 	adcFilterChannel = reprap.GetPlatform().GetAveragingFilterIndex(port);
+	if (adcFilterChannel < 0)
+	{
+		filtered = false;
+	}
 	linearIncreasePerCount = (highTemp - lowTemp)/((filtered) ? FilteredAdcRange : UnfilteredAdcRange);
 }
 
