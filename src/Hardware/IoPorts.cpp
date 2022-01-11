@@ -8,7 +8,6 @@
 #include "IoPorts.h"
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
-#include <Configuration.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 #ifdef DUET_NG

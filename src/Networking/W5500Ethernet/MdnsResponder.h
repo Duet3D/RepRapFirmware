@@ -14,7 +14,7 @@
 #include <General/IPAddress.h>
 #include <General/StringRef.h>
 
-#include "Configuration.h"
+#include <Config/Configuration.h>
 #include "NetworkDefs.h"
 
 class W5500Socket;

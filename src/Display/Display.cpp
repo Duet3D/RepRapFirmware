@@ -11,10 +11,9 @@
 
 #include "Lcd/ST7920/Lcd7920.h"
 #include "Lcd/ST7567/Lcd7567.h"
-#include "GCodes/GCodes.h"
-#include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Hardware/IoPorts.h"
-#include "Pins.h"
+#include <GCodes/GCodes.h>
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Hardware/IoPorts.h>
 
 constexpr int DefaultPulsesPerClick = -4;			// values that work with displays I have are 2 and -4
 

@@ -6,7 +6,7 @@
  */
 
 #include "WizSpi.h"
-#include "Pins.h"
+#include <Config/Pins.h>
 
 // Define exactly one of the following as 1, the other as zero
 #define USE_PDC		1		// use peripheral DMA controller

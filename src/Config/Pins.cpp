@@ -1,16 +1,15 @@
 /*
- * Pins_Duet5LC.cpp
+ * Pins.cpp
  *
- *  Created on: 19 Jun 2020
+ *  Created on: 31 Mar 2019
  *      Author: David
  */
 
-
 #include "RepRapFirmware.h"
 
-// Hardware-dependent pins functions
+// Pins lookup functions, possibly hardware-dependent
 
-// Return a pointer to the pin description entry. Declared in and called from CoreN2G.
+// Return a pointer to the pin description entry. Declared in and called from CoreN2G. Return nullptr if the pin number is out of range.
 const PinDescriptionBase *AppGetPinDescription(Pin p) noexcept
 {
 	return (p < ARRAY_SIZE(PinTable)) ? &PinTable[p] : nullptr;
