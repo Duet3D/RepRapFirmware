@@ -353,8 +353,9 @@ namespace LedStripDriver
 	// Send data to NeoPixel LEDs by DMA to SPI
 	static GCodeResult SpiSendNeoPixelData(uint8_t red, uint8_t green, uint8_t blue, uint8_t white, uint32_t numLeds, bool includeWhite, bool following) noexcept
 	{
-		uint8_t *p = chunkBuffer + (12 * numAlreadyInBuffer);
-		while (numLeds != 0 && p <= chunkBuffer + ARRAY_SIZE(chunkBuffer) - 12)
+		const unsigned int bytesPerLed = (includeWhite) ? 16 : 12;
+		uint8_t *p = chunkBuffer + (bytesPerLed * numAlreadyInBuffer);
+		while (numLeds != 0 && p + bytesPerLed <= chunkBuffer + ARRAY_SIZE(chunkBuffer))
 		{
 			EncodeNeoPixelByte(p, green);
 			p += 4;
@@ -373,7 +374,7 @@ namespace LedStripDriver
 
 		if (!following)
 		{
-			DmaSendChunkBuffer(((includeWhite) ? 16 : 12) * numAlreadyInBuffer);		// send data by DMA to SPI
+			DmaSendChunkBuffer(bytesPerLed * numAlreadyInBuffer);		// send data by DMA to SPI
 			numAlreadyInBuffer = 0;
 			needStartFrame = true;
 		}
