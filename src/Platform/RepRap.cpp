@@ -1101,18 +1101,15 @@ void RepRap::DeleteTool(int toolNumber) noexcept
 void RepRap::SelectTool(int toolNumber, bool simulating) noexcept
 {
 	ReadLockedPointer<Tool> const newTool = GetTool(toolNumber);
-	if (!simulating)
+	if (!simulating && currentTool != nullptr && currentTool != newTool.Ptr())
 	{
-		if (currentTool != nullptr && currentTool != newTool.Ptr())
-		{
-			currentTool->Standby();
-		}
-		if (newTool.IsNotNull())
-		{
-			newTool->Activate();
-		}
+		currentTool->Standby();
 	}
-	currentTool = newTool.Ptr();
+	currentTool = newTool.Ptr();					// must do this first so that Activate() will always work
+	if (!simulating && newTool.IsNotNull())
+	{
+		newTool->Activate();
+	}
 }
 
 void RepRap::PrintTool(int toolNumber, const StringRef& reply) const noexcept

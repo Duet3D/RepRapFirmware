@@ -71,8 +71,7 @@ public:
 	void SetTemperature(float t, bool activeNotStandby) THROWS(GCodeException);
 	float GetActiveTemperature() const noexcept { return activeTemperature; }
 	float GetStandbyTemperature() const noexcept { return standbyTemperature; }
-	GCodeResult Activate(const StringRef& reply) noexcept;				// Switch from idle to active
-	void Standby() noexcept;											// Switch from active to idle
+	GCodeResult SetActiveOrStandby(bool setActive, const StringRef& reply) noexcept;	// Switch from idle to active or standby
 	GCodeResult StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansBitmap fans) THROWS(GCodeException);
 																		// Start an auto tune cycle for this heater
 	void GetAutoTuneStatus(const StringRef& reply) const noexcept;		// Get the auto tune status or last result

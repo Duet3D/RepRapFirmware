@@ -2002,7 +2002,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							else
 							{
 								heat.SetActiveTemperature(currentHeater, temperature);		// may throw
-								result = heat.Activate(currentHeater, reply);
+								result = heat.SetActiveOrStandby(currentHeater, nullptr, true, reply);
 							}
 						}
 					}
@@ -2047,14 +2047,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					const int8_t bedHeater = reprap.GetHeat().GetBedHeater(index);
 					if (bedHeater >= 0)
 					{
-						if (gb.Seen('S') && gb.GetIValue() == 1)
-						{
-							result = reprap.GetHeat().Activate(bedHeater, reply);
-						}
-						else
-						{
-							reprap.GetHeat().Standby(bedHeater, nullptr);
-						}
+						const bool setActive = gb.Seen('S') && gb.GetIValue() == 1;
+						result = reprap.GetHeat().SetActiveOrStandby(bedHeater, nullptr, setActive, reply);
 					}
 				}
 				break;
@@ -2097,7 +2091,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 
 						reprap.GetHeat().SetActiveTemperature(heater, temperature);		// may throw
-						result = reprap.GetHeat().Activate(heater, reply);
+						result = reprap.GetHeat().SetActiveOrStandby(heater, nullptr, true, reply);
 						if (cancelWait || reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TEMPERATURE_CLOSE_ENOUGH))
 						{
 							cancelWait = isWaiting = false;

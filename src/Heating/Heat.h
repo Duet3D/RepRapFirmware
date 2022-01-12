@@ -123,8 +123,9 @@ public:
 
 	void SetActiveTemperature(int heater, float t) THROWS(GCodeException) { SetTemperature(heater, t, true); }
 	void SetStandbyTemperature(int heater, float t) THROWS(GCodeException) { SetTemperature(heater, t, false); }
-	GCodeResult Activate(int heater, const StringRef& reply) noexcept;	// Turn on a heater
-	void Standby(int heater, const Tool* tool) noexcept;				// Set a heater to standby
+	void SetTemperature(int heater, float t, bool activeNotStandby) THROWS(GCodeException);
+
+	GCodeResult SetActiveOrStandby(int heater, const Tool *tool, bool active, const StringRef& reply) noexcept;	// Turn a heater on
 	void SwitchOff(int heater) noexcept;								// Turn off a specific heater
 	void FeedForwardAdjustment(unsigned int heater, float fanPwmChange, float extrusionChange) const noexcept;
 	void SetExtrusionFeedForward(unsigned int heater, float pwm) const noexcept;
@@ -163,7 +164,6 @@ private:
 	ReadLockedPointer<Heater> FindHeater(int heater) const noexcept;
 	void DeleteSensor(unsigned int sn) noexcept;
 	void InsertSensor(TemperatureSensor *newSensor) noexcept;
-	void SetTemperature(int heater, float t, bool activeNotStandby) THROWS(GCodeException);
 
 #if SUPPORT_REMOTE_COMMANDS
 	void SendHeatersStatus(CanMessageBuffer& buf) noexcept;

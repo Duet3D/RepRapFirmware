@@ -569,27 +569,16 @@ const char* Heater::GetSensorName() const noexcept
 	return (sensor.IsNotNull()) ? sensor->GetSensorName() : nullptr;
 }
 
-GCodeResult Heater::Activate(const StringRef& reply) noexcept
+GCodeResult Heater::SetActiveOrStandby(bool setActive, const StringRef& reply) noexcept
 {
 	if (GetMode() != HeaterMode::fault)
 	{
-		active = true;
+		active = setActive;
 		isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(heaterNumber);
 		return SwitchOn(reply);
 	}
-	reply.printf("Can't activate heater %u while in fault state", heaterNumber);
+	reply.printf("Can't turn heater %u on while in fault state", heaterNumber);
 	return GCodeResult::error;
-}
-
-void Heater::Standby() noexcept
-{
-	if (GetMode() != HeaterMode::fault)
-	{
-		active = false;
-		String<1> dummy;
-		isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(heaterNumber);
-		(void)SwitchOn(dummy.GetRef());
-	}
 }
 
 void Heater::SetTemperature(float t, bool activeNotStandby) THROWS(GCodeException)

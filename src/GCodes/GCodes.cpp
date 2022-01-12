@@ -3323,11 +3323,11 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 				break;
 
 			case 1:			// turn heaters to standby, except any that are used by a different active tool
-				tool->HeatersToStandby();
+				tool->HeatersToActiveOrStandby(false);
 				break;
 
 			case 2:			// set heaters to their active temperatures, except any that are used by a different active tool
-				tool->HeatersToActive();
+				tool->HeatersToActiveOrStandby(true);
 				break;
 			}
 		}

@@ -776,12 +776,17 @@ float Heat::GetTargetTemperature(int heater) const noexcept
 				: 0.0;
 }
 
-GCodeResult Heat::Activate(int heater, const StringRef& reply) noexcept
+GCodeResult Heat::SetActiveOrStandby(int heater, const Tool *tool, bool active, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
 	{
-		return h->Activate(reply);
+		const GCodeResult rslt = h->SetActiveOrStandby(active, reply);
+		if (rslt == GCodeResult::ok && !active)
+		{
+			lastStandbyTools[heater] = tool;
+		}
+		return rslt;
 	}
 	reply.printf("Heater %d not found", heater);
 	return GCodeResult::error;
@@ -824,16 +829,6 @@ void Heat::SwitchOffAllLocalFromISR() noexcept
 		{
 			h->SwitchOff();
 		}
-	}
-}
-
-void Heat::Standby(int heater, const Tool *tool) noexcept
-{
-	const auto h = FindHeater(heater);
-	if (h.IsNotNull())
-	{
-		h->Standby();
-		lastStandbyTools[heater] = tool;
 	}
 }
 
