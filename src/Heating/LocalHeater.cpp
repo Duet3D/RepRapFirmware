@@ -445,6 +445,10 @@ void LocalHeater::Spin() noexcept
 				HeaterMonitor& prot = monitors[i];
 				if (!prot.Check())
 				{
+					if (reprap.Debug(moduleHeat))
+					{
+						reprap.GetPlatform().MessageF(GenericMessage, "Heater %u protection kicked in\n", GetHeaterNumber());
+					}
 					lastPwm = 0.0;
 					switch (prot.GetAction())
 					{
@@ -462,10 +466,7 @@ void LocalHeater::Spin() noexcept
 						break;
 
 					case HeaterMonitorAction::PermanentSwitchOff:
-						if (mode != HeaterMode::fault)
-						{
-							SwitchOff();
-						}
+						SwitchOff();
 						break;
 					}
 				}
@@ -478,7 +479,8 @@ void LocalHeater::Spin() noexcept
 
 		// Set the heater power and update the average PWM
 		SetHeater(lastPwm);
-		averagePWM = averagePWM * (1.0 - HeatSampleIntervalMillis/(HeatPwmAverageTime * SecondsToMillis)) + lastPwm;
+		constexpr float avgFactor = HeatSampleIntervalMillis/(HeatPwmAverageTime * SecondsToMillis);
+		averagePWM = (averagePWM * (1.0 - avgFactor)) + (lastPwm * avgFactor);
 
 		// For temperature sensors which do not require frequent sampling and averaging,
 		// their temperature is read here and error/safety handling performed.  However,
@@ -505,7 +507,7 @@ GCodeResult LocalHeater::ResetFault(const StringRef& reply) noexcept
 
 float LocalHeater::GetAveragePWM() const noexcept
 {
-	return averagePWM * HeatSampleIntervalMillis/(HeatPwmAverageTime * SecondsToMillis);
+	return averagePWM;
 }
 
 // Get a conservative estimate of the expected heating rate at the current temperature and average PWM. The result may be negative.
