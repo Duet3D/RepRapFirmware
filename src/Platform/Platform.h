@@ -528,6 +528,10 @@ public:
 	void DisableSteppingDriver(uint8_t driver) noexcept { steppingEnabledDriversBitmap &= ~StepPins::CalcDriverBitmap(driver); }
 	void EnableAllSteppingDrivers() noexcept { steppingEnabledDriversBitmap = 0xFFFFFFFFu; }
 
+#ifdef DUET3_MB6XD
+	bool HasDriverError(size_t driver) const noexcept;
+#endif
+
 #if SUPPORT_NONLINEAR_EXTRUSION
 	const NonlinearExtrusion& GetExtrusionCoefficients(size_t extruder) const noexcept pre(extruder < MaxExtruders) { return nonlinearExtrusion[extruder]; }
 	void SetNonlinearExtrusion(size_t extruder, float a, float b, float limit) noexcept;
@@ -730,6 +734,11 @@ private:
 
 	bool directions[NumDirectDrivers];
 	int8_t enableValues[NumDirectDrivers];
+
+#ifdef DUET3_MB6XD
+	bool driverErrPinsActiveLow;
+#endif
+
 	IoPort brakePorts[NumDirectDrivers];
 
 	float motorCurrents[MaxAxesPlusExtruders];				// the normal motor current for each stepper driver

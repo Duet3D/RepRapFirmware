@@ -649,18 +649,36 @@ void Platform::Init() noexcept
 	}
 
 	// Set up the local drivers. Do this after we have read any direction pins that specify the board type.
+#ifdef DUET3_MB6XD
+	unsigned int numErrorHighDrivers = 0;
+#endif
 	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
-		directions[driver] = true;								// drive moves forwards by default
-		enableValues[driver] = 0;								// assume active low enable signal
-
+		directions[driver] = true;														// drive moves forwards by default
+#ifdef DUET3_MB6XD
+		pinMode(ENABLE_PINS[driver], INPUT);											// temporarily set up the enable pin for reading
+		pinMode(DRIVER_ERR_PINS[driver], INPUT);										// set up the error pin for reading
+		const bool activeHighEnable = !digitalRead(ENABLE_PINS[driver]);				// test whether we have a pullup or pulldown on the Enable pin
+		enableValues[driver] = activeHighEnable;
+		pinMode(ENABLE_PINS[driver], (activeHighEnable) ? OUTPUT_LOW : OUTPUT_HIGH);	// set driver disabled
+		if (digitalRead(DRIVER_ERR_PINS[driver]))
+		{
+			++numErrorHighDrivers;
+		}
+#else
+		enableValues[driver] = 0;														// assume active low enable signal
+#endif
 		// Set up the control pins
 		pinMode(STEP_PINS[driver], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
 #if !defined(DUET3) && !defined(DUET3MINI)
-		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
+		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);										// this is OK for the TMC2660 CS pins too
 #endif
 	}
+
+#ifdef DUET3_MB6XD
+	driverErrPinsActiveLow = (numErrorHighDrivers >= NumDirectDrivers/2);				// determine the error signal polarity by assuming most drivers are not in the error state
+#endif
 
 	// Set up the axis+extruder arrays
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
@@ -669,7 +687,9 @@ void Platform::Init() noexcept
 		driveDriverBits[drive] = 0;
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
+#if HAS_SMART_DRIVERS
 		standstillCurrentPercent[drive] = DefaultStandstillCurrentPercent;
+#endif
 		microstepping[drive] = 16 | 0x8000;						// x16 with interpolation
 	}
 
@@ -2967,6 +2987,20 @@ void Platform::SetEnableValue(size_t driver, int8_t eVal) noexcept
 	}
 }
 
+#ifdef DUET3_MB6XD
+
+bool Platform::HasDriverError(size_t driver) const noexcept
+{
+	if (driver < NumDirectDrivers)
+	{
+		const bool b = digitalRead(DRIVER_ERR_PINS[driver]);
+		return (driverErrPinsActiveLow) ? !b : b;
+	}
+	return false;
+}
+
+#endif
+
 void Platform::SetAxisDriversConfig(size_t axis, size_t numValues, const DriverId driverNumbers[]) noexcept
 {
 	AxisDriversConfig& cfg = axisDrivers[axis];
@@ -5019,10 +5053,10 @@ void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
 		msg->data[driver] = SmartDrivers::GetStatus(driver).AsU32();
 	}
 # else
-	msg->SetStandardFields(NumDrivers);
-	for (size_t driver = 0; driver < NumDrivers; ++driver)
+	msg->SetStandardFields(NumDirectDrivers);
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
-		msg->data[driver] = Platform::GetStandardDriverStatus(driver);
+		msg->data[driver] = HasDriverError(driver) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0u;
 	}
 # endif
 	buf.dataLength = msg->GetActualDataLength();

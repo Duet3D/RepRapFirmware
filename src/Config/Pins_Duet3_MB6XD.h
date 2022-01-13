@@ -22,8 +22,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define HAS_HIGH_SPEED_SD		1
 #define HAS_CPU_TEMP_SENSOR		1
 
-#define SUPPORT_TMC51xx			1
-#define TMC51xx_USES_USART		1
+#define SUPPORT_TMC51xx			0
 
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			0
@@ -57,12 +56,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #include <Duet3Common.h>							// this file is in the CANlib project because both main and expansion boards need it
 
 constexpr size_t NumDirectDrivers = 6;				// The maximum number of drives supported by the electronics inc. direct expansion
-constexpr size_t MaxSmartDrivers = 6;				// The maximum number of direct smart drivers
 constexpr size_t MaxCanDrivers = 20;
 constexpr size_t MaxCanBoards = 20;
-
-constexpr float MaxTmc5160Current = 6300.0;			// The maximum current we allow the TMC5160/5161 drivers to be set to
-constexpr float Tmc5160SenseResistor = 0.050;
 
 constexpr size_t MaxPortsPerHeater = 3;
 
@@ -101,35 +96,20 @@ constexpr GpioPinFunction USARTSPISckPeriphMode = GpioPinFunction::C;
 constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB port
 
 // Drivers
-constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin(18), PortCPin(16), PortCPin(28), PortCPin(01), PortCPin(04), PortCPin(9) };
-constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortBPin(05), PortDPin(10), PortAPin(04), PortAPin(22), PortCPin(03), PortDPin(14) };
-constexpr Pin DIAG_PINS[NumDirectDrivers] =			{ PortDPin(29), PortCPin(17), PortDPin(13), PortCPin(02), PortDPin(31), PortCPin(10) };
+constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin(18), PortCPin(16), PortCPin(28), PortCPin(01), PortCPin(4),  PortCPin(9)  };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortBPin(5),  PortDPin(10), PortAPin(4),  PortAPin(22), PortCPin(3),  PortDPin(14) };
+constexpr Pin ENABLE_PINS[NumDirectDrivers] =		{ PortBPin(4),  PortAPin(21), PortAPin(9),  PortAPin(23), PortAPin(1),  PortDPin(17) };
+constexpr Pin DRIVER_ERR_PINS[NumDirectDrivers] =	{ PortDPin(29), PortCPin(17), PortDPin(13), PortCPin(02), PortDPin(31), PortCPin(10) };
+constexpr Pin StepGatePin = PortDPin(22);
+constexpr GpioPinFunction StepGatePinFunction = GpioPinFunction::C;			// TIOB11
 
-// Pin assignments etc. using USART1 in SPI mode
-constexpr Pin GlobalTmc51xxEnablePin = PortAPin(9);		// The pin that drives ENN of all TMC drivers
-constexpr Pin GlobalTmc51xxCSPin = PortDPin(17);			// The pin that drives CS of all TMC drivers
-Usart * const USART_TMC51xx = USART1;
-constexpr uint32_t  ID_TMC51xx_SPI = ID_USART1;
-constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;
-#define TMC51xx_SPI_Handler	USART1_Handler
-
-// These next two are #defines to avoid the need to #include DmacManager.h here
-#define TMC51xx_DmaTxPerid	((uint32_t)DmaTrigSource::usart1tx)
-#define TMC51xx_DmaRxPerid	((uint32_t)DmaTrigSource::usart1rx)
-
-constexpr Pin TMC51xxMosiPin = PortBPin(4);
-constexpr GpioPinFunction TMC51xxMosiPinPeriphMode = GpioPinFunction::D;
-constexpr Pin TMC51xxMisoPin = PortAPin(21);
-constexpr GpioPinFunction TMC51xxMisoPinPeriphMode = GpioPinFunction::A;
-constexpr Pin TMC51xxSclkPin = PortAPin(23);
-constexpr GpioPinFunction TMC51xxSclkPinPeriphMode = GpioPinFunction::A;
-
-constexpr uint32_t DefaultStandstillCurrentPercent = 71;
+#define STEP_GATE_TC		(TC3)
+#define STEP_GATE_TC_CHAN	(2)
 
 // Thermistor/PT1000 inputs
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(15), PortCPin(29), PortCPin(30), PortCPin(31) };	// Thermistor/PT1000 pins
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(15), PortCPin(29), PortCPin(0), PortCPin(31) };	// Thermistor/PT1000 pins
 constexpr Pin VssaSensePin = PortCPin(13);
-constexpr Pin VrefSensePin = PortCPin(0);
+constexpr Pin VrefSensePin = PortCPin(30);
 
 // Thermistor series resistor value in Ohms
 constexpr float DefaultThermistorSeriesR = 2200.0;
@@ -147,14 +127,15 @@ constexpr float PowerMonitorVoltageRange = (60.4 + 4.7)/4.7 * 3.3;			// voltage 
 constexpr float V12MonitorVoltageRange = (60.4 + 4.7)/4.7 * 3.3;			// voltage divider ratio times the reference voltage
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
-constexpr Pin DiagPin = PortCPin(20);
-constexpr bool DiagOnPolarity = true;
+constexpr Pin DiagPin = PortBPin(6);										// diag/status LED
+constexpr Pin ActLedPin = PortBPin(7);										// activityLED
+constexpr bool DiagOnPolarity = false;
 
 // SD cards
-constexpr size_t NumSdCards = 2;											// we now allow one SPI-connected SD card to be configured at boot time
-constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(29), NoPin };
+constexpr size_t NumSdCards = 2;
+constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(29), PortDPin(18) };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[NumSdCards] = { NoPin, NoPin };
+constexpr Pin SdSpiCSPins[NumSdCards] = { NoPin, PortDPin(19) };
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 
@@ -192,30 +173,30 @@ constexpr PinDescription PinTable[] =
 	//	TC					PWM					ADC				Capability				PinNames
 	// Port A
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io6.out"			},	// PA00 IO6_OUT
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out6.tach"			},	// PA01 OUT6_TACH
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA02 NC
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out5.tach"			},	// PA01 OUT5_TACH
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA02 driver 4 enable
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io3.out"			},	// PA03 IO3_OUT
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA04 driver 2 dir
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs0,serial3.rx"},	// PA05 SPI_CS0 and Serial3 RX
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs1,serial3.tx"},	// PA06 SPI_CS1 abd Serial3 TX
-	{ TcOutput::none,	PwmOutput::pwm0h3_b,AdcInput::none,		PinCapability::wpwm,	"out0"				},	// PA07 OUT0
-	{ TcOutput::none,	PwmOutput::pwm1h3_a,AdcInput::none,		PinCapability::wpwm,	"out6"				},	// PA08 OUT6
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA09 Tmc51xxEnablePin
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs1,serial3.rx"},	// PA05 SPI_CS1 and Serial3 RX
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs2,serial3.tx"},	// PA06 SPI_CS2 and Serial3 TX
+	{ TcOutput::none,	PwmOutput::pwm0h3_b,AdcInput::none,		PinCapability::wpwm,	"laser,vfd"			},	// PA07 VFD
+	{ TcOutput::none,	PwmOutput::pwm1h3_a,AdcInput::none,		PinCapability::wpwm,	"out5"				},	// PA08 OUT5
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA09 driver 2 enable
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"pson"				},	// PA10 PS_ON
-	{ TcOutput::none,	PwmOutput::pwm0h0_b,AdcInput::none,		PinCapability::wpwm,	"out3"				},	// PA11 OUT3
-	{ TcOutput::none,	PwmOutput::pwm1h0_c,AdcInput::none,		PinCapability::wpwm,	"out9,laser,vfd"	},	// PA12 OUT9
+	{ TcOutput::none,	PwmOutput::pwm0h0_b,AdcInput::none,		PinCapability::wpwm,	"out2"				},	// PA11 OUT2
+	{ TcOutput::none,	PwmOutput::pwm1h0_c,AdcInput::none,		PinCapability::wpwm,	"out8"				},	// PA12 OUT8
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA13 DotStarMosi
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA14 DotStarSclk
-	{ TcOutput::tioa1,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out4"				},	// PA15 OUT4
-	{ TcOutput::none,	PwmOutput::pwm0l2_c,AdcInput::none,		PinCapability::wpwm,	"out2"				},	// PA16 OUT2
+	{ TcOutput::tioa1,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out3"				},	// PA15 OUT3
+	{ TcOutput::none,	PwmOutput::pwm0l2_c,AdcInput::none,		PinCapability::wpwm,	"out1"				},	// PA16 OUT1
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_6,	PinCapability::ainr,	"io7.in"			},	// PA17 IO7_IN
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_7,	PinCapability::ainr,	"io6.in"			},	// PA18 IO6_IN
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_8,	PinCapability::ainr,	"io5.in"			},	// PA19 IO5_IN
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_9,	PinCapability::none,	nullptr				},	// PA20 VIN detect
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA21 TMC51xxMisoPin
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA21 driver 1 enable
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA22 driver 3 dir
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA23 TMC51xxSclkPin
-	{ TcOutput::none,	PwmOutput::pwm0h1_b,AdcInput::none,		PinCapability::wpwm,	"out1"				},	// PA24 OUT1
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA23 driver 3 enable
+	{ TcOutput::none,	PwmOutput::pwm0h1_b,AdcInput::none,		PinCapability::wpwm,	"out0"				},	// PA24 OUT0
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA25 SDHC MCCK
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA26 SDHC MCDA2
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA27 SDHC MCDA3
@@ -229,7 +210,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB01 USART_SSPI_MOSI
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB02 CAN0_TX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB03 CAN0_RX
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB04 TMC51xxMosiPin
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB04 driver 0 enable
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB05 driver 0 dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB06 SWDIO
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB07 SWCLK
@@ -259,29 +240,29 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PB31 not on chip
 
 	// Port C
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_9,	PinCapability::none,	nullptr				},	// PC00 VrefSensePin
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_9,	PinCapability::ainr,	"temp2"				},	// PC00 thermistor 2
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC01 driver 3 step
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC02 driver 3 diag
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC02 driver 3 err
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC03 driver 4 dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC04 driver 4 step
-	{ TcOutput::tioa6,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out5"				},	// PC05 OUT5
+	{ TcOutput::tioa6,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out4"				},	// PC05 OUT4
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC06 EthernetPhyInterrupt
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out4.tach"			},	// PC07 OUT4_TACH
-	{ TcOutput::tioa7,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out8"				},	// PC08 OUT8
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out3.tach"			},	// PC07 OUT3_TACH
+	{ TcOutput::tioa7,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out7"				},	// PC08 OUT7
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC09 driver 5 step
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC10 driver 5 diag
-	{ TcOutput::tioa8,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out7"				},	// PC11 OUT7
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC10 driver 5 err
+	{ TcOutput::tioa8,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out6"				},	// PC11 OUT6
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC12 CAN1_RX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_1,	PinCapability::none,	nullptr				},	// PC13 VssaSensePin
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC14 NC
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_2,	PinCapability::ainr,	"temp0"				},	// PC15 thermistor 0
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC16 driver 1 step
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC17 driver 1 diag
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC17 driver 1 err
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC18 driver 0 step
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC19 ETH_LED_Y
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC20 DiagPin
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC20 unused
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC21 UsbVBusPin
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs3"			},	// PC22 SPI CS3
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs4"			},	// PC22 SPI CS4
 	{ TcOutput::tioa3,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"io7.out"			},	// PC23 IO7_OUT
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC24 SBC_SPI_SCK
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC25 SBC_SPI_SS0
@@ -289,7 +270,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC27 SBC_SPI_MOSI
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC28 driver 2 step
 	{ TcOutput::tioa5,	PwmOutput::none,	AdcInput::adc1_4,	PinCapability::ainrwpwm,"temp1"				},	// PC29 thermistor 1
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_5,	PinCapability::ainr,	"temp2"				},	// PC30 thermistor 2
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_5,	PinCapability::none,	nullptr				},	// PC30 vrefmon
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_6,	PinCapability::ainr,	"temp3"				},	// PC31 thermistor 3
 
 	// PORT D
@@ -306,25 +287,25 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD10 driver 1 dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD11 EthernetPhyReset
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD12 CAN1_TX
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD13 driver 2 diag
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD13 driver 2 err
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD14 driver 5 dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io1.in,serial1.rx"	},	// PD15 IO1_IN and Serial1 RX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io1.out,serial1.tx"},	// PD16 IO1_OUT and Serial1 TX
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD17 Tmc51xxCSPin
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD18 NC
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD19 NC
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs2"			},	// PD20 SPI CS2
-	{ TcOutput::tioa11,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"io5.out"			},	// PD21 IO5_OUT
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD22 NC
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out5.tach"			},	// PD23 OUT5_TACH
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD17 driver 5 enable
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD18 External SD card detect
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD19 SPI CS0 (external SD card)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs3"			},	// PD20 SPI CS3
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"io5.out"			},	// PD21 IO5_OUT (not PWM capable on TIOA11 because TIOB11 is used to generate step pulses)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD22 step gate
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out4.tach"			},	// PD23 OUT4_TACH
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD24 SWD_EXT_RST
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io0.in,serial0.rx"	},	// PD25 IO0_IN  Serial0 RX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io0.out,serial0.tx"},	// PD26 IO0_OUT Serial0 TX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io2.out,i2c0.dat"	},	// PD27 IO2_OUT
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io2.in,i2c0.clk"	},	// PD28 IO2_IN
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD29 driver 0 diag
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD29 driver 0 err
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_0,	PinCapability::ainr,	"io4.in"			},	// PD30 IO4_IN
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD31 driver 4 diag
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PD31 driver 4 err
 
 	// Port E
 	{ TcOutput::tioa9,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"io4.out"			},	// PE00 IO4_OUT
