@@ -104,22 +104,23 @@ GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuff
 		else
 #endif
 		{
-			if (port.AssignPort(pinName.c_str(), reply, PinUsedBy::gpout, (isServo) ? PinAccess::servo : PinAccess::pwm))
-			{
-				rslt = GCodeResult::ok;
-				port.SetFrequency(freq);
-			}
-			else
-			{
-				rslt = GCodeResult::error;
-			}
+			rslt = (port.AssignPort(pinName.c_str(), reply, PinUsedBy::gpout, (isServo) ? PinAccess::servo : PinAccess::pwm))
+					? GCodeResult::ok
+						: GCodeResult::error;
 		}
 
-		reprap.StateUpdated();
+		if (Succeeded(rslt))
+		{
+			port.SetFrequency(freq);			// we need to set the frequency even if it is a remote port because M280 uses it
+			reprap.StateUpdated();
+		}
 		return rslt;
 	}
-	else if (seenFreq)
+
+	// If we get here then there was no port name parameter
+	if (seenFreq)
 	{
+		GCodeResult rslt;
 #if SUPPORT_CAN_EXPANSION
 		if (boardAddress != CanInterface::GetCanAddress())
 		{
@@ -127,25 +128,34 @@ GCodeResult GpOutputPort::Configure(uint32_t gpioNumber, bool isServo, GCodeBuff
 			cons.AddUParam('P', gpioNumber);
 			cons.AddUParam('Q', freq);
 			reprap.StateUpdated();
-			return cons.SendAndGetResponse(CanMessageType::m950Gpio, boardAddress, reply);
+			rslt = cons.SendAndGetResponse(CanMessageType::m950Gpio, boardAddress, reply);
 		}
+		else
 #endif
-		port.SetFrequency(freq);
-		reprap.StateUpdated();
-	}
-	else
-	{
-#if SUPPORT_CAN_EXPANSION
-		if (boardAddress != CanInterface::GetCanAddress())
 		{
-			CanMessageGenericConstructor cons(M950GpioParams);
-			cons.AddUParam('P', gpioNumber);
-			return cons.SendAndGetResponse(CanMessageType::m950Gpio, boardAddress, reply);
+			rslt = GCodeResult::ok;
 		}
-#endif
-		reply.printf("GPIO/servo port %" PRIu32, gpioNumber);
-		port.AppendFullDetails(reply);
+
+		if (Succeeded(rslt))
+		{
+			port.SetFrequency(freq);
+			reprap.StateUpdated();
+		}
+		return rslt;
 	}
+
+	// If we get here then we have neither a port name nor a frequency, so just print the port details
+#if SUPPORT_CAN_EXPANSION
+	if (boardAddress != CanInterface::GetCanAddress())
+	{
+		CanMessageGenericConstructor cons(M950GpioParams);
+		cons.AddUParam('P', gpioNumber);
+		return cons.SendAndGetResponse(CanMessageType::m950Gpio, boardAddress, reply);
+	}
+#endif
+
+	reply.printf("GPIO/servo port %" PRIu32, gpioNumber);
+	port.AppendFullDetails(reply);
 	return GCodeResult::ok;
 }
 
