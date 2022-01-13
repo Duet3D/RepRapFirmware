@@ -194,7 +194,7 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 		// Set the model
 		const bool inverseTemperatureControl = (inversionParameter == 1 || inversionParameter == 3);
 		const GCodeResult rslt = SetModel(heatingRate, basicCoolingRate, fanCoolingRate, coolingRateExponent, td, maxPwm, voltage, dontUsePid == 0, inverseTemperatureControl, reply);
-		if (rslt <= GCodeResult::warning)
+		if (Succeeded(rslt))
 		{
 			modelSetByUser = true;
 		}
@@ -412,7 +412,7 @@ void Heater::SetAndReportModelAfterTuning(bool usingFans) noexcept
 										0.0,
 #endif
 										true, false, str.GetRef());
-	if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
+	if (Succeeded(rslt))
 	{
 		tuned = true;
 		str.printf(	"Auto tuning heater %u completed after %u idle and %u tuning cycles in %" PRIu32 " seconds. This heater needs the following M307 command:\n ",
@@ -495,7 +495,7 @@ GCodeResult Heater::ConfigureMonitor(GCodeBuffer &gb, const StringRef &reply) TH
 	{
 		monitors[index].Set(monitoringSensor, limit, action, trigger);
 		const GCodeResult rslt = UpdateHeaterMonitors(reply);
-		if (rslt <= GCodeResult::warning)
+		if (Succeeded(rslt))
 		{
 			monitorsSetByUser = true;
 		}
@@ -598,7 +598,7 @@ void Heater::SetTemperature(float t, bool activeNotStandby) THROWS(GCodeExceptio
 		{
 			String<StringLength100> reply;
 			isBedOrChamber = reprap.GetHeat().IsBedOrChamberHeater(heaterNumber);
-			if (SwitchOn(reply.GetRef()) > GCodeResult::warning)
+			if (!Succeeded(SwitchOn(reply.GetRef())))
 			{
 				throw GCodeException(-1, 1, reply.c_str());
 			}

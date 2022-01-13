@@ -104,7 +104,7 @@ float PulsedFilamentMonitor::MeasuredSensitivity() const noexcept
 GCodeResult PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException)
 {
 	const GCodeResult rslt = CommonConfigure(gb, reply, InterruptMode::rising, seen);
-	if (rslt <= GCodeResult::warning)
+	if (Succeeded(rslt))
 	{
 		gb.TryGetFValue('L', mmPerPulse, seen);
 		gb.TryGetFValue('E', minimumExtrusionCheckLength, seen);

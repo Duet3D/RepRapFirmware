@@ -123,7 +123,7 @@ float LaserFilamentMonitor::MeasuredSensitivity() const noexcept
 GCodeResult LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException)
 {
 	const GCodeResult rslt = CommonConfigure(gb, reply, InterruptMode::change, seen);
-	if (rslt <= GCodeResult::warning)
+	if (Succeeded(rslt))
 	{
 		if (seen)
 		{

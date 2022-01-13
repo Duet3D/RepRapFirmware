@@ -46,7 +46,7 @@ SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int drv, unsigned int moni
 GCodeResult SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException)
 {
 	const GCodeResult rslt = CommonConfigure(gb, reply, InterruptMode::none, seen);
-	if (rslt <= GCodeResult::warning)
+	if (Succeeded(rslt))
 	{
 		if (gb.Seen('S'))
 		{

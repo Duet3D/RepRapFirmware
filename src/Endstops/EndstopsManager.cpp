@@ -699,7 +699,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 		}
 
 		const GCodeResult rslt = newProbe->Configure(gb, reply, seen);
-		if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
+		if (Succeeded(rslt))
 		{
 			zProbes[probeNumber] = newProbe;
 		}

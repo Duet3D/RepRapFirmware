@@ -168,7 +168,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 		try
 		{
 			const GCodeResult rslt = sensor->Configure(gb, reply, seen);		// configure the sensor (may throw)
-			if (rslt <= GCodeResult::warning)
+			if (Succeeded(rslt))
 			{
 				filamentSensors[extruder] = sensor;
 				reprap.SensorsUpdated();

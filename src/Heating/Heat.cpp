@@ -575,7 +575,7 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROW
 		Heater * const newHeater = new LocalHeater(heater);
 #endif
 		const GCodeResult rslt = newHeater->ConfigurePortAndSensor(pinName.c_str(), freq, sensorNumber, reply);
-		if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
+		if (Succeeded(rslt))
 		{
 			heaters[heater] = newHeater;
 		}
@@ -998,7 +998,7 @@ GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCo
 		}
 
 		const GCodeResult rslt = h->StartAutoTune(gb, reply, fans);
-		if (rslt <= GCodeResult::warning)
+		if (Succeeded(rslt))
 		{
 			heaterBeingTuned = (int8_t)heaterNumber;
 		}
@@ -1085,7 +1085,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROW
 		try
 		{
 			const GCodeResult rslt = newSensor->Configure(gb, reply, changed);
-			if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
+			if (Succeeded(rslt))
 			{
 				InsertSensor(newSensor);
 			}
