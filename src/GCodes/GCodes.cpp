@@ -4881,11 +4881,21 @@ void GCodes::SetItemActiveTemperature(unsigned int itemNumber, float temp) noexc
 		if (tool.IsNotNull())
 		{
 			tool->SetToolHeaterActiveTemperature(0, temp);
+			if (tool->Number() == reprap.GetCurrentToolNumber() && temp > NEARLY_ABS_ZERO)
+			{
+				tool->HeatersToActiveOrStandby(true);				// if it's the current tool then make sure it is active
+			}
 		}
 	}
 	else
 	{
-		reprap.GetHeat().SetActiveTemperature(GetHeaterNumber(itemNumber), temp);
+		const int heaterNumber = GetHeaterNumber(itemNumber);
+		reprap.GetHeat().SetActiveTemperature(heaterNumber, temp);
+		if (temp > NEARLY_ABS_ZERO)
+		{
+			String<1> dummy;
+			reprap.GetHeat().SetActiveOrStandby(heaterNumber, nullptr, true, dummy.GetRef());
+		}
 	}
 }
 
