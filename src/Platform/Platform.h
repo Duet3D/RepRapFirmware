@@ -123,9 +123,11 @@ enum class BoardType : uint8_t
 	Duet3Mini_Unknown,
 	Duet3Mini_WiFi,
 	Duet3Mini_Ethernet,
-#elif defined(DUET3)
-	Duet3_v06_100 = 1,
-	Duet3_v101 = 2,
+#elif defined(DUET3_MB6HC)
+	Duet3_6HC_v06_100 = 1,
+	Duet3_6HC_v101 = 2,
+#elif defined(DUET3_MB6XD)
+	Duet3_6XD = 1,
 #elif defined(SAME70XPLD)
 	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)
@@ -137,18 +139,8 @@ enum class BoardType : uint8_t
 	Duet2SBC_102 = 6,
 #elif defined(DUET_M)
 	DuetM_10 = 1,
-#elif defined(DUET_06_085)
-	Duet_06 = 1,
-	Duet_07 = 2,
-	Duet_085 = 3
-#elif defined(__RADDS__)
-	RADDS_15 = 1
 #elif defined(PCCB_10)
 	PCCB_v10 = 1
-#elif defined(PCCB_08) || defined(PCCB_08_X5)
-	PCCB_v08 = 1
-#elif defined(DUET3MINI)
-	Duet_5LC = 1
 #elif defined(__LPC17xx__)
 	Lpc = 1
 #else
@@ -703,6 +695,12 @@ private:
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
 #endif
+
+	// Convert microseconds to step clocks, rounding up to the next step clock
+	static constexpr uint32_t MicrosecondsToStepClocks(float us) noexcept
+	{
+		return (uint32_t)(((float)StepClockRate * 0.000001 * us) + 0.99);
+	}
 
 #ifdef DUET3_MB6XD
 	void UpdateDriverTimings();

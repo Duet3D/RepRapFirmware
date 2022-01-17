@@ -3,10 +3,10 @@
 
 #include <PinDescription.h>
 
-#define BOARD_SHORT_NAME		"MB6HC"
-#define BOARD_NAME				"Duet 3 MB6HC"
+#define BOARD_SHORT_NAME		"MB6XD"
+#define BOARD_NAME				"Duet 3 MB6XD"
 #define DEFAULT_BOARD_TYPE		BoardType::Auto
-#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 MB6HC"
+#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 MB6XD"
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".bin"
 
 #define IAP_UPDATE_FILE			"Duet3_SDiap32_" BOARD_SHORT_NAME ".bin"
@@ -103,7 +103,8 @@ constexpr Pin DRIVER_ERR_PINS[NumDirectDrivers] =	{ PortDPin(29), PortCPin(17), 
 constexpr Pin StepGatePin = PortDPin(22);
 constexpr GpioPinFunction StepGatePinFunction = GpioPinFunction::C;			// TIOB11
 
-#define STEP_GATE_TC		(TC3)
+#define STEP_GATE_TC		(TC3)					// TC11 is really TC3 channel 2
+#define STEP_GATE_TC_ID		(ID_TC11)				// ID for peripheral clock and interrupt
 #define STEP_GATE_TC_CHAN	(2)
 
 // Thermistor/PT1000 inputs
