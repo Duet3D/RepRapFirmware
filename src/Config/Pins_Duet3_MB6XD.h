@@ -415,6 +415,19 @@ namespace StepPins
 	{
 		PIOC->PIO_CODR = driverMap;				// on Duet 3 all step pins are on port C
 	}
+
+	// Get the bitmap for all our drivers
+	constexpr uint32_t AllDriversBitmap =
+		[]()->uint32_t
+		{
+			uint32_t bits = 0;
+			for (Pin p : STEP_PINS)
+			{
+				bits |= 1u << (p & 0x1Fu);
+			}
+			return bits;
+		}
+		();
 }
 
 #endif	//ifndef PINS_DUET3_MB6XD_H__

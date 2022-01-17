@@ -665,6 +665,12 @@ void Platform::Init() noexcept
 		{
 			++numErrorHighDrivers;
 		}
+
+		// Set the default driver step timings
+		driverTimingMicroseconds[driver][0] = DefaultStepWidthMicroseconds;
+		driverTimingMicroseconds[driver][1] = DefaultStepIntervalMicroseconds;
+		driverTimingMicroseconds[driver][2] = DefaultSetupTimeMicroseconds;
+		driverTimingMicroseconds[driver][3] = DefaultHoldTimeMicroseconds;
 #else
 		enableValues[driver] = 0;														// assume active low enable signal
 #endif
@@ -723,11 +729,16 @@ void Platform::Init() noexcept
 #endif
 	}
 
+#ifdef DUET3_MB6XD
+	UpdateDriverTimings();
+#else
 	for (uint32_t& entry : slowDriverStepTimingClocks)
 	{
 		entry = 0;												// reset all to zero as we have no known slow drivers yet
 	}
 	slowDriversBitmap = 0;										// assume no drivers need extended step pulse timing
+#endif
+
 	EnableAllSteppingDrivers();									// no drivers disabled
 
 	driversPowered = false;
@@ -2490,11 +2501,15 @@ void Platform::IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t)>
 // If drive >= DRIVES then we are setting an individual motor direction
 void Platform::SetDirection(size_t axisOrExtruder, bool direction) noexcept
 {
+#ifdef DUET3_MB6XD
+	while (StepTimer::GetTimerTicks() - DDA::lastStepHighTime < GetSlowDriverDirHoldClocksFromLeadingEdge()) { }
+#else
 	const bool isSlowDriver = (GetDriversBitmap(axisOrExtruder) & GetSlowDriversBitmap()) != 0;
 	if (isSlowDriver)
 	{
-		while (StepTimer::GetTimerTicks() - DDA::lastStepLowTime < GetSlowDriverDirHoldClocks()) { }
+		while (StepTimer::GetTimerTicks() - DDA::lastStepLowTime < GetSlowDriverDirHoldClocksFromTrailingEdge()) { }
 	}
+#endif
 
 	if (axisOrExtruder < MaxAxesPlusExtruders)
 	{
@@ -2505,7 +2520,9 @@ void Platform::SetDirection(size_t axisOrExtruder, bool direction) noexcept
 		SetDriverDirection(axisOrExtruder - MaxAxesPlusExtruders, direction);
 	}
 
+#ifndef DUET3_MB6XD
 	if (isSlowDriver)
+#endif
 	{
 		DDA::lastDirChangeTime = StepTimer::GetTimerTicks();
 	}
@@ -3068,6 +3085,10 @@ void Platform::SetExtruderDriver(size_t extruder, DriverId driver) noexcept
 
 void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4]) noexcept
 {
+#ifdef DUET3_MB6XD
+	memcpyf(driverTimingMicroseconds[driver], microseconds, 4);
+	UpdateDriverTimings();
+#else
 	const uint32_t bitmap = StepPins::CalcDriverBitmap(driver);
 	slowDriversBitmap &= ~bitmap;								// start by assuming this drive does not need extended timing
 	if (slowDriversBitmap == 0)
@@ -3090,11 +3111,16 @@ void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4]) n
 			}
 		}
 	}
+#endif
 }
 
 // Get the driver step timing, returning true if we are using slower timing than standard
 bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const noexcept
 {
+#ifdef DUET3_MB6XD
+	memcpyf(microseconds, driverTimingMicroseconds[driver], 4);
+	return true;
+#else
 	const bool isSlowDriver = ((slowDriversBitmap & StepPins::CalcDriverBitmap(driver)) != 0);
 	for (size_t i = 0; i < 4; ++i)
 	{
@@ -3103,6 +3129,7 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const n
 								: 0.0;
 	}
 	return isSlowDriver;
+#endif
 }
 
 //-----------------------------------------------------------------------------------------------------

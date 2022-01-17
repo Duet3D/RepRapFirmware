@@ -1952,8 +1952,12 @@ pre(state == frozen)
 	}
 }
 
-uint32_t DDA::lastStepLowTime = 0;
-uint32_t DDA::lastDirChangeTime = 0;
+#ifdef DUET3_MB6XD
+volatile uint32_t DDA::lastStepHighTime = 0;
+#else
+volatile uint32_t DDA::lastStepLowTime = 0;
+#endif
+volatile uint32_t DDA::lastDirChangeTime = 0;
 
 #if 0	// debug only
 uint32_t DDA::stepsRequested[NumDirectDrivers];
@@ -2005,7 +2009,26 @@ void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 	}
 
 	driversStepping &= p.GetSteppingEnabledDrivers();
-#if SUPPORT_SLOW_DRIVERS											// if supporting slow drivers
+#ifdef DUET3_MB6XD
+	if (driversStepping != 0)
+	{
+		// Wait until step low and direction setup time have elapsed
+		const uint32_t locLastStepPulseTime = lastStepHighTime;
+		const uint32_t locLastDirChangeTime = lastDirChangeTime;
+		while (now - locLastStepPulseTime < p.GetSlowDriverStepPeriodClocks() || now - locLastDirChangeTime < p.GetSlowDriverDirSetupClocks())
+		{
+			now = StepTimer::GetTimerTicks();
+		}
+
+		StepPins::StepDriversLow(StepPins::AllDriversBitmap & (~driversStepping));		// disable the step pins of the drivers we don't want to step
+		StepPins::StepDriversHigh(driversStepping);										// set up the drivers that we do want to step
+
+		// Trigger the TC so that it generates a step pulse
+		STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_SWTRG;
+		lastStepHighTime = StepTimer::GetTimerTicks();
+	}
+#else
+# if SUPPORT_SLOW_DRIVERS											// if supporting slow drivers
 	if ((driversStepping & p.GetSlowDriversBitmap()) != 0)			// if using some slow drivers
 	{
 		// Wait until step low and direction setup time have elapsed
@@ -2028,12 +2051,12 @@ void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 		lastStepLowTime = StepTimer::GetTimerTicks();
 	}
 	else
-#endif
+# endif
 	{
 		StepPins::StepDriversHigh(driversStepping);					// step drivers high
-#if SAME70
+# if SAME70
 		__DSB();													// without this the step pulse can be far too short
-#endif
+# endif
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 		{
 			(void)dm2->CalcNextStepTime(*this);						// calculate next step times
@@ -2041,6 +2064,7 @@ void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 
 		StepPins::StepDriversLow(driversStepping);					// step drivers low
 	}
+#endif
 
 	// Remove those drives from the list, update the direction pins where necessary, and re-insert them so as to keep the list in step-time order.
 	DriveMovement *dmToInsert = activeDMs;							// head of the chain we need to re-insert
