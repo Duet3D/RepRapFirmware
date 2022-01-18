@@ -253,8 +253,8 @@ void QueuedCode::AssignFrom(GCodeBuffer &gb) noexcept
 #if HAS_SBC_INTERFACE
 	isBinary = gb.IsBinary();
 #endif
-	memcpy(data, gb.DataStart(), gb.DataLength());
-	dataLength = gb.DataLength();
+	dataLength = min<size_t>(gb.DataLength(), sizeof(data));
+	memcpy(data, gb.DataStart(), dataLength);
 }
 
 void QueuedCode::AssignTo(GCodeBuffer *gb) noexcept
