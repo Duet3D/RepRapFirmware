@@ -368,10 +368,11 @@ inline void GCodeBuffer::AdvanceState() noexcept
 	machineState->AdvanceState();
 }
 
-// Return true if we can queue gcodes from this source. This is the case if a file is being executed
+// Return true if we can queue the current gcode command from this source. This is the case if a file is being executed.
+// We can't queue it if it contains an expression, because the expression value may change or refer to 'iterations'.
 inline bool GCodeBuffer::CanQueueCodes() const noexcept
 {
-	return machineState->DoingFile();
+	return machineState->DoingFile() && !ContainsExpression();
 }
 
 inline bool GCodeBuffer::IsDoingFile() const noexcept
