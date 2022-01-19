@@ -852,12 +852,13 @@ const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 		"Deep-sleep wakeup",
 		"Turned on by main processor",
 		"Brownout",
-		"SDIO reset"
+		"SDIO reset",
+		"Unknown"
 	};
 
 	return (reason < sizeof(resetReasonTexts)/sizeof(resetReasonTexts[0]))
 			? resetReasonTexts[reason]
-			: "Unknown";
+			: "Unrecognised";
 }
 
 void WiFiInterface::Diagnostics(MessageType mtype) noexcept
