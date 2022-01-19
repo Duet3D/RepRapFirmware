@@ -123,9 +123,11 @@ enum class BoardType : uint8_t
 	Duet3Mini_Unknown,
 	Duet3Mini_WiFi,
 	Duet3Mini_Ethernet,
-#elif defined(DUET3)
-	Duet3_v06_100 = 1,
-	Duet3_v101 = 2,
+#elif defined(DUET3_MB6HC)
+	Duet3_6HC_v06_100 = 1,
+	Duet3_6HC_v101 = 2,
+#elif defined(DUET3_MB6XD)
+	Duet3_6XD = 1,
 #elif defined(SAME70XPLD)
 	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)
@@ -137,18 +139,8 @@ enum class BoardType : uint8_t
 	Duet2SBC_102 = 6,
 #elif defined(DUET_M)
 	DuetM_10 = 1,
-#elif defined(DUET_06_085)
-	Duet_06 = 1,
-	Duet_07 = 2,
-	Duet_085 = 3
-#elif defined(__RADDS__)
-	RADDS_15 = 1
 #elif defined(PCCB_10)
 	PCCB_v10 = 1
-#elif defined(PCCB_08) || defined(PCCB_08_X5)
-	PCCB_v08 = 1
-#elif defined(DUET3MINI)
-	Duet_5LC = 1
 #elif defined(__LPC17xx__)
 	Lpc = 1
 #else
@@ -519,14 +511,26 @@ public:
 	uint32_t GetDriversBitmap(size_t axisOrExtruder) const noexcept	// get the bitmap of driver step bits for this axis or extruder
 		pre(axisOrExtruder < MaxAxesPlusExtruders + NumDirectDrivers)
 		{ return driveDriverBits[axisOrExtruder]; }
+
+#ifdef DUET3_MB6XD		// the first element has a special meaning when we use a TC to generate the steps
+	uint32_t GetSlowDriverStepPeriodClocks() { return stepPulseMinimumPeriodClocks; }
+	uint32_t GetSlowDriverDirHoldClocksFromLeadingEdge() { return directionHoldClocksFromLeadingEdge; }
+	uint32_t GetSlowDriverDirSetupClocks() const noexcept { return directionSetupClocks; }
+#else
 	uint32_t GetSlowDriversBitmap() const noexcept { return slowDriversBitmap; }
 	uint32_t GetSlowDriverStepHighClocks() const noexcept { return slowDriverStepTimingClocks[0]; }
 	uint32_t GetSlowDriverStepLowClocks() const noexcept { return slowDriverStepTimingClocks[1]; }
+	uint32_t GetSlowDriverDirHoldClocksFromTrailingEdge() const noexcept { return slowDriverStepTimingClocks[3]; }
 	uint32_t GetSlowDriverDirSetupClocks() const noexcept { return slowDriverStepTimingClocks[2]; }
-	uint32_t GetSlowDriverDirHoldClocks() const noexcept { return slowDriverStepTimingClocks[3]; }
+#endif
+
 	uint32_t GetSteppingEnabledDrivers() const noexcept { return steppingEnabledDriversBitmap; }
 	void DisableSteppingDriver(uint8_t driver) noexcept { steppingEnabledDriversBitmap &= ~StepPins::CalcDriverBitmap(driver); }
 	void EnableAllSteppingDrivers() noexcept { steppingEnabledDriversBitmap = 0xFFFFFFFFu; }
+
+#ifdef DUET3_MB6XD
+	bool HasDriverError(size_t driver) const noexcept;
+#endif
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 	const NonlinearExtrusion& GetExtrusionCoefficients(size_t extruder) const noexcept pre(extruder < MaxExtruders) { return nonlinearExtrusion[extruder]; }
@@ -692,6 +696,16 @@ private:
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
 #endif
 
+	// Convert microseconds to step clocks, rounding up to the next step clock
+	static constexpr uint32_t MicrosecondsToStepClocks(float us) noexcept
+	{
+		return (uint32_t)(((float)StepClockRate * 0.000001 * us) + 0.99);
+	}
+
+#ifdef DUET3_MB6XD
+	void UpdateDriverTimings();
+#endif
+
 #if HAS_MASS_STORAGE
 	// Logging
 	Logger *logger;
@@ -730,6 +744,11 @@ private:
 
 	bool directions[NumDirectDrivers];
 	int8_t enableValues[NumDirectDrivers];
+
+#ifdef DUET3_MB6XD
+	bool driverErrPinsActiveLow;
+#endif
+
 	IoPort brakePorts[NumDirectDrivers];
 
 	float motorCurrents[MaxAxesPlusExtruders];				// the normal motor current for each stepper driver
@@ -758,8 +777,15 @@ private:
 #endif
 
 	DriverId extruderDrivers[MaxExtruders];					// the driver number assigned to each extruder
-	uint32_t slowDriverStepTimingClocks[4];					// minimum step high, step low, dir setup and dir hold timing for slow drivers
+#ifdef DUET3_MB6XD
+	float driverTimingMicroseconds[NumDirectDrivers][4];	// step high time, step low time, direction setup time to step high, direction hold time from step low (1 set per driver)
+	uint32_t stepPulseMinimumPeriodClocks;					// minimum period between leading edges of step pulses, in step clocks
+	uint32_t directionSetupClocks;							// minimum direction change to step high time, in step clocks
+	uint32_t directionHoldClocksFromLeadingEdge;			// minimum step high to direction low step clocks, calculated from the step low to direction change hold time
+#else
 	uint32_t slowDriversBitmap;								// bitmap of driver port bits that need extended step pulse timing
+	uint32_t slowDriverStepTimingClocks[4];					// minimum step high, step low, dir setup and dir hold timing for slow drivers
+#endif
 	uint32_t steppingEnabledDriversBitmap;					// mask of driver bits that we haven't disabled temporarily
 	float idleCurrentFactor;
 	float minimumMovementSpeed;								// minimum allowed movement speed in mm per step clock

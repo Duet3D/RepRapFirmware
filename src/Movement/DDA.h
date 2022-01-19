@@ -224,8 +224,12 @@ public:
 	static int32_t loggedProbePositions[XYZ_AXES * MaxLoggedProbePositions];
 #endif
 
-	static uint32_t lastStepLowTime;										// when we last completed a step pulse to a slow driver
-	static uint32_t lastDirChangeTime;										// when we last change the DIR signal to a slow driver
+#ifdef DUET3_MB6XD
+	static volatile uint32_t lastStepHighTime;								// when we last started a step pulse
+#else
+	static volatile uint32_t lastStepLowTime;								// when we last completed a step pulse to a slow driver
+#endif
+	static volatile uint32_t lastDirChangeTime;								// when we last change the DIR signal to a slow driver
 
 #if 0	// debug only
 	static uint32_t stepsRequested[NumDirectDrivers], stepsDone[NumDirectDrivers];

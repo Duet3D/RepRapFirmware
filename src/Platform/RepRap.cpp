@@ -1101,18 +1101,15 @@ void RepRap::DeleteTool(int toolNumber) noexcept
 void RepRap::SelectTool(int toolNumber, bool simulating) noexcept
 {
 	ReadLockedPointer<Tool> const newTool = GetTool(toolNumber);
-	if (!simulating)
+	if (!simulating && currentTool != nullptr && currentTool != newTool.Ptr())
 	{
-		if (currentTool != nullptr && currentTool != newTool.Ptr())
-		{
-			currentTool->Standby();
-		}
-		if (newTool.IsNotNull())
-		{
-			newTool->Activate();
-		}
+		currentTool->Standby();
 	}
-	currentTool = newTool.Ptr();
+	currentTool = newTool.Ptr();					// must do this first so that Activate() will always work
+	if (!simulating && newTool.IsNotNull())
+	{
+		newTool->Activate();
+	}
 }
 
 void RepRap::PrintTool(int toolNumber, const StringRef& reply) const noexcept
@@ -2923,7 +2920,9 @@ void RepRap::PrepareToLoadIap() noexcept
 	// This also shuts down tasks and interrupts that might make use of the RAM that we are about to load the IAP binary into.
 	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
 	network->Exit();						// kill the network task to stop it overwriting RAM that we use to hold the IAP
+#if HAS_SMART_DRIVERS
 	SmartDrivers::Exit();					// stop the drivers being polled via SPI or UART because it may use data in the last 64Kb of RAM
+#endif
 	FilamentMonitor::Exit();				// stop the filament monitors generating interrupts, we may be about to overwrite them
 	fansManager->Exit();					// stop the fan tachos generating interrupts, we may be about to overwrite them
 #if SUPPORT_ACCELEROMETERS

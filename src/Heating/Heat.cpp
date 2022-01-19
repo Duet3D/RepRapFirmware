@@ -575,7 +575,7 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROW
 		Heater * const newHeater = new LocalHeater(heater);
 #endif
 		const GCodeResult rslt = newHeater->ConfigurePortAndSensor(pinName.c_str(), freq, sensorNumber, reply);
-		if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
+		if (Succeeded(rslt))
 		{
 			heaters[heater] = newHeater;
 		}
@@ -776,12 +776,17 @@ float Heat::GetTargetTemperature(int heater) const noexcept
 				: 0.0;
 }
 
-GCodeResult Heat::Activate(int heater, const StringRef& reply) noexcept
+GCodeResult Heat::SetActiveOrStandby(int heater, const Tool *tool, bool active, const StringRef& reply) noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
 	{
-		return h->Activate(reply);
+		const GCodeResult rslt = h->SetActiveOrStandby(active, reply);
+		if (rslt == GCodeResult::ok && !active)
+		{
+			lastStandbyTools[heater] = tool;
+		}
+		return rslt;
 	}
 	reply.printf("Heater %d not found", heater);
 	return GCodeResult::error;
@@ -824,16 +829,6 @@ void Heat::SwitchOffAllLocalFromISR() noexcept
 		{
 			h->SwitchOff();
 		}
-	}
-}
-
-void Heat::Standby(int heater, const Tool *tool) noexcept
-{
-	const auto h = FindHeater(heater);
-	if (h.IsNotNull())
-	{
-		h->Standby();
-		lastStandbyTools[heater] = tool;
 	}
 }
 
@@ -1003,7 +998,7 @@ GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCo
 		}
 
 		const GCodeResult rslt = h->StartAutoTune(gb, reply, fans);
-		if (rslt <= GCodeResult::warning)
+		if (Succeeded(rslt))
 		{
 			heaterBeingTuned = (int8_t)heaterNumber;
 		}
@@ -1090,7 +1085,7 @@ GCodeResult Heat::ConfigureSensor(GCodeBuffer& gb, const StringRef& reply) THROW
 		try
 		{
 			const GCodeResult rslt = newSensor->Configure(gb, reply, changed);
-			if (rslt == GCodeResult::ok || rslt == GCodeResult::warning)
+			if (Succeeded(rslt))
 			{
 				InsertSensor(newSensor);
 			}

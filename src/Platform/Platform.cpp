@@ -49,6 +49,7 @@
 # include <AnalogIn.h>
 # include <DmacManager.h>
 using LegacyAnalogIn::AdcBits;
+# include <pmc/pmc.h>
 # if SAME70
 static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA channels in CoreNG");
 # endif
@@ -58,9 +59,6 @@ static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA chan
 using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have the AnalogIn namespace
 #elif defined(__LPC17xx__)
 # include "LPC/BoardConfig.h"
-#else
-# include "sam/drivers/tc/tc.h"
-# include "sam/drivers/hsmci/hsmci.h"
 #endif
 
 #include <Libraries/sd_mmc/sd_mmc.h>
@@ -649,18 +647,52 @@ void Platform::Init() noexcept
 	}
 
 	// Set up the local drivers. Do this after we have read any direction pins that specify the board type.
+#ifdef DUET3_MB6XD
+	unsigned int numErrorHighDrivers = 0;
+#endif
 	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
-		directions[driver] = true;								// drive moves forwards by default
-		enableValues[driver] = 0;								// assume active low enable signal
+		directions[driver] = true;														// drive moves forwards by default
+#ifdef DUET3_MB6XD
+		pinMode(ENABLE_PINS[driver], INPUT);											// temporarily set up the enable pin for reading
+		pinMode(DRIVER_ERR_PINS[driver], INPUT);										// set up the error pin for reading
+		const bool activeHighEnable = !digitalRead(ENABLE_PINS[driver]);				// test whether we have a pullup or pulldown on the Enable pin
+		enableValues[driver] = activeHighEnable;
+		pinMode(ENABLE_PINS[driver], (activeHighEnable) ? OUTPUT_LOW : OUTPUT_HIGH);	// set driver disabled
+		if (digitalRead(DRIVER_ERR_PINS[driver]))
+		{
+			++numErrorHighDrivers;
+		}
 
+		// Set the default driver step timings
+		driverTimingMicroseconds[driver][0] = DefaultStepWidthMicroseconds;
+		driverTimingMicroseconds[driver][1] = DefaultStepIntervalMicroseconds;
+		driverTimingMicroseconds[driver][2] = DefaultSetupTimeMicroseconds;
+		driverTimingMicroseconds[driver][3] = DefaultHoldTimeMicroseconds;
+#else
+		enableValues[driver] = 0;														// assume active low enable signal
+#endif
 		// Set up the control pins
 		pinMode(STEP_PINS[driver], OUTPUT_LOW);
 		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
 #if !defined(DUET3) && !defined(DUET3MINI)
-		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);				// this is OK for the TMC2660 CS pins too
+		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);										// this is OK for the TMC2660 CS pins too
 #endif
 	}
+
+#ifdef DUET3_MB6XD
+	driverErrPinsActiveLow = (numErrorHighDrivers >= NumDirectDrivers/2);				// determine the error signal polarity by assuming most drivers are not in the error state
+
+	// Set up the step gate timer
+	pmc_enable_periph_clk(STEP_GATE_TC_ID);
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CMR =  TC_CMR_BSWTRG_SET				// software trigger sets TIOB
+														| TC_CMR_BCPC_CLEAR				// RC compare clears TIOB
+														| TC_CMR_WAVE					// waveform mode
+														| TC_CMR_WAVSEL_UP				// count up
+														| TC_CMR_CPCSTOP				// counter clock is stopped when counter reaches RC
+														| TC_CMR_TCCLKS_TIMER_CLOCK2;	// divide MCLK (150MHz) by 8 = 18.75MHz
+	SetPinFunction(StepGatePin, StepGatePinFunction);
+#endif
 
 	// Set up the axis+extruder arrays
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
@@ -669,7 +701,9 @@ void Platform::Init() noexcept
 		driveDriverBits[drive] = 0;
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
+#if HAS_SMART_DRIVERS
 		standstillCurrentPercent[drive] = DefaultStandstillCurrentPercent;
+#endif
 		microstepping[drive] = 16 | 0x8000;						// x16 with interpolation
 	}
 
@@ -703,11 +737,16 @@ void Platform::Init() noexcept
 #endif
 	}
 
+#ifdef DUET3_MB6XD
+	UpdateDriverTimings();
+#else
 	for (uint32_t& entry : slowDriverStepTimingClocks)
 	{
 		entry = 0;												// reset all to zero as we have no known slow drivers yet
 	}
 	slowDriversBitmap = 0;										// assume no drivers need extended step pulse timing
+#endif
+
 	EnableAllSteppingDrivers();									// no drivers disabled
 
 	driversPowered = false;
@@ -2470,11 +2509,15 @@ void Platform::IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t)>
 // If drive >= DRIVES then we are setting an individual motor direction
 void Platform::SetDirection(size_t axisOrExtruder, bool direction) noexcept
 {
+#ifdef DUET3_MB6XD
+	while (StepTimer::GetTimerTicks() - DDA::lastStepHighTime < GetSlowDriverDirHoldClocksFromLeadingEdge()) { }
+#else
 	const bool isSlowDriver = (GetDriversBitmap(axisOrExtruder) & GetSlowDriversBitmap()) != 0;
 	if (isSlowDriver)
 	{
-		while (StepTimer::GetTimerTicks() - DDA::lastStepLowTime < GetSlowDriverDirHoldClocks()) { }
+		while (StepTimer::GetTimerTicks() - DDA::lastStepLowTime < GetSlowDriverDirHoldClocksFromTrailingEdge()) { }
 	}
+#endif
 
 	if (axisOrExtruder < MaxAxesPlusExtruders)
 	{
@@ -2485,7 +2528,9 @@ void Platform::SetDirection(size_t axisOrExtruder, bool direction) noexcept
 		SetDriverDirection(axisOrExtruder - MaxAxesPlusExtruders, direction);
 	}
 
+#ifndef DUET3_MB6XD
 	if (isSlowDriver)
+#endif
 	{
 		DDA::lastDirChangeTime = StepTimer::GetTimerTicks();
 	}
@@ -2743,6 +2788,44 @@ GCodeResult Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPerc
 #endif
 }
 
+#ifdef DUET3_MB6XD
+
+// Fetch the worst (longest) timings of any driver, set up the step pulse width timer, and convert the other timings from microseconds to step clocks
+void Platform::UpdateDriverTimings()
+{
+	float worstTimings[4];
+	memcpyf(worstTimings, driverTimingMicroseconds[0], 4);
+	for (size_t driver = 1; driver < NumDirectDrivers; ++driver)
+	{
+		for (size_t i = 0; i < 4; ++i)
+		{
+			if (driverTimingMicroseconds[driver][i] > worstTimings[i])
+			{
+				worstTimings[i] = driverTimingMicroseconds[driver][i];
+			}
+		}
+	}
+
+	// Convert the step pulse width to clocks of the step pulse gate timer. First define some constants.
+	constexpr uint32_t StepGateTcClockFrequency = (SystemCoreClockFreq/2)/8;
+	constexpr float StepGateClocksPerMicrosecond = (float)StepGateTcClockFrequency/1.0e6;
+	constexpr float MicrosecondsPerStepGateClock = 1.0e6/(float)StepGateTcClockFrequency;
+
+	const float fclocks = ceilf(worstTimings[0] * StepGateClocksPerMicrosecond);
+	const uint32_t gateClocks = (uint32_t)fclocks;
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC = gateClocks;
+
+	// Convert the quantised step pulse width back to microseconds
+	const float actualStepPulseMicroseconds = fclocks * MicrosecondsPerStepGateClock;
+
+	// Now convert the other values from microseconds to step clocks
+	stepPulseMinimumPeriodClocks = MicrosecondsToStepClocks(worstTimings[1] + actualStepPulseMicroseconds);
+	directionSetupClocks = MicrosecondsToStepClocks(worstTimings[2]);
+	directionHoldClocksFromLeadingEdge = MicrosecondsToStepClocks(worstTimings[3] + actualStepPulseMicroseconds);
+}
+
+#endif
+
 // This must not be called from an ISR, or with interrupts disabled.
 void Platform::UpdateMotorCurrent(size_t driver, float current) noexcept
 {
@@ -2752,46 +2835,6 @@ void Platform::UpdateMotorCurrent(size_t driver, float current) noexcept
 		if (driver < numSmartDrivers)
 		{
 			SmartDrivers::SetCurrent(driver, current);
-		}
-#elif defined (DUET_06_085)
-		const uint16_t pot = (unsigned short)((0.256*current*8.0*senseResistor + maxStepperDigipotVoltage/2)/maxStepperDigipotVoltage);
-		if (driver < 4)
-		{
-			mcpDuet.setNonVolatileWiper(potWipes[driver], pot);
-			mcpDuet.setVolatileWiper(potWipes[driver], pot);
-		}
-		else
-		{
-			if (board == BoardType::Duet_085)
-			{
-				// Extruder 0 is on DAC channel 0
-				if (driver == 4)
-				{
-					const float dacVoltage = max<float>(current * 0.008 * senseResistor + stepperDacVoltageOffset, 0.0);	// the voltage we want from the DAC relative to its minimum
-					const float dac = dacVoltage/stepperDacVoltageRange;
-					AnalogOut(DAC0, dac);
-				}
-				else
-				{
-					mcpExpansion.setNonVolatileWiper(potWipes[driver-1], pot);
-					mcpExpansion.setVolatileWiper(potWipes[driver-1], pot);
-				}
-			}
-			else if (driver < 8)		// on a Duet 0.6 we have a maximum of 8 drives
-			{
-				mcpExpansion.setNonVolatileWiper(potWipes[driver], pot);
-				mcpExpansion.setVolatileWiper(potWipes[driver], pot);
-			}
-		}
-#elif defined(__ALLIGATOR__)
-		// Alligator SPI DAC current
-		if (driver < 4)  // Onboard DAC
-		{
-			dacAlligator.setChannel(3-driver, current * 0.102);
-		}
-		else // Piggy module DAC
-		{
-			dacPiggy.setChannel(7-driver, current * 0.102);
 		}
 #elif defined(__LPC17xx__)
 		if (hasDriverCurrentControl)
@@ -2967,6 +3010,20 @@ void Platform::SetEnableValue(size_t driver, int8_t eVal) noexcept
 	}
 }
 
+#ifdef DUET3_MB6XD
+
+bool Platform::HasDriverError(size_t driver) const noexcept
+{
+	if (driver < NumDirectDrivers)
+	{
+		const bool b = digitalRead(DRIVER_ERR_PINS[driver]);
+		return (driverErrPinsActiveLow) ? !b : b;
+	}
+	return false;
+}
+
+#endif
+
 void Platform::SetAxisDriversConfig(size_t axis, size_t numValues, const DriverId driverNumbers[]) noexcept
 {
 	AxisDriversConfig& cfg = axisDrivers[axis];
@@ -3034,6 +3091,10 @@ void Platform::SetExtruderDriver(size_t extruder, DriverId driver) noexcept
 
 void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4]) noexcept
 {
+#ifdef DUET3_MB6XD
+	memcpyf(driverTimingMicroseconds[driver], microseconds, 4);
+	UpdateDriverTimings();
+#else
 	const uint32_t bitmap = StepPins::CalcDriverBitmap(driver);
 	slowDriversBitmap &= ~bitmap;								// start by assuming this drive does not need extended timing
 	if (slowDriversBitmap == 0)
@@ -3048,19 +3109,24 @@ void Platform::SetDriverStepTiming(size_t driver, const float microseconds[4]) n
 	{
 		if (microseconds[i] > MinStepPulseTiming)
 		{
-			slowDriversBitmap |= StepPins::CalcDriverBitmap(driver);		// this drive does need extended timing
-			const uint32_t clocks = (uint32_t)(((float)StepClockRate * microseconds[i] * 0.000001) + 0.99);	// convert microseconds to step clocks, rounding up
+			slowDriversBitmap |= StepPins::CalcDriverBitmap(driver);			// this drive does need extended timing
+			const uint32_t clocks = MicrosecondsToStepClocks(microseconds[i]);	// convert microseconds to step clocks, rounding up
 			if (clocks > slowDriverStepTimingClocks[i])
 			{
 				slowDriverStepTimingClocks[i] = clocks;
 			}
 		}
 	}
+#endif
 }
 
 // Get the driver step timing, returning true if we are using slower timing than standard
 bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const noexcept
 {
+#ifdef DUET3_MB6XD
+	memcpyf(microseconds, driverTimingMicroseconds[driver], 4);
+	return true;
+#else
 	const bool isSlowDriver = ((slowDriversBitmap & StepPins::CalcDriverBitmap(driver)) != 0);
 	for (size_t i = 0; i < 4; ++i)
 	{
@@ -3069,6 +3135,7 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const n
 								: 0.0;
 	}
 	return isSlowDriver;
+#endif
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -3709,11 +3776,13 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		board = (digitalRead(DIRECTION_PINS[1]))				// if SAME54P20A
 					? BoardType::Duet3Mini_WiFi
 						: BoardType::Duet3Mini_Ethernet;
-#elif defined(DUET3)
+#elif defined(DUET3_MB6HC)
 		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but won't on v1.01 boards
 		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
 		delayMicroseconds(20);									// give the pullup resistor time to work
-		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_v101 : BoardType::Duet3_v06_100;
+		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
+#elif defined(DUET3_MB6XD)
+		board = BoardType::Duet3_6XD;
 #elif defined(SAME70XPLD)
 		board = BoardType::SAME70XPLD_0;
 #elif defined(DUET_NG)
@@ -3787,9 +3856,11 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3Mini_Unknown:		return "Duet 3 " BOARD_SHORT_NAME " unknown variant";
 	case BoardType::Duet3Mini_WiFi:			return "Duet 3 " BOARD_SHORT_NAME " WiFi";
 	case BoardType::Duet3Mini_Ethernet:		return "Duet 3 " BOARD_SHORT_NAME " Ethernet";
-#elif defined(DUET3)
-	case BoardType::Duet3_v06_100:			return "Duet 3 " BOARD_SHORT_NAME " v0.6 or 1.0";
-	case BoardType::Duet3_v101:				return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
+#elif defined(DUET3_MB6HC)
+	case BoardType::Duet3_6HC_v06_100:			return "Duet 3 " BOARD_SHORT_NAME " v0.6 or 1.0";
+	case BoardType::Duet3_6HC_v101:				return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
+#elif defined(DUET3_MB6XD)
+	case BoardType::Duet3_6XD:				return "Duet 3 " BOARD_SHORT_NAME;					// we have only one version at present
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
 #elif defined(DUET_NG)
@@ -3802,18 +3873,8 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet2SBC_102:			return "Duet 2 + SBC 1.02 or later";
 #elif defined(DUET_M)
 	case BoardType::DuetM_10:				return "Duet Maestro 1.0";
-#elif defined(DUET_06_085)
-	case BoardType::Duet_06:				return "Duet 0.6";
-	case BoardType::Duet_07:				return "Duet 0.7";
-	case BoardType::Duet_085:				return "Duet 0.85";
-#elif defined(__RADDS__)
-	case BoardType::RADDS_15:				return "RADDS 1.5";
-#elif defined(__ALLIGATOR__)
-	case BoardType::Alligator_2:			return "Alligator r2";
 #elif defined(PCCB_10)
 	case BoardType::PCCB_v10:				return "PC001373";
-#elif defined(PCCB_08) || defined(PCCB_08_X5)
-	case BoardType::PCCB_v08:				return "PCCB 0.8";
 #elif defined(__LPC17xx__)
 	case BoardType::Lpc:					return LPC_ELECTRONICS_STRING;
 #else
@@ -3832,9 +3893,11 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3Mini_Unknown:		return "duet5lcunknown";
 	case BoardType::Duet3Mini_WiFi:			return "duet5lcwifi";
 	case BoardType::Duet3Mini_Ethernet:		return "duet5lcethernet";
-#elif defined(DUET3)
-	case BoardType::Duet3_v06_100:			return "duet3mb6hc100";
-	case BoardType::Duet3_v101:				return "duet3mb6hc101";
+#elif defined(DUET3_MB6HC)
+	case BoardType::Duet3_6HC_v06_100:			return "duet3mb6hc100";
+	case BoardType::Duet3_6HC_v101:				return "duet3mb6hc101";
+#elif defined(DUET3_MB6XD)
+	case BoardType::Duet3_6XD:				return "duet3mb6xd";					// we have only one version at present
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "same70xpld";
 #elif defined(DUET_NG)
@@ -3846,18 +3909,8 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet2SBC_102:			return "duet2sbc102";
 #elif defined(DUET_M)
 	case BoardType::DuetM_10:				return "duetmaestro100";
-#elif defined(DUET_06_085)
-	case BoardType::Duet_06:				return "duet06";
-	case BoardType::Duet_07:				return "duet07";
-	case BoardType::Duet_085:				return "duet085";
-#elif defined(__RADDS__)
-	case BoardType::RADDS_15:				return "radds15";
-#elif defined(__ALLIGATOR__)
-	case BoardType::Alligator_2:			return "alligator2";
 #elif defined(PCCB_10)
 	case BoardType::PCCB_v10:				return "pc001373";
-#elif defined(PCCB_08) || defined(PCCB_08_X5)
-	case BoardType::PCCB_v08:				return "pccb08";
 #elif defined(__LPC17xx__)
 	case BoardType::Lpc:					return LPC_BOARD_STRING;
 #else
@@ -5019,10 +5072,10 @@ void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
 		msg->data[driver] = SmartDrivers::GetStatus(driver).AsU32();
 	}
 # else
-	msg->SetStandardFields(NumDrivers);
-	for (size_t driver = 0; driver < NumDrivers; ++driver)
+	msg->SetStandardFields(NumDirectDrivers);
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
-		msg->data[driver] = Platform::GetStandardDriverStatus(driver);
+		msg->data[driver] = HasDriverError(driver) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0u;
 	}
 # endif
 	buf.dataLength = msg->GetActualDataLength();

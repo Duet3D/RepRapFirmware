@@ -330,7 +330,9 @@ float FopDt::GetPwmCorrectionForFan(float temperatureRise, float fanPwmChange) c
 float FopDt::GetCoolingRate(float temperatureRise, float fanPwm) const noexcept
 {
 	temperatureRise *= 0.01;
-	return basicCoolingRate * powf(temperatureRise, coolingRateExponent) + temperatureRise * fanCoolingRate * fanPwm;
+	// If the temperature rise is negative then we must not try to raise it to a non-integral power!
+	const float adjustedTemperatureRise = (temperatureRise < 0.0) ? -powf(-temperatureRise, coolingRateExponent) : powf(temperatureRise, coolingRateExponent);
+	return basicCoolingRate * adjustedTemperatureRise + temperatureRise * fanCoolingRate * fanPwm;
 }
 
 // Get an estimate of the expected heating rate at the specified temperature rise and PWM. The result may be negative.

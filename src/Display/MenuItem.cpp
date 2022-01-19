@@ -533,22 +533,11 @@ bool ValueMenuItem::Adjust_SelectHelper() noexcept
 		switch (valIndex/100)
 		{
 		case 1: // heater active temperature
-			if (1.0 > currentValue.f) // 0 is off
-			{
-				reprap.GetGCodes().SetItemActiveTemperature(itemNumber, -273.15);
-			}
-			else // otherwise ensure the tool is made active at the same time (really only matters for 79)
-			{
-				if (80 > itemNumber)
-				{
-					reprap.SelectTool(itemNumber, false);
-				}
-				reprap.GetGCodes().SetItemActiveTemperature(itemNumber, currentValue.f);
-			}
+			reprap.GetGCodes().SetItemActiveTemperature(itemNumber, (currentValue.f < 1.0) ? ABS_ZERO : currentValue.f);
 			break;
 
 		case 2: // heater standby temperature
-			reprap.GetGCodes().SetItemStandbyTemperature(itemNumber, (1.0 > currentValue.f) ? -273.15 : currentValue.f);
+			reprap.GetGCodes().SetItemStandbyTemperature(itemNumber, (currentValue.f < 1.0) ? ABS_ZERO : currentValue.f);
 			break;
 
 		case 3: // fan %

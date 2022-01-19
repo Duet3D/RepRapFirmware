@@ -1,4 +1,4 @@
-This is firmware for controlling 3D printers and related devices using electronics based on ATSAM main processors. The current processors supported are the ATSAM4E, ATSAM4S and SAME70. The legacy SAM3X processor is also supported. There is a fork of this firmware that supports LPC1768/1769 processors. The SAME5x processor is supported in the related project Duet3Expansion.
+This is firmware for controlling 3D printers and related devices using electronics based on ARM Cortex main processors. The current processors supported are the ATSAM4E, ATSAM4S, SAME70 and SAME5x. There is a fork of this firmware that supports LPC1768/1769 and STM processors.
 
 # Documentation
 All documentation has been moved to the [RepRapFirmware GitHub Wiki](https://github.com/Duet3D/RepRapFirmware/wiki).

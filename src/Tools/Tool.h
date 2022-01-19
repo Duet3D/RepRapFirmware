@@ -103,8 +103,9 @@ public:
 
 	float GetToolHeaterActiveTemperature(size_t heaterNumber) const noexcept;
 	float GetToolHeaterStandbyTemperature(size_t heaterNumber) const noexcept;
-	void SetToolHeaterActiveTemperature(size_t heaterNumber, float temp) THROWS(GCodeException);
-	void SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp) THROWS(GCodeException);
+	void SetToolHeaterActiveTemperature(size_t heaterNumber, float temp) THROWS(GCodeException) { SetToolHeaterActiveOrStandbyTemperature(heaterNumber, temp, true); }
+	void SetToolHeaterStandbyTemperature(size_t heaterNumber, float temp) THROWS(GCodeException) { SetToolHeaterActiveOrStandbyTemperature(heaterNumber, temp, false); }
+
 	GCodeResult SetFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
 	GCodeResult GetSetFeedForward(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
@@ -117,8 +118,8 @@ public:
 	void SetFansPwm(float f) const noexcept;
 
 	void HeatersToOff() const noexcept;
-	void HeatersToActive() const noexcept;
-	void HeatersToStandby() const noexcept;
+	void HeatersToActiveOrStandby(bool active) const noexcept;
+
 
 	void ApplyFeedForward(float extrusionSpeed) const noexcept;
 	void StopFeedForward() const noexcept;
@@ -144,6 +145,7 @@ protected:
 private:
 	Tool() noexcept : next(nullptr), filament(nullptr), name(nullptr), state(ToolState::off) { }
 
+	void SetToolHeaterActiveOrStandbyTemperature(size_t heaterNumber, float temp, bool active) THROWS(GCodeException);
 	void SetTemperatureFault(int8_t dudHeater) noexcept;
 	void ResetTemperatureFault(int8_t wasDudHeater) noexcept;
 	bool AllHeatersAtHighTemperature(bool forExtrusion) const noexcept;
