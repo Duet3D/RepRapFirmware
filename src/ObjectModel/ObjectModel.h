@@ -219,11 +219,12 @@ class ObjectExplorationContext
 {
 public:
 	// Constructor used when reporting the OM as JSON
-	ObjectExplorationContext(bool wal, const char *reportFlags, unsigned int initialMaxDepth, size_t initialBufferOffset) noexcept;
+	ObjectExplorationContext(const GCodeBuffer *_ecv_null gbp, bool wal, const char *reportFlags, unsigned int initialMaxDepth, size_t initialBufferOffset) noexcept;
 
 	// Constructor used when evaluating expressions
-	ObjectExplorationContext(bool wal, bool wex, int p_line, int p_col) noexcept;
+	ObjectExplorationContext(const GCodeBuffer *_ecv_null gbp, bool wal, bool wex, int p_line, int p_col) noexcept;
 
+	const GCodeBuffer *_ecv_null GetGCodeBuffer() const noexcept { return gb; }
 	void SetMaxDepth(unsigned int d) noexcept { maxDepth = d; }
 	bool IncreaseDepth() noexcept { if (currentDepth < maxDepth) { ++currentDepth; return true; } return false; }
 	void DecreaseDepth() noexcept { --currentDepth; }
@@ -267,6 +268,7 @@ private:
 	int32_t indices[MaxIndices];
 	int line;
 	int column;
+	const GCodeBuffer *_ecv_null gb;
 	unsigned int shortForm : 1,
 				wantArrayLength : 1,
 				wantExists : 1,
@@ -297,7 +299,7 @@ public:
 	virtual ~ObjectModel() { }
 
 	// Construct a JSON representation of those parts of the object model requested by the user. This version is called only on the root of the tree.
-	void ReportAsJson(OutputBuffer *buf, const char *_ecv_array filter, const char *_ecv_array reportFlags, bool wantArrayLength) const THROWS(GCodeException);
+	void ReportAsJson(const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, const char *_ecv_array filter, const char *_ecv_array reportFlags, bool wantArrayLength) const THROWS(GCodeException);
 
 	// Get the value of an object via the table
 	ExpressionValue GetObjectValueUsingTableNumber(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *_ecv_array idString, uint8_t tableNumber) const THROWS(GCodeException);

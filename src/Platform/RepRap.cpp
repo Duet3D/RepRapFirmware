@@ -351,6 +351,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),					ObjectModelEntryFlags::live },
 	{ "restorePoints",			OBJECT_MODEL_FUNC_NOSELF(&restorePointsArrayDescriptor),				ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
+	{ "thisInput",				OBJECT_MODEL_FUNC_IF_NOSELF(context.GetGCodeBuffer() != nullptr, (int32_t)context.GetGCodeBuffer()->GetChannel().ToBaseType()),	ObjectModelEntryFlags::none },
 	{ "time",					OBJECT_MODEL_FUNC(DateTime(self->platform->GetDateTime())),				ObjectModelEntryFlags::live },
 	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((context.GetStartMillis()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
 
@@ -406,7 +407,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	0,																						// directories
 #endif
 	25,																						// limits
-	19 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
+	20 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
 	2,																						// state.beep
 	6,																						// state.messageBox
 	12 + HAS_NETWORKING + SUPPORT_SCANNER +
@@ -2498,7 +2499,7 @@ void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numVa
 
 // Return a query into the object model, or return nullptr if no buffer available
 // We append a newline to help PanelDue resync after receiving corrupt or incomplete data. DWC ignores it.
-OutputBuffer *RepRap::GetModelResponse(const char *key, const char *flags) const THROWS(GCodeException)
+OutputBuffer *RepRap::GetModelResponse(const GCodeBuffer *_ecv_null gb, const char *key, const char *flags) const THROWS(GCodeException)
 {
 	OutputBuffer *outBuf;
 	if (OutputBuffer::Allocate(outBuf))
@@ -2516,7 +2517,7 @@ OutputBuffer *RepRap::GetModelResponse(const char *key, const char *flags) const
 
 		try
 		{
-			reprap.ReportAsJson(outBuf, key, flags, wantArrayLength);
+			reprap.ReportAsJson(gb, outBuf, key, flags, wantArrayLength);
 			outBuf->cat("}\n");
 			if (outBuf->HadOverflow())
 			{

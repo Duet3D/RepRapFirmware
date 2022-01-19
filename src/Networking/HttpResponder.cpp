@@ -638,7 +638,7 @@ bool HttpResponder::GetJsonResponse(const char* request, OutputBuffer *&response
 		OutputBuffer::ReleaseAll(response);
 		const char *const filterVal = GetKeyValue("key");
 		const char *const flagsVal = GetKeyValue("flags");
-		response = reprap.GetModelResponse(filterVal, flagsVal);
+		response = reprap.GetModelResponse(nullptr, filterVal, flagsVal);
 	}
 #endif
 	else if (StringEqualsIgnoreCase(request, "config"))

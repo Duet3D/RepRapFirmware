@@ -305,9 +305,9 @@ ObjectModel::ObjectModel() noexcept
 // ObjectExplorationContext members
 
 // Constructor used when reporting the OM as JSON
-ObjectExplorationContext::ObjectExplorationContext(bool wal, const char *reportFlags, unsigned int initialMaxDepth, size_t initialBufferOffset) noexcept
+ObjectExplorationContext::ObjectExplorationContext(const GCodeBuffer *_ecv_null gbp, bool wal, const char *reportFlags, unsigned int initialMaxDepth, size_t initialBufferOffset) noexcept
 	: startMillis(millis()), initialBufOffset(initialBufferOffset), maxDepth(initialMaxDepth), currentDepth(0), startElement(0), nextElement(-1), numIndicesProvided(0), numIndicesCounted(0),
-	  line(-1), column(-1),
+	  line(-1), column(-1), gb(gbp),
 	  shortForm(false), wantArrayLength(wal), wantExists(false),
 	  includeNonLive(true), includeImportant(false), includeNulls(false),
 	  excludeVerbose(true), excludeObsolete(true),
@@ -364,9 +364,9 @@ ObjectExplorationContext::ObjectExplorationContext(bool wal, const char *reportF
 }
 
 // Constructor when evaluating expressions
-ObjectExplorationContext::ObjectExplorationContext(bool wal, bool wex, int p_line, int p_col) noexcept
+ObjectExplorationContext::ObjectExplorationContext(const GCodeBuffer *_ecv_null gbp, bool wal, bool wex, int p_line, int p_col) noexcept
 	: startMillis(millis()), initialBufOffset(0), maxDepth(99), currentDepth(0), startElement(0), nextElement(-1), numIndicesProvided(0), numIndicesCounted(0),
-	  line(p_line), column(p_col),
+	  line(p_line), column(p_col), gb(gbp),
 	  shortForm(false), wantArrayLength(wal), wantExists(wex),
 	  includeNonLive(true), includeImportant(false), includeNulls(false),
 	  excludeVerbose(false), excludeObsolete(false),
@@ -496,10 +496,10 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 }
 
 // Construct a JSON representation of those parts of the object model requested by the user. This version is called on the root of the tree.
-void ObjectModel::ReportAsJson(OutputBuffer *buf, const char *_ecv_array filter, const char *_ecv_array reportFlags, bool wantArrayLength) const THROWS(GCodeException)
+void ObjectModel::ReportAsJson(const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, const char *_ecv_array filter, const char *_ecv_array reportFlags, bool wantArrayLength) const THROWS(GCodeException)
 {
 	const unsigned int defaultMaxDepth = (wantArrayLength) ? 99 : (filter[0] == 0) ? 1 : 99;
-	ObjectExplorationContext context(wantArrayLength, reportFlags, defaultMaxDepth, buf->Length());
+	ObjectExplorationContext context(gb, wantArrayLength, reportFlags, defaultMaxDepth, buf->Length());
 	ReportAsJson(buf, context, nullptr, 0, filter);
 	if (context.GetNextElement() >= 0)
 	{

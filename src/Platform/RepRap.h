@@ -154,7 +154,7 @@ public:
 	GCodeResult GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept;
 
 #if SUPPORT_OBJECT_MODEL
-	OutputBuffer *GetModelResponse(const char *key, const char *flags) const THROWS(GCodeException);
+	OutputBuffer *GetModelResponse(const GCodeBuffer *_ecv_null gb, const char *key, const char *flags) const THROWS(GCodeException);
 #endif
 
 	void Beep(unsigned int freq, unsigned int ms) noexcept;
