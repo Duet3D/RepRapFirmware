@@ -838,7 +838,7 @@ void WiFiInterface::Spin() noexcept
 	}
 }
 
-// Translate a ESP8266 reset reason to text
+// Translate a ESP8266 reset reason to text. Keep this in step with the codes used in file MessageFormats.h in the WiFi server project.
 const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 {
 	// Mapping from known ESP reset codes to reasons
@@ -850,7 +850,9 @@ const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 		"Software watchdog",
 		"Software restart",
 		"Deep-sleep wakeup",
-		"Turned on by main processor"
+		"Turned on by main processor",
+		"Brownout",
+		"SDIO reset"
 	};
 
 	return (reason < sizeof(resetReasonTexts)/sizeof(resetReasonTexts[0]))
