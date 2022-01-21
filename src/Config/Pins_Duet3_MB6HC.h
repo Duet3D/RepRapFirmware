@@ -152,9 +152,9 @@ constexpr bool DiagOnPolarity = true;
 
 // SD cards
 constexpr size_t NumSdCards = 2;											// we now allow one SPI-connected SD card to be configured at boot time
-constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(29), NoPin };
+constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(29), NoPin };		// the CD pin for the second SD card is allocated using M950
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[NumSdCards] = { NoPin, NoPin };
+constexpr Pin SdSpiCSPins[1] = { NoPin };									// this one is allocated using M950
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 

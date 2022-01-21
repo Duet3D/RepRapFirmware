@@ -2009,6 +2009,7 @@ void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 	}
 
 	driversStepping &= p.GetSteppingEnabledDrivers();
+
 #ifdef DUET3_MB6XD
 	if (driversStepping != 0)
 	{
@@ -2026,6 +2027,12 @@ void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 		// Trigger the TC so that it generates a step pulse
 		STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_SWTRG;
 		lastStepHighTime = StepTimer::GetTimerTicks();
+
+		// Calculate the next step times
+		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
+		{
+			(void)dm2->CalcNextStepTime(*this);						// calculate next step times
+		}
 	}
 #else
 # if SUPPORT_SLOW_DRIVERS											// if supporting slow drivers

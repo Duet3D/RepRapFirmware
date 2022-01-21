@@ -78,8 +78,18 @@ void DeviceInit() noexcept
 	SdhcInit();
 	EthernetInit();
 
+#if defined(DUET3_MB6HC)
 	// Set up PB4..PB5 as normal I/O, not JTAG
 	matrix_set_system_io(CCFG_SYSIO_SYSIO4 | CCFG_SYSIO_SYSIO5);
+#elif defined(DUET3_MB6XD)
+# ifdef DEBUG
+	// Set up PB4..PB5 as normal I/O, not JTAG. Leave PB6/7 pins as SWD. STATUS and ACT LEDs will not work.
+	matrix_set_system_io(CCFG_SYSIO_SYSIO4 | CCFG_SYSIO_SYSIO5);
+# else
+	// Set up PB4..PB7 as normal I/O, not JTAG or SWD
+	matrix_set_system_io(CCFG_SYSIO_SYSIO4 | CCFG_SYSIO_SYSIO5 | CCFG_SYSIO_SYSIO6 | CCFG_SYSIO_SYSIO7);
+# endif
+#endif
 }
 
 void StopAnalogTask() noexcept

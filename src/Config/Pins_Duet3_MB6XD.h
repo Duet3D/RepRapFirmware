@@ -136,7 +136,7 @@ constexpr bool DiagOnPolarity = false;
 constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(29), PortDPin(18) };
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[NumSdCards] = { NoPin, PortDPin(19) };
+constexpr Pin SdSpiCSPins[1] = { PortDPin(19) };
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 

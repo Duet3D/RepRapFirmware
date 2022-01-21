@@ -685,13 +685,16 @@ void Platform::Init() noexcept
 
 	// Set up the step gate timer
 	pmc_enable_periph_clk(STEP_GATE_TC_ID);
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_CLKDIS;
 	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CMR =  TC_CMR_BSWTRG_SET				// software trigger sets TIOB
 														| TC_CMR_BCPC_CLEAR				// RC compare clears TIOB
 														| TC_CMR_WAVE					// waveform mode
 														| TC_CMR_WAVSEL_UP				// count up
 														| TC_CMR_CPCSTOP				// counter clock is stopped when counter reaches RC
+														| TC_CMR_EEVT_XC0   			// set external events from XC0 (this allows TIOB to be an output)
 														| TC_CMR_TCCLKS_TIMER_CLOCK2;	// divide MCLK (150MHz) by 8 = 18.75MHz
 	SetPinFunction(StepGatePin, StepGatePinFunction);
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_CLKEN;
 #endif
 
 	// Set up the axis+extruder arrays
@@ -2809,19 +2812,20 @@ void Platform::UpdateDriverTimings()
 	// Convert the step pulse width to clocks of the step pulse gate timer. First define some constants.
 	constexpr uint32_t StepGateTcClockFrequency = (SystemCoreClockFreq/2)/8;
 	constexpr float StepGateClocksPerMicrosecond = (float)StepGateTcClockFrequency/1.0e6;
-	constexpr float MicrosecondsPerStepGateClock = 1.0e6/(float)StepGateTcClockFrequency;
 
 	const float fclocks = ceilf(worstTimings[0] * StepGateClocksPerMicrosecond);
 	const uint32_t gateClocks = (uint32_t)fclocks;
 	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC = gateClocks;
 
 	// Convert the quantised step pulse width back to microseconds
-	const float actualStepPulseMicroseconds = fclocks * MicrosecondsPerStepGateClock;
+	const float actualStepPulseMicroseconds = fclocks/StepGateClocksPerMicrosecond;
 
 	// Now convert the other values from microseconds to step clocks
 	stepPulseMinimumPeriodClocks = MicrosecondsToStepClocks(worstTimings[1] + actualStepPulseMicroseconds);
 	directionSetupClocks = MicrosecondsToStepClocks(worstTimings[2]);
 	directionHoldClocksFromLeadingEdge = MicrosecondsToStepClocks(worstTimings[3] + actualStepPulseMicroseconds);
+//DEBUG
+//	debugPrintf("Clocks: %" PRIu32 " %" PRIu32 " %" PRIu32 "\n", stepPulseMinimumPeriodClocks, directionSetupClocks, directionHoldClocksFromLeadingEdge);
 }
 
 #endif
