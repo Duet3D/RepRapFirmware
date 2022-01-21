@@ -298,7 +298,7 @@ void SbcInterface::ExchangeData() noexcept
 
 			try
 			{
-				OutputBuffer *outBuf = reprap.GetModelResponse(key.c_str(), flags.c_str());
+				OutputBuffer *outBuf = reprap.GetModelResponse(nullptr, key.c_str(), flags.c_str());
 				if (outBuf == nullptr || !transfer.WriteObjectModel(outBuf))
 				{
 					// Failed to write the whole object model, try again later
