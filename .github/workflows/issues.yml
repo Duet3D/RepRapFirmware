@@ -15,7 +15,7 @@ jobs:
           required-permission: write
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - if: contains(github.event.issue.labels.*.name, 'bug') == false && contains(github.event.issue.labels.*.name, 'FeatureRequest') == false
+      - if: contains(github.event.issue.labels.*.name, 'bug') == false && contains(github.event.issue.labels.*.name, 'enhancement') == false
         name: Close Issue
         uses: peter-evans/close-issue@v1
         with:
