@@ -98,7 +98,7 @@ constexpr Pin UsbVBusPin = PortCPin(21);			// Pin used to monitor VBUS on USB po
 // Drivers
 constexpr Pin STEP_PINS[NumDirectDrivers] =			{ PortCPin(18), PortCPin(16), PortCPin(28), PortCPin(01), PortCPin(4),  PortCPin(9)  };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] =	{ PortBPin(5),  PortDPin(10), PortAPin(4),  PortAPin(22), PortCPin(3),  PortDPin(14) };
-constexpr Pin ENABLE_PINS[NumDirectDrivers] =		{ PortBPin(4),  PortAPin(21), PortAPin(9),  PortAPin(23), PortAPin(1),  PortDPin(17) };
+constexpr Pin ENABLE_PINS[NumDirectDrivers] =		{ PortBPin(4),  PortAPin(21), PortAPin(9),  PortAPin(23), PortAPin(2),  PortDPin(17) };
 constexpr Pin DRIVER_ERR_PINS[NumDirectDrivers] =	{ PortDPin(29), PortCPin(17), PortDPin(13), PortCPin(02), PortDPin(31), PortCPin(10) };
 constexpr Pin StepGatePin = PortDPin(22);
 constexpr GpioPinFunction StepGatePinFunction = GpioPinFunction::C;			// TIOB11
@@ -296,7 +296,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PD18 External SD card detect
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PD19 SPI CS0 (external SD card)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs3"				},	// PD20 SPI CS3
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"io5.out,!io5.out.iso"	},	// PD21 IO5_OUT (not PWM capable on TIOA11 because TIOB11 is used to generate step pulses)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io5.out,!io5.out.iso"	},	// PD21 IO5_OUT (not PWM capable on TIOA11 because TIOB11 is used to generate step pulses)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PD22 step gate
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out4.tach"				},	// PD23 OUT4_TACH
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PD24 SWD_EXT_RST

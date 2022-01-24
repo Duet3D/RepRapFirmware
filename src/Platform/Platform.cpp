@@ -405,9 +405,7 @@ Platform::Platform() noexcept :
 	logger(nullptr),
 #endif
 	board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
-#if HAS_SMART_DRIVERS
 	nextDriveToPoll(0),
-#endif
 	lastFanCheckTime(0),
 #if HAS_AUX_DEVICES
 	panelDueUpdater(nullptr),
@@ -1113,7 +1111,7 @@ void Platform::Spin() noexcept
 		else
 #endif
 
-#if HAS_12V_MONITOR
+#if HAS_12V_MONITOR && HAS_SMART_DRIVERS
 		if (currentV12 < driverV12OffAdcReading)
 		{
 			driversPowered = false;
@@ -1124,12 +1122,17 @@ void Platform::Spin() noexcept
 		else
 #endif
 		{
-#if HAS_SMART_DRIVERS
-			// Check one TMC2660 or TMC2224 for temperature warning or temperature shutdown
+			// Check one driver for temperature warning, temperature shutdown etc.
 			if (enableValues[nextDriveToPoll] >= 0)					// don't poll driver if it is flagged "no poll"
 			{
-				StandardDriverStatus stat = SmartDrivers::GetStatus(nextDriveToPoll, true, true);
-				const DriversBitmap mask = DriversBitmap::MakeFromBits(nextDriveToPoll);
+				StandardDriverStatus stat =
+#if defined(DUET3_MB6XD)
+											StandardDriverStatus((HasDriverError(nextDriveToPoll)) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0);
+#else
+											SmartDrivers::GetStatus(nextDriveToPoll, true, true);
+#endif
+#if HAS_SMART_DRIVERS
+											const DriversBitmap mask = DriversBitmap::MakeFromBits(nextDriveToPoll);
 				if (stat.ot)
 				{
 					temperatureShutdownDrivers |= mask;
@@ -1179,6 +1182,7 @@ void Platform::Spin() noexcept
 				{
 					timer.Stop();
 				}
+#endif	// HAS_SMART_DRIVERS
 
 				const StandardDriverStatus oldStatus = lastEventStatus[nextDriveToPoll];
 				lastEventStatus[nextDriveToPoll] = stat;
@@ -1236,11 +1240,10 @@ void Platform::Spin() noexcept
 
 			// Advance drive number ready for next time
 			++nextDriveToPoll;
-			if (nextDriveToPoll == numSmartDrivers)
+			if (nextDriveToPoll == NumDirectDrivers)
 			{
 				nextDriveToPoll = 0;
 			}
-#endif		// HAS_SMART_DRIVERS
 		}
 	}
 #if HAS_VOLTAGE_MONITOR && HAS_12V_MONITOR
@@ -1781,7 +1784,9 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	{
 		String<StringLength256> driverStatus;
 		driverStatus.printf("Driver %u: pos %" PRIi32, drive, reprap.GetMove().GetEndPoint(drive));
-#if HAS_SMART_DRIVERS
+#ifdef DUET3_MB6XD
+		driverStatus.cat((HasDriverError(drive)) ? " error" : " ok");
+#elif HAS_SMART_DRIVERS
 		if (drive < numSmartDrivers)
 		{
 			driverStatus.cat(", ");

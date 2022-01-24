@@ -794,9 +794,10 @@ private:
 	size_t numSmartDrivers;											// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
 	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers;
 	MillisTimer openLoadTimers[MaxSmartDrivers];
-	StandardDriverStatus lastEventStatus[MaxSmartDrivers];
-	uint8_t nextDriveToPoll;
 #endif
+
+	StandardDriverStatus lastEventStatus[NumDirectDrivers];
+	uint8_t nextDriveToPoll;
 
 	bool driversPowered;
 
