@@ -110,13 +110,13 @@ void OutputBuffer::UpdateWhenQueued() noexcept
 	whenQueued = millis();
 }
 
-size_t OutputBuffer::vprintf(const char *fmt, va_list vargs) noexcept
+size_t OutputBuffer::vprintf(const char *_ecv_array fmt, va_list vargs) noexcept
 {
 	Clear();
 	return vcatf(fmt, vargs);
 }
 
-size_t OutputBuffer::printf(const char *fmt, ...) noexcept
+size_t OutputBuffer::printf(const char *_ecv_array fmt, ...) noexcept
 {
 	va_list vargs;
 	va_start(vargs, fmt);
@@ -125,7 +125,7 @@ size_t OutputBuffer::printf(const char *fmt, ...) noexcept
 	return ret;
 }
 
-size_t OutputBuffer::vcatf(const char *fmt, va_list vargs) noexcept
+size_t OutputBuffer::vcatf(const char *_ecv_array fmt, va_list vargs) noexcept
 {
 	return vuprintf([this](char c) noexcept -> bool
 					{
@@ -134,7 +134,7 @@ size_t OutputBuffer::vcatf(const char *fmt, va_list vargs) noexcept
 					fmt, vargs);
 }
 
-size_t OutputBuffer::catf(const char *fmt, ...) noexcept
+size_t OutputBuffer::catf(const char *_ecv_array fmt, ...) noexcept
 {
 	va_list vargs;
 	va_start(vargs, fmt);
@@ -143,7 +143,7 @@ size_t OutputBuffer::catf(const char *fmt, ...) noexcept
 	return ret;
 }
 
-size_t OutputBuffer::lcatf(const char *fmt, ...) noexcept
+size_t OutputBuffer::lcatf(const char *_ecv_array fmt, ...) noexcept
 {
 	size_t extra = 0;
 	if (Length() != 0 && operator[](Length() - 1) != '\n')
@@ -166,12 +166,12 @@ size_t OutputBuffer::copy(const char c) noexcept
 	return 1;
 }
 
-size_t OutputBuffer::copy(const char *src) noexcept
+size_t OutputBuffer::copy(const char *_ecv_array src) noexcept
 {
 	return copy(src, strlen(src));
 }
 
-size_t OutputBuffer::copy(const char *src, size_t len) noexcept
+size_t OutputBuffer::copy(const char *_ecv_array src, size_t len) noexcept
 {
 	Clear();
 	return cat(src, len);
@@ -208,17 +208,17 @@ size_t OutputBuffer::cat(const char c) noexcept
 	return 1;
 }
 
-size_t OutputBuffer::cat(const char *src) noexcept
+size_t OutputBuffer::cat(const char *_ecv_array src) noexcept
 {
 	return cat(src, strlen(src));
 }
 
-size_t OutputBuffer::lcat(const char *src) noexcept
+size_t OutputBuffer::lcat(const char *_ecv_array src) noexcept
 {
 	return lcat(src, strlen(src));
 }
 
-size_t OutputBuffer::cat(const char *src, size_t len) noexcept
+size_t OutputBuffer::cat(const char *_ecv_array src, size_t len) noexcept
 {
 	size_t copied = 0;
 	while (copied < len)
@@ -249,7 +249,7 @@ size_t OutputBuffer::cat(const char *src, size_t len) noexcept
 	return copied;
 }
 
-size_t OutputBuffer::lcat(const char *src, size_t len) noexcept
+size_t OutputBuffer::lcat(const char *_ecv_array src, size_t len) noexcept
 {
 	if (Length() != 0)
 	{

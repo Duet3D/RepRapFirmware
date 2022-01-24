@@ -21,7 +21,7 @@ public:
 
 	static void InitStatic() noexcept;
 	static void Disable() noexcept;
-	static void HandleGCodeReply(const char *reply) noexcept;
+	static void HandleGCodeReply(const char *_ecv_array reply) noexcept;
 	static void HandleGCodeReply(OutputBuffer *reply) noexcept;
 	static uint16_t GetReplySeq() noexcept { return seq; }
 	static void CheckSessions() noexcept;
@@ -81,13 +81,13 @@ private:
 	bool RemoveAuthentication() noexcept;
 
 	bool CharFromClient(char c) noexcept;
-	void SendFile(const char* nameOfFileToSend, bool isWebFile) noexcept;
+	void SendFile(const char *_ecv_array nameOfFileToSend, bool isWebFile) noexcept;
 	void SendGCodeReply() noexcept;
-	void SendJsonResponse(const char* command) noexcept;
-	bool GetJsonResponse(const char* request, OutputBuffer *&response, bool& keepOpen) noexcept;
+	void SendJsonResponse(const char *_ecv_array command) noexcept;
+	bool GetJsonResponse(const char *_ecv_array request, OutputBuffer *&response, bool& keepOpen) noexcept;
 	void ProcessMessage() noexcept;
 	void ProcessRequest() noexcept;
-	void RejectMessage(const char* s, unsigned int code = 500) noexcept;
+	void RejectMessage(const char *_ecv_array s, unsigned int code = 500) noexcept;
 	bool SendFileInfo(bool quitEarly) noexcept;
 	void AddCorsHeader() noexcept;
 
@@ -95,7 +95,7 @@ private:
 	void DoUpload() noexcept;
 #endif
 
-	const char* GetKeyValue(const char *key) const noexcept;	// return the value of the specified key, or nullptr if not present
+	const char* GetKeyValue(const char *_ecv_array key) const noexcept;	// return the value of the specified key, or nullptr if not present
 
 	static void RemoveSession(size_t sessionToRemove) noexcept;
 
