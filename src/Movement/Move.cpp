@@ -103,6 +103,8 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor),											ObjectModelEntryFlags::live },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 1),																		ObjectModelEntryFlags::none },
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
+	{ "limitAxes",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().LimitAxes()),										ObjectModelEntryFlags::none },
+	{ "noMovesBeforeHoming",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().NoMovesBeforeHoming()),								ObjectModelEntryFlags::none },
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxPrintingAcceleration), 1),				ObjectModelEntryFlags::none },
 	{ "queue",					OBJECT_MODEL_FUNC_NOSELF(&queueArrayDescriptor),												ObjectModelEntryFlags::none },
 #if SUPPORT_COORDINATE_ROTATION
@@ -173,7 +175,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 constexpr uint8_t Move::objectModelTableDescriptor[] =
 {
 	9 + SUPPORT_COORDINATE_ROTATION,
-	15 + SUPPORT_WORKPLACE_COORDINATES,
+	17 + SUPPORT_WORKPLACE_COORDINATES,
 	2,
 	4 + SUPPORT_LASER,
 	3,

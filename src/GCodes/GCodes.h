@@ -168,6 +168,8 @@ public:
 	float GetSimulationTime() const noexcept { return simulationTime; }
 
 	bool AllAxesAreHomed() const noexcept;										// Return true if all axes are homed
+	bool LimitAxes() const noexcept { return limitAxes; }
+	bool NoMovesBeforeHoming() const noexcept { return noMovesBeforeHoming; }
 
 	void MoveStoppedByZProbe() noexcept { zProbeTriggered = true; }				// Called from the step ISR when the Z probe is triggered, causing the move to be aborted
 
