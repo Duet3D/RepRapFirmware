@@ -718,6 +718,8 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	params.unshaped.accelClocks = msg.accelerationClocks;
 	params.unshaped.steadyClocks = msg.steadyClocks;
 	params.unshaped.decelClocks = msg.decelClocks;
+	params.unshaped.acceleration = acceleration;
+	params.unshaped.deceleration = deceleration;
 
 	shapedSegments = unshapedSegments = nullptr;
 	activeDMs = completedDMs = nullptr;
