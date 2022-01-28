@@ -378,7 +378,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		extra = LastDiagnosticsPart;
 		StepTimer::Diagnostics(reply);
 		break;
-}
+	}
 	return GCodeResult::ok;
 }
 
@@ -510,6 +510,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::setDriverStates:
 				requestId = buf->msg.multipleDrivesRequestUint16.requestId;
 				rslt = reprap.GetPlatform().EutHandleSetDriverStates(buf->msg.multipleDrivesRequestDriverState, replyRef);
+				break;
+
+			case CanMessageType::m915:
+				requestId = buf->msg.generic.requestId;
+				rslt = reprap.GetPlatform().EutProcessM915(buf->msg.generic, replyRef);
 				break;
 
 			case CanMessageType::setPressureAdvance:

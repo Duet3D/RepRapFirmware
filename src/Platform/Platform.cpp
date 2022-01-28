@@ -5071,6 +5071,80 @@ GCodeResult Platform::EutProcessM569Point7(const CanMessageGeneric& msg, const S
 	return GCodeResult::ok;
 }
 
+GCodeResult Platform::EutProcessM915(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+#if HAS_SMART_DRIVERS
+	CanMessageGenericParser parser(msg, M915Params);
+	uint16_t driverBits;
+	if (!parser.GetUintParam('d', driverBits))
+	{
+		reply.copy("missing parameter in M915 message");
+		return GCodeResult::error;
+	}
+
+	const auto drivers = DriversBitmap::MakeFromRaw(driverBits);
+
+	bool seen = false;
+	{
+		int8_t sgThreshold;
+		if (parser.GetIntParam('S', sgThreshold))
+		{
+			seen = true;
+			drivers.Iterate([sgThreshold](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallThreshold(drive, sgThreshold); });
+		}
+	}
+
+	{
+		uint16_t stepsPerSecond;
+		if (parser.GetUintParam('H', stepsPerSecond))
+		{
+			seen = true;
+			drivers.Iterate([stepsPerSecond](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallMinimumStepsPerSecond(drive, stepsPerSecond); });
+		}
+	}
+
+	{
+		uint16_t coolStepConfig;
+		if (parser.GetUintParam('T', coolStepConfig))
+		{
+			seen = true;
+			drivers.Iterate([coolStepConfig](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetRegister(drive, SmartDriverRegister::coolStep, coolStepConfig); } );
+		}
+	}
+
+	{
+		uint8_t rParam;
+		if (parser.GetUintParam('R', rParam))
+		{
+			seen = true;
+			if (rParam != 0)
+			{
+				eventOnStallDrivers |= drivers;
+			}
+			else
+			{
+				eventOnStallDrivers &= ~drivers;
+			}
+		}
+	}
+
+	if (!seen)
+	{
+		drivers.Iterate([&reply](unsigned int drive, unsigned int) noexcept
+									{
+										reply.lcatf("Driver %u.%u: ", CanInterface::GetCanAddress(), drive);
+										SmartDrivers::AppendStallConfig(drive, reply);
+									}
+					   );
+	}
+
+	return GCodeResult::ok;
+#else
+	reply.copy("stall detection not supported by this board");
+	return GCodeResult::error;
+#endif
+}
+
 void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
 {
 	CanMessageDriversStatus * const msg = buf.SetupStatusMessage<CanMessageDriversStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());

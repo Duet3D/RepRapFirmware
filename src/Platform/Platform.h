@@ -660,6 +660,7 @@ public:
 	GCodeResult EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	GCodeResult EutProcessM569Point2(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	GCodeResult EutProcessM569Point7(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+	GCodeResult EutProcessM915(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	void SendDriversStatus(CanMessageBuffer& buf) noexcept;
 #endif
 
