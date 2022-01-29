@@ -4300,28 +4300,41 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if HAS_SMART_DRIVERS
 			case 917: // Set/report standstill motor current percentage
 #endif
-#if HAS_VOLTAGE_MONITOR
-				if (gb.GetState() != GCodeState::powerFailPausing1)			// we don't wait for movement to stop if we are running the power fail script
-#endif
-				{
-					if (!LockMovementAndWaitForStandstill(gb))
-					{
-						return false;
-					}
-				}
 				{
 					bool seen = false;
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							result = max(result, platform.SetMotorCurrent(axis, gb.GetFValue(), code, reply));
+							if (!seen
+#if HAS_VOLTAGE_MONITOR
+									&& gb.GetState() != GCodeState::powerFailPausing1	// we don't wait for movement to stop if we are running the power fail script
+#endif
+							   )
+							{
+								if (!LockMovementAndWaitForStandstill(gb))
+								{
+									return false;
+								}
+							}
 							seen = true;
+							result = max(result, platform.SetMotorCurrent(axis, gb.GetFValue(), code, reply));
 						}
 					}
 
 					if (gb.Seen(extrudeLetter))
 					{
+						if (!seen
+#if HAS_VOLTAGE_MONITOR
+								&& gb.GetState() != GCodeState::powerFailPausing1		// we don't wait for movement to stop if we are running the power fail script
+#endif
+						   )
+						{
+							if (!LockMovementAndWaitForStandstill(gb))
+							{
+								return false;
+							}
+						}
 						seen = true;
 						float eVals[MaxExtruders];
 						size_t eCount = numExtruders;
