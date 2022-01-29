@@ -29,7 +29,7 @@ public:
 	void AppendDetails(const StringRef& str) noexcept override;
 	bool ShouldReduceAcceleration() const noexcept override { return true; }
 
-	void SetDrivers(DriversBitmap extruderDrivers) noexcept;		// for setting which local extruder drives are active extruder endstops
+	void SetDrivers(DriversBitmap extruderDrivers) noexcept;	// for setting which local extruder drives are active extruder endstops
 
 private:
 	DriversBitmap driversMonitored;
