@@ -131,7 +131,7 @@ constexpr GpioPinFunction TMC22xxUartPeriphMode = UART0PeriphMode;
 #define TMC22xx_SINGLE_DRIVER			0
 #define TMC22xx_HAS_MUX					1
 #define TMC22xx_USE_SLAVEADDR			0
-#define TMC22xx_DEFAULT_STEALTHCHOP		1
+#define TMC22xx_DEFAULT_STEALTHCHOP		0
 
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
