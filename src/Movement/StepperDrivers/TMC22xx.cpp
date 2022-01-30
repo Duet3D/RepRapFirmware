@@ -33,6 +33,8 @@
 # error TMC22xx_DEFAULT_STEALTHCHOP not defined
 #endif
 
+#define TMC22xx_SINGLE_UART		(TMC22xx_SINGLE_DRIVER || TMC22xx_HAS_MUX || TMC22xx_USE_SLAVEADDR)
+
 #define RESET_MICROSTEP_COUNTERS_AT_INIT	0		// Duets use pulldown resistors on the step pins, so we don't get phantom microsteps at power up
 #define USE_FAST_CRC	1
 
@@ -505,12 +507,12 @@ private:
 #if TMC22xx_HAS_MUX
 	void SetUartMux() noexcept;
 #endif
-#if (TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER) && !TMC22xx_USE_SLAVEADDR
-	static void SetupDMASend(uint8_t regnum, uint32_t outVal) noexcept SPEED_CRITICAL;	// set up the DMAC to send a register
-	static void SetupDMARead(uint8_t regnum) noexcept SPEED_CRITICAL;					// set up the DMAC to receive a register
-#else
+#if TMC22xx_USE_SLAVEADDR
 	void SetupDMASend(uint8_t regnum, uint32_t outVal) noexcept SPEED_CRITICAL;			// set up the DMAC to send a register
 	void SetupDMARead(uint8_t regnum) noexcept SPEED_CRITICAL;							// set up the DMAC to receive a register
+#else
+	static void SetupDMASend(uint8_t regnum, uint32_t outVal) noexcept SPEED_CRITICAL;	// set up the DMAC to send a register
+	static void SetupDMARead(uint8_t regnum) noexcept SPEED_CRITICAL;					// set up the DMAC to receive a register
 #endif
 
 #if HAS_STALL_DETECT
@@ -570,7 +572,7 @@ private:
 	uint16_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 #endif
 
-#if TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER
+#if TMC22xx_SINGLE_UART
 # if TMC22xx_USES_SERCOM
 	static Sercom * const sercom;
 	static uint8_t const sercomNumber;
@@ -627,7 +629,7 @@ private:
 
 // Static data members of class TmcDriverState
 
-#if TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER
+#if TMC22xx_SINGLE_UART
 # if TMC22xx_USES_SERCOM
 Sercom * const TmcDriverState::sercom = SERCOM_TMC22xx;
 uint8_t const TmcDriverState::sercomNumber = TMC22xxSercomNumber;
@@ -931,7 +933,7 @@ pre(!driversPowered)
 	IoPort::SetPinMode(p_diagPin, INPUT_PULLDOWN);						// pull down not up so that missing drivers don't signal stalls
 #endif
 
-#if !(TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER || TMC22xx_USE_SLAVEADDR)
+#if !TMC22xx_SINGLE_UART
 # if TMC22xx_USES_SERCOM
 	sercom = TMC22xxSercoms[p_driverNumber];
 	sercomNumber = TMC22xxSercomNumbers[p_driverNumber];
@@ -1463,6 +1465,8 @@ inline void TmcDriverState::StartTransfer() noexcept
 {
 #if TMC22xx_HAS_MUX
 	SetUartMux();
+#elif TMC22xx_USE_SLAVEADDR
+	delay(2);																				// give the previous TMC22xx driver time to get off the bus
 #endif
 
 	// Find which register to send. The common case is when no registers need to be updated.
@@ -1521,7 +1525,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 
 inline void TmcDriverState::UartTmcHandler() noexcept
 {
-#if !(TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER)
+#if !TMC22xx_SINGLE_UART
 # if TMC22xx_USES_SERCOM
 	DmacManager::DisableCompletedInterrupt(DmacChanTmcRx);
 # else
@@ -1531,7 +1535,7 @@ inline void TmcDriverState::UartTmcHandler() noexcept
 	TransferDone();																			// tidy up after the transfer we just completed
 }
 
-#if TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER || TMC22xx_USE_SLAVEADDR
+#if TMC22xx_SINGLE_UART
 
 # if TMC22xx_USES_SERCOM
 
@@ -1584,8 +1588,8 @@ bool DoTransaction(size_t driverNumber)
 	TmcDriverState *currentDriver;
 #if TMC22xx_SINGLE_DRIVER
 	currentDriver = driverStates;
-#elif TMC22xx_USE_SLAVEADDR
-	const size_t mappedDriverNumber = ((driverNumber & 1u) << 2) | (driverNumber >> 1);	// this assumes we have between 5 and 8 drivers
+#elif TMC22xx_USE_SLAVEADDR && TMC22xx_HAS_MUX
+	const size_t mappedDriverNumber = ((driverNumber & 1u) << 2) | (driverNumber >> 1);	// this assumes we have between 5 and 8 drivers and a 2-way multiplexer
 	currentDriver = &driverStates[mappedDriverNumber];
 #else
 	currentDriver = &driverStates[driverNumber];
@@ -1837,7 +1841,7 @@ void SmartDrivers::Init() noexcept
 	// Make sure the ENN pins are high
 	IoPort::SetPinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
 
-#if TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER || TMC22xx_USE_SLAVEADDR
+#if TMC22xx_SINGLE_UART
 	// Set up the single UART that communicates with all TMC22xx drivers
 # if TMC22xx_USES_SERCOM
 	SetPinFunction(TMC22xxSercomTxPin, TMC22xxSercomTxPinPeriphMode);
@@ -1879,7 +1883,7 @@ void SmartDrivers::Init() noexcept
 	driversState = DriversState::noPower;
 	for (size_t drive = 0; drive < GetNumTmcDrivers(); ++drive)
 	{
-#if !(TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER || TMC22xx_USE_SLAVEADDR)
+#if !TMC22xx_SINGLE_UART
 		// Set up the individual UARTs that communicate with each of the TMC22xx drivers
 # if TMC22xx_USES_SERCOM
 		// Initialise the SERCOM that controls this driver
@@ -1927,7 +1931,7 @@ void SmartDrivers::Init() noexcept
 void SmartDrivers::Exit() noexcept
 {
 	IoPort::SetPinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
-#if TMC22xx_HAS_MUX || TMC22xx_SINGLE_DRIVER || TMC22xx_USE_SLAVEADDR
+#if TMC22xx_SINGLE_UART
 # if TMC22xx_USES_SERCOM
 	DmacManager::SetInterruptCallback(DmacChanTmcRx, nullptr, CallbackParameter(nullptr));
 # else
