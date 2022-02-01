@@ -1125,7 +1125,7 @@ decrease(strlen(idString))	// recursion variant
 		}
 		break;
 
-#if defined(DUET3) || defined(DUET3MINI)
+#if SUPPORT_CAN_EXPANSION
 	case TypeCode::CanExpansionBoardDetails:
 		if (*idString == 0)
 		{
