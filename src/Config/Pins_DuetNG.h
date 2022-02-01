@@ -122,7 +122,7 @@ constexpr size_t MaxGpOutPorts = 20;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 10;						// The maximum number of movement axes in the machine, usually just X, Y and Z
-constexpr size_t MaxDriversPerAxis = 5;				// The maximum number of stepper drivers assigned to one axis
+constexpr size_t MaxDriversPerAxis = 6;				// The maximum number of stepper drivers assigned to one axis (increased to 6 for Modix)
 
 constexpr size_t MaxExtruders = 7;					// The maximum number of extruders
 constexpr size_t MaxAxesPlusExtruders = 12;
