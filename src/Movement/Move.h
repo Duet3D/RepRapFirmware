@@ -203,11 +203,13 @@ public:
 	void AddShapeddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept		// add a move from the ATE to the movement queue
 	{
 		mainDDARing.AddMoveFromRemote(msg);
+		MoveAvailable();
 	}
 # else
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept					// add a move from the ATE to the movement queue
 	{
 		mainDDARing.AddMoveFromRemote(msg);
+		MoveAvailable();
 	}
 # endif
 #endif
