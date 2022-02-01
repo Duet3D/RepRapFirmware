@@ -9,6 +9,9 @@
 #define NO_STATUS_CODES
 
 #include "LwipSocket.h"
+
+#if HAS_LWIP_NETWORKING
+
 #include <Networking/NetworkBuffer.h>
 #include <Platform/RepRap.h>
 
@@ -463,5 +466,7 @@ size_t LwipSocket::Send(const uint8_t *data, size_t length) noexcept
 
 	return 0;
 }
+
+#endif	// HAS_LWIP_NETWORKING
 
 // End

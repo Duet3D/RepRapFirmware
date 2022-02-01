@@ -9,6 +9,9 @@
 #define SRC_NETWORKING_LWIPETHERNET_LWIPETHERNETINTERFACE_H_
 
 #include <RepRapFirmware.h>
+
+#if HAS_LWIP_NETWORKING
+
 #include <Networking/NetworkInterface.h>
 #include <Networking/NetworkDefs.h>
 
@@ -95,5 +98,7 @@ private:
 	IPAddress gateway;
 	MacAddress macAddress;
 };
+
+#endif	// HAS_LWIP_NETWORKING
 
 #endif	// SRC_NETWORKING_LWIPETHERNET_LWIPETHERNETINTERFACE_H_

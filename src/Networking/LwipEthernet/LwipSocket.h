@@ -9,6 +9,9 @@
 #define SRC_NETWORKING_LWIPETHERNET_LWIPSOCKET_H_
 
 #include <RepRapFirmware.h>
+
+#if HAS_LWIP_NETWORKING
+
 #include "LwipEthernetInterface.h"
 #include "Networking/NetworkDefs.h"
 #include "Networking/Socket.h"
@@ -73,5 +76,7 @@ private:
 	SocketState state;
 	size_t unAcked;
 };
+
+#endif	// HAS_LWIP_NETWORKING
 
 #endif /* SRC_NETWORKING_LWIPETHERNET_LWIPSOCKET_H_ */

@@ -9,6 +9,9 @@
 #define NO_STATUS_CODES
 
 #include "LwipEthernetInterface.h"
+
+#if HAS_LWIP_NETWORKING
+
 #include <Networking/NetworkBuffer.h>
 #include "LwipSocket.h"
 
@@ -697,5 +700,7 @@ void LwipEthernetInterface::RebuildMdnsServices() noexcept
 
 	mdns_resp_netif_settings_changed(&gs_net_if);
 }
+
+#endif	// HAS_LWIP_NETWORKING
 
 // End
