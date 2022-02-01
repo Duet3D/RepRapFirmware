@@ -2275,15 +2275,20 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 		return nullptr;
 	}
 
-	response->printf("{\"fileName\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
+	response->printf("{\"thumbnail\":{\"fileName\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
 	FileStore *const f = platform->OpenFile(platform->GetGCodeDir(), filename, OpenMode::read);
 	unsigned int err = 0;
 	if (f != nullptr)
 	{
 		if (f->Seek(offset))
 		{
+#define THUMBNAIL_DATA_SIZE_MAX 1024
+static_assert(THUMBNAIL_DATA_SIZE_MAX % 4 == 0, "must be a multiple of to guarantee base64 alignement");
 			response->cat("\"data\":\"");
-			for (unsigned int charsWritten = 0; charsWritten < 2500;)
+
+			unsigned int charsReadTotal = 0;
+			unsigned int charsLeft = 0;
+			for (unsigned int charsWritten = 0; charsWritten < THUMBNAIL_DATA_SIZE_MAX - 4;)
 			{
 				// Read a line
 				char lineBuffer[GCODE_LENGTH];
@@ -2294,35 +2299,34 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 					break;
 				}
 
-				// Check it is a comment line
 				const char *p = lineBuffer;
-				if (*p != ';')
-				{
-					err = 1;
-					break;
-				}
-
-				// Update the file offset for returning 'next'
-				offset = f->Position();
-
-				// Skip white space
-				do
+				// Skip white spaces
+				while (*p == ';' || *p == ' ' || *p == '\t')
 				{
 					++p;
-				} while (*p == ' ' || *p == '\t');
+					charsReadTotal++;
+				}
 
 				// Check for end of thumbnail
-				const unsigned int charsLeft = (unsigned int)charsRead - (p - lineBuffer);
+				charsLeft = (unsigned int)charsRead - (p - lineBuffer);
 				if (charsLeft == 0 || StringStartsWith(p, "thumbnail end"))
 				{
-					offset = 0;				// reached end of encoded thumbnail, so return 0 for 'next'
+					charsLeft = 0;
 					break;
 				}
+
+				charsLeft = std::min(THUMBNAIL_DATA_SIZE_MAX - charsWritten, charsLeft);
+				charsReadTotal += charsRead - 
 
 				// Copy the data
 				response->cat(p, charsLeft);
 				charsWritten += charsLeft;
 			}
+			if (err == 0 && charsLeft)
+			{
+				offset += charsReadTotal;
+			}
+
 			response->catf("\",\"next\":%" PRIu32 ",", offset);
 		}
 		f->Close();
@@ -2332,7 +2336,7 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 		err = 1;
 	}
 
-	response->catf("\"err\":%u}\n", err);
+	response->catf("\"err\":%u}}\n", err);
 	return response;
 }
 
