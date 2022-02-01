@@ -182,7 +182,7 @@ void Network::Init() noexcept
 #  elif HAS_WIFI_NETWORKING
 	interfaces[0] = static_cast<NetworkInterface*>(new WiFiInterface(platform));
 #  elif HAS_LWIP_NETWORKING
-	interfaces[0] = static_cast<NetworkInterface*>new LwipEthernetInterface(platform);
+	interfaces[0] = static_cast<NetworkInterface*>(new LwipEthernetInterface(platform));
 #  endif
 # endif
 

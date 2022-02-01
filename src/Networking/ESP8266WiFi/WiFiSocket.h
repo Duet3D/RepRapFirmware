@@ -9,9 +9,11 @@
 #define SRC_NETWORKING_WIFISOCKET_H_
 
 #include "RepRapFirmware.h"
+
+#if HAS_WIFI_NETWORKING
+
 #include "Networking/NetworkDefs.h"
 #include "Networking/Socket.h"
-
 
 class WiFiInterface;
 
@@ -59,5 +61,7 @@ private:
 	SocketState state;
 	bool needsPolling;
 };
+
+#endif	// HAS_WIFI_NETWORKING
 
 #endif /* SRC_NETWORKING_WIFISOCKET_H_ */
