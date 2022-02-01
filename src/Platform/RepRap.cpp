@@ -2286,48 +2286,69 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 static_assert(THUMBNAIL_DATA_SIZE_MAX % 4 == 0, "must be a multiple of to guarantee base64 alignement");
 			response->cat("\"data\":\"");
 
-			unsigned int charsReadTotal = 0;
-			unsigned int charsLeft = 0;
-			for (unsigned int charsWritten = 0; charsWritten < THUMBNAIL_DATA_SIZE_MAX - 4;)
+			unsigned int charsWrite = 0;
+			unsigned int charsWritten = 0;
+			for (charsWritten = 0; charsWritten < THUMBNAIL_DATA_SIZE_MAX;)
 			{
+				charsWrite = 0;
+
+				unsigned int charsSkipped = 0;
+
 				// Read a line
 				char lineBuffer[GCODE_LENGTH];
-				const int charsRead = f->ReadLine(lineBuffer, ARRAY_SIZE(lineBuffer));
-				if (charsRead < 2)
+#define ALIGN(x, align)   (((x) + (align) - 1) & ~((align) - 1))
+				//size_t charsReadMax = ALIGN(std::min(THUMBNAIL_DATA_SIZE_MAX - charsWritten, sizeof(lineBuffer)), 4);
+				//size_t charsReadMax = std::min(THUMBNAIL_DATA_SIZE_MAX - charsWritten, sizeof(lineBuffer));
+				const int charsRead = f->ReadLine(lineBuffer, sizeof(lineBuffer));
+				if (charsRead <= 0)
 				{
 					err = 1;
 					break;
 				}
 
+				FilePosition posOld = offset;
+
+				offset = f->Position();
+
 				const char *p = lineBuffer;
 				// Skip white spaces
-				while (*p == ';' || *p == ' ' || *p == '\t')
+				while ((p - lineBuffer <= charsRead) && (*p == ';' || *p == ' ' || *p == '\t'))
 				{
 					++p;
-					charsReadTotal++;
+					charsSkipped++;
 				}
 
-				// Check for end of thumbnail
-				charsLeft = (unsigned int)charsRead - (p - lineBuffer);
-				if (charsLeft == 0 || StringStartsWith(p, "thumbnail end"))
+				// skip empty lines
+				if (*p == '\n' || *p == '\0')
 				{
-					charsLeft = 0;
+					continue;
+				}
+
+				if (StringStartsWith(p, "thumbnail end"))
+				{
 					break;
 				}
 
-				charsLeft = std::min(THUMBNAIL_DATA_SIZE_MAX - charsWritten, charsLeft);
-				charsReadTotal += charsRead - 
+				// Check for end of thumbnail
+				charsWrite = std::min(THUMBNAIL_DATA_SIZE_MAX - charsWritten, (unsigned int)charsRead - (p - lineBuffer));
+				if (charsWrite == 0)
+				{
+					break;
+				}
+
+				// fix offset
+				if ((int)(charsSkipped + charsWrite) < charsRead)
+				{
+					offset = posOld + charsSkipped + charsWrite;
+				}
 
 				// Copy the data
-				response->cat(p, charsLeft);
-				charsWritten += charsLeft;
-			}
-			if (err == 0 && charsLeft)
-			{
-				offset += charsReadTotal;
+				response->cat(p, charsWrite);
+				charsWritten += charsWrite;
+
 			}
 
-			response->catf("\",\"next\":%" PRIu32 ",", offset);
+			response->catf("\",\"next\":%" PRIu32 ",", charsWrite == 0 ? 0 : offset);
 		}
 		f->Close();
 	}
