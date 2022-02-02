@@ -2447,106 +2447,109 @@ bool GCodes::ReadMove(RawMove& m) noexcept
 		return false;
 	}
 
-	m = moveState;
-
-	if (moveState.segmentsLeft == 1)
+	while (true)		// loop while we skip move segments
 	{
-		// If there is just 1 segment left, it doesn't matter if it is an arc move or not, just move to the end position
-		if (segmentsLeftToStartAt == 1 && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
-		{
-			// Reduce the extrusion by the amount to be skipped
-			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
-			{
-				m.coords[ExtruderToLogicalDrive(extruder)] *= (1.0 - firstSegmentFractionToSkip);
-			}
-		}
-		m.proportionDone = 1.0;
-		if (moveState.doingArcMove)
-		{
-			m.canPauseAfter = true;					// we can pause after the final segment of an arc move
-		}
-		ClearMove();
-	}
-	else
-	{
-		// This move needs to be divided into 2 or more segments
-		// Do the axes
-		AxesBitmap axisMap0, axisMap1;
-		if (moveState.doingArcMove)
-		{
-			moveState.arcCurrentAngle += moveState.arcAngleIncrement;
-			if (moveState.segmentsTillNextFullCalc == 0)
-			{
-				// Do the full calculation
-				moveState.segmentsTillNextFullCalc = SegmentsPerFulArcCalculation;
-				moveState.currentAngleCosine = cosf(moveState.arcCurrentAngle);
-				moveState.currentAngleSine = sinf(moveState.arcCurrentAngle);
-			}
-			else
-			{
-				// Speed up the computation by doing two multiplications and an addition or subtraction instead of a sine or cosine
-				--moveState.segmentsTillNextFullCalc;
-				const float newCosine = moveState.currentAngleCosine * moveState.angleIncrementCosine - moveState.currentAngleSine   * moveState.angleIncrementSine;
-				const float newSine   = moveState.currentAngleSine   * moveState.angleIncrementCosine + moveState.currentAngleCosine * moveState.angleIncrementSine;
-				moveState.currentAngleCosine = newCosine;
-				moveState.currentAngleSine = newSine;
-			}
-			axisMap0 = Tool::GetAxisMapping(moveState.tool, moveState.arcAxis0);
-			axisMap1 = Tool::GetAxisMapping(moveState.tool, moveState.arcAxis1);
-			moveState.cosXyAngle = (moveState.xyPlane) ? moveState.angleIncrementCosine : 1.0;
-		}
+		m = moveState;
 
-		for (size_t drive = 0; drive < numVisibleAxes; ++drive)
+		if (moveState.segmentsLeft == 1)
 		{
-			if (moveState.doingArcMove && axisMap1.IsBitSet(drive))
+			// If there is just 1 segment left, it doesn't matter if it is an arc move or not, just move to the end position
+			if (segmentsLeftToStartAt == 1 && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
 			{
-				// Axis1 or a substitute in the selected plane
-				moveState.initialCoords[drive] = moveState.arcCentre[drive] + moveState.arcRadius * axisScaleFactors[drive] * moveState.currentAngleSine;
+				// Reduce the extrusion by the amount to be skipped
+				for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+				{
+					m.coords[ExtruderToLogicalDrive(extruder)] *= (1.0 - firstSegmentFractionToSkip);
+				}
 			}
-			else if (moveState.doingArcMove && axisMap0.IsBitSet(drive))
+			m.proportionDone = 1.0;
+			if (moveState.doingArcMove)
 			{
-				// Axis0 or a substitute in the selected plane
-				moveState.initialCoords[drive] = moveState.arcCentre[drive] + moveState.arcRadius * axisScaleFactors[drive] * moveState.currentAngleCosine;
+				m.canPauseAfter = true;					// we can pause after the final segment of an arc move
 			}
-			else
-			{
-				// This axis is not moving in an arc
-				const float movementToDo = (moveState.coords[drive] - moveState.initialCoords[drive])/moveState.segmentsLeft;
-				moveState.initialCoords[drive] += movementToDo;
-			}
-			m.coords[drive] = moveState.initialCoords[drive];
+			ClearMove();
 		}
-
-		if (segmentsLeftToStartAt < moveState.segmentsLeft)
+		else
 		{
-			// We are resuming a print part way through a move and we printed this segment already
+			// This move needs to be divided into 2 or more segments
+			// Do the axes
+			AxesBitmap axisMap0, axisMap1;
+			if (moveState.doingArcMove)
+			{
+				moveState.arcCurrentAngle += moveState.arcAngleIncrement;
+				if (moveState.segmentsTillNextFullCalc == 0)
+				{
+					// Do the full calculation
+					moveState.segmentsTillNextFullCalc = SegmentsPerFulArcCalculation;
+					moveState.currentAngleCosine = cosf(moveState.arcCurrentAngle);
+					moveState.currentAngleSine = sinf(moveState.arcCurrentAngle);
+				}
+				else
+				{
+					// Speed up the computation by doing two multiplications and an addition or subtraction instead of a sine or cosine
+					--moveState.segmentsTillNextFullCalc;
+					const float newCosine = moveState.currentAngleCosine * moveState.angleIncrementCosine - moveState.currentAngleSine   * moveState.angleIncrementSine;
+					const float newSine   = moveState.currentAngleSine   * moveState.angleIncrementCosine + moveState.currentAngleCosine * moveState.angleIncrementSine;
+					moveState.currentAngleCosine = newCosine;
+					moveState.currentAngleSine = newSine;
+				}
+				axisMap0 = Tool::GetAxisMapping(moveState.tool, moveState.arcAxis0);
+				axisMap1 = Tool::GetAxisMapping(moveState.tool, moveState.arcAxis1);
+				moveState.cosXyAngle = (moveState.xyPlane) ? moveState.angleIncrementCosine : 1.0;
+			}
+
+			for (size_t drive = 0; drive < numVisibleAxes; ++drive)
+			{
+				if (moveState.doingArcMove && axisMap1.IsBitSet(drive))
+				{
+					// Axis1 or a substitute in the selected plane
+					moveState.initialCoords[drive] = moveState.arcCentre[drive] + moveState.arcRadius * axisScaleFactors[drive] * moveState.currentAngleSine;
+				}
+				else if (moveState.doingArcMove && axisMap0.IsBitSet(drive))
+				{
+					// Axis0 or a substitute in the selected plane
+					moveState.initialCoords[drive] = moveState.arcCentre[drive] + moveState.arcRadius * axisScaleFactors[drive] * moveState.currentAngleCosine;
+				}
+				else
+				{
+					// This axis is not moving in an arc
+					const float movementToDo = (moveState.coords[drive] - moveState.initialCoords[drive])/moveState.segmentsLeft;
+					moveState.initialCoords[drive] += movementToDo;
+				}
+				m.coords[drive] = moveState.initialCoords[drive];
+			}
+
+			if (segmentsLeftToStartAt < moveState.segmentsLeft)
+			{
+				// We are resuming a print part way through a move and we printed this segment already
+				--moveState.segmentsLeft;
+				continue;
+			}
+
+			// Limit the end position at each segment. This is needed for arc moves on any printer, and for [segmented] straight moves on SCARA printers.
+			if (reprap.GetMove().GetKinematics().LimitPosition(m.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok)
+			{
+				moveState.segMoveState = SegmentedMoveState::aborted;
+				moveState.doingArcMove = false;
+				moveState.segmentsLeft = 0;
+				return false;
+			}
+
+			if (segmentsLeftToStartAt == moveState.segmentsLeft && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
+			{
+				// Reduce the extrusion by the amount to be skipped
+				for (size_t extruder = 0; extruder < numExtruders; ++extruder)
+				{
+					m.coords[ExtruderToLogicalDrive(extruder)] *= (1.0 - firstSegmentFractionToSkip);
+				}
+			}
 			--moveState.segmentsLeft;
-			return false;
+
+			m.proportionDone = moveState.GetProportionDone();
 		}
 
-		// Limit the end position at each segment. This is needed for arc moves on any printer, and for [segmented] straight moves on SCARA printers.
-		if (reprap.GetMove().GetKinematics().LimitPosition(m.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok)
-		{
-			moveState.segMoveState = SegmentedMoveState::aborted;
-			moveState.doingArcMove = false;
-			moveState.segmentsLeft = 0;
-			return false;
-		}
-
-		if (segmentsLeftToStartAt == moveState.segmentsLeft && firstSegmentFractionToSkip != 0.0)	// if this is the segment we are starting at and we need to skip some of it
-		{
-			// Reduce the extrusion by the amount to be skipped
-			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
-			{
-				m.coords[ExtruderToLogicalDrive(extruder)] *= (1.0 - firstSegmentFractionToSkip);
-			}
-		}
-		--moveState.segmentsLeft;
-
-		m.proportionDone = moveState.GetProportionDone();
+		return true;
 	}
-
-	return true;
 }
 
 void GCodes::ClearMove() noexcept
