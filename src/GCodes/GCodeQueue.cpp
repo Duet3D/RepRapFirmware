@@ -87,15 +87,13 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 					shouldQueue = !LedStripDriver::MustStopMovement(gb);		// if it is going to call LockMovementAndWaitForStandstill then we mustn't queue it
 					break;
 #endif
+				// A note about M291:
+				// - We cannot queue M291 messages that are blocking, i.e. with S2 or S3 parameter
+				// - If we queue non-blocking M291 messages then it can happen that if a non-blocking M291 is used and a little later a blocking M291 is used,
+				//   then the blocking one gets displayed while the non-blocking one is still in the queue. Then the non-blocking one overwrites it, and the
+				//   blocking one can no longer be acknowledged except by sending M292 manually.
+				// - Therefore we no longer queue any M291 commands.
 				case 291:
-					{
-						bool seen = false;
-						int32_t sParam = 1;
-						gb.TryGetIValue('S', sParam, seen);
-						shouldQueue = sParam < 2;								// queue non-blocking messages only
-					}
-					break;
-
 				default:
 					shouldQueue = false;
 					break;
