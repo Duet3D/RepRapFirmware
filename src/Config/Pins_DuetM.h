@@ -27,7 +27,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
 #define SUPPORT_TMC22xx			1
-#define TMC22xx_HAS_MUX			1
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
