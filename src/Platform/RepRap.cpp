@@ -2269,6 +2269,9 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 // The offset should always be either the initial offset or the 'next' value passed in a previous call, so it should always be the start of a line.
 OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition offset) noexcept
 {
+	constexpr unsigned int ThumbnailMaxDataSize = 1024;
+	static_assert(ThumbnailMaxDataSize % 4 == 0, "must be a multiple of to guarantee base64 alignment");
+
 	// Need something to write to...
 	OutputBuffer *response;
 	if (!OutputBuffer::Allocate(response))
@@ -2283,73 +2286,65 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 	{
 		if (f->Seek(offset))
 		{
-#define THUMBNAIL_DATA_SIZE_MAX 1024
-static_assert(THUMBNAIL_DATA_SIZE_MAX % 4 == 0, "must be a multiple of to guarantee base64 alignement");
 			response->cat("\"data\":\"");
 
-			unsigned int charsWrite = 0;
-			unsigned int charsWritten = 0;
-			for (charsWritten = 0; charsWritten < THUMBNAIL_DATA_SIZE_MAX;)
+			for (unsigned int charsWrittenThisCall = 0; charsWrittenThisCall < ThumbnailMaxDataSize; )
 			{
-				charsWrite = 0;
-
-				unsigned int charsSkipped = 0;
-
 				// Read a line
 				char lineBuffer[GCODE_LENGTH];
-#define ALIGN(x, align)   (((x) + (align) - 1) & ~((align) - 1))
-				//size_t charsReadMax = ALIGN(std::min(THUMBNAIL_DATA_SIZE_MAX - charsWritten, sizeof(lineBuffer)), 4);
-				//size_t charsReadMax = std::min(THUMBNAIL_DATA_SIZE_MAX - charsWritten, sizeof(lineBuffer));
 				const int charsRead = f->ReadLine(lineBuffer, sizeof(lineBuffer));
 				if (charsRead <= 0)
 				{
 					err = 1;
+					offset = 0;
 					break;
 				}
 
-				FilePosition posOld = offset;
-
+				const FilePosition posOld = offset;
 				offset = f->Position();
 
 				const char *p = lineBuffer;
+
 				// Skip white spaces
 				while ((p - lineBuffer <= charsRead) && (*p == ';' || *p == ' ' || *p == '\t'))
 				{
 					++p;
-					charsSkipped++;
 				}
 
-				// skip empty lines
+				// Skip empty lines (there shouldn't be any, but just in case there are)
 				if (*p == '\n' || *p == '\0')
 				{
 					continue;
 				}
 
+				// Check for end of thumbnail
 				if (StringStartsWith(p, "thumbnail end"))
 				{
+					offset = 0;
 					break;
 				}
 
-				// Check for end of thumbnail
-				charsWrite = std::min(THUMBNAIL_DATA_SIZE_MAX - charsWritten, (unsigned int)charsRead - (p - lineBuffer));
-				if (charsWrite == 0)
+				const unsigned int charsSkipped = p - lineBuffer;
+				const unsigned int charsAvailable = charsRead - charsSkipped;
+				unsigned int charsWrittenFromThisLine;
+				if (charsAvailable <= ThumbnailMaxDataSize - charsWrittenThisCall)
 				{
-					break;
+					// Write all the data in this line
+					charsWrittenFromThisLine = charsAvailable;
 				}
-
-				// fix offset
-				if ((int)(charsSkipped + charsWrite) < charsRead)
+				else
 				{
-					offset = posOld + charsSkipped + charsWrite;
+					// Write just enough characters to fill the buffer
+					charsWrittenFromThisLine = ThumbnailMaxDataSize - charsWrittenThisCall;
+					offset = posOld + charsSkipped + charsWrittenFromThisLine;
 				}
 
 				// Copy the data
-				response->cat(p, charsWrite);
-				charsWritten += charsWrite;
-
+				response->cat(p, charsWrittenFromThisLine);
+				charsWrittenThisCall += charsWrittenFromThisLine;
 			}
 
-			response->catf("\",\"next\":%" PRIu32 ",", charsWrite == 0 ? 0 : offset);
+			response->catf("\",\"next\":%" PRIu32 ",", offset);
 		}
 		f->Close();
 	}
