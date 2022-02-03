@@ -261,8 +261,8 @@ void Heat::ResetHeaterModels() noexcept
 
 void Heat::Init() noexcept
 {
-	extrusionMinTemp = HOT_ENOUGH_TO_EXTRUDE;
-	retractionMinTemp = HOT_ENOUGH_TO_RETRACT;
+	extrusionMinTemp = DefaultMinExtrusionTemperature;
+	retractionMinTemp = DefaultMinRetractionTemperature;
 	coldExtrude = false;
 
 	heaterTask.Create(HeaterTaskStart, "HEAT", nullptr, TaskPriority::HeatPriority);
@@ -633,7 +633,9 @@ bool Heat::HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolera
 		{
 			const float dt = h->GetTemperature();
 			const float target = (stat == HeaterStatus::active) ? h->GetActiveTemperature() : h->GetStandbyTemperature();
-			return (target < TEMPERATURE_LOW_SO_DONT_CARE)
+			const bool cooling = h->IsCoolingDevice();
+			return (!cooling && target < TemperatureSoLowDontCare)
+				|| (cooling && target > TemperatureSoHighDontCare)
 				|| (fabsf(dt - target) <= tolerance)
 				|| (target < dt && !waitWhenCooling);
 

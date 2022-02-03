@@ -105,6 +105,8 @@ public:
 	void SetAsToolHeater() noexcept;
 	void SetAsBedOrChamberHeater() noexcept;
 
+	bool IsCoolingDevice() const noexcept { return model.IsInverted(); }
+
 #if SUPPORT_REMOTE_COMMANDS
 	uint8_t GetModeByte() const { return (uint8_t)GetMode(); }
 #endif

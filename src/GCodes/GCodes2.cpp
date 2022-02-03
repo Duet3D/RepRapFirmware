@@ -1733,7 +1733,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				if (!cancelWait)
 				{
-					const float tolerance = (gb.Seen('S')) ? max<float>(gb.GetFValue(), 0.1) : TEMPERATURE_CLOSE_ENOUGH;
+					const float tolerance = (gb.Seen('S')) ? max<float>(gb.GetFValue(), 0.1) : TemperatureCloseEnough;
 					bool seen = false;
 					if (gb.Seen('P'))
 					{
@@ -2092,7 +2092,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 						reprap.GetHeat().SetActiveTemperature(heater, temperature);		// may throw
 						result = reprap.GetHeat().SetActiveOrStandby(heater, nullptr, true, reply);
-						if (cancelWait || reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TEMPERATURE_CLOSE_ENOUGH))
+						if (cancelWait || reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TemperatureCloseEnough))
 						{
 							cancelWait = isWaiting = false;
 							break;
