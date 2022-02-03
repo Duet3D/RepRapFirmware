@@ -2276,55 +2276,80 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 		return nullptr;
 	}
 
-	response->printf("{\"fileName\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
+	response->printf("{\"thumbnail\":{\"fileName\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
 	FileStore *const f = platform->OpenFile(platform->GetGCodeDir(), filename, OpenMode::read);
 	unsigned int err = 0;
 	if (f != nullptr)
 	{
 		if (f->Seek(offset))
 		{
+#define THUMBNAIL_DATA_SIZE_MAX 1024
+static_assert(THUMBNAIL_DATA_SIZE_MAX % 4 == 0, "must be a multiple of to guarantee base64 alignement");
 			response->cat("\"data\":\"");
-			for (unsigned int charsWritten = 0; charsWritten < 2500;)
+
+			unsigned int charsWrite = 0;
+			unsigned int charsWritten = 0;
+			for (charsWritten = 0; charsWritten < THUMBNAIL_DATA_SIZE_MAX;)
 			{
+				charsWrite = 0;
+
+				unsigned int charsSkipped = 0;
+
 				// Read a line
 				char lineBuffer[GCODE_LENGTH];
-				const int charsRead = f->ReadLine(lineBuffer, ARRAY_SIZE(lineBuffer));
-				if (charsRead < 2)
+#define ALIGN(x, align)   (((x) + (align) - 1) & ~((align) - 1))
+				//size_t charsReadMax = ALIGN(std::min(THUMBNAIL_DATA_SIZE_MAX - charsWritten, sizeof(lineBuffer)), 4);
+				//size_t charsReadMax = std::min(THUMBNAIL_DATA_SIZE_MAX - charsWritten, sizeof(lineBuffer));
+				const int charsRead = f->ReadLine(lineBuffer, sizeof(lineBuffer));
+				if (charsRead <= 0)
 				{
 					err = 1;
 					break;
 				}
 
-				// Check it is a comment line
-				const char *p = lineBuffer;
-				if (*p != ';')
-				{
-					err = 1;
-					break;
-				}
+				FilePosition posOld = offset;
 
-				// Update the file offset for returning 'next'
 				offset = f->Position();
 
-				// Skip white space
-				do
+				const char *p = lineBuffer;
+				// Skip white spaces
+				while ((p - lineBuffer <= charsRead) && (*p == ';' || *p == ' ' || *p == '\t'))
 				{
 					++p;
-				} while (*p == ' ' || *p == '\t');
+					charsSkipped++;
+				}
+
+				// skip empty lines
+				if (*p == '\n' || *p == '\0')
+				{
+					continue;
+				}
+
+				if (StringStartsWith(p, "thumbnail end"))
+				{
+					break;
+				}
 
 				// Check for end of thumbnail
-				const unsigned int charsLeft = (unsigned int)charsRead - (p - lineBuffer);
-				if (charsLeft == 0 || StringStartsWith(p, "thumbnail end"))
+				charsWrite = std::min(THUMBNAIL_DATA_SIZE_MAX - charsWritten, (unsigned int)charsRead - (p - lineBuffer));
+				if (charsWrite == 0)
 				{
-					offset = 0;				// reached end of encoded thumbnail, so return 0 for 'next'
 					break;
+				}
+
+				// fix offset
+				if ((int)(charsSkipped + charsWrite) < charsRead)
+				{
+					offset = posOld + charsSkipped + charsWrite;
 				}
 
 				// Copy the data
-				response->cat(p, charsLeft);
-				charsWritten += charsLeft;
+				response->cat(p, charsWrite);
+				charsWritten += charsWrite;
+
 			}
-			response->catf("\",\"next\":%" PRIu32 ",", offset);
+
+			response->catf("\",\"next\":%" PRIu32 ",", charsWrite == 0 ? 0 : offset);
 		}
 		f->Close();
 	}
@@ -2333,7 +2358,7 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 		err = 1;
 	}
 
-	response->catf("\"err\":%u}\n", err);
+	response->catf("\"err\":%u}}\n", err);
 	return response;
 }
 
