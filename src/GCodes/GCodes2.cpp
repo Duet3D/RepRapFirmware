@@ -1148,7 +1148,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetQuotedString(filename.GetRef(), false);
 						gb.MustSee('S');
 						const FilePosition offset = gb.GetUIValue();
-						outBuf = reprap.GetThumbnailResponse(filename.c_str(), offset);
+						outBuf = reprap.GetThumbnailResponse(filename.c_str(), offset, true);
 						if (outBuf == nullptr)
 						{
 							return false;											// cannot allocate an output buffer, try again later

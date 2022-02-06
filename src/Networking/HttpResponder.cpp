@@ -596,7 +596,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		if (nameVal != nullptr && offsetVal != nullptr && (offset = StrToU32(offsetVal)) != 0)
 		{
 			OutputBuffer::ReleaseAll(response);
-			response = reprap.GetThumbnailResponse(nameVal, offset);
+			response = reprap.GetThumbnailResponse(nameVal, offset, false);
 		}
 		else
 		{
