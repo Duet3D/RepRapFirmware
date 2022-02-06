@@ -47,6 +47,21 @@ const ObjectModelArrayDescriptor PrintMonitor::filamentArrayDescriptor =
 			{ return  ExpressionValue(((const PrintMonitor*)self)->printingFileInfo.filamentNeeded[context.GetIndex(0)], 1); }
 };
 
+const ObjectModelArrayDescriptor PrintMonitor::thumbnailArrayDescriptor =
+{
+	&printMonitorLock,
+	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
+			{
+				size_t count = 0;
+				while (count < GCodeFileInfo::MaxThumbnails && ((const PrintMonitor*)self)->printingFileInfo.thumbnails[count].IsValid())
+				{
+					count++;
+				}
+				return count;
+			},
+	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 2); }
+};
+
 constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
@@ -65,7 +80,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "layerTime",			OBJECT_MODEL_FUNC_IF(self->IsPrinting() && self->currentLayer != 0, self->GetCurrentLayerTime(), 1), 				ObjectModelEntryFlags::live },
 	{ "pauseDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetPauseDuration())),											ObjectModelEntryFlags::live },
 	{ "rawExtrusion",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), ExpressionValue(self->gCodes.GetTotalRawExtrusion(), 1)),					ObjectModelEntryFlags::live },
-	{ "timesLeft",			OBJECT_MODEL_FUNC(self, 2),							 																ObjectModelEntryFlags::live },
+	{ "timesLeft",			OBJECT_MODEL_FUNC(self, 3),							 																ObjectModelEntryFlags::live },
 	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetWarmUpDuration())),										ObjectModelEntryFlags::live },
 
 	// 1. ParsedFileInfo members
@@ -75,18 +90,27 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "height",				OBJECT_MODEL_FUNC(self->printingFileInfo.objectHeight, 2), 															ObjectModelEntryFlags::none },
 	{ "lastModified",		OBJECT_MODEL_FUNC(DateTime(self->printingFileInfo.lastModifiedTime)), 												ObjectModelEntryFlags::none },
 	{ "layerHeight",		OBJECT_MODEL_FUNC(self->printingFileInfo.layerHeight, 2), 															ObjectModelEntryFlags::none },
+	{ "numLayers",			OBJECT_MODEL_FUNC((uint32_t)self->printingFileInfo.numLayers), 														ObjectModelEntryFlags::none },
 	{ "printTime",			OBJECT_MODEL_FUNC_IF(self->printingFileInfo.printTime != 0, (int32_t)self->printingFileInfo.printTime), 			ObjectModelEntryFlags::none },
 	{ "simulatedTime",		OBJECT_MODEL_FUNC_IF(self->printingFileInfo.simulatedTime != 0, (int32_t)self->printingFileInfo.simulatedTime), 	ObjectModelEntryFlags::none },
 	{ "size",				OBJECT_MODEL_FUNC(self->printingFileInfo.fileSize),																	ObjectModelEntryFlags::none },
+	{ "thumbnails",			OBJECT_MODEL_FUNC_NOSELF(&thumbnailArrayDescriptor),																ObjectModelEntryFlags::none },
 
-	// 2. TimesLeft members
+	// 2. ParsedFileInfo.thumbnails[] members
+	{ "format",				OBJECT_MODEL_FUNC(self->printingFileInfo.thumbnails[context.GetLastIndex()].format.ToString()),						ObjectModelEntryFlags::none },
+	{ "height",				OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.thumbnails[context.GetLastIndex()].height),						ObjectModelEntryFlags::none },
+	{ "offset",				OBJECT_MODEL_FUNC(self->printingFileInfo.thumbnails[context.GetLastIndex()].offset),								ObjectModelEntryFlags::none },
+	{ "size",				OBJECT_MODEL_FUNC(self->printingFileInfo.thumbnails[context.GetLastIndex()].size),									ObjectModelEntryFlags::none },
+	{ "width",				OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.thumbnails[context.GetLastIndex()].width),						ObjectModelEntryFlags::none },
+
+	// 3. TimesLeft members
 	{ "filament",			OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(filamentBased)),												ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(fileBased)),													ObjectModelEntryFlags::live },
 	{ "layer", 				OBJECT_MODEL_FUNC_NOSELF(nullptr), 																					ObjectModelEntryFlags::obsolete },
 	{ "slicer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(slicerBased)),													ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 3, 12 + TRACK_OBJECT_NAMES, 9, 4 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 12 + TRACK_OBJECT_NAMES, 11, 5, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 

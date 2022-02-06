@@ -67,6 +67,7 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(filament)
+	OBJECT_MODEL_ARRAY(thumbnail)
 
 private:
 	static constexpr float MinFilamentUsageForEstimation = 0.01;		// Minimum per cent of filament to be printed before the filament-based estimation returns values

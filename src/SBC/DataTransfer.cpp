@@ -564,7 +564,7 @@ void DataTransfer::ReadPrintStartedInfo(size_t packetLength, const StringRef& fi
 {
 	// Read header
 	const PrintStartedHeader *header = ReadDataHeader<PrintStartedHeader>();
-	info.isValid = true;
+	info.Init();
 	info.numFilaments = header->numFilaments;
 	info.numLayers = header->numLayers;
 	info.lastModifiedTime = header->lastModifiedTime;
@@ -573,6 +573,7 @@ void DataTransfer::ReadPrintStartedInfo(size_t packetLength, const StringRef& fi
 	info.objectHeight = header->objectHeight;
 	info.printTime = header->printTime;
 	info.simulatedTime = header->simulatedTime;
+	info.isValid = true;
 
 	// Read filaments
 	memset(info.filamentNeeded, 0, ARRAY_SIZE(info.filamentNeeded) * sizeof(float));
