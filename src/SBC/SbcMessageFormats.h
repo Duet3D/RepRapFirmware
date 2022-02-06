@@ -363,7 +363,7 @@ struct PrintStartedHeader
 	uint32_t numFilaments;
 	time_t lastModifiedTime;
 	uint32_t fileSize;
-	float firstLayerHeight;
+	uint32_t numLayers;
 	float layerHeight;
 	float objectHeight;
 	uint32_t printTime;

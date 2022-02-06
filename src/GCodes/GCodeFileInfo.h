@@ -34,6 +34,7 @@ struct GCodeFileInfo
 	FilePosition fileSize;
 	time_t lastModifiedTime;
 	float layerHeight;
+	unsigned int numLayers;
 	float objectHeight;
 	float filamentNeeded[MaxExtruders];
 	uint32_t printTime;

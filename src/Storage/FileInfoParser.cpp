@@ -299,6 +299,13 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 					}
 				}
 
+				// Search for number of layers
+				if (parsedFileInfo.numLayers == 0)
+				{
+					// Number of layers should come before the object height
+					(void)FindNumLayers(buf, sizeToScan);
+				}
+
 				// Look for print time
 				if (parsedFileInfo.printTime == 0)
 				{
@@ -331,6 +338,10 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 					}
 					parseState = notParsing;
 					fileBeingParsed->Close();
+					if (parsedFileInfo.numLayers == 0 && parsedFileInfo.layerHeight > 0.0 && parsedFileInfo.objectHeight > 0.0)
+					{
+						parsedFileInfo.numLayers = lrintf(parsedFileInfo.objectHeight / parsedFileInfo.layerHeight);
+					}
 					parsedFileInfo.incomplete = false;
 					info = parsedFileInfo;
 					return GCodeResult::ok;
@@ -474,6 +485,51 @@ bool FileInfoParser::FindHeight(const char* bufp, size_t len) noexcept
 		}
 	}
 	return foundHeight;
+}
+
+// Scan the buffer for th total number of layers. The buffer is null-terminated.
+bool FileInfoParser::FindNumLayers(const char* bufp, size_t len) noexcept
+{
+	static const char* const numLayerStrings[] =
+	{
+		"num_layers",
+		"NUM_LAYERS"
+	};
+
+	if (*bufp != 0)
+	{
+		++bufp;														// make sure we can look back 1 character after we find a match
+		for (const char * lhStr : numLayerStrings)					// search for each string in turn
+		{
+			const char *pos = bufp;
+			for(;;)													// loop until success or strstr returns null
+			{
+				pos = strstr(pos, lhStr);
+				if (pos == nullptr)
+				{
+					break;											// didn't find this string in the buffer, so try the next string
+				}
+
+				const char c = pos[-1];								// fetch the previous character
+				pos += strlen(lhStr);								// skip the string we matched
+				if (c == ' ' || c == ';' || c == '\t')				// check we are not in the middle of a word
+				{
+					while (strchr(" \t=:,", *pos) != nullptr)		// skip the possible separators
+					{
+						++pos;
+					}
+					const unsigned int val = StrToU32(pos);
+					if (val > 0)
+					{
+						parsedFileInfo.numLayers = val;
+						return true;
+					}
+				}
+			}
+		}
+	}
+
+	return false;
 }
 
 // Scan the buffer for the layer height. The buffer is null-terminated.

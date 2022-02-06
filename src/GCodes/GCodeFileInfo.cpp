@@ -13,6 +13,7 @@ void GCodeFileInfo::Init() noexcept
 	incomplete = true;
 	objectHeight = 0.0;
 	layerHeight = 0.0;
+	numLayers = 0;
 	printTime = simulatedTime = 0;
 	numFilaments = 0;
 	lastModifiedTime = 0;

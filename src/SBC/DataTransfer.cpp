@@ -566,6 +566,7 @@ void DataTransfer::ReadPrintStartedInfo(size_t packetLength, const StringRef& fi
 	const PrintStartedHeader *header = ReadDataHeader<PrintStartedHeader>();
 	info.isValid = true;
 	info.numFilaments = header->numFilaments;
+	info.numLayers = header->numLayers;
 	info.lastModifiedTime = header->lastModifiedTime;
 	info.fileSize = header->fileSize;
 	info.layerHeight = header->layerHeight;

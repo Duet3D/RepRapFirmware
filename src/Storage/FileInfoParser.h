@@ -53,6 +53,7 @@ private:
 
 	// G-Code parser methods
 	bool FindHeight(const char *_ecv_array bufp, size_t len) noexcept;
+	bool FindNumLayers(const char *_ecv_array bufp, size_t len) noexcept;
 	bool FindLayerHeight(const char *_ecv_array bufp) noexcept;
 	bool FindSlicerInfo(const char *_ecv_array bufp) noexcept;
 	bool FindPrintTime(const char *_ecv_array bufp) noexcept;

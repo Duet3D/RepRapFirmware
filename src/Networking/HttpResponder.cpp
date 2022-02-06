@@ -590,12 +590,12 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 	}
 	else if (StringEqualsIgnoreCase(request, "thumbnail"))
 	{
-		OutputBuffer::ReleaseAll(response);
 		const char* const nameVal = GetKeyValue("name");
 		const char* const offsetVal = GetKeyValue("offset");
 		FilePosition offset;
 		if (nameVal != nullptr && offsetVal != nullptr && (offset = StrToU32(offsetVal)) != 0)
 		{
+			OutputBuffer::ReleaseAll(response);
 			response = reprap.GetThumbnailResponse(nameVal, offset);
 		}
 		else
