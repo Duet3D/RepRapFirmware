@@ -974,7 +974,7 @@ bool FileInfoParser::FindThumbnails(const char *_ecv_array bufp, FilePosition bu
 	}
 
 	constexpr const char * PngThumbnailBegin = "; thumbnail begin ";
-	constexpr const char * QoiThumbnailBegin = "; QOI thumbnail begin ";
+	constexpr const char * QoiThumbnailBegin = "; thumbnail_QOI begin ";
 	const char *_ecv_array pos = bufp;
 	while (true)
 	{
