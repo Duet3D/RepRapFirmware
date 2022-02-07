@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Duet3D Community Support
+    url: https://forum.duet3d.com//
+    about: Please ask and answer questions here.
+  - name: Duet3D Documentation Wiki
+    url: https://duet3d.dozuki.com/
+    about: Detailed documentation for Duet electronics and RepRapFirmware.
