@@ -6,6 +6,9 @@
  */
 
 #include "RtdSensor31865.h"
+
+#if SUPPORT_SPI_SENSORS
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
@@ -237,5 +240,7 @@ void RtdSensor31865::Poll() noexcept
 		}
 	}
 }
+
+#endif // SUPPORT_SPI_SENSORS
 
 // End

@@ -119,7 +119,7 @@ constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in millisec
 enum class BoardType : uint8_t
 {
 	Auto = 0,
-#if defined(DUET3MINI)			// we use the same values for both v0.2 and v0.4
+#if defined(DUET3MINI_V04)			// we use the same values for both v0.2 and v0.4
 	Duet3Mini_Unknown,
 	Duet3Mini_WiFi,
 	Duet3Mini_Ethernet,
@@ -128,6 +128,8 @@ enum class BoardType : uint8_t
 	Duet3_6HC_v101 = 2,
 #elif defined(DUET3_MB6XD)
 	Duet3_6XD = 1,
+#elif defined(DUET3MINI4)
+	Duet3Mini4,
 #elif defined(SAME70XPLD)
 	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)
@@ -386,7 +388,7 @@ public:
     void EnableAux(size_t auxNumber) noexcept;
     bool IsAuxRaw(size_t auxNumber) const noexcept;
 	void SetAuxRaw(size_t auxNumber, bool raw) noexcept;
-#if HAS_AUX_DEVICES
+#if SUPPORT_PANELDUE_FLASH
 	PanelDueUpdater* GetPanelDueUpdater() noexcept { return panelDueUpdater; }
 	void InitPanelDueUpdater() noexcept;
 #endif
@@ -859,6 +861,8 @@ private:
 
 #if HAS_AUX_DEVICES
 	AuxDevice auxDevices[NumSerialChannels - 1];
+#endif
+#if SUPPORT_PANELDUE_FLASH
 	PanelDueUpdater* panelDueUpdater;
 #endif
 

@@ -3506,12 +3506,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = reprap.GetMove().ConfigurePressureAdvance(gb, reply);
 				break;
 
-			case 573: // Report heater average PWM
-				{
-					const unsigned int heater = gb.GetLimitedUIValue('P', MaxHeaters);
-					reply.printf("Average heater %u PWM: %.3f", heater, (double)reprap.GetHeat().GetAveragePWM(heater));
-				}
-				break;
+			// case 573 was report heater average PWM but is no longer supported because you can use "echo heat/heaters[N].avgPwm" instead
 
 			case 574: // Set endstop configuration
 				// We may be about to delete endstops, so make sure we are not executing a move that uses them
@@ -4600,7 +4595,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 #endif
-#if HAS_AUX_DEVICES
+#if SUPPORT_PANELDUE_FLASH
 				if (gb.Seen('A'))
 				{
 					const uint32_t serialChannel = gb.GetLimitedUIValue('A', 1, NumSerialChannels);

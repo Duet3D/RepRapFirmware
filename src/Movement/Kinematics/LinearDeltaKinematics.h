@@ -9,6 +9,9 @@
 #define LINEARDELTAKINEMATICS_H_
 
 #include "RepRapFirmware.h"
+
+#if SUPPORT_LINEAR_DELTA
+
 #include "RoundBedKinematics.h"
 
 // Class to hold the parameter for a delta machine.
@@ -105,5 +108,7 @@ private:
 
 	bool doneAutoCalibration;							// True if we have done auto calibration
 };
+
+#endif	// SUPPORT_LINEAR_DELTA
 
 #endif /* LINEARDELTAKINEMATICS_H_ */

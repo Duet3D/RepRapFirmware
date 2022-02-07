@@ -9,6 +9,9 @@
 #define SRC_HEATING_SPITEMPERATURESENSOR_H_
 
 #include "SensorWithPort.h"
+
+#if SUPPORT_SPI_SENSORS
+
 #include <Hardware/SharedSpi/SharedSpiClient.h>
 
 class SpiTemperatureSensor : public SensorWithPort
@@ -31,5 +34,7 @@ protected:
 	float lastTemperature;
 	TemperatureError lastResult;
 };
+
+#endif // SUPPORT_SPI_SENSORS
 
 #endif /* SRC_HEATING_SPITEMPERATURESENSOR_H_ */

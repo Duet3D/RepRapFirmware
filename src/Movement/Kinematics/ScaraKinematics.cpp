@@ -6,6 +6,9 @@
  */
 
 #include "ScaraKinematics.h"
+
+#if SUPPORT_SCARA
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <Storage/MassStorage.h>
@@ -493,5 +496,7 @@ void ScaraKinematics::Recalc() noexcept
 
 	cachedX = cachedY = std::numeric_limits<float>::quiet_NaN();		// make sure that the cached values won't match any coordinates
 }
+
+#endif // SUPPORT_SCARA
 
 // End

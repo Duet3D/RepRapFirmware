@@ -10,6 +10,8 @@
 
 #include "RoundBedKinematics.h"
 
+#if SUPPORT_HANGPRINTER
+
 class HangprinterKinematics : public RoundBedKinematics
 {
 public:
@@ -136,5 +138,7 @@ class CANSimple {
 	static const int32_t INPUT_MODE_MIRROR = 7;
 	static const int32_t INPUT_MODE_TUNING = 8;
 };
+
+#endif // SUPPORT_HANGPRINTER
 
 #endif /* SRC_MOVEMENT_KINEMATICS_HANGPRINTERKINEMATICS_H_ */

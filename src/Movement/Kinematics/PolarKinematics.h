@@ -10,6 +10,8 @@
 
 #include "Kinematics.h"
 
+#if SUPPORT_POLAR
+
 class PolarKinematics : public Kinematics
 {
 public:
@@ -50,5 +52,7 @@ private:
 
 	float minRadiusSquared, maxRadiusSquared;
 };
+
+#endif // SUPPORT_POLAR
 
 #endif /* SRC_MOVEMENT_KINEMATICS_POLARKINEMATICS_H_ */

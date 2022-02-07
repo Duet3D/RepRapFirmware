@@ -12,6 +12,8 @@
 
 #include "ZLeadscrewKinematics.h"
 
+#if SUPPORT_FIVEBARSCARA
+
 // Standard setup for 5 Bar SCARA (parallel SCARA) machines assumed by this firmware
 enum class Arm : uint8_t
 {
@@ -102,5 +104,7 @@ private:
 	mutable float cachedX1, cachedY1;
 	mutable bool cachedInvalid;
 };
+
+#endif // SUPPORT_FIVEBARSCARA
 
 #endif /* SRC_MOVEMENT_KINEMATICS_FIVEBARSCARAKINEMATICS_H_ */

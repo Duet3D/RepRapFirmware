@@ -10,6 +10,8 @@
 
 #include "SpiTemperatureSensor.h"
 
+#if SUPPORT_SPI_SENSORS
+
 class ThermocoupleSensor31856 : public SpiTemperatureSensor
 {
 public:
@@ -32,5 +34,7 @@ private:
 	uint8_t cr0;
 	uint8_t thermocoupleType;
 };
+
+#endif // SUPPORT_SPI_SENSORS
 
 #endif /* SRC_HEATING_SENSORS_THERMOCOUPLESENSOR31856_H_ */

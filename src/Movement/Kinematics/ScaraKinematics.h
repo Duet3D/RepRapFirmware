@@ -10,6 +10,8 @@
 
 #include "ZLeadscrewKinematics.h"
 
+#if SUPPORT_SCARA
+
 // Standard setup for SCARA machines assumed by this firmware
 // The X motor output drives the proximal arm joint, unless remapped using M584
 // The Y motor output drives the distal arm joint, unless remapped using M584
@@ -82,5 +84,7 @@ private:
 	mutable float cachedX, cachedY, cachedTheta, cachedPsi;
 	mutable bool currentArmMode, cachedArmMode;
 };
+
+#endif // SUPPORT_SCARA
 
 #endif /* SRC_MOVEMENT_KINEMATICS_SCARAKINEMATICS_H_ */

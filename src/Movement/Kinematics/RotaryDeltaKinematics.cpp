@@ -7,6 +7,8 @@
 
 #include "RotaryDeltaKinematics.h"
 
+#if SUPPORT_ROTARY_DELTA
+
 #include <Movement/Move.h>
 #include <Platform/RepRap.h>
 #include <Storage/FileStore.h>
@@ -812,5 +814,7 @@ void RotaryDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float
 			(double)machinePos[X_AXIS], (double)machinePos[Y_AXIS], (double)machinePos[Z_AXIS]);
 	}
 }
+
+#endif // SUPPORT_ROTARY_DELTA
 
 // End

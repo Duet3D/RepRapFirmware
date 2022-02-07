@@ -203,6 +203,7 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char 
 	{
 		ts = new LinearAnalogSensor(sensorNum);
 	}
+#if SUPPORT_SPI_SENSORS
 	else if (ReducedStringEquals(typeName, ThermocoupleSensor31855::TypeName))
 	{
 		ts = new ThermocoupleSensor31855(sensorNum);
@@ -219,6 +220,7 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char 
 	{
 		ts = new CurrentLoopTemperatureSensor(sensorNum);
 	}
+#endif
 #if SUPPORT_DHT_SENSOR
 	else if (ReducedStringEquals(typeName, DhtTemperatureSensor::TypeNameDht21))
 	{

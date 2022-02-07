@@ -46,6 +46,9 @@
 // used by anything else as the Arduino Due leaves pin 78 unconnected.
 
 #include "ThermocoupleSensor31855.h"
+
+#if SUPPORT_SPI_SENSORS
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
@@ -175,5 +178,7 @@ void ThermocoupleSensor31855::Poll() noexcept
 		}
 	}
 }
+
+#endif // SUPPORT_SPI_SENSORS
 
 // End

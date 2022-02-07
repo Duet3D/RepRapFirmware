@@ -50,7 +50,9 @@ public:
 
 	bool CalcNextStepTime(const DDA &dda) noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
+#if SUPPORT_LINEAR_DELTA
 	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
+#endif
 	bool PrepareExtruder(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 
 	void DebugPrint() const noexcept;
@@ -70,7 +72,9 @@ private:
 	bool CalcNextStepTimeFull(const DDA &dda) noexcept SPEED_CRITICAL;
 	bool NewCartesianSegment() noexcept SPEED_CRITICAL;
 	bool NewExtruderSegment() noexcept SPEED_CRITICAL;
+#if SUPPORT_LINEAR_DELTA
 	bool NewDeltaSegment(const DDA& dda) noexcept SPEED_CRITICAL;
+#endif
 
 	static DriveMovement *freeList;
 	static unsigned int numCreated;

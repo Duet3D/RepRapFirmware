@@ -6,9 +6,16 @@
  */
 
 #include "CurrentLoopTemperatureSensor.h"
+
+#if SUPPORT_SPI_SENSORS
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
+
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
 
 const uint32_t MCP3204_Frequency = 1000000;		// maximum for MCP3204 is 1MHz @ 2.7V, will be slightly higher at 3.3V
 
@@ -38,7 +45,26 @@ GCodeResult CurrentLoopTemperatureSensor::Configure(GCodeBuffer& gb, const Strin
 	gb.TryGetUIValue('C', chipChannel, changed);
 	gb.TryGetUIValue('D', isDifferential, changed);
 	TryConfigureSensorName(gb, changed);
+	return FinishConfiguring(changed, reply);
+}
 
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult CurrentLoopTemperatureSensor::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	bool seen = false;
+	if (!ConfigurePort(parser, reply, seen))
+	{
+		return GCodeResult::error;
+	}
+
+	return FinishConfiguring(seen, reply);
+}
+
+#endif
+
+GCodeResult CurrentLoopTemperatureSensor::FinishConfiguring(bool changed, const StringRef& reply) noexcept
+{
 	if (changed)
 	{
 		CalcDerivedParameters();
@@ -134,5 +160,7 @@ TemperatureError CurrentLoopTemperatureSensor::TryGetLinearAdcTemperature(float&
 	}
 	return rslt;
 }
+
+#endif // SUPPORT_SPI_SENSORS
 
 // End

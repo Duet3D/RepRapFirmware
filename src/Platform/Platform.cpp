@@ -407,7 +407,7 @@ Platform::Platform() noexcept :
 	board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
 	nextDriveToPoll(0),
 	lastFanCheckTime(0),
-#if HAS_AUX_DEVICES
+#if SUPPORT_PANELDUE_FLASH
 	panelDueUpdater(nullptr),
 #endif
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -429,10 +429,6 @@ Platform::Platform() noexcept :
 // Initialise the Platform. Note: this is the first module to be initialised, so don't call other modules from here!
 void Platform::Init() noexcept
 {
-#if defined(DUET3) || defined(DUET3MINI)
-	pinMode(EthernetPhyResetPin, OUTPUT_LOW);			// hold the Ethernet Phy chip in reset, hopefully this will prevent it being too noisy if Ethernet is not enabled
-#endif
-
 	// Make sure the on-board drivers are disabled
 #if defined(DUET_NG) || defined(PCCB_10)
 	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
@@ -3210,7 +3206,7 @@ void Platform::SetAuxRaw(size_t auxNumber, bool raw) noexcept
 #endif
 }
 
-#if HAS_AUX_DEVICES
+#if SUPPORT_PANELDUE_FLASH
 void Platform::InitPanelDueUpdater() noexcept
 {
 	if (panelDueUpdater == nullptr)
@@ -3792,6 +3788,8 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
 #elif defined(DUET3_MB6XD)
 		board = BoardType::Duet3_6XD;
+#elif defined(DUET3MINI4)
+		board = BoardType::Duet3Mini4;
 #elif defined(SAME70XPLD)
 		board = BoardType::SAME70XPLD_0;
 #elif defined(DUET_NG)
@@ -3861,7 +3859,7 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 {
 	switch (board)
 	{
-#if defined(DUET3MINI)
+#if defined(DUET3MINI_V04)
 	case BoardType::Duet3Mini_Unknown:		return "Duet 3 " BOARD_SHORT_NAME " unknown variant";
 	case BoardType::Duet3Mini_WiFi:			return "Duet 3 " BOARD_SHORT_NAME " WiFi";
 	case BoardType::Duet3Mini_Ethernet:		return "Duet 3 " BOARD_SHORT_NAME " Ethernet";
@@ -3870,6 +3868,8 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3_6HC_v101:				return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD:				return "Duet 3 " BOARD_SHORT_NAME;					// we have only one version at present
+#elif defined(DUET3MINI4)
+	case BoardType::Duet3Mini4:				return "Duet 3 " BOARD_SHORT_NAME;
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
 #elif defined(DUET_NG)
@@ -3898,7 +3898,7 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 {
 	switch (board)
 	{
-#if defined(DUET3MINI)
+#if defined(DUET3MINI_V04)
 	case BoardType::Duet3Mini_Unknown:		return "duet5lcunknown";
 	case BoardType::Duet3Mini_WiFi:			return "duet5lcwifi";
 	case BoardType::Duet3Mini_Ethernet:		return "duet5lcethernet";
@@ -3907,6 +3907,8 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3_6HC_v101:				return "duet3mb6hc101";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD:				return "duet3mb6xd";					// we have only one version at present
+#elif defined(DUET3MINI4)
+	case BoardType::Duet3Mini4:				return "duet3mini4";
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "same70xpld";
 #elif defined(DUET_NG)
@@ -3953,7 +3955,7 @@ const char *_ecv_array Platform::GetBoardShortName() const noexcept
 
 #endif
 
-#ifdef DUET3MINI
+#ifdef DUET3MINI_V04
 
 // Return true if this is a WiFi board, false if it has Ethernet
 bool Platform::IsDuetWiFi() const noexcept

@@ -172,6 +172,8 @@ bool DriveMovement::NewCartesianSegment() noexcept
 	}
 }
 
+#if SUPPORT_LINEAR_DELTA
+
 // This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
 bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 {
@@ -311,6 +313,8 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 	}
 }
 
+#endif // SUPPORT_LINEAR_DELTA
+
 // This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
 bool DriveMovement::NewExtruderSegment() noexcept
 {
@@ -436,6 +440,8 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	reverseStartStep = totalSteps + 1;				// no reverse phase
 	return CalcNextStepTime(dda);
 }
+
+#if SUPPORT_LINEAR_DELTA
 
 // Prepare this DM for a Delta axis move, returning true if there are steps to do
 bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept
@@ -615,6 +621,8 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	stepsTillRecalc = 0;							// so that we don't skip the calculation
 	return CalcNextStepTime(dda);
 }
+
+#endif	// SUPPORT_LINEAR_DELTA
 
 // Prepare this DM for an extruder move, returning true if there are steps to do
 // If there are no steps to do, set nextStep = 0 so that DDARing::CurrentMoveCompleted doesn't add any steps to the movement accumulator
@@ -902,9 +910,12 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		if (stepsToLimit == 0)
 		{
 			currentSegment = currentSegment->GetNext();
-			const bool more = (isDelta) ? NewDeltaSegment(dda)
-								: (isExtruder) ? NewExtruderSegment()
-									: NewCartesianSegment();
+			const bool more =
+#if SUPPORT_LINEAR_DELTA
+								(isDelta) ? NewDeltaSegment(dda) :
+#endif
+									(isExtruder) ? NewExtruderSegment()
+										: NewCartesianSegment();
 			if (!more)
 			{
 				state = DMState::stepError;

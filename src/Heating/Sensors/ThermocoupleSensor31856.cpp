@@ -6,6 +6,9 @@
  */
 
 #include "ThermocoupleSensor31856.h"
+
+#if SUPPORT_SPI_SENSORS
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
@@ -241,5 +244,7 @@ void ThermocoupleSensor31856::Poll() noexcept
 		}
 	}
 }
+
+#endif // SUPPORT_SPI_SENSORS
 
 // End

@@ -7,6 +7,8 @@
 
 #include "LinearDeltaKinematics.h"
 
+#if SUPPORT_LINEAR_DELTA
+
 #include <Movement/Move.h>
 #include <Platform/RepRap.h>
 #include <Storage/FileStore.h>
@@ -1045,5 +1047,7 @@ AxesBitmap LinearDeltaKinematics::GetLinearAxes() const noexcept
 {
 	return AxesBitmap::MakeFromBits(Z_AXIS);
 }
+
+#endif	// SUPPORT_LINEAR_DELTA
 
 // End

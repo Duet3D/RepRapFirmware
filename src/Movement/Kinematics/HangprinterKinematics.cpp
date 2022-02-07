@@ -6,6 +6,9 @@
  */
 
 #include "HangprinterKinematics.h"
+
+#if SUPPORT_HANGPRINTER
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
@@ -521,7 +524,7 @@ void HangprinterKinematics::ForwardTransform(float const a, float const b, float
 {
 	// Force the anchor location norms Ax=0, Dx=0, Dy=0
 	// through a series of rotations.
-	float const x_angle = atan(anchors[D_AXIS][Y_AXIS]/anchors[D_AXIS][Z_AXIS]);
+	float const x_angle = atanf(anchors[D_AXIS][Y_AXIS]/anchors[D_AXIS][Z_AXIS]);
 	float const rxt[3][3] = {{1, 0, 0}, {0, cosf(x_angle), sinf(x_angle)}, {0, -sinf(x_angle), cosf(x_angle)}};
 	float anchors_tmp0[4][3] = { 0 };
 	for (size_t row{0}; row < 4; ++row) {
@@ -529,7 +532,7 @@ void HangprinterKinematics::ForwardTransform(float const a, float const b, float
 			anchors_tmp0[row][col] = rxt[0][col]*anchors[row][0] + rxt[1][col]*anchors[row][1] + rxt[2][col]*anchors[row][2];
 		}
 	}
-	float const y_angle = atan(-anchors_tmp0[D_AXIS][X_AXIS]/anchors_tmp0[D_AXIS][Z_AXIS]);
+	float const y_angle = atanf(-anchors_tmp0[D_AXIS][X_AXIS]/anchors_tmp0[D_AXIS][Z_AXIS]);
 	float const ryt[3][3] = {{cosf(y_angle), 0, -sinf(y_angle)}, {0, 1, 0}, {sinf(y_angle), 0, cosf(y_angle)}};
 	float anchors_tmp1[4][3] = { 0 };
 	for (size_t row{0}; row < 4; ++row) {
@@ -537,7 +540,7 @@ void HangprinterKinematics::ForwardTransform(float const a, float const b, float
 			anchors_tmp1[row][col] = ryt[0][col]*anchors_tmp0[row][0] + ryt[1][col]*anchors_tmp0[row][1] + ryt[2][col]*anchors_tmp0[row][2];
 		}
 	}
-	float const z_angle = atan(anchors_tmp1[A_AXIS][X_AXIS]/anchors_tmp1[A_AXIS][Y_AXIS]);
+	float const z_angle = atanf(anchors_tmp1[A_AXIS][X_AXIS]/anchors_tmp1[A_AXIS][Y_AXIS]);
 	float const rzt[3][3] = {{cosf(z_angle), sinf(z_angle), 0}, {-sinf(z_angle), cosf(z_angle), 0}, {0, 0, 1}};
 	for (size_t row{0}; row < 4; ++row) {
 		for (size_t col{0}; col < 3; ++col) {
@@ -777,5 +780,7 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, f
 	return res;
 }
 #endif // DUAL_CAN
+
+#endif // SUPPORT_HANGPRINTER
 
 // End

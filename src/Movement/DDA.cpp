@@ -316,8 +316,10 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 		{
 			return false;												// throw away the move if it couldn't be transformed
 		}
+#if SUPPORT_LINEAR_DELTA
 		flags.isDeltaMovement = move.IsDeltaMode()
 							&& (endPoint[X_AXIS] != positionNow[X_AXIS] || endPoint[Y_AXIS] != positionNow[Y_AXIS] || endPoint[Z_AXIS] != positionNow[Z_AXIS]);
+#endif
 	}
 
 	bool linearAxesMoving = false;
@@ -1085,6 +1087,7 @@ float DDA::AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcep
 
 		// Even if there is no babystepping to do this move, we may need to adjust the end coordinates
 		cdda->endCoordinates[Z_AXIS] += babySteppingDone;
+#if SUPPORT_LINEAR_DELTA
 		if (cdda->flags.isDeltaMovement)
 		{
 			for (size_t motor = 0; motor < reprap.GetGCodes().GetTotalAxes(); ++motor)
@@ -1096,6 +1099,7 @@ float DDA::AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcep
 			}
 		}
 		else
+#endif
 		{
 			cdda->endPoint[Z_AXIS] += (int32_t)(babySteppingDone * reprap.GetPlatform().DriveStepsPerUnit(Z_AXIS));
 		}
@@ -1320,26 +1324,28 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 
 	if (simMode < SimulationMode::normal)
 	{
+#if SUPPORT_LINEAR_DELTA
 		if (flags.isDeltaMovement)
 		{
 			// This code assumes that the previous move in the DDA ring is the previously-executed move, because it fetches the X and Y end coordinates from that move.
 			// Therefore the Move code must not store a new move in that entry until this one has been prepared! (It took me ages to track this down.)
 			// Ideally we would store the initial X and Y coordinates in the DDA, but we need to be economical with memory
-#if MS_USE_FPU
+# if MS_USE_FPU
 			// Nothing needed here, use directionVector[Z_AXIS] directly
-#else
+# else
 			afterPrepare.cKc = lrintf(directionVector[Z_AXIS] * MoveSegment::KdirectionVector);
-#endif
+# endif
 			params.a2plusb2 = fsquare(directionVector[X_AXIS]) + fsquare(directionVector[Y_AXIS]);
 			params.initialX = prev->GetEndCoordinate(X_AXIS, false);
 			params.initialY = prev->GetEndCoordinate(Y_AXIS, false);
-#if SUPPORT_CAN_EXPANSION
+			params.dparams = static_cast<const LinearDeltaKinematics*>(&(reprap.GetMove().GetKinematics()));
+# if SUPPORT_CAN_EXPANSION
 			params.finalX = GetEndCoordinate(X_AXIS, false);
 			params.finalY = GetEndCoordinate(Y_AXIS, false);
 			params.zMovement = GetEndCoordinate(Z_AXIS, false) - prev->GetEndCoordinate(Z_AXIS, false);
-#endif
-			params.dparams = static_cast<const LinearDeltaKinematics*>(&(reprap.GetMove().GetKinematics()));
+# endif
 		}
+#endif
 
 		activeDMs = completedDMs = nullptr;
 
@@ -1405,6 +1411,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 					}
 				}
 			}
+#if SUPPORT_LINEAR_DELTA
 			else if (flags.isDeltaMovement && reprap.GetMove().GetKinematics().GetMotionType(drive) == MotionType::segmentFreeDelta)
 			{
 				// On a delta we need to move all towers even if some of them have no net movement
@@ -1438,7 +1445,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 					}
 				}
 
-#if SUPPORT_CAN_EXPANSION
+# if SUPPORT_CAN_EXPANSION
 				afterPrepare.drivesMoving.SetBit(drive);
 				const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
 				for (size_t i = 0; i < config.numDrivers; ++i)
@@ -1449,9 +1456,10 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 						CanMotion::AddMovement(params, driver, delta, false);
 					}
 				}
-#endif
+# endif
 				axisMotorsEnabled.SetBit(drive);
 			}
+#endif
 			else if (drive < reprap.GetGCodes().GetTotalAxes())
 			{
 				// It's a linear axis

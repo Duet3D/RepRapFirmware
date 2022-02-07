@@ -10,6 +10,8 @@
 
 #include "RoundBedKinematics.h"
 
+#if SUPPORT_ROTARY_DELTA
+
 class RotaryDeltaKinematics : public RoundBedKinematics
 {
 public:
@@ -91,5 +93,7 @@ private:
 
 	bool doneAutoCalibration;							// True if we have done auto calibration
 };
+
+#endif // SUPPORT_ROTARY_DELTA
 
 #endif /* SRC_MOVEMENT_KINEMATICS_ROTARYDELTAKINEMATICS_H_ */

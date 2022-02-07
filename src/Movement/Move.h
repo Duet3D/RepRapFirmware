@@ -121,7 +121,9 @@ public:
 	bool IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
 
 	// Temporary kinematics functions
+#if SUPPORT_LINEAR_DELTA
 	bool IsDeltaMode() const noexcept { return kinematics->GetKinematicsType() == KinematicsType::linearDelta; }
+#endif
 	// End temporary functions
 
 	bool IsRawMotorMove(uint8_t moveType) const noexcept;									// Return true if this is a raw motor move

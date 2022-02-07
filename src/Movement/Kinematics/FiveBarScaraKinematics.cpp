@@ -8,6 +8,9 @@
  */
 
 #include "FiveBarScaraKinematics.h"
+
+#if SUPPORT_FIVEBARSCARA
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <Storage/MassStorage.h>
@@ -947,5 +950,7 @@ void FiveBarScaraKinematics::Recalc() noexcept
 	cachedY0 = std::numeric_limits<float>::quiet_NaN(); // make sure that the cached values won't match any coordinates
 	cachedInvalid = true;
 }
+
+#endif // SUPPORT_FIVEBARSCARA
 
 // End

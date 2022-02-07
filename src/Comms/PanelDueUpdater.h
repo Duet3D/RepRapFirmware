@@ -10,7 +10,7 @@
 
 #include <RepRapFirmware.h>
 
-#if HAS_AUX_DEVICES
+#if SUPPORT_PANELDUE_FLASH
 
 #include <General/NamedEnum.h>
 

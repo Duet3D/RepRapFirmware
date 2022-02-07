@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include <Fans/LedStripDriver.h>
+#include "LedStripDriver.h"
 
 #if SUPPORT_LED_STRIPS
 
@@ -17,7 +17,7 @@
 // Define which types of LED strip this hardware supports
 #define SUPPORT_DMA_NEOPIXEL		(defined(DUET3_MB6HC) || defined(DUET3_MB6XD) || defined(DUET3MINI) || defined(PCCB_10))
 #define SUPPORT_DMA_DOTSTAR			(defined(DUET3_MB6HC) || defined(DUET3_MB6XD) || defined(PCCB_10))
-#define SUPPORT_BITBANG_NEOPIXEL	(defined(DUET3MINI) || defined(DUET_NG))
+#define SUPPORT_BITBANG_NEOPIXEL	(defined(DUET3MINI_V04) || defined(DUET_NG))
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
 

@@ -7,7 +7,7 @@
 
 #include "PanelDueUpdater.h"
 
-#if HAS_AUX_DEVICES
+#if SUPPORT_PANELDUE_FLASH
 
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>

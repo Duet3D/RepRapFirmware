@@ -23,6 +23,9 @@
 # elif defined(DUET3MINI_V04)
 #  define DUET3MINI		1
 #  define PLATFORM Duet3Mini
+# elif defined(DUET3MINI4)
+#  define DUET3MINI		1
+#  define PLATFORM Duet3Mini4
 # elif defined(__LPC17xx__)
 #  define PLATFORM LPC
 # else
@@ -69,7 +72,15 @@
 # define SUPPORT_LED_STRIPS		0
 #endif
 
+#ifndef SUPPORT_SPI_SENSORS
+# define SUPPORT_SPI_SENSORS	1
+#endif
+
 #define HAS_AUX_DEVICES			(defined(SERIAL_AUX_DEVICE))		// if SERIAL_AUX_DEVICE is defined then we have one or more aux devices
+
+#ifndef SUPPORT_PANELDUE_FLASH
+# define SUPPORT_PANELDUE_FLASH	HAS_AUX_DEVICES
+#endif
 
 #ifndef ALLOW_ARBITRARY_PANELDUE_PORT
 # define ALLOW_ARBITRARY_PANELDUE_PORT (0)
@@ -207,6 +218,31 @@
 # define SUPPORT_ACCELEROMETERS	0
 #endif
 
+// Optional kinematics support, to allow us to reduce flash memory usage
+#ifndef SUPPORT_LINEAR_DELTA
+# define SUPPORT_LINEAR_DELTA	1
+#endif
+
+#ifndef SUPPORT_ROTARY_DELTA
+# define SUPPORT_ROTARY_DELTA	1
+#endif
+
+#ifndef SUPPORT_POLAR
+# define SUPPORT_POLAR			1
+#endif
+
+#ifndef SUPPORT_SCARA
+# define SUPPORT_SCARA			1
+#endif
+
+#ifndef SUPPORT_FIVEBARSCARA
+# define SUPPORT_FIVEBARSCARA	1
+#endif
+
+#ifndef SUPPORT_HANGPRINTER
+# define SUPPORT_HANGPRINTER	1
+#endif
+
 // We must define MCU_HAS_UNIQUE_ID as either 0 or 1 so we can use it in maths
 #if SAM4E || SAM4S || SAME70 || SAME5x
 # define MCU_HAS_UNIQUE_ID		1
@@ -221,7 +257,6 @@
 #endif
 
 // Define SUPPORT_REMOTE_COMMANDS according to whether this hardware accepts commands over CAN
-// For now we exclude Duet 3 MB6HC because CoreNG doesn't support analog callbacks
 #define SUPPORT_REMOTE_COMMANDS		(SUPPORT_CAN_EXPANSION && !defined(DUET3_ATE))
 #define USE_REMOTE_INPUT_SHAPING	(0)		//TODO temporary!!!
 

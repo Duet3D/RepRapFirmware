@@ -7,6 +7,8 @@
 
 #include "PolarKinematics.h"
 
+#if SUPPORT_POLAR
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <Storage/MassStorage.h>
@@ -339,5 +341,7 @@ void PolarKinematics::Recalc()
 	minRadiusSquared = (minRadius <= 0.0) ? 0.0 : fsquare(minRadius);
 	maxRadiusSquared = fsquare(maxRadius);
 }
+
+#endif // SUPPORT_POLAR
 
 // End
