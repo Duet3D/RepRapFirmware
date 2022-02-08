@@ -211,6 +211,13 @@ constexpr size_t MaxTrackedObjects = 20;				// How many build plate objects we t
 constexpr size_t ObjectNamesStringSpace = 500;			// How much space we reserve for the names of objects on the build plate
 #endif
 
+// How many filaments we can return in the file information. Each one uses 4 bytes of statically-allocated RAM.
+#if SAME70 || SAME5x
+constexpr unsigned int MaxFilaments = 20;
+#else
+constexpr unsigned int MaxFilaments = 8;
+#endif
+
 // Move system
 constexpr float DefaultFeedRate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min
 constexpr float DefaultG0FeedRate = 18000.0;			// The initial feed rate for G0 commands after resetting the printer, in mm/min

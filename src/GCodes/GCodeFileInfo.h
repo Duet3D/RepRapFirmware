@@ -36,7 +36,7 @@ struct GCodeFileInfo
 	float layerHeight;
 	unsigned int numLayers;
 	float objectHeight;
-	float filamentNeeded[MaxExtruders];
+	float filamentNeeded[MaxFilaments];
 	uint32_t printTime;
 	uint32_t simulatedTime;
 	unsigned int numFilaments;
