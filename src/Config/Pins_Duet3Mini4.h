@@ -140,7 +140,6 @@ constexpr GpioPinFunction TMC22xxSercomTxPinPeriphMode = GpioPinFunction::D;
 constexpr Pin TMC22xxSercomRxPin = PortAPin(1);
 constexpr GpioPinFunction TMC22xxSercomRxPinPeriphMode = GpioPinFunction::D;
 constexpr uint8_t TMC22xxSercomRxPad = 1;
-constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
 
 #define TMC22xx_HAS_ENABLE_PINS			0
 #define TMC22xx_HAS_MUX					0
