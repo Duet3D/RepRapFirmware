@@ -148,7 +148,7 @@ public:
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	OutputBuffer *GetFilesResponse(const char* dir, unsigned int startAt, bool flagsDirs) noexcept;
 	OutputBuffer *GetFilelistResponse(const char* dir, unsigned int startAt) noexcept;
-	OutputBuffer *GetThumbnailResponse(const char *filename, FilePosition offset, bool encapsulateThumbnail) noexcept;
+	OutputBuffer *GetThumbnailResponse(const char *filename, FilePosition offset, bool forM31point1) noexcept;
 #endif
 
 	GCodeResult GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept;
