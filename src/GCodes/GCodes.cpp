@@ -800,6 +800,7 @@ void GCodes::EndSimulation(GCodeBuffer *gb) noexcept
 	ToolOffsetTransform(moveState.currentUserPosition, moveState.coords);
 	reprap.GetMove().SetNewPosition(moveState.coords, true);
 	axesVirtuallyHomed = axesHomed;
+	reprap.MoveUpdated();
 }
 
 // Check for and execute triggers
