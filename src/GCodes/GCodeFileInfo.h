@@ -15,7 +15,7 @@ struct GCodeFileInfo
 {
 	struct ThumbnailInfo
 	{
-		NamedEnum(Format, uint8_t, png, qoi);
+		NamedEnum(Format, uint8_t, png, qoi, jpeg);
 		FilePosition offset;
 		uint32_t size;
 		uint16_t width, height;

@@ -2326,8 +2326,8 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 					continue;
 				}
 
-				// Check for end of thumbnail
-				if (StringStartsWith(p, "thumbnail end") || StringStartsWith(p, "thumbnail_QOI end"))
+				// Check for end of thumbnail. We'd like to use a regex here but we can't afford the flash space of a regex parser in some build configurations.
+				if (StringStartsWith(p, "thumbnail end") || StringStartsWith(p, "thumbnail_QOI end")|| StringStartsWith(p, "thumbnail_JPG end"))
 				{
 					offset = 0;
 					break;
