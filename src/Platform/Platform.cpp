@@ -4392,7 +4392,7 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 		case 2:
 		case 3:
 			logOnStallDrivers &= ~drivers;
-			eventOnStallDrivers &= ~drivers;
+			eventOnStallDrivers |= drivers;
 			break;
 		}
 	}
