@@ -85,13 +85,19 @@ void SdCardInfo::Clear(unsigned int card) noexcept
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(SdCardInfo, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(SdCardInfo, _condition,__VA_ARGS__)
 
-static uint64_t GetFreeSpace(size_t slot)
+// These two functions are only called from one place each in the OM table, hence inlined
+static inline uint64_t GetFreeSpace(size_t slot)
 {
-	uint64_t capacity, freeSpace;
-	uint32_t speed;
-	uint32_t clSize;
-	(void)MassStorage::GetCardInfo(slot, capacity, freeSpace, speed, clSize);
-	return freeSpace;
+	MassStorage::SdCardReturnedInfo returnedInfo;
+	(void)MassStorage::GetCardInfo(slot, returnedInfo);
+	return returnedInfo.freeSpace;
+}
+
+static inline uint64_t GetPartitionSize(size_t slot)
+{
+	MassStorage::SdCardReturnedInfo returnedInfo;
+	(void)MassStorage::GetCardInfo(slot, returnedInfo);
+	return returnedInfo.partitionSize;
 }
 
 static const char * const VolPathNames[] = { "0:/", "1:/" };
@@ -109,6 +115,7 @@ constexpr ObjectModelTableEntry SdCardInfo::objectModelTable[] =
 	{ "freeSpace",			OBJECT_MODEL_FUNC_IF(self->isMounted, GetFreeSpace(context.GetLastIndex())),							ObjectModelEntryFlags::none },
 	{ "mounted",			OBJECT_MODEL_FUNC(self->isMounted),																		ObjectModelEntryFlags::none },
 	{ "openFiles",			OBJECT_MODEL_FUNC_IF(self->isMounted, MassStorage::AnyFileOpen(&(self->fileSystem))),					ObjectModelEntryFlags::none },
+	{ "partitionSize",		OBJECT_MODEL_FUNC_IF(self->isMounted, GetPartitionSize(context.GetLastIndex())),						ObjectModelEntryFlags::none },
 	{ "path",				OBJECT_MODEL_FUNC_NOSELF(VolPathNames[context.GetLastIndex()]),											ObjectModelEntryFlags::verbose },
 	{ "speed",				OBJECT_MODEL_FUNC_IF(self->isMounted, (int32_t)sd_mmc_get_interface_speed(context.GetLastIndex())),		ObjectModelEntryFlags::none },
 };
@@ -119,7 +126,7 @@ constexpr ObjectModelTableEntry SdCardInfo::objectModelTable[] =
 	path = null
 */
 
-constexpr uint8_t SdCardInfo::objectModelTableDescriptor[] = { 1, 6 };
+constexpr uint8_t SdCardInfo::objectModelTableDescriptor[] = { 1, 7 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(SdCardInfo)
 
@@ -1207,7 +1214,7 @@ void MassStorage::RecordSimulationTime(const char *printingFilePath, uint32_t si
 }
 
 // Get information about the SD card and interface speed
-MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed, uint32_t& clSize) noexcept
+MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, SdCardReturnedInfo& returnedInfo) noexcept
 {
 	if (slot >= GetNumVolumes())
 	{
@@ -1220,8 +1227,8 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity
 		return InfoResult::noCard;
 	}
 
-	capacity = (uint64_t)sd_mmc_get_capacity(slot) * 1024;
-	speed = sd_mmc_get_interface_speed(slot);
+	returnedInfo.cardCapacity = (uint64_t)sd_mmc_get_capacity(slot) * 1024;
+	returnedInfo.speed = sd_mmc_get_interface_speed(slot);
 	String<StringLength50> path;
 	path.printf("%u:/", slot);
 	uint32_t freeClusters;
@@ -1229,13 +1236,14 @@ MassStorage::InfoResult MassStorage::GetCardInfo(size_t slot, uint64_t& capacity
 	const FRESULT fr = f_getfree(path.c_str(), &freeClusters, &fs);
 	if (fr == FR_OK)
 	{
-		clSize = fs->csize * 512;
-		freeSpace = (uint64_t)freeClusters * clSize;
+		returnedInfo.clSize = fs->csize * 512;
+		returnedInfo.partitionSize = (uint64_t)(fs->n_fatent - 2) * returnedInfo.clSize;
+		returnedInfo.freeSpace = (uint64_t)freeClusters * returnedInfo.clSize;
 	}
 	else
 	{
-		clSize = 0;
-		freeSpace = 0;
+		returnedInfo.clSize = 0;
+		returnedInfo.cardCapacity = returnedInfo.partitionSize = returnedInfo.freeSpace = 0;
 	}
 	return InfoResult::ok;
 }

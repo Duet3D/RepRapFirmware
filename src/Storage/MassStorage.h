@@ -102,7 +102,16 @@ namespace MassStorage
 		ok = 2
 	};
 
-	InfoResult GetCardInfo(size_t slot, uint64_t& capacity, uint64_t& freeSpace, uint32_t& speed, uint32_t& clSize) noexcept;
+	struct SdCardReturnedInfo
+	{
+		uint64_t cardCapacity;
+		uint64_t partitionSize;
+		uint64_t freeSpace;
+		uint32_t clSize;
+		uint32_t speed;
+	};
+
+	InfoResult GetCardInfo(size_t slot, SdCardReturnedInfo& returnedInfo) noexcept;
 
 # ifdef DUET3_MB6HC
 	GCodeResult ConfigureSdCard(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Configure additional SD card slots

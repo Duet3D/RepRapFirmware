@@ -1237,16 +1237,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					gb.TryGetUIValue('P', slot, dummy);
 					int32_t format = 0;
 					gb.TryGetIValue('S', format, dummy);
-					uint64_t capacity, freeSpace;
-					uint32_t speed;
-					uint32_t clSize;
-					const MassStorage::InfoResult res = MassStorage::GetCardInfo(slot, capacity, freeSpace, speed, clSize);
+					MassStorage::SdCardReturnedInfo returnedInfo;
+					const MassStorage::InfoResult res = MassStorage::GetCardInfo(slot, returnedInfo);
 					if (format == 2)
 					{
 						reply.printf("{\"SDinfo\":{\"slot\":%" PRIu32 ",\"present\":", slot);
 						if (res == MassStorage::InfoResult::ok)
 						{
-							reply.catf("1,\"capacity\":%" PRIu64 ",\"free\":%" PRIu64 ",\"speed\":%" PRIu32 ",\"clsize\":%" PRIu32 "}}", capacity, freeSpace, speed, clSize);
+							reply.catf("1,\"capacity\":%" PRIu64 ",\"partitionSize\":%" PRIu64 ",\"free\":%" PRIu64 ",\"speed\":%" PRIu32 ",\"clsize\":%" PRIu32 "}}",
+								returnedInfo.cardCapacity, returnedInfo.partitionSize, returnedInfo.freeSpace, returnedInfo.speed, returnedInfo.clSize);
 						}
 						else
 						{
@@ -1269,16 +1268,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							break;
 
 						case MassStorage::InfoResult::ok:
-							reply.printf("SD card in slot %" PRIu32 ": capacity %.2fGb, free space %.2fGb, speed %.2fMBytes/sec, cluster size ",
-											slot, (double)capacity/(1000*1000*1000), (double)freeSpace/(1000*1000*1000), (double)speed/(1000*1000));
-							if (clSize < 1024)
-							{
-								reply.catf("%" PRIu32 " bytes", clSize);
-							}
-							else
-							{
-								reply.catf("%" PRIu32 "kb", clSize/1024);
-							}
+							reply.printf("SD card in slot %" PRIu32 ": capacity %.2fGb, partition size %.2fGb, free space %.2fGb, speed %.2fMBytes/sec, cluster size %" PRIu32 "%s",
+											slot,
+											(double)((float)returnedInfo.cardCapacity * 1e-9),
+											(double)((float)returnedInfo.partitionSize * 1e-9),
+											(double)((float)returnedInfo.freeSpace * 1e-9),
+											(double)((float)returnedInfo.speed * 1e-6),
+											(returnedInfo.clSize < 1024) ? returnedInfo.clSize : returnedInfo.clSize/1024,
+											(returnedInfo.clSize < 1024) ? " bytes" : "kb"
+										);
 							break;
 						}
 					}
