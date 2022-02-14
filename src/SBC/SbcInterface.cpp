@@ -876,6 +876,7 @@ void SbcInterface::ExchangeData() noexcept
 	}
 
 	// Notify DSF about the available buffer space
+	DefragmentBufferedCodes();
 	if (!codeBufferAvailable || sendBufferUpdate)
 	{
 		TaskCriticalSectionLocker locker;
@@ -1756,6 +1757,87 @@ void SbcInterface::EventOccurred(bool timeCritical) noexcept
 		delaying = false;
 		sbcTask->Give();
 	}
+}
+
+void SbcInterface::DefragmentBufferedCodes() noexcept
+{
+	TaskCriticalSectionLocker locker;
+	if (rxPointer != txPointer || txEnd != 0)
+	{
+		const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
+		if (bufferSpace > MaxCodeBufferSize)
+		{
+			// There is still enough space left for at least one more code, don't worry about fragmentation yet
+			return;
+		}
+
+		if (txEnd == 0)
+		{
+			// Ring buffer data is sequential (rxPointer..txPointer, txEnd=0)
+			(void)DefragmentCodeBlock(rxPointer, txPointer);
+		}
+		else
+		{
+			// Ring buffer overlapped (rxPointer..txEnd, 0..txPointer)
+			if (!DefragmentCodeBlock(rxPointer, txEnd) &&
+				!DefragmentCodeBlock(0, txPointer) &&
+				SpiCodeBufferSize - (size_t)txEnd > MaxCodeBufferSize)
+			{
+				size_t endBufferSize = txEnd - rxPointer;
+				memmoveu32(reinterpret_cast<uint32_t*>(codeBuffer + SpiCodeBufferSize - endBufferSize), reinterpret_cast<uint32_t*>(codeBuffer + rxPointer), endBufferSize / sizeof(uint32_t));
+				rxPointer = SpiCodeBufferSize - endBufferSize;
+				txEnd = SpiCodeBufferSize;
+			}
+		}
+	}
+}
+
+// Defragment a specific block of the code buffer and update the end of it
+bool SbcInterface::DefragmentCodeBlock(uint16_t start, volatile uint16_t &end) noexcept
+{
+	char *gapStart = nullptr;
+	for (uint16_t readPointer = start; readPointer != end;)
+	{
+		BufferedCodeHeader *bufHeader = reinterpret_cast<BufferedCodeHeader *>(codeBuffer + readPointer);
+		size_t bufSize = sizeof(BufferedCodeHeader) + bufHeader->length;
+		readPointer += bufSize;
+
+		if (bufHeader->isPending)
+		{
+			if (gapStart != nullptr)
+			{
+				size_t gapSize = reinterpret_cast<const char *>(bufHeader) - gapStart;
+				if (gapSize >= bufSize)
+				{
+					// Gap size is big enough to accommodate the next code
+					memcpyu32(reinterpret_cast<uint32_t*>(gapStart), reinterpret_cast<uint32_t *>(bufHeader), bufSize / sizeof(uint32_t));		// requires incrementing copy order
+					gapStart += bufSize;
+				}
+				else
+				{
+					// Gap size is too small. Move the remaining buffer but only once per run
+					memcpyu32(reinterpret_cast<uint32_t*>(gapStart), reinterpret_cast<uint32_t *>(bufHeader), (codeBuffer + end - gapStart) / sizeof(uint32_t));
+					readPointer = (uint16_t)(gapStart - codeBuffer + bufSize);
+					gapStart = nullptr;
+					end -= gapSize;
+					sendBufferUpdate = true;
+					return true;
+				}
+			}
+		}
+		else if (gapStart == nullptr)
+		{
+			gapStart = reinterpret_cast<char *>(bufHeader);
+		}
+	}
+
+	if (gapStart != nullptr)
+	{
+		end = (uint16_t)(gapStart - codeBuffer);
+		sendBufferUpdate = true;
+		return true;
+	}
+	return false;
 }
 
 void SbcInterface::InvalidateBufferedCodes(GCodeChannel channel) noexcept
