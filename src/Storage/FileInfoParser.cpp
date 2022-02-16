@@ -972,36 +972,42 @@ bool FileInfoParser::FindThumbnails(const char *_ecv_array bufp, FilePosition bu
 		}
 	}
 
-	constexpr const char * PngThumbnailBegin = "; thumbnail begin ";
-	constexpr const char * QoiThumbnailBegin = "; thumbnail_QOI begin ";
-	constexpr const char * JpegThumbnailBegin = "; thumbnail_JPG begin ";
+	constexpr const char *_ecv_array ThumbnailText = "; thumbnail";
+	constexpr const char *_ecv_array QoiBeginText = "_QOI begin ";
+	constexpr const char *_ecv_array JpegBeginText = "_JPG begin ";
+	constexpr const char *_ecv_array PngBeginText = " begin ";
+
 	const char *_ecv_array pos = bufp;
 	while (true)
 	{
-		const char *_ecv_array qoiPos = strstr(pos, QoiThumbnailBegin);
-		const char *_ecv_array pngPos = strstr(pos, PngThumbnailBegin);
-		const char *_ecv_array jpegPos = strstr(pos, JpegThumbnailBegin);
+		pos = strstr(pos, ThumbnailText);
+		if (pos == nullptr)
+		{
+			return false;
+		}
+
+		pos += strlen(ThumbnailText);
 		GCodeFileInfo::ThumbnailInfo::Format fmt(GCodeFileInfo::ThumbnailInfo::Format::qoi);
-		if (qoiPos != nullptr && (pngPos == nullptr || qoiPos < pngPos) && (jpegPos == nullptr || qoiPos < jpegPos))
+		if (StringStartsWith(pos, QoiBeginText))
 		{
 			// found a QOI thumbnail
-			pos = qoiPos + strlen(QoiThumbnailBegin);
+			pos += strlen(QoiBeginText);
 		}
-		else if (pngPos != nullptr && (jpegPos == nullptr || pngPos < jpegPos))
+		else if (StringStartsWith(pos, PngBeginText))
 		{
 			// found a PNG thumbnail
-			pos = pngPos + strlen(PngThumbnailBegin);
+			pos += strlen(PngBeginText);
 			fmt = GCodeFileInfo::ThumbnailInfo::Format::png;
 		}
-		else if (jpegPos != nullptr)
+		else if (StringStartsWith(pos, JpegBeginText))
 		{
 			// found a JPEG thumbnail
-			pos = jpegPos + strlen(JpegThumbnailBegin);
+			pos += strlen(JpegBeginText);
 			fmt = GCodeFileInfo::ThumbnailInfo::Format::jpeg;
 		}
 		else
 		{
-			return false;		// no more thumbnails in this buffer, but we have room to save more thumbnail details
+			continue;		// unrecognised format, so look for another one
 		}
 
 		// Store this thumbnail data
