@@ -193,20 +193,6 @@ void ExpressionValue::Release() noexcept
 	}
 }
 
-// Get the format string to use assuming this is a floating point number
-const char *_ecv_array ExpressionValue::GetFloatFormatString() const noexcept
-{
-	float f = 1.0;
-	unsigned int digitsAfterPoint = param;
-	while (digitsAfterPoint > 1 && fVal > f)
-	{
-		f *= 10.0;
-		--digitsAfterPoint;
-	}
-
-	return ::GetFloatFormatString(digitsAfterPoint);
-}
-
 #if SUPPORT_CAN_EXPANSION
 
 // Given that this is a CanExpansionBoardDetails value, extract the part requested according to the parameter and append it to the string

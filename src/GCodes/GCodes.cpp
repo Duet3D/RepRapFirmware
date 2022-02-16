@@ -3072,7 +3072,7 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const noexcept
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		// Don't put a space after the colon in the response, it confuses Pronterface
-		s.catf("%c:%.3f ", axisLetters[axis], HideNan(GetUserCoordinate(axis)));
+		s.catf("%c:%.3f ", axisLetters[axis], (double)HideNan(GetUserCoordinate(axis)));
 	}
 
 	// Now the virtual extruder position, for Octoprint
@@ -3098,7 +3098,7 @@ void GCodes::GetCurrentCoordinates(const StringRef& s) const noexcept
 	ToolOffsetTransform(moveState.currentUserPosition, machineCoordinates);
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
-		s.catf(" %.3f", HideNan(machineCoordinates[axis]));
+		s.catf(" %.3f", (double)HideNan(machineCoordinates[axis]));
 	}
 
 	// Add the bed compensation

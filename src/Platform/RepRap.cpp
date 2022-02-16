@@ -1582,7 +1582,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 				first = false;
 				float temp;
 				(void)sensor->GetLatestTemperature(temp);
-				response->catf("{\"name\":\"%.s\",\"temp\":%.1f}", nm, HideNan(temp));
+				response->catf("{\"name\":\"%.s\",\"temp\":%.1f}", nm, (double)HideNan(temp));
 			}
 			nextSensorNumber = sensor->GetSensorNumber() + 1;
 		}
@@ -2469,7 +2469,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 }
 
 // Helper functions to write JSON arrays
-// Append float array using 1 decimal place
+// Append float array using the specified number of decimal places
 void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<float(size_t)> func, unsigned int numDecimalDigits) noexcept
 {
 	if (name != nullptr)
@@ -2483,7 +2483,8 @@ void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numVal
 		{
 			buf->cat(',');
 		}
-		buf->catf(GetFloatFormatString(numDecimalDigits), HideNan(func(i)));
+		const float fVal = HideNan(func(i));
+		buf->catf(GetFloatFormatString(fVal, numDecimalDigits), (double)fVal);
 	}
 	buf->cat(']');
 }

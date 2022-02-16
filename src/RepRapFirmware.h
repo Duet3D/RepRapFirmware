@@ -380,7 +380,7 @@ extern "C" void debugPrintf(const char* fmt, ...) noexcept __attribute__ ((forma
 
 // Functions and globals not part of any class
 
-double HideNan(float val) noexcept;
+float HideNan(float val) noexcept;
 
 void ListDrivers(const StringRef& str, DriversBitmap drivers) noexcept;
 
@@ -544,7 +544,7 @@ static inline constexpr float InverseConvertAcceleration(float accel) noexcept
 }
 
 constexpr unsigned int MaxFloatDigitsDisplayedAfterPoint = 7;
-const char *_ecv_array GetFloatFormatString(unsigned int numDigitsAfterPoint) noexcept;
+const char *_ecv_array GetFloatFormatString(float val, unsigned int numDigitsAfterPoint) noexcept;
 
 #if SUPPORT_WORKPLACE_COORDINATES
 constexpr size_t NumCoordinateSystems = 9;							// G54 up to G59.3

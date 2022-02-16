@@ -172,11 +172,20 @@ Licence: GPL
 RepRap reprap;
 
 // Get the format string to use for printing a floating point number to the specified number of decimal digits. Zero means the maximum sensible number.
-const char *_ecv_array GetFloatFormatString(unsigned int numDigitsAfterPoint) noexcept
+const char *_ecv_array GetFloatFormatString(float val, unsigned int numDigitsAfterPoint) noexcept
 {
 	static constexpr const char *_ecv_array FormatStrings[] = { "%.7f", "%.1f", "%.2f", "%.3f", "%.4f", "%.5f", "%.6f", "%.7f" };
 	static_assert(ARRAY_SIZE(FormatStrings) == MaxFloatDigitsDisplayedAfterPoint + 1);
-	return FormatStrings[min<unsigned int>(numDigitsAfterPoint, MaxFloatDigitsDisplayedAfterPoint)];
+
+	float f = 1.0;
+	unsigned int maxDigitsAfterPoint = MaxFloatDigitsDisplayedAfterPoint;
+	while (maxDigitsAfterPoint > 1 && val >= f)
+	{
+		f *= 10.0;
+		--maxDigitsAfterPoint;
+	}
+
+	return FormatStrings[min<unsigned int>(numDigitsAfterPoint, maxDigitsAfterPoint)];
 }
 
 static const char *_ecv_array const moduleName[] =
@@ -254,9 +263,9 @@ void debugPrintf(const char *_ecv_array fmt, ...) noexcept
 }
 
 // Convert a float to double for passing to printf etc. If it is a NaN or infinity, convert it to 9999.9 to avoid getting JSON parse errors.
-double HideNan(float val) noexcept
+float HideNan(float val) noexcept
 {
-	return (double)((std::isnan(val) || std::isinf(val)) ? 9999.9 : val);
+	return (std::isnan(val) || std::isinf(val)) ? 9999.9 : val;
 }
 
 // Append a list of driver numbers to a string, with a space before each one

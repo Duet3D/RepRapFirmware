@@ -71,7 +71,7 @@ class UniqueId;
 // Encapsulated time_t, used to facilitate overloading the ExpressionValue constructor
 struct DateTime
 {
-	explicit DateTime(time_t t) : tim(t) { }
+	explicit DateTime(time_t t) noexcept : tim(t) { }
 
 	time_t tim;
 };
@@ -192,7 +192,7 @@ struct ExpressionValue
 #endif
 
 	// Get the format string to use assuming this is a floating point number
-	const char *_ecv_array GetFloatFormatString() const noexcept;
+	const char *_ecv_array GetFloatFormatString() const noexcept { return ::GetFloatFormatString(fVal, param); }
 
 	// Append a string representation of this value to a string
 	void AppendAsString(const StringRef& str) const noexcept;
