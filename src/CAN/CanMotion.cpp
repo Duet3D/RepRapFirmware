@@ -305,6 +305,7 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 				{
 					auto stopMsg = urgentMessageBuffer.SetupRequestMessage<CanMessageStopMovement>(0, CanInterface::GetCanAddress(), sl->boardAddress);
 					stopMsg->whichDrives = driversToStop;
+					//debugPrintf("Stopping drivers %u on board %u\n", driversToStop, sl->boardAddress);
 					return &urgentMessageBuffer;
 				}
 
@@ -314,6 +315,7 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 					revertMsg->whichDrives = driversToRevert;
 					revertMsg->clocksAllowed = (StepClockRate * BasicDriverPositionRevertMillis)/1000;
 					urgentMessageBuffer.dataLength = revertMsg->GetActualDataLength(numDriversReverted);
+					//debugPrintf("Reverting drivers %u by %" PRIi32 " on board %u\n", driversToRevert,revertMsg->finalStepCounts[0], sl->boardAddress);
 					return &urgentMessageBuffer;
 				}
 			}
