@@ -94,7 +94,7 @@ constexpr SSPChannel ESP_SPI = SSP0;
 #endif
 
 const uint32_t WiFiResponseTimeoutMillis = 200;					// SPI timeout when when the ESP does not have to write to flash memory
-const uint32_t WiFiTransferTimeoutMillis = 60;					// Christian measured this at 29 to 31ms when the ESP has to write to flag memory
+const uint32_t WiFiTransferTimeoutMillis = 60;					// Christian measured this at 29 to 31ms when the ESP has to write to flash memory
 const uint32_t WiFiWaitReadyMillis = 100;
 const uint32_t WiFiStartupMillis = 300;
 const uint32_t WiFiStableMillis = 100;
@@ -1830,21 +1830,25 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 
 #if SAME5x
 	{
-		// We don't get and end-of-transfer interrupt, just a start-of-transfer one. So wait until SS is high, then disable the SPI.
-		// The max block time is about 2K * 8/spi_clock_speed plus any pauses that the ESP takes, which at 26.7MHz clock rate is 620us plus pause time
-		// However, when we send a command that involves writing to flash memory, then the flash write occurs between sending the header and the body
+		// We don't get an end-of-transfer interrupt, just a start-of-transfer one. So wait until SS is high, then disable the SPI.
+		// The normal maximum block time is about 2K * 8/spi_clock_speed plus any pauses that the ESP takes, which at 26.7MHz clock rate is 620us plus pause time
+		// However, when we send a command that involves writing to flash memory, then the flash write occurs between sending the header and the body, so it takes much longer
 		const uint32_t startedWaitingAt = millis();
 		const bool writingFlash = (   cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkConfigureAccessPoint
 								   || cmd == NetworkCommand::networkDeleteSsid || cmd == NetworkCommand::networkFactoryReset);
 		while (!digitalRead(EspSSPin))
 		{
-			if (writingFlash)
-			{
-				delay(2);						// we sent a command that writes to flash memory. It may take a while and we're not trying to minimise latency, so give up the CPU
-			}
-			if (millis() - startedWaitingAt >= WiFiTransferTimeoutMillis)
+			const uint32_t millisWaiting = millis() - startedWaitingAt;
+			if (millisWaiting >= WiFiTransferTimeoutMillis)
 			{
 				return ResponseTimeout;
+			}
+
+			// The new RTOS SDK for the ESP8266 often interrupts out transfer task for long periods of time. So if the transfer is taking a while to complete, give up the CPU.
+			// Also give up the CPU if we are writing to flash memory, because we know that takes a long time.
+			if (writingFlash || millisWaiting >= 2)
+			{
+				delay(2);
 			}
 		}
 		if (WiFiSpiSercom->SPI.STATUS.bit.BUFOVF)
