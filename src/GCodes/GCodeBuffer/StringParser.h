@@ -63,7 +63,7 @@ public:
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of drivers after a key letter
 
 	void SetFinished() noexcept;											// Set the G Code finished
-	void SetCommsProperties(uint32_t arg) noexcept { checksumRequired = (arg & 1); }
+	void SetCommsProperties(uint32_t arg) noexcept { checksumRequired = (arg & 1); crcRequired = (arg & 4); }
 
 #if HAS_MASS_STORAGE
 	bool OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept;
@@ -164,6 +164,7 @@ private:
 	bool seenExpression;
 
 	bool checksumRequired;								// True if we only accept commands with a valid checksum
+	bool crcRequired;									// True if we only accept commands with a valid CRC, except for M409 commands
 	int8_t commandFraction;
 
 	bool binaryWriting;									// Executing gcode or writing binary file?

@@ -26,7 +26,7 @@ static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML
 
 StringParser::StringParser(GCodeBuffer& gcodeBuffer) noexcept
 	: gb(gcodeBuffer), fileBeingWritten(nullptr), writingFileSize(0), indentToSkipTo(NoIndentSkip), eofStringCounter(0),
-	  hasCommandNumber(false), commandLetter('Q'), checksumRequired(false), binaryWriting(false)
+	  hasCommandNumber(false), commandLetter('Q'), checksumRequired(false), crcRequired(false), binaryWriting(false)
 {
 	StartNewFile();
 	Init();
@@ -305,7 +305,8 @@ bool StringParser::LineFinished() noexcept
 			case 1:
 			case 2:
 			case 3:
-				badChecksum = (computedChecksum != declaredChecksum);
+				// If a CRC is required then the only command we allow without a CRC is M409
+				badChecksum = (computedChecksum != declaredChecksum) || (crcRequired && !StringStartsWith(gb.buffer, "M409 "));
 				break;
 
 			case 5:
@@ -320,7 +321,7 @@ bool StringParser::LineFinished() noexcept
 		else
 		{
 			badChecksum = false;
-			missingChecksum = (checksumRequired && gb.LatestMachineState().GetPrevious() == nullptr);
+			missingChecksum = ((checksumRequired || crcRequired) && gb.LatestMachineState().GetPrevious() == nullptr);
 		}
 
 		if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)

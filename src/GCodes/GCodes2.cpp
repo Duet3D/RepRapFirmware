@@ -3522,13 +3522,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					bool seen = false;
 					if (gb.Seen('B'))
 					{
-						platform.SetBaudRate(chan, gb.GetIValue());
+						platform.SetBaudRate(chan, gb.GetUIValue());
 						seen = true;
 					}
 
 					if (gb.Seen('S'))
 					{
-						const uint32_t val = gb.GetIValue();
+						const uint32_t val = gb.GetUIValue();
 						platform.SetCommsProperties(chan, val);
 						if (chan == 0)
 						{
