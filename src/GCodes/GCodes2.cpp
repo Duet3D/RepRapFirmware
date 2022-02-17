@@ -3255,6 +3255,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 556: // Axis compensation (we support only X, Y, Z)
 			{
 				bool seen = false;
+				Move& move = reprap.GetMove();
 
 				if (gb.Seen('S'))
 				{
@@ -3265,7 +3266,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							if (gb.Seen(axisLetters[axis]))
 							{
-								reprap.GetMove().SetAxisCompensation(axis, gb.GetFValue() / value);
+								move.SetAxisCompensation(axis, gb.GetFValue() / value);
 								seen = true;
 							}
 						}
@@ -3274,15 +3275,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				if (gb.Seen('P'))
 				{
-					reprap.GetMove().SetXYCompensation(gb.GetIValue() <= 0);
+					move.SetXYCompensation(gb.GetIValue() <= 0);
 					seen = true;
 				}
 
 				if (!seen)
 				{
 					reply.printf("Axis compensations - %s: %.5f, YZ: %.5f, ZX: %.5f",
-						reprap.GetMove().IsXYCompensated() ? "XY" : "YX",
-						(double)reprap.GetMove().AxisCompensation(X_AXIS), (double)reprap.GetMove().AxisCompensation(Y_AXIS), (double)reprap.GetMove().AxisCompensation(Z_AXIS));
+						move.IsXYCompensated() ? "XY" : "YX",
+						(double)move.AxisCompensation(X_AXIS), (double)move.AxisCompensation(Y_AXIS), (double)move.AxisCompensation(Z_AXIS));
 				}
 				break;
 			}
@@ -3795,11 +3796,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					if (changed || changedMode)
 					{
-						if (reprap.GetMove().GetKinematics().LimitPosition(moveState.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
+						if (move.GetKinematics().LimitPosition(moveState.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
 						{
 							ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);	// make sure the limits are reflected in the user position
 						}
-						reprap.GetMove().SetNewPosition(moveState.coords, true);
+						move.SetNewPosition(moveState.coords, true);
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
 					}
@@ -3829,62 +3830,42 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					return false;
 				}
+				if (gb.Seen('S'))
 				{
+					const unsigned int mode = gb.GetLimitedUIValue('S', 3);
 					Move& move = reprap.GetMove();
 					const KinematicsType oldK = move.GetKinematics().GetKinematicsType();		// get the current kinematics type so we can tell whether it changed
 
-					bool seen = false;
-					if (gb.Seen('S'))
+					// Switch to the correct CoreXY mode
+					switch (mode)
 					{
-						// Switch to the correct CoreXY mode
-						const int mode = gb.GetIValue();
-						switch (mode)
-						{
-						case 0:
-							move.SetKinematics(KinematicsType::cartesian);
-							break;
+					case 0:
+					default:		// to keep Eclipse happy
+						move.SetKinematics(KinematicsType::cartesian);
+						break;
 
-						case 1:
-							move.SetKinematics(KinematicsType::coreXY);
-							break;
+					case 1:
+						move.SetKinematics(KinematicsType::coreXY);
+						break;
 
-						case 2:
-							move.SetKinematics(KinematicsType::coreXZ);
-							break;
-
-						default:
-							reply.printf("Mode %d is not valid", mode);
-							result = GCodeResult::error;
-							break;
-						}
-						seen = true;
+					case 2:
+						move.SetKinematics(KinematicsType::coreXZ);
+						break;
 					}
 
-					if (result == GCodeResult::ok)
+					// We changed something, so reset the positions and set all axes not homed
+					if (move.GetKinematics().GetKinematicsType() != oldK)
 					{
-						if (gb.Seen('X') || gb.Seen('Y') || gb.Seen('Z'))
-						{
-							reply.copy("M667 XYZ parameters are no longer supported, use M669 matrix parameters instead");
-							result = GCodeResult::error;
-						}
-
-						if (seen)
-						{
-							// We changed something, so reset the positions and set all axes not homed
-							if (move.GetKinematics().GetKinematicsType() != oldK)
-							{
-								move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveState.coords);
-								ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);
-							}
-							if (reprap.GetMove().GetKinematics().LimitPosition(moveState.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
-							{
-								ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);	// make sure the limits are reflected in the user position
-							}
-							reprap.GetMove().SetNewPosition(moveState.coords, true);
-							SetAllAxesNotHomed();
-							reprap.MoveUpdated();
-						}
+						move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveState.coords);
+						ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);
 					}
+					if (move.GetKinematics().LimitPosition(moveState.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
+					{
+						ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);	// make sure the limits are reflected in the user position
+					}
+					move.SetNewPosition(moveState.coords, true);
+					SetAllAxesNotHomed();
+					reprap.MoveUpdated();
 				}
 				break;
 
@@ -3900,8 +3881,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					bool seen = false;
 					if (gb.Seen('K'))
 					{
-						const int nk = gb.GetIValue();
-						if (nk < 0 || nk >= (int)KinematicsType::unknown || !move.SetKinematics(static_cast<KinematicsType>(nk)))
+						const unsigned int nk = gb.GetUIValue();
+						if (nk >= (unsigned int)KinematicsType::unknown || !move.SetKinematics(static_cast<KinematicsType>(nk)))
 						{
 							reply.printf("Unknown kinematics type %d", nk);
 							result = GCodeResult::error;
@@ -3924,11 +3905,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, moveState.coords);
 							ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);
 						}
-						if (reprap.GetMove().GetKinematics().LimitPosition(moveState.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
+						if (move.GetKinematics().LimitPosition(moveState.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
 						{
 							ToolOffsetInverseTransform(moveState.coords, moveState.currentUserPosition);	// make sure the limits are reflected in the user position
 						}
-						reprap.GetMove().SetNewPosition(moveState.coords, true);
+						move.SetNewPosition(moveState.coords, true);
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
 					}
@@ -3966,7 +3947,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				else if (LockMovementAndWaitForStandstill(gb))
 				{
-					if (reprap.GetMove().GetNumProbedProbePoints() < 2)
+					Move& move = reprap.GetMove();
+					if (move.GetNumProbedProbePoints() < 2)
 					{
 						reply.copy("Insufficient probe points");
 						result = GCodeResult::error;
@@ -3991,8 +3973,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 						// Get the coordinates of the first two G30 points and calculate how far off the axis is
 						float x1, y1, x2, y2;
-						const float z1 = reprap.GetMove().GetProbeCoordinates(0, x1, y1, true);
-						const float z2 = reprap.GetMove().GetProbeCoordinates(1, x2, y2, true);
+						const float z1 = move.GetProbeCoordinates(0, x1, y1, true);
+						const float z2 = move.GetProbeCoordinates(1, x2, y2, true);
 						const float a1 = (x1 == x2) ? y1 : x1;
 						const float a2 = (x1 == x2) ? y2 : x2;
 
@@ -4008,11 +3990,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							reply.printf("%c axis is off by %.2f deg", axisLetters[axisToUse], (double)correctionAngle);
 							HandleReply(gb, GCodeResult::notFinished, reply.c_str());
 						}
-						else if (reprap.GetMove().GetNumProbedProbePoints() >= 4)
+						else if (move.GetNumProbedProbePoints() >= 4)
 						{
 							// At least four G30 points are given. This lets us figure out how far off the centre of the axis is
-							const float z3 = reprap.GetMove().GetProbeCoordinates(2, x1, y1, true);
-							const float z4 = reprap.GetMove().GetProbeCoordinates(3, x2, y2, true);
+							const float z3 = move.GetProbeCoordinates(2, x1, y1, true);
+							const float z4 = move.GetProbeCoordinates(3, x2, y2, true);
 							const float a3 = (x1 == x2) ? y1 : x1;
 							const float a4 = (x1 == x2) ? y2 : x2;
 
@@ -4058,7 +4040,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 674: // Set Z to center point
 				if (LockMovementAndWaitForStandstill(gb))
 				{
-					if (reprap.GetMove().GetNumProbedProbePoints() < 2)
+					Move& move = reprap.GetMove();
+					if (move.GetNumProbedProbePoints() < 2)
 					{
 						reply.copy("Insufficient probe points");
 						result = GCodeResult::error;
@@ -4071,18 +4054,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					else
 					{
 						float x, y;
-						const float z1 = reprap.GetMove().GetProbeCoordinates(0, x, y, true);
-						const float z2 = reprap.GetMove().GetProbeCoordinates(1, x, y, true);
+						const float z1 = move.GetProbeCoordinates(0, x, y, true);
+						const float z2 = move.GetProbeCoordinates(1, x, y, true);
 						const float offset = gb.Seen('P') ? gb.GetFValue() : 0.0;
 						currentUserPosition[Z_AXIS] -= (z1 + z2) / 2.0 + offset;
 
 						ToolOffsetTransform(currentUserPosition, moveState.coords);
-						if (reprap.GetMove().GetKinematics().LimitPosition(moveState.coords, numVisibleAxes, LowestNBits<AxesBitmap>(numVisibleAxes), false))	// pretend that all axes are homed
+						if (move.GetKinematics().LimitPosition(moveState.coords, numVisibleAxes, LowestNBits<AxesBitmap>(numVisibleAxes), false))	// pretend that all axes are homed
 						{
 							ToolOffsetInverseTransform(moveState.coords, currentUserPosition);		// make sure the limits are reflected in the user position
 						}
-						reprap.GetMove().SetNewPosition(moveState.coords, true);
-						axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(MakeBitmap<AxesBitmap>(Z_AXIS));
+						move.SetNewPosition(moveState.coords, true);
+						axesHomed |= move.GetKinematics().AxesAssumedHomed(MakeBitmap<AxesBitmap>(Z_AXIS));
 
 						reply.printf("Probe points at %.2f %.2f, setting new Z to %.2f", (double)z1, (double)z2, (double)currentUserPosition[Z_AXIS]);
 					}
@@ -4678,7 +4661,7 @@ GCodeResult GCodes::TryMacroFile(GCodeBuffer& gb) noexcept
 	return GCodeResult::warningNotSupported;
 }
 
-bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
+bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	if (gb.LatestMachineState().runningM502)
 	{
@@ -4700,18 +4683,9 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply)
 	}
 	else if (gb.Seen('R'))
 	{
-		const unsigned int rpNumber = gb.GetIValue();
-		if (rpNumber < ARRAY_SIZE(numberedRestorePoints))
-		{
-			seen = true;
-			toolNum = numberedRestorePoints[rpNumber].toolNumber;
-		}
-		else
-		{
-			UnlockAll(gb);
-			HandleReply(gb, GCodeResult::error, "T: bad restore point number");
-			return true;			// bad restore point number so ignore the T command
-		}
+		const unsigned int rpNumber = gb.GetLimitedUIValue('R', ARRAY_SIZE(numberedRestorePoints));
+		seen = true;
+		toolNum = numberedRestorePoints[rpNumber].toolNumber;
 	}
 
 	if (seen)

@@ -51,7 +51,7 @@
 
 #include <General/SafeStrtod.h>
 
-static constexpr int _DAYS_BEFORE_MONTH[12] =
+static constexpr int16_t _DAYS_BEFORE_MONTH[12] =
 {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
 #define SET_MDAY 1
@@ -90,12 +90,11 @@ static int first_day (int year) noexcept
 #undef 	isspace_l
 #define isspace_l(_c, _l)			isspace(_c)
 #define strtol_l(_b, _s, _n, _l)	StrToI32(_b, _s)
-#define strptime_l(_b, _f, _t, _l)	strptime_dc(_b, _f, _t)
 
 const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept
 {
     char c;
-    int ymd = 0;
+    uint8_t ymd = 0;
 
     for (; (c = *format) != '\0'; ++format)
     {
@@ -255,7 +254,7 @@ const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array form
 			}
 			else
 			{
-				int leap = is_leap_year (timeptr->tm_year + tm_year_base);
+				const int leap = is_leap_year (timeptr->tm_year + tm_year_base);
 				int i;
 				for (i = 2; i < 12; ++i)
 				{
@@ -282,7 +281,7 @@ const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array form
     if ((ymd & (SET_YEAR | SET_YDAY | SET_WDAY)) == (SET_YEAR | SET_YDAY))
     {
 		/* fill in tm_wday */
-		int fday = first_day (timeptr->tm_year + tm_year_base);
+		const int fday = first_day (timeptr->tm_year + tm_year_base);
 		timeptr->tm_wday = (fday + timeptr->tm_yday) % 7;
     }
 

@@ -54,14 +54,14 @@ memcmp (const void *m1,
   while (n--)
     {
       if (*s1 != *s2)
-	{
-	  return *s1 - *s2;
-	}
+	  {
+	    return *s1 - *s2;
+	  }
       s1++;
       s2++;
     }
   return 0;
-#else  
+#else
   unsigned char *s1 = (unsigned char *) m1;
   unsigned char *s2 = (unsigned char *) m2;
   unsigned long *a1;
@@ -72,14 +72,14 @@ memcmp (const void *m1,
      not turn up in inner loops.  */
   if (!TOO_SMALL(n) && !UNALIGNED(s1,s2))
     {
-      /* Otherwise, load and compare the blocks of memory one 
+      /* Otherwise, load and compare the blocks of memory one
          word at a time.  */
       a1 = (unsigned long*) s1;
       a2 = (unsigned long*) s2;
       while (n >= LBLOCKSIZE)
         {
-          if (*a1 != *a2) 
-   	    break;
+          if (*a1 != *a2)
+   	        break;
           a1++;
           a2++;
           n -= LBLOCKSIZE;
@@ -94,7 +94,7 @@ memcmp (const void *m1,
   while (n--)
     {
       if (*s1 != *s2)
-	return *s1 - *s2;
+	    return *s1 - *s2;
       s1++;
       s2++;
     }
