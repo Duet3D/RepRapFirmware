@@ -24,16 +24,19 @@ struct ExpansionBoardData
 {
 	ExpansionBoardData() noexcept;
 
-	const char *typeName;
-	UniqueId uniqueId;
+	const char *_ecv_array typeName;
 	MinCurMax mcuTemp, vin, v12;
+	uint32_t accelerometerLastRunDataPoints;
+	uint32_t closedLoopLastRunDataPoints;
+	UniqueId uniqueId;
+	uint16_t accelerometerRuns;
+	uint16_t closedLoopRuns;
 	uint16_t hasMcuTemp : 1,
 			 hasVin : 1,
 			 hasV12 : 1,
 			 hasAccelerometer : 1,
-			 spare : 12;
-	uint16_t accelerometerRuns;
-	uint16_t accelerometerLastRunDataPoints;
+			 hasClosedLoop : 1,
+			 spare : 11;
 	BoardState state;
 	uint8_t numDrivers;
 };
@@ -56,6 +59,7 @@ public:
 	void UpdateFinished(CanAddress address) noexcept;
 	void UpdateFailed(CanAddress address) noexcept;
 	void AddAccelerometerRun(CanAddress address, unsigned int numDataPoints) noexcept;
+	void AddClosedLoopRun(CanAddress address, unsigned int numDataPoints) noexcept;
 	bool IsFlashing() const noexcept { return numBoardsFlashing != 0; }
 
 	void EmergencyStop() noexcept;

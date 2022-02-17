@@ -69,6 +69,7 @@ static void CloseDataCollectionFile() noexcept
 	closedLoopFile->Truncate();				// truncate the file in case we didn't write all the preallocated space
 	closedLoopFile->Close();
 	closedLoopFile = nullptr;
+	reprap.GetExpansion().AddClosedLoopRun(expectedRemoteBoardAddress, expectedRemoteSampleNumber);
 }
 
 // Handle M569.5 - Collect closed loop data
@@ -143,7 +144,15 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 
 	String<MaxFilenameLength> closedLoopFileName;
 	MassStorage::CombineName(closedLoopFileName.GetRef(), "0:/sys/closed-loop/", tempFilename.c_str());
-	OpenDataCollectionFile(closedLoopFileName, preallocSize);
+	if (!OpenDataCollectionFile(closedLoopFileName, preallocSize))
+	{
+		reply.copy("failed to create data collection file");
+		return GCodeResult::error;
+	}
+
+	// Set up the expected CAN address and next point number before we do anything that might call CloseDataFile
+	expectedRemoteSampleNumber = 0;
+	expectedRemoteBoardAddress = deviceRequested.boardAddress;
 
 	// If no samples have been requested, return with an info message
 	if (numSamplesRequested == 0)
@@ -154,8 +163,6 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	}
 
 	// Set up & start the CAN data transfer
-	expectedRemoteSampleNumber = 0;
-	expectedRemoteBoardAddress = deviceRequested.boardAddress;
 	const GCodeResult rslt = CanInterface::StartClosedLoopDataCollection(deviceRequested, filterRequested, numSamplesRequested, rateRequested, movementRequested, modeRequested, gb, reply);
 	if (rslt > GCodeResult::warning)
 	{
