@@ -1624,7 +1624,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 		}
 
 #if SUPPORT_CAN_EXPANSION
-		const uint32_t canClocksNeeded = CanMotion::FinishMovement(afterPrepare.moveStartTime, simMode != SimulationMode::off, flags.checkEndstops);
+		const uint32_t canClocksNeeded = CanMotion::FinishMovement(*this, afterPrepare.moveStartTime, simMode != SimulationMode::off);
 		if (canClocksNeeded > clocksNeeded)
 		{
 			// Due to rounding error in the calculations, we quite often calculate the CAN move as being longer than our previously-calculated value, normally by just one clock.

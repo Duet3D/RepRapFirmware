@@ -48,6 +48,7 @@ namespace CanMotion
 	static CanMessageBuffer *GetBuffer(const PrepParams& params, DriverId canDriver) noexcept;
 	static void InternalStopDriverWhenProvisional(DriverId driver) noexcept;
 	static bool InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noexcept;
+	static void FreeMovementBuffers() noexcept;
 }
 
 void CanMotion::Init() noexcept
@@ -56,10 +57,8 @@ void CanMotion::Init() noexcept
 	stopListMutex.Create("stopList");
 }
 
-// This is called by DDA::Prepare at the start of preparing a movement
-void CanMotion::StartMovement() noexcept
+void CanMotion::FreeMovementBuffers() noexcept
 {
-	// There shouldn't be any movement buffers in the list, but free any that there may be
 	for (;;)
 	{
 		CanMessageBuffer *p = movementBufferList;
@@ -70,6 +69,12 @@ void CanMotion::StartMovement() noexcept
 		movementBufferList = p->next;
 		CanMessageBuffer::Free(p);
 	}
+}
+
+// This is called by DDA::Prepare at the start of preparing a movement
+void CanMotion::StartMovement() noexcept
+{
+	FreeMovementBuffers();					// there shouldn't be any movement buffers in the list, but free any that there may be
 
 	// Free up any stop list items left over from the previous move
 	MutexLocker lock(stopListMutex);
@@ -212,54 +217,60 @@ void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver
 #endif
 
 // This is called by DDA::Prepare when all DMs for CAN drives have been processed. Return the calculated move time in steps, or 0 if there are no CAN moves
-uint32_t CanMotion::FinishMovement(uint32_t moveStartTime, bool simulating, bool checkingEndstops) noexcept
+uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool simulating) noexcept
 {
-	CanMessageBuffer *buf = movementBufferList;
-	if (buf == nullptr)
+	uint32_t clocks = 0;
+	if (simulating || dda.GetState() == DDA::completed)
 	{
-		return 0;
+		FreeMovementBuffers();											// it turned out that there was nothing to move
 	}
-
-	MutexLocker lock(stopListMutex);
-
-	do
+	else
 	{
-		CanMessageBuffer * const nextBuffer = buf->next;				// must get this before sending the buffer, because sending the buffer releases it
-		if (simulating)
+		CanMessageBuffer *buf = movementBufferList;
+		if (buf != nullptr)
 		{
-			CanMessageBuffer::Free(buf);
-		}
-		else
-		{
-#if USE_REMOTE_INPUT_SHAPING
-			CanMessageMovementLinear& msg = buf->msg.moveLinearShaped;
-#else
-			CanMessageMovementLinear& msg = buf->msg.moveLinear;
-#endif
-			msg.whenToExecute = moveStartTime;
-			uint8_t& seq = nextSeq[buf->id.Dst()];
-			msg.seq = seq;
-			seq = (seq + 1) & 0x7F;
-			buf->dataLength = msg.GetActualDataLength();
-			if (checkingEndstops)
+			MutexLocker lock((dda.IsCheckingEndstops()) ? &stopListMutex : nullptr);
+			do
 			{
-				// Set up the stop list
-				DriversStopList * const sl = new DriversStopList(stopList, buf->id.Dst());
-				const size_t nd = msg.numDrivers;
-				sl->numDrivers = (uint8_t)nd;
-				for (size_t i = 0; i < nd; ++i)
+				CanMessageBuffer * const nextBuffer = buf->next;		// must get this before sending the buffer, because sending the buffer releases it
+#if USE_REMOTE_INPUT_SHAPING
+				CanMessageMovementLinear& msg = buf->msg.moveLinearShaped;
+#else
+				CanMessageMovementLinear& msg = buf->msg.moveLinear;
+#endif
+				if (msg.HasMotion())
 				{
-					sl->stopStates[i] = (msg.perDrive[i].steps != 0) ? DriverStopState::active : DriverStopState::inactive;
+					msg.whenToExecute = moveStartTime;
+					uint8_t& seq = nextSeq[buf->id.Dst()];
+					msg.seq = seq;
+					seq = (seq + 1) & 0x7F;
+					buf->dataLength = msg.GetActualDataLength();
+					if (dda.IsCheckingEndstops())
+					{
+						// Set up the stop list
+						DriversStopList * const sl = new DriversStopList(stopList, buf->id.Dst());
+						const size_t nd = msg.numDrivers;
+						sl->numDrivers = (uint8_t)nd;
+						for (size_t i = 0; i < nd; ++i)
+						{
+							sl->stopStates[i] = (msg.perDrive[i].steps != 0) ? DriverStopState::active : DriverStopState::inactive;
+						}
+						stopList = sl;
+					}
+					CanInterface::SendMotion(buf);								// queues the buffer for sending and frees it when done
+					clocks = currentMoveClocks;
 				}
-				stopList = sl;
-			}
-			CanInterface::SendMotion(buf);								// queues the buffer for sending and frees it when done
-		}
-		buf = nextBuffer;
-	} while (buf != nullptr);
+				else
+				{
+					CanMessageBuffer::Free(buf);
+				}
+				buf = nextBuffer;
+			} while (buf != nullptr);
 
-	movementBufferList = nullptr;
-	return currentMoveClocks;
+			movementBufferList = nullptr;
+		}
+	}
+	return clocks;
 }
 
 bool CanMotion::CanPrepareMove() noexcept
@@ -340,6 +351,7 @@ void CanMotion::InsertHiccup(uint32_t numClocks) noexcept
 	CanInterface::WakeAsyncSenderFromIsr();
 }
 
+// Flag a CAN-connected driver as not moving when we haven't sent the movement message yet
 void CanMotion::InternalStopDriverWhenProvisional(DriverId driver) noexcept
 {
 	// Search for the correct movement buffer
@@ -359,6 +371,7 @@ void CanMotion::InternalStopDriverWhenProvisional(DriverId driver) noexcept
 	}
 }
 
+// Tell a CAN-connected driver to stop moving after we have sent the movement message
 bool CanMotion::InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noexcept
 {
 	DriversStopList *sl = stopList;
@@ -379,7 +392,7 @@ bool CanMotion::InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noe
 	return false;
 }
 
-// This is called from the step ISR with isBeingPrepared false, or from the Move task with isBeingPrepared true
+// This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
 void CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcept
 {
 	if (dda.GetState() == DDA::DDAState::provisional)
@@ -399,7 +412,7 @@ void CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcep
 	}
 }
 
-// This is called from the step ISR with isBeingPrepared false, or from the Move task with isBeingPrepared true
+// This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
 void CanMotion::StopAxis(const DDA& dda, size_t axis) noexcept
 {
 	const Platform& p = reprap.GetPlatform();
@@ -446,7 +459,7 @@ void CanMotion::StopAxis(const DDA& dda, size_t axis) noexcept
 	}
 }
 
-// This is called from the step ISR with isBeingPrepared false, or from the Move task with isBeingPrepared true
+// This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
 void CanMotion::StopAll(const DDA& dda) noexcept
 {
 	if (dda.GetState() == DDA::DDAState::provisional)

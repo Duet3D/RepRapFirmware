@@ -24,7 +24,7 @@ namespace CanMotion
 #else
 	void AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance) noexcept;
 #endif
-	uint32_t FinishMovement(uint32_t moveStartTime, bool simulating, bool checkingEndstops) noexcept;
+	uint32_t FinishMovement(const DDA& dda, uint32_t moveStartTime, bool simulating) noexcept;
 	bool CanPrepareMove() noexcept;
 	CanMessageBuffer *GetUrgentMessage() noexcept;
 
