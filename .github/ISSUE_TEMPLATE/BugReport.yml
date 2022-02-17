@@ -15,10 +15,10 @@ body:
       ### Before posting your issue, please review the following sources to check if your question has already been reported and answered.
 
       #### Have you checked the documentation?
-      https://duet3d.dozuki.com/
+      https://docs.duet3d.com
 
-      #### Have you checked the GCODE Wiki?
-      https://duet3d.dozuki.com/Wiki/Gcode
+      #### Have you checked the GCODE reference?
+      https://docs.duet3d.com/en/User_manual/Reference/Gcodes
 
       #### Have you checked the firmware release notes?
       RRF2: https://github.com/Duet3D/RepRapFirmware/wiki/Changelog-RRF-1.x-&-2.x
