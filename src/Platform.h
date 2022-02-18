@@ -570,6 +570,7 @@ public:
 #endif
 
 #if HAS_SMART_DRIVERS
+	bool IsAnyDriverActive(unsigned int board) const;
 	float GetTmcDriversTemperature(unsigned int board) const;
 	void DriverCoolingFansOnOff(uint32_t driverChannelsMonitored, bool on);
 	unsigned int GetNumSmartDrivers() const { return numSmartDrivers; }
