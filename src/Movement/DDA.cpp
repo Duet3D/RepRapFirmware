@@ -153,7 +153,7 @@ DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
 		ep = 0;
 	}
 
-	flags.all = 0;						// in particular we need to set endCoordinatesValid and usePressureAdvance to false
+	flags.all = 0;						// in particular we need to set endCoordinatesValid and usePressureAdvance to false, also checkEndstops false for the ATE build
 	virtualExtruderPosition = 0.0;
 	filePos = noFilePosition;
 
