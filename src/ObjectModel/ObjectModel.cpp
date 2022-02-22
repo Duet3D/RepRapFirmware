@@ -213,6 +213,9 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 
 		switch((ExpansionDetail)param)
 		{
+		case ExpansionDetail::longName:
+			rslt.cat("Duet 3 Expansion ");
+			// no break
 		case ExpansionDetail::shortName:
 			rslt.catn(sVal, indexOfDivider1);
 			break;
