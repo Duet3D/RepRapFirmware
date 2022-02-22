@@ -327,7 +327,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),	ObjectModelEntryFlags::none },
 	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::none },
 	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->GetCurrentToolNumber()),				ObjectModelEntryFlags::live },
-	{ "deferredPowerDown",		OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), (int32_t)self->platform->IsDeferredPowerDown()),	ObjectModelEntryFlags::none },
+	{ "deferredPowerDown",		OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->IsDeferredPowerDown()),	ObjectModelEntryFlags::none },
 	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),								ObjectModelEntryFlags::none },
 	{ "gpOut",					OBJECT_MODEL_FUNC_NOSELF(&gpoutArrayDescriptor),						ObjectModelEntryFlags::live },
 #if SUPPORT_LASER
