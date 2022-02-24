@@ -184,7 +184,16 @@ AxesBitmap Kinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alread
 		if (toBeHomed.IsBitSet(axis) && (axis != Z_AXIS || !homeZLast || (alreadyHomed & homeFirst) == homeFirst))
 		{
 			filename.copy("home");
-			filename.cat(tolower(reprap.GetGCodes().GetAxisLetters()[axis]));
+			const char axisLetter = reprap.GetGCodes().GetAxisLetters()[axis];
+			if (islower(axisLetter))
+			{
+				filename.cat('\'');
+				filename.cat(axisLetter);
+			}
+			else
+			{
+				filename.cat(tolower(axisLetter));
+			}
 			filename.cat(".g");
 			return AxesBitmap();
 		}
