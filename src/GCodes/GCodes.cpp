@@ -4627,17 +4627,9 @@ void GCodes::GrabResource(const GCodeBuffer& gb, Resource r) noexcept
 
 	if (resourceOwners[r] != &gb)
 	{
-		if (resourceOwners[r] != nullptr)
-		{
-			GCodeMachineState *m = &(resourceOwners[r]->LatestMachineState());
-			do
-			{
-				m->lockedResources.ClearBit(r);
-				m = m->GetPrevious();
-			}
-			while (m != nullptr);
-		}
+		// Note, we now leave the resource bit set in the original owning GCodeBuffer machine state
 		resourceOwners[r] = &gb;
+		gb.LatestMachineState().lockedResources.SetBit(r);
 	}
 }
 
@@ -4672,12 +4664,8 @@ void GCodes::UnlockResource(const GCodeBuffer& gb, Resource r) noexcept
 
 	if (resourceOwners[r] == &gb)
 	{
-		GCodeMachineState * mc = &gb.LatestMachineState();
-		do
-		{
-			mc->lockedResources.ClearBit(r);
-			mc = mc->GetPrevious();
-		} while (mc != nullptr);
+		// Note, we leave the bit set in previous stack levels! This is needed e.g. to allow M291 blocking messages to be used in homing files.
+		gb.LatestMachineState().lockedResources.ClearBit(r);
 		resourceOwners[r] = nullptr;
 	}
 }

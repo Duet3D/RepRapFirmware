@@ -269,6 +269,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::homing1:
+		// We should only ever get here when toBeHomed is not empty
 		if (toBeHomed.IsEmpty())
 		{
 			gb.SetState(GCodeState::normal);
@@ -309,7 +310,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// Test whether the previous homing move homed any axes
 			if (toBeHomed.Disjoint(axesHomed))
 			{
-				reply.copy("Homing failed");
+				reply.copy("Failed to home axes ");
+				AppendAxes(reply, toBeHomed);
 				stateMachineResult = GCodeResult::error;
 				toBeHomed.Clear();
 				gb.SetState(GCodeState::normal);

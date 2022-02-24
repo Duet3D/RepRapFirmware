@@ -1517,7 +1517,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					// 2020-02-04 Don't unlock movement if it was already locked, e.g. because M109 was used in a macro
 					if (!movementWasLocked)
 					{
-						UnlockMovement(gb);								// allow babystepping and pausing while heating
+						UnlockMovement(gb);							// allow babystepping and pausing while heating
 					}
 				}
 

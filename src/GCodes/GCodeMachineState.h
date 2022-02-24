@@ -206,6 +206,8 @@ public:
 #if HAS_SBC_INTERFACE
 	FileId fileId;													// virtual ID to distinguish files in different stack levels (only unique per GB)
 #endif
+	// Note, having a bit set in lockedResources doesn't necessarily mean that we own the lock!
+	// It means we acquired the lock at this stack level, and haven't released it at this level. It may have been released at a more nested level, or stolen from us (see GrabResource).
 	ResourceBitmap lockedResources;
 	BlockState blockStates[MaxBlockIndent];
 	uint32_t lineNumber;
