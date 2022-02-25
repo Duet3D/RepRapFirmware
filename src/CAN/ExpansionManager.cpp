@@ -197,7 +197,7 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 		UpdateBoardState(address, BoardState::running);
 	}
 
-	const CanMessageBoardStatus msg = buf->msg.boardStatus;
+	const CanMessageBoardStatus& msg = buf->msg.boardStatus;
 
 	// We must process the data in the correct order, to ensure that we pick up the right values
 	size_t index = 0;
