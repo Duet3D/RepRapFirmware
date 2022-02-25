@@ -656,13 +656,14 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 			{
 				const char *endptr;
 				const int32_t index = StrToI32(filter, &endptr);
-				if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
+				const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
+				int bitNumber;
+				if (endptr == filter || *endptr != ']' || index < 0 || (bitNumber = bm.GetSetBitNumber(index)) < 0)
 				{
 					buf->cat("null");				// avoid returning badly-formed JSON
 					break;							// invalid syntax, or index out of range
 				}
-				const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
-				buf->catf("%u", bm.GetSetBitNumber(index));
+				buf->catf("%d", bitNumber);
 				break;
 			}
 		}
@@ -688,13 +689,14 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 			{
 				const char *endptr;
 				const int32_t index = StrToI32(filter, &endptr);
-				if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
+				const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.uVal);
+				int bitNumber;
+				if (endptr == filter || *endptr != ']' || index < 0 || (bitNumber = bm.GetSetBitNumber(index)) < 0)
 				{
 					buf->cat("null");				// avoid returning badly-formed JSON
 					break;							// invalid syntax, or index out of range
 				}
-				const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.uVal);
-				buf->catf("%u", bm.GetSetBitNumber(index));
+				buf->catf("%d", bitNumber);
 				break;
 			}
 		}
