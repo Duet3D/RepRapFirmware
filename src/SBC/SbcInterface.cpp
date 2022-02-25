@@ -212,6 +212,7 @@ void SbcInterface::ExchangeData() noexcept
 
 		// Reset the controller
 		case SbcRequest::Reset:
+			reprap.EmergencyStop();							// turn off heaters and motors, tell expansion boards to reset
 			SoftwareReset(SoftwareResetReason::user);
 			break;
 
