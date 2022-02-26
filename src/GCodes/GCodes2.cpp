@@ -3311,8 +3311,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 			Tool* const tool = reprap.GetTool(tNumber);
 			if (tool != nullptr)
 			{
+				bool seen = false;
+				if (gb.Seen('S')) {
+					seen = true;
+					tool->SetCanExceedMixSumOf1(gb.GetIValue() == 0);
+				}
 				if (gb.Seen(extrudeLetter))
 				{
+					seen = true;
 					float eVals[MaxExtruders];
 					size_t eCount = tool->DriveCount();
 					gb.GetFloatArray(eVals, eCount, false);
@@ -3322,10 +3328,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 					}
 					else
 					{
-						tool->DefineMix(eVals);
+						if (!tool->DefineMix(eVals)) {
+							reply.printf("Setting mix ratios - sum of ratios > 1.0. Disable this check with M567 P%d S0", tNumber);
+						}
 					}
 				}
-				else
+				if (!seen)
 				{
 					reply.printf("Tool %d mix ratios:", tNumber);
 					char sep = ' ';
@@ -3334,6 +3342,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 						reply.catf("%c%.3f", sep, (double)tool->GetMix()[drive]);
 						sep = ':';
 					}
+					reply.printf(". Mix ratio sum of 1.0 can be exceeded: %s", tool->GetCanExceedMixSumOf1() ? "true" : "false");
 				}
 			}
 		}

@@ -117,6 +117,7 @@ Tool * Tool::freelist = nullptr;
 	t->heaterFault = false;
 	t->axisOffsetsProbed = 0;
 	t->displayColdExtrudeWarning = false;
+	t->canExceedMixSumOf1 = false;
 
 	for (size_t axis = 0; axis < MaxAxes; axis++)
 	{
@@ -391,12 +392,33 @@ bool Tool::DisplayColdExtrudeWarning()
 	return result;
 }
 
-void Tool::DefineMix(const float m[])
+bool Tool::DefineMix(const float m[])
 {
+	if (this->CheckExceedsMixSumOf1(m)) {
+		return false;
+	}
 	for(size_t drive = 0; drive < driveCount; drive++)
 	{
 		mix[drive] = m[drive];
 	}
+	return true;
+}
+
+bool Tool::CheckExceedsMixSumOf1(const float m[]) const {
+	// We don't need to check if this is true
+	if (this->canExceedMixSumOf1) {
+		return false;
+	}
+
+	float sum = 0.0;
+	// Only check for the amount of configured drives
+	for(size_t drive = 0; drive < driveCount; drive++) {
+		sum += m[drive];
+		if (sum > 1.0) {
+			return true;
+		}
+	}
+	return false;
 }
 
 // Write the tool's settings to file returning true if successful. The settings written leave the tool selected unless it is off.
