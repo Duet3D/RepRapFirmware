@@ -1217,6 +1217,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		}
 		break;
 
+
 	case 99: // Return from Macro/Subprogram
 		FileMacroCyclesReturn(gb);
 		break;
@@ -3987,6 +3988,28 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply)
 		{
 			result = GCodeResult::error;
 			reply.copy("No tool selected");
+		}
+		break;
+
+	case 704: // Run custom filament macro
+		if (gb.Seen('P'))
+		{
+			if (reprap.GetCurrentTool() != nullptr)
+			{
+				if (reprap.GetCurrentTool()->GetFilament() != nullptr)
+				{
+					String<MaxFilenameLength> filename;
+					gb.GetPossiblyQuotedString(filename.GetRef());
+					String<ScratchStringLength> scratchString;
+					scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, reprap.GetCurrentTool()->GetFilament()->GetName(), filename.c_str());
+					DoFileMacro(gb, scratchString.c_str(), true);
+				}
+			}
+			else
+			{
+				result = GCodeResult::error;
+				reply.copy("No tool selected");
+			}
 		}
 		break;
 
