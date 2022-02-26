@@ -278,7 +278,7 @@ public:
 	void UartTmcHandler();									// core of the ISR for this driver
 
 private:
-	bool SetChopConf(uint32_t newVal);
+	bool SetChopConf(uint32_t newVal, bool raw = false);
 	void UpdateRegister(size_t regIndex, uint32_t regVal);
 	void UpdateChopConfRegister();							// calculate the chopper control register and flag it for sending
 	void UpdateCurrent();
@@ -589,7 +589,7 @@ bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal)
 	switch(reg)
 	{
 	case SmartDriverRegister::chopperControl:
-		return SetChopConf(regVal);
+		return SetChopConf(regVal, true);
 
 	case SmartDriverRegister::toff:
 		return SetChopConf((configuredChopConfReg & ~CHOPCONF_TOFF_MASK) | ((regVal << CHOPCONF_TOFF_SHIFT) & CHOPCONF_TOFF_MASK));
@@ -650,10 +650,16 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const
 }
 
 // Set the chopper control register to the settings provided by the user. We allow only the lowest 17 bits to be set.
-bool TmcDriverState::SetChopConf(uint32_t newVal)
+bool TmcDriverState::SetChopConf(uint32_t newVal, bool raw)
 {
 	const uint32_t offTime = (newVal & CHOPCONF_TOFF_MASK) >> CHOPCONF_TOFF_SHIFT;
-	if (offTime == 0 || (offTime == 1 && (newVal & CHOPCONF_TBL_MASK) < (2 << CHOPCONF_TBL_SHIFT)))
+	// TOFF = 0 turns the driver off so it is not allowed unless given via Cnnn parameter.
+	if (!raw && offTime == 0)
+	{
+		return false;
+	}
+	// TOFF = 1 is not allowed if TBL = 0.
+	if (offTime == 1 && (newVal & CHOPCONF_TBL_MASK) < (2 << CHOPCONF_TBL_SHIFT))
 	{
 		return false;
 	}
