@@ -470,6 +470,11 @@ public:
 	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const noexcept;
 	void SetDriverStepTiming(size_t driver, const float microseconds[4]) noexcept;
 	bool GetDriverStepTiming(size_t driver, float microseconds[4]) const noexcept;
+
+#ifdef DUET3_MB6XD
+	void GetActualDriverTimings(float timings[4]) noexcept;
+#endif
+
 	float DriveStepsPerUnit(size_t axisOrExtruder) const noexcept;
 	const float *_ecv_array GetDriveStepsPerUnit() const noexcept
 		{ return driveStepsPerUnit; }
@@ -702,11 +707,11 @@ private:
 	// Convert microseconds to step clocks, rounding up to the next step clock
 	static constexpr uint32_t MicrosecondsToStepClocks(float us) noexcept
 	{
-		return (uint32_t)(((float)StepClockRate * 0.000001 * us) + 0.99);
+		return (uint32_t)ceilf((float)StepClockRate * 0.000001 * us);
 	}
 
 #ifdef DUET3_MB6XD
-	void UpdateDriverTimings();
+	void UpdateDriverTimings() noexcept;
 #endif
 
 #if HAS_MASS_STORAGE

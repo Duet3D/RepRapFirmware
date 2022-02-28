@@ -1567,15 +1567,21 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 						drive,
 						(platform.GetDirectionValue(drive)) ? "forwards" : "in reverse",
 						(platform.GetEnableValue(drive) > 0) ? "high" : "low");
-		float timings[4];
-		const bool isSlowDriver = platform.GetDriverStepTiming(drive, timings);
-		if (isSlowDriver)
 		{
-			reply.catf("%.1f:%.1f:%.1f:%.1fus", (double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
-		}
-		else
-		{
-			reply.cat("fast");
+			float timings[4];
+			const bool isSlowDriver = platform.GetDriverStepTiming(drive, timings);
+			if (isSlowDriver)
+			{
+				reply.catf("%.1f:%.1f:%.1f:%.1fus", (double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
+#ifdef DUET3_MB6XD
+				platform.GetActualDriverTimings(timings);
+				reply.catf(" (actual %.1f:%.1f:%.1f:%.1fus)", (double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
+#endif
+			}
+			else
+			{
+				reply.cat("fast");
+			}
 		}
 
 #if HAS_SMART_DRIVERS

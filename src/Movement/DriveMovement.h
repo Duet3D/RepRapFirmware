@@ -165,11 +165,11 @@ inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
 	{
 		if (stepsTillRecalc != 0)
 		{
-			--stepsTillRecalc;			// we are doing double/quad/octal stepping
+			--stepsTillRecalc;				// we are doing double/quad/octal stepping
 #if EVEN_STEPS
 			nextStepTime += stepInterval;
 #endif
-#if SAME70
+#ifdef DUET3_MB6HC							// we need to increase the minimum step pulse length to be long enough for the TMC5160
 			asm volatile("nop");
 			asm volatile("nop");
 			asm volatile("nop");
@@ -183,7 +183,7 @@ inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
 	}
 
 	state = DMState::idle;
-#if SAME70
+#ifdef DUET3_MB6HC							// we need to increase the minimum step pulse length to be long enough for the TMC5160
 			asm volatile("nop");
 			asm volatile("nop");
 			asm volatile("nop");

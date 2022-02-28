@@ -2799,11 +2799,10 @@ GCodeResult Platform::SetMotorCurrent(size_t axisOrExtruder, float currentOrPerc
 #ifdef DUET3_MB6XD
 
 // Fetch the worst (longest) timings of any driver, set up the step pulse width timer, and convert the other timings from microseconds to step clocks
-void Platform::UpdateDriverTimings()
+void Platform::UpdateDriverTimings() noexcept
 {
-	float worstTimings[4];
-	memcpyf(worstTimings, driverTimingMicroseconds[0], 4);
-	for (size_t driver = 1; driver < NumDirectDrivers; ++driver)
+	float worstTimings[4] = { 0.1, 0.1, 0.0, 0.0 };					// minimum 100ns step high/step low time, zero direction setup/hold time
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
 		for (size_t i = 0; i < 4; ++i)
 		{
@@ -2831,6 +2830,17 @@ void Platform::UpdateDriverTimings()
 	directionHoldClocksFromLeadingEdge = MicrosecondsToStepClocks(worstTimings[3] + actualStepPulseMicroseconds);
 //DEBUG
 //	debugPrintf("Clocks: %" PRIu32 " %" PRIu32 " %" PRIu32 "\n", stepPulseMinimumPeriodClocks, directionSetupClocks, directionHoldClocksFromLeadingEdge);
+}
+
+void Platform::GetActualDriverTimings(float timings[4]) noexcept
+{
+	constexpr uint32_t StepGateTcClockFrequency = (SystemCoreClockFreq/2)/8;
+	constexpr float MicrosecondsPerStepGateClock = 1.0e6/(float)StepGateTcClockFrequency;
+	constexpr float StepClocksToMicroseconds = 1.0e6/(float)StepClockRate;
+	timings[0] = (float)STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC * MicrosecondsPerStepGateClock;
+	timings[1] = stepPulseMinimumPeriodClocks * StepClocksToMicroseconds - timings[0];
+	timings[2] = directionSetupClocks * StepClocksToMicroseconds;
+	timings[3] = directionHoldClocksFromLeadingEdge * StepClocksToMicroseconds - timings[0];
 }
 
 #endif
