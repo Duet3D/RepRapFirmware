@@ -1783,13 +1783,12 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 	for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
 	{
 		String<StringLength256> driverStatus;
-		driverStatus.printf("Driver %u: pos %" PRIi32, drive, reprap.GetMove().GetEndPoint(drive));
+		driverStatus.printf("Driver %u: ", drive);
 #ifdef DUET3_MB6XD
-		driverStatus.cat((HasDriverError(drive)) ? " error" : " ok");
+		driverStatus.cat((HasDriverError(drive)) ? "error" : "ok");
 #elif HAS_SMART_DRIVERS
 		if (drive < numSmartDrivers)
 		{
-			driverStatus.cat(", ");
 			const StandardDriverStatus status = SmartDrivers::GetStatus(drive);
 			status.AppendText(driverStatus.GetRef(), 0);
 			if (!status.notPresent)
