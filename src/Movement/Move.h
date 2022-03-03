@@ -156,10 +156,10 @@ public:
 	const RandomProbePointSet& GetProbePoints() const noexcept { return probePoints; }		// Return the probe point set constructed from G30 commands
 
 	DDARing& GetMainDDARing() noexcept { return mainDDARing; }
-	float GetTopSpeed() const noexcept { return mainDDARing.GetTopSpeed(); }
-	float GetRequestedSpeed() const noexcept { return mainDDARing.GetRequestedSpeed(); }
-	float GetAcceleration() const noexcept { return mainDDARing.GetAcceleration(); }
-	float GetDeceleration() const noexcept { return mainDDARing.GetDeceleration(); }
+	float GetTopSpeedMmPerSec() const noexcept { return mainDDARing.GetTopSpeedMmPerSec(); }
+	float GetRequestedSpeedMmPerSec() const noexcept { return mainDDARing.GetRequestedSpeedMmPerSec(); }
+	float GetAccelerationMmPerSecSquared() const noexcept { return mainDDARing.GetAccelerationMmPerSecSquared(); }
+	float GetDecelerationMmPerSecSquared() const noexcept { return mainDDARing.GetDecelerationMmPerSecSquared(); }
 
 	void AdjustLeadscrews(const floatc_t corrections[]) noexcept;							// Called by some Kinematics classes to adjust the leadscrews
 

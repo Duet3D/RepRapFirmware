@@ -1377,7 +1377,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	AppendFloatArray(response, "extr", GetExtrudersInUse(), [this](size_t extruder) noexcept { return move->LiveCoordinate(ExtruderToLogicalDrive(extruder), currentTool); }, 1);
 
 	// Current speeds
-	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)InverseConvertSpeedToMmPerSec(move->GetRequestedSpeed()), (double)InverseConvertSpeedToMmPerSec(move->GetTopSpeed()));
+	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)move->GetRequestedSpeedMmPerSec(), (double)move->GetTopSpeedMmPerSec());
 
 	// Current tool number
 	response->catf(",\"currentTool\":%d", GetCurrentToolNumber());

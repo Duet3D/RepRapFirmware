@@ -434,11 +434,11 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 					break;
 
 				case 38:	// requested speed
-					currentValue.f = reprap.GetMove().GetRequestedSpeed();
+					currentValue.f = reprap.GetMove().GetRequestedSpeedMmPerSec();
 					break;
 
 				case 39:	// top speed
-					currentValue.f = reprap.GetMove().GetTopSpeed();
+					currentValue.f = reprap.GetMove().GetTopSpeedMmPerSec();
 					break;
 
 				default:

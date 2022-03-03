@@ -738,28 +738,28 @@ void DDARing::ResetExtruderPositions() noexcept
 	liveCoordinatesChanged = true;
 }
 
-float DDARing::GetRequestedSpeed() const noexcept
+float DDARing::GetRequestedSpeedMmPerSec() const noexcept
 {
-	DDA* const cdda = currentDda;					// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetRequestedSpeed() : 0.0;
+	const DDA* const cdda = currentDda;					// capture volatile variable
+	return (cdda != nullptr) ? cdda->GetRequestedSpeedMmPerSec() : 0.0;
 }
 
-float DDARing::GetTopSpeed() const noexcept
+float DDARing::GetTopSpeedMmPerSec() const noexcept
 {
-	DDA* const cdda = currentDda;					// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetTopSpeed() : 0.0;
+	const DDA* const cdda = currentDda;					// capture volatile variable
+	return (cdda != nullptr) ? cdda->GetTopSpeedMmPerSec() : 0.0;
 }
 
-float DDARing::GetAcceleration() const noexcept
+float DDARing::GetAccelerationMmPerSecSquared() const noexcept
 {
-	DDA* const cdda = currentDda;					// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetAcceleration() : 0.0;
+	const DDA* const cdda = currentDda;					// capture volatile variable
+	return (cdda != nullptr) ? cdda->GetAccelerationMmPerSecSquared() : 0.0;
 }
 
-float DDARing::GetDeceleration() const noexcept
+float DDARing::GetDecelerationMmPerSecSquared() const noexcept
 {
-	DDA* const cdda = currentDda;					// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetDeceleration() : 0.0;
+	const DDA* const cdda = currentDda;					// capture volatile variable
+	return (cdda != nullptr) ? cdda->GetDecelerationMmPerSecSquared() : 0.0;
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
@@ -849,7 +849,7 @@ bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 	rp.initialUserC1 = dda->GetInitialUserC1();
 	if (dda->UsingStandardFeedrate())
 	{
-		rp.feedRate = dda->GetRequestedSpeed();
+		rp.feedRate = dda->GetRequestedSpeedMmPerClock();
 	}
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
@@ -920,7 +920,7 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 
 	// We are going to skip some moves, or part of a move.
 	// Store the parameters of the first move we are going to execute when we resume
-	rp.feedRate = dda->GetRequestedSpeed();
+	rp.feedRate = dda->GetRequestedSpeedMmPerClock();
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
 	rp.proportionDone = dda->GetProportionDone(abortedMove);	// store how much of the complete multi-segment move's extrusion has been done

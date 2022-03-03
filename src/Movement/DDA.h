@@ -140,10 +140,11 @@ public:
 	bool FetchEndPosition(volatile int32_t ep[MaxAxesPlusExtruders], volatile float endCoords[MaxAxesPlusExtruders]) noexcept;
 	void SetPositions(const float move[]) noexcept;									// Force the endpoints to be these
 	FilePosition GetFilePosition() const noexcept { return filePos; }
-	float GetRequestedSpeed() const noexcept { return requestedSpeed; }
-	float GetTopSpeed() const noexcept { return topSpeed; }
-	float GetAcceleration() const noexcept { return acceleration; }
-	float GetDeceleration() const noexcept { return deceleration; }
+	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
+	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(requestedSpeed); }
+	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(topSpeed); }
+	float GetAccelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(acceleration); }
+	float GetDecelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(deceleration); }
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcept;	// Try to push babystepping earlier in the move queue
 	const Tool *GetTool() const noexcept { return tool; }

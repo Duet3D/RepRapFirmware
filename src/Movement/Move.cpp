@@ -122,14 +122,14 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "timeout",				OBJECT_MODEL_FUNC(0.001f * (float)self->idleTimeout, 1),										ObjectModelEntryFlags::none },
 
 	// 2. move.currentMove members
-	{ "acceleration",			OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->GetAcceleration()), 1),						ObjectModelEntryFlags::live },
-	{ "deceleration",			OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->GetDeceleration()), 1),						ObjectModelEntryFlags::live },
+	{ "acceleration",			OBJECT_MODEL_FUNC(self->GetAccelerationMmPerSecSquared(), 1),									ObjectModelEntryFlags::live },
+	{ "deceleration",			OBJECT_MODEL_FUNC(self->GetDecelerationMmPerSecSquared(), 1),									ObjectModelEntryFlags::live },
 # if SUPPORT_LASER
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
 															reprap.GetPlatform().GetLaserPwm(), 2),								ObjectModelEntryFlags::live },
 # endif
-	{ "requestedSpeed",			OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->GetRequestedSpeed()), 1),					ObjectModelEntryFlags::live },
-	{ "topSpeed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->GetTopSpeed()), 1),						ObjectModelEntryFlags::live },
+	{ "requestedSpeed",			OBJECT_MODEL_FUNC(self->GetRequestedSpeedMmPerSec(), 1),										ObjectModelEntryFlags::live },
+	{ "topSpeed",				OBJECT_MODEL_FUNC(self->GetTopSpeedMmPerSec(), 1),												ObjectModelEntryFlags::live },
 
 	// 3. move.calibration members
 	{ "final",					OBJECT_MODEL_FUNC(self, 5),																		ObjectModelEntryFlags::none },

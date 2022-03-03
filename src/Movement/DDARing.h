@@ -56,10 +56,10 @@ public:
 
 	DDA *GetCurrentDDA() const noexcept { return currentDda; }							// Return the DDA of the currently-executing move, or nullptr
 
-	float GetRequestedSpeed() const noexcept;
-	float GetTopSpeed() const noexcept;
-	float GetAcceleration() const noexcept;
-	float GetDeceleration() const noexcept;
+	float GetRequestedSpeedMmPerSec() const noexcept;
+	float GetTopSpeedMmPerSec() const noexcept;
+	float GetAccelerationMmPerSecSquared() const noexcept;
+	float GetDecelerationMmPerSecSquared() const noexcept;
 
 	int32_t GetEndPoint(size_t drive) const noexcept { return liveEndPoints[drive]; } 	// Get the current position of a motor
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
