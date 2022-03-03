@@ -3618,9 +3618,18 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	}
 #endif
 
-	// Don't report empty responses if a file or macro is being processed, or if the GCode was queued
-	// Also check that this response was triggered by a gcode
-	if (reply[0] == 0 && (&gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode || &gb == daemonGCode || gb.IsDoingFileMacro()))
+	// Don't report empty responses if a file or macro is being processed, or if the GCode was queued, or to PanelDue
+	if (   reply[0] == 0
+		&& (   &gb == fileGCode || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode || &gb == daemonGCode
+#if HAS_AUX_DEVICES
+			|| (&gb == auxGCode && !platform.IsAuxRaw(0))
+# ifdef SERIAL_AUX2_DEVICE
+			|| (&gb == aux2GCode && !platform.IsAuxRaw(1))
+# endif
+#endif
+			|| gb.IsDoingFileMacro()
+		   )
+	   )
 	{
 		return;
 	}
@@ -3634,8 +3643,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	{
 	case Compatibility::Default:
 	case Compatibility::RepRapFirmware:
-		// In RepRapFirmware compatibility mode we suppress empty responses in most cases.
-		// However, DWC expects a reply from every code, so we must even send empty responses
+		// DWC expects a reply from every code, so we must even send empty responses
 		if (reply[0] != 0 || gb.IsLastCommand() || &gb == httpGCode)
 		{
 			platform.MessageF(mt, "%s\n", reply);
