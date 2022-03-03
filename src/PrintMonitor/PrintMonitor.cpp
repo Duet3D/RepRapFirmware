@@ -53,7 +53,7 @@ const ObjectModelArrayDescriptor PrintMonitor::thumbnailArrayDescriptor =
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
 			{
 				size_t count = 0;
-				while (count < GCodeFileInfo::MaxThumbnails && ((const PrintMonitor*)self)->printingFileInfo.thumbnails[count].IsValid())
+				while (count < MaxThumbnails && ((const PrintMonitor*)self)->printingFileInfo.thumbnails[count].IsValid())
 				{
 					count++;
 				}

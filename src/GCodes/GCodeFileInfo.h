@@ -29,8 +29,6 @@ struct GCodeFileInfo
 	GCodeFileInfo() noexcept { Init(); }
 	void Init() noexcept;
 
-	static constexpr unsigned int MaxThumbnails = 3;
-
 	FilePosition fileSize;
 	time_t lastModifiedTime;
 	float layerHeight;

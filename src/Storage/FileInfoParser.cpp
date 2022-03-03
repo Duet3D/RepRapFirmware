@@ -966,7 +966,7 @@ bool FileInfoParser::FindThumbnails(const char *_ecv_array bufp, FilePosition bu
 	for (thumbnailIndex = 0; parsedFileInfo.thumbnails[thumbnailIndex].IsValid(); )
 	{
 		++thumbnailIndex;
-		if (thumbnailIndex == GCodeFileInfo::MaxThumbnails)
+		if (thumbnailIndex == MaxThumbnails)
 		{
 			return true;		// no more space to store thumbnail info
 		}
@@ -1040,7 +1040,7 @@ bool FileInfoParser::FindThumbnails(const char *_ecv_array bufp, FilePosition bu
 							th.format = fmt;
 							th.offset = offset;
 							++thumbnailIndex;
-							if (thumbnailIndex == GCodeFileInfo::MaxThumbnails)
+							if (thumbnailIndex == MaxThumbnails)
 							{
 								return true;		// no more space to store thumbnail info
 							}

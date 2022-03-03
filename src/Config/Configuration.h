@@ -276,6 +276,8 @@ constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max 
 
 constexpr size_t FILE_BUFFER_SIZE = 128;
 
+constexpr size_t MaxThumbnails = 4;						// Maximum number of thumbnail images read from the job file that we store and report
+
 // Webserver stuff
 #define DEFAULT_PASSWORD		"reprap"				// Default machine password
 #define DEFAULT_MACHINE_NAME	"My Duet"				// Default machine name

@@ -2459,7 +2459,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 								((index == 0) ? '[' : ','), inf.height, inf.width, inf.format.ToString(), inf.offset, inf.size);
 				++index;
 			}
-			while (index < GCodeFileInfo::MaxThumbnails && info.thumbnails[index].IsValid());
+			while (index < MaxThumbnails && info.thumbnails[index].IsValid());
 			response->cat(']');
 		}
 
