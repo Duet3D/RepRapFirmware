@@ -88,16 +88,18 @@ const char *GCodeBuffer::GetStateText() const noexcept
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c) noexcept
-	: codeChannel(channel), normalInput(normalIn),
+	: printFilePositionAtMacroStart(0),
+	  normalInput(normalIn),
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	  fileInput(fileIn),
 #endif
-	  responseMessageType(mt), lastResult(GCodeResult::ok),
+	  responseMessageType(mt),
 #if HAS_SBC_INTERFACE
 	  binaryParser(*this),
 #endif
 	  stringParser(*this),
 	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()),
+	  codeChannel(channel), lastResult(GCodeResult::ok),
 #if HAS_SBC_INTERFACE
 	  isBinaryBuffer(false),
 #endif
@@ -933,19 +935,38 @@ void GCodeBuffer::SetPrintFinished() noexcept
 	}
 }
 
+// This is called on a fileGCode when we stop a print. It closes the file and re-initialises the buffer.
 void GCodeBuffer::ClosePrintFile() noexcept
 {
-	FileId printFileId = OriginalMachineState().fileId;
-	if (printFileId != NoFileId)
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
 	{
-		for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+		FileId printFileId = OriginalMachineState().fileId;
+		if (printFileId != NoFileId)
 		{
-			if (ms->fileId == printFileId)
+			for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
 			{
-				ms->fileId = NoFileId;
+				if (ms->fileId == printFileId)
+				{
+					ms->fileId = NoFileId;
+				}
 			}
 		}
 	}
+	else
+#endif
+	{
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+		FileData& fileBeingPrinted = OriginalMachineState().fileState;
+		GetFileInput()->Reset(fileBeingPrinted);
+		if (fileBeingPrinted.IsLive())
+		{
+			fileBeingPrinted.Close();
+		}
+#endif
+	}
+
+	Init();
 }
 
 // This is only called when using the SBC interface and returns if the macro file could be opened
@@ -1037,6 +1058,38 @@ MessageType GCodeBuffer::GetResponseMessageType() const noexcept
 FilePosition GCodeBuffer::GetFilePosition() const noexcept
 {
 	return PARSER_OPERATION(GetFilePosition());
+}
+
+// Return the current position of the file being printed in bytes.
+// May return noFilePosition if allowNoFilePos is true
+FilePosition GCodeBuffer::GetPrintingFilePosition(bool allowNoFilePos) const noexcept
+{
+#if HAS_SBC_INTERFACE
+	if (!reprap.UsingSbcInterface())
+#endif
+	{
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+		const FileData& fileBeingPrinted = OriginalMachineState().fileState;
+		if (!fileBeingPrinted.IsLive())
+		{
+			return allowNoFilePos ? noFilePosition : 0;
+		}
+#endif
+	}
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
+	const FilePosition pos = (IsDoingFileMacro())
+			? printFilePositionAtMacroStart						// the position before we started executing the macro
+				: GetFilePosition();					// the actual position, allowing for bytes cached but not yet processed
+	return (pos != noFilePosition || allowNoFilePos) ? pos : 0;
+#else
+	return allowNoFilePos ? noFilePosition : 0;
+#endif
+}
+
+void GCodeBuffer::SavePrintingFilePosition() noexcept
+{
+	printFilePositionAtMacroStart = GetFilePosition();
 }
 
 void GCodeBuffer::WaitForAcknowledgement() noexcept

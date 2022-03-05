@@ -149,6 +149,8 @@ public:
 	bool IsDoingLocalFile() const noexcept;						// Return true if this source is executing a file from the local SD card
 	bool IsDoingFileMacro() const noexcept;						// Return true if this source is executing a file macro
 	FilePosition GetFilePosition() const noexcept;				// Get the file position at the start of the current command
+	FilePosition GetPrintingFilePosition(bool allowNoFilePos) const noexcept;	// Get the file position in the printing file
+	void SavePrintingFilePosition() noexcept;
 
 	void WaitForAcknowledgement() noexcept;						// Flag that we are waiting for acknowledgement
 
@@ -265,7 +267,7 @@ private:
 	const char *GetStateText() const noexcept;
 #endif
 
-	const GCodeChannel codeChannel;						// Channel number of this instance
+	FilePosition printFilePositionAtMacroStart;			// the saved file position when we started executing a macro
 	GCodeInput *normalInput;							// Our normal input stream, or nullptr if there isn't one
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -274,22 +276,23 @@ private:
 
 	const MessageType responseMessageType;				// The message type we use for responses to string codes coming from this channel
 
-	GCodeResult lastResult;
-
 #if HAS_SBC_INTERFACE
 	BinaryParser binaryParser;
 #endif
 
 	StringParser stringParser;
 
-	GCodeBufferState bufferState;						// Idle, executing or paused
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 
 	uint32_t whenTimerStarted;							// When we started waiting
 	uint32_t whenReportDueTimerStarted;					// When the report-due-timer has been started
 	static constexpr uint32_t reportDueInterval = 1000;	// Interval in which we send in ms
 
-#if HAS_SBC_INTERFACE
+	const GCodeChannel codeChannel;						// Channel number of this instance
+	GCodeBufferState bufferState;						// Idle, executing or paused
+	GCodeResult lastResult;
+
+	#if HAS_SBC_INTERFACE
 	bool isBinaryBuffer;
 #endif
 	bool timerRunning;									// True if we are waiting

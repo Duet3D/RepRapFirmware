@@ -81,7 +81,10 @@ GCodes::GCodes(Platform& p) noexcept :
 	FileGCodeInput * const fileInput = nullptr;
 #endif
 	fileGCode = new GCodeBuffer(GCodeChannel::File, nullptr, fileInput, GenericMessage);
-
+# if SUPPORT_ASYNC_MOVES
+	FileGCodeInput * const file2Input = new FileGCodeInput();		// use a separate FileInput object so that both file input streams can run concurrently
+	file2GCode = new GCodeBuffer(GCodeChannel::File2, nullptr, file2Input, GenericMessage);
+# endif
 # if SUPPORT_HTTP || HAS_SBC_INTERFACE
 	httpInput = new NetworkGCodeInput();
 	httpGCode = new GCodeBuffer(GCodeChannel::HTTP, httpInput, fileInput, HttpMessage);
@@ -294,7 +297,6 @@ void GCodes::Reset() noexcept
 	fileOffsetToPrint = 0;
 	restartMoveFractionDone = 0.0;
 #endif
-	printFilePositionAtMacroStart = 0;
 	deferredPauseCommandPending = nullptr;
 	moveState.filePos = noFilePosition;
 	firmwareUpdateModuleMap.Clear();
@@ -339,30 +341,12 @@ bool GCodes::WaitingForAcknowledgement() const noexcept
 	return false;
 }
 
-// Return the current position of the file being printed in bytes.
-// May return noFilePosition if allowNoFilePos is true
-FilePosition GCodes::GetFilePosition(bool allowNoFilePos) const noexcept
+FilePosition GCodes::GetPrintingFilePosition() const noexcept
 {
-#if HAS_SBC_INTERFACE
-	if (!reprap.UsingSbcInterface())
-#endif
-	{
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-		const FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
-		if (!fileBeingPrinted.IsLive())
-		{
-			return allowNoFilePos ? noFilePosition : 0;
-		}
-#endif
-	}
-
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
-	const FilePosition pos = (fileGCode->IsDoingFileMacro())
-			? printFilePositionAtMacroStart						// the position before we started executing the macro
-				: fileGCode->GetFilePosition();					// the actual position, allowing for bytes cached but not yet processed
-	return (pos != noFilePosition || allowNoFilePos) ? pos : 0;
+#if HAS_SBC_INTERFACE || HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	return fileGCode->GetPrintingFilePosition(false);
 #else
-	return allowNoFilePos ? noFilePosition : 0;
+	return 0;
 #endif
 }
 
@@ -444,7 +428,11 @@ void GCodes::Spin() noexcept
 	{
 		GCodeBuffer * const gbp = gcodeSources[nextGcodeSource];
 		++nextGcodeSource;													// move on to the next gcode source ready for next time
-		if (nextGcodeSource == ARRAY_SIZE(gcodeSources) - 1)				// the last one is autoPauseGCode, so don't do it again
+		if (nextGcodeSource == GCodeChannel::Autopause)
+		{
+			++nextGcodeSource;												// don't do autoPause again
+		}
+		if (nextGcodeSource == ARRAY_SIZE(gcodeSources))
 		{
 			nextGcodeSource = 0;
 		}
@@ -900,7 +888,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 
 			// TODO: when using RTOS there is a possible race condition in the following,
 			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
-			pauseRestorePoint.filePos = GetFilePosition(true);
+			pauseRestorePoint.filePos = fileGCode->GetPrintingFilePosition(true);	//TODO separate restore point per channel
 			while (fileGCode->IsDoingFileMacro())						// must call this after GetFilePosition because this changes IsDoingFileMacro
 			{
 				pausedInMacro = true;
@@ -1068,7 +1056,7 @@ bool GCodes::DoEmergencyPause() noexcept
 		pauseRestorePoint.feedRate = fileGCode->LatestMachineState().feedRate;
 		pauseRestorePoint.virtualExtruderPosition = virtualExtruderPosition;
 
-		pauseRestorePoint.filePos = GetFilePosition(true);
+		pauseRestorePoint.filePos = fileGCode->GetPrintingFilePosition(true);	//TODO separate restore point per channel
 		pauseRestorePoint.proportionDone = 0.0;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
@@ -2633,10 +2621,16 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 // otherwise it is either the G- or M-code being executed, or ToolChangeMacroCode for a tool change file, or SystemMacroCode for another system file
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning, VariableSet& initialVariables) noexcept
 {
-	if (codeRunning != AsyncSystemMacroCode && &gb == fileGCode && gb.LatestMachineState().GetPrevious() == nullptr)
+	if (codeRunning != AsyncSystemMacroCode
+		&& (   &gb == fileGCode
+#if SUPPORT_ASYNC_MOVES
+			|| &gb == file2GCode
+#endif
+		   )
+		&& gb.LatestMachineState().GetPrevious() == nullptr)
 	{
 		// This macro was invoked directly from the print file by M98, G28, G29, G32 etc. so record the file location of that command so that we can restart it
-		printFilePositionAtMacroStart = gb.GetFilePosition();
+		gb.SavePrintingFilePosition();
 	}
 
 #if HAS_SBC_INTERFACE
@@ -3977,27 +3971,12 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 	deferredPauseCommandPending = nullptr;
 	pauseState = PauseState::notPaused;
 
-#if HAS_SBC_INTERFACE
-	if (reprap.UsingSbcInterface())
-	{
-		fileGCode->ClosePrintFile();
-		fileGCode->Init();
-	}
-	else
+#if HAS_SBC_INTERFACE || HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	fileGCode->ClosePrintFile();
+# if SUPPORT_ASYNC_MOVES
+	file2GCode->ClosePrintFile();
+# endif
 #endif
-	{
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-		FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
-
-		fileGCode->GetFileInput()->Reset(fileBeingPrinted);
-		fileGCode->Init();
-
-		if (fileBeingPrinted.IsLive())
-		{
-			fileBeingPrinted.Close();
-		}
-#endif
-	}
 
 	// Don't call ReserMoveCounters here because we can't be sure that the movement queue is empty
 	codeQueue->Clear();

@@ -121,7 +121,7 @@ public:
 	bool GetMacroRestarted() const noexcept;									// Return true if the macro being executed by fileGCode was restarted
 	bool WaitingForAcknowledgement() const noexcept;							// Is an input waiting for a message to be acknowledged?
 
-	FilePosition GetFilePosition(bool allowNoFilePos = false) const noexcept;	// Return the current position of the file being printed in bytes. May return noFilePosition if allowNoFilePos is true
+	FilePosition GetPrintingFilePosition() const noexcept;						// Return the current position of the file being printed in bytes. May return noFilePosition if allowNoFilePos is true
 	void Diagnostics(MessageType mtype) noexcept;								// Send helpful information out
 
 	bool RunConfigFile(const char* fileName) noexcept;							// Start running the config file
@@ -546,7 +546,10 @@ private:
 	GCodeBuffer*& spiGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)];
 	GCodeBuffer*& daemonGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)];
 	GCodeBuffer*& aux2GCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)];				// This one is reserved for the second async serial interface
-	GCodeBuffer*& autoPauseGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)];		// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
+	GCodeBuffer*& autoPauseGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)];		// GCode state machine used to run macros on power fail, heater faults and filament out
+#if SUPPORT_ASYNC_MOVES
+	GCodeBuffer*& file2GCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)];
+#endif
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling
 
@@ -562,7 +565,6 @@ private:
 
 	MachineType machineType;					// whether FFF, laser or CNC
 	bool active;								// Live and running?
-	FilePosition printFilePositionAtMacroStart;
 	const char *_ecv_array null deferredPauseCommandPending;
 	PauseState pauseState;						// whether the machine is running normally or is pausing, paused or resuming
 	bool pausedInMacro;							// if we are paused then this is true if we paused while fileGCode was executing a macro
