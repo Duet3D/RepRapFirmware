@@ -14,10 +14,11 @@
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeChannel.h>
 #include <GCodes/GCodeMachineState.h>
+#include <ObjectModel/ObjectModel.h>
+
 #if HAS_SBC_INTERFACE
 # include <SBC/SbcMessageFormats.h>
 #endif
-#include <ObjectModel/ObjectModel.h>
 
 class FileGCodeInput;
 
@@ -153,6 +154,7 @@ public:
 	void SavePrintingFilePosition() noexcept;
 
 	void WaitForAcknowledgement() noexcept;						// Flag that we are waiting for acknowledgement
+	void ClosePrintFile() noexcept;								// Close the print file
 
 #if HAS_SBC_INTERFACE
 	bool IsBinary() const noexcept { return isBinaryBuffer; }	// Return true if the code is in binary format
@@ -160,7 +162,6 @@ public:
 	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
 	void SetFileFinished() noexcept;							// Mark the current file as finished
 	void SetPrintFinished() noexcept;							// Mark the current print file as finished
-	void ClosePrintFile() noexcept;								// Close the print file
 
 	bool RequestMacroFile(const char *filename, bool fromCode) noexcept;	// Request execution of a file macro
 	volatile bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened

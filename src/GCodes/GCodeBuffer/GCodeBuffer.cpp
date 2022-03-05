@@ -885,6 +885,40 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
 	}
 }
 
+// This is called on a fileGCode when we stop a print. It closes the file and re-initialises the buffer.
+void GCodeBuffer::ClosePrintFile() noexcept
+{
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		FileId printFileId = OriginalMachineState().fileId;
+		if (printFileId != NoFileId)
+		{
+			for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+			{
+				if (ms->fileId == printFileId)
+				{
+					ms->fileId = NoFileId;
+				}
+			}
+		}
+	}
+	else
+#endif
+	{
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+		FileData& fileBeingPrinted = OriginalMachineState().fileState;
+		GetFileInput()->Reset(fileBeingPrinted);
+		if (fileBeingPrinted.IsLive())
+		{
+			fileBeingPrinted.Close();
+		}
+#endif
+	}
+
+	Init();
+}
+
 #if HAS_SBC_INTERFACE
 
 void GCodeBuffer::SetFileFinished() noexcept
@@ -933,40 +967,6 @@ void GCodeBuffer::SetPrintFinished() noexcept
 		}
 		reprap.GetSbcInterface().EventOccurred();
 	}
-}
-
-// This is called on a fileGCode when we stop a print. It closes the file and re-initialises the buffer.
-void GCodeBuffer::ClosePrintFile() noexcept
-{
-#if HAS_SBC_INTERFACE
-	if (reprap.UsingSbcInterface())
-	{
-		FileId printFileId = OriginalMachineState().fileId;
-		if (printFileId != NoFileId)
-		{
-			for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
-			{
-				if (ms->fileId == printFileId)
-				{
-					ms->fileId = NoFileId;
-				}
-			}
-		}
-	}
-	else
-#endif
-	{
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-		FileData& fileBeingPrinted = OriginalMachineState().fileState;
-		GetFileInput()->Reset(fileBeingPrinted);
-		if (fileBeingPrinted.IsLive())
-		{
-			fileBeingPrinted.Close();
-		}
-#endif
-	}
-
-	Init();
 }
 
 // This is only called when using the SBC interface and returns if the macro file could be opened
