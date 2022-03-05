@@ -81,9 +81,14 @@ GCodes::GCodes(Platform& p) noexcept :
 	FileGCodeInput * const fileInput = nullptr;
 #endif
 	fileGCode = new GCodeBuffer(GCodeChannel::File, nullptr, fileInput, GenericMessage);
+	moveState.codeQueue = new GCodeQueue();
+	queuedGCode = new GCodeBuffer(GCodeChannel::Queue, moveState.codeQueue, fileInput, GenericMessage);
+
 # if SUPPORT_ASYNC_MOVES
 	FileGCodeInput * const file2Input = new FileGCodeInput();		// use a separate FileInput object so that both file input streams can run concurrently
 	file2GCode = new GCodeBuffer(GCodeChannel::File2, nullptr, file2Input, GenericMessage);
+	moveState2.codeQueue = new GCodeQueue();
+	queue2GCode = new GCodeBuffer(GCodeChannel::Queue2, moveState.codeQueue, fileInput, GenericMessage);
 # endif
 # if SUPPORT_HTTP || HAS_SBC_INTERFACE
 	httpInput = new NetworkGCodeInput();
@@ -122,9 +127,6 @@ GCodes::GCodes(Platform& p) noexcept :
 #endif
 
 	triggerGCode = new GCodeBuffer(GCodeChannel::Trigger, nullptr, fileInput, GenericMessage);
-
-	codeQueue = new GCodeQueue();
-	queuedGCode = new GCodeBuffer(GCodeChannel::Queue, codeQueue, fileInput, GenericMessage);
 
 #if SUPPORT_12864_LCD || HAS_SBC_INTERFACE
 	lcdGCode = new GCodeBuffer(GCodeChannel::LCD, nullptr, fileInput, LcdMessage);
@@ -306,7 +308,11 @@ void GCodes::Reset() noexcept
 
 	buildObjects.Init();
 
-	codeQueue->Clear();
+	moveState.Reset();
+#if SUPPORT_ASYNC_MOVES
+	moveState2.Reset();
+#endif
+
 	cancelWait = isWaiting = displayNoToolWarning = false;
 
 	for (const GCodeBuffer*& gbp : resourceOwners)
@@ -929,7 +935,10 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 #endif
 		}
 
-		codeQueue->PurgeEntries();
+		moveState.codeQueue->PurgeEntries();
+#if SUPPORT_ASYNC_MOVES
+		moveState2.codeQueue->PurgeEntries();
+#endif
 
 		if (reprap.Debug(moduleGcodes))
 		{
@@ -1072,7 +1081,10 @@ bool GCodes::DoEmergencyPause() noexcept
 	}
 #endif
 
-	codeQueue->PurgeEntries();
+	moveState.codeQueue->PurgeEntries();
+#if SUPPORT_ASYNC_MOVES
+	moveState2.codeQueue->PurgeEntries();
+#endif
 
 	// Replace the paused machine coordinates by user coordinates, which we updated earlier
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
@@ -1385,7 +1397,10 @@ void GCodes::Diagnostics(MessageType mtype) noexcept
 		}
 	}
 
-	codeQueue->Diagnostics(mtype);
+	moveState.codeQueue->Diagnostics(mtype, 0);
+#if SUPPORT_ASYNC_MOVES
+	moveState2.codeQueue->Diagnostics(mtype, 1);
+#endif
 }
 
 // Lock movement and wait for pending moves to finish.
@@ -1410,9 +1425,26 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 		return false;
 	}
 
-	if (&gb != queuedGCode && !IsCodeQueueIdle())		// wait for deferred command queue to catch up
+	switch (gb.GetChannel().ToBaseType())
 	{
-		return false;
+	case GCodeChannel::Queue:
+	case GCodeChannel::Queue2:
+		break;
+
+#if SUPPORT_ASYNC_MOVES
+	case GCodeChannel::File2:
+		if (!(queue2GCode->IsIdle() && moveState2.codeQueue->IsIdle()))
+		{
+			return false;
+		}
+		break;
+#endif
+
+	default:
+		if (!(queuedGCode->IsIdle() && moveState.codeQueue->IsIdle()))
+		{
+			return false;
+		}
 	}
 
 	gb.MotionStopped();									// must do this after we have finished waiting, so that we don't stop waiting when executing G4
@@ -3957,12 +3989,6 @@ float GCodes::GetRawExtruderTotalByDrive(size_t extruder) const noexcept
 	return (extruder < numExtruders) ? rawExtruderTotalByDrive[extruder] : 0.0;
 }
 
-// Return true if the code queue is idle
-bool GCodes::IsCodeQueueIdle() const noexcept
-{
-	return queuedGCode->IsIdle() && codeQueue->IsIdle();
-}
-
 // Cancel the current SD card print.
 // This is called from Pid.cpp when there is a heater fault, and from elsewhere in this module.
 void GCodes::StopPrint(StopPrintReason reason) noexcept
@@ -3979,9 +4005,12 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 #endif
 
 	// Don't call ReserMoveCounters here because we can't be sure that the movement queue is empty
-	codeQueue->Clear();
-
+	moveState.codeQueue->Clear();
 	UnlockAll(*fileGCode);
+#if SUPPORT_ASYNC_MOVES
+	moveState2.codeQueue->Clear();
+	UnlockAll(*file2GCode);
+#endif
 
 	// Deal with the Z hop from a G10 that has not been undone by G11
 	Tool* const currentTool = reprap.GetCurrentTool();
@@ -4757,6 +4786,16 @@ bool GCodes::CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply,
 
 	return true;
 }
+
+#if SUPPORT_ASYNC_MOVES
+
+// Get a reference to the movement state associated with the specified GCode buffer
+MovementState& GCodes::GetMovementState(GCodeBuffer& gb) noexcept
+{
+	return (gb.GetChannel() == GCodeChannel::File2 || gb.GetChannel() == GCodeChannel::Queue2) ? moveState2 : moveState;
+}
+
+#endif
 
 #if HAS_MASS_STORAGE
 

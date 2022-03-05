@@ -6,6 +6,7 @@
  */
 
 #include "RawMove.h"
+#include <GCodes/GCodeQueue.h>
 
 // Set up some default values in the move buffer for special moves, e.g. for Z probing and firmware retraction
 void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
@@ -30,6 +31,13 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 float MovementState::GetProportionDone() const noexcept
 {
 	return (float)(totalSegments - segmentsLeft)/(float)totalSegments;
+}
+
+void MovementState::Reset() noexcept
+{
+	segmentsLeft = 0;
+	doingArcMove = false;
+	codeQueue->Clear();
 }
 
 #if SUPPORT_ASYNC_MOVES

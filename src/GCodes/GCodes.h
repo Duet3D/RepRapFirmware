@@ -492,7 +492,6 @@ private:
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept;	// Append a list of axes to a string
 
 	void EndSimulation(GCodeBuffer *gb) noexcept;								// Restore positions etc. when exiting simulation mode
-	bool IsCodeQueueIdle() const noexcept;										// Return true if the code queue is idle
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	void SaveResumeInfo(bool wasPowerFailure) noexcept;
@@ -503,6 +502,8 @@ private:
 
 	void SetMoveBufferDefaults() noexcept;										// Set up default values in the move buffer
 	void ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept;	// Change a live extrusion factor
+
+	MovementState& GetMovementState(GCodeBuffer& gb) noexcept;					// Get a reference to the movement state associated with the specified GCode buffer
 
 #if SUPPORT_COORDINATE_ROTATION
 	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68
@@ -549,6 +550,7 @@ private:
 	GCodeBuffer*& autoPauseGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)];		// GCode state machine used to run macros on power fail, heater faults and filament out
 #if SUPPORT_ASYNC_MOVES
 	GCodeBuffer*& file2GCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)];
+	GCodeBuffer*& queue2GCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)];
 #endif
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling
@@ -578,6 +580,10 @@ private:
 
 	// The following contain the details of moves that the Move module fetches
 	MovementState moveState;					// Move details
+#if SUPPORT_ASYNC_MOVES
+	MovementState moveState2;
+#endif
+
 	GCodeBuffer *null updateUserPositionGb;		// if this is non-null then we need to update the user position from he machine position
 
 	unsigned int segmentsLeftToStartAt;
@@ -668,9 +674,6 @@ private:
 	bool isFlashing;							// Is a new firmware binary going to be flashed?
 	bool isFlashingPanelDue;					// Are we in the process of flashing PanelDue?
 
-	// Code queue
-	GCodeQueue *codeQueue;						// Stores certain codes for deferred execution
-
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	// SHA1 hashing
 	FileStore *fileBeingHashed;
@@ -724,6 +727,16 @@ inline float GCodes::GetTotalBabyStepOffset(size_t axis) const noexcept
 {
 	return currentBabyStepOffsets[axis];
 }
+
+#if !SUPPORT_ASYNC_MOVES
+
+// Get a reference to the movement state associated with the specified GCode buffer
+inline MovementState& GCodes::GetMovementState(GCodeBuffer& gb) noexcept
+{
+	return moveState;
+}
+
+#endif
 
 //*****************************************************************************************************
 

@@ -69,22 +69,26 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	try
 	{
 		// Can we queue this code?
-		if (gb.CanQueueCodes() && codeQueue->ShouldQueueCode(gb))
+		if (gb.CanQueueCodes())
 		{
-			// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
-			// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
-			if (moveState.segmentsLeft != 0)
+			GCodeQueue * const codeQueue = GetMovementState(gb).codeQueue;
+			if (codeQueue->ShouldQueueCode(gb))
 			{
-				return false;
-			}
+				// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
+				// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
+				if (moveState.segmentsLeft != 0)
+				{
+					return false;
+				}
 
-			if (codeQueue->QueueCode(gb, reprap.GetMove().GetScheduledMoves() + moveState.segmentsLeft))
-			{
-				HandleReply(gb, GCodeResult::ok, "");
-				return true;
-			}
+				if (codeQueue->QueueCode(gb, reprap.GetMove().GetScheduledMoves() + moveState.segmentsLeft))
+				{
+					HandleReply(gb, GCodeResult::ok, "");
+					return true;
+				}
 
-			return false;		// we should queue this code but we can't, so wait until we can either execute it or queue it
+				return false;		// we should queue this code but we can't, so wait until we can either execute it or queue it
+			}
 		}
 
 		switch (gb.GetCommandLetter())
