@@ -7,6 +7,8 @@
 
 #include "RawMove.h"
 #include <GCodes/GCodeQueue.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 
 // Set up some default values in the move buffer for special moves, e.g. for Z probing and firmware retraction
 void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
@@ -84,6 +86,12 @@ void MovementState::ClearMove() noexcept
 	moveType = 0;
 	applyM220M221 = false;
 	moveFractionToSkip = 0.0;
+}
+
+void MovementState::Diagnostics(MessageType mtype, unsigned int moveSystemNumber) noexcept
+{
+	reprap.GetPlatform().MessageF(mtype, "Segments left Q%u: %u\n", moveSystemNumber, segmentsLeft);
+	codeQueue->Diagnostics(mtype, moveSystemNumber);
 }
 
 #if SUPPORT_ASYNC_MOVES

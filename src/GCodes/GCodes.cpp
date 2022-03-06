@@ -1388,8 +1388,7 @@ void GCodes::Diagnostics(MessageType mtype) noexcept
 
 	for (size_t i = 0; i < ARRAY_SIZE(moveStates); ++i)
 	{
-		platform.MessageF(mtype, "Segments left Q%u: %u\n", i, moveStates[i].segmentsLeft);
-		moveStates[i].codeQueue->Diagnostics(mtype, i);
+		moveStates[i].Diagnostics(mtype, i);
 	}
 }
 

@@ -113,6 +113,7 @@ struct MovementState : public RawMove
 	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;	// change the extrusion factor of an extruder
 	const RestorePoint *GetRestorePoint(size_t n) const pre(n < NumRestorePoints) { return &numberedRestorePoints[n]; }
 	void ClearMove() noexcept;
+	void Diagnostics(MessageType mtype, unsigned int moveSystemNumber) noexcept;
 };
 
 #if SUPPORT_ASYNC_MOVES
