@@ -48,7 +48,7 @@ void MovementState::Reset() noexcept
 
 	currentZHop = 0.0;							// clear this before calling ToolOffsetInverseTransform
 	tool = nullptr;
-	virtualExtruderPosition = 0.0;
+	latestVirtualExtruderPosition = moveStartVirtualExtruderPosition = 0.0;
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();
 #endif

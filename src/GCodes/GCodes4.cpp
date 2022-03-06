@@ -509,8 +509,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			// We no longer restore the paused fan speeds automatically on resuming, because that messes up the print cooling fan speed if a tool change has been done
 			// They can be restored manually in resume.g if required
-			virtualExtruderPosition = ms.pauseRestorePoint.virtualExtruderPosition;			// reset the extruder position in case we are receiving absolute extruder moves
-			ms.virtualExtruderPosition = ms.pauseRestorePoint.virtualExtruderPosition;
+			ms.moveStartVirtualExtruderPosition = ms.latestVirtualExtruderPosition = ms.pauseRestorePoint.virtualExtruderPosition;			// reset the extruder position in case we are receiving absolute extruder moves
 			fileGCode->LatestMachineState().feedRate = ms.pauseRestorePoint.feedRate;
 			ms.moveFractionToSkip = ms.pauseRestorePoint.proportionDone;
 			ms.restartInitialUserC0 = ms.pauseRestorePoint.initialUserC0;

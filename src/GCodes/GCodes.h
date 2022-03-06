@@ -250,7 +250,7 @@ public:
 	const GCodeBuffer* GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
 	const RestorePoint *GetPrimaryRestorePoint(size_t n) const pre(n < NumRestorePoints) { return &moveStates[0].numberedRestorePoints[n]; }
-	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
+	float GetPrimaryVirtualExtruderPosition() const noexcept { return moveStates[0].latestVirtualExtruderPosition; }
 
 # if HAS_VOLTAGE_MONITOR
 	const char *_ecv_array null GetPowerFailScript() const noexcept { return powerFailScript; }
@@ -593,7 +593,6 @@ private:
 	size_t numVisibleAxes;						// How many axes are visible
 	size_t numExtruders;						// How many extruders we have, or may have
 	float axisScaleFactors[MaxAxes];			// Scale XYZ coordinates by this factor
-	float virtualExtruderPosition;				// Virtual extruder position of the last move fed into the Move class
 	float rawExtruderTotalByDrive[MaxExtruders]; // Extrusion amount in the last G1 command with an E parameter when in absolute extrusion mode
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 

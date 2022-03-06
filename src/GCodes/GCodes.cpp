@@ -172,7 +172,7 @@ void GCodes::Init() noexcept
 
 	Reset();
 
-	virtualExtruderPosition = rawExtruderTotal = 0.0;
+	rawExtruderTotal = 0.0;
 	for (float& f : rawExtruderTotalByDrive)
 	{
 		f = 0.0;
@@ -861,7 +861,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 			else if (ms.segmentsLeft != 0)
 			{
 				// We were not able to skip any moves, however we can skip the move that is waiting
-				ms.pauseRestorePoint.virtualExtruderPosition = ms.virtualExtruderPosition;
+				ms.pauseRestorePoint.virtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
 				ms.pauseRestorePoint.filePos = ms.filePos;
 				ms.pauseRestorePoint.feedRate = ms.feedRate;
 				ms.pauseRestorePoint.proportionDone = ms.GetProportionDone();
@@ -874,13 +874,13 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 			{
 				// We were not able to skip any moves, and there is no move waiting
 				ms.pauseRestorePoint.feedRate = fileGCode->LatestMachineState().feedRate;
-				ms.pauseRestorePoint.virtualExtruderPosition = virtualExtruderPosition;		//TODO which extruder position?
+				ms.pauseRestorePoint.virtualExtruderPosition = ms.latestVirtualExtruderPosition;
 				ms.pauseRestorePoint.proportionDone = 0.0;
 
 				// TODO: when using RTOS there is a possible race condition in the following,
 				// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
-				ms.pauseRestorePoint.filePos = fileGCode->GetPrintingFilePosition(true);	//TODO separate restore point per channel
-				while (fileGCode->IsDoingFileMacro())						// must call this after GetFilePosition because this changes IsDoingFileMacro
+				ms.pauseRestorePoint.filePos = fileGCode->GetPrintingFilePosition(true);
+				while (fileGCode->IsDoingFileMacro())										// must call this after GetFilePosition because this changes IsDoingFileMacro
 				{
 					ms.pausedInMacro = true;
 					fileGCode->PopState();
@@ -1037,7 +1037,7 @@ bool GCodes::DoEmergencyPause() noexcept
 			// We were not able to skip any moves, however we can skip the remaining segments of this current move
 			ToolOffsetInverseTransform(ms, ms.initialCoords, ms.currentUserPosition);
 			ms.pauseRestorePoint.feedRate = ms.feedRate;
-			ms.pauseRestorePoint.virtualExtruderPosition = ms.virtualExtruderPosition;
+			ms.pauseRestorePoint.virtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
 			ms.pauseRestorePoint.filePos = ms.filePos;
 			ms.pauseRestorePoint.proportionDone = ms.GetProportionDone();
 			ms.pauseRestorePoint.initialUserC0 = ms.initialUserC0;
@@ -1051,7 +1051,7 @@ bool GCodes::DoEmergencyPause() noexcept
 		{
 			// We were not able to skip any moves, and if there is a move waiting then we can't skip that one either
 			ms.pauseRestorePoint.feedRate = fileGCode->LatestMachineState().feedRate;
-			ms.pauseRestorePoint.virtualExtruderPosition = virtualExtruderPosition;
+			ms.pauseRestorePoint.virtualExtruderPosition = ms.latestVirtualExtruderPosition;
 
 			ms.pauseRestorePoint.filePos = fileGCode->GetPrintingFilePosition(true);	//TODO separate restore point per channel
 			ms.pauseRestorePoint.proportionDone = 0.0;
@@ -1289,7 +1289,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 			}
 			if (ok)
 			{
-				buf.printf("M116\nG92 E%.5f\n%s\n", (double)virtualExtruderPosition, (fileGCode->OriginalMachineState().drivesRelative) ? "M83" : "M82");
+				buf.printf("M116\nG92 E%.5f\n%s\n", (double)moveStates[0].latestVirtualExtruderPosition, (fileGCode->OriginalMachineState().drivesRelative) ? "M83" : "M82");
 				ok = f->Write(buf.c_str());									// write virtual extruder position and absolute/relative extrusion flag
 			}
 			if (ok)
@@ -1510,7 +1510,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, Movement
 		ms.coords[drive] = 0.0;
 	}
 	ms.hasPositiveExtrusion = false;
-	ms.virtualExtruderPosition = virtualExtruderPosition;			// save this before we update it
+	ms.moveStartVirtualExtruderPosition = ms.latestVirtualExtruderPosition;			// save this before we update it
 	ExtrudersBitmap extrudersMoving;
 
 	// Check if we are extruding
@@ -1543,8 +1543,8 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, Movement
 				}
 				else
 				{
-					requestedExtrusionAmount = moveArg - virtualExtruderPosition;
-					virtualExtruderPosition = moveArg;
+					requestedExtrusionAmount = moveArg - ms.latestVirtualExtruderPosition;
+					ms.latestVirtualExtruderPosition = moveArg;
 				}
 
 				if (requestedExtrusionAmount > 0.0)
@@ -3088,7 +3088,7 @@ void GCodes::GetCurrentPrimaryCoordinates(const StringRef& s) const noexcept
 	}
 
 	// Now the virtual extruder position, for Octoprint
-	s.catf("E:%.3f ", (double)virtualExtruderPosition);
+	s.catf("E:%.3f ", (double)moveStates[0].latestVirtualExtruderPosition);
 
 	// Now the extruder coordinates
 	for (size_t i = 0; i < numExtruders; i++)
@@ -3148,14 +3148,13 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 		{
 			ms.fileOffsetToPrint = 0;
 			ms.restartMoveFractionDone = 0.0;
-			ms.virtualExtruderPosition = 0.0;
+			ms.latestVirtualExtruderPosition = ms.moveStartVirtualExtruderPosition = 0.0;
 		}
 
 		fileGCode->LatestMachineState().volumetricExtrusion = false;		// default to non-volumetric extrusion
 #if SUPPORT_ASYNC_MOVES
 		file2GCode->LatestMachineState().volumetricExtrusion = false;		// default to non-volumetric extrusion
 #endif
-		virtualExtruderPosition = 0.0;
 	}
 
 	for (size_t extruder = 0; extruder < MaxExtruders; extruder++)
@@ -4152,7 +4151,7 @@ void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcep
 	}
 
 	rp.feedRate = gb.LatestMachineState().feedRate;
-	rp.virtualExtruderPosition = virtualExtruderPosition;
+	rp.virtualExtruderPosition = ms.latestVirtualExtruderPosition;
 	rp.filePos = gb.GetFilePosition();
 	rp.toolNumber = reprap.GetCurrentToolNumber();
 	rp.fanSpeed = lastDefaultFanSpeed;

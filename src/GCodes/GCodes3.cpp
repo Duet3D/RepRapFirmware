@@ -94,7 +94,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 	// Handle any E parameter in the G92 command
 	if (gb.Seen(extrudeLetter))
 	{
-		virtualExtruderPosition = gb.GetDistance();
+		ms.latestVirtualExtruderPosition = gb.GetDistance();
 	}
 
 	if (axesIncluded.IsNonEmpty())

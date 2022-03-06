@@ -17,7 +17,7 @@ struct RawMove
 	float coords[MaxAxesPlusExtruders];								// new positions for the axes, amount of movement for the extruders
 	float initialUserC0, initialUserC1;								// if this is a segment of an arc move, the user XYZ coordinates at the start
 	float feedRate;													// feed rate of this move
-	float virtualExtruderPosition;									// the virtual extruder position at the start of this move, for normal moves
+	float moveStartVirtualExtruderPosition;									// the virtual extruder position at the start of this move, for normal moves
 	FilePosition filePos;											// offset in the file being printed at the start of reading this move
 	float proportionDone;											// what proportion of the entire move has been done when this segment is complete
 	float cosXyAngle;												// the cosine of the change in XY angle between the previous move and this move
@@ -65,6 +65,7 @@ struct MovementState : public RawMove
 	// We have chosen this approach because it allows us to switch workplace coordinates systems or turn off applying workplace offsets without having to update currentUserPosition.
 	float currentUserPosition[MaxAxes];								// The current position of the axes as commanded by the input gcode, after accounting for workplace offset,
 																	// before accounting for tool offset and Z hop
+	float latestVirtualExtruderPosition;							// The virtual extruder position of this movement system after completing pending moves
 	float currentZHop;												// The amount of Z hop that is currently applied
 	float initialCoords[MaxAxes];									// the initial positions of the axes
 	float previousX, previousY;										// the initial X and Y coordinates in user space of the previous move
