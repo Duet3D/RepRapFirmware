@@ -56,6 +56,13 @@ enum class SegmentedMoveState : uint8_t
 	aborted
 };
 
+constexpr size_t PauseRestorePointNumber = 1;
+constexpr size_t ToolChangeRestorePointNumber = 2;
+
+constexpr size_t NumTotalRestorePoints = NumVisibleRestorePoints + 2;			// The total number of visible + invisible restore points
+constexpr size_t SimulationRestorePointNumber = NumVisibleRestorePoints;
+constexpr size_t ResumeObjectRestorePointNumber = NumVisibleRestorePoints + 1;
+
 // Details of a move that are needed only by GCodes
 // CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
 struct MovementState : public RawMove
@@ -66,6 +73,7 @@ struct MovementState : public RawMove
 	float currentUserPosition[MaxAxes];								// The current position of the axes as commanded by the input gcode, after accounting for workplace offset,
 																	// before accounting for tool offset and Z hop
 	float latestVirtualExtruderPosition;							// The virtual extruder position of this movement system after completing pending moves
+	float virtualFanSpeed;											// Last speed given in a M106 command with no fan number
 	float currentZHop;												// The amount of Z hop that is currently applied
 	float initialCoords[MaxAxes];									// the initial positions of the axes
 	float previousX, previousY;										// the initial X and Y coordinates in user space of the previous move
@@ -93,11 +101,11 @@ struct MovementState : public RawMove
 	float restartInitialUserC0;										// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
 	float restartInitialUserC1;										// if the print was paused during an arc move, the user Y coordinate at the start of that move (from M26)
 
-	RestorePoint simulationRestorePoint;							// The position and feed rate when we started a simulation
-
-	RestorePoint numberedRestorePoints[NumRestorePoints];			// Restore points accessible using the R parameter in the G0/G1 command
-	RestorePoint& pauseRestorePoint = numberedRestorePoints[1];		// The position and feed rate when we paused the print
-	RestorePoint& toolChangeRestorePoint = numberedRestorePoints[2];	// The position and feed rate when we freed a tool
+	RestorePoint restorePoints[NumTotalRestorePoints];
+	RestorePoint& pauseRestorePoint = restorePoints[PauseRestorePointNumber];				// The position and feed rate when we paused the print
+	RestorePoint& toolChangeRestorePoint = restorePoints[ToolChangeRestorePointNumber];		// The position and feed rate when we freed a tool
+	RestorePoint& simulationRestorePoint = restorePoints[SimulationRestorePointNumber];		// The position and feed rate when we started simulating
+	RestorePoint& resumeObjectRestorePoint = restorePoints[ResumeObjectRestorePointNumber];	// The position and feed rate when we resumed printing objects
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	FilePosition fileOffsetToPrint;									// The offset to print from
@@ -111,8 +119,10 @@ struct MovementState : public RawMove
 	float GetProportionDone() const noexcept;						// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
 	void Reset() noexcept;
 	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;	// change the extrusion factor of an extruder
-	const RestorePoint *GetRestorePoint(size_t n) const pre(n < NumRestorePoints) { return &numberedRestorePoints[n]; }
+	const RestorePoint& GetRestorePoint(size_t n) const pre(n < NumTotalRestorePoints) { return restorePoints[n]; }
 	void ClearMove() noexcept;
+	void SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
+		pre(restorePointNumber < NumTotalRestorePoints);
 	void Diagnostics(MessageType mtype, unsigned int moveSystemNumber) noexcept;
 };
 

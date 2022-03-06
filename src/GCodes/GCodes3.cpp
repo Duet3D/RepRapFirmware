@@ -54,8 +54,8 @@ GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply) THROWS
 {
 	uint32_t sParam = 0;
 	bool dummySeen;
-	gb.TryGetLimitedUIValue('S', sParam, dummySeen, NumRestorePoints);
-	SavePosition(GetMovementState(gb).numberedRestorePoints[sParam], gb);
+	gb.TryGetLimitedUIValue('S', sParam, dummySeen, NumVisibleRestorePoints);
+	SavePosition(gb, sParam);
 	return GCodeResult::ok;
 }
 
@@ -438,8 +438,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 			axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 			for (MovementState& ms : moveStates)
 			{
-				SavePosition(ms.simulationRestorePoint, gb);	//TODO using gb here is incorrect!
-				ms.simulationRestorePoint.feedRate = gb.LatestMachineState().feedRate;
+				ms.SavePosition(SimulationRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetFilePosition());
 			}
 		}
 		simulationTime = 0.0;
@@ -482,7 +481,7 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 				axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 				for (MovementState& ms : moveStates)
 				{
-					SavePosition(ms.simulationRestorePoint, gb);	//TODO using gb here is incorrect!
+					ms.SavePosition(SimulationRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetFilePosition());
 				}
 			}
 			simulationTime = 0.0;

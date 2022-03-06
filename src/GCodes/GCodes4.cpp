@@ -328,9 +328,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::toolChange0: 						// run tfree for the old tool (if any)
 	case GCodeState::m109ToolChange0:					// run tfree for the old tool (if any)
 		doingToolChange = true;
-		SavePosition(ms.toolChangeRestorePoint, gb);
+		SavePosition(gb, ToolChangeRestorePointNumber);
 		ms.toolChangeRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
-		ms.toolChangeRestorePoint.fanSpeed = lastDefaultFanSpeed;
+		ms.toolChangeRestorePoint.fanSpeed = ms.virtualFanSpeed;
 		reprap.SetPreviousToolNumber();
 		gb.AdvanceState();
 

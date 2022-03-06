@@ -200,8 +200,8 @@ public:
 	void SetItemStandbyTemperature(unsigned int itemNumber, float temp) noexcept;
 #endif
 
-	float GetMappedFanSpeed() const noexcept { return lastDefaultFanSpeed; }	// Get the mapped fan speed
-	void SetMappedFanSpeed(float f) noexcept;									// Set the speeds of fans mapped for the current tool
+	float GetPrimaryMappedFanSpeed() const noexcept { return moveStates[0].virtualFanSpeed; }	// Get the mapped fan speed for reporting
+	void SetMappedFanSpeed(const GCodeBuffer *null gb, float f) noexcept;						// Set the speeds of fans mapped for the current tool
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept;	// Handle G-Code replies
 	void EmergencyStop() noexcept;												// Cancel everything
 
@@ -219,7 +219,8 @@ public:
 	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Start timing SD card file writing
 #endif
 
-	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcept;		// Save position etc. to a restore point
+	void SavePosition(const GCodeBuffer& gb, unsigned int restorePointNumber) noexcept
+		pre(restorePointNumber < NumTotalRestorePoints);							// Save position etc. to a restore point
 	void StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t param) noexcept;
 
 	unsigned int GetPrimaryWorkplaceCoordinateSystemNumber() const noexcept { return moveStates[0].currentCoordinateSystem + 1; }
@@ -249,7 +250,7 @@ public:
 	const GCodeBuffer* GetInput(size_t n) const noexcept { return gcodeSources[n]; }
 	const GCodeBuffer* GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
-	const RestorePoint *GetPrimaryRestorePoint(size_t n) const pre(n < NumRestorePoints) { return &moveStates[0].numberedRestorePoints[n]; }
+	const RestorePoint *GetPrimaryRestorePoint(size_t n) const pre(n < NumVisibleRestorePoints) { return &moveStates[0].restorePoints[n]; }
 	float GetPrimaryVirtualExtruderPosition() const noexcept { return moveStates[0].latestVirtualExtruderPosition; }
 
 # if HAS_VOLTAGE_MONITOR
@@ -619,7 +620,6 @@ private:
 	AxesBitmap axesHomed;						// Bitmap of which axes have been homed
 	AxesBitmap axesVirtuallyHomed;				// same as axesHomed except all bits are set when simulating
 
-	float lastDefaultFanSpeed;					// Last speed given in a M106 command with no fan number
 	float speedFactor;							// speed factor as a fraction (normally 1.0)
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors

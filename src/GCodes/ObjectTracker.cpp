@@ -258,8 +258,8 @@ void ObjectTracker::ResumePrinting(GCodeBuffer& gb) noexcept
 {
 	currentObjectCancelled = false;
 	printingJustResumed = true;
-	reprap.GetGCodes().SavePosition(rp, gb);					// save the position we should be at for the start of the next move
-	if (reprap.GetCurrentToolNumber() != virtualToolNumber)		// if the wrong tool is loaded
+	reprap.GetGCodes().SavePosition(gb, ResumeObjectRestorePointNumber);	// save the position we should be at for the start of the next move
+	if (reprap.GetCurrentToolNumber() != virtualToolNumber)					// if the wrong tool is loaded
 	{
 		reprap.GetGCodes().StartToolChange(gb, virtualToolNumber, DefaultToolChangeParam);
 	}

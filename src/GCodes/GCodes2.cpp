@@ -1492,28 +1492,28 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							result = reprap.GetFansManager().SetFanValue(fanNum, f, reply);
 							if (IsMappedFan(fanNum))
 							{
-								lastDefaultFanSpeed = f;
+								GetMovementState(gb).virtualFanSpeed = f;
 							}
 						}
 						else
 						{
 							// We are processing an M106 S### command with no other recognised parameters and we have a tool selected.
 							// Apply the fan speed setting to the fans in the fan mapping for the current tool.
-							SetMappedFanSpeed(f);
+							SetMappedFanSpeed(&gb, f);
 						}
 					}
 
 					// ConfigureFan doesn't process R parameters
 					if (gb.Seen('R') && !seenFanNum)
 					{
-						const size_t restorePointNumber = gb.GetLimitedUIValue('R', NumRestorePoints);
-						SetMappedFanSpeed(GetMovementState(gb).numberedRestorePoints[restorePointNumber].fanSpeed);
+						const size_t restorePointNumber = gb.GetLimitedUIValue('R', NumVisibleRestorePoints);
+						SetMappedFanSpeed(&gb, GetMovementState(gb).restorePoints[restorePointNumber].fanSpeed);
 					}
 				}
 				break;
 
 			case 107: // Fan off - deprecated
-				SetMappedFanSpeed(0.0);
+				SetMappedFanSpeed(&gb, 0.0);
 				break;
 
 			case 108: // Cancel waiting for temperature
@@ -4673,9 +4673,9 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	}
 	else if (gb.Seen('R'))
 	{
-		const unsigned int rpNumber = gb.GetLimitedUIValue('R', NumRestorePoints);
+		const unsigned int rpNumber = gb.GetLimitedUIValue('R', NumVisibleRestorePoints);
 		seen = true;
-		toolNum = GetMovementState(gb).numberedRestorePoints[rpNumber].toolNumber;
+		toolNum = GetMovementState(gb).restorePoints[rpNumber].toolNumber;
 	}
 
 	if (seen)

@@ -51,6 +51,8 @@ void MovementState::Reset() noexcept
 	currentZHop = 0.0;							// clear this before calling ToolOffsetInverseTransform
 	tool = nullptr;
 	latestVirtualExtruderPosition = moveStartVirtualExtruderPosition = 0.0;
+	virtualFanSpeed = 0.0;
+
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();
 #endif
@@ -60,7 +62,7 @@ void MovementState::Reset() noexcept
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	fileOffsetToPrint = 0;
 #endif
-	for (RestorePoint& rp : numberedRestorePoints)
+	for (RestorePoint& rp : restorePoints)
 	{
 		rp.Init();
 	}
@@ -92,6 +94,25 @@ void MovementState::Diagnostics(MessageType mtype, unsigned int moveSystemNumber
 {
 	reprap.GetPlatform().MessageF(mtype, "Segments left Q%u: %u\n", moveSystemNumber, segmentsLeft);
 	codeQueue->Diagnostics(mtype, moveSystemNumber);
+}
+
+void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
+{
+	RestorePoint& rp = restorePoints[restorePointNumber];
+	for (size_t axis = 0; axis < numAxes; ++axis)
+	{
+		rp.moveCoords[axis] = currentUserPosition[axis];
+	}
+
+	rp.feedRate = p_feedRate;
+	rp.virtualExtruderPosition = latestVirtualExtruderPosition;
+	rp.filePos = p_filePos;
+	rp.toolNumber = reprap.GetCurrentToolNumber();
+	rp.fanSpeed = virtualFanSpeed;
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	rp.laserPwmOrIoBits = laserPwmOrIoBits;
+#endif
 }
 
 #if SUPPORT_ASYNC_MOVES

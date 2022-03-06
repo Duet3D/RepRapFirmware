@@ -185,8 +185,6 @@ void GCodes::Init() noexcept
 	limitAxes = noMovesBeforeHoming = true;
 	SetAllAxesNotHomed();
 
-	lastDefaultFanSpeed = 0.0;
-
 	lastAuxStatusReportType = -1;						// no status reports requested yet
 
 	laserMaxPower = DefaultMaxLaserPower;
@@ -844,7 +842,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 		if (gb.IsFileChannel())
 		{
 			// Pausing a file print because of a command in the file itself
-			SavePosition(ms.pauseRestorePoint, gb);	//TODO handle multiple motion systems
+			ms.SavePosition(PauseRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetFilePosition());	//TODO not correct, need to use correct gb for each movement system!
 		}
 		else
 		{
@@ -936,7 +934,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 #endif
 
 		ms.pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
-		ms.pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
+		ms.pauseRestorePoint.fanSpeed = ms.virtualFanSpeed;
 
 #if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface())
@@ -1084,7 +1082,7 @@ bool GCodes::DoEmergencyPause() noexcept
 			ms.pauseRestorePoint.filePos = 0;
 		}
 		ms.pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
-		ms.pauseRestorePoint.fanSpeed = lastDefaultFanSpeed;
+		ms.pauseRestorePoint.fanSpeed = ms.virtualFanSpeed;
 	}
 
 	pauseState = PauseState::paused;
@@ -1268,7 +1266,6 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				ok = f->Write(buf.c_str());
 			}
 #endif
-
 			if (ok && fileGCode->OriginalMachineState().volumetricExtrusion)
 			{
 				buf.copy("M200 ");
@@ -1283,7 +1280,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 			}
 			if (ok)
 			{
-				buf.printf("M106 S%.2f\n", (double)lastDefaultFanSpeed);
+				buf.printf("M106 S%.2f\n", (double)moveStates[0].virtualFanSpeed);
 				ok = f->Write(buf.c_str())									// set the speed of the print fan after we have selected the tool
 					&& reprap.GetFansManager().WriteFanSettings(f);			// set the speeds of all non-thermostatic fans after setting the default fan speed
 			}
@@ -1703,9 +1700,9 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	if (ms.moveType == 0 && gb.Seen('R'))
 	{
 		const uint32_t rParam = gb.GetUIValue();
-		if (rParam < ARRAY_SIZE(ms.numberedRestorePoints))
+		if (rParam < NumVisibleRestorePoints)
 		{
-			rp = &ms.numberedRestorePoints[rParam];
+			rp = &ms.restorePoints[rParam];
 		}
 		else
 		{
@@ -2447,8 +2444,9 @@ bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 	ms.SetDefaults(numTotalAxes);
 	SetMoveBufferDefaults(ms);
 	ToolOffsetTransform(ms);
-	ToolOffsetTransform(ms, buildObjects.GetInitialPosition().moveCoords, ms.coords);
-	ms.feedRate = buildObjects.GetInitialPosition().feedRate;
+	const RestorePoint& rp = ms.restorePoints[ResumeObjectRestorePointNumber];
+	ToolOffsetTransform(ms, rp.moveCoords, ms.coords);
+	ms.feedRate = rp.feedRate;
 	ms.tool = reprap.GetCurrentTool();
 	NewSingleSegmentMoveAvailable(ms);
 	return true;
@@ -3569,10 +3567,12 @@ bool GCodes::ChangeMicrostepping(size_t axisOrExtruder, unsigned int microsteps,
 	return success;
 }
 
-// Set the speeds of fans mapped for the current tool to lastDefaultFanSpeed
-void GCodes::SetMappedFanSpeed(float f) noexcept
+// Set the speeds of fans mapped for the current tool to lastDefaultFanSpeed.
+// gbp is nullptr when called from the Display subsystem.
+void GCodes::SetMappedFanSpeed(const GCodeBuffer *null gbp, float f) noexcept
 {
-	lastDefaultFanSpeed = f;
+	MovementState& ms = (gbp == nullptr) ? moveStates[0] : GetMovementState(*gbp);
+	ms.virtualFanSpeed = f;
 	const Tool * const ct = reprap.GetCurrentTool();
 	if (ct == nullptr)
 	{
@@ -4141,23 +4141,10 @@ void GCodes::UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept
 
 // Save position etc. to a restore point.
 // Note that restore point coordinates are not affected by workplace coordinate offsets. This allows them to be used in resume.g.
-void GCodes::SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcept
+void GCodes::SavePosition(const GCodeBuffer& gb, unsigned int restorePointNumber) noexcept
 {
-	const MovementState& ms = GetMovementState(gb);
-	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-	{
-		rp.moveCoords[axis] = ms.currentUserPosition[axis];
-	}
-
-	rp.feedRate = gb.LatestMachineState().feedRate;
-	rp.virtualExtruderPosition = ms.latestVirtualExtruderPosition;
-	rp.filePos = gb.GetFilePosition();
-	rp.toolNumber = reprap.GetCurrentToolNumber();
-	rp.fanSpeed = lastDefaultFanSpeed;
-
-#if SUPPORT_LASER || SUPPORT_IOBITS
-	rp.laserPwmOrIoBits = ms.laserPwmOrIoBits;
-#endif
+	MovementState& ms = GetMovementState(gb);
+	ms.SavePosition(restorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetFilePosition());
 }
 
 // Restore user position from a restore point. Also restore the laser power, but not the spindle speed (the user must do that explicitly).

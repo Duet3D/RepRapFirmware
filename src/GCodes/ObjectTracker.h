@@ -42,7 +42,6 @@ public:
 	bool IsFirstMoveSincePrintingResumed() const noexcept { return printingJustResumed; }
 	void DoneMoveSincePrintingResumed() noexcept { printingJustResumed = false; }
 	GCodeResult HandleM486(GCodeBuffer& gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException);	// Handle M486
-	const RestorePoint& GetInitialPosition() const noexcept { return rp; }
 	void SetVirtualTool(int toolNum) noexcept { virtualToolNumber = toolNum; }
 
 #if TRACK_OBJECT_NAMES
@@ -83,7 +82,6 @@ private:
 	ExpressionValue GetYCoordinate(const ObjectExplorationContext& context) const noexcept;
 #endif
 
-	RestorePoint rp;									// The user coordinates at the point of restarting moves after skipping an object
 	ObjectCancellationBitmap objectsCancelled;			// Which object numbers have been cancelled. The number of bits in this is the maximum number of objects we can track.
 	unsigned int numObjects;							// How many objects we know about, if known
 	int currentObjectNumber;							// the current object number, or a negative value if it isn't an object
