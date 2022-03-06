@@ -200,6 +200,14 @@ public:
 	void MessageAcknowledged(bool cancelled) noexcept;
 
 	GCodeChannel GetChannel() const noexcept { return codeChannel; }
+	bool IsFileChannel() const noexcept
+	{
+		return codeChannel == GCodeChannel::File
+#if SUPPORT_ASYNC_MOVES
+			|| codeChannel == GCodeChannel::File2
+#endif
+				;
+	}
 	const char *GetIdentity() const noexcept { return codeChannel.ToString(); }
 	bool CanQueueCodes() const noexcept;
 	MessageType GetResponseMessageType() const noexcept;

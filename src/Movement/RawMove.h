@@ -8,9 +8,10 @@
 #ifndef SRC_GCODES_RAWMOVE_H_
 #define SRC_GCODES_RAWMOVE_H_
 
-#include "RepRapFirmware.h"
+#include <RepRapFirmware.h>
+#include <GCodes/RestorePoint.h>
 
-// Details of a move that are passed from GCodes to Move
+// Details of a move that are copied from GCodes to Move
 struct RawMove
 {
 	float coords[MaxAxesPlusExtruders];								// new positions for the axes, amount of movement for the extruders
@@ -80,12 +81,37 @@ struct MovementState : public RawMove
 	float angleIncrementSine, angleIncrementCosine;					// the sine and cosine of the increment
 	unsigned int segmentsTillNextFullCalc;							// how may more segments we can do before we need to do the full calculation instead of the quicker one
 	GCodeQueue *codeQueue;											// Stores certain codes for deferred execution
+
+	GCodeBuffer *null updateUserPositionGb;							// if this is non-null then we need to update the user position from the machine position
+
+	unsigned int segmentsLeftToStartAt;
+	float moveFractionToSkip;
+	float firstSegmentFractionToSkip;
+
+	float restartMoveFractionDone;									// how much of the next move was printed before the pause or power failure (from M26)
+	float restartInitialUserC0;										// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
+	float restartInitialUserC1;										// if the print was paused during an arc move, the user Y coordinate at the start of that move (from M26)
+
+	RestorePoint simulationRestorePoint;							// The position and feed rate when we started a simulation
+
+	RestorePoint numberedRestorePoints[NumRestorePoints];			// Restore points accessible using the R parameter in the G0/G1 command
+	RestorePoint& pauseRestorePoint = numberedRestorePoints[1];		// The position and feed rate when we paused the print
+	RestorePoint& toolChangeRestorePoint = numberedRestorePoints[2];	// The position and feed rate when we freed a tool
+
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
+	FilePosition fileOffsetToPrint;									// The offset to print from
+#endif
+
 	bool doingArcMove;												// true if we are doing an arc move
 	bool xyPlane;													// true if the G17/G18/G19 selected plane of the arc move is XY in the original user coordinates
 	SegmentedMoveState segMoveState;
+	bool pausedInMacro;												// if we are paused then this is true if we paused while fileGCode was executing a macro
 
 	float GetProportionDone() const noexcept;						// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
 	void Reset() noexcept;
+	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;	// change the extrusion factor of an extruder
+	const RestorePoint *GetRestorePoint(size_t n) const pre(n < NumRestorePoints) { return &numberedRestorePoints[n]; }
+	void ClearMove() noexcept;
 };
 
 #if SUPPORT_ASYNC_MOVES

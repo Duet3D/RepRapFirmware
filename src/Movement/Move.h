@@ -134,9 +134,9 @@ public:
 	void Simulate(SimulationMode simMode) noexcept;											// Enter or leave simulation mode
 	float GetSimulationTime() const noexcept { return mainDDARing.GetSimulationTime(); }	// Get the accumulated simulation time
 
-	bool PausePrint(RestorePoint& rp) noexcept;												// Pause the print as soon as we can, returning true if we were able to
+	bool PausePrint(unsigned int queueNumber, RestorePoint& rp) noexcept;					// Pause the print as soon as we can, returning true if we were able to
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
-	bool LowPowerOrStallPause(RestorePoint& rp) noexcept;									// Pause the print immediately, returning true if we were able to
+	bool LowPowerOrStallPause(unsigned int queueNumber, RestorePoint& rp) noexcept;			// Pause the print immediately, returning true if we were able to
 #endif
 
 	bool NoLiveMovement() const noexcept { return mainDDARing.IsIdle(); }					// Is a move running, or are there any queued?

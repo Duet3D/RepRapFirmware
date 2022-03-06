@@ -110,13 +110,13 @@ public:
 	void Init() noexcept;														// Set it up
 	void Exit() noexcept;														// Shut it down
 	void Reset() noexcept;														// Reset some parameter to defaults
-	bool ReadMove(RawMove& m) noexcept;											// Called by the Move class to get a movement set by the last G Code
-	void ClearMove() noexcept;
+	bool ReadMove(unsigned int queueNumber, RawMove& m) noexcept
+		pre(queueNumber < ARRAY_SIZE(moveStates));								// Called by the Move class to get a movement set by the last G Code
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply) noexcept;	// Open a file of G Codes to run
 #endif
 	void AbortPrint(GCodeBuffer& gb) noexcept;									// Cancel any print in progress
-	void GetCurrentCoordinates(const StringRef& s) const noexcept;				// Write where we are into a string
+	void GetCurrentPrimaryCoordinates(const StringRef& s) const noexcept;				// Write where we are into a string
 	bool DoingFileMacro() const noexcept;										// Is a macro file being processed by any input channel?
 	bool GetMacroRestarted() const noexcept;									// Return true if the macro being executed by fileGCode was restarted
 	bool WaitingForAcknowledgement() const noexcept;							// Is an input waiting for a message to be acknowledged?
@@ -144,7 +144,7 @@ public:
 	float GetTotalRawExtrusion() const noexcept { return rawExtruderTotal; }	// Get the total extrusion since start of print, all drives
 	float GetTotalBabyStepOffset(size_t axis) const noexcept
 		pre(axis < maxAxes);
-	float GetUserCoordinate(size_t axis) const noexcept;						// Get the current user coordinate in the current workspace coordinate system
+	float GetPrimaryUserCoordinate(size_t axis) const noexcept;						// Get the current user coordinate in the current workspace coordinate system
 
 	bool CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) noexcept;
 #if HAS_NETWORKING
@@ -222,16 +222,16 @@ public:
 	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcept;		// Save position etc. to a restore point
 	void StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t param) noexcept;
 
-	unsigned int GetWorkplaceCoordinateSystemNumber() const noexcept { return moveState.currentCoordinateSystem + 1; }
+	unsigned int GetPrimaryWorkplaceCoordinateSystemNumber() const noexcept { return moveStates[0].currentCoordinateSystem + 1; }
 
 #if SUPPORT_COORDINATE_ROTATION
 	void RotateCoordinates(float angleDegrees, float coords[2]) const noexcept;		// Account for coordinate rotation
 #endif
 
 	// This function is called by other functions to account correctly for workplace coordinates
-	float GetWorkplaceOffset(size_t axis) const noexcept
+	float GetWorkplaceOffset(const GCodeBuffer& gb, size_t axis) const noexcept
 	{
-		return workplaceCoordinates[moveState.currentCoordinateSystem][axis];
+		return workplaceCoordinates[GetMovementState(gb).currentCoordinateSystem][axis];
 	}
 
 #if SUPPORT_OBJECT_MODEL
@@ -249,7 +249,7 @@ public:
 	const GCodeBuffer* GetInput(size_t n) const noexcept { return gcodeSources[n]; }
 	const GCodeBuffer* GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
-	const RestorePoint *GetRestorePoint(size_t n) const pre(n < NumRestorePoints) { return &numberedRestorePoints[n]; }
+	const RestorePoint *GetPrimaryRestorePoint(size_t n) const pre(n < NumRestorePoints) { return &moveStates[0].numberedRestorePoints[n]; }
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 
 # if HAS_VOLTAGE_MONITOR
@@ -257,10 +257,10 @@ public:
 # endif
 
 # if SUPPORT_LASER
-	// Return laser PWM in 0..1
+	// Return laser PWM in 0..1. Only the primary movement queue is permitted to control the laser.
 	float GetLaserPwm() const noexcept
 	{
-		return (float)moveState.laserPwmOrIoBits.laserPwm * (1.0/65535);
+		return (float)moveStates[0].laserPwmOrIoBits.laserPwm * (1.0/65535);
 	}
 # endif
 #endif
@@ -357,14 +357,14 @@ private:
 	void HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept;
 	void HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept;	// Handle G-Code replies
 
-	GCodeResult TryMacroFile(GCodeBuffer& gb) noexcept;								// Try to find a macro file that implements a G or M command
+	GCodeResult TryMacroFile(GCodeBuffer& gb) noexcept;												// Try to find a macro file that implements a G or M command
 
 	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err) THROWS(GCodeException) SPEED_CRITICAL;	// Execute a straight move
-	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err) THROWS(GCodeException)				// Execute an arc move
+	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err) THROWS(GCodeException)		// Execute an arc move
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
-	void FinaliseMove(GCodeBuffer& gb) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
-	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;						// Check that enough axes have been homed
-	bool TravelToStartPoint(GCodeBuffer& gb) noexcept;								// Set up a move to travel to the resume point
+	void FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
+	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;										// Check that enough axes have been homed
+	bool TravelToStartPoint(GCodeBuffer& gb) noexcept;												// Set up a move to travel to the resume point
 
 	GCodeResult DoDwell(GCodeBuffer& gb) THROWS(GCodeException);														// Wait for a bit
 	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);									// Home some axes
@@ -396,7 +396,7 @@ private:
 
 	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
-	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove) THROWS(GCodeException);	// Set up the extrusion of a move
+	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException);	// Set up the extrusion of a move
 
 	bool Push(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb) noexcept;																// Pop feedrate etc
@@ -424,9 +424,13 @@ private:
 	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept;					// Restore user position from a restore point
 
 	void UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept;							// Get the current position from the Move class
-	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
+	void ToolOffsetTransform(MovementState& ms, AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
 																							// Convert user coordinates to head reference point coordinates
-	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept;	// Convert head reference point coordinates to user coordinates
+	void ToolOffsetTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
+																							// Convert user coordinates to head reference point coordinates
+	void ToolOffsetInverseTransform(MovementState& ms) const noexcept;						// Convert head reference point coordinates to user coordinates
+	void ToolOffsetInverseTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept;
+																							// Convert head reference point coordinates to user coordinates
 	float GetCurrentToolOffset(size_t axis) const noexcept;									// Get an axis offset of the current tool
 
 	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);								// Retract or un-retract filaments
@@ -491,19 +495,20 @@ private:
 
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept;	// Append a list of axes to a string
 
-	void EndSimulation(GCodeBuffer *gb) noexcept;								// Restore positions etc. when exiting simulation mode
+	void EndSimulation(GCodeBuffer *null gb) noexcept;							// Restore positions etc. when exiting simulation mode
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	void SaveResumeInfo(bool wasPowerFailure) noexcept;
 #endif
 
-	void NewMoveAvailable(unsigned int sl) noexcept;							// Flag that a new move is available
-	void NewMoveAvailable() noexcept;											// Flag that a new move is available
+	void NewSingleSegmentMoveAvailable(MovementState& ms) noexcept;				// Flag that a new move is available
+	void NewMoveAvailable(MovementState& ms) noexcept;							// Flag that a new move is available
 
-	void SetMoveBufferDefaults() noexcept;										// Set up default values in the move buffer
+	void SetMoveBufferDefaults(MovementState& ms) noexcept;						// Set up default values in the move buffer
 	void ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept;	// Change a live extrusion factor
 
-	MovementState& GetMovementState(GCodeBuffer& gb) noexcept;					// Get a reference to the movement state associated with the specified GCode buffer
+	MovementState& GetMovementState(const GCodeBuffer& gb) noexcept;				// Get a reference to the movement state associated with the specified GCode buffer
+	const MovementState& GetMovementState(const GCodeBuffer& gb) const noexcept;	// Get a reference to the movement state associated with the specified GCode buffer
 
 #if SUPPORT_COORDINATE_ROTATION
 	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68
@@ -569,7 +574,6 @@ private:
 	bool active;								// Live and running?
 	const char *_ecv_array null deferredPauseCommandPending;
 	PauseState pauseState;						// whether the machine is running normally or is pausing, paused or resuming
-	bool pausedInMacro;							// if we are paused then this is true if we paused while fileGCode was executing a macro
 	bool runningConfigFile;						// We are running config.g during the startup process
 	bool doingToolChange;						// We are running tool change macros
 
@@ -579,26 +583,11 @@ private:
 #endif
 
 	// The following contain the details of moves that the Move module fetches
-	MovementState moveState;					// Move details
 #if SUPPORT_ASYNC_MOVES
-	MovementState moveState2;
+	MovementState moveStates[2];
+#else
+	MovementState moveStates[1];				// Move details
 #endif
-
-	GCodeBuffer *null updateUserPositionGb;		// if this is non-null then we need to update the user position from he machine position
-
-	unsigned int segmentsLeftToStartAt;
-	float moveFractionToSkip;
-	float firstSegmentFractionToSkip;
-
-	float restartMoveFractionDone;				// how much of the next move was printed before the pause or power failure (from M26)
-	float restartInitialUserC0;					// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
-	float restartInitialUserC1;					// if the print was paused during an arc move, the user Y coordinate at the start of that move (from M26)
-
-	RestorePoint simulationRestorePoint;		// The position and feed rate when we started a simulation
-
-	RestorePoint numberedRestorePoints[NumRestorePoints];				// Restore points accessible using the R parameter in the G0/G1 command
-	RestorePoint& pauseRestorePoint = numberedRestorePoints[1];			// The position and feed rate when we paused the print
-	RestorePoint& toolChangeRestorePoint = numberedRestorePoints[2];	// The position and feed rate when we freed a tool
 
 	size_t numTotalAxes;						// How many axes we have
 	size_t numVisibleAxes;						// How many axes are visible
@@ -617,9 +606,6 @@ private:
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileData fileToPrint;						// The next file to print
-#endif
-#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	FilePosition fileOffsetToPrint;				// The offset to print from
 #endif
 
 	// Tool change. These variables can be global because movement is locked while doing a tool change, so only one can take place at a time.
@@ -731,9 +717,14 @@ inline float GCodes::GetTotalBabyStepOffset(size_t axis) const noexcept
 #if !SUPPORT_ASYNC_MOVES
 
 // Get a reference to the movement state associated with the specified GCode buffer
-inline MovementState& GCodes::GetMovementState(GCodeBuffer& gb) noexcept
+inline MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) noexcept
 {
-	return moveState;
+	return moveStates[0];
+}
+
+inline const MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) const noexcept
+{
+	return moveStates[0];
 }
 
 #endif

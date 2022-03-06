@@ -114,8 +114,8 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 2),								ObjectModelEntryFlags::none },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxTravelAcceleration), 1),					ObjectModelEntryFlags::none },
 	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetVirtualExtruderPosition(), 5),					ObjectModelEntryFlags::live },
-	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber() - 1),	ObjectModelEntryFlags::none },
-	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber()),		ObjectModelEntryFlags::obsolete },
+	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber() - 1),	ObjectModelEntryFlags::none },
+	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber()),		ObjectModelEntryFlags::obsolete },
 
 	// 1. Move.Idle members
 	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor(), 1),						ObjectModelEntryFlags::none },
@@ -297,10 +297,10 @@ void Move::Exit() noexcept
 			{
 				// If there's a G Code move available, add it to the DDA ring for processing.
 				RawMove nextMove;
-				if (reprap.GetGCodes().ReadMove(nextMove))				// if we have a new move
+				if (reprap.GetGCodes().ReadMove(0, nextMove))				// if we have a new move
 				{
 					moveRead = true;
-					if (simulationMode < SimulationMode::partial)		// in simulation mode partial, we don't process incoming moves beyond this point
+					if (simulationMode < SimulationMode::partial)			// in simulation mode partial, we don't process incoming moves beyond this point
 					{
 						if (nextMove.moveType == 0)
 						{
@@ -451,17 +451,17 @@ bool Move::IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) co
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
-bool Move::PausePrint(RestorePoint& rp) noexcept
+bool Move::PausePrint(unsigned int queueNumber, RestorePoint& rp) noexcept
 {
-	return mainDDARing.PauseMoves(rp);
+	return rings[queueNumber].PauseMoves(rp);
 }
 
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 
 // Pause the print immediately, returning true if we were able to skip or abort any moves and setting up to the move we aborted
-bool Move::LowPowerOrStallPause(RestorePoint& rp) noexcept
+bool Move::LowPowerOrStallPause(unsigned int queueNumber, RestorePoint& rp) noexcept
 {
-	return mainDDARing.LowPowerOrStallPause(rp);
+	return rings[queueNumber].LowPowerOrStallPause(rp);
 }
 
 #endif

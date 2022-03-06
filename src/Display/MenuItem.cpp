@@ -386,7 +386,7 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 				case 13: // U
 				case 14: // V
 				case 15: // W
-					currentValue.f = reprap.GetGCodes().GetUserCoordinate(itemNumber - 10);
+					currentValue.f = reprap.GetGCodes().GetPrimaryUserCoordinate(itemNumber - 10);
 					break;
 
 				case 20:

@@ -219,7 +219,7 @@ constexpr ObjectModelArrayDescriptor RepRap::restorePointsArrayDescriptor =
 	nullptr,
 	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return NumRestorePoints; },
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-																		{ return ExpressionValue(((const RepRap*)self)->gCodes->GetRestorePoint(context.GetLastIndex())); }
+																		{ return ExpressionValue(((const RepRap*)self)->gCodes->GetPrimaryRestorePoint(context.GetLastIndex())); }
 };
 
 constexpr ObjectModelArrayDescriptor RepRap::volumesArrayDescriptor =
@@ -1361,12 +1361,12 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 
 	// First the user coordinates
 #if SUPPORT_WORKPLACE_COORDINATES
-	response->catf(",\"wpl\":%u,", gCodes->GetWorkplaceCoordinateSystemNumber());
+	response->catf(",\"wpl\":%u,", gCodes->GetPrimaryWorkplaceCoordinateSystemNumber());
 #else
 	response->cat(',');
 #endif
 
-	AppendFloatArray(response, "xyz", numVisibleAxes, [this](size_t axis) noexcept { return gCodes->GetUserCoordinate(axis); }, 3);
+	AppendFloatArray(response, "xyz", numVisibleAxes, [this](size_t axis) noexcept { return gCodes->GetPrimaryUserCoordinate(axis); }, 3);
 
 	// Machine coordinates
 	response->cat(',');
@@ -1984,7 +1984,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 
 	// User coordinates
 	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
-	AppendFloatArray(response, "pos", numVisibleAxes, [this](size_t axis) noexcept { return gCodes->GetUserCoordinate(axis); }, 3);
+	AppendFloatArray(response, "pos", numVisibleAxes, [this](size_t axis) noexcept { return gCodes->GetPrimaryUserCoordinate(axis); }, 3);
 
 	// Machine coordinates
 	response->cat(',');
