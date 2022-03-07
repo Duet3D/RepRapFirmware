@@ -20,6 +20,8 @@
 constexpr size_t AnalogInTaskStackWords = 300;
 static Task<AnalogInTaskStackWords> analogInTask;
 
+#ifdef SERIAL_AUX_DEVICE
+
 // Serial device support
 void Serial0PortInit(AsyncSerial *) noexcept
 {
@@ -33,20 +35,7 @@ void Serial0PortDeinit(AsyncSerial *) noexcept
 	pinMode(Serial0RxPin, INPUT_PULLUP);
 }
 
-void Serial1PortInit(AsyncSerial *) noexcept
-{
-	SetPinFunction(Serial1TxPin, Serial1PinFunction);
-	SetPinFunction(Serial1RxPin, Serial1PinFunction);
-}
-
-void Serial1PortDeinit(AsyncSerial *) noexcept
-{
-	pinMode(Serial1TxPin, INPUT_PULLUP);
-	pinMode(Serial1RxPin, INPUT_PULLUP);
-}
-
 AsyncSerial serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512, Serial0PortInit, Serial0PortDeinit);
-AsyncSerial serialUart1(Serial1SercomNumber, Sercom1RxPad, 512, 512, Serial1PortInit, Serial1PortDeinit);
 
 # if !defined(SERIAL0_ISR0) || !defined(SERIAL0_ISR2) || !defined(SERIAL0_ISR3)
 #  error SERIAL0_ISRn not defined
@@ -67,6 +56,24 @@ void SERIAL0_ISR3() noexcept
 	serialUart0.Interrupt3();
 }
 
+#endif
+
+#ifdef SERIAL_AUX2_DEVICE
+
+void Serial1PortInit(AsyncSerial *) noexcept
+{
+	SetPinFunction(Serial1TxPin, Serial1PinFunction);
+	SetPinFunction(Serial1RxPin, Serial1PinFunction);
+}
+
+void Serial1PortDeinit(AsyncSerial *) noexcept
+{
+	pinMode(Serial1TxPin, INPUT_PULLUP);
+	pinMode(Serial1RxPin, INPUT_PULLUP);
+}
+
+AsyncSerial serialUart1(Serial1SercomNumber, Sercom1RxPad, 512, 512, Serial1PortInit, Serial1PortDeinit);
+
 # if !defined(SERIAL1_ISR0) || !defined(SERIAL1_ISR2) || !defined(SERIAL1_ISR3)
 #  error SERIAL1_ISRn not defined
 # endif
@@ -85,6 +92,8 @@ void SERIAL1_ISR3() noexcept
 {
 	serialUart1.Interrupt3();
 }
+
+#endif
 
 SerialCDC serialUSB(UsbVBusPin, 512, 512);
 

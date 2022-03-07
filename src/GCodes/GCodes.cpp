@@ -69,7 +69,11 @@ GCodes::GCodes(Platform& p) noexcept :
 #if HAS_VOLTAGE_MONITOR
 	, powerFailScript(nullptr)
 #endif
-	, isFlashing(false), isFlashingPanelDue(false), lastWarningMillis(0)
+	, isFlashing(false),
+#if SUPPORT_PANELDUE_FLASH
+	isFlashingPanelDue(false),
+#endif
+	lastWarningMillis(0)
 #if HAS_MASS_STORAGE
 	, sdTimingFile(nullptr)
 #endif
@@ -299,7 +303,9 @@ void GCodes::Reset() noexcept
 	moveState.filePos = noFilePosition;
 	firmwareUpdateModuleMap.Clear();
 	isFlashing = false;
+#if SUPPORT_PANELDUE_FLASH
 	isFlashingPanelDue = false;
+#endif
 	currentZProbeNumber = 0;
 
 	buildObjects.Init();
@@ -448,7 +454,7 @@ void GCodes::Spin() noexcept
 		{
 			nextGcodeSource = 0;
 		}
-		if (gbp != nullptr && (gbp != auxGCode || !isFlashingPanelDue))		// skip auxGCode while flashing PanelDue is in progress
+		if (gbp != nullptr && (gbp != auxGCode || !IsFlashingPanelDue()))	// skip auxGCode while flashing PanelDue is in progress
 		{
 			if (SpinGCodeBuffer(*gbp))										// if we did something useful
 			{

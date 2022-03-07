@@ -154,7 +154,13 @@ public:
 
 	PauseState GetPauseState() const noexcept { return pauseState; }
 	bool IsFlashing() const noexcept { return isFlashing; }						// Is a new firmware binary going to be flashed?
-	bool IsFlashingPanelDue() const noexcept { return isFlashingPanelDue; }
+
+	bool IsFlashingPanelDue() const noexcept
+#if SUPPORT_PANELDUE_FLASH
+		{ return isFlashingPanelDue; }
+#else
+		{ return false; }
+#endif
 
 	bool IsReallyPrinting() const noexcept;										// Return true if we are printing from SD card and not pausing, paused or resuming
 	bool IsReallyPrintingOrResuming() const noexcept;
@@ -664,7 +670,9 @@ private:
 	// Firmware update
 	Bitmap<uint8_t> firmwareUpdateModuleMap;	// Bitmap of firmware modules to be updated
 	bool isFlashing;							// Is a new firmware binary going to be flashed?
+#if SUPPORT_PANELDUE_FLASH
 	bool isFlashingPanelDue;					// Are we in the process of flashing PanelDue?
+#endif
 
 	// Code queue
 	GCodeQueue *codeQueue;						// Stores certain codes for deferred execution

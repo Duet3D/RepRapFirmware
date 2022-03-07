@@ -552,15 +552,21 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				if (firmwareUpdateModuleMap.IsBitSet(module))
 				{
 					firmwareUpdateModuleMap.ClearBit(module);
+# if SUPPORT_PANELDUE_FLASH
 					FirmwareUpdater::UpdateModule(module, serialChannelForPanelDueFlashing, filenameString.GetRef());
-					updating = true;
 					isFlashingPanelDue = (module == FirmwareUpdater::PanelDueFirmwareModule);
+# else
+					FirmwareUpdater::UpdateModule(module, 0, filenameString.GetRef());
+# endif
+					updating = true;
 					break;
 				}
 			}
 			if (!updating)
 			{
+# if SUPPORT_PANELDUE_FLASH
 				isFlashingPanelDue = false;
+# endif
 				gb.SetState(GCodeState::flashing2);
 			}
 		}
