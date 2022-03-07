@@ -203,7 +203,22 @@ constexpr IRQn_Type SdhcIRQn = SDHC0_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
 // LCD interface
-// TBC
+constexpr unsigned int LcdSercomNumber = 0;
+constexpr Pin LcdSpiMosiPin = PortAPin(4);
+constexpr Pin LcdSpiMisoPin = PortAPin(7);
+constexpr Pin LcdSpiSclkPin = PortAPin(5);
+constexpr Pin LcdSpiCsPin = PortAPin(6);
+constexpr Pin LcdFlashCsPin = PortCPin(2);
+constexpr Pin LcdFlashWpPin = PortAPin(3);
+constexpr GpioPinFunction LcdSpiPinFunction = GpioPinFunction::C;
+
+// Touch screen interface (when not shared with SharedSpi)
+constexpr unsigned int RtpSercomNumber = 6;
+constexpr Pin RtpSpiMosiPin = PortCPin(16);
+constexpr Pin RtpSpiMisoPin = PortCPin(19);
+constexpr Pin RtpSpiSclkPin = PortCPin(17);
+constexpr Pin RtpSpiCsPin = PortCPin(18);
+constexpr GpioPinFunction RtpSpiPinFunction = GpioPinFunction::C;
 
 // Shared SPI definitions
 constexpr uint8_t SharedSpiSercomNumber = 7;
