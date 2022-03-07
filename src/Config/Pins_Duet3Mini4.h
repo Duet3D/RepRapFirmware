@@ -118,15 +118,17 @@ constexpr Pin GlobalTmc22xxEnablePin = PortCPin(28);	// The pin that drives ENN 
 PortGroup * const StepPio = &(PORT->Group[2]);		// The PIO that all the step pins are on (port C)
 
 constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(20) };
-constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortBPin(3), PortAPin(27), PortCPin(27), PortBPin(2) };
-constexpr Pin DriverDiagPins[NumDirectDrivers] = { PortAPin(10), PortBPin(8), PortBPin(1), PortCPin(21) };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortBPin(3), PortAPin(27), PortBPin(1), PortBPin(2) };
+constexpr Pin DriverDiagPins[NumDirectDrivers] = { PortAPin(10), PortBPin(8), PortCPin(27), PortCPin(21) };
+
 // CCL inputs that the DIAG inputs use. Bits 0-1 are the CCL LUT number. Bits 8-19 are the value to OR in to the control register for that LUT.
+// LUT 0 is kept free for other uses.
 constexpr uint32_t CclDiagInputs[NumDirectDrivers] =
 {
 	0x01 | CCL_LUTCTRL_INSEL2(0x04),		// CCLIN[5] = 1.2
 	0x02 | CCL_LUTCTRL_INSEL2(0x04),		// CCLIN[8]	= 2.2
-	0x00 | CCL_LUTCTRL_INSEL2(0x04),		// CCLIN[2] = 0.2
-	0x03 | CCL_LUTCTRL_INSEL1(0x04),		// CCLIN[10] = 2.1
+	0x01 | CCL_LUTCTRL_INSEL1(0x04),		// CCLIN[4] = 1.1
+	0x03 | CCL_LUTCTRL_INSEL1(0x04),		// CCLIN[10] = 3.1
 };
 
 // UART interface to stepper drivers
