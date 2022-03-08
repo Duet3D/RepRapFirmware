@@ -2300,7 +2300,7 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 			for (unsigned int charsWrittenThisCall = 0; charsWrittenThisCall < thumbnailMaxDataSize; )
 			{
 				// Read a line
-				char lineBuffer[GCODE_LENGTH];
+				char lineBuffer[MaxGCodeLength];
 				const int charsRead = f->ReadLine(lineBuffer, sizeof(lineBuffer));
 				if (charsRead <= 0)
 				{

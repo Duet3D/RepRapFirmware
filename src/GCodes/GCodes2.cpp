@@ -1824,7 +1824,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 118:	// Echo message on host
 				{
 					gb.MustSee('S');
-					String<GCODE_LENGTH> message;
+					String<MaxGCodeLength> message;
 					gb.GetQuotedString(message.GetRef());
 
 					MessageType type = GenericMessage;
@@ -3772,6 +3772,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			// M650 (set peel move parameters) and M651 (execute peel move) are no longer handled specially. Use macros to specify what they should do.
 
+#if SUPPORT_LINEAR_DELTA
 			case 665: // Set delta configuration
 				if (!LockMovementAndWaitForStandstill(gb))
 				{
@@ -3824,7 +3825,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					result = GetGCodeResultFromError(error);
 				}
 				break;
-
+#endif
 			case 667: // Set CoreXY mode
 				if (!LockMovementAndWaitForStandstill(gb))
 				{

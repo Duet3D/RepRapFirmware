@@ -295,13 +295,11 @@ private:
 	bool timerRunning;									// True if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
 
-#if HAS_SBC_INTERFACE
-	alignas(4) char buffer[MaxCodeBufferSize];			// must be aligned because we do dword fetches from it
-#else
-	char buffer[GCODE_LENGTH];
-#endif
+	alignas(4) char buffer[MaxGCodeLength];				// must be aligned because in SBC binary mode we do dword fetches from it
 
 #if HAS_SBC_INTERFACE
+	static_assert(MaxGCodeLength >= MaxCodeBufferSize);	// make sure the GCodeBuffer is large enough to hold a command received from the SBC in binary
+
 	// Accessed by both the Main and SBC tasks
 	BinarySemaphore macroSemaphore;
 	volatile bool isWaitingForMacro;	// Is this GB waiting in DoFileMacro?
