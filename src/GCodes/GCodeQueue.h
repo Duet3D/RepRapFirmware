@@ -12,7 +12,7 @@
 
 class QueuedCode;
 
-const size_t BufferSizePerQueueItem = SHORT_GCODE_LENGTH;
+const size_t BufferSizePerQueueItem = ShortGCodeLength;
 
 class GCodeQueue : public GCodeInput
 {

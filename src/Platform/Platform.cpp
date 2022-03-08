@@ -786,12 +786,14 @@ void Platform::Init() noexcept
 
 	extrusionAncilliaryPwmValue = 0.0;
 
+#if SUPPORT_SPI_SENSORS
 	// Enable pullups on all the SPI CS pins. This is required if we are using more than one device on the SPI bus.
 	// Otherwise, when we try to initialise the first device, the other devices may respond as well because their CS lines are not high.
 	for (Pin p : SpiTempSensorCsPins)
 	{
 		pinMode(p, INPUT_PULLUP);
 	}
+#endif
 
 	// If MISO from a MAX31856 board breaks after initialising the MAX31856 then if MISO floats low and reads as all zeros, this looks like a temperature of 0C and no error.
 	// Enable the pullup resistor, with luck this will make it float high instead.

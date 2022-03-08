@@ -42,7 +42,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 
 #define SUPPORT_CAN_EXPANSION	0
 
-#define SUPPORT_LED_STRIPS		1
+#define SUPPORT_LED_STRIPS		0
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
 #define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
@@ -50,7 +50,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
-#define SUPPORT_12864_LCD		1					// set nonzero to support 12864 LCD and rotary encoder
+#define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_ACCELEROMETERS	1
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				0
@@ -64,7 +64,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 #define USE_CACHE				1					// set nonzero to enable the cache
 #define USE_MPU					0					// set nonzero to enable the memory protection unit
 
-// Disable the kinematcs we don't need to save flash memory space
+// Disable the kinematics we don't need to save flash memory space
 #define SUPPORT_LINEAR_DELTA	0
 #define SUPPORT_ROTARY_DELTA	0
 #define SUPPORT_POLAR			0
@@ -86,8 +86,8 @@ constexpr size_t MaxBedHeaters = 4;
 constexpr size_t MaxChamberHeaters = 4;
 constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
 
-constexpr size_t NumThermistorInputs = 3;
-constexpr size_t NumTmcDriversSenseChannels = 2;
+constexpr size_t NumThermistorInputs = 2;
+constexpr size_t NumTmcDriversSenseChannels = 1;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 10;						// The maximum number of movement axes in the machine
@@ -101,11 +101,9 @@ constexpr size_t MaxExtrudersPerTool = 8;
 
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
-constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels (USB and two auxiliary UARTs)
+constexpr size_t NumSerialChannels = 1;				// The number of serial IO channels (USB and one auxiliary UART)
 
 #define SERIAL_MAIN_DEVICE (serialUSB)
-#define SERIAL_AUX_DEVICE (serialUart0)
-#define SERIAL_AUX2_DEVICE (serialUart1)
 
 // SerialUSB
 constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB port
@@ -119,16 +117,18 @@ constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB po
 constexpr Pin GlobalTmc22xxEnablePin = PortCPin(28);	// The pin that drives ENN of all drivers
 PortGroup * const StepPio = &(PORT->Group[2]);		// The PIO that all the step pins are on (port C)
 
-constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(19) };
-constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortBPin(3), PortBPin(29), PortBPin(28), PortDPin(20) };
-constexpr Pin DriverDiagPins[NumDirectDrivers] = { PortAPin(10), PortBPin(8), PortAPin(22), PortAPin(23) };
+constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(20) };
+constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortBPin(3), PortAPin(27), PortBPin(1), PortBPin(2) };
+constexpr Pin DriverDiagPins[NumDirectDrivers] = { PortAPin(10), PortBPin(8), PortCPin(27), PortCPin(21) };
+
 // CCL inputs that the DIAG inputs use. Bits 0-1 are the CCL LUT number. Bits 8-19 are the value to OR in to the control register for that LUT.
+// LUT 0 is kept free for other uses.
 constexpr uint32_t CclDiagInputs[NumDirectDrivers] =
 {
 	0x01 | CCL_LUTCTRL_INSEL2(0x04),		// CCLIN[5] = 1.2
 	0x02 | CCL_LUTCTRL_INSEL2(0x04),		// CCLIN[8]	= 2.2
-	0x02 | CCL_LUTCTRL_INSEL0(0x04),		// CCLIN[6] = 2.0
-	0x02 | CCL_LUTCTRL_INSEL1(0x04),		// CCLIN[7] = 2.1
+	0x01 | CCL_LUTCTRL_INSEL1(0x04),		// CCLIN[4] = 1.1
+	0x03 | CCL_LUTCTRL_INSEL1(0x04),		// CCLIN[10] = 3.1
 };
 
 // UART interface to stepper drivers
@@ -166,7 +166,7 @@ constexpr float MaximumMotorCurrent = 2000.0;
 constexpr float MaximumStandstillCurrent = 1500.0;
 
 // Thermistors
-constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(0), PortCPin(1), PortCPin(2) }; 	// Thermistor pin numbers
+constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(0), PortCPin(2) }; 	// Thermistor pin numbers
 constexpr Pin VssaSensePin = PortBPin(4);
 constexpr Pin VrefSensePin = PortBPin(5);
 
@@ -174,9 +174,6 @@ constexpr float DefaultThermistorSeriesR = 2200.0;							// Thermistor series re
 constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / NumThermistorInputs) * 4700.0/((DefaultThermistorSeriesR / NumThermistorInputs) + 4700.0);
 																			// there are 3 temperature sensing channels and a 4K7 load resistor
 constexpr float VrefSeriesR = 27.0;
-
-// Digital pins that SPi devices have their select lines tied to
-constexpr Pin SpiTempSensorCsPins[] = { PortDPin(11), PortCPin(7) };		// SPI0_CS1, SPI0_CS2
 
 // Analogue pin numbers
 constexpr Pin PowerMonitorVinDetectPin = PortCPin(3);						// Vin monitor
@@ -187,7 +184,7 @@ constexpr Pin DiagPin = NoPin;												// Diag/status LED pin is shared with 
 constexpr Pin ActLedPin = NoPin;											// Activity LED pin is shared with SWCLK
 #else
 constexpr Pin DiagPin = PortAPin(31);										// Diag/status LED pin
-constexpr Pin ActLedPin = PortAPin(30);										// Activity LED pin (Ethernet Yellow LED on v0.2 board)
+constexpr Pin ActLedPin = NoPin;											// Activity LED pin (not present)
 #endif
 
 constexpr bool DiagOnPolarity = false;
@@ -195,7 +192,7 @@ constexpr bool ActOnPolarity = false;
 
 // SD cards
 constexpr size_t NumSdCards = 2;
-constexpr Pin SdCardDetectPins[NumSdCards] = { PortBPin(16), PortDPin(12) };
+constexpr Pin SdCardDetectPins[NumSdCards] = { PortBPin(16), PortBPin(0) };
 
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[NumSdCards - 1] = { PortCPin(14) };
@@ -205,25 +202,28 @@ Sdhc * const SdDevice = SDHC0;
 constexpr IRQn_Type SdhcIRQn = SDHC0_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
-// 12864 LCD
-// The ST7920 datasheet specifies minimum clock cycle time 400ns @ Vdd=4.5V, min. clock width 200ns high and 20ns low.
-// This assumes that the Vih specification is met, which is 0.7 * Vcc = 3.5V @ Vcc=5V
-// The Duet Maestro level shifts all 3 LCD signals to 5V, so we meet the Vih specification and can reliably run at 2MHz.
-// For other electronics, there are reports that operation with 3.3V LCD signals may work if you reduce the clock frequency.
-// The ST7567 specifies minimum clock cycle time 50ns i.e. 20MHz @ Vcc=3.3V
-constexpr uint32_t LcdSpiClockFrequency = 2000000;		// 2.0MHz
-constexpr Pin LcdCSPin = PortCPin(6);
-constexpr Pin EncoderPinA = PortCPin(11);
-constexpr Pin EncoderPinB = PortDPin(1);
-constexpr Pin EncoderPinSw = PortBPin(9);
+// LCD interface
+constexpr unsigned int LcdSercomNumber = 0;
+constexpr Pin LcdSpiMosiPin = PortAPin(4);
+constexpr Pin LcdSpiMisoPin = PortAPin(7);
+constexpr Pin LcdSpiSclkPin = PortAPin(5);
+constexpr GpioPinFunction LcdSpiPinFunction = GpioPinFunction::C;
 
-constexpr Pin LcdA0Pin = PortAPin(2);
-constexpr Pin LcdBeepPin = PortAPin(9);
+constexpr Pin LcdSpiCsPin = PortAPin(6);
+constexpr Pin LcdRtpPenPin = PortAPin(3);
+constexpr Pin LcdDcPin = PortCPin(5);
+constexpr Pin LcdResetPin = PortCPin(6);
+constexpr Pin LcdFlashCsPin = PortBPin(10);
+constexpr Pin LcdFlashWpPin = PortAPin(2);
+constexpr Pin LcdFlashHoldPin = PortCPin(7);
 
-// Neopixel output
-constexpr Pin NeopixelOutPin = PortAPin(8);
-constexpr GpioPinFunction NeopixelOutPinFunction = GpioPinFunction::H;		// QSPI Data[0]
-#define LEDSTRIP_USES_USART		(0)
+// Touch screen interface (when not shared with SharedSpi)
+constexpr unsigned int RtpSercomNumber = 6;
+constexpr Pin RtpSpiMosiPin = PortCPin(16);
+constexpr Pin RtpSpiMisoPin = PortCPin(19);
+constexpr Pin RtpSpiSclkPin = PortCPin(17);
+constexpr Pin RtpSpiCsPin = PortCPin(18);
+constexpr GpioPinFunction RtpSpiPinFunction = GpioPinFunction::C;
 
 // Shared SPI definitions
 constexpr uint8_t SharedSpiSercomNumber = 7;
@@ -232,29 +232,7 @@ constexpr Pin SharedSpiMisoPin = PortCPin(15);
 constexpr Pin SharedSpiSclkPin = PortCPin(13);
 constexpr GpioPinFunction SharedSpiPinFunction = GpioPinFunction::C;
 
-// Serial on IO0
-constexpr uint8_t Serial0SercomNumber = 2;
-constexpr uint8_t Sercom0RxPad = 1;
-#define SERIAL0_ISR0	SERCOM2_0_Handler
-#define SERIAL0_ISR1	SERCOM2_1_Handler
-#define SERIAL0_ISR2	SERCOM2_2_Handler
-#define SERIAL0_ISR3	SERCOM2_3_Handler
-
-constexpr Pin Serial0TxPin = PortBPin(25);
-constexpr Pin Serial0RxPin = PortBPin(24);
-constexpr GpioPinFunction Serial0PinFunction = GpioPinFunction::D;
-
-// Serial on IO1
-constexpr uint8_t Serial1SercomNumber = 5;
-constexpr uint8_t Sercom1RxPad = 1;
-#define SERIAL1_ISR0	SERCOM5_0_Handler
-#define SERIAL1_ISR1	SERCOM5_1_Handler
-#define SERIAL1_ISR2	SERCOM5_2_Handler
-#define SERIAL1_ISR3	SERCOM5_3_Handler
-
-constexpr Pin Serial1TxPin = PortBPin(31);
-constexpr Pin Serial1RxPin = PortBPin(30);
-constexpr GpioPinFunction Serial1PinFunction = GpioPinFunction::D;
+// No external serial interfaces
 
 // WiFi pins
 constexpr unsigned int WiFiUartSercomNumber = 3;
@@ -278,8 +256,8 @@ constexpr GpioPinFunction WiFiSpiSercomPinsMode = GpioPinFunction::D;
 constexpr IRQn WiFiSpiSercomIRQn = SERCOM4_3_IRQn;			// this is the SS Low interrupt, the only one we use
 #define ESP_SPI_HANDLER		SERCOM4_3_Handler
 
-constexpr Pin EspResetPin = PortCPin(17);
-constexpr Pin EspEnablePin = PortCPin(20);
+constexpr Pin EspResetPin = PortBPin(14);
+constexpr Pin EspEnablePin = PortCPin(11);
 constexpr Pin EspDataReadyPin = PortAPin(18);
 constexpr Pin SamTfrReadyPin = PortAPin(19);
 constexpr Pin SamCsPin = PortAPin(14);
@@ -297,153 +275,118 @@ constexpr PinDescription PinTable[] =
 {
 	//	TC					TCC					ADC					SERCOM in			SERCOM out	  Exint Capability				PinNames
 	// Port A
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA00 TMC UART TxD
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA01 TMC UART RxD
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx, PinCapability::none,	"ate.lcd.a0"	},	// PA02 LCD A0
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx, PinCapability::none,	"ate.sbc.dr"	},	// PA03 SBC data ready
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA04 SBC SPI MISO
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA05 SBC SPI SCLK
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA06 SBC SPI SS
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA07 SBC SPI MOSI
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA08 Neopixel output (QSPI MOSI)
-	{ TcOutput::tc0_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"are.lcd.buzz"	},	// PA09 LCD buzzer
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d0.diag"	},	// PA10 driver 0 diag
-	{ TcOutput::tc1_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out4"			},	// PA11 OUT4
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA12 Ethernet/WiFi SCLK (SERCOM4.1)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA13 Ethernet/WiFi MISO (SERCOM4.0)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA14 Ethernet/WiFi SS (SERCOM4.2)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA15 Ethernet/WiFi MOSI (SERCOM4.3)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA16 Ethernet GCLK2 out/WiFi RxD (SERCOM3.1)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA17 Ethernet/WiFi TxD (SERCOM3.0)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		2,	PinCapability::none,	nullptr			},	// PA18 Ethernet/WiFi ESP_DATA_RDY
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA19 Ethernet/WiFi SAM_TRANSFER_RDY
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA20 SDHC CMD
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA21 SDHC CLK
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d2.diag"	},	// PA22 driver 2 diag
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d3.diag"	},	// PA23 driver 3 diag
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA24 USB
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA25 USB
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA26 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d6.dir"	},	// PA27 driver 6 dir
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA28 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA29 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA30 swclk/ACT LED
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA31 swdio/STATUS LED
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA00 TMC UART TxD
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA01 TMC UART RxD
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx, PinCapability::none,	"ate.lcd.flashwp"	},	// PA02 LCD flash WP
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		3,	PinCapability::none,	nullptr				},	// PA03 RTP pen
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA04 LCD MISO
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA05 LCD SCLK
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA06 LCD CS
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA07 LCD MOSI
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA08 Buzzer A
+	{ TcOutput::tc0_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA09 Buzzer B
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		10,	PinCapability::none,	"ate.d0.diag"		},	// PA10 driver 0 diag
+	{ TcOutput::tc1_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out4"				},	// PA11 OUT4
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA12 WiFi SCLK (SERCOM4.1)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA13 WiFi MISO (SERCOM4.0)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA14 WiFi SS (SERCOM4.2)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA15 WiFi MOSI (SERCOM4.3)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA16 WiFi RxD (SERCOM3.1)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA17 WiFi TxD (SERCOM3.0)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		2,	PinCapability::none,	nullptr				},	// PA18 WiFi ESP_DATA_RDY
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA19 WiFi SAM_TRANSFER_RDY
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA20 SDHC CMD
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA21 SDHC CLK
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA22 unused
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA23 unused
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA24 USB
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA25 USB
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA26 not on chip
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d1.dir"		},	// PA27 driver 1 dir
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA28 not on chip
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA29 not on chip
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA30 swclk
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA31 swdio/STATUS LED
 
 	// Port B
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d5.dir"	},	// PB00 driver 5 dir
-	{ TcOutput::tc7_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out6,laser,vfd" },	// PB01 OUT6
-	{ TcOutput::none,	TccOutput::tcc2_2F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out5"			},	// PB02 OUT5
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d0.dir"	},	// PB03 driver 0 dir
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_6,	SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PB04 VssaMon
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_7,	SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PB05 VrefMon
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_8,	SercomIo::none,		SercomIo::none,		6,	PinCapability::none,	"ate.vbus"		},	// PB06 Vbus
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_9,	SercomIo::none,		SercomIo::none,		7,	PinCapability::ainr,	"io3.in"		},	// PB07 IO3_IN
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d1.diag"	},	// PB08 driver 1 diag
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		9,	PinCapability::none,	"ate.enc.sw"	},	// PB09 ENC SW
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d5.diag"	},	// PB10 driver 5 diag
-	{ TcOutput::tc5_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out3"			},	// PB11 OUT3
-	{ TcOutput::none,	TccOutput::tcc3_0F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"io3.out"		},	// PB12 IO3_OUT
-	{ TcOutput::tc4_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out2"			},	// PB13 OUT2
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	nullptr			},	// PB14 CAN Tx
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::read,	nullptr			},	// PB15 CAN Rx
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.cd"		},	// PB16 SD CD
-	{ TcOutput::tc6_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out0"			},	// PB17 OUT0
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PB18 SD DAT0
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PB19 SD DAT1
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none	,	Nx,	PinCapability::none,	nullptr			},	// PB20 SD DAT2
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PB21 SD DAT3
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PB22 crystal XIN1
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PB23 crystal XOUT1
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::sercom2d,	SercomIo::none,		8,	PinCapability::read,	"io0.in"		},	// PB24 IO0_IN
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::sercom2d,	Nx,	PinCapability::write,	"io0.out"		},	// PB25 IO0_OUT
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		12,	PinCapability::read,	"out4.tach"		},	// PB26 OUT4 tacho
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		13,	PinCapability::read,	"out3.tach"		},	// PB27 OUT3 tacho
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d2.dir"	},	// PB28 driver 2 dir
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d1.dir"	},	// PB29 driver 1 dir
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::sercom5d,	SercomIo::none,		14,	PinCapability::read,	"io1.in"		},	// PB30 IO1_IN
-	{ TcOutput::none,	TccOutput::tcc0_7G,	AdcInput::none,		SercomIo::none,		SercomIo::sercom5d,	Nx,	PinCapability::wpwm,	"io1.out"		},	// PB31 IO1_OUT
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.spi.cd"		},	// PB00 external CD CD
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d2.dir"		},	// PB01 driver 2 dir
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d3.dir"		},	// PB02 driver 3 dir
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d0.dir"		},	// PB03 driver 0 dir
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_6,	SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB04 VssaMon
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_7,	SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB05 VrefMon
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_8,	SercomIo::none,		SercomIo::none,		6,	PinCapability::none,	"ate.vbus"			},	// PB06 Vbus
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_9,	SercomIo::none,		SercomIo::none,		7,	PinCapability::ainr,	"io0.in"			},	// PB07 IO0_IN
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		8,	PinCapability::none,	"ate.d1.diag"		},	// PB08 driver 1 diag
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_1,	SercomIo::none,		SercomIo::none,		9,	PinCapability::none,	"io2.in"			},	// PB09 IO2_IN
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.lcd.flashcs"	},	// PB10 LCD flash CS
+	{ TcOutput::tc5_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out3"				},	// PB11 OUT3
+	{ TcOutput::none,	TccOutput::tcc3_0F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.lcd.backlight"	},	// PB12 LCD backlight control
+	{ TcOutput::tc4_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out2"				},	// PB13 OUT2
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	nullptr				},	// PB14 WiFi ESP reset
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.lcd.fontcs"	},	// PB15 LCD font CS
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.cd"			},	// PB16 SD CD
+	{ TcOutput::tc6_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out0"				},	// PB17 OUT0
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB18 SD DAT0
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB19 SD DAT1
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB20 SD DAT2
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB21 SD DAT3
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB22 crystal XIN1
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB23 crystal XOUT1
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB24 unused (spare UART Sercom2)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB25 unused (spare UART Sercom2)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB26 not on chip
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB27 not on chip
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB28 not on chip
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB29 not on chip
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::sercom5d,	SercomIo::none,		14,	PinCapability::read,	"io3.in"			},	// PB30 IO3_IN
+	{ TcOutput::none,	TccOutput::tcc0_7G,	AdcInput::none,		SercomIo::none,		SercomIo::sercom5d,	Nx,	PinCapability::wpwm,	"io3.out"			},	// PB31 IO3_OUT
 
 	// Port C
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_10,	SercomIo::none,		SercomIo::none,		Nx,	PinCapability::ain,		"temp0"			},	// PC00 thermistor0
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_11,	SercomIo::none,		SercomIo::none,		Nx,	PinCapability::ain,		"temp1"			},	// PC01 thermistor1
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_4,	SercomIo::none,		SercomIo::none,		Nx,	PinCapability::ain,		"temp2"			},	// PC02 thermistor2
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_5,	SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.vin"		},	// PC03 VIN monitor
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		4,	PinCapability::read,	"io5.in"		},	// PC04 IO5_IN
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		5,	PinCapability::read,	"io4.in"		},	// PC05 IO4_IN
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::write,	"spi.cs3"		},	// PC06 SPI_CS3
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::write,	"spi.cs2"		},	// PC07 SPI CS2
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PC08 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PC09 not on chip
-	{ TcOutput::none,	TccOutput::tcc1_4G,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out1"			},	// PC10 OUT1
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		11,	PinCapability::none,	"ate.enc.a"		},	// PC11 ENC A
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PC12 SPI MOSI
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PC13 SPI SCK
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PC14 SPI CS0 (external SD card)
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PC15 SPI_MISO
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d4.step"	},	// PC16 driver4 step
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PC17 phy reset/ESP reset
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d6.step"	},	// PC18 driver 6 step
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d3.step"	},	// PC19 driver 3 step
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PC20 Ethernet/WiFi ESP_EN
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d6.diag"	},	// PC21 driver 4 diag
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PC22 Ethernet
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PC23 Ethernet
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d2.step"	},	// PC24 driver2 step
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d1.step"	},	// PC25 driver1 step
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d0.step"	},	// PC26 driver0 step
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d6.diag"	},	// PC27 driver 6 diag
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PC28 driver ENN
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PC29 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d5.step"	},	// PC30 driver 5 step
-	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_13,	SercomIo::none,		SercomIo::none,		15,	PinCapability::ainr,	"io6.in"		},	// PC31 IO6_IN
-
-	// Port D
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PD00 drivers UART mux
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		1,	PinCapability::none,	"ate.enc.b"		},	// PD01 ENC B
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PD02 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PD03 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PD04 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PD05 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PD06 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PD07 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::sercom6d,	SercomIo::none,		3,	PinCapability::read,	"io2.in"		},	// PD08 IO2_IN
-	{ TcOutput::none,	TccOutput::tcc0_2F,	AdcInput::none,		SercomIo::none,		SercomIo::sercom6d,	Nx,	PinCapability::write,	"io2.out"		},	// PD09 IO2_OUT
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::write,	"io4.out,pson"	},	// PD10 IO4_OUT and PS_ON
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::write,	"spi.cs1"		},	// PD11 SPI2 CS1
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		7,	PinCapability::read	,	"ate.spi2.cd"	},	// PD12 SPI2_CD
-
-#if 1
-	// Port D 13-19 are not on the chip
-	// Port D 20-21 are driver 3 dir and driver 4 dir but those don't need to be in the pin table
-#else
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD13 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD14 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD15 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD16 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD17 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD18 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD19 not on chip
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD20 driver6 dir
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	nullptr		},	// PD21 driver5 dir
-#endif
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_10,	SercomIo::none,		SercomIo::none,		Nx,	PinCapability::ain,		"temp0"				},	// PC00 thermistor0
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_11,	SercomIo::none,		SercomIo::none,		1,	PinCapability::ain,		"io1.in"			},	// PC01 IO1_IN
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_4,	SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"temp1",			},	// PC02 thermistor1
+	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_5,	SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.vin"			},	// PC03 VIN monitor
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC04 not on chip
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.lcd.dc"		},	// PC05 LCD DC
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.lcd.rst"		},	// PC06 LCD_RST
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.lcd.flashhold"	},	// PC07 LCD flash hold
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC08 not on chip
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC09 not on chip
+	{ TcOutput::none,	TccOutput::tcc1_4G,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out1"				},	// PC10 OUT1
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC11 WiFi ESP enable
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC12 SPI MOSI
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC13 SPI SCK
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC14 SPI CS0 (external SD card)
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC15 SPI_MISO
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC16 LCD RTP MOSI
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC17 LCD RTP SCK
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC18 LCD RTP CS
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC19 LCD RTP MISO
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d3.step"		},	// PC20 driver 3 step
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		5,	PinCapability::none,	"ate.d3.diag"		},	// PC21 driver 3 diag
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC22 not on chip
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC23 not on chip
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d2.step"		},	// PC24 driver 2 step
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d1.step"		},	// PC25 driver 1 step
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d0.step"		},	// PC26 driver 0 step
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		11,	PinCapability::none,	"ate.d2.diag"		},	// PC27 driver 2 diag
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PC28 driver ENN
 };
 
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
-static_assert(NumNamedPins == 32+32+32+13);
+static_assert(NumNamedPins == 32+32+29);
 
 // DMA channel assignments. Channels 0-3 have individual interrupt vectors, channels 4-31 share an interrupt vector.
 // When static arbitration within a priority level is selected, lower channel number have higher priority.
 // So we use the low channel numbers for the highest priority sources.
-constexpr DmaChannel DmacChanSbcTx = 0;
-constexpr DmaChannel DmacChanSbcRx = 1;
-constexpr DmaChannel DmacChanWiFiTx = 2;
-constexpr DmaChannel DmacChanWiFiRx = 3;
-constexpr DmaChannel DmacChanDotStarTx = 4;
-constexpr DmaChannel DmacChanTmcTx = 5;
-constexpr DmaChannel DmacChanTmcRx = 6;
+constexpr DmaChannel DmacChanWiFiTx = 0;
+constexpr DmaChannel DmacChanWiFiRx = 1;
+constexpr DmaChannel DmacChanTmcTx = 2;
+constexpr DmaChannel DmacChanTmcRx = 3;
+constexpr DmaChannel DmacChanLcdTx = 4;
 
-constexpr unsigned int NumDmaChannelsUsed = 7;
+constexpr unsigned int NumDmaChannelsUsed = 5;
 
 // The DMAC has priority levels 0-3 but on revision A chips it is unsafe to use multiple levels
 // Fortunately, all our SAME54P20Achips seem to be revision D
@@ -451,7 +394,6 @@ constexpr DmaPriority DmacPrioTmcTx = 0;
 constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this is not very critical
 constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
-constexpr DmaPriority DmacPrioDotStar = 1;				// QSPI in master mode
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers
@@ -461,7 +403,6 @@ constexpr unsigned int StepTcNumber = 2;
 #define STEP_TC_HANDLER		TC2_Handler
 
 // SAME5x event channel allocation, max 32 channels. Only the first 12 provide a synchronous or resynchronised path and can generate interrupts.
-
 constexpr EventNumber CclLut0Event = 0;					// this uses up 4 channels
 constexpr EventNumber NextFreeEvent = CclLut0Event + 4;
 

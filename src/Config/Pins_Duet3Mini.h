@@ -126,7 +126,9 @@ PortGroup * const StepPio = &(PORT->Group[2]);		// The PIO that all the step pin
 constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(19), PortCPin(16), PortCPin(30), PortCPin(18) };
 constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortBPin(3), PortBPin(29), PortBPin(28), PortDPin(20), PortDPin(21), PortBPin(0), PortAPin(27) };
 constexpr Pin DriverDiagPins[NumDirectDrivers] = { PortAPin(10), PortBPin(8), PortAPin(22), PortAPin(23), PortCPin(21), PortBPin(10), PortCPin(27) };
+
 // CCL inputs that the DIAG inputs use. Bits 0-1 are the CCL LUT number. Bits 8-19 are the value to OR in to the control register for that LUT.
+// LUT 0 is kept free for other uses.
 constexpr uint32_t CclDiagInputs[NumDirectDrivers] =
 {
 	0x01 | CCL_LUTCTRL_INSEL2(0x04),		// CCLIN[5] = 1.2
@@ -345,7 +347,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA06 SBC SPI SS
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA07 SBC SPI MOSI
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA08 Neopixel output (QSPI MOSI)
-	{ TcOutput::tc0_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"are.lcd.buzz"	},	// PA09 LCD buzzer
+	{ TcOutput::tc0_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.lcd.buzz"	},	// PA09 LCD buzzer
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d0.diag"	},	// PA10 driver 0 diag
 	{ TcOutput::tc1_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out4"			},	// PA11 OUT4
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr			},	// PA12 Ethernet/WiFi SCLK (SERCOM4.1)
@@ -450,7 +452,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::tcc0_2F,	AdcInput::none,		SercomIo::none,		SercomIo::sercom6d,	Nx,	PinCapability::write,	"io2.out"		},	// PD09 IO2_OUT
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::write,	"io4.out,pson"	},	// PD10 IO4_OUT and PS_ON
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::write,	"spi.cs1"		},	// PD11 SPI2 CS1
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		7,	PinCapability::read	,	"ate.spi2.cd"	},	// PD12 SPI2_CD
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		7,	PinCapability::read	,	"ate.spi.cd"	},	// PD12 SPI2_CD
 
 #if 1
 	// Port D 13-19 are not on the chip
@@ -500,7 +502,6 @@ constexpr unsigned int StepTcNumber = 2;
 #define STEP_TC_HANDLER		TC2_Handler
 
 // SAME5x event channel allocation, max 32 channels. Only the first 12 provide a synchronous or resynchronised path and can generate interrupts.
-
 constexpr EventNumber CclLut0Event = 0;					// this uses up 4 channels
 constexpr EventNumber NextFreeEvent = CclLut0Event + 4;
 

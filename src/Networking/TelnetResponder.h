@@ -32,7 +32,7 @@ private:
 	bool SendGCodeReply() noexcept;
 
 	bool haveCompleteLine;
-	char clientMessage[GCODE_LENGTH];
+	char clientMessage[MaxGCodeLength];
 	size_t clientPointer;
 	uint32_t connectTime;
 
