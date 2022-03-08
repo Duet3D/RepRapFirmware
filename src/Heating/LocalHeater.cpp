@@ -557,7 +557,7 @@ void LocalHeater::FeedForwardAdjustment(float fanPwmChange, float extrusionChang
 {
 	if (mode == HeaterMode::stable)
 	{
-		const float boost = GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, fanPwmChange) * FeedForwardMultiplier;
+		const float boost = GetModel().GetPwmCorrectionForFan(GetTargetTemperature() - NormalAmbientTemperature, fanPwmChange) * FanFeedForwardMultiplier;
 #if 0
 		if (reprap.Debug(moduleHeat))
 		{
