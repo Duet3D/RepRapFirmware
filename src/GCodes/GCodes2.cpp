@@ -858,7 +858,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (
 #if HAS_SBC_INTERFACE
 						reprap.UsingSbcInterface()
-# if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 						||
 # endif
 #endif
