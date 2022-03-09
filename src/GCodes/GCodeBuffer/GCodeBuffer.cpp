@@ -1016,7 +1016,7 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled) noexcept
 			ms->messageAcknowledged = true;
 			ms->messageCancelled = cancelled;
 #if HAS_SBC_INTERFACE
-			messageAcknowledged = true;
+			messageAcknowledged = !cancelled || !ms->DoingFile();
 			reprap.GetSbcInterface().EventOccurred();
 #endif
 		}
