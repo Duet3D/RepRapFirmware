@@ -957,7 +957,7 @@ GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCo
 	if (seenTool)
 	{
 		const int toolNumber = gb.GetIValue();
-		const auto tool = reprap.GetTool(toolNumber);
+		const auto tool = Tool::GetLockedTool(toolNumber);
 		if (tool.IsNull())
 		{
 			reply.printf("tool %d not found", toolNumber);

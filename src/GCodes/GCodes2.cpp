@@ -556,104 +556,106 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 3: // Spin spindle clockwise
 			case 4: // Spin spindle counter clockwise
-				if (machineType == MachineType::cnc)
-				{
-					// Determine what spindle number we are using
-					Tool * const currentTool = reprap.GetCurrentTool();
-					uint32_t slot;
-					if (gb.Seen('P'))
-					{
-						slot = gb.GetLimitedUIValue('P', MaxSpindles);
-					}
-					else if (currentTool != nullptr && currentTool->GetSpindleNumber() >= 0)
-					{
-						slot = currentTool->GetSpindleNumber();
-					}
-					else
-					{
-						reply.copy("No P parameter and no active tool with spindle");
-						result = GCodeResult::error;
-						break;
-					}
-
-					Spindle& spindle = platform.AccessSpindle(slot);
-					if (gb.Seen('S'))
-					{
-						const uint32_t rpm = gb.GetUIValue();
-						if (currentTool != nullptr && currentTool->GetSpindleNumber() == (int)slot)
-						{
-							currentTool->SetSpindleRpm(rpm);
-						}
-						else
-						{
-							spindle.SetConfiguredRpm(rpm, false);
-						}
-					}
-					spindle.SetState((code == 4) ? SpindleState::reverse : SpindleState::forward);
-				}
-#if SUPPORT_LASER
-				else if (machineType == MachineType::laser && code == 3 && gb.Seen('S'))
 				{
 					MovementState& ms = GetMovementState(gb);
-					if (ms.segmentsLeft != 0)
-					{
-						return false;						// don't modify moves that haven't gone yet
-					}
-					ms.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
-				}
-#endif
-				else
-				{
-					result = GCodeResult::notSupportedInCurrentMode;
-				}
-				break;
-
-			case 5: // Spindle motor off
-				switch (machineType)
-				{
-				case MachineType::cnc:
+					if (machineType == MachineType::cnc)
 					{
 						// Determine what spindle number we are using
-						Tool * const currentTool = reprap.GetCurrentTool();
 						uint32_t slot;
 						if (gb.Seen('P'))
 						{
 							slot = gb.GetLimitedUIValue('P', MaxSpindles);
 						}
-						else if (currentTool != nullptr && currentTool->GetSpindleNumber() >= 0)
+						else if (ms.currentTool != nullptr && ms.currentTool->GetSpindleNumber() >= 0)
 						{
-							slot = currentTool->GetSpindleNumber();
+							slot = ms.currentTool->GetSpindleNumber();
 						}
 						else
 						{
-							// Turn off every spindle if no 'P' parameter is present and the current tool does not have a spindle
-							for (size_t i = 0; i < MaxSpindles; i++)
-							{
-								platform.AccessSpindle(i).SetState(SpindleState::stopped);
-							}
+							reply.copy("No P parameter and no active tool with spindle");
+							result = GCodeResult::error;
 							break;
 						}
 
-						platform.AccessSpindle(slot).SetState(SpindleState::stopped);
+						Spindle& spindle = platform.AccessSpindle(slot);
+						if (gb.Seen('S'))
+						{
+							const uint32_t rpm = gb.GetUIValue();
+							if (ms.currentTool != nullptr && ms.currentTool->GetSpindleNumber() == (int)slot)
+							{
+								ms.currentTool->SetSpindleRpm(rpm);
+							}
+							else
+							{
+								spindle.SetConfiguredRpm(rpm, false);
+							}
+						}
+						spindle.SetState((code == 4) ? SpindleState::reverse : SpindleState::forward);
 					}
-					break;
-
 #if SUPPORT_LASER
-				case MachineType::laser:
+					else if (machineType == MachineType::laser && code == 3 && gb.Seen('S'))
 					{
-						MovementState& ms = GetMovementState(gb);
 						if (ms.segmentsLeft != 0)
 						{
 							return false;						// don't modify moves that haven't gone yet
 						}
-						ms.laserPwmOrIoBits.Clear();
+						ms.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
 					}
-					break;
+#endif
+					else
+					{
+						result = GCodeResult::notSupportedInCurrentMode;
+					}
+				}
+				break;
+
+			case 5: // Spindle motor off
+				{
+					MovementState& ms = GetMovementState(gb);
+					switch (machineType)
+					{
+					case MachineType::cnc:
+						{
+							// Determine what spindle number we are using
+							uint32_t slot;
+							if (gb.Seen('P'))
+							{
+								slot = gb.GetLimitedUIValue('P', MaxSpindles);
+							}
+							else if (ms.currentTool != nullptr && ms.currentTool->GetSpindleNumber() >= 0)
+							{
+								slot = ms.currentTool->GetSpindleNumber();
+							}
+							else
+							{
+								// Turn off every spindle if no 'P' parameter is present and the current tool does not have a spindle
+								for (size_t i = 0; i < MaxSpindles; i++)
+								{
+									platform.AccessSpindle(i).SetState(SpindleState::stopped);
+								}
+								break;
+							}
+
+							platform.AccessSpindle(slot).SetState(SpindleState::stopped);
+						}
+						break;
+
+#if SUPPORT_LASER
+					case MachineType::laser:
+						{
+							if (ms.segmentsLeft != 0)
+							{
+								return false;						// don't modify moves that haven't gone yet
+							}
+							ms.laserPwmOrIoBits.Clear();
+						}
+						break;
 #endif
 
-				default:
-					result = GCodeResult::notSupportedInCurrentMode;
-					break;
+					default:
+						result = GCodeResult::notSupportedInCurrentMode;
+						break;
+					}
 				}
 				break;
 
@@ -868,7 +870,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (
 #if HAS_SBC_INTERFACE
 						reprap.UsingSbcInterface()
-# if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 						||
 # endif
 #endif
@@ -1490,9 +1492,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						if (seenFanNum)
 						{
 							result = reprap.GetFansManager().SetFanValue(fanNum, f, reply);
-							if (IsMappedFan(fanNum))
+							// If this is a print cooling fan for an active tool, set the virtual fan speed in the corresponding MovementState
+							for (MovementState& ms : moveStates)
 							{
-								GetMovementState(gb).virtualFanSpeed = f;
+								if (ms.currentTool != nullptr && ms.currentTool->GetFanMapping().IsBitSet(fanNum))
+								{
+									ms.virtualFanSpeed = f;
+								}
 							}
 						}
 						else
@@ -1573,7 +1579,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					int32_t toolNumber = 0;
 					bool seenT = false;
 					gb.TryGetIValue('T', toolNumber, seenT);
-					ReadLockedPointer<Tool> const applicableTool = (seenT) ? reprap.GetTool(toolNumber) : reprap.GetCurrentOrDefaultTool();
+					MovementState& ms = GetMovementState(gb);
+					ReadLockedPointer<Tool> const applicableTool = (seenT) ? Tool::GetLockedTool(toolNumber)			// if we were given a tool number, use that
+																	: ms.GetLockedCurrentOrDefaultTool();		// else if we have a current tool, use that, else the default tool
 
 					// Check that we have a tool
 					if (applicableTool.IsNull())
@@ -1590,8 +1598,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						SetToolHeaters(applicableTool.Ptr(), temperature, true);	// this may throw
 					}
 
-					Tool * const currentTool = reprap.GetCurrentTool();
-					if (code == 109 && currentTool == nullptr)
+					if (code == 109 && ms.currentTool == nullptr)
 					{
 						// Switch to the tool
 						if (!LockMovementAndWaitForStandstill(gb))
@@ -1599,23 +1606,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							return false;
 						}
 
-						newToolNumber = applicableTool->Number();
-						toolChangeParam = (IsSimulating()) ? 0 : DefaultToolChangeParam;
+						ms.newToolNumber = applicableTool->Number();
+						ms.toolChangeParam = (IsSimulating()) ? 0 : DefaultToolChangeParam;
 						gb.SetState(GCodeState::m109ToolChange0);
 						result = GCodeResult::ok;
 					}
 					else
 					{
-						if (applicableTool.Ptr() == currentTool)
+						if (applicableTool.Ptr() == ms.currentTool)
 						{
 							// Even though the tool is selected, we may have turned it off e.g. when upgrading the WiFi firmware or following a heater fault that has been cleared.
 							// So make sure the tool heaters are on.
-							reprap.SelectTool(applicableTool->Number(), IsSimulating());
+							ms.SelectTool(applicableTool->Number(), IsSimulating());
 						}
 						else
 						{
 							// If we already have an active tool and we are setting temperatures for a different tool, set that tool's heaters to standby in case it is off
-							reprap.StandbyTool(applicableTool->Number(), IsSimulating());
+							StandbyTool(applicableTool->Number(), IsSimulating());
 						}
 
 						if (code == 109 && !IsSimulating())
@@ -1688,7 +1695,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 114:
-				GetCurrentPrimaryCoordinates(reply);
+				HandleM114(gb, reply);
 				break;
 
 			case 115: // Print firmware version or set hardware type
@@ -1753,7 +1760,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (gb.Seen('P'))
 					{
 						// Wait for the heaters associated with the specified tool to be ready
-						if (!ToolHeatersAtSetTemperatures(reprap.GetTool(gb.GetIValue()).Ptr(), true, tolerance))
+						if (!ToolHeatersAtSetTemperatures(Tool::GetLockedTool(gb.GetIValue()).Ptr(), true, tolerance))
 						{
 							isWaiting = true;
 							return false;
@@ -2279,7 +2286,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (gb.Seen('P'))
 				{
 					const unsigned int toolNumber = gb.GetUIValue();
-					auto tool = reprap.GetTool(toolNumber);
+					auto tool = Tool::GetLockedTool(toolNumber);
 					if (tool.IsNull())
 					{
 						reply.printf("Tool %u does not exist", toolNumber);
@@ -2292,7 +2299,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				else
 				{
-					result = reprap.SetAllToolsFirmwareRetraction(gb, reply, outBuf);
+					result = SetAllToolsFirmwareRetraction(gb, reply, outBuf);
 				}
 				break;
 
@@ -2392,7 +2399,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						extruder = gb.GetLimitedUIValue('D', numExtruders);
 					}
 
-					const Tool * const ct = reprap.GetCurrentTool();
+					const Tool * const ct = GetMovementState(gb).currentTool;
 					if (!seenD && ct == nullptr)
 					{
 						reply.copy("No tool selected");
@@ -2529,7 +2536,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							// The pipeline is empty, so execute the babystepping move immediately if it is safe to do
 							SetMoveBufferDefaults(ms);
 							ms.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
-							ms.tool = reprap.GetCurrentTool();
 							NewSingleSegmentMoveAvailable(ms);
 						}
 					}
@@ -3021,7 +3027,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 			case 486: // number object or cancel object
-				result = buildObjects.HandleM486(gb, reply, outBuf);
+				result = HandleM486(gb, reply, outBuf);
 				break;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -3359,14 +3365,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (gb.Seen('P'))
 				{
 					const unsigned int heater = gb.GetLimitedUIValue('P', MaxHeaters);
-					result = reprap.ClearTemperatureFault(heater, reply);
+					result = Tool::ClearTemperatureFault(heater, reply);
 				}
 				else
 				{
 					// Clear all heater faults
 					for (unsigned int heater = 0; heater < MaxHeaters; ++heater)
 					{
-						result = max<GCodeResult>(result, reprap.ClearTemperatureFault(heater, reply));
+						result = max<GCodeResult>(result, Tool::ClearTemperatureFault(heater, reply));
 					}
 				}
 				break;
@@ -4014,7 +4020,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 						ms.feedRate = gb.LatestMachineState().feedRate;
 						ms.usingStandardFeedrate = true;
-						ms.tool = reprap.GetCurrentTool();
 						NewSingleSegmentMoveAvailable(ms);
 
 						gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
@@ -4077,20 +4082,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 703: // Configure Filament
-				if (reprap.GetCurrentTool() != nullptr)
 				{
-					const Filament *filament = reprap.GetCurrentTool()->GetFilament();
-					if (filament != nullptr && filament->IsLoaded())
+					const Tool * const currentTool = GetMovementState(gb).currentTool;
+					if (currentTool != nullptr)
 					{
-						String<StringLength256> scratchString;
-						scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filament->GetName(), CONFIG_FILAMENT_G);
-						DoFileMacro(gb, scratchString.c_str(), false, SystemHelperMacroCode);
+						const Filament *filament = currentTool->GetFilament();
+						if (filament != nullptr && filament->IsLoaded())
+						{
+							String<StringLength256> scratchString;
+							scratchString.printf("%s%s/%s", FILAMENTS_DIRECTORY, filament->GetName(), CONFIG_FILAMENT_G);
+							DoFileMacro(gb, scratchString.c_str(), false, SystemHelperMacroCode);
+						}
 					}
-				}
-				else
-				{
-					result = GCodeResult::error;
-					reply.copy("No tool selected");
+					else
+					{
+						result = GCodeResult::error;
+						reply.copy("No tool selected");
+					}
 				}
 				break;
 
@@ -4661,6 +4669,8 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 	bool seen = false;
 	int toolNum;
+	MovementState& ms = GetMovementState(gb);
+
 	if (gb.HasCommandNumber())
 	{
 		seen = true;
@@ -4676,7 +4686,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	{
 		const unsigned int rpNumber = gb.GetLimitedUIValue('R', NumVisibleRestorePoints);
 		seen = true;
-		toolNum = GetMovementState(gb).restorePoints[rpNumber].toolNumber;
+		toolNum = ms.restorePoints[rpNumber].toolNumber;
 	}
 
 	if (seen)
@@ -4686,38 +4696,32 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			return false;
 		}
 
-		if (buildObjects.IsCurrentObjectCancelled())
+		if (ms.IsCurrentObjectCancelled())
 		{
-			buildObjects.SetVirtualTool(toolNum);				// don't do the tool change, just remember which one we are supposed to use
+			ms.SetVirtualTool(toolNum);						// don't do the tool change, just remember which one we are supposed to use
+		}
+		else if (ms.GetCurrentToolNumber() != toolNum)		// if old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
+		{
+			StartToolChange(gb, toolNum, (gb.Seen('P')) ? gb.GetUIValue() : DefaultToolChangeParam);
+			return true;									// proceeding with state machine, so don't unlock or send a reply
 		}
 		else
 		{
-			const Tool * const oldTool = reprap.GetCurrentTool();
-			// If old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
-			if (oldTool == nullptr || oldTool->Number() != toolNum)
-			{
-				StartToolChange(gb, toolNum, (gb.Seen('P')) ? gb.GetUIValue() : DefaultToolChangeParam);
-				return true;									// proceeding with state machine, so don't unlock or send a reply
-			}
-			else
-			{
-				// Even though the tool is selected, we may have turned it off e.g. when upgrading the WiFi firmware or following a heater fault that has been cleared.
-				// So make sure the tool heaters are on.
-				reprap.SelectTool(toolNum, IsSimulating());
-			}
+			// Even though the tool is selected, we may have turned it off e.g. when upgrading the WiFi firmware or following a heater fault that has been cleared. So make sure the tool heaters are on.
+			ms.SelectTool(toolNum, IsSimulating());
 		}
 	}
 	else
 	{
 		// Report the tool number in use if no parameter is passed
-		const Tool * const tool = reprap.GetCurrentTool();
-		if (tool == nullptr)
+		const int toolNum = ms.GetCurrentToolNumber();
+		if (toolNum < 0)
 		{
 			reply.copy("No tool is selected");
 		}
 		else
 		{
-			reply.printf("Tool %d is selected", tool->Number());
+			reply.printf("Tool %d is selected", toolNum);
 		}
 	}
 

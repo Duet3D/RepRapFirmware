@@ -114,8 +114,9 @@ bool MenuItem::IsVisible() const noexcept
 					;
 #endif
 	case 20:
-		{		const auto tool = reprap.GetCurrentOrDefaultTool();			// this can be null, especially during startup
-				return tool.IsNotNull() && tool->HasTemperatureFault();
+		{
+			const auto tool = reprap.GetGCodes().GetPrimaryMovementState().GetLockedCurrentOrDefaultTool();			// this can be null, especially during startup
+			return tool.IsNotNull() && tool->HasTemperatureFault();
 		}
 	case 28:	return reprap.GetHeat().GetStatus(reprap.GetHeat().GetBedHeater(0)) == HeaterStatus::fault;
 	}
@@ -359,7 +360,7 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 
 			case 3:		// fan %
 				currentValue.f = ((itemNumber == 99)
-								? reprap.GetGCodes().GetPrimaryMappedFanSpeed()
+								? reprap.GetGCodes().GetPrimaryMovementState().virtualFanSpeed
 								: reprap.GetFansManager().GetFanValue(itemNumber)
 							   ) * 100.0;
 				currentFormat = PrintFormat::asPercent;
@@ -386,11 +387,11 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 				case 13: // U
 				case 14: // V
 				case 15: // W
-					currentValue.f = reprap.GetGCodes().GetPrimaryUserCoordinate(itemNumber - 10);
+					currentValue.f = reprap.GetGCodes().GetUserCoordinate(reprap.GetGCodes().GetPrimaryMovementState(), itemNumber - 10);
 					break;
 
 				case 20:
-					currentValue.i = reprap.GetCurrentToolNumber();
+					currentValue.i = reprap.GetGCodes().GetPrimaryMovementState().GetCurrentToolNumber();
 					currentFormat = PrintFormat::asSigned;
 					break;
 
@@ -563,7 +564,7 @@ bool ValueMenuItem::Adjust_SelectHelper() noexcept
 				break;
 
 			case 20:
-				reprap.SelectTool(currentValue.i, false);
+				reprap.GetGCodes().GetPrimaryMovementState().SelectTool(currentValue.i, false);
 				break;
 
 			case 21: // baby stepping
@@ -595,7 +596,7 @@ unsigned int ValueMenuItem::GetReferencedToolNumber() const noexcept
 	unsigned int uToolNumber = valIndex % 100;
 	if (79 == uToolNumber)
 	{
-		uToolNumber = reprap.GetCurrentOrDefaultTool()->Number();
+		uToolNumber = reprap.GetGCodes().GetPrimaryMovementState().GetCurrentToolNumber();
 	}
 
 	return uToolNumber;
@@ -631,7 +632,7 @@ bool ValueMenuItem::Adjust_AlterHelper(int clicks) noexcept
 				{
 					currentValue.f = 95.0 - 1.0;
 				}
-				currentValue.f = min<int>(currentValue.f + (float)clicks, reprap.GetHeat().GetHighestTemperatureLimit(reprap.GetTool(itemNumber)->GetHeater(0)));
+				currentValue.f = min<int>(currentValue.f + (float)clicks, reprap.GetHeat().GetHighestTemperatureLimit(Tool::GetLockedTool(itemNumber)->GetHeater(0)));
 			}
 		}
 		else

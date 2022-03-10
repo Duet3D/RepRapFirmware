@@ -65,11 +65,12 @@ GCodes::GCodes(Platform& p) noexcept :
 #if HAS_AUX_DEVICES && ALLOW_ARBITRARY_PANELDUE_PORT
 	serialChannelForPanelDueFlashing(1),
 #endif
-	platform(p), machineType(MachineType::fff), active(false)
+	platform(p),
+	machineType(MachineType::fff), active(false),
 #if HAS_VOLTAGE_MONITOR
-	, powerFailScript(nullptr)
+	powerFailScript(nullptr),
 #endif
-	, isFlashing(false),
+	isFlashing(false),
 #if SUPPORT_PANELDUE_FLASH
 	isFlashingPanelDue(false),
 #endif
@@ -263,9 +264,6 @@ void GCodes::Reset() noexcept
 	{
 		f = 0.0;										// clear babystepping before calling ToolOffsetInverseTransform
 	}
-
-	newToolNumber = -1;
-
 
 	for (Trigger& tr : triggers)
 	{
@@ -775,7 +773,7 @@ void GCodes::EndSimulation(GCodeBuffer *null gb) noexcept
 	// Ending a simulation, so restore the position
 	MovementState& ms = (gb == nullptr) ? moveStates[0] : GetMovementState(*gb);	//TODO handle null gb properly
 	RestorePosition(ms.simulationRestorePoint, gb);
-	reprap.SelectTool(ms.simulationRestorePoint.toolNumber, true);
+	ms.SelectTool(ms.simulationRestorePoint.toolNumber, true);
 	ToolOffsetTransform(ms);
 	reprap.GetMove().SetNewPosition(ms.coords, true);
 	axesVirtuallyHomed = axesHomed;
@@ -939,7 +937,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 		}
 #endif
 
-		ms.pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
+		ms.pauseRestorePoint.toolNumber = ms.GetCurrentToolNumber();
 		ms.pauseRestorePoint.fanSpeed = ms.virtualFanSpeed;
 
 #if HAS_SBC_INTERFACE
@@ -1087,7 +1085,7 @@ bool GCodes::DoEmergencyPause() noexcept
 			// Make sure we expose usable values (which noFilePosition is not)
 			ms.pauseRestorePoint.filePos = 0;
 		}
-		ms.pauseRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
+		ms.pauseRestorePoint.toolNumber = ms.GetCurrentToolNumber();
 		ms.pauseRestorePoint.fanSpeed = ms.virtualFanSpeed;
 	}
 
@@ -1181,8 +1179,9 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 		}
 		else
 		{
+			const MovementState& ms = GetPrimaryMovementState();		//TODO save resume info for all movement states
 			String<FormatStringLength> buf;
-			RestorePoint& pauseRestorePoint = moveStates[0].pauseRestorePoint;		//TODO handle pausing when multiple motion system are active
+			RestorePoint& pauseRestorePoint = ms.pauseRestorePoint;		//TODO handle pausing when multiple motion system are active
 
 			// Write the header comment
 			buf.printf("; File \"%s\" resume print after %s", printingFilename, (wasPowerFailure) ? "power failure" : "print paused");
@@ -1205,7 +1204,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				buf.copy("G92");
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
-					const float totalOffset = currentBabyStepOffsets[axis] - GetCurrentToolOffset(axis);
+					const float totalOffset = currentBabyStepOffsets[axis] - ms.GetCurrentToolOffset(axis);
 					buf.catf(" %c%.3f", axisLetters[axis], (double)(pauseRestorePoint.moveCoords[axis] - totalOffset));
 				}
 				buf.cat("\nG60 S1\n");										// save the coordinates as restore point 1 too
@@ -1213,7 +1212,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 			}
 			if (ok)
 			{
-				ok = reprap.WriteToolSettings(f);							// set tool temperatures, tool mix ratios etc. and select the current tool without running tool change files
+				ok = WriteToolSettings(f, ms);								// set tool temperatures, tool mix ratios etc. and select the current tool without running tool change files
 			}
 			if (ok)
 			{
@@ -1232,11 +1231,14 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 			}
 
 			// Now that we have homed, we can run the tool change files for the current tool
-			const Tool * const ct = reprap.GetCurrentTool();
-			if (ok && ct != nullptr)
+			if (ok)
 			{
-				buf.printf("T-1 P0\nT%u P6\n", ct->Number());				// deselect the current tool without running tfree, and select it running tpre and tpost
-				ok = f->Write(buf.c_str());									// write tool selection
+				const int toolNumber =  ms.GetCurrentToolNumber();
+				if (toolNumber >= 0)
+				{
+					buf.printf("T-1 P0\nT%d P6\n", toolNumber);				// deselect the current tool without running tfree, and select it running tpre and tpost
+					ok = f->Write(buf.c_str());								// write tool selection
+				}
 			}
 
 #if SUPPORT_WORKPLACE_COORDINATES
@@ -1250,13 +1252,13 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 			{
 				// Switch to the correct workplace. 'currentCoordinateSystem' is 0-based.
 				//TODO handle multiple motion systems!
-				if (moveStates[0].currentCoordinateSystem <= 5)
+				if (ms.currentCoordinateSystem <= 5)
 				{
-					buf.printf("G%u\n", 54 + moveStates[0].currentCoordinateSystem);
+					buf.printf("G%u\n", 54 + ms.currentCoordinateSystem);
 				}
 				else
 				{
-					buf.printf("G59.%u\n", moveStates[0].currentCoordinateSystem - 5);
+					buf.printf("G59.%u\n", ms.currentCoordinateSystem - 5);
 				}
 				ok = f->Write(buf.c_str());
 			}
@@ -1286,13 +1288,13 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 			}
 			if (ok)
 			{
-				buf.printf("M106 S%.2f\n", (double)moveStates[0].virtualFanSpeed);
+				buf.printf("M106 S%.2f\n", (double)ms.virtualFanSpeed);
 				ok = f->Write(buf.c_str())									// set the speed of the print fan after we have selected the tool
 					&& reprap.GetFansManager().WriteFanSettings(f);			// set the speeds of all non-thermostatic fans after setting the default fan speed
 			}
 			if (ok)
 			{
-				buf.printf("M116\nG92 E%.5f\n%s\n", (double)moveStates[0].latestVirtualExtruderPosition, (fileGCode->OriginalMachineState().drivesRelative) ? "M83" : "M82");
+				buf.printf("M116\nG92 E%.5f\n%s\n", (double)ms.latestVirtualExtruderPosition, (fileGCode->OriginalMachineState().drivesRelative) ? "M83" : "M82");
 				ok = f->Write(buf.c_str());									// write virtual extruder position and absolute/relative extrusion flag
 			}
 			if (ok)
@@ -1519,7 +1521,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, Movement
 	if (gb.Seen(extrudeLetter))												// DC 2018-08-07: at E3D's request, extrusion is now recognised even on uncoordinated moves
 	{
 		// Check that we have a tool to extrude with
-		Tool* const tool = reprap.GetCurrentTool();
+		const Tool* const tool = ms.currentTool;
 		if (tool == nullptr)
 		{
 			displayNoToolWarning = true;
@@ -1677,7 +1679,6 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	ms.checkEndstops = false;
 	ms.reduceAcceleration = false;
 	ms.moveType = 0;
-	ms.tool = reprap.GetCurrentTool();
 	ms.usePressureAdvance = false;
 	axesToSenseLength.Clear();
 
@@ -1693,7 +1694,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 				return false;
 			}
 			ms.moveType = ival;
-			ms.tool = nullptr;
+			ms.currentTool = nullptr;
 		}
 		if (!gb.Seen('H'))
 		{
@@ -1766,7 +1767,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		// This may be a raw motor move, in which case we need the current raw motor positions in moveBuffer.coords.
 		// If it isn't a raw motor move, it will still be applied without axis or bed transform applied,
 		// so make sure the initial coordinates don't have those either to avoid unwanted Z movement.
-		reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.moveType, reprap.GetCurrentTool());
+		reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.moveType, ms.currentTool);
 	}
 
 	// Set up the initial coordinates
@@ -1815,7 +1816,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 			}
 			else if (gb.LatestMachineState().g53Active)
 			{
-				ms.currentUserPosition[axis] = moveArg + GetCurrentToolOffset(axis);	// g53 ignores tool offsets as well as workplace coordinates
+				ms.currentUserPosition[axis] = moveArg + ms.GetCurrentToolOffset(axis);	// g53 ignores tool offsets as well as workplace coordinates
 			}
 			else if (gb.LatestMachineState().runningSystemMacro)
 			{
@@ -1868,30 +1869,28 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	}
 
 	const bool isPrintingMove = ms.hasPositiveExtrusion && axesMentioned.IsNonEmpty();
-	if (buildObjects.IsFirstMoveSincePrintingResumed())							// if this is the first move after skipping an object
+	if (ms.IsFirstMoveSincePrintingResumed())							// if this is the first move after skipping an object
 	{
 		if (isPrintingMove)
 		{
 			if (TravelToStartPoint(gb))											// don't start a printing move from the wrong place
 			{
-				buildObjects.DoneMoveSincePrintingResumed();
+				ms.DoneMoveSincePrintingResumed();
 			}
 			return false;
 		}
 		else if (axesMentioned.IsNonEmpty())									// don't count G1 Fxxx as a travel move
 		{
-			buildObjects.DoneMoveSincePrintingResumed();
+			ms.DoneMoveSincePrintingResumed();
 		}
 	}
 
-#if TRACK_OBJECT_NAMES
 	if (isPrintingMove)
 	{
 		// Update the object coordinates limits. For efficiency, we only update the final coordinate.
 		// Except in the case of a straight line that is only one extrusion width wide, this is sufficient.
-		buildObjects.UpdateObjectCoordinates(ms.currentUserPosition, axesMentioned);
+		buildObjects.UpdateObjectCoordinates(ms.currentObjectNumber, ms.currentUserPosition, axesMentioned);
 	}
-#endif
 
 	// Set up the move. We must assign segmentsLeft last, so that when Move runs as a separate task the move won't be picked up by the Move process before it is complete.
 	// Note that if this is an extruder-only move, we don't do axis movements to allow for tool offset changes, we defer those until an axis moves.
@@ -2064,7 +2063,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		}
 		else if (gb.LatestMachineState().g53Active)
 		{
-			newAxisPos[0] += GetCurrentToolOffset(axis0);
+			newAxisPos[0] += ms.GetCurrentToolOffset(axis0);
 		}
 		else if (!gb.LatestMachineState().runningSystemMacro)
 		{
@@ -2085,7 +2084,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		}
 		else if (gb.LatestMachineState().g53Active)
 		{
-			newAxisPos[1] += GetCurrentToolOffset(axis1);
+			newAxisPos[1] += ms.GetCurrentToolOffset(axis1);
 		}
 		else if (!gb.LatestMachineState().runningSystemMacro)
 		{
@@ -2200,7 +2199,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 			}
 			else if (gb.LatestMachineState().g53Active)
 			{
-				ms.currentUserPosition[axis] = moveArg + GetCurrentToolOffset(axis);	// g53 ignores tool offsets as well as workplace coordinates
+				ms.currentUserPosition[axis] = moveArg + ms.GetCurrentToolOffset(axis);	// g53 ignores tool offsets as well as workplace coordinates
 			}
 			else if (gb.LatestMachineState().runningSystemMacro)
 			{
@@ -2255,23 +2254,22 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	ms.checkEndstops = false;
 	ms.reduceAcceleration = false;
 	ms.moveType = 0;
-	ms.tool = reprap.GetCurrentTool();
 	ms.isCoordinated = true;
 
 	// Set up the arc centre coordinates and record which axes behave like an X axis.
 	// The I and J parameters are always relative to present position.
 	// For X and Y we need to set up the arc centre for each axis that X or Y is mapped to.
-	const AxesBitmap axis0Mapping = reprap.GetCurrentAxisMapping(axis0);
-	const AxesBitmap axis1Mapping = reprap.GetCurrentAxisMapping(axis1);
+	const AxesBitmap axis0Mapping = ms.GetCurrentAxisMapping(axis0);
+	const AxesBitmap axis1Mapping = ms.GetCurrentAxisMapping(axis1);
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		if (axis0Mapping.IsBitSet(axis))
 		{
-			ms.arcCentre[axis] = (userArcCentre[0] * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
+			ms.arcCentre[axis] = (userArcCentre[0] * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(ms.currentTool, axis);
 		}
 		else if (axis1Mapping.IsBitSet(axis))
 		{
-			ms.arcCentre[axis] = (userArcCentre[1] * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(reprap.GetCurrentTool(), axis);
+			ms.arcCentre[axis] = (userArcCentre[1] * axisScaleFactors[axis]) + currentBabyStepOffsets[axis] - Tool::GetOffset(ms.currentTool, axis);
 		}
 	}
 
@@ -2281,30 +2279,28 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		return true;
 	}
 
-	if (buildObjects.IsFirstMoveSincePrintingResumed())
+	if (ms.IsFirstMoveSincePrintingResumed())
 	{
-		if (ms.hasPositiveExtrusion)					// check whether this is the first move after skipping an object and is extruding
+		if (ms.hasPositiveExtrusion)							// check whether this is the first move after skipping an object and is extruding
 		{
 			if (TravelToStartPoint(gb))							// don't start a printing move from the wrong point
 			{
-				buildObjects.DoneMoveSincePrintingResumed();
+				ms.DoneMoveSincePrintingResumed();
 			}
 			return false;
 		}
 		else
 		{
-			buildObjects.DoneMoveSincePrintingResumed();
+			ms.DoneMoveSincePrintingResumed();
 		}
 	}
 
-#if TRACK_OBJECT_NAMES
 	if (ms.hasPositiveExtrusion)
 	{
 		//TODO ideally we should calculate the min and max X and Y coordinates of the entire arc here and call UpdateObjectCoordinates twice.
 		// But it is currently very rare to use G2/G3 with extrusion, so for now we don't bother.
-		buildObjects.UpdateObjectCoordinates(ms.currentUserPosition, AxesBitmap::MakeLowestNBits(2));
+		buildObjects.UpdateObjectCoordinates(ms.currentObjectNumber, ms.currentUserPosition, AxesBitmap::MakeLowestNBits(2));
 	}
-#endif
 
 #if SUPPORT_LASER
 	if (machineType == MachineType::laser)
@@ -2394,7 +2390,7 @@ void GCodes::FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept
 	ms.filePos = (gb.IsFileChannel()) ? gb.GetFilePosition() : noFilePosition;
 	gb.MotionCommanded();
 
-	if (buildObjects.IsCurrentObjectCancelled())
+	if (ms.IsCurrentObjectCancelled())
 	{
 #if SUPPORT_LASER
 		if (machineType == MachineType::laser)
@@ -2453,7 +2449,6 @@ bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 	const RestorePoint& rp = ms.restorePoints[ResumeObjectRestorePointNumber];
 	ToolOffsetTransform(ms, rp.moveCoords, ms.coords);
 	ms.feedRate = rp.feedRate;
-	ms.tool = reprap.GetCurrentTool();
 	NewSingleSegmentMoveAvailable(ms);
 	return true;
 }
@@ -2514,8 +2509,8 @@ bool GCodes::ReadMove(unsigned int queueNumber, RawMove& m) noexcept
 					ms.currentAngleCosine = newCosine;
 					ms.currentAngleSine = newSine;
 				}
-				axisMap0 = Tool::GetAxisMapping(ms.tool, ms.arcAxis0);
-				axisMap1 = Tool::GetAxisMapping(ms.tool, ms.arcAxis1);
+				axisMap0 = Tool::GetAxisMapping(ms.currentTool, ms.arcAxis0);
+				axisMap1 = Tool::GetAxisMapping(ms.currentTool, ms.arcAxis1);
 				ms.cosXyAngle = (ms.xyPlane) ? ms.angleIncrementCosine : 1.0;
 			}
 
@@ -2847,7 +2842,8 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCode
 GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 {
 	g30SValue = (gb.Seen('S')) ? gb.GetIValue() : -4;		// S-4 or lower is equivalent to having no S parameter
-	if (g30SValue == -2 && reprap.GetCurrentTool() == nullptr)
+	const MovementState& ms = GetMovementState(gb);
+	if (g30SValue == -2 && ms.currentTool == nullptr)
 	{
 		reply.copy("G30 S-2 commanded with no tool selected");
 		return GCodeResult::error;
@@ -2867,7 +2863,6 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
 		else
 		{
 			// Set the specified probe point index to the specified coordinates
-			const MovementState& ms = GetMovementState(gb);
 			const float x = (gb.Seen(axisLetters[X_AXIS])) ? gb.GetFValue() : ms.currentUserPosition[X_AXIS];
 			const float y = (gb.Seen(axisLetters[Y_AXIS])) ? gb.GetFValue() : ms.currentUserPosition[Y_AXIS];
 			const float z = (gb.Seen(axisLetters[Z_AXIS])) ? gb.GetFValue() : ms.currentUserPosition[Z_AXIS];
@@ -3073,30 +3068,32 @@ void GCodes::ClearBedMapping()
 	reprap.GetMove().SetIdentityTransform();
 	for (MovementState& ms : moveStates)
 	{
-		reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, reprap.GetCurrentTool());
+		reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
 		ToolOffsetInverseTransform(ms);		// update user coordinates to remove any height map offset there was at the current position
 	}
 }
 
 // Return the current coordinates as a printable string. Used only to implement M114.
 // Coordinates are updated at the end of each movement, so this won't tell you where you are mid-movement.
-void GCodes::GetCurrentPrimaryCoordinates(const StringRef& s) const noexcept
+void GCodes::HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept
 {
+	const MovementState& ms = GetConstMovementState(gb);
+
 	// Start with the axis coordinates
 	s.Clear();
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		// Don't put a space after the colon in the response, it confuses Pronterface
-		s.catf("%c:%.3f ", axisLetters[axis], (double)HideNan(GetPrimaryUserCoordinate(axis)));
+		s.catf("%c:%.3f ", axisLetters[axis], (double)HideNan(GetUserCoordinate(ms, axis)));
 	}
 
 	// Now the virtual extruder position, for Octoprint
-	s.catf("E:%.3f ", (double)moveStates[0].latestVirtualExtruderPosition);
+	s.catf("E:%.3f ", (double)ms.latestVirtualExtruderPosition);
 
 	// Now the extruder coordinates
 	for (size_t i = 0; i < numExtruders; i++)
 	{
-		s.catf("E%u:%.1f ", i, (double)reprap.GetMove().LiveCoordinate(ExtruderToLogicalDrive(i), reprap.GetCurrentTool()));
+		s.catf("E%u:%.1f ", i, (double)reprap.GetMove().LiveCoordinate(ExtruderToLogicalDrive(i), ms.currentTool));
 	}
 
 	// Print the axis stepper motor positions as Marlin does, as an aid to debugging.
@@ -3110,7 +3107,7 @@ void GCodes::GetCurrentPrimaryCoordinates(const StringRef& s) const noexcept
 	// Add the machine coordinates because they may be different from the user coordinates under some conditions
 	s.cat(" Machine");
 	float machineCoordinates[MaxAxes];
-	ToolOffsetTransform(moveStates[0], moveStates[0].currentUserPosition, machineCoordinates);
+	ToolOffsetTransform(moveStates[0], ms.currentUserPosition, machineCoordinates);
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		s.catf(" %.3f", (double)HideNan(machineCoordinates[axis]));
@@ -3118,7 +3115,7 @@ void GCodes::GetCurrentPrimaryCoordinates(const StringRef& s) const noexcept
 
 	// Add the bed compensation
 	const float machineZ = machineCoordinates[Z_AXIS];
-	reprap.GetMove().AxisAndBedTransform(machineCoordinates, reprap.GetCurrentTool(), true);
+	reprap.GetMove().AxisAndBedTransform(machineCoordinates, ms.currentTool, true);
 	s.catf(" Bed comp %.3f", (double)(machineCoordinates[Z_AXIS] - machineZ));
 }
 
@@ -3143,6 +3140,11 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noex
 void GCodes::StartPrinting(bool fromStart) noexcept
 {
 	buildObjects.Init();
+	for (MovementState& ms : moveStates)
+	{
+		ms.InitObjectCancellation();
+	}
+
 	reprap.GetMove().ResetMoveCounters();
 
 	if (fromStart)															// if not resurrecting a print
@@ -3247,14 +3249,14 @@ ReadLockedPointer<Tool> GCodes::GetSpecifiedOrCurrentTool(GCodeBuffer& gb) THROW
 	}
 	else
 	{
-		tNumber = reprap.GetCurrentToolNumber();
+		tNumber = GetMovementState(gb).GetCurrentToolNumber();
 		if (tNumber < 0)
 		{
 			throw GCodeException(gb.GetLineNumber(), -1, "No tool number given and no current tool");
 		}
 	}
 
-	ReadLockedPointer<Tool> tool = reprap.GetTool(tNumber);
+	ReadLockedPointer<Tool> tool = Tool::GetLockedTool(tNumber);
 	if (tool.IsNull())
 	{
 		throw GCodeException(gb.GetLineNumber(), -1, "Invalid tool number");
@@ -3529,7 +3531,14 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 										: -1);
 
 		// Add or delete tool, so start by deleting the old one with this number, if any
-		reprap.DeleteTool(toolNumber);
+		for (MovementState& ms : moveStates)
+		{
+			if (ms.GetCurrentToolNumber() == (int)toolNumber)
+			{
+				ms.SelectTool(-1, false);
+			}
+		}
+		Tool::DeleteTool(toolNumber);
 
 		// M563 P# D-1 H-1 [R-1] removes an existing tool
 		if (dCount == 1 && hCount == 1 && drives[0] == -1 && heaters[0] == -1 && (sCount == 0 || (sCount == 1 && spindleNumber == -1)))
@@ -3543,12 +3552,12 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 			{
 				return GCodeResult::error;
 			}
-			reprap.AddTool(tool);
+			Tool::AddTool(tool);
 		}
 	}
 	else
 	{
-		reprap.PrintTool(toolNumber, reply);
+		PrintTool(toolNumber, reply);
 	}
 	return GCodeResult::ok;
 }
@@ -3579,24 +3588,14 @@ void GCodes::SetMappedFanSpeed(const GCodeBuffer *null gbp, float f) noexcept
 {
 	MovementState& ms = (gbp == nullptr) ? moveStates[0] : GetMovementState(*gbp);
 	ms.virtualFanSpeed = f;
-	const Tool * const ct = reprap.GetCurrentTool();
-	if (ct == nullptr)
+	if (ms.currentTool == nullptr)
 	{
 		reprap.GetFansManager().SetFanValue(0, f);
 	}
 	else
 	{
-		ct->SetFansPwm(f);
+		ms.currentTool->SetFansPwm(f);
 	}
-}
-
-// Return true if this fan number is currently being used as a print cooling fan
-bool GCodes::IsMappedFan(unsigned int fanNumber) noexcept
-{
-	const Tool * const ct = reprap.GetCurrentTool();
-	return (ct == nullptr)
-			? fanNumber == 0
-				: ct->GetFanMapping().IsBitSet(fanNumber);
 }
 
 // Handle sending a reply back to the appropriate interface(s) and update lastResult
@@ -3823,9 +3822,10 @@ void GCodes::SetToolHeaters(Tool *tool, float temperature, bool both) THROWS(GCo
 // Retract or un-retract filament, returning true if movement has been queued, false if this needs to be called again
 GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 {
-	if (!buildObjects.IsCurrentObjectCancelled())
+	MovementState& ms = GetMovementState(gb);
+	if (!ms.IsCurrentObjectCancelled())
 	{
-		Tool* const currentTool = reprap.GetCurrentTool();
+		Tool* const currentTool = ms.currentTool;
 		if (  currentTool != nullptr
 			&& retract != currentTool->IsRetracted()
 			&& (currentTool->GetRetractLength() != 0.0 || currentTool->GetRetractHop() != 0.0 || (!retract && currentTool->GetRetractExtra() != 0.0))
@@ -3836,7 +3836,6 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 				return GCodeResult::notFinished;
 			}
 
-			MovementState& ms = GetMovementState(gb);
 			if (ms.segmentsLeft != 0)
 			{
 				return GCodeResult::notFinished;
@@ -3845,21 +3844,19 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 			// New code does the retraction and the Z hop as separate moves
 			// Get ready to generate a move
 			SetMoveBufferDefaults(ms);
-			ms.tool = reprap.GetCurrentTool();
-			reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.tool);
+			reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
 			ms.filePos = (gb.IsFileChannel()) ? gb.GetFilePosition() : noFilePosition;
 
 			if (retract)
 			{
 				// Set up the retract move
-				const Tool * const tool = reprap.GetCurrentTool();
-				if (tool != nullptr && tool->DriveCount() != 0)
+				if (currentTool != nullptr && currentTool->DriveCount() != 0)
 				{
-					for (size_t i = 0; i < tool->DriveCount(); ++i)
+					for (size_t i = 0; i < currentTool->DriveCount(); ++i)
 					{
-						ms.coords[ExtruderToLogicalDrive(tool->GetDrive(i))] = -currentTool->GetRetractLength();
+						ms.coords[ExtruderToLogicalDrive(currentTool->GetDrive(i))] = -currentTool->GetRetractLength();
 					}
-					ms.feedRate = currentTool->GetRetractSpeed() * tool->DriveCount();
+					ms.feedRate = currentTool->GetRetractSpeed() * currentTool->DriveCount();
 					ms.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
 					NewSingleSegmentMoveAvailable(ms);
 				}
@@ -3881,14 +3878,13 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 			else
 			{
 				// No retract hop, so just un-retract
-				const Tool * const tool = reprap.GetCurrentTool();
-				if (tool != nullptr && tool->DriveCount() != 0)
+				if (currentTool != nullptr && currentTool->DriveCount() != 0)
 				{
-					for (size_t i = 0; i < tool->DriveCount(); ++i)
+					for (size_t i = 0; i < ms.currentTool->DriveCount(); ++i)
 					{
-						ms.coords[ExtruderToLogicalDrive(tool->GetDrive(i))] = currentTool->GetRetractLength() + currentTool->GetRetractExtra();
+						ms.coords[ExtruderToLogicalDrive(currentTool->GetDrive(i))] = currentTool->GetRetractLength() + currentTool->GetRetractExtra();
 					}
-					ms.feedRate = currentTool->GetUnRetractSpeed() * tool->DriveCount();
+					ms.feedRate = currentTool->GetUnRetractSpeed() * currentTool->DriveCount();
 					ms.canPauseAfter = true;
 					NewSingleSegmentMoveAvailable(ms);
 				}
@@ -3902,7 +3898,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 // Load the specified filament into a tool
 GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	Tool * const tool = reprap.GetCurrentTool();
+	Tool * const tool = GetMovementState(gb).currentTool;
 	if (tool == nullptr)
 	{
 		reply.copy("No tool selected");
@@ -3959,7 +3955,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS
 // Unload the current filament from a tool
 GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	Tool * const tool = reprap.GetCurrentTool();
+	Tool * const tool = GetMovementState(gb).currentTool;
 	if (tool == nullptr)
 	{
 		reply.copy("No tool selected");
@@ -4015,12 +4011,11 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 		ms.laserPwmOrIoBits.laserPwm = 0;
 #endif
 		// Deal with the Z hop from a G10 that has not been undone by G11
-		Tool* const currentTool = reprap.GetCurrentTool();	//TODO get the correct tool
-		if (currentTool != nullptr && currentTool->IsRetracted())
+		if (ms.currentTool != nullptr && ms.currentTool->IsRetracted())
 		{
 			ms.currentUserPosition[Z_AXIS] += ms.currentZHop;
 			ms.currentZHop = 0.0;
-			currentTool->SetRetracted(false);
+			ms.currentTool->SetRetracted(false);
 		}
 	}
 
@@ -4135,7 +4130,7 @@ bool GCodes::ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling
 void GCodes::UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept
 {
 	MovementState& ms = GetMovementState(gb);
-	reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, reprap.GetCurrentTool());
+	reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
 	ToolOffsetInverseTransform(ms);
 #if SUPPORT_COORDINATE_ROTATION
 	if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
@@ -4180,8 +4175,7 @@ void GCodes::RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept
 // So make sure it is suitably initialised before calling this.
 void GCodes::ToolOffsetTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes) const noexcept
 {
-	const Tool * const currentTool = reprap.GetCurrentTool();
-	if (currentTool == nullptr)
+	if (ms.currentTool == nullptr)
 	{
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
@@ -4190,15 +4184,15 @@ void GCodes::ToolOffsetTransform(const MovementState& ms, const float coordsIn[M
 	}
 	else
 	{
-		const AxesBitmap xAxes = currentTool->GetXAxisMap();
-		const AxesBitmap yAxes = currentTool->GetYAxisMap();
+		const AxesBitmap xAxes = ms.currentTool->GetXAxisMap();
+		const AxesBitmap yAxes = ms.currentTool->GetYAxisMap();
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
 			if (   (axis != X_AXIS || xAxes.IsBitSet(X_AXIS))
 				&& (axis != Y_AXIS || yAxes.IsBitSet(Y_AXIS))
 			   )
 			{
-				const float totalOffset = currentBabyStepOffsets[axis] - currentTool->GetOffset(axis);
+				const float totalOffset = currentBabyStepOffsets[axis] - ms.currentTool->GetOffset(axis);
 				const size_t inputAxis = (explicitAxes.IsBitSet(axis)) ? axis
 										: (xAxes.IsBitSet(axis)) ? X_AXIS
 											: (yAxes.IsBitSet(axis)) ? Y_AXIS
@@ -4220,8 +4214,7 @@ void GCodes::ToolOffsetTransform(MovementState& ms, AxesBitmap explicitAxes) con
 // Caution: coordsIn and coordsOut may address the same array!
 void GCodes::ToolOffsetInverseTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept
 {
-	const Tool * const currentTool = reprap.GetCurrentTool();
-	if (currentTool == nullptr)
+	if (ms.currentTool == nullptr)
 	{
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
@@ -4230,13 +4223,13 @@ void GCodes::ToolOffsetInverseTransform(const MovementState& ms, const float coo
 	}
 	else
 	{
-		const AxesBitmap xAxes = reprap.GetCurrentXAxes();
-		const AxesBitmap yAxes = reprap.GetCurrentYAxes();
+		const AxesBitmap xAxes = ms.GetCurrentXAxes();
+		const AxesBitmap yAxes = ms.GetCurrentYAxes();
 		float xCoord = 0.0, yCoord = 0.0;
 		size_t numXAxes = 0, numYAxes = 0;
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			const float totalOffset = currentBabyStepOffsets[axis] - currentTool->GetOffset(axis);
+			const float totalOffset = currentBabyStepOffsets[axis] - ms.currentTool->GetOffset(axis);
 			const float coord = (coordsIn[axis] - totalOffset)/axisScaleFactors[axis];
 			coordsOut[axis] = coord;
 			if (xAxes.IsBitSet(axis))
@@ -4268,17 +4261,10 @@ void GCodes::ToolOffsetInverseTransform(MovementState& ms) const noexcept
 	ToolOffsetInverseTransform(ms, ms.coords, ms.currentUserPosition);
 }
 
-// Get an axis offset of the current tool
-float GCodes::GetCurrentToolOffset(size_t axis) const noexcept
-{
-	const Tool* const tool = reprap.GetCurrentTool();
-	return (tool == nullptr) ? 0.0 : tool->GetOffset(axis);
-}
-
 // Get the current user coordinate and remove the coordinate rotation and workplace offset
-float GCodes::GetPrimaryUserCoordinate(size_t axis) const noexcept
+float GCodes::GetUserCoordinate(const MovementState& ms, size_t axis) const noexcept
 {
-	return (axis < numTotalAxes) ? moveStates[0].currentUserPosition[axis] - GetWorkplaceOffset(axis, moveStates[0].currentCoordinateSystem) : 0.0;
+	return (axis < numTotalAxes) ? ms.currentUserPosition[axis] - GetWorkplaceOffset(axis, ms.currentCoordinateSystem) : 0.0;
 }
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -4433,7 +4419,7 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 
 	if (ok)
 	{
-		ok = reprap.WriteToolParameters(f, p10);
+		ok = WriteToolParameters(f, p10);
 	}
 
 #if SUPPORT_WORKPLACE_COORDINATES
@@ -4490,7 +4476,17 @@ bool GCodes::WriteConfigOverrideHeader(FileStore *f) const noexcept
 // Store a M105-format temperature report in 'reply'. This doesn't put a newline character at the end.
 void GCodes::GenerateTemperatureReport(const StringRef& reply) const noexcept
 {
-	reprap.ReportAllToolTemperatures(reply);
+	{
+		ReadLocker lock(Tool::toolListLock);
+
+		// The following is believed to be compatible with Marlin and Octoprint, based on thread https://github.com/foosel/OctoPrint/issues/2590#issuecomment-385023980
+		ReportToolTemperatures(reply, GetPrimaryMovementState().currentTool, false);
+
+		for (const Tool *tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
+		{
+			ReportToolTemperatures(reply, tool, true);
+		}
+	}
 
 	Heat& heat = reprap.GetHeat();
 	for (size_t hn = 0; hn < MaxBedHeaters && heat.GetBedHeater(hn) >= 0; ++hn)
@@ -4608,8 +4604,9 @@ OutputBuffer *GCodes::GenerateJsonStatusResponse(int type, int seq, ResponseSour
 // Initiate a tool change. Caller has already checked that the correct tool isn't loaded.
 void GCodes::StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t param) noexcept
 {
-	newToolNumber = toolNum;
-	toolChangeParam = (IsSimulating()) ? 0 : param;
+	MovementState& ms = GetMovementState(gb);
+	ms.newToolNumber = toolNum;
+	ms.toolChangeParam = (IsSimulating()) ? 0 : param;
 	gb.SetState(GCodeState::toolChange0);
 }
 
@@ -4765,7 +4762,7 @@ void GCodes::ActivateHeightmap(bool activate) noexcept
 		// Update the current position to allow for any bed compensation at the current XY coordinates
 		for (MovementState& ms : moveStates)
 		{
-			reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, reprap.GetCurrentTool());
+			reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
 			ToolOffsetInverseTransform(ms);							// update user coordinates to reflect any height map offset at the current position
 		}
 	}
@@ -4803,7 +4800,7 @@ MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) noexcept
 }
 
 // Get a reference to the movement state associated with the specified GCode buffer
-const MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) const noexcept
+const MovementState& GCodes::GetConstMovementState(const GCodeBuffer& gb) const noexcept
 {
 	return (gb.GetChannel() == GCodeChannel::File2 || gb.GetChannel() == GCodeChannel::Queue2) ? moveStates[1] : moveStates[0];
 }
@@ -4867,7 +4864,7 @@ int GCodes::GetHeaterNumber(unsigned int itemNumber) const noexcept
 {
 	if (itemNumber < 80)
 	{
-		ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? reprap.GetLockedCurrentTool() : reprap.GetTool(itemNumber);
+		ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? GetPrimaryMovementState().GetLockedCurrentTool() : Tool::GetLockedTool(itemNumber);
 		return (tool.IsNotNull() && tool->HeaterCount() != 0) ? tool->GetHeater(0) : -1;
 	}
 	if (itemNumber < 90)
@@ -4886,7 +4883,7 @@ float GCodes::GetItemActiveTemperature(unsigned int itemNumber) const noexcept
 {
 	if (itemNumber < 80)
 	{
-		ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? reprap.GetLockedCurrentTool() : reprap.GetTool(itemNumber);
+		ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? GetPrimaryMovementState().GetLockedCurrentTool() : Tool::GetLockedTool(itemNumber);
 		return (tool.IsNotNull()) ? tool->GetToolHeaterActiveTemperature(0) : 0.0;
 	}
 
@@ -4897,7 +4894,7 @@ float GCodes::GetItemStandbyTemperature(unsigned int itemNumber) const noexcept
 {
 	if (itemNumber < 80)
 	{
-		ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? reprap.GetLockedCurrentTool() : reprap.GetTool(itemNumber);
+		ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? GetPrimaryMovementState().GetLockedCurrentTool() : Tool::GetLockedTool(itemNumber);
 		return (tool.IsNotNull()) ? tool->GetToolHeaterStandbyTemperature(0) : 0.0;
 	}
 
@@ -4908,11 +4905,11 @@ void GCodes::SetItemActiveTemperature(unsigned int itemNumber, float temp) noexc
 {
 	if (itemNumber < 80)
 	{
-		ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? reprap.GetLockedCurrentTool() : reprap.GetTool(itemNumber);
+		ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? GetPrimaryMovementState().GetLockedCurrentTool() : Tool::GetLockedTool(itemNumber);
 		if (tool.IsNotNull())
 		{
 			tool->SetToolHeaterActiveTemperature(0, temp);
-			if (tool->Number() == reprap.GetCurrentToolNumber() && temp > NEARLY_ABS_ZERO)
+			if (tool->Number() == GetPrimaryMovementState().GetCurrentToolNumber() && temp > NEARLY_ABS_ZERO)
 			{
 				tool->HeatersToActiveOrStandby(true);				// if it's the current tool then make sure it is active
 			}
@@ -4934,7 +4931,7 @@ void GCodes::SetItemStandbyTemperature(unsigned int itemNumber, float temp) noex
 {
 	if (itemNumber < 80)
 	{
-		ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? reprap.GetLockedCurrentTool() : reprap.GetTool(itemNumber);
+		ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? GetPrimaryMovementState().GetLockedCurrentTool() : Tool::GetLockedTool(itemNumber);
 		if (tool.IsNotNull())
 		{
 			tool->SetToolHeaterStandbyTemperature(0, temp);

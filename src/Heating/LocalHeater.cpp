@@ -923,7 +923,7 @@ void LocalHeater::RaiseHeaterFault(HeaterFaultType type, const char *_ecv_array 
 	if (mode != HeaterMode::fault)
 	{
 		mode = HeaterMode::fault;
-		reprap.FlagTemperatureFault(GetHeaterNumber());
+		Tool::FlagTemperatureFault(GetHeaterNumber());
 
 		va_list vargs;
 		va_start(vargs, format);

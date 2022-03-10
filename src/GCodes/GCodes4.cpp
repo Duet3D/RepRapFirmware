@@ -149,15 +149,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 			}
 
-			Tool * const currentTool = reprap.GetCurrentTool();
-			if (currentTool != nullptr)
+			if (ms.currentTool != nullptr)
 			{
 				// We get here when the tool probe has been activated. In this case we know how far we
 				// went (i.e. the difference between our start and end positions) and if we need to
 				// incorporate any correction factors. That's why we only need to set the final tool
 				// offset to this value in order to finish the tool probing.
 				const float coord = ms.toolChangeRestorePoint.moveCoords[m585Settings.axisNumber] - ms.currentUserPosition[m585Settings.axisNumber] + m585Settings.offset;
-				currentTool->SetOffset(m585Settings.axisNumber, coord, true);
+				ms.currentTool->SetOffset(m585Settings.axisNumber, coord, true);
 			}
 			gb.SetState(GCodeState::normal);
 			if (m585Settings.useProbe)
@@ -329,22 +328,21 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::m109ToolChange0:					// run tfree for the old tool (if any)
 		doingToolChange = true;
 		SavePosition(gb, ToolChangeRestorePointNumber);
-		ms.toolChangeRestorePoint.toolNumber = reprap.GetCurrentToolNumber();
+		ms.toolChangeRestorePoint.toolNumber = ms.GetCurrentToolNumber();
 		ms.toolChangeRestorePoint.fanSpeed = ms.virtualFanSpeed;
-		reprap.SetPreviousToolNumber();
+		ms.SetPreviousToolNumber();
 		gb.AdvanceState();
 
 		// If the tool is in the firmware-retracted state, there may be some Z hop applied, which we must remove
 		ms.currentUserPosition[Z_AXIS] += ms.currentZHop;
 		ms.currentZHop = 0.0;
 
-		if ((toolChangeParam & TFreeBit) != 0)
+		if ((ms.toolChangeParam & TFreeBit) != 0)
 		{
-			const Tool * const oldTool = reprap.GetCurrentTool();
-			if (oldTool != nullptr)						// 2020-04-29: run tfree file even if not all axes have been homed
+			if (ms.currentTool != nullptr)				// 2020-04-29: run tfree file even if not all axes have been homed
 			{
 				String<StringLength20> scratchString;
-				scratchString.printf("tfree%d.g", oldTool->Number());
+				scratchString.printf("tfree%d.g", ms.currentTool->Number());
 				DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);		// don't pass the T code here because it may be negative
 			}
 		}
@@ -354,17 +352,16 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::m109ToolChange1:					// release the old tool (if any), then run tpre for the new tool
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tfree.g to finish executing
 		{
-			const Tool * const oldTool = reprap.GetCurrentTool();
-			if (oldTool != nullptr)
+			if (ms.currentTool != nullptr)
 			{
-				reprap.StandbyTool(oldTool->Number(), IsSimulating());
+				StandbyTool(ms.currentTool->Number(), IsSimulating());
 				UpdateCurrentUserPosition(gb);			// the tool offset may have changed, so get the current position
 			}
 			gb.AdvanceState();
-			if (reprap.GetTool(newToolNumber).IsNotNull() && (toolChangeParam & TPreBit) != 0)	// 2020-04-29: run tpre file even if not all axes have been homed
+			if (Tool::GetLockedTool(ms.newToolNumber).IsNotNull() && (ms.toolChangeParam & TPreBit) != 0)	// 2020-04-29: run tpre file even if not all axes have been homed
 			{
 				String<StringLength20> scratchString;
-				scratchString.printf("tpre%d.g", newToolNumber);
+				scratchString.printf("tpre%d.g", ms.newToolNumber);
 				DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);
 			}
 		}
@@ -374,14 +371,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::m109ToolChange2:					// select the new tool if it exists and run tpost
 		if (LockMovementAndWaitForStandstill(gb))		// wait for tpre.g to finish executing
 		{
-			reprap.SelectTool(newToolNumber, IsSimulating());
+			ms.SelectTool(ms.newToolNumber, IsSimulating());
 			UpdateCurrentUserPosition(gb);				// get the actual position of the new tool
 
 			gb.AdvanceState();
-			if (reprap.GetCurrentTool() != nullptr && (toolChangeParam & TPostBit) != 0)	// 2020-04-29: run tpost file even if not all axes have been homed
+			if (ms.currentTool != nullptr && (ms.toolChangeParam & TPostBit) != 0)	// 2020-04-29: run tpost file even if not all axes have been homed
 			{
 				String<StringLength20> scratchString;
-				scratchString.printf("tpost%d.g", newToolNumber);
+				scratchString.printf("tpost%d.g", ms.newToolNumber);
 				DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);
 			}
 		}
@@ -408,7 +405,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::m109WaitForTemperature:
-		if (cancelWait || IsSimulating() || ToolHeatersAtSetTemperatures(reprap.GetCurrentTool(), gb.LatestMachineState().waitWhileCooling, TemperatureCloseEnough))
+		if (cancelWait || IsSimulating() || ToolHeatersAtSetTemperatures(ms.currentTool, gb.LatestMachineState().waitWhileCooling, TemperatureCloseEnough))
 		{
 			cancelWait = isWaiting = false;
 			gb.SetState(GCodeState::normal);
@@ -488,7 +485,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			SetMoveBufferDefaults(ms);
 			ToolOffsetTransform(ms);
 			ms.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
-			ms.tool = reprap.GetCurrentTool();							// needed so that bed compensation is applied correctly
 			if (gb.GetState() == GCodeState::resuming1 && currentZ > ms.pauseRestorePoint.moveCoords[Z_AXIS])
 			{
 				// First move the head to the correct XY point, then move it down in a separate move
@@ -1208,14 +1204,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		else if (g30SValue == -2)
 		{
 			// Adjust the Z offset of the current tool to account for the height error
-			Tool * const tool = reprap.GetCurrentTool();
-			if (tool == nullptr)
+			if (ms.currentTool == nullptr)
 			{
 				gb.LatestMachineState().SetError("Tool was deselected during G30 S-2 command");
 			}
 			else
 			{
-				tool->SetOffset(Z_AXIS, -g30zHeightError, true);
+				ms.currentTool->SetOffset(Z_AXIS, -g30zHeightError, true);
 				ToolOffsetInverseTransform(ms);			// update user coordinates to reflect the new tool offset
 			}
 		}
@@ -1329,17 +1324,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just did the retraction part of a firmware retraction, now we need to do the Z hop
 		if (ms.segmentsLeft == 0)
 		{
-			const Tool * const tool = reprap.GetCurrentTool();
-			if (tool != nullptr)
+			if (ms.currentTool != nullptr)
 			{
 				SetMoveBufferDefaults(ms);
-				ms.tool = tool;
-				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.tool);
-				ms.coords[Z_AXIS] += tool->GetRetractHop();
+				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
+				ms.coords[Z_AXIS] += ms.currentTool->GetRetractHop();
 				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
 				ms.filePos = (gb.IsFileChannel()) ? gb.GetFilePosition() : noFilePosition;
 				ms.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
-				ms.currentZHop = tool->GetRetractHop();
+				ms.currentZHop = ms.currentTool->GetRetractHop();
 				NewSingleSegmentMoveAvailable(ms);
 			}
 			gb.SetState(GCodeState::normal);
@@ -1350,17 +1343,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just undid the Z-hop part of a firmware un-retraction, now we need to do the un-retract
 		if (ms.segmentsLeft == 0)
 		{
-			const Tool * const tool = reprap.GetCurrentTool();
-			if (tool != nullptr && tool->DriveCount() != 0)
+			if (ms.currentTool != nullptr && ms.currentTool->DriveCount() != 0)
 			{
 				SetMoveBufferDefaults(ms);
-				ms.tool = tool;
-				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, tool);
-				for (size_t i = 0; i < tool->DriveCount(); ++i)
+				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
+				for (size_t i = 0; i < ms.currentTool->DriveCount(); ++i)
 				{
-					ms.coords[ExtruderToLogicalDrive(tool->GetDrive(i))] = tool->GetRetractLength() + tool->GetRetractExtra();
+					ms.coords[ExtruderToLogicalDrive(ms.currentTool->GetDrive(i))] = ms.currentTool->GetRetractLength() + ms.currentTool->GetRetractExtra();
 				}
-				ms.feedRate = tool->GetUnRetractSpeed() * tool->DriveCount();
+				ms.feedRate = ms.currentTool->GetUnRetractSpeed() * ms.currentTool->DriveCount();
 				ms.filePos = (gb.IsFileChannel()) ? gb.GetFilePosition() : noFilePosition;
 				ms.canPauseAfter = true;
 				NewSingleSegmentMoveAvailable(ms);
@@ -1371,9 +1362,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::loadingFilament:
 		// We just returned from the filament load macro
-		if (reprap.GetCurrentTool() != nullptr)
+		if (ms.currentTool != nullptr)
 		{
-			reprap.GetCurrentTool()->GetFilament()->Load(filamentToLoad);
+			ms.currentTool->GetFilament()->Load(filamentToLoad);
 			if (reprap.Debug(moduleGcodes))
 			{
 				platform.MessageF(LoggedGenericMessage, "Filament %s loaded", filamentToLoad);
@@ -1384,13 +1375,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::unloadingFilament:
 		// We just returned from the filament unload macro
-		if (reprap.GetCurrentTool() != nullptr)
+		if (ms.currentTool != nullptr)
 		{
 			if (reprap.Debug(moduleGcodes))
 			{
-				platform.MessageF(LoggedGenericMessage, "Filament %s unloaded", reprap.GetCurrentTool()->GetFilament()->GetName());
+				platform.MessageF(LoggedGenericMessage, "Filament %s unloaded", ms.currentTool->GetFilament()->GetName());
 			}
-			reprap.GetCurrentTool()->GetFilament()->Unload();
+			ms.currentTool->GetFilament()->Unload();
 		}
 		gb.SetState(GCodeState::normal);
 		break;

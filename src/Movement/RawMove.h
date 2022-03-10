@@ -21,7 +21,7 @@ struct RawMove
 	FilePosition filePos;											// offset in the file being printed at the start of reading this move
 	float proportionDone;											// what proportion of the entire move has been done when this segment is complete
 	float cosXyAngle;												// the cosine of the change in XY angle between the previous move and this move
-	const Tool *tool;												// which tool (if any) is being used
+	Tool *currentTool;												// which tool (if any) is being used
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
 #else
@@ -111,10 +111,21 @@ struct MovementState : public RawMove
 	FilePosition fileOffsetToPrint;									// The offset to print from
 #endif
 
+	// Tool change. These variables can be global because movement is locked while doing a tool change, so only one can take place at a time.
+	int16_t newToolNumber;
+	int16_t previousToolNumber;										// the tool number we were using before the last tool change, or -1 if we weren't using a tool
+	uint8_t toolChangeParam;
+
 	bool doingArcMove;												// true if we are doing an arc move
 	bool xyPlane;													// true if the G17/G18/G19 selected plane of the arc move is XY in the original user coordinates
 	SegmentedMoveState segMoveState;
 	bool pausedInMacro;												// if we are paused then this is true if we paused while fileGCode was executing a macro
+
+	// Object cancellation variables
+	int currentObjectNumber;										// the current object number, or a negative value if it isn't an object
+	int virtualToolNumber;											// the number of the tool that was active when we cancelled an object
+	bool currentObjectCancelled;									// true if the current object should not be printed
+	bool printingJustResumed;										// true if we have just restarted printing
 
 	float GetProportionDone() const noexcept;						// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
 	void Reset() noexcept;
@@ -123,6 +134,28 @@ struct MovementState : public RawMove
 	void ClearMove() noexcept;
 	void SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
 		pre(restorePointNumber < NumTotalRestorePoints);
+
+	// Tool management
+	void SelectTool(int toolNumber, bool simulating) noexcept;
+	ReadLockedPointer<Tool> GetLockedCurrentTool() const noexcept;
+	ReadLockedPointer<Tool> GetLockedCurrentOrDefaultTool() const noexcept;
+	int GetCurrentToolNumber() const noexcept;
+	void SetPreviousToolNumber() noexcept;
+	AxesBitmap GetCurrentXAxes() const noexcept;											// Get the current axes used as X axes
+	AxesBitmap GetCurrentYAxes() const noexcept;											// Get the current axes used as Y axes
+	AxesBitmap GetCurrentAxisMapping(unsigned int axis) const noexcept;
+	float GetCurrentToolOffset(size_t axis) const noexcept;									// Get an axis offset of the current tool
+
+	// Object cancellation support
+	void InitObjectCancellation() noexcept;
+	bool IsCurrentObjectCancelled() const noexcept { return currentObjectCancelled; }
+	bool IsFirstMoveSincePrintingResumed() const noexcept { return printingJustResumed; }
+	void DoneMoveSincePrintingResumed() noexcept { printingJustResumed = false; }
+	void SetVirtualTool(int toolNum) noexcept { virtualToolNumber = toolNum; }
+	void ChangeToObject(GCodeBuffer& gb, int i) noexcept;
+	void StopPrinting(GCodeBuffer& gb) noexcept;
+	void ResumePrinting(GCodeBuffer& gb) noexcept;
+
 	void Diagnostics(MessageType mtype, unsigned int moveSystemNumber) noexcept;
 };
 

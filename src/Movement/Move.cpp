@@ -113,7 +113,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 2),								ObjectModelEntryFlags::none },
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxTravelAcceleration), 1),					ObjectModelEntryFlags::none },
-	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimaryVirtualExtruderPosition(), 5),					ObjectModelEntryFlags::live },
+	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimaryMovementState().latestVirtualExtruderPosition, 5),	ObjectModelEntryFlags::live },
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber() - 1),	ObjectModelEntryFlags::none },
 	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber()),		ObjectModelEntryFlags::obsolete },
 
@@ -304,7 +304,7 @@ void Move::Exit() noexcept
 					{
 						if (nextMove.moveType == 0)
 						{
-							AxisAndBedTransform(nextMove.coords, nextMove.tool, true);
+							AxisAndBedTransform(nextMove.coords, nextMove.currentTool, true);
 						}
 
 						if (mainDDARing.AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
@@ -514,12 +514,10 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	maxDelay = maxDelayIncrease = 0;
 #endif
 
-#if SUPPORT_ASYNC_MOVES
-	mainDDARing.Diagnostics(mtype, "Main");
-	auxDDARing.Diagnostics(mtype, "Aux");
-#else
-	mainDDARing.Diagnostics(mtype, "");
-#endif
+	for (size_t i = 0; i < ARRAY_SIZE(rings); ++i)
+	{
+		rings[i].Diagnostics(mtype, i);
+	}
 }
 
 // Set the current position to be this
@@ -1062,7 +1060,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 		}
 		else
 		{
-			const Tool * const ct = reprap.GetCurrentTool();
+			const Tool * const ct = reprap.GetGCodes().GetConstMovementState(gb).currentTool;
 			if (ct == nullptr)
 			{
 				reply.copy("No tool selected");

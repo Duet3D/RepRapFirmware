@@ -42,12 +42,6 @@ Licence: GPL
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
 
-// Bits for T-code P-parameter to specify which macros are supposed to be run
-constexpr uint8_t TFreeBit = 1u << 0;
-constexpr uint8_t TPreBit = 1u << 1;
-constexpr uint8_t TPostBit = 1u << 2;
-constexpr uint8_t DefaultToolChangeParam = TFreeBit | TPreBit | TPostBit;
-
 // Machine type enumeration. The numeric values must be in the same order as the corresponding M451..M453 commands.
 enum class MachineType : uint8_t
 {
@@ -116,7 +110,7 @@ public:
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply) noexcept;	// Open a file of G Codes to run
 #endif
 	void AbortPrint(GCodeBuffer& gb) noexcept;									// Cancel any print in progress
-	void GetCurrentPrimaryCoordinates(const StringRef& s) const noexcept;				// Write where we are into a string
+	void HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept;		// Write where we are into a string
 	bool DoingFileMacro() const noexcept;										// Is a macro file being processed by any input channel?
 	bool GetMacroRestarted() const noexcept;									// Return true if the macro being executed by fileGCode was restarted
 	bool WaitingForAcknowledgement() const noexcept;							// Is an input waiting for a message to be acknowledged?
@@ -144,7 +138,7 @@ public:
 	float GetTotalRawExtrusion() const noexcept { return rawExtruderTotal; }	// Get the total extrusion since start of print, all drives
 	float GetTotalBabyStepOffset(size_t axis) const noexcept
 		pre(axis < maxAxes);
-	float GetPrimaryUserCoordinate(size_t axis) const noexcept;						// Get the current user coordinate in the current workspace coordinate system
+	float GetUserCoordinate(const MovementState& ms, size_t axis) const noexcept;	// Get the current user coordinate in the current workspace coordinate system
 
 	bool CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) noexcept;
 #if HAS_NETWORKING
@@ -206,19 +200,17 @@ public:
 	void SetItemStandbyTemperature(unsigned int itemNumber, float temp) noexcept;
 #endif
 
-	float GetPrimaryMappedFanSpeed() const noexcept { return moveStates[0].virtualFanSpeed; }	// Get the mapped fan speed for reporting
-	void SetMappedFanSpeed(const GCodeBuffer *null gb, float f) noexcept;						// Set the speeds of fans mapped for the current tool
+	void SetMappedFanSpeed(const GCodeBuffer *null gb, float f) noexcept;				// Set the speeds of fans mapped for the current tool
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept;	// Handle G-Code replies
-	void EmergencyStop() noexcept;												// Cancel everything
+	void EmergencyStop() noexcept;													// Cancel everything
 
-	const GridDefinition& GetDefaultGrid() const { return defaultGrid; };		// Get the default grid definition
-	void ActivateHeightmap(bool activate) noexcept;								// (De-)Activate the height map
+	const GridDefinition& GetDefaultGrid() const { return defaultGrid; };			// Get the default grid definition
+	void ActivateHeightmap(bool activate) noexcept;									// (De-)Activate the height map
 
-	int GetNewToolNumber() const noexcept { return newToolNumber; }
 	size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
 
 	// These next two are public because they are used by class SbcInterface
-	void UnlockAll(const GCodeBuffer& gb) noexcept;								// Release all locks
+	void UnlockAll(const GCodeBuffer& gb) noexcept;									// Release all locks
 	GCodeBuffer *GetGCodeBuffer(GCodeChannel channel) const noexcept { return gcodeSources[channel.ToBaseType()]; }
 
 #if HAS_MASS_STORAGE
@@ -229,7 +221,7 @@ public:
 		pre(restorePointNumber < NumTotalRestorePoints);							// Save position etc. to a restore point
 	void StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t param) noexcept;
 
-	unsigned int GetPrimaryWorkplaceCoordinateSystemNumber() const noexcept { return moveStates[0].currentCoordinateSystem + 1; }
+	unsigned int GetPrimaryWorkplaceCoordinateSystemNumber() const noexcept { return GetPrimaryMovementState().currentCoordinateSystem + 1; }
 
 #if SUPPORT_COORDINATE_ROTATION
 	void RotateCoordinates(float angleDegrees, float coords[2]) const noexcept;		// Account for coordinate rotation
@@ -238,7 +230,7 @@ public:
 	// This function is called by other functions to account correctly for workplace coordinates
 	float GetWorkplaceOffset(const GCodeBuffer& gb, size_t axis) const noexcept
 	{
-		return workplaceCoordinates[GetMovementState(gb).currentCoordinateSystem][axis];
+		return workplaceCoordinates[GetConstMovementState(gb).currentCoordinateSystem][axis];
 	}
 
 #if SUPPORT_OBJECT_MODEL
@@ -255,9 +247,16 @@ public:
 	size_t GetNumInputs() const noexcept { return NumGCodeChannels; }
 	const GCodeBuffer* GetInput(size_t n) const noexcept { return gcodeSources[n]; }
 	const GCodeBuffer* GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
+
+	// Object cancellation support
+	GCodeResult HandleM486(GCodeBuffer& gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException);
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
-	const RestorePoint *GetPrimaryRestorePoint(size_t n) const pre(n < NumVisibleRestorePoints) { return &moveStates[0].restorePoints[n]; }
-	float GetPrimaryVirtualExtruderPosition() const noexcept { return moveStates[0].latestVirtualExtruderPosition; }
+	void StartObject(GCodeBuffer& gb, const char *_ecv_array label) noexcept;
+	void StopObject(GCodeBuffer& gb) noexcept;
+	void ChangeToObject(GCodeBuffer& gb, int i) noexcept;
+
+	const MovementState& GetPrimaryMovementState() const noexcept { return moveStates[0]; }		// Temporary support for object model and status report values that only handle a single movement system
+	const MovementState& GetConstMovementState(const GCodeBuffer& gb) const noexcept;			// Get a reference to the movement state associated with the specified GCode buffer (there is a private non-const version)
 
 # if HAS_VOLTAGE_MONITOR
 	const char *_ecv_array null GetPowerFailScript() const noexcept { return powerFailScript; }
@@ -438,7 +437,18 @@ private:
 	void ToolOffsetInverseTransform(MovementState& ms) const noexcept;						// Convert head reference point coordinates to user coordinates
 	void ToolOffsetInverseTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept;
 																							// Convert head reference point coordinates to user coordinates
-	float GetCurrentToolOffset(size_t axis) const noexcept;									// Get an axis offset of the current tool
+
+	// Tool management
+	void StandbyTool(int toolNumber, bool simulating) noexcept;
+	bool IsHeaterAssignedToTool(int8_t heater) const noexcept;
+	GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
+	void PrintTool(int toolNumber, const StringRef& reply) const noexcept;
+	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept;
+
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+	bool WriteToolSettings(FileStore *f, const MovementState& ms) const noexcept;			// save some information for the resume file
+	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const noexcept;	// save some information in config-override.g
+#endif
 
 	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);								// Retract or un-retract filaments
 	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load the specified filament into a tool
@@ -455,8 +465,6 @@ private:
 #if HAS_VOLTAGE_MONITOR || HAS_SMART_DRIVERS
 	bool DoEmergencyPause() noexcept;														// Do an emergency pause following loss of power or a motor stall
 #endif
-
-	bool IsMappedFan(unsigned int fanNumber) noexcept;										// Return true if this fan number is currently being used as a print cooling fan
 
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);	// Define the probing grid, returning true if error
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -515,7 +523,6 @@ private:
 	void ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept;	// Change a live extrusion factor
 
 	MovementState& GetMovementState(const GCodeBuffer& gb) noexcept;				// Get a reference to the movement state associated with the specified GCode buffer
-	const MovementState& GetMovementState(const GCodeBuffer& gb) const noexcept;	// Get a reference to the movement state associated with the specified GCode buffer
 
 #if SUPPORT_COORDINATE_ROTATION
 	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68
@@ -613,10 +620,6 @@ private:
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileData fileToPrint;						// The next file to print
 #endif
-
-	// Tool change. These variables can be global because movement is locked while doing a tool change, so only one can take place at a time.
-	int16_t newToolNumber;
-	uint8_t toolChangeParam;
 
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
 	bool limitAxes;								// Don't think outside the box

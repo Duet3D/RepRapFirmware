@@ -134,6 +134,12 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 
 #endif
 
+ReadWriteLock Tool::toolListLock;
+Tool *Tool::toolList = nullptr;
+uint16_t Tool::activeExtruders = 0;
+uint16_t Tool::activeToolHeaters = 0;
+uint16_t Tool::numToolsToReport = 0;
+
 // Create a new tool and return a pointer to it. If an error occurs, put an error message in 'reply' and return nullptr.
 /*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *toolName, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, size_t sCount, int8_t spindleNo, const StringRef& reply) noexcept
 {
@@ -259,6 +265,79 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 	return t;
 }
 
+// Add a tool.
+// Prior to calling this, delete any existing tool with the same number
+// The tool list is maintained in tool number order.
+/*static*/ void Tool::AddTool(Tool* tool) noexcept
+{
+	WriteLocker lock(toolListLock);
+	Tool** t = &toolList;
+	while(*t != nullptr && (*t)->Number() < tool->Number())
+	{
+		t = &((*t)->next);
+	}
+	tool->next = *t;
+	*t = tool;
+	tool->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters, numToolsToReport);
+	reprap.ToolsUpdated();
+}
+
+// Delete a tool. Before calling this, ensure that the tool is not the current tool in any MovementState.
+/*static*/ void Tool::DeleteTool(int toolNumber) noexcept
+{
+	WriteLocker lock(toolListLock);
+
+	// Purge any references to this tool
+	Tool * tool = nullptr;
+	for (Tool **t = &toolList; *t != nullptr; t = &((*t)->next))
+	{
+		if ((*t)->Number() == toolNumber)
+		{
+			tool = *t;
+			*t = tool->next;
+
+			// Switch off any associated heaters
+			for (size_t i = 0; i < tool->HeaterCount(); i++)
+			{
+				reprap.GetHeat().SwitchOff(tool->GetHeater(i));
+			}
+
+			break;
+		}
+	}
+
+	// Delete it
+	Tool::Delete(tool);
+
+	// Update the number of active heaters and extruder drives
+	activeExtruders = activeToolHeaters = numToolsToReport = 0;
+	for (Tool *t = toolList; t != nullptr; t = t->Next())
+	{
+		t->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters, numToolsToReport);
+	}
+	reprap.ToolsUpdated();
+}
+
+/*static*/ unsigned int Tool::GetNumberOfContiguousTools() noexcept
+{
+	unsigned int numTools = 0;
+	ReadLocker lock(Tool::toolListLock);
+	for (const Tool *t = Tool::GetToolList(); t != nullptr && t->Number() == (int)numTools; t = t->Next())
+	{
+		++numTools;
+	}
+	return numTools;
+}
+
+// Return the tool with the specified number, or null if it was not found
+/*static*/ ReadLockedPointer<Tool> Tool::GetLockedTool(int toolNumber) noexcept
+{
+	ReadLocker lock(toolListLock);
+	Tool* tool;
+	for (tool = toolList; tool != nullptr && tool->Number() != toolNumber; tool = tool->Next()) { }
+	return ReadLockedPointer<Tool>(lock, tool);
+}
+
 /*static*/ AxesBitmap Tool::GetXAxes(const Tool *tool) noexcept
 {
 	return (tool == nullptr) ? DefaultXAxisMapping : tool->axisMapping[0];
@@ -362,26 +441,24 @@ void Tool::Print(const StringRef& reply) const noexcept
 	reply.catf("; status: %s", (state == ToolState::active) ? "selected" : (state == ToolState::standby) ? "standby" : "off");
 }
 
-// There is a temperature fault on a heater, so disable all tools using that heater.
-// This function must be called for the first entry in the linked list.
-void Tool::FlagTemperatureFault(int8_t heater) noexcept
+/*static*/ void Tool::FlagTemperatureFault(int8_t dudHeater) noexcept
 {
-	Tool* n = this;
-	while (n != nullptr)
+	ReadLocker lock(toolListLock);
+	for (Tool *t = toolList; t != nullptr; t = t->Next())
 	{
-		n->SetTemperatureFault(heater);
-		n = n->Next();
+		t->SetTemperatureFault(dudHeater);
 	}
 }
 
-void Tool::ClearTemperatureFault(int8_t heater) noexcept
+/*static*/ GCodeResult Tool::ClearTemperatureFault(int8_t wasDudHeater, const StringRef& reply) noexcept
 {
-	Tool* n = this;
-	while (n != nullptr)
+	const GCodeResult rslt = reprap.GetHeat().ResetFault(wasDudHeater, reply);
+	ReadLocker lock(toolListLock);
+	for (Tool *t = toolList; t != nullptr; t = t->Next())
 	{
-		n->ResetTemperatureFault(heater);
-		n = n->Next();
+		t->ResetTemperatureFault(wasDudHeater);
 	}
+	return rslt;
 }
 
 void Tool::SetTemperatureFault(int8_t dudHeater) noexcept

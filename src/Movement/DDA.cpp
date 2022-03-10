@@ -353,7 +353,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 					{
 						linearAxesMoving = true;
 					}
-					if (Tool::GetXAxes(nextMove.tool).IsBitSet(drive) || Tool::GetYAxes(nextMove.tool).IsBitSet(drive))
+					if (Tool::GetXAxes(nextMove.currentTool).IsBitSet(drive) || Tool::GetYAxes(nextMove.currentTool).IsBitSet(drive))
 					{
 						flags.xyMoving = true;				// this move has XY movement in user space, before axis were mapped
 					}
@@ -430,7 +430,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	}
 
 	// 3. Store some values
-	tool = nextMove.tool;
+	tool = nextMove.currentTool;
 	flags.checkEndstops = nextMove.checkEndstops;
 	filePos = nextMove.filePos;
 	virtualExtruderPosition = nextMove.moveStartVirtualExtruderPosition;

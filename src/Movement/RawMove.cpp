@@ -6,9 +6,11 @@
  */
 
 #include "RawMove.h"
+#include <GCodes/GCodes.h>
 #include <GCodes/GCodeQueue.h>
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
+#include <Tools/Tool.h>
 
 // Set up some default values in the move buffer for special moves, e.g. for Z probing and firmware retraction
 void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
@@ -22,7 +24,7 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 	reduceAcceleration = false;
 	hasPositiveExtrusion = false;
 	filePos = noFilePosition;
-	tool = nullptr;
+	currentTool = nullptr;
 	cosXyAngle = 1.0;
 	for (size_t drive = firstDriveToZero; drive < MaxAxesPlusExtruders; ++drive)
 	{
@@ -48,10 +50,12 @@ void MovementState::Reset() noexcept
 		f = 0.0;									// clear out all axis and extruder coordinates
 	}
 
-	currentZHop = 0.0;							// clear this before calling ToolOffsetInverseTransform
-	tool = nullptr;
+	currentZHop = 0.0;								// clear this before calling ToolOffsetInverseTransform
+	currentTool = nullptr;
 	latestVirtualExtruderPosition = moveStartVirtualExtruderPosition = 0.0;
 	virtualFanSpeed = 0.0;
+	newToolNumber = -1;
+	previousToolNumber = -1;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();
@@ -107,12 +111,104 @@ void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes
 	rp.feedRate = p_feedRate;
 	rp.virtualExtruderPosition = latestVirtualExtruderPosition;
 	rp.filePos = p_filePos;
-	rp.toolNumber = reprap.GetCurrentToolNumber();
+	rp.toolNumber = GetCurrentToolNumber();
 	rp.fanSpeed = virtualFanSpeed;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = laserPwmOrIoBits;
 #endif
+}
+
+// Select the specified tool, putting the existing current tool into standby
+void MovementState::SelectTool(int toolNumber, bool simulating) noexcept
+{
+	ReadLockedPointer<Tool> const newTool = Tool::GetLockedTool(toolNumber);
+	if (!simulating && currentTool != nullptr && currentTool != newTool.Ptr())
+	{
+		currentTool->Standby();
+	}
+	currentTool = newTool.Ptr();					// must do this first so that Activate() will always work
+	if (!simulating && newTool.IsNotNull())
+	{
+		newTool->Activate();
+	}
+}
+
+// Get a locked pointer to the current tool, or null if there is no current tool
+ReadLockedPointer<Tool> MovementState::GetLockedCurrentTool() const noexcept
+{
+	ReadLocker lock(Tool::toolListLock);
+	return ReadLockedPointer<Tool>(lock, currentTool);
+}
+
+// Get the current tool, or failing that the default tool. May return nullptr if there are no tools.
+// Called when a M104 or M109 command doesn't specify a tool number.
+ReadLockedPointer<Tool> MovementState::GetLockedCurrentOrDefaultTool() const noexcept
+{
+	ReadLocker lock(Tool::toolListLock);
+	// If a tool is already selected, use that one, else use the lowest-numbered tool which is the one at the start of the tool list
+	return ReadLockedPointer<Tool>(lock, (currentTool != nullptr) ? currentTool : Tool::GetToolList());
+}
+
+// Return the current tool number, or -1 if no tool selected
+int MovementState::GetCurrentToolNumber() const noexcept
+{
+	return (currentTool == nullptr) ? -1 : currentTool->Number();
+}
+
+// Set the previous tool number. Inline because it is only called from one place.
+void MovementState::SetPreviousToolNumber() noexcept
+{
+	previousToolNumber = (currentTool != nullptr) ? currentTool->Number() : -1;
+}
+
+// Get the current axes used as the specified axis
+AxesBitmap MovementState::GetCurrentAxisMapping(unsigned int axis) const noexcept
+{
+	return Tool::GetAxisMapping(currentTool, axis);
+}
+
+// Get the current axes used as X axis
+AxesBitmap MovementState::GetCurrentXAxes() const noexcept
+{
+	return Tool::GetXAxes(currentTool);
+}
+
+// Get the current axes used as Y axis
+AxesBitmap MovementState::GetCurrentYAxes() const noexcept
+{
+	return Tool::GetYAxes(currentTool);
+}
+
+// Get an axis offset of the current tool
+float MovementState::GetCurrentToolOffset(size_t axis) const noexcept
+{
+	return (currentTool == nullptr) ? 0.0 : currentTool->GetOffset(axis);
+}
+
+// We are currently printing, but we must now stop because the current object is cancelled
+void MovementState::StopPrinting(GCodeBuffer& gb) noexcept
+{
+	currentObjectCancelled = true;
+	virtualToolNumber = GetCurrentToolNumber();
+}
+
+// We are currently not printing because the current object was cancelled, but now we need to print again
+void MovementState::ResumePrinting(GCodeBuffer& gb) noexcept
+{
+	currentObjectCancelled = false;
+	printingJustResumed = true;
+	reprap.GetGCodes().SavePosition(gb, ResumeObjectRestorePointNumber);	// save the position we should be at for the start of the next move
+	if (GetCurrentToolNumber() != virtualToolNumber)						// if the wrong tool is loaded
+	{
+		reprap.GetGCodes().StartToolChange(gb, virtualToolNumber, DefaultToolChangeParam);
+	}
+}
+
+void MovementState::InitObjectCancellation() noexcept
+{
+	currentObjectNumber = -1;
+	currentObjectCancelled = printingJustResumed = false;
 }
 
 #if SUPPORT_ASYNC_MOVES

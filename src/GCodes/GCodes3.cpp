@@ -854,8 +854,8 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 			// Get the user provided target coordinate
 			// - If prefixed by G53 add the ToolOffset that will be subtracted below in ToolOffsetTransform as we ignore any offsets when G53 is active
 			// - otherwise add current workplace offsets so we go where the user expects to go
-			// comparable to hoe DoStraightMove/DoArcMove does it
-			const float axisTarget = gb.GetDistance() + (gb.LatestMachineState().g53Active ? GetCurrentToolOffset(axis) : GetWorkplaceOffset(gb, axis));
+			// comparable to how DoStraightMove/DoArcMove does it
+			const float axisTarget = gb.GetDistance() + (gb.LatestMachineState().g53Active ? ms.GetCurrentToolOffset(axis) : GetWorkplaceOffset(gb, axis));
 			if (axisTarget != userPositionTarget[axis])
 			{
 				doesMove = true;
@@ -927,7 +927,8 @@ size_t GCodes::FindAxisLetter(GCodeBuffer& gb) THROWS(GCodeException)
 // Deal with a M585
 GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	if (reprap.GetCurrentTool() == nullptr)
+	MovementState& ms = GetMovementState(gb);
+	if (ms.currentTool == nullptr)
 	{
 		reply.copy("No tool selected!");
 		return GCodeResult::error;
@@ -961,7 +962,6 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	}
 
 	// Decide which way and how far to go
-	MovementState& ms = GetMovementState(gb);
 	ToolOffsetTransform(ms);
 	m585Settings.probingLimit = (gb.Seen('R')) ? ms.coords[m585Settings.axisNumber] + gb.GetDistance()
 								: (gb.Seen('S') && gb.GetIValue() > 0) ? platform.AxisMinimum(m585Settings.axisNumber)
@@ -1020,7 +1020,7 @@ bool GCodes::SetupM585ProbingMove(GCodeBuffer& gb) noexcept
 
 GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	if (reprap.GetCurrentTool() == nullptr)
+	if (GetMovementState(gb).currentTool == nullptr)
 	{
 		reply.copy("No tool selected!");
 		return GCodeResult::error;
@@ -1803,42 +1803,34 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 				switch (i)
 				{
 				case 1:		// MESH (Cura)
-#if TRACK_OBJECT_NAMES
 					if (StringStartsWith(text, "NONMESH"))
 					{
-						buildObjects.StopObject(gb);
+						StopObject(gb);
 					}
 					else
 					{
-						buildObjects.StartObject(gb, text);
+						StartObject(gb, text);
 					}
-#endif
 					break;
 
 				case 9:		// PRINTING (Ideamaker)
-#if TRACK_OBJECT_NAMES
 					if (StringStartsWith(text, "NON-OBJECT"))
 					{
-						buildObjects.StopObject(gb);
+						StopObject(gb);
 					}
 					else
 					{
-						buildObjects.StartObject(gb, text);
+						StartObject(gb, text);
 					}
-#endif
 					break;
 
 				case 0:		// printing object (slic3r)
 				case 2:		// process (S3D)
-#if TRACK_OBJECT_NAMES
-					buildObjects.StartObject(gb, text);
-#endif
+					StartObject(gb, text);
 					break;
 
 				case 3:		// stop printing object
-#if TRACK_OBJECT_NAMES
-					buildObjects.StopObject(gb);
-#endif
+					StopObject(gb);
 					break;
 
 				case 4:		// layer (counting from 1)
