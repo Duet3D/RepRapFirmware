@@ -60,23 +60,50 @@ private:
 
 	void Init() noexcept;
 	void Recalc() noexcept;
-	float LineLengthSquared(const float machinePos[3], const float anchor[3]) const noexcept;		// Calculate the square of the line length from a spool from a Cartesian coordinate
 	void ForwardTransform(float a, float b, float c, float d, float machinePos[3]) const noexcept;
 	float MotorPosToLinePos(const int32_t motorPos, size_t axis) const noexcept;
 
-	void PrintParameters(const StringRef& reply) const noexcept;									// Print all the parameters for debugging
+	void PrintParameters(const StringRef& reply) const noexcept;			// Print all the parameters for debugging
 
-	float anchors[HANGPRINTER_AXES][3];				// XYZ coordinates of the anchors
-	float printRadius;
-	// Line buildup compensation
-	float spoolBuildupFactor;
-	float spoolRadii[HANGPRINTER_AXES];
-	uint32_t mechanicalAdvantage[HANGPRINTER_AXES], linesPerSpool[HANGPRINTER_AXES];
-	uint32_t motorGearTeeth[HANGPRINTER_AXES], spoolGearTeeth[HANGPRINTER_AXES], fullStepsPerMotorRev[HANGPRINTER_AXES];
+	// The real defaults are in the cpp file
+	float printRadius = 0.0F;
+	float anchors[HANGPRINTER_AXES][3] = {{ 0.0, 0.0, 0.0},
+	                                      { 0.0, 0.0, 0.0},
+	                                      { 0.0, 0.0, 0.0},
+	                                      { 0.0, 0.0, 0.0}};
+
+	// Line buildup compensation configurables
+
+	/* The real defaults are in the Init() function, since we sometimes need to reset
+	 * defaults during runtime */
+	float spoolBuildupFactor = 0.0F;
+	float spoolRadii[HANGPRINTER_AXES] = { 0.0F };
+	uint32_t mechanicalAdvantage[HANGPRINTER_AXES] = { 0 };
+	uint32_t linesPerSpool[HANGPRINTER_AXES] = { 0 };
+	uint32_t motorGearTeeth[HANGPRINTER_AXES] = { 0 };
+	uint32_t spoolGearTeeth[HANGPRINTER_AXES] = { 0 };
+	uint32_t fullStepsPerMotorRev[HANGPRINTER_AXES] = { 0 };
+
+	// Flex compensation configurables
+	float moverWeight_kg = 0.0F;
+	float springKPerUnitLength = 0.0F;
+	float minPlannedForce_Newton[HANGPRINTER_AXES] = { 0.0F };
+	float maxPlannedForce_Newton[HANGPRINTER_AXES] = { 0.0F };
+	float guyWireLengths[HANGPRINTER_AXES] = { 0.0F };
+	float targetForce_Newton = 0.0F;
 
 	// Derived parameters
-	float k0[HANGPRINTER_AXES], spoolRadiiSq[HANGPRINTER_AXES], k2[HANGPRINTER_AXES], lineLengthsOrigin[HANGPRINTER_AXES];
-	float printRadiusSquared;
+	float k0[HANGPRINTER_AXES] = { 0.0F };
+	float spoolRadiiSq[HANGPRINTER_AXES] = { 0.0F };
+	float k2[HANGPRINTER_AXES] = { 0.0F };
+	float distancesOrigin[HANGPRINTER_AXES] = { 0.0F };
+	float springKsOrigin[HANGPRINTER_AXES] = { 0.0F };
+	float distancesWithRelaxedSpringsOrigin[HANGPRINTER_AXES] = { 0.0F };
+	float fOrigin[HANGPRINTER_AXES] = { 0.0F };
+	float printRadiusSquared = 0.0F;
+
+	float SpringK(float const springLength) const noexcept;
+	void StaticForces(float const machinePos[3], float F[4]) const noexcept;
 
 #if DUAL_CAN
 	// Some CAN helpers
