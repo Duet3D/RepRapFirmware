@@ -1857,6 +1857,7 @@ void SbcInterface::InvalidateBufferedCodes(GCodeChannel channel) noexcept
 				if (codeHeader->channel == channel.RawValue())
 				{
 					bufHeader->isPending = false;
+					sendBufferUpdate = true;
 				}
 				else
 				{
@@ -1867,7 +1868,6 @@ void SbcInterface::InvalidateBufferedCodes(GCodeChannel channel) noexcept
 
 			if (updateRxPointer)
 			{
-				sendBufferUpdate = true;
 				if (readPointer == txPointer && txEnd == 0)
 				{
 					// Buffer is empty again, reset the pointers
