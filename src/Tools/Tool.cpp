@@ -458,17 +458,18 @@ void Tool::Standby() noexcept
 void Tool::HeatersToActiveOrStandby(bool active) const noexcept
 {
 	const Tool * const currentTool = reprap.GetCurrentTool();
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (size_t heaterIndex = 0; heaterIndex < heaterCount; heaterIndex++)
 	{
+		const int heaterNumber = heaters[heaterIndex];
 		// Don't switch a heater to active if the active tool is using it and is different from this tool
-		if (currentTool == this || currentTool == nullptr || !currentTool->UsesHeater(heater))
+		if (currentTool == this || currentTool == nullptr || !currentTool->UsesHeater(heaterNumber))
 		{
 			String<StringLength100> message;
 			GCodeResult ret;
 			try
 			{
-				reprap.GetHeat().SetTemperature(heaters[heater], ((active) ? activeTemperatures[heater] : standbyTemperatures[heater]), active);
-				ret = reprap.GetHeat().SetActiveOrStandby(heaters[heater], this, active, message.GetRef());
+				reprap.GetHeat().SetTemperature(heaterNumber, ((active) ? activeTemperatures[heaterIndex] : standbyTemperatures[heaterIndex]), active);
+				ret = reprap.GetHeat().SetActiveOrStandby(heaterNumber, this, active, message.GetRef());
 			}
 			catch (const GCodeException& exc)
 			{
@@ -486,12 +487,13 @@ void Tool::HeatersToActiveOrStandby(bool active) const noexcept
 void Tool::HeatersToOff() const noexcept
 {
 	const Tool * const currentTool = reprap.GetCurrentTool();
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (size_t heaterIndex = 0; heaterIndex < heaterCount; heaterIndex++)
 	{
+		const int heaterNumber = heaters[heaterIndex];
 		// Don't switch a heater to standby if the active tool is using it and is different from this tool
-		if (currentTool == this || currentTool == nullptr || !currentTool->UsesHeater(heater))
+		if (currentTool == this || currentTool == nullptr || !currentTool->UsesHeater(heaterNumber))
 		{
-			reprap.GetHeat().SwitchOff(heaters[heater]);
+			reprap.GetHeat().SwitchOff(heaterNumber);
 		}
 	}
 }
