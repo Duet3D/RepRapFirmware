@@ -540,9 +540,9 @@ void Tool::Print(const StringRef& reply) const noexcept
 
 void Tool::SetTemperatureFault(int8_t dudHeater) noexcept
 {
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (size_t heaterIndex = 0; heaterIndex < heaterCount; heaterIndex++)
 	{
-		if (dudHeater == heaters[heater])
+		if (dudHeater == heaters[heaterIndex])
 		{
 			heaterFault = true;
 			return;
@@ -552,9 +552,9 @@ void Tool::SetTemperatureFault(int8_t dudHeater) noexcept
 
 void Tool::ResetTemperatureFault(int8_t wasDudHeater) noexcept
 {
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (size_t heaterIndex = 0; heaterIndex < heaterCount; heaterIndex++)
 	{
-		if (wasDudHeater == heaters[heater])
+		if (wasDudHeater == heaters[heaterIndex])
 		{
 			heaterFault = false;
 			return;
@@ -564,9 +564,9 @@ void Tool::ResetTemperatureFault(int8_t wasDudHeater) noexcept
 
 bool Tool::AllHeatersAtHighTemperature(bool forExtrusion) const noexcept
 {
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (size_t heaterIndex = 0; heaterIndex < heaterCount; heaterIndex++)
 	{
-		const float temperature = reprap.GetHeat().GetHeaterTemperature(heaters[heater]);
+		const float temperature = reprap.GetHeat().GetHeaterTemperature(heaters[heaterIndex]);
 		if (temperature < reprap.GetHeat().GetRetractionMinTemp() || (forExtrusion && temperature < reprap.GetHeat().GetExtrusionMinTemp()))
 		{
 			return false;
@@ -611,17 +611,18 @@ void Tool::Standby() noexcept
 
 void Tool::HeatersToActiveOrStandby(bool active) const noexcept
 {
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (size_t heaterIndex = 0; heaterIndex < heaterCount; heaterIndex++)
 	{
+		const int heaterNumber = heaters[heaterIndex];
 		// Don't switch a heater to active if an active tool is using it and is different from this tool
-		if (!reprap.GetGCodes().IsHeaterUsedByDifferentCurrentTool(heaters[heater], this))
+		if (!reprap.GetGCodes().IsHeaterUsedByDifferentCurrentTool(heaterNumber, this))
 		{
 			String<StringLength100> message;
 			GCodeResult ret;
 			try
 			{
-				reprap.GetHeat().SetTemperature(heaters[heater], ((active) ? activeTemperatures[heater] : standbyTemperatures[heater]), active);
-				ret = reprap.GetHeat().SetActiveOrStandby(heaters[heater], this, active, message.GetRef());
+				reprap.GetHeat().SetTemperature(heaterNumber, ((active) ? activeTemperatures[heaterIndex] : standbyTemperatures[heaterIndex]), active);
+				ret = reprap.GetHeat().SetActiveOrStandby(heaterNumber, this, active, message.GetRef());
 			}
 			catch (const GCodeException& exc)
 			{
@@ -638,12 +639,13 @@ void Tool::HeatersToActiveOrStandby(bool active) const noexcept
 
 void Tool::HeatersToOff() const noexcept
 {
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (size_t heaterIndex = 0; heaterIndex < heaterCount; heaterIndex++)
 	{
+		const int heaterNumber = heaters[heaterIndex];
 		// Don't switch a heater off if an active tool is using it and is different from this tool
-		if (!reprap.GetGCodes().IsHeaterUsedByDifferentCurrentTool(heaters[heater], this))
+		if (!reprap.GetGCodes().IsHeaterUsedByDifferentCurrentTool(heaterNumber, this))
 		{
-			reprap.GetHeat().SwitchOff(heaters[heater]);
+			reprap.GetHeat().SwitchOff(heaterNumber);
 		}
 	}
 }
@@ -671,11 +673,12 @@ void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHea
 		}
 	}
 
-	for (size_t heater = 0; heater < heaterCount; heater++)
+	for (size_t heaterIndex = 0; heaterIndex < heaterCount; heaterIndex++)
 	{
-		if (!reprap.GetHeat().IsBedOrChamberHeater(heaters[heater]) && heaters[heater] >= numHeaters)
+		const int heaterNumber = heaters[heaterIndex];
+		if (!reprap.GetHeat().IsBedOrChamberHeater(heaterNumber) && heaterNumber >= numHeaters)
 		{
-			numHeaters = heaters[heater] + 1;
+			numHeaters = (uint16_t)heaterNumber + 1;
 		}
 	}
 
