@@ -29,25 +29,29 @@ Logger::Logger(LogLevel logLvl) noexcept : logFile(), lastFlushTime(0), lastFlus
 {
 }
 
-void Logger::Start(time_t time, const StringRef& filename) noexcept
+GCodeResult Logger::Start(time_t time, const StringRef& filename, const StringRef& reply) noexcept
 {
 	if (!inLogger && logLevel > LogLevel::off)
 	{
 		Lock loggerLock(inLogger);
 		FileStore * const f = reprap.GetPlatform().OpenSysFile(filename.c_str(), OpenMode::append);
-		if (f != nullptr)
+		if (f == nullptr)
 		{
-			logFile.Set(f);
-			lastFlushFileSize = logFile.Length();
-			logFile.Seek(lastFlushFileSize);
-			logFileName.copy(filename.c_str());
-			String<StringLength50> startMessage;
-			startMessage.printf("Event logging started at level %s\n", logLevel.ToString());
-			InternalLogMessage(time, startMessage.c_str(), MessageLogLevel::info);
-			LogFirmwareInfo(time);
-			reprap.StateUpdated();
+			reply.printf("Unable to create or open file %s", filename.c_str());
+			return GCodeResult::error;
 		}
+
+		logFile.Set(f);
+		lastFlushFileSize = logFile.Length();
+		logFile.Seek(lastFlushFileSize);
+		logFileName.copy(filename.c_str());
+		String<StringLength50> startMessage;
+		startMessage.printf("Event logging started at level %s\n", logLevel.ToString());
+		InternalLogMessage(time, startMessage.c_str(), MessageLogLevel::info);
+		LogFirmwareInfo(time);
+		reprap.StateUpdated();
 	}
+	return GCodeResult::ok;
 }
 
 // TODO: Move this to a more sensible location ?

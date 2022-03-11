@@ -3600,7 +3600,7 @@ GCodeResult Platform::ConfigureLogging(GCodeBuffer& gb, const StringRef& reply) 
 			{
 				filename.copy(DEFAULT_LOG_FILE);
 			}
-			logger->Start(realTime, filename);
+			return logger->Start(realTime, filename, reply);
 		}
 	}
 	else
