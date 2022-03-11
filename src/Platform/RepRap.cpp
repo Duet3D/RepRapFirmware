@@ -792,14 +792,9 @@ void RepRap::Spin() noexcept
 	const uint32_t now = millis();
 	if (now - lastWarningMillis >= MinimumWarningInterval)
 	{
-		ReadLocker lock(Tool::toolListLock);
-		for (Tool *t = Tool::GetToolList(); t != nullptr; t = t->Next())
+		if (Tool::DisplayColdExtrusionWarnings())
 		{
-			if (t->DisplayColdExtrudeWarning())
-			{
-				platform->MessageF(WarningMessage, "Tool %d was not driven because its heater temperatures were not high enough or it has a heater fault\n", t->Number());
-				lastWarningMillis = now;
-			}
+			lastWarningMillis = now;
 		}
 	}
 
@@ -2467,47 +2462,6 @@ void RepRap::SetName(const char* nm) noexcept
 	// Set new DHCP hostname
 	network->SetHostname(myName.c_str());
 	NetworkUpdated();
-}
-
-// Given that we want to extrude/retract the specified extruder drives, check if they are allowed.
-// For each disallowed one, log an error to report later and return a bit in the bitmap.
-// This may be called by an ISR!
-unsigned int RepRap::GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions) noexcept
-{
-	if (GetHeat().ColdExtrude())
-	{
-		return 0;
-	}
-
-	Tool * const tool = currentTool;
-	if (tool == nullptr)
-	{
-		// This should not happen, but if no tool is selected then don't allow any extruder movement
-		return extrusions | retractions;
-	}
-
-	unsigned int result = 0;
-	for (size_t driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
-	{
-		const unsigned int extruderDrive = (unsigned int)(tool->GetDrive(driveNum));
-		const unsigned int mask = 1 << extruderDrive;
-		if (extrusions & mask)
-		{
-			if (!tool->ToolCanDrive(true))
-			{
-				result |= mask;
-			}
-		}
-		else if (retractions & mask)
-		{
-			if (!tool->ToolCanDrive(false))
-			{
-				result |= mask;
-			}
-		}
-	}
-
-	return result;
 }
 
 // Firmware update operations

@@ -81,8 +81,6 @@ public:
 	bool CheckPassword(const char* pw) const noexcept;
 	void SetPassword(const char* pw) noexcept;
 
-	unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions) noexcept;
-
 	Platform& GetPlatform() const noexcept { return *platform; }
 	Move& GetMove() const noexcept { return *move; }
 	Heat& GetHeat() const noexcept { return *heat; }

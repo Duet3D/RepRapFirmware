@@ -525,7 +525,7 @@ void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool do
 {
 	float newPos[MaxAxesPlusExtruders];
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
-	AxisAndBedTransform(newPos, reprap.GetCurrentTool(), doBedCompensation);
+	AxisAndBedTransform(newPos, reprap.GetGCodes().GetPrimaryMovementState().currentTool, doBedCompensation);
 
 	mainDDARing.SetLiveCoordinates(newPos);
 	mainDDARing.SetPositions(newPos);

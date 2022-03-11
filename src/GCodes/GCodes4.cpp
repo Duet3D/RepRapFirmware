@@ -354,7 +354,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			if (ms.currentTool != nullptr)
 			{
-				StandbyTool(ms.currentTool->Number(), IsSimulating());
+				if (!IsSimulating())
+				{
+					ms.currentTool->Standby();
+				}
+				ms.currentTool = nullptr;
 				UpdateCurrentUserPosition(gb);			// the tool offset may have changed, so get the current position
 			}
 			gb.AdvanceState();

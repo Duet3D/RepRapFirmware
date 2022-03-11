@@ -136,6 +136,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 
 ReadWriteLock Tool::toolListLock;
 Tool *Tool::toolList = nullptr;
+ToolNumbersBitmap Tool::prohibitedExtrusionTools;
 uint16_t Tool::activeExtruders = 0;
 uint16_t Tool::activeToolHeaters = 0;
 uint16_t Tool::numToolsToReport = 0;
@@ -227,7 +228,6 @@ uint16_t Tool::numToolsToReport = 0;
 	t->fanMapping = fanMap;
 	t->heaterFault = false;
 	t->axisOffsetsProbed.Clear();
-	t->displayColdExtrudeWarning = false;
 	t->retractLength = DefaultRetractLength;
 	t->retractExtra = 0.0;
 	t->retractHop = 0.0;
@@ -356,6 +356,83 @@ uint16_t Tool::numToolsToReport = 0;
 /*static*/ float Tool::GetOffset(const Tool *tool, size_t axis) noexcept
 {
 	return (tool == nullptr) ? 0.0 : tool->offset[axis];
+}
+
+// Given that we want to extrude/retract the specified extruder drives, check if they are allowed.
+// For each disallowed one, log an error to report later and return a bit in the bitmap.
+// This may be called by an ISR!
+/*static*/ unsigned int Tool::GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions, const Tool *tool) noexcept
+{
+	if (reprap.GetHeat().ColdExtrude())
+	{
+		return 0;
+	}
+
+	if (tool == nullptr)
+	{
+		// This should not happen, but if no tool is selected then don't allow any extruder movement
+		return extrusions | retractions;
+	}
+
+	unsigned int result = 0;
+	for (size_t driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
+	{
+		const unsigned int extruderDrive = (unsigned int)(tool->GetDrive(driveNum));
+		const unsigned int mask = 1 << extruderDrive;
+		if (extrusions & mask)
+		{
+			if (!tool->CanDriveExtruder(true))
+			{
+				result |= mask;
+			}
+		}
+		else if (retractions & mask)
+		{
+			if (!tool->CanDriveExtruder(false))
+			{
+				result |= mask;
+			}
+		}
+	}
+
+	return result;
+}
+
+// If there are any tool numbers flagged foe cold extrusion warnings, display the warning messages, clear them and return true
+/*static*/ bool Tool::DisplayColdExtrusionWarnings() noexcept
+{
+	if (prohibitedExtrusionTools.IsEmpty())
+	{
+		return false;
+	}
+
+	prohibitedExtrusionTools.Iterate
+		([](unsigned int index, unsigned int count) -> void
+			{
+				reprap.GetPlatform().MessageF(WarningMessage, "Tool %u was not driven because its heater temperatures were not high enough or it has a heater fault\n", index);
+			}
+		);
+	prohibitedExtrusionTools.Clear();
+	return true;
+}
+
+// Test whether the specified heater is used by any tool
+/*static*/ bool Tool::IsHeaterAssignedToTool(int8_t heater) noexcept
+{
+	ReadLocker lock(toolListLock);
+	for (Tool *tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
+	{
+		for (size_t i = 0; i < tool->HeaterCount(); i++)
+		{
+			if (tool->GetHeater(i) == heater)
+			{
+				// It's already in use by some tool
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 void Tool::Print(const StringRef& reply) const noexcept
@@ -534,11 +611,10 @@ void Tool::Standby() noexcept
 
 void Tool::HeatersToActiveOrStandby(bool active) const noexcept
 {
-	const Tool * const currentTool = reprap.GetCurrentTool();
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		// Don't switch a heater to active if the active tool is using it and is different from this tool
-		if (currentTool == this || currentTool == nullptr || !currentTool->UsesHeater(heater))
+		// Don't switch a heater to active if an active tool is using it and is different from this tool
+		if (!reprap.GetGCodes().IsHeaterUsedByDifferentCurrentTool(heaters[heater], this))
 		{
 			String<StringLength100> message;
 			GCodeResult ret;
@@ -562,11 +638,10 @@ void Tool::HeatersToActiveOrStandby(bool active) const noexcept
 
 void Tool::HeatersToOff() const noexcept
 {
-	const Tool * const currentTool = reprap.GetCurrentTool();
 	for (size_t heater = 0; heater < heaterCount; heater++)
 	{
-		// Don't switch a heater to standby if the active tool is using it and is different from this tool
-		if (currentTool == this || currentTool == nullptr || !currentTool->UsesHeater(heater))
+		// Don't switch a heater off if an active tool is using it and is different from this tool
+		if (!reprap.GetGCodes().IsHeaterUsedByDifferentCurrentTool(heaters[heater], this))
 		{
 			reprap.GetHeat().SwitchOff(heaters[heater]);
 		}
@@ -574,14 +649,14 @@ void Tool::HeatersToOff() const noexcept
 }
 
 // May be called from ISR
-bool Tool::ToolCanDrive(bool extrude) noexcept
+bool Tool::CanDriveExtruder(bool extrude) const noexcept
 {
 	if (!heaterFault && AllHeatersAtHighTemperature(extrude))
 	{
 		return true;
 	}
 
-	displayColdExtrudeWarning = true;
+	prohibitedExtrusionTools.SetBit(myNumber);
 	return false;
 }
 
@@ -608,13 +683,6 @@ void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHea
 	{
 		numToolsToReport = myNumber + 1;
 	}
-}
-
-bool Tool::DisplayColdExtrudeWarning() noexcept
-{
-	bool result = displayColdExtrudeWarning;
-	displayColdExtrudeWarning = false;
-	return result;
 }
 
 void Tool::DefineMix(const float m[]) noexcept
@@ -685,15 +753,20 @@ float Tool::GetToolHeaterStandbyTemperature(size_t heaterNumber) const noexcept
 	return (heaterNumber < heaterCount) ? standbyTemperatures[heaterNumber] : 0.0;
 }
 
+// Thien is called when M104/109/568 or G10 is used to set the temperature of a heater.
 void Tool::SetToolHeaterActiveOrStandbyTemperature(size_t heaterNumber, float temp, bool active) THROWS(GCodeException)
 {
 	if (heaterNumber < heaterCount)
 	{
-		float& relevantTemperature = (active) ? activeTemperatures[heaterNumber] : standbyTemperatures[heaterNumber];
 		const int8_t heater = heaters[heaterNumber];
-		const Tool * const currentTool = reprap.GetCurrentTool();
-		const Tool * const lastStandbyTool = reprap.GetHeat().GetLastStandbyTool(heater);
-		const bool setHeater = (currentTool == nullptr || currentTool == this || (!active && (lastStandbyTool == nullptr || lastStandbyTool == this)));
+		float& relevantTemperature = (active) ? activeTemperatures[heaterNumber] : standbyTemperatures[heaterNumber];
+		// Check whether in addition to storing the temperature, we need to set the heater active or standby temperature to that temperature as well.
+		// If we are setting the active temperature, only set the heater active temperature if this is a current tool otr no other current tool uses this heater
+		// We set the temperature if this tool is current, or there is no current tool that uses this heater
+		// or we are setting the standby temperature and the heater was either last switched to standby when this tool went to standby or it not in standby.
+		const Tool * lastStandbyTool;
+		const bool setHeater = !reprap.GetGCodes().IsHeaterUsedByDifferentCurrentTool(heater, this)
+								|| (!active && ((lastStandbyTool = reprap.GetHeat().GetLastStandbyTool(heater)) == nullptr || lastStandbyTool == this));
 		if (temp <= NEARLY_ABS_ZERO)								// temperatures close to ABS_ZERO turn off the heater
 		{
 			relevantTemperature = 0;
@@ -717,7 +790,7 @@ void Tool::SetToolHeaterActiveOrStandbyTemperature(size_t heaterNumber, float te
 	}
 }
 
-void Tool::SetSpindleRpm(uint32_t rpm) THROWS(GCodeException)
+void Tool::SetSpindleRpm(uint32_t rpm, bool isCurrentTool) THROWS(GCodeException)
 {
 	if (spindleNumber > -1)
 	{
@@ -735,7 +808,7 @@ void Tool::SetSpindleRpm(uint32_t rpm) THROWS(GCodeException)
 		else
 		{
 			spindleRpm = rpm;
-			if (reprap.GetCurrentTool() == this)
+			if (isCurrentTool)
 			{
 				spindle.SetConfiguredRpm(spindleRpm, true);
 			}

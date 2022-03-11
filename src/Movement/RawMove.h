@@ -152,7 +152,6 @@ struct MovementState : public RawMove
 	bool IsFirstMoveSincePrintingResumed() const noexcept { return printingJustResumed; }
 	void DoneMoveSincePrintingResumed() noexcept { printingJustResumed = false; }
 	void SetVirtualTool(int toolNum) noexcept { virtualToolNumber = toolNum; }
-	void ChangeToObject(GCodeBuffer& gb, int i) noexcept;
 	void StopPrinting(GCodeBuffer& gb) noexcept;
 	void ResumePrinting(GCodeBuffer& gb) noexcept;
 

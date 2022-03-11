@@ -129,10 +129,6 @@ public:
 
 	float GetSpeedFactor() const noexcept { return speedFactor; }				// Return the current speed factor as a fraction
 	float GetExtrusionFactor(size_t extruder) noexcept;							// Return the current extrusion factor for the specified extruder
-#if SUPPORT_12864_LCD
-	void SetSpeedFactor(float factor) noexcept;									// Set the speed factor
-	void SetExtrusionFactor(size_t extruder, float factor) noexcept;			// Set an extrusion factor for the specified extruder
-#endif
 
 	float GetRawExtruderTotalByDrive(size_t extruder) const noexcept;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const noexcept { return rawExtruderTotal; }	// Get the total extrusion since start of print, all drives
@@ -192,6 +188,9 @@ public:
 	bool LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept;			// Lock movement and wait for pending moves to finish
 
 #if SUPPORT_12864_LCD
+	void SetSpeedFactor(float factor) noexcept;									// Set the speed factor
+	void SetExtrusionFactor(size_t extruder, float factor) noexcept;			// Set an extrusion factor for the specified extruder
+	void SelectPrimaryTool(int toolNumber, bool simulating) noexcept { moveStates[0].SelectTool(toolNumber, simulating); }
 	bool ProcessCommandFromLcd(const char *cmd) noexcept;						// Process a GCode command from the 12864 LCD returning true if the command was accepted
 	float GetItemCurrentTemperature(unsigned int itemNumber) const noexcept;
 	float GetItemActiveTemperature(unsigned int itemNumber) const noexcept;
@@ -248,15 +247,11 @@ public:
 	const GCodeBuffer* GetInput(size_t n) const noexcept { return gcodeSources[n]; }
 	const GCodeBuffer* GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
 
-	// Object cancellation support
-	GCodeResult HandleM486(GCodeBuffer& gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException);
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
-	void StartObject(GCodeBuffer& gb, const char *_ecv_array label) noexcept;
-	void StopObject(GCodeBuffer& gb) noexcept;
-	void ChangeToObject(GCodeBuffer& gb, int i) noexcept;
 
 	const MovementState& GetPrimaryMovementState() const noexcept { return moveStates[0]; }		// Temporary support for object model and status report values that only handle a single movement system
 	const MovementState& GetConstMovementState(const GCodeBuffer& gb) const noexcept;			// Get a reference to the movement state associated with the specified GCode buffer (there is a private non-const version)
+	bool IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *tool) const noexcept;	// Check if the specified heater is used by a current tool other than the specified one
 
 # if HAS_VOLTAGE_MONITOR
 	const char *_ecv_array null GetPowerFailScript() const noexcept { return powerFailScript; }
@@ -420,7 +415,7 @@ private:
 
 	ReadLockedPointer<Tool> GetSpecifiedOrCurrentTool(GCodeBuffer& gb) THROWS(GCodeException);
 	GCodeResult ManageTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Create a new tool definition
-	void SetToolHeaters(Tool *tool, float temperature, bool both) THROWS(GCodeException);	// Set all a tool's heaters to the temperature, for M104/M109
+	void SetToolHeaters(Tool *tool, float temperature) THROWS(GCodeException);				// Set all a tool's heaters active and standby temperatures, for M104/M109
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance) const noexcept;
 																							// Wait for the heaters associated with the specified tool to reach their set temperatures
 	void GenerateTemperatureReport(const StringRef& reply) const noexcept;					// Store a standard-format temperature report in reply
@@ -437,10 +432,7 @@ private:
 	void ToolOffsetInverseTransform(MovementState& ms) const noexcept;						// Convert head reference point coordinates to user coordinates
 	void ToolOffsetInverseTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept;
 																							// Convert head reference point coordinates to user coordinates
-
 	// Tool management
-	void StandbyTool(int toolNumber, bool simulating) noexcept;
-	bool IsHeaterAssignedToTool(int8_t heater) const noexcept;
 	GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
 	void PrintTool(int toolNumber, const StringRef& reply) const noexcept;
 	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept;
@@ -486,6 +478,12 @@ private:
 	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M577
 	GCodeResult RaiseEvent(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M957
 
+	// Object cancellation support
+	GCodeResult HandleM486(GCodeBuffer& gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException);
+	void StartObject(GCodeBuffer& gb, const char *_ecv_array label) noexcept;
+	void StopObject(GCodeBuffer& gb) noexcept;
+	void ChangeToObject(GCodeBuffer& gb, int i) noexcept;
+
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// Handle M997
 #endif
@@ -522,7 +520,7 @@ private:
 	void SetMoveBufferDefaults(MovementState& ms) noexcept;						// Set up default values in the move buffer
 	void ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept;	// Change a live extrusion factor
 
-	MovementState& GetMovementState(const GCodeBuffer& gb) noexcept;				// Get a reference to the movement state associated with the specified GCode buffer
+	MovementState& GetMovementState(const GCodeBuffer& gb) noexcept;			// Get a reference to the movement state associated with the specified GCode buffer
 
 #if SUPPORT_COORDINATE_ROTATION
 	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68

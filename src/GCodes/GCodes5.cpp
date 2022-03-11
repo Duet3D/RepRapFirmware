@@ -26,41 +26,16 @@ void GCodes::PrintTool(int toolNumber, const StringRef& reply) const noexcept
 	}
 }
 
-void GCodes::StandbyTool(int toolNumber, bool simulating) noexcept
+// Check if the specified heater is used by a current tool other than the specified one
+bool GCodes::IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *tool) const noexcept
 {
-	ReadLockedPointer<Tool> const tool = Tool::GetLockedTool(toolNumber);
-	if (tool.IsNotNull())
+	for (const MovementState& ms : moveStates)
 	{
-		if (!simulating)
+		if (ms.currentTool != nullptr && ms.currentTool != tool && ms.currentTool->UsesHeater(heaterNumber))
 		{
-			tool->Standby();
-		}
-  		if (currentTool == tool.Ptr())
-		{
-			currentTool = nullptr;
+			return true;
 		}
 	}
-	else
-	{
-		platform.MessageF(ErrorMessage, "Attempt to standby a non-existent tool: %d\n", toolNumber);
-	}
-}
-
-bool GCodes::IsHeaterAssignedToTool(int8_t heater) const noexcept
-{
-	ReadLocker lock(Tool::toolListLock);
-	for (Tool *tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
-	{
-		for (size_t i = 0; i < tool->HeaterCount(); i++)
-		{
-			if (tool->GetHeater(i) == heater)
-			{
-				// It's already in use by some tool
-				return true;
-			}
-		}
-	}
-
 	return false;
 }
 
@@ -127,7 +102,7 @@ GCodeResult GCodes::HandleM486(GCodeBuffer &gb, const StringRef &reply, OutputBu
 			gb.GetQuotedString(objectName.GetRef());
 			buildObjects.SetM486Label(num, objectName.c_str());
 		}
-		GetMovementState(gb).ChangeToObject(gb, num);
+		ChangeToObject(gb, num);
 	}
 
 	const bool seenC = gb.Seen('C');
@@ -193,7 +168,7 @@ void GCodes::StartObject(GCodeBuffer& gb, const char *_ecv_array label) noexcept
 	if (!buildObjects.IsUsingM486Naming())
 	{
 		const size_t objectNumber = buildObjects.GetObjectNumber(label);
-		GetMovementState(gb).ChangeToObject(gb, objectNumber);
+		ChangeToObject(gb, objectNumber);
 	}
 }
 
@@ -202,7 +177,7 @@ void GCodes::StopObject(GCodeBuffer& gb) noexcept
 {
 	if (!buildObjects.IsUsingM486Naming())
 	{
-		GetMovementState(gb).ChangeToObject(gb, -1);
+		ChangeToObject(gb, -1);
 	}
 }
 

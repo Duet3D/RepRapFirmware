@@ -564,7 +564,7 @@ bool ValueMenuItem::Adjust_SelectHelper() noexcept
 				break;
 
 			case 20:
-				reprap.GetGCodes().GetPrimaryMovementState().SelectTool(currentValue.i, false);
+				reprap.GetGCodes().SelectPrimaryTool(currentValue.i, false);
 				break;
 
 			case 21: // baby stepping

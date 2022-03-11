@@ -583,7 +583,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							const uint32_t rpm = gb.GetUIValue();
 							if (ms.currentTool != nullptr && ms.currentTool->GetSpindleNumber() == (int)slot)
 							{
-								ms.currentTool->SetSpindleRpm(rpm);
+								ms.currentTool->SetSpindleRpm(rpm, true);
 							}
 							else
 							{
@@ -1580,7 +1580,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					bool seenT = false;
 					gb.TryGetIValue('T', toolNumber, seenT);
 					MovementState& ms = GetMovementState(gb);
-					ReadLockedPointer<Tool> const applicableTool = (seenT) ? Tool::GetLockedTool(toolNumber)			// if we were given a tool number, use that
+					ReadLockedPointer<Tool> const applicableTool = (seenT) ? Tool::GetLockedTool(toolNumber)	// if we were given a tool number, use that
 																	: ms.GetLockedCurrentOrDefaultTool();		// else if we have a current tool, use that, else the default tool
 
 					// Check that we have a tool
@@ -1592,10 +1592,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 					// Set the heater temperatures for that tool. We set the standby temperatures as well as the active ones,
-					// because any slicer that uses M109 doesn't understand that there are separate active and standby temperatures.
+					// because any slicer that uses M104 or M109 doesn't understand that there are separate active and standby temperatures.
 					if (!IsSimulating())
 					{
-						SetToolHeaters(applicableTool.Ptr(), temperature, true);	// this may throw
+						SetToolHeaters(applicableTool.Ptr(), temperature);			// this may throw
 					}
 
 					if (code == 109 && ms.currentTool == nullptr)
@@ -1619,10 +1619,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							// So make sure the tool heaters are on.
 							ms.SelectTool(applicableTool->Number(), IsSimulating());
 						}
-						else
+						else if (!IsSimulating())
 						{
 							// If we already have an active tool and we are setting temperatures for a different tool, set that tool's heaters to standby in case it is off
-							StandbyTool(applicableTool->Number(), IsSimulating());
+							applicableTool->Standby();
 						}
 
 						if (code == 109 && !IsSimulating())

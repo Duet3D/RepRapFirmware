@@ -3334,7 +3334,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 				settingOther = true;
 				if (!IsSimulating())
 				{
-					tool->SetSpindleRpm(gb.GetUIValue());
+					tool->SetSpindleRpm(gb.GetUIValue(), GetMovementState(gb).currentTool == tool.Ptr());
 				}
 			}
 		}
@@ -3802,7 +3802,8 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 	OutputBuffer::ReleaseAll(reply);
 }
 
-void GCodes::SetToolHeaters(Tool *tool, float temperature, bool both) THROWS(GCodeException)
+// Set all a tool's heaters active and standby temperatures, for M104/M109
+void GCodes::SetToolHeaters(Tool *tool, float temperature) THROWS(GCodeException)
 {
 	if (tool == nullptr)
 	{
@@ -3812,10 +3813,7 @@ void GCodes::SetToolHeaters(Tool *tool, float temperature, bool both) THROWS(GCo
 	for (size_t h = 0; h < tool->HeaterCount(); h++)
 	{
 		tool->SetToolHeaterActiveTemperature(h, temperature);
-		if (both)
-		{
-			tool->SetToolHeaterStandbyTemperature(h, temperature);
-		}
+		tool->SetToolHeaterStandbyTemperature(h, temperature);
 	}
 }
 
