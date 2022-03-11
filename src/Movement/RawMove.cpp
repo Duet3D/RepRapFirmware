@@ -70,6 +70,7 @@ void MovementState::Reset() noexcept
 	{
 		rp.Init();
 	}
+	InitObjectCancellation();
 }
 
 void MovementState::ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept
