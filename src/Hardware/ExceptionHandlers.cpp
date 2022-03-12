@@ -210,7 +210,8 @@ extern "C" void UsageFault_Handler () noexcept { SoftwareReset(SoftwareResetReas
 extern "C" void DebugMon_Handler   () noexcept __attribute__ ((alias("OtherFault_Handler")));
 
 // FreeRTOS hooks that we need to provide
-extern "C" [[noreturn]] void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName) noexcept
+
+extern "C" [[noreturn]] __attribute__((externally_visible)) void stackOverflowDispatcher(const uint32_t *pulFaultStackAddress, char* pcTaskName) noexcept
 {
 	SoftwareReset(SoftwareResetReason::stackOverflow, pulFaultStackAddress);
 }
@@ -230,7 +231,7 @@ void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexce
 	);
 }
 
-extern "C" [[noreturn]] void assertCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
+extern "C" [[noreturn]] __attribute__((externally_visible)) void assertCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
 {
 	SoftwareReset(SoftwareResetReason::assertCalled, pulFaultStackAddress);
 }

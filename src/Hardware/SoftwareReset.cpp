@@ -11,7 +11,7 @@
 #include <Platform/Platform.h>
 #include <General/Portability.h>
 
-extern uint32_t _estack;			// defined in the linker script
+extern char _estack;			// defined in the linker script
 
 // The following must be kept in line with enum class SoftwareResetReason
 const char *const SoftwareResetData::ReasonText[] =
@@ -97,7 +97,7 @@ void SoftwareResetData::Populate(uint16_t reason, const uint32_t *stk) noexcept
 		spare = 0;
 		for (uint32_t& stval : stack)
 		{
-			stval = (stk < &_estack) ? *stk++ : 0xFFFFFFFF;
+			stval = (stk < (uint32_t*)&_estack) ? *stk++ : 0xFFFFFFFF;
 		}
 	}
 }
