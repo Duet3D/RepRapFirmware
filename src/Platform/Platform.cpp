@@ -1234,7 +1234,7 @@ void Platform::Spin() noexcept
 					}
 					else if (logOnStallDrivers.Intersects(mask))
 					{
-						MessageF(WarningMessage, "Driver %u stalled at Z height %.2f", nextDriveToPoll, (double)reprap.GetMove().LiveCoordinate(Z_AXIS, reprap.GetGCodes().GetPrimaryMovementState().currentTool));
+						MessageF(WarningMessage, "Driver %u stalled at Z height %.2f\n", nextDriveToPoll, (double)reprap.GetMove().LiveCoordinate(Z_AXIS, reprap.GetGCodes().GetPrimaryMovementState().currentTool));
 					}
 				}
 # endif
