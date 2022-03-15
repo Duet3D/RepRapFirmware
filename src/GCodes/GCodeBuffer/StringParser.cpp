@@ -875,7 +875,16 @@ bool StringParser::EvaluateCondition() THROWS(GCodeException)
 void StringParser::DecodeCommand() noexcept
 {
 	// Check for a valid command letter at the start
-	const char cl = toupper(gb.buffer[commandStart]);
+	char cl = gb.buffer[commandStart];
+	if (cl == '\'')									// check for a lowercase axis letter in Fanuc mode
+	{
+		++commandStart;
+		cl = tolower(gb.buffer[commandStart]);
+	}
+	else
+	{
+		cl = toupper(cl);
+	}
 	commandFraction = -1;
 	if (cl == 'G' || cl == 'M' || cl == 'T')
 	{
@@ -885,8 +894,6 @@ void StringParser::DecodeCommand() noexcept
 		if (cl == 'T' && gb.buffer[commandStart + 1] == '{')
 		{
 			// It's a T command with an expression for the tool number. This will be treated as if it's "T T{...}.
-			commandLetter = cl;
-			hasCommandNumber = false;
 			parameterStart = commandStart; 			// so that 'Seen('T')' will return true
 		}
 		else
@@ -932,45 +939,7 @@ void StringParser::DecodeCommand() noexcept
 			++parameterStart;
 		}
 
-		// Find where the end of the command is. We assume that a G or M not inside quotes or { } and not preceded by ' is the start of a new command.
-		// This isn't true if the command has an unquoted string argument, but we deal with that later.
-		bool inQuotes = false;
-		unsigned int localBraceCount = 0;
-		parametersPresent.Clear();
-		for (commandEnd = parameterStart; commandEnd < gcodeLineEnd; ++commandEnd)
-		{
-			const char c = gb.buffer[commandEnd];
-			if (c == '"')
-			{
-				inQuotes = !inQuotes;
-			}
-			else if (!inQuotes)
-			{
-				if (c == '{')
-				{
-					++localBraceCount;
-				}
-				else if (localBraceCount != 0)
-				{
-					if (c == '}')
-					{
-						--localBraceCount;
-					}
-				}
-				else
-				{
-					const char c2 = toupper(c);
-					if ((c2  == 'G' || c2 == 'M') && gb.buffer[commandEnd - 1] != '\'')
-					{
-						break;
-					}
-					if (c2 >= 'A' && c2 <= 'Z' && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
-					{
-						parametersPresent.SetBit(c2 - 'A');
-					}
-				}
-			}
-		}
+		FindParameters();
 	}
 	else if (cl == ';')
 	{
@@ -992,9 +961,9 @@ void StringParser::DecodeCommand() noexcept
 			 && !isalpha(gb.buffer[commandStart + 1])								// make sure it isn't an if-command or other meta command
 			)
 	{
-		// Fanuc or LaserWeb-style GCode, repeat the existing G0/G1/G2/G3 command with the new parameters
+		// Fanuc or LaserWeb-style GCode, repeat the existing G0/G1 command with the new parameters
 		parameterStart = commandStart;
-		commandEnd = gcodeLineEnd;
+		FindParameters();
 	}
 	else
 	{
@@ -1008,6 +977,49 @@ void StringParser::DecodeCommand() noexcept
 	}
 
 	gb.bufferState = GCodeBufferState::ready;
+}
+
+// Find where the end of the command is. We assume that a G or M not inside quotes or { } and not preceded by ' is the start of a new command.
+// This isn't true if the command has an unquoted string argument, but we deal with that later.
+void StringParser::FindParameters() noexcept
+{
+	bool inQuotes = false;
+	unsigned int localBraceCount = 0;
+	parametersPresent.Clear();
+	for (commandEnd = parameterStart; commandEnd < gcodeLineEnd; ++commandEnd)
+	{
+		const char c = gb.buffer[commandEnd];
+		if (c == '"')
+		{
+			inQuotes = !inQuotes;
+		}
+		else if (!inQuotes)
+		{
+			if (c == '{')
+			{
+				++localBraceCount;
+			}
+			else if (localBraceCount != 0)
+			{
+				if (c == '}')
+				{
+					--localBraceCount;
+				}
+			}
+			else
+			{
+				const char c2 = toupper(c);
+				if ((c2  == 'G' || c2 == 'M') && gb.buffer[commandEnd - 1] != '\'')
+				{
+					break;
+				}
+				if (c2 >= 'A' && c2 <= 'Z' && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
+				{
+					parametersPresent.SetBit(c2 - 'A');
+				}
+			}
+		}
+	}
 }
 
 // Add an entire string, overwriting any existing content and adding '\n' at the end if necessary to make it a complete line

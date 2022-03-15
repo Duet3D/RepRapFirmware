@@ -123,6 +123,7 @@ private:
 	bool EvaluateCondition() THROWS(GCodeException);
 
 	void SkipWhiteSpace() noexcept;
+	void FindParameters() noexcept;
 
 	unsigned int commandStart;							// Index in the buffer of the command letter of this command
 	unsigned int parameterStart;
