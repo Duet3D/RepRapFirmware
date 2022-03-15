@@ -174,7 +174,7 @@ public:
 	private:
 		FilePosition fpos;											// the file offset at which the current block started
 		uint32_t lineNumber;										// the line number at which the current block started
-		uint32_t iterationsDone;
+		uint32_t iterationsDone;									// the number of iterations completed of the innermost while-loop
 		uint16_t indentLevel;										// the indentation of this block
 		BlockType blockType;										// the type of this block
 	};

@@ -82,6 +82,7 @@ public:
 	static unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions, const Tool *tool) noexcept;
 	static bool DisplayColdExtrusionWarnings() noexcept;
 	static bool IsHeaterAssignedToTool(int8_t heater) noexcept;
+	static GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
 
 	float GetOffset(size_t axis) const noexcept pre(axis < MaxAxes);
 	void SetOffset(size_t axis, float offs, bool byProbing) noexcept pre(axis < MaxAxes);

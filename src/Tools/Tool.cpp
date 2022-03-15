@@ -420,7 +420,7 @@ uint16_t Tool::numToolsToReport = 0;
 /*static*/ bool Tool::IsHeaterAssignedToTool(int8_t heater) noexcept
 {
 	ReadLocker lock(toolListLock);
-	for (Tool *tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
+	for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
 	{
 		for (size_t i = 0; i < tool->HeaterCount(); i++)
 		{
@@ -433,6 +433,17 @@ uint16_t Tool::numToolsToReport = 0;
 	}
 
 	return false;
+}
+
+/*static*/ GCodeResult Tool::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException)
+{
+	GCodeResult rslt = GCodeResult::ok;
+	ReadLocker lock(toolListLock);
+	for (Tool *tool = toolList; tool != nullptr && rslt == GCodeResult::ok; tool = tool->Next())
+	{
+		rslt = tool->SetFirmwareRetraction(gb, reply, outBuf);
+	}
+	return rslt;
 }
 
 void Tool::Print(const StringRef& reply) const noexcept

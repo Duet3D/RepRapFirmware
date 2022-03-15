@@ -100,12 +100,14 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 	  stringParser(*this),
 	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()),
 	  codeChannel(channel), lastResult(GCodeResult::ok),
-#if HAS_SBC_INTERFACE
-	  isBinaryBuffer(false),
+#if SUPPORT_ASYNC_MOVES
+	  currentQueueNumber((channel == GCodeChannel::File2 || channel == GCodeChannel::Queue2) ? 1 : 0),
+#else
+	  currentQueueNumber(0),
 #endif
 	  timerRunning(false), motionCommanded(false)
 #if HAS_SBC_INTERFACE
-	  , isWaitingForMacro(false), invalidated(false)
+	  , isBinaryBuffer(false), isWaitingForMacro(false), invalidated(false)
 #endif
 {
 	mutex.Create(((GCodeChannel)channel).ToString());

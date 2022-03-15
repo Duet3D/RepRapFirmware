@@ -2299,7 +2299,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				else
 				{
-					result = SetAllToolsFirmwareRetraction(gb, reply, outBuf);
+					result = Tool::SetAllToolsFirmwareRetraction(gb, reply, outBuf);
 				}
 				break;
 
@@ -3793,6 +3793,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = reprap.GetMove().ConfigureMovementQueue(gb, reply);
 				break;
 
+#if SUPPORT_ASYNC_MOVES
+			case 596:	// Select movement queue
+				result = SelectMovementQueue(gb, reply);
+				break;
+#endif
 			// For cases 600 and 601, see 226
 
 			// M650 (set peel move parameters) and M651 (execute peel move) are no longer handled specially. Use macros to specify what they should do.

@@ -68,16 +68,17 @@ void GCodes::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bo
 	}
 }
 
-GCodeResult GCodes::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException)
+#if SUPPORT_ASYNC_MOVES
+
+// Handle M596
+GCodeResult GCodes::SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	GCodeResult rslt = GCodeResult::ok;
-	ReadLocker lock(Tool::toolListLock);
-	for (Tool *tool = Tool::GetToolList(); tool != nullptr && rslt == GCodeResult::ok; tool = tool->Next())
-	{
-		rslt = tool->SetFirmwareRetraction(gb, reply, outBuf);
-	}
-	return rslt;
+	const unsigned int queueNumber = gb.GetLimitedUIValue('P', ARRAY_SIZE(moveStates));
+	gb.SetCurrentQueueNumber(queueNumber);
+	return GCodeResult::ok;
 }
+
+#endif
 
 GCodeResult GCodes::HandleM486(GCodeBuffer &gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException)
 {

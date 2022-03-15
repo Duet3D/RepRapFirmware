@@ -126,6 +126,9 @@ public:
 	bool IsExecuting() const noexcept;							// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f) noexcept;							// Set the G Code executed (or not)
 
+	size_t GetCurrentQueueNumber() const noexcept { return currentQueueNumber; }
+	void SetCurrentQueueNumber(size_t qn) noexcept { currentQueueNumber = (uint8_t)qn; }
+
 	void SetCommsProperties(uint32_t arg) noexcept;
 
 	GCodeMachineState& LatestMachineState() const noexcept { return *machineState; }
@@ -300,11 +303,8 @@ private:
 	const GCodeChannel codeChannel;						// Channel number of this instance
 	GCodeBufferState bufferState;						// Idle, executing or paused
 	GCodeResult lastResult;
-
-	#if HAS_SBC_INTERFACE
-	bool isBinaryBuffer;
-#endif
-	bool timerRunning;									// True if we are waiting
+	uint8_t currentQueueNumber;							// the movement queue that this GCodeBuffer currently uses
+	bool timerRunning;									// true if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
 
 	alignas(4) char buffer[MaxGCodeLength];				// must be aligned because in SBC binary mode we do dword fetches from it
@@ -319,6 +319,7 @@ private:
 
 	// Accessed only when the GB mutex is acquired
 	String<MaxFilenameLength> requestedMacroFile;
+	bool isBinaryBuffer;
 	uint8_t
 		macroJustStarted : 1,		// Whether the GB has just started a macro file
 		macroFileError : 1,			// Whether the macro file could be opened or if an error occurred

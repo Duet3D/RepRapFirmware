@@ -433,7 +433,6 @@ private:
 	void ToolOffsetInverseTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept;
 																							// Convert head reference point coordinates to user coordinates
 	// Tool management
-	GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
 	void PrintTool(int toolNumber, const StringRef& reply) const noexcept;
 	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept;
 
@@ -521,6 +520,10 @@ private:
 	void ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept;	// Change a live extrusion factor
 
 	MovementState& GetMovementState(const GCodeBuffer& gb) noexcept;			// Get a reference to the movement state associated with the specified GCode buffer
+
+#if SUPPORT_ASYNC_MOVES
+	GCodeResult SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M596
+#endif
 
 #if SUPPORT_COORDINATE_ROTATION
 	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68
