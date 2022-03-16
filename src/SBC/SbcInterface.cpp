@@ -76,7 +76,7 @@ void SbcInterface::Init() noexcept
 		transfer.Init();
 		sbcTask = new Task<SBCTaskStackWords>();
 		sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SbcPriority);
-		iapRamAvailable = &_estack - Tasks::GetHeapTop();
+		iapRamAvailable = (const char*)&_estack - Tasks::GetHeapTop();
 	}
 	else
 	{

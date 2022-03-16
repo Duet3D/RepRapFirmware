@@ -30,9 +30,6 @@
 
 const uint8_t memPattern = 0xA5;		// this must be the same pattern as FreeRTOS because we use common code for checking for stack overflow
 
-extern char _end;						// defined in linker script
-extern uint32_t _estack;				// defined in linker script
-
 // Define replacement standard library functions
 #include <syscalls.h>
 
