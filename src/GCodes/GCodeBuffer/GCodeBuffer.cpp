@@ -107,7 +107,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 #endif
 	  timerRunning(false), motionCommanded(false)
 #if HAS_SBC_INTERFACE
-	  , isBinaryBuffer(false), isWaitingForMacro(false), invalidated(false)
+	  , isWaitingForMacro(false), isBinaryBuffer(false), invalidated(false)
 #endif
 {
 	mutex.Create(((GCodeChannel)channel).ToString());
