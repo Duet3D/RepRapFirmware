@@ -100,11 +100,6 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 	  stringParser(*this),
 	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()),
 	  codeChannel(channel), lastResult(GCodeResult::ok),
-#if SUPPORT_ASYNC_MOVES
-	  currentQueueNumber((channel == GCodeChannel::File2 || channel == GCodeChannel::Queue2) ? 1 : 0),
-#else
-	  currentQueueNumber(0),
-#endif
 	  timerRunning(false), motionCommanded(false)
 #if HAS_SBC_INTERFACE
 	  , isWaitingForMacro(false), isBinaryBuffer(false), invalidated(false)
@@ -330,6 +325,20 @@ void GCodeBuffer::GetCompleteParameters(const StringRef& str) THROWS(GCodeExcept
 int8_t GCodeBuffer::GetCommandFraction() const noexcept
 {
 	return PARSER_OPERATION(GetCommandFraction());
+}
+
+// Return true if this GCode is executing commands read from stream. The caller must make exceptions for commands that are always processed by both streams.
+bool GCodeBuffer::ShouldExecuteCode() const noexcept
+{
+	switch (codeChannel.RawValue())
+	{
+	case GCodeChannel::File:
+		return machineState->commandedQueueNumber == 0;
+	case GCodeChannel::File2:
+		return machineState->commandedQueueNumber == 1;
+	default:
+		return true;
+	}
 }
 
 // Return true if the command we have just completed was the last command in the line of GCode.

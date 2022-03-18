@@ -238,8 +238,11 @@ public:
 #endif
 		;
 
-	Compatibility compatibility;
 	uint16_t stateParameter;					// a parameter, the meaning of which depends on what state we are in
+	Compatibility compatibility;				// which firmware we are emulating
+#if SUPPORT_ASYNC_MOVES
+	uint8_t commandedQueueNumber;				// the queue number that was most recently commanded on this channel
+#endif
 
 	bool DoingFile() const noexcept;
 	void CloseFile() noexcept;

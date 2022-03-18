@@ -98,6 +98,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	file2GCode = new GCodeBuffer(GCodeChannel::File2, nullptr, file2Input, GenericMessage);
 	moveStates[1].codeQueue = new GCodeQueue();
 	queue2GCode = new GCodeBuffer(GCodeChannel::Queue2, moveStates[1].codeQueue, fileInput, GenericMessage);
+	queue2GCode->SetCurrentQueueNumber(1);							// so that all commands read from this queue get executed on queue #1 instead of the default #0
 #endif
 #if SUPPORT_HTTP || HAS_SBC_INTERFACE
 	httpInput = new NetworkGCodeInput();
@@ -3643,6 +3644,9 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	// Don't report empty responses if a file or macro is being processed, or if the GCode was queued, or to PanelDue
 	if (   reply[0] == 0
 		&& (   gb.IsFileChannel() || &gb == queuedGCode || &gb == triggerGCode || &gb == autoPauseGCode || &gb == daemonGCode
+#if SUPPORT_ASYNC_MOVES
+			|| &gb == queue2GCode
+#endif
 #if HAS_AUX_DEVICES
 			|| (&gb == auxGCode && !platform.IsAuxRaw(0))
 # ifdef SERIAL_AUX2_DEVICE
@@ -4794,7 +4798,7 @@ bool GCodes::CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply,
 // Get a reference to the movement state associated with the specified GCode buffer
 MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) noexcept
 {
-	return (gb.GetChannel() == GCodeChannel::File2 || gb.GetChannel() == GCodeChannel::Queue2) ? moveStates[1] : moveStates[0];
+	return moveStates[gb.GetCurrentQueueNumber()];
 }
 
 // Get a reference to the movement state associated with the specified GCode buffer

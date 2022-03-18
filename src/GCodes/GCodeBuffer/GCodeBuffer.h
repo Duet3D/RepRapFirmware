@@ -126,8 +126,9 @@ public:
 	bool IsExecuting() const noexcept;							// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f) noexcept;							// Set the G Code executed (or not)
 
-	size_t GetCurrentQueueNumber() const noexcept { return currentQueueNumber; }
-	void SetCurrentQueueNumber(size_t qn) noexcept { currentQueueNumber = (uint8_t)qn; }
+	size_t GetCurrentQueueNumber() const noexcept { return machineState->commandedQueueNumber; }
+	void SetCurrentQueueNumber(size_t qn) noexcept { machineState->commandedQueueNumber = (uint8_t)qn; }
+	bool ShouldExecuteCode() const noexcept;
 
 	void SetCommsProperties(uint32_t arg) noexcept;
 
@@ -303,7 +304,6 @@ private:
 	const GCodeChannel codeChannel;						// Channel number of this instance
 	GCodeBufferState bufferState;						// Idle, executing or paused
 	GCodeResult lastResult;
-	uint8_t currentQueueNumber;							// the movement queue that this GCodeBuffer currently uses
 	bool timerRunning;									// true if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
 
