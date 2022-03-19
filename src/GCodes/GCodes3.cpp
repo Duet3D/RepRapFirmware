@@ -1880,6 +1880,7 @@ GCodeResult GCodes::RaiseEvent(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	String<StringLength50> temp;
 	gb.MustSee('E');
 	gb.GetQuotedString(temp.GetRef(), false);
+	temp.ReplaceAll('-', '_');
 	const EventType et(temp.c_str());
 	if (!et.IsValid())
 	{

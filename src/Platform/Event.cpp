@@ -94,7 +94,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, uin
 	if (ep != nullptr && ep->isBeingProcessed)
 	{
 		fname.copy(ep->type.ToString());
-		fname.Replace('_', '-');					// ths only replaces the first instance, but there should not be more than one underscore in the event type name
+		fname.ReplaceAll('_', '-');
 		fname.cat(".g");
 	}
 }
