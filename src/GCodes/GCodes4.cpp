@@ -1334,7 +1334,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
 				ms.coords[Z_AXIS] += ms.currentTool->GetRetractHop();
 				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
-				ms.filePos = (gb.IsFileChannel()) ? gb.GetFilePosition() : noFilePosition;
+				ms.filePos = gb.GetJobFilePosition();
 				ms.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
 				ms.currentZHop = ms.currentTool->GetRetractHop();
 				NewSingleSegmentMoveAvailable(ms);
@@ -1356,7 +1356,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.coords[ExtruderToLogicalDrive(ms.currentTool->GetDrive(i))] = ms.currentTool->GetRetractLength() + ms.currentTool->GetRetractExtra();
 				}
 				ms.feedRate = ms.currentTool->GetUnRetractSpeed() * ms.currentTool->DriveCount();
-				ms.filePos = (gb.IsFileChannel()) ? gb.GetFilePosition() : noFilePosition;
+				ms.filePos = gb.GetJobFilePosition();
 				ms.canPauseAfter = true;
 				NewSingleSegmentMoveAvailable(ms);
 			}

@@ -847,7 +847,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 		if (gb.IsFileChannel())
 		{
 			// Pausing a file print because of a command in the file itself
-			ms.SavePosition(PauseRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetFilePosition());	//TODO not correct, need to use correct gb for each movement system!
+			ms.SavePosition(PauseRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetJobFilePosition());	//TODO not correct, need to use correct gb for each movement system!
 		}
 		else
 		{
@@ -2388,7 +2388,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 void GCodes::FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept
 {
 	ms.canPauseAfter = !ms.checkEndstops && !ms.doingArcMove;		// pausing during an arc move isn't safe because the arc centre get recomputed incorrectly when we resume
-	ms.filePos = (gb.IsFileChannel()) ? gb.GetFilePosition() : noFilePosition;
+	ms.filePos = gb.GetJobFilePosition();
 	gb.MotionCommanded();
 
 	if (ms.IsCurrentObjectCancelled())
@@ -3847,7 +3847,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 			// Get ready to generate a move
 			SetMoveBufferDefaults(ms);
 			reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
-			ms.filePos = (gb.IsFileChannel()) ? gb.GetFilePosition() : noFilePosition;
+			ms.filePos = gb.GetJobFilePosition();
 
 			if (retract)
 			{
@@ -4147,7 +4147,7 @@ void GCodes::UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept
 void GCodes::SavePosition(const GCodeBuffer& gb, unsigned int restorePointNumber) noexcept
 {
 	MovementState& ms = GetMovementState(gb);
-	ms.SavePosition(restorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetFilePosition());
+	ms.SavePosition(restorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetJobFilePosition());
 }
 
 // Restore user position from a restore point. Also restore the laser power, but not the spindle speed (the user must do that explicitly).

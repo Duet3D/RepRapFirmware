@@ -438,7 +438,7 @@ GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const 
 			axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 			for (MovementState& ms : moveStates)
 			{
-				ms.SavePosition(SimulationRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetFilePosition());
+				ms.SavePosition(SimulationRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetJobFilePosition());
 			}
 		}
 		simulationTime = 0.0;
@@ -481,7 +481,7 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 				axesVirtuallyHomed = AxesBitmap::MakeLowestNBits(numVisibleAxes);	// pretend all axes are homed
 				for (MovementState& ms : moveStates)
 				{
-					ms.SavePosition(SimulationRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetFilePosition());
+					ms.SavePosition(SimulationRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetJobFilePosition());
 				}
 			}
 			simulationTime = 0.0;

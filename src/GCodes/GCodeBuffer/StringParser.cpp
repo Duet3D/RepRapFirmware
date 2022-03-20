@@ -1070,7 +1070,9 @@ void StringParser::SetFinished() noexcept
 	}
 }
 
-// Get the file position at the start of the current command
+// Get the file position at the start of the current command.
+// This is called to get the file position within the current job file so that we can save the position in the DDAs to facilitate pause and resume.
+// It is also called to get the position within a macro file when executing a while loop in that file.
 FilePosition StringParser::GetFilePosition() const noexcept
 {
 #if HAS_MASS_STORAGE

@@ -197,6 +197,26 @@ void GCodes::ChangeToObject(GCodeBuffer& gb, int objectNumber) noexcept
 	}
 }
 
+#if SUPPORT_ASYNC_MOVES
+
+// Return true if all GCode buffers reading this stream have reach the same sync point as we have
+bool GCodes::TryToSync(GCodeBuffer& gb) const noexcept
+{
+	//TODO this doesn't handle syncing within macros!
+	const FilePosition fp = gb.SetSyncPosition();
+	switch (gb.GetChannel().RawValue())
+	{
+	case GCodeChannel::File:
+		return file2GCode->GetLastSyncPosition() >= fp;
+	case GCodeChannel::File2:
+		return fileGCode->GetLastSyncPosition() >= fp;
+	default:
+		return true;
+	}
+}
+
+#endif
+
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Save some resume information, returning true if successful

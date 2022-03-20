@@ -293,6 +293,9 @@ void GCodeBuffer::StartNewFile() noexcept
 	machineState->SetFileExecuting();
 #endif
 	machineState->lineNumber = 0;						// reset line numbering when M32 is run
+#if SUPPORT_ASYNC_MOVES
+	lastSyncFilePosition = 0;
+#endif
 	IF_NOT_BINARY(stringParser.StartNewFile());
 }
 
@@ -327,6 +330,8 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 	return PARSER_OPERATION(GetCommandFraction());
 }
 
+#if SUPPORT_ASYNC_MOVES
+
 // Return true if this GCode is executing commands read from stream. The caller must make exceptions for commands that are always processed by both streams.
 bool GCodeBuffer::ShouldExecuteCode() const noexcept
 {
@@ -340,6 +345,14 @@ bool GCodeBuffer::ShouldExecuteCode() const noexcept
 		return true;
 	}
 }
+
+FilePosition GCodeBuffer::SetSyncPosition() noexcept
+{
+	lastSyncFilePosition = PARSER_OPERATION(GetFilePosition());
+	return lastSyncFilePosition;
+}
+
+#endif
 
 // Return true if the command we have just completed was the last command in the line of GCode.
 // If the command was or called a macro then there will be no command in the buffer, so we must return true for this case also.
@@ -1066,9 +1079,9 @@ MessageType GCodeBuffer::GetResponseMessageType() const noexcept
 	return responseMessageType;
 }
 
-FilePosition GCodeBuffer::GetFilePosition() const noexcept
+FilePosition GCodeBuffer::GetJobFilePosition() const noexcept
 {
-	return PARSER_OPERATION(GetFilePosition());
+	return (IsFileChannel() && !IsDoingFileMacro()) ? PARSER_OPERATION(GetFilePosition()) : noFilePosition;
 }
 
 // Return the current position of the file being printed in bytes.
@@ -1091,7 +1104,7 @@ FilePosition GCodeBuffer::GetPrintingFilePosition(bool allowNoFilePos) const noe
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	const FilePosition pos = (IsDoingFileMacro())
 			? printFilePositionAtMacroStart						// the position before we started executing the macro
-				: GetFilePosition();					// the actual position, allowing for bytes cached but not yet processed
+				: GetJobFilePosition();							// the actual position, allowing for bytes cached but not yet processed
 	return (pos != noFilePosition || allowNoFilePos) ? pos : 0;
 #else
 	return allowNoFilePos ? noFilePosition : 0;
@@ -1100,7 +1113,7 @@ FilePosition GCodeBuffer::GetPrintingFilePosition(bool allowNoFilePos) const noe
 
 void GCodeBuffer::SavePrintingFilePosition() noexcept
 {
-	printFilePositionAtMacroStart = GetFilePosition();
+	printFilePositionAtMacroStart = PARSER_OPERATION(GetFilePosition());
 }
 
 void GCodeBuffer::WaitForAcknowledgement() noexcept

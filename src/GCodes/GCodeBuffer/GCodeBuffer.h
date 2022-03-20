@@ -153,7 +153,7 @@ public:
 	bool IsDoingFile() const noexcept;							// Return true if this source is executing a file
 	bool IsDoingLocalFile() const noexcept;						// Return true if this source is executing a file from the local SD card
 	bool IsDoingFileMacro() const noexcept;						// Return true if this source is executing a file macro
-	FilePosition GetFilePosition() const noexcept;				// Get the file position at the start of the current command
+	FilePosition GetJobFilePosition() const noexcept;			// Get the file position at the start of the current command
 	FilePosition GetPrintingFilePosition(bool allowNoFilePos) const noexcept;	// Get the file position in the printing file
 	void SavePrintingFilePosition() noexcept;
 
@@ -260,6 +260,11 @@ public:
 	bool DoingCoordinateRotation() const noexcept;
 #endif
 
+#if SUPPORT_ASYNC_MOVES
+	FilePosition SetSyncPosition() noexcept;
+	FilePosition GetLastSyncPosition() const noexcept { return lastSyncFilePosition; }
+#endif
+
 	Mutex mutex;
 
 protected:
@@ -296,6 +301,10 @@ private:
 	StringParser stringParser;
 
 	GCodeMachineState *machineState;					// Machine state for this gcode source
+
+#if SUPPORT_ASYNC_MOVES
+	FilePosition lastSyncFilePosition;					// the position in the file at which this stream reached a sync point, only used by File and File2 input streams
+#endif
 
 	uint32_t whenTimerStarted;							// When we started waiting
 	uint32_t whenReportDueTimerStarted;					// When the report-due-timer has been started
@@ -414,5 +423,11 @@ inline bool GCodeBuffer::IsDoingLocalFile() const noexcept
 	return IsDoingFile();
 #endif
 }
+
+#if !SUPPORT_ASYNC_MOVES
+
+inline bool GCodeBuffer::ShouldExecuteCode() const noexcept { return true; }
+
+#endif
 
 #endif /* SRC_GCODES_GCODEBUFFER_GCODEBUFFER_H */

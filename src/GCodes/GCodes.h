@@ -520,6 +520,7 @@ private:
 	void ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept;	// Change a live extrusion factor
 
 	MovementState& GetMovementState(const GCodeBuffer& gb) noexcept;			// Get a reference to the movement state associated with the specified GCode buffer
+	bool TryToSync(GCodeBuffer& gb) const noexcept;								// Return true if all GCode buffers reading this stream have reach the same sync point as we have
 
 #if SUPPORT_ASYNC_MOVES
 	GCodeResult SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M596
@@ -737,6 +738,9 @@ inline const MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) cons
 {
 	return moveStates[0];
 }
+
+// Return true if all GCode buffers reading this stream have reach the same sync point as we have
+inline bool GCodes::IsSynced(const GCodeBuffer& gb) const noexcept { return true; }
 
 #endif
 
