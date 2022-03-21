@@ -91,7 +91,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 # define SUPPORT_TELNET			1
 #endif
 
-#define SUPPORT_ASYNC_MOVES		1
+#define SUPPORT_ASYNC_MOVES		0
 #define ALLOCATE_DEFAULT_PORTS	0
 
 #define USE_CACHE				1					// set nonzero to enable the cache

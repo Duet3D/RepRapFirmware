@@ -734,13 +734,10 @@ inline MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) noexcept
 	return moveStates[0];
 }
 
-inline const MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) const noexcept
+inline const MovementState& GCodes::GetConstMovementState(const GCodeBuffer& gb) const noexcept
 {
 	return moveStates[0];
 }
-
-// Return true if all GCode buffers reading this stream have reach the same sync point as we have
-inline bool GCodes::IsSynced(const GCodeBuffer& gb) const noexcept { return true; }
 
 #endif
 
