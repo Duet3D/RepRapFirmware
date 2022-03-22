@@ -293,9 +293,6 @@ void GCodeBuffer::StartNewFile() noexcept
 	machineState->SetFileExecuting();
 #endif
 	machineState->lineNumber = 0;						// reset line numbering when M32 is run
-#if SUPPORT_ASYNC_MOVES
-	lastSyncFilePosition = 0;
-#endif
 	IF_NOT_BINARY(stringParser.StartNewFile());
 }
 
@@ -346,10 +343,53 @@ bool GCodeBuffer::ShouldExecuteCode() const noexcept
 	}
 }
 
-FilePosition GCodeBuffer::SetSyncPosition() noexcept
+// Check whether we are in sync with another GCodeBUffer, i.e. its last sync point is the same as ours or later
+bool GCodeBuffer::CheckSyncedWith(const GCodeBuffer& other) const noexcept
 {
-	lastSyncFilePosition = PARSER_OPERATION(GetFilePosition());
-	return lastSyncFilePosition;
+	unsigned int ourDepth = GetStackDepth();
+	unsigned int otherDepth = other.GetStackDepth();
+	const GCodeMachineState *ourState = machineState;
+	const GCodeMachineState *otherState = other.machineState;
+	bool otherMustBeLater;
+	if (ourDepth > otherDepth)
+	{
+		// The other GB can only be in sync with us if it has exited the inner block we are in and moved on in the surrounding blocks
+		otherMustBeLater = true;
+		do
+		{
+			ourState = ourState->GetPrevious();
+			--ourDepth;
+		} while (ourDepth > otherDepth);
+	}
+	else if (otherDepth > ourDepth)
+	{
+		// The other GB is more deeply nested than we are, so it can only be later if it has moved on
+		otherMustBeLater = true;
+		do
+		{
+			otherState = otherState->GetPrevious();
+			--otherDepth;
+		} while (otherDepth > ourDepth);
+	}
+	else
+	{
+		otherMustBeLater = false;
+	}
+
+	while (ourState != nullptr)
+	{
+		if (otherState->lineNumber < ourState->lineNumber)
+		{
+			otherMustBeLater = true;
+		}
+		else if (otherState->lineNumber > ourState->lineNumber)
+		{
+			otherMustBeLater = false;
+		}
+		otherState = otherState->GetPrevious();
+		ourState = ourState->GetPrevious();
+	}
+	return !otherMustBeLater;
 }
 
 #endif

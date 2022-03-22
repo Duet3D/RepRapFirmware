@@ -202,14 +202,12 @@ void GCodes::ChangeToObject(GCodeBuffer& gb, int objectNumber) noexcept
 // Return true if all GCode buffers reading this stream have reach the same sync point as we have
 bool GCodes::TryToSync(GCodeBuffer& gb) const noexcept
 {
-	//TODO this doesn't handle syncing within macros!
-	const FilePosition fp = gb.SetSyncPosition();
 	switch (gb.GetChannel().RawValue())
 	{
 	case GCodeChannel::File:
-		return file2GCode->GetLastSyncPosition() >= fp;
+		return gb.CheckSyncedWith(*file2GCode);
 	case GCodeChannel::File2:
-		return fileGCode->GetLastSyncPosition() >= fp;
+		return gb.CheckSyncedWith(*fileGCode);
 	default:
 		return true;
 	}

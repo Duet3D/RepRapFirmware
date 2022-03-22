@@ -126,8 +126,11 @@ public:
 	bool IsExecuting() const noexcept;							// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f) noexcept;							// Set the G Code executed (or not)
 
+#if SUPPORT_ASYNC_MOVES
 	size_t GetCurrentQueueNumber() const noexcept { return machineState->commandedQueueNumber; }
 	void SetCurrentQueueNumber(size_t qn) noexcept { machineState->commandedQueueNumber = (uint8_t)qn; }
+#endif
+
 	bool ShouldExecuteCode() const noexcept;
 
 	void SetCommsProperties(uint32_t arg) noexcept;
@@ -261,8 +264,7 @@ public:
 #endif
 
 #if SUPPORT_ASYNC_MOVES
-	FilePosition SetSyncPosition() noexcept;
-	FilePosition GetLastSyncPosition() const noexcept { return lastSyncFilePosition; }
+	bool CheckSyncedWith(const GCodeBuffer& other) const noexcept;
 #endif
 
 	Mutex mutex;
@@ -301,10 +303,6 @@ private:
 	StringParser stringParser;
 
 	GCodeMachineState *machineState;					// Machine state for this gcode source
-
-#if SUPPORT_ASYNC_MOVES
-	FilePosition lastSyncFilePosition;					// the position in the file at which this stream reached a sync point, only used by File and File2 input streams
-#endif
 
 	uint32_t whenTimerStarted;							// When we started waiting
 	uint32_t whenReportDueTimerStarted;					// When the report-due-timer has been started
