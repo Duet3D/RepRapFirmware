@@ -126,8 +126,8 @@ public:
 	bool IsExecuting() const noexcept;							// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f) noexcept;							// Set the G Code executed (or not)
 
+	size_t GetCurrentQueueNumber() const noexcept;
 #if SUPPORT_ASYNC_MOVES
-	size_t GetCurrentQueueNumber() const noexcept { return machineState->commandedQueueNumber; }
 	void SetCurrentQueueNumber(size_t qn) noexcept { machineState->commandedQueueNumber = (uint8_t)qn; }
 #endif
 
@@ -264,7 +264,7 @@ public:
 #endif
 
 #if SUPPORT_ASYNC_MOVES
-	bool CheckSyncedWith(const GCodeBuffer& other) const noexcept;
+	bool MustWaitForSyncWith(const GCodeBuffer& other) noexcept;
 #endif
 
 	Mutex mutex;
@@ -313,6 +313,9 @@ private:
 	GCodeResult lastResult;
 	bool timerRunning;									// true if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
+#if SUPPORT_ASYNC_MOVES
+	bool waitingForSync;
+#endif
 
 	alignas(4) char buffer[MaxGCodeLength];				// must be aligned because in SBC binary mode we do dword fetches from it
 
@@ -427,5 +430,14 @@ inline bool GCodeBuffer::IsDoingLocalFile() const noexcept
 inline bool GCodeBuffer::ShouldExecuteCode() const noexcept { return true; }
 
 #endif
+
+inline size_t GCodeBuffer::GetCurrentQueueNumber() const noexcept
+{
+#if SUPPORT_ASYNC_MOVES
+	return machineState->commandedQueueNumber;
+#else
+	return 0;
+#endif
+}
 
 #endif /* SRC_GCODES_GCODEBUFFER_GCODEBUFFER_H */

@@ -101,6 +101,10 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()),
 	  codeChannel(channel), lastResult(GCodeResult::ok),
 	  timerRunning(false), motionCommanded(false)
+#if SUPPORT_ASYNC_MOVES
+	  , waitingForSync(false)
+#endif
+
 #if HAS_SBC_INTERFACE
 	  , isWaitingForMacro(false), isBinaryBuffer(false), invalidated(false)
 #endif
@@ -343,18 +347,28 @@ bool GCodeBuffer::ShouldExecuteCode() const noexcept
 	}
 }
 
-// Check whether we are in sync with another GCodeBUffer, i.e. its last sync point is the same as ours or later
-bool GCodeBuffer::CheckSyncedWith(const GCodeBuffer& other) const noexcept
+// Check whether we are in sync with another GCodeBUffer. This is only called when we have multiple readers for the same GCode stream.
+// Sync works as follows:
+// 1. All GBs first lock their movement queues and wait for all moves in their own movement queue to finish. Only then do they call this function.
+// 2. The primary GB (the one selected by the most recent M596 command) waits for the other GBs to do one of the following:
+//   (a) reach the same lines in the executing files as the primary GB and set their 'waitingForSync' flags. That way the primary caller know that the secondaries have completed all movements.
+//   (b) reached a later point. That should only happen if the secondary GB didn't execute the command at the sync point due to conditional GCode or executing a loop fewer times.
+// 3. The secondary GBs wait for the primary GB to reach a point strictly later in the executing files, so that the primary can finish executing the command before they resume.
+//    While waiting they set their 'waitingForSync' flags to indicate to the primary that movement has stopped.
+bool GCodeBuffer::MustWaitForSyncWith(const GCodeBuffer& other) noexcept
 {
 	unsigned int ourDepth = GetStackDepth();
 	unsigned int otherDepth = other.GetStackDepth();
 	const GCodeMachineState *ourState = machineState;
 	const GCodeMachineState *otherState = other.machineState;
+	const bool weArePrimary = ShouldExecuteCode();
 	bool otherMustBeLater;
+	bool atSamePoint;
 	if (ourDepth > otherDepth)
 	{
 		// The other GB can only be in sync with us if it has exited the inner block we are in and moved on in the surrounding blocks
 		otherMustBeLater = true;
+		atSamePoint = false;
 		do
 		{
 			ourState = ourState->GetPrevious();
@@ -365,6 +379,7 @@ bool GCodeBuffer::CheckSyncedWith(const GCodeBuffer& other) const noexcept
 	{
 		// The other GB is more deeply nested than we are, so it can only be later if it has moved on
 		otherMustBeLater = true;
+		atSamePoint = false;
 		do
 		{
 			otherState = otherState->GetPrevious();
@@ -373,7 +388,8 @@ bool GCodeBuffer::CheckSyncedWith(const GCodeBuffer& other) const noexcept
 	}
 	else
 	{
-		otherMustBeLater = false;
+		otherMustBeLater = !weArePrimary;
+		atSamePoint = true;
 	}
 
 	while (ourState != nullptr)
@@ -381,15 +397,23 @@ bool GCodeBuffer::CheckSyncedWith(const GCodeBuffer& other) const noexcept
 		if (otherState->lineNumber < ourState->lineNumber)
 		{
 			otherMustBeLater = true;
+			atSamePoint = false;
 		}
 		else if (otherState->lineNumber > ourState->lineNumber)
 		{
 			otherMustBeLater = false;
+			atSamePoint = false;
 		}
 		otherState = otherState->GetPrevious();
 		ourState = ourState->GetPrevious();
 	}
-	return !otherMustBeLater;
+
+	// At this point, if otherMustBeLater is true then we know that it isn't later, so we are not synced.
+	// Else if atSamePoint is true then the other GB is at the same point as us;
+	//  so if we are the primary we need to check whether is has its waitingForSync flag set, and if we are not the primary we must wait for the primary to complete the command.
+	const bool ret = otherMustBeLater || (atSamePoint && (!weArePrimary || !other.waitingForSync));
+	waitingForSync = ret;
+	return ret;
 }
 
 #endif

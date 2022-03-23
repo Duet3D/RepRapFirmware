@@ -197,24 +197,6 @@ void GCodes::ChangeToObject(GCodeBuffer& gb, int objectNumber) noexcept
 	}
 }
 
-#if SUPPORT_ASYNC_MOVES
-
-// Return true if all GCode buffers reading this stream have reach the same sync point as we have
-bool GCodes::TryToSync(GCodeBuffer& gb) const noexcept
-{
-	switch (gb.GetChannel().RawValue())
-	{
-	case GCodeChannel::File:
-		return gb.CheckSyncedWith(*file2GCode);
-	case GCodeChannel::File2:
-		return gb.CheckSyncedWith(*fileGCode);
-	default:
-		return true;
-	}
-}
-
-#endif
-
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Save some resume information, returning true if successful

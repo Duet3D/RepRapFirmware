@@ -1416,12 +1416,6 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 		return false;
 	}
 
-	// Wait for all the queued moves to stop so we get the actual last position
-	if (!reprap.GetMove().WaitingForAllMovesFinished())	//TODO use correct queue
-	{
-		return false;
-	}
-
 	switch (gb.GetChannel().ToBaseType())
 	{
 	case GCodeChannel::Queue:
@@ -1429,8 +1423,35 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 		break;
 
 #if SUPPORT_ASYNC_MOVES
+	case GCodeChannel::File:
+		if (!reprap.GetMove().WaitingForAllMovesFinished(0))
+		{
+			return false;
+		}
+		if (!(queuedGCode->IsIdle() && moveStates[0].codeQueue->IsIdle()))
+		{
+			return false;
+		}
+
+		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
+		if (gb.MustWaitForSyncWith(*file2GCode))
+		{
+			return false;
+		}
+		break;
+
 	case GCodeChannel::File2:
+		if (!reprap.GetMove().WaitingForAllMovesFinished(1))
+		{
+			return false;
+		}
 		if (!(queue2GCode->IsIdle() && moveStates[1].codeQueue->IsIdle()))
+		{
+			return false;
+		}
+
+		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
+		if (gb.MustWaitForSyncWith(*fileGCode))
 		{
 			return false;
 		}
@@ -1438,7 +1459,20 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 #endif
 
 	default:
-		if (!(queuedGCode->IsIdle() && moveStates[0].codeQueue->IsIdle()))
+		if (   !reprap.GetMove().WaitingForAllMovesFinished(0)
+#if SUPPORT_ASYNC_MOVES
+			|| !reprap.GetMove().WaitingForAllMovesFinished(1)
+#endif
+		   )
+		{
+			return false;
+		}
+
+		if (   !(queuedGCode->IsIdle() && moveStates[0].codeQueue->IsIdle())
+#if SUPPORT_ASYNC_MOVES
+			&& !(queue2GCode->IsIdle() && moveStates[1].codeQueue->IsIdle())
+#endif
+		   )
 		{
 			return false;
 		}

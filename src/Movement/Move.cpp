@@ -398,9 +398,9 @@ void Move::MoveAvailable() noexcept
 }
 
 // Tell the lookahead ring we are waiting for it to empty and return true if it is
-bool Move::WaitingForAllMovesFinished() noexcept
+bool Move::WaitingForAllMovesFinished(size_t queueNumber) noexcept
 {
-	return mainDDARing.SetWaitingToEmpty();
+	return rings[queueNumber].SetWaitingToEmpty();
 }
 
 // Return the number of actually probed probe points
