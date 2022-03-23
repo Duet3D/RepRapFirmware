@@ -1400,7 +1400,11 @@ void GCodes::Diagnostics(MessageType mtype) noexcept
 
 // Lock movement and wait for pending moves to finish.
 // As a side-effect it loads moveBuffer with the last position and feedrate for you.
-bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
+bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
+#if SUPPORT_ASYNC_MOVES
+												, bool sync
+#endif
+															) noexcept
 {
 	// Lock movement to stop another source adding moves to the queue
 	if (!LockMovement(gb))
@@ -1434,7 +1438,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 		}
 
 		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
-		if (gb.MustWaitForSyncWith(*file2GCode))
+		if (sync && gb.MustWaitForSyncWith(*file2GCode))
 		{
 			return false;
 		}
@@ -1451,7 +1455,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept
 		}
 
 		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
-		if (gb.MustWaitForSyncWith(*fileGCode))
+		if (sync && gb.MustWaitForSyncWith(*fileGCode))
 		{
 			return false;
 		}
@@ -3237,7 +3241,7 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 	// This is so that G4 can be used in a trigger or daemon macro file without pausing motion, when the macro doesn't itself command any motion.
 	if (gb.WasMotionCommanded())
 	{
-		if (!LockMovementAndWaitForStandstill(gb))
+		if (!LockMovementAndWaitForStandstillNoSync(gb))
 		{
 			return GCodeResult::notFinished;
 		}

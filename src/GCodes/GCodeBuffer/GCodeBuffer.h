@@ -126,12 +126,13 @@ public:
 	bool IsExecuting() const noexcept;							// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f) noexcept;							// Set the G Code executed (or not)
 
-	size_t GetCurrentQueueNumber() const noexcept;
+	size_t GetCurrentQueueNumber() const noexcept;				// Return the current queue number for commands read from this channel
+
 #if SUPPORT_ASYNC_MOVES
 	void SetCurrentQueueNumber(size_t qn) noexcept { machineState->commandedQueueNumber = (uint8_t)qn; }
+	bool IsPrimary() const noexcept;							// Return true if this is the primary GCodeBuffer for executing commands addressed to the current queue
 #endif
 
-	bool ShouldExecuteCode() const noexcept;
 
 	void SetCommsProperties(uint32_t arg) noexcept;
 
@@ -424,12 +425,6 @@ inline bool GCodeBuffer::IsDoingLocalFile() const noexcept
 	return IsDoingFile();
 #endif
 }
-
-#if !SUPPORT_ASYNC_MOVES
-
-inline bool GCodeBuffer::ShouldExecuteCode() const noexcept { return true; }
-
-#endif
 
 inline size_t GCodeBuffer::GetCurrentQueueNumber() const noexcept
 {

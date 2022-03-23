@@ -108,6 +108,16 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	return true;
 }
 
+#if SUPPORT_ASYNC_MOVES
+
+# define BREAK_IF_NOT_PRIMARY	if (!gb.IsPrimary()) { break; }
+
+#else
+
+# define BREAK_IF_NOT_PRIMARY	// nothing
+
+#endif
+
 bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	GCodeResult result = GCodeResult::ok;
@@ -118,23 +128,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		return true;														// we only simulate some gcodes
 	}
 
-	// Can we queue this code?
-	if (gb.CanQueueCodes())
-	{
-		GCodeQueue * const codeQueue = GetMovementState(gb).codeQueue;
-		if (codeQueue->ShouldQueueGCode(gb))
-		{
-			// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
-			// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
-			if (GetMovementState(gb).segmentsLeft == 0 && codeQueue->QueueCode(gb))
-			{
-				HandleReply(gb, GCodeResult::ok, "");
-				return true;
-			}
-
-			return false;		// we should queue this code but we can't yet, so wait until we can either execute it or queue it
-		}
-	}
+	// The only queued GCode is some subfunctions of G10, so we delay checking for queueing it until we are in case 10 below
 
 	if (gb.GetCommandFraction() > 0
 		&& code != 38 && code != 59											// these are the only G-codes we implement that can have fractional parts
@@ -148,6 +142,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		{
 		case 0: // Rapid move
 		case 1: // Ordinary move
+			BREAK_IF_NOT_PRIMARY
 			if (GetMovementState(gb).segmentsLeft != 0)						// do this check first to avoid locking movement unnecessarily
 			{
 				return false;
@@ -173,6 +168,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 2: // Clockwise arc
 		case 3: // Anti clockwise arc
 			// We only support X and Y axes in these (and optionally Z for corkscrew moves), but you can map them to other axes in the tool definitions
+			BREAK_IF_NOT_PRIMARY
 			if (GetMovementState(gb).segmentsLeft != 0)						// do this check first to avoid locking movement unnecessarily
 			{
 				return false;
@@ -208,6 +204,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					switch (ival)
 					{
 					case 1:
+						BREAK_IF_NOT_PRIMARY
 						result = SetOrReportOffsets(gb, reply, 10);			// same as G10 with offsets and no L parameter
 						break;
 
@@ -227,6 +224,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				else
 #endif
 				{
+					BREAK_IF_NOT_PRIMARY
 					bool modifyingTool = gb.Seen('P') || gb.Seen('R') || gb.Seen('S') || gb.Seen('F');
 					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 					{
@@ -239,6 +237,26 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							break;
 						}
+
+						// Should we queue this code?
+						if (gb.CanQueueCodes())
+						{
+							GCodeQueue * const codeQueue = GetMovementState(gb).codeQueue;
+							if (codeQueue->ShouldQueueG10(gb))
+							{
+								// Don't queue any GCodes if there are segments not yet picked up by Move, because in the event that a segment corresponds to no movement,
+								// the move gets discarded, which throws out the count of scheduled moves and hence the synchronisation
+								if (GetMovementState(gb).segmentsLeft == 0 && codeQueue->QueueCode(gb))
+								{
+									HandleReply(gb, GCodeResult::ok, "");
+									return true;
+								}
+
+								return false;		// we should queue this code but we can't yet, so wait until we can either execute it or queue it
+							}
+						}
+
+						// We don't want to queue it
 						result = SetOrReportOffsets(gb, reply, 10);
 					}
 					else
@@ -250,6 +268,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 11: // Un-retract
+			BREAK_IF_NOT_PRIMARY
 			result = RetractFilament(gb, false);
 			break;
 
@@ -298,6 +317,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					sparam = 0;									// mesh.g not found, so treat G29 the same as G29 S0
 				}
 
+				BREAK_IF_NOT_PRIMARY
 				switch(sparam)
 				{
 				case 0:		// probe and save height map
@@ -337,6 +357,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				return false;
 			}
 
+			BREAK_IF_NOT_PRIMARY
 			if (reprap.GetMove().GetKinematics().AxesToHomeBeforeProbing().Intersects(~axesVirtuallyHomed))
 			{
 				reply.copy("Insufficient axes homed for bed probing");
@@ -349,6 +370,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 31: // Return the probe value, or set probe variables
+			BREAK_IF_NOT_PRIMARY
 			result = platform.GetEndstops().HandleG31(gb, reply);
 			break;
 
@@ -372,6 +394,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				return false;
 			}
+			BREAK_IF_NOT_PRIMARY
 			result = StraightProbe(gb, reply);
 			break;
 
@@ -411,6 +434,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 		case 60: // Save position
+			BREAK_IF_NOT_PRIMARY
 			result = SavePosition(gb, reply);
 			break;
 
@@ -420,7 +444,16 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 69:
-			g68Angle = 0.0;
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
+# if SUPPORT_ASYNC_MOVES
+			if (gb.IsPrimary())
+# endif
+			{
+				g68Angle = 0.0;
+			}
 			break;
 #endif
 
@@ -435,6 +468,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 92: // Set position
+			BREAK_IF_NOT_PRIMARY
 			result = SetPositions(gb, reply);
 			break;
 
@@ -4679,6 +4713,14 @@ GCodeResult GCodes::TryMacroFile(GCodeBuffer& gb) noexcept
 
 bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+#if SUPPORT_ASYNC_MOVES
+	if (gb.IsPrimary())
+	{
+		HandleReply(gb, GCodeResult::ok, "");
+		return true;
+	}
+#endif
+
 	if (gb.LatestMachineState().runningM502)
 	{
 		return true;			// when running M502 we don't execute T commands
@@ -4751,6 +4793,13 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 // This is called to handle internally-generated codes
 bool GCodes::HandleQcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+#if SUPPORT_ASYNC_MOVES
+	if (!gb.IsPrimary())
+	{
+		return true;
+	}
+#endif
+
 	// Currently we don't need to worry about whether we are simulating or not
 	switch (gb.GetCommandNumber())
 	{

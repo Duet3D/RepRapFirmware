@@ -192,6 +192,13 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 				{
 					return GCodeResult::notFinished;
 				}
+#if SUPPORT_ASYNC_MOVES
+				// Now that we have synced, we need only continue if we are primary
+				if (!gb.IsPrimary())
+				{
+					return GCodeResult::ok;
+				}
+#endif
 				seen = true;
 			}
 			workplaceCoordinates[cs - 1][axis] = (compute) ? ms.currentUserPosition[axis] - coord : coord;
@@ -1678,29 +1685,35 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	{
 		return GCodeResult::notFinished;
 	}
-	if (gb.CurrentFileMachineState().selectedPlane != 0)
-	{
-		reply.copy("this command may only be used when the selected plane is XY");
-		return GCodeResult::error;
-	}
 
-	float angle, centreX, centreY;
-	gb.MustSee('R');
-	angle = gb.GetFValue();
-	gb.MustSee('A', 'X');
-	centreX = gb.GetFValue();
-	gb.MustSee('B', 'Y');
-	centreY= gb.GetFValue();
+#if SUPPORT_ASYNC_MOVES
+	if (gb.IsPrimary())
+#endif
+	{
+		if (gb.CurrentFileMachineState().selectedPlane != 0)
+		{
+			reply.copy("this command may only be used when the selected plane is XY");
+			return GCodeResult::error;
+		}
 
-	g68Centre[0] = centreX + GetWorkplaceOffset(gb, 0);
-	g68Centre[1] = centreY + GetWorkplaceOffset(gb, 1);
-	if (gb.Seen('I'))
-	{
-		g68Angle += angle;
-	}
-	else
-	{
-		g68Angle = angle;
+		float angle, centreX, centreY;
+		gb.MustSee('R');
+		angle = gb.GetFValue();
+		gb.MustSee('A', 'X');
+		centreX = gb.GetFValue();
+		gb.MustSee('B', 'Y');
+		centreY= gb.GetFValue();
+
+		g68Centre[0] = centreX + GetWorkplaceOffset(gb, 0);
+		g68Centre[1] = centreY + GetWorkplaceOffset(gb, 1);
+		if (gb.Seen('I'))
+		{
+			g68Angle += angle;
+		}
+		else
+		{
+			g68Angle = angle;
+		}
 	}
 	return GCodeResult::ok;
 }

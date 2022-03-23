@@ -23,14 +23,11 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 	}
 }
 
-// Return true if the GCode in the GCodeBuffer should be queued. Caller has already checked that the command does not contain an expression.
-/*static*/ bool GCodeQueue::ShouldQueueGCode(GCodeBuffer &gb) noexcept
+// Return true if the GCode in the GCodeBuffer should be queued
+// Caller has already checked that the command does not contain an expression and involves modifying tool temperatures or spindle speed
+/*static*/ bool GCodeQueue::ShouldQueueG10(GCodeBuffer &gb) noexcept
 {
 	return reprap.GetMove().GetScheduledMoves() != reprap.GetMove().GetCompletedMoves()
-			&& gb.GetCommandNumber() == 10
-			&& gb.Seen('P')
-			&& !gb.Seen('L')
-			&& (gb.Seen('R') || gb.Seen('S'))									// set active/standby temperatures
 			&& gb.DataLength() <= BufferSizePerQueueItem;						// only queue it if it is short enough to fit in a queue item
 }
 

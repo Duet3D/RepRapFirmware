@@ -334,7 +334,7 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 #if SUPPORT_ASYNC_MOVES
 
 // Return true if this GCode is executing commands read from stream. The caller must make exceptions for commands that are always processed by both streams.
-bool GCodeBuffer::ShouldExecuteCode() const noexcept
+bool GCodeBuffer::IsPrimary() const noexcept
 {
 	switch (codeChannel.RawValue())
 	{
@@ -361,7 +361,7 @@ bool GCodeBuffer::MustWaitForSyncWith(const GCodeBuffer& other) noexcept
 	unsigned int otherDepth = other.GetStackDepth();
 	const GCodeMachineState *ourState = machineState;
 	const GCodeMachineState *otherState = other.machineState;
-	const bool weArePrimary = ShouldExecuteCode();
+	const bool weArePrimary = IsPrimary();
 	bool otherMustBeLater;
 	bool atSamePoint;
 	if (ourDepth > otherDepth)

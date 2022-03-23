@@ -185,7 +185,12 @@ public:
 	const char *GetAxisLetters() const noexcept { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
 	size_t GetAxisNumberForLetter(const char axisLetter) const noexcept;
 	MachineType GetMachineType() const noexcept { return machineType; }
-	bool LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept;			// Lock movement and wait for pending moves to finish
+	bool LockMovementAndWaitForStandstill(GCodeBuffer& gb
+#if SUPPORT_ASYNC_MOVES
+											, bool sync = true
+#endif
+															) noexcept;			// Lock movement and wait for pending moves to finish
+	bool LockMovementAndWaitForStandstillNoSync(GCodeBuffer& gb) noexcept;		// Lock movement and wait for pending moves to finish but don't sync if using multiple movement queues
 
 #if SUPPORT_12864_LCD
 	void SetSpeedFactor(float factor) noexcept;									// Set the speed factor
@@ -710,7 +715,7 @@ private:
 	bool isWaiting;								// True if waiting to reach temperature
 	bool cancelWait;							// Set true to cancel waiting
 	bool displayNoToolWarning;					// True if we need to display a 'no tool selected' warning
-	bool m501SeenInConfigFile;					// true if M501 was executed form config.g
+	bool m501SeenInConfigFile;					// true if M501 was executed from config.g
 	bool daemonRunning;
 	char filamentToLoad[FilamentNameLength];	// Name of the filament being loaded
 
@@ -725,7 +730,19 @@ inline float GCodes::GetTotalBabyStepOffset(size_t axis) const noexcept
 	return currentBabyStepOffsets[axis];
 }
 
-#if !SUPPORT_ASYNC_MOVES
+#if SUPPORT_ASYNC_MOVES
+
+inline bool GCodes::LockMovementAndWaitForStandstillNoSync(GCodeBuffer& gb) noexcept
+{
+	return LockMovementAndWaitForStandstill(gb, false);
+}
+
+#else
+
+inline bool GCodes::LockMovementAndWaitForStandstillNoSync(GCodeBuffer& gb) noexcept
+{
+	return LockMovementAndWaitForStandstill(gb);
+}
 
 // Get a reference to the movement state associated with the specified GCode buffer
 inline MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) noexcept
