@@ -375,7 +375,7 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 				switch (itemNumber)
 				{
 				case 0:
-					currentValue.f = reprap.GetGCodes().GetSpeedFactor() * 100.0;
+					currentValue.f = reprap.GetGCodes().GetPrimarySpeedFactor() * 100.0;
 					currentFormat = PrintFormat::asPercent;
 					break;
 
@@ -560,7 +560,7 @@ bool ValueMenuItem::Adjust_SelectHelper() noexcept
 			switch (itemNumber)
 			{
 			case 0:
-				reprap.GetGCodes().SetSpeedFactor(currentValue.f * 0.01);
+				reprap.GetGCodes().SetPrimarySpeedFactor(currentValue.f * 0.01);
 				break;
 
 			case 20:

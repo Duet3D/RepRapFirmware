@@ -2455,33 +2455,37 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 220:	// Set/report speed factor override percentage
-				if (gb.Seen('S'))
+				BREAK_IF_NOT_PRIMARY
 				{
-					const float newSpeedFactor = gb.GetFValue() * 0.01;
-					if (newSpeedFactor >= 0.01)
+					MovementState& ms = GetMovementState(gb);
+					if (gb.Seen('S'))
 					{
-						MovementState& ms = GetMovementState(gb);
-						// If the last move hasn't gone yet, update its feed rate if it is not a firmware retraction
-						if (ms.segmentsLeft != 0 && ms.applyM220M221)
+						const float newSpeedFactor = gb.GetFValue() * 0.01;
+						if (newSpeedFactor >= 0.01)
 						{
-							ms.feedRate *= newSpeedFactor / speedFactor;
+							// If the last move hasn't gone yet, update its feed rate if it is not a firmware retraction
+							if (ms.segmentsLeft != 0 && ms.applyM220M221)
+							{
+								ms.feedRate *= newSpeedFactor / ms.speedFactor;
+							}
+							ms.speedFactor = newSpeedFactor;
+							reprap.MoveUpdated();
 						}
-						speedFactor = newSpeedFactor;
-						reprap.MoveUpdated();
+						else
+						{
+							reply.copy("Invalid speed factor");
+							result = GCodeResult::error;
+						}
 					}
 					else
 					{
-						reply.copy("Invalid speed factor");
-						result = GCodeResult::error;
+						reply.printf("Speed factor: %.1f%%", (double)(ms.speedFactor * 100.0));
 					}
-				}
-				else
-				{
-					reply.printf("Speed factor: %.1f%%", (double)(speedFactor * 100.0));
 				}
 				break;
 
 			case 221:	// Set/report extrusion factor override percentage
+				BREAK_IF_NOT_PRIMARY
 				{
 					uint32_t extruder = 0;
 					const bool seenD = gb.Seen('D');

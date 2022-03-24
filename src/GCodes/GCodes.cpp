@@ -234,7 +234,6 @@ void GCodes::Reset() noexcept
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	fileToPrint.Close();
 #endif
-	speedFactor = 1.0;
 
 	for (size_t i = 0; i < MaxExtruders; ++i)
 	{
@@ -1536,7 +1535,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, Movement
 			gb.LatestMachineState().feedRate = gb.GetSpeed();				// update requested speed, not allowing for speed factor
 		}
 		ms.feedRate = (ms.applyM220M221)
-								? speedFactor * gb.LatestMachineState().feedRate
+								? ms.speedFactor * gb.LatestMachineState().feedRate
 								: gb.LatestMachineState().feedRate;
 		ms.usingStandardFeedrate = true;
 	}
@@ -4875,9 +4874,9 @@ GCodeResult GCodes::StartSDTiming(GCodeBuffer& gb, const StringRef& reply) noexc
 #if SUPPORT_12864_LCD
 
 // Set the speed factor. Value passed is a fraction.
-void GCodes::SetSpeedFactor(float factor) noexcept
+void GCodes::SetPrimarySpeedFactor(float factor) noexcept
 {
-	speedFactor = constrain<float>(factor, 0.1, 5.0);
+	moveStates[0].speedFactor = constrain<float>(factor, 0.1, 5.0);
 }
 
 // Set an extrusion factor

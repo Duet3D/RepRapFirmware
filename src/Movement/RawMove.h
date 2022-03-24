@@ -91,6 +91,7 @@ struct MovementState : public RawMove
 	float currentAngleSine, currentAngleCosine;						// the sine and cosine of the current angle
 	float arcAngleIncrement;										// the amount by which we increment the arc angle in each segment
 	float angleIncrementSine, angleIncrementCosine;					// the sine and cosine of the increment
+	float speedFactor;												// speed factor as a fraction (normally 1.0)
 	unsigned int segmentsTillNextFullCalc;							// how may more segments we can do before we need to do the full calculation instead of the quicker one
 	GCodeQueue *codeQueue;											// Stores certain codes for deferred execution
 

@@ -57,6 +57,7 @@ void MovementState::Reset() noexcept
 	currentTool = nullptr;
 	latestVirtualExtruderPosition = moveStartVirtualExtruderPosition = 0.0;
 	virtualFanSpeed = 0.0;
+	speedFactor = 1.0;
 	newToolNumber = -1;
 	previousToolNumber = -1;
 

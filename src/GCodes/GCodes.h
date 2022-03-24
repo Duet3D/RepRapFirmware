@@ -127,7 +127,7 @@ public:
 	void SetAxisNotHomed(unsigned int axis) noexcept;							// Tell us that the axis is not homed
 	void SetAllAxesNotHomed() noexcept;											// Flag all axes as not homed
 
-	float GetSpeedFactor() const noexcept { return speedFactor; }				// Return the current speed factor as a fraction
+	float GetPrimarySpeedFactor() const noexcept { return moveStates[0].speedFactor; }	// Return the current speed factor as a fraction
 	float GetExtrusionFactor(size_t extruder) noexcept;							// Return the current extrusion factor for the specified extruder
 
 	float GetRawExtruderTotalByDrive(size_t extruder) const noexcept;			// Get the total extrusion since start of print, for one drive
@@ -193,7 +193,7 @@ public:
 	bool LockMovementAndWaitForStandstillNoSync(GCodeBuffer& gb) noexcept;		// Lock movement and wait for pending moves to finish but don't sync if using multiple movement queues
 
 #if SUPPORT_12864_LCD
-	void SetSpeedFactor(float factor) noexcept;									// Set the speed factor
+	void SetPrimarySpeedFactor(float factor) noexcept;							// Set the speed factor
 	void SetExtrusionFactor(size_t extruder, float factor) noexcept;			// Set an extrusion factor for the specified extruder
 	void SelectPrimaryTool(int toolNumber, bool simulating) noexcept { moveStates[0].SelectTool(toolNumber, simulating); }
 	bool ProcessCommandFromLcd(const char *cmd) noexcept;						// Process a GCode command from the 12864 LCD returning true if the command was accepted
@@ -638,7 +638,6 @@ private:
 	AxesBitmap axesHomed;						// Bitmap of which axes have been homed
 	AxesBitmap axesVirtuallyHomed;				// same as axesHomed except all bits are set when simulating
 
-	float speedFactor;							// speed factor as a fraction (normally 1.0)
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors
 	float currentBabyStepOffsets[MaxAxes];		// The accumulated axis offsets due to baby stepping requests
