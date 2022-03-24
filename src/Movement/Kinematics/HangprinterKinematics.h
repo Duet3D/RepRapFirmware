@@ -41,8 +41,15 @@ public:
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
 #if DUAL_CAN
+	static GCodeResult ReadODrive3AxisForce(DriverId driver, const StringRef& reply,
+																					float setTorqueConstants[] = nullptr, uint32_t setMechanicalAdvantage[] = nullptr,
+																					uint32_t setSpoolGearTeeth[] = nullptr, uint32_t setMotorGearTeeth[] = nullptr,
+																					float setSpoolRadii[] = nullptr) THROWS(GCodeException);
 	static GCodeResult ReadODrive3Encoder(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-	static GCodeResult SetODrive3TorqueMode(DriverId driver, float torque, const StringRef& reply) noexcept;
+	static GCodeResult SetODrive3TorqueMode(DriverId driver, float force_Newton, const StringRef& reply,
+																					uint32_t setMechanicalAdvantage[] = nullptr,
+																					uint32_t setSpoolGearTeeth[] = nullptr, uint32_t setMotorGearTeeth[] = nullptr,
+																					float setSpoolRadii[] = nullptr) noexcept;
 #endif
 
 protected:
@@ -91,6 +98,7 @@ private:
 	float maxPlannedForce_Newton[HANGPRINTER_AXES] = { 0.0F };
 	float guyWireLengths[HANGPRINTER_AXES] = { 0.0F };
 	float targetForce_Newton = 0.0F;
+	float torqueConstants[HANGPRINTER_AXES] = { 0.0F };
 
 	// Derived parameters
 	float k0[HANGPRINTER_AXES] = { 0.0F };
@@ -111,8 +119,9 @@ private:
 		bool valid = false;
 		float value = 0.0;
 	};
+	static ODriveAnswer GetODrive3MotorCurrent(DriverId driver, const StringRef& reply) THROWS(GCodeException);
 	static ODriveAnswer GetODrive3EncoderEstimate(DriverId driver, bool makeReference, const StringRef& reply, bool subtractReference) THROWS(GCodeException);
-	static GCodeResult SetODrive3TorqueModeInner(DriverId driver, float torque, const StringRef& reply) noexcept;
+	static GCodeResult SetODrive3TorqueModeInner(DriverId driver, float torque_Nm, const StringRef& reply) noexcept;
 	static GCodeResult SetODrive3PosMode(DriverId driver, const StringRef& reply) noexcept;
 #endif
 };

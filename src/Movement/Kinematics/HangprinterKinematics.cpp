@@ -70,7 +70,7 @@ HangprinterKinematics::HangprinterKinematics() noexcept
 
 void HangprinterKinematics::Init() noexcept
 {
-  /* Naive buildup factor calculation (assumes cylindrical, straight line)
+	/* Naive buildup factor calculation (assumes cylindrical, straight line)
 	 * line diameter: 0.5 mm
 	 * spool height: 8.0 mm
 	 * (line_cross_section_area)/(height*pi): ((0.5/2)*(0.5/2)*pi)/(8.0*pi) = 0.0078 mm
@@ -92,6 +92,7 @@ void HangprinterKinematics::Init() noexcept
 	constexpr float DefaultMaxPlannedForce_Newton[4] = { 70.0F, 70.0F, 70.0F, 70.0F };
 	constexpr float DefaultGuyWireLengths[HANGPRINTER_AXES] = { -1.0F }; // If one of these are negative they will be calculated in Recalc() instead
 	constexpr float DefaultTargetForce_Newton = 20.0F; // 20 chosen quite arbitrarily
+	constexpr float DefaultTorqueConstants[HANGPRINTER_AXES] = { 0.0F };
 
 	ARRAY_INIT(anchors, DefaultAnchors);
 	printRadius = DefaultPrintRadius;
@@ -108,6 +109,7 @@ void HangprinterKinematics::Init() noexcept
 	ARRAY_INIT(maxPlannedForce_Newton, DefaultMaxPlannedForce_Newton);
 	ARRAY_INIT(guyWireLengths, DefaultGuyWireLengths);
 	targetForce_Newton = DefaultTargetForce_Newton;
+	ARRAY_INIT(torqueConstants, DefaultTorqueConstants);
 
 	Recalc();
 }
@@ -158,9 +160,9 @@ void HangprinterKinematics::Recalc() noexcept
 	// If no guy wire lengths are configured, assume a default configuration
 	// with all spools stationary located at the D anchor
 	if (guyWireLengths[A_AXIS] < 0.0F or
-	    guyWireLengths[A_AXIS] < 0.0F or
-	    guyWireLengths[A_AXIS] < 0.0F or
-	    guyWireLengths[A_AXIS] < 0.0F) {
+	    guyWireLengths[B_AXIS] < 0.0F or
+	    guyWireLengths[C_AXIS] < 0.0F or
+	    guyWireLengths[D_AXIS] < 0.0F) {
 		guyWireLengths[A_AXIS] = hyp3(anchors[A_AXIS], anchors[D_AXIS]);
 		guyWireLengths[B_AXIS] = hyp3(anchors[B_AXIS], anchors[D_AXIS]);
 		guyWireLengths[C_AXIS] = hyp3(anchors[C_AXIS], anchors[D_AXIS]);
@@ -176,6 +178,9 @@ void HangprinterKinematics::Recalc() noexcept
 		distancesWithRelaxedSpringsOrigin[i] = distancesOrigin[i] - fOrigin[i] / (springKsOrigin[i] * mechanicalAdvantage[i]);
 	}
 
+	// Setting and reading of forces.
+	ReadODrive3AxisForce({}, StringRef(nullptr, 0), torqueConstants, mechanicalAdvantage, spoolGearTeeth, motorGearTeeth, spoolRadii);
+	SetODrive3TorqueMode({}, 0.0F, StringRef(nullptr, 0), mechanicalAdvantage, spoolGearTeeth, motorGearTeeth, spoolRadii);
 }
 
 // Return the name of the current kinematics
@@ -291,6 +296,11 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			return true;
 		}
 		gb.TryGetFValue('T', targetForce_Newton, seen);
+		if (gb.TryGetFloatArray('C', HANGPRINTER_AXES, torqueConstants, reply, seen))
+		{
+			error = true;
+			return true;
+		}
 		if (seen)
 		{
 			Recalc();
@@ -310,7 +320,8 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 				"I%.1f:%.1f:%.1f:%.1f\n"
 				"X%.1f:%.1f:%.1f:%.1f\n"
 				"Y%.1f:%.1f:%.1f:%.1f\n"
-				"T%.1f",
+				"T%.1f\n"
+				"C%.4f:%.4f:%.4f:%.4f",
 				(double)spoolBuildupFactor,
 				(double)spoolRadii[A_AXIS], (double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS],
 				(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS], (int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS],
@@ -323,7 +334,8 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 				(double)minPlannedForce_Newton[A_AXIS], (double)minPlannedForce_Newton[B_AXIS], (double)minPlannedForce_Newton[C_AXIS], (double)minPlannedForce_Newton[D_AXIS],
 				(double)maxPlannedForce_Newton[A_AXIS], (double)maxPlannedForce_Newton[B_AXIS], (double)maxPlannedForce_Newton[C_AXIS], (double)maxPlannedForce_Newton[D_AXIS],
 				(double)guyWireLengths[A_AXIS], (double)guyWireLengths[B_AXIS], (double)guyWireLengths[C_AXIS], (double)guyWireLengths[D_AXIS],
-				(double)targetForce_Newton
+				(double)targetForce_Newton,
+				(double)torqueConstants[A_AXIS], (double)torqueConstants[B_AXIS], (double)torqueConstants[C_AXIS], (double)torqueConstants[D_AXIS]
 				);
 		}
 	}
@@ -570,10 +582,12 @@ bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const noexc
 						ok = f->Write(scratchString.c_str());
 						if (ok)
 						{
-							scratchString.printf(" Y%.1f:%.1f:%.1f:%.1f T%.1f\n",
+							scratchString.printf(" Y%.1f:%.1f:%.1f:%.1f T%.1f C%.4f:%.4f:%.4f:%.4f\n",
 								(double)guyWireLengths[A_AXIS], (double)guyWireLengths[B_AXIS],
 								(double)guyWireLengths[C_AXIS], (double)guyWireLengths[D_AXIS],
-								(double)targetForce_Newton
+								(double)targetForce_Newton,
+								(double)torqueConstants[A_AXIS], (double)torqueConstants[B_AXIS],
+								(double)torqueConstants[C_AXIS], (double)torqueConstants[D_AXIS]
 							);
 							ok = f->Write(scratchString.c_str());
 						}
@@ -692,6 +706,43 @@ void HangprinterKinematics::PrintParameters(const StringRef& reply) const noexce
 }
 
 #if DUAL_CAN
+HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3MotorCurrent(DriverId driver, const StringRef& reply) THROWS(GCodeException)
+{
+	const uint8_t cmd = CANSimple::MSG_GET_IQ;
+	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
+	if (buf == nullptr)
+	{
+		return {};
+	}
+	buf->id = CanInterface::ODrive::ArbitrationId(driver, cmd);
+	buf->remote = true; // Indicates that we expect an answer
+	CanInterface::ODrive::FlushCanReceiveHardware();
+	CanInterface::SendPlainMessageNoFree(buf);
+	bool ok = CanInterface::ODrive::GetExpectedSimpleMessage(buf, driver, cmd, reply);
+	float motorCurrent = 0.0;
+	if (ok)
+	{
+		size_t const expectedResponseLength = 8;
+		ok = (buf->dataLength == expectedResponseLength);
+		if (ok)
+		{
+			motorCurrent = LoadLEFloat(buf->msg.raw);
+		}
+		else
+		{
+			reply.printf("Unexpected response length: %d", buf->dataLength);
+		}
+	}
+	CanMessageBuffer::Free(buf);
+	if (ok)
+	{
+		return {true, motorCurrent};
+	}
+	return {};
+}
+#endif // DUAL_CAN
+
+#if DUAL_CAN
 HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEstimate(DriverId const driver, bool const makeReference, const StringRef& reply, bool const subtractReference) THROWS(GCodeException)
 {
 	const uint8_t cmd = CANSimple::MSG_GET_ENCODER_ESTIMATES;
@@ -774,6 +825,52 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 #endif // DUAL_CAN
 
 #if DUAL_CAN
+GCodeResult HangprinterKinematics::ReadODrive3AxisForce(DriverId const driver, const StringRef& reply, float setTorqueConstants[], uint32_t setMechanicalAdvantage[], uint32_t setSpoolGearTeeth[], uint32_t setMotorGearTeeth[], float setSpoolRadii[]) THROWS(GCodeException)
+{
+	static float torqueConstants_[HANGPRINTER_AXES] = { 0.0 };
+	static uint32_t mechanicalAdvantage_[HANGPRINTER_AXES] = { 0 };
+	static uint32_t spoolGearTeeth_[HANGPRINTER_AXES] = { 0 };
+	static uint32_t motorGearTeeth_[HANGPRINTER_AXES] = { 0 };
+	static float spoolRadii_[HANGPRINTER_AXES] = { 0.0 };
+	if (setTorqueConstants != nullptr && setMechanicalAdvantage != nullptr && setSpoolGearTeeth != nullptr &&
+			setMotorGearTeeth != nullptr && setSpoolRadii != nullptr) {
+		for(size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+			torqueConstants_[i] = setTorqueConstants[i];
+			mechanicalAdvantage_[i] = setMechanicalAdvantage[i];
+			spoolGearTeeth_[i] = setSpoolGearTeeth[i];
+			motorGearTeeth_[i] = setMotorGearTeeth[i];
+			spoolRadii_[i] = setSpoolRadii[i];
+		}
+		return GCodeResult::ok;
+	}
+
+	HangprinterKinematics::ODriveAnswer const motorCurrent = GetODrive3MotorCurrent(driver, reply);
+	if (motorCurrent.valid)
+	{
+		size_t const boardIndex = driver.boardAddress - 40;
+		if (boardIndex < 0 or boardIndex > 3) {
+			reply.catf("Board address not between 40 and 43: %d", driver.boardAddress);
+			return GCodeResult::error;
+		}
+		// This force calculation if very rough, assuming perfect data from ODrive,
+		// perfect transmission between motor gear and spool gear,
+		// the exact same line buildup on spool as we have at the origin,
+		// and no losses from any of the bearings or eyelets in the motion system.
+		float motorTorque_Nm = motorCurrent.value * torqueConstants_[boardIndex];
+		if (driver.boardAddress == 40 || driver.boardAddress == 41) // Driver direction is not stored on main board!! (will be in the future)
+		{
+			motorTorque_Nm = -motorTorque_Nm;
+		}
+		float const lineTension = 1000.0 * (motorTorque_Nm * (spoolGearTeeth_[boardIndex]/motorGearTeeth_[boardIndex])) / spoolRadii_[boardIndex];
+		float const force = lineTension * mechanicalAdvantage_[boardIndex];
+		reply.catf("%.2f, ", (double)(force));
+		return GCodeResult::ok;
+	}
+	return GCodeResult::error;
+}
+#endif // DUAL_CAN
+
+#if DUAL_CAN
 GCodeResult HangprinterKinematics::ReadODrive3Encoder(DriverId const driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	HangprinterKinematics::ODriveAnswer const estimate = GetODrive3EncoderEstimate(driver, gb.Seen('S'), reply, true);
@@ -792,7 +889,7 @@ GCodeResult HangprinterKinematics::ReadODrive3Encoder(DriverId const driver, GCo
 #endif // DUAL_CAN
 
 #if DUAL_CAN
-GCodeResult HangprinterKinematics::SetODrive3TorqueModeInner(DriverId const driver, float const torque, const StringRef& reply) noexcept
+GCodeResult HangprinterKinematics::SetODrive3TorqueModeInner(DriverId const driver, float const torque_Nm, const StringRef& reply) noexcept
 {
 	// Get a buffer
 	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
@@ -805,7 +902,7 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueModeInner(DriverId const driv
 	buf->id = CanInterface::ODrive::ArbitrationId(driver, CANSimple::MSG_SET_INPUT_TORQUE);
 	buf->dataLength = 4;
 	buf->remote = false;
-	memcpy(buf->msg.raw, &torque, sizeof(torque));
+	memcpy(buf->msg.raw, &torque_Nm, sizeof(torque_Nm));
 	CanInterface::SendPlainMessageNoFree(buf);
 
 	// Enable Torque Control Mode
@@ -828,7 +925,7 @@ GCodeResult HangprinterKinematics::SetODrive3PosMode(DriverId const driver, cons
 	if (estimate.valid)
 	{
 		float const desiredPos = estimate.value;
-		CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
+		CanMessageBuffer* buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
 		if (buf == nullptr)
 		{
 			return GCodeResult::error;
@@ -856,11 +953,28 @@ GCodeResult HangprinterKinematics::SetODrive3PosMode(DriverId const driver, cons
 #endif // DUAL_CAN
 
 #if DUAL_CAN
-GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, float torque, const StringRef& reply) noexcept
+GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, float force_Newton, const StringRef& reply,
+																												uint32_t setMechanicalAdvantage[], uint32_t setSpoolGearTeeth[],
+																												uint32_t setMotorGearTeeth[], float setSpoolRadii[]) noexcept
 {
+	static uint32_t mechanicalAdvantage_[HANGPRINTER_AXES] = { 0 };
+	static uint32_t spoolGearTeeth_[HANGPRINTER_AXES] = { 0 };
+	static uint32_t motorGearTeeth_[HANGPRINTER_AXES] = { 0 };
+	static float spoolRadii_[HANGPRINTER_AXES] = { 0.0 };
+	if (setMechanicalAdvantage != nullptr && setSpoolGearTeeth != nullptr &&
+			setMotorGearTeeth != nullptr && setSpoolRadii != nullptr) {
+		for(size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+			mechanicalAdvantage_[i] = setMechanicalAdvantage[i];
+			spoolGearTeeth_[i] = setSpoolGearTeeth[i];
+			motorGearTeeth_[i] = setMotorGearTeeth[i];
+			spoolRadii_[i] = setSpoolRadii[i];
+		}
+		return GCodeResult::ok;
+	}
+
 	GCodeResult res = GCodeResult::ok;
-	constexpr double MIN_TORQUE_NM = 0.0001;
-	if (fabs(torque) < MIN_TORQUE_NM)
+	constexpr double MIN_TORQUE_N = 0.001;
+	if (fabs(force_Newton) < MIN_TORQUE_N)
 	{
 		res = SetODrive3PosMode(driver, reply);
 		if (res == GCodeResult::ok)
@@ -870,16 +984,25 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, f
 	}
 	else
 	{
+		size_t const boardIndex = driver.boardAddress - 40;
+		if (boardIndex < 0 or boardIndex > 3) {
+			reply.catf("Board address not between 40 and 43: %d", driver.boardAddress);
+			return GCodeResult::error;
+		}
+
+		float const lineTension_N = force_Newton / mechanicalAdvantage_[boardIndex];
+		float const spoolTorque_Nm = lineTension_N * spoolRadii_[boardIndex] * 0.001;
+		float motorTorque_Nm = spoolTorque_Nm * motorGearTeeth_[boardIndex] / spoolGearTeeth_[boardIndex];
 		// Set the right sign
-		torque = std::abs(torque);
+		motorTorque_Nm = std::abs(motorTorque_Nm);
 		if (driver.boardAddress == 40 || driver.boardAddress == 41) // Driver direction is not stored on main board!! (will be in the future)
 		{
-			torque = -torque;
+			motorTorque_Nm = -motorTorque_Nm;
 		}
-		res = SetODrive3TorqueModeInner(driver, torque, reply);
+		res = SetODrive3TorqueModeInner(driver, motorTorque_Nm, reply);
 		if (res == GCodeResult::ok)
 		{
-			reply.catf("%.6f Nm, ", (double)torque);
+			reply.catf("%.6f Nm, ", (double)motorTorque_Nm);
 		}
 	}
 	return res;

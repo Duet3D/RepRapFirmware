@@ -1381,15 +1381,15 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 	DriverId driverIds[drivesCount];
 	gb.GetDriverIdArray(driverIds, drivesCount);
 
-	bool const isEncoderReading = (gb.GetCommandFraction() == 3);
-	if (isEncoderReading)
+	bool const isSetOfReadings = (gb.GetCommandFraction() == 3 || gb.GetCommandFraction() == 8 );
+	if (isSetOfReadings)
 	{
 		reply.copy("[");
 	}
 
-	// Hangprinter needs M569 to support multiple P parameters in M569.3 and M569.4. This poses a problem for other uses of M569 because the output may be too long
+	// Hangprinter needs M569 to support multiple P parameters in M569.3, M569.4, and M569.8. This poses a problem for other uses of M569 because the output may be too long
 	// to fit in the reply buffer, and we can only use an OutputBuffer instead if the overall result is success.
-	// Therefore we only support multiple P parameters for subfunctions 3 and 4.
+	// Therefore we only support multiple P parameters for subfunctions 3, 4, and 8.
 	GCodeResult res = GCodeResult::ok;
 	for (size_t i = 0; i < drivesCount; ++i)
 	{
@@ -1401,13 +1401,13 @@ GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THR
 					:
 #endif
 					ConfigureLocalDriver(gb, reply, id.localDriver);
-		if (res != GCodeResult::ok || (!isEncoderReading && gb.GetCommandFraction() != 4))
+		if (res != GCodeResult::ok || (!isSetOfReadings && gb.GetCommandFraction() != 4))
 		{
 			break;
 		}
 	}
 
-	if (isEncoderReading && res == GCodeResult::ok)
+	if (isSetOfReadings && res == GCodeResult::ok)
 	{
 		reply.cat(" ],\n");
 	}
