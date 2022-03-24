@@ -144,6 +144,16 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return GCodeResult::notFinished;
+			}
+#if SUPPORT_ASYNC_MOVES
+			if (!gb.IsPrimary())
+			{
+				return GCodeResult::ok;
+			}
+#endif
 			workplaceCoordinates[GetMovementState(gb).currentCoordinateSystem][axis] = -gb.GetDistance();
 			seen = true;
 		}

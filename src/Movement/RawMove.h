@@ -17,10 +17,13 @@ struct RawMove
 	float coords[MaxAxesPlusExtruders];								// new positions for the axes, amount of movement for the extruders
 	float initialUserC0, initialUserC1;								// if this is a segment of an arc move, the user XYZ coordinates at the start
 	float feedRate;													// feed rate of this move
-	float moveStartVirtualExtruderPosition;									// the virtual extruder position at the start of this move, for normal moves
+	float moveStartVirtualExtruderPosition;							// the virtual extruder position at the start of this move, for normal moves
 	FilePosition filePos;											// offset in the file being printed at the start of reading this move
 	float proportionDone;											// what proportion of the entire move has been done when this segment is complete
 	float cosXyAngle;												// the cosine of the change in XY angle between the previous move and this move
+	float maxPrintingAcceleration;
+	float maxTravelAcceleration;
+
 	Tool *currentTool;												// which tool (if any) is being used
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required

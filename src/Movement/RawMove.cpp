@@ -50,6 +50,9 @@ void MovementState::Reset() noexcept
 		f = 0.0;									// clear out all axis and extruder coordinates
 	}
 
+	maxPrintingAcceleration = ConvertAcceleration(DefaultPrintingAcceleration);
+	maxTravelAcceleration = ConvertAcceleration(DefaultTravelAcceleration);
+
 	currentZHop = 0.0;								// clear this before calling ToolOffsetInverseTransform
 	currentTool = nullptr;
 	latestVirtualExtruderPosition = moveStartVirtualExtruderPosition = 0.0;

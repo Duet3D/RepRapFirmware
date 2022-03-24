@@ -242,6 +242,8 @@ public:
 	{
 		return workplaceCoordinates[workplaceNumber][axis];
 	}
+	float GetPrimaryMaxPrintingAcceleration() const noexcept { return moveStates[0].maxPrintingAcceleration; }
+	float GetPrimaryMaxTravelAcceleration() const noexcept { return moveStates[0].maxTravelAcceleration; }
 
 # if SUPPORT_COORDINATE_ROTATION
 	float GetRotationAngle() const noexcept { return g68Angle; }
@@ -387,6 +389,7 @@ private:
 		pre(drive < platform.GetNumActualDirectDrivers());																// Deal with M569 for one local driver
 	GCodeResult ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
 		pre(drive < platform.GetNumActualDirectDrivers());																// Deal with M569.0 for one local driver
+	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);					// process M204
 #if SUPPORT_ACCELEROMETERS
 	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);					// Deal with M955
 	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M956

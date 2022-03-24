@@ -105,17 +105,17 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
 	{ "limitAxes",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().LimitAxes()),										ObjectModelEntryFlags::none },
 	{ "noMovesBeforeHoming",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().NoMovesBeforeHoming()),								ObjectModelEntryFlags::none },
-	{ "printingAcceleration",	OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxPrintingAcceleration), 1),				ObjectModelEntryFlags::none },
+	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxPrintingAcceleration()), 1),	ObjectModelEntryFlags::none },
 	{ "queue",					OBJECT_MODEL_FUNC_NOSELF(&queueArrayDescriptor),												ObjectModelEntryFlags::none },
 #if SUPPORT_COORDINATE_ROTATION
 	{ "rotation",				OBJECT_MODEL_FUNC(self, 44),																	ObjectModelEntryFlags::none },
 #endif
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 2),								ObjectModelEntryFlags::none },
-	{ "travelAcceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxTravelAcceleration), 1),					ObjectModelEntryFlags::none },
-	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimaryMovementState().latestVirtualExtruderPosition, 5),	ObjectModelEntryFlags::live },
-	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber() - 1),	ObjectModelEntryFlags::none },
-	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber()),		ObjectModelEntryFlags::obsolete },
+	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxTravelAcceleration()), 1),		ObjectModelEntryFlags::none },
+	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimaryMovementState().latestVirtualExtruderPosition, 5),			ObjectModelEntryFlags::live },
+	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber() - 1),				ObjectModelEntryFlags::none },
+	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber()),					ObjectModelEntryFlags::obsolete },
 
 	// 1. Move.Idle members
 	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor(), 1),						ObjectModelEntryFlags::none },
@@ -202,7 +202,6 @@ Move::Move() noexcept
 #if SUPPORT_ASYNC_MOVES
 	  heightController(nullptr),
 #endif
-	  maxPrintingAcceleration(ConvertAcceleration(DefaultPrintingAcceleration)), maxTravelAcceleration(ConvertAcceleration(DefaultTravelAcceleration)),
 	  jerkPolicy(0),
 	  numCalibratedFactors(0)
 {
@@ -975,38 +974,6 @@ bool Move::WriteResumeSettings(FileStore *f) const noexcept
 }
 
 #endif
-
-// Process M204
-GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException)
-{
-	bool seen = false;
-	if (gb.Seen('S'))
-	{
-		// For backwards compatibility with old versions of Marlin (e.g. for Cura and the Prusa fork of slic3r), set both accelerations
-		seen = true;
-		maxTravelAcceleration = maxPrintingAcceleration = gb.GetAcceleration();
-	}
-	if (gb.Seen('P'))
-	{
-		seen = true;
-		maxPrintingAcceleration = gb.GetAcceleration();
-	}
-	if (gb.Seen('T'))
-	{
-		seen = true;
-		maxTravelAcceleration = gb.GetAcceleration();
-	}
-	if (seen)
-	{
-		reprap.MoveUpdated();
-	}
-	else
-	{
-		reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f mm/sec^2",
-						(double)InverseConvertAcceleration(maxPrintingAcceleration), (double)InverseConvertAcceleration(maxTravelAcceleration));
-	}
-	return GCodeResult::ok;
-}
 
 // Process M595
 GCodeResult Move::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)

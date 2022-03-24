@@ -197,6 +197,39 @@ void GCodes::ChangeToObject(GCodeBuffer& gb, int objectNumber) noexcept
 	}
 }
 
+// Process M204
+GCodeResult GCodes::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException)
+{
+	MovementState& ms = GetMovementState(gb);
+	bool seen = false;
+	if (gb.Seen('S'))
+	{
+		// For backwards compatibility with old versions of Marlin (e.g. for Cura and the Prusa fork of slic3r), set both accelerations
+		seen = true;
+		ms.maxTravelAcceleration = ms.maxPrintingAcceleration = gb.GetAcceleration();
+	}
+	if (gb.Seen('P'))
+	{
+		seen = true;
+		ms.maxPrintingAcceleration = gb.GetAcceleration();
+	}
+	if (gb.Seen('T'))
+	{
+		seen = true;
+		ms.maxTravelAcceleration = gb.GetAcceleration();
+	}
+	if (seen)
+	{
+		reprap.MoveUpdated();
+	}
+	else
+	{
+		reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f mm/sec^2",
+						(double)InverseConvertAcceleration(ms.maxPrintingAcceleration), (double)InverseConvertAcceleration(ms.maxTravelAcceleration));
+	}
+	return GCodeResult::ok;
+}
+
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Save some resume information, returning true if successful

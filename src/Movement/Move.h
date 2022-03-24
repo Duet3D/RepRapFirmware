@@ -93,7 +93,6 @@ public:
 
 	float PushBabyStepping(size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 
-	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);		// process M204
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// process M595
 	GCodeResult ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M572
 
@@ -103,8 +102,6 @@ public:
 	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 #endif
 
-	float GetMaxPrintingAcceleration() const noexcept { return maxPrintingAcceleration; }
-	float GetMaxTravelAcceleration() const noexcept { return maxTravelAcceleration; }
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
 	ExtruderShaper& GetExtruderShaper(size_t extruder) noexcept { return extruderShapers[extruder]; }
 
@@ -263,9 +260,6 @@ private:
 
 	SimulationMode simulationMode;						// Are we simulating, or really printing?
 	MoveState moveState;								// whether the idle timer is active
-
-	float maxPrintingAcceleration;
-	float maxTravelAcceleration;
 
 	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
