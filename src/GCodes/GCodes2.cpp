@@ -482,6 +482,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 {
 	const int code = gb.GetCommandNumber();
 
+	// In simulation mode we don't execute most M-commands
 	if (   IsSimulating()
 		&& (code < 20 || code > 37)
 		&& code != 0 && code != 1 && code != 82 && code != 83 && code != 105 && code != 109 && code != 111 && code != 112 && code != 122
@@ -490,6 +491,55 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		HandleReply(gb, GCodeResult::ok, "");
 		return true;			// we don't simulate most M codes
 	}
+
+#if SUPPORT_ASYNC_MOVES
+	// If we are not the primary GCode reader for this stream, we don't execute most M-commands
+	if (!gb.IsPrimary())
+	{
+		switch (code)
+		{
+		case 0:
+		case 1:
+		case 23:
+		case 24:
+		case 32:
+		case 37:
+		case 82:
+		case 83:
+		case 98:
+		case 99:
+		case 112:
+		case 120:
+		case 121:
+		case 400:
+		case 555:
+		case 596:
+			// These commands are executed by all GCode processors, at least to start with
+			break;
+
+		case 17:
+		case 18:
+		case 81:
+		case 84:
+		case 190:
+		case 191:
+		case 206:
+		case 451:
+		case 452:
+		case 453:
+			// These commands cause synchronisation but are then executed by just the primary processor. The code to implement the command also calls LockMovementAndWaitForStandstill.
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
+			// no break
+		default:
+			// All remaining commands are executed by the primary processor only
+			HandleReply(gb, GCodeResult::ok, "");
+			return true;			// we don't simulate most M codes
+		}
+	}
+#endif
 
 	// Can we queue this code?
 	if (gb.CanQueueCodes())
@@ -552,12 +602,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		else
 		{
 			result = GCodeResult::ok;
-#if SUPPORT_ASYNC_MOVES
-		const bool isPrimary = gb.IsPrimary();								// this is used by the BREAK_IF_NOT_PRIMARY macro and perhaps elsewhere
-# define BREAK_IF_NOT_PRIMARY	if (!isPrimary) { break; }
-#else
-# define BREAK_IF_NOT_PRIMARY	// nothing
-#endif
 			switch (code)
 			{
 			case 0: // Stop
@@ -604,7 +648,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 3: // Spin spindle clockwise
 			case 4: // Spin spindle counter clockwise
-				BREAK_IF_NOT_PRIMARY
 				{
 					MovementState& ms = GetMovementState(gb);
 					if (machineType == MachineType::cnc)
@@ -659,7 +702,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 5: // Spindle motor off
-				BREAK_IF_NOT_PRIMARY
 				{
 					MovementState& ms = GetMovementState(gb);
 					switch (machineType)
@@ -716,7 +758,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					return false;
 				}
-				BREAK_IF_NOT_PRIMARY
 				{
 					bool seen = false;
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
@@ -800,7 +841,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 			case 20:		// List files on SD card
-				BREAK_IF_NOT_PRIMARY
 				if (!LockFileSystem(gb))		// don't allow more than one at a time to avoid contention on output buffers
 				{
 					return false;
@@ -878,7 +918,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 21: // Initialise SD card
-				BREAK_IF_NOT_PRIMARY
 				if (!LockFileSystem(gb))		// don't allow more than one at a time to avoid contention on output buffers
 				{
 					return false;
@@ -890,7 +929,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 22: // Release SD card
-				BREAK_IF_NOT_PRIMARY
 				if (!LockFileSystem(gb))		// don't allow more than one at a time to avoid contention on output buffers
 				{
 					return false;
@@ -1041,7 +1079,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 226: // Synchronous pause, normally initiated from within the file being printed
 			case 601:
-				BREAK_IF_NOT_PRIMARY
 				if (pauseState == PauseState::notPaused)
 				{
 					if (gb.IsDoingFileMacro() && !gb.LatestMachineState().CanRestartMacro())
@@ -1063,7 +1100,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 600: // Filament change pause, synchronous
-				BREAK_IF_NOT_PRIMARY
 				if (pauseState == PauseState::notPaused)
 				{
 					if (fileGCode->IsDoingFileMacro())
@@ -1086,7 +1122,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 25: // Pause the print
-				BREAK_IF_NOT_PRIMARY
 				if (pauseState != PauseState::notPaused)
 				{
 					reply.copy("Printing is already paused!");
@@ -1137,7 +1172,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 			case 27: // Report print status - Deprecated
-				BREAK_IF_NOT_PRIMARY
 				if (reprap.GetPrintMonitor().IsPrinting())
 				{
 					// Pronterface keeps sending M27 commands if "Monitor status" is checked, and it specifically expects the following response syntax
@@ -1155,7 +1189,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if HAS_MASS_STORAGE
 			case 28: // Write to file
-				BREAK_IF_NOT_PRIMARY
 				{
 					String<MaxFilenameLength> filename;
 					gb.GetUnprecedentedString(filename.GetRef());
@@ -1173,12 +1206,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 29: // End of file being written; should be intercepted before getting here
-				BREAK_IF_NOT_PRIMARY
 				reply.copy("GCode end-of-file being interpreted.");
 				break;
 
 			case 30:	// Delete file
-				BREAK_IF_NOT_PRIMARY
 				{
 					String<MaxFilenameLength> filename;
 					gb.GetUnprecedentedString(filename.GetRef());
@@ -1195,7 +1226,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 				case -1:
 				case 0:		// get regular file information
-					BREAK_IF_NOT_PRIMARY
 # if HAS_SBC_INTERFACE
 					if (reprap.UsingSbcInterface())
 					{
@@ -1219,7 +1249,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if HAS_MASS_STORAGE
 				case 1:		// get thumbnail
-					BREAK_IF_NOT_PRIMARY
 					{
 						String<MaxFilenameLength> filename;
 						gb.MustSee('P');
@@ -1279,7 +1308,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 			case 38: // Report SHA1 of file
-				BREAK_IF_NOT_PRIMARY
 				if (!LockFileSystem(gb))								// getting file hash takes several calls and isn't reentrant
 				{
 					return false;
@@ -1310,7 +1338,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if HAS_MASS_STORAGE
 			case 39:	// Return SD card info
-				BREAK_IF_NOT_PRIMARY
 				{
 					uint32_t slot = 0;
 					bool dummy;
@@ -1365,7 +1392,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 			case 42:	// Turn an output pin on or off
-				BREAK_IF_NOT_PRIMARY
 				{
 					const uint32_t gpioPortNumber = gb.GetLimitedUIValue('P', MaxGpOutPorts);
 					gb.MustSee('S');
@@ -1374,12 +1400,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 73:	// Slicer-inserted print time values
-				BREAK_IF_NOT_PRIMARY
 				result = reprap.GetPrintMonitor().ProcessM73(gb, reply);
 				break;
 
 			case 80:	// ATX power on
-				BREAK_IF_NOT_PRIMARY
 				result = platform.HandleM80(gb, reply);
 				break;
 
@@ -1388,7 +1412,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					return false;
 				}
-				BREAK_IF_NOT_PRIMARY
 				result = platform.HandleM81(gb, reply);
 				break;
 
@@ -1421,11 +1444,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							if (!LockMovementAndWaitForStandstill(gb))
+							if (!LockMovementAndWaitForStandstillNoSync(gb))
 							{
 								return false;
 							}
-							BREAK_IF_NOT_PRIMARY
 							platform.SetDriveStepsPerUnit(axis, gb.GetFValue(), ustepMultiplier);
 #if SUPPORT_CAN_EXPANSION
 							axesToUpdate.SetBit(axis);
@@ -1436,11 +1458,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (gb.Seen(extrudeLetter))
 					{
-						if (!LockMovementAndWaitForStandstill(gb))
+						if (!LockMovementAndWaitForStandstillNoSync(gb))
 						{
 							return false;
 						}
-						BREAK_IF_NOT_PRIMARY
 						seen = true;
 						float eVals[MaxExtruders];
 						size_t eCount = numExtruders;
@@ -1457,7 +1478,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
-					BREAK_IF_NOT_PRIMARY
+#if SUPPORT_ASYNC_MOVES
+					if (!gb.IsPrimary())
+					{
+						break;
+					}
+#endif
 					if (seen)
 					{
 						// On a delta, if we change the drive steps/mm then we need to recalculate the motor positions
@@ -1516,7 +1542,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 101: // Un-retract, generated by S3D if "Include M101/101/103" is enabled
-				BREAK_IF_NOT_PRIMARY
 				result = RetractFilament(gb, false);
 				break;
 
@@ -1527,19 +1552,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 103: // Retract, generated by S3D if "Include M101/101/103" is enabled
-				BREAK_IF_NOT_PRIMARY
 				result = RetractFilament(gb, true);
 				break;
 
 			// For case 104, see 109
 
 			case 105: // Get temperatures
-				BREAK_IF_NOT_PRIMARY
 				GenerateTemperatureReport(reply);
 				break;
 
 			case 106: // Set/report fan values
-				BREAK_IF_NOT_PRIMARY
 				{
 					bool seenFanNum = false;
 					uint32_t fanNum;
@@ -1594,7 +1616,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 107: // Fan off - deprecated
-				BREAK_IF_NOT_PRIMARY
 				SetMappedFanSpeed(&gb, 0.0);
 				break;
 
@@ -1715,7 +1736,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 111: // Debug level
-				BREAK_IF_NOT_PRIMARY
 				{
 					bool seen = false;
 					uint32_t flags = 0;
@@ -1772,12 +1792,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 114:
-				BREAK_IF_NOT_PRIMARY
 				HandleM114(gb, reply);
 				break;
 
 			case 115: // Print firmware version or set hardware type
-				BREAK_IF_NOT_PRIMARY
 #ifdef DUET_NG
 				if (gb.Seen('P'))
 				{
@@ -1827,7 +1845,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 116: // Wait for set temperatures
-				BREAK_IF_NOT_PRIMARY
 				if (!LockMovementAndWaitForStandstillNoSync(gb))	// wait until movement has finished and deferred command queue has caught up to avoid out-of-order execution
 				{
 					return false;
@@ -1918,7 +1935,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 117:	// Display message
-				BREAK_IF_NOT_PRIMARY
 				{
 					String<M117StringLength> msg;
 					gb.GetUnprecedentedString(msg.GetRef(), true);
@@ -1927,7 +1943,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 118:	// Echo message on host
-				BREAK_IF_NOT_PRIMARY
 				{
 					gb.MustSee('S');
 					String<MaxGCodeLength> message;
@@ -2010,7 +2025,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 119:
-				BREAK_IF_NOT_PRIMARY
 				platform.GetEndstops().GetM119report(reply);
 				break;
 
@@ -2023,7 +2037,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 122:
-				BREAK_IF_NOT_PRIMARY
 				{
 					const unsigned int type = (gb.Seen('P')) ? gb.GetIValue() : 0;
 					const MessageType mt = (MessageType)(gb.GetResponseMessageType() | PushFlag);	// set the Push flag to combine multiple messages into a single OutputBuffer chain
@@ -2161,7 +2174,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_LED_STRIPS
 			case 150:
-				BREAK_IF_NOT_PRIMARY
 				result = LedStripDriver::SetColours(gb, reply);
 				break;
 #endif
@@ -2212,7 +2224,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 200: // Set filament diameter for volumetric extrusion and enable/disable volumetric extrusion
-				BREAK_IF_NOT_PRIMARY
 				if (gb.Seen('D'))
 				{
 					float diameters[MaxExtruders];
@@ -2249,7 +2260,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 201: // Set/print axis accelerations
-				BREAK_IF_NOT_PRIMARY
 				{
 					const int frac = gb.GetCommandFraction();
 					if (frac > 1)
@@ -2303,7 +2313,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 203: // Set/print minimum/maximum feedrates
-				BREAK_IF_NOT_PRIMARY
 				{
 					// Units are mm/sec if S1 is given, else mm/min
 					const bool usingMmPerSec = (gb.Seen('S') && gb.GetIValue() == 1);
@@ -2361,7 +2370,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 204: // Set max travel and printing accelerations
-				BREAK_IF_NOT_PRIMARY
 				result = ConfigureAccelerations(gb, reply);
 				break;
 
@@ -2372,7 +2380,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 207: // Set firmware retraction details
-				BREAK_IF_NOT_PRIMARY
 				if (gb.Seen('P'))
 				{
 					const unsigned int toolNumber = gb.GetUIValue();
@@ -2394,7 +2401,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 208: // Set/print maximum axis lengths. If there is an S parameter with value 1 then we set the min value, else we set the max value.
-				BREAK_IF_NOT_PRIMARY
 				{
 					bool setMin = (gb.Seen('S') ? (gb.GetIValue() == 1) : false);
 					bool seen = false;
@@ -2455,7 +2461,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 220:	// Set/report speed factor override percentage
-				BREAK_IF_NOT_PRIMARY
 				{
 					MovementState& ms = GetMovementState(gb);
 					if (gb.Seen('S'))
@@ -2485,7 +2490,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 221:	// Set/report extrusion factor override percentage
-				BREAK_IF_NOT_PRIMARY
 				{
 					uint32_t extruder = 0;
 					const bool seenD = gb.Seen('D');
@@ -2825,7 +2829,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							if (!LockMovementAndWaitForStandstill(gb))
+							if (!LockMovementAndWaitForStandstillNoSync(gb))
 							{
 								return false;
 							}
@@ -2847,7 +2851,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (gb.Seen(extrudeLetter))
 					{
-						if (!LockMovementAndWaitForStandstill(gb))
+						if (!LockMovementAndWaitForStandstillNoSync(gb))
 						{
 							return false;
 						}
@@ -4763,7 +4767,7 @@ GCodeResult GCodes::TryMacroFile(GCodeBuffer& gb) noexcept
 bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 #if SUPPORT_ASYNC_MOVES
-	if (gb.IsPrimary())
+	if (!gb.IsPrimary())
 	{
 		HandleReply(gb, GCodeResult::ok, "");
 		return true;
