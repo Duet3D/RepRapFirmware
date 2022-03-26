@@ -1430,9 +1430,12 @@ GCodeResult GCodes::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply
 
 	case 1:
 	case 3:
+	case 4:
 	case 5:
 	case 6:
-		// Main board drivers do not support closed loop modes, or reading encoders
+	case 8:
+		// Main board drivers do not support closed loop modes, or reading encoders,
+		// or reading motor currents through the subfunction 8
 		reply.copy("Command is not supported on local drivers");
 		return GCodeResult::error;
 
