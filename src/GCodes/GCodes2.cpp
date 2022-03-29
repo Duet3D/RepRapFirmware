@@ -409,6 +409,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 53:	// Temporarily use machine coordinates
+			BREAK_IF_NOT_PRIMARY
 			gb.LatestMachineState().g53Active = true;
 			break;
 
@@ -538,9 +539,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 190:
 		case 191:
 		case 206:
+		case 375:
 		case 451:
 		case 452:
 		case 453:
+		case 561:
+		case 574:
+		case 665:
+		case 666:
+		case 669:
+		case 671:
+		case 918:
 			// These commands cause synchronisation but are then executed by just the primary processor. The code to implement the command also calls LockMovementAndWaitForStandstill.
 			if (!LockMovementAndWaitForStandstill(gb))
 			{
@@ -2764,7 +2773,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					bool seen = false;
 					if (gb.Seen('P'))
 					{
-						if (!LockMovementAndWaitForStandstill(gb))
+						if (!LockMovementAndWaitForStandstillNoSync(gb))
 						{
 							return false;
 						}
@@ -2773,7 +2782,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					if (gb.Seen('S'))
 					{
-						if (!LockMovementAndWaitForStandstill(gb))
+						if (!LockMovementAndWaitForStandstillNoSync(gb))
 						{
 							return false;
 						}
@@ -2782,7 +2791,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					if (gb.Seen('R'))
 					{
-						if (!LockMovementAndWaitForStandstill(gb))
+						if (!LockMovementAndWaitForStandstillNoSync(gb))
 						{
 							return false;
 						}
@@ -3162,9 +3171,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 502: // Revert to default "factory settings" ignoring values in config-override.g
-				if (!gb.LatestMachineState().runningM502)									// avoid recursion
+				if (!gb.LatestMachineState().runningM502)							// avoid recursion
 				{
-					if (!LockMovementAndWaitForStandstill(gb))
+					if (!LockMovementAndWaitForStandstillNoSync(gb))
 					{
 						return false;
 					}
@@ -3229,7 +3238,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (gb.Seen('P'))
 				{
 					// Lock movement to try to prevent other threads opening system files while we change the system path
-					if (!LockMovementAndWaitForStandstill(gb))
+					if (!LockMovementAndWaitForStandstillNoSync(gb))
 					{
 						return false;
 					}
@@ -3746,7 +3755,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_INKJET
 			case 578: // Fire Inkjet bits
-				if (!LockMovementAndWaitForStandstill())
+				if (!LockMovementAndWaitForStandstillNoSync())
 				{
 					return false;
 				}
@@ -4059,7 +4068,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					reply.copy("Insufficient axes configured");
 					result = GCodeResult::error;
 				}
-				else if (LockMovementAndWaitForStandstill(gb))
+				else if (LockMovementAndWaitForStandstillNoSync(gb))
 				{
 					Move& move = reprap.GetMove();
 					if (move.GetNumProbedProbePoints() < 2)
@@ -4405,7 +4414,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 							   )
 							{
-								if (!LockMovementAndWaitForStandstill(gb))
+								if (!LockMovementAndWaitForStandstillNoSync(gb))
 								{
 									return false;
 								}
@@ -4423,7 +4432,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 						   )
 						{
-							if (!LockMovementAndWaitForStandstill(gb))
+							if (!LockMovementAndWaitForStandstillNoSync(gb))
 							{
 								return false;
 							}
