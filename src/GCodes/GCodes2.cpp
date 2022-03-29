@@ -118,18 +118,32 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		return true;														// we only simulate some gcodes
 	}
 
-	// The only queued GCodes are some subfunctions of G10, so we delay checking for queueing it until we are in case 10 below
+	// The only queued GCodes are some subfunctions of G10, so we delay checking for queueing this command until we are in case 10 below
 
+#if SUPPORT_ASYNC_MOVES
+	const bool isPrimary = gb.IsPrimary();									// this is used by the BREAK_IF_NOT_PRIMARY macro and elsewhere
+#endif
 	if (gb.GetCommandFraction() > 0
 		&& code != 38 && code != 59											// these are the only G-codes we implement that can have fractional parts
 	   )
 	{
+#if SUPPORT_ASYNC_MOVES
+		if (isPrimary)
+		{
+			result = TryMacroFile(gb);
+		}
+		else
+		{
+			HandleReply(gb, result, "");
+			return true;
+		}
+#else
 		result = TryMacroFile(gb);
+#endif
 	}
 	else
 	{
 #if SUPPORT_ASYNC_MOVES
-		const bool isPrimary = gb.IsPrimary();								// this is used by the BREAK_IF_NOT_PRIMARY macro and perhaps elsewhere
 # define BREAK_IF_NOT_PRIMARY	if (!isPrimary) { break; }
 #else
 # define BREAK_IF_NOT_PRIMARY	// nothing
