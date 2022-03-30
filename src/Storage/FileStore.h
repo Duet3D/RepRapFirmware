@@ -79,6 +79,9 @@ public:
 	bool Invalidate(const FATFS *fs, bool doClose) noexcept;	// Invalidate the file if it uses the specified FATFS object
 	bool IsOpenOn(const FATFS *fs) const noexcept;				// Return true if the file is open on the specified file system
 	bool IsSameFile(const FIL& otherFile) const noexcept;		// Return true if the passed file is the same as ours
+# if SUPPORT_ASYNC_MOVES
+	void CopyFrom(const FileStore *f) noexcept;					// Copy an open file handle to make a duplicate with its own position
+# endif
 # if 0	// not currently used
 	bool SetClusterMap(uint32_t[]) noexcept;					// Provide a cluster map for fast seeking
 # endif

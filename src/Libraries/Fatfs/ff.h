@@ -305,18 +305,18 @@ typedef enum {
 /*--------------------------------------------------------------*/
 /* FatFs module application interface                           */
 
-FRESULT f_open (FIL* fp, const TCHAR* path, BYTE mode) noexcept;				/* Open or create a file */
+FRESULT f_open (FIL* fp, const TCHAR* path, BYTE mode) noexcept;			/* Open or create a file */
 FRESULT f_close (FIL* fp) noexcept;											/* Close an open file object */
 FRESULT f_read (FIL* fp, void* buff, UINT btr, UINT* br) noexcept;			/* Read data from the file */
 FRESULT f_write (FIL* fp, const void* buff, UINT btw, UINT* bw) noexcept;	/* Write data to the file */
-FRESULT f_lseek (FIL* fp, FSIZE_t ofs) noexcept;								/* Move file pointer of the file object */
+FRESULT f_lseek (FIL* fp, FSIZE_t ofs) noexcept;							/* Move file pointer of the file object */
 FRESULT f_truncate (FIL* fp) noexcept;										/* Truncate the file */
 FRESULT f_sync (FIL* fp) noexcept;											/* Flush cached data of the writing file */
-FRESULT f_opendir (DIR* dp, const TCHAR* path) noexcept;						/* Open a directory */
+FRESULT f_opendir (DIR* dp, const TCHAR* path) noexcept;					/* Open a directory */
 FRESULT f_closedir (DIR* dp) noexcept;										/* Close an open directory */
 FRESULT f_readdir (DIR* dp, FILINFO* fno) noexcept;							/* Read a directory item */
 FRESULT f_findfirst (DIR* dp, FILINFO* fno, const TCHAR* path, const TCHAR* pattern) noexcept;	/* Find first file */
-FRESULT f_findnext (DIR* dp, FILINFO* fno) noexcept;							/* Find next file */
+FRESULT f_findnext (DIR* dp, FILINFO* fno) noexcept;						/* Find next file */
 FRESULT f_mkdir (const TCHAR* path) noexcept;								/* Create a sub directory */
 FRESULT f_unlink (const TCHAR* path) noexcept;								/* Delete an existing file or directory */
 FRESULT f_rename (const TCHAR* path_old, const TCHAR* path_new) noexcept;	/* Rename/Move a file or directory */
@@ -336,7 +336,7 @@ FRESULT f_mkfs (const TCHAR* path, const MKFS_PARM* opt, void* work, UINT len) n
 FRESULT f_fdisk (BYTE pdrv, const LBA_t ptbl[], void* work) noexcept;		/* Divide a physical drive into some partitions */
 FRESULT f_setcp (WORD cp) noexcept;											/* Set current code page */
 int f_putc (TCHAR c, FIL* fp) noexcept;										/* Put a character to the file */
-int f_puts (const TCHAR* str, FIL* cp) noexcept;								/* Put a string to the file */
+int f_puts (const TCHAR* str, FIL* cp) noexcept;							/* Put a string to the file */
 int f_printf (FIL* fp, const TCHAR* str, ...) noexcept;						/* Put a formatted string to the file */
 TCHAR* f_gets (TCHAR* buff, int len, FIL* fp) noexcept;						/* Get a string from the file */
 

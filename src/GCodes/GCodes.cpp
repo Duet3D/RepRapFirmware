@@ -3177,6 +3177,20 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noex
 // Start printing the file already selected. We must hold the movement lock and wait for all moves to finish before calling this, because of the call to ResetMoveCounters.
 void GCodes::StartPrinting(bool fromStart) noexcept
 {
+#if HAS_MASS_STORAGE && SUPPORT_ASYNC_MOVES
+	FileData copyFileToPrint;
+# if HAS_SBC_INTERFACE
+	if (!reprap.UsingSbcInterface())
+# endif
+	{
+		copyFileToPrint.Set(MassStorage::DuplicateOpenHandle(fileToPrint.GetUnderlyingFile()));
+		if (!copyFileToPrint.IsLive())
+		{
+			return;
+		}
+	}
+#endif
+
 	buildObjects.Init();
 	for (MovementState& ms : moveStates)
 	{
@@ -3195,10 +3209,24 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 		}
 
 		fileGCode->LatestMachineState().volumetricExtrusion = false;		// default to non-volumetric extrusion
+		fileGCode->LatestMachineState().selectedPlane = 0;					// default G2 and G3 moves to XY plane
 #if SUPPORT_ASYNC_MOVES
 		file2GCode->LatestMachineState().volumetricExtrusion = false;		// default to non-volumetric extrusion
+		file2GCode->LatestMachineState().selectedPlane = 0;					// default G2 and G3 moves to XY plane
 #endif
 	}
+
+#if HAS_MASS_STORAGE
+# if HAS_SBC_INTERFACE
+	if (!reprap.UsingSbcInterface())
+# endif
+	{
+		fileToPrint.Seek(moveStates[0].fileOffsetToPrint);
+# if SUPPORT_ASYNC_MOVES
+		copyFileToPrint.Seek(moveStates[1].fileOffsetToPrint);
+# endif
+	}
+#endif
 
 	for (size_t extruder = 0; extruder < MaxExtruders; extruder++)
 	{
@@ -3214,9 +3242,17 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		fileGCode->OriginalMachineState().fileState.MoveFrom(fileToPrint);
 		fileGCode->GetFileInput()->Reset(fileGCode->OriginalMachineState().fileState);
+# if SUPPORT_ASYNC_MOVES
+		file2GCode->OriginalMachineState().fileState.MoveFrom(copyFileToPrint);
+		file2GCode->GetFileInput()->Reset(file2GCode->OriginalMachineState().fileState);
+# endif
 #endif
 	}
+
 	fileGCode->StartNewFile();
+#if SUPPORT_ASYNC_MOVES
+	file2GCode->StartNewFile();
+#endif
 
 	reprap.GetPrintMonitor().StartedPrint();
 	platform.MessageF(LogWarn,
@@ -3224,12 +3260,17 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 							reprap.GetPrintMonitor().GetPrintingFilename());
 	if (fromStart)
 	{
-		fileGCode->LatestMachineState().selectedPlane = 0;					// default G2 and G3 moves to XY plane
 		DoFileMacro(*fileGCode, START_G, false, AsyncSystemMacroCode);		// get fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
+#if SUPPORT_ASYNC_MOVES
+		DoFileMacro(*file2GCode, START_G, false, AsyncSystemMacroCode);		// get file2GCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
+#endif
 	}
 	else
 	{
 		fileGCode->LatestMachineState().firstCommandAfterRestart = true;
+#if SUPPORT_ASYNC_MOVES
+		file2GCode->LatestMachineState().firstCommandAfterRestart = true;
+#endif
 	}
 }
 

@@ -1074,19 +1074,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						else
 # endif
 						{
-							bool fromStart = (moveStates[0].fileOffsetToPrint == 0);
+							const bool fromStart = (moveStates[0].fileOffsetToPrint == 0)
+# if SUPPORT_ASYNC_MOVES
+												&& (moveStates[1].fileOffsetToPrint == 0)
+# endif
+												;
 							if (!fromStart)
 							{
 								// We executed M26 to set the file offset, which normally means that we are executing resurrect.g.
 								// We need to copy the absolute/relative and volumetric extrusion flags over
 								fileGCode->OriginalMachineState().CopyStateFrom(gb.LatestMachineState());
-# if HAS_SBC_INTERFACE
-								if (!reprap.UsingSbcInterface())
-# endif
-# if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-								{
-									fileToPrint.Seek(moveStates[0].fileOffsetToPrint);		//TODO handle file2 as well
-								}
+# if SUPPORT_ASYNC_MOVES
+								file2GCode->OriginalMachineState().CopyStateFrom(gb.LatestMachineState());
 # endif
 								for (MovementState& ms : moveStates)
 								{
