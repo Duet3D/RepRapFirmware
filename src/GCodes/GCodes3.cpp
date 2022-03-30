@@ -513,7 +513,7 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 #endif
 
 // Handle M577
-GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply)
+GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
 	AxesBitmap endstopsToWaitFor;
 	for (size_t axis = 0; axis < numTotalAxes; ++axis)
@@ -550,35 +550,22 @@ GCodeResult GCodes::WaitForPin(GCodeBuffer& gb, const StringRef &reply)
 }
 
 // Handle M581
-GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	gb.MustSee('T');
-	const unsigned int triggerNumber = gb.GetUIValue();
-	if (triggerNumber < MaxTriggers)
-	{
-		return triggers[triggerNumber].Configure(triggerNumber, gb, reply);
-	}
-
-	reply.copy("Trigger number out of range");
-	return GCodeResult::error;
+	const unsigned int triggerNumber = gb.GetLimitedUIValue('T', MaxTriggers);
+	return triggers[triggerNumber].Configure(triggerNumber, gb, reply);
 }
 
 // Handle M582
-GCodeResult GCodes::CheckTrigger(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	gb.MustSee('T');
-	const unsigned int triggerNumber = gb.GetUIValue();
-	if (triggerNumber < MaxTriggers)
+	const unsigned int triggerNumber = gb.GetLimitedUIValue('T', MaxTriggers);
+	const bool unconditional = gb.Seen('S') && gb.GetUIValue() == 1;
+	if (unconditional || triggers[triggerNumber].CheckLevel())
 	{
-		if (triggers[triggerNumber].CheckLevel())
-		{
-			triggersPending.SetBit(triggerNumber);
-		}
-		return GCodeResult::ok;
+		triggersPending.SetBit(triggerNumber);
 	}
-
-	reply.copy("Trigger number out of range");
-	return GCodeResult::error;
+	return GCodeResult::ok;
 }
 
 // Deal with a M584
