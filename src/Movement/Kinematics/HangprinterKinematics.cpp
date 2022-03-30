@@ -178,9 +178,11 @@ void HangprinterKinematics::Recalc() noexcept
 		distancesWithRelaxedSpringsOrigin[i] = distancesOrigin[i] - fOrigin[i] / (springKsOrigin[i] * mechanicalAdvantage[i]);
 	}
 
+#if DUAL_CAN
 	// Setting and reading of forces.
 	ReadODrive3AxisForce({}, StringRef(nullptr, 0), torqueConstants, mechanicalAdvantage, spoolGearTeeth, motorGearTeeth, spoolRadii);
 	SetODrive3TorqueMode({}, 0.0F, StringRef(nullptr, 0), mechanicalAdvantage, spoolGearTeeth, motorGearTeeth, spoolRadii);
+#endif
 }
 
 // Return the name of the current kinematics
