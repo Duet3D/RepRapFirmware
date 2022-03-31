@@ -58,13 +58,17 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "inMacro",			OBJECT_MODEL_FUNC((bool)self->machineState->doingFileMacro),						ObjectModelEntryFlags::live },
 	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->GetLineNumber()),									ObjectModelEntryFlags::live },
 	{ "macroRestartable",	OBJECT_MODEL_FUNC((bool)self->machineState->macroRestartable),						ObjectModelEntryFlags::none },
+#if SUPPORT_ASYNC_MOVES
+	{ "motionSystem",		OBJECT_MODEL_FUNC((int32_t)self->GetCurrentQueueNumber()),							ObjectModelEntryFlags::live },
+#endif
 	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),									ObjectModelEntryFlags::none },
+	{ "selectedPlane",		OBJECT_MODEL_FUNC((int32_t)self->machineState->selectedPlane),						ObjectModelEntryFlags::none },
 	{ "stackDepth",			OBJECT_MODEL_FUNC((int32_t)self->GetStackDepth()),									ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->GetStateText()),											ObjectModelEntryFlags::live },
 	{ "volumetric",			OBJECT_MODEL_FUNC((bool)self->machineState->volumetricExtrusion),					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 12 };
+constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 13 + SUPPORT_ASYNC_MOVES };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GCodeBuffer)
 
