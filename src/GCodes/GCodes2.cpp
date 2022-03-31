@@ -291,15 +291,12 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 
 			gb.LatestMachineState().selectedPlane = code - 17;
-			break;
-
-		case 20: // Inches (which century are we living in, here?)
-			gb.UseInches(true);
 			reprap.InputsUpdated();
 			break;
 
+		case 20: // Inches (which century are we living in, here?)
 		case 21: // mm
-			gb.UseInches(false);
+			gb.UseInches(code == 20);
 			reprap.InputsUpdated();
 			break;
 

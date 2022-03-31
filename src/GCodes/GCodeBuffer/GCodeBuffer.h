@@ -133,7 +133,6 @@ public:
 	bool IsPrimary() const noexcept;							// Return true if this is the primary GCodeBuffer for executing commands addressed to the current queue
 #endif
 
-
 	void SetCommsProperties(uint32_t arg) noexcept;
 
 	GCodeMachineState& LatestMachineState() const noexcept { return *machineState; }
