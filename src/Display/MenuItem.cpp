@@ -441,7 +441,13 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 				case 39:	// top speed
 					currentValue.f = reprap.GetMove().GetTopSpeedMmPerSec();
 					break;
-
+				case 40:       // Print time remaining, slicer-based
+					currentValue u = (reprap.GetPrintMonitor().IsPrinting()) ? 
+										? static_cast<int>(reprap.GetPrintMonitor().EstimateTimeLeft(PrintEstimationMethod::slicerBased))
+											: 0;
+					currentFormat = PrintFormat::asTime;
+					break; 
+			                
 				default:
 					error = true;
 				}
