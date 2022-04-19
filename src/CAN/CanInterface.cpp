@@ -1514,7 +1514,7 @@ bool CanInterface::ODrive::GetExpectedSimpleMessage(CanMessageBuffer *buf, Drive
 	int count = 0;
 	bool ok = true;
 	do{
-		ok = ReceivePlainMessage(buf, MaxResponseSendWait);
+		ok = ReceivePlainMessage(buf);
 		count++;
 	} while (ok && buf->id != expectedId && count < 5);
 

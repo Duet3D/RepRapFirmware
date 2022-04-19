@@ -728,7 +728,7 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3MotorCurren
 		ok = (buf->dataLength == expectedResponseLength);
 		if (ok)
 		{
-			motorCurrent = LoadLEFloat(buf->msg.raw);
+			motorCurrent = LoadLEFloat(&(buf->msg.raw[4]));
 		}
 		else
 		{
