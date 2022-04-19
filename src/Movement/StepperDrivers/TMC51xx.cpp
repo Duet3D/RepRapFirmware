@@ -765,7 +765,9 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 		status = accumulatedDriveStatus;
 		if (clearAccumulated)
 		{
-			accumulatedDriveStatus = readRegisters[ReadDrvStat];
+			// In the following we can't just copy readRegisters[ReadDrvStat] into accumulatedDriveStatus, because we only want to set bits in accumulatedDriveStatus
+			// when they occur in 2 successive samples. So clear it instead.
+			accumulatedDriveStatus = 0;
 		}
 	}
 	else
