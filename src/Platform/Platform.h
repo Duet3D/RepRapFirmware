@@ -417,9 +417,9 @@ public:
 	bool Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
 #endif
 
-	const char *_ecv_array GetWebDir() const noexcept; 					// Where the html etc files are
-	const char *_ecv_array GetGCodeDir() const noexcept; 				// Where the gcodes are
-	const char *_ecv_array GetMacroDir() const noexcept;				// Where the user-defined macros are
+	static const char *_ecv_array GetWebDir() noexcept; 		// Where the html etc files are
+	static const char *_ecv_array GetGCodeDir() noexcept; 		// Where the gcodes are
+	static const char *_ecv_array GetMacroDir() noexcept;		// Where the user-defined macros are
 
 	// Functions to work with the system files folder
 	GCodeResult SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept;				// Set the system files path
@@ -945,18 +945,18 @@ private:
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 // Where the htm etc files are
-inline const char *_ecv_array Platform::GetWebDir() const noexcept
+inline const char *_ecv_array Platform::GetWebDir() noexcept
 {
 	return WEB_DIR;
 }
 
 // Where the gcodes are
-inline const char *_ecv_array Platform::GetGCodeDir() const noexcept
+inline const char *_ecv_array Platform::GetGCodeDir() noexcept
 {
 	return GCODE_DIR;
 }
 
-inline const char *_ecv_array Platform::GetMacroDir() const noexcept
+inline const char *_ecv_array Platform::GetMacroDir() noexcept
 {
 	return MACRO_DIR;
 }

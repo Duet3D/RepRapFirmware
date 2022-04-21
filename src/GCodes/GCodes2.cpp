@@ -875,7 +875,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else
 					{
-						dir.copy(platform.GetGCodeDir());
+						dir.copy(Platform::GetGCodeDir());
 					}
 
 					if (sparam == 2)
@@ -1211,7 +1211,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					String<MaxFilenameLength> filename;
 					gb.GetUnprecedentedString(filename.GetRef());
-					const bool ok = gb.OpenFileToWrite(platform.GetGCodeDir(), filename.c_str(), 0, false, 0);
+					const bool ok = gb.OpenFileToWrite(Platform::GetGCodeDir(), filename.c_str(), 0, false, 0);
 					if (ok)
 					{
 						reply.printf("Writing to file: %s", filename.c_str());
@@ -1232,7 +1232,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					String<MaxFilenameLength> filename;
 					gb.GetUnprecedentedString(filename.GetRef());
-					result = (platform.Delete(platform.GetGCodeDir(), filename.c_str())) ? GCodeResult::ok : GCodeResult::warning;
+					result = (platform.Delete(Platform::GetGCodeDir(), filename.c_str())) ? GCodeResult::ok : GCodeResult::warning;
 				}
 				break;
 #endif
@@ -3446,7 +3446,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					String<MaxFilenameLength> defaultFolder;
 					if (code == 560)
 					{
-						defaultFolder.copy(platform.GetWebDir());
+						defaultFolder.copy(Platform::GetWebDir());
 					}
 					else
 					{

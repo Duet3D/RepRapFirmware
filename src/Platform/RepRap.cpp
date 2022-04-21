@@ -275,12 +275,12 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "filaments",				OBJECT_MODEL_FUNC_NOSELF(FILAMENTS_DIRECTORY),							ObjectModelEntryFlags::verbose },
 	{ "firmware",				OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_DIRECTORY),							ObjectModelEntryFlags::verbose },
-	{ "gCodes",					OBJECT_MODEL_FUNC(self->platform->GetGCodeDir()),						ObjectModelEntryFlags::verbose },
-	{ "macros",					OBJECT_MODEL_FUNC(self->platform->GetMacroDir()),						ObjectModelEntryFlags::verbose },
+	{ "gCodes",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetGCodeDir()),						ObjectModelEntryFlags::verbose },
+	{ "macros",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetMacroDir()),						ObjectModelEntryFlags::verbose },
 	{ "menu",					OBJECT_MODEL_FUNC_NOSELF(MENU_DIR),										ObjectModelEntryFlags::verbose },
 	{ "scans",					OBJECT_MODEL_FUNC_NOSELF(SCANS_DIRECTORY),								ObjectModelEntryFlags::verbose },
 	{ "system",					OBJECT_MODEL_FUNC_NOSELF(ExpressionValue::SpecialType::sysDir, 0),		ObjectModelEntryFlags::none },
-	{ "web",					OBJECT_MODEL_FUNC(self->platform->GetWebDir()),							ObjectModelEntryFlags::verbose },
+	{ "web",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetWebDir()),						ObjectModelEntryFlags::verbose },
 #endif
 
 	// 2. MachineModel.limits
@@ -2026,7 +2026,7 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 	}
 	response->catf("{\"fileName\":\"%.s\",\"offset\":%" PRIu32 ",", filename, offset);
 
-	FileStore *const f = platform->OpenFile(platform->GetGCodeDir(), filename, OpenMode::read);
+	FileStore *const f = platform->OpenFile(Platform::GetGCodeDir(), filename, OpenMode::read);
 	unsigned int err = 0;
 	if (f != nullptr)
 	{
@@ -2120,7 +2120,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		// Poll file info for a specific file
 		String<MaxFilenameLength> filePath;
-		if (!MassStorage::CombineName(filePath.GetRef(), platform->GetGCodeDir(), filename))
+		if (!MassStorage::CombineName(filePath.GetRef(), Platform::GetGCodeDir(), filename))
 		{
 			info.isValid = false;
 		}
