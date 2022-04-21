@@ -315,7 +315,7 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 {
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	WriteLocker locker(printMonitorLock);
-	MassStorage::CombineName(filenameBeingPrinted.GetRef(), platform.GetGCodeDir(), filename);
+	MassStorage::CombineName(filenameBeingPrinted.GetRef(), Platform::GetGCodeDir(), filename);
 # if HAS_SBC_INTERFACE
 	if (!reprap.UsingSbcInterface())
 # endif

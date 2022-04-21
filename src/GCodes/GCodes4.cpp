@@ -1424,10 +1424,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				platform.MessageF(gb.GetResponseMessageType(), "SD write speed for %.1fMbyte file was %.2fMbytes/sec\n", (double)fileMbytes, (double)mbPerSec);
 				sdTimingFile->Close();
 
-				sdTimingFile = platform.OpenFile(platform.GetGCodeDir(), TimingFileName, OpenMode::read);
+				sdTimingFile = platform.OpenFile(Platform::GetGCodeDir(), TimingFileName, OpenMode::read);
 				if (sdTimingFile == nullptr)
 				{
-					platform.Delete(platform.GetGCodeDir(), TimingFileName);
+					platform.Delete(Platform::GetGCodeDir(), TimingFileName);
 					gb.LatestMachineState().SetError("Failed to re-open timing file");
 					gb.SetState(GCodeState::normal);
 					break;
@@ -1444,7 +1444,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (!sdTimingFile->Write(reply.c_str(), bytesToWrite))
 			{
 				sdTimingFile->Close();
-				platform.Delete(platform.GetGCodeDir(), TimingFileName);
+				platform.Delete(Platform::GetGCodeDir(), TimingFileName);
 				gb.LatestMachineState().SetError("Failed to write to timing file");
 				gb.SetState(GCodeState::normal);
 				break;
@@ -1464,7 +1464,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				const float mbPerSec = (fileMbytes * 1000.0)/(float)ms;
 				sdTimingFile->Close();
 				reply.printf("SD read speed for %.1fMbyte file was %.2fMbytes/sec", (double)fileMbytes, (double)mbPerSec);
-				platform.Delete(platform.GetGCodeDir(), TimingFileName);
+				platform.Delete(Platform::GetGCodeDir(), TimingFileName);
 				gb.SetState(GCodeState::normal);
 				break;
 			}
@@ -1473,7 +1473,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (sdTimingFile->Read(reply.Pointer(), bytesToRead) != (int)bytesToRead)
 			{
 				sdTimingFile->Close();
-				platform.Delete(platform.GetGCodeDir(), TimingFileName);
+				platform.Delete(Platform::GetGCodeDir(), TimingFileName);
 				gb.LatestMachineState().SetError("Failed to read from timing file");
 				gb.SetState(GCodeState::normal);
 				break;
