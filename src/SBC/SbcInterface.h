@@ -72,7 +72,7 @@ private:
 	DataTransfer transfer;
 	volatile bool isConnected;
 	TransferState state;
-	uint32_t numDisconnects, numTimeouts, lastTransferTime;
+	uint32_t numDisconnects, numTimeouts, numSbcTimeouts, lastTransferTime;
 
 	uint32_t maxDelayBetweenTransfers, maxFileOpenDelay, numMaxEvents;
 	bool skipNextDelay;
