@@ -1042,29 +1042,44 @@ decrease(strlen(idString))	// recursion variant
 
 	case TypeCode::Bitmap16:
 	case TypeCode::Bitmap32:
-		if (context.WantArrayLength())
 		{
-			if (*idString != 0)
+			const int numSetBits = Bitmap<uint32_t>::MakeFromRaw(val.uVal).CountSetBits();
+			if (context.WantArrayLength())
 			{
-				break;
+				if (*idString != 0)
+				{
+					break;
+				}
+				return ExpressionValue((int32_t)numSetBits);
 			}
-			const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
-			return ExpressionValue((int32_t)bm.CountSetBits());
+
+			if (*idString == '^')
+			{
+				++idString;
+				if (*idString != 0)
+				{
+					break;
+				}
+				context.AddIndex();
+				const bool inBounds = (context.GetLastIndex() >= 0 && context.GetLastIndex() < numSetBits);
+				if (context.WantExists())
+				{
+					return ExpressionValue(inBounds);
+				}
+
+				if (!inBounds)
+				{
+					throw context.ConstructParseException("array index out of bounds");
+				}
+
+				if (context.WantExists())
+				{
+					return ExpressionValue(true);
+				}
+				return ExpressionValue((int32_t)(Bitmap<uint32_t>::MakeFromRaw(val.uVal).GetSetBitNumber(context.GetLastIndex())));
+			}
 		}
-		if (*idString == '^')
-		{
-			++idString;
-			if (*idString != 0)
-			{
-				break;
-			}
-			if (context.WantExists())
-			{
-				return ExpressionValue(true);
-			}
-			const auto bm = Bitmap<uint32_t>::MakeFromRaw(val.uVal);
-			return ExpressionValue((int32_t)bm.GetSetBitNumber(context.GetLastIndex()));
-		}
+
 		if (*idString != 0)
 		{
 			break;
@@ -1076,29 +1091,45 @@ decrease(strlen(idString))	// recursion variant
 		return ExpressionValue((int32_t)val.uVal);
 
 	case TypeCode::Bitmap64:
-		if (context.WantArrayLength())
 		{
-			if (*idString != 0)
+			const int numSetBits = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue()).CountSetBits();
+			if (context.WantArrayLength())
 			{
-				break;
+				if (*idString != 0)
+				{
+					break;
+				}
+				return ExpressionValue((int32_t)numSetBits);
 			}
-			const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
-			return ExpressionValue((int32_t)bm.CountSetBits());
+
+			if (*idString == '^')
+			{
+				++idString;
+				if (*idString != 0)
+				{
+					break;
+				}
+				context.AddIndex();
+				const bool inBounds = (context.GetLastIndex() >= 0 && context.GetLastIndex() < numSetBits);
+				if (context.WantExists())
+				{
+					return ExpressionValue(inBounds);
+				}
+
+				if (!inBounds)
+				{
+					throw context.ConstructParseException("array index out of bounds");
+				}
+
+				if (context.WantExists())
+				{
+					return ExpressionValue(true);
+				}
+
+				return ExpressionValue((int32_t)(Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue()).GetSetBitNumber(context.GetLastIndex())));
+			}
 		}
-		if (*idString == '^')
-		{
-			++idString;
-			if (*idString != 0)
-			{
-				break;
-			}
-			if (context.WantExists())
-			{
-				return ExpressionValue(true);
-			}
-			const auto bm = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue());
-			return ExpressionValue((int32_t)bm.GetSetBitNumber(context.GetLastIndex()));
-		}
+
 		if (*idString != 0)
 		{
 			break;
