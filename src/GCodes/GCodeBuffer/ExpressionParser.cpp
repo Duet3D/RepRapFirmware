@@ -146,11 +146,11 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 			ParseInternal(val, evaluate, UnaryPriority);
 			if (val.GetType() == TypeCode::CString)
 			{
-				val.Set((int32_t)strlen(val.sVal));
+				val.SetSigned((int32_t)strlen(val.sVal));
 			}
 			else if (val.GetType() == TypeCode::HeapString)
 			{
-				val.Set((int32_t)val.shVal.GetLength());
+				val.SetSigned((int32_t)val.shVal.GetLength());
 			}
 			else
 			{
@@ -673,8 +673,8 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 		{
 			ThrowParseException("expected numeric operands");
 		}
-		val1.Set((int32_t)0);
-		val2.Set((int32_t)0);
+		val1.SetSigned(0);
+		val2.SetSigned(0);
 	}
 }
 
@@ -734,8 +734,8 @@ void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2
 		{
 			ThrowParseException("cannot convert operands to same type");
 		}
-		val1.Set((int32_t)0);
-		val2.Set((int32_t)0);
+		val1.SetSigned(0);
+		val2.SetSigned(0);
 	}
 }
 
@@ -769,7 +769,7 @@ void ExpressionParser::ConvertToFloat(ExpressionValue& val, bool evaluate) const
 		{
 			ThrowParseException("expected numeric operand");
 		}
-		val.Set(0.0f, 1);
+		val.SetFloat(0.0f, 1);
 	}
 }
 
@@ -781,7 +781,7 @@ void ExpressionParser::ConvertToBool(ExpressionValue& val, bool evaluate) const 
 		{
 			ThrowParseException("expected Boolean operand");
 		}
-		val.Set(false);
+		val.SetBool(false);
 	}
 }
 
@@ -798,7 +798,7 @@ void ExpressionParser::ConvertToString(ExpressionValue& val, bool evaluate) noex
 		}
 		else
 		{
-			val.Set("");
+			val.SetCString("");
 		}
 	}
 }
@@ -874,11 +874,11 @@ void ExpressionParser::ParseNumber(ExpressionValue& rslt) noexcept
 
 	if (conv.FitsInInt32())
 	{
-		rslt.Set(conv.GetInt32());
+		rslt.SetSigned(conv.GetInt32());
 	}
 	else
 	{
-		rslt.Set(conv.GetFloat(), constrain<unsigned int>(conv.GetDigitsAfterPoint(), 1, MaxFloatDigitsDisplayedAfterPoint));
+		rslt.SetFloat(conv.GetFloat(), constrain<unsigned int>(conv.GetDigitsAfterPoint(), 1, MaxFloatDigitsDisplayedAfterPoint));
 	}
 }
 
@@ -917,7 +917,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				{
 					ThrowParseException("expected integer expression");
 				}
-				index.Set((int32_t)0);
+				index.SetSigned(0);
 			}
 			AdvancePointer();										// skip the ']'
 			context.ProvideIndex(index.iVal);
@@ -941,11 +941,11 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 		switch (whichConstant.RawValue())
 		{
 		case NamedConstant::_true:
-			rslt.Set(true);
+			rslt.SetBool(true);
 			return;
 
 		case NamedConstant::_false:
-			rslt.Set(false);
+			rslt.SetBool(false);
 			return;
 
 		case NamedConstant::_null:
@@ -953,7 +953,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 			return;
 
 		case NamedConstant::pi:
-			rslt.Set(Pi);
+			rslt.SetFloat(Pi);
 			return;
 
 		case NamedConstant::iterations:
@@ -963,7 +963,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				{
 					ThrowParseException("'iterations' used when not inside a loop");
 				}
-				rslt.Set(v);
+				rslt.SetSigned(v);
 			}
 			return;
 
@@ -985,12 +985,12 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					res = 2;
 					break;
 				}
-				rslt.Set(res);
+				rslt.SetSigned(res);
 			}
 			return;
 
 		case NamedConstant::line:
-			rslt.Set((int32_t)gb.GetLineNumber());
+			rslt.SetSigned((int32_t)gb.GetLineNumber());
 			return;
 
 		default:
@@ -1043,7 +1043,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					{
 						ThrowParseException("expected numeric operand");
 					}
-					rslt.Set((int32_t)0);
+					rslt.SetSigned(0);
 				}
 				break;
 
@@ -1237,7 +1237,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					{
 						ThrowParseException("expected positive integer");
 					}
-					rslt.Set((int32_t)random(limit));
+					rslt.SetSigned((int32_t)random(limit));
 				}
 				break;
 
@@ -1316,7 +1316,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 		// "exists(global)" will anyway because "global" is a root key in the object model. Handle the other two here.
 		if (applyExists && (strcmp(id.c_str(), "param") == 0 || strcmp(id.c_str(), "var") == 0))
 		{
-			rslt.Set(true);
+			rslt.SetBool(true);
 			return;
 		}
 
@@ -1349,7 +1349,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 	const Variable* var = vars->Lookup(name);
 	if (wantExists)
 	{
-		rslt.Set(var != nullptr);
+		rslt.SetBool(var != nullptr);
 		return;
 	}
 

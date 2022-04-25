@@ -855,15 +855,15 @@ void BinaryParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
 					break;
 
 				case DataType::Float:
-					ev.Set(param->floatValue);
+					ev.SetFloat(param->floatValue);
 					break;
 
 				case DataType::Int:
-					ev.Set(param->intValue);
+					ev.SetSigned(param->intValue);
 					break;
 
 				case DataType::UInt:
-					ev.Set((int32_t)param->uintValue);
+					ev.SetSigned((int32_t)param->uintValue);
 					break;
 
 				default:

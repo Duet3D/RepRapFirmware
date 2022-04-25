@@ -5024,6 +5024,7 @@ void GCodes::SetItemStandbyTemperature(unsigned int itemNumber, float temp) noex
 	}
 }
 
+// Evalue a visibility expression string
 bool GCodes::EvaluateConditionForDisplay(const char *_ecv_array str) const noexcept
 {
 	try
@@ -5033,6 +5034,22 @@ bool GCodes::EvaluateConditionForDisplay(const char *_ecv_array str) const noexc
 	}
 	catch (GCodeException&)
 	{
+		return false;
+	}
+}
+
+// Evaluate a value string returning true if an error occurred
+bool GCodes::EvaluateValueForDisplay(const char *_ecv_array str, ExpressionValue& expr) const noexcept
+{
+	try
+	{
+		ExpressionParser parser(*lcdGCode, str, str + strlen(str));
+		expr = parser.Parse();
+		return true;
+	}
+	catch (GCodeException&)
+	{
+		expr.Set(nullptr);
 		return false;
 	}
 }

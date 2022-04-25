@@ -166,15 +166,15 @@ void Menu::DisplayMessageBox(const MessageBox& mbox) noexcept
 	const PixelNumber axisButtonStep = (availableWidth - 3 *axisButtonWidth)/2 + axisButtonWidth;
 	if (mbox.controls.IsBitSet(X_AXIS))
 	{
-		AddItem(new ValueMenuItem(top + 2 * rowHeight, left, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, 510, 1), true);
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, left, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, nullptr, 510, 1), true);
 	}
 	if (mbox.controls.IsBitSet(Y_AXIS))
 	{
-		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, 511, 1), true);
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, nullptr, 511, 1), true);
 	}
 	if (mbox.controls.IsBitSet(Z_AXIS))
 	{
-		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + 2 * axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, 512, 2), true);
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + 2 * axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, nullptr, 512, 2), true);
 	}
 
 	const PixelNumber okCancelButtonWidth = 30;
@@ -240,7 +240,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 	}
 
 	// Find the first word
-	char *args = commandWord;
+	char *_ecv_array args = commandWord;
 	while (isalpha(*args))
 	{
 		++args;
@@ -262,6 +262,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 	MenuItem::Visibility xVis = MenuItem::AlwaysVisible;
 	unsigned int decimals = 0;
 	unsigned int nparam = 0;
+	const char *_ecv_array _ecv_null strNparam = nullptr;
 	unsigned int width = 0;
 	unsigned int alignment = 0;
 	const char *text = "*";
@@ -316,7 +317,24 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 			break;
 
 		case 'N':
-			nparam = StrToU32(args, &args);
+			// 'value' command allows the N parameter to be an object mode string
+			if (*args == '{' && StringEqualsIgnoreCase(commandWord, "value"))
+			{
+				strNparam = args;
+				while (*args != '}' && *args != 0)
+				{
+					++args;
+				}
+				if (*args == '}')
+				{
+					*args = 0;
+					++args;
+				}
+			}
+			else
+			{
+				nparam = StrToU32(args, &args);
+			}
 			break;
 
 		case 'W':
@@ -388,13 +406,13 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "value"))
 	{
-		newItem = new ValueMenuItem(row, column, width, alignment, fontNumber, false, nparam, decimals);
+		newItem = new ValueMenuItem(row, column, width, alignment, fontNumber, false, strNparam, nparam, decimals);
 		AddItem(newItem, false);
 		column += newItem->GetWidth();
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "alter"))
 	{
-		newItem = new ValueMenuItem(row, column, width, alignment, fontNumber, true, nparam, decimals);
+		newItem = new ValueMenuItem(row, column, width, alignment, fontNumber, true, nullptr, nparam, decimals);
 		AddItem(newItem, true);
 		column += newItem->GetWidth();
 	}

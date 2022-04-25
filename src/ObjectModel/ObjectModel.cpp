@@ -83,6 +83,15 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		}
 		break;
 
+	case TypeCode::Duration:
+		{
+			unsigned int hours = uVal/3600,
+				minutes = (uVal / 60) % 60,
+				seconds = uVal % 60;
+			str.catf("%u:%02u:%02u", hours, minutes, seconds);
+		}
+		break;
+
 	case TypeCode::DriverId_tc:
 #if SUPPORT_CAN_EXPANSION
 		str.catf("%u.%u", (unsigned int)param, (unsigned int)uVal);
@@ -141,6 +150,64 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		uniqueIdVal->AppendCharsToString(str);
 		break;
 	}
+}
+
+// Compare two values that are assumed to be represented in the same way
+bool ExpressionValue::operator==(const ExpressionValue& other) const noexcept
+{
+	if (type == other.type)
+	{
+		switch (GetType())
+		{
+		case TypeCode::None:
+			return true;
+
+		case TypeCode::Bool:
+			return bVal == other.bVal;
+
+		case TypeCode::Char:
+			return cVal == other.cVal;
+
+		case TypeCode::CString:
+			return strcmp(sVal, other.sVal) == 0;
+
+		case TypeCode::HeapString:
+			return strcmp(shVal.Get().Ptr(), other.shVal.Get().Ptr()) == 0;
+
+		case TypeCode::Float:
+			return fVal == other.fVal;
+
+		case TypeCode::Uint32:
+		case TypeCode::IPAddress_tc:
+		case TypeCode::Int32:
+		case TypeCode::Bitmap16:
+		case TypeCode::Bitmap32:
+		case TypeCode::Enum32:
+		case TypeCode::Duration:
+			return uVal == other.uVal;
+
+		case TypeCode::Uint64:
+		case TypeCode::Bitmap64:
+		case TypeCode::DateTime_tc:
+		case TypeCode::MacAddress_tc:
+		case TypeCode::DriverId_tc:
+			return uVal == other.uVal && param == other.param;
+
+		case TypeCode::Port:
+			return iopVal == other.iopVal;
+
+		// We don't handle the remaining types
+		case TypeCode::Special:
+		case TypeCode::ObjectModel_tc:
+		case TypeCode::Array:
+		case TypeCode::UniqueId_tc:
+#if SUPPORT_CAN_EXPANSION
+		case TypeCode::CanExpansionBoardDetails:
+#endif
+			return false;
+		}
+	}
+	return false;
 }
 
 ExpressionValue::ExpressionValue(const ExpressionValue& other) noexcept
@@ -747,6 +814,15 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 
 	case TypeCode::DateTime_tc:
 		ReportDateTime(buf, val);
+		break;
+
+	case TypeCode::Duration:
+		{
+			unsigned int hours = val.uVal/3600,
+				minutes = (val.uVal / 60) % 60,
+				seconds = val.uVal % 60;
+			buf->catf("%u:%02u:%02u", hours, minutes, seconds);
+		}
 		break;
 
 	case TypeCode::DriverId_tc:

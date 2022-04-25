@@ -203,6 +203,7 @@ public:
 	void SetItemActiveTemperature(unsigned int itemNumber, float temp) noexcept;
 	void SetItemStandbyTemperature(unsigned int itemNumber, float temp) noexcept;
 	bool EvaluateConditionForDisplay(const char *_ecv_array str) const noexcept;
+	bool EvaluateValueForDisplay(const char *_ecv_array str, ExpressionValue& expr) const noexcept;
 #endif
 
 	void SetMappedFanSpeed(const GCodeBuffer *null gb, float f) noexcept;				// Set the speeds of fans mapped for the current tool

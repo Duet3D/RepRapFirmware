@@ -20,8 +20,8 @@
 # include <Networking/Network.h>
 #endif
 
-ValueMenuItem::ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, bool adj, unsigned int v, unsigned int d) noexcept
-	: MenuItem(r, c, ((w != 0) ? w : DefaultWidth), a, fn), valIndex(v), currentFormat(PrintFormat::undefined), decimals(d), adjusting(AdjustMode::displaying), adjustable(adj)
+ValueMenuItem::ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, bool adj, const char *_ecv_array _ecv_null om, unsigned int v, unsigned int d) noexcept
+	: MenuItem(r, c, ((w != 0) ? w : DefaultWidth), a, fn), omText(om), valIndex(v), decimals(d), adjustable(adj), adjusting(AdjustMode::displaying), error(false), asPercent(false)
 {
 }
 
@@ -36,48 +36,20 @@ void ValueMenuItem::CorePrint(Lcd& lcd) noexcept
 	{
 		lcd.printf("***");
 	}
+	else if (textValue != nullptr)
+	{
+		lcd.printf("%s", textValue);
+	}
+	else if (currentValue.GetType() == TypeCode::Float)
+	{
+		// We handle floats ourselves so that we can handle decimal places and percentages
+		lcd.printf((asPercent) ? "%.*f%%" : "%.*f", decimals, (double)currentValue.fVal);
+	}
 	else
 	{
-		switch (currentFormat)
-		{
-		case PrintFormat::asFloat:
-			lcd.printf("%.*f", decimals, (double)currentValue.f);
-			break;
-
-		case PrintFormat::asPercent:
-			lcd.printf("%.*f%%", decimals, (double)currentValue.f);
-			break;
-
-		case PrintFormat::asUnsigned:
-			lcd.printf("%u", currentValue.u);
-			break;
-
-		case PrintFormat::asSigned:
-			lcd.printf("%d", currentValue.i);
-			break;
-
-		case PrintFormat::asText:
-			lcd.printf("%s", textValue);
-			break;
-
-		case PrintFormat::asIpAddress:
-			lcd.printf("%u.%u.%u.%u", currentValue.u & 0x000000FF, (currentValue.u >> 8) & 0x0000000FF, (currentValue.u >> 16) & 0x0000000FF, (currentValue.u >> 24) & 0x0000000FF);
-			break;
-
-		case PrintFormat::asTime:
-			{
-				unsigned int hours = currentValue.u/3600,
-					minutes = (currentValue.u / 60) % 60,
-					seconds = currentValue.u % 60;
-				lcd.printf("%u:%02u:%02u", hours, minutes, seconds);
-			}
-			break;
-
-		case PrintFormat::undefined:
-		default:
-			lcd.printf("***");
-			break;
-		}
+		String<StringLength50> str;
+		currentValue.AppendAsString(str.GetRef());
+		lcd.printf("%s", str.c_str());
 	}
 }
 
@@ -85,172 +57,139 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 {
 	if (IsVisible())
 	{
-		error = false;
+		error = asPercent = false;
 		textValue = nullptr;
 
-		if (valIndex == 501)
+		if (omText != nullptr && valIndex == 501)
 		{
 			// Item 501 is a special case because it is text, not a number. We store the current message sequence number in currentValue.
 			uint16_t newSeq;
 			textValue = reprap.GetLatestMessage(newSeq);
-			if (newSeq != currentValue.u)
+			if (newSeq != currentValue.uVal)
 			{
 				itemChanged = true;
-				currentValue.u = newSeq;
-				currentFormat = PrintFormat::asText;
+				currentValue.uVal = newSeq;
 			}
 		}
-		else if (adjusting != AdjustMode::adjusting)
+		else
 		{
-			const unsigned int itemNumber = valIndex % 100;
-			const Value oldValue = currentValue;
-			currentFormat = PrintFormat::asFloat;
-
-			switch (valIndex/100)
+			const ExpressionValue oldValue = currentValue;
+			if (omText != nullptr)
 			{
-			case 0:		// heater current temperature
-				currentValue.f = max<float>(reprap.GetGCodes().GetItemCurrentTemperature(itemNumber), 0.0);
-				break;
+				error = reprap.GetGCodes().EvaluateValueForDisplay(omText, currentValue);
+			}
+			else if (adjusting != AdjustMode::adjusting)
+			{
+				// Fetch the value and display it
+				const unsigned int itemNumber = valIndex % 100;
 
-			case 1:		// heater active temperature
-				currentValue.f = max<float>(reprap.GetGCodes().GetItemActiveTemperature(itemNumber), 0.0);
-				break;
-
-			case 2:		// heater standby temperature
-				currentValue.f = max<float>(reprap.GetGCodes().GetItemStandbyTemperature(itemNumber), 0.0);
-				break;
-
-			case 3:		// fan %
-				currentValue.f = ((itemNumber == 99)
-								? reprap.GetGCodes().GetPrimaryMovementState().virtualFanSpeed
-								: reprap.GetFansManager().GetFanValue(itemNumber)
-							   ) * 100.0;
-				currentFormat = PrintFormat::asPercent;
-				break;
-
-			case 4:		// extruder %
-				currentValue.f = reprap.GetGCodes().GetExtrusionFactor(itemNumber) * 100.0;
-				currentFormat = PrintFormat::asPercent;
-				break;
-
-			case 5:		// misc
-				switch (itemNumber)
+				switch (valIndex/100)
 				{
-				case 0:
-					currentValue.f = reprap.GetGCodes().GetPrimarySpeedFactor() * 100.0;
-					currentFormat = PrintFormat::asPercent;
+				case 0:		// heater current temperature
+					currentValue.SetFloat(max<float>(reprap.GetGCodes().GetItemCurrentTemperature(itemNumber), 0.0));
 					break;
 
-				// case 1 is the latest message sent by M117, but it handled at the start
-
-				case 10: // X
-				case 11: // Y
-				case 12: // Z
-				case 13: // U
-				case 14: // V
-				case 15: // W
-					currentValue.f = reprap.GetGCodes().GetUserCoordinate(reprap.GetGCodes().GetPrimaryMovementState(), itemNumber - 10);
+				case 1:		// heater active temperature
+					currentValue.SetFloat(max<float>(reprap.GetGCodes().GetItemActiveTemperature(itemNumber), 0.0));
 					break;
 
-				case 20:
-					currentValue.i = reprap.GetGCodes().GetPrimaryMovementState().GetCurrentToolNumber();
-					currentFormat = PrintFormat::asSigned;
+				case 2:		// heater standby temperature
+					currentValue.SetFloat(max<float>(reprap.GetGCodes().GetItemStandbyTemperature(itemNumber), 0.0));
 					break;
 
-				case 21:	// Z baby-step
-					currentValue.f = reprap.GetGCodes().GetTotalBabyStepOffset(Z_AXIS);
+				case 3:		// fan %
+					{
+						const float val = ((itemNumber == 99)
+											? reprap.GetGCodes().GetPrimaryMovementState().virtualFanSpeed
+												: reprap.GetFansManager().GetFanValue(itemNumber)
+										  ) * 100.0;
+						currentValue.SetFloat(val);
+						asPercent = true;
+					}
 					break;
 
-				// Platform's IP address is the "planned", Network's IP address is the "actual"
-				case 30:
-				case 31:
-				case 32:
-				case 33:
-					currentValue.u = reprap.GetNetwork().GetIPAddress(0).GetQuad(itemNumber - 30);
-					currentFormat = PrintFormat::asUnsigned;
+				case 4:		// extruder %
+					currentValue.SetFloat(reprap.GetGCodes().GetExtrusionFactor(itemNumber) * 100.0f);
+					asPercent = true;
 					break;
 
-				case 34:	// IP address in one go
-					currentValue.u = reprap.GetNetwork().GetIPAddress(0).GetV4LittleEndian();
-					currentFormat = PrintFormat::asIpAddress;
-					break;
+				case 5:		// misc
+					switch (itemNumber)
+					{
+					case 0:
+						currentValue.SetFloat(reprap.GetGCodes().GetPrimarySpeedFactor() * 100.0f);
+						asPercent = true;
+						break;
 
-				case 35:	// Percentage of file that has been processed
-					currentValue.f = (reprap.GetPrintMonitor().IsPrinting())
-										? reprap.GetPrintMonitor().FractionOfFilePrinted() * 100.0
-											: 0;
-					currentFormat = PrintFormat::asPercent;
-					break;
+					// case 1 is the latest message sent by M117, but it handled at the start
 
-				case 36:	// Print time remaining, file-based
-					currentValue.u = (reprap.GetPrintMonitor().IsPrinting())
-										? static_cast<int>(reprap.GetPrintMonitor().EstimateTimeLeft(PrintEstimationMethod::fileBased))
-											: 0;
-					currentFormat = PrintFormat::asTime;
-					break;
+					case 10: // X
+					case 11: // Y
+					case 12: // Z
+					case 13: // U
+					case 14: // V
+					case 15: // W
+						currentValue.SetFloat(reprap.GetGCodes().GetUserCoordinate(reprap.GetGCodes().GetPrimaryMovementState(), itemNumber - 10));
+						break;
 
-				case 37:	// Print time remaining, filament-based
-					currentValue.u = (reprap.GetPrintMonitor().IsPrinting())
-										? static_cast<int>(reprap.GetPrintMonitor().EstimateTimeLeft(PrintEstimationMethod::filamentBased))
-											: 0;
-					currentFormat = PrintFormat::asTime;
-					break;
+					case 20:
+						currentValue.SetSigned(reprap.GetGCodes().GetPrimaryMovementState().GetCurrentToolNumber());
+						break;
 
-				case 38:	// requested speed
-					currentValue.f = reprap.GetMove().GetRequestedSpeedMmPerSec();
-					break;
+					case 21:	// Z baby-step
+						currentValue.SetFloat(reprap.GetGCodes().GetTotalBabyStepOffset(Z_AXIS));
+						break;
 
-				case 39:	// top speed
-					currentValue.f = reprap.GetMove().GetTopSpeedMmPerSec();
+					// Platform's IP address is the "planned", Network's IP address is the "actual"
+					case 30:
+					case 31:
+					case 32:
+					case 33:
+						currentValue.SetUnsigned(reprap.GetNetwork().GetIPAddress(0).GetQuad(itemNumber - 30));
+						break;
+
+					case 34:	// IP address in one go
+						currentValue.Set(reprap.GetNetwork().GetIPAddress(0));
+						break;
+
+					case 35:	// Percentage of file that has been processed
+						currentValue.SetFloat((reprap.GetPrintMonitor().IsPrinting())
+											? reprap.GetPrintMonitor().FractionOfFilePrinted() * 100.0f
+												: 0.0f);
+						asPercent = true;
+						break;
+
+					case 36:	// Print time remaining, file-based
+						currentValue.SetDuration((reprap.GetPrintMonitor().IsPrinting())
+											? static_cast<int>(reprap.GetPrintMonitor().EstimateTimeLeft(PrintEstimationMethod::fileBased))
+												: 0);
+						break;
+
+					case 37:	// Print time remaining, filament-based
+						currentValue.SetDuration((reprap.GetPrintMonitor().IsPrinting())
+											? static_cast<int>(reprap.GetPrintMonitor().EstimateTimeLeft(PrintEstimationMethod::filamentBased))
+												: 0);
+						break;
+
+					case 38:	// requested speed
+						currentValue.SetFloat(reprap.GetMove().GetRequestedSpeedMmPerSec());
+						break;
+
+					case 39:	// top speed
+						currentValue.SetFloat(reprap.GetMove().GetTopSpeedMmPerSec());
+						break;
+
+					default:
+						error = true;
+					}
 					break;
 
 				default:
 					error = true;
-				}
-				break;
-
-			default:
-				error = true;
-				break;
-			}
-
-			if (error)
-			{
-				itemChanged = true;
-			}
-			else
-			{
-				switch (currentFormat)
-				{
-				case PrintFormat::undefined:
-					itemChanged = true;
-					break;
-
-				case PrintFormat::asFloat:
-					if (currentValue.f != oldValue.f)
-					{
-						itemChanged = true;
-					}
-					break;
-
-				case PrintFormat::asSigned:
-					if (currentValue.i != oldValue.i)
-					{
-						itemChanged = true;
-					}
-					break;
-
-				case PrintFormat::asUnsigned:
-				case PrintFormat::asIpAddress:
-				case PrintFormat::asText:
-				case PrintFormat::asTime:
-				default:
-					if (currentValue.u != oldValue.u)
-					{
-						itemChanged = true;
-					}
 					break;
 				}
+
+				itemChanged = (error || currentValue != oldValue);
 			}
 		}
 
@@ -296,37 +235,37 @@ bool ValueMenuItem::Adjust_SelectHelper() noexcept
 		switch (valIndex/100)
 		{
 		case 1: // heater active temperature
-			reprap.GetGCodes().SetItemActiveTemperature(itemNumber, (currentValue.f < 1.0) ? ABS_ZERO : currentValue.f);
+			reprap.GetGCodes().SetItemActiveTemperature(itemNumber, (currentValue.fVal < 1.0) ? ABS_ZERO : currentValue.fVal);
 			break;
 
 		case 2: // heater standby temperature
-			reprap.GetGCodes().SetItemStandbyTemperature(itemNumber, (currentValue.f < 1.0) ? ABS_ZERO : currentValue.f);
+			reprap.GetGCodes().SetItemStandbyTemperature(itemNumber, (currentValue.fVal < 1.0) ? ABS_ZERO : currentValue.fVal);
 			break;
 
 		case 3: // fan %
 			if (itemNumber == 99)
 			{
-				reprap.GetGCodes().SetMappedFanSpeed(nullptr, currentValue.f * 0.01);
+				reprap.GetGCodes().SetMappedFanSpeed(nullptr, currentValue.fVal * 0.01);
 			}
 			else
 			{
-				reprap.GetFansManager().SetFanValue(itemNumber, currentValue.f * 0.01);
+				reprap.GetFansManager().SetFanValue(itemNumber, currentValue.fVal * 0.01);
 			}
 			break;
 
 		case 4: // extruder %
-			reprap.GetGCodes().SetExtrusionFactor(itemNumber, currentValue.f * 0.01);
+			reprap.GetGCodes().SetExtrusionFactor(itemNumber, currentValue.fVal * 0.01);
 			break;
 
 		case 5: // misc.
 			switch (itemNumber)
 			{
 			case 0:
-				reprap.GetGCodes().SetPrimarySpeedFactor(currentValue.f * 0.01);
+				reprap.GetGCodes().SetPrimarySpeedFactor(currentValue.fVal * 0.01);
 				break;
 
 			case 20:
-				reprap.GetGCodes().SelectPrimaryTool(currentValue.i, false);
+				reprap.GetGCodes().SelectPrimaryTool(currentValue.iVal, false);
 				break;
 
 			case 21: // baby stepping
@@ -382,40 +321,40 @@ bool ValueMenuItem::Adjust_AlterHelper(int clicks) noexcept
 			// Also cap the maximum
 			if (0 > clicks) // decrementing
 			{
-				currentValue.f += (float)clicks;
-				if (95.0 > currentValue.f)
+				currentValue.fVal += (float)clicks;
+				if (95.0 > currentValue.fVal)
 				{
-					currentValue.f = 0.0;
+					currentValue.fVal = 0.0;
 				}
 			}
 			else // incrementing
 			{
-				if (0.0 == currentValue.f)
+				if (0.0 == currentValue.fVal)
 				{
-					currentValue.f = 95.0 - 1.0;
+					currentValue.fVal = 95.0 - 1.0;
 				}
-				currentValue.f = min<int>(currentValue.f + (float)clicks, reprap.GetHeat().GetHighestTemperatureLimit(Tool::GetLockedTool(itemNumber)->GetHeater(0)));
+				currentValue.fVal = min<int>(currentValue.fVal + (float)clicks, reprap.GetHeat().GetHighestTemperatureLimit(Tool::GetLockedTool(itemNumber)->GetHeater(0)));
 			}
 		}
 		else
 		{
-			currentValue.f += (float)clicks;
+			currentValue.fVal += (float)clicks;
 		}
 		break;
 
 	case 3: // fan %
-		currentValue.f = constrain<float>(currentValue.f + (float)clicks, 0.0, 100.0);
+		currentValue.fVal = constrain<float>(currentValue.fVal + (float)clicks, 0.0, 100.0);
 		break;
 
 	case 5: // misc.
 		switch (itemNumber)
 		{
 		case 0: // 500 Feed Rate
-			currentValue.f = constrain<float>(currentValue.f + (float)clicks, 10.0, 500.0);
+			currentValue.fVal = constrain<float>(currentValue.fVal + (float)clicks, 10.0, 500.0);
 			break;
 
 		case 20: // 520 Tool Selection
-			currentValue.i = constrain<int>((int)currentValue.f + clicks, -1, 255);
+			currentValue.iVal = constrain<int>((int)currentValue.iVal + clicks, -1, 255);
 			break;
 
 		case 21: // 521 baby stepping
@@ -441,7 +380,7 @@ bool ValueMenuItem::Adjust_AlterHelper(int clicks) noexcept
 		break;
 
 	default:
-		currentValue.f += (float)clicks;
+		currentValue.fVal += (float)clicks;
 		break;
 	}
 

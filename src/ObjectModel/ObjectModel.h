@@ -45,6 +45,7 @@ enum class TypeCode : uint8_t
 	Special,
 	Port,
 	UniqueId_tc,
+	Duration,			// a duration represented an unsigned number of seconds (used by the 12864 LCD code)
 #if SUPPORT_CAN_EXPANSION
 	CanExpansionBoardDetails
 #endif
@@ -146,6 +147,9 @@ struct ExpressionValue
 	ExpressionValue(const char*s, ExpansionDetail p) noexcept : type((uint32_t)TypeCode::CanExpansionBoardDetails), param((uint32_t)p), sVal(s) { }
 #endif
 
+	bool operator==(const ExpressionValue& other) const noexcept;
+	bool operator!=(const ExpressionValue& other) const noexcept { return !operator==(other); }
+
 	ExpressionValue(const ExpressionValue& other) noexcept;
 	ExpressionValue(ExpressionValue&& other) noexcept;
 	~ExpressionValue();
@@ -156,12 +160,14 @@ struct ExpressionValue
 	void SetType(TypeCode t) noexcept { type = (uint32_t)t; }
 	bool IsStringType() const noexcept { return type == (uint32_t)TypeCode::CString || type == (uint32_t)TypeCode::HeapString; }
 
-	void Set(bool b) noexcept { Release(); type = (uint32_t)TypeCode::Bool; bVal = b; }
-	void Set(char c) noexcept { Release(); type = (uint32_t)TypeCode::Char; cVal = c; }
-	void Set(int32_t i) noexcept { Release(); type = (uint32_t)TypeCode::Int32; iVal = i; }
-	void Set(float f) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = MaxFloatDigitsDisplayedAfterPoint; }
-	void Set(float f, uint32_t digits) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = digits; }
-	void Set(const char *_ecv_array s) noexcept { Release(); type = (uint32_t)TypeCode::CString; sVal = s; }
+	void SetBool(bool b) noexcept { Release(); type = (uint32_t)TypeCode::Bool; bVal = b; }
+	void SetChar(char c) noexcept { Release(); type = (uint32_t)TypeCode::Char; cVal = c; }
+	void SetSigned(int32_t i) noexcept { Release(); type = (uint32_t)TypeCode::Int32; iVal = i; }
+	void SetFloat(float f) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = MaxFloatDigitsDisplayedAfterPoint; }
+	void SetFloat(float f, uint32_t digits) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = digits; }
+	void SetCString(const char *_ecv_array s) noexcept { Release(); type = (uint32_t)TypeCode::CString; sVal = s; }
+	void Set(IPAddress ip) noexcept { Release(); type = (uint32_t)TypeCode::IPAddress_tc; uVal = ip.GetV4LittleEndian(); }
+
 	void Set(DriverId did) noexcept
 	{
 		Release();
@@ -176,6 +182,9 @@ struct ExpressionValue
 
 	void Set(StringHandle sh) noexcept { Release(); type = (uint32_t)TypeCode::HeapString; shVal = sh; }
 	void Set(std::nullptr_t dummy) noexcept { Release();  type = (uint32_t)TypeCode::None; }
+
+	void SetUnsigned(uint32_t u) noexcept { Release(); type = (uint32_t)TypeCode::Uint32; uVal = u; }
+	void SetDuration(uint32_t u) noexcept { Release(); type = (uint32_t)TypeCode::Duration; uVal = u; }
 
 	// Store a 56-bit value
 	void Set56BitValue(uint64_t v) { Release(); param = (uint32_t)(v >> 32) & 0x00FFFFFFu; uVal = (uint32_t)v; }
