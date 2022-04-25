@@ -70,13 +70,15 @@
 #if SUPPORT_12864_LCD
 
 #include "Lcd/Lcd.h"
-#include <Platform/RepRap.h>
-#include <Platform/Platform.h>
 #include "Display.h"
+#include "TextMenuItem.h"
+#include "ButtonMenuItem.h"
+#include "ValueMenuItem.h"
+#include "FilesMenuItem.h"
+#include "ImageMenuItem.h"
+
+#include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
-#include <Heating/Heat.h>
-#include <Storage/MassStorage.h>
-#include <Tools/Tool.h>
 
 const uint32_t InactivityTimeout = 20000;		// inactivity timeout
 const uint32_t ErrorTimeout = 6000;				// how long we display an error message for
