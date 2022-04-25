@@ -335,7 +335,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 					}
 					else
 					{
-						Event::AddEvent(EventType::filament_error, (uint16_t)fst.ToBaseType(), extruder, CanInterface::GetCanAddress(), "");
+						Event::AddEvent(EventType::filament_error, (uint16_t)fst.ToBaseType(), CanInterface::GetCanAddress(), extruder, "");
 					}
 				}
 			}
