@@ -16,8 +16,8 @@
 #include <Tools/Tool.h>
 #include <PrintMonitor/PrintMonitor.h>
 
-MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis) noexcept
-	: row(r), column(c), width(w), height(0), align(a), fontNumber(fn), visCase(vis), itemChanged(true), highlighted(false), drawn(false), next(nullptr)
+MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn) noexcept
+	: visStr(nullptr), row(r), column(c), width(w), height(0), align(a), fontNumber(fn), visCase(AlwaysVisible), itemChanged(true), highlighted(false), drawn(false), next(nullptr)
 {
 }
 
@@ -68,19 +68,25 @@ void MenuItem::PrintAligned(Lcd& lcd, PixelNumber tOffset, PixelNumber rightMarg
 
 bool MenuItem::IsVisible() const noexcept
 {
+	const GCodes& gc = reprap.GetGCodes();
+	if (visStr != nullptr)
+	{
+		return gc.EvaluateConditionForDisplay(visStr);
+	}
+
 	switch (visCase)
 	{
 	default:
 	case 0:		return true;
-	case 2:		return reprap.GetGCodes().IsReallyPrinting();
-	case 3:		return !reprap.GetGCodes().IsReallyPrinting();
+	case 2:		return gc.IsReallyPrinting();
+	case 3:		return !gc.IsReallyPrinting();
 	case 4:		return reprap.GetPrintMonitor().IsPrinting();
 	case 5:		return !reprap.GetPrintMonitor().IsPrinting();
 	case 6:		{
-					const PauseState ps = reprap.GetGCodes().GetPauseState();
+					const PauseState ps = gc.GetPauseState();
 					return ps == PauseState::pausing || ps == PauseState::paused;
 				}
-	case 7:		return reprap.GetGCodes().IsReallyPrintingOrResuming();
+	case 7:		return gc.IsReallyPrintingOrResuming();
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	case 10:	return
 # if HAS_MASS_STORAGE
@@ -107,7 +113,7 @@ bool MenuItem::IsVisible() const noexcept
 #endif
 	case 20:
 		{
-			const auto tool = reprap.GetGCodes().GetPrimaryMovementState().GetLockedCurrentOrDefaultTool();			// this can be null, especially during startup
+			const auto tool = gc.GetPrimaryMovementState().GetLockedCurrentOrDefaultTool();			// this can be null, especially during startup
 			return tool.IsNotNull() && tool->HasTemperatureFault();
 		}
 	case 28:	return reprap.GetHeat().GetStatus(reprap.GetHeat().GetBedHeater(0)) == HeaterStatus::fault;

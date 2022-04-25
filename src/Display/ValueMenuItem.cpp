@@ -20,8 +20,8 @@
 # include <Networking/Network.h>
 #endif
 
-ValueMenuItem::ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, bool adj, unsigned int v, unsigned int d) noexcept
-	: MenuItem(r, c, ((w != 0) ? w : DefaultWidth), a, fn, vis), valIndex(v), currentFormat(PrintFormat::undefined), decimals(d), adjusting(AdjustMode::displaying), adjustable(adj)
+ValueMenuItem::ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, bool adj, unsigned int v, unsigned int d) noexcept
+	: MenuItem(r, c, ((w != 0) ? w : DefaultWidth), a, fn), valIndex(v), currentFormat(PrintFormat::undefined), decimals(d), adjusting(AdjustMode::displaying), adjustable(adj)
 {
 }
 

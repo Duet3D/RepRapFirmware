@@ -60,6 +60,11 @@ public:
 	MenuItem *GetNext() const noexcept { return next; }
 	FontNumber GetFontNumber() const noexcept { return fontNumber; }
 	void SetChanged() noexcept { itemChanged = true; }
+
+	// The following functions to set the visibility do not update the display. They should only be called immediately after creating the item and before displaying it for the first time.
+	void SetVisibility(Visibility vis) noexcept { visCase = vis; }
+	void SetVisibility(const char *_ecv_array vis) noexcept { visStr = vis; }
+
 	bool IsVisible() const noexcept;
 
 	// Erase this item if it is drawn but should not be visible
@@ -72,7 +77,7 @@ public:
 	static void AppendToList(MenuItem **root, MenuItem *item) noexcept;
 
 protected:
-	MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility v) noexcept;
+	MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn) noexcept;
 
 	// Print the item starting at the current cursor position, which may be off screen. Used to find the width and also to really print the item.
 	// Overridden for items that support variable alignment
@@ -81,15 +86,16 @@ protected:
 	// Print the item at the correct place with the correct alignment
 	void PrintAligned(Lcd& lcd, PixelNumber tOffset, PixelNumber rightMargin) noexcept;
 
+	const char *_ecv_array _ecv_null visStr;
 	const PixelNumber row, column;
 	PixelNumber width, height;
 	const Alignment align;
 	const FontNumber fontNumber;
-	const Visibility visCase;
+	Visibility visCase;
 
-	bool itemChanged;
-	bool highlighted;
-	bool drawn;
+	uint8_t itemChanged : 1,
+			highlighted : 1,
+			drawn : 1;
 
 private:
 	MenuItem *next;

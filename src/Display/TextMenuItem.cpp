@@ -7,8 +7,8 @@
 
 #include "TextMenuItem.h"
 
-TextMenuItem::TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, const char* t) noexcept
-	: MenuItem(r, c, w, a, fn, vis), text(t)
+TextMenuItem::TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, const char *_ecv_array t) noexcept
+	: MenuItem(r, c, w, a, fn), text(t)
 {
 }
 

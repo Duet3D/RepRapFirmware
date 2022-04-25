@@ -9,8 +9,8 @@
 
 #if HAS_MASS_STORAGE
 
-FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *cmd, const char *dir, const char *acFile, unsigned int nf) noexcept
-	: MenuItem(r, c, w, LeftAlign, fn, vis), numDisplayLines(nf), command(cmd), initialDirectory(dir), m_acFile(acFile),
+FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char *_ecv_array cmd, const char *_ecv_array dir, const char *_ecv_array acFile, unsigned int nf) noexcept
+	: MenuItem(r, c, w, LeftAlign, fn), numDisplayLines(nf), command(cmd), initialDirectory(dir), m_acFile(acFile),
         m_uListingFirstVisibleIndex(0), m_uListingSelectedIndex(0)
 {
 	// There's no guarantee that initialDirectory has a trailing '/'

@@ -26,6 +26,7 @@
 #include "GCodes.h"
 
 #include "GCodeBuffer/GCodeBuffer.h"
+#include "GCodeBuffer/ExpressionParser.h"
 #include "GCodeQueue.h"
 #include <Heating/Heat.h>
 #include <Platform/Platform.h>
@@ -5020,6 +5021,19 @@ void GCodes::SetItemStandbyTemperature(unsigned int itemNumber, float temp) noex
 	else
 	{
 		reprap.GetHeat().SetStandbyTemperature(GetHeaterNumber(itemNumber), temp);
+	}
+}
+
+bool GCodes::EvaluateConditionForDisplay(const char *_ecv_array str) const noexcept
+{
+	try
+	{
+		ExpressionParser parser(*lcdGCode, str, str + strlen(str));
+		return parser.ParseBoolean();
+	}
+	catch (GCodeException&)
+	{
+		return false;
 	}
 }
 

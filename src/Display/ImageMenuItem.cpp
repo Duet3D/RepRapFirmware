@@ -15,8 +15,8 @@
 // Byte 0 = number of columns
 // Byte 1 = number of rows
 // Remaining bytes = data, 1 row at a time. If the number of columns is not a multiple of 8 then the data for each row is padded to a multiple of 8 bits.
-ImageMenuItem::ImageMenuItem(PixelNumber r, PixelNumber c, Visibility vis, const char *_ecv_array pFileName) noexcept
-	: MenuItem(r, c, 0, 0, 0, vis)
+ImageMenuItem::ImageMenuItem(PixelNumber r, PixelNumber c, const char *_ecv_array pFileName) noexcept
+	: MenuItem(r, c, 0, 0, 0)
 {
 	fileName.copy(pFileName);
 }

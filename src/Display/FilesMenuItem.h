@@ -18,7 +18,7 @@ public:
 	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<FilesMenuItem>(); }
 	void operator delete(void* p) noexcept { FreelistManager::Release<FilesMenuItem>(p); }
 
-	FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *cmd, const char *dir, const char *acFile, unsigned int nf) noexcept;
+	FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char *_ecv_array cmd, const char *_ecv_array dir, const char *_ecv_array acFile, unsigned int nf) noexcept;
 	void Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept override;
 	void Enter(bool bForwardDirection) noexcept override;
 	int Advance(int nCounts) noexcept override;
@@ -38,9 +38,9 @@ private:
 
 	const unsigned int numDisplayLines;
 
-	const char *command;
-	const char *initialDirectory;
-	const char *m_acFile; // used when action ("command") includes "menu"
+	const char *_ecv_array command;
+	const char *_ecv_array initialDirectory;
+	const char *_ecv_array m_acFile;	// used when action ("command") includes "menu"
 
 	// Working
 	String<MaxFilenameLength> currentDirectory;

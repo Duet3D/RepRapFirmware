@@ -7,8 +7,8 @@
 
 #include "ButtonMenuItem.h"
 
-ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char* t, const char* cmd, char const* acFile) noexcept
-	: MenuItem(r, c, w, CentreAlign, fn, vis), text(t), command(cmd), m_acFile(acFile)
+ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char* t, const char* cmd, char const* acFile) noexcept
+	: MenuItem(r, c, w, CentreAlign, fn), text(t), command(cmd), m_acFile(acFile)
 {
 }
 
