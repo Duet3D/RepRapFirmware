@@ -3225,10 +3225,10 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 // Get the tool specified by the P parameter, or the current tool if no P parameter
 ReadLockedPointer<Tool> GCodes::GetSpecifiedOrCurrentTool(GCodeBuffer& gb) THROWS(GCodeException)
 {
-	unsigned int tNumber;
+	int tNumber;
 	if (gb.Seen('P'))
 	{
-		tNumber = gb.GetUIValue();
+		tNumber = (int)gb.GetUIValue();
 	}
 	else
 	{
