@@ -125,7 +125,7 @@ static void SdhcInit() noexcept
 	hri_mclk_set_AHBMASK_SDHC1_bit(MCLK);
 	hri_gclk_write_PCHCTRL_reg(GCLK, SDHC1_GCLK_ID, GCLK_PCHCTRL_GEN(GclkNum90MHz) | GCLK_PCHCTRL_CHEN);
 	hri_gclk_write_PCHCTRL_reg(GCLK, SDHC1_GCLK_ID_SLOW, GCLK_PCHCTRL_GEN(GclkNum31KHz) | GCLK_PCHCTRL_CHEN);
-#elif defined(DUET3MINI4)
+#elif defined(FMDC_V02)
 	// Using SDHC 0
 	hri_mclk_set_AHBMASK_SDHC0_bit(MCLK);
 	hri_gclk_write_PCHCTRL_reg(GCLK, SDHC0_GCLK_ID, GCLK_PCHCTRL_GEN(GclkNum90MHz) | GCLK_PCHCTRL_CHEN);
