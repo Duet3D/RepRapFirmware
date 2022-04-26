@@ -3690,7 +3690,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	case Compatibility::Sprinter:
 	case Compatibility::Repetier:
 	default:
-		platform.MessageF(mt, "Emulation of %s is not yet supported.\n", gb.LatestMachineState().compatibility.ToString());
+		platform.MessageF(mt, "Emulation of %s is not supported\n", gb.LatestMachineState().compatibility.ToString());
 		break;
 	}
 }
@@ -3736,36 +3736,41 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 
 	case Compatibility::Marlin:
 	case Compatibility::NanoDLP:
-		if (gb.GetCommandLetter() =='M' && gb.GetCommandNumber() == 20)
+		if (gb.GetCommandLetter() == 'M')
 		{
-			platform.Message(type, "Begin file list\n");
-			platform.Message(type, reply);
-			platform.MessageF(type, "End file list\n%s\n", response);
-			return;
+			// The response to some M-codes is handled differently in Marlin mode
+			if (   gb.GetCommandNumber() == 20											// M20 in Marlin mode adds text around the file list
+				&& ((*reply)[0] != '{' || (*reply)[1] != '"')							// ...but don't if it looks like a JSON response
+			   )
+			{
+				platform.Message(type, "Begin file list\n");
+				platform.Message(type, reply);
+				platform.MessageF(type, "End file list\n%s\n", response);
+				return;
+			}
+
+			if (gb.GetCommandNumber() == 28)
+			{
+				platform.MessageF(type, "%s\n", response);
+				platform.Message(type, reply);
+				return;
+			}
+
+			if (gb.GetCommandNumber() == 105 || gb.GetCommandNumber() == 998)
+			{
+				platform.MessageF(type, "%s ", response);
+				platform.Message(type, reply);
+				return;
+			}
 		}
 
-		if (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 28)
-		{
-			platform.MessageF(type, "%s\n", response);
-			platform.Message(type, reply);
-			return;
-		}
-
-		if (gb.GetCommandLetter() =='M' && (gb.GetCommandNumber() == 105 || gb.GetCommandNumber() == 998))
-		{
-			platform.MessageF(type, "%s ", response);
-			platform.Message(type, reply);
-			return;
-		}
-
-		if (reply->Length() != 0 && !gb.IsDoingFileMacro())
+		if (reply->Length() != 0)
 		{
 			platform.Message(type, reply);
-			platform.MessageF(type, "\n%s\n", response);
-		}
-		else if (reply->Length() != 0)
-		{
-			platform.Message(type, reply);
+			if (!gb.IsDoingFileMacro())
+			{
+				platform.MessageF(type, "\n%s\n", response);
+			}
 		}
 		else
 		{
@@ -3778,7 +3783,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 	case Compatibility::Sprinter:
 	case Compatibility::Repetier:
 	default:
-		platform.MessageF(type, "Emulation of %s is not yet supported.\n", gb.LatestMachineState().compatibility.ToString());
+		platform.MessageF(type, "Emulation of %s is not supported\n", gb.LatestMachineState().compatibility.ToString());
 		break;
 	}
 
