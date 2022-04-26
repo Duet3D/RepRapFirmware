@@ -10,11 +10,11 @@
 
 #include <PinDescription.h>
 
-#define DEFAULT_BOARD_TYPE		 BoardType::Duet3Mini4
+#define DEFAULT_BOARD_TYPE		 BoardType::FMDC
 
-#define BOARD_SHORT_NAME		"Mini4"
-#define BOARD_NAME				"Duet 3 Mini 4"
-#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 4"
+#define BOARD_SHORT_NAME		"FMDC"
+#define BOARD_NAME				"FMDC"
+#define FIRMWARE_NAME			"RepRapFirmware for FMDC"
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".uf2"
 #define IAP_UPDATE_FILE			"Duet3_SDiap32_" BOARD_SHORT_NAME ".bin"
