@@ -90,26 +90,24 @@ constexpr size_t NumThermistorInputs = 2;
 constexpr size_t NumTmcDriversSenseChannels = 1;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
-constexpr size_t MaxAxes = 10;						// The maximum number of movement axes in the machine
-constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
+constexpr size_t MaxAxes = 4;						// The maximum number of movement axes in the machine
+constexpr size_t MaxDriversPerAxis = 2;				// The maximum number of stepper drivers assigned to one axis
 
-constexpr size_t MaxExtruders = 8;					// The maximum number of extruders
-constexpr size_t MaxAxesPlusExtruders = 12;
+constexpr size_t MaxExtruders = 2;					// The maximum number of extruders
+constexpr size_t MaxAxesPlusExtruders = 6;
 
 constexpr size_t MaxHeatersPerTool = 2;
-constexpr size_t MaxExtrudersPerTool = 8;
+constexpr size_t MaxExtrudersPerTool = 2;
 
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
-constexpr size_t NumSerialChannels = 1;				// The number of serial IO channels (USB and one auxiliary UART)
+constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB and one auxiliary UART)
 
 #define SERIAL_MAIN_DEVICE (serialUSB)
+#define SERIAL_AUX_DEVICE (serialUart0)
 
 // SerialUSB
 constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB port
-
-//#define I2C_IFACE	Wire							// First and only I2C interface
-//#define I2C_IRQn	WIRE_ISR_ID
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
@@ -172,7 +170,7 @@ constexpr Pin VrefSensePin = PortBPin(5);
 
 constexpr float DefaultThermistorSeriesR = 2200.0;							// Thermistor series resistor value in ohms
 constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / NumThermistorInputs) * 4700.0/((DefaultThermistorSeriesR / NumThermistorInputs) + 4700.0);
-																			// there are 3 temperature sensing channels and a 4K7 load resistor
+																			// there are 2 temperature sensing channels and a 4K7 load resistor
 constexpr float VrefSeriesR = 27.0;
 
 // Analogue pin numbers
@@ -181,11 +179,11 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 vo
 
 #ifdef DEBUG
 constexpr Pin DiagPin = NoPin;												// Diag/status LED pin is shared with SWD
-constexpr Pin ActLedPin = NoPin;											// Activity LED pin is shared with SWCLK
 #else
 constexpr Pin DiagPin = PortAPin(31);										// Diag/status LED pin
-constexpr Pin ActLedPin = NoPin;											// Activity LED pin (not present)
 #endif
+
+constexpr Pin ActLedPin = NoPin;											// Activity LED pin (not present)
 
 constexpr bool DiagOnPolarity = false;
 constexpr bool ActOnPolarity = false;
@@ -232,7 +230,17 @@ constexpr Pin SharedSpiMisoPin = PortCPin(15);
 constexpr Pin SharedSpiSclkPin = PortCPin(13);
 constexpr GpioPinFunction SharedSpiPinFunction = GpioPinFunction::C;
 
-// No external serial interfaces
+// Serial on IO0
+constexpr uint8_t Serial0SercomNumber = 2;
+constexpr uint8_t Sercom0RxPad = 1;
+#define SERIAL0_ISR0	SERCOM2_0_Handler
+#define SERIAL0_ISR1	SERCOM2_1_Handler
+#define SERIAL0_ISR2	SERCOM2_2_Handler
+#define SERIAL0_ISR3	SERCOM2_3_Handler
+
+constexpr Pin Serial0TxPin = PortBPin(25);
+constexpr Pin Serial0RxPin = PortBPin(24);
+constexpr GpioPinFunction Serial0PinFunction = GpioPinFunction::D;
 
 // WiFi pins
 constexpr unsigned int WiFiUartSercomNumber = 3;
