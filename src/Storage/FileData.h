@@ -10,6 +10,8 @@
 
 #include "FileStore.h"
 
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
+
 class FileGCodeInput;
 
 // Small class to hold an open file and data relating to it.
@@ -165,5 +167,7 @@ private:
 		f = nullptr;
 	}
 };
+
+#endif
 
 #endif

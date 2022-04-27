@@ -415,7 +415,7 @@ public:
 	bool FileExists(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
-#endif
+# endif
 
 	static const char *_ecv_array GetWebDir() noexcept; 		// Where the html etc files are
 	static const char *_ecv_array GetGCodeDir() noexcept; 		// Where the gcodes are

@@ -33,7 +33,7 @@ namespace FirmwareUpdater
 			const size_t serialChannel,
 			const StringRef& filenameRef) noexcept
 	{
-#if HAS_WIFI_NETWORKING
+#if HAS_WIFI_NETWORKING && (HAS_MASS_STORAGE || HAS_EMBEDDED_FILES)
 		if (moduleMap.IsBitSet(WifiExternalFirmwareModule) || moduleMap.IsBitSet(WifiFirmwareModule))
 		{
 			GCodeResult result;
@@ -58,7 +58,7 @@ namespace FirmwareUpdater
 			}
 		}
 #endif
-#if HAS_AUX_DEVICES
+#if SUPPORT_PANELDUE_FLASH && (HAS_MASS_STORAGE || HAS_EMBEDDED_FILES)
 		if (moduleMap.IsBitSet(PanelDueFirmwareModule))
 		{
 			if (!reprap.GetPlatform().IsAuxEnabled(serialChannel-1) || reprap.GetPlatform().IsAuxRaw(serialChannel-1))
@@ -80,7 +80,7 @@ namespace FirmwareUpdater
 
 	bool IsReady() noexcept
 	{
-#if HAS_WIFI_NETWORKING
+#if HAS_WIFI_NETWORKING && (HAS_MASS_STORAGE || HAS_EMBEDDED_FILES)
 		WifiFirmwareUploader * const uploader = reprap.GetNetwork().GetWifiUploader();
 		if (uploader != nullptr && !uploader->IsReady())
 		{
@@ -99,7 +99,7 @@ namespace FirmwareUpdater
 
 	void UpdateModule(unsigned int module, const size_t serialChannel, const StringRef& filenameRef) noexcept
 	{
-#if HAS_WIFI_NETWORKING || SUPPORT_PANELDUE_FLASH
+#if (HAS_WIFI_NETWORKING || SUPPORT_PANELDUE_FLASH) && (HAS_MASS_STORAGE || HAS_EMBEDDED_FILES)
 		switch(module)
 		{
 # if HAS_WIFI_NETWORKING

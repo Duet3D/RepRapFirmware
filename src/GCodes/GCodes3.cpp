@@ -1918,6 +1918,8 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 	// Get the name of the macro file that we should look for
 	String<StringLength50> macroName;
 	Event::GetMacroFileName(macroName.GetRef());
+
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	if (platform.SysFileExists(macroName.c_str()))
 	{
 		// Set up the macro parameters
@@ -1932,6 +1934,7 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 			return;
 		}
 	}
+#endif
 
 	// We didn't execute the macro, so do the default action
 	if (Event::GetDefaultPauseReason() == PrintPausedReason::dontPause)
