@@ -29,7 +29,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 #define HAS_SBC_INTERFACE		0
 
 #define HAS_MASS_STORAGE		1
-#define HAS_HIGH_SPEED_SD		1
+#define HAS_HIGH_SPEED_SD		0//1
 //#define HAS_CPU_TEMP_SENSOR	0					// according to the SAME5x errata doc, the temperature sensors don't work in revision A or D chips (revision D is latest as at 2020-06-28)
 #define HAS_CPU_TEMP_SENSOR		1					// enable this as an experiment - it may be better than nothing
 
@@ -189,16 +189,24 @@ constexpr bool DiagOnPolarity = false;
 constexpr bool ActOnPolarity = false;
 
 // SD cards
+#if !HAS_HIGH_SPEED_SD	//TEMP!!
+constexpr size_t NumSdCards = 1;
+constexpr Pin SdCardDetectPins[NumSdCards] = { /*PortBPin(0)*/ NoPin };
+
+constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin };
+constexpr Pin SdSpiCSPins[NumSdCards - HAS_HIGH_SPEED_SD] = { PortCPin(14) };
+#else
 constexpr size_t NumSdCards = 2;
-constexpr Pin SdCardDetectPins[NumSdCards] = { PortBPin(16), PortBPin(0) };
+constexpr Pin SdCardDetectPins[NumSdCards] = { PortBPin(16), /*PortBPin(0)*/ NoPin };
 
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[NumSdCards - 1] = { PortCPin(14) };
+constexpr Pin SdSpiCSPins[NumSdCards - HAS_HIGH_SPEED_SD] = { PortCPin(14) };
 constexpr Pin SdMciPins[] = { PortAPin(20), PortAPin(21), PortBPin(18), PortBPin(19), PortBPin(20), PortBPin(21) };
 constexpr GpioPinFunction SdMciPinsFunction = GpioPinFunction::I;
-Sdhc * const SdDevice = SDHC0;
-constexpr IRQn_Type SdhcIRQn = SDHC0_IRQn;
+Sdhc * const SdDevice = SDHC1;
+constexpr IRQn_Type SdhcIRQn = SDHC1_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
+#endif
 
 // LCD interface
 constexpr unsigned int LcdSercomNumber = 0;
@@ -348,7 +356,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB28 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB29 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::sercom5d,	SercomIo::none,		14,	PinCapability::read,	"io3.in"			},	// PB30 IO3_IN
-	{ TcOutput::none,	TccOutput::tcc0_7G,	AdcInput::none,		SercomIo::none,		SercomIo::sercom5d,	Nx,	PinCapability::wpwm,	"io3.out"			},	// PB31 IO3_OUT
+	{ TcOutput::none,	TccOutput::tcc4_1F,	AdcInput::none,		SercomIo::none,		SercomIo::sercom5d,	Nx,	PinCapability::wpwm,	"io3.out"			},	// PB31 IO3_OUT
 
 	// Port C
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_10,	SercomIo::none,		SercomIo::none,		Nx,	PinCapability::ain,		"temp0"				},	// PC00 thermistor0

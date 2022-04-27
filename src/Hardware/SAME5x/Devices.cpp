@@ -117,6 +117,8 @@ static void UsbInit() noexcept
 	gpio_set_pin_function(PortAPin(25), PINMUX_PA25H_USB_DP);
 }
 
+#if HAS_HIGH_SPEED_SD
+
 static void SdhcInit() noexcept
 {
 	// Set up SDHC clock
@@ -141,13 +143,17 @@ static void SdhcInit() noexcept
 	}
 }
 
+#endif
+
 void DeviceInit() noexcept
 {
 	// Ensure the Ethernet PHY or WiFi module is held reset
 	pinMode(EspResetPin, OUTPUT_LOW);
 
 	UsbInit();
+#if HAS_HIGH_SPEED_SD
 	SdhcInit();
+#endif
 
 	AnalogIn::Init(NvicPriorityAdc);
 	AnalogOut::Init();
