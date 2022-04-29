@@ -55,12 +55,8 @@
 // SD card configuration for Duet and Duet WiFi
 #define SD_MMC_ENABLE
 
-#ifdef FMDC_V02
-#define SD_MMC_HSMCI_MEM_CNT		0			// TEMP disable SDHC
-#else
 #define SD_MMC_HSMCI_MEM_CNT		1			// Number of HSMCI card slots supported
 #define SD_MMC_HSMCI_SLOT_0_SIZE	4			// HSMCI bus width
-#endif
 
 #ifdef PCCB
 # define SD_MMC_SPI_MEM_CNT			0			// Number of SPI card slots supported
