@@ -155,7 +155,7 @@ constexpr uint8_t TMC22xxSercomRxPad = 1;
 constexpr uint32_t DriversBaudRate = 100000;								// at 100kbaud a transfer may take up to 2ms
 constexpr uint32_t TransferTimeout = 6;										// any transfer should complete within 6 ticks @ 1ms/tick. 5 wasn't quite enough.
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
-constexpr float DriverSenseResistor = 0.056 + 0.02;							// in ohms
+constexpr float DriverSenseResistor = 0.056 + 0.02 + 0.012;					// in ohms. The 0.012 is an additional correction for this board.
 
 constexpr float DriverVRef = 180.0;											// in mV
 constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
