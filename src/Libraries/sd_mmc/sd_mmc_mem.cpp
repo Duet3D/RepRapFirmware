@@ -59,7 +59,7 @@
  * @{
  */
 
-Ctrl_status sd_mmc_test_unit_ready(uint8_t slot)
+Ctrl_status sd_mmc_test_unit_ready(uint8_t slot) noexcept
 {
 	switch (sd_mmc_check(slot))
 	{
@@ -81,7 +81,7 @@ Ctrl_status sd_mmc_test_unit_ready(uint8_t slot)
 	}
 }
 
-Ctrl_status sd_mmc_read_capacity(uint8_t slot, uint32_t *nb_sector)
+Ctrl_status sd_mmc_read_capacity(uint8_t slot, uint32_t *nb_sector) noexcept
 {
 	// Return last sector address (-1)
 	*nb_sector = (sd_mmc_get_capacity(slot) * 2) - 1;
@@ -99,7 +99,7 @@ bool sd_mmc_wr_protect(uint8_t slot)
  * \name MEM <-> RAM Interface
  * @{
  */
-Ctrl_status sd_mmc_mem_2_ram(uint8_t slot, uint32_t addr, void *ram, uint32_t numBlocks)
+Ctrl_status sd_mmc_mem_2_ram(uint8_t slot, uint32_t addr, void *ram, uint32_t numBlocks) noexcept
 {
 	switch (sd_mmc_init_read_blocks(slot, addr, numBlocks, ram)) {
 	case SD_MMC_OK:
@@ -118,7 +118,7 @@ Ctrl_status sd_mmc_mem_2_ram(uint8_t slot, uint32_t addr, void *ram, uint32_t nu
 	return CTRL_GOOD;
 }
 
-Ctrl_status sd_mmc_ram_2_mem(uint8_t slot, uint32_t addr, const void *ram, uint32_t numBlocks)
+Ctrl_status sd_mmc_ram_2_mem(uint8_t slot, uint32_t addr, const void *ram, uint32_t numBlocks) noexcept
 {
 	switch (sd_mmc_init_write_blocks(slot, addr, numBlocks, ram)) {
 	case SD_MMC_OK:

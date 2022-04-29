@@ -63,22 +63,22 @@
 #include "sd_mmc_mem.h"
 
 
-Ctrl_status mem_test_unit_ready(uint8_t lun)
+Ctrl_status mem_test_unit_ready(uint8_t lun) noexcept
 {
 	return (lun < MAX_LUN) ? sd_mmc_test_unit_ready(lun) : CTRL_FAIL;
 }
 
-Ctrl_status mem_read_capacity(uint8_t lun, uint32_t *u32_nb_sector)
+Ctrl_status mem_read_capacity(uint8_t lun, uint32_t *u32_nb_sector) noexcept
 {
 	return (lun < MAX_LUN) ? sd_mmc_read_capacity(lun, u32_nb_sector) : CTRL_FAIL;
 }
 
-uint8_t mem_sector_size(uint8_t lun)
+uint8_t mem_sector_size(uint8_t lun) noexcept
 {
 	return 1;
 }
 
-bool mem_wr_protect(uint8_t lun)
+bool mem_wr_protect(uint8_t lun) noexcept
 {
 #if SUPPORT_WRITE_PROTECT
 	return (lun >= MAX_LUN) || sd_mmc_wr_protect(lun)e;
@@ -87,12 +87,12 @@ bool mem_wr_protect(uint8_t lun)
 #endif
 }
 
-Ctrl_status memory_2_ram(uint8_t lun, uint32_t addr, void *ram, uint32_t numBlocks)
+Ctrl_status memory_2_ram(uint8_t lun, uint32_t addr, void *ram, uint32_t numBlocks) noexcept
 {
 	return (lun < MAX_LUN) ? sd_mmc_mem_2_ram(lun, addr, ram, numBlocks) : CTRL_FAIL;
 }
 
-Ctrl_status ram_2_memory(uint8_t lun, uint32_t addr, const void *ram, uint32_t numBlocks)
+Ctrl_status ram_2_memory(uint8_t lun, uint32_t addr, const void *ram, uint32_t numBlocks) noexcept
 {
 	return (lun < MAX_LUN) ? sd_mmc_ram_2_mem(lun, addr, ram, numBlocks) : CTRL_FAIL;
 }

@@ -3178,7 +3178,7 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noex
 // Start printing the file already selected. We must hold the movement lock and wait for all moves to finish before calling this, because of the call to ResetMoveCounters.
 void GCodes::StartPrinting(bool fromStart) noexcept
 {
-#if HAS_MASS_STORAGE && SUPPORT_ASYNC_MOVES
+#if (HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES) && SUPPORT_ASYNC_MOVES
 	FileData copyFileToPrint;
 # if HAS_SBC_INTERFACE
 	if (!reprap.UsingSbcInterface())

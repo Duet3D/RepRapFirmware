@@ -474,8 +474,9 @@ void WiFiInterface::Activate() noexcept
 
 		bufferOut = new MessageBufferOut;
 		bufferIn = new MessageBufferIn;
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		uploader = new WifiFirmwareUploader(SERIAL_WIFI_DEVICE, *this);
-
+#endif
 		if (requestedMode != WiFiState::disabled)
 		{
 			Start();
@@ -680,10 +681,12 @@ void WiFiInterface::Spin() noexcept
 		break;
 
 	case NetworkState::disabled:
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		if (uploader != nullptr)
 		{
 			uploader->Spin();
 		}
+#endif
 		break;
 
 	case NetworkState::active:
