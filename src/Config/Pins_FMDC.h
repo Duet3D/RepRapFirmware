@@ -51,6 +51,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
+#define SUPPORT_TFTM0356_6_LCD	1
 #define SUPPORT_ACCELEROMETERS	1
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				0
@@ -189,13 +190,6 @@ constexpr bool DiagOnPolarity = false;
 constexpr bool ActOnPolarity = false;
 
 // SD cards
-#if !HAS_HIGH_SPEED_SD	//TEMP!!
-constexpr size_t NumSdCards = 1;
-constexpr Pin SdCardDetectPins[NumSdCards] = { /*PortBPin(0)*/ NoPin };
-
-constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin };
-constexpr Pin SdSpiCSPins[NumSdCards - HAS_HIGH_SPEED_SD] = { PortCPin(14) };
-#else
 constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortBPin(16), /*PortBPin(0)*/ NoPin };
 
@@ -203,12 +197,12 @@ constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[NumSdCards - HAS_HIGH_SPEED_SD] = { PortCPin(14) };
 constexpr Pin SdMciPins[] = { PortAPin(20), PortAPin(21), PortBPin(18), PortBPin(19), PortBPin(20), PortBPin(21) };
 constexpr GpioPinFunction SdMciPinsFunction = GpioPinFunction::I;
-Sdhc * const SdDevice = SDHC1;
+Sdhc * const SdhcDevice = SDHC1;
 constexpr IRQn_Type SdhcIRQn = SDHC1_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
-#endif
 
 // LCD interface
+constexpr uint32_t LcdSpiClockFrequency = 4000000;		// 4.0MHz
 constexpr unsigned int LcdSercomNumber = 0;
 constexpr Pin LcdSpiMosiPin = PortAPin(4);
 constexpr Pin LcdSpiMisoPin = PortAPin(7);
@@ -230,6 +224,9 @@ constexpr Pin RtpSpiMisoPin = PortCPin(19);
 constexpr Pin RtpSpiSclkPin = PortCPin(17);
 constexpr Pin RtpSpiCsPin = PortCPin(18);
 constexpr GpioPinFunction RtpSpiPinFunction = GpioPinFunction::C;
+
+// Beeper
+constexpr Pin BeeperPins[2] = { PortAPin(8), PortAPin(9) };
 
 // Shared SPI definitions
 constexpr uint8_t SharedSpiSercomNumber = 7;
@@ -299,8 +296,8 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA05 LCD SCLK
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA06 LCD CS
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA07 LCD MOSI
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA08 Buzzer A
-	{ TcOutput::tc0_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA09 Buzzer B
+	{ TcOutput::none,	TccOutput::tcc0_0F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA08 Buzzer A
+	{ TcOutput::none,	TccOutput::tcc0_1F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA09 Buzzer B
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		10,	PinCapability::none,	"ate.d0.diag"		},	// PA10 driver 0 diag
 	{ TcOutput::tc1_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out4"				},	// PA11 OUT4
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA12 WiFi SCLK (SERCOM4.1)
