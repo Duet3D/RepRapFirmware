@@ -344,11 +344,11 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "macroRestarted",			OBJECT_MODEL_FUNC(self->gCodes->GetMacroRestarted()),					ObjectModelEntryFlags::none },
 	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::important },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
-	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetNewToolNumber()),			ObjectModelEntryFlags::live },
+	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetNewToolNumber()),			ObjectModelEntryFlags::none },
 #if HAS_VOLTAGE_MONITOR
 	{ "powerFailScript",		OBJECT_MODEL_FUNC(self->gCodes->GetPowerFailScript()),					ObjectModelEntryFlags::none },
 #endif
-	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),					ObjectModelEntryFlags::live },
+	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->previousToolNumber),					ObjectModelEntryFlags::none },
 	{ "restorePoints",			OBJECT_MODEL_FUNC_NOSELF(&restorePointsArrayDescriptor),				ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
 	{ "thisInput",				OBJECT_MODEL_FUNC_IF_NOSELF(context.GetGCodeBuffer() != nullptr, (int32_t)context.GetGCodeBuffer()->GetChannel().ToBaseType()),	ObjectModelEntryFlags::verbose },

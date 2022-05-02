@@ -958,7 +958,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 #if SUPPORT_LASER
 	if (machineType == MachineType::laser)
 	{
-		moveState.laserPwmOrIoBits.laserPwm = 0;		// turn off the laser when we start moving
+		moveState.laserPwmOrIoBits.laserPwm = 0;										// turn off the laser when we start moving
 	}
 #endif
 
@@ -988,6 +988,8 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 		// Make sure we expose usable values (which noFilePosition is not)
 		pauseRestorePoint.filePos = 0;
 	}
+
+	reprap.StateUpdated();																// test DWC/DSF that we have changed a restore point
 }
 
 // Check if a pause is pending, action it if so
