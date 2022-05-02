@@ -154,8 +154,12 @@ void SbcInterface::Spin() noexcept
 				{
 					numSbcTimeouts++;
 				}
+				reprap.GetPlatform().MessageF(NetworkInfoMessage, "Lost connection to SBC due to %s timeout\n", hadSbcTimeout ? "remote" : "local");
 			}
-			reprap.GetPlatform().MessageF(NetworkInfoMessage, "Lost connection to SBC due to %s timeout\n", hadSbcTimeout ? "remote" : "local");
+			else
+			{
+				reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to SBC due to connection reset\n");
+			}
 
 			// Invalidate local resources
 			InvalidateResources();
@@ -176,7 +180,10 @@ void SbcInterface::Spin() noexcept
 			}
 
 			// Handle exchanged data and kick off the next transfer
-			ExchangeData();
+			if (!hadReset)
+			{
+				ExchangeData();
+			}
 			transfer.StartNextTransfer();
 		}
 		else if (hadTimeout || hadReset)
