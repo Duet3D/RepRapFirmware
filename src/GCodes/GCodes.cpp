@@ -266,7 +266,7 @@ void GCodes::Reset() noexcept
 		f = 0.0;										// clear babystepping before calling ToolOffsetInverseTransform
 	}
 
-	for (Trigger& tr : triggers)
+	for (TriggerItem& tr : triggers)
 	{
 		tr.Init();
 	}
@@ -967,6 +967,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 	gb.SetState(newState);
 	pauseState = PauseState::pausing;
 
+	reprap.StateUpdated();																// test DWC/DSF that we have changed a restore point
 }
 
 // Check if a pause is pending, action it if so

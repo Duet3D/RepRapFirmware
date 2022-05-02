@@ -56,6 +56,7 @@ GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply) THROWS
 	bool dummySeen;
 	gb.TryGetLimitedUIValue('S', sParam, dummySeen, NumVisibleRestorePoints);
 	SavePosition(gb, sParam);
+	reprap.StateUpdated();										// tell DWC/DSF that a restore point has been changed
 	return GCodeResult::ok;
 }
 

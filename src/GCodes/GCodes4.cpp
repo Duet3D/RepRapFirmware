@@ -331,6 +331,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		ms.toolChangeRestorePoint.toolNumber = ms.GetCurrentToolNumber();
 		ms.toolChangeRestorePoint.fanSpeed = ms.virtualFanSpeed;
 		ms.SetPreviousToolNumber();
+		reprap.StateUpdated();							// tell DWC/DSF that a restore point, nextToolNumber and the previousToolNumber have been updated
 		gb.AdvanceState();
 
 		// If the tool is in the firmware-retracted state, there may be some Z hop applied, which we must remove

@@ -446,7 +446,7 @@ uint16_t Tool::numToolsToReport = 0;
 	return rslt;
 }
 
-void Tool::Print(const StringRef& reply) const noexcept
+void Tool::PrintTool(const StringRef& reply) const noexcept
 {
 	reply.printf("Tool %u - ", myNumber);
 	if (name != nullptr)
