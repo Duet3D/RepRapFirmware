@@ -1118,7 +1118,7 @@ void RepRap::PrintTool(int toolNumber, const StringRef& reply) const noexcept
 	ReadLockedPointer<Tool> const tool = GetTool(toolNumber);
 	if (tool.IsNotNull())
 	{
-		tool->Print(reply);
+		tool->PrintTool(reply);
 	}
 	else
 	{

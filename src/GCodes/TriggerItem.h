@@ -5,16 +5,16 @@
  *      Author: David
  */
 
-#ifndef SRC_GCODES_TRIGGER_H_
-#define SRC_GCODES_TRIGGER_H_
+#ifndef SRC_GCODES_TRIGGERITEM_H_
+#define SRC_GCODES_TRIGGERITEM_H_
 
 #include <RepRapFirmware.h>
 #include <Hardware/IoPorts.h>
 
-class Trigger
+class TriggerItem
 {
 public:
-	Trigger() noexcept;
+	TriggerItem() noexcept;
 
 	void Init() noexcept;
 
@@ -38,4 +38,4 @@ private:
 	int8_t condition;
 };
 
-#endif /* SRC_GCODES_TRIGGER_H_ */
+#endif /* SRC_GCODES_TRIGGERITEM_H_ */

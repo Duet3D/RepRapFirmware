@@ -276,7 +276,7 @@ void GCodes::Reset() noexcept
 		rp.Init();
 	}
 
-	for (Trigger& tr : triggers)
+	for (TriggerItem& tr : triggers)
 	{
 		tr.Init();
 	}
