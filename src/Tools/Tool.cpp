@@ -196,7 +196,7 @@ uint16_t Tool::numToolsToReport = 0;
 	{
 		// Use exactly only one Filament instance per extruder drive
 		Filament * const filament = Filament::GetFilamentByExtruder(filamentDrive);
-		t->filament = (filament == nullptr) ? new Filament(d[0]) : filament;
+		t->filament = (filament == nullptr) ? new Filament(filamentDrive) : filament;
 		t->filamentExtruder = filamentDrive;
 	}
 	else

@@ -49,7 +49,7 @@ extern "C" [[noreturn]] void SBCTaskStart(void * pvParameters) noexcept
 	reprap.GetSbcInterface().TaskLoop();
 }
 
-SbcInterface::SbcInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0), lastTransferTime(0),
+SbcInterface::SbcInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0), numSbcTimeouts(0), lastTransferTime(0),
 	maxDelayBetweenTransfers(SpiTransferDelay), maxFileOpenDelay(SpiFileOpenDelay), numMaxEvents(SpiEventsRequired),
 	delaying(false), numEvents(0), reportPause(false), reportPauseWritten(false), printAborted(false),
 	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true), waitingForFileChunk(false),
@@ -107,7 +107,7 @@ void SbcInterface::Spin() noexcept
 	transfer.InitFromTask();
 	transfer.StartNextTransfer();
 
-	bool busy = false, transferComplete = false, hadTimeout = false, hadReset = false;
+	bool busy = false, transferComplete = false, hadTimeout = false, hadSbcTimeout = false, hadReset = false;
 	for (;;)
 	{
 		// Try to exchange data with the SBC
@@ -116,19 +116,22 @@ void SbcInterface::Spin() noexcept
 		{
 			busy = false;
 			state = transfer.DoTransfer();
+			const uint32_t transferStartTime = millis();
 			switch (state)
 			{
 			case TransferState::doingFullTransfer:
 				hadTimeout = !TaskBase::Take(isConnected ? SpiConnectionTimeout : TaskBase::TimeoutUnlimited);
+				hadSbcTimeout = hadTimeout && millis() - transferStartTime < SpiConnectionTimeout + SbcYieldTimeout;
 				break;
 			case TransferState::doingPartialTransfer:
 				hadTimeout = !TaskBase::Take(SpiTransferTimeout);
+				hadSbcTimeout = hadTimeout && millis() - transferStartTime < SpiTransferTimeout + SbcYieldTimeout;
 				break;
 			case TransferState::finishingTransfer:
 				busy = true;
 				break;
 			case TransferState::connectionTimeout:
-				hadTimeout = true;
+				hadTimeout = hadSbcTimeout = true;
 				break;
 			case TransferState::connectionReset:
 				hadReset = true;
@@ -147,8 +150,16 @@ void SbcInterface::Spin() noexcept
 			if (hadTimeout)
 			{
 				numTimeouts++;
+				if (hadSbcTimeout)
+				{
+					numSbcTimeouts++;
+				}
+				reprap.GetPlatform().MessageF(NetworkInfoMessage, "Lost connection to SBC due to %s timeout\n", hadSbcTimeout ? "remote" : "local");
 			}
-			reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to SBC\n");
+			else
+			{
+				reprap.GetPlatform().Message(NetworkInfoMessage, "Lost connection to SBC due to connection reset\n");
+			}
 
 			// Invalidate local resources
 			InvalidateResources();
@@ -169,7 +180,10 @@ void SbcInterface::Spin() noexcept
 			}
 
 			// Handle exchanged data and kick off the next transfer
-			ExchangeData();
+			if (!hadReset)
+			{
+				ExchangeData();
+			}
 			transfer.StartNextTransfer();
 		}
 		else if (hadTimeout || hadReset)
@@ -1185,7 +1199,7 @@ void SbcInterface::Diagnostics(MessageType mtype) noexcept
 {
 	reprap.GetPlatform().Message(mtype, "=== SBC interface ===\n");
 	transfer.Diagnostics(mtype);
-	reprap.GetPlatform().MessageF(mtype, "State: %d, disconnects: %" PRIu32 ", timeouts: %" PRIu32 ", IAP RAM available 0x%05" PRIx32 "\n", (int)state, numDisconnects, numTimeouts, iapRamAvailable);
+	reprap.GetPlatform().MessageF(mtype, "State: %d, disconnects: %" PRIu32 ", timeouts: %" PRIu32 " total, %" PRIu32 " by SBC, IAP RAM available 0x%05" PRIx32 "\n", (int)state, numDisconnects, numTimeouts, numSbcTimeouts, iapRamAvailable);
 	reprap.GetPlatform().MessageF(mtype, "Buffer RX/TX: %d/%d-%d, open files: %u\n", (int)rxPointer, (int)txPointer, (int)txEnd, numOpenFiles);
 #ifdef TRACK_FILE_CODES
 	reprap.GetPlatform().MessageF(mtype, "File codes read/handled: %d/%d, file macros open/closing: %d %d\n", (int)fileCodesRead, (int)fileCodesHandled, (int)fileMacrosRunning, (int)fileMacrosClosing);
