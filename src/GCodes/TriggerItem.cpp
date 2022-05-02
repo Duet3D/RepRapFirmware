@@ -5,18 +5,18 @@
  *      Author: David
  */
 
-#include "Trigger.h"
+#include "TriggerItem.h"
 #include <Platform/RepRap.h>
 #include "GCodes.h"
 #include <PrintMonitor/PrintMonitor.h>
 #include "GCodeBuffer/GCodeBuffer.h"
 
-Trigger::Trigger() noexcept : condition(0)
+TriggerItem::TriggerItem() noexcept : condition(0)
 {
 }
 
 // Initialise the trigger
-void Trigger::Init() noexcept
+void TriggerItem::Init() noexcept
 {
 	highLevelEndstops.Clear();
 	lowLevelEndstops.Clear();
@@ -26,14 +26,14 @@ void Trigger::Init() noexcept
 }
 
 // Return true if this trigger is unused, i.e. it doesn't watch any pins
-bool Trigger::IsUnused() const noexcept
+bool TriggerItem::IsUnused() const noexcept
 {
 	return highLevelEndstops.IsEmpty() && lowLevelEndstops.IsEmpty() && highLevelInputs.IsEmpty() && lowLevelInputs.IsEmpty();
 }
 
 // Check whether this trigger is active and update the input states. This is called in a polling loop, so it needs to be fast.
 // TODO when we switch to interrupt-driven endstops, make this interrupt-driven instead
-bool Trigger::Check() noexcept
+bool TriggerItem::Check() noexcept
 {
 	bool triggered = false;
 
@@ -106,7 +106,7 @@ bool Trigger::Check() noexcept
 }
 
 // Handle M581 for this trigger
-GCodeResult Trigger::Configure(unsigned int number, GCodeBuffer &gb, const StringRef &reply)
+GCodeResult TriggerItem::Configure(unsigned int number, GCodeBuffer &gb, const StringRef &reply)
 {
 	bool seen = false;
 	if (gb.Seen('R'))
@@ -217,14 +217,14 @@ GCodeResult Trigger::Configure(unsigned int number, GCodeBuffer &gb, const Strin
 }
 
 // Handle M582 for this trigger
-bool Trigger::CheckLevel() noexcept
+bool TriggerItem::CheckLevel() noexcept
 {
 	endstopStates = lowLevelEndstops;
 	inputStates = lowLevelInputs;
 	return Check();
 }
 
-void Trigger::AppendInputNames(AxesBitmap endstops, InputPortsBitmap inputs, const StringRef &reply) noexcept
+void TriggerItem::AppendInputNames(AxesBitmap endstops, InputPortsBitmap inputs, const StringRef &reply) noexcept
 {
 	if (endstops.IsEmpty() && inputs.IsEmpty())
 	{

@@ -279,7 +279,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 	return (tool == nullptr) ? 0.0 : tool->offset[axis];
 }
 
-void Tool::Print(const StringRef& reply) const noexcept
+void Tool::PrintTool(const StringRef& reply) const noexcept
 {
 	reply.printf("Tool %u - ", myNumber);
 	if (name != nullptr)

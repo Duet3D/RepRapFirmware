@@ -211,7 +211,7 @@ constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[NumSdCards - 1] = { PortCPin(14) };
 constexpr Pin SdMciPins[] = { PortAPin(20), PortAPin(21), PortBPin(18), PortBPin(19), PortBPin(20), PortBPin(21) };
 constexpr GpioPinFunction SdMciPinsFunction = GpioPinFunction::I;
-Sdhc * const SdDevice = SDHC1;
+Sdhc * const SdhcDevice = SDHC1;
 constexpr IRQn_Type SdhcIRQn = SDHC1_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 

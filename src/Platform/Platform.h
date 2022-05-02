@@ -128,8 +128,8 @@ enum class BoardType : uint8_t
 	Duet3_6HC_v101 = 2,
 #elif defined(DUET3_MB6XD)
 	Duet3_6XD = 1,
-#elif defined(DUET3MINI4)
-	Duet3Mini4,
+#elif defined(FMDC_V02)
+	FMDC,
 #elif defined(SAME70XPLD)
 	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)
@@ -415,7 +415,7 @@ public:
 	bool FileExists(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
-#endif
+# endif
 
 	static const char *_ecv_array GetWebDir() noexcept; 		// Where the html etc files are
 	static const char *_ecv_array GetGCodeDir() noexcept; 		// Where the gcodes are

@@ -47,8 +47,8 @@
 // 2021-02-03: MC and DC converted this to be re-entrant, provided that only one task uses each interface.
 // Currently all RRF configurations for Duets support at most one HSMCI and one SPI card, and there is a mutex for each volume, so this is the case.
 
-#include <Core.h>		// for digitalRead() and pinMode()
-#include <string.h>
+#include <RepRapFirmware.h>
+#include <cstring>
 
 #define SUPPORT_SDHC	1
 
@@ -82,27 +82,27 @@ extern void debugPrintf(const char* fmt, ...);
 #  error SD_MMC_SPI_MEM_CNT not defined
 #endif
 
-typedef void (*driverIdleFunc_t)(uint32_t, uint32_t);
+typedef void (*driverIdleFunc_t)(uint32_t, uint32_t) noexcept;
 
 struct DriverInterface
 {
-	bool (*select_device)(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed);
-	void (*deselect_device)(uint8_t slot);
-	uint8_t (*get_bus_width)(uint8_t slot);
-	bool (*is_high_speed_capable)(void);
-	void (*send_clock)(void);
-	bool (*send_cmd)(sdmmc_cmd_def_t cmd, uint32_t arg);
-	uint32_t (*get_response)(void);
-	void (*get_response_128)(uint8_t* response);
-	bool (*adtc_start)(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void* dmaAddr);
-	bool (*adtc_stop)(sdmmc_cmd_def_t cmd, uint32_t arg);
-	bool (*read_word)(uint32_t* value);
-	bool (*write_word)(uint32_t value);
-	bool (*start_read_blocks)(void *dest, uint16_t nb_block);
-	bool (*wait_end_of_read_blocks)(void);
-	bool (*start_write_blocks)(const void *src, uint16_t nb_block);
-	bool (*wait_end_of_write_blocks)(void);
-	uint32_t (*getInterfaceSpeed)(void);
+	bool (*select_device)(uint8_t slot, uint32_t clock, uint8_t bus_width, bool high_speed) noexcept;
+	void (*deselect_device)(uint8_t slot) noexcept;
+	uint8_t (*get_bus_width)(uint8_t slot) noexcept;
+	bool (*is_high_speed_capable)(void) noexcept;
+	void (*send_clock)(void) noexcept;
+	bool (*send_cmd)(sdmmc_cmd_def_t cmd, uint32_t arg) noexcept;
+	uint32_t (*get_response)(void) noexcept;
+	void (*get_response_128)(uint8_t* response) noexcept;
+	bool (*adtc_start)(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_size, uint16_t nb_block, const void* dmaAddr) noexcept;
+	bool (*adtc_stop)(sdmmc_cmd_def_t cmd, uint32_t arg) noexcept;
+	bool (*read_word)(uint32_t* value) noexcept;
+	bool (*write_word)(uint32_t value) noexcept;
+	bool (*start_read_blocks)(void *dest, uint16_t nb_block) noexcept;
+	bool (*wait_end_of_read_blocks)(void) noexcept;
+	bool (*start_write_blocks)(const void *src, uint16_t nb_block) noexcept;
+	bool (*wait_end_of_write_blocks)(void) noexcept;
+	uint32_t (*getInterfaceSpeed)(void) noexcept;
 	driverIdleFunc_t (*set_idle_func)(driverIdleFunc_t);
 	bool is_spi;			// true if the interface is SPI, false if it is HSMCI
 };
@@ -928,7 +928,7 @@ static bool mmc_cmd8(uint8_t *b_authorize_high_speed, uint8_t slot)
 	uint32_t sec_count;
 	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 
-	if (!sd_mmc_card->iface->adtc_start(MMC_CMD8_SEND_EXT_CSD, 0, EXT_CSD_BSIZE, 1, false)) {
+	if (!sd_mmc_card->iface->adtc_start(MMC_CMD8_SEND_EXT_CSD, 0, EXT_CSD_BSIZE, 1, nullptr)) {
 		return false;
 	}
 	//** Read and decode Extended Extended CSD
@@ -1796,7 +1796,7 @@ static bool sd_mmc_mci_install_mmc(uint8_t slot)
 //-------------------------------------------------------------------
 //--------------------- PUBLIC FUNCTIONS ----------------------------
 
-void sd_mmc_init(const Pin wpPins[], const Pin spiCsPins[])
+void sd_mmc_init(const Pin wpPins[], const Pin spiCsPins[]) noexcept
 {
 	for (size_t slot = 0; slot < SD_MMC_MEM_CNT; slot++)
 	{
@@ -1827,7 +1827,11 @@ void sd_mmc_init(const Pin wpPins[], const Pin spiCsPins[])
 //	sd_mmc_slot_sel = 0xFF;					// No slot selected
 
 #if SD_MMC_HSMCI_MEM_CNT != 0
+# if SAME5x
+	hsmci_init(SdhcDevice, SdhcIRQn);
+# else
 	hsmci_init();
+# endif
 #endif
 
 #if SD_MMC_SPI_MEM_CNT != 0
@@ -1835,14 +1839,14 @@ void sd_mmc_init(const Pin wpPins[], const Pin spiCsPins[])
 #endif
 }
 
-uint8_t sd_mmc_nb_slot(void)
+uint8_t sd_mmc_nb_slot(void) noexcept
 {
 	return SD_MMC_MEM_CNT;
 }
 
 // Check that the card is ready and initialise it if necessary
 // The card is not selected on entry or at exit
-sd_mmc_err_t sd_mmc_check(uint8_t slot)
+sd_mmc_err_t sd_mmc_check(uint8_t slot) noexcept
 {
 	sd_mmc_err_t sd_mmc_err = sd_mmc_select_slot(slot);
 	if (sd_mmc_err != SD_MMC_INIT_ONGOING)
@@ -1867,7 +1871,7 @@ sd_mmc_err_t sd_mmc_check(uint8_t slot)
 	return SD_MMC_ERR_UNUSABLE;
 }
 
-card_type_t sd_mmc_get_type(uint8_t slot)
+card_type_t sd_mmc_get_type(uint8_t slot) noexcept
 {
 	if (SD_MMC_OK != sd_mmc_select_slot(slot)) {
 		return CARD_TYPE_UNKNOWN;
@@ -1876,7 +1880,7 @@ card_type_t sd_mmc_get_type(uint8_t slot)
 	return sd_mmc_cards[slot].type;
 }
 
-card_version_t sd_mmc_get_version(uint8_t slot)
+card_version_t sd_mmc_get_version(uint8_t slot) noexcept
 {
 	if (SD_MMC_OK != sd_mmc_select_slot(slot)) {
 		return CARD_VER_UNKNOWN;
@@ -1885,7 +1889,7 @@ card_version_t sd_mmc_get_version(uint8_t slot)
 	return sd_mmc_cards[slot].version;
 }
 
-uint32_t sd_mmc_get_capacity(uint8_t slot)
+uint32_t sd_mmc_get_capacity(uint8_t slot) noexcept
 {
 #if 1 // This will only check for already present data. The old code below is unsafe if another task is accessing data already.
 	if (slot < SD_MMC_MEM_CNT && sd_mmc_cards[slot].state == SD_MMC_CARD_STATE_READY)
@@ -1915,13 +1919,13 @@ bool sd_mmc_is_write_protected(uint8_t slot)
 #if 1	// dc42
 
 // Unmount the card. Must call this to force it to be re-initialised when changing card.
-void sd_mmc_unmount(uint8_t slot)
+void sd_mmc_unmount(uint8_t slot) noexcept
 {
 	sd_mmc_cards[slot].state = SD_MMC_CARD_STATE_NO_CARD;
 }
 
 // Get the interface speed in bytes/sec
-uint32_t sd_mmc_get_interface_speed(uint8_t slot)
+uint32_t sd_mmc_get_interface_speed(uint8_t slot) noexcept
 {
 	return sd_mmc_cards[slot].iface->getInterfaceSpeed();
 }
@@ -1944,7 +1948,7 @@ void sd_mmc_change_cs_pin(uint8_t slot, Pin csPin) noexcept
 // Initialise for reading blocks
 // On entry the card is not selected
 // If SD_MMC_OK is returned then the card is selected, otherwise it is not selected
-sd_mmc_err_t sd_mmc_init_read_blocks(uint8_t slot, uint32_t start, uint16_t nb_block, void *dmaAddr)
+sd_mmc_err_t sd_mmc_init_read_blocks(uint8_t slot, uint32_t start, uint16_t nb_block, void *dmaAddr) noexcept
 {
 	sd_mmc_err_t sd_mmc_err;
 	uint32_t cmd, arg, resp;
@@ -2000,7 +2004,7 @@ sd_mmc_err_t sd_mmc_init_read_blocks(uint8_t slot, uint32_t start, uint16_t nb_b
 // Start reading blocks
 // On entry the card is selected
 // If SD_MMC_OK is returned then the card is selected, otherwise it is not selected
-sd_mmc_err_t sd_mmc_start_read_blocks(void *dest, uint16_t nb_block, uint8_t slot)
+sd_mmc_err_t sd_mmc_start_read_blocks(void *dest, uint16_t nb_block, uint8_t slot) noexcept
 {
 	Assert(sd_mmc_nb_block_remaining[slot] >= nb_block);
 
@@ -2017,7 +2021,7 @@ sd_mmc_err_t sd_mmc_start_read_blocks(void *dest, uint16_t nb_block, uint8_t slo
 // Wait until all blocks have been read
 // On entry the device is selected
 // On return it is not selected
-sd_mmc_err_t sd_mmc_wait_end_of_read_blocks(bool abort, uint8_t slot)
+sd_mmc_err_t sd_mmc_wait_end_of_read_blocks(bool abort, uint8_t slot) noexcept
 {
 	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (!sd_mmc_card->iface->wait_end_of_read_blocks()) {
@@ -2050,7 +2054,7 @@ sd_mmc_err_t sd_mmc_wait_end_of_read_blocks(bool abort, uint8_t slot)
 // Initialise for writing blocks
 // On entry the card is not selected
 // If SD_MMC_OK is returned then the card is selected, otherwise it is not selected
-sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_block, const void *dmaAddr)
+sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_block, const void *dmaAddr) noexcept
 {
 	sd_mmc_err_t sd_mmc_err;
 	uint32_t cmd, arg, resp;
@@ -2106,7 +2110,7 @@ sd_mmc_err_t sd_mmc_init_write_blocks(uint8_t slot, uint32_t start, uint16_t nb_
 // Start writing blocks
 // On entry the card is selected
 // If SD_MMC_OK is returned then the card is selected, otherwise it is not selected
-sd_mmc_err_t sd_mmc_start_write_blocks(const void *src, uint16_t nb_block, uint8_t slot)
+sd_mmc_err_t sd_mmc_start_write_blocks(const void *src, uint16_t nb_block, uint8_t slot) noexcept
 {
 	Assert(sd_mmc_nb_block_remaining[slot] >= nb_block);
 	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
@@ -2122,7 +2126,7 @@ sd_mmc_err_t sd_mmc_start_write_blocks(const void *src, uint16_t nb_block, uint8
 // Wait until all blocks have been written
 // On entry the device is selected
 // On return it is not selected
-sd_mmc_err_t sd_mmc_wait_end_of_write_blocks(bool abort, uint8_t slot)
+sd_mmc_err_t sd_mmc_wait_end_of_write_blocks(bool abort, uint8_t slot) noexcept
 {
 	struct sd_mmc_card * const sd_mmc_card = &sd_mmc_cards[slot];
 	if (!sd_mmc_card->iface->wait_end_of_write_blocks()) {
@@ -2156,8 +2160,7 @@ sd_mmc_err_t sd_mmc_wait_end_of_write_blocks(bool abort, uint8_t slot)
 }
 
 #ifdef SDIO_SUPPORT_ENABLE
-sd_mmc_err_t sdio_read_direct(uint8_t slot, uint8_t func_num, uint32_t addr,
-		uint8_t *dest)
+sd_mmc_err_t sdio_read_direct(uint8_t slot, uint8_t func_num, uint32_t addr, uint8_t *dest) noexcept
 {
 	sd_mmc_err_t sd_mmc_err;
 
@@ -2178,8 +2181,7 @@ sd_mmc_err_t sdio_read_direct(uint8_t slot, uint8_t func_num, uint32_t addr,
 	return SD_MMC_OK;
 }
 
-sd_mmc_err_t sdio_write_direct(uint8_t slot, uint8_t func_num, uint32_t addr,
-		uint8_t data)
+sd_mmc_err_t sdio_write_direct(uint8_t slot, uint8_t func_num, uint32_t addr, uint8_t data) noexcept
 {
 	sd_mmc_err_t sd_mmc_err;
 
@@ -2197,8 +2199,7 @@ sd_mmc_err_t sdio_write_direct(uint8_t slot, uint8_t func_num, uint32_t addr,
 	return SD_MMC_OK;
 }
 
-sd_mmc_err_t sdio_read_extended(uint8_t slot, uint8_t func_num, uint32_t addr,
-		uint8_t inc_addr, uint8_t *dest, uint16_t size)
+sd_mmc_err_t sdio_read_extended(uint8_t slot, uint8_t func_num, uint32_t addr, uint8_t inc_addr, uint8_t *dest, uint16_t size) noexcept
 {
 	sd_mmc_err_t sd_mmc_err;
 
@@ -2229,8 +2230,7 @@ sd_mmc_err_t sdio_read_extended(uint8_t slot, uint8_t func_num, uint32_t addr,
 	return SD_MMC_OK;
 }
 
-sd_mmc_err_t sdio_write_extended(uint8_t slot, uint8_t func_num, uint32_t addr,
-		uint8_t inc_addr, uint8_t *src, uint16_t size)
+sd_mmc_err_t sdio_write_extended(uint8_t slot, uint8_t func_num, uint32_t addr, uint8_t inc_addr, uint8_t *src, uint16_t size) noexcept
 {
 	sd_mmc_err_t sd_mmc_err;
 

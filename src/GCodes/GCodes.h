@@ -32,7 +32,7 @@ Licence: GPL
 #include "GCodeChannel.h"
 #include "GCodeInput.h"
 #include "GCodeMachineState.h"
-#include "Trigger.h"
+#include <GCodes/TriggerItem.h>
 #include <Tools/Filament.h>
 #include <FilamentMonitors/FilamentMonitor.h>
 #include "RestorePoint.h"
@@ -664,7 +664,7 @@ private:
 	bool updateFileWhenSimulationComplete;		// true if simulated time should be appended to the file
 
 	// Triggers
-	Trigger triggers[MaxTriggers];				// Trigger conditions
+	TriggerItem triggers[MaxTriggers];				// Trigger conditions
 	TriggerNumbersBitmap triggersPending;		// Bitmap of triggers pending but not yet executed
 
 	// Firmware update

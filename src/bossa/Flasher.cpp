@@ -28,6 +28,10 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "Flasher.h"
+#include <RepRapFirmware.h>
+
+#if SUPPORT_PANELDUE_FLASH
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <General/Vector.hpp>
@@ -198,5 +202,7 @@ void Flasher::lock(/* string& regionArg, */ bool enable) THROWS(GCodeException)
     }
 #endif
 }
+
+#endif
 
 // End

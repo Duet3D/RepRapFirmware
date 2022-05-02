@@ -10,11 +10,11 @@
 
 #include <PinDescription.h>
 
-#define DEFAULT_BOARD_TYPE		 BoardType::Duet3Mini4
+#define DEFAULT_BOARD_TYPE		 BoardType::FMDC
 
-#define BOARD_SHORT_NAME		"Mini4"
-#define BOARD_NAME				"Duet 3 Mini 4"
-#define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 4"
+#define BOARD_SHORT_NAME		"FMDC"
+#define BOARD_NAME				"FMDC"
+#define FIRMWARE_NAME			"RepRapFirmware for FMDC"
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".uf2"
 #define IAP_UPDATE_FILE			"Duet3_SDiap32_" BOARD_SHORT_NAME ".bin"
@@ -51,6 +51,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
+#define SUPPORT_TFTM0356_6_LCD	1
 #define SUPPORT_ACCELEROMETERS	1
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				0
@@ -90,26 +91,24 @@ constexpr size_t NumThermistorInputs = 2;
 constexpr size_t NumTmcDriversSenseChannels = 1;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
-constexpr size_t MaxAxes = 10;						// The maximum number of movement axes in the machine
-constexpr size_t MaxDriversPerAxis = 4;				// The maximum number of stepper drivers assigned to one axis
+constexpr size_t MaxAxes = 4;						// The maximum number of movement axes in the machine
+constexpr size_t MaxDriversPerAxis = 2;				// The maximum number of stepper drivers assigned to one axis
 
-constexpr size_t MaxExtruders = 8;					// The maximum number of extruders
-constexpr size_t MaxAxesPlusExtruders = 12;
+constexpr size_t MaxExtruders = 2;					// The maximum number of extruders
+constexpr size_t MaxAxesPlusExtruders = 6;
 
 constexpr size_t MaxHeatersPerTool = 2;
-constexpr size_t MaxExtrudersPerTool = 8;
+constexpr size_t MaxExtrudersPerTool = 2;
 
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
-constexpr size_t NumSerialChannels = 1;				// The number of serial IO channels (USB and one auxiliary UART)
+constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB and one auxiliary UART)
 
 #define SERIAL_MAIN_DEVICE (serialUSB)
+#define SERIAL_AUX_DEVICE (serialUart0)
 
 // SerialUSB
 constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB port
-
-//#define I2C_IFACE	Wire							// First and only I2C interface
-//#define I2C_IRQn	WIRE_ISR_ID
 
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
@@ -157,7 +156,7 @@ constexpr uint8_t TMC22xxSercomRxPad = 1;
 constexpr uint32_t DriversBaudRate = 100000;								// at 100kbaud a transfer may take up to 2ms
 constexpr uint32_t TransferTimeout = 6;										// any transfer should complete within 6 ticks @ 1ms/tick. 5 wasn't quite enough.
 constexpr uint32_t DefaultStandstillCurrentPercent = 75;
-constexpr float DriverSenseResistor = 0.056 + 0.02;							// in ohms
+constexpr float DriverSenseResistor = 0.056 + 0.02 + 0.012;					// in ohms. The 0.012 is an additional correction for this board.
 
 constexpr float DriverVRef = 180.0;											// in mV
 constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
@@ -172,7 +171,7 @@ constexpr Pin VrefSensePin = PortBPin(5);
 
 constexpr float DefaultThermistorSeriesR = 2200.0;							// Thermistor series resistor value in ohms
 constexpr float MinVrefLoadR = (DefaultThermistorSeriesR / NumThermistorInputs) * 4700.0/((DefaultThermistorSeriesR / NumThermistorInputs) + 4700.0);
-																			// there are 3 temperature sensing channels and a 4K7 load resistor
+																			// there are 2 temperature sensing channels and a 4K7 load resistor
 constexpr float VrefSeriesR = 27.0;
 
 // Analogue pin numbers
@@ -181,28 +180,29 @@ constexpr float PowerMonitorVoltageRange = 11.0 * 3.3;						// We use an 11:1 vo
 
 #ifdef DEBUG
 constexpr Pin DiagPin = NoPin;												// Diag/status LED pin is shared with SWD
-constexpr Pin ActLedPin = NoPin;											// Activity LED pin is shared with SWCLK
 #else
 constexpr Pin DiagPin = PortAPin(31);										// Diag/status LED pin
-constexpr Pin ActLedPin = NoPin;											// Activity LED pin (not present)
 #endif
+
+constexpr Pin ActLedPin = NoPin;											// Activity LED pin (not present)
 
 constexpr bool DiagOnPolarity = false;
 constexpr bool ActOnPolarity = false;
 
 // SD cards
 constexpr size_t NumSdCards = 2;
-constexpr Pin SdCardDetectPins[NumSdCards] = { PortBPin(16), PortBPin(0) };
+constexpr Pin SdCardDetectPins[NumSdCards] = { PortBPin(16), /*PortBPin(0)*/ NoPin };
 
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[NumSdCards - 1] = { PortCPin(14) };
+constexpr Pin SdSpiCSPins[NumSdCards - HAS_HIGH_SPEED_SD] = { PortCPin(14) };
 constexpr Pin SdMciPins[] = { PortAPin(20), PortAPin(21), PortBPin(18), PortBPin(19), PortBPin(20), PortBPin(21) };
 constexpr GpioPinFunction SdMciPinsFunction = GpioPinFunction::I;
-Sdhc * const SdDevice = SDHC0;
-constexpr IRQn_Type SdhcIRQn = SDHC0_IRQn;
+Sdhc * const SdhcDevice = SDHC1;
+constexpr IRQn_Type SdhcIRQn = SDHC1_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
 // LCD interface
+constexpr uint32_t LcdSpiClockFrequency = 4000000;		// 4.0MHz
 constexpr unsigned int LcdSercomNumber = 0;
 constexpr Pin LcdSpiMosiPin = PortAPin(4);
 constexpr Pin LcdSpiMisoPin = PortAPin(7);
@@ -225,6 +225,9 @@ constexpr Pin RtpSpiSclkPin = PortCPin(17);
 constexpr Pin RtpSpiCsPin = PortCPin(18);
 constexpr GpioPinFunction RtpSpiPinFunction = GpioPinFunction::C;
 
+// Beeper
+constexpr Pin BeeperPins[2] = { PortAPin(8), PortAPin(9) };
+
 // Shared SPI definitions
 constexpr uint8_t SharedSpiSercomNumber = 7;
 constexpr Pin SharedSpiMosiPin = PortCPin(12);
@@ -232,7 +235,17 @@ constexpr Pin SharedSpiMisoPin = PortCPin(15);
 constexpr Pin SharedSpiSclkPin = PortCPin(13);
 constexpr GpioPinFunction SharedSpiPinFunction = GpioPinFunction::C;
 
-// No external serial interfaces
+// Serial on IO0
+constexpr uint8_t Serial0SercomNumber = 2;
+constexpr uint8_t Sercom0RxPad = 1;
+#define SERIAL0_ISR0	SERCOM2_0_Handler
+#define SERIAL0_ISR1	SERCOM2_1_Handler
+#define SERIAL0_ISR2	SERCOM2_2_Handler
+#define SERIAL0_ISR3	SERCOM2_3_Handler
+
+constexpr Pin Serial0TxPin = PortBPin(25);
+constexpr Pin Serial0RxPin = PortBPin(24);
+constexpr GpioPinFunction Serial0PinFunction = GpioPinFunction::D;
 
 // WiFi pins
 constexpr unsigned int WiFiUartSercomNumber = 3;
@@ -283,8 +296,8 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA05 LCD SCLK
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA06 LCD CS
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA07 LCD MOSI
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA08 Buzzer A
-	{ TcOutput::tc0_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA09 Buzzer B
+	{ TcOutput::none,	TccOutput::tcc0_0F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA08 Buzzer A
+	{ TcOutput::none,	TccOutput::tcc0_1F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA09 Buzzer B
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		10,	PinCapability::none,	"ate.d0.diag"		},	// PA10 driver 0 diag
 	{ TcOutput::tc1_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out4"				},	// PA11 OUT4
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PA12 WiFi SCLK (SERCOM4.1)
@@ -340,7 +353,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB28 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB29 not on chip
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::sercom5d,	SercomIo::none,		14,	PinCapability::read,	"io3.in"			},	// PB30 IO3_IN
-	{ TcOutput::none,	TccOutput::tcc0_7G,	AdcInput::none,		SercomIo::none,		SercomIo::sercom5d,	Nx,	PinCapability::wpwm,	"io3.out"			},	// PB31 IO3_OUT
+	{ TcOutput::none,	TccOutput::tcc4_1F,	AdcInput::none,		SercomIo::none,		SercomIo::sercom5d,	Nx,	PinCapability::wpwm,	"io3.out"			},	// PB31 IO3_OUT
 
 	// Port C
 	{ TcOutput::none,	TccOutput::none,	AdcInput::adc1_10,	SercomIo::none,		SercomIo::none,		Nx,	PinCapability::ain,		"temp0"				},	// PC00 thermistor0

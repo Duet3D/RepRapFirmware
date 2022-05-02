@@ -1422,11 +1422,15 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 				}
 
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
-				if (platform.GetDriversBitmap(drive) != 0)					// if any of the drives is local
+				if (platform.GetDriversBitmap(drive) != 0						// if any of the drives is local
+#if SUPPORT_CAN_EXPANSION
+						|| flags.checkEndstops									// if checking endstops, create a DM even if there are no local drives involved
+#endif
+				   )
 				{
 					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
 					pdm->direction = (delta >= 0);
-					pdm->totalSteps = labs(delta);							// this is net steps for now
+					pdm->totalSteps = labs(delta);								// this is net steps for now
 					if (pdm->PrepareDeltaAxis(*this, params))
 					{
 						pdm->directionChanged = false;
@@ -1543,7 +1547,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 					{
 						const NonlinearExtrusion& nl = platform.GetExtrusionCoefficients(extruder);
 						float& dv = directionVector[drive];
-						const float averageExtrusionSpeed = (totalDistance * dv)/clocksNeeded;
+						const float averageExtrusionSpeed = (totalDistance * dv * StepClockRate)/clocksNeeded;			// need speed in mm/sec for nonlinear extrusion calculation
 						const float factor = 1.0 + min<float>((averageExtrusionSpeed * nl.A) + (averageExtrusionSpeed * averageExtrusionSpeed * nl.B), nl.limit);
 						dv *= factor;
 					}

@@ -77,7 +77,7 @@ public:
 	int Number() const noexcept;
 	void DefineMix(const float m[]) noexcept;
 	const float *_ecv_array GetMix() const noexcept;
-	void Print(const StringRef& reply) const noexcept;
+	void PrintTool(const StringRef& reply) const noexcept;
 	AxesBitmap GetXAxisMap() const noexcept { return axisMapping[0]; }
 	AxesBitmap GetYAxisMap() const noexcept { return axisMapping[1]; }
 	FansBitmap GetFanMapping() const noexcept { return fanMapping; }

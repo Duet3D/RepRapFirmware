@@ -48,18 +48,19 @@ enum MessageType : uint32_t
 	LogLevelShift = 30,						// How many bits we have to shift a MessageType right by to get the logging level
 
 	// Common combinations
-	NoDestinationMessage = 0u,												// A message that is going nowhere
-	GenericMessage = UsbMessage | AuxMessage | HttpMessage | TelnetMessage,	// A message that is to be sent to the web, Telnet, USB and panel
-	LogOff = LogMessageLowBit | LogMessageHighBit,							// Log level "off (3): do not log this message
-	LogWarn = LogMessageHighBit,											// Log level "warn" (2): all messages of type Error and Warning are logged
-	LogInfo = LogMessageLowBit,												// Log level "info" (1): all messages of level "warn" plus info messages
-	LoggedGenericMessage = GenericMessage | LogWarn,						// A GenericMessage that is also logged
-	DirectAuxMessage = AuxMessage | RawMessageFlag,							// Direct message to PanelDue
-	ErrorMessage = GenericMessage | LogWarn | ErrorMessageFlag,				// An error message
-	WarningMessage = GenericMessage | LogWarn | WarningMessageFlag,			// A warning message
-	FirmwareUpdateMessage = UsbMessage | ImmediateAuxMessage,				// A message that conveys progress of a firmware update
-	FirmwareUpdateErrorMessage = FirmwareUpdateMessage | ErrorMessageFlag,	// A message that reports an error during a firmware update
-	NetworkInfoMessage = UsbMessage | AuxMessage | LogWarn				 	// A message that conveys information about the state of the network interface
+	NoDestinationMessage = 0u,													// A message that is going nowhere
+	GenericMessage = UsbMessage | AuxMessage | HttpMessage | TelnetMessage,		// A message that is to be sent to the web, Telnet, USB and panel
+	LogOff = LogMessageLowBit | LogMessageHighBit,								// Log level "off (3): do not log this message
+	LogWarn = LogMessageHighBit,												// Log level "warn" (2): all messages of type Error and Warning are logged
+	LogInfo = LogMessageLowBit,													// Log level "info" (1): all messages of level "warn" plus info messages
+	LoggedGenericMessage = GenericMessage | LogWarn,							// A GenericMessage that is also logged
+	DirectAuxMessage = AuxMessage | RawMessageFlag,								// Direct message to PanelDue
+	ErrorMessage = GenericMessage | LogWarn | ErrorMessageFlag,					// An error message
+	WarningMessage = GenericMessage | LogWarn | WarningMessageFlag,				// A warning message
+	FirmwareUpdateMessage = UsbMessage | ImmediateAuxMessage,					// A message that conveys progress of a firmware update
+	FirmwareUpdateErrorMessage = FirmwareUpdateMessage | ErrorMessageFlag,		// A message that reports an error during a firmware update
+	NetworkInfoMessage = UsbMessage | AuxMessage | LogWarn,				 		// A message that conveys information about the state of the network interface
+	NetworkErrorMessage = UsbMessage | AuxMessage | LogWarn | ErrorMessageFlag	// A message that conveys information about the state of the network interface
 };
 
 inline constexpr MessageType AddLogDebug(MessageType mt) noexcept
