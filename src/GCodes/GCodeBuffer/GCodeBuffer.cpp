@@ -337,6 +337,20 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 
 #if SUPPORT_ASYNC_MOVES
 
+// Get the movement queue number that this buffer uses
+size_t GCodeBuffer::GetActiveQueueNumber() const noexcept
+{
+	switch (codeChannel.RawValue())
+	{
+	case GCodeChannel::File:
+		return 0;
+	case GCodeChannel::File2:
+		return 1;
+	default:
+		return machineState->commandedQueueNumber;
+	}
+}
+
 // Return true if this GCode is executing commands read from stream. The caller must make exceptions for commands that are always processed by both streams.
 bool GCodeBuffer::IsPrimary() const noexcept
 {

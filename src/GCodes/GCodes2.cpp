@@ -108,6 +108,7 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	return true;
 }
 
+// Handle G-command returning true if the command completed, false if this function needs to be called again to complete it
 bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	GCodeResult result = GCodeResult::ok;
@@ -614,7 +615,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		GCodeResult result;
 		if (gb.GetCommandFraction() > 0
-			&& code != 36 && code != 201 && code != 569					// these are the only M-codes we implement that can have fractional parts
+			&& code != 36 && code != 201 && code != 569				// these are the only M-codes we implement that can have fractional parts
 		   )
 		{
 			result = TryMacroFile(gb);
@@ -632,7 +633,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					reply.copy("Pause the print before attempting to cancel it");
 					result = GCodeResult::error;
 				}
-				else if (!LockMovementAndWaitForStandstill(gb))	// wait until everything has stopped and deferred command queue has caught up
+				else if (!LockMovementAndWaitForStandstill(gb))		// wait until everything has stopped and deferred command queue has caught up
 				{
 					return false;
 				}
@@ -641,12 +642,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					const auto oldPauseState = pauseState;			// pauseState gets reset by CancelPrint
 					const bool wasSimulating = IsSimulating();		// simulationMode may get cleared by CancelPrint
 					isWaiting = cancelWait = false;					// we may have been waiting for temperatures to be reached
+					//TODO if we are running multiple file channels then we need all of them to get consistent values of oldPauseState and IsSimulating()
+					// Also only one file channel should call StopPrint
+					// however both channels should call stop.g or cancel.g
 					StopPrint((gb.IsFileChannel()) ? StopPrintReason::normalCompletion : StopPrintReason::userCancelled);
 
 					if (!wasSimulating)								// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 					{
 						// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
-						if (oldPauseState != PauseState::notPaused && code == 0 && AllAxesAreHomed())
+						if (oldPauseState != PauseState::notPaused && code == 0)
 						{
 							gb.SetState(GCodeState::cancelling);
 							if (DoFileMacro(gb, CANCEL_G, false, SystemHelperMacroCode))

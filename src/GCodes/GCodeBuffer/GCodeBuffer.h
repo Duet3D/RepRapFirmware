@@ -130,6 +130,7 @@ public:
 		post(result < NumMovementSystems);						// Return the current queue number for commands read from this channel
 
 #if SUPPORT_ASYNC_MOVES
+	size_t GetActiveQueueNumber() const noexcept;				// Get the movement queue number that this buffer uses
 	void SetCurrentQueueNumber(size_t qn) noexcept { machineState->commandedQueueNumber = (uint8_t)qn; }
 	bool IsPrimary() const noexcept;							// Return true if this is the primary GCodeBuffer for executing commands addressed to the current queue
 #endif

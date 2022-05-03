@@ -61,6 +61,7 @@ void GCodes::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bo
 GCodeResult GCodes::SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const unsigned int queueNumber = gb.GetLimitedUIValue('P', ARRAY_SIZE(moveStates));
+	UnlockMovement(gb);							// in case we are in a macro - avoid unlocking the wrong movement system later
 	gb.SetCurrentQueueNumber(queueNumber);
 	return GCodeResult::ok;
 }

@@ -97,7 +97,6 @@ GCodes::GCodes(Platform& p) noexcept :
 	FileGCodeInput * const file2Input = nullptr;
 # endif
 	file2GCode = new GCodeBuffer(GCodeChannel::File2, nullptr, file2Input, GenericMessage);
-	file2GCode->SetCurrentQueueNumber(1);							// so that all commands read from this channel get executed on queue #1 instead of the default #0
 	moveStates[1].codeQueue = new GCodeQueue();
 	queue2GCode = new GCodeBuffer(GCodeChannel::Queue2, moveStates[1].codeQueue, fileInput, GenericMessage);
 	queue2GCode->SetCurrentQueueNumber(1);							// so that all commands read from this queue get executed on queue #1 instead of the default #0
@@ -853,9 +852,9 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 		else
 		{
 			// Pausing a file print via another input source or for some other reason
-			ms.pauseRestorePoint.feedRate = fileGCode->LatestMachineState().feedRate;							// set up the default
+			ms.pauseRestorePoint.feedRate = fileGCode->LatestMachineState().feedRate;						// set up the default
 
-			const bool movesSkipped = reprap.GetMove().PausePrint(moveSystemNumber, ms.pauseRestorePoint);			// tell Move we wish to pause this queue
+			const bool movesSkipped = reprap.GetMove().PausePrint(moveSystemNumber, ms.pauseRestorePoint);	// tell Move we wish to pause this queue
 			if (movesSkipped)
 			{
 				// The PausePrint call has filled in the restore point with machine coordinates
@@ -884,7 +883,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 				// TODO: when using RTOS there is a possible race condition in the following,
 				// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
 				ms.pauseRestorePoint.filePos = fileGCode->GetPrintingFilePosition(true);
-				while (fileGCode->IsDoingFileMacro())										// must call this after GetFilePosition because this changes IsDoingFileMacro
+				while (fileGCode->IsDoingFileMacro())														// must call this after GetFilePosition because this changes IsDoingFileMacro
 				{
 					ms.pausedInMacro = true;
 					fileGCode->PopState();
@@ -4766,19 +4765,19 @@ bool GCodes::LockFileSystem(const GCodeBuffer &gb) noexcept
 // Lock movement
 bool GCodes::LockMovement(const GCodeBuffer& gb) noexcept
 {
-	return LockResource(gb, MoveResourceBase + gb.GetCurrentQueueNumber());
+	return LockResource(gb, MoveResourceBase + gb.GetActiveQueueNumber());
 }
 
 // Grab the movement lock even if another channel owns it
 void GCodes::GrabMovement(const GCodeBuffer& gb) noexcept
 {
-	GrabResource(gb, MoveResourceBase + gb.GetCurrentQueueNumber());
+	GrabResource(gb, MoveResourceBase + gb.GetActiveQueueNumber());
 }
 
 // Release the movement lock
 void GCodes::UnlockMovement(const GCodeBuffer& gb) noexcept
 {
-	UnlockResource(gb, MoveResourceBase + gb.GetCurrentQueueNumber());
+	UnlockResource(gb, MoveResourceBase + gb.GetActiveQueueNumber());
 }
 
 // Unlock the resource if we own it
