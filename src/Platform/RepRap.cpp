@@ -2896,8 +2896,6 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 	if (!ok || firstDword !=
 #if SAME5x
 						HSRAM_ADDR + HSRAM_SIZE
-#elif SAM3XA
-						IRAM1_ADDR + IRAM1_SIZE
 #else
 						IRAM_ADDR + IRAM_SIZE
 #endif
@@ -3036,8 +3034,6 @@ void RepRap::StartIap(const char *filename) noexcept
 		if (topOfStack + firmwareFileLocation.strlen() + 1 <=
 # if SAME5x
 						HSRAM_ADDR + HSRAM_SIZE
-# elif SAM3XA
-						IRAM1_ADDR + IRAM1_SIZE
 # else
 						IRAM_ADDR + IRAM_SIZE
 # endif

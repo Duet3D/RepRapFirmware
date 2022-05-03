@@ -10,10 +10,6 @@
 
 #include <RepRapFirmware.h>
 
-#if SAM3XA
-# include <DueFlashStorage.h>
-#endif
-
 // Enumeration describing the reasons for a software reset.
 // The spin state gets or'ed into this, so keep the lower 5 bits unused.
 // IMPORTANT! When changing this, also update table SoftwareResetReasonText
