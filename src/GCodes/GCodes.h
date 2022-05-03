@@ -443,7 +443,6 @@ private:
 	void ToolOffsetInverseTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept;
 																							// Convert head reference point coordinates to user coordinates
 	// Tool management
-	void PrintTool(int toolNumber, const StringRef& reply) const noexcept;
 	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE

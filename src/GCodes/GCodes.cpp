@@ -3638,7 +3638,16 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	}
 	else
 	{
-		PrintTool(toolNumber, reply);
+		ReadLockedPointer<Tool> const tool = Tool::GetLockedTool(toolNumber);
+		if (tool.IsNotNull())
+		{
+			tool->PrintTool(reply);
+		}
+		else
+		{
+			reply.copy("Error: Attempt to print details of non-existent tool.\n");
+			return GCodeResult::error;
+		}
 	}
 	return GCodeResult::ok;
 }

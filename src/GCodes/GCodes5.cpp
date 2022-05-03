@@ -13,19 +13,6 @@
 #include <Platform/RepRap.h>
 #include <Heating/Heat.h>
 
-void GCodes::PrintTool(int toolNumber, const StringRef& reply) const noexcept
-{
-	ReadLockedPointer<Tool> const tool = Tool::GetLockedTool(toolNumber);
-	if (tool.IsNotNull())
-	{
-		tool->Print(reply);
-	}
-	else
-	{
-		reply.copy("Error: Attempt to print details of non-existent tool.\n");
-	}
-}
-
 // Check if the specified heater is used by a current tool other than the specified one
 bool GCodes::IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *tool) const noexcept
 {
