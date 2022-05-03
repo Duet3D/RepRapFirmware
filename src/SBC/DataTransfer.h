@@ -157,7 +157,8 @@ private:
 
 inline bool DataTransfer::IsConnectionReset() const noexcept
 {
-	return lastTransferNumber != 0 && (lastTransferNumber + 1 != rxHeader.sequenceNumber);
+	uint16_t nextTransferNumber = lastTransferNumber + 1u;
+	return (rxHeader.formatCode == SbcFormatCode) && (rxHeader.sequenceNumber != nextTransferNumber);
 }
 
 inline size_t DataTransfer::PacketsToRead() const noexcept

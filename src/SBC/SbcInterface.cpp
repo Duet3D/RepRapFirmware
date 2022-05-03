@@ -180,10 +180,7 @@ void SbcInterface::Spin() noexcept
 			}
 
 			// Handle exchanged data and kick off the next transfer
-			if (!hadReset)
-			{
-				ExchangeData();
-			}
+			ExchangeData();
 			transfer.StartNextTransfer();
 		}
 		else if (hadTimeout || hadReset)
