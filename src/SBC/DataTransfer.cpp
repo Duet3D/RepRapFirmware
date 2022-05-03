@@ -996,22 +996,20 @@ void DataTransfer::StartNextTransfer() noexcept
 
 void DataTransfer::ResetConnection(bool fullReset) noexcept
 {
-	// The Sbc interface is no longer connected...
+	// Clear the remaining data to send
 	disable_spi();
 	dataReceived = false;
-
-	// Reset the sequence numbers and clear the data to send
-	lastTransferNumber = 0;
-	rxHeader.sequenceNumber = 0;
-	txHeader.sequenceNumber = 0;
 	rxPointer = txPointer = 0;
 	packetId = 0;
 
-	// Kick off a new transfer
+	// Reset the TfrRdy pin level and the seq numbers only if no communication is taking place
 	if (fullReset)
 	{
 		transferReadyHigh = false;
+		lastTransferNumber = rxHeader.sequenceNumber = txHeader.sequenceNumber = 0;
 	}
+
+	// Kick off a new transfer
 	StartNextTransfer();
 }
 
