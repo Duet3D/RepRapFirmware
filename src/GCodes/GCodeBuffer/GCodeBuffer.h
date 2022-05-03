@@ -126,7 +126,8 @@ public:
 	bool IsExecuting() const noexcept;							// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f) noexcept;							// Set the G Code executed (or not)
 
-	size_t GetCurrentQueueNumber() const noexcept;				// Return the current queue number for commands read from this channel
+	size_t GetCurrentQueueNumber() const noexcept
+		post(result < NumMovementSystems);						// Return the current queue number for commands read from this channel
 
 #if SUPPORT_ASYNC_MOVES
 	void SetCurrentQueueNumber(size_t qn) noexcept { machineState->commandedQueueNumber = (uint8_t)qn; }

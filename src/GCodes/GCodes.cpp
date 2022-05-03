@@ -97,6 +97,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	FileGCodeInput * const file2Input = nullptr;
 # endif
 	file2GCode = new GCodeBuffer(GCodeChannel::File2, nullptr, file2Input, GenericMessage);
+	file2GCode->SetCurrentQueueNumber(1);							// so that all commands read from this channel get executed on queue #1 instead of the default #0
 	moveStates[1].codeQueue = new GCodeQueue();
 	queue2GCode = new GCodeBuffer(GCodeChannel::Queue2, moveStates[1].codeQueue, fileInput, GenericMessage);
 	queue2GCode->SetCurrentQueueNumber(1);							// so that all commands read from this queue get executed on queue #1 instead of the default #0
@@ -1382,8 +1383,17 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 void GCodes::Diagnostics(MessageType mtype) noexcept
 {
 	platform.Message(mtype, "=== GCodes ===\n");
-	const GCodeBuffer * const movementOwner = resourceOwners[MoveResource];
-	platform.MessageF(mtype, "Movement lock held by %s\n", (movementOwner == nullptr) ? "null" : movementOwner->GetChannel().ToString());
+	String<StringLength50> text;
+	for (unsigned int i = 0; i < NumMovementSystems; ++i)
+	{
+		const GCodeBuffer * const movementOwner = resourceOwners[MoveResourceBase + i];
+		if (i != 0)
+		{
+			text.cat(", ");
+		}
+		text.cat((movementOwner == nullptr) ? "null" : movementOwner->GetChannel().ToString());
+	}
+	platform.MessageF(mtype, "Movement locks held by %s\n", text.c_str());
 
 	for (GCodeBuffer *gb : gcodeSources)
 	{
@@ -4752,22 +4762,23 @@ bool GCodes::LockFileSystem(const GCodeBuffer &gb) noexcept
 	return LockResource(gb, FileSystemResource);
 }
 
+// The movement lock is special because we have one for each motion system
 // Lock movement
 bool GCodes::LockMovement(const GCodeBuffer& gb) noexcept
 {
-	return LockResource(gb, MoveResource);
+	return LockResource(gb, MoveResourceBase + gb.GetCurrentQueueNumber());
 }
 
 // Grab the movement lock even if another channel owns it
 void GCodes::GrabMovement(const GCodeBuffer& gb) noexcept
 {
-	GrabResource(gb, MoveResource);
+	GrabResource(gb, MoveResourceBase + gb.GetCurrentQueueNumber());
 }
 
 // Release the movement lock
 void GCodes::UnlockMovement(const GCodeBuffer& gb) noexcept
 {
-	UnlockResource(gb, MoveResource);
+	UnlockResource(gb, MoveResourceBase + gb.GetCurrentQueueNumber());
 }
 
 // Unlock the resource if we own it
@@ -4794,7 +4805,7 @@ void GCodes::UnlockAll(const GCodeBuffer& gb) noexcept
 	{
 		if (resourceOwners[i] == &gb && !resourcesToKeep.IsBitSet(i))
 		{
-			if (i == MoveResource)
+			if (i >= MoveResourceBase && i < MoveResourceBase + NumResources)
 			{
 				// In case homing was aborted because of an exception, we need to clear toBeHomed when releasing the movement lock
 				toBeHomed.Clear();

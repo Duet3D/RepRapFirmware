@@ -245,18 +245,16 @@ private:
 	static constexpr unsigned int MoveTaskStackWords = 450;
 	static Task<MoveTaskStackWords> moveTask;
 
+	DDARing rings[NumMovementSystems];
+	DDARing& mainDDARing = rings[0];					// The DDA ring used for regular moves
+
 #if SUPPORT_ASYNC_MOVES
-	DDARing rings[2];
 	DDARing& auxDDARing = rings[1];						// the DDA ring used for live babystepping, height following and other asynchronous moves
 	AsyncMove auxMove;
 	volatile bool auxMoveLocked;
 	volatile bool auxMoveAvailable;
 	HeightController *heightController;
-#else
-	DDARing rings[1];
 #endif
-
-	DDARing& mainDDARing = rings[0];					// The DDA ring used for regular moves
 
 	SimulationMode simulationMode;						// Are we simulating, or really printing?
 	MoveState moveState;								// whether the idle timer is active

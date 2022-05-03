@@ -322,10 +322,9 @@ private:
 	// Resources that can be locked.
 	// To avoid deadlock, if you need multiple resources then you must lock them in increasing numerical order.
 	typedef uint32_t Resource;
-	static const Resource MoveResource = 0;										// Movement system, including canned cycle variables
-	static const Resource FileSystemResource = 1;								// Non-sharable parts of the file system
-	static const Resource HeaterResourceBase = 2;
-	static const size_t NumResources = HeaterResourceBase + 1;
+	static const Resource MoveResourceBase = 0;										// Movement system and associated variables
+	static const Resource FileSystemResource = MoveResourceBase + NumMovementSystems;	// Non-sharable parts of the file system
+	static const size_t NumResources = FileSystemResource + 1;
 
 	static_assert(NumResources <= sizeof(Resource) * CHAR_BIT, "Too many resources to keep a bitmap of them in class GCodeMachineState");
 
@@ -607,11 +606,7 @@ private:
 #endif
 
 	// The following contain the details of moves that the Move module fetches
-#if SUPPORT_ASYNC_MOVES
-	MovementState moveStates[2];
-#else
-	MovementState moveStates[1];				// Move details
-#endif
+	MovementState moveStates[NumMovementSystems];	// Move details
 
 	size_t numTotalAxes;						// How many axes we have
 	size_t numVisibleAxes;						// How many axes are visible

@@ -22,6 +22,13 @@ Licence: GPL
 #include <cstddef>			// for size_t
 #include <cstring>			// for strlen
 
+// Motion systems
+#if SUPPORT_ASYNC_MOVES
+constexpr unsigned int NumMovementSystems = 2;			// for now we support only two motion systems
+#else
+constexpr unsigned int NumMovementSystems = 1;
+#endif
+
 // Axes
 constexpr float DefaultAxisMaxFeedrate = 100.0;			// mm/sec
 constexpr float DefaultZMaxFeedrate = 5.0;
