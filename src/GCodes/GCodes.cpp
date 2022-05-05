@@ -99,7 +99,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	file2GCode = new GCodeBuffer(GCodeChannel::File2, nullptr, file2Input, GenericMessage);
 	moveStates[1].codeQueue = new GCodeQueue();
 	queue2GCode = new GCodeBuffer(GCodeChannel::Queue2, moveStates[1].codeQueue, fileInput, GenericMessage);
-	queue2GCode->SetCurrentQueueNumber(1);							// so that all commands read from this queue get executed on queue #1 instead of the default #0
+	queue2GCode->SetActiveQueueNumber(1);							// so that all commands read from this queue get executed on queue #1 instead of the default #0
 #endif
 #if SUPPORT_HTTP || HAS_SBC_INTERFACE
 	httpInput = new NetworkGCodeInput();
@@ -702,7 +702,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 		case GCodeInputReadResult::noData:
 			// We have reached the end of the file. Check for the last line of gcode not ending in newline.
-			if (gb.FileEnded())							// append a newline if necessary and deal with any pending file write
+			if (gb.FileEnded())										// append a newline if necessary and deal with any pending file write
 			{
 				bool done;
 				try
@@ -733,7 +733,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				return true;
 			}
 
-			gb.Init();								// mark buffer as empty
+			gb.Init();											// mark buffer as empty
 
 			if (gb.LatestMachineState().GetPrevious() == nullptr)
 			{
@@ -741,9 +741,12 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
 				// Don't close the file until all moves have been completed, in case the print gets paused.
 				// Also, this keeps the state as 'Printing' until the print really has finished.
-				if (LockMovementAndWaitForStandstill(gb))					// wait until movement has finished and deferred command queue has caught up
+				if (LockMovementAndWaitForStandstill(gb))		// wait until movement has finished and deferred command queue has caught up
 				{
-					StopPrint(StopPrintReason::normalCompletion);
+					if (&gb == fileGCode)						// if this is the primary file channel
+					{
+						StopPrint(StopPrintReason::normalCompletion);
+					}
 				}
 			}
 			else
@@ -1448,7 +1451,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 		}
 
 		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
-		if (sync && gb.MustWaitForSyncWith(*file2GCode))
+		if (sync && !gb.ExecutingAll() && gb.MustWaitForSyncWith(*file2GCode))
 		{
 			return false;
 		}
@@ -1465,7 +1468,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 		}
 
 		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
-		if (sync && gb.MustWaitForSyncWith(*fileGCode))
+		if (sync && !gb.ExecutingAll() && gb.MustWaitForSyncWith(*fileGCode))
 		{
 			return false;
 		}
@@ -3222,8 +3225,10 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 		fileGCode->LatestMachineState().volumetricExtrusion = false;		// default to non-volumetric extrusion
 		fileGCode->LatestMachineState().selectedPlane = 0;					// default G2 and G3 moves to XY plane
 #if SUPPORT_ASYNC_MOVES
+		fileGCode->ExecuteOnlyQueue(0);										// only execute commands for movement system 0
 		file2GCode->LatestMachineState().volumetricExtrusion = false;		// default to non-volumetric extrusion
 		file2GCode->LatestMachineState().selectedPlane = 0;					// default G2 and G3 moves to XY plane
+		file2GCode->ExecuteOnlyQueue(1);										// only execute commands for movement system 1
 #endif
 	}
 
@@ -4090,6 +4095,7 @@ float GCodes::GetRawExtruderTotalByDrive(size_t extruder) const noexcept
 
 // Cancel the current SD card print.
 // This is called from Pid.cpp when there is a heater fault, and from elsewhere in this module.
+// When called to stop a print normally, this is called by fileGCode but not by file2GCode.
 void GCodes::StopPrint(StopPrintReason reason) noexcept
 {
 	deferredPauseCommandPending = nullptr;
@@ -4141,6 +4147,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 #endif
 
 		exitSimulationWhenFileComplete = false;
+		updateFileWhenSimulationComplete = false;
 		simulationMode = SimulationMode::off;				// do this after we append the simulation info to the file so that DWC doesn't try to reload the file info too soon
 		reprap.GetMove().Simulate(simulationMode);
 		EndSimulation(nullptr);
@@ -4202,14 +4209,17 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 			(reason == StopPrintReason::normalCompletion) ? "Finished" : "Cancelled",
 			printingFilename, printMinutes/60u, printMinutes % 60u);
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-		if (reason == StopPrintReason::normalCompletion && !IsSimulating())
+		if (reason == StopPrintReason::normalCompletion)
 		{
 			platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
+			if (fileGCode->GetState() == GCodeState::normal)		// this should always be the case
+			{
+				fileGCode->SetState(GCodeState::stopping);			// set fileGCode (which should be the one calling this) to run stop.g
+			}
 		}
 #endif
 	}
 
-	updateFileWhenSimulationComplete = false;
 	reprap.GetPrintMonitor().StoppedPrint();			// must do this after printing the simulation details not before, because it clears the filename and pause time
 	buildObjects.Init();
 	fileGCode->LatestMachineState().variables.Clear();	// delete any local variables that the file created
@@ -4765,19 +4775,34 @@ bool GCodes::LockFileSystem(const GCodeBuffer &gb) noexcept
 // Lock movement
 bool GCodes::LockMovement(const GCodeBuffer& gb) noexcept
 {
-	return LockResource(gb, MoveResourceBase + gb.GetActiveQueueNumber());
+#if SUPPORT_ASYNC_MOVES
+	return LockResource(gb, MoveResourceBase + gb.GetQueueNumberToLock());
+#else
+	return LockResource(gb, MoveResourceBase);
+#endif
 }
 
 // Grab the movement lock even if another channel owns it
 void GCodes::GrabMovement(const GCodeBuffer& gb) noexcept
 {
-	GrabResource(gb, MoveResourceBase + gb.GetActiveQueueNumber());
+#if SUPPORT_ASYNC_MOVES
+	GrabResource(gb, MoveResourceBase + gb.GetQueueNumberToLock());
+#else
+	GrabResource(gb, MoveResourceBase);
+#endif
 }
 
 // Release the movement lock
 void GCodes::UnlockMovement(const GCodeBuffer& gb) noexcept
 {
-	UnlockResource(gb, MoveResourceBase + gb.GetActiveQueueNumber());
+#if SUPPORT_ASYNC_MOVES
+	for (Resource r = MoveResourceBase; r < MoveResourceBase + NumMovementSystems; ++r)
+	{
+		UnlockResource(gb, r);
+	}
+#else
+	UnlockResource(gb, MoveResourceBase);
+#endif
 }
 
 // Unlock the resource if we own it
@@ -4902,7 +4927,7 @@ bool GCodes::CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply,
 // Get a reference to the movement state associated with the specified GCode buffer
 MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) noexcept
 {
-	return moveStates[gb.GetCurrentQueueNumber()];
+	return moveStates[gb.GetActiveQueueNumber()];
 }
 
 // Get a reference to the movement state associated with the specified GCode buffer

@@ -150,7 +150,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 				return GCodeResult::notFinished;
 			}
 #if SUPPORT_ASYNC_MOVES
-			if (!gb.IsPrimary())
+			if (!gb.Executing())
 			{
 				return GCodeResult::ok;
 			}
@@ -205,7 +205,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 				}
 #if SUPPORT_ASYNC_MOVES
 				// Now that we have synced, we need only continue if we are primary
-				if (!gb.IsPrimary())
+				if (!gb.Executing())
 				{
 					return GCodeResult::ok;
 				}
@@ -1688,7 +1688,7 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	}
 
 #if SUPPORT_ASYNC_MOVES
-	if (gb.IsPrimary())
+	if (gb.Executing())
 #endif
 	{
 		if (gb.CurrentFileMachineState().selectedPlane != 0)

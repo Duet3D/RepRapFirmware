@@ -59,7 +59,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->GetLineNumber()),									ObjectModelEntryFlags::live },
 	{ "macroRestartable",	OBJECT_MODEL_FUNC((bool)self->machineState->macroRestartable),						ObjectModelEntryFlags::none },
 #if SUPPORT_ASYNC_MOVES
-	{ "motionSystem",		OBJECT_MODEL_FUNC((int32_t)self->GetCurrentQueueNumber()),							ObjectModelEntryFlags::live },
+	{ "motionSystem",		OBJECT_MODEL_FUNC((int32_t)self->GetActiveQueueNumber()),							ObjectModelEntryFlags::live },
 #endif
 	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),									ObjectModelEntryFlags::none },
 	{ "selectedPlane",		OBJECT_MODEL_FUNC((int32_t)self->machineState->selectedPlane),						ObjectModelEntryFlags::none },
@@ -337,34 +337,6 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 
 #if SUPPORT_ASYNC_MOVES
 
-// Get the movement queue number that this buffer uses
-size_t GCodeBuffer::GetActiveQueueNumber() const noexcept
-{
-	switch (codeChannel.RawValue())
-	{
-	case GCodeChannel::File:
-		return 0;
-	case GCodeChannel::File2:
-		return 1;
-	default:
-		return machineState->commandedQueueNumber;
-	}
-}
-
-// Return true if this GCode is executing commands read from stream. The caller must make exceptions for commands that are always processed by both streams.
-bool GCodeBuffer::IsPrimary() const noexcept
-{
-	switch (codeChannel.RawValue())
-	{
-	case GCodeChannel::File:
-		return machineState->commandedQueueNumber == 0;
-	case GCodeChannel::File2:
-		return machineState->commandedQueueNumber == 1;
-	default:
-		return true;
-	}
-}
-
 // Check whether we are in sync with another GCodeBUffer. This is only called when we have multiple readers for the same GCode stream.
 // Sync works as follows:
 // 1. All GBs first lock their movement queues and wait for all moves in their own movement queue to finish. Only then do they call this function.
@@ -379,7 +351,7 @@ bool GCodeBuffer::MustWaitForSyncWith(const GCodeBuffer& other) noexcept
 	unsigned int otherDepth = other.GetStackDepth();
 	const GCodeMachineState *ourState = machineState;
 	const GCodeMachineState *otherState = other.machineState;
-	const bool weArePrimary = IsPrimary();
+	const bool weArePrimary = Executing();
 	bool otherMustBeLater;
 	bool atSamePoint;
 	if (ourDepth > otherDepth)

@@ -126,13 +126,15 @@ public:
 	bool IsExecuting() const noexcept;							// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f) noexcept;							// Set the G Code executed (or not)
 
-	size_t GetCurrentQueueNumber() const noexcept
-		post(result < NumMovementSystems);						// Return the current queue number for commands read from this channel
-
 #if SUPPORT_ASYNC_MOVES
-	size_t GetActiveQueueNumber() const noexcept;				// Get the movement queue number that this buffer uses
-	void SetCurrentQueueNumber(size_t qn) noexcept { machineState->commandedQueueNumber = (uint8_t)qn; }
-	bool IsPrimary() const noexcept;							// Return true if this is the primary GCodeBuffer for executing commands addressed to the current queue
+	size_t GetActiveQueueNumber() const noexcept { return machineState->GetCommandedQueue(); }	// Get the movement queue number that this buffer uses
+	void SetActiveQueueNumber(size_t qn) noexcept { machineState->SetCommandedQueue(qn); }
+	void ExecuteOnlyQueue(size_t qn) noexcept { machineState->ExecuteOnly(qn); }
+	void ExecuteAll() noexcept { machineState->ExecuteAll(); }
+	bool Executing() const noexcept { return machineState->Executing(); }	// Return true if this GCodeBuffer for executing commands addressed to the current queue
+	bool ExecutingAll() const noexcept { return machineState->ExecutingAll(); }
+	size_t GetQueueNumberToLock() const noexcept { return machineState->GetQueueNumberToLock(); }
+
 #endif
 
 	void SetCommsProperties(uint32_t arg) noexcept;
@@ -424,15 +426,6 @@ inline bool GCodeBuffer::IsDoingLocalFile() const noexcept
 	return !IsBinary() && IsDoingFile();
 #else
 	return IsDoingFile();
-#endif
-}
-
-inline size_t GCodeBuffer::GetCurrentQueueNumber() const noexcept
-{
-#if SUPPORT_ASYNC_MOVES
-	return machineState->commandedQueueNumber;
-#else
-	return 0;
 #endif
 }
 

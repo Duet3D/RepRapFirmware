@@ -26,11 +26,11 @@ GCodeMachineState::GCodeMachineState() noexcept
 #endif
 	  stateParameter(0),
 	  compatibility(Compatibility::RepRapFirmware),
-#if SUPPORT_ASYNC_MOVES
-	  commandedQueueNumber(0),
-#endif
 	  previous(nullptr), errorMessage(nullptr),
 	  blockNesting(0), state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
+#if SUPPORT_ASYNC_MOVES
+	  , commandedQueueNumber(0), ownQueueNumber(0), executeAllCommands(true)
+#endif
 {
 	blockStates[0].SetPlainBlock(0);
 }
@@ -54,12 +54,12 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 	  lastCodeFromSbc(prev.lastCodeFromSbc), macroStartedByCode(prev.macroStartedByCode), fileFinished(prev.fileFinished),
 #endif
 	  compatibility(prev.compatibility),
-#if SUPPORT_ASYNC_MOVES
-	  commandedQueueNumber(prev.commandedQueueNumber),
-#endif
 	  previous(&prev), errorMessage(nullptr),
 	  blockNesting((withinSameFile) ? prev.blockNesting : 0),
 	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
+#if SUPPORT_ASYNC_MOVES
+	  , commandedQueueNumber(prev.commandedQueueNumber), ownQueueNumber(prev.ownQueueNumber), executeAllCommands(prev.executeAllCommands)
+#endif
 {
 	if (withinSameFile)
 	{

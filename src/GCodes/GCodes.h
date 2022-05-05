@@ -304,7 +304,6 @@ public:
 	static constexpr const char* CANCEL_G = "cancel.g";
 	static constexpr const char* START_G = "start.g";
 	static constexpr const char* STOP_G = "stop.g";
-	static constexpr const char* SLEEP_G = "sleep.g";
 	static constexpr const char* CONFIG_OVERRIDE_G = "config-override.g";
 	static constexpr const char* DefaultHeightMapFile = "heightmap.csv";
 	static constexpr const char* LOAD_FILAMENT_G = "load.g";

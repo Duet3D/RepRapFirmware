@@ -122,14 +122,14 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	// The only queued GCodes are some subfunctions of G10, so we delay checking for queueing this command until we are in case 10 below
 
 #if SUPPORT_ASYNC_MOVES
-	const bool isPrimary = gb.IsPrimary();									// this is used by the BREAK_IF_NOT_PRIMARY macro and elsewhere
+	const bool executing = gb.Executing();									// this is used by the BREAK_IF_NOT_PRIMARY macro and elsewhere
 #endif
 	if (gb.GetCommandFraction() > 0
 		&& code != 38 && code != 59											// these are the only G-codes we implement that can have fractional parts
 	   )
 	{
 #if SUPPORT_ASYNC_MOVES
-		if (isPrimary)
+		if (executing)
 		{
 			result = TryMacroFile(gb);
 		}
@@ -145,15 +145,15 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	else
 	{
 #if SUPPORT_ASYNC_MOVES
-# define BREAK_IF_NOT_PRIMARY	if (!isPrimary) { break; }
+# define BREAK_IF_NOT_EXECUTING	if (!executing) { break; }
 #else
-# define BREAK_IF_NOT_PRIMARY	// nothing
+# define BREAK_IF_NOT_EXECUTING	// nothing
 #endif
 		switch (code)
 		{
 		case 0: // Rapid move
 		case 1: // Ordinary move
-			BREAK_IF_NOT_PRIMARY
+			BREAK_IF_NOT_EXECUTING
 			if (GetMovementState(gb).segmentsLeft != 0)						// do this check first to avoid locking movement unnecessarily
 			{
 				return false;
@@ -179,7 +179,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 2: // Clockwise arc
 		case 3: // Anti clockwise arc
 			// We only support X and Y axes in these (and optionally Z for corkscrew moves), but you can map them to other axes in the tool definitions
-			BREAK_IF_NOT_PRIMARY
+			BREAK_IF_NOT_EXECUTING
 			if (GetMovementState(gb).segmentsLeft != 0)						// do this check first to avoid locking movement unnecessarily
 			{
 				return false;
@@ -215,7 +215,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					switch (ival)
 					{
 					case 1:
-						BREAK_IF_NOT_PRIMARY
+						BREAK_IF_NOT_EXECUTING
 						result = SetOrReportOffsets(gb, reply, 10);			// same as G10 with offsets and no L parameter
 						break;
 
@@ -235,7 +235,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				else
 #endif
 				{
-					BREAK_IF_NOT_PRIMARY
+					BREAK_IF_NOT_EXECUTING
 					bool modifyingTool = gb.Seen('P') || gb.Seen('R') || gb.Seen('S');
 					for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 					{
@@ -279,7 +279,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 11: // Un-retract
-			BREAK_IF_NOT_PRIMARY
+			BREAK_IF_NOT_EXECUTING
 			result = RetractFilament(gb, false);
 			break;
 
@@ -325,7 +325,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					sparam = 0;									// mesh.g not found, so treat G29 the same as G29 S0
 				}
 
-				BREAK_IF_NOT_PRIMARY
+				BREAK_IF_NOT_EXECUTING
 				switch(sparam)
 				{
 				case 0:		// probe and save height map
@@ -365,7 +365,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				return false;
 			}
 
-			BREAK_IF_NOT_PRIMARY
+			BREAK_IF_NOT_EXECUTING
 			if (reprap.GetMove().GetKinematics().AxesToHomeBeforeProbing().Intersects(~axesVirtuallyHomed))
 			{
 				reply.copy("Insufficient axes homed for bed probing");
@@ -378,7 +378,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 31: // Return the probe value, or set probe variables
-			BREAK_IF_NOT_PRIMARY
+			BREAK_IF_NOT_EXECUTING
 			result = platform.GetEndstops().HandleG31(gb, reply);
 			break;
 
@@ -402,12 +402,12 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				return false;
 			}
-			BREAK_IF_NOT_PRIMARY
+			BREAK_IF_NOT_EXECUTING
 			result = StraightProbe(gb, reply);
 			break;
 
 		case 53:	// Temporarily use machine coordinates
-			BREAK_IF_NOT_PRIMARY
+			BREAK_IF_NOT_EXECUTING
 			gb.LatestMachineState().g53Active = true;
 			break;
 
@@ -443,7 +443,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 		case 60: // Save position
-			BREAK_IF_NOT_PRIMARY
+			BREAK_IF_NOT_EXECUTING
 			result = SavePosition(gb, reply);
 			break;
 
@@ -458,7 +458,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				return false;
 			}
 # if SUPPORT_ASYNC_MOVES
-			if (gb.IsPrimary())
+			if (gb.Executing())
 # endif
 			{
 				g68Angle = 0.0;
@@ -477,7 +477,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 92: // Set position
-			BREAK_IF_NOT_PRIMARY
+			BREAK_IF_NOT_EXECUTING
 			result = SetPositions(gb, reply);
 			break;
 
@@ -485,7 +485,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			result = TryMacroFile(gb);
 			break;
 		}
-#undef BREAK_IF_NOT_PRIMARY
+#undef BREAK_IF_NOT_EXECUTING
 	}
 
 	return HandleResult(gb, result, reply, nullptr);
@@ -507,7 +507,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_ASYNC_MOVES
 	// If we are not the primary GCode reader for this stream, we don't execute most M-commands
-	if (!gb.IsPrimary())
+	if (!gb.Executing())
 	{
 		switch (code)
 		{
@@ -627,46 +627,49 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 			case 0: // Stop
 			case 1: // Sleep
-				// Don't allow M0 or M1 to stop a print, unless the print is paused or the command comes from the file being printed itself.
-				if (reprap.GetPrintMonitor().IsPrinting() && !gb.IsFileChannel() && pauseState != PauseState::paused)
+			case 2: // Stop
+				if (gb.IsFileChannel())
 				{
-					reply.copy("Pause the print before attempting to cancel it");
-					result = GCodeResult::error;
+					// Stopping a job because of a command in the file
+					if (!LockMovementAndWaitForStandstill(gb))		// wait until everything has stopped and deferred command queue has caught up
+					{
+						return false;
+					}
+					if (&gb == fileGCode)
+					{
+						isWaiting = cancelWait = false;				// we may have been waiting for temperatures to be reached
+						StopPrint(StopPrintReason::normalCompletion);
+					}
 				}
-				else if (!LockMovementAndWaitForStandstill(gb))		// wait until everything has stopped and deferred command queue has caught up
+				else if (pauseState == PauseState::paused)
 				{
-					return false;
-				}
-				else
-				{
-					const auto oldPauseState = pauseState;			// pauseState gets reset by CancelPrint
-					const bool wasSimulating = IsSimulating();		// simulationMode may get cleared by CancelPrint
+					// Cancelling a print that has been paused
+					if (!LockMovementAndWaitForStandstill(gb))		// make sure everything has stopped
+					{
+						return false;
+					}
 					isWaiting = cancelWait = false;					// we may have been waiting for temperatures to be reached
-					//TODO if we are running multiple file channels then we need all of them to get consistent values of oldPauseState and IsSimulating()
-					// Also only one file channel should call StopPrint
-					// however both channels should call stop.g or cancel.g
-					StopPrint((gb.IsFileChannel()) ? StopPrintReason::normalCompletion : StopPrintReason::userCancelled);
-
+					const bool wasSimulating = IsSimulating();		// simulationMode may get cleared by CancelPrint
+					StopPrint(StopPrintReason::userCancelled);
 					if (!wasSimulating)								// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 					{
-						// If we are cancelling a paused print with M0 and we are homed and cancel.g exists then run it and do nothing else
-						if (oldPauseState != PauseState::notPaused && code == 0)
+						// If cancel.g exists then run it and do nothing else
+						gb.SetState(GCodeState::cancelling);
+						if (DoFileMacro(gb, CANCEL_G, false, SystemHelperMacroCode))
 						{
-							gb.SetState(GCodeState::cancelling);
-							if (DoFileMacro(gb, CANCEL_G, false, SystemHelperMacroCode))
-							{
-								pauseState = PauseState::cancelling;
-								break;
-							}
-							// The state will be changed a few lines down, so no need to reset it to normal here
+							pauseState = PauseState::cancelling;
+							break;
 						}
-
-						gb.SetState(GCodeState::stopping);
-						if (!DoFileMacro(gb, (code == 0) ? STOP_G : SLEEP_G, false, SystemHelperMacroCode))
+						if (!DoFileMacro(gb, STOP_G, false, SystemHelperMacroCode))
 						{
 							reprap.GetHeat().SwitchOffAll(true);
 						}
 					}
+				}
+				else
+				{
+					reply.copy("Pause the print before attempting to cancel it");
+					result = GCodeResult::error;
 				}
 				break;
 
@@ -1502,7 +1505,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 #if SUPPORT_ASYNC_MOVES
-					if (!gb.IsPrimary())
+					if (!gb.Executing())
 					{
 						break;
 					}
@@ -1651,7 +1654,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 109: // Deprecated in RRF, but widely generated by slicers
 				{
-					const bool movementWasLocked = gb.LatestMachineState().lockedResources.IsBitSet(MoveResourceBase + gb.GetCurrentQueueNumber());
+					const bool movementWasLocked = gb.LatestMachineState().lockedResources.IsBitSet(
+#if SUPPORT_ASYNC_MOVES
+						MoveResourceBase + gb.GetQueueNumberToLock()
+#else
+						MoveResourceBase
+#endif
+						);
 					if (!LockMovementAndWaitForStandstill(gb))		// wait until movement has finished and deferred command queue has caught up to avoid out-of-order execution
 					{
 						return false;
@@ -4790,7 +4799,7 @@ GCodeResult GCodes::TryMacroFile(GCodeBuffer& gb) noexcept
 bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 #if SUPPORT_ASYNC_MOVES
-	if (!gb.IsPrimary())
+	if (!gb.Executing())
 	{
 		HandleReply(gb, GCodeResult::ok, "");
 		return true;
@@ -4870,7 +4879,7 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 bool GCodes::HandleQcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 #if SUPPORT_ASYNC_MOVES
-	if (!gb.IsPrimary())
+	if (!gb.Executing())
 	{
 		return true;
 	}

@@ -605,12 +605,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		gb.SetState(GCodeState::normal);
 		break;
 
-	case GCodeState::stopping:	// MO or M1 after executing stop.g/sleep.g if present
+	case GCodeState::stopping:			// here when a print has finished, need to execute stop.g
 		if (LockMovementAndWaitForStandstill(gb))
 		{
-			pauseState = PauseState::notPaused;
-			platform.SetDriversIdle();
+#if SUPPORT_ASYNC_MOVES
+			gb.ExecuteAll();			// only fileGCode gets here so it needs to execute moves for all commands
+#endif
 			gb.SetState(GCodeState::normal);
+			(void)DoFileMacro(*fileGCode, STOP_G, false, AsyncSystemMacroCode);
 		}
 		break;
 
