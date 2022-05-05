@@ -612,7 +612,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.ExecuteAll();			// only fileGCode gets here so it needs to execute moves for all commands
 #endif
 			gb.SetState(GCodeState::normal);
-			(void)DoFileMacro(*fileGCode, STOP_G, false, AsyncSystemMacroCode);
+			if (!DoFileMacro(*fileGCode, STOP_G, false, AsyncSystemMacroCode))
+			{
+				reprap.GetHeat().SwitchOffAll(true);
+			}
 		}
 		break;
 
