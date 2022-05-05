@@ -3,7 +3,7 @@
 
 #include "Lcd.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
 #include <Hardware/SharedSpi/SharedSpiDevice.h>
 

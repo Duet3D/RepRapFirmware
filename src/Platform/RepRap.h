@@ -121,7 +121,7 @@ public:
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const noexcept { return *portControl; }
 #endif
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
  	Display& GetDisplay() const noexcept { return *display; }
  	const char *GetLatestMessage(uint16_t& sequence) const noexcept;
  	const MessageBox& GetMessageBox() const noexcept { return mbox; }
@@ -245,7 +245,7 @@ private:
  	PortControl *portControl;
 #endif
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
  	Display *display;
 #endif
 
@@ -288,7 +288,7 @@ private:
 	unsigned int beepFrequency, beepDuration;
 	uint32_t beepTimer;
 	String<MaxMessageLength> message;
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	uint16_t messageSequence;					// used by 12864 display to detect when there is a new message
 #endif
 

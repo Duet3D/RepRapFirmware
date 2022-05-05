@@ -7,10 +7,18 @@
 
 #include "Display.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
-#include "Lcd/ST7920/Lcd7920.h"
-#include "Lcd/ST7567/Lcd7567.h"
+# if SUPPORT_12864_LCD
+#  include "Lcd/ST7920/Lcd7920.h"
+#  include "Lcd/ST7567/Lcd7567.h"
+# endif
+
+#if SUPPORT_ILI9488_LCD
+# include "Lcd/ILI9488/ILI9488.h"
+# include <AnalogOut.h>
+#endif
+
 #include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Hardware/IoPorts.h>
@@ -41,19 +49,25 @@ constexpr ObjectModelTableEntry Display::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Display members
+#if SUPPORT_ROTARY_ENCODER
 	{ "pulsesPerClick",			OBJECT_MODEL_FUNC((int32_t)self->encoder->GetPulsesPerClick()), 	ObjectModelEntryFlags::none },
+#endif
 	{ "spiFreq",				OBJECT_MODEL_FUNC((int32_t)self->lcd->GetSpiFrequency()), 			ObjectModelEntryFlags::none },
 	{ "typeName", 				OBJECT_MODEL_FUNC(self->lcd->GetDisplayTypeName()), 				ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Display::objectModelTableDescriptor[] = { 1, 3 };
+constexpr uint8_t Display::objectModelTableDescriptor[] = { 1, 2 + SUPPORT_ROTARY_ENCODER };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Display)
 
 #endif
 
 Display::Display() noexcept
-	: lcd(nullptr), menu(nullptr), encoder(nullptr), lastRefreshMillis(0),
+	: lcd(nullptr), menu(nullptr),
+#if SUPPORT_ROTARY_ENCODER
+	  encoder(nullptr),
+#endif
+	  lastRefreshMillis(0),
 	  mboxSeq(0), mboxActive(false), beepActive(false), updatingFirmware(false)
 {
 }
@@ -63,10 +77,11 @@ void Display::Spin() noexcept
 {
 	if (lcd != nullptr && !updatingFirmware)
 	{
+		bool forceRefresh = false;
+#if SUPPORT_ROTARY_ENCODER
 		encoder->Poll();
 		// Check encoder and update display
 		const int ch = encoder->GetChange();
-		bool forceRefresh = false;
 		if (ch != 0)
 		{
 			menu->EncoderAction(ch);
@@ -77,6 +92,7 @@ void Display::Spin() noexcept
 			menu->EncoderAction(0);
 			forceRefresh = true;
 		}
+#endif
 
 		const MessageBox& mbox = reprap.GetMessageBox();
 		if (mbox.active)
@@ -121,7 +137,7 @@ void Display::Spin() noexcept
 
 		if (beepActive && millis() - whenBeepStarted > beepLength)
 		{
-			IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);
+			StopBeep();
 			beepActive = false;
 		}
 	}
@@ -131,7 +147,8 @@ void Display::Exit() noexcept
 {
 	if (lcd != nullptr)
 	{
-		IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
+		StopBeep();
+		beepActive = false;
 		if (!updatingFirmware)
 		{
 			lcd->TextInvert(false);
@@ -153,7 +170,11 @@ void Display::Beep(unsigned int frequency, unsigned int milliseconds) noexcept
 		whenBeepStarted = millis();
 		beepLength = milliseconds;
 		beepActive = true;
+#if SUPPORT_12864_LCD
 		IoPort::WriteAnalog(LcdBeepPin, 0.5, (uint16_t)frequency);
+#elif SUPPORT_ILI9488_LCD
+		AnalogOut::Beep(BeeperPins[0], BeeperPins[1], (uint16_t)frequency);
+#endif
 	}
 }
 
@@ -174,14 +195,18 @@ void Display::InitDisplay(GCodeBuffer& gb, Lcd *newLcd, Pin csPin, Pin a0Pin, bo
 	const uint32_t contrast = (gb.Seen('C')) ? gb.GetUIValue() : DefaultDisplayContrastRatio;
 	const uint32_t resistorRatio = (gb.Seen('R')) ? gb.GetUIValue() : DefaultDisplayResistorRatio;
 	newLcd->Init(csPin, a0Pin, defaultCsPolarity, (gb.Seen('F')) ? gb.GetUIValue() : LcdSpiClockFrequency, contrast, resistorRatio);
-	IoPort::SetPinMode(LcdBeepPin, OUTPUT_PWM_LOW);
+	StopBeep();													// this serves to initialise the pins
+
 	newLcd->SetFont(SmallFontNumber);
 
+#if SUPPORT_ROTARY_ENCODER
 	if (encoder == nullptr)
 	{
 		encoder = new RotaryEncoder(EncoderPinA, EncoderPinB, EncoderPinSw);
 		encoder->Init(DefaultPulsesPerClick);
 	}
+#endif
+
 	menu = new Menu(*newLcd);
 	menu->Load("main");
 	lcd = newLcd;
@@ -196,7 +221,9 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 		// Delete any existing LCD, menu and encoder
 		DeleteObject(lcd);
 		DeleteObject(menu);
+#if SUPPORT_ROTARY_ENCODER
 		DeleteObject(encoder);
+#endif
 
 		seen = true;
 		switch (gb.GetUIValue())
@@ -205,25 +232,33 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 			// We have already deleted the display, menu buffer and encoder, so nothing to do here
 			break;
 
+#if SUPPORT_12864_LCD
 		case 1:		// 12864 display, ST7920 controller
-#ifdef DUET3MINI
+# ifdef DUET3MINI
 			// On the Duet 3 Mini we use the A0 pin as CS because it more nearly matches the pinout of the display (with the connectors reversed)
 			InitDisplay(gb, new Lcd7920(fonts, ARRAY_SIZE(fonts)), LcdA0Pin, NoPin, true);
-#else
+# else
 			InitDisplay(gb, new Lcd7920(fonts, ARRAY_SIZE(fonts)), LcdCSPin, NoPin, true);
-#endif
+# endif
 			break;
 
 		case 2:		// 12864 display, ST7567 controller
-#ifdef DUET_M
+# ifdef DUET_M
 			// On the Duet Maestro only, the CS pin is active high and gates the clock signal.
 			// The ST7567 needs an active low CS signal, so we must use a different CS pin and set the original one high to let the clock through.
 			pinMode(LcdCSPin, OUTPUT_HIGH);
 			InitDisplay(gb, new Lcd7567(fonts, ARRAY_SIZE(fonts)), LcdCSAltPin, LcdA0Pin, false);
-#else
+# else
 			InitDisplay(gb, new Lcd7567(fonts, ARRAY_SIZE(fonts)), LcdCSPin, LcdA0Pin, false);
-#endif
+# endif
 			break;
+#endif
+
+#if SUPPORT_ILI9488_LCD
+		case 3:		// SPI TFT display with ILI9488 controller
+			InitDisplay(gb, new LcdILI9488(fonts, ARRAY_SIZE(fonts)), LcdSpiCsPin, NoPin, true);
+			break;
+#endif
 
 		default:
 			reply.copy("Unknown display type");
@@ -231,11 +266,13 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 		}
 	}
 
+#if SUPPORT_ROTARY_ENCODER
 	if (gb.Seen('E') && encoder != nullptr)
 	{
 		seen = true;
 		encoder->Init(gb.GetIValue());			// configure encoder pulses per click and direction
 	}
+#endif
 
 	if (seen)
 	{
@@ -245,8 +282,15 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 	{
 		if (lcd != nullptr)
 		{
-			reply.printf("Direct connect display: %s, %.2fMHz, %d encoder pulses per click",
-							lcd->GetDisplayTypeName(), (double)(lcd->GetSpiFrequency() * 0.000001), encoder->GetPulsesPerClick());
+			reply.printf("Direct connect display: %s, %.2fMHz"
+#if SUPPORT_ROTARY_ENCODER
+							", %d encoder pulses per click"
+#endif
+							, lcd->GetDisplayTypeName(), (double)(lcd->GetSpiFrequency() * 0.000001)
+#if SUPPORT_ROTARY_ENCODER
+							, encoder->GetPulsesPerClick()
+#endif
+							);
 		}
 		else
 		{
@@ -262,7 +306,7 @@ void Display::UpdatingFirmware() noexcept
 	updatingFirmware = true;
 	if (lcd != nullptr)
 	{
-		IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);		// stop any beep
+		StopBeep();
 		lcd->TextInvert(false);
 		lcd->Clear();
 		lcd->SetFont(LargeFontNumber);
@@ -270,6 +314,15 @@ void Display::UpdatingFirmware() noexcept
 		lcd->printf("Updating firmware...");
 		lcd->FlushAll();
 	}
+}
+
+void Display::StopBeep() noexcept
+{
+#if SUPPORT_12864_LCD
+			IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);
+#elif SUPPORT_ILI9488_LCD
+			AnalogOut::Beep(BeeperPins[0], BeeperPins[1], 0);
+#endif
 }
 
 #endif

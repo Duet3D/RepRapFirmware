@@ -127,7 +127,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	codeQueue = new GCodeQueue();
 	queuedGCode = new GCodeBuffer(GCodeChannel::Queue, codeQueue, fileInput, GenericMessage);
 
-#if SUPPORT_12864_LCD || HAS_SBC_INTERFACE
+#if SUPPORT_DIRECT_LCD || HAS_SBC_INTERFACE
 	lcdGCode = new GCodeBuffer(GCodeChannel::LCD, nullptr, fileInput, LcdMessage);
 #else
 	lcdGCode = nullptr;
@@ -4819,7 +4819,7 @@ GCodeResult GCodes::StartSDTiming(GCodeBuffer& gb, const StringRef& reply) noexc
 
 #endif
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
 // Set the speed factor. Value passed is a fraction.
 void GCodes::SetSpeedFactor(float factor) noexcept

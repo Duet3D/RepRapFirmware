@@ -10,9 +10,12 @@
 
 #include "RepRapFirmware.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
-#include "RotaryEncoder.h"
+#if SUPPORT_ROTARY_ENCODER
+# include "RotaryEncoder.h"
+#endif
+
 #include "Lcd/Lcd.h"
 #include "Menu.h"
 #include <ObjectModel/ObjectModel.h>
@@ -23,7 +26,7 @@ public:
 	Display() noexcept;
 
 	void Init() noexcept { }
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void Spin() noexcept;
 	void Exit() noexcept;
 	void Beep(unsigned int frequency, unsigned int milliseconds) noexcept;
@@ -39,11 +42,14 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	void InitDisplay(GCodeBuffer& gb, Lcd *newLcd, Pin csPin, Pin a0Pin, bool defaultCsPolarity);
+	void InitDisplay(GCodeBuffer& gb, Lcd *newLcd, Pin csPin, Pin a0Pin, bool defaultCsPolarity) THROWS(GCodeException);
+	void StopBeep() noexcept;
 
 	Lcd *lcd;
 	Menu *menu;
+#if SUPPORT_ROTARY_ENCODER
 	RotaryEncoder *encoder;
+#endif
 	uint32_t whenBeepStarted;
 	uint32_t beepLength;
 	uint32_t lastRefreshMillis;

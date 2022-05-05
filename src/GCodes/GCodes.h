@@ -135,7 +135,7 @@ public:
 
 	float GetSpeedFactor() const noexcept { return speedFactor; }				// Return the current speed factor as a fraction
 	float GetExtrusionFactor(size_t extruder) noexcept;							// Return the current extrusion factor for the specified extruder
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	void SetSpeedFactor(float factor) noexcept;									// Set the speed factor
 	void SetExtrusionFactor(size_t extruder, float factor) noexcept;			// Set an extrusion factor for the specified extruder
 #endif
@@ -197,7 +197,7 @@ public:
 	MachineType GetMachineType() const noexcept { return machineType; }
 	bool LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept;			// Lock movement and wait for pending moves to finish
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	bool ProcessCommandFromLcd(const char *cmd) noexcept;						// Process a GCode command from the 12864 LCD returning true if the command was accepted
 	float GetItemCurrentTemperature(unsigned int itemNumber) const noexcept;
 	float GetItemActiveTemperature(unsigned int itemNumber) const noexcept;
@@ -514,7 +514,7 @@ private:
 	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68
 #endif
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	int GetHeaterNumber(unsigned int itemNumber) const noexcept;
 #endif
 	Pwm_t ConvertLaserPwm(float reqVal) const noexcept;

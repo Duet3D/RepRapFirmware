@@ -67,7 +67,7 @@
 
 #include "Menu.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
 #include "Lcd/Lcd.h"
 #include <Platform/RepRap.h>

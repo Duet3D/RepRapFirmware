@@ -299,7 +299,7 @@ class FansManager;
 class PortControl;
 #endif
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 class Display;
 #endif
 

@@ -7,7 +7,7 @@
 
 #include "MenuItem.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
 #include <Platform/RepRap.h>
 #include <Heating/Heat.h>

@@ -42,7 +42,7 @@
 # include "PortControl.h"
 #endif
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 # include "Display/Display.h"
 #endif
 
@@ -494,7 +494,7 @@ void RepRap::Init() noexcept
 #if SUPPORT_IOBITS
 	portControl = new PortControl();
 #endif
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
  	display = new Display();
 #endif
 #if SUPPORT_CAN_EXPANSION
@@ -503,7 +503,7 @@ void RepRap::Init() noexcept
 
 	SetPassword(DEFAULT_PASSWORD);
 	message.Clear();
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	messageSequence = 0;
 #endif
 
@@ -531,7 +531,7 @@ void RepRap::Init() noexcept
 #if SUPPORT_IOBITS
 	portControl->Init();
 #endif
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	display->Init();
 #endif
 #ifdef DUET3_ATE
@@ -719,7 +719,7 @@ void RepRap::Exit() noexcept
 #if SUPPORT_IOBITS
 	portControl->Exit();
 #endif
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
  	display->Exit();
 #endif
 	network->Exit();
@@ -766,7 +766,7 @@ void RepRap::Spin() noexcept
 	spinningModule = moduleFilamentSensors;
 	FilamentMonitor::Spin();
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	ticksInSpinState = 0;
 	spinningModule = moduleDisplay;
 	display->Spin();
@@ -2584,7 +2584,7 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 
 	// If there is an LCD device present, make it beep
 	bool bleeped = false;
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	if (display->IsPresent())
 	{
 		display->Beep(freq, ms);
@@ -2611,7 +2611,7 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 void RepRap::SetMessage(const char *msg) noexcept
 {
 	message.copy(msg);
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	++messageSequence;
 #endif
 	StateUpdated();
@@ -2942,7 +2942,7 @@ void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
 
 void RepRap::PrepareToLoadIap() noexcept
 {
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	display->UpdatingFirmware();			// put the firmware update message on the display and stop polling the display
 #endif
 
@@ -3123,7 +3123,7 @@ void RepRap::ReportInternalError(const char *file, const char *func, int line) c
 	platform->MessageF(ErrorMessage, "Internal Error in %s at %s(%d)\n", func, file, line);
 }
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
 const char *RepRap::GetLatestMessage(uint16_t& sequence) const noexcept
 {
