@@ -142,10 +142,10 @@ void Menu::DisplayMessageBox(const MessageBox& mbox) noexcept
 	// Draw and a box and clear the interior
 	const PixelNumber nr = lcd.GetNumRows(), nc = lcd.GetNumCols();
 	lcd.SetRightMargin(nc);
-	lcd.Line(topBottomMargin, sideMargin, topBottomMargin, nc - sideMargin - 1, PixelMode::PixelSet);
-	lcd.Line(topBottomMargin, nc - sideMargin - 1, nr - topBottomMargin - 1, nc - sideMargin - 1, PixelMode::PixelSet);
-	lcd.Line(nr - topBottomMargin - 1, sideMargin, nr - topBottomMargin - 1, nc - sideMargin - 1, PixelMode::PixelSet);
-	lcd.Line(topBottomMargin, sideMargin, nr - topBottomMargin - 1, sideMargin, PixelMode::PixelSet);
+	lcd.Line(topBottomMargin, sideMargin, topBottomMargin, nc - sideMargin - 1, true);
+	lcd.Line(topBottomMargin, nc - sideMargin - 1, nr - topBottomMargin - 1, nc - sideMargin - 1, true);
+	lcd.Line(nr - topBottomMargin - 1, sideMargin, nr - topBottomMargin - 1, nc - sideMargin - 1, true);
+	lcd.Line(topBottomMargin, sideMargin, nr - topBottomMargin - 1, sideMargin, true);
 	lcd.Clear(topBottomMargin + 1, sideMargin + 1, nr - topBottomMargin - 1, nc - sideMargin - 1);
 
 	// We could draw the static text directly, but it is easier to use the existing classes

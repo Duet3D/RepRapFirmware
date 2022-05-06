@@ -10,14 +10,6 @@
 #include <Hardware/SharedSpi/SharedSpiClient.h>
 #include <General/SafeVsnprintf.h>
 
-// Enumeration for specifying drawing modes
-enum class PixelMode : uint8_t
-{
-	PixelClear = 0,    // clear the pixel(s)
-	PixelSet = 1,      // set the pixel(s)
-	PixelFlip = 2      // invert the pixel(s)
-};
-
 typedef uint8_t PixelNumber;
 
 // Class for driving 128x64 graphical LCD fitted with ST7920 controller
@@ -104,27 +96,22 @@ public:
 	// Set, clear or invert a pixel
 	//  x = x-coordinate of the pixel, measured from left hand edge of the display
 	//  y = y-coordinate of the pixel, measured down from the top of the display
-	//  mode = whether we want to set, clear or invert the pixel
-	void SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexcept;
-
-	// Read a pixel. Returns true if the pixel is set, false if it is clear.
-	//  x = x-coordinate of the pixel, measured from left hand edge of the display
-	//  y = y-coordinate of the pixel, measured down from the top of the display
-	bool ReadPixel(PixelNumber y, PixelNumber x) const noexcept;
+	//  mode = whether we want to set or clear the pixel
+	void SetPixel(PixelNumber y, PixelNumber x, bool mode) noexcept;
 
 	// Draw a line.
 	//  x0 = x-coordinate of one end of the line, measured from left hand edge of the display
 	//  y0 = y-coordinate of one end of the line, measured down from the top of the display
 	//  x1, y1 = coordinates of the other end od the line
-	//  mode = whether we want to set, clear or invert each pixel
-	void Line(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, PixelMode mode) noexcept;
+	//  mode = whether we want to set or clear each pixel
+	void Line(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, bool mode) noexcept;
 
 	// Draw a circle
 	//  x0 = x-coordinate of the centre, measured from left hand edge of the display
 	//  y0 = y-coordinate of the centre, measured down from the top of the display
 	//  radius = radius of the circle in pixels
-	//  mode = whether we want to set, clear or invert each pixel
-	void Circle(PixelNumber p_row, PixelNumber col, PixelNumber radius, PixelMode mode) noexcept;
+	//  mode = whether we want to set or clear each pixel
+	void Circle(PixelNumber p_row, PixelNumber col, PixelNumber radius, bool mode) noexcept;
 
 	// Draw a bitmap
 	//  x0 = x-coordinate of the top left, measured from left hand edge of the display. Currently, must be a multiple of 8.

@@ -433,7 +433,7 @@ void Lcd::Clear(PixelNumber sRow, PixelNumber sCol, PixelNumber eRow, PixelNumbe
 }
 
 // Draw a line using the Bresenham Algorithm (thanks Wikipedia)
-void Lcd::Line(PixelNumber y0, PixelNumber x0, PixelNumber y1, PixelNumber x1, PixelMode mode) noexcept
+void Lcd::Line(PixelNumber y0, PixelNumber x0, PixelNumber y1, PixelNumber x1, bool mode) noexcept
 {
 	int dx = (x1 >= x0) ? x1 - x0 : x0 - x1;
 	int dy = (y1 >= y0) ? y1 - y0 : y0 - y1;
@@ -463,7 +463,7 @@ void Lcd::Line(PixelNumber y0, PixelNumber x0, PixelNumber y1, PixelNumber x1, P
 }
 
 // Draw a circle using the Bresenham Algorithm (thanks Wikipedia)
-void Lcd::Circle(PixelNumber x0, PixelNumber y0, PixelNumber radius, PixelMode mode) noexcept
+void Lcd::Circle(PixelNumber x0, PixelNumber y0, PixelNumber radius, bool mode) noexcept
 {
 	int f = 1 - (int)radius;
 	int ddF_x = 1;
@@ -581,7 +581,7 @@ void Lcd::SetCursor(PixelNumber r, PixelNumber c) noexcept
 	justSetCursor = true;
 }
 
-void Lcd::SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexcept
+void Lcd::SetPixel(PixelNumber y, PixelNumber x, bool mode) noexcept
 {
 	if (y < numRows && x < rightMargin)
 	{
@@ -589,20 +589,13 @@ void Lcd::SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexcept
 		const uint8_t mask = 0x80u >> (x%8);
 		const uint8_t oldVal = *p;
 		uint8_t newVal;
-		switch(mode)
+		if (mode)
 		{
-		case PixelMode::PixelClear:
-			newVal = oldVal & ~mask;
-			break;
-		case PixelMode::PixelSet:
 			newVal = oldVal | mask;
-			break;
-		case PixelMode::PixelFlip:
-			newVal = oldVal ^ mask;
-			break;
-		default:
-			newVal = oldVal;
-			break;
+		}
+		else
+		{
+			newVal = oldVal & ~mask;
 		}
 
 		if (newVal != oldVal)
@@ -611,16 +604,6 @@ void Lcd::SetPixel(PixelNumber y, PixelNumber x, PixelMode mode) noexcept
 			SetDirty(y, x);
 		}
 	}
-}
-
-bool Lcd::ReadPixel(PixelNumber x, PixelNumber y) const noexcept
-{
-	if (y < numRows && x < numCols)
-	{
-		const uint8_t * const p = image + ((y * (numCols/8)) + (x/8));
-		return (*p & (0x80u >> (x%8))) != 0;
-	}
-	return false;
 }
 
 #endif

@@ -31,15 +31,6 @@ protected:
 
 private:
 
-#ifdef ALTERNATIVE_ST7565_FLUSHROW
-	constexpr PixelNumber GetTileWidth() const noexcept { return 1; };
-	constexpr PixelNumber GetTileHeight() const noexcept { return 8; };
-#else
-	// NOTE: these are remnants of a more efficient flush routine, not sure this will return
-	constexpr PixelNumber GetTileWidth() const noexcept { return 8; };
-	constexpr PixelNumber GetTileHeight() const noexcept { return 8; };
-#endif
-
 	void CommandDelay() noexcept;
 	void DataDelay() noexcept;
 	void SendByte(uint8_t byteToSend) noexcept;
@@ -51,6 +42,7 @@ private:
 	void SelectDevice() noexcept;
 	void DeselectDevice() noexcept;
 
+#if 0
 	constexpr static uint8_t SystemReset = 0xE2;				// 11100010 System reset
 	constexpr static uint8_t DisplayOff = 0xAE;					// 10101110 Set display enable to off
 	constexpr static uint8_t DisplayOn = 0xAF;					// 10101111 Set display enable to on
@@ -87,6 +79,7 @@ private:
 	constexpr static uint8_t SetBooster6 = 3;
 	constexpr static uint8_t Nop = 0xE3;
 	constexpr static uint8_t Test = 0xF0;
+#endif
 
 	constexpr static unsigned int CommandDelayMicros = 72 - 8;	// 72us required, less 7us time to send the command @ 2.0MHz
 	constexpr static unsigned int DataDelayMicros = 4;			// delay between sending data bytes
@@ -94,8 +87,5 @@ private:
 };
 
 #endif
-
-
-
 
 #endif /* SRC_DISPLAY_LCD_ILI9488_ILI9488_H_ */
