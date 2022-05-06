@@ -8,13 +8,11 @@
 #ifndef SRC_DISPLAY_LCD_ILI9488_ILI9488_H_
 #define SRC_DISPLAY_LCD_ILI9488_ILI9488_H_
 
-#include "RepRapFirmware.h"
+#include <Display/Lcd/TFTLcd.h>
 
 #if SUPPORT_ILI9488_LCD
 
-#include <Display/Lcd/Lcd.h>
-
-class LcdILI9488 : public Lcd
+class LcdILI9488 : public TFTLcd
 {
 public:
 	// Construct a GLCD driver.
@@ -27,10 +25,10 @@ public:
 	const char *GetDisplayTypeName() const noexcept override;
 
 protected:
-	void HardwareInit() noexcept override;
+	// Write one column of character data at (row, column)
+	void WriteColumnData(uint16_t columData, uint8_t ySize) noexcept override;
 
 private:
-
 	void CommandDelay() noexcept;
 	void DataDelay() noexcept;
 	void SendByte(uint8_t byteToSend) noexcept;
@@ -42,48 +40,9 @@ private:
 	void SelectDevice() noexcept;
 	void DeselectDevice() noexcept;
 
-#if 0
-	constexpr static uint8_t SystemReset = 0xE2;				// 11100010 System reset
-	constexpr static uint8_t DisplayOff = 0xAE;					// 10101110 Set display enable to off
-	constexpr static uint8_t DisplayOn = 0xAF;					// 10101111 Set display enable to on
-	constexpr static uint8_t PixelOff = 0xA4;					// 10100100 Set all pixel off
-	constexpr static uint8_t PixelOn = 0xA5;					// 10100101 Set all pixel on
-
-	constexpr static uint8_t SetDisplayStartLine = 0x40;
-	constexpr static uint8_t SetPage = 0xB0;
-
-	constexpr static uint8_t SetColumnUpper = 0x10;
-	constexpr static uint8_t SetColumnLower = 0x00;
-
-	constexpr static uint8_t SetAdcNormal =  0xA0;
-	constexpr static uint8_t SetAdcReverse = 0xA1;
-
-	constexpr static uint8_t SetDisplayNormal = 0xA6;
-	constexpr static uint8_t SetDisplayreverse = 0xA7;
-
-	constexpr static uint8_t SetBias9 = 0xA2;
-	constexpr static uint8_t SetBias7 = 0xA3;
-
-	constexpr static uint8_t Rmw = 0xE0;
-	constexpr static uint8_t RmwClear = 0xEE;
-	constexpr static uint8_t SetComNormal = 0xC0;
-	constexpr static uint8_t SetComReverse = 0xC8;
-	constexpr static uint8_t SetPowerControl = 0x28;
-	constexpr static uint8_t SetResistorRatio = 0x20;
-	constexpr static uint8_t SetVolumeFirst = 0x81;
-	constexpr static uint8_t SetStaticOff = 0xAC;
-	constexpr static uint8_t SetStaticOn = 0xAD;
-	constexpr static uint8_t SetBoosterFirst = 0xF8;
-	constexpr static uint8_t SetBooster234 = 0;
-	constexpr static uint8_t SetBooster5 = 1;
-	constexpr static uint8_t SetBooster6 = 3;
-	constexpr static uint8_t Nop = 0xE3;
-	constexpr static uint8_t Test = 0xF0;
-#endif
-
-	constexpr static unsigned int CommandDelayMicros = 72 - 8;	// 72us required, less 7us time to send the command @ 2.0MHz
-	constexpr static unsigned int DataDelayMicros = 4;			// delay between sending data bytes
-	constexpr static unsigned int FlushRowDelayMicros = 20;		// Delay between sending each rows when flushing all rows @ 2.0MHz (@ 1.0MHz this is not necessary)
+//	constexpr static unsigned int CommandDelayMicros = 72 - 8;	// 72us required, less 7us time to send the command @ 2.0MHz
+//	constexpr static unsigned int DataDelayMicros = 4;			// delay between sending data bytes
+//	constexpr static unsigned int FlushRowDelayMicros = 20;		// Delay between sending each rows when flushing all rows @ 2.0MHz (@ 1.0MHz this is not necessary)
 };
 
 #endif
