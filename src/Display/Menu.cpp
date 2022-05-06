@@ -113,7 +113,7 @@ void Menu::LoadFixedMenu() noexcept
 	commandBufferIndex = 0;
 	rowOffset = 0;
 	currentMargin = 0;
-	lcd.Clear();
+	lcd.ClearAll();
 
 	// Instead of Reload():
 	lcd.SetRightMargin(lcd.GetNumCols() - currentMargin);
@@ -196,7 +196,7 @@ void Menu::ClearMessageBox() noexcept
 void Menu::Pop() noexcept
 {
 	// currentMargin = 0;
-	lcd.Clear();
+	lcd.ClearAll();
 	rowOffset = 0;
 	--numNestedMenus;
 	Reload();
@@ -207,7 +207,7 @@ void Menu::LoadError(const char *msg, unsigned int line) noexcept
 	// Remove selectable items that may obscure view of the error message
 	ResetCache();
 
-	lcd.Clear();
+	lcd.ClearAll();
 	lcd.SetFont(0);
 	lcd.printf("Error loading menu\nFile: %s", (numNestedMenus > 0) ? filenames[numNestedMenus - 1].c_str() : "(none)");
 	if (line != 0)
@@ -421,7 +421,7 @@ void Menu::Reload() noexcept
 	if (numNestedMenus == 1)
 	{
 		currentMargin = 0;
-		lcd.Clear();
+		lcd.ClearAll();
 	}
 	else
 	{
@@ -574,7 +574,7 @@ void Menu::EncoderActionScrollItemHelper(int action) noexcept
 			if (rowOffset != tLastOffset)
 			{
 				// We have scrolled the whole menu, so redraw it
-				lcd.Clear();
+				lcd.ClearAll();
 				for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
 				{
 					item->SetChanged();

@@ -25,7 +25,7 @@ constexpr unsigned int LcdDataDelayMicros = 4;			// delay between sending data b
 constexpr unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
 
 Lcd7920::Lcd7920(const LcdFont * const fnts[], size_t nFonts) noexcept
-	: Lcd(64, 128, fnts, nFonts, SpiMode::mode0)
+	: MonoLcd(64, 128, fnts, nFonts, SpiMode::mode0)
 {
 }
 
@@ -51,7 +51,7 @@ void Lcd7920::HardwareInit() noexcept
 	CommandDelay();
 	device.Deselect();
 
-	Clear();
+	ClearAll();
 	FlushAll();
 
 	device.Select();

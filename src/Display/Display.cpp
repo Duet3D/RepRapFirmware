@@ -152,7 +152,7 @@ void Display::Exit() noexcept
 		if (!updatingFirmware)
 		{
 			lcd->TextInvert(false);
-			lcd->Clear();
+			lcd->ClearAll();
 			lcd->SetFont(LargeFontNumber);
 			lcd->SetCursor(20, 0);
 			lcd->printf("Shutting down...");
@@ -308,7 +308,7 @@ void Display::UpdatingFirmware() noexcept
 	{
 		StopBeep();
 		lcd->TextInvert(false);
-		lcd->Clear();
+		lcd->ClearAll();
 		lcd->SetFont(LargeFontNumber);
 		lcd->SetCursor(20, 0);
 		lcd->printf("Updating firmware...");
