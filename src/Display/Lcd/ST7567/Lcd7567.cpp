@@ -18,7 +18,7 @@ Lcd7567::Lcd7567(const LcdFont * const fnts[], size_t nFonts) noexcept
 }
 
 // Get the display type
-const char *Lcd7567::GetDisplayTypeName() const noexcept
+const char *_ecv_array Lcd7567::GetDisplayTypeName() const noexcept
 {
 	return "128x64 mono graphics with ST7567 controller";
 }

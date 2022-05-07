@@ -19,6 +19,7 @@ struct Colour
 			 blue : 5;
 
 	constexpr Colour(uint8_t r, uint8_t g, uint8_t b) noexcept : red(r), green(g), blue(b) { }
+	constexpr Colour() noexcept : red(0), green(0), blue(0) { }
 };
 
 struct Colours

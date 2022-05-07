@@ -22,14 +22,11 @@ public:
 	bool FlushSome() noexcept override;
 
 	// Get the display type
-	const char *GetDisplayTypeName() const noexcept override;
+	const char *_ecv_array GetDisplayTypeName() const noexcept override;
 
 protected:
-	// Write one column of character data at (row, column)
-	void WriteColumnData(uint16_t columData, uint8_t ySize) noexcept override;
-
-	// Flush the buffer to the screen. May block waiting for DMA to complete.
-	void FlushBuffer() noexcept override;
+	// Initialise the TFT screen
+	void HardwareInit() noexcept override;
 
 private:
 //	void CommandDelay() noexcept;

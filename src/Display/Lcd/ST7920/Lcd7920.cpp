@@ -30,7 +30,7 @@ Lcd7920::Lcd7920(const LcdFont * const fnts[], size_t nFonts) noexcept
 }
 
 // Get the display type
-const char *Lcd7920::GetDisplayTypeName() const noexcept
+const char *_ecv_array Lcd7920::GetDisplayTypeName() const noexcept
 {
 	return "128x64 mono graphics with ST7920 controller";
 }
