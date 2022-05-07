@@ -27,6 +27,10 @@ public:
 	// Either way, caller must already have asserted CS for the selected SPI slave.
 	bool TransceivePacket(const uint8_t *tx_data, uint8_t *rx_data, size_t len) const noexcept;
 
+#if SAME5x
+	bool TransceivePacketNineBit(const uint16_t *tx_data, uint16_t *rx_data, size_t len) const noexcept;
+#endif
+
 private:
 	bool waitForTxReady() const noexcept;
 	bool waitForTxEmpty() const noexcept;

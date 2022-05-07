@@ -29,6 +29,19 @@ protected:
 	void HardwareInit() noexcept override;
 
 private:
+	void SendCommand(uint8_t cmd) noexcept;
+	void SendCommand(uint8_t cmd, size_t numData, uint8_t data[]) noexcept;
+	void SetGraphicsAddress(PixelNumber r, PixelNumber cBegin, PixelNumber cEnd) noexcept;
+	void SendBuffer(size_t numWords) const noexcept;
+
+	uint16_t spiBuffer[3 * 480 + 1];							// large enough to write one whole row of pixels
+
+	static constexpr uint8_t CmdReset = 0x01;
+	static constexpr uint8_t CmdColumnAddressSet = 0x2A;
+	static constexpr uint8_t CmdPageAddressSet = 0x2B;
+
+	static constexpr uint32_t ResetDelayMillis = 5;
+
 //	void CommandDelay() noexcept;
 //	void DataDelay() noexcept;
 //	void SendByte(uint8_t byteToSend) noexcept;

@@ -256,6 +256,8 @@ bool SpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data, size_
 {
 	// Clear any existing data
 #if SAME5x
+	hardware->SPI.CTRLB.bit.CHSIZE = 0;
+	while (hardware->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_ENABLE) { }
 	(void)hardware->SPI.DATA.reg;
 #elif USART_SPI
 	(void)hardware->US_RHR;
@@ -327,6 +329,89 @@ bool SpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data, size_
 
 	return true;	// success
 }
+
+#if SAME5x
+
+// Send and receive data returning true if successful, using 16-bit data transfers (needed when using 9-bit characters). 'len' is in 18-bit words.
+bool SpiDevice::TransceivePacketNineBit(const uint16_t* tx_data, uint16_t* rx_data, size_t len) const noexcept
+{
+	// Clear any existing data
+#if SAME5x
+	hardware->SPI.CTRLB.bit.CHSIZE = 1;
+	while (hardware->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_ENABLE) { }
+	(void)hardware->SPI.DATA.reg;
+#elif USART_SPI
+	(void)hardware->US_RHR;
+#else
+	(void)hardware->SPI_RDR;
+#endif
+
+	for (uint32_t i = 0; i < len; ++i)
+	{
+		uint32_t dOut = (tx_data == nullptr) ? 0x000000FF : (uint32_t)*tx_data++;
+		if (waitForTxReady())			// we have to write the first byte after enabling the device without waiting for DRE to be set
+		{
+			return false;
+		}
+
+		// Write to transmit register
+#if SAME5x
+		hardware->SPI.DATA.reg = dOut;
+#elif USART_SPI
+		hardware->US_THR = dOut;
+#else
+		if (i + 1 == len)
+		{
+			dOut |= SPI_TDR_LASTXFER;
+		}
+		hardware->SPI_TDR = dOut;
+#endif
+
+		// Some devices are transmit-only e.g. 12864 display, so don't wait for received data if we don't need to
+		if (rx_data != nullptr)
+		{
+			// Wait for receive register
+			if (waitForRxReady())
+			{
+				return false;
+			}
+
+			// Get data from receive register
+			const uint16_t dIn =
+#if SAME5x
+					(uint16_t)hardware->SPI.DATA.reg;
+#elif USART_SPI
+					(uint16_t)hardware->US_RHR;
+#else
+					(uint16_t)hardware->SPI_RDR;
+#endif
+			*rx_data++ = dIn;
+		}
+	}
+
+	// Wait for transmitter empty, to make sure that the last clock pulse has finished
+	waitForTxEmpty();
+
+	// If we were not receiving, clear data from the receive buffer
+	if (rx_data == nullptr)
+	{
+#if SAME5x
+		// The SAME5x seems to buffer more than one received character
+		while (hardware->SPI.INTFLAG.bit.RXC)
+		{
+			(void)hardware->SPI.DATA.reg;
+		}
+#elif USART_SPI
+		(void)hardware->US_RHR;
+#else
+		(void)hardware->SPI_RDR;
+#endif
+	}
+
+	return true;	// success
+}
+
+#endif
 
 // End
 

@@ -78,13 +78,13 @@ protected:
 	PixelNumber bufferStartRow;
 	PixelNumber dirtyRowsStart, dirtyRowsEnd;				// these are relative to the start of the buffer
 	PixelNumber dirtyColumnsStart, dirtyColumnsEnd;
+	Pin csPin = NoPin;
+	bool csPol;
 
 private:
 	Colour *_ecv_array GetImagePointer(PixelNumber r, PixelNumber c) noexcept { return imageBuffer + ((r - bufferStartRow) * numCols) + c; }
 	uint32_t spiFrequency = 0;
-	Pin csPin = NoPin;
 	SpiMode spiMode;
-	bool csPol;
 };
 
 #endif
