@@ -10,6 +10,8 @@
 
 #include "Lcd.h"
 
+#if SUPPORT_12864_LCD
+
 class MonoLcd : public Lcd
 {
 public:
@@ -71,5 +73,7 @@ protected:
 	uint8_t contrastRatio;
 	uint8_t resistorRatio;
 };
+
+#endif
 
 #endif /* SRC_DISPLAY_LCD_MONOLCD_H_ */

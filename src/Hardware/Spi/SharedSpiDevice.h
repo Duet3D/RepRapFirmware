@@ -5,8 +5,8 @@
  *      Author: David
  */
 
-#ifndef SRC_HARDWARE_SHAREDSPI_SHAREDSPIDEVICE_H_
-#define SRC_HARDWARE_SHAREDSPI_SHAREDSPIDEVICE_H_
+#ifndef SRC_HARDWARE_SPI_SHAREDSPIDEVICE_H_
+#define SRC_HARDWARE_SPI_SHAREDSPIDEVICE_H_
 
 #include <RepRapFirmware.h>
 #include <RTOSIface/RTOSIface.h>
@@ -51,4 +51,4 @@ private:
 	static SharedSpiDevice *mainSharedSpiDevice;
 };
 
-#endif /* SRC_HARDWARE_SHAREDSPI_SHAREDSPIDEVICE_H_ */
+#endif /* SRC_HARDWARE_SPI_SHAREDSPIDEVICE_H_ */

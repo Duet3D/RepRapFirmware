@@ -6,7 +6,9 @@
  */
 
 #include "MonoLcd.h"
-#include <Hardware/SharedSpi/SharedSpiDevice.h>
+#include <Hardware/Spi/SharedSpiDevice.h>
+
+#if SUPPORT_12864_LCD
 
 MonoLcd::MonoLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode) noexcept
 	: Lcd(nr, nc, fnts, nFonts),
@@ -213,5 +215,7 @@ void MonoLcd::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, co
 		}
 	}
 }
+
+#endif
 
 // End

@@ -7,6 +7,8 @@
 
 #include "TFTLcd.h"
 
+#if SUPPORT_ILI9488_LCD
+
 TFTLcd::TFTLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts) noexcept
 	: Lcd(nr, nc, fnts, nFonts),
 	  fgColour(Colours::White), bgColour(Colours::Blue),
@@ -143,5 +145,7 @@ void TFTLcd::EnsureRowInBuffer(PixelNumber r) noexcept
 		SetBufferStartRow(r);
 	}
 }
+
+#endif
 
 // End

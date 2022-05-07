@@ -1883,7 +1883,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Hardware/SAME5x/Ethernet|src/Networking/LwipEthernet|src/Networking/LwipEthernet/Lwip/src/apps/snmp|src/Networking/LwipEthernet/Lwip/src/apps/smtp|src/Hardware/SAME70|src/DuetNG|src/Networking/LwipEthernet/Lwip/src/apps/tftp|src/Networking/W5500Ethernet|src/Networking/LwipEthernet/Lwip/src/netif/ppp|src/Networking/LwipEthernet/Lwip/src/apps/lwiperf|src/Networking/LwipEthernet/Lwip/src/apps/altcp_tls|src/Networking/LwipEthernet/Lwip/src/apps/sntp|src/Networking/LwipEthernet/Lwip/src/apps/http|src/Duet3_V06|src/Hardware/SAM4E|src/Pccb|src/Hardware/SAM4S|src/Networking/LwipEthernet/Lwip/src/apps/mqtt|src/DuetM|src/Networking/LwipEthernet/Lwip/doc" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Hardware/SAME5x/Ethernet|src/Networking/LwipEthernet/Lwip/src/apps/snmp|src/Networking/LwipEthernet/Lwip/src/apps/smtp|src/Hardware/SAME70|src/Networking/LwipEthernet|src/DuetNG|src/Networking/LwipEthernet/Lwip/src/apps/tftp|src/Networking/W5500Ethernet|src/Networking/LwipEthernet/Lwip/src/netif/ppp|src/Networking/LwipEthernet/Lwip/src/apps/lwiperf|src/Networking/LwipEthernet/Lwip/src/apps/altcp_tls|src/Networking/LwipEthernet/Lwip/src/apps/sntp|src/Networking/LwipEthernet/Lwip/src/apps/http|src/Duet3_V06|src/Hardware/SAM4E|src/Pccb|src/Hardware/SAM4S|src/Networking/LwipEthernet/Lwip/src/apps/mqtt|src/DuetM|src/Networking/LwipEthernet/Lwip/doc" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>
@@ -2034,7 +2034,7 @@
 						</toolChain>
 					</folderInfo>
 					<sourceEntries>
-						<entry excluding="src/Hardware/SAME5x/Ethernet|src/Networking/LwipEthernet|src/Networking/LwipEthernet/Lwip/src/apps/snmp|src/Networking/LwipEthernet/Lwip/src/apps/smtp|src/Hardware/SAME70|src/DuetNG|src/Networking/LwipEthernet/Lwip/src/apps/tftp|src/Networking/W5500Ethernet|src/Networking/LwipEthernet/Lwip/src/netif/ppp|src/Networking/LwipEthernet/Lwip/src/apps/lwiperf|src/Networking/LwipEthernet/Lwip/src/apps/altcp_tls|src/Networking/LwipEthernet/Lwip/src/apps/sntp|src/Networking/LwipEthernet/Lwip/src/apps/http|src/Duet3_V06|src/Hardware/SAM4E|src/Pccb|src/Hardware/SAM4S|src/Networking/LwipEthernet/Lwip/src/apps/mqtt|src/DuetM|src/Networking/LwipEthernet/Lwip/doc" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
+						<entry excluding="src/Hardware/SAME5x/Ethernet|src/Networking/LwipEthernet/Lwip/src/apps/snmp|src/Networking/LwipEthernet/Lwip/src/apps/smtp|src/Hardware/SAME70|src/Networking/LwipEthernet|src/DuetNG|src/Networking/LwipEthernet/Lwip/src/apps/tftp|src/Networking/W5500Ethernet|src/Networking/LwipEthernet/Lwip/src/netif/ppp|src/Networking/LwipEthernet/Lwip/src/apps/lwiperf|src/Networking/LwipEthernet/Lwip/src/apps/altcp_tls|src/Networking/LwipEthernet/Lwip/src/apps/sntp|src/Networking/LwipEthernet/Lwip/src/apps/http|src/Duet3_V06|src/Hardware/SAM4E|src/Pccb|src/Hardware/SAM4S|src/Networking/LwipEthernet/Lwip/src/apps/mqtt|src/DuetM|src/Networking/LwipEthernet/Lwip/doc" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

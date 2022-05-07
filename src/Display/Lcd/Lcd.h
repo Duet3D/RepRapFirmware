@@ -7,7 +7,7 @@
 
 #include <Print.h>
 #include "Fonts/LcdFont.h"
-#include <Hardware/SharedSpi/SharedSpiClient.h>
+#include <Hardware/Spi/SharedSpiClient.h>
 #include <General/SafeVsnprintf.h>
 
 typedef uint16_t PixelNumber;
