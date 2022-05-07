@@ -16,7 +16,7 @@ class LcdILI9488 : public TFTLcd
 {
 public:
 	// Construct a GLCD driver.
-	LcdILI9488(const LcdFont * const fnts[], size_t nFonts) noexcept;
+	LcdILI9488(const LcdFont * const fnts[], size_t nFonts, uint8_t sercomNum) noexcept;
 
 	// Flush just some data, returning true if this needs to be called again
 	bool FlushSome() noexcept override;

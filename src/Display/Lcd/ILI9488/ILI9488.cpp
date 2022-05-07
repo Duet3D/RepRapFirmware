@@ -9,8 +9,8 @@
 
 #if SUPPORT_ILI9488_LCD
 
-LcdILI9488::LcdILI9488(const LcdFont * const fnts[], size_t nFonts) noexcept
-	: TFTLcd(320, 480, fnts, nFonts)
+LcdILI9488::LcdILI9488(const LcdFont * const fnts[], size_t nFonts, uint8_t sercomNum) noexcept
+	: TFTLcd(320, 480, fnts, nFonts, SpiMode::mode0, sercomNum)
 {
 	//TODO
 }

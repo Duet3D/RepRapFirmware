@@ -256,7 +256,10 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 
 #if SUPPORT_ILI9488_LCD
 		case 3:		// SPI TFT display with ILI9488 controller
-			InitDisplay(gb, new LcdILI9488(fonts, ARRAY_SIZE(fonts)), LcdSpiCsPin, NoPin, true);
+			SetPinFunction(LcdSpiMosiPin, LcdSpiPinFunction);
+			SetPinFunction(LcdSpiMisoPin, LcdSpiPinFunction);
+			SetPinFunction(LcdSpiSclkPin, LcdSpiPinFunction);
+			InitDisplay(gb, new LcdILI9488(fonts, ARRAY_SIZE(fonts), LcdSercomNumber), LcdSpiCsPin, NoPin, false);
 			break;
 #endif
 

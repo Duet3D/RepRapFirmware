@@ -9,13 +9,15 @@
 #define SRC_DISPLAY_LCD_TFTLCD_H_
 
 #include "Lcd.h"
+#include <Hardware/Spi/SpiDevice.h>
 
 #if SUPPORT_ILI9488_LCD
 
+// This class represents a TFT LCD that uses an exclusive SPI channel to send data to the screen
 class TFTLcd : public Lcd
 {
 public:
-	TFTLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts) noexcept;
+	TFTLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode, uint8_t sercomNum) noexcept;
 	virtual ~TFTLcd();
 
 	// Get the SPI frequency
@@ -69,6 +71,7 @@ protected:
 	// Ensure that the image buffer includes the specified row, flushing if necessary
 	void EnsureRowInBuffer(PixelNumber r) noexcept;
 
+	SpiDevice spiDev;
 	Colour *_ecv_array imageBuffer;
 	Colour fgColour, bgColour;
 	PixelNumber bufferRows;
@@ -78,7 +81,10 @@ protected:
 
 private:
 	Colour *_ecv_array GetImagePointer(PixelNumber r, PixelNumber c) noexcept { return imageBuffer + ((r - bufferStartRow) * numCols) + c; }
+	uint32_t spiFrequency = 0;
 	Pin csPin = NoPin;
+	SpiMode spiMode;
+	bool csPol;
 };
 
 #endif
