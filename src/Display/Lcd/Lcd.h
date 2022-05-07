@@ -12,6 +12,24 @@
 
 typedef uint16_t PixelNumber;
 
+struct Colour
+{
+	uint16_t red : 5,
+			 green : 6,
+			 blue : 5;
+
+	constexpr Colour(uint8_t r, uint8_t g, uint8_t b) noexcept : red(r), green(g), blue(b) { }
+};
+
+struct Colours
+{
+	static constexpr Colour Black = Colour(0, 0, 0);
+	static constexpr Colour White = Colour(31, 63, 31);
+	static constexpr Colour Red = Colour(31, 0, 0);
+	static constexpr Colour Green = Colour(0, 63, 0);
+	static constexpr Colour Blue = Colour(0, 0, 31);
+};
+
 // Class for driving graphical LCD
 
 // Derive the LCD class from the Print class so that we can print stuff to it in alpha mode
@@ -57,6 +75,12 @@ public:
 	//  width = width of bitmap in pixels
 	//  data = bitmap image, must be ((width + 7)/8) bytes long
 	virtual void BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept = 0;
+
+	// Set the foreground colour. Does nothing on monochrome displays.
+	virtual void SetForegroundColour(Colour col) noexcept = 0;
+
+	// Set the background colour. Does nothing on monochrome displays.
+	virtual void SetBackgroundColour(Colour col) noexcept = 0;
 
 	// Draw a line.
 	//  x0 = x-coordinate of one end of the line, measured from left hand edge of the display

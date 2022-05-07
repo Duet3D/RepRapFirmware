@@ -8,7 +8,8 @@
 #include <Display/Lcd/TFTLcd.h>
 
 TFTLcd::TFTLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts) noexcept
-	: Lcd(nr, nc, fnts, nFonts)
+	: Lcd(nr, nc, fnts, nFonts),
+	  fgColour(Colours::White), bgColour(Colours::Blue)
 {
 	// TODO
 }

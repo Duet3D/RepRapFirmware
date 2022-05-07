@@ -46,6 +46,12 @@ public:
 	//  data = bitmap image, must be ((width + 7)/8) bytes long
 	void BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept override final;
 
+	// Set the foreground colour. Does nothing on monochrome displays.
+	void SetForegroundColour(Colour col) noexcept override final { }
+
+	// Set the background colour. Does nothing on monochrome displays.
+	void SetBackgroundColour(Colour col) noexcept override final { }
+
 protected:
 	virtual void HardwareInit() noexcept = 0;
 
