@@ -152,7 +152,7 @@ public:
 	void FlushAll() noexcept;
 
 	// printf to LCD
-	int printf(const char* fmt, ...) noexcept;
+	int printf(const char *_ecv_array fmt, ...) noexcept;
 
 protected:
 	// Write one column of character data at (row, column)
@@ -165,7 +165,7 @@ protected:
 	PixelNumber row, column;
 	PixelNumber leftMargin, rightMargin;
 
-	const LcdFont * const *fonts;
+	const LcdFont * const *_ecv_array fonts;
 	const size_t numFonts;
 	size_t currentFontNumber;						// index of the current font
 	bool textInverted;

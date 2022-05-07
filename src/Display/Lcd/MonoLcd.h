@@ -61,16 +61,15 @@ protected:
 	void SetDirty(PixelNumber r, PixelNumber c) noexcept;
 	void SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept;
 
+	uint8_t *_ecv_array image;									// image buffer
 	size_t imageSize;
-	uint8_t *image;									// image buffer
 	SharedSpiClient device;
-
+	PixelNumber startRow, startCol, endRow, endCol;				// coordinates of the dirty rectangle
+	PixelNumber nextFlushRow;									// which row we need to flush next
 	Pin csPin;
 	Pin a0Pin;
 	uint8_t contrastRatio;
 	uint8_t resistorRatio;
-	PixelNumber startRow, startCol, endRow, endCol;	// coordinates of the dirty rectangle
-	PixelNumber nextFlushRow;						// which row we need to flush next
 };
 
 #endif /* SRC_DISPLAY_LCD_MONOLCD_H_ */

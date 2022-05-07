@@ -28,17 +28,19 @@ protected:
 	// Write one column of character data at (row, column)
 	void WriteColumnData(uint16_t columData, uint8_t ySize) noexcept override;
 
+	// Flush the buffer to the screen. May block waiting for DMA to complete.
+	void FlushBuffer() noexcept override;
+
 private:
-	void CommandDelay() noexcept;
-	void DataDelay() noexcept;
-	void SendByte(uint8_t byteToSend) noexcept;
-	void SetGraphicsAddress(unsigned int r, unsigned int c) noexcept;
-	uint8_t TransformTile(uint8_t data[8], PixelNumber c) noexcept;
-	void StartDataTransaction() noexcept;
-	void EndDataTransaction() noexcept;
-	bool FlushRow() noexcept;
-	void SelectDevice() noexcept;
-	void DeselectDevice() noexcept;
+//	void CommandDelay() noexcept;
+//	void DataDelay() noexcept;
+//	void SendByte(uint8_t byteToSend) noexcept;
+//	void SetGraphicsAddress(unsigned int r, unsigned int c) noexcept;
+//	void StartDataTransaction() noexcept;
+//	void EndDataTransaction() noexcept;
+//	bool FlushRow() noexcept;
+//	void SelectDevice() noexcept;
+//	void DeselectDevice() noexcept;
 
 //	constexpr static unsigned int CommandDelayMicros = 72 - 8;	// 72us required, less 7us time to send the command @ 2.0MHz
 //	constexpr static unsigned int DataDelayMicros = 4;			// delay between sending data bytes

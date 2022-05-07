@@ -55,7 +55,20 @@ public:
 	void SetBackgroundColour(Colour col) noexcept override final { bgColour = col; }
 
 protected:
+	// Flush the buffer to the screen. May block waiting for DMA to complete.
+	virtual void FlushBuffer() noexcept = 0;
+
+	// Test whether the buffer needs to be flushed
+	bool IsDirty() const noexcept { return dirtyColumnsEnd > dirtyColumnsStart; }
+
+	// Set the image buffer to start at a particular row, flushing it if necessary
+	void SetBufferStartRow(PixelNumber r) noexcept;
+
+	uint16_t *_ecv_array imageBuffer;
 	Colour fgColour, bgColour;
+	PixelNumber bufferRows;
+	PixelNumber bufferStartRow;
+	PixelNumber dirtyColumnsStart, dirtyColumnsEnd;
 };
 
 #endif
