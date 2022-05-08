@@ -157,7 +157,7 @@ public:
 
 protected:
 	// Clear part of the display
-	virtual void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept = 0;
+	virtual void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, bool foreground) noexcept = 0;
 
 	// Write one column of character data at (row, column)
 	virtual void WriteColumnData(uint16_t columData, uint8_t ySize) noexcept = 0;

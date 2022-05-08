@@ -19,7 +19,7 @@ public:
 	LcdILI9488(const LcdFont * const fnts[], size_t nFonts, uint8_t sercomNum) noexcept;
 
 	// Clear part of the display
-	void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept override;
+	void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, bool foreground) noexcept override;
 
 	// Set, clear or invert a pixel
 	//  x = x-coordinate of the pixel, measured from left hand edge of the display

@@ -163,7 +163,7 @@ size_t Lcd::writeNative(uint16_t ch) noexcept
 				// Add a single space column after the character
 				if (ySize != 0)
 				{
-					ClearBlock(row, column, row + ySize, column + 1);
+					ClearBlock(row, column, row + ySize, column + 1, textInverted);
 				}
 				++column;
 			}
@@ -193,7 +193,7 @@ size_t Lcd::writeNative(uint16_t ch) noexcept
 // Clear part of the display and select non-inverted text.
 void Lcd::Clear(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept
 {
-	ClearBlock(top, left, bottom, right);
+	ClearBlock(top, left, bottom, right, false);
 
 	SetCursor(top, left);
 	textInverted = false;
@@ -212,7 +212,7 @@ void Lcd::WriteSpaces(PixelNumber numPixels) noexcept
 		{
 			ySize = numRows - row;
 		}
-		ClearBlock(row, column, row + ySize, column + numPixels);
+		ClearBlock(row, column, row + ySize, column + numPixels, textInverted);
 	}
 	column += numPixels;
 	lastCharColData = 0;

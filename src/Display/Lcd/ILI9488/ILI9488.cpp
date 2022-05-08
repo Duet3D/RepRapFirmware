@@ -26,12 +26,12 @@ void LcdILI9488::HardwareInit() noexcept
 	SendCommand(CmdReset);
 	delay(ResetDelayMillis + 1);
 	currentRowColMode = 2;						// force row or column mode to be selected
-	ClearBlock(0, 0, numRows, numCols);
+	ClearBlock(0, 0, numRows, numCols, false);
 	SendCommand(CmdDisplayOn);
 }
 
 // Clear part of the display
-void LcdILI9488::ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept
+void LcdILI9488::ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, bool foreground) noexcept
 {
 	if (left < right)
 	{
@@ -43,7 +43,7 @@ void LcdILI9488::ClearBlock(PixelNumber top, PixelNumber left, PixelNumber botto
 			uint16_t *_ecv_array p = SetRowMode(spiBuffer, true);
 			p = SetGraphicsAddress(p, top, top + rowsToDo - 1, left, right - 1);
 			*p++ = CmdMemoryWrite;
-			p = SetPixelData(p, bgColour, rowsToDo * (right - left));
+			p = SetPixelData(p, (foreground) ? fgColour : bgColour, rowsToDo * (right - left));
 			SendBuffer(p - spiBuffer);
 			top += rowsToDo;
 		}

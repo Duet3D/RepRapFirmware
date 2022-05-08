@@ -50,7 +50,7 @@ void MonoLcd::Init(Pin p_csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uin
 }
 
 // Clear a rectangular block of pixels starting at top, left ending just before bottom, right
-void MonoLcd::ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept
+void MonoLcd::ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, bool foreground) noexcept
 {
 	if (right > numCols) { right = numCols; }
 	if (bottom > numRows) { bottom = numRows; }
@@ -66,16 +66,30 @@ void MonoLcd::ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, 
 		{
 			uint8_t * p = image + ((r * (numCols/8)) + (left/8));
 			uint8_t * const endp = image + ((r * (numCols/8)) + (right/8));
-			*p &= sMask;
+			if (foreground)
+			{
+				*p |= ~sMask;
+			}
+			else
+			{
+				*p &= sMask;
+			}
 			if (p != endp)
 			{
 				while (++p < endp)
 				{
-					*p = 0;
+					*p = (foreground) ? 0xFF : 0;
 				}
 				if ((right & 7) != 0)
 				{
-					*p &= eMask;
+					if (foreground)
+					{
+						*p |= ~eMask;
+					}
+					else
+					{
+						*p &= eMask;
+					}
 				}
 			}
 		}
