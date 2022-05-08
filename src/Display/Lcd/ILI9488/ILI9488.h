@@ -18,8 +18,29 @@ public:
 	// Construct a GLCD driver.
 	LcdILI9488(const LcdFont * const fnts[], size_t nFonts, uint8_t sercomNum) noexcept;
 
-	// Flush just some data, returning true if this needs to be called again
-	bool FlushSome() noexcept override;
+	// Clear part of the display
+	void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept override;
+
+	// Set, clear or invert a pixel
+	//  x = x-coordinate of the pixel, measured from left hand edge of the display
+	//  y = y-coordinate of the pixel, measured down from the top of the display
+	//  mode = whether we want to set or clear the pixel
+	void SetPixel(PixelNumber y, PixelNumber x, bool mode) noexcept override;
+
+	// Draw a bitmap
+	//  x0 = x-coordinate of the top left, measured from left hand edge of the display. Currently, must be a multiple of 8.
+	//  y0 = y-coordinate of the top left, measured down from the top of the display
+	//  width = width of bitmap in pixels. Currently, must be a multiple of 8.
+	//  rows = height of bitmap in pixels
+	//  data = bitmap image, must be ((width/8) * rows) bytes long
+	void BitmapImage(PixelNumber top, PixelNumber left, PixelNumber height, PixelNumber width, const uint8_t data[]) noexcept override;
+
+	// Draw a bitmap row
+	//  x0 = x-coordinate of the top left, measured from left hand edge of the display
+	//  y0 = y-coordinate of the top left, measured down from the top of the display
+	//  width = width of bitmap in pixels
+	//  data = bitmap image, must be ((width + 7)/8) bytes long
+	void BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept override;
 
 	// Get the display type
 	const char *_ecv_array GetDisplayTypeName() const noexcept override;
@@ -28,17 +49,29 @@ protected:
 	// Initialise the TFT screen
 	void HardwareInit() noexcept override;
 
+	// Write one column of character data at (row, column)
+	void WriteColumnData(uint16_t columnData, uint8_t ySize) noexcept override final;
+
 private:
 	void SendCommand(uint8_t cmd) noexcept;
-	void SendCommand(uint8_t cmd, size_t numData, uint8_t data[]) noexcept;
-	void SetGraphicsAddress(PixelNumber r, PixelNumber cBegin, PixelNumber cEnd) noexcept;
 	void SendBuffer(size_t numWords) const noexcept;
 
-	uint16_t spiBuffer[3 * 480 + 1];							// large enough to write one whole row of pixels
+	// Functions for setting up commands and data in the buffer. Each one takes the address to store it in the buffer and returns the next available buffer address.
+	uint16_t *_ecv_array SetGraphicsAddress(uint16_t *_ecv_array buffer, PixelNumber rBegin, PixelNumber rEnd, PixelNumber cBegin, PixelNumber cEnd) noexcept;
+	uint16_t *_ecv_array SetRowMode(uint16_t *_ecv_array buffer, bool rowMode) noexcept;
+	uint16_t *_ecv_array SetPixelData(uint16_t *_ecv_array buffer, Colour pixelColour, unsigned int numPixels) noexcept;
+
+	static constexpr unsigned int MaxPixelsPerTransaction = 480;				// one entire row
+
+	uint16_t spiBuffer[2 + 10 + 1 + (3 * MaxPixelsPerTransaction)];				// large enough to set row or column mode, set the address, and write MaxPixelsPerTransaction
+	uint8_t currentRowColMode;
 
 	static constexpr uint8_t CmdReset = 0x01;
+	static constexpr uint8_t CmdDisplayOn = 0x29;
 	static constexpr uint8_t CmdColumnAddressSet = 0x2A;
 	static constexpr uint8_t CmdPageAddressSet = 0x2B;
+	static constexpr uint8_t CmdMemoryWrite = 0x2C;
+	static constexpr uint8_t CmdMemoryAccessControl = 0x36;
 
 	static constexpr uint32_t ResetDelayMillis = 5;
 

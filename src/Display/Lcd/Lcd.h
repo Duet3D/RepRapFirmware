@@ -14,9 +14,9 @@ typedef uint16_t PixelNumber;
 
 struct Colour
 {
-	uint16_t red : 5,
+	uint32_t red : 6,
 			 green : 6,
-			 blue : 5;
+			 blue : 6;
 
 	constexpr Colour(uint8_t r, uint8_t g, uint8_t b) noexcept : red(r), green(g), blue(b) { }
 	constexpr Colour() noexcept : red(0), green(0), blue(0) { }
@@ -25,10 +25,10 @@ struct Colour
 struct Colours
 {
 	static constexpr Colour Black = Colour(0, 0, 0);
-	static constexpr Colour White = Colour(31, 63, 31);
-	static constexpr Colour Red = Colour(31, 0, 0);
+	static constexpr Colour White = Colour(63, 63, 63);
+	static constexpr Colour Red = Colour(63, 0, 0);
 	static constexpr Colour Green = Colour(0, 63, 0);
-	static constexpr Colour Blue = Colour(0, 0, 31);
+	static constexpr Colour Blue = Colour(0, 0, 63);
 };
 
 // Class for driving graphical LCD
@@ -52,9 +52,6 @@ public:
 
 	// Initialize the display
 	virtual void Init(Pin p_csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uint8_t p_contrastRatio, uint8_t p_resistorRatio) noexcept = 0;
-
-	// Clear part of the display and select non-inverted text.
-	virtual void Clear(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept = 0;
 
 	// Set, clear or invert a pixel
 	//  x = x-coordinate of the pixel, measured from left hand edge of the display
@@ -123,6 +120,9 @@ public:
 	// Select normal or inverted text (only works in graphics mode)
 	void TextInvert(bool b) noexcept;
 
+	// Clear part of the display and select non-inverted text.
+	void Clear(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept;
+
 	// Clear the whole display and select non-inverted text.
 	void ClearAll() noexcept
 	{
@@ -156,6 +156,9 @@ public:
 	int printf(const char *_ecv_array fmt, ...) noexcept;
 
 protected:
+	// Clear part of the display
+	virtual void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept = 0;
+
 	// Write one column of character data at (row, column)
 	virtual void WriteColumnData(uint16_t columData, uint8_t ySize) noexcept = 0;
 

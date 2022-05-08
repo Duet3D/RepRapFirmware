@@ -24,8 +24,8 @@ public:
 	// Initialize the display
 	void Init(Pin p_csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uint8_t p_contrastRatio, uint8_t p_resistorRatio) noexcept override final;
 
-	// Clear part of the display and select non-inverted text.
-	void Clear(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept override final;
+	// Clear part of the display
+	void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept override final;
 
 	// Set, clear or invert a pixel
 	//  x = x-coordinate of the pixel, measured from left hand edge of the display

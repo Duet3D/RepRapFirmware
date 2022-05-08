@@ -49,23 +49,23 @@ void MonoLcd::Init(Pin p_csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uin
 	HardwareInit();
 }
 
-// Clear a rectangular block of pixels starting at rows, scol ending just before erow, ecol
-void MonoLcd::Clear(PixelNumber sRow, PixelNumber sCol, PixelNumber eRow, PixelNumber eCol) noexcept
+// Clear a rectangular block of pixels starting at top, left ending just before bottom, right
+void MonoLcd::ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept
 {
-	if (eCol > numCols) { eCol = numCols; }
-	if (eRow > numRows) { eRow = numRows; }
-	if (sCol < eCol && sRow < eRow)
+	if (right > numCols) { right = numCols; }
+	if (bottom > numRows) { bottom = numRows; }
+	if (left < right && top < bottom)
 	{
-		uint8_t sMask = ~(0xFF >> (sCol & 7));		// mask of bits we want to keep in the first byte of each row that we modify
-		const uint8_t eMask = 0xFF >> (eCol & 7);	// mask of bits we want to keep in the last byte of each row that we modify
-		if ((sCol & ~7) == (eCol & ~7))
+		uint8_t sMask = ~(0xFF >> (left & 7));		// mask of bits we want to keep in the first byte of each row that we modify
+		const uint8_t eMask = 0xFF >> (right & 7);	// mask of bits we want to keep in the last byte of each row that we modify
+		if ((left & ~7) == (right & ~7))
 		{
 			sMask |= eMask;							// special case of just clearing some middle bits
 		}
-		for (PixelNumber r = sRow; r < eRow; ++r)
+		for (PixelNumber r = top; r < bottom; ++r)
 		{
-			uint8_t * p = image + ((r * (numCols/8)) + (sCol/8));
-			uint8_t * const endp = image + ((r * (numCols/8)) + (eCol/8));
+			uint8_t * p = image + ((r * (numCols/8)) + (left/8));
+			uint8_t * const endp = image + ((r * (numCols/8)) + (right/8));
 			*p &= sMask;
 			if (p != endp)
 			{
@@ -73,23 +73,14 @@ void MonoLcd::Clear(PixelNumber sRow, PixelNumber sCol, PixelNumber eRow, PixelN
 				{
 					*p = 0;
 				}
-				if ((eCol & 7) != 0)
+				if ((right & 7) != 0)
 				{
 					*p &= eMask;
 				}
 			}
 		}
 
-		// Flag cleared part as dirty
-		if (sCol < startCol) { startCol = sCol; }
-		if (eCol >= endCol) { endCol = eCol; }
-		if (sRow < startRow) { startRow = sRow; }
-		if (eRow >= endRow) { endRow = eRow; }
-
-		SetCursor(sRow, sCol);
-		textInverted = false;
-		leftMargin = sCol;
-		rightMargin = eCol;
+		SetRectDirty(top, left, bottom, right);		// flag cleared part as dirty
 	}
 }
 
