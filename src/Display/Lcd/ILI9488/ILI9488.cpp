@@ -6,12 +6,20 @@
  */
 
 #include "ILI9488.h"
+#include <AnalogOut.h>
 
 #if SUPPORT_ILI9488_LCD
+
+constexpr PwmFrequency BacklightPwmFrequency = 1000;
 
 LcdILI9488::LcdILI9488(const LcdFont * const fnts[], size_t nFonts, uint8_t sercomNum) noexcept
 	: TFTLcd(320, 480, fnts, nFonts, SpiMode::mode0, sercomNum)
 {
+}
+
+LcdILI9488::~LcdILI9488()
+{
+	AnalogOut::Write(LcdBacklightPin, 0.0, BacklightPwmFrequency);
 }
 
 // Get the display type
@@ -28,6 +36,7 @@ void LcdILI9488::HardwareInit() noexcept
 	currentRowColMode = 2;						// force row or column mode to be selected
 	ClearBlock(0, 0, numRows, numCols, false);
 	SendCommand(CmdDisplayOn);
+	AnalogOut::Write(LcdBacklightPin, 1.0, BacklightPwmFrequency);
 }
 
 // Clear part of the display

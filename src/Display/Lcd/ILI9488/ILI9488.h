@@ -18,6 +18,8 @@ public:
 	// Construct a GLCD driver.
 	LcdILI9488(const LcdFont * const fnts[], size_t nFonts, uint8_t sercomNum) noexcept;
 
+	~LcdILI9488();
+
 	// Clear part of the display
 	void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, bool foreground) noexcept override;
 

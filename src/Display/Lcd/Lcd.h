@@ -171,14 +171,14 @@ protected:
 
 	const LcdFont * const *_ecv_array fonts;
 	const size_t numFonts;
-	size_t currentFontNumber;						// index of the current font
-	bool textInverted;
+	size_t currentFontNumber = 0;					// index of the current font
+	bool textInverted = false;
 
 private:
 	uint32_t charVal;
-	uint16_t lastCharColData;						// data for the last non-space column, used for kerning
-	uint8_t numContinuationBytesLeft;
-	bool justSetCursor;
+	uint16_t lastCharColData = 0;					// data for the last non-space column, used for kerning
+	uint8_t numContinuationBytesLeft = 0;
+	bool justSetCursor = false;
 };
 
 #endif

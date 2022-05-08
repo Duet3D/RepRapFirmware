@@ -207,15 +207,17 @@ constexpr unsigned int LcdSercomNumber = 0;
 constexpr Pin LcdSpiMosiPin = PortAPin(4);
 constexpr Pin LcdSpiMisoPin = PortAPin(7);
 constexpr Pin LcdSpiSclkPin = PortAPin(5);
-constexpr GpioPinFunction LcdSpiPinFunction = GpioPinFunction::C;
-
 constexpr Pin LcdSpiCsPin = PortAPin(6);
+constexpr GpioPinFunction LcdSpiPinFunction = GpioPinFunction::D;
+
 constexpr Pin LcdRtpPenPin = PortAPin(3);
 constexpr Pin LcdDcPin = PortCPin(5);
 constexpr Pin LcdResetPin = PortCPin(6);
 constexpr Pin LcdFlashCsPin = PortBPin(10);
 constexpr Pin LcdFlashWpPin = PortAPin(2);
 constexpr Pin LcdFlashHoldPin = PortCPin(7);
+
+constexpr Pin LcdBacklightPin = PortBPin(12);
 
 // Touch screen interface (when not shared with SharedSpi)
 constexpr unsigned int RtpSercomNumber = 6;
