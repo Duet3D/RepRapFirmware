@@ -990,6 +990,15 @@ pre(driver.IsRemote())
 			cons.PopulateFromCommand(gb);
 			return cons.SendAndGetResponse(CanMessageType::m569p7, driver.boardAddress, reply);
 		}
+#if DUAL_CAN
+	case 8:			// read axis force via secondary CAN
+		{
+			if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter) {
+				return HangprinterKinematics::ReadODrive3AxisForce(driver, reply);
+			}
+			return GCodeResult::errorNotSupported;
+		}
+#endif
 
 	default:
 		return GCodeResult::errorNotSupported;
@@ -1505,7 +1514,7 @@ bool CanInterface::ODrive::GetExpectedSimpleMessage(CanMessageBuffer *buf, Drive
 	int count = 0;
 	bool ok = true;
 	do{
-		ok = ReceivePlainMessage(buf, MaxResponseSendWait);
+		ok = ReceivePlainMessage(buf);
 		count++;
 	} while (ok && buf->id != expectedId && count < 5);
 

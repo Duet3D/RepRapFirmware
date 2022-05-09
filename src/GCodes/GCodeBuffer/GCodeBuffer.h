@@ -14,10 +14,11 @@
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeChannel.h>
 #include <GCodes/GCodeMachineState.h>
+#include <ObjectModel/ObjectModel.h>
+
 #if HAS_SBC_INTERFACE
 # include <SBC/SbcMessageFormats.h>
 #endif
-#include <ObjectModel/ObjectModel.h>
 
 class FileGCodeInput;
 
@@ -125,6 +126,17 @@ public:
 	bool IsExecuting() const noexcept;							// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f) noexcept;							// Set the G Code executed (or not)
 
+#if SUPPORT_ASYNC_MOVES
+	size_t GetActiveQueueNumber() const noexcept { return machineState->GetCommandedQueue(); }	// Get the movement queue number that this buffer uses
+	void SetActiveQueueNumber(size_t qn) noexcept { machineState->SetCommandedQueue(qn); }
+	void ExecuteOnlyQueue(size_t qn) noexcept { machineState->ExecuteOnly(qn); }
+	void ExecuteAll() noexcept { machineState->ExecuteAll(); }
+	bool Executing() const noexcept { return machineState->Executing(); }	// Return true if this GCodeBuffer for executing commands addressed to the current queue
+	bool ExecutingAll() const noexcept { return machineState->ExecutingAll(); }
+	size_t GetQueueNumberToLock() const noexcept { return machineState->GetQueueNumberToLock(); }
+
+#endif
+
 	void SetCommsProperties(uint32_t arg) noexcept;
 
 	GCodeMachineState& LatestMachineState() const noexcept { return *machineState; }
@@ -148,9 +160,12 @@ public:
 	bool IsDoingFile() const noexcept;							// Return true if this source is executing a file
 	bool IsDoingLocalFile() const noexcept;						// Return true if this source is executing a file from the local SD card
 	bool IsDoingFileMacro() const noexcept;						// Return true if this source is executing a file macro
-	FilePosition GetFilePosition() const noexcept;				// Get the file position at the start of the current command
+	FilePosition GetJobFilePosition() const noexcept;			// Get the file position at the start of the current command
+	FilePosition GetPrintingFilePosition(bool allowNoFilePos) const noexcept;	// Get the file position in the printing file
+	void SavePrintingFilePosition() noexcept;
 
 	void WaitForAcknowledgement() noexcept;						// Flag that we are waiting for acknowledgement
+	void ClosePrintFile() noexcept;								// Close the print file
 
 #if HAS_SBC_INTERFACE
 	bool IsBinary() const noexcept { return isBinaryBuffer; }	// Return true if the code is in binary format
@@ -158,7 +173,6 @@ public:
 	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
 	void SetFileFinished() noexcept;							// Mark the current file as finished
 	void SetPrintFinished() noexcept;							// Mark the current print file as finished
-	void ClosePrintFile() noexcept;								// Close the print file
 
 	bool RequestMacroFile(const char *filename, bool fromCode) noexcept;	// Request execution of a file macro
 	volatile bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
@@ -197,6 +211,14 @@ public:
 	void MessageAcknowledged(bool cancelled) noexcept;
 
 	GCodeChannel GetChannel() const noexcept { return codeChannel; }
+	bool IsFileChannel() const noexcept
+	{
+		return codeChannel == GCodeChannel::File
+#if SUPPORT_ASYNC_MOVES
+			|| codeChannel == GCodeChannel::File2
+#endif
+				;
+	}
 	const char *GetIdentity() const noexcept { return codeChannel.ToString(); }
 	bool CanQueueCodes() const noexcept;
 	MessageType GetResponseMessageType() const noexcept;
@@ -245,6 +267,10 @@ public:
 	bool DoingCoordinateRotation() const noexcept;
 #endif
 
+#if SUPPORT_ASYNC_MOVES
+	bool MustWaitForSyncWith(const GCodeBuffer& other) noexcept;
+#endif
+
 	Mutex mutex;
 
 protected:
@@ -265,7 +291,7 @@ private:
 	const char *GetStateText() const noexcept;
 #endif
 
-	const GCodeChannel codeChannel;						// Channel number of this instance
+	FilePosition printFilePositionAtMacroStart;			// the saved file position when we started executing a macro
 	GCodeInput *normalInput;							// Our normal input stream, or nullptr if there isn't one
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -274,26 +300,26 @@ private:
 
 	const MessageType responseMessageType;				// The message type we use for responses to string codes coming from this channel
 
-	GCodeResult lastResult;
-
 #if HAS_SBC_INTERFACE
 	BinaryParser binaryParser;
 #endif
 
 	StringParser stringParser;
 
-	GCodeBufferState bufferState;						// Idle, executing or paused
 	GCodeMachineState *machineState;					// Machine state for this gcode source
 
 	uint32_t whenTimerStarted;							// When we started waiting
 	uint32_t whenReportDueTimerStarted;					// When the report-due-timer has been started
 	static constexpr uint32_t reportDueInterval = 1000;	// Interval in which we send in ms
 
-#if HAS_SBC_INTERFACE
-	bool isBinaryBuffer;
-#endif
-	bool timerRunning;									// True if we are waiting
+	const GCodeChannel codeChannel;						// Channel number of this instance
+	GCodeBufferState bufferState;						// Idle, executing or paused
+	GCodeResult lastResult;
+	bool timerRunning;									// true if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
+#if SUPPORT_ASYNC_MOVES
+	bool waitingForSync;
+#endif
 
 	alignas(4) char buffer[MaxGCodeLength];				// must be aligned because in SBC binary mode we do dword fetches from it
 
@@ -307,6 +333,7 @@ private:
 
 	// Accessed only when the GB mutex is acquired
 	String<MaxFilenameLength> requestedMacroFile;
+	bool isBinaryBuffer;
 	uint8_t
 		macroJustStarted : 1,		// Whether the GB has just started a macro file
 		macroFileError : 1,			// Whether the macro file could be opened or if an error occurred

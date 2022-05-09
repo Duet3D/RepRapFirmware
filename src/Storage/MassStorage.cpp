@@ -449,11 +449,11 @@ FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t p
 {
 	{
 		MutexLocker lock(fsMutex);
-		for (size_t i = 0; i < MAX_FILES; i++)
+		for (FileStore& fs : files)
 		{
-			if (files[i].IsFree())
+			if (fs.IsFree())
 			{
-				FileStore * const ret = (files[i].Open(filePath, mode, preAllocSize)) ? &files[i]: nullptr;
+				FileStore * const ret = (fs.Open(filePath, mode, preAllocSize)) ? &fs: nullptr;
 # if HAS_MASS_STORAGE
 				if (ret != nullptr && (mode == OpenMode::write || mode == OpenMode::writeWithCrc))
 				{
@@ -467,6 +467,31 @@ FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t p
 	reprap.GetPlatform().Message(ErrorMessage, "Max open file count exceeded.\n");
 	return nullptr;
 }
+
+#if SUPPORT_ASYNC_MOVES
+
+// Duplicate a file handle, with the duplicate having its own position in the file. Use only with files opened in read-only mode.
+FileStore *MassStorage::DuplicateOpenHandle(const FileStore *f) noexcept
+{
+	if (f == nullptr)
+	{
+		return nullptr;
+	}
+
+	MutexLocker lock(fsMutex);
+	for (FileStore& fs : files)
+	{
+		if (fs.IsFree())
+		{
+			fs.CopyFrom(f);
+			return &fs;
+		}
+	}
+	reprap.GetPlatform().Message(ErrorMessage, "Max open file count exceeded.\n");
+	return nullptr;
+}
+
+#endif
 
 // Close all files
 void MassStorage::CloseAllFiles() noexcept

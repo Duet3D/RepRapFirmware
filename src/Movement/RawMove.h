@@ -8,19 +8,23 @@
 #ifndef SRC_GCODES_RAWMOVE_H_
 #define SRC_GCODES_RAWMOVE_H_
 
-#include "RepRapFirmware.h"
+#include <RepRapFirmware.h>
+#include <GCodes/RestorePoint.h>
 
-// Details of a move that are passed from GCodes to Move
+// Details of a move that are copied from GCodes to Move
 struct RawMove
 {
 	float coords[MaxAxesPlusExtruders];								// new positions for the axes, amount of movement for the extruders
 	float initialUserC0, initialUserC1;								// if this is a segment of an arc move, the user XYZ coordinates at the start
 	float feedRate;													// feed rate of this move
-	float virtualExtruderPosition;									// the virtual extruder position at the start of this move, for normal moves
+	float moveStartVirtualExtruderPosition;							// the virtual extruder position at the start of this move, for normal moves
 	FilePosition filePos;											// offset in the file being printed at the start of reading this move
 	float proportionDone;											// what proportion of the entire move has been done when this segment is complete
 	float cosXyAngle;												// the cosine of the change in XY angle between the previous move and this move
-	const Tool *tool;												// which tool (if any) is being used
+	float maxPrintingAcceleration;
+	float maxTravelAcceleration;
+
+	Tool *currentTool;												// which tool (if any) is being used
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
 #else
@@ -55,6 +59,13 @@ enum class SegmentedMoveState : uint8_t
 	aborted
 };
 
+constexpr size_t PauseRestorePointNumber = 1;
+constexpr size_t ToolChangeRestorePointNumber = 2;
+
+constexpr size_t NumTotalRestorePoints = NumVisibleRestorePoints + 2;			// The total number of visible + invisible restore points
+constexpr size_t SimulationRestorePointNumber = NumVisibleRestorePoints;
+constexpr size_t ResumeObjectRestorePointNumber = NumVisibleRestorePoints + 1;
+
 // Details of a move that are needed only by GCodes
 // CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
 struct MovementState : public RawMove
@@ -64,6 +75,8 @@ struct MovementState : public RawMove
 	// We have chosen this approach because it allows us to switch workplace coordinates systems or turn off applying workplace offsets without having to update currentUserPosition.
 	float currentUserPosition[MaxAxes];								// The current position of the axes as commanded by the input gcode, after accounting for workplace offset,
 																	// before accounting for tool offset and Z hop
+	float latestVirtualExtruderPosition;							// The virtual extruder position of this movement system after completing pending moves
+	float virtualFanSpeed;											// Last speed given in a M106 command with no fan number
 	float currentZHop;												// The amount of Z hop that is currently applied
 	float initialCoords[MaxAxes];									// the initial positions of the axes
 	float previousX, previousY;										// the initial X and Y coordinates in user space of the previous move
@@ -78,12 +91,75 @@ struct MovementState : public RawMove
 	float currentAngleSine, currentAngleCosine;						// the sine and cosine of the current angle
 	float arcAngleIncrement;										// the amount by which we increment the arc angle in each segment
 	float angleIncrementSine, angleIncrementCosine;					// the sine and cosine of the increment
+	float speedFactor;												// speed factor as a fraction (normally 1.0)
 	unsigned int segmentsTillNextFullCalc;							// how may more segments we can do before we need to do the full calculation instead of the quicker one
+	GCodeQueue *codeQueue;											// Stores certain codes for deferred execution
+
+	GCodeBuffer *null updateUserPositionGb;							// if this is non-null then we need to update the user position from the machine position
+
+	unsigned int segmentsLeftToStartAt;
+	float moveFractionToSkip;
+	float firstSegmentFractionToSkip;
+
+	float restartMoveFractionDone;									// how much of the next move was printed before the pause or power failure (from M26)
+	float restartInitialUserC0;										// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
+	float restartInitialUserC1;										// if the print was paused during an arc move, the user Y coordinate at the start of that move (from M26)
+
+	RestorePoint restorePoints[NumTotalRestorePoints];
+	RestorePoint& pauseRestorePoint = restorePoints[PauseRestorePointNumber];				// The position and feed rate when we paused the print
+	RestorePoint& toolChangeRestorePoint = restorePoints[ToolChangeRestorePointNumber];		// The position and feed rate when we freed a tool
+	RestorePoint& simulationRestorePoint = restorePoints[SimulationRestorePointNumber];		// The position and feed rate when we started simulating
+	RestorePoint& resumeObjectRestorePoint = restorePoints[ResumeObjectRestorePointNumber];	// The position and feed rate when we resumed printing objects
+
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
+	FilePosition fileOffsetToPrint;									// The offset to print from
+#endif
+
+	// Tool change. These variables can be global because movement is locked while doing a tool change, so only one can take place at a time.
+	int16_t newToolNumber;
+	int16_t previousToolNumber;										// the tool number we were using before the last tool change, or -1 if we weren't using a tool
+	uint8_t toolChangeParam;
+
 	bool doingArcMove;												// true if we are doing an arc move
 	bool xyPlane;													// true if the G17/G18/G19 selected plane of the arc move is XY in the original user coordinates
 	SegmentedMoveState segMoveState;
+	bool pausedInMacro;												// if we are paused then this is true if we paused while fileGCode was executing a macro
+
+	// Object cancellation variables
+	int currentObjectNumber;										// the current object number, or a negative value if it isn't an object
+	int virtualToolNumber;											// the number of the tool that was active when we cancelled an object
+	bool currentObjectCancelled;									// true if the current object should not be printed
+	bool printingJustResumed;										// true if we have just restarted printing
 
 	float GetProportionDone() const noexcept;						// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
+	void Reset() noexcept;
+	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;	// change the extrusion factor of an extruder
+	const RestorePoint& GetRestorePoint(size_t n) const pre(n < NumTotalRestorePoints) { return restorePoints[n]; }
+	void ClearMove() noexcept;
+	void SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
+		pre(restorePointNumber < NumTotalRestorePoints);
+
+	// Tool management
+	void SelectTool(int toolNumber, bool simulating) noexcept;
+	ReadLockedPointer<Tool> GetLockedCurrentTool() const noexcept;
+	ReadLockedPointer<Tool> GetLockedCurrentOrDefaultTool() const noexcept;
+	int GetCurrentToolNumber() const noexcept;
+	void SetPreviousToolNumber() noexcept;
+	AxesBitmap GetCurrentXAxes() const noexcept;											// Get the current axes used as X axes
+	AxesBitmap GetCurrentYAxes() const noexcept;											// Get the current axes used as Y axes
+	AxesBitmap GetCurrentAxisMapping(unsigned int axis) const noexcept;
+	float GetCurrentToolOffset(size_t axis) const noexcept;									// Get an axis offset of the current tool
+
+	// Object cancellation support
+	void InitObjectCancellation() noexcept;
+	bool IsCurrentObjectCancelled() const noexcept { return currentObjectCancelled; }
+	bool IsFirstMoveSincePrintingResumed() const noexcept { return printingJustResumed; }
+	void DoneMoveSincePrintingResumed() noexcept { printingJustResumed = false; }
+	void SetVirtualTool(int toolNum) noexcept { virtualToolNumber = toolNum; }
+	void StopPrinting(GCodeBuffer& gb) noexcept;
+	void ResumePrinting(GCodeBuffer& gb) noexcept;
+
+	void Diagnostics(MessageType mtype, unsigned int moveSystemNumber) noexcept;
 };
 
 #if SUPPORT_ASYNC_MOVES

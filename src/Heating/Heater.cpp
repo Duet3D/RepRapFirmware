@@ -285,7 +285,7 @@ GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansB
 		reply.printf("Target temperature must be at least 20C above ambient temperature");
 	}
 
-	// Get abd store the optional parameters
+	// Get and store the optional parameters
 	tuningTargetTemp = targetTemp;
 	tuningFans = fans;
 	tuningPwm = (gb.Seen('P')) ? gb.GetLimitedFValue('P', 0.1, 1.0) : GetModel().GetMaxPwm();

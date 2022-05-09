@@ -105,17 +105,17 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
 	{ "limitAxes",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().LimitAxes()),										ObjectModelEntryFlags::none },
 	{ "noMovesBeforeHoming",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().NoMovesBeforeHoming()),								ObjectModelEntryFlags::none },
-	{ "printingAcceleration",	OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxPrintingAcceleration), 1),				ObjectModelEntryFlags::none },
+	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxPrintingAcceleration()), 1),	ObjectModelEntryFlags::none },
 	{ "queue",					OBJECT_MODEL_FUNC_NOSELF(&queueArrayDescriptor),												ObjectModelEntryFlags::none },
 #if SUPPORT_COORDINATE_ROTATION
 	{ "rotation",				OBJECT_MODEL_FUNC(self, 44),																	ObjectModelEntryFlags::none },
 #endif
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
-	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetSpeedFactor(), 2),								ObjectModelEntryFlags::none },
-	{ "travelAcceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->maxTravelAcceleration), 1),					ObjectModelEntryFlags::none },
-	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetVirtualExtruderPosition(), 5),					ObjectModelEntryFlags::live },
-	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber() - 1),	ObjectModelEntryFlags::none },
-	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetWorkplaceCoordinateSystemNumber()),		ObjectModelEntryFlags::obsolete },
+	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimarySpeedFactor(), 2),						ObjectModelEntryFlags::none },
+	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxTravelAcceleration()), 1),		ObjectModelEntryFlags::none },
+	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimaryMovementState().latestVirtualExtruderPosition, 5),			ObjectModelEntryFlags::live },
+	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber() - 1),				ObjectModelEntryFlags::none },
+	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber()),					ObjectModelEntryFlags::obsolete },
 
 	// 1. Move.Idle members
 	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor(), 1),						ObjectModelEntryFlags::none },
@@ -202,7 +202,6 @@ Move::Move() noexcept
 #if SUPPORT_ASYNC_MOVES
 	  heightController(nullptr),
 #endif
-	  maxPrintingAcceleration(ConvertAcceleration(DefaultPrintingAcceleration)), maxTravelAcceleration(ConvertAcceleration(DefaultTravelAcceleration)),
 	  jerkPolicy(0),
 	  numCalibratedFactors(0)
 {
@@ -297,14 +296,14 @@ void Move::Exit() noexcept
 			{
 				// If there's a G Code move available, add it to the DDA ring for processing.
 				RawMove nextMove;
-				if (reprap.GetGCodes().ReadMove(nextMove))				// if we have a new move
+				if (reprap.GetGCodes().ReadMove(0, nextMove))				// if we have a new move
 				{
 					moveRead = true;
-					if (simulationMode < SimulationMode::partial)		// in simulation mode partial, we don't process incoming moves beyond this point
+					if (simulationMode < SimulationMode::partial)			// in simulation mode partial, we don't process incoming moves beyond this point
 					{
 						if (nextMove.moveType == 0)
 						{
-							AxisAndBedTransform(nextMove.coords, nextMove.tool, true);
+							AxisAndBedTransform(nextMove.coords, nextMove.currentTool, true);
 						}
 
 						if (mainDDARing.AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
@@ -398,9 +397,9 @@ void Move::MoveAvailable() noexcept
 }
 
 // Tell the lookahead ring we are waiting for it to empty and return true if it is
-bool Move::WaitingForAllMovesFinished() noexcept
+bool Move::WaitingForAllMovesFinished(size_t queueNumber) noexcept
 {
-	return mainDDARing.SetWaitingToEmpty();
+	return rings[queueNumber].SetWaitingToEmpty();
 }
 
 // Return the number of actually probed probe points
@@ -451,17 +450,17 @@ bool Move::IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) co
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
-bool Move::PausePrint(RestorePoint& rp) noexcept
+bool Move::PausePrint(unsigned int queueNumber, RestorePoint& rp) noexcept
 {
-	return mainDDARing.PauseMoves(rp);
+	return rings[queueNumber].PauseMoves(rp);
 }
 
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 
 // Pause the print immediately, returning true if we were able to skip or abort any moves and setting up to the move we aborted
-bool Move::LowPowerOrStallPause(RestorePoint& rp) noexcept
+bool Move::LowPowerOrStallPause(unsigned int queueNumber, RestorePoint& rp) noexcept
 {
-	return mainDDARing.LowPowerOrStallPause(rp);
+	return rings[queueNumber].LowPowerOrStallPause(rp);
 }
 
 #endif
@@ -514,12 +513,10 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	maxDelay = maxDelayIncrease = 0;
 #endif
 
-#if SUPPORT_ASYNC_MOVES
-	mainDDARing.Diagnostics(mtype, "Main");
-	auxDDARing.Diagnostics(mtype, "Aux");
-#else
-	mainDDARing.Diagnostics(mtype, "");
-#endif
+	for (size_t i = 0; i < ARRAY_SIZE(rings); ++i)
+	{
+		rings[i].Diagnostics(mtype, i);
+	}
 }
 
 // Set the current position to be this
@@ -527,7 +524,7 @@ void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool do
 {
 	float newPos[MaxAxesPlusExtruders];
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
-	AxisAndBedTransform(newPos, reprap.GetCurrentTool(), doBedCompensation);
+	AxisAndBedTransform(newPos, reprap.GetGCodes().GetPrimaryMovementState().currentTool, doBedCompensation);
 
 	mainDDARing.SetLiveCoordinates(newPos);
 	mainDDARing.SetPositions(newPos);
@@ -978,38 +975,6 @@ bool Move::WriteResumeSettings(FileStore *f) const noexcept
 
 #endif
 
-// Process M204
-GCodeResult Move::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException)
-{
-	bool seen = false;
-	if (gb.Seen('S'))
-	{
-		// For backwards compatibility with old versions of Marlin (e.g. for Cura and the Prusa fork of slic3r), set both accelerations
-		seen = true;
-		maxTravelAcceleration = maxPrintingAcceleration = gb.GetAcceleration();
-	}
-	if (gb.Seen('P'))
-	{
-		seen = true;
-		maxPrintingAcceleration = gb.GetAcceleration();
-	}
-	if (gb.Seen('T'))
-	{
-		seen = true;
-		maxTravelAcceleration = gb.GetAcceleration();
-	}
-	if (seen)
-	{
-		reprap.MoveUpdated();
-	}
-	else
-	{
-		reply.printf("Maximum printing acceleration %.1f, maximum travel acceleration %.1f mm/sec^2",
-						(double)InverseConvertAcceleration(maxPrintingAcceleration), (double)InverseConvertAcceleration(maxTravelAcceleration));
-	}
-	return GCodeResult::ok;
-}
-
 // Process M595
 GCodeResult Move::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
@@ -1062,7 +1027,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 		}
 		else
 		{
-			const Tool * const ct = reprap.GetCurrentTool();
+			const Tool * const ct = reprap.GetGCodes().GetConstMovementState(gb).currentTool;
 			if (ct == nullptr)
 			{
 				reply.copy("No tool selected");

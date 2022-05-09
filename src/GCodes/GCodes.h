@@ -42,12 +42,6 @@ Licence: GPL
 const char feedrateLetter = 'F';						// GCode feedrate
 const char extrudeLetter = 'E'; 						// GCode extrude
 
-// Bits for T-code P-parameter to specify which macros are supposed to be run
-constexpr uint8_t TFreeBit = 1u << 0;
-constexpr uint8_t TPreBit = 1u << 1;
-constexpr uint8_t TPostBit = 1u << 2;
-constexpr uint8_t DefaultToolChangeParam = TFreeBit | TPreBit | TPostBit;
-
 // Machine type enumeration. The numeric values must be in the same order as the corresponding M451..M453 commands.
 enum class MachineType : uint8_t
 {
@@ -110,18 +104,18 @@ public:
 	void Init() noexcept;														// Set it up
 	void Exit() noexcept;														// Shut it down
 	void Reset() noexcept;														// Reset some parameter to defaults
-	bool ReadMove(RawMove& m) noexcept;											// Called by the Move class to get a movement set by the last G Code
-	void ClearMove() noexcept;
+	bool ReadMove(unsigned int queueNumber, RawMove& m) noexcept
+		pre(queueNumber < ARRAY_SIZE(moveStates));								// Called by the Move class to get a movement set by the last G Code
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	bool QueueFileToPrint(const char* fileName, const StringRef& reply) noexcept;	// Open a file of G Codes to run
 #endif
 	void AbortPrint(GCodeBuffer& gb) noexcept;									// Cancel any print in progress
-	void GetCurrentCoordinates(const StringRef& s) const noexcept;				// Write where we are into a string
+	void HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept;		// Write where we are into a string
 	bool DoingFileMacro() const noexcept;										// Is a macro file being processed by any input channel?
 	bool GetMacroRestarted() const noexcept;									// Return true if the macro being executed by fileGCode was restarted
 	bool WaitingForAcknowledgement() const noexcept;							// Is an input waiting for a message to be acknowledged?
 
-	FilePosition GetFilePosition(bool allowNoFilePos = false) const noexcept;	// Return the current position of the file being printed in bytes. May return noFilePosition if allowNoFilePos is true
+	FilePosition GetPrintingFilePosition() const noexcept;						// Return the current position of the file being printed in bytes. May return noFilePosition if allowNoFilePos is true
 	void Diagnostics(MessageType mtype) noexcept;								// Send helpful information out
 
 	bool RunConfigFile(const char* fileName) noexcept;							// Start running the config file
@@ -133,18 +127,14 @@ public:
 	void SetAxisNotHomed(unsigned int axis) noexcept;							// Tell us that the axis is not homed
 	void SetAllAxesNotHomed() noexcept;											// Flag all axes as not homed
 
-	float GetSpeedFactor() const noexcept { return speedFactor; }				// Return the current speed factor as a fraction
+	float GetPrimarySpeedFactor() const noexcept { return moveStates[0].speedFactor; }	// Return the current speed factor as a fraction
 	float GetExtrusionFactor(size_t extruder) noexcept;							// Return the current extrusion factor for the specified extruder
-#if SUPPORT_12864_LCD
-	void SetSpeedFactor(float factor) noexcept;									// Set the speed factor
-	void SetExtrusionFactor(size_t extruder, float factor) noexcept;			// Set an extrusion factor for the specified extruder
-#endif
 
 	float GetRawExtruderTotalByDrive(size_t extruder) const noexcept;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const noexcept { return rawExtruderTotal; }	// Get the total extrusion since start of print, all drives
 	float GetTotalBabyStepOffset(size_t axis) const noexcept
 		pre(axis < maxAxes);
-	float GetUserCoordinate(size_t axis) const noexcept;						// Get the current user coordinate in the current workspace coordinate system
+	float GetUserCoordinate(const MovementState& ms, size_t axis) const noexcept;	// Get the current user coordinate in the current workspace coordinate system
 
 	bool CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) noexcept;
 #if HAS_NETWORKING
@@ -195,49 +185,58 @@ public:
 	const char *GetAxisLetters() const noexcept { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
 	size_t GetAxisNumberForLetter(const char axisLetter) const noexcept;
 	MachineType GetMachineType() const noexcept { return machineType; }
-	bool LockMovementAndWaitForStandstill(GCodeBuffer& gb) noexcept;			// Lock movement and wait for pending moves to finish
+	bool LockMovementAndWaitForStandstill(GCodeBuffer& gb
+#if SUPPORT_ASYNC_MOVES
+											, bool sync = true
+#endif
+															) noexcept;			// Lock movement and wait for pending moves to finish
+	bool LockMovementAndWaitForStandstillNoSync(GCodeBuffer& gb) noexcept;		// Lock movement and wait for pending moves to finish but don't sync if using multiple movement queues
 
 #if SUPPORT_12864_LCD
+	void SetPrimarySpeedFactor(float factor) noexcept;							// Set the speed factor
+	void SetExtrusionFactor(size_t extruder, float factor) noexcept;			// Set an extrusion factor for the specified extruder
+	void SelectPrimaryTool(int toolNumber, bool simulating) noexcept { moveStates[0].SelectTool(toolNumber, simulating); }
 	bool ProcessCommandFromLcd(const char *cmd) noexcept;						// Process a GCode command from the 12864 LCD returning true if the command was accepted
 	float GetItemCurrentTemperature(unsigned int itemNumber) const noexcept;
 	float GetItemActiveTemperature(unsigned int itemNumber) const noexcept;
 	float GetItemStandbyTemperature(unsigned int itemNumber) const noexcept;
 	void SetItemActiveTemperature(unsigned int itemNumber, float temp) noexcept;
 	void SetItemStandbyTemperature(unsigned int itemNumber, float temp) noexcept;
+	bool EvaluateConditionForDisplay(const char *_ecv_array str) const noexcept;
+	bool EvaluateValueForDisplay(const char *_ecv_array str, ExpressionValue& expr) const noexcept;
 #endif
 
-	float GetMappedFanSpeed() const noexcept { return lastDefaultFanSpeed; }	// Get the mapped fan speed
-	void SetMappedFanSpeed(float f) noexcept;									// Set the speeds of fans mapped for the current tool
+	void SetMappedFanSpeed(const GCodeBuffer *null gb, float f) noexcept;				// Set the speeds of fans mapped for the current tool
 	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept;	// Handle G-Code replies
-	void EmergencyStop() noexcept;												// Cancel everything
+	void EmergencyStop() noexcept;													// Cancel everything
 
-	const GridDefinition& GetDefaultGrid() const { return defaultGrid; };		// Get the default grid definition
-	void ActivateHeightmap(bool activate) noexcept;								// (De-)Activate the height map
+	const GridDefinition& GetDefaultGrid() const { return defaultGrid; };			// Get the default grid definition
+	void ActivateHeightmap(bool activate) noexcept;									// (De-)Activate the height map
 
-	int GetNewToolNumber() const noexcept { return newToolNumber; }
 	size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
 
 	// These next two are public because they are used by class SbcInterface
-	void UnlockAll(const GCodeBuffer& gb) noexcept;								// Release all locks
+	void UnlockAll(const GCodeBuffer& gb) noexcept;									// Release all locks
 	GCodeBuffer *GetGCodeBuffer(GCodeChannel channel) const noexcept { return gcodeSources[channel.ToBaseType()]; }
 
 #if HAS_MASS_STORAGE
 	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Start timing SD card file writing
 #endif
 
-	void SavePosition(RestorePoint& rp, const GCodeBuffer& gb) const noexcept;		// Save position etc. to a restore point
+	void SavePosition(const GCodeBuffer& gb, unsigned int restorePointNumber) noexcept
+		pre(restorePointNumber < NumTotalRestorePoints);							// Save position etc. to a restore point
 	void StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t param) noexcept;
 
-	unsigned int GetWorkplaceCoordinateSystemNumber() const noexcept { return moveState.currentCoordinateSystem + 1; }
+	unsigned int GetPrimaryWorkplaceCoordinateSystemNumber() const noexcept { return GetPrimaryMovementState().currentCoordinateSystem + 1; }
 
 #if SUPPORT_COORDINATE_ROTATION
 	void RotateCoordinates(float angleDegrees, float coords[2]) const noexcept;		// Account for coordinate rotation
 #endif
 
 	// This function is called by other functions to account correctly for workplace coordinates
-	float GetWorkplaceOffset(size_t axis) const noexcept
+	float GetWorkplaceOffset(const GCodeBuffer& gb, size_t axis) const noexcept
 	{
-		return workplaceCoordinates[moveState.currentCoordinateSystem][axis];
+		return workplaceCoordinates[GetConstMovementState(gb).currentCoordinateSystem][axis];
 	}
 
 #if SUPPORT_OBJECT_MODEL
@@ -245,6 +244,8 @@ public:
 	{
 		return workplaceCoordinates[workplaceNumber][axis];
 	}
+	float GetPrimaryMaxPrintingAcceleration() const noexcept { return moveStates[0].maxPrintingAcceleration; }
+	float GetPrimaryMaxTravelAcceleration() const noexcept { return moveStates[0].maxTravelAcceleration; }
 
 # if SUPPORT_COORDINATE_ROTATION
 	float GetRotationAngle() const noexcept { return g68Angle; }
@@ -254,19 +255,22 @@ public:
 	size_t GetNumInputs() const noexcept { return NumGCodeChannels; }
 	const GCodeBuffer* GetInput(size_t n) const noexcept { return gcodeSources[n]; }
 	const GCodeBuffer* GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
+
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
-	const RestorePoint *GetRestorePoint(size_t n) const pre(n < NumRestorePoints) { return &numberedRestorePoints[n]; }
-	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
+
+	const MovementState& GetPrimaryMovementState() const noexcept { return moveStates[0]; }		// Temporary support for object model and status report values that only handle a single movement system
+	const MovementState& GetConstMovementState(const GCodeBuffer& gb) const noexcept;			// Get a reference to the movement state associated with the specified GCode buffer (there is a private non-const version)
+	bool IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *tool) const noexcept;	// Check if the specified heater is used by a current tool other than the specified one
 
 # if HAS_VOLTAGE_MONITOR
 	const char *_ecv_array null GetPowerFailScript() const noexcept { return powerFailScript; }
 # endif
 
 # if SUPPORT_LASER
-	// Return laser PWM in 0..1
+	// Return laser PWM in 0..1. Only the primary movement queue is permitted to control the laser.
 	float GetLaserPwm() const noexcept
 	{
-		return (float)moveState.laserPwmOrIoBits.laserPwm * (1.0/65535);
+		return (float)moveStates[0].laserPwmOrIoBits.laserPwm * (1.0/65535);
 	}
 # endif
 #endif
@@ -300,7 +304,6 @@ public:
 	static constexpr const char* CANCEL_G = "cancel.g";
 	static constexpr const char* START_G = "start.g";
 	static constexpr const char* STOP_G = "stop.g";
-	static constexpr const char* SLEEP_G = "sleep.g";
 	static constexpr const char* CONFIG_OVERRIDE_G = "config-override.g";
 	static constexpr const char* DefaultHeightMapFile = "heightmap.csv";
 	static constexpr const char* LOAD_FILAMENT_G = "load.g";
@@ -318,10 +321,9 @@ private:
 	// Resources that can be locked.
 	// To avoid deadlock, if you need multiple resources then you must lock them in increasing numerical order.
 	typedef uint32_t Resource;
-	static const Resource MoveResource = 0;										// Movement system, including canned cycle variables
-	static const Resource FileSystemResource = 1;								// Non-sharable parts of the file system
-	static const Resource HeaterResourceBase = 2;
-	static const size_t NumResources = HeaterResourceBase + 1;
+	static const Resource MoveResourceBase = 0;										// Movement system and associated variables
+	static const Resource FileSystemResource = MoveResourceBase + NumMovementSystems;	// Non-sharable parts of the file system
+	static const size_t NumResources = FileSystemResource + 1;
 
 	static_assert(NumResources <= sizeof(Resource) * CHAR_BIT, "Too many resources to keep a bitmap of them in class GCodeMachineState");
 
@@ -363,14 +365,14 @@ private:
 	void HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept;
 	void HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept;	// Handle G-Code replies
 
-	GCodeResult TryMacroFile(GCodeBuffer& gb) noexcept;								// Try to find a macro file that implements a G or M command
+	GCodeResult TryMacroFile(GCodeBuffer& gb) noexcept;												// Try to find a macro file that implements a G or M command
 
 	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err) THROWS(GCodeException) SPEED_CRITICAL;	// Execute a straight move
-	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err) THROWS(GCodeException)				// Execute an arc move
+	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err) THROWS(GCodeException)		// Execute an arc move
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
-	void FinaliseMove(GCodeBuffer& gb) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
-	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;						// Check that enough axes have been homed
-	bool TravelToStartPoint(GCodeBuffer& gb) noexcept;								// Set up a move to travel to the resume point
+	void FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
+	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;										// Check that enough axes have been homed
+	bool TravelToStartPoint(GCodeBuffer& gb) noexcept;												// Set up a move to travel to the resume point
 
 	GCodeResult DoDwell(GCodeBuffer& gb) THROWS(GCodeException);														// Wait for a bit
 	GCodeResult DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);									// Home some axes
@@ -387,6 +389,7 @@ private:
 		pre(drive < platform.GetNumActualDirectDrivers());																// Deal with M569 for one local driver
 	GCodeResult ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
 		pre(drive < platform.GetNumActualDirectDrivers());																// Deal with M569.0 for one local driver
+	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);					// process M204
 #if SUPPORT_ACCELEROMETERS
 	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);					// Deal with M955
 	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M956
@@ -402,7 +405,7 @@ private:
 
 	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
-	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove) THROWS(GCodeException);	// Set up the extrusion of a move
+	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException);	// Set up the extrusion of a move
 
 	bool Push(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb) noexcept;																// Pop feedrate etc
@@ -420,7 +423,7 @@ private:
 
 	ReadLockedPointer<Tool> GetSpecifiedOrCurrentTool(GCodeBuffer& gb) THROWS(GCodeException);
 	GCodeResult ManageTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Create a new tool definition
-	void SetToolHeaters(Tool *tool, float temperature, bool both) THROWS(GCodeException);	// Set all a tool's heaters to the temperature, for M104/M109
+	void SetToolHeaters(Tool *tool, float temperature) THROWS(GCodeException);				// Set all a tool's heaters active and standby temperatures, for M104/M109
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance) const noexcept;
 																							// Wait for the heaters associated with the specified tool to reach their set temperatures
 	void GenerateTemperatureReport(const StringRef& reply) const noexcept;					// Store a standard-format temperature report in reply
@@ -430,10 +433,20 @@ private:
 	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept;					// Restore user position from a restore point
 
 	void UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept;							// Get the current position from the Move class
-	void ToolOffsetTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
+	void ToolOffsetTransform(MovementState& ms, AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
 																							// Convert user coordinates to head reference point coordinates
-	void ToolOffsetInverseTransform(const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept;	// Convert head reference point coordinates to user coordinates
-	float GetCurrentToolOffset(size_t axis) const noexcept;									// Get an axis offset of the current tool
+	void ToolOffsetTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
+																							// Convert user coordinates to head reference point coordinates
+	void ToolOffsetInverseTransform(MovementState& ms) const noexcept;						// Convert head reference point coordinates to user coordinates
+	void ToolOffsetInverseTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept;
+																							// Convert head reference point coordinates to user coordinates
+	// Tool management
+	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept;
+
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+	bool WriteToolSettings(FileStore *f, const MovementState& ms) const noexcept;			// save some information for the resume file
+	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const noexcept;	// save some information in config-override.g
+#endif
 
 	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);								// Retract or un-retract filaments
 	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load the specified filament into a tool
@@ -450,8 +463,6 @@ private:
 #if HAS_VOLTAGE_MONITOR || HAS_SMART_DRIVERS
 	bool DoEmergencyPause() noexcept;														// Do an emergency pause following loss of power or a motor stall
 #endif
-
-	bool IsMappedFan(unsigned int fanNumber) noexcept;										// Return true if this fan number is currently being used as a print cooling fan
 
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);	// Define the probing grid, returning true if error
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -472,6 +483,12 @@ private:
 	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M261
 	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M577
 	GCodeResult RaiseEvent(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M957
+
+	// Object cancellation support
+	GCodeResult HandleM486(GCodeBuffer& gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException);
+	void StartObject(GCodeBuffer& gb, const char *_ecv_array label) noexcept;
+	void StopObject(GCodeBuffer& gb) noexcept;
+	void ChangeToObject(GCodeBuffer& gb, int i) noexcept;
 
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	GCodeResult UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// Handle M997
@@ -497,18 +514,23 @@ private:
 
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept;	// Append a list of axes to a string
 
-	void EndSimulation(GCodeBuffer *gb) noexcept;								// Restore positions etc. when exiting simulation mode
-	bool IsCodeQueueIdle() const noexcept;										// Return true if the code queue is idle
+	void EndSimulation(GCodeBuffer *null gb) noexcept;							// Restore positions etc. when exiting simulation mode
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	void SaveResumeInfo(bool wasPowerFailure) noexcept;
 #endif
 
-	void NewMoveAvailable(unsigned int sl) noexcept;							// Flag that a new move is available
-	void NewMoveAvailable() noexcept;											// Flag that a new move is available
+	void NewSingleSegmentMoveAvailable(MovementState& ms) noexcept;				// Flag that a new move is available
+	void NewMoveAvailable(MovementState& ms) noexcept;							// Flag that a new move is available
 
-	void SetMoveBufferDefaults() noexcept;										// Set up default values in the move buffer
+	void SetMoveBufferDefaults(MovementState& ms) noexcept;						// Set up default values in the move buffer
 	void ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept;	// Change a live extrusion factor
+
+	MovementState& GetMovementState(const GCodeBuffer& gb) noexcept;			// Get a reference to the movement state associated with the specified GCode buffer
+
+#if SUPPORT_ASYNC_MOVES
+	GCodeResult SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M596
+#endif
 
 #if SUPPORT_COORDINATE_ROTATION
 	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68
@@ -552,7 +574,11 @@ private:
 	GCodeBuffer*& spiGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)];
 	GCodeBuffer*& daemonGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)];
 	GCodeBuffer*& aux2GCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)];				// This one is reserved for the second async serial interface
-	GCodeBuffer*& autoPauseGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)];		// ***THIS ONE MUST BE LAST*** GCode state machine used to run macros on power fail, heater faults and filament out
+	GCodeBuffer*& autoPauseGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)];		// GCode state machine used to run macros on power fail, heater faults and filament out
+#if SUPPORT_ASYNC_MOVES
+	GCodeBuffer*& file2GCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)];
+	GCodeBuffer*& queue2GCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)];
+#endif
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling
 
@@ -568,10 +594,8 @@ private:
 
 	MachineType machineType;					// whether FFF, laser or CNC
 	bool active;								// Live and running?
-	FilePosition printFilePositionAtMacroStart;
 	const char *_ecv_array null deferredPauseCommandPending;
 	PauseState pauseState;						// whether the machine is running normally or is pausing, paused or resuming
-	bool pausedInMacro;							// if we are paused then this is true if we paused while fileGCode was executing a macro
 	bool runningConfigFile;						// We are running config.g during the startup process
 	bool doingToolChange;						// We are running tool change macros
 
@@ -581,28 +605,12 @@ private:
 #endif
 
 	// The following contain the details of moves that the Move module fetches
-	MovementState moveState;					// Move details
-	GCodeBuffer *null updateUserPositionGb;		// if this is non-null then we need to update the user position from he machine position
-
-	unsigned int segmentsLeftToStartAt;
-	float moveFractionToSkip;
-	float firstSegmentFractionToSkip;
-
-	float restartMoveFractionDone;				// how much of the next move was printed before the pause or power failure (from M26)
-	float restartInitialUserC0;					// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
-	float restartInitialUserC1;					// if the print was paused during an arc move, the user Y coordinate at the start of that move (from M26)
-
-	RestorePoint simulationRestorePoint;		// The position and feed rate when we started a simulation
-
-	RestorePoint numberedRestorePoints[NumRestorePoints];				// Restore points accessible using the R parameter in the G0/G1 command
-	RestorePoint& pauseRestorePoint = numberedRestorePoints[1];			// The position and feed rate when we paused the print
-	RestorePoint& toolChangeRestorePoint = numberedRestorePoints[2];	// The position and feed rate when we freed a tool
+	MovementState moveStates[NumMovementSystems];	// Move details
 
 	size_t numTotalAxes;						// How many axes we have
 	size_t numVisibleAxes;						// How many axes are visible
 	size_t numExtruders;						// How many extruders we have, or may have
 	float axisScaleFactors[MaxAxes];			// Scale XYZ coordinates by this factor
-	float virtualExtruderPosition;				// Virtual extruder position of the last move fed into the Move class
 	float rawExtruderTotalByDrive[MaxExtruders]; // Extrusion amount in the last G1 command with an E parameter when in absolute extrusion mode
 	float rawExtruderTotal;						// Total extrusion amount fed to Move class since starting print, before applying extrusion factor, summed over all drives
 
@@ -616,13 +624,6 @@ private:
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileData fileToPrint;						// The next file to print
 #endif
-#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	FilePosition fileOffsetToPrint;				// The offset to print from
-#endif
-
-	// Tool change. These variables can be global because movement is locked while doing a tool change, so only one can take place at a time.
-	int16_t newToolNumber;
-	uint8_t toolChangeParam;
 
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
 	bool limitAxes;								// Don't think outside the box
@@ -632,8 +633,6 @@ private:
 	AxesBitmap axesHomed;						// Bitmap of which axes have been homed
 	AxesBitmap axesVirtuallyHomed;				// same as axesHomed except all bits are set when simulating
 
-	float lastDefaultFanSpeed;					// Last speed given in a M106 command with no fan number
-	float speedFactor;							// speed factor as a fraction (normally 1.0)
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
 	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors
 	float currentBabyStepOffsets[MaxAxes];		// The accumulated axis offsets due to baby stepping requests
@@ -674,9 +673,6 @@ private:
 	bool isFlashingPanelDue;					// Are we in the process of flashing PanelDue?
 #endif
 
-	// Code queue
-	GCodeQueue *codeQueue;						// Stores certain codes for deferred execution
-
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	// SHA1 hashing
 	FileStore *fileBeingHashed;
@@ -716,7 +712,7 @@ private:
 	bool isWaiting;								// True if waiting to reach temperature
 	bool cancelWait;							// Set true to cancel waiting
 	bool displayNoToolWarning;					// True if we need to display a 'no tool selected' warning
-	bool m501SeenInConfigFile;					// true if M501 was executed form config.g
+	bool m501SeenInConfigFile;					// true if M501 was executed from config.g
 	bool daemonRunning;
 	char filamentToLoad[FilamentNameLength];	// Name of the filament being loaded
 
@@ -730,6 +726,33 @@ inline float GCodes::GetTotalBabyStepOffset(size_t axis) const noexcept
 {
 	return currentBabyStepOffsets[axis];
 }
+
+#if SUPPORT_ASYNC_MOVES
+
+inline bool GCodes::LockMovementAndWaitForStandstillNoSync(GCodeBuffer& gb) noexcept
+{
+	return LockMovementAndWaitForStandstill(gb, false);
+}
+
+#else
+
+inline bool GCodes::LockMovementAndWaitForStandstillNoSync(GCodeBuffer& gb) noexcept
+{
+	return LockMovementAndWaitForStandstill(gb);
+}
+
+// Get a reference to the movement state associated with the specified GCode buffer
+inline MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) noexcept
+{
+	return moveStates[0];
+}
+
+inline const MovementState& GCodes::GetConstMovementState(const GCodeBuffer& gb) const noexcept
+{
+	return moveStates[0];
+}
+
+#endif
 
 //*****************************************************************************************************
 

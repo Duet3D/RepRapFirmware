@@ -80,7 +80,7 @@ public:
 #endif
 
 	void RecordLookaheadError() noexcept { ++numLookaheadErrors; }						// Record a lookahead error
-	void Diagnostics(MessageType mtype, const char *prefix) noexcept;
+	void Diagnostics(MessageType mtype, unsigned int ringNumber) noexcept;
 
 	bool SetWaitingToEmpty() noexcept;
 

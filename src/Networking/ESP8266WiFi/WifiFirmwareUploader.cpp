@@ -421,7 +421,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::doCommand(uint8_t op
 	sendCommand(op, checkVal, data, dataLen);
 	size_t bodyLen;
 	EspUploadResult stat = readPacket(op, valp, bodyLen, msTimeout);
-	if (stat == EspUploadResult::success && bodyLen != 2)
+	if (stat == EspUploadResult::success && !(bodyLen == 2 || bodyLen == 4))
 	{
 		stat = EspUploadResult::badReply;
 	}
@@ -458,7 +458,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 		{
 			size_t bodyLen;
 			EspUploadResult rc = readPacket(ESP_SYNC, nullptr, bodyLen, defaultTimeout);
-			if (rc != EspUploadResult::success || bodyLen != 2)
+			if (rc != EspUploadResult::success || !(bodyLen == 2 || bodyLen == 4))
 			{
 				break;
 			}

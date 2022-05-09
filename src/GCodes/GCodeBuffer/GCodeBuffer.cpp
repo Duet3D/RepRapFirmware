@@ -58,13 +58,17 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "inMacro",			OBJECT_MODEL_FUNC((bool)self->machineState->doingFileMacro),						ObjectModelEntryFlags::live },
 	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->GetLineNumber()),									ObjectModelEntryFlags::live },
 	{ "macroRestartable",	OBJECT_MODEL_FUNC((bool)self->machineState->macroRestartable),						ObjectModelEntryFlags::none },
+#if SUPPORT_ASYNC_MOVES
+	{ "motionSystem",		OBJECT_MODEL_FUNC((int32_t)self->GetActiveQueueNumber()),							ObjectModelEntryFlags::live },
+#endif
 	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),									ObjectModelEntryFlags::none },
+	{ "selectedPlane",		OBJECT_MODEL_FUNC((int32_t)self->machineState->selectedPlane),						ObjectModelEntryFlags::none },
 	{ "stackDepth",			OBJECT_MODEL_FUNC((int32_t)self->GetStackDepth()),									ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->GetStateText()),											ObjectModelEntryFlags::live },
 	{ "volumetric",			OBJECT_MODEL_FUNC((bool)self->machineState->volumetricExtrusion),					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 12 };
+constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 13 + SUPPORT_ASYNC_MOVES };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GCodeBuffer)
 
@@ -88,22 +92,25 @@ const char *GCodeBuffer::GetStateText() const noexcept
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c) noexcept
-	: codeChannel(channel), normalInput(normalIn),
+	: printFilePositionAtMacroStart(0),
+	  normalInput(normalIn),
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	  fileInput(fileIn),
 #endif
-	  responseMessageType(mt), lastResult(GCodeResult::ok),
+	  responseMessageType(mt),
 #if HAS_SBC_INTERFACE
 	  binaryParser(*this),
 #endif
 	  stringParser(*this),
 	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()),
-#if HAS_SBC_INTERFACE
-	  isBinaryBuffer(false),
-#endif
+	  codeChannel(channel), lastResult(GCodeResult::ok),
 	  timerRunning(false), motionCommanded(false)
+#if SUPPORT_ASYNC_MOVES
+	  , waitingForSync(false)
+#endif
+
 #if HAS_SBC_INTERFACE
-	  , isWaitingForMacro(false), invalidated(false)
+	  , isWaitingForMacro(false), isBinaryBuffer(false), invalidated(false)
 #endif
 {
 	mutex.Create(((GCodeChannel)channel).ToString());
@@ -327,6 +334,79 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 {
 	return PARSER_OPERATION(GetCommandFraction());
 }
+
+#if SUPPORT_ASYNC_MOVES
+
+// Check whether we are in sync with another GCodeBUffer. This is only called when we have multiple readers for the same GCode stream.
+// Sync works as follows:
+// 1. All GBs first lock their movement queues and wait for all moves in their own movement queue to finish. Only then do they call this function.
+// 2. The primary GB (the one selected by the most recent M596 command) waits for the other GBs to do one of the following:
+//   (a) reach the same lines in the executing files as the primary GB and set their 'waitingForSync' flags. That way the primary caller know that the secondaries have completed all movements.
+//   (b) reached a later point. That should only happen if the secondary GB didn't execute the command at the sync point due to conditional GCode or executing a loop fewer times.
+// 3. The secondary GBs wait for the primary GB to reach a point strictly later in the executing files, so that the primary can finish executing the command before they resume.
+//    While waiting they set their 'waitingForSync' flags to indicate to the primary that movement has stopped.
+bool GCodeBuffer::MustWaitForSyncWith(const GCodeBuffer& other) noexcept
+{
+	unsigned int ourDepth = GetStackDepth();
+	unsigned int otherDepth = other.GetStackDepth();
+	const GCodeMachineState *ourState = machineState;
+	const GCodeMachineState *otherState = other.machineState;
+	const bool weArePrimary = Executing();
+	bool otherMustBeLater;
+	bool atSamePoint;
+	if (ourDepth > otherDepth)
+	{
+		// The other GB can only be in sync with us if it has exited the inner block we are in and moved on in the surrounding blocks
+		otherMustBeLater = true;
+		atSamePoint = false;
+		do
+		{
+			ourState = ourState->GetPrevious();
+			--ourDepth;
+		} while (ourDepth > otherDepth);
+	}
+	else if (otherDepth > ourDepth)
+	{
+		// The other GB is more deeply nested than we are, so it can only be later if it has moved on
+		otherMustBeLater = true;
+		atSamePoint = false;
+		do
+		{
+			otherState = otherState->GetPrevious();
+			--otherDepth;
+		} while (otherDepth > ourDepth);
+	}
+	else
+	{
+		otherMustBeLater = !weArePrimary;
+		atSamePoint = true;
+	}
+
+	while (ourState != nullptr)
+	{
+		if (otherState->lineNumber < ourState->lineNumber)
+		{
+			otherMustBeLater = true;
+			atSamePoint = false;
+		}
+		else if (otherState->lineNumber > ourState->lineNumber)
+		{
+			otherMustBeLater = false;
+			atSamePoint = false;
+		}
+		otherState = otherState->GetPrevious();
+		ourState = ourState->GetPrevious();
+	}
+
+	// At this point, if otherMustBeLater is true then we know that it isn't later, so we are not synced.
+	// Else if atSamePoint is true then the other GB is at the same point as us;
+	//  so if we are the primary we need to check whether is has its waitingForSync flag set, and if we are not the primary we must wait for the primary to complete the command.
+	const bool ret = otherMustBeLater || (atSamePoint && (!weArePrimary || !other.waitingForSync));
+	waitingForSync = ret;
+	return ret;
+}
+
+#endif
 
 // Return true if the command we have just completed was the last command in the line of GCode.
 // If the command was or called a macro then there will be no command in the buffer, so we must return true for this case also.
@@ -883,6 +963,40 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
 	}
 }
 
+// This is called on a fileGCode when we stop a print. It closes the file and re-initialises the buffer.
+void GCodeBuffer::ClosePrintFile() noexcept
+{
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		FileId printFileId = OriginalMachineState().fileId;
+		if (printFileId != NoFileId)
+		{
+			for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+			{
+				if (ms->fileId == printFileId)
+				{
+					ms->fileId = NoFileId;
+				}
+			}
+		}
+	}
+	else
+#endif
+	{
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+		FileData& fileBeingPrinted = OriginalMachineState().fileState;
+		GetFileInput()->Reset(fileBeingPrinted);
+		if (fileBeingPrinted.IsLive())
+		{
+			fileBeingPrinted.Close();
+		}
+#endif
+	}
+
+	Init();
+}
+
 #if HAS_SBC_INTERFACE
 
 void GCodeBuffer::SetFileFinished() noexcept
@@ -930,21 +1044,6 @@ void GCodeBuffer::SetPrintFinished() noexcept
 			}
 		}
 		reprap.GetSbcInterface().EventOccurred();
-	}
-}
-
-void GCodeBuffer::ClosePrintFile() noexcept
-{
-	FileId printFileId = OriginalMachineState().fileId;
-	if (printFileId != NoFileId)
-	{
-		for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
-		{
-			if (ms->fileId == printFileId)
-			{
-				ms->fileId = NoFileId;
-			}
-		}
 	}
 }
 
@@ -1034,9 +1133,41 @@ MessageType GCodeBuffer::GetResponseMessageType() const noexcept
 	return responseMessageType;
 }
 
-FilePosition GCodeBuffer::GetFilePosition() const noexcept
+FilePosition GCodeBuffer::GetJobFilePosition() const noexcept
 {
-	return PARSER_OPERATION(GetFilePosition());
+	return (IsFileChannel() && !IsDoingFileMacro()) ? PARSER_OPERATION(GetFilePosition()) : noFilePosition;
+}
+
+// Return the current position of the file being printed in bytes.
+// May return noFilePosition if allowNoFilePos is true
+FilePosition GCodeBuffer::GetPrintingFilePosition(bool allowNoFilePos) const noexcept
+{
+#if HAS_SBC_INTERFACE
+	if (!reprap.UsingSbcInterface())
+#endif
+	{
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+		const FileData& fileBeingPrinted = OriginalMachineState().fileState;
+		if (!fileBeingPrinted.IsLive())
+		{
+			return allowNoFilePos ? noFilePosition : 0;
+		}
+#endif
+	}
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
+	const FilePosition pos = (IsDoingFileMacro())
+			? printFilePositionAtMacroStart						// the position before we started executing the macro
+				: GetJobFilePosition();							// the actual position, allowing for bytes cached but not yet processed
+	return (pos != noFilePosition || allowNoFilePos) ? pos : 0;
+#else
+	return allowNoFilePos ? noFilePosition : 0;
+#endif
+}
+
+void GCodeBuffer::SavePrintingFilePosition() noexcept
+{
+	printFilePositionAtMacroStart = PARSER_OPERATION(GetFilePosition());
 }
 
 void GCodeBuffer::WaitForAcknowledgement() noexcept

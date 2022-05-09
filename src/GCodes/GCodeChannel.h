@@ -17,7 +17,7 @@
 # undef USB
 #endif
 
-NamedEnum(GCodeChannel, uint8_t, HTTP, Telnet, File, USB, Aux, Trigger, Queue, LCD, SBC, Daemon, Aux2, Autopause);
+NamedEnum(GCodeChannel, uint8_t, HTTP, Telnet, File, USB, Aux, Trigger, Queue, LCD, SBC, Daemon, Aux2, Autopause, File2, Queue2);
 
 constexpr size_t NumGCodeChannels = GCodeChannel::NumValues;
 

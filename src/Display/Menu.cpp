@@ -70,13 +70,15 @@
 #if SUPPORT_12864_LCD
 
 #include "Lcd/Lcd.h"
-#include <Platform/RepRap.h>
-#include <Platform/Platform.h>
 #include "Display.h"
+#include "TextMenuItem.h"
+#include "ButtonMenuItem.h"
+#include "ValueMenuItem.h"
+#include "FilesMenuItem.h"
+#include "ImageMenuItem.h"
+
+#include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
-#include <Heating/Heat.h>
-#include <Storage/MassStorage.h>
-#include <Tools/Tool.h>
 
 const uint32_t InactivityTimeout = 20000;		// inactivity timeout
 const uint32_t ErrorTimeout = 6000;				// how long we display an error message for
@@ -156,33 +158,33 @@ void Menu::DisplayMessageBox(const MessageBox& mbox) noexcept
 	const PixelNumber left = sideMargin + 1 + insideMargin;
 	const PixelNumber right = nc - left;
 	const PixelNumber availableWidth = right - left;
-	AddItem(new TextMenuItem(top, left, availableWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, mbox.title.c_str()), false);
-	AddItem(new TextMenuItem(top + rowHeight, left, availableWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, mbox.message.c_str()), false);	// only 1 row for now
+	AddItem(new TextMenuItem(top, left, availableWidth, MenuItem::CentreAlign, fontToUse, mbox.title.c_str()), false);
+	AddItem(new TextMenuItem(top + rowHeight, left, availableWidth, MenuItem::CentreAlign, fontToUse, mbox.message.c_str()), false);	// only 1 row for now
 
 	// Add whichever XYZ jog buttons we have been asked to display - assume only XYZ for now
 	const PixelNumber axisButtonWidth = availableWidth/4;
 	const PixelNumber axisButtonStep = (availableWidth - 3 *axisButtonWidth)/2 + axisButtonWidth;
 	if (mbox.controls.IsBitSet(X_AXIS))
 	{
-		AddItem(new ValueMenuItem(top + 2 * rowHeight, left, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 510, 1), true);
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, left, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, nullptr, 510, 1), true);
 	}
 	if (mbox.controls.IsBitSet(Y_AXIS))
 	{
-		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 511, 1), true);
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, nullptr, 511, 1), true);
 	}
 	if (mbox.controls.IsBitSet(Z_AXIS))
 	{
-		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + 2 * axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, MenuItem::AlwaysVisible, true, 512, 2), true);
+		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + 2 * axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, nullptr, 512, 2), true);
 	}
 
 	const PixelNumber okCancelButtonWidth = 30;
 	if (mbox.mode & 2)
 	{
-		AddItem(new ButtonMenuItem(top + 3 * rowHeight, left, okCancelButtonWidth, fontToUse, MenuItem::AlwaysVisible, "OK", "M292 P0", nullptr), true);
+		AddItem(new ButtonMenuItem(top + 3 * rowHeight, left, okCancelButtonWidth, fontToUse, "OK", "M292 P0", nullptr), true);
 	}
 	if (mbox.mode & 1)
 	{
-		AddItem(new ButtonMenuItem(top + 3 * rowHeight, right - okCancelButtonWidth, okCancelButtonWidth, fontToUse, MenuItem::AlwaysVisible, "Cancel", "M292 P1", nullptr), true);
+		AddItem(new ButtonMenuItem(top + 3 * rowHeight, right - okCancelButtonWidth, okCancelButtonWidth, fontToUse, "Cancel", "M292 P1", nullptr), true);
 	}
 }
 
@@ -238,7 +240,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 	}
 
 	// Find the first word
-	char *args = commandWord;
+	char *_ecv_array args = commandWord;
 	while (isalpha(*args))
 	{
 		++args;
@@ -256,9 +258,11 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 	}
 
 	// Parse the arguments
-	MenuItem::Visibility xVis = 0;
+	const char *_ecv_array _ecv_null strVis = nullptr;
+	MenuItem::Visibility xVis = MenuItem::AlwaysVisible;
 	unsigned int decimals = 0;
 	unsigned int nparam = 0;
+	const char *_ecv_array _ecv_null strNparam = nullptr;
 	unsigned int width = 0;
 	unsigned int alignment = 0;
 	const char *text = "*";
@@ -288,7 +292,24 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 			break;
 
 		case 'V':
-			xVis = StrToU32(args, &args);
+			if (*args == '{')
+			{
+				++args;
+				strVis = args;
+				while (*args != '}' && *args != 0)
+				{
+					++args;
+				}
+				if (*args == '}')
+				{
+					*args = 0;
+					++args;
+				}
+			}
+			else
+			{
+				xVis = StrToU32(args, &args);
+			}
 			break;
 
 		case 'D':
@@ -296,7 +317,24 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 			break;
 
 		case 'N':
-			nparam = StrToU32(args, &args);
+			// 'value' command allows the N parameter to be an object mode string
+			if (*args == '{' && StringEqualsIgnoreCase(commandWord, "value"))
+			{
+				strNparam = args;
+				while (*args != '}' && *args != 0)
+				{
+					++args;
+				}
+				if (*args == '}')
+				{
+					*args = 0;
+					++args;
+				}
+			}
+			else
+			{
+				nparam = StrToU32(args, &args);
+			}
 			break;
 
 		case 'W':
@@ -341,48 +379,51 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 
 	lcd.SetCursor(row + currentMargin, column + currentMargin);
 
+	MenuItem *_ecv_null newItem = nullptr;
+
 	// Create an object resident in memory corresponding to the menu layout file's description
 	if (StringEqualsIgnoreCase(commandWord, "text"))
 	{
-		const char *const acText = AppendString(text);
-		MenuItem * const pNewItem = new TextMenuItem(row, column, width, alignment, fontNumber, xVis, acText);
-		AddItem(pNewItem, false);
-		column += pNewItem->GetWidth();
+		const char *_ecv_array const acText = AppendString(text);
+		newItem = new TextMenuItem(row, column, width, alignment, fontNumber, acText);
+		AddItem(newItem, false);
+		column += newItem->GetWidth();
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "image") && fname != nullptr)
 	{
-		ImageMenuItem * const pNewItem = new ImageMenuItem(row, column, xVis, fname);
-		AddItem(pNewItem, false);
-		column += pNewItem->GetWidth();
+		newItem = new ImageMenuItem(row, column,fname);
+		AddItem(newItem, false);
+		column += newItem->GetWidth();
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "button"))
 	{
-		const char * const textString = AppendString(text);
-		const char * const actionString = AppendString(action);
-		const char * const c_acFileString = AppendString(fname);
-		ButtonMenuItem * const pNewItem = new ButtonMenuItem(row, column, width, fontNumber, xVis, textString, actionString, c_acFileString);
-		AddItem(pNewItem, true);
-		column += pNewItem->GetWidth();
+		const char *_ecv_array const textString = AppendString(text);
+		const char *_ecv_array const actionString = AppendString(action);
+		const char *_ecv_array const c_acFileString = AppendString(fname);
+		newItem = new ButtonMenuItem(row, column, width, fontNumber, textString, actionString, c_acFileString);
+		AddItem(newItem, true);
+		column += newItem->GetWidth();
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "value"))
 	{
-		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, alignment, fontNumber, xVis, false, nparam, decimals);
-		AddItem(pNewItem, false);
-		column += pNewItem->GetWidth();
+		newItem = new ValueMenuItem(row, column, width, alignment, fontNumber, false, strNparam, nparam, decimals);
+		AddItem(newItem, false);
+		column += newItem->GetWidth();
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "alter"))
 	{
-		ValueMenuItem * const pNewItem = new ValueMenuItem(row, column, width, alignment, fontNumber, xVis, true, nparam, decimals);
-		AddItem(pNewItem, true);
-		column += pNewItem->GetWidth();
+		newItem = new ValueMenuItem(row, column, width, alignment, fontNumber, true, nullptr, nparam, decimals);
+		AddItem(newItem, true);
+		column += newItem->GetWidth();
 	}
 #if HAS_MASS_STORAGE
 	else if (StringEqualsIgnoreCase(commandWord, "files"))
 	{
-		const char * const actionString = AppendString(action);
-		const char *const dir = AppendString(dirpath);
-		const char *const acFileString = AppendString(fname);
-		AddItem(new FilesMenuItem(row, 0, lcd.GetNumCols(), fontNumber, xVis, actionString, dir, acFileString, nparam), true);
+		const char *_ecv_array const actionString = AppendString(action);
+		const char *_ecv_array const dir = AppendString(dirpath);
+		const char *_ecv_array const acFileString = AppendString(fname);
+		newItem = new FilesMenuItem(row, 0, lcd.GetNumCols(), fontNumber, actionString, dir, acFileString, nparam);
+		AddItem(newItem, true);
 		row += nparam * lcd.GetFontHeight(fontNumber);
 		column = 0;
 	}
@@ -393,6 +434,15 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 		return "Unknown command";
 	}
 
+	// Deal with the visibility of the newly-added menu item
+	if (strVis != nullptr)
+	{
+		newItem->SetVisibility(strVis);
+	}
+	else
+	{
+		newItem->SetVisibility(xVis);
+	}
 	return nullptr;
 }
 
@@ -443,8 +493,8 @@ void Menu::Reload() noexcept
 	displayingErrorMessage = false;
 
 	lcd.SetRightMargin(lcd.GetNumCols() - currentMargin);
-	const char * const fname = filenames[numNestedMenus - 1].c_str();
-	FileStore * const file = reprap.GetPlatform().OpenFile(MENU_DIR, fname, OpenMode::read);
+	const char *_ecv_array const fname = filenames[numNestedMenus - 1].c_str();
+	FileStore *_ecv_null const file = reprap.GetPlatform().OpenFile(MENU_DIR, fname, OpenMode::read);
 	if (file == nullptr)
 	{
 		LoadError("File not found", 0);

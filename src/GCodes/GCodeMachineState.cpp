@@ -24,9 +24,13 @@ GCodeMachineState::GCodeMachineState() noexcept
 #if HAS_SBC_INTERFACE
 	  lastCodeFromSbc(false), macroStartedByCode(false), fileFinished(false),
 #endif
+	  stateParameter(0),
 	  compatibility(Compatibility::RepRapFirmware),
 	  previous(nullptr), errorMessage(nullptr),
 	  blockNesting(0), state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
+#if SUPPORT_ASYNC_MOVES
+	  , commandedQueueNumber(0), ownQueueNumber(0), executeAllCommands(true)
+#endif
 {
 	blockStates[0].SetPlainBlock(0);
 }
@@ -51,7 +55,11 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 #endif
 	  compatibility(prev.compatibility),
 	  previous(&prev), errorMessage(nullptr),
-	  blockNesting((withinSameFile) ? prev.blockNesting : 0), state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
+	  blockNesting((withinSameFile) ? prev.blockNesting : 0),
+	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
+#if SUPPORT_ASYNC_MOVES
+	  , commandedQueueNumber(prev.commandedQueueNumber), ownQueueNumber(prev.ownQueueNumber), executeAllCommands(prev.executeAllCommands)
+#endif
 {
 	if (withinSameFile)
 	{
@@ -167,6 +175,7 @@ void GCodeMachineState::WaitForAcknowledgement() noexcept
 #endif
 }
 
+// This is called only after running config.g and when using M26/M23 to resume a print
 void GCodeMachineState::CopyStateFrom(const GCodeMachineState& other) noexcept
 {
 	selectedPlane = other.selectedPlane;

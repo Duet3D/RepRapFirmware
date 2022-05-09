@@ -159,6 +159,10 @@ public:
 		}
 	}
 
+#if SUPPORT_ASYNC_MOVES
+	const FileStore *GetUnderlyingFile() const noexcept { return f; }
+#endif
+
 private:
 	FileStore * null f;
 

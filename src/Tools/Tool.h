@@ -33,6 +33,12 @@ Licence: GPL
 #include <General/NamedEnum.h>
 #include <General/function_ref.h>
 
+// Bits for T-code P-parameter to specify which macros are supposed to be run
+constexpr uint8_t TFreeBit = 1u << 0;
+constexpr uint8_t TPreBit = 1u << 1;
+constexpr uint8_t TPostBit = 1u << 2;
+constexpr uint8_t DefaultToolChangeParam = TFreeBit | TPreBit | TPostBit;
+
 constexpr size_t ToolNameLength = 32;						// maximum allowed length for tool names
 
 NamedEnum(ToolState, uint8_t, off, active, standby);
@@ -42,8 +48,6 @@ class Filament;
 class Tool INHERIT_OBJECT_MODEL
 {
 public:
-	friend class RepRap;
-
 	DECLARE_FREELIST_NEW_DELETE(Tool)
 
 	~Tool() override { delete name; }
@@ -57,20 +61,35 @@ public:
 			AxesBitmap yMap,
 			FansBitmap fanMap,
 			int filamentDrive,
-			size_t sCount, int8_t spindleNo,
+			size_t sCount,
+			int8_t spindleNo,
 			const StringRef& reply) noexcept;
 	static void Delete(Tool *t) noexcept { delete t; }
 	static AxesBitmap GetXAxes(const Tool *tool) noexcept;
 	static AxesBitmap GetYAxes(const Tool *tool) noexcept;
 	static AxesBitmap GetAxisMapping(const Tool *tool, unsigned int axis) noexcept;
 	static float GetOffset(const Tool *tool, size_t axis) noexcept pre(axis < MaxAxes);
+	static void FlagTemperatureFault(int8_t dudHeater) noexcept;
+	static GCodeResult ClearTemperatureFault(int8_t wasDudHeater, const StringRef& reply) noexcept;
+	static void AddTool(Tool* t) noexcept;
+	static void DeleteTool(int toolNumber) noexcept;
+	static uint16_t GetExtrudersInUse() noexcept { return activeExtruders; }
+	static uint16_t GetToolHeatersInUse() noexcept { return activeToolHeaters; }
+	static uint16_t GetNumToolsToReport() noexcept { return numToolsToReport; }
+	static Tool *GetToolList() noexcept { return toolList; }
+	static ReadLockedPointer<Tool> GetLockedTool(int toolNumber) noexcept;
+	static unsigned int GetNumberOfContiguousTools() noexcept;
+	static unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions, const Tool *tool) noexcept;
+	static bool DisplayColdExtrusionWarnings() noexcept;
+	static bool IsHeaterAssignedToTool(int8_t heater) noexcept;
+	static GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
 
 	float GetOffset(size_t axis) const noexcept pre(axis < MaxAxes);
 	void SetOffset(size_t axis, float offs, bool byProbing) noexcept pre(axis < MaxAxes);
 	AxesBitmap GetAxisOffsetsProbed() const noexcept { return axisOffsetsProbed; }
 	size_t DriveCount() const noexcept;
 	int GetDrive(size_t driveNumber) const noexcept pre(driverNumber < DriveCount());
-	bool ToolCanDrive(bool extrude) noexcept;
+	bool CanDriveExtruder(bool extrude) const noexcept;
 	size_t HeaterCount() const noexcept;
 	int GetHeater(size_t heaterNumber) const noexcept pre(heaterNumber < HeaterCount());
 	const char *_ecv_array GetName() const noexcept;
@@ -95,7 +114,7 @@ public:
 	void SetRetracted(bool b) noexcept { isRetracted = b; }
 	int8_t GetSpindleNumber() const noexcept { return spindleNumber; }
 	uint32_t GetSpindleRpm() const noexcept { return spindleRpm; }
-	void SetSpindleRpm(uint32_t rpm) THROWS(GCodeException);
+	void SetSpindleRpm(uint32_t rpm, bool isCurrentTool) THROWS(GCodeException);
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteSettings(FileStore *f) const noexcept;							// write the tool's settings to file
@@ -120,9 +139,14 @@ public:
 	void HeatersToOff() const noexcept;
 	void HeatersToActiveOrStandby(bool active) const noexcept;
 
-
 	void ApplyFeedForward(float extrusionSpeed) const noexcept;
 	void StopFeedForward() const noexcept;
+
+	void Activate() noexcept;
+	void Standby() noexcept;
+	void UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHeaters, uint16_t &numToolsToReport) const noexcept;
+
+	static ReadWriteLock toolListLock;
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -135,13 +159,6 @@ protected:
 	OBJECT_MODEL_ARRAY(standbyTemps)
 	OBJECT_MODEL_ARRAY(feedForward)
 
-	void Activate() noexcept;
-	void Standby() noexcept;
-	void FlagTemperatureFault(int8_t dudHeater) noexcept;
-	void ClearTemperatureFault(int8_t wasDudHeater) noexcept;
-	void UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHeaters, uint16_t &numToolsToReport) const noexcept;
-	bool DisplayColdExtrudeWarning() noexcept;
-
 private:
 	Tool() noexcept : next(nullptr), filament(nullptr), name(nullptr), state(ToolState::off) { }
 
@@ -151,6 +168,12 @@ private:
 	bool AllHeatersAtHighTemperature(bool forExtrusion) const noexcept;
 
 	static void ToolUpdated() noexcept { reprap.ToolsUpdated(); }	// call this whenever we change a variable that is reported in the OM as non-live
+
+	static Tool* toolList;						// the tool list is sorted in order of increasing tool number
+	static ToolNumbersBitmap prohibitedExtrusionTools;
+	static uint16_t activeExtruders;
+	static uint16_t activeToolHeaters;
+	static uint16_t numToolsToReport;
 
 	Tool* null next;
 	Filament *filament;
@@ -184,7 +207,6 @@ private:
 	ToolState state;
 	bool heaterFault;
 	bool isRetracted;							// true if filament has been firmware-retracted
-	volatile bool displayColdExtrudeWarning;
 };
 
 inline int Tool::GetDrive(size_t driveNumber) const noexcept

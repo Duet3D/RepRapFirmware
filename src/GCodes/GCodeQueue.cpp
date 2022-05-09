@@ -23,92 +23,72 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 	}
 }
 
-// Return true if the move in the GCodeBuffer should be queued. Caller has already checked that the command does not contain an expression.
-/*static*/ bool GCodeQueue::ShouldQueueCode(GCodeBuffer &gb) THROWS(GCodeException)
+// Return true if the GCode in the GCodeBuffer should be queued
+// Caller has already checked that the command does not contain an expression and involves modifying tool temperatures or spindle speed
+/*static*/ bool GCodeQueue::ShouldQueueG10(GCodeBuffer &gb) noexcept
 {
-#if SUPPORT_ROLAND
-	// Don't queue codes if the Roland module is active
-	if (reprap.GetRoland()->Active())
-	{
-		return false;
-	}
-#endif
+	return reprap.GetMove().GetScheduledMoves() != reprap.GetMove().GetCompletedMoves()
+			&& gb.DataLength() <= BufferSizePerQueueItem;						// only queue it if it is short enough to fit in a queue item
+}
 
+// Return true if the MCode in the GCodeBuffer should be queued. Caller has already checked that the command does not contain an expression.
+/*static*/ bool GCodeQueue::ShouldQueueMCode(GCodeBuffer &gb) THROWS(GCodeException)
+{
 	// Don't queue anything if no moves are being performed
-	const uint32_t scheduledMoves = reprap.GetMove().GetScheduledMoves();
-	if (scheduledMoves != reprap.GetMove().GetCompletedMoves())
+	if (reprap.GetMove().GetScheduledMoves() != reprap.GetMove().GetCompletedMoves())
 	{
 		bool shouldQueue;
-		switch (gb.GetCommandLetter())
+		switch (gb.GetCommandNumber())
 		{
-		case 'G':
-			shouldQueue = gb.GetCommandNumber() == 10
-						&& gb.Seen('P')
-						&& !gb.Seen('L')
-						&& (gb.Seen('R') || gb.Seen('S'));						// set active/standby temperatures
+		case 3:		// spindle or laser control
+		case 5:		// spindle or laser control
+			// On laser devices we use these codes to set the default laser power for the next G1 command
+			shouldQueue = reprap.GetGCodes().GetMachineType() != MachineType::laser;
 			break;
 
-		case 'M':
+		case 4:		// spindle control
+		case 42:	// set IO pin
+		case 106:	// fan control
+		case 107:	// fan off
+		case 104:	// set temperatures and return immediately
+		case 140:	// set bed temperature and return immediately
+		case 141:	// set chamber temperature and return immediately
+		case 144:	// bed standby
+		case 280:	// set servo
+		case 300:	// beep
+		case 568:	// spindle or temperature control
+			shouldQueue = true;
+			break;
+
+		case 117:	// display message
 			{
-				switch (gb.GetCommandNumber())
-				{
-				case 3:		// spindle or laser control
-				case 5:		// spindle or laser control
-					// On laser devices we use these codes to set the default laser power for the next G1 command
-					shouldQueue = reprap.GetGCodes().GetMachineType() != MachineType::laser;
-					break;
-
-				case 4:		// spindle control
-				case 42:	// set IO pin
-				case 106:	// fan control
-				case 107:	// fan off
-				case 104:	// set temperatures and return immediately
-				case 140:	// set bed temperature and return immediately
-				case 141:	// set chamber temperature and return immediately
-				case 144:	// bed standby
-				case 280:	// set servo
-				case 300:	// beep
-				case 568:	// spindle or temperature control
-					shouldQueue = true;
-					break;
-
-				case 117:	// display message
-					{
-						// We need to call GetUnprecedentedString to ensure that if the string argument is not quoted, gb.DataLength() will return the correct value.
-						// We need to pass the correct length string buffer here because GetUnprecedentedString will throw if the string is too long for the buffer.
-						String<M117StringLength> dummy;
-						gb.GetUnprecedentedString(dummy.GetRef());
-					}
-					shouldQueue = true;
-					break;
+				// We need to call GetUnprecedentedString to ensure that if the string argument is not quoted, gb.DataLength() will return the correct value.
+				// We need to pass the correct length string buffer here because GetUnprecedentedString will throw if the string is too long for the buffer.
+				String<M117StringLength> dummy;
+				gb.GetUnprecedentedString(dummy.GetRef());
+			}
+			shouldQueue = true;
+			break;
 
 #if SUPPORT_LED_STRIPS
-				case 150:	// set LED colours
-					shouldQueue = !LedStripDriver::MustStopMovement(gb);		// if it is going to call LockMovementAndWaitForStandstill then we mustn't queue it
-					break;
+		case 150:	// set LED colours
+			shouldQueue = !LedStripDriver::MustStopMovement(gb);		// if it is going to call LockMovementAndWaitForStandstill then we mustn't queue it
+			break;
 #endif
-				// A note about M291:
-				// - We cannot queue M291 messages that are blocking, i.e. with S2 or S3 parameter
-				// - If we queue non-blocking M291 messages then it can happen that if a non-blocking M291 is used and a little later a blocking M291 is used,
-				//   then the blocking one gets displayed while the non-blocking one is still in the queue. Then the non-blocking one overwrites it, and the
-				//   blocking one can no longer be acknowledged except by sending M292 manually.
-				// - Therefore we no longer queue any M291 commands.
-				case 291:
-				default:
-					shouldQueue = false;
-					break;
-				}
-			}
-			break;
-
+		// A note about M291:
+		// - We cannot queue M291 messages that are blocking, i.e. with S2 or S3 parameter
+		// - If we queue non-blocking M291 messages then it can happen that if a non-blocking M291 is used and a little later a blocking M291 is used,
+		//   then the blocking one gets displayed while the non-blocking one is still in the queue. Then the non-blocking one overwrites it, and the
+		//   blocking one can no longer be acknowledged except by sending M292 manually.
+		// - Therefore we no longer queue any M291 commands.
+		case 291:
 		default:
-			shouldQueue = false;
-			break;
+			return false;
 		}
 
-		if (shouldQueue)
+		if (shouldQueue && gb.DataLength() <= BufferSizePerQueueItem)	// only queue it if it is short enough to fit in a queue item
 		{
-			return gb.DataLength() <= BufferSizePerQueueItem;					// only queue it if it is short enough to fit in a queue item
+			return true;
 		}
 	}
 
@@ -118,7 +98,7 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 // Try to queue the command in the passed GCodeBuffer.
 // If successful, return true to indicate it has been queued.
 // If the queue is full, return false. Caller will wait for space to become available.
-bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t scheduleAt) noexcept
+bool GCodeQueue::QueueCode(const GCodeBuffer &gb) noexcept
 {
 	// Can we queue this code somewhere?
 	if (freeItems == nullptr)
@@ -130,7 +110,7 @@ bool GCodeQueue::QueueCode(GCodeBuffer &gb, uint32_t scheduleAt) noexcept
 	QueuedCode * const code = freeItems;
 	freeItems = code->next;
 	code->AssignFrom(gb);
-	code->executeAtMove = scheduleAt;
+	code->executeAtMove = reprap.GetMove().GetScheduledMoves();
 	code->next = nullptr;
 
 	// Append it to the list of queued codes
@@ -232,11 +212,11 @@ void GCodeQueue::Clear() noexcept
 	}
 }
 
-void GCodeQueue::Diagnostics(MessageType mtype) noexcept
+void GCodeQueue::Diagnostics(MessageType mtype, unsigned int queueNumber) noexcept
 {
 	if (queuedItems == nullptr)
 	{
-		reprap.GetPlatform().Message(mtype, "Code queue is empty\n");
+		reprap.GetPlatform().MessageF(mtype, "Code queue %u is empty\n", queueNumber);
 	}
 	else
 	{
@@ -249,7 +229,7 @@ void GCodeQueue::Diagnostics(MessageType mtype) noexcept
 			if (!reprap.UsingSbcInterface())
 #endif
 			{
-				reprap.GetPlatform().MessageF(mtype, "Queued '%.*s' for move %" PRIu32 "\n", item->dataLength, item->data, item->executeAtMove);
+				reprap.GetPlatform().MessageF(mtype, "Queue %u has '%.*s' for move %" PRIu32 "\n", queueNumber, item->dataLength, item->data, item->executeAtMove);
 			}
 		} while ((item = item->Next()) != nullptr);
 	}
@@ -257,7 +237,7 @@ void GCodeQueue::Diagnostics(MessageType mtype) noexcept
 
 // QueuedCode class
 
-void QueuedCode::AssignFrom(GCodeBuffer &gb) noexcept
+void QueuedCode::AssignFrom(const GCodeBuffer &gb) noexcept
 {
 #if HAS_SBC_INTERFACE
 	isBinary = gb.IsBinary();

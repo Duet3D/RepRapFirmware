@@ -17,8 +17,6 @@
 
 #include <General/Portability.h>
 
-// Default anchor coordinates
-// These are only placeholders. Each machine must have these values calibrated in order to work correctly.
 constexpr float DefaultAnchors[4][3] = {{    0.0, -2000.0, -100.0},
                                         { 2000.0,  1000.0, -100.0},
                                         {-2000.0,  1000.0, -100.0},
@@ -88,6 +86,14 @@ void HangprinterKinematics::Init() noexcept
 	constexpr uint32_t DefaultMotorGearTeeth[4] = {  20,  20,  20,  20}; // HP4 default
 	constexpr uint32_t DefaultSpoolGearTeeth[4] = { 255, 255, 255, 255}; // HP4 default
 	constexpr uint32_t DefaultFullStepsPerMotorRev[4] = { 25, 25, 25, 25};
+	constexpr float DefaultMoverWeight_kg = 0.0F;          // Zero disables flex compensation feature.
+	constexpr float DefaultSpringKPerUnitLength = 20000.0F; // Garda 1.1 is somewhere in the range [20000, 100000]
+	constexpr float DefaultMinPlannedForce_Newton[4] = { 0.0F };
+	constexpr float DefaultMaxPlannedForce_Newton[4] = { 70.0F, 70.0F, 70.0F, 70.0F };
+	constexpr float DefaultGuyWireLengths[HANGPRINTER_AXES] = { -1.0F }; // If one of these are negative they will be calculated in Recalc() instead
+	constexpr float DefaultTargetForce_Newton = 20.0F; // 20 chosen quite arbitrarily
+	constexpr float DefaultTorqueConstants[HANGPRINTER_AXES] = { 0.0F };
+
 	ARRAY_INIT(anchors, DefaultAnchors);
 	printRadius = DefaultPrintRadius;
 	spoolBuildupFactor = DefaultSpoolBuildupFactor;
@@ -97,7 +103,19 @@ void HangprinterKinematics::Init() noexcept
 	ARRAY_INIT(motorGearTeeth, DefaultMotorGearTeeth);
 	ARRAY_INIT(spoolGearTeeth, DefaultSpoolGearTeeth);
 	ARRAY_INIT(fullStepsPerMotorRev, DefaultFullStepsPerMotorRev);
+	moverWeight_kg = DefaultMoverWeight_kg;
+	springKPerUnitLength = DefaultSpringKPerUnitLength;
+	ARRAY_INIT(minPlannedForce_Newton, DefaultMinPlannedForce_Newton);
+	ARRAY_INIT(maxPlannedForce_Newton, DefaultMaxPlannedForce_Newton);
+	ARRAY_INIT(guyWireLengths, DefaultGuyWireLengths);
+	targetForce_Newton = DefaultTargetForce_Newton;
+	ARRAY_INIT(torqueConstants, DefaultTorqueConstants);
+
 	Recalc();
+}
+
+static inline float hyp3(float const a[3], float const b[3]) {
+	return fastSqrtf(fsquare(a[2] - b[2]) + fsquare(a[1] - b[1]) + fsquare(a[0] - b[0]));
 }
 
 // Recalculate the derived parameters
@@ -107,13 +125,13 @@ void HangprinterKinematics::Recalc() noexcept
 
 	// This is the difference between a "line length" and a "line position"
 	// "line length" == ("line position" + "line length in origin")
-	lineLengthsOrigin[A_AXIS] = fastSqrtf(fsquare(anchors[A_AXIS][0]) + fsquare(anchors[A_AXIS][1]) + fsquare(anchors[A_AXIS][2]));
-	lineLengthsOrigin[B_AXIS] = fastSqrtf(fsquare(anchors[B_AXIS][0]) + fsquare(anchors[B_AXIS][1]) + fsquare(anchors[B_AXIS][2]));
-	lineLengthsOrigin[C_AXIS] = fastSqrtf(fsquare(anchors[C_AXIS][0]) + fsquare(anchors[C_AXIS][1]) + fsquare(anchors[C_AXIS][2]));
-	lineLengthsOrigin[D_AXIS] = fastSqrtf(fsquare(anchors[D_AXIS][0]) + fsquare(anchors[D_AXIS][1]) + fsquare(anchors[D_AXIS][2]));
+	distancesOrigin[A_AXIS] = fastSqrtf(fsquare(anchors[A_AXIS][0]) + fsquare(anchors[A_AXIS][1]) + fsquare(anchors[A_AXIS][2]));
+	distancesOrigin[B_AXIS] = fastSqrtf(fsquare(anchors[B_AXIS][0]) + fsquare(anchors[B_AXIS][1]) + fsquare(anchors[B_AXIS][2]));
+	distancesOrigin[C_AXIS] = fastSqrtf(fsquare(anchors[C_AXIS][0]) + fsquare(anchors[C_AXIS][1]) + fsquare(anchors[C_AXIS][2]));
+	distancesOrigin[D_AXIS] = fastSqrtf(fsquare(anchors[D_AXIS][0]) + fsquare(anchors[D_AXIS][1]) + fsquare(anchors[D_AXIS][2]));
 
 
-	// Line buildup compensation
+	//// Line buildup compensation
 	float stepsPerUnitTimesRTmp[HANGPRINTER_AXES] = { 0.0 };
 	Platform& platform = reprap.GetPlatform(); // No const because we want to set drive steper per unit
 	for (size_t i = 0; i < HANGPRINTER_AXES; i++)
@@ -136,6 +154,35 @@ void HangprinterKinematics::Recalc() noexcept
 		// Calculate the steps per unit that is correct at the origin
 		platform.SetDriveStepsPerUnit(i, stepsPerUnitTimesRTmp[i] / spoolRadii[i], 0);
 	}
+
+	//// Flex compensation
+
+	// If no guy wire lengths are configured, assume a default configuration
+	// with all spools stationary located at the D anchor
+	if (guyWireLengths[A_AXIS] < 0.0F or
+	    guyWireLengths[B_AXIS] < 0.0F or
+	    guyWireLengths[C_AXIS] < 0.0F or
+	    guyWireLengths[D_AXIS] < 0.0F) {
+		guyWireLengths[A_AXIS] = hyp3(anchors[A_AXIS], anchors[D_AXIS]);
+		guyWireLengths[B_AXIS] = hyp3(anchors[B_AXIS], anchors[D_AXIS]);
+		guyWireLengths[C_AXIS] = hyp3(anchors[C_AXIS], anchors[D_AXIS]);
+		guyWireLengths[D_AXIS] = 0.0F;
+	}
+
+	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+		springKsOrigin[i] = SpringK(distancesOrigin[i] * mechanicalAdvantage[i] + guyWireLengths[i]);
+	}
+	float constexpr origin[3] = { 0.0F, 0.0F, 0.0F };
+	StaticForces(origin, fOrigin);
+	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+		distancesWithRelaxedSpringsOrigin[i] = distancesOrigin[i] - fOrigin[i] / (springKsOrigin[i] * mechanicalAdvantage[i]);
+	}
+
+#if DUAL_CAN
+	// Setting and reading of forces.
+	ReadODrive3AxisForce({}, StringRef(nullptr, 0), torqueConstants, mechanicalAdvantage, spoolGearTeeth, motorGearTeeth, spoolRadii);
+	SetODrive3TorqueMode({}, 0.0F, StringRef(nullptr, 0), mechanicalAdvantage, spoolGearTeeth, motorGearTeeth, spoolRadii);
+#endif
 }
 
 // Return the name of the current kinematics
@@ -233,6 +280,29 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			error = true;
 			return true;
 		}
+		gb.TryGetFValue('W', moverWeight_kg, seen);
+		gb.TryGetFValue('S', springKPerUnitLength, seen);
+		if (gb.TryGetFloatArray('I', HANGPRINTER_AXES, minPlannedForce_Newton, reply, seen))
+		{
+			error = true;
+			return true;
+		}
+		if (gb.TryGetFloatArray('X', HANGPRINTER_AXES, maxPlannedForce_Newton, reply, seen))
+		{
+			error = true;
+			return true;
+		}
+		if (gb.TryGetFloatArray('Y', HANGPRINTER_AXES, guyWireLengths, reply, seen))
+		{
+			error = true;
+			return true;
+		}
+		gb.TryGetFValue('T', targetForce_Newton, seen);
+		if (gb.TryGetFloatArray('C', HANGPRINTER_AXES, torqueConstants, reply, seen))
+		{
+			error = true;
+			return true;
+		}
 		if (seen)
 		{
 			Recalc();
@@ -240,20 +310,34 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		else
 		{
 			reply.printf(
-				"Q:Buildup fac %.4f\n"
-				"R:Spool r %.2f, %.2f, %.2f, %.2f\n"
-				"U:Mech Adv %d, %d, %d, %d\n"
-				"O:Lines/spool %d, %d, %d, %d\n"
-				"L:Motor gear teeth %d, %d, %d, %d\n"
-				"H:Spool gear teeth %d, %d, %d, %d\n"
-				"J:Full steps/rev %d, %d, %d, %d",
+				"M666 Q%.4f\n"
+				"R%.2f:%.2f:%.2f:%.2f\n"
+				"U%d:%d:%d:%d\n"
+				"O%d:%d:%d:%d\n"
+				"L%d:%d:%d:%d\n"
+				"H%d:%d:%d:%d\n"
+				"J%d:%d:%d:%d\n"
+				"W%.2f\n"
+				"S%.2f\n"
+				"I%.1f:%.1f:%.1f:%.1f\n"
+				"X%.1f:%.1f:%.1f:%.1f\n"
+				"Y%.1f:%.1f:%.1f:%.1f\n"
+				"T%.1f\n"
+				"C%.4f:%.4f:%.4f:%.4f",
 				(double)spoolBuildupFactor,
 				(double)spoolRadii[A_AXIS], (double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS],
 				(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS], (int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS],
 				(int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS], (int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS],
 				(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS], (int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
 				(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS], (int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
-				(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS], (int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS]
+				(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS], (int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS],
+				(double)moverWeight_kg,
+				(double)springKPerUnitLength,
+				(double)minPlannedForce_Newton[A_AXIS], (double)minPlannedForce_Newton[B_AXIS], (double)minPlannedForce_Newton[C_AXIS], (double)minPlannedForce_Newton[D_AXIS],
+				(double)maxPlannedForce_Newton[A_AXIS], (double)maxPlannedForce_Newton[B_AXIS], (double)maxPlannedForce_Newton[C_AXIS], (double)maxPlannedForce_Newton[D_AXIS],
+				(double)guyWireLengths[A_AXIS], (double)guyWireLengths[B_AXIS], (double)guyWireLengths[C_AXIS], (double)guyWireLengths[D_AXIS],
+				(double)targetForce_Newton,
+				(double)torqueConstants[A_AXIS], (double)torqueConstants[B_AXIS], (double)torqueConstants[C_AXIS], (double)torqueConstants[D_AXIS]
 				);
 		}
 	}
@@ -264,26 +348,34 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 	return seen;
 }
 
-// Calculate the square of the line length from a spool from a Cartesian coordinate
-inline float HangprinterKinematics::LineLengthSquared(const float machinePos[3], const float anchors[3]) const noexcept
-{
-	return fsquare(anchors[Z_AXIS] - machinePos[Z_AXIS]) + fsquare(anchors[Y_AXIS] - machinePos[Y_AXIS]) + fsquare(anchors[X_AXIS] - machinePos[X_AXIS]);
-}
-
 // Convert Cartesian coordinates to motor coordinates, returning true if successful
 bool HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[],
 													size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
-	float squaredLineLengths[HANGPRINTER_AXES];
-	squaredLineLengths[A_AXIS] = LineLengthSquared(machinePos, anchors[A_AXIS]);
-	squaredLineLengths[B_AXIS] = LineLengthSquared(machinePos, anchors[B_AXIS]);
-	squaredLineLengths[C_AXIS] = LineLengthSquared(machinePos, anchors[C_AXIS]);
-	squaredLineLengths[D_AXIS] = LineLengthSquared(machinePos, anchors[D_AXIS]);
+	float distances[HANGPRINTER_AXES];
+	distances[A_AXIS] = hyp3(machinePos, anchors[A_AXIS]);
+	distances[B_AXIS] = hyp3(machinePos, anchors[B_AXIS]);
+	distances[C_AXIS] = hyp3(machinePos, anchors[C_AXIS]);
+	distances[D_AXIS] = hyp3(machinePos, anchors[D_AXIS]);
+
+
+	float springKs[HANGPRINTER_AXES];
+	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+		springKs[i] = SpringK(distances[i] * mechanicalAdvantage[i] + guyWireLengths[i]);
+	}
+
+	float F[HANGPRINTER_AXES] = {0.0F}; // desired force in each direction
+	StaticForces(machinePos, F);
+
+	float distancesWithRelaxedSprings[HANGPRINTER_AXES];
+	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+		distancesWithRelaxedSprings[i] = distances[i] - F[i] / (springKs[i] * mechanicalAdvantage[i]);
+		// The second term there is the mover's movement in mm due to flex
+	}
 
 	float linePos[HANGPRINTER_AXES];
-	for (size_t i = 0; i < HANGPRINTER_AXES; ++i)
-	{
-		linePos[i] = fastSqrtf(squaredLineLengths[i]) - lineLengthsOrigin[i];
+	for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
+		linePos[i] = distancesWithRelaxedSprings[i] - distancesWithRelaxedSpringsOrigin[i];
 	}
 
 	motorPos[A_AXIS] = lrintf(k0[A_AXIS] * (fastSqrtf(spoolRadiiSq[A_AXIS] + linePos[A_AXIS] * k2[A_AXIS]) - spoolRadii[A_AXIS]));
@@ -305,10 +397,10 @@ inline float HangprinterKinematics::MotorPosToLinePos(const int32_t motorPos, si
 void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
 	ForwardTransform(
-		MotorPosToLinePos(motorPos[A_AXIS], A_AXIS) + lineLengthsOrigin[A_AXIS],
-		MotorPosToLinePos(motorPos[B_AXIS], B_AXIS) + lineLengthsOrigin[B_AXIS],
-		MotorPosToLinePos(motorPos[C_AXIS], C_AXIS) + lineLengthsOrigin[C_AXIS],
-		MotorPosToLinePos(motorPos[D_AXIS], D_AXIS) + lineLengthsOrigin[D_AXIS],
+		MotorPosToLinePos(motorPos[A_AXIS], A_AXIS) + distancesOrigin[A_AXIS],
+		MotorPosToLinePos(motorPos[B_AXIS], B_AXIS) + distancesOrigin[B_AXIS],
+		MotorPosToLinePos(motorPos[C_AXIS], C_AXIS) + distancesOrigin[C_AXIS],
+		MotorPosToLinePos(motorPos[D_AXIS], D_AXIS) + distancesOrigin[D_AXIS],
 		machinePos);
 }
 
@@ -469,7 +561,7 @@ bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const noexc
 				ok = f->Write(scratchString.c_str());
 				if (ok)
 				{
-					scratchString.printf(" O%d:%d:%d:%d L%d:%d:%d:%d H%d:%d:%d:%d J%d:%d:%d:%d\n",
+					scratchString.printf(" O%d:%d:%d:%d L%d:%d:%d:%d H%d:%d:%d:%d J%d:%d:%d:%d",
 										(int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS],
 										(int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS],
 										(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS],
@@ -480,6 +572,28 @@ bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const noexc
 										(int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS]
 							);
 					ok = f->Write(scratchString.c_str());
+					if (ok)
+					{
+						scratchString.printf(" W%.2f S%.2f I%.1f:%.1f:%.1f:%.1f X%.1f:%.1f:%.1f:%.1f",
+							(double)moverWeight_kg, (double)springKPerUnitLength,
+							(double)minPlannedForce_Newton[A_AXIS], (double)minPlannedForce_Newton[B_AXIS],
+							(double)minPlannedForce_Newton[C_AXIS], (double)minPlannedForce_Newton[D_AXIS],
+							(double)maxPlannedForce_Newton[A_AXIS], (double)maxPlannedForce_Newton[B_AXIS],
+							(double)maxPlannedForce_Newton[C_AXIS], (double)maxPlannedForce_Newton[D_AXIS]
+						);
+						ok = f->Write(scratchString.c_str());
+						if (ok)
+						{
+							scratchString.printf(" Y%.1f:%.1f:%.1f:%.1f T%.1f C%.4f:%.4f:%.4f:%.4f\n",
+								(double)guyWireLengths[A_AXIS], (double)guyWireLengths[B_AXIS],
+								(double)guyWireLengths[C_AXIS], (double)guyWireLengths[D_AXIS],
+								(double)targetForce_Newton,
+								(double)torqueConstants[A_AXIS], (double)torqueConstants[B_AXIS],
+								(double)torqueConstants[C_AXIS], (double)torqueConstants[D_AXIS]
+							);
+							ok = f->Write(scratchString.c_str());
+						}
+					}
 				}
 			}
 		}
@@ -555,10 +669,10 @@ void HangprinterKinematics::ForwardTransform(float const a, float const b, float
 		}
 	}
 
-	const float Asq = fsquare(lineLengthsOrigin[A_AXIS]);
-	const float Bsq = fsquare(lineLengthsOrigin[B_AXIS]);
-	const float Csq = fsquare(lineLengthsOrigin[C_AXIS]);
-	const float Dsq = fsquare(lineLengthsOrigin[D_AXIS]);
+	const float Asq = fsquare(distancesOrigin[A_AXIS]);
+	const float Bsq = fsquare(distancesOrigin[B_AXIS]);
+	const float Csq = fsquare(distancesOrigin[C_AXIS]);
+	const float Dsq = fsquare(distancesOrigin[D_AXIS]);
 	const float aa = fsquare(a);
 	const float dd = fsquare(d);
 	const float k0b = (-fsquare(b) + Bsq - Dsq + dd) / (2.0 * anchors_tmp0[B_AXIS][X_AXIS]) + (anchors_tmp0[B_AXIS][Y_AXIS] / (2.0 * anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[B_AXIS][X_AXIS])) * (Dsq - Asq + aa - dd);
@@ -592,6 +706,43 @@ void HangprinterKinematics::PrintParameters(const StringRef& reply) const noexce
 					(double)anchors[B_AXIS][X_AXIS], (double)anchors[B_AXIS][Y_AXIS], (double)anchors[B_AXIS][Z_AXIS],
 					(double)anchors[C_AXIS][X_AXIS], (double)anchors[C_AXIS][Y_AXIS], (double)anchors[C_AXIS][Z_AXIS]);
 }
+
+#if DUAL_CAN
+HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3MotorCurrent(DriverId driver, const StringRef& reply) THROWS(GCodeException)
+{
+	const uint8_t cmd = CANSimple::MSG_GET_IQ;
+	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
+	if (buf == nullptr)
+	{
+		return {};
+	}
+	buf->id = CanInterface::ODrive::ArbitrationId(driver, cmd);
+	buf->remote = true; // Indicates that we expect an answer
+	CanInterface::ODrive::FlushCanReceiveHardware();
+	CanInterface::SendPlainMessageNoFree(buf);
+	bool ok = CanInterface::ODrive::GetExpectedSimpleMessage(buf, driver, cmd, reply);
+	float motorCurrent = 0.0;
+	if (ok)
+	{
+		size_t const expectedResponseLength = 8;
+		ok = (buf->dataLength == expectedResponseLength);
+		if (ok)
+		{
+			motorCurrent = LoadLEFloat(&(buf->msg.raw[4]));
+		}
+		else
+		{
+			reply.printf("Unexpected response length: %d", buf->dataLength);
+		}
+	}
+	CanMessageBuffer::Free(buf);
+	if (ok)
+	{
+		return {true, motorCurrent};
+	}
+	return {};
+}
+#endif // DUAL_CAN
 
 #if DUAL_CAN
 HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEstimate(DriverId const driver, bool const makeReference, const StringRef& reply, bool const subtractReference) THROWS(GCodeException)
@@ -676,6 +827,52 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 #endif // DUAL_CAN
 
 #if DUAL_CAN
+GCodeResult HangprinterKinematics::ReadODrive3AxisForce(DriverId const driver, const StringRef& reply, float setTorqueConstants[], uint32_t setMechanicalAdvantage[], uint32_t setSpoolGearTeeth[], uint32_t setMotorGearTeeth[], float setSpoolRadii[]) THROWS(GCodeException)
+{
+	static float torqueConstants_[HANGPRINTER_AXES] = { 0.0 };
+	static uint32_t mechanicalAdvantage_[HANGPRINTER_AXES] = { 0 };
+	static uint32_t spoolGearTeeth_[HANGPRINTER_AXES] = { 0 };
+	static uint32_t motorGearTeeth_[HANGPRINTER_AXES] = { 0 };
+	static float spoolRadii_[HANGPRINTER_AXES] = { 0.0 };
+	if (setTorqueConstants != nullptr && setMechanicalAdvantage != nullptr && setSpoolGearTeeth != nullptr &&
+			setMotorGearTeeth != nullptr && setSpoolRadii != nullptr) {
+		for(size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+			torqueConstants_[i] = setTorqueConstants[i];
+			mechanicalAdvantage_[i] = setMechanicalAdvantage[i];
+			spoolGearTeeth_[i] = setSpoolGearTeeth[i];
+			motorGearTeeth_[i] = setMotorGearTeeth[i];
+			spoolRadii_[i] = setSpoolRadii[i];
+		}
+		return GCodeResult::ok;
+	}
+
+	HangprinterKinematics::ODriveAnswer const motorCurrent = GetODrive3MotorCurrent(driver, reply);
+	if (motorCurrent.valid)
+	{
+		size_t const boardIndex = driver.boardAddress - 40;
+		if (boardIndex < 0 or boardIndex > 3) {
+			reply.catf("Board address not between 40 and 43: %d", driver.boardAddress);
+			return GCodeResult::error;
+		}
+		// This force calculation if very rough, assuming perfect data from ODrive,
+		// perfect transmission between motor gear and spool gear,
+		// the exact same line buildup on spool as we have at the origin,
+		// and no losses from any of the bearings or eyelets in the motion system.
+		float motorTorque_Nm = motorCurrent.value * torqueConstants_[boardIndex];
+		if (driver.boardAddress == 40 || driver.boardAddress == 41) // Driver direction is not stored on main board!! (will be in the future)
+		{
+			motorTorque_Nm = -motorTorque_Nm;
+		}
+		float const lineTension = 1000.0 * (motorTorque_Nm * (spoolGearTeeth_[boardIndex]/motorGearTeeth_[boardIndex])) / spoolRadii_[boardIndex];
+		float const force = lineTension * mechanicalAdvantage_[boardIndex];
+		reply.catf("%.2f, ", (double)(force));
+		return GCodeResult::ok;
+	}
+	return GCodeResult::error;
+}
+#endif // DUAL_CAN
+
+#if DUAL_CAN
 GCodeResult HangprinterKinematics::ReadODrive3Encoder(DriverId const driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	HangprinterKinematics::ODriveAnswer const estimate = GetODrive3EncoderEstimate(driver, gb.Seen('S'), reply, true);
@@ -694,7 +891,7 @@ GCodeResult HangprinterKinematics::ReadODrive3Encoder(DriverId const driver, GCo
 #endif // DUAL_CAN
 
 #if DUAL_CAN
-GCodeResult HangprinterKinematics::SetODrive3TorqueModeInner(DriverId const driver, float const torque, const StringRef& reply) noexcept
+GCodeResult HangprinterKinematics::SetODrive3TorqueModeInner(DriverId const driver, float const torque_Nm, const StringRef& reply) noexcept
 {
 	// Get a buffer
 	CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
@@ -707,7 +904,7 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueModeInner(DriverId const driv
 	buf->id = CanInterface::ODrive::ArbitrationId(driver, CANSimple::MSG_SET_INPUT_TORQUE);
 	buf->dataLength = 4;
 	buf->remote = false;
-	memcpy(buf->msg.raw, &torque, sizeof(torque));
+	memcpy(buf->msg.raw, &torque_Nm, sizeof(torque_Nm));
 	CanInterface::SendPlainMessageNoFree(buf);
 
 	// Enable Torque Control Mode
@@ -730,7 +927,7 @@ GCodeResult HangprinterKinematics::SetODrive3PosMode(DriverId const driver, cons
 	if (estimate.valid)
 	{
 		float const desiredPos = estimate.value;
-		CanMessageBuffer * buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
+		CanMessageBuffer* buf = CanInterface::ODrive::PrepareSimpleMessage(driver, reply);
 		if (buf == nullptr)
 		{
 			return GCodeResult::error;
@@ -758,11 +955,28 @@ GCodeResult HangprinterKinematics::SetODrive3PosMode(DriverId const driver, cons
 #endif // DUAL_CAN
 
 #if DUAL_CAN
-GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, float torque, const StringRef& reply) noexcept
+GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, float force_Newton, const StringRef& reply,
+																												uint32_t setMechanicalAdvantage[], uint32_t setSpoolGearTeeth[],
+																												uint32_t setMotorGearTeeth[], float setSpoolRadii[]) noexcept
 {
+	static uint32_t mechanicalAdvantage_[HANGPRINTER_AXES] = { 0 };
+	static uint32_t spoolGearTeeth_[HANGPRINTER_AXES] = { 0 };
+	static uint32_t motorGearTeeth_[HANGPRINTER_AXES] = { 0 };
+	static float spoolRadii_[HANGPRINTER_AXES] = { 0.0 };
+	if (setMechanicalAdvantage != nullptr && setSpoolGearTeeth != nullptr &&
+			setMotorGearTeeth != nullptr && setSpoolRadii != nullptr) {
+		for(size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+			mechanicalAdvantage_[i] = setMechanicalAdvantage[i];
+			spoolGearTeeth_[i] = setSpoolGearTeeth[i];
+			motorGearTeeth_[i] = setMotorGearTeeth[i];
+			spoolRadii_[i] = setSpoolRadii[i];
+		}
+		return GCodeResult::ok;
+	}
+
 	GCodeResult res = GCodeResult::ok;
-	constexpr double MIN_TORQUE_NM = 0.0001;
-	if (fabs(torque) < MIN_TORQUE_NM)
+	constexpr double MIN_TORQUE_N = 0.001;
+	if (fabs(force_Newton) < MIN_TORQUE_N)
 	{
 		res = SetODrive3PosMode(driver, reply);
 		if (res == GCodeResult::ok)
@@ -772,21 +986,216 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, f
 	}
 	else
 	{
+		size_t const boardIndex = driver.boardAddress - 40;
+		if (boardIndex < 0 or boardIndex > 3) {
+			reply.catf("Board address not between 40 and 43: %d", driver.boardAddress);
+			return GCodeResult::error;
+		}
+
+		float const lineTension_N = force_Newton / mechanicalAdvantage_[boardIndex];
+		float const spoolTorque_Nm = lineTension_N * spoolRadii_[boardIndex] * 0.001;
+		float motorTorque_Nm = spoolTorque_Nm * motorGearTeeth_[boardIndex] / spoolGearTeeth_[boardIndex];
 		// Set the right sign
-		torque = std::abs(torque);
+		motorTorque_Nm = std::abs(motorTorque_Nm);
 		if (driver.boardAddress == 40 || driver.boardAddress == 41) // Driver direction is not stored on main board!! (will be in the future)
 		{
-			torque = -torque;
+			motorTorque_Nm = -motorTorque_Nm;
 		}
-		res = SetODrive3TorqueModeInner(driver, torque, reply);
+		res = SetODrive3TorqueModeInner(driver, motorTorque_Nm, reply);
 		if (res == GCodeResult::ok)
 		{
-			reply.catf("%.6f Nm, ", (double)torque);
+			reply.catf("%.6f Nm, ", (double)motorTorque_Nm);
 		}
 	}
 	return res;
 }
 #endif // DUAL_CAN
+
+
+float HangprinterKinematics::SpringK(float const springLength) const noexcept {
+	return springKPerUnitLength / springLength;
+}
+
+void HangprinterKinematics::StaticForces(float const machinePos[3], float F[4]) const noexcept {
+	if (moverWeight_kg > 0.0001) { // mover weight more than one gram
+		// Size of D-force in Newtons
+		float const mg = moverWeight_kg * 9.81;
+		// Unit vector directions toward each anchor from mover
+		float const normA = hyp3(anchors[A_AXIS], machinePos);
+		float const normB = hyp3(anchors[B_AXIS], machinePos);
+		float const normC = hyp3(anchors[C_AXIS], machinePos);
+		float const normD = hyp3(anchors[D_AXIS], machinePos);
+		float ax = (anchors[A_AXIS][0] - machinePos[0])/normA;
+		float ay = (anchors[A_AXIS][1] - machinePos[1])/normA;
+		float az = (anchors[A_AXIS][2] - machinePos[2])/normA;
+		float bx = (anchors[B_AXIS][0] - machinePos[0])/normB;
+		float by = (anchors[B_AXIS][1] - machinePos[1])/normB;
+		float bz = (anchors[B_AXIS][2] - machinePos[2])/normB;
+		float cx = (anchors[C_AXIS][0] - machinePos[0])/normC;
+		float cy = (anchors[C_AXIS][1] - machinePos[1])/normC;
+		float cz = (anchors[C_AXIS][2] - machinePos[2])/normC;
+		float dx = (anchors[D_AXIS][0] - machinePos[0])/normD;
+		float dy = (anchors[D_AXIS][1] - machinePos[1])/normD;
+		float dz = (anchors[D_AXIS][2] - machinePos[2])/normD;
+
+		float D_mg = 0.0F;
+		float D_pre = 0.0F;
+		if (dz > 0.0001) {
+			D_mg = mg / dz;
+			D_pre = targetForce_Newton;
+		}
+		// The D-forces' z-component is always equal to mg + targetForce_Newton.
+		// This means ABC-motors combined pull downwards targetForce_Newton N.
+		// I don't know if that's always solvable.
+		// Still, my tests show that we get very reasonable flex compensation...
+
+		// Right hand side of the equation
+		// A + B + C + D + (0,0,-mg)' = 0
+		// <=> A + B + C = -D + (0,0,mg)'
+		//
+		// Mx = y,
+		//
+		// Where M is the matrix
+		//
+		//     ax bx cx
+		// M = ay by cy,
+		//     az bz cz
+		//
+		// and x is the sizes of the forces:
+		//
+		//     A
+		// x = B,
+		//     C
+		//
+		// anc y is
+		//
+		//     -D*dx
+		// y = -D*dy     .
+		//     -D*dz + mg
+		//
+		float const yx_mg = -D_mg*dx;
+		float const yy_mg = -D_mg*dy;
+		float const yz_mg = -D_mg*dz + mg;
+		float const yx_pre = -D_pre*dx;
+		float const yy_pre = -D_pre*dy;
+		float const yz_pre = -D_pre*dz;
+
+		// Start with saving us from dividing by zero during Gaussian substitution
+		float constexpr eps = 0.00001;
+		bool const divZero0 = std::abs(ax) < eps;
+		if (divZero0) {
+			float const tmpx = bx;
+			float const tmpy = by;
+			float const tmpz = bz;
+			bx = ax;
+			by = ay;
+			bz = az;
+			ax = tmpx;
+			ay = tmpy;
+			az = tmpz;
+		}
+		bool const divZero1 = (std::abs(by - (bx / ax) * ay) < eps);
+		if (divZero1) {
+			float const tmpx = cx;
+			float const tmpy = cy;
+			float const tmpz = cz;
+			cx = bx;
+			cy = by;
+			cz = bz;
+			bx = tmpx;
+			by = tmpy;
+			bz = tmpz;
+		}
+		bool const divZero2 = std::abs((cz - (cx / ax) * az) - ((cy - (cx / ax) * ay) / (by - (bx / ax) * ay)) * (bz - (bx / ax) * az)) < eps;
+		if (divZero2) {
+			float const tmpx = ax;
+			float const tmpy = ay;
+			float const tmpz = az;
+			ax = cx;
+			ay = cy;
+			az = cz;
+			cx = tmpx;
+			cy = tmpy;
+			cz = tmpz;
+		}
+
+		// Solving the two systems by Gaussian substitution
+		float const q0 = bx / ax;
+		float const q1 = cx / ax;
+		float const q2_mg = yx_mg / ax;
+		float const q2_pre = yx_pre / ax;
+		float const q3 = by - q0 * ay;
+		float const q4 = cy - q1 * ay;
+		float const q5_mg = yy_mg - q2_mg * ay;
+		float const q5_pre = yy_pre - q2_pre * ay;
+		float const q6 = bz - q0 * az;
+		float const q7 = cz - q1 * az;
+		float const q8_mg = yz_mg - q2_mg * az;
+		float const q8_pre = yz_pre - q2_pre * az;
+		float const q9 = q4 / q3;
+		float const q10_mg = q5_mg / q3;
+		float const q10_pre = q5_pre / q3;
+		float const q11 = q7 - q9 * q6;
+		float const q12_mg = q8_mg - q10_mg * q6;
+		float const q12_pre = q8_pre - q10_pre * q6;
+		float const q13_mg = q12_mg / q11;
+		float const q13_pre = q12_pre / q11;
+		float const q14_mg = q10_mg - q13_mg * q9;
+		float const q14_pre = q10_pre - q13_pre * q9;
+		float const q15_mg = q2_mg - q13_mg * q1;
+		float const q15_pre = q2_pre - q13_pre * q1;
+
+		// Size of the undetermined forces
+		float A_mg = q15_mg - q14_mg * q0;
+		float A_pre = q15_pre - q14_pre * q0;
+		float B_mg = q14_mg;
+		float B_pre = q14_pre;
+		float C_mg = q13_mg;
+		float C_pre = q13_pre;
+
+		if (divZero2) {
+			float const tmp_mg = A_mg;
+			A_mg = C_mg;
+			C_mg = tmp_mg;
+			float const tmp_pre = A_pre;
+			A_pre = C_pre;
+			C_pre = tmp_pre;
+		}
+		if (divZero1) {
+			float const tmp_mg = C_mg;
+			C_mg = B_mg;
+			B_mg = tmp_mg;
+			float const tmp_pre = C_pre;
+			C_pre = B_pre;
+			B_pre = tmp_pre;
+		}
+		if (divZero0) {
+			float const tmp_mg = B_mg;
+			B_mg = A_mg;
+			A_mg = tmp_mg;
+			float const tmp_pre = B_pre;
+			B_pre = A_pre;
+			A_pre = tmp_pre;
+		}
+
+		// Assure at least targetForce in the ABC lines (first argument to outer min()),
+		// and that no line get more than max planned force (second argument to outer min()).
+		float const preFac = min(max(std::abs((targetForce_Newton - C_mg) / C_pre),
+		                             max(std::abs((targetForce_Newton - B_mg) / B_pre), std::abs((targetForce_Newton - A_mg) / A_pre))),
+		                         min(min(std::abs((maxPlannedForce_Newton[A_AXIS] - A_mg) / A_pre), std::abs((maxPlannedForce_Newton[B_AXIS] - B_mg) / B_pre)),
+		                             min(std::abs((maxPlannedForce_Newton[C_AXIS] - C_mg) / C_pre), std::abs((maxPlannedForce_Newton[D_AXIS] - D_mg) / D_pre))));
+
+		float const A_tot = A_mg + preFac * A_pre;
+		float const B_tot = B_mg + preFac * B_pre;
+		float const C_tot = C_mg + preFac * C_pre;
+		float const D_tot = D_mg + preFac * D_pre;
+
+		F[0] = max(A_tot, minPlannedForce_Newton[A_AXIS]);
+		F[1] = max(B_tot, minPlannedForce_Newton[B_AXIS]);
+		F[2] = max(C_tot, minPlannedForce_Newton[C_AXIS]);
+		F[3] = max(D_tot, minPlannedForce_Newton[D_AXIS]);
+	}
+}
 
 #endif // SUPPORT_HANGPRINTER
 

@@ -174,7 +174,7 @@ public:
 	private:
 		FilePosition fpos;											// the file offset at which the current block started
 		uint32_t lineNumber;										// the line number at which the current block started
-		uint32_t iterationsDone;
+		uint32_t iterationsDone;									// the number of iterations completed of the innermost while-loop
 		uint16_t indentLevel;										// the indentation of this block
 		BlockType blockType;										// the type of this block
 	};
@@ -238,8 +238,17 @@ public:
 #endif
 		;
 
-	Compatibility compatibility;
 	uint16_t stateParameter;					// a parameter, the meaning of which depends on what state we are in
+	Compatibility compatibility;				// which firmware we are emulating
+#if SUPPORT_ASYNC_MOVES
+	void SetCommandedQueue(size_t qn) noexcept { commandedQueueNumber = qn; }
+	size_t GetCommandedQueue() const noexcept { return commandedQueueNumber; }
+	bool Executing() const noexcept { return executeAllCommands || commandedQueueNumber == ownQueueNumber; }
+	void ExecuteAll() noexcept { executeAllCommands = true; }
+	void ExecuteOnly(size_t qn) noexcept { ownQueueNumber = qn; executeAllCommands = false; }
+	bool ExecutingAll() const noexcept { return executeAllCommands; }
+	size_t GetQueueNumberToLock() const noexcept { return (executeAllCommands) ? commandedQueueNumber : ownQueueNumber; }
+#endif
 
 	bool DoingFile() const noexcept;
 	void CloseFile() noexcept;
@@ -274,6 +283,13 @@ private:
 	uint8_t blockNesting;
 	GCodeState state;
 	GCodeResult stateMachineResult;				// the worst status (ok, warning or error) that we encountered while running the state machine
+
+#if SUPPORT_ASYNC_MOVES
+	uint8_t commandedQueueNumber	: 3,		// the queue number that was most recently commanded on this channel
+			ownQueueNumber 			: 3,		// the fixed queue number that we use, if executeAllCommands is clear
+			spare					: 1,
+			executeAllCommands		: 1;		// whether to only execute all commands, or only when commandedQueueNumber == fixedQueueNumber
+#endif
 };
 
 #endif /* SRC_GCODES_GCODEMACHINESTATE_H_ */

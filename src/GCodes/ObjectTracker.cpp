@@ -10,8 +10,6 @@
 #include <Platform/RepRap.h>
 #include "GCodes.h"
 
-#if TRACK_OBJECT_NAMES
-
 // Object model tables and functions for class ObjectTracker
 
 // Macro to build a standard lambda function that includes the necessary type conversions
@@ -43,225 +41,128 @@ constexpr ObjectModelTableEntry ObjectTracker::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. BuildObjects root
-	{ "currentObject",	OBJECT_MODEL_FUNC((int32_t)self->currentObjectNumber),				ObjectModelEntryFlags::live },
+	{ "currentObject",	OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryMovementState().currentObjectNumber), ObjectModelEntryFlags::live },
 	{ "m486Names",		OBJECT_MODEL_FUNC(self->usingM486Naming),							ObjectModelEntryFlags::none },
 	{ "m486Numbers",	OBJECT_MODEL_FUNC(self->usingM486Labelling),						ObjectModelEntryFlags::none },
 	{ "objects",		OBJECT_MODEL_FUNC_NOSELF(&objectsArrayDescriptor),					ObjectModelEntryFlags::none },
 
-#if TRACK_OBJECT_NAMES
 	// 1. ObjectDirectoryEntry root
 	{ "cancelled",	OBJECT_MODEL_FUNC(self->IsCancelled(context.GetLastIndex())),			ObjectModelEntryFlags::none },
 	{ "name",		OBJECT_MODEL_FUNC(self->objectDirectory[context.GetLastIndex()].name.IncreaseRefCount()),	ObjectModelEntryFlags::none },
 	{ "x",			OBJECT_MODEL_FUNC_NOSELF(&xArrayDescriptor),							ObjectModelEntryFlags::none },
 	{ "y",			OBJECT_MODEL_FUNC_NOSELF(&yArrayDescriptor),							ObjectModelEntryFlags::none },
-#endif
 };
 
 constexpr uint8_t ObjectTracker::objectModelTableDescriptor[] =
 {
-	1 + TRACK_OBJECT_NAMES,		// number of sub-tables
+	2,		// number of sub-tables
 	4,
-#if TRACK_OBJECT_NAMES
 	4
-#endif
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ObjectTracker)
 
-#endif
-
 void ObjectTracker::Init() noexcept
 {
 	objectsCancelled.Clear();
-	currentObjectNumber = -1;
 	numObjects = 0;
-	currentObjectCancelled = printingJustResumed = usingM486Labelling = false;
-#if TRACK_OBJECT_NAMES
+	usingM486Labelling = false;
 	// Clear out all object names in case of late object model requests
 	for (ObjectDirectoryEntry& ode : objectDirectory)
 	{
 		ode.Init("");
 	}
 	usingM486Naming = false;
-#endif
 }
 
-void ObjectTracker::ChangeToObject(GCodeBuffer& gb, int i) noexcept
+void ObjectTracker::HandleM486T(unsigned int p_numObjects) noexcept
 {
-	currentObjectNumber = i;
-	if (currentObjectNumber >= (int)numObjects)
-	{
-		numObjects = currentObjectNumber + 1;
-	}
-	const bool cancelCurrentObject = currentObjectNumber >= 0 && currentObjectNumber < (int)objectsCancelled.MaxBits() && objectsCancelled.IsBitSet(currentObjectNumber);
-	if (cancelCurrentObject && !currentObjectCancelled)
-	{
-		StopPrinting(gb);
-	}
-	else if (!cancelCurrentObject && currentObjectCancelled)
-	{
-		ResumePrinting(gb);
-	}
+	numObjects = p_numObjects;
+	objectsCancelled.Clear();							// assume this command is only used at the start of a print
+	reprap.JobUpdated();
 }
 
-GCodeResult ObjectTracker::HandleM486(GCodeBuffer &gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException)
+void ObjectTracker::UseM486Labelling() noexcept
 {
-	bool seen = false;
-	if (gb.Seen('T'))
+	if (!usingM486Labelling)
 	{
-		// Specify how many objects. May be useful for a user interface.
-		seen = true;
-		numObjects = gb.GetUIValue();
-		objectsCancelled.Clear();						// assume this command is only used at the start of a print
+		usingM486Labelling = true;
 		reprap.JobUpdated();
 	}
-
-	if (gb.Seen('S'))
-	{
-		// Specify which object we are about to print
-		seen = true;
-		if (!usingM486Labelling)
-		{
-			usingM486Labelling = true;
-			reprap.JobUpdated();
-		}
-		const int num = gb.GetIValue();
-#if TRACK_OBJECT_NAMES
-		if (num >= 0 && num < (int)MaxTrackedObjects && gb.Seen('A'))
-		{
-			String<StringLength50> objectName;
-			gb.GetQuotedString(objectName.GetRef());
-			usingM486Naming = true;
-
-			if (num >= (int)numObjects)					// if this is a new object
-			{
-				CreateObject(num, objectName.c_str());
-			}
-			else if (num < (int)MaxTrackedObjects && strcmp(objectName.c_str(), objectDirectory[num].name.Get().Ptr()) != 0)
-			{
-				objectDirectory[num].SetName(objectName.c_str());
-				reprap.JobUpdated();
-			}
-		}
-#endif
-		ChangeToObject(gb, num);
-	}
-
-	const bool seenC = gb.Seen('C');
-	if (seenC || gb.Seen('P'))
-	{
-		// Cancel an object
-		seen = true;
-		const int objectToCancel = (seenC) ? currentObjectNumber : (int)gb.GetUIValue();
-		if (objectToCancel < 0)
-		{
-			reply.copy("No current object");
-			return GCodeResult::error;
-		}
-		if (objectToCancel >= (int)objectsCancelled.MaxBits())
-		{
-			reply.copy("Object number out of range");
-			return GCodeResult::error;
-		}
-
-		// We don't flag an error if you try to cancel the same object twice
-		if (!objectsCancelled.IsBitSet(objectToCancel))
-		{
-			objectsCancelled.SetBit(objectToCancel);
-			if (objectToCancel == currentObjectNumber)
-			{
-				StopPrinting(gb);
-			}
-			reprap.JobUpdated();
-			reply.printf("Object %d cancelled", objectToCancel);
-		}
-	}
-
-	if (gb.Seen('U'))
-	{
-		// Resume an object
-		seen = true;
-		const int objectToResume = gb.GetUIValue();
-		if (objectToResume >= (int)objectsCancelled.MaxBits())
-		{
-			reply.copy("Object number out of range");
-			return GCodeResult::error;
-		}
-
-		// We don't flag an error if you try to resume an object that is not cancelled
-		if (objectsCancelled.IsBitSet(objectToResume))
-		{
-			objectsCancelled.ClearBit(objectToResume);
-			if (objectToResume == currentObjectNumber)
-			{
-				ResumePrinting(gb);
-			}
-			reprap.JobUpdated();
-			reply.printf("Object %d resumed", objectToResume);
-		}
-	}
-
-	if (!seen)
-	{
-#if TRACK_OBJECT_NAMES
-		// List objects on build plate
-		if (!OutputBuffer::Allocate(buf))
-		{
-			return GCodeResult::notFinished;
-		}
-
-		if (numObjects == 0)
-		{
-			buf->copy("No known objects on build plate");
-		}
-		else
-		{
-			for (size_t i = 0; i < min<unsigned int>(numObjects, MaxTrackedObjects); ++i)
-			{
-				const ObjectDirectoryEntry& obj = objectDirectory[i];
-				buf->lcatf("%2u%s: X %d to %dmm, Y %d to %dmm, %s",
-							i,
-							(objectsCancelled.IsBitSet(i) ? " (cancelled)" : ""),
-							(int)obj.x[0], (int)obj.x[1],
-							(int)obj.y[0], (int)obj.y[1],
-							obj.name.Get().Ptr());
-			}
-			if (numObjects > MaxTrackedObjects)
-			{
-				buf->lcatf("%u more objects", numObjects - MaxTrackedObjects);
-			}
-		}
-#else
-		if (numObjects == 0)
-		{
-			reply.copy("No known objects on build plate");
-		}
-		else
-		{
-			reply.printf("%u objects on build plate", numObjects);
-		}
-#endif
-	}
-
-	return GCodeResult::ok;
 }
 
-// We are currently printing, but we must now stop because the current object is cancelled
-void ObjectTracker::StopPrinting(GCodeBuffer& gb) noexcept
+void ObjectTracker::SetM486Label(unsigned int objectNumber, const char *_ecv_array objectName) noexcept
 {
-	currentObjectCancelled = true;
-	virtualToolNumber = reprap.GetCurrentToolNumber();
+	usingM486Naming = true;
+
+	if (objectNumber >= numObjects)						// if this is a new object
+	{
+		CreateObject(objectNumber, objectName);
+	}
+	else if (objectNumber < MaxTrackedObjects && objectName[0] != 0 && strcmp(objectName, objectDirectory[objectNumber].name.Get().Ptr()) != 0)
+	{
+		objectDirectory[objectNumber].SetName(objectName);
+		reprap.JobUpdated();
+	}
 }
 
-// We are currently not printing because the current object was cancelled, but now we need to print again
-void ObjectTracker::ResumePrinting(GCodeBuffer& gb) noexcept
+// Cancel an object, returning true if it was not already cancelled
+bool ObjectTracker::CancelObject(unsigned int objectNumber) noexcept
 {
-	currentObjectCancelled = false;
-	printingJustResumed = true;
-	reprap.GetGCodes().SavePosition(rp, gb);					// save the position we should be at for the start of the next move
-	if (reprap.GetCurrentToolNumber() != virtualToolNumber)		// if the wrong tool is loaded
+	if (objectNumber < objectsCancelled.MaxBits() && !objectsCancelled.IsBitSet(objectNumber))
 	{
-		reprap.GetGCodes().StartToolChange(gb, virtualToolNumber, DefaultToolChangeParam);
+		objectsCancelled.SetBit(objectNumber);
+		reprap.JobUpdated();
+		return true;
+	}
+	return false;
+}
+
+// Resume an object, returning true if it was not already enabled
+bool ObjectTracker::ResumeObject(unsigned int objectNumber) noexcept
+{
+	if (objectNumber < objectsCancelled.MaxBits() && objectsCancelled.IsBitSet(objectNumber))
+	{
+		objectsCancelled.ClearBit(objectNumber);
+		reprap.JobUpdated();
+		return true;
+	}
+	return false;
+}
+
+// Add the object number if it isn't already known, return true if it has been cancelled
+bool ObjectTracker::CheckObject(int objectNumber) noexcept
+{
+	if (objectNumber >= (int)numObjects)
+	{
+		numObjects = objectNumber + 1;
+	}
+	return objectNumber >= 0 && objectNumber < (int)objectsCancelled.MaxBits() && objectsCancelled.IsBitSet(objectNumber);
+}
+
+// List the objects on the build plate
+void ObjectTracker::ListObjects(OutputBuffer *buf) noexcept
+{
+	if (numObjects == 0)
+	{
+		buf->copy("No known objects on build plate");
+	}
+	else
+	{
+		for (size_t i = 0; i < min<unsigned int>(numObjects, MaxTrackedObjects); ++i)
+		{
+			const ObjectDirectoryEntry& obj = objectDirectory[i];
+			buf->lcatf("%2u%s: X %d to %dmm, Y %d to %dmm, %s",
+						i,
+						(objectsCancelled.IsBitSet(i) ? " (cancelled)" : ""),
+						(int)obj.x[0], (int)obj.x[1],
+						(int)obj.y[0], (int)obj.y[1],
+						obj.name.Get().Ptr());
+		}
+		if (numObjects > MaxTrackedObjects)
+		{
+			buf->lcatf("%u more objects", numObjects - MaxTrackedObjects);
+		}
 	}
 }
 
@@ -273,20 +174,12 @@ bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
 	bool ok = true;
 
 	// Write the object list
-#if TRACK_OBJECT_NAMES
 	for (size_t i = 0; ok && i < min<unsigned int>(numObjects, MaxTrackedObjects); ++i)
 	{
 		String<StringLength100> buf;
 		buf.printf("M486 S%u A\"%s\"\n", i, objectDirectory[i].name.Get().Ptr());
 		ok = f->Write(buf.c_str());
 	}
-#else
-	{
-		String<StringLength20> buf;
-		buf.printf("M486 T%u", numObjects);
-		ok = f->Write(buf.c_str());
-	}
-#endif
 
 	if (ok)
 	{
@@ -303,7 +196,7 @@ bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
 	if (ok)
 	{
 		String<StringLength20> buf;
-		buf.printf("M486 S%d\n", currentObjectNumber);
+		buf.printf("M486 S%d\n", reprap.GetGCodes().GetPrimaryMovementState().currentObjectNumber);
 		ok = f->Write(buf.c_str());
 	}
 
@@ -311,8 +204,6 @@ bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
 }
 
 #endif
-
-#if TRACK_OBJECT_NAMES
 
 // Create a new entry in the object directory
 void ObjectDirectoryEntry::Init(const char *label) noexcept
@@ -376,11 +267,11 @@ void ObjectDirectoryEntry::SetName(const char *label) noexcept
 // Update the min and max object coordinates to include the coordinates passed
 // We could pass both the start and end coordinates of the printing move, however it is simpler just to pass the end coordinates.
 // This is OK because it is very unlikely that there won't be a subsequent extruding move that ends close to the original one.
-void ObjectTracker::UpdateObjectCoordinates(const float coords[], AxesBitmap axes) noexcept
+void ObjectTracker::UpdateObjectCoordinates(int objectNumber, const float coords[], AxesBitmap axes) noexcept
 {
-	if (currentObjectNumber >= 0 && currentObjectNumber < (int)MaxTrackedObjects)
+	if (objectNumber >= 0 && objectNumber < (int)MaxTrackedObjects)
 	{
-		if (objectDirectory[currentObjectNumber].UpdateObjectCoordinates(coords, axes))
+		if (objectDirectory[objectNumber].UpdateObjectCoordinates(coords, axes))
 		{
 			reprap.JobUpdated();
 		}
@@ -403,40 +294,27 @@ void ObjectTracker::CreateObject(unsigned int number, const char *label) noexcep
 }
 
 // This is called when we have found an object label in a comment
-void ObjectTracker::StartObject(GCodeBuffer& gb, const char *label) noexcept
+size_t ObjectTracker::GetObjectNumber(const char *_ecv_array label) noexcept
 {
-	if (!usingM486Naming)
+	for (size_t i = 0; i < min<size_t>(numObjects, MaxTrackedObjects); ++i)
 	{
-		for (size_t i = 0; i < min<size_t>(numObjects, MaxTrackedObjects); ++i)
+		if (strcmp(objectDirectory[i].name.Get().Ptr(), label) == 0)
 		{
-			if (strcmp(objectDirectory[i].name.Get().Ptr(), label) == 0)
-			{
-				ChangeToObject(gb, i);
-				return;
-			}
-		}
-
-		// The object was not found, so add it
-		if (numObjects < MaxTrackedObjects)
-		{
-			const int newObjectNumber = numObjects;
-			CreateObject(newObjectNumber, label);
-			ChangeToObject(gb, newObjectNumber);
-		}
-		else
-		{
-			// Here if the new object won't fit in the directory
-			ChangeToObject(gb, MaxTrackedObjects);
+			return i;
 		}
 	}
-}
 
-// This is called when we have found a "stop printing object" comment
-void ObjectTracker::StopObject(GCodeBuffer& gb) noexcept
-{
-	if (!usingM486Naming)
+	// The object was not found, so add it
+	if (numObjects < MaxTrackedObjects)
 	{
-		ChangeToObject(gb, -1);
+		const int newObjectNumber = numObjects;
+		CreateObject(newObjectNumber, label);
+		return newObjectNumber;
+	}
+	else
+	{
+		// Here if the new object won't fit in the directory
+		return MaxTrackedObjects;
 	}
 }
 
@@ -451,7 +329,5 @@ ExpressionValue ObjectTracker::GetYCoordinate(const ObjectExplorationContext& co
 	const int16_t val = objectDirectory[context.GetIndex(1)].y[context.GetIndex(0)];
 	return (val == std::numeric_limits<int16_t>::min()) ? ExpressionValue(nullptr) : ExpressionValue((int32_t)val);
 }
-
-#endif
 
 // End

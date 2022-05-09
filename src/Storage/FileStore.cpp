@@ -734,6 +734,24 @@ uint32_t FileStore::ClusterSize() const noexcept
 	return (usageMode == FileUseMode::readOnly || usageMode == FileUseMode::readWrite) ? file.obj.fs->csize * 512u : 1;	// we divide by the cluster size so return 1 not 0 if there is an error
 }
 
+# if SUPPORT_ASYNC_MOVES
+
+// Copy an open file handle to make a duplicate with its own position. Intended for use on files opened in read-only mode.
+// We assume that FatFs doesn't keep a count of open files, so it's OK for us to just make a copy of the FIL structure.
+void FileStore::CopyFrom(const FileStore *f) noexcept
+{
+	usageMode = FileUseMode::readOnly;
+	writeBuffer = nullptr;
+	crc.Reset();
+	calcCrc = false;
+	closeRequested = false;
+	file = f->file;
+	openCount = 1;
+	reprap.VolumesUpdated();
+}
+
+# endif
+
 #endif	// HAS_MASS_STORAGE
 
 #if 0	// these are not currently used

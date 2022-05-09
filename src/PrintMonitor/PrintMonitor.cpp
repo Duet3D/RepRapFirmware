@@ -66,12 +66,10 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Job members
-#if TRACK_OBJECT_NAMES
 	{ "build",				OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->gCodes.GetBuildObjects(), 0), 										ObjectModelEntryFlags::live },
-#endif
 	{ "duration",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetPrintOrSimulatedDuration()), 										ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self, 1),							 																ObjectModelEntryFlags::none },
-	{ "filePosition",		OBJECT_MODEL_FUNC(self->gCodes.GetFilePosition()),																	ObjectModelEntryFlags::live },
+	{ "filePosition",		OBJECT_MODEL_FUNC(self->gCodes.GetPrintingFilePosition()),															ObjectModelEntryFlags::live },
 	{ "firstLayerDuration", OBJECT_MODEL_FUNC_NOSELF(nullptr), 																					ObjectModelEntryFlags::obsolete },
 	{ "lastDuration",		OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), (int32_t)self->gCodes.GetLastDuration()), 								ObjectModelEntryFlags::none },
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty() && !self->IsPrinting(), self->filenameBeingPrinted.c_str()), ObjectModelEntryFlags::none },
@@ -110,7 +108,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "slicer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(slicerBased)),													ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 12 + TRACK_OBJECT_NAMES, 11, 5, 4 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 13, 11, 5, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 
@@ -384,7 +382,7 @@ float PrintMonitor::FractionOfFilePrinted() const noexcept
 	{
 		return -1.0;
 	}
-	return (float)gCodes.GetFilePosition() / (float)printingFileInfo.fileSize;
+	return (float)gCodes.GetPrintingFilePosition() / (float)printingFileInfo.fileSize;
 }
 
 // Estimate the print time left in seconds on a preset estimation method

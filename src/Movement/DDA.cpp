@@ -353,7 +353,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 					{
 						linearAxesMoving = true;
 					}
-					if (Tool::GetXAxes(nextMove.tool).IsBitSet(drive) || Tool::GetYAxes(nextMove.tool).IsBitSet(drive))
+					if (Tool::GetXAxes(nextMove.currentTool).IsBitSet(drive) || Tool::GetYAxes(nextMove.currentTool).IsBitSet(drive))
 					{
 						flags.xyMoving = true;				// this move has XY movement in user space, before axis were mapped
 					}
@@ -430,10 +430,10 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	}
 
 	// 3. Store some values
-	tool = nextMove.tool;
+	tool = nextMove.currentTool;
 	flags.checkEndstops = nextMove.checkEndstops;
 	filePos = nextMove.filePos;
-	virtualExtruderPosition = nextMove.virtualExtruderPosition;
+	virtualExtruderPosition = nextMove.moveStartVirtualExtruderPosition;
 	proportionDone = nextMove.proportionDone;
 	initialUserC0 = nextMove.initialUserC0;
 	initialUserC1 = nextMove.initialUserC1;
@@ -498,7 +498,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	acceleration = beforePrepare.maxAcceleration = VectorBoxIntersection(normalisedDirectionVector, accelerations);
 	if (flags.xyMoving)											// apply M204 acceleration limits to XY moves
 	{
-		acceleration = min<float>(acceleration, (flags.isPrintingMove) ? move.GetMaxPrintingAcceleration() : move.GetMaxTravelAcceleration());
+		acceleration = min<float>(acceleration, (flags.isPrintingMove) ? nextMove.maxPrintingAcceleration : nextMove.maxTravelAcceleration);
 	}
 	deceleration = acceleration;
 
@@ -1920,7 +1920,7 @@ pre(state == frozen)
 		if ((extrusions | retractions) != 0)
 		{
 			// Check for trying to extrude or retract when the hot end temperature is too low
-			const unsigned int prohibitedMovements = reprap.GetProhibitedExtruderMovements(extrusions, retractions);
+			const unsigned int prohibitedMovements = Tool::GetProhibitedExtruderMovements(extrusions, retractions, tool);
 			for (DriveMovement **dmpp = &activeDMs; *dmpp != nullptr; )
 			{
 				DriveMovement* const dm = *dmpp;

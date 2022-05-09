@@ -63,8 +63,9 @@ public:
 	int32_t GetEndPoint(size_t drive) const noexcept;					 	// Get the current position of a motor
 	float LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept; // Gives the last point at the end of the last complete DDA
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
-	bool WaitingForAllMovesFinished() noexcept;								// Tell the lookahead ring we are waiting for it to empty and return true if it is
-	void DoLookAhead() noexcept SPEED_CRITICAL;			// Run the look-ahead procedure
+	bool WaitingForAllMovesFinished(size_t queueNumber) noexcept
+		pre(queueNumber < rings.upb);										// Tell the lookahead ring we are waiting for it to empty and return true if it is
+	void DoLookAhead() noexcept SPEED_CRITICAL;								// Run the look-ahead procedure
 	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation) noexcept; // Set the current position to be this
 	void ResetExtruderPositions() noexcept;									// Resets the extrusion amounts of the live coordinates
 	void SetXYBedProbePoint(size_t index, float x, float y) noexcept;		// Record the X and Y coordinates of a probe point
@@ -92,7 +93,6 @@ public:
 
 	float PushBabyStepping(size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 
-	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);		// process M204
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// process M595
 	GCodeResult ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M572
 
@@ -102,8 +102,6 @@ public:
 	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 #endif
 
-	float GetMaxPrintingAcceleration() const noexcept { return maxPrintingAcceleration; }
-	float GetMaxTravelAcceleration() const noexcept { return maxTravelAcceleration; }
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
 	ExtruderShaper& GetExtruderShaper(size_t extruder) noexcept { return extruderShapers[extruder]; }
 
@@ -134,9 +132,9 @@ public:
 	void Simulate(SimulationMode simMode) noexcept;											// Enter or leave simulation mode
 	float GetSimulationTime() const noexcept { return mainDDARing.GetSimulationTime(); }	// Get the accumulated simulation time
 
-	bool PausePrint(RestorePoint& rp) noexcept;												// Pause the print as soon as we can, returning true if we were able to
+	bool PausePrint(unsigned int queueNumber, RestorePoint& rp) noexcept;					// Pause the print as soon as we can, returning true if we were able to
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
-	bool LowPowerOrStallPause(RestorePoint& rp) noexcept;									// Pause the print immediately, returning true if we were able to
+	bool LowPowerOrStallPause(unsigned int queueNumber, RestorePoint& rp) noexcept;			// Pause the print immediately, returning true if we were able to
 #endif
 
 	bool NoLiveMovement() const noexcept { return mainDDARing.IsIdle(); }					// Is a move running, or are there any queued?
@@ -247,24 +245,19 @@ private:
 	static constexpr unsigned int MoveTaskStackWords = 450;
 	static Task<MoveTaskStackWords> moveTask;
 
+	DDARing rings[NumMovementSystems];
+	DDARing& mainDDARing = rings[0];					// The DDA ring used for regular moves
+
 #if SUPPORT_ASYNC_MOVES
-	DDARing rings[2];
 	DDARing& auxDDARing = rings[1];						// the DDA ring used for live babystepping, height following and other asynchronous moves
 	AsyncMove auxMove;
 	volatile bool auxMoveLocked;
 	volatile bool auxMoveAvailable;
 	HeightController *heightController;
-#else
-	DDARing rings[1];
 #endif
-
-	DDARing& mainDDARing = rings[0];					// The DDA ring used for regular moves
 
 	SimulationMode simulationMode;						// Are we simulating, or really printing?
 	MoveState moveState;								// whether the idle timer is active
-
-	float maxPrintingAcceleration;
-	float maxTravelAcceleration;
 
 	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
