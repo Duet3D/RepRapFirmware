@@ -31,9 +31,41 @@ const char *_ecv_array LcdILI9488::GetDisplayTypeName() const noexcept
 // Initialise the TFT screen
 void LcdILI9488::HardwareInit() noexcept
 {
+	const uint16_t Init1[] =	{ 0xE0, 0x100, 0x103, 0x109, 0x108, 0x116, 0x10A, 0x13F, 0x178, 0x14C, 0x109, 0x10A, 0x108, 0x116, 0x11A, 0x100 };
+	const uint16_t Init2[] =	{ 0XE1, 0x100, 0x116, 0x119, 0x103, 0x10F, 0x105, 0x132, 0x145, 0x146, 0x104, 0x10E, 0x10D, 0x135, 0x137, 0x10F };
+	const uint16_t Init3[] =	{ 0XC0, 0x117, 0x115 };				// Power Control 1, Vreg1out, Vreg2out
+	const uint16_t Init4[] =	{ 0xC1, 0x141 };      				// Power Control 2, VGH, VGL
+	const uint16_t Init5[] =	{ 0xC5, 0x100, 0x112, 0x180 };		// Power Control 3, Vcom
+	const uint16_t Init6[] =	{ 0x36, 0x48 };						// Memory Access
+	const uint16_t Init7[] =	{ 0x3A, 0x166 };      				// Interface Pixel Format 18 bit
+	const uint16_t Init8[] =	{ 0XB0, 0x180 };     				// Interface Mode Control SDO not used
+	const uint16_t Init9[] =	{ 0xB1, 0x1A0 };					// Frame rate 60Hz
+	const uint16_t Init10[] =	{ 0xB4, 0x102 };					// Display Inversion Control 2-dot
+	const uint16_t Init11[] =	{ 0XB6, 0x102, 0x102 };      		// Display Function Control RGB/MCU Interface Control, MCU, Source, Gate scan direction
+	const uint16_t Init12[] =	{ 0XE9, 0x100 };					// Set Image Function, Disable 24 bit data
+	const uint16_t Init13[] =	{ 0xF7, 0xA9, 0x51, 0x2C, 0x82 };	// Adjust Control, D7 stream, loose
+
 	SendCommand(CmdReset);
 	delay(ResetDelayMillis + 1);
-	currentRowColMode = 2;						// force row or column mode to be selected
+
+	SendBuffer(Init1, ARRAY_SIZE(Init1));
+	SendBuffer(Init2, ARRAY_SIZE(Init2));
+	SendBuffer(Init3, ARRAY_SIZE(Init3));
+	SendBuffer(Init4, ARRAY_SIZE(Init4));
+	SendBuffer(Init5, ARRAY_SIZE(Init5));
+	SendBuffer(Init6, ARRAY_SIZE(Init6));
+	SendBuffer(Init7, ARRAY_SIZE(Init7));
+	SendBuffer(Init8, ARRAY_SIZE(Init8));
+	SendBuffer(Init9, ARRAY_SIZE(Init9));
+	SendBuffer(Init10, ARRAY_SIZE(Init10));
+	SendBuffer(Init11, ARRAY_SIZE(Init11));
+	SendBuffer(Init12, ARRAY_SIZE(Init12));
+	SendBuffer(Init13, ARRAY_SIZE(Init13));
+
+	SendCommand(0x11);												// Sleep out
+	delay(120);
+
+	currentRowColMode = 2;											// force row or column mode to be selected
 	ClearBlock(0, 0, numRows, numCols, false);
 	SendCommand(CmdDisplayOn);
 	AnalogOut::Write(LcdBacklightPin, 1.0, BacklightPwmFrequency);
@@ -53,7 +85,7 @@ void LcdILI9488::ClearBlock(PixelNumber top, PixelNumber left, PixelNumber botto
 			p = SetGraphicsAddress(p, top, top + rowsToDo - 1, left, right - 1);
 			*p++ = CmdMemoryWrite;
 			p = SetPixelData(p, (foreground) ? fgColour : bgColour, rowsToDo * (right - left));
-			SendBuffer(p - spiBuffer);
+			SendBuffer(spiBuffer, p - spiBuffer);
 			top += rowsToDo;
 		}
 	}
@@ -69,7 +101,7 @@ void LcdILI9488::SetPixel(PixelNumber y, PixelNumber x, bool mode) noexcept
 	uint16_t *_ecv_array p = SetGraphicsAddress(spiBuffer, y, y, x, x);
 	*p++ = CmdMemoryWrite;
 	p = SetPixelData(p, (mode) ? fgColour : bgColour, 1);
-	SendBuffer(p - spiBuffer);
+	SendBuffer(spiBuffer, p - spiBuffer);
 }
 
 // Draw a bitmap
@@ -104,14 +136,14 @@ void LcdILI9488::WriteColumnData(uint16_t columnData, uint8_t ySize) noexcept
 		p = SetPixelData(p, (columnData & 1u) ? fgColour : bgColour, 1);
 		columnData >>= 1;
 	}
-	SendBuffer(p - spiBuffer);
+	SendBuffer(spiBuffer, p - spiBuffer);
 }
 
 // Send a parameterless command
 void LcdILI9488::SendCommand(uint8_t cmd) noexcept
 {
 	spiBuffer[0] = cmd;
-	SendBuffer(1);
+	SendBuffer(spiBuffer, 1);
 }
 
 uint16_t *_ecv_array LcdILI9488::SetGraphicsAddress(uint16_t *_ecv_array buffer, PixelNumber rBegin, PixelNumber rEnd, PixelNumber cBegin, PixelNumber cEnd) noexcept
@@ -157,11 +189,11 @@ uint16_t *_ecv_array LcdILI9488::SetPixelData(uint16_t *_ecv_array buffer, Colou
 	return buffer;
 }
 
-void LcdILI9488::SendBuffer(size_t numWords) const noexcept
+void LcdILI9488::SendBuffer(const uint16_t *_ecv_array buf, size_t numWords) const noexcept
 {
 	digitalWrite(csPin, csPol);
 	delayMicroseconds(1);						// ILI9488 needs >= 60ns from CS falling to rising edge of clock
-	spiDev.TransceivePacketNineBit(spiBuffer, nullptr, numWords);
+	spiDev.TransceivePacketNineBit(buf, nullptr, numWords);
 	delayMicroseconds(1);						// ILI9488 needs >= 15ns from last falling edge of clock to CS rising
 	digitalWrite(csPin, !csPol);
 }
