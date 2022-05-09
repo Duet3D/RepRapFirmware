@@ -160,12 +160,12 @@ size_t Lcd::writeNative(uint16_t ch) noexcept
 			}
 			if (numSpaces != 0 && column < rightMargin)
 			{
-				// Add a single space column after the character
+				// Add space columns after the character
 				if (ySize != 0)
 				{
-					ClearBlock(row, column, row + ySize, column + 1, textInverted);
+					ClearBlock(row, column, row + ySize, column + numSpaces, textInverted);
 				}
-				++column;
+				column += numSpaces;
 			}
 		}
 

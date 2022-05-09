@@ -33,8 +33,8 @@ const LcdFont * const fonts[] = { &font7x11, &font11x14 };
 
 #if SUPPORT_ILI9488_LCD
 extern const LcdFont font19x21;
-//extern const LcdFont font28x32;
-const LcdFont * const tftFonts[] = { &font19x21 /*, &font28x32 */ };
+extern const LcdFont font28x32;
+const LcdFont * const tftFonts[] = { /*&font19x21 ,*/ &font28x32 };
 #endif
 
 constexpr size_t SmallFontNumber = 0;
