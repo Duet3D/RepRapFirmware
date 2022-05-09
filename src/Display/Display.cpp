@@ -25,10 +25,18 @@
 
 constexpr int DefaultPulsesPerClick = -4;			// values that work with displays I have are 2 and -4
 
-extern const LcdFont font11x14;
+#if SUPPORT_12864_LCD
 extern const LcdFont font7x11;
-
+extern const LcdFont font11x14;
 const LcdFont * const fonts[] = { &font7x11, &font11x14 };
+#endif
+
+#if SUPPORT_ILI9488_LCD
+extern const LcdFont font19x21;
+//extern const LcdFont font28x32;
+const LcdFont * const tftFonts[] = { &font19x21 /*, &font28x32 */ };
+#endif
+
 constexpr size_t SmallFontNumber = 0;
 constexpr size_t LargeFontNumber = 1;
 
@@ -259,7 +267,7 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 			SetPinFunction(LcdSpiMosiPin, LcdSpiPinFunction);
 			SetPinFunction(LcdSpiMisoPin, LcdSpiPinFunction);
 			SetPinFunction(LcdSpiSclkPin, LcdSpiPinFunction);
-			InitDisplay(gb, new LcdILI9488(fonts, ARRAY_SIZE(fonts), LcdSercomNumber), LcdSpiCsPin, NoPin, false);
+			InitDisplay(gb, new LcdILI9488(tftFonts, ARRAY_SIZE(tftFonts), LcdSercomNumber), LcdSpiCsPin, NoPin, false);
 			break;
 #endif
 

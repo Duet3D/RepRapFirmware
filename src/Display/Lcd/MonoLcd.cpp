@@ -114,7 +114,7 @@ void MonoLcd::SetDirty(PixelNumber r, PixelNumber c) noexcept
 }
 
 // Write one column of character data at (row, column)
-void MonoLcd::WriteColumnData(uint16_t columnData, uint8_t ySize) noexcept
+void MonoLcd::WriteColumnData(uint32_t columnData, uint8_t ySize) noexcept
 {
 	const uint8_t mask1 = 0x80 >> (column & 7);
 	const uint8_t mask2 = ~mask1;

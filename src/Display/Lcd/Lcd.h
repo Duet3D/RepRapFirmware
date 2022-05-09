@@ -160,7 +160,7 @@ protected:
 	virtual void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, bool foreground) noexcept = 0;
 
 	// Write one column of character data at (row, column)
-	virtual void WriteColumnData(uint16_t columData, uint8_t ySize) noexcept = 0;
+	virtual void WriteColumnData(uint32_t columData, uint8_t ySize) noexcept = 0;
 
 	// Write a decoded character
 	size_t writeNative(uint16_t c) noexcept;

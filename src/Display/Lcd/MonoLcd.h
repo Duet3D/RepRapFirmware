@@ -58,7 +58,7 @@ protected:
 	virtual void HardwareInit() noexcept = 0;
 
 	// Write one column of character data at (row, column)
-	void WriteColumnData(uint16_t columnData, uint8_t ySize) noexcept override final;
+	void WriteColumnData(uint32_t columnData, uint8_t ySize) noexcept override final;
 
 	void SetDirty(PixelNumber r, PixelNumber c) noexcept;
 	void SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept;

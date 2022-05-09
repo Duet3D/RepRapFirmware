@@ -171,7 +171,7 @@ size_t Lcd::writeNative(uint16_t ch) noexcept
 
 		while (nCols != 0 && column < rightMargin)
 		{
-			uint16_t colData = *reinterpret_cast<const uint16_t*>(fontPtr);
+			uint32_t colData = *reinterpret_cast<const uint32_t*>(fontPtr);
 			fontPtr += bytesPerColumn;
 			if (colData != 0)
 			{

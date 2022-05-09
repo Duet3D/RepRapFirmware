@@ -126,7 +126,7 @@ void LcdILI9488::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width,
 }
 
 // Write one column of character data at (row, column)
-void LcdILI9488::WriteColumnData(uint16_t columnData, uint8_t ySize) noexcept
+void LcdILI9488::WriteColumnData(uint32_t columnData, uint8_t ySize) noexcept
 {
 	uint16_t *_ecv_array p = SetColumnMode(spiBuffer, true);
 	p = SetGraphicsAddress(p, row, row + ySize - 1, column, column);

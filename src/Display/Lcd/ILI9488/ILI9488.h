@@ -52,7 +52,7 @@ protected:
 	void HardwareInit() noexcept override;
 
 	// Write one column of character data at (row, column)
-	void WriteColumnData(uint16_t columnData, uint8_t ySize) noexcept override final;
+	void WriteColumnData(uint32_t columnData, uint8_t ySize) noexcept override final;
 
 private:
 	void SendCommand(uint8_t cmd) noexcept;
