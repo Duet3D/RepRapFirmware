@@ -60,7 +60,7 @@ private:
 
 	// Functions for setting up commands and data in the buffer. Each one takes the address to store it in the buffer and returns the next available buffer address.
 	uint16_t *_ecv_array SetGraphicsAddress(uint16_t *_ecv_array buffer, PixelNumber rBegin, PixelNumber rEnd, PixelNumber cBegin, PixelNumber cEnd) noexcept;
-	uint16_t *_ecv_array SetRowMode(uint16_t *_ecv_array buffer, bool rowMode) noexcept;
+	uint16_t *_ecv_array SetColumnMode(uint16_t *_ecv_array buffer, bool columnMode) noexcept;
 	uint16_t *_ecv_array SetPixelData(uint16_t *_ecv_array buffer, Colour pixelColour, unsigned int numPixels) noexcept;
 
 	static constexpr unsigned int MaxPixelsPerTransaction = 480;				// one entire row
@@ -74,6 +74,18 @@ private:
 	static constexpr uint8_t CmdPageAddressSet = 0x2B;
 	static constexpr uint8_t CmdMemoryWrite = 0x2C;
 	static constexpr uint8_t CmdMemoryAccessControl = 0x36;
+	static constexpr uint8_t CmdInterfacePixelFormat = 0x3A;
+	static constexpr uint8_t CmdInterfaceModeControl = 0xB0;
+	static constexpr uint8_t CmdFrameRateControlNormal = 0xB1;
+	static constexpr uint8_t CmdDisplayInversionControl = 0xB4;
+	static constexpr uint8_t CmdDisplayFunctionControl = 0xB6;
+	static constexpr uint8_t CmdPowerControl1 = 0xC0;
+	static constexpr uint8_t CmdPowerControl2 = 0xC1;
+	static constexpr uint8_t CmdVComControl1 = 0xC5;
+	static constexpr uint8_t CmdPositiveGammaControl = 0xE0;
+	static constexpr uint8_t CmdNegativeGammaControl = 0xE1;
+	static constexpr uint8_t CmdSetImageFunction = 0xE9;
+	static constexpr uint8_t CmdAdjustControl3 = 0xF7;
 
 	static constexpr uint32_t ResetDelayMillis = 5;
 

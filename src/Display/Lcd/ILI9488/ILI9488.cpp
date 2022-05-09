@@ -31,19 +31,19 @@ const char *_ecv_array LcdILI9488::GetDisplayTypeName() const noexcept
 // Initialise the TFT screen
 void LcdILI9488::HardwareInit() noexcept
 {
-	const uint16_t Init1[] =	{ 0xE0, 0x100, 0x103, 0x109, 0x108, 0x116, 0x10A, 0x13F, 0x178, 0x14C, 0x109, 0x10A, 0x108, 0x116, 0x11A, 0x100 };
-	const uint16_t Init2[] =	{ 0XE1, 0x100, 0x116, 0x119, 0x103, 0x10F, 0x105, 0x132, 0x145, 0x146, 0x104, 0x10E, 0x10D, 0x135, 0x137, 0x10F };
-	const uint16_t Init3[] =	{ 0XC0, 0x117, 0x115 };				// Power Control 1, Vreg1out, Vreg2out
-	const uint16_t Init4[] =	{ 0xC1, 0x141 };      				// Power Control 2, VGH, VGL
-	const uint16_t Init5[] =	{ 0xC5, 0x100, 0x112, 0x180 };		// Power Control 3, Vcom
-	const uint16_t Init6[] =	{ 0x36, 0x48 };						// Memory Access
-	const uint16_t Init7[] =	{ 0x3A, 0x166 };      				// Interface Pixel Format 18 bit
-	const uint16_t Init8[] =	{ 0XB0, 0x180 };     				// Interface Mode Control SDO not used
-	const uint16_t Init9[] =	{ 0xB1, 0x1A0 };					// Frame rate 60Hz
-	const uint16_t Init10[] =	{ 0xB4, 0x102 };					// Display Inversion Control 2-dot
-	const uint16_t Init11[] =	{ 0XB6, 0x102, 0x102 };      		// Display Function Control RGB/MCU Interface Control, MCU, Source, Gate scan direction
-	const uint16_t Init12[] =	{ 0XE9, 0x100 };					// Set Image Function, Disable 24 bit data
-	const uint16_t Init13[] =	{ 0xF7, 0xA9, 0x51, 0x2C, 0x82 };	// Adjust Control, D7 stream, loose
+	const uint16_t Init1[] =	{ CmdPositiveGammaControl,		0x100, 0x103, 0x109, 0x108, 0x116, 0x10A, 0x13F, 0x178, 0x14C, 0x109, 0x10A, 0x108, 0x116, 0x11A, 0x100 };
+	const uint16_t Init2[] =	{ CmdNegativeGammaControl,		0x100, 0x116, 0x119, 0x103, 0x10F, 0x105, 0x132, 0x145, 0x146, 0x104, 0x10E, 0x10D, 0x135, 0x137, 0x10F };
+	const uint16_t Init3[] =	{ CmdPowerControl1,				0x117, 0x115 };				// Power Control 1, Vreg1out, Vreg2out
+	const uint16_t Init4[] =	{ CmdPowerControl2,				0x141 };      				// Power Control 2, VGH, VGL
+	const uint16_t Init5[] =	{ CmdVComControl1,				0x100, 0x112, 0x180 };		// Power Control 3, Vcom
+	const uint16_t Init6[] =	{ CmdMemoryAccessControl,		0x48 };						// Memory Access
+	const uint16_t Init7[] =	{ CmdInterfacePixelFormat,		0x166 };      				// Interface Pixel Format 18 bit
+	const uint16_t Init8[] =	{ CmdInterfaceModeControl,		0x180 };     				// Interface Mode Control SDO not used
+	const uint16_t Init9[] =	{ CmdFrameRateControlNormal,	0x1A0 };					// Frame rate 60Hz
+	const uint16_t Init10[] =	{ CmdDisplayInversionControl,	0x102 };					// Display Inversion Control 2-dot
+	const uint16_t Init11[] =	{ CmdDisplayFunctionControl,	0x102, 0x102 };      		// Display Function Control RGB/MCU Interface Control, MCU, Source, Gate scan direction
+	const uint16_t Init12[] =	{ CmdSetImageFunction,			0x100 };					// Set Image Function, Disable 24 bit data
+	const uint16_t Init13[] =	{ CmdAdjustControl3,			0xA9, 0x51, 0x2C, 0x82 };	// Adjust Control, D7 stream, loose
 
 	SendCommand(CmdReset);
 	delay(ResetDelayMillis + 1);
@@ -81,7 +81,7 @@ void LcdILI9488::ClearBlock(PixelNumber top, PixelNumber left, PixelNumber botto
 			const PixelNumber rowsToDo = ((unsigned int)(bottom - top) * (unsigned int)(right - left) < MaxPixelsPerTransaction)
 											? (unsigned int)(bottom - top)
 												: MaxPixelsPerTransaction/(unsigned int)(right - left);
-			uint16_t *_ecv_array p = SetRowMode(spiBuffer, true);
+			uint16_t *_ecv_array p = SetColumnMode(spiBuffer, false);
 			p = SetGraphicsAddress(p, top, top + rowsToDo - 1, left, right - 1);
 			*p++ = CmdMemoryWrite;
 			p = SetPixelData(p, (foreground) ? fgColour : bgColour, rowsToDo * (right - left));
@@ -128,7 +128,7 @@ void LcdILI9488::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width,
 // Write one column of character data at (row, column)
 void LcdILI9488::WriteColumnData(uint16_t columnData, uint8_t ySize) noexcept
 {
-	uint16_t *_ecv_array p = SetRowMode(spiBuffer, false);
+	uint16_t *_ecv_array p = SetColumnMode(spiBuffer, true);
 	p = SetGraphicsAddress(p, row, row + ySize - 1, column, column);
 	*p++ = CmdMemoryWrite;
 	for (uint8_t i = 0; i < ySize; ++i)
@@ -149,25 +149,25 @@ void LcdILI9488::SendCommand(uint8_t cmd) noexcept
 uint16_t *_ecv_array LcdILI9488::SetGraphicsAddress(uint16_t *_ecv_array buffer, PixelNumber rBegin, PixelNumber rEnd, PixelNumber cBegin, PixelNumber cEnd) noexcept
 {
 	buffer[0] = CmdPageAddressSet;
-	buffer[1] = (rBegin >> 8) | 0x0100;
-	buffer[2] = (rBegin & 0x00FF) | 0x0100;
-	buffer[3] = (rEnd >> 8) | 0x0100;
-	buffer[4] = (rEnd & 0x00FF) | 0x0100;
+	buffer[1] = (cBegin >> 8) | 0x0100;
+	buffer[2] = (cBegin & 0x00FF) | 0x0100;
+	buffer[3] = (cEnd >> 8) | 0x0100;
+	buffer[4] = (cEnd & 0x00FF) | 0x0100;
 	buffer[5] = CmdColumnAddressSet;
-	buffer[6] = (cBegin >> 8) | 0x0100;
-	buffer[7] = (cBegin & 0x00FF) | 0x0100;
-	buffer[8] = (cEnd >> 8) | 0x0100;
-	buffer[9] = (cEnd & 0x00FF) | 0x0100;
+	buffer[6] = (rBegin >> 8) | 0x0100;
+	buffer[7] = (rBegin & 0x00FF) | 0x0100;
+	buffer[8] = (rEnd >> 8) | 0x0100;
+	buffer[9] = (rEnd & 0x00FF) | 0x0100;
 	return buffer + 10;
 }
 
-uint16_t *_ecv_array LcdILI9488::SetRowMode(uint16_t *_ecv_array buffer, bool rowMode) noexcept
+uint16_t *_ecv_array LcdILI9488::SetColumnMode(uint16_t *_ecv_array buffer, bool columnMode) noexcept
 {
-	if (currentRowColMode == (uint8_t)rowMode)
+	if (currentRowColMode == (uint8_t)columnMode)
 	{
 		buffer[0] = CmdMemoryAccessControl;
-		buffer[1] = ((uint16_t)rowMode << 5) | 0x0100;
-		currentRowColMode = (uint8_t)rowMode;
+		buffer[1] = ((uint16_t)columnMode << 5) | 0x0100;
+		currentRowColMode = (uint8_t)columnMode;
 		return buffer + 2;
 	}
 	else
@@ -180,9 +180,10 @@ uint16_t *_ecv_array LcdILI9488::SetPixelData(uint16_t *_ecv_array buffer, Colou
 {
 	while (numPixels != 0)
 	{
-		buffer[0] = (pixelColour.red << 2) | 0x0100;
+		// On the ER-TFTM035-6 display the red and blue pixels appear to be swapped, so we must send them in the order blue-green-red
+		buffer[0] = (pixelColour.blue << 2) | 0x0100;
 		buffer[1] = (pixelColour.green << 2) | 0x0100;
-		buffer[2] = (pixelColour.blue << 2) | 0x0100;
+		buffer[2] = (pixelColour.red << 2) | 0x0100;
 		buffer += 3;
 		--numPixels;
 	}
