@@ -20,15 +20,21 @@ public:
 
 	void Disable() const noexcept;
 	void Enable() const noexcept;
-	void SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) const noexcept;
+
+	// Set the clock frequency, SPI mode and character length. 9-bit mode is currently only implemented on the SAME5x.
+	void SetClockFrequencyAndMode(uint32_t freq, SpiMode mode
+#if SAME5x
+									, bool nineBits
+#endif
+								 ) const noexcept;
 
 	// Send and receive data returning true if successful.
 	// If this is a shared SPI device then the caller must already own the mutex.
 	// Either way, caller must already have asserted CS for the selected SPI slave.
-	bool TransceivePacket(const uint8_t *tx_data, uint8_t *rx_data, size_t len) const noexcept;
+	bool TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t *_ecv_array null rx_data, size_t len) const noexcept;
 
 #if SAME5x
-	bool TransceivePacketNineBit(const uint16_t *tx_data, uint16_t *rx_data, size_t len) const noexcept;
+	bool TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data, uint16_t *_ecv_array null rx_data, size_t len) const noexcept;
 #endif
 
 private:

@@ -34,7 +34,7 @@ void TFTLcd::Init(Pin p_csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uint
 	csPin = p_csPin;
 	csPol = csPolarity;
 	spiFrequency = freq;
-	spiDev.SetClockFrequencyAndMode(freq, spiMode);
+	spiDev.SetClockFrequencyAndMode(freq, spiMode, true);				// note we currently always use 9-bit SPI
 	pinMode(csPin, (csPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);
 	HardwareInit();
 }

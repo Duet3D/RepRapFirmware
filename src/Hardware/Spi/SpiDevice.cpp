@@ -188,9 +188,13 @@ inline bool SpiDevice::waitForRxReady() const noexcept
 	return false;
 }
 
-void SpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) const noexcept
+void SpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode
+#if SAME5x
+											, bool nineBits
+#endif
+										) const noexcept
 {
-	// We have to disable SPI device in order to change the baud rate and mode
+	// We have to disable SPI device in order to change the baud rate, mode and character length
 #if SAME5x
 	Disable();
 	// Round the clock frequency rate down. For example, using 60MHz clock, if we ask for 4MHz:
@@ -198,6 +202,8 @@ void SpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) const noex
 	// With rounding, divisor = 67/8 = 8, actual clock rate = 3.75MHz
 	// To get more accurate speeds we could increase the clock frequency to 100MHz
 	hardware->SPI.BAUD.reg = SERCOM_SPI_BAUD_BAUD((Serial::SercomFastGclkFreq + (2 * freq) - 1)/(2 * freq) - 1);
+	hardware->SPI.CTRLB.bit.CHSIZE = (nineBits) ? 1 : 0;
+	while (hardware->SPI.SYNCBUSY.bit.CTRLB) { }
 
 	uint32_t regCtrlA = SERCOM_SPI_CTRLA_MODE(3) | SERCOM_SPI_CTRLA_DIPO(3) | SERCOM_SPI_CTRLA_DOPO(0) | SERCOM_SPI_CTRLA_FORM(0);
 	if (((uint8_t)mode & 2) != 0)
@@ -252,12 +258,10 @@ void SpiDevice::SetClockFrequencyAndMode(uint32_t freq, SpiMode mode) const noex
 }
 
 // Send and receive data returning true if successful
-bool SpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data, size_t len) const noexcept
+bool SpiDevice::TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t *_ecv_array null rx_data, size_t len) const noexcept
 {
 	// Clear any existing data
 #if SAME5x
-	hardware->SPI.CTRLB.bit.CHSIZE = 0;
-	while (hardware->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_ENABLE) { }
 	(void)hardware->SPI.DATA.reg;
 #elif USART_SPI
 	(void)hardware->US_RHR;
@@ -333,12 +337,10 @@ bool SpiDevice::TransceivePacket(const uint8_t* tx_data, uint8_t* rx_data, size_
 #if SAME5x
 
 // Send and receive data returning true if successful, using 16-bit data transfers (needed when using 9-bit characters). 'len' is in 18-bit words.
-bool SpiDevice::TransceivePacketNineBit(const uint16_t* tx_data, uint16_t* rx_data, size_t len) const noexcept
+bool SpiDevice::TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data, uint16_t *_ecv_array null rx_data, size_t len) const noexcept
 {
 	// Clear any existing data
 #if SAME5x
-	hardware->SPI.CTRLB.bit.CHSIZE = 1;
-	while (hardware->SPI.SYNCBUSY.reg & SERCOM_SPI_SYNCBUSY_ENABLE) { }
 	(void)hardware->SPI.DATA.reg;
 #elif USART_SPI
 	(void)hardware->US_RHR;
@@ -348,7 +350,7 @@ bool SpiDevice::TransceivePacketNineBit(const uint16_t* tx_data, uint16_t* rx_da
 
 	for (uint32_t i = 0; i < len; ++i)
 	{
-		uint32_t dOut = (tx_data == nullptr) ? 0x000000FF : (uint32_t)*tx_data++;
+		uint32_t dOut = (tx_data == nullptr) ? 0x000001FF : (uint32_t)*tx_data++;
 		if (waitForTxReady())			// we have to write the first byte after enabling the device without waiting for DRE to be set
 		{
 			return false;
