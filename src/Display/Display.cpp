@@ -29,16 +29,18 @@ constexpr int DefaultPulsesPerClick = -4;			// values that work with displays I 
 extern const LcdFont font7x11;
 extern const LcdFont font11x14;
 const LcdFont * const fonts[] = { &font7x11, &font11x14 };
+constexpr size_t SmallFontNumber = 0;
+constexpr size_t LargeFontNumber = 1;
 #endif
 
 #if SUPPORT_ILI9488_LCD
-extern const LcdFont font19x21;
+// The FMDC prototypes don't have enough flash memory for more than one font
+//extern const LcdFont font19x21;
 extern const LcdFont font28x32;
 const LcdFont * const tftFonts[] = { /*&font19x21 ,*/ &font28x32 };
-#endif
-
 constexpr size_t SmallFontNumber = 0;
-constexpr size_t LargeFontNumber = 1;
+constexpr size_t LargeFontNumber = 0;
+#endif
 
 constexpr uint32_t NormalRefreshMillis = 250;
 constexpr uint32_t FastRefreshMillis = 50;
@@ -75,6 +77,9 @@ Display::Display() noexcept
 #if SUPPORT_ROTARY_ENCODER
 	  encoder(nullptr),
 #endif
+#if SUPPORT_RESISTIVE_TOUCH
+	  touchController(nullptr),
+#endif
 	  lastRefreshMillis(0),
 	  mboxSeq(0), mboxActive(false), beepActive(false), updatingFirmware(false)
 {
@@ -87,21 +92,34 @@ void Display::Spin() noexcept
 	{
 		bool forceRefresh = false;
 #if SUPPORT_ROTARY_ENCODER
-		encoder->Poll();
-		// Check encoder and update display
-		const int ch = encoder->GetChange();
-		if (ch != 0)
+		if (encoder != nullptr)
 		{
-			menu->EncoderAction(ch);
-			forceRefresh = true;
-		}
-		else if (encoder->GetButtonPress())
-		{
-			menu->EncoderAction(0);
-			forceRefresh = true;
+			encoder->Poll();
+			// Check encoder and update display
+			const int ch = encoder->GetChange();
+			if (ch != 0)
+			{
+				menu->EncoderAction(ch);
+				forceRefresh = true;
+			}
+			else if (encoder->GetButtonPress())
+			{
+				menu->EncoderAction(0);
+				forceRefresh = true;
+			}
 		}
 #endif
-
+#if SUPPORT_RESISTIVE_TOUCH
+		if (touchController != nullptr)
+		{
+			uint16_t x, y;
+			bool repeat;
+			if (touchController->Read(x, y, repeat))
+			{
+				lcd->Circle(x, y, 20, true);
+			}
+		}
+#endif
 		const MessageBox& mbox = reprap.GetMessageBox();
 		if (mbox.active)
 		{
@@ -232,7 +250,9 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 #if SUPPORT_ROTARY_ENCODER
 		DeleteObject(encoder);
 #endif
-
+#if SUPPORT_RESISTIVE_TOUCH
+		DeleteObject(touchController);
+#endif
 		seen = true;
 		switch (gb.GetUIValue())
 		{
@@ -268,6 +288,8 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 			SetPinFunction(LcdSpiMisoPin, LcdSpiPinFunction);
 			SetPinFunction(LcdSpiSclkPin, LcdSpiPinFunction);
 			InitDisplay(gb, new LcdILI9488(tftFonts, ARRAY_SIZE(tftFonts), LcdSercomNumber), LcdSpiCsPin, NoPin, false);
+			touchController = new ResistiveTouch(RtpSpiCsPin, RtpPenPin);
+			touchController->Init(lcd->GetNumCols(), lcd->GetNumRows(), DisplayOrientation::ReverseY);
 			break;
 #endif
 

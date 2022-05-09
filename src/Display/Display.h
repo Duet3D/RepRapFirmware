@@ -15,6 +15,9 @@
 #if SUPPORT_ROTARY_ENCODER
 # include "RotaryEncoder.h"
 #endif
+#if SUPPORT_RESISTIVE_TOUCH
+# include "ResistiveTouch.h"
+#endif
 
 #include "Lcd/Lcd.h"
 #include "Menu.h"
@@ -45,10 +48,13 @@ private:
 	void InitDisplay(GCodeBuffer& gb, Lcd *newLcd, Pin csPin, Pin a0Pin, bool defaultCsPolarity) THROWS(GCodeException);
 	void StopBeep() noexcept;
 
-	Lcd *lcd;
+	Lcd *null lcd;
 	Menu *menu;
 #if SUPPORT_ROTARY_ENCODER
-	RotaryEncoder *encoder;
+	RotaryEncoder *null encoder;
+#endif
+#if SUPPORT_RESISTIVE_TOUCH
+	ResistiveTouch *null touchController;
 #endif
 	uint32_t whenBeepStarted;
 	uint32_t beepLength;

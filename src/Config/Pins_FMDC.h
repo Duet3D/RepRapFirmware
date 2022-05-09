@@ -210,7 +210,6 @@ constexpr Pin LcdSpiSclkPin = PortAPin(5);
 constexpr Pin LcdSpiCsPin = PortAPin(6);
 constexpr GpioPinFunction LcdSpiPinFunction = GpioPinFunction::D;
 
-constexpr Pin LcdRtpPenPin = PortAPin(3);
 constexpr Pin LcdDcPin = PortCPin(5);
 constexpr Pin LcdResetPin = PortCPin(6);
 constexpr Pin LcdFlashCsPin = PortBPin(10);
@@ -220,12 +219,14 @@ constexpr Pin LcdFlashHoldPin = PortCPin(7);
 constexpr Pin LcdBacklightPin = PortBPin(12);
 
 // Touch screen interface (when not shared with SharedSpi)
-constexpr unsigned int RtpSercomNumber = 6;
-constexpr Pin RtpSpiMosiPin = PortCPin(16);
-constexpr Pin RtpSpiMisoPin = PortCPin(19);
-constexpr Pin RtpSpiSclkPin = PortCPin(17);
+//constexpr unsigned int RtpSercomNumber = 6;
+//constexpr Pin RtpSpiMosiPin = PortCPin(16);
+//constexpr Pin RtpSpiMisoPin = PortCPin(19);
+//constexpr Pin RtpSpiSclkPin = PortCPin(17);
+//constexpr GpioPinFunction RtpSpiPinFunction = GpioPinFunction::C;
+
 constexpr Pin RtpSpiCsPin = PortCPin(18);
-constexpr GpioPinFunction RtpSpiPinFunction = GpioPinFunction::C;
+constexpr Pin RtpPenPin = PortAPin(3);
 
 // Beeper
 constexpr Pin BeeperPins[2] = { PortAPin(8), PortAPin(9) };
