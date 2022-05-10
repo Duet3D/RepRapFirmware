@@ -114,8 +114,8 @@ size_t Lcd::writeNative(uint16_t ch) noexcept
 	}
 	else
 	{
-		const uint8_t startChar = currentFont->startCharacter;
-		const uint8_t endChar = currentFont->endCharacter;
+		const uint16_t startChar = currentFont->startCharacter;
+		const uint16_t endChar = currentFont->endCharacter;
 
 		if (ch < startChar || ch > endChar)
 		{
