@@ -114,9 +114,9 @@ void Display::Spin() noexcept
 		{
 			uint16_t x, y;
 			bool repeat;
-			if (touchController->Read(x, y, repeat))
+			if (touchController->Read(x, y, repeat) && menu != nullptr)
 			{
-				lcd->Circle(x, y, 20, true);
+				menu->HandleTouch(x, y);
 			}
 		}
 #endif

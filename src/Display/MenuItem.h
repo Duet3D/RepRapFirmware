@@ -57,7 +57,7 @@ public:
 
 	virtual ~MenuItem() noexcept { }
 
-	MenuItem *GetNext() const noexcept { return next; }
+	MenuItem *null GetNext() const noexcept { return next; }
 	FontNumber GetFontNumber() const noexcept { return fontNumber; }
 	void SetChanged() noexcept { itemChanged = true; }
 	bool IsVisible() const noexcept;
@@ -68,6 +68,11 @@ public:
 	// Return the width of this item in pixels
 	PixelNumber GetWidth() const noexcept { return width; }
 	PixelNumber GetHeight() const noexcept { return height; }
+
+	PixelNumber GetMinX() const noexcept { return column; }
+	PixelNumber GetMinY() const noexcept { return row; }
+	PixelNumber GetMaxX() const noexcept { return column + width - 1; }
+	PixelNumber GetMaxY() const noexcept { return row + height - 1; }
 
 	static void AppendToList(MenuItem **root, MenuItem *item) noexcept;
 

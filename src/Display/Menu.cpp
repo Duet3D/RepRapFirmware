@@ -806,6 +806,71 @@ MenuItem *Menu::FindPrevSelectableItem(MenuItem *p) const noexcept
 	return best;
 }
 
+#if SUPPORT_RESISTIVE_TOUCH
+
+// Search for a selectable item that is close to the touched XY coordinates
+void Menu::HandleTouch(PixelNumber x, PixelNumber y) noexcept
+{
+	constexpr int MaxXerror = 8, MaxYerror = 8;		// how far (in pixels) the X and Y coordinates of a touch event need to be to the outline of the item for us to disallow it
+
+	int bestError = MaxXerror + MaxYerror;
+	MenuItem *null best = nullptr;
+	for (MenuItem *p = selectableItems; p != nullptr; p = p->GetNext())
+	{
+		if (p->IsVisible())
+		{
+			const int xError = (x < p->GetMinX()) ? p->GetMinX() - x
+									: (x > p->GetMaxX()) ? x - p->GetMaxX()
+										: 0;
+			if (xError < MaxXerror)
+			{
+				const int yError = (y <p->GetMinY()) ? p->GetMinY() - y
+										: (y > p->GetMaxY()) ? y - p->GetMaxY()
+											: 0;
+				if (yError < MaxYerror && xError + yError < bestError)
+				{
+					bestError = xError + yError;
+					best = p;
+				}
+			}
+		}
+	}
+
+	if (best != nullptr)
+	{
+
+		if (displayingErrorMessage)
+		{
+			// Allow the message to be cancelled by a touch
+			timeoutValue = 1;						// cancel the timeout at the next tick
+		}
+		else if (itemIsSelected)					// send the touch to the item itself
+		{
+			if (highlightedItem != nullptr && highlightedItem->IsVisible())
+			{
+				//TODO
+			}
+			else
+			{
+				itemIsSelected = false;			// should not get here
+			}
+		}
+		else									// click without an item under selection
+		{
+			highlightedItem = best;
+			EncoderActionEnterItemHelper();
+		}
+
+		if (!displayingErrorMessage && !displayingMessageBox)	// if the operation did not result in an error and we are not displaying a message box
+		{
+			lastActionTime = millis();
+			timeoutValue = InactivityTimeout;
+		}
+	}
+}
+
+#endif
+
 #endif
 
 // End

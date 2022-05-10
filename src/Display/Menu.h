@@ -32,6 +32,10 @@ public:
 	void DisplayMessageBox(const MessageBox& mbox) noexcept;
 	void ClearMessageBox() noexcept;
 
+#if SUPPORT_RESISTIVE_TOUCH
+	void HandleTouch(PixelNumber x, PixelNumber y) noexcept;
+#endif
+
 private:
 	void LoadFixedMenu() noexcept;
 	void ResetCache() noexcept;
