@@ -28,7 +28,7 @@ public:
 	static constexpr Visibility AlwaysVisible = 0;
 
 	// Draw this element on the LCD respecting 'maxWidth' and 'highlight'
-	virtual void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept = 0;
+	virtual void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept = 0;
 
 	// Select this element with a push of the encoder.
 	// If it returns nullptr false go into adjustment mode, if we can adjust the item.
@@ -79,7 +79,7 @@ protected:
 	virtual void CorePrint(Lcd& lcd) noexcept { }
 
 	// Print the item at the correct place with the correct alignment
-	void PrintAligned(Lcd& lcd, PixelNumber tOffset, PixelNumber rightMargin) noexcept;
+	void PrintAligned(Lcd& lcd, PixelNumber rightMargin) noexcept;
 
 	const PixelNumber row, column;
 	PixelNumber width, height;
@@ -102,7 +102,7 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<TextMenuItem>(p); }
 
 	TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, const char *t) noexcept;
-	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
+	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept override;
 	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
 
 protected:
@@ -119,7 +119,7 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<ButtonMenuItem>(p); }
 
 	ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *t, const char *cmd, const char *acFile) noexcept;
-	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
+	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept override;
 	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
 	bool Select(const StringRef& cmd) noexcept override;
 
@@ -141,7 +141,7 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<ValueMenuItem>(p); }
 
 	ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, Visibility vis, bool adj, unsigned int v, unsigned int d) noexcept;
-	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
+	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept override;
 	bool Select(const StringRef& cmd) noexcept override;
 	bool CanAdjust() const noexcept override { return true; }
 	bool Adjust(int clicks) noexcept override;
@@ -189,7 +189,7 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<FilesMenuItem>(p); }
 
 	FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, Visibility vis, const char *cmd, const char *dir, const char *acFile, unsigned int nf) noexcept;
-	void Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept override;
+	void Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept override;
 	void Enter(bool bForwardDirection) noexcept override;
 	int Advance(int nCounts) noexcept override;
 	bool Select(const StringRef& cmd) noexcept override;
@@ -203,7 +203,7 @@ protected:
 	void vResetViewState() noexcept;
 
 private:
-	void ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept;
+	void ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept;
 	uint8_t GetDirectoryNesting() const noexcept;
 
 	const unsigned int numDisplayLines;
@@ -238,7 +238,7 @@ public:
 
 	ImageMenuItem(PixelNumber r, PixelNumber c, Visibility vis, const char *pFileName) noexcept;
 
-	void Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept override;
+	void Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept override;
 	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
 
 private:

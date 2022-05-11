@@ -40,7 +40,7 @@ MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, Fon
 }
 
 // Print the item at the correct place with the correct alignment
-void MenuItem::PrintAligned(Lcd& lcd, PixelNumber tOffset, PixelNumber rightMargin) noexcept
+void MenuItem::PrintAligned(Lcd& lcd, PixelNumber rightMargin) noexcept
 {
 	PixelNumber colsToSkip = 0;
 	lcd.SetFont(fontNumber);
@@ -58,7 +58,7 @@ void MenuItem::PrintAligned(Lcd& lcd, PixelNumber tOffset, PixelNumber rightMarg
 		}
 	}
 
-	lcd.SetCursor(row - tOffset, column);
+	lcd.SetCursor(row, column);
 	lcd.SetRightMargin(min<PixelNumber>(rightMargin, column + width));
 	lcd.TextInvert(highlighted);
 	if (colsToSkip != 0)
@@ -141,12 +141,12 @@ void TextMenuItem::CorePrint(Lcd& lcd) noexcept
 	lcd.printf("%s", text);
 }
 
-void TextMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void TextMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	// We ignore the 'highlight' parameter because text items are not selectable
 	if (IsVisible() && (!drawn || itemChanged))
 	{
-		PrintAligned(lcd, tOffset, rightMargin);
+		PrintAligned(lcd, rightMargin);
 		itemChanged = false;
 		drawn = true;
 	}
@@ -186,12 +186,12 @@ void ButtonMenuItem::CorePrint(Lcd& lcd) noexcept
 	lcd.WriteSpaces(1);				// space at end to allow for highlighting
 }
 
-void ButtonMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void ButtonMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	if (IsVisible() && (itemChanged || !drawn || highlight != highlighted) && column < lcd.GetNumCols())
 	{
 		highlighted = highlight;
-		PrintAligned(lcd, tOffset, rightMargin);
+		PrintAligned(lcd, rightMargin);
 		itemChanged = false;
 		drawn = true;
 	}
@@ -318,7 +318,7 @@ void ValueMenuItem::CorePrint(Lcd& lcd) noexcept
 	}
 }
 
-void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	if (IsVisible())
 	{
@@ -494,7 +494,7 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 		if (itemChanged || !drawn || (highlight != highlighted))
 		{
 			highlighted = highlight;
-			PrintAligned(lcd, tOffset, rightMargin);
+			PrintAligned(lcd, rightMargin);
 			itemChanged = false;
 			drawn = true;
 		}
@@ -764,7 +764,7 @@ unsigned int FilesMenuItem::uListingEntries() const noexcept
 	return bInSubdirectory() ? (1 + m_uHardItemsInDirectory) : m_uHardItemsInDirectory;
 }
 
-void FilesMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void FilesMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	// The 'highlight' parameter is not used to highlight this item, but it is still used to tell whether this item is selected or not
 	if (!IsVisible())
@@ -818,7 +818,7 @@ void FilesMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 			break;
 
 		case mounted:
-			ListFiles(lcd, rightMargin, highlight, tOffset);
+			ListFiles(lcd, rightMargin, highlight);
 			break;
 
 		case error:
@@ -827,7 +827,7 @@ void FilesMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 	}
 }
 
-void FilesMenuItem::ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void FilesMenuItem::ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	lcd.SetFont(fontNumber);
 	lcd.SetRightMargin(rightMargin);
@@ -1103,7 +1103,7 @@ ImageMenuItem::ImageMenuItem(PixelNumber r, PixelNumber c, Visibility vis, const
 	fileName.copy(pFileName);
 }
 
-void ImageMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void ImageMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	if (IsVisible() && (!drawn || itemChanged || highlight != highlighted))
 	{
@@ -1125,7 +1125,7 @@ void ImageMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 						{
 							break;
 						}
-						lcd.BitmapRow(row - tOffset + irow, column,  cols, buffer, highlight);
+						lcd.BitmapRow(row + irow, column,  cols, buffer, highlight);
 					}
 				}
 			}

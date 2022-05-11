@@ -195,9 +195,6 @@ void Menu::ClearMessageBox() noexcept
 
 void Menu::Pop() noexcept
 {
-	// currentMargin = 0;
-	lcd.Clear();
-	rowOffset = 0;
 	--numNestedMenus;
 	Reload();
 }
@@ -418,26 +415,8 @@ void Menu::ResetCache() noexcept
 void Menu::Reload() noexcept
 {
 	displayingFixedMenu = false;
-	if (numNestedMenus == 1)
-	{
-		currentMargin = 0;
-		lcd.Clear();
-	}
-	else
-	{
-		currentMargin = 0;
-		const PixelNumber right = lcd.GetNumCols();
-		const PixelNumber bottom = lcd.GetNumRows();
-		lcd.Clear(currentMargin, currentMargin, bottom, right);
-
-		// Draw the outline
-		// lcd.Line(currentMargin, currentMargin, bottom, currentMargin, PixelMode::PixelSet);
-		// lcd.Line(currentMargin, currentMargin, currentMargin, right, PixelMode::PixelSet);
-		// lcd.Line(bottom, currentMargin, bottom, right, PixelMode::PixelSet);
-		// lcd.Line(currentMargin, right, bottom, right, PixelMode::PixelSet);
-
-		// currentMargin += InnerMargin;
-	}
+	currentMargin = rowOffset = 0;
+	lcd.Clear();
 
 	ResetCache();
 	displayingErrorMessage = false;
@@ -700,12 +679,12 @@ void Menu::DrawAll() noexcept
 	const PixelNumber rightMargin = lcd.GetNumCols() - currentMargin;
 	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
 	{
-		item->Draw(lcd, rightMargin, (item == highlightedItem), rowOffset);
+		item->Draw(lcd, rightMargin, (item == highlightedItem));
 	}
 
 	for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())
 	{
-		item->Draw(lcd, rightMargin, false, rowOffset);
+		item->Draw(lcd, rightMargin, false);
 	}
 }
 
