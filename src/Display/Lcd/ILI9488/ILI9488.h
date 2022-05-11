@@ -62,7 +62,7 @@ protected:
 
 private:
 	void SendCommand(uint8_t cmd) noexcept;
-	void SendBuffer(const uint16_t *_ecv_array buf, size_t numWords) const noexcept;
+	void SendBuffer(const uint16_t *_ecv_array buf, size_t numWords) noexcept;
 
 	// Functions for setting up commands and data in the buffer. Each one takes the address to store it in the buffer and returns the next available buffer address.
 	uint16_t *_ecv_array SetGraphicsAddress(uint16_t *_ecv_array buffer, PixelNumber rBegin, PixelNumber rEnd, PixelNumber cBegin, PixelNumber cEnd) noexcept;

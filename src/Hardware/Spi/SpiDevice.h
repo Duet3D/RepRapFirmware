@@ -11,6 +11,10 @@
 #include <RepRapFirmware.h>
 #include "SpiMode.h"
 
+#if SAME5x && defined(FMDC_V02)
+# include <DmacManager.h>
+#endif
+
 // This class represents a master SPI interface, but not the associated CS pin(s).
 // It is used as the base class for SharedSpiDevice. It can also be used by itself to control a non-shared SPI master.
 class SpiDevice
@@ -33,8 +37,10 @@ public:
 	// Either way, caller must already have asserted CS for the selected SPI slave.
 	bool TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t *_ecv_array null rx_data, size_t len) const noexcept;
 
-#if SAME5x
-	bool TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data, uint16_t *_ecv_array null rx_data, size_t len) const noexcept;
+#if SAME5x && defined(FMDC_V02)
+	bool TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data, uint16_t *_ecv_array null rx_data, size_t len) noexcept;
+
+	static void DmaComplete(CallbackParameter param, DmaCallbackReason reason) noexcept;
 #endif
 
 private:
@@ -42,8 +48,16 @@ private:
 	bool waitForTxEmpty() const noexcept;
 	bool waitForRxReady() const noexcept;
 
+#if SAME5x && defined(FMDC_V02)
+	void DmaComplete(DmaCallbackReason reason) noexcept;
+#endif
+
 #if SAME5x
 	Sercom * const hardware;
+	const uint8_t sercomNumber;
+# ifdef FMDC_V02
+	TaskBase *null waitingTask = nullptr;
+# endif
 #elif USART_SPI
 	Usart * const hardware;
 #else

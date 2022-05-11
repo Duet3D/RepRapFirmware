@@ -202,7 +202,11 @@ constexpr IRQn_Type SdhcIRQn = SDHC1_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
 // LCD interface
-constexpr uint32_t LcdSpiClockFrequency = 14000000;		// 14.0MHz (maximum for ILI9488 controller write accesses is 66ns cycle time i.e. 15MHz, or 150ns for read accesses)
+// The maximum permitted SPI speed for the ILI9488 controller is 15.0MHz for write cycles (66ns cycle time) and 6.67MHz for read accesses (150ns cycle time).
+// We use only write accesses.
+// Using an SPI CLK of 60MHz we can only divide by 2, 4, 6 etc.
+// Therefore the available frequencies are 15MHz, 10MHz, 7.5MHz, 6MHz, 5MHz.
+constexpr uint32_t LcdSpiClockFrequency = 15000000;
 constexpr unsigned int LcdSercomNumber = 0;
 constexpr Pin LcdSpiMosiPin = PortAPin(4);
 constexpr Pin LcdSpiMisoPin = PortAPin(7);
@@ -410,6 +414,7 @@ constexpr DmaPriority DmacPrioTmcTx = 0;
 constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this is not very critical
 constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioLcdTx = 3;				// high speed SPI in slave mode
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers

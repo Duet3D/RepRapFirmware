@@ -216,7 +216,7 @@ uint16_t *_ecv_array LcdILI9488::SetPixelData(uint16_t *_ecv_array buffer, Colou
 	return buffer;
 }
 
-void LcdILI9488::SendBuffer(const uint16_t *_ecv_array buf, size_t numWords) const noexcept
+void LcdILI9488::SendBuffer(const uint16_t *_ecv_array buf, size_t numWords) noexcept
 {
 	digitalWrite(csPin, csPol);
 	delayMicroseconds(1);						// ILI9488 needs >= 60ns from CS falling to rising edge of clock

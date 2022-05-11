@@ -9,7 +9,6 @@
 #include <Hardware/IoPorts.h>
 
 #if SAME5x
-# include <DmacManager.h>
 # include <Serial.h>
 # include <peripheral_clk_config.h>
 #elif USART_SPI
@@ -26,7 +25,7 @@ constexpr uint32_t SpiTimeout = 10000;
 
 SpiDevice::SpiDevice(uint8_t sercomNum) noexcept
 #if SAME5x
-	: hardware(Serial::Sercoms[sercomNum])
+	: hardware(Serial::Sercoms[sercomNum]), sercomNumber(sercomNum)
 #elif USART_SPI
 	: hardware(USART_SSPI)			// we ignore the parameter and support just one shared SPI
 #else
@@ -334,10 +333,10 @@ bool SpiDevice::TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t
 	return true;	// success
 }
 
-#if SAME5x
+#if SAME5x && defined(FMDC_V02)
 
-// Send and receive data returning true if successful, using 16-bit data transfers (needed when using 9-bit characters). 'len' is in 18-bit words.
-bool SpiDevice::TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data, uint16_t *_ecv_array null rx_data, size_t len) const noexcept
+// Send and receive data returning true if successful, using 16-bit data transfers (needed when using 9-bit characters). 'len' is in 16-bit words.
+bool SpiDevice::TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data, uint16_t *_ecv_array null rx_data, size_t len) noexcept
 {
 	// Clear any existing data
 #if SAME5x
@@ -348,38 +347,57 @@ bool SpiDevice::TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data,
 	(void)hardware->SPI_RDR;
 #endif
 
-	for (uint32_t i = 0; i < len; ++i)
-	{
-		uint32_t dOut = (tx_data == nullptr) ? 0x000001FF : (uint32_t)*tx_data++;
-		if (waitForTxReady())			// we have to write the first byte after enabling the device without waiting for DRE to be set
-		{
-			return false;
-		}
-
-		// Write to transmit register
 #if SAME5x
-		hardware->SPI.DATA.reg = dOut;
-#elif USART_SPI
-		hardware->US_THR = dOut;
-#else
-		if (i + 1 == len)
-		{
-			dOut |= SPI_TDR_LASTXFER;
-		}
-		hardware->SPI_TDR = dOut;
+	if (len >= 50 && rx_data == nullptr && tx_data != nullptr)
+	{
+		// Sending a large amount of data to LCD, so use DMA. Currently only the TFT LCD uses this device, so we use a fixed DMA channel number.
+		DmacManager::DisableChannel(DmacChanLcdTx);
+		DmacManager::SetSourceAddress(DmacChanLcdTx, tx_data);
+		DmacManager::SetDestinationAddress(DmacChanLcdTx, &(hardware->SPI.DATA));
+		DmacManager::SetBtctrl(DmacChanLcdTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_HWORD | DMAC_BTCTRL_BLOCKACT_NOACT);
+		DmacManager::SetDataLength(DmacChanLcdTx, len);
+		DmacManager::SetTriggerSourceSercomTx(DmacChanLcdTx, sercomNumber);
+		waitingTask = TaskBase::GetCallerTaskHandle();
+		DmacManager::SetInterruptCallback(DmacChanLcdTx, SpiDevice::DmaComplete, CallbackParameter((void *)this));
+		DmacManager::EnableCompletedInterrupt(DmacChanLcdTx);
+		DmacManager::EnableChannel(DmacChanLcdTx, DmacPrioLcdTx);
+		TaskBase::Take(10);						// maximum 3kb transfer should complete in about 2ms @ 14MHz clock speed
+	}
+	else
 #endif
-
-		// Some devices are transmit-only e.g. 12864 display, so don't wait for received data if we don't need to
-		if (rx_data != nullptr)
+	{
+		for (uint32_t i = 0; i < len; ++i)
 		{
-			// Wait for receive register
-			if (waitForRxReady())
+			uint32_t dOut = (tx_data == nullptr) ? 0x000001FF : (uint32_t)*tx_data++;
+			if (waitForTxReady())			// we have to write the first byte after enabling the device without waiting for DRE to be set
 			{
 				return false;
 			}
 
-			// Get data from receive register
-			const uint16_t dIn =
+			// Write to transmit register
+#if SAME5x
+			hardware->SPI.DATA.reg = dOut;
+#elif USART_SPI
+			hardware->US_THR = dOut;
+#else
+			if (i + 1 == len)
+			{
+				dOut |= SPI_TDR_LASTXFER;
+			}
+			hardware->SPI_TDR = dOut;
+#endif
+
+			// Some devices are transmit-only e.g. 12864 display, so don't wait for received data if we don't need to
+			if (rx_data != nullptr)
+			{
+				// Wait for receive register
+				if (waitForRxReady())
+				{
+					return false;
+				}
+
+				// Get data from receive register
+				const uint16_t dIn =
 #if SAME5x
 					(uint16_t)hardware->SPI.DATA.reg;
 #elif USART_SPI
@@ -387,8 +405,10 @@ bool SpiDevice::TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data,
 #else
 					(uint16_t)hardware->SPI_RDR;
 #endif
-			*rx_data++ = dIn;
+				*rx_data++ = dIn;
+			}
 		}
+
 	}
 
 	// Wait for transmitter empty, to make sure that the last clock pulse has finished
@@ -411,6 +431,17 @@ bool SpiDevice::TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data,
 	}
 
 	return true;	// success
+}
+
+void SpiDevice::DmaComplete(DmaCallbackReason reason) noexcept
+{
+	TaskBase::GiveFromISR(waitingTask);
+	waitingTask = nullptr;
+}
+
+/*static*/ void SpiDevice::DmaComplete(CallbackParameter param, DmaCallbackReason reason) noexcept
+{
+	static_cast<SpiDevice*>(param.vp)->DmaComplete(reason);
 }
 
 #endif
