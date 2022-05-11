@@ -114,75 +114,95 @@ size_t Lcd::writeNative(uint16_t ch) noexcept
 	}
 	else
 	{
-		const uint16_t startChar = currentFont->startCharacter;
-		const uint16_t endChar = currentFont->endCharacter;
-
-		if (ch < startChar || ch > endChar)
+		if (column < rightMargin)					// keep column <= rightMargin in the following code
 		{
-			ch = 0x007F;			// replace unsupported characters by square box
-		}
+			const uint16_t startChar = currentFont->startCharacter;
+			const uint16_t endChar = currentFont->endCharacter;
 
-		uint8_t ySize = currentFont->height;
-		const uint8_t bytesPerColumn = (ySize + 7)/8;
-		if (row >= numRows)
-		{
-			ySize = 0;				// we still execute the code, so that the caller can tell how many columns the text will occupy by writing it off-screen
-		}
-		else if (row + ySize > numRows)
-		{
-			ySize = numRows - row;
-		}
-
-		const uint8_t bytesPerChar = (bytesPerColumn * currentFont->width) + 1;
-		const uint8_t *fontPtr = currentFont->ptr + (bytesPerChar * (ch - startChar));
-		const uint16_t cmask = (1u << currentFont->height) - 1;
-
-		uint8_t nCols = *fontPtr++;
-		if (lastCharColData != 0)		// if we have written anything other than spaces
-		{
-			uint8_t numSpaces = currentFont->numSpaces;
-
-			// Decide whether to add a space column first (auto-kerning)
-			// We don't add a space column before a space character.
-			// We add a space column after a space character if we would have added one between the preceding and following characters.
-			uint16_t thisCharColData = *reinterpret_cast<const uint16_t*>(fontPtr) & cmask;
-			if (thisCharColData == 0)  // for characters with deliberate space column at the start, e.g. decimal point
+			if (ch < startChar || ch > endChar)
 			{
-				thisCharColData = *reinterpret_cast<const uint16_t*>(fontPtr + 2) & cmask;
+				ch = 0x007F;			// replace unsupported characters by square box
 			}
 
-			const bool kern = (numSpaces >= 2)
-							? ((thisCharColData & lastCharColData) == 0)
-							: (((thisCharColData | (thisCharColData << 1)) & (lastCharColData | (lastCharColData << 1))) == 0);
-			if (kern)
+			const PixelNumber fontHeight = currentFont->height;
+			const PixelNumber fontBytesPerColumn = (fontHeight + 7)/8;
+			const PixelNumber fontBytesPerChar = (fontBytesPerColumn * currentFont->width) + 1;
+			const uint8_t *fontPtr = currentFont->ptr + (fontBytesPerChar * (ch - startChar));
+			const uint32_t cmask = (currentFont->height < 32) ? (1u << currentFont->height) - 1 : 0xFFFFFFFF;
+
+			PixelNumber numFontColumns = *fontPtr++;
+			PixelNumber columnsLeft = rightMargin - column;
+			PixelNumber numSpaces;
+			if (lastCharColData != 0)		// if we have written anything other than spaces
 			{
-				--numSpaces;	// kern the character pair
+				numSpaces = currentFont->numSpaces;
+
+				// Decide whether to add space columns first, and whether to add one less then usual (auto-kerning)
+				uint32_t thisCharColData = *reinterpret_cast<const uint32_t*>(fontPtr) & cmask;
+				if (thisCharColData == 0)  // for characters with deliberate space column at the start, e.g. decimal point
+				{
+					thisCharColData = *reinterpret_cast<const uint32_t*>(fontPtr + fontBytesPerChar) & cmask;
+				}
+
+				const bool kern = (numSpaces >= 2)
+								? ((thisCharColData & lastCharColData) == 0)
+								: (((thisCharColData | (thisCharColData << 1)) & (lastCharColData | (lastCharColData << 1))) == 0);
+				if (kern)
+				{
+					--numSpaces;	// kern the character pair
+				}
+
+				if (numSpaces > columnsLeft)
+				{
+					numSpaces = columnsLeft;
+				}
+				columnsLeft -= numSpaces;
 			}
-			if (numSpaces != 0 && column < rightMargin)
+			else
 			{
-				// Add space columns after the character
+				numSpaces = 0;
+			}
+
+			if (numFontColumns > columnsLeft)
+			{
+				numFontColumns = columnsLeft;
+			}
+
+			PixelNumber ySize = fontHeight;
+			if (row >= numRows)
+			{
+				ySize = 0;				// we still execute the code, so that the caller can tell how many columns the text will occupy by writing it off-screen
+			}
+			else if (ySize > numRows - row)
+			{
+				ySize = numRows - row;
+			}
+
+			if (ySize != 0)
+			{
+				StartCharacter(ySize, numSpaces, numFontColumns);
+			}
+			column += numSpaces;
+
+			while (numFontColumns != 0)
+			{
+				const uint32_t colData = *reinterpret_cast<const uint32_t*>(fontPtr);
+				fontPtr += fontBytesPerColumn;
+				if ((colData & cmask) != 0)
+				{
+					lastCharColData = colData & cmask;
+				}
 				if (ySize != 0)
 				{
-					ClearBlock(row, column, row + ySize, column + numSpaces, textInverted);
+					WriteColumnData(ySize, colData);
 				}
-				column += numSpaces;
-			}
-		}
-
-		while (nCols != 0 && column < rightMargin)
-		{
-			uint32_t colData = *reinterpret_cast<const uint32_t*>(fontPtr);
-			fontPtr += bytesPerColumn;
-			if (colData != 0)
-			{
-				lastCharColData = colData & cmask;
+				--numFontColumns;
+				++column;
 			}
 			if (ySize != 0)
 			{
-				WriteColumnData(colData, ySize);
+				EndCharacter();
 			}
-			--nCols;
-			++column;
 		}
 
 		justSetCursor = false;
@@ -268,7 +288,7 @@ void Lcd::TextInvert(bool b) noexcept
 		textInverted = b;
 		if (!justSetCursor)
 		{
-			lastCharColData = 0xFFFF;				// force a space when switching between normal and inverted text
+			lastCharColData = (GetFontHeight() < 32) ? (1u << GetFontHeight()) - 1 : 0xFFFFFFFF;		// force a space when switching between normal and inverted text
 		}
 	}
 }

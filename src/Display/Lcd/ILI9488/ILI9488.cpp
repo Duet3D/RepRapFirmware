@@ -125,18 +125,32 @@ void LcdILI9488::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width,
 	//TODO
 }
 
-// Write one column of character data at (row, column)
-void LcdILI9488::WriteColumnData(uint32_t columnData, uint8_t ySize) noexcept
+// Start a character at the current row and column, clearing the specified number of space columns
+void LcdILI9488::StartCharacter(PixelNumber ySize, PixelNumber numSpaceColumns, PixelNumber numFontColumns) noexcept
 {
 	uint16_t *_ecv_array p = SetColumnMode(spiBuffer, true);
-	p = SetGraphicsAddress(p, row, row + ySize - 1, column, column);
+	p = SetGraphicsAddress(p, row, row + ySize - 1, column, column + numSpaceColumns + numFontColumns - 1);
 	*p++ = CmdMemoryWrite;
-	for (uint8_t i = 0; i < ySize; ++i)
+	bufferPointer = SetPixelData(p, (textInverted) ? fgColour : bgColour, numSpaceColumns * ySize);
+}
+
+// Write one column of character data at (row, column)
+void LcdILI9488::WriteColumnData(PixelNumber ySize, uint32_t columnData) noexcept
+{
+	uint16_t *_ecv_array p = bufferPointer;
+	for (PixelNumber i = 0; i < ySize; ++i)
 	{
 		p = SetPixelData(p, (columnData & 1u) ? fgColour : bgColour, 1);
 		columnData >>= 1;
 	}
-	SendBuffer(spiBuffer, p - spiBuffer);
+	bufferPointer = p;
+}
+
+// Finish writing a character
+void LcdILI9488::EndCharacter() noexcept
+{
+	SendBuffer(spiBuffer, bufferPointer - spiBuffer);
+	bufferPointer = spiBuffer;
 }
 
 // Send a parameterless command
@@ -178,12 +192,17 @@ uint16_t *_ecv_array LcdILI9488::SetColumnMode(uint16_t *_ecv_array buffer, bool
 
 uint16_t *_ecv_array LcdILI9488::SetPixelData(uint16_t *_ecv_array buffer, Colour pixelColour, unsigned int numPixels) noexcept
 {
-	while (numPixels != 0)
+	const uint16_t blueVal = (pixelColour.blue << 2) | 0x0100;
+	const uint16_t greenVal = (pixelColour.green << 2) | 0x0100;
+	const uint32_t redVal = (pixelColour.red << 2) | 0x0100;
+	while (numPixels != 0
+			&& buffer + 3 <= spiBuffer + ARRAY_SIZE(spiBuffer)			// should always be true, but don't trust the caller!
+		  )
 	{
 		// On the ER-TFTM035-6 display the red and blue pixels appear to be swapped, so we must send them in the order blue-green-red
-		buffer[0] = (pixelColour.blue << 2) | 0x0100;
-		buffer[1] = (pixelColour.green << 2) | 0x0100;
-		buffer[2] = (pixelColour.red << 2) | 0x0100;
+		buffer[0] = blueVal;
+		buffer[1] = greenVal;
+		buffer[2] = redVal;
 		buffer += 3;
 		--numPixels;
 	}

@@ -113,8 +113,17 @@ void MonoLcd::SetDirty(PixelNumber r, PixelNumber c) noexcept
 	SetRectDirty(r, c, r + 1, c + 1);
 }
 
+// Start a character at the current row and column, clearing the specified number of space columns
+void MonoLcd::StartCharacter(PixelNumber ySize, PixelNumber numSpaceColumns, PixelNumber numFontColumns) noexcept
+{
+	if (numSpaceColumns != 0)
+	{
+		ClearBlock(row, column, row + ySize, column + numSpaceColumns, textInverted);
+	}
+}
+
 // Write one column of character data at (row, column)
-void MonoLcd::WriteColumnData(uint32_t columnData, uint8_t ySize) noexcept
+void MonoLcd::WriteColumnData(PixelNumber ySize, uint32_t columnData) noexcept
 {
 	const uint8_t mask1 = 0x80 >> (column & 7);
 	const uint8_t mask2 = ~mask1;
@@ -132,6 +141,12 @@ void MonoLcd::WriteColumnData(uint32_t columnData, uint8_t ySize) noexcept
 		columnData >>= 1;
 		p += (numCols/8);
 	}
+}
+
+// Finish writing a character
+void MonoLcd::EndCharacter() noexcept
+{
+	// Nothing needed here
 }
 
 void MonoLcd::SetPixel(PixelNumber y, PixelNumber x, bool mode) noexcept

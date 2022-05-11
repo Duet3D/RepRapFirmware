@@ -202,7 +202,7 @@ constexpr IRQn_Type SdhcIRQn = SDHC1_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
 // LCD interface
-constexpr uint32_t LcdSpiClockFrequency = 4000000;		// 4.0MHz
+constexpr uint32_t LcdSpiClockFrequency = 14000000;		// 14.0MHz (maximum for ILI9488 controller write accesses is 66ns cycle time i.e. 15MHz, or 150ns for read accesses)
 constexpr unsigned int LcdSercomNumber = 0;
 constexpr Pin LcdSpiMosiPin = PortAPin(4);
 constexpr Pin LcdSpiMisoPin = PortAPin(7);

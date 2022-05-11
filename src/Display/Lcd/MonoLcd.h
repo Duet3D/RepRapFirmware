@@ -57,10 +57,19 @@ public:
 protected:
 	virtual void HardwareInit() noexcept = 0;
 
-	// Write one column of character data at (row, column)
-	void WriteColumnData(uint32_t columnData, uint8_t ySize) noexcept override final;
+	// Start a character at the current row and column, clearing the specified number of space columns
+	void StartCharacter(PixelNumber ySize, PixelNumber numSpaceColumns, PixelNumber numFontColumns) noexcept override final;
 
+	// Write one column of character data at (row, column)
+	void WriteColumnData(PixelNumber ySize, uint32_t columnData) noexcept override final;
+
+	// Finish writing a character
+	void EndCharacter() noexcept override final;
+
+	// Flag a single pixel dirty
 	void SetDirty(PixelNumber r, PixelNumber c) noexcept;
+
+	// Flag a rectangle dirty
 	void SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept;
 
 	uint8_t *_ecv_array image;									// image buffer

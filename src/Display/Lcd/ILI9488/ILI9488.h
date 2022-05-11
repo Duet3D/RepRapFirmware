@@ -51,8 +51,14 @@ protected:
 	// Initialise the TFT screen
 	void HardwareInit() noexcept override;
 
+	// Start a character at the current row and column, clearing the specified number of space columns
+	void StartCharacter(PixelNumber ySize, PixelNumber totalWidth, PixelNumber numSpaceColumns) noexcept override;
+
 	// Write one column of character data at (row, column)
-	void WriteColumnData(uint32_t columnData, uint8_t ySize) noexcept override final;
+	void WriteColumnData(PixelNumber ySize, uint32_t columnData) noexcept override;
+
+	// Finish writing a character
+	void EndCharacter() noexcept override final;
 
 private:
 	void SendCommand(uint8_t cmd) noexcept;
@@ -63,9 +69,10 @@ private:
 	uint16_t *_ecv_array SetColumnMode(uint16_t *_ecv_array buffer, bool columnMode) noexcept;
 	uint16_t *_ecv_array SetPixelData(uint16_t *_ecv_array buffer, Colour pixelColour, unsigned int numPixels) noexcept;
 
-	static constexpr unsigned int MaxPixelsPerTransaction = 480;				// one entire row
+	static constexpr unsigned int MaxPixelsPerTransaction = 1024;				// enough for two entire rows (960) and for one 32x28 character plus 3 space columns (992)
 
 	uint16_t spiBuffer[2 + 10 + 1 + (3 * MaxPixelsPerTransaction)];				// large enough to set row or column mode, set the address, and write MaxPixelsPerTransaction
+	uint16_t *_ecv_array bufferPointer = spiBuffer;								// tracks the next free location when writing characters
 	uint8_t currentRowColMode;
 
 	static constexpr uint8_t CmdReset = 0x01;

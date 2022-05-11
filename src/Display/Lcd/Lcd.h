@@ -146,10 +146,10 @@ public:
 	// Set the right margin. In graphics mode, anything written will be truncated at the right margin. Defaults to the right hand edge of the display.
 	void SetRightMargin(PixelNumber r) noexcept;
 
-	// Clear a rectangle from the current position to the right margin (graphics mode only). The height of the rectangle is the height of the current font.
+	// Clear a rectangle from the current position to the right margin. The height of the rectangle is the height of the current font.
 	void ClearToMargin() noexcept;
 
-	// Flush the display buffer to the display. Data will not be committed to the display until this is called.
+	// Flush the display buffer to the display. Data may not be committed to the display until this is called.
 	void FlushAll() noexcept;
 
 	// printf to LCD
@@ -159,8 +159,14 @@ protected:
 	// Clear part of the display
 	virtual void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, bool foreground) noexcept = 0;
 
+	// Start a character at the current row and column, clearing the specified number of space columns
+	virtual void StartCharacter(PixelNumber ySize, PixelNumber numSpaceColumns, PixelNumber numFontColumns) noexcept = 0;
+
 	// Write one column of character data at (row, column)
-	virtual void WriteColumnData(uint32_t columData, uint8_t ySize) noexcept = 0;
+	virtual void WriteColumnData(PixelNumber ySize, uint32_t columnData) noexcept = 0;
+
+	// Finish writing a character
+	virtual void EndCharacter() noexcept = 0;
 
 	// Write a decoded character
 	size_t writeNative(uint16_t c) noexcept;
@@ -176,7 +182,7 @@ protected:
 
 private:
 	uint32_t charVal;
-	uint16_t lastCharColData = 0;					// data for the last non-space column, used for kerning
+	uint32_t lastCharColData = 0;					// data for the last non-space column, used for kerning
 	uint8_t numContinuationBytesLeft = 0;
 	bool justSetCursor = false;
 };
