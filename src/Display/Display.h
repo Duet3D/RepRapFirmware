@@ -37,6 +37,7 @@ public:
 	void ErrorBeep() noexcept;
 	bool IsPresent() const noexcept { return lcd != nullptr; }
 	void UpdatingFirmware() noexcept;
+	void Tick() noexcept;
 
 	constexpr static uint8_t DefaultDisplayContrastRatio = 30;		// this works well for the Fysetc display
 	constexpr static uint8_t DefaultDisplayResistorRatio = 6;		// the recommended Fysetc display uses 6, some other displays use 3
@@ -56,12 +57,10 @@ private:
 #if SUPPORT_RESISTIVE_TOUCH
 	ResistiveTouch *null touchController;
 #endif
-	uint32_t whenBeepStarted;
-	uint32_t beepLength;
+	volatile uint32_t beepTicksToGo;
 	uint32_t lastRefreshMillis;
 	uint16_t mboxSeq;
 	bool mboxActive;
-	bool beepActive;
 	bool updatingFirmware;
 };
 

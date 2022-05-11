@@ -1305,6 +1305,9 @@ void RepRap::Tick() noexcept
 		WatchdogResetSecondary();												// kick the secondary watchdog
 #endif
 
+#if SUPPORT_DIRECT_LCD
+		display->Tick();
+#endif
 		if (!stopped)
 		{
 			platform->Tick();

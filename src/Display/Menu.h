@@ -58,6 +58,14 @@ private:
 	static char *SkipWhitespace(char *s) noexcept;
 	static bool CheckVisibility(MenuItem::Visibility vis) noexcept;
 
+#if SUPPORT_RESISTIVE_TOUCH
+	static void TouchBeep() noexcept;
+
+	static constexpr uint32_t TouchBeepLength = 20;				// beep length in ms
+	static constexpr uint32_t TouchBeepFrequency = 4500;		// beep frequency in Hz. Resonant frequency of the piezo sounder is 4.5kHz.
+
+#endif
+
 #ifdef __LPC17xx__
     static const size_t CommandBufferSize = 1024;
 #else

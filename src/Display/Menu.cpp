@@ -813,60 +813,69 @@ void Menu::HandleTouch(PixelNumber x, PixelNumber y) noexcept
 {
 	constexpr int MaxXerror = 8, MaxYerror = 8;		// how far (in pixels) the X and Y coordinates of a touch event need to be to the outline of the item for us to disallow it
 
-	int bestError = MaxXerror + MaxYerror;
-	MenuItem *null best = nullptr;
-	for (MenuItem *p = selectableItems; p != nullptr; p = p->GetNext())
+	if (displayingErrorMessage)
 	{
-		if (p->IsVisible())
+		// Allow the message to be cancelled by a touch
+		TouchBeep();
+		timeoutValue = 1;						// cancel the timeout at the next tick
+	}
+	else
+	{
+		int bestError = MaxXerror + MaxYerror;
+		MenuItem *null best = nullptr;
+		for (MenuItem *p = selectableItems; p != nullptr; p = p->GetNext())
 		{
-			const int xError = (x < p->GetMinX()) ? p->GetMinX() - x
-									: (x > p->GetMaxX()) ? x - p->GetMaxX()
-										: 0;
-			if (xError < MaxXerror)
+			if (p->IsVisible())
 			{
-				const int yError = (y <p->GetMinY()) ? p->GetMinY() - y
-										: (y > p->GetMaxY()) ? y - p->GetMaxY()
+				const int xError = (x < p->GetMinX()) ? p->GetMinX() - x
+										: (x > p->GetMaxX()) ? x - p->GetMaxX()
 											: 0;
-				if (yError < MaxYerror && xError + yError < bestError)
+				if (xError < MaxXerror)
 				{
-					bestError = xError + yError;
-					best = p;
+					const int yError = (y <p->GetMinY()) ? p->GetMinY() - y
+											: (y > p->GetMaxY()) ? y - p->GetMaxY()
+												: 0;
+					if (yError < MaxYerror && xError + yError < bestError)
+					{
+						bestError = xError + yError;
+						best = p;
+					}
 				}
 			}
 		}
-	}
 
-	if (best != nullptr)
-	{
-
-		if (displayingErrorMessage)
+		if (best != nullptr)
 		{
-			// Allow the message to be cancelled by a touch
-			timeoutValue = 1;						// cancel the timeout at the next tick
-		}
-		else if (itemIsSelected)					// send the touch to the item itself
-		{
-			if (highlightedItem != nullptr && highlightedItem->IsVisible())
+			TouchBeep();
+			if (itemIsSelected)					// send the touch to the item itself
 			{
-				//TODO
+				if (highlightedItem != nullptr && highlightedItem->IsVisible())
+				{
+					//TODO
+				}
+				else
+				{
+					itemIsSelected = false;			// should not get here
+				}
 			}
-			else
+			else									// click without an item under selection
 			{
-				itemIsSelected = false;			// should not get here
+				highlightedItem = best;
+				EncoderActionEnterItemHelper();
 			}
-		}
-		else									// click without an item under selection
-		{
-			highlightedItem = best;
-			EncoderActionEnterItemHelper();
-		}
 
-		if (!displayingErrorMessage && !displayingMessageBox)	// if the operation did not result in an error and we are not displaying a message box
-		{
-			lastActionTime = millis();
-			timeoutValue = InactivityTimeout;
+			if (!displayingErrorMessage && !displayingMessageBox)	// if the operation did not result in an error and we are not displaying a message box
+			{
+				lastActionTime = millis();
+				timeoutValue = InactivityTimeout;
+			}
 		}
 	}
+}
+
+/*static*/ void Menu::TouchBeep() noexcept
+{
+	reprap.GetDisplay().Beep(TouchBeepFrequency, TouchBeepLength);
 }
 
 #endif

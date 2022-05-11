@@ -80,8 +80,9 @@ Display::Display() noexcept
 #if SUPPORT_RESISTIVE_TOUCH
 	  touchController(nullptr),
 #endif
+	  beepTicksToGo(0),
 	  lastRefreshMillis(0),
-	  mboxSeq(0), mboxActive(false), beepActive(false), updatingFirmware(false)
+	  mboxSeq(0), mboxActive(false), updatingFirmware(false)
 {
 }
 
@@ -160,12 +161,6 @@ void Display::Spin() noexcept
 			lastRefreshMillis = now;
 		}
 		lcd->FlushSome();
-
-		if (beepActive && millis() - whenBeepStarted > beepLength)
-		{
-			StopBeep();
-			beepActive = false;
-		}
 	}
 }
 
@@ -174,7 +169,6 @@ void Display::Exit() noexcept
 	if (lcd != nullptr)
 	{
 		StopBeep();
-		beepActive = false;
 		if (!updatingFirmware)
 		{
 			lcd->TextInvert(false);
@@ -185,33 +179,6 @@ void Display::Exit() noexcept
 		}
 		lcd->FlushAll();
 	}
-}
-
-// NOTE: nothing enforces that this beep concludes before another is begun;
-//   that is, in rapid succession of commands, only the last beep issued will be heard by the user
-void Display::Beep(unsigned int frequency, unsigned int milliseconds) noexcept
-{
-	if (lcd != nullptr)
-	{
-		whenBeepStarted = millis();
-		beepLength = milliseconds;
-		beepActive = true;
-#if SUPPORT_12864_LCD
-		IoPort::WriteAnalog(LcdBeepPin, 0.5, (uint16_t)frequency);
-#elif SUPPORT_ILI9488_LCD
-		AnalogOut::Beep(BeeperPins[0], BeeperPins[1], (uint16_t)frequency);
-#endif
-	}
-}
-
-void Display::SuccessBeep() noexcept
-{
-	Beep(2000, 100);
-}
-
-void Display::ErrorBeep() noexcept
-{
-	Beep(500, 1000);
 }
 
 void Display::InitDisplay(GCodeBuffer& gb, Lcd *newLcd, Pin csPin, Pin a0Pin, bool defaultCsPolarity) THROWS(GCodeException)
@@ -349,13 +316,55 @@ void Display::UpdatingFirmware() noexcept
 	}
 }
 
+// NOTE: nothing enforces that this beep concludes before another is begun;
+//   that is, in rapid succession of commands, only the last beep issued will be heard by the user
+void Display::Beep(unsigned int frequency, unsigned int milliseconds) noexcept
+{
+	if (lcd != nullptr)
+	{
+#if SUPPORT_12864_LCD
+		IoPort::WriteAnalog(LcdBeepPin, 0.5, (uint16_t)frequency);
+#elif SUPPORT_ILI9488_LCD
+		AnalogOut::Beep(BeeperPins[0], BeeperPins[1], (uint16_t)frequency);
+#endif
+		beepTicksToGo = milliseconds;
+	}
+}
+
+void Display::SuccessBeep() noexcept
+{
+	Beep(2000, 100);
+}
+
+void Display::ErrorBeep() noexcept
+{
+	Beep(500, 1000);
+}
+
+// Caution: this may be called from within an ISR
 void Display::StopBeep() noexcept
 {
+			beepTicksToGo = 0;						// do this first to avoid race condition with tick ISR
 #if SUPPORT_12864_LCD
 			IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);
 #elif SUPPORT_ILI9488_LCD
 			AnalogOut::Beep(BeeperPins[0], BeeperPins[1], 0);
 #endif
+}
+
+// This is called from the tick ISR
+void Display::Tick() noexcept
+{
+	uint32_t locTicks = beepTicksToGo;				// capture volatile variable to reduce code size
+	if (locTicks != 0)
+	{
+		--locTicks;
+		if (locTicks == 0)
+		{
+			StopBeep();
+		}
+		beepTicksToGo = locTicks;
+	}
 }
 
 #endif
