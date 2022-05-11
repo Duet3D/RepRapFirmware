@@ -58,7 +58,7 @@ void MenuItem::PrintAligned(Lcd& lcd, PixelNumber tOffset, PixelNumber rightMarg
 		}
 	}
 
-	lcd.SetCursor(row - tOffset, column);
+	lcd.SetCursor(row, column);
 	lcd.SetRightMargin(min<PixelNumber>(rightMargin, column + width));
 	lcd.TextInvert(highlighted);
 	if (colsToSkip != 0)

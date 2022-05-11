@@ -195,9 +195,6 @@ void Menu::ClearMessageBox() noexcept
 
 void Menu::Pop() noexcept
 {
-	// currentMargin = 0;
-	lcd.ClearAll();
-	rowOffset = 0;
 	--numNestedMenus;
 	Reload();
 }
@@ -276,11 +273,11 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 			break;
 
 		case 'R':
-			row = StrToU32(args, &args);
+			row = StrToU32(args, &args) + rowOffset;
 			break;
 
 		case 'C':
-			column = StrToU32(args, &args);
+			column = StrToU32(args, &args) + currentMargin;
 			break;
 
 		case 'F':
@@ -339,8 +336,6 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 		}
 	}
 
-	lcd.SetCursor(row + currentMargin, column + currentMargin);
-
 	// Create an object resident in memory corresponding to the menu layout file's description
 	if (StringEqualsIgnoreCase(commandWord, "text"))
 	{
@@ -382,9 +377,9 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 		const char * const actionString = AppendString(action);
 		const char *const dir = AppendString(dirpath);
 		const char *const acFileString = AppendString(fname);
-		AddItem(new FilesMenuItem(row, 0, lcd.GetNumCols(), fontNumber, xVis, actionString, dir, acFileString, nparam), true);
+		AddItem(new FilesMenuItem(row, currentMargin, lcd.GetNumCols(), fontNumber, xVis, actionString, dir, acFileString, nparam), true);
 		row += nparam * lcd.GetFontHeight(fontNumber);
-		column = 0;
+		column = currentMargin;
 	}
 #endif
 	else
@@ -418,6 +413,11 @@ void Menu::ResetCache() noexcept
 void Menu::Reload() noexcept
 {
 	displayingFixedMenu = false;
+
+#if 0	// if all menus use the whole screen (no visual nesting)
+	currentMargin = rowOffset = 0;
+	lcd.ClearAll();
+#else
 	if (numNestedMenus == 1)
 	{
 		currentMargin = 0;
@@ -425,19 +425,20 @@ void Menu::Reload() noexcept
 	}
 	else
 	{
-		currentMargin = 0;
-		const PixelNumber right = lcd.GetNumCols();
-		const PixelNumber bottom = lcd.GetNumRows();
-		lcd.Clear(currentMargin, currentMargin, bottom, right);
+		constexpr PixelNumber indentPerLevel = 10;		//TODO make this depend on the screen resolution
+		currentMargin = rowOffset = indentPerLevel * (numNestedMenus - 1);
+		const PixelNumber borderMargin = currentMargin - 2;
+		const PixelNumber right = lcd.GetNumCols() - borderMargin - 1;
+		const PixelNumber bottom = lcd.GetNumRows() - borderMargin - 1;
+		lcd.Clear(borderMargin, borderMargin, bottom, right);
 
 		// Draw the outline
-		// lcd.Line(currentMargin, currentMargin, bottom, currentMargin, PixelMode::PixelSet);
-		// lcd.Line(currentMargin, currentMargin, currentMargin, right, PixelMode::PixelSet);
-		// lcd.Line(bottom, currentMargin, bottom, right, PixelMode::PixelSet);
-		// lcd.Line(currentMargin, right, bottom, right, PixelMode::PixelSet);
-
-		// currentMargin += InnerMargin;
+		lcd.Line(borderMargin, borderMargin, bottom, borderMargin, true);
+		lcd.Line(borderMargin, borderMargin, borderMargin, right, true);
+		lcd.Line(bottom, borderMargin, bottom, right, true);
+		lcd.Line(borderMargin, right, bottom, right, true);
 	}
+#endif
 
 	ResetCache();
 	displayingErrorMessage = false;
@@ -451,8 +452,8 @@ void Menu::Reload() noexcept
 	}
 	else
 	{
-		row = 0;
-		column = 0;
+		row = rowOffset;
+		column = currentMargin;
 		fontNumber = 0;
 		commandBufferIndex = 0;						// Free the string buffer, which contains layout elements from an old menu
 		for (unsigned int line = 1; ; ++line)
