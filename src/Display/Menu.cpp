@@ -701,12 +701,12 @@ void Menu::DrawAll() noexcept
 	const PixelNumber rightMargin = lcd.GetNumCols() - currentMargin;
 	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
 	{
-		item->Draw(lcd, rightMargin, (item == highlightedItem), rowOffset);
+		item->Draw(lcd, rightMargin, (item == highlightedItem));
 	}
 
 	for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())
 	{
-		item->Draw(lcd, rightMargin, false, rowOffset);
+		item->Draw(lcd, rightMargin, false);
 	}
 }
 
