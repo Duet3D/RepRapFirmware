@@ -82,6 +82,7 @@ private:
 	static constexpr uint8_t CmdMemoryWrite = 0x2C;
 	static constexpr uint8_t CmdMemoryAccessControl = 0x36;
 	static constexpr uint8_t CmdInterfacePixelFormat = 0x3A;
+	static constexpr uint8_t CmdMemoryWriteContinue = 0x3C;
 	static constexpr uint8_t CmdInterfaceModeControl = 0xB0;
 	static constexpr uint8_t CmdFrameRateControlNormal = 0xB1;
 	static constexpr uint8_t CmdDisplayInversionControl = 0xB4;

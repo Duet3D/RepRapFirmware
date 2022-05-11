@@ -74,19 +74,26 @@ void LcdILI9488::HardwareInit() noexcept
 // Clear part of the display
 void LcdILI9488::ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, bool foreground) noexcept
 {
-	if (left < right)
+	if (left < right && top < bottom)
 	{
-		while (top < bottom)
+		// Send the data in chunks that fit in our buffer.
+		// There is no need to fill the buffer more than once, we can re-use the same pixel data for each chunk.
+		// The Memory Write Continue command always writes in column mode.
+		uint32_t pixelsLeft = (bottom - top) * (right - left);
+		uint16_t *_ecv_array p = SetColumnMode(spiBuffer, true);
+		uint16_t *_ecv_array const commandPtr = SetGraphicsAddress(p, top, bottom - 1, left, right - 1);
+		*commandPtr = CmdMemoryWrite;
+		uint32_t pixelsToDo = min<uint32_t>(pixelsLeft, MaxPixelsPerTransaction);
+		p = SetPixelData(commandPtr + 1, (foreground) ? fgColour : bgColour, pixelsToDo);
+		SendBuffer(spiBuffer, p - spiBuffer);						// send first chunk
+		while ((pixelsLeft -= pixelsToDo) != 0)						// update pixelsLeft and check if more to do
 		{
-			const PixelNumber rowsToDo = ((unsigned int)(bottom - top) * (unsigned int)(right - left) < MaxPixelsPerTransaction)
-											? (unsigned int)(bottom - top)
-												: MaxPixelsPerTransaction/(unsigned int)(right - left);
-			uint16_t *_ecv_array p = SetColumnMode(spiBuffer, false);
-			p = SetGraphicsAddress(p, top, top + rowsToDo - 1, left, right - 1);
-			*p++ = CmdMemoryWrite;
-			p = SetPixelData(p, (foreground) ? fgColour : bgColour, rowsToDo * (right - left));
-			SendBuffer(spiBuffer, p - spiBuffer);
-			top += rowsToDo;
+			*commandPtr = CmdMemoryWriteContinue;
+			if (pixelsLeft < pixelsToDo)
+			{
+				pixelsToDo = pixelsLeft;
+			}
+			SendBuffer(commandPtr, (3 * pixelsToDo) + 1);
 		}
 	}
 }
