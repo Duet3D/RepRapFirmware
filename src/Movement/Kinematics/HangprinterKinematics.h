@@ -106,12 +106,15 @@ private:
 	float k2[HANGPRINTER_AXES] = { 0.0F };
 	float distancesOrigin[HANGPRINTER_AXES] = { 0.0F };
 	float springKsOrigin[HANGPRINTER_AXES] = { 0.0F };
-	float distancesWithRelaxedSpringsOrigin[HANGPRINTER_AXES] = { 0.0F };
+	float relaxedSpringLengthsOrigin[HANGPRINTER_AXES] = { 0.0F };
 	float fOrigin[HANGPRINTER_AXES] = { 0.0F };
 	float printRadiusSquared = 0.0F;
 
 	float SpringK(float const springLength) const noexcept;
 	void StaticForces(float const machinePos[3], float F[4]) const noexcept;
+	void flexDistances(float const machinePos[3], float const distanceA,
+	                   float const distanceB, float const distanceC,
+	                   float const distanceD, float flex[HANGPRINTER_AXES]) const noexcept;
 
 #if DUAL_CAN
 	// Some CAN helpers

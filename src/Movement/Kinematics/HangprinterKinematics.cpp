@@ -175,7 +175,7 @@ void HangprinterKinematics::Recalc() noexcept
 	float constexpr origin[3] = { 0.0F, 0.0F, 0.0F };
 	StaticForces(origin, fOrigin);
 	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
-		distancesWithRelaxedSpringsOrigin[i] = distancesOrigin[i] - fOrigin[i] / (springKsOrigin[i] * mechanicalAdvantage[i]);
+		relaxedSpringLengthsOrigin[i] = distancesOrigin[i] - fOrigin[i] / (springKsOrigin[i] * mechanicalAdvantage[i]);
 	}
 
 #if DUAL_CAN
@@ -367,15 +367,15 @@ bool HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], cons
 	float F[HANGPRINTER_AXES] = {0.0F}; // desired force in each direction
 	StaticForces(machinePos, F);
 
-	float distancesWithRelaxedSprings[HANGPRINTER_AXES];
+	float relaxedSpringLengths[HANGPRINTER_AXES];
 	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
-		distancesWithRelaxedSprings[i] = distances[i] - F[i] / (springKs[i] * mechanicalAdvantage[i]);
+		relaxedSpringLengths[i] = distances[i] - F[i] / (springKs[i] * mechanicalAdvantage[i]);
 		// The second term there is the mover's movement in mm due to flex
 	}
 
 	float linePos[HANGPRINTER_AXES];
 	for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
-		linePos[i] = distancesWithRelaxedSprings[i] - distancesWithRelaxedSpringsOrigin[i];
+		linePos[i] = relaxedSpringLengths[i] - relaxedSpringLengthsOrigin[i];
 	}
 
 	motorPos[A_AXIS] = lrintf(k0[A_AXIS] * (fastSqrtf(spoolRadiiSq[A_AXIS] + linePos[A_AXIS] * k2[A_AXIS]) - spoolRadii[A_AXIS]));
@@ -392,16 +392,66 @@ inline float HangprinterKinematics::MotorPosToLinePos(const int32_t motorPos, si
 	return (fsquare(motorPos / k0[axis] + spoolRadii[axis]) - spoolRadiiSq[axis]) / k2[axis];
 }
 
+
+void HangprinterKinematics::flexDistances(float const machinePos[3], float const distanceA,
+                                          float const distanceB, float const distanceC,
+                                          float const distanceD, float flex[HANGPRINTER_AXES]) const noexcept {
+	float springKs[HANGPRINTER_AXES] = {
+		SpringK(distanceA * mechanicalAdvantage[A_AXIS] + guyWireLengths[A_AXIS]),
+		SpringK(distanceB * mechanicalAdvantage[B_AXIS] + guyWireLengths[B_AXIS]),
+		SpringK(distanceC * mechanicalAdvantage[C_AXIS] + guyWireLengths[C_AXIS]),
+		SpringK(distanceD * mechanicalAdvantage[D_AXIS] + guyWireLengths[D_AXIS])
+	};
+
+	float F[HANGPRINTER_AXES] = {0.0F}; // desired force in each direction
+	StaticForces(machinePos, F);
+
+	float relaxedSpringLengths[HANGPRINTER_AXES] = {
+		distanceA - F[A_AXIS] / (springKs[A_AXIS] * mechanicalAdvantage[A_AXIS]),
+		distanceB - F[B_AXIS] / (springKs[B_AXIS] * mechanicalAdvantage[B_AXIS]),
+		distanceC - F[C_AXIS] / (springKs[C_AXIS] * mechanicalAdvantage[C_AXIS]),
+		distanceD - F[D_AXIS] / (springKs[D_AXIS] * mechanicalAdvantage[D_AXIS])
+	};
+
+	float linePos[HANGPRINTER_AXES] = {
+		relaxedSpringLengths[A_AXIS] - relaxedSpringLengthsOrigin[A_AXIS],
+		relaxedSpringLengths[B_AXIS] - relaxedSpringLengthsOrigin[B_AXIS],
+		relaxedSpringLengths[C_AXIS] - relaxedSpringLengthsOrigin[C_AXIS],
+		relaxedSpringLengths[D_AXIS] - relaxedSpringLengthsOrigin[D_AXIS]
+	};
+
+	float distanceDifferences[HANGPRINTER_AXES] = {
+		distanceA - distancesOrigin[A_AXIS],
+		distanceB - distancesOrigin[B_AXIS],
+		distanceC - distancesOrigin[C_AXIS],
+		distanceD - distancesOrigin[D_AXIS]
+	};
+
+	flex[A_AXIS] = linePos[A_AXIS] - distanceDifferences[A_AXIS];
+	flex[B_AXIS] = linePos[B_AXIS] - distanceDifferences[B_AXIS];
+	flex[C_AXIS] = linePos[C_AXIS] - distanceDifferences[C_AXIS];
+	flex[D_AXIS] = linePos[D_AXIS] - distanceDifferences[D_AXIS];
+}
+
 // Convert motor coordinates to machine coordinates.
 // Assumes lines are tight and anchor location norms are followed
 void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
-	ForwardTransform(
-		MotorPosToLinePos(motorPos[A_AXIS], A_AXIS) + distancesOrigin[A_AXIS],
-		MotorPosToLinePos(motorPos[B_AXIS], B_AXIS) + distancesOrigin[B_AXIS],
-		MotorPosToLinePos(motorPos[C_AXIS], C_AXIS) + distancesOrigin[C_AXIS],
-		MotorPosToLinePos(motorPos[D_AXIS], D_AXIS) + distancesOrigin[D_AXIS],
-		machinePos);
+	float const distanceA = MotorPosToLinePos(motorPos[A_AXIS], A_AXIS) + distancesOrigin[A_AXIS];
+	float const distanceB = MotorPosToLinePos(motorPos[B_AXIS], B_AXIS) + distancesOrigin[B_AXIS];
+	float const distanceC = MotorPosToLinePos(motorPos[C_AXIS], C_AXIS) + distancesOrigin[C_AXIS];
+	float const distanceD = MotorPosToLinePos(motorPos[D_AXIS], D_AXIS) + distancesOrigin[D_AXIS];
+	ForwardTransform(distanceA, distanceB, distanceC, distanceD, machinePos);
+
+	// Now we have an approximate machinePos
+	// Let's correct for line flex
+	float flex[HANGPRINTER_AXES] = { 0.0F };
+	flexDistances(machinePos, distanceA, distanceB, distanceC, distanceD, flex);
+	float const adjustedDistanceA = distanceA - flex[A_AXIS];
+	float const adjustedDistanceB = distanceB - flex[B_AXIS];
+	float const adjustedDistanceC = distanceC - flex[C_AXIS];
+	float const adjustedDistanceD = distanceD - flex[D_AXIS];
+	ForwardTransform(adjustedDistanceA, adjustedDistanceB, adjustedDistanceC, adjustedDistanceD, machinePos);
 }
 
 static bool isSameSide(float const v0[3], float const v1[3], float const v2[3], float const v3[3], float const p[3]){
@@ -975,8 +1025,8 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, f
 	}
 
 	GCodeResult res = GCodeResult::ok;
-	constexpr double MIN_TORQUE_N = 0.001;
-	if (fabs(force_Newton) < MIN_TORQUE_N)
+	constexpr float MIN_TORQUE_N = 0.001;
+	if (fabsf(force_Newton) < MIN_TORQUE_N)
 	{
 		res = SetODrive3PosMode(driver, reply);
 		if (res == GCodeResult::ok)
