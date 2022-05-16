@@ -69,6 +69,11 @@
 
 #if SUPPORT_DIRECT_LCD
 
+#include "TextMenuItem.h"
+#include "ButtonMenuItem.h"
+#include "ValueMenuItem.h"
+#include "FilesMenuItem.h"
+#include "ImageMenuItem.h"
 #include "Lcd/Lcd.h"
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
