@@ -38,7 +38,7 @@
 #include "Logger.h"
 #include "Tasks.h"
 #include <Cache.h>
-#include <Hardware/SharedSpi/SharedSpiDevice.h>
+#include <Hardware/Spi/SharedSpiDevice.h>
 #include <Math/Isqrt.h>
 #include <Hardware/I2C.h>
 #include <Hardware/NonVolatileMemory.h>
@@ -77,7 +77,7 @@ using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have 
 # include <Comms/FirmwareUpdater.h>
 #endif
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 # include "Display/Display.h"
 #endif
 
@@ -219,7 +219,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #if SUPPORT_CAN_EXPANSION
 	{ "canAddress",			OBJECT_MODEL_FUNC_NOSELF((int32_t)CanInterface::GetCanAddress()),									ObjectModelEntryFlags::none },
 #endif
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	{ "directDisplay",		OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetDisplay().IsPresent(), &reprap.GetDisplay()),					ObjectModelEntryFlags::none },
 #endif
 	{ "firmwareDate",		OBJECT_MODEL_FUNC_NOSELF(DATE),																		ObjectModelEntryFlags::none },
@@ -244,7 +244,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "name",				OBJECT_MODEL_FUNC_NOSELF(BOARD_NAME),																ObjectModelEntryFlags::none },
 	{ "shortName",			OBJECT_MODEL_FUNC_NOSELF(BOARD_SHORT_NAME),															ObjectModelEntryFlags::none },
 #endif
-	{ "supportsDirectDisplay", OBJECT_MODEL_FUNC_NOSELF(SUPPORT_12864_LCD ? true : false),										ObjectModelEntryFlags::verbose },
+	{ "supportsDirectDisplay", OBJECT_MODEL_FUNC_NOSELF(SUPPORT_DIRECT_LCD ? true : false),										ObjectModelEntryFlags::verbose },
 #if MCU_HAS_UNIQUE_ID
 	{ "uniqueId",			OBJECT_MODEL_FUNC_IF(self->uniqueId.IsValid(), self->uniqueId),										ObjectModelEntryFlags::none },
 #endif
@@ -341,7 +341,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
 	10,																		// number of sections
-	9 + SUPPORT_ACCELEROMETERS + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR + SUPPORT_CAN_EXPANSION + SUPPORT_12864_LCD + MCU_HAS_UNIQUE_ID,		// section 0: boards[0]
+	9 + SUPPORT_ACCELEROMETERS + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR + SUPPORT_CAN_EXPANSION + SUPPORT_DIRECT_LCD + MCU_HAS_UNIQUE_ID,		// section 0: boards[0]
 #if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
 #else
@@ -2270,7 +2270,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 #if SUPPORT_IOBITS
 					"\nPortControl %08" PRIx32 "-%08" PRIx32
 #endif
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 					"\nDisplay %08" PRIx32 "-%08" PRIx32
 #endif
 #if SUPPORT_CAN_EXPANSION
@@ -2288,7 +2288,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 #if SUPPORT_IOBITS
 					, reinterpret_cast<uint32_t>(&reprap.GetPortControl()), reinterpret_cast<uint32_t>(&reprap.GetPortControl()) + sizeof(PortControl) - 1
 #endif
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 					, reinterpret_cast<uint32_t>(&reprap.GetDisplay()), reinterpret_cast<uint32_t>(&reprap.GetDisplay()) + sizeof(Display) - 1
 #endif
 #if SUPPORT_CAN_EXPANSION

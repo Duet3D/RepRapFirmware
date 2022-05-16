@@ -10,6 +10,8 @@
 
 #include "MenuItem.h"
 
+#if SUPPORT_DIRECT_LCD
+
 class ImageMenuItem final : public MenuItem
 {
 public:
@@ -24,5 +26,7 @@ public:
 private:
 	String<MaxFilenameLength> fileName;
 };
+
+#endif
 
 #endif /* SRC_DISPLAY_IMAGEMENUITEM_H_ */

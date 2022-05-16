@@ -10,6 +10,8 @@
 
 #include "MenuItem.h"
 
+#if SUPPORT_DIRECT_LCD
+
 class TextMenuItem final : public MenuItem
 {
 public:
@@ -27,5 +29,6 @@ private:
 	const char *_ecv_array text;
 };
 
+#endif
 
 #endif /* SRC_DISPLAY_TEXTMENUITEM_H_ */

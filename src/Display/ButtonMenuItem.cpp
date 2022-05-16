@@ -7,6 +7,8 @@
 
 #include "ButtonMenuItem.h"
 
+#if SUPPORT_DIRECT_LCD
+
 ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char* t, const char* cmd, char const* acFile) noexcept
 	: MenuItem(r, c, w, CentreAlign, fn), text(t), command(cmd), m_acFile(acFile)
 {
@@ -90,5 +92,6 @@ PixelNumber ButtonMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, P
 	return tOffsetRequest;
 }
 
-// End
+#endif
 
+// End

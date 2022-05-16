@@ -10,6 +10,8 @@
 
 #include "MenuItem.h"
 
+#if SUPPORT_DIRECT_LCD
+
 class ButtonMenuItem final : public MenuItem
 {
 public:
@@ -31,5 +33,7 @@ private:
 	const char *command;
 	const char *m_acFile; // used when action ("command") is "menu"
 };
+
+#endif
 
 #endif /* SRC_DISPLAY_BUTTONMENUITEM_H_ */

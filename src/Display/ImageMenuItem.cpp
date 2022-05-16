@@ -7,6 +7,8 @@
 
 #include "ImageMenuItem.h"
 
+#if SUPPORT_DIRECT_LCD
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 
@@ -71,5 +73,6 @@ void ImageMenuItem::UpdateWidthAndHeight(Lcd& lcd) noexcept
 	}
 }
 
-// End
+#endif
 
+// End

@@ -7,6 +7,8 @@
 
 #include "TextMenuItem.h"
 
+#if SUPPORT_DIRECT_LCD
+
 TextMenuItem::TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, const char *_ecv_array t) noexcept
 	: MenuItem(r, c, w, a, fn), text(t)
 {
@@ -50,5 +52,6 @@ void TextMenuItem::UpdateWidthAndHeight(Lcd& lcd) noexcept
 	}
 }
 
-// End
+#endif
 
+// End

@@ -51,7 +51,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
-#define SUPPORT_TFTM0356_6_LCD	1
+#define SUPPORT_ILI9488_LCD		1
 #define SUPPORT_ACCELEROMETERS	1
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				0
@@ -201,28 +201,35 @@ constexpr IRQn_Type SdhcIRQn = SDHC1_IRQn;
 constexpr uint32_t ExpectedSdCardSpeed = 15000000;
 
 // LCD interface
-constexpr uint32_t LcdSpiClockFrequency = 4000000;		// 4.0MHz
+// The maximum permitted SPI speed for the ILI9488 controller is 15.0MHz for write cycles (66ns cycle time) and 6.67MHz for read accesses (150ns cycle time).
+// We use only write accesses.
+// Using an SPI CLK of 60MHz we can only divide by 2, 4, 6 etc.
+// Therefore the available frequencies are 15MHz, 10MHz, 7.5MHz, 6MHz, 5MHz.
+constexpr uint32_t LcdSpiClockFrequency = 15000000;
 constexpr unsigned int LcdSercomNumber = 0;
 constexpr Pin LcdSpiMosiPin = PortAPin(4);
 constexpr Pin LcdSpiMisoPin = PortAPin(7);
 constexpr Pin LcdSpiSclkPin = PortAPin(5);
-constexpr GpioPinFunction LcdSpiPinFunction = GpioPinFunction::C;
-
 constexpr Pin LcdSpiCsPin = PortAPin(6);
-constexpr Pin LcdRtpPenPin = PortAPin(3);
+constexpr GpioPinFunction LcdSpiPinFunction = GpioPinFunction::D;
+
 constexpr Pin LcdDcPin = PortCPin(5);
 constexpr Pin LcdResetPin = PortCPin(6);
 constexpr Pin LcdFlashCsPin = PortBPin(10);
 constexpr Pin LcdFlashWpPin = PortAPin(2);
 constexpr Pin LcdFlashHoldPin = PortCPin(7);
 
+constexpr Pin LcdBacklightPin = PortBPin(12);
+
 // Touch screen interface (when not shared with SharedSpi)
-constexpr unsigned int RtpSercomNumber = 6;
-constexpr Pin RtpSpiMosiPin = PortCPin(16);
-constexpr Pin RtpSpiMisoPin = PortCPin(19);
-constexpr Pin RtpSpiSclkPin = PortCPin(17);
+//constexpr unsigned int RtpSercomNumber = 6;
+//constexpr Pin RtpSpiMosiPin = PortCPin(16);
+//constexpr Pin RtpSpiMisoPin = PortCPin(19);
+//constexpr Pin RtpSpiSclkPin = PortCPin(17);
+//constexpr GpioPinFunction RtpSpiPinFunction = GpioPinFunction::C;
+
 constexpr Pin RtpSpiCsPin = PortCPin(18);
-constexpr GpioPinFunction RtpSpiPinFunction = GpioPinFunction::C;
+constexpr Pin RtpPenPin = PortAPin(3);
 
 // Beeper
 constexpr Pin BeeperPins[2] = { PortAPin(8), PortAPin(9) };
@@ -406,6 +413,7 @@ constexpr DmaPriority DmacPrioTmcTx = 0;
 constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this is not very critical
 constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
+constexpr DmaPriority DmacPrioLcdTx = 3;				// high speed SPI in slave mode
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers

@@ -9,6 +9,9 @@
 #define SRC_DISPLAY_VALUEMENUITEM_H_
 
 #include "MenuItem.h"
+
+#if SUPPORT_DIRECT_LCD
+
 #include <ObjectModel/ObjectModel.h>
 
 class ValueMenuItem final : public MenuItem
@@ -50,5 +53,8 @@ private:
 	uint8_t error : 1,											// for temporary use when printing
 			asPercent : 1;										// true if we print this as a percentage
 };
+
+
+#endif
 
 #endif /* SRC_DISPLAY_VALUEMENUITEM_H_ */

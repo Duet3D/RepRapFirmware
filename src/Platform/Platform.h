@@ -746,7 +746,7 @@ private:
 	void SetDriverDirection(uint8_t driver, bool direction) noexcept
 	pre(driver < NumDirectDrivers);
 
-#if VARIABLE_NUM_DRIVERS && SUPPORT_12864_LCD
+#if VARIABLE_NUM_DRIVERS && SUPPORT_DIRECT_LCD
 	size_t numActualDirectDrivers;
 #endif
 

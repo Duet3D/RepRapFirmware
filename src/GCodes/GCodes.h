@@ -192,7 +192,7 @@ public:
 															) noexcept;			// Lock movement and wait for pending moves to finish
 	bool LockMovementAndWaitForStandstillNoSync(GCodeBuffer& gb) noexcept;		// Lock movement and wait for pending moves to finish but don't sync if using multiple movement queues
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	void SetPrimarySpeedFactor(float factor) noexcept;							// Set the speed factor
 	void SetExtrusionFactor(size_t extruder, float factor) noexcept;			// Set an extrusion factor for the specified extruder
 	void SelectPrimaryTool(int toolNumber, bool simulating) noexcept { moveStates[0].SelectTool(toolNumber, simulating); }
@@ -536,7 +536,7 @@ private:
 	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68
 #endif
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	int GetHeaterNumber(unsigned int itemNumber) const noexcept;
 #endif
 	Pwm_t ConvertLaserPwm(float reqVal) const noexcept;

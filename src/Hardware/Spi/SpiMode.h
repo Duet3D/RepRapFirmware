@@ -5,8 +5,8 @@
  *      Author: David
  */
 
-#ifndef SRC_HARDWARE_SHAREDSPI_SPIMODE_H_
-#define SRC_HARDWARE_SHAREDSPI_SPIMODE_H_
+#ifndef SRC_HARDWARE_SPI_SPIMODE_H_
+#define SRC_HARDWARE_SPI_SPIMODE_H_
 
 enum class SpiMode : uint8_t
 {
@@ -19,4 +19,4 @@ constexpr SpiMode SPI_MODE_1 = SpiMode::mode1;
 constexpr SpiMode SPI_MODE_2 = SpiMode::mode2;
 constexpr SpiMode SPI_MODE_3 = SpiMode::mode3;
 
-#endif /* SRC_HARDWARE_SHAREDSPI_SPIMODE_H_ */
+#endif /* SRC_HARDWARE_SPI_SPIMODE_H_ */

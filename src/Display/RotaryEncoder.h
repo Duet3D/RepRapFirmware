@@ -3,7 +3,7 @@
 
 #include "RepRapFirmware.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_ROTARY_ENCODER
 
 // Class to manage a rotary encoder with a push button
 class RotaryEncoder

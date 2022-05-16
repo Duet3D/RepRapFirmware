@@ -25,12 +25,12 @@ constexpr unsigned int LcdDataDelayMicros = 4;			// delay between sending data b
 constexpr unsigned int LcdDisplayClearDelayMillis = 3;	// 1.6ms should be enough
 
 Lcd7920::Lcd7920(const LcdFont * const fnts[], size_t nFonts) noexcept
-	: Lcd(64, 128, fnts, nFonts, SpiMode::mode0)
+	: MonoLcd(64, 128, fnts, nFonts, SpiMode::mode0)
 {
 }
 
 // Get the display type
-const char *Lcd7920::GetDisplayTypeName() const noexcept
+const char *_ecv_array Lcd7920::GetDisplayTypeName() const noexcept
 {
 	return "128x64 mono graphics with ST7920 controller";
 }
@@ -51,7 +51,7 @@ void Lcd7920::HardwareInit() noexcept
 	CommandDelay();
 	device.Deselect();
 
-	Clear();
+	ClearAll();
 	FlushAll();
 
 	device.Select();

@@ -14,9 +14,9 @@
 
 #define ALTERNATIVE_ST7565_FLUSHROW
 
-#include <Display/Lcd/Lcd.h>
+#include <Display/Lcd/MonoLcd.h>
 
-class Lcd7567 : public Lcd
+class Lcd7567 : public MonoLcd
 {
 public:
 	// Construct a GLCD driver.
@@ -26,7 +26,7 @@ public:
 	bool FlushSome() noexcept override;
 
 	// Get the display type
-	const char *GetDisplayTypeName() const noexcept override;
+	const char *_ecv_array GetDisplayTypeName() const noexcept override;
 
 protected:
 	void HardwareInit() noexcept override;

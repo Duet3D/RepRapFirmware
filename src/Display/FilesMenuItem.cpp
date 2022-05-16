@@ -7,7 +7,7 @@
 
 #include "FilesMenuItem.h"
 
-#if HAS_MASS_STORAGE
+#if SUPPORT_DIRECT_LCD && HAS_MASS_STORAGE
 
 FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char *_ecv_array cmd, const char *_ecv_array dir, const char *_ecv_array acFile, unsigned int nf) noexcept
 	: MenuItem(r, c, w, LeftAlign, fn), numDisplayLines(nf), command(cmd), initialDirectory(dir), m_acFile(acFile),
@@ -408,4 +408,3 @@ PixelNumber FilesMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, Pi
 #endif
 
 // End
-

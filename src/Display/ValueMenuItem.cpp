@@ -6,19 +6,17 @@
  */
 
 #include "ValueMenuItem.h"
+
+#if SUPPORT_DIRECT_LCD
+
 #include <Platform/RepRap.h>
+#include <Display/Display.h>
 #include <GCodes/GCodes.h>
-#include <PrintMonitor/PrintMonitor.h>
 #include <Heating/Heat.h>
 #include <Movement/Move.h>
+#include <Networking/Network.h>
+#include <PrintMonitor/PrintMonitor.h>
 #include <Tools/Tool.h>
-#include "Display.h"
-
-#ifdef __LPC17xx__
-# include "Network.h"
-#else
-# include <Networking/Network.h>
-#endif
 
 ValueMenuItem::ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, bool adj, const char *_ecv_array _ecv_null om, unsigned int v, unsigned int d) noexcept
 	: MenuItem(r, c, ((w != 0) ? w : DefaultWidth), a, fn), omText(om), valIndex(v), decimals(d), adjustable(adj), adjusting(AdjustMode::displaying), error(false), asPercent(false)
@@ -329,11 +327,11 @@ bool ValueMenuItem::Adjust_AlterHelper(int clicks) noexcept
 			}
 			else // incrementing
 			{
-				if (0.0 == currentValue.fVal)
+				if (0.0 == currentValue.f)
 				{
-					currentValue.fVal = 95.0 - 1.0;
+					currentValue.f = 95.0 - 1.0;
 				}
-				currentValue.fVal = min<int>(currentValue.fVal + (float)clicks, reprap.GetHeat().GetHighestTemperatureLimit(Tool::GetLockedTool(itemNumber)->GetHeater(0)));
+				currentValue.f = min<int>(currentValue.f + (float)clicks, reprap.GetHeat().GetHighestTemperatureLimit(reprap.GetTool(itemNumber)->GetHeater(0)));
 			}
 		}
 		else
@@ -396,5 +394,6 @@ bool ValueMenuItem::Adjust(int clicks) noexcept
 				: Adjust_AlterHelper(clicks);
 }
 
-// End
+#endif
 
+// End

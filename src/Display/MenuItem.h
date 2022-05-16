@@ -10,7 +10,7 @@
 
 #include "RepRapFirmware.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
 #include "General/FreelistManager.h"
 #include "Lcd/Lcd.h"
@@ -57,7 +57,7 @@ public:
 
 	virtual ~MenuItem() noexcept { }
 
-	MenuItem *GetNext() const noexcept { return next; }
+	MenuItem *null GetNext() const noexcept { return next; }
 	FontNumber GetFontNumber() const noexcept { return fontNumber; }
 	void SetChanged() noexcept { itemChanged = true; }
 
@@ -73,6 +73,11 @@ public:
 	// Return the width of this item in pixels
 	PixelNumber GetWidth() const noexcept { return width; }
 	PixelNumber GetHeight() const noexcept { return height; }
+
+	PixelNumber GetMinX() const noexcept { return column; }
+	PixelNumber GetMinY() const noexcept { return row; }
+	PixelNumber GetMaxX() const noexcept { return column + width - 1; }
+	PixelNumber GetMaxY() const noexcept { return row + height - 1; }
 
 	static void AppendToList(MenuItem **root, MenuItem *item) noexcept;
 

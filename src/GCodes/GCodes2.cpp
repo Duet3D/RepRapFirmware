@@ -37,7 +37,7 @@
 # include <Comms/FirmwareUpdater.h>
 #endif
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 # include <Display/Display.h>
 #endif
 
@@ -4610,7 +4610,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			// For case 917, see 906
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 			case 918: // Configure direct-connect display
 # ifdef DUET_NG
 				// On Duet 2 configuring the display may affect the number of supported stepper drivers, so wait until there is no movement

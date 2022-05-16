@@ -53,8 +53,8 @@
 #include "sd_mmc.h"
 #include <cstring>
 
-#include <Hardware/SharedSpi/SharedSpiClient.h>
-#include <Hardware/SharedSpi/SharedSpiDevice.h>
+#include <Hardware/Spi/SharedSpiClient.h>
+#include <Hardware/Spi/SharedSpiDevice.h>
 #include <General/Portability.h>
 
 // Enable debug information for SD/MMC SPI module
