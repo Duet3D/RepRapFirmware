@@ -17,12 +17,12 @@ void TextMenuItem::CorePrint(Lcd& lcd) noexcept
 	lcd.printf("%s", text);
 }
 
-void TextMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void TextMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	// We ignore the 'highlight' parameter because text items are not selectable
 	if (IsVisible() && (!drawn || itemChanged))
 	{
-		PrintAligned(lcd, tOffset, rightMargin);
+		PrintAligned(lcd, rightMargin);
 		itemChanged = false;
 		drawn = true;
 	}

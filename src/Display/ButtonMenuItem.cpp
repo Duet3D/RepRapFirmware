@@ -19,12 +19,12 @@ void ButtonMenuItem::CorePrint(Lcd& lcd) noexcept
 	lcd.WriteSpaces(1);				// space at end to allow for highlighting
 }
 
-void ButtonMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void ButtonMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	if (IsVisible() && (itemChanged || !drawn || highlight != highlighted) && column < lcd.GetNumCols())
 	{
 		highlighted = highlight;
-		PrintAligned(lcd, tOffset, rightMargin);
+		PrintAligned(lcd, rightMargin);
 		itemChanged = false;
 		drawn = true;
 	}

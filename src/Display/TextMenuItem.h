@@ -17,7 +17,7 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<TextMenuItem>(p); }
 
 	TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, const char *_ecv_array t) noexcept;
-	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
+	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept override;
 	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
 
 protected:

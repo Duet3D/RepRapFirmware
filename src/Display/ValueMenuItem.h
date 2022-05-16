@@ -18,7 +18,7 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<ValueMenuItem>(p); }
 
 	ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, bool adj, const char *_ecv_array _ecv_null om, unsigned int v, unsigned int d) noexcept;
-	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
+	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept override;
 	bool Select(const StringRef& cmd) noexcept override;
 	bool CanAdjust() const noexcept override { return true; }
 	bool Adjust(int clicks) noexcept override;

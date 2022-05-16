@@ -53,7 +53,7 @@ void ValueMenuItem::CorePrint(Lcd& lcd) noexcept
 	}
 }
 
-void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	if (IsVisible())
 	{
@@ -196,7 +196,7 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 		if (itemChanged || !drawn || (highlight != highlighted))
 		{
 			highlighted = highlight;
-			PrintAligned(lcd, tOffset, rightMargin);
+			PrintAligned(lcd, rightMargin);
 			itemChanged = false;
 			drawn = true;
 		}
