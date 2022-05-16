@@ -87,6 +87,8 @@
 /* Uncomment following line to use DHCP instead of fixed IP */
 #define DHCP_USED
 
+#define LWIP_CHKSUM_ALGORITHM		3		// use fastest checksum algorithm (does 8 bytes at a time)
+
 /*
    ------------------------------------
    ---------- Memory options ----------
