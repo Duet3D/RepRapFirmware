@@ -28,7 +28,7 @@ public:
 	static constexpr Visibility AlwaysVisible = 0;
 
 	// Draw this element on the LCD respecting 'maxWidth' and 'highlight'
-	virtual void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept = 0;
+	virtual void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept = 0;
 
 	// Select this element with a push of the encoder.
 	// If it returns nullptr false go into adjustment mode, if we can adjust the item.
@@ -84,7 +84,7 @@ protected:
 	virtual void CorePrint(Lcd& lcd) noexcept { }
 
 	// Print the item at the correct place with the correct alignment
-	void PrintAligned(Lcd& lcd, PixelNumber tOffset, PixelNumber rightMargin) noexcept;
+	void PrintAligned(Lcd& lcd, PixelNumber rightMargin) noexcept;
 
 	const char *_ecv_array _ecv_null visStr;
 	const PixelNumber row, column;
