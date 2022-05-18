@@ -511,7 +511,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// We no longer restore the paused fan speeds automatically on resuming, because that messes up the print cooling fan speed if a tool change has been done
 			// They can be restored manually in resume.g if required
 			ms.moveStartVirtualExtruderPosition = ms.latestVirtualExtruderPosition = ms.pauseRestorePoint.virtualExtruderPosition;			// reset the extruder position in case we are receiving absolute extruder moves
-			fileGCode->LatestMachineState().feedRate = ms.pauseRestorePoint.feedRate;
+			FileGCode()->LatestMachineState().feedRate = ms.pauseRestorePoint.feedRate;
 			ms.moveFractionToSkip = ms.pauseRestorePoint.proportionDone;
 			ms.restartInitialUserC0 = ms.pauseRestorePoint.initialUserC0;
 			ms.restartInitialUserC1 = ms.pauseRestorePoint.initialUserC1;
@@ -520,7 +520,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			pauseState = PauseState::notPaused;
 			if (ms.pausedInMacro)
 			{
-				fileGCode->OriginalMachineState().firstCommandAfterRestart = true;
+				FileGCode()->OriginalMachineState().firstCommandAfterRestart = true;
 			}
 			gb.SetState(GCodeState::normal);
 		}
@@ -612,7 +612,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.ExecuteAll();			// only fileGCode gets here so it needs to execute moves for all commands
 #endif
 			gb.SetState(GCodeState::normal);
-			if (!DoFileMacro(*fileGCode, STOP_G, false, AsyncSystemMacroCode))
+			if (!DoFileMacro(*FileGCode(), STOP_G, false, AsyncSystemMacroCode))
 			{
 				reprap.GetHeat().SwitchOffAll(true);
 			}
@@ -1536,7 +1536,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #if HAS_SBC_INTERFACE
 	if (reportPause)
 	{
-		fileGCode->Invalidate();
+		FileGCode()->Invalidate();
 		reprap.GetSbcInterface().ReportPause();
 	}
 #endif
