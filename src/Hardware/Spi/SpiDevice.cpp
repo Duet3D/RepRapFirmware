@@ -333,7 +333,7 @@ bool SpiDevice::TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t
 	return true;	// success
 }
 
-#if SAME5x && defined(FMDC_V02)
+#if SAME5x && (defined(FMDC_V02) || defined(FMDC_V03))
 
 // Send and receive data returning true if successful, using 16-bit data transfers (needed when using 9-bit characters). 'len' is in 16-bit words.
 bool SpiDevice::TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data, uint16_t *_ecv_array null rx_data, size_t len) noexcept

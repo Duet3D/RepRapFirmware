@@ -11,7 +11,7 @@
 #include <RepRapFirmware.h>
 #include "SpiMode.h"
 
-#if SAME5x && defined(FMDC_V02)
+#if SAME5x && (defined(FMDC_V02) || defined(FMDC_V03))
 # include <DmacManager.h>
 #endif
 
@@ -37,7 +37,7 @@ public:
 	// Either way, caller must already have asserted CS for the selected SPI slave.
 	bool TransceivePacket(const uint8_t *_ecv_array null tx_data, uint8_t *_ecv_array null rx_data, size_t len) const noexcept;
 
-#if SAME5x && defined(FMDC_V02)
+#if SAME5x && (defined(FMDC_V02) || defined(FMDC_V03))
 	bool TransceivePacketNineBit(const uint16_t *_ecv_array null tx_data, uint16_t *_ecv_array null rx_data, size_t len) noexcept;
 
 	static void DmaComplete(CallbackParameter param, DmaCallbackReason reason) noexcept;
@@ -48,14 +48,14 @@ private:
 	bool waitForTxEmpty() const noexcept;
 	bool waitForRxReady() const noexcept;
 
-#if SAME5x && defined(FMDC_V02)
+#if SAME5x && (defined(FMDC_V02) || defined(FMDC_V03))
 	void DmaComplete(DmaCallbackReason reason) noexcept;
 #endif
 
 #if SAME5x
 	Sercom * const hardware;
 	const uint8_t sercomNumber;
-# ifdef FMDC_V02
+# if defined(FMDC_V02) || defined(FMDC_V03)
 	TaskBase *null waitingTask = nullptr;
 # endif
 #elif USART_SPI

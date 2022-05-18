@@ -213,6 +213,7 @@ constexpr Pin BeeperPins[2] = { PortBPin(18), PortBPin(19) };
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortBPin(16), /*PortBPin(0)*/ NoPin };
 constexpr Pin SdMciPins[] = { PortAPin(20), PortAPin(21), PortBPin(18), PortBPin(19), PortBPin(20), PortBPin(21) };
 constexpr GpioPinFunction SdMciPinsFunction = GpioPinFunction::I;
+Sdhc * const SdhcDevice = SDHC1;
 constexpr IRQn_Type SdhcIRQn = SDHC1_IRQn;
 constexpr Pin BeeperPins[2] = { PortAPin(8), PortAPin(9) };
 
@@ -247,8 +248,6 @@ constexpr Pin LcdBacklightPin = PortBPin(12);
 
 constexpr Pin LcdFlashWpPin = PortAPin(2);
 constexpr Pin LcdFlashHoldPin = PortCPin(7);
-
-constexpr Pin LcdBacklightPin = PortBPin(12);
 
 // Touch screen interface (when not shared with SharedSpi)
 //constexpr unsigned int RtpSercomNumber = 6;
