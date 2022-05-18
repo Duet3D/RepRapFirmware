@@ -1730,6 +1730,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	ms.isCoordinated = isCoordinated;
 	ms.checkEndstops = false;
 	ms.reduceAcceleration = false;
+	ms.movementTool = ms.currentTool;
 	ms.moveType = 0;
 	ms.usePressureAdvance = false;
 	axesToSenseLength.Clear();
@@ -1746,7 +1747,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 				return false;
 			}
 			ms.moveType = ival;
-			ms.currentTool = nullptr;
+			ms.movementTool = nullptr;
 		}
 		if (!gb.Seen('H'))
 		{
@@ -2306,6 +2307,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	ms.checkEndstops = false;
 	ms.reduceAcceleration = false;
 	ms.moveType = 0;
+	ms.movementTool = ms.currentTool;
 	ms.isCoordinated = true;
 
 	// Set up the arc centre coordinates and record which axes behave like an X axis.
@@ -2501,6 +2503,7 @@ bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 	const RestorePoint& rp = ms.restorePoints[ResumeObjectRestorePointNumber];
 	ToolOffsetTransform(ms, rp.moveCoords, ms.coords);
 	ms.feedRate = rp.feedRate;
+	ms.movementTool = ms.currentTool;
 	NewSingleSegmentMoveAvailable(ms);
 	return true;
 }
@@ -2561,8 +2564,8 @@ bool GCodes::ReadMove(unsigned int queueNumber, RawMove& m) noexcept
 					ms.currentAngleCosine = newCosine;
 					ms.currentAngleSine = newSine;
 				}
-				axisMap0 = Tool::GetAxisMapping(ms.currentTool, ms.arcAxis0);
-				axisMap1 = Tool::GetAxisMapping(ms.currentTool, ms.arcAxis1);
+				axisMap0 = Tool::GetAxisMapping(ms.movementTool, ms.arcAxis0);
+				axisMap1 = Tool::GetAxisMapping(ms.movementTool, ms.arcAxis1);
 				ms.cosXyAngle = (ms.xyPlane) ? ms.angleIncrementCosine : 1.0;
 			}
 
@@ -3958,7 +3961,8 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 			// New code does the retraction and the Z hop as separate moves
 			// Get ready to generate a move
 			SetMoveBufferDefaults(ms);
-			reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
+			ms.movementTool = ms.currentTool;
+			reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.movementTool);
 			ms.filePos = gb.GetJobFilePosition();
 
 			if (retract)

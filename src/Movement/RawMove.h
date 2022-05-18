@@ -24,7 +24,7 @@ struct RawMove
 	float maxPrintingAcceleration;
 	float maxTravelAcceleration;
 
-	Tool *currentTool;												// which tool (if any) is being used
+	const Tool *movementTool;										// which tool (if any) is being used by this move
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
 #else
@@ -70,6 +70,8 @@ constexpr size_t ResumeObjectRestorePointNumber = NumVisibleRestorePoints + 1;
 // CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
 struct MovementState : public RawMove
 {
+	Tool *currentTool;												// the current tool of this movement system
+
 	// The current user position now holds the requested user position after applying workplace coordinate offsets.
 	// So we must subtract the workplace coordinate offsets when we want to display them.
 	// We have chosen this approach because it allows us to switch workplace coordinates systems or turn off applying workplace offsets without having to update currentUserPosition.
