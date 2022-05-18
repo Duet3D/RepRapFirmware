@@ -128,7 +128,7 @@ enum class BoardType : uint8_t
 	Duet3_6HC_v101 = 2,
 #elif defined(DUET3_MB6XD)
 	Duet3_6XD = 1,
-#elif defined(FMDC_V02)
+#elif defined(FMDC_V02) || defined(FMDC_V03)
 	FMDC,
 #elif defined(SAME70XPLD)
 	SAME70XPLD_0 = 1

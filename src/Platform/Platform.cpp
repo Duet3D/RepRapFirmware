@@ -3799,7 +3799,7 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
 #elif defined(DUET3_MB6XD)
 		board = BoardType::Duet3_6XD;
-#elif defined(FMDC_V02)
+#elif defined(FMDC_V02) || defined(FMDC_V03)
 		board = BoardType::FMDC;
 #elif defined(SAME70XPLD)
 		board = BoardType::SAME70XPLD_0;
@@ -3879,7 +3879,7 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD:				return "Duet 3 " BOARD_SHORT_NAME;					// we have only one version at present
-#elif defined(FMDC_V02)
+#elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "Duet 3 " BOARD_SHORT_NAME;
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
@@ -3918,7 +3918,7 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3_6HC_v101:			return "duet3mb6hc101";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD:				return "duet3mb6xd";					// we have only one version at present
-#elif defined(FMDC_V02)
+#elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "fmdc";
 #elif defined(SAME70XPLD)
 	case BoardType::SAME70XPLD_0:			return "same70xpld";
