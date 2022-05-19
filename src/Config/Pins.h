@@ -23,7 +23,7 @@
 # elif defined(DUET3MINI_V04)
 #  define DUET3MINI		1
 #  define PLATFORM Duet3Mini
-# elif defined(FMDC_V02)
+# elif defined(FMDC_V02) || defined(FMDC_V03)
 #  define DUET3MINI		1
 #  define PLATFORM FMDC
 # elif defined(__LPC17xx__)
