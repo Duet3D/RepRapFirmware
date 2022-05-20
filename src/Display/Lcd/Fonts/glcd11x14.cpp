@@ -7,7 +7,7 @@
 
 #include "RepRapFirmware.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
 #include "LcdFont.h"
 

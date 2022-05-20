@@ -10,6 +10,8 @@
 
 #include "MenuItem.h"
 
+#if SUPPORT_DIRECT_LCD
+
 class ButtonMenuItem final : public MenuItem
 {
 public:
@@ -17,7 +19,7 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<ButtonMenuItem>(p); }
 
 	ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char *t, const char *cmd, const char *acFile) noexcept;
-	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
+	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept override;
 	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
 	bool Select(const StringRef& cmd) noexcept override;
 
@@ -31,5 +33,7 @@ private:
 	const char *command;
 	const char *m_acFile; // used when action ("command") is "menu"
 };
+
+#endif
 
 #endif /* SRC_DISPLAY_BUTTONMENUITEM_H_ */

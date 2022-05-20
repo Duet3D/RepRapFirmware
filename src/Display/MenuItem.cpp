@@ -7,7 +7,7 @@
 
 #include "MenuItem.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
 #include <Platform/RepRap.h>
 #include <Heating/Heat.h>
@@ -32,7 +32,7 @@ MenuItem::MenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, Fon
 }
 
 // Print the item at the correct place with the correct alignment
-void MenuItem::PrintAligned(Lcd& lcd, PixelNumber tOffset, PixelNumber rightMargin) noexcept
+void MenuItem::PrintAligned(Lcd& lcd, PixelNumber rightMargin) noexcept
 {
 	PixelNumber colsToSkip = 0;
 	lcd.SetFont(fontNumber);
@@ -50,7 +50,7 @@ void MenuItem::PrintAligned(Lcd& lcd, PixelNumber tOffset, PixelNumber rightMarg
 		}
 	}
 
-	lcd.SetCursor(row - tOffset, column);
+	lcd.SetCursor(row, column);
 	lcd.SetRightMargin(min<PixelNumber>(rightMargin, column + width));
 	lcd.TextInvert(highlighted);
 	if (colsToSkip != 0)

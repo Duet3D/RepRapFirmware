@@ -7,6 +7,8 @@
 
 #include "ImageMenuItem.h"
 
+#if SUPPORT_DIRECT_LCD
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 
@@ -21,7 +23,7 @@ ImageMenuItem::ImageMenuItem(PixelNumber r, PixelNumber c, const char *_ecv_arra
 	fileName.copy(pFileName);
 }
 
-void ImageMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void ImageMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	if (IsVisible() && (!drawn || itemChanged || highlight != highlighted))
 	{
@@ -43,7 +45,7 @@ void ImageMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 						{
 							break;
 						}
-						lcd.BitmapRow(row - tOffset + irow, column,  cols, buffer, highlight);
+						lcd.BitmapRow(row + irow, column,  cols, buffer, highlight);
 					}
 				}
 			}
@@ -71,5 +73,6 @@ void ImageMenuItem::UpdateWidthAndHeight(Lcd& lcd) noexcept
 	}
 }
 
-// End
+#endif
 
+// End

@@ -10,7 +10,7 @@
 
 #include "RepRapFirmware.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
 #include "MenuItem.h"
 
@@ -31,6 +31,10 @@ public:
 	void ClearHighlighting() noexcept;
 	void DisplayMessageBox(const MessageBox& mbox) noexcept;
 	void ClearMessageBox() noexcept;
+
+#if SUPPORT_RESISTIVE_TOUCH
+	void HandleTouch(PixelNumber x, PixelNumber y) noexcept;
+#endif
 
 private:
 	void LoadFixedMenu() noexcept;
@@ -53,6 +57,14 @@ private:
 	static const char *SkipWhitespace(const char *s) noexcept;
 	static char *SkipWhitespace(char *s) noexcept;
 	static bool CheckVisibility(MenuItem::Visibility vis) noexcept;
+
+#if SUPPORT_RESISTIVE_TOUCH
+	static void TouchBeep() noexcept;
+
+	static constexpr uint32_t TouchBeepLength = 20;				// beep length in ms
+	static constexpr uint32_t TouchBeepFrequency = 4500;		// beep frequency in Hz. Resonant frequency of the piezo sounder is 4.5kHz.
+
+#endif
 
 #ifdef __LPC17xx__
     static const size_t CommandBufferSize = 1024;

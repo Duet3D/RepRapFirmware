@@ -8,8 +8,8 @@
  *  configured in SPI mode a separate object, and have a pointer or reference to it in SharedSpiDevice.
  */
 
-#ifndef SRC_HARDWARE_SHAREDSPI_SHAREDSPICLIENT_H_
-#define SRC_HARDWARE_SHAREDSPI_SHAREDSPICLIENT_H_
+#ifndef SRC_HARDWARE_SPI_SHAREDSPICLIENT_H_
+#define SRC_HARDWARE_SPI_SHAREDSPICLIENT_H_
 
 #include <RepRapFirmware.h>
 #include "SpiMode.h"
@@ -44,4 +44,4 @@ private:
 	bool csActivePolarity;
 };
 
-#endif /* SRC_HARDWARE_SHAREDSPI_SHAREDSPICLIENT_H_ */
+#endif /* SRC_HARDWARE_SPI_SHAREDSPICLIENT_H_ */

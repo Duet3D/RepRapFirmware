@@ -303,7 +303,7 @@ void Move::Exit() noexcept
 					{
 						if (nextMove.moveType == 0)
 						{
-							AxisAndBedTransform(nextMove.coords, nextMove.currentTool, true);
+							AxisAndBedTransform(nextMove.coords, nextMove.movementTool, true);
 						}
 
 						if (mainDDARing.AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))

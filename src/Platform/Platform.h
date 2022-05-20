@@ -128,7 +128,7 @@ enum class BoardType : uint8_t
 	Duet3_6HC_v101 = 2,
 #elif defined(DUET3_MB6XD)
 	Duet3_6XD = 1,
-#elif defined(FMDC_V02)
+#elif defined(FMDC_V02) || defined(FMDC_V03)
 	FMDC,
 #elif defined(SAME70XPLD)
 	SAME70XPLD_0 = 1
@@ -746,7 +746,7 @@ private:
 	void SetDriverDirection(uint8_t driver, bool direction) noexcept
 	pre(driver < NumDirectDrivers);
 
-#if VARIABLE_NUM_DRIVERS && SUPPORT_12864_LCD
+#if VARIABLE_NUM_DRIVERS && SUPPORT_DIRECT_LCD
 	size_t numActualDirectDrivers;
 #endif
 

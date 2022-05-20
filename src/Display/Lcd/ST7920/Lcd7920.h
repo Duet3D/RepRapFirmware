@@ -5,13 +5,13 @@
 
 #if SUPPORT_12864_LCD
 
-#include <Display/Lcd/Lcd.h>
+#include <Display/Lcd/MonoLcd.h>
 
 // Class for driving 128x64 graphical LCD fitted with ST7920 controller
 // This drives the GLCD in serial mode so that it needs just 2 pins.
 
 // Derive the LCD class from the Print class so that we can print stuff to it in alpha mode
-class Lcd7920 : public Lcd
+class Lcd7920 : public MonoLcd
 {
 public:
 	// Construct a GLCD driver.
@@ -21,7 +21,7 @@ public:
 	bool FlushSome() noexcept override;
 
 	// Get the display type
-	const char *GetDisplayTypeName() const noexcept override;
+	const char *_ecv_array GetDisplayTypeName() const noexcept override;
 
 protected:
 	void HardwareInit() noexcept override;

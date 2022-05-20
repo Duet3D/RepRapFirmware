@@ -7,6 +7,8 @@
 
 #include "ButtonMenuItem.h"
 
+#if SUPPORT_DIRECT_LCD
+
 ButtonMenuItem::ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char* t, const char* cmd, char const* acFile) noexcept
 	: MenuItem(r, c, w, CentreAlign, fn), text(t), command(cmd), m_acFile(acFile)
 {
@@ -19,12 +21,12 @@ void ButtonMenuItem::CorePrint(Lcd& lcd) noexcept
 	lcd.WriteSpaces(1);				// space at end to allow for highlighting
 }
 
-void ButtonMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void ButtonMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	if (IsVisible() && (itemChanged || !drawn || highlight != highlighted) && column < lcd.GetNumCols())
 	{
 		highlighted = highlight;
-		PrintAligned(lcd, tOffset, rightMargin);
+		PrintAligned(lcd, rightMargin);
 		itemChanged = false;
 		drawn = true;
 	}
@@ -90,5 +92,6 @@ PixelNumber ButtonMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, P
 	return tOffsetRequest;
 }
 
-// End
+#endif
 
+// End

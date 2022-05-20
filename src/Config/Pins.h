@@ -23,7 +23,7 @@
 # elif defined(DUET3MINI_V04)
 #  define DUET3MINI		1
 #  define PLATFORM Duet3Mini
-# elif defined(FMDC_V02)
+# elif defined(FMDC_V02) || defined(FMDC_V03)
 #  define DUET3MINI		1
 #  define PLATFORM FMDC
 # elif defined(__LPC17xx__)
@@ -67,6 +67,14 @@
 #ifndef SUPPORT_12864_LCD
 # define SUPPORT_12864_LCD		0
 #endif
+
+#ifndef SUPPORT_ILI9488_LCD
+# define SUPPORT_ILI9488_LCD	0
+#endif
+
+#define SUPPORT_DIRECT_LCD		(SUPPORT_12864_LCD || SUPPORT_ILI9488_LCD)
+#define SUPPORT_ROTARY_ENCODER	SUPPORT_12864_LCD
+#define SUPPORT_RESISTIVE_TOUCH	SUPPORT_ILI9488_LCD
 
 #ifndef SUPPORT_LED_STRIPS
 # define SUPPORT_LED_STRIPS		0

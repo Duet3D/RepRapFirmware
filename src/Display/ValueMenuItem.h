@@ -9,6 +9,9 @@
 #define SRC_DISPLAY_VALUEMENUITEM_H_
 
 #include "MenuItem.h"
+
+#if SUPPORT_DIRECT_LCD
+
 #include <ObjectModel/ObjectModel.h>
 
 class ValueMenuItem final : public MenuItem
@@ -18,7 +21,7 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<ValueMenuItem>(p); }
 
 	ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, bool adj, const char *_ecv_array _ecv_null om, unsigned int v, unsigned int d) noexcept;
-	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept override;
+	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept override;
 	bool Select(const StringRef& cmd) noexcept override;
 	bool CanAdjust() const noexcept override { return true; }
 	bool Adjust(int clicks) noexcept override;
@@ -50,5 +53,8 @@ private:
 	uint8_t error : 1,											// for temporary use when printing
 			asPercent : 1;										// true if we print this as a percentage
 };
+
+
+#endif
 
 #endif /* SRC_DISPLAY_VALUEMENUITEM_H_ */

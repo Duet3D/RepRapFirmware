@@ -192,7 +192,7 @@ public:
 															) noexcept;			// Lock movement and wait for pending moves to finish
 	bool LockMovementAndWaitForStandstillNoSync(GCodeBuffer& gb) noexcept;		// Lock movement and wait for pending moves to finish but don't sync if using multiple movement queues
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	void SetPrimarySpeedFactor(float factor) noexcept;							// Set the speed factor
 	void SetExtrusionFactor(size_t extruder, float factor) noexcept;			// Set an extrusion factor for the specified extruder
 	void SelectPrimaryTool(int toolNumber, bool simulating) noexcept { moveStates[0].SelectTool(toolNumber, simulating); }
@@ -536,7 +536,7 @@ private:
 	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68
 #endif
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 	int GetHeaterNumber(unsigned int itemNumber) const noexcept;
 #endif
 	Pwm_t ConvertLaserPwm(float reqVal) const noexcept;
@@ -563,21 +563,21 @@ private:
 
 	GCodeBuffer* gcodeSources[NumGCodeChannels];						// The various sources of gcodes
 
-	GCodeBuffer*& httpGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)];
-	GCodeBuffer*& telnetGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)];
-	GCodeBuffer*& fileGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File)];
-	GCodeBuffer*& usbGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)];
-	GCodeBuffer*& auxGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)];					// This one is for the PanelDue on the async serial interface
-	GCodeBuffer*& triggerGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Trigger)];			// Used for executing config.g and trigger macro files
-	GCodeBuffer*& queuedGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue)];
-	GCodeBuffer*& lcdGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::LCD)];					// This one for the 12864 LCD
-	GCodeBuffer*& spiGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)];
-	GCodeBuffer*& daemonGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)];
-	GCodeBuffer*& aux2GCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)];				// This one is reserved for the second async serial interface
-	GCodeBuffer*& autoPauseGCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)];		// GCode state machine used to run macros on power fail, heater faults and filament out
+	GCodeBuffer* HttpGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::HTTP)]; }
+	GCodeBuffer* TelnetGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)]; }
+	GCodeBuffer* FileGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File)]; }
+	GCodeBuffer* UsbGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)]; }
+	GCodeBuffer* AuxGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux)]; }					// This one is for the PanelDue on the async serial interface
+	GCodeBuffer* TriggerGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Trigger)]; }			// Used for executing config.g and trigger macro files
+	GCodeBuffer* QueuedGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue)]; }
+	GCodeBuffer* LcdGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::LCD)]; }					// This one for the 12864 LCD
+	GCodeBuffer* SpiGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)]; }
+	GCodeBuffer* DaemonGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)]; }
+	GCodeBuffer* Aux2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)]; }				// This one is reserved for the second async serial interface
+	GCodeBuffer* AutoPauseGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)]; }		// GCode state machine used to run macros on power fail, heater faults and filament out
 #if SUPPORT_ASYNC_MOVES
-	GCodeBuffer*& file2GCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)];
-	GCodeBuffer*& queue2GCode = gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)];
+	GCodeBuffer* File2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)]; }
+	GCodeBuffer* Queue2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]; }
 #endif
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling

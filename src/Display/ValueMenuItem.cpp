@@ -6,19 +6,17 @@
  */
 
 #include "ValueMenuItem.h"
+
+#if SUPPORT_DIRECT_LCD
+
 #include <Platform/RepRap.h>
+#include <Display/Display.h>
 #include <GCodes/GCodes.h>
-#include <PrintMonitor/PrintMonitor.h>
 #include <Heating/Heat.h>
 #include <Movement/Move.h>
+#include <Networking/Network.h>
+#include <PrintMonitor/PrintMonitor.h>
 #include <Tools/Tool.h>
-#include "Display.h"
-
-#ifdef __LPC17xx__
-# include "Network.h"
-#else
-# include <Networking/Network.h>
-#endif
 
 ValueMenuItem::ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, bool adj, const char *_ecv_array _ecv_null om, unsigned int v, unsigned int d) noexcept
 	: MenuItem(r, c, ((w != 0) ? w : DefaultWidth), a, fn), omText(om), valIndex(v), decimals(d), adjustable(adj), adjusting(AdjustMode::displaying), error(false), asPercent(false)
@@ -53,7 +51,7 @@ void ValueMenuItem::CorePrint(Lcd& lcd) noexcept
 	}
 }
 
-void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	if (IsVisible())
 	{
@@ -196,7 +194,7 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 		if (itemChanged || !drawn || (highlight != highlighted))
 		{
 			highlighted = highlight;
-			PrintAligned(lcd, tOffset, rightMargin);
+			PrintAligned(lcd, rightMargin);
 			itemChanged = false;
 			drawn = true;
 		}
@@ -396,5 +394,6 @@ bool ValueMenuItem::Adjust(int clicks) noexcept
 				: Adjust_AlterHelper(clicks);
 }
 
-// End
+#endif
 
+// End

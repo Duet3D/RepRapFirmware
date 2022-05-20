@@ -30,7 +30,11 @@ bool SharedSpiClient::Select(uint32_t timeout) const noexcept
 	const bool ok = device.Take(timeout);
 	if (ok)
 	{
-		device.SetClockFrequencyAndMode(clockFrequency, mode);		// this also enables the SPI peripheral
+		device.SetClockFrequencyAndMode(clockFrequency, mode
+#if SAME5x
+										, false						// for now we always use 8-bit mode
+#endif
+									   );							// this also enables the SPI peripheral
 		delayMicroseconds(1);										// allow the clock time to settle
 		IoPort::WriteDigital(csPin, csActivePolarity);
 	}

@@ -24,7 +24,7 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 	reduceAcceleration = false;
 	hasPositiveExtrusion = false;
 	filePos = noFilePosition;
-	currentTool = nullptr;
+	movementTool = nullptr;
 	cosXyAngle = 1.0;
 	for (size_t drive = firstDriveToZero; drive < MaxAxesPlusExtruders; ++drive)
 	{
@@ -54,7 +54,7 @@ void MovementState::Reset() noexcept
 	maxTravelAcceleration = ConvertAcceleration(DefaultTravelAcceleration);
 
 	currentZHop = 0.0;								// clear this before calling ToolOffsetInverseTransform
-	currentTool = nullptr;
+	movementTool = currentTool = nullptr;
 	latestVirtualExtruderPosition = moveStartVirtualExtruderPosition = 0.0;
 	virtualFanSpeed = 0.0;
 	speedFactor = 1.0;

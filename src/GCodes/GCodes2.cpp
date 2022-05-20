@@ -37,7 +37,7 @@
 # include <Comms/FirmwareUpdater.h>
 #endif
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 # include <Display/Display.h>
 #endif
 
@@ -635,7 +635,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						return false;
 					}
-					if (&gb == fileGCode)
+					if (&gb == FileGCode())
 					{
 						isWaiting = cancelWait = false;				// we may have been waiting for temperatures to be reached
 						StopPrint(StopPrintReason::normalCompletion);
@@ -971,7 +971,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 23: // Set file to print
 			case 32: // Select file and start SD print
 				// We now allow a file that is being printed to chain to another file. This is required for the resume-after-power-fail functionality.
-				if (fileGCode->IsDoingFile() && !gb.IsFileChannel())
+				if (FileGCode()->IsDoingFile() && !gb.IsFileChannel())
 				{
 					reply.copy("Cannot set file to print, because a file is already being printed");
 					result = GCodeResult::error;
@@ -1087,9 +1087,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								// We executed M26 to set the file offset, which normally means that we are executing resurrect.g.
 								// We need to copy the absolute/relative and volumetric extrusion flags over
-								fileGCode->OriginalMachineState().CopyStateFrom(gb.LatestMachineState());
+								FileGCode()->OriginalMachineState().CopyStateFrom(gb.LatestMachineState());
 # if SUPPORT_ASYNC_MOVES
-								file2GCode->OriginalMachineState().CopyStateFrom(gb.LatestMachineState());
+								File2GCode()->OriginalMachineState().CopyStateFrom(gb.LatestMachineState());
 # endif
 								for (MovementState& ms : moveStates)
 								{
@@ -1128,7 +1128,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 600: // Filament change pause, synchronous
 				if (pauseState == PauseState::notPaused)
 				{
-					if (fileGCode->IsDoingFileMacro())
+					if (FileGCode()->IsDoingFileMacro())
 					{
 						deferredPauseCommandPending = "M600";
 						if (!gb.IsFileChannel())
@@ -1158,7 +1158,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					reply.copy("Cannot pause print, because no file is being printed!");
 					result = GCodeResult::error;
 				}
-				else if (fileGCode->IsDoingFileMacro() && !fileGCode->LatestMachineState().CanRestartMacro())
+				else if (FileGCode()->IsDoingFileMacro() && !FileGCode()->LatestMachineState().CanRestartMacro())
 				{
 					if (deferredPauseCommandPending == nullptr)		// filament change pause takes priority
 					{
@@ -1201,7 +1201,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (reprap.GetPrintMonitor().IsPrinting())
 				{
 					// Pronterface keeps sending M27 commands if "Monitor status" is checked, and it specifically expects the following response syntax
-					FileData& fileBeingPrinted = fileGCode->OriginalMachineState().fileState;
+					FileData& fileBeingPrinted = FileGCode()->OriginalMachineState().fileState;
 					// In case there are short periods of time when PrintMonitor says a file is printing but the file is not open, or DSF passes M27 to us, check that we have a file
 					if (fileBeingPrinted.IsLive())
 					{
@@ -3018,12 +3018,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 #endif
 					const int seq = gb.Seen('R') ? gb.GetIValue() : -1;
-					if (&gb == auxGCode && (type == 0 || type == 2))
+					if (&gb == AuxGCode() && (type == 0 || type == 2))
 					{
 						lastAuxStatusReportType = type;
 					}
 
-					outBuf = GenerateJsonStatusResponse(type, seq, (&gb == auxGCode) ? ResponseSource::AUX : ResponseSource::Generic);
+					outBuf = GenerateJsonStatusResponse(type, seq, (&gb == AuxGCode()) ? ResponseSource::AUX : ResponseSource::Generic);
 					if (outBuf == nullptr)
 					{
 						result = GCodeResult::notFinished;			// we ran out of buffers, so try again later
@@ -3039,7 +3039,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					bool dummy;
 					gb.TryGetQuotedString('K', key.GetRef(), dummy, true);
 					gb.TryGetQuotedString('F', flags.GetRef(), dummy, true);
-					if (&gb == auxGCode)
+					if (&gb == AuxGCode())
 					{
 						lastAuxStatusReportType = ObjectModelAuxStatusReportType;
 					}
@@ -3050,7 +3050,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// We don't delay and retry here, in case the user asked for too much of the object model in one go for the output buffers to contain it
 						reply.copy("{\"err\":-1}\n");
 					}
-					if (&gb == auxGCode)
+					if (&gb == AuxGCode())
 					{
 						gb.ResetReportDueTimer();
 					}
@@ -3688,12 +3688,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						platform.SetCommsProperties(chan, val);
 						if (chan == 0)
 						{
-							usbGCode->SetCommsProperties(val);
+							UsbGCode()->SetCommsProperties(val);
 						}
 #if HAS_AUX_DEVICES
 						else if (chan < NumSerialChannels)
 						{
-							GCodeBuffer *& gbp = (chan == 1) ? auxGCode : aux2GCode;
+							GCodeBuffer * gbp = (chan == 1) ? AuxGCode() : Aux2GCode();
 							if (gbp != nullptr)
 							{
 								gbp->SetCommsProperties(val);
@@ -4244,7 +4244,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 751: // Register 3D scanner extension over USB
-				if (&gb == usbGCode)
+				if (&gb == UsbGCode())
 				{
 					if (reprap.GetScanner().IsEnabled())
 					{
@@ -4610,7 +4610,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			// For case 917, see 906
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 			case 918: // Configure direct-connect display
 # ifdef DUET_NG
 				// On Duet 2 configuring the display may affect the number of supported stepper drivers, so wait until there is no movement

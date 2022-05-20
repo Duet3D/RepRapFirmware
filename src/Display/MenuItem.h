@@ -10,7 +10,7 @@
 
 #include "RepRapFirmware.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_DIRECT_LCD
 
 #include "General/FreelistManager.h"
 #include "Lcd/Lcd.h"
@@ -28,7 +28,7 @@ public:
 	static constexpr Visibility AlwaysVisible = 0;
 
 	// Draw this element on the LCD respecting 'maxWidth' and 'highlight'
-	virtual void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight, PixelNumber tOffset) noexcept = 0;
+	virtual void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept = 0;
 
 	// Select this element with a push of the encoder.
 	// If it returns nullptr false go into adjustment mode, if we can adjust the item.
@@ -57,7 +57,7 @@ public:
 
 	virtual ~MenuItem() noexcept { }
 
-	MenuItem *GetNext() const noexcept { return next; }
+	MenuItem *null GetNext() const noexcept { return next; }
 	FontNumber GetFontNumber() const noexcept { return fontNumber; }
 	void SetChanged() noexcept { itemChanged = true; }
 
@@ -74,6 +74,11 @@ public:
 	PixelNumber GetWidth() const noexcept { return width; }
 	PixelNumber GetHeight() const noexcept { return height; }
 
+	PixelNumber GetMinX() const noexcept { return column; }
+	PixelNumber GetMinY() const noexcept { return row; }
+	PixelNumber GetMaxX() const noexcept { return column + width - 1; }
+	PixelNumber GetMaxY() const noexcept { return row + height - 1; }
+
 	static void AppendToList(MenuItem **root, MenuItem *item) noexcept;
 
 protected:
@@ -84,7 +89,7 @@ protected:
 	virtual void CorePrint(Lcd& lcd) noexcept { }
 
 	// Print the item at the correct place with the correct alignment
-	void PrintAligned(Lcd& lcd, PixelNumber tOffset, PixelNumber rightMargin) noexcept;
+	void PrintAligned(Lcd& lcd, PixelNumber rightMargin) noexcept;
 
 	const char *_ecv_array _ecv_null visStr;
 	const PixelNumber row, column;

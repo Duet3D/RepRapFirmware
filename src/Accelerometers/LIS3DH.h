@@ -12,7 +12,7 @@
 
 #if SUPPORT_ACCELEROMETERS
 
-#include <Hardware/SharedSpi/SharedSpiClient.h>
+#include <Hardware/Spi/SharedSpiClient.h>
 
 class LIS3DH : public SharedSpiClient
 {

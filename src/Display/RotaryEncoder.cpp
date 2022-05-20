@@ -1,6 +1,6 @@
 #include "RotaryEncoder.h"
 
-#if SUPPORT_12864_LCD
+#if SUPPORT_ROTARY_ENCODER
 
 #include <Hardware/IoPorts.h>
 

@@ -10,7 +10,7 @@
 
 #include "MenuItem.h"
 
-#if HAS_MASS_STORAGE
+#if SUPPORT_DIRECT_LCD && HAS_MASS_STORAGE
 
 class FilesMenuItem final : public MenuItem
 {
@@ -19,7 +19,7 @@ public:
 	void operator delete(void* p) noexcept { FreelistManager::Release<FilesMenuItem>(p); }
 
 	FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char *_ecv_array cmd, const char *_ecv_array dir, const char *_ecv_array acFile, unsigned int nf) noexcept;
-	void Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept override;
+	void Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept override;
 	void Enter(bool bForwardDirection) noexcept override;
 	int Advance(int nCounts) noexcept override;
 	bool Select(const StringRef& cmd) noexcept override;
@@ -33,7 +33,7 @@ protected:
 	void vResetViewState() noexcept;
 
 private:
-	void ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept;
+	void ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept;
 	uint8_t GetDirectoryNesting() const noexcept;
 
 	const unsigned int numDisplayLines;

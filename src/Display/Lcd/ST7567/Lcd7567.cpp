@@ -13,12 +13,12 @@ constexpr unsigned int TILE_WIDTH = 8;
 constexpr unsigned int TILE_HEIGHT = 8;
 
 Lcd7567::Lcd7567(const LcdFont * const fnts[], size_t nFonts) noexcept
-	: Lcd(64, 128, fnts, nFonts, SpiMode::mode3)
+	: MonoLcd(64, 128, fnts, nFonts, SpiMode::mode3)
 {
 }
 
 // Get the display type
-const char *Lcd7567::GetDisplayTypeName() const noexcept
+const char *_ecv_array Lcd7567::GetDisplayTypeName() const noexcept
 {
 	return "128x64 mono graphics with ST7567 controller";
 }

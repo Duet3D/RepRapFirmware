@@ -7,7 +7,7 @@
 
 #include "FilesMenuItem.h"
 
-#if HAS_MASS_STORAGE
+#if SUPPORT_DIRECT_LCD && HAS_MASS_STORAGE
 
 FilesMenuItem::FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char *_ecv_array cmd, const char *_ecv_array dir, const char *_ecv_array acFile, unsigned int nf) noexcept
 	: MenuItem(r, c, w, LeftAlign, fn), numDisplayLines(nf), command(cmd), initialDirectory(dir), m_acFile(acFile),
@@ -78,7 +78,7 @@ unsigned int FilesMenuItem::uListingEntries() const noexcept
 	return bInSubdirectory() ? (1 + m_uHardItemsInDirectory) : m_uHardItemsInDirectory;
 }
 
-void FilesMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void FilesMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	// The 'highlight' parameter is not used to highlight this item, but it is still used to tell whether this item is selected or not
 	if (!IsVisible())
@@ -132,7 +132,7 @@ void FilesMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 			break;
 
 		case mounted:
-			ListFiles(lcd, rightMargin, highlight, tOffset);
+			ListFiles(lcd, rightMargin, highlight);
 			break;
 
 		case error:
@@ -141,7 +141,7 @@ void FilesMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight, Pixe
 	}
 }
 
-void FilesMenuItem::ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight, PixelNumber tOffset) noexcept
+void FilesMenuItem::ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept
 {
 	lcd.SetFont(fontNumber);
 	lcd.SetRightMargin(rightMargin);
@@ -408,4 +408,3 @@ PixelNumber FilesMenuItem::GetVisibilityRowOffset(PixelNumber tCurrentOffset, Pi
 #endif
 
 // End
-
