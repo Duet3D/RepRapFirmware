@@ -113,7 +113,6 @@ constexpr Pin UsbVBusPin = PortBPin(6);				// Pin used to monitor VBUS on USB po
 // The numbers of entries in each array must correspond with the values of DRIVES, AXES, or HEATERS. Set values to NoPin to flag unavailability.
 
 // Drivers
-constexpr Pin GlobalTmc22xxEnablePin = PortCPin(28);	// The pin that drives ENN of all drivers
 PortGroup * const StepPio = &(PORT->Group[2]);		// The PIO that all the step pins are on (port C)
 
 constexpr Pin STEP_PINS[NumDirectDrivers] = { PortCPin(26), PortCPin(25), PortCPin(24), PortCPin(20) };
@@ -121,8 +120,10 @@ constexpr Pin DIRECTION_PINS[NumDirectDrivers] = { PortBPin(3), PortAPin(27), Po
 
 #if defined(FMDC_V03)
 constexpr Pin DriverDiagPins[NumDirectDrivers] = { PortCPin(28), PortBPin(8), PortCPin(27), PortCPin(21) };
+constexpr Pin GlobalTmc22xxEnablePin = PortBPin(21);	// The pin that drives ENN of all drivers
 #elif defined(FMDC_V02)
 constexpr Pin DriverDiagPins[NumDirectDrivers] = { PortAPin(10), PortBPin(8), PortCPin(27), PortCPin(21) };
+constexpr Pin GlobalTmc22xxEnablePin = PortCPin(28);	// The pin that drives ENN of all drivers
 #endif
 
 // CCL inputs that the DIAG inputs use. Bits 0-1 are the CCL LUT number. Bits 8-19 are the value to OR in to the control register for that LUT.
