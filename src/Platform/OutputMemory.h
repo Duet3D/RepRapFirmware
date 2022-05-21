@@ -35,7 +35,6 @@ public:
 	size_t DataLength() const noexcept { return dataLength; }	// How many bytes have been written to this instance?
 	size_t Length() const noexcept;								// How many bytes have been written to the whole chain?
 
-	char& operator[](size_t index) noexcept;
 	char operator[](size_t index) const noexcept;
 	const char *_ecv_array Read(size_t len) noexcept;
 	void Taken(size_t len) noexcept { bytesRead += len; }
