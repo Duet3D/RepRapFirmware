@@ -1072,10 +1072,6 @@ decrease(strlen(idString))	// recursion variant
 					throw context.ConstructParseException("array index out of bounds");
 				}
 
-				if (context.WantExists())
-				{
-					return ExpressionValue(true);
-				}
 				return ExpressionValue((int32_t)(Bitmap<uint32_t>::MakeFromRaw(val.uVal).GetSetBitNumber(context.GetLastIndex())));
 			}
 		}
@@ -1119,11 +1115,6 @@ decrease(strlen(idString))	// recursion variant
 				if (!inBounds)
 				{
 					throw context.ConstructParseException("array index out of bounds");
-				}
-
-				if (context.WantExists())
-				{
-					return ExpressionValue(true);
 				}
 
 				return ExpressionValue((int32_t)(Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue()).GetSetBitNumber(context.GetLastIndex())));
