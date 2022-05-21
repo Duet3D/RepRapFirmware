@@ -228,10 +228,12 @@ size_t OutputBuffer::cat(const char *_ecv_array src, size_t len) noexcept
 			}
 			nextBuffer->references = references;
 			last->next = nextBuffer;
-			for (OutputBuffer *item = this; item != nextBuffer; item = item->Next())
+			OutputBuffer *item = this;
+			do
 			{
-				item->last = last;
-			}
+				item->last = nextBuffer;
+				item = item->Next();
+			} while (item != nextBuffer);
 		}
 		const size_t copyLength = min<size_t>(len - copied, OUTPUT_BUFFER_SIZE - last->dataLength);
 		memcpy(last->data + last->dataLength, src + copied, copyLength);
