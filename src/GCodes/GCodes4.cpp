@@ -1337,6 +1337,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (ms.currentTool != nullptr)
 			{
 				SetMoveBufferDefaults(ms);
+				ms.movementTool = ms.currentTool;
 				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
 				ms.coords[Z_AXIS] += ms.currentTool->GetRetractHop();
 				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
@@ -1356,6 +1357,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (ms.currentTool != nullptr && ms.currentTool->DriveCount() != 0)
 			{
 				SetMoveBufferDefaults(ms);
+				ms.movementTool = ms.currentTool;
 				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
 				for (size_t i = 0; i < ms.currentTool->DriveCount(); ++i)
 				{
