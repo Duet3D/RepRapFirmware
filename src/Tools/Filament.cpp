@@ -22,21 +22,20 @@ Filament *Filament::filamentList = nullptr;
 
 Filament::Filament(int extr) noexcept : extruder(extr)
 {
-	strcpy(name, "");
-
+	name.Clear();
 	next = filamentList;
 	filamentList = this;
 }
 
 void Filament::Load(const char *filamentName) noexcept
 {
-	SafeStrncpy(name, filamentName, ARRAY_SIZE(name));
+	name.copy(filamentName);
 	Filament::SaveAssignments();
 }
 
 void Filament::Unload() noexcept
 {
-	strcpy(name, "");
+	name.Clear();
 	Filament::SaveAssignments();
 }
 
@@ -68,7 +67,7 @@ void Filament::LoadAssignment() noexcept
 						}
 					}
 
-					SafeStrncpy(name, filament, ARRAY_SIZE(name));
+					name.copy(filament);
 					break;
 				}
 			}
