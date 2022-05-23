@@ -22,26 +22,29 @@ void OutputBuffer::Append(OutputBuffer *other) noexcept
 	if (other != nullptr)
 	{
 		last->next = other;
-		last = other->last;
+		OutputBuffer * const newLast = other->last;
 		if (other->hadOverflow)
 		{
 			hadOverflow = true;
 		}
 
-		for (OutputBuffer *item = Next(); item != other; item = item->Next())
+		OutputBuffer *item = this;
+		do
 		{
-			item->last = last;
+			item->last = newLast;
+			item = item->Next();
 		}
+		while (item != other);
 	}
 }
 
 void OutputBuffer::IncreaseReferences(size_t refs) noexcept
 {
-	if (refs > 0)
+	if (refs != 0)
 	{
 		TaskCriticalSectionLocker lock;
 
-		for(OutputBuffer *item = this; item != nullptr; item = item->Next())
+		for (OutputBuffer *item = this; item != nullptr; item = item->Next())
 		{
 			item->references += refs;
 			item->isReferenced = true;
@@ -57,20 +60,6 @@ size_t OutputBuffer::Length() const noexcept
 		totalLength += current->DataLength();
 	}
 	return totalLength;
-}
-
-char &OutputBuffer::operator[](size_t index) noexcept
-{
-	// Get the right buffer to access
-	OutputBuffer *itemToIndex = this;
-	while (index >= itemToIndex->DataLength())
-	{
-		index -= itemToIndex->DataLength();
-		itemToIndex = itemToIndex->Next();
-	}
-
-	// Return the char reference
-	return itemToIndex->data[index];
 }
 
 char OutputBuffer::operator[](size_t index) const noexcept
@@ -89,7 +78,7 @@ char OutputBuffer::operator[](size_t index) const noexcept
 
 const char *OutputBuffer::Read(size_t len) noexcept
 {
-	size_t offset = bytesRead;
+	const size_t offset = bytesRead;
 	bytesRead += len;
 	return data + offset;
 }
@@ -120,7 +109,7 @@ size_t OutputBuffer::printf(const char *_ecv_array fmt, ...) noexcept
 {
 	va_list vargs;
 	va_start(vargs, fmt);
-	size_t ret = vprintf(fmt, vargs);
+	const size_t ret = vprintf(fmt, vargs);
 	va_end(vargs);
 	return ret;
 }
@@ -138,7 +127,7 @@ size_t OutputBuffer::catf(const char *_ecv_array fmt, ...) noexcept
 {
 	va_list vargs;
 	va_start(vargs, fmt);
-	size_t ret = vcatf(fmt, vargs);
+	const size_t ret = vcatf(fmt, vargs);
 	va_end(vargs);
 	return ret;
 }
@@ -146,9 +135,13 @@ size_t OutputBuffer::catf(const char *_ecv_array fmt, ...) noexcept
 size_t OutputBuffer::lcatf(const char *_ecv_array fmt, ...) noexcept
 {
 	size_t extra = 0;
-	if (Length() != 0 && operator[](Length() - 1) != '\n')
+	if (last->dataLength != 0 && last->data[last->dataLength - 1] != '\n')
 	{
 		extra = cat('\n');
+		if (extra == 0)
+		{
+			return 0;
+		}
 	}
 
 	va_list vargs;
@@ -235,11 +228,12 @@ size_t OutputBuffer::cat(const char *_ecv_array src, size_t len) noexcept
 			}
 			nextBuffer->references = references;
 			last->next = nextBuffer;
-			last = nextBuffer->last;
-			for (OutputBuffer *item = Next(); item != nextBuffer; item = item->Next())
+			OutputBuffer *item = this;
+			do
 			{
-				item->last = last;
-			}
+				item->last = nextBuffer;
+				item = item->Next();
+			} while (item != nextBuffer);
 		}
 		const size_t copyLength = min<size_t>(len - copied, OUTPUT_BUFFER_SIZE - last->dataLength);
 		memcpy(last->data + last->dataLength, src + copied, copyLength);
@@ -251,11 +245,17 @@ size_t OutputBuffer::cat(const char *_ecv_array src, size_t len) noexcept
 
 size_t OutputBuffer::lcat(const char *_ecv_array src, size_t len) noexcept
 {
-	if (Length() != 0)
+	size_t extra = 0;
+	if (last->dataLength != 0 && last->data[last->dataLength - 1] != '\n')
 	{
-		cat('\n');
+		extra = cat('\n');
+		if (extra == 0)
+		{
+			return 0;
+		}
 	}
-	return cat(src, len);
+
+	return cat(src, len) + extra;
 }
 
 size_t OutputBuffer::cat(StringRef &str) noexcept
@@ -294,13 +294,11 @@ size_t OutputBuffer::EncodeChar(char c) noexcept
 
 	if (esc != 0)
 	{
-		cat('\\');
-		cat(esc);
-		return 2;
+		const size_t written = cat('\\');
+		return (written == 0) ? written : written + cat(esc);
 	}
 
-	cat(c);
-	return 1;
+	return cat(c);
 }
 
 size_t OutputBuffer::EncodeReply(OutputBuffer *src) noexcept
