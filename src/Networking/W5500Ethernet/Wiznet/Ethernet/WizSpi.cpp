@@ -7,6 +7,7 @@
 
 #include "WizSpi.h"
 #include <Config/Pins.h>
+#include <Cache.h>
 
 // Define exactly one of the following as 1, the other as zero
 #define USE_PDC		1		// use peripheral DMA controller
@@ -32,26 +33,25 @@ const unsigned int SpiPeripheralChannelId = 0;			// we use NPCS0 as the slave se
 // Functions called by the W5500 module to transfer data to/from the W5500 via SPI
 
 #if USE_PDC
-static Pdc *spi_pdc;
 
 static inline void spi_rx_dma_enable() noexcept
 {
-	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_RXTEN | PERIPH_PTCR_TXTEN);	// we have to transmit in order to receive
+	pdc_enable_transfer(spi_get_pdc_base(W5500_SPI), PERIPH_PTCR_RXTEN | PERIPH_PTCR_TXTEN);	// we have to transmit in order to receive
 }
 
 static inline void spi_tx_dma_enable() noexcept
 {
-	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN);
+	pdc_enable_transfer(spi_get_pdc_base(W5500_SPI), PERIPH_PTCR_TXTEN);
 }
 
 static inline void spi_rx_dma_disable() noexcept
 {
-	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);	// we have to transmit in order to receive
+	pdc_disable_transfer(spi_get_pdc_base(W5500_SPI), PERIPH_PTCR_RXTDIS | PERIPH_PTCR_TXTDIS);	// we have to transmit in order to receive
 }
 
 static inline void spi_tx_dma_disable() noexcept
 {
-	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS);
+	pdc_disable_transfer(spi_get_pdc_base(W5500_SPI), PERIPH_PTCR_TXTDIS);
 }
 
 static inline bool spi_dma_check_rx_complete() noexcept
@@ -69,7 +69,7 @@ static void spi_tx_dma_setup(const uint8_t *buf, uint32_t length) noexcept
 	pdc_packet_t pdc_spi_packet;
 	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
 	pdc_spi_packet.ul_size = length;
-	pdc_tx_init(spi_pdc, &pdc_spi_packet, nullptr);
+	pdc_tx_init(spi_get_pdc_base(W5500_SPI), &pdc_spi_packet, nullptr);
 }
 
 static void spi_rx_dma_setup(uint8_t *buf, uint32_t length) noexcept
@@ -77,8 +77,8 @@ static void spi_rx_dma_setup(uint8_t *buf, uint32_t length) noexcept
 	pdc_packet_t pdc_spi_packet;
 	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
 	pdc_spi_packet.ul_size = length;
-	pdc_rx_init(spi_pdc, &pdc_spi_packet, nullptr);
-	pdc_tx_init(spi_pdc, &pdc_spi_packet, nullptr);					// we have to transmit in order to receive
+	pdc_rx_init(spi_get_pdc_base(W5500_SPI), &pdc_spi_packet, nullptr);
+	pdc_tx_init(spi_get_pdc_base(W5500_SPI), &pdc_spi_packet, nullptr);					// we have to transmit in order to receive
 }
 
 #endif
@@ -170,7 +170,6 @@ namespace WizSpi
 	void Init() noexcept
 	{
 #if USE_PDC
-		spi_pdc = spi_get_pdc_base(W5500_SPI);
 		// The PDCs are masters 2 and 3 and the SRAM is slave 0. Give the receive PDCs the highest priority.
 		matrix_set_master_burst_type(0, MATRIX_ULBT_8_BEAT_BURST);
 		matrix_set_slave_default_master_type(0, MATRIX_DEFMSTR_LAST_DEFAULT_MASTER);
@@ -371,7 +370,11 @@ namespace WizSpi
 			{
 				--timeout;
 			}
+			// The SPI peripheral signals transfer complete at the start of transferring the last byte. If we disable the DMA too soon, there might be a chance
+			// that the transfer does not complete. Therefore, delay disabling DMA until we have invalidated the cache, which takes some time.
+			Cache::InvalidateAfterDMAReceive(rx_data, len);
 			spi_rx_dma_disable();
+
 			if (timeout == 0)
 			{
 				return SPI_ERROR_TIMEOUT;
@@ -414,6 +417,7 @@ namespace WizSpi
 		if (len != 0)
 		{
 #if USE_PDC
+			Cache::FlushBeforeDMASend(tx_data, len);
 			spi_tx_dma_setup(tx_data, len);
 			spi_tx_dma_enable();
 			uint32_t timeout = SPI_TIMEOUT;

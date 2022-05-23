@@ -111,7 +111,14 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 			const char *uploadFilename = filenameBeingProcessed.c_str();
 			if (uploadError)
 			{
+#if 0	// Temporary code to save files with upload errors and report successful uploads
+				String<MaxFilenameLength> newName;
+				MassStorage::CombineName(newName.GetRef(), Platform::GetGCodeDir(), "uploadError_");
+				newName.catf("%04u", (unsigned int)(millis() % 10000));
+				MassStorage::Rename(uploadFilename, newName.c_str(), true, true);
+#else
 				MassStorage::Delete(uploadFilename, true);
+#endif
 			}
 			else
 			{
@@ -126,6 +133,9 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 					// Update the file timestamp if it was specified
 					(void)MassStorage::SetLastModifiedTime(origFilename.c_str(), fileLastModified);
 				}
+#if 0	// Temporary code to save files with upload errors and report successful uploads
+				GetPlatform().Message(GenericMessage, "Successful upload\n");
+#endif
 			}
 			filenameBeingProcessed.Clear();
 		}
