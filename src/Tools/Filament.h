@@ -19,12 +19,12 @@ public:
 	Filament(int extr) noexcept;
 
 	int GetExtruder() const noexcept { return extruder; }				// Returns the assigned extruder drive
-	const char *GetName() const noexcept { return name; }				// Returns the name of the currently loaded filament
+	const char *GetName() const noexcept { return name.c_str(); }		// Returns the name of the currently loaded filament
 
 	// TODO: Add support for filament counters, tool restrictions etc.
 	// These should be stored in a dedicate file per filament directory like /filaments/<material>/filament.json
 
-	bool IsLoaded() const noexcept { return (name[0] != 0); }			// Returns true if a valid filament is assigned to this instance
+	bool IsLoaded() const noexcept { return !name.IsEmpty(); }			// Returns true if a valid filament is assigned to this instance
 	void Load(const char *filamentName) noexcept;						// Loads filament parameters from the SD card
 	void Unload() noexcept;												// Unloads the current filament
 
@@ -34,14 +34,14 @@ public:
 	static Filament *GetFilamentByExtruder(const int extr) noexcept;	// Retrieve the Filament instance assigned to the given extruder drive
 
 private:
-	static const char * const FilamentAssignmentFile;			// In which file the extruder <-> filament assignments are stored
-	static const char * const FilamentAssignmentFileComment;	// The comment we write at the start of this file to ensure its integrity
+	static const char * const FilamentAssignmentFile;					// In which file the extruder <-> filament assignments are stored
+	static const char * const FilamentAssignmentFileComment;			// The comment we write at the start of this file to ensure its integrity
 
 	static Filament *filamentList;
 	Filament *next;
 
 	int extruder;
-	char name[FilamentNameLength];
+	String<FilamentNameLength> name;
 };
 
 #endif
