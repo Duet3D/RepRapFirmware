@@ -41,6 +41,9 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Spindle)
 Spindle::Spindle() noexcept
 	: currentRpm(0),
 	  configuredRpm(0),
+	  minPwm(DefaultMinSpindlePwm),
+	  maxPwm(DefaultMaxSpindlePwm),
+	  idlePwm(DefaultIdleSpindlePwm),
 	  minRpm(DefaultMinSpindleRpm),
 	  maxRpm(DefaultMaxSpindleRpm),
 	  frequency(0),
@@ -67,6 +70,25 @@ GCodeResult Spindle::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 		seen = true;
 		frequency = gb.GetPwmFrequency();
 		pwmPort.SetFrequency(frequency);
+	}
+
+	if (gb.Seen('K'))
+	{
+		seen = true;
+		float pwm[3];
+		size_t numValues = 3;
+		gb.GetFloatArray(pwm, numValues, false);
+		if (numValues >= 2)
+		{
+			minPwm = constrain(pwm[0], 0.0F, 1.0F);
+			maxPwm = constrain(pwm[1], max<float>(pwm[0], minPwm), 1.0F);
+		}
+		else
+		{
+			minPwm = DefaultMinSpindlePwm;
+			maxPwm = constrain(pwm[0], 0.0F, 1.0F);
+		}
+		idlePwm = (numValues == 3) ? constrain(pwm[2], 0.0F, 1.0F) : DefaultIdleSpindlePwm;
 	}
 
 	if (gb.Seen('L'))
@@ -110,14 +132,14 @@ void Spindle::SetRpm(uint32_t rpm) noexcept
 	if (state == SpindleState::stopped || rpm == 0)
 	{
 		onOffPort.WriteDigital(false);
-		pwmPort.WriteAnalog(0.0);
+		pwmPort.WriteAnalog(idlePwm);
 		currentRpm = 0;						// current rpm is flagged live, so no need to change seqs.spindles
 	}
 	else if (state == SpindleState::forward)
 	{
 		rpm = constrain<int>(rpm, minRpm, maxRpm);
 		reverseNotForwardPort.WriteDigital(false);
-		pwmPort.WriteAnalog((float)(rpm - minRpm) / (float)(maxRpm - minRpm));
+		pwmPort.WriteAnalog(((float)(rpm - minRpm) / (float)(maxRpm - minRpm)) * (maxPwm - minPwm) + minPwm);
 		onOffPort.WriteDigital(true);
 		currentRpm = rpm;					// current rpm is flagged live, so no need to change seqs.spindles
 	}
@@ -125,13 +147,14 @@ void Spindle::SetRpm(uint32_t rpm) noexcept
 	{
 		rpm = constrain<int>(-rpm, -maxRpm, -minRpm);
 		reverseNotForwardPort.WriteDigital(true);
-		pwmPort.WriteAnalog((float)(-rpm - minRpm) / (float)(maxRpm - minRpm));
+		pwmPort.WriteAnalog(((float)(-rpm - minRpm) / (float)(maxRpm - minRpm)) * (maxPwm - minPwm) + minPwm);
 		onOffPort.WriteDigital(true);
 		currentRpm = -rpm;					// current rpm is flagged live, so no need to change seqs.spindles
 	}
 }
 
-void Spindle::SetState(const SpindleState newState) noexcept {
+void Spindle::SetState(const SpindleState newState) noexcept
+{
 	if (state != newState)
 	{
 		state = newState;
