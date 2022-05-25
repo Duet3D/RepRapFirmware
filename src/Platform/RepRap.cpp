@@ -2491,6 +2491,17 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 		reply.printf("Firmware binary \"%s\" not found", firmwareBinaryLocation.c_str());
 		return false;
 	}
+#if SAME5x
+	// UF2 files consist of 512 byte blocks with 476 bytes of data per block
+	if ((firmwareFile->Length() / 512) * 476 > FLASH_SIZE)
+#else
+	if (firmwareFile->Length() > IFLASH_SIZE)
+#endif
+	{
+		firmwareFile->Close();
+		reply.printf("Firmware binary \"%s\" is too big for the available Flash memory", filenameRef.c_str());
+		return false;
+	}
 
 	// Check that the binary looks sensible. The first word is the initial stack pointer, which should be the top of RAM.
 	uint32_t firstDword;

@@ -1,0 +1,577 @@
+openapi: 3.0.0
+info:
+    version: '3.4.1'
+    title: 'RepRapFirmware'
+    license:
+        name: GPL-3.0
+paths:
+    /rr_connect:
+        get:
+            summary: |
+                Attempt to create a new connection and log in using the (optional) password
+            parameters:
+                - name: password
+                  in: query
+                  description: 'Password'
+                  required: false
+                  schema:
+                      type: string
+                      format: password
+                - name: 'time'
+                  in: query
+                  description: 'Current datetime that will be used to update RepRapFirmware''s internal clock'
+                  required: false
+                  schema:
+                      type: string
+                      format: 'date-time'
+            responses:
+                '200':
+                    description: 'Connect response'
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    err:
+                                        description: 'Error code (0 = success, 1 = invalid password, 2 = no more sessions available)'
+                                        type: number
+                                        minimum: 0
+                                        maximum: 2
+                                    sessionTimeout:
+                                        type: number
+                                        minimum: 0
+                                    boardType:
+                                        type: string
+    /rr_disconnect:
+        get:
+            summary: |
+                Disconnect again from the RepRapFirmware controller
+            responses:
+                '200':
+                    description: 'Disconnect response'
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    err:
+                                        description: 'Error code (0 = success, 1 = failed to remove session)'
+                                        minimum: 0
+                                        maximum: 1
+    /rr_status:
+        get:
+            deprecated: true
+            summary: |
+                Retrieve a status response from RepRapFirmware in JSON format. Deprecated in RRF 3.0 and later, use `rr_model` instead
+            parameters:
+                - name: 'type'
+                  in: query
+                  description: |
+                      Type of the status response (defaults to 1)
+                      
+                      - 1: Standard status response
+                      - 2: Advanced status response. This also contains fields from the standard status response
+                      - 3: Print status response. This contains fields from the standard status response as well as information about the current (print) job
+                  required: false
+                  schema:
+                      type: number
+                      minimum: 0
+                      maximum: 3
+            responses:
+                '200':
+                    description: |
+                        Status response content, see [JSON responses](https://github.com/Duet3D/RepRapFirmware/blob/v3-dev/JSON%20responses.md) for further information
+                    content:
+                        application/json: {}
+                '503':
+                    description: 'Insufficient RAM to provide the full response'
+    /rr_config:
+        get:
+            deprecated: true
+            summary: |
+                Retrieve the configuration response. This request provides a JSON object with values that are expected to change rarely. Deprecated in RRF 3.0 and later, use rr_model instead
+            responses:
+                '200':
+                    description: |
+                        Config response content, see [JSON responses](https://github.com/Duet3D/RepRapFirmware/blob/v3-dev/JSON%20responses.md) for further information
+                    content:
+                        application/json: {}
+                '503':
+                    description: 'Insufficient RAM to provide the full response'
+    /rr_gcode:
+        get:
+            summary: |
+                Execute arbitrary G/M/T-code(s)
+            parameters:
+                - name: 'gcode'
+                  in: query
+                  description: 'G/M/T-code to execute. This parameter must be present although it can be empty'
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                '200':
+                    description: 'Info about the G-code buffer'
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    bufferSpace:
+                                        description: 'How much buffer space for new G/M/T-codes is still available'
+                                        type: number
+                                        minimum: 0
+    /rr_reply:
+        get:
+            summary: |
+                Retrieve the last G-code reply.
+                
+                The G-code reply is buffered per connected HTTP client and it is discarded when every HTTP client has fetched it or when the firmware is short on memory and the client has not requested it within reasonable time (1 second)
+            responses:
+                '200':
+                    description: 'G-code reply'
+                    content:
+                        text/plain: {}
+    /rr_upload:
+        get:
+            summary: |
+                Get the last file upload result
+            responses:
+                '200':
+                    description: 'Last upload result'
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    err:
+                                        description: 'Last file upload result (can be either `0` if the last upload successfully finished or `1` if an error occurred)'
+                                        type: number
+                                        minimum: 0
+        post:
+            summary: |
+                Upload a file
+            parameters:
+                - name: 'name'
+                  in: query
+                  description: 'Path to the file to upload'
+                  required: true
+                  schema:
+                      type: string
+                - name: 'time'
+                  in: query
+                  description: 'ISO8601-like represenation of the time the file was last modified'
+                  required: false
+                  schema:
+                      type: string
+                      format: 'date-time'
+                - name: 'crc32'
+                  in: query
+                  description: 'CRC32 checksum of the file content as hex string *without* leading `0x`. Usage of this parameter is encouraged'
+                  required: false
+                  schema:
+                      type: string
+            requestBody:
+                description: 'File content'
+                content:
+                    application/octet-stream: {}
+            responses:
+                '200':
+                    description: 'File upload result'
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    err:
+                                        description: 'File upload result (can be either `0` if the last upload uccessfully finished or `1` if an error occurred [e.g. CRC mismatch])'
+                                        type: number
+                                        minimum: 0
+    /rr_download:
+        get:  
+            summary: |
+              Download a file
+            parameters:
+                - name: 'name'
+                  in: query
+                  description: 'Path to the file to download'
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                '200':
+                    description: 'Downloaded file'
+                    content:
+                        application/octet-stream: {}
+                '404':
+                    description: 'File not found'
+    /rr_delete:
+        get:
+            summary: |
+                Delete a file or directory
+            parameters:
+                - name: 'name'
+                  in: query
+                  description: 'Name of the file to delete'
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                '200':
+                    description: 'File delete result'
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    err:
+                                        description: 'File delete result (either `0` on success or `1` on error)'
+                                        type: number
+                                        minimum: 0
+    /rr_filelist:
+        get:
+            summary: |
+                Retrieve a (partial) file list
+            parameters:
+                - name: 'dir'
+                  in: query
+                  description: 'Directory to query'
+                  required: true
+                  schema:
+                      type: string
+                - name: 'first'
+                  in: query
+                  description: 'First item index to return (defaults to `0`)'
+                  required: false
+                  schema:
+                      type: number
+                      minimum: 0
+            responses:
+                '200':
+                    description: 'File list result'
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    dir:
+                                        description: 'Queried directory'
+                                        type: string
+                                    first:
+                                        description: 'First item index returned'
+                                        type: number
+                                        minimum: 0
+                                    files:
+                                        type: array
+                                        items:
+                                            description: 'Files or directories'
+                                            type: object
+                                            properties:
+                                                type:
+                                                    description: 'Type of this item (d = directory, f = file)'
+                                                    enum:
+                                                      - d
+                                                      - f
+                                                name:
+                                                    description: 'Filename of this item'
+                                                    type: string
+                                                size:
+                                                    description: 'Size of this item in bytes'
+                                                    type: number
+                                                    minimum: 0
+                                                date:
+                                                  description: 'Last modified datetime of this item'
+                                                  type: string
+                                                  format: 'date-time'
+                                    next:
+                                        description: 'Index of the next item to query or 0 if there are no more items'
+                                        type: number
+                                        minimum: 0
+                                    err:
+                                        description: |
+                                            Error code
+                                            
+                                            - `0`: List query successful
+                                            - `1`: Drive is not mounted
+                                            - `2`: Directory does not exist
+                                        type: number
+                                        minimum: 0
+                                        maximum: 2
+                '503':
+                    description: 'Insufficient RAM to provide a response'
+    /rr_files:
+        get:
+            summary: |
+                Retrieve a list of files without any attributes
+            parameters:
+                - name: 'dir'
+                  in: query
+                  description: 'Directory to query'
+                  required: true
+                  schema:
+                      type: string
+                - name: 'first'
+                  in: query
+                  description: 'First item index to return (defaults to `0`)'
+                  required: false
+                  schema:
+                      type: number
+                      minimum: 0
+                - name: 'flagDirs'
+                  in: query
+                  description: 'Prefix directories with a `*`'
+                  schema:
+                      type: number
+                      minimum: 0
+                      maximum: 1
+            responses:
+                '200':
+                    description: 'File list result'
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    dir:
+                                        description: 'Queried directory'
+                                        type: string
+                                    first:
+                                        description: 'First item index returned'
+                                        type: number
+                                        minimum: 0
+                                    files:
+                                        type: array
+                                        items:
+                                            description: 'Files or directories'
+                                            type: string
+                                    next:
+                                        description: 'Index of the next item to query or 0 if there are no more items'
+                                        type: number
+                                        minimum: 0
+                                    err:
+                                        description: |
+                                            Error code
+                                            
+                                            - `0`: List query successful
+                                            - `1`: Drive is not mounted
+                                            - `2`: Directory does not exist
+                                        type: number
+                                        minimum: 0
+                                        maximum: 2
+                '503':
+                    description: 'Insufficient RAM to provide a response'
+    /rr_model:
+        get:
+            summary: |
+                Retrieve object model information like [M409](https://duet3d.dozuki.com/Wiki/Gcode#Section_M409_Query_object_model). Supported in RRF 3. and later
+            parameters:
+                - name: 'key'
+                  in: query
+                  description: 'Key to query'
+                  required: true
+                  schema:
+                      type: string
+                - name: 'flags'
+                  in: query
+                  description: 'Query flags'
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                '200':
+                    description: 'Object model result'
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    key:
+                                        description: 'Queried key'
+                                        type: string
+                                    flags:
+                                        description: 'Query flags'
+                                        type: string
+                                    result:
+                                        type: object
+                '503':
+                    description: 'Insufficient RAM to provide a response'
+    /rr_move:
+        get:
+            summary: |
+                Move a file or directory
+            parameters:
+                - name: 'old'
+                  in: query
+                  description: 'Current path to the file or directory'
+                  required: true
+                  schema:
+                      type: string
+                - name: 'new'
+                  in: query
+                  description: 'New path of the file or directory'
+                  required: true
+                  schema:
+                      type: string
+                - name: 'deleteexisting'
+                  in: query
+                  description: 'Set this to `yes` to delete the new file if it already exists. Defaults to `no`'
+                  required: false
+                  schema:
+                      type: string
+                      enum: ['yes', 'no']
+            responses:
+                '200':
+                    description: 'File move result'
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    err:
+                                        description: 'File move result (either `0` on success or `1` on error)'
+                                        type: number
+                                        minimum: 0
+    /rr_mkdir:
+        get:
+            summary: |
+                Create a new directory
+            parameters:
+                - name: 'dir'
+                  in: query
+                  description: 'Directory to create'
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                '200':
+                    description: 'Directory create result'
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    err:
+                                        description: 'Directory create result (either `0` on success or `1` on error)'
+                                        type: number
+                                        minimum: 0
+    /rr_fileinfo:
+        get:
+            summary: |
+                Parse a G-code job file and return retrieved information. If no file is specified, information about the file being printed is returned
+            parameters:
+                - name: 'name'
+                  in: query
+                  description: 'Path to the file to parse'
+                  required: false
+                  schema:
+                      type: string
+            responses:
+                '200':
+                    description: 'File list result'
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    err:
+                                        description: 'Error code, either `0` on success or `1` on error'
+                                        type: number
+                                    fileName:
+                                        description: 'Filename of the G-code file'
+                                        type: string
+                                    size:
+                                        description: 'Size of the file'
+                                        type: number
+                                    lastModified:
+                                        description: 'Datetime when the file was last modified'
+                                        type: string
+                                        format: 'date-time'
+                                    height:
+                                        description: 'Object height (in mm)'
+                                        type: number
+                                    layerHeight:
+                                        description: 'Layer height (in mm)'
+                                        type: number
+                                    numLayers:
+                                        description: 'Number of layers'
+                                        type: number
+                                    printTime:
+                                        description: 'Expected time to print (in s)'
+                                        type: number
+                                    simulatedTime:
+                                        description: 'Simulated time to print (in s)'
+                                        type: number
+                                    filament:
+                                        description: 'Filament usage (in mm)'
+                                        type: array
+                                        items:
+                                            type: number
+                                    printDuration:
+                                        description: 'Current print duration (in s)'
+                                        type: number
+                                    thumbnails:
+                                        description: 'Info about embedded thumbnails'
+                                        items:
+                                            type: object
+                                            properties:
+                                                width:
+                                                    description: 'Width of the thumbnail (in px)'
+                                                    type: number
+                                                height:
+                                                    description: 'Height of the thumbnail (in px)'
+                                                    type: number
+                                                format:
+                                                    description: 'Thumbnail format'
+                                                    type: string
+                                                    enum: ['png', 'qoi', 'jpeg']
+                                                offset:
+                                                    description: 'File offset (to be used with rr_thumbnail)'
+                                                    type: number
+                                                size:
+                                                    description: 'Size of the thumbnail'
+                                                    type: number
+                                    generatedBy:
+                                        description: 'Application that generated the file'
+                                        type: string
+    /rr_thumbnail:
+        get:
+            summary: |
+                Query a thumbnail from a G-code file
+            parameters:
+                - name: 'name'
+                  in: query
+                  description: 'Filename to query'
+                  required: true
+                  schema:
+                      type: string
+                - name: 'offset'
+                  in: query
+                  description: 'File offset of the thumbnail'
+                  required: true
+                  schema:
+                      type: number
+            responses:
+                '200':
+                    description: 'File list result'
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    fileName:
+                                        description: 'Filename of the G-code file'
+                                        type: string
+                                    offset:
+                                        description: 'Offset of the thumbnail'
+                                        type: number
+                                    data:
+                                        description: 'Base64-encoded thumbnail data'
+                                        type: string
+                                    next:
+                                        description: 'Next thumbnail offset or 0 if complete'
+                                        type: number
+                                        minimum: 0
+                                    err:
+                                        description: 'Error code, either `0` on success or `1` on error'
+                                        type: number
+

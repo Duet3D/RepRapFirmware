@@ -21,6 +21,7 @@ private:
 	void SetRpm(const uint32_t rpm) noexcept;
 
 	PwmPort pwmPort, onOffPort, reverseNotForwardPort;
+	float minPwm, maxPwm, idlePwm;
 	uint32_t currentRpm, configuredRpm, minRpm, maxRpm;
 	PwmFrequency frequency;
 	SpindleState state;
