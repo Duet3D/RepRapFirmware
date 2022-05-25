@@ -3709,6 +3709,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 #if HAS_WIFI_NETWORKING
+			case 442:
+			case 443:
 			case 587:	// Add WiFi network or list remembered networks
 			case 588:	// Forget WiFi network
 			case 589:	// Configure access point
@@ -3725,6 +3727,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					result = FilamentMonitor::Configure(gb, reply, extruder);
 				}
 				break;
+
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 			case 592: // Configure nonlinear extrusion
