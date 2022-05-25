@@ -1035,8 +1035,19 @@ void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress 
 
 GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply) THROWS(GCodeException)
 {
+	int32_t rslt = 0;
 	switch (mcode)
 	{
+	case 442:
+		rslt = SendCommand(NetworkCommand::networkStartScan, 0, 0, 0, 0, 0, nullptr, 0);
+		platform.MessageF(MessageType::UsbMessage, "Scan started %ld\n", rslt);
+		return GCodeResult::ok;
+	
+	case 443:
+		rslt = SendCommand(NetworkCommand::networkGetScanResult, 0, 0, 0, 0, 0, nullptr, 0);
+		platform.MessageF(MessageType::UsbMessage, "Scan result %ld", rslt);
+		return GCodeResult::ok;
+
 	case 587:	// Add WiFi network or list remembered networks
 		if (gb.Seen('S'))
 		{
@@ -1078,7 +1089,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 				config.netmask = temp.GetV4LittleEndian();
 			}
 
-			const int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
+			rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
 			if (rslt == ResponseEmpty)
 			{
 				return GCodeResult::ok;
