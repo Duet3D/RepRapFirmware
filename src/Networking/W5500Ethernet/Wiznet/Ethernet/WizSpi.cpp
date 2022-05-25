@@ -28,7 +28,7 @@
 // SPI data rate. I tried 60MHz and we got some data corruption when uploading files, so I reduced it to 40MHz.
 // 2018-01-11: We have now received one report of data corruption at 40MHz, so reduced this to 30MHz
 // 2022-05-23: Very occasionally we get data corruption when uploading files, with a character being replaced by the following character. So reduced to 25MHz.
-const uint32_t SpiClockFrequency = 25000000;
+const uint32_t SpiClockFrequency = 25000000;			// actually gets rounded down to 120/5 = 24MHz
 const unsigned int SpiPeripheralChannelId = 0;			// we use NPCS0 as the slave select signal
 
 // Functions called by the W5500 module to transfer data to/from the W5500 via SPI
