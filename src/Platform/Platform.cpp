@@ -551,40 +551,6 @@ void Platform::Init() noexcept
 # endif
 #endif
 
-#if defined(DUET_06_085)
-	ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
-
-	// Motor current setting on Duet 0.6 and 0.8.5
-	I2C::Init();
-	mcpExpansion.setMCP4461Address(0x2E);		// not required for mcpDuet, as this uses the default address
-	ARRAY_INIT(potWipes, POT_WIPES);
-	senseResistor = SENSE_RESISTOR;
-	maxStepperDigipotVoltage = MAX_STEPPER_DIGIPOT_VOLTAGE;
-	stepperDacVoltageRange = STEPPER_DAC_VOLTAGE_RANGE;
-	stepperDacVoltageOffset = STEPPER_DAC_VOLTAGE_OFFSET;
-#elif defined(__ALLIGATOR__)
-	pinMode(EthernetPhyResetPin, INPUT);													// Init Ethernet Phy Reset Pin
-
-	// Alligator Init DAC for motor current vref
-	ARRAY_INIT(spiDacCS, SPI_DAC_CS);
-	dacAlligator.Init(spiDacCS[0]);
-	dacPiggy.Init(spiDacCS[1]);
-	// Get macaddress from EUI48 eeprom
-	eui48MacAddress.Init(Eui48csPin);
-	if (!eui48MacAddress.getEUI48(defaultMacAddress))
-	{
-		ARRAY_INIT(defaultMacAddress, DefaultMacAddress);
-	}
-
-	Microstepping::Init();																	// Init Motor FAULT detect Pin
-	pinMode(ExpansionVoltageLevelPin, ExpansionVoltageLevel==3 ? OUTPUT_LOW : OUTPUT_HIGH); // Init Expansion Voltage Level Pin
-	pinMode(MotorFaultDetectPin,INPUT);														// Init Motor FAULT detect Pin
-	pinMode(ExpansionPiggyDetectPin,INPUT);													// Init Expansion Piggy module presence Pin
-	pinMode(FTDIconverterResetPin,INPUT);													// Init FTDI Serial Converter Reset Pin
-	pinMode(SpiEEPROMcsPin,OUTPUT_HIGH);													// Init Spi EEPROM Cs pin, not implemented, default unselected
-	pinMode(SpiFLASHcsPin,OUTPUT_HIGH);														// Init Spi FLASH Cs pin, not implemented, default unselected
-#endif
-
 #if defined(__LPC17xx__)
 	if (hasDriverCurrentControl)
 	{
@@ -646,6 +612,7 @@ void Platform::Init() noexcept
 
 	// Set up the local drivers. Do this after we have read any direction pins that specify the board type.
 #ifdef DUET3_MB6XD
+	ENABLE_PINS = (GetBoardType() == BoardType::Duet3_6XD_v01) ? ENABLE_PINS_v01 : ENABLE_PINS_v100;
 	unsigned int numErrorHighDrivers = 0;
 #endif
 	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
@@ -3793,12 +3760,15 @@ void Platform::SetBoardType(BoardType bt) noexcept
 					? BoardType::Duet3Mini_WiFi
 						: BoardType::Duet3Mini_Ethernet;
 #elif defined(DUET3_MB6HC)
-		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but won't on v1.01 boards
+		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 boards
 		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
 		delayMicroseconds(20);									// give the pullup resistor time to work
 		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
 #elif defined(DUET3_MB6XD)
-		board = BoardType::Duet3_6XD;
+		// Driver 0 direction has a pulldown resistor on v1.0  boards, but not on v0.1 boards
+		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
+		delayMicroseconds(20);									// give the pullup resistor time to work
+		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6XD_v01 : BoardType::Duet3_6XD_v100;
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 		board = BoardType::FMDC;
 #elif defined(SAME70XPLD)
@@ -3878,7 +3848,8 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v0.6 or 1.0";
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
 #elif defined(DUET3_MB6XD)
-	case BoardType::Duet3_6XD:				return "Duet 3 " BOARD_SHORT_NAME;					// we have only one version at present
+	case BoardType::Duet3_6XD_v01:			return "Duet 3 " BOARD_SHORT_NAME " v0.1";
+	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0 or later";
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "Duet 3 " BOARD_SHORT_NAME;
 #elif defined(SAME70XPLD)
@@ -3917,7 +3888,8 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3_6HC_v06_100:		return "duet3mb6hc100";
 	case BoardType::Duet3_6HC_v101:			return "duet3mb6hc101";
 #elif defined(DUET3_MB6XD)
-	case BoardType::Duet3_6XD:				return "duet3mb6xd";					// we have only one version at present
+	case BoardType::Duet3_6XD_v01:			return "duet3mb6xd001";					// we have only one version at present
+	case BoardType::Duet3_6XD_v100:			return "duet3mb6xd100";					// we have only one version at present
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "fmdc";
 #elif defined(SAME70XPLD)
