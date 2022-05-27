@@ -1059,13 +1059,24 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 	switch (mcode)
 	{
 	case 442:
-		rslt = SendCommand(NetworkCommand::networkStartScan, 0, 0, 0, 0, 0, nullptr, 0);
-		platform.MessageF(MessageType::UsbMessage, "Scan started %ld\n", rslt);
+		rslt = SendCommand(NetworkCommand::networkStartScan, 0, 0, 0, nullptr, 0, nullptr, 0);
 		return GCodeResult::ok;
 	
 	case 443:
-		rslt = SendCommand(NetworkCommand::networkGetScanResult, 0, 0, 0, 0, 0, nullptr, 0);
-		platform.MessageF(MessageType::UsbMessage, "Scan result %ld", rslt);
+		{
+			static uint32_t buffer[NumDwords(MaxDataLength + 1)];
+			memset(buffer, 0, sizeof(buffer));
+			rslt = SendCommand(NetworkCommand::networkGetScanResult, 0, 0, 0, nullptr, 0, buffer, sizeof(buffer));
+
+			if (rslt >= 0) {
+				ScanData *data = reinterpret_cast<ScanData*>(buffer);
+
+				for(int i = 0; data[i].ssid[0] != 0; i++) {
+					platform.MessageF(MessageType::UsbMessage, "ssid: %s, rssi: %d, auth: %d, bgn: %d\n", 
+							data[i].ssid, data[i].rssi, static_cast<int>(data[i].authmode), static_cast<int>(data[i].phymode));
+				}
+			}
+		}
 		return GCodeResult::ok;
 
 	case 587:	// Add WiFi network or list remembered networks
