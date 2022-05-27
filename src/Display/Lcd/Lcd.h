@@ -6,9 +6,14 @@
 #if SUPPORT_DIRECT_LCD
 
 #include <Print.h>
-#include "Fonts/LcdFont.h"
 #include <Hardware/Spi/SharedSpiClient.h>
 #include <General/SafeVsnprintf.h>
+
+#if USE_FONT_CHIP
+# include "Fonts/ER3301_1.h"
+#else
+# include "Fonts/LcdFont.h"
+#endif
 
 typedef uint16_t PixelNumber;
 
@@ -38,7 +43,12 @@ class Lcd
 {
 public:
 	// Construct a GLCD driver.
+#if USE_FONT_CHIP
+	Lcd(PixelNumber nr, PixelNumber nc, Pin fontCsPin) noexcept;
+#else
 	Lcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts) noexcept;
+#endif
+
 	virtual ~Lcd();
 
 	// Flush just some data, returning true if this needs to be called again
@@ -109,7 +119,7 @@ public:
 	void WriteSpaces(PixelNumber numPixels) noexcept;
 
 	// Return the number of fonts
-	size_t GetNumFonts() const noexcept { return numFonts; }
+	size_t GetNumFonts() const noexcept;
 
 	// Get the current font height
 	PixelNumber GetFontHeight() const noexcept;
@@ -171,12 +181,17 @@ protected:
 	// Write a decoded character
 	size_t writeNative(uint16_t c) noexcept;
 
+#if USE_FONT_CHIP
+	ER3301_1 fontChip;
+#else
+	const LcdFont * const *_ecv_array fonts;
+	const size_t numFonts;
+#endif
+
 	const PixelNumber numRows, numCols;
 	PixelNumber row, column;
 	PixelNumber leftMargin, rightMargin;
 
-	const LcdFont * const *_ecv_array fonts;
-	const size_t numFonts;
 	size_t currentFontNumber = 0;					// index of the current font
 	bool textInverted = false;
 

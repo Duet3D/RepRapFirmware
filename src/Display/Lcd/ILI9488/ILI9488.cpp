@@ -12,8 +12,13 @@
 
 constexpr PwmFrequency BacklightPwmFrequency = 1000;
 
+#if USE_FONT_CHIP
+LcdILI9488::LcdILI9488(Pin fontCsPin, uint8_t sercomNum) noexcept
+	: TFTLcd(320, 480, fontCsPin, SpiMode::mode0, sercomNum)
+#else
 LcdILI9488::LcdILI9488(const LcdFont * const fnts[], size_t nFonts, uint8_t sercomNum) noexcept
 	: TFTLcd(320, 480, fnts, nFonts, SpiMode::mode0, sercomNum)
+#endif
 {
 }
 
