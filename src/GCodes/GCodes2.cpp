@@ -2533,19 +2533,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					bool dummy = false;
 					String<MaxMessageLength> title;
-					gb.TryGetQuotedString('R', title.GetRef(), dummy);
+					(void)gb.TryGetQuotedString('R', title.GetRef(), dummy);
 
-					int32_t sParam = 1;
-					gb.TryGetIValue('S', sParam, dummy);
-					if (sParam < 0 || sParam > 3)
-					{
-						reply.copy("Invalid message box mode");
-						result = GCodeResult::error;
-						break;
-					}
+					uint32_t sParam = 1;
+					(void)gb.TryGetLimitedUIValue('S', sParam, dummy, 4);
 
 					float tParam;
-					if (sParam == 0 || sParam == 1)
+					if (sParam <= 1)
 					{
 						tParam = DefaultMessageTimeout;
 						gb.TryGetFValue('T', tParam, dummy);
@@ -2572,7 +2566,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 					// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
-					if (sParam == 2 || sParam == 3)
+					if (sParam >= 2)
 					{
 #if HAS_SBC_INTERFACE
 						if (reprap.UsingSbcInterface())
@@ -2675,7 +2669,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 305: // Set/report specific heater parameters
-				reply.copy("M305 has been replaced by M308 and M950 in RepRapFirmware 3");
+				reply.copy("M305 has been replaced by M308 and M950");
 				result = GCodeResult::error;
 				break;
 

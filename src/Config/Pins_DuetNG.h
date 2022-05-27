@@ -564,6 +564,12 @@ constexpr DmaChannel DmacChanWiFiTx = 1;
 constexpr DmaChannel DmacChanWiFiRx = 2;
 #endif
 
+#if HAS_W5500_NETWORKING
+// We can use the same DMA channels as for WiFi because only one of them will be present
+constexpr DmaChannel DmacChanW5500Tx = 1;
+constexpr DmaChannel DmacChanW5500Rx = 2;
+#endif
+
 namespace StepPins
 {
 	// *** These next three functions must use the same bit assignments in the drivers bitmap ***
