@@ -259,7 +259,10 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 			SetPinFunction(LcdSpiMosiPin, LcdSpiPinFunction);
 			SetPinFunction(LcdSpiMisoPin, LcdSpiPinFunction);
 			SetPinFunction(LcdSpiSclkPin, LcdSpiPinFunction);
+			SetHighDriveStrength(LcdSpiMosiPin);
+			SetHighDriveStrength(LcdSpiSclkPin);
 			pinMode(LcdFlashCsPin, OUTPUT_HIGH);							// in case the flash chip is fitted, deselect it
+			pinMode(LcdFontCsPin, OUTPUT_HIGH);								// in case the font chip is fitted, deselect it
 			InitDisplay(gb,
 # if USE_FONT_CHIP
 							new LcdILI9488(LcdFontCsPin, LcdSercomNumber),
