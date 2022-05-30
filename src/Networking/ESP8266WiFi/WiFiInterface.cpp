@@ -1040,10 +1040,20 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 	{
 	case 442:
 		rslt = SendCommand(NetworkCommand::networkStartScan, 0, 0, 0, nullptr, 0, nullptr, 0);
+		if (rslt < 0) {
+			reply.printf("failed to start scan: %s\n", TranslateWiFiResponse(rslt));
+			return GCodeResult::error;
+		}
 		return GCodeResult::ok;
-	
+
 	case 443:
 		{
+			// List remembered networks
+			if (longReply == nullptr && !OutputBuffer::Allocate(longReply))
+			{
+				return GCodeResult::notFinished;			// try again later
+			}
+
 			static uint32_t buffer[NumDwords(MaxDataLength + 1)];
 			memset(buffer, 0, sizeof(buffer));
 			rslt = SendCommand(NetworkCommand::networkGetScanResult, 0, 0, 0, nullptr, 0, buffer, sizeof(buffer));
@@ -1052,12 +1062,15 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 				ScanData *data = reinterpret_cast<ScanData*>(buffer);
 
 				for(int i = 0; data[i].ssid[0] != 0; i++) {
-					platform.MessageF(MessageType::UsbMessage, "ssid: %s, rssi: %d, auth: %d, bgn: %d\n", 
+					longReply->catf("ssid: %s, rssi: %d, auth: %d, bgn: %d\n",
 							data[i].ssid, data[i].rssi, static_cast<int>(data[i].authmode), static_cast<int>(data[i].phymode));
 				}
+				return GCodeResult::ok;
+			} else {
+				reply.printf("failed to retrieve scan results: %s\n", TranslateWiFiResponse(rslt));
 			}
 		}
-		return GCodeResult::ok;
+		return GCodeResult::error;
 
 	case 587:	// Add WiFi network or list remembered networks
 		if (gb.Seen('S'))
@@ -1988,6 +2001,8 @@ void WiFiInterface::GetNewStatus() noexcept
 	case ResponseBufferTooSmall:			return "response buffer too small";
 	case ResponseBadReplyFormatVersion:		return "bad reply format version";
 	case ResponseBadParameter:				return "bad parameter in request";
+	case ResponseNoScanStarted:				return "no scan has been started";
+	case ResponseScanInProgress:			return "scan still in progress";
 	case ResponseUnknownError:				return "unknown error";
 	default:								return "unknown response code";
 	}
