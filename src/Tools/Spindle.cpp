@@ -39,13 +39,8 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Spindle)
 #endif
 
 Spindle::Spindle() noexcept
-	: currentRpm(0),
-	  configuredRpm(0),
-	  minPwm(DefaultMinSpindlePwm),
-	  maxPwm(DefaultMaxSpindlePwm),
-	  idlePwm(DefaultIdleSpindlePwm),
-	  minRpm(DefaultMinSpindleRpm),
-	  maxRpm(DefaultMaxSpindleRpm),
+	: minPwm(DefaultMinSpindlePwm), maxPwm(DefaultMaxSpindlePwm), idlePwm(DefaultIdleSpindlePwm),
+	  currentRpm(0), configuredRpm(0),minRpm(DefaultMinSpindleRpm), maxRpm(DefaultMaxSpindleRpm),
 	  frequency(0),
 	  state(SpindleState::unconfigured)
 {
