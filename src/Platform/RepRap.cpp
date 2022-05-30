@@ -2492,14 +2492,14 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 		return false;
 	}
 #if SAME5x
-	// UF2 files consist of 512 byte blocks with 476 bytes of data per block
-	if ((firmwareFile->Length() / 512) * 476 > FLASH_SIZE)
+	// UF2 files consist of 512 byte blocks with (for the SAME5x) 256 bytes of data per block
+	if ((firmwareFile->Length() / 512) * 256 > FLASH_SIZE)
 #else
 	if (firmwareFile->Length() > IFLASH_SIZE)
 #endif
 	{
 		firmwareFile->Close();
-		reply.printf("Firmware binary \"%s\" is too big for the available Flash memory", filenameRef.c_str());
+		reply.printf("Firmware binary \"%s\" is too big for the available flash memory", filenameRef.c_str());
 		return false;
 	}
 
