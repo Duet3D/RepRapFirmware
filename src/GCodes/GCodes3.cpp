@@ -1159,7 +1159,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 	reprap.GetHeat().SwitchOffAll(true);				// turn all heaters off because the main loop may get suspended
 	DisableDrives();									// all motors off
 
-	if (firmwareUpdateModuleMap.IsEmpty())					// have we worked out which modules to update?
+	if (firmwareUpdateModuleMap.IsEmpty())				// have we worked out which modules to update?
 	{
 		// Find out which modules we have been asked to update
 		if (gb.Seen('S'))
@@ -1182,7 +1182,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		}
 		else
 		{
-			firmwareUpdateModuleMap.SetBit(0);		// no modules specified, so update module 0 to match old behaviour
+			firmwareUpdateModuleMap.SetBit(0);			// no modules specified, so update module 0 to match old behaviour
 		}
 
 		if (firmwareUpdateModuleMap.IsEmpty())
