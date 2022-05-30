@@ -1035,143 +1035,153 @@ void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress 
 
 GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply) THROWS(GCodeException)
 {
-	int32_t rslt = 0;
 	switch (mcode)
 	{
-	case 442:
-		rslt = SendCommand(NetworkCommand::networkStartScan, 0, 0, 0, nullptr, 0, nullptr, 0);
-		if (rslt < 0) {
-			reply.printf("failed to start scan: %s\n", TranslateWiFiResponse(rslt));
-			return GCodeResult::error;
-		}
-		return GCodeResult::ok;
-
-	case 443:
-		{
-			// List remembered networks
-			if (longReply == nullptr && !OutputBuffer::Allocate(longReply))
-			{
-				return GCodeResult::notFinished;			// try again later
-			}
-
-			static uint32_t buffer[NumDwords(MaxDataLength + 1)];
-			memset(buffer, 0, sizeof(buffer));
-			rslt = SendCommand(NetworkCommand::networkGetScanResult, 0, 0, 0, nullptr, 0, buffer, sizeof(buffer));
-
-			if (rslt >= 0) {
-				ScanData *data = reinterpret_cast<ScanData*>(buffer);
-
-				for(int i = 0; data[i].ssid[0] != 0; i++) {
-					longReply->catf("ssid: %s, rssi: %d, auth: %d, bgn: %d\n",
-							data[i].ssid, data[i].rssi, static_cast<int>(data[i].authmode), static_cast<int>(data[i].phymode));
-				}
-				return GCodeResult::ok;
-			} else {
-				reply.printf("failed to retrieve scan results: %s\n", TranslateWiFiResponse(rslt));
-			}
-		}
-		return GCodeResult::error;
-
 	case 587:	// Add WiFi network or list remembered networks
-		if (gb.Seen('S'))
+		switch (gb.GetCommandFraction())
 		{
-			WirelessConfigurationData config;
-			memset(&config, 0, sizeof(config));
-			String<ARRAY_SIZE(config.ssid)> ssid;
-			gb.GetQuotedString(ssid.GetRef());
-			SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
-
-			// Get the password
-			gb.MustSee('P');
-			{
-				String<ARRAY_SIZE(config.password)> password;
-				gb.GetQuotedString(password.GetRef());
-				if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
+			case -1:
+			case 0:
+				if (gb.Seen('S'))
 				{
-					reply.copy("WiFi password must be at least 8 characters");
-					return GCodeResult::error;
-				}
-				SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
-			}
+					WirelessConfigurationData config;
+					memset(&config, 0, sizeof(config));
+					String<ARRAY_SIZE(config.ssid)> ssid;
+					gb.GetQuotedString(ssid.GetRef());
+					SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
 
-			if (gb.Seen('I'))
-			{
-				IPAddress temp;
-				gb.GetIPAddress(temp);
-				config.ip = temp.GetV4LittleEndian();
-			}
-			if (gb.Seen('J'))
-			{
-				IPAddress temp;
-				gb.GetIPAddress(temp);
-				config.gateway = temp.GetV4LittleEndian();
-			}
-			if (gb.Seen('K'))
-			{
-				IPAddress temp;
-				gb.GetIPAddress(temp);
-				config.netmask = temp.GetV4LittleEndian();
-			}
-
-			rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
-			if (rslt == ResponseEmpty)
-			{
-				return GCodeResult::ok;
-			}
-			else
-			{
-				reply.printf("Failed to add SSID to remembered list: %s", TranslateWiFiResponse(rslt));
-			}
-		}
-		else
-		{
-			// List remembered networks
-			if (longReply == nullptr && !OutputBuffer::Allocate(longReply))
-			{
-				return GCodeResult::notFinished;			// try again later
-			}
-
-			const bool jsonFormat = gb.Seen('F') && gb.GetUIValue() == 1;
-
-			const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * ReducedWirelessConfigurationDataSize;		// enough for all the remembered SSID data
-			uint32_t buffer[NumDwords(declaredBufferLength)];
-			const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, 0, nullptr, 0, buffer, declaredBufferLength);
-			if (rslt >= 0)
-			{
-				longReply->copy((jsonFormat) ? "{\"rememberedNetworks\":[" : "Remembered networks:");
-				size_t offset = (jsonFormat) ? 0 : ReducedWirelessConfigurationDataSize;		// skip own SSID details unless reporting in JSON format
-				bool found = false;
-				while (offset + ReducedWirelessConfigurationDataSize <= (size_t)rslt)
-				{
-					WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(reinterpret_cast<char*>(buffer) + offset);
-					if (wp->ssid[0] != 0 || (offset == 0 && jsonFormat))
+					// Get the password
+					gb.MustSee('P');
 					{
-						wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
-						if (jsonFormat && found)
+						String<ARRAY_SIZE(config.password)> password;
+						gb.GetQuotedString(password.GetRef());
+						if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
 						{
-							longReply->cat(',');
+							reply.copy("WiFi password must be at least 8 characters");
+							return GCodeResult::error;
 						}
-						longReply->catf((jsonFormat)
-										? "{\"ssid\":\"%.s\",\"ip\":\"%s\",\"gw\":\"%s\",\"mask\":\"%s\"}"
-											: "\n%s IP=%s GW=%s NM=%s",
-											  	 wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
-						found = true;
+						SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
 					}
-					offset += ReducedWirelessConfigurationDataSize;
-				}
 
-				if (jsonFormat)
-				{
-					longReply->cat("],\"err\":0}\n");
-				}
-				else if (!found)
-				{
-					longReply->cat(" none");
-				}
-				return GCodeResult::ok;
-			}
+					if (gb.Seen('I'))
+					{
+						IPAddress temp;
+						gb.GetIPAddress(temp);
+						config.ip = temp.GetV4LittleEndian();
+					}
+					if (gb.Seen('J'))
+					{
+						IPAddress temp;
+						gb.GetIPAddress(temp);
+						config.gateway = temp.GetV4LittleEndian();
+					}
+					if (gb.Seen('K'))
+					{
+						IPAddress temp;
+						gb.GetIPAddress(temp);
+						config.netmask = temp.GetV4LittleEndian();
+					}
 
-			longReply->printf((jsonFormat) ? "{\"rememberedNetworks\":[],\"err\":1,\"errText\":\"%.s\"}" : "Failed to retrieve network list: %s", TranslateWiFiResponse(rslt));
+					const int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
+					if (rslt == ResponseEmpty)
+					{
+						return GCodeResult::ok;
+					}
+					else
+					{
+						reply.printf("Failed to add SSID to remembered list: %s", TranslateWiFiResponse(rslt));
+					}
+				}
+				else
+				{
+					// List remembered networks
+					if (longReply == nullptr && !OutputBuffer::Allocate(longReply))
+					{
+						return GCodeResult::notFinished;			// try again later
+					}
+
+					const bool jsonFormat = gb.Seen('F') && gb.GetUIValue() == 1;
+
+					const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * ReducedWirelessConfigurationDataSize;		// enough for all the remembered SSID data
+					uint32_t buffer[NumDwords(declaredBufferLength)];
+					const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, 0, nullptr, 0, buffer, declaredBufferLength);
+					if (rslt >= 0)
+					{
+						longReply->copy((jsonFormat) ? "{\"rememberedNetworks\":[" : "Remembered networks:");
+						size_t offset = (jsonFormat) ? 0 : ReducedWirelessConfigurationDataSize;		// skip own SSID details unless reporting in JSON format
+						bool found = false;
+						while (offset + ReducedWirelessConfigurationDataSize <= (size_t)rslt)
+						{
+							WirelessConfigurationData* const wp = reinterpret_cast<WirelessConfigurationData *>(reinterpret_cast<char*>(buffer) + offset);
+							if (wp->ssid[0] != 0 || (offset == 0 && jsonFormat))
+							{
+								wp->ssid[ARRAY_UPB(wp->ssid)] = 0;
+								if (jsonFormat && found)
+								{
+									longReply->cat(',');
+								}
+								longReply->catf((jsonFormat)
+												? "{\"ssid\":\"%.s\",\"ip\":\"%s\",\"gw\":\"%s\",\"mask\":\"%s\"}"
+													: "\n%s IP=%s GW=%s NM=%s",
+														wp->ssid, IP4String(wp->ip).c_str(), IP4String(wp->gateway).c_str(), IP4String(wp->netmask).c_str());
+								found = true;
+							}
+							offset += ReducedWirelessConfigurationDataSize;
+						}
+
+						if (jsonFormat)
+						{
+							longReply->cat("],\"err\":0}\n");
+						}
+						else if (!found)
+						{
+							longReply->cat(" none");
+						}
+						return GCodeResult::ok;
+					}
+
+					longReply->printf((jsonFormat) ? "{\"rememberedNetworks\":[],\"err\":1,\"errText\":\"%.s\"}" : "Failed to retrieve network list: %s", TranslateWiFiResponse(rslt));
+				}
+				break;
+			
+			case 1:
+				{
+					const int32_t rslt = SendCommand(NetworkCommand::networkStartScan, 0, 0, 0, nullptr, 0, nullptr, 0);
+					if (rslt >= 0) {
+						reply.printf("failed to start scan: %s\n", TranslateWiFiResponse(rslt));
+						return GCodeResult::ok;
+					}
+				}
+				break;
+
+			case 2:
+				{
+					// List remembered networks
+					if (longReply == nullptr && !OutputBuffer::Allocate(longReply))
+					{
+						return GCodeResult::notFinished;			// try again later
+					}
+
+					static uint32_t buffer[NumDwords(MaxDataLength + 1)];
+					memset(buffer, 0, sizeof(buffer));
+					const int32_t rslt = SendCommand(NetworkCommand::networkGetScanResult, 0, 0, 0, nullptr, 0, buffer, sizeof(buffer));
+
+					if (rslt >= 0) {
+						ScanData *data = reinterpret_cast<ScanData*>(buffer);
+
+						for(int i = 0; data[i].ssid[0] != 0; i++) {
+							longReply->catf("ssid: %s, rssi: %d, auth: %d, bgn: %d\n",
+									data[i].ssid, data[i].rssi, static_cast<int>(data[i].authmode), static_cast<int>(data[i].phymode));
+						}
+						return GCodeResult::ok;
+					} else {
+						reply.printf("failed to retrieve scan results: %s\n", TranslateWiFiResponse(rslt));
+					}
+				}
+				break;
+
+			default:
+				break;
 		}
 		return GCodeResult::error;
 
