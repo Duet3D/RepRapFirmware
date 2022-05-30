@@ -555,7 +555,7 @@ float ExpressionParser::ParseFloat() THROWS(GCodeException)
 
 int32_t ExpressionParser::ParseInteger() THROWS(GCodeException)
 {
-	ExpressionValue val = Parse();
+	const ExpressionValue val = Parse();
 	switch (val.GetType())
 	{
 	case TypeCode::Int32:
@@ -575,7 +575,7 @@ int32_t ExpressionParser::ParseInteger() THROWS(GCodeException)
 
 uint32_t ExpressionParser::ParseUnsigned() THROWS(GCodeException)
 {
-	ExpressionValue val = Parse();
+	const ExpressionValue val = Parse();
 	switch (val.GetType())
 	{
 	case TypeCode::Uint32:

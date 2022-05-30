@@ -122,28 +122,29 @@ GCodeResult TriggerItem::Configure(unsigned int number, GCodeBuffer &gb, const S
 	const int sParam = (gb.Seen('S')) ? gb.GetIValue() : 1;
 	if (gb.Seen('P'))
 	{
-		if (gb.GetIValue() == -1)
+		// We need a try..catch block here so that if we pass an array we do not abort when trying to read a single value
+		try
 		{
-			Init();						// P-1 clears all inputs and sets condition to 0
-			return GCodeResult::ok;
+			if (gb.GetIValue() == -1)
+			{
+				Init();						// P-1 clears all inputs and sets condition to 0
+				return GCodeResult::ok;
+			}
+		} catch (const GCodeException&) { }
+		gb.Seen('P');
+		seen = true;
+		uint32_t inputNumbers[MaxGpInPorts];
+		size_t numValues = MaxGpInPorts;
+		gb.GetUnsignedArray(inputNumbers, numValues, false);
+		const InputPortsBitmap portsToWaitFor = InputPortsBitmap::MakeFromArray(inputNumbers, numValues);
+		if (sParam < 0)
+		{
+			highLevelInputs &= ~portsToWaitFor;
+			lowLevelInputs &= ~portsToWaitFor;
 		}
 		else
 		{
-			seen = true;
-			gb.Seen('P');
-			uint32_t inputNumbers[MaxGpInPorts];
-			size_t numValues = MaxGpInPorts;
-			gb.GetUnsignedArray(inputNumbers, numValues, false);
-			const InputPortsBitmap portsToWaitFor = InputPortsBitmap::MakeFromArray(inputNumbers, numValues);
-			if (sParam < 0)
-			{
-				highLevelInputs &= ~portsToWaitFor;
-				lowLevelInputs &= ~portsToWaitFor;
-			}
-			else
-			{
-				((sParam >= 1) ? highLevelInputs : lowLevelInputs) |= portsToWaitFor;
-			}
+			((sParam >= 1) ? highLevelInputs : lowLevelInputs) |= portsToWaitFor;
 		}
 	}
 
