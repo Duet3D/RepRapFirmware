@@ -17,7 +17,12 @@
 class TFTLcd : public Lcd
 {
 public:
+#if USE_FONT_CHIP
+	TFTLcd(PixelNumber nr, PixelNumber nc, Pin fontCsPin, SpiMode mode, uint8_t sercomNum) noexcept;
+#else
 	TFTLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode, uint8_t sercomNum) noexcept;
+#endif
+
 	virtual ~TFTLcd();
 
 	// Get the SPI frequency

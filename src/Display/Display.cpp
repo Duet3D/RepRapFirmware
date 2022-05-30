@@ -34,12 +34,17 @@ constexpr size_t LargeFontNumber = 1;
 #endif
 
 #if SUPPORT_ILI9488_LCD
+# if USE_FONT_CHIP
+constexpr size_t SmallFontNumber = 0;
+constexpr size_t LargeFontNumber = 1;
+# else
 // The FMDC prototypes don't have enough flash memory for more than one font
 //extern const LcdFont font19x21;
 extern const LcdFont font28x32;
 const LcdFont * const tftFonts[] = { /*&font19x21 ,*/ &font28x32 };
 constexpr size_t SmallFontNumber = 0;
 constexpr size_t LargeFontNumber = 0;
+# endif
 #endif
 
 constexpr uint32_t NormalRefreshMillis = 250;
@@ -254,7 +259,17 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 			SetPinFunction(LcdSpiMosiPin, LcdSpiPinFunction);
 			SetPinFunction(LcdSpiMisoPin, LcdSpiPinFunction);
 			SetPinFunction(LcdSpiSclkPin, LcdSpiPinFunction);
-			InitDisplay(gb, new LcdILI9488(tftFonts, ARRAY_SIZE(tftFonts), LcdSercomNumber), LcdSpiCsPin, NoPin, false);
+			SetHighDriveStrength(LcdSpiMosiPin);
+			SetHighDriveStrength(LcdSpiSclkPin);
+			pinMode(LcdFlashCsPin, OUTPUT_HIGH);							// in case the flash chip is fitted, deselect it
+			pinMode(LcdFontCsPin, OUTPUT_HIGH);								// in case the font chip is fitted, deselect it
+			InitDisplay(gb,
+# if USE_FONT_CHIP
+							new LcdILI9488(LcdFontCsPin, LcdSercomNumber),
+# else
+							new LcdILI9488(tftFonts, ARRAY_SIZE(tftFonts), LcdSercomNumber),
+# endif
+								LcdSpiCsPin, NoPin, false);
 			touchController = new ResistiveTouch(RtpSpiCsPin, RtpPenPin);
 			touchController->Init(lcd->GetNumCols(), lcd->GetNumRows(), DisplayOrientation::ReverseY);
 			break;

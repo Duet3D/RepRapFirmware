@@ -52,6 +52,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_ILI9488_LCD		1
+#define USE_FONT_CHIP			1
 #define SUPPORT_ACCELEROMETERS	1
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				0
@@ -241,9 +242,11 @@ constexpr Pin LcdResetPin = PortCPin(6);
 #if defined(FMDC_V03)
 constexpr Pin LcdFlashCsPin = PortAPin(20);
 constexpr Pin LcdBacklightPin = PortBPin(16);
+constexpr Pin LcdFontCsPin = PortBPin(20);
 #elif defined(FMDC_V02)
 constexpr Pin LcdFlashCsPin = PortBPin(10);
 constexpr Pin LcdBacklightPin = PortBPin(12);
+constexpr Pin LcdFontCsPin = PortBPin(15);
 #endif
 
 constexpr Pin LcdFlashWpPin = PortAPin(2);
@@ -402,7 +405,7 @@ constexpr PinDescription PinTable[] =
 #elif defined(FMDC_V02)
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB18 SDHC DAT0
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB19 SDHC DAT1
-	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB20 SDHC DAT2
+	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.lcd.fontcs"	},	// PB20 SDHC DAT2
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB21 SDHC DAT3
 #endif
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	nullptr				},	// PB22 crystal XIN1

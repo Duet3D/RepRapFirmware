@@ -5,8 +5,14 @@
 
 #if SUPPORT_DIRECT_LCD
 
+#if USE_FONT_CHIP
+Lcd::Lcd(PixelNumber nr, PixelNumber nc, Pin fontCsPin) noexcept
+	: fontChip(fontCsPin),
+#else
 Lcd::Lcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts) noexcept
-	: numRows(nr), numCols(nc), fonts(fnts), numFonts(nFonts),
+	: fonts(fnts), numFonts(nFonts),
+#endif
+	  numRows(nr), numCols(nc),
 	  currentFontNumber(0), textInverted(false), numContinuationBytesLeft(0)
 {
 }
@@ -15,9 +21,19 @@ Lcd::~Lcd()
 {
 }
 
+// Return the number of fonts
+size_t Lcd::GetNumFonts() const noexcept
+{
+#if USE_FONT_CHIP
+	return fontChip.GetNumFonts();
+#else
+	return numFonts;
+#endif
+}
+
 void Lcd::SetFont(size_t newFont) noexcept
 {
-	if (newFont < numFonts)
+	if (newFont < GetNumFonts())
 	{
 		currentFontNumber = newFont;
 	}
@@ -26,17 +42,25 @@ void Lcd::SetFont(size_t newFont) noexcept
 // Get the current font height
 PixelNumber Lcd::GetFontHeight() const noexcept
 {
+#if USE_FONT_CHIP
+	return fontChip.GetFontHeight(currentFontNumber);
+#else
 	return fonts[currentFontNumber]->height;
+#endif
 }
 
 // Get the height of a specified font
 PixelNumber Lcd::GetFontHeight(size_t fontNumber) const noexcept
 {
-	if (fontNumber >= numFonts)
+	if (fontNumber >= GetNumFonts())
 	{
 		fontNumber = currentFontNumber;
 	}
+#if USE_FONT_CHIP
+	return fontChip.GetFontHeight(fontNumber);
+#else
 	return fonts[fontNumber]->height;
+#endif
 }
 
 // Write a UTF8 byte.
@@ -107,15 +131,19 @@ size_t Lcd::write(uint8_t c) noexcept
 
 size_t Lcd::writeNative(uint16_t ch) noexcept
 {
-	const LcdFont * const currentFont = fonts[currentFontNumber];
 	if (ch == '\n')
 	{
-		SetCursor(row + currentFont->height + 1, leftMargin);
+		SetCursor(row + GetFontHeight() + 1, leftMargin);
 	}
 	else
 	{
 		if (column < rightMargin)					// keep column <= rightMargin in the following code
 		{
+#if USE_FONT_CHIP
+			PixelNumber numFontColumns = fontChip.GetCharacter(currentFontNumber, ch);
+			const PixelNumber fontHeight = GetFontHeight();
+#else
+			const LcdFont * const currentFont = fonts[currentFontNumber];
 			const uint16_t startChar = currentFont->startCharacter;
 			const uint16_t endChar = currentFont->endCharacter;
 
@@ -128,21 +156,36 @@ size_t Lcd::writeNative(uint16_t ch) noexcept
 			const PixelNumber fontBytesPerColumn = (fontHeight + 7)/8;
 			const PixelNumber fontBytesPerChar = (fontBytesPerColumn * currentFont->width) + 1;
 			const uint8_t *fontPtr = currentFont->ptr + (fontBytesPerChar * (ch - startChar));
-			const uint32_t cmask = (currentFont->height < 32) ? (1u << currentFont->height) - 1 : 0xFFFFFFFF;
-
 			PixelNumber numFontColumns = *fontPtr++;
+#endif
+			const uint32_t cmask = (fontHeight < 32) ? (1u << fontHeight) - 1 : 0xFFFFFFFF;
 			PixelNumber columnsLeft = rightMargin - column;
 			PixelNumber numSpaces;
 			if (lastCharColData != 0)		// if we have written anything other than spaces
 			{
-				numSpaces = currentFont->numSpaces;
-
 				// Decide whether to add space columns first, and whether to add one less then usual (auto-kerning)
-				uint32_t thisCharColData = *reinterpret_cast<const uint32_t*>(fontPtr) & cmask;
+				uint32_t thisCharColData =
+#if USE_FONT_CHIP
+										fontChip.GetColumnData(0);
+#else
+										*reinterpret_cast<const uint32_t*>(fontPtr) & cmask;
+#endif
 				if (thisCharColData == 0)  // for characters with deliberate space column at the start, e.g. decimal point
 				{
-					thisCharColData = *reinterpret_cast<const uint32_t*>(fontPtr + fontBytesPerChar) & cmask;
+					thisCharColData =
+#if USE_FONT_CHIP
+										fontChip.GetColumnData(1);
+#else
+										*reinterpret_cast<const uint32_t*>(fontPtr + fontBytesPerChar) & cmask;
+#endif
 				}
+
+				numSpaces =
+#if USE_FONT_CHIP
+							fontChip.GetSpacing(currentFontNumber);
+#else
+							currentFont->numSpaces;
+#endif
 
 				const bool kern = (numSpaces >= 2)
 								? ((thisCharColData & lastCharColData) == 0)
@@ -184,10 +227,14 @@ size_t Lcd::writeNative(uint16_t ch) noexcept
 			}
 			column += numSpaces;
 
-			while (numFontColumns != 0)
+			for (PixelNumber charColumn = 0; charColumn < numFontColumns; ++charColumn)
 			{
+#if USE_FONT_CHIP
+				const uint32_t colData = fontChip.GetColumnData(charColumn);
+#else
 				const uint32_t colData = *reinterpret_cast<const uint32_t*>(fontPtr);
 				fontPtr += fontBytesPerColumn;
+#endif
 				if ((colData & cmask) != 0)
 				{
 					lastCharColData = colData & cmask;
@@ -196,7 +243,6 @@ size_t Lcd::writeNative(uint16_t ch) noexcept
 				{
 					WriteColumnData(ySize, colData);
 				}
-				--numFontColumns;
 				++column;
 			}
 			if (ySize != 0)
@@ -224,8 +270,7 @@ void Lcd::Clear(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumb
 // Write some spaces
 void Lcd::WriteSpaces(PixelNumber numPixels) noexcept
 {
-	const LcdFont * const currentFont = fonts[currentFontNumber];
-	uint8_t ySize = currentFont->height;
+	uint8_t ySize = GetFontHeight();
 	if (row < numRows)
 	{
 		if (row + ySize > numRows)
