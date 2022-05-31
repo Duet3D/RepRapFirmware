@@ -2845,22 +2845,6 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCode
 		return GCodeResult::notFinished;
 	}
 
-#if SUPPORT_ROLAND
-	// Deal with a Roland configuration
-	if (reprap.GetRoland()->Active())
-	{
-		bool rolHome = reprap.GetRoland()->ProcessHome();
-		if (rolHome)
-		{
-			for(size_t axis = 0; axis < AXES; axis++)
-			{
-				axisIsHomed[axis] = true;
-			}
-		}
-		return rolHome;
-	}
-#endif
-
 	// We have the movement lock so we have exclusive access to the homing flags
 	if (toBeHomed.IsNonEmpty())
 	{
@@ -3315,14 +3299,6 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 	{
 		return GCodeResult::ok;
 	}
-
-#if SUPPORT_ROLAND
-	// Deal with a Roland configuration
-	if (reprap.GetRoland()->Active())
-	{
-		return reprap.GetRoland()->ProcessDwell(dwell);
-	}
-#endif
 
 	if (   IsSimulating()															// if we are simulating then simulate the G4...
 		&& &gb != DaemonGCode()														// ...unless it comes from the daemon...

@@ -2228,9 +2228,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		MessageF(MessageType::GenericMessage,
 					"\nPrintMonitor %08" PRIx32 "-%08" PRIx32
 					"\nFansManager %08" PRIx32 "-%08" PRIx32
-#if SUPPORT_ROLAND
-					"\nRoland %08" PRIx32 "-%08" PRIx32
-#endif
 #if SUPPORT_SCANNER
 					"\nScanner %08" PRIx32 "-%08" PRIx32
 #endif
@@ -2246,9 +2243,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 					, reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()), reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()) + sizeof(PrintMonitor) - 1
 					, reinterpret_cast<uint32_t>(&reprap.GetFansManager()), reinterpret_cast<uint32_t>(&reprap.GetFansManager()) + sizeof(FansManager) - 1
-#if SUPPORT_ROLAND
-					, reinterpret_cast<uint32_t>(&reprap.GetRoland()), reinterpret_cast<uint32_t>(&reprap.GetRoland()) + sizeof(Roland) - 1
-#endif
 #if SUPPORT_SCANNER
 					, reinterpret_cast<uint32_t>(&reprap.GetScanner()), reinterpret_cast<uint32_t>(&reprap.GetScanner()) + sizeof(Scanner) - 1
 #endif

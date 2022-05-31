@@ -231,11 +231,7 @@ void PrintMonitor::Spin() noexcept
 
 	// Otherwise collect some stats after a certain period of time
 	const uint64_t now = millis64();
-	if (isPrinting
-#if SUPPORT_ROLAND
-		&& !reprap.GetRoland()->Active()
-#endif
-		&& (uint32_t)now - lastUpdateTime > UpdateIntervalMillis)
+	if (isPrinting && (uint32_t)now - lastUpdateTime > UpdateIntervalMillis)
 	{
 		if (gCodes.GetPauseState() != PauseState::notPaused)
 		{

@@ -60,7 +60,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 #define ACTIVE_LOW_HEAT_ON		1
 
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
-#define SUPPORT_ROLAND			0					// set nonzero to support Roland mill
 #if defined(USE_SBC)
 # define SUPPORT_SCANNER		0
 #else

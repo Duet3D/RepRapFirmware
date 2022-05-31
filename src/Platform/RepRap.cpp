@@ -481,9 +481,6 @@ void RepRap::Init() noexcept
 	printMonitor = new PrintMonitor(*platform, *gCodes);
 	fansManager = new FansManager;
 
-#if SUPPORT_ROLAND
-	roland = new Roland(*platform);
-#endif
 #if SUPPORT_SCANNER
 	scanner = new Scanner(*platform);
 #endif
@@ -518,9 +515,6 @@ void RepRap::Init() noexcept
 	printMonitor->Init();
 	FilamentMonitor::InitStatic();
 
-#if SUPPORT_ROLAND
-	roland->Init();
-#endif
 #if SUPPORT_SCANNER
 	scanner->Init();
 #endif
@@ -741,12 +735,6 @@ void RepRap::Spin() noexcept
 	ticksInSpinState = 0;
 	spinningModule = moduleGcodes;
 	gCodes->Spin();
-
-#if SUPPORT_ROLAND
-	ticksInSpinState = 0;
-	spinningModule = moduleRoland;
-	roland->Spin();
-#endif
 
 #if SUPPORT_SCANNER && !SCANNER_AS_SEPARATE_TASK
 	ticksInSpinState = 0;

@@ -117,19 +117,6 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 			}
 			reprap.MoveUpdated();				// because we may have updated axesHomed or zDatumSetByProbing
 		}
-
-#if SUPPORT_ROLAND
-		if (reprap.GetRoland()->Active())
-		{
-			for(size_t axis = 0; axis < AXES; axis++)
-			{
-				if (!reprap.GetRoland()->ProcessG92(moveState[axis], axis))
-				{
-					return GCodeResult::notFinished;
-				}
-			}
-		}
-#endif
 	}
 
 	return GCodeResult::ok;

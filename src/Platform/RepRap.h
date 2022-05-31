@@ -90,9 +90,6 @@ public:
 	PrintMonitor& GetPrintMonitor() const noexcept { return *printMonitor; }
 	FansManager& GetFansManager() const noexcept { return *fansManager; }
 
-#if SUPPORT_ROLAND
-	Roland& GetRoland() const noexcept { return *roland; }
-#endif
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const noexcept { return *portControl; }
 #endif
@@ -215,10 +212,6 @@ private:
 
 #if HAS_SBC_INTERFACE
  	SbcInterface *sbcInterface;
-#endif
-
-#if SUPPORT_ROLAND
-	Roland* roland;
 #endif
 
 #if SUPPORT_CAN_EXPANSION
