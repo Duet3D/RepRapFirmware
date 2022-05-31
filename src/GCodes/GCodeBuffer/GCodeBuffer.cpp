@@ -341,10 +341,11 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 // Sync works as follows:
 // 1. All GBs first lock their movement queues and wait for all moves in their own movement queue to finish. Only then do they call this function.
 // 2. The primary GB (the one selected by the most recent M596 command) waits for the other GBs to do one of the following:
-//   (a) reach the same lines in the executing files as the primary GB and set their 'waitingForSync' flags. That way the primary caller know that the secondaries have completed all movements.
+//   (a) reach the same lines in the executing files as the primary GB and set their 'waitingForSync' flags. That way the primary caller knows that the secondaries have completed all movements.
 //   (b) reached a later point. That should only happen if the secondary GB didn't execute the command at the sync point due to conditional GCode or executing a loop fewer times.
 // 3. The secondary GBs wait for the primary GB to reach a point strictly later in the executing files, so that the primary can finish executing the command before they resume.
 //    While waiting they set their 'waitingForSync' flags to indicate to the primary that movement has stopped.
+// This function returns true if we must continue waiting.
 bool GCodeBuffer::MustWaitForSyncWith(const GCodeBuffer& other) noexcept
 {
 	unsigned int ourDepth = GetStackDepth();
@@ -352,12 +353,12 @@ bool GCodeBuffer::MustWaitForSyncWith(const GCodeBuffer& other) noexcept
 	const GCodeMachineState *ourState = machineState;
 	const GCodeMachineState *otherState = other.machineState;
 	const bool weArePrimary = Executing();
-	bool otherMustBeLater;
+	bool otherMustBeLater = !weArePrimary;
 	bool atSamePoint;
 	if (ourDepth > otherDepth)
 	{
-		// The other GB can only be in sync with us if it has exited the inner block we are in and moved on in the surrounding blocks
-		otherMustBeLater = true;
+		// We are more deeply nested than the other GB. If this is because we are the primary and we are executing a system macro, then the other GB may be in sync with us
+		// and waiting at the outer block for us to finish.
 		atSamePoint = false;
 		do
 		{
@@ -367,8 +368,7 @@ bool GCodeBuffer::MustWaitForSyncWith(const GCodeBuffer& other) noexcept
 	}
 	else if (otherDepth > ourDepth)
 	{
-		// The other GB is more deeply nested than we are, so it can only be later if it has moved on
-		otherMustBeLater = true;
+		// The other GB is more deeply nested than we are, perhaps because it is executing a system macro, so it is later than us if it is at the same place in the enclosing blocks
 		atSamePoint = false;
 		do
 		{
@@ -378,7 +378,6 @@ bool GCodeBuffer::MustWaitForSyncWith(const GCodeBuffer& other) noexcept
 	}
 	else
 	{
-		otherMustBeLater = !weArePrimary;
 		atSamePoint = true;
 	}
 

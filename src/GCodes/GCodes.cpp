@@ -2836,15 +2836,10 @@ void GCodes::FileMacroCyclesReturn(GCodeBuffer& gb) noexcept
 	}
 }
 
-// Home one or more of the axes
+// Home one or more of the axes. Taking the movement lock and syncing has already been done.
 // 'reply' is only written if there is an error.
 GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	if (!LockMovementAndWaitForStandstill(gb))
-	{
-		return GCodeResult::notFinished;
-	}
-
 	// We have the movement lock so we have exclusive access to the homing flags
 	if (toBeHomed.IsNonEmpty())
 	{

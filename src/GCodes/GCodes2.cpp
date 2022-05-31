@@ -302,6 +302,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		case 28: // Home
+			if (!LockMovementAndWaitForStandstill(gb))
+			{
+				return false;
+			}
+			BREAK_IF_NOT_EXECUTING
 			result = DoHome(gb, reply);
 			break;
 
@@ -310,6 +315,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				return false;
 			}
+			BREAK_IF_NOT_EXECUTING
 			{
 				int sparam;
 				if (gb.Seen('S'))
@@ -325,7 +331,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					sparam = 0;									// mesh.g not found, so treat G29 the same as G29 S0
 				}
 
-				BREAK_IF_NOT_EXECUTING
 				switch(sparam)
 				{
 				case 0:		// probe and save height map
@@ -387,6 +392,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				return false;
 			}
+			BREAK_IF_NOT_EXECUTING
 
 			// We need to unlock the movement system here in case there is no Z probe and we are doing manual probing.
 			// Otherwise, even though the bed probing code calls UnlockAll when doing a manual bed probe, the movement system
