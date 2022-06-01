@@ -556,7 +556,6 @@ private:
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling
 
-	static Mutex resourceMutex;
 	const GCodeBuffer* resourceOwners[NumResources];					// Which gcode buffer owns each resource
 
 	StraightProbeSettings straightProbeSettings;						// G38 straight probe settings
