@@ -170,6 +170,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				if (err != nullptr)
 				{
+					platform.GetEndstops().ClearEndstops();					// DoStraightMove may have enabled endstops before quitting, so disable them
 					gb.SetState(GCodeState::abortWhenMovementFinished);		// empty the queue before ending simulation, and force the user position to be restored
 					gb.LatestMachineState().SetError(err);					// must do this *after* calling SetState
 				}

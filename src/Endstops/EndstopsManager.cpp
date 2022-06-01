@@ -178,7 +178,13 @@ void EndstopsManager::AddToActive(EndstopOrZProbe& e) noexcept
 	activeEndstops = &e;
 }
 
-// Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command. Return true if successful.
+// Set no active endstops
+void EndstopsManager::ClearEndstops() noexcept
+{
+	activeEndstops = nullptr;
+}
+
+// Clear any existing endstops and set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command. Return true if successful.
 bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming, bool& reduceAcceleration) noexcept
 {
 	activeEndstops = nullptr;
