@@ -1148,9 +1148,9 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 				{
 					const int32_t rslt = SendCommand(NetworkCommand::networkStartScan, 0, 0, 0, nullptr, 0, nullptr, 0);
 					if (rslt >= 0) {
-						reply.printf("failed to start scan: %s\n", TranslateWiFiResponse(rslt));
 						return GCodeResult::ok;
 					}
+					reply.printf("failed to start scan: %s\n", TranslateWiFiResponse(rslt));
 				}
 				break;
 
@@ -1162,7 +1162,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						return GCodeResult::notFinished;			// try again later
 					}
 
-					static uint32_t buffer[NumDwords(MaxDataLength + 1)];
+					uint32_t buffer[NumDwords(MaxDataLength + 1)];
 					memset(buffer, 0, sizeof(buffer));
 					const int32_t rslt = SendCommand(NetworkCommand::networkGetScanResult, 0, 0, 0, nullptr, 0, buffer, sizeof(buffer));
 
@@ -1174,9 +1174,8 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 									data[i].ssid, data[i].rssi, static_cast<int>(data[i].authmode), static_cast<int>(data[i].phymode));
 						}
 						return GCodeResult::ok;
-					} else {
-						reply.printf("failed to retrieve scan results: %s\n", TranslateWiFiResponse(rslt));
 					}
+					longReply->printf("failed to retrieve scan results: %s\n", TranslateWiFiResponse(rslt));
 				}
 				break;
 
