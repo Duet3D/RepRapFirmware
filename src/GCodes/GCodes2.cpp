@@ -1121,13 +1121,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							deferredPauseCommandPending = (gb.Seen('P') && gb.GetUIValue() == 0) ? "M226 P0" : "M226";
 						}
 					}
-					else
+					else if (!DoPause(gb, PrintPausedReason::gcode, (gb.Seen('P') && gb.GetUIValue() == 0) ? GCodeState::pausing2 : GCodeState::pausing1))
 					{
-						if (!LockMovementAndWaitForStandstill(gb))	// lock movement before calling DoPause, also wait for movement to complete
-						{
-							return false;
-						}
-						DoPause(gb, PrintPausedReason::gcode, (gb.Seen('P') && gb.GetUIValue() == 0) ? GCodeState::pausing2 : GCodeState::pausing1);
+						return false;
 					}
 				}
 				break;
@@ -1143,13 +1139,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							return false;							// wait for the current macro to finish
 						}
 					}
-					else
+					else if (!DoPause(gb, PrintPausedReason::filamentChange, GCodeState::filamentChangePause1))
 					{
-						if (!LockMovementAndWaitForStandstill(gb))	// lock movement before calling DoPause, also wait for movement to complete
-						{
-							return false;
-						}
-						DoPause(gb, PrintPausedReason::filamentChange, GCodeState::filamentChangePause1);
+						return false;
 					}
 				}
 				break;
@@ -1176,13 +1168,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						return false;								// wait for the current macro to finish
 					}
 				}
-				else
+				else if (!DoPause(gb, PrintPausedReason::user, GCodeState::pausing1))
 				{
-					if (!LockMovement(gb))							// lock movement before calling DoPause
-					{
-						return false;
-					}
-					DoPause(gb, PrintPausedReason::user, GCodeState::pausing1);
+					return false;
 				}
 				break;
 

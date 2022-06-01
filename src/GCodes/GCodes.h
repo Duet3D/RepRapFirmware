@@ -335,6 +335,7 @@ private:
 	bool LockResource(const GCodeBuffer& gb, Resource r) noexcept;				// Lock the resource, returning true if success
 	bool LockFileSystem(const GCodeBuffer& gb) noexcept;						// Lock the unshareable parts of the file system
 	bool LockMovement(const GCodeBuffer& gb) noexcept;							// Lock movement
+	bool LockAllMovement(const GCodeBuffer& gb) noexcept;						// Lock movement on all queues
 	void GrabResource(const GCodeBuffer& gb, Resource r) noexcept;				// Grab a resource even if it is already owned
 	void GrabMovement(const GCodeBuffer& gb) noexcept;							// Grab the movement lock even if it is already owned
 	void UnlockResource(const GCodeBuffer& gb, Resource r) noexcept;			// Unlock the resource if we own it
@@ -371,7 +372,7 @@ private:
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err) THROWS(GCodeException)		// Execute an arc move
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
 	void FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
-	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;										// Check that enough axes have been homed
+	bool CheckEnoughAxesHomed(AxesBitmap axesToMove) noexcept;										// Check that enough axes have been homed
 	bool TravelToStartPoint(GCodeBuffer& gb) noexcept;												// Set up a move to travel to the resume point
 
 	GCodeResult DoDwell(GCodeBuffer& gb) THROWS(GCodeException);														// Wait for a bit
@@ -455,8 +456,7 @@ private:
 	void CheckTriggers() noexcept;															// Check for and execute triggers
 	void DoEmergencyStop() noexcept;														// Execute an emergency stop
 
-	void DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept	// Pause the print
-		pre(resourceOwners[movementResource] == &gb);
+	bool DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept;	// Pause the print, returning true if successful, false if we can't yet
 	void CheckForDeferredPause(GCodeBuffer& gb) noexcept;									// Check if a pause is pending, action it if so
 	void ProcessEvent(GCodeBuffer& gb) noexcept;											// Start processing a new event
 
@@ -530,6 +530,8 @@ private:
 
 #if SUPPORT_ASYNC_MOVES
 	GCodeResult SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M596
+	bool AllocateAxes(MovementState& ms, AxesBitmap axes) noexcept;				// allocate axes to a movement state
+	bool AllocateExtruders(MovementState& ms, ExtrudersBitmap extruders) noexcept;	// allocate an extruder to a movement state
 #endif
 
 #if SUPPORT_COORDINATE_ROTATION
@@ -542,14 +544,11 @@ private:
 	Pwm_t ConvertLaserPwm(float reqVal) const noexcept;
 
 #if HAS_AUX_DEVICES
-#if !ALLOW_ARBITRARY_PANELDUE_PORT
-	static constexpr
-#endif
-	uint8_t serialChannelForPanelDueFlashing
-#if !ALLOW_ARBITRARY_PANELDUE_PORT
-	= 1
-#endif
-	;
+# if ALLOW_ARBITRARY_PANELDUE_PORT
+	uint8_t serialChannelForPanelDueFlashing;
+# else
+	static constexpr uint8_t serialChannelForPanelDueFlashing = 1;
+# endif
 	static bool emergencyStopCommanded;
 	static void CommandEmergencyStop(AsyncSerial *p) noexcept;
 #endif
@@ -573,7 +572,7 @@ private:
 	GCodeBuffer* LcdGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::LCD)]; }					// This one for the 12864 LCD
 	GCodeBuffer* SpiGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)]; }
 	GCodeBuffer* DaemonGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)]; }
-	GCodeBuffer* Aux2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)]; }				// This one is reserved for the second async serial interface
+	GCodeBuffer* Aux2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)]; }					// This one is reserved for the second async serial interface
 	GCodeBuffer* AutoPauseGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)]; }		// GCode state machine used to run macros on power fail, heater faults and filament out
 #if SUPPORT_ASYNC_MOVES
 	GCodeBuffer* File2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)]; }
@@ -582,7 +581,6 @@ private:
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling
 
-	static Mutex resourceMutex;
 	const GCodeBuffer* resourceOwners[NumResources];					// Which gcode buffer owns each resource
 
 	StraightProbeSettings straightProbeSettings;						// G38 straight probe settings
@@ -694,6 +692,11 @@ private:
 	// Misc
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
+
+#if SUPPORT_ASYNC_MOVES
+	ExtrudersBitmap extrudersMoved;				// extruders that have moved since the last sync
+	AxesBitmap axesMoved;						// axes that have moved since the last sync
+#endif
 
 #if HAS_MASS_STORAGE
 	static constexpr uint32_t SdTimingByteIncrement = 8 * 1024;	// how many timing bytes we write at a time
