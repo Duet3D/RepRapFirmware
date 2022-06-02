@@ -1163,7 +1163,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					longReply->printf((jsonFormat) ? "{\"rememberedNetworks\":[],\"err\":1,\"errText\":\"%.s\"}" : "Failed to retrieve network list: %s", TranslateWiFiResponse(rslt));
 				}
 				break;
-			
+
 			case 1:
 				{
 					const int32_t rslt = SendCommand(NetworkCommand::networkStartScan, 0, 0, 0, nullptr, 0, nullptr, 0);
@@ -1184,18 +1184,47 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 
 					uint32_t buffer[NumDwords(MaxDataLength + 1)];
 					memset(buffer, 0, sizeof(buffer));
+
+					const bool jsonFormat = gb.Seen('F') && gb.GetUIValue() == 1;
+
 					const int32_t rslt = SendCommand(NetworkCommand::networkGetScanResult, 0, 0, 0, nullptr, 0, buffer, sizeof(buffer));
 
+					static const char* authFriendlyStr[] = {"Open", "WEP", "WPA-Personal", "WPA2-Personal", "WPA/WPA2-Personal", "WPA2-Enterprise", "WPA3-Personal", "WPA2/WPA3-Personal", "WAPI-Personal", "Unknown"};
+
+					// static_assert(sizeof(authFriendlyStr) == static_cast<int>(WiFiAuth::UNKNOWN));
+
 					if (rslt >= 0) {
-						ScanData *data = reinterpret_cast<ScanData*>(buffer);
+						bool found = false;
+						longReply->copy((jsonFormat) ? "{\"networkScanResults\":[" : "Network Scan Results:");
+						WiFiScanData *data = reinterpret_cast<WiFiScanData*>(buffer);
 
 						for(int i = 0; data[i].ssid[0] != 0; i++) {
-							longReply->catf("ssid: %s, rssi: %d, auth: %d, bgn: %d\n",
-									data[i].ssid, data[i].rssi, static_cast<int>(data[i].authmode), static_cast<int>(data[i].phymode));
+							if (jsonFormat && found)
+							{
+								longReply->cat(',');
+							}
+							longReply->catf((jsonFormat)
+											? "{\"ssid\":\"%s\",\"rssi\":\"%d\",\"phymode\":\"%s\",\"auth\":\"%s\"}"
+											: "\nssid=%s rssi=%d phymode=%s auth=%s",
+												data[i].ssid,
+												data[i].rssi,
+												data[i].phymode == WiFiPhyMode::N ? "n" : data[i].phymode == WiFiPhyMode::G ? "g" : "b",
+												authFriendlyStr[static_cast<int>(data[i].auth)]);
+							found = true;
+						}
+
+						if (jsonFormat)
+						{
+							longReply->cat("],\"err\":0}\n");
+						}
+						else if (!found)
+						{
+							longReply->cat(" none");
 						}
 						return GCodeResult::ok;
 					}
-					longReply->printf("failed to retrieve scan results: %s\n", TranslateWiFiResponse(rslt));
+
+					longReply->printf((jsonFormat) ? "{\"networkScanResults\":[],\"err\":1,\"errText\":\"%.s\"}" : "failed to retrieve network list: %s", TranslateWiFiResponse(rslt));
 				}
 				break;
 
