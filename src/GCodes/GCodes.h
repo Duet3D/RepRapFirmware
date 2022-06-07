@@ -433,7 +433,8 @@ private:
 
 	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept;					// Restore user position from a restore point
 
-	void UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept;							// Get the current position from the Move class
+	void UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept;							// Get the machine position from the Move class and transform it to the user position
+	void UpdateUserPositionFromMachinePosition(const GCodeBuffer& gb, MovementState& ms) noexcept;	// Update the user position from the machine position
 	void ToolOffsetTransform(MovementState& ms, AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
 																							// Convert user coordinates to head reference point coordinates
 	void ToolOffsetTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
@@ -532,6 +533,8 @@ private:
 	GCodeResult SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M596
 	bool AllocateAxes(MovementState& ms, AxesBitmap axes) noexcept;				// allocate axes to a movement state
 	bool AllocateExtruders(MovementState& ms, ExtrudersBitmap extruders) noexcept;	// allocate an extruder to a movement state
+	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;	// synchronise motion systems
+	void UpdateUserCoordinatesAndReleaseOwnedAxes(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;
 #endif
 
 #if SUPPORT_COORDINATE_ROTATION

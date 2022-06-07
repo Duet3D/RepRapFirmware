@@ -240,12 +240,14 @@ public:
 
 	uint16_t stateParameter;					// a parameter, the meaning of which depends on what state we are in
 	Compatibility compatibility;				// which firmware we are emulating
+
 #if SUPPORT_ASYNC_MOVES
 	void SetCommandedQueue(size_t qn) noexcept { commandedQueueNumber = qn; }
 	size_t GetCommandedQueue() const noexcept { return commandedQueueNumber; }
 	bool Executing() const noexcept { return executeAllCommands || commandedQueueNumber == ownQueueNumber; }
 	void ExecuteAll() noexcept { executeAllCommands = true; }
 	void ExecuteOnly(size_t qn) noexcept { ownQueueNumber = qn; executeAllCommands = false; }
+	size_t GetOwnQueue() const noexcept { return ownQueueNumber; }
 	bool ExecutingAll() const noexcept { return executeAllCommands; }
 	size_t GetQueueNumberToLock() const noexcept { return (executeAllCommands) ? commandedQueueNumber : ownQueueNumber; }
 #endif

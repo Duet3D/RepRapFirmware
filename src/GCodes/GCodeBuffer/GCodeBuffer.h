@@ -130,6 +130,7 @@ public:
 	size_t GetActiveQueueNumber() const noexcept { return machineState->GetCommandedQueue(); }	// Get the movement queue number that this buffer uses
 	void SetActiveQueueNumber(size_t qn) noexcept { machineState->SetCommandedQueue(qn); }
 	void ExecuteOnlyQueue(size_t qn) noexcept { machineState->ExecuteOnly(qn); }
+	size_t GetOwnQueueNumber() const noexcept { return machineState->GetOwnQueue(); }
 	void ExecuteAll() noexcept { machineState->ExecuteAll(); }
 	bool Executing() const noexcept { return machineState->Executing(); }	// Return true if this GCodeBuffer for executing commands addressed to the current queue
 	bool ExecutingAll() const noexcept { return machineState->ExecutingAll(); }
@@ -268,10 +269,15 @@ public:
 #endif
 
 #if SUPPORT_ASYNC_MOVES
-	bool MustWaitForSyncWith(const GCodeBuffer& other) noexcept;
+	bool IsLaterThan(const GCodeBuffer& other) const noexcept;
 #endif
 
 	Mutex mutex;
+
+#if SUPPORT_ASYNC_MOVES
+	enum class SyncState { running, syncing, synced } ;
+	SyncState syncState;
+#endif
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -317,9 +323,6 @@ private:
 	GCodeResult lastResult;
 	bool timerRunning;									// true if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
-#if SUPPORT_ASYNC_MOVES
-	bool waitingForSync;
-#endif
 
 	alignas(4) char buffer[MaxGCodeLength];				// must be aligned because in SBC binary mode we do dword fetches from it
 

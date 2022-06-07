@@ -1429,7 +1429,8 @@ void GCodes::Diagnostics(MessageType mtype) noexcept
 }
 
 // Lock movement and wait for pending moves to finish.
-// As a side-effect it loads moveBuffer with the last position and feedrate for you.
+// Return true if successful, false if we need to try again later.
+// As a side-effect it updates the user coordinates from the machine coordinates.
 bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 #if SUPPORT_ASYNC_MOVES
 												, bool sync
@@ -1443,11 +1444,9 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 	}
 
 	MovementState& ms = GetMovementState(gb);
-
-	// Last one gone?
-	if (ms.segmentsLeft != 0)
+	if (ms.segmentsLeft != 0)						// has the last move generated been fully transferred to the movement queue?
 	{
-		return false;
+		return false;								// if no
 	}
 
 	switch (gb.GetChannel().ToBaseType())
@@ -1467,18 +1466,10 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 			return false;
 		}
 
-#if SUPPORT_ASYNC_MOVES
-		// The movement queue we are using is empty, so we can release all axes and extruders that we were using
-		axesMoved &= ~ms.axesMoved;
-		ms.axesMoved.Clear();
-		extrudersMoved &= ~ms.extrudersMoved;
-		ms.extrudersMoved.Clear();
-#endif
-
 		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
-		if (sync && !gb.ExecutingAll() && gb.MustWaitForSyncWith(*File2GCode()))
+		if (sync && !gb.ExecutingAll())
 		{
-			return false;
+			return SyncWith(gb, *File2GCode());
 		}
 		break;
 
@@ -1492,18 +1483,10 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 			return false;
 		}
 
-#if SUPPORT_ASYNC_MOVES
-		// The movement queue we are using is empty, so we can release all axes and extruders that we were using
-		axesMoved &= ~ms.axesMoved;
-		ms.axesMoved.Clear();
-		extrudersMoved &= ~ms.extrudersMoved;
-		ms.extrudersMoved.Clear();
-#endif
-
 		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
-		if (sync && !gb.ExecutingAll() && gb.MustWaitForSyncWith(*FileGCode()))
+		if (sync && !gb.ExecutingAll())
 		{
-			return false;
+			return SyncWith(gb, *FileGCode());
 		}
 		break;
 #endif
@@ -1526,14 +1509,6 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 		{
 			return false;
 		}
-
-#if SUPPORT_ASYNC_MOVES
-		// The movement queue we are using is empty, so we can release all axes and extruders that we were using
-		axesMoved &= ~ms.axesMoved;
-		ms.axesMoved.Clear();
-		extrudersMoved &= ~ms.extrudersMoved;
-		ms.extrudersMoved.Clear();
-#endif
 	}
 
 	gb.MotionStopped();									// must do this after we have finished waiting, so that we don't stop waiting when executing G4
@@ -4344,6 +4319,12 @@ void GCodes::UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept
 {
 	MovementState& ms = GetMovementState(gb);
 	reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
+	UpdateUserPositionFromMachinePosition(gb, ms);
+}
+
+// Update the user position from the machine position
+void GCodes::UpdateUserPositionFromMachinePosition(const GCodeBuffer& gb, MovementState& ms) noexcept
+{
 	ToolOffsetInverseTransform(ms);
 #if SUPPORT_COORDINATE_ROTATION
 	if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
@@ -5075,6 +5056,84 @@ bool GCodes::AllocateExtruders(MovementState& ms, ExtrudersBitmap extruders) noe
 	extrudersMoved |= extruders;
 	ms.extrudersMoved |= extruders;
 	return true;
+}
+
+// Synchronise motion systems and update user coordinates.
+// This is called after we have checked that the motion system for thisGb has completed all moves.
+// Return true if synced, false if we need to wait longer.
+bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
+{
+	switch (thisGb.syncState)
+	{
+	case GCodeBuffer::SyncState::running:
+		thisGb.syncState = GCodeBuffer::SyncState::syncing;					// tell other input channels that we are waiting for sync
+		// no break
+	case GCodeBuffer::SyncState::syncing:
+		if (otherGb.syncState == GCodeBuffer::SyncState::running)
+		{
+			// The other input channel has either not caught up with us, or it has skipped this sync point
+			if (otherGb.IsLaterThan(thisGb))
+			{
+				// Other input channel has skipped this sync point
+				UpdateUserCoordinatesAndReleaseOwnedAxes(thisGb, otherGb);	// it's arguable whether updating machine coordinates from the other channel is worth doing here
+				thisGb.syncState = GCodeBuffer::SyncState::running;
+				return true;
+			}
+			// Other input channel has not caught up with us yet, so wait for it
+			return false;
+		}
+
+		// If we get here then the other input channel is also syncing, so it's safe to use the machine axis coordinates of the axes it owns to update our user coordinates
+		UpdateUserCoordinatesAndReleaseOwnedAxes(thisGb, otherGb);
+
+		// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
+		thisGb.syncState = GCodeBuffer::SyncState::synced;
+		return false;
+
+	case GCodeBuffer::SyncState::synced:
+		switch (otherGb.syncState)
+		{
+		case GCodeBuffer::SyncState::running:
+			// Other input channel has carried on. If we are not the primary, until it has completed the command
+			return thisGb.IsExecuting() || otherGb.IsLaterThan(thisGb);
+
+		case GCodeBuffer::SyncState::syncing:
+			// Other input channel hasn't noticed that we are fully synced yet
+			return false;
+
+		case GCodeBuffer::SyncState::synced:
+			// We are fully synchronised now, so we can finish syncing
+			if (thisGb.IsExecuting())
+			{
+				// We are the executing input stream, so we can carry on
+				thisGb.syncState = GCodeBuffer::SyncState::running;
+				return true;
+			}
+			// We are not the primary, so wait for the other onput channel to complete the current command
+			return otherGb.IsLaterThan(thisGb);
+		}
+	}
+
+	return false;			// unreachable code, to keep Eclipse happy
+}
+
+void GCodes::UpdateUserCoordinatesAndReleaseOwnedAxes(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
+{
+	// Get the position of all axes by combining positions from the queues
+	const MovementState& otherMs = GetConstMovementState(otherGb);
+	const Move& move = reprap.GetMove();
+	float coords[MaxAxesPlusExtruders];
+	move.GetPartialMachinePosition(coords, AxesBitmap::MakeLowestNBits(numTotalAxes), thisGb.GetOwnQueueNumber());
+	move.GetPartialMachinePosition(coords, otherMs.axesMoved, otherGb.GetOwnQueueNumber());
+	MovementState& thisMs = GetMovementState(thisGb);
+	move.InverseAxisAndBedTransform(coords, thisMs.currentTool);
+	UpdateUserPositionFromMachinePosition(thisGb, thisMs);
+
+	// Release all axes and extruders that we were using
+	axesMoved &= ~thisMs.axesMoved;
+	thisMs.axesMoved.Clear();
+	extrudersMoved &= ~thisMs.extrudersMoved;
+	thisMs.extrudersMoved.Clear();
 }
 
 #endif

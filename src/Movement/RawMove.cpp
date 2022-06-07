@@ -109,7 +109,7 @@ void MovementState::Diagnostics(MessageType mtype, unsigned int moveSystemNumber
 													moveSystemNumber,
 													segmentsLeft
 #if SUPPORT_ASYNC_MOVES
-													, axesMoved.GetRaw(), (unsigned int)extrudersMoved.GetRaw()
+													, (unsigned int)axesMoved.GetRaw(), (unsigned int)extrudersMoved.GetRaw()
 #endif
 									);
 	codeQueue->Diagnostics(mtype, moveSystemNumber);

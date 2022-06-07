@@ -207,19 +207,19 @@ Move::Move() noexcept
 {
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
 	kinematics = Kinematics::Create(KinematicsType::cartesian);		// default to Cartesian
-	mainDDARing.Init1(InitialDdaRingLength);
+	rings[0].Init1(InitialDdaRingLength);
 #if SUPPORT_ASYNC_MOVES
-	auxDDARing.Init1(AuxDdaRingLength);
+	rings[1].Init1(AuxDdaRingLength);
 #endif
 	DriveMovement::InitialAllocate(InitialNumDms);
 }
 
 void Move::Init() noexcept
 {
-	mainDDARing.Init2();
+	rings[0].Init2();
 
 #if SUPPORT_ASYNC_MOVES
-	auxDDARing.Init2();
+	rings[1].Init2();
 	auxMoveAvailable = false;
 	auxMoveLocked = false;
 #endif
@@ -246,9 +246,9 @@ void Move::Init() noexcept
 void Move::Exit() noexcept
 {
 	StepTimer::DisableTimerInterrupt();
-	mainDDARing.Exit();
+	rings[0].Exit();
 #if SUPPORT_ASYNC_MOVES
-	auxDDARing.Exit();
+	rings[1].Exit();
 #endif
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	delete laserTask;
@@ -262,14 +262,14 @@ void Move::Exit() noexcept
 	for (;;)
 	{
 		// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
-		mainDDARing.RecycleDDAs();
+		rings[0].RecycleDDAs();
 #if SUPPORT_ASYNC_MOVES
-		auxDDARing.RecycleDDAs();
+		rings[1].RecycleDDAs();
 #endif
 
 		// See if we can add another move to the ring
 		bool moveRead = false;
-		const bool canAddMove = mainDDARing.CanAddMove();
+		const bool canAddMove = rings[0].CanAddMove();
 		if (canAddMove)
 		{
 			// OK to add another move. First check if a special move is available.
@@ -278,7 +278,7 @@ void Move::Exit() noexcept
 				moveRead = true;
 				if (simulationMode < SimulationMode::partial)
 				{
-					if (mainDDARing.AddSpecialMove(reprap.GetPlatform().MaxFeedrate(Z_AXIS), specialMoveCoords))
+					if (rings[0].AddSpecialMove(reprap.GetPlatform().MaxFeedrate(Z_AXIS), specialMoveCoords))
 					{
 						const uint32_t now = millis();
 						const uint32_t timeWaiting = now - whenLastMoveAdded;
@@ -306,7 +306,7 @@ void Move::Exit() noexcept
 							AxisAndBedTransform(nextMove.coords, nextMove.movementTool, true);
 						}
 
-						if (mainDDARing.AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
+						if (rings[0].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
 						{
 							const uint32_t now = millis();
 							const uint32_t timeWaiting = now - whenLastMoveAdded;
@@ -323,16 +323,16 @@ void Move::Exit() noexcept
 		}
 
 		// Let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
-		uint32_t nextPrepareDelay = mainDDARing.Spin(simulationMode, !canAddMove, millis() - whenLastMoveAdded >= mainDDARing.GetGracePeriod());
+		uint32_t nextPrepareDelay = rings[0].Spin(simulationMode, !canAddMove, millis() - whenLastMoveAdded >= rings[0].GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
 		{
 			bool waitingForAuxSpace = false;
 			if (auxMoveAvailable)
 			{
-				if (auxDDARing.CanAddMove())
+				if (rings[1].CanAddMove())
 				{
-					if (auxDDARing.AddAsyncMove(auxMove))
+					if (rings[1].AddAsyncMove(auxMove))
 					{
 						moveState = MoveState::collecting;
 					}
@@ -343,7 +343,7 @@ void Move::Exit() noexcept
 					waitingForAuxSpace = true;
 				}
 			}
-			const uint32_t auxPrepareDelay = auxDDARing.Spin(simulationMode, waitingForAuxSpace, true);		// let the DDA ring process moves
+			const uint32_t auxPrepareDelay = rings[1].Spin(simulationMode, waitingForAuxSpace, true);		// let the DDA ring process moves
 			if (auxPrepareDelay < nextPrepareDelay)
 			{
 				nextPrepareDelay = auxPrepareDelay;
@@ -352,9 +352,9 @@ void Move::Exit() noexcept
 #endif
 
 		// Reduce motor current to standby if the rings have been idle for long enough
-		if (   mainDDARing.IsIdle()
+		if (   rings[0].IsIdle()
 #if SUPPORT_ASYNC_MOVES
-			&& auxDDARing.IsIdle()
+			&& rings[1].IsIdle()
 #endif
 		   )
 		{
@@ -414,7 +414,7 @@ float Move::PushBabyStepping(size_t axis, float amount) noexcept
 {
 	TaskCriticalSectionLocker lock;						// lock out the Move task
 
-	return mainDDARing.PushBabyStepping(axis, amount);
+	return rings[0].PushBabyStepping(axis, amount);
 }
 
 // Change the kinematics to the specified type if it isn't already
@@ -526,8 +526,8 @@ void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool do
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, reprap.GetGCodes().GetPrimaryMovementState().currentTool, doBedCompensation);
 
-	mainDDARing.SetLiveCoordinates(newPos);
-	mainDDARing.SetPositions(newPos);
+	rings[0].SetLiveCoordinates(newPos);
+	rings[0].SetPositions(newPos);
 }
 
 // Convert distance to steps for a particular drive
@@ -933,7 +933,7 @@ void Move::Simulate(SimulationMode simMode) noexcept
 	simulationMode = simMode;
 	if (simMode != SimulationMode::off)
 	{
-		mainDDARing.ResetSimulationTime();
+		rings[0].ResetSimulationTime();
 	}
 }
 
@@ -1109,9 +1109,9 @@ GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequ
 // Interrupts are assumed enabled on entry
 float Move::LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept
 {
-	if (mainDDARing.HaveLiveCoordinatesChanged())
+	if (rings[0].HaveLiveCoordinatesChanged())
 	{
-		mainDDARing.LiveCoordinates(latestLiveCoordinates);
+		rings[0].LiveCoordinates(latestLiveCoordinates);
 		InverseAxisAndBedTransform(latestLiveCoordinates, tool);
 	}
 	return latestLiveCoordinates[axisOrExtruder];
@@ -1201,7 +1201,7 @@ void Move::LaserTaskRun() noexcept
 # if SUPPORT_LASER
 			// Manage the laser power
 			uint32_t ticks;
-			while ((ticks = mainDDARing.ManageLaserPower()) != 0)
+			while ((ticks = rings[0].ManageLaserPower()) != 0)
 			{
 				(void)TaskBase::Take(ticks);
 			}
