@@ -393,7 +393,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 	ReadLocker locker(printMonitorLock);
 
 	// We can't provide an estimation if we don't have any information about the file
-	if (!printingFileParsed)
+	if (!printingFileParsed || !isPrinting)
 	{
 		return 0.0;
 	}
