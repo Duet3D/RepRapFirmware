@@ -457,7 +457,8 @@ private:
 	void CheckTriggers() noexcept;															// Check for and execute triggers
 	void DoEmergencyStop() noexcept;														// Execute an emergency stop
 
-	bool DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept;	// Pause the print, returning true if successful, false if we can't yet
+	bool DoSynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept;	// Pause the print due to a command in the file itself
+	bool DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept;	// Pause the print returning true if successful, false if we can't yet
 	void CheckForDeferredPause(GCodeBuffer& gb) noexcept;									// Check if a pause is pending, action it if so
 	void ProcessEvent(GCodeBuffer& gb) noexcept;											// Start processing a new event
 

@@ -1111,35 +1111,31 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 226: // Synchronous pause, normally initiated from within the file being printed
-			case 601:
-				if (pauseState == PauseState::notPaused)
+			case 600: // Filament change pause, synchronous
+			case 601: // Pause, used on Prusa printers
+				if (!gb.IsFileChannel())
+				{
+					reply.copy("use M226 and M601 only within a file being printed");		//TODO handle streaming over USB too
+					result = GCodeResult::error;
+				}
+				else if (pauseState == PauseState::notPaused)
 				{
 					if (gb.IsDoingFileMacro() && !gb.LatestMachineState().CanRestartMacro())
 					{
 						if (deferredPauseCommandPending == nullptr)	// filament change pause takes priority
 						{
-							deferredPauseCommandPending = (gb.Seen('P') && gb.GetUIValue() == 0) ? "M226 P0" : "M226";
+							deferredPauseCommandPending = (code == 600) ? "M600"
+																: (code == 601) ? "M601"
+																	: (gb.Seen('P') && gb.GetUIValue() == 0) ? "M226 P0"
+																		: "M226";
 						}
 					}
-					else if (!DoPause(gb, PrintPausedReason::gcode, (gb.Seen('P') && gb.GetUIValue() == 0) ? GCodeState::pausing2 : GCodeState::pausing1))
-					{
-						return false;
-					}
-				}
-				break;
-
-			case 600: // Filament change pause, synchronous
-				if (pauseState == PauseState::notPaused)
-				{
-					if (FileGCode()->IsDoingFileMacro())
-					{
-						deferredPauseCommandPending = "M600";
-						if (!gb.IsFileChannel())
-						{
-							return false;							// wait for the current macro to finish
-						}
-					}
-					else if (!DoPause(gb, PrintPausedReason::filamentChange, GCodeState::filamentChangePause1))
+					else if (!DoSynchronousPause(gb,
+												(code == 600) ?  PrintPausedReason::filamentChange
+													: PrintPausedReason::gcode,
+												(code == 600) ? GCodeState::filamentChangePause1
+													: (code == 226 && gb.Seen('P') && gb.GetUIValue() == 0) ? GCodeState::pausing2
+														: GCodeState::pausing1))
 					{
 						return false;
 					}
@@ -1157,6 +1153,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					reply.copy("Cannot pause print, because no file is being printed!");
 					result = GCodeResult::error;
 				}
+				else if (gb.IsFileChannel())
+				{
+					if (!DoSynchronousPause(gb, PrintPausedReason::user, GCodeState::pausing1))
+					{
+						return false;
+					}
+				}
 				else if (FileGCode()->IsDoingFileMacro() && !FileGCode()->LatestMachineState().CanRestartMacro())
 				{
 					if (deferredPauseCommandPending == nullptr)		// filament change pause takes priority
@@ -1168,7 +1171,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						return false;								// wait for the current macro to finish
 					}
 				}
-				else if (!DoPause(gb, PrintPausedReason::user, GCodeState::pausing1))
+				else if (!DoAsynchronousPause(gb, PrintPausedReason::user, GCodeState::pausing1))
 				{
 					return false;
 				}

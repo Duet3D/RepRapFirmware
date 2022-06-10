@@ -1507,7 +1507,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				const PrintPausedReason pauseReason = Event::GetDefaultPauseReason();
 				// In the following, if DoPause fails because it can't get the movement lock then it will not change the state, so we will return here to try again
-				(void)DoPause(gb, pauseReason, (pauseReason == PrintPausedReason::driverError) ? GCodeState::eventPausing2 : GCodeState::eventPausing1);
+				(void)DoAsynchronousPause(gb, pauseReason, (pauseReason == PrintPausedReason::driverError) ? GCodeState::eventPausing2 : GCodeState::eventPausing1);
 			}
 		}
 		break;

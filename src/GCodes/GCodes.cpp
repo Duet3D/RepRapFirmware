@@ -812,7 +812,7 @@ void GCodes::CheckTriggers() noexcept
 				{
 					triggersPending.ClearBit(lowestTriggerPending);						// ignore a pause trigger if we are already paused or not printing
 				}
-				else if (DoPause(*TriggerGCode(), PrintPausedReason::trigger, GCodeState::pausing1))
+				else if (DoAsynchronousPause(*TriggerGCode(), PrintPausedReason::trigger, GCodeState::pausing1))
 				{
 					triggersPending.ClearBit(lowestTriggerPending);						// clear the trigger
 					platform.SendAlert(GenericMessage, "Print paused by external trigger", "Printing paused", 1, 0.0, AxesBitmap());
@@ -837,117 +837,150 @@ void GCodes::DoEmergencyStop() noexcept
 	platform.Message(GenericMessage, "Emergency Stop! Reset the controller to continue.\n");
 }
 
-// Pause the print, returning true if successful, false if we can't yet
+// Pause the print because of a command in the print file itself
+// Return true if successful, false if we can't yet
+bool GCodes::DoSynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept
+{
+	// Pausing because of a command in the file itself
+	if (!LockMovementAndWaitForStandstill(gb))
+	{
+		return false;
+	}
+
+	MovementState& ms = GetMovementState(gb);
+	ms.pausedInMacro = false;
+	ms.SavePosition(PauseRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetJobFilePosition());	//TODO not correct, need to use correct gb for each movement system!
+
+#if SUPPORT_LASER
+	if (machineType == MachineType::laser)
+	{
+		ms.laserPwmOrIoBits.laserPwm = 0;		// turn off the laser when we start moving
+	}
+#endif
+
+	ms.pauseRestorePoint.toolNumber = ms.GetCurrentToolNumber();
+	ms.pauseRestorePoint.fanSpeed = ms.virtualFanSpeed;
+
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface())
+	{
+		// Prepare notification for the SBC
+		reprap.GetSbcInterface().SetPauseReason(ms.pauseRestorePoint.filePos, reason);
+	}
+#endif
+
+	if (ms.pauseRestorePoint.filePos == noFilePosition)
+	{
+		// Make sure we expose usable values (which noFilePosition is not)
+		ms.pauseRestorePoint.filePos = 0;
+	}
+
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+	if (!IsSimulating())
+	{
+		//TODO need to sync here!
+		SaveResumeInfo(false);															// create the resume file so that we can resume after power down
+	}
+#endif
+
+	gb.SetState(newState);
+	pauseState = PauseState::pausing;
+
+	reprap.StateUpdated();																// test DWC/DSF that we have changed a restore point
+	return true;
+}
+
+// Pause the print because of an event or command not in the file being printed
+// Return true if successful, false if we can't yet
 // Before calling this, check that we are doing a file print that isn't already paused
 // 'gb' is the GCode buffer that commanded the pause
-bool GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept
+bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept
 {
-	if (gb.IsFileChannel())
+	if (!LockAllMovement(gb))
 	{
-		// Pausing because of a command in the file itself
-		if (!LockMovementAndWaitForStandstill(gb))
-		{
-			return false;
-		}
-	}
-	else
-	{
-		// Pausing because of a command not from the file being printed
-		if (!LockAllMovement(gb))
-		{
-			return false;
-		}
+		return false;
 	}
 
 	for (size_t moveSystemNumber = 0; moveSystemNumber < ARRAY_SIZE(moveStates); ++moveSystemNumber)
 	{
 		MovementState& ms = moveStates[moveSystemNumber];
 		ms.pausedInMacro = false;
-		if (gb.IsFileChannel())
+		ms.pauseRestorePoint.feedRate = ms.feedRate;
+
+		const bool movesSkipped = reprap.GetMove().PausePrint(moveSystemNumber, ms.pauseRestorePoint);	// tell Move we wish to pause this queue
+		if (movesSkipped)
 		{
-			// Pausing a file print because of a command in the file itself
-			ms.SavePosition(PauseRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetJobFilePosition());	//TODO not correct, need to use correct gb for each movement system!
+			// The PausePrint call has filled in the restore point with machine coordinates
+			ToolOffsetInverseTransform(ms, ms.pauseRestorePoint.moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
+			ms.ClearMove();
+		}
+		else if (ms.segmentsLeft != 0)
+		{
+			// We were not able to skip any moves, however we can skip the move that is waiting
+			ms.pauseRestorePoint.virtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
+			ms.pauseRestorePoint.filePos = ms.filePos;
+			ms.pauseRestorePoint.feedRate = ms.feedRate;
+			ms.pauseRestorePoint.proportionDone = ms.GetProportionDone();
+			ms.pauseRestorePoint.initialUserC0 = ms.initialUserC0;
+			ms.pauseRestorePoint.initialUserC1 = ms.initialUserC1;
+			ToolOffsetInverseTransform(ms, ms.pauseRestorePoint.moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
+			ms.ClearMove();
 		}
 		else
 		{
-			// Pausing a file print via another input source or for some other reason
-			ms.pauseRestorePoint.feedRate = FileGCode()->LatestMachineState().feedRate;						// set up the default TODO which filegcode?
+			// We were not able to skip any moves, and there is no move waiting
+			ms.pauseRestorePoint.feedRate = FileGCode()->LatestMachineState().feedRate;
+			ms.pauseRestorePoint.virtualExtruderPosition = ms.latestVirtualExtruderPosition;
+			ms.pauseRestorePoint.proportionDone = 0.0;
 
-			const bool movesSkipped = reprap.GetMove().PausePrint(moveSystemNumber, ms.pauseRestorePoint);	// tell Move we wish to pause this queue
-			if (movesSkipped)
+			// TODO: when using RTOS there is a possible race condition in the following,
+			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
+			ms.pauseRestorePoint.filePos = FileGCode()->GetPrintingFilePosition(true);
+			while (FileGCode()->IsDoingFileMacro())														// must call this after GetFilePosition because this changes IsDoingFileMacro
 			{
-				// The PausePrint call has filled in the restore point with machine coordinates
-				ToolOffsetInverseTransform(ms, ms.pauseRestorePoint.moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
-				ms.ClearMove();
+				ms.pausedInMacro = true;
+				FileGCode()->PopState();
 			}
-			else if (ms.segmentsLeft != 0)
-			{
-				// We were not able to skip any moves, however we can skip the move that is waiting
-				ms.pauseRestorePoint.virtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
-				ms.pauseRestorePoint.filePos = ms.filePos;
-				ms.pauseRestorePoint.feedRate = ms.feedRate;
-				ms.pauseRestorePoint.proportionDone = ms.GetProportionDone();
-				ms.pauseRestorePoint.initialUserC0 = ms.initialUserC0;
-				ms.pauseRestorePoint.initialUserC1 = ms.initialUserC1;
-				ToolOffsetInverseTransform(ms, ms.pauseRestorePoint.moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
-				ms.ClearMove();
-			}
-			else
-			{
-				// We were not able to skip any moves, and there is no move waiting
-				ms.pauseRestorePoint.feedRate = FileGCode()->LatestMachineState().feedRate;
-				ms.pauseRestorePoint.virtualExtruderPosition = ms.latestVirtualExtruderPosition;
-				ms.pauseRestorePoint.proportionDone = 0.0;
-
-				// TODO: when using RTOS there is a possible race condition in the following,
-				// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
-				ms.pauseRestorePoint.filePos = FileGCode()->GetPrintingFilePosition(true);
-				while (FileGCode()->IsDoingFileMacro())														// must call this after GetFilePosition because this changes IsDoingFileMacro
-				{
-					ms.pausedInMacro = true;
-					FileGCode()->PopState();
-				}
 #if SUPPORT_LASER || SUPPORT_IOBITS
-				ms.pauseRestorePoint.laserPwmOrIoBits = ms.laserPwmOrIoBits;
+			ms.pauseRestorePoint.laserPwmOrIoBits = ms.laserPwmOrIoBits;
 #endif
-			}
+		}
 
-			// Replace the paused machine coordinates by user coordinates, which we updated earlier if they were returned by Move::PausePrint
-			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-			{
-				ms.pauseRestorePoint.moveCoords[axis] = ms.currentUserPosition[axis];
-			}
+		// Replace the paused machine coordinates by user coordinates, which we updated earlier if they were returned by Move::PausePrint
+		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+		{
+			ms.pauseRestorePoint.moveCoords[axis] = ms.currentUserPosition[axis];
+		}
 
 #if HAS_SBC_INTERFACE
-			if (reprap.UsingSbcInterface())
-			{
-				FileGCode()->Init();															// clear the next move
-				UnlockAll(*FileGCode());														// release any locks it had
-			}
-			else
+		if (reprap.UsingSbcInterface())
+		{
+			FileGCode()->Init();															// clear the next move
+			UnlockAll(*FileGCode());														// release any locks it had
+		}
+		else
 #endif
-			{
+		{
 #if HAS_MASS_STORAGE
-				// If we skipped any moves, reset the file pointer to the start of the first move we need to replay
-				// The following could be delayed until we resume the print
-				if (ms.pauseRestorePoint.filePos != noFilePosition)
-				{
-					FileData& fdata = FileGCode()->LatestMachineState().fileState;
-					if (fdata.IsLive())
-					{
-						FileGCode()->RestartFrom(ms.pauseRestorePoint.filePos);					// TODO we ought to restore the line number too, but currently we don't save it
-						UnlockAll(*FileGCode());												// release any locks it had
-					}
-				}
-#endif
-			}
-
-			ms.codeQueue->PurgeEntries();
-
-			if (reprap.Debug(moduleGcodes))
+			// If we skipped any moves, reset the file pointer to the start of the first move we need to replay
+			// The following could be delayed until we resume the print
+			if (ms.pauseRestorePoint.filePos != noFilePosition)
 			{
-				platform.MessageF(GenericMessage, "Paused print, file offset=%" PRIu32 "\n", ms.pauseRestorePoint.filePos);
+				FileData& fdata = FileGCode()->LatestMachineState().fileState;
+				if (fdata.IsLive())
+				{
+					FileGCode()->RestartFrom(ms.pauseRestorePoint.filePos);					// TODO we ought to restore the line number too, but currently we don't save it
+					UnlockAll(*FileGCode());												// release any locks it had
+				}
 			}
+#endif
+		}
+
+		ms.codeQueue->PurgeEntries();
+
+		if (reprap.Debug(moduleGcodes))
+		{
+			platform.MessageF(GenericMessage, "Paused print, file offset=%" PRIu32 "\n", ms.pauseRestorePoint.filePos);
 		}
 
 #if SUPPORT_LASER
