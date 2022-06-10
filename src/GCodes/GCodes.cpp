@@ -1502,7 +1502,12 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
 		if (sync && !gb.ExecutingAll())
 		{
-			return SyncWith(gb, *File2GCode());
+			const bool ret = SyncWith(gb, *FileGCode());
+			if (ret)
+			{
+				gb.MotionStopped();
+			}
+			return ret;
 		}
 		break;
 
@@ -1519,7 +1524,12 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
 		if (sync && !gb.ExecutingAll())
 		{
-			return SyncWith(gb, *FileGCode());
+			const bool ret = SyncWith(gb, *FileGCode());
+			if (ret)
+			{
+				gb.MotionStopped();
+			}
+			return ret;
 		}
 		break;
 #endif
@@ -1549,7 +1559,29 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 	if (RTOSIface::GetCurrentTask() == Tasks::GetMainTask())
 	{
 		// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
+#if SUPPORT_ASYNC_MOVES
+		// Get the position of all axes by combining positions from the queues
+		const Move& move = reprap.GetMove();
+		float coords[MaxAxes];
+		move.GetPartialMachinePosition(coords, AxesBitmap::MakeLowestNBits(numTotalAxes), 0);
+		move.GetPartialMachinePosition(coords, moveStates[1].axesMoved, 1);
+		float coords2[MaxAxes];
+		memcpyf(coords2, coords, MaxAxes);
+		move.InverseAxisAndBedTransform(coords, moveStates[0].currentTool);
+		move.InverseAxisAndBedTransform(coords2, moveStates[1].currentTool);
+		UpdateUserPositionFromMachinePosition(gb, moveStates[0]);				//TODO problem when using coordinate rotation!
+		UpdateUserPositionFromMachinePosition(gb, moveStates[1]);
+
+		// Release all axes and extruders
+		axesMoved.Clear();
+		moveStates[0].axesMoved.Clear();
+		moveStates[1].axesMoved.Clear();
+		extrudersMoved.Clear();
+		moveStates[0].extrudersMoved.Clear();
+		moveStates[1].extrudersMoved.Clear();
+#else
 		UpdateCurrentUserPosition(gb);
+#endif
 	}
 	else
 	{
@@ -5155,7 +5187,7 @@ void GCodes::UpdateUserCoordinatesAndReleaseOwnedAxes(GCodeBuffer& thisGb, const
 	// Get the position of all axes by combining positions from the queues
 	const MovementState& otherMs = GetConstMovementState(otherGb);
 	const Move& move = reprap.GetMove();
-	float coords[MaxAxesPlusExtruders];
+	float coords[MaxAxes];
 	move.GetPartialMachinePosition(coords, AxesBitmap::MakeLowestNBits(numTotalAxes), thisGb.GetOwnQueueNumber());
 	move.GetPartialMachinePosition(coords, otherMs.axesMoved, otherGb.GetOwnQueueNumber());
 	MovementState& thisMs = GetMovementState(thisGb);

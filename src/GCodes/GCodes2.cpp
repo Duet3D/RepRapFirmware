@@ -469,6 +469,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 # endif
 			{
 				g68Angle = 0.0;
+				UpdateCurrentUserPosition(gb);
 			}
 			break;
 #endif

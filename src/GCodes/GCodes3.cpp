@@ -1702,11 +1702,12 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		{
 			g68Angle = angle;
 		}
+		UpdateCurrentUserPosition(gb);
 	}
 	return GCodeResult::ok;
 }
 
-// Account for coordinate rotation. Only called wheh the angle to rotate is nonzero, so we don't check that here.
+// Account for coordinate rotation. Only called when the angle to rotate is nonzero, so we don't check that here.
 void GCodes::RotateCoordinates(float angleDegrees, float coords[2]) const noexcept
 {
 	const float angle = angleDegrees * DegreesToRadians;

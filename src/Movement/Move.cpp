@@ -267,10 +267,11 @@ void Move::Exit() noexcept
 		rings[1].RecycleDDAs();
 #endif
 
-		// See if we can add another move to the ring
 		bool moveRead = false;
-		const bool canAddMove = rings[0].CanAddMove();
-		if (canAddMove)
+
+		// See if we can add another move to ring 0
+		const bool canAddRing0Move = rings[0].CanAddMove();
+		if (canAddRing0Move)
 		{
 			// OK to add another move. First check if a special move is available.
 			if (bedLevellingMoveAvailable)
@@ -322,32 +323,63 @@ void Move::Exit() noexcept
 			}
 		}
 
-		// Let the DDA ring process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
-		uint32_t nextPrepareDelay = rings[0].Spin(simulationMode, !canAddMove, millis() - whenLastMoveAdded >= rings[0].GetGracePeriod());
+		// Let ring 0 process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
+		uint32_t nextPrepareDelay = rings[0].Spin(simulationMode, !canAddRing0Move, millis() - whenLastMoveAdded >= rings[0].GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
+		const bool canAddRing1Move = rings[1].CanAddMove();
+		if (canAddRing1Move)
 		{
-			bool waitingForAuxSpace = false;
 			if (auxMoveAvailable)
 			{
-				if (rings[1].CanAddMove())
+				moveRead = true;
+				if (rings[1].AddAsyncMove(auxMove))
 				{
-					if (rings[1].AddAsyncMove(auxMove))
+					const uint32_t now = millis();
+					const uint32_t timeWaiting = now - whenLastMoveAdded;
+					if (timeWaiting > longestGcodeWaitInterval)
 					{
-						moveState = MoveState::collecting;
+						longestGcodeWaitInterval = timeWaiting;
 					}
-					auxMoveAvailable = false;
+					whenLastMoveAdded = now;
+					moveState = MoveState::collecting;
 				}
-				else
-				{
-					waitingForAuxSpace = true;
-				}
+				auxMoveAvailable = false;
 			}
-			const uint32_t auxPrepareDelay = rings[1].Spin(simulationMode, waitingForAuxSpace, true);		// let the DDA ring process moves
-			if (auxPrepareDelay < nextPrepareDelay)
+			else
 			{
-				nextPrepareDelay = auxPrepareDelay;
+				// If there's a G Code move available, add it to the DDA ring for processing.
+				RawMove nextMove;
+				if (reprap.GetGCodes().ReadMove(1, nextMove))				// if we have a new move
+				{
+					moveRead = true;
+					if (simulationMode < SimulationMode::partial)			// in simulation mode partial, we don't process incoming moves beyond this point
+					{
+						if (nextMove.moveType == 0)
+						{
+							AxisAndBedTransform(nextMove.coords, nextMove.movementTool, true);
+						}
+
+						if (rings[1].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
+						{
+							const uint32_t now = millis();
+							const uint32_t timeWaiting = now - whenLastMoveAdded;
+							if (timeWaiting > longestGcodeWaitInterval)
+							{
+								longestGcodeWaitInterval = timeWaiting;
+							}
+							whenLastMoveAdded = now;
+							moveState = MoveState::collecting;
+						}
+					}
+				}
 			}
+		}
+
+		const uint32_t auxPrepareDelay = rings[1].Spin(simulationMode, !canAddRing1Move,  millis() - whenLastMoveAdded >= rings[1].GetGracePeriod());
+		if (auxPrepareDelay < nextPrepareDelay)
+		{
+			nextPrepareDelay = auxPrepareDelay;
 		}
 #endif
 
