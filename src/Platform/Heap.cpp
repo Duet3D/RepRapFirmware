@@ -23,8 +23,15 @@ constexpr size_t HeapBlockSize = 2048;				// the size of each heap block
 
 struct StorageSpace
 {
-	uint16_t length;
+	uint16_t length;								// length of this object in bytes including this length field, always rounded up to a multiple of 4
 	char data[];									// array of unspecified length at the end of a struct is a GNU extension (valid in C but not valid in standard C++)
+};
+
+struct ArrayStorageSpace
+{
+	uint16_t length;								// length of this object in bytes including this length field, always rounded up to a multiple of 4
+	uint16_t count;									// number of elements in the array
+	ExpressionValue elements;						// the array elements
 };
 
 struct IndexSlot
@@ -95,7 +102,7 @@ unsigned int StringHandle::gcCyclesDone = 0;
 			{
 				break;
 			}
-			p += len + sizeof(StorageSpace::length);
+			p += len;
 		}
 
 		if (p < currentBlock->data + currentBlock->allocated)					// if we found an unused block before we reached the end
@@ -112,7 +119,7 @@ unsigned int StringHandle::gcCyclesDone = 0;
 					{
 						break;
 					}
-					p += (len & ~1u) + sizeof(StorageSpace::length);
+					p += (len & ~1u);
 				}
 
 				if (p >= currentBlock->data + currentBlock->allocated)
@@ -133,7 +140,7 @@ unsigned int StringHandle::gcCyclesDone = 0;
 							break;
 						}
 						++numHandlesToAdjust;
-						p += len + sizeof(StorageSpace::length);
+						p += len;
 					}
 
 					// Move the contiguous blocks down
@@ -190,7 +197,7 @@ unsigned int StringHandle::gcCyclesDone = 0;
 				++numHeapErrors;
 				break;
 			}
-			p += (reinterpret_cast<const StorageSpace*>(p)->length & (~1u)) + sizeof(StorageSpace::length);
+			p += (reinterpret_cast<const StorageSpace*>(p)->length & (~1u));
 		}
 	}
 
@@ -227,7 +234,7 @@ unsigned int StringHandle::gcCyclesDone = 0;
 								}
 								break;
 							}
-							p += (reinterpret_cast<const StorageSpace*>(p)->length & (~1u)) + sizeof(StorageSpace::length);
+							p += (reinterpret_cast<const StorageSpace*>(p)->length & (~1u));
 						}
 						break;
 					}
@@ -299,19 +306,19 @@ unsigned int StringHandle::gcCyclesDone = 0;
 	RRF_ASSERT(heapLock.GetWriteLockOwner() == TaskBase::GetCallerTaskHandle());
 #endif
 
-	length = min<size_t>((length + 1) & (~1u), HeapBlockSize - sizeof(StorageSpace::length));	// round to an even length to keep things aligned and limit to max size
+	length = min<size_t>((length + sizeof(StorageSpace::length) + 3u) & (~3u), HeapBlockSize);			// round to make the length field a multiple of 4 and limit to max size
 
 	bool collected = false;
 	do
 	{
 		for (HeapBlock *currentBlock = heapRoot; currentBlock != nullptr; currentBlock = currentBlock->next)
 		{
-			if (HeapBlockSize - sizeof(StorageSpace::length) >= currentBlock->allocated + length)		// if the data will fit at the end of the current block
+			if (HeapBlockSize >= currentBlock->allocated + length)		// if the data will fit at the end of the current block
 			{
 				StorageSpace * const ret = reinterpret_cast<StorageSpace*>(currentBlock->data + currentBlock->allocated);
-				ret->length = length;
-				currentBlock->allocated += length + sizeof(StorageSpace::length);
-				heapUsed += length + sizeof(StorageSpace::length);
+				ret->length = length - sizeof(StorageSpace::length);
+				currentBlock->allocated += length;
+				heapUsed += length;
 				return ret;
 			}
 		}
@@ -328,10 +335,10 @@ unsigned int StringHandle::gcCyclesDone = 0;
 	// Create a new heap block
 	heapRoot = new HeapBlock(heapRoot);
 	heapAllocated += HeapBlockSize;
-	heapUsed += length + sizeof(StorageSpace::length);
+	heapUsed += length;
 	StorageSpace * const ret2 = reinterpret_cast<StorageSpace*>(heapRoot->data);
-	ret2->length = length;
-	heapRoot->allocated = length + sizeof(StorageSpace::length);
+	ret2->length = length - sizeof(StorageSpace::length);
+	heapRoot->allocated = length;
 	return ret2;
 }
 
@@ -422,8 +429,8 @@ void StringHandle::InternalDelete() noexcept
 	RRF_ASSERT(slotPtr->storage != nullptr);
 	if (--slotPtr->refCount == 0)
 	{
-		heapToRecycle += slotPtr->storage->length + sizeof(StorageSpace::length);
-		slotPtr->storage->length |= 1;									// flag the space as unused
+		heapToRecycle += slotPtr->storage->length;
+		slotPtr->storage->length |= 1;						// flag the space as unused
 		slotPtr->storage = nullptr;							// release the handle entry
 		--handlesUsed;
 	}
