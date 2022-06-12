@@ -1741,7 +1741,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 
 	ResetVoltageMonitors();
 
-	StringHandle::Diagnostics(mtype, *this);
+	Heap::Diagnostics(mtype, *this);
 	Event::Diagnostics(mtype, *this);
 
 	// Show the motor position and stall status

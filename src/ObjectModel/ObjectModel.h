@@ -10,7 +10,8 @@
 
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeException.h>
-#include <Platform/Heap.h>
+#include <Platform/StringHandle.h>
+#include <Platform/ArrayHandle.h>
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -94,12 +95,14 @@ struct ExpressionValue
 		const ObjectModel *omVal;					// object of some class derived from ObjectModel
 		const ObjectModelArrayDescriptor *omadVal;
 		StringHandle shVal;
+		ArrayHandle ahVal;
 		const IoPort *iopVal;
 		const UniqueId *uniqueIdVal;
 		uint32_t whole;								// a member we can use to copy the whole thing safely, at least as big as all the others. Assumes all other members are trivially copyable.
 	};
 
 	static_assert(sizeof(whole) >= sizeof(shVal));
+	static_assert(sizeof(whole) >= sizeof(ahVal));
 	static_assert(sizeof(whole) >= sizeof(omVal));
 	static_assert(sizeof(whole) >= sizeof(fVal));
 
