@@ -1171,31 +1171,6 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				break;
 
 			case Function::max:
-				for (;;)
-				{
-					SkipWhiteSpace();
-					if (CurrentCharacter() != ',')
-					{
-						break;
-					}
-					AdvancePointer();
-					SkipWhiteSpace();
-					ExpressionValue nextOperand;
-					// We recently checked the stack for a call to ParseInternal, no need to do it again
-					ParseInternal(nextOperand, evaluate, 0);
-					BalanceNumericTypes(rslt, nextOperand, evaluate);
-					if (rslt.GetType() == TypeCode::Float)
-					{
-						rslt.fVal = max<float>(rslt.fVal, nextOperand.fVal);
-						rslt.param = max(rslt.param, nextOperand.param);
-					}
-					else
-					{
-						rslt.iVal = max<int32_t>(rslt.iVal, nextOperand.iVal);
-					}
-				}
-				break;
-
 			case Function::min:
 				for (;;)
 				{
@@ -1212,12 +1187,12 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					BalanceNumericTypes(rslt, nextOperand, evaluate);
 					if (rslt.GetType() == TypeCode::Float)
 					{
-						rslt.fVal = min<float>(rslt.fVal, nextOperand.fVal);
+						rslt.fVal = ((func.RawValue() == Function::min) ? min<float> : max<float>)(rslt.fVal, nextOperand.fVal);
 						rslt.param = max(rslt.param, nextOperand.param);
 					}
 					else
 					{
-						rslt.iVal = min<int32_t>(rslt.iVal, nextOperand.iVal);
+						rslt.iVal = ((func.RawValue() == Function::min) ? min<int32_t> : max<int32_t>)(rslt.iVal, nextOperand.iVal);
 					}
 				}
 				break;
