@@ -1583,7 +1583,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			// For case 104, see 109
 
 			case 105: // Get temperatures
-				GenerateTemperatureReport(reply);
+				GenerateTemperatureReport(gb, reply);
 				break;
 
 			case 106: // Set/report fan values

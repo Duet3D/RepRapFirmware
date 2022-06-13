@@ -4733,13 +4733,13 @@ bool GCodes::WriteConfigOverrideHeader(FileStore *f) const noexcept
 #endif
 
 // Store a M105-format temperature report in 'reply'. This doesn't put a newline character at the end.
-void GCodes::GenerateTemperatureReport(const StringRef& reply) const noexcept
+void GCodes::GenerateTemperatureReport(const GCodeBuffer& gb, const StringRef& reply) const noexcept
 {
 	{
 		ReadLocker lock(Tool::toolListLock);
 
 		// The following is believed to be compatible with Marlin and Octoprint, based on thread https://github.com/foosel/OctoPrint/issues/2590#issuecomment-385023980
-		ReportToolTemperatures(reply, GetPrimaryMovementState().currentTool, false);
+		ReportToolTemperatures(reply, GetConstMovementState(gb).currentTool, false);
 
 		for (const Tool *tool = Tool::GetToolList(); tool != nullptr; tool = tool->Next())
 		{
@@ -4794,7 +4794,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 		if (gb.LatestMachineState().compatibility == Compatibility::Marlin && gb.IsReportDue())
 		{
 			// In Marlin emulation mode we should return a standard temperature report every second
-			GenerateTemperatureReport(reply);
+			GenerateTemperatureReport(gb, reply);
 			if (reply.strlen() > 0)
 			{
 				reply.cat('\n');

@@ -427,7 +427,7 @@ private:
 	void SetToolHeaters(Tool *tool, float temperature) THROWS(GCodeException);				// Set all a tool's heaters active and standby temperatures, for M104/M109
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance) const noexcept;
 																							// Wait for the heaters associated with the specified tool to reach their set temperatures
-	void GenerateTemperatureReport(const StringRef& reply) const noexcept;					// Store a standard-format temperature report in reply
+	void GenerateTemperatureReport(const GCodeBuffer& gb, const StringRef& reply) const noexcept;	// Store a standard-format temperature report in reply
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
 	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexcept;			// Check whether we need to report temperatures or status
 
