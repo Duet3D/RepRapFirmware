@@ -5094,7 +5094,21 @@ MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) noexcept
 // Get a reference to the movement state associated with the specified GCode buffer
 const MovementState& GCodes::GetConstMovementState(const GCodeBuffer& gb) const noexcept
 {
-	return (gb.GetChannel() == GCodeChannel::File2 || gb.GetChannel() == GCodeChannel::Queue2) ? moveStates[1] : moveStates[0];
+	return moveStates[gb.GetActiveQueueNumber()];
+}
+
+const MovementState& GCodes::GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept
+{
+	const GCodeBuffer *gb = context.GetGCodeBuffer();
+	if (gb == nullptr)
+	{
+#if HAS_NETWORKING
+		gb = HttpGCode();				// assume the request came from the network
+#else
+		return moveStates[0];
+#endif
+	}
+	return GetConstMovementState(*gb);
 }
 
 // Allocate an axis to a movement state returning true if successful, false if another movement state owns it already

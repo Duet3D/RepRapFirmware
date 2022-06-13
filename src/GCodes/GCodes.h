@@ -259,6 +259,7 @@ public:
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
 
 	const MovementState& GetPrimaryMovementState() const noexcept { return moveStates[0]; }		// Temporary support for object model and status report values that only handle a single movement system
+	const MovementState& GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept;
 	const MovementState& GetConstMovementState(const GCodeBuffer& gb) const noexcept;			// Get a reference to the movement state associated with the specified GCode buffer (there is a private non-const version)
 	bool IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *tool) const noexcept;	// Check if the specified heater is used by a current tool other than the specified one
 
@@ -755,6 +756,11 @@ inline MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) noexcept
 }
 
 inline const MovementState& GCodes::GetConstMovementState(const GCodeBuffer& gb) const noexcept
+{
+	return moveStates[0];
+}
+
+inline const MovementState& GCodes::GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept
 {
 	return moveStates[0];
 }

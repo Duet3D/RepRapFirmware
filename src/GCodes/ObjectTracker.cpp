@@ -44,7 +44,7 @@ constexpr ObjectModelTableEntry ObjectTracker::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. BuildObjects root
-	{ "currentObject",	OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryMovementState().currentObjectNumber),	ObjectModelEntryFlags::live },
+	{ "currentObject",	OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetCurrentMovementState(context).currentObjectNumber),	ObjectModelEntryFlags::live },
 	{ "m486Names",		OBJECT_MODEL_FUNC(self->usingM486Naming),																ObjectModelEntryFlags::none },
 	{ "m486Numbers",	OBJECT_MODEL_FUNC(self->usingM486Labelling),															ObjectModelEntryFlags::none },
 	{ "objects",		OBJECT_MODEL_FUNC_ARRAY(0),																				ObjectModelEntryFlags::none },
