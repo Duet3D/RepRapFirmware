@@ -65,43 +65,47 @@ extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters) noexcept
 }
 
 #if SUPPORT_OBJECT_MODEL
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Heat, __VA_ARGS__)
+
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
-constexpr ObjectModelArrayDescriptor Heat::bedHeatersArrayDescriptor =
+constexpr ObjectModelArrayTableEntry Heat::objectModelArrayTable[] =
 {
-	&heatersLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxBedHeaters; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Heat*)self)->bedHeaters[context.GetLastIndex()]); }
+	// 0. Bed heaters
+	{
+		&heatersLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxBedHeaters; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Heat*)self)->bedHeaters[context.GetLastIndex()]); }
+	},
+	// 1. Chamber heaters
+	{
+		&heatersLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxChamberHeaters; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Heat*)self)->chamberHeaters[context.GetLastIndex()]); }
+	},
+	// 2. Heaters
+	{
+		&heatersLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Heat*)self)->GetNumHeatersToReport(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Heat*)self)->heaters[context.GetLastIndex()]); }
+	}
 };
 
-constexpr ObjectModelArrayDescriptor Heat::chamberHeatersArrayDescriptor =
-{
-	&heatersLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MaxChamberHeaters; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Heat*)self)->chamberHeaters[context.GetLastIndex()]); }
-};
-
-constexpr ObjectModelArrayDescriptor Heat::heatersArrayDescriptor =
-{
-	&heatersLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Heat*)self)->GetNumHeatersToReport(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Heat*)self)->heaters[context.GetLastIndex()]); }
-};
-
-// Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Heat, __VA_ARGS__)
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(Heat)
 
 constexpr ObjectModelTableEntry Heat::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
 	// 0. Heat class
-	{ "bedHeaters",				OBJECT_MODEL_FUNC_NOSELF(&bedHeatersArrayDescriptor), 							ObjectModelEntryFlags::none },
-	{ "chamberHeaters",			OBJECT_MODEL_FUNC_NOSELF(&chamberHeatersArrayDescriptor),				 		ObjectModelEntryFlags::none },
+	{ "bedHeaters",				OBJECT_MODEL_FUNC_ARRAY(0), 													ObjectModelEntryFlags::none },
+	{ "chamberHeaters",			OBJECT_MODEL_FUNC_ARRAY(1),				 										ObjectModelEntryFlags::none },
 	{ "coldExtrudeTemperature",	OBJECT_MODEL_FUNC((self->coldExtrude) ? 0.0f : self->extrusionMinTemp, 1),		ObjectModelEntryFlags::none },
 	{ "coldRetractTemperature", OBJECT_MODEL_FUNC((self->coldExtrude) ? 0.0f : self->retractionMinTemp, 1),		ObjectModelEntryFlags::none },
-	{ "heaters",				OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor),								ObjectModelEntryFlags::live },
+	{ "heaters",				OBJECT_MODEL_FUNC_ARRAY(2),														ObjectModelEntryFlags::live },
 };
 
 constexpr uint8_t Heat::objectModelTableDescriptor[] = { 1, 5 };

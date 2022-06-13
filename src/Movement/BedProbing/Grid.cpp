@@ -24,43 +24,45 @@
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(GridDefinition, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(GridDefinition, __VA_ARGS__)
 
-static constexpr ObjectModelArrayDescriptor axisArrayDescriptor =
+constexpr ObjectModelArrayTableEntry GridDefinition::objectModelArrayTable[] =
 {
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetAxisLetter(context.GetLastIndex())); }
+	// 0. Axes
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetAxisLetter(context.GetLastIndex())); }
+	},
+	// 1. Maximums
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetMax(context.GetLastIndex()), 1); }
+	},
+	// 2. Minimums
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetMin(context.GetLastIndex()), 1); }
+	},
+	// 3. Spacings
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetSpacing(context.GetLastIndex()), 1); }
+	}
 };
 
-static constexpr ObjectModelArrayDescriptor maxsArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetMax(context.GetLastIndex()), 1); }
-};
-
-static constexpr ObjectModelArrayDescriptor minsArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetMin(context.GetLastIndex()), 1); }
-};
-
-static constexpr ObjectModelArrayDescriptor spacingsArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const GridDefinition*)self)->GetSpacing(context.GetLastIndex()), 1); }
-};
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(GridDefinition)
 
 constexpr ObjectModelTableEntry GridDefinition::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. GridDefinition members
-	{ "axes",		OBJECT_MODEL_FUNC_NOSELF(&axisArrayDescriptor), 		ObjectModelEntryFlags::none },
-	{ "maxs",		OBJECT_MODEL_FUNC_NOSELF(&maxsArrayDescriptor), 		ObjectModelEntryFlags::none },
-	{ "mins",		OBJECT_MODEL_FUNC_NOSELF(&minsArrayDescriptor), 		ObjectModelEntryFlags::none },
+	{ "axes",		OBJECT_MODEL_FUNC_ARRAY(0), 							ObjectModelEntryFlags::none },
+	{ "maxs",		OBJECT_MODEL_FUNC_ARRAY(1), 							ObjectModelEntryFlags::none },
+	{ "mins",		OBJECT_MODEL_FUNC_ARRAY(2), 							ObjectModelEntryFlags::none },
 	{ "radius",		OBJECT_MODEL_FUNC(self->radius, 1),						ObjectModelEntryFlags::none },
-	{ "spacings",	OBJECT_MODEL_FUNC_NOSELF(&spacingsArrayDescriptor), 	ObjectModelEntryFlags::none },
+	{ "spacings",	OBJECT_MODEL_FUNC_ARRAY(3), 							ObjectModelEntryFlags::none },
 
 	{ "xMax",		OBJECT_MODEL_FUNC(self->maxs[0], 1),					ObjectModelEntryFlags::obsolete },
 	{ "xMin",		OBJECT_MODEL_FUNC(self->mins[0], 1),					ObjectModelEntryFlags::obsolete },

@@ -114,8 +114,7 @@ public:
 	uint32_t GetHttpReplySeq() noexcept;
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(interfaces)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	WiFiInterface *FindWiFiInterface() const noexcept;

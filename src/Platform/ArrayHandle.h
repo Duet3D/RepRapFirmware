@@ -19,16 +19,19 @@ class ExpressionValue;
 class ArrayHandle
 {
 public:
-	ArrayHandle() noexcept { slotPtr = nullptr; }							// build an empty array
-	ArrayHandle(ExpressionValue& arg) noexcept;								// build a 1-element array
+	ArrayHandle() noexcept { slotPtr = nullptr; }										// build an empty array
+	ArrayHandle(ExpressionValue& arg) noexcept;											// build a 1-element array
 
-	unsigned int GetLength() const noexcept;								// get the number of elements
-	void GetElement(size_t index, ExpressionValue& rslt) const noexcept;	// get the specified element
+	void Allocate(size_t numElements) THROWS(GCodeException);
+	void AssignElement(size_t index, ExpressionValue& val) THROWS(GCodeException);
+
+	size_t GetNumElements() const noexcept;												// get the number of elements
+	void GetElement(size_t index, ExpressionValue& rslt) const THROWS(GCodeException);	// get the specified element
 	void Delete() noexcept;
 	const ArrayHandle& IncreaseRefCount() const noexcept;
 	bool IsNull() const noexcept { return slotPtr == nullptr; }
 
-private:
+protected:
 	Heap::IndexSlot * null slotPtr;
 };
 

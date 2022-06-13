@@ -23,15 +23,6 @@ namespace Heap
 		char data[];									// array of unspecified length at the end of a struct is a GNU extension (valid in C but not valid in standard C++)
 	};
 
-#if 0
-	struct ArrayStorageSpace
-	{
-		uint16_t length;								// length of this object in bytes including this length field, always rounded up to a multiple of 4
-		uint16_t count;									// number of elements in the array
-		ExpressionValue elements;						// the array elements
-	};
-#endif
-
 	struct IndexSlot
 	{
 		StorageSpace *storage;

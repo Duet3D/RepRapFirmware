@@ -128,8 +128,9 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 		str.cat("{object}");
 		break;
 
-	case TypeCode::Array:
-		str.cat("[array]");
+	case TypeCode::ObjectModelArray:
+	case TypeCode::HeapArray:
+		str.cat("{array}");
 		break;
 
 	case TypeCode::Bitmap16:
@@ -199,7 +200,8 @@ bool ExpressionValue::operator==(const ExpressionValue& other) const noexcept
 		// We don't handle the remaining types
 		case TypeCode::Special:
 		case TypeCode::ObjectModel_tc:
-		case TypeCode::Array:
+		case TypeCode::ObjectModelArray:
+		case TypeCode::HeapArray:
 		case TypeCode::UniqueId_tc:
 #if SUPPORT_CAN_EXPANSION
 		case TypeCode::CanExpansionBoardDetails:
@@ -430,22 +432,26 @@ ObjectExplorationContext::ObjectExplorationContext(const GCodeBuffer *_ecv_null 
 {
 }
 
-int32_t ObjectExplorationContext::GetIndex(size_t n) const THROWS(GCodeException)
+int32_t ObjectExplorationContext::GetIndex(size_t n) const noexcept
 {
 	if (n < numIndicesCounted)
 	{
 		return indices[numIndicesCounted - n - 1];
 	}
-	THROW_INTERNAL_ERROR;
+	// We can't throw from this function because it is called by lambdas in the object model tables and we don't want exception tables for all of those
+	REPORT_INTERNAL_ERROR;
+	return 0;
 }
 
-int32_t ObjectExplorationContext::GetLastIndex() const THROWS(GCodeException)
+int32_t ObjectExplorationContext::GetLastIndex() const noexcept
 {
 	if (numIndicesCounted != 0)
 	{
 		return indices[numIndicesCounted - 1];
 	}
-	THROW_INTERNAL_ERROR;
+	// We can't throw from this function because it is called by lambdas in the object model tables and we don't want exception tables for all of those
+	REPORT_INTERNAL_ERROR;
+	return 0;
 }
 
 bool ObjectExplorationContext::ShouldReport(const ObjectModelEntryFlags f) const noexcept
@@ -601,8 +607,15 @@ void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationCo
 {
 	switch (val.GetType())
 	{
-	case TypeCode::Array:
-		buf->catf("%u", val.omadVal->GetNumElements(this, context));
+	case TypeCode::ObjectModelArray:
+		{
+			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param);
+			buf->catf("%u", entry->GetNumElements(this, context));
+		}
+		break;
+
+	case TypeCode::HeapArray:
+		buf->catf("%u", val.ahVal.GetNumElements());
 		break;
 
 	case TypeCode::Bitmap16:
@@ -635,19 +648,67 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 {
 	switch (val.GetType())
 	{
-	case TypeCode::Array:
+	case TypeCode::ObjectModelArray:
+		{
+			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param);
+			if (*filter == '[')
+			{
+				++filter;
+				if (*filter == ']')						// if reporting on [parts of] all elements in the array
+				{
+					ReportObjectModelArrayAsJson(buf, context, classDescriptor, entry, filter + 1);
+				}
+				else
+				{
+					const char *endptr;
+					const int32_t index = StrToI32(filter, &endptr);
+					if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= entry->GetNumElements(this, context))
+					{
+						buf->cat("null");					// avoid returning badly-formed JSON
+						break;								// invalid syntax, or index out of range
+					}
+					if (*filter == 0)
+					{
+						buf->cat('[');
+					}
+					context.AddIndex(index);
+					{
+						// As at release 3.1.1 this next block uses the most stack of this entire function
+						ReadLocker lock(entry->lockPointer);
+						const ExpressionValue element = entry->GetElement(this, context);
+						ReportItemAsJson(buf, context, classDescriptor, element, endptr + 1);
+					}
+					context.RemoveIndex();
+					if (*filter == 0)
+					{
+						buf->cat(']');
+					}
+				}
+			}
+			else if (*filter == 0)						// else reporting on all subparts of all elements in the array, or just the length
+			{
+				ReportObjectModelArrayAsJson(buf, context, classDescriptor, entry, filter);
+			}
+			else
+			{
+				buf->cat("null");
+			}
+		}
+		break;
+
+	case TypeCode::HeapArray:
 		if (*filter == '[')
 		{
 			++filter;
 			if (*filter == ']')						// if reporting on [parts of] all elements in the array
 			{
-				ReportArrayAsJson(buf, context, classDescriptor, val.omadVal, filter + 1);
+				ReportHeapArrayAsJson(buf, context, classDescriptor, val.ahVal, filter + 1);
 			}
 			else
 			{
 				const char *endptr;
 				const int32_t index = StrToI32(filter, &endptr);
-				if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.omadVal->GetNumElements(this, context))
+				if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.ahVal.GetNumElements())
 				{
 					buf->cat("null");					// avoid returning badly-formed JSON
 					break;								// invalid syntax, or index out of range
@@ -656,14 +717,11 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 				{
 					buf->cat('[');
 				}
-				context.AddIndex(index);
-				{
-					// As at release 3.1.1 this next block uses the most stack of this entire function
-					ReadLocker lock(val.omadVal->lockPointer);
-					const ExpressionValue element = val.omadVal->GetElement(this, context);
-					ReportItemAsJson(buf, context, classDescriptor, element, endptr + 1);
-				}
-				context.RemoveIndex();
+
+				ExpressionValue element;
+				val.ahVal.GetElement((size_t)index, element);
+				ReportItemAsJson(buf, context, classDescriptor, element, endptr + 1);
+
 				if (*filter == 0)
 				{
 					buf->cat(']');
@@ -672,7 +730,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		}
 		else if (*filter == 0)						// else reporting on all subparts of all elements in the array, or just the length
 		{
-			ReportArrayAsJson(buf, context, classDescriptor, val.omadVal, filter);
+			ReportHeapArrayAsJson(buf, context, classDescriptor, val.ahVal, filter);
 		}
 		else
 		{
@@ -880,14 +938,14 @@ void ObjectModel::ReportPinNameAsJson(OutputBuffer *buf, const ExpressionValue& 
 }
 
 // Report an entire array as JSON
-void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
-										const ObjectModelArrayDescriptor *omad, const char *_ecv_array filter) const THROWS(GCodeException)
+void ObjectModel::ReportObjectModelArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
+												const ObjectModelArrayTableEntry *entry, const char *_ecv_array filter) const THROWS(GCodeException)
 {
 	const bool isRootArray = (buf->Length() == context.GetInitialBufferOffset());		// it's a root array if we haven't started writing to the buffer yet
-	ReadLocker lock(omad->lockPointer);
+	ReadLocker lock(entry->lockPointer);
 
 	buf->cat('[');
-	const size_t count = omad->GetNumElements(this, context);
+	const size_t count = entry->GetNumElements(this, context);
 	const size_t startElement = (isRootArray) ? context.GetStartElement() : 0;
 	for (size_t i = startElement; i < count; ++i)
 	{
@@ -903,9 +961,43 @@ void ObjectModel::ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext&
 			buf->cat(',');
 		}
 		context.AddIndex(i);
-		const ExpressionValue element = omad->GetElement(this, context);
+		const ExpressionValue element = entry->GetElement(this, context);
 		ReportItemAsJson(buf, context, classDescriptor, element, filter);
 		context.RemoveIndex();
+	}
+	if (isRootArray && context.GetNextElement() < 0)
+	{
+		context.SetNextElement(0);
+	}
+	buf->cat(']');
+}
+
+// Report an entire array as JSON
+void ObjectModel::ReportHeapArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
+											ArrayHandle ah, const char *_ecv_array filter) const THROWS(GCodeException)
+{
+	const bool isRootArray = (buf->Length() == context.GetInitialBufferOffset());		// it's a root array if we haven't started writing to the buffer yet
+	buf->cat('[');
+
+	ReadLocker lock(Heap::heapLock);
+	const size_t count = ah.GetNumElements();
+	const size_t startElement = (isRootArray) ? context.GetStartElement() : 0;
+	for (size_t i = startElement; i < count; ++i)
+	{
+		// Support retrieving just part of the array in case it is too large to write all of it to the buffer
+		if (i != startElement)
+		{
+			if (isRootArray && buf->Length() >= (OUTPUT_BUFFER_SIZE * (OUTPUT_BUFFER_COUNT - RESERVED_OUTPUT_BUFFERS))/2)
+			{
+				// We've used half the buffer space already, so stop reporting
+				context.SetNextElement(i);
+				break;
+			}
+			buf->cat(',');
+		}
+		ExpressionValue element;
+		ah.GetElement(i, element);
+		ReportItemAsJson(buf, context, classDescriptor, element, filter);
 	}
 	if (isRootArray && context.GetNextElement() < 0)
 	{
@@ -1057,16 +1149,17 @@ decrease(strlen(idString))	// recursion variant
 
 	switch (val.GetType())
 	{
-	case TypeCode::Array:
+	case TypeCode::ObjectModelArray:
 		{
 			if (*idString == 0)
 			{
 				if (context.WantArrayLength())
 				{
-					ReadLocker lock(val.omadVal->lockPointer);
-					return ExpressionValue((int32_t)val.omadVal->GetNumElements(this, context));
+					const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param);
+					ReadLocker lock(entry->lockPointer);
+					return ExpressionValue((int32_t)entry->GetNumElements(this, context));
 				}
-				return ExpressionValue(static_cast<const ObjectModelArrayDescriptor*>(nullptr));	// return a dummy array so that caller can report "[array]" or compare it with null
+				return val;
 			}
 			if (*idString != '^')
 			{
@@ -1074,9 +1167,10 @@ decrease(strlen(idString))	// recursion variant
 			}
 
 			context.AddIndex();
-			ReadLocker lock(val.omadVal->lockPointer);
+			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param);
+			ReadLocker lock(entry->lockPointer);
 
-			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= val.omadVal->GetNumElements(this, context))
+			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= entry->GetNumElements(this, context))
 			{
 				if (context.WantExists())
 				{
@@ -1085,7 +1179,40 @@ decrease(strlen(idString))	// recursion variant
 				throw context.ConstructParseException("array index out of bounds");
 			}
 
-			const ExpressionValue arrayElement = val.omadVal->GetElement(this, context);
+			const ExpressionValue arrayElement = entry->GetElement(this, context);
+			context.CheckStack(StackUsage::GetObjectValue_noTable);
+			return GetObjectValue(context, classDescriptor, arrayElement, idString + 1);
+		}
+
+	case TypeCode::HeapArray:
+		{
+			if (*idString == 0)
+			{
+				if (context.WantArrayLength())
+				{
+					return ExpressionValue((int32_t)val.ahVal.GetNumElements());
+				}
+				return val;
+			}
+			if (*idString != '^')
+			{
+				throw context.ConstructParseException("missing array index");
+			}
+
+			context.AddIndex();
+			ReadLocker lock(Heap::heapLock);
+
+			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= val.ahVal.GetNumElements())
+			{
+				if (context.WantExists())
+				{
+					return ExpressionValue(false);
+				}
+				throw context.ConstructParseException("array index out of bounds");
+			}
+
+			ExpressionValue arrayElement;
+			val.ahVal.GetElement((size_t)context.GetLastIndex(), arrayElement);
 			context.CheckStack(StackUsage::GetObjectValue_noTable);
 			return GetObjectValue(context, classDescriptor, arrayElement, idString + 1);
 		}

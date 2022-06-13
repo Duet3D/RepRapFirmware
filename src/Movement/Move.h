@@ -218,12 +218,7 @@ public:
 #endif
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(queue)
-
-#if SUPPORT_COORDINATE_ROTATION
-	OBJECT_MODEL_ARRAY(rotationCentre)
-#endif
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	enum class MoveState : uint8_t

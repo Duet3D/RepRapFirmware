@@ -58,8 +58,7 @@ public:
     float GetTowerY(size_t axis) const noexcept { return towerY[axis]; }
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(towers)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	void Init() noexcept;

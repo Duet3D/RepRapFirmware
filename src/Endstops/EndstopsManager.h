@@ -76,12 +76,7 @@ public:
 #endif
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(sensors)
-	OBJECT_MODEL_ARRAY(endstops)
-	OBJECT_MODEL_ARRAY(filamentMonitors)
-	OBJECT_MODEL_ARRAY(gpin)
-	OBJECT_MODEL_ARRAY(probes)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	// Add an endstop to the active list

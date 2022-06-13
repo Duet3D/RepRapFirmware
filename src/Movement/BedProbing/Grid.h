@@ -45,7 +45,7 @@ public:
 	pre(!IsValid());
 
 protected:
-	DECLARE_OBJECT_MODEL
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	void CheckValidity(bool setNum0Num1) noexcept;

@@ -138,7 +138,12 @@ namespace CanInterface
 #include <RRF3Common.h>
 
 #define THROWS(...)				// expands to nothing, for providing exception specifications
+
+// Error reporting for functions that are allowed to throw
 #define THROW_INTERNAL_ERROR	throw GCodeException(-1, -1, "internal error at file " __FILE__ "(%d)", (int32_t)__LINE__)
+
+// Error reporting for functions that are not allowed to throw
+#define REPORT_INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)
 
 // Assertion mechanism
 extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute__((naked));

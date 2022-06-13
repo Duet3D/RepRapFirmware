@@ -25,10 +25,7 @@ public:
 #endif
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(screwX)
-	OBJECT_MODEL_ARRAY(screwY)
-	OBJECT_MODEL_ARRAY(lastCorrections)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	void AppendCorrections(const floatc_t corrections[], const StringRef& reply) const noexcept;

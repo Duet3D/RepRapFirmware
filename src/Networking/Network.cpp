@@ -104,21 +104,27 @@ Network::Network(Platform& p) noexcept : platform(p)
 }
 
 #if SUPPORT_OBJECT_MODEL
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Network, _ret)
+
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
-constexpr ObjectModelArrayDescriptor Network::interfacesArrayDescriptor =
+constexpr ObjectModelArrayTableEntry Network::objectModelArrayTable[] =
 {
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumNetworkInterfaces; },
+	// 0. Interfaces
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumNetworkInterfaces; },
 #if HAS_NETWORKING
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->interfaces[context.GetIndex(0)]); }
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->interfaces[context.GetIndex(0)]); }
 #endif
+	}
 };
 
-// Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(Network, _ret)
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(Network)
 
 constexpr ObjectModelTableEntry Network::objectModelTable[] =
 {
@@ -128,7 +134,7 @@ constexpr ObjectModelTableEntry Network::objectModelTable[] =
 	{ "corsSite",	OBJECT_MODEL_FUNC(self->GetCorsSite()),					ObjectModelEntryFlags::none },
 # endif
 	{ "hostname",	OBJECT_MODEL_FUNC(self->GetHostname()),					ObjectModelEntryFlags::none },
-	{ "interfaces", OBJECT_MODEL_FUNC_NOSELF(&interfacesArrayDescriptor),	ObjectModelEntryFlags::none },
+	{ "interfaces", OBJECT_MODEL_FUNC_ARRAY(0),								ObjectModelEntryFlags::none },
 #endif
 	{ "name",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetName()), 			ObjectModelEntryFlags::none },
 };

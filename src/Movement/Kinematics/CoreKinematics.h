@@ -29,11 +29,7 @@ public:
 	AxesBitmap GetLinearAxes() const noexcept override;
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(forwardMatrix)
-	OBJECT_MODEL_ARRAY(forwardMatrixElement)
-	OBJECT_MODEL_ARRAY(inverseMatrix)
-	OBJECT_MODEL_ARRAY(inverseMatrixElement)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	void Recalc() noexcept;									// recalculate internal variables following a configuration change

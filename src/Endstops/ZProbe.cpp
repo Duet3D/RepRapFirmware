@@ -22,42 +22,44 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(ZProbe, __VA_ARGS__)
 
-constexpr ObjectModelArrayDescriptor ZProbe::offsetsArrayDescriptor =
+constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 {
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const ZProbe*)self)->offsets[context.GetLastIndex()], 2); }
+	// 0. Offsets
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const ZProbe*)self)->offsets[context.GetLastIndex()], 2); }
+	},
+	// 1. Speeds
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::probeSpeeds); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+					{ return ExpressionValue(InverseConvertSpeedToMmPerMin(((const ZProbe*)self)->probeSpeeds[context.GetLastIndex()]), 1); }
+	},
+	// 2. Temperature coefficients
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::temperatureCoefficients); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+					{ return ExpressionValue(((const ZProbe*)self)->temperatureCoefficients[context.GetLastIndex()], 5); }
+	},
+	// 3. Values
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return (((const ZProbe*)self)->type == ZProbeType::dumbModulated) ? 2 : 1; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+					{	int v1 = 0;
+						return ExpressionValue
+								(	(context.GetLastIndex() == 0)
+									? (int32_t)((const ZProbe*)self)->GetReading()
+									: (((const ZProbe*)self)->GetSecondaryValues(v1), v1)
+								);
+					}
+	}
 };
 
-constexpr ObjectModelArrayDescriptor ZProbe::valueArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return (((const ZProbe*)self)->type == ZProbeType::dumbModulated) ? 2 : 1; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{	int v1 = 0;
-					return ExpressionValue
-							(	(context.GetLastIndex() == 0)
-								? (int32_t)((const ZProbe*)self)->GetReading()
-								: (((const ZProbe*)self)->GetSecondaryValues(v1), v1)
-							);
-				}
-};
-
-constexpr ObjectModelArrayDescriptor ZProbe::temperatureCoefficientsArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::temperatureCoefficients); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue(((const ZProbe*)self)->temperatureCoefficients[context.GetLastIndex()], 5); }
-};
-
-constexpr ObjectModelArrayDescriptor ZProbe::speedsArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::probeSpeeds); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue(InverseConvertSpeedToMmPerMin(((const ZProbe*)self)->probeSpeeds[context.GetLastIndex()]), 1); }
-};
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(ZProbe)
 
 constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 {
@@ -69,18 +71,18 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "diveHeight",					OBJECT_MODEL_FUNC(self->diveHeight, 1), 													ObjectModelEntryFlags::none },
 	{ "lastStopHeight",				OBJECT_MODEL_FUNC(self->lastStopHeight, 3), 												ObjectModelEntryFlags::none },
 	{ "maxProbeCount",				OBJECT_MODEL_FUNC((int32_t)self->misc.parts.maxTaps), 										ObjectModelEntryFlags::none },
-	{ "offsets",					OBJECT_MODEL_FUNC_NOSELF(&offsetsArrayDescriptor), 											ObjectModelEntryFlags::none },
+	{ "offsets",					OBJECT_MODEL_FUNC_ARRAY(0), 																ObjectModelEntryFlags::none },
 	{ "recoveryTime",				OBJECT_MODEL_FUNC(self->recoveryTime, 1), 													ObjectModelEntryFlags::none },
 	{ "speed",						OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->probeSpeeds[1]), 1),					ObjectModelEntryFlags::obsolete },
-	{ "speeds",						OBJECT_MODEL_FUNC_NOSELF(&speedsArrayDescriptor), 											ObjectModelEntryFlags::none },
+	{ "speeds",						OBJECT_MODEL_FUNC_ARRAY(1), 																ObjectModelEntryFlags::none },
 	{ "temperatureCoefficient",		OBJECT_MODEL_FUNC(self->temperatureCoefficients[0], 5), 									ObjectModelEntryFlags::obsolete },
-	{ "temperatureCoefficients",	OBJECT_MODEL_FUNC_NOSELF(&temperatureCoefficientsArrayDescriptor), 							ObjectModelEntryFlags::none },
+	{ "temperatureCoefficients",	OBJECT_MODEL_FUNC_ARRAY(2), 																ObjectModelEntryFlags::none },
 	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->adcValue), 												ObjectModelEntryFlags::none },
 	{ "tolerance",					OBJECT_MODEL_FUNC(self->tolerance, 3), 														ObjectModelEntryFlags::none },
 	{ "travelSpeed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->travelSpeed), 1), 					ObjectModelEntryFlags::none },
 	{ "triggerHeight",				OBJECT_MODEL_FUNC(-self->offsets[Z_AXIS], 3), 												ObjectModelEntryFlags::none },
 	{ "type",						OBJECT_MODEL_FUNC((int32_t)self->type), 													ObjectModelEntryFlags::none },
-	{ "value",						OBJECT_MODEL_FUNC_NOSELF(&valueArrayDescriptor), 											ObjectModelEntryFlags::live },
+	{ "value",						OBJECT_MODEL_FUNC_ARRAY(3), 																ObjectModelEntryFlags::live },
 };
 
 constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 18 };

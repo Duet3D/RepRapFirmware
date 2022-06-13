@@ -59,6 +59,7 @@ void StringHandle::Assign(const char *s) noexcept
 	}
 }
 
+// Assign the string. Caller must hold a write lock on the heap.
 void StringHandle::InternalAssign(const char *s, size_t len) noexcept
 {
 	Heap::IndexSlot * const slot = Heap::AllocateHandle();
@@ -122,11 +123,13 @@ size_t StringHandle::GetLength() const noexcept
 // AutoStringHandle members
 
 AutoStringHandle::AutoStringHandle(const AutoStringHandle& other) noexcept
+	: StringHandle(other)
 {
 	IncreaseRefCount();
 }
 
 AutoStringHandle::AutoStringHandle(AutoStringHandle&& other) noexcept
+	: StringHandle(other)
 {
 	other.slotPtr = nullptr;
 }
