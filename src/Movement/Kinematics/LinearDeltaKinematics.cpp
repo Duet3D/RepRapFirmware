@@ -34,7 +34,7 @@ constexpr ObjectModelArrayTableEntry LinearDeltaKinematics::objectModelArrayTabl
 	}
 };
 
-DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(LinearDeltaKinematics, Kinematics, 10)
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(LinearDeltaKinematics, RoundBedKinematics, 10)
 
 constexpr ObjectModelTableEntry LinearDeltaKinematics::objectModelTable[] =
 {
@@ -58,7 +58,7 @@ constexpr ObjectModelTableEntry LinearDeltaKinematics::objectModelTable[] =
 
 constexpr uint8_t LinearDeltaKinematics::objectModelTableDescriptor[] = { 2, 7, 5 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(LinearDeltaKinematics, Kinematics)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(LinearDeltaKinematics, RoundBedKinematics)
 
 #endif
 

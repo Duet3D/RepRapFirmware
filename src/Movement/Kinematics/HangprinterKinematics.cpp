@@ -48,7 +48,7 @@ constexpr ObjectModelArrayTableEntry HangprinterKinematics::objectModelArrayTabl
 	}
 };
 
-DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(HangprinterKinematics, Kinematics, 10)
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(HangprinterKinematics, RoundBedKinematics, 10)
 
 constexpr ObjectModelTableEntry HangprinterKinematics::objectModelTable[] =
 {
@@ -61,7 +61,7 @@ constexpr ObjectModelTableEntry HangprinterKinematics::objectModelTable[] =
 
 constexpr uint8_t HangprinterKinematics::objectModelTableDescriptor[] = { 1, 3 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(HangprinterKinematics, Kinematics)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(HangprinterKinematics, RoundBedKinematics)
 
 #endif
 
