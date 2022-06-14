@@ -55,6 +55,7 @@ private:
 	void DiscardReceivedData() noexcept;
 
 	NetworkBuffer *receivedData;						// List of buffers holding received data
+	bool hasMoreDataPending;							// If there is more data left to read when the buffered data has been processed
 	uint32_t whenConnected;
 	uint16_t txBufferSpace;								// How much free transmit buffer space the WiFi mofule reported
 	SocketNumber socketNum;								// The WiFi socket number we are using
