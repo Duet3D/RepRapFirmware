@@ -24,12 +24,17 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(LinearDeltaKinematics, __VA_ARGS__)
 
-constexpr ObjectModelArrayDescriptor LinearDeltaKinematics::towersArrayDescriptor =
+constexpr ObjectModelArrayTableEntry LinearDeltaKinematics::objectModelArrayTable[] =
 {
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const LinearDeltaKinematics*)self)->numTowers; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 1); }
+	// 10. Towers
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const LinearDeltaKinematics*)self)->numTowers; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 1); }
+	}
 };
+
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(LinearDeltaKinematics, RoundBedKinematics, 10)
 
 constexpr ObjectModelTableEntry LinearDeltaKinematics::objectModelTable[] =
 {
@@ -39,7 +44,7 @@ constexpr ObjectModelTableEntry LinearDeltaKinematics::objectModelTable[] =
 	{ "homedHeight",		OBJECT_MODEL_FUNC(self->homedHeight, 3), 								ObjectModelEntryFlags::none },
 	{ "name",				OBJECT_MODEL_FUNC(self->GetName(true)), 								ObjectModelEntryFlags::none },
 	{ "printRadius",		OBJECT_MODEL_FUNC(self->printRadius, 1), 								ObjectModelEntryFlags::none },
-	{ "towers",				OBJECT_MODEL_FUNC_NOSELF(&towersArrayDescriptor),						ObjectModelEntryFlags::none },
+	{ "towers",				OBJECT_MODEL_FUNC_ARRAY(10),											ObjectModelEntryFlags::none },
 	{ "xTilt",				OBJECT_MODEL_FUNC(self->xTilt, 3), 										ObjectModelEntryFlags::none },
 	{ "yTilt",				OBJECT_MODEL_FUNC(self->yTilt, 3), 										ObjectModelEntryFlags::none },
 
@@ -53,7 +58,7 @@ constexpr ObjectModelTableEntry LinearDeltaKinematics::objectModelTable[] =
 
 constexpr uint8_t LinearDeltaKinematics::objectModelTableDescriptor[] = { 2, 7, 5 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE(LinearDeltaKinematics)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(LinearDeltaKinematics, RoundBedKinematics)
 
 #endif
 

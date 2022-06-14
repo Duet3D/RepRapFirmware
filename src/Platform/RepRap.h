@@ -168,16 +168,7 @@ public:
 	WriteLockedPointer<VariableSet> GetGlobalVariablesForWriting() noexcept { return globalVariables.GetForWriting(); }
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(boards)
-	OBJECT_MODEL_ARRAY(fans)
-	OBJECT_MODEL_ARRAY(gpout)
-	OBJECT_MODEL_ARRAY(inputs)
-	OBJECT_MODEL_ARRAY(spindles)
-	OBJECT_MODEL_ARRAY(tools)
-	OBJECT_MODEL_ARRAY(restorePoints)
-	OBJECT_MODEL_ARRAY(volumes)
-	OBJECT_MODEL_ARRAY(volChanges)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
@@ -264,8 +255,6 @@ extern RepRap reprap;
 
 inline Module RepRap::GetSpinningModule() const noexcept { return spinningModule; }
 inline bool RepRap::IsStopped() const noexcept { return stopped; }
-
-#define REPORT_INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)
 
 #endif
 

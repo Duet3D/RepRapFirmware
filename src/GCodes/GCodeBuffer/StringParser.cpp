@@ -748,7 +748,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	SkipWhiteSpace();
 	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 	ExpressionValue ev = parser.Parse();
-	var->Assign(ev);
+	var->Assign(ev, gb);
 	if (isGlobal)
 	{
 		reprap.GlobalUpdated();

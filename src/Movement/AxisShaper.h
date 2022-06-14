@@ -49,9 +49,7 @@ public:
 	static MoveSegment *GetUnshapedSegments(DDA& dda, const PrepParams& params) noexcept;
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(amplitudes)
-	OBJECT_MODEL_ARRAY(durations)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	MoveSegment *GetAccelerationSegments(const DDA& dda, PrepParams& params) const noexcept;

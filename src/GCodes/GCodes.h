@@ -259,6 +259,7 @@ public:
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
 
 	const MovementState& GetPrimaryMovementState() const noexcept { return moveStates[0]; }		// Temporary support for object model and status report values that only handle a single movement system
+	const MovementState& GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept;
 	const MovementState& GetConstMovementState(const GCodeBuffer& gb) const noexcept;			// Get a reference to the movement state associated with the specified GCode buffer (there is a private non-const version)
 	bool IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *tool) const noexcept;	// Check if the specified heater is used by a current tool other than the specified one
 
@@ -335,6 +336,7 @@ private:
 	bool LockResource(const GCodeBuffer& gb, Resource r) noexcept;				// Lock the resource, returning true if success
 	bool LockFileSystem(const GCodeBuffer& gb) noexcept;						// Lock the unshareable parts of the file system
 	bool LockMovement(const GCodeBuffer& gb) noexcept;							// Lock movement
+	bool LockAllMovement(const GCodeBuffer& gb) noexcept;						// Lock movement on all queues
 	void GrabResource(const GCodeBuffer& gb, Resource r) noexcept;				// Grab a resource even if it is already owned
 	void GrabMovement(const GCodeBuffer& gb) noexcept;							// Grab the movement lock even if it is already owned
 	void UnlockResource(const GCodeBuffer& gb, Resource r) noexcept;			// Unlock the resource if we own it
@@ -371,7 +373,7 @@ private:
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err) THROWS(GCodeException)		// Execute an arc move
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
 	void FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
-	bool CheckEnoughAxesHomed(AxesBitmap axesMoved) noexcept;										// Check that enough axes have been homed
+	bool CheckEnoughAxesHomed(AxesBitmap axesToMove) noexcept;										// Check that enough axes have been homed
 	bool TravelToStartPoint(GCodeBuffer& gb) noexcept;												// Set up a move to travel to the resume point
 
 	GCodeResult DoDwell(GCodeBuffer& gb) THROWS(GCodeException);														// Wait for a bit
@@ -426,13 +428,14 @@ private:
 	void SetToolHeaters(Tool *tool, float temperature) THROWS(GCodeException);				// Set all a tool's heaters active and standby temperatures, for M104/M109
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance) const noexcept;
 																							// Wait for the heaters associated with the specified tool to reach their set temperatures
-	void GenerateTemperatureReport(const StringRef& reply) const noexcept;					// Store a standard-format temperature report in reply
+	void GenerateTemperatureReport(const GCodeBuffer& gb, const StringRef& reply) const noexcept;	// Store a standard-format temperature report in reply
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
 	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexcept;			// Check whether we need to report temperatures or status
 
 	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept;					// Restore user position from a restore point
 
-	void UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept;							// Get the current position from the Move class
+	void UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept;							// Get the machine position from the Move class and transform it to the user position
+	void UpdateUserPositionFromMachinePosition(const GCodeBuffer& gb, MovementState& ms) noexcept;	// Update the user position from the machine position
 	void ToolOffsetTransform(MovementState& ms, AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
 																							// Convert user coordinates to head reference point coordinates
 	void ToolOffsetTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes], AxesBitmap explicitAxes = AxesBitmap()) const noexcept;
@@ -455,8 +458,8 @@ private:
 	void CheckTriggers() noexcept;															// Check for and execute triggers
 	void DoEmergencyStop() noexcept;														// Execute an emergency stop
 
-	void DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept	// Pause the print
-		pre(resourceOwners[movementResource] == &gb);
+	bool DoSynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept;	// Pause the print due to a command in the file itself
+	bool DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept;	// Pause the print returning true if successful, false if we can't yet
 	void CheckForDeferredPause(GCodeBuffer& gb) noexcept;									// Check if a pause is pending, action it if so
 	void ProcessEvent(GCodeBuffer& gb) noexcept;											// Start processing a new event
 
@@ -530,6 +533,10 @@ private:
 
 #if SUPPORT_ASYNC_MOVES
 	GCodeResult SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M596
+	bool AllocateAxes(MovementState& ms, AxesBitmap axes) noexcept;				// allocate axes to a movement state
+	bool AllocateExtruders(MovementState& ms, ExtrudersBitmap extruders) noexcept;	// allocate an extruder to a movement state
+	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;	// synchronise motion systems
+	void UpdateUserCoordinatesAndReleaseOwnedAxes(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;
 #endif
 
 #if SUPPORT_COORDINATE_ROTATION
@@ -542,14 +549,11 @@ private:
 	Pwm_t ConvertLaserPwm(float reqVal) const noexcept;
 
 #if HAS_AUX_DEVICES
-#if !ALLOW_ARBITRARY_PANELDUE_PORT
-	static constexpr
-#endif
-	uint8_t serialChannelForPanelDueFlashing
-#if !ALLOW_ARBITRARY_PANELDUE_PORT
-	= 1
-#endif
-	;
+# if ALLOW_ARBITRARY_PANELDUE_PORT
+	uint8_t serialChannelForPanelDueFlashing;
+# else
+	static constexpr uint8_t serialChannelForPanelDueFlashing = 1;
+# endif
 	static bool emergencyStopCommanded;
 	static void CommandEmergencyStop(AsyncSerial *p) noexcept;
 #endif
@@ -573,7 +577,7 @@ private:
 	GCodeBuffer* LcdGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::LCD)]; }					// This one for the 12864 LCD
 	GCodeBuffer* SpiGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::SBC)]; }
 	GCodeBuffer* DaemonGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Daemon)]; }
-	GCodeBuffer* Aux2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)]; }				// This one is reserved for the second async serial interface
+	GCodeBuffer* Aux2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Aux2)]; }					// This one is reserved for the second async serial interface
 	GCodeBuffer* AutoPauseGCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Autopause)]; }		// GCode state machine used to run macros on power fail, heater faults and filament out
 #if SUPPORT_ASYNC_MOVES
 	GCodeBuffer* File2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)]; }
@@ -582,7 +586,6 @@ private:
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling
 
-	static Mutex resourceMutex;
 	const GCodeBuffer* resourceOwners[NumResources];					// Which gcode buffer owns each resource
 
 	StraightProbeSettings straightProbeSettings;						// G38 straight probe settings
@@ -695,6 +698,11 @@ private:
 	uint32_t lastWarningMillis;					// When we last sent a warning message for things that can happen very often
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
 
+#if SUPPORT_ASYNC_MOVES
+	ExtrudersBitmap extrudersMoved;				// extruders that have moved since the last sync
+	AxesBitmap axesMoved;						// axes that have moved since the last sync
+#endif
+
 #if HAS_MASS_STORAGE
 	static constexpr uint32_t SdTimingByteIncrement = 8 * 1024;	// how many timing bytes we write at a time
 	static constexpr const char *TimingFileName = "test.tst";	// the name of the file we write
@@ -748,6 +756,11 @@ inline MovementState& GCodes::GetMovementState(const GCodeBuffer& gb) noexcept
 }
 
 inline const MovementState& GCodes::GetConstMovementState(const GCodeBuffer& gb) const noexcept
+{
+	return moveStates[0];
+}
+
+inline const MovementState& GCodes::GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept
 {
 	return moveStates[0];
 }

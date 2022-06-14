@@ -160,102 +160,101 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(RepRap, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(RepRap, _condition,__VA_ARGS__)
 
-constexpr ObjectModelArrayDescriptor RepRap::boardsArrayDescriptor =
+constexpr ObjectModelArrayTableEntry RepRap::objectModelArrayTable[] =
 {
-	nullptr,					// no lock needed
-#if SUPPORT_CAN_EXPANSION
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->expansion->GetNumExpansionBoards() + 1; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-			{	return (context.GetLastIndex() == 0)
-						? ExpressionValue(((const RepRap*)self)->platform, 0)
-							: ExpressionValue(((const RepRap*)self)->expansion, 0); }
-#else
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 1; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->platform, 0); }
-#endif
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::fansArrayDescriptor =
-{
-	&FansManager::fansLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->fansManager->GetNumFansToReport(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->fansManager->FindFan(context.GetLastIndex()).Ptr()); }
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::inputsArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->gCodes->GetNumInputs(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->gCodes->GetInput(context.GetLastIndex())); }
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::gpoutArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetPlatform().GetNumGpOutputsToReport(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-					{
-						const GpOutputPort& port = reprap.GetPlatform().GetGpOutPort(context.GetLastIndex());
-						return (port.IsUnused()) ? ExpressionValue(nullptr) : ExpressionValue(&port);
-					}
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::spindlesArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return MaxSpindles; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&((const RepRap*)self)->platform->AccessSpindle(context.GetLastIndex())); }
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::toolsArrayDescriptor =
-{
-	&Tool::toolListLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return Tool::GetNumToolsToReport(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(Tool::GetLockedTool(context.GetLastIndex()).Ptr()); }
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::restorePointsArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return NumVisibleRestorePoints; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-																		{ return ExpressionValue(&((const RepRap*)self)->gCodes->GetPrimaryMovementState().restorePoints[context.GetLastIndex()]); }
-};
-
-constexpr ObjectModelArrayDescriptor RepRap::volumesArrayDescriptor =
-{
-	nullptr,
+	// 0. Boards
+	{
+		nullptr,					// no lock needed
+	#if SUPPORT_CAN_EXPANSION
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->expansion->GetNumExpansionBoards() + 1; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{	return (context.GetLastIndex() == 0)
+							? ExpressionValue(((const RepRap*)self)->platform, 0)
+								: ExpressionValue(((const RepRap*)self)->expansion, 0); }
+	#else
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 1; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->platform, 0); }
+	#endif
+	},
+	// 1. Fans
+	{
+		&FansManager::fansLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->fansManager->GetNumFansToReport(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->fansManager->FindFan(context.GetLastIndex()).Ptr()); }
+	},
+	// 2. Inputs
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->gCodes->GetNumInputs(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->gCodes->GetInput(context.GetLastIndex())); }
+	},
+	// 3. Spindles
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return MaxSpindles; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&((const RepRap*)self)->platform->AccessSpindle(context.GetLastIndex())); }
+	},
+	// 4. Tools
+	{
+		&Tool::toolListLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return Tool::GetNumToolsToReport(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(Tool::GetLockedTool(context.GetLastIndex()).Ptr()); }
+	},
+	// 5. Volumes
+	{
+		nullptr,
 #if HAS_MASS_STORAGE
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MassStorage::GetNumVolumes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(MassStorage::GetVolume(context.GetLastIndex())); }
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MassStorage::GetNumVolumes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(MassStorage::GetVolume(context.GetLastIndex())); }
 #else
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 0; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(nullptr); }
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 0; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(nullptr); }
 #endif
-};
+	},
+	// 6. GP outputs
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetPlatform().GetNumGpOutputsToReport(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+						{
+							const GpOutputPort& port = reprap.GetPlatform().GetGpOutPort(context.GetLastIndex());
+							return (port.IsUnused()) ? ExpressionValue(nullptr) : ExpressionValue(&port);
+						}
+	},
+	// 7. Restore points
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return NumVisibleRestorePoints; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+																			{ return ExpressionValue(&((const RepRap*)self)->gCodes->GetCurrentMovementState(context).restorePoints[context.GetLastIndex()]); }
+	}
 
 #if HAS_MASS_STORAGE
-constexpr ObjectModelArrayDescriptor RepRap::volChangesArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MassStorage::GetNumVolumes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-																		{ return ExpressionValue((int32_t)MassStorage::GetVolumeSeq(context.GetLastIndex())); }
-};
+	,
+	// 8. Volume changes
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MassStorage::GetNumVolumes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+																			{ return ExpressionValue((int32_t)MassStorage::GetVolumeSeq(context.GetLastIndex())); }
+	}
 #endif
+};
+
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(RepRap)
 
 constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. MachineModel root
-	{ "boards",					OBJECT_MODEL_FUNC_NOSELF(&boardsArrayDescriptor),						ObjectModelEntryFlags::live },
+	{ "boards",					OBJECT_MODEL_FUNC_ARRAY(0),												ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "directories",			OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::none },
 #endif
-	{ "fans",					OBJECT_MODEL_FUNC_NOSELF(&fansArrayDescriptor),							ObjectModelEntryFlags::live },
+	{ "fans",					OBJECT_MODEL_FUNC_ARRAY(1),												ObjectModelEntryFlags::live },
 	{ "global",					OBJECT_MODEL_FUNC(&(self->globalVariables)),							ObjectModelEntryFlags::none },
 	{ "heat",					OBJECT_MODEL_FUNC(self->heat),											ObjectModelEntryFlags::live },
-	{ "inputs",					OBJECT_MODEL_FUNC_NOSELF(&inputsArrayDescriptor),						ObjectModelEntryFlags::live },
+	{ "inputs",					OBJECT_MODEL_FUNC_ARRAY(2),												ObjectModelEntryFlags::live },
 	{ "job",					OBJECT_MODEL_FUNC(self->printMonitor),									ObjectModelEntryFlags::live },
 	{ "limits",					OBJECT_MODEL_FUNC(self, 2),												ObjectModelEntryFlags::none },
 	{ "move",					OBJECT_MODEL_FUNC(self->move),											ObjectModelEntryFlags::live },
@@ -266,10 +265,10 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #endif
 	{ "sensors",				OBJECT_MODEL_FUNC(&self->platform->GetEndstops()),						ObjectModelEntryFlags::live },
 	{ "seqs",					OBJECT_MODEL_FUNC(self, 6),												ObjectModelEntryFlags::live },
-	{ "spindles",				OBJECT_MODEL_FUNC_NOSELF(&spindlesArrayDescriptor),						ObjectModelEntryFlags::live },
+	{ "spindles",				OBJECT_MODEL_FUNC_ARRAY(3),												ObjectModelEntryFlags::live },
 	{ "state",					OBJECT_MODEL_FUNC(self, 3),												ObjectModelEntryFlags::live },
-	{ "tools",					OBJECT_MODEL_FUNC_NOSELF(&toolsArrayDescriptor),						ObjectModelEntryFlags::live },
-	{ "volumes",				OBJECT_MODEL_FUNC_NOSELF(&volumesArrayDescriptor),						ObjectModelEntryFlags::none },
+	{ "tools",					OBJECT_MODEL_FUNC_ARRAY(4),												ObjectModelEntryFlags::live },
+	{ "volumes",				OBJECT_MODEL_FUNC_ARRAY(5),												ObjectModelEntryFlags::none },
 
 	// 1. MachineModel.directories
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
@@ -326,10 +325,10 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerState()),	ObjectModelEntryFlags::none },
 	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),	ObjectModelEntryFlags::none },
 	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::none },
-	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetPrimaryMovementState().GetCurrentToolNumber()),	ObjectModelEntryFlags::live },
+	{ "currentTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).GetCurrentToolNumber()),	ObjectModelEntryFlags::live },
 	{ "deferredPowerDown",		OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->IsDeferredPowerDown()),	ObjectModelEntryFlags::none },
 	{ "displayMessage",			OBJECT_MODEL_FUNC(self->message.c_str()),								ObjectModelEntryFlags::none },
-	{ "gpOut",					OBJECT_MODEL_FUNC_NOSELF(&gpoutArrayDescriptor),						ObjectModelEntryFlags::live },
+	{ "gpOut",					OBJECT_MODEL_FUNC_ARRAY(6),												ObjectModelEntryFlags::live },
 #if SUPPORT_LASER
 	// 2020-04-24: return the configured laser PWM even if the laser is temporarily turned off
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF(self->gCodes->GetMachineType() == MachineType::laser, self->gCodes->GetLaserPwm(), 2),	ObjectModelEntryFlags::live },
@@ -344,12 +343,12 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "macroRestarted",			OBJECT_MODEL_FUNC(self->gCodes->GetMacroRestarted()),					ObjectModelEntryFlags::none },
 	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::important },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
-	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetPrimaryMovementState().newToolNumber), ObjectModelEntryFlags::none },
+	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none },
 #if HAS_VOLTAGE_MONITOR
 	{ "powerFailScript",		OBJECT_MODEL_FUNC(self->gCodes->GetPowerFailScript()),					ObjectModelEntryFlags::none },
 #endif
-	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetPrimaryMovementState().previousToolNumber),	ObjectModelEntryFlags::none },
-	{ "restorePoints",			OBJECT_MODEL_FUNC_NOSELF(&restorePointsArrayDescriptor),				ObjectModelEntryFlags::none },
+	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none },
+	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
 	{ "thisInput",				OBJECT_MODEL_FUNC_IF_NOSELF(context.GetGCodeBuffer() != nullptr, (int32_t)context.GetGCodeBuffer()->GetChannel().ToBaseType()),	ObjectModelEntryFlags::verbose },
 	{ "time",					OBJECT_MODEL_FUNC(DateTime(self->platform->GetDateTime())),				ObjectModelEntryFlags::live },
@@ -392,7 +391,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "state",					OBJECT_MODEL_FUNC((int32_t)self->stateSeq),								ObjectModelEntryFlags::live },
 	{ "tools",					OBJECT_MODEL_FUNC((int32_t)self->toolsSeq),								ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE
-	{ "volChanges",				OBJECT_MODEL_FUNC_NOSELF(&volChangesArrayDescriptor),					ObjectModelEntryFlags::live },
+	{ "volChanges",				OBJECT_MODEL_FUNC_ARRAY(8),												ObjectModelEntryFlags::live },
 	{ "volumes",				OBJECT_MODEL_FUNC((int32_t)self->volumesSeq),							ObjectModelEntryFlags::live },
 #endif
 };

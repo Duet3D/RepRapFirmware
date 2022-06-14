@@ -681,9 +681,7 @@ public:
 #endif
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(axisDrivers)
-	OBJECT_MODEL_ARRAY(workplaceOffsets)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	const char *_ecv_array InternalGetSysDir() const noexcept;  				// where the system files are - not thread-safe!

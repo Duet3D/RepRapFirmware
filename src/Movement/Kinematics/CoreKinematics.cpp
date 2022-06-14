@@ -21,42 +21,44 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(CoreKinematics, __VA_ARGS__)
 
-constexpr ObjectModelArrayDescriptor CoreKinematics::forwardMatrixElementArrayDescriptor =
+constexpr ObjectModelArrayTableEntry CoreKinematics::objectModelArrayTable[] =
 {
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-							{ return ExpressionValue(((const CoreKinematics*)self)->forwardMatrix(context.GetIndex(1), context.GetIndex(0)), 3); }
+	// 20. Forward matrix elements in a row
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+								{ return ExpressionValue(((const CoreKinematics*)self)->forwardMatrix(context.GetIndex(1), context.GetLastIndex()), 3); }
+	},
+	// 21. Inverse matrix elements in a row
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+								{ return ExpressionValue(((const CoreKinematics*)self)->inverseMatrix(context.GetIndex(1), context.GetLastIndex()), 3); }
+	},
+	// 22. Forward matrix rows
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 20 | (context.GetLastIndex() << 8), true); }
+	},
+	// 23. Inverse matrix rows
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 21 | (context.GetLastIndex() << 8), true); }
+	}
 };
 
-constexpr ObjectModelArrayDescriptor CoreKinematics::inverseMatrixElementArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-							{ return ExpressionValue(((const CoreKinematics*)self)->inverseMatrix(context.GetIndex(1), context.GetIndex(0)), 3); }
-};
-
-constexpr ObjectModelArrayDescriptor CoreKinematics::forwardMatrixArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&forwardMatrixElementArrayDescriptor); }
-};
-
-constexpr ObjectModelArrayDescriptor CoreKinematics::inverseMatrixArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&inverseMatrixElementArrayDescriptor); }
-};
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(CoreKinematics, ZLeadscrewKinematics, 20)
 
 constexpr ObjectModelTableEntry CoreKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "forwardMatrix",		OBJECT_MODEL_FUNC_NOSELF(&forwardMatrixArrayDescriptor), 		ObjectModelEntryFlags::none },
-	{ "inverseMatrix",		OBJECT_MODEL_FUNC_NOSELF(&inverseMatrixArrayDescriptor), 		ObjectModelEntryFlags::none },
+	{ "forwardMatrix",		OBJECT_MODEL_FUNC_ARRAY(22), 									ObjectModelEntryFlags::none },
+	{ "inverseMatrix",		OBJECT_MODEL_FUNC_ARRAY(23), 									ObjectModelEntryFlags::none },
 	{ "name",				OBJECT_MODEL_FUNC(self->GetName(true)), 						ObjectModelEntryFlags::none },
 };
 

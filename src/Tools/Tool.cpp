@@ -41,83 +41,81 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Tool, __VA_ARGS__)
 
-constexpr ObjectModelArrayDescriptor Tool::activeTempsArrayDescriptor =
+constexpr ObjectModelArrayTableEntry Tool::objectModelArrayTable[] =
 {
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->activeTemperatures[context.GetLastIndex()], 1); }
+	// 0. Active temperatures
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->activeTemperatures[context.GetLastIndex()], 1); }
+	},
+	// 1. Axes
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->axisMapping[context.GetLastIndex()]); }
+	},
+	// 2 Extruders
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->driveCount; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Tool*)self)->drives[context.GetLastIndex()]); }
+	},
+	// 3. Feedforward
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->heaterFeedForward[context.GetLastIndex()], 3); }
+	},
+	// 4. Heaters
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Tool*)self)->heaters[context.GetLastIndex()]); }
+	},
+	// 5. Mix
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->driveCount; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->mix[context.GetLastIndex()], 2); }
+	},
+	// 6. Offsets
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->offset[context.GetLastIndex()], 3); }
+	},
+	// 7. Standby temperatures
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->standbyTemperatures[context.GetLastIndex()], 1); }
+	}
 };
 
-constexpr ObjectModelArrayDescriptor Tool::standbyTempsArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->standbyTemperatures[context.GetLastIndex()], 1); }
-};
-
-constexpr ObjectModelArrayDescriptor Tool::heatersArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Tool*)self)->heaters[context.GetLastIndex()]); }
-};
-
-constexpr ObjectModelArrayDescriptor Tool::feedForwardArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->heaterFeedForward[context.GetLastIndex()], 3); }
-};
-
-constexpr ObjectModelArrayDescriptor Tool::extrudersArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->driveCount; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue((int32_t)((const Tool*)self)->drives[context.GetLastIndex()]); }
-};
-
-constexpr ObjectModelArrayDescriptor Tool::mixArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->driveCount; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->mix[context.GetLastIndex()], 2); }
-};
-
-constexpr ObjectModelArrayDescriptor Tool::offsetsArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->offset[context.GetLastIndex()], 3); }
-};
-
-constexpr ObjectModelArrayDescriptor Tool::axesArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->axisMapping[context.GetLastIndex()]); }
-};
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(Tool)
 
 constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Tool members
-	{ "active",				OBJECT_MODEL_FUNC_NOSELF(&activeTempsArrayDescriptor), 						ObjectModelEntryFlags::live },
-	{ "axes",				OBJECT_MODEL_FUNC_NOSELF(&axesArrayDescriptor), 							ObjectModelEntryFlags::none },
-	{ "extruders",			OBJECT_MODEL_FUNC_NOSELF(&extrudersArrayDescriptor), 						ObjectModelEntryFlags::none },
+	{ "active",				OBJECT_MODEL_FUNC_ARRAY(0), 												ObjectModelEntryFlags::live },
+	{ "axes",				OBJECT_MODEL_FUNC_ARRAY(1), 												ObjectModelEntryFlags::none },
+	{ "extruders",			OBJECT_MODEL_FUNC_ARRAY(2), 												ObjectModelEntryFlags::none },
 	{ "fans",				OBJECT_MODEL_FUNC(self->fanMapping), 										ObjectModelEntryFlags::none },
-	{ "feedForward",		OBJECT_MODEL_FUNC_NOSELF(&feedForwardArrayDescriptor), 						ObjectModelEntryFlags::none },
+	{ "feedForward",		OBJECT_MODEL_FUNC_ARRAY(3), 												ObjectModelEntryFlags::none },
 	{ "filamentExtruder",	OBJECT_MODEL_FUNC((int32_t)self->filamentExtruder),							ObjectModelEntryFlags::none },
-	{ "heaters",			OBJECT_MODEL_FUNC_NOSELF(&heatersArrayDescriptor), 							ObjectModelEntryFlags::none },
+	{ "heaters",			OBJECT_MODEL_FUNC_ARRAY(4), 												ObjectModelEntryFlags::none },
 	{ "isRetracted",		OBJECT_MODEL_FUNC(self->IsRetracted()), 									ObjectModelEntryFlags::live },
-	{ "mix",				OBJECT_MODEL_FUNC_NOSELF(&mixArrayDescriptor), 								ObjectModelEntryFlags::none },
+	{ "mix",				OBJECT_MODEL_FUNC_ARRAY(5), 												ObjectModelEntryFlags::none },
 	{ "name",				OBJECT_MODEL_FUNC(self->name),						 						ObjectModelEntryFlags::none },
 	{ "number",				OBJECT_MODEL_FUNC((int32_t)self->myNumber),									ObjectModelEntryFlags::none },
-	{ "offsets",			OBJECT_MODEL_FUNC_NOSELF(&offsetsArrayDescriptor), 							ObjectModelEntryFlags::none },
+	{ "offsets",			OBJECT_MODEL_FUNC_ARRAY(6), 												ObjectModelEntryFlags::none },
 	{ "offsetsProbed",		OBJECT_MODEL_FUNC((int32_t)self->axisOffsetsProbed.GetRaw()),				ObjectModelEntryFlags::none },
 	{ "retraction",			OBJECT_MODEL_FUNC(self, 1),													ObjectModelEntryFlags::none },
 	{ "spindle",			OBJECT_MODEL_FUNC((int32_t)self->spindleNumber),							ObjectModelEntryFlags::none },
 	{ "spindleRpm",			OBJECT_MODEL_FUNC((int32_t)self->spindleRpm),								ObjectModelEntryFlags::none },
-	{ "standby",			OBJECT_MODEL_FUNC_NOSELF(&standbyTempsArrayDescriptor), 					ObjectModelEntryFlags::live },
+	{ "standby",			OBJECT_MODEL_FUNC_ARRAY(7), 												ObjectModelEntryFlags::live },
 	{ "state",				OBJECT_MODEL_FUNC(self->state.ToString()), 									ObjectModelEntryFlags::live },
 
 	// 1. Tool.retraction members

@@ -19,19 +19,24 @@
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(RestorePoint, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(RestorePoint, _condition,__VA_ARGS__)
 
-constexpr ObjectModelArrayDescriptor RestorePoint::coordinatesArrayDescriptor =
+constexpr ObjectModelArrayTableEntry RestorePoint::objectModelArrayTable[] =
 {
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-																			{ return ExpressionValue(((const RestorePoint*)self)->moveCoords[context.GetLastIndex()], 3); }
+	// 0. Coordinates
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+																				{ return ExpressionValue(((const RestorePoint*)self)->moveCoords[context.GetLastIndex()], 3); }
+	}
 };
+
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(RestorePoint)
 
 constexpr ObjectModelTableEntry RestorePoint::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. LaserFilamentMonitor members
-	{ "coords", 			OBJECT_MODEL_FUNC_NOSELF(&coordinatesArrayDescriptor), 								ObjectModelEntryFlags::none },
+	{ "coords", 			OBJECT_MODEL_FUNC_ARRAY(0), 														ObjectModelEntryFlags::none },
 	{ "extruderPos",		OBJECT_MODEL_FUNC(self->virtualExtruderPosition, 1),	 							ObjectModelEntryFlags::none },
 	{ "fanPwm", 			OBJECT_MODEL_FUNC(self->fanSpeed, 2), 												ObjectModelEntryFlags::none },
 	{ "feedRate", 			OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->feedRate), 1), 				ObjectModelEntryFlags::none },

@@ -29,13 +29,16 @@ public:
 
 	void Init() noexcept;
 
+	// Set no active endstops
+	void ClearEndstops() noexcept;
+
 	// Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command returning true if successful
 	bool EnableAxisEndstops(AxesBitmap axes, bool forHoming, bool& reduceAcceleration) noexcept __attribute__ ((warn_unused_result));
 
-	// Set up the active endstops for Z probing returning true if successful
+	// Clear all endstops then set up the active endstops for Z probing returning true if successful
 	bool EnableZProbe(size_t probeNumber, bool probingAway = false) noexcept __attribute__ ((warn_unused_result));
 
-	// Enable extruder endstops
+	// Enable extruder endstops, adding to any axis endstops already set up
 	bool EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept;
 
 	// Get the first endstop that has triggered and remove it from the active list if appropriate
@@ -73,12 +76,7 @@ public:
 #endif
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(sensors)
-	OBJECT_MODEL_ARRAY(endstops)
-	OBJECT_MODEL_ARRAY(filamentMonitors)
-	OBJECT_MODEL_ARRAY(gpin)
-	OBJECT_MODEL_ARRAY(probes)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	// Add an endstop to the active list

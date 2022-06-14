@@ -117,6 +117,9 @@ struct MovementState : public RawMove
 	FilePosition fileOffsetToPrint;									// The offset to print from
 #endif
 
+	ExtrudersBitmap extrudersMoved;									// extruders that this movement system has moved since the last sync
+	AxesBitmap axesMoved;											// axes that this movement system has moved since the last sync
+
 	// Tool change. These variables can be global because movement is locked while doing a tool change, so only one can take place at a time.
 	int16_t newToolNumber;
 	int16_t previousToolNumber;										// the tool number we were using before the last tool change, or -1 if we weren't using a tool

@@ -13,72 +13,34 @@
 
 #include <atomic>
 
-class IndexSlot;
-class StorageSpace;
-class HeapBlock;
-class IndexBlock;
+#define CHECK_HANDLES	(1)							// set nonzero to check that handles are valid before dereferencing them
 
-// Note: StringHandle is a union member in ExpressionValue, therefore it cannot have a non-trivial destructor, copy constructor etc.
-// This means that when an object containing a StringHandle is copied or destroyed, that object must handle the reference count.
-// Classes other than ExpressionValue should use AutoStringHandle instead;
-class StringHandle
+namespace Heap
 {
-public:
-	StringHandle() noexcept { slotPtr = nullptr; }
-	explicit StringHandle(const char *s) noexcept;
-	StringHandle(const char *s, size_t len) noexcept;
+	struct StorageSpace
+	{
+		uint16_t length;								// length of this object in bytes including this length field, always rounded up to a multiple of 4
+		char data[];									// array of unspecified length at the end of a struct is a GNU extension (valid in C but not valid in standard C++)
+	};
 
-#if 0	// unused
-	StringHandle(const char *s1, const char *s2) noexcept;
-#endif
+	struct IndexSlot
+	{
+		StorageSpace *storage;
+		std::atomic<unsigned int> refCount;
 
-	ReadLockedPointer<const char> Get() const noexcept;
-	size_t GetLength() const noexcept;
-	void Delete() noexcept;
-	const StringHandle& IncreaseRefCount() const noexcept;
-	bool IsNull() const noexcept { return slotPtr == nullptr; }
-	void Assign(const char *s) noexcept;
+		IndexSlot() noexcept : storage(nullptr), refCount(0) { }
+	};
 
-	static void GarbageCollect() noexcept;
-//	static size_t GetWastedSpace() noexcept { return spaceToRecycle; }
-//	static size_t GetIndexSpace() noexcept { return totalIndexSpace; }
-//	static size_t GetHeapSpace() noexcept { return totalHeapSpace; }
-	static bool CheckIntegrity(const StringRef& errmsg) noexcept;
-	static void Diagnostics(MessageType mt, Platform& p) noexcept;
+	IndexSlot *AllocateHandle() noexcept;
+	StorageSpace *AllocateSpace(size_t length) noexcept;
+	void CheckSlotGood(IndexSlot *slotPtr) noexcept;
+	void IncreaseRefCount(IndexSlot *slotPtr) noexcept;
+	void DeleteSlot(IndexSlot *slotPtr) noexcept;
+	void GarbageCollect() noexcept;
+	bool CheckIntegrity(const StringRef& errmsg) noexcept;
+	void Diagnostics(MessageType mt, Platform& p) noexcept;
 
-protected:
-	void InternalAssign(const char *s, size_t len) noexcept;
-	void InternalDelete() noexcept;
-
-	static IndexSlot *AllocateHandle() noexcept;
-	static StorageSpace *AllocateSpace(size_t length) noexcept;
-	static void GarbageCollectInternal() noexcept;
-	static void AdjustHandles(char *startAddr, char *endAddr, size_t moveDown, unsigned int numHandles) noexcept;
-
-	IndexSlot * null slotPtr;
-
-	static ReadWriteLock heapLock;
-	static IndexBlock *indexRoot;
-	static HeapBlock *heapRoot;
-	static size_t handlesAllocated;
-	static std::atomic<size_t> handlesUsed;
-	static size_t heapAllocated;
-	static size_t heapUsed;
-	static std::atomic<size_t> heapToRecycle;
-	static unsigned int gcCyclesDone;
-};
-
-// Version of StringHandle that updates the reference counts automatically
-class AutoStringHandle : public StringHandle
-{
-public:
-	AutoStringHandle() noexcept : StringHandle() { }
-	explicit AutoStringHandle(const char *s) noexcept : StringHandle(s) { }
-	AutoStringHandle(const char *s, size_t len) noexcept : StringHandle(s, len) { }
-	AutoStringHandle(const AutoStringHandle& other) noexcept;
-	AutoStringHandle(AutoStringHandle&& other) noexcept;
-	AutoStringHandle& operator=(const AutoStringHandle& other) noexcept;
-	~AutoStringHandle();
-};
+	extern ReadWriteLock heapLock;
+}
 
 #endif /* SRC_PLATFORM_HEAP_H_ */

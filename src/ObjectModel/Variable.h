@@ -13,6 +13,7 @@
 #include <Platform/Heap.h>
 #include <ObjectModel/ObjectModel.h>
 #include <General/function_ref.h>
+#include <GCodes/GCodeException.h>
 
 // Class to represent a variable having a name and a value
 class Variable
@@ -24,7 +25,7 @@ public:
 	ReadLockedPointer<const char> GetName() const noexcept { return name.Get(); }
 	ExpressionValue GetValue() const noexcept { return val; }
 	int8_t GetScope() const noexcept { return scope; }
-	void Assign(ExpressionValue ev) noexcept { val = ev; }
+	void Assign(ExpressionValue& ev, const GCodeBuffer& gb) THROWS(GCodeException);
 
 private:
 	StringHandle name;

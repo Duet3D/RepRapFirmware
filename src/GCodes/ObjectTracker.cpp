@@ -16,41 +16,44 @@
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(ObjectTracker, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(ObjectTracker, _condition,__VA_ARGS__)
 
-constexpr ObjectModelArrayDescriptor ObjectTracker::objectsArrayDescriptor =
+constexpr ObjectModelArrayTableEntry ObjectTracker::objectModelArrayTable[] =
 {
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return min<size_t>(((const ObjectTracker*)self)->numObjects, MaxTrackedObjects); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 1); }
+	// 0. objects
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return min<size_t>(((const ObjectTracker*)self)->numObjects, MaxTrackedObjects); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 1); }
+	},
+	// 1. X limits
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ((const ObjectTracker*)self)->GetXCoordinate(context); }
+	},
+	// 2. Y limits
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ((const ObjectTracker*)self)->GetYCoordinate(context); }
+	}
 };
 
-constexpr ObjectModelArrayDescriptor ObjectTracker::xArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ((const ObjectTracker*)self)->GetXCoordinate(context); }
-};
-
-constexpr ObjectModelArrayDescriptor ObjectTracker::yArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ((const ObjectTracker*)self)->GetYCoordinate(context); }
-};
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(ObjectTracker)
 
 constexpr ObjectModelTableEntry ObjectTracker::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. BuildObjects root
-	{ "currentObject",	OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryMovementState().currentObjectNumber), ObjectModelEntryFlags::live },
-	{ "m486Names",		OBJECT_MODEL_FUNC(self->usingM486Naming),							ObjectModelEntryFlags::none },
-	{ "m486Numbers",	OBJECT_MODEL_FUNC(self->usingM486Labelling),						ObjectModelEntryFlags::none },
-	{ "objects",		OBJECT_MODEL_FUNC_NOSELF(&objectsArrayDescriptor),					ObjectModelEntryFlags::none },
+	{ "currentObject",	OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetCurrentMovementState(context).currentObjectNumber),	ObjectModelEntryFlags::live },
+	{ "m486Names",		OBJECT_MODEL_FUNC(self->usingM486Naming),																ObjectModelEntryFlags::none },
+	{ "m486Numbers",	OBJECT_MODEL_FUNC(self->usingM486Labelling),															ObjectModelEntryFlags::none },
+	{ "objects",		OBJECT_MODEL_FUNC_ARRAY(0),																				ObjectModelEntryFlags::none },
 
 	// 1. ObjectDirectoryEntry root
-	{ "cancelled",	OBJECT_MODEL_FUNC(self->IsCancelled(context.GetLastIndex())),			ObjectModelEntryFlags::none },
-	{ "name",		OBJECT_MODEL_FUNC(self->objectDirectory[context.GetLastIndex()].name.IncreaseRefCount()),	ObjectModelEntryFlags::none },
-	{ "x",			OBJECT_MODEL_FUNC_NOSELF(&xArrayDescriptor),							ObjectModelEntryFlags::none },
-	{ "y",			OBJECT_MODEL_FUNC_NOSELF(&yArrayDescriptor),							ObjectModelEntryFlags::none },
+	{ "cancelled",		OBJECT_MODEL_FUNC(self->IsCancelled(context.GetLastIndex())),											ObjectModelEntryFlags::none },
+	{ "name",			OBJECT_MODEL_FUNC(self->objectDirectory[context.GetLastIndex()].name.IncreaseRefCount()),				ObjectModelEntryFlags::none },
+	{ "x",				OBJECT_MODEL_FUNC_ARRAY(1),																				ObjectModelEntryFlags::none },
+	{ "y",				OBJECT_MODEL_FUNC_ARRAY(2),																				ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t ObjectTracker::objectModelTableDescriptor[] =
@@ -320,13 +323,13 @@ size_t ObjectTracker::GetObjectNumber(const char *_ecv_array label) noexcept
 
 ExpressionValue ObjectTracker::GetXCoordinate(const ObjectExplorationContext& context) const noexcept
 {
-	const int16_t val = objectDirectory[context.GetIndex(1)].x[context.GetIndex(0)];
+	const int16_t val = objectDirectory[context.GetIndex(1)].x[context.GetLastIndex()];
 	return (val == std::numeric_limits<int16_t>::min()) ? ExpressionValue(nullptr) : ExpressionValue((int32_t)val);
 }
 
 ExpressionValue ObjectTracker::GetYCoordinate(const ObjectExplorationContext& context) const noexcept
 {
-	const int16_t val = objectDirectory[context.GetIndex(1)].y[context.GetIndex(0)];
+	const int16_t val = objectDirectory[context.GetIndex(1)].y[context.GetLastIndex()];
 	return (val == std::numeric_limits<int16_t>::min()) ? ExpressionValue(nullptr) : ExpressionValue((int32_t)val);
 }
 

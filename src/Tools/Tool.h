@@ -149,15 +149,7 @@ public:
 	static ReadWriteLock toolListLock;
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(activeTemps)
-	OBJECT_MODEL_ARRAY(axes)
-	OBJECT_MODEL_ARRAY(extruders)
-	OBJECT_MODEL_ARRAY(heaters)
-	OBJECT_MODEL_ARRAY(mix)
-	OBJECT_MODEL_ARRAY(offsets)
-	OBJECT_MODEL_ARRAY(standbyTemps)
-	OBJECT_MODEL_ARRAY(feedForward)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	Tool() noexcept : next(nullptr), filament(nullptr), name(nullptr), state(ToolState::off) { }

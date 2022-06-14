@@ -637,6 +637,17 @@ void DDARing::GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMappi
 	}
 }
 
+#if SUPPORT_ASYNC_MOVES
+
+// Return the machine coordinates of just some axes
+void DDARing::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) const noexcept
+{
+	DDA * const lastQueuedMove = addPointer->GetPrevious();
+	whichAxes.Iterate([m, lastQueuedMove](unsigned int axis, unsigned int count) { m[axis] = lastQueuedMove->GetEndCoordinate(axis, false); });
+}
+
+#endif
+
 // These are the actual numbers we want in the positions, so don't transform them.
 void DDARing::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
 {

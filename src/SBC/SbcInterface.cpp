@@ -713,7 +713,7 @@ void SbcInterface::ExchangeData() noexcept
 				}
 				else
 				{
-					v->Assign(ev);
+					v->Assign(ev, *gb);
 				}
 
 				transfer.WriteSetVariableResult(varName.c_str(), ev);

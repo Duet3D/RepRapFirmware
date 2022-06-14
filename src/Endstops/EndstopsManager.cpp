@@ -38,58 +38,59 @@ ReadWriteLock EndstopsManager::zProbesLock;
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(EndstopsManager, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)				OBJECT_MODEL_FUNC_BODY(EndstopsManager, __VA_ARGS__)
 
-constexpr ObjectModelArrayDescriptor EndstopsManager::sensorsArrayDescriptor =
+constexpr ObjectModelArrayTableEntry EndstopsManager::objectModelArrayTable[] =
 {
-	&Heat::sensorsLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetHeat().GetNumSensorsToReport(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetHeat().FindSensor(context.GetLastIndex()).Ptr()); }
+	// 0. Analog sensors
+	{
+		&Heat::sensorsLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetHeat().GetNumSensorsToReport(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetHeat().FindSensor(context.GetLastIndex()).Ptr()); }
+	},
+	// 1. Axis endstops
+	{
+		&endstopsLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+						{ return ExpressionValue(((const EndstopsManager*)self)->FindEndstop(context.GetLastIndex()).Ptr()); }
+	},
+	// 2. Filament monitors
+	{
+		&FilamentMonitor::filamentMonitorsLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return FilamentMonitor::GetNumMonitorsToReport(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(FilamentMonitor::GetMonitorAlreadyLocked(context.GetLastIndex())); }
+	},
+	// 3. GpIn ports
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetPlatform().GetNumGpInputsToReport(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+						{
+							const GpInputPort& port = reprap.GetPlatform().GetGpInPort(context.GetLastIndex());
+							return (port.IsUnused()) ? ExpressionValue(nullptr) : ExpressionValue(&port);
+						}
+	},
+	// 4. Z probes
+	{
+		&zProbesLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const EndstopsManager*)self)->GetNumProbesToReport(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+						{ return ExpressionValue(((const EndstopsManager*)self)->GetZProbe(context.GetLastIndex()).Ptr()); }
+	}
 };
 
-constexpr ObjectModelArrayDescriptor EndstopsManager::endstopsArrayDescriptor =
-{
-	&endstopsLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-					{ return ExpressionValue(((const EndstopsManager*)self)->FindEndstop(context.GetLastIndex()).Ptr()); }
-};
-
-constexpr ObjectModelArrayDescriptor EndstopsManager::filamentMonitorsArrayDescriptor =
-{
-	&FilamentMonitor::filamentMonitorsLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return FilamentMonitor::GetNumMonitorsToReport(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(FilamentMonitor::GetMonitorAlreadyLocked(context.GetLastIndex())); }
-};
-
-constexpr ObjectModelArrayDescriptor EndstopsManager::gpinArrayDescriptor =
-{
-	nullptr,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetPlatform().GetNumGpInputsToReport(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-					{
-						const GpInputPort& port = reprap.GetPlatform().GetGpInPort(context.GetLastIndex());
-						return (port.IsUnused()) ? ExpressionValue(nullptr) : ExpressionValue(&port);
-					}
-};
-
-constexpr ObjectModelArrayDescriptor EndstopsManager::probesArrayDescriptor =
-{
-	&zProbesLock,
-	[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const EndstopsManager*)self)->GetNumProbesToReport(); },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-					{ return ExpressionValue(((const EndstopsManager*)self)->GetZProbe(context.GetLastIndex()).Ptr()); }
-};
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(EndstopsManager)
 
 constexpr ObjectModelTableEntry EndstopsManager::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. sensors members
-	{ "analog",				OBJECT_MODEL_FUNC_NOSELF(&sensorsArrayDescriptor),				ObjectModelEntryFlags::live },
-	{ "endstops",			OBJECT_MODEL_FUNC_NOSELF(&endstopsArrayDescriptor), 			ObjectModelEntryFlags::live },
-	{ "filamentMonitors",	OBJECT_MODEL_FUNC_NOSELF(&filamentMonitorsArrayDescriptor),		ObjectModelEntryFlags::live },
-	{ "gpIn",				OBJECT_MODEL_FUNC_NOSELF(&gpinArrayDescriptor), 				ObjectModelEntryFlags::live },
-	{ "probes",				OBJECT_MODEL_FUNC_NOSELF(&probesArrayDescriptor),				ObjectModelEntryFlags::live },
+	{ "analog",				OBJECT_MODEL_FUNC_ARRAY(0),		ObjectModelEntryFlags::live },
+	{ "endstops",			OBJECT_MODEL_FUNC_ARRAY(1), 	ObjectModelEntryFlags::live },
+	{ "filamentMonitors",	OBJECT_MODEL_FUNC_ARRAY(2),		ObjectModelEntryFlags::live },
+	{ "gpIn",				OBJECT_MODEL_FUNC_ARRAY(3), 	ObjectModelEntryFlags::live },
+	{ "probes",				OBJECT_MODEL_FUNC_ARRAY(4),		ObjectModelEntryFlags::live },
 };
 
 constexpr uint8_t EndstopsManager::objectModelTableDescriptor[] = { 1, 5 };
@@ -178,7 +179,13 @@ void EndstopsManager::AddToActive(EndstopOrZProbe& e) noexcept
 	activeEndstops = &e;
 }
 
-// Set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command. Return true if successful.
+// Set no active endstops
+void EndstopsManager::ClearEndstops() noexcept
+{
+	activeEndstops = nullptr;
+}
+
+// Clear any existing endstops and set up the active endstop list according to the axes commanded to move in a G0/G1 S1/S3 command. Return true if successful.
 bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming, bool& reduceAcceleration) noexcept
 {
 	activeEndstops = nullptr;

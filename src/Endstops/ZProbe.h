@@ -67,11 +67,7 @@ public:
 	static constexpr unsigned int MaxTapsLimit = 31;	// must be low enough to fit in the maxTaps field
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(offsets)
-	OBJECT_MODEL_ARRAY(value)
-	OBJECT_MODEL_ARRAY(temperatureCoefficients)
-	OBJECT_MODEL_ARRAY(speeds)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 	uint8_t number;
 	ZProbeType type;

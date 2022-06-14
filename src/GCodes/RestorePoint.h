@@ -31,8 +31,7 @@ public:
 	void Init() noexcept;
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(coordinates)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 };
 
 #endif /* SRC_GCODES_RESTOREPOINT_H_ */

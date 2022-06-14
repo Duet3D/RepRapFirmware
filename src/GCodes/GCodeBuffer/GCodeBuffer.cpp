@@ -92,7 +92,11 @@ const char *GCodeBuffer::GetStateText() const noexcept
 
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c) noexcept
-	: printFilePositionAtMacroStart(0),
+	:
+#if SUPPORT_ASYNC_MOVES
+	  syncState(SyncState::running),
+#endif
+	  printFilePositionAtMacroStart(0),
 	  normalInput(normalIn),
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	  fileInput(fileIn),
@@ -105,9 +109,6 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()),
 	  codeChannel(channel), lastResult(GCodeResult::ok),
 	  timerRunning(false), motionCommanded(false)
-#if SUPPORT_ASYNC_MOVES
-	  , waitingForSync(false)
-#endif
 
 #if HAS_SBC_INTERFACE
 	  , isWaitingForMacro(false), isBinaryBuffer(false), invalidated(false)
@@ -337,72 +338,40 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 
 #if SUPPORT_ASYNC_MOVES
 
-// Check whether we are in sync with another GCodeBUffer. This is only called when we have multiple readers for the same GCode stream.
-// Sync works as follows:
-// 1. All GBs first lock their movement queues and wait for all moves in their own movement queue to finish. Only then do they call this function.
-// 2. The primary GB (the one selected by the most recent M596 command) waits for the other GBs to do one of the following:
-//   (a) reach the same lines in the executing files as the primary GB and set their 'waitingForSync' flags. That way the primary caller knows that the secondaries have completed all movements.
-//   (b) reached a later point. That should only happen if the secondary GB didn't execute the command at the sync point due to conditional GCode or executing a loop fewer times.
-// 3. The secondary GBs wait for the primary GB to reach a point strictly later in the executing files, so that the primary can finish executing the command before they resume.
-//    While waiting they set their 'waitingForSync' flags to indicate to the primary that movement has stopped.
-// This function returns true if we must continue waiting.
-bool GCodeBuffer::MustWaitForSyncWith(const GCodeBuffer& other) noexcept
+// Determine whether the other input channel is at a strictly later point than we are
+bool GCodeBuffer::IsLaterThan(const GCodeBuffer& other) const noexcept
 {
 	unsigned int ourDepth = GetStackDepth();
 	unsigned int otherDepth = other.GetStackDepth();
 	const GCodeMachineState *ourState = machineState;
 	const GCodeMachineState *otherState = other.machineState;
-	const bool weArePrimary = Executing();
-	bool otherMustBeLater = !weArePrimary;
-	bool atSamePoint;
-	if (ourDepth > otherDepth)
+	while (ourDepth > otherDepth)
 	{
-		// We are more deeply nested than the other GB. If this is because we are the primary and we are executing a system macro, then the other GB may be in sync with us
-		// and waiting at the outer block for us to finish.
-		atSamePoint = false;
-		do
-		{
-			ourState = ourState->GetPrevious();
-			--ourDepth;
-		} while (ourDepth > otherDepth);
+		ourState = ourState->GetPrevious();
+		--ourDepth;
 	}
-	else if (otherDepth > ourDepth)
+	while (otherDepth > ourDepth)
 	{
-		// The other GB is more deeply nested than we are, perhaps because it is executing a system macro, so it is later than us if it is at the same place in the enclosing blocks
-		atSamePoint = false;
-		do
-		{
-			otherState = otherState->GetPrevious();
-			--otherDepth;
-		} while (otherDepth > ourDepth);
-	}
-	else
-	{
-		atSamePoint = true;
+		otherState = otherState->GetPrevious();
+		--otherDepth;
 	}
 
+	bool otherIsLater = false;
 	while (ourState != nullptr)
 	{
-		if (otherState->lineNumber < ourState->lineNumber)
+		if (otherState->lineNumber > ourState->lineNumber)
 		{
-			otherMustBeLater = true;
-			atSamePoint = false;
+			otherIsLater = true;
 		}
-		else if (otherState->lineNumber > ourState->lineNumber)
+		else if (otherState->lineNumber < ourState->lineNumber)
 		{
-			otherMustBeLater = false;
-			atSamePoint = false;
+			otherIsLater = false;
 		}
 		otherState = otherState->GetPrevious();
 		ourState = ourState->GetPrevious();
 	}
 
-	// At this point, if otherMustBeLater is true then we know that it isn't later, so we are not synced.
-	// Else if atSamePoint is true then the other GB is at the same point as us;
-	//  so if we are the primary we need to check whether is has its waitingForSync flag set, and if we are not the primary we must wait for the primary to complete the command.
-	const bool ret = otherMustBeLater || (atSamePoint && (!weArePrimary || !other.waitingForSync));
-	waitingForSync = ret;
-	return ret;
+	return otherIsLater;
 }
 
 #endif

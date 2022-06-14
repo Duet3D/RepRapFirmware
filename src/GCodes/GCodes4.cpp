@@ -1503,11 +1503,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				gb.SetState(GCodeState::finishedProcessingEvent);	// already paused or pausing
 			}
-			else if (LockMovementAndWaitForStandstill(gb))
+			else
 			{
 				const PrintPausedReason pauseReason = Event::GetDefaultPauseReason();
-				gb.SetState(GCodeState::finishedProcessingEvent);
-				DoPause(gb, pauseReason, (pauseReason == PrintPausedReason::driverError) ? GCodeState::eventPausing2 : GCodeState::eventPausing1);
+				// In the following, if DoPause fails because it can't get the movement lock then it will not change the state, so we will return here to try again
+				(void)DoAsynchronousPause(gb, pauseReason, (pauseReason == PrintPausedReason::driverError) ? GCodeState::eventPausing2 : GCodeState::eventPausing1);
 			}
 		}
 		break;

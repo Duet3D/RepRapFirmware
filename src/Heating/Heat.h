@@ -155,10 +155,7 @@ public:
 	static ReadWriteLock sensorsLock;							// needs to be public so that the OMT in EndstopsManager can lock it
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(bedHeaters)
-	OBJECT_MODEL_ARRAY(chamberHeaters)
-	OBJECT_MODEL_ARRAY(heaters)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	ReadLockedPointer<Heater> FindHeater(int heater) const noexcept;

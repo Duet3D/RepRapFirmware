@@ -10,7 +10,8 @@
 
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeException.h>
-#include <Platform/Heap.h>
+#include <Platform/StringHandle.h>
+#include <Platform/ArrayHandle.h>
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -37,8 +38,9 @@ enum class TypeCode : uint8_t
 	ObjectModel_tc,		// renamed for eCv to avoid clash with class ObjectModel
 	CString,
 	HeapString,
+	HeapArray,
 	IPAddress_tc,		// renamed for eCv to avoid clash with class IPAddress in RRFLibraries
-	Array,
+	ObjectModelArray,
 	DateTime_tc,		// renamed for eCv to avoid clash with class DateTime
 	DriverId_tc,		// renamed for eCv to avoid clash with class DriverId
 	MacAddress_tc,		// renamed for eCv to avoid clash with class MacAddress
@@ -64,7 +66,7 @@ enum class ExpansionDetail : uint32_t
 
 // Forward declarations
 class ObjectModel;
-class ObjectModelArrayDescriptor;
+class ObjectModelArrayTableEntry;
 class ObjectModelTableEntry;
 class IoPort;
 class UniqueId;
@@ -92,14 +94,15 @@ struct ExpressionValue
 		uint32_t uVal;								// used for enumerations, bitmaps and IP addresses (not for integers, we always use int32_t for those)
 		const char *_ecv_array sVal;
 		const ObjectModel *omVal;					// object of some class derived from ObjectModel
-		const ObjectModelArrayDescriptor *omadVal;
 		StringHandle shVal;
+		ArrayHandle ahVal;
 		const IoPort *iopVal;
 		const UniqueId *uniqueIdVal;
 		uint32_t whole;								// a member we can use to copy the whole thing safely, at least as big as all the others. Assumes all other members are trivially copyable.
 	};
 
 	static_assert(sizeof(whole) >= sizeof(shVal));
+	static_assert(sizeof(whole) >= sizeof(ahVal));
 	static_assert(sizeof(whole) >= sizeof(omVal));
 	static_assert(sizeof(whole) >= sizeof(fVal));
 
@@ -118,8 +121,8 @@ struct ExpressionValue
 	explicit ExpressionValue(uint64_t u) noexcept : type((uint32_t)TypeCode::Uint64) { Set56BitValue(u); }
 	explicit constexpr ExpressionValue(const ObjectModel* null om) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(0), omVal(om) { }
 	constexpr ExpressionValue(const ObjectModel *null om, uint8_t tableNumber) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(tableNumber), omVal(om) { }
+	constexpr ExpressionValue(const ObjectModel *om, uint8_t arrayNumber, bool dummy) noexcept : type((uint32_t)TypeCode::ObjectModelArray), param(arrayNumber), omVal(om) { }
 	explicit constexpr ExpressionValue(const char *_ecv_array s) noexcept : type((uint32_t)TypeCode::CString), param(0), sVal(s) { }
-	explicit constexpr ExpressionValue(const ObjectModelArrayDescriptor *omad) noexcept : type((uint32_t)TypeCode::Array), param(0), omadVal(omad) { }
 	explicit constexpr ExpressionValue(IPAddress ip) noexcept : type((uint32_t)TypeCode::IPAddress_tc), param(0), uVal(ip.GetV4LittleEndian()) { }
 	explicit constexpr ExpressionValue(std::nullptr_t dummy) noexcept : type((uint32_t)TypeCode::None), param(0), uVal(0) { }
 	explicit ExpressionValue(DateTime t) noexcept : type((t.tim == 0) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::DateTime_tc) { Set56BitValue(t.tim); }
@@ -141,6 +144,7 @@ struct ExpressionValue
 	explicit ExpressionValue(const MacAddress& mac) noexcept;
 	ExpressionValue(SpecialType s, uint32_t u) noexcept : type((uint32_t)TypeCode::Special), param((uint32_t)s), uVal(u) { }
 	explicit ExpressionValue(StringHandle h) noexcept : type((uint32_t)TypeCode::HeapString), param(0), shVal(h) { }
+	explicit ExpressionValue(ArrayHandle h) noexcept : type((uint32_t)TypeCode::HeapArray), param(0), ahVal(h) { }
 	explicit ExpressionValue(const IoPort& p) noexcept : type((uint32_t)TypeCode::Port), param(0), iopVal(&p) { }
 	explicit ExpressionValue(const UniqueId& id) noexcept : type((uint32_t)TypeCode::UniqueId_tc), param(0), uniqueIdVal(&id) { }
 #if SUPPORT_CAN_EXPANSION
@@ -233,6 +237,9 @@ public:
 	// Constructor used when evaluating expressions
 	ObjectExplorationContext(const GCodeBuffer *_ecv_null gbp, bool wal, bool wex, int p_line, int p_col) noexcept;
 
+	// Constructor used for generating a context to pass array indices
+	ObjectExplorationContext() noexcept;
+
 	const GCodeBuffer *_ecv_null GetGCodeBuffer() const noexcept { return gb; }
 	void SetMaxDepth(unsigned int d) noexcept { maxDepth = d; }
 	bool IncreaseDepth() noexcept { if (currentDepth < maxDepth) { ++currentDepth; return true; } return false; }
@@ -241,8 +248,8 @@ public:
 	void AddIndex() THROWS(GCodeException);
 	void RemoveIndex() THROWS(GCodeException);
 	void ProvideIndex(int32_t index) THROWS(GCodeException);
-	int32_t GetIndex(size_t n) const THROWS(GCodeException);
-	int32_t GetLastIndex() const THROWS(GCodeException);
+	int32_t GetIndex(size_t n) const noexcept;
+	int32_t GetLastIndex() const noexcept;
 	size_t GetNumIndicesCounted() const noexcept { return numIndicesCounted; }
 	unsigned int GetStartElement() const noexcept { return startElement; }
 	void SetNextElement(int arg) noexcept { nextElement = arg; }
@@ -290,7 +297,7 @@ private:
 };
 
 // Entry to describe an array of objects or values. These must be brace-initializable into flash memory.
-class ObjectModelArrayDescriptor
+class ObjectModelArrayTableEntry
 {
 public:
 	ReadWriteLock *null lockPointer;
@@ -306,6 +313,9 @@ class ObjectModel
 public:
 	ObjectModel() noexcept;
 	virtual ~ObjectModel() { }
+
+	// Get the requested entry in the array table
+	virtual const ObjectModelArrayTableEntry *GetObjectModelArrayEntry(unsigned int index) const noexcept { return nullptr; }
 
 	// Construct a JSON representation of those parts of the object model requested by the user. This version is called only on the root of the tree.
 	void ReportAsJson(const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, const char *_ecv_array filter, const char *_ecv_array reportFlags, bool wantArrayLength) const THROWS(GCodeException);
@@ -326,7 +336,10 @@ protected:
 	virtual void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, uint8_t tableNumber, const char *_ecv_array filter) const THROWS(GCodeException);
 
 	// Report an entire array as JSON
-	void ReportArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor, const ObjectModelArrayDescriptor *omad, const char *_ecv_array filter) const THROWS(GCodeException);
+	void ReportObjectModelArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor, const ObjectModelArrayTableEntry *entry, const char *_ecv_array filter) const THROWS(GCodeException);
+
+	// Report an entire array as JSON
+	void ReportHeapArrayAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor, ArrayHandle ah, const char *_ecv_array filter) const THROWS(GCodeException);
 
 	// Get the value of an object that we hold
 	ExpressionValue GetObjectValue(ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ExpressionValue& val, const char *_ecv_array idString) const THROWS(GCodeException);
@@ -428,6 +441,11 @@ struct ObjectModelClassDescriptor
 	static const uint8_t objectModelTableDescriptor[]; \
 	static const ObjectModelClassDescriptor objectModelClassDescriptor;
 
+#define DECLARE_OBJECT_MODEL_WITH_ARRAYS \
+	DECLARE_OBJECT_MODEL \
+	static const ObjectModelArrayTableEntry objectModelArrayTable[]; \
+	const ObjectModelArrayTableEntry *GetObjectModelArrayEntry(unsigned int index) const noexcept override;
+
 #define DECLARE_OBJECT_MODEL_VIRTUAL \
 	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept override = 0;
 
@@ -455,22 +473,51 @@ struct ObjectModelClassDescriptor
 		return &objectModelClassDescriptor; \
 	}
 
+#define DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(_class) \
+	constexpr unsigned int ArrayIndexOffset = 0; \
+	const ObjectModelArrayTableEntry *_class::GetObjectModelArrayEntry(unsigned int index) const noexcept \
+	{ \
+		if (index < ARRAY_SIZE(_class::objectModelArrayTable)) \
+		{ \
+			return &_class::objectModelArrayTable[index]; \
+		} \
+		return ObjectModel::GetObjectModelArrayEntry(index);; \
+	}
+
+#define DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(_class,_parent,_offset) \
+	constexpr unsigned int ArrayIndexOffset = _offset; \
+	const ObjectModelArrayTableEntry *_class::GetObjectModelArrayEntry(unsigned int index) const noexcept \
+	{ \
+		if (index >= _offset && index < _offset + ARRAY_SIZE(_class::objectModelArrayTable)) \
+		{ \
+			return &_class::objectModelArrayTable[index - _offset]; \
+		} \
+		return _parent::GetObjectModelArrayEntry(index); \
+	}
+
 #define OBJECT_MODEL_FUNC_BODY(_class,...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept \
 	{ const _class * const self = static_cast<const _class*>(arg); return ExpressionValue(__VA_ARGS__); }
 #define OBJECT_MODEL_FUNC_IF_BODY(_class,_condition,...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept \
 	{ const _class * const self = static_cast<const _class*>(arg); return (_condition) ? ExpressionValue(__VA_ARGS__) : ExpressionValue(nullptr); }
+#define OBJECT_MODEL_FUNC_ARRAY(_index) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept \
+	{ \
+		static_assert((unsigned int)_index >= ArrayIndexOffset); \
+		static_assert((unsigned int)_index < sizeof(objectModelArrayTable)/sizeof(ObjectModelArrayTableEntry) + ArrayIndexOffset); \
+		return ExpressionValue(arg, _index, true); \
+	}
 #define OBJECT_MODEL_FUNC_NOSELF(...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept { return ExpressionValue(__VA_ARGS__); }
 #define OBJECT_MODEL_FUNC_IF_NOSELF(_condition,...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept \
 	{ return (_condition) ? ExpressionValue(__VA_ARGS__) : ExpressionValue(nullptr); }
-#define OBJECT_MODEL_ARRAY(_name)	static const ObjectModelArrayDescriptor _name ## ArrayDescriptor;
 
 #else
 
-#define INHERIT_OBJECT_MODEL			// nothing
-#define DECLARE_OBJECT_MODEL			// nothing
-#define DECLARE_OBJECT_MODEL_VIRTUAL	// nothing
-#define DEFINE_GET_OBJECT_MODEL_TABLE	// nothing
-#define OBJECT_MODEL_ARRAY(_name)		// nothing
+#define INHERIT_OBJECT_MODEL										// nothing
+#define DECLARE_OBJECT_MODEL										// nothing
+#define DECLARE_OBJECT_MODEL_WITH_ARRAYS 							// nothing
+#define DECLARE_OBJECT_MODEL_VIRTUAL								// nothing
+#define DEFINE_GET_OBJECT_MODEL_TABLE(_class)						// nothing
+#define DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(_class)					// nothing
+#define DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(_class, _parent)	// nothing
 
 #endif
 

@@ -112,8 +112,7 @@ public:
 #endif
 
 protected:
-	DECLARE_OBJECT_MODEL
-	OBJECT_MODEL_ARRAY(monitors)
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 	struct HeaterParameters
 	{

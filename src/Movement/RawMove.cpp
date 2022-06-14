@@ -101,7 +101,17 @@ void MovementState::ClearMove() noexcept
 
 void MovementState::Diagnostics(MessageType mtype, unsigned int moveSystemNumber) noexcept
 {
-	reprap.GetPlatform().MessageF(mtype, "Segments left Q%u: %u\n", moveSystemNumber, segmentsLeft);
+	reprap.GetPlatform().MessageF(mtype, "Q%u segments left %u"
+#if SUPPORT_ASYNC_MOVES
+											", axes owned %03x, extruders owned %03x"
+#endif
+												"\n",
+													moveSystemNumber,
+													segmentsLeft
+#if SUPPORT_ASYNC_MOVES
+													, (unsigned int)axesMoved.GetRaw(), (unsigned int)extrudersMoved.GetRaw()
+#endif
+									);
 	codeQueue->Diagnostics(mtype, moveSystemNumber);
 }
 

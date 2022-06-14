@@ -35,7 +35,7 @@ constexpr ObjectModelTableEntry RotaryDeltaKinematics::objectModelTable[] =
 
 constexpr uint8_t RotaryDeltaKinematics::objectModelTableDescriptor[] = { 1, 1 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE(RotaryDeltaKinematics)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(RotaryDeltaKinematics, RoundBedKinematics)
 
 #endif
 

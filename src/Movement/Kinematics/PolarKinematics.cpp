@@ -33,7 +33,7 @@ constexpr ObjectModelTableEntry PolarKinematics::objectModelTable[] =
 
 constexpr uint8_t PolarKinematics::objectModelTableDescriptor[] = { 1, 1 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE(PolarKinematics)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(PolarKinematics, Kinematics)
 
 #endif
 

@@ -60,10 +60,17 @@ void GCodes::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bo
 // Handle M596
 GCodeResult GCodes::SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	const unsigned int queueNumber = gb.GetLimitedUIValue('P', ARRAY_SIZE(moveStates));
-	UnlockMovement(gb);							// in case we are in a macro - avoid unlocking the wrong movement system later
-	gb.SetActiveQueueNumber(queueNumber);
-	reprap.InputsUpdated();
+	if (gb.Seen('P'))
+	{
+		UnlockMovement(gb);							// in case we are in a macro - avoid unlocking the wrong movement system later
+		const unsigned int queueNumber = gb.GetLimitedUIValue('P', ARRAY_SIZE(moveStates));
+		gb.SetActiveQueueNumber(queueNumber);
+		reprap.InputsUpdated();
+	}
+	else
+	{
+		reply.printf("Motion system %u is active", gb.GetActiveQueueNumber());
+	}
 	return GCodeResult::ok;
 }
 

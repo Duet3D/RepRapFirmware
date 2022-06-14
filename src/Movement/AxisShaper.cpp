@@ -21,29 +21,33 @@
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(AxisShaper, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(AxisShaper, __VA_ARGS__)
 
-constexpr ObjectModelArrayDescriptor AxisShaper::amplitudesArrayDescriptor =
+constexpr ObjectModelArrayTableEntry AxisShaper::objectModelArrayTable[] =
 {
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numExtraImpulses; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
-										-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->coefficients[context.GetIndex(0)], 3); }
+	// 0. Amplitudes
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numExtraImpulses; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
+											-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->coefficients[context.GetLastIndex()], 3); }
+	},
+	// 1. Durations
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numExtraImpulses; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
+											-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->durations[context.GetLastIndex()] * (1.0/StepClockRate), 5); }
+	}
 };
 
-constexpr ObjectModelArrayDescriptor AxisShaper::durationsArrayDescriptor =
-{
-	nullptr,					// no lock needed
-	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numExtraImpulses; },
-	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
-										-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->durations[context.GetIndex(0)] * (1.0/StepClockRate), 5); }
-};
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(AxisShaper)
 
 constexpr ObjectModelTableEntry AxisShaper::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. InputShaper members
-	{ "amplitudes",				OBJECT_MODEL_FUNC_NOSELF(&amplitudesArrayDescriptor), 		ObjectModelEntryFlags::none },
+	{ "amplitudes",				OBJECT_MODEL_FUNC_ARRAY(0), 								ObjectModelEntryFlags::none },
 	{ "damping",				OBJECT_MODEL_FUNC(self->zeta, 2), 							ObjectModelEntryFlags::none },
-	{ "durations",				OBJECT_MODEL_FUNC_NOSELF(&durationsArrayDescriptor), 		ObjectModelEntryFlags::none },
+	{ "durations",				OBJECT_MODEL_FUNC_ARRAY(1), 								ObjectModelEntryFlags::none },
 	{ "frequency",				OBJECT_MODEL_FUNC(self->frequency, 2), 						ObjectModelEntryFlags::none },
 	{ "minAcceleration",		OBJECT_MODEL_FUNC(self->minimumAcceleration, 1),			ObjectModelEntryFlags::none },
 	{ "type", 					OBJECT_MODEL_FUNC(self->type.ToString()), 					ObjectModelEntryFlags::none },
