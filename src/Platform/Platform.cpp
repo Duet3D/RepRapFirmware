@@ -202,7 +202,7 @@ constexpr ObjectModelArrayTableEntry Platform::objectModelArrayTable[] =
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumCoordinateSystems; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue(reprap.GetGCodes().GetWorkplaceOffset(context.GetIndex(1), context.GetIndex(0)), 3); }
+				{ return ExpressionValue(reprap.GetGCodes().GetWorkplaceOffset(context.GetIndex(1), context.GetLastIndex()), 3); }
 	}
 };
 

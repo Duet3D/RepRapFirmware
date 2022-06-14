@@ -32,7 +32,7 @@ void ArrayHandle::Allocate(size_t numElements) THROWS(GCodeException)
 	Heap::IndexSlot * const slot = Heap::AllocateHandle();
 	Heap::StorageSpace * const space = Heap::AllocateSpace(sizeof(uint16_t) + numElements * sizeof(ExpressionValue));
 	ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(space);
-	aSpace->count = numElements;	//TRODO truncation of allocated space? throw?
+	aSpace->count = numElements;	//TODO truncation of allocated space? throw?
 	for (size_t i = 0; i < numElements; ++i)
 	{
 		new (&aSpace->elements[i]) ExpressionValue;

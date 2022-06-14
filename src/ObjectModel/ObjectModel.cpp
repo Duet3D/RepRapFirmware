@@ -123,24 +123,52 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 #endif
 		break;
 
-	// We don't fully handle the remaining types
-	case TypeCode::ObjectModel_tc:
-		str.cat("{object}");
-		break;
-
 	case TypeCode::ObjectModelArray:
+		str.cat('{');
+		{
+			const ObjectModelArrayTableEntry *entry = omVal->GetObjectModelArrayEntry(param & 0xFF);
+			if (entry == nullptr)
+			{
+				str.cat("error");
+			}
+			else
+			{
+				ObjectExplorationContext context(nullptr, false, false, -1, -1);
+				context.AddIndex(param >> 8);							// in case it is a 2D array
+				ReadLocker lock(entry->lockPointer);
+				const size_t count = entry->GetNumElements(omVal, context);
+				for (size_t i = 0; i < count; ++i)
+				{
+					if (i != 0)
+					{
+						str.cat(',');
+					}
+					context.AddIndex(i);
+					entry->GetElement(omVal, context).AppendAsString(str);
+					context.RemoveIndex();
+				}
+			}
+		}
+		str.cat('}');
+		break;
+
 	case TypeCode::HeapArray:
-		str.cat("{array}");
-		break;
-
-	case TypeCode::Bitmap16:
-	case TypeCode::Bitmap32:
-	case TypeCode::Bitmap64:
-		str.cat("(Bitmap)");
-		break;
-
-	case TypeCode::Enum32:
-		str.cat("(enumeration)");
+		str.cat('{');
+		{
+			ReadLocker lock(Heap::heapLock);
+			const size_t count = ahVal.GetNumElements();
+			for (size_t i = 0; i < count; ++i)
+			{
+				if (i != 0)
+				{
+					str.cat(',');
+				}
+				ExpressionValue val;
+				ahVal.GetElement(i, val);
+				val.AppendAsString(str);
+			}
+		}
+		str.cat('}');
 		break;
 
 	case TypeCode::Port:
@@ -149,6 +177,21 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 
 	case TypeCode::UniqueId_tc:
 		uniqueIdVal->AppendCharsToString(str);
+		break;
+
+	// We don't fully handle the remaining types
+	case TypeCode::ObjectModel_tc:
+		str.cat("{object}");
+		break;
+
+	case TypeCode::Bitmap16:
+	case TypeCode::Bitmap32:
+	case TypeCode::Bitmap64:
+		str.cat("{Bitmap}");
+		break;
+
+	case TypeCode::Enum32:
+		str.cat("{enumeration}");
 		break;
 	}
 }
@@ -609,7 +652,7 @@ void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationCo
 	{
 	case TypeCode::ObjectModelArray:
 		{
-			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param);
+			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param & 0xFF);
 			buf->catf("%u", entry->GetNumElements(this, context));
 		}
 		break;
@@ -650,7 +693,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 	{
 	case TypeCode::ObjectModelArray:
 		{
-			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param);
+			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param & 0xFF);
 			if (*filter == '[')
 			{
 				++filter;
@@ -1155,7 +1198,7 @@ decrease(strlen(idString))	// recursion variant
 			{
 				if (context.WantArrayLength())
 				{
-					const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param);
+					const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param & 0xFF);
 					ReadLocker lock(entry->lockPointer);
 					return ExpressionValue((int32_t)entry->GetNumElements(this, context));
 				}
@@ -1167,7 +1210,7 @@ decrease(strlen(idString))	// recursion variant
 			}
 
 			context.AddIndex();
-			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param);
+			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param & 0xFF);
 			ReadLocker lock(entry->lockPointer);
 
 			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= entry->GetNumElements(this, context))

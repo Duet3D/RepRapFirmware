@@ -44,7 +44,7 @@ constexpr ObjectModelArrayTableEntry HangprinterKinematics::objectModelArrayTabl
 	{
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return HANGPRINTER_AXES; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 10, true); }
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 10 | (context.GetLastIndex() << 8), true); }
 	}
 };
 

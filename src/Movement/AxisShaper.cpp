@@ -28,14 +28,14 @@ constexpr ObjectModelArrayTableEntry AxisShaper::objectModelArrayTable[] =
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numExtraImpulses; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
-											-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->coefficients[context.GetIndex(0)], 3); }
+											-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->coefficients[context.GetLastIndex()], 3); }
 	},
 	// 1. Durations
 	{
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numExtraImpulses; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
-											-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->durations[context.GetIndex(0)] * (1.0/StepClockRate), 5); }
+											-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->durations[context.GetLastIndex()] * (1.0/StepClockRate), 5); }
 	}
 };
 

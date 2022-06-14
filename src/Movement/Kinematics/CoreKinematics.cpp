@@ -28,26 +28,26 @@ constexpr ObjectModelArrayTableEntry CoreKinematics::objectModelArrayTable[] =
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-								{ return ExpressionValue(((const CoreKinematics*)self)->forwardMatrix(context.GetIndex(1), context.GetIndex(0)), 3); }
+								{ return ExpressionValue(((const CoreKinematics*)self)->forwardMatrix(context.GetIndex(1), context.GetLastIndex()), 3); }
 	},
 	// 21. Inverse matrix elements in a row
 	{
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-								{ return ExpressionValue(((const CoreKinematics*)self)->inverseMatrix(context.GetIndex(1), context.GetIndex(0)), 3); }
+								{ return ExpressionValue(((const CoreKinematics*)self)->inverseMatrix(context.GetIndex(1), context.GetLastIndex()), 3); }
 	},
 	// 22. Forward matrix rows
 	{
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetVisibleAxes(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 20, true); }
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 20 | (context.GetLastIndex() << 8), true); }
 	},
 	// 23. Inverse matrix rows
 	{
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 21, true); }
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 21 | (context.GetLastIndex() << 8), true); }
 	}
 };
 

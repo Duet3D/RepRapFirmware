@@ -301,7 +301,7 @@ Heap::StorageSpace *Heap::AllocateSpace(size_t length) noexcept
 			if (HeapBlockSize >= currentBlock->allocated + length)		// if the data will fit at the end of the current block
 			{
 				StorageSpace * const ret = reinterpret_cast<StorageSpace*>(currentBlock->data + currentBlock->allocated);
-				ret->length = length - sizeof(StorageSpace::length);
+				ret->length = length;
 				currentBlock->allocated += length;
 				heapUsed += length;
 				return ret;
@@ -322,7 +322,7 @@ Heap::StorageSpace *Heap::AllocateSpace(size_t length) noexcept
 	heapAllocated += HeapBlockSize;
 	heapUsed += length;
 	StorageSpace * const ret2 = reinterpret_cast<StorageSpace*>(heapRoot->data);
-	ret2->length = length - sizeof(StorageSpace::length);
+	ret2->length = length;
 	heapRoot->allocated = length;
 	return ret2;
 }

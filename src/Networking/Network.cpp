@@ -119,7 +119,7 @@ constexpr ObjectModelArrayTableEntry Network::objectModelArrayTable[] =
 		nullptr,
 		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumNetworkInterfaces; },
 #if HAS_NETWORKING
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->interfaces[context.GetIndex(0)]); }
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->interfaces[context.GetLastIndex()]); }
 #endif
 	}
 };

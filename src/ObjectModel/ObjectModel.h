@@ -311,6 +311,9 @@ public:
 	ObjectModel() noexcept;
 	virtual ~ObjectModel() { }
 
+	// Get the requested entry in the array table
+	virtual const ObjectModelArrayTableEntry *GetObjectModelArrayEntry(unsigned int index) const noexcept { return nullptr; }
+
 	// Construct a JSON representation of those parts of the object model requested by the user. This version is called only on the root of the tree.
 	void ReportAsJson(const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, const char *_ecv_array filter, const char *_ecv_array reportFlags, bool wantArrayLength) const THROWS(GCodeException);
 
@@ -342,7 +345,6 @@ protected:
 	const ObjectModelTableEntry *FindObjectModelTableEntry(const ObjectModelClassDescriptor *classDescriptor, uint8_t tableNumber, const char *_ecv_array idString) const noexcept;
 
 	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
-	virtual const ObjectModelArrayTableEntry *GetObjectModelArrayEntry(unsigned int index) const noexcept { return nullptr; }
 
 	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
 															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);

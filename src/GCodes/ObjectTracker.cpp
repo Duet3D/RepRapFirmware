@@ -18,8 +18,8 @@
 
 constexpr ObjectModelArrayTableEntry ObjectTracker::objectModelArrayTable[] =
 {
+	// 0. objects
 	{
-		// 0. objects
 		nullptr,
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return min<size_t>(((const ObjectTracker*)self)->numObjects, MaxTrackedObjects); },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 1); }
@@ -323,13 +323,13 @@ size_t ObjectTracker::GetObjectNumber(const char *_ecv_array label) noexcept
 
 ExpressionValue ObjectTracker::GetXCoordinate(const ObjectExplorationContext& context) const noexcept
 {
-	const int16_t val = objectDirectory[context.GetIndex(1)].x[context.GetIndex(0)];
+	const int16_t val = objectDirectory[context.GetIndex(1)].x[context.GetLastIndex()];
 	return (val == std::numeric_limits<int16_t>::min()) ? ExpressionValue(nullptr) : ExpressionValue((int32_t)val);
 }
 
 ExpressionValue ObjectTracker::GetYCoordinate(const ObjectExplorationContext& context) const noexcept
 {
-	const int16_t val = objectDirectory[context.GetIndex(1)].y[context.GetIndex(0)];
+	const int16_t val = objectDirectory[context.GetIndex(1)].y[context.GetLastIndex()];
 	return (val == std::numeric_limits<int16_t>::min()) ? ExpressionValue(nullptr) : ExpressionValue((int32_t)val);
 }
 

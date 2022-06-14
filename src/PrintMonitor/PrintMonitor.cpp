@@ -46,7 +46,7 @@ const ObjectModelArrayTableEntry PrintMonitor::objectModelArrayTable[] =
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t
 				{ return ((const PrintMonitor*)self)->printingFileInfo.numFilaments; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return  ExpressionValue(((const PrintMonitor*)self)->printingFileInfo.filamentNeeded[context.GetIndex(0)], 1); }
+				{ return  ExpressionValue(((const PrintMonitor*)self)->printingFileInfo.filamentNeeded[context.GetLastIndex()], 1); }
 	},
 	// 1. Thumbnails
 	{

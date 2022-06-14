@@ -64,7 +64,7 @@ void StringHandle::InternalAssign(const char *s, size_t len) noexcept
 {
 	Heap::IndexSlot * const slot = Heap::AllocateHandle();
 	Heap::StorageSpace * const space = Heap::AllocateSpace(len + 1);
-	SafeStrncpy(space->data, s, len + 1);
+	SafeStrncpy(space->data, s, space->length - sizeof(space->length));
 	slot->storage = space;
 	slotPtr = slot;
 }
