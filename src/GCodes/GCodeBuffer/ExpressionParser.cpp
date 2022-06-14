@@ -144,18 +144,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 		{
 			CheckStack(StackUsage::ParseInternal);
 			ParseInternal(val, evaluate, UnaryPriority);
-			if (val.GetType() == TypeCode::CString)
-			{
-				val.SetSigned((int32_t)strlen(val.sVal));
-			}
-			else if (val.GetType() == TypeCode::HeapString)
-			{
-				val.SetSigned((int32_t)val.shVal.GetLength());
-			}
-			else
-			{
-				ThrowParseException("expected object model value or string after '#");
-			}
+			ApplyLengthOperator(val);
 		}
 		break;
 
@@ -848,6 +837,45 @@ void ExpressionParser::ConvertToDriverId(ExpressionValue& val, bool evaluate) co
 	}
 }
 
+void ExpressionParser::ApplyLengthOperator(ExpressionValue& val) const THROWS(GCodeException)
+{
+	switch (val.GetType())
+	{
+	case TypeCode::CString:
+		val.SetSigned((int32_t)strlen(val.sVal));
+		break;
+
+	case TypeCode::HeapString:
+		val.SetSigned((int32_t)val.shVal.GetLength());
+		break;
+
+	case TypeCode::ObjectModelArray:
+		{
+			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param & 0xFF);
+			if (entry == nullptr)
+			{
+				THROW_INTERNAL_ERROR;
+			}
+			ObjectExplorationContext context;
+			context.AddIndex(val.param >> 16);
+			ReadLocker lock(entry->lockPointer);
+			val.SetSigned(entry->GetNumElements(val.omVal, context));
+			context.RemoveIndex();
+		}
+		break;
+
+	case TypeCode::HeapArray:
+		{
+			ReadLocker lock(Heap::heapLock);
+			val.SetSigned(val.ahVal.GetNumElements());
+		}
+		break;
+
+	default:
+		ThrowParseException("expected object model value or string after '#");
+	}
+}
+
 void ExpressionParser::SkipWhiteSpace() noexcept
 {
 	char c;
@@ -1270,20 +1298,20 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 		// Check for a parameter, local or global variable
 		if (StringStartsWith(id.c_str(), "param."))
 		{
-			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("param."), true, applyExists);
+			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("param."), true, applyLengthOperator, applyExists);
 			return;
 		}
 
 		if (StringStartsWith(id.c_str(), "global."))
 		{
 			auto vars = reprap.GetGlobalVariablesForReading();
-			GetVariableValue(rslt, vars.Ptr(), id.c_str() + strlen("global."), false, applyExists);
+			GetVariableValue(rslt, vars.Ptr(), id.c_str() + strlen("global."), false, applyLengthOperator, applyExists);
 			return;
 		}
 
 		if (StringStartsWith(id.c_str(), "var."))
 		{
-			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("var."), false, applyExists);
+			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("var."), false, applyLengthOperator, applyExists);
 			return;
 		}
 
@@ -1319,7 +1347,7 @@ time_t ExpressionParser::ParseDateTime(const char *s) const THROWS(GCodeExceptio
 }
 
 // Get the value of a variable
-void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, bool parameter, bool wantExists) THROWS(GCodeException)
+void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, bool parameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException)
 {
 	const Variable* var = vars->Lookup(name);
 	if (wantExists)
@@ -1331,6 +1359,10 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 	if (var != nullptr && (!parameter || var->GetScope() < 0))
 	{
 		rslt = var->GetValue();
+		if (applyLengthOperator)
+		{
+			ApplyLengthOperator(rslt);
+		}
 		return;
 	}
 
