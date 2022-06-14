@@ -24,21 +24,20 @@ void Variable::Assign(ExpressionValue& ev, const GCodeBuffer& gb) THROWS(GCodeEx
 	switch (ev.GetType())
 	{
 	case TypeCode::ObjectModelArray:
-#if 0	//TEMP!
 		{
 			// Copy the object model array value to the heap
 			ArrayHandle ah;
-			const ObjectModelArrayTableEntry& entry = val.omVal->GetObjectModelArrayTable()[val.param];
-			ReadLocker lock(entry.lockPointer);
+			const ObjectModelArrayTableEntry *entry = val.omVal->GetObjectModelArrayEntry(val.param);
+			ReadLocker lock(entry->lockPointer);
 			ObjectExplorationContext context;
-			const size_t numElements = entry.GetNumElements(val.omVal, context);
+			const size_t numElements = entry->GetNumElements(val.omVal, context);
 			if (numElements != 0)
 			{
 				ah.Allocate(numElements);
 				for (size_t i = 0; i < numElements; ++i)
 				{
 					context.AddIndex(i);
-					ExpressionValue elemVal = entry.GetElement(val.omVal, context);
+					ExpressionValue elemVal = entry->GetElement(val.omVal, context);
 					ah.AssignElement(i, elemVal);
 					context.RemoveIndex();
 				}
@@ -46,7 +45,7 @@ void Variable::Assign(ExpressionValue& ev, const GCodeBuffer& gb) THROWS(GCodeEx
 			val = ExpressionValue(ah);
 		}
 		break;
-#endif
+
 	case TypeCode::ObjectModel_tc:
 		throw GCodeException(gb.GetLineNumber(), -1, "Cannot assign a value of type 'object' to a variable");
 

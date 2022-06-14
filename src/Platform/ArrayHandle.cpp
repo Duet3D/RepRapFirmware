@@ -30,14 +30,20 @@ void ArrayHandle::Allocate(size_t numElements) THROWS(GCodeException)
 {
 	WriteLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
 	Heap::IndexSlot * const slot = Heap::AllocateHandle();
-	Heap::StorageSpace * const space = Heap::AllocateSpace(sizeof(uint16_t) + numElements * sizeof(ExpressionValue));
+	Heap::StorageSpace * const space = Heap::AllocateSpace(sizeof(ArrayStorageSpace) + numElements * sizeof(ExpressionValue));
+	slot->storage = space;
+	if (space->length < sizeof(ArrayStorageSpace) + numElements * sizeof(ExpressionValue))
+	{
+		Heap::DeleteSlot(slot);
+		throw GCodeException("Array too large");
+	}
+
 	ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(space);
-	aSpace->count = numElements;	//TODO truncation of allocated space? throw?
+	aSpace->count = numElements;
 	for (size_t i = 0; i < numElements; ++i)
 	{
 		new (&aSpace->elements[i]) ExpressionValue;
 	}
-	slot->storage = space;
 	slotPtr = slot;
 }
 
@@ -87,6 +93,11 @@ void ArrayHandle::Delete() noexcept
 	if (slotPtr != nullptr)
 	{
 		ReadLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
+		ArrayStorageSpace *const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
+		for (size_t i = 0; i < aSpace->count; ++i)
+		{
+			aSpace->elements[i].~ExpressionValue();				// call destructor on the elements
+		}
 		Heap::DeleteSlot(slotPtr);
 		slotPtr = nullptr;										// clear the pointer to the handle entry
 	}

@@ -291,7 +291,7 @@ Heap::StorageSpace *Heap::AllocateSpace(size_t length) noexcept
 	RRF_ASSERT(heapLock.GetWriteLockOwner() == TaskBase::GetCallerTaskHandle());
 #endif
 
-	length = min<size_t>((length + sizeof(StorageSpace::length) + 3u) & (~3u), HeapBlockSize);			// round to make the length field a multiple of 4 and limit to max size
+	length = min<size_t>((length + 3u) & (~3u), HeapBlockSize);			// round to make the length field a multiple of 4 and limit to max size
 
 	bool collected = false;
 	do

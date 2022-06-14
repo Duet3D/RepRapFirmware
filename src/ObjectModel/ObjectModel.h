@@ -237,6 +237,9 @@ public:
 	// Constructor used when evaluating expressions
 	ObjectExplorationContext(const GCodeBuffer *_ecv_null gbp, bool wal, bool wex, int p_line, int p_col) noexcept;
 
+	// Constructor used for generating a context to pass array indices
+	ObjectExplorationContext() noexcept;
+
 	const GCodeBuffer *_ecv_null GetGCodeBuffer() const noexcept { return gb; }
 	void SetMaxDepth(unsigned int d) noexcept { maxDepth = d; }
 	bool IncreaseDepth() noexcept { if (currentDepth < maxDepth) { ++currentDepth; return true; } return false; }

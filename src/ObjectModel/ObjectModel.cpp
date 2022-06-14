@@ -133,7 +133,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 			}
 			else
 			{
-				ObjectExplorationContext context(nullptr, false, false, -1, -1);
+				ObjectExplorationContext context;
 				context.AddIndex(param >> 8);							// in case it is a 2D array
 				ReadLocker lock(entry->lockPointer);
 				const size_t count = entry->GetNumElements(omVal, context);
@@ -474,6 +474,10 @@ ObjectExplorationContext::ObjectExplorationContext(const GCodeBuffer *_ecv_null 
 	  obsoleteFieldQueried(false)
 {
 }
+
+// Constructor used for generating a context to pass array indices
+ObjectExplorationContext::ObjectExplorationContext() noexcept
+	: ObjectExplorationContext(nullptr, false, false, -1, -1) { }
 
 int32_t ObjectExplorationContext::GetIndex(size_t n) const noexcept
 {
