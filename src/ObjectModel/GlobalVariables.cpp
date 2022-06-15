@@ -27,7 +27,7 @@ void GlobalVariables::ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 				vars.IterateWhile([this, buf, &context, classDescriptor, filter](unsigned int index, const Variable& v) noexcept -> bool
 									{
 										buf->catf((index != 0) ? ",\"%s\":" : "\"%s\":", v.GetName().Ptr());
-										ReportItemAsJsonFull(buf, context, classDescriptor, v.GetValue(), filter);
+										ReportItemAsJson(buf, context, classDescriptor, v.GetValue(), filter);
 										return true;
 									}
 								 );
@@ -47,24 +47,7 @@ void GlobalVariables::ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 		}
 		else if (context.IncreaseDepth())
 		{
-#if 1
-			// Currently a variable cannot hold an object or an object model array, so it doesn't matter what object we pass as the this-parameter to ReportItemAsJsonFull
-			ReportItemAsJsonFull(buf, context, nullptr, var->GetValue(), pos);
-#else
-			// The following code doesn't work anyway. For type ObjectModel_tc it reports the requested member name but not the value.
-			const ExpressionValue val = var->GetValue();
-			switch (val.GetType())
-			{
-			case TypeCode::ObjectModel_tc:
-			case TypeCode::ObjectModelArray:
-				val.omVal->ReportItemAsJsonFull(buf, context, nullptr, val, pos);
-				break;
-
-			default:
-				ReportItemAsJsonFull(buf, context, nullptr, val, pos);
-				break;
-			}
-#endif
+			ReportItemAsJson(buf, context, nullptr, var->GetValue(), pos);
 		}
 		else
 		{

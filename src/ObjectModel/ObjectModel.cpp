@@ -616,40 +616,6 @@ void ObjectModel::ReportAsJson(const GCodeBuffer *_ecv_null gb, OutputBuffer *bu
 	}
 }
 
-// Function to report a value or object as JSON
-// This function is recursive, so keep its stack usage low.
-// Most recursive calls are for non-array object values, so handle object values inline to reduce stack usage.
-// This saves about 240 bytes of stack space but costs 272 bytes of flash memory.
-inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
-											const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException)
-{
-	if (context.WantArrayLength() && *filter == 0)
-	{
-		ReportArrayLengthAsJson(buf, context, val);
-	}
-	else if (val.GetType() == TypeCode::ObjectModel_tc)
-	{
-		if (  (*filter != '.' && *filter != 0)		// we should have reached the end of the filter or a '.', error if not
-			|| val.omVal == nullptr					// OM arrays may contain null entries, so we need to handle them here
-		   )
-		{
-			buf->cat("null");
-		}
-		else
-		{
-			if (*filter == '.')
-			{
-				++filter;
-			}
-			val.omVal->ReportAsJson(buf, context, (val.omVal == this) ? classDescriptor : nullptr, val.param, filter);
-		}
-	}
-	else
-	{
-		ReportItemAsJsonFull(buf, context, classDescriptor, val, filter);
-	}
-}
-
 void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept
 {
 	switch (val.GetType())
@@ -689,7 +655,8 @@ void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationCo
 }
 
 // Function to report a value or object as JSON
-// This function is recursive, so keep its stack usage low
+// This function is recursive, so keep its stack usage low.
+// The type of 'val' may not be ObjectModel_tc. That type is handled in function ReportItemAsJson, which is declared 'inline' to reduce stack usage.
 void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
 										const ExpressionValue& val, const char *filter) const THROWS(GCodeException)
 {
@@ -985,7 +952,6 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 			}
 		}
 	}
-
 }
 
 // This is a separate function to avoid having a string buffer on the stack of a recursive function
