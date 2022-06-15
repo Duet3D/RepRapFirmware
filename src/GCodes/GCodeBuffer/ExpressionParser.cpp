@@ -1357,7 +1357,6 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 		if (var != nullptr)
 		{
 			ExpressionValue val = var->GetValue();
-			debugPrintf("type=%u\n", (unsigned int)val.GetType());
 			while (val.GetType() == TypeCode::HeapArray)
 			{
 				ExpressionValue elem;

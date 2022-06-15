@@ -12,14 +12,7 @@
 Variable::Variable(const char *str, ExpressionValue& pVal, int8_t pScope) THROWS(GCodeException)
 	: name(str), val(), scope(pScope)
 {
-	if (pVal.GetType() == TypeCode::ObjectModelArray)
-	{
-		Assign(pVal);				// arrays are copied by value. This may throw if the array is too large.
-	}
-	else
-	{
-		val = pVal;
-	}
+	Assign(pVal);				// this may throw
 }
 
 Variable::~Variable()

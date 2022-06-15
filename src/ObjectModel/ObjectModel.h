@@ -327,6 +327,9 @@ public:
 	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
 							const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException);
 
+	// Report on a single item
+	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
+															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 	// Skip the current element in the ID or filter string
 	static const char* GetNextElement(const char *id) noexcept;
 
@@ -349,8 +352,6 @@ protected:
 
 	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
 
-	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
-															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 private:
 	// These functions have been separated from ReportItemAsJson to avoid high stack usage in the recursive functions, therefore they must not be inlined
 	__attribute__ ((noinline)) void ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept;
@@ -397,7 +398,7 @@ public:
 	bool IsObsolete() const noexcept { return ((uint8_t)flags & (uint8_t)ObjectModelEntryFlags::obsolete) != 0; }
 
 	// See whether we should add the value of this element to the buffer, returning true if it matched the filter and we did add it
-	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *_ecv_from self, const char *_ecv_array filter, bool first) const noexcept;
+	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *_ecv_from self, const char *_ecv_array filter, bool first) const THROWS(GCodeException);
 
 	// Return the name of this field
 	const char *_ecv_array  GetName() const noexcept { return name; }
