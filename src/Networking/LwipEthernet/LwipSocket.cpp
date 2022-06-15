@@ -332,6 +332,13 @@ void LwipSocket::Taken(size_t len) noexcept
 // Poll a socket to see if it needs to be serviced
 void LwipSocket::Poll() noexcept
 {
+	// Deal with transfers that went so quickly that we haven't got a responder yet
+	bool wasShortTransfer = !responderFound && (state == SocketState::clientDisconnecting);
+	if (wasShortTransfer)
+	{
+		state = SocketState::connected;
+	}
+
 	switch (state)
 	{
 	case SocketState::listening:
@@ -365,9 +372,11 @@ void LwipSocket::Poll() noexcept
 
 	case SocketState::clientDisconnecting:
 	case SocketState::closing:
+	{
 		// The connection is being closed, but we may be waiting for sent data to be ACKed
 		// or for the received data to be processed by a NetworkResponder
-		if (unAcked == 0 || millis() - whenClosed > MaxAckTime)
+		bool timeoutExceeded = millis() - whenClosed > MaxAckTime;
+		if (unAcked == 0 || timeoutExceeded)
 		{
 			if (connectionPcb != nullptr)
 			{
@@ -385,13 +394,24 @@ void LwipSocket::Poll() noexcept
 				connectionPcb = nullptr;
 			}
 
-			state = (localPort == 0) ? SocketState::disabled : SocketState::listening;
+			if (receivedData == nullptr || timeoutExceeded)
+			{
+				DiscardReceivedData();
+				state = (localPort == 0) ? SocketState::disabled : SocketState::listening;
+			}
 		}
 		break;
+	}
 
 	default:
 		// Nothing to do
 		break;
+	}
+
+	// Restore previous disconnecting state if necessary
+	if (wasShortTransfer)
+	{
+		state = SocketState::clientDisconnecting;
 	}
 }
 
