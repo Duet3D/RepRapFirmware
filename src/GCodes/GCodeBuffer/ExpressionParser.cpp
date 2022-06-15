@@ -1298,20 +1298,20 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 		// Check for a parameter, local or global variable
 		if (StringStartsWith(id.c_str(), "param."))
 		{
-			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("param."), true, applyLengthOperator, applyExists);
+			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("param."), context, true, applyLengthOperator, applyExists);
 			return;
 		}
 
 		if (StringStartsWith(id.c_str(), "global."))
 		{
 			auto vars = reprap.GetGlobalVariablesForReading();
-			GetVariableValue(rslt, vars.Ptr(), id.c_str() + strlen("global."), false, applyLengthOperator, applyExists);
+			GetVariableValue(rslt, vars.Ptr(), id.c_str() + strlen("global."), context, false, applyLengthOperator, applyExists);
 			return;
 		}
 
 		if (StringStartsWith(id.c_str(), "var."))
 		{
-			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("var."), false, applyLengthOperator, applyExists);
+			GetVariableValue(rslt, &gb.GetVariables(), id.c_str() + strlen("var."), context, false, applyLengthOperator, applyExists);
 			return;
 		}
 
@@ -1346,27 +1346,82 @@ time_t ExpressionParser::ParseDateTime(const char *s) const THROWS(GCodeExceptio
 	return mktime(&timeInfo);
 }
 
-// Get the value of a variable
-void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, bool parameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException)
+// Get the value of a variable or part of a variable
+void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, ObjectExplorationContext& context, bool isParameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException)
 {
-	const Variable* var = vars->Lookup(name);
-	if (wantExists)
+	const char *pos = strchr(name, '^');
+	if (pos != nullptr)
 	{
-		rslt.SetBool(var != nullptr);
-		return;
-	}
-
-	if (var != nullptr && (!parameter || var->GetScope() < 0))
-	{
-		rslt = var->GetValue();
-		if (applyLengthOperator)
+		// Indexing into a variable
+		const Variable *const var = vars->Lookup(name, pos - name);
+		if (var != nullptr)
 		{
-			ApplyLengthOperator(rslt);
+			ExpressionValue val = var->GetValue();
+			debugPrintf("type=%u\n", (unsigned int)val.GetType());
+			while (val.GetType() == TypeCode::HeapArray)
+			{
+				ExpressionValue elem;
+				{
+					context.AddIndex();						// we are about to use up an index
+					const int32_t index = context.GetLastIndex();
+					ReadLocker lock(Heap::heapLock);
+					if ((unsigned int)index > val.ahVal.GetNumElements())
+					{
+						ThrowParseException("Index out of range");
+					}
+					val.ahVal.GetElement(index, elem);
+				}
+
+				++pos;					// skip the '^'
+				if (*pos == 0)
+				{
+					// End of the expression
+					rslt = elem;
+					return;
+				}
+				if (*pos == '^')
+				{
+					val = elem;
+					continue;
+				}
+				if (*pos == '.' && elem.GetType() == TypeCode::ObjectModel_tc)
+				{
+					rslt = elem.omVal->GetObjectValueUsingTableNumber(context, nullptr, pos + 1, 0);
+					return;
+				}
+				ThrowParseException("Error indexing into nested arrays");
+			}
+			ThrowParseException("Cannot index into variable or parameter '%s' of non-array type", name);
 		}
-		return;
+		else if (wantExists)
+		{
+			rslt.SetBool(false);
+			return;
+		}
+		// else fall through to throw error
+	}
+	else
+	{
+		const Variable *const var = vars->Lookup(name, strlen(name));
+		if (wantExists)
+		{
+			rslt.SetBool(var != nullptr);
+			return;
+		}
+
+		if (var != nullptr && (!isParameter || var->GetScope() < 0))
+		{
+			rslt = var->GetValue();
+			if (applyLengthOperator)
+			{
+				ApplyLengthOperator(rslt);
+			}
+			return;
+		}
+		// else fall through to throw error
 	}
 
-	ThrowParseException((parameter) ? "unknown parameter '%s'" : "unknown variable '%s'", name);
+	ThrowParseException((isParameter) ? "unknown parameter '%s'" : "unknown variable '%s'", name);
 }
 
 // Parse a quoted string, given that the current character is double-quote

@@ -52,7 +52,7 @@ private:
 	void ParseArray(size_t& length, function_ref<void(size_t index) THROWS(GCodeException)> processElement) THROWS(GCodeException);
 	time_t ParseDateTime(const char *s) const THROWS(GCodeException);
 
-	void GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, bool parameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException);
+	void GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, ObjectExplorationContext& context, bool isParameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException);
 
 	void ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToBool(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
