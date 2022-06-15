@@ -3726,7 +3726,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-
 #if SUPPORT_NONLINEAR_EXTRUSION
 			case 592: // Configure nonlinear extrusion
 				{

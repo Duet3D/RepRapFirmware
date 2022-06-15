@@ -236,6 +236,55 @@ static inline void DisableEspInterrupt() noexcept
 	detachInterrupt(EspDataReadyPin);
 }
 
+static const char* GetWiFiAuthFriendlyStr(WiFiAuth auth)
+{
+	const char* res = "Unknown";
+
+	switch (auth)
+	{
+	case WiFiAuth::OPEN:
+		res = "Open";
+		break;
+
+	case WiFiAuth::WEP:
+		res = "WEP";
+		break;
+
+	case WiFiAuth::WPA_PSK:
+		res = "WPA-Personal";
+		break;
+
+	case WiFiAuth::WPA2_PSK:
+		res = "WPA2-Personal";
+		break;
+
+	case WiFiAuth::WPA_WPA2_PSK:
+		res = "WPA/WPA2-Personal";
+		break;
+
+	case WiFiAuth::WPA2_ENTERPRISE:
+		res = "WPA2-Enterprise";
+		break;
+
+	case WiFiAuth::WPA3_PSK:
+		res = "WPA3-Personal";
+		break;
+
+	case WiFiAuth::WPA2_WPA3_PSK:
+		res = "WPA2/WPA3-Personal";
+		break;
+
+	case WiFiAuth::WAPI_PSK:
+		res = "WAPI-Personal";
+		break;
+
+	default:
+		break;
+	}
+
+	return res;
+}
+
 /*-----------------------------------------------------------------------------------*/
 // WiFi interface class
 
@@ -1176,7 +1225,6 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 
 			case 2:
 				{
-					// List remembered networks
 					if (longReply == nullptr && !OutputBuffer::Allocate(longReply))
 					{
 						return GCodeResult::notFinished;			// try again later
@@ -1186,12 +1234,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					memset(buffer, 0, sizeof(buffer));
 
 					const bool jsonFormat = gb.Seen('F') && gb.GetUIValue() == 1;
-
 					const int32_t rslt = SendCommand(NetworkCommand::networkGetScanResult, 0, 0, 0, nullptr, 0, buffer, sizeof(buffer));
-
-					static const char* authFriendlyStr[] = {"Open", "WEP", "WPA-Personal", "WPA2-Personal", "WPA/WPA2-Personal", "WPA2-Enterprise", "WPA3-Personal", "WPA2/WPA3-Personal", "WAPI-Personal", "Unknown"};
-
-					// static_assert(sizeof(authFriendlyStr) == static_cast<int>(WiFiAuth::UNKNOWN));
 
 					if (rslt >= 0) {
 						bool found = false;
@@ -1208,8 +1251,8 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 											: "\nssid=%s rssi=%d phymode=%s auth=%s",
 												data[i].ssid,
 												data[i].rssi,
-												data[i].phymode == WiFiPhyMode::N ? "n" : data[i].phymode == WiFiPhyMode::G ? "g" : "b",
-												authFriendlyStr[static_cast<int>(data[i].auth)]);
+												data[i].phymode == EspWiFiPhyMode::N ? "n" : data[i].phymode == EspWiFiPhyMode::G ? "g" : "b",
+												GetWiFiAuthFriendlyStr(data[i].auth));
 							found = true;
 						}
 
@@ -1224,7 +1267,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						return GCodeResult::ok;
 					}
 
-					longReply->printf((jsonFormat) ? "{\"networkScanResults\":[],\"err\":1,\"errText\":\"%.s\"}" : "failed to retrieve network list: %s", TranslateWiFiResponse(rslt));
+					longReply->printf((jsonFormat) ? "{\"networkScanResults\":[],\"err\":1,\"errText\":\"%.s\"}" : "failed to retrieve scan results: %s", TranslateWiFiResponse(rslt));
 				}
 				break;
 
