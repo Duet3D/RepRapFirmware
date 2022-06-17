@@ -616,40 +616,6 @@ void ObjectModel::ReportAsJson(const GCodeBuffer *_ecv_null gb, OutputBuffer *bu
 	}
 }
 
-// Function to report a value or object as JSON
-// This function is recursive, so keep its stack usage low.
-// Most recursive calls are for non-array object values, so handle object values inline to reduce stack usage.
-// This saves about 240 bytes of stack space but costs 272 bytes of flash memory.
-inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
-											const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException)
-{
-	if (context.WantArrayLength() && *filter == 0)
-	{
-		ReportArrayLengthAsJson(buf, context, val);
-	}
-	else if (val.GetType() == TypeCode::ObjectModel_tc)
-	{
-		if (  (*filter != '.' && *filter != 0)		// we should have reached the end of the filter or a '.', error if not
-			|| val.omVal == nullptr					// OM arrays may contain null entries, so we need to handle them here
-		   )
-		{
-			buf->cat("null");
-		}
-		else
-		{
-			if (*filter == '.')
-			{
-				++filter;
-			}
-			val.omVal->ReportAsJson(buf, context, (val.omVal == this) ? classDescriptor : nullptr, val.param, filter);
-		}
-	}
-	else
-	{
-		ReportItemAsJsonFull(buf, context, classDescriptor, val, filter);
-	}
-}
-
 void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept
 {
 	switch (val.GetType())
@@ -689,7 +655,8 @@ void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationCo
 }
 
 // Function to report a value or object as JSON
-// This function is recursive, so keep its stack usage low
+// This function is recursive, so keep its stack usage low.
+// The type of 'val' may not be ObjectModel_tc. That type is handled in function ReportItemAsJson, which is declared 'inline' to reduce stack usage.
 void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
 										const ExpressionValue& val, const char *filter) const THROWS(GCodeException)
 {
@@ -785,36 +752,6 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		}
 		break;
 
-	case TypeCode::Float:
-		ReportFloat(buf, val);
-		break;
-
-	case TypeCode::Uint32:
-		buf->catf("%" PRIu32, val.uVal);
-		break;
-
-	case TypeCode::Uint64:
-		buf->catf("%" PRIu64, ((uint64_t)val.param << 32) | val.uVal);	// convert unsigned integer to string
-		break;
-
-	case TypeCode::Int32:
-		buf->catf("%" PRIi32, val.iVal);
-		break;
-
-	case TypeCode::CString:
-		buf->catf("\"%.s\"", val.sVal);
-		break;
-
-	case TypeCode::HeapString:
-		buf->catf("\"%.s\"", val.shVal.Get().Ptr());
-		break;
-
-#if SUPPORT_CAN_EXPANSION
-	case TypeCode::CanExpansionBoardDetails:
-		ReportExpansionBoardDetail(buf, val);
-		break;
-#endif
-
 	case TypeCode::Bitmap16:
 	case TypeCode::Bitmap32:
 		if (*filter == '[')
@@ -882,95 +819,138 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		ReportBitmap64Long(buf, val);
 		break;
 
-	case TypeCode::Enum32:
-		if (context.ShortFormReport())
+	default:
+		// Only primitive types remain so we should have reached the end of the filter string
+		if (*filter != 0)
 		{
-			buf->catf("%" PRIu32, val.uVal);
+			buf->cat("null");
 		}
 		else
 		{
-			buf->cat("\"unimplemented\"");
-			// TODO append the real name
-		}
-		break;
-
-	case TypeCode::Bool:
-		buf->cat((val.bVal) ? "true" : "false");
-		break;
-
-	case TypeCode::Char:
-		buf->cat('"');
-		buf->EncodeChar(val.cVal);
-		buf->cat('"');
-		break;
-
-	case TypeCode::IPAddress_tc:
-		{
-			const IPAddress ipVal(val.uVal);
-			char sep = '"';
-			for (unsigned int q = 0; q < 4; ++q)
+			switch (val.GetType())
 			{
-				buf->catf("%c%u", sep, ipVal.GetQuad(q));
-				sep = '.';
-			}
-			buf->cat('"');
-		}
-		break;
+			case TypeCode::Float:
+				ReportFloat(buf, val);
+				break;
 
-	case TypeCode::DateTime_tc:
-		ReportDateTime(buf, val);
-		break;
+			case TypeCode::Uint32:
+				buf->catf("%" PRIu32, val.uVal);
+				break;
 
-	case TypeCode::Duration:
-		{
-			unsigned int hours = val.uVal/3600,
-				minutes = (val.uVal / 60) % 60,
-				seconds = val.uVal % 60;
-			buf->catf("%u:%02u:%02u", hours, minutes, seconds);
-		}
-		break;
+			case TypeCode::Uint64:
+				buf->catf("%" PRIu64, ((uint64_t)val.param << 32) | val.uVal);	// convert unsigned integer to string
+				break;
 
-	case TypeCode::DriverId_tc:
+			case TypeCode::Int32:
+				buf->catf("%" PRIi32, val.iVal);
+				break;
+
+			case TypeCode::CString:
+				buf->catf("\"%.s\"", val.sVal);
+				break;
+
+			case TypeCode::HeapString:
+				buf->catf("\"%.s\"", val.shVal.Get().Ptr());
+				break;
+
 #if SUPPORT_CAN_EXPANSION
-		buf->catf("\"%u.%u\"", (unsigned int)val.param, (unsigned int)val.uVal);
+			case TypeCode::CanExpansionBoardDetails:
+				ReportExpansionBoardDetail(buf, val);
+				break;
+#endif
+
+			case TypeCode::Enum32:
+				if (context.ShortFormReport())
+				{
+					buf->catf("%" PRIu32, val.uVal);
+				}
+				else
+				{
+					buf->cat("\"unimplemented\"");
+					// TODO append the real name
+				}
+				break;
+
+			case TypeCode::Bool:
+				buf->cat((val.bVal) ? "true" : "false");
+				break;
+
+			case TypeCode::Char:
+				buf->cat('"');
+				buf->EncodeChar(val.cVal);
+				buf->cat('"');
+				break;
+
+			case TypeCode::IPAddress_tc:
+				{
+					const IPAddress ipVal(val.uVal);
+					char sep = '"';
+					for (unsigned int q = 0; q < 4; ++q)
+					{
+						buf->catf("%c%u", sep, ipVal.GetQuad(q));
+						sep = '.';
+					}
+					buf->cat('"');
+				}
+				break;
+
+			case TypeCode::DateTime_tc:
+				ReportDateTime(buf, val);
+				break;
+
+			case TypeCode::Duration:
+				{
+					unsigned int hours = val.uVal/3600,
+						minutes = (val.uVal / 60) % 60,
+						seconds = val.uVal % 60;
+					buf->catf("%u:%02u:%02u", hours, minutes, seconds);
+				}
+				break;
+
+			case TypeCode::DriverId_tc:
+#if SUPPORT_CAN_EXPANSION
+				buf->catf("\"%u.%u\"", (unsigned int)val.param, (unsigned int)val.uVal);
 #else
-		buf->catf("\"%u\"", (unsigned int)val.uVal);
+				buf->catf("\"%u\"", (unsigned int)val.uVal);
 #endif
-		break;
+				break;
 
-	case TypeCode::MacAddress_tc:
-		buf->catf("\"%02x:%02x:%02x:%02x:%02x:%02x\"",
-					(unsigned int)(val.uVal & 0xFF), (unsigned int)((val.uVal >> 8) & 0xFF), (unsigned int)((val.uVal >> 16) & 0xFF), (unsigned int)((val.uVal >> 24) & 0xFF),
-					(unsigned int)(val.param & 0xFF), (unsigned int)((val.param >> 8) & 0xFF));
-		break;
+			case TypeCode::MacAddress_tc:
+				buf->catf("\"%02x:%02x:%02x:%02x:%02x:%02x\"",
+							(unsigned int)(val.uVal & 0xFF), (unsigned int)((val.uVal >> 8) & 0xFF), (unsigned int)((val.uVal >> 16) & 0xFF), (unsigned int)((val.uVal >> 24) & 0xFF),
+							(unsigned int)(val.param & 0xFF), (unsigned int)((val.param >> 8) & 0xFF));
+				break;
 
-	case TypeCode::Special:
+			case TypeCode::Special:
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
-		switch ((ExpressionValue::SpecialType)val.param)
-		{
-		case ExpressionValue::SpecialType::sysDir:
-			buf->catf("\"%.s\"", reprap.GetPlatform().GetSysDir().Ptr());
-			break;
-		}
+				switch ((ExpressionValue::SpecialType)val.param)
+				{
+				case ExpressionValue::SpecialType::sysDir:
+					buf->catf("\"%.s\"", reprap.GetPlatform().GetSysDir().Ptr());
+					break;
+				}
 #endif
-		break;
+				break;
 
-	case TypeCode::None:
-		buf->cat("null");
-		break;
+			case TypeCode::None:
+				buf->cat("null");
+				break;
 
-	case TypeCode::Port:
-		ReportPinNameAsJson(buf, val);
-		break;
+			case TypeCode::Port:
+				ReportPinNameAsJson(buf, val);
+				break;
 
-	case TypeCode::UniqueId_tc:
-		buf->cat('"');
-		val.uniqueIdVal->AppendCharsToBuffer(buf);
-		buf->cat('"');
-		break;
+			case TypeCode::UniqueId_tc:
+				buf->cat('"');
+				val.uniqueIdVal->AppendCharsToBuffer(buf);
+				buf->cat('"');
+				break;
 
-	case TypeCode::ObjectModel_tc:
-		break;											// we already handled this case in the inline part
+			case TypeCode::ObjectModel_tc:					// we already handled this case in the inline part
+			default:										// to keep gcc happy
+				break;
+			}
+		}
 	}
 }
 
@@ -1109,7 +1089,7 @@ bool ObjectModelTableEntry::Matches(const char* filterString, const ObjectExplor
 }
 
 // Add the value of this element to the buffer, returning true if it matched and we did
-bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *self, const char* filter, bool first) const noexcept
+bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *self, const char* filter, bool first) const THROWS(GCodeException)
 {
 	const char * nextElement = ObjectModel::GetNextElement(filter);
 	const ExpressionValue val = func(self, context);

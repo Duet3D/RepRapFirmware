@@ -19,6 +19,7 @@
 #include <General/Bitmap.h>
 #include <RTOSIface/RTOSIface.h>
 #include <Networking/NetworkDefs.h>
+#include <Platform/OutputMemory.h>
 
 // Type codes to indicate what type of expression we have and how it is represented.
 // The "Special" type is for items that we have to evaluate when we are ready to write them out, in particular strings whose storage might disappear.
@@ -349,10 +350,11 @@ protected:
 
 	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
 
-	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
-															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 private:
 	// These functions have been separated from ReportItemAsJson to avoid high stack usage in the recursive functions, therefore they must not be inlined
+	// Report on a single item
+	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
+															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 	__attribute__ ((noinline)) void ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept;
 	__attribute__ ((noinline)) static void ReportDateTime(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 	__attribute__ ((noinline)) static void ReportFloat(OutputBuffer *buf, const ExpressionValue& val) noexcept;
@@ -366,6 +368,40 @@ private:
 #endif
 
 };
+
+// Function to report a value or object as JSON
+// This function is recursive, so keep its stack usage low.
+// Most recursive calls are for non-array object values, so handle object values inline to reduce stack usage.
+// This saves about 240 bytes of stack space but costs 272 bytes of flash memory.
+inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+											const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException)
+{
+	if (context.WantArrayLength() && *filter == 0)
+	{
+		ReportArrayLengthAsJson(buf, context, val);
+	}
+	else if (val.GetType() == TypeCode::ObjectModel_tc)
+	{
+		if (  (*filter != '.' && *filter != 0)		// we should have reached the end of the filter or a '.', error if not
+			|| val.omVal == nullptr					// OM arrays may contain null entries, so we need to handle them here
+		   )
+		{
+			buf->cat("null");
+		}
+		else
+		{
+			if (*filter == '.')
+			{
+				++filter;
+			}
+			val.omVal->ReportAsJson(buf, context, (val.omVal == this) ? classDescriptor : nullptr, val.param, filter);
+		}
+	}
+	else
+	{
+		ReportItemAsJsonFull(buf, context, classDescriptor, val, filter);
+	}
+}
 
 // Function used for compile-time check for the correct number of entries in an object model table
 static inline constexpr size_t ArraySum(const uint8_t *_ecv_array arr, size_t numEntries) noexcept
@@ -397,7 +433,7 @@ public:
 	bool IsObsolete() const noexcept { return ((uint8_t)flags & (uint8_t)ObjectModelEntryFlags::obsolete) != 0; }
 
 	// See whether we should add the value of this element to the buffer, returning true if it matched the filter and we did add it
-	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *_ecv_from self, const char *_ecv_array filter, bool first) const noexcept;
+	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *_ecv_from self, const char *_ecv_array filter, bool first) const THROWS(GCodeException);
 
 	// Return the name of this field
 	const char *_ecv_array  GetName() const noexcept { return name; }
