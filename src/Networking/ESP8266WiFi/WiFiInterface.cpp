@@ -12,6 +12,7 @@
 
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
+#include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Networking/HttpResponder.h>
 #include <Networking/FtpResponder.h>
@@ -1102,6 +1103,73 @@ void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress 
 	gateway = p_gateway;
 }
 
+bool WiFiInterface::SendCredential(const StringRef& reply, size_t credIndex, const char *buffer, size_t bufferSize, bool last = false)
+{
+	const int32_t rslt = SendCommand(NetworkCommand::networkSetEnterpriseCredential, credIndex, last, 0, buffer,
+			bufferSize, nullptr, 0);
+
+	if (rslt == ResponseEmpty)
+	{
+		return true;
+	}
+
+	reply.printf("Failed to set SSID credential: %s\n", TranslateWiFiResponse(rslt));
+	return false;
+}
+
+bool WiFiInterface::SendTextCredential(GCodeBuffer &gb, const StringRef& reply, size_t credIndex)
+{
+	String<IdentityLength> cred;
+	gb.GetQuotedString(cred.GetRef());
+
+	// Passed value to the size argument does not include the null terminator, since on the ESP8266
+	// these are stored as blobs together with the length. Furthermore, these are also consumed as blobs
+	// with the length specified to the relevant ESP-IDF APIs.
+	return SendCredential(reply, credIndex, cred.c_str(), cred.strlen());
+}
+
+bool WiFiInterface::SendFileCredential(GCodeBuffer &gb, const StringRef& reply, size_t credIndex, size_t maxSize)
+{
+	const char *err = "Failed to set SSID credential:";
+
+	static char buffer[MaxCredentialChunkSize];
+
+	String<MaxFilenameLength> fileName;
+	gb.GetQuotedString(fileName.GetRef());
+
+	FileStore *const cert = platform.OpenSysFile(fileName.c_str(), OpenMode::read);
+
+	if (cert)
+	{
+		if (cert->Length() > maxSize)
+		{
+			reply.printf("%s file '%s' exceeds %u bytes size limit", err, fileName.c_str(), maxSize);
+			return false;
+		}
+
+		// If sz < MaxCredentialChunkSize, it means that we have reached the end.
+		// The check beforehand if file length > MaxCertificateSize ensures
+		// that we don't exceed the number of chunks.
+		for (int sz = MaxCredentialChunkSize, chunk = 0; sz == MaxCredentialChunkSize; chunk++)
+		{
+			memset(buffer, 0, sizeof(buffer));
+			sz = cert->Read(buffer, sizeof(buffer));
+
+			if (!SendCredential(reply, credIndex + chunk, buffer, sz))
+			{
+				return false;
+			}
+		}
+	}
+	else
+	{
+		reply.printf("%s file '%s' not found", err, fileName.c_str());
+		return false;
+	}
+
+	return true;
+}
+
 GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply) THROWS(GCodeException)
 {
 	switch (mcode)
@@ -1119,17 +1187,36 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					gb.GetQuotedString(ssid.GetRef());
 					SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
 
-					// Get the password
-					gb.MustSee('P');
+					// Verify that the EAP protocol indicator has the same offset as the null terminator for the password
+					// for networks using pre-shared keys.
+					static_assert(offsetof(WirelessConfigurationData, eap.protocol) ==
+								  offsetof(WirelessConfigurationData, password[sizeof(config.password) - sizeof(config.eap.protocol)]));
+
+					if (gb.Seen('X'))
 					{
-						String<ARRAY_SIZE(config.password)> password;
-						gb.GetQuotedString(password.GetRef());
-						if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
+						switch(gb.GetUIValue())
 						{
-							reply.copy("WiFi password must be at least 8 characters");
-							return GCodeResult::error;
+							case 1:
+								config.eap.protocol = EAPProtocol::EAP_TLS;
+								break;
+
+							case 2:
+								config.eap.protocol = EAPProtocol::EAP_PEAP_MSCHAPV2;
+								break;
+
+							case 3:
+								config.eap.protocol = EAPProtocol::EAP_TTLS_MSCHAPV2;
+								break;
+
+							default:
+								config.eap.protocol = EAPProtocol::UNSUPPORTED;
+								break;
 						}
-						SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
+					}
+					else
+					{
+						// Do nothing, WirelessConfigurationData buffer was cleared, so the value should
+						// be equivalent to EAPProtocol::NONE.
 					}
 
 					if (gb.Seen('I'))
@@ -1151,9 +1238,86 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						config.netmask = temp.GetV4LittleEndian();
 					}
 
-					const int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
+					int32_t rslt = ResponseUnknownError;
+
+					if (config.eap.protocol != EAPProtocol::NONE)
+					{
+						rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
+					}
+					else
+					{
+						// Network uses pre-shared key, get that key
+						gb.MustSee('P');
+						{
+							String<ARRAY_SIZE(config.password)> password;
+							gb.GetQuotedString(password.GetRef());
+							if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
+							{
+								reply.copy("WiFi password must be at least 8 characters");
+								return GCodeResult::error;
+							}
+							SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
+						}
+
+						// Enforce null terminator == EAPProtocol::NONE
+						config.eap.protocol = EAPProtocol::NONE;
+
+						rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
+					}
+
 					if (rslt == ResponseEmpty)
 					{
+						if (config.eap.protocol != EAPProtocol::NONE)
+						{
+							#define SEND_CHECK(x)	{if(!(x)) {return GCodeResult::error;}}
+
+							if (gb.Seen('C'))
+							{
+								SEND_CHECK(SendFileCredential(gb, reply, CredentialIndex(caCert), MaxCertificateSize));
+							}
+
+							if (gb.Seen('A'))
+							{
+								SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(anonymousId)));
+							}
+
+							if (config.eap.protocol == EAPProtocol::EAP_TLS)
+							{
+								gb.MustSee('U');
+								{
+									SEND_CHECK(SendFileCredential(gb, reply, CredentialIndex(tls.userCert), MaxCertificateSize));
+								}
+
+								gb.MustSee('P');
+								{
+									SEND_CHECK(SendFileCredential(gb, reply, CredentialIndex(tls.privateKey), MaxPrivateKeySize));
+								}
+
+								if (gb.Seen('Q'))
+								{
+									SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(tls.privateKeyPswd)));
+								}
+							}
+							else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 ||
+										config.eap.protocol == EAPProtocol::EAP_TTLS_MSCHAPV2)
+							{
+								gb.MustSee('U');
+								{
+									SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(peapttls.identity)));
+								}
+
+								gb.MustSee('P');
+								{
+									SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(peapttls.password)));
+								}
+							}
+							else { }
+
+							SEND_CHECK(SendCredential(reply, CredentialIndex(peapttls.password), nullptr, 0, true));
+
+							#undef SEND_CHECK
+						}
+
 						return GCodeResult::ok;
 					}
 					else
