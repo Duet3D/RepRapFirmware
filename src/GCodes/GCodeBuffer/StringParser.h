@@ -62,6 +62,7 @@ public:
 	void GetUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of drivers after a key letter
 
+	void ResetIndentation() noexcept;										// Reset the indentation level to the last one
 	void SetFinished() noexcept;											// Set the G Code finished
 	void SetCommsProperties(uint32_t arg) noexcept { checksumRequired = (arg & 1); crcRequired = (arg & 4); }
 

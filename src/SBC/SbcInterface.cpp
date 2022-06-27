@@ -411,7 +411,7 @@ void SbcInterface::ExchangeData() noexcept
 						if (error)
 						{
 							gb->CurrentFileMachineState().CloseFile();
-							gb->PopState();
+							gb->PopState(false);
 							gb->Init();
 						}
 						else

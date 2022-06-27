@@ -1055,6 +1055,11 @@ void StringParser::PutCommand(const char *str) noexcept
 	} while (c != 0);
 }
 
+void StringParser::ResetIndentation() noexcept
+{
+	indentToSkipTo = (gb.GetBlockIndent() > 0) ? gb.GetBlockIndent() : NoIndentSkip;
+}
+
 void StringParser::SetFinished() noexcept
 {
 	if (commandEnd < gcodeLineEnd)

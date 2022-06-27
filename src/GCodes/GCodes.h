@@ -405,7 +405,7 @@ private:
 	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isPrintingMove) THROWS(GCodeException);	// Set up the extrusion of a move
 
 	bool Push(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Push feedrate etc on the stack
-	void Pop(GCodeBuffer& gb) noexcept;																// Pop feedrate etc
+	void Pop(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Pop feedrate etc
 	void DisableDrives() noexcept;																	// Turn the motors off
 	bool SendConfigToLine();																		// Deal with M503
 
