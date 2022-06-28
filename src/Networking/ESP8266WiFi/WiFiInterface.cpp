@@ -1231,7 +1231,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 											: "\nssid=%s rssi=%d phymode=%s auth=%s",
 												data[i].ssid,
 												data[i].rssi,
-												data[i].phymode == WiFiPhyMode::N ? "n" : data[i].phymode == WiFiPhyMode::G ? "g" : "b",
+												data[i].phymode == EspWiFiPhyMode::N ? "n" : data[i].phymode == EspWiFiPhyMode::G ? "g" : "b",
 												GetWiFiAuthFriendlyStr(data[i].auth));
 							found = true;
 						}
