@@ -910,7 +910,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 			while (fileGCode->IsDoingFileMacro())						// must call this after GetFilePosition because this changes IsDoingFileMacro
 			{
 				pausedInMacro = true;
-				fileGCode->PopState();
+				fileGCode->PopState(false);
 			}
 #if SUPPORT_LASER || SUPPORT_IOBITS
 			pauseRestorePoint.laserPwmOrIoBits = moveState.laserPwmOrIoBits;
