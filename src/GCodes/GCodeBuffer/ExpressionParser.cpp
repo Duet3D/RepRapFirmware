@@ -59,6 +59,78 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 	{
 		ThrowParseException("expected '%c'", (uint32_t)closingBracket);
 	}
+
+	// Check for trailing index expressions
+	for (;;)
+	{
+		SkipWhiteSpace();
+		if (CurrentCharacter() != '[')
+		{
+			break;
+		}
+		const int indexCol = GetColumn();
+		AdvancePointer();
+		const uint32_t indexValue = ParseUnsigned();
+		if (CurrentCharacter() != ']')
+		{
+			ThrowParseException("expected ']'");
+		}
+		AdvancePointer();
+		switch (rslt.GetType())
+		{
+		case TypeCode::ObjectModelArray:
+			{
+				const ObjectModelArrayTableEntry *const entry = rslt.omVal->GetObjectModelArrayEntry(rslt.param & 0xFF);
+				if (entry == nullptr)
+				{
+					THROW_INTERNAL_ERROR;
+				}
+				ObjectExplorationContext context;
+				context.AddIndex(rslt.param >> 16);
+				ReadLocker lock(entry->lockPointer);
+				const size_t numElements = entry->GetNumElements(rslt.omVal, context);
+				if (indexValue < numElements)
+				{
+					context.AddIndex(indexValue);
+					rslt = entry->GetElement(rslt.omVal, context);
+				}
+				else if (evaluate)
+				{
+					throw GCodeException(gb.GetLineNumber(), indexCol, "array index out of range");
+				}
+				else
+				{
+					rslt.Set(nullptr);
+				}
+			}
+			break;
+
+		case TypeCode::HeapArray:
+			{
+				if (indexValue < rslt.ahVal.GetNumElements())
+				{
+					rslt.ahVal.GetElement(indexValue, rslt);
+				}
+				else if (evaluate)
+				{
+					throw GCodeException(gb.GetLineNumber(), indexCol, "array index out of range");
+				}
+				else
+				{
+					rslt.Set(nullptr);
+				}
+			}
+			break;
+
+		default:
+			if (evaluate)
+			{
+				throw GCodeException(gb.GetLineNumber(), indexCol, "left operand of [ ] is not an array");
+			}
+			rslt.Set(nullptr);
+			break;
+		}
+	}
 }
 
 // Evaluate an expression. Do not call this one recursively!
@@ -666,6 +738,7 @@ void ExpressionParser::ParseGeneralArray(ExpressionValue& firstElementAndResult,
 	{
 		ThrowParseException("expected '}'");
 	}
+	AdvancePointer();
 
 	// Copy the temporary array to the heap
 	ArrayHandle ah;
@@ -957,7 +1030,8 @@ void ExpressionParser::ParseNumber(ExpressionValue& rslt) noexcept
 // *** This function is recursive, so keep its stack usage low!
 void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool evaluate, bool applyLengthOperator, bool applyExists) THROWS(GCodeException)
 {
-	if (!isalpha(CurrentCharacter()))
+	char c = CurrentCharacter();
+	if (!isalpha(c))
 	{
 		ThrowParseException("expected an identifier");
 	}
@@ -967,8 +1041,8 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 	// Loop parsing identifiers and index expressions
 	// When we come across an index expression, evaluate it, add it to the context, and place a marker in the identifier string.
-	char c;
-	while (isalpha((c = CurrentCharacter())) || isdigit(c) || c == '_' || c == '.' || c == '[')
+	bool isIdentifierCharacter = true;
+	do
 	{
 		AdvancePointer();
 		if (c == '[')
@@ -992,11 +1066,30 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 			context.ProvideIndex(index.iVal);
 			c = '^';												// add the marker
 		}
+
 		if (id.cat(c))
 		{
-			ThrowParseException("variable name too long");;
+			ThrowParseException("variable name too long");
 		}
-	}
+
+		// Get the next character, skipping white space that is not inside an identifier
+		bool hadIdentifierSpace = false;
+		for (;;)
+		{
+			c = CurrentCharacter();
+			if (c != ' ' && c != '\t')
+			{
+				break;
+			}
+			hadIdentifierSpace = isIdentifierCharacter;
+			AdvancePointer();
+		}
+		isIdentifierCharacter = (isalpha(c) || isdigit(c) || c == '_');
+		if (isIdentifierCharacter && hadIdentifierSpace)
+		{
+			break;													// don't allow spaces inside identifiers
+		}
+	} while (isIdentifierCharacter || c == '.' || c == '[');
 
 	// Check for the names of constants
 	NamedConstant whichConstant(id.c_str());
