@@ -18,13 +18,6 @@ struct ArrayStorageSpace
 	ExpressionValue elements[];						// the array elements
 };
 
-// Build a 1-element array
-ArrayHandle::ArrayHandle(ExpressionValue &arg) noexcept
-{
-	Allocate(1);
-	AssignElement(0, arg);
-}
-
 // Allocate space for an array
 void ArrayHandle::Allocate(size_t numElements) THROWS(GCodeException)
 {

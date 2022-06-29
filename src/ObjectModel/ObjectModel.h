@@ -186,6 +186,7 @@ struct ExpressionValue
 	}
 
 	void Set(StringHandle sh) noexcept { Release(); type = (uint32_t)TypeCode::HeapString; shVal = sh; }
+	void Set(ArrayHandle ah) noexcept { Release(); type = (uint32_t)TypeCode::HeapArray; ahVal = ah; }
 	void Set(std::nullptr_t dummy) noexcept { Release();  type = (uint32_t)TypeCode::None; }
 
 	void SetUnsigned(uint32_t u) noexcept { Release(); type = (uint32_t)TypeCode::Uint32; uVal = u; }

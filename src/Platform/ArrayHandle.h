@@ -20,7 +20,6 @@ class ArrayHandle
 {
 public:
 	ArrayHandle() noexcept { slotPtr = nullptr; }										// build an empty array
-	ArrayHandle(ExpressionValue& arg) noexcept;											// build a 1-element array
 
 	void Allocate(size_t numElements) THROWS(GCodeException);
 	void AssignElement(size_t index, ExpressionValue& val) THROWS(GCodeException);

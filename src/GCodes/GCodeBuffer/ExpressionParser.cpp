@@ -47,11 +47,18 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 {
 	CheckStack(StackUsage::ParseInternal);
 	ParseInternal(rslt, evaluate, 0);
-	if (CurrentCharacter() != closingBracket)
+	if (CurrentCharacter() == closingBracket)
+	{
+		AdvancePointer();
+	}
+	else if (CurrentCharacter() == ',' && closingBracket == '}')
+	{
+		ParseGeneralArray(rslt, evaluate);
+	}
+	else
 	{
 		ThrowParseException("expected '%c'", (uint32_t)closingBracket);
 	}
-	AdvancePointer();
 }
 
 // Evaluate an expression. Do not call this one recursively!
@@ -634,6 +641,40 @@ void ExpressionParser::ParseUnsignedArray(uint32_t arr[], size_t& length) THROWS
 void ExpressionParser::ParseDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException)
 {
 	ParseArray(length, [this, &arr](size_t index) { arr[index] = ParseDriverId(); });
+}
+
+// Parse the rest of an array. We have already parsed the first element and found but not skipped a comma. The array should be terminated with '}'.
+void ExpressionParser::ParseGeneralArray(ExpressionValue& firstElementAndResult, bool evaluate) THROWS(GCodeException)
+{
+	// Parse the array elements into a temporary array
+	ExpressionValue elements[10];
+	elements[0] = std::move(firstElementAndResult);
+	size_t index = 1;
+	do
+	{
+		AdvancePointer();					// skip the comma
+		SkipWhiteSpace();					// skip any following white space
+		if (CurrentCharacter() == '}')
+		{
+			break;							// we allow a trailing comma and it can be used to distinguish a 1-element array from a bracketed value
+		}
+		ParseInternal(elements[index], evaluate, 0);
+		++index;
+	} while (index < ARRAY_SIZE(elements) && CurrentCharacter() == ',');
+
+	if (CurrentCharacter() != '}')
+	{
+		ThrowParseException("expected '}'");
+	}
+
+	// Copy the temporary array to the heap
+	ArrayHandle ah;
+	ah.Allocate(index);
+	for (size_t i = 0; i < index; ++i)
+	{
+		ah.AssignElement(i, elements[i]);
+	}
+	firstElementAndResult.Set(ah);
 }
 
 void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException)
