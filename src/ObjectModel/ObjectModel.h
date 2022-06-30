@@ -316,8 +316,8 @@ public:
 	ObjectModel() noexcept;
 	virtual ~ObjectModel() { }
 
-	// Get the requested entry in the array table
-	virtual const ObjectModelArrayTableEntry *GetObjectModelArrayEntry(unsigned int index) const noexcept { return nullptr; }
+	// Forwarding function so that we can make GetObjectModelArrayEntry() protected
+	const ObjectModelArrayTableEntry *FindObjectModelArrayEntry(unsigned int index) const noexcept { return GetObjectModelArrayEntry(index); }
 
 	// Construct a JSON representation of those parts of the object model requested by the user. This version is called only on the root of the tree.
 	void ReportAsJson(const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, const char *_ecv_array filter, const char *_ecv_array reportFlags, bool wantArrayLength) const THROWS(GCodeException);
@@ -350,6 +350,9 @@ protected:
 	const ObjectModelTableEntry *FindObjectModelTableEntry(const ObjectModelClassDescriptor *classDescriptor, uint8_t tableNumber, const char *_ecv_array idString) const noexcept;
 
 	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
+
+	// Get the requested entry in the array table
+	virtual const ObjectModelArrayTableEntry *GetObjectModelArrayEntry(unsigned int index) const noexcept { return nullptr; }
 
 private:
 	// These functions have been separated from ReportItemAsJson to avoid high stack usage in the recursive functions, therefore they must not be inlined

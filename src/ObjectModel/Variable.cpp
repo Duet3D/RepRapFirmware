@@ -29,7 +29,7 @@ void Variable::Assign(ExpressionValue& ev) THROWS(GCodeException)
 		{
 			// Copy the object model array value to the heap
 			ArrayHandle ah;
-			const ObjectModelArrayTableEntry *const entry = ev.omVal->GetObjectModelArrayEntry(ev.param);
+			const ObjectModelArrayTableEntry *const entry = ev.omVal->FindObjectModelArrayEntry(ev.param);
 			ReadLocker lock(entry->lockPointer);
 			ObjectExplorationContext context;
 			const size_t numElements = entry->GetNumElements(ev.omVal, context);

@@ -80,7 +80,7 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 		{
 		case TypeCode::ObjectModelArray:
 			{
-				const ObjectModelArrayTableEntry *const entry = rslt.omVal->GetObjectModelArrayEntry(rslt.param & 0xFF);
+				const ObjectModelArrayTableEntry *const entry = rslt.omVal->FindObjectModelArrayEntry(rslt.param & 0xFF);
 				if (entry == nullptr)
 				{
 					THROW_INTERNAL_ERROR;
@@ -965,7 +965,7 @@ void ExpressionParser::ApplyLengthOperator(ExpressionValue& val) const THROWS(GC
 
 	case TypeCode::ObjectModelArray:
 		{
-			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param & 0xFF);
+			const ObjectModelArrayTableEntry *const entry = val.omVal->FindObjectModelArrayEntry(val.param & 0xFF);
 			if (entry == nullptr)
 			{
 				THROW_INTERNAL_ERROR;

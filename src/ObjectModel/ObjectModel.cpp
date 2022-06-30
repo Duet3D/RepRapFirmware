@@ -126,7 +126,7 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 	case TypeCode::ObjectModelArray:
 		str.cat('{');
 		{
-			const ObjectModelArrayTableEntry *entry = omVal->GetObjectModelArrayEntry(param & 0xFF);
+			const ObjectModelArrayTableEntry *entry = omVal->FindObjectModelArrayEntry(param & 0xFF);
 			if (entry == nullptr)
 			{
 				str.cat("error");
