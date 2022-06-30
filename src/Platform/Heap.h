@@ -25,7 +25,7 @@ namespace Heap
 
 	struct IndexSlot
 	{
-		StorageSpace *storage;
+		StorageSpace *null storage;
 		std::atomic<unsigned int> refCount;
 
 		IndexSlot() noexcept : storage(nullptr), refCount(0) { }
