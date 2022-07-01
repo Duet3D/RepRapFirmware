@@ -32,7 +32,7 @@ private:
 	TemperatureError TryInitRtd() const noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
 
-	uint16_t rref;				// reference resistor in ohms
+	uint32_t rrefTimes100;				// reference resistor in units of 0.01 ohms
 	uint8_t cr0;
 };
 
