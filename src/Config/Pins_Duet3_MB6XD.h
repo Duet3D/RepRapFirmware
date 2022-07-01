@@ -294,7 +294,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io1.in,serial1.rx"		},	// PD15 IO1_IN and Serial1 RX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io1.out,serial1.tx"	},	// PD16 IO1_OUT and Serial1 TX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PD17 driver 5 enable
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PD18 External SD card detect
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"ate.sd1.cd"			},	// PD18 External SD card detect
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PD19 SPI CS0 (external SD card)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs3"				},	// PD20 SPI CS3
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io5.out,!io5.out.iso"	},	// PD21 IO5_OUT (not PWM capable on TIOA11 because TIOB11 is used to generate step pulses)

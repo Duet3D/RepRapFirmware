@@ -178,7 +178,15 @@ void W5500Socket::Poll() noexcept
 	{
 		MutexLocker lock(interface->interfaceMutex);
 
-		switch(getSn_SR(socketNum))
+		uint8_t socketStatus = getSn_SR(socketNum);
+		if (socketStatus == SOCK_CLOSE_WAIT && state == SocketState::listening)
+		{
+			// We get here when only very little data had been transferred before the connection was closed again.
+			// In this case make sure a network responder has a chance to deal with the pending data
+			socketStatus = SOCK_ESTABLISHED;
+		}
+
+		switch(socketStatus)
 		{
 		case SOCK_INIT:					// Socket has been initialised but is not listening yet
 			if (localPort != 0)			// localPort for the FTP data socket is 0 until we have decided what port number to use

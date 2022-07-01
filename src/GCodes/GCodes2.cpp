@@ -1912,7 +1912,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 121:
-				Pop(gb);
+				Pop(gb, true);
 				break;
 
 			case 122:
