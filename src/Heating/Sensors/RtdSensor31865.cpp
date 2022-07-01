@@ -40,11 +40,11 @@ const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in
 const uint8_t DefaultCr0 = 0b11000011;
 const uint8_t Cr0ReadMask = 0b11011101;		// bits 1 and 5 auto clear, so ignore the value read
 
-const uint16_t DefaultRef = 400;
+const uint32_t DefaultRef = 400;
 
 RtdSensor31865::RtdSensor31865(unsigned int sensorNum) noexcept
 	: SpiTemperatureSensor(sensorNum, "PT100 (MAX31865)", MAX31865_SpiMode, MAX31865_Frequency),
-	  rref(DefaultRef), cr0(DefaultCr0)
+	  rrefTimes100(DefaultRef * 100), cr0(DefaultCr0)
 {
 }
 
@@ -85,7 +85,7 @@ GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply, b
 	if (gb.Seen('R'))
 	{
 		changed = true;
-		rref = (uint16_t)gb.GetUIValue();
+		rrefTimes100 = lrintf(gb.GetFValue() * 100);
 	}
 
 	return FinishConfiguring(changed, reply);
@@ -133,7 +133,7 @@ GCodeResult RtdSensor31865::Configure(const CanMessageGenericParser& parser, con
 	if (parser.GetFloatParam('R', paramR))
 	{
 		seen = true;
-		rref = (uint16_t)paramR;
+		rrefTimes100 = lrintf(paramR * 100);
 	}
 
 	return FinishConfiguring(seen, reply);
@@ -172,7 +172,7 @@ GCodeResult RtdSensor31865::FinishConfiguring(bool changed, const StringRef& rep
 	else
 	{
 		CopyBasicDetails(reply);
-		reply.catf(", %s wires, reject %dHz, reference resistor %u ohms", (cr0 & 0x10) ? "3" : "2/4", (cr0 & 0x01) ? 50 : 60, (unsigned int)rref);
+		reply.catf(", %s wires, reject %dHz, reference resistor %.2f ohms", (cr0 & 0x10) ? "3" : "2/4", (cr0 & 0x01) ? 50 : 60, (double)((float)rrefTimes100 * 0.01));
 	}
 	return GCodeResult::ok;
 }
@@ -233,7 +233,7 @@ void RtdSensor31865::Poll() noexcept
 		}
 		else
 		{
-			const uint16_t ohmsx100 = (uint16_t)((((rawVal >> 1) & 0x7FFF) * rref * 100) >> 15);
+			const uint16_t ohmsx100 = (uint16_t)((((rawVal >> 1) & 0x7FFF) * rrefTimes100) >> 15);
 			float t;
 			sts = GetPT100Temperature(t, ohmsx100);
 			SetResult(t, sts);
