@@ -1094,7 +1094,8 @@ void Platform::Spin() noexcept
 			{
 				StandardDriverStatus stat =
 #if defined(DUET3_MB6XD)
-											StandardDriverStatus((HasDriverError(nextDriveToPoll)) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0);
+											// Don't raise driver error events while we are being tested by ATE
+											StandardDriverStatus((!CanInterface::InTestMode() && HasDriverError(nextDriveToPoll)) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0);
 #else
 											SmartDrivers::GetStatus(nextDriveToPoll, true, true);
 #endif

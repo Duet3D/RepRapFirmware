@@ -694,7 +694,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 					CanInterface::SendResponseNoFree(buf);
 
 					delay(25);							// allow time for the response to be sent before we re-initialise CAN
-					CanInterface::SwitchToExpansionMode(newAddress);
+					CanInterface::SwitchToExpansionMode(newAddress, true);
 				}
 				break;
 #endif

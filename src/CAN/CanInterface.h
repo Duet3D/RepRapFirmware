@@ -34,7 +34,8 @@ namespace CanInterface
 
 #if SUPPORT_REMOTE_COMMANDS
 	bool InExpansionMode() noexcept;
-	void SwitchToExpansionMode(CanAddress addr) noexcept;
+	bool InTestMode() noexcept;
+	void SwitchToExpansionMode(CanAddress addr, bool useTestMode) noexcept;
 
 	void SendAnnounce(CanMessageBuffer *buf) noexcept;
 	void RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *format, va_list vargs) noexcept;
