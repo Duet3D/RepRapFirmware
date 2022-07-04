@@ -2781,10 +2781,8 @@ void Platform::UpdateDriverTimings() noexcept
 	// Convert the step pulse width to clocks of the step pulse gate timer. First define some constants.
 	constexpr uint32_t StepGateTcClockFrequency = (SystemCoreClockFreq/2)/8;
 	constexpr float StepGateClocksPerMicrosecond = (float)StepGateTcClockFrequency/1.0e6;
-
-	const float fclocks = ceilf(worstTimings[0] * StepGateClocksPerMicrosecond);
-	const uint32_t gateClocks = (uint32_t)fclocks;
-	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC = gateClocks;
+	const float fclocks = min<float>(ceilf(worstTimings[0] * StepGateClocksPerMicrosecond), 65535.0);		// the TC is only 16 bits wide
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC = (uint32_t)fclocks;
 
 	// Convert the quantised step pulse width back to microseconds
 	const float actualStepPulseMicroseconds = fclocks/StepGateClocksPerMicrosecond;
