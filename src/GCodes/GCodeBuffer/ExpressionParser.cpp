@@ -113,8 +113,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 		{
 		case TypeCode::Uint32:
 			// Convert enumeration to integer
-			val.iVal = (int32_t)val.uVal;
-			val.SetType(TypeCode::Int32);
+			val.SetInt((int32_t)val.uVal);
 			break;
 
 		case TypeCode::Int32:
@@ -122,8 +121,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 			break;
 
 		case TypeCode::DateTime_tc:					// unary + converts a DateTime to a seconds count
-			val.iVal = (uint32_t)val.Get56BitValue();
-			val.SetType(TypeCode::Int32);
+			val.SetInt((uint32_t)val.Get56BitValue());
 			break;
 
 		default:
@@ -336,8 +334,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 						if (val2.GetType() == TypeCode::DateTime_tc)
 						{
 							// Difference of two data/times
-							val.SetType(TypeCode::Int32);
-							val.iVal = (int32_t)(val.Get56BitValue() - val2.Get56BitValue());
+							val.SetInt((int32_t)(val.Get56BitValue() - val2.Get56BitValue()));
 						}
 						else if (val2.GetType() == TypeCode::Uint32)
 						{
