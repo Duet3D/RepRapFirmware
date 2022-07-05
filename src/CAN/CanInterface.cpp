@@ -332,9 +332,6 @@ void CanInterface::SwitchToExpansionMode(CanAddress addr, bool useTestMode) noex
 	inExpansionMode = true;
 	inTestMode = useTestMode;
 	reprap.GetGCodes().SwitchToExpansionMode();
-#ifdef DUET3_MB6XD
-	reprap.GetPlatform().InitStepGateTimer();		// change the step gate timer to allow longer pulses for ATE
-#endif
 	ReInit();										// reset the CAN filters to account for our new CAN address
 }
 

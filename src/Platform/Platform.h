@@ -680,10 +680,6 @@ public:
 	void OnProcessingCanMessage() noexcept;								// called when we start processing any CAN message except for regular messages e.g. time sync
 #endif
 
-#ifdef DUET3_MB6XD
-	void InitStepGateTimer() noexcept;
-#endif
-
 protected:
 	DECLARE_OBJECT_MODEL
 	OBJECT_MODEL_ARRAY(axisDrivers)
