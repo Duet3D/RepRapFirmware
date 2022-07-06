@@ -532,7 +532,7 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear() noexcept
 // Print diagnostic info for this sensor
 void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder) noexcept
 {
-	String<FormatStringLength> buf;
+	String<StringLength256> buf;
 	buf.printf("Extruder %u: ", extruder);
 	if (dataReceived)
 	{
