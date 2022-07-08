@@ -329,6 +329,19 @@ void CanMessageGenericConstructor::AddDriverIdParam(char c, DriverId did) THROWS
 	InsertValue(&did.localDriver, sz, pos);
 }
 
+void CanMessageGenericConstructor::AddFloatArrayParam(char c, const float *v, size_t numV) THROWS(GCodeException)
+{
+	ParamDescriptor::ParamType t;
+	size_t sz;
+	const unsigned int pos = FindInsertPoint(c, t, sz);
+	if (t != ParamDescriptor::float_array || numV != sz)
+	{
+		throw ConstructParseException("fval array wrong parameter type or length");
+	}
+	InsertValue(&numV, sizeof(uint8_t), pos);
+	InsertValue(v, numV * sizeof(float), pos + sizeof(uint8_t));
+}
+
 GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) const noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();

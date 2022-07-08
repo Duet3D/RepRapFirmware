@@ -4651,7 +4651,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 954:	// configure as expansion board
 				{
 					CanAddress addr = gb.GetLimitedUIValue('A', 1, CanId::MaxCanAddress + 1);
-					CanInterface::SwitchToExpansionMode(addr);
+					CanInterface::SwitchToExpansionMode(addr, false);
 				}
 				break;
 #endif

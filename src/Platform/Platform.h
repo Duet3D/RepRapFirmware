@@ -703,12 +703,6 @@ private:
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
 #endif
 
-	// Convert microseconds to step clocks, rounding up to the next step clock
-	static constexpr uint32_t MicrosecondsToStepClocks(float us) noexcept
-	{
-		return (uint32_t)ceilf((float)StepClockRate * 0.000001 * us);
-	}
-
 #ifdef DUET3_MB6XD
 	void UpdateDriverTimings() noexcept;
 #endif

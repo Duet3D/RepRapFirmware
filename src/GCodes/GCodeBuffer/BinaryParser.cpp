@@ -841,7 +841,7 @@ void BinaryParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
 				case DataType::String:
 					{
 						StringHandle sh(seenParameterValue, param->intValue);
-						ev.Set(sh);
+						ev.SetStringHandle(sh);
 					}
 					break;
 
@@ -859,11 +859,11 @@ void BinaryParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
 					break;
 
 				case DataType::Int:
-					ev.SetSigned(param->intValue);
+					ev.SetInt(param->intValue);
 					break;
 
 				case DataType::UInt:
-					ev.SetSigned((int32_t)param->uintValue);
+					ev.SetInt((int32_t)param->uintValue);
 					break;
 
 				default:

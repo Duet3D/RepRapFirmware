@@ -192,8 +192,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 		{
 		case TypeCode::Uint32:
 			// Convert enumeration to integer
-			val.iVal = (int32_t)val.uVal;
-			val.SetType(TypeCode::Int32);
+			val.SetInt((int32_t)val.uVal);
 			break;
 
 		case TypeCode::Int32:
@@ -201,8 +200,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 			break;
 
 		case TypeCode::DateTime_tc:					// unary + converts a DateTime to a seconds count
-			val.iVal = (uint32_t)val.Get56BitValue();
-			val.SetType(TypeCode::Int32);
+			val.SetInt((uint32_t)val.Get56BitValue());
 			break;
 
 		default:
@@ -404,8 +402,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 						if (val2.GetType() == TypeCode::DateTime_tc)
 						{
 							// Difference of two data/times
-							val.SetType(TypeCode::Int32);
-							val.iVal = (int32_t)(val.Get56BitValue() - val2.Get56BitValue());
+							val.SetInt((int32_t)(val.Get56BitValue() - val2.Get56BitValue()));
 						}
 						else if (val2.GetType() == TypeCode::Uint32)
 						{
@@ -457,133 +454,130 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 
 				case '>':
 					BalanceTypes(val, val2, evaluate);
-					switch (val.GetType())
 					{
-					case TypeCode::Int32:
-						val.bVal = (val.iVal > val2.iVal);
-						break;
-
-					case TypeCode::Float:
-						val.bVal = (val.fVal > val2.fVal);
-						break;
-
-					case TypeCode::DateTime_tc:
-						val.bVal = val.Get56BitValue() > val2.Get56BitValue();
-						break;
-
-					case TypeCode::Bool:
-						val.bVal = (val.bVal && !val2.bVal);
-						break;
-
-					default:
-						if (evaluate)
-						{
-							ThrowParseException("expected numeric or Boolean operands to comparison operator");
-						}
-						val.bVal = false;
-						break;
-					}
-					val.SetType(TypeCode::Bool);
-					if (invert)
-					{
-						val.bVal = !val.bVal;
-					}
-					break;
-
-				case '<':
-					BalanceTypes(val, val2, evaluate);
-					switch (val.GetType())
-					{
-					case TypeCode::Int32:
-						val.bVal = (val.iVal < val2.iVal);
-						break;
-
-					case TypeCode::Float:
-						val.bVal = (val.fVal < val2.fVal);
-						break;
-
-					case TypeCode::DateTime_tc:
-						val.bVal = val.Get56BitValue() < val2.Get56BitValue();
-						break;
-
-					case TypeCode::Bool:
-						val.bVal = (!val.bVal && val2.bVal);
-						break;
-
-					default:
-						if (evaluate)
-						{
-							ThrowParseException("expected numeric or Boolean operands to comparison operator");
-						}
-						val.bVal = false;
-						break;
-					}
-					val.SetType(TypeCode::Bool);
-					if (invert)
-					{
-						val.bVal = !val.bVal;
-					}
-					break;
-
-				case '=':
-					// Before balancing, handle comparisons with null
-					if (val.GetType() == TypeCode::None)
-					{
-						val.bVal = (val2.GetType() == TypeCode::None);
-					}
-					else if (val2.GetType() == TypeCode::None)
-					{
-						val.bVal = false;
-					}
-					else
-					{
-						BalanceTypes(val, val2, evaluate);
+						bool bResult;
 						switch (val.GetType())
 						{
-						case TypeCode::ObjectModel_tc:
-							ThrowParseException("cannot compare objects");
-
 						case TypeCode::Int32:
-							val.bVal = (val.iVal == val2.iVal);
-							break;
-
-						case TypeCode::Uint32:
-							val.bVal = (val.uVal == val2.uVal);
+							bResult = (val.iVal > val2.iVal);
 							break;
 
 						case TypeCode::Float:
-							val.bVal = (val.fVal == val2.fVal);
+							bResult = (val.fVal > val2.fVal);
 							break;
 
 						case TypeCode::DateTime_tc:
-							val.bVal = val.Get56BitValue() == val2.Get56BitValue();
+							bResult = val.Get56BitValue() > val2.Get56BitValue();
 							break;
 
 						case TypeCode::Bool:
-							val.bVal = (val.bVal == val2.bVal);
-							break;
-
-						case TypeCode::CString:
-							val.bVal = (strcmp(val.sVal, (val2.GetType() == TypeCode::HeapString) ? val2.shVal.Get().Ptr() : val2.sVal) == 0);
-							break;
-
-						case TypeCode::HeapString:
-							val.bVal = (strcmp(val.shVal.Get().Ptr(), (val2.GetType() == TypeCode::HeapString) ? val2.shVal.Get().Ptr() : val2.sVal) == 0);
+							bResult = (val.bVal && !val2.bVal);
 							break;
 
 						default:
 							if (evaluate)
 							{
-								ThrowParseException("unexpected operand type to equality operator");
+								ThrowParseException("expected numeric or Boolean operands to comparison operator");
 							}
-							val.bVal = false;
+							bResult = false;
 							break;
 						}
+						val.SetBool((invert) ? !bResult : bResult);
 					}
-					val.SetType(TypeCode::Bool);
-					if (invert)
+					break;
+
+				case '<':
+					BalanceTypes(val, val2, evaluate);
 					{
-						val.bVal = !val.bVal;
+						bool bResult;
+						switch (val.GetType())
+						{
+						case TypeCode::Int32:
+							bResult = (val.iVal < val2.iVal);
+							break;
+
+						case TypeCode::Float:
+							bResult = (val.fVal < val2.fVal);
+							break;
+
+						case TypeCode::DateTime_tc:
+							bResult = val.Get56BitValue() < val2.Get56BitValue();
+							break;
+
+						case TypeCode::Bool:
+							bResult = (!val.bVal && val2.bVal);
+							break;
+
+						default:
+							if (evaluate)
+							{
+								ThrowParseException("expected numeric or Boolean operands to comparison operator");
+							}
+							bResult = false;
+							break;
+						}
+						val.SetBool((invert) ? !bResult : bResult);
+					}
+					break;
+
+				case '=':
+					{
+						bool bResult;
+						// Before balancing, handle comparisons with null
+						if (val.GetType() == TypeCode::None)
+						{
+							bResult = (val2.GetType() == TypeCode::None);
+						}
+						else if (val2.GetType() == TypeCode::None)
+						{
+							bResult = false;
+						}
+						else
+						{
+							BalanceTypes(val, val2, evaluate);
+							switch (val.GetType())
+							{
+							case TypeCode::ObjectModel_tc:
+								ThrowParseException("cannot compare objects");
+
+							case TypeCode::Int32:
+								bResult = (val.iVal == val2.iVal);
+								break;
+
+							case TypeCode::Uint32:
+								bResult = (val.uVal == val2.uVal);
+								break;
+
+							case TypeCode::Float:
+								bResult = (val.fVal == val2.fVal);
+								break;
+
+							case TypeCode::DateTime_tc:
+								bResult = val.Get56BitValue() == val2.Get56BitValue();
+								break;
+
+							case TypeCode::Bool:
+								bResult = (val.bVal == val2.bVal);
+								break;
+
+							case TypeCode::CString:
+								bResult = (strcmp(val.sVal, (val2.GetType() == TypeCode::HeapString) ? val2.shVal.Get().Ptr() : val2.sVal) == 0);
+								break;
+
+							case TypeCode::HeapString:
+								bResult = (strcmp(val.shVal.Get().Ptr(), (val2.GetType() == TypeCode::HeapString) ? val2.shVal.Get().Ptr() : val2.sVal) == 0);
+								break;
+
+							default:
+								if (evaluate)
+								{
+									ThrowParseException("unexpected operand type to equality operator");
+								}
+								bResult = false;
+								break;
+							}
+						}
+						val.SetBool((invert) ? !bResult : bResult);
 					}
 					break;
 
@@ -604,7 +598,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
     val.AppendAsString(str.GetRef());
     val2.AppendAsString(str.GetRef());
     StringHandle sh(str.c_str());
-    val.Set(sh);
+    val.SetStringHandle(sh);
 }
 
 bool ExpressionParser::ParseBoolean() THROWS(GCodeException)
@@ -776,8 +770,8 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 		{
 			ThrowParseException("expected numeric operands");
 		}
-		val1.SetSigned(0);
-		val2.SetSigned(0);
+		val1.SetInt(0);
+		val2.SetInt(0);
 	}
 }
 
@@ -837,34 +831,29 @@ void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2
 		{
 			ThrowParseException("cannot convert operands to same type");
 		}
-		val1.SetSigned(0);
-		val2.SetSigned(0);
+		val1.SetInt(0);
+		val2.SetInt(0);
 	}
 }
 
 void ExpressionParser::ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
 {
+	float fVal;
 	switch (val.GetType())
 	{
+	case TypeCode::Float:
+		return;							// no conversion needed, leave the precision alone
+
 	case TypeCode::Uint32:
-		val.SetType(TypeCode::Float);
-		val.fVal = (float)val.uVal;
-		val.param = 1;
+		fVal = (float)val.uVal;
 		break;
 
 	case TypeCode::Uint64:
-		val.SetType(TypeCode::Float);
-		val.fVal = (float)val.Get56BitValue();
-		val.param = 1;
+		fVal = (float)val.Get56BitValue();
 		break;
 
 	case TypeCode::Int32:
-		val.fVal = (float)val.iVal;
-		val.SetType(TypeCode::Float);
-		val.param = 1;
-		break;
-
-	case TypeCode::Float:
+		fVal = (float)val.iVal;
 		break;
 
 	default:
@@ -872,8 +861,10 @@ void ExpressionParser::ConvertToFloat(ExpressionValue& val, bool evaluate) const
 		{
 			ThrowParseException("expected numeric operand");
 		}
-		val.SetFloat(0.0f, 1);
+		fVal = 0.0f;
+		break;
 	}
+	val.SetFloat(fVal, 1);
 }
 
 void ExpressionParser::ConvertToBool(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
@@ -897,7 +888,7 @@ void ExpressionParser::ConvertToString(ExpressionValue& val, bool evaluate) noex
 			String<MaxStringExpressionLength> str;
 			val.AppendAsString(str.GetRef());
 			StringHandle sh(str.c_str());
-			val.Set(sh);
+			val.SetStringHandle(sh);
 		}
 		else
 		{
@@ -915,9 +906,9 @@ void ExpressionParser::ConvertToDriverId(ExpressionValue& val, bool evaluate) co
 
 	case TypeCode::Int32:
 #if SUPPORT_CAN_EXPANSION
-		val.Set(DriverId(0, val.uVal));
+		val.SetDriverId(DriverId(0, val.uVal));
 #else
-		val.Set(DriverId(val.uVal));
+		val.SetDriverId(DriverId(val.uVal));
 #endif
 		break;
 
@@ -928,12 +919,12 @@ void ExpressionParser::ConvertToDriverId(ExpressionValue& val, bool evaluate) co
 #if SUPPORT_CAN_EXPANSION
 			if (ival >= 0 && fabsf(f10val - (float)ival) <= 0.002)
 			{
-				val.Set(DriverId(ival/10, ival % 10));
+				val.SetDriverId(DriverId(ival/10, ival % 10));
 			}
 #else
 			if (ival >= 0 && ival < 10 && fabsf(f10val - (float)ival) <= 0.002)
 			{
-				val.Set(DriverId(ival % 10));
+				val.SetDriverId(DriverId(ival % 10));
 			}
 #endif
 			else
@@ -1016,7 +1007,7 @@ void ExpressionParser::ParseNumber(ExpressionValue& rslt) noexcept
 
 	if (conv.FitsInInt32())
 	{
-		rslt.SetSigned(conv.GetInt32());
+		rslt.SetInt(conv.GetInt32());
 	}
 	else
 	{
@@ -1060,7 +1051,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				{
 					ThrowParseException("expected integer expression");
 				}
-				index.SetSigned(0);
+				index.SetInt(0);
 			}
 			AdvancePointer();										// skip the ']'
 			context.ProvideIndex(index.iVal);
@@ -1111,7 +1102,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 			return;
 
 		case NamedConstant::_null:
-			rslt.Set(nullptr);
+			rslt.SetNull(nullptr);
 			return;
 
 		case NamedConstant::pi:
@@ -1125,7 +1116,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				{
 					ThrowParseException("'iterations' used when not inside a loop");
 				}
-				rslt.SetSigned(v);
+				rslt.SetInt(v);
 			}
 			return;
 
@@ -1147,12 +1138,12 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					res = 2;
 					break;
 				}
-				rslt.SetSigned(res);
+				rslt.SetInt(res);
 			}
 			return;
 
 		case NamedConstant::line:
-			rslt.SetSigned((int32_t)gb.GetLineNumber());
+			rslt.SetInt((int32_t)gb.GetLineNumber());
 			return;
 
 		default:
@@ -1205,7 +1196,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					{
 						ThrowParseException("expected numeric operand");
 					}
-					rslt.SetSigned(0);
+					rslt.SetInt(0);
 				}
 				break;
 
@@ -1284,8 +1275,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 			case Function::isnan:
 				ConvertToFloat(rslt, evaluate);
-				rslt.SetType(TypeCode::Bool);
-				rslt.bVal = (std::isnan(rslt.fVal) != 0);
+				rslt.SetBool(std::isnan(rslt.fVal) != 0);
 				break;
 
 			case Function::floor:
@@ -1294,8 +1284,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					const float f = floorf(rslt.fVal);
 					if (f <= (float)std::numeric_limits<int32_t>::max() && f >= (float)std::numeric_limits<int32_t>::min())
 					{
-						rslt.SetType(TypeCode::Int32);
-						rslt.iVal = (int32_t)f;
+						rslt.SetInt((int32_t)f);
 					}
 					else
 					{
@@ -1374,7 +1363,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					{
 						ThrowParseException("expected positive integer");
 					}
-					rslt.SetSigned((int32_t)random(limit));
+					rslt.SetInt((int32_t)random(limit));
 				}
 				break;
 
@@ -1407,8 +1396,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					default:
 						ThrowParseException("can't convert value to DateTime");
 					}
-					rslt.SetType(TypeCode::DateTime_tc);
-					rslt.Set56BitValue(val);
+					rslt.SetDateTime(val);
 				}
 				break;
 
@@ -1466,7 +1454,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 		}
 		return;
 	}
-	rslt.Set(nullptr);
+	rslt.SetNull(nullptr);
 }
 
 // Parse a string to a DateTime
@@ -1576,7 +1564,7 @@ void ExpressionParser::ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeExce
 			if (CurrentCharacter() != c)
 			{
 				StringHandle sh(str.c_str());
-				rslt.Set(sh);
+				rslt.SetStringHandle(sh);
 				return;
 			}
 			AdvancePointer();

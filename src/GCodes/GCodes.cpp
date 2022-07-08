@@ -1235,7 +1235,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 		else
 		{
 			const MovementState& ms = GetPrimaryMovementState();		//TODO save resume info for all movement states
-			String<FormatStringLength> buf;
+			String<StringLength256> buf;
 			RestorePoint& pauseRestorePoint = ms.pauseRestorePoint;		//TODO handle pausing when multiple motion system are active
 
 			// Write the header comment

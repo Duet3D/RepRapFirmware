@@ -99,6 +99,7 @@ static uint8_t currentTimeSyncMarker = 0xFF;
 
 #if SUPPORT_REMOTE_COMMANDS
 static bool inExpansionMode = false;
+static bool inTestMode = false;
 static bool mainBoardAcknowledgedAnnounce = false;
 #endif
 
@@ -311,6 +312,11 @@ bool CanInterface::InExpansionMode() noexcept
 	return inExpansionMode;
 }
 
+bool CanInterface::InTestMode() noexcept
+{
+	return inTestMode;
+}
+
 static void ReInit() noexcept
 {
 	can0dev->Disable();
@@ -318,12 +324,13 @@ static void ReInit() noexcept
 	can0dev->Enable();
 }
 
-void CanInterface::SwitchToExpansionMode(CanAddress addr) noexcept
+void CanInterface::SwitchToExpansionMode(CanAddress addr, bool useTestMode) noexcept
 {
 	TaskCriticalSectionLocker lock;
 
 	myAddress = addr;
 	inExpansionMode = true;
+	inTestMode = useTestMode;
 	reprap.GetGCodes().SwitchToExpansionMode();
 	ReInit();										// reset the CAN filters to account for our new CAN address
 }

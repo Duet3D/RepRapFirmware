@@ -162,38 +162,24 @@ struct ExpressionValue
 	void Release() noexcept;					// release any associated storage
 
 	TypeCode GetType() const noexcept { return (TypeCode)type; }
-	void SetType(TypeCode t) noexcept { type = (uint32_t)t; }
 	bool IsStringType() const noexcept { return type == (uint32_t)TypeCode::CString || type == (uint32_t)TypeCode::HeapString; }
 
-	void SetBool(bool b) noexcept { Release(); type = (uint32_t)TypeCode::Bool; bVal = b; }
-	void SetChar(char c) noexcept { Release(); type = (uint32_t)TypeCode::Char; cVal = c; }
-	void SetSigned(int32_t i) noexcept { Release(); type = (uint32_t)TypeCode::Int32; iVal = i; }
-	void SetFloat(float f) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = MaxFloatDigitsDisplayedAfterPoint; }
-	void SetFloat(float f, uint32_t digits) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = digits; }
+	void SetBool(bool b) noexcept;
+	void SetInt(int32_t i) noexcept;
+	void SetFloat(float f, uint32_t digits) noexcept;
+	void SetFloat(float f) noexcept { SetFloat(f, MaxFloatDigitsDisplayedAfterPoint); }
 	void SetCString(const char *_ecv_array s) noexcept { Release(); type = (uint32_t)TypeCode::CString; sVal = s; }
-	void Set(IPAddress ip) noexcept { Release(); type = (uint32_t)TypeCode::IPAddress_tc; uVal = ip.GetV4LittleEndian(); }
+	void SetDriverId(DriverId did) noexcept;
 
-	void Set(DriverId did) noexcept
-	{
-		Release();
-		type = (uint32_t)TypeCode::DriverId_tc;
-#if SUPPORT_CAN_EXPANSION
-		param = did.boardAddress;
-#else
-		param = 0;
-#endif
-		uVal = did.localDriver;
-	}
-
-	void Set(StringHandle sh) noexcept { Release(); type = (uint32_t)TypeCode::HeapString; shVal = sh; }
-	void Set(ArrayHandle ah) noexcept { Release(); type = (uint32_t)TypeCode::HeapArray; ahVal = ah; }
-	void Set(std::nullptr_t dummy) noexcept { Release();  type = (uint32_t)TypeCode::None; }
+	void SetStringHandle(StringHandle sh) noexcept { Release(); type = (uint32_t)TypeCode::HeapString; shVal = sh; }
+	void SetNull(std::nullptr_t dummy) noexcept { Release();  type = (uint32_t)TypeCode::None; }
+	void SetDateTime(time_t t) noexcept { Release(); type = (uint32_t)TypeCode::DateTime_tc; Set56BitValue(t); }
 
 	void SetUnsigned(uint32_t u) noexcept { Release(); type = (uint32_t)TypeCode::Uint32; uVal = u; }
 	void SetDuration(uint32_t u) noexcept { Release(); type = (uint32_t)TypeCode::Duration; uVal = u; }
 
 	// Store a 56-bit value
-	void Set56BitValue(uint64_t v) { Release(); param = (uint32_t)(v >> 32) & 0x00FFFFFFu; uVal = (uint32_t)v; }
+	void Set56BitValue(uint64_t v) { param = (uint32_t)(v >> 32) & 0x00FFFFFFu; uVal = (uint32_t)v; }
 
 	// Extract a 56-bit value that we have stored. Used to retrieve date/times and large bitmaps.
 	uint64_t Get56BitValue() const noexcept { return ((uint64_t)param << 32) | uVal; }

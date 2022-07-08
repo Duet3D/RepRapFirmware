@@ -509,6 +509,12 @@ constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2 and Ma
 constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
 constexpr float StepClocksToMillis = 1000.0/(float)StepClockRate;
 
+// Convert microseconds to step clocks, rounding up to the next step clock
+static inline constexpr uint32_t MicrosecondsToStepClocks(float us) noexcept
+{
+	return (uint32_t)ceilf((float)StepClockRate * 0.000001 * us);
+}
+
 // Functions to convert speeds and accelerations between seconds and step clocks
 static inline constexpr float ConvertSpeedFromMmPerSec(float speed) noexcept
 {
