@@ -158,6 +158,10 @@ constexpr uint32_t GSTAT_RESET = 1 << 0;					// driver has been reset since last
 constexpr uint32_t GSTAT_DRV_ERR = 1 << 1;					// driver has been shut down due to over temp or short circuit
 constexpr uint32_t GSTAT_UV_CP = 1 << 2;					// undervoltage on charge pump, driver disabled. Not latched so does not need to be cleared.
 
+#if SUPPORT_TMC2240
+constexpr uint32_t GSTAT40_RESET = 1 << 3;					// chip has been reset since the last access to GSTAT, all registers have been restored to default values
+#endif
+
 // IFCOUNT register (0x02, RO)
 constexpr uint8_t REGNUM_IFCOUNT = 0x02;
 constexpr uint32_t IFCOUNT_MASK = 0x000F;					// interface transmission counter
@@ -175,7 +179,7 @@ constexpr uint32_t SLAVECONF_SENDDLY_120_BITS = 14 << 8;
 
 constexpr uint32_t DefaultSlaveConfReg = SLAVECONF_SENDDLY_8_BITS;	// we don't need any delay between transmission and reception
 
-// OTP_PROG register (0x04, WO)
+// OTP_PROG register (0x04, WO, not TMC2240)
 constexpr uint8_t REGNUM_OTP_PROG = 0x04;
 constexpr uint32_t OTP_PROG_BIT_SHIFT = 0;
 constexpr uint32_t OTP_PROG_BIT_MASK = 7 << OTP_PROG_BIT_SHIFT;
@@ -183,7 +187,7 @@ constexpr uint32_t OTP_PROG_BYTE_SHIFT = 4;
 constexpr uint32_t OTP_PROG_BYTE_MASK = 3 << OTP_PROG_BYTE_SHIFT;
 constexpr uint32_t OTP_PROG_MAGIC = 0xBD << 8;
 
-// OTP_READ register (0x05, RO)
+// OTP_READ register (0x05, RO, not TMC2240)
 constexpr uint8_t REGNUM_OTP_READ = 0x05;
 constexpr uint32_t OTP_READ_BYTE0_SHIFT = 0;
 constexpr uint32_t OTP_READ_BYTE0_MASK = 0xFF << OTP_READ_BYTE0_SHIFT;
@@ -192,8 +196,9 @@ constexpr uint32_t OTP_READ_BYTE1_MASK = 0xFF << OTP_READ_BYTE1_SHIFT;
 constexpr uint32_t OTP_READ_BYTE2_SHIFT = 16;
 constexpr uint32_t OTP_READ_BYTE2_MASK = 0xFF << OTP_READ_BYTE2_SHIFT;
 
-// IOIN register (0x06, RO)
-constexpr uint8_t REGNUM_IOIN = 0x06;
+// IOIN register for TMC22xx but not TMC2240 (0x06, RO)
+constexpr uint8_t REGNUM_IOIN_22xx = 0x06;
+#if 0	// we don't currently use these
 constexpr uint32_t IOIN_220x_ENN = 1 << 0;
 constexpr uint32_t IOIN_222x_PDN_UART = 1 << 1;
 constexpr uint32_t IOIN_220x_MS1 = 1 << 2;
@@ -215,6 +220,10 @@ constexpr uint32_t IOIN_VERSION_MASK = 0xFF << IOIN_VERSION_SHIFT;
 
 constexpr uint32_t IOIN_VERSION_2208_2224 = 0x20;			// version for TMC2208/2224
 constexpr uint32_t IOIN_VERSION_2209 = 0x21;				// version for TMC2209
+#endif
+
+// IOIN register for TMC2240 (0x04, RO)
+constexpr uint8_t REGNUM_IOIN_2240 = 0x04;
 
 // FACTORY_CONF register (0x07, RW)
 constexpr uint8_t REGNUM_FACTORY_CONF = 0x07;
@@ -559,22 +568,21 @@ private:
 	static constexpr unsigned int WriteSpecial = NumWriteRegisters;
 
 #if HAS_STALL_DETECT
-	static constexpr unsigned int NumReadRegisters = 8;			// the number of registers that we read from on a TMC2209
+	static constexpr unsigned int NumReadRegisters = 7;			// the number of registers that we read from on a TMC2209
 #else
-	static constexpr unsigned int NumReadRegisters = 7;			// the number of registers that we read from on a TMC2208/2224
+	static constexpr unsigned int NumReadRegisters = 6;			// the number of registers that we read from on a TMC2208/2224
 #endif
 	static const uint8_t ReadRegNumbers[NumReadRegisters];		// the register numbers that we read from
 
 	// Read register numbers, in same order as ReadRegNumbers
-	static constexpr unsigned int ReadIoIn = 0;				// includes the version which we use to distinguish TMC2209 from 2208/2224
-	static constexpr unsigned int ReadGStat = 1;			// global status
-	static constexpr unsigned int ReadDrvStat = 2;			// drive status
-	static constexpr unsigned int ReadMsCnt = 3;			// microstep counter
-	static constexpr unsigned int ReadChopConf = 4;			// chopper control register - we read it to detect the VSENSE bit getting cleared
-	static constexpr unsigned int ReadPwmScale = 5;			// PWM scaling
-	static constexpr unsigned int ReadPwmAuto = 6;			// PWM scaling
+	static constexpr unsigned int ReadGStat = 0;			// global status
+	static constexpr unsigned int ReadDrvStat = 1;			// drive status
+	static constexpr unsigned int ReadMsCnt = 2;			// microstep counter
+	static constexpr unsigned int ReadChopConf = 3;			// chopper control register - we read it to detect the VSENSE bit getting cleared
+	static constexpr unsigned int ReadPwmScale = 4;			// PWM scaling
+	static constexpr unsigned int ReadPwmAuto = 5;			// PWM scaling
 #if HAS_STALL_DETECT
-	static constexpr unsigned int ReadSgResult = 7;			// stallguard result, TMC2209 only
+	static constexpr unsigned int ReadSgResult = 6;			// stallguard result, TMC2209 only
 #endif
 	static constexpr unsigned int ReadSpecial = NumReadRegisters;
 
@@ -716,7 +724,6 @@ constexpr uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 
 constexpr uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 {
-	REGNUM_IOIN,						// tells us whether we have a TMC2208/24 or a TMC2209
 	REGNUM_GSTAT,
 	REGNUM_DRV_STATUS,
 	REGNUM_MSCNT,
