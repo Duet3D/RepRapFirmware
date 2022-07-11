@@ -29,8 +29,8 @@
 # error TMC22xx_USE_SLAVEADDR not defined
 #endif
 
-#ifndef TMC22xx_DEFAULT_STEALTHCHOP
-# error TMC22xx_DEFAULT_STEALTHCHOP not defined
+#ifndef SUPPORT_TMC2240
+# define SUPPORT_TMC2240	0
 #endif
 
 #define TMC22xx_SINGLE_UART		(TMC22xx_SINGLE_DRIVER || TMC22xx_HAS_MUX || TMC22xx_USE_SLAVEADDR)
@@ -114,22 +114,40 @@ static bool currentMuxState;
 
 // GCONF register (0x00, RW)
 constexpr uint8_t REGNUM_GCONF = 0x00;
-constexpr uint32_t GCONF_USE_VREF = 1 << 0;					// use external VRef
-constexpr uint32_t GCONF_INT_RSENSE = 1 << 1;				// use internal sense resistors
-constexpr uint32_t GCONF_SPREAD_CYCLE = 1 << 2;				// use spread cycle mode (else stealthchop mode)
-constexpr uint32_t GCONF_REV_DIR = 1 << 3;					// reverse motor direction
-constexpr uint32_t GCONF_INDEX_OTPW = 1 << 4;				// INDEX output shows over temperature warning (else it shows first microstep position)
-constexpr uint32_t GCONF_INDEX_PULSE = 1 << 5;				// INDEX output shows pulses from internal pulse generator, else as set by GCONF_INDEX_OTPW
-constexpr uint32_t GCONF_UART = 1 << 6;						// PDN_UART used for UART interface (else used for power down)
-constexpr uint32_t GCONF_MSTEP_REG = 1 << 7;				// microstep resolution set by MSTEP register (else by MS1 and MS2 pins)
-constexpr uint32_t GCONF_MULTISTEP_FILT = 1 << 8;			// pulse generation optimised for >750Hz full stepping frequency
-constexpr uint32_t GCONF_TEST_MODE = 1 << 9;				// test mode, do not set this bit for normal operation
 
-constexpr uint32_t DefaultGConfReg =
-#if TMC22xx_DEFAULT_STEALTHCHOP
-									GCONF_UART | GCONF_MSTEP_REG | GCONF_MULTISTEP_FILT;
-#else
-									GCONF_UART | GCONF_MSTEP_REG | GCONF_MULTISTEP_FILT | GCONF_SPREAD_CYCLE;
+// Bit assignments for TMC2208/09
+constexpr uint32_t GCONF09_USE_VREF = 1 << 0;				// use external VRef
+constexpr uint32_t GCONF09_INT_RSENSE = 1 << 1;				// use internal sense resistors
+constexpr uint32_t GCONF09_SPREAD_CYCLE = 1 << 2;			// use spread cycle mode (else stealthchop mode)
+constexpr uint32_t GCONF09_REV_DIR = 1 << 3;				// reverse motor direction
+constexpr uint32_t GCONF09_INDEX_OTPW = 1 << 4;				// INDEX output shows over temperature warning (else it shows first microstep position)
+constexpr uint32_t GCONF09_INDEX_PULSE = 1 << 5;			// INDEX output shows pulses from internal pulse generator, else as set by GCONF_INDEX_OTPW
+constexpr uint32_t GCONF09_UART = 1 << 6;					// PDN_UART used for UART interface (else used for power down)
+constexpr uint32_t GCONF09_MSTEP_REG = 1 << 7;				// microstep resolution set by MSTEP register (else by MS1 and MS2 pins)
+constexpr uint32_t GCONF09_MULTISTEP_FILT = 1 << 8;			// pulse generation optimised for >750Hz full stepping frequency
+constexpr uint32_t GCONF09_TEST_MODE = 1 << 9;				// test mode, do not set this bit for normal operation
+
+constexpr uint32_t DefaultGConfReg09 = GCONF09_UART | GCONF09_MSTEP_REG | GCONF09_MULTISTEP_FILT | GCONF09_SPREAD_CYCLE;
+
+#if SUPPORT_TMC2240
+// Bit assignments for TMC2240
+constexpr uint32_t GCONF40_FAST_STANDSTILL = 1 << 1;		// 0 = 2^20 clocks, 1 = 2^18 clocks
+constexpr uint32_t GCONF40_EN_PWM_MODE = 1 << 2;			// 0 = spreadyCycle, 1 = stealthChop 2
+constexpr uint32_t GCONF40_MULTISTEP_FILT_40 = 1 << 3;		// pulse generation optimised for >750Hz full stepping frequency
+constexpr uint32_t GCONF40_REV_DIR = 1 << 4;				// reverse motor direction
+constexpr uint32_t GCONF40_DIAG0_ERROR = 1 << 5;			// DIAG0 active on driver errors
+constexpr uint32_t GCONF40_DIAG0_OTPW = 1 << 6;				// DIAG0 active on over temperature warning
+constexpr uint32_t GCONF40_DIAG0_STALL = 1 << 7;			// DIAG1 active on stall
+constexpr uint32_t GCONF40_DIAG1_STALL = 1 << 8;			// DIAG1 active on stall
+constexpr uint32_t GCONF40_DIAG1_INDEX = 1 << 9;			// DIAG1 active on index position (microstep table position 0)
+constexpr uint32_t GCONF40_DIAG1_ONSTATE = 1 << 10;			// DIAG1 active when chopper is on
+constexpr uint32_t GCONF40_DIAG0_PUSHPULL = 1 << 12;		// DIAG0 push pull output (else open drain)
+constexpr uint32_t GCONF40_DIAG1_PUSHPULL = 1 << 13;		// DIAG1 push pull output (else open drain)
+constexpr uint32_t GCONF40_SMALL_HYSTERESIS = 1 << 14;		// hysteresis for step frequency comparison is 1/32 (else 1/16)
+constexpr uint32_t GCONF40_STOP_ENABLE = 1 << 15;			// emergency stop when ENCA goes high (motor goes to standstill)
+constexpr uint32_t GCONF40_DIRECT_MODE = 1 << 16;			// enable direct coil current control
+
+constexpr uint32_t DefaultGConfReg40 = GCONF40_MULTISTEP_FILT_40 | GCONF40_DIAG0_STALL | GCONF40_DIAG0_PUSHPULL;
 #endif
 
 // General configuration and status registers
@@ -422,6 +440,9 @@ public:
 #if HAS_STALL_DETECT
 							, Pin p_diagPin
 #endif
+#if SUPPORT_TMC2240
+							, bool p_isTmc2240
+#endif
 			 ) noexcept;
 	void SetAxisNumber(size_t p_axisNumber) noexcept;
 	uint32_t GetAxisNumber() const noexcept { return axisNumber; }
@@ -493,6 +514,7 @@ public:
 
 	void UartTmcHandler() noexcept;							// core of the ISR for this driver
 private:
+	bool IsStealthChop() const noexcept;
 	bool SetChopConf(uint32_t newVal) noexcept;
 	void UpdateRegister(size_t regIndex, uint32_t regVal) noexcept;
 	void UpdateCurrent() noexcept;
@@ -622,6 +644,9 @@ private:
 	volatile uint8_t specialReadRegisterNumber;				// the special register number we are reading
 	volatile uint8_t specialWriteRegisterNumber;			// the special register number we are writing
 	bool enabled;											// true if driver is enabled
+#if SUPPORT_TMC2240
+	bool isTmc2240;											// true for TMC2240, false for TMC2208/09/24
+#endif
 #if RESET_MICROSTEP_COUNTERS_AT_INIT
 	bool hadStepFailure;
 #endif
@@ -859,15 +884,22 @@ inline void TmcDriverState::SetupDMARead(uint8_t regNum) noexcept
 #endif
 }
 
+// Return true if this driver is operating in stealthChop mode
+bool TmcDriverState::IsStealthChop() const noexcept
+{
+	const uint32_t gconf = writeRegisters[WriteGConf];
+	return
+#if SUPPORT_TMC2240
+			(isTmc2240) ? (gconf & GCONF40_EN_PWM_MODE) != 0 :
+#endif
+				(gconf & GCONF09_SPREAD_CYCLE) == 0;
+}
+
 // Update the maximum step pulse interval at which we consider open load detection to be reliable
 void TmcDriverState::UpdateMaxOpenLoadStepInterval() noexcept
 {
 	const uint32_t defaultMaxInterval = StepClockRate/MinimumOpenLoadFullStepsPerSec;
-	if ((writeRegisters[WriteGConf] & GCONF_SPREAD_CYCLE) != 0)
-	{
-		maxOpenLoadStepInterval = defaultMaxInterval;
-	}
-	else
+	if (IsStealthChop())
 	{
 		// In stealthchop mode open load detection in unreliable, so disable it below the speed at which we switch to spreadCycle
 		const uint32_t tpwmthrs = writeRegisters[WriteTpwmthrs] & 0x000FFFFF;
@@ -877,6 +909,10 @@ void TmcDriverState::UpdateMaxOpenLoadStepInterval() noexcept
 		constexpr uint32_t conversionFactor = ((256 - 51) * (StepClockRate/1000000))/12;
 		const uint32_t fullStepClocks = tpwmthrs * conversionFactor;
 		maxOpenLoadStepInterval = min<uint32_t>(fullStepClocks, defaultMaxInterval);
+	}
+	else
+	{
+		maxOpenLoadStepInterval = defaultMaxInterval;
 	}
 }
 
@@ -918,11 +954,17 @@ void TmcDriverState::Init(uint32_t p_driverNumber
 #if HAS_STALL_DETECT
 							, Pin p_diagPin
 #endif
+#if SUPPORT_TMC2240
+							, bool p_isTmc2240
+#endif
 ) noexcept
 pre(!driversPowered)
 {
 	driverNumber = p_driverNumber;
 	axisNumber = p_driverNumber;										// assume straight-through axis mapping initially
+#if SUPPORT_TMC2240
+	isTmc2240 = p_isTmc2240;
+#endif
 #if TMC22xx_HAS_ENABLE_PINS
 	enablePin = p_enablePin;											// this is NoPin for the built-in drivers
 	IoPort::SetPinMode(p_enablePin, OUTPUT_HIGH);
@@ -959,7 +1001,11 @@ pre(!driversPowered)
 	specialReadRegisterNumber = specialWriteRegisterNumber = 0xFF;
 	motorCurrent = 0.0;
 	standstillCurrentFraction = (uint8_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 255);
-	UpdateRegister(WriteGConf, DefaultGConfReg);
+	UpdateRegister(WriteGConf,
+#if SUPPORT_TMC2240
+								(isTmc2240) ? DefaultGConfReg40 :
+#endif
+									DefaultGConfReg09);
 	UpdateRegister(WriteSlaveConf, DefaultSlaveConfReg);
 	configuredChopConfReg = DefaultChopConfReg;
 	SetMicrostepping(DefaultMicrosteppingShift, DefaultInterpolation);	// this also updates the chopper control register
@@ -1188,11 +1234,29 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 	switch (mode)
 	{
 	case (unsigned int)DriverMode::spreadCycle:
-		UpdateRegister(WriteGConf, writeRegisters[WriteGConf] | GCONF_SPREAD_CYCLE);
+#if SUPPORT_TMC2240
+		if (isTmc2240)
+		{
+			UpdateRegister(WriteGConf, writeRegisters[WriteGConf] & ~GCONF40_EN_PWM_MODE);
+		}
+		else
+#endif
+		{
+			UpdateRegister(WriteGConf, writeRegisters[WriteGConf] | GCONF09_SPREAD_CYCLE);
+		}
 		return true;
 
 	case (unsigned int)DriverMode::stealthChop:
-		UpdateRegister(WriteGConf, writeRegisters[WriteGConf] & ~GCONF_SPREAD_CYCLE);
+#if SUPPORT_TMC2240
+		if (isTmc2240)
+		{
+			UpdateRegister(WriteGConf, writeRegisters[WriteGConf] | GCONF40_EN_PWM_MODE);
+		}
+		else
+#endif
+		{
+			UpdateRegister(WriteGConf, writeRegisters[WriteGConf] & ~GCONF09_SPREAD_CYCLE);
+		}
 		return true;
 
 	default:
@@ -1203,7 +1267,7 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 // Get the driver mode
 DriverMode TmcDriverState::GetDriverMode() const noexcept
 {
-	return ((writeRegisters[WriteGConf] & GCONF_SPREAD_CYCLE) != 0) ? DriverMode::spreadCycle : DriverMode::stealthChop;
+	return (IsStealthChop()) ? DriverMode::stealthChop : DriverMode::spreadCycle;
 }
 
 // Set the motor current
@@ -1915,6 +1979,9 @@ void SmartDrivers::Init() noexcept
 #endif
 #if HAS_STALL_DETECT
 								, DriverDiagPins[drive]
+#endif
+#if SUPPORT_TMC2240
+								, false
 #endif
 								);
 	}
