@@ -162,18 +162,17 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				return false;
 			}
+			try
 			{
-				const char* err = nullptr;
-				if (!DoStraightMove(gb, code == 1, err))
+				if (!DoStraightMove(gb, code == 1))
 				{
 					return false;
 				}
-				if (err != nullptr)
-				{
-					platform.GetEndstops().ClearEndstops();					// DoStraightMove may have enabled endstops before quitting, so disable them
-					gb.SetState(GCodeState::abortWhenMovementFinished);		// empty the queue before ending simulation, and force the user position to be restored
-					gb.LatestMachineState().SetError(err);					// must do this *after* calling SetState
-				}
+			} catch (const GCodeException& exc)
+			{
+				platform.GetEndstops().ClearEndstops();					// DoStraightMove may have enabled endstops before quitting, so disable them
+				gb.SetState(GCodeState::abortWhenMovementFinished);		// empty the queue before ending simulation, and force the user position to be restored
+				gb.LatestMachineState().SetError(exc);					// must do this *after* calling SetState
 			}
 			break;
 
@@ -181,7 +180,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 3: // Anti clockwise arc
 			// We only support X and Y axes in these (and optionally Z for corkscrew moves), but you can map them to other axes in the tool definitions
 			BREAK_IF_NOT_EXECUTING
-			if (GetMovementState(gb).segmentsLeft != 0)						// do this check first to avoid locking movement unnecessarily
+			if (GetMovementState(gb).segmentsLeft != 0)					// do this check first to avoid locking movement unnecessarily
 			{
 				return false;
 			}
@@ -189,17 +188,16 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			{
 				return false;
 			}
+			try
 			{
-				const char* err = nullptr;
-				if (!DoArcMove(gb, code == 2, err))
+				if (!DoArcMove(gb, code == 2))
 				{
 					return false;
 				}
-				if (err != nullptr)
-				{
-					gb.SetState(GCodeState::abortWhenMovementFinished);		// empty the queue before ending simulation, and force the user position to be restored
-					gb.LatestMachineState().SetError(err);						// must do this *after* calling SetState
-				}
+			} catch (GCodeException& exc)
+			{
+				gb.SetState(GCodeState::abortWhenMovementFinished);		// empty the queue before ending simulation, and force the user position to be restored
+				gb.LatestMachineState().SetError(exc);					// must do this *after* calling SetState
 			}
 			break;
 
@@ -1723,7 +1721,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					// because any slicer that uses M104 or M109 doesn't understand that there are separate active and standby temperatures.
 					if (!IsSimulating())
 					{
-						SetToolHeaters(applicableTool.Ptr(), temperature);			// this may throw
+						SetToolHeaters(gb, applicableTool.Ptr(), temperature);			// this may throw
 					}
 
 					if (code == 109 && ms.currentTool == nullptr)

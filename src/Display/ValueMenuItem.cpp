@@ -131,7 +131,7 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noex
 						break;
 
 					case 20:
-						currentValue.SetSigned(reprap.GetGCodes().GetPrimaryMovementState().GetCurrentToolNumber());
+						currentValue.SetInt(reprap.GetGCodes().GetPrimaryMovementState().GetCurrentToolNumber());
 						break;
 
 					case 21:	// Z baby-step
@@ -147,7 +147,7 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noex
 						break;
 
 					case 34:	// IP address in one go
-						currentValue.Set(reprap.GetNetwork().GetIPAddress(0));
+						currentValue.SetIPAddress(reprap.GetNetwork().GetIPAddress(0));
 						break;
 
 					case 35:	// Percentage of file that has been processed

@@ -556,13 +556,13 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 
 		// parameter X: x origins of actuators
 		float paraX[2];
-		gb.TryGetFloatArray('X', 2, paraX, reply, seen);
+		gb.TryGetFloatArray('X', 2, paraX, seen);
 		xOrigL = paraX[0];
 		xOrigR = paraX[1];
 
 		// parameter Y: y origins of actuators
 		float paraY[2];
-		gb.TryGetFloatArray('Y', 2, paraY, reply, seen);
+		gb.TryGetFloatArray('Y', 2, paraY, seen);
 		yOrigL = paraY[0];
 		yOrigR = paraY[1];
 
@@ -585,7 +585,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 
 		// proximal arm lengths
 		float proximalLengths[2];
-		gb.TryGetFloatArray('P', 2, proximalLengths, reply, seen);
+		gb.TryGetFloatArray('P', 2, proximalLengths, seen);
 		proximalL = proximalLengths[0];
 		proximalR = proximalLengths[1];
 
@@ -594,7 +594,8 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		float distalLengths[4];
 		//TODO TryGetFloatArray will report an error if the wrong number of values is provided. But we want to allow either 2 or 4.
 		//TODO So this code should call Seen() followed by GetFloatArray() instead, then check the number of returned values.
-		if (!gb.TryGetFloatArray('D', 4, distalLengths, reply, dseen) && dseen)
+		gb.TryGetFloatArray('D', 4, distalLengths, dseen);
+		if (dseen)
 		{
 			distalL = distalLengths[0];
 			distalR = distalLengths[1];
@@ -605,7 +606,8 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		else
 		{
 			dseen = false;
-			if (!gb.TryGetFloatArray('D', 2, distalLengths, reply, dseen) && dseen)
+			gb.TryGetFloatArray('D', 2, distalLengths, dseen);
+			if (dseen)
 			{
 				distalL = distalLengths[0];
 				distalR = distalLengths[1];
@@ -619,7 +621,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		if (gb.Seen('B'))
 		{
 			float homingAngles[2];
-			gb.TryGetFloatArray('B', 2, homingAngles, reply, seen);
+			gb.TryGetFloatArray('B', 2, homingAngles, seen);
 			homingAngleL = homingAngles[0];
 			homingAngleR = homingAngles[1];
 		}
@@ -652,7 +654,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		if (gb.Seen('A'))
 		{
 			float angles[6];
-			gb.TryGetFloatArray('A', 6, angles, reply, seen);
+			gb.TryGetFloatArray('A', 6, angles, seen);
 			headAngleMin      = angles[0];
 			headAngleMax      = angles[1];
 			proxDistLAngleMin = angles[2];
@@ -674,7 +676,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		if (gb.Seen('C'))
 		{
 			float angles[4];
-			gb.TryGetFloatArray('C', 4, angles, reply, seen);
+			gb.TryGetFloatArray('C', 4, angles, seen);
 			actuatorAngleLMin = angles[0];
 			actuatorAngleLMax = angles[1];
 			actuatorAngleRMin = angles[2];
@@ -693,7 +695,7 @@ bool FiveBarScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, cons
 		if (gb.Seen('Z'))
 		{
 			float coordinates[4];
-			gb.TryGetFloatArray('Z', 4, coordinates, reply, seenNonGeometry);
+			gb.TryGetFloatArray('Z', 4, coordinates, seenNonGeometry);
 			for (int i=0; i < 4; i++)
 			{
 				printArea[i] = coordinates[i];

@@ -282,16 +282,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 				return GCodeResult::error;
 			}
 			bool dummy;
-			if (gb.TryGetFloatArray(
-					axisLetters[axis],
-					2,
-					(axesSeenCount == 0) ? axis0Values : axis1Values,
-					reply,
-					dummy,
-					false))
-			{
-				return GCodeResult::error;
-			}
+			gb.TryGetFloatArray(axisLetters[axis], 2, (axesSeenCount == 0) ? axis0Values : axis1Values, dummy, false);
 			axesLetters[axesSeenCount] = axisLetters[axis];
 			++axesSeenCount;
 		}
@@ -304,16 +295,10 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 	const bool axesSeen = axesSeenCount > 0;
 
 	uint32_t numPoints[2];
-	if (gb.TryGetUIArray('P', 2, numPoints, reply, seenP, true))
-	{
-		return GCodeResult::error;
-	}
+	gb.TryGetUIArray('P', 2, numPoints, seenP, true);
 	if (!seenP)
 	{
-		if (gb.TryGetFloatArray('S', 2, spacings, reply, seenS, true))
-		{
-			return GCodeResult::error;
-		}
+		gb.TryGetFloatArray('S', 2, spacings, seenS, true);
 	}
 
 	float radius = -1.0;

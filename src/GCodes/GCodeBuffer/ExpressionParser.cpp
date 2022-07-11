@@ -100,7 +100,7 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 				}
 				else
 				{
-					rslt.Set(nullptr);
+					rslt.SetNull(nullptr);
 				}
 			}
 			break;
@@ -117,7 +117,7 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 				}
 				else
 				{
-					rslt.Set(nullptr);
+					rslt.SetNull(nullptr);
 				}
 			}
 			break;
@@ -127,7 +127,7 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 			{
 				throw GCodeException(gb.GetLineNumber(), indexCol, "left operand of [ ] is not an array");
 			}
-			rslt.Set(nullptr);
+			rslt.SetNull(nullptr);
 			break;
 		}
 	}
@@ -741,7 +741,7 @@ void ExpressionParser::ParseGeneralArray(ExpressionValue& firstElementAndResult,
 	{
 		ah.AssignElement(i, elements[i]);
 	}
-	firstElementAndResult.Set(ah);
+	firstElementAndResult.SetArrayHandle(ah);
 }
 
 void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException)
@@ -947,11 +947,11 @@ void ExpressionParser::ApplyLengthOperator(ExpressionValue& val) const THROWS(GC
 	switch (val.GetType())
 	{
 	case TypeCode::CString:
-		val.SetSigned((int32_t)strlen(val.sVal));
+		val.SetInt((int32_t)strlen(val.sVal));
 		break;
 
 	case TypeCode::HeapString:
-		val.SetSigned((int32_t)val.shVal.GetLength());
+		val.SetInt((int32_t)val.shVal.GetLength());
 		break;
 
 	case TypeCode::ObjectModelArray:
@@ -964,7 +964,7 @@ void ExpressionParser::ApplyLengthOperator(ExpressionValue& val) const THROWS(GC
 			ObjectExplorationContext context;
 			context.AddIndex(val.param >> 16);
 			ReadLocker lock(entry->lockPointer);
-			val.SetSigned(entry->GetNumElements(val.omVal, context));
+			val.SetInt(entry->GetNumElements(val.omVal, context));
 			context.RemoveIndex();
 		}
 		break;
@@ -972,7 +972,7 @@ void ExpressionParser::ApplyLengthOperator(ExpressionValue& val) const THROWS(GC
 	case TypeCode::HeapArray:
 		{
 			ReadLocker lock(Heap::heapLock);
-			val.SetSigned(val.ahVal.GetNumElements());
+			val.SetInt(val.ahVal.GetNumElements());
 		}
 		break;
 

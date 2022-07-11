@@ -369,8 +369,8 @@ private:
 
 	GCodeResult TryMacroFile(GCodeBuffer& gb) noexcept;												// Try to find a macro file that implements a G or M command
 
-	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err) THROWS(GCodeException) SPEED_CRITICAL;	// Execute a straight move
-	bool DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err) THROWS(GCodeException)		// Execute an arc move
+	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeException) SPEED_CRITICAL;	// Execute a straight move
+	bool DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)							// Execute an arc move
 		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
 	void FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
 	bool CheckEnoughAxesHomed(AxesBitmap axesToMove) noexcept;										// Check that enough axes have been homed
@@ -407,7 +407,7 @@ private:
 
 	bool ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Process a whole-line comment
 
-	const char *LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException);	// Set up the extrusion of a move
+	void LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException);	// Set up the extrusion of a move
 
 	bool Push(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Push feedrate etc on the stack
 	void Pop(GCodeBuffer& gb, bool withinSameFile) noexcept;										// Pop feedrate etc
@@ -425,7 +425,7 @@ private:
 
 	ReadLockedPointer<Tool> GetSpecifiedOrCurrentTool(GCodeBuffer& gb) THROWS(GCodeException);
 	GCodeResult ManageTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Create a new tool definition
-	void SetToolHeaters(Tool *tool, float temperature) THROWS(GCodeException);				// Set all a tool's heaters active and standby temperatures, for M104/M109
+	void SetToolHeaters(const GCodeBuffer& gb, Tool *tool, float temperature) THROWS(GCodeException);	// Set all a tool's heaters active and standby temperatures, for M104/M109
 	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance) const noexcept;
 																							// Wait for the heaters associated with the specified tool to reach their set temperatures
 	void GenerateTemperatureReport(const GCodeBuffer& gb, const StringRef& reply) const noexcept;	// Store a standard-format temperature report in reply
@@ -451,7 +451,7 @@ private:
 	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const noexcept;	// save some information in config-override.g
 #endif
 
-	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract);								// Retract or un-retract filaments
+	GCodeResult RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeException);			// Retract or un-retract filaments
 	GCodeResult LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load the specified filament into a tool
 	GCodeResult UnloadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Unload the current filament from a tool
 	bool ChangeMicrostepping(size_t axisOrExtruder, unsigned int microsteps, bool interp, const StringRef& reply) const noexcept; // Change microstepping on the specified drive
@@ -533,8 +533,7 @@ private:
 
 #if SUPPORT_ASYNC_MOVES
 	GCodeResult SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M596
-	bool AllocateAxes(MovementState& ms, AxesBitmap axes) noexcept;				// allocate axes to a movement state
-	bool AllocateExtruders(MovementState& ms, ExtrudersBitmap extruders) noexcept;	// allocate an extruder to a movement state
+	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes) THROWS(GCodeException);	// allocate axes to a movement state
 	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;	// synchronise motion systems
 	void UpdateUserCoordinatesAndReleaseOwnedAxes(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;
 #endif
@@ -699,8 +698,7 @@ private:
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
 
 #if SUPPORT_ASYNC_MOVES
-	ExtrudersBitmap extrudersMoved;				// extruders that have moved since the last sync
-	AxesBitmap axesMoved;						// axes that have moved since the last sync
+	AxesBitmap axesAndExtrudersMoved;			// axes and extruders that have moved since the last sync
 #endif
 
 #if HAS_MASS_STORAGE

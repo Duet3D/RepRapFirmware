@@ -684,7 +684,7 @@ bool GCodeBuffer::TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeExcept
 // Try to get an int array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
-bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad) THROWS(GCodeException)
+void GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& seen, bool doPad) THROWS(GCodeException)
 {
 	if (Seen(c))
 	{
@@ -696,17 +696,15 @@ bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], const S
 		}
 		else
 		{
-			reply.printf("Wrong number of values after '\''%c'\'', expected %d", c, numVals);
-			return true;
+			ThrowGCodeException("Wrong number of values in array, expected %u", (uint32_t)numVals);
 		}
 	}
-	return false;
 }
 
 // Try to get a float array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
-bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad) THROWS(GCodeException)
+void GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], bool& seen, bool doPad) THROWS(GCodeException)
 {
 	if (Seen(c))
 	{
@@ -718,11 +716,9 @@ bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], const S
 		}
 		else
 		{
-			reply.printf("Wrong number of values after '\''%c'\'', expected %d", c, numVals);
-			return true;
+			ThrowGCodeException("Wrong number of values in array, expected %u", (uint32_t)numVals);
 		}
 	}
-	return false;
 }
 
 // Try to get a quoted string after parameter letter.
@@ -1233,6 +1229,26 @@ VariableSet& GCodeBuffer::GetVariables() const noexcept
 		mc = mc->GetPrevious();
 	}
 	return mc->variables;
+}
+
+void GCodeBuffer::ThrowGCodeException(const char *msg) const THROWS(GCodeException)
+{
+	const int column =
+#if HAS_SBC_INTERFACE
+						(isBinaryBuffer) ? -1 :
+#endif
+							stringParser.GetColumn();
+	throw GCodeException(GetLineNumber(), column, msg);
+}
+
+void GCodeBuffer::ThrowGCodeException(const char *msg, uint32_t param) const THROWS(GCodeException)
+{
+	const int column =
+#if HAS_SBC_INTERFACE
+						(isBinaryBuffer) ? -1 :
+#endif
+							stringParser.GetColumn();
+	throw GCodeException(GetLineNumber(), column, msg, param);
 }
 
 #if SUPPORT_COORDINATE_ROTATION

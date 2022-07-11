@@ -115,8 +115,8 @@ public:
 	bool TryGetUIValue(char c, uint32_t& val, bool& seen) THROWS(GCodeException);
 	bool TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32_t maxValuePlusOne) THROWS(GCodeException);
 	bool TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeException);
-	bool TryGetFloatArray(char c, size_t numVals, float vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS(GCodeException);
-	bool TryGetUIArray(char c, size_t numVals, uint32_t vals[], const StringRef& reply, bool& seen, bool doPad = false) THROWS(GCodeException);
+	void TryGetFloatArray(char c, size_t numVals, float vals[], bool& seen, bool doPad = false) THROWS(GCodeException);
+	void TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& seen, bool doPad = false) THROWS(GCodeException);
 	bool TryGetQuotedString(char c, const StringRef& str, bool& seen, bool allowEmpty = false) THROWS(GCodeException);
 	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen) THROWS(GCodeException);
 
@@ -135,7 +135,6 @@ public:
 	bool Executing() const noexcept { return machineState->Executing(); }	// Return true if this GCodeBuffer for executing commands addressed to the current queue
 	bool ExecutingAll() const noexcept { return machineState->ExecutingAll(); }
 	size_t GetQueueNumberToLock() const noexcept { return machineState->GetQueueNumberToLock(); }
-
 #endif
 
 	void SetCommsProperties(uint32_t arg) noexcept;
@@ -263,6 +262,9 @@ public:
 
 	void AddParameters(VariableSet& vars, int codeRunning) noexcept;
 	VariableSet& GetVariables() const noexcept;
+
+	[[noreturn]] void ThrowGCodeException(const char *msg) const THROWS(GCodeException);
+	[[noreturn]] void ThrowGCodeException(const char *msg, uint32_t param) const THROWS(GCodeException);
 
 #if SUPPORT_COORDINATE_ROTATION
 	bool DoingCoordinateRotation() const noexcept;

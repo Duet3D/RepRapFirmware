@@ -1564,7 +1564,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 		const Move& move = reprap.GetMove();
 		float coords[MaxAxes];
 		move.GetPartialMachinePosition(coords, AxesBitmap::MakeLowestNBits(numTotalAxes), 0);
-		move.GetPartialMachinePosition(coords, moveStates[1].axesMoved, 1);
+		move.GetPartialMachinePosition(coords, moveStates[1].axesAndExtrudersOwned, 1);
 		float coords2[MaxAxes];
 		memcpyf(coords2, coords, MaxAxes);
 		move.InverseAxisAndBedTransform(coords, moveStates[0].currentTool);
@@ -1573,12 +1573,9 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 		UpdateUserPositionFromMachinePosition(gb, moveStates[1]);
 
 		// Release all axes and extruders
-		axesMoved.Clear();
-		moveStates[0].axesMoved.Clear();
-		moveStates[1].axesMoved.Clear();
-		extrudersMoved.Clear();
-		moveStates[0].extrudersMoved.Clear();
-		moveStates[1].extrudersMoved.Clear();
+		axesAndExtrudersMoved.Clear();
+		moveStates[0].axesAndExtrudersOwned.Clear();
+		moveStates[1].axesAndExtrudersOwned.Clear();
 #else
 		UpdateCurrentUserPosition(gb);
 #endif
@@ -1616,8 +1613,7 @@ void GCodes::Pop(GCodeBuffer& gb, bool withinSameFile) noexcept
 // Set up the extrusion and feed rate of a move for the Move class
 // 'moveBuffer.moveType' and 'moveBuffer.isCoordinated' must be set up before calling this
 // 'isPrintingMove' is true if there is any axis movement
-// Returns nullptr if this gcode is valid so far, or an error message if it should be discarded
-const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException)
+void GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& ms, bool isPrintingMove) THROWS(GCodeException)
 {
 	// Deal with feed rate, also determine whether M220 and M221 speed and extrusion factors apply to this move
 	if (ms.isCoordinated || machineType == MachineType::fff)
@@ -1646,6 +1642,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, Movement
 	}
 	ms.hasPositiveExtrusion = false;
 	ms.moveStartVirtualExtruderPosition = ms.latestVirtualExtruderPosition;			// save this before we update it
+	AxesBitmap logicalDrivesMoving;
 	ExtrudersBitmap extrudersMoving;
 
 	// Check if we are extruding
@@ -1656,7 +1653,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, Movement
 		if (tool == nullptr)
 		{
 			displayNoToolWarning = true;
-			return nullptr;
+			return;
 		}
 
 		const size_t eMoveCount = tool->DriveCount();
@@ -1718,6 +1715,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, Movement
 																		? extrusionAmount * extrusionFactors[extruder]
 																		: extrusionAmount;
 						extrudersMoving.SetBit(extruder);
+						logicalDrivesMoving.SetBit(ExtruderToLogicalDrive(extruder));
 					}
 				}
 				if (!isPrintingMove && ms.usingStandardFeedrate)
@@ -1757,33 +1755,29 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, Movement
 																			? extrusionAmount * extrusionFactors[extruder]
 																			: extrusionAmount;
 							extrudersMoving.SetBit(extruder);
+							logicalDrivesMoving.SetBit(ExtruderToLogicalDrive(extruder));
 						}
 					}
 				}
 				else
 				{
-					return "Multiple E parameters in G1 commands are not supported in absolute extrusion mode";
+					gb.ThrowGCodeException("Multiple E parameters in G1 commands are not supported in absolute extrusion mode");
 				}
 			}
 		}
 	}
 
 #if SUPPORT_ASYNC_MOVES
-	if (!AllocateExtruders(ms, extrudersMoving))
-	{
-		return "Extruder is already in use by a different motion system";
-	}
+	AllocateAxes(gb, ms, logicalDrivesMoving);
 #endif
 
 	if (ms.moveType == 1 || ms.moveType == 4)
 	{
 		if (!platform.GetEndstops().EnableExtruderEndstops(extrudersMoving))
 		{
-			return "Failed to enable extruder endstops";
+			gb.ThrowGCodeException("Failed to enable extruder endstops");
 		}
 	}
-
-	return nullptr;
 }
 
 // Check that enough axes have been homed, returning true if insufficient axes homed
@@ -1797,7 +1791,7 @@ bool GCodes::CheckEnoughAxesHomed(AxesBitmap axesToMove) noexcept
 // If we can't execute the move, return true with 'err' set to the error message
 // Else return true with 'err' left alone (it is set to nullptr on entry)
 // We have already acquired the movement lock and waited for the previous move to be taken.
-bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& err) THROWS(GCodeException)
+bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeException)
 {
 	MovementState& ms = GetMovementState(gb);
 	if (ms.moveFractionToSkip > 0.0)
@@ -1848,8 +1842,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		}
 		else
 		{
-			err = "G0/G1: bad restore point number";
-			return true;
+			gb.ThrowGCodeException("G0/G1: bad restore point number");
 		}
 	}
 
@@ -1920,8 +1913,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 			// If it is a special move on a delta, movement must be relative.
 			if (ms.moveType != 0 && !gb.LatestMachineState().axesRelative && reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta)
 			{
-				err = "G0/G1: attempt to move individual motors of a delta machine to absolute positions";
-				return true;
+				gb.ThrowGCodeException("G0/G1: attempt to move individual motors of a delta machine to absolute positions");
 			}
 
 			axesMentioned.SetBit(axis);
@@ -2000,26 +1992,17 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		}
 
 #if SUPPORT_ASYNC_MOVES
-		if (!AllocateAxes(ms, realAxesMoving))
-		{
-			err = "Axis is already in use by a different motion system";
-			return true;
-		}
+		AllocateAxes(gb, ms, realAxesMoving);
 #endif
 		if (!doingManualBedProbe && CheckEnoughAxesHomed(axesMentioned))
 		{
-			err = "G0/G1: insufficient axes homed";
-			return true;
+			gb.ThrowGCodeException("G0/G1: insufficient axes homed");
 		}
 	}
 	else
 	{
 #if SUPPORT_ASYNC_MOVES
-		if (!AllocateAxes(ms, axesMentioned))
-		{
-			err = "Axis is already in use by a different motion system";
-			return true;
-		}
+		AllocateAxes(gb, ms, axesMentioned);
 #endif
 		switch (ms.moveType)
 		{
@@ -2032,8 +2015,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 				bool reduceAcceleration;
 				if (!platform.GetEndstops().EnableAxisEndstops(axesMentioned & AxesBitmap::MakeLowestNBits(numTotalAxes), ms.moveType == 1, reduceAcceleration))
 				{
-					err = "Failed to enable endstops";
-					return true;
+					gb.ThrowGCodeException("Failed to enable endstops");
 				}
 				ms.reduceAcceleration = reduceAcceleration;
 			}
@@ -2046,11 +2028,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		}
 	}
 
-	err = LoadExtrusionAndFeedrateFromGCode(gb, ms, axesMentioned.IsNonEmpty());	// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
-	if (err != nullptr)
-	{
-		return true;
-	}
+	LoadExtrusionAndFeedrateFromGCode(gb, ms, axesMentioned.IsNonEmpty());		// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
 
 	const bool isPrintingMove = ms.hasPositiveExtrusion && axesMentioned.IsNonEmpty();
 	if (ms.IsFirstMoveSincePrintingResumed())									// if this is the first move after skipping an object
@@ -2117,8 +2095,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		case LimitPositionResult::adjustedAndIntermediateUnreachable:
 			if (machineType != MachineType::fff)
 			{
-				err = "G0/G1: target position outside machine limits";		// it's a laser or CNC so this is a definite error
-				return true;
+				gb.ThrowGCodeException("G0/G1: target position outside machine limits");	// it's a laser or CNC so this is a definite error
 			}
 			ToolOffsetInverseTransform(ms);									// make sure the limits are reflected in the user position
 			if (lp == LimitPositionResult::adjusted)
@@ -2144,8 +2121,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 					break;
 				}
 			}
-			err = "G0/G1: target position not reachable from current position";		// we can't bring the move within limits, so this is a definite error
-			return true;
+			gb.ThrowGCodeException("G0/G1: target position not reachable from current position");		// we can't bring the move within limits, so this is a definite error
 
 		case LimitPositionResult::ok:
 		default:
@@ -2208,7 +2184,6 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	ms.doingArcMove = false;
 	FinaliseMove(gb, ms);
 	UnlockAll(gb);			// allow pause
-	err = nullptr;
 	return true;
 }
 
@@ -2217,7 +2192,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 // Currently, we do not process new babystepping when executing an arc move
 // Return true if finished, false if needs to be called again
 // If an error occurs, return true with 'err' assigned
-bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
+bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 {
 	// The planes are XY, ZX and YZ depending on the G17/G18/G19 setting. We must use ZX instead of XZ to get the correct arc direction.
 	const unsigned int selectedPlane = gb.LatestMachineState().selectedPlane;
@@ -2295,8 +2270,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		// The distance between start and end points must not be zero
 		if (dSquared == 0.0)
 		{
-			err = "G2/G3: distance between start and end points must not be zero when specifying a radius";
-			return true;
+			gb.ThrowGCodeException("G2/G3: distance between start and end points must not be zero when specifying a radius");
 		}
 
 		// The perpendicular must have a real length (possibly zero)
@@ -2312,8 +2286,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		{
 			if (hSquared < -0.02 * fsquare(rParam))							// allow the radius to be up to 1% too short
 			{
-				err = "G2/G3: radius is too small to reach endpoint";
-				return true;
+				gb.ThrowGCodeException("G2/G3: radius is too small to reach endpoint");
 			}
 			hDivD = 0.0;													// this has the effect of increasing the radius slightly so that the maths works
 		}
@@ -2350,8 +2323,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 
 		if (iParam == 0.0 && jParam == 0.0)			// at least one of IJK must be specified and nonzero
 		{
-			err = "G2/G3: no I J K or R parameter";
-			return true;
+			gb.ThrowGCodeException("G2/G3: no I J K or R parameter");
 		}
 	}
 
@@ -2418,16 +2390,11 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 
 	if (CheckEnoughAxesHomed(realAxesMoving))
 	{
-		err = "G2/G3: insufficient axes homed";
-		return true;
+		gb.ThrowGCodeException("G2/G3: insufficient axes homed");
 	}
 
 #if SUPPORT_ASYNC_MOVES
-	if (!AllocateAxes(ms, realAxesMoving))
-	{
-		err = "Axis is already in use by a different motion system";
-		return true;
-	}
+	AllocateAxes(gb, ms, realAxesMoving);
 #endif
 
 	// Compute the initial and final angles. Do this before we possible rotate the coordinates of the arc centre.
@@ -2456,8 +2423,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 
 	if (reprap.GetMove().GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok)
 	{
-		err = "G2/G3: outside machine limits";				// abandon the move
-		return true;
+		gb.ThrowGCodeException("G2/G3: outside machine limits");				// abandon the move
 	}
 
 	// Set up default move parameters
@@ -2484,11 +2450,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		}
 	}
 
-	err = LoadExtrusionAndFeedrateFromGCode(gb, ms, true);
-	if (err != nullptr)
-	{
-		return true;
-	}
+	LoadExtrusionAndFeedrateFromGCode(gb, ms, true);
 
 	if (ms.IsFirstMoveSincePrintingResumed())
 	{
@@ -3102,7 +3064,7 @@ ReadLockedPointer<ZProbe> GCodes::SetZProbeNumber(GCodeBuffer& gb, char probeLet
 	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(probeNumber);
 	if (zp.IsNull())
 	{
-		throw GCodeException(gb.GetLineNumber(), -1, "Z probe %" PRIu32 " not found", probeNumber);
+		gb.ThrowGCodeException("Z probe %u not found", probeNumber);
 	}
 	currentZProbeNumber = (uint8_t)probeNumber;
 	return zp;
@@ -3478,14 +3440,14 @@ ReadLockedPointer<Tool> GCodes::GetSpecifiedOrCurrentTool(GCodeBuffer& gb) THROW
 		tNumber = GetMovementState(gb).GetCurrentToolNumber();
 		if (tNumber < 0)
 		{
-			throw GCodeException(gb.GetLineNumber(), -1, "No tool number given and no current tool");
+			gb.ThrowGCodeException("No tool number given and no current tool");
 		}
 	}
 
 	ReadLockedPointer<Tool> tool = Tool::GetLockedTool(tNumber);
 	if (tool.IsNull())
 	{
-		throw GCodeException(gb.GetLineNumber(), -1, "Invalid tool number");
+		gb.ThrowGCodeException("Invalid tool number");
 	}
 	return tool;
 }
@@ -4050,11 +4012,11 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 }
 
 // Set all a tool's heaters active and standby temperatures, for M104/M109
-void GCodes::SetToolHeaters(Tool *tool, float temperature) THROWS(GCodeException)
+void GCodes::SetToolHeaters(const GCodeBuffer& gb, Tool *tool, float temperature) THROWS(GCodeException)
 {
 	if (tool == nullptr)
 	{
-		throw GCodeException(-1, -1, "setting temperature: no tool selected\n");
+		gb.ThrowGCodeException("setting temperature: no tool selected");
 	}
 
 	for (size_t h = 0; h < tool->HeaterCount(); h++)
@@ -4065,7 +4027,7 @@ void GCodes::SetToolHeaters(Tool *tool, float temperature) THROWS(GCodeException
 }
 
 // Retract or un-retract filament, returning true if movement has been queued, false if this needs to be called again
-GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
+GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeException)
 {
 	MovementState& ms = GetMovementState(gb);
 	if (!ms.IsCurrentObjectCancelled())
@@ -4098,12 +4060,18 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 				// Set up the retract move
 				if (currentTool != nullptr && currentTool->DriveCount() != 0)
 				{
+					AxesBitmap drivesMoving;
 					for (size_t i = 0; i < currentTool->DriveCount(); ++i)
 					{
-						ms.coords[ExtruderToLogicalDrive(currentTool->GetDrive(i))] = -currentTool->GetRetractLength();
+						const size_t logicalDrive = ExtruderToLogicalDrive(currentTool->GetDrive(i));
+						ms.coords[logicalDrive] = -currentTool->GetRetractLength();
+						drivesMoving.SetBit(logicalDrive);
 					}
 					ms.feedRate = currentTool->GetRetractSpeed() * currentTool->DriveCount();
 					ms.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
+#if SUPPORT_ASYNC_MOVES
+					AllocateAxes(gb, ms, drivesMoving);
+#endif
 					NewSingleSegmentMoveAvailable(ms);
 				}
 				if (currentTool->GetRetractHop() > 0.0)
@@ -4118,6 +4086,9 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 				ms.coords[Z_AXIS] -= ms.currentZHop;
 				ms.currentZHop = 0.0;
 				ms.canPauseAfter = false;			// don't pause in the middle of a command
+#if SUPPORT_ASYNC_MOVES
+				AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS));
+#endif
 				NewSingleSegmentMoveAvailable(ms);
 				gb.SetState(GCodeState::doingFirmwareUnRetraction);
 			}
@@ -4126,12 +4097,18 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 				// No retract hop, so just un-retract
 				if (currentTool != nullptr && currentTool->DriveCount() != 0)
 				{
+					AxesBitmap drivesMoving;
 					for (size_t i = 0; i < ms.currentTool->DriveCount(); ++i)
 					{
-						ms.coords[ExtruderToLogicalDrive(currentTool->GetDrive(i))] = currentTool->GetRetractLength() + currentTool->GetRetractExtra();
+						const size_t logicalDrive = ExtruderToLogicalDrive(currentTool->GetDrive(i));
+						ms.coords[logicalDrive] = currentTool->GetRetractLength() + currentTool->GetRetractExtra();
+						drivesMoving.SetBit(logicalDrive);
 					}
 					ms.feedRate = currentTool->GetUnRetractSpeed() * currentTool->DriveCount();
 					ms.canPauseAfter = true;
+#if SUPPORT_ASYNC_MOVES
+					AllocateAxes(gb, ms, drivesMoving);
+#endif
 					NewSingleSegmentMoveAvailable(ms);
 				}
 			}
@@ -5111,28 +5088,14 @@ const MovementState& GCodes::GetCurrentMovementState(const ObjectExplorationCont
 
 // Allocate an axis to a movement state returning true if successful, false if another movement state owns it already
 // This relies on cooperative scheduling between different GCodeBuffer objects
-bool GCodes::AllocateAxes(MovementState& ms, AxesBitmap axes) noexcept
+void GCodes::AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes) THROWS(GCodeException)
 {
-	if ((axes & axesMoved & ~ms.axesMoved).IsNonEmpty())
+	if ((axes & axesAndExtrudersMoved & ~ms.axesAndExtrudersOwned).IsNonEmpty())
 	{
-		return false;
+		gb.ThrowGCodeException("Axis is already used by a different motion system");
 	}
-	axesMoved |= axes;
-	ms.axesMoved |= axes;
-	return true;
-}
-
-// Allocate an extruder to a movement state
-// This relies on cooperative scheduling between different GCodeBuffer objects
-bool GCodes::AllocateExtruders(MovementState& ms, ExtrudersBitmap extruders) noexcept
-{
-	if ((extruders & extrudersMoved & ~ms.extrudersMoved).IsNonEmpty())
-	{
-		return false;
-	}
-	extrudersMoved |= extruders;
-	ms.extrudersMoved |= extruders;
-	return true;
+	axesAndExtrudersMoved |= axes;
+	ms.axesAndExtrudersOwned |= axes;
 }
 
 // Synchronise motion systems and update user coordinates.
@@ -5201,16 +5164,14 @@ void GCodes::UpdateUserCoordinatesAndReleaseOwnedAxes(GCodeBuffer& thisGb, const
 	const Move& move = reprap.GetMove();
 	float coords[MaxAxes];
 	move.GetPartialMachinePosition(coords, AxesBitmap::MakeLowestNBits(numTotalAxes), thisGb.GetOwnQueueNumber());
-	move.GetPartialMachinePosition(coords, otherMs.axesMoved, otherGb.GetOwnQueueNumber());
+	move.GetPartialMachinePosition(coords, otherMs.axesAndExtrudersOwned, otherGb.GetOwnQueueNumber());
 	MovementState& thisMs = GetMovementState(thisGb);
 	move.InverseAxisAndBedTransform(coords, thisMs.currentTool);
 	UpdateUserPositionFromMachinePosition(thisGb, thisMs);
 
 	// Release all axes and extruders that we were using
-	axesMoved &= ~thisMs.axesMoved;
-	thisMs.axesMoved.Clear();
-	extrudersMoved &= ~thisMs.extrudersMoved;
-	thisMs.extrudersMoved.Clear();
+	axesAndExtrudersMoved &= ~thisMs.axesAndExtrudersOwned;
+	thisMs.axesAndExtrudersOwned.Clear();
 }
 
 #endif
@@ -5376,7 +5337,7 @@ bool GCodes::EvaluateValueForDisplay(const char *_ecv_array str, ExpressionValue
 	}
 	catch (GCodeException&)
 	{
-		expr.Set(nullptr);
+		expr.SetNull(nullptr);
 		return false;
 	}
 }

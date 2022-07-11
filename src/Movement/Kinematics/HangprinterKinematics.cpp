@@ -203,26 +203,10 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 	if (mCode == 669)
 	{
 		const bool seenNonGeometry = TryConfigureSegmentation(gb);
-		if (gb.TryGetFloatArray('A', 3, anchors[A_AXIS], reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('B', 3, anchors[B_AXIS], reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('C', 3, anchors[C_AXIS], reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('D', 3, anchors[D_AXIS], reply, seen))
-		{
-			error = true;
-			return true;
-		}
+		gb.TryGetFloatArray('A', 3, anchors[A_AXIS], seen);
+		gb.TryGetFloatArray('B', 3, anchors[B_AXIS], seen);
+		gb.TryGetFloatArray('C', 3, anchors[C_AXIS], seen);
+		gb.TryGetFloatArray('D', 3, anchors[D_AXIS], seen);
 
 		if (gb.Seen('P'))
 		{
@@ -254,59 +238,18 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 	else if (mCode == 666)
 	{
 		gb.TryGetFValue('Q', spoolBuildupFactor, seen);
-		if (gb.TryGetFloatArray('R', HANGPRINTER_AXES, spoolRadii, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetUIArray('U', HANGPRINTER_AXES, mechanicalAdvantage, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetUIArray('O', HANGPRINTER_AXES, linesPerSpool, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetUIArray('L', HANGPRINTER_AXES, motorGearTeeth, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetUIArray('H', HANGPRINTER_AXES, spoolGearTeeth, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetUIArray('J', HANGPRINTER_AXES, fullStepsPerMotorRev, reply, seen))
-		{
-			error = true;
-			return true;
-		}
+		gb.TryGetFloatArray('R', HANGPRINTER_AXES, spoolRadii, seen);
+		gb.TryGetUIArray('U', HANGPRINTER_AXES, mechanicalAdvantage, seen);
+		gb.TryGetUIArray('O', HANGPRINTER_AXES, linesPerSpool, seen);
+		gb.TryGetUIArray('L', HANGPRINTER_AXES, motorGearTeeth, seen);
+		gb.TryGetUIArray('H', HANGPRINTER_AXES, spoolGearTeeth, seen);
+		gb.TryGetUIArray('J', HANGPRINTER_AXES, fullStepsPerMotorRev, seen);
 		gb.TryGetFValue('W', moverWeight_kg, seen);
 		gb.TryGetFValue('S', springKPerUnitLength, seen);
-		if (gb.TryGetFloatArray('I', HANGPRINTER_AXES, minPlannedForce_Newton, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('X', HANGPRINTER_AXES, maxPlannedForce_Newton, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('Y', HANGPRINTER_AXES, guyWireLengths, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		gb.TryGetFValue('T', targetForce_Newton, seen);
-		if (gb.TryGetFloatArray('C', HANGPRINTER_AXES, torqueConstants, reply, seen))
-		{
-			error = true;
-			return true;
-		}
+		gb.TryGetFloatArray('I', HANGPRINTER_AXES, minPlannedForce_Newton, seen);
+		gb.TryGetFloatArray('X', HANGPRINTER_AXES, maxPlannedForce_Newton, seen);
+		gb.TryGetFloatArray('Y', HANGPRINTER_AXES, guyWireLengths, seen);
+		gb.TryGetFloatArray('C', HANGPRINTER_AXES, torqueConstants, seen);
 		if (seen)
 		{
 			Recalc();

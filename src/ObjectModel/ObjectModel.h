@@ -169,9 +169,11 @@ struct ExpressionValue
 	void SetFloat(float f, uint32_t digits) noexcept;
 	void SetFloat(float f) noexcept { SetFloat(f, MaxFloatDigitsDisplayedAfterPoint); }
 	void SetCString(const char *_ecv_array s) noexcept { Release(); type = (uint32_t)TypeCode::CString; sVal = s; }
+	void SetIPAddress(IPAddress ip) noexcept { Release(); type = (uint32_t)TypeCode::IPAddress_tc; uVal = ip.GetV4LittleEndian(); }
 	void SetDriverId(DriverId did) noexcept;
 
 	void SetStringHandle(StringHandle sh) noexcept { Release(); type = (uint32_t)TypeCode::HeapString; shVal = sh; }
+	void SetArrayHandle(ArrayHandle ah) noexcept { Release(); type = (uint32_t)TypeCode::HeapArray; ahVal = ah; }
 	void SetNull(std::nullptr_t dummy) noexcept { Release();  type = (uint32_t)TypeCode::None; }
 	void SetDateTime(time_t t) noexcept { Release(); type = (uint32_t)TypeCode::DateTime_tc; Set56BitValue(t); }
 

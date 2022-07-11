@@ -1942,17 +1942,23 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
 
 GCodeException StringParser::ConstructParseException(const char *str) const noexcept
 {
-	return GCodeException(gb.GetLineNumber(), readPointer + commandIndent, str);
+	return GCodeException(gb.GetLineNumber(), GetColumn(), str);
 }
 
 GCodeException StringParser::ConstructParseException(const char *str, const char *param) const noexcept
 {
-	return GCodeException(gb.GetLineNumber(), readPointer + commandIndent, str, param);
+	return GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
 }
 
 GCodeException StringParser::ConstructParseException(const char *str, uint32_t param) const noexcept
 {
-	return GCodeException(gb.GetLineNumber(), readPointer + commandIndent, str, param);
+	return GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
+}
+
+// Get the current column if we can, else return -1
+int StringParser::GetColumn() const noexcept
+{
+	return (readPointer < 0) ? -1 : readPointer + commandIndent;
 }
 
 // End
