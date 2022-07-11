@@ -1853,7 +1853,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 #endif
 					reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s", FIRMWARE_NAME, VERSION, platform.GetElectronicsString());
-#ifdef DUET_NG
+#if defined(DUET_NG)
 					const char* const expansionName = DuetExpansion::GetExpansionBoardName();
 					if (expansionName != nullptr)
 					{
@@ -1864,8 +1864,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						reply.catf(" + %s", additionalExpansionName);
 					}
+#elif defined(DUET3MINI)
+					{
+						const char *const expansionString = platform.GetExpansionBoardName();
+						if (expansionString != nullptr)
+						{
+							reply.catf(" + %s", expansionString);
+						}
+					}
 #endif
-#ifdef DUET3_ATE
+#if defined(DUET3_ATE)
 					reply.lcatf("ATE firmware version %s date %s %s", Duet3Ate::GetFirmwareVersionString(), Duet3Ate::GetFirmwareDateString(), Duet3Ate::GetFirmwareTimeString());
 #else
 					reply.catf(" FIRMWARE_DATE: %s%s", DATE, TIME_SUFFIX);

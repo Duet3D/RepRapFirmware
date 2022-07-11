@@ -680,6 +680,10 @@ public:
 	void OnProcessingCanMessage() noexcept;								// called when we start processing any CAN message except for regular messages e.g. time sync
 #endif
 
+#if SUPPORT_TMC2240 && defined(DUET3MINI)
+	const char *_ecv_array null GetExpansionBoardName() const noexcept { return (hasTmc2240Expansion) ? "Duet3 Mini 2+ (TMC2240)" : nullptr; }
+#endif
+
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
@@ -805,6 +809,10 @@ private:
 
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 	bool warnDriversNotPowered;
+#endif
+
+#if SUPPORT_TMC2240 && defined(DUET3MINI)
+	bool hasTmc2240Expansion;
 #endif
 
 #if HAS_STALL_DETECT

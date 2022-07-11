@@ -1964,6 +1964,8 @@ debugPrintf("Driver %u ok\n", driver);
 // It is assumed that the drivers are not powered, so driversPowered(true) must be called after calling this before the motors can be moved.
 #if TMC22xx_VARIABLE_NUM_DRIVERS
 void SmartDrivers::Init(size_t numTmcDrivers) noexcept
+#elif SUPPORT_TMC2240 && defined(DUET3MINI)
+void SmartDrivers::Init(bool hasTmc2240Expansion) noexcept
 #else
 void SmartDrivers::Init() noexcept
 #endif
@@ -2051,7 +2053,11 @@ void SmartDrivers::Init() noexcept
 								, DriverDiagPins[drive]
 #endif
 #if SUPPORT_TMC2240
+# ifdef DUET3MINI
+								, hasTmc2240Expansion && drive >= 5		// drivers 5 and 6 may be TMC2240
+# else
 								, false
+# endif
 #endif
 								);
 	}
