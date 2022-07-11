@@ -179,6 +179,8 @@ constexpr uint32_t SLAVECONF_SENDDLY_120_BITS = 14 << 8;
 
 constexpr uint32_t DefaultSlaveConfReg = SLAVECONF_SENDDLY_8_BITS;	// we don't need any delay between transmission and reception
 
+#if 0	// we don't currently use these
+
 // OTP_PROG register (0x04, WO, not TMC2240)
 constexpr uint8_t REGNUM_OTP_PROG = 0x04;
 constexpr uint32_t OTP_PROG_BIT_SHIFT = 0;
@@ -198,7 +200,7 @@ constexpr uint32_t OTP_READ_BYTE2_MASK = 0xFF << OTP_READ_BYTE2_SHIFT;
 
 // IOIN register for TMC22xx but not TMC2240 (0x06, RO)
 constexpr uint8_t REGNUM_IOIN_22xx = 0x06;
-#if 0	// we don't currently use these
+
 constexpr uint32_t IOIN_220x_ENN = 1 << 0;
 constexpr uint32_t IOIN_222x_PDN_UART = 1 << 1;
 constexpr uint32_t IOIN_220x_MS1 = 1 << 2;
@@ -220,7 +222,6 @@ constexpr uint32_t IOIN_VERSION_MASK = 0xFF << IOIN_VERSION_SHIFT;
 
 constexpr uint32_t IOIN_VERSION_2208_2224 = 0x20;			// version for TMC2208/2224
 constexpr uint32_t IOIN_VERSION_2209 = 0x21;				// version for TMC2209
-#endif
 
 // IOIN register for TMC2240 (0x04, RO)
 constexpr uint8_t REGNUM_IOIN_2240 = 0x04;
@@ -236,16 +237,40 @@ constexpr uint32_t FACTORY_CONF_OTTRIM_150_120 = 0x01 << FACTORY_CONF_OTTRIM_SHI
 constexpr uint32_t FACTORY_CONF_OTTRIM_150_143 = 0x02 << FACTORY_CONF_OTTRIM_SHIFT;
 constexpr uint32_t FACTORY_CONF_OTTRIM_157_143 = 0x03 << FACTORY_CONF_OTTRIM_SHIFT;
 
+#endif
+
+#if SUPPORT_TMC2240
+
+// DRV_CONF register (TMC2240 only)
+constexpr uint8_t REGNUM_DRV_CONF40 = 0x0A;
+
+constexpr unsigned int DRV_CONF40_CURRENT_RANGE_SHIFT = 0;
+constexpr uint32_t DRV_CONF40_CURRENT_RANGE_MASK = 0x03;										// 0 = 100V/us, 1 = 200V/us, 2 = 400V/us, 3 - 800V/us
+constexpr unsigned int DRV_CONF40_SLOPE_CONTROL_SHIFT = 4;
+constexpr uint32_t DRV_CONF40_SLOPE_CONTROL_MASK = 0x03 << DRV_CONF40_SLOPE_CONTROL_SHIFT;		// 0 = 1A, 1 = 2A, 2 = 3A, 3 = 3A peak current
+
+// GLOBAL_SCALER register (TMC2240 only)
+constexpr uint8_t REGNUM_GLOVAL_SCALER40 = 0x0B;
+
+constexpr uint32_t GLOBAL_SCALER40_MASK = 0xFF;				// maximum current gets multiplied by this and divided by 255. Must be >= 32; > 128 recommended.
+
+#endif
+
 // Velocity dependent control registers
 
 // IHOLD_IRUN register (WO)
 constexpr uint8_t REGNUM_IHOLDIRUN = 0x10;
-constexpr uint32_t IHOLDIRUN_IHOLD_SHIFT = 0;				// standstill current
+constexpr unsigned int IHOLDIRUN_IHOLD_SHIFT = 0;				// standstill current
 constexpr uint32_t IHOLDIRUN_IHOLD_MASK = 0x1F << IHOLDIRUN_IHOLD_SHIFT;
-constexpr uint32_t IHOLDIRUN_IRUN_SHIFT = 8;
+constexpr unsigned int IHOLDIRUN_IRUN_SHIFT = 8;
 constexpr uint32_t IHOLDIRUN_IRUN_MASK = 0x1F << IHOLDIRUN_IRUN_SHIFT;
-constexpr uint32_t IHOLDIRUN_IHOLDDELAY_SHIFT = 16;
+constexpr unsigned int IHOLDIRUN_IHOLDDELAY_SHIFT = 16;
 constexpr uint32_t IHOLDIRUN_IHOLDDELAY_MASK = 0x0F << IHOLDIRUN_IHOLDDELAY_SHIFT;
+
+#if SUPPORT_TMC2240
+constexpr unsigned int IHOLDIRUN40_IRUNDELAY_SHIFT = 24;
+constexpr uint32_t IHOLDIRUN40_IRUNDELAY_MASK = 0x0F << IHOLDIRUN40_IRUNDELAY_SHIFT;
+#endif
 
 constexpr uint32_t DefaultIholdIrunReg = (0 << IHOLDIRUN_IHOLD_SHIFT) | (0 << IHOLDIRUN_IRUN_SHIFT) | (2 << IHOLDIRUN_IHOLDDELAY_SHIFT);
 															// approx. 0.5 sec motor current reduction to low power
@@ -253,10 +278,26 @@ constexpr uint32_t DefaultIholdIrunReg = (0 << IHOLDIRUN_IHOLD_SHIFT) | (0 << IH
 constexpr uint8_t REGNUM_TPOWER_DOWN = 0x11;	// wo, 8 bits, sets delay from standstill detection to motor current reduction
 constexpr uint8_t REGNUM_TSTEP = 0x12;			// ro, 20 bits, measured time between two 1/256 microsteps, in clocks
 constexpr uint8_t REGNUM_TPWMTHRS = 0x13;		// wo, 20 bits, upper velocity for StealthChop mode
+
+#if SUPPORT_TMC2240
+constexpr uint8_t REGNUM_THIGH40 = 0x15;
+constexpr uint32_t THIGH_MASK = 0x00FFFFFF;		// when the step interval is below this, TMC2240 is forced into spreadCycle mode
+#endif
+
 constexpr uint8_t REGNUM_VACTUAL = 0x22;		// wo, 24 bits signed, sets motor velocity for continuous rotation
 
-// Stallguard registers (TMC2209 only)
+// Stallguard registers (TMC2209 and TMC2240 only)
 constexpr uint8_t REGNUM_TCOOLTHRS = 0x14;		// wo, 20-bit lower threshold velocity. CoolStep and the StallGuard DIAG output are enabled above this speed.
+
+#if SUPPORT_TMC2240
+constexpr uint8_t REGNUM_DIRECT_MODE = 0x2D;
+constexpr uint8_t REGNUM_ENCMODE = 0x38;
+constexpr uint8_t REGNUM_X_ENC = 0x39;
+constexpr uint8_t REGNUM_ENC_CONST = 0x3A;
+constexpr uint8_t REGNUM_ENC_STATUS = 0x3B;
+constexpr uint8_t REGNUM_ENC_LATCH = 0x3C;
+#endif
+
 constexpr uint8_t REGNUM_SGTHRS = 0x40;			// w0, 8-bit stall detection threshold. Stall is signalled when SG_RESULT <= SGTHRS * 2.
 constexpr uint8_t REGNUM_SG_RESULT = 0x41;		// 10-bit StallGard result, read-only. Bits 0 and 9 are always 0.
 constexpr uint8_t REGNUM_COOLCONF = 0x42;		// 16-bit CoolStep control
@@ -278,6 +319,28 @@ constexpr uint32_t COOLCONF_SEDN_MASK = 0x0003 << COOLCONF_SEDN_SHIFT;
 // Minimum current for smart current control, 0 = half of IRUN, 1 = 1/4 of IRUN
 constexpr unsigned int COOLCONF_SEIMIN_SHIFT = 15;
 constexpr uint32_t COOLCONF_SEIMIN_MASK = 0x0001 << COOLCONF_SEIMIN_SHIFT;
+
+#if SUPPORT_TMC2240
+constexpr uint8_t REGNUM_ADC_VSUPPLY_AIN = 0x50;
+constexpr unsigned int ADC_VSUPPLY_SHIFT = 0;
+constexpr uint32_t ADC_VSUPPLY_MASK = 0x01FFF << ADC_VSUPPLY_SHIFT;							// ADC voltage reading via low pass filter
+constexpr unsigned int ADC_AIN_SHIFT = 16;
+constexpr uint32_t ADC_AIN_MASK = 0x01FFF << ADC_AIN_SHIFT;									// ADC AIN reading
+
+constexpr uint8_t REGNUM_ADC_TEMP = 0x51;
+constexpr unsigned int ADC_TEMP_SHIFT = 0;
+constexpr uint32_t ADC_TEMP_MASK = 0x01FFF << ADC_TEMP_SHIFT;								// ADC temperature reading
+
+constexpr uint8_t REGNUM_OTW_OV_VTH = 0x52;
+constexpr unsigned int OVERVOLTAGE_VTH_SHIFT = 0;
+constexpr uint32_t OVERVOLTAGE_VTH_MASK = 0x01FFF << OVERVOLTAGE_VTH_SHIFT;					// ADC over-voltage threshold, default 36V
+constexpr unsigned int OVERTEMPPREWARNING_VTH_SHIFT = 16;
+constexpr uint32_t OVERTEMPPREWARNING_VTH_MASK = 0x01FFF << OVERTEMPPREWARNING_VTH_SHIFT;	// ADC over-temperature warning threshold, default 0x0B92 = 120C
+
+constexpr uint8_t REGNUM_MSLUT_0 = 0x60;			// first of 8 lookup table registers
+constexpr uint8_t REGNUM_MSLUTSEL = 0x68;
+constexpr uint8_t REGNUM_MSLUTSTART = 0x69;
+#endif
 
 // Sequencer registers (read only)
 constexpr uint8_t REGNUM_MSCNT = 0x6A;
