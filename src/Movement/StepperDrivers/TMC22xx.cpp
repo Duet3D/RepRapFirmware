@@ -29,8 +29,16 @@
 # error TMC22xx_USE_SLAVEADDR not defined
 #endif
 
+#ifndef HAS_STALL_DETECT
+# error HAS_STALL_DETECT not defined
+#endif
+
 #ifndef SUPPORT_TMC2240
 # define SUPPORT_TMC2240	0
+#endif
+
+#if SUPPORT_TMC2240 && !HAS_STALL_DETECT
+# error Must set HAS_STALL_DETECT with SUPPORT_TMC2240
 #endif
 
 #define TMC22xx_SINGLE_UART		(TMC22xx_SINGLE_DRIVER || TMC22xx_HAS_MUX || TMC22xx_USE_SLAVEADDR)
@@ -609,7 +617,9 @@ private:
 	static void SetupDMARead(uint8_t regnum) noexcept SPEED_CRITICAL;					// set up the DMAC to receive a register
 #endif
 
-#if HAS_STALL_DETECT
+#if SUPPORT_TMC2240
+	static constexpr unsigned int NumWriteRegisters = 10;		// the number of registers that we write to on a TMC2240
+#elif HAS_STALL_DETECT
 	static constexpr unsigned int NumWriteRegisters = 9;		// the number of registers that we write to on a TMC2209
 #else
 	static constexpr unsigned int NumWriteRegisters = 6;		// the number of registers that we write to on a TMC2208/2224
@@ -627,6 +637,9 @@ private:
 	static constexpr unsigned int WriteTcoolthrs = 6;			// coolstep and stall DIAG output lower speed threshold
 	static constexpr unsigned int WriteSgthrs = 7;				// stallguard threshold
 	static constexpr unsigned int WriteCoolconf = 8;			// coolstep configuration
+#endif
+#if SUPPORT_TMC2240
+	static constexpr unsigned int WriteDrvConf = 9;
 #endif
 	static constexpr unsigned int WriteSpecial = NumWriteRegisters;
 
@@ -781,7 +794,10 @@ constexpr uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 	// The rest are on TMC2209 only
 	REGNUM_TCOOLTHRS,
 	REGNUM_SGTHRS,
-	REGNUM_COOLCONF
+	REGNUM_COOLCONF,
+#endif
+#if SUPPORT_TMC2240
+	REGNUM_DRV_CONF40
 #endif
 };
 
@@ -794,7 +810,7 @@ constexpr uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 	REGNUM_PWM_SCALE,
 	REGNUM_PWM_AUTO,
 #if HAS_STALL_DETECT
-	REGNUM_SG_RESULT					// TMC2209 only
+	REGNUM_SG_RESULT					// TMC2209 and TMC2240 only
 #endif
 };
 
@@ -1087,6 +1103,12 @@ pre(!driversPowered)
 	SetStallMinimumStepsPerSecond(DefaultMinimumStepsPerSecond);
 	UpdateRegister(WriteCoolconf, 0);									// coolStep disabled
 #endif
+#if SUPPORT_TMC2240
+	if (isTmc2240)
+	{
+		UpdateRegister(WriteDrvConf, 0x02);								// set range to maximum
+	}
+#endif
 
 	for (size_t i = 0; i < NumReadRegisters; ++i)
 	{
@@ -1343,13 +1365,23 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 // Set the motor current
 void TmcDriverState::SetCurrent(float current) noexcept
 {
-	motorCurrent = constrain<float>(current, 50.0, MaximumMotorCurrent);
+	motorCurrent = constrain<float>(current, 50.0,
+#if SUPPORT_TMC2240
+													(isTmc2240) ? MaximumTmc2240MotorCurrent :
+#endif
+													MaximumMotorCurrent
+									);
 	UpdateCurrent();
 }
 
 void TmcDriverState::UpdateCurrent() noexcept
 {
-	const float idealIRunCs = DriverCsMultiplier * motorCurrent;
+	const float idealIRunCs = motorCurrent *
+#if SUPPORT_TMC2240
+								((isTmc2240) ? Tmc2240CsMultiplier : DriverCsMultiplier);
+#else
+								DriverCsMultiplier;
+#endif
 	const uint32_t iRunCsBits = constrain<uint32_t>((unsigned int)(idealIRunCs + 0.2), 1, 32) - 1;
 	const float idealIHoldCs = idealIRunCs * standstillCurrentFraction * (1.0/256.0);
 	const uint32_t iHoldCsBits = constrain<uint32_t>((unsigned int)(idealIHoldCs + 0.2), 1, 32) - 1;

@@ -171,7 +171,14 @@ constexpr float DriverVRef = 180.0;											// in mV
 constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
 constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
 constexpr float MaximumMotorCurrent = 2000.0;
-constexpr float MaximumStandstillCurrent = 1500.0;
+//constexpr float MaximumStandstillCurrent = 1500.0;						// this is not currently enforced
+
+#if SUPPORT_TMC2240
+constexpr float Tmc2240Rref = 14.0;											// TMC2240 reference resistor on Duet 3 Mini2+ prototype, in Kohms
+constexpr float Tmc2240FullScaleCurrent = 36000/Tmc2240Rref;				// in mA, assuming we set the range bits in the DRV_CONF register to 01b
+constexpr float Tmc2240CsMultiplier = 32.0/Tmc2240FullScaleCurrent;
+constexpr float MaximumTmc2240MotorCurrent = 2500.0;
+#endif
 
 // Thermistors
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(0), PortCPin(1), PortCPin(2) }; 	// Thermistor pin numbers
