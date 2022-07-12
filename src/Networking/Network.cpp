@@ -21,29 +21,32 @@
 #include "NetworkInterface.h"
 
 #if HAS_LWIP_NETWORKING
-#include "LwipEthernet/LwipEthernetInterface.h"
+# include "LwipEthernet/LwipEthernetInterface.h"
 #endif
 
 #if HAS_W5500_NETWORKING
-#include "W5500Ethernet/W5500Interface.h"
+# include "W5500Ethernet/W5500Interface.h"
 #endif
 
 #if HAS_WIFI_NETWORKING
-#include "ESP8266WiFi/WiFiInterface.h"
+# include "ESP8266WiFi/WiFiInterface.h"
 #endif
 
 #if HAS_RTOSPLUSTCP_NETWORKING
-#include "RTOSPlusTCPEthernet/RTOSPlusTCPEthernetInterface.h"
+# include "RTOSPlusTCPEthernet/RTOSPlusTCPEthernetInterface.h"
 #endif
 
 #if SUPPORT_HTTP
-#include "HttpResponder.h"
+# include "HttpResponder.h"
 #endif
 #if SUPPORT_FTP
-#include "FtpResponder.h"
+# include "FtpResponder.h"
 #endif
 #if SUPPORT_TELNET
-#include "TelnetResponder.h"
+# include "TelnetResponder.h"
+#endif
+#if SUPPORT_MULTICAST_DISCOVERY
+# include "MulticastResponder.h"
 #endif
 
 #ifdef __LPC17xx__
@@ -250,6 +253,12 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 				break;
 #endif
 
+#if SUPPORT_MULTICAST_DISCOVERY
+			case MulticastDiscoveryProtocol:
+				MulticastResponder::Disable();
+				break;
+#endif
+
 			default:
 				break;
 			}
@@ -434,6 +443,10 @@ void Network::Activate() noexcept
 		responders = new HttpResponder(responders);
 	}
 # endif
+
+#if SUPPORT_MULTICAST_DISCOVERY
+	responders = new MulticastResponder(responders);
+#endif
 
 	// Finally, create the network task
 	networkTask.Create(NetworkLoop, "NETWORK", nullptr, TaskPriority::SpinPriority);
