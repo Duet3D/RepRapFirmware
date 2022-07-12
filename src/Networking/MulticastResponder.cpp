@@ -15,72 +15,87 @@ extern "C" {
 
 #if SUPPORT_MULTICAST_DISCOVERY
 
-static udp_pcb *pcb = nullptr;
+static udp_pcb *ourPcb = nullptr;
+static pbuf * volatile receivedPbuf = nullptr;
+static volatile uint32_t receivedIpAddr;
+static volatile uint16_t receivedPort;
+static unsigned int messagesProcessed = 0;
+
+static bool active = false;
+
+// Receive callback function
+extern "C" void rcvFunc(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port) noexcept
+{
+	if (active && receivedPbuf == nullptr)
+	{
+		receivedIpAddr = addr->addr;
+		receivedPort = port;
+		receivedPbuf = p;
+	}
+	else
+	{
+		pbuf_free(p);
+	}
+}
 
 void MulticastResponder::Init() noexcept
 {
-	// TODO Auto-generated  stub
+	// Nothing needed here yet
 }
 
 // Do some work, returning true if we did anything significant
 void MulticastResponder::Spin() noexcept
 {
-	//TODO
+	pbuf *rxPbuf = receivedPbuf;
+	if (rxPbuf != nullptr)
+	{
+		debugPrintf("Rx UDP: addr %u.%u.%u.%u port %u data",
+						(unsigned int)((receivedIpAddr >> 24) & 0xFF), (unsigned int)((receivedIpAddr >> 16) & 0xFF), (unsigned int)((receivedIpAddr >> 8) & 0xFF), (unsigned int)(receivedIpAddr & 0xFF), receivedPort);
+		for (size_t i = 0; i < receivedPbuf->len; ++i)
+		{
+			debugPrintf(" %02x", ((const uint8_t*)(rxPbuf->payload))[i]);
+		}
+		debugPrintf("\n");
+		pbuf_free(rxPbuf);
+		receivedPbuf = nullptr;
+		++messagesProcessed;
+	}
 }
 
 void MulticastResponder::Diagnostics(MessageType mtype) noexcept
 {
-	//TODO
+	reprap.GetPlatform().MessageF(mtype, "=== Multicast handler ===\nMessages processed %u\n", messagesProcessed);
 }
 
 void MulticastResponder::Start(TcpPort port) noexcept
 {
-	if (pcb == nullptr)
+	if (ourPcb == nullptr)
 	{
-		pcb = udp_new();
-		if (pcb == nullptr)
+		ourPcb = udp_new();
+		if (ourPcb == nullptr)
 		{
 			reprap.GetPlatform().Message(ErrorMessage, "unable to allocate a pcb\n");
 		}
 		else
 		{
-			udp_bind(pcb, IP_ADDR_ANY, port);
-			//TODO
-#if 0
-			pcb = tcp_listen(pcb);
-			if (pcb == nullptr)
+			if (udp_bind(ourPcb, IP_ADDR_ANY, port) != ERR_OK)
 			{
-				platform.Message(ErrorMessage, "tcp_listen call failed\n");
+				reprap.GetPlatform().Message(ErrorMessage, "udp_bind call failed\n");
 			}
 			else
 			{
-				listeningPcbs[protocol] = pcb;
-				tcp_accept(listeningPcbs[protocol], conn_accept);
+				udp_recv(ourPcb, rcvFunc, nullptr);
 			}
-#endif
 		}
 	}
+	active = true;
+	messagesProcessed = 0;
 }
 
 void MulticastResponder::Stop() noexcept
 {
-	//TODO
+	active = false;
 }
-
-#if 0
-// Offer the responder a UDP packet, return true if it was accepted
-bool MulticastResponder::AcceptUdp(struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, uint16_t port) noexcept
-{
-	debugPrintf("Rx UDP: addr %u.%u.%u.%u port %u data", (unsigned int)((addr->addr >> 24) & 0xFF));
-	for (size_t i = 0; i < qq; ++i)
-	{
-		debugPrintf(" %02x", qq);
-	}
-	debugPrintf("\n");
-//TODO
-	return true;
-}
-#endif
 
 #endif
 

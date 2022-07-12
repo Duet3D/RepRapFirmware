@@ -584,6 +584,10 @@ void Network::Diagnostics(MessageType mtype) noexcept
 		iface->Diagnostics(mtype);
 	}
 #endif
+
+#if SUPPORT_MULTICAST_DISCOVERY
+	MulticastResponder::Diagnostics(mtype);
+#endif
 }
 
 int Network::EnableState(unsigned int interface) const noexcept
