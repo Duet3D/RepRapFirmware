@@ -32,10 +32,6 @@ public:
 	virtual void Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept = 0;	// terminate the responder if it is serving the specified protocol on the specified interface
 	virtual void Diagnostics(MessageType mtype) const noexcept = 0;
 
-#if SUPPORT_MULTICAST_DISCOVERY
-	virtual bool AcceptUdp(/*TODO parameters*/) noexcept { return false; }						// most responders are TCP responders, so reject UDP packets by default
-#endif
-
 protected:
 	// State machine control. Not all derived classes use all states.
 	enum class ResponderState

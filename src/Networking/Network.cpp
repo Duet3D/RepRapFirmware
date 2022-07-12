@@ -255,7 +255,6 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 
 #if SUPPORT_MULTICAST_DISCOVERY
 			case MulticastDiscoveryProtocol:
-				MulticastResponder::Disable();
 				break;
 #endif
 
@@ -445,7 +444,7 @@ void Network::Activate() noexcept
 # endif
 
 #if SUPPORT_MULTICAST_DISCOVERY
-	responders = new MulticastResponder(responders);
+	MulticastResponder::Init();
 #endif
 
 	// Finally, create the network task
