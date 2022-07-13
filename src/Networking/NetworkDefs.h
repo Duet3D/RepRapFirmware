@@ -46,7 +46,6 @@ constexpr size_t NumProtocols = NumTcpProtocols;		// number of network protocols
 
 constexpr NetworkProtocol HttpProtocol = 0, FtpProtocol = 1, TelnetProtocol = 2, MulticastDiscoveryProtocol = 3, FtpDataProtocol = 3, MdnsProtocol = 4, AnyProtocol = 255;
 
-constexpr size_t NumTcpPorts = NumTcpProtocols + 1;
 constexpr TcpPort DefaultHttpPort = 80;
 constexpr TcpPort DefaultFtpPort = 21;
 constexpr TcpPort DefaultTelnetPort = 23;

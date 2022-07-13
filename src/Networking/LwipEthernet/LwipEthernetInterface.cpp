@@ -146,9 +146,9 @@ void LwipEthernetInterface::Init() noexcept
 	lwipMutex.Create("LwipCore");
 
 	// Clear the PCBs
-	for (size_t i = 0; i < NumTcpPorts; ++i)
+	for (tcp_pcb*& pcb : listeningPcbs)
 	{
-		listeningPcbs[i] = nullptr;
+		pcb = nullptr;
 	}
 
 	macAddress = platform.GetDefaultMacAddress();

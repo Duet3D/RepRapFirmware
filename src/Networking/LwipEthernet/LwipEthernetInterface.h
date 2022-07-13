@@ -87,7 +87,7 @@ private:
 	TcpPort portNumbers[NumProtocols];				// port number used for each protocol
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
 	bool closeDataPort;
-	tcp_pcb *listeningPcbs[NumTcpPorts];
+	tcp_pcb *listeningPcbs[NumProtocols + 1];
 
 	bool activated;
 	bool initialised;
