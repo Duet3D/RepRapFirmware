@@ -485,7 +485,7 @@ FilamentSensorStatus LaserFilamentMonitor::Clear() noexcept
 // Print diagnostic info for this sensor
 void LaserFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder) noexcept
 {
-	String<FormatStringLength> buf;
+	String<StringLength256> buf;
 	buf.printf("Extruder %u: ", extruder);
 	if (dataReceived)
 	{

@@ -149,6 +149,8 @@ constexpr float V12MonitorVoltageRange = (60.4 + 4.7)/4.7 * 3.3;			// voltage di
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
 constexpr Pin DiagPin = PortCPin(20);
 constexpr bool DiagOnPolarity = true;
+constexpr Pin ActLedPin = NoPin;
+constexpr bool ActOnPolarity = false;
 
 // SD cards
 constexpr size_t NumSdCards = 2;											// we now allow one SPI-connected SD card to be configured at boot time

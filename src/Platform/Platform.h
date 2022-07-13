@@ -705,12 +705,6 @@ private:
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
 #endif
 
-	// Convert microseconds to step clocks, rounding up to the next step clock
-	static constexpr uint32_t MicrosecondsToStepClocks(float us) noexcept
-	{
-		return (uint32_t)ceilf((float)StepClockRate * 0.000001 * us);
-	}
-
 #ifdef DUET3_MB6XD
 	void UpdateDriverTimings() noexcept;
 #endif
@@ -918,7 +912,7 @@ private:
 	// Event handling
 	uint32_t lastDriverPollMillis;						// when we last checked the drivers and voltage monitoring
 
-#ifdef DUET3MINI
+#if SUPPORT_CAN_EXPANSION
 	uint32_t whenLastCanMessageProcessed;
 #endif
 

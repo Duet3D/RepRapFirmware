@@ -193,6 +193,34 @@ void ExpressionValue::Release() noexcept
 	}
 }
 
+void ExpressionValue::SetBool(bool b) noexcept
+{
+	Release();
+	type = (uint32_t)TypeCode::Bool;
+	bVal = b;
+}
+
+void ExpressionValue::SetInt(int32_t i) noexcept
+{
+	Release();
+	type = (uint32_t)TypeCode::Int32;
+	iVal = i;
+}
+
+void ExpressionValue::SetFloat(float f, uint32_t digits) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = digits; }
+
+void ExpressionValue::SetDriverId(DriverId did) noexcept
+{
+	Release();
+	type = (uint32_t)TypeCode::DriverId_tc;
+#if SUPPORT_CAN_EXPANSION
+	param = did.boardAddress;
+#else
+	param = 0;
+#endif
+	uVal = did.localDriver;
+}
+
 #if SUPPORT_CAN_EXPANSION
 
 // Given that this is a CanExpansionBoardDetails value, extract the part requested according to the parameter and append it to the string

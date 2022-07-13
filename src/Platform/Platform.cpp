@@ -415,7 +415,7 @@ Platform::Platform() noexcept :
 #endif
 	tickState(0), debugCode(0),
 	lastDriverPollMillis(0),
-#ifdef DUET3MINI
+#if SUPPORT_CAN_EXPANSION
 	whenLastCanMessageProcessed(0),
 #endif
 
@@ -647,19 +647,9 @@ void Platform::Init() noexcept
 
 #ifdef DUET3_MB6XD
 	driverErrPinsActiveLow = (numErrorHighDrivers >= NumDirectDrivers/2);				// determine the error signal polarity by assuming most drivers are not in the error state
-
-	// Set up the step gate timer
-	pmc_enable_periph_clk(STEP_GATE_TC_ID);
-	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_CLKDIS;
-	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CMR =  TC_CMR_BSWTRG_SET				// software trigger sets TIOB
-														| TC_CMR_BCPC_CLEAR				// RC compare clears TIOB
-														| TC_CMR_WAVE					// waveform mode
-														| TC_CMR_WAVSEL_UP				// count up
-														| TC_CMR_CPCSTOP				// counter clock is stopped when counter reaches RC
-														| TC_CMR_EEVT_XC0   			// set external events from XC0 (this allows TIOB to be an output)
-														| TC_CMR_TCCLKS_TIMER_CLOCK2;	// divide MCLK (150MHz) by 8 = 18.75MHz
+	pmc_enable_periph_clk(STEP_GATE_TC_ID);												// need to do this before we set up the step gate TC
+	UpdateDriverTimings();																// this also initialises the step gate TC
 	SetPinFunction(StepGatePin, StepGatePinFunction);
-	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_CLKEN;
 #endif
 
 	// Set up the axis+extruder arrays
@@ -705,9 +695,7 @@ void Platform::Init() noexcept
 #endif
 	}
 
-#ifdef DUET3_MB6XD
-	UpdateDriverTimings();
-#else
+#ifndef DUET3_MB6XD
 	for (uint32_t& entry : slowDriverStepTimingClocks)
 	{
 		entry = 0;												// reset all to zero as we have no known slow drivers yet
@@ -989,8 +977,7 @@ void Platform::Spin() noexcept
 		return;
 	}
 
-#if defined(DUET3) || defined(DUET3MINI) || defined(__LPC17xx__)
-# if SUPPORT_REMOTE_COMMANDS
+#if SUPPORT_REMOTE_COMMANDS
 	if (CanInterface::InExpansionMode())
 	{
 		if (StepTimer::IsSynced())
@@ -1002,21 +989,14 @@ void Platform::Spin() noexcept
 			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 17)) != 0);
 		}
 	}
-	else
-# endif
-	{
-		// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
-		digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 19)) != 0);
-	}
 #endif
 
-#if defined(DUET3MINI)
+#if SUPPORT_CAN_EXPANSION
 	// Turn off the ACT LED if it is time to do so
 	if (millis() - whenLastCanMessageProcessed > ActLedFlashTime)
 	{
 		digitalWrite(ActLedPin, !ActOnPolarity);
 	}
-
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -1094,7 +1074,8 @@ void Platform::Spin() noexcept
 			{
 				StandardDriverStatus stat =
 #if defined(DUET3_MB6XD)
-											StandardDriverStatus((HasDriverError(nextDriveToPoll)) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0);
+											// Don't raise driver error events while we are being tested by ATE
+											StandardDriverStatus((!CanInterface::InTestMode() && HasDriverError(nextDriveToPoll)) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0);
 #else
 											SmartDrivers::GetStatus(nextDriveToPoll, true, true);
 #endif
@@ -2778,15 +2759,31 @@ void Platform::UpdateDriverTimings() noexcept
 	}
 
 	// Convert the step pulse width to clocks of the step pulse gate timer. First define some constants.
-	constexpr uint32_t StepGateTcClockFrequency = (SystemCoreClockFreq/2)/8;
-	constexpr float StepGateClocksPerMicrosecond = (float)StepGateTcClockFrequency/1.0e6;
+	constexpr uint32_t StepGateTcBaseClockFrequency = (SystemCoreClockFreq/2)/8;										// the step gate T clock frequency when we use a prescaler of 8
+	constexpr float StepGateBaseClocksPerMicrosecond = (float)StepGateTcBaseClockFrequency * 1.0e-6;
+	const float fclocks = min<float>(ceilf(worstTimings[0] * StepGateBaseClocksPerMicrosecond), (float)(4 * 65535));	// the TC is only 16 bits wide, but we increase the prescaler to 32 if necessary
 
-	const float fclocks = ceilf(worstTimings[0] * StepGateClocksPerMicrosecond);
-	const uint32_t gateClocks = (uint32_t)fclocks;
-	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC = gateClocks;
+	uint32_t iclocks = (uint32_t)fclocks;
+	uint32_t clockPrescaler = TC_CMR_TCCLKS_TIMER_CLOCK2;								// divide MCLK (150MHz) by 8 = 18.75MHz
+	if (iclocks > 65535)
+	{
+		clockPrescaler = TC_CMR_TCCLKS_TIMER_CLOCK3;									// divide MCLK (150MHz) by 32 = 4.6875MHz
+		iclocks >>= 2;
+	}
+
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_CLKDIS;
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CMR =  TC_CMR_BSWTRG_SET				// software trigger sets TIOB
+														| TC_CMR_BCPC_CLEAR				// RC compare clears TIOB
+														| TC_CMR_WAVE					// waveform mode
+														| TC_CMR_WAVSEL_UP				// count up
+														| TC_CMR_CPCSTOP				// counter clock is stopped when counter reaches RC
+														| TC_CMR_EEVT_XC0   			// set external events from XC0 (this allows TIOB to be an output)
+														| clockPrescaler;				// divide MCLK (150MHz) by 8 or 32
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC = iclocks;
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_CLKEN;
 
 	// Convert the quantised step pulse width back to microseconds
-	const float actualStepPulseMicroseconds = fclocks/StepGateClocksPerMicrosecond;
+	const float actualStepPulseMicroseconds = fclocks/StepGateBaseClocksPerMicrosecond;
 
 	// Now convert the other values from microseconds to step clocks
 	stepPulseMinimumPeriodClocks = MicrosecondsToStepClocks(worstTimings[1] + actualStepPulseMicroseconds);
@@ -2798,8 +2795,12 @@ void Platform::UpdateDriverTimings() noexcept
 
 void Platform::GetActualDriverTimings(float timings[4]) noexcept
 {
-	constexpr uint32_t StepGateTcClockFrequency = (SystemCoreClockFreq/2)/8;
-	constexpr float MicrosecondsPerStepGateClock = 1.0e6/(float)StepGateTcClockFrequency;
+	uint32_t StepGateTcClockFrequency = (SystemCoreClockFreq/2)/8;
+	if ((STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CMR & TC_CMR_TCCLKS_Msk) == TC_CMR_TCCLKS_TIMER_CLOCK3)
+	{
+		StepGateTcClockFrequency >>= 2;;
+	}
+	const float MicrosecondsPerStepGateClock = 1.0e6/(float)StepGateTcClockFrequency;
 	constexpr float StepClocksToMicroseconds = 1.0e6/(float)StepClockRate;
 	timings[0] = (float)STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC * MicrosecondsPerStepGateClock;
 	timings[1] = stepPulseMinimumPeriodClocks * StepClocksToMicroseconds - timings[0];
@@ -4543,7 +4544,7 @@ GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndE
 
 void Platform::OnProcessingCanMessage() noexcept
 {
-#ifdef DUET3MINI			// MB6HC doesn't yet have a ACT LED
+#if SUPPORT_CAN_EXPANSION
 	whenLastCanMessageProcessed = millis();
 	digitalWrite(ActLedPin, ActOnPolarity);				// turn the ACT LED on
 #endif

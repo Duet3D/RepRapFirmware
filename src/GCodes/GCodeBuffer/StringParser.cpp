@@ -1929,7 +1929,7 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
 										catch (const GCodeException&)
 										{
 											//TODO can we report the error anywhere?
-											ev.Set(nullptr);
+											ev.SetNull(nullptr);
 										}
 										char paramName[2] = { letter, 0 };
 										vs.InsertNewParameter(paramName, ev);

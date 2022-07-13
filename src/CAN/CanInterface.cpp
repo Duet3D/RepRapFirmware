@@ -99,6 +99,7 @@ static uint8_t currentTimeSyncMarker = 0xFF;
 
 #if SUPPORT_REMOTE_COMMANDS
 static bool inExpansionMode = false;
+static bool inTestMode = false;
 static bool mainBoardAcknowledgedAnnounce = false;
 #endif
 
@@ -311,6 +312,11 @@ bool CanInterface::InExpansionMode() noexcept
 	return inExpansionMode;
 }
 
+bool CanInterface::InTestMode() noexcept
+{
+	return inTestMode;
+}
+
 static void ReInit() noexcept
 {
 	can0dev->Disable();
@@ -318,12 +324,13 @@ static void ReInit() noexcept
 	can0dev->Enable();
 }
 
-void CanInterface::SwitchToExpansionMode(CanAddress addr) noexcept
+void CanInterface::SwitchToExpansionMode(CanAddress addr, bool useTestMode) noexcept
 {
 	TaskCriticalSectionLocker lock;
 
 	myAddress = addr;
 	inExpansionMode = true;
+	inTestMode = useTestMode;
 	reprap.GetGCodes().SwitchToExpansionMode();
 	ReInit();										// reset the CAN filters to account for our new CAN address
 }
@@ -482,70 +489,75 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 
 	for (;;)
 	{
-#if SUPPORT_REMOTE_COMMANDS
-		if (!inExpansionMode)
-#endif
+		CanMessageTimeSync * const msg = buf.SetupBroadcastMessage<CanMessageTimeSync>(CanInterface::GetCanAddress());
+		msg->lastTimeSent = lastTimeSent;
+		msg->lastTimeAcknowledgeDelay = 0;									// assume we don't have the transmit delay available
+
+		currentTimeSyncMarker = ((currentTimeSyncMarker + 1) & 0x0F) | 0xA0;
+		buf.marker = currentTimeSyncMarker;
+		buf.reportInFifo = 1;
+
+		if (gotTimeSyncTxTimeStamp)
 		{
-			CanMessageTimeSync * const msg = buf.SetupBroadcastMessage<CanMessageTimeSync>(CanInterface::GetCanAddress());
-			msg->lastTimeSent = lastTimeSent;
-			msg->lastTimeAcknowledgeDelay = 0;									// assume we don't have the transmit delay available
-
-			currentTimeSyncMarker = ((currentTimeSyncMarker + 1) & 0x0F) | 0xA0;
-			buf.marker = currentTimeSyncMarker;
-			buf.reportInFifo = 1;
-
-			if (gotTimeSyncTxTimeStamp)
-			{
 # if SAME70
-				// On the SAME70 the step clock is also the external time stamp counter
-				const uint32_t timeSyncTxDelay = (timeSyncTxTimeStamp - (uint16_t)lastTimeSent) & 0xFFFF;
+			// On the SAME70 the step clock is also the external time stamp counter
+			const uint32_t timeSyncTxDelay = (timeSyncTxTimeStamp - (uint16_t)lastTimeSent) & 0xFFFF;
 # else
-				// On the SAME5x the time stamp counter counts CAN bit times divided by 64
-				const uint32_t timeSyncTxDelay = (((timeSyncTxTimeStamp - lastTimeSyncTxPreparedStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
+			// On the SAME5x the time stamp counter counts CAN bit times divided by 64
+			const uint32_t timeSyncTxDelay = (((timeSyncTxTimeStamp - lastTimeSyncTxPreparedStamp) & 0xFFFF) * CanInterface::GetTimeStampPeriod()) >> 6;
 # endif
-				if (timeSyncTxDelay > peakTimeSyncTxDelay)
-				{
-					peakTimeSyncTxDelay = timeSyncTxDelay;
-				}
-
-				// Occasionally on the SAME70 we get very large delays reported. These delays are not genuine.
-				if (timeSyncTxDelay < MaxTimeSyncDelay)
-				{
-					msg->lastTimeAcknowledgeDelay = timeSyncTxDelay;
-				}
-				gotTimeSyncTxTimeStamp = false;
-			}
-
-			msg->isPrinting = reprap.GetGCodes().IsReallyPrinting();
-
-			// Send the real time just once a second
-			const uint32_t realTime = (uint32_t)reprap.GetPlatform().GetDateTime();
-			if (realTime != lastRealTimeSent)
+			if (timeSyncTxDelay > peakTimeSyncTxDelay)
 			{
-				msg->realTime = realTime;
-				lastRealTimeSent = realTime;
+				peakTimeSyncTxDelay = timeSyncTxDelay;
 			}
-			else
+
+			// Occasionally on the SAME70 we get very large delays reported. These delays are not genuine.
+			if (timeSyncTxDelay < MaxTimeSyncDelay)
 			{
-				buf.dataLength = CanMessageTimeSync::SizeWithoutRealTime;		// send a short message to save CAN bandwidth
+				msg->lastTimeAcknowledgeDelay = timeSyncTxDelay;
 			}
+			gotTimeSyncTxTimeStamp = false;
+		}
+
+		msg->isPrinting = reprap.GetGCodes().IsReallyPrinting();
+
+		// Send the real time just once a second
+		const uint32_t realTime = (uint32_t)reprap.GetPlatform().GetDateTime();
+		if (realTime != lastRealTimeSent)
+		{
+			msg->realTime = realTime;
+			lastRealTimeSent = realTime;
+		}
+		else
+		{
+			buf.dataLength = CanMessageTimeSync::SizeWithoutRealTime;		// send a short message to save CAN bandwidth
+		}
 
 #if SAME70
-			lastTimeSent = StepTimer::GetTimerTicks();
+		lastTimeSent = StepTimer::GetTimerTicks();
 #else
-			{
-				AtomicCriticalSectionLocker lock;
-				lastTimeSent = StepTimer::GetTimerTicks();
-				lastTimeSyncTxPreparedStamp = CanInterface::GetTimeStampCounter();
-			}
-#endif
-			msg->timeSent = lastTimeSent;
-			SendCanMessage(TxBufferIndexTimeSync, 0, &buf);
-			++timeSyncMessagesSent;
+		{
+			AtomicCriticalSectionLocker lock;
+			lastTimeSent = StepTimer::GetTimerTicks();
+			lastTimeSyncTxPreparedStamp = CanInterface::GetTimeStampCounter();
 		}
+#endif
+		msg->timeSent = lastTimeSent;
+		SendCanMessage(TxBufferIndexTimeSync, 0, &buf);
+		++timeSyncMessagesSent;
+
+		// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
+		digitalWrite(DiagPin, XNor(DiagOnPolarity, lastTimeSent & (1u << 19)) != 0);
 
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, CanClockIntervalMillis);
+
+#if SUPPORT_REMOTE_COMMANDS
+		if (inExpansionMode)
+		{
+			vTaskDelete(nullptr);											// once in expansion mode we can't revert to main board mode, so we don't need this task any more
+		}
+#endif
 
 		// Check that the message was sent and get the time stamp
 		if (can0dev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, 0))		// if the buffer is free already then the message was sent
@@ -555,8 +567,8 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		else
 		{
 			(void)can0dev->IsSpaceAvailable((CanDevice::TxBufferNumber)TxBufferIndexTimeSync, MaxTimeSyncSendWait);		// free the buffer
-			can0dev->PollTxEventFifo(TxCallback);								// empty the fifo
-			gotTimeSyncTxTimeStamp = false;										// ignore any values read from it
+			can0dev->PollTxEventFifo(TxCallback);							// empty the fifo
+			gotTimeSyncTxTimeStamp = false;									// ignore any values read from it
 		}
 	}
 }
