@@ -203,21 +203,9 @@ bool ScaraKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 		gb.TryGetFValue('D', distalArmLength, seen);
 		gb.TryGetFValue('X', xOffset, seen);
 		gb.TryGetFValue('Y', yOffset, seen);
-		if (gb.TryGetFloatArray('A', 2, thetaLimits, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('B', 2, psiLimits, reply, seen))
-		{
-			error = true;
-			return true;
-		}
-		if (gb.TryGetFloatArray('C', 3, crosstalk, reply, seen))
-		{
-			error = true;
-			return true;
-		}
+		gb.TryGetFloatArray('A', 2, thetaLimits, seen);
+		gb.TryGetFloatArray('B', 2, psiLimits, seen);
+		gb.TryGetFloatArray('C', 3, crosstalk, seen);
 		gb.TryGetFValue('R', requestedMinRadius, seen);
 
 		if (seen)

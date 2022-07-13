@@ -1529,7 +1529,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We completed a command, so unlock resources and tell the host about it
 		gb.StopTimer();
 		UnlockAll(gb);
-		gb.LatestMachineState().RetrieveStateMachineResult(stateMachineResult, reply);
+		gb.LatestMachineState().RetrieveStateMachineResult(gb, reply, stateMachineResult);
 		HandleReply(gb, stateMachineResult, reply.c_str());
 
 		CheckForDeferredPause(gb);

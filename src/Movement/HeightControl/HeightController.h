@@ -20,7 +20,7 @@ public:
 	HeightController() noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Start/stop height following
+	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Start/stop height following
 	void Stop() noexcept;							// stop height following mode
 
 	[[noreturn]] void RunTask() noexcept;

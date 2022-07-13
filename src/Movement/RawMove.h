@@ -25,11 +25,17 @@ struct RawMove
 	float maxTravelAcceleration;
 
 	const Tool *movementTool;										// which tool (if any) is being used by this move
+	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync
+
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
-#else
-	uint16_t padding;
+# if !defined(DUET3) && !defined(DUET3MINI)
+	uint16_t padding;												// pad to make the length a multiple of 4 bytes
+# endif
+#elif defined(DUET3) || defined(DUET3MINI)
+	uint16_t padding;												// pad to make the length a multiple of 4 bytes
 #endif
+
 	uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
 
 	uint8_t applyM220M221 : 1,										// true if this move is affected by M220 and M221 (this could be moved to ExtendedRawMove)
@@ -51,6 +57,8 @@ struct RawMove
 		return *this;
 	}
 };
+
+static_assert(offsetof(RawMove, moveType) % 4 == 2);
 
 enum class SegmentedMoveState : uint8_t
 {
@@ -116,9 +124,6 @@ struct MovementState : public RawMove
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	FilePosition fileOffsetToPrint;									// The offset to print from
 #endif
-
-	ExtrudersBitmap extrudersMoved;									// extruders that this movement system has moved since the last sync
-	AxesBitmap axesMoved;											// axes that this movement system has moved since the last sync
 
 	// Tool change. These variables can be global because movement is locked while doing a tool change, so only one can take place at a time.
 	int16_t newToolNumber;

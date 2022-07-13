@@ -19,6 +19,8 @@ namespace SmartDrivers
 #if TMC22xx_VARIABLE_NUM_DRIVERS
 	void Init(size_t numTmcDrivers) noexcept
 	pre(numTmcDrivers <= MaxSmartDrivers);
+#elif SUPPORT_TMC2240 && defined(DUET3MINI)
+	void Init(bool hasTmc2240Expansion) noexcept;
 #else
 	void Init() noexcept;
 #endif

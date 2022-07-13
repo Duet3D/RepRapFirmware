@@ -191,7 +191,16 @@ void GCodeMachineState::SetError(const char *msg) noexcept
 {
 	if (stateMachineResult != GCodeResult::error)
 	{
-		errorMessage = msg;
+		errorMessage = GCodeException(msg);
+		stateMachineResult = GCodeResult::error;
+	}
+}
+
+void GCodeMachineState::SetError(const GCodeException& exc) noexcept
+{
+	if (stateMachineResult != GCodeResult::error)
+	{
+		errorMessage = exc;
 		stateMachineResult = GCodeResult::error;
 	}
 }
@@ -200,20 +209,20 @@ void GCodeMachineState::SetWarning(const char *msg) noexcept
 {
 	if (stateMachineResult == GCodeResult::ok)
 	{
-		errorMessage = msg;
+		errorMessage = GCodeException(msg);
 		stateMachineResult = GCodeResult::warning;
 	}
 }
 
 // Retrieve the result and error message if it is worse than the one we already have
-void GCodeMachineState::RetrieveStateMachineResult(GCodeResult& rslt, const StringRef& reply) const noexcept
+void GCodeMachineState::RetrieveStateMachineResult(const GCodeBuffer& gb, const StringRef& reply, GCodeResult& rslt) const noexcept
 {
 	if (stateMachineResult >= rslt)
 	{
 		rslt = stateMachineResult;
-		if (errorMessage != nullptr)
+		if (!errorMessage.IsNull())
 		{
-			reply.copy(errorMessage);
+			errorMessage.GetMessage(reply, &gb);
 		}
 	}
 }
@@ -221,7 +230,7 @@ void GCodeMachineState::RetrieveStateMachineResult(GCodeResult& rslt, const Stri
 GCodeMachineState *GCodeMachineState::Pop() const noexcept
 {
 	GCodeMachineState * const rslt = GetPrevious();
-	if (errorMessage != nullptr)
+	if (!errorMessage.IsNull())
 	{
 		rslt->errorMessage = errorMessage;
 		rslt->stateMachineResult = stateMachineResult;
@@ -234,7 +243,7 @@ void GCodeMachineState::SetState(GCodeState newState) noexcept
 	if (state == GCodeState::normal && newState != GCodeState::normal)
 	{
 		stateMachineResult = GCodeResult::ok;
-		errorMessage = nullptr;
+		errorMessage = GCodeException();
 	}
 	state = newState;
 }

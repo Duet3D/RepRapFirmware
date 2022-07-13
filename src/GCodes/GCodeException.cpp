@@ -11,7 +11,7 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 // Construct the error message. This will be prefixed with "Error: " when it is returned to the user.
-void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *gb) const noexcept
+void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null gb) const noexcept
 {
 	// Print the file location, if possible
 	const bool inFile = gb != nullptr && gb->IsDoingFile();
@@ -54,13 +54,21 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *gb) c
 	}
 
 	// Print the message and any parameter
-	if (haveStringParam)
+	if (message == nullptr)
+	{
+		reply.cat("<null error message>");					// should not happem
+	}
+	else if (strstr(message, "%s"))
 	{
 		reply.catf(message, stringParam.c_str());
 	}
-	else
+	else if (strstr(message, "%u"))
 	{
 		reply.catf(message, param.u);
+	}
+	else
+	{
+		reply.catf(message, param.i);
 	}
 }
 

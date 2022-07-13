@@ -265,8 +265,9 @@ public:
 
 	// Set the error message and associated state
 	void SetError(const char *msg) noexcept;
+	void SetError(const GCodeException& exc) noexcept;
 	void SetWarning(const char *msg) noexcept;
-	void RetrieveStateMachineResult(GCodeResult& rslt, const StringRef& reply) const noexcept;
+	void RetrieveStateMachineResult(const GCodeBuffer& gb, const StringRef& reply, GCodeResult& rslt) const noexcept;
 
 	// Copy values that may have been altered into this state record
 	// Called after running config.g and after running resurrect.g
@@ -281,7 +282,7 @@ public:
 
 private:
 	GCodeMachineState *previous;
-	const char *errorMessage;
+	GCodeException errorMessage;				// we use a GCodeException to store a possible message and a parameter
 	uint8_t blockNesting;
 	GCodeState state;
 	GCodeResult stateMachineResult;				// the worst status (ok, warning or error) that we encountered while running the state machine

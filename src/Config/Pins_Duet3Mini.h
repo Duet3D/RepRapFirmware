@@ -39,6 +39,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20038000;
 #define HAS_CPU_TEMP_SENSOR		1					// enable this as an experiment - it may be better than nothing
 
 #define SUPPORT_TMC22xx			1
+#define SUPPORT_TMC2240			1
 #define HAS_STALL_DETECT		1
 
 #define HAS_VOLTAGE_MONITOR		1
@@ -155,7 +156,6 @@ constexpr Pin TMC22xxMuxPins[1] = { PortDPin(0) };
 #define TMC22xx_VARIABLE_NUM_DRIVERS	0
 #define TMC22xx_SINGLE_DRIVER			0
 #define TMC22xx_USE_SLAVEADDR			1
-#define TMC22xx_DEFAULT_STEALTHCHOP		0
 
 // Define the baud rate used to send/receive data to/from the drivers.
 // If we assume a worst case clock frequency of 8MHz then the maximum baud rate is 8MHz/16 = 500kbaud.
@@ -171,7 +171,14 @@ constexpr float DriverVRef = 180.0;											// in mV
 constexpr float DriverFullScaleCurrent = DriverVRef/DriverSenseResistor;	// in mA
 constexpr float DriverCsMultiplier = 32.0/DriverFullScaleCurrent;
 constexpr float MaximumMotorCurrent = 2000.0;
-constexpr float MaximumStandstillCurrent = 1500.0;
+//constexpr float MaximumStandstillCurrent = 1500.0;						// this is not currently enforced
+
+#if SUPPORT_TMC2240
+constexpr float Tmc2240Rref = 14.0;											// TMC2240 reference resistor on Duet 3 Mini2+ prototype, in Kohms
+constexpr float Tmc2240FullScaleCurrent = 36000/Tmc2240Rref;				// in mA, assuming we set the range bits in the DRV_CONF register to 01b
+constexpr float Tmc2240CsMultiplier = 32.0/Tmc2240FullScaleCurrent;
+constexpr float MaximumTmc2240MotorCurrent = 2500.0;
+#endif
 
 // Thermistors
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(0), PortCPin(1), PortCPin(2) }; 	// Thermistor pin numbers

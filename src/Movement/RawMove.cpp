@@ -103,13 +103,13 @@ void MovementState::Diagnostics(MessageType mtype, unsigned int moveSystemNumber
 {
 	reprap.GetPlatform().MessageF(mtype, "Q%u segments left %u"
 #if SUPPORT_ASYNC_MOVES
-											", axes owned %03x, extruders owned %03x"
+											", axes/extruders owned %03x"
 #endif
 												"\n",
 													moveSystemNumber,
 													segmentsLeft
 #if SUPPORT_ASYNC_MOVES
-													, (unsigned int)axesMoved.GetRaw(), (unsigned int)extrudersMoved.GetRaw()
+													, (unsigned int)axesAndExtrudersOwned.GetRaw()
 #endif
 									);
 	codeQueue->Diagnostics(mtype, moveSystemNumber);
