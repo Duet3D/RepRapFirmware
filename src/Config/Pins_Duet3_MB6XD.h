@@ -132,6 +132,7 @@ constexpr float V12MonitorVoltageRange = (60.4 + 4.7)/4.7 * 3.3;			// voltage di
 constexpr Pin DiagPin = PortBPin(6);										// diag/status LED
 constexpr Pin ActLedPin = PortBPin(7);										// activityLED
 constexpr bool DiagOnPolarity = false;
+constexpr bool ActOnPolarity = false;
 
 // SD cards
 constexpr size_t NumSdCards = 2;
