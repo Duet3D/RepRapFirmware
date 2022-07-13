@@ -910,7 +910,7 @@ private:
 	// Event handling
 	uint32_t lastDriverPollMillis;						// when we last checked the drivers and voltage monitoring
 
-#ifdef DUET3MINI
+#if SUPPORT_CAN_EXPANSION
 	uint32_t whenLastCanMessageProcessed;
 #endif
 

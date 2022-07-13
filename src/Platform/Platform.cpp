@@ -419,7 +419,7 @@ Platform::Platform() noexcept :
 #endif
 	tickState(0), debugCode(0),
 	lastDriverPollMillis(0),
-#ifdef DUET3MINI
+#if SUPPORT_CAN_EXPANSION
 	whenLastCanMessageProcessed(0),
 #endif
 
@@ -981,8 +981,7 @@ void Platform::Spin() noexcept
 		return;
 	}
 
-#if defined(DUET3) || defined(DUET3MINI) || defined(__LPC17xx__)
-# if SUPPORT_REMOTE_COMMANDS
+#if SUPPORT_REMOTE_COMMANDS
 	if (CanInterface::InExpansionMode())
 	{
 		if (StepTimer::IsSynced())
@@ -994,21 +993,14 @@ void Platform::Spin() noexcept
 			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 17)) != 0);
 		}
 	}
-	else
-# endif
-	{
-		// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
-		digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetTimerTicks() & (1u << 19)) != 0);
-	}
 #endif
 
-#if defined(DUET3MINI)
+#if SUPPORT_CAN_EXPANSION
 	// Turn off the ACT LED if it is time to do so
 	if (millis() - whenLastCanMessageProcessed > ActLedFlashTime)
 	{
 		digitalWrite(ActLedPin, !ActOnPolarity);
 	}
-
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -4550,7 +4542,7 @@ GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndE
 
 void Platform::OnProcessingCanMessage() noexcept
 {
-#ifdef DUET3MINI			// MB6HC doesn't yet have a ACT LED
+#if SUPPORT_CAN_EXPANSION
 	whenLastCanMessageProcessed = millis();
 	digitalWrite(ActLedPin, ActOnPolarity);				// turn the ACT LED on
 #endif
