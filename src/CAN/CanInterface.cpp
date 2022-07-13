@@ -452,6 +452,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 			{
 				buf.dataLength = msg->GetActualDataLength();
 				SendCanMessage(TxBufferIndexUrgent, MaxUrgentSendWait, &buf);
+				reprap.GetPlatform().OnProcessingCanMessage();
 			}
 			TaskBase::Take(timeToWait);							// wait until we are woken up because a message is available, or we time out
 		}

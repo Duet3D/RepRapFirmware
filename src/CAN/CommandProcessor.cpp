@@ -389,15 +389,15 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 {
 	if (buf->id.Src() != CanInterface::GetCanAddress())								// I don't think we should receive our own broadcasts, but in case we do...
 	{
+		if (buf->id.Dst() != CanId::BroadcastAddress)
+		{
+			reprap.GetPlatform().OnProcessingCanMessage();
+		}
+
 		const CanMessageType id = buf->id.MsgType();
 #if SUPPORT_REMOTE_COMMANDS
 		if (CanInterface::InExpansionMode())
 		{
-			if (id != CanMessageType::timeSync)
-			{
-				reprap.GetPlatform().OnProcessingCanMessage();
-			}
-
 			String<StringLength500> reply;
 			const StringRef& replyRef = reply.GetRef();
 			GCodeResult rslt;

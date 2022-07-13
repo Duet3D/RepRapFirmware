@@ -128,7 +128,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
 [[noreturn]] void AppMain() noexcept
 {
 	pinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up status LED for debugging and turn it off
-#ifdef DUET3MINI
+#if defined(DUET3MINI) || defined(DUET3_MB6XD)
 	pinMode(ActLedPin, (ActOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up activity LED and turn it off
 #endif
 
