@@ -2511,7 +2511,7 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexce
 			{
 				SmartDrivers::EnableDrive(driver, true);
 			}
-# if !defined(DUET3MINI)		// no enable pins on 5LC
+# if !defined(DUET3MINI)								// no enable pins on 5LC
 			else
 			{
 				digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
