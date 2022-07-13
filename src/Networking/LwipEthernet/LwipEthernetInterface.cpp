@@ -50,7 +50,14 @@ extern "C"
 extern struct netif gs_net_if;
 }
 
-const char * const MdnsServiceStrings[NumProtocols] = { "_http", "_ftp", "_telnet" };
+const char * const MdnsServiceStrings[NumProtocols] =
+{
+	"_http", "_ftp", "_telnet",
+#if SUPPORT_MULTICAST_DISCOVERY
+	"_duet_discovery"
+#endif
+};
+
 const char * const MdnsTxtRecords[2] = { "product=" FIRMWARE_NAME, "version=" VERSION };
 const unsigned int MdnsTtl = 10 * 60;			// same value as on the Duet 0.6/0.8.5
 

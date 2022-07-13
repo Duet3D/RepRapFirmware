@@ -531,6 +531,9 @@ void Network::Spin() noexcept
 			if (nr == nullptr)
 			{
 				nr = responders;		// 'responders' can't be null at this point
+#if SUPPORT_MULTICAST_DISCOVERY
+				MulticastResponder::Spin();
+#endif
 			}
 			doneSomething = nr->Spin();
 			nr = nr->GetNext();
