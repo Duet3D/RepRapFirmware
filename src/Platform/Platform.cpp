@@ -616,7 +616,7 @@ void Platform::Init() noexcept
 
 	// Set up the local drivers. Do this after we have read any direction pins that specify the board type.
 #if defined(DUET3MINI) && SUPPORT_TMC2240
-	// Check whether we have a TMNC2240 prototype expansion board connected, before we set the driver directon pins to outputs
+	// Check whether we have a TMC2240 prototype expansion board connected, before we set the driver direction pins to outputs
 	pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
 	delayMicroseconds(20);						// give the pullup resistor time to work
 	hasTmc2240Expansion = !digitalRead(DIRECTION_PINS[5]);

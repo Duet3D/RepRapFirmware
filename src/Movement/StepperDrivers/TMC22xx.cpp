@@ -540,7 +540,6 @@ public:
 #endif
 	void AppendDriverStatus(const StringRef& reply) noexcept;
 	StandardDriverStatus GetStatus(bool accumulated, bool clearAccumulated) noexcept;
-	uint8_t GetDriverNumber() const noexcept { return driverNumber; }
 	bool UpdatePending() const noexcept;
 #if TMC22xx_HAS_ENABLE_PINS
 	bool UsesGlobalEnable() const noexcept { return enablePin == NoPin; }
@@ -593,16 +592,29 @@ public:
 	static uint32_t transferStartedTime;
 
 	void UartTmcHandler() noexcept;							// core of the ISR for this driver
+
 private:
 	bool IsStealthChop() const noexcept;
 	bool SetChopConf(uint32_t newVal) noexcept;
 	void UpdateRegister(size_t regIndex, uint32_t regVal) noexcept;
 	void UpdateCurrent() noexcept;
 	void UpdateMaxOpenLoadStepInterval() noexcept;
+
 #if HAS_STALL_DETECT
 	void ResetLoadRegisters() noexcept
 	{
 		minSgLoadRegister = 9999;							// values read from the driver are in the range 0 to 1023, so 9999 indicates that it hasn't been read
+	}
+#endif
+
+#if TMC22xx_USE_SLAVEADDR
+	uint8_t GetSlaveAddr() const noexcept
+	{
+# if SUPPORT_TMC2240
+		return driverNumber & ((isTmc2240) ? 7u : 3u);
+# else
+		return driverNumber & 3u;
+# endif
 	}
 #endif
 
@@ -836,7 +848,7 @@ inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal) noexce
 #endif
 
 #if TMC22xx_USE_SLAVEADDR
-	const uint8_t slaveAddress = driverNumber & 3u;
+	const uint8_t slaveAddress = GetSlaveAddr();
 	sendData[SendDataSlaveAddressIndex0] = slaveAddress;
 	sendData[SendDataSlaveAddressIndex1] = slaveAddress;
 	uint8_t crc = initialSendCRC;
@@ -925,7 +937,7 @@ inline void TmcDriverState::SetupDMARead(uint8_t regNum) noexcept
 #endif
 
 #if TMC22xx_USE_SLAVEADDR
-	sendData[SendDataSlaveAddressIndex0] = driverNumber & 3u;
+	sendData[SendDataSlaveAddressIndex0] = GetSlaveAddr();
 	uint8_t crc = initialSendCRC;
 #else
 	sendData[SendDataSlaveAddressIndex0] = 0;
@@ -1071,7 +1083,7 @@ pre(!driversPowered)
 #endif
 
 #if TMC22xx_USE_SLAVEADDR
-	initialSendCRC = CRCAddByte(InitialByteCRC, driverNumber & 3u);		// CRC of the first 2 bytes of any transmission
+	initialSendCRC = CRCAddByte(InitialByteCRC, GetSlaveAddr());		// CRC of the first 2 bytes of any transmission
 	readIfCountCRC =
 # if USE_FAST_CRC
 		Reflect(CRCAddByte(initialSendCRC, REGNUM_IFCOUNT));
