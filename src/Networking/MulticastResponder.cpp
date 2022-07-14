@@ -11,6 +11,8 @@
 
 extern "C" {
 #include "LwipEthernet/Lwip/src/include/lwip/udp.h"
+#include "LwipEthernet/Lwip/src/include/lwip/igmp.h"
+extern struct netif gs_net_if;
 }
 
 #if SUPPORT_MULTICAST_DISCOVERY
@@ -22,6 +24,8 @@ static volatile uint16_t receivedPort;
 static unsigned int messagesProcessed = 0;
 
 static bool active = false;
+
+static constexpr ip_addr_t ourGroup = IPADDR4_INIT_BYTES(239, 255, 2, 3);
 
 // Receive callback function
 extern "C" void rcvFunc(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port) noexcept
@@ -50,7 +54,7 @@ void MulticastResponder::Spin() noexcept
 	if (rxPbuf != nullptr)
 	{
 		debugPrintf("Rx UDP: addr %u.%u.%u.%u port %u data",
-						(unsigned int)((receivedIpAddr >> 24) & 0xFF), (unsigned int)((receivedIpAddr >> 16) & 0xFF), (unsigned int)((receivedIpAddr >> 8) & 0xFF), (unsigned int)(receivedIpAddr & 0xFF), receivedPort);
+			(unsigned int)(receivedIpAddr & 0xFF), (unsigned int)((receivedIpAddr >> 8) & 0xFF), (unsigned int)((receivedIpAddr >> 16) & 0xFF), (unsigned int)((receivedIpAddr >> 24) & 0xFF), receivedPort);
 		for (size_t i = 0; i < rxPbuf->len; ++i)
 		{
 			debugPrintf(" %02x", ((const uint8_t*)(rxPbuf->payload))[i]);
@@ -79,13 +83,16 @@ void MulticastResponder::Start(TcpPort port) noexcept
 		else
 		{
 			udp_set_multicast_ttl(ourPcb, 255);
-			if (udp_bind(ourPcb, IP_ADDR_ANY, port) != ERR_OK)
+			if (igmp_joingroup_netif(&gs_net_if, ip_2_ip4(&ourGroup)) != ERR_OK)			// without this call, multicast packets to this IP address get discarded
+			{
+				reprap.GetPlatform().Message(ErrorMessage, "igmp_joingroup failed\n");
+			}
+			else if (udp_bind(ourPcb, &ourGroup, port) != ERR_OK)
 			{
 				reprap.GetPlatform().Message(ErrorMessage, "udp_bind call failed\n");
 			}
 			else
 			{
-				debugPrintf("udp_bind call succeeded\n");
 				udp_recv(ourPcb, rcvFunc, nullptr);
 			}
 		}
