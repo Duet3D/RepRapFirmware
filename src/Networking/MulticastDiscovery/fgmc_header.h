@@ -1,8 +1,4 @@
-/// \file
-/// \copyright Festo SE & Co. KG, Esslingen. All rights reserved.
-/// \author erfe
-/// \brief
-///
+// Multicast discovery protocol and associated constants
 
 #ifndef FGMC_HEADER_H
 #define FGMC_HEADER_H
@@ -13,7 +9,8 @@ namespace engp {
 enum class FGMCHwTypeId : uint32_t { FGMC_DEVICE_ID_ZERO = 0, FGMC_DEVICE_ID_CMMT_AS = 23, FGMC_DEVICE_ID_CMMT_ST = 33 };
 
 /// fgmc error codes
-enum class FGMCErrorCode : int16_t {
+enum class FGMCErrorCode : int16_t
+{
   FGMC_ERROR_CODE_NORMAL = 0,
   FGMC_ERROR_CODE_CMD_NOT_KNOWN = -1,
   FGMC_ERROR_CODE_CMD_VERSION_NOT_SUPPORTED = -2,
@@ -22,7 +19,8 @@ enum class FGMCErrorCode : int16_t {
 };
 
 /// fgmc commands
-enum class FGMCCommand : int32_t {
+enum class FGMCCommand : int32_t
+{
   MCD_COMMAND_UNKNOWN = 0,
   MCD_COMMAND_UNETINF = 1,
   MCD_COMMAND_DNETINF = 2,
