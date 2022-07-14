@@ -21,7 +21,7 @@
 #include <Networking/FtpResponder.h>
 #include <Networking/TelnetResponder.h>
 #if SUPPORT_MULTICAST_DISCOVERY
-# include <Networking/MulticastResponder.h>
+# include <Networking/MulticastDiscovery/MulticastResponder.h>
 #endif
 
 #include <General/IP4String.h>

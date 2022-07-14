@@ -1,21 +1,23 @@
 /*
- * MulricastResponder.cpp
+ * MulticastResponder.cpp
  *
  *  Created on: 12 Jul 2022
  *      Author: David
  */
 
 #include "MulticastResponder.h"
+
+#if SUPPORT_MULTICAST_DISCOVERY
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
+#include "fgmc_header.h"
 
 extern "C" {
 #include "LwipEthernet/Lwip/src/include/lwip/udp.h"
 #include "LwipEthernet/Lwip/src/include/lwip/igmp.h"
 extern struct netif gs_net_if;
 }
-
-#if SUPPORT_MULTICAST_DISCOVERY
 
 static udp_pcb *ourPcb = nullptr;
 static pbuf * volatile receivedPbuf = nullptr;

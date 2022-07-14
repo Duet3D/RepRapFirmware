@@ -46,7 +46,7 @@
 # include "TelnetResponder.h"
 #endif
 #if SUPPORT_MULTICAST_DISCOVERY
-# include "MulticastResponder.h"
+# include "MulticastDiscovery/MulticastResponder.h"
 #endif
 
 #ifdef __LPC17xx__
