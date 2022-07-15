@@ -109,6 +109,11 @@ namespace CanInterface
 #endif
 	GCodeResult StartClosedLoopDataCollection(DriverId device, uint16_t filter, uint16_t numSamples, uint16_t rateRequested, uint8_t movementRequested, uint8_t mode, const GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
+#if SUPPORT_MULTICAST_DISCOVERY
+	void SetStatusLedIdentify(uint32_t seconds) noexcept;
+	void SetStatusLedNormal() noexcept;
+#endif
+
 #if DUAL_CAN
 namespace ODrive {
 	CanId ArbitrationId(DriverId driver, uint8_t cmd) noexcept;

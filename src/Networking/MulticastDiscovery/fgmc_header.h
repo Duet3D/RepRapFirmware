@@ -3,10 +3,8 @@
 #ifndef FGMC_HEADER_H
 #define FGMC_HEADER_H
 
-namespace engp {
-
 /// fgmc device id for platform family cmmt
-enum class FGMCHwTypeId : uint32_t { FGMC_DEVICE_ID_ZERO = 0, FGMC_DEVICE_ID_CMMT_AS = 23, FGMC_DEVICE_ID_CMMT_ST = 33 };
+enum class FGMCHwTypeId : uint32_t { FGMC_DEVICE_ID_ZERO = 0, FGMC_DEVICE_ID_CMMT_AS = 23, FGMC_DEVICE_ID_CMMT_ST = 33, FGMC_DEVICE_ID_DUET3 = 41 };
 
 /// fgmc error codes
 enum class FGMCErrorCode : int16_t
@@ -167,7 +165,5 @@ struct __attribute__((packed)) FGMC_ResGetSupportedCommands
 	uint32_t cmd_;
 	uint16_t cmd_version_;
 };
-
-}  // namespace engp
 
 #endif // #ifndef FGMC_HEADER_H

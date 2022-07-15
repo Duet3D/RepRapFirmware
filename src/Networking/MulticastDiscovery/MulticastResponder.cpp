@@ -12,6 +12,7 @@
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include "fgmc_header.h"
+#include "fgmc_protocol.h"
 
 extern "C" {
 #include "LwipEthernet/Lwip/src/include/lwip/udp.h"
@@ -24,6 +25,7 @@ static pbuf * volatile receivedPbuf = nullptr;
 static volatile uint32_t receivedIpAddr;
 static volatile uint16_t receivedPort;
 static unsigned int messagesProcessed = 0;
+static FGMCProtocol *fgmcHandler = nullptr;
 
 static bool active = false;
 
@@ -62,8 +64,9 @@ void MulticastResponder::Spin() noexcept
 			debugPrintf(" %02x", ((const uint8_t*)(rxPbuf->payload))[i]);
 		}
 		debugPrintf("\n");
-		pbuf_free(rxPbuf);
 		receivedPbuf = nullptr;
+		fgmcHandler->handleStream(0, (uint8_t *)rxPbuf->payload, rxPbuf->len);
+		pbuf_free(rxPbuf);
 		++messagesProcessed;
 	}
 }
@@ -75,6 +78,11 @@ void MulticastResponder::Diagnostics(MessageType mtype) noexcept
 
 void MulticastResponder::Start(TcpPort port) noexcept
 {
+	if (fgmcHandler == nullptr)
+	{
+		fgmcHandler = new FGMCProtocol;
+	}
+
 	if (ourPcb == nullptr)
 	{
 		ourPcb = udp_new_ip_type(IPADDR_TYPE_ANY);

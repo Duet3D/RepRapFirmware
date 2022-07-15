@@ -35,6 +35,9 @@ public:
 	virtual GCodeResult ReportProtocols(const StringRef& reply) const noexcept = 0;
 
 	virtual IPAddress GetIPAddress() const noexcept = 0;
+	virtual IPAddress GetNetmask() const noexcept = 0;
+	virtual IPAddress GetGateway() const noexcept = 0;
+	virtual bool UsingDhcp() const noexcept = 0;
 	virtual void SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept = 0;
 	virtual GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept = 0;
 	virtual const MacAddress& GetMacAddress() const noexcept = 0;

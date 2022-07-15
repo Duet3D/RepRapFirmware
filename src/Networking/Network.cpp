@@ -626,6 +626,33 @@ IPAddress Network::GetIPAddress(unsigned int interface) const noexcept
 					IPAddress();
 }
 
+IPAddress Network::GetNetmask(unsigned int interface) const noexcept
+{
+	return
+#if HAS_NETWORKING
+			(interface < NumNetworkInterfaces) ? interfaces[interface]->GetNetmask() :
+#endif
+					IPAddress();
+}
+
+IPAddress Network::GetGateway(unsigned int interface) const noexcept
+{
+	return
+#if HAS_NETWORKING
+			(interface < NumNetworkInterfaces) ? interfaces[interface]->GetGateway() :
+#endif
+					IPAddress();
+}
+
+bool Network::UsingDhcp(unsigned int interface) const noexcept
+{
+#if HAS_NETWORKING
+	return interface < NumNetworkInterfaces && interfaces[interface]->UsingDhcp();
+#else
+	return false;
+#endif
+}
+
 void Network::SetHostname(const char *name) noexcept
 {
 #if HAS_NETWORKING

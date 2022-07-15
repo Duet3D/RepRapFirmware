@@ -575,11 +575,6 @@ bool LwipEthernetInterface::ConnectionEstablished(tcp_pcb *pcb) noexcept
 	return false;
 }
 
-IPAddress LwipEthernetInterface::GetIPAddress() const noexcept
-{
-	return ipAddress;
-}
-
 void LwipEthernetInterface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept
 {
 	if (GetState() == NetworkState::obtainingIP || GetState() == NetworkState::active)
