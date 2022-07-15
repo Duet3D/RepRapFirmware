@@ -40,9 +40,8 @@ enum class FGMCCommandVersion : uint16_t { MCD_COMMAND_VERSION = 0 };
 #define INVALID_EEPROM_DATA_STRING_LEN sizeof(INVALID_EEPROM_DATA_STRING) - 1
 
 /// array size definitions
-#define FGMC_NAME "FESTOMULTICAST"
-
-constexpr size_t SIZE_FGMC_NAME = 14;
+constexpr const char *FGMC_NAME = "FESTOMULTICAST";
+constexpr size_t SIZE_FGMC_NAME = strlen(FGMC_NAME);
 constexpr size_t SIZE_FGMC_DEST_ID = 16;
 
 constexpr size_t SIZE_FGMC_RES_MAX = 464;  // 461 Bytes for FGMC_ResUploadNetInfoHeader

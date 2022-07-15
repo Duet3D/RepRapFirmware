@@ -6,6 +6,7 @@
 
 #include <Platform/RepRap.h>
 #include <Networking/Network.h>
+#include <Networking/MulticastDiscovery/MulticastResponder.h>
 #include <CAN/CanInterface.h>
 #include <Version.h>
 #include <cstring>
@@ -174,7 +175,7 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddres
   }
 }
 
-void FGMCProtocol::sendGenericHeader(char* tx_netbuf, FGMCCommand cmd, uint32_t length, uint32_t packetId, uint32_t segmentIndex, uint32_t segmentCount) noexcept
+void FGMCProtocol::sendGenericHeader(uint8_t* tx_netbuf, FGMCCommand cmd, uint32_t length, uint32_t packetId, uint32_t segmentIndex, uint32_t segmentCount) noexcept
 {
   FGMC_GenericHeader* pOutGenericHeader = reinterpret_cast<FGMC_GenericHeader*>(tx_netbuf);
 
@@ -196,16 +197,7 @@ void FGMCProtocol::sendGenericHeader(char* tx_netbuf, FGMCCommand cmd, uint32_t 
   // Send Message
   insertPacketId(pOutGenericHeader->fgmc_packet_id_);
 
-#if 1
-  //TODO
-#else
-  IP_PACKET* pPacket = nullptr;
-  pPacket = ::IP_UDP_AllocEx(iface_id_, static_cast<unsigned>(length));
-  if (pPacket != nullptr) {
-    (void)memcpy(pPacket->pData, tx_netbuf, static_cast<unsigned>(length));
-    ::IP_UDP_SendAndFree(iface_id_, htonl(FGMC_IP), FGMC_PORT, FGMC_PORT, pPacket);
-  }
-#endif
+  MulticastResponder::SendResponse(tx_netbuf, length);
 }
 
 void FGMCProtocol::cmdUnetinf(uint32_t inPacketId) noexcept

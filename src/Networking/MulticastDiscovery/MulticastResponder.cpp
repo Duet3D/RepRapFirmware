@@ -20,16 +20,17 @@ extern "C" {
 extern struct netif gs_net_if;
 }
 
+static constexpr ip_addr_t ourGroup = IPADDR4_INIT_BYTES(239, 255, 2, 3);
+
 static udp_pcb *ourPcb = nullptr;
 static pbuf * volatile receivedPbuf = nullptr;
 static volatile uint32_t receivedIpAddr;
 static volatile uint16_t receivedPort;
+static uint16_t lastMessageReceivedPort;
 static unsigned int messagesProcessed = 0;
 static FGMCProtocol *fgmcHandler = nullptr;
 
 static bool active = false;
-
-static constexpr ip_addr_t ourGroup = IPADDR4_INIT_BYTES(239, 255, 2, 3);
 
 // Receive callback function
 extern "C" void rcvFunc(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, u16_t port) noexcept
@@ -57,8 +58,9 @@ void MulticastResponder::Spin() noexcept
 	pbuf *rxPbuf = receivedPbuf;
 	if (rxPbuf != nullptr)
 	{
+		lastMessageReceivedPort = receivedPort;
 		debugPrintf("Rx UDP: addr %u.%u.%u.%u port %u data",
-			(unsigned int)(receivedIpAddr & 0xFF), (unsigned int)((receivedIpAddr >> 8) & 0xFF), (unsigned int)((receivedIpAddr >> 16) & 0xFF), (unsigned int)((receivedIpAddr >> 24) & 0xFF), receivedPort);
+			(unsigned int)(receivedIpAddr & 0xFF), (unsigned int)((receivedIpAddr >> 8) & 0xFF), (unsigned int)((receivedIpAddr >> 16) & 0xFF), (unsigned int)((receivedIpAddr >> 24) & 0xFF), lastMessageReceivedPort);
 		for (size_t i = 0; i < rxPbuf->len; ++i)
 		{
 			debugPrintf(" %02x", ((const uint8_t*)(rxPbuf->payload))[i]);
@@ -119,6 +121,17 @@ void MulticastResponder::Stop() noexcept
 		ourPcb = nullptr;
 	}
 	active = false;
+}
+
+void MulticastResponder::SendResponse(uint8_t *data, size_t length) noexcept
+{
+	debugPrintf("Tx UDP: port %u data", lastMessageReceivedPort);
+	for (size_t i = 0; i < length; ++i)
+	{
+		debugPrintf(" %02x", data[i]);
+	}
+	debugPrintf("\n");
+	//TODO actually send it
 }
 
 #endif

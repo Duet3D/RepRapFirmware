@@ -68,7 +68,7 @@ public:
 	/// \param packetId packedId
 	/// \param segmentIndex segmentIndex
 	/// \param segmentCount segmentCount
-	void sendGenericHeader(char* tx_netbuf, FGMCCommand cmd, uint32_t length, uint32_t packetId, uint32_t segmentIndex, uint32_t segmentCount) noexcept;
+	void sendGenericHeader(uint8_t* tx_netbuf, FGMCCommand cmd, uint32_t length, uint32_t packetId, uint32_t segmentIndex, uint32_t segmentCount) noexcept;
 
 	/// fgmc command "upload network informations"
 	/// \param inPacketId packedId
@@ -120,7 +120,7 @@ public:
 	uint32_t fgmc_application_type_;
 	char fgmc_device_type_[SIZE_DEVICE_TYPE];
 
-	char tx_netbuf_[SIZE_FGMC_RES_MAX];
+	uint8_t tx_netbuf_[SIZE_FGMC_RES_MAX];
 
 	/// Object that holds communication related parameter.
 #if 0
