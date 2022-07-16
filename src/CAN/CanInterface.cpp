@@ -229,8 +229,6 @@ void CanInterface::SetStatusLedNormal() noexcept
 // This is called only from the CAN clock loop, so inline
 static inline void UpdateLed(uint32_t stepClocks) noexcept
 {
-	// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
-	bool turnLedOn = (stepClocks & (1u << 19)) != 0;
 #if SUPPORT_MULTICAST_DISCOVERY
 	if (identifying)
 	{
@@ -238,13 +236,17 @@ static inline void UpdateLed(uint32_t stepClocks) noexcept
 		{
 			identifying = 0;							// stop identifying
 		}
-		else if ((stepClocks & (1u << 17)) == 0)		// double flash instead of single
+		else
 		{
-			turnLedOn = false;
+			// Blink the LED fast. This function gets called every 200ms, so that's the fastest we can blink it without having another task do it.
+			digitalWrite(DiagPin, !digitalRead(DiagPin));
+			return;
 		}
 	}
 #endif
-	digitalWrite(DiagPin, XNor(DiagOnPolarity, turnLedOn));
+
+	// Blink the LED at about 1Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
+	digitalWrite(DiagPin, XNor(DiagOnPolarity,  (stepClocks & (1u << 19)) != 0));
 }
 
 static void InitReceiveFilters() noexcept
