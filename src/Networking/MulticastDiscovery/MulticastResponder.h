@@ -20,6 +20,7 @@ namespace MulticastResponder
 	void Start(TcpPort port) noexcept;
 	void Stop() noexcept;
 	void SendResponse(uint8_t *data, size_t length) noexcept;
+	void ScheduleReboot() noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
 }
 

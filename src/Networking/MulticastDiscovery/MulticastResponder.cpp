@@ -11,6 +11,8 @@
 
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
+#include <Hardware/ExceptionHandlers.h>
+
 #include "fgmc_header.h"
 #include "fgmc_protocol.h"
 
@@ -29,6 +31,8 @@ static volatile uint16_t receivedPort;
 static uint16_t lastMessageReceivedPort;
 static unsigned int messagesProcessed = 0;
 static FGMCProtocol *fgmcHandler = nullptr;
+static uint32_t ticksToReboot = 0;
+static uint32_t whenRebootScheduled;
 
 static bool active = false;
 
@@ -55,21 +59,33 @@ void MulticastResponder::Init() noexcept
 // Do some work, returning true if we did anything significant
 void MulticastResponder::Spin() noexcept
 {
-	pbuf *rxPbuf = receivedPbuf;
-	if (rxPbuf != nullptr)
+	if (ticksToReboot != 0)
 	{
-		lastMessageReceivedPort = receivedPort;
-		debugPrintf("Rx UDP: addr %u.%u.%u.%u port %u data",
-			(unsigned int)(receivedIpAddr & 0xFF), (unsigned int)((receivedIpAddr >> 8) & 0xFF), (unsigned int)((receivedIpAddr >> 16) & 0xFF), (unsigned int)((receivedIpAddr >> 24) & 0xFF), lastMessageReceivedPort);
-		for (size_t i = 0; i < rxPbuf->len; ++i)
+		if (millis() - whenRebootScheduled > ticksToReboot)
 		{
-			debugPrintf(" %02x", ((const uint8_t*)(rxPbuf->payload))[i]);
+			reprap.EmergencyStop();									// this disables heaters and drives - Duet WiFi pre-production boards need drives disabled here
+			SoftwareReset(SoftwareResetReason::user);				// doesn't return
 		}
-		debugPrintf("\n");
-		receivedPbuf = nullptr;
-		fgmcHandler->handleStream(0, (uint8_t *)rxPbuf->payload, rxPbuf->len);
-		pbuf_free(rxPbuf);
-		++messagesProcessed;
+
+	}
+	else
+	{
+		pbuf *rxPbuf = receivedPbuf;
+		if (rxPbuf != nullptr)
+		{
+			lastMessageReceivedPort = receivedPort;
+			debugPrintf("Rx UDP: addr %u.%u.%u.%u port %u data",
+				(unsigned int)(receivedIpAddr & 0xFF), (unsigned int)((receivedIpAddr >> 8) & 0xFF), (unsigned int)((receivedIpAddr >> 16) & 0xFF), (unsigned int)((receivedIpAddr >> 24) & 0xFF), lastMessageReceivedPort);
+			for (size_t i = 0; i < rxPbuf->len; ++i)
+			{
+				debugPrintf(" %02x", ((const uint8_t*)(rxPbuf->payload))[i]);
+			}
+			debugPrintf("\n");
+			receivedPbuf = nullptr;
+			fgmcHandler->handleStream(0, (uint8_t *)rxPbuf->payload, rxPbuf->len);
+			pbuf_free(rxPbuf);
+			++messagesProcessed;
+		}
 	}
 }
 
@@ -132,6 +148,13 @@ void MulticastResponder::SendResponse(uint8_t *data, size_t length) noexcept
 	}
 	debugPrintf("\n");
 	//TODO actually send it
+}
+
+// Schedule a reboot. We delay a little while to allow the response to be transmitted first.
+void MulticastResponder::ScheduleReboot() noexcept
+{
+	whenRebootScheduled = millis();
+	ticksToReboot = 1000;
 }
 
 #endif
