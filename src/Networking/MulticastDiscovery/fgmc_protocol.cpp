@@ -11,6 +11,10 @@
 #include <Version.h>
 #include <cstring>
 
+// Disable gcc warning about strncpy not being able to include a terminating null.
+// We don't need a terminating null when filling in response fields (if we did then we would use SafeStrcpy instead).
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+
 FGMCProtocol::FGMCProtocol() noexcept
     : iface_id_(0),
       eeprom_product_key_{0},
@@ -18,19 +22,13 @@ FGMCProtocol::FGMCProtocol() noexcept
       eeprom_noc_code_{0},
       fgmc_device_id_(FGMCHwTypeId::FGMC_DEVICE_ID_ZERO),
       fgmc_application_type_(0),
-      fgmc_device_type_{0},
       tx_netbuf_{0},
-#if 0
-      app_info_(nullptr),
-      led_manager_(nullptr),
-      engp_router_{nullptr, nullptr},
-      parameter_management_(nullptr),
-#endif
       packetIdBuffer{0},
       packetIdIndex{0}
 {
 }
 
+// Build a unique ID from the MAC address
 void FGMCProtocol::macToString(uint32_t interface) noexcept
 {
   for (uint32_t i = 0; i < SIZE_FGMC_DEST_ID; i++)
@@ -68,37 +66,38 @@ void FGMCProtocol::macToString(uint32_t interface) noexcept
 
 void FGMCProtocol::init() noexcept
 {
-  char deviceName[SIZE_DEVICE_NAME] = {0};
-
 #if 0
-  // Read eeprom data
-  ret = deviceInfo.GetFestoNocCode(&eeprom_noc_code_[0], SIZE_EEPROM_NOC_CODE);
-  if (ret != base::ReturnCode::kRcSuccess) {
-    retTotal = ret;
-  }
-  ret = deviceInfo.GetFestoProductKey(&eeprom_product_key_[0], SIZE_EEPROM_PRODUCT_KEY);
-  if (ret != base::ReturnCode::kRcSuccess) {
-    retTotal = ret;
-  }
-  fgmc_application_type_ = deviceInfo.GetFestoPartNumber();
-  (void)strncpy(&deviceName[0], &eeprom_noc_code_[0], SIZE_EEPROM_NOC_CODE);
+	char deviceName[SIZE_DEVICE_NAME] = {0};
 
-  // check eeprom values available
-  if ((eeprom_noc_code_[0] == '\0')) {  // || (eeprom_product_key_[0] == '\0')
-    // EEPROMs not described
-    eeprom_product_key_[0] = '1';
-    eeprom_product_key_[1] = '\0';
-    (void)memcpy(&eeprom_noc_code_[0], &INVALID_EEPROM_DATA_STRING, INVALID_EEPROM_DATA_STRING_LEN);
-    (void)memcpy(&deviceName[0], &INVALID_EEPROM_DATA_STRING, INVALID_EEPROM_DATA_STRING_LEN);
-  }
+	// Read eeprom data
+	ret = deviceInfo.GetFestoNocCode(&eeprom_noc_code_[0], SIZE_EEPROM_NOC_CODE);
+	if (ret != base::ReturnCode::kRcSuccess) {
+		retTotal = ret;
+	}
+	ret = deviceInfo.GetFestoProductKey(&eeprom_product_key_[0], SIZE_EEPROM_PRODUCT_KEY);
+	if (ret != base::ReturnCode::kRcSuccess) {
+		retTotal = ret;
+	}
+	fgmc_application_type_ = deviceInfo.GetFestoPartNumber();
+	(void)strncpy(&deviceName[0], &eeprom_noc_code_[0], SIZE_EEPROM_NOC_CODE);
 
-  for (uint32_t i = 0; i < IP_MAX_IFACES; i++) {
-    macToString(i);
-  }
+	// check eeprom values available
+	if ((eeprom_noc_code_[0] == '\0')) {  // || (eeprom_product_key_[0] == '\0')
+		// EEPROMs not described
+		eeprom_product_key_[0] = '1';
+		eeprom_product_key_[1] = '\0';
+		(void)memcpy(&eeprom_noc_code_[0], &INVALID_EEPROM_DATA_STRING, INVALID_EEPROM_DATA_STRING_LEN);
+		(void)memcpy(&deviceName[0], &INVALID_EEPROM_DATA_STRING, INVALID_EEPROM_DATA_STRING_LEN);
+	}
+
 #endif
 
-  SafeStrncpy(deviceName, BOARD_SHORT_NAME, ARRAY_SIZE(deviceName));
-  fgmc_device_id_ = FGMCHwTypeId::FGMC_DEVICE_ID_DUET3;
+	for (uint32_t i = 0; i < IP_MAX_IFACES; i++)
+	{
+		macToString(i);
+	}
+
+	fgmc_device_id_ = FGMCHwTypeId::FGMC_DEVICE_ID_DUET3;
 }
 
 void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddress, uint32_t rxLength) noexcept
@@ -195,7 +194,7 @@ void FGMCProtocol::sendGenericHeader(uint8_t* tx_netbuf, FGMCCommand cmd, uint32
 	pOutGenericHeader->fgmc_length_ = length;
 	pOutGenericHeader->fgmc_hw_type_id_ = fgmc_device_id_;
 	// device unique fgmc destination id
-	strncpy(&pOutGenericHeader->fgmc_destination_id_[0], unique_id_[iface_id_], SIZE_FGMC_DEST_ID);
+	strncpy(pOutGenericHeader->fgmc_destination_id_, unique_id_[iface_id_], SIZE_FGMC_DEST_ID);
 	pOutGenericHeader->fgmc_packet_id_ = packetId + 1;
 	pOutGenericHeader->fgmc_segment_index_ = segmentIndex;
 	pOutGenericHeader->fgmc_segment_count_ = segmentCount;
@@ -236,13 +235,13 @@ void FGMCProtocol::cmdUnetinf(uint32_t inPacketId) noexcept
 	memcpy(pOutCmdHeader->fgmc_mac_address_, macAddress.bytes, 6);
 
 	// IPv4
-	const uint32_t ipaddress = reprap.GetNetwork().GetIPAddress(iface_id_).GetV4BigEndian();
+	const uint32_t ipaddress = reprap.GetNetwork().GetIPAddress(iface_id_).GetV4LittleEndian();
 	(void)memcpy(&pOutCmdHeader->fgmc_ip_v4_static_address_[0], &ipaddress, SIZE_IP_V4);
 
-	const uint32_t subnetmask = reprap.GetNetwork().GetNetmask(iface_id_).GetV4BigEndian();
+	const uint32_t subnetmask = reprap.GetNetwork().GetNetmask(iface_id_).GetV4LittleEndian();
 	(void)memcpy(&pOutCmdHeader->fgmc_ip_v4_static_netmask_[0], &subnetmask, SIZE_IP_V4);
 
-	const uint32_t gateway = reprap.GetNetwork().GetGateway(iface_id_).GetV4BigEndian();
+	const uint32_t gateway = reprap.GetNetwork().GetGateway(iface_id_).GetV4LittleEndian();
 	(void)memcpy(&pOutCmdHeader->fgmc_ip_v4_static_gateway_[0], &gateway, SIZE_IP_V4);
 
 	pOutCmdHeader->fgmc_ip_v4_static_dns_[0] = 0;
@@ -272,7 +271,7 @@ void FGMCProtocol::cmdUnetinf(uint32_t inPacketId) noexcept
 	pOutCmdHeader->fgmc_ip_v4_dns_[3] = 0;
 
 	// NOC-CODE
-	(void)strncpy(&pOutCmdHeader->fgmc_noc_code_[0], &eeprom_noc_code_[0], SIZE_EEPROM_NOC_CODE);
+//	(void)strncpy(pOutCmdHeader->fgmc_noc_code_, &eeprom_noc_code_[0], SIZE_EEPROM_NOC_CODE);
 
 	// iTTL
 	pOutCmdHeader->fgmc_ttl_ = 255;
@@ -281,10 +280,10 @@ void FGMCProtocol::cmdUnetinf(uint32_t inPacketId) noexcept
 	pOutCmdHeader->fgmc_connection_state_ = 0;
 
 	// Device Type
-	(void)strncpy(&pOutCmdHeader->fgmc_device_type_[0], &fgmc_device_type_[0], SIZE_DEVICE_TYPE);
+	(void)strncpy(pOutCmdHeader->fgmc_device_type_, BOARD_NAME, SIZE_DEVICE_TYPE);
 
 	// Device Serial Number
-	(void)strncpy(&pOutCmdHeader->fgmc_serial_number_[0], &eeprom_product_key_[0], SIZE_SERIAL_NUMBER);
+	(void)strncpy(pOutCmdHeader->fgmc_serial_number_, &eeprom_product_key_[0], SIZE_SERIAL_NUMBER);
 
 	// Application Type
 	pOutCmdHeader->fgmc_application_type_ = fgmc_application_type_;
@@ -296,10 +295,10 @@ void FGMCProtocol::cmdUnetinf(uint32_t inPacketId) noexcept
 	pOutCmdHeader->fgmc_application_version_revision_ = 0;
 
 	// Generic Info
-	(void)memset(&pOutCmdHeader->fgmc_generic_info_[0], 0x00, SIZE_GENERIC_INFO);
+	(void)memset(pOutCmdHeader->fgmc_generic_info_, 0x00, SIZE_GENERIC_INFO);
 
 	// Device Name
-	SafeStrncpy(pOutCmdHeader->fgmc_device_name_, BOARD_SHORT_NAME, ARRAY_SIZE(pOutCmdHeader->fgmc_device_name_));
+	strncpy(pOutCmdHeader->fgmc_device_name_, reprap.GetName(), ARRAY_SIZE(pOutCmdHeader->fgmc_device_name_));
 
 	//-----------------------------------------------------------------------------------
 	// Generic Multicast Header
@@ -408,7 +407,7 @@ void FGMCProtocol::cmdGetFirmwareVersion(uint32_t inPacketId) noexcept
 	//-----------------------------------------------------------------------------------
 	// Get Firmware Version
 	//-----------------------------------------------------------------------------------
-	(void)strncpy(&pOutCmdHeader->module_name_[0], &fgmc_device_type_[0], SIZE_DEVICE_TYPE);
+	(void)strncpy(pOutCmdHeader->module_name_, BOARD_NAME, SIZE_DEVICE_TYPE);
 
 	SafeSnprintf(pOutCmdHeader->module_version_, SIZE_MODULE_VERSION, "%s version %s", FIRMWARE_NAME, VERSION);
 

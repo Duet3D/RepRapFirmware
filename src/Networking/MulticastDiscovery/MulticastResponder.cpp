@@ -74,6 +74,7 @@ void MulticastResponder::Spin() noexcept
 		if (rxPbuf != nullptr)
 		{
 			lastMessageReceivedPort = receivedPort;
+#if 0
 			debugPrintf("Rx UDP: addr %u.%u.%u.%u port %u data",
 				(unsigned int)(receivedIpAddr & 0xFF), (unsigned int)((receivedIpAddr >> 8) & 0xFF), (unsigned int)((receivedIpAddr >> 16) & 0xFF), (unsigned int)((receivedIpAddr >> 24) & 0xFF), lastMessageReceivedPort);
 			for (size_t i = 0; i < rxPbuf->len; ++i)
@@ -81,6 +82,7 @@ void MulticastResponder::Spin() noexcept
 				debugPrintf(" %02x", ((const uint8_t*)(rxPbuf->payload))[i]);
 			}
 			debugPrintf("\n");
+#endif
 			receivedPbuf = nullptr;
 			fgmcHandler->handleStream(0, (uint8_t *)rxPbuf->payload, rxPbuf->len);
 			pbuf_free(rxPbuf);
@@ -99,6 +101,7 @@ void MulticastResponder::Start(TcpPort port) noexcept
 	if (fgmcHandler == nullptr)
 	{
 		fgmcHandler = new FGMCProtocol;
+		fgmcHandler->init();
 	}
 
 	if (ourPcb == nullptr)
@@ -141,13 +144,29 @@ void MulticastResponder::Stop() noexcept
 
 void MulticastResponder::SendResponse(uint8_t *data, size_t length) noexcept
 {
+#if 0
 	debugPrintf("Tx UDP: port %u data", lastMessageReceivedPort);
 	for (size_t i = 0; i < length; ++i)
 	{
 		debugPrintf(" %02x", data[i]);
 	}
 	debugPrintf("\n");
-	//TODO actually send it
+#endif
+
+	pbuf * const pb = pbuf_alloc(PBUF_TRANSPORT, length, PBUF_RAM);
+#if 0
+	if (pbuf_take(pb, data, length) != ERR_OK)
+	{
+		debugPrintf("pbuf_take returned error\n");
+	}
+	if (udp_sendto_if(ourPcb, pb, &ourGroup, lastMessageReceivedPort, &gs_net_if) != ERR_OK)
+	{
+		debugPrintf("UDP send failed\n");
+	}
+#else
+	(void)pbuf_take(pb, data, length);
+	(void)udp_sendto_if(ourPcb, pb, &ourGroup, lastMessageReceivedPort, &gs_net_if);
+#endif
 }
 
 // Schedule a reboot. We delay a little while to allow the response to be transmitted first.
