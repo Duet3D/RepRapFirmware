@@ -17,69 +17,53 @@
 
 FGMCProtocol::FGMCProtocol() noexcept
     : iface_id_(0),
-      eeprom_product_key_{0},
-      unique_id_{0},
-      eeprom_noc_code_{0},
       fgmc_device_id_(FGMCHwTypeId::FGMC_DEVICE_ID_ZERO),
       fgmc_application_type_(0),
-      tx_netbuf_{0},
-      packetIdBuffer{0},
-      packetIdIndex{0}
+      tx_netbuf_{0}
 {
 }
 
 // Build a unique ID from the MAC address
 void FGMCProtocol::macToString(uint32_t interface) noexcept
 {
-  for (uint32_t i = 0; i < SIZE_FGMC_DEST_ID; i++)
-  {
-    unique_id_[interface][i] = '\0';
-  }
+	InterfaceData& ifData = ifaceData[interface];
 
-  const MacAddress& macAddress = reprap.GetNetwork().GetMacAddress(interface);
-  for (uint32_t i = 0; i < 6; i++)
-  {
-    const uint8_t byte = macAddress.bytes[i];
-    uint8_t lowValue = (byte & 0x0Fu);
-    if (lowValue < 0xA)
-    {
-      lowValue = lowValue + 48;
-    }
-    else
-    {
-      lowValue = lowValue + 55;
-    }
+	for (uint32_t i = 0; i < SIZE_FGMC_DEST_ID; i++)
+	{
+		ifData.unique_id_[i] = '\0';
+	}
 
-    uint8_t highValue = (byte >> 4u) & 0x0Fu;
-    if (highValue < 0xA)
-    {
-      highValue = highValue + 48;
-    }
-    else
-    {
-      highValue = highValue + 55;
-    }
-    unique_id_[interface][i * 2] = static_cast<char>(lowValue);
-    unique_id_[interface][(i * 2) + 1] = static_cast<char>(highValue);
-  }
+	const MacAddress& macAddress = reprap.GetNetwork().GetMacAddress(interface);
+	for (uint32_t i = 0; i < 6; i++)
+	{
+		const uint8_t byte = macAddress.bytes[i];
+		uint8_t lowValue = (byte & 0x0Fu);
+		if (lowValue < 0xA)
+		{
+			lowValue = lowValue + 48;
+		}
+		else
+		{
+			lowValue = lowValue + 55;
+		}
+
+		uint8_t highValue = (byte >> 4u) & 0x0Fu;
+		if (highValue < 0xA)
+		{
+			highValue = highValue + 48;
+		}
+		else
+		{
+			highValue = highValue + 55;
+		}
+		ifData.unique_id_[i * 2] = static_cast<char>(lowValue);
+		ifData.unique_id_[(i * 2) + 1] = static_cast<char>(highValue);
+	}
 }
 
 void FGMCProtocol::init() noexcept
 {
 #if 0
-	char deviceName[SIZE_DEVICE_NAME] = {0};
-
-	// Read eeprom data
-	ret = deviceInfo.GetFestoNocCode(&eeprom_noc_code_[0], SIZE_EEPROM_NOC_CODE);
-	if (ret != base::ReturnCode::kRcSuccess) {
-		retTotal = ret;
-	}
-	ret = deviceInfo.GetFestoProductKey(&eeprom_product_key_[0], SIZE_EEPROM_PRODUCT_KEY);
-	if (ret != base::ReturnCode::kRcSuccess) {
-		retTotal = ret;
-	}
-	fgmc_application_type_ = deviceInfo.GetFestoPartNumber();
-	(void)strncpy(&deviceName[0], &eeprom_noc_code_[0], SIZE_EEPROM_NOC_CODE);
 
 	// check eeprom values available
 	if ((eeprom_noc_code_[0] == '\0')) {  // || (eeprom_product_key_[0] == '\0')
@@ -95,6 +79,9 @@ void FGMCProtocol::init() noexcept
 	for (uint32_t i = 0; i < IP_MAX_IFACES; i++)
 	{
 		macToString(i);
+		ifaceData[i].configuredIpAddress = reprap.GetNetwork().GetIPAddress(i);
+		ifaceData[i].configuredNetmask = reprap.GetNetwork().GetNetmask(i);
+		ifaceData[i].configuredGateway = reprap.GetNetwork().GetGateway(i);
 	}
 
 	fgmc_device_id_ = FGMCHwTypeId::FGMC_DEVICE_ID_DUET3;
@@ -111,14 +98,16 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddres
 		FGMC_GenericHeader* pInGenericHeader = reinterpret_cast<FGMC_GenericHeader*>(inputBufferAddress);
 
 		// read incoming packetid
-		uint32_t packetId = pInGenericHeader->fgmc_packet_id_;
+		const uint32_t packetId = pInGenericHeader->fgmc_packet_id_;
 
-		if (isPacketInBuffer(packetId))
+		InterfaceData& ifData = ifaceData[iface_id_];
+
+		if (ifData.isPacketInBuffer(packetId))
 		{
 			return;  // TODO: Filter out iFace 1, if iFace 0 is active (PACKET-ID) ?
 		}
 
-		insertPacketId(packetId);
+		ifData.insertPacketId(packetId);
 
 		switch (pInGenericHeader->fgmc_command_)
 		{
@@ -130,9 +119,8 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddres
 			}
 			break;
 
-		#if 0	// not supported for now
 		case FGMCCommand::MCD_COMMAND_DNETINF:
-			if (strncmp(pInGenericHeader->fgmc_destination_id_, unique_id_[iface_id_], SIZE_FGMC_DEST_ID) == 0)
+			if (strncmp(pInGenericHeader->fgmc_destination_id_, ifData.unique_id_, SIZE_FGMC_DEST_ID) == 0)
 			{
 				// fgmc command: download network information
 				FGMC_ReqDownloadNetInfoHeader* const pInCmdPointer =
@@ -140,10 +128,9 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddres
 				cmdDnetinf(pInCmdPointer, packetId);
 			}
 			break;
-		#endif
 
 		case FGMCCommand::MCD_COMMAND_REBOOT:
-			if (strncmp(pInGenericHeader->fgmc_destination_id_, unique_id_[iface_id_], SIZE_FGMC_DEST_ID) == 0)
+			if (strncmp(pInGenericHeader->fgmc_destination_id_, ifData.unique_id_, SIZE_FGMC_DEST_ID) == 0)
 			{
 				// fgmc command: reboot
 				cmdReboot(packetId);
@@ -151,7 +138,7 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddres
 			break;
 
 		case FGMCCommand::MCD_COMMAND_IDENTIFY:
-			if (strncmp(pInGenericHeader->fgmc_destination_id_, unique_id_[iface_id_], SIZE_FGMC_DEST_ID) == 0)
+			if (strncmp(pInGenericHeader->fgmc_destination_id_, ifData.unique_id_, SIZE_FGMC_DEST_ID) == 0)
 			{
 				// fgmc command: identify
 				FGMC_ReqIdentify* pInCmdPointer =
@@ -161,7 +148,7 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddres
 			break;
 
 		case FGMCCommand::MCD_COMMAND_GET_FIRMWARE_VERSION:
-			if (strncmp(pInGenericHeader->fgmc_destination_id_, unique_id_[iface_id_], SIZE_FGMC_DEST_ID) == 0)
+			if (strncmp(pInGenericHeader->fgmc_destination_id_, ifData.unique_id_, SIZE_FGMC_DEST_ID) == 0)
 			{
 				// fgmc command: get firmware version
 				cmdGetFirmwareVersion(packetId);
@@ -169,7 +156,7 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddres
 			break;
 
 		case FGMCCommand::MCD_COMMAND_GET_SUPPORTED_COMMANDS:
-			if (strncmp(pInGenericHeader->fgmc_destination_id_, unique_id_[iface_id_], SIZE_FGMC_DEST_ID) == 0)
+			if (strncmp(pInGenericHeader->fgmc_destination_id_, ifData.unique_id_, SIZE_FGMC_DEST_ID) == 0)
 			{
 				// fgmc command: get supported commands
 				cmdGetSupportedCommands(packetId);
@@ -194,7 +181,7 @@ void FGMCProtocol::sendGenericHeader(uint8_t* tx_netbuf, FGMCCommand cmd, uint32
 	pOutGenericHeader->fgmc_length_ = length;
 	pOutGenericHeader->fgmc_hw_type_id_ = fgmc_device_id_;
 	// device unique fgmc destination id
-	strncpy(pOutGenericHeader->fgmc_destination_id_, unique_id_[iface_id_], SIZE_FGMC_DEST_ID);
+	strncpy(pOutGenericHeader->fgmc_destination_id_, ifaceData[iface_id_].unique_id_, SIZE_FGMC_DEST_ID);
 	pOutGenericHeader->fgmc_packet_id_ = packetId + 1;
 	pOutGenericHeader->fgmc_segment_index_ = segmentIndex;
 	pOutGenericHeader->fgmc_segment_count_ = segmentCount;
@@ -203,7 +190,7 @@ void FGMCProtocol::sendGenericHeader(uint8_t* tx_netbuf, FGMCCommand cmd, uint32
 	pOutGenericHeader->fgmc_error_code_ = FGMCErrorCode::FGMC_ERROR_CODE_NORMAL;
 
 	// Send Message
-	insertPacketId(pOutGenericHeader->fgmc_packet_id_);
+	ifaceData[iface_id_].insertPacketId(pOutGenericHeader->fgmc_packet_id_);
 
 	MulticastResponder::SendResponse(tx_netbuf, length);
 }
@@ -235,13 +222,14 @@ void FGMCProtocol::cmdUnetinf(uint32_t inPacketId) noexcept
 	memcpy(pOutCmdHeader->fgmc_mac_address_, macAddress.bytes, 6);
 
 	// IPv4
-	const uint32_t ipaddress = reprap.GetNetwork().GetIPAddress(iface_id_).GetV4LittleEndian();
+	const InterfaceData& ifData = ifaceData[iface_id_];
+	const uint32_t ipaddress = ifData.configuredIpAddress.GetV4LittleEndian();
 	(void)memcpy(&pOutCmdHeader->fgmc_ip_v4_static_address_[0], &ipaddress, SIZE_IP_V4);
 
-	const uint32_t subnetmask = reprap.GetNetwork().GetNetmask(iface_id_).GetV4LittleEndian();
+	const uint32_t subnetmask = ifData.configuredNetmask.GetV4LittleEndian();
 	(void)memcpy(&pOutCmdHeader->fgmc_ip_v4_static_netmask_[0], &subnetmask, SIZE_IP_V4);
 
-	const uint32_t gateway = reprap.GetNetwork().GetGateway(iface_id_).GetV4LittleEndian();
+	const uint32_t gateway = ifData.configuredGateway.GetV4LittleEndian();
 	(void)memcpy(&pOutCmdHeader->fgmc_ip_v4_static_gateway_[0], &gateway, SIZE_IP_V4);
 
 	pOutCmdHeader->fgmc_ip_v4_static_dns_[0] = 0;
@@ -256,13 +244,13 @@ void FGMCProtocol::cmdUnetinf(uint32_t inPacketId) noexcept
 	(void)memset(&pOutCmdHeader->fgmc_ip_v6_static_dns_[0], 0x00, SIZE_IP_V6);
 
 	// IPv4 active
-	const uint32_t ipaddressActive = ipaddress;
+	const uint32_t ipaddressActive = reprap.GetNetwork().GetIPAddress(iface_id_).GetV4LittleEndian();
 	(void)memcpy(&pOutCmdHeader->fgmc_ip_v4_address_[0], &ipaddressActive, SIZE_IP_V4);
 
-	const uint32_t subnetmaskActive = subnetmask;
+	const uint32_t subnetmaskActive = reprap.GetNetwork().GetNetmask(iface_id_).GetV4LittleEndian();
 	(void)memcpy(&pOutCmdHeader->fgmc_ip_v4_netmask_[0], &subnetmaskActive, SIZE_IP_V4);
 
-	const uint32_t gatewayActive = gateway;
+	const uint32_t gatewayActive = reprap.GetNetwork().GetGateway(iface_id_).GetV4LittleEndian();
 	(void)memcpy(&pOutCmdHeader->fgmc_ip_v4_gateway_[0], &gatewayActive, SIZE_IP_V4);
 
 	pOutCmdHeader->fgmc_ip_v4_dns_[0] = 0;
@@ -271,7 +259,7 @@ void FGMCProtocol::cmdUnetinf(uint32_t inPacketId) noexcept
 	pOutCmdHeader->fgmc_ip_v4_dns_[3] = 0;
 
 	// NOC-CODE
-//	(void)strncpy(pOutCmdHeader->fgmc_noc_code_, &eeprom_noc_code_[0], SIZE_EEPROM_NOC_CODE);
+	(void)strncpy(pOutCmdHeader->fgmc_noc_code_, INVALID_EEPROM_DATA_STRING, SIZE_EEPROM_NOC_CODE);
 
 	// iTTL
 	pOutCmdHeader->fgmc_ttl_ = 255;
@@ -283,7 +271,7 @@ void FGMCProtocol::cmdUnetinf(uint32_t inPacketId) noexcept
 	(void)strncpy(pOutCmdHeader->fgmc_device_type_, BOARD_NAME, SIZE_DEVICE_TYPE);
 
 	// Device Serial Number
-	(void)strncpy(pOutCmdHeader->fgmc_serial_number_, &eeprom_product_key_[0], SIZE_SERIAL_NUMBER);
+	memset(pOutCmdHeader->fgmc_serial_number_, 0, sizeof(pOutCmdHeader->fgmc_serial_number_));
 
 	// Application Type
 	pOutCmdHeader->fgmc_application_type_ = fgmc_application_type_;
@@ -306,8 +294,7 @@ void FGMCProtocol::cmdUnetinf(uint32_t inPacketId) noexcept
 	sendGenericHeader(tx_netbuf_, FGMCCommand::MCD_COMMAND_UNETINF, sizeof(FGMC_ResUploadNetInfoHeader), inPacketId, 0, 1);
 }
 
-#if 0	// not supported for now
-void FGMCProtocol::cmdDnetinf(FGMC_ReqDownloadNetInfoHeader* pInCmdHeader, uint32_t inPacketId)
+void FGMCProtocol::cmdDnetinf(FGMC_ReqDownloadNetInfoHeader* pInCmdHeader, uint32_t inPacketId) noexcept
 {
 	FGMC_ResDownloadNetInfoHeader* pOutCmdHeader = reinterpret_cast<FGMC_ResDownloadNetInfoHeader*>(tx_netbuf_);
 	(void)memset(pOutCmdHeader, 0x00, sizeof(FGMC_ResDownloadNetInfoHeader));
@@ -316,20 +303,32 @@ void FGMCProtocol::cmdDnetinf(FGMC_ReqDownloadNetInfoHeader* pInCmdHeader, uint3
 	// The Download Netinformation Structure
 	//-----------------------------------------------------------------------------------
 
-	bool dhcpEnable = false;
-	uint32_t ipaddress = 0;
-	uint32_t subnetmask = 0;
-	uint32_t gateway = 0;
 
 	// set new network settings
-	dhcpEnable = static_cast<bool>(pInCmdHeader->fgmc_ip_address_type_);
-	engp_router_[iface_id_]->SetDhcpenable(dhcpEnable);
-	(void)memcpy(&ipaddress, &pInCmdHeader->fgmc_ip_v4_static_address_[0], SIZE_IP_V4);
-	engp_router_[iface_id_]->SetIpaddress(ntohl(ipaddress));
-	(void)memcpy(&subnetmask, &pInCmdHeader->fgmc_ip_v4_static_netmask_[0], SIZE_IP_V4);
-	engp_router_[iface_id_]->SetSubnetmask(ntohl(subnetmask));
-	(void)memcpy(&gateway, &pInCmdHeader->fgmc_ip_v4_static_gateway_[0], SIZE_IP_V4);
-	engp_router_[iface_id_]->SetGateway(ntohl(gateway));
+	InterfaceData& ifData = ifaceData[iface_id_];
+	const bool dhcpEnable = static_cast<bool>(pInCmdHeader->fgmc_ip_address_type_);
+	if (dhcpEnable)
+	{
+		ifData.configuredIpAddress.SetNull();
+	}
+	else
+	{
+		uint32_t ipaddress;
+		(void)memcpy(&ipaddress, &pInCmdHeader->fgmc_ip_v4_static_address_[0], SIZE_IP_V4);
+		ifData.configuredIpAddress.SetV4LittleEndian(ipaddress);
+	}
+
+	{
+		uint32_t subnetmask;
+		(void)memcpy(&subnetmask, &pInCmdHeader->fgmc_ip_v4_static_netmask_[0], SIZE_IP_V4);
+		ifData.configuredNetmask.SetV4LittleEndian(subnetmask);
+	}
+
+	{
+		uint32_t gateway;
+		(void)memcpy(&gateway, &pInCmdHeader->fgmc_ip_v4_static_gateway_[0], SIZE_IP_V4);
+		ifData.configuredGateway.SetV4LittleEndian(gateway);
+	}
 
 	// set new device name
 	// filter out " (X19)  / (X18)
@@ -352,14 +351,16 @@ void FGMCProtocol::cmdDnetinf(FGMC_ReqDownloadNetInfoHeader* pInCmdHeader, uint3
 			break;
 		}
 	}
-	app_info_->setDeviceName(&pInCmdHeader->fgmc_device_name_[0], SIZE_DEVICE_NAME);
+
+	//TODO create new network-override.g file
+	//TODO write M550, M553, M553, M554 commands
+	//TODO close file
 
 	//-----------------------------------------------------------------------------------
 	// Generic Multicast Header
 	//-----------------------------------------------------------------------------------
 	sendGenericHeader(tx_netbuf_, FGMCCommand::MCD_COMMAND_DNETINF, sizeof(FGMC_ResDownloadNetInfoHeader), inPacketId, 0, 1);
 }
-#endif
 
 void FGMCProtocol::cmdReboot(uint32_t inPacketId) noexcept
 {
@@ -425,9 +426,7 @@ void FGMCProtocol::cmdGetSupportedCommands(uint32_t inPacketId) noexcept
 	FGMCCommand supportedCommands[] =
 	{
 		FGMCCommand::MCD_COMMAND_UNETINF,
-#if 0	// not supported for now
 		FGMCCommand::MCD_COMMAND_DNETINF,
-#endif
 		FGMCCommand::MCD_COMMAND_IDENTIFY,
 		FGMCCommand::MCD_COMMAND_GET_FIRMWARE_VERSION,
 		FGMCCommand::MCD_COMMAND_GET_SUPPORTED_COMMANDS
@@ -453,11 +452,19 @@ void FGMCProtocol::cmdGetSupportedCommands(uint32_t inPacketId) noexcept
 	}
 }
 
-bool FGMCProtocol::isPacketInBuffer(uint32_t packetId) noexcept
+FGMCProtocol::InterfaceData::InterfaceData() noexcept
+	: unique_id_{0},
+	  packetIdBuffer{0},
+	  packetIdIndex(0)
 {
-	for (uint32_t i = 0; i < ringBufferSize; i++)
+}
+
+//TODO combine these 2 functions
+bool FGMCProtocol::InterfaceData::isPacketInBuffer(uint32_t packetId) noexcept
+{
+	for (uint32_t i = 0; i < InterfaceData::ringBufferSize; i++)
 	{
-		if (packetId == packetIdBuffer[iface_id_][i])
+		if (packetId == packetIdBuffer[i])
 		{
 			return true;
 		}
@@ -465,17 +472,17 @@ bool FGMCProtocol::isPacketInBuffer(uint32_t packetId) noexcept
 	return false;
 }
 
-void FGMCProtocol::insertPacketId(uint32_t packetId) noexcept
+void FGMCProtocol::InterfaceData::insertPacketId(uint32_t packetId) noexcept
 {
 	if (isPacketInBuffer(packetId))
 	{
 		return;
 	}
-	packetIdBuffer[iface_id_][packetIdIndex[iface_id_]] = packetId;
-	packetIdIndex[iface_id_]++;
-	if (packetIdIndex[iface_id_] >= ringBufferSize)
+	packetIdBuffer[packetIdIndex] = packetId;
+	packetIdIndex++;
+	if (packetIdIndex >= InterfaceData::ringBufferSize)
 	{
-		packetIdIndex[iface_id_] = 0;
+		packetIdIndex = 0;
 	}
 }
 

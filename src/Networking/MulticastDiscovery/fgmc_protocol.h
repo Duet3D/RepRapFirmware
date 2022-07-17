@@ -4,6 +4,7 @@
 #define FGMC_PROTOCOL_H
 
 #include <RepRapFirmware.h>
+#include <General/IPAddress.h>
 
 #if SUPPORT_MULTICAST_DISCOVERY
 
@@ -73,23 +74,14 @@ private:
 	/// \param inPacketId packedId
 	void cmdGetSupportedCommands(uint32_t inPacketId) noexcept;
 
-	/// insert used packet-id
-	/// \param packetId packedId
-	void insertPacketId(uint32_t packetId) noexcept;
-
-	/// check if packet id is already used
-	/// \param packetId packedId
-	bool isPacketInBuffer(uint32_t packetId) noexcept;
-
 	void macToString(uint32_t interface) noexcept;
 
 	// connection data pointer
 	unsigned int iface_id_;
 
 	// product key from eeprom
-	char eeprom_product_key_[SIZE_EEPROM_PRODUCT_KEY];
-	char unique_id_[IP_MAX_IFACES][SIZE_FGMC_DEST_ID];
-	char eeprom_noc_code_[SIZE_EEPROM_NOC_CODE];
+//	char eeprom_product_key_[SIZE_EEPROM_PRODUCT_KEY];
+//	char eeprom_noc_code_[SIZE_EEPROM_NOC_CODE];
 
 	// variables will be initialized at init phase
 	FGMCHwTypeId fgmc_device_id_;
@@ -97,9 +89,26 @@ private:
 
 	uint8_t tx_netbuf_[SIZE_FGMC_RES_MAX];
 
-	static constexpr uint32_t ringBufferSize = 10;
-	uint32_t packetIdBuffer[IP_MAX_IFACES][ringBufferSize];
-	uint32_t packetIdIndex[IP_MAX_IFACES];
+	struct InterfaceData
+	{
+		char unique_id_[SIZE_FGMC_DEST_ID];
+		IPAddress configuredIpAddress, configuredNetmask, configuredGateway;
+		static constexpr uint32_t ringBufferSize = 10;
+		uint32_t packetIdBuffer[ringBufferSize];
+		uint32_t packetIdIndex;
+
+		InterfaceData() noexcept;
+
+		/// insert used packet-id
+		/// \param packetId packedId
+		void insertPacketId(uint32_t packetId) noexcept;
+
+		/// check if packet id is already used
+		/// \param packetId packedId
+		bool isPacketInBuffer(uint32_t packetId) noexcept;
+	};
+
+	InterfaceData ifaceData[IP_MAX_IFACES];
 };
 
 #endif	// SUPPORT_MULTICAST_DISCOVERY

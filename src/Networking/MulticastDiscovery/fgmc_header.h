@@ -36,8 +36,7 @@ enum class FGMCCommand : int32_t
 enum class FGMCCommandVersion : uint16_t { MCD_COMMAND_VERSION = 0 };
 
 //
-#define INVALID_EEPROM_DATA_STRING "invalid eeprom data"
-#define INVALID_EEPROM_DATA_STRING_LEN sizeof(INVALID_EEPROM_DATA_STRING) - 1
+constexpr const char * INVALID_EEPROM_DATA_STRING = "invalid eeprom data";
 
 /// array size definitions
 constexpr const char *FGMC_NAME = "FESTOMULTICAST";
