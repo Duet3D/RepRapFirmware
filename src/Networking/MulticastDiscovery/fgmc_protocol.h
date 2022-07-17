@@ -87,8 +87,7 @@ private:
 	FGMCHwTypeId fgmc_device_id_;
 	uint32_t fgmc_application_type_;
 
-	uint8_t tx_netbuf_[SIZE_FGMC_RES_MAX];
-
+	// struct to hold per-interface data
 	struct InterfaceData
 	{
 		char unique_id_[SIZE_FGMC_DEST_ID];
@@ -101,14 +100,13 @@ private:
 
 		/// insert used packet-id
 		/// \param packetId packedId
-		void insertPacketId(uint32_t packetId) noexcept;
-
-		/// check if packet id is already used
-		/// \param packetId packedId
-		bool isPacketInBuffer(uint32_t packetId) noexcept;
+		/// \return true if inserted, false if it was already used
+		bool insertPacketId(uint32_t packetId) noexcept;
 	};
 
+
 	InterfaceData ifaceData[IP_MAX_IFACES];
+	uint8_t tx_netbuf_[SIZE_FGMC_RES_MAX];
 };
 
 #endif	// SUPPORT_MULTICAST_DISCOVERY

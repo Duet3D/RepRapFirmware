@@ -5,11 +5,14 @@
 #if SUPPORT_MULTICAST_DISCOVERY
 
 #include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 #include <Networking/Network.h>
 #include <Networking/MulticastDiscovery/MulticastResponder.h>
 #include <CAN/CanInterface.h>
 #include <Version.h>
 #include <cstring>
+
+constexpr const char *NetworkConfigOverrideFileName = "network-override.g";
 
 // Disable gcc warning about strncpy not being able to include a terminating null.
 // We don't need a terminating null when filling in response fields (if we did then we would use SafeStrcpy instead).
@@ -95,19 +98,15 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddres
 
 	if (rxLength >= static_cast<uint32_t>(sizeof(FGMC_GenericHeader)))
 	{
-		FGMC_GenericHeader* pInGenericHeader = reinterpret_cast<FGMC_GenericHeader*>(inputBufferAddress);
+		FGMC_GenericHeader* const pInGenericHeader = reinterpret_cast<FGMC_GenericHeader*>(inputBufferAddress);
 
 		// read incoming packetid
 		const uint32_t packetId = pInGenericHeader->fgmc_packet_id_;
-
 		InterfaceData& ifData = ifaceData[iface_id_];
-
-		if (ifData.isPacketInBuffer(packetId))
+		if (!ifData.insertPacketId(packetId))
 		{
-			return;  // TODO: Filter out iFace 1, if iFace 0 is active (PACKET-ID) ?
+			return;
 		}
-
-		ifData.insertPacketId(packetId);
 
 		switch (pInGenericHeader->fgmc_command_)
 		{
@@ -190,7 +189,7 @@ void FGMCProtocol::sendGenericHeader(uint8_t* tx_netbuf, FGMCCommand cmd, uint32
 	pOutGenericHeader->fgmc_error_code_ = FGMCErrorCode::FGMC_ERROR_CODE_NORMAL;
 
 	// Send Message
-	ifaceData[iface_id_].insertPacketId(pOutGenericHeader->fgmc_packet_id_);
+	(void)ifaceData[iface_id_].insertPacketId(pOutGenericHeader->fgmc_packet_id_);
 
 	MulticastResponder::SendResponse(tx_netbuf, length);
 }
@@ -303,7 +302,6 @@ void FGMCProtocol::cmdDnetinf(FGMC_ReqDownloadNetInfoHeader* pInCmdHeader, uint3
 	// The Download Netinformation Structure
 	//-----------------------------------------------------------------------------------
 
-
 	// set new network settings
 	InterfaceData& ifData = ifaceData[iface_id_];
 	const bool dhcpEnable = static_cast<bool>(pInCmdHeader->fgmc_ip_address_type_);
@@ -313,22 +311,11 @@ void FGMCProtocol::cmdDnetinf(FGMC_ReqDownloadNetInfoHeader* pInCmdHeader, uint3
 	}
 	else
 	{
-		uint32_t ipaddress;
-		(void)memcpy(&ipaddress, &pInCmdHeader->fgmc_ip_v4_static_address_[0], SIZE_IP_V4);
-		ifData.configuredIpAddress.SetV4LittleEndian(ipaddress);
+		ifData.configuredIpAddress.SetV4LittleEndian(LoadLE32(pInCmdHeader->fgmc_ip_v4_static_address_));
 	}
 
-	{
-		uint32_t subnetmask;
-		(void)memcpy(&subnetmask, &pInCmdHeader->fgmc_ip_v4_static_netmask_[0], SIZE_IP_V4);
-		ifData.configuredNetmask.SetV4LittleEndian(subnetmask);
-	}
-
-	{
-		uint32_t gateway;
-		(void)memcpy(&gateway, &pInCmdHeader->fgmc_ip_v4_static_gateway_[0], SIZE_IP_V4);
-		ifData.configuredGateway.SetV4LittleEndian(gateway);
-	}
+	ifData.configuredNetmask.SetV4LittleEndian(LoadLE32(pInCmdHeader->fgmc_ip_v4_static_netmask_));
+	ifData.configuredGateway.SetV4LittleEndian(LoadLE32(pInCmdHeader->fgmc_ip_v4_static_gateway_));
 
 	// set new device name
 	// filter out " (X19)  / (X18)
@@ -352,9 +339,34 @@ void FGMCProtocol::cmdDnetinf(FGMC_ReqDownloadNetInfoHeader* pInCmdHeader, uint3
 		}
 	}
 
-	//TODO create new network-override.g file
-	//TODO write M550, M553, M553, M554 commands
-	//TODO close file
+	// Create a new network-override.g file
+	FileStore *const fs = reprap.GetPlatform().OpenSysFile(NetworkConfigOverrideFileName, OpenMode::write);
+	if (fs == nullptr)
+	{
+		reprap.GetPlatform().MessageF(ErrorMessage, "Unable to create file %s\n", NetworkConfigOverrideFileName);
+	}
+	else
+	{
+		String<StringLength256> buf;
+		buf.printf(	"M550 P\"%s\"\n"
+					"M552 P%u.%u.%u.%u\n"
+					"M553 P%u.%u.%u.%u\n"
+					"M554 P%u.%u.%u.%u\n",
+					pInCmdHeader->fgmc_device_name_,
+					ifData.configuredIpAddress.GetQuad(0), ifData.configuredIpAddress.GetQuad(1), ifData.configuredIpAddress.GetQuad(2), ifData.configuredIpAddress.GetQuad(3),
+					ifData.configuredNetmask.GetQuad(0), ifData.configuredNetmask.GetQuad(1), ifData.configuredNetmask.GetQuad(2), ifData.configuredNetmask.GetQuad(3),
+					ifData.configuredGateway.GetQuad(0), ifData.configuredGateway.GetQuad(1), ifData.configuredGateway.GetQuad(2), ifData.configuredGateway.GetQuad(3)
+				  );
+
+		if (!fs->Write(buf.c_str()))
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Unable to write file %s\n", NetworkConfigOverrideFileName);
+		}
+		if (!fs->Close())
+		{
+			reprap.GetPlatform().MessageF(ErrorMessage, "Unable to close file %s\n", NetworkConfigOverrideFileName);
+		}
+	}
 
 	//-----------------------------------------------------------------------------------
 	// Generic Multicast Header
@@ -427,12 +439,13 @@ void FGMCProtocol::cmdGetSupportedCommands(uint32_t inPacketId) noexcept
 	{
 		FGMCCommand::MCD_COMMAND_UNETINF,
 		FGMCCommand::MCD_COMMAND_DNETINF,
+		FGMCCommand::MCD_COMMAND_REBOOT,
 		FGMCCommand::MCD_COMMAND_IDENTIFY,
 		FGMCCommand::MCD_COMMAND_GET_FIRMWARE_VERSION,
-		FGMCCommand::MCD_COMMAND_GET_SUPPORTED_COMMANDS
+		FGMCCommand::MCD_COMMAND_GET_SUPPORTED_COMMANDS,
 	};
 
-	for (uint8_t i = 0; i < (sizeof(supportedCommands) / sizeof(FGMCCommand)); i++)
+	for (uint8_t i = 0; i < ARRAY_SIZE(supportedCommands); i++)
 	{
 		FGMC_ResGetSupportedCommands* pOutCmdHeader = reinterpret_cast<FGMC_ResGetSupportedCommands*>(tx_netbuf_);
 		(void)memset(pOutCmdHeader, 0x00, sizeof(FGMC_ResGetSupportedCommands));
@@ -447,7 +460,7 @@ void FGMCProtocol::cmdGetSupportedCommands(uint32_t inPacketId) noexcept
 		// Generic Multicast Header
 		//-----------------------------------------------------------------------------------
 		segmentIndex = static_cast<uint32_t>(i);
-		segmentCount = static_cast<uint32_t>(sizeof(supportedCommands)) / sizeof(FGMCCommand);
+		segmentCount = static_cast<uint32_t>(ARRAY_SIZE(supportedCommands));
 		sendGenericHeader(tx_netbuf_, FGMCCommand::MCD_COMMAND_GET_SUPPORTED_COMMANDS, sizeof(FGMC_ResGetSupportedCommands), inPacketId, segmentIndex, segmentCount);
 	}
 }
@@ -459,31 +472,24 @@ FGMCProtocol::InterfaceData::InterfaceData() noexcept
 {
 }
 
-//TODO combine these 2 functions
-bool FGMCProtocol::InterfaceData::isPacketInBuffer(uint32_t packetId) noexcept
+// Insert packet ID into buffer, returning true if success, false if it was already there,
+bool FGMCProtocol::InterfaceData::insertPacketId(uint32_t packetId) noexcept
 {
 	for (uint32_t i = 0; i < InterfaceData::ringBufferSize; i++)
 	{
 		if (packetId == packetIdBuffer[i])
 		{
-			return true;
+			return false;
 		}
 	}
-	return false;
-}
 
-void FGMCProtocol::InterfaceData::insertPacketId(uint32_t packetId) noexcept
-{
-	if (isPacketInBuffer(packetId))
-	{
-		return;
-	}
 	packetIdBuffer[packetIdIndex] = packetId;
 	packetIdIndex++;
 	if (packetIdIndex >= InterfaceData::ringBufferSize)
 	{
 		packetIdIndex = 0;
 	}
+	return true;
 }
 
 #endif

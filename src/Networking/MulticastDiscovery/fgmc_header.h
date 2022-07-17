@@ -43,8 +43,6 @@ constexpr const char *FGMC_NAME = "FESTOMULTICAST";
 constexpr size_t SIZE_FGMC_NAME = strlen(FGMC_NAME);
 constexpr size_t SIZE_FGMC_DEST_ID = 16;
 
-constexpr size_t SIZE_FGMC_RES_MAX = 464;  // 461 Bytes for FGMC_ResUploadNetInfoHeader
-
 /// fgmc protocol header
 struct __attribute__((packed)) FGMC_GenericHeader
 {
@@ -163,5 +161,13 @@ struct __attribute__((packed)) FGMC_ResGetSupportedCommands
 	uint32_t cmd_;
 	uint16_t cmd_version_;
 };
+
+constexpr size_t SIZE_FGMC_RES_MAX = 461;		// 461 Bytes for FGMC_ResUploadNetInfoHeader
+
+static_assert(SIZE_FGMC_RES_MAX >= sizeof(FGMC_ResIdentify));
+static_assert(SIZE_FGMC_RES_MAX >= sizeof(FGMC_ResUploadNetInfoHeader));
+static_assert(SIZE_FGMC_RES_MAX >= sizeof(FGMC_ResDownloadNetInfoHeader));
+static_assert(SIZE_FGMC_RES_MAX >= sizeof(FGMC_ResGetFwVersion));
+static_assert(SIZE_FGMC_RES_MAX >= sizeof(FGMC_ResGetSupportedCommands));
 
 #endif // #ifndef FGMC_HEADER_H
