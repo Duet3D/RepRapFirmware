@@ -29,9 +29,9 @@ The DNETINF command allows the IP address, netmask and gateway UP address to be 
 M98 P"network-override.g"
 M552 S1
 ```
-- After these commands there must not be any M552, M553 or M554 commands
-- Optionally, create an initial file sys/network-override.g containing M552, M553 and M554 commands to set default IP address etc. In the absence of file network-override.g, DHCP will be used.
+- After these commands there must not be any M550, M552, M553 or M554 commands
+- Optionally, create an initial file sys/network-override.g containing M550, M552, M553 and M554 commands to set default device name, IP address etc. In the absence of file network-override.g, DHCP will be used.
 
-When the DNETINF multicast command is received, file sys/network-override.g will be re-created with M552, M553 and M554 commands to set the requested IP address, netmask and gateway IP address.
+When the DNETINF multicast command is received, file sys/network-override.g will be re-created with M550, M552, M553 and M554 commands to set the requested device name, IP address, netmask and gateway IP address.
 
 Note, if the DHCP flag is set in the DNETINF command then the received IP address, netmask and gateway address will be ignored and the IP address etc. will be set to zero instead. This is because RRF uses a zero IP address to indicate that DHCP should be used.
