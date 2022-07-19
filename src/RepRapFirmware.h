@@ -320,7 +320,7 @@ class ExpansionManager;
 #if SAME70
 typedef double floatc_t;						// type of matrix element used for calibration
 #else
-// We are more memory-constrained on the older processors
+// We are more memory-constrained on the other processors and they don't support double precision
 typedef float floatc_t;							// type of matrix element used for calibration
 #endif
 
