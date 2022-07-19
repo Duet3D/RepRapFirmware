@@ -599,6 +599,20 @@ bool HeightMap::UseHeightMap(bool b) noexcept
 	return useMap;
 }
 
+// Return true if we can probe this point
+bool HeightMap::CanProbePoint(size_t axis0Index, size_t axis1Index) const noexcept
+{
+#if SUPPORT_PROBE_POINTS_FILE
+	if (gridPointInvalid.IsBitSet((axis1Index * def.nums[0]) + axis0Index))
+	{
+		return false;
+	}
+#endif
+	const float axis0Coord = def.GetCoordinate(0, axis0Index);
+	const float axis1Coord = def.GetCoordinate(1, axis1Index);
+	return def.IsInRadius(axis0Coord, axis1Coord);
+}
+
 // Compute the height error at the specified point
 float HeightMap::GetInterpolatedHeightError(float axis0, float axis1) const noexcept
 {

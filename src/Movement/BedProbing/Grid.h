@@ -32,7 +32,6 @@ public:
 	uint32_t NumAxisPoints(size_t axis) const noexcept pre(axis < 2) { return nums[axis]; }
 	uint32_t NumPoints() const noexcept { return nums[0] * nums[1]; }
 	float GetCoordinate(size_t axis, size_t coordinateIndex) const noexcept pre(axis < 2) { return mins[axis] + (coordinateIndex * spacings[axis]); }
-	bool IsInRadius(float x, float y) const noexcept;
 	bool IsValid() const noexcept { return isValid; }
 
 	bool Set(const char axisLetters[2], const float axis0Range[2], const float axis1Range[2], float pRadius, const float pSpacings[2]) noexcept;
@@ -48,6 +47,7 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
+	bool IsInRadius(float x, float y) const noexcept;
 	void CheckValidity(bool setNum0Num1) noexcept;
 
 	static constexpr float MinSpacing = 0.1;						// The minimum point spacing allowed
@@ -99,6 +99,7 @@ public:
 	bool UsingHeightMap() const noexcept { return useMap; }
 
 	unsigned int GetStatistics(Deviation& deviation, float& minError, float& maxError) const noexcept;	// Return number of points probed, mean and RMS deviation, min and max error
+	bool CanProbePoint(size_t axis0Index, size_t axis1Index) const noexcept;			// Return true if we can probe this point
 	void ExtrapolateMissing() noexcept;													// Extrapolate missing points to ensure consistency
 
 private:
