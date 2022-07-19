@@ -78,7 +78,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(GridDefinition)
 
 #endif
 
-const char * const GridDefinition::HeightMapLabelLines[] =
+constexpr const char* GridDefinition::HeightMapLabelLines[] =
 {
 	"xmin,xmax,ymin,ymax,radius,spacing,xnum,ynum",														// old version label line
 	"xmin,xmax,ymin,ymax,radius,xspacing,yspacing,xnum,ynum",											// label line until 3.3-beta1
@@ -325,10 +325,6 @@ void GridDefinition::PrintError(float originalAxis0range, float originalAxis1ran
 	}
 }
 
-// Increase the version number in the following string whenever we change the format of the height map file significantly.
-// Adding more fields to the header row can be handled in GridDefinition::ReadParameters(), though.
-const char * const HeightMap::HeightMapComment = "RepRapFirmware height map file v2";
-
 HeightMap::HeightMap() noexcept : useMap(false) { }
 
 void HeightMap::SetGrid(const GridDefinition& gd) noexcept
@@ -441,7 +437,11 @@ bool HeightMap::SaveToFile(FileStore *f, const char *fname, float zOffset) noexc
 }
 
 // Load the grid from file, returning true if an error occurred with the error reason appended to the buffer
-bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
+bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
+# if SUPPORT_PROBE_POINTS_FILE
+							, bool isPointsFile
+# endif
+							) noexcept
 {
 	const size_t MaxLineLength = (MaxAxis0GridPoints * 8) + 2;					// maximum length of a line in the height map file, need 8 characters per grid point
 	const char* const readFailureText = "failed to read line from file";
@@ -456,7 +456,13 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 	{
 		r.cat(readFailureText);
 	}
-	else if (!StringStartsWith(buffer, HeightMapComment))						// check the version line is as expected
+	else if (!StringStartsWith(buffer, 											// check the version line is as expected
+# if SUPPORT_PROBE_POINTS_FILE
+								(isPointsFile) ? PointsFileComment :
+# endif
+										HeightMapComment
+								)
+			)
 	{
 		r.cat("bad header line or wrong version header");
 	}
@@ -497,7 +503,12 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 				{
 					++p;
 				}
-				if (*p == '0' && (p[1] == ',' || p[1] == 0))
+				if (
+#if SUPPORT_PROBE_POINTS_FILE
+					!isPointsFile &&
+#endif
+						(*p == '0' && (p[1] == ',' || p[1] == 0))
+				   )
 				{
 					// Values of 0 with no decimal places in un-probed values, so leave the point set as not valid
 					++p;
@@ -511,7 +522,23 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 						r.catf("number expected at line %" PRIu32 " column %d", row + 3, (p - buffer) + 1);
 						return true;						// failed to read a number
 					}
-					SetGridHeight(col, row, f);
+#if SUPPORT_PROBE_POINTS_FILE
+					if (isPointsFile)
+					{
+						if (f > 0.0)
+						{
+							gridPointInvalid.ClearBit((row * def.nums[0]) + col);
+						}
+						else
+						{
+							gridPointInvalid.SetBit((row * def.nums[0]) + col);
+						}
+					}
+					else
+#endif
+					{
+						SetGridHeight(col, row, f);
+					}
 					p = np;
 				}
 				if (*p == ',')
@@ -520,14 +547,19 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 				}
 			}
 		}
-		ExtrapolateMissing();
-		fileName.copy(fname);
+#if SUPPORT_PROBE_POINTS_FILE
+		if (!isPointsFile)
+#endif
+		{
+			ExtrapolateMissing();
+			fileName.copy(fname);
+		}
 		return false;										// success!
 	}
 	return true;											// an error occurred
 }
 
-#endif
+#endif	// HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Return number of points probed, mean and RMS deviation, min and max error
 unsigned int HeightMap::GetStatistics(Deviation& deviation, float& minError, float& maxError) const noexcept

@@ -81,9 +81,14 @@ public:
 	void SetGridHeight(size_t axis0Index, size_t axis1Index, float height) noexcept;	// Set the height of a grid point
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	bool SaveToFile(FileStore *f, const char *fname, float zOffset) noexcept	// Save the grid to file returning true if an error occurred
-	pre(IsValid());
-	bool LoadFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept;	// Load the grid from file returning true if an error occurred
+	bool SaveToFile(FileStore *f, const char *fname, float zOffset) noexcept			// Save the grid to file returning true if an error occurred
+		pre(IsValid());
+
+	bool LoadFromFile(FileStore *f, const char *fname, const StringRef& r
+# if SUPPORT_PROBE_POINTS_FILE
+						, bool isPointsFile
+# endif
+						) noexcept;	// Load the grid from file returning true if an error occurred
 
 	const char *GetFileName() const noexcept { return fileName.c_str(); }
 #endif
@@ -93,18 +98,27 @@ public:
 	bool UseHeightMap(bool b) noexcept;
 	bool UsingHeightMap() const noexcept { return useMap; }
 
-	unsigned int GetStatistics(Deviation& deviation, float& minError, float& maxError) const noexcept;
-																	// Return number of points probed, mean and RMS deviation, min and max error
-	void ExtrapolateMissing() noexcept;								// Extrapolate missing points to ensure consistency
+	unsigned int GetStatistics(Deviation& deviation, float& minError, float& maxError) const noexcept;	// Return number of points probed, mean and RMS deviation, min and max error
+	void ExtrapolateMissing() noexcept;													// Extrapolate missing points to ensure consistency
 
 private:
-	static const char * const HeightMapComment;						// The start of the comment we write at the start of the height map file
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+	// Increase the version number in the following string whenever we change the format of the height map file significantly.
+	// Adding more fields to the header row can be handled in GridDefinition::ReadParameters() though.
+	static constexpr const char* HeightMapComment = "RepRapFirmware height map file v2";	// The start of the comment we write at the start of the height map file
+# if SUPPORT_PROBE_POINTS_FILE
+	static constexpr const char* PointsFileComment = "RepRapFirmware probe points map file v2";	// The start of the comment we write at the start of the points map file
+# endif
+#endif
 
 	GridDefinition def;
 	float gridHeights[MaxGridProbePoints];							// The Z coordinates of the points on the bed that were probed
 	LargeBitmap<MaxGridProbePoints> gridHeightSet;					// Bitmap of which heights are set
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	String<MaxFilenameLength> fileName;								// The name of the file that this height map was loaded from or saved to
+#endif
+#if SUPPORT_PROBE_POINTS_FILE
+	LargeBitmap<MaxGridProbePoints> gridPointInvalid;				// Bitmap of which points are not valid
 #endif
 	bool useMap;													// True to do bed compensation
 

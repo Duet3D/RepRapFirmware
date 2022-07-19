@@ -785,7 +785,11 @@ void Move::SetIdentityTransform() noexcept
 // Load the height map from file, returning true if an error occurred with the error reason appended to the buffer
 bool Move::LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
 {
-	const bool err = heightMap.LoadFromFile(f, fname, r);
+	const bool err = heightMap.LoadFromFile(f, fname, r
+#if SUPPORT_PROBE_POINTS_FILE
+											, false				// loading the height map, not the probe points file
+#endif
+											);
 	if (err)
 	{
 		heightMap.ClearGridHeights();							// make sure we don't end up with a partial height map
@@ -811,8 +815,7 @@ bool Move::SaveHeightMapToFile(FileStore *f, const char *fname) noexcept
 // Load the probe points map from a file returning true if an error occurred
 bool Move::LoadProbePointsFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
 {
-	//TODO
-	return true;
+	return heightMap.LoadFromFile(f, fname, r, true);
 }
 
 # endif
