@@ -203,6 +203,52 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept;
 
+// Status LED handling
+
+#if SUPPORT_MULTICAST_DISCOVERY
+
+// The STATUS LED is also used to identify one board among several visible to the user
+static volatile uint32_t identInitialClocks = 0;		// when we started identifying
+static volatile uint32_t identTotalClocks = 0;			// how many step clocks to identify for, zero means until cancelled
+static volatile bool identifying = false;
+
+void CanInterface::SetStatusLedIdentify(uint32_t seconds) noexcept
+{
+	identTotalClocks = seconds * StepClockRate;
+	identInitialClocks = StepTimer::GetTimerTicks();
+	identifying = true;
+}
+
+void CanInterface::SetStatusLedNormal() noexcept
+{
+	identifying = false;
+}
+
+#endif
+
+// This is called only from the CAN clock loop, so inline
+static inline void UpdateLed(uint32_t stepClocks) noexcept
+{
+#if SUPPORT_MULTICAST_DISCOVERY
+	if (identifying)
+	{
+		if (identTotalClocks != 0 && stepClocks - identInitialClocks >= identTotalClocks)
+		{
+			identifying = 0;							// stop identifying
+		}
+		else
+		{
+			// Blink the LED fast. This function gets called every 200ms, so that's the fastest we can blink it without having another task do it.
+			digitalWrite(DiagPin, !digitalRead(DiagPin));
+			return;
+		}
+	}
+#endif
+
+	// Blink the LED at about 1Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
+	digitalWrite(DiagPin, XNor(DiagOnPolarity,  (stepClocks & (1u << 19)) != 0));
+}
+
 static void InitReceiveFilters() noexcept
 {
 	// Set up a filter to receive all request messages addressed to us in FIFO 0
@@ -570,8 +616,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		SendCanMessage(TxBufferIndexTimeSync, 0, &buf);
 		++timeSyncMessagesSent;
 
-		// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
-		digitalWrite(DiagPin, XNor(DiagOnPolarity, lastTimeSent & (1u << 19)) != 0);
+		UpdateLed(lastTimeSent);
 
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, CanClockIntervalMillis);
@@ -1499,15 +1544,14 @@ GCodeResult CanInterface::StartClosedLoopDataCollection(DriverId device, uint16_
 }
 
 #if DUAL_CAN
+
 CanId CanInterface::ODrive::ArbitrationId(DriverId const driver, uint8_t const cmd) noexcept {
 	const auto arbitration_id = (driver.boardAddress << 5) + cmd;
 	CanId canId;
 	canId.SetReceivedId(arbitration_id);
 	return canId;
 }
-#endif
 
-#if DUAL_CAN
 CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const driver, const StringRef& reply) noexcept
 {
 	// Detect any early return conditions
@@ -1532,17 +1576,12 @@ CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const dri
 
 	return buf;
 }
-#endif
 
-#if DUAL_CAN
 void CanInterface::ODrive::FlushCanReceiveHardware() noexcept
 {
 	while (CanInterface::ReceivePlainMessage(nullptr, 0)) { }
 }
-#endif
 
-
-#if DUAL_CAN
 bool CanInterface::ODrive::GetExpectedSimpleMessage(CanMessageBuffer *buf, DriverId const driver, uint8_t const cmd, const StringRef& reply) noexcept
 {
 	CanId const expectedId = ArbitrationId(driver, cmd);
@@ -1563,7 +1602,7 @@ bool CanInterface::ODrive::GetExpectedSimpleMessage(CanMessageBuffer *buf, Drive
 
 	return ok;
 }
-#endif
+#endif	// DUAL_CAN
 
 #endif
 

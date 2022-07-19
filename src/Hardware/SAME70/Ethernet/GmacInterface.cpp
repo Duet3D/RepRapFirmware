@@ -667,6 +667,13 @@ void ethernetif_hardware_init() noexcept
 	gmac_enable_copy_all(GMAC, false);
 	gmac_disable_broadcast(GMAC, false);
 
+#if SUPPORT_MULTICAST_DISCOVERY
+	// Without this code, we don't receive any multicast packets
+	GMAC->GMAC_NCFGR |= GMAC_NCFGR_MTIHEN;			// enable multicast hash reception
+	GMAC->GMAC_HRB = 0xFFFFFFFF;					// enable reception of all multicast frames
+	GMAC->GMAC_HRT = 0xFFFFFFFF;
+#endif
+
 	/* Set RX buffer size to 1536. */
 	gmac_set_rx_bufsize(GMAC, 0x18);
 

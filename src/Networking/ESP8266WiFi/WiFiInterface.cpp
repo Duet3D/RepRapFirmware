@@ -1078,6 +1078,7 @@ void WiFiInterface::EspRequestsTransfer() noexcept
 void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress p_gateway) noexcept
 {
 	ipAddress = p_ip;
+	usingDhcp = ipAddress.IsNull();
 	netmask = p_netmask;
 	gateway = p_gateway;
 }

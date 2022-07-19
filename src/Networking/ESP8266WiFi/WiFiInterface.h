@@ -58,7 +58,11 @@ public:
 	bool IsWiFiInterface() const noexcept override { return true; }
 
 	void UpdateHostname(const char *hostname) noexcept override;
+
 	IPAddress GetIPAddress() const noexcept override { return ipAddress; }
+	IPAddress GetNetmask() const noexcept override { return netmask; }
+	IPAddress GetGateway() const noexcept override { return gateway; }
+	bool UsingDhcp() const noexcept override { return usingDhcp; }
 	void SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress p_gateway) noexcept override;
 	GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept override;
 	const MacAddress& GetMacAddress() const noexcept override { return macAddress; }
@@ -138,7 +142,7 @@ private:
 	WiFiSocket *sockets[NumWiFiTcpSockets];
 	size_t currentSocket;
 
-	TcpPort portNumbers[NumProtocols];					// port number used for each protocol
+	TcpPort portNumbers[NumProtocols];				// port number used for each protocol
 	TcpPort ftpDataPort;
 	bool closeDataPort;
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
@@ -163,6 +167,8 @@ private:
 	unsigned int responseTimeoutCount;
 
 	char wiFiServerVersion[16];
+
+	bool usingDhcp = true;
 
 	// For processing debug messages from the WiFi module
 	bool serialRunning;

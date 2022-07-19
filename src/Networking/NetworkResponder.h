@@ -27,8 +27,8 @@ public:
 	NetworkResponder(const NetworkResponder&) = delete;
 
 	NetworkResponder *GetNext() const noexcept { return next; }
-	virtual bool Spin() noexcept = 0;							// do some work, returning true if we did anything significant
-	virtual bool Accept(Socket *s, NetworkProtocol protocol) noexcept = 0;	// ask the responder to accept this connection, returns true if it did
+	virtual bool Spin() noexcept = 0;															// do some work, returning true if we did anything significant
+	virtual bool Accept(Socket *s, NetworkProtocol protocol) noexcept = 0;						// ask the responder to accept this connection, returns true if it did
 	virtual void Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept = 0;	// terminate the responder if it is serving the specified protocol on the specified interface
 	virtual void Diagnostics(MessageType mtype) const noexcept = 0;
 
