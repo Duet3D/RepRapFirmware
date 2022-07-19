@@ -806,7 +806,18 @@ bool Move::SaveHeightMapToFile(FileStore *f, const char *fname) noexcept
 	return heightMap.SaveToFile(f, fname, zShift);
 }
 
-#endif
+# if SUPPORT_PROBE_POINTS_FILE
+
+// Load the probe points map from a file returning true if an error occurred
+bool Move::LoadProbePointsFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept
+{
+	//TODO
+	return true;
+}
+
+# endif
+
+#endif	// HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 void Move::SetTaperHeight(float h) noexcept
 {

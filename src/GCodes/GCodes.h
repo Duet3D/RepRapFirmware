@@ -315,6 +315,9 @@ public:
 	static constexpr const char* FILAMENT_CHANGE_G = "filament-change.g";
 	static constexpr const char* DAEMON_G = "daemon.g";
 	static constexpr const char* RUNONCE_G = "runonce.g";
+#if SUPPORT_PROBE_POINTS_FILE
+	static constexpr const char* DefaultProbeProbePointsFile = "probePoints.csv";
+#endif
 
 private:
 	GCodes(const GCodes&) = delete;
@@ -472,6 +475,9 @@ private:
 	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load the height map from file
 	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept;		// Save the height map to the specified file
 	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;				// Save the height map to the file specified by P parameter
+# if SUPPORT_PROBE_POINTS_FILE
+	GCodeResult LoadProbePointsMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load map of reachable probe points from file
+# endif
 #endif
 	void ClearBedMapping();																	// Stop using bed compensation
 	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Start probing the grid, returning true if we didn't because of an error

@@ -43,7 +43,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		0
-#define ALLOCATE_DEFAULT_PORTS	0
 
 // The physical capabilities of the machine
 

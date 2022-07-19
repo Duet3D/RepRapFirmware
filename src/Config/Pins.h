@@ -230,6 +230,10 @@
 # define SUPPORT_ACCELEROMETERS	0
 #endif
 
+#ifndef SUPPORT_PROBE_POINTS_FILE
+# define SUPPORT_PROBE_POINTS_FILE	0
+#endif
+
 // Optional kinematics support, to allow us to reduce flash memory usage
 #ifndef SUPPORT_LINEAR_DELTA
 # define SUPPORT_LINEAR_DELTA	1

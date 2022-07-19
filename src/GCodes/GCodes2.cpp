@@ -356,6 +356,14 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 					break;
 
+				case 4:		// read grid parameters and can/cannot probe map
+#if (HAS_MASS_STORAGE || HAS_SBC_INTERFACE) && SUPPORT_PROBE_POINTS_FILE
+					result = LoadProbePointsMap(gb, reply);
+#else
+					result = GCodeResult::errorNotSupported;
+#endif
+					break;
+
 				default:
 					result = GCodeResult::badOrMissingParameter;
 					break;
