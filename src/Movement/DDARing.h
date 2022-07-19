@@ -92,6 +92,7 @@ public:
 # else
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept;				// add a move from the ATE to the movement queue
 # endif
+	void StopDrivers(uint16_t whichDrives) noexcept;
 #endif
 
 protected:

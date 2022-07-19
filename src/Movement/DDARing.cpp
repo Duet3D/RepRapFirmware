@@ -1020,6 +1020,22 @@ void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
 }
 
 # endif
+
+void DDARing::StopDrivers(uint16_t whichDrives) noexcept
+{
+	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);
+	DDA *cdda = currentDda;							// capture volatile
+	if (cdda != nullptr)
+	{
+		cdda->StopDrivers(whichDrives);
+		if (cdda->GetState() == DDA::completed)
+		{
+			CurrentMoveCompleted();					// tell the DDA ring that the current move is complete
+		}
+	}
+	RestoreBasePriority(oldPrio);
+}
+
 #endif
 
 // End
