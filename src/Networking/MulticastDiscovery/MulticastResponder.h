@@ -9,9 +9,10 @@
 #define SRC_NETWORKING_MULTICASTRESPONDER_H_
 
 #include <RepRapFirmware.h>
-#include <NetworkDefs.h>
 
 #if SUPPORT_MULTICAST_DISCOVERY
+
+#include <NetworkDefs.h>
 
 namespace MulticastResponder
 {
