@@ -1154,6 +1154,7 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 
 	size_t index = 0;
 	bool needSteps = false;
+	const volatile int32_t * const lastMoveStepsTaken = rings[0].GetLastMoveStepsTaken();
 	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
 		int32_t steps = 0;

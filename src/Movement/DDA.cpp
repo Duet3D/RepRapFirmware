@@ -876,7 +876,21 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	return true;
 }
 
-#endif
+void DDA::StopDrivers(uint16_t whichDrives) noexcept
+{
+	if (state == executing)
+	{
+		for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
+		{
+			if (whichDrives & (1u << drive))
+			{
+				StopDrive(drive);
+			}
+		}
+	}
+}
+
+#endif	// SUPPORT_REMOTE_COMMANDS
 
 // Return true if this move is or might have been intended to be a deceleration-only move
 // A move planned as a deceleration-only move may have a short acceleration segment at the start because of rounding error

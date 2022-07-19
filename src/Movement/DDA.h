@@ -131,6 +131,7 @@ public:
 # else
 	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
 # endif
+	void StopDrivers(uint16_t whichDrives) noexcept;
 #endif
 
 	const int32_t *DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates

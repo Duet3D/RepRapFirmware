@@ -580,6 +580,13 @@ void DDARing::CurrentMoveCompleted() noexcept
 	liveCoordinatesValid = cdda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
 	liveCoordinatesChanged = true;
 
+#if SUPPORT_REMOTE_COMMANDS
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+	{
+		lastMoveStepsTaken[driver] = cdda->GetStepsTaken(driver);
+	}
+#endif
+
 	// Disable interrupts before we touch any extrusion accumulators until after we set currentDda to null, in case the filament monitor interrupt has higher priority than ours
 	{
 		AtomicCriticalSectionLocker lock;
