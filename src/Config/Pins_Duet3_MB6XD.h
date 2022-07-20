@@ -11,6 +11,7 @@
 
 #define IAP_UPDATE_FILE			"Duet3_SDiap32_" BOARD_SHORT_NAME ".bin"
 #define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap32_" BOARD_SHORT_NAME ".bin"
+#define IAP_CAN_LOADER_FILE		"Duet3_CANiap32" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 
 // Features definition

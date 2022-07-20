@@ -382,7 +382,30 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 	return GCodeResult::ok;
 }
 
-#endif
+static GCodeResult InitiateFirmwareUpdate(const CanMessageUpdateYourFirmware& msg, const StringRef& reply)
+{
+	if (msg.boardId != CanInterface::GetCanAddress() || msg.invertedBoardId != (uint8_t)~CanInterface::GetCanAddress() || (msg.module != 0 && msg.module != 3))
+	{
+		reply.printf("Invalid firmware update command received");
+		return GCodeResult::error;
+	}
+
+	if (msg.module == 0)
+	{
+		if (!reprap.GetPlatform().FileExists(FIRMWARE_DIRECTORY, IAP_CAN_LOADER_FILE))
+		{
+			reply.printf("In-application programming binary \"%s\" not found on board %u", FIRMWARE_DIRECTORY IAP_CAN_LOADER_FILE, CanInterface::GetCanAddress());
+			return GCodeResult::error;
+		}
+		reply.printf("Board %u starting firmware update", CanInterface::GetCanAddress());
+		reprap.ScheduleFirmwareUpdateOverCan();
+		return GCodeResult::ok;
+	}
+	reply.copy("unknown firmware module number");
+	return GCodeResult::error;
+}
+
+#endif	// SUPPORT_REMOTE_COMMANDS
 
 // Process a received broadcast or request message. Don't free the message buffer
 void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
@@ -410,6 +433,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				StepTimer::ProcessTimeSyncMessage(buf->msg.sync, buf->dataLength, buf->timeStamp);
 				return;							// no reply needed
 
+			case CanMessageType::emergencyStop:
+				reprap.EmergencyStop();
+				reprap.ScheduleReset();
+				return;							// no reply needed
+
 			case CanMessageType::movementLinear:
 				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinear);
 				return;							// no reply needed
@@ -431,6 +459,19 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::acknowledgeAnnounce:
 				CanInterface::MainBoardAcknowledgedAnnounce();
 				return;
+
+			case CanMessageType::updateFirmware:
+				requestId = buf->msg.updateYourFirmware.requestId;
+				rslt = InitiateFirmwareUpdate(buf->msg.updateYourFirmware, replyRef);
+				break;
+
+			case CanMessageType::reset:
+				requestId = buf->msg.reset.requestId;
+				reply.printf("Board %u resetting", CanInterface::GetCanAddress());
+				reprap.EmergencyStop();
+				reprap.ScheduleReset();
+				rslt = GCodeResult::ok;
+				break;
 
 			case CanMessageType::returnInfo:
 				requestId = buf->msg.getInfo.requestId;

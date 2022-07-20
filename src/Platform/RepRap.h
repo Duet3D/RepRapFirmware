@@ -61,7 +61,7 @@ public:
 	RepRap(const RepRap&) = delete;
 
 	void EmergencyStop() noexcept;
-	void Init() noexcept;
+ 	void Init() noexcept;
 	void Spin() noexcept;
 	void Exit() noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
@@ -134,6 +134,11 @@ public:
  	ExpansionManager& GetExpansion() const noexcept { return *expansion; }
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+ 	void ScheduleReset() noexcept { whenDeferredCommandScheduled = millis(); deferredCommand = DeferredCommand::reboot; }
+ 	void ScheduleFirmwareUpdateOverCan() noexcept { whenDeferredCommandScheduled = millis(); deferredCommand = DeferredCommand::updateFirmware; }
+#endif
+
 	void Tick() noexcept;
 	bool SpinTimeoutImminent() const noexcept;
 	bool IsStopped() const noexcept;
@@ -171,7 +176,7 @@ public:
 
 	// Firmware update operations
 	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply, const StringRef& filenameRef) noexcept;
-	void UpdateFirmware(const StringRef& filenameRef) noexcept;
+	void UpdateFirmware(const char *iapFilename, const char *iapParam) noexcept;
 	void PrepareToLoadIap() noexcept;
 	[[noreturn]] void StartIap(const char *filename) noexcept;
 
@@ -279,6 +284,12 @@ private:
 	uint16_t ticksInSpinState;
 	uint16_t heatTaskIdleTicks;
 	uint32_t fastLoop, slowLoop;
+
+#if SUPPORT_REMOTE_COMMANDS
+	enum class DeferredCommand : uint8_t { none, reboot, updateFirmware };
+	volatile uint32_t whenDeferredCommandScheduled;
+	volatile DeferredCommand deferredCommand;
+#endif
 
 	DebugFlags debugMaps[Module::numModules];
 
