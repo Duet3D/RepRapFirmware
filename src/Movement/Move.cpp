@@ -1146,7 +1146,7 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 	CanMessageMovementLinear msg2;
 	msg2.accelerationClocks = msg2.decelClocks = msg.clocksAllowed/4;
 	msg2.steadyClocks = msg.clocksAllowed/8;
-	msg2.whenToExecute = StepTimer::GetTimerTicks() + msg.clocksAllowed/4;
+	msg2.whenToExecute = StepTimer::GetMasterTime() + msg.clocksAllowed/4;
 	msg2.numDrivers = NumDirectDrivers;
 	msg2.pressureAdvanceDrives = 0;
 	msg2.seq = 0;
@@ -1155,7 +1155,8 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 	size_t index = 0;
 	bool needSteps = false;
 	const volatile int32_t * const lastMoveStepsTaken = rings[0].GetLastMoveStepsTaken();
-	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+	constexpr size_t numDrivers = min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave);
+	for (size_t driver = 0; driver < numDrivers; ++driver)
 	{
 		int32_t steps = 0;
 		if (msg.whichDrives & (1u << driver))

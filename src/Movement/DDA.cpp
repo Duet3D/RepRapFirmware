@@ -725,6 +725,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 
 	shapedSegments = unshapedSegments = nullptr;
 	activeDMs = completedDMs = nullptr;
+	afterPrepare.drivesMoving.Clear();
 
 # if USE_REMOTE_INPUT_SHAPING
 	const size_t numDrivers = min<size_t>(msg.numDriversMinusOne + 1, min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave));
@@ -828,7 +829,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
 			pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 			pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
-
+			afterPrepare.drivesMoving.SetBit(drive);
 			reprap.GetPlatform().EnableDrivers(drive, false);
 			const bool stepsToDo = ((msg.pressureAdvanceDrives & (1u << drive)) != 0)
 						? pdm->PrepareExtruder(*this, params)
