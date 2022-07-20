@@ -1103,9 +1103,9 @@ void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress 
 	gateway = p_gateway;
 }
 
-bool WiFiInterface::SendCredential(const StringRef& reply, size_t credIndex, const char *buffer, size_t bufferSize, bool last = false)
+bool WiFiInterface::SendCredential(const StringRef& reply, size_t credIndex, const char *buffer, size_t bufferSize)
 {
-	const int32_t rslt = SendCommand(NetworkCommand::networkSetEnterpriseCredential, credIndex, last, 0, buffer,
+	const int32_t rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, credIndex, static_cast<uint8_t>(AddEnterpriseSsidFlag::CREDENTIAL), 0, buffer,
 			bufferSize, nullptr, 0);
 
 	if (rslt == ResponseEmpty)
@@ -1119,12 +1119,9 @@ bool WiFiInterface::SendCredential(const StringRef& reply, size_t credIndex, con
 
 bool WiFiInterface::SendTextCredential(GCodeBuffer &gb, const StringRef& reply, size_t credIndex)
 {
-	String<IdentityLength> cred;
+	String<IdentityLength> cred; // TODO [wpa2_ent]: use proper buffer
 	gb.GetQuotedString(cred.GetRef());
 
-	// Passed value to the size argument does not include the null terminator, since on the ESP8266
-	// these are stored as blobs together with the length. Furthermore, these are also consumed as blobs
-	// with the length specified to the relevant ESP-IDF APIs.
 	return SendCredential(reply, credIndex, cred.c_str(), cred.strlen());
 }
 
@@ -1132,7 +1129,7 @@ bool WiFiInterface::SendFileCredential(GCodeBuffer &gb, const StringRef& reply, 
 {
 	const char *err = "Failed to set SSID credential:";
 
-	static char buffer[MaxCredentialChunkSize];
+	static char buffer[MaxCredentialChunkSize]; // TODO [wpa2_ent]: use proper buffer
 
 	String<MaxFilenameLength> fileName;
 	gb.GetQuotedString(fileName.GetRef());
@@ -1147,15 +1144,12 @@ bool WiFiInterface::SendFileCredential(GCodeBuffer &gb, const StringRef& reply, 
 			return false;
 		}
 
-		// If sz < MaxCredentialChunkSize, it means that we have reached the end.
-		// The check beforehand if file length > MaxCertificateSize ensures
-		// that we don't exceed the number of chunks.
-		for (int sz = MaxCredentialChunkSize, chunk = 0; sz == MaxCredentialChunkSize; chunk++)
+		for (size_t sent = 0, sz = sizeof(buffer); sz && sent < cert->Length(); sent += sz)
 		{
 			memset(buffer, 0, sizeof(buffer));
 			sz = cert->Read(buffer, sizeof(buffer));
 
-			if (!SendCredential(reply, credIndex + chunk, buffer, sz))
+			if (!SendCredential(reply, credIndex, buffer, sz))
 			{
 				return false;
 			}
@@ -1242,7 +1236,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 
 					if (config.eap.protocol != EAPProtocol::NONE)
 					{
-						rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
+						rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0, static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), 0, &config, sizeof(config), nullptr, 0);
 					}
 					else
 					{
@@ -1313,17 +1307,22 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 							}
 							else { }
 
-							SEND_CHECK(SendCredential(reply, CredentialIndex(peapttls.password), nullptr, 0, true));
-
 							#undef SEND_CHECK
-						}
 
-						return GCodeResult::ok;
+							rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0, static_cast<uint8_t>(AddEnterpriseSsidFlag::COMMIT), 0, nullptr, 0, nullptr, 0);
+
+							if (rslt == ResponseEmpty)
+							{
+								return GCodeResult::ok;
+							}
+						}
+						else
+						{
+							return GCodeResult::ok;
+						}
 					}
-					else
-					{
-						reply.printf("Failed to add SSID to remembered list: %s", TranslateWiFiResponse(rslt));
-					}
+
+					reply.printf("Failed to add SSID to remembered list: %s", TranslateWiFiResponse(rslt));
 				}
 				else
 				{

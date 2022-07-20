@@ -115,7 +115,7 @@ private:
 	void GetNewStatus() noexcept;
 	void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept;
 
-	bool SendCredential(const StringRef& reply, size_t credIndex, const char *buffer, size_t bufferSize, bool last);
+	bool SendCredential(const StringRef& reply, size_t credIndex, const char *buffer, size_t bufferSize);
 	bool SendFileCredential(GCodeBuffer &gb,  const StringRef& reply, size_t credIndex, size_t maxSize);
 	bool SendTextCredential(GCodeBuffer &gb, const StringRef& reply, size_t credIndex);
 

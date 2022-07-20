@@ -46,7 +46,7 @@ constexpr unsigned int MainTaskStackWords = 1800;			// on the SAME70 we use matr
 #elif defined(__LPC17xx__)
 constexpr unsigned int MainTaskStackWords = 1110-(16*9);	// LPC builds only support 16 calibration points, so less space needed
 #else
-constexpr unsigned int MainTaskStackWords = 2048;			// on other processors we use matrixes of floats
+constexpr unsigned int MainTaskStackWords = 1110;			// on other processors we use matrixes of floats
 #endif
 
 static Task<MainTaskStackWords> mainTask;
