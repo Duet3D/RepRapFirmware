@@ -1939,7 +1939,7 @@ pre(state == frozen)
 			if ((extrusions | retractions) != 0)
 			{
 				// Check for trying to extrude or retract when the hot end temperature is too low
-				const unsigned int prohibitedMovements = reprap.GetProhibitedExtruderMovements(extrusions, retractions);
+				const unsigned int prohibitedMovements = Tool::GetProhibitedExtruderMovements(extrusions, retractions, tool);
 				for (DriveMovement **dmpp = &activeDMs; *dmpp != nullptr; )
 				{
 					DriveMovement* const dm = *dmpp;
