@@ -218,6 +218,13 @@ public:
 		MoveAvailable();
 	}
 # endif
+
+	void StopDrivers(uint16_t whichDrives) noexcept
+	{
+		rings[0].StopDrivers(whichDrives);
+	}
+
+	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
 #endif
 
 protected:

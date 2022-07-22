@@ -1152,6 +1152,46 @@ GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequ
 	return rslt;
 }
 
+void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
+{
+	// Construct a MovementLinear message to revert the position. The move must be shorter than clocksAllowed.
+	// When writing this, clocksAllowed was equivalent to 40ms.
+	// We allow 10ms delay time to allow the motor to stop and reverse direction, 10ms acceleration time, 5ms steady time and 10ms deceleration time.
+	CanMessageMovementLinear msg2;
+	msg2.accelerationClocks = msg2.decelClocks = msg.clocksAllowed/4;
+	msg2.steadyClocks = msg.clocksAllowed/8;
+	msg2.whenToExecute = StepTimer::GetMasterTime() + msg.clocksAllowed/4;
+	msg2.numDrivers = NumDirectDrivers;
+	msg2.pressureAdvanceDrives = 0;
+	msg2.seq = 0;
+	msg2.initialSpeedFraction = msg2.finalSpeedFraction = 0.0;
+
+	size_t index = 0;
+	bool needSteps = false;
+	const volatile int32_t * const lastMoveStepsTaken = rings[0].GetLastMoveStepsTaken();
+	constexpr size_t numDrivers = min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave);
+	for (size_t driver = 0; driver < numDrivers; ++driver)
+	{
+		int32_t steps = 0;
+		if (msg.whichDrives & (1u << driver))
+		{
+			const int32_t stepsWanted = msg.finalStepCounts[index++];
+			const int32_t stepsTaken = lastMoveStepsTaken[driver];
+			if (((stepsWanted >= 0 && stepsTaken > stepsWanted) || (stepsWanted <= 0 && stepsTaken < stepsWanted)))
+			{
+				steps = stepsWanted - stepsTaken;
+				needSteps = true;
+			}
+		}
+		msg2.perDrive[driver].steps = steps;
+	}
+
+	if (needSteps)
+	{
+		AddMoveFromRemote(msg2);
+	}
+}
+
 #endif
 
 // Return the current live XYZ and extruder coordinates

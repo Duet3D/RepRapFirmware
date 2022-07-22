@@ -591,12 +591,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			// Update main firmware
 			firmwareUpdateModuleMap.Clear();
-			String<MaxFilenameLength> filenameString;
 			try
 			{
+				String<MaxFilenameLength> filenameString;
 				bool dummy;
 				gb.TryGetQuotedString('P', filenameString.GetRef(), dummy);
-				reprap.UpdateFirmware(filenameString.GetRef());
+				reprap.UpdateFirmware(IAP_UPDATE_FILE, filenameString.c_str());
 				// The above call does not return unless an error occurred
 			}
 			catch (const GCodeException&) { }
