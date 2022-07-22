@@ -59,7 +59,6 @@ private:
 	void Init() noexcept;
 	void Reset() noexcept;
 	void HandleIncomingData() noexcept;
-	float GetCurrentPosition() const noexcept;
 	FilamentSensorStatus CheckFilament(float amountCommanded, float amountMeasured, bool overdue) noexcept;
 
 	bool HaveCalibrationData() const noexcept;
@@ -84,7 +83,8 @@ private:
 	float extrusionCommandedSinceLastSync;
 	float movementMeasuredSinceLastSync;
 
-	uint16_t sensorValue;									// last known filament position (10 bits)
+	uint16_t sensorValue;									// latest word received from sensor
+	uint16_t lastKnownPosition;								// last known filament position (10 bits)
 	uint32_t lastMeasurementTime;							// the last time we received a value
 	uint16_t switchOpenMask;								// mask to isolate the switch open bit(s) from the sensor value
 	uint8_t version;										// sensor/firmware version
