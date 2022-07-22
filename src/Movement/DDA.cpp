@@ -18,6 +18,10 @@
 # include <CAN/CanMotion.h>
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <Can/CanInterface.h>
+#endif
+
 #ifdef DUET_NG
 # define DDA_MOVE_DEBUG	(0)
 #else
@@ -1909,73 +1913,86 @@ pre(state == frozen)
 		{
 			p.EnableAllSteppingDrivers();							// make sure that all drivers are enabled
 		}
-		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
-		unsigned int extrusions = 0, retractions = 0;				// bitmaps of extruding and retracting drives
-		float extrusionFraction = 0.0;
-		for (const DriveMovement* pdm = activeDMs; pdm != nullptr; pdm = pdm->nextDM)
-		{
-			const size_t drive = pdm->drive;
-			p.SetDirection(drive, pdm->direction);
-			if (drive >= numTotalAxes && drive < MaxAxesPlusExtruders)	// if it's an extruder
-			{
-				const size_t extruder = LogicalDriveToExtruder(drive);
-				if (pdm->direction == FORWARDS)
-				{
-					extrusions |= (1u << extruder);
-					extrusionFraction += directionVector[drive];
-				}
-				else
-				{
-					retractions |= (1u << extruder);
-				}
-			}
-		}
 
-		bool extruding = false;
-		if ((extrusions | retractions) != 0)
+#if SUPPORT_REMOTE_COMMANDS
+		if (CanInterface::InExpansionMode())
 		{
-			// Check for trying to extrude or retract when the hot end temperature is too low
-			const unsigned int prohibitedMovements = reprap.GetProhibitedExtruderMovements(extrusions, retractions);
-			for (DriveMovement **dmpp = &activeDMs; *dmpp != nullptr; )
+			for (const DriveMovement* pdm = activeDMs; pdm != nullptr; pdm = pdm->nextDM)
 			{
-				DriveMovement* const dm = *dmpp;
-				const size_t drive = dm->drive;
-				if (drive >= numTotalAxes && drive < MaxAxesPlusExtruders)
-				{
-					if ((prohibitedMovements & (1u << LogicalDriveToExtruder(drive))) != 0)
-					{
-						*dmpp = dm->nextDM;
-						dm->nextDM = completedDMs;
-						completedDMs = dm;
-					}
-					else
-					{
-						extruding = true;
-						dmpp = &(dm->nextDM);
-					}
-				}
-				else
-				{
-					dmpp = &(dm->nextDM);
-				}
-			}
-		}
-
-		if (extruding)
-		{
-			p.ExtrudeOn();
-			if (tool != nullptr)
-			{
-				// Pass the extrusion speed averaged over the whole move in mm/sec
-				tool->ApplyFeedForward((extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded);
+				p.SetDirection(pdm->drive, pdm->direction);
 			}
 		}
 		else
+#endif
 		{
-			p.ExtrudeOff();
-			if (tool != nullptr)
+			const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
+			unsigned int extrusions = 0, retractions = 0;				// bitmaps of extruding and retracting drives
+			float extrusionFraction = 0.0;
+			for (const DriveMovement* pdm = activeDMs; pdm != nullptr; pdm = pdm->nextDM)
 			{
-				tool->StopFeedForward();
+				const size_t drive = pdm->drive;
+				p.SetDirection(drive, pdm->direction);
+				if (drive >= numTotalAxes && drive < MaxAxesPlusExtruders)	// if it's an extruder
+				{
+					const size_t extruder = LogicalDriveToExtruder(drive);
+					if (pdm->direction == FORWARDS)
+					{
+						extrusions |= (1u << extruder);
+						extrusionFraction += directionVector[drive];
+					}
+					else
+					{
+						retractions |= (1u << extruder);
+					}
+				}
+			}
+
+			bool extruding = false;
+			if ((extrusions | retractions) != 0)
+			{
+				// Check for trying to extrude or retract when the hot end temperature is too low
+				const unsigned int prohibitedMovements = reprap.GetProhibitedExtruderMovements(extrusions, retractions);
+				for (DriveMovement **dmpp = &activeDMs; *dmpp != nullptr; )
+				{
+					DriveMovement* const dm = *dmpp;
+					const size_t drive = dm->drive;
+					if (drive >= numTotalAxes && drive < MaxAxesPlusExtruders)
+					{
+						if ((prohibitedMovements & (1u << LogicalDriveToExtruder(drive))) != 0)
+						{
+							*dmpp = dm->nextDM;
+							dm->nextDM = completedDMs;
+							completedDMs = dm;
+						}
+						else
+						{
+							extruding = true;
+							dmpp = &(dm->nextDM);
+						}
+					}
+					else
+					{
+						dmpp = &(dm->nextDM);
+					}
+				}
+			}
+
+			if (extruding)
+			{
+				p.ExtrudeOn();
+				if (tool != nullptr)
+				{
+					// Pass the extrusion speed averaged over the whole move in mm/sec
+					tool->ApplyFeedForward((extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded);
+				}
+			}
+			else
+			{
+				p.ExtrudeOff();
+				if (tool != nullptr)
+				{
+					tool->StopFeedForward();
+				}
 			}
 		}
 	}
