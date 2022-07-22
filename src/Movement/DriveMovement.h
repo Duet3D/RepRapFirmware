@@ -103,16 +103,9 @@ private:
 	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
 
-#if MS_USE_FPU
 	float distanceSoFar;
 	float timeSoFar;
 	float pA, pB, pC;
-#else
-	uint32_t iDistanceSoFar;
-	uint32_t iTimeSoFar;
-	int64_t iA;
-	int32_t iB, iC;
-#endif
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	union
@@ -123,32 +116,18 @@ private:
 			float fTwoA;
 			float fTwoB;
 			float h0MinusZ0;							// the height subtended by the rod at the start of the move
-#if MS_USE_FPU
 			float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
 			float fHmz0s;								// the starting height less the starting Z height, multiplied by the Z movement fraction (can go negative)
 			float fMinusAaPlusBbTimesS;
 			float reverseStartDistance;					// the overall move distance at which movement reversal occurs
-#else
-			int64_t dSquaredMinusAsquaredMinusBsquaredTimesKsquaredSsquared;
-			int32_t hmz0sK;								// the starting step position less the starting Z height, multiplied by the Z movement fraction and K (can go negative)
-			int32_t minusAaPlusBbTimesKs;
-			int32_t iReverseStartDistance;				// the overall move distance at which movement reversal occurs
-#endif
 		} delta;
 
 		struct CartesianParameters
 		{
-#if MS_USE_FPU
 			float pressureAdvanceK;						// how much pressure advance is applied to this move
 			float effectiveStepsPerMm;					// the steps/mm multiplied by the movement fraction
 			float effectiveMmPerStep;					// reciprocal of [the steps/mm multiplied by the movement fraction]
 			float extraExtrusionDistance;				// the extra extrusion distance in the acceleration phase
-#else
-			uint32_t iPressureAdvanceK;					// how much pressure advance is applied to this move
-			uint32_t iEffectiveStepsPerMmTimesK;		// the steps/mm multiplied by the movement fraction
-			uint32_t iEffectiveMmPerStepTimesK;			// reciprocal of [the steps/mm multiplied by the movement fraction]
-			uint32_t iExtraExtrusionDistance;			// the extra extrusion distance in the acceleration phase
-#endif
 			float extrusionBroughtForwards;				// the amount of extrusion brought forwards from previous moves. Only needed for debug output.
 		} cart;
 	} mp;

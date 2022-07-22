@@ -18,10 +18,6 @@
 # include <CAN/CanMotion.h>
 #endif
 
-#if SUPPORT_REMOTE_COMMANDS
-# include <Can/CanInterface.h>
-#endif
-
 #ifdef DUET_NG
 # define DDA_MOVE_DEBUG	(0)
 #else
@@ -825,10 +821,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 		const int32_t delta = msg.perDrive[drive].steps;
 		if (delta != 0)
 		{
-			if (shapedSegments == nullptr)
-			{
-				EnsureUnshapedSegments(params);
-			}
+			EnsureUnshapedSegments(params);				// there are no shaped segments, so set up the unshaped ones
 
 			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
 			pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
@@ -1349,11 +1342,6 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 			// This code assumes that the previous move in the DDA ring is the previously-executed move, because it fetches the X and Y end coordinates from that move.
 			// Therefore the Move code must not store a new move in that entry until this one has been prepared! (It took me ages to track this down.)
 			// Ideally we would store the initial X and Y coordinates in the DDA, but we need to be economical with memory
-# if MS_USE_FPU
-			// Nothing needed here, use directionVector[Z_AXIS] directly
-# else
-			afterPrepare.cKc = lrintf(directionVector[Z_AXIS] * MoveSegment::KdirectionVector);
-# endif
 			params.a2plusb2 = fsquare(directionVector[X_AXIS]) + fsquare(directionVector[Y_AXIS]);
 			params.initialX = prev->GetEndCoordinate(X_AXIS, false);
 			params.initialY = prev->GetEndCoordinate(Y_AXIS, false);
@@ -1915,7 +1903,7 @@ pre(state == frozen)
 		}
 
 #if SUPPORT_REMOTE_COMMANDS
-		if (CanInterface::InExpansionMode())
+		if (flags.isRemote)
 		{
 			for (const DriveMovement* pdm = activeDMs; pdm != nullptr; pdm = pdm->nextDM)
 			{
