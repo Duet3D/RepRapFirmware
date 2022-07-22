@@ -48,8 +48,13 @@ public:
 	bool IsWiFiInterface() const noexcept override { return false; }
 
 	void UpdateHostname(const char *hostname) noexcept override;
-	IPAddress GetIPAddress() const noexcept override;
+
+	IPAddress GetIPAddress() const noexcept override { return ipAddress; }
+	IPAddress GetNetmask() const noexcept override { return netmask; }
+	IPAddress GetGateway() const noexcept override { return gateway; }
+	bool UsingDhcp() const noexcept override { return usingDhcp; }
 	void SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept override;
+
 	GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept override;
 	const MacAddress& GetMacAddress() const noexcept override { return macAddress; }
 
@@ -87,11 +92,11 @@ private:
 	TcpPort portNumbers[NumProtocols];				// port number used for each protocol
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
 	bool closeDataPort;
-	tcp_pcb *listeningPcbs[NumTcpPorts];
+	tcp_pcb *listeningPcbs[NumProtocols + 1];
 
 	bool activated;
 	bool initialised;
-	bool usingDhcp;
+	bool usingDhcp = true;
 
 	IPAddress ipAddress;
 	IPAddress netmask;

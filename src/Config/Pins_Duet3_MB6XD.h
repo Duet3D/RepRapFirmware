@@ -15,12 +15,15 @@
 constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 
 // Features definition
+// Networking support
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		0
-#define HAS_SBC_INTERFACE		1
 
+// Storage support
+#define HAS_SBC_INTERFACE		1
 #define HAS_MASS_STORAGE		1
 #define HAS_HIGH_SPEED_SD		1
+
 #define HAS_CPU_TEMP_SENSOR		1
 
 #define SUPPORT_TMC51xx			0
@@ -45,6 +48,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
+#define SUPPORT_MULTICAST_DISCOVERY	1
 #define SUPPORT_ASYNC_MOVES		1
 #define ALLOCATE_DEFAULT_PORTS	0
 #define TRACK_OBJECT_NAMES		1

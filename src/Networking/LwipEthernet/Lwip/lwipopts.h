@@ -267,7 +267,7 @@ extern uint32_t random32(void) noexcept;
 #define LWIP_NETIF_HOSTNAME             1
 
 /** The maximum number of services per netif */
-#define MDNS_MAX_SERVICES               4
+#define MDNS_MAX_SERVICES               5		// increased from 4 to 5 to include _duet_discovery service
 
 
 /*
