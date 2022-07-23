@@ -1103,7 +1103,7 @@ void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress 
 	gateway = p_gateway;
 }
 
-bool WiFiInterface::SendCredential(const StringRef& reply, size_t credIndex, const char *buffer, size_t bufferSize)
+bool WiFiInterface::SendCredential(const StringRef& reply, size_t credIndex, const uint8_t *buffer, size_t bufferSize)
 {
 	const int32_t rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, credIndex, static_cast<uint8_t>(AddEnterpriseSsidFlag::CREDENTIAL), 0, buffer,
 			bufferSize, nullptr, 0);
@@ -1119,17 +1119,17 @@ bool WiFiInterface::SendCredential(const StringRef& reply, size_t credIndex, con
 
 bool WiFiInterface::SendTextCredential(GCodeBuffer &gb, const StringRef& reply, size_t credIndex)
 {
-	String<IdentityLength> cred; // TODO [wpa2_ent]: use proper buffer
-	gb.GetQuotedString(cred.GetRef());
+	StringRef cred(reinterpret_cast<char*>(&(bufferOut->data)), sizeof(bufferOut->data));
+	gb.GetQuotedString(cred);
 
-	return SendCredential(reply, credIndex, cred.c_str(), cred.strlen());
+	return SendCredential(reply, credIndex, reinterpret_cast<const uint8_t*>(cred.c_str()), cred.strlen());
 }
 
 bool WiFiInterface::SendFileCredential(GCodeBuffer &gb, const StringRef& reply, size_t credIndex, size_t maxSize)
 {
-	const char *err = "Failed to set SSID credential:";
+	static_assert(MaxCredentialChunkSize <= sizeof(bufferOut->data));
 
-	static char buffer[MaxCredentialChunkSize]; // TODO [wpa2_ent]: use proper buffer
+	const char *err = "Failed to set SSID credential:";
 
 	String<MaxFilenameLength> fileName;
 	gb.GetQuotedString(fileName.GetRef());
@@ -1144,12 +1144,12 @@ bool WiFiInterface::SendFileCredential(GCodeBuffer &gb, const StringRef& reply, 
 			return false;
 		}
 
-		for (size_t sent = 0, sz = sizeof(buffer); sz && sent < cert->Length(); sent += sz)
+		for (size_t sent = 0, sz = sizeof(bufferOut->data); sz && sent < cert->Length(); sent += sz)
 		{
-			memset(buffer, 0, sizeof(buffer));
-			sz = cert->Read(buffer, sizeof(buffer));
+			memset(bufferOut->data, 0, sizeof(bufferOut->data));
+			sz = cert->Read(bufferOut->data, sizeof(bufferOut->data));
 
-			if (!SendCredential(reply, credIndex, buffer, sz))
+			if (!SendCredential(reply, credIndex, bufferOut->data, sz))
 			{
 				return false;
 			}
@@ -1265,7 +1265,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						{
 							#define SEND_CHECK(x)	{if(!(x)) {return GCodeResult::error;}}
 
-							if (gb.Seen('C'))
+							if (gb.Seen('E'))
 							{
 								SEND_CHECK(SendFileCredential(gb, reply, CredentialIndex(caCert), MaxCertificateSize));
 							}
@@ -2087,7 +2087,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	bufferOut->hdr.param32 = param32;
 	bufferOut->hdr.dataLength = (uint16_t)dataOutLength;
 	bufferOut->hdr.dataBufferAvailable = (uint16_t)dataInLength;
-	if (dataOut != nullptr)
+	if (dataOut != nullptr && dataOut != &(bufferOut->data))
 	{
 		memcpy(bufferOut->data, dataOut, dataOutLength);
 	}
@@ -2178,7 +2178,11 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	{
 		const size_t sizeToCopy = min<size_t>(dataInLength, (size_t)response);
 		Cache::InvalidateAfterDMAReceive(bufferIn->data, sizeToCopy);
-		memcpy(dataIn, bufferIn->data, sizeToCopy);
+
+		if (dataIn != &(bufferIn->data))
+		{
+			memcpy(dataIn, bufferIn->data, sizeToCopy);
+		}
 	}
 
 	if (response < 0 && reprap.Debug(moduleNetwork))
