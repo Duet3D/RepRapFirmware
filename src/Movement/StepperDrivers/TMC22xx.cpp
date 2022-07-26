@@ -382,28 +382,43 @@ constexpr uint32_t ChopConf256mstep = DefaultChopConfReg;	// the default uses x2
 
 // DRV_STATUS register
 constexpr uint8_t REGNUM_DRV_STATUS = 0x6F;
-constexpr uint32_t TMC_RR_OT = 1u << 1;			// over temperature shutdown
-constexpr uint32_t TMC_RR_OTPW = 1u << 0;		// over temperature warning
-constexpr uint32_t TMC_RR_S2G = 15u << 2;		// short to ground counter (4 bits)
-constexpr uint32_t TMC_RR_OLA = 1u << 6;		// open load A
-constexpr uint32_t TMC_RR_OLB = 1u << 7;		// open load B
-constexpr uint32_t TMC_RR_STST = 1u << 31;		// standstill detected
-constexpr uint32_t TMC_RR_OPW_120 = 1u << 8;	// temperature threshold exceeded
-constexpr uint32_t TMC_RR_OPW_143 = 1u << 9;	// temperature threshold exceeded
-constexpr uint32_t TMC_RR_OPW_150 = 1u << 10;	// temperature threshold exceeded
-constexpr uint32_t TMC_RR_OPW_157 = 1u << 11;	// temperature threshold exceeded
-constexpr uint32_t TMC_RR_TEMPBITS = 15u << 8;	// all temperature threshold bits
 
-constexpr uint32_t TMC_RR_RESERVED = (15u << 12) | (0x01FF << 21);	// reserved bits
-constexpr uint32_t TMC_RR_SG = 1u << 12;		// this is a reserved bit, which we use to signal a stall
+// Values for TMC2208/2224 and TMC2209
+constexpr uint32_t TMC_RR_OT_2209 = 1u << 1;			// over temperature shutdown
+constexpr uint32_t TMC_RR_OTPW_2209 = 1u << 0;			// over temperature warning
+constexpr uint32_t TMC_RR_S2G_2209 = 3u << 2;			// short to ground indicators (2 bits)
+constexpr uint32_t TMC_RR_S2VS_2209 = 3u << 4;			// short to Vs indicators (2 bits)
+constexpr uint32_t TMC_RR_OLA_2209 = 1u << 6;			// open load A
+constexpr uint32_t TMC_RR_OLB_2209 = 1u << 7;			// open load B
+constexpr uint32_t TMC_RR_STST = 1u << 31;				// standstill detected (same bit on 2209 and 2240)
+constexpr uint32_t TMC_RR_OPW_2209_120 = 1u << 8;		// temperature threshold exceeded
+constexpr uint32_t TMC_RR_OPW_2209_143 = 1u << 9;		// temperature threshold exceeded
+constexpr uint32_t TMC_RR_OPW_2209_150 = 1u << 10;		// temperature threshold exceeded
+constexpr uint32_t TMC_RR_OPW_2209_157 = 1u << 11;		// temperature threshold exceeded
+constexpr uint32_t TMC_RR_TEMPBITS_2209 = 15u << 8;		// all temperature threshold bits
+constexpr uint32_t TMC_RR_RESERVED_2209 = (15u << 12) | (0x01FF << 21);	// reserved bits
 
-constexpr unsigned int TMC_RR_STST_BIT_POS = 31;
-constexpr unsigned int TMC_RR_SG_BIT_POS = 12;
+// Values for TMC2240
+constexpr uint32_t TMC_RR_SGRESULT_MASK_2240 = 1023;	// StallGuard result
+constexpr uint32_t TMC_RR_S2VS_2240 = 3u << 12;			// short to Vs indicators (2 bits)
+constexpr uint32_t TMC_RR_OT_2240 = 1u << 25;			// over temperature shutdown
+constexpr uint32_t TMC_RR_OTPW_2240 = 1u << 26;			// over temperature warning
+constexpr uint32_t TMC_RR_S2G_2240 = 3u << 27;			// short to ground indicators (2 bits)
+constexpr uint32_t TMC_RR_OLA_2240 = 1u << 29;			// open load A
+constexpr uint32_t TMC_RR_OLB_2240 = 1u << 30;			// open load B
+
+constexpr unsigned int TMC_RR_S2VS_BITS_POS_2240 = 12;
+constexpr unsigned int TMC_RR_OT_BIT_POS_2240 = 25;
+constexpr unsigned int TMC_RR_OTPW_BIT_POS_2240 = 26;
+constexpr unsigned int TMC_RR_S2G_BITS_POS_2240 = 27;
+constexpr unsigned int TMC_RR_OPENLOAD_BITS_POS_2240 = 29;
+
+constexpr unsigned int TMC_RR_STST_BIT_POS = 31;		// same position for 2209 and 2240
 
 // PWMCONF register
 constexpr uint8_t REGNUM_PWMCONF = 0x70;
 
-constexpr uint32_t DefaultPwmConfReg = 0xC10D0024;			// this is the reset default - try it until we find something better
+constexpr uint32_t DefaultPwmConfReg = 0xC10D0024;		// this is the reset default - try it until we find something better
 
 constexpr uint8_t REGNUM_PWM_SCALE = 0x71;
 constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
@@ -1440,21 +1455,34 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 			status = readRegisters[ReadDrvStat];
 			if (!enabled)
 			{
-				status &= ~(TMC_RR_OLA | TMC_RR_OLB);
+				status &=
+#if SUPPORT_TMC2240
+										(isTmc2240) ? ~(TMC_RR_OLA_2240 | TMC_RR_OLB_2240) :
+#endif
+														~(TMC_RR_OLA_2209 | TMC_RR_OLB_2209);
 			}
 		}
+#if SUPPORT_TMC2240
+		if (isTmc2240)
+		{
+			rslt.all = ExtractBit(status, TMC_RR_OT_BIT_POS_2240, StandardDriverStatus::OtBitPos)
+						| ExtractBit(status, TMC_RR_OTPW_BIT_POS_2240, StandardDriverStatus::OtpwBitPos)
+						| ExtractTwoBits(status, TMC_RR_S2G_BITS_POS_2240, StandardDriverStatus::S2gBitsPos)
+						| ExtractTwoBits(status, TMC_RR_S2VS_BITS_POS_2240, StandardDriverStatus::S2vsBitsPos)
+						| ExtractTwoBits(status, TMC_RR_OPENLOAD_BITS_POS_2240, StandardDriverStatus::OpenLoadBitsPos);
+		}
+		else
+#endif
+		{
+			// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status
+			rslt.all = status & 0x000000FF;
+		}
+		rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
 #if HAS_STALL_DETECT
 		if (IoPort::ReadPin(diagPin))
 		{
-			status |= TMC_RR_SG;
+			rslt.stall = true;
 		}
-#endif
-
-		// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status
-		rslt.all = status & 0x000000FF;
-		rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
-		rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
-#if HAS_STALL_DETECT
 		rslt.sgresultMin = minSgLoadRegister;
 #endif
 	}
@@ -1548,8 +1576,22 @@ inline void TmcDriverState::TransferDone() noexcept
 					|| motorCurrent < MinimumOpenLoadMotorCurrent
 				   )
 				{
-					regVal &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill and low speeds
+					regVal &=
+#if SUPPORT_TMC2240
+								(isTmc2240) ? ~(TMC_RR_OLA_2240 | TMC_RR_OLB_2240) :
+#endif
+									~(TMC_RR_OLA_2209 | TMC_RR_OLB_2209);				// open load bits are unreliable at standstill and low speeds
 				}
+#if SUPPORT_TMC2240
+				if (isTmc2240)
+				{
+					const uint16_t sgResult = regVal & TMC_RR_SGRESULT_MASK_2240;
+					if (sgResult < minSgLoadRegister)
+					{
+						minSgLoadRegister = sgResult;
+					}
+				}
+#endif
 			}
 			else if (registerToRead == ReadChopConf)
 			{
@@ -1561,7 +1603,11 @@ inline void TmcDriverState::TransferDone() noexcept
 				}
 			}
 #if HAS_STALL_DETECT
-			else if (registerToRead == ReadSgResult)
+			else if (registerToRead == ReadSgResult
+# if SUPPORT_TMC2240
+					&& !isTmc2240
+# endif
+					)
 			{
 				const uint16_t sgResult = regVal & SG_RESULT_MASK;
 				if (sgResult < minSgLoadRegister)
