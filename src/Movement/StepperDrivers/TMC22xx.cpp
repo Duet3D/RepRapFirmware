@@ -687,6 +687,7 @@ private:
 #if HAS_STALL_DETECT
 	static constexpr unsigned int ReadSgResult = 6;			// stallguard result, TMC2209 only
 #endif
+	static constexpr unsigned int ReadAdcTemp = 6;			// driver temperature, TMC2240 only
 	static constexpr unsigned int ReadSpecial = NumReadRegisters;
 
 	volatile uint32_t writeRegisters[NumWriteRegisters + 1];	// the values we want the TMC22xx writable registers to have
@@ -837,7 +838,7 @@ constexpr uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 	REGNUM_PWM_SCALE,
 	REGNUM_PWM_AUTO,
 #if HAS_STALL_DETECT
-	REGNUM_SG_RESULT					// TMC2209 and TMC2240 only
+	REGNUM_SG_RESULT					// TMC2209 only - for TMC2240 we read REGNUM_ADC_TEMP instead
 #endif
 };
 
@@ -1494,7 +1495,7 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 	return rslt;
 }
 
-// Append any additional driver status to a string, and reset the min/max load values
+// Append any additional driver status to a string, and reset values as appropriate
 void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 {
 #if RESET_MICROSTEP_COUNTERS_AT_INIT
@@ -1514,6 +1515,12 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 		reply.cat(", SG min n/a");
 	}
 	ResetLoadRegisters();
+#endif
+#if SUPPORT_TMC2240
+	if (isTmc2240)
+	{
+		reply.catf(", temp %.1fC", (double)((float)(((readRegisters[ReadAdcTemp] & ADC_TEMP_MASK) >> ADC_TEMP_SHIFT) - 2038)/7.7));
+	}
 #endif
 
 	reply.catf(", read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u, CC errors %u",
@@ -1557,7 +1564,11 @@ inline void TmcDriverState::TransferDone() noexcept
 	}
 	else if (driversState != DriversState::noPower)		// we don't check the CRC, so only accept the result if power is still good
 	{
-		const uint8_t readRegNumber = (registerToRead < NumReadRegisters) ? ReadRegNumbers[registerToRead] : specialReadRegisterNumber;
+		const uint8_t readRegNumber = (registerToRead >= NumReadRegisters) ? specialReadRegisterNumber
+#if SUPPORT_TMC2240
+											: (registerToRead == ReadSgResult && isTmc2240) ? REGNUM_ADC_TEMP	// on TMC2240 read ADC_TEMP instead of SGRESULT
+#endif
+												: ReadRegNumbers[registerToRead];
 		if (sendData[2] == readRegNumber
 			&& readRegNumber == receiveData[6]
 			&& receiveData[4] == 0x05
@@ -1731,7 +1742,11 @@ inline void TmcDriverState::StartTransfer() noexcept
 		uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX;										// reset transmitter and receiver
 #endif
 
-		const uint8_t readRegNumber = (registerToRead < NumReadRegisters) ? ReadRegNumbers[registerToRead] : specialReadRegisterNumber;
+		const uint8_t readRegNumber = (registerToRead >= NumReadRegisters) ? specialReadRegisterNumber
+#if SUPPORT_TMC2240
+											: (registerToRead == ReadSgResult && isTmc2240) ? REGNUM_ADC_TEMP	// on TMC2240 read ADC_TEMP instead of SGRESULT
+#endif
+												: ReadRegNumbers[registerToRead];
 		SetupDMARead(readRegNumber);														// set up the DMAC
 
 #if TMC22xx_USES_SERCOM
