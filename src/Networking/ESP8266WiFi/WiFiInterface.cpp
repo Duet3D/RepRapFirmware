@@ -1122,6 +1122,7 @@ bool WiFiInterface::SendTextCredential(GCodeBuffer &gb, const StringRef& reply, 
 	StringRef cred(reinterpret_cast<char*>(&(bufferOut->data)), sizeof(bufferOut->data));
 	gb.GetQuotedString(cred);
 
+	// Text credentials are stored as a blob, and does not require the null terminator.
 	return SendCredential(reply, credIndex, reinterpret_cast<const uint8_t*>(cred.c_str()), cred.strlen());
 }
 
@@ -1144,12 +1145,36 @@ bool WiFiInterface::SendFileCredential(GCodeBuffer &gb, const StringRef& reply, 
 			return false;
 		}
 
-		for (size_t sent = 0, sz = sizeof(bufferOut->data); sz && sent < cert->Length(); sent += sz)
+		// Send the contents of the file with a null terminator appended at the end. The authentication
+		// fails without the null terminator.
+		size_t total = 0;
+		bool nullAppended = false;
+
+		while(total < cert->Length())
 		{
 			memset(bufferOut->data, 0, sizeof(bufferOut->data));
-			sz = cert->Read(bufferOut->data, sizeof(bufferOut->data));
+			size_t sz = cert->Read(bufferOut->data, sizeof(bufferOut->data));
+
+			if (sz < sizeof(bufferOut->data))
+			{
+				bufferOut->data[sz] = 0;
+				sz += 1;
+				nullAppended = true;
+			}
 
 			if (!SendCredential(reply, credIndex, bufferOut->data, sz))
+			{
+				return false;
+			}
+
+			total += sz;
+		}
+
+		if (!nullAppended)
+		{
+			uint8_t n = 0;
+
+			if (!SendCredential(reply, credIndex, &n, 1))
 			{
 				return false;
 			}
