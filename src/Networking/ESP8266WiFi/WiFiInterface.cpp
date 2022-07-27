@@ -1142,6 +1142,7 @@ bool WiFiInterface::SendFileCredential(GCodeBuffer &gb, const StringRef& reply, 
 		if (cert->Length() > maxSize)
 		{
 			reply.printf("%s file '%s' exceeds %u bytes size limit", err, fileName.c_str(), maxSize);
+			cert->Close();
 			return false;
 		}
 
@@ -1164,6 +1165,7 @@ bool WiFiInterface::SendFileCredential(GCodeBuffer &gb, const StringRef& reply, 
 
 			if (!SendCredential(reply, credIndex, bufferOut->data, sz))
 			{
+				cert->Close();
 				return false;
 			}
 
@@ -1176,9 +1178,12 @@ bool WiFiInterface::SendFileCredential(GCodeBuffer &gb, const StringRef& reply, 
 
 			if (!SendCredential(reply, credIndex, &n, 1))
 			{
+				cert->Close();
 				return false;
 			}
 		}
+
+		cert->Close();
 	}
 	else
 	{
