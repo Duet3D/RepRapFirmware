@@ -444,7 +444,12 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	timeSoFar = 0.0;
 
 	// Calculate the total forward and reverse movement distances
-	if (dda.flags.usePressureAdvance && shaper.GetKclocks() > 0.0)
+	if ((   dda.flags.usePressureAdvance
+#if SUPPORT_REMOTE_COMMANDS
+		 || dda.flags.isRemote				// for remote moves we check whether PA is wanted before calling PreparExtruder
+#endif
+		) && shaper.GetKclocks() > 0.0
+	   )
 	{
 		// We are using nonzero pressure advance. Movement must be forwards.
 		mp.cart.pressureAdvanceK = shaper.GetKclocks();
