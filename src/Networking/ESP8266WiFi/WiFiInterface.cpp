@@ -1276,8 +1276,8 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 #if !defined(__LPC17xx__)
 					if (config.eap.protocol != EAPProtocol::NONE)
 					{
-						rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
-										static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), 0, &config, sizeof(config), nullptr, 0);
+						rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, static_cast<int>(config.eap.protocol),
+										static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), 0, &config, ReducedWirelessConfigurationDataSize, nullptr, 0);
 
 						bool ok = (rslt == ResponseEmpty);
 
@@ -1331,9 +1331,18 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						}
 
 					cred_send_end:
-						rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
-									static_cast<uint8_t>(ok ? AddEnterpriseSsidFlag::COMMIT : AddEnterpriseSsidFlag::CANCEL), 
-									0, nullptr, 0, nullptr, 0);
+
+						// If there is a previous error, report that instead. On error, cancel ongoing operation.
+						if (ok)
+						{
+							rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
+										static_cast<uint8_t>(AddEnterpriseSsidFlag::COMMIT), 0, nullptr, 0, nullptr, 0);
+						}
+						else
+						{
+							SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
+									static_cast<uint8_t>(AddEnterpriseSsidFlag::CANCEL), 0, nullptr, 0, nullptr, 0);
+						}
 
 						if (rslt == ResponseEmpty)
 						{
