@@ -1224,7 +1224,10 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					// Verify that the EAP protocol indicator has the same offset as the null terminator for the password
 					// for networks using pre-shared keys.
 					static_assert(offsetof(WirelessConfigurationData, eap.protocol) ==
-								  offsetof(WirelessConfigurationData, password[sizeof(config.password) - sizeof(config.eap.protocol)]));
+								offsetof(WirelessConfigurationData, password[sizeof(config.password) - sizeof(config.eap.protocol)]));
+					// If the above is true, this effectively sets the last character 
+					// of the password to the null terminator.
+					config.eap.protocol = EAPProtocol::NONE;
 
 					if (gb.Seen('X'))
 					{
@@ -1246,11 +1249,6 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 								config.eap.protocol = EAPProtocol::UNSUPPORTED;
 								break;
 						}
-					}
-					else
-					{
-						// Do nothing, WirelessConfigurationData buffer was cleared, so the value should
-						// be equivalent to EAPProtocol::NONE.
 					}
 #endif
 
@@ -1280,37 +1278,12 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					{
 						rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
 										static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), 0, &config, sizeof(config), nullptr, 0);
-					}
-					else
-#endif
-					{
-						// Network uses pre-shared key, get that key
-						gb.MustSee('P');
+
+						bool ok = (rslt == ResponseEmpty);
+
+						if (ok)
 						{
-							String<ARRAY_SIZE(config.password)> password;
-							gb.GetQuotedString(password.GetRef());
-							if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
-							{
-								reply.copy("WiFi password must be at least 8 characters");
-								return GCodeResult::error;
-							}
-							SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
-						}
-
-						// Enforce null terminator == EAPProtocol::NONE
-						config.eap.protocol = EAPProtocol::NONE;
-
-						rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
-					}
-
-#if !defined(__LPC17xx__)
-					if (rslt == ResponseEmpty)
-					{
-						if (config.eap.protocol != EAPProtocol::NONE)
-						{
-							bool ok = true;
-
-							#define CRED_SEND_CHECK(x)	{ok = (x); if (!ok) {goto cred_send_fail;}}
+							#define CRED_SEND_CHECK(x)	{ok = (x); if (!ok) {goto cred_send_end;}}
 
 							if (gb.Seen('E'))
 							{
@@ -1355,23 +1328,42 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 							else { }
 
 							#undef CRED_SEND_CHECK
-
-						cred_send_fail:
-							rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
-										static_cast<uint8_t>(ok ? AddEnterpriseSsidFlag::COMMIT : AddEnterpriseSsidFlag::CANCEL), 
-										0, nullptr, 0, nullptr, 0);
-
-							if (rslt == ResponseEmpty)
-							{
-								return GCodeResult::ok;
-							}
 						}
-						else
+
+					cred_send_end:
+						rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
+									static_cast<uint8_t>(ok ? AddEnterpriseSsidFlag::COMMIT : AddEnterpriseSsidFlag::CANCEL), 
+									0, nullptr, 0, nullptr, 0);
+
+						if (rslt == ResponseEmpty)
 						{
 							return GCodeResult::ok;
 						}
 					}
+					else
 #endif
+					{
+						// Network uses pre-shared key, get that key
+						gb.MustSee('P');
+						{
+							String<ARRAY_SIZE(config.password)> password;
+							gb.GetQuotedString(password.GetRef());
+							if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
+							{
+								reply.copy("WiFi password must be at least 8 characters");
+								return GCodeResult::error;
+							}
+							SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
+						}
+
+						rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
+
+						if (rslt == ResponseEmpty)
+						{
+							return GCodeResult::ok;
+						}
+					}
+
 					reply.printf("Failed to add SSID to remembered list: %s", TranslateWiFiResponse(rslt));
 				}
 				else
