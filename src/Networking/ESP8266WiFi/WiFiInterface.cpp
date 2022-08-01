@@ -1308,33 +1308,35 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					{
 						if (config.eap.protocol != EAPProtocol::NONE)
 						{
-							#define SEND_CHECK(x)	{if(!(x)) {return GCodeResult::error;}}
+							bool ok = true;
+
+							#define CRED_SEND_CHECK(x)	{ok = (x); if (!ok) {goto cred_send_fail;}}
 
 							if (gb.Seen('E'))
 							{
-								SEND_CHECK(SendFileCredential(gb, reply, CredentialIndex(caCert), MaxCertificateSize));
+								CRED_SEND_CHECK(SendFileCredential(gb, reply, CredentialIndex(caCert), MaxCertificateSize));
 							}
 
 							if (gb.Seen('A'))
 							{
-								SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(anonymousId)));
+								CRED_SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(anonymousId)));
 							}
 
 							if (config.eap.protocol == EAPProtocol::EAP_TLS)
 							{
 								gb.MustSee('U');
 								{
-									SEND_CHECK(SendFileCredential(gb, reply, CredentialIndex(tls.userCert), MaxCertificateSize));
+									CRED_SEND_CHECK(SendFileCredential(gb, reply, CredentialIndex(tls.userCert), MaxCertificateSize));
 								}
 
 								gb.MustSee('P');
 								{
-									SEND_CHECK(SendFileCredential(gb, reply, CredentialIndex(tls.privateKey), MaxPrivateKeySize));
+									CRED_SEND_CHECK(SendFileCredential(gb, reply, CredentialIndex(tls.privateKey), MaxPrivateKeySize));
 								}
 
 								if (gb.Seen('Q'))
 								{
-									SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(tls.privateKeyPswd)));
+									CRED_SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(tls.privateKeyPswd)));
 								}
 							}
 							else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 ||
@@ -1342,20 +1344,22 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 							{
 								gb.MustSee('U');
 								{
-									SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(peapttls.identity)));
+									CRED_SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(peapttls.identity)));
 								}
 
 								gb.MustSee('P');
 								{
-									SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(peapttls.password)));
+									CRED_SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(peapttls.password)));
 								}
 							}
 							else { }
 
-							#undef SEND_CHECK
+							#undef CRED_SEND_CHECK
 
+						cred_send_fail:
 							rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
-										static_cast<uint8_t>(AddEnterpriseSsidFlag::COMMIT), 0, nullptr, 0, nullptr, 0);
+										static_cast<uint8_t>(ok ? AddEnterpriseSsidFlag::COMMIT : AddEnterpriseSsidFlag::CANCEL), 
+										0, nullptr, 0, nullptr, 0);
 
 							if (rslt == ResponseEmpty)
 							{
