@@ -12,7 +12,6 @@
 
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
-#include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Networking/HttpResponder.h>
 #include <Networking/FtpResponder.h>
@@ -1105,8 +1104,9 @@ void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress 
 
 bool WiFiInterface::SendCredential(const StringRef& reply, size_t credIndex, const uint8_t *buffer, size_t bufferSize)
 {
-	const int32_t rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, credIndex, static_cast<uint8_t>(AddEnterpriseSsidFlag::CREDENTIAL), 0, buffer,
-			bufferSize, nullptr, 0);
+	const int32_t rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, credIndex,
+									static_cast<uint8_t>(AddEnterpriseSsidFlag::CREDENTIAL), 0,
+									buffer, bufferSize, nullptr, 0);
 
 	if (rslt == ResponseEmpty)
 	{
@@ -1119,7 +1119,8 @@ bool WiFiInterface::SendCredential(const StringRef& reply, size_t credIndex, con
 
 bool WiFiInterface::SendTextCredential(GCodeBuffer &gb, const StringRef& reply, size_t credIndex)
 {
-	StringRef cred(reinterpret_cast<char*>(&(bufferOut->data)), sizeof(bufferOut->data));
+	static_assert(MaxCredentialChunkSize <= sizeof(bufferOut->data));
+	StringRef cred(reinterpret_cast<char*>(&(bufferOut->data)), MaxCredentialChunkSize);
 	gb.GetQuotedString(cred);
 
 	// Text credentials are stored as a blob, and does not require the null terminator.
@@ -1139,59 +1140,65 @@ bool WiFiInterface::SendFileCredential(GCodeBuffer &gb, const StringRef& reply, 
 
 	if (cert)
 	{
-		if (cert->Length() > maxSize)
+		if (cert->Length() <= maxSize)
+		{
+			// Send the contents of the file with a null terminator appended at the end. The authentication
+			// fails without the null terminator.
+			size_t total = 0;
+			bool nullAppended = false;
+
+			bool ok = true;
+
+			while(ok && total <= cert->Length())
+			{
+				memset(bufferOut->data, 0, sizeof(bufferOut->data));
+				size_t sz = cert->Read(bufferOut->data, MaxCredentialChunkSize);
+
+				if (sz <= MaxCredentialChunkSize - 1)
+				{
+					bufferOut->data[sz] = 0;
+					sz += 1;
+					nullAppended = true;
+				}
+
+				if (SendCredential(reply, credIndex, bufferOut->data, sz))
+				{
+					total += sz;
+				}
+				else
+				{
+					ok = false;
+				}
+			}
+
+			// The last chunk is of MaxCredentialChunkSize, send another chunk
+			// with just the null terminator.
+			if (ok && !nullAppended)
+			{
+				uint8_t n = 0;
+
+				if (!SendCredential(reply, credIndex, &n, 1))
+				{
+					ok = false;
+				}
+			}
+
+			cert->Close();
+			// No need to append a text reply here in case of error, since SendCredential() will do so.
+			return ok;
+		}
+		else
 		{
 			reply.printf("%s file '%s' exceeds %u bytes size limit", err, fileName.c_str(), maxSize);
 			cert->Close();
-			return false;
 		}
-
-		// Send the contents of the file with a null terminator appended at the end. The authentication
-		// fails without the null terminator.
-		size_t total = 0;
-		bool nullAppended = false;
-
-		while(total < cert->Length())
-		{
-			memset(bufferOut->data, 0, sizeof(bufferOut->data));
-			size_t sz = cert->Read(bufferOut->data, sizeof(bufferOut->data));
-
-			if (sz < sizeof(bufferOut->data))
-			{
-				bufferOut->data[sz] = 0;
-				sz += 1;
-				nullAppended = true;
-			}
-
-			if (!SendCredential(reply, credIndex, bufferOut->data, sz))
-			{
-				cert->Close();
-				return false;
-			}
-
-			total += sz;
-		}
-
-		if (!nullAppended)
-		{
-			uint8_t n = 0;
-
-			if (!SendCredential(reply, credIndex, &n, 1))
-			{
-				cert->Close();
-				return false;
-			}
-		}
-
-		cert->Close();
 	}
 	else
 	{
 		reply.printf("%s file '%s' not found", err, fileName.c_str());
-		return false;
 	}
 
-	return true;
+	return false;
 }
 
 GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply) THROWS(GCodeException)
@@ -1266,7 +1273,8 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 
 					if (config.eap.protocol != EAPProtocol::NONE)
 					{
-						rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0, static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), 0, &config, sizeof(config), nullptr, 0);
+						rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
+										static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), 0, &config, sizeof(config), nullptr, 0);
 					}
 					else
 					{
@@ -1339,7 +1347,8 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 
 							#undef SEND_CHECK
 
-							rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0, static_cast<uint8_t>(AddEnterpriseSsidFlag::COMMIT), 0, nullptr, 0, nullptr, 0);
+							rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
+										static_cast<uint8_t>(AddEnterpriseSsidFlag::COMMIT), 0, nullptr, 0, nullptr, 0);
 
 							if (rslt == ResponseEmpty)
 							{
@@ -2208,11 +2217,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	{
 		const size_t sizeToCopy = min<size_t>(dataInLength, (size_t)response);
 		Cache::InvalidateAfterDMAReceive(bufferIn->data, sizeToCopy);
-
-		if (dataIn != &(bufferIn->data))
-		{
-			memcpy(dataIn, bufferIn->data, sizeToCopy);
-		}
+		memcpy(dataIn, bufferIn->data, sizeToCopy);
 	}
 
 	if (response < 0 && reprap.Debug(moduleNetwork))
