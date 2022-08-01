@@ -1281,68 +1281,77 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 
 						bool ok = (rslt == ResponseEmpty);
 
-						if (ok)
-						{
-							if (gb.Seen('E'))
-							{
-								ok = SendFileCredential(gb, reply, CredentialIndex(caCert), MaxCertificateSize);
-							}
+						const GCodeException *ex = nullptr;
 
+						try
+						{
 							if (ok)
 							{
-								if (gb.Seen('A'))
+								if (gb.Seen('E'))
 								{
-									ok = SendTextCredential(gb, reply, CredentialIndex(anonymousId));
+									ok = SendFileCredential(gb, reply, CredentialIndex(caCert), MaxCertificateSize);
 								}
 
 								if (ok)
 								{
-									if (config.eap.protocol == EAPProtocol::EAP_TLS)
+									if (gb.Seen('A'))
 									{
-										gb.MustSee('U');
-										{
-											ok = SendFileCredential(gb, reply, CredentialIndex(tls.userCert), MaxCertificateSize);
-										}
+										ok = SendTextCredential(gb, reply, CredentialIndex(anonymousId));
+									}
 
-										if (ok)
+									if (ok)
+									{
+										if (config.eap.protocol == EAPProtocol::EAP_TLS)
 										{
-											gb.MustSee('P');
+											gb.MustSee('U');
 											{
-												ok = SendFileCredential(gb, reply, CredentialIndex(tls.privateKey), MaxPrivateKeySize);
+												ok = SendFileCredential(gb, reply, CredentialIndex(tls.userCert), MaxCertificateSize);
 											}
 
 											if (ok)
 											{
-												if (gb.Seen('Q'))
+												gb.MustSee('P');
 												{
-													ok = SendTextCredential(gb, reply, CredentialIndex(tls.privateKeyPswd));
+													ok = SendFileCredential(gb, reply, CredentialIndex(tls.privateKey), MaxPrivateKeySize);
+												}
+
+												if (ok)
+												{
+													if (gb.Seen('Q'))
+													{
+														ok = SendTextCredential(gb, reply, CredentialIndex(tls.privateKeyPswd));
+													}
 												}
 											}
 										}
-									}
-									else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 ||
-												config.eap.protocol == EAPProtocol::EAP_TTLS_MSCHAPV2)
-									{
-										gb.MustSee('U');
+										else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 ||
+													config.eap.protocol == EAPProtocol::EAP_TTLS_MSCHAPV2)
 										{
-											ok = SendTextCredential(gb, reply, CredentialIndex(peapttls.identity));
-										}
-
-										if (ok)
-										{
-											gb.MustSee('P');
+											gb.MustSee('U');
 											{
-												ok = SendTextCredential(gb, reply, CredentialIndex(peapttls.password));
+												ok = SendTextCredential(gb, reply, CredentialIndex(peapttls.identity));
+											}
+
+											if (ok)
+											{
+												gb.MustSee('P');
+												{
+													ok = SendTextCredential(gb, reply, CredentialIndex(peapttls.password));
+												}
 											}
 										}
+										else { }
 									}
-									else { }
 								}
 							}
 						}
+						catch (const GCodeException& e)
+						{
+							ex = &e;
+						}
 
 						// If there is a previous error, report that instead. On error, cancel ongoing operation.
-						if (ok)
+						if (ok && !ex)
 						{
 							rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
 										static_cast<uint8_t>(AddEnterpriseSsidFlag::COMMIT), 0, nullptr, 0, nullptr, 0);
@@ -1351,6 +1360,11 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						{
 							SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
 									static_cast<uint8_t>(AddEnterpriseSsidFlag::CANCEL), 0, nullptr, 0, nullptr, 0);
+						}
+
+						if (ex)
+						{
+							throw *ex;
 						}
 
 						if (rslt == ResponseEmpty)
