@@ -1225,7 +1225,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					// for networks using pre-shared keys.
 					static_assert(offsetof(WirelessConfigurationData, eap.protocol) ==
 								offsetof(WirelessConfigurationData, password[sizeof(config.password) - sizeof(config.eap.protocol)]));
-					// If the above is true, this effectively sets the last character 
+					// If the above is true, this effectively sets the last character
 					// of the password to the null terminator.
 					config.eap.protocol = EAPProtocol::NONE;
 
@@ -1283,54 +1283,63 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 
 						if (ok)
 						{
-							#define CRED_SEND_CHECK(x)	{ok = (x); if (!ok) {goto cred_send_end;}}
-
 							if (gb.Seen('E'))
 							{
-								CRED_SEND_CHECK(SendFileCredential(gb, reply, CredentialIndex(caCert), MaxCertificateSize));
+								ok = SendFileCredential(gb, reply, CredentialIndex(caCert), MaxCertificateSize);
 							}
 
-							if (gb.Seen('A'))
+							if (ok)
 							{
-								CRED_SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(anonymousId)));
+								if (gb.Seen('A'))
+								{
+									ok = SendTextCredential(gb, reply, CredentialIndex(anonymousId));
+								}
+
+								if (ok)
+								{
+									if (config.eap.protocol == EAPProtocol::EAP_TLS)
+									{
+										gb.MustSee('U');
+										{
+											ok = SendFileCredential(gb, reply, CredentialIndex(tls.userCert), MaxCertificateSize);
+										}
+
+										if (ok)
+										{
+											gb.MustSee('P');
+											{
+												ok = SendFileCredential(gb, reply, CredentialIndex(tls.privateKey), MaxPrivateKeySize);
+											}
+
+											if (ok)
+											{
+												if (gb.Seen('Q'))
+												{
+													ok = SendTextCredential(gb, reply, CredentialIndex(tls.privateKeyPswd));
+												}
+											}
+										}
+									}
+									else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 ||
+												config.eap.protocol == EAPProtocol::EAP_TTLS_MSCHAPV2)
+									{
+										gb.MustSee('U');
+										{
+											ok = SendTextCredential(gb, reply, CredentialIndex(peapttls.identity));
+										}
+
+										if (ok)
+										{
+											gb.MustSee('P');
+											{
+												ok = SendTextCredential(gb, reply, CredentialIndex(peapttls.password));
+											}
+										}
+									}
+									else { }
+								}
 							}
-
-							if (config.eap.protocol == EAPProtocol::EAP_TLS)
-							{
-								gb.MustSee('U');
-								{
-									CRED_SEND_CHECK(SendFileCredential(gb, reply, CredentialIndex(tls.userCert), MaxCertificateSize));
-								}
-
-								gb.MustSee('P');
-								{
-									CRED_SEND_CHECK(SendFileCredential(gb, reply, CredentialIndex(tls.privateKey), MaxPrivateKeySize));
-								}
-
-								if (gb.Seen('Q'))
-								{
-									CRED_SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(tls.privateKeyPswd)));
-								}
-							}
-							else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 ||
-										config.eap.protocol == EAPProtocol::EAP_TTLS_MSCHAPV2)
-							{
-								gb.MustSee('U');
-								{
-									CRED_SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(peapttls.identity)));
-								}
-
-								gb.MustSee('P');
-								{
-									CRED_SEND_CHECK(SendTextCredential(gb, reply, CredentialIndex(peapttls.password)));
-								}
-							}
-							else { }
-
-							#undef CRED_SEND_CHECK
 						}
-
-					cred_send_end:
 
 						// If there is a previous error, report that instead. On error, cancel ongoing operation.
 						if (ok)
