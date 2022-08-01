@@ -1102,6 +1102,7 @@ void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress 
 	gateway = p_gateway;
 }
 
+#if !defined(__LPC17xx__)
 bool WiFiInterface::SendCredential(const StringRef& reply, size_t credIndex, const uint8_t *buffer, size_t bufferSize)
 {
 	const int32_t rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, credIndex,
@@ -1200,6 +1201,7 @@ bool WiFiInterface::SendFileCredential(GCodeBuffer &gb, const StringRef& reply, 
 
 	return false;
 }
+#endif
 
 GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply) THROWS(GCodeException)
 {
@@ -1218,6 +1220,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					gb.GetQuotedString(ssid.GetRef());
 					SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
 
+#if !defined(__LPC17xx__)
 					// Verify that the EAP protocol indicator has the same offset as the null terminator for the password
 					// for networks using pre-shared keys.
 					static_assert(offsetof(WirelessConfigurationData, eap.protocol) ==
@@ -1249,6 +1252,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						// Do nothing, WirelessConfigurationData buffer was cleared, so the value should
 						// be equivalent to EAPProtocol::NONE.
 					}
+#endif
 
 					if (gb.Seen('I'))
 					{
@@ -1271,12 +1275,14 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 
 					int32_t rslt = ResponseUnknownError;
 
+#if !defined(__LPC17xx__)
 					if (config.eap.protocol != EAPProtocol::NONE)
 					{
 						rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
 										static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), 0, &config, sizeof(config), nullptr, 0);
 					}
 					else
+#endif
 					{
 						// Network uses pre-shared key, get that key
 						gb.MustSee('P');
@@ -1297,6 +1303,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
 					}
 
+#if !defined(__LPC17xx__)
 					if (rslt == ResponseEmpty)
 					{
 						if (config.eap.protocol != EAPProtocol::NONE)
@@ -1360,7 +1367,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 							return GCodeResult::ok;
 						}
 					}
-
+#endif
 					reply.printf("Failed to add SSID to remembered list: %s", TranslateWiFiResponse(rslt));
 				}
 				else

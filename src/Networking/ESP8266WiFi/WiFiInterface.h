@@ -115,9 +115,11 @@ private:
 	void GetNewStatus() noexcept;
 	void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept;
 
+#if !defined(__LPC17xx__)
 	bool SendCredential(const StringRef& reply, size_t credIndex, const uint8_t *buffer, size_t bufferSize);
 	bool SendFileCredential(GCodeBuffer &gb,  const StringRef& reply, size_t credIndex, size_t maxSize);
 	bool SendTextCredential(GCodeBuffer &gb, const StringRef& reply, size_t credIndex);
+#endif
 
 	static const char* TranslateWiFiResponse(int32_t response) noexcept;
 	static const char* TranslateEspResetReason(uint32_t reason) noexcept;
