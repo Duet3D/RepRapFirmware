@@ -283,10 +283,11 @@ private:
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
-	float& tanXY = tangents[0];
-	float& tanYZ = tangents[1];
-	float& tanXZ = tangents[2];
-	bool compensateXY;
+	bool compensateXY;									// If true then we compensate for XY skew by adjusting the Y coordinate; else we adjust the X coordinate
+
+	float tanXY() const noexcept { return tangents[0]; }
+	float tanYZ() const noexcept { return tangents[1]; }
+	float tanXZ() const noexcept { return tangents[2]; }
 
 	HeightMap heightMap;    							// The grid definition in use and height map for G29 bed probing
 	RandomProbePointSet probePoints;					// G30 bed probe points
