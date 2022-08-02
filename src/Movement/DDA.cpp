@@ -846,7 +846,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 				}
 
 				// Check for sensible values, print them if they look dubious
-				if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
+				if (reprap.Debug(moduleDda) && (reprap.Debug(moduleMove) || pdm->totalSteps > 1000000))
 				{
 					DebugPrintAll("rem");
 				}

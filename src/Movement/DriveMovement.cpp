@@ -273,7 +273,11 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	timeSoFar = 0.0;
 	mp.cart.pressureAdvanceK = 0.0;
 	// We can't use directionVector here because those values relate to Cartesian space, whereas we may be CoreXY etc.
-	mp.cart.effectiveStepsPerMm = (float)totalSteps/dda.totalDistance;
+	mp.cart.effectiveStepsPerMm =
+#if SUPPORT_REMOTE_COMMANDS
+					(dda.flags.isRemote) ? (float)totalSteps :
+#endif
+						(float)totalSteps/dda.totalDistance;
 	mp.cart.effectiveMmPerStep = 1.0/mp.cart.effectiveStepsPerMm;
 	isDelta = false;
 	isExtruder = false;
@@ -414,8 +418,11 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 // We have already generated the extruder segments and we know that there are some
 bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) noexcept
 {
-	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
-	const float effStepsPerMm = stepsPerMm * fabsf(dda.directionVector[drive]);
+	const float effStepsPerMm =
+#if SUPPORT_REMOTE_COMMANDS
+							(dda.flags.isRemote) ? (float)totalSteps :
+#endif
+								reprap.GetPlatform().DriveStepsPerUnit(drive) * fabsf(dda.directionVector[drive]);
 	const float effMmPerStep = 1.0/effStepsPerMm;
 
 	ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(
@@ -437,7 +444,12 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) no
 	timeSoFar = 0.0;
 
 	// Calculate the total forward and reverse movement distances
-	if (dda.flags.usePressureAdvance && shaper.GetKclocks() > 0.0)
+	if ((   dda.flags.usePressureAdvance
+#if SUPPORT_REMOTE_COMMANDS
+		 || dda.flags.isRemote				// for remote moves we check whether PA is wanted before calling PreparExtruder
+#endif
+		) && shaper.GetKclocks() > 0.0
+	   )
 	{
 		// We are using nonzero pressure advance. Movement must be forwards.
 		mp.cart.pressureAdvanceK = shaper.GetKclocks();

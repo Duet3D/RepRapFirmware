@@ -1,4 +1,4 @@
-// Implementation of MulticastDiscovery protocol
+// Implementation of Multicast Discovery protocol
 
 #include "fgmc_protocol.h"
 
@@ -26,62 +26,29 @@ FGMCProtocol::FGMCProtocol() noexcept
 {
 }
 
-// Build a unique ID from the MAC address
-void FGMCProtocol::macToString(uint32_t interface) noexcept
+static void StoreBase64(char buf[8], uint32_t val) noexcept
 {
-	InterfaceData& ifData = ifaceData[interface];
-
-	for (uint32_t i = 0; i < SIZE_FGMC_DEST_ID; i++)
+	for (unsigned int i = 0; i < 8; ++i)
 	{
-		ifData.unique_id_[i] = '\0';
+		const uint8_t v = val & 0x0f;
+		buf[i] = (v < 10) ? v + '0' : v + ('A' - 10);
+		val >>= 4;
 	}
+}
 
-	const MacAddress& macAddress = reprap.GetNetwork().GetMacAddress(interface);
-	for (uint32_t i = 0; i < 6; i++)
-	{
-		const uint8_t byte = macAddress.bytes[i];
-		uint8_t lowValue = (byte & 0x0Fu);
-		if (lowValue < 0xA)
-		{
-			lowValue = lowValue + 48;
-		}
-		else
-		{
-			lowValue = lowValue + 55;
-		}
-
-		uint8_t highValue = (byte >> 4u) & 0x0Fu;
-		if (highValue < 0xA)
-		{
-			highValue = highValue + 48;
-		}
-		else
-		{
-			highValue = highValue + 55;
-		}
-		ifData.unique_id_[i * 2] = static_cast<char>(lowValue);
-		ifData.unique_id_[(i * 2) + 1] = static_cast<char>(highValue);
-	}
+// Fill in the 16-character unique ID string
+void FGMCProtocol::BuildUniqueId() noexcept
+{
+	const UniqueId& id = reprap.GetPlatform().GetUniqueId();
+	StoreBase64(uniqueId, id.GetDwords()[0] ^ id.GetDwords()[2]);
+	StoreBase64(uniqueId + 8, id.GetDwords()[1] ^ id.GetDwords()[3]);
 }
 
 void FGMCProtocol::init() noexcept
 {
-#if 0
-
-	// check eeprom values available
-	if ((eeprom_noc_code_[0] == '\0')) {  // || (eeprom_product_key_[0] == '\0')
-		// EEPROMs not described
-		eeprom_product_key_[0] = '1';
-		eeprom_product_key_[1] = '\0';
-		(void)memcpy(&eeprom_noc_code_[0], &INVALID_EEPROM_DATA_STRING, INVALID_EEPROM_DATA_STRING_LEN);
-		(void)memcpy(&deviceName[0], &INVALID_EEPROM_DATA_STRING, INVALID_EEPROM_DATA_STRING_LEN);
-	}
-
-#endif
-
+	BuildUniqueId();
 	for (uint32_t i = 0; i < IP_MAX_IFACES; i++)
 	{
-		macToString(i);
 		ifaceData[i].configuredIpAddress = reprap.GetNetwork().GetIPAddress(i);
 		ifaceData[i].configuredNetmask = reprap.GetNetwork().GetNetmask(i);
 		ifaceData[i].configuredGateway = reprap.GetNetwork().GetGateway(i);
@@ -119,7 +86,7 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddres
 			break;
 
 		case FGMCCommand::MCD_COMMAND_DNETINF:
-			if (strncmp(pInGenericHeader->fgmc_destination_id_, ifData.unique_id_, SIZE_FGMC_DEST_ID) == 0)
+			if (strncmp(pInGenericHeader->fgmc_destination_id_, uniqueId, SIZE_FGMC_DEST_ID) == 0)
 			{
 				// fgmc command: download network information
 				FGMC_ReqDownloadNetInfoHeader* const pInCmdPointer =
@@ -129,7 +96,7 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddres
 			break;
 
 		case FGMCCommand::MCD_COMMAND_REBOOT:
-			if (strncmp(pInGenericHeader->fgmc_destination_id_, ifData.unique_id_, SIZE_FGMC_DEST_ID) == 0)
+			if (strncmp(pInGenericHeader->fgmc_destination_id_, uniqueId, SIZE_FGMC_DEST_ID) == 0)
 			{
 				// fgmc command: reboot
 				cmdReboot(packetId);
@@ -137,7 +104,7 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddres
 			break;
 
 		case FGMCCommand::MCD_COMMAND_IDENTIFY:
-			if (strncmp(pInGenericHeader->fgmc_destination_id_, ifData.unique_id_, SIZE_FGMC_DEST_ID) == 0)
+			if (strncmp(pInGenericHeader->fgmc_destination_id_, uniqueId, SIZE_FGMC_DEST_ID) == 0)
 			{
 				// fgmc command: identify
 				FGMC_ReqIdentify* pInCmdPointer =
@@ -147,7 +114,7 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddres
 			break;
 
 		case FGMCCommand::MCD_COMMAND_GET_FIRMWARE_VERSION:
-			if (strncmp(pInGenericHeader->fgmc_destination_id_, ifData.unique_id_, SIZE_FGMC_DEST_ID) == 0)
+			if (strncmp(pInGenericHeader->fgmc_destination_id_, uniqueId, SIZE_FGMC_DEST_ID) == 0)
 			{
 				// fgmc command: get firmware version
 				cmdGetFirmwareVersion(packetId);
@@ -155,7 +122,7 @@ void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddres
 			break;
 
 		case FGMCCommand::MCD_COMMAND_GET_SUPPORTED_COMMANDS:
-			if (strncmp(pInGenericHeader->fgmc_destination_id_, ifData.unique_id_, SIZE_FGMC_DEST_ID) == 0)
+			if (strncmp(pInGenericHeader->fgmc_destination_id_, uniqueId, SIZE_FGMC_DEST_ID) == 0)
 			{
 				// fgmc command: get supported commands
 				cmdGetSupportedCommands(packetId);
@@ -180,7 +147,7 @@ void FGMCProtocol::sendGenericHeader(uint8_t* tx_netbuf, FGMCCommand cmd, uint32
 	pOutGenericHeader->fgmc_length_ = length;
 	pOutGenericHeader->fgmc_hw_type_id_ = fgmc_device_id_;
 	// device unique fgmc destination id
-	strncpy(pOutGenericHeader->fgmc_destination_id_, ifaceData[iface_id_].unique_id_, SIZE_FGMC_DEST_ID);
+	strncpy(pOutGenericHeader->fgmc_destination_id_, uniqueId, SIZE_FGMC_DEST_ID);
 	pOutGenericHeader->fgmc_packet_id_ = packetId + 1;
 	pOutGenericHeader->fgmc_segment_index_ = segmentIndex;
 	pOutGenericHeader->fgmc_segment_count_ = segmentCount;
@@ -204,21 +171,10 @@ void FGMCProtocol::cmdUnetinf(uint32_t inPacketId) noexcept
 	//-----------------------------------------------------------------------------------
 
 	// ip address type
-	const bool dhcpEnable = reprap.GetNetwork().UsingDhcp(iface_id_);
-	if (dhcpEnable)
-	{
-		// dynamic
-		pOutCmdHeader->fgmc_ip_address_type_ = 1;
-	}
-	else
-	{
-		// static
-		pOutCmdHeader->fgmc_ip_address_type_ = 0;
-	}
+	pOutCmdHeader->fgmc_ip_address_type_ = (reprap.GetNetwork().UsingDhcp(iface_id_)) ? 1 : 0;
 
 	// mac address
-	const MacAddress& macAddress = reprap.GetNetwork().GetMacAddress(iface_id_);
-	memcpy(pOutCmdHeader->fgmc_mac_address_, macAddress.bytes, 6);
+	memcpy(pOutCmdHeader->fgmc_mac_address_, reprap.GetNetwork().GetMacAddress(iface_id_).bytes, 6);
 
 	// IPv4
 	const InterfaceData& ifData = ifaceData[iface_id_];
@@ -258,7 +214,7 @@ void FGMCProtocol::cmdUnetinf(uint32_t inPacketId) noexcept
 	pOutCmdHeader->fgmc_ip_v4_dns_[3] = 0;
 
 	// NOC-CODE
-	(void)strncpy(pOutCmdHeader->fgmc_noc_code_, INVALID_EEPROM_DATA_STRING, SIZE_EEPROM_NOC_CODE);
+	(void)strncpy(pOutCmdHeader->fgmc_noc_code_, "DUET3" BOARD_SHORT_NAME, SIZE_NOC_CODE);
 
 	// iTTL
 	pOutCmdHeader->fgmc_ttl_ = 255;
@@ -269,8 +225,12 @@ void FGMCProtocol::cmdUnetinf(uint32_t inPacketId) noexcept
 	// Device Type
 	(void)strncpy(pOutCmdHeader->fgmc_device_type_, BOARD_NAME, SIZE_DEVICE_TYPE);
 
-	// Device Serial Number
-	memset(pOutCmdHeader->fgmc_serial_number_, 0, sizeof(pOutCmdHeader->fgmc_serial_number_));
+	// Device Serial Number. This is 64 characters long. We split the 128-bit unique ID into four 32-bit words and print each as 10 decimal digits.
+	const UniqueId& id = reprap.GetPlatform().GetUniqueId();
+	SafeSnprintf(pOutCmdHeader->fgmc_serial_number_,
+					sizeof(pOutCmdHeader->fgmc_serial_number_),
+					"%010" PRIu32 "%010" PRIu32 "%010" PRIu32 "%010" PRIu32,
+					id.GetDwords()[0], id.GetDwords()[1], id.GetDwords()[2], id.GetDwords()[3]);
 
 	// Application Type
 	pOutCmdHeader->fgmc_application_type_ = fgmc_application_type_;
@@ -466,8 +426,7 @@ void FGMCProtocol::cmdGetSupportedCommands(uint32_t inPacketId) noexcept
 }
 
 FGMCProtocol::InterfaceData::InterfaceData() noexcept
-	: unique_id_{0},
-	  packetIdBuffer{0},
+	: packetIdBuffer{0},
 	  packetIdIndex(0)
 {
 }

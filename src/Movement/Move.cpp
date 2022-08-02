@@ -164,9 +164,9 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 
 	// 8. move.compensation.skew members
 	{ "compensateXY",			OBJECT_MODEL_FUNC(self->compensateXY),															ObjectModelEntryFlags::none },
-	{ "tanXY",					OBJECT_MODEL_FUNC(self->tanXY, 4),																ObjectModelEntryFlags::none },
-	{ "tanXZ",					OBJECT_MODEL_FUNC(self->tanXZ, 4),																ObjectModelEntryFlags::none },
-	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ, 4),																ObjectModelEntryFlags::none },
+	{ "tanXY",					OBJECT_MODEL_FUNC(self->tanXY(), 4),															ObjectModelEntryFlags::none },
+	{ "tanXZ",					OBJECT_MODEL_FUNC(self->tanXZ(), 4),															ObjectModelEntryFlags::none },
+	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ(), 4),															ObjectModelEntryFlags::none },
 
 #if SUPPORT_COORDINATE_ROTATION
 	// 8. move.rotation members
@@ -230,7 +230,7 @@ void Move::Init() noexcept
 	// Clear the transforms
 	SetIdentityTransform();
 	compensateXY = true;
-	tanXY = tanYZ = tanXZ = 0.0;
+	tangents[0] = tangents[1] = tangents[2] = 0.0;
 
 	usingMesh = useTaper = false;
 	zShift = 0.0;
@@ -650,11 +650,11 @@ void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexce
 		{
 			if (xAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] += (compensateXY ? tanXY*xyzPoint[lowestYAxis] : 0.0) + tanXZ*xyzPoint[Z_AXIS];
+				xyzPoint[axis] += (compensateXY ? tanXY() * xyzPoint[lowestYAxis] : 0.0) + tanXZ() * xyzPoint[Z_AXIS];
 			}
 			if (yAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] += (compensateXY ? 0.0 : tanXY*xyzPoint[lowestXAxis]) + tanYZ*xyzPoint[Z_AXIS];
+				xyzPoint[axis] += (compensateXY ? 0.0 : tanXY() * xyzPoint[lowestXAxis]) + tanYZ() * xyzPoint[Z_AXIS];
 			}
 		}
 	}
@@ -676,11 +676,11 @@ void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 		{
 			if (yAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] -= ((compensateXY ? 0.0 : tanXY*xyzPoint[lowestXAxis]) + tanYZ*xyzPoint[Z_AXIS]);
+				xyzPoint[axis] -= ((compensateXY ? 0.0 : tanXY() * xyzPoint[lowestXAxis]) + tanYZ() * xyzPoint[Z_AXIS]);
 			}
 			if (xAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] -= ((compensateXY ? tanXY*xyzPoint[lowestYAxis] : 0.0) + tanXZ*xyzPoint[Z_AXIS]);
+				xyzPoint[axis] -= ((compensateXY ? tanXY() * xyzPoint[lowestYAxis] : 0.0) + tanXZ() * xyzPoint[Z_AXIS]);
 			}
 		}
 	}
