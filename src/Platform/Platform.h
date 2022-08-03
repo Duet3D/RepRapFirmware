@@ -328,6 +328,7 @@ public:
 	void Exit() noexcept;									// Shut down tidily. Calling Init after calling this should reset to the beginning
 
 	void Diagnostics(MessageType mtype) noexcept;
+	static const char *GetResetReasonText() noexcept;
 	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& buf, unsigned int d) THROWS(GCodeException);
 	static bool WasDeliberateError() noexcept { return deliberateError; }
 	void LogError(ErrorCode e) noexcept { errorCodeBits |= (uint32_t)e; }
