@@ -332,7 +332,13 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 
 	case CanMessageReturnInfo::typeDiagnosticsPart0:
 		extra = LastDiagnosticsPart;
-		reply.lcatf("%s (%s%s)", VERSION, DATE, TIME_SUFFIX);
+		// Report the firmware version and board type
+		reply.lcatf("%s version %s (%s%s) running on %s", FIRMWARE_NAME, VERSION, DATE, TIME_SUFFIX, reprap.GetPlatform().GetElectronicsString());
+		// Show the up time and reason for the last reset
+		{
+			const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
+			reply.lcatf("Last reset %02d:%02d:%02d ago, cause: %s", (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60), Platform::GetResetReasonText());
+		}
 		break;
 
 	case CanMessageReturnInfo::typeDiagnosticsPart0 + 1:
