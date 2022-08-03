@@ -294,7 +294,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 	{
 	case CanMessageReturnInfo::typeFirmwareVersion:
 	default:
-		reply.printf("%s (%s%s)", VERSION, DATE, TIME_SUFFIX);
+		reply.printf("%s version %s (%s%s) running on %s", FIRMWARE_NAME, VERSION, DATE, TIME_SUFFIX, reprap.GetPlatform().GetElectronicsString());
 		break;
 
 	case CanMessageReturnInfo::typeBoardName:
