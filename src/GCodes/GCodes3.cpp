@@ -1914,7 +1914,6 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 	// Get the event message
 	String<StringLength100> eventText;
 	const MessageType mt = Event::GetTextDescription(eventText.GetRef());
-	platform.MessageF(mt, "%s\n", eventText.c_str());					// tell the user about the event and log it
 
 	// Get the name of the macro file that we should look for
 	String<StringLength50> macroName;
@@ -1938,6 +1937,11 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 #endif
 
 	// We didn't execute the macro, so do the default action
+	if ((mt & LogLevelMask) != 0)
+	{
+		platform.MessageF((MessageType)(mt & (LogLevelMask | ErrorMessageFlag | WarningMessageFlag)), "%s\n", eventText.c_str());	// log the event
+	}
+
 	if (Event::GetDefaultPauseReason() == PrintPausedReason::dontPause)
 	{
 		Event::FinishedProcessing();									// nothing more to do
@@ -1945,8 +1949,6 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 	else
 	{
 		// It's a serious event that causes the print to pause by default, so send an alert
-		String<StringLength100> eventText;
-		Event::GetTextDescription(eventText.GetRef());
 		const bool isPrinting = IsReallyPrinting();
 		platform.SendAlert(GenericMessage, eventText.c_str(), (isPrinting) ? "Printing paused" : "Event notification", 1, 0.0, AxesBitmap());
 		if (IsReallyPrinting())
