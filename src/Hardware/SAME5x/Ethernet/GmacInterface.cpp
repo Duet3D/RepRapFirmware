@@ -33,7 +33,7 @@ extern Mutex lwipMutex;
 #if defined(LWIP_DEBUG)
 constexpr size_t EthernetTaskStackWords = 700;
 #else
-constexpr size_t EthernetTaskStackWords = 250;
+constexpr size_t EthernetTaskStackWords = 300;
 #endif
 
 static Task<EthernetTaskStackWords> ethernetTask;
@@ -84,27 +84,27 @@ struct alignas(8) gmac_device {
 	/** Pointer to Tx descriptor list (must be 8-byte aligned). */
 	volatile gmac_tx_descriptor_t tx_desc[GMAC_TX_BUFFERS];
 
-	/** RX index for current processing TD. */
-	uint32_t us_rx_idx;
-	/** Circular buffer head pointer by upper layer (buffer to be sent). */
-	uint32_t us_tx_idx;
-
-	bool rxPbufsFullyPopulated = false;
-
-	/** Reference to lwIP netif structure. */
-	struct netif *netif;
-
 	/** RX pbuf pointer list. */
 	struct pbuf *rx_pbuf[GMAC_RX_BUFFERS];
 
 	/** TX buffers. */
 	alignas(8) uint8_t tx_buf[GMAC_TX_BUFFERS][(GMAC_TX_UNITSIZE + 3u) & (~3u)];
+
+	/** RX index for current processing TD. */
+	uint32_t us_rx_idx;
+	/** Circular buffer head pointer by upper layer (buffer to be sent). */
+	uint32_t us_tx_idx;
+
+	/** Reference to lwIP netif structure. */
+	struct netif *netif;
+
+	bool rxPbufsFullyPopulated = false;
 };
 
 /**
  * GMAC driver instance.
  */
-__nocache static struct gmac_device gs_gmac_dev;
+__nocache alignas(8) static struct gmac_device gs_gmac_dev;
 
 /**
  * MAC address to use.
@@ -524,7 +524,7 @@ bool ethernetif_input(struct netif *netif) noexcept
 	/* Points to packet payload, which starts with an Ethernet header. */
 	ethhdr = static_cast<struct eth_hdr*>(p->payload);
 
-	switch (htons(ethhdr->type)) {
+	switch (lwip_htons(ethhdr->type)) {
 		case ETHTYPE_IP:
 		case ETHTYPE_ARP:
 #if defined(PPPOE_SUPPORT) && PPPOE_SUPPORT
@@ -720,6 +720,20 @@ void ethernetif_hardware_init() noexcept
 	/* Disable TX & RX and more. */
 	gmac_disable_interrupt(GMAC, ~0u);
 
+	/* Enable the copy of data into the buffers ignore broadcasts, and not copy FCS. */
+	gmac_enable_copy_all(GMAC, false);
+	gmac_disable_broadcast(GMAC, false);
+
+#if SUPPORT_MULTICAST_DISCOVERY
+	// Without this code, we don't receive any multicast packets
+	GMAC->GMAC_NCFGR |= GMAC_NCFGR_MTIHEN;			// enable multicast hash reception
+	GMAC->GMAC_HRB = 0xFFFFFFFF;					// enable reception of all multicast frames
+	GMAC->GMAC_HRT = 0xFFFFFFFF;
+#endif
+
+	/* Set RX buffer size to 1536. */
+	gmac_set_rx_bufsize(GMAC, 0x18);
+
 	/* Clear all status bits in the receive status register. */
 	gmac_clear_rx_status(GMAC, GMAC_RSR_BNA | GMAC_RSR_REC | GMAC_RSR_RXOVR | GMAC_RSR_HNO);
 
@@ -735,6 +749,7 @@ void ethernetif_hardware_init() noexcept
 	/* Enable Rx, Tx and the statistics register. */
 	gmac_enable_transmit(GMAC, true);
 	gmac_enable_receive(GMAC, true);
+	gmac_enable_statistics_write(GMAC, true);
 
 	/* Set GMAC address. */
 	gmac_set_address(GMAC, 0, gs_uc_mac_address);

@@ -89,6 +89,10 @@
 
 #define LWIP_CHKSUM_ALGORITHM		3		// use fastest checksum algorithm (does 8 bytes at a time)
 
+#define LWIP_DONT_PROVIDE_BYTEORDER_FUNCTIONS	1
+#define lwip_htons(_x)		__builtin_bswap16(_x)
+#define lwip_htonl(_x)		__builtin_bswap32(_x)
+
 /*
    ------------------------------------
    ---------- Memory options ----------
