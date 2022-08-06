@@ -21,7 +21,7 @@
 #define GMAC_TX_BUFFERS  4
 
 /** The MAC can support frame lengths up to 1536 bytes */
-#define GMAC_FRAME_LENTGH_MAX   1536
+#define GMAC_FRAME_LENGTH_MAX   1536
 
 /** MAC PHY operation max retry count */
 #define MAC_PHY_RETRY_MAX 1000000
