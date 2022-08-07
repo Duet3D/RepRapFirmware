@@ -1494,7 +1494,7 @@ const char * GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, bool isP
 	else
 	{
 		moveState.applyM220M221 = false;
-		moveState.feedRate = ConvertSpeedFromMmPerMin(DefaultG0FeedRate);	// use maximum feed rate, the M203 parameters will limit it
+		moveState.feedRate = ConvertSpeedFromMmPerMin(MaximumG0FeedRate);	// use maximum feed rate, the M203 parameters will limit it
 		moveState.usingStandardFeedrate = false;
 	}
 
