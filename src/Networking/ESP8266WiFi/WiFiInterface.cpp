@@ -1802,7 +1802,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 #if SAME5x
     spi_slave_dma_setup(dataOutLength, dataInLength);
 	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;		// clear any pending interrupts
-	WiFiSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_SSL;	// enable the start of transfer (SS low) interrupt
+	WiFiSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_TXC;	// enable the end of transmit interrupt
 	EnableSpi();
 #elif defined(__LPC17xx__)
     spi_slave_dma_setup(dataOutLength, dataInLength);
@@ -1845,27 +1845,6 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 
 #if SAME5x
 	{
-		// We don't get an end-of-transfer interrupt, just a start-of-transfer one. So wait until SS is high, then disable the SPI.
-		// The normal maximum block time is about 2K * 8/spi_clock_speed plus any pauses that the ESP takes, which at 26.7MHz clock rate is 620us plus pause time
-		// However, when we send a command that involves writing to flash memory, then the flash write occurs between sending the header and the body, so it takes much longer
-		const uint32_t startedWaitingAt = millis();
-		const bool writingFlash = (   cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkConfigureAccessPoint
-								   || cmd == NetworkCommand::networkDeleteSsid || cmd == NetworkCommand::networkFactoryReset);
-		while (!digitalRead(EspSSPin))
-		{
-			const uint32_t millisWaiting = millis() - startedWaitingAt;
-			if (millisWaiting >= WiFiTransferTimeoutMillis)
-			{
-				return ResponseTimeout;
-			}
-
-			// The new RTOS SDK for the ESP8266 often interrupts out transfer task for long periods of time. So if the transfer is taking a while to complete, give up the CPU.
-			// Also give up the CPU if we are writing to flash memory, because we know that takes a long time.
-			if (writingFlash || millisWaiting >= 2)
-			{
-				delay(2);
-			}
-		}
 		if (WiFiSpiSercom->SPI.STATUS.bit.BUFOVF)
 		{
 			++spiRxOverruns;
@@ -1978,7 +1957,7 @@ void WiFiInterface::GetNewStatus() noexcept
 #  error ESP_SPI_HANDLER not defined
 # endif
 
-// SPI interrupt handler, called when NSS goes high (SAM4E, SAME70) or low (SAME5x)
+// SPI interrupt handler, called when NSS goes high (SAM4E, SAME70) or end of transfer (SAME5x)
 void ESP_SPI_HANDLER() noexcept
 {
 	wifiInterface->SpiInterrupt();
@@ -1987,13 +1966,11 @@ void ESP_SPI_HANDLER() noexcept
 void WiFiInterface::SpiInterrupt() noexcept
 {
 #if SAME5x
-	// On the SAM5x we can't get an end-of-transfer interrupt, only a start-of-transfer interrupt.
-	// So we can't disable SPI or DMA in this ISR.
 	const uint8_t status = WiFiSpiSercom->SPI.INTFLAG.reg;
-	if ((status & SERCOM_SPI_INTENSET_SSL) != 0)
+	if ((status & SERCOM_SPI_INTFLAG_TXC) != 0)
 	{
-		WiFiSpiSercom->SPI.INTENCLR.reg = SERCOM_SPI_INTENSET_SSL;		// disable the interrupt
-		WiFiSpiSercom->SPI.INTFLAG.reg = SERCOM_SPI_INTENSET_SSL;		// clear the status
+		WiFiSpiSercom->SPI.INTENCLR.reg = SERCOM_SPI_INTENSET_TXC;		// disable the interrupt
+		WiFiSpiSercom->SPI.INTFLAG.reg = SERCOM_SPI_INTFLAG_TXC;		// clear the status
 #else
 	const uint32_t status = ESP_SPI->SPI_SR;							// read status and clear interrupt
 	ESP_SPI->SPI_IDR = SPI_IER_NSSR;									// disable the interrupt
