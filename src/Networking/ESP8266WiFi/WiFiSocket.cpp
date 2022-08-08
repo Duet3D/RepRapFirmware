@@ -11,6 +11,7 @@
 
 #include <Networking/NetworkBuffer.h>
 #include <Platform/RepRap.h>
+#include <Platform/TaskPriorities.h>
 #include "WiFiInterface.h"
 
 const unsigned int MaxBuffersPerSocket = 4;
@@ -257,6 +258,7 @@ void WiFiSocket::ReceiveData(uint16_t bytesAvailable) noexcept
 		{
 			// Read data into the existing buffer
 			const size_t maxToRead = min<size_t>(lastBuffer->SpaceLeft(), MaxDataLength);
+			TaskBase::SetCurrentTaskPriority(TaskPriority::SpinPriority + 1);		// temporarily increase our priority so we get woken up when the transfer is complete
 			const int32_t ret = GetInterface()->SendCommand(NetworkCommand::connRead, socketNum, 0, 0, nullptr, 0, lastBuffer->UnwrittenData(), maxToRead);
 			if (ret > 0 && (size_t)ret <= maxToRead)
 			{
@@ -274,6 +276,7 @@ void WiFiSocket::ReceiveData(uint16_t bytesAvailable) noexcept
 			if (buf != nullptr)
 			{
 				const size_t maxToRead = min<size_t>(NetworkBuffer::bufferSize, MaxDataLength);
+				TaskBase::SetCurrentTaskPriority(TaskPriority::SpinPriority + 1);		// temporarily increase our priority so we get woken up when the transfer is complete
 				const int32_t ret = GetInterface()->SendCommand(NetworkCommand::connRead, socketNum, 0, 0, nullptr, 0, buf->Data(), maxToRead);
 				if (ret > 0 && (size_t)ret <= maxToRead)
 				{

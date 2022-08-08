@@ -558,6 +558,7 @@ void Network::Spin() noexcept
 
 		if (!doneSomething)
 		{
+			TaskBase::SetCurrentTaskPriority(TaskPriority::SpinPriority);		// restore normal priority
 			RTOSIface::Yield();
 		}
 	}
