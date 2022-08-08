@@ -1969,7 +1969,7 @@ void WiFiInterface::SpiInterrupt() noexcept
 	const uint8_t status = WiFiSpiSercom->SPI.INTFLAG.reg;
 	if ((status & SERCOM_SPI_INTFLAG_TXC) != 0)
 	{
-		WiFiSpiSercom->SPI.INTENCLR.reg = SERCOM_SPI_INTENSET_TXC;		// disable the interrupt
+		WiFiSpiSercom->SPI.INTENCLR.reg = SERCOM_SPI_INTENCLR_TXC;		// disable the interrupt
 		WiFiSpiSercom->SPI.INTFLAG.reg = SERCOM_SPI_INTFLAG_TXC;		// clear the status
 #else
 	const uint32_t status = ESP_SPI->SPI_SR;							// read status and clear interrupt
