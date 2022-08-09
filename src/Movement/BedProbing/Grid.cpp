@@ -760,13 +760,56 @@ void HeightMap::ExtrapolateMissing() noexcept
 // Return true if success with 'height' set to the interpolated height, else false
 bool HeightMap::InterpolateMissingPoint(size_t axis0Index, size_t axis1Index, float& height) const noexcept
 {
-	if (axis0Index != 0 && axis0Index + 1 < def.nums[0])
+	float total = 0;
+	unsigned int numPointsUsed = 0;
+
+	// Try the 2 points either side
+	if (   axis0Index != 0
+		&& axis0Index + 1 < def.nums[0]
+		&& gridHeightSet.IsBitSet(GetMapIndex(axis0Index - 1, axis1Index))
+		&& gridHeightSet.IsBitSet(GetMapIndex(axis0Index + 1, axis1Index))
+	   )
 	{
-//		qq;
+		total += gridHeights[GetMapIndex(axis0Index - 1, axis1Index)] + gridHeights[GetMapIndex(axis0Index + 1, axis1Index)];
+		numPointsUsed += 2;
 	}
-	if (axis1Index != 0 && axis1Index + 1 < def.nums[1])
+
+	// Try the 2 points above and below
+	if (   axis1Index != 0
+		&& axis1Index + 1 < def.nums[1]
+	   )
 	{
-//		qq;
+		if (   gridHeightSet.IsBitSet(GetMapIndex(axis0Index, axis1Index - 1))
+			&& gridHeightSet.IsBitSet(GetMapIndex(axis0Index, axis1Index + 1))
+		   )
+		{
+			total += gridHeights[GetMapIndex(axis0Index, axis1Index - 1)] + gridHeights[GetMapIndex(axis0Index, axis1Index + 1)];
+			numPointsUsed += 2;
+		}
+
+		// If we found 0 or 1 pairs of points to interpolate between, also try both sets of diagonal points
+		if (   numPointsUsed < 4
+			&& axis0Index != 0
+			&& axis0Index + 1 < def.nums[0]
+		   )
+		{
+			if (gridHeightSet.IsBitSet(GetMapIndex(axis0Index - 1, axis1Index - 1)) && gridHeightSet.IsBitSet(GetMapIndex(axis0Index + 1, axis1Index + 1)))
+			{
+				total += gridHeights[GetMapIndex(axis0Index - 1, axis1Index - 1)] + gridHeights[GetMapIndex(axis0Index + 1, axis1Index + 1)];
+				numPointsUsed += 2;
+			}
+			if (gridHeightSet.IsBitSet(GetMapIndex(axis0Index - 1, axis1Index + 1)) && gridHeightSet.IsBitSet(GetMapIndex(axis0Index + 1, axis1Index - 1)))
+			{
+				total += gridHeights[GetMapIndex(axis0Index - 1, axis1Index + 1)] + gridHeights[GetMapIndex(axis0Index + 1, axis1Index - 1)];
+				numPointsUsed += 2;
+			}
+		}
+	}
+
+	if (numPointsUsed != 0)
+	{
+		height = total/numPointsUsed;
+		return true;
 	}
 	return false;
 }
