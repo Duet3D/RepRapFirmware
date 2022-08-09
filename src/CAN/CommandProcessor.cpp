@@ -58,7 +58,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 		String<MaxFilenameLength> fname;
 		fname.copy((msg.fileWanted == (unsigned int)FirmwareModule::bootloader) ? "Duet3Bootloader-" : "Duet3Firmware_");
 		fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
-		fname.cat(".bin");
+		fname.cat((msg.uf2Format) ? ".uf2" : ".bin");
 
 		uint32_t fileOffset = msg.fileOffset, fileLength = 0;
 		uint32_t lreq = msg.lengthRequested;
