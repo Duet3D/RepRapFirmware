@@ -643,7 +643,7 @@ float HeightMap::GetInterpolatedHeightError(float axis0, float axis1) const noex
 	return InterpolateAxis0Axis1(xIndex, yIndex, xf - xFloor, yf - yFloor);
 }
 
-float HeightMap::InterpolateAxis0Axis1(uint32_t axis0Index, uint32_t axis1Index, float axis0Frac, float axis1Frac) const noexcept
+float HeightMap::InterpolateAxis0Axis1(size_t axis0Index, size_t axis1Index, float axis0Frac, float axis1Frac) const noexcept
 {
 	const uint32_t indexX0Y0 = GetMapIndex(axis0Index, axis1Index);	// (X0,Y0)
 	const uint32_t indexX1Y0 = indexX0Y0 + 1;						// (X1,Y0)
@@ -732,20 +732,45 @@ void HeightMap::ExtrapolateMissing() noexcept
 	const float d = centAxis0*a + centAxis1*b + centZ*c;
 
 	// Fill in the blanks
-	for (uint32_t iAxis1 = 0; iAxis1 < def.nums[1]; iAxis1++)
+	for (size_t iAxis1 = 0; iAxis1 < def.nums[1]; iAxis1++)
 	{
-		for (uint32_t iAxis0 = 0; iAxis0 < def.nums[0]; iAxis0++)
+		for (size_t iAxis0 = 0; iAxis0 < def.nums[0]; iAxis0++)
 		{
 			const uint32_t index = GetMapIndex(iAxis0, iAxis1);
 			if (!gridHeightSet.IsBitSet(index))
 			{
-				const float fAxis0 = (def.spacings[0] * iAxis0) + def.mins[0];
-				const float fAxis1 = (def.spacings[1] * iAxis1) + def.mins[1];
-				const float fZ = (d - (a * fAxis0 + b * fAxis1)) * invC;
-				gridHeights[index] = fZ;	// fill in Z but don't mark it as set so we can always differentiate between measured and extrapolated
+#if SUPPORT_PROBE_POINTS_FILE
+				// The point may be surrounded by points we have probed, in which case we need to interpolate instead of extrapolate
+				if (!InterpolateMissingPoint(iAxis0, iAxis1, gridHeights[index]))
+#endif
+				{
+					const float fAxis0 = (def.spacings[0] * iAxis0) + def.mins[0];
+					const float fAxis1 = (def.spacings[1] * iAxis1) + def.mins[1];
+					const float fZ = (d - (a * fAxis0 + b * fAxis1)) * invC;
+					gridHeights[index] = fZ;	// fill in Z but don't mark it as set so we can always differentiate between measured and extrapolated
+				}
 			}
 		}
 	}
 }
+
+#if SUPPORT_PROBE_POINTS_FILE
+
+// Try to fill in a grid height by interpolation, if it is surrounded by a sufficient number of probed points
+// Return true if success with 'height' set to the interpolated height, else false
+bool HeightMap::InterpolateMissingPoint(size_t axis0Index, size_t axis1Index, float& height) const noexcept
+{
+	if (axis0Index != 0 && axis0Index + 1 < def.nums[0])
+	{
+//		qq;
+	}
+	if (axis1Index != 0 && axis1Index + 1 < def.nums[1])
+	{
+//		qq;
+	}
+	return false;
+}
+
+#endif
 
 // End

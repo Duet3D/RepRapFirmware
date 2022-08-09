@@ -123,10 +123,14 @@ private:
 #endif
 	bool useMap;													// True to do bed compensation
 
-	uint32_t GetMapIndex(uint32_t axis0Index, uint32_t axis1Index) const noexcept { return (axis1Index * def.NumAxisPoints(0)) + axis0Index; }
+	size_t GetMapIndex(size_t axis0Index, size_t axis1Index) const noexcept { return (axis1Index * def.NumAxisPoints(0)) + axis0Index; }
 	void SetGridHeight(size_t index, float height) noexcept;							// Set the height of a grid point
 
-	float InterpolateAxis0Axis1(uint32_t axis0Index, uint32_t axis1Index, float axis0Frac, float axis1Frac) const noexcept;
+	float InterpolateAxis0Axis1(size_t axis0Index, size_t axis1Index, float axis0Frac, float axis1Frac) const noexcept;
+
+#if SUPPORT_PROBE_POINTS_FILE
+	bool InterpolateMissingPoint(size_t axis0Index, size_t axis1Index, float& height) const noexcept;
+#endif
 };
 
 #endif /* SRC_MOVEMENT_GRID_H_ */
