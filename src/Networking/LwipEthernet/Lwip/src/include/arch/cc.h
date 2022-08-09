@@ -104,15 +104,9 @@ typedef uintptr_t          mem_ptr_t;
 /* Make lwip/arch.h define the codes which are used throughout */
 #define LWIP_PROVIDE_ERRNO
 
-#ifdef __cplusplus
-# define NOEXCEPT	noexcept
-#else
-# define NOEXCEPT
-#endif
-
 /* Debug facilities. LWIP_DEBUG must be defined to read output */
 #ifdef LWIP_DEBUG
-extern void debugPrintf(const char *, ...) NOEXCEPT;
+extern void debugPrintf(const char *, ...) noexcept;
 #define LWIP_PLATFORM_DIAG(x)   {debugPrintf x;}
 #define LWIP_PLATFORM_ASSERT(x) {debugPrintf("Assertion \"%s\" failed at line %d in %s\n", x, __LINE__, __FILE__); while(1);}
 #else

@@ -63,6 +63,7 @@ private:
 
 	void ReInit() noexcept;
 	void DiscardReceivedData() noexcept;
+	pbuf *GetNextReceivedPbuf() noexcept;
 
 	uint32_t whenConnected;
 	uint32_t whenWritten;
@@ -70,7 +71,7 @@ private:
 	bool responderFound;
 
 	tcp_pcb *connectionPcb;
-	pbuf *receivedData;
+	pbuf *volatile receivedData;
 	size_t readIndex;
 
 	SocketState state;

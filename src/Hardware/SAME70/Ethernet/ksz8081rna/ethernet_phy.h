@@ -47,7 +47,7 @@
 #ifndef ETHERNET_PHY_H_INCLUDED
 #define ETHERNET_PHY_H_INCLUDED
 
-#include "compiler.h"
+#include <Core.h>
 
 // IEEE defined Registers
 #define GMII_BMCR        0x00   // Basic Control

@@ -31,6 +31,8 @@
  *
  */
 
+#include <Core.h>
+#include <Cache.h>
 #include "GmacInterface.h"
 #include <pmc/pmc.h>
 
@@ -54,18 +56,26 @@ extern "C" {
 #include <RepRapFirmware.h>
 #include <RTOSIface/RTOSIface.h>
 #include <Platform/TaskPriorities.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 
 extern Mutex lwipMutex;
 
+#if defined(LWIP_DEBUG)
+constexpr size_t EthernetTaskStackWords = 700;
+#else
 constexpr size_t EthernetTaskStackWords = 300;
+#endif
+
 static Task<EthernetTaskStackWords> ethernetTask;
 
 // Error counters
-unsigned int rxErrorCount;
-unsigned int rxBuffersNotFullyPopulatedCount;
-unsigned int txErrorCount;
-unsigned int txBufferNotFreeCount;
-unsigned int txBufferTooShortCount;
+static unsigned int rxErrorCount = 0;
+static unsigned int rxBuffersNotFullyPopulatedCount = 0;
+static unsigned int rxBufferNotAvailableCount = 0;
+static unsigned int txErrorCount = 0;
+static unsigned int txBufferNotFreeCount = 0;
+static unsigned int txBufferTooShortCount = 0;
 
 /** Network interface identifier. */
 #define IFNAME0               'e'
@@ -82,7 +92,7 @@ unsigned int txBufferTooShortCount;
 /* configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY. */
 
 /** The GMAC interrupts to enable */
-#define GMAC_INT_GROUP (GMAC_ISR_RCOMP | GMAC_ISR_ROVR | GMAC_ISR_HRESP | GMAC_ISR_TCOMP | GMAC_ISR_TUR | GMAC_ISR_TFC)
+#define GMAC_INT_GROUP (GMAC_ISR_RCOMP | GMAC_ISR_ROVR)
 
 /** The GMAC TX errors to handle */
 #define GMAC_TX_ERRORS (GMAC_TSR_TFC | GMAC_TSR_HRESP)
@@ -97,7 +107,7 @@ alignas(8) static gmac_rx_descriptor_t gs_rx_desc_null;
 /**
  * GMAC driver structure.
  */
-struct gmac_device {
+struct alignas(8) gmac_device {
 	/**
 	 * Pointer to allocated TX buffer.
 	 * Section 3.6 of AMBA 2.0 spec states that burst should not cross
@@ -109,10 +119,12 @@ struct gmac_device {
 	volatile gmac_rx_descriptor_t rx_desc[GMAC_RX_BUFFERS];
 	/** Pointer to Tx descriptor list (must be 8-byte aligned). */
 	volatile gmac_tx_descriptor_t tx_desc[GMAC_TX_BUFFERS];
+
 	/** RX pbuf pointer list. */
 	struct pbuf *rx_pbuf[GMAC_RX_BUFFERS];
+
 	/** TX buffers. */
-	uint8_t tx_buf[GMAC_TX_BUFFERS][GMAC_TX_UNITSIZE];
+	alignas(8) uint8_t tx_buf[GMAC_TX_BUFFERS][(GMAC_TX_UNITSIZE + 3u) & (~3u)];
 
 	/** RX index for current processing TD. */
 	uint32_t us_rx_idx;
@@ -121,12 +133,14 @@ struct gmac_device {
 
 	/** Reference to lwIP netif structure. */
 	struct netif *netif;
+
+	bool rxPbufsFullyPopulated = false;
 };
 
 /**
  * GMAC driver instance.
  */
-__nocache __aligned(8) static struct gmac_device gs_gmac_dev;
+__nocache alignas(8) static struct gmac_device gs_gmac_dev;
 
 /**
  * MAC address to use.
@@ -141,8 +155,6 @@ static uint8_t gs_uc_mac_address[] =
 	ETHERNET_CONF_ETHADDR5
 };
 
-static bool rxPbufsFullyPopulated = false;
-
 #if LWIP_STATS
 /** Used to compute lwIP bandwidth. */
 uint32_t lwip_tx_count = 0;
@@ -151,9 +163,8 @@ uint32_t lwip_tx_rate = 0;
 uint32_t lwip_rx_rate = 0;
 #endif
 
-/**
- * \brief GMAC interrupt handler.
- */
+// GMAC interrupt handler
+// At present, we only use receive interrupts
 extern "C" void GMAC_Handler() noexcept
 {
 	/* Get interrupt status. */
@@ -185,11 +196,11 @@ static void gmac_rx_populate_queue(struct gmac_device *p_gmac_dev, uint32_t star
 		if (p_gmac_dev->rx_pbuf[ul_index] == nullptr)
 		{
 			/* Allocate a new pbuf with the maximum size. */
-			pbuf * const p = pbuf_alloc(PBUF_RAW, (u16_t) GMAC_FRAME_LENTGH_MAX, PBUF_POOL);
+			pbuf * const p = pbuf_alloc(PBUF_RAW, (u16_t) GMAC_FRAME_LENGTH_MAX, PBUF_POOL);
 			if (p == nullptr)
 			{
 				LWIP_DEBUGF(NETIF_DEBUG, ("gmac_rx_populate_queue: pbuf allocation failure\n"));
-				rxPbufsFullyPopulated = false;
+				p_gmac_dev->rxPbufsFullyPopulated = false;
 				++rxBuffersNotFullyPopulatedCount;
 				return;
 			}
@@ -198,28 +209,18 @@ static void gmac_rx_populate_queue(struct gmac_device *p_gmac_dev, uint32_t star
 			LWIP_ASSERT("gmac_rx_populate_queue: pbuf size too small!", pbuf_clen(p) <= 1);
 
 			/* Make sure that the payload buffer is properly aligned. */
-			LWIP_ASSERT("gmac_rx_populate_queue: unaligned p->payload buffer address",
-					(((uint32_t)p->payload & 0xFFFFFFFC) == (uint32_t)p->payload));
-
-			// dc42 do this first to avoid a race condition with DMA, because writing addr.val transfers ownership back to the GMAC, so it should be the last thing we do
-			/* Reset status value. */
-			p_gmac_dev->rx_desc[ul_index].status.val = 0;
+			LWIP_ASSERT("gmac_rx_populate_queue: unaligned p->payload buffer address", (((uint32_t)p->payload & 0xFFFFFFFC) == (uint32_t)p->payload));
 
 			/* Save pbuf pointer to be sent to lwIP upper layer. */
 			p_gmac_dev->rx_pbuf[ul_index] = p;
 
-			if (ul_index == GMAC_RX_BUFFERS - 1)
-			{
-				p_gmac_dev->rx_desc[ul_index].addr.val = (u32_t) p->payload | GMAC_RXD_WRAP;
-			}
-			else
-			{
-				p_gmac_dev->rx_desc[ul_index].addr.val = (u32_t) p->payload;
-			}
+			// dc42 do this first to avoid a race condition with DMA, because writing addr.val transfers ownership back to the GMAC, so it should be the last thing we do
+			p_gmac_dev->rx_desc[ul_index].status.val = 0;				// reset status value
 
-			LWIP_DEBUGF(NETIF_DEBUG,
-					("gmac_rx_populate_queue: new pbuf allocated: %p [idx=%u]\n",
-					p, (unsigned int)ul_index));
+			__DSB();
+			p_gmac_dev->rx_desc[ul_index].addr.val = (ul_index == GMAC_RX_BUFFERS - 1) ? (u32_t) p->payload | GMAC_RXD_WRAP : (u32_t) p->payload;
+			Cache::FlushBeforeDMASend(&p_gmac_dev->rx_desc[ul_index], sizeof(p_gmac_dev->rx_desc[ul_index]));
+			LWIP_DEBUGF(NETIF_DEBUG, ("gmac_rx_populate_queue: new pbuf allocated: %p [idx=%u]\n", p, (unsigned int)ul_index));
 		}
 
 		++ul_index;
@@ -229,7 +230,7 @@ static void gmac_rx_populate_queue(struct gmac_device *p_gmac_dev, uint32_t star
 		}
 	} while (ul_index != startAt);
 
-	rxPbufsFullyPopulated = true;
+	p_gmac_dev->rxPbufsFullyPopulated = true;
 }
 
 /**
@@ -283,9 +284,13 @@ static void gmac_tx_init(struct gmac_device *ps_gmac_dev) noexcept
 		ps_gmac_dev->tx_desc[ul_index].status.val = GMAC_TXD_USED | GMAC_TXD_LAST;
 	}
 	ps_gmac_dev->tx_desc[ul_index - 1].status.val |= GMAC_TXD_WRAP;
+	Cache::FlushBeforeDMASend(ps_gmac_dev->tx_desc, sizeof(ps_gmac_dev->tx_desc));
 
 	/* Set transmit buffer queue base address pointer. */
 	gmac_set_tx_queue(GMAC, (uint32_t) &ps_gmac_dev->tx_desc[0]);
+
+	/* Clear error status. */
+	gmac_clear_tx_status(GMAC, GMAC_TX_ERRORS);
 }
 
 /**
@@ -297,10 +302,6 @@ static void gmac_tx_init(struct gmac_device *ps_gmac_dev) noexcept
  */
 static void gmac_low_level_init(struct netif *netif) noexcept
 {
-#if 0			// chrishamm
-	volatile uint32_t ul_delay;
-#endif
-
 	/* Set MAC hardware address length. */
 	netif->hwaddr_len = sizeof(gs_uc_mac_address);
 	/* Set MAC hardware address. */
@@ -315,41 +316,14 @@ static void gmac_low_level_init(struct netif *netif) noexcept
 	netif->mtu = NET_MTU;
 
 	/* Device capabilities. */
-	netif->flags |= NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP
-#if LWIP_IGMP	// chrishamm
-			| NETIF_FLAG_IGMP
-#endif
-	;
-
-#if 0			// chrishamm: Just like with the EMAC on the Duet, we initialise the GMAC step-by-step to avoid blocking
-	/* Wait for PHY to be ready (CAT811: Max400ms). */
-	ul_delay = sysclk_get_cpu_hz() / 1000 / 3 * 400;
-	while (ul_delay--) {
-	}
-#endif
+	netif->flags |= NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP | NETIF_FLAG_IGMP;
 
 	/* Init MAC PHY driver. */
-	if (ethernet_phy_init(GMAC, BOARD_GMAC_PHY_ADDR, SystemCoreClock) != GMAC_OK) {
+	if (ethernet_phy_init(GMAC, BOARD_GMAC_PHY_ADDR, SystemCoreClockFreq/2) != GMAC_OK)		// MCLK is half the core clock on the SAME70
+	{
 		LWIP_DEBUGF(NETIF_DEBUG, ("gmac_low_level_init: PHY init ERROR!\n"));
 		return;
 	}
-
-#if 0			// chrishamm: See ethernetif_establish_link()
-	/* Auto Negotiate, work in RMII mode. */
-	if (ethernet_phy_auto_negotiate(GMAC, BOARD_GMAC_PHY_ADDR) != GMAC_OK) {
-		LWIP_DEBUGF(NETIF_DEBUG, ("gmac_low_level_init: auto negotiate ERROR!\n"));
-		return;
-	}
-
-	/* Establish ethernet link. */
-	while (ethernet_phy_set_link(GMAC, BOARD_GMAC_PHY_ADDR, 1) != GMAC_OK) {
-		LWIP_DEBUGF(NETIF_DEBUG, ("gmac_low_level_init: set link ERROR!\n"));
-		return;
-	}
-
-	/* Set link up*/
-	netif->flags |= NETIF_FLAG_LINK_UP;
-#endif
 }
 
 /**
@@ -367,72 +341,73 @@ static err_t gmac_low_level_output(netif *p_netif, struct pbuf *p) noexcept
 {
 	gmac_device *const ps_gmac_dev = static_cast<gmac_device *>(p_netif->state);
 
-	/* Handle GMAC underrun or AHB errors. */
-	if (gmac_get_tx_status(GMAC) & GMAC_TX_ERRORS)
+	while (true)
 	{
-		++txErrorCount;
-		LWIP_DEBUGF(NETIF_DEBUG, ("gmac_low_level_output: GMAC ERROR, reinit TX...\n"));
-
-		gmac_enable_transmit(GMAC, false);
-
-		LINK_STATS_INC(link.err);
-		LINK_STATS_INC(link.drop);
-
-		/* Reinit TX descriptors. */
-		gmac_tx_init(ps_gmac_dev);
-
-		/* Clear error status. */
-		gmac_clear_tx_status(GMAC, GMAC_TX_ERRORS);
-
-		gmac_enable_transmit(GMAC, true);
-	}
-
-	while ((ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx].status.val & GMAC_TXD_USED) == 0)
-	{
-		++txBufferNotFreeCount;
-		delay(1);
-	}
-
-	// Copy pbuf chain into TX buffer
-	{
-		uint8_t *buffer = reinterpret_cast<uint8_t*>(ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx].addr);
-		size_t totalLength = 0;
-		for (const pbuf *q = p; q != nullptr; q = q->next)
+		// Handle GMAC underrun or AHB errors
+		if (gmac_get_tx_status(GMAC) & GMAC_TX_ERRORS)
 		{
-			totalLength += q->len;
-			if (totalLength > GMAC_TX_UNITSIZE)
-			{
-				++txBufferTooShortCount;
-				return ERR_BUF;
-			}
-			memcpy(buffer, q->payload, q->len);
-			buffer += q->len;
+			++txErrorCount;
+			LWIP_DEBUGF(NETIF_DEBUG, ("gmac_low_level_output: GMAC ERROR, reinit TX...\n"));
+
+			gmac_enable_transmit(GMAC, false);
+
+			LINK_STATS_INC(link.err);
+			LINK_STATS_INC(link.drop);
+
+			/* Reinit TX descriptors. */
+			gmac_tx_init(ps_gmac_dev);			// this also clears the Tx errors
+
+			gmac_enable_transmit(GMAC, true);
 		}
-	}
 
-	// Set length and mark the buffer to be sent by GMAC
-	uint32_t txStat = p->tot_len | GMAC_TXD_LAST;
-	if (ps_gmac_dev->us_tx_idx == GMAC_TX_BUFFERS - 1)
-	{
-		txStat |= GMAC_TXD_WRAP;
-	}
-	ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx].status.val = txStat;
+		volatile gmac_tx_descriptor_t& txDescriptor = ps_gmac_dev->tx_desc[ps_gmac_dev->us_tx_idx];
+		Cache::InvalidateAfterDMAReceive(&txDescriptor, sizeof(gmac_tx_descriptor_t));
+		if ((txDescriptor.status.val & GMAC_TXD_USED) != 0)
+		{
+			// Copy pbuf chain into TX buffer
+			uint8_t *buffer = reinterpret_cast<uint8_t*>(txDescriptor.addr);
+			size_t totalLength = 0;
+			for (const pbuf *q = p; q != nullptr; q = q->next)
+			{
+				totalLength += q->len;
+				if (totalLength > GMAC_TX_UNITSIZE)
+				{
+					++txBufferTooShortCount;
+					return ERR_BUF;
+				}
+				memcpy(buffer, q->payload, q->len);
+				buffer += q->len;
+			}
+			Cache::FlushBeforeDMASend(reinterpret_cast<const uint8_t*>(txDescriptor.addr), totalLength);
 
-	LWIP_DEBUGF(NETIF_DEBUG,
-			("gmac_low_level_output: DMA buffer sent, size=%d [idx=%u]\n",
-			p->tot_len, (unsigned int)ps_gmac_dev->us_tx_idx));
+			// Set length and mark the buffer to be sent by GMAC
+			uint32_t txStat = totalLength | GMAC_TXD_LAST;
+			if (ps_gmac_dev->us_tx_idx == GMAC_TX_BUFFERS - 1)
+			{
+				txStat |= GMAC_TXD_WRAP;
+			}
+			txDescriptor.status.val = txStat;
+			Cache::FlushBeforeDMASend(&txDescriptor, sizeof(gmac_tx_descriptor_t));
+			LWIP_DEBUGF(NETIF_DEBUG,
+					("gmac_low_level_output: DMA buffer sent, size=%d [idx=%u]\n",
+					p->tot_len, (unsigned int)ps_gmac_dev->us_tx_idx));
 
-	ps_gmac_dev->us_tx_idx = (ps_gmac_dev->us_tx_idx + 1) % GMAC_TX_BUFFERS;
+			ps_gmac_dev->us_tx_idx = (ps_gmac_dev->us_tx_idx + 1) % GMAC_TX_BUFFERS;
 
-	/* Now start to transmission. */
-	gmac_start_transmission(GMAC);
+			/* Now start to transmission. */
+			gmac_start_transmission(GMAC);
 
 #if LWIP_STATS
-	lwip_tx_count += p->tot_len;
+			lwip_tx_count += p->tot_len;
 #endif
-	LINK_STATS_INC(link.xmit);
+			LINK_STATS_INC(link.xmit);
 
-	return ERR_OK;
+			return ERR_OK;
+		}
+
+		++txBufferNotFreeCount;
+		delay(2);	//TODO use an interrupt instead
+	}
 }
 
 /**
@@ -441,11 +416,11 @@ static err_t gmac_low_level_output(netif *p_netif, struct pbuf *p) noexcept
  * \param netif the lwIP network interface structure for this ethernetif.
  *
  * \return a pbuf filled with the received packet (including MAC header).
- * 0 on memory error.
+ * nullptr if no received packet available.
  */
 static pbuf *gmac_low_level_input(struct netif *netif) noexcept
 {
-	gmac_device *ps_gmac_dev = static_cast<gmac_device *>(netif->state);
+	gmac_device *const ps_gmac_dev = static_cast<gmac_device *>(netif->state);
 
 	if (gmac_get_rx_status(GMAC) & GMAC_RX_ERRORS)
 	{
@@ -476,43 +451,55 @@ static pbuf *gmac_low_level_input(struct netif *netif) noexcept
 		return nullptr;
 	}
 
-	volatile gmac_rx_descriptor_t * const p_rx = &ps_gmac_dev->rx_desc[ps_gmac_dev->us_rx_idx];
-	pbuf * const p = ((p_rx->addr.val & GMAC_RXD_OWNERSHIP) == GMAC_RXD_OWNERSHIP)
-						? ps_gmac_dev->rx_pbuf[ps_gmac_dev->us_rx_idx]
-							: nullptr;
+	if (gmac_get_rx_status(GMAC) & GMAC_RSR_BNA)
+	{
+		++rxBufferNotAvailableCount;
+		gmac_clear_rx_status(GMAC, GMAC_RSR_BNA);
+	}
+
+	/* Check if a packet has been received and processed by GMAC. */
+	uint32_t rxIdx = ps_gmac_dev->us_rx_idx;
+	volatile gmac_rx_descriptor_t * const p_rx = &ps_gmac_dev->rx_desc[rxIdx];
+	Cache::InvalidateAfterDMAReceive(p_rx, sizeof(gmac_rx_descriptor_t));
+	pbuf * p = ((p_rx->addr.val & GMAC_RXD_OWNERSHIP) != 0)
+					? ps_gmac_dev->rx_pbuf[rxIdx]
+						: nullptr;
 
 	/* Check if a packet has been received and processed by GMAC. */
 	if (p != nullptr)
 	{
-		/* Packet is a SOF since packet size is set to maximum. */
-		const uint32_t length = p_rx->status.val & GMAC_RXD_LEN_MASK;
+		const uint32_t status = p_rx->status.val;
+		const uint32_t length = status & GMAC_RXD_LEN_MASK;
 
 		/* Fetch pre-allocated pbuf. */
-		p->len = length;
+		Cache::InvalidateAfterDMAReceive(p->payload, length);
 
 		/* Remove this pbuf from its descriptor. */
-		ps_gmac_dev->rx_pbuf[ps_gmac_dev->us_rx_idx] = nullptr;
-		rxPbufsFullyPopulated = false;
+		ps_gmac_dev->rx_pbuf[rxIdx] = nullptr;
+		ps_gmac_dev->rxPbufsFullyPopulated = false;
+		p->tot_len = p->len = length;
 
-		LWIP_DEBUGF(NETIF_DEBUG,
-				("gmac_low_level_input: DMA buffer %p received, size=%u [idx=%u]\n",
-				p, (unsigned int)length, (unsigned int)ps_gmac_dev->us_rx_idx));
-
-		/* Set pbuf total packet size. */
-		p->tot_len = length;
 		LINK_STATS_INC(link.recv);
 
-		ps_gmac_dev->us_rx_idx = (ps_gmac_dev->us_rx_idx + 1) % GMAC_RX_BUFFERS;
+		ps_gmac_dev->us_rx_idx = rxIdx = (rxIdx + 1) % GMAC_RX_BUFFERS;
 
+		if ((status & (GMAC_RXD_SOF | GMAC_RXD_EOF)) == (GMAC_RXD_SOF | GMAC_RXD_EOF))
+		{
 #if LWIP_STATS
-		lwip_rx_count += length;
+			lwip_rx_count += length;
 #endif
+		}
+		else
+		{
+			pbuf_free(p);
+			p = nullptr;
+		}
 	}
 
 	/* Fill empty descriptors with new pbufs. */
-	if (!rxPbufsFullyPopulated)
+	if (!ps_gmac_dev->rxPbufsFullyPopulated)
 	{
-		gmac_rx_populate_queue(ps_gmac_dev, ps_gmac_dev->us_rx_idx);
+		gmac_rx_populate_queue(ps_gmac_dev, rxIdx);
 	}
 
 	return p;
@@ -539,7 +526,7 @@ extern "C" [[noreturn]] void gmac_task(void *pvParameters) noexcept
 		}
 
 		// Wait for the RX notification from the ISR
-		TaskBase::Take((rxPbufsFullyPopulated) ? 1000 : 20);
+		TaskBase::Take((ps_gmac_dev->rxPbufsFullyPopulated) ? 1000 : 20);
 	}
 }
 
@@ -554,38 +541,37 @@ extern "C" [[noreturn]] void gmac_task(void *pvParameters) noexcept
  */
 bool ethernetif_input(struct netif *netif) noexcept
 {
-	struct eth_hdr *ethhdr;
-	struct pbuf *p;
-
 	/* Move received packet into a new pbuf. */
-	p = gmac_low_level_input(netif);
+	pbuf *const p = gmac_low_level_input(netif);
 	if (p == nullptr)
 	{
 		return false;
 	}
 
 	/* Points to packet payload, which starts with an Ethernet header. */
-	ethhdr = static_cast<struct eth_hdr*>(p->payload);
+	const eth_hdr *ethhdr = static_cast<struct eth_hdr*>(p->payload);
 
-	switch (htons(ethhdr->type)) {
-		case ETHTYPE_IP:
-		case ETHTYPE_ARP:
+	switch (lwip_htons(ethhdr->type))
+	{
+	case ETHTYPE_IP:
+	case ETHTYPE_ARP:
 #if defined(PPPOE_SUPPORT) && PPPOE_SUPPORT
-		case ETHTYPE_PPPOEDISC:
-		case ETHTYPE_PPPOE:
+	case ETHTYPE_PPPOEDISC:
+	case ETHTYPE_PPPOE:
 #endif /* PPPOE_SUPPORT */
-			/* Send packet to lwIP for processing. */
-			if (netif->input(p, netif) != ERR_OK) {
-				LWIP_DEBUGF(NETIF_DEBUG, ("ethernetif_input: IP input error\n"));
-				/* Free buffer. */
-				pbuf_free(p);
-			}
-			break;
-
-		default:
+		/* Send packet to lwIP for processing. */
+		if (netif->input(p, netif) != ERR_OK)
+		{
+			LWIP_DEBUGF(NETIF_DEBUG, ("ethernetif_input: IP input error\n"));
 			/* Free buffer. */
 			pbuf_free(p);
-			break;
+		}
+		break;
+
+	default:
+		/* Free buffer. */
+		pbuf_free(p);
+		break;
 	}
 	return true;
 }
@@ -636,6 +622,14 @@ err_t ethernetif_init(struct netif *netif) noexcept
 	gmac_low_level_init(netif);
 
 	ethernetTask.Create(gmac_task, "ETHERNET", &gs_gmac_dev, TaskPriority::EthernetPriority);
+
+	/* Set up the interrupts for transmission and errors. */
+	gmac_enable_interrupt(GMAC, GMAC_INT_GROUP);
+
+	/* Enable NVIC GMAC interrupt. */
+	NVIC_ClearPendingIRQ(GMAC_IRQn);
+	NVIC_EnableIRQ(GMAC_IRQn);
+
 	return ERR_OK;
 }
 
@@ -651,21 +645,18 @@ void ethernetif_hardware_init() noexcept
 	gmac_clear_statistics(GMAC);
 
 	/* Clear all status bits in the receive status register. */
-	gmac_clear_rx_status(GMAC, GMAC_RSR_BNA | GMAC_RSR_REC | GMAC_RSR_RXOVR
-			| GMAC_RSR_HNO);
+	gmac_clear_rx_status(GMAC, GMAC_RSR_BNA | GMAC_RSR_REC | GMAC_RSR_RXOVR | GMAC_RSR_HNO);
 
 	/* Clear all status bits in the transmit status register. */
-	gmac_clear_tx_status(GMAC, GMAC_TSR_UBR | GMAC_TSR_COL | GMAC_TSR_RLE
-			| GMAC_TSR_TXGO | GMAC_TSR_TFC | GMAC_TSR_TXCOMP
-			| GMAC_TSR_HRESP);
+	gmac_clear_tx_status(GMAC, GMAC_TSR_UBR | GMAC_TSR_COL | GMAC_TSR_RLE | GMAC_TSR_TXGO | GMAC_TSR_TFC | GMAC_TSR_TXCOMP | GMAC_TSR_HRESP);
 
 	/* Clear interrupts. */
 	gmac_get_interrupt_status(GMAC);
 
-	/* Enable the copy of data into the buffers
-	   ignore broadcasts, and not copy FCS. */
+	/* Enable the copy of data into the buffers ignore broadcasts, and not copy FCS. */
 	gmac_enable_copy_all(GMAC, false);
 	gmac_disable_broadcast(GMAC, false);
+	GMAC->GMAC_NCFGR |= GMAC_NCFGR_RXCOEN;			// check IP, UDP and TCP checksums so that we don't need to do it in lwip
 
 #if SUPPORT_MULTICAST_DISCOVERY
 	// Without this code, we don't receive any multicast packets
@@ -717,35 +708,21 @@ void ethernetif_hardware_init() noexcept
 	gmac_enable_receive(GMAC, true);
 	gmac_enable_statistics_write(GMAC, true);
 
-	/* Set up the interrupts for transmission and errors. */
-	gmac_enable_interrupt(GMAC, GMAC_INT_GROUP);
-
 	/* Set GMAC address. */
 	gmac_set_address(GMAC, 0, gs_uc_mac_address);
-
-	/* Enable NVIC GMAC interrupt. */
-#if 0		// chrishamm: NVIC priorities are assigned by RepRapFirmware
-	NVIC_SetPriority(GMAC_IRQn, INT_PRIORITY_GMAC);
-#endif
-	NVIC_EnableIRQ(GMAC_IRQn);
 }
 
 bool ethernetif_establish_link() noexcept
 {
 	/* Auto Negotiate, work in RMII mode. */
-	uint8_t result = ethernet_phy_auto_negotiate(GMAC, BOARD_GMAC_PHY_ADDR);
-	if (result != GMAC_OK) {
+	const uint8_t result = ethernet_phy_auto_negotiate(GMAC, BOARD_GMAC_PHY_ADDR);
+	if (result != GMAC_OK)
+	{
 		if (result != GMAC_TIMEOUT)
 		{
 			// chrishamm: It is expected that the function above will return ERR_TIMEOUT a few times
 			LWIP_DEBUGF(NETIF_DEBUG, ("gmac_low_level_init: auto negotiate ERROR!\n"));
 		}
-		return false;
-	}
-
-	/* Establish ethernet link. */
-	if (ethernet_phy_set_link(GMAC, BOARD_GMAC_PHY_ADDR, 1) != GMAC_OK) {
-		LWIP_DEBUGF(NETIF_DEBUG, ("gmac_low_level_init: set link ERROR!\n"));
 		return false;
 	}
 
@@ -758,12 +735,14 @@ bool ethernetif_link_established() noexcept
 	gmac_enable_management(GMAC, true);
 
 	uint32_t ul_stat1;
-	if (gmac_phy_read(GMAC, BOARD_GMAC_PHY_ADDR, GMII_BMSR, &ul_stat1) != GMAC_OK) {
+	if (gmac_phy_read(GMAC, BOARD_GMAC_PHY_ADDR, GMII_BMSR, &ul_stat1) != GMAC_OK)
+	{
 		gmac_enable_management(GMAC, false);
 		return false;
 	}
 
-	if ((ul_stat1 & GMII_LINK_STATUS) == 0) {
+	if ((ul_stat1 & GMII_LINK_STATUS) == 0)
+	{
 		gmac_enable_management(GMAC, false);
 		return false;
 	}
@@ -785,13 +764,22 @@ void ethernetif_set_mac_address(const uint8_t macAddress[]) noexcept
 // This is called when we shut down
 void ethernetif_terminate() noexcept
 {
+	gmac_enable_transmit(GMAC, false);
+	gmac_enable_receive(GMAC, false);
 	NVIC_DisableIRQ(GMAC_IRQn);
 	ethernetTask.TerminateAndUnlink();
 }
 
-extern "C" u32_t sys_now() noexcept
+extern "C" uint32_t sys_now() noexcept
 {
 	return millis();
+}
+
+void ethernetif_diagnostics(MessageType mtype) noexcept
+{
+	reprap.GetPlatform().MessageF(mtype, "Error counts: %u %u %u %u %u %u\nSocket states:",
+								rxErrorCount, rxBuffersNotFullyPopulatedCount, rxBufferNotAvailableCount, txErrorCount, txBufferNotFreeCount, txBufferTooShortCount);
+	rxErrorCount = rxBuffersNotFullyPopulatedCount = rxBufferNotAvailableCount = txErrorCount = txBufferNotFreeCount = txBufferTooShortCount = 0;
 }
 
 // End

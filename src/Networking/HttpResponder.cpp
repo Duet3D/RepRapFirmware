@@ -1296,21 +1296,24 @@ void HttpResponder::DoUpload() noexcept
 	size_t len;
 	if (skt->ReadBuffer(buffer, len))
 	{
-		(void)CheckAuthenticated();							// uploading may take a long time, so make sure the requester IP is not timed out
-		timer = millis();									// reset the timer
-
-		const bool ok = dummyUpload || fileBeingUploaded.Write(buffer, len);
-		skt->Taken(len);
-		uploadedBytes += len;
-
-		if (!ok)
+		do
 		{
-			uploadError = true;
-			GetPlatform().Message(ErrorMessage, "HTTP: could not write upload data\n");
-			CancelUpload();
-			SendJsonResponse("upload");
-			return;
-		}
+			(void)CheckAuthenticated();						// uploading may take a long time, so make sure the requester IP is not timed out
+			timer = millis();								// reset the timer
+
+			const bool ok = dummyUpload || fileBeingUploaded.Write(buffer, len);
+			skt->Taken(len);
+			uploadedBytes += len;
+
+			if (!ok)
+			{
+				uploadError = true;
+				GetPlatform().Message(ErrorMessage, "HTTP: could not write upload data\n");
+				CancelUpload();
+				SendJsonResponse("upload");
+				return;
+			}
+		} while (skt->ReadBuffer(buffer, len));
 	}
 	else if (!skt->CanRead() || millis() - timer >= HttpSessionTimeout)
 	{

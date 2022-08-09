@@ -561,7 +561,11 @@ void Network::Spin() noexcept
 		{
 			slowLoop = dt;
 		}
-		RTOSIface::Yield();
+
+		if (!doneSomething)
+		{
+			RTOSIface::Yield();
+		}
 	}
 }
 #endif

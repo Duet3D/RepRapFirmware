@@ -1645,6 +1645,7 @@ tcp_receive(struct tcp_pcb *pcb)
         /* We get here if the incoming segment is out-of-sequence. */
 
 #if TCP_QUEUE_OOSEQ
+    	//debugPrintf("OOS! have %" PRIu32 ", expected %" PRIu32 " to %" PRIu32 "\n", seqno, pcb->rcv_nxt, pcb->rcv_nxt + pcb->rcv_wnd - 1);
         /* We queue the segment on the ->ooseq queue. */
         if (pcb->ooseq == NULL) {
           pcb->ooseq = tcp_seg_copy(&inseg);
@@ -1873,6 +1874,7 @@ tcp_receive(struct tcp_pcb *pcb)
       }
     } else {
       /* The incoming segment is not within the window. */
+      //debugPrintf("Not in window: %" PRIu32 ", expected %" PRIu32 " to %" PRIu32 "\n", seqno, pcb->rcv_nxt, pcb->rcv_nxt + pcb->rcv_wnd - 1);
       tcp_send_empty_ack(pcb);
     }
   } else {

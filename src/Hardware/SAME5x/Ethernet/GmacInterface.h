@@ -8,17 +8,14 @@
 #ifndef SRC_HARDWARE_SAME5X_ETHERNET_GMACINTERFACE_H_
 #define SRC_HARDWARE_SAME5X_ETHERNET_GMACINTERFACE_H_
 
-#ifdef __cplusplus
 extern "C" {
-#endif
-
 #include "lwip/err.h"
 #include "lwip/ip_addr.h"
 #include "lwip/netif.h"
 #include "netif/etharp.h"
-
-#ifdef __cplusplus
 }
+
+#include <Platform/MessageType.h>
 
 err_t ethernetif_init(struct netif *netif) noexcept;		// called by LwIP to initialise the interface
 
@@ -34,13 +31,6 @@ bool ethernetif_link_established() noexcept;				// asks the PHY if the link is s
 
 void ethernetif_set_mac_address(const uint8_t macAddress[]) noexcept;
 
-#endif
-
-// Error counters
-extern unsigned int rxErrorCount;
-extern unsigned int rxBuffersNotFullyPopulatedCount;
-extern unsigned int txErrorCount;
-extern unsigned int txBufferNotFreeCount;
-extern unsigned int txBufferTooShortCount;
+void ethernetif_diagnostics(MessageType mtype) noexcept;
 
 #endif /* SRC_HARDWARE_SAME5X_ETHERNET_GMACINTERFACE_H_ */

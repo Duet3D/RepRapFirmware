@@ -70,15 +70,9 @@ Mutex lwipMutex;
 
 extern "C"
 {
-	// Task function to keep the GMAC and LwIP running
-	void DoEthernetTask()
-	{
-		ethernet_task();
-	}
-
 	// Callback functions for LWIP (may be called from ISR)
 	// This occasionally seems to get called with a null pcb argument, so check for that here
-	static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
+	static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err) noexcept
 	{
 		LWIP_UNUSED_ARG(arg);
 		LWIP_UNUSED_ARG(err);
@@ -450,7 +444,7 @@ void LwipEthernetInterface::Spin() noexcept
 		if (ethernet_link_established())
 		{
 			// Check for incoming packets
-			DoEthernetTask();
+			ethernet_task();
 
 			// Have we obtained an IP address yet?
 			ethernet_get_ipaddress(ipAddress, netmask, gateway);
@@ -483,7 +477,7 @@ void LwipEthernetInterface::Spin() noexcept
 		if (ethernet_link_established())
 		{
 			// Check for incoming packets
-			DoEthernetTask();
+			ethernet_task();
 
 			// Poll the next TCP socket
 			sockets[nextSocketToPoll]->Poll();
@@ -513,10 +507,9 @@ void LwipEthernetInterface::Spin() noexcept
 
 void LwipEthernetInterface::Diagnostics(MessageType mtype) noexcept
 {
-	platform.MessageF(mtype, "- Ethernet -\nState: %s\n", GetStateName());
-	platform.MessageF(mtype, "Error counts: %u %u %u %u %u\nSocket states:",
-								rxErrorCount, rxBuffersNotFullyPopulatedCount, txErrorCount, txBufferNotFreeCount, txBufferTooShortCount);
-	for (LwipSocket *s : sockets)
+	platform.MessageF(mtype, "= Ethernet =\nState: %s\n", GetStateName());
+	ethernetif_diagnostics(mtype);
+	for (const LwipSocket *s : sockets)
 	{
 		platform.MessageF(mtype, " %d", s->GetState());
 	}
