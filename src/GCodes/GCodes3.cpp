@@ -1937,18 +1937,18 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 #endif
 
 	// We didn't execute the macro, so do the default action
-	if ((mt & LogLevelMask) != 0)
-	{
-		platform.MessageF((MessageType)(mt & (LogLevelMask | ErrorMessageFlag | WarningMessageFlag)), "%s\n", eventText.c_str());	// log the event
-	}
-
 	if (Event::GetDefaultPauseReason() == PrintPausedReason::dontPause)
 	{
+		platform.MessageF(mt, "%s\n", eventText.c_str());				// record the event on the console and log it
 		Event::FinishedProcessing();									// nothing more to do
 	}
 	else
 	{
 		// It's a serious event that causes the print to pause by default, so send an alert
+		if ((mt & LogLevelMask) != 0)
+		{
+			platform.MessageF((MessageType)(mt & (LogLevelMask | ErrorMessageFlag | WarningMessageFlag)), "%s\n", eventText.c_str());	// log the event
+		}
 		const bool isPrinting = IsReallyPrinting();
 		platform.SendAlert(GenericMessage, eventText.c_str(), (isPrinting) ? "Printing paused" : "Event notification", 1, 0.0, AxesBitmap());
 		if (IsReallyPrinting())
