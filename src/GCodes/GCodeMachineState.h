@@ -230,7 +230,8 @@ public:
 		localPush : 1,							// true if this stack frame was created by M120, so we use the parent variables
 		macroRestartable : 1,					// true if the current macro has used M98 R1 to say that it can be interrupted and restarted
 		firstCommandAfterRestart : 1,			// true if this is the first command after restarting a macro that was interrupted
-		commandRepeated : 1						// true if the current command is being repeated because it returned GCodeResult::notFinished the first time
+		commandRepeated : 1,					// true if the current command is being repeated because it returned GCodeResult::notFinished the first time
+		inverseTimeMode : 1						// true if using inverse time mode
 #if HAS_SBC_INTERFACE
 		, lastCodeFromSbc : 1,
 		macroStartedByCode : 1,

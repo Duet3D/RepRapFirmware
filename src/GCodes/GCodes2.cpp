@@ -1544,6 +1544,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
+			case 93:	// inverse time mode
+				gb.LatestMachineState().inverseTimeMode = true;
+				reprap.InputsUpdated();
+				break;
+
+			case 94:	//normal feed rate mode
+				gb.LatestMachineState().inverseTimeMode = false;
+				reprap.InputsUpdated();
+				break;
+
 			case 98: // Call Macro/Subprogram
 				if (gb.Seen('P'))
 				{

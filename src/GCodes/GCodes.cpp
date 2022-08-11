@@ -1349,8 +1349,10 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 			}
 			if (ok)
 			{
-				buf.printf("M116\nG92 E%.5f\n%s\n", (double)ms.latestVirtualExtruderPosition, (FileGCode()->OriginalMachineState().drivesRelative) ? "M83" : "M82");
-				ok = f->Write(buf.c_str());									// write virtual extruder position and absolute/relative extrusion flag
+				buf.printf("M116\nG92 E%.5f\n%s\n%s\n", (double)ms.latestVirtualExtruderPosition,
+						(FileGCode()->OriginalMachineState().drivesRelative) ? "M83" : "M82",
+							(FileGCode()->OriginalMachineState().inverseTimeMode) ? "G93" : "G94");
+				ok = f->Write(buf.c_str());									// write virtual extruder position, absolute/relative extrusion flag, and inverse time mode/normal mode flag
 			}
 			if (ok)
 			{

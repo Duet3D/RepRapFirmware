@@ -20,7 +20,7 @@ GCodeMachineState::GCodeMachineState() noexcept
 	  selectedPlane(0), drivesRelative(false), axesRelative(false),
 	  doingFileMacro(false), waitWhileCooling(false), runningM501(false), runningM502(false),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(false), usingInches(false),
-	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(false), macroRestartable(false), firstCommandAfterRestart(false), commandRepeated(false),
+	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(false), macroRestartable(false), firstCommandAfterRestart(false), commandRepeated(false), inverseTimeMode(false),
 #if HAS_SBC_INTERFACE
 	  lastCodeFromSbc(false), macroStartedByCode(false), fileFinished(false),
 #endif
@@ -50,6 +50,7 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501), runningM502(prev.runningM502),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),
 	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(withinSameFile), firstCommandAfterRestart(prev.firstCommandAfterRestart), commandRepeated(false),
+	  inverseTimeMode(withinSameFile && prev.inverseTimeMode),
 #if HAS_SBC_INTERFACE
 	  lastCodeFromSbc(prev.lastCodeFromSbc), macroStartedByCode(prev.macroStartedByCode), fileFinished(prev.fileFinished),
 #endif
@@ -184,6 +185,7 @@ void GCodeMachineState::CopyStateFrom(const GCodeMachineState& other) noexcept
 	feedRate = other.feedRate;
 	volumetricExtrusion = other.volumetricExtrusion;
 	usingInches = other.usingInches;
+	inverseTimeMode = other.inverseTimeMode;
 }
 
 // Set the error message and associated state
