@@ -93,7 +93,8 @@ constexpr SSPChannel ESP_SPI = SSP0;
 # include "matrix/matrix.h"
 #endif
 
-const uint32_t WiFiResponseTimeoutMillis = 12000;					// Timeout includes time-intensive flash-access operations; high value for factory reset command, which formats the SPIFFS partition.
+const uint32_t WiFiSlowResponseTimeoutMillis = 12000;				// SPI timeout when when the ESP has to access the SPIFFS filesytem. A long timeout is alloted for formatting the filesystem.
+const uint32_t WiFiFastResponseTimeoutMillis = 20;				// SPI timeout when when the ESP does not have to write to flash memory.
 const uint32_t WiFiWaitReadyMillis = 100;
 const uint32_t WiFiStartupMillis = 12000;
 const uint32_t WiFiStableMillis = 100;
@@ -1845,9 +1846,12 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	digitalWrite(SamTfrReadyPin, true);
 
 	// Wait until the DMA transfer is complete, with timeout
+	const uint32_t timeout = (cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkDeleteSsid || cmd == NetworkCommand::networkConfigureAccessPoint || cmd == NetworkCommand::networkFactoryReset)
+								? WiFiSlowResponseTimeoutMillis
+									: WiFiFastResponseTimeoutMillis;
 	do
 	{
-		if (!TaskBase::Take(WiFiResponseTimeoutMillis))
+		if (!TaskBase::Take(timeout))
 		{
 			if (reprap.Debug(moduleNetwork))
 			{
