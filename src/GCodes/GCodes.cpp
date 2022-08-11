@@ -1621,24 +1621,28 @@ void GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& m
 	if (ms.isCoordinated || machineType == MachineType::fff)
 	{
 		ms.applyM220M221 = (ms.moveType == 0 && isPrintingMove && !gb.IsDoingFileMacro());
-		const bool inverseTimeMode = gb.LatestMachineState().inverseTimeMode;
-		ms.inverseTimeMode = inverseTimeMode;
-		if (gb.Seen(feedrateLetter))
+		ms.inverseTimeMode = gb.LatestMachineState().inverseTimeMode;
+		if (ms.inverseTimeMode)
 		{
-			gb.LatestMachineState().feedRate = (inverseTimeMode)
-												? gb.GetFValue() * (StepClockRate * 60)		// set required move time in step clocks
-													: gb.GetSpeed();						// update requested speed in mm per step clock, not allowing for speed factor
+			if (!gb.Seen(feedrateLetter))
+			{
+				gb.ThrowGCodeException("Feed rate must be specified with every move when using inverse time mode");
+			}
+			const float feedRate = gb.GetFValue() * (StepClockRate * 60);						// get the requested move duration in step clocks
+			ms.feedRate = (ms.applyM220M221)
+							? feedRate/ms.speedFactor
+								: feedRate;
 		}
-		else if (inverseTimeMode)
+		else
 		{
-			gb.ThrowGCodeException("Feed rate must be specified with every move when using inverse time mode");
-		}
-		ms.feedRate = (ms.applyM220M221)
-								? ((inverseTimeMode)
-									? gb.LatestMachineState().feedRate/ms.speedFactor
-									: gb.LatestMachineState().feedRate * ms.speedFactor
-								  )
+			if (gb.Seen(feedrateLetter))
+			{
+				gb.LatestMachineState().feedRate = gb.GetSpeed();						// update requested speed in mm per step clock, not allowing for speed factor
+			}
+			ms.feedRate = (ms.applyM220M221)
+							?  gb.LatestMachineState().feedRate * ms.speedFactor
 								: gb.LatestMachineState().feedRate;
+		}
 		ms.usingStandardFeedrate = true;
 	}
 	else
