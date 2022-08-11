@@ -258,8 +258,9 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 	String<StringLength50> firmwareFilename;
 	firmwareFilename.copy((moduleNumber == 3) ? "Duet3Bootloader-" : "Duet3Firmware_");
 	firmwareFilename.cat(reply.c_str());
+	firmwareFilename.cat((strcmp(reply.c_str(), "Mini5plus") == 0) ? ".uf2" : ".bin");
+
 	reply.Clear();
-	firmwareFilename.cat(".bin");
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	if (!reprap.GetPlatform().FileExists(FIRMWARE_DIRECTORY, firmwareFilename.c_str()))

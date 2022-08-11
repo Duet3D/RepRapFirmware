@@ -2558,10 +2558,11 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 	return true;
 }
 
+#if HAS_MASS_STORAGE
+
 // Update the firmware. Prerequisites should be checked before calling this.
 void RepRap::UpdateFirmware(const char *iapFilename, const char *iapParam) noexcept
 {
-#if HAS_MASS_STORAGE
 	FileStore * iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, iapFilename, OpenMode::read);
 	if (iapFile == nullptr)
 	{
@@ -2580,8 +2581,9 @@ void RepRap::UpdateFirmware(const char *iapFilename, const char *iapParam) noexc
 	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
 	iapFile->Close();
 	StartIap(iapParam);
-#endif
 }
+
+#endif
 
 void RepRap::PrepareToLoadIap() noexcept
 {

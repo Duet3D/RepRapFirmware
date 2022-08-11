@@ -587,6 +587,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::flashing2:
+#if HAS_MASS_STORAGE
 		if (firmwareUpdateModuleMap.IsBitSet(0))
 		{
 			// Update main firmware
@@ -601,6 +602,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			catch (const GCodeException&) { }
 		}
+#endif
 		isFlashing = false;
 		gb.SetState(GCodeState::normal);
 		break;

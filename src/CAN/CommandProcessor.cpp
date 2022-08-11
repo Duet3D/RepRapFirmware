@@ -58,7 +58,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 		String<MaxFilenameLength> fname;
 		fname.copy((msg.fileWanted == (unsigned int)FirmwareModule::bootloader) ? "Duet3Bootloader-" : "Duet3Firmware_");
 		fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
-		fname.cat(".bin");
+		fname.cat((msg.uf2Format) ? ".uf2" : ".bin");
 
 		uint32_t fileOffset = msg.fileOffset, fileLength = 0;
 		uint32_t lreq = msg.lengthRequested;
@@ -371,11 +371,15 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 #elif HAS_VOLTAGE_MONITOR
 			reply.catf("VIN: %.1fV", (double)reprap.GetPlatform().GetCurrentPowerVoltage());
 #elif HAS_12V_MONITOR
-			reply.catf("V12: %.1fn", (double)reprap.GetPlatform().GetCurrentV12Voltage());
+			reply.catf("V12: %.1fV", (double)reprap.GetPlatform().GetCurrentV12Voltage());
 #endif
 #if HAS_CPU_TEMP_SENSOR
 			const MinCurMax temps = reprap.GetPlatform().GetMcuTemperatures();
-			reply.catf("MCU temperature: min %.1fC, current %.1fC, max %.1fC", (double)temps.minimum, (double)temps.current, (double)temps.maximum);
+			reply.catf(
+# if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
+				", "
+# endif
+				"MCU temperature: min %.1fC, current %.1fC, max %.1fC", (double)temps.minimum, (double)temps.current, (double)temps.maximum);
 #endif
 		}
 		break;

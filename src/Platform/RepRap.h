@@ -140,7 +140,9 @@ public:
 
 	// Firmware update operations
 	bool CheckFirmwareUpdatePrerequisites(const StringRef& reply, const StringRef& filenameRef) noexcept;
+#if HAS_MASS_STORAGE
 	void UpdateFirmware(const char *iapFilename, const char *iapParam) noexcept;
+#endif
 	void PrepareToLoadIap() noexcept;
 	[[noreturn]] void StartIap(const char *filename) noexcept;
 
