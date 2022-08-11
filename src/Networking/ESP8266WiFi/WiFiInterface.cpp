@@ -93,8 +93,8 @@ constexpr SSPChannel ESP_SPI = SSP0;
 # include "matrix/matrix.h"
 #endif
 
-const uint32_t WiFiResponseTimeoutMillis = 200;					// SPI timeout when when the ESP does not have to write to flash memory
-const uint32_t WiFiTransferTimeoutMillis = 60;					// Christian measured this at 29 to 31ms when the ESP has to write to flash memory
+const uint32_t WiFiSlowResponseTimeoutMillis = 300;				// SPI timeout when when the ESP has to write to flash memory. Christian measured this at 29 to 31ms when using NVRAM. Renz measured up to 178ms when using SPIFFS.
+const uint32_t WiFiFastResponseTimeoutMillis = 20;				// SPI timeout when when the ESP does not have to write to flash memory.
 const uint32_t WiFiWaitReadyMillis = 100;
 const uint32_t WiFiStartupMillis = 300;
 const uint32_t WiFiStableMillis = 100;
@@ -1942,9 +1942,12 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	digitalWrite(SamTfrReadyPin, true);
 
 	// Wait until the DMA transfer is complete, with timeout
+	const uint32_t timeout = (cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkDeleteSsid || cmd == NetworkCommand::networkConfigureAccessPoint || cmd == NetworkCommand::networkFactoryReset)
+								? WiFiSlowResponseTimeoutMillis
+									: WiFiFastResponseTimeoutMillis;
 	do
 	{
-		if (!TaskBase::Take(WiFiResponseTimeoutMillis))
+		if (!TaskBase::Take(timeout))
 		{
 			if (reprap.Debug(moduleNetwork))
 			{
