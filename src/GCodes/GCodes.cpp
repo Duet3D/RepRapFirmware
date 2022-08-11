@@ -1631,7 +1631,7 @@ void GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& m
 	else
 	{
 		ms.applyM220M221 = false;
-		ms.feedRate = ConvertSpeedFromMmPerMin(DefaultG0FeedRate);	// use maximum feed rate, the M203 parameters will limit it
+		ms.feedRate = ConvertSpeedFromMmPerMin(MaximumG0FeedRate);			// use maximum feed rate, the M203 parameters will limit it
 		ms.usingStandardFeedrate = false;
 	}
 
@@ -1641,7 +1641,7 @@ void GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& m
 		ms.coords[drive] = 0.0;
 	}
 	ms.hasPositiveExtrusion = false;
-	ms.moveStartVirtualExtruderPosition = ms.latestVirtualExtruderPosition;			// save this before we update it
+	ms.moveStartVirtualExtruderPosition = ms.latestVirtualExtruderPosition;	// save this before we update it
 	AxesBitmap logicalDrivesMoving;
 	ExtrudersBitmap extrudersMoving;
 
