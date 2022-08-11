@@ -1621,12 +1621,23 @@ void GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& m
 	if (ms.isCoordinated || machineType == MachineType::fff)
 	{
 		ms.applyM220M221 = (ms.moveType == 0 && isPrintingMove && !gb.IsDoingFileMacro());
+		const bool inverseTimeMode = gb.LatestMachineState().inverseTimeMode;
+		ms.inverseTimeMode = inverseTimeMode;
 		if (gb.Seen(feedrateLetter))
 		{
-			gb.LatestMachineState().feedRate = gb.GetSpeed();				// update requested speed, not allowing for speed factor
+			gb.LatestMachineState().feedRate = (inverseTimeMode)
+												? gb.GetFValue() * (StepClockRate * 60)		// set required move time in step clocks
+													: gb.GetSpeed();						// update requested speed in mm per step clock, not allowing for speed factor
+		}
+		else if (inverseTimeMode)
+		{
+			gb.ThrowGCodeException("Feed rate must be specified with every move when using inverse time mode");
 		}
 		ms.feedRate = (ms.applyM220M221)
-								? ms.speedFactor * gb.LatestMachineState().feedRate
+								? ((inverseTimeMode)
+									? gb.LatestMachineState().feedRate/ms.speedFactor
+									: gb.LatestMachineState().feedRate * ms.speedFactor
+								  )
 								: gb.LatestMachineState().feedRate;
 		ms.usingStandardFeedrate = true;
 	}
