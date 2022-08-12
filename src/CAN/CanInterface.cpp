@@ -393,7 +393,7 @@ void CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 		memcpy(msg->uniqueId, reprap.GetPlatform().GetUniqueId().GetRaw(), sizeof(msg->uniqueId));
 		// Note, board type name, firmware version, firmware date and firmware time are limited to 43 characters in the new
 		// We use vertical-bar to separate the three fields: board type, firmware version, date/time
-		SafeSnprintf(msg->boardTypeAndFirmwareVersion, ARRAY_SIZE(msg->boardTypeAndFirmwareVersion), "%s|%s|%s%.6s", BOARD_SHORT_NAME, VERSION, IsoDate, TIME_SUFFIX);
+		SafeSnprintf(msg->boardTypeAndFirmwareVersion, ARRAY_SIZE(msg->boardTypeAndFirmwareVersion), "%s|%s|%s%.6s", BOARD_SHORT_NAME, VERSION, DATE, TIME_SUFFIX);
 		buf->dataLength = msg->GetActualDataLength();
 		SendMessageNoReplyNoFree(buf);
 	}

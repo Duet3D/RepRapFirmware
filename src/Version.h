@@ -19,18 +19,8 @@
 # define VERSION MAIN_VERSION VERSION_SUFFIX
 #endif
 
-#ifndef DATE
-# include <General/IsoDate.h>
-# define DATE IsoDate
-#endif
-
-#if 0
-// Use this for official releases
-# define TIME_SUFFIX
-#else
-// Use this for internal builds
-# define TIME_SUFFIX		" " __TIME__
-#endif
+extern const char *const DATE;
+extern const char *const TIME_SUFFIX;
 
 #define AUTHORS "reprappro, dc42, chrishamm, t3p3, dnewman, printm3d"
 
