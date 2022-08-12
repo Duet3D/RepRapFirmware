@@ -1564,13 +1564,11 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 #if SUPPORT_ASYNC_MOVES
 		// Get the position of all axes by combining positions from the queues
 		const Move& move = reprap.GetMove();
-		float coords[MaxAxes];
-		move.GetPartialMachinePosition(coords, AxesBitmap::MakeLowestNBits(numTotalAxes), 0);
-		move.GetPartialMachinePosition(coords, moveStates[1].axesAndExtrudersOwned, 1);
-		float coords2[MaxAxes];
-		memcpyf(coords2, coords, MaxAxes);
-		move.InverseAxisAndBedTransform(coords, moveStates[0].currentTool);
-		move.InverseAxisAndBedTransform(coords2, moveStates[1].currentTool);
+		move.GetPartialMachinePosition(moveStates[0].coords, AxesBitmap::MakeLowestNBits(numTotalAxes), 0);
+		move.GetPartialMachinePosition(moveStates[0].coords, moveStates[1].axesAndExtrudersOwned, 1);
+		memcpyf(moveStates[1].coords, moveStates[0].coords, MaxAxes);
+		move.InverseAxisAndBedTransform(moveStates[0].coords, moveStates[0].currentTool);
+		move.InverseAxisAndBedTransform(moveStates[1].coords, moveStates[1].currentTool);
 		UpdateUserPositionFromMachinePosition(gb, moveStates[0]);				//TODO problem when using coordinate rotation!
 		UpdateUserPositionFromMachinePosition(gb, moveStates[1]);
 
@@ -1803,11 +1801,8 @@ bool GCodes::CheckEnoughAxesHomed(AxesBitmap axesToMove) noexcept
 	return (reprap.GetMove().GetKinematics().MustBeHomedAxes(axesToMove, noMovesBeforeHoming) & ~axesVirtuallyHomed).IsNonEmpty();
 }
 
-// Execute a straight move
-// If not ready, return false
-// If we can't execute the move, return true with 'err' set to the error message
-// Else return true with 'err' left alone (it is set to nullptr on entry)
-// We have already acquired the movement lock and waited for the previous move to be taken.
+// Execute a straight move. We have already acquired the movement lock and waited for the previous move to be taken.
+// Return false if we can't execute it yet, throw an exception if we can't execute it at all, and return true if we have queued it.
 bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeException)
 {
 	MovementState& ms = GetMovementState(gb);
