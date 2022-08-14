@@ -39,8 +39,8 @@ private:
 	struct NVM
 	{
 		uint16_t magic;
-		uint8_t thermistorLowCalibration[MaxCalibratedThermistors];		// currently used only by SAME70-based boards
-		uint8_t thermistorHighCalibration[MaxCalibratedThermistors];	// currently used only by SAME70-based boards
+		uint8_t thermistorLowCalibration[MaxCalibratedThermistors];
+		uint8_t thermistorHighCalibration[MaxCalibratedThermistors];
 		uint8_t spare[38];
 		// 56 bytes up to here
 		SoftwareResetData resetData[NumberOfResetDataSlots];			// 3 slots of 152 bytes each
