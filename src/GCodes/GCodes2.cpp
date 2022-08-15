@@ -1406,14 +1406,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							break;
 
 						case MassStorage::InfoResult::ok:
-							reply.printf("SD card in slot %" PRIu32 ": capacity %.2fGb, partition size %.2fGb, free space %.2fGb, speed %.2fMBytes/sec, cluster size %" PRIu32 "%s",
+							reply.printf("SD card in slot %" PRIu32 ": capacity %.2fGB, partition size %.2fGB, free space %.2fGB, speed %.2fMBytes/sec, cluster size %" PRIu32 "%s",
 											slot,
 											(double)((float)returnedInfo.cardCapacity * 1e-9),
 											(double)((float)returnedInfo.partitionSize * 1e-9),
 											(double)((float)returnedInfo.freeSpace * 1e-9),
 											(double)((float)returnedInfo.speed * 1e-6),
 											(returnedInfo.clSize < 1024) ? returnedInfo.clSize : returnedInfo.clSize/1024,
-											(returnedInfo.clSize < 1024) ? " bytes" : "kb"
+											(returnedInfo.clSize < 1024) ? " bytes" : "kB"
 										);
 							break;
 						}
