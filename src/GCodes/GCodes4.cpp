@@ -1424,7 +1424,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				const uint32_t ms = millis() - timingStartMillis;
 				const float fileMbytes = (float)timingBytesWritten/(float)(1024 * 1024);
 				const float mbPerSec = (fileMbytes * 1000.0)/(float)ms;
-				platform.MessageF(gb.GetResponseMessageType(), "SD write speed for %.1fMbyte file was %.2fMbytes/sec\n", (double)fileMbytes, (double)mbPerSec);
+				platform.MessageF(gb.GetResponseMessageType(), "SD write speed for %.1fMByte file was %.2fMBytes/sec\n", (double)fileMbytes, (double)mbPerSec);
 				sdTimingFile->Close();
 
 				sdTimingFile = platform.OpenFile(Platform::GetGCodeDir(), TimingFileName, OpenMode::read);
@@ -1466,7 +1466,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				const float fileMbytes = (float)timingBytesWritten/(float)(1024 * 1024);
 				const float mbPerSec = (fileMbytes * 1000.0)/(float)ms;
 				sdTimingFile->Close();
-				reply.printf("SD read speed for %.1fMbyte file was %.2fMbytes/sec", (double)fileMbytes, (double)mbPerSec);
+				reply.printf("SD read speed for %.1fMByte file was %.2fMBytes/sec", (double)fileMbytes, (double)mbPerSec);
 				platform.Delete(Platform::GetGCodeDir(), TimingFileName);
 				gb.SetState(GCodeState::normal);
 				break;
