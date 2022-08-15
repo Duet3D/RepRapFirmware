@@ -1103,103 +1103,105 @@ void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress 
 }
 
 #if !defined(__LPC17xx__)
-bool WiFiInterface::SendCredential(const StringRef& reply, size_t credIndex, const uint8_t *buffer, size_t bufferSize)
+size_t WiFiInterface::CheckCredential(GCodeBuffer &gb, bool file)
 {
-	const int32_t rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, credIndex,
-									static_cast<uint8_t>(AddEnterpriseSsidFlag::CREDENTIAL), 0,
-									buffer, bufferSize, nullptr, 0);
+	static_assert(MaxCredentialChunkSize <= sizeof(bufferOut->data));
+	StringRef cred(reinterpret_cast<char*>(&(bufferOut->data)), MaxCredentialChunkSize);
+	gb.GetQuotedString(cred);
 
-	if (rslt == ResponseEmpty)
+	size_t sz = 0;
+
+	if (file)
 	{
-		return true;
+		FileStore *const f = platform.OpenSysFile(cred.c_str(), OpenMode::read);
+
+		if (f)
+		{
+			sz = f->Length() + 1; // plus null terminator
+			f->Close();
+
+			if (!sz)
+			{
+				throw GCodeException(-1, -1, "File '%s' empty", cred.c_str());
+			}
+		}
+		else
+		{
+			throw GCodeException(-1, -1, "File '%s' not found", cred.c_str());
+		}
+	}
+	else
+	{
+		sz = cred.strlen();
 	}
 
-	reply.printf("Failed to set SSID credential: %s\n", TranslateWiFiResponse(rslt));
-	return false;
+	return sz;
 }
 
-bool WiFiInterface::SendTextCredential(GCodeBuffer &gb, const StringRef& reply, size_t credIndex)
+int32_t WiFiInterface::SendCredential(size_t credIndex, const uint8_t *buffer, size_t bufferSize)
+{
+	return SendCommand(NetworkCommand::networkAddEnterpriseSsid, credIndex,
+									static_cast<uint8_t>(AddEnterpriseSsidFlag::CREDENTIAL), 0,
+									buffer, bufferSize, nullptr, 0);
+}
+
+int32_t WiFiInterface::SendTextCredential(GCodeBuffer &gb, size_t credIndex)
 {
 	static_assert(MaxCredentialChunkSize <= sizeof(bufferOut->data));
 	StringRef cred(reinterpret_cast<char*>(&(bufferOut->data)), MaxCredentialChunkSize);
 	gb.GetQuotedString(cred);
 
 	// Text credentials are stored as a blob, and does not require the null terminator.
-	return SendCredential(reply, credIndex, reinterpret_cast<const uint8_t*>(cred.c_str()), cred.strlen());
+	return SendCredential(credIndex, reinterpret_cast<const uint8_t*>(cred.c_str()), cred.strlen());
 }
 
-bool WiFiInterface::SendFileCredential(GCodeBuffer &gb, const StringRef& reply, size_t credIndex, size_t maxSize)
+int32_t WiFiInterface::SendFileCredential(GCodeBuffer &gb, size_t credIndex)
 {
 	static_assert(MaxCredentialChunkSize <= sizeof(bufferOut->data));
-
-	const char *err = "Failed to set SSID credential:";
 
 	String<MaxFilenameLength> fileName;
 	gb.GetQuotedString(fileName.GetRef());
 
 	FileStore *const cert = platform.OpenSysFile(fileName.c_str(), OpenMode::read);
 
-	if (cert)
+	// Send the contents of the file with a null terminator appended at the end. The authentication
+	// fails without the null terminator.
+	bool nullAppended = false;
+
+	int32_t rslt = ResponseEmpty;
+
+	for(size_t total = 0, sz = 0; total < cert->Length(); total += sz)
 	{
-		if (cert->Length() <= maxSize)
+		memset(bufferOut->data, 0, sizeof(bufferOut->data));
+		sz = cert->Read(bufferOut->data, MaxCredentialChunkSize);
+
+		if (sz <= MaxCredentialChunkSize - 1)
 		{
-			// Send the contents of the file with a null terminator appended at the end. The authentication
-			// fails without the null terminator.
-			size_t total = 0;
-			bool nullAppended = false;
-
-			bool ok = true;
-
-			while(ok && total <= cert->Length())
-			{
-				memset(bufferOut->data, 0, sizeof(bufferOut->data));
-				size_t sz = cert->Read(bufferOut->data, MaxCredentialChunkSize);
-
-				if (sz <= MaxCredentialChunkSize - 1)
-				{
-					bufferOut->data[sz] = 0;
-					sz += 1;
-					nullAppended = true;
-				}
-
-				if (SendCredential(reply, credIndex, bufferOut->data, sz))
-				{
-					total += sz;
-				}
-				else
-				{
-					ok = false;
-				}
-			}
-
-			// The last chunk is of MaxCredentialChunkSize, send another chunk
-			// with just the null terminator.
-			if (ok && !nullAppended)
-			{
-				uint8_t n = 0;
-
-				if (!SendCredential(reply, credIndex, &n, 1))
-				{
-					ok = false;
-				}
-			}
-
-			cert->Close();
-			// No need to append a text reply here in case of error, since SendCredential() will do so.
-			return ok;
+			bufferOut->data[sz] = 0;
+			sz += 1;
+			nullAppended = true;
 		}
-		else
+
+		if ((rslt = SendCredential(credIndex, bufferOut->data, sz)) != ResponseEmpty)
 		{
-			reply.printf("%s file '%s' exceeds %u bytes size limit", err, fileName.c_str(), maxSize);
-			cert->Close();
+			return rslt;
 		}
 	}
-	else
+
+	// The last chunk is of MaxCredentialChunkSize, send another chunk
+	// with just the null terminator.
+	if (!nullAppended)
 	{
-		reply.printf("%s file '%s' not found", err, fileName.c_str());
+		uint8_t n = 0;
+
+		if ((rslt = SendCredential(credIndex, &n, 1)) != ResponseEmpty)
+		{
+			return rslt;
+		}
 	}
 
-	return false;
+	cert->Close();
+	return rslt;
 }
 #endif
 
@@ -1271,106 +1273,135 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						config.netmask = temp.GetV4LittleEndian();
 					}
 
-					int32_t rslt = ResponseUnknownError;
-
 #if !defined(__LPC17xx__)
 					if (config.eap.protocol != EAPProtocol::NONE)
 					{
-						rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, static_cast<int>(config.eap.protocol),
-										static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), 0, &config, ReducedWirelessConfigurationDataSize, nullptr, 0);
-
-						bool ok = (rslt == ResponseEmpty);
-
-						const GCodeException *ex = nullptr;
-
-						try
+						// Check all credential parameters and get their sizes.
+						if (gb.Seen('E'))
 						{
-							if (ok)
+							config.eap.credSizes.asMemb.caCert = CheckCredential(gb, true);
+						}
+
+						if (gb.Seen('A'))
+						{
+							config.eap.credSizes.asMemb.anonymousId = CheckCredential(gb);
+						}
+
+						if (config.eap.protocol == EAPProtocol::EAP_TLS)
+						{
+							gb.MustSee('U');
 							{
-								if (gb.Seen('E'))
+								config.eap.credSizes.asMemb.tls.userCert = CheckCredential(gb, true);
+							}
+
+							gb.MustSee('P');
+							{
+								config.eap.credSizes.asMemb.tls.privateKey = CheckCredential(gb, true);
+							}
+
+							if (gb.Seen('Q'))
+							{
+								config.eap.credSizes.asMemb.tls.privateKeyPswd = CheckCredential(gb);
+							}
+						}
+						else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 ||
+									config.eap.protocol == EAPProtocol::EAP_TTLS_MSCHAPV2)
+						{
+							gb.MustSee('U');
+							{
+								config.eap.credSizes.asMemb.peapttls.identity = CheckCredential(gb);
+							}
+
+							gb.MustSee('P');
+							{
+								config.eap.credSizes.asMemb.peapttls.password = CheckCredential(gb);
+							}
+						}
+
+						int32_t rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, static_cast<int>(config.eap.protocol),
+										static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), 0, &config, sizeof(config), nullptr, 0);
+
+						if (rslt == ResponseEmpty)
+						{
+							if (config.eap.credSizes.asMemb.caCert)
+							{
+								gb.MustSee('E');
 								{
-									ok = SendFileCredential(gb, reply, CredentialIndex(caCert), MaxCertificateSize);
+									rslt = SendFileCredential(gb, CredentialIndex(caCert));
+								}
+							}
+
+							if (rslt == ResponseEmpty)
+							{
+								if (config.eap.credSizes.asMemb.anonymousId)
+								{
+									gb.MustSee('A');
+									{
+										rslt = SendTextCredential(gb, CredentialIndex(anonymousId));
+									}
 								}
 
-								if (ok)
+								if (rslt == ResponseEmpty)
 								{
-									if (gb.Seen('A'))
+									if (config.eap.protocol == EAPProtocol::EAP_TLS)
 									{
-										ok = SendTextCredential(gb, reply, CredentialIndex(anonymousId));
+										gb.MustSee('U');
+										{
+											rslt = SendFileCredential(gb, CredentialIndex(tls.userCert));
+										}
+
+										if (rslt == ResponseEmpty)
+										{
+											gb.MustSee('P');
+											{
+												rslt = SendFileCredential(gb, CredentialIndex(tls.privateKey));
+											}
+
+											if (rslt == ResponseEmpty)
+											{
+												if(config.eap.credSizes.asMemb.tls.privateKeyPswd)
+												{
+													gb.MustSee('Q');
+													rslt = SendTextCredential(gb, CredentialIndex(tls.privateKeyPswd));
+												}
+											}
+										}
 									}
-
-									if (ok)
+									else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 ||
+												config.eap.protocol == EAPProtocol::EAP_TTLS_MSCHAPV2)
 									{
-										if (config.eap.protocol == EAPProtocol::EAP_TLS)
+										gb.MustSee('U');
 										{
-											gb.MustSee('U');
-											{
-												ok = SendFileCredential(gb, reply, CredentialIndex(tls.userCert), MaxCertificateSize);
-											}
+											rslt = SendTextCredential(gb, CredentialIndex(peapttls.identity));
+										}
 
-											if (ok)
+										if (rslt == ResponseEmpty)
+										{
+											gb.MustSee('P');
 											{
-												gb.MustSee('P');
-												{
-													ok = SendFileCredential(gb, reply, CredentialIndex(tls.privateKey), MaxPrivateKeySize);
-												}
-
-												if (ok)
-												{
-													if (gb.Seen('Q'))
-													{
-														ok = SendTextCredential(gb, reply, CredentialIndex(tls.privateKeyPswd));
-													}
-												}
+												rslt = SendTextCredential(gb, CredentialIndex(peapttls.password));
 											}
 										}
-										else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 ||
-													config.eap.protocol == EAPProtocol::EAP_TTLS_MSCHAPV2)
-										{
-											gb.MustSee('U');
-											{
-												ok = SendTextCredential(gb, reply, CredentialIndex(peapttls.identity));
-											}
-
-											if (ok)
-											{
-												gb.MustSee('P');
-												{
-													ok = SendTextCredential(gb, reply, CredentialIndex(peapttls.password));
-												}
-											}
-										}
-										else { }
 									}
 								}
 							}
 						}
-						catch (const GCodeException& e)
-						{
-							ex = &e;
-						}
 
 						// If there is a previous error, report that instead. On error, cancel ongoing operation.
-						if (ok && !ex)
+						if (rslt == ResponseEmpty)
 						{
 							rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
 										static_cast<uint8_t>(AddEnterpriseSsidFlag::COMMIT), 0, nullptr, 0, nullptr, 0);
-						}
-						else
-						{
-							SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
-									static_cast<uint8_t>(AddEnterpriseSsidFlag::CANCEL), 0, nullptr, 0, nullptr, 0);
+
+							if (rslt == ResponseEmpty)
+							{
+								return GCodeResult::ok;
+							}
 						}
 
-						if (ex)
-						{
-							throw *ex;
-						}
-
-						if (rslt == ResponseEmpty)
-						{
-							return GCodeResult::ok;
-						}
+						reply.printf("Failed to add enterprise SSID to remembered list: %s", TranslateWiFiResponse(rslt));
+						SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
+								static_cast<uint8_t>(AddEnterpriseSsidFlag::CANCEL), 0, nullptr, 0, nullptr, 0);
 					}
 					else
 #endif
@@ -1388,15 +1419,15 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 							SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
 						}
 
-						rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
+						int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
 
 						if (rslt == ResponseEmpty)
 						{
 							return GCodeResult::ok;
 						}
-					}
 
-					reply.printf("Failed to add SSID to remembered list: %s", TranslateWiFiResponse(rslt));
+						reply.printf("Failed to add SSID to remembered list: %s", TranslateWiFiResponse(rslt));
+					}
 				}
 				else
 				{

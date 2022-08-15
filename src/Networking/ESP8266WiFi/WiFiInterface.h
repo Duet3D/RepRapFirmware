@@ -116,9 +116,10 @@ private:
 	void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept;
 
 #if !defined(__LPC17xx__)
-	bool SendCredential(const StringRef& reply, size_t credIndex, const uint8_t *buffer, size_t bufferSize);
-	bool SendFileCredential(GCodeBuffer &gb,  const StringRef& reply, size_t credIndex, size_t maxSize);
-	bool SendTextCredential(GCodeBuffer &gb, const StringRef& reply, size_t credIndex);
+	int32_t SendCredential(size_t credIndex, const uint8_t *buffer, size_t bufferSize);
+	int32_t SendFileCredential(GCodeBuffer &gb, size_t credIndex);
+	int32_t SendTextCredential(GCodeBuffer &gb, size_t credIndex);
+	size_t CheckCredential(GCodeBuffer &gb, bool file = false) THROWS(GCodeException);
 #endif
 
 	static const char* TranslateWiFiResponse(int32_t response) noexcept;
