@@ -32,6 +32,7 @@ Licence: GPL
 #include "GCodeChannel.h"
 #include "GCodeInput.h"
 #include "GCodeMachineState.h"
+#include <GCodes/CollisionAvoider.h>
 #include <GCodes/TriggerItem.h>
 #include <Tools/Filament.h>
 #include <FilamentMonitors/FilamentMonitor.h>
@@ -540,6 +541,7 @@ private:
 
 #if SUPPORT_ASYNC_MOVES
 	GCodeResult SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M596
+	GCodeResult CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M597
 	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes) THROWS(GCodeException);	// allocate axes to a movement state
 	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;	// synchronise motion systems
 	void UpdateUserCoordinatesAndReleaseOwnedAxes(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;
@@ -707,6 +709,7 @@ private:
 
 #if SUPPORT_ASYNC_MOVES
 	AxesBitmap axesAndExtrudersMoved;			// axes and extruders that have moved since the last sync
+	CollisionAvoider collisionChecker;
 #endif
 
 #if HAS_MASS_STORAGE

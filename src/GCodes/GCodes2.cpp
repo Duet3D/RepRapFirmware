@@ -3952,6 +3952,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 596:	// Select movement queue
 				result = SelectMovementQueue(gb, reply);
 				break;
+
+			case 597:	// Collision avoidance
+				result = CollisionAvoidance(gb, reply);
+				break;
 #endif
 			// For cases 600 and 601, see 226
 

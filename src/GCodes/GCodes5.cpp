@@ -74,6 +74,59 @@ GCodeResult GCodes::SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply)
 	return GCodeResult::ok;
 }
 
+// Handle M597
+GCodeResult GCodes::CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	// Find the two specified axes
+	int lowerAxisLetter = -1, upperAxisLetter = -1;
+	for (unsigned int i = 0; i < numVisibleAxes; ++i)
+	{
+		if (gb.Seen(axisLetters[i]))
+		{
+			if (lowerAxisLetter < 0)
+			{
+				lowerAxisLetter = i;
+			}
+			else
+			{
+				upperAxisLetter = i;
+				break;
+			}
+		}
+	}
+
+	// Get the minimum separation
+	bool seen = gb.Seen('S');
+	if (seen)
+	{
+		if (upperAxisLetter < 0)
+		{
+			reply.copy("missing axis letter");
+			return GCodeResult::error;
+		}
+		if (!LockMovementAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+		collisionChecker.Set(lowerAxisLetter, upperAxisLetter, gb.GetFValue());
+	}
+	else if (upperAxisLetter >= 0)
+	{
+		// Axes provided but no spacing
+		gb.MustSee('S');					// this will throw an exception
+	}
+	else if (collisionChecker.IsValid())
+	{
+		reply.printf("For collision avoidance, axis %c position must be at least %.1fmm higher than axis %c",
+						axisLetters[collisionChecker.GetUpperAxis()], (double)collisionChecker.GetMinSeparation(), axisLetters[collisionChecker.GetLowerAxis()]);
+	}
+	else
+	{
+		reply.copy("Collision avoidance is not active");
+	}
+	return GCodeResult::ok;
+}
+
 #endif
 
 GCodeResult GCodes::HandleM486(GCodeBuffer &gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException)
