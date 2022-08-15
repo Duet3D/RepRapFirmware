@@ -238,7 +238,9 @@ void GCodes::Reset() noexcept
 
 	for (size_t i = 0; i < MaxExtruders; ++i)
 	{
-		extrusionFactors[i] = volumetricExtrusionFactors[i] = 1.0;
+		extrusionFactors[i] = 1.0;
+		filamentDiameters[i] = DefaultFilamentDiameter;
+		volumetricExtrusionFactors[i] = 4.0/(fsquare(DefaultFilamentDiameter) * Pi);
 	}
 
 	for (size_t i = 0; i < MaxAxes; ++i)

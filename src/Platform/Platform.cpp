@@ -302,6 +302,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),																		ObjectModelEntryFlags::none },
 	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 3),												ObjectModelEntryFlags::none },
 	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(GetFilamentName(context.GetLastIndex())),																		ObjectModelEntryFlags::none },
+	{ "filamentDiameter",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetFilamentDiameter(context.GetLastIndex()), 3),											ObjectModelEntryFlags::none },
 	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
 	{ "microstepping",		OBJECT_MODEL_FUNC(self, 8),																												ObjectModelEntryFlags::none },
 	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 5),																												ObjectModelEntryFlags::none },
@@ -361,7 +362,7 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	14,																		// section 4: move.extruders[]
 #else
 	20,																		// section 3: move.axes[]
-	15,																		// section 4: move.extruders[]
+	16,																		// section 4: move.extruders[]
 #endif
 	3,																		// section 5: move.extruders[].nonlinear
 #if HAS_12V_MONITOR

@@ -2279,36 +2279,43 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 200: // Set filament diameter for volumetric extrusion and enable/disable volumetric extrusion
-				if (gb.Seen('D'))
 				{
-					float diameters[MaxExtruders];
-					size_t len = MaxExtruders;
-					gb.GetFloatArray(diameters, len, true);
-					for (size_t i = 0; i < len; ++i)
+					bool seen = gb.Seen('S');
+					bool enable = !seen || gb.GetIValue() > 0;
+					if (gb.Seen('D'))
 					{
-						const float d = diameters[i];
-						volumetricExtrusionFactors[i] = (d <= 0.0) ? 1.0 : 4.0/(fsquare(d) * Pi);
-					}
-					gb.LatestMachineState().volumetricExtrusion = (diameters[0] > 0.0);
-					reprap.InputsUpdated();
-				}
-				else if (!gb.LatestMachineState().volumetricExtrusion)
-				{
-					reply.copy("Volumetric extrusion is disabled for this input source");
-				}
-				else
-				{
-					reply.copy("Filament diameters for volumetric extrusion:");
-					for (size_t i = 0; i < numExtruders; ++i)
-					{
-						const float vef = volumetricExtrusionFactors[i];
-						if (vef == 1.0)
+						seen = true;
+						float diameters[MaxExtruders];
+						size_t len = MaxExtruders;
+						gb.GetFloatArray(diameters, len, true);
+						for (size_t i = 0; i < len; ++i)
 						{
-							reply.cat(" n/a");
+							const float d = diameters[i];
+							if (d <= 0.0)
+							{
+								volumetricExtrusionFactors[i] = 1.0;
+							}
+							else
+							{
+								filamentDiameters[i] = d;
+								volumetricExtrusionFactors[i] = (enable) ? 4.0/(fsquare(d) * Pi) : 1.0;
+							}
 						}
-						else
+						reprap.MoveUpdated();
+					}
+
+					if (seen)
+					{
+						gb.LatestMachineState().volumetricExtrusion = enable;
+						reprap.InputsUpdated();
+					}
+					else
+					{
+						reply.printf("Volumetric extrusion is %sabled for this input, filament diameters:",
+										(gb.LatestMachineState().volumetricExtrusion) ? "en" : "dis");
+						for (size_t i = 0; i < numExtruders; ++i)
 						{
-							reply.catf(" %.03f", (double)(2.0/fastSqrtf(vef * Pi)));
+							reply.catf(" %.03f", (double)filamentDiameters[i]);
 						}
 					}
 				}

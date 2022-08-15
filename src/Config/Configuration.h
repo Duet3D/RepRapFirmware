@@ -59,6 +59,8 @@ constexpr float DefaultTravelAcceleration = 20000.0;	// higher than the likely m
 constexpr float DefaultAxisMinimum = 0.0;
 constexpr float DefaultAxisMaximum = 200.0;
 
+constexpr float DefaultFilamentDiameter = 1.75;			// the default filament diameter assumed
+
 constexpr unsigned int MaxTools = 50;					// this limit is to stop the serialised object model getting too large
 constexpr unsigned int MinVisibleAxes = 2;				// the minimum number of axes that we allow to be visible
 

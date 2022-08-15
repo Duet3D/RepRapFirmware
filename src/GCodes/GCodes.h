@@ -129,7 +129,8 @@ public:
 
 	float GetPrimarySpeedFactor() const noexcept { return moveStates[0].speedFactor; }	// Return the current speed factor as a fraction
 	float GetExtrusionFactor(size_t extruder) noexcept;							// Return the current extrusion factor for the specified extruder
-
+	float GetFilamentDiameter(size_t extruder) const noexcept
+		pre(extruder < MaxExtruders) { return filamentDiameters[extruder]; }
 	float GetRawExtruderTotalByDrive(size_t extruder) const noexcept;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const noexcept { return rawExtruderTotal; }	// Get the total extrusion since start of print, all drives
 	float GetTotalBabyStepOffset(size_t axis) const noexcept
@@ -642,6 +643,7 @@ private:
 	AxesBitmap axesVirtuallyHomed;				// same as axesHomed except all bits are set when simulating
 
 	float extrusionFactors[MaxExtruders];		// extrusion factors (normally 1.0)
+	float filamentDiameters[MaxExtruders];		// diameter of the filament in each extruder
 	float volumetricExtrusionFactors[MaxExtruders]; // Volumetric extrusion factors
 	float currentBabyStepOffsets[MaxAxes];		// The accumulated axis offsets due to baby stepping requests
 
