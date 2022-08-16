@@ -1963,10 +1963,10 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 
 #if !HAS_MASS_STORAGE && !HAS_EMBEDDED_FILES && defined(DUET_NG)
 
-// Function called by RepRap.cpp to enable PanelDue by default in the Duet 2 SBC build
+// Function called by RepRap.cpp to enable PanelDue by default in the Duet 2 SBC build so that we can test it in the ATE
 void GCodes::SetAux0CommsProperties(uint32_t mode) const noexcept
 {
-	auxGCode->SetCommsProperties(mode);
+	AuxGCode()->SetCommsProperties(mode);
 }
 
 #endif

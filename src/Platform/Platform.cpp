@@ -359,7 +359,7 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 #endif
 #ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current
 	19,																		// section 3: move.axes[]
-	14,																		// section 4: move.extruders[]
+	15,																		// section 4: move.extruders[]
 #else
 	20,																		// section 3: move.axes[]
 	16,																		// section 4: move.extruders[]
