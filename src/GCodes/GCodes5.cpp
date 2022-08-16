@@ -108,7 +108,7 @@ GCodeResult GCodes::CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) 
 		{
 			return GCodeResult::notFinished;
 		}
-		collisionChecker.Set(lowerAxisLetter, upperAxisLetter, gb.GetFValue());
+		collisionChecker.Set(lowerAxisLetter, upperAxisLetter, gb.GetFValue(), GetMovementState(gb).coords);
 	}
 	else if (upperAxisLetter >= 0)
 	{

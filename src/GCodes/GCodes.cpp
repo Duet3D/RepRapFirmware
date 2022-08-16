@@ -1578,6 +1578,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 		axesAndExtrudersMoved.Clear();
 		moveStates[0].axesAndExtrudersOwned.Clear();
 		moveStates[1].axesAndExtrudersOwned.Clear();
+		collisionChecker.ResetPositions(moveStates[0].coords);
 #else
 		UpdateCurrentUserPosition(gb);
 #endif
@@ -1976,13 +1977,10 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		// Update the list of axes mentioned to allow for cross coupling between X and Y
 		if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
 		{
-			if (axesMentioned.IsBitSet(X_AXIS))
+			const AxesBitmap xAndY = AxesBitmap::MakeFromBits(X_AXIS, Y_AXIS);
+			if (axesMentioned.Intersects(xAndY))
 			{
-				axesMentioned.SetBit(Y_AXIS);
-			}
-			if (axesMentioned.IsBitSet(Y_AXIS))
-			{
-				axesMentioned.SetBit(X_AXIS);
+				axesMentioned |= xAndY;													// if either X or Y is moving and we are rotating coordinates, both are moving
 			}
 		}
 #endif
@@ -2078,7 +2076,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	}
 	else if (axesMentioned.IsEmpty())
 	{
-		ms.totalSegments = 1;
+		ms.totalSegments = 1;													// it's an extruder only move
 	}
 	else
 	{
@@ -2096,6 +2094,13 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			ToolOffsetTransform(ms, axesMentioned);
 		}
 																				// apply tool offset, baby stepping, Z hop and axis scaling
+#if SUPPORT_ASYNC_MOVES
+		if (!collisionChecker.UpdatePositions(ms.coords))
+		{
+			gb.ThrowGCodeException("potential collision detected");
+		}
+#endif
+
 		AxesBitmap effectiveAxesHomed = axesVirtuallyHomed;
 		if (doingManualBedProbe)
 		{
@@ -2417,14 +2422,20 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	ms.arcCurrentAngle = atan2(-jParam, -iParam);
 
 	// Transform to machine coordinates and check that it is within limits
+
 #if SUPPORT_COORDINATE_ROTATION
 	// Apply coordinate rotation to the final and the centre coordinates
 	if (g68Angle != 0.0 && gb.DoingCoordinateRotation())
 	{
+		const AxesBitmap xAndY = AxesBitmap::MakeFromBits(X_AXIS, Y_AXIS);
+		if (axesMentioned.Intersects(xAndY))
+		{
+			axesMentioned |= xAndY;												// if either X or Y is moving and we are rotating coordinates, both are moving
+		}
 		float coords[MaxAxes];
 		memcpyf(coords, ms.currentUserPosition, MaxAxes);
 		RotateCoordinates(g68Angle, coords);
-		ToolOffsetTransform(ms, coords, ms.coords, axesMentioned);								// set the final position
+		ToolOffsetTransform(ms, coords, ms.coords, axesMentioned);				// set the final position
 		RotateCoordinates(g68Angle, userArcCentre);
 		finalTheta -= g68Angle * DegreesToRadians;
 		ms.arcCurrentAngle -= g68Angle * DegreesToRadians;
@@ -2432,8 +2443,13 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	else
 #endif
 	{
-		ToolOffsetTransform(ms, axesMentioned);		// set the final position
+		ToolOffsetTransform(ms, axesMentioned);									// set the final position
 	}
+
+#if SUPPORT_ASYNC_MOVES
+	// Check the final position for collisions. We check the intermediate positions as we go.
+	collisionChecker.UpdatePositions(ms.coords);
+#endif
 
 	if (reprap.GetMove().GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok)
 	{
@@ -2731,7 +2747,11 @@ bool GCodes::ReadMove(unsigned int queueNumber, RawMove& m) noexcept
 			}
 
 			// Limit the end position at each segment. This is needed for arc moves on any printer, and for [segmented] straight moves on SCARA printers.
-			if (reprap.GetMove().GetKinematics().LimitPosition(m.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok)
+			if (   reprap.GetMove().GetKinematics().LimitPosition(m.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok
+#if SUPPORT_ASYNC_MOVES
+				|| !collisionChecker.UpdatePositions(m.coords)
+#endif
+			   )
 			{
 				ms.segMoveState = SegmentedMoveState::aborted;
 				ms.doingArcMove = false;
