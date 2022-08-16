@@ -21,21 +21,23 @@ struct RawMove
 	float proportionDone;											// what proportion of the entire move has been done when this segment is complete
 	float cosXyAngle;												// the cosine of the change in XY angle between the previous move and this move
 	const Tool *tool;												// which tool (if any) is being used
-#if SUPPORT_LASER || SUPPORT_IOBITS
-	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
-#else
-	uint16_t padding;
-#endif
-	uint8_t moveType;												// the S parameter from the G0 or G1 command, 0 for a normal move
-
-	uint8_t applyM220M221 : 1,										// true if this move is affected by M220 and M221 (this could be moved to ExtendedRawMove)
+	uint16_t moveType : 3,											// the H parameter from the G0 or G1 command, 0 for a normal move
+			applyM220M221 : 1,										// true if this move is affected by M220 and M221 (this could be moved to ExtendedRawMove)
 			usePressureAdvance : 1,									// true if we want to us extruder pressure advance, if there is any extrusion
 			canPauseAfter : 1,										// true if we can pause just after this move and successfully restart
 			hasPositiveExtrusion : 1,								// true if the move includes extrusion; only valid if the move was set up by SetupMove
 			isCoordinated : 1,										// true if this is a coordinated move
 			usingStandardFeedrate : 1,								// true if this move uses the standard feed rate
 			checkEndstops : 1,										// true if any endstops or the Z probe can terminate the move
-			reduceAcceleration : 1;									// true if Z probing so we should limit the Z acceleration
+			reduceAcceleration : 1,									// true if Z probing so we should limit the Z acceleration
+			linearAxesMentioned : 1,								// true if any linear axes were mentioned in the movement command
+			rotationalAxesMentioned: 1;								// true if any rotational axes were mentioned in the movement command
+
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
+#else
+	uint16_t padding;
+#endif
 	// If adding any more fields, keep the total size a multiple of 4 bytes so that we can use our optimised assignment operator
 
 	void SetDefaults(size_t firstDriveToZero) noexcept;				// set up default values

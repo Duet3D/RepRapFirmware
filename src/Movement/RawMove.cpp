@@ -18,6 +18,8 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 	checkEndstops = false;
 	reduceAcceleration = false;
 	hasPositiveExtrusion = false;
+	linearAxesMentioned = false;
+	rotationalAxesMentioned = false;
 	filePos = noFilePosition;
 	tool = nullptr;
 	cosXyAngle = 1.0;

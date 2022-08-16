@@ -345,17 +345,17 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				directionVector[drive] = positionDelta;
 				if (positionDelta != 0.0)
 				{
-					if (reprap.GetPlatform().IsAxisRotational(drive))
+					if (reprap.GetPlatform().IsAxisRotational(drive) && nextMove.rotationalAxesMentioned)
 					{
 						rotationalAxesMoving = true;
 					}
-					else
+					else if (nextMove.linearAxesMentioned)
 					{
 						linearAxesMoving = true;
-					}
-					if (Tool::GetXAxes(nextMove.tool).IsBitSet(drive) || Tool::GetYAxes(nextMove.tool).IsBitSet(drive))
-					{
-						flags.xyMoving = true;				// this move has XY movement in user space, before axis were mapped
+						if (Tool::GetXAxes(nextMove.tool).IsBitSet(drive) || Tool::GetYAxes(nextMove.tool).IsBitSet(drive))
+						{
+							flags.xyMoving = true;				// this move has XY movement in user space, before axis were mapped
+						}
 					}
 				}
 			}

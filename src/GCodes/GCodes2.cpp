@@ -2511,7 +2511,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							SetMoveBufferDefaults();
 							moveState.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
 							moveState.tool = reprap.GetCurrentTool();
-							NewMoveAvailable(1);
+							moveState.linearAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetLinearAxes());
+							moveState.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetRotationalAxes());
+							NewSingleSegmentMoveAvailable();
 						}
 					}
 					else
@@ -3935,22 +3937,26 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 673: // Align plane on rotary axis
-				if (numTotalAxes < U_AXIS)
+				if (numTotalAxes <= U_AXIS)
 				{
 					reply.copy("Insufficient axes configured");
 					result = GCodeResult::error;
 				}
-				else if (LockMovementAndWaitForStandstill(gb))
+				else if (!LockMovementAndWaitForStandstill(gb))
+				{
+					result = GCodeResult::notFinished;
+				}
+				else if (!AllAxesAreHomed())
+				{
+					reply.copy("Home the axes first");
+					result = GCodeResult::error;
+				}
+				else
 				{
 					Move& move = reprap.GetMove();
 					if (move.GetNumProbedProbePoints() < 2)
 					{
 						reply.copy("Insufficient probe points");
-						result = GCodeResult::error;
-					}
-					else if (!AllAxesAreHomed())
-					{
-						reply.copy("Home the axes first");
 						result = GCodeResult::error;
 					}
 					else
@@ -3977,11 +3983,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						SetMoveBufferDefaults();
 						if (axisToUse != 0)
 						{
+							if (!reprap.GetPlatform().IsAxisRotational(axisToUse))
+							{
+								reply.printf("%c axis is not rotary", axisLetters[axisToUse]);
+								result = GCodeResult::error;
+								break;
+							}
+
 							// An axis letter is given, so try to level the given axis
 							const float correctionAngle = atanf((z2 - z1) / (a2 - a1)) * 180.0 / M_PI;
 							const float correctionFactor = gb.Seen('S') ? gb.GetFValue() : 1.0;
 							moveState.coords[axisToUse] += correctionAngle * correctionFactor;
-
+							moveState.rotationalAxesMentioned = true;
 							reply.printf("%c axis is off by %.2f deg", axisLetters[axisToUse], (double)correctionAngle);
 							HandleReply(gb, GCodeResult::notFinished, reply.c_str());
 						}
@@ -4000,6 +4013,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 									((z4 - z3) * (a2 - a1) - (z2 - z1) * (a4 - a3));
 							moveState.coords[(x1 == x2) ? Y_AXIS : X_AXIS] += aS;
 							moveState.coords[Z_AXIS] += zS;
+							moveState.linearAxesMentioned = true;
 
 							reply.printf("%c is offset by %.2fmm, Z is offset by %.2fmm", (x2 == x1) ? 'Y' : 'X', (double)aS, (double)zS);
 							HandleReply(gb, GCodeResult::notFinished, reply.c_str());
@@ -4019,14 +4033,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						moveState.feedRate = gb.LatestMachineState().feedRate;
 						moveState.usingStandardFeedrate = true;
 						moveState.tool = reprap.GetCurrentTool();
-						NewMoveAvailable(1);
+						NewSingleSegmentMoveAvailable();
 
 						gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
 					}
-				}
-				else
-				{
-					result = GCodeResult::notFinished;
 				}
 				break;
 

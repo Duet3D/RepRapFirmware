@@ -1909,13 +1909,13 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 		else
 #endif
 		{
-			ToolOffsetTransform(moveState.currentUserPosition, moveState.coords, axesMentioned);
+			ToolOffsetTransform(moveState.currentUserPosition, moveState.coords, axesMentioned);	// apply tool offset, baby stepping, Z hop and axis scaling
 		}
-																				// apply tool offset, baby stepping, Z hop and axis scaling
+
 		AxesBitmap effectiveAxesHomed = axesVirtuallyHomed;
 		if (doingManualBedProbe)
 		{
-			effectiveAxesHomed.ClearBit(Z_AXIS);								// if doing a manual Z probe, don't limit the Z movement
+			effectiveAxesHomed.ClearBit(Z_AXIS);							// if doing a manual Z probe, don't limit the Z movement
 		}
 
 		const LimitPositionResult lp = reprap.GetMove().GetKinematics().LimitPosition(moveState.coords, moveState.initialCoords, numVisibleAxes, effectiveAxesHomed, moveState.isCoordinated, limitAxes);
@@ -2014,6 +2014,8 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 	}
 
 	moveState.doingArcMove = false;
+	moveState.linearAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetLinearAxes());
+	moveState.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetRotationalAxes());
 	FinaliseMove(gb);
 	UnlockAll(gb);			// allow pause
 	err = nullptr;
@@ -2370,6 +2372,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 	moveState.arcAxis1 = axis1;
 	moveState.doingArcMove = true;
 	moveState.xyPlane = (selectedPlane == 0);
+	moveState.linearAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetLinearAxes());
+	moveState.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetRotationalAxes());
 	FinaliseMove(gb);
 	UnlockAll(gb);			// allow pause
 //	debugPrintf("Radius %.2f, initial angle %.1f, increment %.1f, segments %u\n",
@@ -2441,7 +2445,8 @@ bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 	ToolOffsetTransform(buildObjects.GetInitialPosition().moveCoords, moveState.coords);
 	moveState.feedRate = buildObjects.GetInitialPosition().feedRate;
 	moveState.tool = reprap.GetCurrentTool();
-	NewMoveAvailable(1);
+	moveState.linearAxesMentioned = moveState.rotationalAxesMentioned = true;		// assume that both linear and rotational axes might be moving
+	NewSingleSegmentMoveAvailable();
 	return true;
 }
 
@@ -2573,14 +2578,14 @@ void GCodes::ClearMove() noexcept
 	moveFractionToSkip = 0.0;
 }
 
-// Flag that a new move is available for consumption by the Move subsystem
+// Flag that a new single-segment move is available for consumption by the Move subsystem
 // Code that sets up a new move should ensure that segmentsLeft is zero, then set up all the move parameters,
 // then call this function to update SegmentsLeft safely in a multi-threaded environment
-void GCodes::NewMoveAvailable(unsigned int sl) noexcept
+void GCodes::NewSingleSegmentMoveAvailable() noexcept
 {
-	moveState.totalSegments = sl;
+	moveState.totalSegments = 1;
 	__DMB();									// make sure that all the move details have been written first
-	moveState.segmentsLeft = sl;				// set the number of segments to indicate that a move is available to be taken
+	moveState.segmentsLeft = 1;					// set the number of segments to indicate that a move is available to be taken
 	reprap.GetMove().MoveAvailable();			// notify the Move task that we have a move
 }
 
@@ -3850,7 +3855,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 					}
 					moveState.feedRate = currentTool->GetRetractSpeed() * tool->DriveCount();
 					moveState.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
-					NewMoveAvailable(1);
+					NewSingleSegmentMoveAvailable();
 				}
 				if (currentTool->GetRetractHop() > 0.0)
 				{
@@ -3864,7 +3869,8 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 				moveState.coords[Z_AXIS] -= moveState.currentZHop;
 				moveState.currentZHop = 0.0;
 				moveState.canPauseAfter = false;			// don't pause in the middle of a command
-				NewMoveAvailable(1);
+				moveState.linearAxesMentioned = true;		// assume that both linear and rotational axes might be moving
+				NewSingleSegmentMoveAvailable();
 				gb.SetState(GCodeState::doingFirmwareUnRetraction);
 			}
 			else
@@ -3879,7 +3885,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract)
 					}
 					moveState.feedRate = currentTool->GetUnRetractSpeed() * tool->DriveCount();
 					moveState.canPauseAfter = true;
-					NewMoveAvailable(1);
+					NewSingleSegmentMoveAvailable();
 				}
 			}
 			currentTool->SetRetracted(retract);

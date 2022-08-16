@@ -504,7 +504,7 @@ private:
 	void SaveResumeInfo(bool wasPowerFailure) noexcept;
 #endif
 
-	void NewMoveAvailable(unsigned int sl) noexcept;							// Flag that a new move is available
+	void NewSingleSegmentMoveAvailable() noexcept;								// Flag that a new move is available
 	void NewMoveAvailable() noexcept;											// Flag that a new move is available
 
 	void SetMoveBufferDefaults() noexcept;										// Set up default values in the move buffer

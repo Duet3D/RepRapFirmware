@@ -499,6 +499,7 @@ public:
 
 	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
 	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }
+	inline bool IsAxisLinear(size_t axis) const noexcept { return linearAxes.IsBitSet(axis); }
 	inline bool IsAxisRotational(size_t axis) const noexcept { return rotationalAxes.IsBitSet(axis); }
 	inline bool IsAxisContinuous(size_t axis) const noexcept { return continuousAxes.IsBitSet(axis); }
 #if 0	// shortcut axes not implemented yet
