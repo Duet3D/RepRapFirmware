@@ -1305,7 +1305,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						moveState.reduceAcceleration = true;
 						straightProbeSettings.SetCoordsToTarget(moveState.coords);
 						moveState.feedRate = zp->GetProbingSpeed(0);
-						moveState.linearAxesMentioned = moveState.rotationalAxesmentioned = true;
+						moveState.linearAxesMentioned = moveState.rotationalAxesMentioned = true;
 						NewSingleSegmentMoveAvailable();
 						gb.AdvanceState();
 					}
