@@ -25,7 +25,6 @@ struct RawMove
 	float maxTravelAcceleration;
 
 	const Tool *movementTool;										// which tool (if any) is being used by this move
-	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync
 
 	uint16_t moveType : 3,											// the S parameter from the G0 or G1 command, 0 for a normal move
 			applyM220M221 : 1,										// true if this move is affected by M220 and M221 (this could be moved to ExtendedRawMove)
@@ -78,6 +77,7 @@ constexpr size_t ResumeObjectRestorePointNumber = NumVisibleRestorePoints + 1;
 struct MovementState : public RawMove
 {
 	Tool *currentTool;												// the current tool of this movement system
+	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync
 
 	// The current user position now holds the requested user position after applying workplace coordinate offsets.
 	// So we must subtract the workplace coordinate offsets when we want to display them.
