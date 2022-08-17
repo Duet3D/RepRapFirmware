@@ -154,6 +154,7 @@ public:
 	bool SaveHeightMapToFile(FileStore *f, const char *fname) noexcept;						// Save the height map to a file returning true if an error occurred
 # if SUPPORT_PROBE_POINTS_FILE
 	bool LoadProbePointsFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept;	// Load the probe points map from a file returning true if an error occurred
+	void ClearProbePointsInvalid() noexcept;
 # endif
 #endif
 

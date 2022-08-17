@@ -818,6 +818,11 @@ bool Move::LoadProbePointsFromFile(FileStore *f, const char *fname, const String
 	return heightMap.LoadFromFile(f, fname, r, true);
 }
 
+void Move::ClearProbePointsInvalid() noexcept
+{
+	return heightMap.ClearProbePointsInvalid();
+}
+
 # endif
 
 #endif	// HAS_MASS_STORAGE || HAS_SBC_INTERFACE

@@ -102,13 +102,17 @@ public:
 	bool CanProbePoint(size_t axis0Index, size_t axis1Index) const noexcept;			// Return true if we can probe this point
 	void ExtrapolateMissing() noexcept;													// Extrapolate missing points to ensure consistency
 
+#if SUPPORT_PROBE_POINTS_FILE
+	void ClearProbePointsInvalid() noexcept { gridPointInvalid.ClearAll(); }
+#endif
+
 private:
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	// Increase the version number in the following string whenever we change the format of the height map file significantly.
 	// Adding more fields to the header row can be handled in GridDefinition::ReadParameters() though.
 	static constexpr const char* HeightMapComment = "RepRapFirmware height map file v2";	// The start of the comment we write at the start of the height map file
 # if SUPPORT_PROBE_POINTS_FILE
-	static constexpr const char* PointsFileComment = "RepRapFirmware probe points map file v2";	// The start of the comment we write at the start of the points map file
+	static constexpr const char* PointsFileComment = "RepRapFirmware probe points file v2";	// The start of the comment we write at the start of the points map file
 # endif
 #endif
 

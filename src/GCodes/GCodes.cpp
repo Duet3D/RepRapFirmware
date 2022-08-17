@@ -285,6 +285,9 @@ void GCodes::Reset() noexcept
 #endif
 	doingToolChange = false;
 	doingManualBedProbe = false;
+#if SUPPORT_PROBE_POINTS_FILE
+	probePointsFileLoaded = false;
+#endif
 	deferredPauseCommandPending = nullptr;
 	firmwareUpdateModuleMap.Clear();
 	isFlashing = false;

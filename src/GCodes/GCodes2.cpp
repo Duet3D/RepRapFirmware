@@ -346,6 +346,9 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				case 2:		// clear height map
 					ClearBedMapping();
+#if SUPPORT_PROBE_POINTS_FILE
+					ClearProbePointsInvalid();
+#endif
 					break;
 
 				case 3:		// save height map to names file

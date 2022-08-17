@@ -452,7 +452,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 	GridDefinition newGrid;
 	int gridVersion;
 
-	if (f->ReadLine(buffer, sizeof(buffer)) <= 0)
+	if (f->ReadLine(buffer, sizeof(buffer)) <= 0)								// read the header comment line, which includes the version
 	{
 		r.cat(readFailureText);
 	}
@@ -466,7 +466,7 @@ bool HeightMap::LoadFromFile(FileStore *f, const char *fname, const StringRef& r
 	{
 		r.cat("bad header line or wrong version header");
 	}
-	else if (f->ReadLine(buffer, sizeof(buffer)) <= 0)
+	else if (f->ReadLine(buffer, sizeof(buffer)) <= 0)							// read and discard the column names line
 	{
 		r.cat(readFailureText);
 	}

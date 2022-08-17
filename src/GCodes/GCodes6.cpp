@@ -123,6 +123,157 @@ void GCodes::DoManualBedProbe(GCodeBuffer& gb)
 	DoManualProbe(gb, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", AxesBitmap::MakeFromBits(Z_AXIS));
 }
 
+// Define the probing grid, called when we see an M557 command
+GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
+{
+	if (!LockMovement(gb))							// to ensure that probing is not already in progress
+	{
+		return GCodeResult::notFinished;
+	}
+
+	bool seenR = false, seenP = false, seenS = false;
+	char axesLetters[2] = { 'X', 'Y'};
+	float axis0Values[2];
+	float axis1Values[2];
+	float spacings[2] = { DefaultGridSpacing, DefaultGridSpacing };
+
+	size_t axesSeenCount = 0;
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
+	{
+		if (gb.Seen(axisLetters[axis]))
+		{
+			if (axisLetters[axis] == 'Z')
+			{
+				reply.copy("Z axis is not allowed for mesh leveling");
+				return GCodeResult::error;
+			}
+			else if (axesSeenCount > 2)
+			{
+				reply.copy("Mesh leveling expects exactly two axes");
+				return GCodeResult::error;
+			}
+			bool dummy;
+			gb.TryGetFloatArray(axisLetters[axis], 2, (axesSeenCount == 0) ? axis0Values : axis1Values, dummy, false);
+			axesLetters[axesSeenCount] = axisLetters[axis];
+			++axesSeenCount;
+		}
+	}
+	if (axesSeenCount == 1)
+	{
+		reply.copy("Specify zero or two axes in M557");
+		return GCodeResult::error;
+	}
+	const bool axesSeen = axesSeenCount > 0;
+
+	uint32_t numPoints[2];
+	gb.TryGetUIArray('P', 2, numPoints, seenP, true);
+	if (!seenP)
+	{
+		gb.TryGetFloatArray('S', 2, spacings, seenS, true);
+	}
+
+	float radius = -1.0;
+	gb.TryGetFValue('R', radius, seenR);
+
+	if (!axesSeen && !seenR && !seenS && !seenP)
+	{
+		// Just print the existing grid parameters
+		if (defaultGrid.IsValid())
+		{
+			reply.copy("Grid: ");
+			defaultGrid.PrintParameters(reply);
+		}
+		else
+		{
+			reply.copy("Grid is not defined");
+		}
+		return GCodeResult::ok;
+	}
+
+	if (!axesSeen && !seenR)
+	{
+		// Must have given just the S or P parameter
+		reply.copy("specify at least radius or two axis ranges in M557");
+		return GCodeResult::error;
+	}
+
+	if (axesSeen)
+	{
+		// Seen both axes
+		if (seenP)
+		{
+			// In the following, we multiply the spacing by 0.9999 to ensure that when we divide the axis range by the spacing, we get the correct number of points
+			// Otherwise, for some values we occasionally get one less point
+			if (spacings[0] >= 2 && axis0Values[1] > axis0Values[0])
+			{
+				spacings[0] = (axis0Values[1] - axis0Values[0])/(numPoints[0] - 1) * 0.9999;
+			}
+			if (spacings[1] >= 2 && axis1Values[1] > axis1Values[0])
+			{
+				spacings[1] = (axis1Values[1] - axis1Values[0])/(numPoints[1] - 1) * 0.9999;
+			}
+		}
+	}
+	else
+	{
+		// Seen R
+		if (radius > 0.0)
+		{
+			float effectiveXRadius;
+			if (seenP && numPoints[0] >= 2)
+			{
+				effectiveXRadius = radius - 0.1;
+				if (numPoints[1] % 2 == 0)
+				{
+					effectiveXRadius *= fastSqrtf(1.0 - 1.0/(float)((numPoints[1] - 1) * (numPoints[1] - 1)));
+				}
+				spacings[0] = (2 * effectiveXRadius)/(numPoints[0] - 1);
+			}
+			else
+			{
+				effectiveXRadius = floorf((radius - 0.1)/spacings[0]) * spacings[0];
+			}
+			axis0Values[0] = -effectiveXRadius;
+			axis0Values[1] =  effectiveXRadius + 0.1;
+
+			float effectiveYRadius;
+			if (seenP && numPoints[1] >= 2)
+			{
+				effectiveYRadius = radius - 0.1;
+				if (numPoints[0] % 2 == 0)
+				{
+					effectiveYRadius *= fastSqrtf(1.0 - 1.0/(float)((numPoints[0] - 1) * (numPoints[0] - 1)));
+				}
+				spacings[1] = (2 * effectiveYRadius)/(numPoints[1] - 1);
+			}
+			else
+			{
+				effectiveYRadius = floorf((radius - 0.1)/spacings[1]) * spacings[1];
+			}
+			axis1Values[0] = -effectiveYRadius;
+			axis1Values[1] =  effectiveYRadius + 0.1;
+		}
+		else
+		{
+			reply.copy("M577 radius must be positive unless X and Y are specified");
+			return GCodeResult::error;
+		}
+	}
+
+	const bool ok = defaultGrid.Set(axesLetters, axis0Values, axis1Values, radius, spacings);
+	reprap.MoveUpdated();
+	if (ok)
+	{
+		return GCodeResult::ok;
+	}
+
+	const float axis1Range = axesSeen ? axis0Values[1] - axis0Values[0] : 2 * radius;
+	const float axis2Range = axesSeen ? axis1Values[1] - axis1Values[0] : 2 * radius;
+	reply.copy("bad grid definition: ");
+	defaultGrid.PrintError(axis1Range, axis2Range, reply);
+	return GCodeResult::error;
+}
+
 // Start probing the grid, returning true if we didn't because of an error.
 // Prior to calling this the movement system must be locked.
 GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
@@ -141,7 +292,13 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 
 	const auto zp = SetZProbeNumber(gb, 'K');			// may throw, so do this before changing the state
 
-	reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);
+#if SUPPORT_PROBE_POINTS_FILE
+	if (!probePointsFileLoaded)							// if we are using a probe points file then the grid has already been loaded
+#endif
+	{
+		reprap.GetMove().AccessHeightMap().SetGrid(defaultGrid);
+	}
+
 	ClearBedMapping();
 	gridAxis0index = gridAxis1index = 0;
 
@@ -226,7 +383,7 @@ bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) cons
 }
 
 // Save the height map to the file specified by P parameter
-GCodeResult GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
+GCodeResult GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const THROWS(GCodeException)
 {
 	// No need to check if we're using the SBC interface here, because TrySaveHeightMap does that already
 	if (gb.Seen('P'))
@@ -244,6 +401,7 @@ GCodeResult GCodes::SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const
 GCodeResult GCodes::LoadProbePointsMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	ClearBedMapping();
+	ClearProbePointsInvalid();
 
 	String<MaxFilenameLength> probePointsFileName;
 	bool seen = false;
@@ -261,20 +419,32 @@ GCodeResult GCodes::LoadProbePointsMap(GCodeBuffer& gb, const StringRef& reply) 
 		reply.printf("Probe points file %s not found", fullName.c_str());
 		return GCodeResult::error;
 	}
-	reply.printf("Failed to load probe points from file %s: ", fullName.c_str());	// set up error message to append to
 
+	reply.printf("Failed to load probe points from file %s: ", fullName.c_str());	// set up error message to append to
 	const bool err = reprap.GetMove().LoadProbePointsFromFile(f, fullName.c_str(), reply);
 	f->Close();
+	if (err)
+	{
+		return GCodeResult::error;
+	}
 
-	return (err) ? GCodeResult::error : GCodeResult::ok;
+	reply.Clear();						// get rid of the error message
+	probePointsFileLoaded = true;		// use the grid we loaded when we probe
+	return GCodeResult::ok;
 }
 
-#endif
+void GCodes::ClearProbePointsInvalid() noexcept
+{
+	reprap.GetMove().ClearProbePointsInvalid();
+	probePointsFileLoaded = false;		// use the default grid when we next probe
+}
+
+#endif	// SUPPORT_PROBE_POINTS_FILE
 
 #endif	// HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Stop using bed compensation
-void GCodes::ClearBedMapping()
+void GCodes::ClearBedMapping() noexcept
 {
 	reprap.GetMove().SetIdentityTransform();
 	for (MovementState& ms : moveStates)

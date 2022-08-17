@@ -474,19 +474,20 @@ private:
 
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);	// Define the probing grid, returning true if error
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load the height map from file
-	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept;		// Save the height map to the specified file
-	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const;				// Save the height map to the file specified by P parameter
+	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Load the height map from file
+	bool TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept;				// Save the height map to the specified file
+	GCodeResult SaveHeightMap(GCodeBuffer& gb, const StringRef& reply) const THROWS(GCodeException);	// Save the height map to the file specified by P parameter
 # if SUPPORT_PROBE_POINTS_FILE
 	GCodeResult LoadProbePointsMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Load map of reachable probe points from file
+	void ClearProbePointsInvalid() noexcept;
 # endif
 #endif
-	void ClearBedMapping();																	// Stop using bed compensation
-	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Start probing the grid, returning true if we didn't because of an error
-	ReadLockedPointer<ZProbe> SetZProbeNumber(GCodeBuffer& gb, char probeLetter) THROWS(GCodeException);		// Set up currentZProbeNumber and return the probe
-	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Probes at a given position - see the comment at the head of the function itself
-	void InitialiseTaps(bool fastThenSlow) noexcept;										// Set up to do the first of a possibly multi-tap probe
-	void SetBedEquationWithProbe(int sParam, const StringRef& reply);						// Probes a series of points and sets the bed equation
+	void ClearBedMapping() noexcept;																// Stop using bed compensation
+	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Start probing the grid, returning true if we didn't because of an error
+	ReadLockedPointer<ZProbe> SetZProbeNumber(GCodeBuffer& gb, char probeLetter) THROWS(GCodeException);	// Set up currentZProbeNumber and return the probe
+	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Probes at a given position - see the comment at the head of the function itself
+	void InitialiseTaps(bool fastThenSlow) noexcept;												// Set up to do the first of a possibly multi-tap probe
+	void SetBedEquationWithProbe(int sParam, const StringRef& reply) noexcept;						// Probes a series of points and sets the bed equation
 
 	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M581
 	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M582
@@ -666,6 +667,9 @@ private:
 	bool zDatumSetByProbing;					// true if the Z position was last set by probing, not by an endstop switch or by G92
 	int8_t tapsDone;							// how many times we tapped the current point
 	uint8_t currentZProbeNumber;				// which Z probe a G29 or G30 command is using
+#if SUPPORT_PROBE_POINTS_FILE
+	bool probePointsFileLoaded;					// true if we loaded a probe point file since we last cleared the grid
+#endif
 
 	// Simulation and print time
 	float simulationTime;						// Accumulated simulation time
