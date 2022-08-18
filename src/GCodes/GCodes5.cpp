@@ -78,42 +78,45 @@ GCodeResult GCodes::SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply)
 GCodeResult GCodes::CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	// Find the two specified axes
-	int lowerAxisLetter = -1, upperAxisLetter = -1;
+	int lowerAxisNumber = -1, upperAxisNumber = -1;
+	float lowerValue, upperValue;
 	for (unsigned int i = 0; i < numVisibleAxes; ++i)
 	{
 		if (gb.Seen(axisLetters[i]))
 		{
-			if (lowerAxisLetter < 0)
+			if (lowerAxisNumber < 0)
 			{
-				lowerAxisLetter = i;
+				lowerAxisNumber = i;
+				lowerValue = gb.GetFValue();
 			}
 			else
 			{
-				upperAxisLetter = i;
+				upperAxisNumber = i;
+				upperValue = gb.GetFValue();
 				break;
 			}
 		}
 	}
 
-	// Get the minimum separation
-	bool seen = gb.Seen('S');
-	if (seen)
+	if (upperAxisNumber >= 0)
 	{
-		if (upperAxisLetter < 0)
+		// Seen two axes, so go ahead
+		if (upperValue == lowerValue)
 		{
-			reply.copy("missing axis letter");
+			reply.copy("Axis values must be different");
 			return GCodeResult::error;
 		}
-		if (!LockMovementAndWaitForStandstill(gb))
+		if (upperValue < lowerValue)
 		{
-			return GCodeResult::notFinished;
+			std::swap(upperValue, lowerValue);
+			std::swap(upperAxisNumber, lowerAxisNumber);
+			collisionChecker.Set(lowerAxisNumber, upperAxisNumber, upperValue - lowerValue, GetMovementState(gb).coords);
 		}
-		collisionChecker.Set(lowerAxisLetter, upperAxisLetter, gb.GetFValue(), GetMovementState(gb).coords);
 	}
-	else if (upperAxisLetter >= 0)
+	else if (lowerAxisNumber >= 0)
 	{
-		// Axes provided but no spacing
-		gb.MustSee('S');					// this will throw an exception
+		reply.copy("Only one axis specified");
+		return GCodeResult::error;
 	}
 	else if (collisionChecker.IsValid())
 	{

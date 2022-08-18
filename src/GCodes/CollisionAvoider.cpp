@@ -16,7 +16,7 @@ CollisionAvoider::CollisionAvoider() noexcept
 
 bool CollisionAvoider::IsValid() const noexcept
 {
-	return lowerAxis >= 0 && upperAxis > lowerAxis;
+	return lowerAxis >= 0 && upperAxis >= 0;
 }
 
 // Reset the position accumulators
