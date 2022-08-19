@@ -608,15 +608,24 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 		if (gb.IsFileFinished())
 		{
+			if (!LockMovementAndWaitForStandstill(gb))				// wait until movement has finished and deferred command queue has caught up
+			{
+				return false;
+			}
+
 			if (gb.LatestMachineState().GetPrevious() == nullptr)
 			{
 				// Finished printing SD card file.
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
 				// Don't close the file until all moves have been completed, in case the print gets paused.
 				// Also, this keeps the state as 'Printing' until the print really has finished.
-				if (LockMovementAndWaitForStandstill(gb))				// wait until movement has finished and deferred command queue has caught up
+				if (&gb == FileGCode())
 				{
 					StopPrint(StopPrintReason::normalCompletion);
+				}
+				else
+				{
+					UnlockAll(gb);
 				}
 				return true;
 			}
@@ -740,18 +749,33 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 			gb.Init();											// mark buffer as empty
 
+			if (!LockMovementAndWaitForStandstill(gb))			// wait until movement has finished and deferred command queue has caught up
+			{
+				return false;
+			}
+
 			if (gb.LatestMachineState().GetPrevious() == nullptr)
 			{
 				// Finished printing SD card file.
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
 				// Don't close the file until all moves have been completed, in case the print gets paused.
 				// Also, this keeps the state as 'Printing' until the print really has finished.
-				if (LockMovementAndWaitForStandstill(gb))		// wait until movement has finished and deferred command queue has caught up
+				if (&gb == FileGCode())
 				{
-					if (&gb == FileGCode())					// if this is the primary file channel
+					if (reprap.Debug(moduleGcodes))
 					{
-						StopPrint(StopPrintReason::normalCompletion);
+						debugPrintf("File stopping print\n");
 					}
+					StopPrint(StopPrintReason::normalCompletion);
+				}
+				else
+				{
+					if (reprap.Debug(moduleGcodes))
+					{
+						debugPrintf("Other stopping print\n");
+					}
+					UnlockAll(gb);
+					fd.Close();
 				}
 			}
 			else
@@ -1507,7 +1531,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 		}
 
 		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
-		if (sync && !gb.ExecutingAll())
+		if (sync && !gb.ExecutingAll() && File2GCode()->IsDoingFile())
 		{
 			const bool ret = SyncWith(gb, *File2GCode());
 			if (ret)
@@ -1529,7 +1553,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 		}
 
 		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
-		if (sync && !gb.ExecutingAll())
+		if (sync && !gb.ExecutingAll() && FileGCode()->IsDoingFile())
 		{
 			const bool ret = SyncWith(gb, *FileGCode());
 			if (ret)
@@ -4124,15 +4148,18 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 			platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
 			if (FileGCode()->GetState() == GCodeState::normal)		// this should always be the case
 			{
-				FileGCode()->SetState(GCodeState::stopping);			// set fileGCode (which should be the one calling this) to run stop.g
+				FileGCode()->SetState(GCodeState::stopping);		// set fileGCode (which should be the one calling this) to run stop.g
 			}
 		}
 #endif
 	}
 
-	reprap.GetPrintMonitor().StoppedPrint();			// must do this after printing the simulation details not before, because it clears the filename and pause time
+	reprap.GetPrintMonitor().StoppedPrint();				// must do this after printing the simulation details not before, because it clears the filename and pause time
 	buildObjects.Init();
 	FileGCode()->LatestMachineState().variables.Clear();	// delete any local variables that the file created
+#if SUPPORT_ASYNC_MOVES
+	File2GCode()->LatestMachineState().variables.Clear();	// delete any local variables that the file created
+#endif
 }
 
 // Return true if all the heaters for the specified tool are at their set temperatures
