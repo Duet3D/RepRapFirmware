@@ -433,7 +433,7 @@ void StringParser::CheckForMixedSpacesAndTabs() noexcept
 	if (seenMetaCommand && !warnedAboutMixedSpacesAndTabs && seenLeadingSpace && seenLeadingTab)
 	{
 		reprap.GetPlatform().MessageF(AddWarning(gb.GetResponseMessageType()),
-								"both space and tab characters used to indent blocks by line %" PRIu32, gb.GetLineNumber());
+								"both space and tab characters used to indent blocks at/before line %" PRIu32 "\n", gb.GetLineNumber());
 		warnedAboutMixedSpacesAndTabs = true;
 	}
 }
