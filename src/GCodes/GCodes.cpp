@@ -1509,7 +1509,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
 		if (sync && !gb.ExecutingAll())
 		{
-			const bool ret = SyncWith(gb, *FileGCode());
+			const bool ret = SyncWith(gb, *File2GCode());
 			if (ret)
 			{
 				gb.MotionStopped();
