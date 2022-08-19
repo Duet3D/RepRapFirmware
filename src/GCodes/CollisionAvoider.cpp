@@ -9,6 +9,9 @@
 
 #if SUPPORT_ASYNC_MOVES
 
+#include <Platform/RepRap.h>
+#include <GCodes/GCodes.h>
+
 CollisionAvoider::CollisionAvoider() noexcept
 {
 	lowerAxis = upperAxis = -1;
@@ -44,6 +47,11 @@ bool CollisionAvoider::UpdatePositions(const float axisPositions[]) noexcept
 	const float newUpperMin = min<float>(axisPositions[upperAxis], upperAxisMin);
 	if (newLowerMax + minSeparation > newUpperMin)
 	{
+		if (reprap.Debug(moduleMove))
+		{
+			const char *const axisLetters = reprap.GetGCodes().GetAxisLetters();
+			debugPrintf("Potential collision between axis %c at %.1f and axis %c at %.1f\n", axisLetters[lowerAxis], (double)newLowerMax, axisLetters[upperAxis], (double)newUpperMin);
+		}
 		return false;
 	}
 	lowerAxisMax = newLowerMax;
