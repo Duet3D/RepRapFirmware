@@ -9,7 +9,7 @@
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
 #include <Movement/Move.h>
-#include <Endstops/Zprobe.h>
+#include <Endstops/ZProbe.h>
 
 // This is called to execute a G30.
 // It sets wherever we are as the probe point P (probePointIndex) then probes the bed, or gets all its parameters from the arguments.
