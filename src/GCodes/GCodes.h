@@ -260,6 +260,7 @@ public:
 
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
 
+	const MovementState& GetMovementState(unsigned int queueNumber) pre(queueNumber < NumMovementSystems) const noexcept { return moveStates[queueNumber]; }
 	const MovementState& GetPrimaryMovementState() const noexcept { return moveStates[0]; }		// Temporary support for object model and status report values that only handle a single movement system
 	const MovementState& GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept;
 	const MovementState& GetConstMovementState(const GCodeBuffer& gb) const noexcept;			// Get a reference to the movement state associated with the specified GCode buffer (there is a private non-const version)

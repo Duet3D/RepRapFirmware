@@ -69,7 +69,8 @@ public:
 	bool WaitingForAllMovesFinished(size_t queueNumber) noexcept
 		pre(queueNumber < rings.upb);										// Tell the lookahead ring we are waiting for it to empty and return true if it is
 	void DoLookAhead() noexcept SPEED_CRITICAL;								// Run the look-ahead procedure
-	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation) noexcept; // Set the current position to be this
+	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation, unsigned int queueNumber) noexcept
+			pre(queueNumber < NumMovementSystems);							// Set the current position to be this
 	void ResetExtruderPositions() noexcept;									// Resets the extrusion amounts of the live coordinates
 	void SetXYBedProbePoint(size_t index, float x, float y) noexcept;		// Record the X and Y coordinates of a probe point
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError) noexcept; // Record the Z coordinate of a probe point

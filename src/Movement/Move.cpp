@@ -555,14 +555,14 @@ void Move::Diagnostics(MessageType mtype) noexcept
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation) noexcept
+void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation, unsigned int queueNumber) noexcept
 {
 	float newPos[MaxAxesPlusExtruders];
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
-	AxisAndBedTransform(newPos, reprap.GetGCodes().GetPrimaryMovementState().currentTool, doBedCompensation);
+	AxisAndBedTransform(newPos, reprap.GetGCodes().GetMovementState(queueNumber).currentTool, doBedCompensation);
 
-	rings[0].SetLiveCoordinates(newPos);
-	rings[0].SetPositions(newPos);
+	rings[queueNumber].SetLiveCoordinates(newPos);
+	rings[queueNumber].SetPositions(newPos);
 }
 
 // Convert distance to steps for a particular drive

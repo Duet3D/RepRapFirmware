@@ -804,11 +804,12 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 void GCodes::EndSimulation(GCodeBuffer *null gb) noexcept
 {
 	// Ending a simulation, so restore the position
-	MovementState& ms = (gb == nullptr) ? moveStates[0] : GetMovementState(*gb);	//TODO handle null gb properly
+	const unsigned int queueNumber = (gb == nullptr) ? 0 : gb->GetActiveQueueNumber();	//TODO handle null gb properly
+	MovementState& ms = moveStates[queueNumber];
 	RestorePosition(ms.simulationRestorePoint, gb);
 	ms.SelectTool(ms.simulationRestorePoint.toolNumber, true);
 	ToolOffsetTransform(ms);
-	reprap.GetMove().SetNewPosition(ms.coords, true);
+	reprap.GetMove().SetNewPosition(ms.coords, true, queueNumber);
 	axesVirtuallyHomed = axesHomed;
 	reprap.MoveUpdated();
 }
@@ -1592,14 +1593,18 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 		// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
 #if SUPPORT_ASYNC_MOVES
 		// Get the position of all axes by combining positions from the queues
-		const Move& move = reprap.GetMove();
-		move.GetPartialMachinePosition(moveStates[0].coords, AxesBitmap::MakeLowestNBits(numTotalAxes), 0);
-		move.GetPartialMachinePosition(moveStates[0].coords, moveStates[1].axesAndExtrudersOwned, 1);
-		memcpyf(moveStates[1].coords, moveStates[0].coords, MaxAxes);
+		Move& move = reprap.GetMove();
+		float coords[MaxAxes];
+		move.GetPartialMachinePosition(coords, AxesBitmap::MakeLowestNBits(numTotalAxes), 0);
+		move.GetPartialMachinePosition(coords, moveStates[1].axesAndExtrudersOwned, 1);
+		memcpyf(moveStates[0].coords, coords, MaxAxes);
+		memcpyf(moveStates[1].coords, coords, MaxAxes);
 		move.InverseAxisAndBedTransform(moveStates[0].coords, moveStates[0].currentTool);
 		move.InverseAxisAndBedTransform(moveStates[1].coords, moveStates[1].currentTool);
 		UpdateUserPositionFromMachinePosition(gb, moveStates[0]);				//TODO problem when using coordinate rotation!
 		UpdateUserPositionFromMachinePosition(gb, moveStates[1]);
+		move.SetNewPosition(coords, true, 0);
+		move.SetNewPosition(coords, true, 1);
 
 		// Release all axes and extruders
 		axesAndExtrudersMoved.Clear();
@@ -4933,7 +4938,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 	case GCodeBuffer::SyncState::syncing:
 		if (otherGb.syncState == GCodeBuffer::SyncState::running)
 		{
-			// The other input channel has either not caught up with us, or it has skipped this sync point
+			// The other input channel has either not caught up with us, or it has skipped this sync point, or it is not running
 			if (otherGb.IsLaterThan(thisGb))
 			{
 				// Other input channel has skipped this sync point
@@ -4956,7 +4961,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 		switch (otherGb.syncState)
 		{
 		case GCodeBuffer::SyncState::running:
-			// Other input channel has carried on. If we are not the primary, until it has completed the command
+			// Other input channel has carried on. If we are not the primary, wait until it has completed the command
 			return thisGb.IsExecuting() || otherGb.IsLaterThan(thisGb);
 
 		case GCodeBuffer::SyncState::syncing:
@@ -4983,13 +4988,14 @@ void GCodes::UpdateUserCoordinatesAndReleaseOwnedAxes(GCodeBuffer& thisGb, const
 {
 	// Get the position of all axes by combining positions from the queues
 	const MovementState& otherMs = GetConstMovementState(otherGb);
-	const Move& move = reprap.GetMove();
+	Move& move = reprap.GetMove();
 	float coords[MaxAxes];
 	move.GetPartialMachinePosition(coords, AxesBitmap::MakeLowestNBits(numTotalAxes), thisGb.GetOwnQueueNumber());
 	move.GetPartialMachinePosition(coords, otherMs.axesAndExtrudersOwned, otherGb.GetOwnQueueNumber());
 	MovementState& thisMs = GetMovementState(thisGb);
 	move.InverseAxisAndBedTransform(coords, thisMs.currentTool);
 	UpdateUserPositionFromMachinePosition(thisGb, thisMs);
+	move.SetNewPosition(coords, true, thisGb.GetOwnQueueNumber());
 
 	// Release all axes and extruders that we were using
 	axesAndExtrudersMoved &= ~thisMs.axesAndExtrudersOwned;

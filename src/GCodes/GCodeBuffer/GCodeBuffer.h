@@ -126,8 +126,16 @@ public:
 	bool IsExecuting() const noexcept;							// Return true if a gcode has been started and is not paused
 	void SetFinished(bool f) noexcept;							// Set the G Code executed (or not)
 
+	size_t GetActiveQueueNumber() const noexcept				// Get the movement queue number that this buffer uses
+	{
 #if SUPPORT_ASYNC_MOVES
-	size_t GetActiveQueueNumber() const noexcept { return machineState->GetCommandedQueue(); }	// Get the movement queue number that this buffer uses
+		return machineState->GetCommandedQueue();
+#else
+		return 0;
+#endif
+	}
+
+#if SUPPORT_ASYNC_MOVES
 	void SetActiveQueueNumber(size_t qn) noexcept { machineState->SetCommandedQueue(qn); }
 	void ExecuteOnlyQueue(size_t qn) noexcept { machineState->ExecuteOnly(qn); }
 	size_t GetOwnQueueNumber() const noexcept { return machineState->GetOwnQueue(); }

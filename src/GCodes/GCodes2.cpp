@@ -1521,9 +1521,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (seen)
 					{
 						// On a delta, if we change the drive steps/mm then we need to recalculate the motor positions
-						for (MovementState& ms : moveStates)
+						for (size_t i = 0; i < NumMovementSystems; ++i)
 						{
-							reprap.GetMove().SetNewPosition(ms.coords, true);
+							reprap.GetMove().SetNewPosition(moveStates[i].coords, true, i);
 						}
 #if SUPPORT_CAN_EXPANSION
 						result = platform.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply);
@@ -3992,13 +3992,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					if (changed || changedMode)
 					{
-						for (MovementState& ms : moveStates)
+						for (size_t i = 0; i < NumMovementSystems; ++i)
 						{
+							MovementState& ms = moveStates[i];
 							if (move.GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
 							{
 								ToolOffsetInverseTransform(ms);					// make sure the limits are reflected in the user position
 							}
-							move.SetNewPosition(ms.coords, true);
+							move.SetNewPosition(ms.coords, true, i);
 						}
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
@@ -4060,8 +4061,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (seen)
 					{
 						// We changed something significant, so reset the positions and set all axes not homed
-						for (MovementState& ms : moveStates)
+						for (size_t i = 0; i < NumMovementSystems; ++i)
 						{
+							MovementState& ms = moveStates[i];
 							if (move.GetKinematics().GetKinematicsType() != oldK)
 							{
 								move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, ms.coords);
@@ -4071,7 +4073,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								ToolOffsetInverseTransform(ms);				// make sure the limits are reflected in the user position
 							}
-							move.SetNewPosition(ms.coords, true);
+							move.SetNewPosition(ms.coords, true, i);
 						}
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
