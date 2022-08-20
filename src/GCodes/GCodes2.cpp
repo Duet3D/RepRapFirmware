@@ -4829,14 +4829,6 @@ GCodeResult GCodes::TryMacroFile(GCodeBuffer& gb) noexcept
 
 bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-#if SUPPORT_ASYNC_MOVES
-	if (!gb.Executing())
-	{
-		HandleReply(gb, GCodeResult::ok, "");
-		return true;
-	}
-#endif
-
 	if (gb.LatestMachineState().runningM502)
 	{
 		return true;			// when running M502 we don't execute T commands
@@ -4871,6 +4863,14 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			return false;
 		}
 
+#if SUPPORT_ASYNC_MOVES
+		if (!gb.Executing())
+		{
+			UnlockAll(gb);
+			HandleReply(gb, GCodeResult::ok, "");
+			return true;
+		}
+#endif
 		if (ms.IsCurrentObjectCancelled())
 		{
 			ms.SetVirtualTool(toolNum);						// don't do the tool change, just remember which one we are supposed to use
@@ -4888,6 +4888,13 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	}
 	else
 	{
+#if SUPPORT_ASYNC_MOVES
+		if (!gb.Executing())
+		{
+			HandleReply(gb, GCodeResult::ok, "");
+			return true;
+		}
+#endif
 		// Report the tool number in use if no parameter is passed
 		const int toolNum = ms.GetCurrentToolNumber();
 		if (toolNum < 0)
