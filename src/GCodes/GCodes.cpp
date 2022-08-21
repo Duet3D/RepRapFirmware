@@ -1662,7 +1662,7 @@ void GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& m
 			{
 				gb.ThrowGCodeException("Feed rate must be specified with every move when using inverse time mode");
 			}
-			const float feedRate = gb.GetFValue() * (StepClockRate * 60);						// get the requested move duration in step clocks
+			const float feedRate = (StepClockRate * 60)/gb.GetPositiveFValue();			// get the requested move duration in step clocks
 			ms.feedRate = (ms.applyM220M221)
 							? feedRate/ms.speedFactor
 								: feedRate;

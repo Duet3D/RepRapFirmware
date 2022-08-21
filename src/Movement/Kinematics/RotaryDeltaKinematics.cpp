@@ -117,7 +117,7 @@ bool RotaryDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			gb.TryGetFValue('R', radius, seen);
 			if (gb.Seen('B'))
 			{
-				printRadius = gb.GetFValue();
+				printRadius = gb.GetPositiveFValue();
 				// Set the axis limits so that DWC reports them correctly (they are not otherwise used for deltas, except Z min)
 				Platform& p = reprap.GetPlatform();
 				p.SetAxisMinimum(X_AXIS, -printRadius, false);

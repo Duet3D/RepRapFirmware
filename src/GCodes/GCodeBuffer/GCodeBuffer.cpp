@@ -424,18 +424,43 @@ float GCodeBuffer::GetFValue() THROWS(GCodeException)
 	return PARSER_OPERATION(GetFValue());
 }
 
+// Get a float after a key letter and check that it is greater then zero
+float GCodeBuffer::GetPositiveFValue() THROWS(GCodeException)
+{
+	const int column =
+#if HAS_SBC_INTERFACE
+						(isBinaryBuffer) ? -1 :
+#endif
+							stringParser.GetColumn();
+	const float val = GetFValue();
+	if (val > 0.0) { return val; }
+	throw GCodeException(GetLineNumber(), column, "value must be greater than zero");
+}
+
+// Get a float after a key letter and check that it is greater than or equal to zero
+float GCodeBuffer::GetNonNegativeFValue() THROWS(GCodeException)
+{
+	const int column =
+#if HAS_SBC_INTERFACE
+						(isBinaryBuffer) ? -1 :
+#endif
+							stringParser.GetColumn();
+	const float val = GetFValue();
+	if (val >= 0.0) { return val; }
+	throw GCodeException(GetLineNumber(), column, "value must be not less than zero");
+}
+
 float GCodeBuffer::GetLimitedFValue(char c, float minValue, float maxValue) THROWS(GCodeException)
 {
 	MustSee(c);
+	const int column =
+#if HAS_SBC_INTERFACE
+						(isBinaryBuffer) ? -1 :
+#endif
+							stringParser.GetColumn();
 	const float ret = GetFValue();
-	if (ret < minValue)
-	{
-		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too low", (uint32_t)c);
-	}
-	if (ret > maxValue)
-	{
-		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too high", (uint32_t)c);
-	}
+	if (ret < minValue) { throw GCodeException(GetLineNumber(), column, "parameter '%c' too low", (uint32_t)c); }
+	if (ret > maxValue) { throw GCodeException(GetLineNumber(), column, "parameter '%c' too high", (uint32_t)c); }
 	return ret;
 }
 

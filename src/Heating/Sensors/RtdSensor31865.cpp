@@ -85,7 +85,7 @@ GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply, b
 	if (gb.Seen('R'))
 	{
 		changed = true;
-		rrefTimes100 = lrintf(gb.GetFValue() * 100);
+		rrefTimes100 = lrintf(gb.GetPositiveFValue() * 100);
 	}
 
 	return FinishConfiguring(changed, reply);

@@ -735,7 +735,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							return false;						// don't modify moves that haven't gone yet
 						}
-						ms.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
+						ms.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetNonNegativeFValue());
 					}
 #endif
 					else
@@ -849,17 +849,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (gb.Seen('S'))
 					{
 						seen = true;
-
-						const float idleTimeout = gb.GetFValue();
-						if (idleTimeout < 0.0)
-						{
-							reply.copy("Idle timeouts cannot be negative");
-							result = GCodeResult::error;
-						}
-						else
-						{
-							reprap.GetMove().SetIdleTimeout(idleTimeout);
-						}
+						reprap.GetMove().SetIdleTimeout(gb.GetPositiveFValue());
 					}
 
 					if (!seen)
@@ -1482,7 +1472,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								return false;
 							}
-							platform.SetDriveStepsPerUnit(axis, gb.GetFValue(), ustepMultiplier);
+							platform.SetDriveStepsPerUnit(axis, gb.GetPositiveFValue(), ustepMultiplier);
 #if SUPPORT_CAN_EXPANSION
 							axesToUpdate.SetBit(axis);
 #endif
@@ -1910,7 +1900,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				if (!cancelWait)
 				{
-					const float tolerance = (gb.Seen('S')) ? max<float>(gb.GetFValue(), 0.1) : TemperatureCloseEnough;
+					const float tolerance = (gb.Seen('S')) ? gb.GetPositiveFValue() : TemperatureCloseEnough;
 					bool seen = false;
 					if (gb.Seen('P'))
 					{
@@ -2530,7 +2520,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					MovementState& ms = GetMovementState(gb);
 					if (gb.Seen('S'))
 					{
-						const float newSpeedFactor = gb.GetFValue() * 0.01;
+						const float newSpeedFactor = gb.GetPositiveFValue() * 0.01;
 						if (newSpeedFactor >= 0.01)
 						{
 							// If the last move hasn't gone yet, update its feed rate if it is not a firmware retraction
@@ -2571,7 +2561,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else if (gb.Seen('S'))	// S parameter sets the override percentage
 					{
-						const float extrusionFactor = gb.GetFValue() * 0.01;
+						const float extrusionFactor = gb.GetPositiveFValue() * 0.01;
 						if (extrusionFactor >= 0.01)
 						{
 							if (seenD)
@@ -3025,7 +3015,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				// TODO support per-extruder values
 				if (gb.Seen('N'))
 				{
-					platform.SetFilamentWidth(gb.GetFValue());
+					platform.SetFilamentWidth(gb.GetPositiveFValue());
 					break;
 				}
 				// no break
@@ -3130,7 +3120,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					if (gb.Seen('R'))
 					{
-						laserMaxPower = max<float>(1.0, gb.GetFValue());
+						laserMaxPower = max<float>(1.0, gb.GetNonNegativeFValue());
 					}
 				}
 				reprap.StateUpdated();
@@ -3442,16 +3432,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				if (gb.Seen('S'))
 				{
-					const float value = gb.GetFValue();
-					if (value >= 10.0)			// avoid divide by zero and silly results
+					const float value = gb.GetPositiveFValue();
+					for (size_t axis = 0; axis <= Z_AXIS; axis++)
 					{
-						for (size_t axis = 0; axis <= Z_AXIS; axis++)
+						if (gb.Seen(axisLetters[axis]))
 						{
-							if (gb.Seen(axisLetters[axis]))
-							{
-								move.SetAxisCompensation(axis, gb.GetFValue() / value);
-								seen = true;
-							}
+							move.SetAxisCompensation(axis, gb.GetFValue() / value);
+							seen = true;
 						}
 					}
 				}
@@ -4150,7 +4137,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							// An axis letter is given, so try to level the given axis
 							const float correctionAngle = atanf((z2 - z1) / (a2 - a1)) * 180.0 / M_PI;
-							const float correctionFactor = gb.Seen('S') ? gb.GetFValue() : 1.0;
+							const float correctionFactor = gb.Seen('S') ? gb.GetPositiveFValue() : 1.0;
 							ms.coords[axisToUse] += correctionAngle * correctionFactor;
 
 							reply.printf("%c axis is off by %.2f deg", axisLetters[axisToUse], (double)correctionAngle);
@@ -4462,7 +4449,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								}
 							}
 							seen = true;
-							result = max(result, platform.SetMotorCurrent(axis, gb.GetFValue(), code, reply));
+							result = max(result, platform.SetMotorCurrent(axis, gb.GetPositiveFValue(), code, reply));
 						}
 					}
 
@@ -4492,7 +4479,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (code == 906 && gb.Seen('I'))
 					{
 						seen = true;
-						platform.SetIdleCurrentFactor(gb.GetFValue()/100.0);
+						platform.SetIdleCurrentFactor(gb.GetNonNegativeFValue()/100.0);
 					}
 
 					if (seen)
@@ -4528,7 +4515,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 911: // Enable auto save on loss of power
 				if (gb.Seen('S'))
 				{
-					const float saveVoltage = gb.GetFValue();
+					const float saveVoltage = gb.GetPositiveFValue();
 					if (saveVoltage < 10.0)
 					{
 						platform.DisableAutoSave();

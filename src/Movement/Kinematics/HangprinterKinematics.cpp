@@ -210,7 +210,7 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 
 		if (gb.Seen('P'))
 		{
-			printRadius = gb.GetFValue();
+			printRadius = gb.GetPositiveFValue();
 			seen = true;
 		}
 

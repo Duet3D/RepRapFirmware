@@ -44,7 +44,7 @@ GCodeResult HeightController::Configure(GCodeBuffer& gb, const StringRef& reply)
 	gb.TryGetFValue('D', configuredPidD, seen);
 	if (gb.Seen('F'))
 	{
-		const float freq = gb.GetFValue();
+		const float freq = gb.GetPositiveFValue();
 		if (freq >= 0.1 && freq <= 200.0)
 		{
 			sampleInterval = lrintf(1000/freq);

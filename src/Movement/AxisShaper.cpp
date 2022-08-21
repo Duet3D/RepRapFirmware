@@ -91,7 +91,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 	if (gb.Seen('L'))
 	{
 		seen = true;
-		minimumAcceleration = ConvertAcceleration(max<float>(gb.GetFValue(), 1.0));			// very low accelerations cause problems with the maths
+		minimumAcceleration = ConvertAcceleration(max<float>(gb.GetNonNegativeFValue(), 1.0));			// very low accelerations cause problems with the maths
 	}
 	if (gb.Seen('S'))
 	{

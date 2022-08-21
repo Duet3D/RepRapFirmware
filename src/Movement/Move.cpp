@@ -1041,7 +1041,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 {
 	if (gb.Seen('S'))
 	{
-		const float advance = gb.GetFValue();
+		const float advance = gb.GetNonNegativeFValue();
 		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;

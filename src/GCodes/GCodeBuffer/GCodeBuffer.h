@@ -78,6 +78,8 @@ public:
 	inline bool SeenAny(const char *s) const noexcept { return SeenAny(Bitmap<uint32_t>(ParametersToBitmap(s))); }
 
 	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get a float after a key letter
+	float GetPositiveFValue() THROWS(GCodeException) SPEED_CRITICAL;				// Get a float after a key letter and check that it is greater than zero
+	float GetNonNegativeFValue() THROWS(GCodeException) SPEED_CRITICAL;				// Get a float after a key letter and check that it is greater than or equal to zero
 	float GetDistance() THROWS(GCodeException);										// Get a distance or coordinate and convert it from inches to mm if necessary
 	float GetSpeed() THROWS(GCodeException);										// Get a speed in mm/min or inches/min and convert it to mm/step_clock
 	float GetSpeedFromMm(bool useSeconds) THROWS(GCodeException);					// Get a speed in mm/min or optionally /sec and convert it to mm/step_clock

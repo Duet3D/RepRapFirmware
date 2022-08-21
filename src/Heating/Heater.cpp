@@ -156,7 +156,7 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 		if (gb.Seen('R'))
 		{
 			seen = true;
-			heatingRate = gb.GetFValue();
+			heatingRate = gb.GetPositiveFValue();
 		}
 		gb.TryGetFValue('E', coolingRateExponent, seen);
 	}
