@@ -227,7 +227,7 @@ public:
 
 	void SavePosition(const GCodeBuffer& gb, unsigned int restorePointNumber) noexcept
 		pre(restorePointNumber < NumTotalRestorePoints);							// Save position etc. to a restore point
-	void StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t param) noexcept;
+	void StartToolChange(GCodeBuffer& gb, uint8_t param) noexcept;
 
 	unsigned int GetPrimaryWorkplaceCoordinateSystemNumber() const noexcept { return GetPrimaryMovementState().currentCoordinateSystem + 1; }
 

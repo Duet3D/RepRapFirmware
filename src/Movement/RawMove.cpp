@@ -206,7 +206,6 @@ float MovementState::GetCurrentToolOffset(size_t axis) const noexcept
 void MovementState::StopPrinting(GCodeBuffer& gb) noexcept
 {
 	currentObjectCancelled = true;
-	virtualToolNumber = GetCurrentToolNumber();
 }
 
 // We are currently not printing because the current object was cancelled, but now we need to print again
@@ -215,9 +214,9 @@ void MovementState::ResumePrinting(GCodeBuffer& gb) noexcept
 	currentObjectCancelled = false;
 	printingJustResumed = true;
 	reprap.GetGCodes().SavePosition(gb, ResumeObjectRestorePointNumber);	// save the position we should be at for the start of the next move
-	if (GetCurrentToolNumber() != virtualToolNumber)						// if the wrong tool is loaded
+	if (GetCurrentToolNumber() != newToolNumber)							// if the wrong tool is loaded
 	{
-		reprap.GetGCodes().StartToolChange(gb, virtualToolNumber, DefaultToolChangeParam);
+		reprap.GetGCodes().StartToolChange(gb, DefaultToolChangeParam);
 	}
 }
 

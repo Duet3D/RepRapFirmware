@@ -1539,6 +1539,7 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 			{
 				gb.MotionStopped();
 			}
+			//if (!ret) { debugPrintf("Lock wait 7, queue %u\n", gb.GetQueueNumberToLock()); }
 			return ret;
 		}
 		break;
@@ -4662,11 +4663,10 @@ OutputBuffer *GCodes::GenerateJsonStatusResponse(int type, int seq, ResponseSour
 	return statusResponse;
 }
 
-// Initiate a tool change. Caller has already checked that the correct tool isn't loaded.
-void GCodes::StartToolChange(GCodeBuffer& gb, int toolNum, uint8_t param) noexcept
+// Initiate a tool change. Caller has already checked that the correct tool isn't loaded and set up ms.newToolNumber.
+void GCodes::StartToolChange(GCodeBuffer& gb, uint8_t param) noexcept
 {
 	MovementState& ms = GetMovementState(gb);
-	ms.newToolNumber = toolNum;
 	ms.toolChangeParam = (IsSimulating()) ? 0 : param;
 	gb.SetState(GCodeState::toolChange0);
 }

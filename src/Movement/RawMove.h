@@ -124,8 +124,8 @@ struct MovementState : public RawMove
 	FilePosition fileOffsetToPrint;									// The offset to print from
 #endif
 
-	// Tool change. These variables can be global because movement is locked while doing a tool change, so only one can take place at a time.
-	int16_t newToolNumber;
+	// Tool change. These variables can be global because movement is locked while doing a tool change, so only one per movement system can take place at a time.
+	int16_t newToolNumber;											// the tool number we are switching to, or the tool number we were supposed to switch to but didn't because the current object has been cancelled
 	int16_t previousToolNumber;										// the tool number we were using before the last tool change, or -1 if we weren't using a tool
 	uint8_t toolChangeParam;
 
@@ -136,7 +136,6 @@ struct MovementState : public RawMove
 
 	// Object cancellation variables
 	int currentObjectNumber;										// the current object number, or a negative value if it isn't an object
-	int virtualToolNumber;											// the number of the tool that was active when we cancelled an object
 	bool currentObjectCancelled;									// true if the current object should not be printed
 	bool printingJustResumed;										// true if we have just restarted printing
 
@@ -164,7 +163,6 @@ struct MovementState : public RawMove
 	bool IsCurrentObjectCancelled() const noexcept { return currentObjectCancelled; }
 	bool IsFirstMoveSincePrintingResumed() const noexcept { return printingJustResumed; }
 	void DoneMoveSincePrintingResumed() noexcept { printingJustResumed = false; }
-	void SetVirtualTool(int toolNum) noexcept { virtualToolNumber = toolNum; }
 	void StopPrinting(GCodeBuffer& gb) noexcept;
 	void ResumePrinting(GCodeBuffer& gb) noexcept;
 

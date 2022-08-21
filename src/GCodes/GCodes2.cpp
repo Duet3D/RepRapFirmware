@@ -4836,6 +4836,15 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		return true;			// when running M502 we don't execute T commands
 	}
 
+#if SUPPORT_ASYNC_MOVES
+		if (!gb.Executing())
+		{
+			UnlockAll(gb);
+			HandleReply(gb, GCodeResult::ok, "");
+			return true;
+		}
+#endif
+
 	bool seen = false;
 	int toolNum;
 	MovementState& ms = GetMovementState(gb);
@@ -4860,26 +4869,39 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 	if (seen)
 	{
-		if (!LockMovementAndWaitForStandstill(gb))
+		if (!LockMovementAndWaitForStandstill(gb
+#if SUPPORT_ASYNC_MOVES
+												, false		// the other motion system can run concurrently with the tool change
+#endif
+														))
 		{
 			return false;
 		}
 
 #if SUPPORT_ASYNC_MOVES
-		if (!gb.Executing())
+		if (toolNum >= 0)
 		{
-			UnlockAll(gb);
-			HandleReply(gb, GCodeResult::ok, "");
-			return true;
+			// Check that the other motion system isn't already using the requested tool or changing to it
+			for (const MovementState& ms2 : moveStates)
+			{
+				if (&ms2 != &ms && (toolNum == ms2.GetCurrentToolNumber() || toolNum == ms2.newToolNumber))
+				{
+					UnlockAll(gb);
+					reply.printf("Tool %d is already in use by another motion system", toolNum);
+					HandleReply(gb, GCodeResult::error, reply.c_str());
+					return true;
+				}
+			}
 		}
 #endif
+		ms.newToolNumber = toolNum;							// claim the new tool to prevent the other movement system doing so
 		if (ms.IsCurrentObjectCancelled())
 		{
-			ms.SetVirtualTool(toolNum);						// don't do the tool change, just remember which one we are supposed to use
+			// Don't do the tool change, just remember which one we are supposed to use in 'newToolNumber'
 		}
 		else if (ms.GetCurrentToolNumber() != toolNum)		// if old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
 		{
-			StartToolChange(gb, toolNum, (gb.Seen('P')) ? gb.GetUIValue() : DefaultToolChangeParam);
+			StartToolChange(gb, (gb.Seen('P')) ? gb.GetUIValue() : DefaultToolChangeParam);
 			return true;									// proceeding with state machine, so don't unlock or send a reply
 		}
 		else
@@ -4890,13 +4912,6 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	}
 	else
 	{
-#if SUPPORT_ASYNC_MOVES
-		if (!gb.Executing())
-		{
-			HandleReply(gb, GCodeResult::ok, "");
-			return true;
-		}
-#endif
 		// Report the tool number in use if no parameter is passed
 		const int toolNum = ms.GetCurrentToolNumber();
 		if (toolNum < 0)

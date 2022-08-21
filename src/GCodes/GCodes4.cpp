@@ -351,7 +351,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::toolChange1:						// release the old tool (if any), then run tpre for the new tool
 	case GCodeState::m109ToolChange1:					// release the old tool (if any), then run tpre for the new tool
-		if (LockMovementAndWaitForStandstill(gb))		// wait for tfree.g to finish executing
+		if (LockMovementAndWaitForStandstill(gb
+#if SUPPORT_ASYNC_MOVES
+										, false
+#endif
+												))		// wait for tfree.g to finish executing
 		{
 			if (ms.currentTool != nullptr)
 			{
@@ -374,7 +378,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::toolChange2:						// select the new tool if it exists and run tpost
 	case GCodeState::m109ToolChange2:					// select the new tool if it exists and run tpost
-		if (LockMovementAndWaitForStandstill(gb))		// wait for tpre.g to finish executing
+		if (LockMovementAndWaitForStandstill(gb
+#if SUPPORT_ASYNC_MOVES
+										, false
+#endif
+												))		// wait for tpre.g to finish executing
 		{
 			ms.SelectTool(ms.newToolNumber, IsSimulating());
 			UpdateCurrentUserPosition(gb);				// get the actual position of the new tool
@@ -391,7 +399,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::toolChangeComplete:
 	case GCodeState::m109ToolChangeComplete:
-		if (LockMovementAndWaitForStandstill(gb))		// wait for the move to height to finish
+		if (LockMovementAndWaitForStandstill(gb
+#if SUPPORT_ASYNC_MOVES
+										, false
+#endif
+												))		// wait for the move to height to finish
 		{
 			gb.LatestMachineState().feedRate = ms.toolChangeRestorePoint.feedRate;
 			// We don't restore the default fan speed in case the user wants to use a different one for the new tool
