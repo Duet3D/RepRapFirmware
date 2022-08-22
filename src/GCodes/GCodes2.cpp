@@ -113,7 +113,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 {
 	GCodeResult result = GCodeResult::ok;
 	const int code = gb.GetCommandNumber();
-	if (IsSimulating() && code > 4 && code != 10 && code != 11 && code != 20 && code != 21 && (code < 53 || code > 59) && (code < 90 || code > 92))
+	if (IsSimulating() && code > 4 && code != 10 && code != 11 && code != 20 && code != 21 && (code < 53 || code > 59) && (code < 90 || code > 94))
 	{
 		HandleReply(gb, result, "");
 		return true;														// we only simulate some gcodes
@@ -496,6 +496,16 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 92: // Set position
 			BREAK_IF_NOT_EXECUTING
 			result = SetPositions(gb, reply);
+			break;
+
+		case 93:	// inverse time mode
+			gb.LatestMachineState().inverseTimeMode = true;
+			reprap.InputsUpdated();
+			break;
+
+		case 94:	//normal feed rate mode
+			gb.LatestMachineState().inverseTimeMode = false;
+			reprap.InputsUpdated();
 			break;
 
 		default:
@@ -1535,16 +1545,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 				}
-				break;
-
-			case 93:	// inverse time mode
-				gb.LatestMachineState().inverseTimeMode = true;
-				reprap.InputsUpdated();
-				break;
-
-			case 94:	//normal feed rate mode
-				gb.LatestMachineState().inverseTimeMode = false;
-				reprap.InputsUpdated();
 				break;
 
 			case 98: // Call Macro/Subprogram
