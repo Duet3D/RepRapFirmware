@@ -673,8 +673,8 @@ void WiFiInterface::Spin() noexcept
 				lastState = currentState;
 			}
 
-			// The ESP toggles CS before it has finished starting up, so don't look at the CS signal too soon
 			const uint32_t now = millis();
+
 			if (risingEdges >= 2) // the first rising edge is the one coming out of reset
 			{
 				lastTickMillis = now;
