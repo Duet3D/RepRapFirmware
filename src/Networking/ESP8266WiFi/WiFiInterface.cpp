@@ -1117,13 +1117,15 @@ size_t WiFiInterface::CheckCredential(GCodeBuffer &gb, bool file)
 
 		if (f)
 		{
-			sz = f->Length() + 1; // plus null terminator
+			sz = f->Length();
 			f->Close();
 
 			if (!sz)
 			{
 				throw GCodeException(-1, -1, "File '%s' empty", cred.c_str());
 			}
+
+			sz++;  // plus null terminator
 		}
 		else
 		{
@@ -1159,45 +1161,29 @@ int32_t WiFiInterface::SendFileCredential(GCodeBuffer &gb, size_t credIndex)
 {
 	static_assert(MaxCredentialChunkSize <= sizeof(bufferOut->data));
 
-	String<MaxFilenameLength> fileName;
-	gb.GetQuotedString(fileName.GetRef());
+	StringRef fileName(reinterpret_cast<char*>(&(bufferOut->data)), MaxCredentialChunkSize);
+	gb.GetQuotedString(fileName);
 
 	FileStore *const cert = platform.OpenSysFile(fileName.c_str(), OpenMode::read);
 
 	// Send the contents of the file with a null terminator appended at the end. The authentication
 	// fails without the null terminator.
-	bool nullAppended = false;
-
 	int32_t rslt = ResponseEmpty;
 
-	for(size_t total = 0, sz = 0; total < cert->Length(); total += sz)
+	for(size_t total = 0, sz = 0; rslt == ResponseEmpty && total <= cert->Length(); total += sz)
 	{
+		rslt = ResponseUnknownError;
+
 		memset(bufferOut->data, 0, sizeof(bufferOut->data));
 		sz = cert->Read(bufferOut->data, MaxCredentialChunkSize);
 
-		if (sz <= MaxCredentialChunkSize - 1)
+		if (sz < MaxCredentialChunkSize)
 		{
 			bufferOut->data[sz] = 0;
-			sz += 1;
-			nullAppended = true;
+			sz++;
 		}
 
-		if ((rslt = SendCredential(credIndex, bufferOut->data, sz)) != ResponseEmpty)
-		{
-			return rslt;
-		}
-	}
-
-	// The last chunk is of MaxCredentialChunkSize, send another chunk
-	// with just the null terminator.
-	if (!nullAppended)
-	{
-		uint8_t n = 0;
-
-		if ((rslt = SendCredential(credIndex, &n, 1)) != ResponseEmpty)
-		{
-			return rslt;
-		}
+		rslt = SendCredential(credIndex, bufferOut->data, sz);
 	}
 
 	cert->Close();
@@ -1233,22 +1219,22 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 
 					if (gb.Seen('X'))
 					{
-						switch(gb.GetUIValue())
+						auto param = gb.GetUIValue();
+						switch (param)
 						{
+							case 0: // do nothing
+								break;
 							case 1:
 								config.eap.protocol = EAPProtocol::EAP_TLS;
 								break;
-
 							case 2:
 								config.eap.protocol = EAPProtocol::EAP_PEAP_MSCHAPV2;
 								break;
-
 							case 3:
 								config.eap.protocol = EAPProtocol::EAP_TTLS_MSCHAPV2;
 								break;
-
 							default:
-								config.eap.protocol = EAPProtocol::UNSUPPORTED;
+								throw GCodeException(-1, -1, "Invalid parameter X=%d", param);
 								break;
 						}
 					}
@@ -1317,9 +1303,10 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 								config.eap.credSizes.asMemb.peapttls.password = CheckCredential(gb);
 							}
 						}
+						else { }
 
 						int32_t rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, static_cast<int>(config.eap.protocol),
-										static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), 0, &config, sizeof(config), nullptr, 0);
+													static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), 0, &config, sizeof(config), nullptr, 0);
 
 						if (rslt == ResponseEmpty)
 						{
