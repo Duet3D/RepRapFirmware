@@ -659,7 +659,7 @@ void Platform::Init() noexcept
 		driveDriverBits[drive] = 0;
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
-#if HAS_SMART_DRIVERS
+#if HAS_SMART_DRIVERS || SUPPORT_CAN_EXPANSION
 		standstillCurrentPercent[drive] = DefaultStandstillCurrentPercent;
 #endif
 		microstepping[drive] = 16 | 0x8000;						// x16 with interpolation
@@ -2848,7 +2848,7 @@ int Platform::GetMotorCurrent(size_t drive, int code) const noexcept
 		rslt = motorCurrentFraction[drive] * 100.0;
 		break;
 
-#if HAS_SMART_DRIVERS
+#if HAS_SMART_DRIVERS || SUPPORT_CAN_EXPANSION
 	case 917:
 		rslt = standstillCurrentPercent[drive];
 		break;
