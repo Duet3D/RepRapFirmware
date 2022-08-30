@@ -96,7 +96,7 @@ constexpr SSPChannel ESP_SPI = SSP0;
 const uint32_t WiFiSlowResponseTimeoutMillis = 300;				// SPI timeout when when the ESP has to write to flash memory. Christian measured this at 29 to 31ms when using NVRAM. Renz measured up to 178ms when using SPIFFS.
 const uint32_t WiFiFastResponseTimeoutMillis = 20;				// SPI timeout when when the ESP does not have to write to flash memory.
 const uint32_t WiFiWaitReadyMillis = 100;
-const uint32_t WiFiStartupMillis = 300;
+const uint32_t WiFiStartupMillis = 8000;
 const uint32_t WiFiStableMillis = 100;
 
 const unsigned int MaxHttpConnections = 4;
@@ -626,6 +626,8 @@ void WiFiInterface::Start() noexcept
 	transferAlreadyPendingCount = readyTimeoutCount = responseTimeoutCount = 0;
 
 	lastTickMillis = millis();
+	lastDataReadyPinState = 0;
+	risingEdges = 0;
 	SetState(NetworkState::starting1);
 }
 
@@ -662,12 +664,30 @@ void WiFiInterface::Spin() noexcept
 	{
 	case NetworkState::starting1:
 		{
+			const bool currentDataReadyPinState = digitalRead(EspDataReadyPin);
+			if (currentDataReadyPinState != lastDataReadyPinState)
+			{
+				if (currentDataReadyPinState && risingEdges < 10)
+				{
+					risingEdges++;
+				}
+				lastDataReadyPinState = currentDataReadyPinState;
+			}
+
 			// The ESP toggles CS before it has finished starting up, so don't look at the CS signal too soon
 			const uint32_t now = millis();
-			if (now - lastTickMillis >= WiFiStartupMillis)
+			if (risingEdges >= 2) // the first rising edge is the one coming out of reset
 			{
 				lastTickMillis = now;
 				SetState(NetworkState::starting2);
+			}
+			else
+			{
+				if (now - lastTickMillis >= WiFiStartupMillis) // time wait expired
+				{
+					platform.Message(NetworkInfoMessage, "WiFi module disabled - start timed out\n");
+					SetState(NetworkState::disabled);
+				}
 			}
 		}
 		break;

@@ -120,6 +120,8 @@ private:
 
 	Platform& platform;
 	uint32_t lastTickMillis;
+	bool lastDataReadyPinState;
+	uint8_t risingEdges;
 
 	struct MessageBufferOut
 	{

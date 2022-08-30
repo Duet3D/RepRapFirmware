@@ -722,7 +722,7 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcep
 {
 	if (usingMesh)
 	{
-		const float toolHeight = xyzPoint[Z_AXIS] + Tool::GetOffset(tool, Z_AXIS);
+		const float toolHeight = xyzPoint[Z_AXIS] + Tool::GetOffset(tool, Z_AXIS);			// the requested nozzle height above the bed
 		if (!useTaper || toolHeight < taperHeight)
 		{
 			const float zCorrection = ComputeHeightCorrection(xyzPoint, tool);
