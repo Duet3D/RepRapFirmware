@@ -576,7 +576,7 @@ void WiFiInterface::Start() noexcept
 	transferAlreadyPendingCount = readyTimeoutCount = responseTimeoutCount = 0;
 
 	lastTickMillis = millis();
-	lastState = 0;
+	lastDataReadyPinState = 0;
 	risingEdges = 0;
 	SetState(NetworkState::starting1);
 }
@@ -614,14 +614,14 @@ void WiFiInterface::Spin() noexcept
 	{
 	case NetworkState::starting1:
 		{
-			const bool currentState = digitalRead(EspDataReadyPin);
-			if (currentState != lastState)
+			const bool currentDataReadyPinState = digitalRead(EspDataReadyPin);
+			if (currentDataReadyPinState != lastDataReadyPinState)
 			{
-				if (currentState)
+				if (currentDataReadyPinState && risingEdges < 10)
 				{
 					risingEdges++;
 				}
-				lastState = currentState;
+				lastDataReadyPinState = currentDataReadyPinState;
 			}
 
 			// The ESP toggles CS before it has finished starting up, so don't look at the CS signal too soon
