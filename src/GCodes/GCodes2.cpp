@@ -4278,7 +4278,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 906: // Set/report Motor currents
 			case 913: // Set/report motor current percent
-#if HAS_SMART_DRIVERS
+#if HAS_SMART_DRIVERS || SUPPORT_CAN_EXPANSION
 			case 917: // Set/report standstill motor current percentage
 #endif
 				{
@@ -4339,7 +4339,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					else
 					{
 						reply.copy(	(code == 913) ? "Motor current % of normal - "
-#if HAS_SMART_DRIVERS
+#if HAS_SMART_DRIVERS || SUPPORT_CAN_EXPANSION
 									: (code == 917) ? "Motor standstill current % of normal - "
 #endif
 											: "Motor current (mA) - "

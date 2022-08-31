@@ -113,6 +113,8 @@ constexpr GpioPinFunction StepGatePinFunction = GpioPinFunction::C;			// TIOB11
 #define STEP_GATE_TC_ID		(ID_TC11)				// ID for peripheral clock and interrupt
 #define STEP_GATE_TC_CHAN	(2)
 
+constexpr uint32_t DefaultStandstillCurrentPercent = 71;					// needed to support expansion boards
+
 // Thermistor/PT1000 inputs
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(15), PortCPin(29), PortCPin(0), PortCPin(31) };	// Thermistor/PT1000 pins
 constexpr Pin VssaSensePin = PortCPin(13);
