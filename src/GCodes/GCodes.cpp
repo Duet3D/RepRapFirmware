@@ -2236,7 +2236,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	ms.doingArcMove = false;
 	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetLinearAxes());
 	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetRotationalAxes());
-	FinaliseMove(gb);
+	FinaliseMove(gb, ms);
 	UnlockAll(gb);			// allow pause
 	return true;
 }
@@ -2616,7 +2616,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	ms.xyPlane = (selectedPlane == 0);
 	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetLinearAxes());
 	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetRotationalAxes());
-	FinaliseMove(gb);
+	FinaliseMove(gb, ms);
 	UnlockAll(gb);			// allow pause
 //	debugPrintf("Radius %.2f, initial angle %.1f, increment %.1f, segments %u\n",
 //				arcRadius, arcCurrentAngle * RadiansToDegrees, arcAngleIncrement * RadiansToDegrees, segmentsLeft);
@@ -2690,7 +2690,7 @@ bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 	ToolOffsetTransform(ms, rp.moveCoords, ms.coords);
 	ms.feedRate = rp.feedRate;
 	ms.movementTool = ms.currentTool;
-	ms.linearAxesMentioned = moveState.rotationalAxesMentioned = true;			// assume that both linear and rotational axes might be moving
+	ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;			// assume that both linear and rotational axes might be moving
 	NewSingleSegmentMoveAvailable(ms);
 	return true;
 }
