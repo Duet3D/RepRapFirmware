@@ -844,6 +844,8 @@ bool GCodes::SetupM585ProbingMove(GCodeBuffer& gb) noexcept
 	ms.checkEndstops = true;
 	ms.canPauseAfter = false;
 	zProbeTriggered = false;
+	ms.linearAxesMentioned = reprap.GetPlatform().IsAxisLinear(m585Settings.axisNumber);
+	ms.rotationalAxesMentioned = reprap.GetPlatform().IsAxisRotational(m585Settings.axisNumber);
 	NewSingleSegmentMoveAvailable(ms);
 	return true;
 }
@@ -900,6 +902,8 @@ bool GCodes::SetupM675ProbingMove(GCodeBuffer& gb, bool towardsMin) noexcept
 	ms.checkEndstops = true;
 	ms.canPauseAfter = false;
 	zProbeTriggered = false;
+	ms.linearAxesMentioned = reprap.GetPlatform().IsAxisLinear(m675Settings.axisNumber);
+	ms.rotationalAxesMentioned = reprap.GetPlatform().IsAxisRotational(m675Settings.axisNumber);
 	NewSingleSegmentMoveAvailable(ms);						// kick off the move
 	return true;
 }
@@ -912,6 +916,8 @@ void GCodes::SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept
 	ms.coords[m675Settings.axisNumber] = position;
 	ms.feedRate = m675Settings.feedRate;
 	ms.canPauseAfter = false;
+	ms.linearAxesMentioned = reprap.GetPlatform().IsAxisLinear(m675Settings.axisNumber);
+	ms.rotationalAxesMentioned = reprap.GetPlatform().IsAxisRotational(m675Settings.axisNumber);
 	NewSingleSegmentMoveAvailable(ms);
 }
 

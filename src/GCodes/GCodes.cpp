@@ -2137,7 +2137,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		AxesBitmap effectiveAxesHomed = axesVirtuallyHomed;
 		if (doingManualBedProbe)
 		{
-			effectiveAxesHomed.ClearBit(Z_AXIS);								// if doing a manual Z probe, don't limit the Z movement
+			effectiveAxesHomed.ClearBit(Z_AXIS);							// if doing a manual Z probe, don't limit the Z movement
 		}
 
 		const LimitPositionResult lp = reprap.GetMove().GetKinematics().LimitPosition(ms.coords, ms.initialCoords, numVisibleAxes, effectiveAxesHomed, ms.isCoordinated, limitAxes);
@@ -2234,7 +2234,9 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	}
 
 	ms.doingArcMove = false;
-	FinaliseMove(gb, ms);
+	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetLinearAxes());
+	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetRotationalAxes());
+	FinaliseMove(gb);
 	UnlockAll(gb);			// allow pause
 	return true;
 }
@@ -2612,7 +2614,9 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	ms.arcAxis1 = axis1;
 	ms.doingArcMove = true;
 	ms.xyPlane = (selectedPlane == 0);
-	FinaliseMove(gb, ms);
+	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetLinearAxes());
+	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetRotationalAxes());
+	FinaliseMove(gb);
 	UnlockAll(gb);			// allow pause
 //	debugPrintf("Radius %.2f, initial angle %.1f, increment %.1f, segments %u\n",
 //				arcRadius, arcCurrentAngle * RadiansToDegrees, arcAngleIncrement * RadiansToDegrees, segmentsLeft);
@@ -2686,6 +2690,7 @@ bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 	ToolOffsetTransform(ms, rp.moveCoords, ms.coords);
 	ms.feedRate = rp.feedRate;
 	ms.movementTool = ms.currentTool;
+	ms.linearAxesMentioned = moveState.rotationalAxesMentioned = true;			// assume that both linear and rotational axes might be moving
 	NewSingleSegmentMoveAvailable(ms);
 	return true;
 }
@@ -3913,6 +3918,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 				ms.coords[Z_AXIS] -= ms.currentZHop;
 				ms.currentZHop = 0.0;
 				ms.canPauseAfter = false;			// don't pause in the middle of a command
+				ms.linearAxesMentioned = true;
 #if SUPPORT_ASYNC_MOVES
 				AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS));
 #endif

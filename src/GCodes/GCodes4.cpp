@@ -513,6 +513,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// Just move to the saved position in one go
 				gb.SetState(GCodeState::resuming3);
 			}
+			ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;	// assume that both linear and rotational axes might be moving
 			NewSingleSegmentMoveAvailable(ms);
 		}
 		break;
@@ -662,6 +663,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.coords[axis1Num] = axesCoords[axis1Num];
 					ms.coords[Z_AXIS] = zp->GetStartingHeight();
 					ms.feedRate = zp->GetTravelSpeed();
+					ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;		// assume that both linear and rotational axes might be moving
 					NewSingleSegmentMoveAvailable(ms);
 
 					InitialiseTaps(false);
@@ -742,6 +744,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.reduceAcceleration = true;
 					ms.coords[Z_AXIS] = -zp->GetDiveHeight() + zp->GetActualTriggerHeight();
 					ms.feedRate = zp->GetProbingSpeed(tapsDone);
+					ms.linearAxesMentioned = true;
 					NewSingleSegmentMoveAvailable(ms);
 					gb.AdvanceState();
 				}
@@ -793,6 +796,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			ms.coords[Z_AXIS] = zp->GetStartingHeight();
 			ms.feedRate = zp->GetTravelSpeed();
 		}
+		ms.linearAxesMentioned = true;
 		NewSingleSegmentMoveAvailable(ms);
 		gb.AdvanceState();
 		break;
@@ -933,6 +937,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			ms.coords[Z_AXIS] = zp->GetStartingHeight();
 			ms.feedRate = zp->GetTravelSpeed();
 		}
+		ms.linearAxesMentioned = true;
 		NewSingleSegmentMoveAvailable(ms);
 		gb.AdvanceState();
 		break;
@@ -947,6 +952,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
 			ms.coords[Z_AXIS] = zp->GetStartingHeight();
 			ms.feedRate = zp->GetTravelSpeed();
+			ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;		// assume that both linear and rotational axes might be moving
 			NewSingleSegmentMoveAvailable(ms);
 
 			InitialiseTaps(false);
@@ -1027,6 +1033,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 												: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet, so treat this as a homing move
 					ms.feedRate = zp->GetProbingSpeed(tapsDone);
 					NewSingleSegmentMoveAvailable(ms);
+					ms.linearAxesMentioned = true;
 					gb.AdvanceState();
 				}
 			}
@@ -1120,6 +1127,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			ms.coords[Z_AXIS] = zp->GetStartingHeight();
 			ms.feedRate = zp->GetTravelSpeed();
 		}
+		ms.linearAxesMentioned = true;
 		NewSingleSegmentMoveAvailable(ms);
 		gb.AdvanceState();
 		break;
@@ -1314,6 +1322,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						ms.reduceAcceleration = true;
 						straightProbeSettings.SetCoordsToTarget(ms.coords);
 						ms.feedRate = zp->GetProbingSpeed(0);
+						ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;
 						NewSingleSegmentMoveAvailable(ms);
 						gb.AdvanceState();
 					}
@@ -1359,6 +1368,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				ms.filePos = gb.GetJobFilePosition();
 				ms.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
 				ms.currentZHop = ms.currentTool->GetRetractHop();
+				ms.linearAxesMentioned = true;
 				NewSingleSegmentMoveAvailable(ms);
 			}
 			gb.SetState(GCodeState::normal);

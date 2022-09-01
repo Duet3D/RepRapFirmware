@@ -24,6 +24,8 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 	reduceAcceleration = false;
 	hasPositiveExtrusion = false;
 	inverseTimeMode = false;
+	linearAxesMentioned = false;
+	rotationalAxesMentioned = false;
 	filePos = noFilePosition;
 	movementTool = nullptr;
 	cosXyAngle = 1.0;

@@ -35,7 +35,9 @@ struct RawMove
 			usingStandardFeedrate : 1,								// true if this move uses the standard feed rate
 			checkEndstops : 1,										// true if any endstops or the Z probe can terminate the move
 			reduceAcceleration : 1,									// true if Z probing so we should limit the Z acceleration
-			inverseTimeMode : 1;									// true if executing the move in inverse time mode
+			inverseTimeMode : 1,									// true if executing the move in inverse time mode
+			linearAxesMentioned : 1,								// true if any linear axes were mentioned in the movement command
+			rotationalAxesMentioned: 1;								// true if any rotational axes were mentioned in the movement command
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
