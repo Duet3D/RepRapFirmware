@@ -93,9 +93,9 @@ constexpr SSPChannel ESP_SPI = SSP0;
 # include "matrix/matrix.h"
 #endif
 
-const uint32_t WiFiResponseTimeoutMillis = 500;					// Timeout includes time-intensive flash-access operations; highest measured is 234 ms.
+const uint32_t WiFiResponseTimeoutMillis = 12000;					// Timeout includes time-intensive flash-access operations; high value for factory reset command, which formats the SPIFFS partition.
 const uint32_t WiFiWaitReadyMillis = 100;
-const uint32_t WiFiStartupMillis = 8000;
+const uint32_t WiFiStartupMillis = 12000;
 const uint32_t WiFiStableMillis = 100;
 
 const unsigned int MaxHttpConnections = 4;
