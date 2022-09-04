@@ -843,12 +843,12 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 				// We received an unexpected message. Don't tack it on to 'reply' because some replies contain important data, e.g. request for board short name.
 				if (buf->id.MsgType() == CanMessageType::standardReply)
 				{
-					reprap.GetPlatform().MessageF(WarningMessage, "Discarded std reply src=%u RID=%u exp %u \"%s\"\n",
-													buf->id.Src(), (unsigned int)buf->msg.standardReply.requestId, rid, buf->msg.standardReply.text);
+					reprap.GetPlatform().MessageF(WarningMessage, "Discarded std reply src=%u RID=%u exp=%u \"%.*s\"\n",
+													buf->id.Src(), (unsigned int)buf->msg.standardReply.requestId, rid, buf->msg.standardReply.GetTextLength(buf->dataLength), buf->msg.standardReply.text);
 				}
 				else
 				{
-					reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp %u\n",
+					reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp=%u\n",
 													buf->id.Src(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->msg.standardReply.requestId, rid);
 				}
 			}
