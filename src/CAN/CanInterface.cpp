@@ -1173,10 +1173,10 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 	if (type == (uint16_t)DiagnosticTestType::AccessMemory)
 	{
 		gb.MustSee('A');
-		msg->param32[0] = gb.GetUIValue();
+		msg->param32[0] = (uint32_t)gb.GetIValue();			// allow negative values so that we can read high memory addresses
 		if (gb.Seen('V'))
 		{
-			msg->param32[1] = gb.GetUIValue();
+			msg->param32[1] = (uint32_t)gb.GetIValue();		// allow negative values so that we set high values
 			msg->param16 = 1;
 		}
 		else
@@ -1184,7 +1184,7 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 			msg->param16 = 0;
 		}
 	}
-	return SendRequestAndGetStandardReply(buf, rid, reply);			// we may not actually get a reply if the test is one that crashes the expansion board
+	return SendRequestAndGetStandardReply(buf, rid, reply);	// we may not actually get a reply if the test is one that crashes the expansion board
 }
 
 GCodeResult CanInterface::RemoteM408(uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)

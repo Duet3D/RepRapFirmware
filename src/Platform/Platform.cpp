@@ -2035,16 +2035,16 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 	case (unsigned int)DiagnosticTestType::AccessMemory:
 		{
 			gb.MustSee('A');
-			uint32_t address = gb.GetUIValue();
+			uint32_t address = (uint32_t)gb.GetIValue();		// allow negative values here so that we can read high addresses
 			unsigned int numValues = (gb.Seen('R')) ? gb.GetUIValue() : 1;
-			uint32_t val;
+			int32_t val;
 			bool dummy;
 			deliberateError = true;								// in case the memory access causes a fault
-			if (gb.TryGetUIValue('V', val, dummy))
+			if (gb.TryGetIValue('V', val, dummy))				// allow negative values so that we can use values like 0xffffffff
 			{
 				while (numValues != 0)
 				{
-					*reinterpret_cast<uint32_t*>(address) = val;
+					*reinterpret_cast<uint32_t*>(address) = (uint32_t)val;
 					address += 4;
 					--numValues;
 				}
