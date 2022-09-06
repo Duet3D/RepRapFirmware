@@ -45,14 +45,6 @@ Licence: GPL
 
 #if defined(DUET_NG)
 # include "DueXn.h"
-#elif defined(DUET_06_085)
-# include "MCP4461/MCP4461.h"
-#elif defined(__ALLIGATOR__)
-# include "DAC/DAC084S085.h"       // SPI DAC for motor current vref
-# include "EUI48/EUI48EEPROM.h"    // SPI EUI48 mac address EEPROM
-# include "Microstepping.h"
-#elif defined(__LPC17xx__)
-# include "MCP4461/MCP4461.h"
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -126,6 +118,7 @@ enum class BoardType : uint8_t
 #elif defined(DUET3_MB6HC)
 	Duet3_6HC_v06_100 = 1,
 	Duet3_6HC_v101 = 2,
+	Duet3_6HC_v102 = 3,
 #elif defined(DUET3_MB6XD)
 	Duet3_6XD_v01 = 1,
 	Duet3_6XD_v100 = 2,
@@ -707,7 +700,10 @@ private:
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
 #endif
 
-#ifdef DUET3_MB6XD
+#if defined(DUET3_MB6HC)
+	float AdcReadingToPowerVoltage(uint16_t adcVal) const noexcept;
+	uint16_t PowerVoltageToAdcReading(float voltage) const noexcept;
+#elif defined(DUET3_MB6XD)
 	void UpdateDriverTimings() noexcept;
 #endif
 
@@ -893,6 +889,13 @@ private:
 	uint16_t autoPauseReading, autoResumeReading;
 	uint32_t numVinUnderVoltageEvents, previousVinUnderVoltageEvents;
 	volatile uint32_t numVinOverVoltageEvents, previousVinOverVoltageEvents;
+
+#ifdef DUET3_MB6HC
+	float powerMonitorVoltageRange;
+	uint16_t driverPowerOnAdcReading;
+	uint16_t driverPowerOffAdcReading;
+#endif
+
 	bool autoSaveEnabled;
 
 	enum class AutoSaveState : uint8_t

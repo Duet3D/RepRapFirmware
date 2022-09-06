@@ -148,7 +148,8 @@ constexpr Pin SpiTempSensorCsPins[] = { PortAPin(5), PortAPin(6), PortDPin(20), 
 // Analogue pin numbers
 constexpr Pin PowerMonitorVinDetectPin = PortAPin(20);
 constexpr Pin PowerMonitorV12DetectPin = PortEPin(4);
-constexpr float PowerMonitorVoltageRange = (60.4 + 4.7)/4.7 * 3.3;			// voltage divider ratio times the reference voltage
+constexpr float PowerMonitorVoltageRange_v102 = (100.0 + 5.1)/5.1 * 3.3;	// voltage divider ratio times the reference voltage
+constexpr float PowerMonitorVoltageRange_v101 = (60.4 + 4.7)/4.7 * 3.3;		// voltage divider ratio times the reference voltage
 constexpr float V12MonitorVoltageRange = (60.4 + 4.7)/4.7 * 3.3;			// voltage divider ratio times the reference voltage
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED

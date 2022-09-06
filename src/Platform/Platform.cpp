@@ -47,8 +47,8 @@
 
 #if SAM4E || SAM4S || SAME70
 # include <AnalogIn.h>
-# include <DmacManager.h>
 using LegacyAnalogIn::AdcBits;
+# include <DmacManager.h>
 # include <pmc/pmc.h>
 # if SAME70
 static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA channels in CoreNG");
@@ -116,18 +116,34 @@ using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have 
 
 #if HAS_VOLTAGE_MONITOR
 
-inline constexpr float AdcReadingToPowerVoltage(uint16_t adcVal)
+# if defined(DUET3_MB6HC)
+
+	float Platform::AdcReadingToPowerVoltage(uint16_t adcVal) const noexcept
+	{
+		return (adcVal * powerMonitorVoltageRange)/(1u << AdcBits);
+	}
+
+	uint16_t Platform::PowerVoltageToAdcReading(float voltage) const noexcept
+	{
+		return (uint16_t)((voltage * (1u << AdcBits))/powerMonitorVoltageRange);
+	}
+
+# else
+
+inline constexpr float AdcReadingToPowerVoltage(uint16_t adcVal) noexcept
 {
 	return adcVal * (PowerMonitorVoltageRange/(1u << AdcBits));
 }
 
-inline constexpr uint16_t PowerVoltageToAdcReading(float voltage)
+inline constexpr uint16_t PowerVoltageToAdcReading(float voltage) noexcept
 {
 	return (uint16_t)(voltage * ((1u << AdcBits)/PowerMonitorVoltageRange));
 }
 
 constexpr uint16_t driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);			// minimum voltage at which we initialise the drivers
 constexpr uint16_t driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);			// voltages below this flag the drivers as unusable
+
+#endif
 
 # if ENFORCE_MAX_VIN
 constexpr uint16_t driverOverVoltageAdcReading = PowerVoltageToAdcReading(29.0);		// voltages above this cause driver shutdown
@@ -138,12 +154,12 @@ constexpr uint16_t driverNormalVoltageAdcReading = PowerVoltageToAdcReading(27.5
 
 #if HAS_12V_MONITOR
 
-inline constexpr float AdcReadingToV12Voltage(uint16_t adcVal)
+inline constexpr float AdcReadingToV12Voltage(uint16_t adcVal) noexcept
 {
 	return adcVal * (V12MonitorVoltageRange/(1u << AdcBits));
 }
 
-inline constexpr uint16_t V12VoltageToAdcReading(float voltage)
+inline constexpr uint16_t V12VoltageToAdcReading(float voltage) noexcept
 {
 	return (uint16_t)(voltage * ((1u << AdcBits)/V12MonitorVoltageRange));
 }
@@ -1273,7 +1289,7 @@ void Platform::Spin() noexcept
 #if HAS_12V_MONITOR
 			if (numV12UnderVoltageEvents != previousV12UnderVoltageEvents)
 			{
-				MessageF(WarningMessage, "12V under-voltage event (%.1fV)", (double)AdcReadingToPowerVoltage(lastV12UnderVoltageValue));
+				MessageF(WarningMessage, "12V under-voltage event (%.1fV)", (double)AdcReadingToV12Voltage(lastV12UnderVoltageValue));
 				previousV12UnderVoltageEvents = numV12UnderVoltageEvents;
 				reported = true;
 			}
@@ -1709,7 +1725,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 #if HAS_12V_MONITOR
 	// Show the 12V rail voltage
 	MessageF(mtype, "12V rail voltage: min %.1f, current %.1f, max %.1f, under voltage events: %" PRIu32 "\n",
-		(double)AdcReadingToPowerVoltage(lowestV12), (double)AdcReadingToPowerVoltage(currentV12), (double)AdcReadingToPowerVoltage(highestV12), numV12UnderVoltageEvents);
+		(double)AdcReadingToV12Voltage(lowestV12), (double)AdcReadingToV12Voltage(currentV12), (double)AdcReadingToV12Voltage(highestV12), numV12UnderVoltageEvents);
 #endif
 
 	ResetVoltageMonitors();
@@ -1885,7 +1901,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				size_t numVoltages = 2;
 				gb.GetFloatArray(voltageMinMax, numVoltages, false);
 
-				const float voltage = AdcReadingToPowerVoltage(currentV12);
+				const float voltage = AdcReadingToV12Voltage(currentV12);
 				if (voltage < voltageMinMax[0])
 				{
 					buf->lcatf("12V voltage reading %.1f is lower than expected", (double)voltage);
@@ -3753,10 +3769,24 @@ void Platform::SetBoardType(BoardType bt) noexcept
 					? BoardType::Duet3Mini_WiFi
 						: BoardType::Duet3Mini_Ethernet;
 #elif defined(DUET3_MB6HC)
-		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 boards
+		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
+		// Driver 1 has a pulldown resistor on v0.1 and v1.0 boards, however we don't support v0.1 and we don't care about the difference between v0.6 and v1.0, so we don't need to read it
+		// Driver 2 has a pulldown resistor on v1.02 only
+		pinMode(DIRECTION_PINS[2], INPUT_PULLUP);
 		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
 		delayMicroseconds(20);									// give the pullup resistor time to work
-		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
+		if (digitalRead(DIRECTION_PINS[2]))
+		{
+			board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
+			powerMonitorVoltageRange = PowerMonitorVoltageRange_v101;
+		}
+		else
+		{
+			board = BoardType::Duet3_6HC_v102;
+			powerMonitorVoltageRange = PowerMonitorVoltageRange_v102;
+		}
+		driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);
+		driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);
 #elif defined(DUET3_MB6XD)
 		// Driver 0 direction has a pulldown resistor on v1.0  boards, but not on v0.1 boards
 		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
@@ -3839,7 +3869,8 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3Mini_Ethernet:		return "Duet 3 " BOARD_SHORT_NAME " Ethernet";
 #elif defined(DUET3_MB6HC)
 	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v0.6 or 1.0";
-	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
+	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
+	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "Duet 3 " BOARD_SHORT_NAME " v0.1";
 	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0 or later";
@@ -3880,6 +3911,7 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 #elif defined(DUET3_MB6HC)
 	case BoardType::Duet3_6HC_v06_100:		return "duet3mb6hc100";
 	case BoardType::Duet3_6HC_v101:			return "duet3mb6hc101";
+	case BoardType::Duet3_6HC_v102:			return "duet3mb6hc102";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "duet3mb6xd001";					// we have only one version at present
 	case BoardType::Duet3_6XD_v100:			return "duet3mb6xd100";					// we have only one version at present
@@ -4203,15 +4235,15 @@ float Platform::GetCurrentPowerVoltage() const noexcept
 MinCurMax Platform::GetV12Voltages() const noexcept
 {
 	MinCurMax result;
-	result.minimum = AdcReadingToPowerVoltage(lowestV12);
-	result.current = AdcReadingToPowerVoltage(currentV12);
-	result.maximum = AdcReadingToPowerVoltage(highestV12);
+	result.minimum = AdcReadingToV12Voltage(lowestV12);
+	result.current = AdcReadingToV12Voltage(currentV12);
+	result.maximum = AdcReadingToV12Voltage(highestV12);
 	return result;
 }
 
 float Platform::GetCurrentV12Voltage() const noexcept
 {
-	return AdcReadingToPowerVoltage(currentV12);
+	return AdcReadingToV12Voltage(currentV12);
 }
 
 #endif
