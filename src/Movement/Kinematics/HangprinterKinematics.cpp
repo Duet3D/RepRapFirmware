@@ -353,30 +353,26 @@ static bool isSameSide(float const v0[3], float const v1[3], float const v2[3], 
 	return dot0*dot1 > 0.0F;
 }
 
-static bool isInsideTetrahedron(float const point[3], float const tetrahedron[4][3]){
-	return isSameSide(tetrahedron[0], tetrahedron[1], tetrahedron[2], tetrahedron[3], point) &&
-	       isSameSide(tetrahedron[2], tetrahedron[1], tetrahedron[3], tetrahedron[0], point) &&
-	       isSameSide(tetrahedron[2], tetrahedron[3], tetrahedron[0], tetrahedron[1], point) &&
-	       isSameSide(tetrahedron[0], tetrahedron[3], tetrahedron[1], tetrahedron[2], point);
-}
-
-static bool isInsideSquarePyramid(float const point[3], float const squarePyramid[5][3]){
-	return isSameSide(squarePyramid[0], squarePyramid[1], squarePyramid[2], squarePyramid[4], point) &&
-	       isSameSide(squarePyramid[2], squarePyramid[1], squarePyramid[4], squarePyramid[0], point) &&
-	       isSameSide(squarePyramid[2], squarePyramid[4], squarePyramid[3], squarePyramid[1], point) &&
-	       isSameSide(squarePyramid[0], squarePyramid[4], squarePyramid[3], squarePyramid[2], point) &&
-	       isSameSide(squarePyramid[0], squarePyramid[4], squarePyramid[1], squarePyramid[3], point);
-}
-
 bool HangprinterKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept /*override*/
 {
 	float const coords[3] = {axesCoords[X_AXIS], axesCoords[Y_AXIS], axesCoords[Z_AXIS]};
-	switch(numAnchors)
+
+	bool reachable = isSameSide(anchors[0], anchors[1], anchors[2], anchors[numAnchors - 1], coords);
+
+	for (size_t i = 1; reachable && i < numAnchors - 3; ++i)
 	{
-	case 5:	return isInsideSquarePyramid(coords, anchors);
-	default:
-	case 4:	return isInsideTetrahedron(coords, anchors);
+		reachable = isSameSide(anchors[i], anchors[i + 1], anchors[numAnchors - 1], anchors[i + 2], coords);
 	}
+	if (reachable)
+	{
+		reachable = isSameSide(anchors[numAnchors - 3], anchors[numAnchors - 2], anchors[numAnchors - 1], anchors[0], coords);
+	}
+	if (reachable)
+	{
+		reachable = isSameSide(anchors[numAnchors - 2], anchors[0], anchors[numAnchors - 1], anchors[1], coords);
+	}
+
+	return reachable;
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
