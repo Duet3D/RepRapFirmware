@@ -20,10 +20,11 @@
 constexpr size_t DefaultNumAnchors = 4;
 // Default anchor coordinates
 // These are only placeholders. Each machine must have these values calibrated in order to work correctly.
-constexpr float DefaultAnchors[7][3] = {{    0.0, -2000.0, -100.0},
+constexpr float DefaultAnchors[8][3] = {{    0.0, -2000.0, -100.0},
                                         { 2000.0,  1000.0, -100.0},
                                         {-2000.0,  1000.0, -100.0},
                                         {    0.0,     0.0, 3000.0},
+                                        {    0.0,     0.0,    0.0},
                                         {    0.0,     0.0,    0.0},
                                         {    0.0,     0.0,    0.0},
                                         {    0.0,     0.0,    0.0}};
@@ -85,13 +86,13 @@ void HangprinterKinematics::Init() noexcept
 	 * In practice you might want to compensate a bit more or a bit less */
 	constexpr float DefaultSpoolBuildupFactor = 0.007;
 	/* Measure and set spool radii with M669 to achieve better accuracy */
-	constexpr float DefaultSpoolRadii[HANGPRINTER_MAX_AXES] = { 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0}; // HP4 default
+	constexpr float DefaultSpoolRadii[HANGPRINTER_MAX_AXES] = { 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0, 75.0}; // HP4 default
 	/* If axis runs lines back through pulley system, set mechanical advantage accordingly with M669 */
-	constexpr uint32_t DefaultMechanicalAdvantage[HANGPRINTER_MAX_AXES] = { 2, 2, 2, 2, 2, 2, 4}; // HP4 default
-	constexpr uint32_t DefaultLinesPerSpool[HANGPRINTER_MAX_AXES] = { 1, 1, 1, 1, 1, 1, 1}; // HP4 default
-	constexpr uint32_t DefaultMotorGearTeeth[HANGPRINTER_MAX_AXES] = {  20,  20,  20,  20,  20,  20,  20}; // HP4 default
-	constexpr uint32_t DefaultSpoolGearTeeth[HANGPRINTER_MAX_AXES] = { 255, 255, 255, 255, 255, 255, 255}; // HP4 default
-	constexpr uint32_t DefaultFullStepsPerMotorRev[HANGPRINTER_MAX_AXES] = { 25, 25, 25, 25, 25, 25, 25};
+	constexpr uint32_t DefaultMechanicalAdvantage[HANGPRINTER_MAX_AXES] = { 2, 2, 2, 2, 2, 2, 2, 4}; // HP4 default
+	constexpr uint32_t DefaultLinesPerSpool[HANGPRINTER_MAX_AXES] = { 1, 1, 1, 1, 1, 1, 1, 1}; // HP4 default
+	constexpr uint32_t DefaultMotorGearTeeth[HANGPRINTER_MAX_AXES] = {  20,  20,  20,  20,  20,  20,  20,  20}; // HP4 default
+	constexpr uint32_t DefaultSpoolGearTeeth[HANGPRINTER_MAX_AXES] = { 255, 255, 255, 255, 255, 255, 255, 255}; // HP4 default
+	constexpr uint32_t DefaultFullStepsPerMotorRev[HANGPRINTER_MAX_AXES] = { 25, 25, 25, 25, 25, 25, 25, 25};
 	ARRAY_INIT(anchors, DefaultAnchors);
 	numAnchors = DefaultNumAnchors;
 	printRadius = DefaultPrintRadius;
@@ -676,8 +677,8 @@ void HangprinterKinematics::PrintParameters(const StringRef& reply) const noexce
 HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEstimate(DriverId const driver, bool const makeReference, const StringRef& reply, bool const subtractReference) THROWS(GCodeException)
 {
 	const uint8_t cmd = CANSimple::MSG_GET_ENCODER_ESTIMATES;
-	static CanAddress seenDrives[HANGPRINTER_MAX_AXES] = { 0, 0, 0, 0, 0, 0, 0 };
-	static float referencePositions[HANGPRINTER_MAX_AXES] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+	static CanAddress seenDrives[HANGPRINTER_MAX_AXES] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+	static float referencePositions[HANGPRINTER_MAX_AXES] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
 	static size_t numSeenDrives = 0;
 	size_t thisDriveIdx = 0;
 
