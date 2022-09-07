@@ -52,8 +52,8 @@ protected:
 
 private:
 	// Basic facts about movement system
-	const char* ANCHOR_CHARS = "ABCDEF";
-	static constexpr size_t HANGPRINTER_MAX_AXES = 6;
+	const char* ANCHOR_CHARS = "ABCDEFH"; // Skip the G, since it is reserved in G-code
+	static constexpr size_t HANGPRINTER_MAX_AXES = 7;
 	static constexpr size_t A_AXIS = 0;
 	static constexpr size_t B_AXIS = 1;
 	static constexpr size_t C_AXIS = 2;
