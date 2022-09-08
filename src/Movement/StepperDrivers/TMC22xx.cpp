@@ -687,7 +687,9 @@ private:
 #if HAS_STALL_DETECT
 	static constexpr unsigned int ReadSgResult = 6;			// stallguard result, TMC2209 only
 #endif
+#if SUPPORT_TMC2240
 	static constexpr unsigned int ReadAdcTemp = 6;			// driver temperature, TMC2240 only
+#endif
 	static constexpr unsigned int ReadSpecial = NumReadRegisters;
 
 	volatile uint32_t writeRegisters[NumWriteRegisters + 1];	// the values we want the TMC22xx writable registers to have
