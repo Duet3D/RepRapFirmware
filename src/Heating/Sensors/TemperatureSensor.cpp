@@ -6,6 +6,7 @@
 #include "CurrentLoopTemperatureSensor.h"
 #include "LinearAnalogSensor.h"
 #include "RemoteSensor.h"
+#include "BME280.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -233,6 +234,20 @@ TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char 
 	else if (ReducedStringEquals(typeName, DhtHumiditySensor::TypeName))
 	{
 		ts = new DhtHumiditySensor(sensorNum);
+	}
+#endif
+#if SUPPORT_BME280
+	else if (ReducedStringEquals(typeName, BME280TemperatureSensor::TypeName))
+	{
+		ts = new BME280TemperatureSensor(sensorNum);
+	}
+	else if (ReducedStringEquals(typeName, BME280PressureSensor::TypeName))
+	{
+		ts = new BME280PressureSensor(sensorNum);
+	}
+	else if (ReducedStringEquals(typeName, BME280HumiditySensor::TypeName))
+	{
+		ts = new BME280HumiditySensor(sensorNum);
 	}
 #endif
 #if HAS_CPU_TEMP_SENSOR

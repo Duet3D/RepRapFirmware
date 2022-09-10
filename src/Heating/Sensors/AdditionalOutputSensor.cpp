@@ -51,7 +51,7 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
 			return GCodeResult::error;
 		}
 
-		// We use this block to have the ReadLockPointer below go out of scope as early as possible
+		// We use this block to have the ReadLockedPointer below go out of scope as early as possible
 		{
 			const auto parent = reprap.GetHeat().FindSensor(parentSensor);
 			if (parent.IsNull())
