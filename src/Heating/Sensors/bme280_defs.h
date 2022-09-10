@@ -132,6 +132,8 @@
 #define BME280_CONFIG_ADDR                        UINT8_C(0xF5)
 #define BME280_DATA_ADDR                          UINT8_C(0xF7)
 
+#if 0
+
 /**\name API success code */
 #define BME280_OK                                 INT8_C(0)
 
@@ -145,6 +147,8 @@
 
 /**\name API warning codes */
 #define BME280_W_INVALID_OSR_MACRO                INT8_C(1)
+
+#endif
 
 /**\name Macros related to size */
 #define BME280_TEMP_PRESS_CALIB_DATA_LEN          UINT8_C(26)

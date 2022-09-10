@@ -42,15 +42,60 @@
 
 #if SUPPORT_BME280
 
-const uint32_t BME280_Frequency = 4000000;			// maximum for BME280 is 10MHz
-const SpiMode BME280_SpiMode = SPI_MODE_2;			// clock is high when idle, data sampled on rising edge
+constexpr uint16_t MinimumReadInterval = 1000;			// ms
+constexpr uint32_t BME280_Frequency = 4000000;			// maximum for BME280 is 10MHz
+constexpr SpiMode BME280_SpiMode = SPI_MODE_2;			// clock is high when idle, data sampled on rising edge
+constexpr size_t MaxRegistersToRead = 26;
+constexpr size_t MaxRegistersToWrite = 10;
 
 // BME280 support functions, derived from code at https://github.com/BoschSensortec/BME280_driver
 
 /*!
+ *  @brief This API is the entry point.
+ *  It reads the chip-id and calibration data from the sensor.
+ */
+TemperatureError BME280TemperatureSensor::bme280_init() noexcept
+{
+    /* chip id read try count */
+    uint8_t try_count = 5;
+    uint8_t chip_id = 0;
+
+	while (try_count)
+	{
+		/* Read the chip-id of bme280 sensor */
+		static_assert(1 <= MaxRegistersToRead);
+		TemperatureError rslt = bme280_get_regs(BME280_CHIP_ID_ADDR, &chip_id, 1);
+
+		/* Check for chip id validity */
+		if ((rslt == TemperatureError::success) && (chip_id == BME280_CHIP_ID))
+		{
+			dev.chip_id = chip_id;
+
+			/* Reset the sensor */
+			rslt = bme280_soft_reset();
+
+			if (rslt == TemperatureError::success)
+			{
+				/* Read the calibration data */
+				rslt = get_calib_data();
+				return rslt;
+			}
+
+			break;
+		}
+
+		/* Wait for at least 1 ms */
+		delay(2);
+		--try_count;
+	}
+
+    return TemperatureError::hardwareError;
+}
+
+/*!
  * @brief This API reads the data from the given register address of the sensor.
  */
-int8_t BME280TemperatureSensor::bme280_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint16_t len) noexcept
+TemperatureError BME280TemperatureSensor::bme280_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint16_t len) noexcept
 {
 	/* If interface selected is SPI */
 	if (true)
@@ -58,10 +103,6 @@ int8_t BME280TemperatureSensor::bme280_get_regs(uint8_t reg_addr, uint8_t *reg_d
 		reg_addr = reg_addr | 0x80;
 	}
 
-	constexpr size_t MaxRegistersToRead = 26;
-	static_assert(MaxRegistersToRead >= BME280_P_T_H_DATA_LEN);
-	static_assert(MaxRegistersToRead >= BME280_TEMP_PRESS_CALIB_DATA_LEN);
-	static_assert(MaxRegistersToRead >= BME280_HUMIDITY_CALIB_DATA_LEN);
 	uint8_t addrBuff[MaxRegistersToRead + 1];				// only the first bytes is used but the remainder need to be value addresses
 	uint8_t dataBuff[MaxRegistersToRead + 1];
 
@@ -73,53 +114,26 @@ int8_t BME280TemperatureSensor::bme280_get_regs(uint8_t reg_addr, uint8_t *reg_d
 	if (err == TemperatureError::success)
 	{
 		memcpy(reg_data, &dataBuff[1], len);
-		return BME280_OK;
 	}
-	else
-	{
-		return BME280_E_COMM_FAIL;
-	}
+	return err;
 }
 
 /*!
  * @brief This API writes the given data to the register address
  * of the sensor.
  */
-int8_t BME280TemperatureSensor::bme280_set_regs(uint8_t *reg_addr, const uint8_t *reg_data, uint8_t len) noexcept
+TemperatureError BME280TemperatureSensor::bme280_set_regs(uint8_t *reg_addr, const uint8_t *reg_data, uint8_t len) noexcept
 {
-    uint8_t temp_buff[21]; /* Typically not to write more than 10 registers */
+    uint8_t temp_buff[MaxRegistersToWrite + 1];
 
-    if (len > 10)
-    {
-        len = 10;
-    }
-
-    int8_t rslt = BME280_OK;
-
-    /* Check for arguments validity */
-	if (len != 0)
+	/* Interleave register address w.r.t data for burst write */
+	for (uint8_t index = 0; index < len; index++)
 	{
-		/* Interleave register address w.r.t data for burst write */
-	    for (uint8_t index = 0; index < len; index++)
-	    {
-	        temp_buff[index * 2] = reg_addr[index] & 0x7F;
-	        temp_buff[(index * 2) + 1] = reg_data[index];
-	    }
-
-		TemperatureError err = DoSpiTransaction(temp_buff, nullptr, len * 2);
-
-		/* Check for communication error */
-		if (err != TemperatureError::success)
-		{
-			rslt = BME280_E_COMM_FAIL;
-		}
-	}
-	else
-	{
-		rslt = BME280_E_INVALID_LEN;
+		temp_buff[index * 2] = reg_addr[index] & 0x7F;
+		temp_buff[(index * 2) + 1] = reg_data[index];
 	}
 
-    return rslt;
+	return DoSpiTransaction(temp_buff, nullptr, len * 2);
 }
 
 /*!
@@ -227,7 +241,7 @@ float BME280TemperatureSensor::compensate_humidity(const struct bme280_uncomp_da
 /*!
  * @brief This API performs the soft reset of the sensor.
  */
-int8_t BME280TemperatureSensor::bme280_soft_reset() noexcept
+TemperatureError BME280TemperatureSensor::bme280_soft_reset() noexcept
 {
     uint8_t reg_addr = BME280_RESET_ADDR;
     uint8_t status_reg = 0;
@@ -237,21 +251,23 @@ int8_t BME280TemperatureSensor::bme280_soft_reset() noexcept
     uint8_t soft_rst_cmd = BME280_SOFT_RESET_COMMAND;
 
 	/* Write the soft reset command in the sensor */
-	int8_t rslt = bme280_set_regs(&reg_addr, &soft_rst_cmd, 1);
+    static_assert(1 <= MaxRegistersToWrite);
+    TemperatureError rslt = bme280_set_regs(&reg_addr, &soft_rst_cmd, 1);
 
-	if (rslt == BME280_OK)
+	if (rslt == TemperatureError::success)
 	{
 		/* If NVM not copied yet, Wait for NVM to copy */
 		do
 		{
 			/* As per data sheet - Table 1, startup time is 2 ms. */
 			delay(3);
+			static_assert(1 <= MaxRegistersToRead);
 			rslt = bme280_get_regs(BME280_STATUS_REG_ADDR, &status_reg, 1);
-		} while ((rslt == BME280_OK) && (try_run--) && (status_reg & BME280_STATUS_IM_UPDATE));
+		} while ((rslt == TemperatureError::success) && (try_run--) && (status_reg & BME280_STATUS_IM_UPDATE));
 
 		if (status_reg & BME280_STATUS_IM_UPDATE)
 		{
-			rslt = BME280_E_NVM_COPY_FAILED;
+			rslt = TemperatureError::hardwareError;
 		}
 	}
 
@@ -263,7 +279,7 @@ int8_t BME280TemperatureSensor::bme280_soft_reset() noexcept
  * sensor, compensates the data and store it in the bme280_data structure
  * instance passed by the user.
  */
-int8_t BME280TemperatureSensor::bme280_get_sensor_data(uint8_t sensor_comp, struct bme280_data *comp_data) noexcept
+TemperatureError BME280TemperatureSensor::bme280_get_sensor_data() noexcept
 {
     /* Array to store the pressure, temperature and humidity data read from
      * the sensor
@@ -272,9 +288,10 @@ int8_t BME280TemperatureSensor::bme280_get_sensor_data(uint8_t sensor_comp, stru
     struct bme280_uncomp_data uncomp_data = { 0 };
 
 	/* Read the pressure and temperature data from the sensor */
-	int8_t rslt = bme280_get_regs(BME280_DATA_ADDR, reg_data, BME280_P_T_H_DATA_LEN);
+	static_assert(BME280_P_T_H_DATA_LEN <= MaxRegistersToRead);
+    const TemperatureError rslt = bme280_get_regs(BME280_DATA_ADDR, reg_data, BME280_P_T_H_DATA_LEN);
 
-	if (rslt == BME280_OK)
+	if (rslt == TemperatureError::success)
 	{
 		/* Parse the read data from the sensor */
 		bme280_parse_sensor_data(reg_data, &uncomp_data);
@@ -282,7 +299,7 @@ int8_t BME280TemperatureSensor::bme280_get_sensor_data(uint8_t sensor_comp, stru
 		/* Compensate the pressure and/or temperature and/or
 		 * humidity data from the sensor
 		 */
-		bme280_compensate_data(sensor_comp, &uncomp_data);
+		bme280_compensate_data(&uncomp_data);
 	}
 
     return rslt;
@@ -322,7 +339,7 @@ void BME280TemperatureSensor::bme280_parse_sensor_data(const uint8_t *reg_data, 
  * temperature and/or humidity data according to the component selected
  * by the user.
  */
-void BME280TemperatureSensor::bme280_compensate_data(uint8_t sensor_comp, const struct bme280_uncomp_data *uncomp_data) noexcept
+void BME280TemperatureSensor::bme280_compensate_data(const struct bme280_uncomp_data *uncomp_data) noexcept
 {
 	/* Compensate the temperature data */
 	compTemperature = compensate_temperature(uncomp_data);
@@ -379,7 +396,7 @@ void BME280TemperatureSensor::parse_humidity_calib_data(const uint8_t *reg_data)
  * @brief This internal API reads the calibration data from the sensor, parse
  * it and store in the device structure.
  */
-int8_t BME280TemperatureSensor::get_calib_data() noexcept
+TemperatureError BME280TemperatureSensor::get_calib_data() noexcept
 {
     uint8_t reg_addr = BME280_TEMP_PRESS_CALIB_DATA_ADDR;
 
@@ -387,9 +404,10 @@ int8_t BME280TemperatureSensor::get_calib_data() noexcept
     uint8_t temp_calib_data[BME280_TEMP_PRESS_CALIB_DATA_LEN] = { 0 };
 
     /* Read the calibration data from the sensor */
-    int8_t rslt = bme280_get_regs(reg_addr, temp_calib_data, BME280_TEMP_PRESS_CALIB_DATA_LEN);
+	static_assert(BME280_TEMP_PRESS_CALIB_DATA_LEN <= MaxRegistersToRead);
+    TemperatureError rslt = bme280_get_regs(reg_addr, temp_calib_data, BME280_TEMP_PRESS_CALIB_DATA_LEN);
 
-    if (rslt == BME280_OK)
+    if (rslt == TemperatureError::success)
     {
         /* Parse temperature and pressure calibration data and store
          * it in device structure
@@ -398,9 +416,10 @@ int8_t BME280TemperatureSensor::get_calib_data() noexcept
         reg_addr = BME280_HUMIDITY_CALIB_DATA_ADDR;
 
         /* Read the humidity calibration data from the sensor */
+    	static_assert(BME280_HUMIDITY_CALIB_DATA_LEN <= MaxRegistersToRead);
         rslt = bme280_get_regs(reg_addr, temp_calib_data, BME280_HUMIDITY_CALIB_DATA_LEN);
 
-        if (rslt == BME280_OK)
+        if (rslt == TemperatureError::success)
         {
             /* Parse humidity calibration data and store it in
              * device structure
@@ -434,15 +453,49 @@ GCodeResult BME280TemperatureSensor::Configure(const CanMessageGenericParser& pa
 	//TODO
 	reply.copy("not implemented");
 	return GCodeResult::error;
+
+	bme280_init();
+	lastReadTime = millis();
 }
 
 #endif
 
-void BME280TemperatureSensor::Poll() noexcept
+TemperatureError BME280TemperatureSensor::GetLatestTemperature(float &t, uint8_t outputNumber) noexcept
 {
-	// TODO
+	if (outputNumber > 1)
+	{
+		t = BadErrorTemperature;
+		return TemperatureError::invalidOutputNumber;
+	}
+
+	const auto result = TemperatureSensor::GetLatestTemperature(t);
+	if (outputNumber == 1)
+	{
+		t = compPressure;
+	}
+	else if (outputNumber == 2)
+	{
+		t = compHumidity;
+	}
+	return result;
 }
 
+void BME280TemperatureSensor::Poll() noexcept
+{
+	const auto now = millis();
+	if ((now - lastReadTime) >= MinimumReadInterval)
+	{
+		lastReadTime = now;
+		if (bme280_get_sensor_data() == TemperatureError::success)
+		{
+			SetResult(compTemperature, TemperatureError::success);
+		}
+		else
+		{
+			SetResult(TemperatureError::hardwareError);
+		}
+	}
+}
 
 // Bme280PressureSensor members
 

@@ -26,26 +26,30 @@ public:
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override; // configure the sensor from M308 parameters
 #endif
 
+	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 2; }
+	TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0) noexcept override;
 	void Poll() noexcept override;
 	const char *GetShortSensorType() const noexcept override { return TypeName; }
 
 	static constexpr const char *TypeName = "bme280temperature";
 
 private:
-	int8_t bme280_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint16_t len) noexcept;
-	int8_t bme280_set_regs(uint8_t *reg_addr, const uint8_t *reg_data, uint8_t len) noexcept;
-	int8_t get_calib_data() noexcept;
-	void bme280_compensate_data(uint8_t sensor_comp, const bme280_uncomp_data *uncomp_data) noexcept;
+	TemperatureError bme280_init() noexcept;
+	TemperatureError bme280_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint16_t len) noexcept;
+	TemperatureError bme280_set_regs(uint8_t *reg_addr, const uint8_t *reg_data, uint8_t len) noexcept;
+	TemperatureError get_calib_data() noexcept;
+	void bme280_compensate_data(const bme280_uncomp_data *uncomp_data) noexcept;
 	float compensate_temperature(const struct bme280_uncomp_data *uncomp_data) noexcept;
 	float compensate_pressure(const struct bme280_uncomp_data *uncomp_data) const noexcept;
 	float compensate_humidity(const struct bme280_uncomp_data *uncomp_data) const noexcept;
 	void parse_temp_press_calib_data(const uint8_t *reg_data) noexcept;
 	void parse_humidity_calib_data(const uint8_t *reg_data) noexcept;
-	int8_t bme280_soft_reset() noexcept;
-	int8_t bme280_get_sensor_data(uint8_t sensor_comp, struct bme280_data *comp_data) noexcept;
+	TemperatureError bme280_soft_reset() noexcept;
+	TemperatureError bme280_get_sensor_data() noexcept;
 	void bme280_parse_sensor_data(const uint8_t *reg_data, struct bme280_uncomp_data *uncomp_data) noexcept;
 
 	bme280_dev dev;
+	uint32_t lastReadTime;
     float compPressure;			    /*< Compensated pressure */
     float compTemperature;    		/*< Compensated temperature */
     float compHumidity;    			/*< Compensated humidity */
