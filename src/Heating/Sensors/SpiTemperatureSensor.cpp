@@ -76,6 +76,29 @@ TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[],
 	return TemperatureError::success;
 }
 
+// Send and receive data
+TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[], uint8_t dataIn[], size_t nbytes) const noexcept
+{
+	if (!device.Select(10))
+	{
+		return TemperatureError::busBusy;
+	}
+
+	delayMicroseconds(1);
+	const bool ok = device.TransceivePacket(dataOut, dataIn, nbytes);
+	delayMicroseconds(1);
+
+	device.Deselect();
+	delayMicroseconds(1);
+
+	if (!ok)
+	{
+		return TemperatureError::timeout;
+	}
+
+	return TemperatureError::success;
+}
+
 #endif // SUPPORT_SPI_SENSORS
 
 // End

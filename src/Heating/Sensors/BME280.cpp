@@ -3,16 +3,124 @@
  *
  *  Created on: 10 Sept 2022
  *      Author: David
+ *
+ * Portions of this driver are derived from code at https://github.com/BoschSensortec/BME280_driver. The following applies to those portions:
+ *
+ * Copyright (c) 2020 Bosch Sensortec GmbH. All rights reserved.
+ *
+ * BSD-3-Clause
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ * FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+ * IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "BME280.h"
 
 #if SUPPORT_BME280
 
-// BME280 support functions
-
 const uint32_t BME280_Frequency = 4000000;			// maximum for BME280 is 10MHz
 const SpiMode BME280_SpiMode = SPI_MODE_2;			// clock is high when idle, data sampled on rising edge
+
+// BME280 support functions, derived from code at https://github.com/BoschSensortec/BME280_driver
+
+/*!
+ * @brief This API reads the data from the given register address of the sensor.
+ */
+int8_t BME280TemperatureSensor::bme280_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint16_t len) noexcept
+{
+	/* If interface selected is SPI */
+	if (true)
+	{
+		reg_addr = reg_addr | 0x80;
+	}
+
+	constexpr size_t MaxRegistersToRead = 26;
+	static_assert(MaxRegistersToRead >= BME280_P_T_H_DATA_LEN);
+	static_assert(MaxRegistersToRead >= BME280_TEMP_PRESS_CALIB_DATA_LEN);
+	static_assert(MaxRegistersToRead >= BME280_HUMIDITY_CALIB_DATA_LEN);
+	uint8_t addrBuff[MaxRegistersToRead + 1];				// only the first bytes is used but the remainder need to be value addresses
+	uint8_t dataBuff[MaxRegistersToRead + 1];
+
+	/* Read the data  */
+	addrBuff[0] = reg_addr;
+	TemperatureError err = DoSpiTransaction(addrBuff, dataBuff, len + 1);
+
+	/* Check for communication error */
+	if (err == TemperatureError::success)
+	{
+		memcpy(reg_data, &dataBuff[1], len);
+		return BME280_OK;
+	}
+	else
+	{
+		return BME280_E_COMM_FAIL;
+	}
+}
+
+/*!
+ * @brief This API writes the given data to the register address
+ * of the sensor.
+ */
+int8_t BME280TemperatureSensor::bme280_set_regs(uint8_t *reg_addr, const uint8_t *reg_data, uint8_t len) noexcept
+{
+    uint8_t temp_buff[21]; /* Typically not to write more than 10 registers */
+
+    if (len > 10)
+    {
+        len = 10;
+    }
+
+    int8_t rslt = BME280_OK;
+
+    /* Check for arguments validity */
+	if (len != 0)
+	{
+		/* Interleave register address w.r.t data for burst write */
+	    for (uint8_t index = 0; index < len; index++)
+	    {
+	        temp_buff[index * 2] = reg_addr[index] & 0x7F;
+	        temp_buff[(index * 2) + 1] = reg_data[index];
+	    }
+
+		TemperatureError err = DoSpiTransaction(temp_buff, nullptr, len * 2);
+
+		/* Check for communication error */
+		if (err != TemperatureError::success)
+		{
+			rslt = BME280_E_COMM_FAIL;
+		}
+	}
+	else
+	{
+		rslt = BME280_E_INVALID_LEN;
+	}
+
+    return rslt;
+}
 
 /*!
  * @brief This internal API is used to compensate the raw temperature data and
@@ -117,46 +225,111 @@ float BME280TemperatureSensor::compensate_humidity(const struct bme280_uncomp_da
 }
 
 /*!
+ * @brief This API performs the soft reset of the sensor.
+ */
+int8_t BME280TemperatureSensor::bme280_soft_reset() noexcept
+{
+    uint8_t reg_addr = BME280_RESET_ADDR;
+    uint8_t status_reg = 0;
+    uint8_t try_run = 5;
+
+    /* 0xB6 is the soft reset command */
+    uint8_t soft_rst_cmd = BME280_SOFT_RESET_COMMAND;
+
+	/* Write the soft reset command in the sensor */
+	int8_t rslt = bme280_set_regs(&reg_addr, &soft_rst_cmd, 1);
+
+	if (rslt == BME280_OK)
+	{
+		/* If NVM not copied yet, Wait for NVM to copy */
+		do
+		{
+			/* As per data sheet - Table 1, startup time is 2 ms. */
+			delay(3);
+			rslt = bme280_get_regs(BME280_STATUS_REG_ADDR, &status_reg, 1);
+		} while ((rslt == BME280_OK) && (try_run--) && (status_reg & BME280_STATUS_IM_UPDATE));
+
+		if (status_reg & BME280_STATUS_IM_UPDATE)
+		{
+			rslt = BME280_E_NVM_COPY_FAILED;
+		}
+	}
+
+    return rslt;
+}
+
+/*!
+ * @brief This API reads the pressure, temperature and humidity data from the
+ * sensor, compensates the data and store it in the bme280_data structure
+ * instance passed by the user.
+ */
+int8_t BME280TemperatureSensor::bme280_get_sensor_data(uint8_t sensor_comp, struct bme280_data *comp_data) noexcept
+{
+    /* Array to store the pressure, temperature and humidity data read from
+     * the sensor
+     */
+    uint8_t reg_data[BME280_P_T_H_DATA_LEN] = { 0 };
+    struct bme280_uncomp_data uncomp_data = { 0 };
+
+	/* Read the pressure and temperature data from the sensor */
+	int8_t rslt = bme280_get_regs(BME280_DATA_ADDR, reg_data, BME280_P_T_H_DATA_LEN);
+
+	if (rslt == BME280_OK)
+	{
+		/* Parse the read data from the sensor */
+		bme280_parse_sensor_data(reg_data, &uncomp_data);
+
+		/* Compensate the pressure and/or temperature and/or
+		 * humidity data from the sensor
+		 */
+		bme280_compensate_data(sensor_comp, &uncomp_data);
+	}
+
+    return rslt;
+}
+
+/*!
+ *  @brief This API is used to parse the pressure, temperature and
+ *  humidity data and store it in the bme280_uncomp_data structure instance.
+ */
+void BME280TemperatureSensor::bme280_parse_sensor_data(const uint8_t *reg_data, struct bme280_uncomp_data *uncomp_data) noexcept
+{
+    /* Variables to store the sensor data */
+    uint32_t data_xlsb;
+    uint32_t data_lsb;
+    uint32_t data_msb;
+
+    /* Store the parsed register values for pressure data */
+    data_msb = (uint32_t)reg_data[0] << 12;
+    data_lsb = (uint32_t)reg_data[1] << 4;
+    data_xlsb = (uint32_t)reg_data[2] >> 4;
+    uncomp_data->pressure = data_msb | data_lsb | data_xlsb;
+
+    /* Store the parsed register values for temperature data */
+    data_msb = (uint32_t)reg_data[3] << 12;
+    data_lsb = (uint32_t)reg_data[4] << 4;
+    data_xlsb = (uint32_t)reg_data[5] >> 4;
+    uncomp_data->temperature = data_msb | data_lsb | data_xlsb;
+
+    /* Store the parsed register values for humidity data */
+    data_msb = (uint32_t)reg_data[6] << 8;
+    data_lsb = (uint32_t)reg_data[7];
+    uncomp_data->humidity = data_msb | data_lsb;
+}
+
+/*!
  * @brief This API is used to compensate the pressure and/or
  * temperature and/or humidity data according to the component selected
  * by the user.
  */
-int8_t BME280TemperatureSensor::bme280_compensate_data(uint8_t sensor_comp, const struct bme280_uncomp_data *uncomp_data, struct bme280_data *comp_data) noexcept
+void BME280TemperatureSensor::bme280_compensate_data(uint8_t sensor_comp, const struct bme280_uncomp_data *uncomp_data) noexcept
 {
-    int8_t rslt = BME280_OK;
-
-    if ((uncomp_data != NULL) && (comp_data != NULL))
-    {
-        /* Initialize to zero */
-        comp_data->temperature = 0;
-        comp_data->pressure = 0;
-        comp_data->humidity = 0;
-
-        /* If pressure or temperature component is selected */
-        if (sensor_comp & (BME280_PRESS | BME280_TEMP | BME280_HUM))
-        {
-            /* Compensate the temperature data */
-            comp_data->temperature = compensate_temperature(uncomp_data);
-        }
-
-        if (sensor_comp & BME280_PRESS)
-        {
-            /* Compensate the pressure data */
-            comp_data->pressure = compensate_pressure(uncomp_data);
-        }
-
-        if (sensor_comp & BME280_HUM)
-        {
-            /* Compensate the humidity data */
-            comp_data->humidity = compensate_humidity(uncomp_data);
-        }
-    }
-    else
-    {
-        rslt = BME280_E_NULL_PTR;
-    }
-
-    return rslt;
+	/* Compensate the temperature data */
+	compTemperature = compensate_temperature(uncomp_data);
+	/* Compensate the pressure data */
+	compPressure = compensate_pressure(uncomp_data);
+	/* Compensate the humidity data */
+	compHumidity = compensate_humidity(uncomp_data);
 }
 
 /*!

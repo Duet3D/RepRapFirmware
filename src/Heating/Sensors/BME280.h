@@ -33,15 +33,22 @@ public:
 
 private:
 	int8_t bme280_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint16_t len) noexcept;
+	int8_t bme280_set_regs(uint8_t *reg_addr, const uint8_t *reg_data, uint8_t len) noexcept;
 	int8_t get_calib_data() noexcept;
-	int8_t bme280_compensate_data(uint8_t sensor_comp, const struct bme280_uncomp_data *uncomp_data, struct bme280_data *comp_data) noexcept;
+	void bme280_compensate_data(uint8_t sensor_comp, const bme280_uncomp_data *uncomp_data) noexcept;
 	float compensate_temperature(const struct bme280_uncomp_data *uncomp_data) noexcept;
 	float compensate_pressure(const struct bme280_uncomp_data *uncomp_data) const noexcept;
 	float compensate_humidity(const struct bme280_uncomp_data *uncomp_data) const noexcept;
 	void parse_temp_press_calib_data(const uint8_t *reg_data) noexcept;
 	void parse_humidity_calib_data(const uint8_t *reg_data) noexcept;
+	int8_t bme280_soft_reset() noexcept;
+	int8_t bme280_get_sensor_data(uint8_t sensor_comp, struct bme280_data *comp_data) noexcept;
+	void bme280_parse_sensor_data(const uint8_t *reg_data, struct bme280_uncomp_data *uncomp_data) noexcept;
 
 	bme280_dev dev;
+    float compPressure;			    /*< Compensated pressure */
+    float compTemperature;    		/*< Compensated temperature */
+    float compHumidity;    			/*< Compensated humidity */
 };
 
 // This class represents a DHT humidity sensor

@@ -255,6 +255,7 @@ enum bme280_intf {
  * @brief Type definitions
  */
 
+#if 0
 /*!
  * @brief Bus communication function pointer which should be mapped to
  * the platform specific read functions of the user
@@ -299,6 +300,7 @@ typedef BME280_INTF_RET_TYPE (*bme280_write_fptr_t)(uint8_t reg_addr, const uint
  *
  */
 typedef void (*bme280_delay_us_fptr_t)(uint32_t period, void *intf_ptr);
+#endif
 
 /*!
  * @brief Calibration data
@@ -363,6 +365,8 @@ struct bme280_calib_data
     int32_t t_fine;
 };
 
+#if 0
+
 /*!
  * @brief bme280 sensor structure which comprises of temperature, pressure and
  * humidity data
@@ -392,6 +396,8 @@ struct bme280_data
     uint32_t humidity;
 };
 #endif /*! BME280_USE_FLOATING_POINT */
+
+#endif
 
 /*!
  * @brief bme280 sensor structure which comprises of uncompensated temperature,
@@ -439,6 +445,7 @@ struct bme280_dev
     /*< Chip Id */
     uint8_t chip_id;
 
+#if 0
     /*< Interface function pointer used to enable the device address for I2C and chip selection for SPI */
     void *intf_ptr;
 
@@ -456,6 +463,7 @@ struct bme280_dev
 
     /*< Delay function pointer */
     bme280_delay_us_fptr_t delay_us;
+#endif
 
     /*< Trim data */
     struct bme280_calib_data calib_data;
