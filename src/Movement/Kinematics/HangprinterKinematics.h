@@ -67,8 +67,8 @@ protected:
 
 private:
 	// Basic facts about movement system
-	const char* ANCHOR_CHARS = "ABCD";
-	static constexpr size_t HANGPRINTER_AXES = 4;
+	const char* ANCHOR_CHARS = "ABCDIJKLO"; // anchors shouldn't be conflated with axes
+	static constexpr size_t HANGPRINTER_MAX_ANCHORS = 5;
 	static constexpr size_t A_AXIS = 0;
 	static constexpr size_t B_AXIS = 1;
 	static constexpr size_t C_AXIS = 2;
@@ -83,48 +83,46 @@ private:
 
 	// The real defaults are in the cpp file
 	HangprinterAnchorMode anchorMode = HangprinterAnchorMode::LastOnTop;
+	size_t numAnchors;
 	float printRadius = 0.0F;
-	float anchors[HANGPRINTER_AXES][3] = {{ 0.0, 0.0, 0.0},
-	                                      { 0.0, 0.0, 0.0},
-	                                      { 0.0, 0.0, 0.0},
-	                                      { 0.0, 0.0, 0.0}};
+	float anchors[HANGPRINTER_MAX_ANCHORS][3];
 
 	// Line buildup compensation configurables
 
 	/* The real defaults are in the Init() function, since we sometimes need to reset
 	 * defaults during runtime */
 	float spoolBuildupFactor = 0.0F;
-	float spoolRadii[HANGPRINTER_AXES] = { 0.0F };
-	uint32_t mechanicalAdvantage[HANGPRINTER_AXES] = { 0 };
-	uint32_t linesPerSpool[HANGPRINTER_AXES] = { 0 };
-	uint32_t motorGearTeeth[HANGPRINTER_AXES] = { 0 };
-	uint32_t spoolGearTeeth[HANGPRINTER_AXES] = { 0 };
-	uint32_t fullStepsPerMotorRev[HANGPRINTER_AXES] = { 0 };
+	float spoolRadii[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	uint32_t mechanicalAdvantage[HANGPRINTER_MAX_ANCHORS] = { 0 };
+	uint32_t linesPerSpool[HANGPRINTER_MAX_ANCHORS] = { 0 };
+	uint32_t motorGearTeeth[HANGPRINTER_MAX_ANCHORS] = { 0 };
+	uint32_t spoolGearTeeth[HANGPRINTER_MAX_ANCHORS] = { 0 };
+	uint32_t fullStepsPerMotorRev[HANGPRINTER_MAX_ANCHORS] = { 0 };
 
 	// Flex compensation configurables
 	float moverWeight_kg = 0.0F;
 	float springKPerUnitLength = 0.0F;
-	float minPlannedForce_Newton[HANGPRINTER_AXES] = { 0.0F };
-	float maxPlannedForce_Newton[HANGPRINTER_AXES] = { 0.0F };
-	float guyWireLengths[HANGPRINTER_AXES] = { 0.0F };
+	float minPlannedForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	float maxPlannedForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	float guyWireLengths[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	float targetForce_Newton = 0.0F;
-	float torqueConstants[HANGPRINTER_AXES] = { 0.0F };
+	float torqueConstants[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 
 	// Derived parameters
-	float k0[HANGPRINTER_AXES] = { 0.0F };
-	float spoolRadiiSq[HANGPRINTER_AXES] = { 0.0F };
-	float k2[HANGPRINTER_AXES] = { 0.0F };
-	float distancesOrigin[HANGPRINTER_AXES] = { 0.0F };
-	float springKsOrigin[HANGPRINTER_AXES] = { 0.0F };
-	float relaxedSpringLengthsOrigin[HANGPRINTER_AXES] = { 0.0F };
-	float fOrigin[HANGPRINTER_AXES] = { 0.0F };
+	float k0[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	float spoolRadiiSq[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	float k2[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	float distancesOrigin[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	float springKsOrigin[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	float relaxedSpringLengthsOrigin[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	float fOrigin[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	float printRadiusSquared = 0.0F;
 
 	float SpringK(float const springLength) const noexcept;
 	void StaticForces(float const machinePos[3], float F[4]) const noexcept;
 	void flexDistances(float const machinePos[3], float const distanceA,
 	                   float const distanceB, float const distanceC,
-	                   float const distanceD, float flex[HANGPRINTER_AXES]) const noexcept;
+	                   float const distanceD, float flex[HANGPRINTER_MAX_ANCHORS]) const noexcept;
 
 #if DUAL_CAN
 	// Some CAN helpers
