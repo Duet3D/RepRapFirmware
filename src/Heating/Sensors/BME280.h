@@ -35,18 +35,30 @@ public:
 
 private:
 	TemperatureError bme280_init() noexcept;
-	TemperatureError bme280_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint16_t len) noexcept;
-	TemperatureError bme280_set_regs(uint8_t *reg_addr, const uint8_t *reg_data, uint8_t len) noexcept;
+	TemperatureError bme280_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint16_t len) const noexcept;
+	TemperatureError bme280_set_regs(uint8_t *reg_addr, const uint8_t *reg_data, uint8_t len) const noexcept;
+	TemperatureError bme280_set_sensor_settings(uint8_t desired_settings) const noexcept;
+	TemperatureError bme280_set_sensor_mode(uint8_t sensor_mode) const noexcept;
+	TemperatureError bme280_get_sensor_mode(uint8_t *sensor_mode) const noexcept;
 	TemperatureError get_calib_data() noexcept;
-	void bme280_compensate_data(const bme280_uncomp_data *uncomp_data) noexcept;
+	TemperatureError bme280_soft_reset() const noexcept;
+	TemperatureError set_filter_standby_settings(uint8_t desired_settings, const struct bme280_settings *settings) const noexcept;
+	TemperatureError write_power_mode(uint8_t sensor_mode) const noexcept;
+	TemperatureError put_device_to_sleep() const noexcept;
+	TemperatureError reload_device_settings(const struct bme280_settings *settings) const noexcept;
+	TemperatureError bme280_get_sensor_data() noexcept;
+	TemperatureError set_osr_settings(uint8_t desired_settings, const struct bme280_settings *settings) const noexcept;
+	TemperatureError set_osr_humidity_settings(const struct bme280_settings *settings) const noexcept;
+	TemperatureError set_osr_press_temp_settings(uint8_t desired_settings, const struct bme280_settings *settings) const noexcept;
 	float compensate_temperature(const struct bme280_uncomp_data *uncomp_data) noexcept;
 	float compensate_pressure(const struct bme280_uncomp_data *uncomp_data) const noexcept;
 	float compensate_humidity(const struct bme280_uncomp_data *uncomp_data) const noexcept;
+	void bme280_compensate_data(const bme280_uncomp_data *uncomp_data) noexcept;
 	void parse_temp_press_calib_data(const uint8_t *reg_data) noexcept;
 	void parse_humidity_calib_data(const uint8_t *reg_data) noexcept;
-	TemperatureError bme280_soft_reset() noexcept;
-	TemperatureError bme280_get_sensor_data() noexcept;
 	void bme280_parse_sensor_data(const uint8_t *reg_data, struct bme280_uncomp_data *uncomp_data) noexcept;
+	static bool are_settings_changed(uint8_t sub_settings, uint8_t desired_settings) noexcept;
+	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
 
 	bme280_dev dev;
 	uint32_t lastReadTime;
