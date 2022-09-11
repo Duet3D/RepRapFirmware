@@ -52,6 +52,7 @@ protected:
 
 private:
 	// Basic facts about movement system
+	const char* ANCHOR_CHARS = "ABCD";
 	static constexpr size_t HANGPRINTER_AXES = 4;
 	static constexpr size_t A_AXIS = 0;
 	static constexpr size_t B_AXIS = 1;

@@ -443,48 +443,59 @@ AxesBitmap HangprinterKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 // Write the parameters to a file, returning true if success
 bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const noexcept
 {
-	bool ok = f->Write("; Hangprinter parameters\n");
-	if (ok)
+	if (!f->Write("; Hangprinter parameters\n"))
 	{
-		String<100> scratchString;
-		scratchString.printf("M669 K6 A%.3f:%.3f:%.3f B%.3f:%.3f:%.3f",
-							(double)anchors[A_AXIS][X_AXIS], (double)anchors[A_AXIS][Y_AXIS], (double)anchors[A_AXIS][Z_AXIS],
-							(double)anchors[B_AXIS][X_AXIS], (double)anchors[B_AXIS][Y_AXIS], (double)anchors[B_AXIS][Z_AXIS]);
-		ok = f->Write(scratchString.c_str());
-		if (ok)
-		{
-			scratchString.printf(" C%.3f:%.3f:%.3f D%.3f:%.3f:%.3f P%.1f\n",
-								(double)anchors[C_AXIS][X_AXIS], (double)anchors[C_AXIS][Y_AXIS], (double)anchors[C_AXIS][Z_AXIS],
-								(double)anchors[D_AXIS][X_AXIS], (double)anchors[D_AXIS][Y_AXIS], (double)anchors[D_AXIS][Z_AXIS],
-								(double)printRadius);
-			ok = f->Write(scratchString.c_str());
-			if (ok)
-			{
-				scratchString.printf("M666 Q%.6f R%.3f:%.3f:%.3f:%.3f U%d:%d:%d:%d",
-									(double)spoolBuildupFactor, (double)spoolRadii[A_AXIS],
-									(double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS],
-									(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS],
-									(int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS]
-						);
-				ok = f->Write(scratchString.c_str());
-				if (ok)
-				{
-					scratchString.printf(" O%d:%d:%d:%d L%d:%d:%d:%d H%d:%d:%d:%d J%d:%d:%d:%d\n",
-										(int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS],
-										(int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS],
-										(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS],
-										(int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
-										(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS],
-										(int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
-										(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS],
-										(int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS]
-							);
-					ok = f->Write(scratchString.c_str());
-				}
-			}
-		}
+		return false;
 	}
-	return ok;
+
+	String<255> scratchString;
+	scratchString.printf("M669 K6 P%.1f ", (double)printRadius);
+
+	for (size_t i = 0; i < HANGPRINTER_AXES; ++i)
+	{
+		scratchString.catf("%c%.3f:%.3f:%.3f ", ANCHOR_CHARS[i], (double)anchors[i][X_AXIS], (double)anchors[i][Y_AXIS], (double)anchors[i][Z_AXIS]);
+	}
+	if (!f->Write(scratchString.c_str()))
+	{
+		return false;
+	}
+
+	scratchString.printf("M666 Q%.6f ", (double)spoolBuildupFactor);
+	if (!f->Write(scratchString.c_str()))
+	{
+		return false;
+	}
+	scratchString.printf("R%.3f:%.3f:%.3f:%.3f", (double)spoolRadii[A_AXIS], (double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS]);
+	if (!f->Write(scratchString.c_str()))
+	{
+		return false;
+	}
+	scratchString.printf("U%d:%d:%d:%d", (int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS], (int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS]);
+	if (!f->Write(scratchString.c_str()))
+	{
+		return false;
+	}
+
+	scratchString.printf(" O%d:%d:%d:%d", (int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS], (int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS]);
+	if (!f->Write(scratchString.c_str()))
+	{
+		return false;
+	}
+
+	scratchString.printf(" L%d:%d:%d:%d", (int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS], (int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS]);
+	if (!f->Write(scratchString.c_str()))
+	{
+		return false;
+	}
+
+	scratchString.printf(" H%d:%d:%d:%d", (int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS], (int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS]);
+	if (!f->Write(scratchString.c_str()))
+	{
+		return false;
+	}
+
+	scratchString.printf(" J%d:%d:%d:%d", (int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS], (int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS]);
+	return f->Write(scratchString.c_str());
 }
 
 // Write any calibration data that we need to resume a print after power fail, returning true if successful
