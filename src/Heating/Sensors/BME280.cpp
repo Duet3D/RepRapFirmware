@@ -44,7 +44,7 @@
 
 constexpr uint16_t MinimumReadInterval = 1000;			// ms
 constexpr uint32_t BME280_Frequency = 4000000;			// maximum for BME280 is 10MHz
-constexpr SpiMode BME280_SpiMode = SPI_MODE_2;			// clock is high when idle, data sampled on rising edge
+constexpr SpiMode BME280_SpiMode = SPI_MODE_0;			// BME280 does mode 0 or mode 3 depending on value of CLK at falling edge of CS
 constexpr size_t MaxRegistersToRead = 26;
 constexpr size_t MaxRegistersToWrite = 10;
 
@@ -64,12 +64,12 @@ TemperatureError BME280TemperatureSensor::bme280_init() noexcept
 {
     /* chip id read try count */
     uint8_t try_count = 5;
-    uint8_t chip_id = 0;
 
 	while (try_count)
 	{
 		/* Read the chip-id of bme280 sensor */
 		static_assert(1 <= MaxRegistersToRead);
+	    uint8_t chip_id = 0;
 		TemperatureError rslt = bme280_get_regs(BME280_CHIP_ID_ADDR, &chip_id, 1);
 
 		/* Check for chip id validity */
@@ -103,17 +103,11 @@ TemperatureError BME280TemperatureSensor::bme280_init() noexcept
  */
 TemperatureError BME280TemperatureSensor::bme280_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint16_t len) const noexcept
 {
-	/* If interface selected is SPI */
-	if (true)
-	{
-		reg_addr = reg_addr | 0x80;
-	}
-
 	uint8_t addrBuff[MaxRegistersToRead + 1];				// only the first bytes is used but the remainder need to be value addresses
 	uint8_t dataBuff[MaxRegistersToRead + 1];
 
 	/* Read the data  */
-	addrBuff[0] = reg_addr;
+	addrBuff[0] = reg_addr | 0x80;							// for SPI bit 7 is set to read, clear to write
 	TemperatureError err = DoSpiTransaction(addrBuff, dataBuff, len + 1);
 
 	/* Check for communication error */
@@ -129,7 +123,7 @@ TemperatureError BME280TemperatureSensor::bme280_get_regs(uint8_t reg_addr, uint
  */
 TemperatureError BME280TemperatureSensor::bme280_set_regs(uint8_t *reg_addr, const uint8_t *reg_data, uint8_t len) const noexcept
 {
-    uint8_t temp_buff[MaxRegistersToWrite + 1];
+    uint8_t temp_buff[2 * MaxRegistersToWrite];
 
 	/* Interleave register address w.r.t data for burst write */
 	for (uint8_t index = 0; index < len; index++)
@@ -195,7 +189,7 @@ TemperatureError BME280TemperatureSensor::bme280_set_sensor_mode(uint8_t sensor_
 		rslt = write_power_mode(sensor_mode);
 	}
 
-    return rslt;
+	return rslt;
 }
 
 /*!
@@ -203,13 +197,13 @@ TemperatureError BME280TemperatureSensor::bme280_set_sensor_mode(uint8_t sensor_
  */
 TemperatureError BME280TemperatureSensor::bme280_get_sensor_mode(uint8_t *sensor_mode) const noexcept
 {
-    /* Read the power mode register */
+	/* Read the power mode register */
 	TemperatureError rslt = bme280_get_regs(BME280_PWR_CTRL_ADDR, sensor_mode, 1);
 
 	/* Assign the power mode in the device structure */
 	*sensor_mode = BME280_GET_BITS_POS_0(*sensor_mode, BME280_SENSOR_MODE);
 
-    return rslt;
+	return rslt;
 }
 
 /*!
@@ -217,21 +211,21 @@ TemperatureError BME280TemperatureSensor::bme280_get_sensor_mode(uint8_t *sensor
  */
 TemperatureError BME280TemperatureSensor::bme280_soft_reset() const noexcept
 {
-    uint8_t reg_addr = BME280_RESET_ADDR;
-    uint8_t try_run = 5;
+	uint8_t reg_addr = BME280_RESET_ADDR;
+	uint8_t try_run = 5;
 
-    /* 0xB6 is the soft reset command */
-    uint8_t soft_rst_cmd = BME280_SOFT_RESET_COMMAND;
+	/* 0xB6 is the soft reset command */
+	uint8_t soft_rst_cmd = BME280_SOFT_RESET_COMMAND;
 
 	/* Write the soft reset command in the sensor */
-    static_assert(1 <= MaxRegistersToWrite);
-    TemperatureError rslt = bme280_set_regs(&reg_addr, &soft_rst_cmd, 1);
+	static_assert(1 <= MaxRegistersToWrite);
+	TemperatureError rslt = bme280_set_regs(&reg_addr, &soft_rst_cmd, 1);
 
 	if (rslt == TemperatureError::success)
 	{
-	    uint8_t status_reg = 0;
+		uint8_t status_reg = 0;
 
-	    /* If NVM not copied yet, Wait for NVM to copy */
+		/* If NVM not copied yet, Wait for NVM to copy */
 		do
 		{
 			/* As per data sheet - Table 1, startup time is 2 ms. */
@@ -246,249 +240,7 @@ TemperatureError BME280TemperatureSensor::bme280_soft_reset() const noexcept
 		}
 	}
 
-    return rslt;
-}
-
-/*!
- * @brief This internal API fills the filter settings provided by the user
- * in the data buffer so as to write in the sensor.
- */
-static void fill_filter_settings(uint8_t *reg_data, const struct bme280_settings *settings)
-{
-    *reg_data = BME280_SET_BITS(*reg_data, BME280_FILTER, settings->filter);
-}
-
-/*!
- * @brief This internal API fills the standby duration settings provided by
- * the user in the data buffer so as to write in the sensor.
- */
-static void fill_standby_settings(uint8_t *reg_data, const struct bme280_settings *settings)
-{
-    *reg_data = BME280_SET_BITS(*reg_data, BME280_STANDBY, settings->standby_time);
-}
-
-/*!
- * @brief This internal API fills the pressure oversampling settings provided by
- * the user in the data buffer so as to write in the sensor.
- */
-static void fill_osr_press_settings(uint8_t *reg_data, const struct bme280_settings *settings)
-{
-    *reg_data = BME280_SET_BITS(*reg_data, BME280_CTRL_PRESS, settings->osr_p);
-}
-
-/*!
- * @brief This internal API fills the temperature oversampling settings
- * provided by the user in the data buffer so as to write in the sensor.
- */
-static void fill_osr_temp_settings(uint8_t *reg_data, const struct bme280_settings *settings)
-{
-    *reg_data = BME280_SET_BITS(*reg_data, BME280_CTRL_TEMP, settings->osr_t);
-}
-
-/*!
- * @brief This internal API sets the filter and/or standby duration settings
- * in the sensor according to the settings selected by the user.
- */
-TemperatureError BME280TemperatureSensor::set_filter_standby_settings(uint8_t desired_settings, const struct bme280_settings *settings) const noexcept
-{
-    uint8_t reg_addr = BME280_CONFIG_ADDR;
-    uint8_t reg_data;
-
-    TemperatureError rslt = bme280_get_regs(reg_addr, &reg_data, 1);
-
-    if (rslt == TemperatureError::success)
-    {
-        if (desired_settings & BME280_FILTER_SEL)
-        {
-            fill_filter_settings(&reg_data, settings);
-        }
-
-        if (desired_settings & BME280_STANDBY_SEL)
-        {
-            fill_standby_settings(&reg_data, settings);
-        }
-
-        /* Write the oversampling settings in the register */
-        rslt = bme280_set_regs(&reg_addr, &reg_data, 1);
-    }
-
-    return rslt;
-}
-
-/*!
- * @brief This internal API parse the oversampling(pressure, temperature
- * and humidity), filter and standby duration settings and store in the
- * device structure.
- */
-static void parse_device_settings(const uint8_t *reg_data, struct bme280_settings *settings)
-{
-    settings->osr_h = BME280_GET_BITS_POS_0(reg_data[0], BME280_CTRL_HUM);
-    settings->osr_p = BME280_GET_BITS(reg_data[2], BME280_CTRL_PRESS);
-    settings->osr_t = BME280_GET_BITS(reg_data[2], BME280_CTRL_TEMP);
-    settings->filter = BME280_GET_BITS(reg_data[3], BME280_FILTER);
-    settings->standby_time = BME280_GET_BITS(reg_data[3], BME280_STANDBY);
-}
-
-/*!
- * @brief This internal API writes the power mode in the sensor.
- */
-TemperatureError BME280TemperatureSensor::write_power_mode(uint8_t sensor_mode) const noexcept
-{
-    uint8_t reg_addr = BME280_PWR_CTRL_ADDR;
-
-    /* Variable to store the value read from power mode register */
-    uint8_t sensor_mode_reg_val;
-
-    /* Read the power mode register */
-    TemperatureError rslt = bme280_get_regs(reg_addr, &sensor_mode_reg_val, 1);
-
-    /* Set the power mode */
-    if (rslt == TemperatureError::success)
-    {
-        sensor_mode_reg_val = BME280_SET_BITS_POS_0(sensor_mode_reg_val, BME280_SENSOR_MODE, sensor_mode);
-
-        /* Write the power mode in the register */
-        rslt = bme280_set_regs(&reg_addr, &sensor_mode_reg_val, 1);
-    }
-
-    return rslt;
-}
-
-/*!
- * @brief This internal API puts the device to sleep mode.
- */
-TemperatureError BME280TemperatureSensor::put_device_to_sleep() const noexcept
-{
-    uint8_t reg_data[4];
-    TemperatureError rslt = bme280_get_regs(BME280_CTRL_HUM_ADDR, reg_data, 4);
-
-    if (rslt == TemperatureError::success)
-    {
-        struct bme280_settings settings;
-        parse_device_settings(reg_data, &settings);
-        rslt = bme280_soft_reset();
-
-        if (rslt == TemperatureError::success)
-        {
-            rslt = reload_device_settings(&settings);
-        }
-    }
-
-    return rslt;
-}
-
-/*!
- * @brief This internal API reloads the already existing device settings in
- * the sensor after soft reset.
- */
-TemperatureError BME280TemperatureSensor::reload_device_settings(const struct bme280_settings *settings) const noexcept
-{
-    TemperatureError rslt = set_osr_settings(BME280_ALL_SETTINGS_SEL, settings);
-
-    if (rslt == TemperatureError::success)
-    {
-        rslt = set_filter_standby_settings(BME280_ALL_SETTINGS_SEL, settings);
-    }
-
-    return rslt;
-}
-/*!
- * @brief This internal API is used to compensate the raw temperature data and return the compensated temperature data in float data type.
- */
-float BME280TemperatureSensor::compensate_temperature(const struct bme280_uncomp_data *uncomp_data) noexcept
-{
-    constexpr float temperature_min = -40;
-    constexpr float temperature_max = 85;
-
-    float var1 = ((float)uncomp_data->temperature) / 16384.0 - ((float)dev.calib_data.dig_t1) / 1024.0;
-    var1 = var1 * ((float)dev.calib_data.dig_t2);
-    float var2 = (((float)uncomp_data->temperature) / 131072.0 - ((float)dev.calib_data.dig_t1) / 8192.0);
-    var2 = (var2 * var2) * ((float)dev.calib_data.dig_t3);
-    dev.calib_data.t_fine = (int32_t)(var1 + var2);
-    float temperature = (var1 + var2) / 5120.0;
-
-    if (temperature < temperature_min)
-    {
-        temperature = temperature_min;
-    }
-    else if (temperature > temperature_max)
-    {
-        temperature = temperature_max;
-    }
-
-    return temperature;
-}
-
-/*!
- * @brief This internal API is used to compensate the raw pressure data and return the compensated pressure data in float data type.
- */
-float BME280TemperatureSensor::compensate_pressure(const struct bme280_uncomp_data *uncomp_data) const noexcept
-{
-    constexpr float pressure_min = 30000.0;
-    constexpr float pressure_max = 110000.0;
-
-    float var1 = ((float)dev.calib_data.t_fine / 2.0) - 64000.0;
-    float var2 = var1 * var1 * ((float)dev.calib_data.dig_p6) / 32768.0;
-    var2 = var2 + var1 * ((float)dev.calib_data.dig_p5) * 2.0;
-    var2 = (var2 / 4.0) + (((float)dev.calib_data.dig_p4) * 65536.0);
-    const float var3 = ((float)dev.calib_data.dig_p3) * var1 * var1 / 524288.0;
-    var1 = (var3 + ((float)dev.calib_data.dig_p2) * var1) / 524288.0;
-    var1 = (1.0 + var1 / 32768.0) * ((float)dev.calib_data.dig_p1);
-    float pressure;
-
-    /* avoid exception caused by division by zero */
-    if (var1 > (0.0))
-    {
-        pressure = 1048576.0 - (float) uncomp_data->pressure;
-        pressure = (pressure - (var2 / 4096.0)) * 6250.0 / var1;
-        var1 = ((float)dev.calib_data.dig_p9) * pressure * pressure / 2147483648.0;
-        var2 = pressure * ((float)dev.calib_data.dig_p8) / 32768.0;
-        pressure = pressure + (var1 + var2 + ((float)dev.calib_data.dig_p7)) / 16.0;
-
-        if (pressure < pressure_min)
-        {
-            pressure = pressure_min;
-        }
-        else if (pressure > pressure_max)
-        {
-            pressure = pressure_max;
-        }
-    }
-    else /* Invalid case */
-    {
-        pressure = pressure_min;
-    }
-
-    return pressure;
-}
-
-/*!
- * @brief This internal API is used to compensate the raw humidity data and return the compensated humidity data in float data type.
- */
-float BME280TemperatureSensor::compensate_humidity(const struct bme280_uncomp_data *uncomp_data) const noexcept
-{
-    constexpr float humidity_min = 0.0;
-    constexpr float humidity_max = 100.0;
-
-    const float var1 = ((float)dev.calib_data.t_fine) - 76800.0;
-    const float var2 = (((float)dev.calib_data.dig_h4) * 64.0 + (((float)dev.calib_data.dig_h5) / 16384.0) * var1);
-    const float var3 = uncomp_data->humidity - var2;
-    const float var4 = ((float)dev.calib_data.dig_h2) / 65536.0;
-    const float var5 = (1.0 + (((float)dev.calib_data.dig_h3) / 67108864.0) * var1);
-    float var6 = 1.0 + (((float)dev.calib_data.dig_h6) / 67108864.0) * var1 * var5;
-    var6 = var3 * var4 * (var5 * var6);
-    float humidity = var6 * (1.0 - ((float)dev.calib_data.dig_h1) * var6 / 524288.0);
-
-    if (humidity > humidity_max)
-    {
-        humidity = humidity_max;
-    }
-    else if (humidity < humidity_min)
-    {
-        humidity = humidity_min;
-    }
-
-    return humidity;
+	return rslt;
 }
 
 /*!
@@ -497,13 +249,13 @@ float BME280TemperatureSensor::compensate_humidity(const struct bme280_uncomp_da
  */
 TemperatureError BME280TemperatureSensor::bme280_get_sensor_data() noexcept
 {
-    /* Array to store the pressure, temperature and humidity data read from the sensor */
-    uint8_t reg_data[BME280_P_T_H_DATA_LEN] = { 0 };
-    struct bme280_uncomp_data uncomp_data = { 0 };
+	/* Array to store the pressure, temperature and humidity data read from the sensor */
+	uint8_t reg_data[BME280_P_T_H_DATA_LEN] = { 0 };
+	struct bme280_uncomp_data uncomp_data = { 0 };
 
 	/* Read the pressure and temperature data from the sensor */
 	static_assert(BME280_P_T_H_DATA_LEN <= MaxRegistersToRead);
-    const TemperatureError rslt = bme280_get_regs(BME280_DATA_ADDR, reg_data, BME280_P_T_H_DATA_LEN);
+	const TemperatureError rslt = bme280_get_regs(BME280_DATA_ADDR, reg_data, BME280_P_T_H_DATA_LEN);
 
 	if (rslt == TemperatureError::success)
 	{
@@ -514,41 +266,258 @@ TemperatureError BME280TemperatureSensor::bme280_get_sensor_data() noexcept
 		bme280_compensate_data(&uncomp_data);
 	}
 
-    return rslt;
+	return rslt;
+}
+
+/*!
+ * @brief This internal API fills the filter settings provided by the user
+ * in the data buffer so as to write in the sensor.
+ */
+static void fill_filter_settings(uint8_t *reg_data, const struct bme280_settings *settings)
+{
+	*reg_data = BME280_SET_BITS(*reg_data, BME280_FILTER, settings->filter);
+}
+
+/*!
+ * @brief This internal API fills the standby duration settings provided by
+ * the user in the data buffer so as to write in the sensor.
+ */
+static void fill_standby_settings(uint8_t *reg_data, const struct bme280_settings *settings)
+{
+	*reg_data = BME280_SET_BITS(*reg_data, BME280_STANDBY, settings->standby_time);
+}
+
+/*!
+ * @brief This internal API fills the pressure oversampling settings provided by
+ * the user in the data buffer so as to write in the sensor.
+ */
+static void fill_osr_press_settings(uint8_t *reg_data, const struct bme280_settings *settings)
+{
+	*reg_data = BME280_SET_BITS(*reg_data, BME280_CTRL_PRESS, settings->osr_p);
+}
+
+/*!
+ * @brief This internal API fills the temperature oversampling settings
+ * provided by the user in the data buffer so as to write in the sensor.
+ */
+static void fill_osr_temp_settings(uint8_t *reg_data, const struct bme280_settings *settings)
+{
+	*reg_data = BME280_SET_BITS(*reg_data, BME280_CTRL_TEMP, settings->osr_t);
+}
+
+/*!
+ * @brief This internal API sets the filter and/or standby duration settings
+ * in the sensor according to the settings selected by the user.
+ */
+TemperatureError BME280TemperatureSensor::set_filter_standby_settings(uint8_t desired_settings, const struct bme280_settings *settings) const noexcept
+{
+	uint8_t reg_addr = BME280_CONFIG_ADDR;
+	uint8_t reg_data;
+
+	TemperatureError rslt = bme280_get_regs(reg_addr, &reg_data, 1);
+
+	if (rslt == TemperatureError::success)
+	{
+		if (desired_settings & BME280_FILTER_SEL)
+		{
+			fill_filter_settings(&reg_data, settings);
+		}
+
+		if (desired_settings & BME280_STANDBY_SEL)
+		{
+			fill_standby_settings(&reg_data, settings);
+		}
+
+		/* Write the oversampling settings in the register */
+		rslt = bme280_set_regs(&reg_addr, &reg_data, 1);
+	}
+
+	return rslt;
+}
+
+/*!
+ * @brief This internal API parse the oversampling(pressure, temperature
+ * and humidity), filter and standby duration settings and store in the
+ * device structure.
+ */
+static void parse_device_settings(const uint8_t *reg_data, struct bme280_settings *settings)
+{
+	settings->osr_h = BME280_GET_BITS_POS_0(reg_data[0], BME280_CTRL_HUM);
+	settings->osr_p = BME280_GET_BITS(reg_data[2], BME280_CTRL_PRESS);
+	settings->osr_t = BME280_GET_BITS(reg_data[2], BME280_CTRL_TEMP);
+	settings->filter = BME280_GET_BITS(reg_data[3], BME280_FILTER);
+	settings->standby_time = BME280_GET_BITS(reg_data[3], BME280_STANDBY);
+}
+
+/*!
+ * @brief This internal API writes the power mode in the sensor.
+ */
+TemperatureError BME280TemperatureSensor::write_power_mode(uint8_t sensor_mode) const noexcept
+{
+	uint8_t reg_addr = BME280_PWR_CTRL_ADDR;
+
+	/* Variable to store the value read from power mode register */
+	uint8_t sensor_mode_reg_val;
+
+	/* Read the power mode register */
+	TemperatureError rslt = bme280_get_regs(reg_addr, &sensor_mode_reg_val, 1);
+
+	/* Set the power mode */
+	if (rslt == TemperatureError::success)
+	{
+		sensor_mode_reg_val = BME280_SET_BITS_POS_0(sensor_mode_reg_val, BME280_SENSOR_MODE, sensor_mode);
+
+		/* Write the power mode in the register */
+		rslt = bme280_set_regs(&reg_addr, &sensor_mode_reg_val, 1);
+	}
+
+	return rslt;
+}
+
+/*!
+ * @brief This internal API puts the device to sleep mode.
+ */
+TemperatureError BME280TemperatureSensor::put_device_to_sleep() const noexcept
+{
+	uint8_t reg_data[4];
+	TemperatureError rslt = bme280_get_regs(BME280_CTRL_HUM_ADDR, reg_data, 4);
+
+	if (rslt == TemperatureError::success)
+	{
+		struct bme280_settings settings;
+		parse_device_settings(reg_data, &settings);
+		rslt = bme280_soft_reset();
+
+		if (rslt == TemperatureError::success)
+		{
+			rslt = reload_device_settings(&settings);
+		}
+	}
+
+	return rslt;
+}
+
+/*!
+ * @brief This internal API reloads the already existing device settings in
+ * the sensor after soft reset.
+ */
+TemperatureError BME280TemperatureSensor::reload_device_settings(const struct bme280_settings *settings) const noexcept
+{
+	TemperatureError rslt = set_osr_settings(BME280_ALL_SETTINGS_SEL, settings);
+	if (rslt == TemperatureError::success)
+	{
+		rslt = set_filter_standby_settings(BME280_ALL_SETTINGS_SEL, settings);
+	}
+
+	return rslt;
+}
+
+/*!
+ * @brief This internal API is used to compensate the raw temperature data and return the compensated temperature data in float data type.
+ */
+float BME280TemperatureSensor::compensate_temperature(const bme280_uncomp_data *uncomp_data) noexcept
+{
+	constexpr float temperature_min = -40;
+	constexpr float temperature_max = 85;
+
+	float var1 = ((float)uncomp_data->temperature) / 16384.0 - ((float)dev.calib_data.dig_t1) / 1024.0;
+	var1 = var1 * ((float)dev.calib_data.dig_t2);
+	float var2 = (((float)uncomp_data->temperature) / 131072.0 - ((float)dev.calib_data.dig_t1) / 8192.0);
+	var2 = (var2 * var2) * ((float)dev.calib_data.dig_t3);
+	dev.calib_data.t_fine = (int32_t)(var1 + var2);
+	float temperature = (var1 + var2) / 5120.0;
+	temperature = constrain<float>(temperature, temperature_min, temperature_max);
+
+	return temperature;
+}
+
+/*!
+ * @brief This internal API is used to compensate the raw pressure data and return the compensated pressure data in float data type.
+ */
+float BME280TemperatureSensor::compensate_pressure(const bme280_uncomp_data *uncomp_data) const noexcept
+{
+	constexpr float pressure_min = 30000.0;
+	constexpr float pressure_max = 110000.0;
+
+	float var1 = ((float)dev.calib_data.t_fine / 2.0) - 64000.0;
+	float var2 = var1 * var1 * ((float)dev.calib_data.dig_p6) / 32768.0;
+	var2 = var2 + var1 * ((float)dev.calib_data.dig_p5) * 2.0;
+	var2 = (var2 / 4.0) + (((float)dev.calib_data.dig_p4) * 65536.0);
+	const float var3 = ((float)dev.calib_data.dig_p3) * var1 * var1 / 524288.0;
+	var1 = (var3 + ((float)dev.calib_data.dig_p2) * var1) / 524288.0;
+	var1 = (1.0 + var1 / 32768.0) * ((float)dev.calib_data.dig_p1);
+	float pressure;
+
+	/* avoid exception caused by division by zero */
+	if (var1 > (0.0))
+	{
+		pressure = 1048576.0 - (float) uncomp_data->pressure;
+		pressure = (pressure - (var2 / 4096.0)) * 6250.0 / var1;
+		var1 = ((float)dev.calib_data.dig_p9) * pressure * pressure / 2147483648.0;
+		var2 = pressure * ((float)dev.calib_data.dig_p8) / 32768.0;
+		pressure = pressure + (var1 + var2 + ((float)dev.calib_data.dig_p7)) / 16.0;
+		pressure = constrain<float>(pressure, pressure_min, pressure_max);
+	}
+	else /* Invalid case */
+	{
+		pressure = pressure_min;
+	}
+
+	return pressure * 0.01;				// we want pressure in hectopascals, not pascals
+}
+
+/*!
+ * @brief This internal API is used to compensate the raw humidity data and return the compensated humidity data in float data type.
+ */
+float BME280TemperatureSensor::compensate_humidity(const bme280_uncomp_data *uncomp_data) const noexcept
+{
+	constexpr float humidity_min = 0.0;
+	constexpr float humidity_max = 100.0;
+
+	const float var1 = ((float)dev.calib_data.t_fine) - 76800.0;
+	const float var2 = (((float)dev.calib_data.dig_h4) * 64.0 + (((float)dev.calib_data.dig_h5) / 16384.0) * var1);
+	const float var3 = uncomp_data->humidity - var2;
+	const float var4 = ((float)dev.calib_data.dig_h2) / 65536.0;
+	const float var5 = (1.0 + (((float)dev.calib_data.dig_h3) / 67108864.0) * var1);
+	float var6 = 1.0 + (((float)dev.calib_data.dig_h6) / 67108864.0) * var1 * var5;
+	var6 = var3 * var4 * (var5 * var6);
+	float humidity = var6 * (1.0 - ((float)dev.calib_data.dig_h1) * var6 / 524288.0);
+	humidity = constrain<float>(humidity, humidity_min, humidity_max);
+	return humidity;
 }
 
 /*!
  *  @brief This API is used to parse the pressure, temperature and humidity data and store it in the bme280_uncomp_data structure instance.
  */
-void BME280TemperatureSensor::bme280_parse_sensor_data(const uint8_t *reg_data, struct bme280_uncomp_data *uncomp_data) noexcept
+void BME280TemperatureSensor::bme280_parse_sensor_data(const uint8_t *reg_data, bme280_uncomp_data *uncomp_data) noexcept
 {
-    /* Variables to store the sensor data */
-    uint32_t data_xlsb;
-    uint32_t data_lsb;
-    uint32_t data_msb;
+	/* Variables to store the sensor data */
+	uint32_t data_xlsb;
+	uint32_t data_lsb;
+	uint32_t data_msb;
 
-    /* Store the parsed register values for pressure data */
-    data_msb = (uint32_t)reg_data[0] << 12;
-    data_lsb = (uint32_t)reg_data[1] << 4;
-    data_xlsb = (uint32_t)reg_data[2] >> 4;
-    uncomp_data->pressure = data_msb | data_lsb | data_xlsb;
+	/* Store the parsed register values for pressure data */
+	data_msb = (uint32_t)reg_data[0] << 12;
+	data_lsb = (uint32_t)reg_data[1] << 4;
+	data_xlsb = (uint32_t)reg_data[2] >> 4;
+	uncomp_data->pressure = data_msb | data_lsb | data_xlsb;
 
-    /* Store the parsed register values for temperature data */
-    data_msb = (uint32_t)reg_data[3] << 12;
-    data_lsb = (uint32_t)reg_data[4] << 4;
-    data_xlsb = (uint32_t)reg_data[5] >> 4;
-    uncomp_data->temperature = data_msb | data_lsb | data_xlsb;
+	/* Store the parsed register values for temperature data */
+	data_msb = (uint32_t)reg_data[3] << 12;
+	data_lsb = (uint32_t)reg_data[4] << 4;
+	data_xlsb = (uint32_t)reg_data[5] >> 4;
+	uncomp_data->temperature = data_msb | data_lsb | data_xlsb;
 
-    /* Store the parsed register values for humidity data */
-    data_msb = (uint32_t)reg_data[6] << 8;
-    data_lsb = (uint32_t)reg_data[7];
-    uncomp_data->humidity = data_msb | data_lsb;
+	/* Store the parsed register values for humidity data */
+	data_msb = (uint32_t)reg_data[6] << 8;
+	data_lsb = (uint32_t)reg_data[7];
+	uncomp_data->humidity = data_msb | data_lsb;
 }
 
 /*!
  * @brief This API is used to compensate the pressure and/or temperature and/or humidity data according to the component selected by the user.
  */
-void BME280TemperatureSensor::bme280_compensate_data(const struct bme280_uncomp_data *uncomp_data) noexcept
+void BME280TemperatureSensor::bme280_compensate_data(const bme280_uncomp_data *uncomp_data) noexcept
 {
 	/* Compensate the temperature data */
 	compTemperature = compensate_temperature(uncomp_data);
@@ -562,7 +531,7 @@ void BME280TemperatureSensor::bme280_compensate_data(const struct bme280_uncomp_
  * @brief This internal API sets the oversampling settings for pressure,
  * temperature and humidity in the sensor.
  */
-TemperatureError BME280TemperatureSensor::set_osr_settings(uint8_t desired_settings, const struct bme280_settings *settings) const noexcept
+TemperatureError BME280TemperatureSensor::set_osr_settings(uint8_t desired_settings, const bme280_settings *settings) const noexcept
 {
 	TemperatureError rslt = TemperatureError::success;
 
@@ -800,7 +769,7 @@ GCodeResult BME280TemperatureSensor::FinishConfiguring(bool changed, const Strin
 
 TemperatureError BME280TemperatureSensor::GetLatestTemperature(float &t, uint8_t outputNumber) noexcept
 {
-	if (outputNumber > 1)
+	if (outputNumber > 2)
 	{
 		t = BadErrorTemperature;
 		return TemperatureError::invalidOutputNumber;
