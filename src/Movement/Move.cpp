@@ -820,7 +820,7 @@ bool Move::LoadProbePointsFromFile(FileStore *f, const char *fname, const String
 
 void Move::ClearProbePointsInvalid() noexcept
 {
-	return heightMap.ClearProbePointsInvalid();
+	heightMap.ClearProbePointsInvalid();
 }
 
 # endif
