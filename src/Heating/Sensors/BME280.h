@@ -31,7 +31,7 @@ public:
 	void Poll() noexcept override;
 	const char *GetShortSensorType() const noexcept override { return TypeName; }
 
-	static constexpr const char *TypeName = "bme280temperature";
+	static constexpr const char *TypeName = "bme280";
 
 private:
 	TemperatureError bme280_init() noexcept;
@@ -76,7 +76,7 @@ public:
 
 	const char *GetShortSensorType() const noexcept override { return TypeName; }
 
-	static constexpr const char *TypeName = "bme280pressure";
+	static constexpr const char *TypeName = "bmepressure";
 };
 
 // This class represents a DHT humidity sensor
@@ -88,7 +88,7 @@ public:
 
 	const char *GetShortSensorType() const noexcept override { return TypeName; }
 
-	static constexpr const char *TypeName = "bme280humidity";
+	static constexpr const char *TypeName = "bmehumidity";
 };
 
 #endif	// SUPPORT_BME280
