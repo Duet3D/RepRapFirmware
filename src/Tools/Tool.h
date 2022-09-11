@@ -144,7 +144,7 @@ public:
 
 	void Activate() noexcept;
 	void Standby() noexcept;
-	void UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHeaters, uint16_t &numToolsToReport) const noexcept;
+	void UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHeaters) const noexcept;
 
 	static ReadWriteLock toolListLock;
 

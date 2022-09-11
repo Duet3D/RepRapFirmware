@@ -276,7 +276,7 @@ uint16_t Tool::numToolsToReport = 0;
 	}
 	tool->next = *t;
 	*t = tool;
-	tool->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters, numToolsToReport);
+	tool->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters);
 	reprap.ToolsUpdated();
 }
 
@@ -311,7 +311,7 @@ uint16_t Tool::numToolsToReport = 0;
 	activeExtruders = activeToolHeaters = numToolsToReport = 0;
 	for (Tool *t = toolList; t != nullptr; t = t->Next())
 	{
-		t->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters, numToolsToReport);
+		t->UpdateExtruderAndHeaterCount(activeExtruders, activeToolHeaters);
 	}
 	reprap.ToolsUpdated();
 }
@@ -672,7 +672,7 @@ bool Tool::CanDriveExtruder(bool extrude) const noexcept
 }
 
 // Update the number of active drives and extruders in use to reflect what this tool uses
-void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHeaters, uint16_t &numToolsToReport) const noexcept
+void Tool::UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHeaters) const noexcept
 {
 	for (size_t drive = 0; drive < driveCount; drive++)
 	{
