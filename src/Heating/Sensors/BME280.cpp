@@ -46,7 +46,6 @@ constexpr uint16_t MinimumReadInterval = 1000;			// ms
 constexpr uint32_t BME280_Frequency = 4000000;			// maximum for BME280 is 10MHz
 constexpr SpiMode BME280_SpiMode = SPI_MODE_0;			// BME280 does mode 0 or mode 3 depending on value of CLK at falling edge of CS
 constexpr size_t MaxRegistersToRead = 26;
-constexpr size_t MaxRegistersToWrite = 10;
 
 // BME280 support functions, derived from code at https://github.com/BoschSensortec/BME280_driver
 
@@ -121,23 +120,14 @@ TemperatureError BME280TemperatureSensor::bme280_get_regs(uint8_t reg_addr, uint
 /*!
  * @brief This API writes the given data to the register address of the sensor.
  */
-TemperatureError BME280TemperatureSensor::bme280_set_regs(uint8_t *reg_addr, const uint8_t *reg_data, uint8_t len) const noexcept
+TemperatureError BME280TemperatureSensor::bme280_set_reg(uint8_t reg_addr, uint8_t reg_data) const noexcept
 {
-    uint8_t temp_buff[2 * MaxRegistersToWrite];
-
-	/* Interleave register address w.r.t data for burst write */
-	for (uint8_t index = 0; index < len; index++)
-	{
-		temp_buff[index * 2] = reg_addr[index] & 0x7F;
-		temp_buff[(index * 2) + 1] = reg_data[index];
-	}
-
-	return DoSpiTransaction(temp_buff, nullptr, len * 2);
+    uint8_t temp_buff[2] = { reg_addr, reg_data };
+	return DoSpiTransaction(temp_buff, nullptr, 2);
 }
 
 /*!
- * @brief This API sets the oversampling, filter and standby duration
- * (normal mode) settings in the sensor.
+ * @brief This API sets the oversampling, filter and standby duration (normal mode) settings in the sensor.
  */
 TemperatureError BME280TemperatureSensor::bme280_set_sensor_settings(uint8_t desired_settings) const noexcept
 {
@@ -211,15 +201,10 @@ TemperatureError BME280TemperatureSensor::bme280_get_sensor_mode(uint8_t *sensor
  */
 TemperatureError BME280TemperatureSensor::bme280_soft_reset() const noexcept
 {
-	uint8_t reg_addr = BME280_RESET_ADDR;
 	uint8_t try_run = 5;
 
-	/* 0xB6 is the soft reset command */
-	uint8_t soft_rst_cmd = BME280_SOFT_RESET_COMMAND;
-
 	/* Write the soft reset command in the sensor */
-	static_assert(1 <= MaxRegistersToWrite);
-	TemperatureError rslt = bme280_set_regs(&reg_addr, &soft_rst_cmd, 1);
+	TemperatureError rslt = bme280_set_reg(BME280_RESET_ADDR, BME280_SOFT_RESET_COMMAND);
 
 	if (rslt == TemperatureError::success)
 	{
@@ -311,10 +296,8 @@ static void fill_osr_temp_settings(uint8_t *reg_data, const struct bme280_settin
  */
 TemperatureError BME280TemperatureSensor::set_filter_standby_settings(uint8_t desired_settings, const struct bme280_settings *settings) const noexcept
 {
-	uint8_t reg_addr = BME280_CONFIG_ADDR;
 	uint8_t reg_data;
-
-	TemperatureError rslt = bme280_get_regs(reg_addr, &reg_data, 1);
+	TemperatureError rslt = bme280_get_regs(BME280_CONFIG_ADDR, &reg_data, 1);
 
 	if (rslt == TemperatureError::success)
 	{
@@ -329,16 +312,15 @@ TemperatureError BME280TemperatureSensor::set_filter_standby_settings(uint8_t de
 		}
 
 		/* Write the oversampling settings in the register */
-		rslt = bme280_set_regs(&reg_addr, &reg_data, 1);
+		rslt = bme280_set_reg(BME280_CONFIG_ADDR, reg_data);
 	}
 
 	return rslt;
 }
 
 /*!
- * @brief This internal API parse the oversampling(pressure, temperature
- * and humidity), filter and standby duration settings and store in the
- * device structure.
+ * @brief This internal API parse the oversampling(pressure, temperature and humidity),
+ * filter and standby duration settings and store in the device structure.
  */
 static void parse_device_settings(const uint8_t *reg_data, struct bme280_settings *settings)
 {
@@ -354,13 +336,11 @@ static void parse_device_settings(const uint8_t *reg_data, struct bme280_setting
  */
 TemperatureError BME280TemperatureSensor::write_power_mode(uint8_t sensor_mode) const noexcept
 {
-	uint8_t reg_addr = BME280_PWR_CTRL_ADDR;
-
 	/* Variable to store the value read from power mode register */
 	uint8_t sensor_mode_reg_val;
 
 	/* Read the power mode register */
-	TemperatureError rslt = bme280_get_regs(reg_addr, &sensor_mode_reg_val, 1);
+	TemperatureError rslt = bme280_get_regs(BME280_PWR_CTRL_ADDR, &sensor_mode_reg_val, 1);
 
 	/* Set the power mode */
 	if (rslt == TemperatureError::success)
@@ -368,7 +348,7 @@ TemperatureError BME280TemperatureSensor::write_power_mode(uint8_t sensor_mode) 
 		sensor_mode_reg_val = BME280_SET_BITS_POS_0(sensor_mode_reg_val, BME280_SENSOR_MODE, sensor_mode);
 
 		/* Write the power mode in the register */
-		rslt = bme280_set_regs(&reg_addr, &sensor_mode_reg_val, 1);
+		rslt = bme280_set_reg(BME280_PWR_CTRL_ADDR, sensor_mode_reg_val);
 	}
 
 	return rslt;
@@ -398,8 +378,7 @@ TemperatureError BME280TemperatureSensor::put_device_to_sleep() const noexcept
 }
 
 /*!
- * @brief This internal API reloads the already existing device settings in
- * the sensor after soft reset.
+ * @brief This internal API reloads the already existing device settings in the sensor after soft reset.
  */
 TemperatureError BME280TemperatureSensor::reload_device_settings(const struct bme280_settings *settings) const noexcept
 {
@@ -553,24 +532,19 @@ TemperatureError BME280TemperatureSensor::set_osr_settings(uint8_t desired_setti
  */
 TemperatureError BME280TemperatureSensor::set_osr_humidity_settings(const struct bme280_settings *settings) const noexcept
 {
-    uint8_t reg_addr = BME280_CTRL_HUM_ADDR;
     uint8_t ctrl_hum = settings->osr_h & BME280_CTRL_HUM_MSK;
 
     /* Write the humidity control value in the register */
-    TemperatureError rslt = bme280_set_regs(&reg_addr, &ctrl_hum, 1);
+    TemperatureError rslt = bme280_set_reg(BME280_CTRL_HUM_ADDR, ctrl_hum);
 
-    /* Humidity related changes will be only effective after a
-     * write operation to ctrl_meas register
-     */
+    /* Humidity related changes will be only effective after a write operation to ctrl_meas register */
     if (rslt == TemperatureError::success)
     {
-        reg_addr = BME280_CTRL_MEAS_ADDR;
         uint8_t ctrl_meas;
-        rslt = bme280_get_regs(reg_addr, &ctrl_meas, 1);
-
+        rslt = bme280_get_regs(BME280_CTRL_MEAS_ADDR, &ctrl_meas, 1);
         if (rslt == TemperatureError::success)
         {
-            rslt = bme280_set_regs(&reg_addr, &ctrl_meas, 1);
+            rslt = bme280_set_reg(BME280_CTRL_MEAS_ADDR, ctrl_meas);
         }
     }
 
@@ -578,15 +552,11 @@ TemperatureError BME280TemperatureSensor::set_osr_humidity_settings(const struct
 }
 
 /*!
- * @brief This API sets the pressure and/or temperature oversampling settings
- * in the sensor according to the settings selected by the user.
- */
+ * @brief This API sets the pressure and/or temperature oversampling settings in the sensor according to the settings selected by the user. */
 TemperatureError BME280TemperatureSensor::set_osr_press_temp_settings(uint8_t desired_settings, const struct bme280_settings *settings) const noexcept
 {
-    uint8_t reg_addr = BME280_CTRL_MEAS_ADDR;
     uint8_t reg_data;
-
-    TemperatureError rslt = bme280_get_regs(reg_addr, &reg_data, 1);
+    TemperatureError rslt = bme280_get_regs(BME280_CTRL_MEAS_ADDR, &reg_data, 1);
 
     if (rslt == TemperatureError::success)
     {
@@ -601,7 +571,7 @@ TemperatureError BME280TemperatureSensor::set_osr_press_temp_settings(uint8_t de
         }
 
         /* Write the oversampling settings in the register */
-        rslt = bme280_set_regs(&reg_addr, &reg_data, 1);
+        rslt = bme280_set_reg(BME280_CTRL_MEAS_ADDR, reg_data);
     }
 
     return rslt;
@@ -632,18 +602,13 @@ void BME280TemperatureSensor::parse_temp_press_calib_data(const uint8_t *reg_dat
  */
 void BME280TemperatureSensor::parse_humidity_calib_data(const uint8_t *reg_data) noexcept
 {
-    int16_t dig_h4_lsb;
-    int16_t dig_h4_msb;
-    int16_t dig_h5_lsb;
-    int16_t dig_h5_msb;
-
     dev.calib_data.dig_h2 = (int16_t)BME280_CONCAT_BYTES(reg_data[1], reg_data[0]);
     dev.calib_data.dig_h3 = reg_data[2];
-    dig_h4_msb = (int16_t)(int8_t)reg_data[3] * 16;
-    dig_h4_lsb = (int16_t)(reg_data[4] & 0x0F);
+    const int16_t dig_h4_msb = (int16_t)(int8_t)reg_data[3] * 16;
+    const int16_t dig_h4_lsb = (int16_t)(reg_data[4] & 0x0F);
     dev.calib_data.dig_h4 = dig_h4_msb | dig_h4_lsb;
-    dig_h5_msb = (int16_t)(int8_t)reg_data[5] * 16;
-    dig_h5_lsb = (int16_t)(reg_data[4] >> 4);
+    const int16_t dig_h5_msb = (int16_t)(int8_t)reg_data[5] * 16;
+    const int16_t dig_h5_lsb = (int16_t)(reg_data[4] >> 4);
     dev.calib_data.dig_h5 = dig_h5_msb | dig_h5_lsb;
     dev.calib_data.dig_h6 = (int8_t)reg_data[6];
 }
@@ -662,24 +627,21 @@ void BME280TemperatureSensor::parse_humidity_calib_data(const uint8_t *reg_data)
  */
 TemperatureError BME280TemperatureSensor::get_calib_data() noexcept
 {
-    uint8_t reg_addr = BME280_TEMP_PRESS_CALIB_DATA_ADDR;
-
     /* Array to store calibration data */
     uint8_t temp_calib_data[BME280_TEMP_PRESS_CALIB_DATA_LEN] = { 0 };
 
     /* Read the calibration data from the sensor */
 	static_assert(BME280_TEMP_PRESS_CALIB_DATA_LEN <= MaxRegistersToRead);
-    TemperatureError rslt = bme280_get_regs(reg_addr, temp_calib_data, BME280_TEMP_PRESS_CALIB_DATA_LEN);
+    TemperatureError rslt = bme280_get_regs(BME280_TEMP_PRESS_CALIB_DATA_ADDR, temp_calib_data, BME280_TEMP_PRESS_CALIB_DATA_LEN);
 
     if (rslt == TemperatureError::success)
     {
         /* Parse temperature and pressure calibration data and store it in device structure */
         parse_temp_press_calib_data(temp_calib_data);
-        reg_addr = BME280_HUMIDITY_CALIB_DATA_ADDR;
 
         /* Read the humidity calibration data from the sensor */
     	static_assert(BME280_HUMIDITY_CALIB_DATA_LEN <= MaxRegistersToRead);
-        rslt = bme280_get_regs(reg_addr, temp_calib_data, BME280_HUMIDITY_CALIB_DATA_LEN);
+        rslt = bme280_get_regs(BME280_HUMIDITY_CALIB_DATA_ADDR, temp_calib_data, BME280_HUMIDITY_CALIB_DATA_LEN);
 
         if (rslt == TemperatureError::success)
         {

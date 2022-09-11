@@ -36,7 +36,7 @@ public:
 private:
 	TemperatureError bme280_init() noexcept;
 	TemperatureError bme280_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint16_t len) const noexcept;
-	TemperatureError bme280_set_regs(uint8_t *reg_addr, const uint8_t *reg_data, uint8_t len) const noexcept;
+	TemperatureError bme280_set_reg(uint8_t reg_addr, uint8_t reg_data) const noexcept;
 	TemperatureError bme280_set_sensor_settings(uint8_t desired_settings) const noexcept;
 	TemperatureError bme280_set_sensor_mode(uint8_t sensor_mode) const noexcept;
 	TemperatureError bme280_get_sensor_mode(uint8_t *sensor_mode) const noexcept;
