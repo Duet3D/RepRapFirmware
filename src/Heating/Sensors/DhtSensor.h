@@ -54,7 +54,6 @@ private:
 	float lastHumidity;
 	uint8_t badTemperatureCount;
 
-	uint32_t lastReadTime;
 	volatile uint16_t lastPulseTime;
 	volatile uint8_t numPulses;
 	uint16_t pulses[41];			// 1 start bit + 40 data bits

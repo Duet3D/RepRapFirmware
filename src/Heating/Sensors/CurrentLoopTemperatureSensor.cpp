@@ -77,7 +77,7 @@ GCodeResult CurrentLoopTemperatureSensor::FinishConfiguring(bool changed, const 
 		for (unsigned int i = 0; i < 3; ++i)		// try 3 times
 		{
 			rslt = TryGetLinearAdcTemperature(t);
-			if (lastResult == TemperatureError::success)
+			if (rslt == TemperatureError::success)
 			{
 				break;
 			}

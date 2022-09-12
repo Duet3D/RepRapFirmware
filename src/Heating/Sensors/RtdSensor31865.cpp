@@ -159,10 +159,7 @@ GCodeResult RtdSensor31865::FinishConfiguring(bool changed, const StringRef& rep
 			delay(MinimumReadInterval);
 		}
 
-		lastReadingTime = millis();
-		lastResult = rslt;
-		lastTemperature = 0.0;
-
+		SetResult(0.0, rslt);
 		if (rslt != TemperatureError::success)
 		{
 			reply.printf("Failed to initialise RTD: %s", TemperatureErrorString(rslt));

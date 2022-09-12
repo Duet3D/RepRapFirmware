@@ -168,10 +168,7 @@ GCodeResult ThermocoupleSensor31856::FinishConfiguring(bool changed, const Strin
 			delay(MinimumReadInterval);
 		}
 
-		lastReadingTime = millis();
-		lastResult = rslt;
-		lastTemperature = 0.0;
-
+		SetResult(0.0, rslt);
 		if (rslt != TemperatureError::success)
 		{
 			reply.printf("Failed to initialise thermocouple: %s", TemperatureErrorString(rslt));
@@ -226,7 +223,6 @@ void ThermocoupleSensor31856::Poll() noexcept
 	}
 	else
 	{
-		lastReadingTime = millis();
 		if ((rawVal & 0x00FF) != 0)
 		{
 			// One or more fault bits is set

@@ -106,7 +106,6 @@ GCodeResult ThermocoupleSensor31855::FinishConfiguring(bool changed, const Strin
 	{
 		// Initialise the sensor
 		InitSpi();
-		lastReadingTime = millis();
 	}
 	else
 	{
@@ -128,7 +127,7 @@ void ThermocoupleSensor31855::Poll() noexcept
 		if ((rawVal & 0x00020008) != 0)
 		{
 			// These two bits should always read 0. Likely the entire read was 0xFF 0xFF which is not uncommon when first powering up
-			lastResult = TemperatureError::ioError;
+			SetResult(TemperatureError::ioError);
 		}
 		else if ((rawVal & 0x00010007) != 0)		// check the fault bits
 		{
@@ -164,7 +163,7 @@ void ThermocoupleSensor31855::Poll() noexcept
 				{
 					// Fault indicator was set but a fault reason was not set (nbits == 0) or too many fault reason bits were set (nbits > 1).
 					// Assume that a communication error with the MAX31855 has occurred.
-					lastResult = TemperatureError::ioError;
+					SetResult(TemperatureError::ioError);
 				}
 			}
 		}

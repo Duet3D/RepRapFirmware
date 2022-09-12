@@ -27,7 +27,7 @@ void DhtDataTransition(CallbackParameter cp) noexcept
 
 // Class DhtTemperatureSensor members
 DhtTemperatureSensor::DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType t) noexcept
-	: SensorWithPort(sensorNum, "DHT-temperature"), type(t), lastReadTime(0)
+	: SensorWithPort(sensorNum, "DHT-temperature"), type(t)
 {
 }
 
@@ -159,7 +159,7 @@ void DhtTemperatureSensor::Interrupt() noexcept
 void DhtTemperatureSensor::Poll() noexcept
 {
 	const auto now = millis();
-	if ((now - lastReadTime) >= MinimumReadInterval)
+	if ((now - GetLastReadingTime()) >= MinimumReadInterval)
 	{
 		TakeReading();
 	}
@@ -223,7 +223,6 @@ void DhtTemperatureSensor::TakeReading() noexcept
 		SetResult(rslt);
 		lastHumidity = BadErrorTemperature;
 	}
-	lastReadTime = millis();
 }
 
 // Process a reading. If success then update the temperature and humidity and return TemperatureError::success.

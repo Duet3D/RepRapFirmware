@@ -61,7 +61,6 @@ private:
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
 
 	bme280_dev dev;
-	uint32_t lastReadTime;
     float compPressure;			    /*< Compensated pressure */
     float compTemperature;    		/*< Compensated temperature */
     float compHumidity;    			/*< Compensated humidity */

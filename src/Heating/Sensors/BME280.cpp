@@ -691,9 +691,7 @@ GCodeResult BME280TemperatureSensor::FinishConfiguring(bool changed, const Strin
 		// Initialise the sensor
 		InitSpi();
 		TemperatureError rslt = bme280_init();
-		lastReadingTime = millis();
-		lastResult = rslt;
-		lastTemperature = 0.0;
+		SetResult(0.0, rslt);
 
 		if (rslt == TemperatureError::success)
 		{
@@ -752,9 +750,8 @@ TemperatureError BME280TemperatureSensor::GetLatestTemperature(float &t, uint8_t
 void BME280TemperatureSensor::Poll() noexcept
 {
 	const auto now = millis();
-	if ((now - lastReadTime) >= MinimumReadInterval)
+	if ((now - GetLastReadingTime()) >= MinimumReadInterval)
 	{
-		lastReadTime = now;
 		if (bme280_get_sensor_data() == TemperatureError::success)
 		{
 			SetResult(compTemperature, TemperatureError::success);

@@ -18,8 +18,7 @@ SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *n
 #if defined(__LPC17xx__)
     device.sspChannel = TempSensorSSPChannel;		// use SSP0 on LPC
 #endif
-	lastTemperature = 0.0;
-	lastResult = TemperatureError::notInitialised;
+    SetResult(0.0, TemperatureError::notInitialised);
 }
 
 bool SpiTemperatureSensor::ConfigurePort(GCodeBuffer& gb, const StringRef& reply, bool& seen)
@@ -42,7 +41,6 @@ bool SpiTemperatureSensor::ConfigurePort(const CanMessageGenericParser& parser, 
 
 void SpiTemperatureSensor::InitSpi() noexcept
 {
-	lastReadingTime = millis();
 }
 
 // Send and receive 1 to 8 bytes of data and return the result as a single 32-bit word

@@ -67,7 +67,10 @@ TemperatureSensor::~TemperatureSensor() noexcept
 // Return the latest temperature reading
 TemperatureError TemperatureSensor::GetLatestTemperature(float& t, uint8_t outputNumber) noexcept
 {
-	if (millis() - whenLastRead > TemperatureReadingTimeout)
+	// We must read whenLastRead *before* we call millis(). Otherwise, a task switch to the heater task could occur after we call millis and before we read whenLastRead,
+	// so that when we read whenLastRead its value is greater than the result from millis().
+	const uint32_t wlr = whenLastRead;
+	if (millis() - wlr > TemperatureReadingTimeout)
 	{
 		lastTemperature = BadErrorTemperature;
 		lastResult = TemperatureError::timeout;

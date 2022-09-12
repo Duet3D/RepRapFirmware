@@ -82,6 +82,9 @@ public:
 	virtual void UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report) noexcept;
 #endif
 
+	// Get the time of the last reading
+	uint32_t GetLastReadingTime() const noexcept { return whenLastRead; }
+
 	// Factory method
 #if SUPPORT_CAN_EXPANSION
 	static TemperatureSensor *Create(unsigned int sensorNum, CanAddress boardAddress, const char *typeName, const StringRef& reply) noexcept;
