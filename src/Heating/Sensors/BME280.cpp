@@ -102,7 +102,7 @@ TemperatureError BME280TemperatureSensor::bme280_init() noexcept
  */
 TemperatureError BME280TemperatureSensor::bme280_get_regs(uint8_t reg_addr, uint8_t *reg_data, uint16_t len) const noexcept
 {
-	uint8_t addrBuff[MaxRegistersToRead + 1];				// only the first bytes is used but the remainder need to be value addresses
+	uint8_t addrBuff[MaxRegistersToRead + 1];				// only the first byte is used but the remainder need to be value addresses
 	uint8_t dataBuff[MaxRegistersToRead + 1];
 
 	/* Read the data  */
@@ -122,7 +122,7 @@ TemperatureError BME280TemperatureSensor::bme280_get_regs(uint8_t reg_addr, uint
  */
 TemperatureError BME280TemperatureSensor::bme280_set_reg(uint8_t reg_addr, uint8_t reg_data) const noexcept
 {
-    uint8_t temp_buff[2] = { reg_addr, reg_data };
+    uint8_t temp_buff[2] = { (uint8_t)(reg_addr & 0x7F), reg_data };
 	return DoSpiTransaction(temp_buff, nullptr, 2);
 }
 
@@ -201,14 +201,12 @@ TemperatureError BME280TemperatureSensor::bme280_get_sensor_mode(uint8_t *sensor
  */
 TemperatureError BME280TemperatureSensor::bme280_soft_reset() const noexcept
 {
-	uint8_t try_run = 5;
-
-	/* Write the soft reset command in the sensor */
+	/* Write the soft reset command to the sensor */
 	TemperatureError rslt = bme280_set_reg(BME280_RESET_ADDR, BME280_SOFT_RESET_COMMAND);
-
 	if (rslt == TemperatureError::success)
 	{
 		uint8_t status_reg = 0;
+		uint8_t try_run = 5;
 
 		/* If NVM not copied yet, Wait for NVM to copy */
 		do
