@@ -1186,17 +1186,22 @@ void Platform::Spin() noexcept
 #  if SUPPORT_REMOTE_COMMANDS
 					if (CanInterface::InExpansionMode())
 					{
-						CanInterface::RaiseEvent(EventType::driver_stall, 0, nextDriveToPoll, "", va_list());
+						if (eventOnStallDrivers.Intersects(mask))
+						{
+							CanInterface::RaiseEvent(EventType::driver_stall, 0, nextDriveToPoll, "", va_list());
+						}
 					}
 					else
 #  endif
-					if (eventOnStallDrivers.Intersects(mask))
 					{
-						Event::AddEvent(EventType::driver_stall, 0, CanInterface::GetCanAddress(), nextDriveToPoll, "");
-					}
-					else if (logOnStallDrivers.Intersects(mask))
-					{
-						MessageF(WarningMessage, "Driver %u stalled at Z height %.2f\n", nextDriveToPoll, (double)reprap.GetMove().LiveCoordinate(Z_AXIS, reprap.GetCurrentTool()));
+						if (eventOnStallDrivers.Intersects(mask))
+						{
+							Event::AddEvent(EventType::driver_stall, 0, CanInterface::GetCanAddress(), nextDriveToPoll, "");
+						}
+						else if (logOnStallDrivers.Intersects(mask))
+						{
+							MessageF(WarningMessage, "Driver %u stalled at Z height %.2f\n", nextDriveToPoll, (double)reprap.GetMove().LiveCoordinate(Z_AXIS, reprap.GetCurrentTool()));
+						}
 					}
 				}
 # endif
