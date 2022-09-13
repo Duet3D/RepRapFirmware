@@ -5172,10 +5172,12 @@ GCodeResult Platform::EutProcessM915(const CanMessageGeneric& msg, const StringR
 
 	if (!seen)
 	{
-		drivers.Iterate([&reply](unsigned int drive, unsigned int) noexcept
+		drivers.Iterate([&reply, this](unsigned int drive, unsigned int) noexcept
 									{
 										reply.lcatf("Driver %u.%u: ", CanInterface::GetCanAddress(), drive);
 										SmartDrivers::AppendStallConfig(drive, reply);
+										reply.cat(", event on stall: ");
+										reply.cat((eventOnStallDrivers.IsBitSet(drive)) ? "yes" : "no");
 									}
 					   );
 	}
