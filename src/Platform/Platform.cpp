@@ -4275,7 +4275,7 @@ float Platform::GetTmcDriversTemperature(unsigned int boardNumber) const noexcep
 
 #endif
 
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 
 // Configure the motor stall detection, returning true if an error was encountered
 GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException)
@@ -4283,9 +4283,9 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 	// Build a bitmap of all the drivers referenced
 	// First looks for explicit driver numbers
 	DriversBitmap drivers;
-#if SUPPORT_CAN_EXPANSION
+# if SUPPORT_CAN_EXPANSION
 	CanDriversList canDrivers;
-#endif
+# endif
 	if (gb.Seen('P'))
 	{
 		DriverId drives[NumDirectDrivers];
@@ -4295,19 +4295,21 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 		{
 			if (drives[i].IsLocal())
 			{
+# if HAS_SMART_DRIVERS
 				if (drives[i].localDriver >= numSmartDrivers)
 				{
 					reply.printf("Invalid local drive number '%u'", drives[i].localDriver);
 					return GCodeResult::error;
 				}
+# endif
 				drivers.SetBit(drives[i].localDriver);
 			}
-#if SUPPORT_CAN_EXPANSION
+# if SUPPORT_CAN_EXPANSION
 			else
 			{
 				canDrivers.AddEntry(drives[i]);
 			}
-#endif
+# endif
 		}
 	}
 
@@ -4318,9 +4320,9 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 		{
 			IterateDrivers(axis,
 							[&drivers](uint8_t localDriver){ drivers.SetBit(localDriver); }
-#if SUPPORT_CAN_EXPANSION
+# if SUPPORT_CAN_EXPANSION
 						  , [&canDrivers](DriverId driver){ canDrivers.AddEntry(driver); }
-#endif
+# endif
 						  );
 		}
 	}
@@ -4340,16 +4342,17 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 				{
 					drivers.SetBit(driver.localDriver);
 				}
-#if SUPPORT_CAN_EXPANSION
+# if SUPPORT_CAN_EXPANSION
 				else
 				{
 					canDrivers.AddEntry(driver);
 				}
-#endif
+# endif
 			}
 		}
 	}
 
+# if HAS_STALL_DETECT
 	// Now check for values to change
 	bool seen = false;
 	if (gb.Seen('S'))
@@ -4400,39 +4403,52 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 			break;
 		}
 	}
+#else
+	// Board does not have any local drivers with stall detection but may have CAN-connected drivers
+	const bool seen = gb.SeenAny("SFHTR");
+#endif
 
 	if (seen)
 	{
-#if SUPPORT_CAN_EXPANSION
-		return CanInterface::GetSetRemoteDriverStallParameters(canDrivers, gb, reply, buf);
-#else
+# if SUPPORT_CAN_EXPANSION
+		const GCodeResult rslt = CanInterface::GetSetRemoteDriverStallParameters(canDrivers, gb, reply, buf);
+#  if !HAS_SMART_DRIVERS
+		if (drivers.IsNonEmpty())
+		{
+			reply.lcatf("Stall detection not available for external drivers");
+			return max(rslt, GCodeResult::warning);
+		}
+#  endif
+		return rslt;
+# else
 		return GCodeResult::ok;
-#endif
+# endif
 	}
 
 	// Print the stall status
-	if (!OutputBuffer::Allocate(buf))
-	{
-		return GCodeResult::notFinished;
-	}
-
+# if HAS_SMART_DRIVERS
 	if (drivers.IsEmpty()
-#if SUPPORT_CAN_EXPANSION
+#  if SUPPORT_CAN_EXPANSION
 		&& canDrivers.IsEmpty()
-#endif
+#  endif
 	   )
 	{
 		drivers = DriversBitmap::MakeLowestNBits(numSmartDrivers);
 	}
 
+	if (!OutputBuffer::Allocate(buf))
+	{
+		return GCodeResult::notFinished;
+	}
+
 	drivers.Iterate
 		([buf, this, &reply](unsigned int drive, unsigned int) noexcept
 			{
-#if SUPPORT_CAN_EXPANSION
+#  if SUPPORT_CAN_EXPANSION
 				buf->lcatf("Driver 0.%u: ", drive);
-#else
+#  else
 				buf->lcatf("Driver %u: ", drive);
-#endif
+#  endif
 				reply.Clear();										// we use 'reply' as a temporary buffer
 				SmartDrivers::AppendStallConfig(drive, reply);
 				buf->cat(reply.c_str());
@@ -4443,12 +4459,23 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 						  );
 			}
 		);
+# else
+	if (canDrivers.IsEmpty())
+	{
+		reply.copy("No local drivers have stall detection");
+		return GCodeResult::ok;
+	}
 
+	if (!OutputBuffer::Allocate(buf))
+	{
+		return GCodeResult::notFinished;
+	}
+# endif
 # if SUPPORT_CAN_EXPANSION
 	return CanInterface::GetSetRemoteDriverStallParameters(canDrivers, gb, reply, buf);
 # else
 	return GCodeResult::ok;
-#endif
+# endif
 }
 
 #endif
