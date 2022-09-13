@@ -843,12 +843,12 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 				// We received an unexpected message. Don't tack it on to 'reply' because some replies contain important data, e.g. request for board short name.
 				if (buf->id.MsgType() == CanMessageType::standardReply)
 				{
-					reprap.GetPlatform().MessageF(WarningMessage, "Discarded std reply src=%u RID=%u exp %u \"%s\"\n",
-													buf->id.Src(), (unsigned int)buf->msg.standardReply.requestId, rid, buf->msg.standardReply.text);
+					reprap.GetPlatform().MessageF(WarningMessage, "Discarded std reply src=%u RID=%u exp=%u \"%.*s\"\n",
+													buf->id.Src(), (unsigned int)buf->msg.standardReply.requestId, rid, buf->msg.standardReply.GetTextLength(buf->dataLength), buf->msg.standardReply.text);
 				}
 				else
 				{
-					reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp %u\n",
+					reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp=%u\n",
 													buf->id.Src(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->msg.standardReply.requestId, rid);
 				}
 			}
@@ -1182,10 +1182,10 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 	if (type == (uint16_t)DiagnosticTestType::AccessMemory)
 	{
 		gb.MustSee('A');
-		msg->param32[0] = gb.GetUIValue();
+		msg->param32[0] = (uint32_t)gb.GetIValue();			// allow negative values so that we can read high memory addresses
 		if (gb.Seen('V'))
 		{
-			msg->param32[1] = gb.GetUIValue();
+			msg->param32[1] = (uint32_t)gb.GetIValue();		// allow negative values so that we set high values
 			msg->param16 = 1;
 		}
 		else
@@ -1193,7 +1193,7 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 			msg->param16 = 0;
 		}
 	}
-	return SendRequestAndGetStandardReply(buf, rid, reply);			// we may not actually get a reply if the test is one that crashes the expansion board
+	return SendRequestAndGetStandardReply(buf, rid, reply);	// we may not actually get a reply if the test is one that crashes the expansion board
 }
 
 GCodeResult CanInterface::RemoteM408(uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)

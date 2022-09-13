@@ -4614,7 +4614,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 			case 915:
 				result = platform.ConfigureStallDetection(gb, reply, outBuf);
 				break;
