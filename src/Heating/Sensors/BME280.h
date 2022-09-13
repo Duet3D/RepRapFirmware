@@ -21,9 +21,8 @@ public:
 	BME280TemperatureSensor(unsigned int sensorNum) noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
-
 #if SUPPORT_REMOTE_COMMANDS
-	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override; // configure the sensor from M308 parameters
+	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
 #endif
 
 	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 2; }

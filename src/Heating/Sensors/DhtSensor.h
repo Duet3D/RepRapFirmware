@@ -14,7 +14,7 @@
 
 # include "AdditionalOutputSensor.h"
 # include "SensorWithPort.h"
-# include "RTOSIface/RTOSIface.h"
+# include <RTOSIface/RTOSIface.h>
 
 enum class DhtSensorType
 {
@@ -30,6 +30,10 @@ public:
 	~DhtTemperatureSensor() noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
+#if 0 //SUPPORT_REMOTE_COMMANDS
+	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
+#endif
+
 	TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0) noexcept override;
 	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 1; }
 	void Poll() noexcept override;
