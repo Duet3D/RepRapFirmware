@@ -398,6 +398,8 @@ private:
 	GCodeResult ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
 		pre(drive < platform.GetNumActualDirectDrivers());																// Deal with M569.0 for one local driver
 	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);					// process M204
+	GCodeResult DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);							// process M291
+	GCodeResult AcknowledgeMessage(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);						// process M292
 #if SUPPORT_ACCELEROMETERS
 	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);					// Deal with M955
 	GCodeResult StartAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M956
