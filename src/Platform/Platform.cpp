@@ -11,7 +11,7 @@
 
  18 November 2012
 
- Adrian Bowyer
+ Adrian Bowyerinfo[1]
  RepRap Professional Ltd
  http://reprappro.com
 
@@ -1200,17 +1200,22 @@ void Platform::Spin() noexcept
 #  if SUPPORT_REMOTE_COMMANDS
 					if (CanInterface::InExpansionMode())
 					{
-						CanInterface::RaiseEvent(EventType::driver_stall, 0, nextDriveToPoll, "", va_list());
+						if (eventOnStallDrivers.Intersects(mask))
+						{
+							CanInterface::RaiseEvent(EventType::driver_stall, 0, nextDriveToPoll, "", va_list());
+						}
 					}
 					else
 #  endif
-					if (eventOnStallDrivers.Intersects(mask))
 					{
-						Event::AddEvent(EventType::driver_stall, 0, CanInterface::GetCanAddress(), nextDriveToPoll, "");
-					}
-					else if (logOnStallDrivers.Intersects(mask))
-					{
-						MessageF(WarningMessage, "Driver %u stalled at Z height %.2f\n", nextDriveToPoll, (double)reprap.GetMove().LiveCoordinate(Z_AXIS, reprap.GetGCodes().GetPrimaryMovementState().currentTool));
+						if (eventOnStallDrivers.Intersects(mask))
+						{
+							Event::AddEvent(EventType::driver_stall, 0, CanInterface::GetCanAddress(), nextDriveToPoll, "");
+						}
+						else if (logOnStallDrivers.Intersects(mask))
+						{
+							MessageF(WarningMessage, "Driver %u stalled at Z height %.2f\n", nextDriveToPoll, (double)reprap.GetMove().LiveCoordinate(Z_AXIS, reprap.GetCurrentTool()));
+						}
 					}
 				}
 # endif
@@ -3764,6 +3769,29 @@ void Platform::ResetChannel(size_t chan) noexcept
 #endif
 }
 
+#if defined(DUET3_MB6HC)
+
+// this is safe to call before Platform has been created
+/*static*/ BoardType Platform::GetMB6HCBoardType() noexcept
+{
+	// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
+	// Driver 1 has a pulldown resistor on v0.1 and v1.0 boards, however we don't support v0.1 and we don't care about the difference between v0.6 and v1.0, so we don't need to read it
+	// Driver 2 has a pulldown resistor on v1.02 only
+	pinMode(DIRECTION_PINS[2], INPUT_PULLUP);
+	pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
+	delayMicroseconds(20);									// give the pullup resistor time to work
+	if (digitalRead(DIRECTION_PINS[2]))
+	{
+		return (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
+	}
+	else
+	{
+		return BoardType::Duet3_6HC_v102;
+	}
+}
+
+#endif
+
 // Set the board type. This must be called quite early, because for some builds it relies on pins not having been programmed for their intended use yet.
 void Platform::SetBoardType(BoardType bt) noexcept
 {
@@ -3777,21 +3805,20 @@ void Platform::SetBoardType(BoardType bt) noexcept
 					? BoardType::Duet3Mini_WiFi
 						: BoardType::Duet3Mini_Ethernet;
 #elif defined(DUET3_MB6HC)
-		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
-		// Driver 1 has a pulldown resistor on v0.1 and v1.0 boards, however we don't support v0.1 and we don't care about the difference between v0.6 and v1.0, so we don't need to read it
-		// Driver 2 has a pulldown resistor on v1.02 only
-		pinMode(DIRECTION_PINS[2], INPUT_PULLUP);
-		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
-		delayMicroseconds(20);									// give the pullup resistor time to work
-		if (digitalRead(DIRECTION_PINS[2]))
+		board = GetMB6HCBoardType();
+		if (board == BoardType::Duet3_6HC_v102)
 		{
-			board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
-			powerMonitorVoltageRange = PowerMonitorVoltageRange_v101;
+			powerMonitorVoltageRange = PowerMonitorVoltageRange_v102;
+			DiagPin = DiagPin102;
+			ActLedPin = ActLedPin102;
+			DiagOnPolarity = DiagOnPolarity102;
 		}
 		else
 		{
-			board = BoardType::Duet3_6HC_v102;
-			powerMonitorVoltageRange = PowerMonitorVoltageRange_v102;
+			powerMonitorVoltageRange = PowerMonitorVoltageRange_v101;
+			DiagPin = DiagPinPre102;
+			ActLedPin = ActLedPinPre102;
+			DiagOnPolarity = DiagOnPolarityPre102;
 		}
 		driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);
 		driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);
@@ -3876,9 +3903,9 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3Mini_WiFi:			return "Duet 3 " BOARD_SHORT_NAME " WiFi";
 	case BoardType::Duet3Mini_Ethernet:		return "Duet 3 " BOARD_SHORT_NAME " Ethernet";
 #elif defined(DUET3_MB6HC)
-	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v0.6 or 1.0";
+	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v1.0 or earlier";
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
-	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02";
+	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or later";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "Duet 3 " BOARD_SHORT_NAME " v0.1";
 	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0 or later";
@@ -4649,6 +4676,20 @@ uint32_t Platform::Random() noexcept
 
 #endif
 
+void Platform::SetDiagLed(bool on) const noexcept
+{
+	digitalWrite(DiagPin, XNor(DiagOnPolarity, on));
+}
+
+#if SUPPORT_MULTICAST_DISCOVERY
+
+void Platform::InvertDiagLed() const noexcept
+{
+	digitalWrite(DiagPin, !digitalRead(DiagPin));
+}
+
+#endif
+
 #if HAS_CPU_TEMP_SENSOR && SAME5x
 
 void Platform::TemperatureCalibrationInit() noexcept
@@ -5175,10 +5216,12 @@ GCodeResult Platform::EutProcessM915(const CanMessageGeneric& msg, const StringR
 
 	if (!seen)
 	{
-		drivers.Iterate([&reply](unsigned int drive, unsigned int) noexcept
+		drivers.Iterate([&reply, this](unsigned int drive, unsigned int) noexcept
 									{
 										reply.lcatf("Driver %u.%u: ", CanInterface::GetCanAddress(), drive);
 										SmartDrivers::AppendStallConfig(drive, reply);
+										reply.cat(", event on stall: ");
+										reply.cat((eventOnStallDrivers.IsBitSet(drive)) ? "yes" : "no");
 									}
 					   );
 	}

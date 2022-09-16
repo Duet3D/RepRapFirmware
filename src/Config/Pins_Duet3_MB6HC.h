@@ -152,16 +152,27 @@ constexpr float PowerMonitorVoltageRange_v101 = (60.4 + 4.7)/4.7 * 3.3;		// volt
 constexpr float V12MonitorVoltageRange = (60.4 + 4.7)/4.7 * 3.3;			// voltage divider ratio times the reference voltage
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
-constexpr Pin DiagPin = PortCPin(20);
-constexpr bool DiagOnPolarity = true;
-constexpr Pin ActLedPin = NoPin;
+constexpr Pin DiagPinPre102 = PortCPin(20);
+constexpr bool DiagOnPolarityPre102 = true;
+constexpr Pin ActLedPinPre102 = NoPin;
+
+constexpr Pin DiagPin102 = PortBPin(6);
+constexpr bool DiagOnPolarity102 = false;
+constexpr Pin ActLedPin102 = PortBPin(7);
 constexpr bool ActOnPolarity = false;
 
+// MB6HC 1.02 USB control
+constexpr Pin UsbPowerSwitchPin = PortCPin(6);
+constexpr Pin UsbModePin = PortCPin(20);
+constexpr Pin UsbDetectPin = PortCPin(19);
+
 // SD cards
-constexpr size_t NumSdCards = 2;											// we now allow one SPI-connected SD card to be configured at boot time
-constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(29), NoPin };		// the CD pin for the second SD card is allocated using M950
+// PD24 is SWD_EXT_RESET on pre-1.02 boards, PanelDue Card Detect on 1.20 and later
+// PD24 is not connected on pre-1.02 boards, SPI_CS4 on 1.02 and later
+constexpr size_t NumSdCards = 2;												// we now allow one SPI-connected SD card to be configured at boot time
+constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(29), PortDPin(24) };	// the CD pin for the second SD card is allocated using M950 on MB6HC boards before version 1.02
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[1] = { NoPin };									// this one is allocated using M950
+constexpr Pin SdSpiCSPins[1] = { PortDPin(22) };								// this one is allocated using M950 on MB6HC boards before version 1.02
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 
@@ -175,7 +186,7 @@ constexpr uint32_t DotStarClockId = ID_QSPI;
 constexpr IRQn DotStarIRQn = QSPI_IRQn;
 
 // Ethernet
-constexpr Pin EthernetPhyInterruptPin = PortCPin(6);
+constexpr Pin EthernetPhyInterruptPinPre102 = PortCPin(6);
 constexpr Pin EthernetPhyResetPin = PortDPin(11);
 constexpr Pin EthernetPhyOtherPins[] = {
 		PortDPin(0), PortDPin(1), PortDPin(2), PortDPin(3), PortDPin(4),
