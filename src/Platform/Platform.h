@@ -672,7 +672,17 @@ public:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void OnProcessingCanMessage() noexcept;								// called when we start processing any CAN message except for regular messages e.g. time sync
+	void OnProcessingCanMessage() noexcept;										// called when we start processing any CAN message except for regular messages e.g. time sync
+#endif
+
+#if defined(DUET3_MB6HC)
+	static BoardType GetMB6HCBoardType() noexcept;								// this is safe to call before Platform has been created
+#endif
+
+	void SetDiagLed(bool on) const noexcept;
+
+#if SUPPORT_MULTICAST_DISCOVERY
+	void InvertDiagLed() const noexcept;
 #endif
 
 protected:
@@ -894,6 +904,9 @@ private:
 	float powerMonitorVoltageRange;
 	uint16_t driverPowerOnAdcReading;
 	uint16_t driverPowerOffAdcReading;
+	Pin DiagPin;
+	Pin ActLedPin;
+	bool DiagOnPolarity;
 #endif
 
 	bool autoSaveEnabled;

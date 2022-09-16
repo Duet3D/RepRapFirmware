@@ -239,14 +239,14 @@ static inline void UpdateLed(uint32_t stepClocks) noexcept
 		else
 		{
 			// Blink the LED fast. This function gets called every 200ms, so that's the fastest we can blink it without having another task do it.
-			digitalWrite(DiagPin, !digitalRead(DiagPin));
+			reprap.GetPlatform().InvertDiagLed();
 			return;
 		}
 	}
 #endif
 
 	// Blink the LED at about 1Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
-	digitalWrite(DiagPin, XNor(DiagOnPolarity,  (stepClocks & (1u << 19)) != 0));
+	reprap.GetPlatform().SetDiagLed((stepClocks & (1u << 19)) != 0);
 }
 
 static void InitReceiveFilters() noexcept

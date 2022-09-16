@@ -62,7 +62,6 @@ void SdhcInit() noexcept
 void EthernetInit() noexcept
 {
 	// Initialize Ethernet pins
-	pinMode(EthernetPhyInterruptPin, INPUT_PULLUP);
 	for (Pin p : EthernetPhyOtherPins)
 	{
 		SetPinFunction(p, EthernetPhyOtherPinsFunction);
@@ -78,10 +77,7 @@ void DeviceInit() noexcept
 	SdhcInit();
 	EthernetInit();
 
-#if defined(DUET3_MB6HC)
-	// Set up PB4..PB5 as normal I/O, not JTAG
-	matrix_set_system_io(CCFG_SYSIO_SYSIO4 | CCFG_SYSIO_SYSIO5);
-#elif defined(DUET3_MB6XD)
+#if defined(DUET3_MB6HC) || defined(DUET3_MB6XD)
 # ifdef DEBUG
 	// Set up PB4..PB5 as normal I/O, not JTAG. Leave PB6/7 pins as SWD. STATUS and ACT LEDs will not work.
 	matrix_set_system_io(CCFG_SYSIO_SYSIO4 | CCFG_SYSIO_SYSIO5);

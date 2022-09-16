@@ -3761,6 +3761,29 @@ void Platform::ResetChannel(size_t chan) noexcept
 #endif
 }
 
+#if defined(DUET3_MB6HC)
+
+// this is safe to call before Platform has been created
+/*static*/ BoardType Platform::GetMB6HCBoardType() noexcept
+{
+	// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
+	// Driver 1 has a pulldown resistor on v0.1 and v1.0 boards, however we don't support v0.1 and we don't care about the difference between v0.6 and v1.0, so we don't need to read it
+	// Driver 2 has a pulldown resistor on v1.02 only
+	pinMode(DIRECTION_PINS[2], INPUT_PULLUP);
+	pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
+	delayMicroseconds(20);									// give the pullup resistor time to work
+	if (digitalRead(DIRECTION_PINS[2]))
+	{
+		return (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
+	}
+	else
+	{
+		return BoardType::Duet3_6HC_v102;
+	}
+}
+
+#endif
+
 // Set the board type. This must be called quite early, because for some builds it relies on pins not having been programmed for their intended use yet.
 void Platform::SetBoardType(BoardType bt) noexcept
 {
@@ -3774,21 +3797,20 @@ void Platform::SetBoardType(BoardType bt) noexcept
 					? BoardType::Duet3Mini_WiFi
 						: BoardType::Duet3Mini_Ethernet;
 #elif defined(DUET3_MB6HC)
-		// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
-		// Driver 1 has a pulldown resistor on v0.1 and v1.0 boards, however we don't support v0.1 and we don't care about the difference between v0.6 and v1.0, so we don't need to read it
-		// Driver 2 has a pulldown resistor on v1.02 only
-		pinMode(DIRECTION_PINS[2], INPUT_PULLUP);
-		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
-		delayMicroseconds(20);									// give the pullup resistor time to work
-		if (digitalRead(DIRECTION_PINS[2]))
+		board = GetMB6HCBoardType();
+		if (board == BoardType::Duet3_6HC_v102)
 		{
-			board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v101 : BoardType::Duet3_6HC_v06_100;
-			powerMonitorVoltageRange = PowerMonitorVoltageRange_v101;
+			powerMonitorVoltageRange = PowerMonitorVoltageRange_v102;
+			DiagPin = DiagPin102;
+			ActLedPin = ActLedPin102;
+			DiagOnPolarity = DiagOnPolarity102;
 		}
 		else
 		{
-			board = BoardType::Duet3_6HC_v102;
-			powerMonitorVoltageRange = PowerMonitorVoltageRange_v102;
+			powerMonitorVoltageRange = PowerMonitorVoltageRange_v101;
+			DiagPin = DiagPinPre102;
+			ActLedPin = ActLedPinPre102;
+			DiagOnPolarity = DiagOnPolarityPre102;
 		}
 		driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);
 		driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);
@@ -4642,6 +4664,20 @@ GCodeResult Platform::GetSetAncillaryPwm(GCodeBuffer& gb, const StringRef& reply
 uint32_t Platform::Random() noexcept
 {
 	return StepTimer::GetTimerTicks() ^ uniqueId.GetHash();
+}
+
+#endif
+
+void Platform::SetDiagLed(bool on) const noexcept
+{
+	digitalWrite(DiagPin, XNor(DiagOnPolarity, on));
+}
+
+#if SUPPORT_MULTICAST_DISCOVERY
+
+void Platform::InvertDiagLed() const noexcept
+{
+	digitalWrite(DiagPin, !digitalRead(DiagPin));
 }
 
 #endif
