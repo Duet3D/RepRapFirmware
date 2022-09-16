@@ -168,10 +168,12 @@ constexpr Pin UsbModePin = PortCPin(20);
 constexpr Pin UsbDetectPin = PortCPin(19);
 
 // SD cards
-constexpr size_t NumSdCards = 2;											// we now allow one SPI-connected SD card to be configured at boot time
-constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(29), NoPin };		// the CD pin for the second SD card is allocated using M950
+// PD24 is SWD_EXT_RESET on pre-1.02 boards, PanelDue Card Detect on 1.20 and later
+// PD24 is not connected on pre-1.02 boards, SPI_CS4 on 1.02 and later
+constexpr size_t NumSdCards = 2;												// we now allow one SPI-connected SD card to be configured at boot time
+constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(29), PortDPin(24) };	// the CD pin for the second SD card is allocated using M950 on MB6HC boards before version 1.02
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[1] = { NoPin };									// this one is allocated using M950
+constexpr Pin SdSpiCSPins[1] = { PortDPin(22) };								// this one is allocated using M950 on MB6HC boards before version 1.02
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 

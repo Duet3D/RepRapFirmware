@@ -211,6 +211,10 @@ GCodeResult MassStorage::ConfigureSdCard(GCodeBuffer& gb, const StringRef& reply
 		}
 		sd_mmc_change_cs_pin(1, sd1Ports[0].GetPin());
 		info[1].cdPin = sd1Ports[1].GetPin();
+		if (info[1].cdPin == NoPin)
+		{
+			info[1].cardState = CardDetectState::present;
+		}
 		reprap.VolumesUpdated();
 	}
 	else
