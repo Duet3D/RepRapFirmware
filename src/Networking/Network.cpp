@@ -190,10 +190,8 @@ void Network::Init() noexcept
 
 	SafeStrncpy(hostname, DEFAULT_HOSTNAME, ARRAY_SIZE(hostname));
 
-	for (NetworkInterface *iface : interfaces)
-	{
-		iface->Init();
-	}
+	// Only the MB6HC has more than one interface, and at this point we haven't created the second one yet. So initialise just the first.
+	interfaces[0]->Init();
 #endif
 
 	fastLoop = UINT32_MAX;
@@ -209,6 +207,8 @@ void Network::CreateAdditionalInterface() noexcept
 	{
 		interfaces[1] = new WiFiInterface(platform);
 		numActualNetworkInterfaces = 2;
+		interfaces[1]->Init();
+		interfaces[1]->UpdateHostname(hostname);
 	}
 }
 
@@ -699,9 +699,9 @@ void Network::SetHostname(const char *name) noexcept
 		strcpy(hostname, DEFAULT_HOSTNAME);
 	}
 
-	for (NetworkInterface *iface : interfaces)
+	for (unsigned int i = 0; i < GetNumNetworkInterfaces(); ++i)
 	{
-		iface->UpdateHostname(hostname);
+		interfaces[i]->UpdateHostname(hostname);
 	}
 #endif
 }
