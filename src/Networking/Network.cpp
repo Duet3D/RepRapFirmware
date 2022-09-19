@@ -86,23 +86,17 @@ Network::Network(Platform& p) noexcept : platform(p)
 #endif
 {
 #if HAS_NETWORKING
-#if defined(DUET3_MB6HC) || defined(DUET3_MB6XD)
+# if defined(DUET3_MB6HC) || defined(DUET3_MB6XD)
 	interfaces[0] = new LwipEthernetInterface(p);
-#elif defined(DUET_NG) || defined(DUET3MINI_V04)
+# elif defined(DUET_NG) || defined(DUET3MINI_V04)
 	interfaces[0] = nullptr;			// we set this up in Init()
-#elif defined(FMDC_V02) || defined(FMDC_V03)
+# elif defined(FMDC_V02) || defined(FMDC_V03)
 	interfaces[0] = new WiFiInterface(p);
-#elif defined(DUET_M)
+# elif defined(DUET_M)
 	interfaces[0] = new W5500Interface(p);
-#elif defined(__LPC17xx__)
-# if HAS_WIFI_NETWORKING
-	interfaces[0] = new WiFiInterface(p);
- #else
-	interfaces[0] = new RTOSPlusTCPEthernetInterface(p);
- #endif
-#else
-# error Unknown board
-#endif
+# else
+#  error Unknown board
+# endif
 #endif // HAS_NETWORKING
 }
 
@@ -120,7 +114,7 @@ constexpr ObjectModelArrayTableEntry Network::objectModelArrayTable[] =
 	// 0. Interfaces
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumNetworkInterfaces; },
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((Network*)self)->GetNumNetworkInterfaces(); },
 #if HAS_NETWORKING
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->interfaces[context.GetLastIndex()]); }
 #endif
@@ -206,10 +200,24 @@ void Network::Init() noexcept
 	slowLoop = 0;
 }
 
+#if defined(DUET3_MB6HC)
+
+// Create the additional interface. Called after we have established that we are not running in SBC mode but before config.g is run.
+void Network::CreateAdditionalInterface() noexcept
+{
+	if (platform.GetBoardType() >= BoardType::Duet3_6HC_v102)
+	{
+		interfaces[1] = new WiFiInterface(platform);
+		numActualNetworkInterfaces = 2;
+	}
+}
+
+#endif
+
 GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept
 {
 #if HAS_NETWORKING
-	if (interface < NumNetworkInterfaces)
+	if (interface < GetNumNetworkInterfaces())
 	{
 		return interfaces[interface]->EnableProtocol(protocol, port, secure, reply);
 	}
@@ -225,7 +233,7 @@ GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol prot
 GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol protocol, const StringRef& reply) noexcept
 {
 #if HAS_NETWORKING
-	if (interface < NumNetworkInterfaces)
+	if (interface < GetNumNetworkInterfaces())
 	{
 		NetworkInterface * const iface = interfaces[interface];
 		const GCodeResult ret = iface->DisableProtocol(protocol, reply);
@@ -286,7 +294,7 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 GCodeResult Network::ReportProtocols(unsigned int interface, const StringRef& reply) const noexcept
 {
 #if HAS_NETWORKING
-	if (interface < NumNetworkInterfaces)
+	if (interface < GetNumNetworkInterfaces())
 	{
 		return interfaces[interface]->ReportProtocols(reply);
 	}
@@ -302,7 +310,7 @@ GCodeResult Network::ReportProtocols(unsigned int interface, const StringRef& re
 GCodeResult Network::EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply) noexcept
 {
 #if HAS_NETWORKING
-	if (interface < NumNetworkInterfaces)
+	if (interface < GetNumNetworkInterfaces())
 	{
 		NetworkInterface * const iface = interfaces[interface];
 		const GCodeResult ret = iface->EnableInterface(mode, ssid, reply);
@@ -491,7 +499,7 @@ void Network::Exit() noexcept
 GCodeResult Network::GetNetworkState(unsigned int interface, const StringRef& reply) noexcept
 {
 #if HAS_NETWORKING
-	if (interface < NumNetworkInterfaces)
+	if (interface < GetNumNetworkInterfaces())
 	{
 		return interfaces[interface]->GetNetworkState(reply);
 	}
@@ -507,7 +515,7 @@ GCodeResult Network::GetNetworkState(unsigned int interface, const StringRef& re
 bool Network::IsWiFiInterface(unsigned int interface) const noexcept
 {
 #if HAS_NETWORKING
-	return interface < NumNetworkInterfaces && interfaces[interface]->IsWiFiInterface();
+	return interface < GetNumNetworkInterfaces() && interfaces[interface]->IsWiFiInterface();
 #else
 	return false;
 #endif
@@ -607,7 +615,7 @@ void Network::Diagnostics(MessageType mtype) noexcept
 int Network::EnableState(unsigned int interface) const noexcept
 {
 #if HAS_NETWORKING
-	if (interface < NumNetworkInterfaces)
+	if (interface < GetNumNetworkInterfaces())
 	{
 		return interfaces[interface]->EnableState();
 	}
@@ -632,7 +640,7 @@ IPAddress Network::GetIPAddress(unsigned int interface) const noexcept
 {
 	return
 #if HAS_NETWORKING
-			(interface < NumNetworkInterfaces) ? interfaces[interface]->GetIPAddress() :
+			(interface < GetNumNetworkInterfaces()) ? interfaces[interface]->GetIPAddress() :
 #endif
 					IPAddress();
 }
@@ -641,7 +649,7 @@ IPAddress Network::GetNetmask(unsigned int interface) const noexcept
 {
 	return
 #if HAS_NETWORKING
-			(interface < NumNetworkInterfaces) ? interfaces[interface]->GetNetmask() :
+			(interface < GetNumNetworkInterfaces()) ? interfaces[interface]->GetNetmask() :
 #endif
 					IPAddress();
 }
@@ -650,7 +658,7 @@ IPAddress Network::GetGateway(unsigned int interface) const noexcept
 {
 	return
 #if HAS_NETWORKING
-			(interface < NumNetworkInterfaces) ? interfaces[interface]->GetGateway() :
+			(interface < GetNumNetworkInterfaces()) ? interfaces[interface]->GetGateway() :
 #endif
 					IPAddress();
 }
@@ -658,7 +666,7 @@ IPAddress Network::GetGateway(unsigned int interface) const noexcept
 bool Network::UsingDhcp(unsigned int interface) const noexcept
 {
 #if HAS_NETWORKING
-	return interface < NumNetworkInterfaces && interfaces[interface]->UsingDhcp();
+	return interface < GetNumNetworkInterfaces() && interfaces[interface]->UsingDhcp();
 #else
 	return false;
 #endif
@@ -702,7 +710,7 @@ void Network::SetHostname(const char *name) noexcept
 GCodeResult Network::SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept
 {
 #if HAS_NETWORKING
-	if (interface < NumNetworkInterfaces)
+	if (interface < GetNumNetworkInterfaces())
 	{
 		return interfaces[interface]->SetMacAddress(mac, reply);
 	}
@@ -717,7 +725,7 @@ GCodeResult Network::SetMacAddress(unsigned int interface, const MacAddress& mac
 const MacAddress& Network::GetMacAddress(unsigned int interface) const noexcept
 {
 #if HAS_NETWORKING
-	if (interface >= NumNetworkInterfaces)
+	if (interface >= GetNumNetworkInterfaces())
 	{
 		interface = 0;
 	}

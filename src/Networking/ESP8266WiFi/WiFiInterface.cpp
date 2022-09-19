@@ -36,7 +36,10 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 # define USE_DMAC_MANAGER	0		// use SAMD/SAME DMA controller via DmacManager module
 # define USE_XDMAC			0		// use SAME7 XDMA controller
 
-#elif defined(DUET3_V03) || defined(SAME70XPLD)
+#elif defined(DUET3_MB6HC)
+
+# include <pmc/pmc.h>
+# include <spi/spi.h>
 
 # define USE_PDC			0		// use SAM4 peripheral DMA controller
 # define USE_DMAC			0		// use SAM4 general DMA controller
@@ -186,6 +189,10 @@ void SERIAL_WIFI_ISR3() noexcept
 {
 	SerialWiFiDevice->Interrupt3();
 }
+
+#else
+
+#define SERIAL_WIFI_DEVICE	(SerialWiFi)
 
 #endif
 
@@ -2164,8 +2171,8 @@ void WiFiInterface::StartWiFi() noexcept
 #endif
 
 #if !SAME5x && !defined(__LPC17xx__)
-	SetPinFunction(APIN_Serial1_TXD, Serial1PeriphMode);				// connect the pins to the UART
-	SetPinFunction(APIN_Serial1_RXD, Serial1PeriphMode);				// connect the pins to the UART
+	SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);		// connect the pins to the UART
+	SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);		// connect the pins to the UART
 #endif
 	SERIAL_WIFI_DEVICE.begin(WiFiBaudRate);						// initialise the UART, to receive debug info
 	debugMessageChars = 0;
@@ -2183,8 +2190,8 @@ void WiFiInterface::ResetWiFi() noexcept
 #endif
 
 #if !defined(SAME5x)
-	pinMode(APIN_Serial1_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
-	pinMode(APIN_Serial1_RXD, INPUT_PULLUP);
+	pinMode(APIN_SerialWiFi_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
+	pinMode(APIN_SerialWiFi_RXD, INPUT_PULLUP);
 #endif
 	currentMode = WiFiState::disabled;
 
@@ -2235,15 +2242,15 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	if (external)
 	{
 #if !defined(DUET3MINI)
-		pinMode(APIN_Serial1_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
-		pinMode(APIN_Serial1_RXD, INPUT_PULLUP);
+		pinMode(APIN_SerialWiFi_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
+		pinMode(APIN_SerialWiFi_RXD, INPUT_PULLUP);
 #endif
 	}
 	else
 	{
 #if !SAME5x && !defined(__LPC17xx__)
-		SetPinFunction(APIN_Serial1_TXD, Serial1PeriphMode);				// connect the pins to the UART
-		SetPinFunction(APIN_Serial1_RXD, Serial1PeriphMode);				// connect the pins to the UART
+		SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);	// connect the pins to the UART
+		SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);	// connect the pins to the UART
 #endif
 	}
 

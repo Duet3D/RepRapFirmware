@@ -14,6 +14,10 @@
 extern AsyncSerial Serial;
 extern USARTClass Serial1;
 
+#if defined(DUET3_MB6HC)
+extern AsyncSerial SerialWiFi;
+#endif
+
 #define SUPPORT_USB		1		// needed by SerialCDC.h
 #include "SerialCDC.h"
 
