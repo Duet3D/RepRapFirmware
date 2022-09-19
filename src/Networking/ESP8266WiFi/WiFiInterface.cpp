@@ -2157,10 +2157,15 @@ void WiFiInterface::StartWiFi() noexcept
 #endif
 
 #if !SAME5x && !defined(__LPC17xx__)
-	SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);		// connect the pins to the UART
-	SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);		// connect the pins to the UART
+	SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);	// connect the pins to the UART
+	SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);	// connect the pins to the UART
 #endif
+
+#if defined(DUET3_MB6HC)
+	SERIAL_WIFI_DEVICE.begin(WiFiBaudRate_ESP32);				// initialise the UART, to receive debug info
+#else
 	SERIAL_WIFI_DEVICE.begin(WiFiBaudRate);						// initialise the UART, to receive debug info
+#endif
 	debugMessageChars = 0;
 	serialRunning = true;
 	debugPrintPending = false;
