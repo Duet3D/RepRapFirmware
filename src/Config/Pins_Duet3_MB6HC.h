@@ -14,7 +14,7 @@
 #define IAP_CAN_LOADER_FILE		"Duet3_CANiap32_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 
-#define WIFI_FIRMWARE_FILE		"DuetWiFiServer_32S3.bin"
+#define WIFI_FIRMWARE_FILE		"DuetWiFiModule_32S3.bin"
 
 // Features definition
 // Networking support
@@ -387,6 +387,9 @@ constexpr Pin APIN_SBC_SPI_SCK = PortCPin(24);
 constexpr Pin APIN_SBC_SPI_SS0 = PortCPin(25);
 constexpr GpioPinFunction SBCPinPeriphMode = GpioPinFunction::C;
 
+constexpr Pin SbcTfrReadyPin = PortEPin(2);
+// Note, the DMAC peripheral IDs are hard-coded in DataTransfer
+
 // WiFi pins, mostly shared with the SBC interface
 #define ESP_SPI					SPI1
 #define ESP_SPI_INTERFACE_ID	ID_SPI1
@@ -403,11 +406,11 @@ constexpr Pin APIN_SerialWiFi_TXD = PortDPin(19);
 constexpr Pin APIN_SerialWiFi_RXD = PortDPin(18);
 constexpr GpioPinFunction SerialWiFiPeriphMode = GpioPinFunction::C;
 
-constexpr Pin EspResetPin = PortCPin(14);			// Low on this in holds the WiFi module in reset (ESP_RESET)
-constexpr Pin EspEnablePin = NoPin;					// High to enable the WiFi module, low to power it down (ESP_CH_PD)
+constexpr Pin EspResetPin = PortCPin(14);			// Low on this in holds the WiFi module in reset (ESP_EN)
 constexpr Pin EspDataReadyPin = PortAPin(2);		// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
-constexpr Pin SamTfrReadyPin = PortEPin(2);			// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
+constexpr Pin SamTfrReadyPin = PortEPin(2);			// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO8)
 constexpr Pin SamCsPin = PortCPin(25);				// SPI NPCS pin, input from WiFi module
+// Note, the DMAC peripheral IDs are hard-coded in WiFiInterface
 
 // CAN
 constexpr Pin APIN_CAN0_RX = PortBPin(3);
@@ -424,9 +427,6 @@ constexpr unsigned int CanDeviceNumber = 1;				// CAN-FD device number
 #if defined(DUAL_CAN) && DUAL_CAN
 constexpr unsigned int SecondaryCanDeviceNumber = 0;	// plan CAN device number
 #endif
-
-constexpr Pin SbcTfrReadyPin = PortEPin(2);
-// Note, the DMAC peripheral IDs are hard-coded in DataTransfer
 
 // Timer allocation
 // Step timer is timer 0 aka TC0 channel 0. Also used as the CAN timestamp counter.
