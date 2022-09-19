@@ -14,10 +14,12 @@
 #define IAP_CAN_LOADER_FILE		"Duet3_CANiap32_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 
+#define WIFI_FIRMWARE_FILE		"DuetWiFiServer_32S3.bin"
+
 // Features definition
 // Networking support
 #define HAS_LWIP_NETWORKING		1
-#define HAS_WIFI_NETWORKING		0
+#define HAS_WIFI_NETWORKING		1
 
 // Storage support
 #define HAS_SBC_INTERFACE		1
@@ -386,6 +388,28 @@ constexpr Pin APIN_SBC_SPI_SCK = PortCPin(24);
 constexpr Pin APIN_SBC_SPI_SS0 = PortCPin(25);
 constexpr GpioPinFunction SBCPinPeriphMode = GpioPinFunction::C;
 
+// WiFi pins, mostly shared with the SBC interface
+#define ESP_SPI					SPI1
+#define ESP_SPI_INTERFACE_ID	ID_SPI1
+#define ESP_SPI_IRQn			SPI1_IRQn
+#define ESP_SPI_HANDLER			SPI1_Handler
+
+constexpr Pin APIN_ESP_SPI_MOSI = PortCPin(27);
+constexpr Pin APIN_ESP_SPI_MISO = PortCPin(26);
+constexpr Pin APIN_ESP_SPI_SCK  = PortCPin(24);
+constexpr Pin APIN_ESP_SPI_SS0  = PortCPin(25);
+constexpr GpioPinFunction SPIPeriphMode = GpioPinFunction::C;
+
+constexpr Pin APIN_SerialWiFi_TXD = PortDPin(19);
+constexpr Pin APIN_SerialWiFi_RXD = PortDPin(18);
+constexpr GpioPinFunction SerialWiFiPeriphMode = GpioPinFunction::C;
+
+constexpr Pin EspResetPin = PortCPin(14);			// Low on this in holds the WiFi module in reset (ESP_RESET)
+constexpr Pin EspEnablePin = NoPin;					// High to enable the WiFi module, low to power it down (ESP_CH_PD)
+constexpr Pin EspDataReadyPin = PortAPin(2);		// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
+constexpr Pin SamTfrReadyPin = PortEPin(2);			// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO4 via 7474)
+constexpr Pin SamCsPin = PortCPin(25);				// SPI NPCS pin, input from WiFi module
+
 // CAN
 constexpr Pin APIN_CAN0_RX = PortBPin(3);
 constexpr Pin APIN_CAN0_TX = PortBPin(2);
@@ -417,8 +441,8 @@ constexpr Pin SbcTfrReadyPin = PortEPin(2);
 
 // DMA channel allocation
 constexpr DmaChannel DmacChanHsmci = 0;			// this is hard coded in the ASF HSMCI driver
-//constexpr DmaChannel DmacChanWiFiTx = 1;		// only on v0.3 board
-//constexpr DmaChannel DmacChanWiFiRx = 2;		// only on v0.3 board
+constexpr DmaChannel DmacChanWiFiTx = 1;
+constexpr DmaChannel DmacChanWiFiRx = 2;
 constexpr DmaChannel DmacChanTmcTx = 3;
 constexpr DmaChannel DmacChanTmcRx = 4;
 constexpr DmaChannel DmacChanSbcTx = 5;

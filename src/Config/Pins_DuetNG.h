@@ -139,7 +139,6 @@ constexpr size_t MaxSpindles = 4;					// Maximum number of configurable spindles
 constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE	SerialUSB
 #define SERIAL_AUX_DEVICE	Serial
-#define SERIAL_WIFI_DEVICE	Serial1
 
 constexpr Pin UsbVBusPin = PortCPin(22);			// Pin used to monitor VBUS on USB port
 
@@ -483,9 +482,9 @@ constexpr Pin APIN_Serial0_TXD = PortAPin(10);
 constexpr GpioPinFunction Serial0PeriphMode = GpioPinFunction::A;
 
 // Serial1
-constexpr Pin APIN_Serial1_RXD = PortAPin(5);
-constexpr Pin APIN_Serial1_TXD = PortAPin(6);
-constexpr GpioPinFunction Serial1PeriphMode = GpioPinFunction::C;
+constexpr Pin APIN_SerialWiFi_RXD = PortAPin(5);
+constexpr Pin APIN_SerialWiFi_TXD = PortAPin(6);
+constexpr GpioPinFunction SerialWiFiPeriphMode = GpioPinFunction::C;
 
 // Duet pin numbers to control the WiFi interface on the Duet WiFi
 #define ESP_SPI					SPI

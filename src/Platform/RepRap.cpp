@@ -607,6 +607,9 @@ void RepRap::Init() noexcept
 
 		if (rslt == GCodeResult::ok)
 		{
+# if defined(DUET3_MB6HC)
+			network->CreateAdditionalInterface();		// do this now because config.g may refer to it
+# endif
 			// Run the configuration file
 			if (!RunStartupFile(GCodes::CONFIG_FILE) && !RunStartupFile(GCodes::CONFIG_BACKUP_FILE))
 			{

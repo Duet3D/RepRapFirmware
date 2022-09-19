@@ -37,6 +37,21 @@ USARTClass Serial1(USART2, USART2_IRQn, ID_USART2, 512, 512,
 					}
 				);
 
+#if defined(DUET3_MB6HC)
+AsyncSerial SerialWiFi(UART4, UART4_IRQn, ID_UART4, 512, 512,
+					[](AsyncSerial*) noexcept
+					{
+						SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);
+						SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);
+					},
+					[](AsyncSerial*) noexcept
+					{
+						ClearPinFunction(APIN_SerialWiFi_RXD);
+						ClearPinFunction(APIN_SerialWiFi_TXD);
+					}
+				);
+#endif
+
 SerialCDC SerialUSB;
 
 void UART2_Handler(void) noexcept
@@ -48,6 +63,13 @@ void USART2_Handler(void) noexcept
 {
 	Serial1.IrqHandler();
 }
+
+#if defined(DUET3_MB6HC)
+void UART4_Handler(void) noexcept
+{
+	SerialWiFi.IrqHandler();
+}
+#endif
 
 void SdhcInit() noexcept
 {

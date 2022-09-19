@@ -14,10 +14,10 @@
 #include <ObjectModel/ObjectModel.h>
 #include <General/NamedEnum.h>
 
-#if defined(DUET3_V03)
-const size_t NumNetworkInterfaces = 2;
+#if defined(DUET3_MB6HC) && HAS_WIFI_NETWORKING
+const size_t MaxNetworkInterfaces = 2;
 #elif defined(DUET3_MB6HC) || defined(DUET3_MB6XD) || defined(DUET_NG) || defined(DUET_M) || defined(__LPC17xx__) || defined(PCCB) || defined(DUET3MINI)
-const size_t NumNetworkInterfaces = 1;
+const size_t MaxNetworkInterfaces = 1;
 #else
 # error Wrong Network.h file included
 #endif
@@ -78,6 +78,10 @@ public:
 	void Diagnostics(MessageType mtype) noexcept;
 	bool IsWiFiInterface(unsigned int interface) const noexcept;
 
+#if defined(DUET3_MB6HC)
+	void CreateAdditionalInterface() noexcept;
+#endif
+
 	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply) noexcept;
 	GCodeResult EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept;
 	GCodeResult DisableProtocol(unsigned int interface, NetworkProtocol protocol, const StringRef& reply) noexcept;
@@ -121,12 +125,13 @@ protected:
 	OBJECT_MODEL_ARRAY(interfaces)
 
 private:
+	unsigned int GetNumNetworkInterfaces() const noexcept;
 	WiFiInterface *FindWiFiInterface() const noexcept;
 
 	Platform& platform;
 
 #if HAS_NETWORKING
-	NetworkInterface *interfaces[NumNetworkInterfaces];
+	NetworkInterface *interfaces[MaxNetworkInterfaces];
 #endif
 
 #if HAS_RESPONDERS
@@ -146,7 +151,21 @@ private:
 #if SUPPORT_HTTP
 	String<StringLength20> corsSite;
 #endif
+
+#ifdef DUET3_MB6HC
+	unsigned int numActualNetworkInterfaces = 1;	// don't add a second interface until we know whether the board supports it
+#endif
+
 	char hostname[16];								// Limit DHCP hostname to 15 characters + terminating 0
 };
+
+inline unsigned int Network::GetNumNetworkInterfaces() const noexcept
+{
+#if defined(DUET3_MB6HC)
+	return numActualNetworkInterfaces;
+#else
+	return MaxNetworkInterfaces;
+#endif
+}
 
 #endif /* SRC_NETWORK_NETWORK_H_ */

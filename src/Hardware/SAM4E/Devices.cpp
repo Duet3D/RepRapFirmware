@@ -11,8 +11,8 @@
 #include <AnalogOut.h>
 #include <pmc/pmc.h>
 
-AsyncSerial Serial (UART0, UART0_IRQn, ID_UART0, 512, 512, 	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
-AsyncSerial Serial1(UART1, UART1_IRQn, ID_UART1, 512, 512,	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
+AsyncSerial Serial(UART0, UART0_IRQn, ID_UART0, 512, 512, 	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
+AsyncSerial SerialWiFi(UART1, UART1_IRQn, ID_UART1, 512, 512,	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
 SerialCDC SerialUSB;
 
 void UART0_Handler(void) noexcept
@@ -22,7 +22,7 @@ void UART0_Handler(void) noexcept
 
 void UART1_Handler(void) noexcept
 {
-	Serial1.IrqHandler();
+	SerialWiFi.IrqHandler();
 }
 
 void SerialInit() noexcept
@@ -31,9 +31,9 @@ void SerialInit() noexcept
 	SetPinFunction(APIN_Serial0_TXD, Serial0PeriphMode);
 	EnablePullup(APIN_Serial0_RXD);
 
-	SetPinFunction(APIN_Serial1_RXD, Serial1PeriphMode);
-	SetPinFunction(APIN_Serial1_TXD, Serial1PeriphMode);
-	EnablePullup(APIN_Serial1_RXD);
+	SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);
+	SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);
+	EnablePullup(APIN_SerialWiFi_RXD);
 }
 
 void SdhcInit() noexcept
