@@ -40,6 +40,7 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 
 # include <pmc/pmc.h>
 # include <spi/spi.h>
+# include <DmacManager.h>
 
 # define USE_PDC			0		// use SAM4 peripheral DMA controller
 # define USE_DMAC			0		// use SAM4 general DMA controller
@@ -62,18 +63,6 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 constexpr Pin APIN_ESP_SPI_MISO = EspMisoPin;
 constexpr Pin APIN_ESP_SPI_SCK = EspSclkPin;
 constexpr IRQn ESP_SPI_IRQn = WiFiSpiSercomIRQn;
-
-#elif defined(__LPC17xx__)
-
-# define USE_PDC            0		// use SAM4 peripheral DMA controller
-# define USE_DMAC           0		// use SAM4 general DMA controller
-# define USE_DMAC_MANAGER	0		// use SAMD/SAME DMA controller via DmacManager module
-# define USE_XDMAC          0		// use SAME7 XDMA controller
-
-// Compatibility with existing RRF Code
-constexpr Pin APIN_ESP_SPI_MISO = SPI0_MOSI;
-constexpr Pin APIN_ESP_SPI_SCK = SPI0_SCK;
-constexpr SSPChannel ESP_SPI = SSP0;
 
 #else
 # error Unknown board
@@ -1421,9 +1410,6 @@ static Pdc *spi_pdc;
 #if USE_XDMAC
 
 // XDMAC hardware
-const uint32_t SPI0_XDMAC_TX_CH_NUM = 1;
-const uint32_t SPI0_XDMAC_RX_CH_NUM = 2;
-
 static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
 
 #endif
@@ -1594,7 +1580,7 @@ static void spi_tx_dma_setup(const void *buf, uint32_t transferLength) noexcept
 			XDMAC_CC_DIF_AHB_IF1 |
 			XDMAC_CC_SAM_INCREMENTED_AM |
 			XDMAC_CC_DAM_FIXED_AM |
-			XDMAC_CC_PERID(SPI0_XDMAC_TX_CH_NUM);
+			XDMAC_CC_PERID((uint32_t)DmaTrigSource::spi1tx);
 	xdmac_tx_cfg.mbr_bc = 0;
 	xdmac_tx_cfg.mbr_ds = 0;
 	xdmac_tx_cfg.mbr_sus = 0;
@@ -1655,7 +1641,7 @@ static void spi_rx_dma_setup(void *buf, uint32_t transferLength) noexcept
 			XDMAC_CC_DIF_AHB_IF0 |
 			XDMAC_CC_SAM_FIXED_AM |
 			XDMAC_CC_DAM_INCREMENTED_AM |
-			XDMAC_CC_PERID(SPI0_XDMAC_RX_CH_NUM);
+			XDMAC_CC_PERID((uint32_t)DmaTrigSource::spi1rx);
 	xdmac_rx_cfg.mbr_bc = 0;
 	xdmac_tx_cfg.mbr_ds = 0;
 	xdmac_rx_cfg.mbr_sus = 0;
