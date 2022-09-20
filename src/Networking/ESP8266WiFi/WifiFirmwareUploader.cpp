@@ -602,17 +602,17 @@ void WifiFirmwareUploader::Spin() noexcept
 //				MessageF(" success on attempt %d\n", (connectAttemptNumber % retriesPerBaudRate) + 1);
 				MessageF(" success\n");
 #if WIFI_USES_ESP32
-				res = flashSpiSetParameters(Esp32FlashModuleSize);
-				if (res != EspUploadResult::success)
-				{
-					MessageF("Failed to set SPI parameters\n");
-					state = UploadState::resetting;		// try a reset and a lower baud rate
-					break;
-				}
 				res = flashSpiAttach();
 				if (res != EspUploadResult::success)
 				{
 					MessageF("Failed to attach SPI flash\n");
+					state = UploadState::resetting;		// try a reset and a lower baud rate
+					break;
+				}
+				res = flashSpiSetParameters(Esp32FlashModuleSize);
+				if (res != EspUploadResult::success)
+				{
+					MessageF("Failed to set SPI parameters\n");
 					state = UploadState::resetting;		// try a reset and a lower baud rate
 					break;
 				}
