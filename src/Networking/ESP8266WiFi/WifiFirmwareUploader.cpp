@@ -617,8 +617,10 @@ void WifiFirmwareUploader::Spin() noexcept
 					break;
 				}
 				MessageF("SPI flash parameters set\n");
-#endif
+				state = UploadState::erasing2;
+#else
 				state = UploadState::erasing1;
+#endif
 			}
 			else
 			{
@@ -637,6 +639,9 @@ void WifiFirmwareUploader::Spin() noexcept
 		break;
 
 	case UploadState::erasing1:
+#if WIFI_USES_ESP32
+		// no break
+#else
 		if (millis() - lastAttemptTime >= blockWriteInterval)
 		{
 			uploadResult = DoErase(systemParametersAddress, systemParametersSize);
@@ -651,6 +656,7 @@ void WifiFirmwareUploader::Spin() noexcept
 			}
 		}
 		break;
+#endif
 
 	case UploadState::erasing2:
 		if (millis() - lastAttemptTime >= blockWriteInterval)
