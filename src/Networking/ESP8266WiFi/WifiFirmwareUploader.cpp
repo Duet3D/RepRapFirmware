@@ -44,14 +44,6 @@ const size_t EspFlashBlockSize = 0x0400;			// 1K byte blocks
 const uint8_t ESP_IMAGE_MAGIC = 0xe9;
 const uint8_t ESP_CHECKSUM_MAGIC = 0xef;
 
-const uint32_t ESP_ERASE_CHIP_ADDR = 0x40004984;	// &SPIEraseChip
-const uint32_t ESP_SEND_PACKET_ADDR = 0x40003c80;	// &send_packet
-const uint32_t ESP_SPI_READ_ADDR = 0x40004b1c;		// &SPIRead
-const uint32_t ESP_UNKNOWN_ADDR = 0x40001121;		// not used
-const uint32_t ESP_USER_DATA_RAM_ADDR = 0x3ffe8000;	// &user data ram
-const uint32_t ESP_IRAM_ADDR = 0x40100000;			// instruction RAM
-const uint32_t ESP_FLASH_ADDR = 0x40200000;			// address of start of Flash
-
 // Messages corresponding to result codes, should make sense when followed by " error"
 const char * const resultMessages[] =
 {
@@ -99,42 +91,6 @@ void WifiFirmwareUploader::flushInput() noexcept
 	while (uploadPort.available() != 0)
 	{
 		(void)uploadPort.read();
-	}
-}
-
-// Extract 1-4 bytes of a value in little-endian order from a buffer beginning at a specified offset
-uint32_t WifiFirmwareUploader::getData(unsigned byteCnt, const uint8_t *buf, int ofst) noexcept
-{
-	uint32_t val = 0;
-
-	if (buf && byteCnt)
-	{
-		unsigned int shiftCnt = 0;
-		if (byteCnt > 4)
-			byteCnt = 4;
-		do
-		{
-			val |= (uint32_t)buf[ofst++] << shiftCnt;
-			shiftCnt += 8;
-		} while (--byteCnt);
-	}
-	return(val);
-}
-
-// Put 1-4 bytes of a value in little-endian order into a buffer beginning at a specified offset.
-void WifiFirmwareUploader::putData(uint32_t val, unsigned byteCnt, uint8_t *buf, int ofst) noexcept
-{
-	if (buf && byteCnt)
-	{
-		if (byteCnt > 4)
-		{
-			byteCnt = 4;
-		}
-		do
-		{
-			buf[ofst++] = (uint8_t)(val & 0xff);
-			val >>= 8;
-		} while (--byteCnt);
 	}
 }
 
@@ -248,7 +204,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 	const size_t headerLength = 8;
 
 	uint32_t startTime = millis();
-	uint8_t hdr[headerLength];
+	alignas(4) uint8_t hdr[headerLength];
 	uint16_t hdrIdx = 0;
 	bodyLen = 0;
 	uint16_t bodyIdx = 0;
@@ -314,12 +270,12 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 					if (hdrIdx >= headerLength)
 					{
 						// get the body length, prepare a buffer for it
-						bodyLen = (uint16_t)getData(2, hdr, 2);
+						bodyLen = *(const uint16_t*)(hdr + 2);
 
 						// extract the value, if requested
 						if (valp != nullptr)
 						{
-							*valp = getData(4, hdr, 4);
+							*valp = *(const uint32_t*)(hdr + 4);
 						}
 
 						if (bodyLen != 0)
@@ -356,8 +312,9 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 	}
 
 	// Extract elements from the header
-	const uint8_t resp = (uint8_t)getData(1, hdr, 0);
-	const uint8_t opRet = (uint8_t)getData(1, hdr, 1);
+	const uint8_t resp = hdr[0];
+	const uint8_t opRet = hdr[1];
+
 	// Sync packets often provoke a response with a zero opcode instead of ESP_SYNC
 	if (resp != 0x01 || opRet != op)
 	{
@@ -403,22 +360,26 @@ void WifiFirmwareUploader::writePacketRaw(const uint8_t *hdr, size_t hdrLen, con
 // The data is supplied via a list of one or more segments.
 void WifiFirmwareUploader::sendCommand(uint8_t op, uint32_t checkVal, const uint8_t *data, size_t dataLen) noexcept
 {
+	struct __attribute__((packed)) CommandHeader
+	{
+		uint8_t zero;
+		uint8_t op;
+		uint16_t dataLen;
+		uint32_t checkVal;
+	};
+
 	// populate the header
-	uint8_t hdr[8];
-	putData(0, 1, hdr, 0);
-	putData(op, 1, hdr, 1);
-	putData(dataLen, 2, hdr, 2);
-	putData(checkVal, 4, hdr, 4);
+	CommandHeader cmdHdr = { 0, op, (uint16_t)dataLen, checkVal };
 
 	// send the packet
 	flushInput();
 	if (op == ESP_SYNC)
 	{
-		writePacketRaw(hdr, sizeof(hdr), data, dataLen);
+		writePacketRaw((const uint8_t*)&cmdHdr, sizeof(cmdHdr), data, dataLen);
 	}
 	else
 	{
-		writePacket(hdr, sizeof(hdr), data, dataLen);
+		writePacket((const uint8_t*)&cmdHdr, sizeof(cmdHdr), data, dataLen);
 	}
 }
 
@@ -563,8 +524,8 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 	if (uploadBlockNumber == 0 && uploadAddress == 0 && blkBuf[dataOfst] == ESP_IMAGE_MAGIC && flashParmMask != 0)
 	{
 		// update the Flash parameters
-		const uint32_t flashParm = getData(2, blkBuf + dataOfst + 2, 0) & ~(uint32_t)flashParmMask;
-		putData(flashParm | flashParmVal, 2, blkBuf + dataOfst + 2, 0);
+		const uint32_t flashParm = (blkBuf32[dataOfst/4] >> 16) & ~(uint32_t)flashParmMask;
+		blkBuf32[dataOfst/4] = (blkBuf32[dataOfst/4] & 0x0000FFFF) | ((flashParm | flashParmVal) << 16);
 	}
 
 	// Calculate the block checksum
