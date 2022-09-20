@@ -25,7 +25,7 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 
 // Define exactly one of the following as 1, the other as zero
 
-#if defined(DUET_NG)
+#if SAM4E
 
 # include <pmc/pmc.h>
 # include <spi/spi.h>
@@ -36,7 +36,7 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 # define USE_DMAC_MANAGER	0		// use SAMD/SAME DMA controller via DmacManager module
 # define USE_XDMAC			0		// use SAME7 XDMA controller
 
-#elif defined(DUET3_MB6HC)
+#elif SAME70
 
 # include <pmc/pmc.h>
 # include <spi/spi.h>
@@ -46,6 +46,9 @@ static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and
 # define USE_DMAC			0		// use SAM4 general DMA controller
 # define USE_DMAC_MANAGER	0		// use SAMD/SAME DMA controller via DmacManager module
 # define USE_XDMAC			1		// use SAME7 XDMA controller
+
+static __nocache MessageBufferOut messageBufferOut;
+static __nocache MessageBufferIn messageBufferIn;
 
 #elif SAME5x
 
@@ -517,8 +520,14 @@ void WiFiInterface::Activate() noexcept
 	{
 		activated = true;
 
+#if SAME70
+		bufferOut = &messageBufferOut;
+		bufferIn = &messageBufferIn;
+#else
 		bufferOut = new MessageBufferOut;
 		bufferIn = new MessageBufferIn;
+#endif
+
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		uploader = new WifiFirmwareUploader(SERIAL_WIFI_DEVICE, *this);
 #endif

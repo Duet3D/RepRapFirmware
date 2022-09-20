@@ -32,6 +32,18 @@ private:
 	uint32_t padding;
 };
 
+struct MessageBufferOut
+{
+	MessageHeaderSamToEsp hdr;
+	uint8_t data[MaxDataLength];	// data to send
+};
+
+struct alignas(16) MessageBufferIn
+{
+	MessageHeaderEspToSam hdr;
+	uint8_t data[MaxDataLength];	// data to send
+};
+
 // The main network class that drives the network.
 class WiFiInterface : public NetworkInterface
 {
@@ -122,18 +134,6 @@ private:
 	uint32_t lastTickMillis;
 	bool lastDataReadyPinState;
 	uint8_t risingEdges;
-
-	struct MessageBufferOut
-	{
-		MessageHeaderSamToEsp hdr;
-		uint8_t data[MaxDataLength];	// data to send
-	};
-
-	struct alignas(16) MessageBufferIn
-	{
-		MessageHeaderEspToSam hdr;
-		uint8_t data[MaxDataLength];	// data to send
-	};
 
 	MessageBufferOut *bufferOut;
 	MessageBufferIn *bufferIn;
