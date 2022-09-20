@@ -82,6 +82,10 @@ private:
 	EspUploadResult Sync(uint16_t timeout) noexcept;
 	EspUploadResult flashBegin(uint32_t addr, uint32_t size) noexcept;
 	EspUploadResult flashFinish(bool reboot) noexcept;
+#if WIFI_USES_ESP32
+	EspUploadResult flashSpiSetParameters(uint32_t size) noexcept;
+	EspUploadResult flashSpiAttach() noexcept;
+#endif
 	static uint16_t checksum(const uint8_t *data, uint16_t dataLen, uint16_t cksum) noexcept;
 	EspUploadResult flashWriteBlock(uint16_t flashParmVal, uint16_t flashParmMask) noexcept;
 	EspUploadResult DoErase(uint32_t address, uint32_t size) noexcept;
