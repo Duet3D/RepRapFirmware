@@ -2039,7 +2039,7 @@ void WiFiInterface::StartWiFi() noexcept
 	SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);	// connect the pins to the UART
 #endif
 
-#if defined(DUET3_MB6HC)
+#if WIFI_USES_ESP32
 	SERIAL_WIFI_DEVICE.begin(WiFiBaudRate_ESP32);				// initialise the UART, to receive debug info
 #else
 	SERIAL_WIFI_DEVICE.begin(WiFiBaudRate);						// initialise the UART, to receive debug info
