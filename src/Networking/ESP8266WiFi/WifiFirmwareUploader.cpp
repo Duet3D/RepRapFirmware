@@ -47,8 +47,18 @@ const uint8_t ESP_CHECKSUM_MAGIC = 0xef;
 // Messages corresponding to result codes, should make sense when followed by " error"
 const char * const resultMessages[] =
 {
-	"no",
-	"timeout",
+	"no",											// 0
+	"unknown", "unknown", "unknown", "unknown",		// 0x01 to 0x04
+	"invalidMessage",								// 0x05
+	"failedToAct",									// 0x06
+	"invalidCrc",									// 0x07
+	"flashWriteError",								// 0x08
+	"flashReadError",								// 0x09
+	"unknown",										// 0x0a
+	"deflateError",									// 0x0b
+	"unknown", "unknown", "unknown", "unknown",		// 0x0c to 0x0f
+
+	"timeout",										// 0x10
 	"comm write",
 	"connect",
 	"bad reply",
@@ -190,7 +200,7 @@ inline void WifiFirmwareUploader::WriteByteSlip(uint8_t b) noexcept
 //
 // If an error occurs, return a negative value.  Otherwise, return the number
 // of bytes in the response (or zero if the response was not the standard "two bytes of zero").
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t op, uint32_t *valp, size_t& bodyLen, uint32_t msTimeout) noexcept
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t op, uint32_t *valp, size_t& bodyLen, uint32_t *status, uint32_t msTimeout) noexcept
 {
 	enum class PacketState
 	{
@@ -208,7 +218,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 	uint16_t hdrIdx = 0;
 	bodyLen = 0;
 	uint16_t bodyIdx = 0;
-	uint8_t respBuf[2];
+	alignas(4) uint8_t respBuf[4];
 
 	// wait for the response
 	uint16_t needBytes = 1;
@@ -322,6 +332,11 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::readPacket(uint8_t o
 		return EspUploadResult::respHeader;
 	}
 
+	if (status != nullptr)
+	{
+		*status = (bodyLen == 2) ? *(const uint16_t*)respBuf : *(const uint32_t*)respBuf;
+	}
+
 	return EspUploadResult::success;
 }
 
@@ -383,22 +398,57 @@ void WifiFirmwareUploader::sendCommand(uint8_t op, uint32_t checkVal, const uint
 	}
 }
 
+// Calculate the number of bytes to erase
+/*static*/ uint32_t WifiFirmwareUploader::getEraseSize(uint32_t offset, uint32_t size) noexcept
+{
+#if WIFI_USES_ESP32
+	return size;
+#else
+	// This works around a bug in the ESP8266 ROM
+    const uint32_t sectors_per_block = 16;
+    const uint32_t sector_size = 4 * 1024;
+    const uint32_t num_sectors = (size + sector_size - 1) / sector_size;
+    const uint32_t start_sector = offset / sector_size;
+
+    uint32_t head_sectors = sectors_per_block - (start_sector % sectors_per_block);
+    if (num_sectors < head_sectors)
+    {
+        head_sectors = num_sectors;
+    }
+
+    return (num_sectors < 2 * head_sectors)
+    		? (num_sectors + 1) / 2 * sector_size
+    			: (num_sectors - head_sectors) * sector_size;
+#endif
+}
+
 // Send a command to the attached device together with the supplied data, if any, and get the response
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::doCommand(uint8_t op, const uint8_t *data, size_t dataLen, uint32_t checkVal, uint32_t *valp, uint32_t msTimeout) noexcept
 {
 	sendCommand(op, checkVal, data, dataLen);
 	size_t bodyLen;
-	EspUploadResult stat = readPacket(op, valp, bodyLen, msTimeout);
-	if (stat == EspUploadResult::success && !(bodyLen == 2 || bodyLen == 4))
+	uint32_t status;
+	EspUploadResult stat = readPacket(op, valp, bodyLen, &status, msTimeout);
+	if (stat == EspUploadResult::success)
 	{
-		stat = EspUploadResult::badReply;
+		if (!(bodyLen == 2 || bodyLen == 4))
+		{
+			stat = EspUploadResult::badReply;
+		}
+		else if ((status & 0xFF) != 0)
+		{
+			stat = (EspUploadResult)((status >> 8) & 0xFF);
+			if (reprap.Debug(moduleWiFi))
+			{
+				debugPrintf("opcode %u returned length %u status 0x%" PRIx32 "\n", op, bodyLen, status);
+			}
+		}
 	}
 
 	return stat;
 }
 
-// Send a synchronising packet to the serial port in an attempt to induce
-// the ESP8266 to auto-baud lock on the baud rate.
+// Send a synchronising packet to the serial port in an attempt to induce the ESP8266 to auto-baud lock on the baud rate.
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeout) noexcept
 {
 	uint8_t buf[36];
@@ -416,7 +466,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 	for (int i = 0; i < 10 && stat == EspUploadResult::respHeader; ++i)
 	{
 		size_t bodyLen;
-		stat = readPacket(ESP_SYNC, nullptr, bodyLen, timeout);
+		stat = readPacket(ESP_SYNC, nullptr, bodyLen, nullptr, timeout);
 	}
 
 	if (stat == EspUploadResult::success)
@@ -425,7 +475,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 		for (;;)
 		{
 			size_t bodyLen;
-			EspUploadResult rc = readPacket(ESP_SYNC, nullptr, bodyLen, defaultTimeout);
+			EspUploadResult rc = readPacket(ESP_SYNC, nullptr, bodyLen, nullptr, defaultTimeout);
 			if (rc != EspUploadResult::success || !(bodyLen == 2 || bodyLen == 4))
 			{
 				break;
@@ -471,7 +521,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashSpiSetParameter
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashSpiAttach() noexcept
 {
 	const uint32_t buf[2] = { 0, 0 };
-	return doCommand(ESP_SPI_SET_PARAMS, (const uint8_t*)buf, sizeof(buf), 0, nullptr, defaultTimeout);
+	return doCommand(ESP_SPI_ATTACH, (const uint8_t*)buf, sizeof(buf), 0, nullptr, defaultTimeout);
 }
 
 #endif
@@ -661,7 +711,7 @@ void WifiFirmwareUploader::Spin() noexcept
 	case UploadState::erasing2:
 		if (millis() - lastAttemptTime >= blockWriteInterval)
 		{
-			uploadResult = DoErase(uploadAddress, fileSize);
+			uploadResult = DoErase(uploadAddress, getEraseSize(uploadAddress, fileSize));
 			if (uploadResult == EspUploadResult::success)
 			{
 				MessageF("Uploading file...\n");
