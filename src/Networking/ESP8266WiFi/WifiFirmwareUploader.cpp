@@ -15,16 +15,23 @@
 #include <Platform/RepRap.h>
 #include <Storage/FileStore.h>
 
+#if WIFI_USES_ESP32
+constexpr uint32_t Esp32FlashModuleSize = 4 * 1024 * 1024;		// assume at least 4Mbytes flash
+#endif
+
 // ESP8266 command codes
-const uint8_t ESP_FLASH_BEGIN = 0x02;
-const uint8_t ESP_FLASH_DATA = 0x03;
-const uint8_t ESP_FLASH_END = 0x04;
-const uint8_t ESP_MEM_BEGIN = 0x05;
-const uint8_t ESP_MEM_END = 0x06;
-const uint8_t ESP_MEM_DATA = 0x07;
-const uint8_t ESP_SYNC = 0x08;
-const uint8_t ESP_WRITE_REG = 0x09;
-const uint8_t ESP_READ_REG = 0x0a;
+const uint8_t ESP_FLASH_BEGIN = 0x02;		// Four 32-bit words: size to erase, number of data packets, data size in one packet, flash offset.
+const uint8_t ESP_FLASH_DATA = 0x03;		// Four 32-bit words: data size, sequence number, 0, 0, then data. Uses Checksum.
+const uint8_t ESP_FLASH_END = 0x04;			// One 32-bit word: 0 to reboot, 1 “run to user code”. Not necessary to send this command if you wish to stay in the loader
+const uint8_t ESP_MEM_BEGIN = 0x05;			// total size, number of data packets, data size in one packet, memory offset
+const uint8_t ESP_MEM_END = 0x06;			// Two 32-bit words: execute flag, entry point address
+const uint8_t ESP_MEM_DATA = 0x07;			// Four 32-bit words: data size, sequence number, 0, 0, then data. Uses Checksum.
+const uint8_t ESP_SYNC = 0x08;				// 36 bytes: 0x07 0x07 0x12 0x20, followed by 32 x 0x55
+const uint8_t ESP_WRITE_REG = 0x09;			// Four 32-bit words: address, value, mask and delay (in microseconds)
+const uint8_t ESP_READ_REG = 0x0a;			// Address as 32-bit word. Returns read data as 32-bit word in value field.
+// The following two commands are needed by the ESP32 ROM loader
+const uint8_t ESP_SPI_SET_PARAMS = 0x0b;	// Six 32-bit words: id, total size in bytes, block size, sector size, page size, status mask.
+const uint8_t ESP_SPI_ATTACH = 0x0d;		// 32-bit word: Zero for normal SPI flash. A second 32-bit word (should be 0) is passed to ROM loader only.
 
 // MAC address storage locations
 const uint32_t ESP_OTP_MAC0 = 0x3ff00050;
@@ -479,23 +486,34 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t 
 	addr &= ~(EspFlashBlockSize - 1);
 
 	// begin the Flash process
-	uint8_t buf[16];
-	putData(size, 4, buf, 0);
-	putData(blkCnt, 4, buf, 4);
-	putData(EspFlashBlockSize, 4, buf, 8);
-	putData(addr, 4, buf, 12);
+	const uint32_t buf[4] = { size, blkCnt, EspFlashBlockSize, addr };
 
-	uint32_t timeout = (size != 0) ? eraseTimeout : defaultTimeout;
-	return doCommand(ESP_FLASH_BEGIN, buf, sizeof(buf), 0, nullptr, timeout);
+	const uint32_t timeout = (size != 0) ? eraseTimeout : defaultTimeout;
+	return doCommand(ESP_FLASH_BEGIN, (const uint8_t*)buf, sizeof(buf), 0, nullptr, timeout);
 }
 
 // Send a command to the device to terminate the Flash process
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashFinish(bool reboot) noexcept
 {
-	uint8_t buf[4];
-	putData(reboot ? 0 : 1, 4, buf, 0);
-	return doCommand(ESP_FLASH_END, buf, sizeof(buf), 0, nullptr, defaultTimeout);
+	const uint32_t data = (reboot) ? 0 : 1;
+	return doCommand(ESP_FLASH_END, (const uint8_t*)&data, sizeof(data), 0, nullptr, defaultTimeout);
 }
+
+#if WIFI_USES_ESP32
+
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashSpiSetParameters(uint32_t size) noexcept
+{
+	const uint32_t buf[6] = { 0, size, 64 * 1024, 4 * 1024, 256, 0x0000FFFF };	// id, size, block size, sector size, page size, status mask
+	return doCommand(ESP_SPI_SET_PARAMS, (const uint8_t*)buf, sizeof(buf), 0, nullptr, defaultTimeout);
+}
+
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashSpiAttach() noexcept
+{
+	const uint32_t buf[2] = { 0, 0 };
+	return doCommand(ESP_SPI_SET_PARAMS, (const uint8_t*)buf, sizeof(buf), 0, nullptr, defaultTimeout);
+}
+
+#endif
 
 // Compute the checksum of a block of data
 uint16_t WifiFirmwareUploader::checksum(const uint8_t *data, uint16_t dataLen, uint16_t cksum) noexcept
@@ -515,17 +533,16 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 	const uint32_t blkSize = EspFlashBlockSize;
 
 	// Allocate a data buffer for the combined header and block data
-	const uint16_t hdrOfst = 0;
 	const uint16_t dataOfst = 16;
 	const uint16_t blkBufSize = dataOfst + blkSize;
 	uint32_t blkBuf32[blkBufSize/4];
 	uint8_t * const blkBuf = reinterpret_cast<uint8_t*>(blkBuf32);
 
 	// Prepare the header for the block
-	putData(blkSize, 4, blkBuf, hdrOfst + 0);
-	putData(uploadBlockNumber, 4, blkBuf, hdrOfst + 4);
-	putData(0, 4, blkBuf, hdrOfst + 8);
-	putData(0, 4, blkBuf, hdrOfst + 12);
+	blkBuf32[0] = blkSize;
+	blkBuf32[1] = uploadBlockNumber;
+	blkBuf32[2] = 0;
+	blkBuf32[3] = 0;
 
 	// Get the data for the block
 	size_t cnt = uploadFile->Read(reinterpret_cast<char *>(blkBuf + dataOfst), blkSize);
@@ -546,12 +563,12 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 	if (uploadBlockNumber == 0 && uploadAddress == 0 && blkBuf[dataOfst] == ESP_IMAGE_MAGIC && flashParmMask != 0)
 	{
 		// update the Flash parameters
-		uint32_t flashParm = getData(2, blkBuf + dataOfst + 2, 0) & ~(uint32_t)flashParmMask;
+		const uint32_t flashParm = getData(2, blkBuf + dataOfst + 2, 0) & ~(uint32_t)flashParmMask;
 		putData(flashParm | flashParmVal, 2, blkBuf + dataOfst + 2, 0);
 	}
 
 	// Calculate the block checksum
-	uint16_t cksum = checksum(blkBuf + dataOfst, blkSize, ESP_CHECKSUM_MAGIC);
+	const uint16_t cksum = checksum(blkBuf + dataOfst, blkSize, ESP_CHECKSUM_MAGIC);
 	EspUploadResult stat;
 	for (int i = 0; i < 3; i++)
 	{
@@ -623,6 +640,23 @@ void WifiFirmwareUploader::Spin() noexcept
 				// Successful connection
 //				MessageF(" success on attempt %d\n", (connectAttemptNumber % retriesPerBaudRate) + 1);
 				MessageF(" success\n");
+#if WIFI_USES_ESP32
+				res = flashSpiSetParameters(Esp32FlashModuleSize);
+				if (res != EspUploadResult::success)
+				{
+					MessageF("Failed to set SPI parameters\n");
+					state = UploadState::resetting;		// try a reset and a lower baud rate
+					break;
+				}
+				res = flashSpiAttach();
+				if (res != EspUploadResult::success)
+				{
+					MessageF("Failed to attach SPI flash\n");
+					state = UploadState::resetting;		// try a reset and a lower baud rate
+					break;
+				}
+				MessageF("SPI flash parameters set\n");
+#endif
 				state = UploadState::erasing1;
 			}
 			else
