@@ -39,7 +39,7 @@ const uint32_t ESP_OTP_MAC1 = 0x3ff00054;
 const uint32_t ESP_OTP_MAC2	= 0x3ff00058;
 const uint32_t ESP_OTP_MAC3 = 0x3ff0005c;
 
-const size_t EspFlashBlockSize = 0x0400;			// 1K byte blocks
+const size_t EspFlashBlockSize = 0x0400;			// we send 1K byte blocks
 
 const uint8_t ESP_IMAGE_MAGIC = 0xe9;
 const uint8_t ESP_CHECKSUM_MAGIC = 0xef;
@@ -398,30 +398,6 @@ void WifiFirmwareUploader::sendCommand(uint8_t op, uint32_t checkVal, const uint
 	}
 }
 
-// Calculate the number of bytes to erase
-/*static*/ uint32_t WifiFirmwareUploader::getEraseSize(uint32_t offset, uint32_t size) noexcept
-{
-#if WIFI_USES_ESP32
-	return size;
-#else
-	// This works around a bug in the ESP8266 ROM
-    const uint32_t sectors_per_block = 16;
-    const uint32_t sector_size = 4 * 1024;
-    const uint32_t num_sectors = (size + sector_size - 1) / sector_size;
-    const uint32_t start_sector = offset / sector_size;
-
-    uint32_t head_sectors = sectors_per_block - (start_sector % sectors_per_block);
-    if (num_sectors < head_sectors)
-    {
-        head_sectors = num_sectors;
-    }
-
-    return (num_sectors < 2 * head_sectors)
-    		? (num_sectors + 1) / 2 * sector_size
-    			: (num_sectors - head_sectors) * sector_size;
-#endif
-}
-
 // Send a command to the attached device together with the supplied data, if any, and get the response
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::doCommand(uint8_t op, const uint8_t *data, size_t dataLen, uint32_t checkVal, uint32_t *valp, uint32_t msTimeout) noexcept
 {
@@ -488,18 +464,52 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 }
 
 // Send a command to the device to begin the Flash process.
-WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t addr, uint32_t size) noexcept
+WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t offset, uint32_t size) noexcept
 {
 	// determine the number of blocks represented by the size
 	const uint32_t blkCnt = (size + EspFlashBlockSize - 1) / EspFlashBlockSize;
 
 	// ensure that the address is on a block boundary
-	addr &= ~(EspFlashBlockSize - 1);
+	size += offset & (EspFlashBlockSize - 1);
+	offset &= ~(EspFlashBlockSize - 1);
+
+	// Calculate the number of sectors to erase
+	const uint32_t sector_size = 4 * 1024;
+	uint32_t num_sectors = (size + (sector_size - 1))/sector_size;
+
+#if !WIFI_USES_ESP32
+	const uint32_t start_sector = offset / sector_size;
+	const uint32_t sectors_per_block = 16;
+
+	uint32_t head_sectors = sectors_per_block - (start_sector % sectors_per_block);
+	if (num_sectors < head_sectors)
+	{
+		head_sectors = num_sectors;
+	}
+
+	// SPI EraseArea function in the esp8266 ROM has a bug which causes extra area to be erased.
+	// If the address range to be erased crosses the block boundary then extra head_sector_count sectors are erased.
+	// If the address range doesn't cross the block boundary, then extra total_sector_count sectors are erased.
+	if (num_sectors < 2 * head_sectors)
+	{
+		num_sectors = ((num_sectors + 1) / 2);
+	}
+	else
+	{
+		num_sectors = (num_sectors - head_sectors);
+	}
+#endif
+
+	const uint32_t erase_size = num_sectors * sector_size;
 
 	// begin the Flash process
-	const uint32_t buf[4] = { size, blkCnt, EspFlashBlockSize, addr };
+#if WIFI_USES_ESP32
+	const uint32_t buf[5] = { erase_size, blkCnt, EspFlashBlockSize, offset, 0 };		// last word means not encrypted
+#else
+	const uint32_t buf[4] = { erase_size, blkCnt, EspFlashBlockSize, offset };
+#endif
 
-	const uint32_t timeout = (size != 0) ? eraseTimeout : defaultTimeout;
+	const uint32_t timeout = (erase_size != 0) ? eraseTimeout : defaultTimeout;
 	return doCommand(ESP_FLASH_BEGIN, (const uint8_t*)buf, sizeof(buf), 0, nullptr, timeout);
 }
 
@@ -711,7 +721,7 @@ void WifiFirmwareUploader::Spin() noexcept
 	case UploadState::erasing2:
 		if (millis() - lastAttemptTime >= blockWriteInterval)
 		{
-			uploadResult = DoErase(uploadAddress, getEraseSize(uploadAddress, fileSize));
+			uploadResult = DoErase(uploadAddress, fileSize);
 			if (uploadResult == EspUploadResult::success)
 			{
 				MessageF("Uploading file...\n");

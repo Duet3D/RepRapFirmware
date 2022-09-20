@@ -22,8 +22,8 @@ public:
 	void SendUpdateFile(const char *file, uint32_t address) noexcept;
 	void Spin() noexcept;
 
+	// Offsets in flash memory
 	static const uint32_t FirmwareAddress = 0x00000000;
-	static const uint32_t WebFilesAddress = 0x00100000;
 
 private:
 	static const uint32_t defaultTimeout = 500;					// default timeout in milliseconds
@@ -36,8 +36,11 @@ private:
 	static const uint32_t blockWriteTimeout = 200;
 	static const uint32_t eraseTimeout = 15000;					// increased from 12 to 15 seconds because Roland's board was timing out
 	static const unsigned int percentToReportIncrement = 5;		// how often we report % complete
+
+#if !WIFI_USES_ESP32
 	static const uint32_t systemParametersAddress = 0x3FE000;	// the address of the system + user parameter area that needs to be cleared when changing SDK version
 	static const uint32_t systemParametersSize = 0x2000;		// the size of the system + user parameter area
+#endif
 
 	// Return codes
 	// *** This list must be kept in step with the corresponding messages! ***
@@ -87,10 +90,9 @@ private:
 	void writePacket(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen) noexcept;
 	void writePacketRaw(const uint8_t *hdr, size_t hdrLen, const uint8_t *data, size_t dataLen) noexcept;
 	void sendCommand(uint8_t op, uint32_t checkVal, const uint8_t *data, size_t dataLen) noexcept;
-	static uint32_t getEraseSize(uint32_t offset, uint32_t size) noexcept;
 	EspUploadResult doCommand(uint8_t op, const uint8_t *data, size_t dataLen, uint32_t checkVal, uint32_t *valp, uint32_t msTimeout) noexcept;
 	EspUploadResult Sync(uint16_t timeout) noexcept;
-	EspUploadResult flashBegin(uint32_t addr, uint32_t size) noexcept;
+	EspUploadResult flashBegin(uint32_t offset, uint32_t size) noexcept;
 	EspUploadResult flashFinish(bool reboot) noexcept;
 #if WIFI_USES_ESP32
 	EspUploadResult flashSpiSetParameters(uint32_t size) noexcept;
