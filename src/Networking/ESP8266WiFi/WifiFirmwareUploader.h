@@ -66,8 +66,6 @@ private:
 	};
 
 	void MessageF(const char *fmt, ...) noexcept;
-	uint32_t getData(unsigned byteCnt, const uint8_t *buf, int ofst) noexcept;
-	void putData(uint32_t val, unsigned byteCnt, uint8_t *buf, int ofst) noexcept;
 	int ReadByte(uint8_t& data, bool slipDecode) noexcept;
 	void WriteByteRaw(uint8_t b) noexcept;
 	void WriteByteSlip(uint8_t b) noexcept;
