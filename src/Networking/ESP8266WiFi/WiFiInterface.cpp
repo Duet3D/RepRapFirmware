@@ -83,8 +83,7 @@ constexpr IRQn ESP_SPI_IRQn = WiFiSpiSercomIRQn;
 # include "xdmac/xdmac.h"
 #endif
 
-#if SAME5x
-#elif !defined(__LPC17xx__)
+#if !SAME5x
 # include "matrix/matrix.h"
 #endif
 
@@ -214,10 +213,6 @@ static void debugPrintBuffer(const char *msg, void *buf, size_t dataLength) noex
 	}
 	debugPrintf("\n");
 }
-#endif
-
-#ifdef __LPC17xx__
-# include "WiFiInterface_LPC.hpp"
 #endif
 
 static void EspTransferRequestIsr(CallbackParameter) noexcept
@@ -540,7 +535,7 @@ void WiFiInterface::Start() noexcept
 	// Make sure the ESP8266 is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
 
-#if defined(DUET_NG) || defined(DUET3MINI)
+#if !WIFI_USES_ESP32
 	pinMode(EspEnablePin, OUTPUT_LOW);
 #endif
 
@@ -595,7 +590,7 @@ void WiFiInterface::Stop() noexcept
 
 		digitalWrite(SamTfrReadyPin, false);		// tell the ESP we can't receive
 		digitalWrite(EspResetPin, false);			// put the ESP back into reset
-#if defined(DUET_NG) || defined(DUET3MINI)
+#if !WIFI_USES_ESP32
 		digitalWrite(EspEnablePin, false);
 #endif
 		DisableEspInterrupt();						// ignore IRQs from the transfer request pin
@@ -1410,8 +1405,6 @@ void WiFiInterface::TerminateDataPort() noexcept
 	}
 }
 
-#ifndef __LPC17xx__
-
 #if USE_PDC
 static Pdc *spi_pdc;
 #endif
@@ -1427,58 +1420,58 @@ static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
 
 static inline void spi_rx_dma_enable() noexcept
 {
-#if USE_DMAC
+# if USE_DMAC
 	dmac_channel_enable(DMAC, DmacChanWiFiRx);
-#endif
+# endif
 
-#if USE_XDMAC
+# if USE_XDMAC
 	xdmac_channel_enable(XDMAC, DmacChanWiFiRx);
-#endif
+# endif
 
-#if USE_DMAC_MANAGER
+# if USE_DMAC_MANAGER
 	DmacManager::EnableChannel(DmacChanWiFiRx, DmacPrioWiFi);
-#endif
+# endif
 }
 
 static inline void spi_tx_dma_enable() noexcept
 {
-#if USE_DMAC
+# if USE_DMAC
 	dmac_channel_enable(DMAC, DmacChanWiFiTx);
-#endif
+# endif
 
-#if USE_XDMAC
+# if USE_XDMAC
 	xdmac_channel_enable(XDMAC, DmacChanWiFiTx);
-#endif
+# endif
 
-#if USE_DMAC_MANAGER
+# if USE_DMAC_MANAGER
 	DmacManager::EnableChannel(DmacChanWiFiTx, DmacPrioWiFi);
-#endif
+# endif
 }
 
 static inline void spi_rx_dma_disable() noexcept
 {
-#if USE_DMAC
+# if USE_DMAC
 	dmac_channel_disable(DMAC, DmacChanWiFiRx);
-#endif
+# endif
 
-#if USE_XDMAC
+# if USE_XDMAC
 	xdmac_channel_disable(XDMAC, DmacChanWiFiRx);
-#endif
+# endif
 
-#if USE_DMAC_MANAGER
+# if USE_DMAC_MANAGER
 	DmacManager::DisableChannel(DmacChanWiFiRx);
-#endif
+# endif
 }
 
 static inline void spi_tx_dma_disable() noexcept
 {
-#if USE_DMAC
+# if USE_DMAC
 	dmac_channel_disable(DMAC, DmacChanWiFiTx);
-#endif
+# endif
 
-#if USE_XDMAC
+# if USE_XDMAC
 	xdmac_channel_disable(XDMAC, DmacChanWiFiTx);
-#endif
+# endif
 
 #if USE_DMAC_MANAGER
 	DmacManager::DisableChannel(DmacChanWiFiTx);
@@ -1760,8 +1753,6 @@ void WiFiInterface::SetupSpi() noexcept
 	NVIC_EnableIRQ(ESP_SPI_IRQn);
 }
 
-#endif //end ifndef __LPC17xx__
-
 // Send a command to the ESP and get the result
 int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, uint32_t param32, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept
 {
@@ -1825,8 +1816,6 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;		// clear any pending interrupts
 	WiFiSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_TXC;	// enable the end of transmit interrupt
 	EnableSpi();
-#elif defined(__LPC17xx__)
-    spi_slave_dma_setup(dataOutLength, dataInLength);
 #else
     // DMA may have transferred an extra word to the SPI transmit data register. We need to clear this.
 	// The only way I can find to do this is to issue a software reset to the SPI system.
@@ -1972,8 +1961,6 @@ void WiFiInterface::GetNewStatus() noexcept
 	}
 }
 
-#if !defined(__LPC17xx__)
-
 # ifndef ESP_SPI_HANDLER
 #  error ESP_SPI_HANDLER not defined
 # endif
@@ -2024,26 +2011,24 @@ void WiFiInterface::SpiInterrupt() noexcept
 #endif
 		if (transferPending)
 		{
-			digitalWrite(SamTfrReadyPin, false);							// stop signalling that we are ready for another transfer
+			digitalWrite(SamTfrReadyPin, false);						// stop signalling that we are ready for another transfer
 			transferPending = false;
 			TaskBase::GiveFromISR(espWaitingTask);
 		}
 	}
 }
 
-#endif //ifndef __LPC17xx__
-
 // Start the ESP
 void WiFiInterface::StartWiFi() noexcept
 {
 	digitalWrite(EspResetPin, true);
 
-#if defined(DUET_NG) || defined(DUET3MINI)
+#if !WIFI_USES_ESP32
 	delayMicroseconds(150);										// ESP8266 datasheet specifies minimum 100us from releasing reset to power up
 	digitalWrite(EspEnablePin, true);
 #endif
 
-#if !SAME5x && !defined(__LPC17xx__)
+#if !SAME5x
 	SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);	// connect the pins to the UART
 	SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);	// connect the pins to the UART
 #endif
@@ -2063,7 +2048,7 @@ void WiFiInterface::ResetWiFi() noexcept
 {
 	pinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
 
-#if defined(DUET_NG) || defined(DUET3MINI)
+#if !WIFI_USES_ESP32
 	pinMode(EspEnablePin, OUTPUT_LOW);
 #endif
 
@@ -2097,7 +2082,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	// Make sure the ESP8266 is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
 
-#if defined(DUET_NG) || defined(DUET3MINI)
+#if !WIFI_USES_ESP32
 	// Power down the ESP8266
 	pinMode(EspEnablePin, OUTPUT_LOW);
 #endif
@@ -2126,7 +2111,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	}
 	else
 	{
-#if !SAME5x && !defined(__LPC17xx__)
+#if !SAME5x
 		SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);	// connect the pins to the UART
 		SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);	// connect the pins to the UART
 #endif
@@ -2135,7 +2120,7 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	// Release the reset on the ESP8266
 	digitalWrite(EspResetPin, true);
 
-#if defined(DUET_NG) || defined(DUET3MINI)
+#if !WIFI_USES_ESP32
 	// Take the ESP8266 out of power down
 	delayMicroseconds(150);											// ESP8266 datasheet specifies minimum 100us from releasing reset to power up
 	digitalWrite(EspEnablePin, true);

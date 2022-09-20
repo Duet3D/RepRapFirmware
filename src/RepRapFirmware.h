@@ -605,7 +605,7 @@ const NvicPriority NvicPriorityEthernet = 7;		// priority for Ethernet interface
 # endif
 
 const NvicPriority NvicPriorityDMA = 7;				// end-of-DMA interrupt used by TMC drivers and HSMCI
-const NvicPriority NvicPrioritySpi = 7;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
+const NvicPriority NvicPrioritySpi = 7;				// SPI is used for network transfers on Duet WiFi/Duet Ethernet and for SBC transfers
 
 #elif __NVIC_PRIO_BITS >= 4
 // We have at least 16 priority levels
