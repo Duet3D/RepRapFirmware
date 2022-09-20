@@ -93,10 +93,11 @@ constexpr SSPChannel ESP_SPI = SSP0;
 # include "matrix/matrix.h"
 #endif
 
-const uint32_t WiFiSlowResponseTimeoutMillis = 12000;				// SPI timeout when when the ESP has to access the SPIFFS filesytem. A long timeout is alloted for formatting the filesystem.
-const uint32_t WiFiFastResponseTimeoutMillis = 20;				// SPI timeout when when the ESP does not have to write to flash memory.
+const uint32_t WiFiSlowResponseTimeoutMillis = 500;				// SPI timeout when when the ESP has to access the SPIFFS filesytem; highest measure is 234ms.
+const uint32_t WiFiFastResponseTimeoutMillis = 20;				// SPI timeout when when the ESP does not have to access SPIFFS filesystem.
 const uint32_t WiFiWaitReadyMillis = 100;
-const uint32_t WiFiStartupMillis = 12000;
+const uint32_t WiFiStartupMillis = 15000;						// Reformat/repair of the SPIFFS filesystem might be performed at module startup. Formatting
+																// the filesystem can be initiated on demand, use this timeout for that as well.
 const uint32_t WiFiStableMillis = 100;
 
 const unsigned int MaxHttpConnections = 4;
@@ -1846,9 +1847,12 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	digitalWrite(SamTfrReadyPin, true);
 
 	// Wait until the DMA transfer is complete, with timeout
-	const uint32_t timeout = (cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkDeleteSsid || cmd == NetworkCommand::networkConfigureAccessPoint || cmd == NetworkCommand::networkFactoryReset)
-								? WiFiSlowResponseTimeoutMillis
-									: WiFiFastResponseTimeoutMillis;
+	// On factory reset, use the startup timeout, as it involves re-formatting the SPIFFS
+	// partition.
+	const uint32_t timeout = (cmd == NetworkCommand::networkFactoryReset ? WiFiStartupMillis :
+		(cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkDeleteSsid || 
+		 cmd == NetworkCommand::networkConfigureAccessPoint || cmd == NetworkCommand::networkRetrieveSsidData 
+			? WiFiSlowResponseTimeoutMillis : WiFiFastResponseTimeoutMillis));
 	do
 	{
 		if (!TaskBase::Take(timeout))
