@@ -20,6 +20,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 // Networking support
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		1
+#define WIFI_USES_ESP32			1
 
 // Storage support
 #define HAS_SBC_INTERFACE		1
