@@ -4591,16 +4591,21 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 #ifdef DUET3_MB6HC
 	case 64:	// D
 # if HAS_SBC_INTERFACE
-		if (!reprap.UsingSbcInterface())
-# endif
+		if (reprap.UsingSbcInterface())
 		{
-			return MassStorage::ConfigureSdCard(gb, reply);
+			reply.copy("SD card not supported in SBC mode");
+			return GCodeResult::error;
 		}
+# endif
+		return MassStorage::ConfigureSdCard(gb, reply);
 #endif
-		//no break
 
 	default:
+#ifdef DUET3_MB6HC
+		reply.copy("exactly one of FHJPSRD must be given");
+#else
 		reply.copy("exactly one of FHJPSR must be given");
+#endif
 		return GCodeResult::error;
 	}
 }
