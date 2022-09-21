@@ -469,47 +469,14 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t 
 	// determine the number of blocks represented by the size
 	const uint32_t blkCnt = (size + EspFlashBlockSize - 1) / EspFlashBlockSize;
 
-	// ensure that the address is on a block boundary
-	size += offset & (EspFlashBlockSize - 1);
-	offset &= ~(EspFlashBlockSize - 1);
-
-	// Calculate the number of sectors to erase
-	const uint32_t sector_size = 4 * 1024;
-	uint32_t num_sectors = (size + (sector_size - 1))/sector_size;
-
-#if !WIFI_USES_ESP32
-	const uint32_t start_sector = offset / sector_size;
-	const uint32_t sectors_per_block = 16;
-
-	uint32_t head_sectors = sectors_per_block - (start_sector % sectors_per_block);
-	if (num_sectors < head_sectors)
-	{
-		head_sectors = num_sectors;
-	}
-
-	// SPI EraseArea function in the esp8266 ROM has a bug which causes extra area to be erased.
-	// If the address range to be erased crosses the block boundary then extra head_sector_count sectors are erased.
-	// If the address range doesn't cross the block boundary, then extra total_sector_count sectors are erased.
-	if (num_sectors < 2 * head_sectors)
-	{
-		num_sectors = ((num_sectors + 1) / 2);
-	}
-	else
-	{
-		num_sectors = (num_sectors - head_sectors);
-	}
-#endif
-
-	const uint32_t erase_size = num_sectors * sector_size;
-
 	// begin the Flash process
 #if WIFI_USES_ESP32
-	const uint32_t buf[5] = { erase_size, blkCnt, EspFlashBlockSize, offset, 0 };		// last word means not encrypted
+	const uint32_t buf[5] = { size, blkCnt, EspFlashBlockSize, offset, 0 };		// last word means not encrypted
 #else
-	const uint32_t buf[4] = { erase_size, blkCnt, EspFlashBlockSize, offset };
+	const uint32_t buf[4] = { size, blkCnt, EspFlashBlockSize, offset };
 #endif
 
-	const uint32_t timeout = (erase_size != 0) ? eraseTimeout : defaultTimeout;
+	const uint32_t timeout = (size != 0) ? eraseTimeout : defaultTimeout;
 	return doCommand(ESP_FLASH_BEGIN, (const uint8_t*)buf, sizeof(buf), 0, nullptr, timeout);
 }
 
@@ -604,6 +571,12 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::DoErase(uint32_t address, uint32_t size) noexcept
 {
+#if WIFI_USES_ESP32
+	const uint32_t eraseSize = size;
+#else
+	// SPI EraseArea function in the esp8266 ROM has a bug which causes extra area to be erased.
+	// If the address range to be erased crosses the block boundary then extra head_sector_count sectors are erased.
+	// If the address range doesn't cross the block boundary, then extra total_sector_count sectors are erased.
 	const uint32_t sectorsPerBlock = 16;
 	const uint32_t sectorSize = 4096;
 	const uint32_t numSectors = (size + sectorSize - 1)/sectorSize;
@@ -615,9 +588,9 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::DoErase(uint32_t add
 		headSectors = numSectors;
 	}
     const uint32_t eraseSize = (numSectors < 2 * headSectors)
-    									? (numSectors + 1) / 2 * sectorSize
+    									? ((numSectors + 1) / 2) * sectorSize
     									: (numSectors - headSectors) * sectorSize;
-
+#endif
 	MessageF("Erasing %u bytes...\n", eraseSize);
 	return flashBegin(uploadAddress, eraseSize);
 }
