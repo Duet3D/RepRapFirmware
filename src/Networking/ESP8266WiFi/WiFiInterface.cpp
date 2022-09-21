@@ -585,9 +585,7 @@ void WiFiInterface::Start() noexcept
 	// Make sure the ESP8266 is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
 
-#if !WIFI_USES_ESP32
 	pinMode(EspEnablePin, OUTPUT_LOW);
-#endif
 
 	// Set up our transfer request pin (GPIO4) as an output and set it low
 	pinMode(SamTfrReadyPin, OUTPUT_LOW);
@@ -640,9 +638,7 @@ void WiFiInterface::Stop() noexcept
 
 		digitalWrite(SamTfrReadyPin, false);		// tell the ESP we can't receive
 		digitalWrite(EspResetPin, false);			// put the ESP back into reset
-#if !WIFI_USES_ESP32
 		digitalWrite(EspEnablePin, false);
-#endif
 		DisableEspInterrupt();						// ignore IRQs from the transfer request pin
 
 		NVIC_DisableIRQ(ESP_SPI_IRQn);
@@ -2145,10 +2141,8 @@ void WiFiInterface::StartWiFi() noexcept
 {
 	digitalWrite(EspResetPin, true);
 
-#if !WIFI_USES_ESP32
 	delayMicroseconds(150);										// ESP8266 datasheet specifies minimum 100us from releasing reset to power up
 	digitalWrite(EspEnablePin, true);
-#endif
 
 #if !SAME5x
 	SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);	// connect the pins to the UART
@@ -2169,10 +2163,7 @@ void WiFiInterface::StartWiFi() noexcept
 void WiFiInterface::ResetWiFi() noexcept
 {
 	pinMode(EspResetPin, OUTPUT_LOW);							// assert ESP8266 /RESET
-
-#if !WIFI_USES_ESP32
 	pinMode(EspEnablePin, OUTPUT_LOW);
-#endif
 
 #if !defined(SAME5x)
 	pinMode(APIN_SerialWiFi_TXD, INPUT_PULLUP);					// just enable pullups on TxD and RxD pins
@@ -2204,10 +2195,8 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	// Make sure the ESP8266 is in the reset state
 	pinMode(EspResetPin, OUTPUT_LOW);
 
-#if !WIFI_USES_ESP32
 	// Power down the ESP8266
 	pinMode(EspEnablePin, OUTPUT_LOW);
-#endif
 
 	// Set up our transfer request pin (GPIO4) as an output and set it low
 	pinMode(SamTfrReadyPin, OUTPUT_LOW);
@@ -2242,11 +2231,9 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	// Release the reset on the ESP8266
 	digitalWrite(EspResetPin, true);
 
-#if !WIFI_USES_ESP32
 	// Take the ESP8266 out of power down
 	delayMicroseconds(150);											// ESP8266 datasheet specifies minimum 100us from releasing reset to power up
 	digitalWrite(EspEnablePin, true);
-#endif
 }
 
 #endif	// HAS_WIFI_NETWORKING
