@@ -592,14 +592,18 @@ void WiFiInterface::Start() noexcept
 	// Set up our transfer request pin (GPIO4) as an output and set it low
 	pinMode(SamTfrReadyPin, OUTPUT_LOW);
 
-	// Set up our data ready pin (ESP GPIO0) as an output and set it high ready to boot the ESP from flash
+	// Set up our data ready pin (ESP8266 and ESP32 GPIO0) as an output and set it high ready to boot the ESP from flash
 	pinMode(EspDataReadyPin, OUTPUT_HIGH);
 
-	// GPIO2 also needs to be high to boot. It's connected to MISO on the SAM, so set the pullup resistor on that pin
-	pinMode(APIN_ESP_SPI_MISO, INPUT_PULLUP);
-
-	// Set our CS input (ESP GPIO15) low ready for booting the ESP. This also clears the transfer ready latch.
+#if WIFI_USES_ESP32
+	pinMode(SamCsPin, INPUT_PULLUP);		// ensure that SS is pulled high
+#else
+	// Set our CS input (ESP8266 GPIO15) low ready for booting the ESP. This also clears the transfer ready latch on older Duet 2 boards.
 	pinMode(SamCsPin, OUTPUT_LOW);
+
+	// ESP8266 GPIO2 also needs to be high to boot. It's connected to MISO on the SAM, so set the pullup resistor on that pin
+	pinMode(APIN_ESP_SPI_MISO, INPUT_PULLUP);
+#endif
 
 	// Make sure it has time to reset - no idea how long it needs, but 20ms should be plenty
 	delay(50);
@@ -614,8 +618,10 @@ void WiFiInterface::Start() noexcept
 	// - so 18ms is probably long enough. Use 50ms for safety.
 	delay(50);
 
+#if !WIFI_USES_ESP32
 	// Relinquish control of our CS pin so that the ESP can take it over
 	pinMode(SamCsPin, INPUT);
+#endif
 
 	// Set the data request pin to be an input
 	pinMode(EspDataReadyPin, INPUT_PULLUP);
@@ -2206,8 +2212,10 @@ void WiFiInterface::ResetWiFiForUpload(bool external) noexcept
 	// GPIO2 also needs to be high to boot up. It's connected to MISO on the SAM, so set the pullup resistor on that pin
 	pinMode(APIN_ESP_SPI_MISO, INPUT_PULLUP);
 
+#if !WIFI_USES_ESP32
 	// Set our CS input (ESP GPIO15) low ready for booting the ESP. This also clears the transfer ready latch.
 	pinMode(SamCsPin, OUTPUT_LOW);
+#endif
 
 	// Make sure it has time to reset - no idea how long it needs, but 50ms should be plenty
 	delay(50);
