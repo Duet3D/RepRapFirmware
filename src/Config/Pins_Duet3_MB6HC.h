@@ -407,7 +407,7 @@ constexpr Pin APIN_SerialWiFi_TXD = PortDPin(19);
 constexpr Pin APIN_SerialWiFi_RXD = PortDPin(18);
 constexpr GpioPinFunction SerialWiFiPeriphMode = GpioPinFunction::C;
 
-constexpr Pin EspResetPin = PortCPin(14);			// Low on this in holds the WiFi module in reset (ESP_EN)
+constexpr Pin EspEnablePin = PortCPin(14);			// Low on this in holds the WiFi module in reset (ESP_EN)
 constexpr Pin EspDataReadyPin = PortAPin(2);		// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
 constexpr Pin SamTfrReadyPin = PortEPin(2);			// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO8)
 constexpr Pin SamCsPin = PortCPin(25);				// SPI NPCS pin, input from WiFi module

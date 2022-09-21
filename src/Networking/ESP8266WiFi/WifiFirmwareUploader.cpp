@@ -466,18 +466,17 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::Sync(uint16_t timeou
 // Send a command to the device to begin the Flash process.
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t offset, uint32_t size) noexcept
 {
-	// determine the number of blocks represented by the size
-	const uint32_t blkCnt = (size + EspFlashBlockSize - 1) / EspFlashBlockSize;
+	// Determine the number of blocks represented by the size
+	const uint32_t blkCnt = (size + (EspFlashBlockSize - 1)) / EspFlashBlockSize;
 
-	// ensure that the address is on a block boundary
-	size += offset & (EspFlashBlockSize - 1);
-	offset &= ~(EspFlashBlockSize - 1);
-
+	// Determine the erase size parameter to pass in the FLASH_BEGIN command
+#if WIFI_USES_ESP32
+	const uint32_t erase_size = size;
+#else
 	// Calculate the number of sectors to erase
 	const uint32_t sector_size = 4 * 1024;
 	uint32_t num_sectors = (size + (sector_size - 1))/sector_size;
 
-#if !WIFI_USES_ESP32
 	const uint32_t start_sector = offset / sector_size;
 	const uint32_t sectors_per_block = 16;
 
@@ -498,9 +497,9 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashBegin(uint32_t 
 	{
 		num_sectors = (num_sectors - head_sectors);
 	}
-#endif
 
 	const uint32_t erase_size = num_sectors * sector_size;
+#endif
 
 	// begin the Flash process
 #if WIFI_USES_ESP32
@@ -604,22 +603,8 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::DoErase(uint32_t address, uint32_t size) noexcept
 {
-	const uint32_t sectorsPerBlock = 16;
-	const uint32_t sectorSize = 4096;
-	const uint32_t numSectors = (size + sectorSize - 1)/sectorSize;
-	const uint32_t startSector = address/sectorSize;
-	uint32_t headSectors = sectorsPerBlock - (startSector % sectorsPerBlock);
-
-	if (numSectors < headSectors)
-	{
-		headSectors = numSectors;
-	}
-    const uint32_t eraseSize = (numSectors < 2 * headSectors)
-    									? (numSectors + 1) / 2 * sectorSize
-    									: (numSectors - headSectors) * sectorSize;
-
-	MessageF("Erasing %u bytes...\n", eraseSize);
-	return flashBegin(uploadAddress, eraseSize);
+	MessageF("Erasing %u bytes...\n", size);
+	return flashBegin(uploadAddress, size);
 }
 
 void WifiFirmwareUploader::Spin() noexcept
