@@ -396,7 +396,12 @@ constexpr Pin SbcTfrReadyPin = PortEPin(2);
 #define ESP_SPI					SPI1
 #define ESP_SPI_INTERFACE_ID	ID_SPI1
 #define ESP_SPI_IRQn			SPI1_IRQn
+
+#if HAS_SBC_INTERFACE
 #define ESP_SPI_HANDLER			SPI1_WiFi_Handler	// SBC interface redirects the interrupt to here
+#else
+#define ESP_SPI_HANDLER			SPI1_Handler		// SBC interface redirects the interrupt to here
+#endif
 
 constexpr Pin APIN_ESP_SPI_MOSI = PortCPin(27);
 constexpr Pin APIN_ESP_SPI_MISO = PortCPin(26);

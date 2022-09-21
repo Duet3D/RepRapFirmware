@@ -1536,9 +1536,7 @@ static bool spi_dma_check_rx_complete() noexcept
 
 	if ((XDMAC->XDMAC_CHID[DmacChanWiFiRx].XDMAC_CC & (XDMAC_CC_RDIP | XDMAC_CC_WRIP)) == 0)
 	{
-//		XDMAC->XDMAC_GSWF = (1u << DmacChanWiFiRx);						// flush the channel
-//		while ((XDMAC->XDMAC_CHID[DmacChanWiFiRx].XDMAC_CIS & XDMAC_CIS_FIS) == 0) { }
-		XDMAC->XDMAC_GD = (1u << DmacChanWiFiRx);						// disable the channel
+		XDMAC->XDMAC_GD = (1u << DmacChanWiFiRx);						// disable the channel, which flushes the FIFO
 		while ((XDMAC->XDMAC_GS & (1u << DmacChanWiFiRx)) != 0) { }		// wait for disable to complete
 		return true;
 	}
@@ -1989,10 +1987,8 @@ void WiFiInterface::SpiInterrupt() noexcept
 # endif
 
 # if USE_XDMAC
-		spi_tx_dma_disable();
-		xdmac_channel_readwrite_suspend(XDMAC, DmacChanWiFiRx);			// suspend the receive channel
+		spi_tx_dma_disable();											// don't suspend receive, it prevents the FIFO from being emptied in checkRxComplete
 # endif
-
 		DisableSpi();
 		if ((status & SPI_SR_OVRES) != 0)
 		{
