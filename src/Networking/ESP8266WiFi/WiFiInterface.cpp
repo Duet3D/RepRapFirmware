@@ -87,9 +87,10 @@ constexpr IRQn ESP_SPI_IRQn = WiFiSpiSercomIRQn;
 # include "matrix/matrix.h"
 #endif
 
-const uint32_t WiFiResponseTimeoutMillis = 500;					// Timeout includes time-intensive flash-access operations; highest measured is 234 ms.
+const uint32_t WiFiSlowResponseTimeoutMillis = 500;		// SPI timeout when when the ESP has to access the SPIFFS filesytem; highest measured is 234ms.
+const uint32_t WiFiFastResponseTimeoutMillis = 20;		// SPI timeout when when the ESP does not have to access SPIFFS filesystem.
 const uint32_t WiFiWaitReadyMillis = 100;
-const uint32_t WiFiStartupMillis = 8000;
+const uint32_t WiFiStartupMillis = 15000;				// Formatting the SPIFFS partition can take up to 10s.
 const uint32_t WiFiStableMillis = 100;
 
 const unsigned int MaxHttpConnections = 4;
@@ -1828,6 +1829,12 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	digitalWrite(SamTfrReadyPin, true);
 
 	// Wait until the DMA transfer is complete, with timeout
+	// On factory reset, use the startup timeout, as it involves re-formatting the SPIFFS
+	// partition.
+	const uint32_t timeout = (cmd == NetworkCommand::networkFactoryReset) ? WiFiStartupMillis :
+		(cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkDeleteSsid ||
+		 cmd == NetworkCommand::networkConfigureAccessPoint || cmd == NetworkCommand::networkRetrieveSsidData
+			? WiFiSlowResponseTimeoutMillis : WiFiFastResponseTimeoutMillis);
 	do
 	{
 		if (!TaskBase::Take(WiFiResponseTimeoutMillis))
