@@ -604,7 +604,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::flashWriteBlock(uint
 WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::DoErase(uint32_t address, uint32_t size) noexcept
 {
 	MessageF("Erasing %u bytes...\n", size);
-	return flashBegin(uploadAddress, size);
+	return flashBegin(address, size);
 }
 
 void WifiFirmwareUploader::Spin() noexcept
