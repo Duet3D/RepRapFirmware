@@ -1837,7 +1837,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 			? WiFiSlowResponseTimeoutMillis : WiFiFastResponseTimeoutMillis);
 	do
 	{
-		if (!TaskBase::Take(WiFiResponseTimeoutMillis))
+		if (!TaskBase::Take(timeout))
 		{
 			if (reprap.Debug(moduleNetwork))
 			{
