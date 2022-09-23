@@ -107,10 +107,8 @@ Network::Network(Platform& p) noexcept : platform(p)
 
 constexpr ObjectModelArrayDescriptor Network::interfacesArrayDescriptor =
 {
-	// 0. Interfaces
-	{
-		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((Network*)self)->GetNumNetworkInterfaces(); },
+	nullptr,
+	[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((Network*)self)->GetNumNetworkInterfaces(); },
 #if HAS_NETWORKING
 	[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((Network*)self)->interfaces[context.GetIndex(0)]); }
 #endif
