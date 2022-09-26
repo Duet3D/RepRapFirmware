@@ -76,6 +76,7 @@ public:
 	Scanner& GetScanner() const noexcept { return *scanner; }
 	PrintMonitor& GetPrintMonitor() const noexcept { return *printMonitor; }
 	FansManager& GetFansManager() const noexcept { return *fansManager; }
+ 	MessageBox& GetMessageBox() noexcept { return mbox; }
 
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const noexcept { return *portControl; }
@@ -83,7 +84,6 @@ public:
 #if SUPPORT_DIRECT_LCD
  	Display& GetDisplay() const noexcept { return *display; }
  	const char *GetLatestMessage(uint16_t& sequence) const noexcept;
- 	const MessageBox& GetMessageBox() const noexcept { return mbox; }
 #endif
 #if HAS_SBC_INTERFACE
  	bool UsingSbcInterface() const noexcept { return usingSbcInterface; }
@@ -120,8 +120,6 @@ public:
 
 	void Beep(unsigned int freq, unsigned int ms) noexcept;
 	void SetMessage(const char *msg) noexcept;
-	void SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls) noexcept;
-	void ClearAlert() noexcept;
 
 	bool IsProcessingConfig() const noexcept { return processingConfig; }
 

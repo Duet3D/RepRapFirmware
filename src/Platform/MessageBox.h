@@ -20,11 +20,11 @@ public:
 	// Set a message box
 	void SetAlert(const char *msg, const char *p_title, int p_mode, float p_timeout, AxesBitmap p_controls) noexcept;
 
-	// This is called periodically to handle timeouts. Return true if the data returned by the object model has changed.
-	bool Spin() noexcept;
+	// This is called periodically to handle timeouts
+	void Spin() noexcept;
 
-	// This is called to clear any pending message box. Return true if the data returned by the object model has changed.
-	bool ClearAlert() noexcept;
+	// This is called to clear any pending message box
+	void ClearAlert() noexcept;
 
 	ReadWriteLock& GetLock() const noexcept { return lock; }
 	bool IsActive() const noexcept { return active; }

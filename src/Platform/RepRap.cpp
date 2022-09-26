@@ -807,10 +807,7 @@ void RepRap::Spin() noexcept
 	}
 
 	// Check if the message box can be hidden
-	if (mbox.Spin())
-	{
-		StateUpdated();
-	}
+	mbox.Spin();
 
 	// Keep track of the loop time
 	if (justSentDiagnostics)
@@ -2360,22 +2357,6 @@ void RepRap::SetMessage(const char *msg) noexcept
 		platform->SendPanelDueMessage(0, msg);
 	}
 	platform->Message(MessageType::LogInfo, msg);
-}
-
-// Display a message box on the web interface and PanelDue
-void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls) noexcept
-{
-	mbox.SetAlert(msg, title, mode, timeout, controls);
-	StateUpdated();
-}
-
-// Clear pending message box
-void RepRap::ClearAlert() noexcept
-{
-	if (mbox.ClearAlert())
-	{
-		StateUpdated();
-	}
 }
 
 // Get the status index

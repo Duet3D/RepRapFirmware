@@ -6,6 +6,7 @@
  */
 
 #include "MessageBox.h"
+#include "RepRap.h"
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(MessageBox, __VA_ARGS__)
@@ -41,10 +42,11 @@ void MessageBox::SetAlert(const char *msg, const char *p_title, int p_mode, floa
 	controls = p_controls;
 	active = true;
 	++seq;
+	reprap.StateUpdated();
 }
 
 // This is called periodically to handle timeouts. Return true if the data returned by the object model has changed.
-bool MessageBox::Spin() noexcept
+void MessageBox::Spin() noexcept
 {
 	if (active)		// don't get the lock if we don't need to
 	{
@@ -52,22 +54,20 @@ bool MessageBox::Spin() noexcept
 		if (active && timer != 0 && millis() - timer >= timeout)
 		{
 			active = false;
-			return true;;
+			reprap.StateUpdated();
 		}
 	}
-	return false;
 }
 
 // This is called to clear any pending message box. Return true if the data returned by the object model has changed.
-bool MessageBox::ClearAlert() noexcept
+void MessageBox::ClearAlert() noexcept
 {
 	WriteLocker locker(lock);
 	if (active)
 	{
 		active = false;
-		return true;
+		reprap.StateUpdated();
 	}
-	return false;
 }
 
 float MessageBox::GetTimeLeft() const noexcept

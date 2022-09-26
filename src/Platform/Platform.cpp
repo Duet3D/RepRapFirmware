@@ -3534,7 +3534,7 @@ void Platform::SendAlert(MessageType mt, const char *_ecv_array message, const c
 {
 	if ((mt & (HttpMessage | AuxMessage | LcdMessage | BinaryCodeReplyFlag)) != 0)
 	{
-		reprap.SetAlert(message, title, sParam, tParam, controls);		// make the RepRap class cache this message until it's picked up by the HTTP clients and/or PanelDue
+		reprap.GetMessageBox().SetAlert(message, title, sParam, tParam, controls);
 	}
 
 	MessageF(MessageType::LogInfo, "M291: - %s - %s", (strlen(title) > 0 ? title : "[no title]"), message);

@@ -75,7 +75,7 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 // Process M292
 GCodeResult GCodes::AcknowledgeMessage(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException)
 {
-	reprap.ClearAlert();
+	reprap.GetMessageBox().ClearAlert();
 
 	const bool cancelled = (gb.Seen('P') && gb.GetIValue() == 1);
 	for (GCodeBuffer* targetGb : gcodeSources)
