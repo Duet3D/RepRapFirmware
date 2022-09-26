@@ -13,28 +13,23 @@
 // Process M291
 GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException)
 {
+	// Get the message
 	gb.MustSee('P');
 	String<MaxMessageLength> message;
 	gb.GetQuotedString(message.GetRef());
 
+	// Get the optional message box title
 	bool dummy = false;
 	String<MaxMessageLength> title;
 	(void)gb.TryGetQuotedString('R', title.GetRef(), dummy);
 
+	// Get the message box mode
 	uint32_t sParam = 1;
-	(void)gb.TryGetLimitedUIValue('S', sParam, dummy, 4);
+	(void)gb.TryGetLimitedUIValue('S', sParam, dummy, 8);
 
-	float tParam;
-	if (sParam <= 1)
-	{
-		tParam = DefaultMessageTimeout;
-		gb.TryGetFValue('T', tParam, dummy);
-	}
-	else
-	{
-		tParam = 0.0;
-	}
-
+	// Get the optional timeout parameter
+	float tParam = (sParam <= 1) ? DefaultMessageTimeout : 0.0;
+	gb.TryGetNonNegativeFValue('T', tParam, dummy);
 	if (sParam == 0 && tParam <= 0.0)
 	{
 		reply.copy("Attempt to create a message box that cannot be dismissed");
@@ -42,17 +37,37 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 	}
 
 	AxesBitmap axisControls;
-	for (size_t axis = 0; axis < numTotalAxes; axis++)
+	bool isBlocking = true;				// all message types except 0,1 are blocking
+
+	switch (sParam)
 	{
-		if (gb.Seen(axisLetters[axis]) && gb.GetIValue() > 0)
+	case 0:		// no buttons displayed, non-blocking
+	case 1:		// Close button displayed, non-blocking
+		isBlocking = false;
+		break;
+
+	case 2:		// OK button displayed, blocking
+	case 3:		// OK and Cancel buttons displayed, blocking
+		for (size_t axis = 0; axis < numTotalAxes; axis++)
 		{
-			axisControls.SetBit(axis);
+			if (gb.Seen(axisLetters[axis]) && gb.GetIValue() > 0)
+			{
+				axisControls.SetBit(axis);
+			}
 		}
+		break;
+
+	case 4:		// Multiple choices, blocking
+	case 5:		// Integer value required, blocking
+	case 6:		// Floating point value required, blocking
+	case 7:		// String value required, blocking
+		//TODO
+		break;
 	}
 
-	// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
-	if (sParam >= 2)
+	if (isBlocking)
 	{
+		// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
 #if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface())
 		{
