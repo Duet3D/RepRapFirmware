@@ -165,16 +165,16 @@ constexpr ObjectModelArrayTableEntry RepRap::objectModelArrayTable[] =
 	// 0. Boards
 	{
 		nullptr,					// no lock needed
-	#if SUPPORT_CAN_EXPANSION
+#if SUPPORT_CAN_EXPANSION
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->expansion->GetNumExpansionBoards() + 1; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 				{	return (context.GetLastIndex() == 0)
 							? ExpressionValue(((const RepRap*)self)->platform, 0)
 								: ExpressionValue(((const RepRap*)self)->expansion, 0); }
-	#else
+#else
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 1; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const RepRap*)self)->platform, 0); }
-	#endif
+#endif
 	},
 	// 1. Fans
 	{
@@ -264,7 +264,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "scanner",				OBJECT_MODEL_FUNC(self->scanner),										ObjectModelEntryFlags::none },
 #endif
 	{ "sensors",				OBJECT_MODEL_FUNC(&self->platform->GetEndstops()),						ObjectModelEntryFlags::live },
-	{ "seqs",					OBJECT_MODEL_FUNC(self, 6),												ObjectModelEntryFlags::live },
+	{ "seqs",					OBJECT_MODEL_FUNC(self, 5),												ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC_ARRAY(3),												ObjectModelEntryFlags::live },
 	{ "state",					OBJECT_MODEL_FUNC(self, 3),												ObjectModelEntryFlags::live },
 	{ "tools",					OBJECT_MODEL_FUNC_ARRAY(4),												ObjectModelEntryFlags::live },
@@ -341,7 +341,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "logLevel",				OBJECT_MODEL_FUNC(self->platform->GetLogLevel()),						ObjectModelEntryFlags::none },
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
 	{ "macroRestarted",			OBJECT_MODEL_FUNC(self->gCodes->GetMacroRestarted()),					ObjectModelEntryFlags::none },
-	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, self, 5),						ObjectModelEntryFlags::important },
+	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, &(self->mbox), 0),				ObjectModelEntryFlags::important },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
 	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none },
 #if HAS_VOLTAGE_MONITOR
@@ -358,15 +358,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "duration",				OBJECT_MODEL_FUNC((int32_t)self->beepDuration),							ObjectModelEntryFlags::none },
 	{ "frequency",				OBJECT_MODEL_FUNC((int32_t)self->beepFrequency),						ObjectModelEntryFlags::none },
 
-	// 5. MachineModel.state.messageBox (FIXME acquire MutexLocker when accessing the following)
-	{ "axisControls",			OBJECT_MODEL_FUNC((int32_t)self->mbox.controls.GetRaw()),				ObjectModelEntryFlags::important },
-	{ "message",				OBJECT_MODEL_FUNC(self->mbox.message.c_str()),							ObjectModelEntryFlags::important },
-	{ "mode",					OBJECT_MODEL_FUNC((int32_t)self->mbox.mode),							ObjectModelEntryFlags::important },
-	{ "seq",					OBJECT_MODEL_FUNC((int32_t)self->mbox.seq),								ObjectModelEntryFlags::important },
-	{ "timeout",				OBJECT_MODEL_FUNC((int32_t)self->mbox.timeout),							ObjectModelEntryFlags::important },
-	{ "title",					OBJECT_MODEL_FUNC(self->mbox.title.c_str()),							ObjectModelEntryFlags::important },
-
-	// 6. MachineModel.seqs
+	// 5. MachineModel.seqs
 	{ "boards",					OBJECT_MODEL_FUNC((int32_t)self->boardsSeq),							ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "directories",			OBJECT_MODEL_FUNC((int32_t)self->directoriesSeq),						ObjectModelEntryFlags::live },
@@ -398,7 +390,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 {
-	7,																						// number of sub-tables
+	6,																						// number of sub-tables
 	15 + SUPPORT_SCANNER + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),		// root
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	8, 																						// directories
@@ -408,7 +400,6 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	25,																						// limits
 	20 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
 	2,																						// state.beep
-	6,																						// state.messageBox
 	12 + HAS_NETWORKING + SUPPORT_SCANNER +
 	2 * HAS_MASS_STORAGE + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE)		// seqs
 };

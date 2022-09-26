@@ -26,6 +26,7 @@ Licence: GPL
 #include <RTOSIface/RTOSIface.h>
 #include <General/function_ref.h>
 #include <ObjectModel/GlobalVariables.h>
+#include "MessageBox.h"
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/ExpansionManager.h>
@@ -36,20 +37,6 @@ enum class ResponseSource
 	HTTP,
 	AUX,
 	Generic
-};
-
-// Message box data
-struct MessageBox
-{
-	bool active;
-	String<MaxMessageLength> message;
-	String<MaxTitleLength> title;
-	int mode;
-	uint32_t seq;
-	uint32_t timer, timeout;
-	AxesBitmap controls;
-
-	MessageBox() noexcept : active(false), seq(0) { }
 };
 
 typedef Bitmap<uint32_t> DebugFlags;
