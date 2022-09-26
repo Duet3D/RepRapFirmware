@@ -3539,7 +3539,7 @@ void Platform::SendAlert(MessageType mt, const char *_ecv_array message, const c
 
 	MessageF(MessageType::LogInfo, "M291: - %s - %s", (strlen(title) > 0 ? title : "[no title]"), message);
 
-	mt = (MessageType)(mt & (UsbMessage | TelnetMessage));
+	mt = (MessageType)(mt & (UsbMessage | TelnetMessage | Aux2Message));
 	if (mt != 0)
 	{
 		if (strlen(title) > 0)
@@ -4593,7 +4593,7 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 # if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface())
 		{
-			reply.copy("SD card not supported in SBC mode");
+			reply.copy("SD card attached to Duet is not supported in SBC mode");
 			return GCodeResult::error;
 		}
 # endif
