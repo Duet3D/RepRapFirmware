@@ -163,31 +163,31 @@ void Menu::DisplayMessageBox(const MessageBox& mbox) noexcept
 	const PixelNumber left = sideMargin + 1 + insideMargin;
 	const PixelNumber right = nc - left;
 	const PixelNumber availableWidth = right - left;
-	AddItem(new TextMenuItem(top, left, availableWidth, MenuItem::CentreAlign, fontToUse, mbox.title.c_str()), false);
-	AddItem(new TextMenuItem(top + rowHeight, left, availableWidth, MenuItem::CentreAlign, fontToUse, mbox.message.c_str()), false);	// only 1 row for now
+	AddItem(new TextMenuItem(top, left, availableWidth, MenuItem::CentreAlign, fontToUse, mbox.GetTitle()), false);
+	AddItem(new TextMenuItem(top + rowHeight, left, availableWidth, MenuItem::CentreAlign, fontToUse, mbox.GetMessage()), false);	// only 1 row for now
 
 	// Add whichever XYZ jog buttons we have been asked to display - assume only XYZ for now
 	const PixelNumber axisButtonWidth = availableWidth/4;
 	const PixelNumber axisButtonStep = (availableWidth - 3 *axisButtonWidth)/2 + axisButtonWidth;
-	if (mbox.controls.IsBitSet(X_AXIS))
+	if (mbox.GetControls().IsBitSet(X_AXIS))
 	{
 		AddItem(new ValueMenuItem(top + 2 * rowHeight, left, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, nullptr, 510, 1), true);
 	}
-	if (mbox.controls.IsBitSet(Y_AXIS))
+	if (mbox.GetControls().IsBitSet(Y_AXIS))
 	{
 		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, nullptr, 511, 1), true);
 	}
-	if (mbox.controls.IsBitSet(Z_AXIS))
+	if (mbox.GetControls().IsBitSet(Z_AXIS))
 	{
 		AddItem(new ValueMenuItem(top + 2 * rowHeight, left + 2 * axisButtonStep, axisButtonWidth, MenuItem::CentreAlign, fontToUse, true, nullptr, 512, 2), true);
 	}
 
 	const PixelNumber okCancelButtonWidth = 30;
-	if (mbox.mode & 2)
+	if (mbox.GetMode() & 2)
 	{
 		AddItem(new ButtonMenuItem(top + 3 * rowHeight, left, okCancelButtonWidth, fontToUse, "OK", "M292 P0", nullptr), true);
 	}
-	if (mbox.mode & 1)
+	if (mbox.GetMode() & 1)
 	{
 		AddItem(new ButtonMenuItem(top + 3 * rowHeight, right - okCancelButtonWidth, okCancelButtonWidth, fontToUse, "Cancel", "M292 P1", nullptr), true);
 	}

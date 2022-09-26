@@ -29,4 +29,50 @@ constexpr uint8_t MessageBox::objectModelTableDescriptor[] =
 
 DEFINE_GET_OBJECT_MODEL_TABLE(MessageBox)
 
+// Set a message box
+void MessageBox::SetAlert(const char *msg, const char *p_title, int p_mode, float p_timeout, AxesBitmap p_controls) noexcept
+{
+	WriteLocker locker(lock);
+	message.copy(msg);
+	title.copy(p_title);
+	mode = p_mode;
+	timer = (p_timeout <= 0.0) ? 0 : millis();
+	timeout = round(max<float>(p_timeout, 0.0) * 1000.0);
+	controls = p_controls;
+	active = true;
+	++seq;
+}
+
+// This is called periodically to handle timeouts. Return true if the data returned by the object model has changed.
+bool MessageBox::Spin() noexcept
+{
+	if (active)		// don't get the lock if we don't need to
+	{
+		WriteLocker locker(lock);
+		if (active && timer != 0 && millis() - timer >= timeout)
+		{
+			active = false;
+			return true;;
+		}
+	}
+	return false;
+}
+
+// This is called to clear any pending message box. Return true if the data returned by the object model has changed.
+bool MessageBox::ClearAlert() noexcept
+{
+	WriteLocker locker(lock);
+	if (active)
+	{
+		active = false;
+		return true;
+	}
+	return false;
+}
+
+float MessageBox::GetTimeLeft() const noexcept
+{
+	return (timer != 0) ? (float)timeout / 1000.0 - (float)(millis() - timer) / 1000.0 : 0.0;
+}
+
 // End

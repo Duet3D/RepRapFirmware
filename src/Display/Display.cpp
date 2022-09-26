@@ -126,29 +126,32 @@ void Display::Spin() noexcept
 			}
 		}
 #endif
-		const MessageBox& mbox = reprap.GetMessageBox();
-		if (mbox.active)
 		{
-			if (!mboxActive || mboxSeq != mbox.seq)
+			const MessageBox& mbox = reprap.GetMessageBox();
+			ReadLocker lock(mbox.GetLock());
+			if (mbox.IsActiveLegacy())
 			{
-				// New message box to display
-				if (!mboxActive)
+				if (!mboxActive || mboxSeq != mbox.GetSeq())
 				{
-					menu->ClearHighlighting();					// cancel highlighting and adjustment
-					menu->Refresh();
+					// New message box to display
+					if (!mboxActive)
+					{
+						menu->ClearHighlighting();					// cancel highlighting and adjustment
+						menu->Refresh();
+					}
+					mboxActive = true;
+					mboxSeq = mbox.GetSeq();
+					menu->DisplayMessageBox(mbox);
+					forceRefresh = true;
 				}
-				mboxActive = true;
-				mboxSeq = mbox.seq;
-				menu->DisplayMessageBox(mbox);
+			}
+			else if (mboxActive)
+			{
+				// Message box has been cancelled from this or another input channel
+				menu->ClearMessageBox();
+				mboxActive = false;
 				forceRefresh = true;
 			}
-		}
-		else if (mboxActive)
-		{
-			// Message box has been cancelled from this or another input channel
-			menu->ClearMessageBox();
-			mboxActive = false;
-			forceRefresh = true;
 		}
 
 		const uint32_t now = millis();

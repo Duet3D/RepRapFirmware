@@ -341,7 +341,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "logLevel",				OBJECT_MODEL_FUNC(self->platform->GetLogLevel()),						ObjectModelEntryFlags::none },
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
 	{ "macroRestarted",			OBJECT_MODEL_FUNC(self->gCodes->GetMacroRestarted()),					ObjectModelEntryFlags::none },
-	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.active, &(self->mbox), 0),				ObjectModelEntryFlags::important },
+	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mbox.IsActive(), &(self->mbox), 0),			ObjectModelEntryFlags::important },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
 	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none },
 #if HAS_VOLTAGE_MONITOR
@@ -489,8 +489,6 @@ void RepRap::Init() noexcept
 #if SUPPORT_DIRECT_LCD
 	messageSequence = 0;
 #endif
-
-	messageBoxMutex.Create("MessageBox");
 
 	platform->Init();
 	network->Init();
@@ -809,13 +807,9 @@ void RepRap::Spin() noexcept
 	}
 
 	// Check if the message box can be hidden
+	if (mbox.Spin())
 	{
-		MutexLocker lock(messageBoxMutex);
-		if (mbox.active && mbox.timer != 0 && now - mbox.timer >= mbox.timeout)
-		{
-			mbox.active = false;
-			StateUpdated();
-		}
+		StateUpdated();
 	}
 
 	// Keep track of the loop time
@@ -1145,15 +1139,9 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		const bool sendBeep = ((source == ResponseSource::AUX || !platform->IsAuxEnabled(0) || platform->IsAuxRaw(0)) && beepDuration != 0 && beepFrequency != 0);
 		const bool sendMessage = !message.IsEmpty();
 
-		float timeLeft = 0.0;
-		MutexLocker lock(messageBoxMutex);
-
-		if (mbox.active && mbox.timer != 0)
-		{
-			timeLeft = (float)(mbox.timeout) / 1000.0 - (float)(millis() - mbox.timer) / 1000.0;
-		}
-
-		if (sendBeep || sendMessage || mbox.active)
+		ReadLocker locker(mbox.GetLock());
+		const bool mboxActive = mbox.IsActiveLegacy();
+		if (sendBeep || sendMessage || mboxActive)
 		{
 			response->cat(",\"output\":{");
 
@@ -1161,7 +1149,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 			if (sendBeep)
 			{
 				response->catf("\"beepDuration\":%u,\"beepFrequency\":%u", beepDuration, beepFrequency);
-				if (sendMessage || mbox.active)
+				if (sendMessage || mboxActive)
 				{
 					response->cat(',');
 				}
@@ -1171,17 +1159,17 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 			if (sendMessage)
 			{
 				response->catf("\"message\":\"%.s\"", message.c_str());
-				if (mbox.active)
+				if (mboxActive)
 				{
 					response->cat(',');
 				}
 			}
 
 			// Report message box
-			if (mbox.active)
+			if (mboxActive)
 			{
 				response->catf("\"msgBox\":{\"msg\":\"%.s\",\"title\":\"%.s\",\"mode\":%d,\"seq\":%" PRIu32 ",\"timeout\":%.1f,\"controls\":%u}",
-								mbox.message.c_str(), mbox.title.c_str(), mbox.mode, mbox.seq, (double)timeLeft, (unsigned int)mbox.controls.GetRaw());
+								mbox.GetMessage(), mbox.GetTitle(), mbox.GetMode(), mbox.GetSeq(), (double)mbox.GetTimeLeft(), (unsigned int)mbox.GetControls().GetRaw());
 			}
 			response->cat('}');
 		}
@@ -1802,18 +1790,11 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 	// Don't send it if we are flashing firmware, because when we flash firmware we send messages directly to PanelDue and we don't want them to get cleared.
 	if (!gCodes->IsFlashing())
 	{
-		float timeLeft = 0.0;
-		MutexLocker lock(messageBoxMutex);
-
-		if (mbox.active && mbox.timer != 0)
-		{
-			timeLeft = (float)(mbox.timeout) / 1000.0 - (float)(millis() - mbox.timer) / 1000.0;
-		}
-
-		if (mbox.active)
+		ReadLocker locker(mbox.GetLock());
+		if (mbox.IsActiveLegacy())
 		{
 			response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%u,\"msgBox.msg\":\"%.s\",\"msgBox.title\":\"%.s\"",
-							mbox.mode, mbox.seq, (double)timeLeft, (unsigned int)mbox.controls.GetRaw(), mbox.message.c_str(), mbox.title.c_str());
+							mbox.GetMode(), mbox.GetSeq(), (double)mbox.GetTimeLeft(), (unsigned int)mbox.GetControls().GetRaw(), mbox.GetMessage(), mbox.GetTitle());
 		}
 		else
 		{
@@ -2381,27 +2362,20 @@ void RepRap::SetMessage(const char *msg) noexcept
 	platform->Message(MessageType::LogInfo, msg);
 }
 
-// Display a message box on the web interface
+// Display a message box on the web interface and PanelDue
 void RepRap::SetAlert(const char *msg, const char *title, int mode, float timeout, AxesBitmap controls) noexcept
 {
-	MutexLocker lock(messageBoxMutex);
-	mbox.message.copy(msg);
-	mbox.title.copy(title);
-	mbox.mode = mode;
-	mbox.timer = (timeout <= 0.0) ? 0 : millis();
-	mbox.timeout = round(max<float>(timeout, 0.0) * 1000.0);
-	mbox.controls = controls;
-	mbox.active = true;
-	++mbox.seq;
+	mbox.SetAlert(msg, title, mode, timeout, controls);
 	StateUpdated();
 }
 
 // Clear pending message box
 void RepRap::ClearAlert() noexcept
 {
-	MutexLocker lock(messageBoxMutex);
-	mbox.active = false;
-	StateUpdated();
+	if (mbox.ClearAlert())
+	{
+		StateUpdated();
+	}
 }
 
 // Get the status index

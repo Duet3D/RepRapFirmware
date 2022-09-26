@@ -581,6 +581,7 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 			classDescriptor = GetObjectModelClassDescriptor();
 		}
 
+		// Loop doing this object followed by its ancestors
 		while (classDescriptor != nullptr)
 		{
 			const uint8_t * const descriptor = classDescriptor->omd;
@@ -597,6 +598,7 @@ void ObjectModel::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& cont
 				{
 					if (tbl->Matches(filter, context))
 					{
+						ReadLocker lock(GetObjectLock(tableNumber));
 						if (tbl->ReportAsJson(buf, context, classDescriptor, this, filter, !added))
 						{
 							added = true;
@@ -1165,6 +1167,7 @@ decrease(strlen(idString))	// recursion variant
 		classDescriptor = GetObjectModelClassDescriptor();
 	}
 
+	// Loop through this class and its ancestors
 	while (classDescriptor != nullptr)
 	{
 		const ObjectModelTableEntry * const e = FindObjectModelTableEntry(classDescriptor, tableNumber, idString);
@@ -1177,6 +1180,7 @@ decrease(strlen(idString))	// recursion variant
 			idString = GetNextElement(idString);
 			const ExpressionValue val = e->func(this, context);
 			context.CheckStack(StackUsage::GetObjectValue_noTable);
+			ReadLocker lock(GetObjectLock(tableNumber));
 			return GetObjectValue(context, classDescriptor, val, idString);
 		}
 		if (tableNumber != 0)
