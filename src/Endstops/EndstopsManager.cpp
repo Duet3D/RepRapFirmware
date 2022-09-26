@@ -145,21 +145,18 @@ void EndstopsManager::Init() noexcept
 
 ReadLockedPointer<Endstop> EndstopsManager::FindEndstop(size_t axis) const noexcept
 {
-	ReadLocker lock(endstopsLock);
-	return ReadLockedPointer<Endstop>(lock, (axis < MaxAxes) ? axisEndstops[axis] : nullptr);
+	return ReadLockedPointer<Endstop>(endstopsLock, (axis < MaxAxes) ? axisEndstops[axis] : nullptr);
 }
 
 ReadLockedPointer<ZProbe> EndstopsManager::GetZProbe(size_t index) const noexcept
 {
-	ReadLocker lock(zProbesLock);
-	return ReadLockedPointer<ZProbe>(lock, (index < ARRAY_SIZE(zProbes)) ? zProbes[index] : nullptr);
+	return ReadLockedPointer<ZProbe>(zProbesLock, (index < ARRAY_SIZE(zProbes)) ? zProbes[index] : nullptr);
 }
 
 // Return the current Z probe if there is one, else a default Z probe
 ReadLockedPointer<ZProbe> EndstopsManager::GetZProbeOrDefault(size_t index) const noexcept
 {
-	ReadLocker lock(zProbesLock);
-	return ReadLockedPointer<ZProbe>(lock,
+	return ReadLockedPointer<ZProbe>(zProbesLock,
 										(index < ARRAY_SIZE(zProbes) && zProbes[index] != nullptr)
 										? zProbes[index]
 										: defaultZProbe);

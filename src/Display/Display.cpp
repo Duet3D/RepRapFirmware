@@ -127,11 +127,10 @@ void Display::Spin() noexcept
 		}
 #endif
 		{
-			const MessageBox& mbox = reprap.GetMessageBox();
-			ReadLocker lock(mbox.GetLock());
-			if (mbox.IsActiveLegacy())
+			ReadLockedPointer<const MessageBox> mbox = reprap.GetCurrentMessageBox();
+			if (mbox.IsNotNull() && mbox->IsLegacyType())
 			{
-				if (!mboxActive || mboxSeq != mbox.GetSeq())
+				if (!mboxActive || mboxSeq != mbox->GetSeq())
 				{
 					// New message box to display
 					if (!mboxActive)
@@ -140,8 +139,8 @@ void Display::Spin() noexcept
 						menu->Refresh();
 					}
 					mboxActive = true;
-					mboxSeq = mbox.GetSeq();
-					menu->DisplayMessageBox(mbox);
+					mboxSeq = mbox->GetSeq();
+					menu->DisplayMessageBox(*mbox);
 					forceRefresh = true;
 				}
 			}

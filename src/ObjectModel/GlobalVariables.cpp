@@ -58,14 +58,12 @@ void GlobalVariables::ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 
 ReadLockedPointer<const VariableSet> GlobalVariables::GetForReading() noexcept
 {
-	ReadLocker locker(lock);
-	return ReadLockedPointer<const VariableSet>(locker, &vars);
+	return ReadLockedPointer<const VariableSet>(lock, &vars);
 }
 
 WriteLockedPointer<VariableSet> GlobalVariables::GetForWriting() noexcept
 {
-	WriteLocker locker(lock);
-	return WriteLockedPointer<VariableSet>(locker, &vars);
+	return WriteLockedPointer<VariableSet>(lock, &vars);
 }
 
 // End

@@ -76,7 +76,12 @@ public:
 	Scanner& GetScanner() const noexcept { return *scanner; }
 	PrintMonitor& GetPrintMonitor() const noexcept { return *printMonitor; }
 	FansManager& GetFansManager() const noexcept { return *fansManager; }
- 	MessageBox& GetMessageBox() noexcept { return mbox; }
+
+	// Message box functions
+	ReadLockedPointer<const MessageBox> GetCurrentMessageBox() const noexcept;
+	bool SendAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls) noexcept;
+	bool SendSimpleAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title) noexcept;
+	void ClearAlert() noexcept;
 
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const noexcept { return *portControl; }
@@ -162,6 +167,8 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
+	ReadWriteLock *_ecv_null GetObjectLock(unsigned int tableNumber) const noexcept override;
+
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
 	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<float(size_t)> func, unsigned int numDecimalDigits) noexcept;
@@ -230,7 +237,8 @@ private:
 	uint16_t messageSequence;					// used by 12864 display to detect when there is a new message
 #endif
 
-	MessageBox mbox;							// message box data
+	MessageBox *_ecv_null mboxList;				// linked list of message boxes
+	mutable ReadWriteLock mboxLock;
 
 	// Deferred diagnostics
 	MessageType diagnosticsDestination;

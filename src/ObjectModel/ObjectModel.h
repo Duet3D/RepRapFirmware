@@ -345,12 +345,12 @@ protected:
 	// Return the address of the ReadWriteLock (if any) that we need to acquire before querying or reporting on this object
 	// Override this default implementation in classes that need to be locked. If the returned lock belongs to the current object
 	// then it must be declared 'mutable' because this function is const, like the querying and reporting functions
-	virtual ReadWriteLock* GetObjectLock(unsigned int tableNumber) const noexcept { return nullptr; }
+	virtual ReadWriteLock *_ecv_null GetObjectLock(unsigned int tableNumber) const noexcept { return nullptr; }
 
 private:
 	// These functions have been separated from ReportItemAsJson to avoid high stack usage in the recursive functions, therefore they must not be inlined
 	// Report on a single item
-	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
+	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor,
 															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
 	__attribute__ ((noinline)) void ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept;
 	__attribute__ ((noinline)) static void ReportDateTime(OutputBuffer *buf, const ExpressionValue& val) noexcept;

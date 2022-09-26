@@ -10,41 +10,45 @@
 
 #include <RepRapFirmware.h>
 #include <ObjectModel/ObjectModel.h>
+#include <General/FreelistManager.h>
 
 // Message box data
 class MessageBox INHERIT_OBJECT_MODEL
 {
 public:
-	MessageBox() noexcept : seq(0), active(false) { }
+	DECLARE_FREELIST_NEW_DELETE(MessageBox)
+
+	MessageBox(MessageBox *p_next) noexcept : next(p_next) { seq = ++nextSeq; }
 
 	// Set a message box
-	void SetAlert(const char *msg, const char *p_title, int p_mode, float p_timeout, AxesBitmap p_controls) noexcept;
+	void Populate(const char *msg, const char *p_title, int p_mode, float p_timeout, AxesBitmap p_controls) noexcept;
 
 	// This is called periodically to handle timeouts
 	void Spin() noexcept;
 
-	// This is called to clear any pending message box
-	void ClearAlert() noexcept;
+	// Return true if the mode of this message box is one that the legacy status calls can handle
+	bool IsLegacyType() const noexcept { return mode <= 3; }	// legacy M407 and rr_status etc. don't handle higher message box modes
 
-	ReadWriteLock& GetLock() const noexcept { return lock; }
-	bool IsActive() const noexcept { return active; }
-	bool IsActiveLegacy() const noexcept { return active && mode <= 3; }	// legacy M407 and rr_status etc. don't handle higher message box modes
+	// Return true if this message box should be timed out
+	bool HasTimedOut() const noexcept { return timer != 0 && millis() - timer >= timeout; }
 
-	ReadWriteLock* GetObjectLock(unsigned int tableNumber) const noexcept override { return &lock; }
+	// Return the length of time before this box should time out
+	float GetTimeLeft() const noexcept;
 
+	MessageBox *GetNext() const noexcept { return next; }
+
+	// Return various data about the message box
 	AxesBitmap GetControls() const noexcept { return controls; }
 	int GetMode() const noexcept { return mode; }
 	uint32_t GetSeq() const noexcept { return seq; }
 	const char *GetMessage() const noexcept { return message.c_str(); }
 	const char *GetTitle() const noexcept { return title.c_str(); }
 
-	float GetTimeLeft() const noexcept;
-
 protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	mutable ReadWriteLock lock;
+	MessageBox *next;
 	String<MaxMessageLength> message;
 	String<MaxTitleLength> title;
 	int mode;
@@ -52,7 +56,8 @@ private:
 	uint32_t timer;
 	uint32_t timeout;
 	AxesBitmap controls;
-	bool active;
+
+	static uint32_t nextSeq;
 };
 
 #endif /* SRC_PLATFORM_MESSAGEBOX_H_ */

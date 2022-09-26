@@ -155,17 +155,15 @@ void MovementState::SelectTool(int toolNumber, bool simulating) noexcept
 // Get a locked pointer to the current tool, or null if there is no current tool
 ReadLockedPointer<Tool> MovementState::GetLockedCurrentTool() const noexcept
 {
-	ReadLocker lock(Tool::toolListLock);
-	return ReadLockedPointer<Tool>(lock, currentTool);
+	return ReadLockedPointer<Tool>(Tool::toolListLock, currentTool);
 }
 
 // Get the current tool, or failing that the default tool. May return nullptr if there are no tools.
 // Called when a M104 or M109 command doesn't specify a tool number.
 ReadLockedPointer<Tool> MovementState::GetLockedCurrentOrDefaultTool() const noexcept
 {
-	ReadLocker lock(Tool::toolListLock);
 	// If a tool is already selected, use that one, else use the lowest-numbered tool which is the one at the start of the tool list
-	return ReadLockedPointer<Tool>(lock, (currentTool != nullptr) ? currentTool : Tool::GetToolList());
+	return ReadLockedPointer<Tool>(Tool::toolListLock, (currentTool != nullptr) ? currentTool : Tool::GetToolList());
 }
 
 // Return the current tool number, or -1 if no tool selected

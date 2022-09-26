@@ -114,7 +114,7 @@ void GCodes::DoManualProbe(GCodeBuffer& gb, const char *message, const char *tit
 	{
 		gb.WaitForAcknowledgement();									// flag that we are waiting for acknowledgement
 		const MessageType mt = GetMessageBoxDevice(gb);
-		platform.SendAlert(mt, message, title, 2, 0.0, axes);
+		reprap.SendAlert(mt, message, title, 2, 0.0, axes);
 	}
 }
 

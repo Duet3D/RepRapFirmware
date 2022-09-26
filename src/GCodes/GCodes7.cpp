@@ -68,14 +68,14 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 
 	// Display the message box on all relevant devices. Acknowledging any one of them clears them all.
 	const MessageType mt = GetMessageBoxDevice(gb);						// get the display device
-	platform.SendAlert(mt, message.c_str(), title.c_str(), (int)sParam, tParam, axisControls);
+	reprap.SendAlert(mt, message.c_str(), title.c_str(), (int)sParam, tParam, axisControls);
 	return GCodeResult::ok;
 }
 
 // Process M292
 GCodeResult GCodes::AcknowledgeMessage(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException)
 {
-	reprap.GetMessageBox().ClearAlert();
+	reprap.ClearAlert();
 
 	const bool cancelled = (gb.Seen('P') && gb.GetIValue() == 1);
 	for (GCodeBuffer* targetGb : gcodeSources)

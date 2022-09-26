@@ -147,8 +147,7 @@ Heat::Heat() noexcept
 
 ReadLockedPointer<Heater> Heat::FindHeater(int heater) const noexcept
 {
-	ReadLocker locker(heatersLock);
-	return ReadLockedPointer<Heater>(locker, (heater < 0 || heater >= (int)MaxHeaters) ? nullptr : heaters[heater]);
+	return ReadLockedPointer<Heater>(heatersLock, (heater < 0 || heater >= (int)MaxHeaters) ? nullptr : heaters[heater]);
 }
 
 // Process M307

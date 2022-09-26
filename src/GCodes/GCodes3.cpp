@@ -1807,7 +1807,7 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 			platform.MessageF((MessageType)(mt & (LogLevelMask | ErrorMessageFlag | WarningMessageFlag)), "%s\n", eventText.c_str());	// log the event
 		}
 		const bool isPrinting = IsReallyPrinting();
-		platform.SendAlert(GenericMessage, eventText.c_str(), (isPrinting) ? "Printing paused" : "Event notification", 1, 0.0, AxesBitmap());
+		reprap.SendSimpleAlert(GenericMessage, eventText.c_str(), (isPrinting) ? "Printing paused" : "Event notification");
 		if (IsReallyPrinting())
 		{
 			// We are going to pause. It may need to wait for the movement lock, so do it in a new state.

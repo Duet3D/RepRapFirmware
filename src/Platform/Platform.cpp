@@ -3525,39 +3525,6 @@ void Platform::DebugMessage(const char *_ecv_array fmt, va_list vargs) noexcept
 			);
 }
 
-// Send a message box, which may require an acknowledgement
-// sParam = 0 Just display the message box, optional timeout
-// sParam = 1 As for 0 but display a Close button as well
-// sParam = 2 Display the message box with an OK button, wait for acknowledgement (waiting is set up by the caller)
-// sParam = 3 As for 2 but also display a Cancel button
-void Platform::SendAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls) noexcept
-{
-	if ((mt & (HttpMessage | AuxMessage | LcdMessage | BinaryCodeReplyFlag)) != 0)
-	{
-		reprap.GetMessageBox().SetAlert(message, title, sParam, tParam, controls);
-	}
-
-	MessageF(MessageType::LogInfo, "M291: - %s - %s", (strlen(title) > 0 ? title : "[no title]"), message);
-
-	mt = (MessageType)(mt & (UsbMessage | TelnetMessage | Aux2Message));
-	if (mt != 0)
-	{
-		if (strlen(title) > 0)
-		{
-			MessageF(mt, "- %s -\n", title);
-		}
-		MessageF(mt, "%s\n", message);
-		if (sParam == 2)
-		{
-			Message(mt, "Send M292 to continue\n");
-		}
-		else if (sParam == 3)
-		{
-			Message(mt, "Send M292 to continue or M292 P1 to cancel\n");
-		}
-	}
-}
-
 #if HAS_MASS_STORAGE
 
 // Configure logging according to the M929 command received, returning true if error
@@ -4077,8 +4044,7 @@ void Platform::AppendSysDir(const StringRef & path) const noexcept
 
 ReadLockedPointer<const char> Platform::GetSysDir() const noexcept
 {
-	ReadLocker lock(sysDirLock);
-	return ReadLockedPointer<const char>(lock, InternalGetSysDir());
+	return ReadLockedPointer<const char>(sysDirLock, InternalGetSysDir());
 }
 
 #endif

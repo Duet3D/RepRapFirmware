@@ -435,7 +435,6 @@ public:
 	void MessageV(MessageType type, const char *_ecv_array fmt, va_list vargs) noexcept;
 	void DebugMessage(const char *_ecv_array fmt, va_list vargs) noexcept;
 	bool FlushMessages() noexcept;								// Flush messages to USB and aux, returning true if there is more to send
-	void SendAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls) noexcept;
 	void StopLogging() noexcept;
 
 	// Movement
