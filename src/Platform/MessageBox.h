@@ -20,6 +20,7 @@ struct MessageBoxLimits
 	void GetFloatLimits(GCodeBuffer& gb) THROWS(GCodeException);
 
 	ExpressionValue minVal, maxVal, defaultVal, choices;
+	bool canCancel = false;
 };
 
 // Message box data

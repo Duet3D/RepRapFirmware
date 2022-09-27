@@ -16,6 +16,7 @@
 constexpr ObjectModelTableEntry MessageBox::objectModelTable[] =
 {
 	{ "axisControls",			OBJECT_MODEL_FUNC_IF(self->mode == 2 || self->mode == 3, (int32_t)self->controls.GetRaw()),	ObjectModelEntryFlags::important },
+	{ "cancelButton",			OBJECT_MODEL_FUNC_IF(self->mode >= 4, self->limits.canCancel),	ObjectModelEntryFlags::important },
 	{ "choices",				OBJECT_MODEL_FUNC_IF(self->mode == 4, self->limits.choices),	ObjectModelEntryFlags::important },
 	{ "default",				OBJECT_MODEL_FUNC_IF(self->mode >= 4, self->limits.defaultVal),	ObjectModelEntryFlags::important },
 	{ "max",					OBJECT_MODEL_FUNC_IF(self->mode >= 5, self->limits.maxVal),		ObjectModelEntryFlags::important },
@@ -30,7 +31,7 @@ constexpr ObjectModelTableEntry MessageBox::objectModelTable[] =
 constexpr uint8_t MessageBox::objectModelTableDescriptor[] =
 {
 	1,
-	10
+	11
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(MessageBox)

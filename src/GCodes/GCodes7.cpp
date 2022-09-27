@@ -31,11 +31,10 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 	float tParam = (sParam <= 1) ? DefaultMessageTimeout : 0.0;
 	gb.TryGetNonNegativeFValue('T', tParam, dummy);
 
-	bool displayCancelButton = false;
-	gb.TryGetBValue('J', displayCancelButton, dummy);
+	MessageBoxLimits limits;
+	gb.TryGetBValue('J', limits.canCancel, dummy);
 
 	AxesBitmap axisControls;
-	MessageBoxLimits limits;
 
 	switch (sParam)
 	{
