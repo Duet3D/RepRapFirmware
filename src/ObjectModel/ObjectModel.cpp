@@ -335,7 +335,7 @@ void ExpressionValue::SetDriverId(DriverId did) noexcept
 
 bool ExpressionValue::IsHeapStringArrayType() const noexcept
 {
-	if (type != (uint32_t)TypeCode::HeapString)
+	if (type != (uint32_t)TypeCode::HeapArray)
 	{
 		return false;
 	}
