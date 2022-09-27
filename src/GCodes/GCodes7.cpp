@@ -30,22 +30,25 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 	// Get the optional timeout parameter. The default value depends on the mode (S parameter).
 	float tParam = (sParam <= 1) ? DefaultMessageTimeout : 0.0;
 	gb.TryGetNonNegativeFValue('T', tParam, dummy);
-	if (sParam == 0 && tParam <= 0.0)
-	{
-		reply.copy("Attempt to create a message box that cannot be dismissed");
-		return GCodeResult::error;
-	}
+
+	bool displayCancelButton = false;
+	gb.TryGetBValue('J', displayCancelButton, dummy);
 
 	AxesBitmap axisControls;
-	ExpressionValue choices;
-	bool isBlocking = true;				// all message types except 0,1 are blocking
-	uint32_t defaultChoice = 0;
+	MessageBoxLimits limits;
 
 	switch (sParam)
 	{
 	case 0:		// no buttons displayed, non-blocking
+		if (tParam <= 0.0)
+		{
+			reply.copy("Attempt to create a message box that cannot be dismissed");
+			return GCodeResult::error;
+		}
+		break;
+
 	case 1:		// Close button displayed, non-blocking
-		isBlocking = false;
+	default:
 		break;
 
 	case 2:		// OK button displayed, blocking
@@ -62,18 +65,33 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 
 	case 4:		// Multiple choices, blocking
 		gb.MustSee('K');
-		choices = gb.GetExpression();
-		gb.TryGetUIValue('F', defaultChoice, dummy);
-		break;
+		limits.choices = gb.GetExpression();
+		if (limits.choices.IsHeapStringArrayType())
+		{
+			uint32_t defaultChoice = 0;
+			if (gb.TryGetUIValue('F', defaultChoice, dummy))
+			{
+				limits.defaultVal.SetInt((int32_t)defaultChoice);
+			}
+			break;
+		}
+		reply.copy("K parameter must be an array of strings");
+		return GCodeResult::error;
 
 	case 5:		// Integer value required, blocking
+		limits.GetIntegerLimits(gb, false);
+		break;
+
 	case 6:		// Floating point value required, blocking
+		limits.GetFloatLimits(gb);
+		break;
+
 	case 7:		// String value required, blocking
-		//TODO
+		limits.GetIntegerLimits(gb, true);
 		break;
 	}
 
-	if (isBlocking)
+	if (sParam >= 2)			// if it's a blocking message box
 	{
 		// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
 #if HAS_SBC_INTERFACE
@@ -91,7 +109,7 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 
 	// Display the message box on all relevant devices. Acknowledging any one of them clears them all.
 	const MessageType mt = GetMessageBoxDevice(gb);						// get the display device
-	reprap.SendAlert(mt, message.c_str(), title.c_str(), (int)sParam, tParam, axisControls);
+	reprap.SendAlert(mt, message.c_str(), title.c_str(), (int)sParam, tParam, axisControls, &limits);
 	return GCodeResult::ok;
 }
 

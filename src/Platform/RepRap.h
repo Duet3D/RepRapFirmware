@@ -79,7 +79,7 @@ public:
 
 	// Message box functions
 	ReadLockedPointer<const MessageBox> GetCurrentMessageBox() const noexcept;
-	bool SendAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls) noexcept;
+	bool SendAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits = nullptr) noexcept;
 	bool SendSimpleAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title) noexcept;
 	void ClearAlert() noexcept;
 

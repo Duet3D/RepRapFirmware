@@ -9,6 +9,7 @@
 #define SRC_PLATFORM_ARRAYHANDLE_H_
 
 #include <RepRapFirmware.h>
+#include <ObjectModel/TypeCode.h>
 #include "Heap.h"
 
 class ExpressionValue;
@@ -26,6 +27,7 @@ public:
 
 	size_t GetNumElements() const noexcept;												// get the number of elements
 	void GetElement(size_t index, ExpressionValue& rslt) const THROWS(GCodeException);	// get the specified element
+	TypeCode GetElementType(size_t index) const noexcept;
 	void Delete() noexcept;
 	const ArrayHandle& IncreaseRefCount() const noexcept;
 	bool IsNull() const noexcept { return slotPtr == nullptr; }

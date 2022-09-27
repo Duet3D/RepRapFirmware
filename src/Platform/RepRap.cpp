@@ -2751,7 +2751,7 @@ ReadLockedPointer<const MessageBox> RepRap::GetCurrentMessageBox() const noexcep
 // sParam = 2 Display the message box with an OK button, wait for acknowledgement (waiting is set up by the caller)
 // sParam = 3 As for 2 but also display a Cancel button
 // Returns true if we sent the message box, false if we couldn't because there is already a message box
-bool RepRap::SendAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls) noexcept
+bool RepRap::SendAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits) noexcept
 {
 	WriteLocker lock(mboxLock);
 
@@ -2764,7 +2764,7 @@ bool RepRap::SendAlert(MessageType mt, const char *_ecv_array message, const cha
 	if ((mt & (HttpMessage | AuxMessage | LcdMessage | BinaryCodeReplyFlag)) != 0)
 	{
 		MessageBox *mb = new MessageBox(nullptr);
-		mb->Populate(message, title, sParam, tParam, controls);
+		mb->Populate(message, title, sParam, tParam, controls, limits);
 		mboxList = mb;
 		StateUpdated();
 	}

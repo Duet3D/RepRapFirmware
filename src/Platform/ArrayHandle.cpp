@@ -80,6 +80,20 @@ void ArrayHandle::GetElement(size_t index, ExpressionValue &rslt) const THROWS(G
 	throw GCodeException("Array index out of bounds");
 }
 
+TypeCode ArrayHandle::GetElementType(size_t index) const noexcept
+{
+	if (slotPtr != nullptr)
+	{
+		ReadLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
+		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
+		if (index < aSpace->count)
+		{
+			return aSpace->elements[index].GetType();
+		}
+	}
+	return TypeCode::None;
+}
+
 // Decrease the reference count for the array referred to and delete it if it reaches zero
 void ArrayHandle::Delete() noexcept
 {

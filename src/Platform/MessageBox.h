@@ -12,6 +12,16 @@
 #include <ObjectModel/ObjectModel.h>
 #include <General/FreelistManager.h>
 
+// Struct to hold minimum, maximum and default values
+struct MessageBoxLimits
+{
+	MessageBoxLimits() noexcept { }
+	void GetIntegerLimits(GCodeBuffer& gb, bool defaultIsString) THROWS(GCodeException);
+	void GetFloatLimits(GCodeBuffer& gb) THROWS(GCodeException);
+
+	ExpressionValue minVal, maxVal, defaultVal, choices;
+};
+
 // Message box data
 class MessageBox INHERIT_OBJECT_MODEL
 {
@@ -21,7 +31,7 @@ public:
 	MessageBox(MessageBox *p_next) noexcept : next(p_next) { seq = ++nextSeq; }
 
 	// Set a message box
-	void Populate(const char *msg, const char *p_title, int p_mode, float p_timeout, AxesBitmap p_controls) noexcept;
+	void Populate(const char *msg, const char *p_title, int p_mode, float p_timeout, AxesBitmap p_controls, MessageBoxLimits *_ecv_null p_limits) noexcept;
 
 	// This is called periodically to handle timeouts
 	void Spin() noexcept;
@@ -51,6 +61,7 @@ private:
 	MessageBox *next;
 	String<MaxMessageLength> message;
 	String<MaxTitleLength> title;
+	MessageBoxLimits limits;
 	int mode;
 	uint32_t seq;
 	uint32_t timer;

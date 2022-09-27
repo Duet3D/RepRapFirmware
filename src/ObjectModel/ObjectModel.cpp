@@ -333,6 +333,24 @@ void ExpressionValue::SetDriverId(DriverId did) noexcept
 	uVal = did.localDriver;
 }
 
+bool ExpressionValue::IsHeapStringArrayType() const noexcept
+{
+	if (type != (uint32_t)TypeCode::HeapString)
+	{
+		return false;
+	}
+
+	const size_t numElems = ahVal.GetNumElements();
+	for (size_t i = 0; i < numElems; ++i)
+	{
+		if (ahVal.GetElementType(i) != TypeCode::HeapString)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 #if SUPPORT_CAN_EXPANSION
 
 // Given that this is a CanExpansionBoardDetails value, extract the part requested according to the parameter and append it to the string
