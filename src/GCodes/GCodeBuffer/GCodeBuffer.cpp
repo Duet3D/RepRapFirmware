@@ -624,6 +624,12 @@ void GCodeBuffer::GetUnsignedArray(uint32_t arr[], size_t& length, bool doPad) T
 	}
 }
 
+// Get a string array after a key letter
+ExpressionValue GCodeBuffer::GetExpression() THROWS(GCodeException)
+{
+	return PARSER_OPERATION(GetExpression());
+}
+
 // Get a :-separated list of drivers after a key letter
 void GCodeBuffer::GetDriverIdArray(DriverId arr[], size_t& length)
 {

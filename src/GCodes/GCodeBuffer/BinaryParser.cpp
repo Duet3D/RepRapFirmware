@@ -368,7 +368,7 @@ void BinaryParser::GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException)
 	case DataType::Expression:
 		//TODO not handled yet
 	default:
-		throw ConstructParseException("IP address string expected");
+		throw ConstructParseException("expected a IP address");
 	}
 
 	seenParameter = nullptr;
@@ -420,7 +420,7 @@ void BinaryParser::GetMacAddress(MacAddress& mac) THROWS(GCodeException)
 	case DataType::Expression:
 		//TODO not handled yet
 	default:
-		throw ConstructParseException("MAC address string expected");
+		throw ConstructParseException("expected a MAC address");
 	}
 
 	seenParameter = nullptr;
@@ -435,7 +435,7 @@ void BinaryParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
 	}
 	else if (!allowEmpty)
 	{
-		throw ConstructParseException("non-empty string expected");
+		throw ConstructParseException("expected a non-empty string");
 	}
 }
 
@@ -470,7 +470,7 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty
 	seenParameterValue = nullptr;
 	if (!allowEmpty && str.IsEmpty())
 	{
-		throw ConstructParseException("non-empty string expected");
+		throw ConstructParseException("expected a non-empty string");
 	}
 }
 
@@ -568,6 +568,24 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 		length = 0;
 		return;
 	}
+}
+
+// Get a :-separated list of strings after a key letter
+ExpressionValue BinaryParser::GetExpression() THROWS(GCodeException)
+{
+	if (seenParameter == nullptr)
+	{
+		THROW_INTERNAL_ERROR;
+	}
+
+	if (seenParameter->type == DataType::Expression)
+	{
+		ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+		const ExpressionValue val = parser.Parse();
+		parser.CheckForExtraCharacters();
+		return val;
+	}
+	throw ConstructParseException("expected an expression inside { }");
 }
 
 void BinaryParser::SetFinished() noexcept

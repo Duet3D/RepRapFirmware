@@ -61,6 +61,7 @@ public:
 	void GetIntArray(int32_t arr[], size_t& length) THROWS(GCodeException);						// Get a :-separated list of ints after a key letter
 	void GetUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of unsigned ints after a key letter
 	void GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);				// Get a :-separated list of drivers after a key letter
+	ExpressionValue GetExpression() THROWS(GCodeException);										// Get an expression after a key letter
 
 	void ResetIndentation() noexcept;										// Reset the indentation level to the last one
 	void SetFinished() noexcept;											// Set the G Code finished

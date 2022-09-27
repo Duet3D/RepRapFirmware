@@ -1321,6 +1321,17 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength) THRO
 	readPointer = -1;
 }
 
+// Get a :-separated list of strings after a key letter
+ExpressionValue StringParser::GetExpression() THROWS(GCodeException)
+{
+	if (gb.buffer[readPointer] == '{')
+	{
+		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		return parser.Parse();
+	}
+	throw ConstructParseException("expected an expression inside { }");
+}
+
 void StringParser::CheckArrayLength(size_t actualLength, size_t maxLength) THROWS(GCodeException)
 {
 	if (actualLength >= maxLength)
@@ -1354,12 +1365,12 @@ void StringParser::GetQuotedString(const StringRef& str, bool allowEmpty) THROWS
 		break;
 
 	default:
-		throw ConstructParseException("expected string expression");
+		throw ConstructParseException("expected a string expression");
 	}
 
 	if (!allowEmpty && str.IsEmpty())
 	{
-		throw ConstructParseException("non-empty string expected");
+		throw ConstructParseException("expected a non-empty string");
 	}
 }
 
@@ -1414,7 +1425,7 @@ void StringParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty
 	InternalGetPossiblyQuotedString(str);
 	if (!allowEmpty && str.IsEmpty())
 	{
-		throw ConstructParseException("non-empty string expected");
+		throw ConstructParseException("expected a non-empty string");
 	}
 }
 
@@ -1458,7 +1469,7 @@ void StringParser::GetUnprecedentedString(const StringRef& str, bool allowEmpty)
 	InternalGetPossiblyQuotedString(str);
 	if (!allowEmpty && str.IsEmpty())
 	{
-		throw ConstructParseException("non-empty string expected");
+		throw ConstructParseException("expected a non-empty string");
 	}
 }
 

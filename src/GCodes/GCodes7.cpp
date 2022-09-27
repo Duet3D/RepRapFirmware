@@ -20,14 +20,14 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 
 	// Get the optional message box title
 	bool dummy = false;
-	String<MaxMessageLength> title;
+	String<StringLength100> title;
 	(void)gb.TryGetQuotedString('R', title.GetRef(), dummy);
 
 	// Get the message box mode
 	uint32_t sParam = 1;
 	(void)gb.TryGetLimitedUIValue('S', sParam, dummy, 8);
 
-	// Get the optional timeout parameter
+	// Get the optional timeout parameter. The default value depends on the mode (S parameter).
 	float tParam = (sParam <= 1) ? DefaultMessageTimeout : 0.0;
 	gb.TryGetNonNegativeFValue('T', tParam, dummy);
 	if (sParam == 0 && tParam <= 0.0)
@@ -37,7 +37,9 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 	}
 
 	AxesBitmap axisControls;
+	ExpressionValue choices;
 	bool isBlocking = true;				// all message types except 0,1 are blocking
+	uint32_t defaultChoice = 0;
 
 	switch (sParam)
 	{
@@ -48,6 +50,7 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 
 	case 2:		// OK button displayed, blocking
 	case 3:		// OK and Cancel buttons displayed, blocking
+		// Message box modes 2 and 3 can take a list of axes that can be jogged
 		for (size_t axis = 0; axis < numTotalAxes; axis++)
 		{
 			if (gb.Seen(axisLetters[axis]) && gb.GetIValue() > 0)
@@ -58,6 +61,11 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 		break;
 
 	case 4:		// Multiple choices, blocking
+		gb.MustSee('K');
+		choices = gb.GetExpression();
+		gb.TryGetUIValue('F', defaultChoice, dummy);
+		break;
+
 	case 5:		// Integer value required, blocking
 	case 6:		// Floating point value required, blocking
 	case 7:		// String value required, blocking
