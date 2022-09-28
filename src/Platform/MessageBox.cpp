@@ -16,7 +16,7 @@
 constexpr ObjectModelTableEntry MessageBox::objectModelTable[] =
 {
 	{ "axisControls",			OBJECT_MODEL_FUNC_IF(self->mode == 2 || self->mode == 3, (int32_t)self->controls.GetRaw()),	ObjectModelEntryFlags::important },
-	{ "cancelButton",			OBJECT_MODEL_FUNC_IF(self->mode >= 4, self->limits.canCancel),	ObjectModelEntryFlags::important },
+	{ "cancelButton",			OBJECT_MODEL_FUNC(self->limits.canCancel),						ObjectModelEntryFlags::important },
 	{ "choices",				OBJECT_MODEL_FUNC_IF(self->mode == 4, self->limits.choices),	ObjectModelEntryFlags::important },
 	{ "default",				OBJECT_MODEL_FUNC_IF(self->mode >= 4, self->limits.defaultVal),	ObjectModelEntryFlags::important },
 	{ "max",					OBJECT_MODEL_FUNC_IF(self->mode >= 5, self->limits.maxVal),		ObjectModelEntryFlags::important },
@@ -50,6 +50,16 @@ void MessageBox::Populate(const char *msg, const char *p_title, int p_mode, floa
 	if (p_limits != nullptr)
 	{
 		limits = *p_limits;
+	}
+
+	// Override the canCancel flag if its value is implied by the mode
+	if (mode == 3)
+	{
+		limits.canCancel = true;
+	}
+	else if (mode < 3)
+	{
+		limits.canCancel = false;
 	}
 }
 
