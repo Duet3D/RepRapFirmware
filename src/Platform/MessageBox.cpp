@@ -94,7 +94,7 @@ void MessageBoxLimits::GetIntegerLimits(GCodeBuffer& gb, bool defaultIsString) T
 			String<StringLength100> sDefault;
 			gb.GetQuotedString(sDefault.GetRef(), true);
 			iDefault = (int32_t)sDefault.strlen();
-			defaultVal.SetCString(sDefault.c_str());
+			defaultVal.SetStringHandle(StringHandle(sDefault.c_str()));
 		}
 		else
 		{
