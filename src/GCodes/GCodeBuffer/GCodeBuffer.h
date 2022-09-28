@@ -71,6 +71,7 @@ public:
 	bool IsLastCommand() const noexcept;
 	GCodeResult GetLastResult() const noexcept { return lastResult; }
 	void SetLastResult(GCodeResult r) noexcept { lastResult = r; }
+	ExpressionValue GetM291Result() const noexcept { return m291Result; }
 
 	bool Seen(char c) noexcept SPEED_CRITICAL;										// Is a character present?
 	void MustSee(char c) THROWS(GCodeException);									// Test for character present, throw error if not
@@ -327,6 +328,7 @@ private:
 	StringParser stringParser;
 
 	GCodeMachineState *machineState;					// Machine state for this gcode source
+	ExpressionValue m291Result;							// the value entered or choice selected in response to a M291 command
 
 	uint32_t whenTimerStarted;							// When we started waiting
 	uint32_t whenReportDueTimerStarted;					// When the report-due-timer has been started
@@ -335,6 +337,7 @@ private:
 	const GCodeChannel codeChannel;						// Channel number of this instance
 	GCodeBufferState bufferState;						// Idle, executing or paused
 	GCodeResult lastResult;
+
 	bool timerRunning;									// true if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
 

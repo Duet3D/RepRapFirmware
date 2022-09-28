@@ -32,7 +32,7 @@ namespace StackUsage
 }
 
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
-NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true);
+NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true, input);
 NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, datetime, degrees, exists, floor, isnan, max, min, mod, radians, random, sin, sqrt, tan);
 
 const char * const InvalidExistsMessage = "invalid 'exists' expression";
@@ -1134,6 +1134,10 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					res = 1;
 					break;
 
+				case GCodeResult::m291Cancelled:
+					res = -1;
+					break;
+
 				default:
 					res = 2;
 					break;
@@ -1144,6 +1148,10 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 		case NamedConstant::line:
 			rslt.SetInt((int32_t)gb.GetLineNumber());
+			return;
+
+		case NamedConstant::input:
+			rslt = gb.GetM291Result();
 			return;
 
 		default:

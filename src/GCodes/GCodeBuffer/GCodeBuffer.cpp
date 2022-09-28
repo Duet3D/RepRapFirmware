@@ -1122,7 +1122,11 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled, ExpressionValue rslt) noex
 			ms->waitingForAcknowledgement = false;
 			ms->messageAcknowledged = true;
 			ms->messageCancelled = cancelled;
-			ms->m291Result = rslt;
+			m291Result = rslt;
+			if (cancelled)
+			{
+				lastResult = GCodeResult::m291Cancelled;
+			}
 #if HAS_SBC_INTERFACE
 			messageAcknowledged = !cancelled || !ms->DoingFile();
 			reprap.GetSbcInterface().EventOccurred();
