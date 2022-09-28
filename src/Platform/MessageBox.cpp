@@ -44,8 +44,8 @@ void MessageBox::Populate(const char *msg, const char *p_title, int p_mode, floa
 	message.copy(msg);
 	title.copy(p_title);
 	mode = p_mode;
-	timer = (p_timeout <= 0.0) ? 0 : millis();
-	timeout = roundf(max<float>(p_timeout, 0.0) * 1000.0);
+	startTime = millis();
+	timeout = lrintf(max<float>(p_timeout, 0.0) * 1000.0);
 	controls = p_controls;
 	if (p_limits != nullptr)
 	{
@@ -65,7 +65,7 @@ void MessageBox::Populate(const char *msg, const char *p_title, int p_mode, floa
 
 float MessageBox::GetTimeLeft() const noexcept
 {
-	return (timer != 0) ? ((float)timeout - (float)(millis() - timer)) / 1000.0 : 0.0;
+	return (timeout != 0) ? ((float)timeout - (float)(millis() - startTime)) / 1000.0 : 0.0;
 }
 
 void MessageBoxLimits::GetIntegerLimits(GCodeBuffer& gb, bool defaultIsString) THROWS(GCodeException)

@@ -81,7 +81,8 @@ public:
 	ReadLockedPointer<const MessageBox> GetCurrentMessageBox() const noexcept;
 	bool SendAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits = nullptr) noexcept;
 	bool SendSimpleAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title) noexcept;
-	void ClearAlert() noexcept;
+	bool AcknowledgeMessageBox(uint32_t seq, bool& wasBlocking) noexcept;
+	void CheckMessageBoxTimeout() noexcept;
 
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const noexcept { return *portControl; }

@@ -115,18 +115,48 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 // Process M292
 GCodeResult GCodes::AcknowledgeMessage(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException)
 {
-	reprap.ClearAlert();
+	uint32_t seq = 0;
+	if (gb.Seen('S'))
+	{
+		seq = gb.GetUIValue();
+	}
 
-	const bool cancelled = (gb.Seen('P') && gb.GetIValue() == 1);
+	bool wasBlocking;
+	if (reprap.AcknowledgeMessageBox(seq, wasBlocking))
+	{
+		if (wasBlocking)
+		{
+			const bool cancelled = (gb.Seen('P') && gb.GetIValue() == 1);
+			ExpressionValue rslt;
+			if (!cancelled && gb.Seen('R'))
+			{
+				rslt = gb.GetExpression();
+			}
+			MessageBoxClosed(cancelled, true, rslt);
+		}
+		return GCodeResult::ok;
+	}
+	else
+	{
+		reply.copy("no active message box");
+		return GCodeResult::error;
+	}
+}
+
+// Deal with processing a M292 or timing out a message box
+void GCodes::MessageBoxClosed(bool cancelled, bool m292, ExpressionValue rslt) noexcept
+{
+	platform.MessageF(MessageType::LogInfo,
+						"%s: cancelled=%s",
+							(m292) ? "M292" : "Message box timed out",
+								(cancelled ? "true" : "false"));
 	for (GCodeBuffer* targetGb : gcodeSources)
 	{
 		if (targetGb != nullptr)
 		{
-			targetGb->MessageAcknowledged(cancelled);
+			targetGb->MessageAcknowledged(cancelled, rslt);
 		}
 	}
-	platform.MessageF(MessageType::LogInfo, "M292: cancelled: %s", (cancelled ? "true" : "false"));
-	return GCodeResult::ok;
 }
 
 // End

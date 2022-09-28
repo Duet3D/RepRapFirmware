@@ -34,17 +34,17 @@ public:
 	// Set a message box
 	void Populate(const char *msg, const char *p_title, int p_mode, float p_timeout, AxesBitmap p_controls, MessageBoxLimits *_ecv_null p_limits) noexcept;
 
-	// This is called periodically to handle timeouts
-	void Spin() noexcept;
-
 	// Return true if the mode of this message box is one that the legacy status calls can handle
 	bool IsLegacyType() const noexcept { return mode <= 3; }	// legacy M407 and rr_status etc. don't handle higher message box modes
 
 	// Return true if this message box should be timed out
-	bool HasTimedOut() const noexcept { return timer != 0 && millis() - timer >= timeout; }
+	bool HasTimedOut() const noexcept { return timeout != 0 && millis() - startTime >= timeout; }
 
 	// Return the length of time before this box should time out
 	float GetTimeLeft() const noexcept;
+
+	// Return true if this message box blocks the input that created it
+	bool IsBlocking() const noexcept { return mode >= 2; }
 
 	MessageBox *GetNext() const noexcept { return next; }
 
@@ -54,6 +54,8 @@ public:
 	uint32_t GetSeq() const noexcept { return seq; }
 	const char *GetMessage() const noexcept { return message.c_str(); }
 	const char *GetTitle() const noexcept { return title.c_str(); }
+	ExpressionValue GetDefaultValue() const noexcept { return limits.defaultVal; }
+	bool CanCancel() const noexcept { return limits.canCancel; }
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -65,7 +67,7 @@ private:
 	MessageBoxLimits limits;
 	int mode;
 	uint32_t seq;
-	uint32_t timer;
+	uint32_t startTime;
 	uint32_t timeout;
 	AxesBitmap controls;
 

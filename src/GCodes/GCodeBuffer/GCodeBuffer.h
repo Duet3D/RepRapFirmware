@@ -220,7 +220,7 @@ public:
 	void SetState(GCodeState newState) noexcept;
 	void SetState(GCodeState newState, uint16_t param) noexcept;
 	void AdvanceState() noexcept;
-	void MessageAcknowledged(bool cancelled) noexcept;
+	void MessageAcknowledged(bool cancelled, ExpressionValue rslt) noexcept;
 
 	GCodeChannel GetChannel() const noexcept { return codeChannel; }
 	bool IsFileChannel() const noexcept

@@ -239,6 +239,7 @@ public:
 #endif
 		;
 
+	ExpressionValue m291Result;					// the value entered or choice selected in response to a M291 command
 	uint16_t stateParameter;					// a parameter, the meaning of which depends on what state we are in
 	Compatibility compatibility;				// which firmware we are emulating
 

@@ -812,18 +812,7 @@ void RepRap::Spin() noexcept
 		StateUpdated();
 	}
 
-	// Check if the current message box has timed out
-	if (mboxList != nullptr)
-	{
-		WriteLocker locker(mboxLock);
-		MessageBox *mb = mboxList;
-		if (mb != nullptr && mb->HasTimedOut())
-		{
-			mboxList = mb->GetNext();
-			delete mb;
-			StateUpdated();
-		}
-	}
+	CheckMessageBoxTimeout();
 
 	// Keep track of the loop time
 	if (justSentDiagnostics)
@@ -2796,17 +2785,41 @@ bool RepRap::SendSimpleAlert(MessageType mt, const char *_ecv_array message, con
 	return SendAlert(mt, message, title, 1, 0.0, AxesBitmap());
 }
 
-void RepRap::ClearAlert() noexcept
+// If we have an active message box with the specified sequence number, close it and tell the caller whether it was blocking or not, then return true
+bool RepRap::AcknowledgeMessageBox(uint32_t seq, bool& wasBlocking) noexcept
 {
 	WriteLocker lock(mboxLock);
 
 	// Currently we only allow a single outstanding message box, but we may change that in future
 	MessageBox *mb = mboxList;
-	if (mb != nullptr)
+	if (mb != nullptr && (seq == 0 || mb->GetSeq() == seq))
 	{
+		wasBlocking = mb->IsBlocking();
 		mboxList = mb->GetNext();
 		delete mb;
 		StateUpdated();
+		return true;
+	}
+
+	return false;
+}
+
+// Check if the current message box should be timed out
+void RepRap::CheckMessageBoxTimeout() noexcept
+{
+	if (mboxList != nullptr)
+	{
+		WriteLocker locker(mboxLock);
+		MessageBox *mb = mboxList;
+		if (mb != nullptr && mb->HasTimedOut())
+		{
+			const ExpressionValue rslt = mb->GetDefaultValue();
+			const bool canCancel = mb->CanCancel();
+			mboxList = mb->GetNext();
+			delete mb;
+			StateUpdated();
+			gCodes->MessageBoxClosed(canCancel, false, rslt);
+		}
 	}
 }
 
