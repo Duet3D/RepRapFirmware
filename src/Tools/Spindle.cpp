@@ -27,12 +27,15 @@ constexpr ObjectModelTableEntry Spindle::objectModelTable[] =
 	{ "canReverse",		OBJECT_MODEL_FUNC(self->reverseNotForwardPort.IsValid()),	ObjectModelEntryFlags::none },
 	{ "current",		OBJECT_MODEL_FUNC((int32_t)self->currentRpm),				ObjectModelEntryFlags::live },
 	{ "frequency",		OBJECT_MODEL_FUNC((int32_t)self->frequency),				ObjectModelEntryFlags::verbose },
+	{ "idlePwm",		OBJECT_MODEL_FUNC(self->idlePwm, 1),						ObjectModelEntryFlags::verbose },
 	{ "max",			OBJECT_MODEL_FUNC((int32_t)self->maxRpm),					ObjectModelEntryFlags::verbose },
+	{ "maxPwm",			OBJECT_MODEL_FUNC(self->maxPwm, 1),							ObjectModelEntryFlags::verbose },
 	{ "min",			OBJECT_MODEL_FUNC((int32_t)self->minRpm),					ObjectModelEntryFlags::verbose },
+	{ "minPwm",			OBJECT_MODEL_FUNC(self->minPwm, 1),							ObjectModelEntryFlags::verbose },
 	{ "state",			OBJECT_MODEL_FUNC(self->state.ToString()),					ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t Spindle::objectModelTableDescriptor[] = { 1, 7 };
+constexpr uint8_t Spindle::objectModelTableDescriptor[] = { 1, 10 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Spindle)
 
