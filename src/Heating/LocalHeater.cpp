@@ -251,7 +251,7 @@ void LocalHeater::Spin() noexcept
 		{
 			// Error may be a temporary error and may correct itself after a few additional reads
 			badTemperatureCount++;
-			if (badTemperatureCount > MaxBadTemperatureCount)
+			if (badTemperatureCount > GetMaxBadTemperatureCount())
 			{
 				RaiseHeaterFault(HeaterFaultType::failedToReadSensor, "%s", TemperatureErrorString(err));
 			}
@@ -443,7 +443,7 @@ void LocalHeater::Spin() noexcept
 			for (size_t i = 0; i < ARRAY_SIZE(monitors); ++i)
 			{
 				HeaterMonitor& prot = monitors[i];
-				if (!prot.Check())
+				if (!prot.Check(GetMaxBadTemperatureCount()))
 				{
 					if (reprap.Debug(moduleHeat))
 					{

@@ -931,18 +931,7 @@ GCodeResult Heat::ConfigureHeaterMonitoring(size_t heater, GCodeBuffer& gb, cons
 		return GCodeResult::error;
 	}
 
-	bool seenValue = false;
-	float maxTempExcursion, maxFaultTime;
-	h->GetFaultDetectionParameters(maxTempExcursion, maxFaultTime);
-	gb.TryGetFValue('P', maxFaultTime, seenValue);
-	gb.TryGetFValue('T', maxTempExcursion, seenValue);
-	if (seenValue)
-	{
-		return h->SetFaultDetectionParameters(maxTempExcursion, maxFaultTime, reply);
-	}
-
-	reply.printf("Heater %u allowed excursion %.1f" DEGREE_SYMBOL "C, fault trigger time %.1f seconds", heater, (double)maxTempExcursion, (double)maxFaultTime);
-	return GCodeResult::ok;
+	return h->ConfigureFaultDetectionParameters(gb, reply);
 }
 
 // Process M303
@@ -1450,7 +1439,7 @@ GCodeResult Heat::SetFaultDetection(const CanMessageSetHeaterFaultDetectionParam
 {
 	const auto h = FindHeater(msg.heater);
 	return (h.IsNotNull())
-			? h->SetFaultDetectionParameters(msg.maxTempExcursion, msg.maxFaultTime, reply)
+			? h->SetFaultDetectionParameters(msg, reply)
 				: UnknownHeater(msg.heater, reply);
 }
 
