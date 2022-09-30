@@ -214,7 +214,7 @@ void DhtTemperatureSensor::TakeReading() noexcept
 		SetResult(t, rslt);
 		badTemperatureCount = 0;
 	}
-	else if (badTemperatureCount < MaxBadTemperatureCount)
+	else if (badTemperatureCount < MaxDhtBadTemperatureCount)
 	{
 		badTemperatureCount++;
 	}

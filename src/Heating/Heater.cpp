@@ -109,7 +109,7 @@ Heater::HeaterParameters Heater::fanOffParams, Heater::fanOnParams;
 
 Heater::Heater(unsigned int num) noexcept
 	: tuned(false), heaterNumber(num), sensorNumber(-1), activeTemperature(0.0), standbyTemperature(0.0),
-	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime),
+	  maxTempExcursion(DefaultMaxTempExcursion), maxHeatingFaultTime(DefaultMaxHeatingFaultTime), maxBadTemperatureCount(DefaultMaxBadTemperatureCount),
 	  isBedOrChamber(false),
 	  active(false), modelSetByUser(false), monitorsSetByUser(false)
 {
@@ -456,13 +456,20 @@ void Heater::SetAndReportModelAfterTuning(bool usingFans) noexcept
 	}
 }
 
-GCodeResult Heater::SetFaultDetectionParameters(float pMaxTempExcursion, float pMaxFaultTime, const StringRef& reply) noexcept
+GCodeResult Heater::ConfigureFaultDetectionParameters(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	maxTempExcursion = pMaxTempExcursion;
-	maxHeatingFaultTime = pMaxFaultTime;
-	const GCodeResult rslt = UpdateFaultDetectionParameters(reply);
-	reprap.HeatUpdated();
-	return rslt;
+	bool seenValue = false;
+	gb.TryGetNonNegativeFValue('P', maxHeatingFaultTime, seenValue);
+	gb.TryGetNonNegativeFValue('T', maxTempExcursion, seenValue);
+	if (seenValue)
+	{
+		const GCodeResult rslt = UpdateFaultDetectionParameters(reply);
+		reprap.HeatUpdated();
+		return rslt;
+	}
+
+	reply.printf("Heater %u allowed excursion %.1f" DEGREE_SYMBOL "C, fault trigger time %.1f seconds", heaterNumber, (double)maxTempExcursion, (double)maxHeatingFaultTime);
+	return GCodeResult::ok;
 }
 
 // Process M143 for this heater
@@ -660,6 +667,13 @@ GCodeResult Heater::SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, co
 	{
 		monitors[i].Set(msg.monitors[i].sensor, msg.monitors[i].limit, (HeaterMonitorAction)msg.monitors[i].action, (HeaterMonitorTrigger)msg.monitors[i].trigger);
 	}
+	return GCodeResult::ok;
+}
+
+GCodeResult Heater::SetFaultDetectionParameters(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept
+{
+	maxTempExcursion = msg.maxTempExcursion;
+	maxHeatingFaultTime = msg.maxFaultTime;
 	return GCodeResult::ok;
 }
 

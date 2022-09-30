@@ -32,6 +32,7 @@ struct CanMessageHeaterModelNewNew;
 struct CanMessageSetHeaterTemperature;
 struct CanMessageSetHeaterMonitors;
 struct CanMessageHeaterTuningCommand;
+struct CanMessageSetHeaterFaultDetectionParameters;
 #endif
 
 // Enumeration to describe the status of a heater. Note that the web interface returns the numerical values, so don't change them.
@@ -75,11 +76,7 @@ public:
 	GCodeResult StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansBitmap fans) THROWS(GCodeException);
 																		// Start an auto tune cycle for this heater
 	void GetAutoTuneStatus(const StringRef& reply) const noexcept;		// Get the auto tune status or last result
-
-	void GetFaultDetectionParameters(float& pMaxTempExcursion, float& pMaxFaultTime) const noexcept
-		{ pMaxTempExcursion = maxTempExcursion; pMaxFaultTime = maxHeatingFaultTime; }
-	GCodeResult SetFaultDetectionParameters(float pMaxTempExcursion, float pMaxFaultTime, const StringRef& reply) noexcept;
-
+	GCodeResult ConfigureFaultDetectionParameters(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult ConfigureMonitor(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException);
 
 	float GetHighestTemperatureLimit() const noexcept;
@@ -92,6 +89,7 @@ public:
 	virtual GCodeResult TuningCommand(const CanMessageHeaterTuningCommand& msg, const StringRef& reply) noexcept = 0;
 	GCodeResult SetModel(unsigned int heater, const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept;
 	GCodeResult SetTemperature(const CanMessageSetHeaterTemperature& msg, const StringRef& reply) noexcept;
+	GCodeResult SetFaultDetectionParameters(const CanMessageSetHeaterFaultDetectionParameters& msg, const StringRef& reply) noexcept;
 	GCodeResult SetHeaterMonitors(const CanMessageSetHeaterMonitors& msg, const StringRef& reply) noexcept;
 #endif
 
@@ -137,6 +135,7 @@ protected:
 	void SetSensorNumber(int sn) noexcept;
 	float GetMaxTemperatureExcursion() const noexcept { return maxTempExcursion; }
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
+	unsigned int GetMaxBadTemperatureCount() const noexcept { return maxBadTemperatureCount; }
 	float GetTargetTemperature() const noexcept { return (active) ? activeTemperature : standbyTemperature; }
 	bool IsBedOrChamber() const noexcept { return isBedOrChamber; }
 
@@ -201,6 +200,7 @@ private:
 	float standbyTemperature;						// the required standby temperature
 	float maxTempExcursion;							// the maximum temperature excursion permitted while maintaining the setpoint
 	float maxHeatingFaultTime;						// how long a heater fault is permitted to persist before a heater fault is raised
+	unsigned int maxBadTemperatureCount;			// the number of consecutive bad sensor readings we allow before raising a fault
 
 	bool isBedOrChamber;							// true if this was a bed or chamber heater when we were switched on
 	bool active;									// are we active or standby?
