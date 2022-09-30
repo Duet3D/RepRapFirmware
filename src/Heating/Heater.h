@@ -20,7 +20,6 @@
 # include "CanId.h"
 #endif
 
-
 #define TUNE_WITH_HALF_FAN	0
 
 class HeaterMonitor;
@@ -135,7 +134,7 @@ protected:
 	void SetSensorNumber(int sn) noexcept;
 	float GetMaxTemperatureExcursion() const noexcept { return maxTempExcursion; }
 	float GetMaxHeatingFaultTime() const noexcept { return maxHeatingFaultTime; }
-	unsigned int GetMaxBadTemperatureCount() const noexcept { return maxBadTemperatureCount; }
+	uint32_t GetMaxBadTemperatureCount() const noexcept { return maxBadTemperatureCount; }
 	float GetTargetTemperature() const noexcept { return (active) ? activeTemperature : standbyTemperature; }
 	bool IsBedOrChamber() const noexcept { return isBedOrChamber; }
 
@@ -200,7 +199,7 @@ private:
 	float standbyTemperature;						// the required standby temperature
 	float maxTempExcursion;							// the maximum temperature excursion permitted while maintaining the setpoint
 	float maxHeatingFaultTime;						// how long a heater fault is permitted to persist before a heater fault is raised
-	unsigned int maxBadTemperatureCount;			// the number of consecutive bad sensor readings we allow before raising a fault
+	uint32_t maxBadTemperatureCount;				// the number of consecutive bad sensor readings we allow before raising a fault
 
 	bool isBedOrChamber;							// true if this was a bed or chamber heater when we were switched on
 	bool active;									// are we active or standby?

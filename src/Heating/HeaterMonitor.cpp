@@ -17,7 +17,7 @@ HeaterMonitor::HeaterMonitor() noexcept
 }
 
 // Check if any action needs to be taken. Returns true if everything is OK
-bool HeaterMonitor::Check(unsigned int maxBadTemperatureCount) noexcept
+bool HeaterMonitor::Check(uint32_t maxBadTemperatureCount) noexcept
 {
 	if (sensorNumber >= 0 && trigger != HeaterMonitorTrigger::Disabled)
 	{
