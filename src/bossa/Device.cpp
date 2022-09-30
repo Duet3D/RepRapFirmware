@@ -635,8 +635,7 @@ Device::create() THROWS(GCodeException)
     _flash = flashPtr;
 }
 
-void
-Device::reset() THROWS(GCodeException)
+void Device::reset() noexcept
 {
     try
     {

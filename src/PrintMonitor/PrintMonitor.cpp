@@ -74,7 +74,6 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "duration",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->GetPrintOrSimulatedDuration()), 										ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self, 1),							 																ObjectModelEntryFlags::none },
 	{ "filePosition",		OBJECT_MODEL_FUNC(self->gCodes.GetPrintingFilePosition()),															ObjectModelEntryFlags::live },
-	{ "firstLayerDuration", OBJECT_MODEL_FUNC_NOSELF(nullptr), 																					ObjectModelEntryFlags::obsolete },
 	{ "lastDuration",		OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), (int32_t)self->gCodes.GetLastDuration()), 								ObjectModelEntryFlags::none },
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty() && !self->IsPrinting(), self->filenameBeingPrinted.c_str()), ObjectModelEntryFlags::none },
 	// TODO Add enum about the last file print here (to replace lastFileAborted, lastFileCancelled, lastFileSimulated)
@@ -108,11 +107,10 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	// 3. TimesLeft members
 	{ "filament",			OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(filamentBased)),												ObjectModelEntryFlags::live },
 	{ "file",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(fileBased)),													ObjectModelEntryFlags::live },
-	{ "layer", 				OBJECT_MODEL_FUNC_NOSELF(nullptr), 																					ObjectModelEntryFlags::obsolete },
 	{ "slicer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(slicerBased)),													ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 13, 11, 5, 4 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 12, 11, 5, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 
