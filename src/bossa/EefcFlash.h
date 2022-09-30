@@ -42,7 +42,7 @@ public:
               uint32_t pages,
               uint32_t size,
               uint32_t planes,
-              uint32_t lockRegions,
+              uint32_t numLockRegions,
               uint32_t user,
               uint32_t stack,
               uint32_t regs,
@@ -52,22 +52,18 @@ public:
     void eraseAll(uint32_t offset) THROWS(GCodeException) override;
     void eraseAuto(bool enable) noexcept override;
 
-    Vector<bool, 16> getLockRegions() THROWS(GCodeException) override;
+    Bitmap<uint32_t> getLockRegions() THROWS(GCodeException) override;
 
 #if ORIGINAL_BOSSA_CODE
     bool getSecurity();
-
-    bool getBod();
-#endif
-    bool canBod() noexcept override { return _canBrownout; }
-
-#if ORIGINAL_BOSSA_CODE
     bool getBor();
+    bool getBod();
+    bool canBor() const noexcept override { return _canBrownout; }
 #endif
-    bool canBor() noexcept override { return _canBrownout; }
 
+    bool canBod() const noexcept override { return _canBrownout; }
     bool getBootFlash() THROWS(GCodeException) override;
-    bool canBootFlash() noexcept override { return true; }
+    bool canBootFlash() const noexcept override { return true; }
 
     void writeOptions() THROWS(GCodeException) override;
 

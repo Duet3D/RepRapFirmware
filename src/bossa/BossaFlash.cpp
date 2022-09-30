@@ -34,11 +34,11 @@ BossaFlash::BossaFlash(Samba& samba,
              uint32_t pages,
              uint32_t size,
              uint32_t planes,
-             uint32_t lockRegions,
+             uint32_t numLockRegions,
              uint32_t user,
              uint32_t stack) THROWS(GCodeException)
     : _samba(samba), _name(name), _addr(addr), _pages(pages), _size(size),
-      _planes(planes), _lockRegions(lockRegions), _user(user), _wordCopy(samba, user)
+      _planes(planes), _numLockRegions(numLockRegions), _user(user), _wordCopy(samba, user)
 {
 
     _wordCopy.setWords(size / sizeof(uint32_t));
@@ -51,44 +51,39 @@ BossaFlash::BossaFlash(Samba& samba,
     _pageBufferB = _pageBufferA + size;
 }
 
-void
-BossaFlash::setLockRegions(const Vector<bool, 16>& regions) THROWS(GCodeException)
+void BossaFlash::setLockRegions(Bitmap<uint32_t>regions) THROWS(GCodeException)
 {
-    if (regions.Size() > _lockRegions)
-        throw FlashRegionError("Flash::setLockRegions: regions.Size() > _lockRegions");
-
     _regions.set(regions);
 }
 
-void
-BossaFlash::setSecurity() noexcept
+#if ORIGINAL_BOSSA_CODE
+
+void BossaFlash::setSecurity() noexcept
 {
     _security.set(true);
 }
 
-void
-BossaFlash::setBor(bool enable) noexcept
+void BossaFlash::setBor(bool enable) noexcept
 {
     if (canBor())
         _bor.set(enable);
 }
 
-void
-BossaFlash::setBod(bool enable) noexcept
+void BossaFlash::setBod(bool enable) noexcept
 {
     if (canBod())
         _bod.set(enable);
 }
 
-void
-BossaFlash::setBootFlash(bool enable) noexcept
+#endif
+
+void BossaFlash::setBootFlash(bool enable) noexcept
 {
     if (canBootFlash())
         _bootFlash.set(enable);
 }
 
-void
-BossaFlash::loadBuffer(const uint8_t* data, uint16_t bufferSize) THROWS(GCodeException)
+void BossaFlash::loadBuffer(const uint8_t* data, uint16_t bufferSize) THROWS(GCodeException)
 {
     _samba.write(_onBufferA ? _pageBufferA : _pageBufferB, data, bufferSize);
 }
