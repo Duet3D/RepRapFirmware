@@ -17,8 +17,7 @@
 class ValueMenuItem final : public MenuItem
 {
 public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<ValueMenuItem>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<ValueMenuItem>(p); }
+	DECLARE_FREELIST_NEW_DELETE(ValueMenuItem)
 
 	ValueMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, bool adj, const char *_ecv_array _ecv_null om, unsigned int v, unsigned int d) noexcept;
 	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept override;

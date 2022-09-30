@@ -487,7 +487,7 @@ bool FileInfoParser::FindHeight(const char* bufp, size_t len) noexcept
 	return foundHeight;
 }
 
-// Scan the buffer for th total number of layers. The buffer is null-terminated.
+// Scan the buffer for the total number of layers. The buffer is null-terminated.
 bool FileInfoParser::FindNumLayers(const char* bufp, size_t len) noexcept
 {
 	static const char* const numLayerStrings[] =

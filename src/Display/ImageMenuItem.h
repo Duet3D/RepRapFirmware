@@ -15,8 +15,7 @@
 class ImageMenuItem final : public MenuItem
 {
 public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<ImageMenuItem>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<ImageMenuItem>(p); }
+	DECLARE_FREELIST_NEW_DELETE(ImageMenuItem)
 
 	ImageMenuItem(PixelNumber r, PixelNumber c, const char *_ecv_array pFileName) noexcept;
 

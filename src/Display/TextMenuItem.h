@@ -15,8 +15,7 @@
 class TextMenuItem final : public MenuItem
 {
 public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<TextMenuItem>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<TextMenuItem>(p); }
+	DECLARE_FREELIST_NEW_DELETE(TextMenuItem)
 
 	TextMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, Alignment a, FontNumber fn, const char *_ecv_array t) noexcept;
 	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept override;
