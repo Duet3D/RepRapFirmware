@@ -121,17 +121,18 @@ GCodeResult GCodes::AcknowledgeMessage(GCodeBuffer&gb, const StringRef& reply) T
 		seq = gb.GetUIValue();
 	}
 
+	const bool cancelled = (gb.Seen('P') && gb.GetIValue() == 1);
+	ExpressionValue rslt;
+	if (!cancelled && gb.Seen('R'))
+	{
+		rslt = gb.GetExpression();
+	}
+
 	bool wasBlocking;
 	if (reprap.AcknowledgeMessageBox(seq, wasBlocking))
 	{
 		if (wasBlocking)
 		{
-			const bool cancelled = (gb.Seen('P') && gb.GetIValue() == 1);
-			ExpressionValue rslt;
-			if (!cancelled && gb.Seen('R'))
-			{
-				rslt = gb.GetExpression();
-			}
 			MessageBoxClosed(cancelled, true, rslt);
 		}
 		return GCodeResult::ok;
