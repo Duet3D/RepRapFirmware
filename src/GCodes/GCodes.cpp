@@ -187,8 +187,6 @@ void GCodes::Init() noexcept
 	laserMaxPower = DefaultMaxLaserPower;
 	laserPowerSticky = false;
 
-	heaterFaultTimeout = DefaultHeaterFaultTimeout;
-
 #if SUPPORT_SCANNER
 	reprap.GetScanner().SetGCodeBuffer(usbGCode);
 #endif

@@ -688,9 +688,6 @@ private:
 	float laserMaxPower;
 	bool laserPowerSticky;						// true if G1 S parameters are remembered across G1 commands
 
-	// Heater fault handler
-	uint32_t heaterFaultTimeout;				// how long we wait for the user to fix it before turning everything off
-
 	// Object cancellation
 	ObjectTracker buildObjects;
 
