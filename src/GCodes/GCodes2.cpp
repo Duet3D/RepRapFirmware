@@ -3580,23 +3580,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 570: // Set/report heater monitoring
-				{
-					bool seen = false;
-					if (gb.Seen('S'))
-					{
-						seen = true;
-						heaterFaultTimeout = gb.GetUIValue() * (60 * 1000);
-					}
-					if (gb.Seen('H'))
-					{
-						seen = true;
-						result = reprap.GetHeat().ConfigureHeaterMonitoring(gb.GetUIValue(), gb, reply);
-					}
-					if (!seen)
-					{
-						reply.printf("Print will be terminated if a heater fault is not reset within %" PRIu32 " minutes", heaterFaultTimeout/(60 * 1000));
-					}
-				}
+				gb.MustSee('H');
+				result = reprap.GetHeat().ConfigureHeaterMonitoring(gb.GetUIValue(), gb, reply);
 				break;
 
 			case 571: // Set output on extrude
