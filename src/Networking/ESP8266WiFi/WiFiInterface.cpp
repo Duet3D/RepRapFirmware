@@ -1150,8 +1150,8 @@ size_t WiFiInterface::CheckCredential(GCodeBuffer &gb, bool file)
 
 int32_t WiFiInterface::SendCredential(size_t credIndex, const uint8_t *buffer, size_t bufferSize)
 {
-	return SendCommand(NetworkCommand::networkAddEnterpriseSsid, credIndex,
-									static_cast<uint8_t>(AddEnterpriseSsidFlag::CREDENTIAL), 0,
+	return SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
+									static_cast<uint8_t>(AddEnterpriseSsidFlag::CREDENTIAL), credIndex,
 									buffer, bufferSize, nullptr, 0);
 }
 
@@ -1313,8 +1313,8 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						}
 						else { }
 
-						int32_t rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, static_cast<int>(config.eap.protocol),
-													static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), 0, &config, sizeof(config), nullptr, 0);
+						int32_t rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
+													static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), static_cast<int>(config.eap.protocol), &config, sizeof(config), nullptr, 0);
 
 						if (rslt == ResponseEmpty)
 						{
