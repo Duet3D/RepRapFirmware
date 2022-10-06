@@ -96,6 +96,7 @@ float Heater::lastCoolingRate;
 FansBitmap Heater::tuningFans;
 unsigned int Heater::tuningPhase;
 uint8_t Heater::idleCyclesDone;
+bool Heater::tuningQuietMode;
 
 Heater::HeaterParameters Heater::fanOffParams, Heater::fanOnParams;
 
@@ -289,7 +290,8 @@ GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansB
 	const float ambientTemp = (seenA) ? gb.GetFValue() : currentTemp;
 	if (ambientTemp + 20 >= targetTemp)
 	{
-		reply.printf("Target temperature must be at least 20C above ambient temperature");
+		reply.copy("Target temperature must be at least 20C above ambient temperature");
+		return GCodeResult::error;
 	}
 
 	// Get and store the optional parameters
@@ -298,6 +300,7 @@ GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansB
 	tuningPwm = (gb.Seen('P')) ? gb.GetLimitedFValue('P', 0.1, 1.0) : GetModel().GetMaxPwm();
 	tuningHysteresis = (gb.Seen('Y')) ? gb.GetLimitedFValue('Y', 1.0, 20.0) : DefaultTuningHysteresis;
 	tuningFanPwm = (gb.Seen('F')) ? gb.GetLimitedFValue('F', 0.1, 1.0) : DefaultTuningFanPwm;
+	tuningQuietMode = gb.Seen('Q') && gb.GetUIValue() != 0;
 
 	const GCodeResult rslt = StartAutoTune(reply, seenA, ambientTemp);
 	if (rslt == GCodeResult::ok)
@@ -422,14 +425,23 @@ void Heater::SetAndReportModelAfterTuning(bool usingFans) noexcept
 	if (Succeeded(rslt))
 	{
 		tuned = true;
-		str.printf(	"Auto tuning heater %u completed after %u idle and %u tuning cycles in %" PRIu32 " seconds. This heater needs the following M307 command:\n ",
+		str.printf(	"Auto tuning heater %u completed after %u idle and %u tuning cycles in %" PRIu32 " seconds",
 					GetHeaterNumber(),
 					idleCyclesDone,
 					(usingFans) ? fanOffParams.numCycles + fanOnParams.numCycles : fanOffParams.numCycles,
 					(millis() - tuningBeginTime)/(uint32_t)SecondsToMillis
 				  );
-		GetModel().AppendM307Command(GetHeaterNumber(), str.GetRef(), !reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber()));
+		if (tuningQuietMode)
+		{
+			str.cat('\n');
+		}
+		else
+		{
+			str.cat( ". This heater needs the following M307 command:\n");
+			GetModel().AppendM307Command(GetHeaterNumber(), str.GetRef(), !reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber()));
+		}
 		reprap.GetPlatform().Message(LoggedGenericMessage, str.c_str());
+
 		if (reprap.Debug(moduleHeat))
 		{
 			str.printf("Long term gain %.1f/%.1f", (double)fanOffParams.GetNormalGain(), (double)fanOffParams.gain);
@@ -441,13 +453,16 @@ void Heater::SetAndReportModelAfterTuning(bool usingFans) noexcept
 			reprap.GetPlatform().Message(GenericMessage, str.c_str());
 		}
 
-		if (reprap.GetGCodes().SawM501InConfigFile())
+		if (!tuningQuietMode)
 		{
-			reprap.GetPlatform().Message(GenericMessage, "Send M500 to save this command in config-override.g\n");
-		}
-		else
-		{
-			reprap.GetPlatform().MessageF(GenericMessage, "Edit the M307 H%u command in config.g to match this. Omit the V parameter if the heater is not powered from VIN.\n", GetHeaterNumber());
+			if (reprap.GetGCodes().SawM501InConfigFile())
+			{
+				reprap.GetPlatform().Message(GenericMessage, "Send M500 to save this command in config-override.g\n");
+			}
+			else
+			{
+				reprap.GetPlatform().MessageF(GenericMessage, "Edit the M307 H%u command in config.g to match this. Omit the V parameter if the heater is not powered from VIN.\n", GetHeaterNumber());
+			}
 		}
 	}
 	else
