@@ -761,7 +761,8 @@ private:
 	bool driverErrPinsActiveLow;
 #endif
 
-	IoPort brakePorts[NumDirectDrivers];
+	IoPort brakePorts[NumDirectDrivers];					// the brake ports for each driver
+	uint16_t delayAfterBrakeOn[NumDirectDrivers];			// how many milliseconds we wait between turning the brake on and de-energising the driver
 
 	float motorCurrents[MaxAxesPlusExtruders];				// the normal motor current for each stepper driver
 	float motorCurrentFraction[MaxAxesPlusExtruders];		// the percentages of normal motor current that each driver is set to
