@@ -606,12 +606,17 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 		if (gb.IsFileFinished())
 		{
-			if (!LockMovementAndWaitForStandstill(gb))				// wait until movement has finished and deferred command queue has caught up
+			const bool printFileFinished = (gb.LatestMachineState().GetPrevious() == nullptr);
+			if (!LockMovementAndWaitForStandstill(gb
+# if SUPPORT_ASYNC_MOVES
+													, printFileFinished
+# endif
+													))				// wait until movement has finished and deferred command queue has caught up
 			{
 				return false;
 			}
 
-			if (gb.LatestMachineState().GetPrevious() == nullptr)
+			if (printFileFinished)
 			{
 				// Finished printing SD card file.
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
@@ -747,12 +752,17 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 			gb.Init();											// mark buffer as empty
 
-			if (!LockMovementAndWaitForStandstill(gb))			// wait until movement has finished and deferred command queue has caught up
+			const bool printFileFinished = (gb.LatestMachineState().GetPrevious() == nullptr);
+			if (!LockMovementAndWaitForStandstill(gb
+#if SUPPORT_ASYNC_MOVES
+													, printFileFinished
+#endif
+													))			// wait until movement has finished and deferred command queue has caught up
 			{
 				return false;
 			}
 
-			if (gb.LatestMachineState().GetPrevious() == nullptr)
+			if (printFileFinished)
 			{
 				// Finished printing SD card file.
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
