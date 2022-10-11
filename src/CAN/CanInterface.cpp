@@ -979,7 +979,7 @@ pre(driver.IsRemote())
 	case 0:
 		if (gb.SeenAny("RS"))
 		{
-			if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+			if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 			{
 				return GCodeResult::notFinished;
 			}
@@ -993,7 +993,7 @@ pre(driver.IsRemote())
 	case 1:
 		if (gb.SeenAny("STERID"))
 		{
-			if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+			if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 			{
 				return GCodeResult::notFinished;
 			}

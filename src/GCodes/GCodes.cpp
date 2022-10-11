@@ -254,10 +254,18 @@ void GCodes::Reset() noexcept
 	g68Angle = g68Centre[0] = g68Centre[1] = 0.0;		// no coordinate rotation
 #endif
 
+#if SUPPORT_ASYNC_MOVES
+	reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numVisibleAxes, lastKnownMachinePositions);
+#endif
+
 	for (MovementState& ms : moveStates)
 	{
 		ms.Reset();
+#if SUPPORT_ASYNC_MOVES
+		memcpyf(ms.coords, lastKnownMachinePositions, numVisibleAxes);
+#else
 		reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numVisibleAxes, ms.coords);
+#endif
 		ToolOffsetInverseTransform(ms);
 	}
 
@@ -607,13 +615,18 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (gb.IsFileFinished())
 		{
 			const bool printFileFinished = (gb.LatestMachineState().GetPrevious() == nullptr);
-			if (!LockMovementAndWaitForStandstill(gb
 # if SUPPORT_ASYNC_MOVES
-													, printFileFinished
-# endif
-													))				// wait until movement has finished and deferred command queue has caught up
+			if (printFileFinished)
 			{
-				return false;
+				DoSync(gb);														// wait until the other input stream has caught up
+			}
+			else
+# endif
+			{
+				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))			// wait until movement has finished and deferred command queue has caught up
+				{
+					return false;
+				}
 			}
 
 			if (printFileFinished)
@@ -750,16 +763,21 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				return true;
 			}
 
-			gb.Init();											// mark buffer as empty
+			gb.Init();															// mark buffer as empty
 
 			const bool printFileFinished = (gb.LatestMachineState().GetPrevious() == nullptr);
-			if (!LockMovementAndWaitForStandstill(gb
-#if SUPPORT_ASYNC_MOVES
-													, printFileFinished
-#endif
-													))			// wait until movement has finished and deferred command queue has caught up
+# if SUPPORT_ASYNC_MOVES
+			if (printFileFinished)
 			{
-				return false;
+				DoSync(gb);														// wait until the other input stream has caught up
+			}
+			else
+# endif
+			{
+				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))			// wait until movement has finished and deferred command queue has caught up
+				{
+					return false;
+				}
 			}
 
 			if (printFileFinished)
@@ -882,7 +900,7 @@ void GCodes::DoEmergencyStop() noexcept
 bool GCodes::DoSynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept
 {
 	// Pausing because of a command in the file itself
-	if (!LockMovementAndWaitForStandstill(gb))
+	if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 	{
 		return false;
 	}
@@ -1503,22 +1521,47 @@ void GCodes::Diagnostics(MessageType mtype) noexcept
 	}
 }
 
+#if SUPPORT_ASYNC_MOVES
+
+// Lock the movement system that we currently use and wait for it to stop
+bool GCodes::LockCurrentMovementSystemAndWaitForStandstill(GCodeBuffer& gb) noexcept
+{
+	return LockMovementSystemAndWaitForStandstill(gb, gb.GetActiveQueueNumber());
+}
+
+// Lock all movement systems and wait for them to stop
+bool GCodes::LockAllMovementSystemsAndWaitForStandstill(GCodeBuffer& gb) noexcept
+{
+	unsigned int i = 0;
+	while (LockMovementSystemAndWaitForStandstill(gb, i))
+	{
+		++i;
+		if (i == NumMovementSystems)
+		{
+			return true;
+		}
+	}
+
+	// We failed to lock the ith movement system. To avoid possible deadlock we need to release any later locks that we have.
+	UnlockMovementFrom(gb, i + 1);
+	return false;
+}
+
+#endif
+
 // Lock movement and wait for pending moves to finish.
 // Return true if successful, false if we need to try again later.
 // As a side-effect it updates the user coordinates from the machine coordinates.
-bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
-#if SUPPORT_ASYNC_MOVES
-												, bool sync
-#endif
-															) noexcept
+
+bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned int msNumber) noexcept
 {
 	// Lock movement to stop another source adding moves to the queue
-	if (!LockMovement(gb))
+	if (!LockResource(gb, MoveResourceBase + msNumber))
 	{
 		return false;
 	}
 
-	MovementState& ms = GetMovementState(gb);
+	MovementState& ms = moveStates[msNumber];
 	if (ms.segmentsLeft != 0)						// has the last move generated been fully transferred to the movement queue?
 	{
 		return false;								// if no
@@ -1530,71 +1573,16 @@ bool GCodes::LockMovementAndWaitForStandstill(GCodeBuffer& gb
 	case GCodeChannel::Queue2:
 		break;
 
-#if SUPPORT_ASYNC_MOVES
-	case GCodeChannel::File:
-		if (!reprap.GetMove().WaitingForAllMovesFinished(0))
-		{
-			return false;
-		}
-		if (!(QueuedGCode()->IsIdle() && moveStates[0].codeQueue->IsIdle()))
-		{
-			return false;
-		}
-
-		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
-		if (sync && !gb.ExecutingAll() && File2GCode()->IsDoingFile())
-		{
-			const bool ret = SyncWith(gb, *File2GCode());
-			if (ret)
-			{
-				gb.MotionStopped();
-			}
-			//if (!ret) { debugPrintf("Lock wait 7, queue %u\n", gb.GetQueueNumberToLock()); }
-			return ret;
-		}
-		break;
-
-	case GCodeChannel::File2:
-		if (!reprap.GetMove().WaitingForAllMovesFinished(1))
-		{
-			return false;
-		}
-		if (!(Queue2GCode()->IsIdle() && moveStates[1].codeQueue->IsIdle()))
-		{
-			return false;
-		}
-
-		// Now that we know that pending commands for this queue are completed, we can try to sync with other GCode buffers
-		if (sync && !gb.ExecutingAll() && FileGCode()->IsDoingFile())
-		{
-			const bool ret = SyncWith(gb, *FileGCode());
-			if (ret)
-			{
-				gb.MotionStopped();
-			}
-			return ret;
-		}
-		break;
-#endif
-
 	default:
-		if (   !reprap.GetMove().WaitingForAllMovesFinished(0)
-#if SUPPORT_ASYNC_MOVES
-			|| !reprap.GetMove().WaitingForAllMovesFinished(1)
-#endif
-		   )
+		if (!reprap.GetMove().WaitingForAllMovesFinished(msNumber))
 		{
 			return false;
 		}
-
-		if (   !(QueuedGCode()->IsIdle() && moveStates[0].codeQueue->IsIdle())
-#if SUPPORT_ASYNC_MOVES
-			&& !(Queue2GCode()->IsIdle() && moveStates[1].codeQueue->IsIdle())
-#endif
-		   )
+		if (!(QueuedGCode()->IsIdle() && moveStates[msNumber].codeQueue->IsIdle()))
 		{
 			return false;
 		}
+		break;
 	}
 
 	gb.MotionStopped();									// must do this after we have finished waiting, so that we don't stop waiting when executing G4
@@ -1880,7 +1868,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		const int ival = gb.GetIValue();
 		if (ival >= 1 && ival <= 4)
 		{
-			if (!LockMovementAndWaitForStandstill(gb))
+			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 			{
 				return false;
 			}
@@ -2687,7 +2675,7 @@ void GCodes::FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept
 // But the expected position was saved by buildObjects when the state changed from printing a cancelled object to printing a live object.
 bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 {
-	if (!LockMovementAndWaitForStandstill(gb))				// update the user position from the machine position
+	if (!LockCurrentMovementSystemAndWaitForStandstill(gb))				// update the user position from the machine position
 	{
 		return false;
 	}
@@ -3240,7 +3228,7 @@ GCodeResult GCodes::DoDwell(GCodeBuffer& gb) THROWS(GCodeException)
 	// This is so that G4 can be used in a trigger or daemon macro file without pausing motion, when the macro doesn't itself command any motion.
 	if (gb.WasMotionCommanded())
 	{
-		if (!LockMovementAndWaitForStandstillNoSync(gb))
+		if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
 		}
@@ -3550,7 +3538,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 
 	if (seen)
 	{
-		if (!LockMovementAndWaitForStandstill(gb))
+		if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
 		}
@@ -4733,56 +4721,56 @@ bool GCodes::LockFileSystem(const GCodeBuffer &gb) noexcept
 	return LockResource(gb, FileSystemResource);
 }
 
+#if SUPPORT_ASYNC_MOVES
+
 // The movement lock is special because we have one for each motion system
-// Lock movement
+
+// Lock the movement system that we currently use
 bool GCodes::LockMovement(const GCodeBuffer& gb) noexcept
 {
-#if SUPPORT_ASYNC_MOVES
-	return LockResource(gb, MoveResourceBase + gb.GetQueueNumberToLock());
-#else
-	return LockResource(gb, MoveResourceBase);
-#endif
+	return LockMovement(gb, gb.GetQueueNumberToLock());
 }
 
 // Lock movement on all motion systems
 bool GCodes::LockAllMovement(const GCodeBuffer& gb) noexcept
 {
-#if SUPPORT_ASYNC_MOVES
-	for (Resource r = MoveResourceBase; r < MoveResourceBase + NumMovementSystems; ++r)
+	for (unsigned int i = 0; i < NumMovementSystems; ++i)
 	{
-		if (!LockResource(gb, r))
+		if (!LockMovement(gb, i))
 		{
+			UnlockMovementFrom(gb, i + 1);			// release any higher locks we own to avoid deadlock
 			return false;
 		}
 	}
 	return true;
-#else
-	return LockMovement(gb);
-#endif
 }
 
-// Grab the movement lock even if another channel owns it
-void GCodes::GrabMovement(const GCodeBuffer& gb) noexcept
+// Release movement locks greater than the specified one
+void GCodes::UnlockMovementFrom(const GCodeBuffer& gb, unsigned int msNumber) noexcept
 {
-#if SUPPORT_ASYNC_MOVES
-	GrabResource(gb, MoveResourceBase + gb.GetQueueNumberToLock());
-#else
-	GrabResource(gb, MoveResourceBase);
-#endif
+	while (msNumber < NumMovementSystems)
+	{
+		UnlockMovement(gb, msNumber);
+		++msNumber;
+	}
 }
 
-// Release the movement lock
+// Release all movement locks that we own
 void GCodes::UnlockMovement(const GCodeBuffer& gb) noexcept
 {
-#if SUPPORT_ASYNC_MOVES
-	for (Resource r = MoveResourceBase; r < MoveResourceBase + NumMovementSystems; ++r)
-	{
-		UnlockResource(gb, r);
-	}
-#else
-	UnlockResource(gb, MoveResourceBase);
-#endif
+	UnlockMovementFrom(gb, 0);
 }
+
+// Grab all movement locks even if other channels owns them
+void GCodes::GrabMovement(const GCodeBuffer& gb) noexcept
+{
+	for (unsigned int i = 0; i < NumMovementSystems; ++i)
+	{
+		GrabResource(gb, MoveResourceBase + i);
+	}
+}
+
+#endif
 
 // Unlock the resource if we own it
 void GCodes::UnlockResource(const GCodeBuffer& gb, Resource r) noexcept
@@ -4942,10 +4930,14 @@ void GCodes::AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap a
 }
 
 // Synchronise motion systems and update user coordinates.
-// This is called after we have checked that the motion system for thisGb has completed all moves.
 // Return true if synced, false if we need to wait longer.
 bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 {
+	if (!LockCurrentMovementSystemAndWaitForStandstill(thisGb))
+	{
+		return false;
+	}
+
 	switch (thisGb.syncState)
 	{
 	case GCodeBuffer::SyncState::running:
@@ -4992,12 +4984,20 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 				thisGb.syncState = GCodeBuffer::SyncState::running;
 				return true;
 			}
-			// We are not the primary, so wait for the other onput channel to complete the current command
+			// We are not the primary, so wait for the other output channel to complete the current command
 			return otherGb.IsLaterThan(thisGb);
 		}
 	}
 
 	return false;			// unreachable code, to keep Eclipse happy
+}
+
+// Synchronise the other motion system with this one. Return true if done, false if we need to wait for it to catch up.
+bool GCodes::DoSync(GCodeBuffer& gb) noexcept
+{
+	return (&gb == FileGCode()) ? SyncWith(gb, *File2GCode())
+			: (&gb == File2GCode()) ? SyncWith(gb, *FileGCode())
+				: true;
 }
 
 void GCodes::UpdateUserCoordinatesAndReleaseOwnedAxes(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept

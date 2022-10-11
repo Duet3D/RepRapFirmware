@@ -508,7 +508,7 @@ GCodeResult LedStripDriver::SetColours(GCodeBuffer& gb, const StringRef& reply) 
 	// Interrupts are disabled while bit-banging data, which will mess up the step timing. So make sure movement has stopped if we are going to use bit-banging
 	if (MustStopMovement(gb))
 	{
-		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+		if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
 		}

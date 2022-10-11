@@ -82,7 +82,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 			const float axisValue = gb.GetFValue();
 			if (axesIncluded.IsEmpty())
 			{
-				if (!LockMovementAndWaitForStandstill(gb))	// lock movement and get current coordinates
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))	// lock movement and get current coordinates
 				{
 					return GCodeResult::notFinished;
 				}
@@ -134,7 +134,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
-			if (!LockMovementAndWaitForStandstill(gb))
+			if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 			{
 				return GCodeResult::notFinished;
 			}
@@ -188,7 +188,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 			const float coord = gb.GetDistance();
 			if (!seen)
 			{
-				if (!LockMovementAndWaitForStandstill(gb))						// make sure the user coordinates are stable and up to date
+				if (!LockAllMovementSystemsAndWaitForStandstill(gb))			// make sure the user coordinates are stable and up to date
 				{
 					return GCodeResult::notFinished;
 				}
@@ -305,7 +305,7 @@ GCodeResult GCodes::ChangeSimulationMode(GCodeBuffer& gb, const StringRef &reply
 {
 	if (newSimMode != simulationMode)
 	{
-		if (!LockMovementAndWaitForStandstill(gb))
+		if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
 		}
@@ -395,7 +395,7 @@ GCodeResult GCodes::CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS
 // Deal with a M584
 GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	if (!LockMovementAndWaitForStandstill(gb))				// we also rely on this to retrieve the current motor positions to moveBuffer
+	if (!LockAllMovementSystemsAndWaitForStandstill(gb))		// we also rely on this to retrieve the current motor positions to moveBuffer
 	{
 		return GCodeResult::notFinished;
 	}
@@ -764,7 +764,7 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		return GCodeResult::error;
 	}
 
-	if (!LockMovementAndWaitForStandstill(gb))
+	if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 	{
 		return GCodeResult::notFinished;
 	}
@@ -858,7 +858,7 @@ GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) 
 		return GCodeResult::error;
 	}
 
-	if (!LockMovementAndWaitForStandstill(gb))
+	if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 	{
 		return GCodeResult::notFinished;
 	}
@@ -983,7 +983,7 @@ GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply) THROWS(
 // Handle M997
 GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 {
-	if (!LockMovementAndWaitForStandstill(gb))
+	if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 	{
 		return GCodeResult::notFinished;
 	}
@@ -1295,7 +1295,7 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 {
 	if (gb.SeenAny("RS"))
 	{
-		if (!LockMovementAndWaitForStandstill(gb))
+		if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
 		}
@@ -1513,7 +1513,7 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 // Handle G68
 GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	if (!LockMovementAndWaitForStandstill(gb))
+	if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 	{
 		return GCodeResult::notFinished;
 	}

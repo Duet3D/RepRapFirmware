@@ -451,7 +451,7 @@ void SbcInterface::ExchangeData() noexcept
 			{
 				GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 				MutexLocker locker(gb->mutex, SbcYieldTimeout);
-				if (locker.IsAcquired() && reprap.GetGCodes().LockMovementAndWaitForStandstill(*gb))
+				if (locker.IsAcquired() && reprap.GetGCodes().LockCurrentMovementSystemAndWaitForStandstill(*gb))
 				{
 					transfer.WriteLocked(channel);
 				}

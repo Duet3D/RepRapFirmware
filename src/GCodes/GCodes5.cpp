@@ -57,6 +57,14 @@ void GCodes::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bo
 
 #if SUPPORT_ASYNC_MOVES
 
+// Handle M400
+GCodeResult GCodes::ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	const unsigned int param = (gb.Seen('P')) ? gb.GetLimitedUIValue('P', 2) : 0;
+	const bool finished = (param == 1) ? LockAllMovementSystemsAndWaitForStandstill(gb) : LockCurrentMovementSystemAndWaitForStandstill(gb);
+	return (finished) ? GCodeResult::ok : GCodeResult::notFinished;
+}
+
 // Handle M596
 GCodeResult GCodes::SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
@@ -128,6 +136,12 @@ GCodeResult GCodes::CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) 
 		reply.copy("Collision avoidance is not active");
 	}
 	return GCodeResult::ok;
+}
+
+// Handle M598
+GCodeResult GCodes::SyncMovementSystems(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	return (DoSync(gb)) ? GCodeResult::ok : GCodeResult::notFinished;
 }
 
 #endif

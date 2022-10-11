@@ -187,12 +187,9 @@ public:
 	const char *GetAxisLetters() const noexcept { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
 	size_t GetAxisNumberForLetter(const char axisLetter) const noexcept;
 	MachineType GetMachineType() const noexcept { return machineType; }
-	bool LockMovementAndWaitForStandstill(GCodeBuffer& gb
-#if SUPPORT_ASYNC_MOVES
-											, bool sync = true
-#endif
-															) noexcept;			// Lock movement and wait for pending moves to finish
-	bool LockMovementAndWaitForStandstillNoSync(GCodeBuffer& gb) noexcept;		// Lock movement and wait for pending moves to finish but don't sync if using multiple movement queues
+	bool LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned int msNumber) noexcept;	// Lock a movement system and wait for pending moves to finish
+	bool LockCurrentMovementSystemAndWaitForStandstill(GCodeBuffer& gb) noexcept;	// Lock movement and wait for pending moves to finish
+	bool LockAllMovementSystemsAndWaitForStandstill(GCodeBuffer& gb) noexcept;	// Lock movement and wait for all motion systems to reach standstill
 
 #if SUPPORT_DIRECT_LCD
 	void SetPrimarySpeedFactor(float factor) noexcept;							// Set the speed factor
@@ -342,12 +339,17 @@ private:
 
 	bool LockResource(const GCodeBuffer& gb, Resource r) noexcept;				// Lock the resource, returning true if success
 	bool LockFileSystem(const GCodeBuffer& gb) noexcept;						// Lock the unshareable parts of the file system
-	bool LockMovement(const GCodeBuffer& gb) noexcept;							// Lock movement
-	bool LockAllMovement(const GCodeBuffer& gb) noexcept;						// Lock movement on all queues
+	bool LockMovement(const GCodeBuffer& gb) noexcept;							// Lock the movement system we are using
+	bool LockMovement(const GCodeBuffer& gb, unsigned int msNumber) noexcept;	// Lock a particular movement system
+	bool LockAllMovement(const GCodeBuffer& gb) noexcept;						// Lock all movement systems
 	void GrabResource(const GCodeBuffer& gb, Resource r) noexcept;				// Grab a resource even if it is already owned
-	void GrabMovement(const GCodeBuffer& gb) noexcept;							// Grab the movement lock even if it is already owned
+	void GrabMovement(const GCodeBuffer& gb) noexcept;							// Grab all movement locks even if they are already owned
 	void UnlockResource(const GCodeBuffer& gb, Resource r) noexcept;			// Unlock the resource if we own it
-	void UnlockMovement(const GCodeBuffer& gb) noexcept;						// Unlock the movement resource if we own it
+	void UnlockMovement(const GCodeBuffer& gb) noexcept;						// Unlock the movement system we are using, if we own it
+	void UnlockMovement(const GCodeBuffer& gb, unsigned int msNumber) noexcept;	// Unlock a particular movement system, if we own it
+#if SUPPORT_ASYNC_MOVES
+	void UnlockMovementFrom(const GCodeBuffer& gb, unsigned int firstMsNumber) noexcept;	// Release movement locks greater or equal to than the specified one
+#endif
 
 	bool SpinGCodeBuffer(GCodeBuffer& gb) noexcept;								// Do some work on an input channel
 	bool StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept;		// Fetch a new or old GCode and process it
@@ -546,10 +548,13 @@ private:
 	MovementState& GetMovementState(const GCodeBuffer& gb) noexcept;			// Get a reference to the movement state associated with the specified GCode buffer
 
 #if SUPPORT_ASYNC_MOVES
-	GCodeResult SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M596
-	GCodeResult CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M597
+	GCodeResult SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M596
+	GCodeResult CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Handle M597
+	GCodeResult SyncMovementSystems(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M598
+	GCodeResult ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);				// Handle M400
 	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes) THROWS(GCodeException);	// allocate axes to a movement state
-	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;	// synchronise motion systems
+	bool DoSync(GCodeBuffer& gb) noexcept;																	// sync with the other stream returning true if done, false if we need to wait for it
+	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;								// synchronise motion systems
 	void UpdateUserCoordinatesAndReleaseOwnedAxes(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;
 #endif
 
@@ -716,6 +721,7 @@ private:
 #if SUPPORT_ASYNC_MOVES
 	AxesBitmap axesAndExtrudersMoved;			// axes and extruders that have moved since the last sync
 	CollisionAvoider collisionChecker;
+	float lastKnownMachinePositions[MaxAxes];
 #endif
 
 #if HAS_MASS_STORAGE
@@ -750,18 +756,28 @@ inline float GCodes::GetTotalBabyStepOffset(size_t axis) const noexcept
 	return currentBabyStepOffsets[axis];
 }
 
-#if SUPPORT_ASYNC_MOVES
-
-inline bool GCodes::LockMovementAndWaitForStandstillNoSync(GCodeBuffer& gb) noexcept
+// Lock a particular movement system
+inline bool GCodes::LockMovement(const GCodeBuffer& gb, unsigned int msNumber) noexcept
 {
-	return LockMovementAndWaitForStandstill(gb, false);
+	return LockResource(gb, MoveResourceBase + msNumber);
 }
 
-#else
-
-inline bool GCodes::LockMovementAndWaitForStandstillNoSync(GCodeBuffer& gb) noexcept
+// Unlock a particular movement system, if we own it
+inline void GCodes::UnlockMovement(const GCodeBuffer& gb, unsigned int msNumber) noexcept
 {
-	return LockMovementAndWaitForStandstill(gb);
+	return UnlockResource(gb, MoveResourceBase + msNumber);
+}
+
+#if !SUPPORT_ASYNC_MOVES
+
+inline bool GCodes::LockCurrentMovementSystemAndWaitForStandstill(GCodeBuffer& gb) noexcept
+{
+	return LockMovementSystemAndWaitForStandstill(gb, 0);
+}
+
+inline bool GCodes::LockAllMovementSystemsAndWaitForStandstill(GCodeBuffer& gb) noexcept
+{
+	return LockMovementSystemAndWaitForStandstill(gb, 0);
 }
 
 // Get a reference to the movement state associated with the specified GCode buffer
@@ -778,6 +794,30 @@ inline const MovementState& GCodes::GetConstMovementState(const GCodeBuffer& gb)
 inline const MovementState& GCodes::GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept
 {
 	return moveStates[0];
+}
+
+// Lock the movement system we are using
+inline bool GCodes::LockMovement(const GCodeBuffer& gb) noexcept
+{
+	return LockResource(gb, MoveResourceBase);
+}
+
+// Lock all movement systems
+inline bool GCodes::LockAllMovement(const GCodeBuffer& gb) noexcept
+{
+	return LockResource(gb, MoveResourceBase);
+}
+
+// Unlock the movement system we are using, if we own it
+inline void GCodes::UnlockMovement(const GCodeBuffer& gb) noexcept
+{
+	return UnlockResource(gb, MoveResourceBase);
+}
+
+// Grab all movement locks even if they are already owned
+inline void GCodes::GrabMovement(const GCodeBuffer& gb) noexcept
+{
+	GrabResource(gb, MoveResourceBase);
 }
 
 #endif
