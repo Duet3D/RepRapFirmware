@@ -98,7 +98,14 @@ bool BinaryParser::SeenAny(Bitmap<uint32_t> bm) const noexcept
 		{
 			const CodeParameter *param = reinterpret_cast<const CodeParameter*>(parameterStart + i * sizeof(CodeParameter));
 			const char paramLetter = param->letter;
-			if (paramLetter >= 'A' && paramLetter <= 'Z' && bm.IsBitSet(paramLetter - 'A'))
+			if (paramLetter >= 'A' && paramLetter <= 'Z')
+			{
+				if (bm.IsBitSet(paramLetter - 'A'))
+				{
+					return true;
+				}
+			}
+			else if (paramLetter >= 'a' && paramLetter <= 'f' && bm.IsBitSet(paramLetter - ('a' - 26)))
 			{
 				return true;
 			}
