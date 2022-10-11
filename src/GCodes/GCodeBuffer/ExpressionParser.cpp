@@ -33,7 +33,7 @@ namespace StackUsage
 
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true, input);
-NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, datetime, degrees, exists, floor, isnan, max, min, mod, radians, random, sin, sqrt, tan);
+NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, datetime, degrees, fileexists, exists, floor, isnan, max, min, mod, radians, random, sin, sqrt, tan);
 
 const char * const InvalidExistsMessage = "invalid 'exists' expression";
 
@@ -1405,6 +1405,32 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 						ThrowParseException("can't convert value to DateTime");
 					}
 					rslt.SetDateTime(val);
+				}
+				break;
+
+			case Function::fileexists:
+				ConvertToString(rslt, evaluate);
+				{
+					bool b;
+					switch (rslt.GetType())
+					{
+					case TypeCode::CString:
+						b = reprap.GetPlatform().SysFileExists(rslt.sVal);
+						break;
+
+					case TypeCode::HeapString:
+						{
+							ReadLockedPointer<const char> p = rslt.shVal.Get();
+							// We assume that calling SysFileExists doesn't need to use the heap, so we are OK keeping the lock around the call and we don't need to copy the string
+							b = reprap.GetPlatform().SysFileExists(p.Ptr());
+						}
+						break;
+
+					default:
+						b = false;
+						break;
+					}
+					rslt.SetBool(b);
 				}
 				break;
 
