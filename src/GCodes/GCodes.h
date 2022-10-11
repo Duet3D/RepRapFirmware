@@ -287,7 +287,7 @@ public:
 	void SetRemotePrinting(bool isPrinting) noexcept { isRemotePrinting = isPrinting; }
 #endif
 
-	static constexpr const char *AllowedAxisLetters = "XYZUVWABCDabcdefghijkl";
+	static constexpr const char *AllowedAxisLetters = "XYZUVWABCDabcdef";
 
 	// Standard macro filenames
 #define DEPLOYPROBE		"deployprobe"

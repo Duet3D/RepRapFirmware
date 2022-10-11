@@ -984,40 +984,56 @@ void StringParser::DecodeCommand() noexcept
 void StringParser::FindParameters() noexcept
 {
 	bool inQuotes = false;
+	bool escaped = false;
 	unsigned int localBraceCount = 0;
 	parametersPresent.Clear();
 	for (commandEnd = parameterStart; commandEnd < gcodeLineEnd; ++commandEnd)
 	{
 		const char c = gb.buffer[commandEnd];
-		if (c == '"')
+		if (c == '\'')
 		{
-			inQuotes = !inQuotes;
+			escaped = !inQuotes;
 		}
-		else if (!inQuotes)
+		else
 		{
-			if (c == '{')
+			if (c == '"')
 			{
-				++localBraceCount;
+				inQuotes = !inQuotes;
 			}
-			else if (localBraceCount != 0)
+			else if (!inQuotes)
 			{
-				if (c == '}')
+				if (c == '{')
 				{
-					--localBraceCount;
+					++localBraceCount;
+				}
+				else if (localBraceCount != 0)
+				{
+					if (c == '}')
+					{
+						--localBraceCount;
+					}
+				}
+				else
+				{
+					const char c2 = toupper(c);
+					if (escaped)
+					{
+						if (c2 >= 'A' && c2 <= 'F' && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
+						{
+							parametersPresent.SetBit(c2 - ('A' - 26));
+						}
+					}
+					else if (c2 == 'G' || c2 == 'M')
+					{
+						break;
+					}
+					else if (c2 >= 'A' && c2 <= 'Z' && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
+					{
+						parametersPresent.SetBit(c2 - 'A');
+					}
 				}
 			}
-			else
-			{
-				const char c2 = toupper(c);
-				if ((c2  == 'G' || c2 == 'M') && gb.buffer[commandEnd - 1] != '\'')
-				{
-					break;
-				}
-				if (c2 >= 'A' && c2 <= 'Z' && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
-				{
-					parametersPresent.SetBit(c2 - 'A');
-				}
-			}
+			escaped = false;
 		}
 	}
 }
@@ -1109,16 +1125,22 @@ bool StringParser::IsLastCommand() const noexcept
 	return commandEnd >= gcodeLineEnd;			// using >= here also covers the case where the buffer is empty and gcodeLineEnd has been set to zero
 }
 
-// Is 'c' in the G Code string?
+// Is 'c' in the G Code string? 'c' must be in A..Z or a..f
 // Leave the pointer one after it for a subsequent read.
 bool StringParser::Seen(char c) noexcept
 {
-	bool wantLowerCase = (c >= 'a');
+	const bool wantLowerCase = (c >= 'a');
+	unsigned int bit;
 	if (wantLowerCase)
 	{
+		bit = c - ('a' - 26);
 		c = toupper(c);
 	}
-	else if (!parametersPresent.IsBitSet(c - 'A'))
+	else
+	{
+		bit = c - 'A';
+	}
+	if (bit > 31 || !parametersPresent.IsBitSet(c - 'A'))
 	{
 		return false;
 	}
