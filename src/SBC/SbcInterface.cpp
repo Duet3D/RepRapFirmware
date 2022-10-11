@@ -443,7 +443,7 @@ void SbcInterface::ExchangeData() noexcept
 			break;
 		}
 
-		// Lock movement and wait for standstill
+		// Lock movement and wait for standstill. Currently this is used only by M505, so we lock all movement systems.
 		case SbcRequest::LockMovementAndWaitForStandstill:
 		{
 			const GCodeChannel channel = transfer.ReadCodeChannel();
@@ -451,7 +451,7 @@ void SbcInterface::ExchangeData() noexcept
 			{
 				GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 				MutexLocker locker(gb->mutex, SbcYieldTimeout);
-				if (locker.IsAcquired() && reprap.GetGCodes().LockCurrentMovementSystemAndWaitForStandstill(*gb))
+				if (locker.IsAcquired() && reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(*gb))
 				{
 					transfer.WriteLocked(channel);
 				}
