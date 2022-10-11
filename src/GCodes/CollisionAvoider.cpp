@@ -23,12 +23,18 @@ bool CollisionAvoider::IsValid() const noexcept
 }
 
 // Reset the position accumulators
-void CollisionAvoider::ResetPositions(const float positions[]) noexcept
+void CollisionAvoider::ResetPositions(const float positions[], AxesBitmap whichPositions) noexcept
 {
 	if (IsValid())
 	{
-		lowerAxisMax = positions[lowerAxis];
-		upperAxisMin = positions[upperAxis];
+		if (whichPositions.IsBitSet(lowerAxis))
+		{
+			lowerAxisMax = positions[lowerAxis];
+		}
+		if (whichPositions.IsBitSet(upperAxis))
+		{
+			upperAxisMin = positions[upperAxis];
+		}
 	}
 }
 
@@ -38,7 +44,8 @@ void CollisionAvoider::Set(int axisL, int axisH, float sep, const float position
 	lowerAxis = axisL;
 	upperAxis = axisH;
 	minSeparation = sep;
-	ResetPositions(positions);
+	lowerAxisMax = positions[lowerAxis];
+	upperAxisMin = positions[upperAxis];
 }
 
 bool CollisionAvoider::UpdatePositions(const float axisPositions[]) noexcept

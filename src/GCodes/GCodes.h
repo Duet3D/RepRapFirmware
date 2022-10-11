@@ -555,7 +555,7 @@ private:
 	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes) THROWS(GCodeException);	// allocate axes to a movement state
 	bool DoSync(GCodeBuffer& gb) noexcept;																	// sync with the other stream returning true if done, false if we need to wait for it
 	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;								// synchronise motion systems
-	void UpdateUserCoordinatesAndReleaseOwnedAxes(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;
+	void UpdateAllCoordinates(GCodeBuffer& gb) noexcept;
 #endif
 
 #if SUPPORT_COORDINATE_ROTATION

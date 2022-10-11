@@ -1593,23 +1593,16 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned in
 #if SUPPORT_ASYNC_MOVES
 		// Get the position of all axes by combining positions from the queues
 		Move& move = reprap.GetMove();
-		float coords[MaxAxes];
-		move.GetPartialMachinePosition(coords, AxesBitmap::MakeLowestNBits(numTotalAxes), 0);
-		move.GetPartialMachinePosition(coords, moveStates[1].axesAndExtrudersOwned, 1);
-		memcpyf(moveStates[0].coords, coords, MaxAxes);
-		memcpyf(moveStates[1].coords, coords, MaxAxes);
-		move.InverseAxisAndBedTransform(moveStates[0].coords, moveStates[0].currentTool);
-		move.InverseAxisAndBedTransform(moveStates[1].coords, moveStates[1].currentTool);
-		UpdateUserPositionFromMachinePosition(gb, moveStates[0]);				//TODO problem when using coordinate rotation!
-		UpdateUserPositionFromMachinePosition(gb, moveStates[1]);
-		move.SetNewPosition(coords, true, 0);
-		move.SetNewPosition(coords, true, 1);
+		const AxesBitmap ownedAxes = moveStates[msNumber].axesAndExtrudersOwned;
+		move.GetPartialMachinePosition(lastKnownMachinePositions, ownedAxes, msNumber);
+		memcpyf(moveStates[msNumber].coords, lastKnownMachinePositions, MaxAxes);
+		move.InverseAxisAndBedTransform(lastKnownMachinePositions, moveStates[msNumber].currentTool);
+		UpdateUserPositionFromMachinePosition(gb, moveStates[msNumber]);
+		collisionChecker.ResetPositions(lastKnownMachinePositions, ownedAxes);
 
-		// Release all axes and extruders
-		axesAndExtrudersMoved.Clear();
-		moveStates[0].axesAndExtrudersOwned.Clear();
-		moveStates[1].axesAndExtrudersOwned.Clear();
-		collisionChecker.ResetPositions(moveStates[0].coords);
+		// Release the axes and extruders that this movement system owns
+		axesAndExtrudersMoved.ClearBits(ownedAxes);
+		moveStates[msNumber].axesAndExtrudersOwned.Clear();
 #else
 		UpdateCurrentUserPosition(gb);
 #endif
@@ -4950,7 +4943,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 			if (otherGb.IsLaterThan(thisGb))
 			{
 				// Other input channel has skipped this sync point
-				UpdateUserCoordinatesAndReleaseOwnedAxes(thisGb, otherGb);	// it's arguable whether updating machine coordinates from the other channel is worth doing here
+				UpdateAllCoordinates(thisGb);
 				thisGb.syncState = GCodeBuffer::SyncState::running;
 				return true;
 			}
@@ -4959,7 +4952,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 		}
 
 		// If we get here then the other input channel is also syncing, so it's safe to use the machine axis coordinates of the axes it owns to update our user coordinates
-		UpdateUserCoordinatesAndReleaseOwnedAxes(thisGb, otherGb);
+		UpdateAllCoordinates(thisGb);
 
 		// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
 		thisGb.syncState = GCodeBuffer::SyncState::synced;
@@ -4995,27 +4988,19 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 // Synchronise the other motion system with this one. Return true if done, false if we need to wait for it to catch up.
 bool GCodes::DoSync(GCodeBuffer& gb) noexcept
 {
-	return (&gb == FileGCode()) ? SyncWith(gb, *File2GCode())
+	const bool rslt = (&gb == FileGCode()) ? SyncWith(gb, *File2GCode())
 			: (&gb == File2GCode()) ? SyncWith(gb, *FileGCode())
 				: true;
+	return rslt;
 }
 
-void GCodes::UpdateUserCoordinatesAndReleaseOwnedAxes(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
+void GCodes::UpdateAllCoordinates(GCodeBuffer& gb) noexcept
 {
-	// Get the position of all axes by combining positions from the queues
-	const MovementState& otherMs = GetConstMovementState(otherGb);
-	Move& move = reprap.GetMove();
-	float coords[MaxAxes];
-	move.GetPartialMachinePosition(coords, AxesBitmap::MakeLowestNBits(numTotalAxes), thisGb.GetOwnQueueNumber());
-	move.GetPartialMachinePosition(coords, otherMs.axesAndExtrudersOwned, otherGb.GetOwnQueueNumber());
-	MovementState& thisMs = GetMovementState(thisGb);
-	move.InverseAxisAndBedTransform(coords, thisMs.currentTool);
-	UpdateUserPositionFromMachinePosition(thisGb, thisMs);
-	move.SetNewPosition(coords, true, thisGb.GetOwnQueueNumber());
-
-	// Release all axes and extruders that we were using
-	axesAndExtrudersMoved &= ~thisMs.axesAndExtrudersOwned;
-	thisMs.axesAndExtrudersOwned.Clear();
+	const unsigned int msNumber = gb.GetOwnQueueNumber();
+	memcpyf(moveStates[msNumber].coords, lastKnownMachinePositions, MaxAxes);
+	reprap.GetMove().InverseAxisAndBedTransform(moveStates[msNumber].coords, moveStates[msNumber].currentTool);
+	UpdateUserPositionFromMachinePosition(gb, moveStates[msNumber]);
+	reprap.GetMove().SetNewPosition(moveStates[msNumber].coords, true, msNumber);
 }
 
 #endif
