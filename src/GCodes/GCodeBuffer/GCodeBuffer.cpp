@@ -381,7 +381,7 @@ bool GCodeBuffer::IsLaterThan(const GCodeBuffer& other) const noexcept
 // If the command was or called a macro then there will be no command in the buffer, so we must return true for this case also.
 bool GCodeBuffer::IsLastCommand() const noexcept
 {
-	return 	IS_BINARY_OR((bufferState != GCodeBufferState::ready && bufferState != GCodeBufferState::executing) || stringParser.IsLastCommand());
+	return IS_BINARY_OR((bufferState != GCodeBufferState::ready && bufferState != GCodeBufferState::executing) || stringParser.IsLastCommand());
 }
 
 bool GCodeBuffer::ContainsExpression() const noexcept
@@ -395,10 +395,9 @@ bool GCodeBuffer::Seen(char c) noexcept
 	return PARSER_OPERATION(Seen(c));
 }
 
-// Return true if any of the parameter letters in the bitmap were seen
-bool GCodeBuffer::SeenAny(Bitmap<uint32_t> bm) const noexcept
+ParameterLettersBitmap GCodeBuffer::AllParameters() const noexcept
 {
-	return PARSER_OPERATION(SeenAny(bm));
+	return PARSER_OPERATION(AllParameters());
 }
 
 // Test for character present, throw error if not

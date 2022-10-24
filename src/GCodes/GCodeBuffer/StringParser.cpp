@@ -1140,7 +1140,7 @@ bool StringParser::Seen(char c) noexcept
 	{
 		bit = c - 'A';
 	}
-	if (bit > 31 || !parametersPresent.IsBitSet(c - 'A'))
+	if (bit >= ParameterLettersBitmap::MaxBits() || !parametersPresent.IsBitSet(c - 'A'))
 	{
 		return false;
 	}
@@ -1186,12 +1186,6 @@ bool StringParser::Seen(char c) noexcept
 	}
 	readPointer = -1;
 	return false;
-}
-
-// Return true if any of the parameter letters in the bitmap were seen
-bool StringParser::SeenAny(Bitmap<uint32_t> bm) const noexcept
-{
-	return parametersPresent.Intersects(bm);
 }
 
 // Get a float after a G Code letter found by a call to Seen()

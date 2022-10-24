@@ -80,6 +80,7 @@ struct MovementState : public RawMove
 {
 	Tool *currentTool;												// the current tool of this movement system
 	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync
+	ParameterLettersBitmap ownedAxisLetters;						// letters denoting axes that this movement system owns
 
 	// The current user position now holds the requested user position after applying workplace coordinate offsets.
 	// So we must subtract the workplace coordinate offsets when we want to display them.

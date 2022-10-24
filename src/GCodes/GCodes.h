@@ -190,6 +190,8 @@ public:
 	bool LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned int msNumber) noexcept;	// Lock a movement system and wait for pending moves to finish
 	bool LockCurrentMovementSystemAndWaitForStandstill(GCodeBuffer& gb) noexcept;	// Lock movement and wait for pending moves to finish
 	bool LockAllMovementSystemsAndWaitForStandstill(GCodeBuffer& gb) noexcept;	// Lock movement and wait for all motion systems to reach standstill
+	uint16_t GetMotorBrakeOnDelay() const noexcept { return 200; }				// Get the delay between brake on and motors off, in milliseconds TODO make this configurable
+	uint16_t GetMotorBrakeOffDelay() const noexcept { return 25; }				// Get the delay between motors on and brake off, in milliseconds
 
 #if SUPPORT_DIRECT_LCD
 	void SetPrimarySpeedFactor(float factor) noexcept;							// Set the speed factor
@@ -553,6 +555,8 @@ private:
 	GCodeResult SyncMovementSystems(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M598
 	GCodeResult ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);				// Handle M400
 	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes) THROWS(GCodeException);	// allocate axes to a movement state
+	void AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException);
+																											// allocate axes by letter
 	bool DoSync(GCodeBuffer& gb) noexcept;																	// sync with the other stream returning true if done, false if we need to wait for it
 	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;								// synchronise motion systems
 	void UpdateAllCoordinates(GCodeBuffer& gb) noexcept;
@@ -647,6 +651,9 @@ private:
 	FileData fileToPrint;						// The next file to print
 #endif
 
+#if SUPPORT_ASYNC_MOVES
+	ParameterLettersBitmap allAxisLetters;		// Which axis letters are in use
+#endif
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
 	bool limitAxes;								// Don't think outside the box
 	bool noMovesBeforeHoming;					// Don't allow movement prior to homing the associates axes

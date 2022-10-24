@@ -477,6 +477,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 				{
 					// We are creating a new axis
 					axisLetters[drive] = c;								// assign the drive to this drive letter
+#if SUPPORT_ASYNC_MOVES
+					allAxisLetters.SetBit((c >= 'a') ? c - ('a' - 26) : c - 'A');	// update the map of all parameters that can be axis letters
+#endif
 					const AxisWrapType wrapType = (newAxesType != AxisWrapType::undefined) ? newAxesType
 													: (c >= 'A' && c <= 'D') ? AxisWrapType::wrapAt360			// default A thru D to rotational but not continuous
 														: AxisWrapType::noWrap;									// default other axes to linear

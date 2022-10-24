@@ -318,25 +318,26 @@ class ExpansionManager;
 
 // Define floating point type to use for calculations where we would like high precision in matrix calculations
 #if SAME70
-typedef double floatc_t;						// type of matrix element used for calibration
+typedef double floatc_t;							// type of matrix element used for calibration
 #else
-// We are more memory-constrained on the other processors and they don't support double precision
-typedef float floatc_t;							// type of matrix element used for calibration
+// We are more memory-constrained on the other processors and they don't support double precision in hardware
+typedef float floatc_t;								// type of matrix element used for calibration
 #endif
 
 #if defined(DUET3) || defined(DUET3MINI)
-typedef Bitmap<uint32_t> AxesBitmap;			// Type of a bitmap representing a set of axes, and sometimes extruders too
+typedef Bitmap<uint32_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
 #else
-typedef Bitmap<uint16_t> AxesBitmap;			// Type of a bitmap representing a set of axes, and sometimes extruders too
+typedef Bitmap<uint16_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
 #endif
-typedef Bitmap<uint32_t> ExtrudersBitmap;		// Type of a bitmap representing a set of extruder drive numbers
-typedef Bitmap<uint32_t> DriversBitmap;			// Type of a bitmap representing a set of local driver numbers
-typedef Bitmap<uint32_t> FansBitmap;			// Type of a bitmap representing a set of fan numbers
-typedef Bitmap<uint32_t> HeatersBitmap;			// Type of a bitmap representing a set of heater numbers
-typedef Bitmap<uint16_t> DriverChannelsBitmap;	// Type of a bitmap representing a set of drivers that typically have a common cooling fan
-typedef Bitmap<uint32_t> InputPortsBitmap;		// Type of a bitmap representing a set of input ports
-typedef Bitmap<uint32_t> TriggerNumbersBitmap;	// Type of a bitmap representing a set of trigger numbers
-typedef Bitmap<uint64_t> ToolNumbersBitmap;		// Type of a bitmap representing a set of tool numbers
+typedef Bitmap<uint32_t> ExtrudersBitmap;			// Type of a bitmap representing a set of extruder drive numbers
+typedef Bitmap<uint32_t> DriversBitmap;				// Type of a bitmap representing a set of local driver numbers
+typedef Bitmap<uint32_t> FansBitmap;				// Type of a bitmap representing a set of fan numbers
+typedef Bitmap<uint32_t> HeatersBitmap;				// Type of a bitmap representing a set of heater numbers
+typedef Bitmap<uint16_t> DriverChannelsBitmap;		// Type of a bitmap representing a set of drivers that typically have a common cooling fan
+typedef Bitmap<uint32_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
+typedef Bitmap<uint32_t> TriggerNumbersBitmap;		// Type of a bitmap representing a set of trigger numbers
+typedef Bitmap<uint64_t> ToolNumbersBitmap;			// Type of a bitmap representing a set of tool numbers
+typedef Bitmap<uint32_t> ParameterLettersBitmap;	// Type of a bitmap representing a set of parameter letters in A..Z and a..f
 
 #if defined(DUET3) || defined(DUET3MINI)
 typedef Bitmap<uint64_t> SensorsBitmap;

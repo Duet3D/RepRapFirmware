@@ -174,6 +174,9 @@ void GCodes::Init() noexcept
 	axisLetters[0] = 'X';
 	axisLetters[1] = 'Y';
 	axisLetters[2] = 'Z';
+#if SUPPORT_ASYNC_MOVES
+	allAxisLetters = ParameterLettersBitmap((1u << ('X'-'A')) | (1u << ('Y'-'A')) | (1u << ('Z'-'A')));
+#endif
 
 	numExtruders = 0;
 
@@ -1603,6 +1606,7 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned in
 		// Release the axes and extruders that this movement system owns
 		axesAndExtrudersMoved.ClearBits(ownedAxes);
 		moveStates[msNumber].axesAndExtrudersOwned.Clear();
+		ms.ownedAxisLetters.Clear();
 #else
 		UpdateCurrentUserPosition(gb);
 #endif
@@ -1833,6 +1837,18 @@ bool GCodes::CheckEnoughAxesHomed(AxesBitmap axesToMove) noexcept
 bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeException)
 {
 	MovementState& ms = GetMovementState(gb);
+
+#if SUPPORT_ASYNC_MOVES
+	// We need to check for moving unowned axes right at the start in case we need to fetch axis positions before processing the command
+	ParameterLettersBitmap axisLettersMentioned = gb.AllParameters() & allAxisLetters;
+	axisLettersMentioned.ClearBits(ms.ownedAxisLetters);
+	if (axisLettersMentioned.IsNonEmpty())
+	{
+		//TODO problem! this ignores axis mapping and coordinate rotation!!!
+		AllocateAxisLetters(gb, ms, axisLettersMentioned);
+	}
+#endif
+
 	if (ms.moveFractionToSkip > 0.0)
 	{
 		ms.initialUserC0 = ms.restartInitialUserC0;
@@ -4910,7 +4926,7 @@ const MovementState& GCodes::GetCurrentMovementState(const ObjectExplorationCont
 	return GetConstMovementState(*gb);
 }
 
-// Allocate an axis to a movement state returning true if successful, false if another movement state owns it already
+// Allocate additional axes and/or extruders to a movement state returning true if successful, false if another movement state owns it already
 // This relies on cooperative scheduling between different GCodeBuffer objects
 void GCodes::AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes) THROWS(GCodeException)
 {
@@ -4920,6 +4936,23 @@ void GCodes::AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap a
 	}
 	axesAndExtrudersMoved |= axes;
 	ms.axesAndExtrudersOwned |= axes;
+}
+
+// Allocate additional axes by letter
+void GCodes::AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException)
+{
+	AxesBitmap newAxes;
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		const char c = axisLetters[axis];
+		const unsigned int axisLetterBit = (c >= 'a') ? c - ('a' - 26) : c - 'A';
+		if (axLetters.IsBitSet(axisLetterBit))
+		{
+			newAxes.SetBit(axis);
+		}
+	}
+	AllocateAxes(gb, ms, newAxes);
+	ms.ownedAxisLetters |= axLetters;
 }
 
 // Synchronise motion systems and update user coordinates.
