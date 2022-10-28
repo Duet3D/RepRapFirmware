@@ -97,6 +97,9 @@ Network::Network(Platform& p) noexcept : platform(p)
 # else
 #  error Unknown board
 # endif
+# if defined(DUET3_MB6HC)
+	interfaces[1] = nullptr;			// no WiFi interface yet
+# endif
 #endif // HAS_NETWORKING
 }
 
@@ -350,7 +353,7 @@ WiFiInterface *Network::FindWiFiInterface() const noexcept
 #if HAS_WIFI_NETWORKING
 	for (NetworkInterface *iface : interfaces)
 	{
-		if (iface->IsWiFiInterface())
+		if (iface != nullptr && iface->IsWiFiInterface())
 		{
 			return static_cast<WiFiInterface *>(iface);
 		}
@@ -533,7 +536,10 @@ void Network::Spin() noexcept
 		// Keep the network modules running
 		for (NetworkInterface *iface : interfaces)
 		{
-			iface->Spin();
+			if (iface != nullptr)
+			{
+				iface->Spin();
+			}
 		}
 
 #if HAS_RESPONDERS
@@ -603,7 +609,10 @@ void Network::Diagnostics(MessageType mtype) noexcept
 
 	for (NetworkInterface *iface : interfaces)
 	{
-		iface->Diagnostics(mtype);
+		if (iface != nullptr)
+		{
+			iface->Diagnostics(mtype);
+		}
 	}
 #endif
 
@@ -628,7 +637,7 @@ void Network::SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, I
 #if HAS_NETWORKING
 	for (NetworkInterface *iface : interfaces)
 	{
-		if (!iface->IsWiFiInterface())
+		if (iface != nullptr && !iface->IsWiFiInterface())
 		{
 			iface->SetIPAddress(p_ipAddress, p_netmask, p_gateway);
 		}
@@ -699,9 +708,12 @@ void Network::SetHostname(const char *name) noexcept
 		strcpy(hostname, DEFAULT_HOSTNAME);
 	}
 
-	for (unsigned int i = 0; i < GetNumNetworkInterfaces(); ++i)
+	for (NetworkInterface *iface : interfaces)
 	{
-		interfaces[i]->UpdateHostname(hostname);
+		if (iface != nullptr)
+		{
+			iface->UpdateHostname(hostname);
+		}
 	}
 #endif
 }

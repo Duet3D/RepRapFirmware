@@ -24,8 +24,6 @@ public:
 			  SerialPort::StopBit stop = SerialPort::StopBitOne) noexcept override { return true; }
 	void close() noexcept override {}
 
-	bool isUsb() noexcept override { return false; }
-
 	int read(uint8_t* data, int size) noexcept override;
 	int write(const uint8_t* data, int size) noexcept override { return this->uart.write(data, size); }
 	int get() noexcept override;
@@ -33,8 +31,6 @@ public:
 
 	bool timeout(int millisecs) noexcept override { _timeout = millisecs; return true; }
 	void flush() noexcept override { this->uart.flush(); }
-	void setDTR(bool dtr) noexcept override {}
-	void setRTS(bool rts) noexcept override {}
 
 private:
 	AsyncSerial& uart;

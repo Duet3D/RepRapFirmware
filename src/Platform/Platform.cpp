@@ -2677,12 +2677,30 @@ void Platform::SetDriversIdle() noexcept
 // Configure the brake port for a driver
 GCodeResult Platform::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
 {
+	bool seen = false;
 	if (gb.Seen('C'))
 	{
-		return GetGCodeResultFromSuccess(brakePorts[driver].AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::write0));
+		seen = true;
+		if (!brakePorts[driver].AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::write0))
+		{
+			return GCodeResult::error;
+		}
+		delayAfterBrakeOn[driver] = DefaultDelayAfterBrakeOn;
 	}
-	reply.printf("Driver %u uses brake port ", driver);
-	brakePorts[driver].AppendPinName(reply);
+	uint32_t val;
+	if (gb.TryGetLimitedUIValue('S', val, seen, 100))
+	{
+		delayAfterBrakeOn[driver] = val;
+	}
+
+	if (!seen)
+	{
+		reply.printf("Driver %u uses brake port ", driver);
+		brakePorts[driver].AppendPinName(reply);
+#if 0	// don't print this bit until we have implemented it!
+		reply.catf(" and %ums delay after turning the brake on", delayAfterBrakeOn[driver]);
+#endif
+	}
 	return GCodeResult::ok;
 }
 

@@ -77,7 +77,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 	// Changing just the minimum acceleration is OK because no other variables depend on it.
 	if (gb.SeenAny("FSPHT"))
 	{
-		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+		if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
 		}

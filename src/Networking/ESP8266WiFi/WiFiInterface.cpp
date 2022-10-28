@@ -88,7 +88,7 @@ constexpr IRQn ESP_SPI_IRQn = WiFiSpiSercomIRQn;
 #endif
 
 const uint32_t WiFiSlowResponseTimeoutMillis = 500;		// SPI timeout when when the ESP has to access the SPIFFS filesytem; highest measured is 234ms.
-const uint32_t WiFiFastResponseTimeoutMillis = 20;		// SPI timeout when when the ESP does not have to access SPIFFS filesystem.
+const uint32_t WiFiFastResponseTimeoutMillis = 100;		// SPI timeout when when the ESP does not have to access SPIFFS filesystem. 20ms is too short on Duet 2 with both FTP and Telnet enabled.
 const uint32_t WiFiWaitReadyMillis = 100;
 const uint32_t WiFiStartupMillis = 15000;				// Formatting the SPIFFS partition can take up to 10s.
 const uint32_t WiFiStableMillis = 100;

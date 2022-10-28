@@ -26,12 +26,12 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ///////////////////////////////////////////////////////////////////////////////
+
 #include "Device.h"
 #include "EefcFlash.h"
 
 #if ORIGINAL_BOSSA_CODE
-void
-Device::readChipId(uint32_t& chipId, uint32_t& extChipId)
+void Device::readChipId(uint32_t& chipId, uint32_t& extChipId)
 {
     if ((chipId = _samba.readWord(0x400e0740)) != 0)
     {
@@ -44,8 +44,7 @@ Device::readChipId(uint32_t& chipId, uint32_t& extChipId)
 }
 #endif
 
-void
-Device::create() THROWS(GCodeException)
+void Device::create() THROWS(GCodeException)
 {
 	BossaFlash* flashPtr;
 #if ORIGINAL_BOSSA_CODE
@@ -635,8 +634,7 @@ Device::create() THROWS(GCodeException)
     _flash = flashPtr;
 }
 
-void
-Device::reset() THROWS(GCodeException)
+void Device::reset() noexcept
 {
     try
     {
@@ -696,4 +694,4 @@ Device::reset() THROWS(GCodeException)
     }
 }
 
-
+// End

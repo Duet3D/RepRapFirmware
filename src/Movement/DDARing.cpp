@@ -121,7 +121,7 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 	gb.TryGetUIValue('R', gracePeriod, seen);
 	if (seen)
 	{
-		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+		if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
 		}
@@ -778,6 +778,12 @@ float DDARing::GetDecelerationMmPerSecSquared() const noexcept
 {
 	const DDA* const cdda = currentDda;					// capture volatile variable
 	return (cdda != nullptr) ? cdda->GetDecelerationMmPerSecSquared() : 0.0;
+}
+
+float DDARing::GetTotalExtrusionRate() const noexcept
+{
+	const DDA* const cdda = currentDda;					// capture volatile variable
+	return (cdda != nullptr) ? cdda->GetTotalExtrusionRate() : 0.0;
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.

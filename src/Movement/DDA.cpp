@@ -2374,6 +2374,16 @@ void DDA::UpdateMovementAccumulators(volatile int32_t *accumulators) const noexc
 #endif
 }
 
+float DDA::GetTotalExtrusionRate() const noexcept
+{
+	float fraction = 0.0;
+	for (size_t i = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); i < MaxAxesPlusExtruders; ++i)
+	{
+		fraction += directionVector[i];
+	}
+	return fraction * InverseConvertSpeedToMmPerSec(topSpeed);
+}
+
 #if SUPPORT_LASER
 
 // Manage the laser power. Return the number of ticks until we should be called again, or 0 to be called at the start of the next move.

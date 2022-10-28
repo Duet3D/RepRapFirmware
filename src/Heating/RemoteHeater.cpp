@@ -426,6 +426,8 @@ GCodeResult RemoteHeater::UpdateFaultDetectionParameters(const StringRef& reply)
 		msg->heater = GetHeaterNumber();
 		msg->maxFaultTime = GetMaxHeatingFaultTime();
 		msg->maxTempExcursion = GetMaxTemperatureExcursion();
+		msg->maxBadTemperatureCount = GetMaxBadTemperatureCount();
+		msg->version35 = true;
 		return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 	}
 

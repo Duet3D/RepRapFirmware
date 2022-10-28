@@ -57,8 +57,6 @@ public:
                       StopBit stop = StopBitOne) noexcept = 0;
     virtual void close() noexcept = 0;
 
-    virtual bool isUsb() noexcept = 0;
-
     virtual int read(uint8_t* data, int size) noexcept = 0;
     virtual int write(const uint8_t* data, int size) noexcept = 0;
     virtual int get() noexcept = 0;
@@ -66,8 +64,6 @@ public:
 
     virtual bool timeout(int millisecs) noexcept = 0;
     virtual void flush() noexcept = 0;
-    virtual void setDTR(bool dtr) noexcept = 0;
-    virtual void setRTS(bool rts) noexcept = 0;
 };
 
 #endif // _SERIALPORT_H

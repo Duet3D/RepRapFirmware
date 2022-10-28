@@ -376,7 +376,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 	}
 
 	// If we get here then axes were specified so we are setting endstop parameters
-	if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+	if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 	{
 		return GCodeResult::notFinished;
 	}

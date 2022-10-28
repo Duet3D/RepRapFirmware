@@ -48,7 +48,7 @@ public:
 
 	void Set(int sn, float lim, HeaterMonitorAction act, HeaterMonitorTrigger trig) noexcept;
 	void Disable() noexcept;
-	bool Check(unsigned int maxBadTemperatureCount) noexcept;			// Check if any action needs to be taken
+	bool Check(uint32_t) noexcept;										// Check if any action needs to be taken
 
 	int GetSensorNumber() const noexcept { return sensorNumber; }		// Get the supervisory sensor number
 	float GetTemperatureLimit() const noexcept { return limit; }		// Get the temperature limit

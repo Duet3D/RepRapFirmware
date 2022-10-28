@@ -85,7 +85,7 @@ public:
 
     BossaFlash *_ecv_from null getFlash() const noexcept { return _flash; }
 
-    void reset() THROWS(GCodeException);
+    void reset() noexcept;
 
 private:
     Samba& _samba;

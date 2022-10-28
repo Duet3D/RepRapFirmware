@@ -120,6 +120,9 @@ SECTIONS
 	_firmware_end = _etext + (_erelocate - _srelocate);		/* Embedded files start here */
 	_firmware_crc = _firmware_end;							/* We append the CRC32 to the binary file. This is its offset in memory if we don't append embedded files */
 
+	/* check that CRC is within flash memory */
+    ASSERT(_firmware_crc + 4 <= ORIGIN(rom) + LENGTH(rom), "region ROM overflowed")
+
     /* .bss section which is used for uninitialized data */
     .bss ALIGN(4) (NOLOAD) :
     {

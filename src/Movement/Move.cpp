@@ -127,6 +127,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	// 2. move.currentMove members
 	{ "acceleration",			OBJECT_MODEL_FUNC(self->GetAccelerationMmPerSecSquared(), 1),									ObjectModelEntryFlags::live },
 	{ "deceleration",			OBJECT_MODEL_FUNC(self->GetDecelerationMmPerSecSquared(), 1),									ObjectModelEntryFlags::live },
+	{ "extrusionRate",			OBJECT_MODEL_FUNC(self->GetTotalExtrusionRate(), 2),											ObjectModelEntryFlags::live },
 # if SUPPORT_LASER
 	{ "laserPwm",				OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetGCodes().GetMachineType() == MachineType::laser,
 															reprap.GetPlatform().GetLaserPwm(), 2),								ObjectModelEntryFlags::live },
@@ -180,7 +181,7 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 	9 + SUPPORT_COORDINATE_ROTATION,
 	17 + SUPPORT_WORKPLACE_COORDINATES,
 	2,
-	4 + SUPPORT_LASER,
+	5 + SUPPORT_LASER,
 	3,
 	2,
 	2,
@@ -1042,7 +1043,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 	if (gb.Seen('S'))
 	{
 		const float advance = gb.GetNonNegativeFValue();
-		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+		if (!reprap.GetGCodes().LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
 		}

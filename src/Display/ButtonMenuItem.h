@@ -15,8 +15,7 @@
 class ButtonMenuItem final : public MenuItem
 {
 public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<ButtonMenuItem>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<ButtonMenuItem>(p); }
+	DECLARE_FREELIST_NEW_DELETE(ButtonMenuItem)
 
 	ButtonMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char *t, const char *cmd, const char *acFile) noexcept;
 	void Draw(Lcd& lcd, PixelNumber maxWidth, bool highlight) noexcept override;

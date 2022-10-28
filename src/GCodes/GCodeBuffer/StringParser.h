@@ -44,15 +44,15 @@ public:
 	bool IsLastCommand() const noexcept;
 	bool ContainsExpression() const noexcept { return seenExpression; }
 
-	bool Seen(char c) noexcept SPEED_CRITICAL;									// Is a character present?
-	bool SeenAny(Bitmap<uint32_t> bm) const noexcept;							// Return true if any of the parameter letters in the bitmap were seen
-	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;					// Get a float after a key letter
-	float GetDistance() THROWS(GCodeException) SPEED_CRITICAL;					// Get a distance or coordinate and convert it from inches to mm if necessary
-	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;					// Get an integer after a key letter
-	uint32_t GetUIValue() THROWS(GCodeException);								// Get an unsigned integer value
-	DriverId GetDriverId() THROWS(GCodeException);								// Get a driver ID
-	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);			// Get an IP address quad after a key letter
-	void GetMacAddress(MacAddress& mac) THROWS(GCodeException);					// Get a MAC address sextet after a key letter
+	bool Seen(char c) noexcept SPEED_CRITICAL;													// Is a character present?
+	ParameterLettersBitmap AllParameters() const noexcept { return parametersPresent; }			// Return the bitmap of all parameters seen
+	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;									// Get a float after a key letter
+	float GetDistance() THROWS(GCodeException) SPEED_CRITICAL;									// Get a distance or coordinate and convert it from inches to mm if necessary
+	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;									// Get an integer after a key letter
+	uint32_t GetUIValue() THROWS(GCodeException);												// Get an unsigned integer value
+	DriverId GetDriverId() THROWS(GCodeException);												// Get a driver ID
+	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);							// Get an IP address quad after a key letter
+	void GetMacAddress(MacAddress& mac) THROWS(GCodeException);									// Get a MAC address sextet after a key letter
 	void GetUnprecedentedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException);	// Get a string with no preceding key letter
 	void GetCompleteParameters(const StringRef& str) const noexcept;							// Get the complete parameter string
 	void GetQuotedString(const StringRef& str, bool allowEmpty) THROWS(GCodeException);			// Get and copy a quoted string
@@ -135,7 +135,7 @@ private:
 	unsigned int commandLength;							// Number of characters we read to build this command including the final \r or \n
 	unsigned int braceCount;							// how many nested { } we are inside
 	unsigned int gcodeLineEnd;							// Number of characters in the entire line of gcode
-	Bitmap<uint32_t> parametersPresent;					// which parameters are present in this command
+	ParameterLettersBitmap parametersPresent;			// which parameters are present in this command
 	int readPointer;									// Where in the buffer to read next, or -1
 
 	FileStore *fileBeingWritten;						// If we are copying GCodes to a file, which file it is

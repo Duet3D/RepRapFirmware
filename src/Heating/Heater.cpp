@@ -41,26 +41,29 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Heater members
-	{ "active",		OBJECT_MODEL_FUNC(self->GetActiveTemperature(), 1), 									ObjectModelEntryFlags::live },
-	{ "avgPwm",		OBJECT_MODEL_FUNC(self->GetAveragePWM(), 3), 											ObjectModelEntryFlags::live },
-	{ "current",	OBJECT_MODEL_FUNC(self->GetTemperature(), 2), 											ObjectModelEntryFlags::live },
-	{ "max",		OBJECT_MODEL_FUNC(self->GetHighestTemperatureLimit(), 1), 								ObjectModelEntryFlags::none },
-	{ "min",		OBJECT_MODEL_FUNC(self->GetLowestTemperatureLimit(), 1), 								ObjectModelEntryFlags::none },
-	{ "model",		OBJECT_MODEL_FUNC((const FopDt *)&self->GetModel()),									ObjectModelEntryFlags::none },
-	{ "monitors",	OBJECT_MODEL_FUNC_ARRAY(0), 															ObjectModelEntryFlags::none },
-	{ "sensor",		OBJECT_MODEL_FUNC((int32_t)self->GetSensorNumber()), 									ObjectModelEntryFlags::none },
-	{ "standby",	OBJECT_MODEL_FUNC(self->GetStandbyTemperature(), 1), 									ObjectModelEntryFlags::live },
-	{ "state",		OBJECT_MODEL_FUNC(self->GetStatus().ToString()), 										ObjectModelEntryFlags::live },
+	{ "active",				OBJECT_MODEL_FUNC(self->GetActiveTemperature(), 1), 									ObjectModelEntryFlags::live },
+	{ "avgPwm",				OBJECT_MODEL_FUNC(self->GetAveragePWM(), 3), 											ObjectModelEntryFlags::live },
+	{ "current",			OBJECT_MODEL_FUNC(self->GetTemperature(), 2), 											ObjectModelEntryFlags::live },
+	{ "max",				OBJECT_MODEL_FUNC(self->GetHighestTemperatureLimit(), 1), 								ObjectModelEntryFlags::none },
+	{ "maxBadReadings",		OBJECT_MODEL_FUNC((int32_t)self->maxBadTemperatureCount), 								ObjectModelEntryFlags::none },
+	{ "maxHeatingFaultTime", OBJECT_MODEL_FUNC(self->maxHeatingFaultTime, 1), 										ObjectModelEntryFlags::none },
+	{ "maxTempExcursion",	OBJECT_MODEL_FUNC(self->maxTempExcursion, 1),				 							ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->GetLowestTemperatureLimit(), 1), 								ObjectModelEntryFlags::none },
+	{ "model",				OBJECT_MODEL_FUNC((const FopDt *)&self->GetModel()),									ObjectModelEntryFlags::none },
+	{ "monitors",			OBJECT_MODEL_FUNC_ARRAY(0), 															ObjectModelEntryFlags::none },
+	{ "sensor",				OBJECT_MODEL_FUNC((int32_t)self->GetSensorNumber()), 									ObjectModelEntryFlags::none },
+	{ "standby",			OBJECT_MODEL_FUNC(self->GetStandbyTemperature(), 1), 									ObjectModelEntryFlags::live },
+	{ "state",				OBJECT_MODEL_FUNC(self->GetStatus().ToString()), 										ObjectModelEntryFlags::live },
 
 	// 1. Heater.monitors[] members
-	{ "action",		OBJECT_MODEL_FUNC_IF(self->monitors[context.GetLastIndex()].GetTrigger() != HeaterMonitorTrigger::Disabled,
-										(int32_t)self->monitors[context.GetLastIndex()].GetAction()), 		ObjectModelEntryFlags::none },
-	{ "condition",	OBJECT_MODEL_FUNC(self->monitors[context.GetLastIndex()].GetTriggerName()), 			ObjectModelEntryFlags::none },
-	{ "limit",		OBJECT_MODEL_FUNC_IF(self->monitors[context.GetLastIndex()].GetTrigger() != HeaterMonitorTrigger::Disabled,
-										self->monitors[context.GetLastIndex()].GetTemperatureLimit(), 1),	ObjectModelEntryFlags::none },
+	{ "action",			OBJECT_MODEL_FUNC_IF(self->monitors[context.GetLastIndex()].GetTrigger() != HeaterMonitorTrigger::Disabled,
+												(int32_t)self->monitors[context.GetLastIndex()].GetAction()), 		ObjectModelEntryFlags::none },
+	{ "condition",		OBJECT_MODEL_FUNC(self->monitors[context.GetLastIndex()].GetTriggerName()), 			ObjectModelEntryFlags::none },
+	{ "limit",			OBJECT_MODEL_FUNC_IF(self->monitors[context.GetLastIndex()].GetTrigger() != HeaterMonitorTrigger::Disabled,
+												self->monitors[context.GetLastIndex()].GetTemperatureLimit(), 1),	ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 10, 3 };
+constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 13, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
 
@@ -93,6 +96,7 @@ float Heater::lastCoolingRate;
 FansBitmap Heater::tuningFans;
 unsigned int Heater::tuningPhase;
 uint8_t Heater::idleCyclesDone;
+bool Heater::tuningQuietMode;
 
 Heater::HeaterParameters Heater::fanOffParams, Heater::fanOnParams;
 
@@ -286,7 +290,8 @@ GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansB
 	const float ambientTemp = (seenA) ? gb.GetFValue() : currentTemp;
 	if (ambientTemp + 20 >= targetTemp)
 	{
-		reply.printf("Target temperature must be at least 20C above ambient temperature");
+		reply.copy("Target temperature must be at least 20C above ambient temperature");
+		return GCodeResult::error;
 	}
 
 	// Get and store the optional parameters
@@ -295,6 +300,7 @@ GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansB
 	tuningPwm = (gb.Seen('P')) ? gb.GetLimitedFValue('P', 0.1, 1.0) : GetModel().GetMaxPwm();
 	tuningHysteresis = (gb.Seen('Y')) ? gb.GetLimitedFValue('Y', 1.0, 20.0) : DefaultTuningHysteresis;
 	tuningFanPwm = (gb.Seen('F')) ? gb.GetLimitedFValue('F', 0.1, 1.0) : DefaultTuningFanPwm;
+	tuningQuietMode = gb.Seen('Q') && gb.GetUIValue() != 0;
 
 	const GCodeResult rslt = StartAutoTune(reply, seenA, ambientTemp);
 	if (rslt == GCodeResult::ok)
@@ -419,14 +425,23 @@ void Heater::SetAndReportModelAfterTuning(bool usingFans) noexcept
 	if (Succeeded(rslt))
 	{
 		tuned = true;
-		str.printf(	"Auto tuning heater %u completed after %u idle and %u tuning cycles in %" PRIu32 " seconds. This heater needs the following M307 command:\n ",
+		str.printf(	"Auto tuning heater %u completed after %u idle and %u tuning cycles in %" PRIu32 " seconds",
 					GetHeaterNumber(),
 					idleCyclesDone,
 					(usingFans) ? fanOffParams.numCycles + fanOnParams.numCycles : fanOffParams.numCycles,
 					(millis() - tuningBeginTime)/(uint32_t)SecondsToMillis
 				  );
-		GetModel().AppendM307Command(GetHeaterNumber(), str.GetRef(), !reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber()));
+		if (tuningQuietMode)
+		{
+			str.cat('\n');
+		}
+		else
+		{
+			str.cat( ". This heater needs the following M307 command:\n");
+			GetModel().AppendM307Command(GetHeaterNumber(), str.GetRef(), !reprap.GetHeat().IsBedOrChamberHeater(GetHeaterNumber()));
+		}
 		reprap.GetPlatform().Message(LoggedGenericMessage, str.c_str());
+
 		if (reprap.Debug(moduleHeat))
 		{
 			str.printf("Long term gain %.1f/%.1f", (double)fanOffParams.GetNormalGain(), (double)fanOffParams.gain);
@@ -438,13 +453,16 @@ void Heater::SetAndReportModelAfterTuning(bool usingFans) noexcept
 			reprap.GetPlatform().Message(GenericMessage, str.c_str());
 		}
 
-		if (reprap.GetGCodes().SawM501InConfigFile())
+		if (!tuningQuietMode)
 		{
-			reprap.GetPlatform().Message(GenericMessage, "Send M500 to save this command in config-override.g\n");
-		}
-		else
-		{
-			reprap.GetPlatform().MessageF(GenericMessage, "Edit the M307 H%u command in config.g to match this. Omit the V parameter if the heater is not powered from VIN.\n", GetHeaterNumber());
+			if (reprap.GetGCodes().SawM501InConfigFile())
+			{
+				reprap.GetPlatform().Message(GenericMessage, "Send M500 to save this command in config-override.g\n");
+			}
+			else
+			{
+				reprap.GetPlatform().MessageF(GenericMessage, "Edit the M307 H%u command in config.g to match this. Omit the V parameter if the heater is not powered from VIN.\n", GetHeaterNumber());
+			}
 		}
 	}
 	else
@@ -461,6 +479,7 @@ GCodeResult Heater::ConfigureFaultDetectionParameters(GCodeBuffer& gb, const Str
 	bool seenValue = false;
 	gb.TryGetNonNegativeFValue('P', maxHeatingFaultTime, seenValue);
 	gb.TryGetNonNegativeFValue('T', maxTempExcursion, seenValue);
+	gb.TryGetLimitedUIValue('R', maxBadTemperatureCount, seenValue, 51);
 	if (seenValue)
 	{
 		const GCodeResult rslt = UpdateFaultDetectionParameters(reply);
@@ -468,7 +487,8 @@ GCodeResult Heater::ConfigureFaultDetectionParameters(GCodeBuffer& gb, const Str
 		return rslt;
 	}
 
-	reply.printf("Heater %u allowed excursion %.1f" DEGREE_SYMBOL "C, fault trigger time %.1f seconds", heaterNumber, (double)maxTempExcursion, (double)maxHeatingFaultTime);
+	reply.printf("Heater %u allowed excursion %.1f" DEGREE_SYMBOL "C, fault trigger time %.1f seconds, max %" PRIu32 " consecutive bad readings",
+					heaterNumber, (double)maxTempExcursion, (double)maxHeatingFaultTime, maxBadTemperatureCount);
 	return GCodeResult::ok;
 }
 
@@ -674,6 +694,10 @@ GCodeResult Heater::SetFaultDetectionParameters(const CanMessageSetHeaterFaultDe
 {
 	maxTempExcursion = msg.maxTempExcursion;
 	maxHeatingFaultTime = msg.maxFaultTime;
+	if (msg.version35)
+	{
+		maxBadTemperatureCount = msg.maxBadTemperatureCount;
+	}
 	return GCodeResult::ok;
 }
 

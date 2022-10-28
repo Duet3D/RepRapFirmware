@@ -15,8 +15,7 @@
 class FilesMenuItem final : public MenuItem
 {
 public:
-	void* operator new(size_t sz) noexcept { return FreelistManager::Allocate<FilesMenuItem>(); }
-	void operator delete(void* p) noexcept { FreelistManager::Release<FilesMenuItem>(p); }
+	DECLARE_FREELIST_NEW_DELETE(FilesMenuItem)
 
 	FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char *_ecv_array cmd, const char *_ecv_array dir, const char *_ecv_array acFile, unsigned int nf) noexcept;
 	void Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept override;

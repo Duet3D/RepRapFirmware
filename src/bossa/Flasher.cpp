@@ -176,7 +176,7 @@ void Flasher::lock(/* string& regionArg, */ bool enable) THROWS(GCodeException)
     {
         _observer.onStatus("%s all regions\n", enable ? "Lock" : "Unlock");
 #endif
-        Vector<bool, 16> regions(_flash->lockRegions(), enable);
+        Bitmap<uint32_t> regions = Bitmap<uint32_t>::MakeLowestNBits((enable) ? _flash->getNumLockRegions() : 0);
         _flash->setLockRegions(regions);
 #if ORIGINAL_BOSSA_CODE
     }
