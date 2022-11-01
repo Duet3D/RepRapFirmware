@@ -2390,7 +2390,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else
 					{
-						reply.printf("Max speeds (%s)): ", (usingMmPerSec) ? "mm/sec" : "mm/min");
+						reply.printf("Max speeds (%s): ", (usingMmPerSec) ? "mm/sec" : "mm/min");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
 							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertSpeedToMm(platform.MaxFeedrate(axis), usingMmPerSec));

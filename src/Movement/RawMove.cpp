@@ -106,7 +106,7 @@ void MovementState::Diagnostics(MessageType mtype, unsigned int moveSystemNumber
 {
 	reprap.GetPlatform().MessageF(mtype, "Q%u segments left %u"
 #if SUPPORT_ASYNC_MOVES
-											", axes/extruders owned %03x"
+											", axes/extruders owned 0x%07x"
 #endif
 												"\n",
 													moveSystemNumber,

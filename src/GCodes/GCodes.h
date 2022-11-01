@@ -559,7 +559,7 @@ private:
 																											// allocate axes by letter
 	bool DoSync(GCodeBuffer& gb) noexcept;																	// sync with the other stream returning true if done, false if we need to wait for it
 	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;								// synchronise motion systems
-	void UpdateAllCoordinates(GCodeBuffer& gb) noexcept;
+	void UpdateAllCoordinates(const GCodeBuffer& gb) noexcept;
 #endif
 
 #if SUPPORT_COORDINATE_ROTATION

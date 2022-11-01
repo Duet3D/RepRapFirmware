@@ -382,6 +382,11 @@ union LaserPwmOrIoBits
 };
 #endif
 
+// Find the bit number corresponding to a parameter letter
+constexpr unsigned int ParameterLetterToBitNumber(char c) noexcept
+{
+	return (c <= 'Z') ? c - 'A' : c - ('a' - 26);
+}
 // Debugging support
 extern "C" void debugPrintf(const char* fmt, ...) noexcept __attribute__ ((format (printf, 1, 2)));
 #define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)

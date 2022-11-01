@@ -71,10 +71,21 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 	}
 #endif
 
+	MovementState& ms = GetMovementState(gb);
+
+#if SUPPORT_ASYNC_MOVES
+	// Check for setting unowned axes before processing the command
+	ParameterLettersBitmap axisLettersMentioned = gb.AllParameters() & allAxisLetters;
+	axisLettersMentioned.ClearBits(ms.ownedAxisLetters);
+	if (axisLettersMentioned.IsNonEmpty())
+	{
+		AllocateAxisLetters(gb, ms, axisLettersMentioned);
+	}
+#endif
+
 	// Don't wait for the machine to stop if only extruder drives are being reset.
 	// This avoids blobs and seams when the gcode uses absolute E coordinates and periodically includes G92 E0.
 	AxesBitmap axesIncluded;
-	MovementState& ms = GetMovementState(gb);
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		if (gb.Seen(axisLetters[axis]))
@@ -82,7 +93,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 			const float axisValue = gb.GetFValue();
 			if (axesIncluded.IsEmpty())
 			{
-				if (!LockAllMovementSystemsAndWaitForStandstill(gb))	// lock movement and get current coordinates
+				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))	// lock movement and get current coordinates
 				{
 					return GCodeResult::notFinished;
 				}
@@ -1537,10 +1548,13 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		gb.MustSee('A', 'X');
 		centreX = gb.GetFValue();
 		gb.MustSee('B', 'Y');
-		centreY= gb.GetFValue();
+		centreY = gb.GetFValue();
 
 		g68Centre[0] = centreX + GetWorkplaceOffset(gb, 0);
 		g68Centre[1] = centreY + GetWorkplaceOffset(gb, 1);
+#if SUPPORT_ASYNC_MOVES
+		const float oldG68Angle = g68Angle;
+#endif
 		if (gb.Seen('I'))
 		{
 			g68Angle += angle;
@@ -1549,6 +1563,16 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		{
 			g68Angle = angle;
 		}
+#if SUPPORT_ASYNC_MOVES
+		if (g68Angle != 0.0 && oldG68Angle == 0.0)
+		{
+			// We have just started doing coordinate rotation, so if we own axis letter X we need to own Y and vice versa
+			// Simplest is just to say we don't own either in the axis letters bitmap
+			MovementState& ms = GetMovementState(gb);
+			ms.ownedAxisLetters.ClearBit('X' - 'A');
+			ms.ownedAxisLetters.ClearBit('Y' - 'A');
+		}
+#endif
 		UpdateCurrentUserPosition(gb);
 	}
 	return GCodeResult::ok;

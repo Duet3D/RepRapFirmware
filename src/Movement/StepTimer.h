@@ -63,6 +63,9 @@ public:
 	// ISR called from StepTimer
 	static void Interrupt() noexcept;
 
+	// Append diagnostics to reply string
+	static void Diagnostics(const StringRef& reply) noexcept;
+
 	static constexpr uint32_t MinInterruptInterval = 6;							// Minimum interval between step timer interrupts, in step clocks; about 6us
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -71,9 +74,7 @@ public:
 	static uint32_t ConvertToLocalTime(uint32_t masterTime) noexcept { return masterTime + localTimeOffset; }
 	static uint32_t ConvertToMasterTime(uint32_t localTime) noexcept { return localTime - localTimeOffset; }
 	static uint32_t GetMasterTime() noexcept { return ConvertToMasterTime(GetTimerTicks()); }
-
 	static bool IsSynced() noexcept;
-	static void Diagnostics(const StringRef& reply) noexcept;
 
 	static constexpr uint32_t MinSyncInterval = 2000;							// maximum interval in milliseconds between sync messages for us to remain synced
 																				// increased from 1000 because of workaround we added for bad Tx time stamps on SAME70

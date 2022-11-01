@@ -507,7 +507,7 @@ void Move::Diagnostics(MessageType mtype) noexcept
 #if 0	// debug only
 	String<StringLength256> scratchString;
 #else
-	String<StringLength50> scratchString;
+	String<StringLength100> scratchString;
 #endif
 	scratchString.copy(GetCompensationTypeString());
 
@@ -548,6 +548,10 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	p.MessageF(mtype, "Max delay %" PRIu32 ", increase %" PRIu32 "\n", maxDelay, maxDelayIncrease);
 	maxDelay = maxDelayIncrease = 0;
 #endif
+
+	scratchString.Clear();
+	StepTimer::Diagnostics(scratchString.GetRef());
+	p.MessageF(mtype, "%s\n", scratchString.c_str());
 
 	for (size_t i = 0; i < ARRAY_SIZE(rings); ++i)
 	{
