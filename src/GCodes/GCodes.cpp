@@ -3104,9 +3104,11 @@ void GCodes::HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept
 	// Print the axis stepper motor positions as Marlin does, as an aid to debugging.
 	// Don't bother with the extruder endpoints, they are zero after any non-extruding move.
 	s.cat("Count");
+	int32_t positions[MaxAxesPlusExtruders];
+	reprap.GetMove().GetLivePositions(positions);
 	for (size_t i = 0; i < numVisibleAxes; ++i)
 	{
-		s.catf(" %" PRIi32, reprap.GetMove().GetEndPoint(i));
+		s.catf(" %" PRIi32, positions[i]);
 	}
 
 	// Add the machine coordinates because they may be different from the user coordinates under some conditions
