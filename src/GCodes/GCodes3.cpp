@@ -76,7 +76,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 #if SUPPORT_ASYNC_MOVES
 	// Check for setting unowned axes before processing the command
 	ParameterLettersBitmap axisLettersMentioned = gb.AllParameters() & allAxisLetters;
-	axisLettersMentioned.ClearBits(ms.ownedAxisLetters);
+	axisLettersMentioned.ClearBits(ms.GetOwnedAxisLetters());
 	if (axisLettersMentioned.IsNonEmpty())
 	{
 		AllocateAxisLetters(gb, ms, axisLettersMentioned);
@@ -1569,8 +1569,8 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 			// We have just started doing coordinate rotation, so if we own axis letter X we need to own Y and vice versa
 			// Simplest is just to say we don't own either in the axis letters bitmap
 			MovementState& ms = GetMovementState(gb);
-			ms.ownedAxisLetters.ClearBit('X' - 'A');
-			ms.ownedAxisLetters.ClearBit('Y' - 'A');
+			ms.ReleaseAxisLetter('X');
+			ms.ReleaseAxisLetter('Y');
 		}
 #endif
 		UpdateCurrentUserPosition(gb);

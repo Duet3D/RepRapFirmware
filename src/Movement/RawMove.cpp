@@ -226,6 +226,13 @@ void MovementState::InitObjectCancellation() noexcept
 	currentObjectCancelled = printingJustResumed = false;
 }
 
+// When releasing axes we must also release the corresponding axis letters, because they serve as a cache
+void MovementState::ReleaseOwnedAxesAndExtruders() noexcept
+{
+	axesAndExtrudersOwned.Clear();
+	ownedAxisLetters.Clear();
+}
+
 #if SUPPORT_ASYNC_MOVES
 
 void AsyncMove::SetDefaults() noexcept

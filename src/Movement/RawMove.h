@@ -76,11 +76,46 @@ constexpr size_t ResumeObjectRestorePointNumber = NumVisibleRestorePoints + 1;
 
 // Details of a move that are needed only by GCodes
 // CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
-struct MovementState : public RawMove
+class MovementState : public RawMove
 {
+public:
+	AxesBitmap GetAxesAndExtrudersOwned() const noexcept { return axesAndExtrudersOwned; }		// Get the axes and extruders that this movement system owns
+	ParameterLettersBitmap GetOwnedAxisLetters() const noexcept { return ownedAxisLetters; }	// Get the letters denoting axes that this movement system owns
+	void AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept;
+	void ReleaseOwnedAxesAndExtruders() noexcept;
+	void ReleaseAxisLetter(char letter) noexcept;											// stop claiming that we own an axis letter (if we do) but don't release the associated axis
+
+	float GetProportionDone() const noexcept;												// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
+	void Reset() noexcept;
+	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;			// change the extrusion factor of an extruder
+	const RestorePoint& GetRestorePoint(size_t n) const pre(n < NumTotalRestorePoints) { return restorePoints[n]; }
+	void ClearMove() noexcept;
+	void SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
+		pre(restorePointNumber < NumTotalRestorePoints);
+
+	// Tool management
+	void SelectTool(int toolNumber, bool simulating) noexcept;
+	ReadLockedPointer<Tool> GetLockedCurrentTool() const noexcept;
+	ReadLockedPointer<Tool> GetLockedCurrentOrDefaultTool() const noexcept;
+	int GetCurrentToolNumber() const noexcept;
+	void SetPreviousToolNumber() noexcept;
+	AxesBitmap GetCurrentXAxes() const noexcept;											// Get the current axes used as X axes
+	AxesBitmap GetCurrentYAxes() const noexcept;											// Get the current axes used as Y axes
+	AxesBitmap GetCurrentAxisMapping(unsigned int axis) const noexcept;
+	float GetCurrentToolOffset(size_t axis) const noexcept;									// Get an axis offset of the current tool
+
+	// Object cancellation support
+	void InitObjectCancellation() noexcept;
+	bool IsCurrentObjectCancelled() const noexcept { return currentObjectCancelled; }
+	bool IsFirstMoveSincePrintingResumed() const noexcept { return printingJustResumed; }
+	void DoneMoveSincePrintingResumed() noexcept { printingJustResumed = false; }
+	void StopPrinting(GCodeBuffer& gb) noexcept;
+	void ResumePrinting(GCodeBuffer& gb) noexcept;
+
+	void Diagnostics(MessageType mtype, unsigned int moveSystemNumber) noexcept;
+
+	// These variables are currently all public, but we ought to make most of them private
 	Tool *currentTool;												// the current tool of this movement system
-	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync
-	ParameterLettersBitmap ownedAxisLetters;						// letters denoting axes that this movement system owns
 
 	// The current user position now holds the requested user position after applying workplace coordinate offsets.
 	// So we must subtract the workplace coordinate offsets when we want to display them.
@@ -142,35 +177,22 @@ struct MovementState : public RawMove
 	bool currentObjectCancelled;									// true if the current object should not be printed
 	bool printingJustResumed;										// true if we have just restarted printing
 
-	float GetProportionDone() const noexcept;						// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
-	void Reset() noexcept;
-	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;	// change the extrusion factor of an extruder
-	const RestorePoint& GetRestorePoint(size_t n) const pre(n < NumTotalRestorePoints) { return restorePoints[n]; }
-	void ClearMove() noexcept;
-	void SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
-		pre(restorePointNumber < NumTotalRestorePoints);
-
-	// Tool management
-	void SelectTool(int toolNumber, bool simulating) noexcept;
-	ReadLockedPointer<Tool> GetLockedCurrentTool() const noexcept;
-	ReadLockedPointer<Tool> GetLockedCurrentOrDefaultTool() const noexcept;
-	int GetCurrentToolNumber() const noexcept;
-	void SetPreviousToolNumber() noexcept;
-	AxesBitmap GetCurrentXAxes() const noexcept;											// Get the current axes used as X axes
-	AxesBitmap GetCurrentYAxes() const noexcept;											// Get the current axes used as Y axes
-	AxesBitmap GetCurrentAxisMapping(unsigned int axis) const noexcept;
-	float GetCurrentToolOffset(size_t axis) const noexcept;									// Get an axis offset of the current tool
-
-	// Object cancellation support
-	void InitObjectCancellation() noexcept;
-	bool IsCurrentObjectCancelled() const noexcept { return currentObjectCancelled; }
-	bool IsFirstMoveSincePrintingResumed() const noexcept { return printingJustResumed; }
-	void DoneMoveSincePrintingResumed() noexcept { printingJustResumed = false; }
-	void StopPrinting(GCodeBuffer& gb) noexcept;
-	void ResumePrinting(GCodeBuffer& gb) noexcept;
-
-	void Diagnostics(MessageType mtype, unsigned int moveSystemNumber) noexcept;
+private:
+	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync
+	ParameterLettersBitmap ownedAxisLetters;						// letters denoting axes that this movement system owns
 };
+
+inline void MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept
+{
+	axesAndExtrudersOwned |= axes;
+	ownedAxisLetters |= axisLetters;
+}
+
+// Stop claiming that we own an axis letter (if we do) but don't release the associated axis
+inline void MovementState::ReleaseAxisLetter(char letter) noexcept
+{
+	ownedAxisLetters.ClearBit(ParameterLetterToBitNumber(letter));
+}
 
 #if SUPPORT_ASYNC_MOVES
 
