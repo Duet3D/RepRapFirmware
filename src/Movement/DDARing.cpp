@@ -673,6 +673,7 @@ void DDARing::ResetExtruderPositions() noexcept
 {
 	AtomicCriticalSectionLocker lock;
 	liveCoordinatesValid = false;
+	DDA::DDAState state;
 	if (   getPointer != addPointer								// OK if the ring is neither empty or full
 		|| (state = addPointer->GetState()) == DDA::DDAState::empty	 || state == DDA::DDAState::completed	// also OK if the ring is not full
 	   )
