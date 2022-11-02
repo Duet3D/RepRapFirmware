@@ -26,6 +26,7 @@ struct ExpansionBoardData
 
 	const char *_ecv_array typeName;
 	MinCurMax mcuTemp, vin, v12;
+	float accelerometerLastRunAverages[3];
 	uint32_t accelerometerLastRunDataPoints;
 	uint32_t closedLoopLastRunDataPoints;
 	UniqueId uniqueId;
@@ -59,13 +60,14 @@ public:
 	void UpdateFinished(CanAddress address) noexcept;
 	void UpdateFailed(CanAddress address) noexcept;
 	void AddAccelerometerRun(CanAddress address, unsigned int numDataPoints) noexcept;
+	void AddAccelerometerLastRunAverages(CanAddress address, float averages[], int32_t numAxis) noexcept;
 	void AddClosedLoopRun(CanAddress address, unsigned int numDataPoints) noexcept;
 	bool IsFlashing() const noexcept { return numBoardsFlashing != 0; }
 
 	void EmergencyStop() noexcept;
 
 protected:
-	DECLARE_OBJECT_MODEL
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	const ExpansionBoardData& FindIndexedBoard(unsigned int index) const noexcept;

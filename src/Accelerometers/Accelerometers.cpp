@@ -68,6 +68,8 @@ static volatile uint32_t numSamplesRequested;
 static uint8_t resolution = DefaultResolution;
 static uint8_t orientation = 20;							// +Z -> +Z, +X -> +X
 static volatile uint8_t axesRequested;
+constexpr size_t NumAxis = 3;
+static float lastRunAverages[NumAxis] = {0.0f, 0.0f, 0.0f};
 static FileStore* volatile accelerometerFile = nullptr;		// this is non-null when the accelerometer is running, null otherwise
 static unsigned int numLocalRunsCompleted = 0;
 static unsigned int lastRunNumSamplesReceived = 0;
@@ -84,6 +86,15 @@ static void AddLocalAccelerometerRun(unsigned int numDataPoints) noexcept
 {
 	lastRunNumSamplesReceived = numDataPoints;
 	++numLocalRunsCompleted;
+	reprap.BoardsUpdated();
+}
+
+static void AddLocalAccelerometerAverages(float averages[]) noexcept
+{
+	for(unsigned int axis = 0;axis < NumAxis;++axis)
+	{
+		lastRunAverages[axis] = averages[axis];
+	}
 	reprap.BoardsUpdated();
 }
 
@@ -115,6 +126,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 			const uint16_t mask = (1u << resolution) - 1;
 			const int decimalPlaces = GetDecimalPlaces(resolution);
 			bool recordFailedStart = false;
+			float accumulatedSamples[NumAxis] = {0.0f, 0.0f, 0.0f};
 
 			if (accelerometer->StartCollecting(TranslateAxes(axesRequested)))
 			{
@@ -180,6 +192,9 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 
 									// Append it to the buffer
 									temp.catf(",%.*f", decimalPlaces, (double)fVal);
+
+									// accumulate the values so they can be averaged later
+									accumulatedSamples[axis] += fVal;
 								}
 							}
 
@@ -216,6 +231,13 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();
 				AddLocalAccelerometerRun(samplesWritten);
+
+				// find the average value for each axis
+				for(unsigned int axis = 0;axis < NumAxis;++axis)
+				{
+					accumulatedSamples[axis] /= float(samplesWritten);
+				}
+				AddLocalAccelerometerAverages(accumulatedSamples);
 			}
 
 			accelerometer->StopCollecting();
@@ -532,6 +554,11 @@ bool Accelerometers::HasLocalAccelerometer() noexcept
 	return accelerometer != nullptr;
 }
 
+float Accelerometers::GetLocalAccelerometerLastRunAverage(const int &axis) noexcept
+{
+	return lastRunAverages[axis];
+}
+
 unsigned int Accelerometers::GetLocalAccelerometerDataPoints() noexcept
 {
 	return lastRunNumSamplesReceived;
@@ -592,6 +619,8 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			const unsigned int receivedResolution = msg.bitsPerSampleMinusOne + 1;
 			const uint16_t mask = (1u << receivedResolution) - 1;
 			const int decimalPlaces = GetDecimalPlaces(receivedResolution);
+			float accumulatedSamples[NumAxis] = {0.0f, 0.0f, 0.0f};
+
 			if (msg.overflowed)
 			{
 				++numRemoteOverflows;
@@ -632,6 +661,9 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 
 					// Append it to the buffer
 					temp.catf(",%.*f", decimalPlaces, (double)fVal);
+
+					// accumulate the values so they can be averaged later
+					accumulatedSamples[axis] += fVal;
 				}
 
 				temp.cat('\n');
@@ -648,6 +680,13 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 				f->Close();
 				accelerometerFile = nullptr;
 				reprap.GetExpansion().AddAccelerometerRun(src, expectedRemoteSampleNumber);
+
+				// find the average value for each axis
+				for (unsigned int axis = 0; axis < NumAxis; ++axis)
+				{
+					accumulatedSamples[axis] /= float(msg.numSamples);
+				}
+				reprap.GetExpansion().AddAccelerometerLastRunAverages(src, accumulatedSamples, NumAxis);
 			}
 		}
 	}

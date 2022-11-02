@@ -24,6 +24,18 @@
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(ExpansionManager, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(ExpansionManager, __VA_ARGS__)
 
+constexpr ObjectModelArrayTableEntry ExpansionManager::objectModelArrayTable[] =
+{
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return 3; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return ExpressionValue(((const ExpansionManager*)self)->FindIndexedBoard(context.GetIndex(1)).accelerometerLastRunAverages[context.GetLastIndex()]); }
+	}
+};
+
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(ExpansionManager)
+
 constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 {
 	// 0. boards[] members
@@ -59,6 +71,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.minimum, 1),								ObjectModelEntryFlags::none },
 
 	// 4. accelerometer members
+	{ "lastRunAverages",	OBJECT_MODEL_FUNC_ARRAY(0),																						ObjectModelEntryFlags::none },
 	{ "points",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerLastRunDataPoints),		ObjectModelEntryFlags::none },
 	{ "runs",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerRuns),					ObjectModelEntryFlags::none },
 
@@ -74,7 +87,7 @@ constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 	3,				// section 1: mcuTemp
 	3,				// section 2: vIn
 	3,				// section 3: v12
-	2,				// section 4: accelerometer
+	3,				// section 4: accelerometer
 	2				// section 5: closed loop
 };
 
@@ -292,6 +305,15 @@ void ExpansionManager::UpdateFinished(CanAddress address) noexcept
 void ExpansionManager::UpdateFailed(CanAddress address) noexcept
 {
 	UpdateBoardState(address, BoardState::flashFailed);
+}
+
+void ExpansionManager::AddAccelerometerLastRunAverages(CanAddress address, float averages[], int32_t numAxis) noexcept
+{
+	for(int32_t i = 0;i < numAxis;++i)
+	{
+		boards[address].accelerometerLastRunAverages[i] = averages[i];
+	}
+	reprap.BoardsUpdated();
 }
 
 void ExpansionManager::AddAccelerometerRun(CanAddress address, unsigned int numDataPoints) noexcept

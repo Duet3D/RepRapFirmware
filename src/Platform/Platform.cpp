@@ -219,6 +219,13 @@ constexpr ObjectModelArrayTableEntry Platform::objectModelArrayTable[] =
 		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumCoordinateSystems; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 				{ return ExpressionValue(reprap.GetGCodes().GetWorkplaceOffset(context.GetIndex(1), context.GetLastIndex()), 3); }
+	},
+	// 2. Average readings from last accelerometer run
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return 3; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return ExpressionValue((float)Accelerometers::GetLocalAccelerometerLastRunAverage(context.GetLastIndex())); }
 	}
 };
 
@@ -357,6 +364,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 
 #if SUPPORT_ACCELEROMETERS
 	// 9. boards[0].accelerometer members
+	{ "lastRunAverages",	OBJECT_MODEL_FUNC_ARRAY(2),																					ObjectModelEntryFlags::none },
 	{ "points",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerDataPoints()),						ObjectModelEntryFlags::none },
 	{ "runs",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerRuns()),								ObjectModelEntryFlags::none },
 #endif
@@ -393,7 +401,7 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	2,																		// section 7: move.axes[].microstepping
 	2,																		// section 8: move.extruders[].microstepping
 #if SUPPORT_ACCELEROMETERS
-	2,																		// section 9: boards[0].accelerometer
+	3,																		// section 9: boards[0].accelerometer
 #else
 	0,
 #endif
