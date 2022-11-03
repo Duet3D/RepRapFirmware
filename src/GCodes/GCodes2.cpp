@@ -509,6 +509,14 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			break;
 
 		default:
+#if HAS_SBC_INTERFACE
+			// Send unknown non-binary codes to DSF so potential plugins can interpret them
+			if (reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected() && !gb.IsBinary())
+			{
+				gb.SendToSbc();
+				return false;
+			}
+#endif
 			result = TryMacroFile(gb);
 			break;
 		}
@@ -4690,6 +4698,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			default:
+#if HAS_SBC_INTERFACE
+				// Send unknown non-binary codes to DSF so potential plugins can interpret them
+				if (reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected() && !gb.IsBinary())
+				{
+					gb.SendToSbc();
+					return false;
+				}
+#endif
 				result = TryMacroFile(gb);
 				break;
 			}
