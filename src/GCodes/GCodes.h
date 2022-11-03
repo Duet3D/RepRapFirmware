@@ -554,12 +554,14 @@ private:
 	GCodeResult CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Handle M597
 	GCodeResult SyncMovementSystems(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M598
 	GCodeResult ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);				// Handle M400
-	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes) THROWS(GCodeException);	// allocate axes to a movement state
+	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes, ParameterLettersBitmap axLetters) THROWS(GCodeException);	// allocate axes to a movement state
 	void AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException);
 																											// allocate axes by letter
+	void AllocateAxesDirectFromLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException);
+																											// allocate axes by letter for a special move
 	bool DoSync(GCodeBuffer& gb) noexcept;																	// sync with the other stream returning true if done, false if we need to wait for it
 	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;								// synchronise motion systems
-	void UpdateAllCoordinates(GCodeBuffer& gb) noexcept;
+	void UpdateAllCoordinates(const GCodeBuffer& gb) noexcept;
 #endif
 
 #if SUPPORT_COORDINATE_ROTATION

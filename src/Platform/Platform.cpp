@@ -5143,6 +5143,8 @@ GCodeResult Platform::EutProcessM569Point7(const CanMessageGeneric& msg, const S
 		String<StringLength20> portName;
 		parser.GetStringParam('C', portName.GetRef());
 		return GetGCodeResultFromSuccess(brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, PinAccess::write0));
+		//TODO use the following instead when we track the enable state of each driver individually
+		//return GetGCodeResultFromSuccess(brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, (driverDisabled[drive]) ? PinAccess::write0 : PinAccess::write1));
 	}
 
 	reply.printf("Driver %u.%u uses brake port ", CanInterface::GetCanAddress(), drive);

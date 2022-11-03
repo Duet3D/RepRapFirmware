@@ -310,6 +310,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// Test whether the previous homing move homed any axes
 			if (toBeHomed.Disjoint(axesHomed))
 			{
+				//debugPrintf("tbh %04x, ah %04x\n", (unsigned int)toBeHomed.GetRaw(), (unsigned int)axesHomed.GetRaw());
 				reply.copy("Failed to home axes ");
 				AppendAxes(reply, toBeHomed);
 				stateMachineResult = GCodeResult::error;

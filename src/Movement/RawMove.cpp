@@ -106,7 +106,7 @@ void MovementState::Diagnostics(MessageType mtype, unsigned int moveSystemNumber
 {
 	reprap.GetPlatform().MessageF(mtype, "Q%u segments left %u"
 #if SUPPORT_ASYNC_MOVES
-											", axes/extruders owned %03x"
+											", axes/extruders owned 0x%07x"
 #endif
 												"\n",
 													moveSystemNumber,
@@ -224,6 +224,13 @@ void MovementState::InitObjectCancellation() noexcept
 {
 	currentObjectNumber = -1;
 	currentObjectCancelled = printingJustResumed = false;
+}
+
+// When releasing axes we must also release the corresponding axis letters, because they serve as a cache
+void MovementState::ReleaseOwnedAxesAndExtruders() noexcept
+{
+	axesAndExtrudersOwned.Clear();
+	ownedAxisLetters.Clear();
 }
 
 #if SUPPORT_ASYNC_MOVES
