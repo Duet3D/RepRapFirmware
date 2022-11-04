@@ -728,9 +728,7 @@ private:
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
 
 #if SUPPORT_ASYNC_MOVES
-	AxesBitmap axesAndExtrudersMoved;			// axes and extruders that have moved since the last sync
 	CollisionAvoider collisionChecker;
-	float lastKnownMachinePositions[MaxAxes];
 #endif
 
 #if HAS_MASS_STORAGE

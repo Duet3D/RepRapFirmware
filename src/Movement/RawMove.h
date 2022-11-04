@@ -81,15 +81,22 @@ class MovementState : public RawMove
 public:
 
 #if SUPPORT_ASYNC_MOVES
-	AxesBitmap GetAxesAndExtrudersOwned() const noexcept { return axesAndExtrudersOwned; }		// Get the axes and extruders that this movement system owns
-	ParameterLettersBitmap GetOwnedAxisLetters() const noexcept { return ownedAxisLetters; }	// Get the letters denoting axes that this movement system owns
-	void AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept;
+	static void GlobalInit(size_t numVisibleAxes) noexcept;
+	static const float *GetLastKnownMachinePositions() noexcept { return lastKnownMachinePositions; }
+	static AxesBitmap GetAxesAndExtrudersMoved() noexcept { return axesAndExtrudersMoved; }
+
+	AxesBitmap GetAxesAndExtrudersOwned() const noexcept { return axesAndExtrudersOwned; }	// Get the axes and extruders that this movement system owns
+	ParameterLettersBitmap GetOwnedAxisLetters() const noexcept { return ownedAxisLetters; } // Get the letters denoting axes that this movement system owns
+	AxesBitmap AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept;	// try to allocate the requested axes, if we can't then return the axes we can't allocate
 	void ReleaseOwnedAxesAndExtruders() noexcept;
+	void ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept;
 	void ReleaseAxisLetter(char letter) noexcept;											// stop claiming that we own an axis letter (if we do) but don't release the associated axis
+	void SaveOwnAxisCoordinates() const noexcept;											// save the coordinates of axes we own to lastKnownMachinePositions
 #endif
 
+	unsigned int GetMsNumber() const noexcept { return msNumber; }
 	float GetProportionDone() const noexcept;												// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
-	void Reset() noexcept;
+	void Init(unsigned int p_msNumber) noexcept;
 	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;			// change the extrusion factor of an extruder
 	const RestorePoint& GetRestorePoint(size_t n) const pre(n < NumTotalRestorePoints) { return restorePoints[n]; }
 	void ClearMove() noexcept;
@@ -181,19 +188,18 @@ public:
 	bool printingJustResumed;										// true if we have just restarted printing
 
 private:
+	unsigned int msNumber;
+
 #if SUPPORT_ASYNC_MOVES
 	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync
-	ParameterLettersBitmap ownedAxisLetters;						// letters denoting axes that this movement system owns
+	ParameterLettersBitmap ownedAxisLetters;						// cache of letters denoting user axes for which the corresponding machine axes for the current tool are definitely owned
+
+	static AxesBitmap axesAndExtrudersMoved;						// axes and extruders that are owned by any movement system
+	static float lastKnownMachinePositions[MaxAxes];				// the last stored machine position of the axes
 #endif
 };
 
 #if SUPPORT_ASYNC_MOVES
-
-inline void MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept
-{
-	axesAndExtrudersOwned |= axes;
-	ownedAxisLetters |= axisLetters;
-}
 
 // Stop claiming that we own an axis letter (if we do) but don't release the associated axis
 inline void MovementState::ReleaseAxisLetter(char letter) noexcept

@@ -39,19 +39,19 @@ void CollisionAvoider::ResetPositions(const float positions[], AxesBitmap whichP
 }
 
 // Set the parameters
-void CollisionAvoider::Set(int axisL, int axisH, float sep, const float positions[]) noexcept
+void CollisionAvoider::Set(int axisL, int axisH, float sep) noexcept
 {
 	lowerAxis = axisL;
 	upperAxis = axisH;
 	minSeparation = sep;
-	lowerAxisMax = positions[lowerAxis];
-	upperAxisMin = positions[upperAxis];
+	lowerAxisMax = -std::numeric_limits<float>::infinity();
+	upperAxisMin = std::numeric_limits<float>::infinity();
 }
 
 // If the new move doesn't risk a collision, update the position accumulators and return true; else return false
-bool CollisionAvoider::UpdatePositions(const float axisPositions[]) noexcept
+bool CollisionAvoider::UpdatePositions(const float axisPositions[], AxesBitmap axesHomed) noexcept
 {
-	if (IsValid())
+	if (IsValid() && axesHomed.IsBitSet(lowerAxis) && axesHomed.IsBitSet(upperAxis))
 	{
 		const float newLowerMax = max<float>(axisPositions[lowerAxis], lowerAxisMax);
 		const float newUpperMin = min<float>(axisPositions[upperAxis], upperAxisMin);

@@ -11,6 +11,8 @@
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <Tools/Tool.h>
+#include <Movement/Move.h>
+#include <Movement/Kinematics/Kinematics.h>
 
 // Set up some default values in the move buffer for special moves, e.g. for Z probing and firmware retraction
 void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
@@ -35,23 +37,46 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 	}
 }
 
+#if SUPPORT_ASYNC_MOVES
+
+AxesBitmap MovementState::axesAndExtrudersMoved;						// axes and extruders that are owned by any movement system
+float MovementState::lastKnownMachinePositions[MaxAxes];				// the last stored machine position of the axes
+
+/*static*/ void MovementState::GlobalInit(size_t numVisibleAxes) noexcept
+{
+	axesAndExtrudersMoved.Clear();
+	reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numVisibleAxes, lastKnownMachinePositions);
+	for (size_t i = numVisibleAxes; i < MaxAxes; ++i)
+	{
+		lastKnownMachinePositions[i] = 0.0;
+	}
+}
+
+#endif
+
 float MovementState::GetProportionDone() const noexcept
 {
 	return (float)(totalSegments - segmentsLeft)/(float)totalSegments;
 }
 
-void MovementState::Reset() noexcept
+// Initialise this MovementState. If SUPPORT_ASYNC_MOVES is set then must call MovementState::GlobalInit before calling this.
+void MovementState::Init(unsigned int p_msNumber) noexcept
 {
+	msNumber = p_msNumber;
 	ClearMove();
 	filePos = noFilePosition;
 	codeQueue->Clear();
 	currentCoordinateSystem = 0;
 	pausedInMacro = false;
 
+#if SUPPORT_ASYNC_MOVES
+	memcpyf(coords, MovementState::GetLastKnownMachinePositions(), MaxAxesPlusExtruders);
+#else
 	for (float& f : coords)
 	{
 		f = 0.0;									// clear out all axis and extruder coordinates
 	}
+#endif
 
 	maxPrintingAcceleration = ConvertAcceleration(DefaultPrintingAcceleration);
 	maxTravelAcceleration = ConvertAcceleration(DefaultTravelAcceleration);
@@ -231,9 +256,36 @@ void MovementState::InitObjectCancellation() noexcept
 // When releasing axes we must also release the corresponding axis letters, because they serve as a cache
 void MovementState::ReleaseOwnedAxesAndExtruders() noexcept
 {
+	axesAndExtrudersMoved.ClearBits(axesAndExtrudersOwned);
 	axesAndExtrudersOwned.Clear();
 	ownedAxisLetters.Clear();
 }
+
+void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
+{
+	axesAndExtrudersOwned &= ~axesToRelease;						// clear the axes/extruders we have been asked to release
+	axesAndExtrudersMoved.ClearBits(axesToRelease);					// remove them from the own axes/extruders
+	ownedAxisLetters.Clear();										// clear the cache of owned axis letters
+}
+
+AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept
+{
+	const AxesBitmap unAvailable = axes & ~axesAndExtrudersOwned & axesAndExtrudersMoved;
+	if (unAvailable.IsEmpty())
+	{
+		axesAndExtrudersMoved |= axes;
+		axesAndExtrudersOwned |= axes;
+		ownedAxisLetters |= axisLetters;
+	}
+	return unAvailable;
+}
+
+// Save the coordinates of axes we own to lastKnownMachinePositions
+void MovementState::SaveOwnAxisCoordinates() const noexcept
+{
+	reprap.GetMove().GetPartialMachinePosition(lastKnownMachinePositions, GetAxesAndExtrudersOwned(), msNumber);
+}
+
 
 void AsyncMove::SetDefaults() noexcept
 {
