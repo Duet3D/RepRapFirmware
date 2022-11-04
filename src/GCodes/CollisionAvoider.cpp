@@ -48,21 +48,25 @@ void CollisionAvoider::Set(int axisL, int axisH, float sep, const float position
 	upperAxisMin = positions[upperAxis];
 }
 
+// If the new move doesn't risk a collision, update the position accumulators and return true; else return false
 bool CollisionAvoider::UpdatePositions(const float axisPositions[]) noexcept
 {
-	const float newLowerMax = max<float>(axisPositions[lowerAxis], lowerAxisMax);
-	const float newUpperMin = min<float>(axisPositions[upperAxis], upperAxisMin);
-	if (newLowerMax + minSeparation > newUpperMin)
+	if (IsValid())
 	{
-		if (reprap.Debug(moduleMove))
+		const float newLowerMax = max<float>(axisPositions[lowerAxis], lowerAxisMax);
+		const float newUpperMin = min<float>(axisPositions[upperAxis], upperAxisMin);
+		if (newLowerMax + minSeparation > newUpperMin)
 		{
-			const char *const axisLetters = reprap.GetGCodes().GetAxisLetters();
-			debugPrintf("Potential collision between axis %c at %.1f and axis %c at %.1f\n", axisLetters[lowerAxis], (double)newLowerMax, axisLetters[upperAxis], (double)newUpperMin);
+			if (reprap.Debug(moduleMove))
+			{
+				const char *const axisLetters = reprap.GetGCodes().GetAxisLetters();
+				debugPrintf("Potential collision between axis %c at %.1f and axis %c at %.1f\n", axisLetters[lowerAxis], (double)newLowerMax, axisLetters[upperAxis], (double)newUpperMin);
+			}
+			return false;
 		}
-		return false;
+		lowerAxisMax = newLowerMax;
+		upperAxisMin = newUpperMin;
 	}
-	lowerAxisMax = newLowerMax;
-	upperAxisMin = newUpperMin;
 	return true;
 }
 
