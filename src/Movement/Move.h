@@ -63,7 +63,7 @@ public:
 #endif
 	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
-	int32_t GetEndPoint(size_t drive) const noexcept;					 	// Get the current position of a motor
+	void GetLivePositions(int32_t pos[MaxAxesPlusExtruders]) const noexcept;
 	float LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept; // Gives the last point at the end of the last complete DDA
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
 	bool WaitingForAllMovesFinished(size_t queueNumber) noexcept
@@ -300,7 +300,8 @@ private:
 	AxisShaper axisShaper;
 	ExtruderShaper extruderShapers[MaxExtruders];
 
-	float latestLiveCoordinates[MaxAxesPlusExtruders];
+	float latestLiveCoordinates[MaxAxesPlusExtruders];	// the most recent set of live coordinates that we fetched
+	uint32_t latestLiveCoordinatesFetchedAt = 0;		// when we fetched the live coordinates
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
 
 	uint8_t numCalibratedFactors;
@@ -333,10 +334,9 @@ inline void Move::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAx
 
 #endif
 
-// Get the current position of a motor
-inline int32_t Move::GetEndPoint(size_t drive) const noexcept
+inline void Move::GetLivePositions(int32_t pos[MaxAxesPlusExtruders]) const noexcept
 {
-	return rings[0].GetEndPoint(drive);
+	return rings[0].GetCurrentMotorPositions(pos);
 }
 
 // Perform motor endpoint adjustment

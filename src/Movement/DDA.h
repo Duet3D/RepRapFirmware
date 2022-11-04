@@ -138,7 +138,8 @@ public:
 	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;						// Force an end point
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept;
-	bool FetchEndPosition(volatile int32_t ep[MaxAxesPlusExtruders], volatile float endCoords[MaxAxesPlusExtruders]) noexcept;
+	void FetchEndPoints(int32_t ep[MaxAxesPlusExtruders]) const noexcept;
+	void FetchCurrentPositions(int32_t ep[MaxAxesPlusExtruders]) const noexcept;
 	void SetPositions(const float move[]) noexcept;									// Force the endpoints to be these
 	FilePosition GetFilePosition() const noexcept { return filePos; }
 	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
@@ -452,6 +453,12 @@ inline int32_t DDA::GetStepsTaken(size_t drive) const noexcept
 {
 	const DriveMovement * const dmp = FindDM(drive);
 	return (dmp != nullptr) ? dmp->GetNetStepsTaken() : 0;
+}
+
+// This is called by DDARing::LiveCoordinates to get the endpoints of a move that has been completed
+inline void DDA::FetchEndPoints(int32_t ep[MaxAxesPlusExtruders]) const noexcept
+{
+	memcpyi32(ep, endPoint, MaxAxesPlusExtruders);
 }
 
 #if SUPPORT_CAN_EXPANSION

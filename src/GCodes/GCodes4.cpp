@@ -363,13 +363,50 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				ms.currentTool = nullptr;
 				UpdateCurrentUserPosition(gb);			// the tool offset may have changed, so get the current position
 			}
-			gb.AdvanceState();
-			if (Tool::GetLockedTool(ms.newToolNumber).IsNotNull() && (ms.toolChangeParam & TPreBit) != 0)	// 2020-04-29: run tpre file even if not all axes have been homed
+
+#if SUPPORT_ASYNC_MOVES && PREALLOCATE_TOOL_AXES
+			// Whenever we release axes, we must update lastKnownMachinePositions for those axes first so that whoever allocated them next gets the correct positions
+			ms.SaveOwnAxisCoordinates();
+
+			ReadLockedPointer<Tool> newTool = Tool::GetLockedTool(ms.newToolNumber);
+			if (newTool.IsNull())
 			{
-				String<StringLength20> scratchString;
-				scratchString.printf("tpre%d.g", ms.newToolNumber);
-				DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);
+				// Release the axes and extruders that this movement system owns
+				ms.ReleaseOwnedAxesAndExtruders();
 			}
+			else
+			{
+				// Allocate the axes and extruders that the new tool uses, and release all others
+				const AxesBitmap newToolAxes = newTool->GetXYAxesAndExtruders();
+				const AxesBitmap axesToAllocate = newToolAxes & ~ms.GetAxesAndExtrudersOwned();
+				const AxesBitmap axesToRelease = ms.GetAxesAndExtrudersOwned() & ~newToolAxes;
+				ms.ReleaseAxesAndExtruders(axesToRelease);
+				try
+				{
+					AllocateAxes(gb, ms, axesToAllocate, ParameterLettersToBitmap("XY"));
+				}
+				catch (const GCodeException& exc)
+				{
+					// We failed to allocate the new axes/extruders that we need
+					// Release all axes and extruders that this movement system owns
+					ms.ReleaseOwnedAxesAndExtruders();
+					gb.LatestMachineState().SetError(exc);
+					gb.SetState(GCodeState::normal);
+					break;
+				}
+				newTool.Release();						// release the tool list lock before we run tpre
+#else
+			if (Tool::GetLockedTool(ms.newToolNumber).IsNotNull())
+			{
+#endif
+				if ((ms.toolChangeParam & TPreBit) != 0)	// 2020-04-29: run tpre file even if not all axes have been homed
+				{
+					String<StringLength20> scratchString;
+					scratchString.printf("tpre%d.g", ms.newToolNumber);
+					DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);
+				}
+			}
+			gb.AdvanceState();
 		}
 		break;
 
@@ -1347,8 +1384,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just did the retraction part of a firmware retraction, now we need to do the Z hop
 		if (ms.segmentsLeft == 0)
 		{
-			if (ms.currentTool != nullptr)
+			if (ms.currentTool != nullptr)					// this should always be true
 			{
+#if SUPPORT_ASYNC_MOVES
+				// We already allocated the Z axis to this MS when we began the retraction, so no need to do it here
+#endif
 				SetMoveBufferDefaults(ms);
 				ms.movementTool = ms.currentTool;
 				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);

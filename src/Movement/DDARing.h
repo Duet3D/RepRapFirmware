@@ -62,17 +62,15 @@ public:
 	float GetDecelerationMmPerSecSquared() const noexcept;
 	float GetTotalExtrusionRate() const noexcept;
 
-	int32_t GetEndPoint(size_t drive) const noexcept { return liveEndPoints[drive]; } 	// Get the current position of a motor
-	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
+	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the position at the end of the last queued move in untransformed coords
 #if SUPPORT_ASYNC_MOVES
 	void GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) const noexcept;	// Return the machine coordinates of just some axes
 #endif
 
 	void SetPositions(const float move[MaxAxesPlusExtruders]) noexcept;					// Force the machine coordinates to be these
 	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;		// Perform motor endpoint adjustment
-	bool LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept;						// Fetch the last point at the end of the last completed DDA if it has changed since we last called this
-	void SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexcept;			// Force the live coordinates (see above) to be these
-	bool HaveLiveCoordinatesChanged() const noexcept { return liveCoordinatesChanged; }
+	void GetCurrentMotorPositions(int32_t pos[MaxAxesPlusExtruders]) const noexcept;	// Get the live motor positions
+	void LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept;						// Fetch the last point at the end of the last completed DDA
 	void ResetExtruderPositions() noexcept;												// Resets the extrusion amounts of the live coordinates
 
 	bool PauseMoves(RestorePoint& rp) noexcept;											// Pause the print as soon as we can, returning true if we were able to skip any
@@ -121,7 +119,6 @@ private:
 	StepTimer timer;															// Timer object to control getting step interrupts
 
 	volatile float liveCoordinates[MaxAxesPlusExtruders];						// The endpoint that the machine moved to in the last completed move
-	volatile int32_t liveEndPoints[MaxAxesPlusExtruders];						// The XYZ endpoints of the last completed move in motor coordinates
 
 	unsigned int numDdasInRing;
 	uint32_t gracePeriod;														// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
@@ -145,7 +142,6 @@ private:
 
 	volatile bool extrudersPrinting;											// Set whenever an extruder starts a printing move, cleared by a non-printing extruder move
 	volatile bool liveCoordinatesValid;											// True if the XYZ live coordinates in liveCoordinates are reliable (the extruder ones always are)
-	volatile bool liveCoordinatesChanged;										// True if the live coordinates have changed since LiveCoordinates was last called
 	volatile bool waitingForRingToEmpty;										// True if Move has signalled that we are waiting for this ring to empty
 };
 

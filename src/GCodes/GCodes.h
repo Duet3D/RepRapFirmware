@@ -226,7 +226,7 @@ public:
 
 	void SavePosition(const GCodeBuffer& gb, unsigned int restorePointNumber) noexcept
 		pre(restorePointNumber < NumTotalRestorePoints);							// Save position etc. to a restore point
-	void StartToolChange(GCodeBuffer& gb, uint8_t param) noexcept;
+	void StartToolChange(GCodeBuffer& gb, MovementState& ms, uint8_t param) noexcept;
 
 	unsigned int GetPrimaryWorkplaceCoordinateSystemNumber() const noexcept { return GetPrimaryMovementState().currentCoordinateSystem + 1; }
 
@@ -554,9 +554,11 @@ private:
 	GCodeResult CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Handle M597
 	GCodeResult SyncMovementSystems(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M598
 	GCodeResult ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);				// Handle M400
-	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes) THROWS(GCodeException);	// allocate axes to a movement state
+	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes, ParameterLettersBitmap axLetters) THROWS(GCodeException);	// allocate axes to a movement state
 	void AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException);
 																											// allocate axes by letter
+	void AllocateAxesDirectFromLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException);
+																											// allocate axes by letter for a special move
 	bool DoSync(GCodeBuffer& gb) noexcept;																	// sync with the other stream returning true if done, false if we need to wait for it
 	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;								// synchronise motion systems
 	void UpdateAllCoordinates(const GCodeBuffer& gb) noexcept;
@@ -726,9 +728,7 @@ private:
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
 
 #if SUPPORT_ASYNC_MOVES
-	AxesBitmap axesAndExtrudersMoved;			// axes and extruders that have moved since the last sync
 	CollisionAvoider collisionChecker;
-	float lastKnownMachinePositions[MaxAxes];
 #endif
 
 #if HAS_MASS_STORAGE
