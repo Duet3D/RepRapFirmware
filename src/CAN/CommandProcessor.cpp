@@ -355,11 +355,11 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 			const size_t driver = msg.type - (CanMessageReturnInfo::typeDiagnosticsPart0 + 1);
 			if (driver < NumDirectDrivers)			// we have up to 7 drivers on the Duet 3 Mini but only 6 on the 6HC and 6XD
 			{
-				reply.lcatf("Driver %u: position %" PRIi32 ", %.1f steps/mm"
+				reply.lcatf("Driver %u: %.1f steps/mm"
 #if HAS_SMART_DRIVERS
 					","
 #endif
-					, driver, reprap.GetMove().GetEndPoint(driver), (double)reprap.GetPlatform().DriveStepsPerUnit(driver));
+					, driver, (double)reprap.GetPlatform().DriveStepsPerUnit(driver));
 #if HAS_SMART_DRIVERS
 				SmartDrivers::AppendDriverStatus(driver, reply);
 #endif

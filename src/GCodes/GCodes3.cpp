@@ -76,7 +76,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 #if SUPPORT_ASYNC_MOVES
 	// Check for setting unowned axes before processing the command
 	ParameterLettersBitmap axisLettersMentioned = gb.AllParameters() & allAxisLetters;
-	axisLettersMentioned.ClearBits(ms.ownedAxisLetters);
+	axisLettersMentioned.ClearBits(ms.GetOwnedAxisLetters());
 	if (axisLettersMentioned.IsNonEmpty())
 	{
 		AllocateAxisLetters(gb, ms, axisLettersMentioned);
@@ -118,8 +118,9 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 			ToolOffsetInverseTransform(ms);		// make sure the limits are reflected in the user position
 		}
 		reprap.GetMove().SetNewPosition(ms.coords, true, gb.GetActiveQueueNumber());
-		//TODO update the other move system too!
-
+#if SUPPORT_ASYNC_MOVES
+		ms.SaveOwnAxisCoordinates();
+#endif
 		if (!IsSimulating())
 		{
 			axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
@@ -130,6 +131,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 			}
 			reprap.MoveUpdated();				// because we may have updated axesHomed or zDatumSetByProbing
 		}
+
 	}
 
 	return GCodeResult::ok;
@@ -1569,8 +1571,8 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 			// We have just started doing coordinate rotation, so if we own axis letter X we need to own Y and vice versa
 			// Simplest is just to say we don't own either in the axis letters bitmap
 			MovementState& ms = GetMovementState(gb);
-			ms.ownedAxisLetters.ClearBit('X' - 'A');
-			ms.ownedAxisLetters.ClearBit('Y' - 'A');
+			ms.ReleaseAxisLetter('X');
+			ms.ReleaseAxisLetter('Y');
 		}
 #endif
 		UpdateCurrentUserPosition(gb);

@@ -565,8 +565,6 @@ void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool do
 	float newPos[MaxAxesPlusExtruders];
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, reprap.GetGCodes().GetMovementState(queueNumber).currentTool, doBedCompensation);
-
-	rings[queueNumber].SetLiveCoordinates(newPos);
 	rings[queueNumber].SetPositions(newPos);
 }
 
@@ -1204,14 +1202,17 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 
 #endif
 
-// Return the current live XYZ and extruder coordinates
+// Return the current machine axis and extruder coordinates. They are needed only to service status requests from DWC, PanelDue, M114.
+// Transforming the machine motor coordinates to Cartesian coordinates is quite expensive, and a status request or object model request will call this for each axis.
+// So we cache the latest coordinates and only update them if it is some time since we last did
 // Interrupts are assumed enabled on entry
 float Move::LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept
 {
-	if (rings[0].HaveLiveCoordinatesChanged())
+	if (millis() - latestLiveCoordinatesFetchedAt > 200)
 	{
 		rings[0].LiveCoordinates(latestLiveCoordinates);
 		InverseAxisAndBedTransform(latestLiveCoordinates, tool);
+		latestLiveCoordinatesFetchedAt = millis();
 	}
 	return latestLiveCoordinates[axisOrExtruder];
 }

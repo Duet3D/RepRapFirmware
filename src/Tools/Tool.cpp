@@ -958,4 +958,18 @@ void Tool::StopFeedForward() const noexcept
 	}
 }
 
+#if SUPPORT_ASYNC_MOVES && PREALLOCATE_TOOL_AXES
+
+AxesBitmap Tool::GetXYAxesAndExtruders() const noexcept
+{
+	AxesBitmap ret = axisMapping[0] | axisMapping[1];
+	for (size_t i = 0; i < driveCount; ++i)
+	{
+		ret.SetBit(ExtruderToLogicalDrive(drives[i]));
+	}
+	return ret;
+}
+
+#endif
+
 // End

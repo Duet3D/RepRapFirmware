@@ -80,7 +80,7 @@ public:
 	bool SeenAny(ParameterLettersBitmap bm) const noexcept							// Return true if any of the parameter letters in the bitmap were seen
 		{ return AllParameters().Intersects(bm); }
 	bool SeenAny(const char *s) const noexcept										// Return true if any of the parameter letters in the string were seen
-		{ return SeenAny(ParameterLettersBitmap(ParametersToBitmap(s))); }
+		{ return SeenAny(ParameterLettersToBitmap(s)); }
 
 	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get a float after a key letter
 	float GetPositiveFValue() THROWS(GCodeException) SPEED_CRITICAL;				// Get a float after a key letter and check that it is greater than zero
@@ -302,13 +302,6 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	// Convert a string of uppercase parameter letters to a bit map
-	static inline constexpr uint32_t ParametersToBitmap(const char *s) noexcept
-	{
-		return (*s == 0) ? 0
-			: (*s >= 'A' && *s <= 'Z') ? ((uint32_t)1 << (*s - 'A')) | ParametersToBitmap(s + 1)
-				: ParametersToBitmap(s + 1);
-	}
 
 #if SUPPORT_OBJECT_MODEL
 	const char *GetStateText() const noexcept;

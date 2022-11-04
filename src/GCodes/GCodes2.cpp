@@ -4736,12 +4736,13 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	}
 
 #if SUPPORT_ASYNC_MOVES
-		if (!gb.Executing())
-		{
-			UnlockAll(gb);
-			HandleReply(gb, GCodeResult::ok, "");
-			return true;
-		}
+	if (!gb.Executing())
+	{
+		// This is not the active MS, so ignore the command
+		UnlockAll(gb);
+		HandleReply(gb, GCodeResult::ok, "");
+		return true;
+	}
 #endif
 
 	bool seen = false;
@@ -4794,15 +4795,15 @@ bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		{
 			// Don't do the tool change, just remember which one we are supposed to use in 'newToolNumber'
 		}
-		else if (ms.GetCurrentToolNumber() != toolNum)		// if old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
-		{
-			StartToolChange(gb, (gb.Seen('P')) ? gb.GetUIValue() : DefaultToolChangeParam);
-			return true;									// proceeding with state machine, so don't unlock or send a reply
-		}
-		else
+		else if (ms.GetCurrentToolNumber() == toolNum)		// if old and new are the same we no longer follow the sequence. User can deselect and then reselect the tool if he wants the macros run.
 		{
 			// Even though the tool is selected, we may have turned it off e.g. when upgrading the WiFi firmware or following a heater fault that has been cleared. So make sure the tool heaters are on.
 			ms.SelectTool(toolNum, IsSimulating());
+		}
+		else
+		{
+			StartToolChange(gb, ms, (gb.Seen('P')) ? gb.GetUIValue() : DefaultToolChangeParam);
+			return true;									// proceeding with state machine, so don't unlock or send a reply
 		}
 	}
 	else

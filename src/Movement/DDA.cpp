@@ -1233,30 +1233,14 @@ void DDA::MatchSpeeds() noexcept
 	}
 }
 
-// This is called by Move::CurrentMoveCompleted to update the live coordinates from the move that has just finished
-bool DDA::FetchEndPosition(volatile int32_t ep[MaxAxesPlusExtruders], volatile float endCoords[MaxAxesPlusExtruders]) noexcept
+// This is called by DDARing::LiveCoordinates to get the endpoints of a move that is being executed
+void DDA::FetchCurrentPositions(int32_t ep[MaxAxesPlusExtruders]) const noexcept
 {
-	for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
+	memcpyi32(ep, endPoint, MaxAxesPlusExtruders);
+	for (const DriveMovement* dm = activeDMs; dm != nullptr; dm = dm->nextDM)
 	{
-		ep[drive] = endPoint[drive];
+		ep[dm->drive] -= dm->GetNetStepsLeft();
 	}
-	if (flags.endCoordinatesValid)
-	{
-		const size_t visibleAxes = reprap.GetGCodes().GetVisibleAxes();
-		for (size_t axis = 0; axis < visibleAxes; ++axis)
-		{
-			endCoords[axis] = endCoordinates[axis];
-		}
-	}
-
-	// Extrusion amounts are always valid
-	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
-	for (size_t extruder = 0; extruder < numExtruders; ++extruder)
-	{
-		endCoords[ExtruderToLogicalDrive(extruder)] += endCoordinates[ExtruderToLogicalDrive(extruder)];
-	}
-
-	return flags.endCoordinatesValid;
 }
 
 // This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered
