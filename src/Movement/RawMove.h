@@ -91,7 +91,7 @@ public:
 	void ReleaseOwnedAxesAndExtruders() noexcept;
 	void ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept;
 	void ReleaseAxisLetter(char letter) noexcept;											// stop claiming that we own an axis letter (if we do) but don't release the associated axis
-	void SaveOwnAxisCoordinates() const noexcept;											// save the coordinates of axes we own to lastKnownMachinePositions
+	void SaveOwnAxisCoordinates() noexcept;													// fetch and save the coordinates of axes we own to lastKnownMachinePositions
 #endif
 
 	unsigned int GetMsNumber() const noexcept { return msNumber; }

@@ -280,12 +280,13 @@ AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap a
 	return unAvailable;
 }
 
-// Save the coordinates of axes we own to lastKnownMachinePositions
-void MovementState::SaveOwnAxisCoordinates() const noexcept
+// Fetch and save the coordinates of axes we own to lastKnownMachinePositions, also copy them to our own coordinates in case we just did a homing move
+void MovementState::SaveOwnAxisCoordinates() noexcept
 {
-	reprap.GetMove().GetPartialMachinePosition(lastKnownMachinePositions, GetAxesAndExtrudersOwned(), msNumber);
+	reprap.GetMove().GetPartialMachinePosition(lastKnownMachinePositions, axesAndExtrudersOwned, msNumber);
+	memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
+	reprap.GetMove().InverseAxisAndBedTransform(coords, currentTool);
 }
-
 
 void AsyncMove::SetDefaults() noexcept
 {

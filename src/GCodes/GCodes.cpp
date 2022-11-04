@@ -1593,15 +1593,9 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned in
 		// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
 #if SUPPORT_ASYNC_MOVES
 		// Get the position of all axes by combining positions from the queues
-		Move& move = reprap.GetMove();
-		const AxesBitmap ownedAxes = ms.GetAxesAndExtrudersOwned();
-
-		// Whenever we release axes, we must update lastKnownMachinePositions for those axes first so that whoever allocated them next gets the correct positions
 		ms.SaveOwnAxisCoordinates();
-		memcpyf(ms.coords, MovementState::GetLastKnownMachinePositions(), MaxAxes);
-		move.InverseAxisAndBedTransform(ms.coords, ms.currentTool);
 		UpdateUserPositionFromMachinePosition(gb, ms);
-		collisionChecker.ResetPositions(ms.coords, ownedAxes);
+		collisionChecker.ResetPositions(ms.coords, ms.GetAxesAndExtrudersOwned());
 
 		// Release the axes and extruders that this movement system owns, except those used by the current tool
 		if (ms.currentTool != nullptr)
@@ -5117,7 +5111,6 @@ void GCodes::UpdateAllCoordinates(const GCodeBuffer& gb) noexcept
 {
 	const unsigned int msNumber = gb.GetOwnQueueNumber();
 	memcpyf(moveStates[msNumber].coords, MovementState::GetLastKnownMachinePositions(), MaxAxes);
-	reprap.GetMove().InverseAxisAndBedTransform(moveStates[msNumber].coords, moveStates[msNumber].currentTool);
 	UpdateUserPositionFromMachinePosition(gb, moveStates[msNumber]);
 	reprap.GetMove().SetNewPosition(moveStates[msNumber].coords, true, msNumber);
 }
