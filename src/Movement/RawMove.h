@@ -79,11 +79,14 @@ constexpr size_t ResumeObjectRestorePointNumber = NumVisibleRestorePoints + 1;
 class MovementState : public RawMove
 {
 public:
+
+#if SUPPORT_ASYNC_MOVES
 	AxesBitmap GetAxesAndExtrudersOwned() const noexcept { return axesAndExtrudersOwned; }		// Get the axes and extruders that this movement system owns
 	ParameterLettersBitmap GetOwnedAxisLetters() const noexcept { return ownedAxisLetters; }	// Get the letters denoting axes that this movement system owns
 	void AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept;
 	void ReleaseOwnedAxesAndExtruders() noexcept;
 	void ReleaseAxisLetter(char letter) noexcept;											// stop claiming that we own an axis letter (if we do) but don't release the associated axis
+#endif
 
 	float GetProportionDone() const noexcept;												// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
 	void Reset() noexcept;
@@ -178,9 +181,13 @@ public:
 	bool printingJustResumed;										// true if we have just restarted printing
 
 private:
+#if SUPPORT_ASYNC_MOVES
 	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync
 	ParameterLettersBitmap ownedAxisLetters;						// letters denoting axes that this movement system owns
+#endif
 };
+
+#if SUPPORT_ASYNC_MOVES
 
 inline void MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept
 {
@@ -193,8 +200,6 @@ inline void MovementState::ReleaseAxisLetter(char letter) noexcept
 {
 	ownedAxisLetters.ClearBit(ParameterLetterToBitNumber(letter));
 }
-
-#if SUPPORT_ASYNC_MOVES
 
 struct AsyncMove
 {

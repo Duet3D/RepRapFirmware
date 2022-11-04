@@ -216,7 +216,7 @@ void MovementState::ResumePrinting(GCodeBuffer& gb) noexcept
 	reprap.GetGCodes().SavePosition(gb, ResumeObjectRestorePointNumber);	// save the position we should be at for the start of the next move
 	if (GetCurrentToolNumber() != newToolNumber)							// if the wrong tool is loaded
 	{
-		reprap.GetGCodes().StartToolChange(gb, DefaultToolChangeParam);
+		reprap.GetGCodes().StartToolChange(gb, *this, DefaultToolChangeParam);
 	}
 }
 
@@ -226,14 +226,14 @@ void MovementState::InitObjectCancellation() noexcept
 	currentObjectCancelled = printingJustResumed = false;
 }
 
+#if SUPPORT_ASYNC_MOVES
+
 // When releasing axes we must also release the corresponding axis letters, because they serve as a cache
 void MovementState::ReleaseOwnedAxesAndExtruders() noexcept
 {
 	axesAndExtrudersOwned.Clear();
 	ownedAxisLetters.Clear();
 }
-
-#if SUPPORT_ASYNC_MOVES
 
 void AsyncMove::SetDefaults() noexcept
 {

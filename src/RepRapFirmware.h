@@ -111,6 +111,11 @@ enum class PinUsedBy : uint8_t
 static_assert(MinVisibleAxes <= MinAxes);
 static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logical pin numbers");
 
+// Motion system choices, temporary until we finalise the choices of behaviour
+#if SUPPORT_ASYNC_MOVES
+# define PREALLOCATE_TOOL_AXES		1		// if set, when a tool is selected we preallocate and hang on to its X/Y axes and extruders
+#endif
+
 #if SUPPORT_CAN_EXPANSION
 
 # include <CanId.h>
@@ -383,10 +388,30 @@ union LaserPwmOrIoBits
 #endif
 
 // Find the bit number corresponding to a parameter letter
-constexpr unsigned int ParameterLetterToBitNumber(char c) noexcept
+inline constexpr unsigned int ParameterLetterToBitNumber(char c) noexcept
 {
 	return (c <= 'Z') ? c - 'A' : c - ('a' - 26);
 }
+
+// Make a ParameterLettersBitmap representing a single letter
+inline constexpr ParameterLettersBitmap ParameterLetterToBitmap(char c) noexcept
+{
+	return ParameterLettersBitmap::MakeFromBits(ParameterLetterToBitNumber(c));
+}
+
+// Convert a string of parameter letters to a collection of bits. Normally used with constant strings, so recursive is OK.
+inline constexpr uint32_t ParameterLettersToBits(const char *s) noexcept
+{
+	return (*s == 0) ? 0
+		: (1u << ParameterLetterToBitNumber(*s)) | ParameterLettersToBits(s + 1);
+}
+
+// Convert a string of parameter letters to a bitmap
+inline constexpr ParameterLettersBitmap ParameterLettersToBitmap(const char *s) noexcept
+{
+	return ParameterLettersBitmap(ParameterLettersToBits(s));
+}
+
 // Debugging support
 extern "C" void debugPrintf(const char* fmt, ...) noexcept __attribute__ ((format (printf, 1, 2)));
 #define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)

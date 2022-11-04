@@ -1347,8 +1347,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just did the retraction part of a firmware retraction, now we need to do the Z hop
 		if (ms.segmentsLeft == 0)
 		{
-			if (ms.currentTool != nullptr)
+			if (ms.currentTool != nullptr)					// this should always be true
 			{
+#if SUPPORT_ASYNC_MOVES
+				// We already allocated the Z axis to this MS when we began the retraction, so no need to do it here
+#endif
 				SetMoveBufferDefaults(ms);
 				ms.movementTool = ms.currentTool;
 				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
