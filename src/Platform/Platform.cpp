@@ -223,7 +223,7 @@ constexpr ObjectModelArrayTableEntry Platform::objectModelArrayTable[] =
 	// 2. Average readings from last accelerometer run
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return 3; },
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumAccelerometerAxes; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 				{ return ExpressionValue((float)Accelerometers::GetLocalAccelerometerLastRunAverage(context.GetLastIndex())); }
 	}

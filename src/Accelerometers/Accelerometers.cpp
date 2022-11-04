@@ -16,6 +16,7 @@
 #include <RTOSIface/RTOSIface.h>
 #include <Platform/TaskPriorities.h>
 #include <Hardware/Spi/SharedSpiDevice.h>
+#include <RRF3Common.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include <CanMessageFormats.h>
@@ -68,8 +69,7 @@ static volatile uint32_t numSamplesRequested;
 static uint8_t resolution = DefaultResolution;
 static uint8_t orientation = 20;							// +Z -> +Z, +X -> +X
 static volatile uint8_t axesRequested;
-constexpr size_t NumAxis = 3;
-static float lastRunAverages[NumAxis] = {0.0f, 0.0f, 0.0f};
+static float lastRunAverages[NumAccelerometerAxes] = {0.0f, 0.0f, 0.0f};
 static FileStore* volatile accelerometerFile = nullptr;		// this is non-null when the accelerometer is running, null otherwise
 static unsigned int numLocalRunsCompleted = 0;
 static unsigned int lastRunNumSamplesReceived = 0;
@@ -82,26 +82,23 @@ static IoPort spiCsPort;
 static IoPort irqPort;
 
 // Add a local accelerometer run
-static void AddLocalAccelerometerRun(unsigned int numDataPoints) noexcept
+static void AddLocalAccelerometerRun(unsigned int numDataPoints, float averages[]) noexcept
 {
 	lastRunNumSamplesReceived = numDataPoints;
 	++numLocalRunsCompleted;
-	reprap.BoardsUpdated();
-}
 
-static void AddLocalAccelerometerAverages(float averages[]) noexcept
-{
-	for(unsigned int axis = 0;axis < NumAxis;++axis)
+	for(unsigned int axis = 0;axis < NumAccelerometerAxes;++axis)
 	{
 		lastRunAverages[axis] = averages[axis];
 	}
+
 	reprap.BoardsUpdated();
 }
 
 static uint8_t TranslateAxes(uint8_t axes) noexcept
 {
 	uint8_t rslt = 0;
-	for (unsigned int i = 0; i < 3; ++i)
+	for (unsigned int i = 0; i < NumAccelerometerAxes; ++i)
 	{
 		if (axes & (1u << i))
 		{
@@ -126,7 +123,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 			const uint16_t mask = (1u << resolution) - 1;
 			const int decimalPlaces = GetDecimalPlaces(resolution);
 			bool recordFailedStart = false;
-			float accumulatedSamples[NumAxis] = {0.0f, 0.0f, 0.0f};
+			float accumulatedSamples[NumAccelerometerAxes] = {0.0f, 0.0f, 0.0f};
 
 			if (accelerometer->StartCollecting(TranslateAxes(axesRequested)))
 			{
@@ -145,7 +142,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 						f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 						f->Close();
 						f = nullptr;
-						AddLocalAccelerometerRun(0);
+						AddLocalAccelerometerRun(0, {0});
 					}
 					else
 					{
@@ -170,7 +167,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 							String<StringLength50> temp;
 							temp.printf("%u", samplesWritten);
 
-							for (unsigned int axis = 0; axis < 3; ++axis)
+							for (unsigned int axis = 0; axis < NumAccelerometerAxes; ++axis)
 							{
 								if (axesRequested & (1u << axis))
 								{
@@ -230,14 +227,15 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 			{
 				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();
-				AddLocalAccelerometerRun(samplesWritten);
 
 				// find the average value for each axis
-				for(unsigned int axis = 0;axis < NumAxis;++axis)
+				for(unsigned int axis = 0;axis < NumAccelerometerAxes;++axis)
 				{
 					accumulatedSamples[axis] /= float(samplesWritten);
 				}
-				AddLocalAccelerometerAverages(accumulatedSamples);
+
+				AddLocalAccelerometerRun(samplesWritten, accumulatedSamples);
+
 			}
 
 			accelerometer->StopCollecting();
@@ -479,12 +477,12 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 # if SUPPORT_CAN_EXPANSION
 		if (device.IsRemote())
 		{
-			reprap.GetExpansion().AddAccelerometerRun(device.boardAddress, 0);
+			reprap.GetExpansion().AddAccelerometerRun(device.boardAddress, 0, {0});
 		}
 		else
 # endif
 		{
-			AddLocalAccelerometerRun(0);
+			AddLocalAccelerometerRun(0, {0});
 		}
 		return GCodeResult::error;
 	}
@@ -515,7 +513,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 			accelerometerFile->Close();
 			accelerometerFile = nullptr;
 			MassStorage::Delete(accelerometerFileName.c_str(), false);
-			reprap.GetExpansion().AddAccelerometerRun(device.boardAddress, 0);
+			reprap.GetExpansion().AddAccelerometerRun(device.boardAddress, 0, {0});
 		}
 		return rslt;
 	}
@@ -599,7 +597,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			accelerometerFile = nullptr;
-			reprap.GetExpansion().AddAccelerometerRun(src, 0);
+			reprap.GetExpansion().AddAccelerometerRun(src, 0, {0});
 		}
 		else if (msg.axes != expectedRemoteAxes || msg.firstSampleNumber != expectedRemoteSampleNumber || src != expectedRemoteBoardAddress)
 		{
@@ -607,7 +605,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			accelerometerFile = nullptr;
-			reprap.GetExpansion().AddAccelerometerRun(src, 0);
+			reprap.GetExpansion().AddAccelerometerRun(src, 0, {0});
 		}
 		else
 		{
@@ -619,7 +617,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			const unsigned int receivedResolution = msg.bitsPerSampleMinusOne + 1;
 			const uint16_t mask = (1u << receivedResolution) - 1;
 			const int decimalPlaces = GetDecimalPlaces(receivedResolution);
-			float accumulatedSamples[NumAxis] = {0.0f, 0.0f, 0.0f};
+			float accumulatedSamples[NumAccelerometerAxes] = {0.0f, 0.0f, 0.0f};
 
 			if (msg.overflowed)
 			{
@@ -679,14 +677,14 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();
 				accelerometerFile = nullptr;
-				reprap.GetExpansion().AddAccelerometerRun(src, expectedRemoteSampleNumber);
 
 				// find the average value for each axis
-				for (unsigned int axis = 0; axis < NumAxis; ++axis)
+				for (unsigned int axis = 0; axis < NumAccelerometerAxes; ++axis)
 				{
 					accumulatedSamples[axis] /= float(msg.numSamples);
 				}
-				reprap.GetExpansion().AddAccelerometerLastRunAverages(src, accumulatedSamples, NumAxis);
+
+				reprap.GetExpansion().AddAccelerometerRun(src, expectedRemoteSampleNumber, accumulatedSamples);
 			}
 		}
 	}

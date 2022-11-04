@@ -28,7 +28,7 @@ constexpr ObjectModelArrayTableEntry ExpansionManager::objectModelArrayTable[] =
 {
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return 3; },
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumAccelerometerAxes; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 				{ return ExpressionValue(((const ExpansionManager*)self)->FindIndexedBoard(context.GetIndex(1)).accelerometerLastRunAverages[context.GetLastIndex()]); }
 	}
@@ -307,19 +307,16 @@ void ExpansionManager::UpdateFailed(CanAddress address) noexcept
 	UpdateBoardState(address, BoardState::flashFailed);
 }
 
-void ExpansionManager::AddAccelerometerLastRunAverages(CanAddress address, float averages[], int32_t numAxis) noexcept
-{
-	for(int32_t i = 0;i < numAxis;++i)
-	{
-		boards[address].accelerometerLastRunAverages[i] = averages[i];
-	}
-	reprap.BoardsUpdated();
-}
-
-void ExpansionManager::AddAccelerometerRun(CanAddress address, unsigned int numDataPoints) noexcept
+void ExpansionManager::AddAccelerometerRun(CanAddress address, unsigned int numDataPoints, float averages[]) noexcept
 {
 	boards[address].accelerometerLastRunDataPoints = numDataPoints;
 	++boards[address].accelerometerRuns;
+
+	for(int32_t i = 0;i < NumAccelerometerAxes;++i)
+	{
+		boards[address].accelerometerLastRunAverages[i] = averages[i];
+	}
+
 	reprap.BoardsUpdated();
 }
 
