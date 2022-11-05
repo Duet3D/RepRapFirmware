@@ -226,7 +226,7 @@ public:
 
 	void SavePosition(const GCodeBuffer& gb, unsigned int restorePointNumber) noexcept
 		pre(restorePointNumber < NumTotalRestorePoints);							// Save position etc. to a restore point
-	void StartToolChange(GCodeBuffer& gb, uint8_t param) noexcept;
+	void StartToolChange(GCodeBuffer& gb, MovementState& ms, uint8_t param) noexcept;
 
 	unsigned int GetPrimaryWorkplaceCoordinateSystemNumber() const noexcept { return GetPrimaryMovementState().currentCoordinateSystem + 1; }
 
@@ -728,9 +728,7 @@ private:
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
 
 #if SUPPORT_ASYNC_MOVES
-	AxesBitmap axesAndExtrudersMoved;			// axes and extruders that have moved since the last sync
 	CollisionAvoider collisionChecker;
-	float lastKnownMachinePositions[MaxAxes];
 #endif
 
 #if HAS_MASS_STORAGE

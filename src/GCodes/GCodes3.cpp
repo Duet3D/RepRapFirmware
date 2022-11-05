@@ -118,8 +118,9 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 			ToolOffsetInverseTransform(ms);		// make sure the limits are reflected in the user position
 		}
 		reprap.GetMove().SetNewPosition(ms.coords, true, gb.GetActiveQueueNumber());
-		//TODO update the other move system too!
-
+#if SUPPORT_ASYNC_MOVES
+		ms.SaveOwnAxisCoordinates();
+#endif
 		if (!IsSimulating())
 		{
 			axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
@@ -130,6 +131,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 			}
 			reprap.MoveUpdated();				// because we may have updated axesHomed or zDatumSetByProbing
 		}
+
 	}
 
 	return GCodeResult::ok;
