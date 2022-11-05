@@ -87,10 +87,19 @@ static void AddLocalAccelerometerRun(unsigned int numDataPoints, float averages[
 	lastRunNumSamplesReceived = numDataPoints;
 	++numLocalRunsCompleted;
 
-	for(unsigned int axis = 0;axis < NumAccelerometerAxes;++axis)
-	{
-		lastRunAverages[axis] = averages[axis];
-	}
+	memcpyf(lastRunAverages, averages, ARRAY_SIZE(averages));
+
+	reprap.BoardsUpdated();
+}
+
+// Add a local failed accelerometer run
+static void AddLocalFailedAccelerometerRun() noexcept
+{
+	lastRunNumSamplesReceived = 0;
+	++numLocalRunsCompleted;
+
+	// reset the last run averages
+	for (float& f : lastRunAverages) { f = 0.0f; }
 
 	reprap.BoardsUpdated();
 }
@@ -142,7 +151,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 						f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 						f->Close();
 						f = nullptr;
-						AddLocalAccelerometerRun(0, {0});
+						AddLocalFailedAccelerometerRun();
 					}
 					else
 					{
@@ -229,13 +238,9 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 				f->Close();
 
 				// find the average value for each axis
-				for(unsigned int axis = 0;axis < NumAccelerometerAxes;++axis)
-				{
-					accumulatedSamples[axis] /= float(samplesWritten);
-				}
+				for (float& f : accumulatedSamples) { f /= float(samplesWritten); }
 
 				AddLocalAccelerometerRun(samplesWritten, accumulatedSamples);
-
 			}
 
 			accelerometer->StopCollecting();
@@ -477,12 +482,12 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 # if SUPPORT_CAN_EXPANSION
 		if (device.IsRemote())
 		{
-			reprap.GetExpansion().AddAccelerometerRun(device.boardAddress, 0, {0});
+			reprap.GetExpansion().AddFailedAccelerometerRun(device.boardAddress);
 		}
 		else
 # endif
 		{
-			AddLocalAccelerometerRun(0, {0});
+			AddLocalFailedAccelerometerRun();
 		}
 		return GCodeResult::error;
 	}
@@ -513,7 +518,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 			accelerometerFile->Close();
 			accelerometerFile = nullptr;
 			MassStorage::Delete(accelerometerFileName.c_str(), false);
-			reprap.GetExpansion().AddAccelerometerRun(device.boardAddress, 0, {0});
+			reprap.GetExpansion().AddFailedAccelerometerRun(device.boardAddress);
 		}
 		return rslt;
 	}
@@ -597,7 +602,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			accelerometerFile = nullptr;
-			reprap.GetExpansion().AddAccelerometerRun(src, 0, {0});
+			reprap.GetExpansion().AddFailedAccelerometerRun(src);
 		}
 		else if (msg.axes != expectedRemoteAxes || msg.firstSampleNumber != expectedRemoteSampleNumber || src != expectedRemoteBoardAddress)
 		{
@@ -605,7 +610,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			accelerometerFile = nullptr;
-			reprap.GetExpansion().AddAccelerometerRun(src, 0, {0});
+			reprap.GetExpansion().AddFailedAccelerometerRun(src);
 		}
 		else
 		{
@@ -679,10 +684,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 				accelerometerFile = nullptr;
 
 				// find the average value for each axis
-				for (unsigned int axis = 0; axis < NumAccelerometerAxes; ++axis)
-				{
-					accumulatedSamples[axis] /= float(msg.numSamples);
-				}
+				for (float& f : accumulatedSamples) { f /= float(msg.numSamples); }
 
 				reprap.GetExpansion().AddAccelerometerRun(src, expectedRemoteSampleNumber, accumulatedSamples);
 			}

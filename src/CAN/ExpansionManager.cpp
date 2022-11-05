@@ -312,10 +312,18 @@ void ExpansionManager::AddAccelerometerRun(CanAddress address, unsigned int numD
 	boards[address].accelerometerLastRunDataPoints = numDataPoints;
 	++boards[address].accelerometerRuns;
 
-	for(int32_t i = 0;i < NumAccelerometerAxes;++i)
-	{
-		boards[address].accelerometerLastRunAverages[i] = averages[i];
-	}
+	memcpyf(boards[address].accelerometerLastRunAverages, averages, ARRAY_SIZE(averages));
+
+	reprap.BoardsUpdated();
+}
+
+void ExpansionManager::AddFailedAccelerometerRun(CanAddress address) noexcept
+{
+	boards[address].accelerometerLastRunDataPoints = 0;
+	++boards[address].accelerometerRuns;
+
+	// reset the averages to 0.0f
+	for (float& f : boards[address].accelerometerLastRunAverages) { f = 0.0f; }
 
 	reprap.BoardsUpdated();
 }

@@ -60,6 +60,7 @@ public:
 	void UpdateFinished(CanAddress address) noexcept;
 	void UpdateFailed(CanAddress address) noexcept;
 	void AddAccelerometerRun(CanAddress address, unsigned int numDataPoints, float averages[]) noexcept;
+	void AddFailedAccelerometerRun(CanAddress address) noexcept;
 	void AddClosedLoopRun(CanAddress address, unsigned int numDataPoints) noexcept;
 	bool IsFlashing() const noexcept { return numBoardsFlashing != 0; }
 
