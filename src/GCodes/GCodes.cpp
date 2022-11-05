@@ -175,7 +175,7 @@ void GCodes::Init() noexcept
 	axisLetters[1] = 'Y';
 	axisLetters[2] = 'Z';
 #if SUPPORT_ASYNC_MOVES
-	allAxisLetters = ParameterLettersBitmap(ParameterLetterToBitNumber('X') | ParameterLetterToBitNumber('Y') | ParameterLetterToBitNumber('Z'));
+	allAxisLetters = ParameterLettersToBitmap("XYZ");
 #endif
 
 	numExtruders = 0;
@@ -4968,6 +4968,7 @@ void GCodes::AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap a
 		//TODO report the lowest axis letter that is already allocated
 		gb.ThrowGCodeException("Axis is already used by a different motion system");
 	}
+	UpdateUserPositionFromMachinePosition(gb, ms);
 }
 
 // Allocate additional axes by letter when we are doing a standard move. The axis letters are as in the GCode, before we account for coordinate rotation and axis mapping.
@@ -4989,7 +4990,6 @@ void GCodes::AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, Param
 	}
 # endif
 
-	ms.SaveOwnAxisCoordinates();
 	AxesBitmap newAxes;
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
@@ -5014,13 +5014,11 @@ void GCodes::AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, Param
 		}
 	}
 	AllocateAxes(gb, ms, newAxes, axLetters);
-	UpdateAllCoordinates(gb);
 }
 
 // Allocate axes by letter when we are doing a special move. Do not update the map of owned axes letters.
 void GCodes::AllocateAxesDirectFromLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException)
 {
-	ms.SaveOwnAxisCoordinates();
 	AxesBitmap newAxes;
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
@@ -5032,7 +5030,6 @@ void GCodes::AllocateAxesDirectFromLetters(const GCodeBuffer& gb, MovementState&
 		}
 	}
 	AllocateAxes(gb, ms, newAxes, ParameterLettersBitmap());			// don't own the letters!
-	UpdateAllCoordinates(gb);
 }
 
 // Synchronise motion systems and update user coordinates.
@@ -5047,7 +5044,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 	switch (thisGb.syncState)
 	{
 	case GCodeBuffer::SyncState::running:
-		thisGb.syncState = GCodeBuffer::SyncState::syncing;					// tell other input channels that we are waiting for sync
+		thisGb.syncState = GCodeBuffer::SyncState::syncing;				// tell other input channels that we are waiting for sync
 		// no break
 	case GCodeBuffer::SyncState::syncing:
 		if (otherGb.syncState == GCodeBuffer::SyncState::running)
@@ -5107,6 +5104,7 @@ bool GCodes::DoSync(GCodeBuffer& gb) noexcept
 	return rslt;
 }
 
+// Update our machine coordinates from the set of last stored coordinates. If we have moved any axes then we must call ms.SaveOwnAxisPositions before calling this.
 void GCodes::UpdateAllCoordinates(const GCodeBuffer& gb) noexcept
 {
 	const unsigned int msNumber = gb.GetOwnQueueNumber();

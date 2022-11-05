@@ -59,7 +59,7 @@ float MovementState::GetProportionDone() const noexcept
 	return (float)(totalSegments - segmentsLeft)/(float)totalSegments;
 }
 
-// Initialise this MovementState. If SUPPORT_ASYNC_MOVES is set then must call MovementState::GlobalInit before calling this.
+// Initialise this MovementState. If SUPPORT_ASYNC_MOVES is set then must call MovementState::GlobalInit before calling this to initialise lastKnownMachinePositions.
 void MovementState::Init(unsigned int p_msNumber) noexcept
 {
 	msNumber = p_msNumber;
@@ -70,7 +70,9 @@ void MovementState::Init(unsigned int p_msNumber) noexcept
 	pausedInMacro = false;
 
 #if SUPPORT_ASYNC_MOVES
-	memcpyf(coords, MovementState::GetLastKnownMachinePositions(), MaxAxesPlusExtruders);
+	memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
+	axesAndExtrudersOwned.Clear();
+	ownedAxisLetters.Clear();
 #else
 	for (float& f : coords)
 	{
@@ -270,6 +272,7 @@ void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 
 AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept
 {
+	SaveOwnAxisCoordinates();										// we must do this before we allocate new axis to ourselves
 	const AxesBitmap unAvailable = axes & ~axesAndExtrudersOwned & axesAndExtrudersMoved;
 	if (unAvailable.IsEmpty())
 	{
@@ -283,9 +286,11 @@ AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap a
 // Fetch and save the coordinates of axes we own to lastKnownMachinePositions, also copy them to our own coordinates in case we just did a homing move
 void MovementState::SaveOwnAxisCoordinates() noexcept
 {
-	reprap.GetMove().GetPartialMachinePosition(lastKnownMachinePositions, axesAndExtrudersOwned, msNumber);
+	Move& move = reprap.GetMove();
+	move.GetPartialMachinePosition(lastKnownMachinePositions, axesAndExtrudersOwned, msNumber);
 	memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
-	reprap.GetMove().InverseAxisAndBedTransform(coords, currentTool);
+	move.SetRawPosition(lastKnownMachinePositions, msNumber);
+	move.InverseAxisAndBedTransform(coords, currentTool);
 }
 
 void AsyncMove::SetDefaults() noexcept

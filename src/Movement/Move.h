@@ -59,7 +59,10 @@ public:
 
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
 #if SUPPORT_ASYNC_MOVES
-	void GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes, unsigned int queueNumber) const noexcept;	// Get the current position of some axes from one of the rings
+	void GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes, unsigned int queueNumber) const noexcept
+			pre(queueNumber < NumMovementSystems);							// Get the current position of some axes from one of the rings
+	void SetRawPosition(const float positions[MaxAxesPlusExtruders], unsigned int queueNumber) noexcept
+			pre(queueNumber < NumMovementSystems);							// Set the current position to be this without transforming them first
 #endif
 	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
@@ -330,6 +333,12 @@ inline void Move::GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorM
 inline void Move::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes, unsigned int queueNumber) const noexcept
 {
 	rings[queueNumber].GetPartialMachinePosition(m, whichAxes);
+}
+
+// Set the current position to be this without transforming them first
+inline void Move::SetRawPosition(const float positions[MaxAxesPlusExtruders], unsigned int queueNumber) noexcept
+{
+	rings[queueNumber].SetPositions(positions);
 }
 
 #endif
