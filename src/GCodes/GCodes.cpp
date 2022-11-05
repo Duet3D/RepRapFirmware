@@ -4963,10 +4963,10 @@ const MovementState& GCodes::GetCurrentMovementState(const ObjectExplorationCont
 // This relies on cooperative scheduling between different GCodeBuffer objects
 void GCodes::AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes, ParameterLettersBitmap axLetters) THROWS(GCodeException)
 {
-	if (!ms.AllocateAxes(axes, axLetters).IsEmpty())
+	const AxesBitmap badAxes = ms.AllocateAxes(axes, axLetters);
+	if (!badAxes.IsEmpty())
 	{
-		//TODO report the lowest axis letter that is already allocated
-		gb.ThrowGCodeException("Axis is already used by a different motion system");
+		gb.ThrowGCodeException("Axis %c is already used by a different motion system", (unsigned int)axisLetters[badAxes.LowestSetBit()]);
 	}
 	UpdateUserPositionFromMachinePosition(gb, ms);
 }

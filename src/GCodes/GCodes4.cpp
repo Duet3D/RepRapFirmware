@@ -367,6 +367,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #if SUPPORT_ASYNC_MOVES && PREALLOCATE_TOOL_AXES
 			// Whenever we release axes, we must update lastKnownMachinePositions for those axes first so that whoever allocated them next gets the correct positions
 			ms.SaveOwnAxisCoordinates();
+			gb.AdvanceState();
 
 			ReadLockedPointer<Tool> newTool = Tool::GetLockedTool(ms.newToolNumber);
 			if (newTool.IsNull())
@@ -406,7 +407,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);
 				}
 			}
-			gb.AdvanceState();
 		}
 		break;
 

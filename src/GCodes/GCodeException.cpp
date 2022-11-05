@@ -62,7 +62,7 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 	{
 		reply.catf(message, stringParam.c_str());
 	}
-	else if (strstr(message, "%u"))
+	else if (strstr(message, "%u") || strstr(message, "%c"))
 	{
 		reply.catf(message, param.u);
 	}
