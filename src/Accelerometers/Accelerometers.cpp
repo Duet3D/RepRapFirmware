@@ -87,7 +87,7 @@ static void AddLocalAccelerometerRun(unsigned int numDataPoints, float averages[
 	lastRunNumSamplesReceived = numDataPoints;
 	++numLocalRunsCompleted;
 
-	memcpyf(lastRunAverages, averages, ARRAY_SIZE(averages));
+	memcpyf(lastRunAverages, averages, NumAccelerometerAxes);
 
 	reprap.BoardsUpdated();
 }
@@ -238,7 +238,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 				f->Close();
 
 				// find the average value for each axis
-				for (float& f : accumulatedSamples) { f /= float(samplesWritten); }
+				for (float& sample : accumulatedSamples) { sample /= float(samplesWritten); }
 
 				AddLocalAccelerometerRun(samplesWritten, accumulatedSamples);
 			}
@@ -684,7 +684,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 				accelerometerFile = nullptr;
 
 				// find the average value for each axis
-				for (float& f : accumulatedSamples) { f /= float(msg.numSamples); }
+				for (float& sample : accumulatedSamples) { sample /= float(msg.numSamples); }
 
 				reprap.GetExpansion().AddAccelerometerRun(src, expectedRemoteSampleNumber, accumulatedSamples);
 			}

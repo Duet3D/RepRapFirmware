@@ -312,7 +312,7 @@ void ExpansionManager::AddAccelerometerRun(CanAddress address, unsigned int numD
 	boards[address].accelerometerLastRunDataPoints = numDataPoints;
 	++boards[address].accelerometerRuns;
 
-	memcpyf(boards[address].accelerometerLastRunAverages, averages, ARRAY_SIZE(averages));
+	memcpyf(boards[address].accelerometerLastRunAverages, averages, NumAccelerometerAxes);
 
 	reprap.BoardsUpdated();
 }
