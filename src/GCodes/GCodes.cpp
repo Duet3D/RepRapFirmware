@@ -4966,6 +4966,10 @@ void GCodes::AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap a
 	const AxesBitmap badAxes = ms.AllocateAxes(axes, axLetters);
 	if (!badAxes.IsEmpty())
 	{
+		if (reprap.Debug(moduleMove))
+		{
+			debugPrintf("Failed to allocate axes %07" PRIx32 " to MS %u letters %08" PRIx32 "\n", badAxes.GetRaw(), ms.GetMsNumber(), axLetters.GetRaw());
+		}
 		gb.ThrowGCodeException("Axis %c is already used by a different motion system", (unsigned int)axisLetters[badAxes.LowestSetBit()]);
 	}
 	UpdateUserPositionFromMachinePosition(gb, ms);
@@ -4997,7 +5001,6 @@ void GCodes::AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, Param
 		const unsigned int axisLetterBitNumber = ParameterLetterToBitNumber(c);
 		if (axLetters.IsBitSet(axisLetterBitNumber))
 		{
-# if !PREALLOCATE_TOOL_AXES			// if we pre-allocated the tool X and Y axes, then if we have X or Y here then no tool is selected
 			if (axis == 0)			// axis 0 is always X
 			{
 				newAxes |= Tool::GetXAxes(ms.currentTool);
@@ -5007,7 +5010,6 @@ void GCodes::AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, Param
 				newAxes |= Tool::GetYAxes(ms.currentTool);
 			}
 			else
-# endif
 			{
 				newAxes.SetBit(axis);
 			}
