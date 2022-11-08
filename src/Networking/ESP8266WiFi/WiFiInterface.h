@@ -161,6 +161,7 @@ private:
 	char requestedSsid[SsidLength + 1];
 	char actualSsid[SsidLength + 1];
 
+	int8_t rssi;
 	unsigned int spiTxUnderruns;
 	unsigned int spiRxOverruns;
 	unsigned int reconnectCount;
@@ -171,12 +172,14 @@ private:
 	char wiFiServerVersion[16];
 
 	bool usingDhcp = true;
+	uint32_t lastStatusPoll;
 
 	// For processing debug messages from the WiFi module
 	bool serialRunning;
 	bool debugPrintPending;
 	char debugMessageBuffer[200];
 	size_t debugMessageChars;
+
 };
 
 #endif	// HAS_WIFI_NETWORKING
