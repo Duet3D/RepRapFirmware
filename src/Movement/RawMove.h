@@ -195,7 +195,7 @@ private:
 	ParameterLettersBitmap ownedAxisLetters;						// cache of letters denoting user axes for which the corresponding machine axes for the current tool are definitely owned
 
 	static AxesBitmap axesAndExtrudersMoved;						// axes and extruders that are owned by any movement system
-	static float lastKnownMachinePositions[MaxAxes];				// the last stored machine position of the axes
+	static float lastKnownMachinePositions[MaxAxesPlusExtruders];	// the last stored machine position of the axes
 #endif
 };
 
