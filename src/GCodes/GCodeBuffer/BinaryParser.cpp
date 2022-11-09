@@ -26,24 +26,6 @@ void BinaryParser::Init() noexcept
 	gb.bufferState = GCodeBufferState::parseNotStarted;
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
-	parametersPresent.Clear();
-	if (bufferLength != 0 && header->numParameters != 0)
-	{
-		const char *parameterStart = reinterpret_cast<const char*>(gb.buffer) + sizeof(CodeHeader);
-		for (size_t i = 0; i < header->numParameters; i++)
-		{
-			const CodeParameter *param = reinterpret_cast<const CodeParameter*>(parameterStart + i * sizeof(CodeParameter));
-			const char paramLetter = param->letter;
-			if (paramLetter >= 'A' && paramLetter <= 'Z')
-			{
-				parametersPresent.SetBit(paramLetter - 'A');
-			}
-			else if (paramLetter >= 'a' && paramLetter <= 'f')
-			{
-				parametersPresent.SetBit(paramLetter - ('a' - 26));
-			}
-		}
-	}
 }
 
 // Add an entire binary G-Code, overwriting any existing content
@@ -67,6 +49,27 @@ void BinaryParser::DecodeCommand() noexcept
 			AppendFullCommand(buf.GetRef());
 			debugPrintf("%s: %s\n", gb.GetIdentity(), buf.c_str());
 		}
+
+		// Initialise the parameter letters bitmap
+		parametersPresent.Clear();
+		if (bufferLength != 0 && header->numParameters != 0)
+		{
+			const char *parameterStart = reinterpret_cast<const char*>(gb.buffer) + sizeof(CodeHeader);
+			for (size_t i = 0; i < header->numParameters; i++)
+			{
+				const CodeParameter *param = reinterpret_cast<const CodeParameter*>(parameterStart + i * sizeof(CodeParameter));
+				const char paramLetter = param->letter;
+				if (paramLetter >= 'A' && paramLetter <= 'Z')
+				{
+					parametersPresent.SetBit(paramLetter - 'A');
+				}
+				else if (paramLetter >= 'a' && paramLetter <= 'f')
+				{
+					parametersPresent.SetBit(paramLetter - ('a' - 26));
+				}
+			}
+		}
+
 		gb.bufferState = GCodeBufferState::executing;
 	}
 }
