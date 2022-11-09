@@ -40,13 +40,13 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 #if SUPPORT_ASYNC_MOVES
 
 AxesBitmap MovementState::axesAndExtrudersMoved;						// axes and extruders that are owned by any movement system
-float MovementState::lastKnownMachinePositions[MaxAxes];				// the last stored machine position of the axes
+float MovementState::lastKnownMachinePositions[MaxAxesPlusExtruders];	// the last stored machine position of the axes
 
 /*static*/ void MovementState::GlobalInit(size_t numVisibleAxes) noexcept
 {
 	axesAndExtrudersMoved.Clear();
 	reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numVisibleAxes, lastKnownMachinePositions);
-	for (size_t i = numVisibleAxes; i < MaxAxes; ++i)
+	for (size_t i = numVisibleAxes; i < MaxAxesPlusExtruders; ++i)
 	{
 		lastKnownMachinePositions[i] = 0.0;
 	}
