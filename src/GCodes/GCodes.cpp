@@ -1605,8 +1605,7 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned in
 		collisionChecker.ResetPositions(ms.coords, ms.GetAxesAndExtrudersOwned());
 
 		// Release the axes and extruders that this movement system owns, except those used by the current tool
-		// Don't release them if we are in the middle of a state machine operation e.g. probing the bed
-		if (gb.GetState() == GCodeState::normal)
+		if (gb.AllStatesNormal())						// don't release them if we are in the middle of a state machine operation e.g. probing the bed
 		{
 			if (ms.currentTool != nullptr)
 			{
