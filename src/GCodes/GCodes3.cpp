@@ -79,6 +79,10 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 	axisLettersMentioned.ClearBits(ms.GetOwnedAxisLetters());
 	if (axisLettersMentioned.IsNonEmpty())
 	{
+		if (!LockCurrentMovementSystemAndWaitForStandstill(gb))	// lock movement and get current coordinates before we try to allocate any axes
+		{
+			return GCodeResult::notFinished;
+		}
 		AllocateAxisLetters(gb, ms, axisLettersMentioned);
 	}
 #endif
@@ -91,6 +95,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 		if (gb.Seen(axisLetters[axis]))
 		{
 			const float axisValue = gb.GetFValue();
+#if !SUPPORT_ASYNC_MOVES
 			if (axesIncluded.IsEmpty())
 			{
 				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))	// lock movement and get current coordinates
@@ -98,6 +103,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 					return GCodeResult::notFinished;
 				}
 			}
+#endif
 			axesIncluded.SetBit(axis);
 			ms.currentUserPosition[axis] = gb.ConvertDistance(axisValue);
 		}
@@ -115,12 +121,12 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 
 		if (reprap.GetMove().GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesIncluded, false, limitAxes) != LimitPositionResult::ok)
 		{
-			ToolOffsetInverseTransform(ms);		// make sure the limits are reflected in the user position
+			ToolOffsetInverseTransform(ms);					// make sure the limits are reflected in the user position
 		}
-		reprap.GetMove().SetNewPosition(ms.coords, true, gb.GetActiveQueueNumber());
 #if SUPPORT_ASYNC_MOVES
-		ms.SaveOwnAxisCoordinates();
+		ms.OwnedAxisCoordinatesUpdated(axesIncluded);		// save coordinates of any owned axes we changed
 #endif
+		reprap.GetMove().SetNewPosition(ms.coords, true, gb.GetActiveQueueNumber());
 		if (!IsSimulating())
 		{
 			axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
@@ -131,7 +137,6 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 			}
 			reprap.MoveUpdated();				// because we may have updated axesHomed or zDatumSetByProbing
 		}
-
 	}
 
 	return GCodeResult::ok;

@@ -1120,7 +1120,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				if (tapsDone <= 1 && !hadProbingError)
 				{
 					// Reset the Z axis origin according to the height error so that we can move back up to the dive height
-					ms.UpdateOwnedAxisCoordinate(Z_AXIS, zp->GetActualTriggerHeight());
+					ms.coords[Z_AXIS] = zp->GetActualTriggerHeight();
+#if SUPPORT_ASYNC_MOVES
+					ms.OwnedAxisCoordinateUpdated(Z_AXIS);
+#endif
 					reprap.GetMove().SetNewPosition(ms.coords, false, gb.GetActiveQueueNumber());
 
 					// Find the coordinates of the Z probe to pass to SetZeroHeightError
