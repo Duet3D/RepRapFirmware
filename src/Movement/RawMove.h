@@ -102,6 +102,7 @@ public:
 	void ClearMove() noexcept;
 	void SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
 		pre(restorePointNumber < NumTotalRestorePoints);
+	void UpdateOwnedAxisCoordinate(size_t axis, float coordinate) noexcept;					// update the machine coordinate of an axis we own - called after Z probing
 
 	// Tool management
 	void SelectTool(int toolNumber, bool simulating) noexcept;

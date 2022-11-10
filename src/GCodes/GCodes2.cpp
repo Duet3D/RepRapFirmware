@@ -404,6 +404,9 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			}
 			BREAK_IF_NOT_EXECUTING
 
+#if SUPPORT_ASYNC_MOVES
+			AllocateAxes(gb, GetMovementState(gb), AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
+#endif
 			// We need to unlock the movement system here in case there is no Z probe and we are doing manual probing.
 			// Otherwise, even though the bed probing code calls UnlockAll when doing a manual bed probe, the movement system
 			// remains locked because the current MachineState object already held the lock when the macro file was started,

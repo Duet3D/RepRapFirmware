@@ -1579,7 +1579,14 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned in
 		{
 			return false;
 		}
-		if (!(QueuedGCode()->IsIdle() && moveStates[msNumber].codeQueue->IsIdle()))
+
+		if (!(
+#if SUPPORT_ASYNC_MOVES
+				((msNumber == 1) ? Queue2GCode() : QueuedGCode())
+#else
+				QueuedGCode()
+#endif
+							->IsIdle() && moveStates[msNumber].codeQueue->IsIdle()))
 		{
 			return false;
 		}
@@ -1598,15 +1605,19 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned in
 		collisionChecker.ResetPositions(ms.coords, ms.GetAxesAndExtrudersOwned());
 
 		// Release the axes and extruders that this movement system owns, except those used by the current tool
-		if (ms.currentTool != nullptr)
+		// Don't release them if we are in the middle of a state machine operation e.g. probing the bed
+		if (gb.GetState() == GCodeState::normal)
 		{
-			const AxesBitmap currentToolAxes = ms.currentTool->GetXYAxesAndExtruders();
-			const AxesBitmap axesToRelease = ms.GetAxesAndExtrudersOwned() & ~currentToolAxes;
-			ms.ReleaseAxesAndExtruders(axesToRelease);
-		}
-		else
-		{
-			ms.ReleaseOwnedAxesAndExtruders();
+			if (ms.currentTool != nullptr)
+			{
+				const AxesBitmap currentToolAxes = ms.currentTool->GetXYAxesAndExtruders();
+				const AxesBitmap axesToRelease = ms.GetAxesAndExtrudersOwned() & ~currentToolAxes;
+				ms.ReleaseAxesAndExtruders(axesToRelease);
+			}
+			else
+			{
+				ms.ReleaseOwnedAxesAndExtruders();
+			}
 		}
 #else
 		UpdateCurrentUserPosition(gb);
@@ -1615,6 +1626,7 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned in
 	else
 	{
 		// Cannot update the user position from external tasks. Do it later
+		//TODO when SbcInterface stops calling this from its own task, get rid of this, it isn't correct any more anyway
 		ms.updateUserPositionGb = &gb;
 	}
 	return true;

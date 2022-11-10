@@ -293,6 +293,18 @@ void MovementState::SaveOwnAxisCoordinates() noexcept
 	move.InverseAxisAndBedTransform(coords, currentTool);
 }
 
+// Update the machine coordinate of an axis we own - called after Z probing
+void MovementState::UpdateOwnedAxisCoordinate(size_t axis, float coordinate) noexcept
+{
+	coords[axis] = coordinate;
+#if SUPPORT_ASYNC_MOVES
+	if (axesAndExtrudersOwned.IsBitSet(axis))
+	{
+		lastKnownMachinePositions[axis] = coordinate;
+	}
+#endif
+}
+
 void AsyncMove::SetDefaults() noexcept
 {
 	for (float& f : movements)
