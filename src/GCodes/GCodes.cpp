@@ -1352,8 +1352,28 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				if (toolNumber >= 0)
 				{
 					buf.printf("T-1 P0\nT%d P6\n", toolNumber);				// deselect the current tool without running tfree, and select it running tpre and tpost
+					if (ms.currentTool->GetSpindleNumber() >= 0)
+					{
+						// Set the spindle RPM
+						const Spindle& spindle = platform.AccessSpindle(ms.currentTool->GetSpindleNumber() >= 0);
+						switch (spindle.GetState().RawValue())
+						{
+						case SpindleState::stopped:
+						default:
+							break;											// selecting the tool will have stopped the spindle
+
+						case SpindleState::forward:
+							buf.catf("M3 S%" PRIu32 " G4 S2\n", spindle.GetRpm());
+							break;
+
+						case SpindleState::reverse:
+							buf.catf("M4 S%" PRIu32 " G4 S2\n", spindle.GetRpm());
+							break;
+						}
+					}
 					ok = f->Write(buf.c_str());								// write tool selection
 				}
+
 			}
 
 #if SUPPORT_WORKPLACE_COORDINATES
