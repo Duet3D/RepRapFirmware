@@ -1352,8 +1352,28 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				if (toolNumber >= 0)
 				{
 					buf.printf("T-1 P0\nT%d P6\n", toolNumber);				// deselect the current tool without running tfree, and select it running tpre and tpost
+					if (ms.currentTool->GetSpindleNumber() >= 0)
+					{
+						// Set the spindle RPM
+						const Spindle& spindle = platform.AccessSpindle(ms.currentTool->GetSpindleNumber() >= 0);
+						switch (spindle.GetState().RawValue())
+						{
+						case SpindleState::stopped:
+						default:
+							break;											// selecting the tool will have stopped the spindle
+
+						case SpindleState::forward:
+							buf.catf("M3 S%" PRIu32 " G4 S2\n", spindle.GetRpm());
+							break;
+
+						case SpindleState::reverse:
+							buf.catf("M4 S%" PRIu32 " G4 S2\n", spindle.GetRpm());
+							break;
+						}
+					}
 					ok = f->Write(buf.c_str());								// write tool selection
 				}
+
 			}
 
 #if SUPPORT_WORKPLACE_COORDINATES
@@ -1579,7 +1599,14 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned in
 		{
 			return false;
 		}
-		if (!(QueuedGCode()->IsIdle() && moveStates[msNumber].codeQueue->IsIdle()))
+
+		if (!(
+#if SUPPORT_ASYNC_MOVES
+				((msNumber == 1) ? Queue2GCode() : QueuedGCode())
+#else
+				QueuedGCode()
+#endif
+							->IsIdle() && moveStates[msNumber].codeQueue->IsIdle()))
 		{
 			return false;
 		}
@@ -1598,15 +1625,18 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned in
 		collisionChecker.ResetPositions(ms.coords, ms.GetAxesAndExtrudersOwned());
 
 		// Release the axes and extruders that this movement system owns, except those used by the current tool
-		if (ms.currentTool != nullptr)
+		if (gb.AllStatesNormal())						// don't release them if we are in the middle of a state machine operation e.g. probing the bed
 		{
-			const AxesBitmap currentToolAxes = ms.currentTool->GetXYAxesAndExtruders();
-			const AxesBitmap axesToRelease = ms.GetAxesAndExtrudersOwned() & ~currentToolAxes;
-			ms.ReleaseAxesAndExtruders(axesToRelease);
-		}
-		else
-		{
-			ms.ReleaseOwnedAxesAndExtruders();
+			if (ms.currentTool != nullptr)
+			{
+				const AxesBitmap currentToolAxes = ms.currentTool->GetXYAxesAndExtruders();
+				const AxesBitmap axesToRelease = ms.GetAxesAndExtrudersOwned() & ~currentToolAxes;
+				ms.ReleaseAxesAndExtruders(axesToRelease);
+			}
+			else
+			{
+				ms.ReleaseOwnedAxesAndExtruders();
+			}
 		}
 #else
 		UpdateCurrentUserPosition(gb);
@@ -1615,6 +1645,7 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned in
 	else
 	{
 		// Cannot update the user position from external tasks. Do it later
+		//TODO when SbcInterface stops calling this from its own task, get rid of this, it isn't correct any more anyway
 		ms.updateUserPositionGb = &gb;
 	}
 	return true;

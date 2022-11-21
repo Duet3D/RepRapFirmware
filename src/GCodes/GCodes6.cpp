@@ -18,10 +18,15 @@
 // If it is specified and is greater than SILLY_Z_VALUE (i.e. greater than -9999.0) then that value is used.
 // If it's less than SILLY_Z_VALUE the bed is probed and that value is used.
 // We already own the movement lock before this is called.
-GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	MovementState& ms = GetMovementState(gb);
+
+#if SUPPORT_ASYNC_MOVES
+	AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
+#endif
+
 	g30SValue = (gb.Seen('S')) ? gb.GetIValue() : -4;		// S-4 or lower is equivalent to having no S parameter
-	const MovementState& ms = GetMovementState(gb);
 	if (g30SValue == -2 && ms.currentTool == nullptr)
 	{
 		reply.copy("G30 S-2 commanded with no tool selected");
@@ -277,7 +282,7 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 
 // Start probing the grid, returning true if we didn't because of an error.
 // Prior to calling this the movement system must be locked.
-GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	if (!defaultGrid.IsValid())
 	{
@@ -292,6 +297,11 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply)
 	}
 
 	const auto zp = SetZProbeNumber(gb, 'K');			// may throw, so do this before changing the state
+
+#if SUPPORT_ASYNC_MOVES
+	constexpr AxesBitmap XyzAxes = AxesBitmap::MakeFromBits(X_AXIS, Y_AXIS) | AxesBitmap::MakeFromBits(Z_AXIS);
+	AllocateAxes(gb, GetMovementState(gb), XyzAxes, ParameterLetterToBitmap('Z'));		// don't cache axis letters X and Y because they may be mapped
+#endif
 
 #if SUPPORT_PROBE_POINTS_FILE
 	if (!probePointsFileLoaded)							// if we are using a probe points file then the grid has already been loaded
@@ -453,6 +463,318 @@ void GCodes::ClearBedMapping() noexcept
 		reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
 		ToolOffsetInverseTransform(ms);		// update user coordinates to remove any height map offset there was at the current position
 	}
+}
+
+// Handle G38.[2-5]
+GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	const int8_t fraction = gb.GetCommandFraction();
+	if (fraction < 2 || fraction > 5)
+	{
+		return GCodeResult::warningNotSupported;
+	}
+	/*
+	 * It is an error if:
+	 * # the current point is the same as the programmed point.
+	 * # no axis word is used
+	 * # the feed rate is zero
+	 * # the probe is already in the target state
+	 */
+
+	straightProbeSettings.Reset();
+
+	switch (fraction)
+	{
+	case 2:
+		straightProbeSettings.SetStraightProbeType(StraightProbeType::towardsWorkpieceErrorOnFailure);
+		break;
+
+	case 3:
+		straightProbeSettings.SetStraightProbeType(StraightProbeType::towardsWorkpiece);
+		break;
+
+	case 4:
+		straightProbeSettings.SetStraightProbeType(StraightProbeType::awayFromWorkpieceErrorOnFailure);
+		break;
+
+	case 5:
+		straightProbeSettings.SetStraightProbeType(StraightProbeType::awayFromWorkpiece);
+		break;
+	}
+
+	// Get the target coordinates (as user position) and check if we would move at all
+	float userPositionTarget[MaxAxes];
+	MovementState& ms = GetMovementState(gb);
+	memcpyf(userPositionTarget, ms.currentUserPosition, numVisibleAxes);
+
+	bool seen = false;
+	bool doesMove = false;
+
+#if SUPPORT_ASYNC_MOVES
+	ParameterLettersBitmap axisLettersSeen;
+#endif
+
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
+	{
+		const char c = axisLetters[axis];
+		if (gb.Seen(c))
+		{
+			seen = true;
+#if SUPPORT_ASYNC_MOVES
+			axisLettersSeen.SetBit(ParameterLetterToBitNumber(c));
+#endif
+			// Get the user provided target coordinate
+			// - If prefixed by G53 add the ToolOffset that will be subtracted below in ToolOffsetTransform as we ignore any offsets when G53 is active
+			// - otherwise add current workplace offsets so we go where the user expects to go
+			// comparable to how DoStraightMove/DoArcMove does it
+			const float axisTarget = gb.GetDistance() + (gb.LatestMachineState().g53Active ? ms.GetCurrentToolOffset(axis) : GetWorkplaceOffset(gb, axis));
+			if (axisTarget != userPositionTarget[axis])
+			{
+				doesMove = true;
+			}
+			userPositionTarget[axis] = axisTarget;
+			straightProbeSettings.AddMovingAxis(axis);
+		}
+	}
+
+	// No axis letters seen
+	if (!seen)
+	{
+		// Signal error for G38.2 and G38.4
+		if (straightProbeSettings.SignalError())
+		{
+			reply.copy("No axis specified.");
+			return GCodeResult::error;
+		}
+		return GCodeResult::ok;
+	}
+
+	// At least one axis seen but it would not result in movement
+	else if (!doesMove)
+	{
+		// Signal error for G38.2 and G38.4
+		if (straightProbeSettings.SignalError())
+		{
+			reply.copy("Target equals current position.");
+			return GCodeResult::error;
+		}
+		return GCodeResult::ok;
+	}
+
+#if SUPPORT_ASYNC_MOVES
+	AllocateAxes(gb, ms, straightProbeSettings.GetMovingAxes(), axisLettersSeen);
+#endif
+
+	// Convert target user position to machine coordinates and save them in StraightProbeSettings
+	ToolOffsetTransform(ms, userPositionTarget, straightProbeSettings.GetTarget());
+
+	// See whether we are using a user-defined Z probe or just current one
+	const size_t probeToUse = (gb.Seen('K') || gb.Seen('P')) ? gb.GetUIValue() : 0;
+
+	// Check if this probe exists to not run into a nullptr dereference later
+	if (platform.GetEndstops().GetZProbe(probeToUse).IsNull())
+	{
+		reply.catf("Invalid probe number: %d", probeToUse);
+		return GCodeResult::error;
+	}
+	straightProbeSettings.SetZProbeToUse(probeToUse);
+
+	gb.SetState(GCodeState::straightProbe0);
+	return GCodeResult::ok;
+}
+
+// Search for and return an axis, throw if none found or that axis hasn't been homed. On return we can fetch the parameter value after the axis letter.
+size_t GCodes::FindAxisLetter(GCodeBuffer& gb) THROWS(GCodeException)
+{
+	for (size_t axis = 0; axis < numVisibleAxes; axis++)
+	{
+		if (gb.Seen(axisLetters[axis]))
+		{
+			if (IsAxisHomed(axis))
+			{
+				return axis;
+			}
+			throw GCodeException(gb.GetLineNumber(), -1, "%c axis has not been homed", (uint32_t)axisLetters[axis]);
+		}
+	}
+
+	throw GCodeException(gb.GetLineNumber(), -1, "No axis specified");
+}
+
+// Deal with a M585
+GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	MovementState& ms = GetMovementState(gb);
+	if (ms.currentTool == nullptr)
+	{
+		reply.copy("No tool selected!");
+		return GCodeResult::error;
+	}
+
+	if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
+	{
+		return GCodeResult::notFinished;
+	}
+
+	// Get the feed rate and axis
+	gb.MustSee(feedrateLetter);
+	m585Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetSpeed();		// don't apply the speed factor to homing and other special moves
+	m585Settings.axisNumber = FindAxisLetter(gb);
+	m585Settings.offset = gb.GetDistance();
+
+#if SUPPORT_ASYNC_MOVES
+	AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(m585Settings.axisNumber), ParameterLettersBitmap());
+#endif
+
+	// See whether we are using a Z probe or just endstops
+	if (gb.Seen('K'))
+	{
+		(void)SetZProbeNumber(gb, 'K');						// throws if the probe doesn't exist
+		m585Settings.useProbe = true;
+	}
+	else if (gb.Seen('P'))
+	{
+		(void)SetZProbeNumber(gb, 'P');						// throws if the probe doesn't exist
+		m585Settings.useProbe = true;
+	}
+	else
+	{
+		m585Settings.useProbe = false;
+	}
+
+	// Decide which way and how far to go
+	ToolOffsetTransform(ms);
+	m585Settings.probingLimit = (gb.Seen('R')) ? ms.coords[m585Settings.axisNumber] + gb.GetDistance()
+								: (gb.Seen('S') && gb.GetIValue() > 0) ? platform.AxisMinimum(m585Settings.axisNumber)
+									: platform.AxisMaximum(m585Settings.axisNumber);
+	if (m585Settings.useProbe)
+	{
+		gb.SetState(GCodeState::probingToolOffset1);
+		DeployZProbe(gb);
+	}
+	else
+	{
+		gb.SetState(GCodeState::probingToolOffset3);		// skip the Z probe stuff
+	}
+
+	return GCodeResult::ok;
+}
+
+// Set up a probing move for M675. If using a Z probe, it has already been deployed
+// Return true if successful, else SetError has been called to save the error message
+bool GCodes::SetupM585ProbingMove(GCodeBuffer& gb) noexcept
+{
+	bool reduceAcceleration;
+	if (m585Settings.useProbe)
+	{
+		const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+		if (zp->Stopped())
+		{
+			gb.LatestMachineState().SetError("Probe already triggered before probing move started");
+			return false;
+		}
+		if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
+		{
+			gb.LatestMachineState().SetError("Failed to enable probe");
+			return false;
+		}
+		reduceAcceleration = true;
+	}
+	else if (!platform.GetEndstops().EnableAxisEndstops(AxesBitmap::MakeFromBits(m585Settings.axisNumber), false, reduceAcceleration))
+	{
+		gb.LatestMachineState().SetError("Failed to enable endstop");
+		return false;
+	}
+
+	MovementState& ms = GetMovementState(gb);
+	SetMoveBufferDefaults(ms);
+	ToolOffsetTransform(ms);
+	ms.feedRate = m585Settings.feedRate;
+	ms.coords[m585Settings.axisNumber] = m585Settings.probingLimit;
+	ms.reduceAcceleration = reduceAcceleration;
+	ms.checkEndstops = true;
+	ms.canPauseAfter = false;
+	zProbeTriggered = false;
+	ms.linearAxesMentioned = reprap.GetPlatform().IsAxisLinear(m585Settings.axisNumber);
+	ms.rotationalAxesMentioned = reprap.GetPlatform().IsAxisRotational(m585Settings.axisNumber);
+	NewSingleSegmentMoveAvailable(ms);
+	return true;
+}
+
+GCodeResult GCodes::FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	MovementState& ms = GetMovementState(gb);
+	if (ms.currentTool == nullptr)
+	{
+		reply.copy("No tool selected!");
+		return GCodeResult::error;
+	}
+
+	if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
+	{
+		return GCodeResult::notFinished;
+	}
+
+	// Get the feed rate, backoff distance, and axis
+	gb.MustSee(feedrateLetter);
+	m675Settings.feedRate = gb.LatestMachineState().feedRate = gb.GetSpeed();		// don't apply the speed factor to homing and other special moves
+	m675Settings.backoffDistance = gb.Seen('R') ? gb.GetDistance() : 5.0;
+	m675Settings.axisNumber = FindAxisLetter(gb);
+
+#if SUPPORT_ASYNC_MOVES
+	AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(m585Settings.axisNumber), ParameterLettersBitmap());
+#endif
+
+	// Get the probe number from the K or P parameter
+	const char probeLetter = gb.MustSee('K', 'P');				// throws if neither character is found
+	(void)SetZProbeNumber(gb, probeLetter);						// throws if the probe doesn't exist
+	gb.SetState(GCodeState::findCenterOfCavity1);
+	DeployZProbe(gb);
+
+	return GCodeResult::ok;
+}
+
+// Set up a probing move for M675. If using a Z probe, it has already been deployed
+// Return true if successful, else SetError has been called to save the error message
+bool GCodes::SetupM675ProbingMove(GCodeBuffer& gb, bool towardsMin) noexcept
+{
+	const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+	if (zp->Stopped())
+	{
+		gb.LatestMachineState().SetError("Probe already triggered before probing move started");
+		return false;
+	}
+	if (!platform.GetEndstops().EnableZProbe(currentZProbeNumber) || !zp->SetProbing(true))
+	{
+		gb.LatestMachineState().SetError("Failed to enable probe");
+		return false;
+	}
+
+	MovementState& ms = GetMovementState(gb);
+	SetMoveBufferDefaults(ms);
+	ToolOffsetTransform(ms);
+	ms.coords[m675Settings.axisNumber] = towardsMin ? platform.AxisMinimum(m675Settings.axisNumber) : platform.AxisMaximum(m675Settings.axisNumber);
+	ms.feedRate = m675Settings.feedRate;
+	ms.checkEndstops = true;
+	ms.canPauseAfter = false;
+	zProbeTriggered = false;
+	ms.linearAxesMentioned = reprap.GetPlatform().IsAxisLinear(m675Settings.axisNumber);
+	ms.rotationalAxesMentioned = reprap.GetPlatform().IsAxisRotational(m675Settings.axisNumber);
+	NewSingleSegmentMoveAvailable(ms);						// kick off the move
+	return true;
+}
+
+void GCodes::SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept
+{
+	MovementState& ms = GetMovementState(gb);
+	SetMoveBufferDefaults(ms);
+	ToolOffsetTransform(ms);
+	ms.coords[m675Settings.axisNumber] = position;
+	ms.feedRate = m675Settings.feedRate;
+	ms.canPauseAfter = false;
+	ms.linearAxesMentioned = reprap.GetPlatform().IsAxisLinear(m675Settings.axisNumber);
+	ms.rotationalAxesMentioned = reprap.GetPlatform().IsAxisRotational(m675Settings.axisNumber);
+	NewSingleSegmentMoveAvailable(ms);
 }
 
 // End

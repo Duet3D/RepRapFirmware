@@ -228,7 +228,7 @@ void MillisTimer::Start() noexcept
 }
 
 // Check whether the timer is running and a timeout has expired, but don't stop it
-bool MillisTimer::Check(uint32_t timeoutMillis) const noexcept
+bool MillisTimer::CheckNoStop(uint32_t timeoutMillis) const noexcept
 {
 	return running && millis() - whenStarted >= timeoutMillis;
 }
@@ -236,7 +236,7 @@ bool MillisTimer::Check(uint32_t timeoutMillis) const noexcept
 // Check whether a timeout has expired and stop the timer if it has, else leave it running if it was running
 bool MillisTimer::CheckAndStop(uint32_t timeoutMillis) noexcept
 {
-	const bool ret = Check(timeoutMillis);
+	const bool ret = CheckNoStop(timeoutMillis);
 	if (ret)
 	{
 		running = false;

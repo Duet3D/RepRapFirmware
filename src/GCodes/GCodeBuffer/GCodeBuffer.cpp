@@ -859,6 +859,19 @@ GCodeMachineState& GCodeBuffer::CurrentFileMachineState() const noexcept
 	return *ms;
 }
 
+// Return true if all GCodes machine states on the stack are 'normal'
+bool GCodeBuffer::AllStatesNormal() const noexcept
+{
+	for (const GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+	{
+		if (ms->GetState() != GCodeState::normal)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 // Convert from inches to mm if necessary
 float GCodeBuffer::ConvertDistance(float distance) const noexcept
 {

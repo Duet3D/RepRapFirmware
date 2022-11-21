@@ -462,7 +462,7 @@ public:
 	MillisTimer() noexcept { running = false; }
 	void Start() noexcept;
 	void Stop() noexcept { running = false; }
-	bool Check(uint32_t timeoutMillis) const noexcept;
+	bool CheckNoStop(uint32_t timeoutMillis) const noexcept;
 	bool CheckAndStop(uint32_t timeoutMillis) noexcept;
 	bool IsRunning() const noexcept { return running; }
 

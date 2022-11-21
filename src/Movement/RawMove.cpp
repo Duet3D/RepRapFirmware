@@ -293,6 +293,20 @@ void MovementState::SaveOwnAxisCoordinates() noexcept
 	move.InverseAxisAndBedTransform(coords, currentTool);
 }
 
+// Update changed coordinates of some owned axes - called after G92
+void MovementState::OwnedAxisCoordinatesUpdated(AxesBitmap axesIncluded) noexcept
+{
+	axesIncluded.Iterate([this](unsigned int bitNumber, unsigned int count)->void
+							{ lastKnownMachinePositions[bitNumber] = coords[bitNumber]; }
+						);
+}
+
+// Update the machine coordinate of an axis we own - called after Z probing
+void MovementState::OwnedAxisCoordinateUpdated(size_t axis) noexcept
+{
+	lastKnownMachinePositions[axis] = coords[axis];
+}
+
 void AsyncMove::SetDefaults() noexcept
 {
 	for (float& f : movements)

@@ -161,6 +161,7 @@ public:
 	GCodeMachineState& OriginalMachineState() const noexcept;
 	GCodeMachineState::BlockState& GetBlockState() const noexcept { return CurrentFileMachineState().CurrentBlockState(); }
 	uint16_t GetBlockIndent() const noexcept { return GetBlockState().GetIndent(); }
+	bool AllStatesNormal() const noexcept;						// Return true if all GCode states on the stack are 'normal'
 
 	void UseInches(bool inchesNotMm) noexcept { machineState->usingInches = inchesNotMm; }
 	bool UsingInches() const noexcept { return machineState->usingInches; }
