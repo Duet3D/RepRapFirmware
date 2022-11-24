@@ -2997,7 +2997,7 @@ void RepRap::PrepareToLoadIap() noexcept
 
 	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters.
 	// This also shuts down tasks and interrupts that might make use of the RAM that we are about to load the IAP binary into.
-	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
+	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it may access a Z probe object in RAM which will be overwritten by the IAP
 	network->Exit();						// kill the network task to stop it overwriting RAM that we use to hold the IAP
 #if HAS_SMART_DRIVERS
 	SmartDrivers::Exit();					// stop the drivers being polled via SPI or UART because it may use data in the last 64Kb of RAM
@@ -3023,19 +3023,20 @@ void RepRap::PrepareToLoadIap() noexcept
 	ARM_MPU_Disable();						// make sure we can execute from RAM
 #endif
 
-#if 0
+#if 0	// this code doesn't work, it causes a watchdog reset
 	// Debug
-	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 60 * 1024);
+	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 20 * 1024);
 	delay(2000);
-	for (char* p = reinterpret_cast<char *>(IAP_IMAGE_START); p < reinterpret_cast<char *>(IAP_IMAGE_START + (60 * 1024)); ++p)
+	for (char* p = reinterpret_cast<char *>(IAP_IMAGE_START); p < reinterpret_cast<char *>(IAP_IMAGE_START + (20 * 1024)); ++p)
 	{
 		if (*p != 0x7E)
 		{
-			debugPrintf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
+			SERIAL_AUX_DEVICE.printf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
 		}
 	}
-	debugPrintf("Scan complete\n");
-	#endif
+	SERIAL_AUX_DEVICE.printf("Scan complete\n");
+	delay(1000);							// give it time to send the message
+#endif
 }
 
 void RepRap::StartIap(const char *filename) noexcept

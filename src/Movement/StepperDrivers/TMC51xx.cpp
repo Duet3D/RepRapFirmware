@@ -1240,7 +1240,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 				InterruptCriticalSectionLocker lock2;
 
 				fastDigitalWriteLow(GlobalTmc51xxCSPin);			// set CS low
-				TaskBase::ClearNotifyCount();
+				TaskBase::ClearCurrentTaskNotifyCount();
 				EnableEndOfTransferInterrupt();
 				ResetSpi();
 				EnableDma();
