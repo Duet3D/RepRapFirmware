@@ -45,6 +45,7 @@ const size_t NumFtpResponders = 1;		// the number of concurrent FTP sessions we 
 
 // Forward declarations
 class NetworkResponder;
+class NetworkClient;
 class NetworkInterface;
 class Socket;
 class WiFiInterface;
@@ -83,7 +84,7 @@ public:
 #endif
 
 	GCodeResult EnableInterface(unsigned int interface, int mode, const StringRef& ssid, const StringRef& reply) noexcept;
-	GCodeResult EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept;
+	GCodeResult EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept;
 	GCodeResult DisableProtocol(unsigned int interface, NetworkProtocol protocol, const StringRef& reply) noexcept;
 	GCodeResult ReportProtocols(unsigned int interface, const StringRef& reply) const noexcept;
 
@@ -113,11 +114,14 @@ public:
 #endif
 
 	bool FindResponder(Socket *skt, NetworkProtocol protocol) noexcept;
+	bool StartClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept;
+	void StopClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept;
 
 	void HandleHttpGCodeReply(const char *msg) noexcept;
 	void HandleTelnetGCodeReply(const char *msg) noexcept;
 	void HandleHttpGCodeReply(OutputBuffer *buf) noexcept;
 	void HandleTelnetGCodeReply(OutputBuffer *buf) noexcept;
+
 	uint32_t GetHttpReplySeq() noexcept;
 
 protected:
@@ -135,6 +139,7 @@ private:
 
 #if HAS_RESPONDERS
 	NetworkResponder *responders;
+	NetworkClient *clients;
 	NetworkResponder *nextResponderToPoll;
 #endif
 

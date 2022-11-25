@@ -3787,7 +3787,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								const int port = (gb.Seen('R')) ? gb.GetIValue() : -1;
 								const int secure = (gb.Seen('T')) ? gb.GetIValue() : -1;
-								result = reprap.GetNetwork().EnableProtocol(interface, protocol, port, secure, reply);
+								IPAddress ip;
+								if (gb.Seen('H'))
+								{
+									gb.GetIPAddress(ip);
+								}
+								result = reprap.GetNetwork().EnableProtocol(interface, protocol, port,
+																			ip.GetV4LittleEndian(), secure, reply);
 							}
 							else
 							{

@@ -15,6 +15,7 @@
 #include <Version.h>
 #include <Movement/StepTimer.h>
 #include <Platform/TaskPriorities.h>
+#include <NetworkClient.h>
 
 #if HAS_NETWORKING
 #include "NetworkBuffer.h"
@@ -82,7 +83,7 @@ void MacAddress::SetFromBytes(const uint8_t mb[6]) noexcept
 // Network members
 Network::Network(Platform& p) noexcept : platform(p)
 #if HAS_RESPONDERS
-			, responders(nullptr), nextResponderToPoll(nullptr)
+			, responders(nullptr), clients(nullptr), nextResponderToPoll(nullptr)
 #endif
 {
 #if HAS_NETWORKING
@@ -214,12 +215,12 @@ void Network::CreateAdditionalInterface() noexcept
 
 #endif
 
-GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept
+GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
 {
 #if HAS_NETWORKING
 	if (interface < GetNumNetworkInterfaces())
 	{
-		return interfaces[interface]->EnableProtocol(protocol, port, secure, reply);
+		return interfaces[interface]->EnableProtocol(protocol, port, ip, secure, reply);
 	}
 
 	reply.printf("Invalid network interface '%d'\n", interface);
@@ -235,14 +236,31 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 #if HAS_NETWORKING
 	if (interface < GetNumNetworkInterfaces())
 	{
+		bool client = false;
+
+		// Check if a client handles the protocol. If so, termination is handled
+		// by the client itself, after attempting to disconnect gracefully.
+		for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
+		{
+			if (c->HandlesProtocol(protocol))
+			{
+				client = true;
+				break;
+			}
+		}
+
 		NetworkInterface * const iface = interfaces[interface];
-		const GCodeResult ret = iface->DisableProtocol(protocol, reply);
+		const GCodeResult ret = iface->DisableProtocol(protocol, reply, !client);
+
 		if (ret == GCodeResult::ok)
 		{
 #if HAS_RESPONDERS
-			for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+			if (!client)
 			{
-				r->Terminate(protocol, iface);
+				for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+				{
+					r->Terminate(protocol, iface);
+				}
 			}
 
 			// The following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
@@ -749,6 +767,30 @@ bool Network::FindResponder(Socket *skt, NetworkProtocol protocol) noexcept
 	}
 #endif
 	return false;
+}
+
+bool Network::StartClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept
+{
+#if HAS_RESPONDERS
+	for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
+	{
+		if (c->Start(protocol, interface))
+		{
+			return true;
+		}
+	}
+#endif
+	return false;
+}
+
+void Network::StopClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept
+{
+#if HAS_RESPONDERS
+	for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
+	{
+		c->Stop(protocol, interface);
+	}
+#endif
 }
 
 void Network::HandleHttpGCodeReply(const char *msg) noexcept

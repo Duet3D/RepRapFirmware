@@ -12,6 +12,7 @@
 #include "General/IPAddress.h"
 
 const uint32_t FindResponderTimeout = 2000;		// how long we wait for a responder to become available
+const uint32_t ConnectTimeout = 2000;			// how long we wait for an outgoing connection attempt
 const uint32_t MaxAckTime = 4000;				// how long we wait for a connection to acknowledge the remaining data before it is closed
 const uint32_t MaxWriteTime = 2000;				// how long we wait for a write operation to complete before it is cancelled
 
@@ -51,7 +52,7 @@ protected:
 		inactive,
 		listening,
 		connected,
-		clientDisconnecting,
+		peerDisconnecting,
 		closing,
 		aborted
 	};
