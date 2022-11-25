@@ -222,13 +222,16 @@ bool Kinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 // many types of kinematics, but not for Cartesian.
 void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
 {
-	const float xyFactor = fastSqrtf(fsquare(normalisedDirectionVector[X_AXIS]) + fsquare(normalisedDirectionVector[Y_AXIS]));
-	if (xyFactor > 0.01)
+	const float dx = normalisedDirectionVector[X_AXIS];
+	const float dy = normalisedDirectionVector[Y_AXIS];
+	const float xySum = dx + dy;
+	if (xySum > 0.05)
 	{
 		const Platform& platform = reprap.GetPlatform();
-		const float maxSpeed = min<float>(platform.MaxFeedrate(X_AXIS), platform.MaxFeedrate(Y_AXIS));
-		const float maxAcceleration = min<float>(platform.Acceleration(X_AXIS), platform.Acceleration(Y_AXIS));
-		dda.LimitSpeedAndAcceleration(maxSpeed/xyFactor, maxAcceleration/xyFactor);
+		const float maxSpeedTimesXySum = platform.MaxFeedrate(X_AXIS) * dx + platform.MaxFeedrate(Y_AXIS) * dy;
+		const float maxAccelerationTimesXySum = platform.Acceleration(X_AXIS) * dx + platform.Acceleration(Y_AXIS) * dy;
+		const float xyFactor = xySum * fastSqrtf(fsquare(dx) + fsquare(dy));
+		dda.LimitSpeedAndAcceleration(maxSpeedTimesXySum/xyFactor, maxAccelerationTimesXySum/xyFactor);
 	}
 }
 

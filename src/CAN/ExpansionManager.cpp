@@ -351,30 +351,21 @@ const ExpansionBoardData& ExpansionManager::FindIndexedBoard(unsigned int index)
 
 void ExpansionManager::EmergencyStop() noexcept
 {
-	CanMessageBuffer *buf;
-	while ((buf = CanMessageBuffer::Allocate()) == nullptr)
-	{
-		delay(1);
-	}
+	CanMessageBuffer buf(nullptr);
 
-//	debugPrintf("Allocated buffer\n");
 	// Send an individual message to each known expansion board
 	for (CanAddress addr = 1; addr <= CanId::MaxCanAddress; ++addr)
 	{
 		if (boards[addr].state == BoardState::running)
 		{
-			buf->SetupRequestMessage<CanMessageEmergencyStop>(0, CanInterface::GetCanAddress(), addr);
-			CanInterface::SendMessageNoReplyNoFree(buf);
+			buf.SetupRequestMessage<CanMessageEmergencyStop>(0, CanInterface::GetCanAddress(), addr);
+			CanInterface::SendMessageNoReplyNoFree(&buf);
 		}
 	}
-//	debugPrintf("sent individual messages\n");
 
 	// Finally, send a broadcast message in case we missed any, and free the buffer
-	buf->SetupBroadcastMessage<CanMessageEmergencyStop>(CanInterface::GetCanAddress());
-	CanInterface::SendBroadcastNoFree(buf);
-
-	CanMessageBuffer::Free(buf);
-//	debugPrintf("sent broadcast\n");
+	buf.SetupBroadcastMessage<CanMessageEmergencyStop>(CanInterface::GetCanAddress());
+	CanInterface::SendBroadcastNoFree(&buf);
 
 	delay(10);							// allow time for the broadcast to be sent
 	CanInterface::Shutdown();
