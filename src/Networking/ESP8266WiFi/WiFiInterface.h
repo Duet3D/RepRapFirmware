@@ -170,6 +170,8 @@ private:
 	unsigned int responseTimeoutCount;
 
 	char wiFiServerVersion[16];
+	uint8_t majorVersion;
+	uint8_t minorVersion;
 
 	bool usingDhcp = true;
 	uint32_t lastStatusPoll;

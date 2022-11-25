@@ -719,7 +719,23 @@ void WiFiInterface::Spin() noexcept
 					int32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
 					if (rc > 0)
 					{
+						memset(wiFiServerVersion, 0, sizeof(wiFiServerVersion));
 						SafeStrncpy(wiFiServerVersion, status.Value().versionText, ARRAY_SIZE(wiFiServerVersion));
+
+						// Parse the version string to obtain major and minor versions. Expecting a string of the format
+						// x.yn where x is the major version, y the minor version and n a development stage descriptor string.
+						const char *verStr = wiFiServerVersion;
+						majorVersion = minorVersion = 0;
+						majorVersion = StrToI32(verStr, &verStr);
+
+						if (majorVersion >= 1 && majorVersion <= 2) // The server versions valid for this RRF version
+						{
+							minorVersion = StrToI32(verStr + 1);
+						}
+						else
+						{
+							reprap.GetPlatform().MessageF(NetworkErrorMessage, "invalid wifi version detected: %s", wiFiServerVersion);
+						}
 
 						// Set the hostname before anything else is done
 						rc = SendCommand(NetworkCommand::networkSetHostName, 0, 0, 0, reprap.GetNetwork().GetHostname(), HostNameLength, nullptr, 0);
@@ -730,7 +746,7 @@ void WiFiInterface::Spin() noexcept
 #if SAME5x
 						// If running the RTOS-based WiFi module code, tell the module to increase SPI clock speed to 40MHz.
 						// This is safe on SAME5x processors but not on SAM4 processors.
-						if (isdigit(wiFiServerVersion[0]) && wiFiServerVersion[0] >= '2')
+						if (majorVersion >= 2)
 						{
 							rc = SendCommand(NetworkCommand::networkSetClockControl, 0, 0, 0x2001, nullptr, 0, nullptr, 0);
 							if (rc != ResponseEmpty)
@@ -857,7 +873,7 @@ void WiFiInterface::Spin() noexcept
 				if (rc > 0)
 				{
 					rssi = status.Value().rssi;
-					if (rc >= offsetof(NetworkStatusResponse, netmask))
+					if (majorVersion >= 2)
 					{
 						reconnectCount = status.Value().numReconnects;
 					}
@@ -892,7 +908,7 @@ void WiFiInterface::Spin() noexcept
 						macAddress.SetFromBytes(status.Value().macAddress); // MAC address for AP and STA are separate and different
 						SafeStrncpy(actualSsid, status.Value().ssid, SsidLength);
 
-						if (rc > offsetof(NetworkStatusResponse, netmask))
+						if (majorVersion >= 2)
 						{
 							netmask.SetV4LittleEndian(status.Value().netmask);
 							gateway.SetV4LittleEndian(status.Value().gateway);
@@ -1022,7 +1038,7 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 
 			if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 			{
-				if (rc > offsetof(NetworkStatusResponse, netmask))
+				if (majorVersion >= 2)
 				{
 					platform.MessageF(mtype, "WiFi IP address %s, netmask %s, gateway %s%s\n",
 						IP4String(r.ipAddress).c_str(), IP4String(r.netmask).c_str(), IP4String(r.gateway).c_str(),
@@ -1039,7 +1055,7 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 
 			if (currentMode == WiFiState::connected)
 			{
-				if (rc > offsetof(NetworkStatusResponse, netmask))
+				if (majorVersion >= 2)
 				{
 					platform.MessageF(mtype, "WiFi signal strength %ddBm, mode %s, reconnections %u, sleep mode %s, channel %u (%s), auth %s\n",
 						(int)r.rssi, ConnectionModes[r.phyMode], reconnectCount, SleepModes[r.sleepMode],
@@ -1052,7 +1068,7 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 			}
 			else if (currentMode == WiFiState::runningAsAccessPoint)
 			{
-				if (rc > offsetof(NetworkStatusResponse, netmask))
+				if (majorVersion >= 2)
 				{
 					platform.MessageF(mtype, "WiFi mode %s, sleep mode %s, channel %u (%s), auth %s\n",
 					ConnectionModes[r.phyMode], SleepModes[r.sleepMode], r.channel,
