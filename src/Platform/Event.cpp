@@ -16,7 +16,7 @@ unsigned int Event::eventsQueued = 0;
 unsigned int Event::eventsProcessed = 0;
 
 // Private constructor, inline because it is only called from one place
-inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, uint8_t devNum, CanAddress p_ba, const char *_ecv_array format, va_list vargs) noexcept
+inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, CanAddress p_ba, uint8_t devNum, const char *_ecv_array format, va_list vargs) noexcept
 	: next(p_next), param(p_param), type(et), boardAddress(p_ba), deviceNumber(devNum), isBeingProcessed(false)
 {
 	text.vprintf(format, vargs);
@@ -34,7 +34,7 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, uin
 
 // Queue an event unless we have a similar event pending already. Returns true if the event was added.
 // The event list is held in priority order, lowest numbered (highest priority) events first.
-/*static*/ bool Event::AddEventV(EventType et, uint16_t p_param, uint8_t devNum, CanAddress p_ba, const char *_ecv_array format, va_list vargs) noexcept
+/*static*/ bool Event::AddEventV(EventType et, uint16_t p_param, CanAddress p_ba, uint8_t devNum, const char *_ecv_array format, va_list vargs) noexcept
 {
 	// Search for similar events already pending or being processed.
 	// An event is 'similar' if it has the same type, device number, CAN address and parameter even if the text is different.
