@@ -91,7 +91,7 @@ private:
 	float overlappedShapingClocks;						// the acceleration or deceleration duration when we use overlapping, in step clocks
 	float overlappedDeltaVPerA;							// the effective acceleration time (velocity change per unit acceleration) when we use overlapping, in step clocks
 	float overlappedDistancePerA;						// the distance needed by an overlapped acceleration or deceleration, less the initial velocity contribution
-	InputShaperType type;
+	InputShaperType type;								// the type of the input shaper, from which we can find its name
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */
