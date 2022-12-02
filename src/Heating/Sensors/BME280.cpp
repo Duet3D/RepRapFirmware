@@ -72,14 +72,14 @@ TemperatureError BME280TemperatureSensor::bme280_init() noexcept
 		TemperatureError rslt = bme280_get_regs(BME280_CHIP_ID_ADDR, &chip_id, 1);
 
 		/* Check for chip id validity */
-		if ((rslt == TemperatureError::success) && (chip_id == BME280_CHIP_ID))
+		if ((rslt == TemperatureError::ok) && (chip_id == BME280_CHIP_ID))
 		{
 			dev.chip_id = chip_id;
 
 			/* Reset the sensor */
 			rslt = bme280_soft_reset();
 
-			if (rslt == TemperatureError::success)
+			if (rslt == TemperatureError::ok)
 			{
 				/* Read the calibration data */
 				rslt = get_calib_data();
@@ -110,7 +110,7 @@ TemperatureError BME280TemperatureSensor::bme280_get_regs(uint8_t reg_addr, uint
 	TemperatureError err = DoSpiTransaction(addrBuff, dataBuff, len + 1);
 
 	/* Check for communication error */
-	if (err == TemperatureError::success)
+	if (err == TemperatureError::ok)
 	{
 		memcpy(reg_data, &dataBuff[1], len);
 	}
@@ -134,12 +134,12 @@ TemperatureError BME280TemperatureSensor::bme280_set_sensor_settings(uint8_t des
 	uint8_t sensor_mode;
 	TemperatureError rslt = bme280_get_sensor_mode(&sensor_mode);
 
-	if ((rslt == TemperatureError::success) && (sensor_mode != BME280_SLEEP_MODE))
+	if ((rslt == TemperatureError::ok) && (sensor_mode != BME280_SLEEP_MODE))
 	{
 		rslt = put_device_to_sleep();
 	}
 
-	if (rslt == TemperatureError::success)
+	if (rslt == TemperatureError::ok)
 	{
 		/* Check if user wants to change oversampling settings */
 		if (are_settings_changed(OVERSAMPLING_SETTINGS, desired_settings))
@@ -148,7 +148,7 @@ TemperatureError BME280TemperatureSensor::bme280_set_sensor_settings(uint8_t des
 		}
 
 		/* Check if user wants to change filter and/or standby settings */
-		if ((rslt == TemperatureError::success) && are_settings_changed(FILTER_STANDBY_SETTINGS, desired_settings))
+		if ((rslt == TemperatureError::ok) && are_settings_changed(FILTER_STANDBY_SETTINGS, desired_settings))
 		{
 			rslt = set_filter_standby_settings(desired_settings, &dev.settings);
 		}
@@ -168,13 +168,13 @@ TemperatureError BME280TemperatureSensor::bme280_set_sensor_mode(uint8_t sensor_
 	/* If the sensor is not in sleep mode put the device to sleep
 	 * mode
 	 */
-	if ((rslt == TemperatureError::success) && (last_set_mode != BME280_SLEEP_MODE))
+	if ((rslt == TemperatureError::ok) && (last_set_mode != BME280_SLEEP_MODE))
 	{
 		rslt = put_device_to_sleep();
 	}
 
 	/* Set the power mode */
-	if (rslt == TemperatureError::success)
+	if (rslt == TemperatureError::ok)
 	{
 		rslt = write_power_mode(sensor_mode);
 	}
@@ -203,7 +203,7 @@ TemperatureError BME280TemperatureSensor::bme280_soft_reset() const noexcept
 {
 	/* Write the soft reset command to the sensor */
 	TemperatureError rslt = bme280_set_reg(BME280_RESET_ADDR, BME280_SOFT_RESET_COMMAND);
-	if (rslt == TemperatureError::success)
+	if (rslt == TemperatureError::ok)
 	{
 		uint8_t status_reg = 0;
 		uint8_t try_run = 5;
@@ -215,7 +215,7 @@ TemperatureError BME280TemperatureSensor::bme280_soft_reset() const noexcept
 			delay(3);
 			static_assert(1 <= MaxRegistersToRead);
 			rslt = bme280_get_regs(BME280_STATUS_REG_ADDR, &status_reg, 1);
-		} while ((rslt == TemperatureError::success) && (try_run--) && (status_reg & BME280_STATUS_IM_UPDATE));
+		} while ((rslt == TemperatureError::ok) && (try_run--) && (status_reg & BME280_STATUS_IM_UPDATE));
 
 		if (status_reg & BME280_STATUS_IM_UPDATE)
 		{
@@ -240,7 +240,7 @@ TemperatureError BME280TemperatureSensor::bme280_get_sensor_data() noexcept
 	static_assert(BME280_P_T_H_DATA_LEN <= MaxRegistersToRead);
 	const TemperatureError rslt = bme280_get_regs(BME280_DATA_ADDR, reg_data, BME280_P_T_H_DATA_LEN);
 
-	if (rslt == TemperatureError::success)
+	if (rslt == TemperatureError::ok)
 	{
 		/* Parse the read data from the sensor */
 		bme280_parse_sensor_data(reg_data, &uncomp_data);
@@ -297,7 +297,7 @@ TemperatureError BME280TemperatureSensor::set_filter_standby_settings(uint8_t de
 	uint8_t reg_data;
 	TemperatureError rslt = bme280_get_regs(BME280_CONFIG_ADDR, &reg_data, 1);
 
-	if (rslt == TemperatureError::success)
+	if (rslt == TemperatureError::ok)
 	{
 		if (desired_settings & BME280_FILTER_SEL)
 		{
@@ -341,7 +341,7 @@ TemperatureError BME280TemperatureSensor::write_power_mode(uint8_t sensor_mode) 
 	TemperatureError rslt = bme280_get_regs(BME280_PWR_CTRL_ADDR, &sensor_mode_reg_val, 1);
 
 	/* Set the power mode */
-	if (rslt == TemperatureError::success)
+	if (rslt == TemperatureError::ok)
 	{
 		sensor_mode_reg_val = BME280_SET_BITS_POS_0(sensor_mode_reg_val, BME280_SENSOR_MODE, sensor_mode);
 
@@ -360,13 +360,13 @@ TemperatureError BME280TemperatureSensor::put_device_to_sleep() const noexcept
 	uint8_t reg_data[4];
 	TemperatureError rslt = bme280_get_regs(BME280_CTRL_HUM_ADDR, reg_data, 4);
 
-	if (rslt == TemperatureError::success)
+	if (rslt == TemperatureError::ok)
 	{
 		struct bme280_settings settings;
 		parse_device_settings(reg_data, &settings);
 		rslt = bme280_soft_reset();
 
-		if (rslt == TemperatureError::success)
+		if (rslt == TemperatureError::ok)
 		{
 			rslt = reload_device_settings(&settings);
 		}
@@ -381,7 +381,7 @@ TemperatureError BME280TemperatureSensor::put_device_to_sleep() const noexcept
 TemperatureError BME280TemperatureSensor::reload_device_settings(const struct bme280_settings *settings) const noexcept
 {
 	TemperatureError rslt = set_osr_settings(BME280_ALL_SETTINGS_SEL, settings);
-	if (rslt == TemperatureError::success)
+	if (rslt == TemperatureError::ok)
 	{
 		rslt = set_filter_standby_settings(BME280_ALL_SETTINGS_SEL, settings);
 	}
@@ -510,7 +510,7 @@ void BME280TemperatureSensor::bme280_compensate_data(const bme280_uncomp_data *u
  */
 TemperatureError BME280TemperatureSensor::set_osr_settings(uint8_t desired_settings, const bme280_settings *settings) const noexcept
 {
-	TemperatureError rslt = TemperatureError::success;
+	TemperatureError rslt = TemperatureError::ok;
 
     if (desired_settings & BME280_OSR_HUM_SEL)
     {
@@ -536,11 +536,11 @@ TemperatureError BME280TemperatureSensor::set_osr_humidity_settings(const struct
     TemperatureError rslt = bme280_set_reg(BME280_CTRL_HUM_ADDR, ctrl_hum);
 
     /* Humidity related changes will be only effective after a write operation to ctrl_meas register */
-    if (rslt == TemperatureError::success)
+    if (rslt == TemperatureError::ok)
     {
         uint8_t ctrl_meas;
         rslt = bme280_get_regs(BME280_CTRL_MEAS_ADDR, &ctrl_meas, 1);
-        if (rslt == TemperatureError::success)
+        if (rslt == TemperatureError::ok)
         {
             rslt = bme280_set_reg(BME280_CTRL_MEAS_ADDR, ctrl_meas);
         }
@@ -556,7 +556,7 @@ TemperatureError BME280TemperatureSensor::set_osr_press_temp_settings(uint8_t de
     uint8_t reg_data;
     TemperatureError rslt = bme280_get_regs(BME280_CTRL_MEAS_ADDR, &reg_data, 1);
 
-    if (rslt == TemperatureError::success)
+    if (rslt == TemperatureError::ok)
     {
         if (desired_settings & BME280_OSR_PRESS_SEL)
         {
@@ -632,7 +632,7 @@ TemperatureError BME280TemperatureSensor::get_calib_data() noexcept
 	static_assert(BME280_TEMP_PRESS_CALIB_DATA_LEN <= MaxRegistersToRead);
     TemperatureError rslt = bme280_get_regs(BME280_TEMP_PRESS_CALIB_DATA_ADDR, temp_calib_data, BME280_TEMP_PRESS_CALIB_DATA_LEN);
 
-    if (rslt == TemperatureError::success)
+    if (rslt == TemperatureError::ok)
     {
         /* Parse temperature and pressure calibration data and store it in device structure */
         parse_temp_press_calib_data(temp_calib_data);
@@ -641,7 +641,7 @@ TemperatureError BME280TemperatureSensor::get_calib_data() noexcept
     	static_assert(BME280_HUMIDITY_CALIB_DATA_LEN <= MaxRegistersToRead);
         rslt = bme280_get_regs(BME280_HUMIDITY_CALIB_DATA_ADDR, temp_calib_data, BME280_HUMIDITY_CALIB_DATA_LEN);
 
-        if (rslt == TemperatureError::success)
+        if (rslt == TemperatureError::ok)
         {
             /* Parse humidity calibration data and store it in device structure */
             parse_humidity_calib_data(temp_calib_data);
@@ -691,7 +691,7 @@ GCodeResult BME280TemperatureSensor::FinishConfiguring(bool changed, const Strin
 		TemperatureError rslt = bme280_init();
 		SetResult(0.0, rslt);
 
-		if (rslt == TemperatureError::success)
+		if (rslt == TemperatureError::ok)
 		{
 			/* Recommended mode of operation: Indoor navigation */
 			dev.settings.osr_h = BME280_OVERSAMPLING_1X;
@@ -706,15 +706,15 @@ GCodeResult BME280TemperatureSensor::FinishConfiguring(bool changed, const Strin
 			settings_sel |= BME280_STANDBY_SEL;
 			settings_sel |= BME280_FILTER_SEL;
 			rslt = bme280_set_sensor_settings(settings_sel);
-			if (rslt == TemperatureError::success)
+			if (rslt == TemperatureError::ok)
 			{
 				rslt = bme280_set_sensor_mode(BME280_NORMAL_MODE);
 			}
 		}
 
-		if (rslt != TemperatureError::success)
+		if (rslt != TemperatureError::ok)
 		{
-			reply.printf("Failed to initialise BME280 sensor: %s", TemperatureErrorString(rslt));
+			reply.printf("Failed to initialise BME280 sensor: %s", rslt.ToString());
 			return GCodeResult::error;
 		}
 	}
@@ -750,9 +750,9 @@ void BME280TemperatureSensor::Poll() noexcept
 	const auto now = millis();
 	if ((now - GetLastReadingTime()) >= MinimumReadInterval)
 	{
-		if (bme280_get_sensor_data() == TemperatureError::success)
+		if (bme280_get_sensor_data() == TemperatureError::ok)
 		{
-			SetResult(compTemperature, TemperatureError::success);
+			SetResult(compTemperature, TemperatureError::ok);
 		}
 		else
 		{

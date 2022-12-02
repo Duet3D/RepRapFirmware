@@ -159,9 +159,9 @@ void HeightController::Stop() noexcept
 		}
 		else
 		{
-			TemperatureError err;
+			TemperatureError err(TemperatureError::unknownError);
 			const float sensorVal = reprap.GetHeat().GetSensorTemperature(sensorNumber, err);
-			if (err == TemperatureError::success)
+			if (err == TemperatureError::ok)
 			{
 				AsyncMove * const move = reprap.GetMove().LockAuxMove();
 				if (move != nullptr)

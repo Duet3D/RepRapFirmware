@@ -101,7 +101,7 @@ GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& re
 		reply.catf(" type %s using pins ", GetSensorType());
 		const IoPort* const portAddrs[] = { &port, &interruptPort };
 		IoPort::AppendPinNames(reply, 2, portAddrs);
-		reply.catf(", reading %.1f, last error: %s", (double)GetStoredReading(), TemperatureErrorString(GetLastError()));
+		reply.catf(", reading %.1f, last error: %s", (double)GetStoredReading(), GetLastError().ToString());
 #else
 		CopyBasicDetails(reply);
 #endif
