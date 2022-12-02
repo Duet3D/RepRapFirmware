@@ -139,7 +139,7 @@ void AdditionalOutputSensor::Poll() noexcept
 		return;
 	}
 	const auto err = parent->GetLatestTemperature(t, this->outputNumber);
-	if (err == TemperatureError::success)
+	if (err == TemperatureError::ok)
 	{
 		SetResult(t, err);
 	}

@@ -21,10 +21,10 @@ bool HeaterMonitor::Check(uint32_t maxBadTemperatureCount) noexcept
 {
 	if (sensorNumber >= 0 && trigger != HeaterMonitorTrigger::Disabled)
 	{
-		TemperatureError err;
+		TemperatureError err(TemperatureError::unknownError);
 		const float temperature = reprap.GetHeat().GetSensorTemperature(sensorNumber, err);
 
-		if (err != TemperatureError::success)
+		if (err != TemperatureError::ok)
 		{
 			badTemperatureCount++;
 			if (badTemperatureCount > maxBadTemperatureCount)

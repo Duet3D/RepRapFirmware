@@ -44,10 +44,11 @@ constexpr ObjectModelTableEntry TemperatureSensor::objectModelTable[] =
 	// 0. TemperatureSensor members
 	{ "lastReading",	OBJECT_MODEL_FUNC(self->lastTemperature, 2), 	ObjectModelEntryFlags::live },
 	{ "name",			OBJECT_MODEL_FUNC(self->sensorName), 			ObjectModelEntryFlags::none },
+	{ "state",			OBJECT_MODEL_FUNC(self->lastResult.ToString()),	ObjectModelEntryFlags::none },
 	{ "type",			OBJECT_MODEL_FUNC(self->GetShortSensorType()), 	ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t TemperatureSensor::objectModelTableDescriptor[] = { 1, 3 };
+constexpr uint8_t TemperatureSensor::objectModelTableDescriptor[] = { 1, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(TemperatureSensor)
 
@@ -56,7 +57,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(TemperatureSensor)
 // Constructor
 TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *t) noexcept
 	: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr),
-	  lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::success) {}
+	  lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::ok) {}
 
 // Virtual destructor
 TemperatureSensor::~TemperatureSensor() noexcept
@@ -129,7 +130,7 @@ void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 	{
 		reply.catf(" (%s)", sensorName);
 	}
-	reply.catf(" type %s, reading %.1f, last error: %s", sensorType, (double)lastTemperature, TemperatureErrorString(lastRealError));
+	reply.catf(" type %s, reading %.1f, last error: %s", sensorType, (double)lastTemperature, lastRealError.ToString());
 }
 
 // Configure then heater name, if it is provided
@@ -150,7 +151,7 @@ void TemperatureSensor::SetResult(float t, TemperatureError rslt) noexcept
 	lastResult = rslt;
 	lastTemperature = t;
 	whenLastRead = millis();
-	if (rslt != TemperatureError::success)
+	if (rslt != TemperatureError::ok)
 	{
 		lastRealError = rslt;
 	}
@@ -350,7 +351,7 @@ const size_t NumTempTableEntries = sizeof(tempTable)/sizeof(tempTable[0]);
 	t = CelsiusInterval * (low - 1 + temperatureFraction) + CelsiusMin;
 
 	//debugPrintf("raw %f low %u temp %f\n", ohmsx100, low, t);
-	return TemperatureError::success;
+	return TemperatureError::ok;
 }
 
 // End

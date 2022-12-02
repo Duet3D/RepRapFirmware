@@ -440,7 +440,7 @@ void Thermistor::Poll() noexcept
 					}
 					else
 					{
-						SetResult(temp, TemperatureError::success);
+						SetResult(temp, TemperatureError::ok);
 					}
 				}
 			}

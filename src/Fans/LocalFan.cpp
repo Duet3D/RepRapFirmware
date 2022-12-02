@@ -96,7 +96,7 @@ void LocalFan::InternalRefresh(bool checkSensors) noexcept
 					//TODO we used to turn the fan on if the associated heater was being tuned
 					float ht;
 					const TemperatureError err = sensor->GetLatestTemperature(ht);
-					if (err != TemperatureError::success || ht < BadLowTemperature || ht >= triggerTemperatures[1])
+					if (err != TemperatureError::ok || ht < BadLowTemperature || ht >= triggerTemperatures[1])
 					{
 						reqVal = maxVal;
 					}

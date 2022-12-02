@@ -28,7 +28,7 @@ Licence: GPL
 #include <ObjectModel/ObjectModel.h>
 #include <Hardware/IoPorts.h>
 #include <Fans/FansManager.h>
-#include <Heating/TemperatureError.h>
+#include <TemperatureError.h>
 #include "OutputMemory.h"
 #include "UniqueId.h"
 #include <Storage/FileStore.h>

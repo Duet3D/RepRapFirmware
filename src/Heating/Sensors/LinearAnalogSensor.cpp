@@ -76,7 +76,7 @@ void LinearAnalogSensor::Poll() noexcept
 		if (tempFilter.IsValid())
 		{
 			const int32_t averagedTempReading = tempFilter.GetSum()/(ThermistorAverageReadings >> AdcOversampleBits);
-			SetResult((averagedTempReading * linearIncreasePerCount) + lowTemp, TemperatureError::success);
+			SetResult((averagedTempReading * linearIncreasePerCount) + lowTemp, TemperatureError::ok);
 		}
 		else
 		{
@@ -85,7 +85,7 @@ void LinearAnalogSensor::Poll() noexcept
 	}
 	else
 	{
-		SetResult((port.ReadAnalog() * linearIncreasePerCount) + lowTemp, TemperatureError::success);
+		SetResult((port.ReadAnalog() * linearIncreasePerCount) + lowTemp, TemperatureError::ok);
 	}
 }
 
