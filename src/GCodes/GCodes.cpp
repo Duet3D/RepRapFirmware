@@ -902,7 +902,7 @@ void GCodes::DoEmergencyStop() noexcept
 bool GCodes::DoSynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newState) noexcept
 {
 	// Pausing because of a command in the file itself
-	if (!LockAllMovementSystemsAndWaitForStandstill(gb))
+	if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
 	{
 		return false;
 	}
@@ -1015,8 +1015,13 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 #if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface())
 		{
-			FileGCode()->Init();															// clear the next move
-			UnlockAll(*FileGCode());														// release any locks it had
+# if SUPPORT_ASYNC_MOVES
+			GCodeBuffer& fgb = (ms.GetMsNumber() == 0) ? *FileGCode() : *File2GCode();
+# else
+			GCodeBuffer& fgb = *FileGCode();
+# endif
+			fgb.Init();															// clear the next move
+			UnlockAll(fgb);														// release any locks it had
 		}
 		else
 #endif
@@ -1026,11 +1031,16 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 			// The following could be delayed until we resume the print
 			if (ms.pauseRestorePoint.filePos != noFilePosition)
 			{
-				FileData& fdata = FileGCode()->LatestMachineState().fileState;
+# if SUPPORT_ASYNC_MOVES
+				GCodeBuffer& fgb = (ms.GetMsNumber() == 0) ? *FileGCode() : *File2GCode();
+# else
+			GCodeBuffer& fgb = *FileGCode();
+# endif
+				FileData& fdata = fgb.LatestMachineState().fileState;
 				if (fdata.IsLive())
 				{
-					FileGCode()->RestartFrom(ms.pauseRestorePoint.filePos);					// TODO we ought to restore the line number too, but currently we don't save it
-					UnlockAll(*FileGCode());												// release any locks it had
+					fgb.RestartFrom(ms.pauseRestorePoint.filePos);				// TODO we ought to restore the line number too, but currently we don't save it
+					UnlockAll(fgb);												// release any locks it had
 				}
 			}
 #endif
