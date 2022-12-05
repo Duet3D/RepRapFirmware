@@ -49,8 +49,20 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 		else
 		{
 			// Set the specified probe point index to the specified coordinates
-			const float x = (gb.Seen(axisLetters[X_AXIS])) ? (axesMoving.SetBit(X_AXIS), gb.GetFValue()) : ms.currentUserPosition[X_AXIS];
-			const float y = (gb.Seen(axisLetters[Y_AXIS])) ? (axesMoving.SetBit(Y_AXIS), gb.GetFValue()) : ms.currentUserPosition[Y_AXIS];
+			const float x = (gb.Seen(axisLetters[X_AXIS]))
+#if SUPPORT_ASYNC_MOVES
+							? (axesMoving.SetBit(X_AXIS), gb.GetFValue())
+#else
+							? gb.GetFValue()
+#endif
+								: ms.currentUserPosition[X_AXIS];
+			const float y = (gb.Seen(axisLetters[Y_AXIS]))
+#if SUPPORT_ASYNC_MOVES
+							? (axesMoving.SetBit(Y_AXIS), gb.GetFValue())
+#else
+							? gb.GetFValue()
+#endif
+								: ms.currentUserPosition[Y_AXIS];
 			const float z = (gb.Seen(axisLetters[Z_AXIS])) ? gb.GetFValue() : ms.currentUserPosition[Z_AXIS];
 			reprap.GetMove().SetXYBedProbePoint((size_t)g30ProbePointIndex, x, y);
 

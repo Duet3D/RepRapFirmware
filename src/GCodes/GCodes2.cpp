@@ -3616,8 +3616,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 									gbp->LatestMachineState().compatibility = Compatibility::Marlin;
 								}
 							}
-						}
 #endif
+						}
 						seen = true;
 					}
 
