@@ -560,12 +560,12 @@ void Move::Diagnostics(MessageType mtype) noexcept
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation, unsigned int queueNumber) noexcept
+void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], unsigned int msNumber, bool doBedCompensation) noexcept
 {
 	float newPos[MaxAxesPlusExtruders];
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
-	AxisAndBedTransform(newPos, reprap.GetGCodes().GetMovementState(queueNumber).currentTool, doBedCompensation);
-	rings[queueNumber].SetPositions(newPos);
+	AxisAndBedTransform(newPos, reprap.GetGCodes().GetMovementState(msNumber).currentTool, doBedCompensation);
+	rings[msNumber].SetPositions(newPos);
 }
 
 // Convert distance to steps for a particular drive

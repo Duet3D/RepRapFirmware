@@ -832,12 +832,12 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 void GCodes::EndSimulation(GCodeBuffer *null gb) noexcept
 {
 	// Ending a simulation, so restore the position
-	const unsigned int queueNumber = (gb == nullptr) ? 0 : gb->GetActiveQueueNumber();	//TODO handle null gb properly
-	MovementState& ms = moveStates[queueNumber];
+	const unsigned int msNumber = (gb == nullptr) ? 0 : gb->GetActiveQueueNumber();	//TODO handle null gb properly
+	MovementState& ms = moveStates[msNumber];
 	RestorePosition(ms.simulationRestorePoint, gb);
 	ms.SelectTool(ms.simulationRestorePoint.toolNumber, true);
 	ToolOffsetTransform(ms);
-	reprap.GetMove().SetNewPosition(ms.coords, true, queueNumber);
+	reprap.GetMove().SetNewPosition(ms.coords, msNumber, true);
 	axesVirtuallyHomed = axesHomed;
 	reprap.MoveUpdated();
 }
@@ -5151,10 +5151,10 @@ bool GCodes::DoSync(GCodeBuffer& gb) noexcept
 // Update our machine coordinates from the set of last stored coordinates. If we have moved any axes then we must call ms.SaveOwnAxisPositions before calling this.
 void GCodes::UpdateAllCoordinates(const GCodeBuffer& gb) noexcept
 {
-	const unsigned int msNumber = gb.GetOwnQueueNumber();
-	memcpyf(moveStates[msNumber].coords, MovementState::GetLastKnownMachinePositions(), MaxAxes);
-	UpdateUserPositionFromMachinePosition(gb, moveStates[msNumber]);
-	reprap.GetMove().SetNewPosition(moveStates[msNumber].coords, true, msNumber);
+	MovementState& ms = GetMovementState(gb);
+	memcpyf(ms.coords, MovementState::GetLastKnownMachinePositions(), MaxAxes);
+	UpdateUserPositionFromMachinePosition(gb, ms);
+	reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), true);
 }
 
 #endif
