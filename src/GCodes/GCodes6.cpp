@@ -22,10 +22,6 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 {
 	MovementState& ms = GetMovementState(gb);
 
-#if SUPPORT_ASYNC_MOVES
-	AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
-#endif
-
 	g30SValue = (gb.Seen('S')) ? gb.GetIValue() : -4;		// S-4 or lower is equivalent to having no S parameter
 	if (g30SValue == -2 && ms.currentTool == nullptr)
 	{
@@ -35,6 +31,12 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 
 	g30HValue = (gb.Seen('H')) ? gb.GetFValue() : 0.0;
 	g30ProbePointIndex = -1;
+
+	GCodeState newState = GCodeState::normal;
+#if SUPPORT_ASYNC_MOVES
+	AxesBitmap axesMoving;
+#endif
+
 	bool seenP = false;
 	gb.TryGetIValue('P', g30ProbePointIndex, seenP);
 	if (seenP)
@@ -47,8 +49,8 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 		else
 		{
 			// Set the specified probe point index to the specified coordinates
-			const float x = (gb.Seen(axisLetters[X_AXIS])) ? gb.GetFValue() : ms.currentUserPosition[X_AXIS];
-			const float y = (gb.Seen(axisLetters[Y_AXIS])) ? gb.GetFValue() : ms.currentUserPosition[Y_AXIS];
+			const float x = (gb.Seen(axisLetters[X_AXIS])) ? (axesMoving.SetBit(X_AXIS), gb.GetFValue()) : ms.currentUserPosition[X_AXIS];
+			const float y = (gb.Seen(axisLetters[Y_AXIS])) ? (axesMoving.SetBit(Y_AXIS), gb.GetFValue()) : ms.currentUserPosition[Y_AXIS];
 			const float z = (gb.Seen(axisLetters[Z_AXIS])) ? gb.GetFValue() : ms.currentUserPosition[Z_AXIS];
 			reprap.GetMove().SetXYBedProbePoint((size_t)g30ProbePointIndex, x, y);
 
@@ -64,12 +66,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 			else
 			{
 				// Do a Z probe at the specified point.
-				const auto zp = SetZProbeNumber(gb, 'K');		// may throw, so do this before changing the state
-				gb.SetState(GCodeState::probingAtPoint0);
-				if (zp->GetProbeType() != ZProbeType::blTouch)
-				{
-					DeployZProbe(gb);
-				}
+				newState = GCodeState::probingAtPoint0;
 			}
 		}
 	}
@@ -77,14 +74,24 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 	{
 		// G30 without P parameter. This probes the current location starting from the current position.
 		// If S=-1 it just reports the stopped height, else it resets the Z origin.
-		const auto zp = SetZProbeNumber(gb, 'K');				// may throw, so do this before changing the state
-		InitialiseTaps(zp->HasTwoProbingSpeeds());
-		gb.SetState(GCodeState::probingAtPoint2a);
-		if (zp->GetProbeType() != ZProbeType::blTouch)
-		{
-			DeployZProbe(gb);
-		}
+		newState = GCodeState::probingAtPoint2a;
 	}
+
+	// If we get here then we actually need to probe
+	const auto zp = SetZProbeNumber(gb, 'K');						// may throw, so do this before changing the state
+	InitialiseTaps(zp->HasTwoProbingSpeeds());
+
+#if SUPPORT_ASYNC_MOVES
+	axesMoving.SetBit(Z_AXIS);
+	AllocateAxes(gb, ms, axesMoving, ParameterLettersBitmap());		// allocate any axes we are moving but don't bother to record the letters
+#endif
+
+	gb.SetState(newState);
+	if (zp->GetProbeType() != ZProbeType::blTouch)
+	{
+		DeployZProbe(gb);
+	}
+
 	return GCodeResult::ok;
 }
 

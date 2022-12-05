@@ -1616,7 +1616,7 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned in
 #else
 				QueuedGCode()
 #endif
-							->IsIdle() && moveStates[msNumber].codeQueue->IsIdle()))
+							->IsIdle() && ms.codeQueue->IsIdle()))
 		{
 			return false;
 		}
