@@ -17,6 +17,8 @@
 #include <Movement/Move.h>
 #include <Platform/TaskPriorities.h>
 
+constexpr unsigned int HeightControlMovementSystemNumber = 1;
+
 HeightController::HeightController() noexcept
 	: heightControllerTask(nullptr), sensorNumber(-1),
 		sampleInterval(DefaultSampleInterval), setPoint(1.0), pidP(1.0), configuredPidI(0.0), configuredPidD(0.0), iAccumulator(0.0),
@@ -149,7 +151,7 @@ void HeightController::Stop() noexcept
 			lastWakeTime = xTaskGetTickCount();
 			lastReadingOk = false;
 			float machinePos[MaxAxes];
-			reprap.GetMove().GetCurrentMachinePosition(machinePos, false);
+			reprap.GetMove().GetCurrentMachinePosition(machinePos, HeightControlMovementSystemNumber, false);
 			currentZ = machinePos[Z_AXIS];
 			iAccumulator = constrain<float>(currentZ, zMin, zMax);
 		}

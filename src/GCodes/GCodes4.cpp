@@ -1095,7 +1095,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// Successful probing
 					float m[MaxAxes];
-					reprap.GetMove().GetCurrentMachinePosition(m, false);		// get height without bed compensation
+					reprap.GetMove().GetCurrentMachinePosition(m, ms.GetMsNumber(), false);		// get height without bed compensation
 					const float g30zStoppedHeight = m[Z_AXIS] - g30HValue;		// save for later
 					zp->SetLastStoppedHeight(g30zStoppedHeight);
 					if (tapsDone > 0)											// don't accumulate the result of we are doing fast-then-slow probing and this was the fast probe
@@ -1394,7 +1394,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #endif
 				SetMoveBufferDefaults(ms);
 				ms.movementTool = ms.currentTool;
-				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
+				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.currentTool);
 				ms.coords[Z_AXIS] += ms.currentTool->GetRetractHop();
 				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
 				ms.filePos = gb.GetJobFilePosition();
@@ -1415,7 +1415,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				SetMoveBufferDefaults(ms);
 				ms.movementTool = ms.currentTool;
-				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
+				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.currentTool);
 				for (size_t i = 0; i < ms.currentTool->DriveCount(); ++i)
 				{
 					ms.coords[ExtruderToLogicalDrive(ms.currentTool->GetDrive(i))] = ms.currentTool->GetRetractLength() + ms.currentTool->GetRetractExtra();

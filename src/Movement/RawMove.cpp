@@ -287,7 +287,7 @@ AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap a
 void MovementState::SaveOwnAxisCoordinates() noexcept
 {
 	Move& move = reprap.GetMove();
-	move.GetPartialMachinePosition(lastKnownMachinePositions, axesAndExtrudersOwned, msNumber);
+	move.GetPartialMachinePosition(lastKnownMachinePositions, msNumber, axesAndExtrudersOwned);
 	memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
 	move.SetRawPosition(lastKnownMachinePositions, msNumber);
 	move.InverseAxisAndBedTransform(coords, currentTool);

@@ -2004,7 +2004,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		// This may be a raw motor move, in which case we need the current raw motor positions in moveBuffer.coords.
 		// If it isn't a raw motor move, it will still be applied without axis or bed transform applied,
 		// so make sure the initial coordinates don't have those either to avoid unwanted Z movement.
-		reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.moveType, ms.currentTool);
+		reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), ms.moveType, ms.currentTool);
 	}
 
 	// Set up the initial coordinates
@@ -3123,6 +3123,7 @@ GCodeResult GCodes::DoHome(GCodeBuffer& gb, const StringRef& reply) THROWS(GCode
 
 // Return the current coordinates as a printable string. Used only to implement M114.
 // Coordinates are updated at the end of each movement, so this won't tell you where you are mid-movement.
+// We only report the coordinates of the current movement system.
 void GCodes::HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept
 {
 	const MovementState& ms = GetConstMovementState(gb);
@@ -3148,7 +3149,7 @@ void GCodes::HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept
 	// Don't bother with the extruder endpoints, they are zero after any non-extruding move.
 	s.cat("Count");
 	int32_t positions[MaxAxesPlusExtruders];
-	reprap.GetMove().GetLivePositions(positions);
+	reprap.GetMove().GetLivePositions(positions, gb.GetActiveQueueNumber());
 	for (size_t i = 0; i < numVisibleAxes; ++i)
 	{
 		s.catf(" %" PRIi32, positions[i]);
@@ -3949,7 +3950,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 			// Get ready to generate a move
 			SetMoveBufferDefaults(ms);
 			ms.movementTool = ms.currentTool;
-			reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.movementTool);
+			reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.movementTool);
 			ms.filePos = gb.GetJobFilePosition();
 
 			if (retract)
@@ -4283,7 +4284,7 @@ bool GCodes::ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling
 void GCodes::UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept
 {
 	MovementState& ms = GetMovementState(gb);
-	reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
+	reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.currentTool);
 	UpdateUserPositionFromMachinePosition(gb, ms);
 }
 
@@ -4943,7 +4944,7 @@ void GCodes::ActivateHeightmap(bool activate) noexcept
 		// Update the current position to allow for any bed compensation at the current XY coordinates
 		for (MovementState& ms : moveStates)
 		{
-			reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
+			reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.currentTool);
 			ToolOffsetInverseTransform(ms);							// update user coordinates to reflect any height map offset at the current position
 		}
 	}
