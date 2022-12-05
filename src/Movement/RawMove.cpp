@@ -288,9 +288,14 @@ void MovementState::SaveOwnAxisCoordinates() noexcept
 {
 	Move& move = reprap.GetMove();
 	move.GetPartialMachinePosition(lastKnownMachinePositions, msNumber, axesAndExtrudersOwned);
-	memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
-	move.SetRawPosition(lastKnownMachinePositions, msNumber);
-	move.InverseAxisAndBedTransform(coords, currentTool);
+
+	// Only update our own position if something has changed, to avoid frequent inverse and forward transforms
+	if (!memeqf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders))
+	{
+		memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
+		move.SetRawPosition(lastKnownMachinePositions, msNumber);
+		move.InverseAxisAndBedTransform(coords, currentTool);
+	}
 }
 
 // Update changed coordinates of some owned axes - called after G92

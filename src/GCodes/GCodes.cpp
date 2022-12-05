@@ -616,7 +616,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 		if (gb.IsFileFinished())
 		{
-			const bool printFileFinished = (gb.LatestMachineState().GetPrevious() == nullptr);
+			const bool printFileFinished = (gb.IsFileChannel() && gb.LatestMachineState().GetPrevious() == nullptr);
 # if SUPPORT_ASYNC_MOVES
 			if (printFileFinished)
 			{
@@ -767,7 +767,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 			gb.Init();															// mark buffer as empty
 
-			const bool printFileFinished = (gb.LatestMachineState().GetPrevious() == nullptr);
+			const bool printFileFinished = (gb.IsFileChannel() && gb.LatestMachineState().GetPrevious() == nullptr);
 # if SUPPORT_ASYNC_MOVES
 			if (printFileFinished)
 			{
