@@ -3591,6 +3591,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 575: // Set communications parameters
 				{
 					const size_t chan = gb.GetLimitedUIValue('P', NumSerialChannels);
+					GCodeBuffer * const gbp = (chan == 0) ? UsbGCode() : (chan == 1) ? AuxGCode() : Aux2GCode();
 					bool seen = false;
 					if (gb.Seen('B'))
 					{
@@ -3602,17 +3603,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						const uint32_t val = gb.GetUIValue();
 						platform.SetCommsProperties(chan, val);
-						if (chan == 0)
+						if (gbp != nullptr)
 						{
-							UsbGCode()->SetCommsProperties(val);
-						}
+							gbp->SetCommsProperties(val);
 #if HAS_AUX_DEVICES
-						else if (chan < NumSerialChannels)
-						{
-							GCodeBuffer * gbp = (chan == 1) ? AuxGCode() : Aux2GCode();
-							if (gbp != nullptr)
+							if (chan != 0)
 							{
-								gbp->SetCommsProperties(val);
 								const bool rawMode = (val & 2u) != 0;
 								platform.SetAuxRaw(chan - 1, rawMode);
 								if (rawMode && !platform.IsAuxEnabled(chan - 1))			// if enabling aux for the first time and in raw mode, set Marlin compatibility
@@ -3645,7 +3641,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					else
 					{
 						const uint32_t cp = platform.GetCommsProperties(chan);
-						reply.printf("Channel %d: baud rate %" PRIu32 ", %s checksum", chan, platform.GetBaudRate(chan), (cp & 1) ? "requires" : "does not require");
+						reply.printf("Channel %d: baud rate %" PRIu32 ", %s%s", chan, platform.GetBaudRate(chan),
+										(chan != 0 && platform.IsAuxRaw(chan - 1)) ? "raw mode, " : "",
+										(cp & 4) ? "requires CRC"
+											: (cp & 1) ? "requires checksum or CRC"
+												: "does not require checksum or CRC"
+									);
 						if (chan == 0 && SERIAL_MAIN_DEVICE.IsConnected())
 						{
 							reply.cat(", connected");
