@@ -155,7 +155,7 @@ bool ZLeadscrewKinematics::SupportsAutoCalibration() const noexcept
 }
 
 // Perform auto calibration, returning true if failed. Override this implementation in kinematics that support it. Caller already owns the GCode movement lock.
-bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
+bool ZLeadscrewKinematics::DoAutoCalibration(unsigned int msNumber, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	if (!SupportsAutoCalibration())			// should be checked by caller, but check it here too
 	{

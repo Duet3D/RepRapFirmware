@@ -78,7 +78,7 @@ public:
 	void SetXYBedProbePoint(size_t index, float x, float y) noexcept;		// Record the X and Y coordinates of a probe point
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError) noexcept; // Record the Z coordinate of a probe point
 	float GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePosition) const noexcept; // Get pre-recorded probe coordinates
-	bool FinishedBedProbing(int sParam, const StringRef& reply) noexcept;	// Calibrate or set the bed equation after probing
+	bool FinishedBedProbing(unsigned int msNumber, int sParam, const StringRef& reply) noexcept;	// Calibrate or set the bed equation after probing
 	void SetAxisCompensation(unsigned int axis, float tangent) noexcept;	// Set an axis-pair compensation angle
 	float AxisCompensation(unsigned int axis) const noexcept;				// The tangent value
 	bool IsXYCompensated() const;											// Check if XY axis compensation applies to the X or Y axis
@@ -121,7 +121,7 @@ public:
 																							// Convert Cartesian coordinates to delta motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept;
 																							// Convert motor coordinates to machine coordinates
-	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;			// Perform motor endpoint adjustment
+	void AdjustMotorPositions(unsigned int msNumber, const float adjustment[], size_t numMotors) noexcept;			// Perform motor endpoint adjustment
 	const char* GetGeometryString() const noexcept { return kinematics->GetName(true); }
 	bool IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
 
@@ -349,9 +349,9 @@ inline void Move::GetLivePositions(int32_t pos[MaxAxesPlusExtruders], unsigned i
 }
 
 // Perform motor endpoint adjustment
-inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept
+inline void Move::AdjustMotorPositions(unsigned int msNumber, const float adjustment[], size_t numMotors) noexcept
 {
-	rings[0].AdjustMotorPositions(adjustment, numMotors);
+	rings[msNumber].AdjustMotorPositions(adjustment, numMotors);
 }
 
 inline void Move::ResetExtruderPositions() noexcept

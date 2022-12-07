@@ -1241,13 +1241,16 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			else if (g30SValue >= -1)
 			{
-				if (reprap.GetMove().FinishedBedProbing(g30SValue, reply))
+				if (reprap.GetMove().FinishedBedProbing(ms.GetMsNumber(), g30SValue, reply))
 				{
 					stateMachineResult = GCodeResult::error;
 				}
 				else if (reprap.GetMove().GetKinematics().SupportsAutoCalibration())
 				{
 					zDatumSetByProbing = true;			// if we successfully auto calibrated or adjusted leadscrews, we've set the Z datum by probing
+					// Auto calibration may have adjusted the motor positions and the geometry, so the head may now be at a different position
+					ms.SaveOwnAxisCoordinates();
+					UpdateUserPositionFromMachinePosition(gb, ms);
 				}
 			}
 			gb.SetState(GCodeState::normal);

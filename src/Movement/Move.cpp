@@ -877,7 +877,7 @@ void Move::SetXYCompensation(bool xyCompensation)
 // Calibrate or set the bed equation after probing, returning true if an error occurred
 // sParam is the value of the S parameter in the G30 command that provoked this call.
 // Caller already owns the GCode movement lock.
-bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
+bool Move::FinishedBedProbing(unsigned int msNumber, int sParam, const StringRef& reply) noexcept
 {
 	bool error = false;
 	const size_t numPoints = probePoints.NumberOfProbePoints();
@@ -911,7 +911,7 @@ bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
 		}
 		else if (kinematics->SupportsAutoCalibration())
 		{
-			error = kinematics->DoAutoCalibration(sParam, probePoints, reply);
+			error = kinematics->DoAutoCalibration(msNumber, sParam, probePoints, reply);
 		}
 		else
 		{
