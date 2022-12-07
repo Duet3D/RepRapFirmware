@@ -350,6 +350,8 @@ typedef Bitmap<uint64_t> SensorsBitmap;
 typedef Bitmap<uint32_t> SensorsBitmap;
 #endif
 
+typedef unsigned int MovementSystemNumber;			// we could use uint8_t for this but using unsigned int may be more efficient
+
 static_assert(MaxAxesPlusExtruders <= AxesBitmap::MaxBits());
 static_assert(MaxExtruders <= ExtrudersBitmap::MaxBits());
 static_assert(MaxFans <= FansBitmap::MaxBits());

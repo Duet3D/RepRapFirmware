@@ -71,7 +71,7 @@ GCodeResult GCodes::SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('P'))
 	{
 		UnlockMovement(gb);							// in case we are in a macro - avoid unlocking the wrong movement system later
-		const unsigned int queueNumber = gb.GetLimitedUIValue('P', ARRAY_SIZE(moveStates));
+		const MovementSystemNumber queueNumber = gb.GetLimitedUIValue('P', ARRAY_SIZE(moveStates));
 		gb.SetActiveQueueNumber(queueNumber);
 		reprap.InputsUpdated();
 	}

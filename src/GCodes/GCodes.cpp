@@ -261,7 +261,7 @@ void GCodes::Reset() noexcept
 	MovementState::GlobalInit(numVisibleAxes);
 #endif
 
-	for (unsigned int i = 0; i < NumMovementSystems; ++i)
+	for (MovementSystemNumber i = 0; i < NumMovementSystems; ++i)
 	{
 		MovementState& ms = moveStates[i];
 		ms.Init(i);
@@ -838,7 +838,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 void GCodes::EndSimulation(GCodeBuffer *null gb) noexcept
 {
 	// Ending a simulation, so restore the position
-	const unsigned int msNumber = (gb == nullptr) ? 0 : gb->GetActiveQueueNumber();	//TODO handle null gb properly
+	const MovementSystemNumber msNumber = (gb == nullptr) ? 0 : gb->GetActiveQueueNumber();	//TODO handle null gb properly
 	MovementState& ms = moveStates[msNumber];
 	RestorePosition(ms.simulationRestorePoint, gb);
 	ms.SelectTool(ms.simulationRestorePoint.toolNumber, true);
@@ -967,13 +967,12 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 		return false;
 	}
 
-	for (size_t moveSystemNumber = 0; moveSystemNumber < ARRAY_SIZE(moveStates); ++moveSystemNumber)
+	for (MovementState& ms : moveStates)
 	{
-		MovementState& ms = moveStates[moveSystemNumber];
 		ms.pausedInMacro = false;
 		ms.pauseRestorePoint.feedRate = ms.feedRate;
 
-		const bool movesSkipped = reprap.GetMove().PausePrint(moveSystemNumber, ms.pauseRestorePoint);	// tell Move we wish to pause this queue
+		const bool movesSkipped = reprap.GetMove().PausePrint(ms.GetMsNumber(), ms.pauseRestorePoint);	// tell Move we wish to pause this queue
 		if (movesSkipped)
 		{
 			// The PausePrint call has filled in the restore point with machine coordinates
@@ -1151,14 +1150,13 @@ bool GCodes::DoEmergencyPause() noexcept
 	// Save the resume info, stop movement immediately and run the low voltage pause script to lift the nozzle etc.
 	GrabMovement(*AutoPauseGCode());
 
-	for (size_t moveSystemNumber = 0; moveSystemNumber < ARRAY_SIZE(moveStates); ++moveSystemNumber)
+	for (MovementState& ms : moveStates)
 	{
-		MovementState& ms = moveStates[moveSystemNumber];
 		// When we use RTOS there is a possible race condition in the following, because we might try to pause when a waiting move has just been added
 		// but before the gcode buffer has been re-initialised ready for the next command. So start a critical section.
 		TaskCriticalSectionLocker lock;
 
-		const bool movesSkipped = reprap.GetMove().LowPowerOrStallPause(moveSystemNumber, ms.pauseRestorePoint);
+		const bool movesSkipped = reprap.GetMove().LowPowerOrStallPause(ms.GetMsNumber(), ms.pauseRestorePoint);
 		if (movesSkipped)
 		{
 			// The PausePrint call has filled in the restore point with machine coordinates
@@ -1553,9 +1551,9 @@ void GCodes::Diagnostics(MessageType mtype) noexcept
 		}
 	}
 
-	for (size_t i = 0; i < ARRAY_SIZE(moveStates); ++i)
+	for (MovementState& ms : moveStates)
 	{
-		moveStates[i].Diagnostics(mtype, i);
+		ms.Diagnostics(mtype);
 	}
 }
 
@@ -1590,7 +1588,7 @@ bool GCodes::LockAllMovementSystemsAndWaitForStandstill(GCodeBuffer& gb) noexcep
 // Lock movement and wait for pending moves to finish.
 // Return true if successful, false if we need to try again later.
 // As a side-effect it updates the user coordinates from the machine coordinates.
-bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, unsigned int msNumber) noexcept
+bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept
 {
 	// Lock movement to stop another source adding moves to the queue
 	if (!LockResource(gb, MoveResourceBase + msNumber))
@@ -2766,7 +2764,7 @@ bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 
 // The Move class calls this function to find what to do next. It takes its own copy of the move because it adjusts the coordinates.
 // Returns true if a new move was copied to 'm'.
-bool GCodes::ReadMove(unsigned int queueNumber, RawMove& m) noexcept
+bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 {
 	MovementState& ms = moveStates[queueNumber];
 	if (ms.segmentsLeft == 0)
@@ -3164,7 +3162,7 @@ void GCodes::HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept
 	// Add the machine coordinates because they may be different from the user coordinates under some conditions
 	s.cat(" Machine");
 	float machineCoordinates[MaxAxes];
-	ToolOffsetTransform(moveStates[0], ms.currentUserPosition, machineCoordinates);
+	ToolOffsetTransform(ms, ms.currentUserPosition, machineCoordinates);
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		s.catf(" %.3f", (double)HideNan(machineCoordinates[axis]));
@@ -4839,7 +4837,7 @@ bool GCodes::LockAllMovement(const GCodeBuffer& gb) noexcept
 }
 
 // Release movement locks greater than the specified one
-void GCodes::UnlockMovementFrom(const GCodeBuffer& gb, unsigned int msNumber) noexcept
+void GCodes::UnlockMovementFrom(const GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept
 {
 	while (msNumber < NumMovementSystems)
 	{

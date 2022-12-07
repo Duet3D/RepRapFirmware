@@ -425,7 +425,7 @@ void LinearDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float posi
 }
 
 // Auto calibrate from a set of probe points returning true if it failed
-bool LinearDeltaKinematics::DoAutoCalibration(unsigned int msNumber, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
+bool LinearDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	constexpr size_t NumDeltaFactors = 9;		// maximum number of delta machine factors we can adjust
 

@@ -96,9 +96,9 @@ public:
 	void OwnedAxisCoordinateUpdated(size_t axis) noexcept;									// update the machine coordinate of an axis we own - called after Z probing
 #endif
 
-	unsigned int GetMsNumber() const noexcept { return msNumber; }
+	MovementSystemNumber GetMsNumber() const noexcept { return msNumber; }
 	float GetProportionDone() const noexcept;												// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
-	void Init(unsigned int p_msNumber) noexcept;
+	void Init(MovementSystemNumber p_msNumber) noexcept;
 	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;			// change the extrusion factor of an extruder
 	const RestorePoint& GetRestorePoint(size_t n) const pre(n < NumTotalRestorePoints) { return restorePoints[n]; }
 	void ClearMove() noexcept;
@@ -124,7 +124,7 @@ public:
 	void StopPrinting(GCodeBuffer& gb) noexcept;
 	void ResumePrinting(GCodeBuffer& gb) noexcept;
 
-	void Diagnostics(MessageType mtype, unsigned int moveSystemNumber) noexcept;
+	void Diagnostics(MessageType mtype) noexcept;
 
 	// These variables are currently all public, but we ought to make most of them private
 	Tool *currentTool;												// the current tool of this movement system
@@ -190,7 +190,7 @@ public:
 	bool printingJustResumed;										// true if we have just restarted printing
 
 private:
-	unsigned int msNumber;
+	MovementSystemNumber msNumber;
 
 #if SUPPORT_ASYNC_MOVES
 	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync

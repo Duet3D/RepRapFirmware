@@ -293,7 +293,7 @@ floatc_t RotaryDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, 
 
 // Perform auto calibration. Caller already owns the movement lock.
 // Return true if an error occurred.
-bool RotaryDeltaKinematics::DoAutoCalibration(unsigned int msNumber, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
+bool RotaryDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	constexpr size_t NumDeltaFactors = 7;		// maximum number of rotary delta machine factors we can adjust
 

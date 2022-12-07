@@ -145,8 +145,8 @@ public:
 	}
 
 #if SUPPORT_ASYNC_MOVES
-	void SetActiveQueueNumber(size_t qn) noexcept { machineState->SetCommandedQueue(qn); }
-	void ExecuteOnlyQueue(size_t qn) noexcept { machineState->ExecuteOnly(qn); }
+	void SetActiveQueueNumber(MovementSystemNumber qn) noexcept { machineState->SetCommandedQueue(qn); }
+	void ExecuteOnlyQueue(MovementSystemNumber qn) noexcept { machineState->ExecuteOnly(qn); }
 	size_t GetOwnQueueNumber() const noexcept { return machineState->GetOwnQueue(); }
 	void ExecuteAll() noexcept { machineState->ExecuteAll(); }
 	bool Executing() const noexcept { return machineState->Executing(); }	// Return true if this GCodeBuffer for executing commands addressed to the current queue

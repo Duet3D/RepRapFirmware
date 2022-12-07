@@ -2666,7 +2666,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							reprap.MoveUpdated();
 							if (IsAxisHomed(axis))
 							{
-								const float amountPushed = reprap.GetMove().PushBabyStepping(axis, differences[axis]);
+								//TODO find which movement system owns the axis concerned and push the babystepping through that one
+								const float amountPushed = reprap.GetMove().PushBabyStepping(0, axis, differences[axis]);
 								ms.initialCoords[axis] += amountPushed;
 
 								// The following causes all the remaining baby stepping that we didn't manage to push to be added to the [remainder of the] currently-executing move, if there is one.
@@ -3894,14 +3895,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					if (changed || changedMode)
 					{
-						for (size_t i = 0; i < NumMovementSystems; ++i)
+						for (MovementState& ms : moveStates)
 						{
-							MovementState& ms = moveStates[i];
 							if (move.GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, false, false) != LimitPositionResult::ok)
 							{
 								ToolOffsetInverseTransform(ms);					// make sure the limits are reflected in the user position
 							}
-							move.SetNewPosition(ms.coords, i, true);
+							move.SetNewPosition(ms.coords, ms.GetMsNumber(), true);
 						}
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
@@ -3963,9 +3963,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (seen)
 					{
 						// We changed something significant, so reset the positions and set all axes not homed
-						for (size_t i = 0; i < NumMovementSystems; ++i)
+						for (MovementState& ms : moveStates)
 						{
-							MovementState& ms = moveStates[i];
 							if (move.GetKinematics().GetKinematicsType() != oldK)
 							{
 								move.GetKinematics().GetAssumedInitialPosition(numVisibleAxes, ms.coords);
@@ -3975,7 +3974,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								ToolOffsetInverseTransform(ms);				// make sure the limits are reflected in the user position
 							}
-							move.SetNewPosition(ms.coords, i, true);
+							move.SetNewPosition(ms.coords, ms.GetMsNumber(), true);
 						}
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();

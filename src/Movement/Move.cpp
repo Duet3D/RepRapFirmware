@@ -433,7 +433,7 @@ void Move::MoveAvailable() noexcept
 }
 
 // Tell the lookahead ring we are waiting for it to empty and return true if it is
-bool Move::WaitingForAllMovesFinished(unsigned int msNumber) noexcept
+bool Move::WaitingForAllMovesFinished(MovementSystemNumber msNumber) noexcept
 {
 	return rings[msNumber].SetWaitingToEmpty();
 }
@@ -446,11 +446,11 @@ unsigned int Move::GetNumProbedProbePoints() const noexcept
 
 // Try to push some babystepping through the lookahead queue, returning the amount pushed
 // This is called by the Main task, so we need to lock out the Move task while doing this
-float Move::PushBabyStepping(size_t axis, float amount) noexcept
+float Move::PushBabyStepping(MovementSystemNumber msNumber,size_t axis, float amount) noexcept
 {
 	TaskCriticalSectionLocker lock;						// lock out the Move task
 
-	return rings[0].PushBabyStepping(axis, amount);
+	return rings[msNumber].PushBabyStepping(axis, amount);
 }
 
 // Change the kinematics to the specified type if it isn't already
@@ -560,7 +560,7 @@ void Move::Diagnostics(MessageType mtype) noexcept
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], unsigned int msNumber, bool doBedCompensation) noexcept
+void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], MovementSystemNumber msNumber, bool doBedCompensation) noexcept
 {
 	float newPos[MaxAxesPlusExtruders];
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
@@ -877,7 +877,7 @@ void Move::SetXYCompensation(bool xyCompensation)
 // Calibrate or set the bed equation after probing, returning true if an error occurred
 // sParam is the value of the S parameter in the G30 command that provoked this call.
 // Caller already owns the GCode movement lock.
-bool Move::FinishedBedProbing(unsigned int msNumber, int sParam, const StringRef& reply) noexcept
+bool Move::FinishedBedProbing(MovementSystemNumber msNumber, int sParam, const StringRef& reply) noexcept
 {
 	bool error = false;
 	const size_t numPoints = probePoints.NumberOfProbePoints();
@@ -932,7 +932,7 @@ bool Move::FinishedBedProbing(unsigned int msNumber, int sParam, const StringRef
 }
 
 // Return the transformed machine coordinates
-void Move::GetCurrentUserPosition(float m[MaxAxes], unsigned int msNumber, uint8_t moveType, const Tool *tool) const noexcept
+void Move::GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept
 {
 	GetCurrentMachinePosition(m, msNumber, IsRawMotorMove(moveType));
 	if (moveType == 0)
