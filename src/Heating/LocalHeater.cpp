@@ -169,7 +169,7 @@ GCodeResult LocalHeater::ReportDetails(const StringRef& reply) const noexcept
 // Read and store the temperature of this heater and returns the error code.
 TemperatureError LocalHeater::ReadTemperature() noexcept
 {
-	TemperatureError err;
+	TemperatureError err(TemperatureError::unknownError);
 	temperature = reprap.GetHeat().GetSensorTemperature(GetSensorNumber(), err);		// in the event of an error, err is set and BAD_ERROR_TEMPERATURE is returned
 	return err;
 }
@@ -244,7 +244,7 @@ void LocalHeater::Spin() noexcept
 	const TemperatureError err = ReadTemperature();
 
 	// Handle any temperature reading error and calculate the temperature rate of change, if possible
-	if (err != TemperatureError::success)
+	if (err != TemperatureError::ok)
 	{
 		previousTemperaturesGood <<= 1;				// this reading isn't a good one
 		if (mode > HeaterMode::suspended)			// don't worry about errors when reading heaters that are switched off or flagged as having faults
@@ -253,7 +253,7 @@ void LocalHeater::Spin() noexcept
 			badTemperatureCount++;
 			if (badTemperatureCount > GetMaxBadTemperatureCount())
 			{
-				RaiseHeaterFault(HeaterFaultType::failedToReadSensor, "%s", TemperatureErrorString(err));
+				RaiseHeaterFault(HeaterFaultType::failedToReadSensor, "%s", err.ToString());
 			}
 		}
 		// We leave lastPWM alone if we have a temporary temperature reading error

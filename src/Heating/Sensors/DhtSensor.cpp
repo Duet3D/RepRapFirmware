@@ -101,7 +101,7 @@ GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& re
 		reply.catf(" type %s using pins ", GetSensorType());
 		const IoPort* const portAddrs[] = { &port, &interruptPort };
 		IoPort::AppendPinNames(reply, 2, portAddrs);
-		reply.catf(", reading %.1f, last error: %s", (double)GetStoredReading(), TemperatureErrorString(GetLastError()));
+		reply.catf(", reading %.1f, last error: %s", (double)GetStoredReading(), GetLastError().ToString());
 #else
 		CopyBasicDetails(reply);
 #endif
@@ -163,7 +163,7 @@ void DhtTemperatureSensor::Poll() noexcept
 	{
 		TakeReading();
 	}
-	SetResult(GetStoredReading(), TemperatureError::success);
+	SetResult(GetStoredReading(), TemperatureError::ok);
 }
 
 void DhtTemperatureSensor::TakeReading() noexcept
@@ -209,7 +209,7 @@ void DhtTemperatureSensor::TakeReading() noexcept
 	// Attempt to convert the signal into temp+RH values
 	float t;
 	const auto rslt = ProcessReadings(t, lastHumidity);
-	if (rslt == TemperatureError::success)
+	if (rslt == TemperatureError::ok)
 	{
 		SetResult(t, rslt);
 		badTemperatureCount = 0;
@@ -268,7 +268,7 @@ TemperatureError DhtTemperatureSensor::ProcessReadings(float& t, float& h) noexc
 		{
 			t *= -1.0;
 		}
-		return TemperatureError::success;
+		return TemperatureError::ok;
 
 	default:
 		return TemperatureError::notInitialised;

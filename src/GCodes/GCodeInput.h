@@ -129,7 +129,7 @@ public:
 	NetworkGCodeInput() noexcept;
 
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
-	void Put(MessageType mtype, const char *buf) noexcept;		// Append a null-terminated string to the buffer
+	bool Put(MessageType mtype, const char *buf) noexcept;		// Append a null-terminated string to the buffer returning true if success
 
 private:
 	void Put(MessageType mtype, char c) noexcept;				// Append a single character. This does NOT lock the mutex!

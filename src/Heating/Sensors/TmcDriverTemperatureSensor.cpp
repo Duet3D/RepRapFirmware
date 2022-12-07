@@ -27,7 +27,7 @@ const char *TmcDriverTemperatureSensor::GetShortSensorType() const noexcept
 
 void TmcDriverTemperatureSensor::Poll() noexcept
 {
-	SetResult(reprap.GetPlatform().GetTmcDriversTemperature(channel), TemperatureError::success);
+	SetResult(reprap.GetPlatform().GetTmcDriversTemperature(channel), TemperatureError::ok);
 }
 
 #endif

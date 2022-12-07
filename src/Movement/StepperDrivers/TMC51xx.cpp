@@ -1178,92 +1178,89 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		{
 			TaskBase::Take();
 		}
-		else
+		else if (driversState == DriversState::notInitialised)
 		{
-			if (driversState == DriversState::notInitialised)
+			for (size_t drive = 0; drive < numTmc51xxDrivers; ++drive)
 			{
-				for (size_t drive = 0; drive < numTmc51xxDrivers; ++drive)
-				{
-					driverStates[drive].WriteAll();
-				}
-				driversState = DriversState::initialising;
+				driverStates[drive].WriteAll();
 			}
-			else if (!timedOut)
+			driversState = DriversState::initialising;
+		}
+		else if (!timedOut)
+		{
+			// Handle the read response - data comes out of the drivers in reverse driver order
+			const volatile uint8_t *readPtr = rcvData + 5 * numTmc51xxDrivers;
+			for (size_t drive = 0; drive < numTmc51xxDrivers; ++drive)
 			{
-				// Handle the read response - data comes out of the drivers in reverse driver order
-				const volatile uint8_t *readPtr = rcvData + 5 * numTmc51xxDrivers;
-				for (size_t drive = 0; drive < numTmc51xxDrivers; ++drive)
-				{
-					readPtr -= 5;
-					driverStates[drive].TransferSucceeded(const_cast<const uint8_t*>(readPtr));
-				}
+				readPtr -= 5;
+				driverStates[drive].TransferSucceeded(const_cast<const uint8_t*>(readPtr));
+			}
 
-				if (driversState == DriversState::initialising)
+			if (driversState == DriversState::initialising)
+			{
+				// If all drivers that share the global enable have been initialised, set the global enable
+				bool allInitialised = true;
+				for (size_t i = 0; i < numTmc51xxDrivers; ++i)
 				{
-					// If all drivers that share the global enable have been initialised, set the global enable
-					bool allInitialised = true;
-					for (size_t i = 0; i < numTmc51xxDrivers; ++i)
+					if (driverStates[i].UpdatePending())
 					{
-						if (driverStates[i].UpdatePending())
-						{
-							allInitialised = false;
-							break;
-						}
-					}
-
-					if (allInitialised)
-					{
-						fastDigitalWriteLow(GlobalTmc51xxEnablePin);
-						driversState = DriversState::ready;
+						allInitialised = false;
+						break;
 					}
 				}
-			}
 
-			// Set up data to write. Driver 0 is the first in the SPI chain so we must write them in reverse order.
-			volatile uint8_t *writeBufPtr = sendData + 5 * numTmc51xxDrivers;
-			for (size_t i = 0; i < numTmc51xxDrivers; ++i)
-			{
-				writeBufPtr -= 5;
-				driverStates[i].GetSpiCommand(const_cast<uint8_t*>(writeBufPtr));
-			}
-
-			// Kick off a transfer.
-			// On the SAME5x the only way I have found to get reliable transfers and no timeouts is to disable SPI, enable DMA, and then enable SPI.
-			// Enabling SPI before DMA sometimes results in timeouts.
-			// Unfortunately, when we disable SPI the SCLK line floats. Therefore we disable SPI for as little time as possible.
-			{
-				TaskCriticalSectionLocker lock;
-
-				SetupDMA();											// set up the PDC or DMAC
-				dmaFinishedReason = DmaCallbackReason::none;
-
-				InterruptCriticalSectionLocker lock2;
-
-				fastDigitalWriteLow(GlobalTmc51xxCSPin);			// set CS low
-				TaskBase::ClearNotifyCount();
-				EnableEndOfTransferInterrupt();
-				ResetSpi();
-				EnableDma();
-				EnableSpi();
-			}
-
-			// Wait for the end-of-transfer interrupt
-			timedOut = !TaskBase::Take(TransferTimeout);
-			DisableEndOfTransferInterrupt();
-			DisableDma();
-
-			if (timedOut || dmaFinishedReason != DmaCallbackReason::complete)
-			{
-				TmcDriverState::TransferTimedOut();
-				// If the transfer was interrupted then we will have written dud data to the drivers. So we should re-initialise them all.
-				// Unfortunately registers that we don't normally write to may have changed too.
-				fastDigitalWriteHigh(GlobalTmc51xxEnablePin);
-				fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
-				driversState = DriversState::notInitialised;
-				for (size_t drive = 0; drive < numTmc51xxDrivers; ++drive)
+				if (allInitialised)
 				{
-					driverStates[drive].TransferFailed();
+					fastDigitalWriteLow(GlobalTmc51xxEnablePin);
+					driversState = DriversState::ready;
 				}
+			}
+		}
+
+		// Set up data to write. Driver 0 is the first in the SPI chain so we must write them in reverse order.
+		volatile uint8_t *writeBufPtr = sendData + 5 * numTmc51xxDrivers;
+		for (size_t i = 0; i < numTmc51xxDrivers; ++i)
+		{
+			writeBufPtr -= 5;
+			driverStates[i].GetSpiCommand(const_cast<uint8_t*>(writeBufPtr));
+		}
+
+		// Kick off a transfer.
+		// On the SAME5x the only way I have found to get reliable transfers and no timeouts is to disable SPI, enable DMA, and then enable SPI.
+		// Enabling SPI before DMA sometimes results in timeouts.
+		// Unfortunately, when we disable SPI the SCLK line floats. Therefore we disable SPI for as little time as possible.
+		{
+			TaskCriticalSectionLocker lock;
+
+			SetupDMA();											// set up the PDC or DMAC
+			dmaFinishedReason = DmaCallbackReason::none;
+
+			InterruptCriticalSectionLocker lock2;
+
+			fastDigitalWriteLow(GlobalTmc51xxCSPin);			// set CS low
+			TaskBase::ClearCurrentTaskNotifyCount();
+			EnableEndOfTransferInterrupt();
+			ResetSpi();
+			EnableDma();
+			EnableSpi();
+		}
+
+		// Wait for the end-of-transfer interrupt
+		timedOut = !TaskBase::Take(TransferTimeout);
+		DisableEndOfTransferInterrupt();
+		DisableDma();
+
+		if (timedOut || dmaFinishedReason != DmaCallbackReason::complete)
+		{
+			TmcDriverState::TransferTimedOut();
+			// If the transfer was interrupted then we will have written dud data to the drivers. So we should re-initialise them all.
+			// Unfortunately registers that we don't normally write to may have changed too.
+			fastDigitalWriteHigh(GlobalTmc51xxEnablePin);
+			fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
+			driversState = DriversState::notInitialised;
+			for (size_t drive = 0; drive < numTmc51xxDrivers; ++drive)
+			{
+				driverStates[drive].TransferFailed();
 			}
 		}
 	}

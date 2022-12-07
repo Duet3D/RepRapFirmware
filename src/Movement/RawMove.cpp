@@ -287,10 +287,15 @@ AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap a
 void MovementState::SaveOwnAxisCoordinates() noexcept
 {
 	Move& move = reprap.GetMove();
-	move.GetPartialMachinePosition(lastKnownMachinePositions, axesAndExtrudersOwned, msNumber);
-	memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
-	move.SetRawPosition(lastKnownMachinePositions, msNumber);
-	move.InverseAxisAndBedTransform(coords, currentTool);
+	move.GetPartialMachinePosition(lastKnownMachinePositions, msNumber, axesAndExtrudersOwned);
+
+	// Only update our own position if something has changed, to avoid frequent inverse and forward transforms
+	if (!memeqf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders))
+	{
+		memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
+		move.SetRawPosition(lastKnownMachinePositions, msNumber);
+		move.InverseAxisAndBedTransform(coords, currentTool);
+	}
 }
 
 // Update changed coordinates of some owned axes - called after G92

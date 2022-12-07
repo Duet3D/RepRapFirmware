@@ -995,7 +995,11 @@ void RepRap::EmergencyStop() noexcept
 
 #if SUPPORT_CAN_EXPANSION
 # if SUPPORT_REMOTE_COMMANDS
-	if (!CanInterface::InExpansionMode())
+	if (CanInterface::InExpansionMode())
+	{
+		CanInterface::Shutdown();
+	}
+	else
 # endif
 	{
 		expansion->EmergencyStop();
@@ -2555,7 +2559,7 @@ void RepRap::PrepareToLoadIap() noexcept
 
 	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters.
 	// This also shuts down tasks and interrupts that might make use of the RAM that we are about to load the IAP binary into.
-	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
+	EmergencyStop();						// this also stops CAN and stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
 	network->Exit();						// kill the network task to stop it overwriting RAM that we use to hold the IAP
 #if HAS_SMART_DRIVERS
 	SmartDrivers::Exit();					// stop the drivers being polled via SPI or UART because it may use data in the last 64Kb of RAM
@@ -2583,7 +2587,7 @@ void RepRap::PrepareToLoadIap() noexcept
 
 #if 0
 	// Debug
-	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 60 * 1024);
+	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 30 * 1024);
 	delay(2000);
 	for (char* p = reinterpret_cast<char *>(IAP_IMAGE_START); p < reinterpret_cast<char *>(IAP_IMAGE_START + (60 * 1024)); ++p)
 	{
@@ -2593,7 +2597,7 @@ void RepRap::PrepareToLoadIap() noexcept
 		}
 	}
 	debugPrintf("Scan complete\n");
-	#endif
+#endif
 }
 
 void RepRap::StartIap(const char *filename) noexcept

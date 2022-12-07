@@ -278,11 +278,11 @@ GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansB
 		return GCodeResult::error;
 	}
 
-	TemperatureError err;
+	TemperatureError err(TemperatureError::unknownError);
 	const float currentTemp = reprap.GetHeat().GetSensorTemperature(GetSensorNumber(), err);
-	if (err != TemperatureError::success)
+	if (err != TemperatureError::ok)
 	{
-		reply.printf("heater %u reported error '%s' at start of auto tuning", GetHeaterNumber(), TemperatureErrorString(err));
+		reply.printf("heater %u reported error '%s' at start of auto tuning", GetHeaterNumber(), err.ToString());
 		return GCodeResult::error;
 	}
 

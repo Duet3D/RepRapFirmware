@@ -217,7 +217,7 @@ void NetworkGCodeInput::Put(MessageType mtype, char c) noexcept
 	}
 }
 
-void NetworkGCodeInput::Put(MessageType mtype, const char *buf) noexcept
+bool NetworkGCodeInput::Put(MessageType mtype, const char *buf) noexcept
 {
 	const size_t len = strlen(buf) + 1;
 	MutexLocker lock(bufMutex, 200);
@@ -230,8 +230,10 @@ void NetworkGCodeInput::Put(MessageType mtype, const char *buf) noexcept
 			{
 				Put(mtype, buf[i]);
 			}
+			return true;
 		}
 	}
+	return false;
 }
 
 NetworkGCodeInput::NetworkGCodeInput() noexcept : RegularGCodeInput()

@@ -57,22 +57,22 @@ public:
 
 	[[noreturn]] void MoveLoop() noexcept;									// Main loop called by the Move task
 
-	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
+	void GetCurrentMachinePosition(float m[MaxAxes], unsigned int msNumber, bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
 #if SUPPORT_ASYNC_MOVES
-	void GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes, unsigned int queueNumber) const noexcept
+	void GetPartialMachinePosition(float m[MaxAxes], unsigned int msNumber, AxesBitmap whichAxes) const noexcept
 			pre(queueNumber < NumMovementSystems);							// Get the current position of some axes from one of the rings
-	void SetRawPosition(const float positions[MaxAxesPlusExtruders], unsigned int queueNumber) noexcept
+	void SetRawPosition(const float positions[MaxAxesPlusExtruders], unsigned int msNumber) noexcept
 			pre(queueNumber < NumMovementSystems);							// Set the current position to be this without transforming them first
 #endif
-	void GetCurrentUserPosition(float m[MaxAxes], uint8_t moveType, const Tool *tool) const noexcept;
+	void GetCurrentUserPosition(float m[MaxAxes], unsigned int msNumber, uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
-	void GetLivePositions(int32_t pos[MaxAxesPlusExtruders]) const noexcept;
+	void GetLivePositions(int32_t pos[MaxAxesPlusExtruders], unsigned int msNumber) const noexcept;
 	float LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept; // Gives the last point at the end of the last complete DDA
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
-	bool WaitingForAllMovesFinished(size_t queueNumber) noexcept
+	bool WaitingForAllMovesFinished(unsigned int msNumber) noexcept
 		pre(queueNumber < rings.upb);										// Tell the lookahead ring we are waiting for it to empty and return true if it is
 	void DoLookAhead() noexcept SPEED_CRITICAL;								// Run the look-ahead procedure
-	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], bool doBedCompensation, unsigned int queueNumber) noexcept
+	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], unsigned int msNumber, bool doBedCompensation) noexcept
 			pre(queueNumber < NumMovementSystems);							// Set the current position to be this
 	void ResetExtruderPositions() noexcept;									// Resets the extrusion amounts of the live coordinates
 	void SetXYBedProbePoint(size_t index, float x, float y) noexcept;		// Record the X and Y coordinates of a probe point
@@ -322,30 +322,30 @@ private:
 //******************************************************************************************************
 
 // Get the current position in untransformed coords
-inline void Move::GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept
+inline void Move::GetCurrentMachinePosition(float m[MaxAxes], unsigned int msNumber, bool disableMotorMapping) const noexcept
 {
-	return rings[0].GetCurrentMachinePosition(m, disableMotorMapping);
+	return rings[msNumber].GetCurrentMachinePosition(m, disableMotorMapping);
 }
 
 #if SUPPORT_ASYNC_MOVES
 
 // Get the current position of some axes from one of the rings
-inline void Move::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes, unsigned int queueNumber) const noexcept
+inline void Move::GetPartialMachinePosition(float m[MaxAxes], unsigned int msNumber, AxesBitmap whichAxes) const noexcept
 {
-	rings[queueNumber].GetPartialMachinePosition(m, whichAxes);
+	rings[msNumber].GetPartialMachinePosition(m, whichAxes);
 }
 
 // Set the current position to be this without transforming them first
-inline void Move::SetRawPosition(const float positions[MaxAxesPlusExtruders], unsigned int queueNumber) noexcept
+inline void Move::SetRawPosition(const float positions[MaxAxesPlusExtruders], unsigned int msNumber) noexcept
 {
-	rings[queueNumber].SetPositions(positions);
+	rings[msNumber].SetPositions(positions);
 }
 
 #endif
 
-inline void Move::GetLivePositions(int32_t pos[MaxAxesPlusExtruders]) const noexcept
+inline void Move::GetLivePositions(int32_t pos[MaxAxesPlusExtruders], unsigned int msNumber) const noexcept
 {
-	return rings[0].GetCurrentMotorPositions(pos);
+	return rings[msNumber].GetCurrentMotorPositions(pos);
 }
 
 // Perform motor endpoint adjustment
