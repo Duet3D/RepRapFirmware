@@ -620,7 +620,10 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 # if SUPPORT_ASYNC_MOVES
 			if (printFileFinished)
 			{
-				DoSync(gb);														// wait until the other input stream has caught up
+				if (!DoSync(gb))												// wait until the other input stream has caught up
+				{
+					return false;
+				}
 			}
 			else
 # endif
@@ -771,7 +774,10 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 # if SUPPORT_ASYNC_MOVES
 			if (printFileFinished)
 			{
-				DoSync(gb);														// wait until the other input stream has caught up
+				if (!DoSync(gb))												// wait until the other input stream has caught up
+				{
+					return false;
+				}
 			}
 			else
 # endif
