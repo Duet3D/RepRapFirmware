@@ -1596,6 +1596,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	if (reportPause)
 	{
 		FileGCode()->Invalidate();
+# if SUPPORT_ASYNC_MOVES
+		File2GCode()->Invalidate();
+# endif
 		reprap.GetSbcInterface().ReportPause();
 	}
 #endif

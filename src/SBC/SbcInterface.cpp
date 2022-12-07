@@ -251,7 +251,7 @@ void SbcInterface::ExchangeData() noexcept
 			{
 				gb->ResolveMacroRequest(false, false);
 #ifdef TRACK_FILE_CODES
-				if (channel == GCodeChannel::File)
+				if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
 				{
 					fileMacrosRunning++;
 				}
@@ -369,15 +369,19 @@ void SbcInterface::ExchangeData() noexcept
 				// Stop the print with the given reason
 				printAborted = true;
 				InvalidateBufferedCodes(GCodeChannel::File);
+				InvalidateBufferedCodes(GCodeChannel::File2);
 			}
 			else
 			{
-				// Just mark the print file as finished
-				GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File);
-				MutexLocker locker(gb->mutex, SbcYieldTimeout);
-				if (locker.IsAcquired())
+				// Just mark the print files as finished
+				GCodeBuffer * const fileGb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File);
+				GCodeBuffer * const file2Gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File2);
+				MutexLocker fileLocker(fileGb->mutex, SbcYieldTimeout);
+				MutexLocker file2Locker(file2Gb->mutex, SbcYieldTimeout);
+				if (fileLocker.IsAcquired() && file2Locker.IsAcquired())
 				{
-					gb->SetPrintFinished();
+					fileGb->SetPrintFinished();
+					file2Gb->SetPrintFinished();
 				}
 				else
 				{
@@ -417,7 +421,7 @@ void SbcInterface::ExchangeData() noexcept
 						else
 						{
 #ifdef TRACK_FILE_CODES
-							if (channel == GCodeChannel::File)
+							if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
 							{
 								fileMacrosClosing++;
 							}
@@ -524,7 +528,7 @@ void SbcInterface::ExchangeData() noexcept
 				{
 					gb->ResolveMacroRequest(false, false);
 #ifdef TRACK_FILE_CODES
-					if (channel == GCodeChannel::File)
+					if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
 					{
 						fileMacrosRunning++;
 					}
@@ -596,7 +600,7 @@ void SbcInterface::ExchangeData() noexcept
 					// File exists and is open, but no code has arrived yet
 					gb->ResolveMacroRequest(false, false);
 #ifdef TRACK_FILE_CODES
-					if (channel == GCodeChannel::File)
+					if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
 					{
 						fileMacrosRunning++;
 					}
@@ -1018,7 +1022,7 @@ void SbcInterface::ExchangeData() noexcept
 				if (gb->IsAbortRequested() && transfer.WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
 				{
 #ifdef TRACK_FILE_CODES
-					if (channel == GCodeChannel::File)
+					if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
 					{
 						if (gb->IsAbortAllRequested())
 						{
@@ -1247,7 +1251,7 @@ GCodeResult SbcInterface::HandleM576(GCodeBuffer& gb, const StringRef& reply) no
 bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 {
 	if (gb.IsInvalidated() || gb.IsMacroFileClosed() || gb.IsMessageAcknowledged() ||
-		gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::File) ||
+		gb.IsAbortRequested() || (reportPause && gb.IsFileChannel()) ||
 		(gb.LatestMachineState().waitingForAcknowledgement && gb.IsMessagePromptPending()))
 	{
 		// Don't process codes that are supposed to be suspended...
@@ -1277,7 +1281,7 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 					if (gb.GetChannel().RawValue() == codeHeader->channel)
 					{
 #ifdef TRACK_FILE_CODES
-						if (gb.GetChannel() == GCodeChannel::File && gb.GetCommandLetter() != 'Q')
+						if (gb.IsFileChannel() && gb.GetCommandLetter() != 'Q')
 						{
 							fileMacrosRunning -= fileMacrosClosing;
 							fileMacrosClosing = 0;
@@ -1655,7 +1659,7 @@ void SbcInterface::HandleGCodeReply(MessageType mt, const char *reply) noexcept
 	}
 
 #ifdef TRACK_FILE_CODES
-	if ((mt & (1 << GCodeChannel::File)) != 0)
+	if ((mt & ((1 << GCodeChannel::File) | (1 << GCodeChannel::File2))) != 0)
 	{
 		fileCodesHandled++;
 	}
@@ -1691,7 +1695,7 @@ void SbcInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer) noexce
 	}
 
 #ifdef TRACK_FILE_CODES
-	if ((mt & (1 << GCodeChannel::File)) != 0)
+	if ((mt & ((1 << GCodeChannel::File) | (1 << GCodeChannel::File2))) != 0)
 	{
 		fileCodesHandled++;
 	}
