@@ -296,7 +296,7 @@ public:
 
 #if SUPPORT_ASYNC_MOVES
 	enum class SyncState { running, syncing, synced } ;
-	SyncState syncState;
+	SyncState syncState = SyncState::running;
 #endif
 
 protected:

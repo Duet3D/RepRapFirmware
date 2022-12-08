@@ -5085,8 +5085,9 @@ void GCodes::AllocateAxesDirectFromLetters(const GCodeBuffer& gb, MovementState&
 // Return true if synced, false if we need to wait longer.
 bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 {
-	if (!LockCurrentMovementSystemAndWaitForStandstill(thisGb))
+	if (!LockMovementSystemAndWaitForStandstill(thisGb, thisGb.GetOwnQueueNumber()))
 	{
+//		debugPrintf("Channel %u can't lock ms\n", thisGb.GetChannel().ToBaseType());
 		return false;
 	}
 
@@ -5094,6 +5095,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 	{
 	case GCodeBuffer::SyncState::running:
 		thisGb.syncState = GCodeBuffer::SyncState::syncing;				// tell other input channels that we are waiting for sync
+		//debugPrintf("Channel %u changed state to syncing, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
 		// no break
 	case GCodeBuffer::SyncState::syncing:
 		if (otherGb.syncState == GCodeBuffer::SyncState::running)
@@ -5104,6 +5106,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 				// Other input channel has skipped this sync point
 				UpdateAllCoordinates(thisGb);
 				thisGb.syncState = GCodeBuffer::SyncState::running;
+				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
 				return true;
 			}
 			// Other input channel has not caught up with us yet, so wait for it
@@ -5115,6 +5118,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 
 		// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
 		thisGb.syncState = GCodeBuffer::SyncState::synced;
+		//debugPrintf("Channel %u changed state to synced, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
 		return false;
 
 	case GCodeBuffer::SyncState::synced:
@@ -5122,7 +5126,13 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 		{
 		case GCodeBuffer::SyncState::running:
 			// Other input channel has carried on. If we are not the primary, wait until it has completed the command
-			return thisGb.IsExecuting() || otherGb.IsLaterThan(thisGb);
+			if (thisGb.IsExecuting() || otherGb.IsLaterThan(thisGb))
+			{
+				thisGb.syncState = GCodeBuffer::SyncState::running;
+				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+				return true;
+			}
+			return false;
 
 		case GCodeBuffer::SyncState::syncing:
 			// Other input channel hasn't noticed that we are fully synced yet
@@ -5134,10 +5144,17 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 			{
 				// We are the executing input stream, so we can carry on
 				thisGb.syncState = GCodeBuffer::SyncState::running;
+				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
 				return true;
 			}
 			// We are not the primary, so wait for the other output channel to complete the current command
-			return otherGb.IsLaterThan(thisGb);
+			if (otherGb.IsLaterThan(thisGb))
+			{
+				thisGb.syncState = GCodeBuffer::SyncState::running;
+				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+				return true;
+			}
+			return false;
 		}
 	}
 
