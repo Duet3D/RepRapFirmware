@@ -4004,14 +4004,15 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 			else if (ms.currentZHop > 0.0)
 			{
 				// Set up the reverse Z hop move
+#if SUPPORT_ASYNC_MOVES
+				// Allocating the axes fetches the current coordinates, so we must do this before setting up the Z move
+				AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
+#endif
 				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
 				ms.coords[Z_AXIS] -= ms.currentZHop;
 				ms.currentZHop = 0.0;
 				ms.canPauseAfter = false;			// don't pause in the middle of a command
 				ms.linearAxesMentioned = true;
-#if SUPPORT_ASYNC_MOVES
-				AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
-#endif
 				NewSingleSegmentMoveAvailable(ms);
 				gb.SetState(GCodeState::doingFirmwareUnRetraction);
 			}
