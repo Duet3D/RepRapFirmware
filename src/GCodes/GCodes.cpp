@@ -5091,6 +5091,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 		return false;
 	}
 
+	bool synced = false;		// assume failure
 	switch (thisGb.syncState)
 	{
 	case GCodeBuffer::SyncState::running:
@@ -5107,19 +5108,20 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 				UpdateAllCoordinates(thisGb);
 				thisGb.syncState = GCodeBuffer::SyncState::running;
 				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-				return true;
+				synced = true;
 			}
-			// Other input channel has not caught up with us yet, so wait for it
-			return false;
+			// Else other input channel has not caught up with us yet, so wait for it
 		}
+		else
+		{
+			// If we get here then the other input channel is also syncing, so it's safe to use the machine axis coordinates of the axes it owns to update our user coordinates
+			UpdateAllCoordinates(thisGb);
 
-		// If we get here then the other input channel is also syncing, so it's safe to use the machine axis coordinates of the axes it owns to update our user coordinates
-		UpdateAllCoordinates(thisGb);
-
-		// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
-		thisGb.syncState = GCodeBuffer::SyncState::synced;
-		//debugPrintf("Channel %u changed state to synced, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-		return false;
+			// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
+			thisGb.syncState = GCodeBuffer::SyncState::synced;
+			//debugPrintf("Channel %u changed state to synced, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+		}
+		break;
 
 	case GCodeBuffer::SyncState::synced:
 		switch (otherGb.syncState)
@@ -5130,13 +5132,13 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 			{
 				thisGb.syncState = GCodeBuffer::SyncState::running;
 				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-				return true;
+				synced = true;
 			}
-			return false;
+			break;
 
 		case GCodeBuffer::SyncState::syncing:
 			// Other input channel hasn't noticed that we are fully synced yet
-			return false;
+			break;
 
 		case GCodeBuffer::SyncState::synced:
 			// We are fully synchronised now, so we can finish syncing
@@ -5145,20 +5147,28 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 				// We are the executing input stream, so we can carry on
 				thisGb.syncState = GCodeBuffer::SyncState::running;
 				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-				return true;
+				synced = true;
+				break;
 			}
+
 			// We are not the primary, so wait for the other output channel to complete the current command
 			if (otherGb.IsLaterThan(thisGb))
 			{
 				thisGb.syncState = GCodeBuffer::SyncState::running;
 				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-				return true;
+				synced = true;
 			}
-			return false;
+			break;
 		}
+		break;
 	}
 
-	return false;			// unreachable code, to keep Eclipse happy
+	if (!synced)
+	{
+		// We must release the movement lock if syncing failed, so that if an input wants to pause the print it can get the lock
+		UnlockMovement(thisGb, thisGb.GetOwnQueueNumber());
+	}
+	return synced;
 }
 
 // Synchronise the other motion system with this one. Return true if done, false if we need to wait for it to catch up.
