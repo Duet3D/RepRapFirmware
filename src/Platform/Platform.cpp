@@ -447,7 +447,7 @@ Platform::Platform() noexcept :
 #if SUPPORT_LASER
 	lastLaserPwm(0.0),
 #endif
-	deferredPowerDown(false)
+	powerDownWhenFansStop(false), delayedPowerDown(false)
 {
 }
 
@@ -1284,9 +1284,16 @@ void Platform::Spin() noexcept
 	{
 		lastFanCheckTime = now;
 
-		if (deferredPowerDown && !thermostaticFanRunning)
+		// Check for a deferred or delayed power down
+		if (delayedPowerDown || powerDownWhenFansStop)
 		{
-			AtxPowerOff();
+			do
+			{
+				if (delayedPowerDown && (int32_t)(now - whenToPowerDown) < 0) break;
+				if (powerDownWhenFansStop && thermostaticFanRunning) break;
+				powerDownWhenFansStop = delayedPowerDown = false;
+				AtxPowerOff();
+			} while (false);
 		}
 
 		// Check whether it is time to report any faults (do this after checking fans in case driver cooling fans are turned on)
@@ -3629,7 +3636,7 @@ bool Platform::GetAtxPowerState() const noexcept
 
 GCodeResult Platform::HandleM80(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	deferredPowerDown = false;				// cancel any pending power down
+	powerDownWhenFansStop = delayedPowerDown = false;				// cancel any pending power down
 
 	GCodeResult rslt;
 	if (gb.Seen('C'))
@@ -3660,8 +3667,14 @@ GCodeResult Platform::HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(
 	}
 	else if (PsOnPort.IsValid())
 	{
-		deferredPowerDown = gb.Seen('S') && gb.GetUIValue() != 0;
-		if (!deferredPowerDown)
+		// This is a power-down command
+		powerDownWhenFansStop = gb.Seen('S') && gb.GetUIValue() != 0;
+		delayedPowerDown = gb.Seen('D');
+		if (delayedPowerDown)
+		{
+			whenToPowerDown = (gb.GetUIValue() * SecondsToMillis) + millis();
+		}
+		if (!powerDownWhenFansStop && !delayedPowerDown)
 		{
 			AtxPowerOff();
 		}
