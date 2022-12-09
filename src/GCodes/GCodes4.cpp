@@ -1249,7 +1249,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					zDatumSetByProbing = true;			// if we successfully auto calibrated or adjusted leadscrews, we've set the Z datum by probing
 					// Auto calibration may have adjusted the motor positions and the geometry, so the head may now be at a different position
+#if SUPPORT_ASYNC_MOVES
 					ms.SaveOwnAxisCoordinates();
+#endif
 					UpdateUserPositionFromMachinePosition(gb, ms);
 				}
 			}
