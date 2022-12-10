@@ -739,6 +739,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// We have reached the end of the file. Check for the last line of gcode not ending in newline.
 			if (gb.FileEnded())										// append a newline if necessary and deal with any pending file write
 			{
+				// If we get here then the file didn't end in newline and there is a command waiting to be processed
 				bool done;
 				try
 				{
@@ -755,10 +756,12 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 				if (done)
 				{
+					// Send the reply to the meta command
 					HandleReply(gb, GCodeResult::ok, reply.c_str());
 				}
 				else
 				{
+					// There wasn't a meta command so parse it as a regular command
 					gb.DecodeCommand();
 					if (gb.IsReady())
 					{
@@ -5087,7 +5090,6 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 {
 	if (!LockMovementSystemAndWaitForStandstill(thisGb, thisGb.GetOwnQueueNumber()))
 	{
-//		debugPrintf("Channel %u can't lock ms\n", thisGb.GetChannel().ToBaseType());
 		return false;
 	}
 
@@ -5128,7 +5130,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 		{
 		case GCodeBuffer::SyncState::running:
 			// Other input channel has carried on. If we are not the primary, wait until it has completed the command
-			if (thisGb.IsExecuting() || otherGb.IsLaterThan(thisGb))
+			if (thisGb.LatestMachineState().Executing() || otherGb.IsLaterThan(thisGb))
 			{
 				thisGb.syncState = GCodeBuffer::SyncState::running;
 				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
@@ -5142,7 +5144,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 
 		case GCodeBuffer::SyncState::synced:
 			// We are fully synchronised now, so we can finish syncing
-			if (thisGb.IsExecuting())
+			if (thisGb.LatestMachineState().Executing())
 			{
 				// We are the executing input stream, so we can carry on
 				thisGb.syncState = GCodeBuffer::SyncState::running;

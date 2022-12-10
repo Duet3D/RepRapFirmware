@@ -237,6 +237,12 @@ void GCodeBuffer::Diagnostics(MessageType mtype) noexcept
 	{
 		scratchString.cat(", running macro");
 	}
+#if SUPPORT_ASYNC_MOVES
+	if (syncState != SyncState::running)
+	{
+		scratchString.catf(", sync state %u", (unsigned int)syncState);
+	}
+#endif
 	scratchString.cat('\n');
 	reprap.GetPlatform().Message(mtype, scratchString.c_str());
 }
