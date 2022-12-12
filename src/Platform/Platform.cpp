@@ -489,7 +489,7 @@ void Platform::Init() noexcept
 	baudRates[0] = MAIN_BAUD_RATE;
 	commsParams[0] = 0;
 	usbMutex.Create("USB");
-#if SAME5x
+#if SAME5x && !CORE_USES_TINYUSB
     SERIAL_MAIN_DEVICE.Start();
 #elif defined(__LPC17xx__)
 	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
@@ -3762,7 +3762,7 @@ void Platform::ResetChannel(size_t chan) noexcept
 	if (chan == 0)
 	{
 		SERIAL_MAIN_DEVICE.end();
-#if SAME5x
+#if SAME5x && !CORE_USES_TINYUSB
         SERIAL_MAIN_DEVICE.Start();
 #elif defined(__LPC17xx__)
 		SERIAL_MAIN_DEVICE.begin(baudRates[0]);

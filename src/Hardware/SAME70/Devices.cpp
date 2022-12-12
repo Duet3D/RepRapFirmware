@@ -122,8 +122,8 @@ void DeviceInit() noexcept
 #endif
 
 #if CORE_USES_TINYUSB
-	NVIC_SetPriority(USBHS_IRQn, NvicPriorityUSB);
-	usbDeviceTask.Create(UsbDeviceTask, "USBD", nullptr, TaskPriority::UsbPriority);
+	CoreUsbInit(NvicPriorityUSB);
+	usbDeviceTask.Create(CoreUsbDeviceTask, "USBD", nullptr, TaskPriority::UsbPriority);
 #endif
 }
 
