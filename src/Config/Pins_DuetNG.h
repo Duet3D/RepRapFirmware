@@ -128,8 +128,8 @@ constexpr unsigned int MaxTriggers = 16;			// Must be <= 32 because we store a b
 constexpr size_t MaxSpindles = 4;					// Maximum number of configurable spindles
 
 constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
-#define SERIAL_MAIN_DEVICE	SerialUSB
-#define SERIAL_AUX_DEVICE	Serial
+#define SERIAL_MAIN_DEVICE	serialUSB
+#define SERIAL_AUX_DEVICE	serialUart
 
 constexpr Pin UsbVBusPin = PortCPin(22);			// Pin used to monitor VBUS on USB port
 

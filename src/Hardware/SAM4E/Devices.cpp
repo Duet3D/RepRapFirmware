@@ -11,18 +11,18 @@
 #include <AnalogOut.h>
 #include <pmc/pmc.h>
 
-AsyncSerial Serial(UART0, UART0_IRQn, ID_UART0, 512, 512, 	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
-AsyncSerial SerialWiFi(UART1, UART1_IRQn, ID_UART1, 512, 512,	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
-SerialCDC SerialUSB;
+AsyncSerial serialUart(UART0, UART0_IRQn, ID_UART0, 512, 512, 	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
+AsyncSerial serialWiFi(UART1, UART1_IRQn, ID_UART1, 512, 512,	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
+SerialCDC serialUSB;
 
 void UART0_Handler(void) noexcept
 {
-	Serial.IrqHandler();
+	serialUart.IrqHandler();
 }
 
 void UART1_Handler(void) noexcept
 {
-	SerialWiFi.IrqHandler();
+	serialWiFi.IrqHandler();
 }
 
 void SerialInit() noexcept
@@ -70,6 +70,10 @@ void DeviceInit() noexcept
 }
 
 void StopAnalogTask() noexcept
+{
+}
+
+void StopUsbTask() noexcept
 {
 }
 

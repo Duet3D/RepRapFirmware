@@ -159,8 +159,8 @@ static bool spi_dma_check_rx_complete() noexcept;
 
 #ifdef DUET3MINI
 
-AsyncSerial *SerialWiFiDevice;
-# define SERIAL_WIFI_DEVICE	(*SerialWiFiDevice)
+AsyncSerial *serialWiFiDevice;
+# define SERIAL_WIFI_DEVICE	(*serialWiFiDevice)
 
 # if !defined(SERIAL_WIFI_ISR0) || !defined(SERIAL_WIFI_ISR2) || !defined(SERIAL_WIFI_ISR3)
 #  error SERIAL_WIFI_ISRn not defined
@@ -168,22 +168,22 @@ AsyncSerial *SerialWiFiDevice;
 
 void SERIAL_WIFI_ISR0() noexcept
 {
-	SerialWiFiDevice->Interrupt0();
+	serialWiFiDevice->Interrupt0();
 }
 
 void SERIAL_WIFI_ISR2() noexcept
 {
-	SerialWiFiDevice->Interrupt2();
+	serialWiFiDevice->Interrupt2();
 }
 
 void SERIAL_WIFI_ISR3() noexcept
 {
-	SerialWiFiDevice->Interrupt3();
+	serialWiFiDevice->Interrupt3();
 }
 
 #else
 
-#define SERIAL_WIFI_DEVICE	(SerialWiFi)
+#define SERIAL_WIFI_DEVICE	(serialWiFi)
 
 #endif
 
@@ -307,8 +307,8 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 	strcpy(wiFiServerVersion, "(unknown)");
 
 #ifdef DUET3MINI
-	SerialWiFiDevice = new AsyncSerial(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512, SerialWiFiPortInit, SerialWiFiPortDeinit);
-	SerialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUartRx, NvicPriorityWiFiUartTx);
+	serialWiFiDevice = new AsyncSerial(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512, SerialWiFiPortInit, SerialWiFiPortDeinit);
+	serialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUartRx, NvicPriorityWiFiUartTx);
 #else
 	SERIAL_WIFI_DEVICE.setInterruptPriority(NvicPriorityWiFiUart);
 #endif

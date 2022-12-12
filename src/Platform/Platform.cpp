@@ -1665,6 +1665,10 @@ void Platform::InitialiseInterrupts() noexcept
 #endif
 }
 
+#if CORE_USES_TINYUSB	//debug
+extern uint32_t numUsbInterrupts;
+#endif
+
 // Return diagnostic information
 void Platform::Diagnostics(MessageType mtype) noexcept
 {
@@ -1804,6 +1808,10 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 #endif
 
 	reprap.Timing(mtype);
+
+#if CORE_USES_TINYUSB	//DEBUG
+	MessageF(mtype, "USB interrupts %" PRIu32 "\n", numUsbInterrupts);
+#endif
 
 #if 0
 	// Debugging temperature readings

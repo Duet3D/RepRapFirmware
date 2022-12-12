@@ -13,11 +13,11 @@
 #include <matrix/matrix.h>
 
 #ifndef PCCB
-AsyncSerial Serial (UART1, UART1_IRQn, ID_UART1, 512, 512, 	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
+AsyncSerial serialUart (UART1, UART1_IRQn, ID_UART1, 512, 512, 	[](AsyncSerial*) noexcept { }, [](AsyncSerial*) noexcept { });
 
 void UART1_Handler(void) noexcept
 {
-	Serial.IrqHandler();
+	serialUart.IrqHandler();
 }
 
 void SerialInit() noexcept
@@ -28,7 +28,7 @@ void SerialInit() noexcept
 }
 #endif
 
-SerialCDC SerialUSB;
+SerialCDC serialUSB;
 
 void SdhcInit() noexcept
 {
@@ -71,6 +71,10 @@ void DeviceInit() noexcept
 }
 
 void StopAnalogTask() noexcept
+{
+}
+
+void StopUsbTask() noexcept
 {
 }
 

@@ -97,6 +97,13 @@ void SERIAL1_ISR3() noexcept
 
 SerialCDC serialUSB(UsbVBusPin, 512, 512);
 
+#if CORE_USES_TINYUSB
+
+constexpr size_t UsbDeviceTaskStackWords = 200;
+static Task<UsbDeviceTaskStackWords> usbDeviceTask;
+
+#endif
+
 static void UsbInit() noexcept
 {
 	// Set up USB clock
@@ -158,12 +165,24 @@ void DeviceInit() noexcept
 	AnalogIn::Init(NvicPriorityAdc);
 	AnalogOut::Init();
 	analogInTask.Create(AnalogIn::TaskLoop, "AIN", nullptr, TaskPriority::AinPriority);
+
+#if CORE_USES_TINYUSB
+	NVIC_SetPriority(USBHS_IRQn, NvicPriorityUSB);
+	usbDeviceTask.Create(UsbDeviceTask, "USBD", nullptr, TaskPriority::UsbPriority);
+#endif
 }
 
 void StopAnalogTask() noexcept
 {
 	AnalogIn::Exit();								// make sure that the ISR doesn't try to wake the analog task after we terminate it
 	analogInTask.TerminateAndUnlink();
+}
+
+void StopUsbTask() noexcept
+{
+#if CORE_USES_TINYUSB
+	usbDeviceTask.TerminateAndUnlink();
+#endif
 }
 
 // End
