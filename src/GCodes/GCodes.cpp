@@ -100,6 +100,9 @@ GCodes::GCodes(Platform& p) noexcept :
 	moveStates[1].codeQueue = new GCodeQueue();
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)] = new GCodeBuffer(GCodeChannel::Queue2, moveStates[1].codeQueue, fileInput, GenericMessage);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]->SetActiveQueueNumber(1);							// so that all commands read from this queue get executed on queue #1 instead of the default #0
+#else
+	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)] = nullptr;
+	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)] = nullptr;
 #endif
 #if SUPPORT_HTTP || HAS_SBC_INTERFACE
 	httpInput = new NetworkGCodeInput();

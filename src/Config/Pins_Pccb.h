@@ -117,7 +117,7 @@ constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
 
 constexpr size_t NumSerialChannels = 1;				// The number of serial IO channels (USB only)
-#define SERIAL_MAIN_DEVICE SerialUSB
+#define SERIAL_MAIN_DEVICE serialUSB
 
 // SerialUSB
 constexpr Pin UsbVBusPin = PortCPin(11);			// Pin used to monitor VBUS on USB port
