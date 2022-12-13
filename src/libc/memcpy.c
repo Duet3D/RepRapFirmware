@@ -70,7 +70,11 @@ memcpy (void *__restrict dst0,
 
   /* If the size is small, or either SRC or DST is unaligned,
      then punt into the byte copy loop.  This should be rare.  */
-  if (!TOO_SMALL(len0) && !UNALIGNED (src, dst))
+  if (!TOO_SMALL(len0) && !UNALIGNED (src, dst)
+#if defined(__SAME70Q20B__)
+	  && (((unsigned long)src | (unsigned long)dst) >> 30) == 0		// src and dst in flash or normal RAM
+#endif
+	  )
     {
       aligned_dst = (long*)dst;
       aligned_src = (long*)src;
