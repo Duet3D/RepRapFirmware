@@ -397,6 +397,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 				newTool.Release();						// release the tool list lock before we run tpre
 #else
+			gb.AdvanceState();
 			if (Tool::GetLockedTool(ms.newToolNumber).IsNotNull())
 			{
 #endif
