@@ -76,6 +76,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "filePosition",		OBJECT_MODEL_FUNC(self->gCodes.GetPrintingFilePosition()),															ObjectModelEntryFlags::live },
 	{ "lastDuration",		OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), (int32_t)self->gCodes.GetLastDuration()), 								ObjectModelEntryFlags::none },
 	{ "lastFileName",		OBJECT_MODEL_FUNC_IF(!self->filenameBeingPrinted.IsEmpty() && !self->IsPrinting(), self->filenameBeingPrinted.c_str()), ObjectModelEntryFlags::none },
+	{ "lastWarmUpDuration",	OBJECT_MODEL_FUNC_IF(!self->IsPrinting(), self->lastWarmUpDuration),												ObjectModelEntryFlags::none },
 	// TODO Add enum about the last file print here (to replace lastFileAborted, lastFileCancelled, lastFileSimulated)
 	{ "layer",				OBJECT_MODEL_FUNC_IF(self->IsPrinting() && self->currentLayer != 0, (int32_t)self->currentLayer), 					ObjectModelEntryFlags::live },
 	{ "layerTime",			OBJECT_MODEL_FUNC_IF(self->IsPrinting() && self->currentLayer != 0, self->GetCurrentLayerTime(), 1), 				ObjectModelEntryFlags::live },
@@ -110,7 +111,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "slicer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(slicerBased)),													ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 12, 11, 5, 3 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 13, 11, 5, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 
@@ -121,7 +122,7 @@ int32_t PrintMonitor::GetPrintOrSimulatedDuration() const noexcept
 
 #endif
 
-PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) noexcept : platform(p), gCodes(gc), isPrinting(false), heatingUp(false), paused(false), printingFileParsed(false)
+PrintMonitor::PrintMonitor(Platform& p, GCodes& gc) noexcept : platform(p), gCodes(gc), lastWarmUpDuration(0), isPrinting(false), heatingUp(false), paused(false), printingFileParsed(false)
 {
 }
 
@@ -341,8 +342,10 @@ void PrintMonitor::StartedPrint() noexcept
 
 void PrintMonitor::StoppedPrint() noexcept
 {
+	lastWarmUpDuration = lrintf(GetWarmUpDuration());
 	isPrinting = printingFileParsed = false;
 	Reset();
+
 }
 
 // Set the current layer number as given in a comment
