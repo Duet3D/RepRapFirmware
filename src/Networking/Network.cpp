@@ -37,6 +37,8 @@
 # include "RTOSPlusTCPEthernet/RTOSPlusTCPEthernetInterface.h"
 #endif
 
+#include "MQTT/MqttClient.h"
+
 #if SUPPORT_HTTP
 # include "HttpResponder.h"
 #endif
@@ -45,6 +47,9 @@
 #endif
 #if SUPPORT_TELNET
 # include "TelnetResponder.h"
+#endif
+#if SUPPORT_MQTT
+#include "MQTT/MqttClient.h"
 #endif
 #if SUPPORT_MULTICAST_DISCOVERY
 # include "MulticastDiscovery/MulticastResponder.h"
@@ -290,6 +295,12 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 				break;
 #endif
 
+#if SUPPORT_MQTT
+			case MqttProtocol:
+				MqttClient::Disable();
+				break;
+#endif
+
 			default:
 				break;
 			}
@@ -350,6 +361,9 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 #endif
 #if SUPPORT_TELNET
 			TelnetResponder::Disable();
+#endif
+#if SUPPORT_MQTT
+			MqttClient::Disable();
 #endif
 #endif // HAS_RESPONDERS
 		}
@@ -479,6 +493,13 @@ void Network::Activate() noexcept
 	MulticastResponder::Init();
 #endif
 
+#if SUPPORT_MQTT
+	for (size_t i = 0; i < NumMqttClients; ++i)
+	{
+		responders = clients = new MqttClient(responders, clients);
+	}
+#endif
+
 	// Finally, create the network task
 	networkTask.Create(NetworkLoop, "NETWORK", nullptr, TaskPriority::SpinPriority);
 #endif
@@ -503,6 +524,9 @@ void Network::Exit() noexcept
 #endif
 #if SUPPORT_TELNET
 	TelnetResponder::Disable();
+#endif
+#if SUPPORT_MQTT
+	MqttClient::Disable();
 #endif
 
 	if (TaskBase::GetCallerTaskHandle() != &networkTask)
@@ -808,6 +832,13 @@ void Network::HandleTelnetGCodeReply(const char *msg) noexcept
 	TelnetResponder::HandleGCodeReply(msg);
 #endif
 }
+
+#if SUPPORT_MQTT
+void Network::MqttPublish(const char *msg) noexcept
+{
+	MqttClient::Publish(msg);
+}
+#endif
 
 void Network::HandleHttpGCodeReply(OutputBuffer *buf) noexcept
 {
