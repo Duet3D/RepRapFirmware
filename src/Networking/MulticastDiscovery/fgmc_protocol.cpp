@@ -57,15 +57,15 @@ void FGMCProtocol::init() noexcept
 	fgmc_device_id_ = FGMCHwTypeId::FGMC_DEVICE_ID_DUET3;
 }
 
-void FGMCProtocol::handleStream(unsigned int iFaceId, uint8_t* inputBufferAddress, uint32_t rxLength) noexcept
+void FGMCProtocol::handleStream(unsigned int iFaceId, const uint8_t* inputBufferAddress, uint32_t rxLength) noexcept
 {
 	// backup sciopta connection handle
-	// if a null pointer received => plattform should execute a exception
+	// if a null pointer received => platform should execute a exception
 	this->iface_id_ = iFaceId;
 
 	if (rxLength >= static_cast<uint32_t>(sizeof(FGMC_GenericHeader)))
 	{
-		FGMC_GenericHeader* const pInGenericHeader = reinterpret_cast<FGMC_GenericHeader*>(inputBufferAddress);
+		const FGMC_GenericHeader* const pInGenericHeader = reinterpret_cast<const FGMC_GenericHeader*>(inputBufferAddress);
 
 		// read incoming packetid
 		const uint32_t packetId = pInGenericHeader->fgmc_packet_id_;
