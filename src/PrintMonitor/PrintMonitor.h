@@ -83,11 +83,6 @@ private:
 
 	Platform& platform;
 	GCodes& gCodes;
-	uint32_t lastUpdateTime;
-
-	bool isPrinting;
-	bool heatingUp;
-	bool paused;
 
 	uint64_t printStartTime;
 	uint64_t heatingStartedTime;
@@ -99,7 +94,9 @@ private:
 	uint64_t lastLayerChangeNonPrintingTime;
 	uint64_t whenSlicerTimeLeftSet;
 
+	uint32_t lastUpdateTime;
 	uint32_t lastLayerDuration;
+	uint32_t lastWarmUpDuration;
 
 	unsigned int currentLayer;
 	float lastSnapshotFileFraction, lastSnapshotFilamentUsed;
@@ -111,6 +108,10 @@ private:
 	float lastLayerStartHeightNotified;
 
 	static ReadWriteLock printMonitorLock;
+
+	bool isPrinting;
+	bool heatingUp;
+	bool paused;
 
 	bool printingFileParsed;
 	GCodeFileInfo printingFileInfo;
