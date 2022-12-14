@@ -129,7 +129,6 @@ public:
 	void SetAllAxesNotHomed() noexcept;											// Flag all axes as not homed
 
 	float GetPrimarySpeedFactor() const noexcept { return moveStates[0].speedFactor; }	// Return the current speed factor as a fraction
-	float GetPrimaryCurrentZHop() const noexcept { return moveStates[0].currentZHop; }
 	float GetExtrusionFactor(size_t extruder) noexcept;							// Return the current extrusion factor for the specified extruder
 	float GetFilamentDiameter(size_t extruder) const noexcept
 		pre(extruder < MaxExtruders) { return filamentDiameters[extruder]; }
