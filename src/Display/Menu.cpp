@@ -471,14 +471,14 @@ void Menu::Reload() noexcept
 	currentMargin = rowOffset = 0;
 	lcd.ClearAll();
 #else
-	if (numNestedMenus == 1)
+	if (numNestedMenus == 1 || lcd.GetNumRows() < 160)							// don't nest menus on a low-res display e.g. 12864
 	{
 		currentMargin = rowOffset = 0;
 		lcd.ClearAll();
 	}
 	else
 	{
-		const PixelNumber indentPerLevel = lcd.GetNumRows()/30 + 2;				// 4 pixels on a 12864 display, 12 pixels on a 480x320 TFT
+		const PixelNumber indentPerLevel = lcd.GetNumRows()/40 + 2;				// 10 pixels on a 480x320 TFT
 		currentMargin = rowOffset = indentPerLevel * (numNestedMenus - 1);
 		const PixelNumber borderMargin = currentMargin - 2;
 		const PixelNumber right = lcd.GetNumCols() - borderMargin - 1;
