@@ -270,6 +270,7 @@ void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 	ownedAxisLetters.Clear();										// clear the cache of owned axis letters
 }
 
+// Allocate additional axes. segmentsLeft must be zero when this is called.
 AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept
 {
 	SaveOwnAxisCoordinates();										// we must do this before we allocate new axis to ourselves
@@ -293,7 +294,7 @@ void MovementState::SaveOwnAxisCoordinates() noexcept
 	if (!memeqf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders))
 	{
 		memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
-		move.SetRawPosition(lastKnownMachinePositions, msNumber);
+		move.SetRawPosition(coords, msNumber);
 		move.InverseAxisAndBedTransform(coords, currentTool);
 	}
 }

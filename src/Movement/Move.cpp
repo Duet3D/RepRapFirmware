@@ -565,7 +565,7 @@ void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], Movemen
 	float newPos[MaxAxesPlusExtruders];
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, reprap.GetGCodes().GetMovementState(msNumber).currentTool, doBedCompensation);
-	rings[msNumber].SetPositions(newPos);
+	SetRawPosition(newPos, msNumber);
 }
 
 // Convert distance to steps for a particular drive

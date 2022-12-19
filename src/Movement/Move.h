@@ -335,13 +335,13 @@ inline void Move::GetPartialMachinePosition(float m[MaxAxes], MovementSystemNumb
 	rings[msNumber].GetPartialMachinePosition(m, whichAxes);
 }
 
+#endif
+
 // Set the current position to be this without transforming them first
 inline void Move::SetRawPosition(const float positions[MaxAxesPlusExtruders], MovementSystemNumber msNumber) noexcept
 {
 	rings[msNumber].SetPositions(positions);
 }
-
-#endif
 
 inline void Move::GetLivePositions(int32_t pos[MaxAxesPlusExtruders], MovementSystemNumber msNumber) const noexcept
 {
@@ -356,7 +356,10 @@ inline void Move::AdjustMotorPositions(MovementSystemNumber msNumber, const floa
 
 inline void Move::ResetExtruderPositions() noexcept
 {
-	rings[0].ResetExtruderPositions();
+	for (DDARing& r : rings)
+	{
+		r.ResetExtruderPositions();
+	}
 }
 
 inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept
