@@ -263,6 +263,7 @@ void MovementState::ReleaseOwnedAxesAndExtruders() noexcept
 	ownedAxisLetters.Clear();
 }
 
+// Release some of the axes that we own. We must also clear the cache of owned axis letters.
 void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 {
 	axesAndExtrudersOwned &= ~axesToRelease;						// clear the axes/extruders we have been asked to release
@@ -270,7 +271,7 @@ void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 	ownedAxisLetters.Clear();										// clear the cache of owned axis letters
 }
 
-// Allocate additional axes. segmentsLeft must be zero when this is called.
+// Allocate additional axes
 AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept
 {
 	SaveOwnAxisCoordinates();										// we must do this before we allocate new axis to ourselves

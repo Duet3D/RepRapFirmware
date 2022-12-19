@@ -656,17 +656,7 @@ void DDARing::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
 {
 	AtomicCriticalSectionLocker lock;
 	liveCoordinatesValid = false;
-	DDA::DDAState state;
-	if (   getPointer != addPointer								// OK if the ring is neither empty or full
-		|| (state = addPointer->GetState()) == DDA::DDAState::empty	 || state == DDA::DDAState::completed	// also OK if the ring is not full
-	   )
-	{
-		addPointer->GetPrevious()->SetPositions(move);
-	}
-	else
-	{
-		reprap.GetPlatform().Message(ErrorMessage, "SetPositions called when DDA ring is full\n");
-	}
+	addPointer->GetPrevious()->SetPositions(move);
 }
 
 // Reset the extruder positions. Should only be called when the DDA ring is empty.
