@@ -3197,7 +3197,8 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noex
 }
 #endif
 
-// Start printing the file already selected. We must hold the movement lock and wait for all moves to finish before calling this, because of the call to ResetMoveCounters.
+// Start printing the file already selected.
+// We must hold the movement lock and wait for all moves to finish before calling this because of the calls to ResetMoveCounters and ResetExtruderPositions.
 void GCodes::StartPrinting(bool fromStart) noexcept
 {
 #if (HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES) && SUPPORT_ASYNC_MOVES
@@ -3956,7 +3957,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 				return GCodeResult::notFinished;
 			}
 
-			// New code does the retraction and the Z hop as separate moves
+			// Do the retraction and the Z hop as separate moves
 			// Get ready to generate a move
 			SetMoveBufferDefaults(ms);
 			ms.movementTool = ms.currentTool;
