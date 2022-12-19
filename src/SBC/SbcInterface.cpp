@@ -789,7 +789,7 @@ void SbcInterface::ExchangeData() noexcept
 				fileOperation == FileOperation::openWrite ||
 				fileOperation == FileOperation::openAppend)
 			{
-				fileHandle = transfer.ReadOpenFileResult(fileOffset);
+				fileHandle = transfer.ReadOpenFileResult(const_cast<FilePosition&>(fileOffset));	// cast away volatile
 				fileSuccess = (fileHandle != noFileHandle);
 				fileOperation = FileOperation::none;
 				if (fileSuccess)
@@ -933,8 +933,8 @@ void SbcInterface::ExchangeData() noexcept
 
 		case FileOperation::write:
 		{
-			size_t bytesNotWritten = fileBufferLength;
-			if (transfer.WriteFileData(fileHandle, fileWriteBuffer, fileBufferLength))
+			const size_t bytesNotWritten = fileBufferLength;
+			if (transfer.WriteFileData(fileHandle, fileWriteBuffer, const_cast<size_t&>(fileBufferLength)))		// cast away volatile
 			{
 				fileWriteBuffer += bytesNotWritten - fileBufferLength;
 				if (fileBufferLength == 0)
@@ -1366,23 +1366,11 @@ bool SbcInterface::FileExists(const char *filename) noexcept
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	filePath = filename;
-	fileOperation = FileOperation::checkFileExists;
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
-	}
-
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(FileOperation::checkFileExists))
 	{
 		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to check if file %s exists\n", filename);
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
 		return false;
 	}
 
@@ -1400,23 +1388,11 @@ bool SbcInterface::DeleteFileOrDirectory(const char *fileOrDirectory) noexcept
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	filePath = fileOrDirectory;
-	fileOperation = FileOperation::deleteFileOrDirectory;
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
-	}
-
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(FileOperation::deleteFileOrDirectory))
 	{
 		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to delete %s\n", fileOrDirectory);
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
 		return false;
 	}
 
@@ -1434,44 +1410,35 @@ FileHandle SbcInterface::OpenFile(const char *filename, OpenMode mode, FilePosit
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	filePath = filename;
 	filePreAllocSize = preAllocSize;
+	FileOperation op;
 	switch (mode)
 	{
 	case OpenMode::read:
-		fileOperation = FileOperation::openRead;
+		op = FileOperation::openRead;
 		break;
 
 	case OpenMode::write:
 	case OpenMode::writeWithCrc:
-		fileOperation = FileOperation::openWrite;
+		op = FileOperation::openWrite;
 		break;
 
 	case OpenMode::append:
-		fileOperation = FileOperation::openAppend;
+		op = FileOperation::openAppend;
 		break;
 
 	default:
 		filePath = nullptr;
 		REPORT_INTERNAL_ERROR;
-		break;
-	}
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
+		return false;
 	}
 
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(op))
 	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to open file %s\n", filename);
 		fileLength = 0;
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
+		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to open file %s\n", filename);
 		return false;
 	}
 
@@ -1490,25 +1457,13 @@ int SbcInterface::ReadFile(FileHandle handle, char *buffer, size_t bufferLength)
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	fileHandle = handle;
 	fileReadBuffer = buffer;
 	fileBufferLength = bufferLength;
-	fileOperation = FileOperation::read;
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
-	}
-
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(FileOperation::read))
 	{
 		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to read from file\n");
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
 		return -1;
 	}
 
@@ -1526,25 +1481,13 @@ bool SbcInterface::WriteFile(FileHandle handle, const char *buffer, size_t buffe
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	fileHandle = handle;
 	fileWriteBuffer = buffer;
 	fileBufferLength = bufferLength;
-	fileOperation = FileOperation::write;
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
-	}
-
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(FileOperation::write))
 	{
 		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to write to file\n");
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
 		return false;
 	}
 
@@ -1562,24 +1505,12 @@ bool SbcInterface::SeekFile(FileHandle handle, FilePosition offset) noexcept
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	fileHandle = handle;
 	fileOffset = offset;
-	fileOperation = FileOperation::seek;
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
-	}
-
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(FileOperation::seek))
 	{
 		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to seek in file\n");
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
 		return false;
 	}
 
@@ -1597,23 +1528,11 @@ bool SbcInterface::TruncateFile(FileHandle handle) noexcept
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	fileHandle = handle;
-	fileOperation = FileOperation::truncate;
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
-	}
-
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(FileOperation::truncate))
 	{
 		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to truncate file\n");
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
 		return false;
 	}
 
@@ -1632,7 +1551,20 @@ void SbcInterface::CloseFile(FileHandle handle) noexcept
 	// Set up the request content
 	MutexLocker locker(fileMutex);
 	fileHandle = handle;
-	fileOperation = FileOperation::close;
+
+	if (!DoFileOperation(FileOperation::close))
+	{
+		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to close file\n");
+	}
+}
+
+// Ask the SBC task to do a file operation
+// Return true if the SBC task gave us a response, false if we timed out waiting for it
+// Caller must own fileMutex and set up the appropriate parameters before calling this
+bool SbcInterface::DoFileOperation(FileOperation f) noexcept
+{
+	fileOperation = f;
+	TaskBase::ClearCurrentTaskNotifyCount();
 	fileOperationPending = true;
 
 	// Let the SBC task process this request as quickly as possible
@@ -1642,13 +1574,13 @@ void SbcInterface::CloseFile(FileHandle handle) noexcept
 		sbcTask->Give();
 	}
 
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	const bool rslt =  fileSemaphore.Take(SpiMaxRequestTime);
+	if (!rslt)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to close file\n");
-
 		fileOperation = FileOperation::none;
 		fileOperationPending = false;
 	}
+	return rslt;
 }
 
 void SbcInterface::HandleGCodeReply(MessageType mt, const char *reply) noexcept

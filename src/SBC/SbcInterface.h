@@ -104,6 +104,7 @@ private:
 	unsigned int numOpenFiles;
 	BinarySemaphore fileSemaphore;										// resolved when the requested file operation has finished
 
+	// File operation variables, accessed by more than one task hence volatile
 	enum class FileOperation {
 		none,
 		checkFileExists,
@@ -116,18 +117,19 @@ private:
 		seek,
 		truncate,
 		close
-	} fileOperation;
-	bool fileOperationPending;
+	} volatile fileOperation;
+	volatile bool fileOperationPending;
 
-	const char *filePath;
-	FileHandle fileHandle;
-	bool fileSuccess;
+	const char * volatile filePath;
+	volatile FileHandle fileHandle;
+	volatile bool fileSuccess;
 
-	uint32_t filePreAllocSize;
-	char *fileReadBuffer;
-	const char *fileWriteBuffer;
-	size_t fileBufferLength;
-	FilePosition fileOffset;
+	volatile uint32_t filePreAllocSize;
+	char * volatile fileReadBuffer;
+	const char * volatile fileWriteBuffer;
+	volatile size_t fileBufferLength;
+	volatile FilePosition fileOffset;
+	// End of file operation variables
 
 	static volatile OutputStack gcodeReply;
 	static Mutex gcodeReplyMutex;											// static so that the SbcInterface is safe to delete even is the mutex is linked into the mutex chain or is in use
@@ -142,6 +144,7 @@ private:
 	void DefragmentBufferedCodes() noexcept;								// Attempt to defragment the code buffer ring to avoid stalls
 	bool DefragmentCodeBlock(uint16_t start, volatile uint16_t &end) noexcept;	// Defragment a specific code buffer region returning true if anything was defragmented
 	void InvalidateBufferedCodes(GCodeChannel channel) noexcept;           	// Invalidate every buffered G-code of the corresponding channel from the buffer ring
+	bool DoFileOperation(FileOperation f) noexcept;							// Ask the SBC task to do a file operation
 };
 
 inline void SbcInterface::SetPauseReason(FilePosition position, PrintPausedReason reason) noexcept
