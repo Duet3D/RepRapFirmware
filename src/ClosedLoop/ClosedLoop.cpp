@@ -19,12 +19,14 @@
 # include <CAN/CanMessageGenericConstructor.h>
 
 constexpr unsigned int MaxSamples = 65535;				// This comes from the fact CanMessageClosedLoopData->firstSampleNumber has a max value of 65535
+constexpr uint32_t DataReceiveTimeout = 5000;			// Data receive timeout in milliseconds
 
 static uint16_t rateRequested;							// The sampling rate
 static uint8_t modeRequested;							// The sampling mode(immediate or on next move)
 static uint32_t filterRequested;						// A filter for what data is collected
 static DriverId deviceRequested;						// The driver being sampled
 static uint8_t movementRequested;						// The movement to be made whilst recording
+static uint32_t whenDataLastReceived;
 static volatile uint32_t numSamplesRequested;			// The number of samples to collect
 static FileStore* volatile closedLoopFile = nullptr;	// This is non-null when the data collection is running, null otherwise
 
@@ -36,6 +38,8 @@ static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned 
 	// Create the file
 	FileStore * const f = MassStorage::OpenFile(filename.c_str(), OpenMode::write, size);
 	if (f == nullptr) { return false; }
+
+	whenDataLastReceived = millis();					// prevent another request closing the file
 
 	// Write the header line
 	{
@@ -57,7 +61,7 @@ static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned 
 
 		temp.Erase(temp.strlen(), 1);
 		temp.cat("\n");
-		f->Write(temp.c_str());
+		f->Write(temp.c_str());			// this call could result in the file becoming invalidated
 	}
 
 	closedLoopFile = f;
@@ -99,8 +103,15 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	// If we get here then the user is requesting a recording
 	if (closedLoopFile != nullptr)									// check if one is already happening
 	{
-		CloseDataCollectionFile();
-		reply.copy("Closed loop data is already being collected; the file will now be closed");
+		if (millis() - whenDataLastReceived >= DataReceiveTimeout)
+		{
+			CloseDataCollectionFile();								// this case is to allow us to reset if data collection stalls
+			reply.copy("Closed loop data collection timed out, closing file");
+		}
+		else
+		{
+			reply.copy("Closed loop data is already being collected");
+		}
 		return GCodeResult::error;
 	}
 
@@ -178,6 +189,7 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 	FileStore * const f = closedLoopFile;
 	if (f != nullptr)
 	{
+		whenDataLastReceived = millis();
 		if (msg.firstSampleNumber != expectedRemoteSampleNumber)
 		{
 			f->Write("Data lost\n");
