@@ -228,6 +228,7 @@ bool FileStore::Close() noexcept
 			}
 			else
 			{
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 				FileWriteBuffer *wb = nullptr;
 				std::swap(wb, writeBuffer);
 				IrqRestore(flags);
@@ -235,6 +236,7 @@ bool FileStore::Close() noexcept
 				{
 					MassStorage::ReleaseWriteBuffer(wb);
 				}
+#endif
 				usageMode = FileUseMode::free;
 			}
 			return true;
