@@ -56,6 +56,7 @@ public:
 	FilePosition Length() const noexcept;						// File size in bytes
 	bool IsCloseRequested() const noexcept { return closeRequested; }
 	bool IsFree() const noexcept { return usageMode == FileUseMode::free; }
+	bool IsOpen() const noexcept { return usageMode != FileUseMode::free && usageMode != FileUseMode::invalidated; }
 	FilePosition Position() const noexcept;						// Return the current position in the file, assuming we are reading the file
 	void Duplicate() noexcept;									// Create a second reference to this file
 
