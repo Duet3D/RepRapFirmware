@@ -224,7 +224,7 @@ void SbcInterface::ExchangeData() noexcept
 		// Reset the controller
 		case SbcRequest::Reset:
 			reprap.EmergencyStop();							// turn off heaters and motors, tell expansion boards to reset
-			SoftwareReset(SoftwareResetReason::user);
+			SoftwareReset(SoftwareResetReason::userFromSbc);
 			break;
 
 		// Perform a G/M/T-code
@@ -789,7 +789,7 @@ void SbcInterface::ExchangeData() noexcept
 				fileOperation == FileOperation::openWrite ||
 				fileOperation == FileOperation::openAppend)
 			{
-				fileHandle = transfer.ReadOpenFileResult(const_cast<FilePosition&>(fileOffset));	// cast away volatile
+				fileHandle = transfer.ReadOpenFileResult(fileOffset);
 				fileSuccess = (fileHandle != noFileHandle);
 				fileOperation = FileOperation::none;
 				if (fileSuccess)
@@ -909,7 +909,7 @@ void SbcInterface::ExchangeData() noexcept
 	}
 
 	// Perform the next file operation if requested
-	if (fileOperationPending)
+	if (fileOperationPending.load(std::memory_order_acquire))
 	{
 		switch (fileOperation)
 		{
@@ -934,7 +934,7 @@ void SbcInterface::ExchangeData() noexcept
 		case FileOperation::write:
 		{
 			const size_t bytesNotWritten = fileBufferLength;
-			if (transfer.WriteFileData(fileHandle, fileWriteBuffer, const_cast<size_t&>(fileBufferLength)))		// cast away volatile
+			if (transfer.WriteFileData(fileHandle, fileWriteBuffer, fileBufferLength))
 			{
 				fileWriteBuffer += bytesNotWritten - fileBufferLength;
 				if (fileBufferLength == 0)
@@ -1432,14 +1432,14 @@ FileHandle SbcInterface::OpenFile(const char *filename, OpenMode mode, FilePosit
 	default:
 		filePath = nullptr;
 		REPORT_INTERNAL_ERROR;
-		return false;
+		return noFileHandle;
 	}
 
 	if (!DoFileOperation(op))
 	{
 		fileLength = 0;
 		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to open file %s\n", filename);
-		return false;
+		return noFileHandle;
 	}
 
 	// Update the file length and return the handle
@@ -1565,20 +1565,20 @@ bool SbcInterface::DoFileOperation(FileOperation f) noexcept
 {
 	fileOperation = f;
 	TaskBase::ClearCurrentTaskNotifyCount();
-	fileOperationPending = true;
+	fileOperationPending.store(true, std::memory_order_release);
 
 	// Let the SBC task process this request as quickly as possible
-	if (delaying)
+	const bool isDelaying = delaying.exchange(false);
+	if (isDelaying)
 	{
-		delaying = false;
 		sbcTask->Give();
 	}
 
-	const bool rslt =  fileSemaphore.Take(SpiMaxRequestTime);
+	const bool rslt = fileSemaphore.Take(SpiMaxRequestTime);
 	if (!rslt)
 	{
 		fileOperation = FileOperation::none;
-		fileOperationPending = false;
+		fileOperationPending.store(false, std::memory_order_release);
 	}
 	return rslt;
 }
@@ -1591,7 +1591,7 @@ void SbcInterface::HandleGCodeReply(MessageType mt, const char *reply) noexcept
 	}
 
 #ifdef TRACK_FILE_CODES
-	if ((mt & ((1 << GCodeChannel::File) | (1 << GCodeChannel::File2))) != 0)
+	if ((mt & ((1u << GCodeChannel::File) | (1u << GCodeChannel::File2))) != 0)
 	{
 		fileCodesHandled++;
 	}
@@ -1627,7 +1627,7 @@ void SbcInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer) noexce
 	}
 
 #ifdef TRACK_FILE_CODES
-	if ((mt & ((1 << GCodeChannel::File) | (1 << GCodeChannel::File2))) != 0)
+	if ((mt & ((1u << GCodeChannel::File) | (1u << GCodeChannel::File2))) != 0)
 	{
 		fileCodesHandled++;
 	}
@@ -1700,10 +1700,13 @@ void SbcInterface::EventOccurred(bool timeCritical) noexcept
 	}
 
 	// Stop delaying if the next transfer is time-critical
-	if (delaying && numEvents >= numMaxEvents)
+	if (numEvents >= numMaxEvents)
 	{
-		delaying = false;
-		sbcTask->Give();
+		const bool isDelaying = delaying.exchange(false);
+		if (isDelaying)
+		{
+			sbcTask->Give();
+		}
 	}
 }
 

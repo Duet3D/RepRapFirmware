@@ -76,7 +76,7 @@ private:
 
 	uint32_t maxDelayBetweenTransfers, maxFileOpenDelay, numMaxEvents;
 	bool skipNextDelay;
-	volatile bool delaying;
+	std::atomic<bool> delaying;
 	volatile uint32_t numEvents;
 
 	GCodeFileInfo fileInfo;
@@ -104,7 +104,7 @@ private:
 	unsigned int numOpenFiles;
 	BinarySemaphore fileSemaphore;										// resolved when the requested file operation has finished
 
-	// File operation variables, accessed by more than one task hence volatile
+	// File operation variables, accessed by more than one task
 	enum class FileOperation {
 		none,
 		checkFileExists,
@@ -117,18 +117,18 @@ private:
 		seek,
 		truncate,
 		close
-	} volatile fileOperation;
-	volatile bool fileOperationPending;
+	} fileOperation;
+	std::atomic<bool> fileOperationPending;
 
-	const char * volatile filePath;
-	volatile FileHandle fileHandle;
-	volatile bool fileSuccess;
+	const char * filePath;
+	FileHandle fileHandle;
+	std::atomic<bool> fileSuccess;
 
-	volatile uint32_t filePreAllocSize;
-	char * volatile fileReadBuffer;
-	const char * volatile fileWriteBuffer;
-	volatile size_t fileBufferLength;
-	volatile FilePosition fileOffset;
+	uint32_t filePreAllocSize;
+	char * fileReadBuffer;
+	const char * fileWriteBuffer;
+	size_t fileBufferLength;
+	FilePosition fileOffset;
 	// End of file operation variables
 
 	static volatile OutputStack gcodeReply;
