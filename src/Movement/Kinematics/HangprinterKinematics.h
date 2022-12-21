@@ -50,6 +50,9 @@ protected:
 	OBJECT_MODEL_ARRAY(anchors)
 	OBJECT_MODEL_ARRAY(anchorCoordinates)
 
+	bool IsReachablePyramid(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
+	bool IsReachablePrism(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
+
 private:
 	// Basic facts about movement system
 	const char* ANCHOR_CHARS = "ABCDEFHIJ"; // Skip the G, since it is reserved in G-code
@@ -58,6 +61,9 @@ private:
 	static constexpr size_t B_AXIS = 1;
 	static constexpr size_t C_AXIS = 2;
 	static constexpr size_t D_AXIS = 3;
+	// LastTopRestDown (default) has a single anchor on top and produces pyramid-shaped printing volumes
+	// AllTop has a all anchors on top and produces prism-shaped printing volumes
+	enum AnchorsSetup {LastTopRestDown, AllTop}; // Allowed setups for placing the anchors
 
 	void Init() noexcept;
 	void Recalc() noexcept;
@@ -69,6 +75,7 @@ private:
 
 	size_t numAnchors;
 	float anchors[HANGPRINTER_MAX_AXES][3];				// XYZ coordinates of the anchors
+	AnchorsSetup anchorsSetup;
 	float printRadius;
 	// Line buildup compensation
 	float spoolBuildupFactor;
