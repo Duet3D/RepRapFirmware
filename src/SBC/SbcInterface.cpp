@@ -1243,7 +1243,7 @@ GCodeResult SbcInterface::HandleM576(GCodeBuffer& gb, const StringRef& reply) no
 
 	if (!seen)
 	{
-		reply.printf("Max transfer delay %" PRIu32 "ms, max number of events during delays: %" PRIu32, maxDelayBetweenTransfers, numMaxEvents);
+		reply.printf("Max delay between full SBC transfers %" PRIu32 "ms (%" PRIu32 "ms during file IO), max number of events before a delay is skipped: %" PRIu32, maxDelayBetweenTransfers, maxFileOpenDelay, numMaxEvents);
 	}
 	return GCodeResult::ok;
 }
