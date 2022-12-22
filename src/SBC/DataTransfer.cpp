@@ -1007,17 +1007,18 @@ void DataTransfer::ResetConnection(bool fullReset) noexcept
 bool DataTransfer::WriteObjectModel(OutputBuffer *data) noexcept
 {
 	// Try to write the packet header. This packet type cannot deal with truncated messages
-	if (!CanWritePacket(data->Length()))
+	const size_t dataLength = (data != nullptr) ? data->Length() : 0;
+	if (!CanWritePacket(sizeof(StringHeader) + dataLength))
 	{
 		return false;
 	}
 
 	// Write packet header
-	(void)WritePacketHeader(FirmwareRequest::ObjectModel, sizeof(StringHeader) + data->Length());
+	(void)WritePacketHeader(FirmwareRequest::ObjectModel, sizeof(StringHeader) + dataLength);
 
 	// Write header
 	StringHeader *header = WriteDataHeader<StringHeader>();
-	header->length = data->Length();
+	header->length = dataLength;
 	header->padding = 0;
 
 	// Write data

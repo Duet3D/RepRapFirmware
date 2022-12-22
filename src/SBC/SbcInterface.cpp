@@ -311,7 +311,21 @@ void SbcInterface::ExchangeData() noexcept
 			try
 			{
 				OutputBuffer *outBuf = reprap.GetModelResponse(nullptr, key.c_str(), flags.c_str());
-				if (outBuf == nullptr || !transfer.WriteObjectModel(outBuf))
+				if (outBuf != nullptr && outBuf->Length() > SbcTransferBufferSize - sizeof(PacketHeader) - sizeof(StringHeader))
+				{
+					if (!transfer.WriteObjectModel(nullptr))
+					{
+						// Cannot store this object model response even if we wanted to
+						reprap.GetPlatform().MessageF(ErrorMessage, "Cannot store excessively long object model response, discarding request (total length %d, key %s, flags %s)", outBuf->Length(), key.c_str(), flags.c_str());
+					}
+					else
+					{
+						// Failed to write an empty object model response, try again later
+						packetAcknowledged = false;
+					}
+					OutputBuffer::ReleaseAll(outBuf);
+				}
+				else if (outBuf == nullptr || !transfer.WriteObjectModel(outBuf))
 				{
 					// Failed to write the whole object model, try again later
 					packetAcknowledged = false;
