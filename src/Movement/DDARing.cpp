@@ -642,7 +642,8 @@ void DDARing::GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMappi
 
 #if SUPPORT_ASYNC_MOVES
 
-// Return the machine coordinates of just some axes
+// Return the machine coordinates of just some axes in the last queued move.
+// On machines with nonlinear kinematics this is quite likely to return coordinates slightly different from the original ones.
 void DDARing::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) const noexcept
 {
 	DDA * const lastQueuedMove = addPointer->GetPrevious();
@@ -651,7 +652,8 @@ void DDARing::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) 
 
 #endif
 
-// These are the actual numbers we want in the positions, so don't transform them.
+// Set the initial machine coordinates for the next move to be added to the specified values, by setting the final coordinates of the last move in the queue
+// The last move in the queue must have already been set up by the Move process before this is called.
 void DDARing::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
 {
 	AtomicCriticalSectionLocker lock;
