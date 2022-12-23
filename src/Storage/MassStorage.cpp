@@ -254,12 +254,12 @@ static bool VolumeUpdated(const char *path) noexcept
 }
 
 // Unmount a file system returning the number of open files were invalidated
-static unsigned int InternalUnmount(size_t card, bool doClose) noexcept
+static unsigned int InternalUnmount(size_t card) noexcept
 {
 	SdCardInfo& inf = info[card];
 	MutexLocker lock1(fsMutex);
 	MutexLocker lock2(inf.volMutex);
-	const unsigned int invalidated = MassStorage::InvalidateFiles(&inf.fileSystem, doClose);
+	const unsigned int invalidated = MassStorage::InvalidateFiles(&inf.fileSystem);
 	const char path[3] = { (char)('0' + card), ':', 0 };
 	f_mount(nullptr, path, 0);
 	inf.Clear(card);
@@ -399,7 +399,7 @@ void MassStorage::Spin() noexcept
 						inf.cardState = CardDetectState::notPresent;
 						if (inf.isMounted)
 						{
-							const unsigned int numFiles = InternalUnmount(card, false);
+							const unsigned int numFiles = InternalUnmount(card);
 							if (numFiles != 0)
 							{
 								reprap.GetPlatform().MessageF(ErrorMessage, "SD card %u removed with %u file(s) open on it\n", card, numFiles);
@@ -992,13 +992,13 @@ bool MassStorage::AnyFileOpen(const FATFS *fs) noexcept
 }
 
 // Invalidate all open files on the specified file system, returning the number of files that were invalidated
-unsigned int MassStorage::InvalidateFiles(const FATFS *fs, bool doClose) noexcept
+unsigned int MassStorage::InvalidateFiles(const FATFS *fs) noexcept
 {
 	unsigned int invalidated = 0;
 	MutexLocker lock(fsMutex);
 	for (FileStore & fil : files)
 	{
-		if (fil.Invalidate(fs, doClose))
+		if (fil.Invalidate(fs))
 		{
 			++invalidated;
 		}
@@ -1040,7 +1040,7 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 				reply.copy("SD card has open file(s)");
 				return GCodeResult::error;
 			}
-			(void)InternalUnmount(card, false);
+			(void)InternalUnmount(card);
 		}
 
 		inf.mountStartTime = millis();
@@ -1123,13 +1123,17 @@ GCodeResult MassStorage::Unmount(size_t card, const StringRef& reply) noexcept
 	}
 
 # if HAS_MASS_STORAGE
-	reply.printf("SD card %u may now be removed", card);
-	const unsigned int numFilesClosed = InternalUnmount(card, true);
-	if (numFilesClosed != 0)
+	SdCardInfo& inf = info[card];
+	if (AnyFileOpen(&inf.fileSystem))
 	{
-		reply.catf(" (%u file(s) were closed)", numFilesClosed);
+		// Don't unmount the card if any files are open on it
+		reply.copy("SD card has open file(s)");
+		return GCodeResult::error;
 	}
-	++info[card].seq;
+
+	(void)InternalUnmount(card);
+	reply.printf("SD card %u may now be removed", card);
+	++inf.seq;
 # endif
 
 	return GCodeResult::ok;

@@ -709,23 +709,10 @@ void FileStore::Invalidate() noexcept
 #if HAS_MASS_STORAGE			// the remaining functions are only supported on local storage
 
 // Invalidate the file if it uses the specified FATFS object
-bool FileStore::Invalidate(const FATFS *fs, bool doClose) noexcept
+bool FileStore::Invalidate(const FATFS *fs) noexcept
 {
 	if (file.obj.fs == fs)
 	{
-		if (doClose)
-		{
-			(void)ForceClose();
-		}
-		else
-		{
-			file.obj.fs = nullptr;
-			if (writeBuffer != nullptr)
-			{
-				MassStorage::ReleaseWriteBuffer(writeBuffer);
-				writeBuffer = nullptr;
-			}
-		}
 		usageMode = FileUseMode::invalidated;
 		return true;
 	}
