@@ -267,6 +267,9 @@ constexpr uint8_t REGNUM_PWM_AUTO = 0x72;
 // Common data
 static constexpr size_t numTmc51xxDrivers = MaxSmartDrivers;
 
+static constexpr uint32_t MaxValidSgLoadRegister = 1023;
+static constexpr uint32_t InvalidSgLoadRegister = 1024;
+
 enum class DriversState : uint8_t
 {
 	shutDown = 0,
@@ -319,12 +322,12 @@ public:
 private:
 	bool SetChopConf(uint32_t newVal) noexcept;
 	void UpdateRegister(size_t regIndex, uint32_t regVal) noexcept;
-	void UpdateChopConfRegister() noexcept;							// calculate the chopper control register and flag it for sending
+	void UpdateChopConfRegister() noexcept;					// calculate the chopper control register and flag it for sending
 	void UpdateCurrent() noexcept;
 
 	void ResetLoadRegisters() noexcept
 	{
-		minSgLoadRegister = 9999;							// values read from the driver are in the range 0 to 1023, so 9999 indicates that it hasn't been read
+		minSgLoadRegister = InvalidSgLoadRegister;			// value InvalidSgLoadRegister indicates that it hasn't been read
 	}
 
 	// Write register numbers are in priority order, most urgent first, in same order as WriteRegNumbers
@@ -452,6 +455,7 @@ pre(!driversPowered)
 		readRegisters[i] = 0;
 	}
 	accumulatedDriveStatus = 0;
+	ResetLoadRegisters();
 
 	regIndexBeingUpdated = regIndexRequested = previousRegIndexRequested = NoRegIndex;
 	numReads = numWrites = 0;
@@ -789,7 +793,7 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 // Append any additional driver status to a string, and reset the min/max load values
 void TmcDriverState::AppendDriverStatus(const StringRef& reply, bool clearGlobalStats) noexcept
 {
-	if (minSgLoadRegister <= 1023)
+	if (minSgLoadRegister <= MaxValidSgLoadRegister)
 	{
 		reply.catf(", SG min %u", minSgLoadRegister);
 	}
