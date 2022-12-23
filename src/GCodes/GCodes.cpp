@@ -1647,6 +1647,7 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSys
 		// Release the axes and extruders that this movement system owns, except those used by the current tool
 		if (gb.AllStatesNormal())						// don't release them if we are in the middle of a state machine operation e.g. probing the bed
 		{
+# if PREALLOCATE_TOOL_AXES
 			if (ms.currentTool != nullptr)
 			{
 				const AxesBitmap currentToolAxes = ms.currentTool->GetXYAxesAndExtruders();
@@ -1654,8 +1655,9 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSys
 				ms.ReleaseAxesAndExtruders(axesToRelease);
 			}
 			else
+# endif
 			{
-				ms.ReleaseOwnedAxesAndExtruders();
+				ms.ReleaseAllOwnedAxesAndExtruders();
 			}
 		}
 #else
@@ -3957,50 +3959,49 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 				return GCodeResult::notFinished;
 			}
 
-			// Do the retraction and the Z hop as separate moves
-			// Get ready to generate a move
 			SetMoveBufferDefaults(ms);
 			ms.movementTool = ms.currentTool;
 			reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.movementTool);
 			ms.filePos = gb.GetJobFilePosition();
 
+#if SUPPORT_ASYNC_MOVES
+			// Allocate any axes and extruder that we re going to use
+			const bool needZhop = (retract) ? currentTool->GetRetractHop() > 0.0 : ms.currentZHop > 0.0;
+# if PREALLOCATE_TOOL_AXES
+			if (needZhop /* && !ms.GetOwnedAxisLetters().IsBitSet(ParameterLetterToBitNumber('Z')) */)
+			{
+				AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
+			}
+# else
+			AxesBitmap drivesMoving;
+			for (size_t i = 0; i < currentTool->DriveCount(); ++i)
+			{
+				const size_t logicalDrive = ExtruderToLogicalDrive(currentTool->GetDrive(i));
+				drivesMoving.SetBit(logicalDrive);
+			}
+			if (needZhop /* && !ms.GetOwnedAxisLetters().IsBitSet(ParameterLetterToBitNumber('Z')) */)
+			{
+				drivesMoving.SetBit(Z_AXIS);
+				AllocateAxes(gb, ms, drivesMoving, ParameterLetterToBitmap('Z'));
+			}
+			else
+			{
+				AllocateAxes(gb, ms, drivesMoving, ParameterLettersBitmap());
+			}
+# endif
+#endif
 			if (retract)
 			{
-				// Set up the retract move
-				if (currentTool != nullptr && currentTool->DriveCount() != 0)
+				// If the current tool has any drivers, set up the retract move
+				if (currentTool->DriveCount() != 0)
 				{
-#if SUPPORT_ASYNC_MOVES && !PREALLOCATE_TOOL_AXES
-					AxesBitmap drivesMoving;
-#endif
 					for (size_t i = 0; i < currentTool->DriveCount(); ++i)
 					{
 						const size_t logicalDrive = ExtruderToLogicalDrive(currentTool->GetDrive(i));
 						ms.coords[logicalDrive] = -currentTool->GetRetractLength();
-#if SUPPORT_ASYNC_MOVES && !PREALLOCATE_TOOL_AXES
-						drivesMoving.SetBit(logicalDrive);
-#endif
 					}
 					ms.feedRate = currentTool->GetRetractSpeed() * currentTool->DriveCount();
 					ms.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
-#if SUPPORT_ASYNC_MOVES
-					// If there is any Z hop then make sure we own the Z axis too
-# if PREALLOCATE_TOOL_AXES
-					if (currentTool->GetRetractHop() > 0.0 && !ms.GetOwnedAxisLetters().IsBitSet(ParameterLetterToBitNumber('Z')))
-					{
-						AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
-					}
-# else
-					if (currentTool->GetRetractHop() > 0.0 && !ms.GetOwnedAxisLetters().IsBitSet(ParameterLetterToBitNumber('Z')))
-					{
-						drivesMoving.SetBit(Z_AXIS);
-						AllocateAxes(gb, ms, drivesMoving, ParameterLetterToBitmap('Z'));
-					}
-					else
-					{
-						AllocateAxes(gb, ms, drivesMoving, ParameterLettersBitmap());
-					}
-# endif
-#endif
 					NewSingleSegmentMoveAvailable(ms);
 				}
 				if (currentTool->GetRetractHop() > 0.0)
@@ -4008,43 +4009,21 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 					gb.SetState(GCodeState::doingFirmwareRetraction);
 				}
 			}
-			else if (ms.currentZHop > 0.0)
-			{
-				// Set up the reverse Z hop move
-#if SUPPORT_ASYNC_MOVES
-				// Allocating the axes fetches the current coordinates, so we must do this before setting up the Z move
-				AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
-#endif
-				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
-				ms.coords[Z_AXIS] -= ms.currentZHop;
-				ms.currentZHop = 0.0;
-				ms.canPauseAfter = false;			// don't pause in the middle of a command
-				ms.linearAxesMentioned = true;
-				NewSingleSegmentMoveAvailable(ms);
-				gb.SetState(GCodeState::doingFirmwareUnRetraction);
-			}
 			else
 			{
-				// No retract hop, so just un-retract
-				if (currentTool != nullptr && currentTool->DriveCount() != 0)
+				if (ms.currentZHop > 0.0)
 				{
-#if SUPPORT_ASYNC_MOVES && !PREALLOCATE_TOOL_AXES
-					AxesBitmap drivesMoving;
-#endif
-					for (size_t i = 0; i < ms.currentTool->DriveCount(); ++i)
-					{
-						const size_t logicalDrive = ExtruderToLogicalDrive(currentTool->GetDrive(i));
-						ms.coords[logicalDrive] = currentTool->GetRetractLength() + currentTool->GetRetractExtra();
-#if SUPPORT_ASYNC_MOVES && !PREALLOCATE_TOOL_AXES
-						drivesMoving.SetBit(logicalDrive);
-#endif
-					}
-					ms.feedRate = currentTool->GetUnRetractSpeed() * currentTool->DriveCount();
-					ms.canPauseAfter = true;
-#if SUPPORT_ASYNC_MOVES && !PREALLOCATE_TOOL_AXES
-					AllocateAxes(gb, ms, drivesMoving, ParameterLettersBitmap());
-#endif
+					// Set up the reverse Z hop move
+					ms.feedRate = platform.MaxFeedrate(Z_AXIS);
+					ms.coords[Z_AXIS] -= ms.currentZHop;
+					ms.currentZHop = 0.0;
+					ms.canPauseAfter = false;			// don't pause in the middle of a command
+					ms.linearAxesMentioned = true;
 					NewSingleSegmentMoveAvailable(ms);
+				}
+				if (currentTool->DriveCount() != 0)
+				{
+					gb.SetState(GCodeState::doingFirmwareUnRetraction);
 				}
 			}
 			currentTool->SetRetracted(retract);
@@ -5017,6 +4996,7 @@ const MovementState& GCodes::GetCurrentMovementState(const ObjectExplorationCont
 // This relies on cooperative scheduling between different GCodeBuffer objects
 void GCodes::AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes, ParameterLettersBitmap axLetters) THROWS(GCodeException)
 {
+	debugPrintf("Allocating axes %04" PRIx32 " letters %08" PRIx32 " command %u\n", axes.GetRaw(), axLetters.GetRaw(), gb.GetCommandNumber());
 	const AxesBitmap badAxes = ms.AllocateAxes(axes, axLetters);
 	if (!badAxes.IsEmpty())
 	{

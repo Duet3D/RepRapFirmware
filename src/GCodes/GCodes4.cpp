@@ -373,7 +373,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (newTool.IsNull())
 			{
 				// Release the axes and extruders that this movement system owns
-				ms.ReleaseOwnedAxesAndExtruders();
+				ms.ReleaseAllOwnedAxesAndExtruders();
 			}
 			else
 			{
@@ -390,7 +390,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// We failed to allocate the new axes/extruders that we need
 					// Release all axes and extruders that this movement system owns
-					ms.ReleaseOwnedAxesAndExtruders();
+					ms.ReleaseAllOwnedAxesAndExtruders();
 					gb.LatestMachineState().SetError(exc);
 					gb.SetState(GCodeState::normal);
 					break;

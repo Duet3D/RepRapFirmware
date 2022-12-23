@@ -255,17 +255,16 @@ void MovementState::InitObjectCancellation() noexcept
 
 #if SUPPORT_ASYNC_MOVES
 
-// When releasing axes we must also release the corresponding axis letters, because they serve as a cache
-void MovementState::ReleaseOwnedAxesAndExtruders() noexcept
+// Release all owned axes and extruders
+void MovementState::ReleaseAllOwnedAxesAndExtruders() noexcept
 {
-	axesAndExtrudersMoved.ClearBits(axesAndExtrudersOwned);
-	axesAndExtrudersOwned.Clear();
-	ownedAxisLetters.Clear();
+	ReleaseAxesAndExtruders(axesAndExtrudersOwned);
 }
 
 // Release some of the axes that we own. We must also clear the cache of owned axis letters.
 void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 {
+	SaveOwnAxisCoordinates();										// save the positions of the axes we own before we release them, otherwise we will get the wrong positions when we allocate them again
 	axesAndExtrudersOwned &= ~axesToRelease;						// clear the axes/extruders we have been asked to release
 	axesAndExtrudersMoved.ClearBits(axesToRelease);					// remove them from the own axes/extruders
 	ownedAxisLetters.Clear();										// clear the cache of owned axis letters
@@ -294,6 +293,15 @@ void MovementState::SaveOwnAxisCoordinates() noexcept
 	// Only update our own position if something has changed, to avoid frequent inverse and forward transforms
 	if (!memeqf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders))
 	{
+//DEBUG
+		for (size_t i = 0; i < MaxAxesPlusExtruders; ++i)
+		{
+			if (coords[i] != lastKnownMachinePositions[i])
+			{
+				debugPrintf("Coord %u changed by %.4f\n", i, (double)(lastKnownMachinePositions[i] - coords[i]));
+			}
+		}
+//ENDDB
 		memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
 		move.SetRawPosition(coords, msNumber);
 		move.InverseAxisAndBedTransform(coords, currentTool);
