@@ -3961,11 +3961,10 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 
 			SetMoveBufferDefaults(ms);
 			ms.movementTool = ms.currentTool;
-			reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.movementTool);
 			ms.filePos = gb.GetJobFilePosition();
 
 #if SUPPORT_ASYNC_MOVES
-			// Allocate any axes and extruder that we re going to use
+			// Allocate any axes and extruders that we re going to use
 			const bool needZhop = (retract) ? currentTool->GetRetractHop() > 0.0 : ms.currentZHop > 0.0;
 # if PREALLOCATE_TOOL_AXES
 			if (needZhop /* && !ms.GetOwnedAxisLetters().IsBitSet(ParameterLetterToBitNumber('Z')) */)
@@ -4996,8 +4995,9 @@ const MovementState& GCodes::GetCurrentMovementState(const ObjectExplorationCont
 // This relies on cooperative scheduling between different GCodeBuffer objects
 void GCodes::AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes, ParameterLettersBitmap axLetters) THROWS(GCodeException)
 {
-	debugPrintf("Allocating axes %04" PRIx32 " letters %08" PRIx32 " command %u\n", axes.GetRaw(), axLetters.GetRaw(), gb.GetCommandNumber());
+	//debugPrintf("Allocating axes %04" PRIx32 " letters %08" PRIx32 " command %u\n", axes.GetRaw(), axLetters.GetRaw(), gb.GetCommandNumber());
 	const AxesBitmap badAxes = ms.AllocateAxes(axes, axLetters);
+	//debugPrintf("alloc done\n");
 	if (!badAxes.IsEmpty())
 	{
 		if (reprap.Debug(moduleMove))

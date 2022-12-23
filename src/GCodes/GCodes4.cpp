@@ -1393,19 +1393,20 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just did the retraction part of a firmware retraction, now we need to do the Z hop
 		if (ms.segmentsLeft == 0)
 		{
-			if (ms.currentTool != nullptr)					// this should always be true
+			const Tool * const t = ms.currentTool;
+			if (t != nullptr)								// this should always be true
 			{
 #if SUPPORT_ASYNC_MOVES
 				// We already allocated the Z axis to this MS when we began the retraction, so no need to do it here
 #endif
 				SetMoveBufferDefaults(ms);
-				ms.movementTool = ms.currentTool;
-				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.currentTool);
-				ms.coords[Z_AXIS] += ms.currentTool->GetRetractHop();
+				ms.movementTool = t;
+				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, t);
+				ms.coords[Z_AXIS] += t->GetRetractHop();
 				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
 				ms.filePos = gb.GetJobFilePosition();
-				ms.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
-				ms.currentZHop = ms.currentTool->GetRetractHop();
+				ms.canPauseAfter = false;					// don't pause after a retraction because that could cause too much retraction
+				ms.currentZHop = t->GetRetractHop();
 				ms.linearAxesMentioned = true;
 				NewSingleSegmentMoveAvailable(ms);
 			}
@@ -1417,16 +1418,17 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just undid the Z-hop part of a firmware un-retraction, now we need to do the un-retract
 		if (ms.segmentsLeft == 0)
 		{
-			if (ms.currentTool != nullptr && ms.currentTool->DriveCount() != 0)
+			const Tool * const t = ms.currentTool;
+			if (t != nullptr && t->DriveCount() != 0)
 			{
 				SetMoveBufferDefaults(ms);
-				ms.movementTool = ms.currentTool;
+				ms.movementTool = t;
 				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.currentTool);
-				for (size_t i = 0; i < ms.currentTool->DriveCount(); ++i)
+				for (size_t i = 0; i < t->DriveCount(); ++i)
 				{
-					ms.coords[ExtruderToLogicalDrive(ms.currentTool->GetDrive(i))] = ms.currentTool->GetRetractLength() + ms.currentTool->GetRetractExtra();
+					ms.coords[ExtruderToLogicalDrive(t->GetDrive(i))] = t->GetRetractLength() + t->GetRetractExtra();
 				}
-				ms.feedRate = ms.currentTool->GetUnRetractSpeed() * ms.currentTool->DriveCount();
+				ms.feedRate = t->GetUnRetractSpeed() * t->DriveCount();
 				ms.filePos = gb.GetJobFilePosition();
 				ms.canPauseAfter = true;
 				NewSingleSegmentMoveAvailable(ms);

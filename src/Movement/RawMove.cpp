@@ -291,18 +291,19 @@ void MovementState::SaveOwnAxisCoordinates() noexcept
 	move.GetPartialMachinePosition(lastKnownMachinePositions, msNumber, axesAndExtrudersOwned);
 
 	// Only update our own position if something has changed, to avoid frequent inverse and forward transforms
-	if (!memeqf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders))
+	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
+	if (!memeqf(coords, lastKnownMachinePositions, totalAxes))
 	{
-//DEBUG
-		for (size_t i = 0; i < MaxAxesPlusExtruders; ++i)
+#if 0	//DEBUG
+		for (size_t i = 0; i < totalAxes; ++i)
 		{
 			if (coords[i] != lastKnownMachinePositions[i])
 			{
-				debugPrintf("Coord %u changed by %.4f\n", i, (double)(lastKnownMachinePositions[i] - coords[i]));
+				debugPrintf("Coord %u changed from %.4f to %.4f in ms %u\n", i, (double)coords[i], (double)lastKnownMachinePositions[i], GetMsNumber());
 			}
 		}
-//ENDDB
-		memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
+#endif	//END DEBUGB
+		memcpyf(coords, lastKnownMachinePositions, totalAxes);
 		move.SetRawPosition(coords, msNumber);
 		move.InverseAxisAndBedTransform(coords, currentTool);
 	}
