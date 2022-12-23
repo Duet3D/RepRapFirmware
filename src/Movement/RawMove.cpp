@@ -273,8 +273,16 @@ void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 // Allocate additional axes
 AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept
 {
-	SaveOwnAxisCoordinates();										// we must do this before we allocate new axis to ourselves
-	const AxesBitmap unAvailable = axes & ~axesAndExtrudersOwned & axesAndExtrudersMoved;
+	// Sometimes we ask to allocate aces that we already own, e.g. when doing firmware retraction. Optimise this case.
+	const AxesBitmap axesNeeded = axes & ~axesAndExtrudersOwned;
+	if (axesNeeded.IsEmpty())
+	{
+		ownedAxisLetters |= axisLetters;
+		return axesNeeded;											// return empty bitmap
+	}
+
+	SaveOwnAxisCoordinates();										// we must do this before we allocate new axes to ourselves
+	const AxesBitmap unAvailable = axesNeeded & axesAndExtrudersMoved;
 	if (unAvailable.IsEmpty())
 	{
 		axesAndExtrudersMoved |= axes;

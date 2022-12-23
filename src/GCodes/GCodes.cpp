@@ -3978,7 +3978,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 				const size_t logicalDrive = ExtruderToLogicalDrive(currentTool->GetDrive(i));
 				drivesMoving.SetBit(logicalDrive);
 			}
-			if (needZhop /* && !ms.GetOwnedAxisLetters().IsBitSet(ParameterLetterToBitNumber('Z')) */)
+			if (needZhop)
 			{
 				drivesMoving.SetBit(Z_AXIS);
 				AllocateAxes(gb, ms, drivesMoving, ParameterLetterToBitmap('Z'));
