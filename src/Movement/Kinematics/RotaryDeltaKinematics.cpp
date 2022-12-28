@@ -214,15 +214,6 @@ bool RotaryDeltaKinematics::CartesianToMotorSteps(const float machinePos[], cons
 		}
 	}
 
-	// TEMP DEBUG
-	if (reprap.Debug(moduleMove))
-	{
-		debugPrintf("Transformed %.2f,%.2f,%.2f mm to %" PRIi32 ",%" PRIi32 ",%" PRIi32 " steps %s\n",
-			(double)machinePos[0], (double)machinePos[1], (double)machinePos[2],
-			motorPos[0], motorPos[1], motorPos[2],
-			(ok) ? "ok" : "fail");
-	}
-
 	// Transform any additional axes linearly
 	for (size_t axis = DELTA_AXES; axis < numVisibleAxes; ++axis)
 	{
