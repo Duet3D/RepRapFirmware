@@ -15,9 +15,6 @@
 SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *name, SpiMode spiMode, uint32_t clockFrequency) noexcept
 	: SensorWithPort(sensorNum, name), device(SharedSpiDevice::GetMainSharedSpiDevice(), clockFrequency, spiMode, NoPin, false)
 {
-#if defined(__LPC17xx__)
-    device.sspChannel = TempSensorSSPChannel;		// use SSP0 on LPC
-#endif
     SetResult(0.0, TemperatureError::notInitialised);
 }
 
