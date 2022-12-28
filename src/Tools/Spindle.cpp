@@ -131,7 +131,8 @@ void Spindle::SetRpm(uint32_t rpm) noexcept
 	}
 }
 
-void Spindle::SetState(const SpindleState newState) noexcept {
+void Spindle::SetState(const SpindleState newState) noexcept
+{
 	if (state != newState)
 	{
 		state = newState;
