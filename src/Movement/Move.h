@@ -67,7 +67,8 @@ public:
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	void GetLivePositions(int32_t pos[MaxAxesPlusExtruders], MovementSystemNumber msNumber) const noexcept;
-	float LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept; // Gives the last point at the end of the last complete DDA
+	void GetLiveCoordinates(unsigned int msNumber, const Tool *tool, float coordsOut[MaxAxesPlusExtruders]) noexcept;
+																			// Gives the last point at the end of the last complete DDA
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
 	bool WaitingForAllMovesFinished(MovementSystemNumber msNumber) noexcept
 		pre(queueNumber < rings.upb);										// Tell the lookahead ring we are waiting for it to empty and return true if it is
@@ -297,14 +298,11 @@ private:
 	Deviation initialCalibrationDeviation;
 	Deviation latestMeshDeviation;
 
-
 	Kinematics *kinematics;								// What kinematics we are using
 
 	AxisShaper axisShaper;
 	ExtruderShaper extruderShapers[MaxExtruders];
 
-	float latestLiveCoordinates[MaxAxesPlusExtruders];	// the most recent set of live coordinates that we fetched
-	uint32_t latestLiveCoordinatesFetchedAt = 0;		// when we fetched the live coordinates
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
 
 	uint8_t numCalibratedFactors;

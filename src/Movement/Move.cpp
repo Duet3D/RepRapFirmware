@@ -1203,18 +1203,11 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 #endif
 
 // Return the current machine axis and extruder coordinates. They are needed only to service status requests from DWC, PanelDue, M114.
-// Transforming the machine motor coordinates to Cartesian coordinates is quite expensive, and a status request or object model request will call this for each axis.
-// So we cache the latest coordinates and only update them if it is some time since we last did
-// Interrupts are assumed enabled on entry
-float Move::LiveCoordinate(unsigned int axisOrExtruder, const Tool *tool) noexcept
+// This is quite expensive, so it should only be called from class MovemebntState, which caches the results.
+void Move::GetLiveCoordinates(unsigned int msNumber, const Tool *tool, float coordsOut[MaxAxesPlusExtruders]) noexcept
 {
-	if (millis() - latestLiveCoordinatesFetchedAt > 200)
-	{
-		rings[0].LiveCoordinates(latestLiveCoordinates);
-		InverseAxisAndBedTransform(latestLiveCoordinates, tool);
-		latestLiveCoordinatesFetchedAt = millis();
-	}
-	return latestLiveCoordinates[axisOrExtruder];
+	rings[msNumber].LiveCoordinates(coordsOut);
+	InverseAxisAndBedTransform(coordsOut, tool);
 }
 
 void Move::SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) noexcept
