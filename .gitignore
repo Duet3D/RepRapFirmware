@@ -5,6 +5,10 @@
 # Misc
 /.settings/language.settings.xml
 
+# Emacs backup and auto-save files
+*~
+\#*\#
+
 # Output folders
 /Duet2/
 /Duet2_SBC/
