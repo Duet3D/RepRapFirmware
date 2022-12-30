@@ -402,14 +402,14 @@ inline constexpr ParameterLettersBitmap ParameterLetterToBitmap(char c) noexcept
 }
 
 // Convert a string of parameter letters to a collection of bits. Normally used with constant strings, so recursive is OK.
-inline constexpr uint32_t ParameterLettersToBits(const char *s) noexcept
+inline constexpr uint32_t ParameterLettersToBits(const char *_ecv_array s) noexcept
 {
 	return (*s == 0) ? 0
 		: (1u << ParameterLetterToBitNumber(*s)) | ParameterLettersToBits(s + 1);
 }
 
 // Convert a string of parameter letters to a bitmap
-inline constexpr ParameterLettersBitmap ParameterLettersToBitmap(const char *s) noexcept
+inline constexpr ParameterLettersBitmap ParameterLettersToBitmap(const char *_ecv_array s) noexcept
 {
 	return ParameterLettersBitmap(ParameterLettersToBits(s));
 }

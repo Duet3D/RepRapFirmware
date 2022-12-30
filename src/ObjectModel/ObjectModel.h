@@ -62,7 +62,7 @@ struct ExpressionValue
 		int32_t iVal;
 		uint32_t uVal;								// used for enumerations, bitmaps and IP addresses (not for integers, we always use int32_t for those)
 		const char *_ecv_array sVal;
-		const ObjectModel *omVal;					// object of some class derived from ObjectModel
+		const ObjectModel *_ecv_from _ecv_null omVal;	// object of some class derived from ObjectModel. Object model arrays may include null objects, so allow nullptr here.
 		StringHandle shVal;
 		ArrayHandle ahVal;
 		const IoPort *iopVal;
@@ -309,7 +309,7 @@ protected:
 	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
 
 	// Get the requested entry in the array table
-	virtual const ObjectModelArrayTableEntry *GetObjectModelArrayEntry(unsigned int index) const noexcept { return nullptr; }
+	virtual const ObjectModelArrayTableEntry *_ecv_null GetObjectModelArrayEntry(unsigned int index) const noexcept { return nullptr; }
 
 	// Return the address of the ReadWriteLock (if any) that we need to acquire before querying or reporting on this object
 	// Override this default implementation in classes that need to be locked. If the returned lock belongs to the current object
@@ -320,7 +320,7 @@ private:
 	// These functions have been separated from ReportItemAsJson to avoid high stack usage in the recursive functions, therefore they must not be inlined
 	// Report on a single item
 	__attribute__ ((noinline)) void ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor,
-															const ExpressionValue& val, const char *filter) const THROWS(GCodeException);
+															const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException);
 	__attribute__ ((noinline)) void ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ExpressionValue& val) const noexcept;
 	__attribute__ ((noinline)) static void ReportDateTime(OutputBuffer *buf, const ExpressionValue& val) noexcept;
 	__attribute__ ((noinline)) static void ReportFloat(OutputBuffer *buf, const ExpressionValue& val) noexcept;
@@ -446,7 +446,7 @@ struct ObjectModelClassDescriptor
 #define DECLARE_OBJECT_MODEL_WITH_ARRAYS \
 	DECLARE_OBJECT_MODEL \
 	static const ObjectModelArrayTableEntry objectModelArrayTable[]; \
-	const ObjectModelArrayTableEntry *GetObjectModelArrayEntry(unsigned int index) const noexcept override;
+	const ObjectModelArrayTableEntry *_ecv_null GetObjectModelArrayEntry(unsigned int index) const noexcept override;
 
 #define DECLARE_OBJECT_MODEL_VIRTUAL \
 	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept override = 0;
