@@ -987,7 +987,7 @@ bool FileInfoParser::FindThumbnails(const char *_ecv_array bufp, FilePosition bu
 		}
 
 		pos += strlen(ThumbnailText);
-		GCodeFileInfo::ThumbnailInfo::Format fmt(GCodeFileInfo::ThumbnailInfo::Format::qoi);
+		GCodeFileInfo::ThumbnailInfo::ImageFormat fmt(GCodeFileInfo::ThumbnailInfo::ImageFormat::qoi);
 		if (StringStartsWith(pos, QoiBeginText))
 		{
 			// found a QOI thumbnail
@@ -997,13 +997,13 @@ bool FileInfoParser::FindThumbnails(const char *_ecv_array bufp, FilePosition bu
 		{
 			// found a PNG thumbnail
 			pos += strlen(PngBeginText);
-			fmt = GCodeFileInfo::ThumbnailInfo::Format::png;
+			fmt = GCodeFileInfo::ThumbnailInfo::ImageFormat::png;
 		}
 		else if (StringStartsWith(pos, JpegBeginText))
 		{
 			// found a JPEG thumbnail
 			pos += strlen(JpegBeginText);
-			fmt = GCodeFileInfo::ThumbnailInfo::Format::jpeg;
+			fmt = GCodeFileInfo::ThumbnailInfo::ImageFormat::jpeg;
 		}
 		else
 		{
