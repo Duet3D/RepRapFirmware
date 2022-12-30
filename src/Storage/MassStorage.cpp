@@ -1299,30 +1299,29 @@ const ObjectModel * MassStorage::GetVolume(size_t vol) noexcept
 // Functions called by FatFS to acquire/release mutual exclusion
 extern "C"
 {
-	// Create a sync object. We already created it, we just need to copy the handle.
-	int ff_cre_syncobj (BYTE vol, FF_SYNC_t* psy) noexcept
+	// Create a sync object. We already created it so just need to return success.
+	int ff_mutex_create (int vol) noexcept
 	{
-		*psy = &MassStorage::GetVolumeMutex(vol);
 		return 1;
 	}
 
 	// Lock sync object
-	int ff_req_grant (FF_SYNC_t sy) noexcept
+	int ff_mutex_take (int vol) noexcept
 	{
-		sy->Take();
+		info[vol].volMutex.Take();
 		return 1;
 	}
 
 	// Unlock sync object
-	void ff_rel_grant (FF_SYNC_t sy) noexcept
+	void ff_mutex_give (int vol) noexcept
 	{
-		sy->Release();
+		info[vol].volMutex.Release();
 	}
 
 	// Delete a sync object
-	int ff_del_syncobj (FF_SYNC_t sy) noexcept
+	void ff_mutex_delete (int vol) noexcept
 	{
-		return 1;		// nothing to do, we never delete the mutex
+		// nothing to do, we never delete the mutex
 	}
 }
 
