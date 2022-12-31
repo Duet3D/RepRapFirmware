@@ -1236,7 +1236,11 @@ decrease(strlen(idString))	// recursion variant
 					ReadLocker lock(entry->lockPointer);
 					return ExpressionValue((int32_t)entry->GetNumElements(this, context));
 				}
-				return val;
+
+				// Else we want the entire array. The caller may need the previous array index in order to iterate its elements, so store this in the upper 16 bits of 'param'.
+				ExpressionValue rslt = val;
+				rslt.param |= (uint32_t)context.GetLastIndex() << 8;
+				return rslt;
 			}
 			if (*idString != '^')
 			{
