@@ -1243,11 +1243,12 @@ decrease(strlen(idString))	// recursion variant
 				throw context.ConstructParseException("missing array index");
 			}
 
-			context.AddIndex();
 			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param & 0xFF);
 			ReadLocker lock(entry->lockPointer);
+			const size_t numElements = entry->GetNumElements(this, context);			// must get this before we call context.AddIndex because it may depend on indices
+			context.AddIndex();
 
-			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= entry->GetNumElements(this, context))
+			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= numElements)
 			{
 				if (context.WantExists())
 				{
