@@ -775,6 +775,21 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 	}
 }
 
+// Balance types v2 and v2 and store the min or max of them in v1
+void ExpressionParser::EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2, bool evaluate, bool isMax) THROWS(GCodeException)
+{
+	BalanceNumericTypes(v1, v2, evaluate);
+	if (v1.GetType() == TypeCode::Float)
+	{
+		v1.fVal = ((isMax) ? max<float> : min<float>)(v1.fVal, v2.fVal);
+		v1.param = max(v2.param, v2.param);
+	}
+	else
+	{
+		v1.iVal = (isMax ? max<int32_t> : min<int32_t>)(v1.iVal, v2.iVal);
+	}
+}
+
 // Return true if the specified type has no literals and should therefore be converted to string when comparing with another value that is not of the same type.
 // We don't need to handle Port and UniqueId types here because we convent them to string before calling this.
 /*static*/ bool ExpressionParser::TypeHasNoLiterals(TypeCode t) noexcept
@@ -1331,28 +1346,43 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 			case Function::max:
 			case Function::min:
-				for (;;)
+				SkipWhiteSpace();
+				if (CurrentCharacter() != ',')
 				{
-					SkipWhiteSpace();
-					if (CurrentCharacter() != ',')
+					// Only one operand, so it's min or max on an array
+					if (rslt.GetType() != TypeCode::HeapArray)
 					{
-						break;
+						ThrowParseException("operand is not an array");
 					}
-					AdvancePointer();
-					SkipWhiteSpace();
-					ExpressionValue nextOperand;
-					// We recently checked the stack for a call to ParseInternal, no need to do it again
-					ParseInternal(nextOperand, evaluate, 0);
-					BalanceNumericTypes(rslt, nextOperand, evaluate);
-					if (rslt.GetType() == TypeCode::Float)
+					ReadLocker lock(Heap::heapLock);
+					const size_t length = rslt.ahVal.GetNumElements();
+					if (length == 0)
 					{
-						rslt.fVal = ((func.RawValue() == Function::min) ? min<float> : max<float>)(rslt.fVal, nextOperand.fVal);
-						rslt.param = max(rslt.param, nextOperand.param);
+						ThrowParseException("array has no elements");
 					}
-					else
+					ExpressionValue rVal;
+					rslt.ahVal.GetElement(0, rVal);
+					for (size_t i = 1; i < length; ++i)
 					{
-						rslt.iVal = ((func.RawValue() == Function::min) ? min<int32_t> : max<int32_t>)(rslt.iVal, nextOperand.iVal);
+						ExpressionValue nextVal;
+						rslt.ahVal.GetElement(i, nextVal);
+						EvaluateMinOrMax(rVal, nextVal, evaluate, func.RawValue() == Function::max);
 					}
+					rslt = rVal;
+				}
+				else
+				{
+					// We have a command after the first operand, so it's a multi-operand min or max
+					do
+					{
+						AdvancePointer();			// skip the comma
+						SkipWhiteSpace();
+						ExpressionValue nextOperand;
+						// We recently checked the stack for a call to ParseInternal, no need to do it again
+						ParseInternal(nextOperand, evaluate, 0);
+						EvaluateMinOrMax(rslt, nextOperand, evaluate, func.RawValue() == Function::max);
+						SkipWhiteSpace();
+					} while (CurrentCharacter() == ',');
 				}
 				break;
 
