@@ -727,7 +727,7 @@ unsigned int FileInfoParser::FindFilamentUsed(const char* bufp) noexcept
 	{
 		const char *filamentLengthStrs[] =
 		{	"ilament length",		// comment string used by S3D v4
-			"aterial length"		// comment string used by S3D v5
+			"aterial Length"		// comment string used by S3D v5
 		};
 
 		p = bufp;
