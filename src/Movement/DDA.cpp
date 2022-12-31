@@ -612,10 +612,10 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 #endif
 
 	// 4. Normalise the direction vector and compute the amount of motion.
-	// Currently we normalise the vector sum of all Z motor movement to unit length.
+	//    Currently we normalise the vector sum of all Z motor movement to unit length.
 	totalDistance = Normalise(directionVector);
 
-	// 6. Set the speed to the smaller of the requested and maximum speed.
+	// 6. Set the speed to requested feed rate, which the caller must ensure is no more than the maximum speed for the Z axis.
 	requestedSpeed = feedrate;
 
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
@@ -1237,9 +1237,12 @@ void DDA::MatchSpeeds() noexcept
 void DDA::FetchCurrentPositions(int32_t ep[MaxAxesPlusExtruders]) const noexcept
 {
 	memcpyi32(ep, endPoint, MaxAxesPlusExtruders);
-	for (const DriveMovement* dm = activeDMs; dm != nullptr; dm = dm->nextDM)
+	if (!flags.isLeadscrewAdjustmentMove)			// driver numbers are out of the usual range for leadscrew adjustment moves
 	{
-		ep[dm->drive] -= dm->GetNetStepsLeft();
+		for (const DriveMovement* dm = activeDMs; dm != nullptr; dm = dm->nextDM)
+		{
+			ep[dm->drive] -= dm->GetNetStepsLeft();
+		}
 	}
 }
 
