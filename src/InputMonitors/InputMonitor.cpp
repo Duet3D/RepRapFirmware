@@ -15,7 +15,6 @@
 #include <CanMessageBuffer.h>
 
 InputMonitor * volatile InputMonitor::monitorsList = nullptr;
-InputMonitor * volatile InputMonitor::freeList = nullptr;
 ReadWriteLock InputMonitor::listLock;
 
 bool InputMonitor::Activate(bool useInterrupt) noexcept
@@ -51,7 +50,19 @@ bool InputMonitor::Activate(bool useInterrupt) noexcept
 
 void InputMonitor::Deactivate() noexcept
 {
-	//TODO
+	if (active)
+	{
+		if (threshold == 0)
+		{
+			port.DetachInterrupt();
+		}
+		else
+		{
+#if SAME5x
+			port.ClearAnalogCallback();
+#endif
+		}
+	}
 	active = false;
 }
 
@@ -126,6 +137,8 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 		if (current->handle == hndl)
 		{
 			current->Deactivate();
+
+			// Remove the monitor from the list of monitors
 			if (prev == nullptr)
 			{
 				monitorsList = current->next;
@@ -134,10 +147,12 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 			{
 				prev->next = current->next;
 			}
-			current->next = freeList;
-			freeList = current;
+
+			delete current;
 			return true;
 		}
+
+		// Move on to next monitor in list
 		prev = current;
 		current = current->next;
 	}
@@ -152,16 +167,7 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	Delete(msg.handle.u.all);						// delete any existing monitor with the same handle
 
 	// Allocate a new one
-	InputMonitor *newMonitor;
-	if (freeList == nullptr)
-	{
-		newMonitor = new InputMonitor;
-	}
-	else
-	{
-		newMonitor = freeList;
-		freeList = newMonitor->next;
-	}
+	InputMonitor *newMonitor = new InputMonitor;
 
 	newMonitor->handle = msg.handle.u.all;
 	newMonitor->active = false;
@@ -186,8 +192,7 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 		return GCodeResult::ok;
 	}
 
-	newMonitor->next = freeList;
-	freeList = newMonitor;
+	delete newMonitor;
 	return GCodeResult::error;
 }
 

@@ -195,6 +195,11 @@ bool IoPort::SetAnalogCallback(AnalogInCallbackFunction fn, CallbackParameter cb
 	return AnalogIn::SetCallback(GetAnalogChannel(), fn, cbp, ticksPerCall, false);
 }
 
+void IoPort::ClearAnalogCallback() noexcept
+{
+	(void)AnalogIn::SetCallback(GetAnalogChannel(), nullptr, CallbackParameter(), 1, false);
+}
+
 #endif
 
 // Allocate the specified logical pin, returning true if successful

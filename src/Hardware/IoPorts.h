@@ -42,6 +42,7 @@ public:
 	void DetachInterrupt() const noexcept;
 #if SAME5x
 	bool SetAnalogCallback(AnalogInCallbackFunction fn, CallbackParameter cbp, uint32_t ticksPerCall) noexcept;
+	void ClearAnalogCallback() noexcept;
 #endif
 
 	uint16_t ReadAnalog() const noexcept;
