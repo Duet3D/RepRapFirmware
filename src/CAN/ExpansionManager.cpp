@@ -363,7 +363,7 @@ void ExpansionManager::EmergencyStop() noexcept
 		}
 	}
 
-	// Finally, send a broadcast message in case we missed any, and free the buffer
+	// Finally, send a broadcast message in case we missed any
 	buf.SetupBroadcastMessage<CanMessageEmergencyStop>(CanInterface::GetCanAddress());
 	CanInterface::SendBroadcastNoFree(&buf);
 

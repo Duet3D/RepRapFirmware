@@ -997,7 +997,7 @@ void RepRap::EmergencyStop() noexcept
 # if SUPPORT_REMOTE_COMMANDS
 	if (CanInterface::InExpansionMode())
 	{
-		CanInterface::Shutdown();
+		// We can't shut down CAN here because this gets called by the CAN Receive task
 	}
 	else
 # endif
