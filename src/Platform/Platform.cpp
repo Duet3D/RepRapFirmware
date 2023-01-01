@@ -1643,14 +1643,6 @@ void Platform::InitialiseInterrupts() noexcept
 	if (resetReason & RSTC_RCAUSE_SYST)		{ return "software"; }
 	if (resetReason & RSTC_RCAUSE_BACKUP)	{ return "backup/hibernate"; }
 	return "unknown";
-#elif defined(__LPC17xx__)
-	if (LPC_SYSCTL->RSID & RSID_POR) { return "power up"; }
-	if (LPC_SYSCTL->RSID & RSID_EXTR) { return "reset button"; }
-	if (LPC_SYSCTL->RSID & RSID_WDTR) { return "watchdog"; }
-	if (LPC_SYSCTL->RSID & RSID_BODR) { return "brownout"; }
-	if (LPC_SYSCTL->RSID & RSID_SYSRESET) { return "software"; }
-	if (LPC_SYSCTL->RSID & RSID_LOCKUP) { return "lockup"; }
-	return "unknown";
 #else
 	constexpr const char *_ecv_array resetReasons[8] = { "power up", "backup", "watchdog", "software",
 # ifdef DUET_NG
