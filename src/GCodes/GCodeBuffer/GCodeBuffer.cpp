@@ -94,9 +94,6 @@ const char *GCodeBuffer::GetStateText() const noexcept
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c) noexcept
 	:
-#if SUPPORT_ASYNC_MOVES
-	  syncState(SyncState::running),
-#endif
 	  printFilePositionAtMacroStart(0),
 	  normalInput(normalIn),
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -151,6 +148,9 @@ void GCodeBuffer::Init() noexcept
 #endif
 	stringParser.Init();
 	timerRunning = false;
+#if SUPPORT_ASYNC_MOVES
+	syncState = SyncState::running;
+#endif
 }
 
 void GCodeBuffer::StartTimer() noexcept

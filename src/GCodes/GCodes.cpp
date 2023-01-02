@@ -4128,6 +4128,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 	pauseState = PauseState::notPaused;
 
 #if HAS_SBC_INTERFACE || HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	bool stoppingFromCode = FileGCode()->IsExecuting();		// the following method calls Init(), so check here if a code is being executed
 	FileGCode()->ClosePrintFile();
 # if SUPPORT_ASYNC_MOVES
 	File2GCode()->ClosePrintFile();
@@ -4240,7 +4241,8 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 			platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
 			if (FileGCode()->GetState() == GCodeState::normal)		// this should always be the case
 			{
-				FileGCode()->SetState(GCodeState::stopping);		// set fileGCode (which should be the one calling this) to run stop.g
+				const GCodeState newState = stoppingFromCode ? GCodeState::stoppingFromCode : GCodeState::stopping;
+				FileGCode()->SetState(newState);					// set fileGCode (which should be the one calling this) to run stop.g
 			}
 		}
 #endif
