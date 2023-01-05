@@ -76,7 +76,7 @@ private:
 	static constexpr uint32_t SnapshotIntervalSecondsSimulating = 1;	// Snapshot interval in seconds
 
 	void Reset() noexcept;
-	void UpdatePrintingFileInfo() noexcept;
+	void PrintingFileInfoUpdated() noexcept;
 
 #if SUPPORT_OBJECT_MODEL
 	ExpressionValue EstimateTimeLeftAsExpression(PrintEstimationMethod method) const noexcept;
