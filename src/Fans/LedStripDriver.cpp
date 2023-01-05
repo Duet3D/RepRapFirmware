@@ -476,13 +476,16 @@ void LedStripDriver::Init() noexcept
 }
 
 // Return true if we must stop movement before we handle this command
+// This is called both from this module and from GCodes when deciding whether to queue this command
 bool LedStripDriver::MustStopMovement(GCodeBuffer& gb) noexcept
 {
 #if SUPPORT_BITBANG_NEOPIXEL
 	try
 	{
 		const LedType lt = (gb.Seen('X')) ? (LedType)gb.GetLimitedUIValue('X', 0, ARRAY_SIZE(LedTypeNames)) : ledType;
-		return (lt == LedType::neopixelRGBBitBang || lt == LedType::neopixelRGBWBitBang) && gb.SeenAny("RUBWPYSF");
+		return (lt == LedType::neopixelRGBBitBang || lt == LedType::neopixelRGBWBitBang)	// if we're bit banging
+				&& gb.SeenAny("RUBWPYS")													// and we are setting colours
+				&& (!gb.Seen('F') || gb.GetUIValue() == 0);									// and we are going to send data this time
 	}
 	catch (const GCodeException&)
 	{
