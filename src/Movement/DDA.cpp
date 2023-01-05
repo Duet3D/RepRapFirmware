@@ -853,6 +853,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 			}
 			else
 			{
+				// No steps to do, so release the DM
 				DriveMovement::Release(pdm);
 			}
 		}
@@ -862,6 +863,14 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	// 2. Throw it away if there's no real movement.
 	if (activeDMs == nullptr)
 	{
+		// We may have set up the unshaped segments, in which case we must recycle them
+		for (MoveSegment* seg = unshapedSegments; seg != nullptr; )
+		{
+			MoveSegment* const nextSeg = seg->GetNext();
+			MoveSegment::Release(seg);
+			seg = nextSeg;
+		}
+		unshapedSegments = nullptr;
 		return false;
 	}
 
