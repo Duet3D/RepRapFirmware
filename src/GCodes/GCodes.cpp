@@ -788,9 +788,12 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 			else
 # endif
 			{
-				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))			// wait until movement has finished and deferred command queue has caught up
+				if (gb.WasMotionCommanded())									// don't wait for motion to stop if we were called from daemon and didn't command any motion
 				{
-					return false;
+					if (!LockCurrentMovementSystemAndWaitForStandstill(gb))		// wait until movement has finished and deferred command queue has caught up
+					{
+						return false;
+					}
 				}
 			}
 
