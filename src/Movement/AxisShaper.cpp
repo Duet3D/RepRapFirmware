@@ -931,7 +931,7 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, PrepParams& par
 	return nullptr;
 }
 
-// Generate the steady speed segment (if any), tack the segments together, and attach them to the DDA
+// Generate the steady speed segment (if any), tack all the segments together, and return them
 // Must set up params.steadyClocks before calling this
 MoveSegment *AxisShaper::FinishShapedSegments(const DDA& dda, const PrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept
 {
