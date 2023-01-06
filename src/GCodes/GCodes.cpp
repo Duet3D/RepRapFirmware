@@ -771,33 +771,18 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 			gb.Init();															// mark buffer as empty
 
-			const bool printFileFinished = (gb.IsFileChannel() && gb.LatestMachineState().GetPrevious() == nullptr);
-# if SUPPORT_ASYNC_MOVES
-			if (printFileFinished)
-			{
-				if (!DoSync(gb))												// wait until the other input stream has caught up
-				{
-					return false;
-				}
-			}
-			else
-# endif
-			{
-				if (gb.WasMotionCommanded())									// don't wait for motion to stop if we were called from daemon and didn't command any motion
-				{
-					if (!LockCurrentMovementSystemAndWaitForStandstill(gb))		// wait until movement has finished and deferred command queue has caught up
-					{
-						return false;
-					}
-				}
-			}
-
-			if (printFileFinished)
+			if (gb.IsFileChannel() && gb.LatestMachineState().GetPrevious() == nullptr)
 			{
 				// Finished printing SD card file.
 				// We never get here if the file ends in M0 because CancelPrint gets called directly in that case.
 				// Don't close the file until all moves have been completed, in case the print gets paused.
 				// Also, this keeps the state as 'Printing' until the print really has finished.
+# if SUPPORT_ASYNC_MOVES
+				if (!DoSync(gb))												// wait until the other input stream has caught up
+				{
+					return false;
+				}
+
 				if (&gb == FileGCode())
 				{
 					if (reprap.Debug(moduleGcodes))
@@ -815,6 +800,13 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					UnlockAll(gb);
 					fd.Close();
 				}
+# else
+				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))		// wait until movement has finished and deferred command queue has caught up
+				{
+					return false;
+				}
+				StopPrint(StopPrintReason::normalCompletion);
+# endif
 			}
 			else
 			{
