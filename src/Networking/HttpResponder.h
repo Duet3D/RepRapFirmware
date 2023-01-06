@@ -21,6 +21,7 @@ public:
 
 	static void InitStatic() noexcept;
 	static void Disable() noexcept;
+	static void DisableInterface(const NetworkInterface *iface) noexcept;
 	static void HandleGCodeReply(const char *_ecv_array reply) noexcept;
 	static void HandleGCodeReply(OutputBuffer *reply) noexcept;
 	static uint16_t GetReplySeq() noexcept { return seq; }
@@ -71,9 +72,10 @@ private:
 	struct HttpSession
 	{
 		IPAddress ip;
+		const NetworkInterface *iface;
 		uint32_t lastQueryTime;
-		bool isPostUploading;
 		uint16_t postPort;
+		bool isPostUploading;
 	};
 
 	bool Authenticate() noexcept;

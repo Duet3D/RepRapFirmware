@@ -717,6 +717,7 @@ bool HttpResponder::Authenticate() noexcept
 		sessions[numSessions].ip = GetRemoteIP();
 		sessions[numSessions].lastQueryTime = millis();
 		sessions[numSessions].isPostUploading = false;
+		sessions[numSessions].iface = skt->GetInterface();
 		numSessions++;
 		return true;
 	}
@@ -1402,6 +1403,24 @@ void HttpResponder::Diagnostics(MessageType mt) const noexcept
 	clientsServed = 0;
 	numSessions = 0;
 	gcodeReply.ReleaseAll();
+}
+
+// Remove all HTTP sessions that use the specified interface
+/*static*/ void HttpResponder::DisableInterface(const NetworkInterface *iface) noexcept
+{
+	for (size_t i = numSessions; i != 0; )
+	{
+		--i;
+		if (iface == sessions[i].iface)
+		{
+			RemoveSession(i);
+		}
+	}
+
+	if (numSessions == 0)
+	{
+		Disable();
+	}
 }
 
 // This is called from the GCodes task to store a response, which is picked up by the Network task
