@@ -1899,7 +1899,7 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 
 	// Accelerations
 	response->cat(',');
-	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertAcceleration(platform->Acceleration(drive)); }, 2);
+	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertAcceleration(platform->NormalAcceleration(drive)); }, 2);
 
 	// Motor currents
 	response->cat(',');

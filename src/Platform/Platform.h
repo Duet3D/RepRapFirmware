@@ -474,8 +474,8 @@ public:
 	const float *_ecv_array GetDriveStepsPerUnit() const noexcept
 		{ return driveStepsPerUnit; }
 	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept;
-	float Acceleration(size_t axisOrExtruder) const noexcept;
-	const float *_ecv_array Accelerations(bool useReduced) const noexcept;
+	float NormalAcceleration(size_t axisOrExtruder) const noexcept;
+	float Acceleration(size_t axisOrExtruder, bool reduced) const noexcept;
 	void SetAcceleration(size_t axisOrExtruder, float value, bool reduced) noexcept;
 	float MaxFeedrate(size_t axisOrExtruder) const noexcept;
 	const float *_ecv_array MaxFeedrates() const noexcept { return maxFeedrates; }
@@ -986,14 +986,14 @@ inline float Platform::DriveStepsPerUnit(size_t drive) const noexcept
 	return driveStepsPerUnit[drive];
 }
 
-inline float Platform::Acceleration(size_t drive) const noexcept
+inline float Platform::NormalAcceleration(size_t drive) const noexcept
 {
 	return normalAccelerations[drive];
 }
 
-inline const float *_ecv_array Platform::Accelerations(bool useReduced) const noexcept
+inline float Platform::Acceleration(size_t drive, bool useReduced) const noexcept
 {
-	return (useReduced) ? reducedAccelerations : normalAccelerations;
+	return (useReduced) ? min<float>(reducedAccelerations[drive], normalAccelerations[drive]) : normalAccelerations[drive];
 }
 
 inline void Platform::SetAcceleration(size_t drive, float value, bool reduced) noexcept

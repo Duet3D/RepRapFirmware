@@ -327,11 +327,10 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	bool extrudersMoving = false;
 	bool forwardExtruding = false;
 	float accelerations[MaxAxesPlusExtruders];
-	const float * const normalAccelerations = reprap.GetPlatform().Accelerations(nextMove.reduceAcceleration);
 
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
-		accelerations[drive] = normalAccelerations[drive];
+		accelerations[drive] = reprap.GetPlatform().Acceleration(drive, nextMove.reduceAcceleration);
 
 		if (drive < numVisibleAxes)
 		{
@@ -594,7 +593,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	tool = nullptr;
 	filePos = prev->filePos;
 	flags.endCoordinatesValid = prev->flags.endCoordinatesValid;
-	acceleration = deceleration = reprap.GetPlatform().Acceleration(Z_AXIS);
+	acceleration = deceleration = reprap.GetPlatform().NormalAcceleration(Z_AXIS);
 
 #if SUPPORT_LASER && SUPPORT_IOBITS
 	if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
