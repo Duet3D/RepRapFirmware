@@ -11,7 +11,7 @@
 
  18 November 2012
 
- Adrian Bowyerinfo[1]
+ Adrian Bowyer
  RepRap Professional Ltd
  http://reprappro.com
 
