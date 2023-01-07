@@ -138,6 +138,7 @@ public:
 	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;						// Force an end point
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept;
+	float GetRawEndCoordinate(size_t drive) const noexcept { return endCoordinates[drive]; }
 	void FetchEndPoints(int32_t ep[MaxAxesPlusExtruders]) const noexcept;
 	void FetchCurrentPositions(int32_t ep[MaxAxesPlusExtruders]) const noexcept;
 	void SetPositions(const float move[]) noexcept;									// Force the endpoints to be these
