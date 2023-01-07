@@ -2231,6 +2231,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 				}
 			}
 			gb.ThrowGCodeException("G0/G1: target position not reachable from current position");		// we can't bring the move within limits, so this is a definite error
+			// no break
 
 		case LimitPositionResult::ok:
 		default:
