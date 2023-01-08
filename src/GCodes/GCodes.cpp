@@ -874,10 +874,8 @@ void GCodes::CheckTriggers() noexcept
 				}
 				else if (DoAsynchronousPause(*TriggerGCode(), PrintPausedReason::trigger, GCodeState::pausing1))
 				{
-					if (reprap.SendSimpleAlert(GenericMessage, "Print paused by external trigger", "Printing paused"))
-					{
-						triggersPending.ClearBit(lowestTriggerPending);						// clear the trigger
-					}
+					reprap.SendSimpleAlert(GenericMessage, "Print paused by external trigger", "Printing paused");
+					triggersPending.ClearBit(lowestTriggerPending);						// clear the trigger
 				}
 			}
 			else

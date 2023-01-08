@@ -80,11 +80,8 @@ public:
 	FansManager& GetFansManager() const noexcept { return *fansManager; }
 
 	// Message box functions
-	ReadLockedPointer<const MessageBox> GetCurrentMessageBox() const noexcept;
-	bool SendAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits = nullptr) noexcept;
-	bool SendSimpleAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title) noexcept;
-	bool AcknowledgeMessageBox(uint32_t seq, bool& wasBlocking) noexcept;
-	void CheckMessageBoxTimeout() noexcept;
+	uint32_t SendAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits = nullptr) noexcept;
+	void SendSimpleAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title) noexcept;
 
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const noexcept { return *portControl; }
@@ -241,9 +238,6 @@ private:
 #if SUPPORT_DIRECT_LCD
 	uint16_t messageSequence;					// used by 12864 display to detect when there is a new message
 #endif
-
-	MessageBox *_ecv_null mboxList;				// linked list of message boxes
-	mutable ReadWriteLock mboxLock;
 
 	// Deferred diagnostics
 	MessageType diagnosticsDestination;

@@ -211,7 +211,7 @@ public:
 	ResourceBitmap lockedResources;
 	BlockState blockStates[MaxBlockIndent];
 	uint32_t lineNumber;
-
+	uint32_t msgBoxSeq;							// the sequence number of the message box that needs to be acknowledged, if waitingForAcknowledgement is true
 	uint32_t
 		selectedPlane : 2,
 		drivesRelative : 1,
@@ -256,7 +256,7 @@ public:
 	bool DoingFile() const noexcept;
 	void CloseFile() noexcept;
 
-	void WaitForAcknowledgement() noexcept;
+	void WaitForAcknowledgement(uint32_t seq) noexcept;
 
 #if HAS_SBC_INTERFACE
 	void SetFileExecuting() noexcept;

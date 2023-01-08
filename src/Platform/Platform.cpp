@@ -594,16 +594,14 @@ void Platform::Init() noexcept
 		axisMaxima[axis] = DefaultAxisMaximum;
 
 		maxFeedrates[axis] = ConvertSpeedFromMmPerSec(DefaultAxisMaxFeedrate);
-		normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
-		reducedAccelerations[axis] = ConvertAcceleration(DefaultReducedAxisAcceleration);
+		reducedAccelerations[axis] = normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
 		driveStepsPerUnit[axis] = DefaultAxisDriveStepsPerUnit;
 		instantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
 	}
 
 	// We use different defaults for the Z axis
 	maxFeedrates[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZMaxFeedrate);
-	normalAccelerations[Z_AXIS] = ConvertAcceleration(DefaultZAcceleration);
-	reducedAccelerations[Z_AXIS] = ConvertAcceleration(DefaultReducedZAcceleration);
+	reducedAccelerations[Z_AXIS] = normalAccelerations[Z_AXIS] = ConvertAcceleration(DefaultZAcceleration);
 	driveStepsPerUnit[Z_AXIS] = DefaultZDriveStepsPerUnit;
 	instantDvs[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZInstantDv);
 
@@ -2212,11 +2210,11 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 	case (unsigned int)DiagnosticTestType::PrintObjectSizes:
 		reply.printf(
-				"Task %u, DDA %u, DM %u, MS %u, Tool %u, GCodeBuffer %u, heater %u"
+				"Task %u, DDA %u, DM %u, MS %u, Tool %u, GCodeBuffer %u, heater %u, mbox %u"
 #if HAS_NETWORKING
 				", HTTP resp %u, FTP resp %u, Telnet resp %u"
 #endif
-				, sizeof(TaskBase), sizeof(DDA), sizeof(DriveMovement), sizeof(MoveSegment), sizeof(Tool), sizeof(GCodeBuffer), sizeof(Heater)
+				, sizeof(TaskBase), sizeof(DDA), sizeof(DriveMovement), sizeof(MoveSegment), sizeof(Tool), sizeof(GCodeBuffer), sizeof(Heater), sizeof(MessageBox)
 #if HAS_NETWORKING
 				, sizeof(HttpResponder), sizeof(FtpResponder), sizeof(TelnetResponder)
 #endif

@@ -182,7 +182,7 @@ public:
 	FilePosition GetPrintingFilePosition(bool allowNoFilePos) const noexcept;	// Get the file position in the printing file
 	void SavePrintingFilePosition() noexcept;
 
-	void WaitForAcknowledgement() noexcept;						// Flag that we are waiting for acknowledgement
+	void WaitForAcknowledgement(uint32_t seq) noexcept;			// Flag that we are waiting for acknowledgement
 	void ClosePrintFile() noexcept;								// Close the print file
 
 #if HAS_SBC_INTERFACE
@@ -226,7 +226,7 @@ public:
 	void SetState(GCodeState newState) noexcept;
 	void SetState(GCodeState newState, uint16_t param) noexcept;
 	void AdvanceState() noexcept;
-	void MessageAcknowledged(bool cancelled, ExpressionValue rslt) noexcept;
+	void MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionValue rslt) noexcept;
 
 	GCodeChannel GetChannel() const noexcept { return codeChannel; }
 	bool IsFileChannel() const noexcept
