@@ -13,13 +13,13 @@
 class LinearAnalogSensor : public SensorWithPort
 {
 public:
-	LinearAnalogSensor(unsigned int sensorNum) noexcept;
+	explicit LinearAnalogSensor(unsigned int sensorNum) noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
 	void Poll() noexcept override;
-	const char *GetShortSensorType() const noexcept override { return TypeName; }
+	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 
-	static constexpr const char *TypeName = "linearanalog";
+	static constexpr const char *_ecv_array TypeName = "linearanalog";
 
 private:
 	void CalcDerivedParameters() noexcept;

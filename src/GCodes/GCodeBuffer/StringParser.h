@@ -24,7 +24,7 @@ class VariableSet;
 class StringParser
 {
 public:
-	StringParser(GCodeBuffer& gcodeBuffer) noexcept;
+	explicit StringParser(GCodeBuffer& gcodeBuffer) noexcept;
 	void Init() noexcept; 													// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype) noexcept;							// Write some debug info
 	bool Put(char c) noexcept SPEED_CRITICAL;				// Add a character to the end

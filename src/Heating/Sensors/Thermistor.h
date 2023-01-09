@@ -30,10 +30,10 @@ public:
 #endif
 
 	void Poll() noexcept override;
-	const char *GetShortSensorType() const noexcept override { return (isPT1000) ? TypeNamePT1000 : TypeNameThermistor; }
+	const char *_ecv_array GetShortSensorType() const noexcept override { return (isPT1000) ? TypeNamePT1000 : TypeNameThermistor; }
 
-	static constexpr const char *TypeNameThermistor = "thermistor";
-	static constexpr const char *TypeNamePT1000 = "pt1000";
+	static constexpr const char *_ecv_array TypeNameThermistor = "thermistor";
+	static constexpr const char *_ecv_array TypeNamePT1000 = "pt1000";
 
 private:
 	void CalcDerivedParameters() noexcept;											// calculate shA and shB

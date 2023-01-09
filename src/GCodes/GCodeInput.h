@@ -39,7 +39,7 @@ protected:
 class StreamGCodeInput : public StandardGCodeInput
 {
 public:
-	StreamGCodeInput(Stream &dev) noexcept : device(dev) { }
+	explicit StreamGCodeInput(Stream &_ecv_from dev) noexcept : device(dev) { }
 
 	void Reset() noexcept override;
 	size_t BytesCached() const noexcept override;				// How many bytes have been cached?
@@ -48,7 +48,7 @@ protected:
 	char ReadByte() noexcept override;
 
 private:
-	Stream &device;
+	Stream &_ecv_from device;
 };
 
 // When characters from input sources are received, they should be checked consequently for M112 (Emergency Stop).
@@ -90,7 +90,7 @@ protected:
 class BufferedStreamGCodeInput : public RegularGCodeInput
 {
 public:
-	BufferedStreamGCodeInput(Stream &dev) noexcept : RegularGCodeInput(), device(dev) { }
+	explicit BufferedStreamGCodeInput(Stream &dev) noexcept : RegularGCodeInput(), device(dev) { }
 
 	void Reset() noexcept override;
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code

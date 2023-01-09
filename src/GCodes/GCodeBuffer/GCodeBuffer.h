@@ -42,10 +42,12 @@ enum class GCodeBufferState : uint8_t
 class GCodeBuffer INHERIT_OBJECT_MODEL
 {
 public:
+#ifndef __ECV__		//temporary!
 	friend class BinaryParser;
 	friend class StringParser;
+#endif
 
-	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
+	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
 	void Reset() noexcept;														// Reset it to its state after start-up
 	void Init() noexcept;														// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype) noexcept;								// Write some debug info
@@ -237,7 +239,7 @@ public:
 #endif
 				;
 	}
-	const char *GetIdentity() const noexcept { return codeChannel.ToString(); }
+	const char *_ecv_array GetIdentity() const noexcept { return codeChannel.ToString(); }
 	bool CanQueueCodes() const noexcept;
 	MessageType GetResponseMessageType() const noexcept;
 
