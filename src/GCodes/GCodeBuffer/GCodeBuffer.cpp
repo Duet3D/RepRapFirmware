@@ -50,6 +50,12 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. inputs[] root
+	{ "active",
+#if SUPPORT_ASYNC_MOVES
+							OBJECT_MODEL_FUNC(self->Executing()),												ObjectModelEntryFlags::live },
+#else
+							OBJECT_MODEL_FUNC(true),															ObjectModelEntryFlags::none },
+#endif
 	{ "axesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->axesRelative),							ObjectModelEntryFlags::none },
 	{ "compatibility",		OBJECT_MODEL_FUNC(self->machineState->compatibility.ToString()),					ObjectModelEntryFlags::none },
 	{ "distanceUnit",		OBJECT_MODEL_FUNC(self->GetDistanceUnits()),										ObjectModelEntryFlags::none },
@@ -59,8 +65,11 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "inverseTimeMode",	OBJECT_MODEL_FUNC((bool)self->machineState->inverseTimeMode),						ObjectModelEntryFlags::none },
 	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->GetLineNumber()),									ObjectModelEntryFlags::live },
 	{ "macroRestartable",	OBJECT_MODEL_FUNC((bool)self->machineState->macroRestartable),						ObjectModelEntryFlags::none },
+	{ "motionSystem",
 #if SUPPORT_ASYNC_MOVES
-	{ "motionSystem",		OBJECT_MODEL_FUNC((int32_t)self->GetActiveQueueNumber()),							ObjectModelEntryFlags::live },
+							OBJECT_MODEL_FUNC((int32_t)self->GetActiveQueueNumber()),							ObjectModelEntryFlags::live },
+#else
+							OBJECT_MODEL_FUNC((int32_t)0),														ObjectModelEntryFlags::none },
 #endif
 	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),									ObjectModelEntryFlags::none },
 	{ "selectedPlane",		OBJECT_MODEL_FUNC((int32_t)self->machineState->selectedPlane),						ObjectModelEntryFlags::none },
@@ -69,7 +78,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "volumetric",			OBJECT_MODEL_FUNC((bool)self->machineState->volumetricExtrusion),					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 14 + SUPPORT_ASYNC_MOVES };
+constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 16 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GCodeBuffer)
 

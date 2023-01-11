@@ -351,6 +351,12 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none },
 	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
+	{ "thisActive",
+#if SUPPORT_ASYNC_MOVES
+								OBJECT_MODEL_FUNC_IF_NOSELF(context.GetGCodeBuffer() != nullptr, context.GetGCodeBuffer()->Executing()), ObjectModelEntryFlags::none },
+#else
+								OBJECT_MODEL_FUNC_IF_NOSELF(context.GetGCodeBuffer() != nullptr, true),	ObjectModelEntryFlags::verbose },
+#endif
 	{ "thisInput",				OBJECT_MODEL_FUNC_IF_NOSELF(context.GetGCodeBuffer() != nullptr, (int32_t)context.GetGCodeBuffer()->GetChannel().ToBaseType()),	ObjectModelEntryFlags::verbose },
 	{ "time",					OBJECT_MODEL_FUNC(DateTime(self->platform->GetDateTime())),				ObjectModelEntryFlags::live },
 	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((context.GetStartMillis()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
@@ -404,7 +410,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	0,																						// directories
 #endif
 	25,																						// limits
-	20 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
+	21 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
 	2,																						// state.beep
 	12 + HAS_NETWORKING + SUPPORT_SCANNER +
 	2 * HAS_MASS_STORAGE + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE)		// seqs
