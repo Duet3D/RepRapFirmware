@@ -648,17 +648,22 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::stopping:			// here when a print has finished, need to execute stop.g
+	case GCodeState::stoppingFromCode:
 		if (LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 #if SUPPORT_ASYNC_MOVES
 			gb.ExecuteAll();			// only fileGCode gets here so it needs to execute moves for all commands
 #endif
-			gb.SetState(GCodeState::normal);
-			if (!DoFileMacro(*FileGCode(), STOP_G, false, AsyncSystemMacroCode))
+			gb.SetState(GCodeState::stopped);
+			if (!DoFileMacro(gb, STOP_G, false, (state == GCodeState::stoppingFromCode) ? SystemHelperMacroCode : AsyncSystemMacroCode))
 			{
 				reprap.GetHeat().SwitchOffAll(true);
 			}
 		}
+		break;
+
+	case GCodeState::stopped:
+		gb.SetState(GCodeState::normal);
 		break;
 
 	// States used for grid probing

@@ -646,7 +646,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					// Stopping a job because of a command in the file
 #if SUPPORT_ASYNC_MOVES
-					if (!DoSync(gb))
+					if (!DoSync(gb) || &gb == File2GCode())
 					{
 						return false;
 					}
@@ -656,11 +656,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						return false;
 					}
 #endif
-					if (&gb == FileGCode())
+					isWaiting = cancelWait = false;				// we may have been waiting for temperatures to be reached
+					StopPrint(StopPrintReason::normalCompletion);
+
+#if SUPPORT_ASYNC_MOVES && HAS_SBC_INTERFACE
+					if (reprap.UsingSbcInterface())
 					{
-						isWaiting = cancelWait = false;				// we may have been waiting for temperatures to be reached
-						StopPrint(StopPrintReason::normalCompletion);
+						// SBC requires a final response for M0/M1/M2 on File2
+						HandleReply(*File2GCode(), GCodeResult::ok, "");
 					}
+#endif
 				}
 				else if (pauseState == PauseState::paused)
 				{
