@@ -175,7 +175,7 @@ void DDARing::RecycleDDAs() noexcept
 		// Check for step errors and record/print them if we have any, before we lose the DMs
 		if (checkPointer->HasStepError())
 		{
-			if (reprap.Debug(moduleMove))
+			if (reprap.Debug(Module::Move))
 			{
 				checkPointer->DebugPrintAll("rd");
 			}
@@ -270,7 +270,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 	if (simulationMode != SimulationMode::off && cdda != nullptr)
 	{
 		simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
-		if (simulationMode == SimulationMode::debug && reprap.Debug(moduleDda))
+		if (simulationMode == SimulationMode::debug && reprap.Debug(Module::Dda))
 		{
 			do
 			{

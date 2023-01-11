@@ -57,7 +57,7 @@ bool HttpResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
 		numHeaderKeys = 0;
 		commandWords[0] = clientMessage;
 
-		if (reprap.Debug(moduleWebserver))
+		if (reprap.Debug(Module::Webserver))
 		{
 			debugPrintf("HTTP connection accepted\n");
 		}
@@ -942,7 +942,7 @@ void HttpResponder::SendGCodeReply() noexcept
 				clearReply = true;
 			}
 
-			if (reprap.Debug(moduleWebserver))
+			if (reprap.Debug(Module::Webserver))
 			{
 				GetPlatform().MessageF(UsbMessage, "Sending G-Code reply to HTTP client %d of %d (length %u)\n", clientsServed, numSessions, gcodeReply.DataLength());
 			}
@@ -1079,7 +1079,7 @@ void HttpResponder::SendJsonResponse(const char *_ecv_array command) noexcept
 
 	// Here if everything is OK
 	Commit(keepOpen ? ResponderState::reading : ResponderState::free, false);
-	if (reprap.Debug(moduleWebserver))
+	if (reprap.Debug(Module::Webserver))
 	{
 		debugPrintf("Sending JSON reply, length %u\n", replyLength);
 	}
@@ -1088,7 +1088,7 @@ void HttpResponder::SendJsonResponse(const char *_ecv_array command) noexcept
 // Process the message received. We have reached the end of the headers.
 void HttpResponder::ProcessMessage() noexcept
 {
-	if (reprap.Debug(moduleWebserver))
+	if (reprap.Debug(Module::Webserver))
 	{
 		Platform& p = GetPlatform();
 		p.Message(UsbMessage, "HTTP req, command words {");
@@ -1229,7 +1229,7 @@ void HttpResponder::ProcessRequest() noexcept
 						fileLastModified = 0;
 					}
 
-					if (reprap.Debug(moduleWebserver))
+					if (reprap.Debug(Module::Webserver))
 					{
 						GetPlatform().MessageF(UsbMessage, "Start uploading file %s length %lu\n", filename, postFileLength);
 					}
@@ -1270,7 +1270,7 @@ void HttpResponder::ProcessRequest() noexcept
 // Reject the current message
 void HttpResponder::RejectMessage(const char *_ecv_array response, unsigned int code) noexcept
 {
-	if (reprap.Debug(moduleWebserver))
+	if (reprap.Debug(Module::Webserver))
 	{
 		GetPlatform().MessageF(UsbMessage, "Webserver: rejecting message with: %u %s\n", code, response);
 	}
@@ -1507,7 +1507,7 @@ void HttpResponder::Diagnostics(MessageType mt) const noexcept
 			}
 			clientsServed = 0;
 		}
-		if (released && reprap.Debug(moduleWebserver))
+		if (released && reprap.Debug(Module::Webserver))
 		{
 			debugPrintf("Released gcodeReply, free buffers=%u\n", OutputBuffer::GetFreeBuffers());
 		}
@@ -1520,7 +1520,7 @@ void HttpResponder::Diagnostics(MessageType mt) const noexcept
 			MutexLocker lock(gcodeReplyMutex);
 			released = gcodeReply.ApplyTimeout(HttpSessionTimeout);
 		}
-		if (released && reprap.Debug(moduleWebserver))
+		if (released && reprap.Debug(Module::Webserver))
 		{
 			debugPrintf("Timed out gcodeReply, free buffers=%u\n", OutputBuffer::GetFreeBuffers());
 		}

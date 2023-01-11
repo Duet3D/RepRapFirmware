@@ -195,7 +195,7 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 									: HeaterMode::stable;
 	if (newMode != mode)
 	{
-		if (reprap.Debug(Module::moduleHeat) && mode == HeaterMode::off)
+		if (reprap.Debug(Module::Heat) && mode == HeaterMode::off)
 		{
 			reprap.GetPlatform().MessageF(GenericMessage, "Heater %u switched on\n", GetHeaterNumber());
 		}
@@ -223,7 +223,7 @@ void LocalHeater::SwitchOff() noexcept
 		if (mode > HeaterMode::off)
 		{
 			mode = HeaterMode::off;
-			if (reprap.Debug(Module::moduleHeat))
+			if (reprap.Debug(Module::Heat))
 			{
 				reprap.GetPlatform().MessageF(GenericMessage, "Heater %u switched off\n", GetHeaterNumber());
 			}
@@ -445,7 +445,7 @@ void LocalHeater::Spin() noexcept
 				HeaterMonitor& prot = monitors[i];
 				if (!prot.Check(GetMaxBadTemperatureCount()))
 				{
-					if (reprap.Debug(moduleHeat))
+					if (reprap.Debug(Module::Heat))
 					{
 						reprap.GetPlatform().MessageF(GenericMessage, "Heater %u protection kicked in\n", GetHeaterNumber());
 					}

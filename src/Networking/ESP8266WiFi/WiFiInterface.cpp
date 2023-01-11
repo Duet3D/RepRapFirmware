@@ -768,7 +768,7 @@ void WiFiInterface::Spin() noexcept
 	case NetworkState::active:
 		if (espStatusChanged && digitalRead(EspDataReadyPin))
 		{
-			if (reprap.Debug(moduleNetwork))
+			if (reprap.Debug(Module::WiFi))
 			{
 				debugPrintf("ESP reported status change\n");
 			}
@@ -921,7 +921,7 @@ void WiFiInterface::Spin() noexcept
 	// Check for debug info received from the WiFi module
 	if (debugPrintPending)
 	{
-		if (reprap.Debug(moduleWiFi))
+		if (reprap.Debug(Module::WiFi))
 		{
 			debugMessageBuffer[debugMessageChars] = 0;
 			debugPrintf("WiFi: %s\n", debugMessageBuffer);
@@ -1867,7 +1867,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 {
 	if (GetState() == NetworkState::disabled)
 	{
-		if (reprap.Debug(moduleNetwork))
+		if (reprap.Debug(Module::WiFi))
 		{
 			debugPrintf("ResponseNetworkDisabled\n");
 		}
@@ -1878,7 +1878,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 
 	if (transferPending)
 	{
-		if (reprap.Debug(moduleNetwork))
+		if (reprap.Debug(Module::WiFi))
 		{
 			debugPrintf("ResponseBusy\n");
 		}
@@ -1893,7 +1893,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		{
 			if (millis() - now > WiFiWaitReadyMillis)
 			{
-				if (reprap.Debug(moduleNetwork))
+				if (reprap.Debug(Module::WiFi))
 				{
 					debugPrintf("ResponseBusy\n");
 				}
@@ -1955,7 +1955,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	{
 		if (!TaskBase::Take(timeout))
 		{
-			if (reprap.Debug(moduleNetwork))
+			if (reprap.Debug(Module::WiFi))
 			{
 				debugPrintf("ResponseTimeout, pending=%d\n", (int)transferPending);
 			}
@@ -1985,7 +1985,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	Cache::InvalidateAfterDMAReceive(&bufferIn->hdr, sizeof(bufferIn->hdr));
 	if (bufferIn->hdr.formatVersion != MyFormatVersion)
 	{
-		if (reprap.Debug(moduleNetwork))
+		if (reprap.Debug(Module::WiFi))
 		{
 			debugPrintf("bad format version %02x\n", bufferIn->hdr.formatVersion);
 		}
@@ -2008,7 +2008,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		memcpy(dataIn, bufferIn->data, sizeToCopy);
 	}
 
-	if (response < 0 && reprap.Debug(moduleNetwork))
+	if (response < 0 && reprap.Debug(Module::WiFi))
 	{
 		debugPrintf("Network command %d socket %u returned error: %s\n", (int)cmd, socketNum, TranslateWiFiResponse(response));
 	}

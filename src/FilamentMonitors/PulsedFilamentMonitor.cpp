@@ -254,7 +254,7 @@ FilamentSensorStatus PulsedFilamentMonitor::Check(bool isPrinting, bool fromIsr,
 // Compare the amount commanded with the amount of extrusion measured, and set up for the next comparison
 FilamentSensorStatus PulsedFilamentMonitor::CheckFilament(float amountCommanded, float amountMeasured, bool overdue) noexcept
 {
-	if (reprap.Debug(moduleFilamentSensors))
+	if (reprap.Debug(Module::FilamentSensors))
 	{
 		debugPrintf("Extr req %.3f meas %.3f%s\n", (double)amountCommanded, (double)amountMeasured, (overdue) ? " overdue" : "");
 	}

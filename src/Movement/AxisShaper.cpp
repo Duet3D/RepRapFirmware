@@ -352,7 +352,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			{
 				reply.catf(" %.2f", (double)(durations[i] * StepClocksToMillis));
 			}
-			if (reprap.Debug(moduleMove))
+			if (reprap.Debug(Module::Move))
 			{
 				reply.catf(" odpa=%.4e odvpa=%.4e ovc=", (double)overlappedDistancePerA, (double)overlappedDeltaVPerA);
 				for (unsigned int i = 0; i < 2 * numExtraImpulses; ++i)
@@ -572,7 +572,7 @@ void AxisShaper::TryShapeAccelEnd(const DDA& dda, PrepParams& params) const noex
 	else
 	{
 		// Not enough constant speed time to the acceleration shaping
-		if (reprap.Debug(Module::moduleDda))
+		if (reprap.Debug(Module::Module::Dda))
 		{
 			debugPrintf("Can't shape accel end\n");
 		}
@@ -654,7 +654,7 @@ void AxisShaper::TryShapeDecelStart(const DDA& dda, PrepParams& params) const no
 	else
 	{
 		// Not enough constant speed time to do deceleration shaping
-		if (reprap.Debug(Module::moduleDda))
+		if (reprap.Debug(Module::Module::Dda))
 		{
 			debugPrintf("Can't shape decel start\n");
 		}
@@ -809,7 +809,7 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, PrepParams& par
 			const float c = 2.0/params.shaped.acceleration;
 			endAccelSegs->SetNonLinear(endDistance - startDistance, params.shaped.accelClocks - accumulatedSegTime, b, c);
 		}
-		else if (reprap.Debug(moduleMove))
+		else if (reprap.Debug(Module::Move))
 		{
 			debugPrintf("Missing steady accel segment\n");
 			params.shapingPlan.debugPrint = true;
@@ -914,7 +914,7 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, PrepParams& par
 			const float c = -2.0/params.shaped.deceleration;
 			endDecelSegs->SetNonLinear(endDistance - startDistance, params.shaped.decelClocks - accumulatedSegTime, b, c);
 		}
-		else if (reprap.Debug(moduleMove))
+		else if (reprap.Debug(Module::Move))
 		{
 			debugPrintf("Missing steady decel segment\n");
 			params.shapingPlan.debugPrint = true;

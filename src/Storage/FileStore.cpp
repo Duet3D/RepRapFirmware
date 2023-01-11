@@ -73,7 +73,7 @@ bool FileStore::Open(const char *_ecv_array filePath, OpenMode mode, uint32_t pr
 
 		// We no longer report an error if opening a file in read mode fails unless debugging is enabled, because sometimes that is quite normal.
 		// It is up to the caller to report an error if necessary.
-		if (reprap.Debug(moduleStorage))
+		if (reprap.Debug(Module::Storage))
 		{
 			reprap.GetPlatform().MessageF(WarningMessage, "Failed to open %s to %sn", filePath, (writing) ? "write" : "read");
 		}
@@ -138,7 +138,7 @@ bool FileStore::Open(const char *_ecv_array filePath, OpenMode mode, uint32_t pr
 		{
 			// We no longer report an error if opening a file in read mode fails unless debugging is enabled, because sometimes that is quite normal.
 			// It is up to the caller to report an error if necessary.
-			if (reprap.Debug(moduleStorage))
+			if (reprap.Debug(Module::Storage))
 			{
 				reprap.GetPlatform().MessageF(WarningMessage, "Failed to open %s to %s, error code %d\n", filePath, (writing) ? "write" : "read", (int)openReturn);
 			}
@@ -168,7 +168,7 @@ bool FileStore::Open(const char *_ecv_array filePath, OpenMode mode, uint32_t pr
 	if (preAllocSize != 0 && (mode == OpenMode::write || mode == OpenMode::writeWithCrc))
 	{
 		const FRESULT expandReturn = f_expand(&file, preAllocSize, 1);		// try to pre-allocate contiguous space - it doesn't matter if it fails
-		if (reprap.Debug(moduleStorage))
+		if (reprap.Debug(Module::Storage))
 		{
 			debugPrintf("Preallocating %" PRIu32 " bytes returned %d\n", preAllocSize, (int)expandReturn);
 		}

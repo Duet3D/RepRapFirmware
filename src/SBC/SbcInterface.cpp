@@ -200,7 +200,7 @@ void SbcInterface::ExchangeData() noexcept
 		const PacketHeader * const packet = transfer.ReadPacket();
 		if (packet == nullptr)
 		{
-			if (reprap.Debug(moduleSbcInterface))
+			if (reprap.Debug(Module::SbcInterface))
 			{
 				debugPrintf("Error trying to read next SPI packet\n");
 			}
@@ -416,7 +416,7 @@ void SbcInterface::ExchangeData() noexcept
 				if (gb->IsWaitingForMacro() && !gb->IsMacroRequestPending())
 				{
 					gb->ResolveMacroRequest(error, true);
-					if (reprap.Debug(moduleSbcInterface))
+					if (reprap.Debug(Module::SbcInterface))
 					{
 						debugPrintf("Waiting macro completed on channel %u\n", channel.ToBaseType());
 					}
@@ -443,7 +443,7 @@ void SbcInterface::ExchangeData() noexcept
 							gb->SetFileFinished();
 						}
 
-						if (reprap.Debug(moduleSbcInterface))
+						if (reprap.Debug(Module::SbcInterface))
 						{
 							debugPrintf("Macro completed on channel %u\n", channel.ToBaseType());
 						}
@@ -1012,7 +1012,7 @@ void SbcInterface::ExchangeData() noexcept
 			bool fromCode = gb->IsMacroStartedByCode();
 			if (transfer.WriteMacroRequest(channel, requestedMacroFile, fromCode))
 			{
-				if (reprap.Debug(moduleSbcInterface))
+				if (reprap.Debug(Module::SbcInterface))
 				{
 					debugPrintf("Requesting macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
 				}
@@ -1072,7 +1072,7 @@ void SbcInterface::ExchangeData() noexcept
 					bool fromCode = gb->IsMacroStartedByCode();
 					if (transfer.WriteMacroRequest(channel, requestedMacroFile, fromCode))
 					{
-						if (reprap.Debug(moduleSbcInterface))
+						if (reprap.Debug(Module::SbcInterface))
 						{
 							debugPrintf("Requesting non-blocking macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
 						}

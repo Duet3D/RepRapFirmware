@@ -2160,7 +2160,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				if (nval != sqrtf(val))
 				{
 					ok3 = false;
-					if (reprap.Debug(modulePlatform))
+					if (reprap.Debug(Module::Platform))
 					{
 						debugPrintf("val=%.7e sq=%.7e sqrtf=%.7e\n", (double)val, (double)nval, (double)sqrtf(val));
 					}

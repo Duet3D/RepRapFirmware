@@ -324,7 +324,7 @@ bool StringParser::LineFinished() noexcept
 			missingChecksum = ((checksumRequired || crcRequired) && gb.LatestMachineState().GetPrevious() == nullptr);
 		}
 
-		if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
+		if (reprap.GetDebugFlags(Module::Gcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
 		{
 			debugPrintf("%s%s: %s\n", gb.GetChannel().ToString(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
 		}

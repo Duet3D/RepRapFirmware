@@ -353,7 +353,7 @@ void Heater::ReportTuningUpdate() noexcept
 
 void Heater::CalculateModel(HeaterParameters& params) noexcept
 {
-	if (reprap.Debug(moduleHeat))
+	if (reprap.Debug(Module::Heat))
 	{
 #define PLUS_OR_MINUS "\xC2\xB1"
 		reprap.GetPlatform().MessageF(GenericMessage,
@@ -442,7 +442,7 @@ void Heater::SetAndReportModelAfterTuning(bool usingFans) noexcept
 		}
 		reprap.GetPlatform().Message(LoggedGenericMessage, str.c_str());
 
-		if (reprap.Debug(moduleHeat))
+		if (reprap.Debug(Module::Heat))
 		{
 			str.printf("Long term gain %.1f/%.1f", (double)fanOffParams.GetNormalGain(), (double)fanOffParams.gain);
 			if (usingFans)

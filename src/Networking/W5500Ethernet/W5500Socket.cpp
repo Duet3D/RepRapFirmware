@@ -222,7 +222,7 @@ void W5500Socket::Poll() noexcept
 				}
 				else if (millis() - whenConnected >= FindResponderTimeout)
 				{
-					if (reprap.Debug(moduleNetwork))
+					if (reprap.Debug(Module::Network))
 					{
 						debugPrintf("Timed out waiting for resonder for port %u\n", localPort);
 					}
@@ -270,7 +270,7 @@ void W5500Socket::ReceiveData() noexcept
 			wiz_recv_data(socketNum, lastBuffer->UnwrittenData(), len);
 			ExecCommand(socketNum, Sn_CR_RECV);
 			lastBuffer->dataLength += len;
-			if (reprap.Debug(moduleNetwork))
+			if (reprap.Debug(Module::Network))
 			{
 				debugPrintf("Appended %u bytes\n", (unsigned int)len);
 			}
@@ -284,7 +284,7 @@ void W5500Socket::ReceiveData() noexcept
 				ExecCommand(socketNum, Sn_CR_RECV);
 				buf->dataLength = (size_t)len;
 				NetworkBuffer::AppendToList(&receivedData, buf);
-				if (reprap.Debug(moduleNetwork))
+				if (reprap.Debug(Module::Network))
 				{
 					debugPrintf("Received %u bytes\n", (unsigned int)len);
 				}

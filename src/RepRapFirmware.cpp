@@ -181,36 +181,6 @@ const char *_ecv_array GetFloatFormatString(float val, unsigned int numDigitsAft
 	return FormatStrings[min<unsigned int>(numDigitsAfterPoint, maxDigitsAfterPoint)];
 }
 
-static const char *_ecv_array const moduleName[] =
-{
-	"Platform",
-	"Network",
-	"Webserver",
-	"GCodes",
-	"Move",
-	"Heat",
-	"DDA",
-	"",				// was "Roland"
-	"Scanner",
-	"PrintMonitor",
-	"Storage",
-	"PortControl",
-	"DuetExpansion",
-	"FilamentSensors",
-	"WiFi",
-	"Display",
-	"SbcInterface",
-	"CAN",
-	"none"
-};
-
-static_assert(ARRAY_SIZE(moduleName) == Module::numModules + 1);
-
-const char *_ecv_array GetModuleName(uint8_t module) noexcept
-{
-	return (module < ARRAY_SIZE(moduleName)) ? moduleName[module] : "unknown";
-}
-
 // class MillisTimer members
 
 // Start or restart the timer

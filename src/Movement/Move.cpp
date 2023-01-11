@@ -579,7 +579,7 @@ int32_t Move::MotorMovementToSteps(size_t drive, float coord) noexcept
 void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
 	kinematics->MotorStepsToCartesian(motorPos, reprap.GetPlatform().GetDriveStepsPerUnit(), numVisibleAxes, numTotalAxes, machinePos);
-	if (reprap.Debug(moduleMove) && !inInterrupt())
+	if (reprap.Debug(Module::Move) && !inInterrupt())
 	{
 		debugPrintf("Forward transformed %" PRIi32 " %" PRIi32 " %" PRIi32 " to %.2f %.2f %.2f\n",
 			motorPos[0], motorPos[1], motorPos[2], (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
@@ -593,7 +593,7 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 {
 	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(),
 														reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), motorPos, isCoordinated);
-	if (reprap.Debug(moduleMove) && !inInterrupt())
+	if (reprap.Debug(Module::Move) && !inInterrupt())
 	{
 		if (!b)
 		{
@@ -604,7 +604,7 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 			}
 			debugPrintf("\n");
 		}
-		else if (reprap.Debug(moduleDda))
+		else if (reprap.Debug(Module::Dda))
 		{
 			debugPrintf("Transformed");
 			for (size_t i = 0; i < reprap.GetGCodes().GetVisibleAxes(); ++i)
@@ -894,7 +894,7 @@ bool Move::FinishedBedProbing(MovementSystemNumber msNumber, int sParam, const S
 	}
 	else
 	{
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			probePoints.DebugPrint(numPoints);
 		}

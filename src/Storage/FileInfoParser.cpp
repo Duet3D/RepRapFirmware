@@ -74,7 +74,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 		parsedFileInfo.isValid = true;
 
 		// Record some debug values here
-		if (reprap.Debug(modulePrintMonitor))
+		if (reprap.Debug(Module::PrintMonitor))
 		{
 			accumulatedReadTime = accumulatedParseTime = 0;
 			reprap.GetPlatform().MessageF(UsbMessage, "-- Parsing file %s --\n", filePath);
@@ -179,7 +179,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 				if (headerInfoComplete || pos >= GCODE_HEADER_SIZE || pos == fileBeingParsed->Length())
 				{
 					// Yes - see if we need to output some debug info
-					if (reprap.Debug(modulePrintMonitor))
+					if (reprap.Debug(Module::PrintMonitor))
 					{
 						reprap.GetPlatform().MessageF(UsbMessage, "Header complete, processed %lu bytes, read time %.3fs, parse time %.3fs\n",
 											fileBeingParsed->Position(), (double)((float)accumulatedReadTime/1000.0), (double)((float)accumulatedParseTime/1000.0));
@@ -330,7 +330,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 				// If we've collected all details, scanned the last 192K of the file or if we cannot go any further, stop here.
 				if (footerInfoComplete || nextSeekPos == 0 || fileBeingParsed->Length() - nextSeekPos >= GCODE_FOOTER_SIZE)
 				{
-					if (reprap.Debug(modulePrintMonitor))
+					if (reprap.Debug(Module::PrintMonitor))
 					{
 						reprap.GetPlatform().MessageF(UsbMessage, "Footer complete, processed %lu bytes, read time %.3fs, parse time %.3fs, seek time %.3fs\n",
 											fileBeingParsed->Length() - fileBeingParsed->Position() + GCODE_READ_SIZE,

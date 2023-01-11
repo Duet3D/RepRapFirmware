@@ -29,7 +29,7 @@ bool FtpResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
 		{
 			clientPointer = 0;
 			skt = s;
-			if (reprap.Debug(moduleWebserver))
+			if (reprap.Debug(Module::Webserver))
 			{
 				debugPrintf("FTP connection accepted\n");
 			}
@@ -45,7 +45,7 @@ bool FtpResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
 		dataSocket = s;
 		responderState = ResponderState::pasvPortOpened;
 
-		if (reprap.Debug(moduleWebserver))
+		if (reprap.Debug(Module::Webserver))
 		{
 			debugPrintf("FTP data connection accepted\n");
 		}
@@ -189,7 +189,7 @@ void FtpResponder::SendData() noexcept
 				if (!skt->CanSend())
 				{
 					// The connection has been lost or the other end has closed it
-					if (reprap.Debug(moduleWebserver))
+					if (reprap.Debug(Module::Webserver))
 					{
 						debugPrintf("Can't send anymore\n");
 					}
@@ -239,7 +239,7 @@ void FtpResponder::SendPassiveData() noexcept
 				// Check whether the connection has been closed
 				if (!dataSocket->CanSend())
 				{
-					if (reprap.Debug(moduleWebserver))
+					if (reprap.Debug(Module::Webserver))
 					{
 						debugPrintf("Can't send anymore over the data port\n");
 					}
@@ -307,7 +307,7 @@ void FtpResponder::SendPassiveData() noexcept
 				// Check whether the connection has been closed
 				if (!dataSocket->CanSend())
 				{
-					if (reprap.Debug(moduleWebserver))
+					if (reprap.Debug(Module::Webserver))
 					{
 						debugPrintf("Can't send anymore\n");
 					}
@@ -351,7 +351,7 @@ void FtpResponder::DoUpload() noexcept
 	size_t len;
 	if (dataSocket->ReadBuffer(buffer, len))
 	{
-		if (reprap.Debug(moduleWebserver))
+		if (reprap.Debug(Module::Webserver))
 		{
 			GetPlatform().MessageF(UsbMessage, "Writing %u bytes of upload data\n", len);
 		}
@@ -438,7 +438,7 @@ void FtpResponder::CharFromClient(char c) noexcept
 // Process the next FTP command
 void FtpResponder::ProcessLine() noexcept
 {
-	if (reprap.Debug(moduleWebserver))
+	if (reprap.Debug(Module::Webserver))
 	{
 		debugPrintf("FTP request '%s' (state %d)\n", clientMessage, (int)responderState);
 	}
@@ -551,7 +551,7 @@ void FtpResponder::ProcessLine() noexcept
 			passivePortOpenTime = millis();
 
 			skt->GetInterface()->OpenDataPort(passivePort);
-			if (reprap.Debug(moduleWebserver))
+			if (reprap.Debug(Module::Webserver))
 			{
 				debugPrintf("FTP data port open at port %u\n", passivePort);
 			}
@@ -884,7 +884,7 @@ void FtpResponder::ChangeDirectory(const char *newDirectory) noexcept
 
 void FtpResponder::CloseDataPort() noexcept
 {
-	if (reprap.Debug(moduleWebserver))
+	if (reprap.Debug(Module::Webserver))
 	{
 		debugPrintf("FTP data port is being closed\n");
 	}

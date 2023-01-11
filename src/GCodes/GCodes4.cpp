@@ -1447,7 +1447,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (ms.currentTool != nullptr)
 		{
 			ms.currentTool->GetFilament()->Load(filamentToLoad);
-			if (reprap.Debug(moduleGcodes))
+			if (reprap.Debug(Module::Gcodes))
 			{
 				platform.MessageF(LoggedGenericMessage, "Filament %s loaded", filamentToLoad);
 			}
@@ -1459,7 +1459,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just returned from the filament unload macro
 		if (ms.currentTool != nullptr)
 		{
-			if (reprap.Debug(moduleGcodes))
+			if (reprap.Debug(Module::Gcodes))
 			{
 				platform.MessageF(LoggedGenericMessage, "Filament %s unloaded", ms.currentTool->GetFilament()->GetName());
 			}

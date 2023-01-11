@@ -152,7 +152,7 @@ void SoftwareResetData::Printit(MessageType mtype, unsigned int slot) const noex
 #endif
 	reprap.GetPlatform().MessageF(mtype, "%s, %s spinning, available RAM %" PRIi32 ", slot %u\n",
 						scratchString.c_str(),
-						GetModuleName(resetReason & 0x1F),
+						Module(resetReason & 0x1F).ToString(),
 						neverUsedRam,
 						slot);
 

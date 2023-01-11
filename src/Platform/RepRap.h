@@ -55,8 +55,8 @@ public:
 	void DeferredDiagnostics(MessageType mtype) noexcept { diagnosticsDestination = mtype; }
 	void Timing(MessageType mtype) noexcept;
 
-	bool Debug(Module module) const noexcept { return debugMaps[module].IsNonEmpty(); }
-	DebugFlags GetDebugFlags(Module m) const noexcept { return debugMaps[m]; }
+	bool Debug(Module module) const noexcept { return debugMaps[module.ToBaseType()].IsNonEmpty(); }
+	DebugFlags GetDebugFlags(Module m) const noexcept { return debugMaps[m.ToBaseType()]; }
 	void SetDebug(Module m, uint32_t flags) noexcept;
 	void ClearDebug() noexcept;
 	void PrintDebug(MessageType mt) noexcept;
@@ -221,7 +221,7 @@ private:
 	volatile DeferredCommand deferredCommand;
 #endif
 
-	DebugFlags debugMaps[Module::numModules];
+	DebugFlags debugMaps[NumRealModules];
 
 	String<RepRapPasswordLength> password;
 	String<MachineNameLength> myName;

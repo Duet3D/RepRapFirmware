@@ -1777,7 +1777,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					bool seen = false;
 					uint32_t flags = 0;
-					Module module = Module::noModule;
+					Module module = Module::none;
 					if (gb.Seen('S'))
 					{
 						flags = gb.GetUIValue();
@@ -1794,12 +1794,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					if (gb.Seen('P'))
 					{
-						module = static_cast<Module>(gb.GetLimitedUIValue('P', Module::numModules));
+						module = static_cast<Module>(gb.GetLimitedUIValue('P', NumRealModules));
 						seen = true;
 					}
 					if (seen)
 					{
-						if (module != Module::noModule)
+						if (module != Module::none)
 						{
 							reprap.SetDebug(module, flags);
 							reprap.PrintDebug(gb.GetResponseMessageType());

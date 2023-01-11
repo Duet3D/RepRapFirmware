@@ -777,7 +777,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 				if (&gb == FileGCode())
 				{
-					if (reprap.Debug(moduleGcodes))
+					if (reprap.Debug(Module::Gcodes))
 					{
 						debugPrintf("File stopping print\n");
 					}
@@ -785,7 +785,7 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 				else
 				{
-					if (reprap.Debug(moduleGcodes))
+					if (reprap.Debug(Module::Gcodes))
 					{
 						debugPrintf("Other stopping print\n");
 					}
@@ -1039,7 +1039,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 
 		ms.codeQueue->PurgeEntries();
 
-		if (reprap.Debug(moduleGcodes))
+		if (reprap.Debug(Module::Gcodes))
 		{
 			platform.MessageF(GenericMessage, "Paused print, file offset=%" PRIu32 "\n", ms.pauseRestorePoint.filePos);
 		}
@@ -4689,7 +4689,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 			if (statusBuf != nullptr)
 			{
 				platform.AppendAuxReply(0, statusBuf, true);
-				if (reprap.Debug(moduleGcodes))
+				if (reprap.Debug(Module::Gcodes))
 				{
 					debugPrintf("%s: Sent unsolicited status report\n", gb.GetChannel().ToString());
 				}
@@ -4985,7 +4985,7 @@ void GCodes::AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap a
 	//debugPrintf("alloc done\n");
 	if (!badAxes.IsEmpty())
 	{
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			debugPrintf("Failed to allocate axes %07" PRIx32 " to MS %u letters %08" PRIx32 "\n", badAxes.GetRaw(), ms.GetMsNumber(), axLetters.GetRaw());
 		}

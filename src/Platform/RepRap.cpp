@@ -424,7 +424,7 @@ RepRap::RepRap() noexcept
 	  ticksInSpinState(0), heatTaskIdleTicks(0),
 	  beepFrequency(0), beepDuration(0), beepTimer(0),
 	  diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
-	  spinningModule(noModule), stopped(false), active(false), processingConfig(true)
+	  spinningModule(Module::none), stopped(false), active(false), processingConfig(true)
 #if HAS_SBC_INTERFACE
 	  , usingSbcInterface(false)						// default to not using the SBC interface until we have checked for config.g on an SD card,
 														// because a disconnected SBC interface can generate noise which may trigger interrupts and DMA
@@ -716,24 +716,24 @@ void RepRap::Spin() noexcept
 	const uint32_t lastTime = StepTimer::GetTimerTicks();
 
 	ticksInSpinState = 0;
-	spinningModule = modulePlatform;
+	spinningModule = Module::Platform;
 	platform->Spin();
 
 	ticksInSpinState = 0;
-	spinningModule = moduleGcodes;
+	spinningModule = Module::Gcodes;
 	gCodes->Spin();
 
 	ticksInSpinState = 0;
-	spinningModule = modulePrintMonitor;
+	spinningModule = Module::PrintMonitor;
 	printMonitor->Spin();
 
 	ticksInSpinState = 0;
-	spinningModule = moduleFilamentSensors;
+	spinningModule = Module::FilamentSensors;
 	FilamentMonitor::Spin();
 
 #if SUPPORT_DIRECT_LCD
 	ticksInSpinState = 0;
-	spinningModule = moduleDisplay;
+	spinningModule = Module::Display;
 	display->Spin();
 #endif
 
@@ -742,13 +742,13 @@ void RepRap::Spin() noexcept
 	if (!UsingSbcInterface())
 	{
 		ticksInSpinState = 0;
-		spinningModule = moduleSbcInterface;
+		spinningModule = Module::SbcInterface;
 		sbcInterface->Spin();
 	}
 #endif
 
 	ticksInSpinState = 0;
-	spinningModule = noModule;
+	spinningModule = Module::none;
 
 	// Check if we need to send diagnostics
 	if (diagnosticsDestination != MessageType::NoDestinationMessage)
@@ -999,9 +999,9 @@ void RepRap::EmergencyStop() noexcept
 
 void RepRap::SetDebug(Module m, uint32_t flags) noexcept
 {
-	if (m < numModules)
+	if (m.ToBaseType() < NumRealModules)
 	{
-		debugMaps[m].SetFromRaw(flags);
+		debugMaps[m.ToBaseType()].SetFromRaw(flags);
 	}
 }
 
@@ -1016,20 +1016,20 @@ void RepRap::ClearDebug() noexcept
 void RepRap::PrintDebug(MessageType mt) noexcept
 {
 	platform->Message((MessageType)(mt | PushFlag), "Debugging enabled for modules:");
-	for (size_t i = 0; i < numModules; i++)
+	for (size_t i = 0; i < NumRealModules; i++)
 	{
 		if (debugMaps[i].IsNonEmpty())
 		{
-			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u - %#" PRIx32 ")", GetModuleName(i), i, debugMaps[i].GetRaw());
+			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u - %#" PRIx32 ")", Module(i).ToString(), i, debugMaps[i].GetRaw());
 		}
 	}
 
 	platform->Message((MessageType)(mt | PushFlag), "\nDebugging disabled for modules:");
-	for (size_t i = 0; i < numModules; i++)
+	for (size_t i = 0; i < NumRealModules; i++)
 	{
 		if (debugMaps[i].IsEmpty())
 		{
-			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", GetModuleName(i), i);
+			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", Module(i).ToString(), i);
 		}
 	}
 	platform->Message(mt, "\n");

@@ -176,7 +176,7 @@ DSTATUS disk_status(BYTE drv) noexcept
  */
 DRESULT disk_read(BYTE drv, BYTE *buff, LBA_t sector, UINT count) noexcept
 {
-	if (reprap.Debug(moduleStorage))
+	if (reprap.Debug(Module::Storage))
 	{
 		debugPrintf("Read %u %u %lu\n", drv, count, sector);
 	}
@@ -213,7 +213,7 @@ DRESULT disk_read(BYTE drv, BYTE *buff, LBA_t sector, UINT count) noexcept
 			break;
 		}
 
-		if (reprap.Debug(moduleStorage))
+		if (reprap.Debug(Module::Storage))
 		{
 			debugPrintf("SD read error %d\n", (int)ret);
 		}
@@ -253,7 +253,7 @@ DRESULT disk_read(BYTE drv, BYTE *buff, LBA_t sector, UINT count) noexcept
 #if _READONLY == 0
 DRESULT disk_write(BYTE drv, BYTE const *buff, LBA_t sector, UINT count) noexcept
 {
-	if (reprap.Debug(moduleStorage))
+	if (reprap.Debug(Module::Storage))
 	{
 		debugPrintf("Write %u %u %lu\n", drv, count, sector);
 	}
@@ -292,7 +292,7 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, LBA_t sector, UINT count) noexcep
 			break;
 		}
 
-		if (reprap.Debug(moduleStorage))
+		if (reprap.Debug(Module::Storage))
 		{
 			debugPrintf("SD write error %d\n", (int)ret);
 		}

@@ -392,7 +392,7 @@ FilamentSensorStatus LaserFilamentMonitor::CheckFilament(float amountCommanded, 
 		return FilamentSensorStatus::noDataReceived;
 	}
 
-	if (reprap.Debug(moduleFilamentSensors))
+	if (reprap.Debug(Module::FilamentSensors))
 	{
 		debugPrintf("Extr req %.3f meas %.3f%s\n", (double)amountCommanded, (double)amountMeasured, (overdue) ? " overdue" : "");
 	}
