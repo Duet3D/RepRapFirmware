@@ -54,7 +54,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 #if SUPPORT_ASYNC_MOVES
 							OBJECT_MODEL_FUNC(self->Executing()),												ObjectModelEntryFlags::live },
 #else
-							OBJECT_MODEL_FUNC(true),															ObjectModelEntryFlags::none },
+							OBJECT_MODEL_FUNC_NOSELF(true),														ObjectModelEntryFlags::none },
 #endif
 	{ "axesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->axesRelative),							ObjectModelEntryFlags::none },
 	{ "compatibility",		OBJECT_MODEL_FUNC(self->machineState->compatibility.ToString()),					ObjectModelEntryFlags::none },
@@ -69,7 +69,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 #if SUPPORT_ASYNC_MOVES
 							OBJECT_MODEL_FUNC((int32_t)self->GetActiveQueueNumber()),							ObjectModelEntryFlags::live },
 #else
-							OBJECT_MODEL_FUNC((int32_t)0),														ObjectModelEntryFlags::none },
+							OBJECT_MODEL_FUNC_NOSELF((int32_t)0),												ObjectModelEntryFlags::none },
 #endif
 	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),									ObjectModelEntryFlags::none },
 	{ "selectedPlane",		OBJECT_MODEL_FUNC((int32_t)self->machineState->selectedPlane),						ObjectModelEntryFlags::none },

@@ -34,7 +34,7 @@ public:
 	static bool HaveCurrent() noexcept { return mboxList != nullptr; }
 	static MessageBox *GetCurrent() noexcept { return mboxList; }
 	static ReadLockedPointer<const MessageBox> GetLockedCurrent() noexcept;
-	static bool Acknowledge(uint32_t seq, bool& wasBlocking) noexcept;
+	static bool Acknowledge(uint32_t ackSeq, bool& wasBlocking) noexcept;
 	static bool CheckTimeout() noexcept;
 
 	// Return true if the mode of this message box is one that the legacy status calls can handle

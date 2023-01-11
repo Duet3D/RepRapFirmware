@@ -796,9 +796,9 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	FileData outputFile;
+	bool appendNewline = true;
 #endif
 
-	bool appendNewline = true;
 	if (gb.buffer[readPointer] == '>')
 	{
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE

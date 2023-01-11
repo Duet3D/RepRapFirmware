@@ -115,7 +115,7 @@ float MessageBox::GetTimeLeft() const noexcept
 }
 
 // If we have an active message box with the specified sequence number, close it and tell the caller whether it was blocking or not, and return true
-/*static*/ bool MessageBox::Acknowledge(uint32_t seq, bool& wasBlocking) noexcept
+/*static*/ bool MessageBox::Acknowledge(uint32_t ackSeq, bool& wasBlocking) noexcept
 {
 	if (mboxList != nullptr)
 	{
@@ -125,7 +125,7 @@ float MessageBox::GetTimeLeft() const noexcept
 		while (*mbp != nullptr)
 		{
 			MessageBox *mb = *mbp;
-			if (seq == 0 || mb->GetSeq() == seq)
+			if (ackSeq == 0 || mb->GetSeq() == ackSeq)
 			{
 				wasBlocking = mb->IsBlocking();
 				if (mbp == &mboxList)
