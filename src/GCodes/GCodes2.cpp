@@ -2353,13 +2353,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						reply.copy((frac == 1) ? "Reduced accelerations (mm/sec^2): " : "Accelerations (mm/sec^2): ");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertAcceleration(platform.Accelerations(frac == 1)[axis]));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertAcceleration(platform.Acceleration(axis, frac == 1)));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(platform.Accelerations(frac == 1)[ExtruderToLogicalDrive(extruder)]));
+							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(platform.Acceleration(ExtruderToLogicalDrive(extruder), frac == 1)));
 							sep = ':';
 						}
 					}

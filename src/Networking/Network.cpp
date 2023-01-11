@@ -326,15 +326,13 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 			}
 
 #if SUPPORT_HTTP
-			// The following isn't quite right, because we shouldn't free up output buffers if another network interface is still enabled and serving this protocol.
-			// However, the only supported hardware with more than one network interface is the early Duet 3 prototype, so we'll leave this be.
-			HttpResponder::Disable();
+			HttpResponder::DisableInterface(iface);		// remove sessions that use this interface
 #endif
 #if SUPPORT_FTP
 			FtpResponder::Disable();
 #endif
 #if SUPPORT_TELNET
-			TelnetResponder::Disable();
+			TelnetResponder::Disable();					// ideally here we would leave any Telnet session using a different interface alone
 #endif
 #endif // HAS_RESPONDERS
 		}

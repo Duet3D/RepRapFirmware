@@ -11,7 +11,7 @@
 
  18 November 2012
 
- Adrian Bowyerinfo[1]
+ Adrian Bowyer
  RepRap Professional Ltd
  http://reprappro.com
 
@@ -292,7 +292,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #endif
 
 	// 3. move.axes[] members
-	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
+	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
 	{ "babystep",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetTotalBabyStepOffset(context.GetLastIndex()), 3),					ObjectModelEntryFlags::none },
 	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 906))),								ObjectModelEntryFlags::none },
 	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(0),																						ObjectModelEntryFlags::none },
@@ -316,7 +316,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "workplaceOffsets",	OBJECT_MODEL_FUNC_ARRAY(1),																						ObjectModelEntryFlags::none },
 
 	// 4. move.extruders[] members
-	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
+	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
 	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906))),								ObjectModelEntryFlags::none },
 	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),																		ObjectModelEntryFlags::none },
 	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 3),												ObjectModelEntryFlags::none },
@@ -594,16 +594,14 @@ void Platform::Init() noexcept
 		axisMaxima[axis] = DefaultAxisMaximum;
 
 		maxFeedrates[axis] = ConvertSpeedFromMmPerSec(DefaultAxisMaxFeedrate);
-		normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
-		reducedAccelerations[axis] = ConvertAcceleration(DefaultReducedAxisAcceleration);
+		reducedAccelerations[axis] = normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
 		driveStepsPerUnit[axis] = DefaultAxisDriveStepsPerUnit;
 		instantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
 	}
 
 	// We use different defaults for the Z axis
 	maxFeedrates[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZMaxFeedrate);
-	normalAccelerations[Z_AXIS] = ConvertAcceleration(DefaultZAcceleration);
-	reducedAccelerations[Z_AXIS] = ConvertAcceleration(DefaultReducedZAcceleration);
+	reducedAccelerations[Z_AXIS] = normalAccelerations[Z_AXIS] = ConvertAcceleration(DefaultZAcceleration);
 	driveStepsPerUnit[Z_AXIS] = DefaultZDriveStepsPerUnit;
 	instantDvs[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZInstantDv);
 
@@ -2212,11 +2210,11 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 	case (unsigned int)DiagnosticTestType::PrintObjectSizes:
 		reply.printf(
-				"Task %u, DDA %u, DM %u, MS %u, Tool %u, GCodeBuffer %u, heater %u"
+				"Task %u, DDA %u, DM %u, MS %u, Tool %u, GCodeBuffer %u, heater %u, mbox %u"
 #if HAS_NETWORKING
 				", HTTP resp %u, FTP resp %u, Telnet resp %u"
 #endif
-				, sizeof(TaskBase), sizeof(DDA), sizeof(DriveMovement), sizeof(MoveSegment), sizeof(Tool), sizeof(GCodeBuffer), sizeof(Heater)
+				, sizeof(TaskBase), sizeof(DDA), sizeof(DriveMovement), sizeof(MoveSegment), sizeof(Tool), sizeof(GCodeBuffer), sizeof(Heater), sizeof(MessageBox)
 #if HAS_NETWORKING
 				, sizeof(HttpResponder), sizeof(FtpResponder), sizeof(TelnetResponder)
 #endif

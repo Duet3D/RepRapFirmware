@@ -583,6 +583,12 @@ void DDARing::CurrentMoveCompleted() noexcept
 	}
 #endif
 
+	// Accumulate the extrusion from this move
+	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
+	{
+		liveCoordinates[drive] += currentDda->GetRawEndCoordinate(drive);
+	}
+
 	// Disable interrupts before we touch any extrusion accumulators until after we set currentDda to null, in case the filament monitor interrupt has higher priority than ours
 	{
 		AtomicCriticalSectionLocker lock;
@@ -726,18 +732,28 @@ void DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 		IrqEnable();
 
 		reprap.GetMove().MotorStepsToCartesian(currentMotorPositions, numVisibleAxes, numTotalAxes, m);		// this is slow, so do it with interrupts enabled
-		for (size_t i = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); i < MaxAxesPlusExtruders; ++i)
-		{
-			m[i] = currentMotorPositions[i] / reprap.GetPlatform().DriveStepsPerUnit(i);
-		}
 
-		// Optimisation: if no movement, save the positions for next time
-		if (cdda == nullptr)
+		const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
+		if (cdda != nullptr)
 		{
+			// Add extrusion so far in the current move to the accumulated extrusion
+			for (size_t i = MaxAxesPlusExtruders - numExtruders; i < MaxAxesPlusExtruders; ++i)
+			{
+				m[i] = liveCoordinates[i] + currentMotorPositions[i] / reprap.GetPlatform().DriveStepsPerUnit(i);
+			}
+		}
+		else
+		{
+			for (size_t i = MaxAxesPlusExtruders - numExtruders; i < MaxAxesPlusExtruders; ++i)
+			{
+				m[i] = liveCoordinates[i];
+			}
+
+			// Optimisation: if no movement, save the positions for next time
 			IrqDisable();
 			if (currentDda == nullptr)
 			{
-				memcpyf(const_cast<float *>(liveCoordinates), m, MaxAxesPlusExtruders);
+				memcpyf(const_cast<float *>(liveCoordinates), m, numVisibleAxes);
 				liveCoordinatesValid = true;
 			}
 			IrqEnable();

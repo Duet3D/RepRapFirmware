@@ -42,10 +42,12 @@ enum class GCodeBufferState : uint8_t
 class GCodeBuffer INHERIT_OBJECT_MODEL
 {
 public:
+#ifndef __ECV__		//temporary!
 	friend class BinaryParser;
 	friend class StringParser;
+#endif
 
-	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
+	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
 	void Reset() noexcept;														// Reset it to its state after start-up
 	void Init() noexcept;														// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype) noexcept;								// Write some debug info
@@ -182,7 +184,7 @@ public:
 	FilePosition GetPrintingFilePosition(bool allowNoFilePos) const noexcept;	// Get the file position in the printing file
 	void SavePrintingFilePosition() noexcept;
 
-	void WaitForAcknowledgement() noexcept;						// Flag that we are waiting for acknowledgement
+	void WaitForAcknowledgement(uint32_t seq) noexcept;			// Flag that we are waiting for acknowledgement
 	void ClosePrintFile() noexcept;								// Close the print file
 
 #if HAS_SBC_INTERFACE
@@ -226,7 +228,7 @@ public:
 	void SetState(GCodeState newState) noexcept;
 	void SetState(GCodeState newState, uint16_t param) noexcept;
 	void AdvanceState() noexcept;
-	void MessageAcknowledged(bool cancelled, ExpressionValue rslt) noexcept;
+	void MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionValue rslt) noexcept;
 
 	GCodeChannel GetChannel() const noexcept { return codeChannel; }
 	bool IsFileChannel() const noexcept
@@ -237,7 +239,7 @@ public:
 #endif
 				;
 	}
-	const char *GetIdentity() const noexcept { return codeChannel.ToString(); }
+	const char *_ecv_array GetIdentity() const noexcept { return codeChannel.ToString(); }
 	bool CanQueueCodes() const noexcept;
 	MessageType GetResponseMessageType() const noexcept;
 

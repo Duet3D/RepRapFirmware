@@ -38,23 +38,20 @@ constexpr float DefaultAxisAcceleration = 500.0;		// mm/sec^2
 constexpr float DefaultZAcceleration = 20.0;
 constexpr float DefaultEAcceleration = 250.0;
 
-constexpr float DefaultReducedAxisAcceleration = 1000.0;	// Maximum XY acceleration to use at the start of a homing move if stall endstops are being used
-constexpr float DefaultReducedZAcceleration = 250.0;		// Maximum Z acceleration to use at the start of a probing or stall endstop move
-
 constexpr float DefaultAxisDriveStepsPerUnit = 80.0;	// steps/mm
 constexpr float DefaultZDriveStepsPerUnit = 4000.0;
 constexpr float DefaultEDriveStepsPerUnit = 420.0;
 
 constexpr float DefaultAxisInstantDv = 15.0;			// mm/sec
-constexpr float DefaultZInstantDv = 0.2;
-constexpr float DefaultEInstantDv = 2.0;
+constexpr float DefaultZInstantDv = 10.0;
+constexpr float DefaultEInstantDv = 5.0;
 
 constexpr float DefaultMinFeedrate = 0.5;				// the default minimum movement speed in mm/sec (extruding moves will go slower than this if the extrusion rate demands it)
 constexpr float AbsoluteMinFeedrate = 0.01;				// the absolute minimum movement speed in mm/sec
 constexpr float MinimumJerk = 0.1;						// the minimum jerk in mm/sec
 constexpr float MinimumAcceleration = 0.1;				// the minimum acceleration in mm/sec^2
-constexpr float DefaultPrintingAcceleration = 20000.0;	// higher than the likely max acceleration defined by M201
-constexpr float DefaultTravelAcceleration = 20000.0;	// higher than the likely max acceleration defined by M201
+constexpr float DefaultPrintingAcceleration = 50000.0;	// higher than any likely max acceleration defined by M201
+constexpr float DefaultTravelAcceleration = 50000.0;	// higher than any likely max acceleration defined by M201
 
 constexpr float DefaultAxisMinimum = 0.0;
 constexpr float DefaultAxisMaximum = 200.0;
@@ -76,10 +73,13 @@ constexpr unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliar
 constexpr uint32_t SERIAL_MAIN_TIMEOUT = 2000;			// timeout in ms for sending data to the main serial/USB port
 constexpr uint32_t AuxTimeout = 2000;					// timeout in ms for PanelDue replies
 
+// Message boxes
+constexpr unsigned int MaxMessageBoxes = 8;				// the maximum number of message boxes that can be queued
+
 #define PANEL_DUE_FIRMWARE_FILE "PanelDueFirmware.bin"
 
 // Conditional GCode support
-constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. Each level of indentation introduced a new block.
+constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. Each level of indentation introduces a new block.
 
 // Default Z probe values
 

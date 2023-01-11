@@ -15,7 +15,7 @@
 class CurrentLoopTemperatureSensor : public SpiTemperatureSensor
 {
 public:
-	CurrentLoopTemperatureSensor(unsigned int sensorNum) noexcept;
+	explicit CurrentLoopTemperatureSensor(unsigned int sensorNum) noexcept;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -23,9 +23,9 @@ public:
 #endif
 
 	void Poll() noexcept override;
-	const char *GetShortSensorType() const noexcept override { return TypeName; }
+	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 
-	static constexpr const char *TypeName = "currentloop";
+	static constexpr const char *_ecv_array TypeName = "currentloop";
 
 private:
 	TemperatureError TryGetLinearAdcTemperature(float& t) noexcept;

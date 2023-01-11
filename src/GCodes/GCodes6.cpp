@@ -136,9 +136,9 @@ void GCodes::DoManualProbe(GCodeBuffer& gb, const char *message, const char *tit
 {
 	if (Push(gb, true))													// stack the machine state including the file position and set the state to GCodeState::normal
 	{
-		gb.WaitForAcknowledgement();									// flag that we are waiting for acknowledgement
 		const MessageType mt = GetMessageBoxDevice(gb);
-		reprap.SendAlert(mt, message, title, 2, 0.0, axes);
+		const uint32_t seq = reprap.SendAlert(mt, message, title, 2, 0.0, axes);
+		gb.WaitForAcknowledgement(seq);									// flag that we are waiting for acknowledgement
 	}
 }
 

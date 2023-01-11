@@ -88,9 +88,9 @@ struct ExpressionValue
 	explicit constexpr ExpressionValue(int32_t i) noexcept : type((uint32_t)TypeCode::Int32), param(0), iVal(i) { }
 	explicit constexpr ExpressionValue(FilePosition p) noexcept : type((uint32_t)TypeCode::Uint32), param(0), uVal(p) { }
 	explicit ExpressionValue(uint64_t u) noexcept : type((uint32_t)TypeCode::Uint64) { Set56BitValue(u); }
-	explicit constexpr ExpressionValue(const ObjectModel* null om) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(0), omVal(om) { }
-	constexpr ExpressionValue(const ObjectModel *null om, uint8_t tableNumber) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(tableNumber), omVal(om) { }
-	constexpr ExpressionValue(const ObjectModel *om, uint8_t arrayNumber, bool dummy) noexcept : type((uint32_t)TypeCode::ObjectModelArray), param(arrayNumber), omVal(om) { }
+	explicit constexpr ExpressionValue(const ObjectModel *_ecv_from _ecv_null om) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(0), omVal(om) { }
+	constexpr ExpressionValue(const ObjectModel *_ecv_from _ecv_null om, uint8_t tableNumber) noexcept : type((om == nullptr) ? (uint32_t)TypeCode::None : (uint32_t)TypeCode::ObjectModel_tc), param(tableNumber), omVal(om) { }
+	constexpr ExpressionValue(const ObjectModel *_ecv_from om, uint8_t arrayNumber, bool dummy) noexcept : type((uint32_t)TypeCode::ObjectModelArray), param(arrayNumber), omVal(om) { }
 	explicit constexpr ExpressionValue(const char *_ecv_array s) noexcept : type((uint32_t)TypeCode::CString), param(0), sVal(s) { }
 	explicit constexpr ExpressionValue(IPAddress ip) noexcept : type((uint32_t)TypeCode::IPAddress_tc), param(0), uVal(ip.GetV4LittleEndian()) { }
 	explicit constexpr ExpressionValue(std::nullptr_t dummy) noexcept : type((uint32_t)TypeCode::None), param(0), uVal(0) { }
@@ -260,8 +260,8 @@ class ObjectModelArrayTableEntry
 {
 public:
 	ReadWriteLock *null lockPointer;
-	size_t (*GetNumElements)(const ObjectModel*, const ObjectExplorationContext&) noexcept;
-	ExpressionValue (*GetElement)(const ObjectModel*, ObjectExplorationContext&) noexcept;
+	size_t (*GetNumElements)(const ObjectModel *_ecv_from, const ObjectExplorationContext&) noexcept;
+	ExpressionValue (*GetElement)(const ObjectModel *_ecv_from, ObjectExplorationContext&) noexcept;
 };
 
 struct ObjectModelClassDescriptor;
@@ -430,7 +430,7 @@ struct ObjectModelClassDescriptor
 {
 	const ObjectModelTableEntry *omt;
 	const uint8_t *omd;
-	const ObjectModelClassDescriptor *parent;
+	const ObjectModelClassDescriptor *_ecv_null parent;
 };
 
 // Use this macro to inherit from ObjectModel
@@ -497,18 +497,18 @@ struct ObjectModelClassDescriptor
 		return _parent::GetObjectModelArrayEntry(index); \
 	}
 
-#define OBJECT_MODEL_FUNC_BODY(_class,...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept \
+#define OBJECT_MODEL_FUNC_BODY(_class,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept \
 	{ const _class * const self = static_cast<const _class*>(arg); return ExpressionValue(__VA_ARGS__); }
-#define OBJECT_MODEL_FUNC_IF_BODY(_class,_condition,...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept \
+#define OBJECT_MODEL_FUNC_IF_BODY(_class,_condition,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept \
 	{ const _class * const self = static_cast<const _class*>(arg); return (_condition) ? ExpressionValue(__VA_ARGS__) : ExpressionValue(nullptr); }
-#define OBJECT_MODEL_FUNC_ARRAY(_index) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept \
+#define OBJECT_MODEL_FUNC_ARRAY(_index) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept \
 	{ \
 		static_assert((unsigned int)_index >= ArrayIndexOffset); \
 		static_assert((unsigned int)_index < sizeof(objectModelArrayTable)/sizeof(ObjectModelArrayTableEntry) + ArrayIndexOffset); \
 		return ExpressionValue(arg, _index, true); \
 	}
-#define OBJECT_MODEL_FUNC_NOSELF(...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept { return ExpressionValue(__VA_ARGS__); }
-#define OBJECT_MODEL_FUNC_IF_NOSELF(_condition,...) [] (const ObjectModel* arg, ObjectExplorationContext& context) noexcept \
+#define OBJECT_MODEL_FUNC_NOSELF(...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept { return ExpressionValue(__VA_ARGS__); }
+#define OBJECT_MODEL_FUNC_IF_NOSELF(_condition,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept \
 	{ return (_condition) ? ExpressionValue(__VA_ARGS__) : ExpressionValue(nullptr); }
 
 #else

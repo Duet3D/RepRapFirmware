@@ -15,12 +15,12 @@
 class CpuTemperatureSensor : public TemperatureSensor
 {
 public:
-	CpuTemperatureSensor(unsigned int sensorNum) noexcept;
+	explicit CpuTemperatureSensor(unsigned int sensorNum) noexcept;
 
 	void Poll() noexcept override;
-	const char *GetShortSensorType() const noexcept override { return TypeName; }
+	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 
-	static constexpr const char *TypeName = "mcutemp";
+	static constexpr const char *_ecv_array TypeName = "mcutemp";
 };
 
 #endif

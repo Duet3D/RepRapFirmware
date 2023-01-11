@@ -355,7 +355,7 @@ bool GCodes::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) con
 			{
 				if (forceWriteOffsets || axesProbed.IsBitSet(axis))
 				{
-					scratchString.catf(" %c%.2f", GetAxisLetters()[axis], (double)(t->GetOffset(axis)));
+					scratchString.catf(" %c%.3f", GetAxisLetters()[axis], (double)(t->GetOffset(axis)));
 				}
 			}
 			scratchString.cat('\n');

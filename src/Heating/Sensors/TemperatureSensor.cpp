@@ -55,7 +55,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(TemperatureSensor)
 #endif
 
 // Constructor
-TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *t) noexcept
+TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *_ecv_array t) noexcept
 	: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr),
 	  lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::ok) {}
 
@@ -81,16 +81,16 @@ TemperatureError TemperatureSensor::GetLatestTemperature(float& t, uint8_t outpu
 }
 
 // Set the name - normally called only once, so we allow heap memory to be allocated
-void TemperatureSensor::SetSensorName(const char *newName) noexcept
+void TemperatureSensor::SetSensorName(const char *_ecv_array _ecv_null newName) noexcept
 {
 	// Change the heater name in a thread-safe manner
-	const char *oldName = sensorName;
+	const char *_ecv_array _ecv_null oldName = sensorName;
 	sensorName = nullptr;
 	delete oldName;
 
 	if (newName != nullptr && strlen(newName) != 0)
 	{
-		char * const temp = new char[strlen(newName) + 1];
+		char *_ecv_array const temp = new char[strlen(newName) + 1];
 		strcpy(temp, newName);
 		sensorName = temp;
 	}
@@ -183,12 +183,12 @@ void TemperatureSensor::UpdateRemoteTemperature(CanAddress src, const CanSensorR
 
 // Factory method
 #if SUPPORT_CAN_EXPANSION
-TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, CanAddress boardAddress, const char *typeName, const StringRef& reply) noexcept
+TemperatureSensor *_ecv_from TemperatureSensor::Create(unsigned int sensorNum, CanAddress boardAddress, const char *_ecv_array typeName, const StringRef& reply) noexcept
 #else
-TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char *typeName, const StringRef& reply) noexcept
+TemperatureSensor *_ecv_from TemperatureSensor::Create(unsigned int sensorNum, const char *_ecv_array typeName, const StringRef& reply) noexcept
 #endif
 {
-	TemperatureSensor *ts;
+	TemperatureSensor *_ecv_from ts;
 #if SUPPORT_CAN_EXPANSION
 	if (boardAddress != CanInterface::GetCanAddress())
 	{

@@ -649,6 +649,7 @@ uint32_t ExpressionParser::ParseUnsigned() THROWS(GCodeException)
 			return (uint32_t)val.iVal;
 		}
 		ThrowParseException("value must be non-negative");
+		// no break
 
 	default:
 		ThrowParseException("expected non-negative integer value");

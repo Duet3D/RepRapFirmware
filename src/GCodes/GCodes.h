@@ -264,7 +264,7 @@ public:
 	const MovementState& GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept;
 	const MovementState& GetConstMovementState(const GCodeBuffer& gb) const noexcept;			// Get a reference to the movement state associated with the specified GCode buffer (there is a private non-const version)
 	bool IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *tool) const noexcept;	// Check if the specified heater is used by a current tool other than the specified one
-	void MessageBoxClosed(bool cancelled, bool m292, ExpressionValue rslt) noexcept;
+	void MessageBoxClosed(bool cancelled, bool m292, uint32_t seq, ExpressionValue rslt) noexcept;
 
 # if HAS_VOLTAGE_MONITOR
 	const char *_ecv_array null GetPowerFailScript() const noexcept { return powerFailScript; }

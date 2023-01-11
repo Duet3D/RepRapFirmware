@@ -342,7 +342,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "logLevel",				OBJECT_MODEL_FUNC(self->platform->GetLogLevel()),						ObjectModelEntryFlags::none },
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
 	{ "macroRestarted",			OBJECT_MODEL_FUNC(self->gCodes->GetMacroRestarted()),					ObjectModelEntryFlags::none },
-	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mboxList != nullptr, self->mboxList, 0),		ObjectModelEntryFlags::important },
+	{ "messageBox",				OBJECT_MODEL_FUNC_IF_NOSELF(MessageBox::HaveCurrent(), MessageBox::GetCurrent(), 0), ObjectModelEntryFlags::important },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
 	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none },
 #if HAS_VOLTAGE_MONITOR
@@ -391,7 +391,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 
 ReadWriteLock *_ecv_null RepRap::GetObjectLock(unsigned int tableNumber) const noexcept /*override*/
 {
-	return (tableNumber == StateSubTableNumber) ? &mboxLock : nullptr;
+	return (tableNumber == StateSubTableNumber) ? &MessageBox::mboxLock : nullptr;
 }
 
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
@@ -812,7 +812,10 @@ void RepRap::Spin() noexcept
 		StateUpdated();
 	}
 
-	CheckMessageBoxTimeout();
+	if (MessageBox::CheckTimeout())
+	{
+		StateUpdated();
+	}
 
 	// Keep track of the loop time
 	if (justSentDiagnostics)
@@ -1145,7 +1148,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		const bool sendBeep = ((source == ResponseSource::AUX || !platform->IsAuxEnabled(0) || platform->IsAuxRaw(0)) && beepDuration != 0 && beepFrequency != 0);
 		const bool sendMessage = !message.IsEmpty();
 
-		const ReadLockedPointer<const MessageBox> mbox(GetCurrentMessageBox());
+		const ReadLockedPointer<const MessageBox> mbox(MessageBox::GetLockedCurrent());
 		const bool mboxActive = mbox.IsNotNull() && mbox->IsLegacyType();
 		if (sendBeep || sendMessage || mboxActive)
 		{
@@ -1612,7 +1615,7 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 
 	// Accelerations
 	response->cat(',');
-	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertAcceleration(platform->Acceleration(drive)); }, 2);
+	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertAcceleration(platform->NormalAcceleration(drive)); }, 2);
 
 	// Motor currents
 	response->cat(',');
@@ -1797,7 +1800,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 	// Don't send it if we are flashing firmware, because when we flash firmware we send messages directly to PanelDue and we don't want them to get cleared.
 	if (!gCodes->IsFlashing())
 	{
-		const ReadLockedPointer<const MessageBox> mbox(GetCurrentMessageBox());
+		const ReadLockedPointer<const MessageBox> mbox(MessageBox::GetLockedCurrent());
 		if (mbox.IsNotNull() && mbox->IsLegacyType())
 		{
 			response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%u,\"msgBox.msg\":\"%.s\",\"msgBox.title\":\"%.s\"",
@@ -2732,38 +2735,25 @@ void RepRap::ReportInternalError(const char *file, const char *func, int line) c
 
 // Message box functions
 
-ReadLockedPointer<const MessageBox> RepRap::GetCurrentMessageBox() const noexcept
-{
-	ReadLockedPointer<const MessageBox> p(mboxLock, mboxList);
-	if (p.IsNull())
-	{
-		p.Release();
-	}
-	return p;
-}
-
 // Send a message box, which may require an acknowledgement
 // sParam = 0 Just display the message box, optional timeout
 // sParam = 1 As for 0 but display a Close button as well
 // sParam = 2 Display the message box with an OK button, wait for acknowledgement (waiting is set up by the caller)
 // sParam = 3 As for 2 but also display a Cancel button
-// Returns true if we sent the message box, false if we couldn't because there is already a message box
-bool RepRap::SendAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits) noexcept
+// Returns the message box sequence number
+uint32_t RepRap::SendAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits) noexcept
 {
-	WriteLocker lock(mboxLock);
+	WriteLocker lock(MessageBox::mboxLock);
 
-	// Currently we only allow a single outstanding message box, but we may change that in future
-	if (mboxList != nullptr)
-	{
-		return false;
-	}
-
+	uint32_t seq;
 	if ((mt & (HttpMessage | AuxMessage | LcdMessage | BinaryCodeReplyFlag)) != 0)
 	{
-		MessageBox *mb = new MessageBox(nullptr);
-		mb->Populate(message, title, sParam, tParam, controls, limits);
-		mboxList = mb;
+		seq = MessageBox::Create(message, title, sParam, tParam, controls, limits);
 		StateUpdated();
+	}
+	else
+	{
+		seq = 0;
 	}
 
 	platform->MessageF(MessageType::LogInfo, "M291: - %s - %s", (strlen(title) > 0 ? title : "[no title]"), message);
@@ -2785,50 +2775,12 @@ bool RepRap::SendAlert(MessageType mt, const char *_ecv_array message, const cha
 			platform->Message(mt, "Send M292 to continue or M292 P1 to cancel\n");
 		}
 	}
-	return true;
+	return seq;
 }
 
-bool RepRap::SendSimpleAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title) noexcept
+void RepRap::SendSimpleAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title) noexcept
 {
-	return SendAlert(mt, message, title, 1, 0.0, AxesBitmap());
-}
-
-// If we have an active message box with the specified sequence number, close it and tell the caller whether it was blocking or not, then return true
-bool RepRap::AcknowledgeMessageBox(uint32_t seq, bool& wasBlocking) noexcept
-{
-	WriteLocker lock(mboxLock);
-
-	// Currently we only allow a single outstanding message box, but we may change that in future
-	MessageBox *mb = mboxList;
-	if (mb != nullptr && (seq == 0 || mb->GetSeq() == seq))
-	{
-		wasBlocking = mb->IsBlocking();
-		mboxList = mb->GetNext();
-		delete mb;
-		StateUpdated();
-		return true;
-	}
-
-	return false;
-}
-
-// Check if the current message box should be timed out
-void RepRap::CheckMessageBoxTimeout() noexcept
-{
-	if (mboxList != nullptr)
-	{
-		WriteLocker locker(mboxLock);
-		MessageBox *mb = mboxList;
-		if (mb != nullptr && mb->HasTimedOut())
-		{
-			const ExpressionValue rslt = mb->GetDefaultValue();
-			const bool canCancel = mb->CanCancel();
-			mboxList = mb->GetNext();
-			delete mb;
-			StateUpdated();
-			gCodes->MessageBoxClosed(canCancel, false, rslt);
-		}
-	}
+	(void)SendAlert(mt, message, title, 1, 0.0, AxesBitmap());
 }
 
 #if SUPPORT_DIRECT_LCD

@@ -7,6 +7,7 @@
 
 #include "MessageBox.h"
 #include "RepRap.h"
+#include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 // Macro to build a standard lambda function that includes the necessary type conversions
@@ -37,30 +38,75 @@ constexpr uint8_t MessageBox::objectModelTableDescriptor[] =
 DEFINE_GET_OBJECT_MODEL_TABLE(MessageBox)
 
 uint32_t MessageBox::nextSeq = 0;
+MessageBox *MessageBox::mboxList = nullptr;
+ReadWriteLock MessageBox::mboxLock;
+uint32_t MessageBox::startTime;
+unsigned int MessageBox::numMessages = 0;
+unsigned int MessageBox::numAutoCancelledMessages = 0;
 
-// Set a message box
-void MessageBox::Populate(const char *msg, const char *p_title, int p_mode, float p_timeout, AxesBitmap p_controls, MessageBoxLimits *_ecv_null p_limits) noexcept
+// Create a message box. Caller should own the lock first.
+/*static*/ uint32_t MessageBox::Create(const char *msg, const char *p_title, int p_mode, float p_timeout, AxesBitmap p_controls, MessageBoxLimits *_ecv_null p_limits) noexcept
 {
-	message.copy(msg);
-	title.copy(p_title);
-	mode = p_mode;
-	startTime = millis();
-	timeout = lrintf(max<float>(p_timeout, 0.0) * 1000.0);
-	controls = p_controls;
+	MessageBox **mbp = &mboxList;
+	while (*mbp != nullptr)
+	{
+		MessageBox *mb = *mbp;
+		if (!mb->IsBlocking() && numMessages >= MaxMessageBoxes)
+		{
+			// Time out this nonblocking message now to make room in the queue
+			*mbp = mb->next;
+			mb->TimeOut();
+			++numAutoCancelledMessages;
+		}
+		else
+		{
+			if (!mb->IsBlocking() && mb->timeout > 1000)
+			{
+				// Time out this non-blocking message after 1 second
+				mb->timeout = 1000;
+			}
+			mbp = &((*mbp)->next);
+		}
+	}
+
+	if (numMessages >= MaxMessageBoxes)
+	{
+		// Message box queue is still full, so time out the oldest message even though it is blocking
+		MessageBox *mb = mboxList;
+		mboxList = mb->next;
+		mb->TimeOut();
+		++numAutoCancelledMessages;
+	}
+
+	MessageBox *const mbox = new MessageBox(nullptr);
+	mbox->message.copy(msg);
+	mbox->title.copy(p_title);
+	mbox->mode = p_mode;
+	mbox->startTime = millis();
+	mbox->timeout = lrintf(max<float>(p_timeout, 0.0) * 1000.0);
+	mbox->controls = p_controls;
 	if (p_limits != nullptr)
 	{
-		limits = *p_limits;
+		mbox->limits = *p_limits;
 	}
 
 	// Override the canCancel flag if its value is implied by the mode
-	if (mode == 3)
+	if (p_mode == 3)
 	{
-		limits.canCancel = true;
+		mbox->limits.canCancel = true;
 	}
-	else if (mode < 3)
+	else if (p_mode < 3)
 	{
-		limits.canCancel = false;
+		mbox->limits.canCancel = false;
 	}
+
+	if (mbp == &mboxList)
+	{
+		startTime = millis();
+	}
+	*mbp = mbox;
+	++numMessages;
+	return mbox->seq;
 }
 
 float MessageBox::GetTimeLeft() const noexcept
@@ -68,6 +114,79 @@ float MessageBox::GetTimeLeft() const noexcept
 	return (timeout != 0) ? ((float)timeout - (float)(millis() - startTime)) / 1000.0 : 0.0;
 }
 
+// If we have an active message box with the specified sequence number, close it and tell the caller whether it was blocking or not, and return true
+/*static*/ bool MessageBox::Acknowledge(uint32_t seq, bool& wasBlocking) noexcept
+{
+	if (mboxList != nullptr)
+	{
+		WriteLocker lock(mboxLock);
+
+		MessageBox **mbp = &mboxList;
+		while (*mbp != nullptr)
+		{
+			MessageBox *mb = *mbp;
+			if (seq == 0 || mb->GetSeq() == seq)
+			{
+				wasBlocking = mb->IsBlocking();
+				if (mbp == &mboxList)
+				{
+					startTime = millis();
+				}
+				*mbp = mb->next;
+				delete mb;
+				--numMessages;
+				reprap.StateUpdated();
+				return true;
+			}
+			mbp = &((*mbp)->next);
+		}
+	}
+
+	return false;
+}
+
+// Check if the head message box should be timed out, returning true if we timed it out
+/*static*/ bool MessageBox::CheckTimeout() noexcept
+{
+	if (mboxList != nullptr)
+	{
+		WriteLocker locker(mboxLock);
+
+		MessageBox *mb = mboxList;
+		if (mb != nullptr && mb->timeout != 0 && millis() - startTime >= mb->timeout)
+		{
+			mboxList = mb->next;
+			startTime = millis();
+			mb->TimeOut();
+			return true;
+		}
+	}
+
+	return false;
+}
+
+// Time out this message box
+void MessageBox::TimeOut() noexcept
+{
+	if (IsBlocking())
+	{
+		reprap.GetGCodes().MessageBoxClosed(CanCancel(), false, seq, GetDefaultValue());
+	}
+	--numMessages;
+	delete this;
+}
+
+/*static*/ ReadLockedPointer<const MessageBox> MessageBox::GetLockedCurrent() noexcept
+{
+	ReadLockedPointer<const MessageBox> p(mboxLock, mboxList);
+	if (p.IsNull())
+	{
+		p.Release();
+	}
+	return p;
+}
+
+// MessageBoxLimits members
 void MessageBoxLimits::GetIntegerLimits(GCodeBuffer& gb, bool defaultIsString) THROWS(GCodeException)
 {
 	int32_t iLow, iHigh;
