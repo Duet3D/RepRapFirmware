@@ -32,7 +32,7 @@
 #include <FilamentMonitors/FilamentMonitor.h>
 #include "RepRap.h"
 #include "Heap.h"
-#include "Scanner.h"
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include "Event.h"
 #include <Version.h>
 #include "Logger.h"
@@ -2245,9 +2245,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		MessageF(MessageType::GenericMessage,
 					"\nPrintMonitor %08" PRIx32 "-%08" PRIx32
 					"\nFansManager %08" PRIx32 "-%08" PRIx32
-#if SUPPORT_SCANNER
-					"\nScanner %08" PRIx32 "-%08" PRIx32
-#endif
 #if SUPPORT_IOBITS
 					"\nPortControl %08" PRIx32 "-%08" PRIx32
 #endif
@@ -2260,9 +2257,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 					, reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()), reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()) + sizeof(PrintMonitor) - 1
 					, reinterpret_cast<uint32_t>(&reprap.GetFansManager()), reinterpret_cast<uint32_t>(&reprap.GetFansManager()) + sizeof(FansManager) - 1
-#if SUPPORT_SCANNER
-					, reinterpret_cast<uint32_t>(&reprap.GetScanner()), reinterpret_cast<uint32_t>(&reprap.GetScanner()) + sizeof(Scanner) - 1
-#endif
 #if SUPPORT_IOBITS
 					, reinterpret_cast<uint32_t>(&reprap.GetPortControl()), reinterpret_cast<uint32_t>(&reprap.GetPortControl()) + sizeof(PortControl) - 1
 #endif
@@ -3176,11 +3170,7 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const n
 
 void Platform::AppendUsbReply(OutputBuffer *buffer) noexcept
 {
-	if (   !SERIAL_MAIN_DEVICE.IsConnected()
-#if SUPPORT_SCANNER
-		|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
-#endif
-	   )
+	if (!SERIAL_MAIN_DEVICE.IsConnected())
 	{
 		// If the serial USB line is not open, discard the message right away
 		OutputBuffer::ReleaseAll(buffer);
@@ -3332,27 +3322,23 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 	{
 		// Message that is to be sent via the USB line (non-blocking)
 		MutexLocker lock(usbMutex);
-#if SUPPORT_SCANNER
-		if (!reprap.GetScanner().IsRegistered() || reprap.GetScanner().DoingGCodes())
-#endif
+
+		// Ensure we have a valid buffer to write to that isn't referenced for other destinations
+		OutputBuffer *usbOutputBuffer = usbOutput.GetLastItem();
+		if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
 		{
-			// Ensure we have a valid buffer to write to that isn't referenced for other destinations
-			OutputBuffer *usbOutputBuffer = usbOutput.GetLastItem();
-			if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
+			if (OutputBuffer::Allocate(usbOutputBuffer))
 			{
-				if (OutputBuffer::Allocate(usbOutputBuffer))
+				if (usbOutput.Push(usbOutputBuffer))
 				{
-					if (usbOutput.Push(usbOutputBuffer))
-					{
-						usbOutputBuffer->cat(message);
-					}
-					// else the message buffer has been released, so discard the message
+					usbOutputBuffer->cat(message);
 				}
+				// else the message buffer has been released, so discard the message
 			}
-			else
-			{
-				usbOutputBuffer->cat(message);		// append the message
-			}
+		}
+		else
+		{
+			usbOutputBuffer->cat(message);		// append the message
 		}
 	}
 }

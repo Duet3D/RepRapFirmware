@@ -31,7 +31,6 @@
 #include <Heating/Heat.h>
 #include <Platform/Platform.h>
 #include <Movement/Move.h>
-#include <Platform/Scanner.h>
 #include <PrintMonitor/PrintMonitor.h>
 #include <Platform/RepRap.h>
 #include <Platform/Tasks.h>
@@ -202,10 +201,6 @@ void GCodes::Init() noexcept
 
 	laserMaxPower = DefaultMaxLaserPower;
 	laserPowerSticky = false;
-
-#if SUPPORT_SCANNER
-	reprap.GetScanner().SetGCodeBuffer(UsbGCode());
-#endif
 
 #if SUPPORT_LED_STRIPS
 	LedStripDriver::Init();
@@ -574,9 +569,6 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 	}
 	else
-#if SUPPORT_SCANNER
-		 if (!(&gb == UsbGCode() && reprap.GetScanner().IsRegistered()))
-#endif
 	{
 		const bool gotCommand = (gb.GetNormalInput() != nullptr) && gb.GetNormalInput()->FillBuffer(&gb);
 		if (gotCommand)
@@ -4116,8 +4108,10 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 	deferredPauseCommandPending = nullptr;
 	pauseState = PauseState::notPaused;
 
-#if HAS_SBC_INTERFACE || HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#if HAS_SBC_INTERFACE || HAS_MASS_STORAGE
 	bool stoppingFromCode = FileGCode()->IsExecuting();		// the following method calls Init(), so check here if a code is being executed
+#endif
+#if HAS_SBC_INTERFACE || HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileGCode()->ClosePrintFile();
 # if SUPPORT_ASYNC_MOVES
 	File2GCode()->ClosePrintFile();

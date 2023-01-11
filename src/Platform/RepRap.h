@@ -73,9 +73,6 @@ public:
 	Heat& GetHeat() const noexcept { return *heat; }
 	GCodes& GetGCodes() const noexcept { return *gCodes; }
 	Network& GetNetwork() const noexcept { return *network; }
-#if SUPPORT_SCANNER
-	Scanner& GetScanner() const noexcept { return *scanner; }
-#endif
 	PrintMonitor& GetPrintMonitor() const noexcept { return *printMonitor; }
 	FansManager& GetFansManager() const noexcept { return *fansManager; }
 
@@ -188,9 +185,6 @@ private:
 	Move* move;
 	Heat* heat;
 	GCodes* gCodes;
-#if SUPPORT_SCANNER
-	Scanner* scanner;
-#endif
  	PrintMonitor* printMonitor;
  	FansManager* fansManager;
 

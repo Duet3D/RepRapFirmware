@@ -1,24 +1,24 @@
 #include "RepRap.h"
 
-#include "Movement/Move.h"
-#include "Movement/StepTimer.h"
-#include "FilamentMonitors/FilamentMonitor.h"
-#include "GCodes/GCodes.h"
-#include "Heating/Heat.h"
-#include "Heating/Sensors/TemperatureSensor.h"
-#include "Networking/Network.h"
+#include <Movement/Move.h>
+#include <Movement/StepTimer.h>
+#include <FilamentMonitors/FilamentMonitor.h>
+#include <GCodes/GCodes.h>
+#include <Heating/Heat.h>
+#include <Heating/Sensors/TemperatureSensor.h>
+#include <Networking/Network.h>
 #if SUPPORT_HTTP
-# include "Networking/HttpResponder.h"
+# include <Networking/HttpResponder.h>
 #endif
 #include "Platform.h"
-#include "Scanner.h"
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <PrintMonitor/PrintMonitor.h>
-#include "Tools/Tool.h"
-#include "Tools/Filament.h"
-#include "Endstops/ZProbe.h"
+#include <Tools/Tool.h>
+#include <Tools/Filament.h>
+#include <Endstops/ZProbe.h>
 #include "Tasks.h"
 #include <Cache.h>
-#include "Fans/FansManager.h"
+#include <Fans/FansManager.h>
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
 #include <Accelerometers/Accelerometers.h>
@@ -29,13 +29,13 @@
 #endif
 
 #if SUPPORT_TMC2660
-# include "Movement/StepperDrivers/TMC2660.h"
+# include <Movement/StepperDrivers/TMC2660.h>
 #endif
 #if SUPPORT_TMC22xx
-# include "Movement/StepperDrivers/TMC22xx.h"
+# include <Movement/StepperDrivers/TMC22xx.h>
 #endif
 #if SUPPORT_TMC51xx
-# include "Movement/StepperDrivers/TMC51xx.h"
+# include <Movement/StepperDrivers/TMC51xx.h>
 #endif
 
 #if SUPPORT_IOBITS
@@ -43,11 +43,11 @@
 #endif
 
 #if SUPPORT_DIRECT_LCD
-# include "Display/Display.h"
+# include <Display/Display.h>
 #endif
 
 #if HAS_SBC_INTERFACE
-# include "SBC/SbcInterface.h"
+# include <SBC/SbcInterface.h>
 #endif
 
 #ifdef DUET3_ATE
@@ -261,9 +261,6 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "move",					OBJECT_MODEL_FUNC(self->move),											ObjectModelEntryFlags::live },
 	// Note, 'network' is needed even if there is no networking, because it contains the machine name
 	{ "network",				OBJECT_MODEL_FUNC(self->network),										ObjectModelEntryFlags::none },
-#if SUPPORT_SCANNER
-	{ "scanner",				OBJECT_MODEL_FUNC(self->scanner),										ObjectModelEntryFlags::none },
-#endif
 	{ "sensors",				OBJECT_MODEL_FUNC(&self->platform->GetEndstops()),						ObjectModelEntryFlags::live },
 	{ "seqs",					OBJECT_MODEL_FUNC(self, 5),												ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC_ARRAY(3),												ObjectModelEntryFlags::live },
@@ -382,9 +379,6 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #if HAS_NETWORKING
 	{ "reply",					OBJECT_MODEL_FUNC_NOSELF((int32_t)HttpResponder::GetReplySeq()),		ObjectModelEntryFlags::live },
 #endif
-#if SUPPORT_SCANNER
-	{ "scanner",				OBJECT_MODEL_FUNC((int32_t)self->scannerSeq),							ObjectModelEntryFlags::live },
-#endif
 	{ "sensors",				OBJECT_MODEL_FUNC((int32_t)self->sensorsSeq),							ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC((int32_t)self->spindlesSeq),							ObjectModelEntryFlags::live },
 	{ "state",					OBJECT_MODEL_FUNC((int32_t)self->stateSeq),								ObjectModelEntryFlags::live },
@@ -403,7 +397,7 @@ ReadWriteLock *_ecv_null RepRap::GetObjectLock(unsigned int tableNumber) const n
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 {
 	6,																						// number of sub-tables
-	15 + SUPPORT_SCANNER + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),		// root
+	15 + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),						// root
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	8, 																						// directories
 #else
@@ -412,8 +406,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	25,																						// limits
 	21 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
 	2,																						// state.beep
-	12 + HAS_NETWORKING + SUPPORT_SCANNER +
-	2 * HAS_MASS_STORAGE + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE)		// seqs
+	12 + HAS_NETWORKING + (2 * HAS_MASS_STORAGE) + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE)		// seqs
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
@@ -483,9 +476,6 @@ void RepRap::Init() noexcept
 	printMonitor = new PrintMonitor(*platform, *gCodes);
 	fansManager = new FansManager;
 
-#if SUPPORT_SCANNER
-	scanner = new Scanner(*platform);
-#endif
 #if SUPPORT_IOBITS
 	portControl = new PortControl();
 #endif
@@ -515,9 +505,6 @@ void RepRap::Init() noexcept
 	printMonitor->Init();
 	FilamentMonitor::InitStatic();
 
-#if SUPPORT_SCANNER
-	scanner->Init();
-#endif
 #if SUPPORT_IOBITS
 	portControl->Init();
 #endif
@@ -706,9 +693,6 @@ void RepRap::Exit() noexcept
 	heat->Exit();
 	move->Exit();
 	gCodes->Exit();
-#if SUPPORT_SCANNER
-	scanner->Exit();
-#endif
 #if SUPPORT_IOBITS
 	portControl->Exit();
 #endif
@@ -738,12 +722,6 @@ void RepRap::Spin() noexcept
 	ticksInSpinState = 0;
 	spinningModule = moduleGcodes;
 	gCodes->Spin();
-
-#if SUPPORT_SCANNER && !SCANNER_AS_SEPARATE_TASK
-	ticksInSpinState = 0;
-	spinningModule = moduleScanner;
-	scanner->Spin();
-#endif
 
 	ticksInSpinState = 0;
 	spinningModule = modulePrintMonitor;
@@ -1353,15 +1331,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 
 	// Time since last reset
 	response->catf(",\"time\":%.1f", (double)(millis64()/1000u));
-
-#if SUPPORT_SCANNER
-	// Scanner
-	if (scanner->IsEnabled())
-	{
-		response->catf(",\"scanner\":{\"status\":\"%c\"", scanner->GetStatusCharacter());
-		response->catf(",\"progress\":%.1f}", (double)(scanner->GetProgress() * 100.0));
-	}
-#endif
 
 	// Spindles
 	if (gCodes->GetMachineType() == MachineType::cnc || type == 2)

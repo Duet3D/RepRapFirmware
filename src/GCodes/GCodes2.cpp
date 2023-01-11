@@ -17,7 +17,6 @@
 #endif
 #include <Movement/Move.h>
 #include <Networking/Network.h>
-#include <Platform/Scanner.h>
 #include <PrintMonitor/PrintMonitor.h>
 #include <Platform/RepRap.h>
 #include <Tools/Tool.h>
@@ -4186,149 +4185,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if SUPPORT_SCANNER
-			case 750: // Enable 3D scanner extension
-				reprap.GetScanner().Enable();
-				break;
-
-			case 751: // Register 3D scanner extension over USB
-				if (&gb == UsbGCode())
-				{
-					if (reprap.GetScanner().IsEnabled())
-					{
-						reprap.GetScanner().Register();
-					}
-					else
-					{
-						reply.copy("Scanner extension is not enabled");
-						result = GCodeResult::error;
-					}
-				}
-				else
-				{
-					reply.copy("Invalid source");
-					result = GCodeResult::error;
-				}
-				break;
-
-			case 752: // Start 3D scan
-				{
-					gb.MustSee('P');
-					String<MaxFilenameLength> file;
-					gb.GetPossiblyQuotedString(file.GetRef());
-					gb.MustSee('S');
-					const int range = gb.GetIValue();
-					if (reprap.GetScanner().IsEnabled())
-					{
-						if (reprap.GetScanner().IsRegistered())
-						{
-							const int resolution = gb.Seen('R') ? gb.GetIValue() : 100;
-							const int mode = gb.Seen('N') ? gb.GetIValue() : 0;
-							result = GetGCodeResultFromFinished(reprap.GetScanner().StartScan(file.c_str(), range, resolution, mode));
-						}
-						else
-						{
-							reply.copy("Scanner is not registered");
-							result = GCodeResult::error;
-						}
-					}
-					else
-					{
-						reply.copy("Scanner extension is not enabled");
-						result = GCodeResult::error;
-					}
-				}
-				break;
-
-			case 753: // Cancel current 3D scanner action
-				if (reprap.GetScanner().IsEnabled())
-				{
-					if (reprap.GetScanner().IsRegistered())
-					{
-						result = GetGCodeResultFromFinished(reprap.GetScanner().Cancel());
-					}
-					else
-					{
-						reply.copy("Scanner is not registered");
-						result = GCodeResult::error;
-					}
-				}
-				else
-				{
-					reply.copy("Scanner extension is not enabled");
-					result = GCodeResult::error;
-				}
-				break;
-
-			case 754: // Calibrate scanner
-				if (reprap.GetScanner().IsEnabled())
-				{
-					if (reprap.GetScanner().IsRegistered())
-					{
-						const int mode = gb.Seen('N') ? gb.GetIValue() : 0;
-						result = GetGCodeResultFromFinished(reprap.GetScanner().Calibrate(mode));
-					}
-					else
-					{
-						reply.copy("Scanner is not registered");
-						result = GCodeResult::error;
-					}
-				}
-				else
-				{
-					reply.copy("Scanner extension is not enabled");
-					result = GCodeResult::error;
-				}
-				break;
-
-			case 755: // Set alignment mode for 3D scanner
-				if (reprap.GetScanner().IsEnabled())
-				{
-					if (reprap.GetScanner().IsRegistered())
-					{
-						const bool on = (gb.Seen('P') && gb.GetIValue() > 0);
-						result = GetGCodeResultFromFinished(reprap.GetScanner().SetAlignment(on));
-					}
-					else
-					{
-						reply.copy("Scanner is not registered");
-						result = GCodeResult::error;
-					}
-				}
-				else
-				{
-					reply.copy("Scanner extension is not enabled");
-					result = GCodeResult::error;
-				}
-				break;
-
-			case 756: // Shutdown 3D scanner
-				if (reprap.GetScanner().IsEnabled())
-				{
-					if (reprap.GetScanner().IsRegistered())
-					{
-						result = GetGCodeResultFromFinished(reprap.GetScanner().Shutdown());
-					}
-					else
-					{
-						reply.copy("Scanner is not registered");
-						result = GCodeResult::error;
-					}
-				}
-				else
-				{
-					reply.copy("Scanner extension is not enabled");
-					result = GCodeResult::error;
-				}
-				break;
-#else
-			case 750:
-			case 751:
-			case 752:
-			case 753:
-			case 754:
-			case 755:
-			case 756:
+#if 0
+			case 750:	// was: Enable 3D scanner extension
+			case 751:	// was: Register 3D scanner extension over USB
+			case 752:	// was: Start 3D scan
+			case 753:	// was: Cancel current 3D scanner action
+			case 754:	// was: Calibrate scanner
+			case 755:	// was: Set alignment mode for 3D scanner
+			case 756:	// was: Shutdown 3D scanner
 				reply.copy("Scanner support not built-in");
 				result = GCodeResult::error;
 				break;

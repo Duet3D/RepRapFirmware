@@ -221,9 +221,6 @@
 # if SUPPORT_FTP
 #  error "FTP support requires mass storage"
 # endif
-# if SUPPORT_SCANNER
-#  error "Scanner support requires mass storage"
-# endif
 #endif
 
 #ifndef SUPPORT_ASYNC_MOVES
