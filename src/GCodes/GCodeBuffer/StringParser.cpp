@@ -790,6 +790,7 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 	FileData outputFile;
 #endif
 
+	bool appendNewline = true;
 	if (gb.buffer[readPointer] == '>')
 	{
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -800,6 +801,11 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 		{
 			openMode = OpenMode::append;
 			++readPointer;
+			if (gb.buffer[readPointer] == '>')
+			{
+				appendNewline = false;
+				++readPointer;
+			}
 		}
 		else
 		{
@@ -847,7 +853,10 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	if (outputFile.IsLive())
 	{
-		reply.cat('\n');
+		if (appendNewline)
+		{
+			reply.cat('\n');
+		}
 		const bool ok = outputFile.Write(reply.c_str());
 		outputFile.Close();
 		reply.Clear();
