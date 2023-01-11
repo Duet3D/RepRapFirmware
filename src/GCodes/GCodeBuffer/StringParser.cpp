@@ -709,12 +709,16 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	// Skip the "var." or "global." prefix
 	SkipWhiteSpace();
 	const bool isGlobal = StringStartsWith(gb.buffer + readPointer, "global.");
+
+#if SUPPORT_ASYNC_MOVES
+	if (isGlobal && !gb.Executing()) return;
+#endif
+
 	WriteLockedPointer<VariableSet> vset = (isGlobal)
 											? (readPointer += strlen("global."), reprap.GetGlobalVariablesForWriting())
 											: (StringStartsWith(gb.buffer + readPointer, "var."))
 											  	? (readPointer += strlen("var."), WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables()))
 												: throw ConstructParseException("expected a global or local variable");
-
 	// Get the identifier
 	char c = gb.buffer[readPointer];
 	if (!isalpha(c))
@@ -784,6 +788,10 @@ void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 
 void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeException)
 {
+#if SUPPORT_ASYNC_MOVES
+	if (!gb.Executing()) return;
+#endif
+
 	SkipWhiteSpace();
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
