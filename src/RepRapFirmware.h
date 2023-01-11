@@ -264,7 +264,7 @@ enum Module : uint8_t
 	moduleMove = 4,
 	moduleHeat = 5,
 	moduleDda = 6,
-	moduleRoland = 7,
+	moduleUnused = 7,				// was moduleRoland
 	moduleScanner = 8,
 	modulePrintMonitor = 9,
 	moduleStorage = 10,
@@ -291,7 +291,6 @@ class Kinematics;
 class Heat;
 class TemperatureSensor;
 class Tool;
-class Roland;
 class Scanner;
 class PrintMonitor;
 class RepRap;
