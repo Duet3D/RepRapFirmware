@@ -351,7 +351,7 @@ bool GCodes::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) con
 				written = true;
 			}
 			scratchString.catf("G10 P%d", t->Number());
-			for (size_t axis = 0; axis < MaxAxes; ++axis)
+			for (size_t axis = 0; axis < GetVisibleAxes(); ++axis)
 			{
 				if (forceWriteOffsets || axesProbed.IsBitSet(axis))
 				{
