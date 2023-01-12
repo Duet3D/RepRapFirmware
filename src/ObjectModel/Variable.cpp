@@ -165,7 +165,7 @@ void VariableSet::AssignFrom(VariableSet& other) noexcept
 	other.root = nullptr;
 }
 
-void VariableSet::IterateWhile(function_ref<bool(unsigned int, const Variable&) /*noexcept*/ > func) const noexcept
+void VariableSet::IterateWhile(function_ref_noexcept<bool(unsigned int, const Variable&) noexcept> func) const noexcept
 {
 	unsigned int num = 0;
 	for (const LinkedVariable *lv = root; lv != nullptr; lv = lv->next)

@@ -53,7 +53,7 @@ public:
 	void Delete(const char *str) noexcept;
 	void Clear() noexcept;
 
-	void IterateWhile(function_ref<bool(unsigned int index, const Variable& v) /*noexcept*/ > func) const noexcept;
+	void IterateWhile(function_ref_noexcept<bool(unsigned int index, const Variable& v) noexcept> func) const noexcept;
 
 private:
 	struct LinkedVariable

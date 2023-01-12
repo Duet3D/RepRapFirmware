@@ -130,8 +130,8 @@ public:
 
 	bool HasTemperatureFault() const noexcept { return heaterFault; }
 
-	void IterateExtruders(function_ref<void(unsigned int)> f) const noexcept;
-	void IterateHeaters(function_ref<void(int)> f) const noexcept;
+	void IterateExtruders(function_ref_noexcept<void(unsigned int) noexcept> f) const noexcept;
+	void IterateHeaters(function_ref_noexcept<void(int) noexcept> f) const noexcept;
 	bool UsesHeater(int8_t heater) const noexcept;
 
 	void SetFansPwm(float f) const noexcept;

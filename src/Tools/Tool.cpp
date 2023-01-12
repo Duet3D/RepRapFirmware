@@ -829,7 +829,7 @@ void Tool::SetSpindleRpm(uint32_t rpm, bool isCurrentTool) THROWS(GCodeException
 	}
 }
 
-void Tool::IterateExtruders(function_ref<void(unsigned int)> f) const noexcept
+void Tool::IterateExtruders(function_ref_noexcept<void(unsigned int) noexcept> f) const noexcept
 {
 	for (size_t i = 0; i < driveCount; ++i)
 	{
@@ -837,7 +837,7 @@ void Tool::IterateExtruders(function_ref<void(unsigned int)> f) const noexcept
 	}
 }
 
-void Tool::IterateHeaters(function_ref<void(int)> f) const noexcept
+void Tool::IterateHeaters(function_ref_noexcept<void(int) noexcept> f) const noexcept
 {
 	for (size_t i = 0; i < heaterCount; ++i)
 	{

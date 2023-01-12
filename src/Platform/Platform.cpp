@@ -2429,7 +2429,7 @@ bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float 
 #if SUPPORT_CAN_EXPANSION
 
 // Function to identify and iterate through all drivers attached to an axis or extruder
-void Platform::IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t)> localFunc, function_ref<void(DriverId)> remoteFunc) noexcept
+void Platform::IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc, function_ref_noexcept<void(DriverId) noexcept> remoteFunc) noexcept
 {
 	if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
 	{
@@ -2463,7 +2463,7 @@ void Platform::IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t)>
 #else
 
 // Function to identify and iterate through all drivers attached to an axis or extruder
-void Platform::IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t)> localFunc) noexcept
+void Platform::IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc) noexcept
 {
 	if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
 	{

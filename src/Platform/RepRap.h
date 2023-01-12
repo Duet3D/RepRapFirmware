@@ -168,9 +168,9 @@ protected:
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
-	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<float(size_t)> func, unsigned int numDecimalDigits) noexcept;
-	static void AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<int(size_t)> func) noexcept;
-	static void AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<const char *(size_t)> func) noexcept;
+	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<float(size_t) noexcept> func, unsigned int numDecimalDigits) noexcept;
+	static void AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<int(size_t) noexcept> func) noexcept;
+	static void AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<const char *(size_t) noexcept> func) noexcept;
 
 	size_t GetStatusIndex() const noexcept;
 	char GetStatusCharacter() const noexcept;
