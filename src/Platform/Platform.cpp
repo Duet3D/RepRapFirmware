@@ -292,8 +292,9 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #endif
 
 	// 3. move.axes[] members
-	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
+	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(context.GetLastIndex())), 1),				ObjectModelEntryFlags::none },
 	{ "babystep",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetTotalBabyStepOffset(context.GetLastIndex()), 3),					ObjectModelEntryFlags::none },
+	{ "backlash",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetBacklashMm(context.GetLastIndex()), 3),							ObjectModelEntryFlags::none },
 	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 906))),								ObjectModelEntryFlags::none },
 	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(0),																						ObjectModelEntryFlags::none },
 	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),								ObjectModelEntryFlags::none },
@@ -378,10 +379,10 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	0,																		// section 2: vIn
 #endif
 #ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current
-	19,																		// section 3: move.axes[]
+	20,																		// section 3: move.axes[]
 	15,																		// section 4: move.extruders[]
 #else
-	20,																		// section 3: move.axes[]
+	21,																		// section 3: move.axes[]
 	16,																		// section 4: move.extruders[]
 #endif
 	3,																		// section 5: move.extruders[].nonlinear

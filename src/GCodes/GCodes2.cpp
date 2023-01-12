@@ -1488,6 +1488,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
+					if (seen)
+					{
+						reprap.GetMove().UpdateBacklashSteps();
+					}
+
 					if (gb.Seen(extrudeLetter))
 					{
 						if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
@@ -2829,6 +2834,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
+					if (seen)
+					{
+						reprap.GetMove().UpdateBacklashSteps();
+					}
+
 					if (gb.Seen(extrudeLetter))
 					{
 						if (!LockAllMovementSystemsAndWaitForStandstill(gb))
@@ -3009,6 +3019,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 #endif
+
+			case 425: // Backlash compensation
+				result = reprap.GetMove().ConfigureBacklashCompensation(gb, reply);
+				break;
 
 			case 450: // Report printer mode
 				reply.printf("PrinterMode:%s", GetMachineModeString());
