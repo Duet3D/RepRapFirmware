@@ -157,6 +157,7 @@ private:
 	bool hadChecksum;
 	bool hasCommandNumber;
 	char commandLetter;
+	char lastChar;
 	uint8_t commandIndent;								// Number of whitespace characters before the line number or the first command starts
 	bool seenLeadingSpace;
 	bool seenLeadingTab;
