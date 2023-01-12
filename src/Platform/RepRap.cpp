@@ -2887,7 +2887,7 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noe
 				written = true;
 			}
 			scratchString.catf("G10 P%d", t->Number());
-			for (size_t axis = 0; axis < MaxAxes; ++axis)
+			for (size_t axis = 0; axis < gCodes->GetVisibleAxes(); ++axis)
 			{
 				if (forceWriteOffsets || axesProbed.IsBitSet(axis))
 				{
