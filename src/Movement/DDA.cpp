@@ -334,12 +334,9 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 
 		if (drive < numVisibleAxes)
 		{
-
-			int32_t delta;
 			if (doMotorMapping)
 			{
 				endCoordinates[drive] = nextMove.coords[drive];
-				delta = endPoint[drive] - positionNow[drive];
 				const float positionDelta = endCoordinates[drive] - prev->GetEndCoordinate(drive, false);
 				directionVector[drive] = positionDelta;
 				if (positionDelta != 0.0)
@@ -362,7 +359,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 			{
 				// Raw motor move on a visible axis
 				endPoint[drive] = Move::MotorMovementToSteps(drive, nextMove.coords[drive]);
-				delta = endPoint[drive] - positionNow[drive];
+				const int32_t delta = endPoint[drive] - positionNow[drive];
 				directionVector[drive] = (float)delta/reprap.GetPlatform().DriveStepsPerUnit(drive);
 				if (delta != 0)
 				{
@@ -1490,6 +1487,8 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 							delta += stepsPerRotation;
 						}
 					}
+
+					delta = platform.ApplyBacklashCompensation(drive, delta);
 
 					if (   platform.GetDriversBitmap(drive) != 0				// if any of the drives is local
 #if SUPPORT_CAN_EXPANSION

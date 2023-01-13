@@ -61,6 +61,8 @@ constexpr float DefaultFilamentDiameter = 1.75;			// the default filament diamet
 constexpr unsigned int MaxTools = 50;					// this limit is to stop the serialised object model getting too large
 constexpr unsigned int MinVisibleAxes = 2;				// the minimum number of axes that we allow to be visible
 
+constexpr float DefaultBacklashCorrectionDistanceFactor = 10.0;	// backlash correction is spread over (backlash amount * this) mm
+
 // Timeouts
 constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
 constexpr float DefaultMessageTimeout = 10.0;			// How long a message is displayed by default, in seconds

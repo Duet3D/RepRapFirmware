@@ -236,13 +236,6 @@ void Move::Init() noexcept
 	usingMesh = useTaper = false;
 	zShift = 0.0;
 
-	for (size_t i = 0; i < MaxAxes; ++i)
-	{
-		backlashMm[i] = 0.0;
-		backlashSteps[i] = 0;
-		backlashStepsDue[i] = 0;
-	}
-
 	idleTimeout = DefaultIdleTimeout;
 	moveState = MoveState::idle;
 	whenLastMoveAdded = whenIdleTimerStarted = millis();
@@ -1137,45 +1130,6 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 		c = ',';
 	}
 	return GCodeResult::ok;
-}
-
-// Process M425
-GCodeResult Move::ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
-{
-	bool seen = false;
-	size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
-	for (size_t i = 0; i < totalAxes; ++i)
-	{
-		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[i]))
-		{
-			seen = true;
-			backlashMm[i] = gb.GetNonNegativeFValue();
-		}
-	}
-
-	if (seen)
-	{
-		UpdateBacklashSteps();
-		reprap.MoveUpdated();
-	}
-	else
-	{
-		reply.copy("Backlash correction (mm)");
-		for (size_t i = 0; i < totalAxes; ++i)
-		{
-			reply.catf(" %c: %.3f", reprap.GetGCodes().GetAxisLetters()[i], (double)backlashMm[i]);
-		}
-	}
-	return GCodeResult::ok;
-}
-
-// Update the backlash correction in steps. Called when the configured backlash distance or steps/mm is changed.
-void Move::UpdateBacklashSteps() noexcept
-{
-	for (size_t i = 0; i < reprap.GetGCodes().GetTotalAxes(); ++i)
-	{
-		backlashSteps[i] = backlashMm[i] * reprap.GetPlatform().DriveStepsPerUnit(i);
-	}
 }
 
 #if SUPPORT_REMOTE_COMMANDS

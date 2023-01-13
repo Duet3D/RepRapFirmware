@@ -1490,7 +1490,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (seen)
 					{
-						reprap.GetMove().UpdateBacklashSteps();
+						platform.UpdateBacklashSteps();
 					}
 
 					if (gb.Seen(extrudeLetter))
@@ -2836,7 +2836,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (seen)
 					{
-						reprap.GetMove().UpdateBacklashSteps();
+						platform.UpdateBacklashSteps();
 					}
 
 					if (gb.Seen(extrudeLetter))
@@ -3021,7 +3021,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 			case 425: // Backlash compensation
-				result = reprap.GetMove().ConfigureBacklashCompensation(gb, reply);
+				result = platform.ConfigureBacklashCompensation(gb, reply);
 				break;
 
 			case 450: // Report printer mode

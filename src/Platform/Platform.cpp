@@ -294,7 +294,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	// 3. move.axes[] members
 	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(context.GetLastIndex())), 1),				ObjectModelEntryFlags::none },
 	{ "babystep",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetTotalBabyStepOffset(context.GetLastIndex()), 3),					ObjectModelEntryFlags::none },
-	{ "backlash",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetBacklashMm(context.GetLastIndex()), 3),							ObjectModelEntryFlags::none },
+	{ "backlash",			OBJECT_MODEL_FUNC(self->backlashMm[context.GetLastIndex()], 3),													ObjectModelEntryFlags::none },
 	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 906))),								ObjectModelEntryFlags::none },
 	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(0),																						ObjectModelEntryFlags::none },
 	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),								ObjectModelEntryFlags::none },
@@ -598,7 +598,13 @@ void Platform::Init() noexcept
 		reducedAccelerations[axis] = normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
 		driveStepsPerUnit[axis] = DefaultAxisDriveStepsPerUnit;
 		instantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
+
+		backlashMm[axis] = 0.0;
+		backlashSteps[axis] = 0;
+		backlashStepsDue[axis] = 0;
 	}
+
+	backlashCorrectionDistanceFactor = DefaultBacklashCorrectionDistanceFactor;
 
 	// We use different defaults for the Z axis
 	maxFeedrates[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZMaxFeedrate);
@@ -4590,6 +4596,88 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 #endif
 		return GCodeResult::error;
 	}
+}
+
+// Process M425
+GCodeResult Platform::ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	bool seen = false;
+	size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
+	for (size_t i = 0; i < totalAxes; ++i)
+	{
+		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[i]))
+		{
+			seen = true;
+			backlashMm[i] = gb.GetNonNegativeFValue();
+		}
+	}
+
+	if (gb.Seen('S'))
+	{
+		seen = true;
+		backlashCorrectionDistanceFactor = gb.GetLimitedUIValue('S', 1, 101);
+	}
+
+	if (seen)
+	{
+		UpdateBacklashSteps();
+		reprap.MoveUpdated();
+	}
+	else
+	{
+		reply.copy("Backlash correction (mm)");
+		for (size_t i = 0; i < totalAxes; ++i)
+		{
+			reply.catf(" %c: %.3f", reprap.GetGCodes().GetAxisLetters()[i], (double)backlashMm[i]);
+		}
+		reply.catf(", correction distance multiplier %" PRIu32, backlashCorrectionDistanceFactor);
+	}
+	return GCodeResult::ok;
+}
+
+// Update the backlash correction in steps. Called when the configured backlash distance or steps/mm is changed.
+void Platform::UpdateBacklashSteps() noexcept
+{
+	for (size_t i = 0; i < reprap.GetGCodes().GetTotalAxes(); ++i)
+	{
+		backlashSteps[i] = backlashMm[i] * reprap.GetPlatform().DriveStepsPerUnit(i);
+	}
+}
+
+// Given the number of microsteps that an axis has been asked to move, return the number that it should actually move
+int32_t Platform::ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
+{
+	// If this drive has changed direction, update the backlash correction steps due
+	const bool backwards = (delta < 0);
+	int32_t& stepsDue = backlashStepsDue[drive];
+	if (backwards != lastDirections.IsBitSet(drive))
+	{
+		lastDirections.InvertBit(drive);		// Direction has reversed
+		int32_t temp = (int32_t)backlashSteps[drive];
+		if (backwards)
+		{
+			temp = -temp;
+		}
+		stepsDue += temp;
+	}
+
+	// Apply some or all of the compensation steps due
+	if (stepsDue != 0)
+	{
+		if (labs(stepsDue) * backlashCorrectionDistanceFactor <= labs(delta))		// avoid a division if we can
+		{
+			delta += stepsDue;
+			stepsDue = 0;
+		}
+		else
+		{
+			const int32_t maxAllowedSteps = (int32_t)max<uint32_t>((uint32_t)labs(delta)/backlashCorrectionDistanceFactor, 1u);
+			const int32_t stepsToDo = (stepsDue < 0) ? max<int32_t>(stepsDue, -maxAllowedSteps) : min<int32_t>(stepsDue, maxAllowedSteps);
+			stepsDue -= stepsToDo;
+			delta += stepsToDo;
+		}
+	}
+	return delta;
 }
 
 #if SUPPORT_CAN_EXPANSION

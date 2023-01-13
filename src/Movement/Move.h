@@ -103,10 +103,8 @@ public:
 
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// process M595
 	GCodeResult ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M572
-	GCodeResult ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M425
 
 	float GetPressureAdvanceClocks(size_t extruder) const noexcept;
-	float GetBacklashMm(size_t axis) const noexcept pre(axis < MaxAxes) { return backlashMm[axis]; }
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
@@ -186,7 +184,6 @@ public:
 
 	unsigned int GetJerkPolicy() const noexcept { return jerkPolicy; }
 	void SetJerkPolicy(unsigned int jp) noexcept { jerkPolicy = jp; }
-	void UpdateBacklashSteps() noexcept;
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;			// Get the current step interval for this axis or extruder
@@ -307,12 +304,6 @@ private:
 	ExtruderShaper extruderShapers[MaxExtruders];
 
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
-
-	// Backlash compensation
-	float backlashMm[MaxAxes];							// amount of backlash in mm for each axis motor
-	uint32_t backlashSteps[MaxAxes];					// the backlash converted to microsteps
-	int32_t backlashStepsDue[MaxAxes];					// how many backlash compensation microsteps are due for each axis
-	AxesBitmap lastDirections;							// each but is set if the corresponding axes motor last moved backwards
 
 	// Calibration and bed compensation
 	uint8_t numCalibratedFactors;
