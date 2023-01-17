@@ -667,6 +667,10 @@ void StringParser::ProcessContinueCommand() THROWS(GCodeException)
 
 void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeException)
 {
+#if SUPPORT_ASYNC_MOVES
+	if (isGlobal && !gb.Executing()) return;
+#endif
+
 	SkipWhiteSpace();
 
 	// Get the identifier
