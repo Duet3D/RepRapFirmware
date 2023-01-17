@@ -680,6 +680,12 @@ void Platform::Init() noexcept
 #if !defined(DUET3) && !defined(DUET3MINI)
 		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);										// this is OK for the TMC2660 CS pins too
 #endif
+
+		delayAfterBrakeOn[driver] = 0;
+#if SUPPORT_BRAKE_PWM
+		currentBrakePwm[driver] = 0.0;
+		brakeVoltages[driver] = FullyOnBrakeVoltage;
+#endif
 	}
 
 #ifdef DUET3_MB6XD
@@ -1230,6 +1236,19 @@ void Platform::Spin() noexcept
 # endif
 			}
 
+# if SUPPORT_BRAKE_PWM
+			// If the brake solenoid is activated, adjust the PWM if necessary
+			const float voltsVin = AdcReadingToPowerVoltage(currentVin);
+			if (currentBrakePwm[nextDriveToPoll] != 0.0 && voltsVin > 10.0)
+			{
+				const float newBrakePwm = min<float>(brakeVoltages[nextDriveToPoll]/voltsVin, 1.0);
+				if (fabsf(newBrakePwm - currentBrakePwm[nextDriveToPoll] >= 0.05))
+				{
+					brakePorts[nextDriveToPoll].WriteAnalog(newBrakePwm);
+					currentBrakePwm[nextDriveToPoll] = newBrakePwm;
+				}
+			}
+# endif
 			// Advance drive number ready for next time
 			++nextDriveToPoll;
 			if (nextDriveToPoll == NumDirectDrivers)
@@ -2554,7 +2573,7 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexce
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 		}
 #endif
-		brakePorts[driver].WriteDigital(true);			// turn the brake solenoid on to disengage the brake
+		DisengageBrake(driver);
 	}
 }
 
@@ -2563,7 +2582,7 @@ void Platform::DisableOneLocalDriver(size_t driver) noexcept
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
-		brakePorts[driver].WriteDigital(false);			// turn the brake solenoid off to engage the brake
+		EngageBrake(driver);
 #if defined(DUET3) && HAS_SMART_DRIVERS
 		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
 #elif HAS_SMART_DRIVERS
@@ -2646,6 +2665,25 @@ void Platform::DisableAllDrivers() noexcept
 	}
 }
 
+void Platform::EngageBrake(size_t driver) noexcept
+{
+#if SUPPORT_BRAKE_PWM
+	currentBrakePwm[driver] = 0.0;
+#endif
+	brakePorts[driver].WriteDigital(false);			// turn the brake solenoid off to engage the brake
+}
+
+void Platform::DisengageBrake(size_t driver) noexcept
+{
+#if SUPPORT_BRAKE_PWM
+	// Set the PWM to deliver the requested voltage regardless of the VIN voltage
+	currentBrakePwm[driver] = min<float>(brakeVoltages[driver]/AdcReadingToPowerVoltage(max<uint16_t>(currentVin, 1)), 1.0);
+	brakePorts[driver].WriteAnalog(currentBrakePwm[driver]);
+#else
+	brakePorts[driver].WriteDigital(true);			// turn the brake solenoid on to disengage the brake
+#endif
+}
+
 // Set drives to idle hold if they are enabled. If a drive is disabled, leave it alone.
 // Must not be called from an ISR, or with interrupts disabled.
 void Platform::SetDriversIdle() noexcept
@@ -2683,6 +2721,15 @@ void Platform::SetDriversIdle() noexcept
 // Configure the brake port for a driver
 GCodeResult Platform::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
 {
+# if !SUPPORT_BRAKE_PWM
+	if (gb.Seen('V'))
+	{
+		// Don't allow a brake port to be configured if the user specified a voltage and we don't support PWM
+		reply.copy("Brake PWM not supported by this board");
+		return GCodeResult::error;
+	}
+# endif
+
 	bool seen = false;
 	if (gb.Seen('C'))
 	{
@@ -2691,21 +2738,36 @@ GCodeResult Platform::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef&
 		{
 			return GCodeResult::error;
 		}
+# if SUPPORT_BRAKE_PWM
+		brakePorts[driver].SetFrequency(BrakePwmFrequency);
+# endif
 		delayAfterBrakeOn[driver] = DefaultDelayAfterBrakeOn;
 	}
+
 	uint32_t val;
 	if (gb.TryGetLimitedUIValue('S', val, seen, 100))
 	{
+		seen = true;
 		delayAfterBrakeOn[driver] = val;
 	}
+
+# if SUPPORT_BRAKE_PWM
+	gb.TryGetNonNegativeFValue('V', brakeVoltages[driver], seen);
+# endif
 
 	if (!seen)
 	{
 		reply.printf("Driver %u uses brake port ", driver);
 		brakePorts[driver].AppendPinName(reply);
-#if 0	// don't print this bit until we have implemented it!
+# if SUPPORT_BRAKE_PWM
+		if (brakeVoltages[driver] < FullyOnBrakeVoltage)
+		{
+			reply.catf(" with voltage limited to %.1f by PWM", (double)brakeVoltages[driver]);
+		}
+# endif
+# if 0	// don't print this bit until we have implemented it!
 		reply.catf(" and %ums delay after turning the brake on", delayAfterBrakeOn[driver]);
-#endif
+# endif
 	}
 	return GCodeResult::ok;
 }
@@ -5224,17 +5286,50 @@ GCodeResult Platform::EutProcessM569Point7(const CanMessageGeneric& msg, const S
 		return GCodeResult::error;
 	}
 
+# if !SUPPORT_BRAKE_PWM
+	if (parser.HasParameter('V'))
+	{
+		// Don't allow a brake port to be configured if the user specified a voltage and we don't support PWM
+		reply.copy("Brake PWM not supported by this board");
+		return GCodeResult::error;
+	}
+# endif
+
+	bool seen = false;
 	if (parser.HasParameter('C'))
 	{
+		seen = true;
 		String<StringLength20> portName;
 		parser.GetStringParam('C', portName.GetRef());
-		return GetGCodeResultFromSuccess(brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, PinAccess::write0));
 		//TODO use the following instead when we track the enable state of each driver individually
-		//return GetGCodeResultFromSuccess(brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, (driverDisabled[drive]) ? PinAccess::write0 : PinAccess::write1));
+		//if (!brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, (driverDisabled[drive]) ? PinAccess::write0 : PinAccess::write1)) ...
+		if (brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, PinAccess::write0))
+		{
+			return GCodeResult::error;
+		}
+# if SUPPORT_BRAKE_PWM
+		brakePorts[drive].SetFrequency(BrakePwmFrequency);
+# endif
 	}
 
-	reply.printf("Driver %u.%u uses brake port ", CanInterface::GetCanAddress(), drive);
-	brakePorts[drive].AppendPinName(reply);
+# if SUPPORT_BRAKE_PWM
+	if (parser.GetFloatParam('V', brakeVoltages[drive]))
+	{
+		seen = true;
+	}
+# endif
+
+	if (!seen)
+	{
+		reply.printf("Driver %u.%u uses brake port ", CanInterface::GetCanAddress(), drive);
+		brakePorts[drive].AppendPinName(reply);
+# if SUPPORT_BRAKE_PWM
+		if (brakeVoltages[drive] < FullyOnBrakeVoltage)
+		{
+			reply.catf(" with voltage limited to %.1f by PWM", (double)brakeVoltages[drive]);
+		}
+# endif
+	}
 	return GCodeResult::ok;
 }
 

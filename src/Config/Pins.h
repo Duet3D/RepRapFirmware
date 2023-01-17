@@ -147,6 +147,10 @@
 # define SUPPORT_SLOW_DRIVERS	1
 #endif
 
+#ifndef SUPPORT_BRAKE_PWM
+# define SUPPORT_BRAKE_PWM		0
+#endif
+
 #ifndef HAS_12V_MONITOR
 # define HAS_12V_MONITOR		0
 # define ENFORCE_MIN_V12		0

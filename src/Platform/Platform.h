@@ -712,6 +712,9 @@ private:
 	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func); }
 #endif
 
+	void EngageBrake(size_t driver) noexcept;
+	void DisengageBrake(size_t driver) noexcept;
+
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
 #endif
@@ -766,7 +769,14 @@ private:
 	bool driverErrPinsActiveLow;
 #endif
 
+#if SUPPORT_BRAKE_PWM
+	PwmPort brakePorts[NumDirectDrivers];					// the brake ports for each driver
+	float brakeVoltages[NumDirectDrivers];
+	static constexpr float FullyOnBrakeVoltage = 100.0;		// this value means always use full voltage (don't PWM)
+	float currentBrakePwm[NumDirectDrivers];
+#else
 	IoPort brakePorts[NumDirectDrivers];					// the brake ports for each driver
+#endif
 	uint16_t delayAfterBrakeOn[NumDirectDrivers];			// how many milliseconds we wait between turning the brake on and de-energising the driver
 
 	float motorCurrents[MaxAxesPlusExtruders];				// the normal motor current for each stepper driver

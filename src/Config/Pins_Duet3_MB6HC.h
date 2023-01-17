@@ -54,6 +54,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_MULTICAST_DISCOVERY	1
 #define SUPPORT_ASYNC_MOVES		1
 #define SUPPORT_PROBE_POINTS_FILE	1
+#define SUPPORT_BRAKE_PWM		1
 
 #define USE_MPU					1					// Needed if USE_CACHE is set, so that we can have non-cacheable memory regions
 #define USE_CACHE				1
