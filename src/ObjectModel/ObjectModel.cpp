@@ -260,9 +260,18 @@ ExpressionValue::ExpressionValue(const ExpressionValue& other) noexcept
 	type = other.type;
 	param = other.param;
 	whole = other.whole;
-	if (type == (uint32_t)TypeCode::HeapString)
+	switch (GetType())
 	{
+	case TypeCode::HeapString:
 		shVal.IncreaseRefCount();
+		break;
+
+	case TypeCode::HeapArray:
+		ahVal.IncreaseRefCount();
+		break;
+
+	default:
+		break;
 	}
 }
 
@@ -287,9 +296,18 @@ ExpressionValue& ExpressionValue::operator=(const ExpressionValue& other) noexce
 		type = other.type;
 		param = other.param;
 		whole = other.whole;
-		if (type == (uint32_t)TypeCode::HeapString)
+		switch (GetType())
 		{
+		case TypeCode::HeapString:
 			shVal.IncreaseRefCount();
+			break;
+
+		case TypeCode::HeapArray:
+			ahVal.IncreaseRefCount();
+			break;
+
+		default:
+			break;
 		}
 	}
 	return *this;
@@ -298,10 +316,21 @@ ExpressionValue& ExpressionValue::operator=(const ExpressionValue& other) noexce
 // Release any associated storage
 void ExpressionValue::Release() noexcept
 {
-	if (type == (uint32_t)TypeCode::HeapString)
+	switch (GetType())
 	{
+	case TypeCode::HeapString:
+
 		shVal.Delete();
 		type = (uint32_t)TypeCode::None;
+		break;
+
+	case TypeCode::HeapArray:
+		ahVal.Delete();
+		type = (uint32_t)TypeCode::None;
+		break;
+
+	default:
+		break;
 	}
 }
 

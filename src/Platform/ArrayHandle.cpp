@@ -100,10 +100,14 @@ void ArrayHandle::Delete() noexcept
 	if (slotPtr != nullptr)
 	{
 		ReadLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
-		ArrayStorageSpace *const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
-		for (size_t i = 0; i < aSpace->count; ++i)
+		if (slotPtr->refCount == 1)
 		{
-			aSpace->elements[i].~ExpressionValue();				// call destructor on the elements
+			// The call to Heap:::DeleteSlot will deallocate the slot, so release the contents first
+			ArrayStorageSpace *const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
+			for (size_t i = 0; i < aSpace->count; ++i)
+			{
+				aSpace->elements[i].~ExpressionValue();			// call destructor on the elements
+			}
 		}
 		Heap::DeleteSlot(slotPtr);
 		slotPtr = nullptr;										// clear the pointer to the handle entry
