@@ -681,7 +681,9 @@ void Platform::Init() noexcept
 		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);										// this is OK for the TMC2660 CS pins too
 #endif
 
-		delayAfterBrakeOn[driver] = 0;
+		brakeOffDelays[driver] = 0;
+		motorOffDelays[driver] = DefaultDelayAfterBrakeOn;
+
 #if SUPPORT_BRAKE_PWM
 		currentBrakePwm[driver] = 0.0;
 		brakeVoltages[driver] = FullyOnBrakeVoltage;
@@ -1234,6 +1236,16 @@ void Platform::Spin() noexcept
 					}
 				}
 # endif
+			}
+
+			// Brake control
+			if (brakeOffTimers[nextDriveToPoll].CheckAndStop(brakeOffDelays[nextDriveToPoll]))
+			{
+				DisengageBrake(nextDriveToPoll);
+			}
+			if (motorOffTimers[nextDriveToPoll].CheckAndStop(motorOffDelays[nextDriveToPoll]))
+			{
+				InternalDisableDriver(nextDriveToPoll);
 			}
 
 # if SUPPORT_BRAKE_PWM
@@ -2544,6 +2556,8 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexce
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
+		motorOffTimers[driver].Stop();
+
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 		if (driver < numSmartDrivers && !driversPowered)
 		{
@@ -2573,7 +2587,17 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexce
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 		}
 #endif
-		DisengageBrake(driver);
+		if (brakePorts[driver].IsValid() && !brakePorts[driver].ReadDigital())
+		{
+			if (brakeOffDelays[driver] != 0)
+			{
+				brakeOffTimers[driver].Start();
+			}
+			else
+			{
+				DisengageBrake(driver);
+			}
+		}
 	}
 }
 
@@ -2582,24 +2606,37 @@ void Platform::DisableOneLocalDriver(size_t driver) noexcept
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
+		brakeOffTimers[driver].Stop();
 		EngageBrake(driver);
-#if defined(DUET3) && HAS_SMART_DRIVERS
-		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
-#elif HAS_SMART_DRIVERS
-		if (driver < numSmartDrivers)
+		if (motorOffDelays[driver] != 0 && brakePorts[driver].IsValid() && brakePorts[driver].ReadDigital())
 		{
-			SmartDrivers::EnableDrive(driver, false);
+			motorOffTimers[driver].Start();
 		}
-# if !defined(DUET3MINI)		// Duet 5LC has no enable pins
 		else
 		{
-			digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
+			InternalDisableDriver(driver);
 		}
+	}
+}
+
+void Platform::InternalDisableDriver(size_t driver) noexcept
+{
+#if defined(DUET3) && HAS_SMART_DRIVERS
+	SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
+#elif HAS_SMART_DRIVERS
+	if (driver < numSmartDrivers)
+	{
+		SmartDrivers::EnableDrive(driver, false);
+	}
+# if !defined(DUET3MINI)		// Duet 5LC has no enable pins
+	else
+	{
+		digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
+	}
 # endif
 #else
-		digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
+	digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
 #endif
-	}
 }
 
 // Enable the local drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
@@ -2741,14 +2778,14 @@ GCodeResult Platform::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef&
 # if SUPPORT_BRAKE_PWM
 		brakePorts[driver].SetFrequency(BrakePwmFrequency);
 # endif
-		delayAfterBrakeOn[driver] = DefaultDelayAfterBrakeOn;
+		motorOffDelays[driver] = DefaultDelayAfterBrakeOn;
 	}
 
 	uint32_t val;
-	if (gb.TryGetLimitedUIValue('S', val, seen, 100))
+	if (gb.TryGetLimitedUIValue('S', val, seen, 1000))
 	{
 		seen = true;
-		delayAfterBrakeOn[driver] = val;
+		motorOffDelays[driver] = val;
 	}
 
 # if SUPPORT_BRAKE_PWM

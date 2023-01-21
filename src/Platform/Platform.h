@@ -712,6 +712,7 @@ private:
 	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func); }
 #endif
 
+	void InternalDisableDriver(size_t driver) noexcept;
 	void EngageBrake(size_t driver) noexcept;
 	void DisengageBrake(size_t driver) noexcept;
 
@@ -769,6 +770,7 @@ private:
 	bool driverErrPinsActiveLow;
 #endif
 
+	// Stepper motor brake control
 #if SUPPORT_BRAKE_PWM
 	PwmPort brakePorts[NumDirectDrivers];					// the brake ports for each driver
 	float brakeVoltages[NumDirectDrivers];
@@ -777,7 +779,10 @@ private:
 #else
 	IoPort brakePorts[NumDirectDrivers];					// the brake ports for each driver
 #endif
-	uint16_t delayAfterBrakeOn[NumDirectDrivers];			// how many milliseconds we wait between turning the brake on and de-energising the driver
+	MillisTimer brakeOffTimers[NumDirectDrivers];
+	MillisTimer motorOffTimers[NumDirectDrivers];
+	uint16_t brakeOffDelays[NumDirectDrivers];				// how many milliseconds we wait between energising the driver and energising the brake
+	uint16_t motorOffDelays[NumDirectDrivers];				// how many milliseconds we wait between de-energising the brake (to turn it on) and de-energising the driver
 
 	float motorCurrents[MaxAxesPlusExtruders];				// the normal motor current for each stepper driver
 	float motorCurrentFraction[MaxAxesPlusExtruders];		// the percentages of normal motor current that each driver is set to
