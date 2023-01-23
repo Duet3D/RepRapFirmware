@@ -365,7 +365,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 
 #if SUPPORT_ASYNC_MOVES && PREALLOCATE_TOOL_AXES
-			// Whenever we release axes, we must update lastKnownMachinePositions for those axes first so that whoever allocated them next gets the correct positions
+			// Whenever we release axes, we must update lastKnownMachinePositions for those axes first so that whoever allocates them next gets the correct positions
 			ms.SaveOwnAxisCoordinates();
 			gb.AdvanceState();
 
