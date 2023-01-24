@@ -1276,13 +1276,13 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 							config.eap.credSizes.asMemb.caCert = CheckCredential(gb, true);
 						}
 
-						if (gb.Seen('A'))
-						{
-							config.eap.credSizes.asMemb.anonymousId = CheckCredential(gb);
-						}
-
 						if (config.eap.protocol == EAPProtocol::EAP_TLS)
 						{
+							gb.MustSee('A');
+							{
+								config.eap.credSizes.asMemb.anonymousId = CheckCredential(gb);
+							}
+
 							gb.MustSee('U');
 							{
 								config.eap.credSizes.asMemb.tls.userCert = CheckCredential(gb, true);
@@ -1301,6 +1301,10 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 ||
 									config.eap.protocol == EAPProtocol::EAP_TTLS_MSCHAPV2)
 						{
+							if (gb.Seen('A'))
+							{
+								config.eap.credSizes.asMemb.anonymousId = CheckCredential(gb);
+							}
 							gb.MustSee('U');
 							{
 								config.eap.credSizes.asMemb.peapttls.identity = CheckCredential(gb);
