@@ -761,8 +761,6 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				return true;
 			}
 
-			gb.Init();															// mark buffer as empty
-
 			if (gb.IsFileChannel() && gb.LatestMachineState().GetPrevious() == nullptr)
 			{
 				// Finished printing SD card file.
@@ -793,10 +791,11 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 					fd.Close();
 				}
 # else
-				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))		// wait until movement has finished and deferred command queue has caught up
+				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))			// wait until movement has finished and deferred command queue has caught up
 				{
 					return false;
 				}
+
 				StopPrint(StopPrintReason::normalCompletion);
 # endif
 			}
@@ -5082,18 +5081,16 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 				synced = true;
 			}
 			// Else other input channel has not caught up with us yet, so wait for it
+			break;
 		}
-		else
-		{
-			// If we get here then the other input channel is also syncing, so it's safe to use the machine axis coordinates of the axes it owns to update our user coordinates
-			UpdateAllCoordinates(thisGb);
 
-			// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
-			thisGb.syncState = GCodeBuffer::SyncState::synced;
-			//debugPrintf("Channel %u changed state to synced, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
-		}
-		break;
+		// If we get here then the other input channel is also syncing, so it's safe to use the machine axis coordinates of the axes it owns to update our user coordinates
+		UpdateAllCoordinates(thisGb);
 
+		// Now that we no longer need to read axis coordinates from the other motion system, flag that we have finished syncing
+		thisGb.syncState = GCodeBuffer::SyncState::synced;
+		//debugPrintf("Channel %u changed state to synced, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
+		// no break
 	case GCodeBuffer::SyncState::synced:
 		switch (otherGb.syncState)
 		{
