@@ -71,7 +71,7 @@ void Heap::GarbageCollect() noexcept
 void Heap::GarbageCollectInternal() noexcept
 {
 #if CHECK_HANDLES
-	RRF_ASSERT(heapLock.GetWriteLockOwner() == TaskBase::GetCallerTaskHandle());
+	heapLock.CheckHasWriteLock();
 #endif
 
 	heapUsed = 0;
@@ -246,7 +246,7 @@ bool Heap::CheckIntegrity(const StringRef& errmsg) noexcept
 Heap::IndexSlot *Heap::AllocateHandle() noexcept
 {
 #if CHECK_HANDLES
-	RRF_ASSERT(heapLock.GetWriteLockOwner() == TaskBase::GetCallerTaskHandle());
+	heapLock.CheckHasWriteLock();
 #endif
 
 	IndexBlock *prevIndexBlock = nullptr;
@@ -288,7 +288,7 @@ Heap::IndexSlot *Heap::AllocateHandle() noexcept
 Heap::StorageSpace *Heap::AllocateSpace(size_t length) noexcept
 {
 #if CHECK_HANDLES
-	RRF_ASSERT(heapLock.GetWriteLockOwner() == TaskBase::GetCallerTaskHandle());
+	heapLock.CheckHasWriteLock();
 #endif
 
 	length = min<size_t>((length + 3u) & (~3u), HeapBlockSize);			// round to make the length field a multiple of 4 and limit to max size

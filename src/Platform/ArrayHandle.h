@@ -12,6 +12,8 @@
 #include <ObjectModel/TypeCode.h>
 #include "Heap.h"
 
+#define CHECK_HEAP_READ_LOCKED		(1)
+
 class ExpressionValue;
 
 // Note: ArrayHandle is a union member in ExpressionValue, therefore it must be no larger than 32 bits and it cannot have a non-trivial destructor, copy constructor etc.
@@ -26,7 +28,7 @@ public:
 	void AssignElement(size_t index, ExpressionValue& val) THROWS(GCodeException);
 
 	size_t GetNumElements() const noexcept;												// get the number of elements
-	void GetElement(size_t index, ExpressionValue& rslt) const THROWS(GCodeException);	// get the specified element
+	bool GetElement(size_t index, ExpressionValue& rslt) const noexcept;				// return true and get the specified element if the index is in range
 	TypeCode GetElementType(size_t index) const noexcept;
 	void Delete() noexcept;
 	const ArrayHandle& IncreaseRefCount() const noexcept;

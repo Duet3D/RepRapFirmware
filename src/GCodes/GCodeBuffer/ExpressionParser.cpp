@@ -107,17 +107,17 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 
 		case TypeCode::HeapArray:
 			{
-				if (indexValue < rslt.ahVal.GetNumElements())
+				ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
+				if (!rslt.ahVal.GetElement(indexValue, rslt))	// if index was out of bounds
 				{
-					rslt.ahVal.GetElement(indexValue, rslt);
-				}
-				else if (evaluate)
-				{
-					throw GCodeException(gb.GetLineNumber(), indexCol, "array index out of range");
-				}
-				else
-				{
-					rslt.SetNull(nullptr);
+					if (evaluate)
+					{
+						throw GCodeException(gb.GetLineNumber(), indexCol, "array index out of range");
+					}
+					else
+					{
+						rslt.SetNull(nullptr);
+					}
 				}
 			}
 			break;
@@ -987,7 +987,7 @@ void ExpressionParser::ApplyLengthOperator(ExpressionValue& val) const THROWS(GC
 
 	case TypeCode::HeapArray:
 		{
-			ReadLocker lock(Heap::heapLock);
+			ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
 			val.SetInt(val.ahVal.GetNumElements());
 		}
 		break;
@@ -1355,18 +1355,21 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					{
 						ThrowParseException("operand is not an array");
 					}
-					ReadLocker lock(Heap::heapLock);
-					const size_t length = rslt.ahVal.GetNumElements();
-					if (length == 0)
+
+					ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
+					ExpressionValue rVal;
+					if (!rslt.ahVal.GetElement(0, rVal))
 					{
 						ThrowParseException("array has no elements");
 					}
-					ExpressionValue rVal;
-					rslt.ahVal.GetElement(0, rVal);
-					for (size_t i = 1; i < length; ++i)
+					
+					for (size_t i = 1; ; ++i)
 					{
 						ExpressionValue nextVal;
-						rslt.ahVal.GetElement(i, nextVal);
+						if (!rslt.ahVal.GetElement(i, nextVal))
+						{
+							break;									// quit when index out of bounds
+						}
 						EvaluateMinOrMax(rVal, nextVal, evaluate, func.RawValue() == Function::max);
 					}
 					rslt = rVal;
@@ -1548,17 +1551,16 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 			{
 				ExpressionValue elem;
 				{
-					context.AddIndex();						// we are about to use up an index
+					context.AddIndex();								// we are about to use up an index
 					const int32_t index = context.GetLastIndex();
-					ReadLocker lock(Heap::heapLock);
-					if ((unsigned int)index > val.ahVal.GetNumElements())
+					ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
+					if (!val.ahVal.GetElement(index, elem))
 					{
 						ThrowParseException("Index out of range");
 					}
-					val.ahVal.GetElement(index, elem);
 				}
 
-				++pos;					// skip the '^'
+				++pos;												// skip the '^'
 				if (*pos == 0)
 				{
 					// End of the expression
