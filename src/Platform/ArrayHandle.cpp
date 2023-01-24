@@ -55,36 +55,48 @@ void ArrayHandle::AssignElement(size_t index, ExpressionValue &val) THROWS(GCode
 	throw GCodeException("Array index out of bounds");
 }
 
+// Get the number of elements in a heap array
+// Caller must have a read lock on heapLock before calling this!
 size_t ArrayHandle::GetNumElements() const noexcept
 {
+#if CHECK_HEAP_READ_LOCKED
+	Heap::heapLock.CheckHasReadLock();
+#endif
 	if (slotPtr == nullptr)
 	{
 		return 0;
 	}
-	ReadLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
 	return reinterpret_cast<const ArrayStorageSpace*>(slotPtr->storage)->count;
 }
 
-void ArrayHandle::GetElement(size_t index, ExpressionValue &rslt) const THROWS(GCodeException)
+// Retrieve an array element, returning false if the index is out of bounds
+// Caller must have a read lock on heapLock before calling this!
+bool ArrayHandle::GetElement(size_t index, ExpressionValue &rslt) const noexcept
 {
+#if CHECK_HEAP_READ_LOCKED
+	Heap::heapLock.CheckHasReadLock();
+#endif
 	if (slotPtr != nullptr)
 	{
-		ReadLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
 		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
 		if (index < aSpace->count)
 		{
 			rslt = aSpace->elements[index];
-			return;
+			return true;
 		}
 	}
-	throw GCodeException("Array index out of bounds");
+	return false;
 }
 
+// Retrieve the type of an array element, or TypeCode::None if the index is out of range
+// Caller must have a read lock on heapLock before calling this!
 TypeCode ArrayHandle::GetElementType(size_t index) const noexcept
 {
+#if CHECK_HEAP_READ_LOCKED
+	Heap::heapLock.CheckHasReadLock();
+#endif
 	if (slotPtr != nullptr)
 	{
-		ReadLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
 		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
 		if (index < aSpace->count)
 		{
