@@ -30,7 +30,7 @@ class OutputStack;
 //#define TRACK_FILE_CODES			// Uncomment this to enable code <-> code reply tracking for the file G-code channel
 
 // G-Code input class for an SPI channel
-class SbcInterface
+class SbcInterface INHERIT_OBJECT_MODEL
 {
 public:
 	SbcInterface() noexcept;
@@ -67,6 +67,9 @@ public:
 	bool SeekFile(FileHandle handle, FilePosition offset) noexcept;
 	bool TruncateFile(FileHandle handle) noexcept;
 	void CloseFile(FileHandle handle) noexcept;
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	DataTransfer transfer;
