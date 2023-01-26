@@ -29,6 +29,9 @@ extern char _estack;		// defined by the linker
 volatile OutputStack SbcInterface::gcodeReply;
 Mutex SbcInterface::gcodeReplyMutex;
 
+// This function is not used in this class
+const ObjectModelClassDescriptor *SbcInterface::GetObjectModelClassDescriptor() const noexcept { return nullptr; }
+
 // The SBC task's stack size needs to be enough to support rr_model and expression evaluation
 // In RRF 3.3beta3, 744 is only just enough for simple expression evaluation in a release build when using globals
 // In 3.3beta3.1 we have saved ~151 bytes (37 words) of stack compared to 3.3beta3
@@ -557,7 +560,26 @@ void SbcInterface::ExchangeData() noexcept
 					{
 						ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
 						const ExpressionValue val = parser.Parse();
-						packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), val);
+						if (val.GetType() == TypeCode::HeapArray)
+						{
+							// Write heap arrays as JSON
+							OutputBuffer *json;
+							if (OutputBuffer::Allocate(json))
+							{
+								ObjectExplorationContext context;
+								ReportHeapArrayAsJson(json, context, nullptr, val.ahVal,  "");
+								packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), json);
+							}
+							else
+							{
+								packetAcknowledged = false;
+							}
+						}
+						else
+						{
+							// Write plain result
+							packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), val);
+						}
 					}
 					else
 					{

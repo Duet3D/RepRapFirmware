@@ -1228,7 +1228,6 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	switch (value.GetType())
 	{
 	case TypeCode::None:
-	// FIXME Add support for arrays
 	case TypeCode::Bool:
 	case TypeCode::DriverId_tc:
 	case TypeCode::Uint32:
@@ -1254,7 +1253,6 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::HeapString:
 		payloadLength = expressionLength + value.shVal.GetLength();
 		break;
-
 	default:
 		rslt.printf("unsupported type code %d", (int)value.type);
 		payloadLength = expressionLength + rslt.strlen();
@@ -1334,6 +1332,37 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 		header->intValue = rslt.strlen();
 		WriteData(rslt.c_str(), rslt.strlen());
 		break;
+	}
+	return true;
+}
+
+bool DataTransfer::WriteEvaluationResult(const char *expression, OutputBuffer *json) noexcept
+{
+	// Check if we can write the JSON result
+	const size_t expressionLength = strlen(expression);
+	if (!CanWritePacket(sizeof(EvaluationResultHeader) + expressionLength + json->Length()))
+	{
+		OutputBuffer::ReleaseAll(json);
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::EvaluationResult, sizeof(EvaluationResultHeader) + expressionLength + json->Length());
+
+	// Write partial header
+	EvaluationResultHeader *header = WriteDataHeader<EvaluationResultHeader>();
+	header->expressionLength = expressionLength;
+
+	// Write expression
+	WriteData(expression, expressionLength);
+
+	// Write JSON
+	header->dataType = DataType::Expression;
+	header->intValue = json->Length();
+	while (json != nullptr)
+	{
+		WriteData(json->Data(), json->DataLength());
+		json = OutputBuffer::Release(json);
 	}
 	return true;
 }
