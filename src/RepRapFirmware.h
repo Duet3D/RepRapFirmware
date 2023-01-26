@@ -169,6 +169,8 @@ struct DriverId
 	// Constructor used by ATE configurations and object model
 	DriverId(CanAddress addr, uint8_t drv) noexcept : localDriver(drv), boardAddress(addr) { }
 
+	CanAddress GetBoardAddress() const noexcept { return boardAddress; }
+
 	void SetFromBinary(uint32_t val) noexcept
 	{
 		localDriver = val & 0x000000FF;
@@ -211,6 +213,8 @@ struct DriverId
 
 	// Constructor used by object model
 	explicit DriverId(uint8_t drv) noexcept : localDriver(drv) { }
+
+	CanAddress GetBoardAddress() const noexcept { return 0; }
 
 	// Set the driver ID from the binary value, returning true if there was a nonzero board number so that the caller knows the address is not valid
 	bool SetFromBinary(uint32_t val) noexcept
