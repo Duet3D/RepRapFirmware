@@ -39,20 +39,22 @@ extern uint32_t _firmware_crc;			// defined in linker script
 
 // MAIN task data
 // The main task currently runs GCodes, so it needs to be large enough to hold the matrices used for delta auto calibration.
-// The worst case stack usage is after running delta auto calibration with Move debugging enabled.
-// The timer and idle tasks currently never do I/O, so they can be much smaller.
+// The worst case stack usage points are as follows:
+// 1. After running delta auto calibration with Move debugging enabled
+// 2. We create an array of (2 * MaxAxes^2) floats when inverting the movement matrix for Core kinematics.
 #if SAME70
-constexpr unsigned int MainTaskStackWords = 1800;			// on the SAME70 we use matrices of doubles
-#elif defined(__LPC17xx__)
-constexpr unsigned int MainTaskStackWords = 1110-(16*9);	// LPC builds only support 16 calibration points, so less space needed
+// On the SAME70 we use matrices of doubles when doing auto calibration, so we need 1800 words of stack even when MaxAxes is only 15
+constexpr unsigned int MainTaskStackWords = max<unsigned int>(1800, (MaxAxes * MaxAxes * 2) + 250);
 #else
-constexpr unsigned int MainTaskStackWords = 1110;			// on other processors we use matrixes of floats
+// On other processors we use matrixes of floats when doing auto calibration
+constexpr unsigned int MainTaskStackWords = max<unsigned int>(1110, (MaxAxes * MaxAxes * 2) + 250);
 #endif
 
 static Task<MainTaskStackWords> mainTask;
 extern "C" [[noreturn]] void MainTask(void * pvParameters) noexcept;
 
 // Idle task data
+// The timer and idle tasks currently never do I/O, so they don't need much stack.
 constexpr unsigned int IdleTaskStackWords = 50;				// currently we don't use the idle task for anything, so this can be quite small
 static Task<IdleTaskStackWords> idleTask;
 

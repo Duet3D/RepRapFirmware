@@ -1047,7 +1047,7 @@ void StringParser::FindParameters() noexcept
 					const char c2 = toupper(c);
 					if (escaped)
 					{
-						if (c2 >= 'A' && c2 <= 'F' && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
+						if (c2 >= 'A' && c2 <= toupper(HighestAxisLetter) && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
 						{
 							parametersPresent.SetBit(c2 - ('A' - 26));
 						}
@@ -1154,7 +1154,7 @@ bool StringParser::IsLastCommand() const noexcept
 	return commandEnd >= gcodeLineEnd;			// using >= here also covers the case where the buffer is empty and gcodeLineEnd has been set to zero
 }
 
-// Is 'c' in the G Code string? 'c' must be in A..Z or a..f
+// Is 'c' in the G Code string? 'c' must be in A..Z or a..HighestAxisLetter
 // Leave the pointer one after it for a subsequent read.
 bool StringParser::Seen(char c) noexcept
 {
@@ -1169,7 +1169,7 @@ bool StringParser::Seen(char c) noexcept
 	{
 		bit = c - 'A';
 	}
-	if (bit >= ParameterLettersBitmap::MaxBits() || !parametersPresent.IsBitSet(c - 'A'))
+	if (bit >= ParameterLettersBitmap::MaxBits() || !parametersPresent.IsBitSet(bit))
 	{
 		return false;
 	}

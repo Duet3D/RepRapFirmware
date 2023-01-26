@@ -325,7 +325,14 @@ typedef Bitmap<uint16_t> DriverChannelsBitmap;		// Type of a bitmap representing
 typedef Bitmap<uint32_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
 typedef Bitmap<uint32_t> TriggerNumbersBitmap;		// Type of a bitmap representing a set of trigger numbers
 typedef Bitmap<uint64_t> ToolNumbersBitmap;			// Type of a bitmap representing a set of tool numbers
+
+#if defined(DUET3)
+typedef Bitmap<uint64_t> ParameterLettersBitmap;	// Type of a bitmap representing a set of parameter letters in A..Z and a..z
+constexpr char HighestAxisLetter = 'z';
+#else
 typedef Bitmap<uint32_t> ParameterLettersBitmap;	// Type of a bitmap representing a set of parameter letters in A..Z and a..f
+constexpr char HighestAxisLetter = 'f';
+#endif
 
 #if defined(DUET3) || defined(DUET3MINI)
 typedef Bitmap<uint64_t> SensorsBitmap;
@@ -344,6 +351,7 @@ static_assert(MaxSensors <= SensorsBitmap::MaxBits());
 static_assert(MaxGpInPorts <= InputPortsBitmap::MaxBits());
 static_assert(MaxTriggers <= TriggerNumbersBitmap::MaxBits());
 static_assert(MaxTools <= ToolNumbersBitmap::MaxBits());
+static_assert(MaxAxes + 17 <= ParameterLettersBitmap::MaxBits());	// so that we have enough letters available for all the axes
 
 typedef uint16_t Pwm_t;							// Type of a PWM value when we don't want to use floats
 
