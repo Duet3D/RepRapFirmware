@@ -33,7 +33,7 @@ namespace StackUsage
 
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true, input);
-NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, datetime, degrees, fileexists, exists, floor, isnan, max, min, mod, radians, random, sin, sqrt, tan);
+NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, datetime, degrees, fileexists, exists, floor, isnan, max, min, mod, radians, random, sin, sqrt, tan, vector);
 
 const char * const InvalidExistsMessage = "invalid 'exists' expression";
 
@@ -1362,7 +1362,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					{
 						ThrowParseException("array has no elements");
 					}
-					
+
 					for (size_t i = 1; ; ++i)
 					{
 						ExpressionValue nextVal;
@@ -1465,6 +1465,42 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 						break;
 					}
 					rslt.SetBool(b);
+				}
+				break;
+
+			case Function::vector:		// vector(numElements, elementValue)
+				if (evaluate && (rslt.GetType() != TypeCode::Int32 || rslt.iVal < 0))
+				{
+					ThrowParseException("expected non-negative integer");
+				}
+				SkipWhiteSpace();
+				if (CurrentCharacter() != ',')
+				{
+					ThrowParseException("expected ','");
+				}
+
+				AdvancePointer();			// skip the comma
+				SkipWhiteSpace();
+				{
+					ExpressionValue valueOperand;
+					// We recently checked the stack for a call to ParseInternal, no need to do it again
+					ParseInternal(valueOperand, evaluate, 0);
+					if (evaluate)
+					{
+						const size_t numElems = (size_t)rslt.iVal;
+						ArrayHandle ah;
+						ah.Allocate(numElems);
+						for (size_t i = 0; i < numElems; ++i)
+						{
+							ah.AssignElement(i, valueOperand);
+						}
+						rslt.SetArrayHandle(ah);
+					}
+					else
+					{
+						rslt.SetNull(nullptr);
+					}
+					break;
 				}
 				break;
 
