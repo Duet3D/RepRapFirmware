@@ -26,6 +26,7 @@ public:
 
 	void Allocate(size_t numElements) THROWS(GCodeException);
 	void AssignElement(size_t index, ExpressionValue& val) THROWS(GCodeException);
+	void AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndeces != 0);
 
 	size_t GetNumElements() const noexcept;												// get the number of elements
 	bool GetElement(size_t index, ExpressionValue& rslt) const noexcept;				// return true and get the specified element if the index is in range
@@ -36,6 +37,10 @@ public:
 
 protected:
 	Heap::IndexSlot * null slotPtr;
+
+private:
+	void MakeUnique() THROWS(GCodeException);
+	void InternalAssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndeces != 0);
 };
 
 // Version of ArrayHandle that updates the reference counts automatically

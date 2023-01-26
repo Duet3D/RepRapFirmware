@@ -718,7 +718,6 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 
 void StringParser::ProcessSetCommand() THROWS(GCodeException)
 {
-	// Skip the "var." or "global." prefix
 	SkipWhiteSpace();
 	const bool isGlobal = StringStartsWith(gb.buffer + readPointer, "global.");
 
@@ -726,11 +725,13 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	if (isGlobal && !gb.Executing()) return;
 #endif
 
+	// Skip the "var." or "global." prefix and get access to the appropriate variable set
 	WriteLockedPointer<VariableSet> vset = (isGlobal)
 											? (readPointer += strlen("global."), reprap.GetGlobalVariablesForWriting())
 											: (StringStartsWith(gb.buffer + readPointer, "var."))
 											  	? (readPointer += strlen("var."), WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables()))
 												: throw ConstructParseException("expected a global or local variable");
+
 	// Get the identifier
 	char c = gb.buffer[readPointer];
 	if (!isalpha(c))
@@ -746,14 +747,6 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 		c = gb.buffer[readPointer];
 	} while (isalpha(c) || isdigit(c) || c == '_' );
 
-	// Expect '='
-	SkipWhiteSpace();
-	if (gb.buffer[readPointer] != '=')
-	{
-		throw ConstructParseException("expected '='");
-	}
-	++readPointer;
-
 	// Look up the identifier
 	Variable * const var = vset->Lookup(varName.c_str());
 	if (var == nullptr)
@@ -762,9 +755,54 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	}
 
 	SkipWhiteSpace();
+
+	// Check for index expressions after the identifier
+	constexpr size_t MaxArrayIndices = 5;
+	uint32_t indices[MaxArrayIndices];
+	size_t numIndices = 0;
+	for (numIndices = 0; ; ++numIndices)
+	{
+		SkipWhiteSpace();
+		if (gb.buffer[readPointer] != '[')
+		{
+			break;
+		}
+		if (numIndices == MaxArrayIndices)
+		{
+			throw ConstructParseException("Too many array indices");
+		}
+
+		++readPointer;
+		ExpressionParser indexParser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		const uint32_t indexExpr = indexParser.ParseUnsigned();
+		readPointer = indexParser.GetEndptr() - gb.buffer;
+		if (gb.buffer[readPointer] != ']')
+		{
+			throw ConstructParseException("expected ']'");
+		}
+		indices[numIndices] = indexExpr;
+		++readPointer;
+	}
+
+	// Expect '='
+	if (gb.buffer[readPointer] != '=')
+	{
+		throw ConstructParseException("expected '='");
+	}
+	++readPointer;
+
 	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 	ExpressionValue ev = parser.Parse();
-	var->Assign(ev);
+
+	if (numIndices == 0)
+	{
+		var->Assign(ev);
+	}
+	else
+	{
+		var->AssignIndexed(ev, numIndices, indices);
+	}
+
 	if (isGlobal)
 	{
 		reprap.GlobalUpdated();
