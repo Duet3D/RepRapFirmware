@@ -44,10 +44,10 @@ extern uint32_t _firmware_crc;			// defined in linker script
 // 2. We create an array of (2 * MaxAxes^2) floats when inverting the movement matrix for Core kinematics.
 #if SAME70
 // On the SAME70 we use matrices of doubles when doing auto calibration, so we need 1800 words of stack even when MaxAxes is only 15
-constexpr unsigned int MainTaskStackWords = max<unsigned int>(1800, (MaxAxes * MaxAxes * 2) + 250);
+constexpr unsigned int MainTaskStackWords = max<unsigned int>(1800, (MaxAxes * MaxAxes * 2) + 550);
 #else
 // On other processors we use matrixes of floats when doing auto calibration
-constexpr unsigned int MainTaskStackWords = max<unsigned int>(1110, (MaxAxes * MaxAxes * 2) + 250);
+constexpr unsigned int MainTaskStackWords = max<unsigned int>(1110, (MaxAxes * MaxAxes * 2) + 550);
 #endif
 
 static Task<MainTaskStackWords> mainTask;

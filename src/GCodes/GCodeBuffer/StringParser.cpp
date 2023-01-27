@@ -757,7 +757,6 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	SkipWhiteSpace();
 
 	// Check for index expressions after the identifier
-	constexpr size_t MaxArrayIndices = 5;
 	uint32_t indices[MaxArrayIndices];
 	size_t numIndices = 0;
 	for (numIndices = 0; ; ++numIndices)

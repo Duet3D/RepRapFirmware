@@ -81,7 +81,7 @@ constexpr size_t NumThermistorInputs = 4;
 constexpr size_t NumTmcDriversSenseChannels = 1;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
-constexpr size_t MaxAxes = 32;						// The maximum number of movement axes in the machine
+constexpr size_t MaxAxes = 30;						// The maximum number of movement axes in the machine
 constexpr size_t MaxDriversPerAxis = 8;				// The maximum number of stepper drivers assigned to one axis
 
 constexpr size_t MaxExtruders = 20;					// The maximum number of extruders
