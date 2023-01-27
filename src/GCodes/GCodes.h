@@ -289,7 +289,12 @@ public:
 	void SetRemotePrinting(bool isPrinting) noexcept { isRemotePrinting = isPrinting; }
 #endif
 
-	static constexpr const char *AllowedAxisLetters = "XYZUVWABCDabcdef";
+	static constexpr const char *AllowedAxisLetters =
+#if defined(DUET3)
+						"XYZUVWABCDabcdefghijklmnopqrstuvwxyz";
+#else
+						"XYZUVWABCDabcdef";
+#endif
 
 	// Standard macro filenames
 #define DEPLOYPROBE		"deployprobe"

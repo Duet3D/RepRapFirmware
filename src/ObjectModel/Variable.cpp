@@ -21,6 +21,7 @@ Variable::~Variable()
 	val.Release();
 }
 
+// Assign a new value to this variable
 void Variable::Assign(ExpressionValue& ev) THROWS(GCodeException)
 {
 	switch (ev.GetType())
@@ -55,6 +56,16 @@ void Variable::Assign(ExpressionValue& ev) THROWS(GCodeException)
 		val = ev;
 		break;
 	}
+}
+
+// Assign a new value to an indexed part of this variable. There is always at least one index.
+void Variable::AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException)
+{
+	if (val.GetType() != TypeCode::HeapArray)
+	{
+		throw GCodeException("Expected an array expression");
+	}
+	val.ahVal.AssignIndexed(ev, numIndices, indices);
 }
 
 Variable* VariableSet::Lookup(const char *str) noexcept

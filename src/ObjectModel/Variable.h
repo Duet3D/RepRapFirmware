@@ -26,6 +26,7 @@ public:
 	ExpressionValue GetValue() const noexcept { return val; }
 	int8_t GetScope() const noexcept { return scope; }
 	void Assign(ExpressionValue& ev) THROWS(GCodeException);
+	void AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndeces != 0);
 
 private:
 	StringHandle name;

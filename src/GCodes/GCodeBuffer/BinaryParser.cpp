@@ -63,7 +63,7 @@ void BinaryParser::DecodeCommand() noexcept
 				{
 					parametersPresent.SetBit(paramLetter - 'A');
 				}
-				else if (paramLetter >= 'a' && paramLetter <= 'f')
+				else if (paramLetter >= 'a' && paramLetter <= HighestAxisLetter)
 				{
 					parametersPresent.SetBit(paramLetter - ('a' - 26));
 				}
