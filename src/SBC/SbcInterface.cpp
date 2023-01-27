@@ -722,6 +722,48 @@ void SbcInterface::ExchangeData() noexcept
 			}
 			WriteLockedPointer<VariableSet> vset = (isGlobal) ? reprap.GetGlobalVariablesForWriting() : WriteLockedPointer<VariableSet>(nullptr, &gb->GetVariables());
 
+			// Check for index expressions after the variable name. DSF will have stripped out any spaces except for those within index expressions.
+			uint32_t indices[MaxArrayIndices];
+			size_t numIndices = 0;
+			if (!createVariable)
+			{
+				const char* indexStart = strchr(varName.c_str(), '[');
+				if (indexStart != nullptr)
+				{
+					const size_t firstIndexOffset = indexStart - varName.c_str();
+					bool hadError = false;
+					do
+					{
+						if (numIndices == MaxArrayIndices)
+						{
+							expression.printf("too many array indices in '%s'", varName.c_str());
+							hadError = true;
+							break;
+						}
+
+						ExpressionParser indexParser(*gb, indexStart + 1, varName.c_str() + varName.strlen());
+						const uint32_t indexExpr = indexParser.ParseUnsigned();
+						indexStart = indexParser.GetEndptr();
+						if (*indexStart != ']')
+						{
+							expression.printf("missing ']' in '%s'", varName.c_str());
+							hadError = true;
+							break;
+						}
+
+						indices[numIndices++] = indexExpr;
+						++indexStart;								// skip the ']'
+					} while (*indexStart == '[');
+
+					if (hadError)
+					{
+						packetAcknowledged = transfer.WriteSetVariableError(varName.c_str(), expression.c_str());
+						break;
+					}
+					varName[firstIndexOffset] = 0;					// terminate the variable name at the first '['
+				}
+			}
+
 			// Check if the variable is valid
 			const char *shortVarName = varName.c_str() + strlen(isGlobal ? "global." : "var.");
 			Variable * const v = vset->Lookup(shortVarName);
@@ -751,9 +793,13 @@ void SbcInterface::ExchangeData() noexcept
 					// DSF doesn't provide indent values but instructs RRF to delete local variables when the current block ends
 					vset->InsertNew(shortVarName, ev, 0);
 				}
-				else
+				else if (numIndices == 0)
 				{
 					v->Assign(ev);
+				}
+				else
+				{
+					v->AssignIndexed(ev, numIndices, indices);
 				}
 
 				transfer.WriteSetVariableResult(varName.c_str(), ev);
