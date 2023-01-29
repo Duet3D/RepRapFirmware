@@ -218,7 +218,7 @@ bool EndstopsManager::EnableZProbe(size_t probeNumber, bool probingAway) noexcep
 	isHomingMove = false;
 	if (probeNumber < MaxZProbes && zProbes[probeNumber] != nullptr)
 	{
-		zProbes[probeNumber]->SetProbingAway(probingAway);
+		zProbes[probeNumber]->PrepareForUse(probingAway);
 		AddToActive(*zProbes[probeNumber]);
 	}
 	return true;

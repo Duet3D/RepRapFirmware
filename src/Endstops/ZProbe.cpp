@@ -121,8 +121,13 @@ void ZProbe::SetDefaults() noexcept
 	sensor = -1;
 }
 
-float ZProbe::GetActualTriggerHeight() const noexcept
+// Prepare to use this Z probe
+void ZProbe::PrepareForUse(const bool probingAway) noexcept
 {
+	misc.parts.probingAway = probingAway;
+
+	// We can't read temperature sensors from within the step ISR so calculate the actual trigger height now
+	actualTriggerHeight = -offsets[Z_AXIS];
 	if (sensor >= 0)
 	{
 		TemperatureError err(TemperatureError::unknownError);
@@ -130,10 +135,9 @@ float ZProbe::GetActualTriggerHeight() const noexcept
 		if (err == TemperatureError::ok)
 		{
 			const float dt = temperature - calibTemperature;
-			return (dt * temperatureCoefficients[0]) + (fsquare(dt) * temperatureCoefficients[1]) - offsets[Z_AXIS];
+			actualTriggerHeight += (dt * temperatureCoefficients[0]) + (fsquare(dt) * temperatureCoefficients[1]);
 		}
 	}
-	return -offsets[Z_AXIS];
 }
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
