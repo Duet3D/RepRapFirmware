@@ -550,6 +550,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		{
 		case 0:
 		case 1:
+		case 2:
 		case 23:
 		case 24:
 		case 32:
@@ -597,7 +598,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	// Pass file- and system-related commands to the SBC service if they came from somewhere else.
 	// They will be passed back to us via a binary buffer or separate SPI message if necessary.
 	if (   reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected() && !gb.IsBinary()
-		&& (   code == 0 || code == 1
+		&& (   code == 0 || code == 1 || code == 2
 			|| code == 20 || code == 21 || code == 22 || code == 23 || code == 24 || code == 26 || code == 27 || code == 28
 			|| code == 30 || code == 32 || code == 36 || code == 37 || code == 38 || code == 39
 			|| code == 112
