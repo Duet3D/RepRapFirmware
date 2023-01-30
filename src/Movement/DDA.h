@@ -330,13 +330,12 @@ private:
 
 	union
 	{
-		// Values that are needed only before Prepare is called
+		// Values that are needed only before Prepare is called and in the first few lines of Prepare
 		struct
 		{
 			float accelDistance;
 			float decelDistance;
 			float targetNextSpeed;					// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
-			float maxAcceleration;					// the maximum allowed acceleration for this move according to the limits set by M201
 		} beforePrepare;
 
 		// Values that are not set or accessed before Prepare is called
@@ -344,10 +343,10 @@ private:
 		{
 			// These are calculated from the above and used in the ISR, so they are set up by Prepare()
 			uint32_t moveStartTime;					// clock count at which the move is due to start (before execution) or was started (during execution)
+			float averageExtrusionSpeed;			// the average extrusion speed in mm/sec, for applying heater feedforward
 
 #if SUPPORT_CAN_EXPANSION
-			DriversBitmap drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
-			static_assert(MaxAxesPlusExtruders <= DriversBitmap::MaxBits());
+			AxesBitmap drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
 #endif
 		} afterPrepare;
 	};

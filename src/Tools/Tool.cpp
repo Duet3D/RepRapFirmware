@@ -356,10 +356,7 @@ uint16_t Tool::numToolsToReport = 0;
 	return (tool == nullptr) ? 0.0 : tool->offset[axis];
 }
 
-// Given that we want to extrude/retract the specified extruder drives, check if they are allowed.
-// For each disallowed one, log an error to report later and return a bit in the bitmap.
-// This may be called by an ISR!
-/*static*/ unsigned int Tool::GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions, const Tool *tool) noexcept
+/*static*/ bool Tool::ExtruderMovementAllowed(const Tool *tool, bool forwards, unsigned int extruder) noexcept
 {
 	if (reprap.GetHeat().ColdExtrude())
 	{
@@ -369,31 +366,18 @@ uint16_t Tool::numToolsToReport = 0;
 	if (tool == nullptr)
 	{
 		// This should not happen, but if no tool is selected then don't allow any extruder movement
-		return extrusions | retractions;
+		return false;
 	}
 
-	unsigned int result = 0;
 	for (size_t driveNum = 0; driveNum < tool->DriveCount(); driveNum++)
 	{
-		const unsigned int extruderDrive = (unsigned int)(tool->GetDrive(driveNum));
-		const unsigned int mask = 1 << extruderDrive;
-		if (extrusions & mask)
+		if (extruder == (unsigned int)(tool->GetDrive(driveNum)))
 		{
-			if (!tool->CanDriveExtruder(true))
-			{
-				result |= mask;
-			}
-		}
-		else if (retractions & mask)
-		{
-			if (!tool->CanDriveExtruder(false))
-			{
-				result |= mask;
-			}
+			return tool->CanDriveExtruder(forwards);
 		}
 	}
 
-	return result;
+	return false;
 }
 
 // If there are any tool numbers flagged foe cold extrusion warnings, display the warning messages, clear them and return true

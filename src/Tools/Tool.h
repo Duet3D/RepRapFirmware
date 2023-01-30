@@ -79,7 +79,7 @@ public:
 	static Tool *GetToolList() noexcept { return toolList; }
 	static ReadLockedPointer<Tool> GetLockedTool(int toolNumber) noexcept;
 	static unsigned int GetNumberOfContiguousTools() noexcept;
-	static unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions, const Tool *tool) noexcept;
+	static bool ExtruderMovementAllowed(const Tool *tool, bool extruding, unsigned int extruder) noexcept;
 	static bool DisplayColdExtrusionWarnings() noexcept;
 	static bool IsHeaterAssignedToTool(int8_t heater) noexcept;
 	static GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
