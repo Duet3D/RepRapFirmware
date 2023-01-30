@@ -81,6 +81,7 @@ public:
 	bool WriteWaitForAcknowledgement(GCodeChannel channel) noexcept;
 	bool WriteMessageAcknowledged(GCodeChannel channel) noexcept;
 	bool WriteSetVariableResult(const char *varName, const ExpressionValue& value) noexcept;
+	bool WriteSetVariableResult(const char *varName, OutputBuffer *json) noexcept;
 	bool WriteSetVariableError(const char *varName, const char *errorMessage) noexcept;
 	bool WriteCheckFileExists(const char *filename) noexcept;
 	bool WriteDeleteFileOrDirectory(const char *filename) noexcept;

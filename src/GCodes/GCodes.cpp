@@ -4749,7 +4749,7 @@ void GCodes::StartToolChange(GCodeBuffer& gb, MovementState& ms, uint8_t param) 
 }
 
 // Set up some default values in the move buffer for special moves, e.g. for Z probing and firmware retraction
-void GCodes:: SetMoveBufferDefaults(MovementState& ms) noexcept
+void GCodes::SetMoveBufferDefaults(MovementState& ms) noexcept
 {
 	ms.SetDefaults(numTotalAxes);
 }

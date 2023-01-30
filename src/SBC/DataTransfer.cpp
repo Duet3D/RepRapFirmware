@@ -1455,7 +1455,6 @@ bool DataTransfer::WriteSetVariableResult(const char *varName, const ExpressionV
 	String<StringLength50> rslt;
 	switch (value.GetType())
 	{
-	// FIXME Add support for arrays
 	case TypeCode::Bool:
 	case TypeCode::DriverId_tc:
 	case TypeCode::Uint32:
@@ -1469,7 +1468,7 @@ bool DataTransfer::WriteSetVariableResult(const char *varName, const ExpressionV
 	case TypeCode::IPAddress_tc:
 	case TypeCode::MacAddress_tc:
 	case TypeCode::DateTime_tc:
-		// All these types are represented as strings (FIXME: should we pass a DateTime over in raw format? Can DSF handle it?)
+		// All these types are represented as strings
 		value.AppendAsString(rslt.GetRef());
 		payloadLength = varNameLength + rslt.strlen();
 		break;
@@ -1537,10 +1536,41 @@ bool DataTransfer::WriteSetVariableResult(const char *varName, const ExpressionV
 	case TypeCode::IPAddress_tc:
 	default:
 		// We have already converted the value to a string in 'rslt'
-		header->dataType = DataType::String;
+		header->dataType = (value.GetType() == TypeCode::DateTime_tc) ? DataType::DateTime : DataType::String;
 		header->intValue = rslt.strlen();
 		WriteData(rslt.c_str(), rslt.strlen());
 		break;
+	}
+	return true;
+}
+
+bool DataTransfer::WriteSetVariableResult(const char *varName, OutputBuffer *json) noexcept
+{
+	// Check if we can write the JSON result
+	const size_t varNameLength = strlen(varName);
+	if (!CanWritePacket(sizeof(EvaluationResultHeader) + varNameLength + json->Length()))
+	{
+		OutputBuffer::ReleaseAll(json);
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::VariableResult, sizeof(EvaluationResultHeader) + varNameLength + json->Length());
+
+	// Write partial header
+	EvaluationResultHeader *header = WriteDataHeader<EvaluationResultHeader>();
+	header->expressionLength = varNameLength;
+
+	// Write variable name
+	WriteData(varName, varNameLength);
+
+	// Write JSON
+	header->dataType = DataType::Expression;
+	header->intValue = json->Length();
+	while (json != nullptr)
+	{
+		WriteData(json->Data(), json->DataLength());
+		json = OutputBuffer::Release(json);
 	}
 	return true;
 }
