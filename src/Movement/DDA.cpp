@@ -491,7 +491,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	float normalisedDirectionVector[MaxAxesPlusExtruders];			// used to hold a unit-length vector in the direction of motion
 	memcpyf(normalisedDirectionVector, directionVector, ARRAY_SIZE(normalisedDirectionVector));
 	Absolute(normalisedDirectionVector, MaxAxesPlusExtruders);
-	acceleration = beforePrepare.maxAcceleration = VectorBoxIntersection(normalisedDirectionVector, accelerations);
+	acceleration = VectorBoxIntersection(normalisedDirectionVector, accelerations);
 	if (flags.xyMoving)												// apply M204 acceleration limits to XY moves
 	{
 		acceleration = min<float>(acceleration, (flags.isPrintingMove) ? nextMove.maxPrintingAcceleration : nextMove.maxTravelAcceleration);
@@ -1351,7 +1351,6 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 #if SUPPORT_CAN_EXPANSION
 		CanMotion::StartMovement();
 #endif
-
 		// Handle all drivers
 		Platform& platform = reprap.GetPlatform();
 		if (flags.isLeadscrewAdjustmentMove)
@@ -1359,6 +1358,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 			platform.EnableDrivers(Z_AXIS, false);			// ensure all Z motors are enabled
 		}
 
+		float extrusionFraction = 0.0;
 		AxesBitmap additionalAxisMotorsToEnable, axisMotorsEnabled;
 #if SUPPORT_CAN_EXPANSION
 		afterPrepare.drivesMoving.Clear();
@@ -1535,70 +1535,80 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 			}
 			else
 			{
-				// It's an extruder drive
+				// It's an extruder drive. Currently, we don't apply input shaping to extruders.
 				if (directionVector[drive] != 0.0)
 				{
-					// Currently, we don't apply input shaping to extruders
-					platform.EnableDrivers(drive, false);
 					const size_t extruder = LogicalDriveToExtruder(drive);
-#if SUPPORT_NONLINEAR_EXTRUSION
-					// Add the nonlinear extrusion correction to totalExtrusion.
-					// If we are given a stupidly short move to execute then clocksNeeded can be zero, which leads to NaNs in this code; so we need to guard against that.
-					if (flags.isPrintingMove && clocksNeeded != 0)
+
+					// Check for cold extrusion/retraction. Do this now because we can't read temperatures from within the step ISR, also this works for CAN-connected extruders.
+					if (Tool::ExtruderMovementAllowed(tool, directionVector[drive] > 0, extruder))
 					{
-						const NonlinearExtrusion& nl = platform.GetExtrusionCoefficients(extruder);
-						float& dv = directionVector[drive];
-						const float averageExtrusionSpeed = (totalDistance * dv * StepClockRate)/clocksNeeded;			// need speed in mm/sec for nonlinear extrusion calculation
-						const float factor = 1.0 + min<float>((averageExtrusionSpeed * nl.A) + (averageExtrusionSpeed * averageExtrusionSpeed * nl.B), nl.limit);
-						dv *= factor;
-					}
+						platform.EnableDrivers(drive, false);
+
+						if (directionVector[drive] > 0.0)
+						{
+							extrusionFraction += directionVector[drive];			// accumulate the total extrusion fraction
+						}
+
+#if SUPPORT_NONLINEAR_EXTRUSION
+						// Add the nonlinear extrusion correction to totalExtrusion.
+						// If we are given a stupidly short move to execute then clocksNeeded can be zero, which leads to NaNs in this code; so we need to guard against that.
+						if (flags.isPrintingMove && clocksNeeded != 0)
+						{
+							const NonlinearExtrusion& nl = platform.GetExtrusionCoefficients(extruder);
+							float& dv = directionVector[drive];
+							const float averageExtrusionSpeed = (totalDistance * dv * StepClockRate)/clocksNeeded;		// need speed in mm/sec for nonlinear extrusion calculation
+							const float factor = 1.0 + min<float>((averageExtrusionSpeed * nl.A) + (averageExtrusionSpeed * averageExtrusionSpeed * nl.B), nl.limit);
+							dv *= factor;
+						}
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-					afterPrepare.drivesMoving.SetBit(drive);
-					const DriverId driver = platform.GetExtruderDriver(extruder);
-					if (driver.IsRemote())
-					{
-						// This calculation isn't quite right when we use PA and fractional steps accumulate. I will fix it when I change the CAN protocol.
-						// The MovementLinear message requires the raw step count not adjusted for PA to be passed. The remote board adds the PA.
-						ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(LogicalDriveToExtruder(drive));
-						float netMovement = (totalDistance * directionVector[drive]) + shaper.GetExtrusionPending();
-						const float stepsPerMm = platform.DriveStepsPerUnit(drive);
-						const int32_t rawSteps = lrintf(netMovement * stepsPerMm);					// we round here instead of truncating to match the old code
-						if (flags.usePressureAdvance)
+						afterPrepare.drivesMoving.SetBit(drive);
+						const DriverId driver = platform.GetExtruderDriver(extruder);
+						if (driver.IsRemote())
 						{
-							netMovement += (endSpeed - startSpeed) * directionVector[drive] * shaper.GetKclocks();
-						}
-						if (rawSteps != 0)
-						{
-							CanMotion::AddMovement(params, driver, rawSteps, flags.usePressureAdvance);
-							const int32_t netSteps = (flags.usePressureAdvance)
-														? lrintf(netMovement * stepsPerMm)			// work out how many steps the remote extruder will take
-															: rawSteps;
-							netMovement -= (float)netSteps/stepsPerMm;
-						}
-						shaper.SetExtrusionPending(netMovement);
-					}
-					else
-#endif
-					{
-						EnsureUnshapedSegments(params);
-						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
-						pdm->direction = (directionVector[drive] >= 0);
-						if (pdm->PrepareExtruder(*this, params))
-						{
-							pdm->directionChanged = false;
-							if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
+							// This calculation isn't quite right when we use PA and fractional steps accumulate. I will fix it when I change the CAN protocol.
+							// The MovementLinear message requires the raw step count not adjusted for PA to be passed. The remote board adds the PA.
+							ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(LogicalDriveToExtruder(drive));
+							float netMovement = (totalDistance * directionVector[drive]) + shaper.GetExtrusionPending();
+							const float stepsPerMm = platform.DriveStepsPerUnit(drive);
+							const int32_t rawSteps = lrintf(netMovement * stepsPerMm);					// we round here instead of truncating to match the old code
+							if (flags.usePressureAdvance)
 							{
-								DebugPrintAll("pr_err4");
+								netMovement += (endSpeed - startSpeed) * directionVector[drive] * shaper.GetKclocks();
 							}
-							InsertDM(pdm);
+							if (rawSteps != 0)
+							{
+								CanMotion::AddMovement(params, driver, rawSteps, flags.usePressureAdvance);
+								const int32_t netSteps = (flags.usePressureAdvance)
+															? lrintf(netMovement * stepsPerMm)			// work out how many steps the remote extruder will take
+																: rawSteps;
+								netMovement -= (float)netSteps/stepsPerMm;
+							}
+							shaper.SetExtrusionPending(netMovement);
 						}
 						else
+#endif
 						{
-							pdm->state = DMState::idle;
-							pdm->nextDM = completedDMs;
-							completedDMs = pdm;
+							EnsureUnshapedSegments(params);
+							DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
+							pdm->direction = (directionVector[drive] >= 0);
+							if (pdm->PrepareExtruder(*this, params))
+							{
+								pdm->directionChanged = false;
+								if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
+								{
+									DebugPrintAll("pr_err4");
+								}
+								InsertDM(pdm);
+							}
+							else
+							{
+								pdm->state = DMState::idle;
+								pdm->nextDM = completedDMs;
+								completedDMs = pdm;
+							}
 						}
 					}
 				}
@@ -1637,6 +1647,8 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 			clocksNeeded = canClocksNeeded;
 		}
 #endif
+
+		afterPrepare.averageExtrusionSpeed = (extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded;
 
 		if (reprap.Debug(Module::Move) && (reprap.Debug(Module::Dda) || params.shapingPlan.debugPrint))		// show the prepared DDA if debug enabled for both modules
 		{
@@ -1896,76 +1908,22 @@ pre(state == frozen)
 			p.EnableAllSteppingDrivers();							// make sure that all drivers are enabled
 		}
 
-#if SUPPORT_REMOTE_COMMANDS
-		if (flags.isRemote)
+		for (const DriveMovement* pdm = activeDMs; pdm != nullptr; pdm = pdm->nextDM)
 		{
-			for (const DriveMovement* pdm = activeDMs; pdm != nullptr; pdm = pdm->nextDM)
-			{
-				p.SetDirection(pdm->drive, pdm->direction);
-			}
+			p.SetDirection(pdm->drive, pdm->direction);
 		}
-		else
+
+#if SUPPORT_REMOTE_COMMANDS
+		if (!flags.isRemote)
 #endif
 		{
-			const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
-			unsigned int extrusions = 0, retractions = 0;				// bitmaps of extruding and retracting drives
-			float extrusionFraction = 0.0;
-			for (const DriveMovement* pdm = activeDMs; pdm != nullptr; pdm = pdm->nextDM)
-			{
-				const size_t drive = pdm->drive;
-				p.SetDirection(drive, pdm->direction);
-				if (drive >= numTotalAxes && drive < MaxAxesPlusExtruders)	// if it's an extruder
-				{
-					const size_t extruder = LogicalDriveToExtruder(drive);
-					if (pdm->direction == FORWARDS)
-					{
-						extrusions |= (1u << extruder);
-						extrusionFraction += directionVector[drive];
-					}
-					else
-					{
-						retractions |= (1u << extruder);
-					}
-				}
-			}
-
-			bool extruding = false;
-			if ((extrusions | retractions) != 0)
-			{
-				// Check for trying to extrude or retract when the hot end temperature is too low
-				const unsigned int prohibitedMovements = Tool::GetProhibitedExtruderMovements(extrusions, retractions, tool);
-				for (DriveMovement **dmpp = &activeDMs; *dmpp != nullptr; )
-				{
-					DriveMovement* const dm = *dmpp;
-					const size_t drive = dm->drive;
-					if (drive >= numTotalAxes && drive < MaxAxesPlusExtruders)
-					{
-						if ((prohibitedMovements & (1u << LogicalDriveToExtruder(drive))) != 0)
-						{
-							*dmpp = dm->nextDM;
-							dm->nextDM = completedDMs;
-							completedDMs = dm;
-						}
-						else
-						{
-							extruding = true;
-							dmpp = &(dm->nextDM);
-						}
-					}
-					else
-					{
-						dmpp = &(dm->nextDM);
-					}
-				}
-			}
-
-			if (extruding)
+			if (afterPrepare.averageExtrusionSpeed != 0.0)
 			{
 				p.ExtrudeOn();
 				if (tool != nullptr)
 				{
 					// Pass the extrusion speed averaged over the whole move in mm/sec
-					tool->ApplyFeedForward((extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded);
+					tool->ApplyFeedForward(afterPrepare.averageExtrusionSpeed);
 				}
 			}
 			else
