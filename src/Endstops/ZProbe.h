@@ -36,7 +36,7 @@ public:
 	ZProbeType GetProbeType() const noexcept { return type; }
 	float GetOffset(size_t axisNumber) const noexcept { return offsets[axisNumber]; }
 	float GetConfiguredTriggerHeight() const noexcept { return -offsets[Z_AXIS]; }
-	float GetActualTriggerHeight() const noexcept;
+	float GetActualTriggerHeight() const noexcept { return actualTriggerHeight; }
 	float GetDiveHeight() const noexcept { return diveHeight; }
 	float GetStartingHeight() const noexcept { return diveHeight + GetActualTriggerHeight(); }
 	float GetProbingSpeed(int tapsDone) const noexcept { return probeSpeeds[(tapsDone < 0) ? 0 : 1]; }
@@ -53,7 +53,7 @@ public:
 	int GetSecondaryValues(int& v1) const noexcept;
 	bool IsDeployedByUser() const noexcept { return isDeployedByUser; }
 
-	void SetProbingAway(const bool probingAway) noexcept { misc.parts.probingAway = probingAway; }
+	void PrepareForUse(const bool probingAway) noexcept;
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void SetTriggerHeight(float height) noexcept { offsets[Z_AXIS] = -height; }
 	void SetSaveToConfigOverride() noexcept { misc.parts.saveToConfigOverride = true; }
@@ -92,6 +92,7 @@ protected:
 	float travelSpeed;					// the speed at which we travel to the probe point ni mm per step clock
 	float recoveryTime;					// Z probe recovery time
 	float tolerance;					// maximum difference between probe heights when doing >1 taps
+	float actualTriggerHeight;			// the actual trigger height of the probe, taking account of the temperature coefficient
 	float lastStopHeight;				// the height at which the last G30 probe move stopped
 
 	bool isDeployedByUser;				// true if the user has used the M401 command to deploy this probe and not sent M402 to retract it
