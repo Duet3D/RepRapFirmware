@@ -97,6 +97,9 @@ size_t ArrayHandle::GetNumElements() const noexcept
 	{
 		return 0;
 	}
+#if CHECK_HANDLES
+	Heap::CheckSlotGood(slotPtr);
+#endif
 	return reinterpret_cast<const ArrayStorageSpace*>(slotPtr->storage)->count;
 }
 
@@ -109,6 +112,9 @@ bool ArrayHandle::GetElement(size_t index, ExpressionValue &rslt) const noexcept
 #endif
 	if (slotPtr != nullptr)
 	{
+#if CHECK_HANDLES
+		Heap::CheckSlotGood(slotPtr);
+#endif
 		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
 		if (index < aSpace->count)
 		{
@@ -128,6 +134,9 @@ TypeCode ArrayHandle::GetElementType(size_t index) const noexcept
 #endif
 	if (slotPtr != nullptr)
 	{
+#if CHECK_HANDLES
+		Heap::CheckSlotGood(slotPtr);
+#endif
 		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
 		if (index < aSpace->count)
 		{
