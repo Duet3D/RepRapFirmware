@@ -112,8 +112,12 @@ struct ExpressionValue
 	explicit ExpressionValue(Bitmap<uint64_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap64) { Set56BitValue(bm.GetRaw()); }
 	explicit ExpressionValue(const MacAddress& mac) noexcept;
 	ExpressionValue(SpecialType s, uint32_t u) noexcept : type((uint32_t)TypeCode::Special), param((uint32_t)s), uVal(u) { }
+
+	// NOTE: wWhen using these two constructors, the reference count in the handle must already be high enough to account for this expression referring to it.
 	explicit ExpressionValue(StringHandle h) noexcept : type((uint32_t)TypeCode::HeapString), param(0), shVal(h) { }
 	explicit ExpressionValue(ArrayHandle h) noexcept : type((uint32_t)TypeCode::HeapArray), param(0), ahVal(h) { }
+	// End note
+
 	explicit ExpressionValue(const IoPort& p) noexcept : type((uint32_t)TypeCode::Port), param(0), iopVal(&p) { }
 	explicit ExpressionValue(const UniqueId& id) noexcept : type((uint32_t)TypeCode::UniqueId_tc), param(0), uniqueIdVal(&id) { }
 #if SUPPORT_CAN_EXPANSION

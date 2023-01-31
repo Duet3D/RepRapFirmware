@@ -3702,7 +3702,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char* reply) n
 	HandleReplyPreserveResult(gb, rslt, reply);
 }
 
-// Handle sending a reply back to the appropriate interface(s) but dpm't update lastResult
+// Handle sending a reply back to the appropriate interface(s) but don't update lastResult
 // Note that 'reply' may be empty. If it isn't, then we need to append newline when sending it.
 void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept
 {
@@ -3753,6 +3753,11 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 	   )
 	{
 		return;
+	}
+
+	if (rslt == GCodeResult::error && reprap.IsProcessingConfig())
+	{
+		reprap.SaveConfigError((gb.LatestMachineState().GetPrevious() == nullptr) ? "config.g" : "macro", gb.GetLineNumber(), reply);
 	}
 
 	const MessageType initialMt = gb.GetResponseMessageType();
