@@ -3821,12 +3821,13 @@ void Platform::SetBoardType(BoardType bt) noexcept
 #elif defined(DUET3_MB6XD)
 		// Driver 0 direction has a pulldown resistor on v1.0  boards, but not on v0.1 boards
 		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
+		pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
 		delayMicroseconds(20);									// give the pullup resistor time to work
-		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6XD_v01 : BoardType::Duet3_6XD_v100;
+		board = (!digitalRead(DIRECTION_PINS[5])) ? BoardType::Duet3_6XD_v101
+					: (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6XD_v01
+						: BoardType::Duet3_6XD_v100;
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 		board = BoardType::FMDC;
-#elif defined(SAME70XPLD)
-		board = BoardType::SAME70XPLD_0;
 #elif defined(DUET_NG)
 		// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
 		pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500. We assume that this forces the ESP8266 UART output pin to high impedance.
@@ -3904,11 +3905,10 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or later";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "Duet 3 " BOARD_SHORT_NAME " v0.1";
-	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0 or later";
+	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0";
+	case BoardType::Duet3_6XD_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "Duet 3 " BOARD_SHORT_NAME;
-#elif defined(SAME70XPLD)
-	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
 #elif defined(DUET_NG)
 	// This is the string that the Duet 2 ATE uses to identify the board. The version number must be at the end.
 	case BoardType::DuetWiFi_10:			return "Duet WiFi 1.0 or 1.01";
@@ -3944,12 +3944,11 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3_6HC_v101:			return "duet3mb6hc101";
 	case BoardType::Duet3_6HC_v102:			return "duet3mb6hc102";
 #elif defined(DUET3_MB6XD)
-	case BoardType::Duet3_6XD_v01:			return "duet3mb6xd001";					// we have only one version at present
-	case BoardType::Duet3_6XD_v100:			return "duet3mb6xd100";					// we have only one version at present
+	case BoardType::Duet3_6XD_v01:			return "duet3mb6xd001";
+	case BoardType::Duet3_6XD_v100:			return "duet3mb6xd100";
+	case BoardType::Duet3_6XD_v101:			return "duet3mb6xd101";
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "fmdc";
-#elif defined(SAME70XPLD)
-	case BoardType::SAME70XPLD_0:			return "same70xpld";
 #elif defined(DUET_NG)
 	case BoardType::DuetWiFi_10:			return "duetwifi10";
 	case BoardType::DuetWiFi_102:			return "duetwifi102";
