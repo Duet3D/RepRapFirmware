@@ -140,6 +140,11 @@ constexpr Pin ActLedPin = PortBPin(7);										// activityLED
 constexpr bool DiagOnPolarity = false;
 constexpr bool ActOnPolarity = false;
 
+// MB6XD 1.01 USB control
+constexpr Pin UsbPowerSwitchPin = PortCPin(6);
+constexpr Pin UsbModePin = PortCPin(14);
+constexpr Pin UsbDetectPin = PortCPin(19);
+
 // SD cards
 constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(29), PortDPin(18) };
@@ -255,7 +260,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC03 driver 4 dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC04 driver 4 step
 	{ TcOutput::tioa6,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out4"					},	// PC05 OUT4
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC06 EthernetPhyInterrupt
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC06 EthernetPhyInterrupt (up to v1.0), USB_PWR_EN (v1.1)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out3.tach"				},	// PC07 OUT3_TACH
 	{ TcOutput::tioa7,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out7"					},	// PC08 OUT7
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC09 driver 5 step
@@ -263,12 +268,12 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::tioa8,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out6"					},	// PC11 OUT6
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC12 CAN1_RX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_1,	PinCapability::none,	nullptr					},	// PC13 VssaSensePin
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC14 NC
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC14 NC (up to v1.0), USB_STATE (v1.1)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_2,	PinCapability::ainr,	"temp0"					},	// PC15 thermistor 0
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC16 driver 1 step
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"driver1.err"			},	// PC17 driver 1 err
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC18 driver 0 step
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC19 ETH_LED_Y
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC19 ETH_LED_Y (up to v1.0), USB_UFP_DETECT (v1.1)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC20 driver 2 enable on V1.0 boards
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC21 UsbVBusPin
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs4"				},	// PC22 SPI CS4
