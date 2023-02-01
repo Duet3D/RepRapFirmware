@@ -18,22 +18,21 @@
 class KeepoutZone
 {
 public:
-	// Set the limits of one axis
-	void SetAxisLimits(size_t axis, float min, float max) noexcept;
+	// Constructor
+	KeepoutZone() noexcept : active(false) { }			// the BitMap default constructor will clear axesChecked
 
 	// Configure or report this zone
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
-	// Check that a point is outside the keepout zone, throwing if it is inside
-	void CheckPointIsOutside(const GCodeBuffer& gb, const float *coords) THROWS(GCodeException);
+	// Check that a point is outside the keepout zone, returning true if it is
+	bool CheckPointIsOutside(const GCodeBuffer& gb, const float *pointCoords) noexcept;
 
-	// Check that a straight move lies fully outside the keepout zone, throwing if it encroaches it
-	void CheckLineIsOutside(const GCodeBuffer& gb, const float *startCoords, const float *endCoords) THROWS(GCodeException);
+	// Check that a straight line move lies fully outside the keepout zone, returning true if it is
+	bool CheckLineIsOutside(const GCodeBuffer& gb, const float *startCoords, const float *endCoords) noexcept;
 
 private:
 	AxesBitmap axesChecked;
-	float lowCoords[MaxAxes];
-	float highCoords[MaxAxes];
+	float coords[MaxAxes][2];
 	bool active;
 };
 
