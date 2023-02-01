@@ -677,6 +677,9 @@ public:
 #if defined(DUET3_MB6HC)
 	static BoardType GetMB6HCBoardType() noexcept;								// this is safe to call before Platform has been created
 #endif
+#if defined(DUET3_MB6XD)
+	static BoardType GetMB6XDBoardType() noexcept;								// this is safe to call before Platform has been created
+#endif
 
 	void SetDiagLed(bool on) const noexcept;
 

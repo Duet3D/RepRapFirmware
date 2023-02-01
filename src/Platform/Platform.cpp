@@ -3767,7 +3767,7 @@ void Platform::ResetChannel(size_t chan) noexcept
 
 #if defined(DUET3_MB6HC)
 
-// this is safe to call before Platform has been created
+// This is safe to call before Platform has been created
 /*static*/ BoardType Platform::GetMB6HCBoardType() noexcept
 {
 	// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
@@ -3784,6 +3784,23 @@ void Platform::ResetChannel(size_t chan) noexcept
 	{
 		return BoardType::Duet3_6HC_v102;
 	}
+}
+
+#endif
+
+#if defined(DUET3_MB6XD)
+
+// This is safe to call before Platform has been created
+/*static*/ BoardType Platform::GetMB6XDBoardType() noexcept
+{
+	// Driver 0 direction has a pulldown resistor on v1.0  boards only
+	// Driver 5 direction has a pulldown resistor on 1.01 boards only
+	pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
+	pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
+	delayMicroseconds(20);									// give the pullup resistor time to work
+	return (!digitalRead(DIRECTION_PINS[5])) ? BoardType::Duet3_6XD_v101
+				: (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6XD_v01
+					: BoardType::Duet3_6XD_v100;
 }
 
 #endif
@@ -3819,13 +3836,7 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);
 		driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);
 #elif defined(DUET3_MB6XD)
-		// Driver 0 direction has a pulldown resistor on v1.0  boards, but not on v0.1 boards
-		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
-		pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
-		delayMicroseconds(20);									// give the pullup resistor time to work
-		board = (!digitalRead(DIRECTION_PINS[5])) ? BoardType::Duet3_6XD_v101
-					: (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6XD_v01
-						: BoardType::Duet3_6XD_v100;
+		board = GetMB6XDBoardType();
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 		board = BoardType::FMDC;
 #elif defined(DUET_NG)
