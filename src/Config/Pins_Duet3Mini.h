@@ -63,6 +63,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20038000;
 #define SUPPORT_TELNET			1
 #define SUPPORT_ASYNC_MOVES		1
 #define SUPPORT_PROBE_POINTS_FILE	1
+#define SUPPORT_KEEPOUT_ZONES	1
 
 #define USE_CACHE				1					// set nonzero to enable the cache
 #define USE_MPU					0					// set nonzero to enable the memory protection unit

@@ -32,8 +32,9 @@ Licence: GPL
 #include "GCodeChannel.h"
 #include "GCodeInput.h"
 #include "GCodeMachineState.h"
-#include <GCodes/CollisionAvoider.h>
-#include <GCodes/TriggerItem.h>
+#include "CollisionAvoider.h"
+#include "KeepoutZone.h"
+#include "TriggerItem.h"
 #include <Tools/Filament.h>
 #include <FilamentMonitors/FilamentMonitor.h>
 #include "RestorePoint.h"
@@ -569,6 +570,10 @@ private:
 	void UpdateAllCoordinates(const GCodeBuffer& gb) noexcept;
 #endif
 
+#if SUPPORT_KEEPOUT_ZONES
+	GCodeResult DefineKeepoutZone(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Handle M599
+#endif
+
 #if SUPPORT_COORDINATE_ROTATION
 	GCodeResult HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle G68
 #endif
@@ -733,7 +738,10 @@ private:
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
 
 #if SUPPORT_ASYNC_MOVES
-	CollisionAvoider collisionChecker;
+	CollisionAvoider collisionChecker;			// currently we support just one collision avoider
+#endif
+#if SUPPORT_KEEPOUT_ZONES
+	KeepoutZone keepoutZone;					// currently we support just one keepout zone
 #endif
 
 #if HAS_MASS_STORAGE

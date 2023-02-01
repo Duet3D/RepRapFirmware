@@ -26,7 +26,7 @@ static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML
 
 StringParser::StringParser(GCodeBuffer& gcodeBuffer) noexcept
 	: gb(gcodeBuffer), fileBeingWritten(nullptr), writingFileSize(0), indentToSkipTo(NoIndentSkip), eofStringCounter(0),
-	  hasCommandNumber(false), commandLetter('Q'), lastChar(0), checksumRequired(false), crcRequired(false), binaryWriting(false)
+	  hasCommandNumber(false), commandLetter('Q'), checksumRequired(false), crcRequired(false), binaryWriting(false)
 {
 	StartNewFile();
 	Init();
@@ -70,17 +70,13 @@ inline void StringParser::StoreAndAddToChecksum(char c) noexcept
 	}
 }
 
-// Add a byte to the code being assembled.  If false is returned, the code is
-// not yet complete.  If true, it is complete and ready to be acted upon and 'indent'
-// is the number of leading white space characters..
+// Add a byte to the code being assembled.  If false is returned, the code is not yet complete.
+// If true, it is complete and ready to be acted upon and 'indent' is the number of leading white space characters.
 bool StringParser::Put(char c) noexcept
 {
-	// If this character is LF and the previous one was CR, throw the LF away so that we don't increment the line number twice
-	const char prevChar = lastChar;
-	lastChar = c;
-	if (c == '\n' && prevChar == '\r')
+	if (c == '\r')
 	{
-		return false;
+		return false;										// we now discard CR, it makes line counting easier and it's unlikely that a pre-OSX Mac will be used with a Duet
 	}
 
 	if (c != 0)
@@ -88,7 +84,7 @@ bool StringParser::Put(char c) noexcept
 		++commandLength;
 	}
 
-	if (c == 0 || c == '\n' || c == '\r')
+	if (c == 0 || c == '\n')
 	{
 		return LineFinished();
 	}

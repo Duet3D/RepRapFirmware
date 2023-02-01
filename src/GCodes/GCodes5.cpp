@@ -146,6 +146,21 @@ GCodeResult GCodes::SyncMovementSystems(GCodeBuffer& gb, const StringRef& reply)
 
 #endif
 
+#if SUPPORT_KEEPOUT_ZONES
+
+// Handle M599
+GCodeResult GCodes::DefineKeepoutZone(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	// Get the optional P parameter. Currently it may only be zero.
+	uint32_t zoneNumber = 0;
+	bool seen = false;
+	gb.TryGetLimitedUIValue('P', zoneNumber, seen, 1);
+
+	return keepoutZone.Configure(gb, reply);
+}
+
+#endif
+
 GCodeResult GCodes::HandleM486(GCodeBuffer &gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException)
 {
 	bool seen = false;

@@ -3882,6 +3882,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = SyncMovementSystems(gb, reply);
 				break;
 #endif
+
+#if SUPPORT_KEEPOUT_ZONES
+			case 599:	// Define keepout zone
+				result = DefineKeepoutZone(gb, reply);
+				break;
+#endif
+
 			// For cases 600 and 601, see 226
 
 			// M650 (set peel move parameters) and M651 (execute peel move) are no longer handled specially. Use macros to specify what they should do.
