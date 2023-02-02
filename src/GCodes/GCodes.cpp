@@ -2174,7 +2174,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		}
 
 #if SUPPORT_KEEPOUT_ZONES
-		if (!keepoutZone.CheckLineIsOutside(ms.initialCoords, ms.coords))
+		if (keepoutZone.DoesLineIntrude(ms.initialCoords, ms.coords))
 		{
 			gb.ThrowGCodeException("straight move would enter keepout zone");
 		}
@@ -2586,7 +2586,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	}
 
 #if SUPPORT_KEEPOUT_ZONES
-	if (!keepoutZone.CheckArcIsOutside(ms.initialCoords, ms.coords, ms.arcCurrentAngle, finalTheta, ms.arcCentre, ms.arcRadius, axis0Mapping, axis1Mapping, clockwise, wholeCircle))
+	if (keepoutZone.DoesArcIntrude(ms.initialCoords, ms.coords, ms.arcCurrentAngle, finalTheta, ms.arcCentre, ms.arcRadius, axis0Mapping, axis1Mapping, clockwise, wholeCircle))
 	{
 		gb.ThrowGCodeException("arc move would enter keepout zone");
 	}
