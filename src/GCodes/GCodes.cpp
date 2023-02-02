@@ -2340,47 +2340,47 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	}
 
 	// Get the axis parameters
-	float newAxisPos[2];
+	float newAxis0Pos, newAxis1Pos;
 	if (gb.Seen(axisLetters[axis0]))
 	{
-		newAxisPos[0] = gb.GetDistance();
+		newAxis0Pos = gb.GetDistance();
 		if (gb.LatestMachineState().axesRelative)
 		{
-			newAxisPos[0] += ms.initialUserC0;
+			newAxis0Pos += ms.initialUserC0;
 		}
 		else if (gb.LatestMachineState().g53Active)
 		{
-			newAxisPos[0] += ms.GetCurrentToolOffset(axis0);
+			newAxis0Pos += ms.GetCurrentToolOffset(axis0);
 		}
 		else if (!gb.LatestMachineState().runningSystemMacro)
 		{
-			newAxisPos[0] += GetWorkplaceOffset(gb, axis0);
+			newAxis0Pos += GetWorkplaceOffset(gb, axis0);
 		}
 	}
 	else
 	{
-		newAxisPos[0] = ms.initialUserC0;
+		newAxis0Pos = ms.initialUserC0;
 	}
 
 	if (gb.Seen(axisLetters[axis1]))
 	{
-		newAxisPos[1] = gb.GetDistance();
+		newAxis1Pos = gb.GetDistance();
 		if (gb.LatestMachineState().axesRelative)
 		{
-			newAxisPos[1] += ms.initialUserC1;
+			newAxis1Pos += ms.initialUserC1;
 		}
 		else if (gb.LatestMachineState().g53Active)
 		{
-			newAxisPos[1] += ms.GetCurrentToolOffset(axis1);
+			newAxis1Pos += ms.GetCurrentToolOffset(axis1);
 		}
 		else if (!gb.LatestMachineState().runningSystemMacro)
 		{
-			newAxisPos[1] += GetWorkplaceOffset(gb, axis1);
+			newAxis1Pos += GetWorkplaceOffset(gb, axis1);
 		}
 	}
 	else
 	{
-		newAxisPos[1] = ms.initialUserC1;
+		newAxis1Pos = ms.initialUserC1;
 	}
 
 	float iParam, jParam;
@@ -2390,8 +2390,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		const float rParam = gb.GetDistance();
 
 		// Get the XY coordinates of the midpoints between the start and end points X and Y distances between start and end points
-		const float deltaAxis0 = newAxisPos[0] - ms.initialUserC0;
-		const float deltaAxis1 = newAxisPos[1] - ms.initialUserC1;
+		const float deltaAxis0 = newAxis0Pos - ms.initialUserC0;
+		const float deltaAxis1 = newAxis1Pos - ms.initialUserC1;
 
 		const float dSquared = fsquare(deltaAxis0) + fsquare(deltaAxis1);	// square of the distance between start and end points
 
@@ -2461,12 +2461,12 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	float userArcCentre[2] = { ms.initialUserC0 + iParam, ms.initialUserC1 + jParam };
 
 	// Set the new user position
-	ms.currentUserPosition[axis0] = newAxisPos[0];
-	ms.currentUserPosition[axis1] = newAxisPos[1];
+	ms.currentUserPosition[axis0] = newAxis0Pos;
+	ms.currentUserPosition[axis1] = newAxis1Pos;
 
 	// CNC machines usually do a full circle if the initial and final XY coordinates are the same.
 	// Usually this is because X and Y were not given, but repeating the coordinates is permitted.
-	const bool wholeCircle = (ms.initialUserC0 == ms.currentUserPosition[axis0] && ms.initialUserC1 == ms.currentUserPosition[axis1]);
+	const bool wholeCircle = (ms.initialUserC0 == newAxis0Pos && ms.initialUserC1 == newAxis1Pos);
 
 	// Get any additional axes
 	AxesBitmap axesMentioned;
