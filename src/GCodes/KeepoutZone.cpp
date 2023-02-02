@@ -13,6 +13,8 @@
 #include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
 
+#define ARC_DEBUG	0
+
 GCodeResult KeepoutZone::Configure(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
 	// See if any axes have been given
@@ -61,7 +63,7 @@ GCodeResult KeepoutZone::Configure(GCodeBuffer &gb, const StringRef &reply) THRO
 #if 0	// not used
 
 // Check whether a point is inside the keepout zone, returning true if it is
-bool KeepoutZone::IsPointInside(const GCodeBuffer &gb, const float *pointCoords) noexcept
+bool KeepoutZone::IsPointInside(const GCodeBuffer &gb, const float *pointCoords) const noexcept
 {
 	if (!active || axesChecked.IsEmpty())
 	{
@@ -83,7 +85,7 @@ bool KeepoutZone::IsPointInside(const GCodeBuffer &gb, const float *pointCoords)
 #endif
 
 // Check whether a straight line move lies fully outside the keepout zone, returning true if it is
-bool KeepoutZone::DoesLineIntrude(const float startCoords[MaxAxes], const float endCoords[MaxAxes]) noexcept
+bool KeepoutZone::DoesLineIntrude(const float startCoords[MaxAxes], const float endCoords[MaxAxes]) const noexcept
 {
 	if (!active || axesChecked.IsEmpty())
 	{
@@ -127,6 +129,9 @@ public:
 	bool AddRangeLimit(float startAngle, float endAngle) noexcept;
 
 private:
+	// Print the ranges to debug
+	void DebugPrint(const char *str) noexcept;
+
 	struct IntervalSet
 	{
 		float lowAngle[4];
@@ -165,6 +170,10 @@ ArcIntervals::ArcIntervals(float startAngle, float endAngle) noexcept
 		}
 		numIntervals = 1;
 	}
+
+#if ARC_DEBUG
+	DebugPrint("init");
+#endif
 }
 
 // Limit the existing range(s) by a new one. startAngle and endAngle are both in the range -Pi to Pi.
@@ -223,7 +232,24 @@ bool ArcIntervals::AddRangeLimit(float startAngle, float endAngle) noexcept
 		}
 	}
 	numIntervals = j;
+
+#if ARC_DEBUG
+	DebugPrint("add");
+#endif
+
 	return j == 0;
+}
+
+// Print the ranges to debug
+void ArcIntervals::DebugPrint(const char *str) noexcept
+{
+	const IntervalSet& currentSet = intervals[currentSetNumber];
+	debugPrintf("Intervals %s:", str);
+	for (size_t i = 0; i < numIntervals; ++i)
+	{
+		debugPrintf(" %.2f:%.2f", (double)currentSet.lowAngle[i], (double)currentSet.highAngle[i]);
+	}
+	debugPrintf("\n");
 }
 
 // Check whether an arc move intrudes into the keepout zone, returning true if it does. See CheckLineIsOutside for the algorithm.
@@ -231,17 +257,15 @@ bool KeepoutZone::DoesArcIntrude(const float startCoords[MaxAxes], const float e
 									float startAngle, float endAngle,
 									const float arcCentres[MaxAxes], float arcRadius,
 									AxesBitmap cosineAxes, AxesBitmap sineAxes,
-									bool clockwise, bool wholeCircle) noexcept
+									bool clockwise, bool wholeCircle) const noexcept
 {
 	if (!active || axesChecked.IsEmpty())
 	{
 		return false;
 	}
 
-	// There may be up to 4 ranged of p that fall inside the keepout zone
-	float pLow = 0.0, pHigh = 1.0;
-
 	// First check the linear axes because that needs less computation
+	float pLow = 0.0, pHigh = 1.0;
 	const AxesBitmap linearAxes = axesChecked - (cosineAxes | sineAxes);
 	if (   !linearAxes.IsEmpty()
 		&& !linearAxes.IterateWhile([this, startCoords, endCoords, &pLow, &pHigh](unsigned int axis, unsigned int)->bool
@@ -272,7 +296,12 @@ bool KeepoutZone::DoesArcIntrude(const float startCoords[MaxAxes], const float e
 	if (clockwise)
 	{
 		// Angle is decreasing from startAngle to endAngle
-		if (wholeCircle || endAngle > startAngle)
+		if (wholeCircle)
+		{
+			// If we are describing a whole circle then we might be passed the same angle twice or they might already differ by 2*pi
+			startAngle = endAngle + TwoPi;
+		}
+		else if (endAngle > startAngle)
 		{
 			// The arc does cross the boundary between negative and positive angles
 			startAngle += TwoPi;				// make startAngle > endAngle
@@ -283,7 +312,12 @@ bool KeepoutZone::DoesArcIntrude(const float startCoords[MaxAxes], const float e
 	else
 	{
 		// Angle is increasing from startAngle to endAngle
-		if (wholeCircle || endAngle < startAngle)
+		if (wholeCircle)
+		{
+			// If we are describing a whole circle then we might be passed the same angle twice or they might already differ by 2*pi
+			endAngle = startAngle + TwoPi;
+		}
+		else if (endAngle < startAngle)
 		{
 			// The arc does cross the boundary between negative and positive angles
 			endAngle += TwoPi;				// make endAngle > startAngle
@@ -291,6 +325,11 @@ bool KeepoutZone::DoesArcIntrude(const float startCoords[MaxAxes], const float e
 		tempLowAngle = pLow * endAngle + (1.0 - pLow) * startAngle;
 		tempHighAngle = pHigh * endAngle + (1.0 - pHigh) * startAngle;
 	}
+
+
+#if ARC_DEBUG
+	debugPrintf("pLow=%.3f pHigh=%.3f whole=%u tempLow=%.2f tempHigh=%.2F\n", (double)pLow, (double)pHigh, wholeCircle, (double)tempLowAngle, (double)tempHighAngle);
+#endif
 
 	ArcIntervals angleIntervals(tempLowAngle, tempHighAngle);
 

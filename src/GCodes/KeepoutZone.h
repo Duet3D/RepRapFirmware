@@ -15,6 +15,7 @@
 #include "GCodeException.h"
 #include <General/FreelistManager.h>
 
+// This class represents a keepout zone in the form of a hypercuboid
 class KeepoutZone
 {
 public:
@@ -26,22 +27,22 @@ public:
 
 #if 0	// not used
 	// Check whether a point is inside the keepout zone, returning true if it is
-	bool IsPointInside(const GCodeBuffer& gb, const float *pointCoords) noexcept;
+	bool IsPointInside(const GCodeBuffer& gb, const float *pointCoords) const noexcept;
 #endif
 
 	// Check whether a straight line move intrudes into the keepout zone, returning true if it does
-	bool DoesLineIntrude(const float startCoords[MaxAxes], const float endCoords[MaxAxes]) noexcept;
+	bool DoesLineIntrude(const float startCoords[MaxAxes], const float endCoords[MaxAxes]) const noexcept;
 
 	// Check whether an arc move intrudes into the keepout zone, returning true if it does
 	bool DoesArcIntrude(const float startCoords[MaxAxes], const float endCoords[MaxAxes],
 							float startAngle, float endAngle,
 							const float arcCentres[MaxAxes], float arcRadius,
 							AxesBitmap cosineAxes, AxesBitmap sineAxes,
-							bool clockwise, bool wholeCircle) noexcept;
+							bool clockwise, bool wholeCircle) const noexcept;
 
 private:
-	AxesBitmap axesChecked;
-	float coords[MaxAxes][2];
+	AxesBitmap axesChecked;				// which axes have defined limits
+	float coords[MaxAxes][2];			// the lower and upper limits for each axis, lower < upper
 	bool active;
 };
 
