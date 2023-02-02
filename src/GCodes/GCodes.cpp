@@ -2132,7 +2132,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			}
 			return false;
 		}
-		else if (axesMentioned.IsNonEmpty())									// don't count G1 Fxxx as a travel move
+		else if (axesMentioned.IsNonEmpty())								// don't count G1 Fxxx as a travel move
 		{
 			ms.DoneMoveSincePrintingResumed();
 		}
@@ -2155,7 +2155,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	}
 	else if (axesMentioned.IsEmpty())
 	{
-		ms.totalSegments = 1;													// it's an extruder only move
+		ms.totalSegments = 1;												// it's an extruder only move
 	}
 	else
 	{
@@ -2170,9 +2170,16 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		else
 #endif
 		{
-			ToolOffsetTransform(ms, axesMentioned);
+			ToolOffsetTransform(ms, axesMentioned);							// apply tool offset, baby stepping, Z hop and axis scaling
 		}
-																				// apply tool offset, baby stepping, Z hop and axis scaling
+
+#if SUPPORT_KEEPOUT_ZONES
+		if (!keepoutZone.CheckLineIsOutside(ms.initialCoords, ms.coords))
+		{
+			gb.ThrowGCodeException("straight move would enter keepout zone");
+		}
+#endif
+
 #if SUPPORT_ASYNC_MOVES
 		if (!collisionChecker.UpdatePositions(ms.coords, axesHomed))
 		{
@@ -2191,7 +2198,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		AxesBitmap axesToLimit = axesVirtuallyHomed & axesMentioned;
 		if (doingManualBedProbe)
 		{
-			axesToLimit.ClearBit(Z_AXIS);							// if doing a manual Z probe, don't limit the Z movement
+			axesToLimit.ClearBit(Z_AXIS);									// if doing a manual Z probe, don't limit the Z movement
 		}
 
 		const LimitPositionResult lp = reprap.GetMove().GetKinematics().LimitPosition(ms.coords, ms.initialCoords, numVisibleAxes, axesToLimit, ms.isCoordinated, limitAxes);
@@ -2514,10 +2521,10 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		gb.ThrowGCodeException("G2/G3: insufficient axes homed");
 	}
 
-	// Compute the initial and final angles. Do this before we possible rotate the coordinates of the arc centre.
-	float finalTheta = atan2(ms.currentUserPosition[axis1] - userArcCentre[1], ms.currentUserPosition[axis0] - userArcCentre[0]);
+	// Compute the initial and final angles. Do this before we possibly rotate the coordinates of the arc centre.
+	float finalTheta = atan2f(ms.currentUserPosition[axis1] - userArcCentre[1], ms.currentUserPosition[axis0] - userArcCentre[0]);
 	ms.arcRadius = fastSqrtf(iParam * iParam + jParam * jParam);
-	ms.arcCurrentAngle = atan2(-jParam, -iParam);
+	ms.arcCurrentAngle = atan2f(-jParam, -iParam);
 
 	// Transform to machine coordinates and check that it is within limits
 
@@ -2578,6 +2585,13 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		}
 	}
 
+#if SUPPORT_KEEPOUT_ZONES
+	if (!keepoutZone.CheckArcIsOutside(ms.initialCoords, ms.coords, ms.arcCurrentAngle, finalTheta, ms.arcCentre, ms.arcRadius, axis0Mapping, axis1Mapping, clockwise, wholeCircle))
+	{
+		gb.ThrowGCodeException("arc move would enter keepout zone");
+	}
+#endif
+
 	LoadExtrusionAndFeedrateFromGCode(gb, ms, true);
 
 	if (ms.IsFirstMoveSincePrintingResumed())
@@ -2619,9 +2633,9 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 			ms.laserPwmOrIoBits.laserPwm = 0;
 		}
 	}
-# if SUPPORT_IOBITS
+#endif
+#if SUPPORT_LASER && SUPPORT_IOBITS
 	else
-# endif
 #endif
 #if SUPPORT_IOBITS
 	{
