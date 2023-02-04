@@ -685,19 +685,13 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 // Set up a remote move. Return true if it represents real movement, else false.
 // All values have already been converted to step clocks and the total distance has been normalised to 1.0.
 //TODO pass the input shaping plan in the message. For now we don't use input shaping.
-# if USE_REMOTE_INPUT_SHAPING
-bool DDA::InitShapedFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
-# else
 bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
-#endif
 {
 	afterPrepare.moveStartTime = StepTimer::ConvertToLocalTime(msg.whenToExecute);
 	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
 	flags.all = 0;
 	flags.isRemote = true;
-# if !USE_REMOTE_INPUT_SHAPING
 	flags.isPrintingMove = (msg.pressureAdvanceDrives != 0);
-# endif
 
 	// Normalise the move to unit distance and convert time units from step clocks to seconds
 	totalDistance = 1.0;
@@ -723,97 +717,10 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	activeDMs = completedDMs = nullptr;
 	afterPrepare.drivesMoving.Clear();
 
-# if USE_REMOTE_INPUT_SHAPING
-	const size_t numDrivers = min<size_t>(msg.numDriversMinusOne + 1, min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave));
-# else
 	const size_t numDrivers = min<size_t>(msg.numDrivers, min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave));
-# endif
 	for (size_t drive = 0; drive < numDrivers; drive++)
 	{
 		endPoint[drive] = prev->endPoint[drive];				// the steps for this move will be added later
-# if USE_REMOTE_INPUT_SHAPING
-		switch (msg.GetMoveType(drive))
-		{
-		case CanMessageMovementLinearShaped::shapedAxis:
-			// Note, drivers that are not moving are set to shapedAxis, so we need to check that the driver really is moving
-			{
-				const int32_t delta = msg.perDrive[drive].iSteps;
-				if (delta != 0)
-				{
-					if (shapedSegments == nullptr)
-					{
-						// Calculate the segments needed for axis movement
-						//TODO the message will include input shaping info
-						shapedSegments = AxisShaper::GetUnshapedSegments(*this, params);
-					}
-
-					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
-					pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
-					pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
-
-					reprap.GetPlatform().EnableDrivers(drive);
-					const bool stepsToDo = pdm->PrepareCartesianAxis(*this, params);
-					if (stepsToDo)
-					{
-						pdm->directionChanged = false;
-						InsertDM(pdm);
-						const uint32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
-						if (pdm->direction)
-						{
-							endPoint[drive] += netSteps;
-						}
-						else
-						{
-							endPoint[drive] -= netSteps;
-						}
-
-						// Check for sensible values, print them if they look dubious
-						if (reprap.Debug(moduleDda) && pdm->totalSteps > 1000000)
-						{
-							DebugPrintAll("rem");
-						}
-					}
-					else
-					{
-						DriveMovement::Release(pdm);
-					}
-				}
-			}
-			break;
-
-		case CanMessageMovementLinearShaped::shapedDelta:
-			{
-				if (shapedSegments == nullptr)
-				{
-					// Calculate the segments needed for axis movement
-					//TODO the message will include input shaping info
-					shapedSegments = AxisShaper::GetUnshapedSegments(*this, params);
-				}
-
-				//TODO
-			}
-			break;
-
-		case CanMessageMovementLinearShaped::extruderWithPa:
-			flags.usePressureAdvance = true;					// either all extruder use pressure advance, or none do
-			// no break
-		case CanMessageMovementLinearShaped::MoveType::extruderNoPa:
-			{
-				if (unshapedSegments != nullptr)
-				{
-					unshapedSegments = AxisShaper::GetUnshapedSegments(*this, params);
-				}
-				if (unshapedSegments != nullptr)
-				{
-					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
-					pdm->PrepareExtruder(*this, params);
-					InsertDM(pdm);
-				}
-			}
-			break;
-		}
-	}
-# else
 		const int32_t delta = msg.perDrive[drive].steps;
 		if (delta != 0)
 		{
@@ -854,7 +761,6 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 			}
 		}
 	}
-# endif
 
 	// 2. Throw it away if there's no real movement.
 	if (activeDMs == nullptr)

@@ -90,11 +90,7 @@ public:
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 #if SUPPORT_REMOTE_COMMANDS
-# if USE_REMOTE_INPUT_SHAPING
-	void AddShapedMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;	// add a move from the ATE to the movement queue
-# else
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept;				// add a move from the ATE to the movement queue
-# endif
 	void StopDrivers(uint16_t whichDrives) noexcept;
 #endif
 

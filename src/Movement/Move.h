@@ -212,19 +212,11 @@ public:
 	static const TaskBase *GetMoveTaskHandle() noexcept { return &moveTask; }
 
 #if SUPPORT_REMOTE_COMMANDS
-# if USE_REMOTE_INPUT_SHAPING
-	void AddShapeddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept		// add a move from the ATE to the movement queue
-	{
-		rings[0].AddMoveFromRemote(msg);
-		MoveAvailable();
-	}
-# else
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept					// add a move from the ATE to the movement queue
 	{
 		rings[0].AddMoveFromRemote(msg);
 		MoveAvailable();
 	}
-# endif
 
 	void StopDrivers(uint16_t whichDrives) noexcept
 	{

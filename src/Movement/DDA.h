@@ -126,11 +126,7 @@ public:
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
-# if USE_REMOTE_INPUT_SHAPING
-	bool InitShapedFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
-# else
 	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
-# endif
 	void StopDrivers(uint16_t whichDrives) noexcept;
 #endif
 
