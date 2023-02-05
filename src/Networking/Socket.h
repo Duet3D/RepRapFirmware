@@ -58,7 +58,7 @@ protected:
 	};
 
 	NetworkInterface * const interface;
-	TcpPort localPort, remotePort;							// The local and remote ports
+	TcpPort localPort, remotePort;						// The local and remote ports
 	NetworkProtocol protocol;							// What protocol this socket is for
 	IPAddress remoteIPAddress;							// The remote IP address
 	SocketState state;

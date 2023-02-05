@@ -15,12 +15,9 @@
 
 #include "mqtt.h"
 
-MqttClient::MqttClient(NetworkResponder *n, NetworkClient *c) noexcept : NetworkClient(n, c),
-																		prevSub(nullptr),
-																		currSub(nullptr),
-																		currBuf(nullptr),
-																		messageTimer(0),
-																		next(clients)
+MqttClient::MqttClient(NetworkResponder *n, NetworkClient *c) noexcept
+	: NetworkClient(n, c),
+	  prevSub(nullptr), currSub(nullptr), currBuf(nullptr), messageTimer(0), next(clients)
 {
 	clients = this;
 
@@ -161,16 +158,15 @@ bool MqttClient::Spin() noexcept
 						uint8_t flags = 0;
 
 						// If not specified, publish under the hostname
-						const char *topic = publishTopic ? publishTopic : reprap.GetNetwork().GetHostname();
+						const char *const topic = publishTopic ? publishTopic : reprap.GetNetwork().GetHostname();
 
 						flags |= (publishQos == 0) ? MQTT_PUBLISH_QOS_0 :
 									(publishQos == 1 ? MQTT_PUBLISH_QOS_1 : MQTT_PUBLISH_QOS_2);
 						flags |= (retain) ? MQTT_PUBLISH_RETAIN : 0;
 						flags |= (duplicate) ? MQTT_PUBLISH_DUP : 0;
 
-						enum MQTTErrors err = mqtt_publish(&client, topic, currBuf->Data(), currBuf->DataLength(), flags);
-
-						if (err == MQTT_ERROR_SEND_BUFFER_IS_FULL)
+						const MQTTErrors mqttErr = mqtt_publish(&client, topic, currBuf->Data(), currBuf->DataLength(), flags);
+						if (mqttErr == MQTT_ERROR_SEND_BUFFER_IS_FULL)
 						{
 							currBuf = nullptr; // retry to publish the same buffer on the next loop
 						}
@@ -184,8 +180,8 @@ bool MqttClient::Spin() noexcept
 
 			case ResponderState::disconnecting:
 				{
-					struct mqtt_queued_message* msg = mqtt_mq_find(&client.mq, MQTT_CONTROL_DISCONNECT, NULL);
-					bool disconnecting = msg && msg->state != MQTT_QUEUED_COMPLETE;
+					const mqtt_queued_message *const msg = mqtt_mq_find(&client.mq, MQTT_CONTROL_DISCONNECT, NULL);
+					const bool disconnecting = (msg != nullptr && msg->state != MQTT_QUEUED_COMPLETE);
 
 					// If received ACK for DISCONNECT regardless of result, or the time has expired.
 					if (!disconnecting || millis() - messageTimer >= MqttClient::MessageTimeout)
@@ -270,8 +266,7 @@ void MqttClient::ConnectionLost() noexcept
 
 /* static */ GCodeResult MqttClient::Configure(GCodeBuffer &gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// Since the config is shared, make sure the protocol is not active
-	// on any interface.
+	// Since the config is shared, make sure the protocol is not active on any interface.
 	for (MqttClient *c = clients; c != nullptr; c = c->next)
 	{
 		if (c->responderState != ResponderState::free)
@@ -297,9 +292,9 @@ void MqttClient::ConnectionLost() noexcept
 		clearMemb(field);
 		size_t sz = param.strlen() + 1;
 		field = new char[sz]();
-		if (!field)
+		if (field == nullptr)
 		{
-			reply.copy("Unable to allocate mem");
+			reply.copy("Unable to allocate memory");
 			return false;
 		}
 		SafeStrncpy(field, param.c_str(), sz);
@@ -557,4 +552,5 @@ bool MqttClient::retain = false;
 
 MqttClient::Subscription *MqttClient::subs = nullptr;
 MqttClient *MqttClient::clients = nullptr;
+
 #endif

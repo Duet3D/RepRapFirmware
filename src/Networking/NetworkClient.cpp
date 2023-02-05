@@ -11,23 +11,21 @@
 
 static const uint32_t connectTimeout = ConnectTimeout + 1000; // Make sure the socket, if any, is closed before attempting another connection.
 
-NetworkClient::NetworkClient(NetworkResponder *n, NetworkClient *c) noexcept : NetworkResponder(n),
-																			interface(nullptr),
-																			next(c),
-																			whenRequest(0)
+NetworkClient::NetworkClient(NetworkResponder *n, NetworkClient *c) noexcept
+	: NetworkResponder(n), interface(nullptr), next(c), whenRequest(0)
 {
 	clients = this;
 }
 
-bool NetworkClient::Start(NetworkProtocol protocol, NetworkInterface *interface) noexcept
+bool NetworkClient::Start(NetworkProtocol protocol, NetworkInterface *iface) noexcept
 {
 	if (HandlesProtocol(protocol))
 	{
-		if (!skt)
+		if (skt == nullptr)
 		{
-			if (this->interface)
+			if (interface != nullptr)
 			{
-				if (this->interface == interface)
+				if (interface == iface)
 				{
 					if (millis() - whenRequest < connectTimeout)
 					{
@@ -35,8 +33,7 @@ bool NetworkClient::Start(NetworkProtocol protocol, NetworkInterface *interface)
 						// or for a socket to be available; do not start.
 						return false;
 					}
-					// Else the previous start request has timed out before getting a socket;
-					// do it again.
+					// Else the previous start request has timed out before getting a socket; do it again.
 				}
 				else
 				{
@@ -48,7 +45,7 @@ bool NetworkClient::Start(NetworkProtocol protocol, NetworkInterface *interface)
 			// Enforce a single client on each interface.
 			for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
 			{
-				if (c != this && c->HandlesProtocol(protocol) && c->interface == interface)
+				if (c != this && c->HandlesProtocol(protocol) && c->interface == iface)
 				{
 					return false;
 				}
@@ -57,7 +54,7 @@ bool NetworkClient::Start(NetworkProtocol protocol, NetworkInterface *interface)
 			// If everything passes, confirm the specific client implementation requests a start.
 			if (Start())
 			{
-				this->interface = interface;
+				interface = iface;
 				whenRequest = millis();
 				return true;
 			}
@@ -68,11 +65,11 @@ bool NetworkClient::Start(NetworkProtocol protocol, NetworkInterface *interface)
 	return false;
 }
 
-void NetworkClient::Stop(NetworkProtocol protocol, NetworkInterface *interface) noexcept
+void NetworkClient::Stop(NetworkProtocol protocol, NetworkInterface *iface) noexcept
 {
-	if (HandlesProtocol(protocol) && this->interface == interface)
+	if (HandlesProtocol(protocol) && interface == iface)
 	{
-		Stop(); // Allow the specific client implementation to disconnect gracefully
+		Stop();					// allow the specific client implementation to disconnect gracefully
 	}
 }
 
@@ -86,9 +83,9 @@ bool NetworkClient::Accept(Socket *s, NetworkProtocol protocol) noexcept
 	return false;
 }
 
-void NetworkClient::Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept
+void NetworkClient::Terminate(NetworkProtocol protocol, NetworkInterface *iface) noexcept
 {
-	if ((HandlesProtocol(protocol) || protocol == AnyProtocol) && this->interface == interface)
+	if ((HandlesProtocol(protocol) || protocol == AnyProtocol) && interface == iface)
 	{
 		Terminate();
 	}

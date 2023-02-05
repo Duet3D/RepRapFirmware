@@ -24,10 +24,10 @@ public:
 	NetworkClient(const NetworkClient&) = delete;
 	NetworkClient(NetworkResponder *n, NetworkClient *c) noexcept;
 
-	bool Start(NetworkProtocol protocol, NetworkInterface *interface) noexcept;
-	void Stop(NetworkProtocol protocol, NetworkInterface *interface) noexcept;
+	bool Start(NetworkProtocol protocol, NetworkInterface *iface) noexcept;
+	void Stop(NetworkProtocol protocol, NetworkInterface *iface) noexcept;
 	bool Accept(Socket *s, NetworkProtocol protocol) noexcept override;
-	void Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept override;
+	void Terminate(NetworkProtocol protocol, NetworkInterface *iface) noexcept override;
 
 	NetworkInterface *GetInterface() { return interface; }
 	NetworkClient *GetNext() const noexcept { return next; }
