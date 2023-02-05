@@ -118,7 +118,7 @@ bool W5500Socket::CanRead() const noexcept
 {
 	return (state == SocketState::connected)
 		|| (state == SocketState::listening && protocol == MdnsProtocol)
-		|| (state == SocketState::clientDisconnecting && receivedData != nullptr && receivedData->TotalRemaining() != 0);
+		|| (state == SocketState::peerDisconnecting && receivedData != nullptr && receivedData->TotalRemaining() != 0);
 }
 
 bool W5500Socket::CanSend() const noexcept
@@ -242,7 +242,7 @@ void W5500Socket::Poll() noexcept
 			// This must be done to ensure that FTP uploads are not cut off.
 			ReceiveData();
 
-			state = SocketState::clientDisconnecting;
+			state = SocketState::peerDisconnecting;
 			break;
 
 		case SOCK_CLOSED:
