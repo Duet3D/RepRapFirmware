@@ -46,7 +46,7 @@ bool MqttClient::Spin() noexcept
 			err != MQTT_ERROR_SUBSCRIBE_FAILED && // Handled in ResponderState::subscribing
 			err != MQTT_ERROR_SEND_BUFFER_IS_FULL) // Buffer gets drained as socket send
 		{
-			if (reprap.Debug(moduleWebserver))
+			if (reprap.Debug(Module::Webserver))
 			{
 				debugPrintf("MQTT encountered an error '%s', state = %d, resetting connection\n",
 							mqtt_error_str(err), static_cast<int>(responderState));
@@ -69,7 +69,7 @@ bool MqttClient::Spin() noexcept
 						if (millis() - messageTimer >= MqttClient::MessageTimeout)
 						{
 							ConnectionLost();
-							if (reprap.Debug(moduleWebserver))
+							if (reprap.Debug(Module::Webserver))
 							{
 								debugPrintf("MQTT connect timed out\n");
 							}
@@ -81,7 +81,7 @@ bool MqttClient::Spin() noexcept
 						currSub = subs;
 						prevSub = nullptr;
 						responderState = ResponderState::subscribing;
-						if (reprap.Debug(moduleWebserver))
+						if (reprap.Debug(Module::Webserver))
 						{
 							debugPrintf("MQTT client connected\n");
 						}
@@ -100,7 +100,7 @@ bool MqttClient::Spin() noexcept
 					{
 						subscribing = false; // Skip the topic
 						prevSub = nullptr;
-						if (reprap.Debug(moduleWebserver))
+						if (reprap.Debug(Module::Webserver))
 						{
 							debugPrintf("MQTT subscribe to topic %s failed, skipped\n", prevSub->topic);
 						}
@@ -112,7 +112,7 @@ bool MqttClient::Spin() noexcept
 						if (millis() - messageTimer >= MqttClient::MessageTimeout)
 						{
 							ConnectionLost();
-							if (reprap.Debug(moduleWebserver))
+							if (reprap.Debug(Module::Webserver))
 							{
 								debugPrintf("MQTT subscribe timed out\n");
 							}
@@ -121,7 +121,7 @@ bool MqttClient::Spin() noexcept
 					}
 					else
 					{
-						if (prevSub && reprap.Debug(moduleWebserver))
+						if (prevSub && reprap.Debug(Module::Webserver))
 						{
 							debugPrintf("MQTT subscribed to topic %s\n", prevSub->topic);
 						}
@@ -191,7 +191,7 @@ bool MqttClient::Spin() noexcept
 					if (!disconnecting || millis() - messageTimer >= MqttClient::MessageTimeout)
 					{
 						ConnectionLost();
-						if (reprap.Debug(moduleWebserver))
+						if (reprap.Debug(Module::Webserver))
 						{
 							debugPrintf("MQTT disconnected\n");
 						}
@@ -332,7 +332,7 @@ void MqttClient::ConnectionLost() noexcept
 			clearMemb(password);
 		}
 
-		if (reprap.Debug(moduleWebserver))
+		if (reprap.Debug(Module::Webserver))
 		{
 			debugPrintf("Username set to '%s'", username);
 			if (password)
@@ -353,7 +353,7 @@ void MqttClient::ConnectionLost() noexcept
 			return GCodeResult::error;
 		}
 
-		if (reprap.Debug(moduleWebserver))
+		if (reprap.Debug(Module::Webserver))
 		{
 			debugPrintf("Client ID set to '%s'\n", id);
 		}
@@ -381,7 +381,7 @@ void MqttClient::ConnectionLost() noexcept
 			}
 		}
 
-		if (reprap.Debug(moduleWebserver))
+		if (reprap.Debug(Module::Webserver))
 		{
 			debugPrintf("Will message set to '%s'", willMessage);
 			if (willTopic)
@@ -442,7 +442,7 @@ void MqttClient::ConnectionLost() noexcept
 			sub->next = subs;
 			subs = sub;
 
-			if (reprap.Debug(moduleWebserver))
+			if (reprap.Debug(Module::Webserver))
 			{
 				debugPrintf("MQTT added topic %s with QOS %d to subscriptions\n", param.c_str(), qos);
 			}
@@ -483,14 +483,14 @@ void MqttClient::ConnectionLost() noexcept
 			else
 			{
 				publishQos = qos;
-				if (reprap.Debug(moduleWebserver))
+				if (reprap.Debug(Module::Webserver))
 				{
 					debugPrintf("MQTT publish QOS set to %d\n", publishQos);
 				}
 			}
 		}
 
-		if (reprap.Debug(moduleWebserver))
+		if (reprap.Debug(Module::Webserver))
 		{
 			debugPrintf("Publish topic '%s', with settings duplicate = %d retain = %d qos = %d\n", publishTopic, retain, duplicate, publishQos);
 		}

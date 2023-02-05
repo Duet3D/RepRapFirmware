@@ -15,9 +15,9 @@
 #include <Version.h>
 #include <Movement/StepTimer.h>
 #include <Platform/TaskPriorities.h>
-#include <NetworkClient.h>
 
 #if HAS_NETWORKING
+#include "NetworkClient.h"
 #include "NetworkBuffer.h"
 #include "NetworkInterface.h"
 

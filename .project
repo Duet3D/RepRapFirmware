@@ -32,8 +32,8 @@
 	</natures>
 	<filteredResources>
 		<filter>
-			<id>1670214705580</id>
-			<name>src/Networking/MQTT/MQTT-C</name>
+			<id>0</id>
+			<name>src/Networking/MQTT/MQTT_C</name>
 			<type>13</type>
 			<matcher>
 				<id>org.eclipse.ui.ide.multiFilter</id>
@@ -41,8 +41,8 @@
 			</matcher>
 		</filter>
 		<filter>
-			<id>1670214705581</id>
-			<name>src/Networking/MQTT/MQTT-C</name>
+			<id>0</id>
+			<name>src/Networking/MQTT/MQTT_C</name>
 			<type>13</type>
 			<matcher>
 				<id>org.eclipse.ui.ide.multiFilter</id>
@@ -50,8 +50,8 @@
 			</matcher>
 		</filter>
 		<filter>
-			<id>1670217666123</id>
-			<name>src/Networking/MQTT/MQTT-C/include</name>
+			<id>0</id>
+			<name>src/Networking/MQTT/MQTT_C/include</name>
 			<type>6</type>
 			<matcher>
 				<id>org.eclipse.ui.ide.multiFilter</id>
@@ -59,8 +59,8 @@
 			</matcher>
 		</filter>
 		<filter>
-			<id>1670218610607</id>
-			<name>src/Networking/MQTT/MQTT-C/src</name>
+			<id>0</id>
+			<name>src/Networking/MQTT/MQTT_C/src</name>
 			<type>6</type>
 			<matcher>
 				<id>org.eclipse.ui.ide.multiFilter</id>

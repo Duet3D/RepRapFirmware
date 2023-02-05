@@ -12,12 +12,13 @@
 #include "GCodeException.h"
 #include "GCodeQueue.h"
 #include "Heating/Heat.h"
+
 #if HAS_SBC_INTERFACE
 # include <SBC/SbcInterface.h>
 #endif
+
 #include <Movement/Move.h>
-#include <Networking/Network.h>
-#include <Networking/MQTT/MqttClient.h>
+
 #include <PrintMonitor/PrintMonitor.h>
 #include <Platform/RepRap.h>
 #include <Tools/Tool.h>
@@ -31,6 +32,11 @@
 
 #if SUPPORT_IOBITS
 # include <Platform/PortControl.h>
+#endif
+
+#if HAS_NETWORKING
+# include <Networking/Network.h>
+# include <Networking/MQTT/MqttClient.h>
 #endif
 
 #if HAS_WIFI_NETWORKING
@@ -3240,6 +3246,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
+#if HAS_NETWORKING
 			case 540: // Set/report MAC address
 				if (CheckNetworkCommandAllowed(gb, reply, result))
 				{
@@ -3257,6 +3264,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
+#endif
 
 			case 550: // Set/report machine name
 #if HAS_SBC_INTERFACE
@@ -3292,6 +3300,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
+#if HAS_NETWORKING
 			case 552: // Enable/Disable network and/or Set/Get IP address
 				if (CheckNetworkCommandAllowed(gb, reply, result))
 				{
@@ -3371,6 +3380,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
+#endif
 
 			case 555: // Set/report firmware type to emulate
 				if (gb.Seen('P'))
@@ -3769,6 +3779,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = ProbeTool(gb, reply);
 				break;
 
+#if HAS_NETWORKING
 			case 586: // Configure network protocols
 				if (CheckNetworkCommandAllowed(gb, reply, result))
 				{
@@ -3778,7 +3789,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						case -1:
 							{
 								bool seen = false;
-#if SUPPORT_HTTP
+# if SUPPORT_HTTP
 								if (gb.Seen('C'))
 								{
 									String<StringLength20> corsSite;
@@ -3786,7 +3797,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 									reprap.GetNetwork().SetCorsSite(corsSite.c_str());
 									seen = true;
 								}
-#endif
+# endif
 
 								if (gb.Seen('P'))
 								{
@@ -3822,7 +3833,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 								if (!seen)
 								{
-#if SUPPORT_HTTP
+# if SUPPORT_HTTP
 									if (reprap.GetNetwork().GetCorsSite() != nullptr)
 									{
 										reply.printf("CORS enabled for site '%s'", reprap.GetNetwork().GetCorsSite());
@@ -3831,7 +3842,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 									{
 										reply.copy("CORS disabled");
 									}
-#endif
+# endif
 									// Default to reporting current protocols if P or S parameter missing
 									result = reprap.GetNetwork().ReportProtocols(interface, reply);
 								}
@@ -3850,6 +3861,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				}
 				break;
+#endif
 
 #if HAS_WIFI_NETWORKING
 			case 587:	// Add WiFi network or list remembered networks
