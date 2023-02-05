@@ -200,7 +200,7 @@
 #endif
 
 #ifndef SUPPORT_MQTT
-# define SUPPORT_MQTT			HAS_NETWORKING
+# define SUPPORT_MQTT			0
 #endif
 
 #ifndef SUPPORT_MULTICAST_DISCOVERY

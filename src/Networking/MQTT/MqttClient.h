@@ -7,11 +7,9 @@
 #ifndef SRC_NETWORKING_MQTT_MQTTCLIENT_H_
 #define SRC_NETWORKING_MQTT_MQTTCLIENT_H_
 
-#include <sys/types.h>
-#include <stdint.h>
-#include <string.h>
-#include <limits.h>
-#include <stdarg.h>
+#include <RepRapFirmware.h>
+
+#if SUPPORT_MQTT
 
 #include "mqtt.h"
 #include "NetworkClient.h"
@@ -86,5 +84,7 @@ private:
 
 	static MqttClient *clients; // List of all MQTT clients
 };
+
+#endif	// SUPPORT_MQTT
 
 #endif /* SRC_NETWORKING_MQTT_MQTTCLIENT_H_ */

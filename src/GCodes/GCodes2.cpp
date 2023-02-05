@@ -36,6 +36,9 @@
 
 #if HAS_NETWORKING
 # include <Networking/Network.h>
+#endif
+
+#if SUPPORT_MQTT
 # include <Networking/MQTT/MqttClient.h>
 #endif
 
@@ -3850,9 +3853,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							break;
 
 						case MqttProtocol:
-							{
-								result = MqttClient::Configure(gb, reply);
-							}
+# if SUPPORT_MQTT
+							result = MqttClient::Configure(gb, reply);
+# else
+							reply.copy("MQTT protocol not supported by this firmware");
+							result = GCodeResult::error;
+# endif
 							break;
 
 						default:

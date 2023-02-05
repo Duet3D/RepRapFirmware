@@ -534,7 +534,7 @@ void MqttClient::ConnectionLost() noexcept
 
 /*static*/ void MqttClient::PublishCallback(void** state, struct mqtt_response_publish *msg)
 {
-	// Null terminate the recieved message details. Since this is just for display, cut them off if they don't fit the buffer.
+	// Null terminate the received message details. Since this is just for display, cut them off if they don't fit the buffer.
 	char topic[32];
 	SafeStrncpy(topic, static_cast<const char*>(msg->topic_name), std::min(static_cast<size_t>(msg->topic_name_size + 1), sizeof(topic)));
 	char message[64];

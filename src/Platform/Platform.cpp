@@ -3405,7 +3405,7 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 		reprap.GetNetwork().HandleTelnetGCodeReply(message);
 	}
 
-#if HAS_NETWORKING
+#if SUPPORT_MQTT
 	if ((type & MqttMessage) != 0)
 	{
 		reprap.GetNetwork().MqttPublish(message);
