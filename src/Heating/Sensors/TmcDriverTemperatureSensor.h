@@ -19,12 +19,12 @@ public:
 
 	int GetSmartDriversChannel() const noexcept override { return (int) channel; }		// Get the smart drivers channel that this sensor monitors, or -1 if it doesn't
 	void Poll() noexcept override;
-	const char *GetShortSensorType() const noexcept override;
+	const char *_ecv_array GetShortSensorType() const noexcept override;
 
-	static constexpr const char *PrimaryTypeName = "drivers";
+	static constexpr const char *_ecv_array PrimaryTypeName = "drivers";
 #if defined(DUET_NG) || defined(PCCB_10)
-	static constexpr const char *DuexTypeName = "drivers-duex";
-	static constexpr const char *DuexTypeShortName = "driversduex";
+	static constexpr const char *_ecv_array DuexTypeName = "drivers-duex";
+	static constexpr const char *_ecv_array DuexTypeShortName = "driversduex";
 #endif
 
 private:

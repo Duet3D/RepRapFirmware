@@ -18,12 +18,7 @@ namespace CanMotion
 {
 	void Init() noexcept;
 	void StartMovement() noexcept;
-#if USE_REMOTE_INPUT_SHAPING
-	void AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept;
-	void AddExtruderMovement(const PrepParams& params, DriverId canDriver, float extrusion, bool usePressureAdvance) noexcept;
-#else
 	void AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance) noexcept;
-#endif
 	uint32_t FinishMovement(const DDA& dda, uint32_t moveStartTime, bool simulating) noexcept;
 	bool CanPrepareMove() noexcept;
 	CanMessageBuffer *GetUrgentMessage() noexcept;

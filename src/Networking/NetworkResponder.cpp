@@ -26,7 +26,7 @@ void NetworkResponder::Commit(ResponderState nextState, bool report) noexcept
 {
 	stateAfterSending = nextState;
 	responderState = ResponderState::sending;
-	if (report && reprap.Debug(moduleWebserver))
+	if (report && reprap.Debug(Module::Webserver))
 	{
 #if HAS_MASS_STORAGE
 		debugPrintf("Sending reply, file = %s\n", (fileBeingSent != nullptr) ? "yes" : "no");
@@ -65,7 +65,7 @@ void NetworkResponder::SendData() noexcept
 				if (!skt->CanSend())
 				{
 					// The connection has been lost or the other end has closed it
-					if (reprap.Debug(moduleWebserver))
+					if (reprap.Debug(Module::Webserver))
 					{
 						debugPrintf("Can't send anymore\n");
 					}
@@ -125,7 +125,7 @@ void NetworkResponder::SendData() noexcept
 				// Check whether the connection has been closed
 				if (!skt->CanSend())
 				{
-					if (reprap.Debug(moduleWebserver))
+					if (reprap.Debug(Module::Webserver))
 					{
 						debugPrintf("Can't send anymore\n");
 					}
@@ -194,7 +194,7 @@ IPAddress NetworkResponder::GetRemoteIP() const noexcept
 
 void NetworkResponder::ReportOutputBufferExhaustion(const char *sourceFile, int line) noexcept
 {
-	if (reprap.Debug(moduleWebserver))
+	if (reprap.Debug(Module::Webserver))
 	{
 		debugPrintf("Ran out of output buffers at %s(%d)\n", sourceFile, line);
 	}

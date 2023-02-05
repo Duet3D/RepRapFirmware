@@ -45,7 +45,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	{
 	case GCodeState::waitingForSpecialMoveToComplete:
 	case GCodeState::abortWhenMovementFinished:
-		if (   LockMovementAndWaitForStandstill(gb)		// movement should already be locked, but we need to wait for standstill and fetch the current position
+		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)		// movement should already be locked, but we need to wait for standstill and fetch the current position
 #if SUPPORT_CAN_EXPANSION
 			&& CanMotion::FinishedReverting()
 #endif
@@ -88,7 +88,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			break;
 
 		case SegmentedMoveState::aborted:					// move terminated abnormally
-			if (!LockMovementAndWaitForStandstill(gb))		// update the the user position from the machine position at which we stop
+			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))	// update the the user position from the machine position at which we stop
 			{
 				break;
 			}
@@ -133,7 +133,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::probingToolOffset4:					// executing M585, probing move has started
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			if (m585Settings.useProbe)
 			{
@@ -169,7 +169,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::findCenterOfCavity1:						// Executing M675 using a Z probe, have already deployed the probe
 	case GCodeState::probingToolOffset1:						// Executing M585 using a probe, which we have deployed
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			lastProbedTime = millis();							// start the recovery timer
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
@@ -202,7 +202,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::findCenterOfCavity3:						// Executing M675, min probing move has started
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
 			zp->SetProbing(false);
@@ -223,7 +223,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::findCenterOfCavity4:						// Executing M675, backoff move from min has started
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			if (SetupM675ProbingMove(gb, false))
 			{
@@ -240,7 +240,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::findCenterOfCavity5:						// Executing M675, max probing move has started
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			reprap.GetHeat().SuspendHeaters(false);
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
@@ -261,7 +261,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::findCenterOfCavity6:						// Executing M675, move to centre has started
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			gb.SetState(GCodeState::normal);
 			RetractZProbe(gb);
@@ -305,11 +305,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::homing2:
-		if (LockMovementAndWaitForStandstill(gb))		// movement should already be locked, but we need to wait for the previous homing move to complete
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))		// movement should already be locked, but we need to wait for the previous homing move to complete
 		{
 			// Test whether the previous homing move homed any axes
 			if (toBeHomed.Disjoint(axesHomed))
 			{
+				//debugPrintf("tbh %04x, ah %04x\n", (unsigned int)toBeHomed.GetRaw(), (unsigned int)axesHomed.GetRaw());
 				reply.copy("Failed to home axes ");
 				AppendAxes(reply, toBeHomed);
 				stateMachineResult = GCodeResult::error;
@@ -351,11 +352,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::toolChange1:						// release the old tool (if any), then run tpre for the new tool
 	case GCodeState::m109ToolChange1:					// release the old tool (if any), then run tpre for the new tool
-		if (LockMovementAndWaitForStandstill(gb
-#if SUPPORT_ASYNC_MOVES
-										, false
-#endif
-												))		// wait for tfree.g to finish executing
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))	// wait for tfree.g to finish executing
 		{
 			if (ms.currentTool != nullptr)
 			{
@@ -366,23 +363,57 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				ms.currentTool = nullptr;
 				UpdateCurrentUserPosition(gb);			// the tool offset may have changed, so get the current position
 			}
+
+#if SUPPORT_ASYNC_MOVES && PREALLOCATE_TOOL_AXES
+			// Whenever we release axes, we must update lastKnownMachinePositions for those axes first so that whoever allocates them next gets the correct positions
+			ms.SaveOwnAxisCoordinates();
 			gb.AdvanceState();
-			if (Tool::GetLockedTool(ms.newToolNumber).IsNotNull() && (ms.toolChangeParam & TPreBit) != 0)	// 2020-04-29: run tpre file even if not all axes have been homed
+
+			ReadLockedPointer<Tool> newTool = Tool::GetLockedTool(ms.newToolNumber);
+			if (newTool.IsNull())
 			{
-				String<StringLength20> scratchString;
-				scratchString.printf("tpre%d.g", ms.newToolNumber);
-				DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);
+				// Release the axes and extruders that this movement system owns
+				ms.ReleaseAllOwnedAxesAndExtruders();
+			}
+			else
+			{
+				// Allocate the axes and extruders that the new tool uses, and release all others
+				const AxesBitmap newToolAxes = newTool->GetXYAxesAndExtruders();
+				const AxesBitmap axesToAllocate = newToolAxes & ~ms.GetAxesAndExtrudersOwned();
+				const AxesBitmap axesToRelease = ms.GetAxesAndExtrudersOwned() & ~newToolAxes;
+				ms.ReleaseAxesAndExtruders(axesToRelease);
+				try
+				{
+					AllocateAxes(gb, ms, axesToAllocate, ParameterLettersToBitmap("XY"));
+				}
+				catch (const GCodeException& exc)
+				{
+					// We failed to allocate the new axes/extruders that we need
+					// Release all axes and extruders that this movement system owns
+					ms.ReleaseAllOwnedAxesAndExtruders();
+					gb.LatestMachineState().SetError(exc);
+					gb.SetState(GCodeState::normal);
+					break;
+				}
+				newTool.Release();						// release the tool list lock before we run tpre
+#else
+			gb.AdvanceState();
+			if (Tool::GetLockedTool(ms.newToolNumber).IsNotNull())
+			{
+#endif
+				if ((ms.toolChangeParam & TPreBit) != 0)	// 2020-04-29: run tpre file even if not all axes have been homed
+				{
+					String<StringLength20> scratchString;
+					scratchString.printf("tpre%d.g", ms.newToolNumber);
+					DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);
+				}
 			}
 		}
 		break;
 
 	case GCodeState::toolChange2:						// select the new tool if it exists and run tpost
 	case GCodeState::m109ToolChange2:					// select the new tool if it exists and run tpost
-		if (LockMovementAndWaitForStandstill(gb
-#if SUPPORT_ASYNC_MOVES
-										, false
-#endif
-												))		// wait for tpre.g to finish executing
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))	// wait for tpre.g to finish executing
 		{
 			ms.SelectTool(ms.newToolNumber, IsSimulating());
 			UpdateCurrentUserPosition(gb);				// get the actual position of the new tool
@@ -399,11 +430,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::toolChangeComplete:
 	case GCodeState::m109ToolChangeComplete:
-		if (LockMovementAndWaitForStandstill(gb
-#if SUPPORT_ASYNC_MOVES
-										, false
-#endif
-												))		// wait for the move to height to finish
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))	// wait for the move to height to finish
 		{
 			gb.LatestMachineState().feedRate = ms.toolChangeRestorePoint.feedRate;
 			// We don't restore the default fan speed in case the user wants to use a different one for the new tool
@@ -435,7 +462,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::pausing1:
 	case GCodeState::eventPausing1:
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
@@ -446,7 +473,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::filamentChangePause1:
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 			gb.AdvanceState();
 			if (AllAxesAreHomed())
@@ -461,7 +488,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::pausing2:
 	case GCodeState::filamentChangePause2:
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 			reply.printf((gb.GetState() == GCodeState::filamentChangePause2) ? "Printing paused for filament change at" : "Printing paused at");
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
@@ -478,7 +505,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::eventPausing2:
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 			pauseState = PauseState::paused;
 #if HAS_SBC_INTERFACE
@@ -492,7 +519,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::resuming2:
 		// Here when we have just finished running the resume macro file.
 		// Move the head back to the paused location
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 			const float currentZ = ms.coords[Z_AXIS];
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
@@ -519,7 +546,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::resuming3:
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 			// We no longer restore the paused fan speeds automatically on resuming, because that messes up the print cooling fan speed if a tool change has been done
 			// They can be restored manually in resume.g if required
@@ -540,7 +567,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::cancelling:
-		if (LockMovementAndWaitForStandstill(gb))		// wait until cancel.g has completely finished
+		if (LockAllMovementSystemsAndWaitForStandstill(gb))		// wait until cancel.g has completely finished
 		{
 			pauseState = PauseState::notPaused;
 			gb.SetState(GCodeState::normal);
@@ -621,17 +648,22 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::stopping:			// here when a print has finished, need to execute stop.g
-		if (LockMovementAndWaitForStandstill(gb))
+	case GCodeState::stoppingFromCode:
+		if (LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 #if SUPPORT_ASYNC_MOVES
 			gb.ExecuteAll();			// only fileGCode gets here so it needs to execute moves for all commands
 #endif
-			gb.SetState(GCodeState::normal);
-			if (!DoFileMacro(*FileGCode(), STOP_G, false, AsyncSystemMacroCode))
+			gb.SetState(GCodeState::stopped);
+			if (!DoFileMacro(gb, STOP_G, false, (state == GCodeState::stoppingFromCode) ? SystemHelperMacroCode : AsyncSystemMacroCode))
 			{
 				reprap.GetHeat().SwitchOffAll(true);
 			}
 		}
+		break;
+
+	case GCodeState::stopped:
+		gb.SetState(GCodeState::normal);
 		break;
 
 	// States used for grid probing
@@ -683,7 +715,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::gridProbing2a:		// ready to probe the current grid probe point (we return to this state when doing the second and subsequent taps)
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			gb.AdvanceState();
 			if (platform.GetZProbeOrDefault(currentZProbeNumber)->GetProbeType() == ZProbeType::blTouch)
@@ -694,7 +726,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::gridProbing2b:		// ready to probe the current grid probe point
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			lastProbedTime = millis();														// start the recovery timer
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
@@ -753,7 +785,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::gridProbing4:	// ready to lift the probe after probing the current grid probe point
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			doingManualBedProbe = false;
 			++tapsDone;
@@ -802,7 +834,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::gridProbing5:	// finished probing a point and moved back to the dive height
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			// See whether we need to do any more taps
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
@@ -944,7 +976,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::probingAtPoint1:
 		// The move to raise/lower the head to the correct dive height has been commanded.
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			// Head is at the dive height but needs to be moved to the correct XY position. The XY coordinates have already been stored.
 			SetMoveBufferDefaults(ms);
@@ -963,7 +995,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::probingAtPoint2a:								// note we return to this state when doing the second and subsequent taps
 		// Executing G30 with a P parameter. The move to put the head at the specified XY coordinates has been commanded.
 		// OR initial state when executing G30 with no P parameter (must call InitialiseTaps first)
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			gb.AdvanceState();
 			if (platform.GetZProbeOrDefault(currentZProbeNumber)->GetProbeType() == ZProbeType::blTouch)	// bltouch needs to be redeployed prior to each probe point
@@ -974,7 +1006,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::probingAtPoint2b:
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			// Head has finished moving to the correct XY position and BLTouch has been deployed
 			lastProbedTime = millis();								// start the probe recovery timer
@@ -1032,8 +1064,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 												? platform.AxisMinimum(Z_AXIS) - zp->GetDiveHeight() + zp->GetActualTriggerHeight()	// Z axis has been homed, so no point in going very far
 												: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet, so treat this as a homing move
 					ms.feedRate = zp->GetProbingSpeed(tapsDone);
-					NewSingleSegmentMoveAvailable(ms);
 					ms.linearAxesMentioned = true;
+					NewSingleSegmentMoveAvailable(ms);
 					gb.AdvanceState();
 				}
 			}
@@ -1042,7 +1074,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::probingAtPoint4:
 		// Executing G30. The probe wasn't triggered at the start of the move, and the probing move has been commanded.
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			// Probing move has stopped
 			reprap.GetHeat().SuspendHeaters(false);
@@ -1069,7 +1101,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// Successful probing
 					float m[MaxAxes];
-					reprap.GetMove().GetCurrentMachinePosition(m, false);		// get height without bed compensation
+					reprap.GetMove().GetCurrentMachinePosition(m, ms.GetMsNumber(), false);		// get height without bed compensation
 					const float g30zStoppedHeight = m[Z_AXIS] - g30HValue;		// save for later
 					zp->SetLastStoppedHeight(g30zStoppedHeight);
 					if (tapsDone > 0)											// don't accumulate the result of we are doing fast-then-slow probing and this was the fast probe
@@ -1095,7 +1127,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// Reset the Z axis origin according to the height error so that we can move back up to the dive height
 					ms.coords[Z_AXIS] = zp->GetActualTriggerHeight();
-					reprap.GetMove().SetNewPosition(ms.coords, false, gb.GetActiveQueueNumber());
+#if SUPPORT_ASYNC_MOVES
+					ms.OwnedAxisCoordinateUpdated(Z_AXIS);
+#endif
+					reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), false);
 
 					// Find the coordinates of the Z probe to pass to SetZeroHeightError
 					float tempCoords[MaxAxes];
@@ -1134,7 +1169,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::probingAtPoint5:
 		// Here when we have moved the head back up to the dive height
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			// See whether we need to do any more taps
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
@@ -1180,7 +1215,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				// Setting the Z height with G30
 				ms.coords[Z_AXIS] -= g30zHeightError;
-				reprap.GetMove().SetNewPosition(ms.coords, false, gb.GetActiveQueueNumber());
+				reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), false);
 
 				// Find the coordinates of the Z probe to pass to SetZeroHeightError
 				float tempCoords[MaxAxes];
@@ -1200,25 +1235,30 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::probingAtPoint6:
 		// Here when we have finished probing and have retracted the probe if necessary
-		if (LockMovementAndWaitForStandstill(gb))		// retracting the Z probe
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))		// retracting the Z probe
 		{
 			if (g30SValue == 1)
 			{
 				// G30 with a silly Z value and S=1 is equivalent to G30 with no parameters in that it sets the current Z height
 				// This is useful because it adjusts the XY position to account for the probe offset.
 				ms.coords[Z_AXIS] -= g30zHeightError;
-				reprap.GetMove().SetNewPosition(ms.coords, false, gb.GetActiveQueueNumber());
+				reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), false);
 				ToolOffsetInverseTransform(ms);
 			}
 			else if (g30SValue >= -1)
 			{
-				if (reprap.GetMove().FinishedBedProbing(g30SValue, reply))
+				if (reprap.GetMove().FinishedBedProbing(ms.GetMsNumber(), g30SValue, reply))
 				{
 					stateMachineResult = GCodeResult::error;
 				}
 				else if (reprap.GetMove().GetKinematics().SupportsAutoCalibration())
 				{
 					zDatumSetByProbing = true;			// if we successfully auto calibrated or adjusted leadscrews, we've set the Z datum by probing
+					// Auto calibration may have adjusted the motor positions and the geometry, so the head may now be at a different position
+#if SUPPORT_ASYNC_MOVES
+					ms.SaveOwnAxisCoordinates();
+#endif
+					UpdateUserPositionFromMachinePosition(gb, ms);
 				}
 			}
 			gb.SetState(GCodeState::normal);
@@ -1256,7 +1296,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::straightProbe0:					// ready to deploy the probe
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			gb.AdvanceState();
 			currentZProbeNumber = straightProbeSettings.GetZProbeToUse();
@@ -1265,7 +1305,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::straightProbe1:
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			const auto zp = platform.GetEndstops().GetZProbe(straightProbeSettings.GetZProbeToUse());
 			lastProbedTime = millis();			// start the probe recovery timer
@@ -1333,7 +1373,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::straightProbe3:
 		// Executing G38. The probe wasn't in target state at the start of the move, and the probing move has been commanded.
-		if (LockMovementAndWaitForStandstill(gb))
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			// Probing move has stopped
 			reprap.GetHeat().SuspendHeaters(false);
@@ -1358,16 +1398,20 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just did the retraction part of a firmware retraction, now we need to do the Z hop
 		if (ms.segmentsLeft == 0)
 		{
-			if (ms.currentTool != nullptr)
+			const Tool * const t = ms.currentTool;
+			if (t != nullptr)								// this should always be true
 			{
+#if SUPPORT_ASYNC_MOVES
+				// We already allocated the Z axis to this MS when we began the retraction, so no need to do it here
+#endif
 				SetMoveBufferDefaults(ms);
-				ms.movementTool = ms.currentTool;
-				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
-				ms.coords[Z_AXIS] += ms.currentTool->GetRetractHop();
+				ms.movementTool = t;
+				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, t);
+				ms.coords[Z_AXIS] += t->GetRetractHop();
 				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
 				ms.filePos = gb.GetJobFilePosition();
-				ms.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
-				ms.currentZHop = ms.currentTool->GetRetractHop();
+				ms.canPauseAfter = false;					// don't pause after a retraction because that could cause too much retraction
+				ms.currentZHop = t->GetRetractHop();
 				ms.linearAxesMentioned = true;
 				NewSingleSegmentMoveAvailable(ms);
 			}
@@ -1379,16 +1423,17 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just undid the Z-hop part of a firmware un-retraction, now we need to do the un-retract
 		if (ms.segmentsLeft == 0)
 		{
-			if (ms.currentTool != nullptr && ms.currentTool->DriveCount() != 0)
+			const Tool * const t = ms.currentTool;
+			if (t != nullptr && t->DriveCount() != 0)
 			{
 				SetMoveBufferDefaults(ms);
-				ms.movementTool = ms.currentTool;
-				reprap.GetMove().GetCurrentUserPosition(ms.coords, 0, ms.currentTool);
-				for (size_t i = 0; i < ms.currentTool->DriveCount(); ++i)
+				ms.movementTool = t;
+				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.currentTool);
+				for (size_t i = 0; i < t->DriveCount(); ++i)
 				{
-					ms.coords[ExtruderToLogicalDrive(ms.currentTool->GetDrive(i))] = ms.currentTool->GetRetractLength() + ms.currentTool->GetRetractExtra();
+					ms.coords[ExtruderToLogicalDrive(t->GetDrive(i))] = t->GetRetractLength() + t->GetRetractExtra();
 				}
-				ms.feedRate = ms.currentTool->GetUnRetractSpeed() * ms.currentTool->DriveCount();
+				ms.feedRate = t->GetUnRetractSpeed() * t->DriveCount();
 				ms.filePos = gb.GetJobFilePosition();
 				ms.canPauseAfter = true;
 				NewSingleSegmentMoveAvailable(ms);
@@ -1402,7 +1447,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (ms.currentTool != nullptr)
 		{
 			ms.currentTool->GetFilament()->Load(filamentToLoad);
-			if (reprap.Debug(moduleGcodes))
+			if (reprap.Debug(Module::Gcodes))
 			{
 				platform.MessageF(LoggedGenericMessage, "Filament %s loaded", filamentToLoad);
 			}
@@ -1414,7 +1459,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just returned from the filament unload macro
 		if (ms.currentTool != nullptr)
 		{
-			if (reprap.Debug(moduleGcodes))
+			if (reprap.Debug(Module::Gcodes))
 			{
 				platform.MessageF(LoggedGenericMessage, "Filament %s unloaded", ms.currentTool->GetFilament()->GetName());
 			}
@@ -1564,6 +1609,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	if (reportPause)
 	{
 		FileGCode()->Invalidate();
+# if SUPPORT_ASYNC_MOVES
+		File2GCode()->Invalidate();
+# endif
 		reprap.GetSbcInterface().ReportPause();
 	}
 #endif

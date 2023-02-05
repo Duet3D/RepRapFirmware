@@ -141,7 +141,7 @@ void LinearDeltaKinematics::Recalc() noexcept
 
 	printRadiusSquared = fsquare(printRadius);
 
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		debugPrintf("HCH:");
 		for (size_t i = 0; i < numTowers; ++i)
@@ -353,7 +353,7 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 											// Update the intermediate variables that have changed
 											again = true;
 											Q2 = P2 + fsquare(dz);
-											if (reprap.Debug(moduleMove))
+											if (reprap.Debug(Module::Move))
 											{
 												debugPrintf("Limit tower %u, t=%.2f\n", tower, (double)t);
 											}
@@ -378,7 +378,7 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 							{
 								finalCoords[Z_AXIS] -= proposedAdjustment;
 								limited = true;
-								if (reprap.Debug(moduleMove))
+								if (reprap.Debug(Module::Move))
 								{
 									debugPrintf("Limit tower %u\n", tower);
 								}
@@ -425,7 +425,7 @@ void LinearDeltaKinematics::GetAssumedInitialPosition(size_t numAxes, float posi
 }
 
 // Auto calibrate from a set of probe points returning true if it failed
-bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
+bool LinearDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	constexpr size_t NumDeltaFactors = 9;		// maximum number of delta machine factors we can adjust
 
@@ -435,7 +435,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 		return true;
 	}
 
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());
@@ -490,7 +490,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			}
 		}
 
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			PrintMatrix("Derivative matrix", derivativeMatrix, numPoints, numFactors);
 		}
@@ -516,7 +516,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			normalMatrix(i, numFactors) = temp;
 		}
 
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			PrintMatrix("Normal matrix", normalMatrix, numFactors, numFactors + 1);
 		}
@@ -533,7 +533,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			solution[i] = normalMatrix(i, numFactors);
 		}
 
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			PrintMatrix("Solved matrix", normalMatrix, numFactors, numFactors + 1);
 			PrintVector("Solution", solution, numFactors);
@@ -570,7 +570,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			}
 
 			// Adjust the motor endpoints to allow for the change to endstop adjustments
-			reprap.GetMove().AdjustMotorPositions(heightAdjust, UsualNumTowers);
+			reprap.GetMove().AdjustMotorPositions(msNumber, heightAdjust, UsualNumTowers);
 		}
 
 		// Calculate the expected probe heights using the new parameters
@@ -593,7 +593,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 
 			finalDeviation.Set(finalSumOfSquares, finalSum, numPoints);
 
-			if (reprap.Debug(moduleMove))
+			if (reprap.Debug(Module::Move))
 			{
 				PrintVector("Expected probe error", expectedResiduals, numPoints);
 			}
@@ -610,7 +610,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 
 	// Print out the calculation time
 	//debugPrintf("Time taken %dms\n", (reprap.GetPlatform()->GetInterruptClocks() - startTime) * 1000 / DDA::stepClockRate);
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());

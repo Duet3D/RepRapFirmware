@@ -42,6 +42,7 @@ public:
 	void DetachInterrupt() const noexcept;
 #if SAME5x
 	bool SetAnalogCallback(AnalogInCallbackFunction fn, CallbackParameter cbp, uint32_t ticksPerCall) noexcept;
+	void ClearAnalogCallback() noexcept;
 #endif
 
 	uint16_t ReadAnalog() const noexcept;
@@ -96,7 +97,7 @@ protected:
 
 static_assert(sizeof(IoPort) == 2, "Unexpected size for class IoPort");		// try to keep these small because triggers have arrays of them
 
-// Class to represent a PWM output port
+// Class to represent an output port that might (or might not) support PWM
 class PwmPort : public IoPort
 {
 public:
@@ -107,6 +108,7 @@ public:
 	void SetFrequency(PwmFrequency freq) noexcept { frequency = freq; }
 	PwmFrequency GetFrequency() const noexcept { return frequency; }
 	void WriteAnalog(float pwm) const noexcept;
+	bool SupportsPwm() const noexcept;
 
 private:
 	PwmFrequency frequency;

@@ -274,7 +274,7 @@ float RemoteHeater::GetTemperature() const noexcept
 		return lastTemperature;
 	}
 
-	TemperatureError err;
+	TemperatureError err(TemperatureError::unknownError);
 	return reprap.GetHeat().GetSensorTemperature(GetSensorNumber(), err);
 }
 

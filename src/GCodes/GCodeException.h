@@ -49,7 +49,7 @@ public:
 private:
 	int line;
 	int column;
-	const char *_ecv_array message;
+	const char *_ecv_array _ecv_null message;
 	union
 	{
 		int32_t i;

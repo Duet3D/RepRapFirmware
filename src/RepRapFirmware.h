@@ -52,6 +52,7 @@ const char *_ecv_array SafeStrptime(const char *_ecv_array buf, const char *_ecv
 
 #include <CoreIO.h>
 #include <Devices.h>
+#include <General/NamedEnum.h>
 
 // The following are needed by many other files, so include them here
 #include <Platform/MessageType.h>
@@ -111,6 +112,11 @@ enum class PinUsedBy : uint8_t
 static_assert(MinVisibleAxes <= MinAxes);
 static_assert(NumNamedPins <= 255 || sizeof(LogicalPin) > 1, "Need 16-bit logical pin numbers");
 
+// Motion system choices, temporary until we finalise the choices of behaviour
+#if SUPPORT_ASYNC_MOVES
+# define PREALLOCATE_TOOL_AXES		1		// if set, when a tool is selected we preallocate and hang on to its X/Y axes and extruders
+#endif
+
 #if SUPPORT_CAN_EXPANSION
 
 # include <CanId.h>
@@ -163,6 +169,8 @@ struct DriverId
 	// Constructor used by ATE configurations and object model
 	DriverId(CanAddress addr, uint8_t drv) noexcept : localDriver(drv), boardAddress(addr) { }
 
+	CanAddress GetBoardAddress() const noexcept { return boardAddress; }
+
 	void SetFromBinary(uint32_t val) noexcept
 	{
 		localDriver = val & 0x000000FF;
@@ -205,6 +213,8 @@ struct DriverId
 
 	// Constructor used by object model
 	explicit DriverId(uint8_t drv) noexcept : localDriver(drv) { }
+
+	CanAddress GetBoardAddress() const noexcept { return 0; }
 
 	// Set the driver ID from the binary value, returning true if there was a nonzero board number so that the caller knows the address is not valid
 	bool SetFromBinary(uint32_t val) noexcept
@@ -250,31 +260,14 @@ struct DriverId
 
 // Module numbers and names, used for diagnostics and debug
 // All of these including noModule must be <= 31 because we 'or' the module number into the software reset code
-enum Module : uint8_t
-{
-	modulePlatform = 0,
-	moduleNetwork = 1,
-	moduleWebserver = 2,
-	moduleGcodes = 3,
-	moduleMove = 4,
-	moduleHeat = 5,
-	moduleDda = 6,
-	moduleRoland = 7,
-	moduleScanner = 8,
-	modulePrintMonitor = 9,
-	moduleStorage = 10,
-	modulePortControl = 11,
-	moduleDuetExpansion = 12,
-	moduleFilamentSensors = 13,
-	moduleWiFi = 14,
-	moduleDisplay = 15,
-	moduleSbcInterface = 16,
-	moduleCan = 17,
-	numModules = 18,				// make this one greater than the last real module number
-	noModule = numModules
-};
+NamedEnum(Module, uint8_t,
+			Platform, Network, Webserver, Gcodes, Move, Heat, Dda, unused1 /* was Roland */,
+			unused2 /* was Scanner*/, PrintMonitor, Storage, PortControl, DuetExpansion, FilamentSensors, WiFi, Display,
+			SbcInterface, Can,
+			none					// make this one last so that it is the number of real modules, one greater than the last real module number
+		 );
 
-const char *_ecv_array GetModuleName(uint8_t module) noexcept;
+constexpr size_t NumRealModules = Module::NumValues - 1;
 
 // Warn of what's to come, so we can use pointers and references to classes without including the entire header files
 class Network;
@@ -286,7 +279,6 @@ class Kinematics;
 class Heat;
 class TemperatureSensor;
 class Tool;
-class Roland;
 class Scanner;
 class PrintMonitor;
 class RepRap;
@@ -318,31 +310,41 @@ class ExpansionManager;
 
 // Define floating point type to use for calculations where we would like high precision in matrix calculations
 #if SAME70
-typedef double floatc_t;						// type of matrix element used for calibration
+typedef double floatc_t;							// type of matrix element used for calibration
 #else
-// We are more memory-constrained on the other processors and they don't support double precision
-typedef float floatc_t;							// type of matrix element used for calibration
+// We are more memory-constrained on the other processors and they don't support double precision in hardware
+typedef float floatc_t;								// type of matrix element used for calibration
 #endif
 
 #if defined(DUET3) || defined(DUET3MINI)
-typedef Bitmap<uint32_t> AxesBitmap;			// Type of a bitmap representing a set of axes, and sometimes extruders too
+typedef Bitmap<uint32_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
 #else
-typedef Bitmap<uint16_t> AxesBitmap;			// Type of a bitmap representing a set of axes, and sometimes extruders too
+typedef Bitmap<uint16_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
 #endif
-typedef Bitmap<uint32_t> ExtrudersBitmap;		// Type of a bitmap representing a set of extruder drive numbers
-typedef Bitmap<uint32_t> DriversBitmap;			// Type of a bitmap representing a set of local driver numbers
-typedef Bitmap<uint32_t> FansBitmap;			// Type of a bitmap representing a set of fan numbers
-typedef Bitmap<uint32_t> HeatersBitmap;			// Type of a bitmap representing a set of heater numbers
-typedef Bitmap<uint16_t> DriverChannelsBitmap;	// Type of a bitmap representing a set of drivers that typically have a common cooling fan
-typedef Bitmap<uint32_t> InputPortsBitmap;		// Type of a bitmap representing a set of input ports
-typedef Bitmap<uint32_t> TriggerNumbersBitmap;	// Type of a bitmap representing a set of trigger numbers
-typedef Bitmap<uint64_t> ToolNumbersBitmap;		// Type of a bitmap representing a set of tool numbers
+typedef Bitmap<uint32_t> ExtrudersBitmap;			// Type of a bitmap representing a set of extruder drive numbers
+typedef Bitmap<uint32_t> DriversBitmap;				// Type of a bitmap representing a set of local driver numbers
+typedef Bitmap<uint32_t> FansBitmap;				// Type of a bitmap representing a set of fan numbers
+typedef Bitmap<uint32_t> HeatersBitmap;				// Type of a bitmap representing a set of heater numbers
+typedef Bitmap<uint16_t> DriverChannelsBitmap;		// Type of a bitmap representing a set of drivers that typically have a common cooling fan
+typedef Bitmap<uint32_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
+typedef Bitmap<uint32_t> TriggerNumbersBitmap;		// Type of a bitmap representing a set of trigger numbers
+typedef Bitmap<uint64_t> ToolNumbersBitmap;			// Type of a bitmap representing a set of tool numbers
+
+#if defined(DUET3)
+typedef Bitmap<uint64_t> ParameterLettersBitmap;	// Type of a bitmap representing a set of parameter letters in A..Z and a..z
+constexpr char HighestAxisLetter = 'z';
+#else
+typedef Bitmap<uint32_t> ParameterLettersBitmap;	// Type of a bitmap representing a set of parameter letters in A..Z and a..f
+constexpr char HighestAxisLetter = 'f';
+#endif
 
 #if defined(DUET3) || defined(DUET3MINI)
 typedef Bitmap<uint64_t> SensorsBitmap;
 #else
 typedef Bitmap<uint32_t> SensorsBitmap;
 #endif
+
+typedef unsigned int MovementSystemNumber;			// we could use uint8_t for this but using unsigned int may be more efficient
 
 static_assert(MaxAxesPlusExtruders <= AxesBitmap::MaxBits());
 static_assert(MaxExtruders <= ExtrudersBitmap::MaxBits());
@@ -353,6 +355,7 @@ static_assert(MaxSensors <= SensorsBitmap::MaxBits());
 static_assert(MaxGpInPorts <= InputPortsBitmap::MaxBits());
 static_assert(MaxTriggers <= TriggerNumbersBitmap::MaxBits());
 static_assert(MaxTools <= ToolNumbersBitmap::MaxBits());
+static_assert(MaxAxes + 17 <= ParameterLettersBitmap::MaxBits());	// so that we have enough letters available for all the axes
 
 typedef uint16_t Pwm_t;							// Type of a PWM value when we don't want to use floats
 
@@ -380,6 +383,31 @@ union LaserPwmOrIoBits
 	}
 };
 #endif
+
+// Find the bit number corresponding to a parameter letter
+inline constexpr unsigned int ParameterLetterToBitNumber(char c) noexcept
+{
+	return (c <= 'Z') ? c - 'A' : c - ('a' - 26);
+}
+
+// Make a ParameterLettersBitmap representing a single letter
+inline constexpr ParameterLettersBitmap ParameterLetterToBitmap(char c) noexcept
+{
+	return ParameterLettersBitmap::MakeFromBits(ParameterLetterToBitNumber(c));
+}
+
+// Convert a string of parameter letters to a collection of bits. Normally used with constant strings, so recursive is OK.
+inline constexpr uint32_t ParameterLettersToBits(const char *_ecv_array s) noexcept
+{
+	return (*s == 0) ? 0
+		: (1u << ParameterLetterToBitNumber(*s)) | ParameterLettersToBits(s + 1);
+}
+
+// Convert a string of parameter letters to a bitmap
+inline constexpr ParameterLettersBitmap ParameterLettersToBitmap(const char *_ecv_array s) noexcept
+{
+	return ParameterLettersBitmap(ParameterLettersToBits(s));
+}
 
 // Debugging support
 extern "C" void debugPrintf(const char* fmt, ...) noexcept __attribute__ ((format (printf, 1, 2)));
@@ -431,7 +459,7 @@ public:
 	MillisTimer() noexcept { running = false; }
 	void Start() noexcept;
 	void Stop() noexcept { running = false; }
-	bool Check(uint32_t timeoutMillis) const noexcept;
+	bool CheckNoStop(uint32_t timeoutMillis) const noexcept;
 	bool CheckAndStop(uint32_t timeoutMillis) noexcept;
 	bool IsRunning() const noexcept { return running; }
 

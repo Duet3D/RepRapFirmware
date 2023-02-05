@@ -68,7 +68,7 @@ public:
 	bool IsVisible() const noexcept;
 
 	// Erase this item if it is drawn but should not be visible
-	void EraseIfInvisible(Lcd& lcd, PixelNumber tOffset) noexcept;
+	void EraseIfInvisible(Lcd& lcd) noexcept;
 
 	// Return the width of this item in pixels
 	PixelNumber GetWidth() const noexcept { return width; }

@@ -93,7 +93,7 @@ Menu::Menu(Lcd& refLcd) noexcept
 	  timeoutValue(0), lastActionTime(0),
 	  selectableItems(nullptr), unSelectableItems(nullptr), highlightedItem(nullptr), numNestedMenus(0),
 	  itemIsSelected(false), displayingFixedMenu(false), displayingErrorMessage(false), displayingMessageBox(false),
-	  errorColumn(0), rowOffset(0)
+	  errorColumn(0), currentMargin(0), rowOffset(0)
 {
 }
 
@@ -108,7 +108,6 @@ void Menu::Load(const char* filename) noexcept
 	{
 		filenames[numNestedMenus].copy(filename);
 		++numNestedMenus;
-		rowOffset = 0;
 		Reload();
 	}
 }
@@ -118,12 +117,11 @@ void Menu::LoadFixedMenu() noexcept
 	displayingFixedMenu = true;
 	numNestedMenus = 0;
 	commandBufferIndex = 0;
-	rowOffset = 0;
-	currentMargin = 0;
+	rowOffset = currentMargin = 0;
 	lcd.ClearAll();
 
 	// Instead of Reload():
-	lcd.SetRightMargin(lcd.GetNumCols() - currentMargin);
+	lcd.SetRightMargin(lcd.GetNumCols());
 
 	ResetCache();
 
@@ -391,7 +389,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 	}
 	else if (StringEqualsIgnoreCase(commandWord, "image") && fname != nullptr)
 	{
-		newItem = new ImageMenuItem(row, column,fname);
+		newItem = new ImageMenuItem(row, column, fname);
 		AddItem(newItem, false);
 		column += newItem->GetWidth();
 	}
@@ -473,14 +471,14 @@ void Menu::Reload() noexcept
 	currentMargin = rowOffset = 0;
 	lcd.ClearAll();
 #else
-	if (numNestedMenus == 1)
+	if (numNestedMenus == 1 || lcd.GetNumRows() < 160)							// don't nest menus on a low-res display e.g. 12864
 	{
-		currentMargin = 0;
+		currentMargin = rowOffset = 0;
 		lcd.ClearAll();
 	}
 	else
 	{
-		constexpr PixelNumber indentPerLevel = 10;		//TODO make this depend on the screen resolution
+		const PixelNumber indentPerLevel = lcd.GetNumRows()/40 + 2;				// 10 pixels on a 480x320 TFT
 		currentMargin = rowOffset = indentPerLevel * (numNestedMenus - 1);
 		const PixelNumber borderMargin = currentMargin - 2;
 		const PixelNumber right = lcd.GetNumCols() - borderMargin - 1;
@@ -744,12 +742,12 @@ void Menu::DrawAll() noexcept
 	// First erase any displayed items that should now be invisible
 	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
 	{
-		item->EraseIfInvisible(lcd, rowOffset);
+		item->EraseIfInvisible(lcd);
 	}
 
 	for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())
 	{
-		item->EraseIfInvisible(lcd, rowOffset);
+		item->EraseIfInvisible(lcd);
 	}
 
 	// Now draw items

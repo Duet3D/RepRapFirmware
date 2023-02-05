@@ -23,39 +23,50 @@ bool CollisionAvoider::IsValid() const noexcept
 }
 
 // Reset the position accumulators
-void CollisionAvoider::ResetPositions(const float positions[]) noexcept
+void CollisionAvoider::ResetPositions(const float positions[], AxesBitmap whichPositions) noexcept
 {
 	if (IsValid())
 	{
-		lowerAxisMax = positions[lowerAxis];
-		upperAxisMin = positions[upperAxis];
+		if (whichPositions.IsBitSet(lowerAxis))
+		{
+			lowerAxisMax = positions[lowerAxis];
+		}
+		if (whichPositions.IsBitSet(upperAxis))
+		{
+			upperAxisMin = positions[upperAxis];
+		}
 	}
 }
 
 // Set the parameters
-void CollisionAvoider::Set(int axisL, int axisH, float sep, const float positions[]) noexcept
+void CollisionAvoider::Set(int axisL, int axisH, float sep) noexcept
 {
 	lowerAxis = axisL;
 	upperAxis = axisH;
 	minSeparation = sep;
-	ResetPositions(positions);
+	lowerAxisMax = -std::numeric_limits<float>::infinity();
+	upperAxisMin = std::numeric_limits<float>::infinity();
 }
 
-bool CollisionAvoider::UpdatePositions(const float axisPositions[]) noexcept
+// If the new move doesn't risk a collision, update the position accumulators and return true; else return false
+bool CollisionAvoider::UpdatePositions(const float axisPositions[], AxesBitmap axesHomed) noexcept
 {
-	const float newLowerMax = max<float>(axisPositions[lowerAxis], lowerAxisMax);
-	const float newUpperMin = min<float>(axisPositions[upperAxis], upperAxisMin);
-	if (newLowerMax + minSeparation > newUpperMin)
+	if (IsValid() && axesHomed.IsBitSet(lowerAxis) && axesHomed.IsBitSet(upperAxis))
 	{
-		if (reprap.Debug(moduleMove))
+		const float newLowerMax = max<float>(axisPositions[lowerAxis], lowerAxisMax);
+		const float newUpperMin = min<float>(axisPositions[upperAxis], upperAxisMin);
+		if (newLowerMax + minSeparation > newUpperMin)
 		{
-			const char *const axisLetters = reprap.GetGCodes().GetAxisLetters();
-			debugPrintf("Potential collision between axis %c at %.1f and axis %c at %.1f\n", axisLetters[lowerAxis], (double)newLowerMax, axisLetters[upperAxis], (double)newUpperMin);
+			if (reprap.Debug(Module::Move))
+			{
+				const char *const axisLetters = reprap.GetGCodes().GetAxisLetters();
+				debugPrintf("Potential collision between axis %c at %.1f and axis %c at %.1f\n", axisLetters[lowerAxis], (double)newLowerMax, axisLetters[upperAxis], (double)newUpperMin);
+			}
+			return false;
 		}
-		return false;
+		lowerAxisMax = newLowerMax;
+		upperAxisMin = newUpperMin;
 	}
-	lowerAxisMax = newLowerMax;
-	upperAxisMin = newUpperMin;
 	return true;
 }
 

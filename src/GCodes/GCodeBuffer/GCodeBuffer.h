@@ -42,10 +42,12 @@ enum class GCodeBufferState : uint8_t
 class GCodeBuffer INHERIT_OBJECT_MODEL
 {
 public:
+#ifndef __ECV__		//temporary!
 	friend class BinaryParser;
 	friend class StringParser;
+#endif
 
-	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
+	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
 	void Reset() noexcept;														// Reset it to its state after start-up
 	void Init() noexcept;														// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype) noexcept;								// Write some debug info
@@ -76,7 +78,11 @@ public:
 	bool Seen(char c) noexcept SPEED_CRITICAL;										// Is a character present?
 	void MustSee(char c) THROWS(GCodeException);									// Test for character present, throw error if not
 	char MustSee(char c1, char c2) THROWS(GCodeException);							// Test for one of two characters present, throw error if not
-	inline bool SeenAny(const char *s) const noexcept { return SeenAny(Bitmap<uint32_t>(ParametersToBitmap(s))); }
+	ParameterLettersBitmap AllParameters() const noexcept;							// Return a bitmap of all parameters in the command
+	bool SeenAny(ParameterLettersBitmap bm) const noexcept							// Return true if any of the parameter letters in the bitmap were seen
+		{ return AllParameters().Intersects(bm); }
+	bool SeenAny(const char *s) const noexcept										// Return true if any of the parameter letters in the string were seen
+		{ return SeenAny(ParameterLettersToBitmap(s)); }
 
 	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get a float after a key letter
 	float GetPositiveFValue() THROWS(GCodeException) SPEED_CRITICAL;				// Get a float after a key letter and check that it is greater than zero
@@ -141,8 +147,8 @@ public:
 	}
 
 #if SUPPORT_ASYNC_MOVES
-	void SetActiveQueueNumber(size_t qn) noexcept { machineState->SetCommandedQueue(qn); }
-	void ExecuteOnlyQueue(size_t qn) noexcept { machineState->ExecuteOnly(qn); }
+	void SetActiveQueueNumber(MovementSystemNumber qn) noexcept { machineState->SetCommandedQueue(qn); }
+	void ExecuteOnlyQueue(MovementSystemNumber qn) noexcept { machineState->ExecuteOnly(qn); }
 	size_t GetOwnQueueNumber() const noexcept { return machineState->GetOwnQueue(); }
 	void ExecuteAll() noexcept { machineState->ExecuteAll(); }
 	bool Executing() const noexcept { return machineState->Executing(); }	// Return true if this GCodeBuffer for executing commands addressed to the current queue
@@ -157,6 +163,7 @@ public:
 	GCodeMachineState& OriginalMachineState() const noexcept;
 	GCodeMachineState::BlockState& GetBlockState() const noexcept { return CurrentFileMachineState().CurrentBlockState(); }
 	uint16_t GetBlockIndent() const noexcept { return GetBlockState().GetIndent(); }
+	bool AllStatesNormal() const noexcept;						// Return true if all GCode states on the stack are 'normal'
 
 	void UseInches(bool inchesNotMm) noexcept { machineState->usingInches = inchesNotMm; }
 	bool UsingInches() const noexcept { return machineState->usingInches; }
@@ -177,7 +184,7 @@ public:
 	FilePosition GetPrintingFilePosition(bool allowNoFilePos) const noexcept;	// Get the file position in the printing file
 	void SavePrintingFilePosition() noexcept;
 
-	void WaitForAcknowledgement() noexcept;						// Flag that we are waiting for acknowledgement
+	void WaitForAcknowledgement(uint32_t seq) noexcept;			// Flag that we are waiting for acknowledgement
 	void ClosePrintFile() noexcept;								// Close the print file
 
 #if HAS_SBC_INTERFACE
@@ -221,7 +228,7 @@ public:
 	void SetState(GCodeState newState) noexcept;
 	void SetState(GCodeState newState, uint16_t param) noexcept;
 	void AdvanceState() noexcept;
-	void MessageAcknowledged(bool cancelled, ExpressionValue rslt) noexcept;
+	void MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionValue rslt) noexcept;
 
 	GCodeChannel GetChannel() const noexcept { return codeChannel; }
 	bool IsFileChannel() const noexcept
@@ -232,7 +239,7 @@ public:
 #endif
 				;
 	}
-	const char *GetIdentity() const noexcept { return codeChannel.ToString(); }
+	const char *_ecv_array GetIdentity() const noexcept { return codeChannel.ToString(); }
 	bool CanQueueCodes() const noexcept;
 	MessageType GetResponseMessageType() const noexcept;
 
@@ -291,22 +298,13 @@ public:
 
 #if SUPPORT_ASYNC_MOVES
 	enum class SyncState { running, syncing, synced } ;
-	SyncState syncState;
+	SyncState syncState = SyncState::running;
 #endif
 
 protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	bool SeenAny(Bitmap<uint32_t> bm) const noexcept;								// Return true if any of the parameter letters in the bitmap were seen
-
-	// Convert a string of uppercase parameter letters to a bit map
-	static inline constexpr uint32_t ParametersToBitmap(const char *s) noexcept
-	{
-		return (*s == 0) ? 0
-			: (*s >= 'A' && *s <= 'Z') ? ((uint32_t)1 << (*s - 'A')) | ParametersToBitmap(s + 1)
-				: ParametersToBitmap(s + 1);
-	}
 
 #if SUPPORT_OBJECT_MODEL
 	const char *GetStateText() const noexcept;

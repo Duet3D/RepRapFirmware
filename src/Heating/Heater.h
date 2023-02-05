@@ -184,6 +184,7 @@ protected:
 	static FansBitmap tuningFans;
 	static unsigned int tuningPhase;
 	static uint8_t idleCyclesDone;
+	static bool tuningQuietMode;
 
 	static HeaterParameters fanOffParams, fanOnParams;
 

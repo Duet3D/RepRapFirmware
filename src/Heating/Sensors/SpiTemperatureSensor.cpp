@@ -15,9 +15,6 @@
 SpiTemperatureSensor::SpiTemperatureSensor(unsigned int sensorNum, const char *name, SpiMode spiMode, uint32_t clockFrequency) noexcept
 	: SensorWithPort(sensorNum, name), device(SharedSpiDevice::GetMainSharedSpiDevice(), clockFrequency, spiMode, NoPin, false)
 {
-#if defined(__LPC17xx__)
-    device.sspChannel = TempSensorSSPChannel;		// use SSP0 on LPC
-#endif
     SetResult(0.0, TemperatureError::notInitialised);
 }
 
@@ -71,7 +68,7 @@ TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[],
 		rslt |= rawBytes[i];
 	}
 
-	return TemperatureError::success;
+	return TemperatureError::ok;
 }
 
 // Send and receive data
@@ -94,7 +91,7 @@ TemperatureError SpiTemperatureSensor::DoSpiTransaction(const uint8_t dataOut[],
 		return TemperatureError::timeout;
 	}
 
-	return TemperatureError::success;
+	return TemperatureError::ok;
 }
 
 #endif // SUPPORT_SPI_SENSORS

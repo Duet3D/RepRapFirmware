@@ -422,7 +422,7 @@ WifiFirmwareUploader::EspUploadResult WifiFirmwareUploader::doCommand(uint8_t op
 		else if ((status & 0xFF) != 0)
 		{
 			stat = (EspUploadResult)((status >> 8) & 0xFF);
-			if (reprap.Debug(moduleWiFi))
+			if (reprap.Debug(Module::WiFi))
 			{
 				debugPrintf("opcode %u returned length %u status 0x%" PRIx32 "\n", op, bodyLen, status);
 			}

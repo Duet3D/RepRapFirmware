@@ -79,7 +79,7 @@ public:
 	static Tool *GetToolList() noexcept { return toolList; }
 	static ReadLockedPointer<Tool> GetLockedTool(int toolNumber) noexcept;
 	static unsigned int GetNumberOfContiguousTools() noexcept;
-	static unsigned int GetProhibitedExtruderMovements(unsigned int extrusions, unsigned int retractions, const Tool *tool) noexcept;
+	static bool ExtruderMovementAllowed(const Tool *tool, bool extruding, unsigned int extruder) noexcept;
 	static bool DisplayColdExtrusionWarnings() noexcept;
 	static bool IsHeaterAssignedToTool(int8_t heater) noexcept;
 	static GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
@@ -130,8 +130,8 @@ public:
 
 	bool HasTemperatureFault() const noexcept { return heaterFault; }
 
-	void IterateExtruders(function_ref<void(unsigned int)> f) const noexcept;
-	void IterateHeaters(function_ref<void(int)> f) const noexcept;
+	void IterateExtruders(function_ref_noexcept<void(unsigned int) noexcept> f) const noexcept;
+	void IterateHeaters(function_ref_noexcept<void(int) noexcept> f) const noexcept;
 	bool UsesHeater(int8_t heater) const noexcept;
 
 	void SetFansPwm(float f) const noexcept;
@@ -145,6 +145,10 @@ public:
 	void Activate() noexcept;
 	void Standby() noexcept;
 	void UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHeaters) const noexcept;
+
+#if SUPPORT_ASYNC_MOVES && PREALLOCATE_TOOL_AXES
+	AxesBitmap GetXYAxesAndExtruders() const noexcept;
+#endif
 
 	static ReadWriteLock toolListLock;
 

@@ -155,16 +155,19 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 	case TypeCode::HeapArray:
 		str.cat('{');
 		{
-			ReadLocker lock(Heap::heapLock);
-			const size_t count = ahVal.GetNumElements();
-			for (size_t i = 0; i < count; ++i)
+			ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
+			for (size_t i = 0; ; ++i)
 			{
 				if (i != 0)
 				{
 					str.cat(',');
 				}
+
 				ExpressionValue val;
-				ahVal.GetElement(i, val);
+				if (!ahVal.GetElement(i, val))
+				{
+					break;									// reached the end of the array
+				}
 				val.AppendAsString(str);
 			}
 		}
@@ -260,9 +263,18 @@ ExpressionValue::ExpressionValue(const ExpressionValue& other) noexcept
 	type = other.type;
 	param = other.param;
 	whole = other.whole;
-	if (type == (uint32_t)TypeCode::HeapString)
+	switch (GetType())
 	{
+	case TypeCode::HeapString:
 		shVal.IncreaseRefCount();
+		break;
+
+	case TypeCode::HeapArray:
+		ahVal.IncreaseRefCount();
+		break;
+
+	default:
+		break;
 	}
 }
 
@@ -287,9 +299,18 @@ ExpressionValue& ExpressionValue::operator=(const ExpressionValue& other) noexce
 		type = other.type;
 		param = other.param;
 		whole = other.whole;
-		if (type == (uint32_t)TypeCode::HeapString)
+		switch (GetType())
 		{
+		case TypeCode::HeapString:
 			shVal.IncreaseRefCount();
+			break;
+
+		case TypeCode::HeapArray:
+			ahVal.IncreaseRefCount();
+			break;
+
+		default:
+			break;
 		}
 	}
 	return *this;
@@ -298,10 +319,21 @@ ExpressionValue& ExpressionValue::operator=(const ExpressionValue& other) noexce
 // Release any associated storage
 void ExpressionValue::Release() noexcept
 {
-	if (type == (uint32_t)TypeCode::HeapString)
+	switch (GetType())
 	{
+	case TypeCode::HeapString:
+
 		shVal.Delete();
 		type = (uint32_t)TypeCode::None;
+		break;
+
+	case TypeCode::HeapArray:
+		ahVal.Delete();
+		type = (uint32_t)TypeCode::None;
+		break;
+
+	default:
+		break;
 	}
 }
 
@@ -340,6 +372,7 @@ bool ExpressionValue::IsHeapStringArrayType() const noexcept
 		return false;
 	}
 
+	ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
 	const size_t numElems = ahVal.GetNumElements();
 	for (size_t i = 0; i < numElems; ++i)
 	{
@@ -676,7 +709,10 @@ void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationCo
 		break;
 
 	case TypeCode::HeapArray:
-		buf->catf("%u", val.ahVal.GetNumElements());
+		{
+			ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
+			buf->catf("%u", val.ahVal.GetNumElements());
+		}
 		break;
 
 	case TypeCode::Bitmap16:
@@ -762,7 +798,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		if (*filter == '[')
 		{
 			++filter;
-			if (*filter == ']')						// if reporting on [parts of] all elements in the array
+			if (*filter == ']')								// if reporting on [parts of] all elements in the array
 			{
 				ReportHeapArrayAsJson(buf, context, classDescriptor, val.ahVal, filter + 1);
 			}
@@ -770,18 +806,19 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 			{
 				const char *endptr;
 				const int32_t index = StrToI32(filter, &endptr);
-				if (endptr == filter || *endptr != ']' || index < 0 || (size_t)index >= val.ahVal.GetNumElements())
+				ExpressionValue element;
 				{
-					buf->cat("null");					// avoid returning badly-formed JSON
-					break;								// invalid syntax, or index out of range
+					ReadLocker lock(Heap::heapLock);		// must have a read lock on heapLock when calling GetNumElements or GetElement
+					if (endptr == filter || *endptr != ']' || index < 0 || !val.ahVal.GetElement((size_t)index, element))
+					{
+						buf->cat("null");					// avoid returning badly-formed JSON
+						break;								// invalid syntax, or index out of range
+					}
 				}
 				if (*filter == 0)
 				{
 					buf->cat('[');
 				}
-
-				ExpressionValue element;
-				val.ahVal.GetElement((size_t)index, element);
 				ReportItemAsJson(buf, context, classDescriptor, element, endptr + 1);
 
 				if (*filter == 0)
@@ -790,7 +827,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 				}
 			}
 		}
-		else if (*filter == 0)						// else reporting on all subparts of all elements in the array, or just the length
+		else if (*filter == 0)								// else reporting on all subparts of all elements in the array, or just the length
 		{
 			ReportHeapArrayAsJson(buf, context, classDescriptor, val.ahVal, filter);
 		}
@@ -1236,18 +1273,23 @@ decrease(strlen(idString))	// recursion variant
 					ReadLocker lock(entry->lockPointer);
 					return ExpressionValue((int32_t)entry->GetNumElements(this, context));
 				}
-				return val;
+
+				// Else we want the entire array. The caller may need the previous array index in order to iterate its elements, so store this in the upper 16 bits of 'param'.
+				ExpressionValue rslt = val;
+				rslt.param |= (uint32_t)context.GetLastIndex() << 8;
+				return rslt;
 			}
 			if (*idString != '^')
 			{
 				throw context.ConstructParseException("missing array index");
 			}
 
-			context.AddIndex();
 			const ObjectModelArrayTableEntry *const entry = val.omVal->GetObjectModelArrayEntry(val.param & 0xFF);
 			ReadLocker lock(entry->lockPointer);
+			const size_t numElements = entry->GetNumElements(this, context);			// must get this before we call context.AddIndex because it may depend on indices
+			context.AddIndex();
 
-			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= entry->GetNumElements(this, context))
+			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= numElements)
 			{
 				if (context.WantExists())
 				{
@@ -1267,6 +1309,7 @@ decrease(strlen(idString))	// recursion variant
 			{
 				if (context.WantArrayLength())
 				{
+					ReadLocker lock(Heap::heapLock);		// must have a read lock on heapLock when calling GetNumElements or GetElement
 					return ExpressionValue((int32_t)val.ahVal.GetNumElements());
 				}
 				return val;
@@ -1277,7 +1320,7 @@ decrease(strlen(idString))	// recursion variant
 			}
 
 			context.AddIndex();
-			ReadLocker lock(Heap::heapLock);
+			ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
 
 			if (context.GetLastIndex() < 0 || (size_t)context.GetLastIndex() >= val.ahVal.GetNumElements())
 			{

@@ -29,6 +29,9 @@ extern char _estack;		// defined by the linker
 volatile OutputStack SbcInterface::gcodeReply;
 Mutex SbcInterface::gcodeReplyMutex;
 
+// This function is not used in this class
+const ObjectModelClassDescriptor *SbcInterface::GetObjectModelClassDescriptor() const noexcept { return nullptr; }
+
 // The SBC task's stack size needs to be enough to support rr_model and expression evaluation
 // In RRF 3.3beta3, 744 is only just enough for simple expression evaluation in a release build when using globals
 // In 3.3beta3.1 we have saved ~151 bytes (37 words) of stack compared to 3.3beta3
@@ -68,7 +71,7 @@ void SbcInterface::Init() noexcept
 		gcodeReplyMutex.Create("SBCReply");
 		codeBuffer = (char *)new uint32_t[(SpiCodeBufferSize + 3)/4];
 
-#if defined(DUET_NG)
+#if defined(DUET_NG) || defined(DUET3_MB6HC)
 		// Make sure that the Wifi module if present is disabled. The ESP Reset pin is already forced low in Platform::Init();
 		pinMode(EspEnablePin, OUTPUT_LOW);
 #endif
@@ -200,7 +203,7 @@ void SbcInterface::ExchangeData() noexcept
 		const PacketHeader * const packet = transfer.ReadPacket();
 		if (packet == nullptr)
 		{
-			if (reprap.Debug(moduleSbcInterface))
+			if (reprap.Debug(Module::SbcInterface))
 			{
 				debugPrintf("Error trying to read next SPI packet\n");
 			}
@@ -224,7 +227,7 @@ void SbcInterface::ExchangeData() noexcept
 		// Reset the controller
 		case SbcRequest::Reset:
 			reprap.EmergencyStop();							// turn off heaters and motors, tell expansion boards to reset
-			SoftwareReset(SoftwareResetReason::user);
+			SoftwareReset(SoftwareResetReason::userFromSbc);
 			break;
 
 		// Perform a G/M/T-code
@@ -251,7 +254,7 @@ void SbcInterface::ExchangeData() noexcept
 			{
 				gb->ResolveMacroRequest(false, false);
 #ifdef TRACK_FILE_CODES
-				if (channel == GCodeChannel::File)
+				if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
 				{
 					fileMacrosRunning++;
 				}
@@ -311,7 +314,21 @@ void SbcInterface::ExchangeData() noexcept
 			try
 			{
 				OutputBuffer *outBuf = reprap.GetModelResponse(nullptr, key.c_str(), flags.c_str());
-				if (outBuf == nullptr || !transfer.WriteObjectModel(outBuf))
+				if (outBuf != nullptr && outBuf->Length() > SbcTransferBufferSize - sizeof(PacketHeader) - sizeof(StringHeader))
+				{
+					if (!transfer.WriteObjectModel(nullptr))
+					{
+						// Cannot store this object model response even if we wanted to
+						reprap.GetPlatform().MessageF(ErrorMessage, "Cannot store excessively long object model response, discarding request (total length %d, key %s, flags %s)", outBuf->Length(), key.c_str(), flags.c_str());
+					}
+					else
+					{
+						// Failed to write an empty object model response, try again later
+						packetAcknowledged = false;
+					}
+					OutputBuffer::ReleaseAll(outBuf);
+				}
+				else if (outBuf == nullptr || !transfer.WriteObjectModel(outBuf))
 				{
 					// Failed to write the whole object model, try again later
 					packetAcknowledged = false;
@@ -369,15 +386,19 @@ void SbcInterface::ExchangeData() noexcept
 				// Stop the print with the given reason
 				printAborted = true;
 				InvalidateBufferedCodes(GCodeChannel::File);
+				InvalidateBufferedCodes(GCodeChannel::File2);
 			}
 			else
 			{
-				// Just mark the print file as finished
-				GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File);
-				MutexLocker locker(gb->mutex, SbcYieldTimeout);
-				if (locker.IsAcquired())
+				// Just mark the print files as finished
+				GCodeBuffer * const fileGb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File);
+				GCodeBuffer * const file2Gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File2);
+				MutexLocker fileLocker(fileGb->mutex, SbcYieldTimeout);
+				MutexLocker file2Locker(file2Gb->mutex, SbcYieldTimeout);
+				if (fileLocker.IsAcquired() && file2Locker.IsAcquired())
 				{
-					gb->SetPrintFinished();
+					fileGb->SetPrintFinished();
+					file2Gb->SetPrintFinished();
 				}
 				else
 				{
@@ -398,7 +419,7 @@ void SbcInterface::ExchangeData() noexcept
 				if (gb->IsWaitingForMacro() && !gb->IsMacroRequestPending())
 				{
 					gb->ResolveMacroRequest(error, true);
-					if (reprap.Debug(moduleSbcInterface))
+					if (reprap.Debug(Module::SbcInterface))
 					{
 						debugPrintf("Waiting macro completed on channel %u\n", channel.ToBaseType());
 					}
@@ -417,7 +438,7 @@ void SbcInterface::ExchangeData() noexcept
 						else
 						{
 #ifdef TRACK_FILE_CODES
-							if (channel == GCodeChannel::File)
+							if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
 							{
 								fileMacrosClosing++;
 							}
@@ -425,7 +446,7 @@ void SbcInterface::ExchangeData() noexcept
 							gb->SetFileFinished();
 						}
 
-						if (reprap.Debug(moduleSbcInterface))
+						if (reprap.Debug(Module::SbcInterface))
 						{
 							debugPrintf("Macro completed on channel %u\n", channel.ToBaseType());
 						}
@@ -443,7 +464,7 @@ void SbcInterface::ExchangeData() noexcept
 			break;
 		}
 
-		// Lock movement and wait for standstill
+		// Lock movement and wait for standstill. Currently this is used only by M505, so we lock all movement systems.
 		case SbcRequest::LockMovementAndWaitForStandstill:
 		{
 			const GCodeChannel channel = transfer.ReadCodeChannel();
@@ -451,7 +472,7 @@ void SbcInterface::ExchangeData() noexcept
 			{
 				GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
 				MutexLocker locker(gb->mutex, SbcYieldTimeout);
-				if (locker.IsAcquired() && reprap.GetGCodes().LockMovementAndWaitForStandstill(*gb))
+				if (locker.IsAcquired() && reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(*gb))
 				{
 					transfer.WriteLocked(channel);
 				}
@@ -524,7 +545,7 @@ void SbcInterface::ExchangeData() noexcept
 				{
 					gb->ResolveMacroRequest(false, false);
 #ifdef TRACK_FILE_CODES
-					if (channel == GCodeChannel::File)
+					if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
 					{
 						fileMacrosRunning++;
 					}
@@ -539,7 +560,26 @@ void SbcInterface::ExchangeData() noexcept
 					{
 						ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
 						const ExpressionValue val = parser.Parse();
-						packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), val);
+						if (val.GetType() == TypeCode::HeapArray)
+						{
+							// Write heap arrays as JSON
+							OutputBuffer *json;
+							if (OutputBuffer::Allocate(json))
+							{
+								ObjectExplorationContext context;
+								ReportHeapArrayAsJson(json, context, nullptr, val.ahVal, "");
+								packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), json);
+							}
+							else
+							{
+								packetAcknowledged = false;
+							}
+						}
+						else
+						{
+							// Write plain result
+							packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), val);
+						}
 					}
 					else
 					{
@@ -596,7 +636,7 @@ void SbcInterface::ExchangeData() noexcept
 					// File exists and is open, but no code has arrived yet
 					gb->ResolveMacroRequest(false, false);
 #ifdef TRACK_FILE_CODES
-					if (channel == GCodeChannel::File)
+					if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
 					{
 						fileMacrosRunning++;
 					}
@@ -682,9 +722,55 @@ void SbcInterface::ExchangeData() noexcept
 			}
 			WriteLockedPointer<VariableSet> vset = (isGlobal) ? reprap.GetGlobalVariablesForWriting() : WriteLockedPointer<VariableSet>(nullptr, &gb->GetVariables());
 
+			// Make a copy of the variable name excluding prefix so that we can terminate the name at the first '[' if necessary
+			String<MaxVariableNameLength> shortVarName;
+			shortVarName.copy(varName.c_str() + strlen(isGlobal ? "global." : "var."));
+
+			// Check for index expressions after the variable name. DSF will have stripped out any spaces except for those within index expressions.
+			uint32_t indices[MaxArrayIndices];
+			size_t numIndices = 0;
+			if (!createVariable)
+			{
+				const char* indexStart = strchr(shortVarName.c_str(), '[');
+				if (indexStart != nullptr)
+				{
+					const size_t firstIndexOffset = indexStart - shortVarName.c_str();
+					bool hadError = false;
+					do
+					{
+						if (numIndices == MaxArrayIndices)
+						{
+							expression.printf("too many array indices in '%s'", varName.c_str());
+							hadError = true;
+							break;
+						}
+
+						ExpressionParser indexParser(*gb, indexStart + 1, shortVarName.c_str() + shortVarName.strlen());
+						const uint32_t indexExpr = indexParser.ParseUnsigned();
+						indexStart = indexParser.GetEndptr();
+						if (*indexStart != ']')
+						{
+							expression.printf("missing ']' in '%s'", varName.c_str());
+							hadError = true;
+							break;
+						}
+
+						indices[numIndices++] = indexExpr;
+						++indexStart;								// skip the ']'
+					} while (*indexStart == '[');
+
+					if (hadError)
+					{
+						packetAcknowledged = transfer.WriteSetVariableError(varName.c_str(), expression.c_str());
+						break;
+					}
+
+					shortVarName[firstIndexOffset] = 0;					// terminate the short variable name at the first '['
+				}
+			}
+
 			// Check if the variable is valid
-			const char *shortVarName = varName.c_str() + strlen(isGlobal ? "global." : "var.");
-			Variable * const v = vset->Lookup(shortVarName);
+			Variable * const v = vset->Lookup(shortVarName.c_str());
 			if (createVariable && v != nullptr)
 			{
 				// For now we don't allow an existing variable to be reassigned using a 'var' or 'global' statement. We may need to allow it for 'global' statements.
@@ -709,14 +795,38 @@ void SbcInterface::ExchangeData() noexcept
 				if (v == nullptr)
 				{
 					// DSF doesn't provide indent values but instructs RRF to delete local variables when the current block ends
-					vset->InsertNew(shortVarName, ev, 0);
+					vset->InsertNew(shortVarName.c_str(), ev, 0);
 				}
-				else
+				else if (numIndices == 0)
 				{
 					v->Assign(ev);
 				}
+				else
+				{
+					v->AssignIndexed(ev, numIndices, indices);
+				}
 
-				transfer.WriteSetVariableResult(varName.c_str(), ev);
+				if (ev.GetType() == TypeCode::HeapArray)
+				{
+					// Write heap arrays as JSON
+					OutputBuffer *json;
+					if (OutputBuffer::Allocate(json))
+					{
+						ObjectExplorationContext context;
+						ReportHeapArrayAsJson(json, context, nullptr, ev.ahVal, "");
+						packetAcknowledged = transfer.WriteSetVariableResult(varName.c_str(), json);
+					}
+					else
+					{
+						packetAcknowledged = false;
+					}
+				}
+				else
+				{
+					// Write plain result
+					packetAcknowledged = transfer.WriteSetVariableResult(varName.c_str(), ev);
+				}
+
 				if (isGlobal)
 				{
 					reprap.GlobalUpdated();
@@ -905,7 +1015,7 @@ void SbcInterface::ExchangeData() noexcept
 	}
 
 	// Perform the next file operation if requested
-	if (fileOperationPending)
+	if (fileOperationPending.load(std::memory_order_acquire))
 	{
 		switch (fileOperation)
 		{
@@ -929,7 +1039,7 @@ void SbcInterface::ExchangeData() noexcept
 
 		case FileOperation::write:
 		{
-			size_t bytesNotWritten = fileBufferLength;
+			const size_t bytesNotWritten = fileBufferLength;
 			if (transfer.WriteFileData(fileHandle, fileWriteBuffer, fileBufferLength))
 			{
 				fileWriteBuffer += bytesNotWritten - fileBufferLength;
@@ -994,7 +1104,7 @@ void SbcInterface::ExchangeData() noexcept
 			bool fromCode = gb->IsMacroStartedByCode();
 			if (transfer.WriteMacroRequest(channel, requestedMacroFile, fromCode))
 			{
-				if (reprap.Debug(moduleSbcInterface))
+				if (reprap.Debug(Module::SbcInterface))
 				{
 					debugPrintf("Requesting macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
 				}
@@ -1018,7 +1128,7 @@ void SbcInterface::ExchangeData() noexcept
 				if (gb->IsAbortRequested() && transfer.WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
 				{
 #ifdef TRACK_FILE_CODES
-					if (channel == GCodeChannel::File)
+					if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
 					{
 						if (gb->IsAbortAllRequested())
 						{
@@ -1054,7 +1164,7 @@ void SbcInterface::ExchangeData() noexcept
 					bool fromCode = gb->IsMacroStartedByCode();
 					if (transfer.WriteMacroRequest(channel, requestedMacroFile, fromCode))
 					{
-						if (reprap.Debug(moduleSbcInterface))
+						if (reprap.Debug(Module::SbcInterface))
 						{
 							debugPrintf("Requesting non-blocking macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
 						}
@@ -1182,7 +1292,7 @@ void SbcInterface::InvalidateResources() noexcept
 			gb->MacroRequestSent();
 		}
 		gb->AbortFile(true, false);
-		gb->MessageAcknowledged(true, ExpressionValue());
+		gb->MessageAcknowledged(true, 0, ExpressionValue());
 	}
 
 	// Abort the print (if applicable)
@@ -1239,7 +1349,7 @@ GCodeResult SbcInterface::HandleM576(GCodeBuffer& gb, const StringRef& reply) no
 
 	if (!seen)
 	{
-		reply.printf("Max transfer delay %" PRIu32 "ms, max number of events during delays: %" PRIu32, maxDelayBetweenTransfers, numMaxEvents);
+		reply.printf("Max delay between full SBC transfers %" PRIu32 "ms (%" PRIu32 "ms during file IO), max number of events before a delay is skipped: %" PRIu32, maxDelayBetweenTransfers, maxFileOpenDelay, numMaxEvents);
 	}
 	return GCodeResult::ok;
 }
@@ -1247,7 +1357,7 @@ GCodeResult SbcInterface::HandleM576(GCodeBuffer& gb, const StringRef& reply) no
 bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 {
 	if (gb.IsInvalidated() || gb.IsMacroFileClosed() || gb.IsMessageAcknowledged() ||
-		gb.IsAbortRequested() || (reportPause && gb.GetChannel() == GCodeChannel::File) ||
+		gb.IsAbortRequested() || (reportPause && gb.IsFileChannel()) ||
 		(gb.LatestMachineState().waitingForAcknowledgement && gb.IsMessagePromptPending()))
 	{
 		// Don't process codes that are supposed to be suspended...
@@ -1277,7 +1387,7 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 					if (gb.GetChannel().RawValue() == codeHeader->channel)
 					{
 #ifdef TRACK_FILE_CODES
-						if (gb.GetChannel() == GCodeChannel::File && gb.GetCommandLetter() != 'Q')
+						if (gb.IsFileChannel() && gb.GetCommandLetter() != 'Q')
 						{
 							fileMacrosRunning -= fileMacrosClosing;
 							fileMacrosClosing = 0;
@@ -1362,23 +1472,11 @@ bool SbcInterface::FileExists(const char *filename) noexcept
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	filePath = filename;
-	fileOperation = FileOperation::checkFileExists;
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
-	}
-
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(FileOperation::checkFileExists))
 	{
 		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to check if file %s exists\n", filename);
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
 		return false;
 	}
 
@@ -1396,23 +1494,11 @@ bool SbcInterface::DeleteFileOrDirectory(const char *fileOrDirectory) noexcept
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	filePath = fileOrDirectory;
-	fileOperation = FileOperation::deleteFileOrDirectory;
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
-	}
-
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(FileOperation::deleteFileOrDirectory))
 	{
 		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to delete %s\n", fileOrDirectory);
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
 		return false;
 	}
 
@@ -1430,45 +1516,36 @@ FileHandle SbcInterface::OpenFile(const char *filename, OpenMode mode, FilePosit
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	filePath = filename;
 	filePreAllocSize = preAllocSize;
+	FileOperation op;
 	switch (mode)
 	{
 	case OpenMode::read:
-		fileOperation = FileOperation::openRead;
+		op = FileOperation::openRead;
 		break;
 
 	case OpenMode::write:
 	case OpenMode::writeWithCrc:
-		fileOperation = FileOperation::openWrite;
+		op = FileOperation::openWrite;
 		break;
 
 	case OpenMode::append:
-		fileOperation = FileOperation::openAppend;
+		op = FileOperation::openAppend;
 		break;
 
 	default:
 		filePath = nullptr;
 		REPORT_INTERNAL_ERROR;
-		break;
-	}
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
+		return noFileHandle;
 	}
 
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(op))
 	{
-		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to open file %s\n", filename);
 		fileLength = 0;
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
-		return false;
+		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to open file %s\n", filename);
+		return noFileHandle;
 	}
 
 	// Update the file length and return the handle
@@ -1486,25 +1563,13 @@ int SbcInterface::ReadFile(FileHandle handle, char *buffer, size_t bufferLength)
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	fileHandle = handle;
 	fileReadBuffer = buffer;
 	fileBufferLength = bufferLength;
-	fileOperation = FileOperation::read;
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
-	}
-
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(FileOperation::read))
 	{
 		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to read from file\n");
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
 		return -1;
 	}
 
@@ -1522,25 +1587,13 @@ bool SbcInterface::WriteFile(FileHandle handle, const char *buffer, size_t buffe
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	fileHandle = handle;
 	fileWriteBuffer = buffer;
 	fileBufferLength = bufferLength;
-	fileOperation = FileOperation::write;
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
-	}
-
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(FileOperation::write))
 	{
 		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to write to file\n");
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
 		return false;
 	}
 
@@ -1558,24 +1611,12 @@ bool SbcInterface::SeekFile(FileHandle handle, FilePosition offset) noexcept
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	fileHandle = handle;
 	fileOffset = offset;
-	fileOperation = FileOperation::seek;
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
-	}
-
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(FileOperation::seek))
 	{
 		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to seek in file\n");
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
 		return false;
 	}
 
@@ -1593,23 +1634,11 @@ bool SbcInterface::TruncateFile(FileHandle handle) noexcept
 
 	// Set up the request content
 	MutexLocker locker(fileMutex);
+
 	fileHandle = handle;
-	fileOperation = FileOperation::truncate;
-	fileOperationPending = true;
-
-	// Let the SBC task process this request as quickly as possible
-	if (delaying)
-	{
-		delaying = false;
-		sbcTask->Give();
-	}
-
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	if (!DoFileOperation(FileOperation::truncate))
 	{
 		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to truncate file\n");
-
-		fileOperation = FileOperation::none;
-		fileOperationPending = false;
 		return false;
 	}
 
@@ -1628,23 +1657,36 @@ void SbcInterface::CloseFile(FileHandle handle) noexcept
 	// Set up the request content
 	MutexLocker locker(fileMutex);
 	fileHandle = handle;
-	fileOperation = FileOperation::close;
-	fileOperationPending = true;
+
+	if (!DoFileOperation(FileOperation::close))
+	{
+		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to close file\n");
+	}
+}
+
+// Ask the SBC task to do a file operation
+// Return true if the SBC task gave us a response, false if we timed out waiting for it
+// Caller must own fileMutex and set up the appropriate parameters before calling this
+bool SbcInterface::DoFileOperation(FileOperation f) noexcept
+{
+	fileOperation = f;
+	TaskBase::ClearCurrentTaskNotifyCount();
+	fileOperationPending.store(true, std::memory_order_release);
 
 	// Let the SBC task process this request as quickly as possible
-	if (delaying)
+	const bool isDelaying = delaying.exchange(false);
+	if (isDelaying)
 	{
-		delaying = false;
 		sbcTask->Give();
 	}
 
-	if (!fileSemaphore.Take(SpiMaxRequestTime))
+	const bool rslt = fileSemaphore.Take(SpiMaxRequestTime);
+	if (!rslt)
 	{
-		reprap.GetPlatform().Message(ErrorMessage, "Timeout while trying to close file\n");
-
 		fileOperation = FileOperation::none;
-		fileOperationPending = false;
+		fileOperationPending.store(false, std::memory_order_release);
 	}
+	return rslt;
 }
 
 void SbcInterface::HandleGCodeReply(MessageType mt, const char *reply) noexcept
@@ -1655,7 +1697,7 @@ void SbcInterface::HandleGCodeReply(MessageType mt, const char *reply) noexcept
 	}
 
 #ifdef TRACK_FILE_CODES
-	if ((mt & (1 << GCodeChannel::File)) != 0)
+	if ((mt & ((1u << GCodeChannel::File) | (1u << GCodeChannel::File2))) != 0)
 	{
 		fileCodesHandled++;
 	}
@@ -1691,7 +1733,7 @@ void SbcInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer) noexce
 	}
 
 #ifdef TRACK_FILE_CODES
-	if ((mt & (1 << GCodeChannel::File)) != 0)
+	if ((mt & ((1u << GCodeChannel::File) | (1u << GCodeChannel::File2))) != 0)
 	{
 		fileCodesHandled++;
 	}
@@ -1764,10 +1806,13 @@ void SbcInterface::EventOccurred(bool timeCritical) noexcept
 	}
 
 	// Stop delaying if the next transfer is time-critical
-	if (delaying && numEvents >= numMaxEvents)
+	if (numEvents >= numMaxEvents)
 	{
-		delaying = false;
-		sbcTask->Give();
+		const bool isDelaying = delaying.exchange(false);
+		if (isDelaying)
+		{
+			sbcTask->Give();
+		}
 	}
 }
 

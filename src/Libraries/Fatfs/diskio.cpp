@@ -44,6 +44,7 @@
 #include <ecv_duet3d.h>
 
 #include "compiler.h"
+#include "ff.h"				// for type definitions
 #include "diskio.h"
 
 #include <Libraries/sd_mmc/ctrl_access.h>
@@ -173,9 +174,9 @@ DSTATUS disk_status(BYTE drv) noexcept
  *
  * \return RES_OK for success, otherwise DRESULT error code.
  */
-DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
+DRESULT disk_read(BYTE drv, BYTE *buff, LBA_t sector, UINT count) noexcept
 {
-	if (reprap.Debug(moduleStorage))
+	if (reprap.Debug(Module::Storage))
 	{
 		debugPrintf("Read %u %u %lu\n", drv, count, sector);
 	}
@@ -212,7 +213,7 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
 			break;
 		}
 
-		if (reprap.Debug(moduleStorage))
+		if (reprap.Debug(Module::Storage))
 		{
 			debugPrintf("SD read error %d\n", (int)ret);
 		}
@@ -250,9 +251,9 @@ DRESULT disk_read(BYTE drv, BYTE *buff, DWORD sector, BYTE count) noexcept
  * \return RES_OK for success, otherwise DRESULT error code.
  */
 #if _READONLY == 0
-DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count) noexcept
+DRESULT disk_write(BYTE drv, BYTE const *buff, LBA_t sector, UINT count) noexcept
 {
-	if (reprap.Debug(moduleStorage))
+	if (reprap.Debug(Module::Storage))
 	{
 		debugPrintf("Write %u %u %lu\n", drv, count, sector);
 	}
@@ -291,7 +292,7 @@ DRESULT disk_write(BYTE drv, BYTE const *buff, DWORD sector, BYTE count) noexcep
 			break;
 		}
 
-		if (reprap.Debug(moduleStorage))
+		if (reprap.Debug(Module::Storage))
 		{
 			debugPrintf("SD write error %d\n", (int)ret);
 		}

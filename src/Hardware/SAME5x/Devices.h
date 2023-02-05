@@ -20,6 +20,7 @@ extern SerialCDC serialUSB;
 
 void DeviceInit() noexcept;
 void StopAnalogTask() noexcept;
+void StopUsbTask() noexcept;
 
 // GCLK numbers not defined in the core
 constexpr unsigned int GclkNum25MHz = 2;		// for Ethernet PHY

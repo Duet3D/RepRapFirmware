@@ -197,7 +197,7 @@ private:
 
 	static_assert(sizeof(MoveSegment*) == sizeof(uint32_t));
 
-	// The 'next' field is a MoveSegment pointer with two flag bits in the bottom two bits
+	// The 'nextAndFlags' field is a MoveSegment pointer with two flag bits in the bottom two bits
 	uint32_t nextAndFlags;									// pointer to the next segment, plus flag bits
 	float segLength;										// the length of this segment before applying the movement fraction
 	float segTime;											// the time in step clocks at which this move ends

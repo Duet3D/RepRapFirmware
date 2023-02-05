@@ -117,7 +117,7 @@ public:
 
 	// Perform auto calibration. Override this implementation in kinematics that support it. Caller already owns the movement lock.
 	// Return true if an error occurred.
-	virtual bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
+	virtual bool DoAutoCalibration(MovementSystemNumber msNumber, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 	pre(SupportsAutoCalibration()) { return false; }
 
 	// Set the default parameters that are changed by auto calibration back to their defaults.

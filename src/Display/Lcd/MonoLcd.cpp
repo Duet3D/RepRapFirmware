@@ -98,8 +98,9 @@ void MonoLcd::ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, 
 	}
 }
 
-// Flag a rectangle as dirty. Inline because it is called from only two places.
-inline void MonoLcd::SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept
+// Flag a rectangle as dirty from (top, left) to just before (bottom, right)
+// bottom, right must be no greater than numRows, numCols
+void MonoLcd::SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept
 {
 	if (top < startRow) startRow = top;
 	if (bottom > endRow) endRow = bottom;
@@ -108,7 +109,7 @@ inline void MonoLcd::SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber
 }
 
 // Flag a pixel as dirty. The r and c parameters must be no greater than NumRows-1 and NumCols-1 respectively.
-void MonoLcd::SetDirty(PixelNumber r, PixelNumber c) noexcept
+inline void MonoLcd::SetPixelDirty(PixelNumber r, PixelNumber c) noexcept
 {
 	SetRectDirty(r, c, r + 1, c + 1);
 }
@@ -129,14 +130,14 @@ void MonoLcd::WriteColumnData(PixelNumber ySize, uint32_t columnData) noexcept
 	const uint8_t mask2 = ~mask1;
 	uint8_t *p = image + ((row * (numCols/8)) + (column/8));
 	const uint16_t setPixelVal = (textInverted) ? 0 : 1;
-	for (uint8_t i = 0; i < ySize; ++i)
+	for (PixelNumber r = row; r < row + ySize; ++r)
 	{
 		const uint8_t oldVal = *p;
 		const uint8_t newVal = ((columnData & 1u) == setPixelVal) ? oldVal | mask1 : oldVal & mask2;
 		if (newVal != oldVal)
 		{
 			*p = newVal;
-			SetDirty(row + i, column);
+			SetPixelDirty(r, column);
 		}
 		columnData >>= 1;
 		p += (numCols/8);
@@ -169,7 +170,7 @@ void MonoLcd::SetPixel(PixelNumber y, PixelNumber x, bool mode) noexcept
 		if (newVal != oldVal)
 		{
 			*p = newVal;
-			SetDirty(y, x);
+			SetPixelDirty(y, x);
 		}
 	}
 }
@@ -187,16 +188,17 @@ void MonoLcd::BitmapImage(PixelNumber x0, PixelNumber y0, PixelNumber width, Pix
 		}
 	}
 
-	// Assume the whole area has changed
-	if (x0 < startCol) startCol = x0;
-	if (x0 + width > endCol) endCol = x0 + width;
-	if (y0 < startRow) startRow = y0;
-	if (y0 + height > endRow) endRow = y0 + height;
+	SetRectDirty(y0, x0, y0 + height, x0 + width);						// assume the whole area has changed
 }
 
 // Draw a single bitmap row. 'left' and 'width' do not need to be divisible by 8.
 void MonoLcd::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept
 {
+	if (left + width > numCols)
+	{
+		width = numCols - left;										// avoid overflowing the buffer
+	}
+
 	if (width != 0 && top < numRows)									// avoid possible arithmetic underflow or overflowing the buffer
 	{
 		const uint8_t inv = (invert) ? 0xFF : 0;
@@ -214,7 +216,7 @@ void MonoLcd::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, co
 			if (newVal != *p)
 			{
 				*p = newVal;
-				SetDirty(top, 8 * firstColIndex);
+				SetPixelDirty(top, 8 * firstColIndex);
 			}
 			accumulator = invData << (8 - firstDataShift);
 			++p;
@@ -231,7 +233,7 @@ void MonoLcd::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, co
 		if (accumulator != *p)
 		{
 			*p = accumulator;
-			SetDirty(top, 8 * firstColIndex);
+			SetPixelDirty(top, 8 * firstColIndex);
 		}
 	}
 }

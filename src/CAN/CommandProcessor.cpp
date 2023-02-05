@@ -353,14 +353,17 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		extra = LastDiagnosticsPart;
 		{
 			const size_t driver = msg.type - (CanMessageReturnInfo::typeDiagnosticsPart0 + 1);
-			reply.lcatf("Driver %u: position %" PRIi32 ", %.1f steps/mm"
+			if (driver < NumDirectDrivers)			// we have up to 7 drivers on the Duet 3 Mini but only 6 on the 6HC and 6XD
+			{
+				reply.lcatf("Driver %u: %.1f steps/mm"
 #if HAS_SMART_DRIVERS
-				","
+					","
 #endif
-				, driver, reprap.GetMove().GetEndPoint(driver), (double)reprap.GetPlatform().DriveStepsPerUnit(driver));
+					, driver, (double)reprap.GetPlatform().DriveStepsPerUnit(driver));
 #if HAS_SMART_DRIVERS
-			SmartDrivers::AppendDriverStatus(driver, reply);
+				SmartDrivers::AppendDriverStatus(driver, reply);
 #endif
+			}
 		}
 		break;
 
@@ -457,12 +460,6 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::movementLinear:
 				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinear);
 				return;							// no reply needed
-
-# if USE_REMOTE_INPUT_SHAPING
-			case CanMessageType::movementLinearShaped:
-				reprap.GetMove().AddShapedMoveFromRemote(buf->msg.moveLinearShaped);
-				return;							// no reply needed
-# endif
 
 			case CanMessageType::stopMovement:
 				reprap.GetMove().StopDrivers(buf->msg.stopMovement.whichDrives);
@@ -765,7 +762,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 #endif
 
 			default:
-				if (reprap.Debug(moduleCan))
+				if (reprap.Debug(Module::Can))
 				{
 					buf->DebugPrint("Rec: ");
 				}

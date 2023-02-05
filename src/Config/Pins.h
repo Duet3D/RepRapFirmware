@@ -147,6 +147,10 @@
 # define SUPPORT_SLOW_DRIVERS	1
 #endif
 
+#ifndef SUPPORT_BRAKE_PWM
+# define SUPPORT_BRAKE_PWM		0
+#endif
+
 #ifndef HAS_12V_MONITOR
 # define HAS_12V_MONITOR		0
 # define ENFORCE_MIN_V12		0
@@ -225,13 +229,14 @@
 # if SUPPORT_FTP
 #  error "FTP support requires mass storage"
 # endif
-# if SUPPORT_SCANNER
-#  error "Scanner support requires mass storage"
-# endif
 #endif
 
 #ifndef SUPPORT_ASYNC_MOVES
 # define SUPPORT_ASYNC_MOVES	0
+#endif
+
+#ifndef SUPPORT_KEEPOUT_ZONES
+# define SUPPORT_KEEPOUT_ZONES	0
 #endif
 
 #ifndef ALLOCATE_DEFAULT_PORTS

@@ -75,11 +75,13 @@ public:
 	bool WriteLocked(GCodeChannel channel) noexcept;
 	bool WriteFileChunkRequest(const char *filename, uint32_t offset, uint32_t maxLength) noexcept;
 	bool WriteEvaluationResult(const char *expression, const ExpressionValue& value) noexcept;
+	bool WriteEvaluationResult(const char *expression, OutputBuffer *json) noexcept;
 	bool WriteEvaluationError(const char *expression, const char *errorMessage) noexcept;
 	bool WriteDoCode(GCodeChannel channel, const char *code, size_t length) noexcept;
 	bool WriteWaitForAcknowledgement(GCodeChannel channel) noexcept;
 	bool WriteMessageAcknowledged(GCodeChannel channel) noexcept;
 	bool WriteSetVariableResult(const char *varName, const ExpressionValue& value) noexcept;
+	bool WriteSetVariableResult(const char *varName, OutputBuffer *json) noexcept;
 	bool WriteSetVariableError(const char *varName, const char *errorMessage) noexcept;
 	bool WriteCheckFileExists(const char *filename) noexcept;
 	bool WriteDeleteFileOrDirectory(const char *filename) noexcept;

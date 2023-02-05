@@ -126,11 +126,7 @@ public:
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
-# if USE_REMOTE_INPUT_SHAPING
-	bool InitShapedFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
-# else
 	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
-# endif
 	void StopDrivers(uint16_t whichDrives) noexcept;
 #endif
 
@@ -138,7 +134,9 @@ public:
 	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;						// Force an end point
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept;
-	bool FetchEndPosition(volatile int32_t ep[MaxAxesPlusExtruders], volatile float endCoords[MaxAxesPlusExtruders]) noexcept;
+	float GetRawEndCoordinate(size_t drive) const noexcept { return endCoordinates[drive]; }
+	void FetchEndPoints(int32_t ep[MaxAxesPlusExtruders]) const noexcept;
+	void FetchCurrentPositions(int32_t ep[MaxAxesPlusExtruders]) const noexcept;
 	void SetPositions(const float move[]) noexcept;									// Force the endpoints to be these
 	FilePosition GetFilePosition() const noexcept { return filePos; }
 	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
@@ -147,6 +145,8 @@ public:
 	float GetAccelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(acceleration); }
 	float GetDecelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(deceleration); }
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
+	float GetTotalExtrusionRate() const noexcept;
+
 	float AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcept;	// Try to push babystepping earlier in the move queue
 	const Tool *GetTool() const noexcept { return tool; }
 	float GetTotalDistance() const noexcept { return totalDistance; }
@@ -326,13 +326,12 @@ private:
 
 	union
 	{
-		// Values that are needed only before Prepare is called
+		// Values that are needed only before Prepare is called and in the first few lines of Prepare
 		struct
 		{
 			float accelDistance;
 			float decelDistance;
 			float targetNextSpeed;					// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
-			float maxAcceleration;					// the maximum allowed acceleration for this move according to the limits set by M201
 		} beforePrepare;
 
 		// Values that are not set or accessed before Prepare is called
@@ -340,10 +339,10 @@ private:
 		{
 			// These are calculated from the above and used in the ISR, so they are set up by Prepare()
 			uint32_t moveStartTime;					// clock count at which the move is due to start (before execution) or was started (during execution)
+			float averageExtrusionSpeed;			// the average extrusion speed in mm/sec, for applying heater feedforward
 
 #if SUPPORT_CAN_EXPANSION
-			DriversBitmap drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
-			static_assert(MaxAxesPlusExtruders <= DriversBitmap::MaxBits());
+			AxesBitmap drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
 #endif
 		} afterPrepare;
 	};
@@ -450,6 +449,12 @@ inline int32_t DDA::GetStepsTaken(size_t drive) const noexcept
 {
 	const DriveMovement * const dmp = FindDM(drive);
 	return (dmp != nullptr) ? dmp->GetNetStepsTaken() : 0;
+}
+
+// This is called by DDARing::LiveCoordinates to get the endpoints of a move that has been completed
+inline void DDA::FetchEndPoints(int32_t ep[MaxAxesPlusExtruders]) const noexcept
+{
+	memcpyi32(ep, endPoint, MaxAxesPlusExtruders);
 }
 
 #if SUPPORT_CAN_EXPANSION

@@ -39,20 +39,22 @@ extern uint32_t _firmware_crc;			// defined in linker script
 
 // MAIN task data
 // The main task currently runs GCodes, so it needs to be large enough to hold the matrices used for delta auto calibration.
-// The worst case stack usage is after running delta auto calibration with Move debugging enabled.
-// The timer and idle tasks currently never do I/O, so they can be much smaller.
+// The worst case stack usage points are as follows:
+// 1. After running delta auto calibration with Move debugging enabled
+// 2. We create an array of (2 * MaxAxes^2) floats when inverting the movement matrix for Core kinematics.
 #if SAME70
-constexpr unsigned int MainTaskStackWords = 1800;			// on the SAME70 we use matrices of doubles
-#elif defined(__LPC17xx__)
-constexpr unsigned int MainTaskStackWords = 1110-(16*9);	// LPC builds only support 16 calibration points, so less space needed
+// On the SAME70 we use matrices of doubles when doing auto calibration, so we need 1800 words of stack even when MaxAxes is only 15
+constexpr unsigned int MainTaskStackWords = max<unsigned int>(1800, (MaxAxes * MaxAxes * 2) + 550);
 #else
-constexpr unsigned int MainTaskStackWords = 1110;			// on other processors we use matrixes of floats
+// On other processors we use matrixes of floats when doing auto calibration
+constexpr unsigned int MainTaskStackWords = max<unsigned int>(1110, (MaxAxes * MaxAxes * 2) + 550);
 #endif
 
 static Task<MainTaskStackWords> mainTask;
 extern "C" [[noreturn]] void MainTask(void * pvParameters) noexcept;
 
 // Idle task data
+// The timer and idle tasks currently never do I/O, so they don't need much stack.
 constexpr unsigned int IdleTaskStackWords = 50;				// currently we don't use the idle task for anything, so this can be quite small
 static Task<IdleTaskStackWords> idleTask;
 
@@ -134,6 +136,14 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 	const Pin ActLedPin = (bt == BoardType::Duet3_6HC_v102) ? ActLedPin102 : ActLedPinPre102;
 	const bool DiagOnPolarity = (bt == BoardType::Duet3_6HC_v102) ? DiagOnPolarity102 : DiagOnPolarityPre102;
 	if (bt == BoardType::Duet3_6HC_v102)
+	{
+		pinMode(UsbPowerSwitchPin, OUTPUT_LOW);								// turn USB power off
+		pinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
+	}
+#endif
+#if defined(DUET3_MB6XD)
+	const BoardType bt = Platform::GetMB6XDBoardType();
+	if (bt == BoardType::Duet3_6XD_v101)
 	{
 		pinMode(UsbPowerSwitchPin, OUTPUT_LOW);								// turn USB power off
 		pinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
@@ -320,6 +330,9 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 #endif
 		p.MessageF(mtype, "Never used RAM %d, free system stack %d words\n", GetNeverUsedRam(), GetHandlerFreeStack()/4);
 
+		//DEBUG
+		//p.MessageF(mtype, "heap top %.08" PRIx32 ", limit %.08" PRIx32 "\n", (uint32_t)heapTop, (uint32_t)heapLimit);
+		//ENDDB
 	}	// end memory stats scope
 
 	const uint32_t timeSinceLastCall = TaskResetRunTimeCounter();

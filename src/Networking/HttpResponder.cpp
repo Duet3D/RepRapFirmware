@@ -57,7 +57,7 @@ bool HttpResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
 		numHeaderKeys = 0;
 		commandWords[0] = clientMessage;
 
-		if (reprap.Debug(moduleWebserver))
+		if (reprap.Debug(Module::Webserver))
 		{
 			debugPrintf("HTTP connection accepted\n");
 		}
@@ -529,11 +529,14 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		const char *command = GetKeyValue("gcode");
 		NetworkGCodeInput * const httpInput = reprap.GetGCodes().GetHTTPInput();
 		// If the command is empty, just report the buffer space. This allows rr_gcode to be used to poll the buffer space without using it up.
-		if (command != nullptr && command[0] != 0)
+		if (command != nullptr && command[0] != 0 && !httpInput->Put(HttpMessage, command))
 		{
-			httpInput->Put(HttpMessage, command);
+			response->copy("{\"err\":1}");								// the command string wasn't accepted, it's probably too long
 		}
-		response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
+		else
+		{
+			response->printf("{\"buff\":%u}", httpInput->BufferSpaceLeft());
+		}
 	}
 #if HAS_MASS_STORAGE
 	else if (StringEqualsIgnoreCase(request, "upload"))
@@ -714,6 +717,7 @@ bool HttpResponder::Authenticate() noexcept
 		sessions[numSessions].ip = GetRemoteIP();
 		sessions[numSessions].lastQueryTime = millis();
 		sessions[numSessions].isPostUploading = false;
+		sessions[numSessions].iface = skt->GetInterface();
 		numSessions++;
 		return true;
 	}
@@ -938,7 +942,7 @@ void HttpResponder::SendGCodeReply() noexcept
 				clearReply = true;
 			}
 
-			if (reprap.Debug(moduleWebserver))
+			if (reprap.Debug(Module::Webserver))
 			{
 				GetPlatform().MessageF(UsbMessage, "Sending G-Code reply to HTTP client %d of %d (length %u)\n", clientsServed, numSessions, gcodeReply.DataLength());
 			}
@@ -1075,7 +1079,7 @@ void HttpResponder::SendJsonResponse(const char *_ecv_array command) noexcept
 
 	// Here if everything is OK
 	Commit(keepOpen ? ResponderState::reading : ResponderState::free, false);
-	if (reprap.Debug(moduleWebserver))
+	if (reprap.Debug(Module::Webserver))
 	{
 		debugPrintf("Sending JSON reply, length %u\n", replyLength);
 	}
@@ -1084,7 +1088,7 @@ void HttpResponder::SendJsonResponse(const char *_ecv_array command) noexcept
 // Process the message received. We have reached the end of the headers.
 void HttpResponder::ProcessMessage() noexcept
 {
-	if (reprap.Debug(moduleWebserver))
+	if (reprap.Debug(Module::Webserver))
 	{
 		Platform& p = GetPlatform();
 		p.Message(UsbMessage, "HTTP req, command words {");
@@ -1225,7 +1229,7 @@ void HttpResponder::ProcessRequest() noexcept
 						fileLastModified = 0;
 					}
 
-					if (reprap.Debug(moduleWebserver))
+					if (reprap.Debug(Module::Webserver))
 					{
 						GetPlatform().MessageF(UsbMessage, "Start uploading file %s length %lu\n", filename, postFileLength);
 					}
@@ -1266,7 +1270,7 @@ void HttpResponder::ProcessRequest() noexcept
 // Reject the current message
 void HttpResponder::RejectMessage(const char *_ecv_array response, unsigned int code) noexcept
 {
-	if (reprap.Debug(moduleWebserver))
+	if (reprap.Debug(Module::Webserver))
 	{
 		GetPlatform().MessageF(UsbMessage, "Webserver: rejecting message with: %u %s\n", code, response);
 	}
@@ -1401,6 +1405,24 @@ void HttpResponder::Diagnostics(MessageType mt) const noexcept
 	gcodeReply.ReleaseAll();
 }
 
+// Remove all HTTP sessions that use the specified interface
+/*static*/ void HttpResponder::DisableInterface(const NetworkInterface *iface) noexcept
+{
+	for (size_t i = numSessions; i != 0; )
+	{
+		--i;
+		if (iface == sessions[i].iface)
+		{
+			RemoveSession(i);
+		}
+	}
+
+	if (numSessions == 0)
+	{
+		Disable();
+	}
+}
+
 // This is called from the GCodes task to store a response, which is picked up by the Network task
 /*static*/ void HttpResponder::HandleGCodeReply(const char *_ecv_array reply) noexcept
 {
@@ -1485,7 +1507,7 @@ void HttpResponder::Diagnostics(MessageType mt) const noexcept
 			}
 			clientsServed = 0;
 		}
-		if (released && reprap.Debug(moduleWebserver))
+		if (released && reprap.Debug(Module::Webserver))
 		{
 			debugPrintf("Released gcodeReply, free buffers=%u\n", OutputBuffer::GetFreeBuffers());
 		}
@@ -1498,7 +1520,7 @@ void HttpResponder::Diagnostics(MessageType mt) const noexcept
 			MutexLocker lock(gcodeReplyMutex);
 			released = gcodeReply.ApplyTimeout(HttpSessionTimeout);
 		}
-		if (released && reprap.Debug(moduleWebserver))
+		if (released && reprap.Debug(Module::Webserver))
 		{
 			debugPrintf("Timed out gcodeReply, free buffers=%u\n", OutputBuffer::GetFreeBuffers());
 		}

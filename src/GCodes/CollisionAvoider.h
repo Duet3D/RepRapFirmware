@@ -25,13 +25,13 @@ public:
 	float GetMinSeparation()const noexcept { return minSeparation; }
 
 	// Reset the position accumulators
-	void ResetPositions(const float positions[]) noexcept;
+	void ResetPositions(const float positions[], AxesBitmap whichPositions) noexcept;
 
 	// If the new move doesn't risk a collision, update the position accumulators and return true; else return false
-	bool UpdatePositions(const float axisPositions[]) noexcept;
+	bool UpdatePositions(const float axisPositions[], AxesBitmap axesHomed) noexcept;
 
 	// Set the parameters
-	void Set(int axisL, int axisH, float sep, const float positions[]) noexcept;
+	void Set(int axisL, int axisH, float sep) noexcept;
 
 private:
 	float minSeparation;

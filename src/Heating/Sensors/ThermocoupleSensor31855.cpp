@@ -118,7 +118,7 @@ void ThermocoupleSensor31855::Poll() noexcept
 {
 	uint32_t rawVal;
 	TemperatureError sts = DoSpiTransaction(nullptr, 4, rawVal);
-	if (sts != TemperatureError::success)
+	if (sts != TemperatureError::ok)
 	{
 		SetResult(sts);
 	}
@@ -173,7 +173,7 @@ void ThermocoupleSensor31855::Poll() noexcept
 			rawVal |= (0 - (rawVal & 0x2000));		// sign-extend the sign bit
 
 			// And convert to from units of 1/4C to 1C
-			SetResult((float)(0.25 * (float)(int32_t)rawVal), TemperatureError::success);
+			SetResult((float)(0.25 * (float)(int32_t)rawVal), TemperatureError::ok);
 		}
 	}
 }

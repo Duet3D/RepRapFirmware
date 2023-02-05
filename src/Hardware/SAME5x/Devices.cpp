@@ -16,6 +16,10 @@
 #include <hal_usb_device.h>
 #include <peripheral_clk_config.h>
 
+#if CORE_USES_TINYUSB
+# include <TinyUsbInterface.h>
+#endif
+
 // Analog input support
 constexpr size_t AnalogInTaskStackWords = 300;
 static Task<AnalogInTaskStackWords> analogInTask;
@@ -95,7 +99,20 @@ void SERIAL1_ISR3() noexcept
 
 #endif
 
+#if CORE_USES_TINYUSB
+
+constexpr size_t UsbDeviceTaskStackWords = 200;
+static Task<UsbDeviceTaskStackWords> usbDeviceTask;
+
+SerialCDC serialUSB;
+
+#else
+
 SerialCDC serialUSB(UsbVBusPin, 512, 512);
+
+#endif
+
+#if !CORE_USES_TINYUSB
 
 static void UsbInit() noexcept
 {
@@ -116,6 +133,8 @@ static void UsbInit() noexcept
 	gpio_set_pin_pull_mode(PortAPin(25), GPIO_PULL_OFF);
 	gpio_set_pin_function(PortAPin(25), PINMUX_PA25H_USB_DP);
 }
+
+#endif
 
 #if HAS_HIGH_SPEED_SD
 
@@ -150,7 +169,6 @@ void DeviceInit() noexcept
 	// Ensure the Ethernet PHY or WiFi module is held reset
 	pinMode(EspResetPin, OUTPUT_LOW);
 
-	UsbInit();
 #if HAS_HIGH_SPEED_SD
 	SdhcInit();
 #endif
@@ -158,12 +176,26 @@ void DeviceInit() noexcept
 	AnalogIn::Init(NvicPriorityAdc);
 	AnalogOut::Init();
 	analogInTask.Create(AnalogIn::TaskLoop, "AIN", nullptr, TaskPriority::AinPriority);
+
+#if CORE_USES_TINYUSB
+	CoreUsbInit(NvicPriorityUSB);
+	usbDeviceTask.Create(CoreUsbDeviceTask, "USBD", nullptr, TaskPriority::UsbPriority);
+#else
+	UsbInit();
+#endif
 }
 
 void StopAnalogTask() noexcept
 {
 	AnalogIn::Exit();								// make sure that the ISR doesn't try to wake the analog task after we terminate it
 	analogInTask.TerminateAndUnlink();
+}
+
+void StopUsbTask() noexcept
+{
+#if CORE_USES_TINYUSB
+	usbDeviceTask.TerminateAndUnlink();
+#endif
 }
 
 // End

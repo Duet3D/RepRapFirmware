@@ -10,18 +10,19 @@
 
 #include <AsyncSerial.h>
 
-extern AsyncSerial Serial;
-extern AsyncSerial SerialWiFi;
+extern AsyncSerial serialUart;
+extern AsyncSerial serialWiFi;
 
 #define SUPPORT_USB		1		// needed by SerialCDC.h
 #include <SerialCDC.h>
 
-extern SerialCDC SerialUSB;
+extern SerialCDC serialUSB;
 
 #include <Wire.h>
 extern TwoWire Wire;
 
 void DeviceInit() noexcept;
 void StopAnalogTask() noexcept;
+void StopUsbTask() noexcept;
 
 #endif /* SRC_HARDWARE_SAM4E_DEVICES_H_ */

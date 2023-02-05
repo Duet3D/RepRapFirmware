@@ -28,7 +28,7 @@ public:
 	void Put(const uint32_t *data, size_t len) noexcept;						// Add an entire binary code, overwriting any existing content
 	void DecodeCommand() noexcept;												// Print the buffer content in debug mode and prepare for execution
 	bool Seen(char c) noexcept SPEED_CRITICAL;									// Is a character present?
-	bool SeenAny(Bitmap<uint32_t> bm) const noexcept;							// Return true if any of the parameter letters in the bitmap were seen
+	ParameterLettersBitmap AllParameters() const noexcept { return parametersPresent; }	// Return the bitmap of all parameters seen
 
 	char GetCommandLetter() const noexcept;
 	bool HasCommandNumber() const noexcept;
@@ -81,6 +81,7 @@ private:
 	const CodeHeader *header;
 
 	int reducedBytesRead;
+	ParameterLettersBitmap parametersPresent;
 	const CodeParameter *seenParameter;
 	const char *seenParameterValue;
 };

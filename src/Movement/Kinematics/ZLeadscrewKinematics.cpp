@@ -154,8 +154,8 @@ bool ZLeadscrewKinematics::SupportsAutoCalibration() const noexcept
 	return numLeadscrews >= 2;
 }
 
-// Perform auto calibration, returning true if failed. Override this implementation in kinematics that support it. Caller already owns the GCode movement lock.
-bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
+// Perform auto calibration, returning true if failed. Caller already owns the GCode movement lock.
+bool ZLeadscrewKinematics::DoAutoCalibration(MovementSystemNumber msNumber, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	if (!SupportsAutoCalibration())			// should be checked by caller, but check it here too
 	{
@@ -271,7 +271,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 	reprap.GetMove().SetInitialCalibrationDeviation(initialDeviation);
 	reprap.GetMove().SetLatestCalibrationDeviation(initialDeviation, 0);
 
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		PrintMatrix("Derivative matrix", derivativeMatrix, numPoints, numFactors);
 	}
@@ -297,7 +297,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 		normalMatrix(i, numFactors) = temp;
 	}
 
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		PrintMatrix("Normal matrix", normalMatrix, numFactors, numFactors + 1);
 	}
@@ -314,7 +314,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 		solution[i] = normalMatrix(i, numFactors);
 	}
 
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		PrintMatrix("Solved matrix", normalMatrix, numFactors, numFactors + 1);
 		PrintVector("Solution", solution, numFactors);
@@ -339,7 +339,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 
 		finalDeviation.Set(finalSumOfSquares, finalSum, numPoints);
 
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			PrintVector("Residuals", residuals, numPoints);
 		}

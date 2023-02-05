@@ -65,7 +65,7 @@
 			}
 #endif
 		}
-		fullReason |= (uint8_t)reprap.GetSpinningModule();
+		fullReason |= reprap.GetSpinningModule().ToBaseType();
 		if (reprap.GetPlatform().WasDeliberateError())
 		{
 			fullReason |= (uint16_t)SoftwareResetReason::deliberate;

@@ -12,18 +12,19 @@
 # include <AsyncSerial.h>
 # include <USARTClass.h>
 
-extern AsyncSerial Serial;
+extern AsyncSerial serialUart;
 #endif
 
 #define SUPPORT_USB		1		// needed by SerialCDC.h
 #include <SerialCDC.h>
 
-extern SerialCDC SerialUSB;
+extern SerialCDC serialUSB;
 
 #include <Wire.h>
 extern TwoWire Wire;
 
 void DeviceInit() noexcept;
 void StopAnalogTask() noexcept;
+void StopUsbTask() noexcept;
 
 #endif /* SRC_HARDWARE_SAM4S_DEVICES_H_ */

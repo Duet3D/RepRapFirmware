@@ -21,6 +21,7 @@ namespace TaskPriority
     //EMAC priority = 3 defined in FreeRTOSIPConfig.h
 #endif
     constexpr unsigned int HeatPriority = 3;
+	constexpr unsigned int UsbPriority = 3;							// priority of USB task when using tinyusb
 	constexpr unsigned int MovePriority = 4;
 	constexpr unsigned int TmcPriority = 4;
 	constexpr unsigned int AinPriority = 4;

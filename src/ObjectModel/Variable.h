@@ -26,6 +26,7 @@ public:
 	ExpressionValue GetValue() const noexcept { return val; }
 	int8_t GetScope() const noexcept { return scope; }
 	void Assign(ExpressionValue& ev) THROWS(GCodeException);
+	void AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndeces != 0);
 
 private:
 	StringHandle name;
@@ -53,7 +54,7 @@ public:
 	void Delete(const char *str) noexcept;
 	void Clear() noexcept;
 
-	void IterateWhile(function_ref<bool(unsigned int index, const Variable& v) /*noexcept*/ > func) const noexcept;
+	void IterateWhile(function_ref_noexcept<bool(unsigned int index, const Variable& v) noexcept> func) const noexcept;
 
 private:
 	struct LinkedVariable

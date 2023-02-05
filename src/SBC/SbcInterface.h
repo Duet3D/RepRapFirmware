@@ -30,7 +30,7 @@ class OutputStack;
 //#define TRACK_FILE_CODES			// Uncomment this to enable code <-> code reply tracking for the file G-code channel
 
 // G-Code input class for an SPI channel
-class SbcInterface
+class SbcInterface INHERIT_OBJECT_MODEL
 {
 public:
 	SbcInterface() noexcept;
@@ -68,6 +68,9 @@ public:
 	bool TruncateFile(FileHandle handle) noexcept;
 	void CloseFile(FileHandle handle) noexcept;
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	DataTransfer transfer;
 	volatile bool isConnected;
@@ -76,7 +79,7 @@ private:
 
 	uint32_t maxDelayBetweenTransfers, maxFileOpenDelay, numMaxEvents;
 	bool skipNextDelay;
-	volatile bool delaying;
+	std::atomic<bool> delaying;
 	volatile uint32_t numEvents;
 
 	GCodeFileInfo fileInfo;
@@ -104,6 +107,7 @@ private:
 	unsigned int numOpenFiles;
 	BinarySemaphore fileSemaphore;										// resolved when the requested file operation has finished
 
+	// File operation variables, accessed by more than one task
 	enum class FileOperation {
 		none,
 		checkFileExists,
@@ -117,17 +121,18 @@ private:
 		truncate,
 		close
 	} fileOperation;
-	bool fileOperationPending;
+	std::atomic<bool> fileOperationPending;
 
-	const char *filePath;
+	const char * filePath;
 	FileHandle fileHandle;
-	bool fileSuccess;
+	std::atomic<bool> fileSuccess;
 
 	uint32_t filePreAllocSize;
-	char *fileReadBuffer;
-	const char *fileWriteBuffer;
+	char * fileReadBuffer;
+	const char * fileWriteBuffer;
 	size_t fileBufferLength;
 	FilePosition fileOffset;
+	// End of file operation variables
 
 	static volatile OutputStack gcodeReply;
 	static Mutex gcodeReplyMutex;											// static so that the SbcInterface is safe to delete even is the mutex is linked into the mutex chain or is in use
@@ -142,6 +147,7 @@ private:
 	void DefragmentBufferedCodes() noexcept;								// Attempt to defragment the code buffer ring to avoid stalls
 	bool DefragmentCodeBlock(uint16_t start, volatile uint16_t &end) noexcept;	// Defragment a specific code buffer region returning true if anything was defragmented
 	void InvalidateBufferedCodes(GCodeChannel channel) noexcept;           	// Invalidate every buffered G-code of the corresponding channel from the buffer ring
+	bool DoFileOperation(FileOperation f) noexcept;							// Ask the SBC task to do a file operation
 };
 
 inline void SbcInterface::SetPauseReason(FilePosition position, PrintPausedReason reason) noexcept

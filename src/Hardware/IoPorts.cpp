@@ -195,6 +195,11 @@ bool IoPort::SetAnalogCallback(AnalogInCallbackFunction fn, CallbackParameter cb
 	return AnalogIn::SetCallback(GetAnalogChannel(), fn, cbp, ticksPerCall, false);
 }
 
+void IoPort::ClearAnalogCallback() noexcept
+{
+	(void)AnalogIn::SetCallback(GetAnalogChannel(), nullptr, CallbackParameter(), 1, false);
+}
+
 #endif
 
 // Allocate the specified logical pin, returning true if successful
@@ -665,6 +670,11 @@ void PwmPort::WriteAnalog(float pwm) const noexcept
 	{
 		IoPort::WriteAnalog(GetPinNoCheck(), ((totalInvert) ? 1.0 - pwm : pwm), frequency);
 	}
+}
+
+bool PwmPort::SupportsPwm() const noexcept
+{
+	return IsValid() && (((uint8_t)PinTable[logicalPin].GetCapability() & (uint8_t)PinCapability::pwm) != 0);
 }
 
 // End

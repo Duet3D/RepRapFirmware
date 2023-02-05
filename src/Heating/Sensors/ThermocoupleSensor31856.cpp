@@ -157,11 +157,11 @@ GCodeResult ThermocoupleSensor31856::FinishConfiguring(bool changed, const Strin
 		// Initialise the sensor
 		InitSpi();
 
-		TemperatureError rslt;
+		TemperatureError rslt(TemperatureError::unknownError);
 		for (unsigned int i = 0; i < 3; ++i)		// try 3 times
 		{
 			rslt = TryInitThermocouple();
-			if (rslt == TemperatureError::success)
+			if (rslt == TemperatureError::ok)
 			{
 				break;
 			}
@@ -169,9 +169,9 @@ GCodeResult ThermocoupleSensor31856::FinishConfiguring(bool changed, const Strin
 		}
 
 		SetResult(0.0, rslt);
-		if (rslt != TemperatureError::success)
+		if (rslt != TemperatureError::ok)
 		{
-			reply.printf("Failed to initialise thermocouple: %s", TemperatureErrorString(rslt));
+			reply.printf("Failed to initialise thermocouple: %s", rslt.ToString());
 			return GCodeResult::error;
 		}
 	}
@@ -189,14 +189,14 @@ TemperatureError ThermocoupleSensor31856::TryInitThermocouple() const noexcept
 	uint32_t rawVal;
 	TemperatureError sts = DoSpiTransaction(modeData, ARRAY_SIZE(modeData), rawVal);
 
-	if (sts == TemperatureError::success)
+	if (sts == TemperatureError::ok)
 	{
 		static const uint8_t readData[4] = { 0x00, 0x00, 0x00, 0x00 };		// read registers 0, 1, 2
 		sts = DoSpiTransaction(readData, ARRAY_SIZE(readData), rawVal);
 	}
 
 	//debugPrintf("Status %d data %04x\n", (int)sts, rawVal);
-	if (sts == TemperatureError::success)
+	if (sts == TemperatureError::ok)
 	{
 		const uint32_t expectedResponseMask = (0b10111101 << 16)	// bits 1 and 5 of CR0 auto-clear
 											| (0b01111111 << 8)		// ignore the reserved bit
@@ -217,7 +217,7 @@ void ThermocoupleSensor31856::Poll() noexcept
 	uint32_t rawVal;
 	TemperatureError sts = DoSpiTransaction(dataOut, ARRAY_SIZE(dataOut), rawVal);
 
-	if (sts != TemperatureError::success)
+	if (sts != TemperatureError::ok)
 	{
 		SetResult(sts);
 	}
@@ -236,7 +236,7 @@ void ThermocoupleSensor31856::Poll() noexcept
 		else
 		{
 			const int16_t rawTemp = (int16_t)(rawVal >> 16);			// keep just the most significant 2 bytes and interpret them as signed
-			SetResult((float)rawTemp / 16, TemperatureError::success);
+			SetResult((float)rawTemp / 16, TemperatureError::ok);
 		}
 	}
 }

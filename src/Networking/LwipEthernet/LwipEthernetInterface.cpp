@@ -516,7 +516,7 @@ void LwipEthernetInterface::Diagnostics(MessageType mtype) noexcept
 	platform.Message(mtype, "\n");
 
 #if LWIP_STATS
-	if (reprap.Debug(moduleNetwork))
+	if (reprap.Debug(Module::Network))
 	{
 		// This prints LwIP diagnostics data to the USB port - blocking!
 		stats_display();

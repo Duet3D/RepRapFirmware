@@ -121,11 +121,11 @@ bool MenuItem::IsVisible() const noexcept
 }
 
 // Erase this item if it is drawn but should not be visible
-void MenuItem::EraseIfInvisible(Lcd& lcd, PixelNumber tOffset) noexcept
+void MenuItem::EraseIfInvisible(Lcd& lcd) noexcept
 {
 	if (drawn && !IsVisible())
 	{
-		lcd.Clear(row - tOffset, column, row + height, column + width);
+		lcd.Clear(row, column, row + height, column + width);
 		drawn = false;
 	}
 }

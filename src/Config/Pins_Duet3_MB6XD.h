@@ -38,7 +38,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define DUAL_CAN				1					// support the second CAN interface as simple CAN (not FD)
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_INKJET			0					// set nonzero to support inkjet control
-#define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
@@ -51,6 +50,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_MULTICAST_DISCOVERY	1
 #define SUPPORT_ASYNC_MOVES		1
 #define SUPPORT_PROBE_POINTS_FILE	1
+#define SUPPORT_BRAKE_PWM		1
+#define SUPPORT_KEEPOUT_ZONES	1
 
 #define USE_MPU					1					// Needed if USE_CACHE is set, so that we can have non-cacheable memory regions
 #define USE_CACHE				1
@@ -73,21 +74,21 @@ constexpr size_t NumThermistorInputs = 4;
 constexpr size_t NumTmcDriversSenseChannels = 1;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
-constexpr size_t MaxAxes = 15;						// The maximum number of movement axes in the machine
+constexpr size_t MaxAxes = 30;						// The maximum number of movement axes in the machine
 constexpr size_t MaxDriversPerAxis = 8;				// The maximum number of stepper drivers assigned to one axis
 
-constexpr size_t MaxExtruders = 16;					// The maximum number of extruders
-constexpr size_t MaxAxesPlusExtruders = 25;			// May be <= MaxAxes + MaxExtruders
+constexpr size_t MaxExtruders = 20;					// The maximum number of extruders
+constexpr size_t MaxAxesPlusExtruders = 32;			// May be <= MaxAxes + MaxExtruders
 
 constexpr size_t MaxHeatersPerTool = 20;			// Increased in 3.4 due to OEM requirement
 constexpr size_t MaxExtrudersPerTool = 10;			// Increased in 3.4 due to OEM requirement
 
 constexpr unsigned int MaxTriggers = 32;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
-constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
-#define SERIAL_MAIN_DEVICE SerialUSB
-#define SERIAL_AUX_DEVICE Serial
-#define SERIAL_AUX2_DEVICE Serial1
+constexpr size_t NumSerialChannels = 3;				// The number of serial IO channels not counting the WiFi serial connection (USB and two auxiliary UARTs)
+#define SERIAL_MAIN_DEVICE serialUSB
+#define SERIAL_AUX_DEVICE serialUart1
+#define SERIAL_AUX2_DEVICE serialUart2
 
 // Shared SPI (USART 1)
 constexpr Pin APIN_USART_SSPI_SCK = PortBPin(13);
@@ -140,6 +141,11 @@ constexpr Pin ActLedPin = PortBPin(7);										// activityLED
 constexpr bool DiagOnPolarity = false;
 constexpr bool ActOnPolarity = false;
 
+// MB6XD 1.01 USB control
+constexpr Pin UsbPowerSwitchPin = PortCPin(6);
+constexpr Pin UsbModePin = PortCPin(14);
+constexpr Pin UsbDetectPin = PortCPin(19);
+
 // SD cards
 constexpr size_t NumSdCards = 2;
 constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(29), PortDPin(18) };
@@ -190,7 +196,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs2,serial3.tx"	},	// PA06 SPI_CS2 and Serial3 TX
 	{ TcOutput::none,	PwmOutput::pwm0h3_b,AdcInput::none,		PinCapability::wpwm,	"laser,vfd"				},	// PA07 VFD
 	{ TcOutput::none,	PwmOutput::pwm1h3_a,AdcInput::none,		PinCapability::wpwm,	"out5"					},	// PA08 OUT5
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PA09 driver 2 enable
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PA09 driver 2 enable on version 0.1 boards
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"pson"					},	// PA10 PS_ON
 	{ TcOutput::none,	PwmOutput::pwm0h0_b,AdcInput::none,		PinCapability::wpwm,	"out2"					},	// PA11 OUT2
 	{ TcOutput::none,	PwmOutput::pwm1h0_c,AdcInput::none,		PinCapability::wpwm,	"out8"					},	// PA12 OUT8
@@ -255,7 +261,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC03 driver 4 dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC04 driver 4 step
 	{ TcOutput::tioa6,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out4"					},	// PC05 OUT4
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC06 EthernetPhyInterrupt
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC06 EthernetPhyInterrupt (up to v1.0), USB_PWR_EN (v1.1)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out3.tach"				},	// PC07 OUT3_TACH
 	{ TcOutput::tioa7,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out7"					},	// PC08 OUT7
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC09 driver 5 step
@@ -263,13 +269,13 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::tioa8,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out6"					},	// PC11 OUT6
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC12 CAN1_RX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_1,	PinCapability::none,	nullptr					},	// PC13 VssaSensePin
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC14 NC
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC14 NC (up to v1.0), USB_STATE (v1.1)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_2,	PinCapability::ainr,	"temp0"					},	// PC15 thermistor 0
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC16 driver 1 step
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"driver1.err"			},	// PC17 driver 1 err
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC18 driver 0 step
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC19 ETH_LED_Y
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC20 unused
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC19 ETH_LED_Y (up to v1.0), USB_UFP_DETECT (v1.1)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC20 driver 2 enable on V1.0 boards
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC21 UsbVBusPin
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs4"				},	// PC22 SPI CS4
 	{ TcOutput::tioa3,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"io7.out,!io7.out.iso"	},	// PC23 IO7_OUT

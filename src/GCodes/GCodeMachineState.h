@@ -74,6 +74,8 @@ enum class GCodeState : uint8_t
 	flashing2,
 
 	stopping,
+	stoppingFromCode,
+	stopped,
 
 	// These next 9 must be contiguous
 	gridProbing1,
@@ -211,7 +213,7 @@ public:
 	ResourceBitmap lockedResources;
 	BlockState blockStates[MaxBlockIndent];
 	uint32_t lineNumber;
-
+	uint32_t msgBoxSeq;							// the sequence number of the message box that needs to be acknowledged, if waitingForAcknowledgement is true
 	uint32_t
 		selectedPlane : 2,
 		drivesRelative : 1,
@@ -243,20 +245,20 @@ public:
 	Compatibility compatibility;				// which firmware we are emulating
 
 #if SUPPORT_ASYNC_MOVES
-	void SetCommandedQueue(size_t qn) noexcept { commandedQueueNumber = qn; }
-	size_t GetCommandedQueue() const noexcept { return commandedQueueNumber; }
+	void SetCommandedQueue(MovementSystemNumber qn) noexcept { commandedQueueNumber = qn; }
+	MovementSystemNumber GetCommandedQueue() const noexcept { return commandedQueueNumber; }
 	bool Executing() const noexcept { return executeAllCommands || commandedQueueNumber == ownQueueNumber; }
 	void ExecuteAll() noexcept { executeAllCommands = true; }
-	void ExecuteOnly(size_t qn) noexcept { ownQueueNumber = qn; executeAllCommands = false; }
-	size_t GetOwnQueue() const noexcept { return ownQueueNumber; }
+	void ExecuteOnly(MovementSystemNumber qn) noexcept { ownQueueNumber = qn; executeAllCommands = false; }
+	MovementSystemNumber GetOwnQueue() const noexcept { return ownQueueNumber; }
 	bool ExecutingAll() const noexcept { return executeAllCommands; }
-	size_t GetQueueNumberToLock() const noexcept { return (executeAllCommands) ? commandedQueueNumber : ownQueueNumber; }
+	MovementSystemNumber GetQueueNumberToLock() const noexcept { return (executeAllCommands) ? commandedQueueNumber : ownQueueNumber; }
 #endif
 
 	bool DoingFile() const noexcept;
 	void CloseFile() noexcept;
 
-	void WaitForAcknowledgement() noexcept;
+	void WaitForAcknowledgement(uint32_t seq) noexcept;
 
 #if HAS_SBC_INTERFACE
 	void SetFileExecuting() noexcept;

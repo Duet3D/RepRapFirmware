@@ -127,7 +127,7 @@ void Display::Spin() noexcept
 		}
 #endif
 		{
-			ReadLockedPointer<const MessageBox> mbox = reprap.GetCurrentMessageBox();
+			ReadLockedPointer<const MessageBox> mbox = MessageBox::GetLockedCurrent();
 			if (mbox.IsNotNull() && mbox->IsLegacyType())
 			{
 				if (!mboxActive || mboxSeq != mbox->GetSeq())

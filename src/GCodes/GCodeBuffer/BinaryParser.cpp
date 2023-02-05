@@ -43,12 +43,33 @@ void BinaryParser::DecodeCommand() noexcept
 {
 	if (gb.bufferState == GCodeBufferState::parsingGCode)
 	{
-		if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()))
+		if (reprap.GetDebugFlags(Module::Gcodes).IsBitSet(gb.GetChannel().ToBaseType()))
 		{
 			String<MaxCodeBufferSize> buf;
 			AppendFullCommand(buf.GetRef());
 			debugPrintf("%s: %s\n", gb.GetIdentity(), buf.c_str());
 		}
+
+		// Initialise the parameter letters bitmap
+		parametersPresent.Clear();
+		if (bufferLength != 0 && header->numParameters != 0)
+		{
+			const char *parameterStart = reinterpret_cast<const char*>(gb.buffer) + sizeof(CodeHeader);
+			for (size_t i = 0; i < header->numParameters; i++)
+			{
+				const CodeParameter *param = reinterpret_cast<const CodeParameter*>(parameterStart + i * sizeof(CodeParameter));
+				const char paramLetter = param->letter;
+				if (paramLetter >= 'A' && paramLetter <= 'Z')
+				{
+					parametersPresent.SetBit(paramLetter - 'A');
+				}
+				else if (paramLetter >= 'a' && paramLetter <= HighestAxisLetter)
+				{
+					parametersPresent.SetBit(paramLetter - ('a' - 26));
+				}
+			}
+		}
+
 		gb.bufferState = GCodeBufferState::executing;
 	}
 }
@@ -82,25 +103,6 @@ bool BinaryParser::Seen(char c) noexcept
 			else if (param->type == DataType::String || param->type == DataType::Expression)
 			{
 				seenParameterValue += AddPadding(param->intValue);
-			}
-		}
-	}
-	return false;
-}
-
-// Return true if any of the parameter letters in the bitmap were seen
-bool BinaryParser::SeenAny(Bitmap<uint32_t> bm) const noexcept
-{
-	if (bufferLength != 0 && header->numParameters != 0)
-	{
-		const char *parameterStart = reinterpret_cast<const char*>(gb.buffer) + sizeof(CodeHeader);
-		for (size_t i = 0; i < header->numParameters; i++)
-		{
-			const CodeParameter *param = reinterpret_cast<const CodeParameter*>(parameterStart + i * sizeof(CodeParameter));
-			const char paramLetter = param->letter;
-			if (paramLetter >= 'A' && paramLetter <= 'Z' && bm.IsBitSet(paramLetter - 'A'))
-			{
-				return true;
 			}
 		}
 	}
@@ -170,6 +172,8 @@ float BinaryParser::GetFValue() THROWS(GCodeException)
 			parser.CheckForExtraCharacters();
 		}
 		break;
+	case DataType::Null:
+		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 	default:
 		value = 0.0;
 		break;
@@ -205,6 +209,8 @@ int32_t BinaryParser::GetIValue() THROWS(GCodeException)
 			parser.CheckForExtraCharacters();
 		}
 		break;
+	case DataType::Null:
+		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 	default:
 		value = 0;
 		break;
@@ -240,6 +246,8 @@ uint32_t BinaryParser::GetUIValue() THROWS(GCodeException)
 			parser.CheckForExtraCharacters();
 		}
 		break;
+	case DataType::Null:
+		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 	default:
 		value = 0;
 		break;
@@ -312,6 +320,9 @@ DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 			SetDriverIdFromFloat(value, fval);
 		}
 		break;
+
+	case DataType::Null:
+		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 
 	default:
 		break;
@@ -461,6 +472,9 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty
 		}
 		break;
 
+	case DataType::Null:
+		throw ConstructParseException("expected a string expression");
+
 	default:
 		str.Clear();
 		break;
@@ -564,6 +578,7 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 		}
 		break;
 
+	case DataType::Null:
 	default:
 		length = 0;
 		return;
@@ -695,6 +710,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length) THROWS
 		lastIndex = seenParameter->intValue - 1;
 		break;
 
+	case DataType::Null:
 	default:
 		length = 0;
 		return;
@@ -832,7 +848,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 				break;
 			}
 			case DataType::Null:
-				s.cat("null");
+				s.cat(param->letter);
 				break;
 			}
 		}

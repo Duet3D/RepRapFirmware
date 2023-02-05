@@ -44,7 +44,7 @@ namespace CanInterface
 
 	CanRequestId AllocateRequestId(CanAddress destination, CanMessageBuffer *buf) noexcept;
 	GCodeResult SendRequestAndGetStandardReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra = nullptr) noexcept;
-	GCodeResult SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra, CanMessageType replyType, function_ref<void(const CanMessageBuffer*) /*noexcept*/> callback) noexcept;
+	GCodeResult SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra, CanMessageType replyType, function_ref_noexcept<void(const CanMessageBuffer*) noexcept> callback) noexcept;
 	void SendResponseNoFree(CanMessageBuffer *buf) noexcept;
 	void SendBroadcastNoFree(CanMessageBuffer *buf) noexcept;
 	void SendMessageNoReplyNoFree(CanMessageBuffer *buf) noexcept;

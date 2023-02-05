@@ -15,7 +15,7 @@
 class ThermocoupleSensor31856 : public SpiTemperatureSensor
 {
 public:
-	ThermocoupleSensor31856(unsigned int sensorNum) noexcept;
+	explicit ThermocoupleSensor31856(unsigned int sensorNum) noexcept;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -23,9 +23,9 @@ public:
 #endif
 
 	void Poll() noexcept override;
-	const char *GetShortSensorType() const noexcept override { return TypeName; }
+	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 
-	static constexpr const char *TypeName = "thermocouplemax31856";
+	static constexpr const char *_ecv_array TypeName = "thermocouplemax31856";
 
 private:
 	TemperatureError TryInitThermocouple() const noexcept;

@@ -151,7 +151,7 @@ void CoreKinematics::Recalc() noexcept
 		}
 	}
 
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		PrintMatrix("Inverse", inverseMatrix);
 		PrintMatrix("Forward", forwardMatrix);
@@ -446,7 +446,7 @@ void CoreKinematics::LimitSpeedAndAcceleration(DDA& dda, const float* normalised
 		const float mm = fabsf(motorMovements[motor]);
 		if (mm != 0.0)
 		{
-			dda.LimitSpeedAndAcceleration(reprap.GetPlatform().MaxFeedrate(motor)/mm, reprap.GetPlatform().Acceleration(motor)/mm);
+			dda.LimitSpeedAndAcceleration(reprap.GetPlatform().MaxFeedrate(motor)/mm, reprap.GetPlatform().NormalAcceleration(motor)/mm);
 		}
 	}
 }

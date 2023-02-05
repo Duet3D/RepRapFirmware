@@ -198,7 +198,7 @@ bool RotaryDeltaKinematics::CartesianToMotorSteps(const float machinePos[], cons
 	}
 
 	// TEMP DEBUG
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		debugPrintf("Transformed %.2f,%.2f,%.2f mm to %" PRIi32 ",%" PRIi32 ",%" PRIi32 " steps %s\n",
 			(double)machinePos[0], (double)machinePos[1], (double)machinePos[2],
@@ -293,7 +293,7 @@ floatc_t RotaryDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, 
 
 // Perform auto calibration. Caller already owns the movement lock.
 // Return true if an error occurred.
-bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
+bool RotaryDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	constexpr size_t NumDeltaFactors = 7;		// maximum number of rotary delta machine factors we can adjust
 
@@ -303,7 +303,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 		return true;
 	}
 
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());
@@ -358,7 +358,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			}
 		}
 
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			PrintMatrix("Derivative matrix", derivativeMatrix, numPoints, numFactors);
 		}
@@ -384,7 +384,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			normalMatrix(i, numFactors) = temp;
 		}
 
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			PrintMatrix("Normal matrix", normalMatrix, numFactors, numFactors + 1);
 		}
@@ -401,7 +401,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			solution[i] = normalMatrix(i, numFactors);
 		}
 
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			PrintMatrix("Solved matrix", normalMatrix, numFactors, numFactors + 1);
 			PrintVector("Solution", solution, numFactors);
@@ -431,7 +431,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 			{
 				heightAdjust[drive] = solution[drive];
 			}
-			reprap.GetMove().AdjustMotorPositions(heightAdjust, DELTA_AXES);
+			reprap.GetMove().AdjustMotorPositions(msNumber, heightAdjust, DELTA_AXES);
 		}
 
 		// Calculate the expected probe heights using the new parameters
@@ -454,7 +454,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 
 			finalDeviation.Set(finalSumOfSquares, finalSum, numPoints);
 
-			if (reprap.Debug(moduleMove))
+			if (reprap.Debug(Module::Move))
 			{
 				PrintVector("Expected probe error", expectedResiduals, numPoints);
 			}
@@ -471,7 +471,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
 
 	// Print out the calculation time
 	//debugPrintf("Time taken %dms\n", (reprap.GetPlatform()->GetInterruptClocks() - startTime) * 1000 / DDA::stepClockRate);
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());
@@ -790,7 +790,7 @@ void RotaryDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float
 	machinePos[Y_AXIS] = -(R * z + T)/P;
 	machinePos[Z_AXIS] = z;
 
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		debugPrintf("Trilaterated (%.2f, %.2f, %.2f)" DEGREE_SYMBOL " to X=%.2f Y=%.2f Z=%.2f\n",
 			(double)Ha, (double)Hb, (double)Hc,

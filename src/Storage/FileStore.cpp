@@ -73,7 +73,7 @@ bool FileStore::Open(const char *_ecv_array filePath, OpenMode mode, uint32_t pr
 
 		// We no longer report an error if opening a file in read mode fails unless debugging is enabled, because sometimes that is quite normal.
 		// It is up to the caller to report an error if necessary.
-		if (reprap.Debug(moduleStorage))
+		if (reprap.Debug(Module::Storage))
 		{
 			reprap.GetPlatform().MessageF(WarningMessage, "Failed to open %s to %sn", filePath, (writing) ? "write" : "read");
 		}
@@ -138,7 +138,7 @@ bool FileStore::Open(const char *_ecv_array filePath, OpenMode mode, uint32_t pr
 		{
 			// We no longer report an error if opening a file in read mode fails unless debugging is enabled, because sometimes that is quite normal.
 			// It is up to the caller to report an error if necessary.
-			if (reprap.Debug(moduleStorage))
+			if (reprap.Debug(Module::Storage))
 			{
 				reprap.GetPlatform().MessageF(WarningMessage, "Failed to open %s to %s, error code %d\n", filePath, (writing) ? "write" : "read", (int)openReturn);
 			}
@@ -168,7 +168,7 @@ bool FileStore::Open(const char *_ecv_array filePath, OpenMode mode, uint32_t pr
 	if (preAllocSize != 0 && (mode == OpenMode::write || mode == OpenMode::writeWithCrc))
 	{
 		const FRESULT expandReturn = f_expand(&file, preAllocSize, 1);		// try to pre-allocate contiguous space - it doesn't matter if it fails
-		if (reprap.Debug(moduleStorage))
+		if (reprap.Debug(Module::Storage))
 		{
 			debugPrintf("Preallocating %" PRIu32 " bytes returned %d\n", preAllocSize, (int)expandReturn);
 		}
@@ -224,12 +224,21 @@ bool FileStore::Close() noexcept
 			if (openCount > 1)
 			{
 				--openCount;
+				IrqRestore(flags);
 			}
 			else
 			{
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+				FileWriteBuffer *wb = nullptr;
+				std::swap(wb, writeBuffer);
+				IrqRestore(flags);
+				if (wb != nullptr)
+				{
+					MassStorage::ReleaseWriteBuffer(wb);
+				}
+#endif
 				usageMode = FileUseMode::free;
 			}
-			IrqRestore(flags);
 			return true;
 		}
 	}
@@ -542,7 +551,7 @@ bool FileStore::Store(const char *_ecv_array s, size_t len, size_t *bytesWritten
 #if HAS_SBC_INTERFACE
 	if (reprap.UsingSbcInterface())
 	{
-		bool ok = (len > 0) ? reprap.GetSbcInterface().WriteFile(handle, s, len) : true;
+		const bool ok = (len > 0) ? reprap.GetSbcInterface().WriteFile(handle, s, len) : true;
 		*bytesWritten = ok ? len : 0;
 		offset += len;
 		if (offset > length)
@@ -582,10 +591,10 @@ bool FileStore::Write(const char *_ecv_array s, size_t len) noexcept
 	switch (usageMode)
 	{
 	case FileUseMode::free:
+	case FileUseMode::readOnly:
 		REPORT_INTERNAL_ERROR;
 		return false;
 
-	case FileUseMode::readOnly:
 	case FileUseMode::readWrite:
 		{
 			size_t totalBytesWritten = 0;
@@ -603,7 +612,13 @@ bool FileStore::Write(const char *_ecv_array s, size_t len) noexcept
 					{
 						const size_t bytesToWrite = writeBuffer->BytesStored();
 						size_t bytesWritten;
+						// In SBC mode, if we have a timeout or a connection reset then during the following Store() call this file may be invalidated
 						writeOk = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
+						if (!writeOk)
+						{
+							break;
+						}
+
 						writeBuffer->DataTaken();
 
 						if (bytesToWrite != bytesWritten)
@@ -614,14 +629,15 @@ bool FileStore::Write(const char *_ecv_array s, size_t len) noexcept
 					}
 					totalBytesWritten += bytesStored;
 				}
-				while (writeOk && totalBytesWritten != len);
+				while (totalBytesWritten != len);
 			}
 
-			if (totalBytesWritten != len)
+			if (writeOk && totalBytesWritten == len)
 			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "Failed to write to file. Card may be full.\n");
+				return true;
 			}
-			return writeOk && (totalBytesWritten == len);
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to write to file. Card may be full.\n");
+			return false;
 		}
 
 	case FileUseMode::invalidated:
@@ -648,14 +664,19 @@ bool FileStore::Flush() noexcept
 			if (bytesToWrite != 0)
 			{
 				size_t bytesWritten;
-				bool writeOk = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
-				writeBuffer->DataTaken();
-
-				if (writeOk && (bytesToWrite != bytesWritten))
+				const bool writeOk = Store(writeBuffer->Data(), bytesToWrite, &bytesWritten);
+				// Don't call DataTaken if Store() returned false because the SBC task may have invalidated the file
+				if (writeOk)
 				{
-					reprap.GetPlatform().MessageF(ErrorMessage, "Failed to flush data to file. Card may be full.\n");
+					writeBuffer->DataTaken();
+					if (bytesWritten == bytesToWrite)
+					{
+						return true;
+					}
 				}
-				return writeOk && (bytesToWrite == bytesWritten);
+
+				reprap.GetPlatform().MessageF(ErrorMessage, "Failed to flush data to file. Card may be full.\n");
+				return false;
 			}
 		}
 #if HAS_SBC_INTERFACE
@@ -676,17 +697,11 @@ bool FileStore::Flush() noexcept
 
 #if HAS_SBC_INTERFACE			// these functions are only supported in SBC mode
 
-// Invalidate the file
+// Invalidate the file. Don't free the write buffer because another task may be using it.
 void FileStore::Invalidate() noexcept
 {
-	if (writeBuffer != nullptr)
-	{
-		MassStorage::ReleaseWriteBuffer(writeBuffer);
-		writeBuffer = nullptr;
-	}
-	closeRequested = false;
-	openCount = 0;
 	usageMode = FileUseMode::invalidated;
+	handle = noFileHandle;
 }
 
 #endif
@@ -694,23 +709,10 @@ void FileStore::Invalidate() noexcept
 #if HAS_MASS_STORAGE			// the remaining functions are only supported on local storage
 
 // Invalidate the file if it uses the specified FATFS object
-bool FileStore::Invalidate(const FATFS *fs, bool doClose) noexcept
+bool FileStore::Invalidate(const FATFS *fs) noexcept
 {
 	if (file.obj.fs == fs)
 	{
-		if (doClose)
-		{
-			(void)ForceClose();
-		}
-		else
-		{
-			file.obj.fs = nullptr;
-			if (writeBuffer != nullptr)
-			{
-				MassStorage::ReleaseWriteBuffer(writeBuffer);
-				writeBuffer = nullptr;
-			}
-		}
 		usageMode = FileUseMode::invalidated;
 		return true;
 	}

@@ -391,7 +391,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 							{
 								msg->whichSensors |= (uint64_t)1u << currentSensor->GetSensorNumber();
 								float temperature;
-								msg->temperatureReports[sensorsFound].errorCode = (uint8_t)currentSensor->GetLatestTemperature(temperature);
+								msg->temperatureReports[sensorsFound].errorCode = currentSensor->GetLatestTemperature(temperature).ToBaseType();
 								msg->temperatureReports[sensorsFound].SetTemperature(temperature);
 								++sensorsFound;
 								nextUnreportedSensor = sn + 1;

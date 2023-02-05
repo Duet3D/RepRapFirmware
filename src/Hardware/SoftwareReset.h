@@ -38,9 +38,11 @@ enum class SoftwareResetReason : uint16_t
 	unusedBit = 0x0200,				// spare bit
 	unused2 = 0x0400,				// spare bit
 	inAuxOutput = 0x0800,			// this bit is or'ed in if we were in aux output at the time
-	unused_was_inLwipSpin = 0x2000,	// no longer used
+	fromSbc = 0x2000 ,				// means the command came from the SBC interface
 	inUsbOutput = 0x4000,			// this bit is or'ed in if we were in USB output at the time
-	deliberate = 0x8000				// this but it or'ed in if we deliberately caused a fault
+	deliberate = 0x8000,			// this but it or'ed in if we deliberately caused a fault
+
+	userFromSbc = user | fromSbc
 };
 
 // These are the structures used to hold our non-volatile data.

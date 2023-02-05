@@ -79,9 +79,7 @@ void DDARing::Init2() noexcept
 		for (size_t i = 0; i < MaxAxesPlusExtruders; i++)
 		{
 			pos[i] = 0.0;
-			liveEndPoints[i] = 0;								// not actually right for a delta, but better than printing random values in response to M114
 		}
-		SetLiveCoordinates(pos);
 		SetPositions(pos);
 	}
 
@@ -121,7 +119,7 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 	gb.TryGetUIValue('R', gracePeriod, seen);
 	if (seen)
 	{
-		if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+		if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
 			return GCodeResult::notFinished;
 		}
@@ -177,7 +175,7 @@ void DDARing::RecycleDDAs() noexcept
 		// Check for step errors and record/print them if we have any, before we lose the DMs
 		if (checkPointer->HasStepError())
 		{
-			if (reprap.Debug(moduleMove))
+			if (reprap.Debug(Module::Move))
 			{
 				checkPointer->DebugPrintAll("rd");
 			}
@@ -272,7 +270,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 	if (simulationMode != SimulationMode::off && cdda != nullptr)
 	{
 		simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
-		if (simulationMode == SimulationMode::debug && reprap.Debug(moduleDda))
+		if (simulationMode == SimulationMode::debug && reprap.Debug(Module::Dda))
 		{
 			do
 			{
@@ -380,6 +378,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 				Interrupt(p);
 			}
 			SetBasePriority(0);
+			liveCoordinatesValid = false;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 			if (wakeLaser)
@@ -576,9 +575,6 @@ void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 void DDARing::CurrentMoveCompleted() noexcept
 {
 	DDA * const cdda = currentDda;					// capture volatile variable
-	// Save the current motor coordinates, and the machine Cartesian coordinates if known
-	liveCoordinatesValid = cdda->FetchEndPosition(const_cast<int32_t*>(liveEndPoints), const_cast<float *>(liveCoordinates));
-	liveCoordinatesChanged = true;
 
 #if SUPPORT_REMOTE_COMMANDS
 	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
@@ -586,6 +582,12 @@ void DDARing::CurrentMoveCompleted() noexcept
 		lastMoveStepsTaken[driver] = cdda->GetStepsTaken(driver);
 	}
 #endif
+
+	// Accumulate the extrusion from this move
+	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
+	{
+		liveCoordinates[drive] += currentDda->GetRawEndCoordinate(drive);
+	}
 
 	// Disable interrupts before we touch any extrusion accumulators until after we set currentDda to null, in case the filament monitor interrupt has higher priority than ours
 	{
@@ -646,7 +648,8 @@ void DDARing::GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMappi
 
 #if SUPPORT_ASYNC_MOVES
 
-// Return the machine coordinates of just some axes
+// Return the machine coordinates of just some axes in the last queued move.
+// On machines with nonlinear kinematics this is quite likely to return coordinates slightly different from the original ones.
 void DDARing::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) const noexcept
 {
 	DDA * const lastQueuedMove = addPointer->GetPrevious();
@@ -655,18 +658,23 @@ void DDARing::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) 
 
 #endif
 
-// These are the actual numbers we want in the positions, so don't transform them.
+// Set the initial machine coordinates for the next move to be added to the specified values, by setting the final coordinates of the last move in the queue
+// The last move in the queue must have already been set up by the Move process before this is called.
 void DDARing::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
 {
-	if (   getPointer == addPointer								// by itself this means the ring is empty or full
-		&& addPointer->GetState() == DDA::DDAState::empty
-	   )
+	AtomicCriticalSectionLocker lock;
+	liveCoordinatesValid = false;
+	addPointer->GetPrevious()->SetPositions(move);
+}
+
+// Reset the extruder positions. Should only be called when the DDA ring is empty.
+void DDARing::ResetExtruderPositions() noexcept
+{
+	AtomicCriticalSectionLocker lock;
+	liveCoordinatesValid = false;
+	for (size_t eDrive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); eDrive < MaxAxesPlusExtruders; eDrive++)
 	{
-		addPointer->GetPrevious()->SetPositions(move);
-	}
-	else
-	{
-		reprap.GetPlatform().Message(ErrorMessage, "SetPositions called when DDA ring not empty\n");
+		liveCoordinates[eDrive] = 0.0;
 	}
 }
 
@@ -681,22 +689,30 @@ void DDARing::AdjustMotorPositions(const float adjustment[], size_t numMotors) n
 	{
 		const int32_t ep = endCoordinates[drive] + lrintf(adjustment[drive] * driveStepsPerUnit[drive]);
 		lastQueuedMove->SetDriveCoordinate(ep, drive);
-		liveEndPoints[drive] = ep;
 	}
 
 	liveCoordinatesValid = false;		// force the live XYZ position to be recalculated
-	liveCoordinatesChanged = true;
 }
 
-// Fetch the current live XYZ and extruder coordinates if they have changed since this was lass called
-// Interrupts are assumed enabled on entry
-bool DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
+// Get the live motor positions
+void DDARing::GetCurrentMotorPositions(int32_t pos[MaxAxesPlusExtruders]) const noexcept
 {
-	if (!liveCoordinatesChanged)
+	AtomicCriticalSectionLocker lock;
+	const DDA *const cdda = currentDda;									// capture volatile variable
+	if (cdda == nullptr)
 	{
-		return false;
+		getPointer->GetPrevious()->FetchEndPoints(pos);
 	}
+	else
+	{
+		cdda->FetchCurrentPositions(pos);
+	}
+}
 
+// Fetch the current axis and extruder coordinates
+// Interrupts are assumed enabled on entry
+void DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
+{
 	// The live coordinates and live endpoints are modified by the ISR, so be careful to get a self-consistent set of them
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();		// do this before we disable interrupts
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();			// do this before we disable interrupts
@@ -705,55 +721,44 @@ bool DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 	{
 		// All coordinates are valid, so copy them across
 		memcpyf(m, const_cast<const float *>(liveCoordinates), MaxAxesPlusExtruders);
-		liveCoordinatesChanged = false;
 		IrqEnable();
 	}
 	else
 	{
-		// Only the extruder coordinates are valid, so we need to convert the motor endpoints to coordinates
-		memcpyf(m + numTotalAxes, const_cast<const float *>(liveCoordinates + numTotalAxes), MaxAxesPlusExtruders - numTotalAxes);
-		int32_t tempEndPoints[MaxAxes];
-		memcpyi32(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), ARRAY_SIZE(tempEndPoints));
+		// Get the positions of each motor
+		int32_t currentMotorPositions[MaxAxesPlusExtruders];
+		GetCurrentMotorPositions(currentMotorPositions);
+		const DDA * const cdda = currentDda;
 		IrqEnable();
 
-		reprap.GetMove().MotorStepsToCartesian(tempEndPoints, numVisibleAxes, numTotalAxes, m);		// this is slow, so do it with interrupts enabled
+		reprap.GetMove().MotorStepsToCartesian(currentMotorPositions, numVisibleAxes, numTotalAxes, m);		// this is slow, so do it with interrupts enabled
 
-		// If the ISR has not updated the endpoints, store the live coordinates back so that we don't need to do it again
-		IrqDisable();
-		if (memcmp(tempEndPoints, const_cast<const int32_t*>(liveEndPoints), sizeof(tempEndPoints)) == 0)
+		const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
+		if (cdda != nullptr)
 		{
-			memcpyf(const_cast<float *>(liveCoordinates), m, numVisibleAxes);
-			liveCoordinatesValid = true;
-			liveCoordinatesChanged = false;
+			// Add extrusion so far in the current move to the accumulated extrusion
+			for (size_t i = MaxAxesPlusExtruders - numExtruders; i < MaxAxesPlusExtruders; ++i)
+			{
+				m[i] = liveCoordinates[i] + currentMotorPositions[i] / reprap.GetPlatform().DriveStepsPerUnit(i);
+			}
 		}
-		IrqEnable();
-	}
-	return true;
-}
+		else
+		{
+			for (size_t i = MaxAxesPlusExtruders - numExtruders; i < MaxAxesPlusExtruders; ++i)
+			{
+				m[i] = liveCoordinates[i];
+			}
 
-// These are the actual numbers that we want to be the coordinates, so don't transform them.
-// The caller must make sure that no moves are in progress or pending when calling this
-void DDARing::SetLiveCoordinates(const float coords[MaxAxesPlusExtruders]) noexcept
-{
-	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
-	for (size_t drive = 0; drive < numAxes; drive++)
-	{
-		liveCoordinates[drive] = coords[drive];
+			// Optimisation: if no movement, save the positions for next time
+			IrqDisable();
+			if (currentDda == nullptr)
+			{
+				memcpyf(const_cast<float *>(liveCoordinates), m, numVisibleAxes);
+				liveCoordinatesValid = true;
+			}
+			IrqEnable();
+		}
 	}
-	liveCoordinatesValid = true;
-	liveCoordinatesChanged = true;
-	(void)reprap.GetMove().CartesianToMotorSteps(coords, const_cast<int32_t *>(liveEndPoints), true);
-}
-
-void DDARing::ResetExtruderPositions() noexcept
-{
-	IrqDisable();
-	for (size_t eDrive = reprap.GetGCodes().GetTotalAxes(); eDrive < MaxAxesPlusExtruders; eDrive++)
-	{
-		liveCoordinates[eDrive] = 0.0;
-	}
-	IrqEnable();
-	liveCoordinatesChanged = true;
 }
 
 float DDARing::GetRequestedSpeedMmPerSec() const noexcept
@@ -778,6 +783,12 @@ float DDARing::GetDecelerationMmPerSecSquared() const noexcept
 {
 	const DDA* const cdda = currentDda;					// capture volatile variable
 	return (cdda != nullptr) ? cdda->GetDecelerationMmPerSecSquared() : 0.0;
+}
+
+float DDARing::GetTotalExtrusionRate() const noexcept
+{
+	const DDA* const cdda = currentDda;					// capture volatile variable
+	return (cdda != nullptr) ? cdda->GetTotalExtrusionRate() : 0.0;
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
@@ -1007,23 +1018,6 @@ uint32_t DDARing::ManageLaserPower() const noexcept
 
 #if SUPPORT_REMOTE_COMMANDS
 
-# if USE_REMOTE_INPUT_SHAPING
-
-// Add a move from the ATE to the movement queue
-void DDARing::AddShapedMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
-{
-	if (addPointer->GetState() == DDA::empty)
-	{
-		if (addPointer->InitShapedFromRemote(msg))
-		{
-			addPointer = addPointer->GetNext();
-			scheduledMoves++;
-		}
-	}
-}
-
-# else
-
 // Add a move from the ATE to the movement queue
 void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
 {
@@ -1036,8 +1030,6 @@ void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
 		}
 	}
 }
-
-# endif
 
 void DDARing::StopDrivers(uint16_t whichDrives) noexcept
 {

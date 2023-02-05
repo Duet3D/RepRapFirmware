@@ -67,7 +67,7 @@ protected:
 	void EndCharacter() noexcept override final;
 
 	// Flag a single pixel dirty
-	void SetDirty(PixelNumber r, PixelNumber c) noexcept;
+	void SetPixelDirty(PixelNumber r, PixelNumber c) noexcept;
 
 	// Flag a rectangle dirty
 	void SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept;

@@ -765,7 +765,7 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 }
 
 // Send a request to an expansion board and append the response to 'reply'. The response may either be a standard reply or 'replyType'.
-GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra, CanMessageType replyType, function_ref<void(const CanMessageBuffer*) /*noexcept*/> callback) noexcept
+GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra, CanMessageType replyType, function_ref_noexcept<void(const CanMessageBuffer*) noexcept> callback) noexcept
 {
 	if (can0dev == nullptr)
 	{
@@ -794,7 +794,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 				break;
 			}
 
-			if (reprap.Debug(moduleCan))
+			if (reprap.Debug(Module::Can))
 			{
 				buf->DebugPrint("Rx1:");
 			}
@@ -906,7 +906,7 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 	{
 		if (can0dev->ReceiveMessage(RxBufferIndexRequest, TaskBase::TimeoutUnlimited, &buf))
 		{
-			if (reprap.Debug(moduleCan))
+			if (reprap.Debug(Module::Can))
 			{
 				buf.DebugPrint("Rx0:");
 			}
@@ -919,7 +919,7 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 // This one is used by ATE
 GCodeResult CanInterface::EnableRemoteDrivers(const CanDriversList& drivers, const StringRef& reply) noexcept
 {
-	return SetRemoteDriverStates(drivers, reply, DriverStateControl(DriverStateControl::driverActive));
+	return SetRemoteDriverStates(drivers, reply, DriverStateControl(DriverStateControl::driverActive, reprap.GetGCodes().GetMotorBrakeOffDelay()));
 }
 
 // This one is used by Prepare and by M17
@@ -932,7 +932,7 @@ void CanInterface::EnableRemoteDrivers(const CanDriversList& drivers) noexcept
 // This one is used by ATE
 GCodeResult CanInterface::DisableRemoteDrivers(const CanDriversList& drivers, const StringRef& reply) noexcept
 {
-	return SetRemoteDriverStates(drivers, reply, DriverStateControl(DriverStateControl::driverDisabled));
+	return SetRemoteDriverStates(drivers, reply, DriverStateControl(DriverStateControl::driverDisabled, reprap.GetGCodes().GetMotorBrakeOnDelay()));
 }
 
 // This one is used by Prepare
@@ -945,7 +945,7 @@ void CanInterface::DisableRemoteDrivers(const CanDriversList& drivers) noexcept
 void CanInterface::SetRemoteDriversIdle(const CanDriversList& drivers, float idleCurrentFactor) noexcept
 {
 	String<1> dummy;
-	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), DriverStateControl(DriverStateControl::driverIdle, lrintf(idleCurrentFactor * 100)));
+	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), DriverStateControl(DriverStateControl::driverIdle, (uint16_t)lrintf(idleCurrentFactor * 100) << 4));
 }
 
 GCodeResult CanInterface::SetRemoteStandstillCurrentPercent(const CanDriversData<float>& data, const StringRef& reply) noexcept
@@ -979,7 +979,7 @@ pre(driver.IsRemote())
 	case 0:
 		if (gb.SeenAny("RS"))
 		{
-			if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+			if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 			{
 				return GCodeResult::notFinished;
 			}
@@ -993,7 +993,7 @@ pre(driver.IsRemote())
 	case 1:
 		if (gb.SeenAny("STERID"))
 		{
-			if (!reprap.GetGCodes().LockMovementAndWaitForStandstill(gb))
+			if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 			{
 				return GCodeResult::notFinished;
 			}

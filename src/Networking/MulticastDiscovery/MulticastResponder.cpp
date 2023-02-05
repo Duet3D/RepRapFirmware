@@ -19,17 +19,21 @@
 extern "C" {
 #include "LwipEthernet/Lwip/src/include/lwip/udp.h"
 #include "LwipEthernet/Lwip/src/include/lwip/igmp.h"
-extern struct netif gs_net_if;
+extern netif gs_net_if;
 }
 
-static constexpr ip_addr_t ourGroup = IPADDR4_INIT_BYTES(239, 255, 2, 3);
+extern Mutex lwipMutex;
+
+static constexpr ip_addr_t ourGroupIpAddr = IPADDR4_INIT_BYTES(239, 255, 2, 3);
 
 static udp_pcb *ourPcb = nullptr;
 static pbuf * volatile receivedPbuf = nullptr;
+static pbuf *pbufToFree = nullptr;
 static volatile uint32_t receivedIpAddr;
 static volatile uint16_t receivedPort;
 static uint16_t lastMessageReceivedPort;
 static unsigned int messagesProcessed = 0;
+static unsigned int responsesSent = 0;
 static FGMCProtocol *fgmcHandler = nullptr;
 static uint32_t ticksToReboot = 0;
 static uint32_t whenRebootScheduled;
@@ -43,7 +47,7 @@ extern "C" void rcvFunc(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip
 	{
 		receivedIpAddr = addr->addr;
 		receivedPort = port;
-		receivedPbuf = p;
+		receivedPbuf = p;				// store this one last
 	}
 	else
 	{
@@ -84,16 +88,26 @@ void MulticastResponder::Spin() noexcept
 			debugPrintf("\n");
 #endif
 			receivedPbuf = nullptr;
-			fgmcHandler->handleStream(0, (uint8_t *)rxPbuf->payload, rxPbuf->len);
-			pbuf_free(rxPbuf);
+			pbufToFree = rxPbuf;
+
+			fgmcHandler->handleStream(0, (const uint8_t *)rxPbuf->payload, rxPbuf->len);
 			++messagesProcessed;
+
+			// If processing the message didn't free the pbuf, free it now
+			if (pbufToFree != nullptr)
+			{
+				MutexLocker lock(lwipMutex);
+				pbuf_free(pbufToFree);
+				pbufToFree = nullptr;
+			}
 		}
 	}
 }
 
 void MulticastResponder::Diagnostics(MessageType mtype) noexcept
 {
-	reprap.GetPlatform().MessageF(mtype, "=== Multicast handler ===\nResponder is %s, messages processed %u\n", (active) ? "active" : "inactive", messagesProcessed);
+	reprap.GetPlatform().MessageF(mtype, "=== Multicast handler ===\nResponder is %s, messages received %u, responses %u\n",
+									(active) ? "active" : "inactive", messagesProcessed, responsesSent);
 }
 
 void MulticastResponder::Start(TcpPort port) noexcept
@@ -106,20 +120,24 @@ void MulticastResponder::Start(TcpPort port) noexcept
 
 	if (ourPcb == nullptr)
 	{
+		MutexLocker lock(lwipMutex);
 		ourPcb = udp_new_ip_type(IPADDR_TYPE_ANY);
 		if (ourPcb == nullptr)
 		{
+			lock.Release();
 			reprap.GetPlatform().Message(ErrorMessage, "unable to allocate a pcb\n");
 		}
 		else
 		{
 			udp_set_multicast_ttl(ourPcb, 255);
-			if (igmp_joingroup_netif(&gs_net_if, ip_2_ip4(&ourGroup)) != ERR_OK)			// without this call, multicast packets to this IP address get discarded
+			if (igmp_joingroup_netif(&gs_net_if, ip_2_ip4(&ourGroupIpAddr)) != ERR_OK)			// without this call, multicast packets to this IP address get discarded
 			{
+				lock.Release();
 				reprap.GetPlatform().Message(ErrorMessage, "igmp_joingroup failed\n");
 			}
-			else if (udp_bind(ourPcb, &ourGroup, port) != ERR_OK)
+			else if (udp_bind(ourPcb, &ourGroupIpAddr, port) != ERR_OK)
 			{
+				lock.Release();
 				reprap.GetPlatform().Message(ErrorMessage, "udp_bind call failed\n");
 			}
 			else
@@ -129,13 +147,14 @@ void MulticastResponder::Start(TcpPort port) noexcept
 		}
 	}
 	active = true;
-	messagesProcessed = 0;
+	messagesProcessed = responsesSent = 0;
 }
 
 void MulticastResponder::Stop() noexcept
 {
 	if (ourPcb != nullptr)
 	{
+		MutexLocker lock(lwipMutex);
 		udp_remove(ourPcb);
 		ourPcb = nullptr;
 	}
@@ -153,20 +172,46 @@ void MulticastResponder::SendResponse(uint8_t *data, size_t length) noexcept
 	debugPrintf("\n");
 #endif
 
+	MutexLocker lock(lwipMutex);
+
+	// Release the pbuf that the message arrived in
+	if (pbufToFree != nullptr)
+	{
+		pbuf_free(pbufToFree);
+		pbufToFree = nullptr;
+	}
+
 	pbuf * const pb = pbuf_alloc(PBUF_TRANSPORT, length, PBUF_RAM);
-#if 0
-	if (pbuf_take(pb, data, length) != ERR_OK)
+	if (pb != nullptr)
 	{
-		debugPrintf("pbuf_take returned error\n");
+		if (pbuf_take(pb, data, length) == ERR_OK)
+		{
+			const err_t err = udp_sendto(ourPcb, pb, &ourGroupIpAddr, lastMessageReceivedPort);
+			if (err == ERR_OK)
+			{
+				++responsesSent;
+			}
+			else
+			{
+				if (reprap.Debug(Module::Network))
+				{
+					debugPrintf("UDP send failed, err=%u\n", err);
+				}
+			}
+		}
+		else
+		{
+			if (reprap.Debug(Module::Network))
+			{
+				debugPrintf("pbuf_take returned error, length %u\n", length);
+			}
+		}
+		pbuf_free(pb);
 	}
-	if (udp_sendto_if(ourPcb, pb, &ourGroup, lastMessageReceivedPort, &gs_net_if) != ERR_OK)
+	else if (reprap.Debug(Module::Network))
 	{
-		debugPrintf("UDP send failed\n");
+		debugPrintf("pbuf_alloc failed,length=%u\n", length);
 	}
-#else
-	(void)pbuf_take(pb, data, length);
-	(void)udp_sendto_if(ourPcb, pb, &ourGroup, lastMessageReceivedPort, &gs_net_if);
-#endif
 }
 
 // Schedule a reboot. We delay a little while to allow the response to be transmitted first.

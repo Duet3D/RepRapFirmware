@@ -164,9 +164,9 @@ void GCodeMachineState::CloseFile() noexcept
 	}
 }
 
-void GCodeMachineState::WaitForAcknowledgement() noexcept
+void GCodeMachineState::WaitForAcknowledgement(uint32_t seq) noexcept
 {
-	waitingForAcknowledgement = true;
+	msgBoxSeq = seq;
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	if (fileState.IsLive())
 	{
@@ -174,6 +174,7 @@ void GCodeMachineState::WaitForAcknowledgement() noexcept
 		CloseFile();
 	}
 #endif
+	waitingForAcknowledgement = true;
 }
 
 // This is called only after running config.g and when using M26/M23 to resume a print

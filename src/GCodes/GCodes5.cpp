@@ -57,13 +57,21 @@ void GCodes::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bo
 
 #if SUPPORT_ASYNC_MOVES
 
+// Handle M400
+GCodeResult GCodes::ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	const unsigned int param = (gb.Seen('P')) ? gb.GetLimitedUIValue('P', 2) : 0;
+	const bool finished = (param == 1) ? LockAllMovementSystemsAndWaitForStandstill(gb) : LockCurrentMovementSystemAndWaitForStandstill(gb);
+	return (finished) ? GCodeResult::ok : GCodeResult::notFinished;
+}
+
 // Handle M596
 GCodeResult GCodes::SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	if (gb.Seen('P'))
 	{
 		UnlockMovement(gb);							// in case we are in a macro - avoid unlocking the wrong movement system later
-		const unsigned int queueNumber = gb.GetLimitedUIValue('P', ARRAY_SIZE(moveStates));
+		const MovementSystemNumber queueNumber = gb.GetLimitedUIValue('P', ARRAY_SIZE(moveStates));
 		gb.SetActiveQueueNumber(queueNumber);
 		reprap.InputsUpdated();
 	}
@@ -110,7 +118,7 @@ GCodeResult GCodes::CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) 
 		{
 			std::swap(upperValue, lowerValue);
 			std::swap(upperAxisNumber, lowerAxisNumber);
-			collisionChecker.Set(lowerAxisNumber, upperAxisNumber, upperValue - lowerValue, GetMovementState(gb).coords);
+			collisionChecker.Set(lowerAxisNumber, upperAxisNumber, upperValue - lowerValue);
 		}
 	}
 	else if (lowerAxisNumber >= 0)
@@ -128,6 +136,27 @@ GCodeResult GCodes::CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) 
 		reply.copy("Collision avoidance is not active");
 	}
 	return GCodeResult::ok;
+}
+
+// Handle M598
+GCodeResult GCodes::SyncMovementSystems(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	return (DoSync(gb)) ? GCodeResult::ok : GCodeResult::notFinished;
+}
+
+#endif
+
+#if SUPPORT_KEEPOUT_ZONES
+
+// Handle M599
+GCodeResult GCodes::DefineKeepoutZone(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	// Get the optional P parameter. Currently it may only be zero.
+	uint32_t zoneNumber = 0;
+	bool seen = false;
+	gb.TryGetLimitedUIValue('P', zoneNumber, seen, 1);
+
+	return keepoutZone.Configure(gb, reply);
 }
 
 #endif
@@ -337,11 +366,11 @@ bool GCodes::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) con
 				written = true;
 			}
 			scratchString.catf("G10 P%d", t->Number());
-			for (size_t axis = 0; axis < MaxAxes; ++axis)
+			for (size_t axis = 0; axis < GetVisibleAxes(); ++axis)
 			{
 				if (forceWriteOffsets || axesProbed.IsBitSet(axis))
 				{
-					scratchString.catf(" %c%.2f", GetAxisLetters()[axis], (double)(t->GetOffset(axis)));
+					scratchString.catf(" %c%.3f", GetAxisLetters()[axis], (double)(t->GetOffset(axis)));
 				}
 			}
 			scratchString.cat('\n');

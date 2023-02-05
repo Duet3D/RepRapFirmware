@@ -44,19 +44,20 @@ constexpr ObjectModelTableEntry TemperatureSensor::objectModelTable[] =
 	// 0. TemperatureSensor members
 	{ "lastReading",	OBJECT_MODEL_FUNC(self->lastTemperature, 2), 	ObjectModelEntryFlags::live },
 	{ "name",			OBJECT_MODEL_FUNC(self->sensorName), 			ObjectModelEntryFlags::none },
+	{ "state",			OBJECT_MODEL_FUNC(self->lastResult.ToString()),	ObjectModelEntryFlags::none },
 	{ "type",			OBJECT_MODEL_FUNC(self->GetShortSensorType()), 	ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t TemperatureSensor::objectModelTableDescriptor[] = { 1, 3 };
+constexpr uint8_t TemperatureSensor::objectModelTableDescriptor[] = { 1, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(TemperatureSensor)
 
 #endif
 
 // Constructor
-TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *t) noexcept
+TemperatureSensor::TemperatureSensor(unsigned int sensorNum, const char *_ecv_array t) noexcept
 	: next(nullptr), sensorNumber(sensorNum), sensorType(t), sensorName(nullptr),
-	  lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::success) {}
+	  lastTemperature(0.0), whenLastRead(0), lastResult(TemperatureError::notReady), lastRealError(TemperatureError::ok) {}
 
 // Virtual destructor
 TemperatureSensor::~TemperatureSensor() noexcept
@@ -80,16 +81,16 @@ TemperatureError TemperatureSensor::GetLatestTemperature(float& t, uint8_t outpu
 }
 
 // Set the name - normally called only once, so we allow heap memory to be allocated
-void TemperatureSensor::SetSensorName(const char *newName) noexcept
+void TemperatureSensor::SetSensorName(const char *_ecv_array _ecv_null newName) noexcept
 {
 	// Change the heater name in a thread-safe manner
-	const char *oldName = sensorName;
+	const char *_ecv_array _ecv_null oldName = sensorName;
 	sensorName = nullptr;
 	delete oldName;
 
 	if (newName != nullptr && strlen(newName) != 0)
 	{
-		char * const temp = new char[strlen(newName) + 1];
+		char *_ecv_array const temp = new char[strlen(newName) + 1];
 		strcpy(temp, newName);
 		sensorName = temp;
 	}
@@ -129,7 +130,7 @@ void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 	{
 		reply.catf(" (%s)", sensorName);
 	}
-	reply.catf(" type %s, reading %.1f, last error: %s", sensorType, (double)lastTemperature, TemperatureErrorString(lastRealError));
+	reply.catf(" type %s, reading %.1f, last error: %s", sensorType, (double)lastTemperature, lastRealError.ToString());
 }
 
 // Configure then heater name, if it is provided
@@ -150,7 +151,7 @@ void TemperatureSensor::SetResult(float t, TemperatureError rslt) noexcept
 	lastResult = rslt;
 	lastTemperature = t;
 	whenLastRead = millis();
-	if (rslt != TemperatureError::success)
+	if (rslt != TemperatureError::ok)
 	{
 		lastRealError = rslt;
 	}
@@ -182,12 +183,12 @@ void TemperatureSensor::UpdateRemoteTemperature(CanAddress src, const CanSensorR
 
 // Factory method
 #if SUPPORT_CAN_EXPANSION
-TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, CanAddress boardAddress, const char *typeName, const StringRef& reply) noexcept
+TemperatureSensor *_ecv_from TemperatureSensor::Create(unsigned int sensorNum, CanAddress boardAddress, const char *_ecv_array typeName, const StringRef& reply) noexcept
 #else
-TemperatureSensor *TemperatureSensor::Create(unsigned int sensorNum, const char *typeName, const StringRef& reply) noexcept
+TemperatureSensor *_ecv_from TemperatureSensor::Create(unsigned int sensorNum, const char *_ecv_array typeName, const StringRef& reply) noexcept
 #endif
 {
-	TemperatureSensor *ts;
+	TemperatureSensor *_ecv_from ts;
 #if SUPPORT_CAN_EXPANSION
 	if (boardAddress != CanInterface::GetCanAddress())
 	{
@@ -350,7 +351,7 @@ const size_t NumTempTableEntries = sizeof(tempTable)/sizeof(tempTable[0]);
 	t = CelsiusInterval * (low - 1 + temperatureFraction) + CelsiusMin;
 
 	//debugPrintf("raw %f low %u temp %f\n", ohmsx100, low, t);
-	return TemperatureError::success;
+	return TemperatureError::ok;
 }
 
 // End

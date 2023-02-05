@@ -83,7 +83,7 @@ namespace DuetExpansion
 		for (;;)
 		{
 			taskWaiting = false;						// make sure we are not notified while we do the I2C transaction
-			TaskBase::ClearNotifyCount();
+			TaskBase::ClearCurrentTaskNotifyCount();
 			dueXnInputBits = dueXnExpander.digitalReadAll();
 			taskWaiting = true;
 			++dueXnReadCount;

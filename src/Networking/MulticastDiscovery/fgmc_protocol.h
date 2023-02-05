@@ -36,7 +36,7 @@ public:
 	/// \param nConn connection
 	/// \param inputBufferAddress fgmc request frame
 	/// \param rxLength receive frame length
-	void handleStream(unsigned int iFaceId, uint8_t* inputBufferAddress, uint32_t rxLength) noexcept;
+	void handleStream(unsigned int iFaceId, const uint8_t* inputBufferAddress, uint32_t rxLength) noexcept;
 
 private:
 	/// this functions sends fgmc frame

@@ -11,7 +11,12 @@
 #include <AnalogOut.h>
 #include <matrix/matrix.h>
 
-AsyncSerial Serial(UART2, UART2_IRQn, ID_UART2, 512, 512,
+#if CORE_USES_TINYUSB
+# include <TinyUsbInterface.h>
+# include <Platform/TaskPriorities.h>
+#endif
+
+AsyncSerial serialUart1(UART2, UART2_IRQn, ID_UART2, 512, 512,
 					[](AsyncSerial*) noexcept
 					{
 						SetPinFunction(APIN_Serial0_RXD, Serial0PinFunction);
@@ -24,7 +29,7 @@ AsyncSerial Serial(UART2, UART2_IRQn, ID_UART2, 512, 512,
 					}
 				);
 
-USARTClass Serial1(USART2, USART2_IRQn, ID_USART2, 512, 512,
+USARTClass serialUart2(USART2, USART2_IRQn, ID_USART2, 512, 512,
 					[](AsyncSerial*) noexcept
 					{
 						SetPinFunction(APIN_Serial1_RXD, Serial1PinFunction);
@@ -38,7 +43,7 @@ USARTClass Serial1(USART2, USART2_IRQn, ID_USART2, 512, 512,
 				);
 
 #if defined(DUET3_MB6HC)
-AsyncSerial SerialWiFi(UART4, UART4_IRQn, ID_UART4, 512, 512,
+AsyncSerial serialWiFi(UART4, UART4_IRQn, ID_UART4, 512, 512,
 					[](AsyncSerial*) noexcept
 					{
 						SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);
@@ -52,22 +57,20 @@ AsyncSerial SerialWiFi(UART4, UART4_IRQn, ID_UART4, 512, 512,
 				);
 #endif
 
-SerialCDC SerialUSB;
-
 void UART2_Handler(void) noexcept
 {
-	Serial.IrqHandler();
+	serialUart1.IrqHandler();
 }
 
 void USART2_Handler(void) noexcept
 {
-	Serial1.IrqHandler();
+	serialUart2.IrqHandler();
 }
 
 #if defined(DUET3_MB6HC)
 void UART4_Handler(void) noexcept
 {
-	SerialWiFi.IrqHandler();
+	serialWiFi.IrqHandler();
 }
 #endif
 
@@ -90,6 +93,15 @@ void EthernetInit() noexcept
 	}
 }
 
+#if CORE_USES_TINYUSB
+
+constexpr size_t UsbDeviceTaskStackWords = 200;
+static Task<UsbDeviceTaskStackWords> usbDeviceTask;
+
+#endif
+
+SerialCDC serialUSB;
+
 // Device initialisation
 void DeviceInit() noexcept
 {
@@ -108,10 +120,22 @@ void DeviceInit() noexcept
 	matrix_set_system_io(CCFG_SYSIO_SYSIO4 | CCFG_SYSIO_SYSIO5 | CCFG_SYSIO_SYSIO6 | CCFG_SYSIO_SYSIO7);
 # endif
 #endif
+
+#if CORE_USES_TINYUSB
+	CoreUsbInit(NvicPriorityUSB);
+	usbDeviceTask.Create(CoreUsbDeviceTask, "USBD", nullptr, TaskPriority::UsbPriority);
+#endif
 }
 
 void StopAnalogTask() noexcept
 {
+}
+
+void StopUsbTask() noexcept
+{
+#if CORE_USES_TINYUSB
+	usbDeviceTask.TerminateAndUnlink();
+#endif
 }
 
 // End

@@ -76,10 +76,60 @@ constexpr size_t ResumeObjectRestorePointNumber = NumVisibleRestorePoints + 1;
 
 // Details of a move that are needed only by GCodes
 // CAUTION: segmentsLeft should ONLY be changed from 0 to not 0 by calling NewMoveAvailable()!
-struct MovementState : public RawMove
+class MovementState : public RawMove
 {
+public:
+
+#if SUPPORT_ASYNC_MOVES
+	static void GlobalInit(size_t numVisibleAxes) noexcept;
+	static const float *GetLastKnownMachinePositions() noexcept { return lastKnownMachinePositions; }
+	static AxesBitmap GetAxesAndExtrudersMoved() noexcept { return axesAndExtrudersMoved; }
+
+	AxesBitmap GetAxesAndExtrudersOwned() const noexcept { return axesAndExtrudersOwned; }	// Get the axes and extruders that this movement system owns
+	ParameterLettersBitmap GetOwnedAxisLetters() const noexcept { return ownedAxisLetters; } // Get the letters denoting axes that this movement system owns
+	AxesBitmap AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept;	// try to allocate the requested axes, if we can't then return the axes we can't allocate
+	void ReleaseAllOwnedAxesAndExtruders() noexcept;
+	void ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept;
+	void ReleaseAxisLetter(char letter) noexcept;											// stop claiming that we own an axis letter (if we do) but don't release the associated axis
+	void SaveOwnAxisCoordinates() noexcept;													// fetch and save the coordinates of axes we own to lastKnownMachinePositions
+	void OwnedAxisCoordinatesUpdated(AxesBitmap axesIncluded) noexcept;						// update changed coordinates of some owned axes - called after G92
+	void OwnedAxisCoordinateUpdated(size_t axis) noexcept;									// update the machine coordinate of an axis we own - called after Z probing
+#endif
+
+	MovementSystemNumber GetMsNumber() const noexcept { return msNumber; }
+	float GetProportionDone() const noexcept;												// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
+	void Init(MovementSystemNumber p_msNumber) noexcept;
+	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;			// change the extrusion factor of an extruder
+	const RestorePoint& GetRestorePoint(size_t n) const pre(n < NumTotalRestorePoints) { return restorePoints[n]; }
+	void ClearMove() noexcept;
+	void SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
+		pre(restorePointNumber < NumTotalRestorePoints);
+
+	// Tool management
+	void SelectTool(int toolNumber, bool simulating) noexcept;
+	ReadLockedPointer<Tool> GetLockedCurrentTool() const noexcept;
+	ReadLockedPointer<Tool> GetLockedCurrentOrDefaultTool() const noexcept;
+	int GetCurrentToolNumber() const noexcept;
+	void SetPreviousToolNumber() noexcept;
+	AxesBitmap GetCurrentXAxes() const noexcept;											// Get the current axes used as X axes
+	AxesBitmap GetCurrentYAxes() const noexcept;											// Get the current axes used as Y axes
+	AxesBitmap GetCurrentAxisMapping(unsigned int axis) const noexcept;
+	float GetCurrentToolOffset(size_t axis) const noexcept;									// Get an axis offset of the current tool
+
+	// Object cancellation support
+	void InitObjectCancellation() noexcept;
+	bool IsCurrentObjectCancelled() const noexcept { return currentObjectCancelled; }
+	bool IsFirstMoveSincePrintingResumed() const noexcept { return printingJustResumed; }
+	void DoneMoveSincePrintingResumed() noexcept { printingJustResumed = false; }
+	void StopPrinting(GCodeBuffer& gb) noexcept;
+	void ResumePrinting(GCodeBuffer& gb) noexcept;
+
+	float LiveCoordinate(unsigned int axisOrExtruder) const noexcept;
+
+	void Diagnostics(MessageType mtype) noexcept;
+
+	// These variables are currently all public, but we ought to make most of them private
 	Tool *currentTool;												// the current tool of this movement system
-	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync
 
 	// The current user position now holds the requested user position after applying workplace coordinate offsets.
 	// So we must subtract the workplace coordinate offsets when we want to display them.
@@ -116,6 +166,9 @@ struct MovementState : public RawMove
 	float restartInitialUserC0;										// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
 	float restartInitialUserC1;										// if the print was paused during an arc move, the user Y coordinate at the start of that move (from M26)
 
+	mutable float latestLiveCoordinates[MaxAxesPlusExtruders];		// the most recent set of live coordinates that we fetched
+	mutable uint32_t latestLiveCoordinatesFetchedAt = 0;			// when we fetched the live coordinates
+
 	RestorePoint restorePoints[NumTotalRestorePoints];
 	RestorePoint& pauseRestorePoint = restorePoints[PauseRestorePointNumber];				// The position and feed rate when we paused the print
 	RestorePoint& toolChangeRestorePoint = restorePoints[ToolChangeRestorePointNumber];		// The position and feed rate when we freed a tool
@@ -141,37 +194,25 @@ struct MovementState : public RawMove
 	bool currentObjectCancelled;									// true if the current object should not be printed
 	bool printingJustResumed;										// true if we have just restarted printing
 
-	float GetProportionDone() const noexcept;						// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
-	void Reset() noexcept;
-	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;	// change the extrusion factor of an extruder
-	const RestorePoint& GetRestorePoint(size_t n) const pre(n < NumTotalRestorePoints) { return restorePoints[n]; }
-	void ClearMove() noexcept;
-	void SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
-		pre(restorePointNumber < NumTotalRestorePoints);
+private:
+	MovementSystemNumber msNumber;
 
-	// Tool management
-	void SelectTool(int toolNumber, bool simulating) noexcept;
-	ReadLockedPointer<Tool> GetLockedCurrentTool() const noexcept;
-	ReadLockedPointer<Tool> GetLockedCurrentOrDefaultTool() const noexcept;
-	int GetCurrentToolNumber() const noexcept;
-	void SetPreviousToolNumber() noexcept;
-	AxesBitmap GetCurrentXAxes() const noexcept;											// Get the current axes used as X axes
-	AxesBitmap GetCurrentYAxes() const noexcept;											// Get the current axes used as Y axes
-	AxesBitmap GetCurrentAxisMapping(unsigned int axis) const noexcept;
-	float GetCurrentToolOffset(size_t axis) const noexcept;									// Get an axis offset of the current tool
+#if SUPPORT_ASYNC_MOVES
+	AxesBitmap axesAndExtrudersOwned;								// axes and extruders that this movement system has moved since the last sync
+	ParameterLettersBitmap ownedAxisLetters;						// cache of letters denoting user axes for which the corresponding machine axes for the current tool are definitely owned
 
-	// Object cancellation support
-	void InitObjectCancellation() noexcept;
-	bool IsCurrentObjectCancelled() const noexcept { return currentObjectCancelled; }
-	bool IsFirstMoveSincePrintingResumed() const noexcept { return printingJustResumed; }
-	void DoneMoveSincePrintingResumed() noexcept { printingJustResumed = false; }
-	void StopPrinting(GCodeBuffer& gb) noexcept;
-	void ResumePrinting(GCodeBuffer& gb) noexcept;
-
-	void Diagnostics(MessageType mtype, unsigned int moveSystemNumber) noexcept;
+	static AxesBitmap axesAndExtrudersMoved;						// axes and extruders that are owned by any movement system
+	static float lastKnownMachinePositions[MaxAxesPlusExtruders];	// the last stored machine position of the axes
+#endif
 };
 
 #if SUPPORT_ASYNC_MOVES
+
+// Stop claiming that we own an axis letter (if we do) but don't release the associated axis
+inline void MovementState::ReleaseAxisLetter(char letter) noexcept
+{
+	ownedAxisLetters.ClearBit(ParameterLetterToBitNumber(letter));
+}
 
 struct AsyncMove
 {

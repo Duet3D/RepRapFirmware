@@ -11,6 +11,8 @@
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <Tools/Tool.h>
+#include <Movement/Move.h>
+#include <Movement/Kinematics/Kinematics.h>
 
 // Set up some default values in the move buffer for special moves, e.g. for Z probing and firmware retraction
 void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
@@ -35,23 +37,48 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 	}
 }
 
+#if SUPPORT_ASYNC_MOVES
+
+AxesBitmap MovementState::axesAndExtrudersMoved;						// axes and extruders that are owned by any movement system
+float MovementState::lastKnownMachinePositions[MaxAxesPlusExtruders];	// the last stored machine position of the axes
+
+/*static*/ void MovementState::GlobalInit(size_t numVisibleAxes) noexcept
+{
+	axesAndExtrudersMoved.Clear();
+	reprap.GetMove().GetKinematics().GetAssumedInitialPosition(numVisibleAxes, lastKnownMachinePositions);
+	for (size_t i = numVisibleAxes; i < MaxAxesPlusExtruders; ++i)
+	{
+		lastKnownMachinePositions[i] = 0.0;
+	}
+}
+
+#endif
+
 float MovementState::GetProportionDone() const noexcept
 {
 	return (float)(totalSegments - segmentsLeft)/(float)totalSegments;
 }
 
-void MovementState::Reset() noexcept
+// Initialise this MovementState. If SUPPORT_ASYNC_MOVES is set then must call MovementState::GlobalInit before calling this to initialise lastKnownMachinePositions.
+void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 {
+	msNumber = p_msNumber;
 	ClearMove();
 	filePos = noFilePosition;
 	codeQueue->Clear();
 	currentCoordinateSystem = 0;
 	pausedInMacro = false;
 
+#if SUPPORT_ASYNC_MOVES
+	memcpyf(coords, lastKnownMachinePositions, MaxAxesPlusExtruders);
+	axesAndExtrudersOwned.Clear();
+	ownedAxisLetters.Clear();
+#else
 	for (float& f : coords)
 	{
 		f = 0.0;									// clear out all axis and extruder coordinates
 	}
+#endif
 
 	maxPrintingAcceleration = ConvertAcceleration(DefaultPrintingAcceleration);
 	maxTravelAcceleration = ConvertAcceleration(DefaultTravelAcceleration);
@@ -102,20 +129,20 @@ void MovementState::ClearMove() noexcept
 	moveFractionToSkip = 0.0;
 }
 
-void MovementState::Diagnostics(MessageType mtype, unsigned int moveSystemNumber) noexcept
+void MovementState::Diagnostics(MessageType mtype) noexcept
 {
 	reprap.GetPlatform().MessageF(mtype, "Q%u segments left %u"
 #if SUPPORT_ASYNC_MOVES
-											", axes/extruders owned %03x"
+											", axes/extruders owned 0x%07x"
 #endif
-												"\n",
-													moveSystemNumber,
+											"\n",
+													GetMsNumber(),
 													segmentsLeft
 #if SUPPORT_ASYNC_MOVES
 													, (unsigned int)axesAndExtrudersOwned.GetRaw()
 #endif
 									);
-	codeQueue->Diagnostics(mtype, moveSystemNumber);
+	codeQueue->Diagnostics(mtype, GetMsNumber());
 }
 
 void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
@@ -216,7 +243,7 @@ void MovementState::ResumePrinting(GCodeBuffer& gb) noexcept
 	reprap.GetGCodes().SavePosition(gb, ResumeObjectRestorePointNumber);	// save the position we should be at for the start of the next move
 	if (GetCurrentToolNumber() != newToolNumber)							// if the wrong tool is loaded
 	{
-		reprap.GetGCodes().StartToolChange(gb, DefaultToolChangeParam);
+		reprap.GetGCodes().StartToolChange(gb, *this, DefaultToolChangeParam);
 	}
 }
 
@@ -226,7 +253,97 @@ void MovementState::InitObjectCancellation() noexcept
 	currentObjectCancelled = printingJustResumed = false;
 }
 
+// Return the current machine axis and extruder coordinates. They are needed only to service status requests from DWC, PanelDue, M114.
+// Transforming the machine motor coordinates to Cartesian coordinates is quite expensive, and a status request or object model request will call this for each axis.
+// So we cache the latest coordinates and only update them if it is some time since we last did
+// Interrupts are assumed enabled on entry
+float MovementState::LiveCoordinate(unsigned int axisOrExtruder) const noexcept
+{
+	if (millis() - latestLiveCoordinatesFetchedAt > 200)
+	{
+		reprap.GetMove().GetLiveCoordinates(msNumber, currentTool, latestLiveCoordinates);
+		latestLiveCoordinatesFetchedAt = millis();
+	}
+	return latestLiveCoordinates[axisOrExtruder];
+}
+
 #if SUPPORT_ASYNC_MOVES
+
+// Release all owned axes and extruders
+void MovementState::ReleaseAllOwnedAxesAndExtruders() noexcept
+{
+	ReleaseAxesAndExtruders(axesAndExtrudersOwned);
+}
+
+// Release some of the axes that we own. We must also clear the cache of owned axis letters.
+void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
+{
+	SaveOwnAxisCoordinates();										// save the positions of the axes we own before we release them, otherwise we will get the wrong positions when we allocate them again
+	axesAndExtrudersOwned &= ~axesToRelease;						// clear the axes/extruders we have been asked to release
+	axesAndExtrudersMoved.ClearBits(axesToRelease);					// remove them from the own axes/extruders
+	ownedAxisLetters.Clear();										// clear the cache of owned axis letters
+}
+
+// Allocate additional axes
+AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept
+{
+	// Sometimes we ask to allocate aces that we already own, e.g. when doing firmware retraction. Optimise this case.
+	const AxesBitmap axesNeeded = axes & ~axesAndExtrudersOwned;
+	if (axesNeeded.IsEmpty())
+	{
+		ownedAxisLetters |= axisLetters;
+		return axesNeeded;											// return empty bitmap
+	}
+
+	SaveOwnAxisCoordinates();										// we must do this before we allocate new axes to ourselves
+	const AxesBitmap unAvailable = axesNeeded & axesAndExtrudersMoved;
+	if (unAvailable.IsEmpty())
+	{
+		axesAndExtrudersMoved |= axes;
+		axesAndExtrudersOwned |= axes;
+		ownedAxisLetters |= axisLetters;
+	}
+	return unAvailable;
+}
+
+// Fetch and save the coordinates of axes we own to lastKnownMachinePositions, also copy them to our own coordinates in case we just did a homing move
+void MovementState::SaveOwnAxisCoordinates() noexcept
+{
+	Move& move = reprap.GetMove();
+	move.GetPartialMachinePosition(lastKnownMachinePositions, msNumber, axesAndExtrudersOwned);
+
+	// Only update our own position if something has changed, to avoid frequent inverse and forward transforms
+	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
+	if (!memeqf(coords, lastKnownMachinePositions, totalAxes))
+	{
+#if 0	//DEBUG
+		for (size_t i = 0; i < totalAxes; ++i)
+		{
+			if (coords[i] != lastKnownMachinePositions[i])
+			{
+				debugPrintf("Coord %u changed from %.4f to %.4f in ms %u\n", i, (double)coords[i], (double)lastKnownMachinePositions[i], GetMsNumber());
+			}
+		}
+#endif	//END DEBUGB
+		memcpyf(coords, lastKnownMachinePositions, totalAxes);
+		move.SetRawPosition(coords, msNumber);
+		move.InverseAxisAndBedTransform(coords, currentTool);
+	}
+}
+
+// Update changed coordinates of some owned axes - called after G92
+void MovementState::OwnedAxisCoordinatesUpdated(AxesBitmap axesIncluded) noexcept
+{
+	axesIncluded.Iterate([this](unsigned int bitNumber, unsigned int count)->void
+							{ lastKnownMachinePositions[bitNumber] = coords[bitNumber]; }
+						);
+}
+
+// Update the machine coordinate of an axis we own - called after Z probing
+void MovementState::OwnedAxisCoordinateUpdated(size_t axis) noexcept
+{
+	lastKnownMachinePositions[axis] = coords[axis];
+}
 
 void AsyncMove::SetDefaults() noexcept
 {

@@ -121,19 +121,23 @@ void ZProbe::SetDefaults() noexcept
 	sensor = -1;
 }
 
-float ZProbe::GetActualTriggerHeight() const noexcept
+// Prepare to use this Z probe
+void ZProbe::PrepareForUse(const bool probingAway) noexcept
 {
+	misc.parts.probingAway = probingAway;
+
+	// We can't read temperature sensors from within the step ISR so calculate the actual trigger height now
+	actualTriggerHeight = -offsets[Z_AXIS];
 	if (sensor >= 0)
 	{
-		TemperatureError err;
+		TemperatureError err(TemperatureError::unknownError);
 		const float temperature = reprap.GetHeat().GetSensorTemperature(sensor, err);
-		if (err == TemperatureError::success)
+		if (err == TemperatureError::ok)
 		{
 			const float dt = temperature - calibTemperature;
-			return (dt * temperatureCoefficients[0]) + (fsquare(dt) * temperatureCoefficients[1]) - offsets[Z_AXIS];
+			actualTriggerHeight += (dt * temperatureCoefficients[0]) + (fsquare(dt) * temperatureCoefficients[1]);
 		}
 	}
-	return -offsets[Z_AXIS];
 }
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -278,7 +282,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 			tc = 0.0;
 		}
 
-		TemperatureError terr;
+		TemperatureError terr(TemperatureError::unknownError);
 		const float currentTemperature = reprap.GetHeat().GetSensorTemperature(newSensor, terr);
 		if (terr == TemperatureError::unknownSensor)
 		{
@@ -295,7 +299,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 			{
 				newCalibTemperature = gb.GetFValue();
 			}
-			else if (terr == TemperatureError::success)
+			else if (terr == TemperatureError::ok)
 			{
 				newCalibTemperature = currentTemperature;
 			}

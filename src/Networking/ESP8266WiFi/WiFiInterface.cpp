@@ -89,7 +89,7 @@ constexpr IRQn ESP_SPI_IRQn = WiFiSpiSercomIRQn;
 #endif
 
 const uint32_t WiFiSlowResponseTimeoutMillis = 500;		// SPI timeout when when the ESP has to access the SPIFFS filesytem; highest measured is 234ms.
-const uint32_t WiFiFastResponseTimeoutMillis = 20;		// SPI timeout when when the ESP does not have to access SPIFFS filesystem.
+const uint32_t WiFiFastResponseTimeoutMillis = 100;		// SPI timeout when when the ESP does not have to access SPIFFS filesystem. 20ms is too short on Duet 2 with both FTP and Telnet enabled.
 const uint32_t WiFiWaitReadyMillis = 100;
 const uint32_t WiFiStartupMillis = 15000;				// Formatting the SPIFFS partition can take up to 10s.
 const uint32_t WiFiStableMillis = 100;
@@ -160,8 +160,8 @@ static bool spi_dma_check_rx_complete() noexcept;
 
 #ifdef DUET3MINI
 
-AsyncSerial *SerialWiFiDevice;
-# define SERIAL_WIFI_DEVICE	(*SerialWiFiDevice)
+AsyncSerial *serialWiFiDevice;
+# define SERIAL_WIFI_DEVICE	(*serialWiFiDevice)
 
 # if !defined(SERIAL_WIFI_ISR0) || !defined(SERIAL_WIFI_ISR2) || !defined(SERIAL_WIFI_ISR3)
 #  error SERIAL_WIFI_ISRn not defined
@@ -169,22 +169,22 @@ AsyncSerial *SerialWiFiDevice;
 
 void SERIAL_WIFI_ISR0() noexcept
 {
-	SerialWiFiDevice->Interrupt0();
+	serialWiFiDevice->Interrupt0();
 }
 
 void SERIAL_WIFI_ISR2() noexcept
 {
-	SerialWiFiDevice->Interrupt2();
+	serialWiFiDevice->Interrupt2();
 }
 
 void SERIAL_WIFI_ISR3() noexcept
 {
-	SerialWiFiDevice->Interrupt3();
+	serialWiFiDevice->Interrupt3();
 }
 
 #else
 
-#define SERIAL_WIFI_DEVICE	(SerialWiFi)
+#define SERIAL_WIFI_DEVICE	(serialWiFi)
 
 #endif
 
@@ -309,8 +309,8 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 	strcpy(wiFiServerVersion, "(unknown)");
 
 #ifdef DUET3MINI
-	SerialWiFiDevice = new AsyncSerial(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512, SerialWiFiPortInit, SerialWiFiPortDeinit);
-	SerialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUartRx, NvicPriorityWiFiUartTx);
+	serialWiFiDevice = new AsyncSerial(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512, SerialWiFiPortInit, SerialWiFiPortDeinit);
+	serialWiFiDevice->setInterruptPriority(NvicPriorityWiFiUartRx, NvicPriorityWiFiUartTx);
 #else
 	SERIAL_WIFI_DEVICE.setInterruptPriority(NvicPriorityWiFiUart);
 #endif
@@ -792,7 +792,7 @@ void WiFiInterface::Spin() noexcept
 	case NetworkState::active:
 		if (espStatusChanged && digitalRead(EspDataReadyPin))
 		{
-			if (reprap.Debug(moduleNetwork))
+			if (reprap.Debug(Module::WiFi))
 			{
 				debugPrintf("ESP reported status change\n");
 			}
@@ -962,7 +962,7 @@ void WiFiInterface::Spin() noexcept
 	// Check for debug info received from the WiFi module
 	if (debugPrintPending)
 	{
-		if (reprap.Debug(moduleWiFi))
+		if (reprap.Debug(Module::WiFi))
 		{
 			debugMessageBuffer[debugMessageChars] = 0;
 			debugPrintf("WiFi: %s\n", debugMessageBuffer);
@@ -1908,7 +1908,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 {
 	if (GetState() == NetworkState::disabled)
 	{
-		if (reprap.Debug(moduleNetwork))
+		if (reprap.Debug(Module::WiFi))
 		{
 			debugPrintf("ResponseNetworkDisabled\n");
 		}
@@ -1919,7 +1919,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 
 	if (transferPending)
 	{
-		if (reprap.Debug(moduleNetwork))
+		if (reprap.Debug(Module::WiFi))
 		{
 			debugPrintf("ResponseBusy\n");
 		}
@@ -1934,7 +1934,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		{
 			if (millis() - now > WiFiWaitReadyMillis)
 			{
-				if (reprap.Debug(moduleNetwork))
+				if (reprap.Debug(Module::WiFi))
 				{
 					debugPrintf("ResponseBusy\n");
 				}
@@ -1996,7 +1996,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	{
 		if (!TaskBase::Take(timeout))
 		{
-			if (reprap.Debug(moduleNetwork))
+			if (reprap.Debug(Module::WiFi))
 			{
 				debugPrintf("ResponseTimeout, pending=%d\n", (int)transferPending);
 			}
@@ -2026,7 +2026,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	Cache::InvalidateAfterDMAReceive(&bufferIn->hdr, sizeof(bufferIn->hdr));
 	if (bufferIn->hdr.formatVersion != MyFormatVersion)
 	{
-		if (reprap.Debug(moduleNetwork))
+		if (reprap.Debug(Module::WiFi))
 		{
 			debugPrintf("bad format version %02x\n", bufferIn->hdr.formatVersion);
 		}
@@ -2049,7 +2049,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		memcpy(dataIn, bufferIn->data, sizeToCopy);
 	}
 
-	if (response < 0 && reprap.Debug(moduleNetwork))
+	if (response < 0 && reprap.Debug(Module::WiFi))
 	{
 		debugPrintf("Network command %d socket %u returned error: %s\n", (int)cmd, socketNum, TranslateWiFiResponse(response));
 	}

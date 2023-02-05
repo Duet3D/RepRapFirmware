@@ -15,13 +15,13 @@ struct GCodeFileInfo
 {
 	struct ThumbnailInfo
 	{
-		NamedEnum(Format, uint8_t, png, qoi, jpeg);
+		NamedEnum(ImageFormat, uint8_t, png, qoi, jpeg);
 		FilePosition offset;
 		uint32_t size;
 		uint16_t width, height;
-		Format format;
+		ImageFormat format;
 
-		ThumbnailInfo() : width(0), format(Format::png) { }
+		ThumbnailInfo() : width(0), format(ImageFormat::png) { }
 		bool IsValid() const { return width != 0; }
 		void Invalidate() { width = 0; }
 	};

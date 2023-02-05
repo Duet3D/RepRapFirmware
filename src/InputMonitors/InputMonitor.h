@@ -14,6 +14,7 @@
 
 #include <Hardware/IoPorts.h>
 #include <RTOSIface/RTOSIface.h>
+#include <General/FreelistManager.h>
 
 struct CanMessageCreateInputMonitor;
 struct CanMessageChangeInputMonitor;
@@ -23,6 +24,8 @@ class CanMessageBuffer;
 class InputMonitor
 {
 public:
+	DECLARE_FREELIST_NEW_DELETE(InputMonitor)
+
 	InputMonitor() noexcept { }
 
 	static void Init() noexcept;
@@ -47,8 +50,8 @@ private:
 	static ReadLockedPointer<InputMonitor> Find(uint16_t hndl) noexcept;
 
 	InputMonitor *next;
-	IoPort port;
 	uint32_t whenLastSent;
+	IoPort port;
 	uint16_t handle;
 	uint16_t minInterval;
 	uint16_t threshold;
@@ -57,7 +60,6 @@ private:
 	volatile bool sendDue;
 
 	static InputMonitor * volatile monitorsList;
-	static InputMonitor * volatile freeList;
 
 	static ReadWriteLock listLock;
 };

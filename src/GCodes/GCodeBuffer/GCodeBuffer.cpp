@@ -50,6 +50,12 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. inputs[] root
+	{ "active",
+#if SUPPORT_ASYNC_MOVES
+							OBJECT_MODEL_FUNC(self->Executing()),												ObjectModelEntryFlags::live },
+#else
+							OBJECT_MODEL_FUNC_NOSELF(true),														ObjectModelEntryFlags::none },
+#endif
 	{ "axesRelative",		OBJECT_MODEL_FUNC((bool)self->machineState->axesRelative),							ObjectModelEntryFlags::none },
 	{ "compatibility",		OBJECT_MODEL_FUNC(self->machineState->compatibility.ToString()),					ObjectModelEntryFlags::none },
 	{ "distanceUnit",		OBJECT_MODEL_FUNC(self->GetDistanceUnits()),										ObjectModelEntryFlags::none },
@@ -59,8 +65,11 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "inverseTimeMode",	OBJECT_MODEL_FUNC((bool)self->machineState->inverseTimeMode),						ObjectModelEntryFlags::none },
 	{ "lineNumber",			OBJECT_MODEL_FUNC((int32_t)self->GetLineNumber()),									ObjectModelEntryFlags::live },
 	{ "macroRestartable",	OBJECT_MODEL_FUNC((bool)self->machineState->macroRestartable),						ObjectModelEntryFlags::none },
+	{ "motionSystem",
 #if SUPPORT_ASYNC_MOVES
-	{ "motionSystem",		OBJECT_MODEL_FUNC((int32_t)self->GetActiveQueueNumber()),							ObjectModelEntryFlags::live },
+							OBJECT_MODEL_FUNC((int32_t)self->GetActiveQueueNumber()),							ObjectModelEntryFlags::live },
+#else
+							OBJECT_MODEL_FUNC_NOSELF((int32_t)0),												ObjectModelEntryFlags::none },
 #endif
 	{ "name",				OBJECT_MODEL_FUNC(self->codeChannel.ToString()),									ObjectModelEntryFlags::none },
 	{ "selectedPlane",		OBJECT_MODEL_FUNC((int32_t)self->machineState->selectedPlane),						ObjectModelEntryFlags::none },
@@ -69,7 +78,7 @@ constexpr ObjectModelTableEntry GCodeBuffer::objectModelTable[] =
 	{ "volumetric",			OBJECT_MODEL_FUNC((bool)self->machineState->volumetricExtrusion),					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 14 + SUPPORT_ASYNC_MOVES };
+constexpr uint8_t GCodeBuffer::objectModelTableDescriptor[] = { 1, 16 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GCodeBuffer)
 
@@ -94,9 +103,6 @@ const char *GCodeBuffer::GetStateText() const noexcept
 // Create a default GCodeBuffer
 GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c) noexcept
 	:
-#if SUPPORT_ASYNC_MOVES
-	  syncState(SyncState::running),
-#endif
 	  printFilePositionAtMacroStart(0),
 	  normalInput(normalIn),
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -151,6 +157,9 @@ void GCodeBuffer::Init() noexcept
 #endif
 	stringParser.Init();
 	timerRunning = false;
+#if SUPPORT_ASYNC_MOVES
+	syncState = SyncState::running;
+#endif
 }
 
 void GCodeBuffer::StartTimer() noexcept
@@ -237,6 +246,12 @@ void GCodeBuffer::Diagnostics(MessageType mtype) noexcept
 	{
 		scratchString.cat(", running macro");
 	}
+#if SUPPORT_ASYNC_MOVES
+	if (syncState != SyncState::running)
+	{
+		scratchString.catf(", sync state %u", (unsigned int)syncState);
+	}
+#endif
 	scratchString.cat('\n');
 	reprap.GetPlatform().Message(mtype, scratchString.c_str());
 }
@@ -339,7 +354,7 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 
 #if SUPPORT_ASYNC_MOVES
 
-// Determine whether the other input channel is at a strictly later point than we are
+// Determine whether this input channel is at a strictly later point than the other one
 bool GCodeBuffer::IsLaterThan(const GCodeBuffer& other) const noexcept
 {
 	unsigned int ourDepth = GetStackDepth();
@@ -357,22 +372,22 @@ bool GCodeBuffer::IsLaterThan(const GCodeBuffer& other) const noexcept
 		--otherDepth;
 	}
 
-	bool otherIsLater = false;
+	bool oursIsLater = false;
 	while (ourState != nullptr)
 	{
-		if (otherState->lineNumber > ourState->lineNumber)
+		if (ourState->lineNumber > otherState->lineNumber)
 		{
-			otherIsLater = true;
+			oursIsLater = true;
 		}
-		else if (otherState->lineNumber < ourState->lineNumber)
+		else if (ourState->lineNumber < otherState->lineNumber)
 		{
-			otherIsLater = false;
+			oursIsLater = false;
 		}
 		otherState = otherState->GetPrevious();
 		ourState = ourState->GetPrevious();
 	}
 
-	return otherIsLater;
+	return oursIsLater;
 }
 
 #endif
@@ -381,7 +396,7 @@ bool GCodeBuffer::IsLaterThan(const GCodeBuffer& other) const noexcept
 // If the command was or called a macro then there will be no command in the buffer, so we must return true for this case also.
 bool GCodeBuffer::IsLastCommand() const noexcept
 {
-	return 	IS_BINARY_OR((bufferState != GCodeBufferState::ready && bufferState != GCodeBufferState::executing) || stringParser.IsLastCommand());
+	return IS_BINARY_OR((bufferState != GCodeBufferState::ready && bufferState != GCodeBufferState::executing) || stringParser.IsLastCommand());
 }
 
 bool GCodeBuffer::ContainsExpression() const noexcept
@@ -395,10 +410,9 @@ bool GCodeBuffer::Seen(char c) noexcept
 	return PARSER_OPERATION(Seen(c));
 }
 
-// Return true if any of the parameter letters in the bitmap were seen
-bool GCodeBuffer::SeenAny(Bitmap<uint32_t> bm) const noexcept
+ParameterLettersBitmap GCodeBuffer::AllParameters() const noexcept
 {
-	return PARSER_OPERATION(SeenAny(bm));
+	return PARSER_OPERATION(AllParameters());
 }
 
 // Test for character present, throw error if not
@@ -860,6 +874,19 @@ GCodeMachineState& GCodeBuffer::CurrentFileMachineState() const noexcept
 	return *ms;
 }
 
+// Return true if all GCodes machine states on the stack are 'normal'
+bool GCodeBuffer::AllStatesNormal() const noexcept
+{
+	for (const GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+	{
+		if (ms->GetState() != GCodeState::normal)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 // Convert from inches to mm if necessary
 float GCodeBuffer::ConvertDistance(float distance) const noexcept
 {
@@ -1113,11 +1140,11 @@ void GCodeBuffer::MacroFileClosed() noexcept
 
 // Tell this input source that any message it sent and is waiting on has been acknowledged
 // Allow for the possibility that the source may have started running a macro since it started waiting
-void GCodeBuffer::MessageAcknowledged(bool cancelled, ExpressionValue rslt) noexcept
+void GCodeBuffer::MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionValue rslt) noexcept
 {
 	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
 	{
-		if (ms->waitingForAcknowledgement)
+		if (ms->waitingForAcknowledgement && (seq == ms->msgBoxSeq || seq == 0 || ms->msgBoxSeq == 0))
 		{
 			ms->waitingForAcknowledgement = false;
 			ms->messageAcknowledged = true;
@@ -1183,9 +1210,9 @@ void GCodeBuffer::SavePrintingFilePosition() noexcept
 	printFilePositionAtMacroStart = PARSER_OPERATION(GetFilePosition());
 }
 
-void GCodeBuffer::WaitForAcknowledgement() noexcept
+void GCodeBuffer::WaitForAcknowledgement(uint32_t seq) noexcept
 {
-	machineState->WaitForAcknowledgement();
+	machineState->WaitForAcknowledgement(seq);
 #if HAS_SBC_INTERFACE
 	if (reprap.UsingSbcInterface())
 	{

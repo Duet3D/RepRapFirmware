@@ -1,24 +1,24 @@
 #include "RepRap.h"
 
-#include "Movement/Move.h"
-#include "Movement/StepTimer.h"
-#include "FilamentMonitors/FilamentMonitor.h"
-#include "GCodes/GCodes.h"
-#include "Heating/Heat.h"
-#include "Heating/Sensors/TemperatureSensor.h"
-#include "Networking/Network.h"
+#include <Movement/Move.h>
+#include <Movement/StepTimer.h>
+#include <FilamentMonitors/FilamentMonitor.h>
+#include <GCodes/GCodes.h>
+#include <Heating/Heat.h>
+#include <Heating/Sensors/TemperatureSensor.h>
+#include <Networking/Network.h>
 #if SUPPORT_HTTP
-# include "Networking/HttpResponder.h"
+# include <Networking/HttpResponder.h>
 #endif
 #include "Platform.h"
-#include "Scanner.h"
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <PrintMonitor/PrintMonitor.h>
-#include "Tools/Tool.h"
-#include "Tools/Filament.h"
-#include "Endstops/ZProbe.h"
+#include <Tools/Tool.h>
+#include <Tools/Filament.h>
+#include <Endstops/ZProbe.h>
 #include "Tasks.h"
 #include <Cache.h>
-#include "Fans/FansManager.h"
+#include <Fans/FansManager.h>
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
 #include <Accelerometers/Accelerometers.h>
@@ -29,13 +29,13 @@
 #endif
 
 #if SUPPORT_TMC2660
-# include "Movement/StepperDrivers/TMC2660.h"
+# include <Movement/StepperDrivers/TMC2660.h>
 #endif
 #if SUPPORT_TMC22xx
-# include "Movement/StepperDrivers/TMC22xx.h"
+# include <Movement/StepperDrivers/TMC22xx.h>
 #endif
 #if SUPPORT_TMC51xx
-# include "Movement/StepperDrivers/TMC51xx.h"
+# include <Movement/StepperDrivers/TMC51xx.h>
 #endif
 
 #if SUPPORT_IOBITS
@@ -43,11 +43,11 @@
 #endif
 
 #if SUPPORT_DIRECT_LCD
-# include "Display/Display.h"
+# include <Display/Display.h>
 #endif
 
 #if HAS_SBC_INTERFACE
-# include "SBC/SbcInterface.h"
+# include <SBC/SbcInterface.h>
 #endif
 
 #ifdef DUET3_ATE
@@ -247,7 +247,7 @@ constexpr unsigned int StateSubTableNumber = 3;		// section number of 'state' in
 constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
-	// 0. MachineModel root
+	// 0. root
 	{ "boards",					OBJECT_MODEL_FUNC_ARRAY(0),												ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "directories",			OBJECT_MODEL_FUNC(self, 1),												ObjectModelEntryFlags::none },
@@ -261,9 +261,6 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "move",					OBJECT_MODEL_FUNC(self->move),											ObjectModelEntryFlags::live },
 	// Note, 'network' is needed even if there is no networking, because it contains the machine name
 	{ "network",				OBJECT_MODEL_FUNC(self->network),										ObjectModelEntryFlags::none },
-#if SUPPORT_SCANNER
-	{ "scanner",				OBJECT_MODEL_FUNC(self->scanner),										ObjectModelEntryFlags::none },
-#endif
 	{ "sensors",				OBJECT_MODEL_FUNC(&self->platform->GetEndstops()),						ObjectModelEntryFlags::live },
 	{ "seqs",					OBJECT_MODEL_FUNC(self, 5),												ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC_ARRAY(3),												ObjectModelEntryFlags::live },
@@ -271,7 +268,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "tools",					OBJECT_MODEL_FUNC_ARRAY(4),												ObjectModelEntryFlags::live },
 	{ "volumes",				OBJECT_MODEL_FUNC_ARRAY(5),												ObjectModelEntryFlags::none },
 
-	// 1. MachineModel.directories
+	// 1. directories
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "filaments",				OBJECT_MODEL_FUNC_NOSELF(FILAMENTS_DIRECTORY),							ObjectModelEntryFlags::verbose },
 	{ "firmware",				OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_DIRECTORY),							ObjectModelEntryFlags::verbose },
@@ -283,7 +280,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "web",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetWebDir()),						ObjectModelEntryFlags::verbose },
 #endif
 
-	// 2. MachineModel.limits
+	// 2. limits
 	{ "axes",					OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxAxes),								ObjectModelEntryFlags::verbose },
 	{ "axesPlusExtruders",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxAxesPlusExtruders),				ObjectModelEntryFlags::verbose },
 	{ "bedHeaters",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxBedHeaters),						ObjectModelEntryFlags::verbose },
@@ -322,7 +319,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "zProbeProgramBytes",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbeProgramBytes),				ObjectModelEntryFlags::verbose },
 	{ "zProbes",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxZProbes),							ObjectModelEntryFlags::verbose },
 
-	// 3. MachineModel.state (see declaration of StateSubTableNumber above)
+	// 3. state (see declaration of StateSubTableNumber above)
 	{ "atxPower",				OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerState()),	ObjectModelEntryFlags::none },
 	{ "atxPowerPort",			OBJECT_MODEL_FUNC_IF(self->platform->IsAtxPowerControlled(), self->platform->GetAtxPowerPort()),	ObjectModelEntryFlags::none },
 	{ "beep",					OBJECT_MODEL_FUNC_IF(self->beepDuration != 0, self, 4),					ObjectModelEntryFlags::none },
@@ -342,7 +339,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "logLevel",				OBJECT_MODEL_FUNC(self->platform->GetLogLevel()),						ObjectModelEntryFlags::none },
 	{ "machineMode",			OBJECT_MODEL_FUNC(self->gCodes->GetMachineModeString()),				ObjectModelEntryFlags::none },
 	{ "macroRestarted",			OBJECT_MODEL_FUNC(self->gCodes->GetMacroRestarted()),					ObjectModelEntryFlags::none },
-	{ "messageBox",				OBJECT_MODEL_FUNC_IF(self->mboxList != nullptr, self->mboxList, 0),		ObjectModelEntryFlags::important },
+	{ "messageBox",				OBJECT_MODEL_FUNC_IF_NOSELF(MessageBox::HaveCurrent(), MessageBox::GetCurrent(), 0), ObjectModelEntryFlags::important },
 	{ "msUpTime",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(context.GetStartMillis() % 1000u)),	ObjectModelEntryFlags::live },
 	{ "nextTool",				OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).newToolNumber), ObjectModelEntryFlags::none },
 #if HAS_VOLTAGE_MONITOR
@@ -350,16 +347,23 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #endif
 	{ "previousTool",			OBJECT_MODEL_FUNC((int32_t)self->gCodes->GetCurrentMovementState(context).previousToolNumber),	ObjectModelEntryFlags::none },
 	{ "restorePoints",			OBJECT_MODEL_FUNC_ARRAY(7),												ObjectModelEntryFlags::none },
+	{ "startupError",			OBJECT_MODEL_FUNC_IF(!self->configErrorMessage.IsNull(), self, 6),		ObjectModelEntryFlags::none },
 	{ "status",					OBJECT_MODEL_FUNC(self->GetStatusString()),								ObjectModelEntryFlags::live },
+	{ "thisActive",
+#if SUPPORT_ASYNC_MOVES
+								OBJECT_MODEL_FUNC_IF_NOSELF(context.GetGCodeBuffer() != nullptr, context.GetGCodeBuffer()->Executing()), ObjectModelEntryFlags::none },
+#else
+								OBJECT_MODEL_FUNC_IF_NOSELF(context.GetGCodeBuffer() != nullptr, true),	ObjectModelEntryFlags::verbose },
+#endif
 	{ "thisInput",				OBJECT_MODEL_FUNC_IF_NOSELF(context.GetGCodeBuffer() != nullptr, (int32_t)context.GetGCodeBuffer()->GetChannel().ToBaseType()),	ObjectModelEntryFlags::verbose },
 	{ "time",					OBJECT_MODEL_FUNC(DateTime(self->platform->GetDateTime())),				ObjectModelEntryFlags::live },
 	{ "upTime",					OBJECT_MODEL_FUNC_NOSELF((int32_t)((context.GetStartMillis()/1000u) & 0x7FFFFFFF)),	ObjectModelEntryFlags::live },
 
-	// 4. MachineModel.state.beep
+	// 4. state.beep
 	{ "duration",				OBJECT_MODEL_FUNC((int32_t)self->beepDuration),							ObjectModelEntryFlags::none },
 	{ "frequency",				OBJECT_MODEL_FUNC((int32_t)self->beepFrequency),						ObjectModelEntryFlags::none },
 
-	// 5. MachineModel.seqs
+	// 5. seqs
 	{ "boards",					OBJECT_MODEL_FUNC((int32_t)self->boardsSeq),							ObjectModelEntryFlags::live },
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	{ "directories",			OBJECT_MODEL_FUNC((int32_t)self->directoriesSeq),						ObjectModelEntryFlags::live },
@@ -376,9 +380,6 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #if HAS_NETWORKING
 	{ "reply",					OBJECT_MODEL_FUNC_NOSELF((int32_t)HttpResponder::GetReplySeq()),		ObjectModelEntryFlags::live },
 #endif
-#if SUPPORT_SCANNER
-	{ "scanner",				OBJECT_MODEL_FUNC((int32_t)self->scannerSeq),							ObjectModelEntryFlags::live },
-#endif
 	{ "sensors",				OBJECT_MODEL_FUNC((int32_t)self->sensorsSeq),							ObjectModelEntryFlags::live },
 	{ "spindles",				OBJECT_MODEL_FUNC((int32_t)self->spindlesSeq),							ObjectModelEntryFlags::live },
 	{ "state",					OBJECT_MODEL_FUNC((int32_t)self->stateSeq),								ObjectModelEntryFlags::live },
@@ -387,27 +388,32 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "volChanges",				OBJECT_MODEL_FUNC_ARRAY(8),												ObjectModelEntryFlags::live },
 	{ "volumes",				OBJECT_MODEL_FUNC((int32_t)self->volumesSeq),							ObjectModelEntryFlags::live },
 #endif
+
+	// 6. state.startupError
+	{ "file",					OBJECT_MODEL_FUNC(self->configErrorFilename.IncreaseRefCount()),		ObjectModelEntryFlags::none },
+	{ "line",					OBJECT_MODEL_FUNC((int32_t)self->configErrorLine),						ObjectModelEntryFlags::none },
+	{ "message",				OBJECT_MODEL_FUNC(self->configErrorMessage.IncreaseRefCount()),			ObjectModelEntryFlags::none },
 };
 
 ReadWriteLock *_ecv_null RepRap::GetObjectLock(unsigned int tableNumber) const noexcept /*override*/
 {
-	return (tableNumber == StateSubTableNumber) ? &mboxLock : nullptr;
+	return (tableNumber == StateSubTableNumber) ? &MessageBox::mboxLock : nullptr;
 }
 
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 {
-	6,																						// number of sub-tables
-	15 + SUPPORT_SCANNER + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),		// root
+	7,																						// number of sub-tables
+	15 + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),						// root
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	8, 																						// directories
 #else
 	0,																						// directories
 #endif
 	25,																						// limits
-	20 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
+	22 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
 	2,																						// state.beep
-	12 + HAS_NETWORKING + SUPPORT_SCANNER +
-	2 * HAS_MASS_STORAGE + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE)		// seqs
+	12 + HAS_NETWORKING + (2 * HAS_MASS_STORAGE) + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),	// seqs
+	3																						// state.configErr
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
@@ -425,7 +431,7 @@ RepRap::RepRap() noexcept
 	  ticksInSpinState(0), heatTaskIdleTicks(0),
 	  beepFrequency(0), beepDuration(0), beepTimer(0),
 	  diagnosticsDestination(MessageType::NoDestinationMessage), justSentDiagnostics(false),
-	  spinningModule(noModule), stopped(false), active(false), processingConfig(true)
+	  spinningModule(Module::none), stopped(false), active(false), processingConfig(true)
 #if HAS_SBC_INTERFACE
 	  , usingSbcInterface(false)						// default to not using the SBC interface until we have checked for config.g on an SD card,
 														// because a disconnected SBC interface can generate noise which may trigger interrupts and DMA
@@ -477,9 +483,6 @@ void RepRap::Init() noexcept
 	printMonitor = new PrintMonitor(*platform, *gCodes);
 	fansManager = new FansManager;
 
-#if SUPPORT_SCANNER
-	scanner = new Scanner(*platform);
-#endif
 #if SUPPORT_IOBITS
 	portControl = new PortControl();
 #endif
@@ -509,9 +512,6 @@ void RepRap::Init() noexcept
 	printMonitor->Init();
 	FilamentMonitor::InitStatic();
 
-#if SUPPORT_SCANNER
-	scanner->Init();
-#endif
 #if SUPPORT_IOBITS
 	portControl->Init();
 #endif
@@ -700,9 +700,6 @@ void RepRap::Exit() noexcept
 	heat->Exit();
 	move->Exit();
 	gCodes->Exit();
-#if SUPPORT_SCANNER
-	scanner->Exit();
-#endif
 #if SUPPORT_IOBITS
 	portControl->Exit();
 #endif
@@ -726,30 +723,24 @@ void RepRap::Spin() noexcept
 	const uint32_t lastTime = StepTimer::GetTimerTicks();
 
 	ticksInSpinState = 0;
-	spinningModule = modulePlatform;
+	spinningModule = Module::Platform;
 	platform->Spin();
 
 	ticksInSpinState = 0;
-	spinningModule = moduleGcodes;
+	spinningModule = Module::Gcodes;
 	gCodes->Spin();
 
-#if SUPPORT_SCANNER && !SCANNER_AS_SEPARATE_TASK
 	ticksInSpinState = 0;
-	spinningModule = moduleScanner;
-	scanner->Spin();
-#endif
-
-	ticksInSpinState = 0;
-	spinningModule = modulePrintMonitor;
+	spinningModule = Module::PrintMonitor;
 	printMonitor->Spin();
 
 	ticksInSpinState = 0;
-	spinningModule = moduleFilamentSensors;
+	spinningModule = Module::FilamentSensors;
 	FilamentMonitor::Spin();
 
 #if SUPPORT_DIRECT_LCD
 	ticksInSpinState = 0;
-	spinningModule = moduleDisplay;
+	spinningModule = Module::Display;
 	display->Spin();
 #endif
 
@@ -758,13 +749,13 @@ void RepRap::Spin() noexcept
 	if (!UsingSbcInterface())
 	{
 		ticksInSpinState = 0;
-		spinningModule = moduleSbcInterface;
+		spinningModule = Module::SbcInterface;
 		sbcInterface->Spin();
 	}
 #endif
 
 	ticksInSpinState = 0;
-	spinningModule = noModule;
+	spinningModule = Module::none;
 
 	// Check if we need to send diagnostics
 	if (diagnosticsDestination != MessageType::NoDestinationMessage)
@@ -812,7 +803,10 @@ void RepRap::Spin() noexcept
 		StateUpdated();
 	}
 
-	CheckMessageBoxTimeout();
+	if (MessageBox::CheckTimeout())
+	{
+		StateUpdated();
+	}
 
 	// Keep track of the loop time
 	if (justSentDiagnostics)
@@ -918,6 +912,14 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	// Show the used and free buffer counts. Do this early in case we are running out of them and the diagnostics get truncated.
 	OutputBuffer::Diagnostics(mtype);
 
+	// If there was an error running config.g, print it
+	if (!configErrorMessage.IsNull())
+	{
+		auto msg  = configErrorMessage.Get();
+		auto fname = configErrorFilename.Get();
+		platform->MessageF(mtype, "Error in %s line %u while starting up: %s\n", fname.Ptr(), configErrorLine, msg.Ptr());
+	}
+
 	// Now print diagnostics for other modules
 	Tasks::Diagnostics(mtype);
 	platform->Diagnostics(mtype);				// this includes a call to our Timing() function
@@ -995,7 +997,11 @@ void RepRap::EmergencyStop() noexcept
 
 #if SUPPORT_CAN_EXPANSION
 # if SUPPORT_REMOTE_COMMANDS
-	if (!CanInterface::InExpansionMode())
+	if (CanInterface::InExpansionMode())
+	{
+		// We can't shut down CAN here because this gets called by the CAN Receive task
+	}
+	else
 # endif
 	{
 		expansion->EmergencyStop();
@@ -1008,9 +1014,9 @@ void RepRap::EmergencyStop() noexcept
 
 void RepRap::SetDebug(Module m, uint32_t flags) noexcept
 {
-	if (m < numModules)
+	if (m.ToBaseType() < NumRealModules)
 	{
-		debugMaps[m].SetFromRaw(flags);
+		debugMaps[m.ToBaseType()].SetFromRaw(flags);
 	}
 }
 
@@ -1025,20 +1031,20 @@ void RepRap::ClearDebug() noexcept
 void RepRap::PrintDebug(MessageType mt) noexcept
 {
 	platform->Message((MessageType)(mt | PushFlag), "Debugging enabled for modules:");
-	for (size_t i = 0; i < numModules; i++)
+	for (size_t i = 0; i < NumRealModules; i++)
 	{
 		if (debugMaps[i].IsNonEmpty())
 		{
-			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u - %#" PRIx32 ")", GetModuleName(i), i, debugMaps[i].GetRaw());
+			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u - %#" PRIx32 ")", Module(i).ToString(), i, debugMaps[i].GetRaw());
 		}
 	}
 
 	platform->Message((MessageType)(mt | PushFlag), "\nDebugging disabled for modules:");
-	for (size_t i = 0; i < numModules; i++)
+	for (size_t i = 0; i < NumRealModules; i++)
 	{
 		if (debugMaps[i].IsEmpty())
 		{
-			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", GetModuleName(i), i);
+			platform->MessageF((MessageType)(mt | PushFlag), " %s(%u)", Module(i).ToString(), i);
 		}
 	}
 	platform->Message(mt, "\n");
@@ -1124,11 +1130,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	// Machine coordinates
 	const MovementState& ms = gCodes->GetPrimaryMovementState();				// we only report the primary in this response
 	response->cat(',');
-	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return move->LiveCoordinate(axis, ms.currentTool); }, 3);
+	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return ms.LiveCoordinate(axis); }, 3);
 
 	// Actual extruder positions since power up, last G92 or last M23
 	response->cat(',');
-	AppendFloatArray(response, "extr", Tool::GetExtrudersInUse(), [this, &ms](size_t extruder) noexcept { return move->LiveCoordinate(ExtruderToLogicalDrive(extruder), ms.currentTool); }, 1);
+	AppendFloatArray(response, "extr", Tool::GetExtrudersInUse(), [this, &ms](size_t extruder) noexcept { return ms.LiveCoordinate(ExtruderToLogicalDrive(extruder)); }, 1);
 
 	// Current speeds
 	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)move->GetRequestedSpeedMmPerSec(), (double)move->GetTopSpeedMmPerSec());
@@ -1141,7 +1147,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		const bool sendBeep = ((source == ResponseSource::AUX || !platform->IsAuxEnabled(0) || platform->IsAuxRaw(0)) && beepDuration != 0 && beepFrequency != 0);
 		const bool sendMessage = !message.IsEmpty();
 
-		const ReadLockedPointer<const MessageBox> mbox(GetCurrentMessageBox());
+		const ReadLockedPointer<const MessageBox> mbox(MessageBox::GetLockedCurrent());
 		const bool mboxActive = mbox.IsNotNull() && mbox->IsLegacyType();
 		if (sendBeep || sendMessage || mboxActive)
 		{
@@ -1340,15 +1346,6 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 
 	// Time since last reset
 	response->catf(",\"time\":%.1f", (double)(millis64()/1000u));
-
-#if SUPPORT_SCANNER
-	// Scanner
-	if (scanner->IsEnabled())
-	{
-		response->catf(",\"scanner\":{\"status\":\"%c\"", scanner->GetStatusCharacter());
-		response->catf(",\"progress\":%.1f}", (double)(scanner->GetProgress() * 100.0));
-	}
-#endif
 
 	// Spindles
 	if (gCodes->GetMachineType() == MachineType::cnc || type == 2)
@@ -1608,7 +1605,7 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 
 	// Accelerations
 	response->cat(',');
-	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertAcceleration(platform->Acceleration(drive)); }, 2);
+	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertAcceleration(platform->NormalAcceleration(drive)); }, 2);
 
 	// Motor currents
 	response->cat(',');
@@ -1732,11 +1729,12 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 
 	// User coordinates
 	const size_t numVisibleAxes = gCodes->GetVisibleAxes();
-	AppendFloatArray(response, "pos", numVisibleAxes, [this](size_t axis) noexcept { return gCodes->GetUserCoordinate(gCodes->GetPrimaryMovementState(), axis); }, 3);
+	const MovementState& ms = gCodes->GetPrimaryMovementState();
+	AppendFloatArray(response, "pos", numVisibleAxes, [this, &ms](size_t axis) noexcept { return gCodes->GetUserCoordinate(ms, axis); }, 3);
 
 	// Machine coordinates
 	response->cat(',');
-	AppendFloatArray(response, "machine", numVisibleAxes, [this](size_t axis) noexcept { return move->LiveCoordinate(axis, gCodes->GetPrimaryMovementState().currentTool); }, 3);
+	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return ms.LiveCoordinate(axis); }, 3);
 
 	// Send the speed and extruder override factors
 	response->catf(",\"sfactor\":%.1f,", (double)(gCodes->GetPrimarySpeedFactor() * 100.0));
@@ -1792,7 +1790,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 	// Don't send it if we are flashing firmware, because when we flash firmware we send messages directly to PanelDue and we don't want them to get cleared.
 	if (!gCodes->IsFlashing())
 	{
-		const ReadLockedPointer<const MessageBox> mbox(GetCurrentMessageBox());
+		const ReadLockedPointer<const MessageBox> mbox(MessageBox::GetLockedCurrent());
 		if (mbox.IsNotNull() && mbox->IsLegacyType())
 		{
 			response->catf(",\"msgBox.mode\":%d,\"msgBox.seq\":%" PRIu32 ",\"msgBox.timeout\":%.1f,\"msgBox.controls\":%u,\"msgBox.msg\":\"%.s\",\"msgBox.title\":\"%.s\"",
@@ -2220,7 +2218,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 
 // Helper functions to write JSON arrays
 // Append float array using the specified number of decimal places
-void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<float(size_t)> func, unsigned int numDecimalDigits) noexcept
+void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<float(size_t) noexcept> func, unsigned int numDecimalDigits) noexcept
 {
 	if (name != nullptr)
 	{
@@ -2239,7 +2237,7 @@ void RepRap::AppendFloatArray(OutputBuffer *buf, const char *name, size_t numVal
 	buf->cat(']');
 }
 
-void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<int(size_t)> func) noexcept
+void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<int(size_t) noexcept> func) noexcept
 {
 	if (name != nullptr)
 	{
@@ -2257,7 +2255,7 @@ void RepRap::AppendIntArray(OutputBuffer *buf, const char *name, size_t numValue
 	buf->cat(']');
 }
 
-void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<const char *(size_t)> func) noexcept
+void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<const char *(size_t) noexcept> func) noexcept
 {
 	if (name != nullptr)
 	{
@@ -2555,7 +2553,7 @@ void RepRap::PrepareToLoadIap() noexcept
 
 	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters.
 	// This also shuts down tasks and interrupts that might make use of the RAM that we are about to load the IAP binary into.
-	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
+	EmergencyStop();						// this also stops CAN and stops Platform::Tick being called, which is necessary because it may access a Z probe object in RAM which will be overwritten by the IAP
 	network->Exit();						// kill the network task to stop it overwriting RAM that we use to hold the IAP
 #if HAS_SMART_DRIVERS
 	SmartDrivers::Exit();					// stop the drivers being polled via SPI or UART because it may use data in the last 64Kb of RAM
@@ -2574,6 +2572,8 @@ void RepRap::PrepareToLoadIap() noexcept
 	DuetExpansion::Exit();					// stop the DueX polling task
 #endif
 	StopAnalogTask();
+	serialUSB.end();
+	StopUsbTask();
 
 	Cache::Disable();						// disable the cache because it interferes with flash memory access
 
@@ -2581,19 +2581,20 @@ void RepRap::PrepareToLoadIap() noexcept
 	ARM_MPU_Disable();						// make sure we can execute from RAM
 #endif
 
-#if 0
+#if 0	// this code doesn't work, it causes a watchdog reset
 	// Debug
-	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 60 * 1024);
+	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 20 * 1024);
 	delay(2000);
-	for (char* p = reinterpret_cast<char *>(IAP_IMAGE_START); p < reinterpret_cast<char *>(IAP_IMAGE_START + (60 * 1024)); ++p)
+	for (char* p = reinterpret_cast<char *>(IAP_IMAGE_START); p < reinterpret_cast<char *>(IAP_IMAGE_START + (20 * 1024)); ++p)
 	{
 		if (*p != 0x7E)
 		{
-			debugPrintf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
+			SERIAL_AUX_DEVICE.printf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
 		}
 	}
-	debugPrintf("Scan complete\n");
-	#endif
+	SERIAL_AUX_DEVICE.printf("Scan complete\n");
+	delay(1000);							// give it time to send the message
+#endif
 }
 
 void RepRap::StartIap(const char *filename) noexcept
@@ -2724,38 +2725,25 @@ void RepRap::ReportInternalError(const char *file, const char *func, int line) c
 
 // Message box functions
 
-ReadLockedPointer<const MessageBox> RepRap::GetCurrentMessageBox() const noexcept
-{
-	ReadLockedPointer<const MessageBox> p(mboxLock, mboxList);
-	if (p.IsNull())
-	{
-		p.Release();
-	}
-	return p;
-}
-
 // Send a message box, which may require an acknowledgement
 // sParam = 0 Just display the message box, optional timeout
 // sParam = 1 As for 0 but display a Close button as well
 // sParam = 2 Display the message box with an OK button, wait for acknowledgement (waiting is set up by the caller)
 // sParam = 3 As for 2 but also display a Cancel button
-// Returns true if we sent the message box, false if we couldn't because there is already a message box
-bool RepRap::SendAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits) noexcept
+// Returns the message box sequence number
+uint32_t RepRap::SendAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits) noexcept
 {
-	WriteLocker lock(mboxLock);
+	WriteLocker lock(MessageBox::mboxLock);
 
-	// Currently we only allow a single outstanding message box, but we may change that in future
-	if (mboxList != nullptr)
-	{
-		return false;
-	}
-
+	uint32_t seq;
 	if ((mt & (HttpMessage | AuxMessage | LcdMessage | BinaryCodeReplyFlag)) != 0)
 	{
-		MessageBox *mb = new MessageBox(nullptr);
-		mb->Populate(message, title, sParam, tParam, controls, limits);
-		mboxList = mb;
+		seq = MessageBox::Create(message, title, sParam, tParam, controls, limits);
 		StateUpdated();
+	}
+	else
+	{
+		seq = 0;
 	}
 
 	platform->MessageF(MessageType::LogInfo, "M291: - %s - %s", (strlen(title) > 0 ? title : "[no title]"), message);
@@ -2777,49 +2765,23 @@ bool RepRap::SendAlert(MessageType mt, const char *_ecv_array message, const cha
 			platform->Message(mt, "Send M292 to continue or M292 P1 to cancel\n");
 		}
 	}
-	return true;
+	return seq;
 }
 
-bool RepRap::SendSimpleAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title) noexcept
+void RepRap::SendSimpleAlert(MessageType mt, const char *_ecv_array message, const char *_ecv_array title) noexcept
 {
-	return SendAlert(mt, message, title, 1, 0.0, AxesBitmap());
+	(void)SendAlert(mt, message, title, 1, 0.0, AxesBitmap());
 }
 
-// If we have an active message box with the specified sequence number, close it and tell the caller whether it was blocking or not, then return true
-bool RepRap::AcknowledgeMessageBox(uint32_t seq, bool& wasBlocking) noexcept
+// Save the first error message generated while running config.g
+void RepRap::SaveConfigError(const char *filename, unsigned int lineNumber, const char *errorMessage) noexcept
 {
-	WriteLocker lock(mboxLock);
-
-	// Currently we only allow a single outstanding message box, but we may change that in future
-	MessageBox *mb = mboxList;
-	if (mb != nullptr && (seq == 0 || mb->GetSeq() == seq))
+	if (configErrorMessage.IsNull())
 	{
-		wasBlocking = mb->IsBlocking();
-		mboxList = mb->GetNext();
-		delete mb;
+		configErrorLine = lineNumber;
+		configErrorFilename.Assign(filename);
+		configErrorMessage.Assign(errorMessage);
 		StateUpdated();
-		return true;
-	}
-
-	return false;
-}
-
-// Check if the current message box should be timed out
-void RepRap::CheckMessageBoxTimeout() noexcept
-{
-	if (mboxList != nullptr)
-	{
-		WriteLocker locker(mboxLock);
-		MessageBox *mb = mboxList;
-		if (mb != nullptr && mb->HasTimedOut())
-		{
-			const ExpressionValue rslt = mb->GetDefaultValue();
-			const bool canCancel = mb->CanCancel();
-			mboxList = mb->GetNext();
-			delete mb;
-			StateUpdated();
-			gCodes->MessageBoxClosed(canCancel, false, rslt);
-		}
 	}
 }
 
