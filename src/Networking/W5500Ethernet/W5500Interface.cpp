@@ -126,7 +126,7 @@ GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const Stri
 	{
 		MutexLocker lock(interfaceMutex);
 
-		if (GetState() == NetworkState::active)
+		if (shutdown && GetState() == NetworkState::active)
 		{
 			ResetSockets();
 		}
