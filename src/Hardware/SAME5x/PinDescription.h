@@ -16,10 +16,11 @@ enum class PinCapability: uint8_t
 {
 	// Individual capabilities
 	none = 0u,
-	read = 1u,
-	ain = 2u,
-	write = 4u,
-	pwm = 8u,
+	read = 1u,				// digital read
+	ain = 2u,				// analog read
+	write = 4u,				// digital write
+	pwm = 8u,				// PWM write
+	npDma = 16u,			// Neopixel output using DMA e.g. using SPI MOSI
 
 	// Combinations
 	ainr = 1u|2u,
