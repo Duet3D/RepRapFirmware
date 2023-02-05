@@ -27,6 +27,7 @@ enum MessageType : uint32_t
 	DaemonMessage =				 0x200u,	// A message that is sent to the daemon processor
 	Aux2Message =				 0x400u,	// A message that is to be sent to the second aux device
 	AutoPauseMessage =			 0x800u,	// A message that is to be sent to an auto-pause processor
+	MqttMessage = 				0x1000u,	// A message that is to be sent to a Mqtt processor
 
 	// Special destinations (byte 3)
 	BlockingUsbMessage =	   0x10000u,	// A message that is to be sent to USB in blocking mode

@@ -30,7 +30,7 @@ void WiFiSocket::Init(SocketNumber n) noexcept
 // Close a connection when the last packet has been sent
 void WiFiSocket::Close() noexcept
 {
-	if (state == SocketState::connected || state == SocketState::clientDisconnecting)
+	if (state == SocketState::connected || state == SocketState::connecting || state == SocketState::peerDisconnecting)
 	{
 		const int32_t reply = GetInterface()->SendCommand(NetworkCommand::connClose, socketNum, 0, 0, nullptr, 0, nullptr, 0);
 		if (reply == ResponseEmpty)
@@ -65,7 +65,7 @@ void WiFiSocket::Terminate() noexcept
 bool WiFiSocket::CanRead() const noexcept
 {
 	return (state == SocketState::connected)
-		|| (state == SocketState::clientDisconnecting && (hasMoreDataPending || (receivedData != nullptr && receivedData->TotalRemaining() != 0)));
+		|| (state == SocketState::peerDisconnecting && (hasMoreDataPending || (receivedData != nullptr && receivedData->TotalRemaining() != 0)));
 }
 
 // Return true if we can send data to this socket
@@ -139,12 +139,32 @@ void WiFiSocket::Poll() noexcept
 
 	switch (resp.Value().state)
 	{
+	case ConnState::connecting:
+		{
+			// This state might get skipped, if the socket connected before it can be polled
+			// in this state. This shouldn't matter, as there is no important logic in this
+			// state, other than to check if we're here a bit too long.
+			if (state == SocketState::connecting)
+			{
+				// Check for timeout
+				if (millis() - whenInState >= ConnectTimeout)
+				{
+					Close();
+				}
+			}
+			else
+			{
+				whenInState = millis();
+				state = SocketState::connecting;
+			}
+		}
+		break;
 	case ConnState::otherEndClosed:
 		// Check for further incoming packets before this socket is finally closed.
 		// This must be done to ensure that FTP uploads are not cut off.
 		ReceiveData(resp.Value().bytesAvailable);
 
-		if (state == SocketState::clientDisconnecting)
+		if (state == SocketState::peerDisconnecting)
 		{
 			if (!CanRead())
 			{
@@ -155,15 +175,15 @@ void WiFiSocket::Poll() noexcept
 		}
 		else if (state != SocketState::inactive)
 		{
-			state = SocketState::clientDisconnecting;
+			state = SocketState::peerDisconnecting;
 			if (reprap.Debug(Module::Network))
 			{
-				debugPrintf("Client disconnected on socket %u\n", socketNum);
+				debugPrintf("Peer disconnected on socket %u\n", socketNum);
 			}
 			break;
 		}
-		// We can get here if a client has sent very little data and then instantly closed
-		// the connection, e.g. when an FTP client transferred very small files over the
+		// We can get here if a peer has sent very little data and then instantly closed
+		// the connection, e.g. when an FTP peer transferred very small files over the
 		// data port. In such cases we must notify the responder about this transmission!
 		// no break
 
@@ -181,20 +201,28 @@ void WiFiSocket::Poll() noexcept
 			if (state != SocketState::waitingForResponder)
 			{
 				WiFiInterface *iface = static_cast<WiFiInterface *>(interface);
-				protocol = iface->GetProtocolByLocalPort(localPort);
+				if (isdigit(iface->wiFiServerVersion[0]) && iface->wiFiServerVersion[0] >= '2')
+				{
+					// On version 2 onwards, this is a valid field ConnStatusResponse.
+					protocol = resp.Value().protocol;
+				}
+				else
+				{
+					protocol = iface->GetProtocolByLocalPort(localPort);
+				}
 
-				whenConnected = millis();
+				whenInState = millis();
 				state = SocketState::waitingForResponder;
 			}
 			if (reprap.GetNetwork().FindResponder(this, protocol))
 			{
-				state = (resp.Value().state == ConnState::connected) ? SocketState::connected : SocketState::clientDisconnecting;
+				state = (resp.Value().state == ConnState::connected) ? SocketState::connected : SocketState::peerDisconnecting;
 				if (reprap.Debug(Module::Network))
 				{
 					debugPrintf("Found responder\n");
 				}
 			}
-			else if (millis() - whenConnected >= FindResponderTimeout)
+			else if (millis() - whenInState >= FindResponderTimeout)
 			{
 				Terminate();
 				if (reprap.Debug(Module::Network))

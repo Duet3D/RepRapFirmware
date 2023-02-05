@@ -43,9 +43,10 @@ private:
 	enum class SocketState : uint8_t
 	{
 		inactive,
+		connecting,
 		waitingForResponder,
 		connected,
-		clientDisconnecting,
+		peerDisconnecting,
 		closing,
 		broken
 	};
@@ -56,7 +57,7 @@ private:
 
 	NetworkBuffer *receivedData;						// List of buffers holding received data
 	bool hasMoreDataPending;							// If there is more data left to read when the buffered data has been processed
-	uint32_t whenConnected;
+	uint32_t whenInState;								// General purpose timekeeping value for duration spent in various socket states
 	uint16_t txBufferSpace;								// How much free transmit buffer space the WiFi mofule reported
 	SocketNumber socketNum;								// The WiFi socket number we are using
 	SocketState state;

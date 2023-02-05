@@ -1,0 +1,4 @@
+<map id="include/mqtt.h" name="include/mqtt.h">
+<area shape="rect" id="node2" href="$mqtt_8c.html" title="Implements the functionality of MQTT&#45;C. " alt="" coords="5,80,87,107"/>
+<area shape="rect" id="node3" href="$mqtt__pal_8c.html" title="Implements mqtt_pal_sendall and mqtt_pal_recvall and any platform&#45;specific helpers you&#39;d like..." alt="" coords="111,80,216,107"/>
+</map>

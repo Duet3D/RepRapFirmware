@@ -53,7 +53,13 @@ protected:
 
 		// Telnet responder additional states
 		justConnected,
-		authenticating
+		authenticating,
+
+		// MQTT client additional states
+		connecting,
+		subscribing,
+		active,
+		disconnecting,
 	};
 
 	NetworkResponder(NetworkResponder *n) noexcept;

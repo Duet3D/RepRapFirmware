@@ -61,8 +61,8 @@ public:
 	void Stop() noexcept;
 
 	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
-	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept override;
-	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept override;
+	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept override;
+	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown = true) noexcept override;
 	GCodeResult ReportProtocols(const StringRef& reply) const noexcept override;
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
@@ -100,12 +100,15 @@ protected:
 private:
 	void InitSockets() noexcept;
 	void TerminateSockets() noexcept;
-	void TerminateSockets(TcpPort port) noexcept;
+	void TerminateSockets(TcpPort port, bool local = true) noexcept;
 	void StopListening(TcpPort port) noexcept;
 
-	void StartProtocol(NetworkProtocol protocol) noexcept
+	// Protocol socket operations - listen for incoming connections,
+	// create outgoing connection, kill existing listeners & connections.
+	void ListenProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumProtocols);
-
+	void ConnectProtocol(NetworkProtocol protocol) noexcept
+	pre(protocol < NumProtocols);
 	void ShutdownProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumProtocols);
 
@@ -124,6 +127,7 @@ private:
 	}
 
 	void SendListenCommand(TcpPort port, NetworkProtocol protocol, unsigned int maxConnections) noexcept;
+	void SendConnectCommand(TcpPort port, NetworkProtocol protocol, uint32_t ip) noexcept;
 	void GetNewStatus() noexcept;
 	void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept;
 
@@ -144,6 +148,7 @@ private:
 	WiFiSocket *sockets[NumWiFiTcpSockets];
 	size_t currentSocket;
 
+	uint32_t ipAddresses[NumProtocols];
 	TcpPort portNumbers[NumProtocols];				// port number used for each protocol
 	TcpPort ftpDataPort;
 	bool closeDataPort;

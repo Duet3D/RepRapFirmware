@@ -16,6 +16,7 @@
 #include <Networking/HttpResponder.h>
 #include <Networking/FtpResponder.h>
 #include <Networking/TelnetResponder.h>
+#include <Networking/MQTT/MqttClient.h>
 #include "WifiFirmwareUploader.h"
 #include <General/IP4String.h>
 #include "WiFiSocket.h"
@@ -299,6 +300,7 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 
 	for (size_t i = 0; i < NumProtocols; ++i)
 	{
+		ipAddresses[i] = AnyIp;
 		portNumbers[i] = DefaultPortNumbers[i];
 		protocolEnabled[i] = (i == HttpProtocol);
 	}
@@ -359,7 +361,7 @@ void WiFiInterface::Init() noexcept
 	currentSocket = 0;
 }
 
-GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept
+GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
 {
 	if (secure != 0 && secure != -1)
 	{
@@ -370,19 +372,22 @@ GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, in
 		const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
 		MutexLocker lock(interfaceMutex);
 
-		if (portToUse != portNumbers[protocol] && GetState() == NetworkState::active)
+		if ((portToUse != portNumbers[protocol] || ip != ipAddresses[protocol]) && GetState() == NetworkState::active)
 		{
-			// We need to shut down and restart the protocol if it is active because the port number has changed
+			// We need to shut down and restart the protocol if it is active because the port number has changed.
+			// Note that clients will probably be unable to close their connections gracefully.
 			ShutdownProtocol(protocol);
 			protocolEnabled[protocol] = false;
 		}
+		ipAddresses[protocol] = ip;
 		portNumbers[protocol] = portToUse;
 		if (!protocolEnabled[protocol])
 		{
 			protocolEnabled[protocol] = true;
 			if (GetState() == NetworkState::active)
 			{
-				StartProtocol(protocol);
+				// Only start listeners here, connection requests for clients are made in the main loop.
+				ListenProtocol(protocol);
 				// mDNS announcement is done by the WiFi Server firmware
 			}
 		}
@@ -394,13 +399,13 @@ GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, in
 	return GCodeResult::error;
 }
 
-GCodeResult WiFiInterface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept
+GCodeResult WiFiInterface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown) noexcept
 {
 	if (protocol < NumProtocols)
 	{
 		MutexLocker lock(interfaceMutex);
 
-		if (GetState() == NetworkState::active)
+		if (shutdown && GetState() == NetworkState::active)
 		{
 			ShutdownProtocol(protocol);
 		}
@@ -413,7 +418,7 @@ GCodeResult WiFiInterface::DisableProtocol(NetworkProtocol protocol, const Strin
 	return GCodeResult::error;
 }
 
-void WiFiInterface::StartProtocol(NetworkProtocol protocol) noexcept
+void WiFiInterface::ListenProtocol(NetworkProtocol protocol) noexcept
 {
 	MutexLocker lock(interfaceMutex);
 
@@ -429,6 +434,21 @@ void WiFiInterface::StartProtocol(NetworkProtocol protocol) noexcept
 
 	case TelnetProtocol:
 		SendListenCommand(portNumbers[protocol], protocol, 1);
+		break;
+
+	default:
+		break;
+	}
+}
+
+void WiFiInterface::ConnectProtocol(NetworkProtocol protocol) noexcept
+{
+	MutexLocker lock(interfaceMutex);
+
+	switch(protocol)
+	{
+	case MqttProtocol:
+		SendConnectCommand(portNumbers[protocol], protocol, ipAddresses[protocol]);
 		break;
 
 	default:
@@ -460,6 +480,10 @@ void WiFiInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 	case TelnetProtocol:
 		StopListening(portNumbers[protocol]);
 		TerminateSockets(portNumbers[protocol]);
+		break;
+
+	case MqttProtocol:
+		TerminateSockets(portNumbers[protocol], false);
 		break;
 
 	default:
@@ -808,6 +832,22 @@ void WiFiInterface::Spin() noexcept
 		}
 		else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 		{
+			// Maintain client connections
+			for (uint8_t p = 0; p < NumProtocols; p++)
+			{
+				if (protocolEnabled[p])
+				{
+					if (reprap.GetNetwork().StartClient(this, p))
+					{
+						ConnectProtocol(p);
+					}
+				}
+				else
+				{
+					reprap.GetNetwork().StopClient(this, p);
+				}
+			}
+
 			// Find the next socket to poll
 			const size_t startingSocket = currentSocket;
 			do
@@ -830,6 +870,7 @@ void WiFiInterface::Spin() noexcept
 			{
 				currentSocket = 0;
 			}
+
 
 			// Check if the data port needs to be closed
 			if (closeDataPort)
@@ -1440,7 +1481,7 @@ void WiFiInterface::InitSockets() noexcept
 	{
 		if (protocolEnabled[i])
 		{
-			StartProtocol(i);
+			ListenProtocol(i);
 		}
 	}
 	currentSocket = 0;
@@ -1454,11 +1495,11 @@ void WiFiInterface::TerminateSockets() noexcept
 	}
 }
 
-void WiFiInterface::TerminateSockets(TcpPort port) noexcept
+void WiFiInterface::TerminateSockets(TcpPort port, bool local) noexcept
 {
 	for (WiFiSocket *socket : sockets)
 	{
-		if (socket->GetLocalPort() == port)
+		if ((local ? socket->GetLocalPort() : socket->GetRemotePort()) == port)
 		{
 			socket->Terminate();
 		}
@@ -2024,6 +2065,16 @@ void WiFiInterface::SendListenCommand(TcpPort port, NetworkProtocol protocol, un
 	lcb.remoteIp = AnyIp;
 	lcb.maxConnections = maxConnections;
 	SendCommand(NetworkCommand::networkListen, 0, 0, 0, &lcb, sizeof(lcb), nullptr, 0);
+}
+
+void WiFiInterface::SendConnectCommand(TcpPort remotePort, NetworkProtocol protocol, uint32_t remoteIp) noexcept
+{
+	ListenOrConnectData lcb;
+	memset(&lcb, 0, sizeof(lcb));
+	lcb.port = remotePort;
+	lcb.protocol = protocol;
+	lcb.remoteIp = remoteIp;
+	SendCommand(NetworkCommand::connCreate, 0, 0, 0, &lcb, sizeof(lcb), nullptr, 0);
 }
 
 // Stop listening on a port

@@ -155,7 +155,7 @@ void LwipEthernetInterface::Init() noexcept
 	macAddress = platform.GetDefaultMacAddress();
 }
 
-GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept
+GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
 {
 	if (secure != 0 && secure != -1)
 	{
@@ -192,11 +192,11 @@ GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int 
 	return GCodeResult::error;
 }
 
-GCodeResult LwipEthernetInterface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept
+GCodeResult LwipEthernetInterface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown) noexcept
 {
 	if (protocol < NumProtocols)
 	{
-		if (GetState() == NetworkState::active)
+		if (shutdown && GetState() == NetworkState::active)
 		{
 			ShutdownProtocol(protocol);
 		}
