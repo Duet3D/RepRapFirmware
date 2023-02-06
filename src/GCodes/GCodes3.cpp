@@ -1002,7 +1002,6 @@ GCodeResult GCodes::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply
 		reply.copy("Command is not supported on local drivers");
 		return GCodeResult::error;
 
-
 #if SUPPORT_TMC22xx || SUPPORT_TMC51xx
 	case 2:			// read/write smart driver register
 		{
