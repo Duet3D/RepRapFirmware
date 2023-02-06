@@ -52,7 +52,7 @@ size_t FilamentMonitor::GetNumMonitorsToReport() noexcept
 
 // Constructor
 FilamentMonitor::FilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
-	: driveNumber(drv), type(monitorType), driverId(did), lastStatus(FilamentSensorStatus::noDataReceived)
+	: driveNumber(drv), type(monitorType), driverId(did), enableMode(0), lastStatus(FilamentSensorStatus::noDataReceived)
 #if SUPPORT_CAN_EXPANSION
 	  , lastRemoteStatus(FilamentSensorStatus::noDataReceived), hasRemote(false)
 #endif
@@ -82,6 +82,12 @@ void FilamentMonitor::Disable() noexcept
 // For a remote filament monitor, this does the full configuration or query of the remote object instead, and we always return seen true because we don't need to report local status.
 GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) THROWS(GCodeException)
 {
+	if (gb.Seen('S'))
+	{
+		seen = true;
+		enableMode = gb.GetLimitedUIValue('S', 3);
+	}
+
 #if SUPPORT_CAN_EXPANSION
 	// Check that the port (if given) is on the same board as the extruder
 	String<StringLength20> portName;
@@ -257,6 +263,8 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 	}
 }
 
+// Check the status of all the filament monitors.
+// Currently, the status for all filament monitors (on expansion boards as well as on the main board) is checked by the main board, which generates any necessary events.
 /*static*/ void FilamentMonitor::Spin() noexcept
 {
 #if SUPPORT_REMOTE_COMMANDS
@@ -325,8 +333,13 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 #if SUPPORT_REMOTE_COMMANDS
 					statusChanged = true;
 #endif
+					if (reprap.Debug(Module::FilamentSensors))
+					{
+						debugPrintf("Extruder %u status change from %s to %s\n", LogicalDriveToExtruder(fs.driveNumber), fs.lastStatus.ToString(), fst.ToString());
+					}
+
 					fs.lastStatus = fst;
-					if (   fst != FilamentSensorStatus::ok
+					if (   fst != FilamentSensorStatus::ok && gCodes.IsReallyPrinting() && !gCodes.IsSimulating()
 #if SUPPORT_REMOTE_COMMANDS
 						&& !CanInterface::InExpansionMode()
 #endif
@@ -378,6 +391,10 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 			if (fs.driverId.boardAddress == src && fs.driverId.localDriver < msg.numMonitorsReported)
 			{
 				const FilamentSensorStatus newStatus = FilamentSensorStatus(msg.data[fs.driverId.localDriver].status);
+				if (reprap.Debug(Module::FilamentSensors) && newStatus != fs.lastRemoteStatus)
+				{
+					debugPrintf("Remote extruder %u status change from %s to %s\n", LogicalDriveToExtruder(fs.driveNumber), fs.lastRemoteStatus.ToString(), newStatus.ToString());
+				}
 				fs.lastRemoteStatus = newStatus;
 			}
 		}
