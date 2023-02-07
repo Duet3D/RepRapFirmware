@@ -31,15 +31,15 @@ constexpr unsigned int NumMovementSystems = 1;
 
 // Axes
 constexpr float DefaultAxisMaxFeedrate = 100.0;			// mm/sec
-constexpr float DefaultZMaxFeedrate = 5.0;
-constexpr float DefaultEMaxFeedrate = 20.0;
+constexpr float DefaultZMaxFeedrate = 20.0;
+constexpr float DefaultEMaxFeedrate = 100.0;
 
-constexpr float DefaultAxisAcceleration = 500.0;		// mm/sec^2
-constexpr float DefaultZAcceleration = 20.0;
-constexpr float DefaultEAcceleration = 250.0;
+constexpr float DefaultAxisAcceleration = 1000.0;		// mm/sec^2
+constexpr float DefaultZAcceleration = 200.0;
+constexpr float DefaultEAcceleration = 500.0;
 
 constexpr float DefaultAxisDriveStepsPerUnit = 80.0;	// steps/mm
-constexpr float DefaultZDriveStepsPerUnit = 4000.0;
+constexpr float DefaultZDriveStepsPerUnit = 800.0;
 constexpr float DefaultEDriveStepsPerUnit = 420.0;
 
 constexpr float DefaultAxisInstantDv = 15.0;			// mm/sec
