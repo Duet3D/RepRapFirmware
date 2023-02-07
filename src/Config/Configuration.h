@@ -275,12 +275,8 @@ constexpr uint32_t I2cClockFreq = 100000;				// clock frequency in Hz. 100kHz is
 constexpr size_t MaxI2cBytes = 32;						// max bytes in M260 or M261 command
 
 // File handling
-#if defined(__LPC17xx__)
-# if defined (ESP_NETWORKING)
-constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
-# else
-constexpr size_t MAX_FILES = 4;							// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
-# endif
+#if defined(DUET3) || defined(DUET3MINI)
+constexpr size_t MAX_FILES = 20;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
 #else
 constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
 #endif
