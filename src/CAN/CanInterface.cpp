@@ -1393,7 +1393,10 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	// Get the address of the board whose parameters we are changing
 	gb.MustSee('B');
 	const uint32_t oldAddress = gb.GetUIValue();
-	CheckCanAddress(oldAddress, gb);
+	if (oldAddress != 0)							// we must allow address 0 but CheckCanAddress doesn't allow it
+	{
+		CheckCanAddress(oldAddress, gb);
+	}
 
 	// Get the new timing details, if provided
 	CanTiming timing;
