@@ -99,10 +99,10 @@ M111 P2 S1
 ### Configure the MQTT client
 
 ```
-M586.5 C"duet"
-M586.5 U"test-duet" K"test-duet-pswd"
-M586.5 P"topic-duet" D0 R0 Q0
-M586.5 S"topic-echo" Q0
+M586.4 C"duet"
+M586.4 U"test-duet" K"test-duet-pswd"
+M586.4 P"topic-duet" D0 R0 Q0
+M586.4 S"topic-echo" Q0
 ```
 
 - `C` - Client ID
@@ -112,7 +112,7 @@ M586.5 S"topic-echo" Q0
 ### Enable the MQTT protocol
 
 ```
-M586 P5 R1884 H192.168.10.244 S1
+M586 P4 R1884 H192.168.10.244 S1
 ```
 
 ### Publish a message via M118
@@ -131,7 +131,7 @@ Received message from topic 'topic-echo': 'duet-message'
 ### Disable the MQTT Protocol
 
 ```
-M586 P5 S0
+M586 P4 S0
 ```
 # Scenarios
 
