@@ -456,14 +456,26 @@ Platform::Platform() noexcept :
 void Platform::Init() noexcept
 {
 #if HAS_LWIP_NETWORKING
-	pinMode(EthernetPhyResetPin, OUTPUT_LOW);			// reset the Ethernet Phy chip
+	pinMode(EthernetPhyResetPin, OUTPUT_LOW);					// reset the Ethernet Phy chip
 #endif
+
+	// Do any board-specific initialisation that needs to be done early and does not depend on the board revision
 
 	// Make sure the on-board drivers are disabled
 #if defined(DUET_NG) || defined(PCCB_10)
 	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
 #elif defined(DUET_M) || defined(DUET3MINI)
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+#elif defined(DUET3_MB6HC)
+	pinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
+#endif
+
+	// Make sure any WiFi module is held in reset
+#if defined(DUET_NG)
+	pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500
+	pinMode(EspEnablePin, OUTPUT_LOW);
+#elif defined(DUET3_MB6HC)
+	pinMode(EspEnablePin, OUTPUT_LOW);						// make sure that the Wifi module if present is disabled
 #endif
 
 	// Sort out which board we are running on (some firmware builds support more than one board variant)
@@ -3908,7 +3920,8 @@ void Platform::ResetChannel(size_t chan) noexcept
 
 #endif
 
-// Set the board type. This must be called quite early, because for some builds it relies on pins not having been programmed for their intended use yet.
+// Set the board type/revision. This must be called quite early, because for some builds it relies on pins not having been programmed for their intended use yet.
+// Also do any specific initialisation that varies with the board revision.
 void Platform::SetBoardType(BoardType bt) noexcept
 {
 	if (bt == BoardType::Auto)
@@ -3940,13 +3953,10 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);
 #elif defined(DUET3_MB6XD)
 		board = GetMB6XDBoardType();
-		pinMode(EspEnablePin, OUTPUT_LOW);						// make sure that the Wifi module if present is disabled
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 		board = BoardType::FMDC;
 #elif defined(DUET_NG)
 		// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
-		pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500. We assume that this forces the ESP8266 UART output pin to high impedance.
-		pinMode(EspEnablePin, OUTPUT_LOW);
 		pinMode(W5500ModuleSensePin, INPUT_PULLUP);				// set our UART receive pin to be an input pin and enable the pullup
 
 		// Set up the VSSA sense pin. Older Duet WiFis don't have it connected, so we enable the pulldown resistor to keep it inactive.
@@ -3986,16 +3996,8 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		delayMicroseconds(10);
 		board = (digitalRead(Dac0DigitalPin)) ? BoardType::Duet_06 : BoardType::Duet_085;
 		pinMode(Dac0DigitalPin, INPUT);			// turn pullup off
-#elif defined(__RADDS__)
-		board = BoardType::RADDS_15;
-#elif defined(__ALLIGATOR__)
-		board = BoardType::Alligator_2;
 #elif defined(PCCB_10)
 		board = BoardType::PCCB_v10;
-#elif defined(PCCB_08) || defined(PCCB_08_X5)
-		board = BoardType::PCCB_v08;
-#elif defined(__LPC17xx__)
-		board = BoardType::Lpc;
 #else
 # error Undefined board type
 #endif
