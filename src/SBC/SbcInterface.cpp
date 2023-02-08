@@ -70,12 +70,6 @@ void SbcInterface::Init() noexcept
 		fileMutex.Create("SBCFile");
 		gcodeReplyMutex.Create("SBCReply");
 		codeBuffer = (char *)new uint32_t[(SpiCodeBufferSize + 3)/4];
-
-#if defined(DUET_NG) || defined(DUET3_MB6HC)
-		// Make sure that the Wifi module if present is disabled. The ESP Reset pin is already forced low in Platform::Init();
-		pinMode(EspEnablePin, OUTPUT_LOW);
-#endif
-
 		transfer.Init();
 		sbcTask = new Task<SBCTaskStackWords>();
 		sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SbcPriority);

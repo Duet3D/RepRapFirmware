@@ -3940,11 +3940,13 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);
 #elif defined(DUET3_MB6XD)
 		board = GetMB6XDBoardType();
+		pinMode(EspEnablePin, OUTPUT_LOW);						// make sure that the Wifi module if present is disabled
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 		board = BoardType::FMDC;
 #elif defined(DUET_NG)
 		// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
 		pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500. We assume that this forces the ESP8266 UART output pin to high impedance.
+		pinMode(EspEnablePin, OUTPUT_LOW);
 		pinMode(W5500ModuleSensePin, INPUT_PULLUP);				// set our UART receive pin to be an input pin and enable the pullup
 
 		// Set up the VSSA sense pin. Older Duet WiFis don't have it connected, so we enable the pulldown resistor to keep it inactive.
