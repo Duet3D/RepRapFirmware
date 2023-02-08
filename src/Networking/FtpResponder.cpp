@@ -837,13 +837,19 @@ void FtpResponder::ChangeDirectory(const char *newDirectory) noexcept
 
 			// No - find the parent directory
 			combinedPath.copy(currentDirectory.c_str());
-			for(int i = combinedPath.strlen() - 2; i >= 0; i--)
+			for (int i = combinedPath.strlen() - 2; i >= 0; i--)
 			{
 				if (combinedPath[i] == '/')
 				{
 					combinedPath[i + 1] = 0;
 					break;
 				}
+			}
+
+			// If we're at the root then store "/" instead of an empty string, otherwise some FTP clients complain when PWD returns an empty path
+			if (combinedPath[0] == 0)
+			{
+				combinedPath.copy("/");
 			}
 		}
 		else									// Go to child directory
