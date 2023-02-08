@@ -106,14 +106,14 @@ private:
 	// Protocol socket operations - listen for incoming connections,
 	// create outgoing connection, kill existing listeners & connections.
 	void ListenProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumProtocols);
+	pre(protocol < NumSelectableProtocols);
 	void ConnectProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumProtocols);
+	pre(protocol < NumSelectableProtocols);
 	void ShutdownProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumProtocols);
+	pre(protocol < NumSelectableProtocols);
 
 	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
-	pre(protocol < NumProtocols);
+	pre(protocol < NumSelectableProtocols);
 
 	NetworkProtocol GetProtocolByLocalPort(TcpPort port) const noexcept;
 
@@ -148,11 +148,11 @@ private:
 	WiFiSocket *sockets[NumWiFiTcpSockets];
 	size_t currentSocket;
 
-	uint32_t ipAddresses[NumProtocols];
-	TcpPort portNumbers[NumProtocols];				// port number used for each protocol
+	uint32_t ipAddresses[NumSelectableProtocols];
+	TcpPort portNumbers[NumSelectableProtocols];				// port number used for each protocol
 	TcpPort ftpDataPort;
 	bool closeDataPort;
-	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
+	bool protocolEnabled[NumSelectableProtocols];				// whether each protocol is enabled
 
 	WiFiState requestedMode;
 	WiFiState currentMode;

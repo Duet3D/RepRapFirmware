@@ -85,8 +85,8 @@ private:
 	W5500Socket *mdnsSocket;
 	MdnsResponder *mdnsResponder;
 
-	TcpPort portNumbers[NumProtocols];				// port number used for each protocol
-	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
+	TcpPort portNumbers[NumSelectableProtocols];	// port number used for each protocol
+	bool protocolEnabled[NumSelectableProtocols];	// whether each protocol is enabled
 
 	bool activated;
 	bool usingDhcp = true;

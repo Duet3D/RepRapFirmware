@@ -54,8 +54,8 @@ protected:
 	void SetState(NetworkState::RawType newState) noexcept;
 	const char *GetStateName() const noexcept { return state.ToString(); }
 
-	TcpPort portNumbers[NumProtocols];					// port number used for each protocol
-	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
+	TcpPort portNumbers[NumSelectableProtocols];					// port number used for each protocol
+	bool protocolEnabled[NumSelectableProtocols];				// whether each protocol is enabled
 
 private:
 	NetworkState state;
