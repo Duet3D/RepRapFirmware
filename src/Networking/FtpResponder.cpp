@@ -845,12 +845,6 @@ void FtpResponder::ChangeDirectory(const char *newDirectory) noexcept
 					break;
 				}
 			}
-
-			// If we're at the root then store "/" instead of an empty string, otherwise some FTP clients complain when PWD returns an empty path
-			if (combinedPath[0] == 0)
-			{
-				combinedPath.copy("/");
-			}
 		}
 		else									// Go to child directory
 		{
@@ -868,10 +862,11 @@ void FtpResponder::ChangeDirectory(const char *newDirectory) noexcept
 			combinedPath[combinedPath.strlen() - 1] = 0;
 		}
 
-		// Verify the final path and change it if possible
+		// Verify the final path and change it if possible. The call to DirectoryExists will remove any trailing '/'.
 		if (MassStorage::DirectoryExists(combinedPath.GetRef()))
 		{
-			currentDirectory.copy(combinedPath.c_str());
+			// If we're at the root then store "/" instead of an empty string, otherwise some FTP clients complain when PWD returns an empty path
+			currentDirectory.copy((combinedPath[0] == 0) ? "/" : combinedPath.c_str());
 			outBuf->copy("250 Directory successfully changed.\r\n");
 			Commit(responderState);
 		}
