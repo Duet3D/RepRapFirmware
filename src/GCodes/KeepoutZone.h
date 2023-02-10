@@ -23,6 +23,8 @@ public:
 	// Constructor
 	KeepoutZone() noexcept : active(false) { }			// the BitMap default constructor will clear axesChecked
 
+	bool IsDefined() const noexcept { return !axesChecked.IsEmpty(); }
+
 	// Configure or report this zone
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 

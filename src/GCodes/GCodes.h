@@ -242,7 +242,8 @@ public:
 	}
 
 #if SUPPORT_KEEPOUT_ZONES
-	size_t GetNumKeepoutZones() const noexcept { return 1; }
+	size_t GetNumKeepoutZones() const noexcept { return (keepoutZone.IsDefined()) ? 1 : 0; }
+	bool IsKeepoutZoneDefined(size_t n) const noexcept { return n == 0 && keepoutZone.IsDefined(); }
 	const KeepoutZone *GetKeepoutZone(size_t) const noexcept { return &keepoutZone; }
 #endif
 

@@ -94,8 +94,9 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 	// 4. Keepout zone list
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 1; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetGCodes().GetKeepoutZone(context.GetLastIndex())); }
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetNumKeepoutZones(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return (reprap.GetGCodes().IsKeepoutZoneDefined(context.GetLastIndex())) ? ExpressionValue(reprap.GetGCodes().GetKeepoutZone(context.GetLastIndex())) : ExpressionValue(nullptr); }
 	},
 #endif
 };

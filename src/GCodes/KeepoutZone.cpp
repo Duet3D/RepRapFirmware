@@ -72,13 +72,20 @@ GCodeResult KeepoutZone::Configure(GCodeBuffer &gb, const StringRef &reply) THRO
 	}
 
 	// See if enabled or disabled
+	bool seen = false;
 	if (gb.Seen('S'))
 	{
+		seen = true;
 		active = (gb.GetUIValue() != 0);
 	}
 	else if (seenAxis)
 	{
 		active = true;
+	}
+
+	if (seenAxis || seen)
+	{
+		reprap.MoveUpdated();
 	}
 	else if (axesChecked.IsEmpty())
 	{
