@@ -35,7 +35,7 @@ StringParser::StringParser(GCodeBuffer& gcodeBuffer) noexcept
 void StringParser::Init() noexcept
 {
 	gcodeLineEnd = 0;
-	commandStart = commandLength = 0;								// set both to zero so that calls to GetFilePosition don't return negative values
+	commandStart = commandCharsRead = 0;								// set both to zero so that calls to GetFilePosition don't return negative values
 	readPointer = -1;
 	hadLineNumber = hadChecksum = overflowed = seenExpression = false;
 	computedChecksum = 0;
@@ -74,16 +74,16 @@ inline void StringParser::StoreAndAddToChecksum(char c) noexcept
 // If true, it is complete and ready to be acted upon and 'indent' is the number of leading white space characters.
 bool StringParser::Put(char c) noexcept
 {
+	if (c != 0)
+	{
+		++commandCharsRead;
+	}
+
 	// We now discard CR if we are reading from file. It makes line number counting easier and it's unlikely that a pre-OSX Mac will be used with a Duet.
 	// When not reading from file we still accept CR as a line terminator, for compatibility with Putty and some other terminal emulators.
 	if (c == '\r' && gb.IsDoingFile())
 	{
 		return false;
-	}
-
-	if (c != 0)
-	{
-		++commandLength;
 	}
 
 	if (c == 0 || c == '\n' || c == '\r')
@@ -1167,7 +1167,7 @@ FilePosition StringParser::GetFilePosition() const noexcept
 # endif
 	   )
 	{
-		return gb.LatestMachineState().fileState.GetPosition() - gb.fileInput->BytesCached() - commandLength + commandStart;
+		return gb.LatestMachineState().fileState.GetPosition() - gb.fileInput->BytesCached() - commandCharsRead + commandStart;
 	}
 #endif
 	return noFilePosition;
