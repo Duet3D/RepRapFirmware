@@ -129,7 +129,6 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxTravelAcceleration()), 1),		ObjectModelEntryFlags::none },
 	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).latestVirtualExtruderPosition, 5),		ObjectModelEntryFlags::live },
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber() - 1),				ObjectModelEntryFlags::none },
-	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber()),					ObjectModelEntryFlags::obsolete },
 
 	// 1. Move.Idle members
 	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor(), 1),						ObjectModelEntryFlags::none },
@@ -190,7 +189,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 constexpr uint8_t Move::objectModelTableDescriptor[] =
 {
 	9 + SUPPORT_COORDINATE_ROTATION,
-	18 + SUPPORT_WORKPLACE_COORDINATES + SUPPORT_KEEPOUT_ZONES,
+	17 + SUPPORT_WORKPLACE_COORDINATES + SUPPORT_KEEPOUT_ZONES,
 	2,
 	5 + SUPPORT_LASER,
 	3,
