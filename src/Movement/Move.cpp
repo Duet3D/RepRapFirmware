@@ -79,19 +79,26 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(rings); },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&((const Move*)self)->rings[context.GetLastIndex()]); }
-	}
+	},
 
 #if SUPPORT_COORDINATE_ROTATION
-	,
 	// 3. Rotation centre coordinates
 	{
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetGCodes().GetRotationCentre(context.GetLastIndex())); }
-	}
-};
-
+	},
 #endif
+
+#if SUPPORT_KEEPOUT_ZONES
+	// 4. Keepout zone list
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 1; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetGCodes().GetKeepoutZone(context.GetLastIndex())); }
+	},
+#endif
+};
 
 DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(Move)
 
@@ -106,6 +113,9 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "currentMove",			OBJECT_MODEL_FUNC(self, 2),																		ObjectModelEntryFlags::live },
 	{ "extruders",				OBJECT_MODEL_FUNC_ARRAY(1),																		ObjectModelEntryFlags::live },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 1),																		ObjectModelEntryFlags::none },
+#if SUPPORT_KEEPOUT_ZONES
+	{ "keepout",				OBJECT_MODEL_FUNC_ARRAY(4),																		ObjectModelEntryFlags::none },
+#endif
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
 	{ "limitAxes",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().LimitAxes()),										ObjectModelEntryFlags::none },
 	{ "noMovesBeforeHoming",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().NoMovesBeforeHoming()),								ObjectModelEntryFlags::none },
@@ -180,7 +190,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 constexpr uint8_t Move::objectModelTableDescriptor[] =
 {
 	9 + SUPPORT_COORDINATE_ROTATION,
-	18 + SUPPORT_WORKPLACE_COORDINATES,
+	18 + SUPPORT_WORKPLACE_COORDINATES + SUPPORT_KEEPOUT_ZONES,
 	2,
 	5 + SUPPORT_LASER,
 	3,
