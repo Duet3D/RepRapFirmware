@@ -1,7 +1,7 @@
 
 # Requirements
 
-- [Python](https://www.python.org/downloads/) - runs the demo script, `echo.py`, which runs broker and `echo` client
+- [Python](https://www.python.org/downloads/) - runs the demo script, `echo.py`, which runs broker and `echo` client; additional pip dependencies:
     - [Paho](https://www.eclipse.org/paho/index.php?page=clients/python/index.php) - used to implement the `echo` MQTT client
     - [Colorama](https://pypi.org/project/colorama/) - used to colorize log output of `echo.py`
 
