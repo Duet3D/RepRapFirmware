@@ -35,7 +35,7 @@ StringParser::StringParser(GCodeBuffer& gcodeBuffer) noexcept
 void StringParser::Init() noexcept
 {
 	gcodeLineEnd = 0;
-	commandStart = commandCharsRead = 0;								// set both to zero so that calls to GetFilePosition don't return negative values
+	commandStart = commandLength = 0;								// set both to zero so that calls to GetFilePosition don't return negative values
 	readPointer = -1;
 	hadLineNumber = hadChecksum = overflowed = seenExpression = false;
 	computedChecksum = 0;
@@ -76,7 +76,7 @@ bool StringParser::Put(char c) noexcept
 {
 	if (c != 0)
 	{
-		++commandCharsRead;
+		++commandLength;
 	}
 
 	// We now discard CR if we are reading from file. It makes line number counting easier and it's unlikely that a pre-OSX Mac will be used with a Duet.
@@ -1167,7 +1167,7 @@ FilePosition StringParser::GetFilePosition() const noexcept
 # endif
 	   )
 	{
-		return gb.LatestMachineState().fileState.GetPosition() - gb.fileInput->BytesCached() - commandCharsRead + commandStart;
+		return gb.LatestMachineState().fileState.GetPosition() - gb.fileInput->BytesCached() - commandLength + commandStart;
 	}
 #endif
 	return noFilePosition;
