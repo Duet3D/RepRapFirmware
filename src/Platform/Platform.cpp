@@ -4830,10 +4830,45 @@ GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndE
 
 void Platform::OnProcessingCanMessage() noexcept
 {
-#if SUPPORT_CAN_EXPANSION
 	whenLastCanMessageProcessed = millis();
 	digitalWrite(ActLedPin, ActOnPolarity);				// turn the ACT LED on
-#endif
+}
+
+GCodeResult Platform::UpdateRemoteInputShaping(unsigned int numExtraImpulses, const float coefficients[], const float durations[], const StringRef& reply) const noexcept
+{
+	const ExpansionManager& expansion = reprap.GetExpansion();
+	GCodeResult res = GCodeResult::ok;
+	if (expansion.GetNumExpansionBoards() != 0)
+	{
+		// Build a CAN message to update the remote drivers
+		for (uint8_t addr = 0; addr < CanId::MaxCanAddress; ++addr)
+		{
+			if (addr != CanInterface::GetCanAddress())
+			{
+				const ExpansionBoardData *boardData = expansion.GetBoardDetails(addr);
+				if (boardData != nullptr && boardData->numDrivers != 0)
+				{
+					CanMessageBuffer *const buf = CanMessageBuffer::BlockingAllocate();
+					const CanRequestId rid = CanInterface::AllocateRequestId(addr, buf);
+					auto msg = buf->SetupRequestMessage<CanMessageSetInputShaping>(rid, CanInterface::GetCanAddress(), addr);
+					msg->numExtraImpulses = numExtraImpulses;
+					for (unsigned int i = 0; i < numExtraImpulses; ++i)
+					{
+						msg->impulses[i].coefficient = coefficients[i];
+						msg->impulses[i].duration = durations[i];
+					}
+					buf->dataLength = msg->GetActualDataLength();
+					msg->SetRequestId(rid);
+					const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, 0);
+					if (rslt > res)
+					{
+						res = rslt;
+					}
+				}
+			}
+		}
+	}
+	return res;
 }
 
 #endif
