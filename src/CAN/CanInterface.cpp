@@ -402,7 +402,7 @@ void CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 // Send an event. The text will be truncated if it is longer than 55 characters.
 void CanInterface::RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *format, va_list vargs) noexcept
 {
-	CanMessageBuffer buf(nullptr);
+	CanMessageBuffer buf;
 	auto msg = buf.SetupStatusMessage<CanMessageEvent>(GetCanAddress(), GetCurrentMasterAddress());
 	msg->eventType = type.ToBaseType();;
 	msg->deviceNumber = device;
@@ -487,7 +487,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 		if (inExpansionMode)
 		{
 			// In expansion mode this task just send notifications when the states of input handles change
-			CanMessageBuffer buf(nullptr);
+			CanMessageBuffer buf;
 			auto msg = buf.SetupStatusMessage<CanMessageInputChanged>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 			msg->states = 0;
 			msg->zero = 0;
@@ -553,7 +553,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 {
-	CanMessageBuffer buf(nullptr);
+	CanMessageBuffer buf;
 	uint32_t lastWakeTime = xTaskGetTickCount();
 	uint32_t lastRealTimeSent = 0;
 
@@ -901,7 +901,7 @@ bool CanInterface::ReceivePlainMessage(CanMessageBuffer *null buf, uint32_t cons
 // The CanReceiver task
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 {
-	CanMessageBuffer buf(nullptr);
+	CanMessageBuffer buf;
 	for (;;)
 	{
 		if (can0dev->ReceiveMessage(RxBufferIndexRequest, TaskBase::TimeoutUnlimited, &buf))
