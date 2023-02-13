@@ -66,7 +66,7 @@ AxisShaper::AxisShaper() noexcept
 {
 }
 
-// Process M593
+// Process M593 (configure input shaping)
 GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	constexpr float MinimumInputShapingFrequency = (float)StepClockRate/(2 * 65535);		// we use a 16-bit number of step clocks to represent half the input shaping period
@@ -292,6 +292,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 
 #if SUPPORT_REMOTE_COMMANDS
 
+// Handle a request from the master board to set input shaping parameters
 GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept
 {
 	if (msg.numExtraImpulses <= MaxExtraImpulses && dataLength >= msg.GetActualDataLength())
@@ -390,22 +391,9 @@ void AxisShaper::CalculateDerivedParameters() noexcept
 // Currently we use a single input shaper for all axes, so the move segments are attached to the DDA not the DM
 void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) const noexcept
 {
-	switch ((shapingEnabled) ? type.RawValue() : InputShaperType::none)
+	params.SetFromDDA(dda);																// set up the provisional parameters
+	if (numExtraImpulses != 0)
 	{
-	case InputShaperType::none:
-	default:
-		params.SetFromDDA(dda);
-		break;
-
-	// The other input shapers all have multiple impulses with varying coefficients
-	case InputShaperType::zvd:
-	case InputShaperType::mzv:
-	case InputShaperType::zvdd:
-	case InputShaperType::zvddd:
-	case InputShaperType::ei2:
-	case InputShaperType::ei3:
-		params.SetFromDDA(dda);															// set up the provisional parameters
-
 		if (params.unshaped.accelDistance < params.unshaped.decelStartDistance)			// we can't do any shaping unless there is a steady speed segment that can be shortened
 		{
 			params.shaped = params.unshaped;
@@ -433,7 +421,6 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 				}
 			}
 		}
-		break;
 	}
 
 	// If we are doing any input shaping then set up dda.shapedSegments, else leave it as null
@@ -876,6 +863,7 @@ inline float AxisShaper::GetExtraDecelEndDistance(float endSpeed, float decelera
 	return (extraClocksAtEnd * endSpeed) - (extraDistanceAtEnd * deceleration);
 }
 
+// Calculate the move segments when input shaping is not in use
 /*static*/ MoveSegment *AxisShaper::GetUnshapedSegments(DDA& dda, const PrepParams& params) noexcept
 {
 	// Deceleration phase

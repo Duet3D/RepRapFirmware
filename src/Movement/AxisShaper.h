@@ -35,17 +35,18 @@ class AxisShaper INHERIT_OBJECT_MODEL
 public:
 	AxisShaper() noexcept;
 
-	float GetFrequency() const noexcept { return frequency; }
-	float GetDamping() const noexcept { return zeta; }
-	InputShaperType GetType() const noexcept { return type; }
-	void PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) const noexcept;
-
+	// Configure input shaping
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M593
 
 #if SUPPORT_REMOTE_COMMANDS
+	// Handle a request from the master board to set input shaping parameters
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept;
 #endif
 
+	// Plan input shaping for an individual move
+	void PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) const noexcept;
+
+	// Calculate the move segments when input shaping is not used
 	static MoveSegment *GetUnshapedSegments(DDA& dda, const PrepParams& params) noexcept;
 
 protected:
