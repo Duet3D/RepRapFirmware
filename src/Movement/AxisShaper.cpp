@@ -119,6 +119,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 
 	if (seen)
 	{
+		// Calculate the parameters that define the input shaping, which are the number of extra acceleration segments, and their amplitudes and durations
 		const float sqrtOneMinusZetaSquared = fastSqrtf(1.0 - fsquare(zeta));
 		const float dampedFrequency = frequency * sqrtOneMinusZetaSquared;
 		const float dampedPeriod = StepClockRate/dampedFrequency;
@@ -247,77 +248,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			break;
 		}
 
-		// Calculate the total extra duration of input shaping
-		totalShapingClocks = 0.0;
-		extraClocksAtStart = 0.0;
-		extraClocksAtEnd = 0.0;
-		extraDistanceAtStart = 0.0;
-		extraDistanceAtEnd = 0.0;
-
-		{
-			float u = 0.0;
-			for (unsigned int i = 0; i < numExtraImpulses; ++i)
-			{
-				const float segTime = durations[i];
-				totalShapingClocks += segTime;
-				extraClocksAtStart += (1.0 - coefficients[i]) * segTime;
-				extraClocksAtEnd += coefficients[i] * segTime;
-				const float speedChange = coefficients[i] * segTime;
-				extraDistanceAtStart += (1.0 - coefficients[i]) * (u + 0.5 * speedChange) * segTime;
-				u += speedChange;
-			}
-		}
-
-		minimumShapingStartOriginalClocks = totalShapingClocks - extraClocksAtStart + (MinimumMiddleSegmentTime * StepClockRate);
-		minimumShapingEndOriginalClocks = totalShapingClocks - extraClocksAtEnd + (MinimumMiddleSegmentTime * StepClockRate);
-		minimumNonOverlappedOriginalClocks = (totalShapingClocks * 2) - extraClocksAtStart - extraClocksAtEnd + (MinimumMiddleSegmentTime * StepClockRate);
-
-		{
-			float v = 0.0;
-			for (int i = numExtraImpulses - 1; i >= 0; --i)
-			{
-				const float segTime = durations[i];
-				const float speedChange = (1.0 - coefficients[i]) * segTime;
-				extraDistanceAtEnd += coefficients[i] * (v - 0.5 * speedChange) * segTime;
-				v -= speedChange;
-			}
-		}
-
-		if (numExtraImpulses != 0)
-		{
-			overlappedShapingClocks = 2 * totalShapingClocks;
-			// Calculate the clocks and coefficients needed when we shape the start of acceleration/deceleration and then immediately shape the end
-			float maxVal = 0.0;
-			for (unsigned int i = 0; i < numExtraImpulses; ++i)
-			{
-				overlappedDurations[i] = overlappedDurations[i + numExtraImpulses] = durations[i];
-				float val = coefficients[i];
-				overlappedCoefficients[i] = val;
-				if (val > maxVal)
-				{
-					maxVal = val;
-				}
-				val = 1.0 - val;
-				overlappedCoefficients[i + numExtraImpulses] = val;
-				if (val > maxVal)
-				{
-					maxVal = val;
-				}
-			}
-
-			// Now scale the values by maxVal so that the highest coefficient is 1.0, and calculate the total distance per unit acceleration
-			overlappedDistancePerA = 0.0;
-			float u = 0.0;
-			for (unsigned int i = 0; i < 2 * numExtraImpulses; ++i)
-			{
-				overlappedCoefficients[i] /= maxVal;
-				const float speedChange = overlappedCoefficients[i] * overlappedDurations[i];
-				overlappedDistancePerA += (u + 0.5 * speedChange) * overlappedDurations[i];
-				u += speedChange;
-			}
-			overlappedDeltaVPerA = u;
-		}
-
+		CalculateDerivedParameters();
 		reprap.MoveUpdated();
 
 #if SUPPORT_CAN_EXPANSION
@@ -357,6 +288,101 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		}
 	}
 	return GCodeResult::ok;
+}
+
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept
+{
+	if (msg.numExtraImpulses <= MaxExtraImpulses && dataLength >= msg.GetActualDataLength())
+	{
+		numExtraImpulses = msg.numExtraImpulses;
+		for (size_t i = 0; i < numExtraImpulses; ++i)
+		{
+			coefficients[i] = msg.impulses[i].coefficient;
+			durations[i] = msg.impulses[i].duration;
+		}
+		CalculateDerivedParameters();
+		return GCodeResult::ok;
+	}
+	return GCodeResult::error;
+}
+
+#endif
+
+// Calculate the input shaping parameters that we can derive from the primary ones
+void AxisShaper::CalculateDerivedParameters() noexcept
+{
+	// Calculate the total extra duration of input shaping
+	totalShapingClocks = 0.0;
+	extraClocksAtStart = 0.0;
+	extraClocksAtEnd = 0.0;
+	extraDistanceAtStart = 0.0;
+	extraDistanceAtEnd = 0.0;
+
+	{
+		float u = 0.0;
+		for (unsigned int i = 0; i < numExtraImpulses; ++i)
+		{
+			const float segTime = durations[i];
+			totalShapingClocks += segTime;
+			extraClocksAtStart += (1.0 - coefficients[i]) * segTime;
+			extraClocksAtEnd += coefficients[i] * segTime;
+			const float speedChange = coefficients[i] * segTime;
+			extraDistanceAtStart += (1.0 - coefficients[i]) * (u + 0.5 * speedChange) * segTime;
+			u += speedChange;
+		}
+	}
+
+	minimumShapingStartOriginalClocks = totalShapingClocks - extraClocksAtStart + (MinimumMiddleSegmentTime * StepClockRate);
+	minimumShapingEndOriginalClocks = totalShapingClocks - extraClocksAtEnd + (MinimumMiddleSegmentTime * StepClockRate);
+	minimumNonOverlappedOriginalClocks = (totalShapingClocks * 2) - extraClocksAtStart - extraClocksAtEnd + (MinimumMiddleSegmentTime * StepClockRate);
+
+	{
+		float v = 0.0;
+		for (int i = numExtraImpulses - 1; i >= 0; --i)
+		{
+			const float segTime = durations[i];
+			const float speedChange = (1.0 - coefficients[i]) * segTime;
+			extraDistanceAtEnd += coefficients[i] * (v - 0.5 * speedChange) * segTime;
+			v -= speedChange;
+		}
+	}
+
+	if (numExtraImpulses != 0)
+	{
+		overlappedShapingClocks = 2 * totalShapingClocks;
+		// Calculate the clocks and coefficients needed when we shape the start of acceleration/deceleration and then immediately shape the end
+		float maxVal = 0.0;
+		for (unsigned int i = 0; i < numExtraImpulses; ++i)
+		{
+			overlappedDurations[i] = overlappedDurations[i + numExtraImpulses] = durations[i];
+			float val = coefficients[i];
+			overlappedCoefficients[i] = val;
+			if (val > maxVal)
+			{
+				maxVal = val;
+			}
+			val = 1.0 - val;
+			overlappedCoefficients[i + numExtraImpulses] = val;
+			if (val > maxVal)
+			{
+				maxVal = val;
+			}
+		}
+
+		// Now scale the values by maxVal so that the highest coefficient is 1.0, and calculate the total distance per unit acceleration
+		overlappedDistancePerA = 0.0;
+		float u = 0.0;
+		for (unsigned int i = 0; i < 2 * numExtraImpulses; ++i)
+		{
+			overlappedCoefficients[i] /= maxVal;
+			const float speedChange = overlappedCoefficients[i] * overlappedDurations[i];
+			overlappedDistancePerA += (u + 0.5 * speedChange) * overlappedDurations[i];
+			u += speedChange;
+		}
+		overlappedDeltaVPerA = u;
+	}
 }
 
 // Plan input shaping, generate the MoveSegment, and set up the basic move parameters.

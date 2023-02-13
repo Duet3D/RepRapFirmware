@@ -28,6 +28,7 @@ NamedEnum(InputShaperType, uint8_t,
 class DDA;
 class PrepParams;
 class MoveSegment;
+struct CanMessageSetInputShaping;
 
 class AxisShaper INHERIT_OBJECT_MODEL
 {
@@ -41,12 +42,17 @@ public:
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M593
 
+#if SUPPORT_REMOTE_COMMANDS
+	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept;
+#endif
+
 	static MoveSegment *GetUnshapedSegments(DDA& dda, const PrepParams& params) noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
+	void CalculateDerivedParameters() noexcept;
 	MoveSegment *GetAccelerationSegments(const DDA& dda, PrepParams& params) const noexcept;
 	MoveSegment *GetDecelerationSegments(const DDA& dda, PrepParams& params) const noexcept;
 	MoveSegment *FinishShapedSegments(const DDA& dda, const PrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept;
