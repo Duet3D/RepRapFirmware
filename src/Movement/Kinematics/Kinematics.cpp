@@ -84,7 +84,7 @@ bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef&
 }
 
 // Try to configure the segmentation parameters. Return true if we did.
-bool Kinematics::TryConfigureSegmentation(GCodeBuffer& gb) noexcept
+bool Kinematics::TryConfigureSegmentation(GCodeBuffer& gb) THROWS(GCodeException)
 {
 	bool seen = false;
 	gb.TryGetFValue('S', segmentsPerSecond, seen);
