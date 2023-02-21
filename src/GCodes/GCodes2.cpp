@@ -2042,7 +2042,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							type = Aux2Message;
 							break;
 #endif
-
 						case 6:		// MQTT
 							type = MqttMessage;
 							break;
