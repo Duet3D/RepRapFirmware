@@ -228,7 +228,7 @@ protected:
 	bool LimitPositionFromAxis(float coords[], size_t firstAxis, size_t numVisibleAxes, AxesBitmap axesHomed) const noexcept;
 
 	// Try to configure the segmentation parameters
-	bool TryConfigureSegmentation(GCodeBuffer& gb) noexcept;
+	bool TryConfigureSegmentation(GCodeBuffer& gb) THROWS(GCodeException);
 
 	// Debugging functions
 	static void PrintMatrix(const char* s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0) noexcept;

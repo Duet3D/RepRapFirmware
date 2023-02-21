@@ -351,7 +351,7 @@ const ExpansionBoardData& ExpansionManager::FindIndexedBoard(unsigned int index)
 
 void ExpansionManager::EmergencyStop() noexcept
 {
-	CanMessageBuffer buf(nullptr);
+	CanMessageBuffer buf;
 
 	// Send an individual message to each known expansion board
 	for (CanAddress addr = 1; addr <= CanId::MaxCanAddress; ++addr)

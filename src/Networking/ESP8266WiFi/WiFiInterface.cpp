@@ -298,7 +298,7 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 		skt = new WiFiSocket(this);
 	}
 
-	for (size_t i = 0; i < NumProtocols; ++i)
+	for (size_t i = 0; i < NumSelectableProtocols; ++i)
 	{
 		ipAddresses[i] = AnyIp;
 		portNumbers[i] = DefaultPortNumbers[i];
@@ -367,7 +367,7 @@ GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, ui
 	{
 		reply.copy("Error: this firmware does not support TLS");
 	}
-	else if (protocol < NumProtocols)
+	else if (protocol < NumSelectableProtocols)
 	{
 		const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
 		MutexLocker lock(interfaceMutex);
@@ -401,7 +401,7 @@ GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, ui
 
 GCodeResult WiFiInterface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown) noexcept
 {
-	if (protocol < NumProtocols)
+	if (protocol < NumSelectableProtocols)
 	{
 		MutexLocker lock(interfaceMutex);
 
@@ -494,7 +494,7 @@ void WiFiInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 // Report the protocols and ports in use
 GCodeResult WiFiInterface::ReportProtocols(const StringRef& reply) const noexcept
 {
-	for (size_t i = 0; i < NumProtocols; ++i)
+	for (size_t i = 0; i < NumSelectableProtocols; ++i)
 	{
 		ReportOneProtocol(i, reply);
 	}
@@ -833,7 +833,7 @@ void WiFiInterface::Spin() noexcept
 		else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 		{
 			// Maintain client connections
-			for (uint8_t p = 0; p < NumProtocols; p++)
+			for (uint8_t p = 0; p < NumSelectableProtocols; p++)
 			{
 				if (protocolEnabled[p])
 				{
@@ -1477,7 +1477,7 @@ GCodeResult WiFiInterface::SetMacAddress(const MacAddress& mac, const StringRef&
 
 void WiFiInterface::InitSockets() noexcept
 {
-	for (size_t i = 0; i < NumProtocols; ++i)
+	for (size_t i = 0; i < NumSelectableProtocols; ++i)
 	{
 		if (protocolEnabled[i])
 		{

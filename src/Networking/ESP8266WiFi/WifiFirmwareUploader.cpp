@@ -684,7 +684,7 @@ void WifiFirmwareUploader::Spin() noexcept
 			{
 				// Successful connection
 				Identify();
-				MessageF(" success, found %s\n", ESP_NAMES[espType]);
+				MessageF("success, found %s\n", ESP_NAMES[espType]);
 				if (espType == ESPType::ESP8266)
 				{
 					state = UploadState::erasing1;
@@ -717,7 +717,7 @@ void WifiFirmwareUploader::Spin() noexcept
 				{
 					if (connectAttemptNumber % retriesPerBaudRate == 0)
 					{
-						MessageF(" failed\n");
+						MessageF("failed\n");
 					}
 					state = UploadState::resetting;		// try a reset and a lower baud rate
 				}

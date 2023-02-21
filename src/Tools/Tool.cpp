@@ -360,7 +360,7 @@ uint16_t Tool::numToolsToReport = 0;
 {
 	if (reprap.GetHeat().ColdExtrude())
 	{
-		return 0;
+		return true;
 	}
 
 	if (tool == nullptr)

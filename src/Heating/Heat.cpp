@@ -336,7 +336,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 		}
 
 #if SUPPORT_CAN_EXPANSION
-		CanMessageBuffer buf(nullptr);
+		CanMessageBuffer buf;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS

@@ -15,6 +15,42 @@
 
 #define ARC_DEBUG	0
 
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(KeepoutZone, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(KeepoutZone, __VA_ARGS__)
+
+constexpr ObjectModelArrayTableEntry KeepoutZone::objectModelArrayTable[] =
+{
+	// 0. Axis coordinates
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+					{ return (((const KeepoutZone*)self)->axesChecked.IsBitSet(context.GetLastIndex())) ? ExpressionValue(self, 1) : ExpressionValue(nullptr); }
+	},
+};
+
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(KeepoutZone)
+
+constexpr ObjectModelTableEntry KeepoutZone::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. KeepoutZone members
+	{ "active",		OBJECT_MODEL_FUNC(self->active),											ObjectModelEntryFlags::none },
+	{ "coords",		OBJECT_MODEL_FUNC_ARRAY(0),													ObjectModelEntryFlags::none },
+	// 1. KeepoutZone.coords[] members
+	{ "max",		OBJECT_MODEL_FUNC(self->coords[context.GetLastIndex()][1]),					ObjectModelEntryFlags::none },
+	{ "min",		OBJECT_MODEL_FUNC(self->coords[context.GetLastIndex()][0]),					ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t KeepoutZone::objectModelTableDescriptor[] =
+{
+	2,				// number of sections
+	2,
+	2
+};
+
+DEFINE_GET_OBJECT_MODEL_TABLE(KeepoutZone)
+
 GCodeResult KeepoutZone::Configure(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
 	// See if any axes have been given
@@ -36,13 +72,20 @@ GCodeResult KeepoutZone::Configure(GCodeBuffer &gb, const StringRef &reply) THRO
 	}
 
 	// See if enabled or disabled
+	bool seen = false;
 	if (gb.Seen('S'))
 	{
+		seen = true;
 		active = (gb.GetUIValue() != 0);
 	}
 	else if (seenAxis)
 	{
 		active = true;
+	}
+
+	if (seenAxis || seen)
+	{
+		reprap.MoveUpdated();
 	}
 	else if (axesChecked.IsEmpty())
 	{

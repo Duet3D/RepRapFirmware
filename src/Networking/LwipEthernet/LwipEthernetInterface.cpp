@@ -50,7 +50,7 @@ extern "C"
 extern struct netif gs_net_if;
 }
 
-const char * const MdnsServiceStrings[NumProtocols] =
+const char * const MdnsServiceStrings[NumSelectableProtocols] =
 {
 	"_http", "_ftp", "_telnet",
 #if SUPPORT_MULTICAST_DISCOVERY
@@ -106,7 +106,7 @@ LwipEthernetInterface::LwipEthernetInterface(Platform& p) noexcept
 	}
 
 	// Initialise default ports
-	for (size_t i = 0; i < NumProtocols; ++i)
+	for (size_t i = 0; i < NumSelectableProtocols; ++i)
 	{
 		portNumbers[i] = DefaultPortNumbers[i];
 		protocolEnabled[i] = (i == HttpProtocol);
@@ -163,7 +163,7 @@ GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int 
 		return GCodeResult::error;
 	}
 
-	if (protocol < NumProtocols)
+	if (protocol < NumSelectableProtocols)
 	{
 		const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
 		if (portToUse != portNumbers[protocol] && GetState() == NetworkState::active)
@@ -194,7 +194,7 @@ GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int 
 
 GCodeResult LwipEthernetInterface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown) noexcept
 {
-	if (protocol < NumProtocols)
+	if (protocol < NumSelectableProtocols)
 	{
 		if (shutdown && GetState() == NetworkState::active)
 		{
@@ -306,7 +306,7 @@ void LwipEthernetInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 // Report the protocols and ports in use
 GCodeResult LwipEthernetInterface::ReportProtocols(const StringRef& reply) const noexcept
 {
-	for (size_t i = 0; i < NumProtocols; ++i)
+	for (size_t i = 0; i < NumSelectableProtocols; ++i)
 	{
 		ReportOneProtocol(i, reply);
 	}
@@ -621,7 +621,7 @@ GCodeResult LwipEthernetInterface::SetMacAddress(const MacAddress& mac, const St
 
 void LwipEthernetInterface::OpenDataPort(TcpPort port) noexcept
 {
-	if (listeningPcbs[NumProtocols] != nullptr)
+	if (listeningPcbs[NumSelectableProtocols] != nullptr)
 	{
 		closeDataPort = true;
 		TerminateDataPort();
@@ -642,8 +642,8 @@ void LwipEthernetInterface::OpenDataPort(TcpPort port) noexcept
 		}
 		else
 		{
-			listeningPcbs[NumProtocols] = pcb;
-			tcp_accept(listeningPcbs[NumProtocols], conn_accept);
+			listeningPcbs[NumSelectableProtocols] = pcb;
+			tcp_accept(listeningPcbs[NumSelectableProtocols], conn_accept);
 			sockets[FtpDataSocketNumber]->Init(FtpDataSocketNumber, port, FtpDataProtocol);
 		}
 	}
@@ -657,10 +657,10 @@ void LwipEthernetInterface::TerminateDataPort() noexcept
 		closeDataPort = false;
 		sockets[FtpDataSocketNumber]->TerminateAndDisable();
 
-		if (listeningPcbs[NumProtocols] != nullptr)
+		if (listeningPcbs[NumSelectableProtocols] != nullptr)
 		{
-			tcp_close(listeningPcbs[NumProtocols]);
-			listeningPcbs[NumProtocols] = nullptr;
+			tcp_close(listeningPcbs[NumSelectableProtocols]);
+			listeningPcbs[NumSelectableProtocols] = nullptr;
 		}
 	}
 	else
@@ -673,7 +673,7 @@ void LwipEthernetInterface::TerminateDataPort() noexcept
 
 void LwipEthernetInterface::InitSockets() noexcept
 {
-	for (size_t i = 0; i < NumProtocols; ++i)
+	for (size_t i = 0; i < NumSelectableProtocols; ++i)
 	{
 		if (protocolEnabled[i])
 		{
@@ -705,7 +705,7 @@ void LwipEthernetInterface::RebuildMdnsServices() noexcept
 	mdns_resp_add_netif(&gs_net_if, reprap.GetNetwork().GetHostname(), MdnsTtl);
 	mdns_resp_add_service(&gs_net_if, "echo", "_echo", DNSSD_PROTO_TCP, 0, 0, nullptr, nullptr);
 
-	for (size_t protocol = 0; protocol < NumProtocols; protocol++)
+	for (size_t protocol = 0; protocol < NumSelectableProtocols; protocol++)
 	{
 		if (protocolEnabled[protocol])
 		{

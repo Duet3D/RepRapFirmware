@@ -116,7 +116,7 @@ constexpr Pin DIAG_PINS[NumDirectDrivers] =			{ PortDPin(29), PortCPin(17), Port
 
 // Pin assignments etc. using USART1 in SPI mode
 constexpr Pin GlobalTmc51xxEnablePin = PortAPin(9);		// The pin that drives ENN of all TMC drivers
-constexpr Pin GlobalTmc51xxCSPin = PortDPin(17);			// The pin that drives CS of all TMC drivers
+constexpr Pin GlobalTmc51xxCSPin = PortDPin(17);		// The pin that drives CS of all TMC drivers
 Usart * const USART_TMC51xx = USART1;
 constexpr uint32_t  ID_TMC51xx_SPI = ID_USART1;
 constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;

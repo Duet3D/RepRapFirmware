@@ -12,15 +12,18 @@
 
 #if SUPPORT_KEEPOUT_ZONES
 
+#include <ObjectModel/ObjectModel.h>
 #include "GCodeException.h"
 #include <General/FreelistManager.h>
 
 // This class represents a keepout zone in the form of a hypercuboid
-class KeepoutZone
+class KeepoutZone INHERIT_OBJECT_MODEL
 {
 public:
 	// Constructor
 	KeepoutZone() noexcept : active(false) { }			// the BitMap default constructor will clear axesChecked
+
+	bool IsDefined() const noexcept { return !axesChecked.IsEmpty(); }
 
 	// Configure or report this zone
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
@@ -39,6 +42,9 @@ public:
 							const float arcCentres[MaxAxes], float arcRadius,
 							AxesBitmap cosineAxes, AxesBitmap sineAxes,
 							bool clockwise, bool wholeCircle) const noexcept;
+
+protected:
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	AxesBitmap axesChecked;				// which axes have defined limits

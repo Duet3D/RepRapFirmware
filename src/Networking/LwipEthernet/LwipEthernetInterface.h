@@ -76,23 +76,23 @@ private:
 	void RebuildMdnsServices() noexcept;
 
 	void StartProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumProtocols);
+	pre(protocol < NumSelectableProtocols);
 
 	void ShutdownProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumProtocols);
+	pre(protocol < NumSelectableProtocols);
 
 	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
-	pre(protocol < NumProtocols);
+	pre(protocol < NumSelectableProtocols);
 
 	Platform& platform;
 
 	LwipSocket *sockets[NumEthernetSockets];
 	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
 
-	TcpPort portNumbers[NumProtocols];				// port number used for each protocol
-	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
+	TcpPort portNumbers[NumSelectableProtocols];				// port number used for each protocol
+	bool protocolEnabled[NumSelectableProtocols];				// whether each protocol is enabled
 	bool closeDataPort;
-	tcp_pcb *listeningPcbs[NumProtocols + 1];
+	tcp_pcb *listeningPcbs[NumTcpProtocols];
 
 	bool activated;
 	bool initialised;

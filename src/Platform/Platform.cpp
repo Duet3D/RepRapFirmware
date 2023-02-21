@@ -310,6 +310,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #ifndef DUET_NG
 	{ "percentStstCurrent",	OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 917))),								ObjectModelEntryFlags::none },
 #endif
+	{ "reducedAcceleration", OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex(), true)), 1),			ObjectModelEntryFlags::none },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->driveStepsPerUnit[context.GetLastIndex()], 2),											ObjectModelEntryFlags::none },
 	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(reprap.GetGCodes().GetCurrentMovementState(context), context.GetLastIndex()), 3), ObjectModelEntryFlags::live },
@@ -317,7 +318,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "workplaceOffsets",	OBJECT_MODEL_FUNC_ARRAY(1),																						ObjectModelEntryFlags::none },
 
 	// 4. move.extruders[] members
-	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
+	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
 	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906))),								ObjectModelEntryFlags::none },
 	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),																		ObjectModelEntryFlags::none },
 	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 3),												ObjectModelEntryFlags::none },
@@ -379,10 +380,10 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	0,																		// section 2: vIn
 #endif
 #ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current
-	20,																		// section 3: move.axes[]
+	21,																		// section 3: move.axes[]
 	15,																		// section 4: move.extruders[]
 #else
-	21,																		// section 3: move.axes[]
+	22,																		// section 3: move.axes[]
 	16,																		// section 4: move.extruders[]
 #endif
 	3,																		// section 5: move.extruders[].nonlinear
@@ -456,14 +457,26 @@ Platform::Platform() noexcept :
 void Platform::Init() noexcept
 {
 #if HAS_LWIP_NETWORKING
-	pinMode(EthernetPhyResetPin, OUTPUT_LOW);			// reset the Ethernet Phy chip
+	pinMode(EthernetPhyResetPin, OUTPUT_LOW);					// reset the Ethernet Phy chip
 #endif
+
+	// Do any board-specific initialisation that needs to be done early and does not depend on the board revision
 
 	// Make sure the on-board drivers are disabled
 #if defined(DUET_NG) || defined(PCCB_10)
 	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
 #elif defined(DUET_M) || defined(DUET3MINI)
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+#elif defined(DUET3_MB6HC)
+	pinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
+#endif
+
+	// Make sure any WiFi module is held in reset
+#if defined(DUET_NG)
+	pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500
+	pinMode(EspEnablePin, OUTPUT_LOW);
+#elif defined(DUET3_MB6HC)
+	pinMode(EspEnablePin, OUTPUT_LOW);						// make sure that the Wifi module if present is disabled
 #endif
 
 	// Sort out which board we are running on (some firmware builds support more than one board variant)
@@ -3908,7 +3921,8 @@ void Platform::ResetChannel(size_t chan) noexcept
 
 #endif
 
-// Set the board type. This must be called quite early, because for some builds it relies on pins not having been programmed for their intended use yet.
+// Set the board type/revision. This must be called quite early, because for some builds it relies on pins not having been programmed for their intended use yet.
+// Also do any specific initialisation that varies with the board revision.
 void Platform::SetBoardType(BoardType bt) noexcept
 {
 	if (bt == BoardType::Auto)
@@ -3944,7 +3958,6 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		board = BoardType::FMDC;
 #elif defined(DUET_NG)
 		// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
-		pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500. We assume that this forces the ESP8266 UART output pin to high impedance.
 		pinMode(W5500ModuleSensePin, INPUT_PULLUP);				// set our UART receive pin to be an input pin and enable the pullup
 
 		// Set up the VSSA sense pin. Older Duet WiFis don't have it connected, so we enable the pulldown resistor to keep it inactive.
@@ -3984,16 +3997,8 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		delayMicroseconds(10);
 		board = (digitalRead(Dac0DigitalPin)) ? BoardType::Duet_06 : BoardType::Duet_085;
 		pinMode(Dac0DigitalPin, INPUT);			// turn pullup off
-#elif defined(__RADDS__)
-		board = BoardType::RADDS_15;
-#elif defined(__ALLIGATOR__)
-		board = BoardType::Alligator_2;
 #elif defined(PCCB_10)
 		board = BoardType::PCCB_v10;
-#elif defined(PCCB_08) || defined(PCCB_08_X5)
-		board = BoardType::PCCB_v08;
-#elif defined(__LPC17xx__)
-		board = BoardType::Lpc;
 #else
 # error Undefined board type
 #endif
@@ -4825,10 +4830,45 @@ GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndE
 
 void Platform::OnProcessingCanMessage() noexcept
 {
-#if SUPPORT_CAN_EXPANSION
 	whenLastCanMessageProcessed = millis();
 	digitalWrite(ActLedPin, ActOnPolarity);				// turn the ACT LED on
-#endif
+}
+
+GCodeResult Platform::UpdateRemoteInputShaping(unsigned int numExtraImpulses, const float coefficients[], const float durations[], const StringRef& reply) const noexcept
+{
+	const ExpansionManager& expansion = reprap.GetExpansion();
+	GCodeResult res = GCodeResult::ok;
+	if (expansion.GetNumExpansionBoards() != 0)
+	{
+		// Build a CAN message to update the remote drivers
+		for (uint8_t addr = 0; addr < CanId::MaxCanAddress; ++addr)
+		{
+			if (addr != CanInterface::GetCanAddress())
+			{
+				const ExpansionBoardData *boardData = expansion.GetBoardDetails(addr);
+				if (boardData != nullptr && boardData->numDrivers != 0)
+				{
+					CanMessageBuffer *const buf = CanMessageBuffer::BlockingAllocate();
+					const CanRequestId rid = CanInterface::AllocateRequestId(addr, buf);
+					auto msg = buf->SetupRequestMessage<CanMessageSetInputShaping>(rid, CanInterface::GetCanAddress(), addr);
+					msg->numExtraImpulses = numExtraImpulses;
+					for (unsigned int i = 0; i < numExtraImpulses; ++i)
+					{
+						msg->impulses[i].coefficient = coefficients[i];
+						msg->impulses[i].duration = durations[i];
+					}
+					buf->dataLength = msg->GetActualDataLength();
+					msg->SetRequestId(rid);
+					const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, 0);
+					if (rslt > res)
+					{
+						res = rslt;
+					}
+				}
+			}
+		}
+	}
+	return res;
 }
 
 #endif

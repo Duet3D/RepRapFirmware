@@ -241,6 +241,12 @@ public:
 		return workplaceCoordinates[GetConstMovementState(gb).currentCoordinateSystem][axis];
 	}
 
+#if SUPPORT_KEEPOUT_ZONES
+	size_t GetNumKeepoutZones() const noexcept { return (keepoutZone.IsDefined()) ? 1 : 0; }
+	bool IsKeepoutZoneDefined(size_t n) const noexcept { return n == 0 && keepoutZone.IsDefined(); }
+	const KeepoutZone *GetKeepoutZone(size_t) const noexcept { return &keepoutZone; }
+#endif
+
 #if SUPPORT_OBJECT_MODEL
 	float GetWorkplaceOffset(size_t axis, size_t workplaceNumber) const noexcept
 	{

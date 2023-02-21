@@ -268,7 +268,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 /*static*/ void FilamentMonitor::Spin() noexcept
 {
 #if SUPPORT_REMOTE_COMMANDS
-	CanMessageBuffer buf(nullptr);
+	CanMessageBuffer buf;
 	auto msg = buf.SetupStatusMessage<CanMessageFilamentMonitorsStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 	bool statusChanged = false;
 	bool haveMonitor = false;

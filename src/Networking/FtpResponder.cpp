@@ -461,7 +461,7 @@ void FtpResponder::ProcessLine() noexcept
 		// but check the password (if set)
 		else if (StringStartsWith(clientMessage, "PASS"))
 		{
-			const char *password = GetParameter("PASS");
+			const char *const password = GetParameter("PASS");
 			if (reprap.NoPasswordSet() || reprap.CheckPassword(password))
 			{
 				currentDirectory.copy("/");
@@ -514,7 +514,7 @@ void FtpResponder::ProcessLine() noexcept
 		// set current dir
 		else if (StringStartsWith(clientMessage, "CWD"))
 		{
-			const char *directory = GetParameter("CWD");
+			const char *const directory = GetParameter("CWD");
 			ChangeDirectory(directory);
 		}
 		// change to parent of current directory
@@ -525,7 +525,7 @@ void FtpResponder::ProcessLine() noexcept
 		// switch transfer mode (sends response, but doesn't have any effects)
 		else if (StringStartsWith(clientMessage, "TYPE"))
 		{
-			const char *type = GetParameter("TYPE");
+			const char *const type = GetParameter("TYPE");
 			if (StringEqualsIgnoreCase(type, "I"))
 			{
 				outBuf->copy("200 Switching to Binary mode.\r\n");
@@ -572,7 +572,7 @@ void FtpResponder::ProcessLine() noexcept
 		// delete file
 		else if (StringStartsWith(clientMessage, "DELE"))
 		{
-			const char *filename = GetParameter("DELE");
+			const char *const filename = GetParameter("DELE");
 			if (GetPlatform().Delete(currentDirectory.c_str(), filename))
 			{
 				outBuf->copy("250 Delete operation successful.\r\n");
@@ -586,7 +586,7 @@ void FtpResponder::ProcessLine() noexcept
 		// delete directory
 		else if (StringStartsWith(clientMessage, "RMD"))
 		{
-			const char *filename = GetParameter("RMD");
+			const char *const filename = GetParameter("RMD");
 			if (GetPlatform().Delete(currentDirectory.c_str(), filename))
 			{
 				outBuf->copy("250 Remove directory operation successful.\r\n");
@@ -600,7 +600,7 @@ void FtpResponder::ProcessLine() noexcept
 		// make new directory
 		else if (StringStartsWith(clientMessage, "MKD"))
 		{
-			const char *filename = GetParameter("MKD");
+			const char *const filename = GetParameter("MKD");
 			String<MaxFilenameLength> location;
 			if (MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename)
 				&& MassStorage::MakeDirectory(location.c_str(), false))
@@ -616,7 +616,7 @@ void FtpResponder::ProcessLine() noexcept
 		// rename file or directory
 		else if (StringStartsWith(clientMessage, "RNFR"))
 		{
-			const char *filename = GetParameter("RNFR");
+			const char *const filename = GetParameter("RNFR");
 			if (MassStorage::CombineName(filenameBeingProcessed.GetRef(), currentDirectory.c_str(), filename)
 				&& MassStorage::FileExists(filenameBeingProcessed.c_str()))
 			{
@@ -631,7 +631,7 @@ void FtpResponder::ProcessLine() noexcept
 		}
 		else if (StringStartsWith(clientMessage, "RNTO"))
 		{
-			const char *filename = GetParameter("RNTO");
+			const char *const filename = GetParameter("RNTO");
 			String<MaxFilenameLength> location;
 			if (haveFileToMove
 				&& MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), filename)
@@ -672,13 +672,17 @@ void FtpResponder::ProcessLine() noexcept
 		// list directory entries
 		if (StringStartsWith(clientMessage, "LIST"))
 		{
+			const char *const pathname = GetParameter("LIST");
+			String<MaxFilenameLength> location;
+			MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), pathname);
+
 			// send announcement via ftp main port
 			outBuf->copy("150 Here comes the directory listing.\r\n");
 			Commit(ResponderState::sendingPasvData);
 
 			// build directory listing, dataBuf is sent later in the Spin loop
 			FileInfo fileInfo;
-			if (MassStorage::FindFirst(currentDirectory.c_str(), fileInfo))
+			if (MassStorage::FindFirst(location.c_str(), fileInfo))
 			{
 				do {
 					// Example for a typical UNIX-like file list:
@@ -695,7 +699,7 @@ void FtpResponder::ProcessLine() noexcept
 		// switch transfer mode (sends response, but doesn't have any effects)
 		else if (StringStartsWith(clientMessage, "TYPE"))
 		{
-			const char *type = GetParameter("TYPE");
+			const char *const type = GetParameter("TYPE");
 			if (StringEqualsIgnoreCase(type, "I"))
 			{
 				outBuf->copy("200 Switching to Binary mode.\r\n");
@@ -717,7 +721,7 @@ void FtpResponder::ProcessLine() noexcept
 			haveFileToMove = false;
 			filenameBeingProcessed.Clear();
 
-			const char * const filename = GetParameter("STOR");
+			const char *const filename = GetParameter("STOR");
 			if (StartUpload(currentDirectory.c_str(), filename, OpenMode::write))
 			{
 				outBuf->copy("150 OK to send data.\r\n");
@@ -732,7 +736,7 @@ void FtpResponder::ProcessLine() noexcept
 		// download a file
 		else if (StringStartsWith(clientMessage, "RETR"))
 		{
-			const char * const filename = GetParameter("RETR");
+			const char *const filename = GetParameter("RETR");
 			fileBeingSent = GetPlatform().OpenFile(currentDirectory.c_str(), filename, OpenMode::read);
 			if (fileBeingSent != nullptr)
 			{
@@ -803,8 +807,12 @@ const char *FtpResponder::GetParameter(const char *after) const noexcept
 		return "";
 	}
 
-	const char *result = clientMessage + strlen(after) + 1;
-	while ((*result == '\t' || *result == ' ') && *result != 0)
+	const char *result = clientMessage + strlen(after);
+	if (*result != 0)
+	{
+		++result;
+	}
+	while (*result == '\t' || *result == ' ')
 	{
 		++result;
 	}
@@ -837,7 +845,7 @@ void FtpResponder::ChangeDirectory(const char *newDirectory) noexcept
 
 			// No - find the parent directory
 			combinedPath.copy(currentDirectory.c_str());
-			for(int i = combinedPath.strlen() - 2; i >= 0; i--)
+			for (int i = combinedPath.strlen() - 2; i >= 0; i--)
 			{
 				if (combinedPath[i] == '/')
 				{
@@ -862,10 +870,11 @@ void FtpResponder::ChangeDirectory(const char *newDirectory) noexcept
 			combinedPath[combinedPath.strlen() - 1] = 0;
 		}
 
-		// Verify the final path and change it if possible
+		// Verify the final path and change it if possible. The call to DirectoryExists will remove any trailing '/'.
 		if (MassStorage::DirectoryExists(combinedPath.GetRef()))
 		{
-			currentDirectory.copy(combinedPath.c_str());
+			// If we're at the root then store "/" instead of an empty string, otherwise some FTP clients complain when PWD returns an empty path
+			currentDirectory.copy((combinedPath[0] == 0) ? "/" : combinedPath.c_str());
 			outBuf->copy("250 Directory successfully changed.\r\n");
 			Commit(responderState);
 		}

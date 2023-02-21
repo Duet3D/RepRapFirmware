@@ -34,7 +34,7 @@ namespace CanMotion
 		volatile int32_t stopSteps[MaxLinearDriversPerCanSlave];
 	};
 
-	static CanMessageBuffer urgentMessageBuffer(nullptr);
+	static CanMessageBuffer urgentMessageBuffer;
 	static CanMessageBuffer *movementBufferList = nullptr;
 	static DriversStopList *volatile stopList = nullptr;
 	static uint32_t currentMoveClocks;

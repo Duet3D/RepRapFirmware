@@ -74,16 +74,16 @@ inline void StringParser::StoreAndAddToChecksum(char c) noexcept
 // If true, it is complete and ready to be acted upon and 'indent' is the number of leading white space characters.
 bool StringParser::Put(char c) noexcept
 {
+	if (c != 0)
+	{
+		++commandLength;
+	}
+
 	// We now discard CR if we are reading from file. It makes line number counting easier and it's unlikely that a pre-OSX Mac will be used with a Duet.
 	// When not reading from file we still accept CR as a line terminator, for compatibility with Putty and some other terminal emulators.
 	if (c == '\r' && gb.IsDoingFile())
 	{
 		return false;
-	}
-
-	if (c != 0)
-	{
-		++commandLength;
 	}
 
 	if (c == 0 || c == '\n' || c == '\r')
