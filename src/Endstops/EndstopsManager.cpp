@@ -456,9 +456,12 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 					return GCodeResult::error;
 #endif
 				case EndStopType::zProbeAsEndstop:
+				{
 					// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
-					ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos));
+					uint32_t zProbeNumber = gb.Seen('K') ? gb.GetUIValue() : 0;
+					ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos, zProbeNumber));
 					break;
+				}
 
 				case EndStopType::inputPin:
 					if (   axisEndstops[axis] == nullptr

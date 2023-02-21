@@ -20,17 +20,19 @@ DriversBitmap EndstopOrZProbe::stalledDrivers;			// used to track which drivers 
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(Endstop, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(Endstop, _condition,__VA_ARGS__)
 
 constexpr ObjectModelTableEntry Endstop::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Endstop members
-	{ "highEnd",	OBJECT_MODEL_FUNC(self->GetAtHighEnd()),		 					ObjectModelEntryFlags::none },
-	{ "triggered",	OBJECT_MODEL_FUNC(self->Stopped()),		 							ObjectModelEntryFlags::live },
-	{ "type",		OBJECT_MODEL_FUNC(self->GetEndstopType().ToString()), 				ObjectModelEntryFlags::none },
+	{ "highEnd",	OBJECT_MODEL_FUNC(self->GetAtHighEnd()),		 							ObjectModelEntryFlags::none },
+	{ "probe",		OBJECT_MODEL_FUNC_IF(self->IsZProbe(), (int32_t)self->GetZProbeNumber()),	ObjectModelEntryFlags::none },
+	{ "triggered",	OBJECT_MODEL_FUNC(self->Stopped()),		 									ObjectModelEntryFlags::live },
+	{ "type",		OBJECT_MODEL_FUNC(self->GetEndstopType().ToString()), 						ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Endstop::objectModelTableDescriptor[] = { 1, 3 };
+constexpr uint8_t Endstop::objectModelTableDescriptor[] = { 1, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Endstop)
 

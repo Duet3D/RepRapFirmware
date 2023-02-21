@@ -2864,12 +2864,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							return false;
 						}
-						seen = true;
-						uint32_t eVals[MaxExtruders];
+						int32_t eVals[MaxExtruders];
 						size_t eCount = numExtruders;
-						gb.GetUnsignedArray(eVals, eCount, true);
+						gb.GetIntArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
+							if (eVals[e] < 0)
+							{
+								// ignore negative microstepping values
+								continue;
+							}
+
+							seen = true;
 							const size_t drive = ExtruderToLogicalDrive(e);
 #if SUPPORT_CAN_EXPANSION
 							axesToUpdate.SetBit(drive);
