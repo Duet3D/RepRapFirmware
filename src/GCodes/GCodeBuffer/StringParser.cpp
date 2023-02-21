@@ -574,6 +574,13 @@ void StringParser::ProcessIfCommand() THROWS(GCodeException)
 
 void StringParser::ProcessElseCommand(BlockType skippedBlockType) THROWS(GCodeException)
 {
+	// Users may be tempted to put a command after 'else' so flag an error if that happens
+	SkipWhiteSpace();
+	if (gb.buffer[readPointer] != 0)
+	{
+		throw ConstructParseException("unexpected characters after 'else'");
+	}
+
 	if (skippedBlockType == BlockType::ifFalseNoneTrue)
 	{
 		gb.GetBlockState().SetPlainBlock();				// execute the else-block, treating it like a plain block
