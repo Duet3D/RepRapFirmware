@@ -117,7 +117,7 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 
 		buf->next = movementBufferList;
 		movementBufferList = buf;
-		auto move = buf->SetupRequestMessage<CanMessageMovementLinear>(0, CanInterface::GetCurrentMasterAddress(), canDriver.boardAddress);
+		auto move = buf->SetupRequestMessage<CanMessageMovementLinearShaped>(0, CanInterface::GetCurrentMasterAddress(), canDriver.boardAddress);
 
 		// Common parameters
 		if (buf->next == nullptr)
@@ -137,7 +137,7 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 		}
 		move->initialSpeedFraction = params.initialSpeedFraction;
 		move->finalSpeedFraction = params.finalSpeedFraction;
-		move->pressureAdvanceDrives = 0;
+		move->extruderDrives = 0;
 		move->numDrivers = canDriver.localDriver + 1;
 		move->zero = 0;
 
@@ -155,20 +155,24 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 }
 
 // This is called by DDA::Prepare for each active CAN DM in the move
-void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance) noexcept
+void CanMotion::AddAxisMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept
 {
 	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
 	if (buf != nullptr)
 	{
-		buf->msg.moveLinear.perDrive[canDriver.localDriver].steps = steps;
-		if (usePressureAdvance)
-		{
-			buf->msg.moveLinear.pressureAdvanceDrives |= 1u << canDriver.localDriver;
-		}
-		buf->msg.moveLinear.shapeAccelStart = params.shapingPlan.shapeAccelStart;
-		buf->msg.moveLinear.shapeAccelEnd = params.shapingPlan.shapeAccelEnd;
-		buf->msg.moveLinear.shapeDecelStart = params.shapingPlan.shapeDecelStart;
-		buf->msg.moveLinear.shapeDecelEnd = params.shapingPlan.shapeDecelEnd;
+		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].steps = steps;
+		buf->msg.moveLinearShaped.shapingPlan = params.shapingPlan.condensedPlan;
+	}
+}
+
+void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver, float extrusion, bool usePressureAdvance) noexcept
+{
+	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
+	if (buf != nullptr)
+	{
+		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].extrusion = extrusion;
+		buf->msg.moveLinearShaped.shapingPlan = params.shapingPlan.condensedPlan;
+		buf->msg.moveLinearShaped.usePressureAdvance = usePressureAdvance;
 	}
 }
 
@@ -189,7 +193,7 @@ uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool 
 			do
 			{
 				CanMessageBuffer * const nextBuffer = buf->next;		// must get this before sending the buffer, because sending the buffer releases it
-				CanMessageMovementLinear& msg = buf->msg.moveLinear;
+				CanMessageMovementLinearShaped& msg = buf->msg.moveLinearShaped;
 				if (msg.HasMotion())
 				{
 					msg.whenToExecute = moveStartTime;

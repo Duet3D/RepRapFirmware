@@ -684,7 +684,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 
 // Set up a remote move. Return true if it represents real movement, else false.
 // All values have already been converted to step clocks and the total distance has been normalised to 1.0.
-//TODO pass the input shaping plan in the message. For now we don't use input shaping.
+// This one handles the old format movement message, used by older versions of RRF and the ATE
 bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 {
 	afterPrepare.moveStartTime = StepTimer::ConvertToLocalTime(msg.whenToExecute);
@@ -693,7 +693,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	flags.isRemote = true;
 	flags.isPrintingMove = (msg.pressureAdvanceDrives != 0);
 
-	// Normalise the move to unit distance and convert time units from step clocks to seconds
+	// Normalise the move to unit distance
 	totalDistance = 1.0;
 
 	topSpeed = 2.0/(2 * msg.steadyClocks + (msg.initialSpeedFraction + 1.0) * msg.accelerationClocks + (msg.finalSpeedFraction + 1.0) * msg.decelClocks);
@@ -703,7 +703,10 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	acceleration = (msg.accelerationClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.initialSpeedFraction))/msg.accelerationClocks;
 	deceleration = (msg.decelClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.finalSpeedFraction))/msg.decelClocks;
 
-	PrepParams params;
+	// Prepare for movement
+	PrepParams params;											// the default constructor clears params.plan to 'no shaping'
+
+	// Set up the unshaped values
 	params.unshaped.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
 	const float decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
 	params.unshaped.decelStartDistance = 1.0 - decelDistance;
@@ -724,16 +727,16 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 		const int32_t delta = msg.perDrive[drive].steps;
 		if (delta != 0)
 		{
-			EnsureUnshapedSegments(params);				// there are no shaped segments, so set up the unshaped ones
+			EnsureUnshapedSegments(params);						// we are going to need unshaped segments
 
 			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
-			pdm->totalSteps = labs(delta);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
-			pdm->direction = (delta >= 0);				// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
+			pdm->totalSteps = labs(delta);						// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
+			pdm->direction = (delta >= 0);						// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 			afterPrepare.drivesMoving.SetBit(drive);
 			reprap.GetPlatform().EnableDrivers(drive, false);
 			const bool stepsToDo = ((msg.pressureAdvanceDrives & (1u << drive)) != 0)
-						? pdm->PrepareExtruder(*this, params)
-							: pdm->PrepareCartesianAxis(*this, params);
+									? pdm->PrepareExtruder(*this, params)
+										: pdm->PrepareCartesianAxis(*this, params);
 			if (stepsToDo)
 			{
 				pdm->directionChanged = false;
@@ -773,6 +776,131 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 			seg = nextSeg;
 		}
 		unshapedSegments = nullptr;
+		return false;
+	}
+
+	if (reprap.Debug(Module::Dda) && reprap.Debug(Module::Move))	// temp show the prepared DDA if debug enabled for both modules
+	{
+		DebugPrintAll("rem");
+	}
+
+	state = frozen;												// must do this last so that the ISR doesn't start executing it before we have finished setting it up
+	return true;
+}
+
+// Set up a remote move. Return true if it represents real movement, else false.
+// All values have already been converted to step clocks and the total distance has been normalised to 1.0.
+// This version handles the new movement message that includes the input shaping plan
+bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
+{
+	afterPrepare.moveStartTime = StepTimer::ConvertToLocalTime(msg.whenToExecute);
+	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
+	flags.all = 0;
+	flags.isRemote = true;
+	flags.isPrintingMove = msg.usePressureAdvance;
+
+	// Normalise the move to unit distance
+	totalDistance = 1.0;
+
+	topSpeed = 2.0/(2 * msg.steadyClocks + (msg.initialSpeedFraction + 1.0) * msg.accelerationClocks + (msg.finalSpeedFraction + 1.0) * msg.decelClocks);
+	startSpeed = topSpeed * msg.initialSpeedFraction;
+	endSpeed = topSpeed * msg.finalSpeedFraction;
+
+	acceleration = (msg.accelerationClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.initialSpeedFraction))/msg.accelerationClocks;
+	deceleration = (msg.decelClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.finalSpeedFraction))/msg.decelClocks;
+
+	// Prepare for movement
+	shapedSegments = unshapedSegments = nullptr;
+	PrepParams params;										// the default constructor clears params.plan to 'no shaping'
+
+	// Set up the unshaped values
+	params.unshaped.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
+	const float decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
+	params.unshaped.decelStartDistance = 1.0 - decelDistance;
+	params.unshaped.accelClocks = msg.accelerationClocks;
+	params.unshaped.steadyClocks = msg.steadyClocks;
+	params.unshaped.decelClocks = msg.decelClocks;
+	params.unshaped.acceleration = acceleration;
+	params.unshaped.deceleration = deceleration;
+
+#if 1
+	// Set up the shaped segments if any input shaping is specified and we have any drivers that are not using pressure advance
+	if (msg.shapingPlan != 0)
+	{
+		// Set up the plan
+		params.shapingPlan.condensedPlan = msg.shapingPlan;
+		reprap.GetMove().GetAxisShaper().GetRemoteShapedSegments(*this, params);
+	}
+#endif
+
+	activeDMs = completedDMs = nullptr;
+	afterPrepare.drivesMoving.Clear();
+
+	const size_t numDrivers = min<size_t>(msg.numDrivers, min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave));
+	for (size_t drive = 0; drive < numDrivers; drive++)
+	{
+		endPoint[drive] = prev->endPoint[drive];				// the steps for this move will be added later
+		const int32_t delta = msg.perDrive[drive].steps;
+		if (delta != 0)
+		{
+			if (shapedSegments == nullptr || (msg.extruderDrives & (1u << drive)) != 0)
+			{
+				EnsureUnshapedSegments(params);					// we are going to need unshaped segments
+			}
+
+			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
+			pdm->totalSteps = labs(delta);						// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
+			pdm->direction = (delta >= 0);						// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
+			afterPrepare.drivesMoving.SetBit(drive);
+			reprap.GetPlatform().EnableDrivers(drive, false);
+			const bool stepsToDo = ((msg.extruderDrives & (1u << drive)) != 0)
+									? pdm->PrepareExtruder(*this, params)
+										: pdm->PrepareCartesianAxis(*this, params);
+			if (stepsToDo)
+			{
+				pdm->directionChanged = false;
+				InsertDM(pdm);
+				const uint32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
+				if (pdm->direction)
+				{
+					endPoint[drive] += netSteps;
+				}
+				else
+				{
+					endPoint[drive] -= netSteps;
+				}
+
+				// Check for sensible values, print them if they look dubious
+				if (reprap.Debug(Module::Dda) && (reprap.Debug(Module::Move) || pdm->totalSteps > 1000000))
+				{
+					DebugPrintAll("rem");
+				}
+			}
+			else
+			{
+				// No steps to do, so release the DM
+				DriveMovement::Release(pdm);
+			}
+		}
+	}
+
+	// 2. Throw it away if there's no real movement.
+	if (activeDMs == nullptr)
+	{
+		// We may have set up the shaped and/or unshaped segments, in which case we must recycle them
+		for (MoveSegment* seg = unshapedSegments; seg != nullptr; )
+		{
+			MoveSegment* const nextSeg = seg->GetNext();
+			MoveSegment::Release(seg);
+			seg = nextSeg;
+		}
+		for (MoveSegment* seg = shapedSegments; seg != nullptr; )
+		{
+			MoveSegment* const nextSeg = seg->GetNext();
+			MoveSegment::Release(seg);
+			seg = nextSeg;
+		}
+		shapedSegments = unshapedSegments = nullptr;
 		return false;
 	}
 
@@ -1287,7 +1415,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 #if SUPPORT_CAN_EXPANSION
 						if (driver.IsRemote())
 						{
-							CanMotion::AddMovement(params, driver, delta, false);
+							CanMotion::AddAxisMovement(params, driver, delta);
 						}
 						else
 #endif
@@ -1362,7 +1490,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 					const DriverId driver = config.driverNumbers[i];
 					if (driver.IsRemote())
 					{
-						CanMotion::AddMovement(params, driver, delta, false);
+						CanMotion::AddAxisMovement(params, driver, delta);
 					}
 				}
 # endif
@@ -1431,7 +1559,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 						const DriverId driver = config.driverNumbers[i];
 						if (driver.IsRemote())
 						{
-							CanMotion::AddMovement(params, driver, delta, false);
+							CanMotion::AddAxisMovement(params, driver, delta);
 						}
 					}
 #endif
@@ -1486,7 +1614,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 							}
 							if (rawSteps != 0)
 							{
-								CanMotion::AddMovement(params, driver, rawSteps, flags.usePressureAdvance);
+								CanMotion::AddExtruderMovement(params, driver, rawSteps, flags.usePressureAdvance);
 								const int32_t netSteps = (flags.usePressureAdvance)
 															? lrintf(netMovement * stepsPerMm)			// work out how many steps the remote extruder will take
 																: rawSteps;

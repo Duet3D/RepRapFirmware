@@ -461,6 +461,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinear);
 				return;							// no reply needed
 
+			case CanMessageType::movementLinearShaped:
+				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinearShaped);
+				return;							// no reply needed
+
 			case CanMessageType::stopMovement:
 				reprap.GetMove().StopDrivers(buf->msg.stopMovement.whichDrives);
 				return;							// no reply needed

@@ -12,7 +12,7 @@
 #include "DriveMovement.h"
 #include "StepTimer.h"
 #include "MoveSegment.h"
-#include "InputShaperPlan.h"
+#include <InputShaperPlan.h>
 #include <Platform/Tasks.h>
 #include <GCodes/GCodes.h>			// for class RawMove
 
@@ -127,6 +127,7 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
+	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
 	void StopDrivers(uint16_t whichDrives) noexcept;
 #endif
 
