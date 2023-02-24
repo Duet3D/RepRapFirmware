@@ -713,7 +713,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 4: // Spin spindle counter clockwise
 				{
 					MovementState& ms = GetMovementState(gb);
-					if (machineType == MachineType::cnc)
+#if SUPPORT_LASER
+					if (machineType == MachineType::laser)
+					{
+						if (code == 3 && gb.Seen('S'))
+						{
+							if (ms.segmentsLeft != 0)
+							{
+								return false;						// don't modify moves that haven't gone yet
+							}
+							ms.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetNonNegativeFValue());
+						}
+						else
+						{
+							result = GCodeResult::notSupportedInCurrentMode;
+						}
+					}
+					else
+#endif
 					{
 						// Determine what spindle number we are using
 						uint32_t slot;
@@ -747,69 +764,45 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 						spindle.SetState((code == 4) ? SpindleState::reverse : SpindleState::forward);
 					}
-#if SUPPORT_LASER
-					else if (machineType == MachineType::laser && code == 3 && gb.Seen('S'))
-					{
-						if (ms.segmentsLeft != 0)
-						{
-							return false;						// don't modify moves that haven't gone yet
-						}
-						ms.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetNonNegativeFValue());
-					}
-#endif
-					else
-					{
-						result = GCodeResult::notSupportedInCurrentMode;
-					}
 				}
 				break;
 
 			case 5: // Spindle motor off
 				{
 					MovementState& ms = GetMovementState(gb);
-					switch (machineType)
-					{
-					case MachineType::cnc:
-						{
-							// Determine what spindle number we are using
-							uint32_t slot;
-							if (gb.Seen('P'))
-							{
-								slot = gb.GetLimitedUIValue('P', MaxSpindles);
-							}
-							else if (ms.currentTool != nullptr && ms.currentTool->GetSpindleNumber() >= 0)
-							{
-								slot = ms.currentTool->GetSpindleNumber();
-							}
-							else
-							{
-								// Turn off every spindle if no 'P' parameter is present and the current tool does not have a spindle
-								for (size_t i = 0; i < MaxSpindles; i++)
-								{
-									platform.AccessSpindle(i).SetState(SpindleState::stopped);
-								}
-								break;
-							}
-
-							platform.AccessSpindle(slot).SetState(SpindleState::stopped);
-						}
-						break;
-
 #if SUPPORT_LASER
-					case MachineType::laser:
+					if (machineType == MachineType::laser)
+					{
+						if (ms.segmentsLeft != 0)
 						{
-							if (ms.segmentsLeft != 0)
-							{
-								return false;						// don't modify moves that haven't gone yet
-							}
-							ms.laserPwmOrIoBits.Clear();
+							return false;						// don't modify moves that haven't gone yet
 						}
-						break;
+						ms.laserPwmOrIoBits.Clear();
+					}
+					else
 #endif
+					{
+						// Determine what spindle number we are using
+						uint32_t slot;
+						if (gb.Seen('P'))
+						{
+							slot = gb.GetLimitedUIValue('P', MaxSpindles);
+						}
+						else if (ms.currentTool != nullptr && ms.currentTool->GetSpindleNumber() >= 0)
+						{
+							slot = ms.currentTool->GetSpindleNumber();
+						}
+						else
+						{
+							// Turn off every spindle if no 'P' parameter is present and the current tool does not have a spindle
+							for (size_t i = 0; i < MaxSpindles; i++)
+							{
+								platform.AccessSpindle(i).SetState(SpindleState::stopped);
+							}
+							break;
+						}
 
-					default:
-						result = GCodeResult::notSupportedInCurrentMode;
-						break;
+						platform.AccessSpindle(slot).SetState(SpindleState::stopped);
 					}
 				}
 				break;
