@@ -316,7 +316,7 @@ typedef double floatc_t;							// type of matrix element used for calibration
 typedef float floatc_t;								// type of matrix element used for calibration
 #endif
 
-#if defined(DUET3) || defined(DUET3MINI)
+#if SUPPORT_CAN_EXPANSION
 typedef Bitmap<uint32_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
 #else
 typedef Bitmap<uint16_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
@@ -357,10 +357,14 @@ static_assert(MaxTriggers <= TriggerNumbersBitmap::MaxBits());
 static_assert(MaxTools <= ToolNumbersBitmap::MaxBits());
 static_assert(MaxAxes + 17 <= ParameterLettersBitmap::MaxBits());	// so that we have enough letters available for all the axes
 
-typedef uint16_t Pwm_t;							// Type of a PWM value when we don't want to use floats
+#if SUPPORT_REMOTE_COMMANDS
+static_assert(MaxExtruders >= NumDirectDrivers);					// so that we get enough ExtruderShapers and nonlinear extrusion data when in expansion mode
+#endif
+
+typedef uint16_t Pwm_t;						// Type of a PWM value when we don't want to use floats
 
 #if SUPPORT_IOBITS
-typedef uint16_t IoBits_t;						// Type of the port control bitmap (G1 P parameter)
+typedef uint16_t IoBits_t;					// Type of the port control bitmap (G1 P parameter)
 #endif
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
