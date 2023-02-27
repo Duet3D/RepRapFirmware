@@ -16,8 +16,6 @@ class LinearDeltaKinematics;
 class PrepParams;
 class ExtruderShaper;
 
-#define EVEN_STEPS			(1)						// 1 to generate steps at even intervals when doing double/quad/octal stepping
-
 enum class DMState : uint8_t
 {
 	idle = 0,
@@ -53,7 +51,7 @@ public:
 #if SUPPORT_LINEAR_DELTA
 	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 #endif
-	bool PrepareExtruder(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
+	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept SPEED_CRITICAL;
 
 	void DebugPrint() const noexcept;
 	int32_t GetNetStepsLeft() const noexcept;
@@ -94,7 +92,7 @@ private:
 			stepsTakenThisSegment : 2;					// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
-	uint32_t totalSteps;								// total number of steps for this move
+	uint32_t totalSteps;								// total number of steps for this move (not used by extruders)
 
 	// These values change as the step is executed, except for reverseStartStep
 	uint32_t nextStep;									// number of steps already done
@@ -103,9 +101,9 @@ private:
 	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
 
-	float distanceSoFar;
-	float timeSoFar;
-	float pA, pB, pC;
+	float distanceSoFar;								// the accumulated distance at the end of the current move segment
+	float timeSoFar;									// the accumulated taken for this current DDA at the end of the current move segment
+	float pA, pB, pC;									// the move parameters for the current move segment
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	union
@@ -127,7 +125,8 @@ private:
 			float pressureAdvanceK;						// how much pressure advance is applied to this move
 			float effectiveStepsPerMm;					// the steps/mm multiplied by the movement fraction
 			float effectiveMmPerStep;					// reciprocal of [the steps/mm multiplied by the movement fraction]
-			float extraExtrusionDistance;				// the extra extrusion distance in the acceleration phase
+			float extruderSpeed;						// the speed at the end of the current move segment, only for extruders
+			uint32_t extruderReverseSteps;				// the number of reverse steps taken before the start of the current segment, only for extruders
 			float extrusionBroughtForwards;				// the amount of extrusion brought forwards from previous moves. Only needed for debug output.
 		} cart;
 	} mp;
@@ -145,9 +144,7 @@ inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
 		if (stepsTillRecalc != 0)
 		{
 			--stepsTillRecalc;				// we are doing double/quad/octal stepping
-#if EVEN_STEPS
 			nextStepTime += stepInterval;
-#endif
 #ifdef DUET3_MB6HC							// we need to increase the minimum step pulse length to be long enough for the TMC5160
 			asm volatile("nop");
 			asm volatile("nop");
@@ -199,13 +196,17 @@ inline int32_t DriveMovement::GetNetStepsLeft() const noexcept
 inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 {
 	int32_t netStepsTaken;
-	if (nextStep < reverseStartStep || reverseStartStep > totalSteps)				// if no reverse phase, or not started it yet
+	if (nextStep <= reverseStartStep)												// if no reverse phase, or not started it yet
 	{
 		netStepsTaken = (nextStep == 0) ? 0 : (int32_t)nextStep - 1;
 	}
 	else
 	{
 		netStepsTaken = (int32_t)nextStep - (int32_t)(2 * reverseStartStep) + 1;	// allowing for direction having changed
+	}
+	if (isExtruder)
+	{
+		netStepsTaken -= 2 * (int32_t)mp.cart.extruderReverseSteps;
 	}
 	return (direction) ? netStepsTaken : -netStepsTaken;
 }

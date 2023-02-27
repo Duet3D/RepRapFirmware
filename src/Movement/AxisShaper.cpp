@@ -309,6 +309,111 @@ GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShaping& msg,
 	return GCodeResult::error;
 }
 
+// Calculate up the shaped segments for a move
+void AxisShaper::GetRemoteShapedSegments(DDA& dda, const PrepParams& params) const noexcept
+{
+#if 0
+	// Deceleration phase
+	MoveSegment *tempSegments;
+	if (params.shapingPlan.shapeDecelStart)
+	{
+		if (params.shapingPlan.shapeDecelEnd)
+		{
+			// Shaping both the start and end of deceleration. There are two cases:
+			// 1. There is a phase of max deceleration in the middle
+			// 2. The movement has just the segments from shaping
+			if (qq)
+			{
+				params.shapingPlan.shapeDecelOverlapped = true;
+				qq;
+			}
+			else
+			{
+				qq;
+			}
+		}
+		else
+		{
+			// Shaping just the start of deceleration
+			qq;
+		}
+	}
+	else if (params.shapingPlan.shapeDecelEnd)
+	{
+		// Shaping just the end of deceleration
+		const float decalMainSegmentClocks = params.unshaped.decelClocks - extraClocksAtEnd;
+		const float decelMainDistance = dda.totalDistance - params.unshaped.decelStartDistance - qq;
+		qq;
+	}
+	else
+	{
+		// Not shaping deceleration at all
+		if (params.unshaped.decelClocks > 0.0)
+		{
+			tempSegments = MoveSegment::Allocate(nullptr);
+			const float b = dda.topSpeed/params.unshaped.deceleration;
+			const float c = -2.0/params.unshaped.deceleration;
+			tempSegments->SetNonLinear(dda.totalDistance - params.unshaped.decelStartDistance, params.unshaped.decelClocks, b, c);
+		}
+		else
+		{
+			tempSegments = nullptr;
+		}
+	}
+
+	// Steady speed phase
+	if (params.unshaped.steadyClocks > 0.0)
+	{
+		tempSegments = MoveSegment::Allocate(tempSegments);
+		const float c = 1.0/dda.topSpeed;
+		tempSegments->SetLinear(params.unshaped.decelStartDistance - params.unshaped.accelDistance, params.unshaped.steadyClocks, c);
+	}
+
+	// Acceleration phase
+	if (params.shapingPlan.shapeAccelStart)
+	{
+		if (params.shapingPlan.shapeAccelEnd)
+		{
+			// Shaping both the start and end of acceleration. There are two cases:
+			// 1. There is a phase of max acceleration in the middle
+			// 2. The shaped deceleration phase follows the shapes acceleration phase immediately
+			if (qq)
+			{
+				params.shapingPlan.shapeAccelOverlapped = true;
+				qq;
+			}
+			else
+			{
+				qq;
+			}
+		}
+		else
+		{
+			// Shaping just the start of acceleration
+			qq;
+		}
+	}
+	else if (params.shapingPlan.shapeAccelEnd)
+	{
+		// Shaping just the end of acceleration
+		qq;
+	}
+	else
+	{
+		// Not shaping acceleration at all
+		if (params.unshaped.accelClocks > 0.0)
+		{
+			tempSegments = MoveSegment::Allocate(tempSegments);
+			const float b = dda.startSpeed/(-params.unshaped.acceleration);
+			const float c = 2.0/params.unshaped.acceleration;
+			tempSegments->SetNonLinear(params.unshaped.accelDistance, params.unshaped.accelClocks, b, c);
+		}
+	}
+#else
+	dda.shapedSegments = nullptr;
+#endif
+}
+
 #endif
 
 // Calculate the input shaping parameters that we can derive from the primary ones
@@ -584,7 +689,7 @@ void AxisShaper::TryShapeDecelBoth(DDA& dda, PrepParams& params) const noexcept
 	}
 }
 
-// Check whether we can implement acceleration shaping using the proposed parameters; if so then implement it and return true; else return false with nothing changed
+// Check whether we can implement deceleration shaping using the proposed parameters; if so then implement it and return true; else return false with nothing changed
 bool AxisShaper::ImplementDecelShaping(const DDA& dda, PrepParams& params, float newDecelStartDistance, float newDecelClocks) const noexcept
 {
 	if (params.shaped.accelDistance <= newDecelStartDistance)
@@ -621,11 +726,12 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, PrepParams& par
 				accelSegs = MoveSegment::Allocate(accelSegs);
 				const float acceleration = params.shaped.acceleration * overlappedCoefficients[i];
 				const float segTime = overlappedDurations[i];
-				segStartSpeed -= acceleration * segTime;
+				const float speedChange = acceleration * segTime;
+				segStartSpeed -= speedChange;
 				const float b = segStartSpeed/(-acceleration);
 				const float c = 2.0/acceleration;
-				const float segLen = (segStartSpeed + (0.5 * acceleration * segTime)) * segTime;
-				accelSegs->SetNonLinear(segLen, segTime, b, c);
+				const float segLen = (segStartSpeed + (0.5 * speedChange)) * segTime;
+				accelSegs->SetNonLinear(segLen, segTime, b, c, speedChange);
 			}
 			return accelSegs;
 		}
@@ -643,12 +749,13 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, PrepParams& par
 				endAccelSegs = MoveSegment::Allocate(endAccelSegs);
 				const float acceleration = params.shaped.acceleration * (1.0 - coefficients[i]);
 				const float segTime = durations[i];
-				segStartSpeed -= acceleration * segTime;
+				const float speedChange = acceleration * segTime;
+				segStartSpeed -= speedChange;
 				const float b = segStartSpeed/(-acceleration);
 				const float c = 2.0/acceleration;
-				const float segLen = (segStartSpeed + (0.5 * acceleration * segTime)) * segTime;
+				const float segLen = (segStartSpeed + (0.5 * speedChange)) * segTime;
 				endDistance -= segLen;
-				endAccelSegs->SetNonLinear(segLen, segTime, b, c);
+				endAccelSegs->SetNonLinear(segLen, segTime, b, c, speedChange);
 			}
 			accumulatedSegTime += totalShapingClocks;
 		}
@@ -666,9 +773,10 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, PrepParams& par
 				const float segTime = durations[i];
 				const float b = startSpeed/(-acceleration);
 				const float c = 2.0/acceleration;
-				const float segLen = (startSpeed + (0.5 * acceleration * segTime)) * segTime;
+				const float speedChange = acceleration * segTime;
+				const float segLen = (startSpeed + (0.5 * speedChange)) * segTime;
 				startDistance += segLen;
-				seg->SetNonLinear(segLen, segTime, b, c);
+				seg->SetNonLinear(segLen, segTime, b, c, speedChange);
 				if (i == 0)
 				{
 					startAccelSegs = seg;
@@ -688,7 +796,8 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, PrepParams& par
 			endAccelSegs = MoveSegment::Allocate(endAccelSegs);
 			const float b = startSpeed/(-params.shaped.acceleration);
 			const float c = 2.0/params.shaped.acceleration;
-			endAccelSegs->SetNonLinear(endDistance - startDistance, params.shaped.accelClocks - accumulatedSegTime, b, c);
+			const float segTime = params.shaped.accelClocks - accumulatedSegTime;
+			endAccelSegs->SetNonLinear(endDistance - startDistance, segTime, b, c, params.shaped.acceleration * segTime);
 		}
 		else if (reprap.Debug(Module::Move))
 		{
@@ -726,11 +835,12 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, PrepParams& par
 				decelSegs = MoveSegment::Allocate(decelSegs);
 				const float deceleration = params.shaped.deceleration * overlappedCoefficients[i];
 				const float segTime = overlappedDurations[i];
-				segStartSpeed += deceleration * segTime;
+				const float speedChange = deceleration * segTime;
+				segStartSpeed += speedChange;
 				const float b = segStartSpeed/deceleration;
 				const float c = -2.0/deceleration;
-				const float segLen = (segStartSpeed + (-0.5 * deceleration * segTime)) * segTime;
-				decelSegs->SetNonLinear(segLen, segTime, b, c);
+				const float segLen = (segStartSpeed + (-0.5 * speedChange)) * segTime;
+				decelSegs->SetNonLinear(segLen, segTime, b, c, -speedChange);
 			}
 			return decelSegs;
 		}
@@ -748,11 +858,12 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, PrepParams& par
 				endDecelSegs = MoveSegment::Allocate(endDecelSegs);
 				const float deceleration = params.shaped.deceleration * (1.0 - coefficients[i]);
 				const float segTime = durations[i];
-				segStartSpeed += deceleration * segTime;
+				const float speedChange = deceleration * segTime;
+				segStartSpeed += speedChange;
 				const float b = segStartSpeed/deceleration;
 				const float c = -2.0/deceleration;
-				const float segLen = (segStartSpeed + (-0.5 * deceleration * segTime)) * segTime;
-				endDecelSegs->SetNonLinear(segLen, segTime, b, c);
+				const float segLen = (segStartSpeed + (-0.5 * speedChange)) * segTime;
+				endDecelSegs->SetNonLinear(segLen, segTime, b, c, -speedChange);
 				endDistance -= segLen;
 			}
 			accumulatedSegTime += totalShapingClocks;
@@ -771,9 +882,10 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, PrepParams& par
 				const float segTime = durations[i];
 				const float b = startSpeed/deceleration;
 				const float c = -2.0/deceleration;
-				const float segLen = (startSpeed + (-0.5 * deceleration * segTime)) * segTime;
+				const float speedChange = deceleration * segTime;
+				const float segLen = (startSpeed + (-0.5 * speedChange)) * segTime;
 				startDistance += segLen;
-				seg->SetNonLinear(segLen, segTime, b, c);
+				seg->SetNonLinear(segLen, segTime, b, c, -speedChange);
 				if (i == 0)
 				{
 					startDecelSegs = seg;
@@ -793,7 +905,8 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, PrepParams& par
 			endDecelSegs = MoveSegment::Allocate(endDecelSegs);
 			const float b = startSpeed/params.shaped.deceleration;
 			const float c = -2.0/params.shaped.deceleration;
-			endDecelSegs->SetNonLinear(endDistance - startDistance, params.shaped.decelClocks - accumulatedSegTime, b, c);
+			const float segTime = params.shaped.decelClocks - accumulatedSegTime;
+			endDecelSegs->SetNonLinear(endDistance - startDistance, segTime, b, c, -params.shaped.deceleration * segTime);
 		}
 		else if (reprap.Debug(Module::Move))
 		{
@@ -873,7 +986,7 @@ inline float AxisShaper::GetExtraDecelEndDistance(float endSpeed, float decelera
 		tempSegments = MoveSegment::Allocate(nullptr);
 		const float b = dda.topSpeed/params.unshaped.deceleration;
 		const float c = -2.0/params.unshaped.deceleration;
-		tempSegments->SetNonLinear(dda.totalDistance - params.unshaped.decelStartDistance, params.unshaped.decelClocks, b, c);
+		tempSegments->SetNonLinear(dda.totalDistance - params.unshaped.decelStartDistance, params.unshaped.decelClocks, b, c, -params.unshaped.deceleration * params.unshaped.decelClocks);
 	}
 	else
 	{
@@ -894,7 +1007,7 @@ inline float AxisShaper::GetExtraDecelEndDistance(float endSpeed, float decelera
 		tempSegments = MoveSegment::Allocate(tempSegments);
 		const float b = dda.startSpeed/(-params.unshaped.acceleration);
 		const float c = 2.0/params.unshaped.acceleration;
-		tempSegments->SetNonLinear(params.unshaped.accelDistance, params.unshaped.accelClocks, b, c);
+		tempSegments->SetNonLinear(params.unshaped.accelDistance, params.unshaped.accelClocks, b, c, params.unshaped.acceleration * params.unshaped.accelClocks);
 	}
 
 	return tempSegments;

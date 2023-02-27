@@ -68,7 +68,7 @@ void DriveMovement::DebugPrint() const noexcept
 		}
 		else if (isExtruder)
 		{
-			debugPrintf(" pa=%" PRIu32 " eed=%.4e ebf=%.4e\n", (uint32_t)mp.cart.pressureAdvanceK, (double)mp.cart.extraExtrusionDistance, (double)mp.cart.extrusionBroughtForwards);
+			debugPrintf(" pa=%" PRIu32 " ebf=%.4e\n", (uint32_t)mp.cart.pressureAdvanceK, (double)mp.cart.extrusionBroughtForwards);
 		}
 		else
 		{
@@ -213,7 +213,7 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 
 #endif // SUPPORT_LINEAR_DELTA
 
-// This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
+// This is called for an extruder driver when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
 bool DriveMovement::NewExtruderSegment() noexcept
 {
 	while (true)
@@ -228,6 +228,10 @@ bool DriveMovement::NewExtruderSegment() noexcept
 
 		distanceSoFar += currentSegment->GetSegmentLength();
 		timeSoFar += currentSegment->GetSegmentTime();
+		if (nextStep > reverseStartStep)
+		{
+			mp.cart.extruderReverseSteps += reverseStartStep - nextStep;
+		}
 
 		pC = currentSegment->CalcC(mp.cart.effectiveMmPerStep);
 		if (currentSegment->IsLinear())
@@ -235,27 +239,61 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
 			pB = currentSegment->CalcLinearB(startDistance, startTime);
 			state = DMState::cartLinear;
+			reverseStartStep = segmentStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 		}
 		else
 		{
 			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * stepNumber)
 			pA = currentSegment->CalcNonlinearA(startDistance, mp.cart.pressureAdvanceK);
 			pB = currentSegment->CalcNonlinearB(startTime, mp.cart.pressureAdvanceK);
+			distanceSoFar += currentSegment->GetSpeedChange() * mp.cart.pressureAdvanceK;		// add the extra extrusion due to pressure advance to the extrusion done at the end of this move
+			const int32_t netStepsAtSegmentEnd = (int32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm);
+			const float endSpeed = mp.cart.extruderSpeed = currentSegment->GetSpeedChange();
 			if (currentSegment->IsAccelerating())
 			{
-				// Extruders have a single acceleration segment. We need to add the extra extrusion distance due to pressure advance to the extrusion distance.
-				distanceSoFar += mp.cart.extraExtrusionDistance;
 				state = DMState::cartAccel;
+				reverseStartStep = segmentStepLimit = (uint32_t)(netStepsAtSegmentEnd + 1);
 			}
 			else
 			{
-				// This is the single decelerating segment. If it includes pressure advance then it may include reversal.
-				state = (reverseStartStep <= totalSteps) ? DMState::cartDecelForwardsReversing : DMState::cartDecelNoReverse;
+				// This is a decelerating segment. If it includes pressure advance then it may include reversal.
+				if (endSpeed >= 0.0)
+				{
+					state = DMState::cartDecelNoReverse;				// this segment is forwards throughout
+					reverseStartStep = segmentStepLimit = (uint32_t)(netStepsAtSegmentEnd + 1);
+				}
+				else
+				{
+					if (mp.cart.extruderSpeed < 0)
+					{
+						state = DMState::cartDecelReverse;					// this segment is reverse throughout
+						reverseStartStep = nextStep;
+					}
+					else
+					{
+						// This segment starts forwards and then reverses. Either or both of the forward and reverse segments may be small enough to need no steps.
+						const float segmentDistanceToReverse = fsquare(mp.cart.extruderSpeed) * currentSegment->GetC() * (-0.25);	// because (v^2-u^2) = 2as, so if v=0 then s=-u^2/2a = u^2/2d = -0.25*u^2*c
+						const float distanceToReverse = startDistance + segmentDistanceToReverse - 0.5;								// don't do the last step if we only overshoot it slightly
+						reverseStartStep = (uint32_t)((int32_t)(distanceToReverse * mp.cart.effectiveStepsPerMm) + (2 * mp.cart.extruderReverseSteps) + 1);
+						if (nextStep < reverseStartStep)
+						{
+							// There is at least one step before we reverse
+							state = DMState::cartDecelForwardsReversing;
+						}
+						else
+						{
+							// There is no significant forward phase, so start in reverse
+							reverseStartStep = nextStep;					// they are probably equal anyway, but just in case...
+							state = DMState::cartDecelReverse;
+						}
+					}
+				}
+				segmentStepLimit = (uint32_t)((int32_t)(2 * (reverseStartStep + mp.cart.extruderReverseSteps)) - netStepsAtSegmentEnd);
 			}
+			mp.cart.extruderSpeed = endSpeed;
 		}
 
 		// Work out the movement limit in steps
-		segmentStepLimit = ((currentSegment->GetNext() == nullptr) ? totalSteps : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm)) + 1;
 
 		if (nextStep < segmentStepLimit)
 		{
@@ -275,9 +313,11 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	// We can't use directionVector here because those values relate to Cartesian space, whereas we may be CoreXY etc.
 	mp.cart.effectiveStepsPerMm =
 #if SUPPORT_REMOTE_COMMANDS
-					(dda.flags.isRemote) ? (float)totalSteps :
+									(dda.flags.isRemote) ? (float)totalSteps
+										: (float)totalSteps/dda.totalDistance;
+#else
+									(float)totalSteps/dda.totalDistance;
 #endif
-						(float)totalSteps/dda.totalDistance;
 	mp.cart.effectiveMmPerStep = 1.0/mp.cart.effectiveStepsPerMm;
 	isDelta = false;
 	isExtruder = false;
@@ -416,220 +456,41 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 // Prepare this DM for an extruder move, returning true if there are steps to do
 // If there are no steps to do, set nextStep = 0 so that DDARing::CurrentMoveCompleted doesn't add any steps to the movement accumulator
 // We have already generated the extruder segments and we know that there are some
-bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params) noexcept
+// effStepsPerMm is the number of extruder steps needed per mm of totalDistance before we apply pressure advance
+bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept
 {
-	const float effStepsPerMm =
+	const size_t logicalDrive =
 #if SUPPORT_REMOTE_COMMANDS
-							(dda.flags.isRemote) ? (float)totalSteps :
+								(dda.flags.isRemote) ? drive : LogicalDriveToExtruder(drive);
+#else
+								LogicalDriveToExtruder(drive);
 #endif
-								reprap.GetPlatform().DriveStepsPerUnit(drive) * fabsf(dda.directionVector[drive]);
-	const float effMmPerStep = 1.0/effStepsPerMm;
+	ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
 
-	ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(
-#if SUPPORT_REMOTE_COMMANDS
-																(dda.flags.isRemote) ? drive :
-#endif
-																	LogicalDriveToExtruder(drive)
-															   );
-	float forwardDistance =	mp.cart.extrusionBroughtForwards =
-#if SUPPORT_REMOTE_COMMANDS
-			(dda.flags.isRemote) ? 0.0 :
-#endif
-				shaper.GetExtrusionPending()/dda.directionVector[drive];
-	float reverseDistance;
+	// distanceSoFar will accumulate the equivalent amount of totalDistance that the extruder moves forwards.
+	// It would be equal to totalDistance if there was no pressure advance and no extrusion pending.
+	distanceSoFar =	mp.cart.extrusionBroughtForwards = shaper.GetExtrusionPending()/dda.directionVector[drive];
 
+	const float effStepsPerMm = fabsf(signedEffStepsPerMm);
 	mp.cart.effectiveStepsPerMm = effStepsPerMm;
+	const float effMmPerStep = 1.0/effStepsPerMm;
 	mp.cart.effectiveMmPerStep = effMmPerStep;
-	distanceSoFar = forwardDistance;
 	timeSoFar = 0.0;
+	mp.cart.extruderSpeed = dda.startSpeed;
+	mp.cart.extruderReverseSteps = 0;
 
 	// Calculate the total forward and reverse movement distances
-	if ((   dda.flags.usePressureAdvance
-#if SUPPORT_REMOTE_COMMANDS
-		 || dda.flags.isRemote				// for remote moves we check whether PA is wanted before calling PreparExtruder
-#endif
-		) && shaper.GetKclocks() > 0.0
-	   )
-	{
-		// We are using nonzero pressure advance. Movement must be forwards.
-		mp.cart.pressureAdvanceK = shaper.GetKclocks();
-		mp.cart.extraExtrusionDistance = mp.cart.pressureAdvanceK * (dda.topSpeed - dda.startSpeed);
-		forwardDistance += mp.cart.extraExtrusionDistance;
+	mp.cart.pressureAdvanceK = (dda.flags.usePressureAdvance && shaper.GetKclocks() > 0.0) ? shaper.GetKclocks() : 0.0;
 
-# if 0 //SHAPE_EXTRUSION
-		forwardDistance += params.shaped.decelStartDistance;
-		reverseDistance = 0.0;
-
-		// Find the deceleration segments
-		const MoveSegment *decelSeg = dda.unshapedSegments;
-		while (decelSeg != nullptr && (decelSeg->IsLinear() || decelSeg->IsAccelerating()))
-		{
-			decelSeg = decelSeg->GetNext();
-		}
-
-		float lastUncorrectedSpeed = dda.topSpeed;
-		float lastDistance = forwardDistance;
-		while (decelSeg != nullptr)
-		{
-			const float initialDecelSpeed = lastUncorrectedSpeed - mp.cart.pressureAdvanceK * decelSeg->deceleration;
-			if (initialDecelSpeed <= 0.0)
-			{
-				// This entire deceleration segment is in reverse
-				reverseDistance += ((0.5 * params.unshaped.deceleration * params.unshaped.decelClocks) - initialDecelSpeed) * params.unshaped.decelClocks;
-			}
-			else
-			{
-				const float timeToReverse = initialDecelSpeed * ((-0.5) * decelSeg->GetC());	// 'c' is -2/deceleration, so -0.5*c is 1/deceleration
-				if (timeToReverse < params.unshaped.decelClocks)
-				{
-					// There is a reversal, although it could be tiny
-					const float distanceToReverse = fsquare(initialDecelSpeed) * decelSeg->GetC() * (-0.25);	// because (v^2-u^2) = 2as, so if v=0 then s=-u^2/2a = u^2/2d = -0.25*u^2*c
-					forwardDistance += params.unshaped.decelStartDistance + distanceToReverse;
-					reverseDistance = 0.5 * params.unshaped.deceleration * fsquare(params.unshaped.decelClocks - timeToReverse);	// because s = 0.5*a*t^2
-				}
-				else
-				{
-					// No reversal
-					forwardDistance += dda.totalDistance - (mp.cart.pressureAdvanceK * params.unshaped.deceleration * params.unshaped.decelClocks);
-					reverseDistance = 0.0;
-				}
-			}
-
-		}
-# else
-		// Check if there is a reversal in the deceleration segment
-		// There is at most one deceleration segment in the unshaped segments
-		const MoveSegment *decelSeg = dda.unshapedSegments;
-		while (decelSeg != nullptr && (decelSeg->IsLinear() || decelSeg->IsAccelerating()))
-		{
-			decelSeg = decelSeg->GetNext();
-		}
-
-		if (decelSeg == nullptr)
-		{
-			forwardDistance += dda.totalDistance;			// no deceleration segment
-			reverseDistance = 0.0;
-		}
-		else
-		{
-			const float initialDecelSpeed = dda.topSpeed - mp.cart.pressureAdvanceK * params.unshaped.deceleration;
-			if (initialDecelSpeed <= 0.0)
-			{
-				// The entire deceleration segment is in reverse
-				forwardDistance += params.unshaped.decelStartDistance;
-				reverseDistance = ((0.5 * params.unshaped.deceleration * params.unshaped.decelClocks) - initialDecelSpeed) * params.unshaped.decelClocks;
-			}
-			else
-			{
-				const float timeToReverse = initialDecelSpeed * ((-0.5) * decelSeg->GetC());	// 'c' is -2/deceleration, so -0.5*c is 1/deceleration
-				if (timeToReverse < params.unshaped.decelClocks)
-				{
-					// There is a reversal, although it could be tiny
-					const float distanceToReverse = fsquare(initialDecelSpeed) * decelSeg->GetC() * (-0.25);	// because (v^2-u^2) = 2as, so if v=0 then s=-u^2/2a = u^2/2d = -0.25*u^2*c
-					forwardDistance += params.unshaped.decelStartDistance + distanceToReverse;
-					reverseDistance = 0.5 * params.unshaped.deceleration * fsquare(params.unshaped.decelClocks - timeToReverse);	// because s = 0.5*a*t^2
-				}
-				else
-				{
-					// No reversal
-					forwardDistance += dda.totalDistance - (mp.cart.pressureAdvanceK * params.unshaped.deceleration * params.unshaped.decelClocks);
-					reverseDistance = 0.0;
-				}
-			}
-		}
-# endif
-	}
-	else
-	{
-		// No pressure advance. Movement may be backwards but this still counts as forward distance in the calculations.
-		mp.cart.pressureAdvanceK = mp.cart.extraExtrusionDistance = 0.0;
-		forwardDistance += dda.totalDistance;
-		reverseDistance = 0.0;
-	}
-
-	// Check whether there are any steps at all
-	const float forwardSteps = forwardDistance * effStepsPerMm;
-	if (reverseDistance > 0.0)
-	{
-		const float netDistance = forwardDistance - reverseDistance;
-		const int32_t iFwdSteps = (int32_t)forwardSteps;
-		int32_t netSteps = (int32_t)(netDistance * effStepsPerMm);
-		if (netSteps == 0 && iFwdSteps == 0)
-		{
-			// No movement at all
-			nextStep = totalSteps = 0;
-			reverseStartStep = 1;
-#if SUPPORT_REMOTE_COMMANDS
-			if (!dda.flags.isRemote)
-#endif
-			{
-				shaper.SetExtrusionPending(netDistance * dda.directionVector[drive]);
-			}
-			return false;
-		}
-
-		// Note, netSteps may be negative for e.g. a deceleration-only move
-		if (netSteps == iFwdSteps)
-		{
-			// The reverse segment is very small, so ignore it
-			totalSteps = (uint32_t)iFwdSteps;
-			reverseStartStep = totalSteps + 1;
-		}
-		else
-		{
-			// We know that netSteps <= iFwdSteps
-			reverseStartStep = iFwdSteps + 1;
-			// Round up netSteps because we don't want to overshoot the reverse movement.
-			const float extrusionPending = netDistance - (float)netSteps * effMmPerStep;
-			if (extrusionPending > 0.05 * effMmPerStep)
-			{
-				++netSteps;
-			}
-			totalSteps = (uint32_t)((int32_t)(2 * reverseStartStep) - netSteps - 2);
-		}
-#if SUPPORT_REMOTE_COMMANDS
-		if (!dda.flags.isRemote)
-#endif
-		{
-			shaper.SetExtrusionPending((netDistance - (float)netSteps * effMmPerStep) * dda.directionVector[drive]);
-		}
-	}
-	else
-	{
-		if (forwardSteps >= 1.0)
-		{
-			totalSteps = (uint32_t)forwardSteps;
-#if SUPPORT_REMOTE_COMMANDS
-			if (!dda.flags.isRemote)
-#endif
-			{
-				shaper.SetExtrusionPending((forwardDistance - (float)totalSteps * effMmPerStep) * dda.directionVector[drive]);
-			}
-		}
-		else
-		{
-			// No steps at all, or negative forward steps which I think should be impossible unless the steps/mm is changed
-			nextStep = totalSteps = 0;
-			reverseStartStep = 1;
-#if SUPPORT_REMOTE_COMMANDS
-			if (!dda.flags.isRemote)
-#endif
-			{
-				shaper.SetExtrusionPending(forwardDistance * dda.directionVector[drive]);
-			}
-			return false;
-		}
-		reverseStartStep = totalSteps + 1;			// no reverse phase
-	}
-
-	currentSegment = dda.unshapedSegments;
+	currentSegment = (dda.shapedSegments != nullptr) ? dda.shapedSegments : dda.unshapedSegments;
 	isDelta = false;
 	isExtruder = true;
-
 	nextStep = 0;									// must do this before calling NewExtruderSegment
+
 	if (!NewExtruderSegment())
 	{
-		return false;								// this should not happen because we have already determined that there are steps to do
+		shaper.SetExtrusionPending(distanceSoFar * dda.directionVector[drive]);
+		return false;								// quit if no steps to do
 	}
 
 	// Prepare for the first step
@@ -659,17 +520,34 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		if (stepsToLimit == 0)
 		{
 			currentSegment = currentSegment->GetNext();
-			const bool more =
+			if (isExtruder)
+			{
+				if (!NewExtruderSegment())
+				{
+					const size_t logicalDrive =
+#if SUPPORT_REMOTE_COMMANDS
+												(dda.flags.isRemote) ? drive : LogicalDriveToExtruder(drive);
+#else
+												LogicalDriveToExtruder(drive);
+#endif
+					ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
+					shaper.SetExtrusionPending(distanceSoFar * dda.directionVector[drive] - ((int)nextStep + (int)mp.cart.extruderReverseSteps));
+					return false;
+				}
+			}
+			else
+			{
+				const bool more =
 #if SUPPORT_LINEAR_DELTA
 								(isDelta) ? NewDeltaSegment(dda) :
 #endif
-									(isExtruder) ? NewExtruderSegment()
-										: NewCartesianSegment();
-			if (!more)
-			{
-				state = DMState::stepError;
-				nextStep += 100000000;							// so we can tell what happened in the debug print
-				return false;
+									NewCartesianSegment();
+				if (!more)
+				{
+					state = DMState::stepError;
+					nextStep += 100000000;							// so we can tell what happened in the debug print
+					return false;
+				}
 			}
 			// Leave shiftFactor set to 0 so that we compute a single step time, because the interval will have changed
 			stepsTakenThisSegment = 1;							// this will be the first step in this segment
@@ -739,7 +617,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)((2 * (int32_t)(reverseStartStep - 1)) - (int32_t)(nextStep + stepsTillRecalc)));
 		break;
 
-	case DMState::cartDecelNoReverse:							// Cartesian accelerating with no reversal
+	case DMState::cartDecelNoReverse:							// Cartesian decelerating with no reversal
 		nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
 		break;
 
@@ -837,12 +715,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	}
 #endif
 
-#if EVEN_STEPS
 	nextStepTime = iNextCalcStepTime - (stepsTillRecalc * stepInterval);
-#else
-	nextStepTime = iNextCalcStepTime;
-#endif
-
 	return true;
 }
 
