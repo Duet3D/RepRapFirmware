@@ -54,7 +54,6 @@ public:
 	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept SPEED_CRITICAL;
 
 	void DebugPrint() const noexcept;
-	int32_t GetNetStepsLeft() const noexcept;
 	int32_t GetNetStepsTaken() const noexcept;
 
 #if HAS_SMART_DRIVERS
@@ -168,27 +167,6 @@ inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
 			asm volatile("nop");
 #endif
 	return false;
-}
-
-// Return the number of net steps left for the move in the forwards direction.
-// We have already taken nextSteps - 1 steps, unless nextStep is zero.
-inline int32_t DriveMovement::GetNetStepsLeft() const noexcept
-{
-	int32_t netStepsLeft;
-	if (reverseStartStep > totalSteps)		// if no reverse phase
-	{
-		netStepsLeft = (nextStep == 0) ? (int32_t)totalSteps : (int32_t)totalSteps - (int32_t)nextStep + 1;
-	}
-	else if (nextStep >= reverseStartStep)
-	{
-		netStepsLeft = (int32_t)totalSteps - (int32_t)nextStep + 1;
-	}
-	else
-	{
-		const int32_t totalNetSteps = (int32_t)(2 * reverseStartStep) - (int32_t)totalSteps - 2;
-		netStepsLeft = (nextStep == 0) ? totalNetSteps : totalNetSteps - (int32_t)nextStep + 1;
-	}
-	return (direction) ? netStepsLeft : -netStepsLeft;
 }
 
 // Return the number of net steps already taken for the move in the forwards direction.

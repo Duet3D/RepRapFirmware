@@ -1316,12 +1316,12 @@ void DDA::MatchSpeeds() noexcept
 // This is called by DDARing::LiveCoordinates to get the endpoints of a move that is being executed
 void DDA::FetchCurrentPositions(int32_t ep[MaxAxesPlusExtruders]) const noexcept
 {
-	memcpyi32(ep, endPoint, MaxAxesPlusExtruders);
+	memcpyi32(ep, prev->endPoint, MaxAxesPlusExtruders);
 	if (!flags.isLeadscrewAdjustmentMove)			// driver numbers are out of the usual range for leadscrew adjustment moves
 	{
 		for (const DriveMovement* dm = activeDMs; dm != nullptr; dm = dm->nextDM)
 		{
-			ep[dm->drive] -= dm->GetNetStepsLeft();
+			ep[dm->drive] += dm->GetNetStepsTaken();
 		}
 	}
 }
@@ -2225,7 +2225,7 @@ void DDA::StopDrive(size_t drive) noexcept
 	{
 		if (drive < reprap.GetGCodes().GetTotalAxes())
 		{
-			endPoint[drive] -= pdm->GetNetStepsLeft();
+			endPoint[drive] = prev->endPoint[drive] + pdm->GetNetStepsTaken();
 			flags.endCoordinatesValid = false;			// the XYZ position is no longer valid
 		}
 		DeactivateDM(drive);
@@ -2262,7 +2262,7 @@ void DDA::MoveAborted() noexcept
 	state = completed;
 }
 
-// Return the proportion of the complete multi-segment move that has already been done.
+// Return the proportion of the extrusion in the complete multi-segment move that has already been done.
 // The move was either not started or was aborted.
 float DDA::GetProportionDone(bool moveWasAborted) const noexcept
 {
@@ -2275,20 +2275,21 @@ float DDA::GetProportionDone(bool moveWasAborted) const noexcept
 		// The move was aborted, so subtract how much was done
 		if (proportionDone > proportionDoneSoFar)
 		{
-			int32_t taken = 0, left = 0;
+			int32_t stepsTaken = 0;
+			float extrusionRequested = 0;
 			for (size_t extruder = 0; extruder < reprap.GetGCodes().GetNumExtruders(); ++extruder)
 			{
-				const DriveMovement* const pdm = FindDM(ExtruderToLogicalDrive(extruder));
+				const size_t logicalDrive = ExtruderToLogicalDrive(extruder);
+				const DriveMovement* const pdm = FindDM(logicalDrive);
 				if (pdm != nullptr)								// if this extruder is active
 				{
-					taken += pdm->GetNetStepsTaken();
-					left += pdm->GetNetStepsLeft();
+					stepsTaken += pdm->GetNetStepsTaken();
+					extrusionRequested += totalDistance * directionVector[logicalDrive];
 				}
 			}
-			const int32_t total = taken + left;
-			if (total > 0)										// if the move has net extrusion
+			if (extrusionRequested > 0.0)										// if the move has net extrusion
 			{
-				proportionDoneSoFar += (((proportionDone - proportionDoneSoFar) * taken) + (total/2)) / total;
+				proportionDoneSoFar += ((proportionDone - proportionDoneSoFar) * stepsTaken) / extrusionRequested;
 			}
 		}
 	}
