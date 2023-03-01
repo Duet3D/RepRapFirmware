@@ -268,14 +268,8 @@ void DDA::DebugPrint(const char *tag) const noexcept
 	DebugPrintVector(" vec", directionVector, MaxAxesPlusExtruders);
 	debugPrintf("\n" "a=%.4e d=%.4e reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=%04x\n",
 				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded, (uint32_t)filePos, flags.all);
-	for (const MoveSegment *segs = shapedSegments; segs != nullptr; segs = segs->GetNext())
-	{
-		segs->DebugPrint('S');
-	}
-	for (const MoveSegment *segs = unshapedSegments; segs != nullptr; segs = segs->GetNext())
-	{
-		segs->DebugPrint('U');
-	}
+	MoveSegment::DebugPrintList('S', shapedSegments);
+	MoveSegment::DebugPrintList('U', unshapedSegments);
 }
 
 // Print the DDA and active DMs
@@ -1658,10 +1652,8 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 							if (pdm->PrepareExtruder(*this, params, platform.DriveStepsPerUnit(drive) * directionVector[drive]))
 							{
 								pdm->directionChanged = false;
-								if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
-								{
-									DebugPrintAll("pr_err4");
-								}
+								// Check for sensible values, debugPrint them if they look dubious
+								//TODO (note: totalSteps is no longer valid for extruders)
 								InsertDM(pdm);
 							}
 							else

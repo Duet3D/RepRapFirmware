@@ -102,7 +102,7 @@ private:
 
 	float distanceSoFar;								// the accumulated distance at the end of the current move segment
 	float timeSoFar;									// the accumulated taken for this current DDA at the end of the current move segment
-	float pA, pB, pC;									// the move parameters for the current move segment
+	float pA, pB, pC;									// the move parameters for the current move segment. pA is not used when performing a move at constant speed.
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	union
@@ -138,7 +138,7 @@ private:
 inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
 {
 	++nextStep;
-	if (nextStep <= totalSteps)
+	if (nextStep <= totalSteps || isExtruder)
 	{
 		if (stepsTillRecalc != 0)
 		{
@@ -154,7 +154,10 @@ inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
 #endif
 			return true;
 		}
-		return CalcNextStepTimeFull(dda);
+		if (CalcNextStepTimeFull(dda))
+		{
+			return true;
+		}
 	}
 
 	state = DMState::idle;

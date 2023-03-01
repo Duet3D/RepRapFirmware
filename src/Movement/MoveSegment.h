@@ -148,15 +148,30 @@ public:
 	bool IsAccelerating() const noexcept pre(!IsLinear());
 	bool IsLast() const noexcept;
 
+	// Get the segment length in mm
 	float GetSegmentLength() const noexcept { return segLength; }
+
+	// Get the segment duration in step clocks
 	float GetSegmentTime() const noexcept { return segTime; }
+
+	// Get the segment speed change in mm/step_clock. Only for accelerating or decelerating moves.
 	float GetSpeedChange() const noexcept pre(!IsLinear()) { return speedChange; }
+
+	// Calculate the move A coefficient in step_clocks^2 for an accelerating or decelerating move
 	float CalcNonlinearA(float startDistance) const noexcept pre(!IsLinear());
 	float CalcNonlinearA(float startDistance, float pressureAdvanceK) pre(!IsLinear()) const noexcept pre(!IsLinear());
+
+	// Calculate the move B coefficient in step_clocks for an accelerating or decelerating move
 	float CalcNonlinearB(float startTime) const noexcept pre(!IsLinear());
 	float CalcNonlinearB(float startTime, float pressureAdvanceK) const noexcept pre(!IsLinear());
+
+	// Calculate the move B coefficient in step_clocks for a steady speed move
 	float CalcLinearB(float startDistance, float startTime) const noexcept pre(IsLinear());
+
+	// Calculate the move C coefficient in step_clocks/step for a linear move, or step_clocks^2/step for an accelerating or decelerating move
 	float CalcC(float mmPerStep) const noexcept;
+
+	// Return the C coefficient
 	float GetC() const noexcept { return c; }
 
 	void SetLinear(float pSegmentLength, float p_segTime, float p_c) noexcept post(IsLinear());
@@ -166,6 +181,7 @@ public:
 	void SetNext(MoveSegment *p_next) noexcept;
 	void AddToTail(MoveSegment *tail) noexcept;
 	void DebugPrint(char ch) const noexcept;
+	static void DebugPrintList(char ch, const MoveSegment *segs) noexcept;
 
 	// Allocate a MoveSegment, clearing the flags
 	static MoveSegment *Allocate(MoveSegment *next) noexcept;
@@ -205,8 +221,8 @@ private:
 	uint32_t nextAndFlags;									// pointer to the next segment, plus flag bits
 	float segLength;										// the length of this segment before applying the movement fraction
 	float segTime;											// the time in step clocks at which this move ends
-	float c;												// the c move parameter
-	float b;												// the b move parameter, not used by linear move segments
+	float c;												// the c move parameter, units are step_clocks/mm for linear moves, units are steps_clocks^2/mm for accelerating or decelerating moves
+	float b;												// the b move parameter, units are step_clocks, not used by linear move segments
 	float speedChange;										// the change in speed during this segment, not used by linear move segments
 };
 

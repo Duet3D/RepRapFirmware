@@ -68,7 +68,8 @@ void DriveMovement::DebugPrint() const noexcept
 		}
 		else if (isExtruder)
 		{
-			debugPrintf(" pa=%" PRIu32 " ebf=%.4e\n", (uint32_t)mp.cart.pressureAdvanceK, (double)mp.cart.extrusionBroughtForwards);
+			debugPrintf(" pa=%" PRIu32 " es=%.4e ers=%" PRIu32 " ebf=%.4e\n",
+							(uint32_t)mp.cart.pressureAdvanceK, (double)mp.cart.extruderSpeed, mp.cart.extruderReverseSteps, (double)mp.cart.extrusionBroughtForwards);
 		}
 		else
 		{
@@ -228,11 +229,6 @@ bool DriveMovement::NewExtruderSegment() noexcept
 
 		distanceSoFar += currentSegment->GetSegmentLength();
 		timeSoFar += currentSegment->GetSegmentTime();
-		if (nextStep > reverseStartStep)
-		{
-			mp.cart.extruderReverseSteps += reverseStartStep - nextStep;
-		}
-
 		pC = currentSegment->CalcC(mp.cart.effectiveMmPerStep);
 		if (currentSegment->IsLinear())
 		{
@@ -287,8 +283,8 @@ bool DriveMovement::NewExtruderSegment() noexcept
 							state = DMState::cartDecelReverse;
 						}
 					}
+					segmentStepLimit = (uint32_t)((int32_t)(2 * (reverseStartStep + mp.cart.extruderReverseSteps)) - netStepsAtSegmentEnd);
 				}
-				segmentStepLimit = (uint32_t)((int32_t)(2 * (reverseStartStep + mp.cart.extruderReverseSteps)) - netStepsAtSegmentEnd);
 			}
 			mp.cart.extruderSpeed = endSpeed;
 		}
@@ -465,16 +461,17 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 #else
 								LogicalDriveToExtruder(drive);
 #endif
-	ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
-
-	// distanceSoFar will accumulate the equivalent amount of totalDistance that the extruder moves forwards.
-	// It would be equal to totalDistance if there was no pressure advance and no extrusion pending.
-	distanceSoFar =	mp.cart.extrusionBroughtForwards = shaper.GetExtrusionPending()/dda.directionVector[drive];
 
 	const float effStepsPerMm = fabsf(signedEffStepsPerMm);
 	mp.cart.effectiveStepsPerMm = effStepsPerMm;
 	const float effMmPerStep = 1.0/effStepsPerMm;
 	mp.cart.effectiveMmPerStep = effMmPerStep;
+
+	// distanceSoFar will accumulate the equivalent amount of totalDistance that the extruder moves forwards.
+	// It would be equal to totalDistance if there was no pressure advance and no extrusion pending.
+	ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
+debugPrintf("pending %.2f\n", (double)shaper.GetExtrusionPending());
+	distanceSoFar =	mp.cart.extrusionBroughtForwards = shaper.GetExtrusionPending() * effMmPerStep;
 	timeSoFar = 0.0;
 	mp.cart.extruderSpeed = dda.startSpeed;
 	mp.cart.extruderReverseSteps = 0;
@@ -486,10 +483,11 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	isDelta = false;
 	isExtruder = true;
 	nextStep = 0;									// must do this before calling NewExtruderSegment
+	totalSteps = 0;									// we don't use totalSteps but set it to 0 to avoid random values being printed in DebugPrint
 
 	if (!NewExtruderSegment())
 	{
-		shaper.SetExtrusionPending(distanceSoFar * dda.directionVector[drive]);
+		shaper.SetExtrusionPending(dda.totalDistance * effStepsPerMm);
 		return false;								// quit if no steps to do
 	}
 
@@ -531,7 +529,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 												LogicalDriveToExtruder(drive);
 #endif
 					ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
-					shaper.SetExtrusionPending(distanceSoFar * dda.directionVector[drive] - ((int)nextStep + (int)mp.cart.extruderReverseSteps));
+					shaper.SetExtrusionPending(distanceSoFar * mp.cart.effectiveStepsPerMm - (float)((int)nextStep - 2 * (int)mp.cart.extruderReverseSteps));
 					return false;
 				}
 			}

@@ -34,7 +34,7 @@ public:
 
 private:
 	float k;								// the pressure advance constant in step clocks
-	float extrusionPending;					// extrusion we have been asked to do but haven't because it is less than one microstep, in mm
+	float extrusionPending;					// extrusion we have been asked to do but haven't because it is less than one microstep, in microsteps
 };
 
 #endif /* SRC_MOVEMENT_EXTRUDERSHAPER_H_ */

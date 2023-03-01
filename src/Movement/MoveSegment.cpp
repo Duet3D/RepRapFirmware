@@ -57,7 +57,23 @@ void MoveSegment::DebugPrint(char ch) const noexcept
 	}
 	else
 	{
-		debugPrintf("b=%.4e c=%.4e\n", (double)b, (double)c);
+		debugPrintf("b=%.4e c=%.4e s=%.4e\n", (double)b, (double)c, (double)speedChange);
+	}
+}
+
+/*static*/ void MoveSegment::DebugPrintList(char ch, const MoveSegment *segs) noexcept
+{
+	if (segs == nullptr)
+	{
+		debugPrintf("%c null\n", ch);
+	}
+	else
+	{
+		while (segs != nullptr)
+		{
+			segs->DebugPrint(ch);
+			segs = segs->GetNext();
+		}
 	}
 }
 
