@@ -99,6 +99,7 @@ void HangprinterKinematics::Init() noexcept
 	constexpr float DefaultTorqueConstants[HANGPRINTER_AXES] = { 0.0F };
 
 	ARRAY_INIT(anchors, DefaultAnchors);
+	anchorMode = HangprinterAnchorMode::LastOnTop;
 	printRadius = DefaultPrintRadius;
 	spoolBuildupFactor = DefaultSpoolBuildupFactor;
 	ARRAY_INIT(spoolRadii, DefaultSpoolRadii);
@@ -229,6 +230,12 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 	}
 	else if (mCode == 666)
 	{
+		// 0=None, 1=last-top, 2=all-top, 3-half-top, etc
+		uint32_t unsignedAnchorMode = (uint32_t)anchorMode;
+		gb.TryGetUIValue('A', unsignedAnchorMode, seen);
+		if (unsignedAnchorMode <= (uint32_t)HangprinterAnchorMode::AllOnTop) {
+			anchorMode = (HangprinterAnchorMode)unsignedAnchorMode;
+		}
 		gb.TryGetFValue('Q', spoolBuildupFactor, seen);
 		gb.TryGetFloatArray('R', HANGPRINTER_AXES, spoolRadii, seen);
 		gb.TryGetUIArray('U', HANGPRINTER_AXES, mechanicalAdvantage, seen);
@@ -248,7 +255,7 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		}
 		else
 		{
-			reply.printf("M666 Q%.4f\n", (double)spoolBuildupFactor);
+			reply.printf("M666 A%u Q%.4f\n", (unsigned)anchorMode, (double)spoolBuildupFactor);
 
 			reply.lcatf("R%.2f", (double)spoolRadii[0]);
 			for (size_t i = 1; i < HANGPRINTER_AXES; ++i)
@@ -444,6 +451,29 @@ static bool isSameSide(float const v0[3], float const v1[3], float const v2[3], 
 	return dot0*dot1 > 0.0F;
 }
 
+bool HangprinterKinematics::IsInsidePyramidSides(float const coords[3]) const noexcept
+{
+	bool reachable = true;
+
+	// Check all the planes defined by triangle sides in the pyramid
+	for (size_t i = 0; reachable && i < HANGPRINTER_AXES - 1; ++i) {
+		reachable = reachable && isSameSide(anchors[i], anchors[(i+1) % (HANGPRINTER_AXES - 1)], anchors[HANGPRINTER_AXES - 1], anchors[(i+2) % (HANGPRINTER_AXES - 1)], coords);
+	}
+	return reachable;
+}
+
+bool HangprinterKinematics::IsInsidePrismSides(float const coords[3], unsigned const discount_last) const noexcept
+{
+	bool reachable = true;
+
+	// For each side of the base, check the plane formed by side and another point bellow them in z.
+	for (size_t i = 0; reachable && i < HANGPRINTER_AXES - discount_last; ++i) {
+		float const lower_point[3] = {anchors[i][0], anchors[i][1], anchors[i][2] - 1};
+		reachable = reachable && isSameSide(anchors[i], anchors[(i+1) % (HANGPRINTER_AXES - 1)], lower_point, anchors[(i+2) % (HANGPRINTER_AXES - 1)], coords);
+	}
+	return reachable;
+}
+
 // For each triangle side in a pseudo-pyramid, check if the point is inside the pyramid (Except for the base)
 // Also check that any point below the line between two exterior anchors (all anchors are exterior except for the last one)
 // is in the "inside part" all the way down to min_Z, however low it may be.
@@ -453,16 +483,19 @@ bool HangprinterKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap ax
 	float const coords[3] = {axesCoords[X_AXIS], axesCoords[Y_AXIS], axesCoords[Z_AXIS]};
 	bool reachable = true;
 
-	// Check all the planes defined by triangle sides in the pyramid
-	for (size_t i = 0; reachable && i < HANGPRINTER_AXES - 1; ++i) {
-		reachable = reachable && isSameSide(anchors[i], anchors[(i+1) % (HANGPRINTER_AXES - 1)], anchors[HANGPRINTER_AXES - 1], anchors[(i+2) % (HANGPRINTER_AXES - 1)], coords);
-	}
+	switch (anchorMode) {
+		case HangprinterAnchorMode::None:
+			return true;
 
-	// For each side of the base, check the plane formed by side and another point bellow them in z.
-	for (size_t i = 0; reachable && i < HANGPRINTER_AXES - 1; ++i) {
-		float const lower_point[3] = {anchors[i][0], anchors[i][1], anchors[i][2] - 1};
-		reachable = reachable && isSameSide(anchors[i], anchors[(i+1) % (HANGPRINTER_AXES - 1)], lower_point, anchors[(i+2) % (HANGPRINTER_AXES - 1)], coords);
-	}
+		// This reaches a pyramid on top of the lower prism if the bed is below the lower anchors
+		case HangprinterAnchorMode::LastOnTop:
+		default:
+			reachable = IsInsidePyramidSides(coords);
+			return reachable && IsInsidePrismSides(coords, 1);
+
+		case HangprinterAnchorMode::AllOnTop:
+			return IsInsidePrismSides(coords, 0);
+	};
 
 	return reachable;
 }
@@ -586,7 +619,7 @@ bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const noexc
 	ok = f->Write(scratchString.c_str());
 	if (!ok) return false;
 
-	scratchString.printf("M666 Q%.6f ", (double)spoolBuildupFactor);
+	scratchString.printf("M666 A%u Q%.6f ", (unsigned)anchorMode, (double)spoolBuildupFactor);
 	ok = f->Write(scratchString.c_str());
 	if (!ok) return false;
 

@@ -12,6 +12,13 @@
 
 #if SUPPORT_HANGPRINTER
 
+// Different modes can be configured for different tradeoffs in terms of printing volumes and speeds
+enum class HangprinterAnchorMode {
+	None, // All is reacheable in None anchor mode as printing volume
+	LastOnTop, // (Default) Rsults in a pyramid plus a prism below if the lower anchors are above the printing bed
+	AllOnTop, // Result in a prism (speeds get limited, specially going down in Z)
+};
+
 class HangprinterKinematics : public RoundBedKinematics
 {
 public:
@@ -55,6 +62,9 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
+	bool IsInsidePyramidSides(float const coords[3]) const noexcept;
+	bool IsInsidePrismSides(float const coords[3], unsigned const discount_last) const noexcept;
+
 private:
 	// Basic facts about movement system
 	const char* ANCHOR_CHARS = "ABCD";
@@ -72,6 +82,7 @@ private:
 	void PrintParameters(const StringRef& reply) const noexcept;			// Print all the parameters for debugging
 
 	// The real defaults are in the cpp file
+	HangprinterAnchorMode anchorMode = HangprinterAnchorMode::LastOnTop;
 	float printRadius = 0.0F;
 	float anchors[HANGPRINTER_AXES][3] = {{ 0.0, 0.0, 0.0},
 	                                      { 0.0, 0.0, 0.0},
