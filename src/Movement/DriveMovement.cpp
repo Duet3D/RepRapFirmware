@@ -13,6 +13,15 @@
 #include <Math/Isqrt.h>
 #include "Kinematics/LinearDeltaKinematics.h"
 
+//DEBUG
+float debugF[2];
+int32_t debugI[10];
+void DebugSavedVars() noexcept
+{
+	debugPrintf("%.4e %.4e %" PRIi32 " %" PRIi32 " %" PRIi32 " %" PRIi32 " %" PRIi32 "\n", (double)debugF[0], (double)debugF[1], debugI[0], debugI[1], debugI[2], debugI[3], debugI[4]);
+}
+//ENDDB
+
 // Static members
 
 DriveMovement *DriveMovement::freeList = nullptr;
@@ -70,6 +79,9 @@ void DriveMovement::DebugPrint() const noexcept
 		{
 			debugPrintf(" pa=%" PRIu32 " es=%.4e ers=%" PRIu32 " ebf=%.4e\n",
 							(uint32_t)mp.cart.pressureAdvanceK, (double)mp.cart.extruderSpeed, mp.cart.extruderReverseSteps, (double)mp.cart.extrusionBroughtForwards);
+#if 1	//DEBUG
+			DebugSavedVars();
+#endif
 		}
 		else
 		{
@@ -244,7 +256,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			pB = currentSegment->CalcNonlinearB(startTime, mp.cart.pressureAdvanceK);
 			distanceSoFar += currentSegment->GetSpeedChange() * mp.cart.pressureAdvanceK;		// add the extra extrusion due to pressure advance to the extrusion done at the end of this move
 			const int32_t netStepsAtSegmentEnd = (int32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm);
-			const float endSpeed = mp.cart.extruderSpeed = currentSegment->GetSpeedChange();
+			const float endSpeed = mp.cart.extruderSpeed + currentSegment->GetSpeedChange();
 			if (currentSegment->IsAccelerating())
 			{
 				state = DMState::cartAccel;
@@ -289,8 +301,12 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			mp.cart.extruderSpeed = endSpeed;
 		}
 
-		// Work out the movement limit in steps
-
+#if 1	//DB
+		const MoveSegment *ms = currentSegment;
+		unsigned int count = 0;
+		while ((ms = ms->GetNext()) != nullptr) { ++count; }
+		debugI[count+2] = segmentStepLimit;
+#endif
 		if (nextStep < segmentStepLimit)
 		{
 			return true;
@@ -529,7 +545,17 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 												LogicalDriveToExtruder(drive);
 #endif
 					ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
-					shaper.SetExtrusionPending(distanceSoFar * mp.cart.effectiveStepsPerMm - (float)((int)nextStep - 2 * (int)mp.cart.extruderReverseSteps));
+#if 1	//DEBUG
+					debugF[0] = distanceSoFar;
+					debugF[1] = mp.cart.effectiveStepsPerMm;
+					debugI[0] = nextStep;
+					debugI[1] = mp.cart.extruderReverseSteps;
+#endif
+					if (dda.flags.isPrintingMove)
+					{
+						const int32_t stepsDone = (nextStep == 0) ? 0 : (int)nextStep - 1 - 2 * (int)mp.cart.extruderReverseSteps;
+						shaper.SetExtrusionPending(distanceSoFar * mp.cart.effectiveStepsPerMm - (float)stepsDone);
+					}
 					return false;
 				}
 			}
