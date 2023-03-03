@@ -308,7 +308,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 							}
 						}
 					}
-					segmentStepLimit = (uint32_t)((int32_t)(2 * (reverseStartStep + mp.cart.extruderReverseSteps)) - netStepsAtSegmentEnd);
+					segmentStepLimit = (uint32_t)((int32_t)(2 * (reverseStartStep + mp.cart.extruderReverseSteps)) - netStepsAtSegmentEnd - 1);
 					mp.cart.extruderReverseSteps += segmentStepLimit - reverseStartStep;
 				}
 			}
