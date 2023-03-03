@@ -85,9 +85,10 @@ private:
 	uint8_t drive;										// the drive that this DM controls
 	uint8_t direction : 1,								// true=forwards, false=backwards
 			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
+			directionReversed : 1,						// true if we have reversed the requested motion direction because of pressure advance
 			isDelta : 1,								// true if this DM uses segment-free delta kinematics
 			isExtruder : 1,								// true if this DM is for an extruder (only matters if !isDelta)
-					: 2,								// padding to make the next field last
+					: 1,								// padding to make the next field last
 			stepsTakenThisSegment : 2;					// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
@@ -124,7 +125,6 @@ private:
 			float pressureAdvanceK;						// how much pressure advance is applied to this move
 			float effectiveStepsPerMm;					// the steps/mm multiplied by the movement fraction
 			float effectiveMmPerStep;					// reciprocal of [the steps/mm multiplied by the movement fraction]
-			float extruderSpeed;						// the speed at the end of the current move segment, only for extruders
 			uint32_t extruderReverseSteps;				// the number of reverse steps taken before the start of the current segment, only for extruders
 			float extrusionBroughtForwards;				// the amount of extrusion brought forwards from previous moves. Only needed for debug output.
 		} cart;

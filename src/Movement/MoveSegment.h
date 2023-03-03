@@ -155,7 +155,13 @@ public:
 	float GetSegmentTime() const noexcept { return segTime; }
 
 	// Get the segment speed change in mm/step_clock. Only for accelerating or decelerating moves.
-	float GetSpeedChange() const noexcept pre(!IsLinear()) { return speedChange; }
+	float GetNonlinearSpeedChange() const noexcept pre(!IsLinear()) { return acceleration * segTime; }
+
+	// Get the start speed for an accelerating or decelerating move
+	float GetNonlinearStartSpeed(float pressureAdvanceK) const noexcept pre(!IsLinear()) { return (pressureAdvanceK - b) * acceleration; }
+
+	// Get the end speed for an accelerating or decelerating move
+	float GetNonlinearEndSpeed(float pressureAdvanceK) const noexcept pre(!IsLinear()) { return (pressureAdvanceK - b + segTime) * acceleration; }
 
 	// Calculate the move A coefficient in step_clocks^2 for an accelerating or decelerating move
 	float CalcNonlinearA(float startDistance) const noexcept pre(!IsLinear());
@@ -175,7 +181,7 @@ public:
 	float GetC() const noexcept { return c; }
 
 	void SetLinear(float pSegmentLength, float p_segTime, float p_c) noexcept post(IsLinear());
-	void SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c, float p_speedChange) noexcept post(!IsLinear());
+	void SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c, float p_acceleration) noexcept post(!IsLinear());
 
 	MoveSegment *GetNext() const noexcept;
 	void SetNext(MoveSegment *p_next) noexcept;
@@ -222,8 +228,8 @@ private:
 	float segLength;										// the length of this segment before applying the movement fraction
 	float segTime;											// the time in step clocks at which this move ends
 	float c;												// the c move parameter, units are step_clocks/mm for linear moves, units are steps_clocks^2/mm for accelerating or decelerating moves
-	float b;												// the b move parameter, units are step_clocks, not used by linear move segments
-	float speedChange;										// the change in speed during this segment, not used by linear move segments
+	float b;												// the b move parameter, equal to -(u/a), units are step_clocks, not used by linear move segments
+	float acceleration;										// the acceleration during this segment, not used by linear move segments
 };
 
 // Create a new one, leaving the flags clear
@@ -293,13 +299,13 @@ inline void MoveSegment::SetLinear(float pSegmentLength, float p_segTime, float 
 }
 
 // Set up an accelerating or decelerating move. We assume that the 'linear' flag is already clear.
-inline void MoveSegment::SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c, float p_speedChange) noexcept
+inline void MoveSegment::SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c, float p_acceleration) noexcept
 {
 	segLength = pSegmentLength;
 	segTime = p_segTime;
 	b = p_b;
 	c = p_c;
-	speedChange = p_speedChange;
+	acceleration = p_acceleration;
 }
 
 // Given that this is an accelerating or decelerating move, return true if it is accelerating

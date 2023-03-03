@@ -57,7 +57,7 @@ void MoveSegment::DebugPrint(char ch) const noexcept
 	}
 	else
 	{
-		debugPrintf("b=%.4e c=%.4e s=%.4e\n", (double)b, (double)c, (double)speedChange);
+		debugPrintf("b=%.4e c=%.4e a=%.4e\n", (double)b, (double)c, (double)acceleration);
 	}
 }
 
