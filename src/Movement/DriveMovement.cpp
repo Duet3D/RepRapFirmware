@@ -15,11 +15,18 @@
 
 //DEBUG
 float debugF[5];
-int32_t debugI[20];
+int32_t debugI[30];
 void DebugSavedVars() noexcept
 {
-	debugPrintf("%.4e %.4e %.4e %.4e %" PRIi32 " %" PRIi32 " %" PRIi32 " %" PRIi32 " %" PRIi32 " %" PRIi32 " %" PRIi32 " %" PRIi32 "\n",
-		(double)debugF[0], (double)debugF[1], (double)debugF[2], (double)debugF[3], debugI[0], debugI[1], debugI[2], debugI[3], debugI[4], debugI[5], debugI[6], debugI[7]);
+	for (size_t i = 0; i < ARRAY_SIZE(debugF); ++i)
+	{
+		debugPrintf("%.4e ", (double)debugF[i]);
+	}
+	for (size_t i = 0; i < ARRAY_SIZE(debugI); ++i)
+	{
+		debugPrintf(" %" PRIi32, debugI[i]);
+	}
+	debugPrintf("\n");
 }
 //ENDDB
 
@@ -270,6 +277,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 				{
 					state = DMState::cartDecelNoReverse;					// this segment is forwards throughout
 					reverseStartStep = segmentStepLimit = (uint32_t)(netStepsAtSegmentEnd + 1);
+					CheckDirection(false);
 				}
 				else
 				{
@@ -277,12 +285,8 @@ bool DriveMovement::NewExtruderSegment() noexcept
 					if (startSpeed <= 0.0)
 					{
 						state = DMState::cartDecelReverse;					// this segment is reverse throughout
-						if (!directionReversed)
-						{
-							direction = !direction;
-							directionChanged = directionReversed = true;
-						}
 						reverseStartStep = nextStep;
+						CheckDirection(true);
 					}
 					else
 					{
@@ -295,17 +299,14 @@ bool DriveMovement::NewExtruderSegment() noexcept
 						{
 							// There is at least one step before we reverse
 							state = DMState::cartDecelForwardsReversing;
+							CheckDirection(false);
 						}
 						else
 						{
 							// There is no significant forward phase, so start in reverse
 							reverseStartStep = nextStep;					// they are probably equal anyway, but just in case...
 							state = DMState::cartDecelReverse;
-							if (!directionReversed)
-							{
-								direction = !direction;
-								directionChanged = directionReversed = true;
-							}
+							CheckDirection(true);
 						}
 					}
 					segmentStepLimit = (uint32_t)((int32_t)(2 * (reverseStartStep + mp.cart.extruderReverseSteps)) - netStepsAtSegmentEnd - 1);

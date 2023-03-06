@@ -73,6 +73,8 @@ private:
 	bool NewDeltaSegment(const DDA& dda) noexcept SPEED_CRITICAL;
 #endif
 
+	void CheckDirection(bool reversed) noexcept;
+
 	static DriveMovement *freeList;
 	static unsigned int numCreated;
 
@@ -197,6 +199,15 @@ inline void DriveMovement::Release(DriveMovement *item) noexcept
 {
 	item->nextDM = freeList;
 	freeList = item;
+}
+
+inline void DriveMovement::CheckDirection(bool reversed) noexcept
+{
+	if (reversed != directionReversed)
+	{
+		directionReversed = reversed;
+		directionChanged = true;
+	}
 }
 
 #if HAS_SMART_DRIVERS
