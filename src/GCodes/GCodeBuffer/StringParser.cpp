@@ -26,7 +26,7 @@ static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML
 
 StringParser::StringParser(GCodeBuffer& gcodeBuffer) noexcept
 	: gb(gcodeBuffer), fileBeingWritten(nullptr), writingFileSize(0), indentToSkipTo(NoIndentSkip), eofStringCounter(0),
-	  hasCommandNumber(false), commandLetter('Q'), lastChar(0), checksumRequired(false), crcRequired(false), binaryWriting(false)
+	  hasCommandNumber(false), commandLetter('Q'), checksumRequired(false), crcRequired(false), binaryWriting(false)
 {
 	StartNewFile();
 	Init();
@@ -75,17 +75,16 @@ inline void StringParser::StoreAndAddToChecksum(char c) noexcept
 // is the number of leading white space characters..
 bool StringParser::Put(char c) noexcept
 {
-	// If this character is LF and the previous one was CR, throw the LF away so that we don't increment the line number twice
-	const char prevChar = lastChar;
-	lastChar = c;
-	if (c == '\n' && prevChar == '\r')
-	{
-		return false;
-	}
-
 	if (c != 0)
 	{
 		++commandLength;
+	}
+
+	// We now discard CR if we are reading from file. It makes line number counting easier and it's unlikely that a pre-OSX Mac will be used with a Duet.
+	// When not reading from file we still accept CR as a line terminator, for compatibility with Putty and some other terminal emulators.
+	if (c == '\r' && gb.IsDoingFile())
+	{
+		return false;
 	}
 
 	if (c == 0 || c == '\n' || c == '\r')
