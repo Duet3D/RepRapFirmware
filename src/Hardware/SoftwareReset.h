@@ -43,6 +43,25 @@ enum class SoftwareResetReason : uint16_t
 	deliberate = 0x8000				// this but it or'ed in if we deliberately caused a fault
 };
 
+// Return true if a software reset with this reason has an exception stack frame. Used to sip the FP registers when saving the stack frame.
+inline bool ResetReasonHasExceptionFrame(uint16_t reason) noexcept
+{
+	switch ((SoftwareResetReason)(reason & (uint16_t)SoftwareResetReason::mainReasonMask))
+	{
+	case SoftwareResetReason::NMI:
+	case SoftwareResetReason::hardFault:
+	case SoftwareResetReason::stuckInSpin:
+	case SoftwareResetReason::wdtFault:
+	case SoftwareResetReason::usageFault:
+	case SoftwareResetReason::otherFault:
+	case SoftwareResetReason::heaterWatchdog:
+	case SoftwareResetReason::memFault:
+		return true;
+	default:
+		return false;
+	}
+}
+
 // These are the structures used to hold our non-volatile data.
 // We store the software reset data in the 512-byte user signature area of the SAM4E, SAM4S and SAME70 processors.
 // It must be a multiple of 4 bytes long.

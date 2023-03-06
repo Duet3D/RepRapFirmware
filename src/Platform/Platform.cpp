@@ -1051,7 +1051,7 @@ void Platform::Spin() noexcept
 	// Diagnostics test
 	if (debugCode == (unsigned int)DiagnosticTestType::TestSpinLockup)
 	{
-		for (;;) {}
+		delay(30000);
 	}
 
 	// Check whether the TMC drivers need to be initialised.
