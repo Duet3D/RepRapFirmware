@@ -21,7 +21,7 @@
 # define USE_XDMAC			0		// use XDMA controller
 # define USE_DMAC_MANAGER	0		// use SAME5x DmacManager module
 
-#elif defined(DUET3) || defined(SAME70XPLD)
+#elif defined(DUET3)
 
 # define USE_DMAC			0		// use general DMA controller
 # define USE_XDMAC			1		// use XDMA controller

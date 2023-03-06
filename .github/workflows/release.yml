@@ -1,0 +1,49 @@
+name: Upload release assets
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      # Download release assets
+      - name: Download assets
+        run: |
+          mkdir assets
+          cd assets
+          gh release download -R Duet3D/RepRapFirmware $GITHUB_REF_NAME -p "*.bin" -p "*.uf2"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # Clean up unused files
+      - name: Remove unused files
+        run: |
+          cd assets
+          rm -f Duet2CombinedFirmware.bin DuetMaestroFirmware.bin Duet*_SD*.bin Duet3_CAN*.bin DuetWiFi*.bin
+
+      # Upload assets to dev feed on pkg.duet3d.com
+      - name: Upload files to dev feed
+        uses: Creepios/sftp-action@v1.0.3
+        with:
+          host: pkg.duet3d.com
+          port: 22
+          username: ${{ secrets.PKG_SSH_USER }}
+          password: ${{ secrets.PKG_SSH_PASS }}
+          privateKey: ${{ secrets.PKG_SSH_KEY }}
+          localPath: ./assets
+          remotePath: /var/rrf-pkg/dev
+
+      # Upload assets to (un)stable feed on pkg.duet3d.com
+      - name: Upload files to primary feed
+        uses: Creepios/sftp-action@v1.0.3
+        with:
+          host: pkg.duet3d.com
+          port: 22
+          username: ${{ secrets.PKG_SSH_USER }}
+          password: ${{ secrets.PKG_SSH_PASS }}
+          privateKey: ${{ secrets.PKG_SSH_KEY }}
+          localPath: ./assets
+          remotePath: /var/rrf-pkg/${{ (github.event.release.prerelease && 'unstable') || 'stable' }}
+

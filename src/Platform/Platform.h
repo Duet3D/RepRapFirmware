@@ -122,10 +122,9 @@ enum class BoardType : uint8_t
 #elif defined(DUET3_MB6XD)
 	Duet3_6XD_v01 = 1,
 	Duet3_6XD_v100 = 2,
+	Duet3_6XD_v101 = 3,
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	FMDC,
-#elif defined(SAME70XPLD)
-	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)
 	DuetWiFi_10 = 1,
 	DuetWiFi_102 = 2,
@@ -677,6 +676,9 @@ public:
 
 #if defined(DUET3_MB6HC)
 	static BoardType GetMB6HCBoardType() noexcept;								// this is safe to call before Platform has been created
+#endif
+#if defined(DUET3_MB6XD)
+	static BoardType GetMB6XDBoardType() noexcept;								// this is safe to call before Platform has been created
 #endif
 
 	void SetDiagLed(bool on) const noexcept;

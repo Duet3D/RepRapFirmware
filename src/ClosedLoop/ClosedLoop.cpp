@@ -17,6 +17,7 @@
 # include <CAN/ExpansionManager.h>
 # include <GCodes/GCodeBuffer/GCodeBuffer.h>
 # include <CAN/CanMessageGenericConstructor.h>
+# include <atomic>
 
 constexpr unsigned int MaxSamples = 65535;				// This comes from the fact CanMessageClosedLoopData->firstSampleNumber has a max value of 65535
 
@@ -25,8 +26,9 @@ static uint8_t modeRequested;							// The sampling mode(immediate or on next mo
 static uint32_t filterRequested;						// A filter for what data is collected
 static DriverId deviceRequested;						// The driver being sampled
 static uint8_t movementRequested;						// The movement to be made whilst recording
-static volatile uint32_t numSamplesRequested;			// The number of samples to collect
-static FileStore* volatile closedLoopFile = nullptr;	// This is non-null when the data collection is running, null otherwise
+static std::atomic<uint32_t> whenDataLastReceived;
+static std::atomic<uint32_t> numSamplesRequested;			// The number of samples to collect
+static std::atomic<FileStore*> closedLoopFile = nullptr;	// This is non-null when the data collection is running, null otherwise
 
 static unsigned int expectedRemoteSampleNumber = 0;
 static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
@@ -55,21 +57,25 @@ static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned 
 		if (filterRequested & CL_RECORD_COIL_A_CURRENT) 		{temp.cat(",Coil A Current");}
 		if (filterRequested & CL_RECORD_COIL_B_CURRENT) 		{temp.cat(",Coil B Current");}
 
-		temp.Erase(temp.strlen(), 1);
 		temp.cat("\n");
-		f->Write(temp.c_str());
+		f->Write(temp.c_str());							// this call could result in the file becoming invalidated
 	}
 
-	closedLoopFile = f;
+	whenDataLastReceived = millis();					// prevent another request closing the file
+	closedLoopFile.store(f);
 	return true;
 }
 
+// Close the data collection file. Avoid a race between the two tasks that access it.
 static void CloseDataCollectionFile() noexcept
 {
-	closedLoopFile->Truncate();				// truncate the file in case we didn't write all the preallocated space
-	closedLoopFile->Close();
-	closedLoopFile = nullptr;
-	reprap.GetExpansion().AddClosedLoopRun(expectedRemoteBoardAddress, expectedRemoteSampleNumber);
+	FileStore *const f = closedLoopFile.exchange(nullptr);
+	if (f != nullptr)
+	{
+		f->Truncate();				// truncate the file in case we didn't write all the preallocated space
+		f->Close();
+		reprap.GetExpansion().AddClosedLoopRun(expectedRemoteBoardAddress, expectedRemoteSampleNumber);
+	}
 }
 
 // Handle M569.5 - Collect closed loop data
@@ -84,7 +90,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	if (!recording)
 	{
 		// No S parameter was given so this is a request for the recording status
-		if (closedLoopFile == nullptr)
+		if (closedLoopFile.load() == nullptr)
 		{
 			reply.copy("Closed loop data is not being collected");
 			return GCodeResult::warning;							// looks like the closed loop plugin relies on this being a warning
@@ -97,10 +103,18 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	}
 
 	// If we get here then the user is requesting a recording
-	if (closedLoopFile != nullptr)									// check if one is already happening
+	if (closedLoopFile.load() != nullptr)							// check if one is already happening
 	{
-		CloseDataCollectionFile();
-		reply.copy("Closed loop data is already being collected; the file will now be closed");
+		const uint32_t wlr = whenDataLastReceived;					// load this volatile variable before calling millis()
+		if (millis() - wlr >= DataReceiveTimeout)
+		{
+			CloseDataCollectionFile();								// this case is to allow us to reset if data collection stalls
+			reply.copy("Closed loop data collection timed out, closing file");
+		}
+		else
+		{
+			reply.copy("Closed loop data is already being collected");
+		}
 		return GCodeResult::error;
 	}
 
@@ -175,9 +189,10 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 // Process closed loop data received over CAN
 void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopData& msg, size_t msgLen) noexcept
 {
-	FileStore * const f = closedLoopFile;
+	FileStore * const f = closedLoopFile.load();
 	if (f != nullptr)
 	{
+		whenDataLastReceived = millis();
 		if (msg.firstSampleNumber != expectedRemoteSampleNumber)
 		{
 			f->Write("Data lost\n");
