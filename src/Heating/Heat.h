@@ -152,6 +152,8 @@ public:
 	GCodeResult FeedForward(const CanMessageHeaterFeedForward& msg, const StringRef& reply) noexcept;
 #endif
 
+	static TaskHandle GetHeatTask() noexcept;
+
 	static ReadWriteLock sensorsLock;							// needs to be public so that the OMT in EndstopsManager can lock it
 
 protected:
