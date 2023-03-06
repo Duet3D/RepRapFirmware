@@ -20,6 +20,7 @@
 # include <atomic>
 
 constexpr unsigned int MaxSamples = 65535;				// This comes from the fact CanMessageClosedLoopData->firstSampleNumber has a max value of 65535
+constexpr uint32_t DataReceiveTimeout = 5000;			// Data receive timeout in milliseconds
 
 static uint16_t rateRequested;							// The sampling rate
 static uint8_t modeRequested;							// The sampling mode(immediate or on next move)

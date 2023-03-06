@@ -333,7 +333,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 					   )
 					{
 						const size_t extruder = LogicalDriveToExtruder(fs.driveNumber);
-						if (reprap.Debug(Module::FilamentSensors))
+						if (reprap.Debug(moduleFilamentSensors))
 						{
 							debugPrintf("Filament error: extruder %u reports %s\n", extruder, fst.ToString());
 						}
