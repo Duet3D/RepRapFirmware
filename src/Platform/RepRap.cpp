@@ -1076,12 +1076,36 @@ void RepRap::Tick() noexcept
 				heat->SwitchOffAllLocalFromISR();								// can't call SwitchOffAll because remote heaters can't be turned off from inside a ISR
 				platform->EmergencyDisableDrivers();
 
-				// We now save the stack when we get stuck in a spin loop
-				__asm volatile("mrs r2, psp");
-				register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
-				SoftwareReset(
-					(heatTaskStuck) ? SoftwareResetReason::heaterWatchdog : SoftwareResetReason::stuckInSpin,
-					stackPtr + 5);												// discard uninteresting registers, keep LR PC PSR
+				// Save the stack of the stuck task when we get stuck in a spin loop
+				const uint32_t *relevantStackPtr;
+				const TaskHandle relevantTask = (heatTaskStuck) ? Heat::GetHeatTask() : Tasks::GetMainTask();
+				if (relevantTask == RTOSIface::GetCurrentTask())
+				{
+					__asm volatile("mrs r2, psp");
+					register const uint32_t * stackPtr asm ("r2");				// we want the PSP not the MSP
+					relevantStackPtr = stackPtr + 5;							// discard uninteresting registers, keep LR PC PSR
+				}
+				else
+				{
+					relevantStackPtr = const_cast<const uint32_t*>(pxTaskGetLastStackTop(relevantTask->GetFreeRTOSHandle()));
+					// All registers were saved on the stack, so to get useful return addresses we need to skip most of them.
+					// See the port.c files in FreeRTOS for the stack layouts
+#if SAME70 || SAM4E || SAME5x
+					// ARM Cortex M7 with double precision floating point, or ARM Cortex M4F
+					if ((relevantStackPtr[8] & 0x10) == 0)						// test EXC_RETURN FP bit
+					{
+						relevantStackPtr += 9 + 16;								// skip r4-r11 and r14 and s16-s31
+					}
+					else
+					{
+						relevantStackPtr += 9;									// skip r4-r11 and r14
+					}
+#else
+					// ARM Cortex M3 or M4 without floating point
+					relevantStackPtr += 8;										// skip r4-r11
+#endif
+				}
+				SoftwareReset((heatTaskStuck) ? SoftwareResetReason::heaterWatchdog : SoftwareResetReason::stuckInSpin, relevantStackPtr);
 			}
 		}
 	}
