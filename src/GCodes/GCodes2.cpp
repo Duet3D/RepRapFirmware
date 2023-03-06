@@ -1249,7 +1249,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					String<MaxFilenameLength> filename;
 					gb.GetUnprecedentedString(filename.GetRef());
-					result = (platform.Delete(Platform::GetGCodeDir(), filename.c_str())) ? GCodeResult::ok : GCodeResult::warning;
+					if (platform.Delete(Platform::GetGCodeDir(), filename.c_str()))
+					{
+						result =  GCodeResult::ok;
+					}
+					else
+					{
+						reply.copy("delete failed");
+						result = GCodeResult::error;
+					}
 				}
 				break;
 #endif
@@ -3116,7 +3124,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					gb.MustSee('P');
 					String<MaxFilenameLength> dirName;
 					gb.GetQuotedString(dirName.GetRef());
-					result = (MassStorage::MakeDirectory(dirName.c_str(), true)) ? GCodeResult::ok : GCodeResult::error;
+					if (MassStorage::MakeDirectory(dirName.c_str(), true))
+					{
+						result =  GCodeResult::ok;
+					}
+					else
+					{
+						reply.copy("failed to create folder");
+						result = GCodeResult::error;
+					}
 				}
 				break;
 
@@ -3129,7 +3145,33 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					gb.MustSee('T');
 					gb.GetQuotedString(newVal.GetRef());
 					const bool deleteExisting = (gb.Seen('D') && gb.GetUIValue() == 1);
-					result = (MassStorage::Rename(oldVal.c_str(), newVal.c_str(), deleteExisting, true)) ? GCodeResult::ok : GCodeResult::error;
+					if (MassStorage::Rename(oldVal.c_str(), newVal.c_str(), deleteExisting, true))
+					{
+						result = GCodeResult::ok ;
+					}
+					else
+					{
+						reply.copy("rename failed");
+						result = GCodeResult::error;
+					}
+				}
+				break;
+
+			case 472: // delete file/directory
+				{
+					gb.MustSee('P');
+					String<MaxFilenameLength> path;
+					gb.GetQuotedString(path.GetRef());
+					const bool recursive = (gb.Seen('R') && gb.GetUIValue() == 1);
+					if (MassStorage::Delete(path.GetRef(), ErrorMessageMode::messageAlways, recursive))
+					{
+						result = GCodeResult::ok;
+					}
+					else
+					{
+						reply.copy("delete failed");
+						result = GCodeResult::error;
+					}
 				}
 				break;
 #endif

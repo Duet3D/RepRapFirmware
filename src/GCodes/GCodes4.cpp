@@ -1500,7 +1500,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				sdTimingFile = platform.OpenFile(Platform::GetGCodeDir(), TimingFileName, OpenMode::read);
 				if (sdTimingFile == nullptr)
 				{
-					platform.Delete(Platform::GetGCodeDir(), TimingFileName);
+					(void)platform.Delete(Platform::GetGCodeDir(), TimingFileName);
 					gb.LatestMachineState().SetError("Failed to re-open timing file");
 					gb.SetState(GCodeState::normal);
 					break;
@@ -1517,7 +1517,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (!sdTimingFile->Write(reply.c_str(), bytesToWrite))
 			{
 				sdTimingFile->Close();
-				platform.Delete(Platform::GetGCodeDir(), TimingFileName);
+				(void)platform.Delete(Platform::GetGCodeDir(), TimingFileName);
 				gb.LatestMachineState().SetError("Failed to write to timing file");
 				gb.SetState(GCodeState::normal);
 				break;
@@ -1537,7 +1537,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				const float mbPerSec = (fileMbytes * 1000.0)/(float)ms;
 				sdTimingFile->Close();
 				reply.printf("SD read speed for %.1fMByte file was %.2fMBytes/sec", (double)fileMbytes, (double)mbPerSec);
-				platform.Delete(Platform::GetGCodeDir(), TimingFileName);
+				(void)platform.Delete(Platform::GetGCodeDir(), TimingFileName);
 				gb.SetState(GCodeState::normal);
 				break;
 			}
@@ -1546,7 +1546,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (sdTimingFile->Read(reply.Pointer(), bytesToRead) != (int)bytesToRead)
 			{
 				sdTimingFile->Close();
-				platform.Delete(Platform::GetGCodeDir(), TimingFileName);
+				(void)platform.Delete(Platform::GetGCodeDir(), TimingFileName);
 				gb.LatestMachineState().SetError("Failed to read from timing file");
 				gb.SetState(GCodeState::normal);
 				break;

@@ -182,7 +182,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	if (rslt > GCodeResult::warning)
 	{
 		CloseDataCollectionFile();
-		MassStorage::Delete(closedLoopFileName.c_str(), false);
+		(void)MassStorage::Delete(closedLoopFileName.GetRef(), ErrorMessageMode::messageAlways);
 	}
 	return rslt;
 }

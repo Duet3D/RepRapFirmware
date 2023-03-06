@@ -4127,13 +4127,13 @@ bool Platform::IsDuetWiFi() const noexcept
 bool Platform::Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
-	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
+	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.GetRef(), ErrorMessageMode::messageUnlessMissing);
 }
 
 bool Platform::DeleteSysFile(const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
-	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.c_str(), true);
+	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.GetRef(), ErrorMessageMode::messageUnlessMissing);
 }
 
 #endif

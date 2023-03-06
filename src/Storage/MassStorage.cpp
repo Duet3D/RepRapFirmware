@@ -534,7 +534,7 @@ bool MassStorage::DirectoryExists(const StringRef& path) noexcept
 		path.Truncate(len - 1);
 	}
 
-#if HAS_MASS_STORAGE
+# if HAS_MASS_STORAGE
 	DIR dir;
 	const bool ok = (f_opendir(&dir, path.c_str()) == FR_OK);
 	if (ok)
@@ -542,9 +542,9 @@ bool MassStorage::DirectoryExists(const StringRef& path) noexcept
 		f_closedir(&dir);
 	}
 	return ok;
-#elif HAS_EMBEDDED_FILES
+# elif HAS_EMBEDDED_FILES
 	return EmbeddedFiles::DirectoryExists(path);
-#endif
+# endif
 }
 
 #endif
@@ -609,7 +609,7 @@ void MassStorage::InvalidateAllFiles() noexcept
 # if HAS_MASS_STORAGE
 
 // Delete a file or directory
-static bool InternalDelete(const char* filePath, bool messageIfFailed) noexcept
+static bool InternalDelete(const char* filePath, ErrorMessageMode errorMessageMode) noexcept
 {
 	FRESULT unlinkReturn;
 	bool isOpen = false;
@@ -649,12 +649,14 @@ static bool InternalDelete(const char* filePath, bool messageIfFailed) noexcept
 	if (unlinkReturn != FR_OK)
 	{
 		// If the error was that the file or path doesn't exist, don't generate a global error message, but still return false
-		if (unlinkReturn != FR_NO_FILE && unlinkReturn != FR_NO_PATH)
+		if (   errorMessageMode == ErrorMessageMode::messageAlways
+			|| (errorMessageMode == ErrorMessageMode::messageUnlessMissing && unlinkReturn != FR_NO_FILE && unlinkReturn != FR_NO_PATH)
+		   )
 		{
-			if (messageIfFailed)
-			{
-				reprap.GetPlatform().MessageF(ErrorMessage, "Failed to delete file %s\n", filePath);
-			}
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to delete %s%s\n",
+											filePath,
+											(unlinkReturn == FR_NOT_EMPTY) ? " because it is a folder and not empty" : ""
+										 );
 		}
 		return false;
 	}
@@ -663,35 +665,128 @@ static bool InternalDelete(const char* filePath, bool messageIfFailed) noexcept
 
 # endif
 
-// Delete a file or directory and update the volume sequence number returning true if successful
-bool MassStorage::Delete(const char* filePath, bool messageIfFailed) noexcept
+// Delete the contents of an open directory returning true if successful
+// File system must be locked before calling this
+// This is recursive. In order to avoid using large amounts of stack it uses the string referred to by filePath to hold the name of each contained file as it is deleted.
+static bool DeleteContents(DIR& dir, const StringRef& filePath, ErrorMessageMode errorMessageMode) noexcept
 {
-#if HAS_SBC_INTERFACE
+	const size_t originalPathLength = filePath.strlen();
+	size_t pathLength = originalPathLength;
+	if (originalPathLength == 0 || filePath[originalPathLength - 1] != '/')
+	{
+		filePath.cat('/');
+		++pathLength;
+	}
+
+	bool ok = true;
+	while (ok)
+	{
+		FILINFO entry;
+		const FRESULT res = f_readdir(&dir, &entry);
+		if (res != FR_OK || entry.fname[0] == 0)
+		{
+			break;
+		}
+		if (!StringEqualsIgnoreCase(entry.fname, ".") && !StringEqualsIgnoreCase(entry.fname, ".."))
+		{
+			filePath.cat(entry.fname);
+			if (entry.fattrib & AM_DIR)
+			{
+				DIR dir2;
+				if (f_opendir(&dir2, filePath.c_str()) == FR_OK)
+				{
+					const bool ok = DeleteContents(dir, filePath, errorMessageMode);
+					f_closedir(&dir2);
+					if (!ok)
+					{
+						return false;
+					}
+				}
+				else
+				{
+					ok = false;
+				}
+			}
+			else
+			{
+				if (!InternalDelete(filePath.c_str(), errorMessageMode))
+				{
+					ok = false;
+				}
+			}
+			filePath.Truncate(pathLength);
+		}
+	}
+
+	filePath.Truncate(originalPathLength);
+	return true;
+}
+
+// Delete a file or directory and update the volume sequence number returning true if successful
+// Note, we use the filePath string to build up nested directories if we are doing a recursive delete
+bool MassStorage::Delete(const StringRef& filePath, ErrorMessageMode errorMessageMode, bool recursive) noexcept
+{
+# if HAS_SBC_INTERFACE
 	if (reprap.UsingSbcInterface())
 	{
-		if (reprap.GetSbcInterface().DeleteFileOrDirectory(filePath))
+		if (reprap.GetSbcInterface().DeleteFileOrDirectory(filePath.c_str()))
 		{
 			return true;
 		}
 
-		if (messageIfFailed)
+		if (errorMessageMode != ErrorMessageMode::noMessage)
 		{
-			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to delete file %s\n", filePath);
+			reprap.GetPlatform().MessageF(ErrorMessage, "Failed to delete file %s\n", filePath.c_str());
 		}
 		return false;
 	}
-#endif
+# endif
 
-#if HAS_MASS_STORAGE
-	const bool ok = InternalDelete(filePath, messageIfFailed);
+# if HAS_MASS_STORAGE
+	if (recursive)
+	{
+		// Check for trying to delete root
+		const char *fp = filePath.c_str();
+		if (isDigit(*fp) && fp[1] == ':')
+		{
+			fp += 2;
+		}
+		while (*fp == '/')
+		{
+			++fp;
+		}
+		if (*fp == 0)
+		{
+			if (errorMessageMode != ErrorMessageMode::noMessage)
+			{
+				reprap.GetPlatform().Message(ErrorMessage, "Delete root folder is not allowed");
+			}
+			return false;
+		}
+
+		MutexLocker locker(fsMutex);
+		DIR dir;
+		if (f_opendir(&dir, filePath.c_str()) == FR_OK)
+		{
+			const bool ok = DeleteContents(dir, filePath, errorMessageMode);
+			f_closedir(&dir);
+			if (!ok)
+			{
+				(void)VolumeUpdated(filePath.c_str());			// in case we deleted any contained files
+				return false;
+			}
+		}
+	}
+
+	const bool ok = InternalDelete(filePath.c_str(), errorMessageMode);
 	if (ok)
 	{
-		(void)VolumeUpdated(filePath);
+		(void)VolumeUpdated(filePath.c_str());
 	}
 	return ok;
-#else
+# else
 	return false;
-#endif
+# endif
 }
 
 #endif
@@ -718,14 +813,12 @@ bool MassStorage::FindFirst(const char *directory, FileInfo &file_info) noexcept
 	}
 
 #if HAS_MASS_STORAGE
-	FRESULT res = f_opendir(&findDir, loc.c_str());
-	if (res == FR_OK)
+	if (f_opendir(&findDir, loc.c_str()) == FR_OK)
 	{
 		FILINFO entry;
-
 		for (;;)
 		{
-			res = f_readdir(&findDir, &entry);
+			const FRESULT res = f_readdir(&findDir, &entry);
 			if (res != FR_OK || entry.fname[0] == 0) break;
 			if (!StringEqualsIgnoreCase(entry.fname, ".") && !StringEqualsIgnoreCase(entry.fname, ".."))
 			{
@@ -895,7 +988,7 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename, bool 
 	}
 	if (deleteExisting && (FileExists(newFilename) || DirectoryExists(newFilename)))
 	{
-		if (!InternalDelete(newFilename, messageIfFailed))
+		if (!InternalDelete(newFilename, ErrorMessageMode::messageAlways))
 		{
 			return false;
 		}

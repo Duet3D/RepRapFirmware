@@ -36,6 +36,14 @@ namespace EmbeddedFiles
 
 class ObjectModel;
 
+// Enum used to report whether we want a message of a file delete fails
+enum class ErrorMessageMode : uint8_t
+{
+	noMessage = 0,
+	messageUnlessMissing,
+	messageAlways
+};
+
 namespace MassStorage
 {
 	bool CombineName(const StringRef& outbuf, const char* directory, const char* fileName) noexcept;	// returns false if error i.e. filename too long
@@ -59,7 +67,7 @@ namespace MassStorage
 	FileWriteBuffer *AllocateWriteBuffer() noexcept;
 	size_t GetFileWriteBufferLength() noexcept;
 	void ReleaseWriteBuffer(FileWriteBuffer *buffer) noexcept;
-	bool Delete(const char* filePath, bool messageIfFailed) noexcept;
+	bool Delete(const StringRef& filePath, ErrorMessageMode errorMessageMode, bool recursive = false) noexcept;
 #endif
 
 #if HAS_SBC_INTERFACE
