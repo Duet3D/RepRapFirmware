@@ -683,7 +683,7 @@ bool RepRap::RunStartupFile(const char *filename) noexcept
 		platform->MessageF(UsbMessage, "Executing %s... ", filename);
 		do
 		{
-			// GCodes::Spin will process the macro file and ensure IsDaemonBusy returns false when it's done
+			// GCodes::Spin will process the macro file and ensure IsTriggerBusy returns false when it's done
 			Spin();
 		} while (gCodes->IsTriggerBusy());
 		platform->Message(UsbMessage, "Done!\n");
@@ -693,7 +693,7 @@ bool RepRap::RunStartupFile(const char *filename) noexcept
 
 void RepRap::Exit() noexcept
 {
-#if HAS_HIGH_SPEED_SD && !SAME5x		// SAME5x MCI driver is RTOS_aware, so it doesn't need this
+#if HAS_HIGH_SPEED_SD && !SAME5x		// SAME5x MCI driver is RTOS-aware so it doesn't need this
 	hsmci_set_idle_func(nullptr);
 #endif
 	active = false;
