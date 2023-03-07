@@ -13,23 +13,6 @@
 #include <Math/Isqrt.h>
 #include "Kinematics/LinearDeltaKinematics.h"
 
-//DEBUG
-float debugF[5];
-int32_t debugI[30];
-void DebugSavedVars() noexcept
-{
-	for (size_t i = 0; i < ARRAY_SIZE(debugF); ++i)
-	{
-		debugPrintf("%.4e ", (double)debugF[i]);
-	}
-	for (size_t i = 0; i < ARRAY_SIZE(debugI); ++i)
-	{
-		debugPrintf(" %" PRIi32, debugI[i]);
-	}
-	debugPrintf("\n");
-}
-//ENDDB
-
 // Static members
 
 DriveMovement *DriveMovement::freeList = nullptr;
@@ -130,6 +113,13 @@ bool DriveMovement::NewCartesianSegment() noexcept
 
 		segmentStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 
+#if 1	//DEBUG
+		if (__get_BASEPRI() == 0)
+		{
+			debugPrintf("New cart seg: state %u A=%.4e B=%.4e C=%.4e ns=%" PRIu32 " ssl=%" PRIu32 "\n",
+						(unsigned int)state, (double)pA, (double)pB, (double)pC, nextStep, segmentStepLimit);
+		}
+#endif
 		if (nextStep < segmentStepLimit)
 		{
 			return true;
@@ -270,9 +260,6 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			else
 			{
 				// This is a decelerating segment. If it includes pressure advance then it may include reversal.
-#if 1	//DEBUG
-				debugF[2] = endSpeed;
-#endif
 				if (endSpeed >= 0.0)
 				{
 					state = DMState::cartDecelNoReverse;					// this segment is forwards throughout
@@ -316,11 +303,11 @@ bool DriveMovement::NewExtruderSegment() noexcept
 		}
 
 #if 1	//DEBUG
-		const MoveSegment *ms = currentSegment;
-		unsigned int count = 0;
-		while ((ms = ms->GetNext()) != nullptr) { ++count; }
-		debugI[2*count+2] = segmentStepLimit;
-		debugI[2*count+3] = reverseStartStep;
+		if (__get_BASEPRI() == 0)
+		{
+			debugPrintf("New ex seg: state %u A=%.4e B=%.4e C=%.4e ns=%" PRIu32 " ssl=%" PRIu32 " rss=%" PRIu32 "\n",
+						(unsigned int)state, (double)pA, (double)pB, (double)pC, nextStep, segmentStepLimit, reverseStartStep);
+		}
 #endif
 		if (nextStep < segmentStepLimit)
 		{
@@ -486,9 +473,6 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 // effStepsPerMm is the number of extruder steps needed per mm of totalDistance before we apply pressure advance
 bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept
 {
-#if 1	//DEBUG
-	DebugSavedVars();
-#endif
 	const size_t logicalDrive =
 #if SUPPORT_REMOTE_COMMANDS
 								(dda.flags.isRemote) ? drive : LogicalDriveToExtruder(drive);
@@ -564,12 +548,6 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 												LogicalDriveToExtruder(drive);
 #endif
 					ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
-#if 1	//DEBUG
-					debugF[0] = distanceSoFar;
-					debugF[1] = mp.cart.effectiveStepsPerMm;
-					debugI[0] = nextStep;
-					debugI[1] = mp.cart.extruderReverseSteps;
-#endif
 					if (dda.flags.isPrintingMove)
 					{
 						const int32_t stepsDone = (nextStep == 0) ? 0 : (int)nextStep - 1 - 2 * (int)mp.cart.extruderReverseSteps;
