@@ -61,10 +61,13 @@ GCodeResult KeepoutZone::Configure(GCodeBuffer &gb, const StringRef &reply) THRO
 	{
 		if (gb.Seen(*p))
 		{
-			seenAxis = true;
+			if (!seenAxis)
+			{
+				axesChecked.Clear();
+				seenAxis = true;
+			}
 			size_t numCoords = 2;
 			const size_t axisNumber = p - axisNames;
-			axesChecked.ClearBit(axisNumber);								// in case the following call throws
 			gb.GetFloatArray(coords[axisNumber], numCoords, false);
 			axesChecked.SetOrClearBit(axisNumber, coords[axisNumber][1] > coords[axisNumber][0]);
 		}
