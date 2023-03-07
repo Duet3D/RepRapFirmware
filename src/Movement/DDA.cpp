@@ -2151,12 +2151,13 @@ void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 }
 
 // Simulate stepping the drivers, for debugging.
-// This is basically a copy of DDA::SetDrivers except that instead of being called from the timer ISR and generating steps,
+// This is basically a copy of DDA::StepDrivers except that instead of being called from the timer ISR and generating steps,
 // it is called from the Move task and outputs info on the step timings. It ignores endstops.
 void DDA::SimulateSteppingDrivers(Platform& p) noexcept
 {
 	static uint32_t lastStepTime;
 	static bool checkTiming = false;
+	static uint8_t lastDrive = 0;
 
 	DriveMovement* dm = activeDMs;
 	if (dm != nullptr)
@@ -2165,8 +2166,9 @@ void DDA::SimulateSteppingDrivers(Platform& p) noexcept
 		while (dm != nullptr && dueTime >= dm->nextStepTime)			// if the next step is due
 		{
 			const uint32_t timeDiff = dm->nextStepTime - lastStepTime;
-			const bool badTiming = checkTiming && (timeDiff < 10 || timeDiff > 100000000);
+			const bool badTiming = checkTiming && dm->drive == lastDrive && (timeDiff < 10 || timeDiff > 100000000);
 			debugPrintf("%10" PRIu32 " D%u %c%s", dm->nextStepTime, dm->drive, (dm->direction) ? 'F' : 'B', (badTiming) ? " *\n" : "\n");
+			lastDrive = dm->drive;
 			dm = dm->nextDM;
 		}
 		lastStepTime = dueTime;
