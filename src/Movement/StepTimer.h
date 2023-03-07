@@ -10,7 +10,7 @@
 
 #include "RepRapFirmware.h"
 
-#define STEP_TIMER_DEBUG	1			// currently this only works for the SAME5x
+#define STEP_TIMER_DEBUG	0
 
 class CanMessageTimeSync;
 
