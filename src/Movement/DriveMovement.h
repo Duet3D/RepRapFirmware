@@ -205,7 +205,8 @@ inline void DriveMovement::CheckDirection(bool reversed) noexcept
 {
 	if (reversed != directionReversed)
 	{
-		directionReversed = reversed;
+		directionReversed = !directionReversed;										// this can be done by an xor so hopefully more efficient than assignment
+		direction = !direction;
 		directionChanged = true;
 	}
 }

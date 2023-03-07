@@ -276,7 +276,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 				if (endSpeed >= 0.0)
 				{
 					state = DMState::cartDecelNoReverse;					// this segment is forwards throughout
-					reverseStartStep = segmentStepLimit = (uint32_t)(netStepsAtSegmentEnd + 1);
+					reverseStartStep = segmentStepLimit = (uint32_t)(netStepsAtSegmentEnd + (2 * mp.cart.extruderReverseSteps) + 1);
 					CheckDirection(false);
 				}
 				else
@@ -309,7 +309,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 							CheckDirection(true);
 						}
 					}
-					segmentStepLimit = (uint32_t)((int32_t)(2 * (reverseStartStep + mp.cart.extruderReverseSteps)) - netStepsAtSegmentEnd - 1);
+					segmentStepLimit = (uint32_t)((int32_t)(2 * (reverseStartStep - mp.cart.extruderReverseSteps)) - netStepsAtSegmentEnd - 1);
 					mp.cart.extruderReverseSteps += segmentStepLimit - reverseStartStep;
 				}
 			}
