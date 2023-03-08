@@ -53,7 +53,7 @@ constexpr ObjectModelArrayTableEntry EndstopsManager::objectModelArrayTable[] =
 		&endstopsLock,
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-						{ return ExpressionValue(((const EndstopsManager*)self)->FindEndstop(context.GetLastIndex()).Ptr()); }
+						{ return ExpressionValue(((const EndstopsManager*)self)->FindEndstopWhenLockOwned(context.GetLastIndex())); }
 	},
 	// 2. Filament monitors
 	{
@@ -143,9 +143,11 @@ void EndstopsManager::Init() noexcept
 	defaultZProbe = new DummyZProbe(0);			// we must always have a non-null current Z probe so we use this one if none is defined
 }
 
-ReadLockedPointer<Endstop> EndstopsManager::FindEndstop(size_t axis) const noexcept
+// Return a pointer to an endstop. Caller must already own a read lock on endstopsLock.
+// We don't lock endstopsLock because if we already own a read lock and someone else is requesting a write lock, when using 3.4.x version of ReadWriteLock we will deadlock (fixed in 3.5).
+const Endstop *EndstopsManager::FindEndstopWhenLockOwned(size_t axis) const noexcept
 {
-	return ReadLockedPointer<Endstop>(endstopsLock, (axis < MaxAxes) ? axisEndstops[axis] : nullptr);
+	return (axis < MaxAxes) ? axisEndstops[axis] : nullptr;
 }
 
 ReadLockedPointer<ZProbe> EndstopsManager::GetZProbe(size_t index) const noexcept
@@ -323,7 +325,8 @@ EndstopHitDetails EndstopsManager::CheckEndstops() noexcept
 	return ret;
 }
 
-// Configure the endstops in response to M574
+// Configure the endstops in response to M574.
+// Caller has not locked movement. If we make any changes, we must lock movement first in case a move using endstops is executing or about to be queued.
 GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf) THROWS(GCodeException)
 {
 	// First count how many axes we are configuring, and lock movement if necessary
