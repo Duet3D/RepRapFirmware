@@ -68,8 +68,7 @@ void DriveMovement::DebugPrint() const noexcept
 		}
 		else if (isExtruder)
 		{
-			debugPrintf(" pa=%" PRIu32 " ers=%" PRIu32 " ebf=%.4e\n",
-							(uint32_t)mp.cart.pressureAdvanceK, mp.cart.extruderReverseSteps, (double)mp.cart.extrusionBroughtForwards);
+			debugPrintf(" pa=%.3e ebf=%.3e\n", (double)mp.cart.pressureAdvanceK, (double)mp.cart.extrusionBroughtForwards);
 		}
 		else
 		{
@@ -183,9 +182,9 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 			// If there is a reversal then we only ever move up by (reverseStartStep - 1) steps, so netStepsAtEnd should be less than reverseStartStep.
 			// However, because of rounding error, it might possibly be equal.
 			// If there is no reversal then reverseStartStep is set to totalSteps + 1, so netStepsAtEnd must again be less than reverseStartStep.
-			if (netStepsAtEnd >= (int32_t)reverseStartStep)
+			if (netStepsAtEnd >= reverseStartStep)
 			{
-				netStepsAtEnd = (int32_t)(reverseStartStep - 1);			// correct the rounding error - we know that reverseStartStep cannot be 0 so subtracting 1 is safe
+				netStepsAtEnd = reverseStartStep - 1;							// correct the rounding error - we know that reverseStartStep cannot be 0 so subtracting 1 is safe
 			}
 
 			if (!direction)
@@ -193,19 +192,19 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 				// We are going down so any reversal has already happened
 				state = DMState::deltaNormal;
 				segmentStepLimit = (nextStep >= reverseStartStep)
-									? (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd)		// we went up (reverseStartStep-1) steps, now we are going down to netStepsAtEnd
-										: (uint32_t)(-netStepsAtEnd);									// we are just going down to netStepsAtEnd
+									? (2 * reverseStartStep) - netStepsAtEnd	// we went up (reverseStartStep-1) steps, now we are going down to netStepsAtEnd
+										: -netStepsAtEnd;						// we are just going down to netStepsAtEnd
 			}
 			else if (distanceSoFar <= mp.delta.reverseStartDistance)
 			{
 				// This segment is purely upwards motion of the tower
 				state = DMState::deltaNormal;
-				segmentStepLimit = (uint32_t)(netStepsAtEnd + 1);
+				segmentStepLimit = netStepsAtEnd + 1;
 			}
 			else
 			{
 				// This segment ends with reverse motion
-				segmentStepLimit = (uint32_t)((int32_t)(2 * reverseStartStep) - netStepsAtEnd);
+				segmentStepLimit = (2 * reverseStartStep) - netStepsAtEnd;
 				state = DMState::deltaForwardsReversing;
 			}
 		}
@@ -255,7 +254,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			if (currentSegment->IsAccelerating())
 			{
 				state = DMState::cartAccel;
-				reverseStartStep = segmentStepLimit = (uint32_t)(netStepsAtSegmentEnd + 1);
+				reverseStartStep = segmentStepLimit = netStepsAtSegmentEnd + 1;
 			}
 			else
 			{
@@ -263,7 +262,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 				if (endSpeed >= 0.0)
 				{
 					state = DMState::cartDecelNoReverse;					// this segment is forwards throughout
-					reverseStartStep = segmentStepLimit = (uint32_t)(netStepsAtSegmentEnd + (2 * mp.cart.extruderReverseSteps) + 1);
+					reverseStartStep = segmentStepLimit = netStepsAtSegmentEnd + 1;
 					CheckDirection(false);
 				}
 				else
@@ -281,7 +280,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 						const float segmentDistanceToReverse = fsquare(startSpeed) * currentSegment->GetC() * (-0.25);	// because (v^2-u^2) = 2as, so if v=0 then s=-u^2/2a = u^2/2d = -0.25*u^2*c
 						const float distanceToReverse = startDistance + segmentDistanceToReverse;
 						const int32_t netStepsToReverse = (int32_t)(distanceToReverse * mp.cart.effectiveStepsPerMm - 0.5);			// don't do the last step if we only overshoot it slightly, hence -0.5
-						reverseStartStep = (uint32_t)(netStepsToReverse + (2 * mp.cart.extruderReverseSteps) + 1);
+						reverseStartStep = netStepsToReverse + 1;
 						if (nextStep < reverseStartStep)
 						{
 							// There is at least one step before we reverse
@@ -296,7 +295,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 							CheckDirection(true);
 						}
 					}
-					segmentStepLimit = (uint32_t)((int32_t)(2 * (reverseStartStep - mp.cart.extruderReverseSteps)) - netStepsAtSegmentEnd - 1);
+					segmentStepLimit = (2 * reverseStartStep) - netStepsAtSegmentEnd - 1;
 				}
 			}
 		}
@@ -304,7 +303,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 #if 1	//DEBUG
 		if (__get_BASEPRI() == 0)
 		{
-			debugPrintf("New ex seg: state %u A=%.4e B=%.4e C=%.4e ns=%" PRIu32 " ssl=%" PRIu32 " rss=%" PRIu32 "\n",
+			debugPrintf("New ex seg: state %u A=%.4e B=%.4e C=%.4e ns=%" PRIi32 " ssl=%" PRIi32 " rss=%" PRIi32 "\n",
 						(unsigned int)state, (double)pA, (double)pB, (double)pC, nextStep, segmentStepLimit, reverseStartStep);
 		}
 #endif
@@ -322,7 +321,6 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 {
 	distanceSoFar = 0.0;
 	timeSoFar = 0.0;
-	mp.cart.extruderReverseSteps = 0;
 	mp.cart.pressureAdvanceK = 0.0;
 	// We can't use directionVector here because those values relate to Cartesian space, whereas we may be CoreXY etc.
 	mp.cart.effectiveStepsPerMm =
@@ -417,7 +415,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 					reverseStartStep = totalSteps + 1;
 				}
 			}
-			else if (direction && (uint32_t)numStepsUp <= totalSteps)
+			else if (direction && numStepsUp <= totalSteps)
 			{
 				// If numStepsUp == totalSteps then the reverse segment is too small to do.
 				// If numStepsUp < totalSteps then there has been a rounding error, because we are supposed to move up more than the calculated number of steps we move up.
@@ -428,19 +426,19 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 			}
 			else
 			{
-				reverseStartStep = (uint32_t)numStepsUp + 1;
+				reverseStartStep = numStepsUp + 1;
 
 				// Correct the initial direction and the total number of steps
 				if (direction)
 				{
 					// Net movement is up, so we will go up first and then down by a lesser amount
-					totalSteps = (2 * (uint32_t)numStepsUp) - totalSteps;
+					totalSteps = (2 * numStepsUp) - totalSteps;
 				}
 				else
 				{
 					// Net movement is down, so we will go up first and then down by a greater amount
 					direction = true;
-					totalSteps = (2 * (uint32_t)numStepsUp) + totalSteps;
+					totalSteps = (2 * numStepsUp) + totalSteps;
 				}
 			}
 		}
@@ -493,7 +491,6 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 #endif
 	distanceSoFar =	mp.cart.extrusionBroughtForwards = shaper.GetExtrusionPending() * effMmPerStep;
 	timeSoFar = 0.0;
-	mp.cart.extruderReverseSteps = 0;
 
 	// Calculate the total forward and reverse movement distances
 	mp.cart.pressureAdvanceK = (dda.flags.usePressureAdvance && shaper.GetKclocks() > 0.0) ? shaper.GetKclocks() : 0.0;
@@ -504,7 +501,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	nextStep = 0;									// must do this before calling NewExtruderSegment
 	totalSteps = 0;									// we don't use totalSteps but set it to 0 to avoid random values being printed by DebugPrint
 
-	if (!NewExtruderSegment())
+	if (!NewExtruderSegment())						// if no steps to do
 	{
 		shaper.SetExtrusionPending(dda.totalDistance * effStepsPerMm);
 		return false;								// quit if no steps to do
@@ -529,17 +526,17 @@ static inline float fastLimSqrtf(float f) noexcept
 bool DriveMovement::CalcNextStepTimeFull(const DDA &dda) noexcept
 pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 {
-	uint32_t shiftFactor = 0;									// assume single stepping
+	uint32_t shiftFactor = 0;										// assume single stepping
 
 	{
-		uint32_t stepsToLimit = segmentStepLimit - nextStep;
+		int32_t stepsToLimit = segmentStepLimit - nextStep;
 		// If there are no more steps left in this segment, skip to the next segment and use single stepping
 		if (stepsToLimit == 0)
 		{
 			currentSegment = currentSegment->GetNext();
 			if (isExtruder)
 			{
-				mp.cart.extruderReverseSteps += segmentStepLimit - reverseStartStep;
+				nextStep -= 2 * (segmentStepLimit - reverseStartStep);	// set nextStep to the net steps taken (this may make nextStep negative)
 				if (!NewExtruderSegment())
 				{
 					const size_t logicalDrive =
@@ -551,8 +548,8 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 					ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
 					if (dda.flags.isPrintingMove)
 					{
-						const int32_t stepsDone = (nextStep == 0) ? 0 : (int)nextStep - 1 - 2 * (int)mp.cart.extruderReverseSteps;
-						shaper.SetExtrusionPending(distanceSoFar * mp.cart.effectiveStepsPerMm - (float)stepsDone);
+						const int32_t netStepsDone = nextStep - 1;
+						shaper.SetExtrusionPending(distanceSoFar * mp.cart.effectiveStepsPerMm - (float)netStepsDone);
 					}
 					return false;
 				}
@@ -572,7 +569,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 				}
 			}
 			// Leave shiftFactor set to 0 so that we compute a single step time, because the interval will have changed
-			stepsTakenThisSegment = 1;							// this will be the first step in this segment
+			stepsTakenThisSegment = 1;								// this will be the first step in this segment
 		}
 		else if (stepsTakenThisSegment < 2)
 		{
@@ -627,8 +624,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	case DMState::cartDecelForwardsReversing:
 		if (nextStep + stepsTillRecalc < reverseStartStep)
 		{
-			const uint32_t netSteps = nextStep - 2 * mp.cart.extruderReverseSteps;
-			nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(netSteps + stepsTillRecalc));
+			nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
 			break;
 		}
 
@@ -638,16 +634,13 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// no break
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.
 		{
-			const int32_t netSteps = (2 * (int32_t)(reverseStartStep - mp.cart.extruderReverseSteps - 1)) - (int32_t)nextStep;
+			const int32_t netSteps = (2 * (reverseStartStep - 1)) - nextStep;
 			nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)(netSteps - (int32_t)stepsTillRecalc));
 		}
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian decelerating with no reversal
-		{
-			const uint32_t netSteps = nextStep - 2 * mp.cart.extruderReverseSteps;
-			nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(netSteps + stepsTillRecalc));
-		}
+		nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
 		break;
 
 	case DMState::deltaForwardsReversing:						// moving forwards
@@ -690,7 +683,6 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			nextCalcStepTime = (currentSegment->IsLinear()) ? pB + pCds
 								: (currentSegment->IsAccelerating()) ? pB + fastLimSqrtf(pA + pCds)
 									 : pB - fastLimSqrtf(pA + pCds);
-			//if (currentSegment->IsLinear()) { pA = ds; }	//DEBUG
 		}
 		break;
 

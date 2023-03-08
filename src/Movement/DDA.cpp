@@ -735,7 +735,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 			{
 				pdm->directionChanged = pdm->directionReversed = false;
 				InsertDM(pdm);
-				const uint32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
+				const int32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
 				if (pdm->direction)
 				{
 					endPoint[drive] += netSteps;
@@ -850,7 +850,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 				{
 					pdm->directionChanged = pdm->directionReversed = false;
 					InsertDM(pdm);
-					const uint32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
+					const int32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
 					if (pdm->direction)
 					{
 						endPoint[drive] += netSteps;
@@ -894,7 +894,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 				{
 					pdm->directionChanged = pdm->directionReversed = false;
 					InsertDM(pdm);
-					const uint32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
+					const int32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
 					if (pdm->direction)
 					{
 						endPoint[drive] += netSteps;

@@ -94,12 +94,12 @@ private:
 			stepsTakenThisSegment : 2;					// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
-	uint32_t totalSteps;								// total number of steps for this move (not used by extruders)
+	int32_t totalSteps;									// total number of steps for this move, always positive, but zero for extruders
 
 	// These values change as the step is executed, except for reverseStartStep
-	uint32_t nextStep;									// number of steps already done
-	uint32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
-	uint32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
+	int32_t nextStep;									// number of steps already done. For extruders this gets reset to the net steps already done at the start of each segment, so it can go negative.
+	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
+	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
 
@@ -127,7 +127,6 @@ private:
 			float pressureAdvanceK;						// how much pressure advance is applied to this move
 			float effectiveStepsPerMm;					// the steps/mm multiplied by the movement fraction
 			float effectiveMmPerStep;					// reciprocal of [the steps/mm multiplied by the movement fraction]
-			uint32_t extruderReverseSteps;				// the number of reverse steps taken before the start of the current segment, only for extruders
 			float extrusionBroughtForwards;				// the amount of extrusion brought forwards from previous moves. Only needed for debug output.
 		} cart;
 	} mp;
@@ -181,15 +180,11 @@ inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 	int32_t netStepsTaken;
 	if (nextStep <= reverseStartStep)												// if no reverse phase, or not started it yet
 	{
-		netStepsTaken = (nextStep == 0) ? 0 : (int32_t)nextStep - 1;
+		netStepsTaken = (nextStep == 0) ? 0 : nextStep - 1;
 	}
 	else
 	{
-		netStepsTaken = (int32_t)nextStep - (int32_t)(2 * reverseStartStep) + 1;	// allowing for direction having changed
-	}
-	if (isExtruder)
-	{
-		netStepsTaken -= 2 * (int32_t)mp.cart.extruderReverseSteps;
+		netStepsTaken = nextStep - (2 * reverseStartStep) + 1;						// allowing for direction having changed
 	}
 	return (direction) ? netStepsTaken : -netStepsTaken;
 }
@@ -216,7 +211,7 @@ inline void DriveMovement::CheckDirection(bool reversed) noexcept
 // Get the current full step interval for this axis or extruder
 inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const noexcept
 {
-	return (nextStep < totalSteps && nextStep > (1u << microstepShift))				// if at least 1 full step done
+	return (nextStep < totalSteps && nextStep > (1 << microstepShift))				// if at least 1 full step done
 				? stepInterval << microstepShift									// return the interval between steps converted to full steps
 					: 0;
 }
