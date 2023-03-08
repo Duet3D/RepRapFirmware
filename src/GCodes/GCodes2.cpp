@@ -3489,12 +3489,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			// case 573 was report heater average PWM but is no longer supported because you can use "echo heat/heaters[N].avgPwm" instead
 
 			case 574: // Set endstop configuration
-				// We may be about to delete endstops, so make sure we are not executing a move that uses them
-				if (!LockMovementAndWaitForStandstill(gb))
-				{
-					return false;
-				}
-				result = platform.GetEndstops().HandleM574(gb, reply, outBuf);
+				result = platform.GetEndstops().HandleM574(gb, reply, outBuf);				// this will lock movement if it is going to make any changes
 				break;
 
 			case 575: // Set communications parameters
