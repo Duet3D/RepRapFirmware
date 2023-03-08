@@ -663,8 +663,6 @@ static bool InternalDelete(const char* filePath, ErrorMessageMode errorMessageMo
 	return true;
 }
 
-# endif
-
 // Delete the contents of an open directory returning true if successful
 // File system must be locked before calling this
 // This is recursive. In order to avoid using large amounts of stack it uses the string referred to by filePath to hold the name of each contained file as it is deleted.
@@ -721,6 +719,8 @@ static bool DeleteContents(DIR& dir, const StringRef& filePath, ErrorMessageMode
 	filePath.Truncate(originalPathLength);
 	return true;
 }
+
+# endif
 
 // Delete a file or directory and update the volume sequence number returning true if successful
 // Note, we use the filePath string to build up nested directories if we are doing a recursive delete
