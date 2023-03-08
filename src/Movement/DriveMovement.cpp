@@ -297,7 +297,6 @@ bool DriveMovement::NewExtruderSegment() noexcept
 						}
 					}
 					segmentStepLimit = (uint32_t)((int32_t)(2 * (reverseStartStep - mp.cart.extruderReverseSteps)) - netStepsAtSegmentEnd - 1);
-					mp.cart.extruderReverseSteps += segmentStepLimit - reverseStartStep;
 				}
 			}
 		}
@@ -323,6 +322,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 {
 	distanceSoFar = 0.0;
 	timeSoFar = 0.0;
+	mp.cart.extruderReverseSteps = 0;
 	mp.cart.pressureAdvanceK = 0.0;
 	// We can't use directionVector here because those values relate to Cartesian space, whereas we may be CoreXY etc.
 	mp.cart.effectiveStepsPerMm =
@@ -539,6 +539,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			currentSegment = currentSegment->GetNext();
 			if (isExtruder)
 			{
+				mp.cart.extruderReverseSteps += segmentStepLimit - reverseStartStep;
 				if (!NewExtruderSegment())
 				{
 					const size_t logicalDrive =
@@ -626,7 +627,8 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	case DMState::cartDecelForwardsReversing:
 		if (nextStep + stepsTillRecalc < reverseStartStep)
 		{
-			nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+			const uint32_t netSteps = nextStep - 2 * mp.cart.extruderReverseSteps;
+			nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(netSteps + stepsTillRecalc));
 			break;
 		}
 
@@ -635,11 +637,17 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		state = DMState::cartDecelReverse;
 		// no break
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.
-		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)((2 * (int32_t)(reverseStartStep - 1)) - (int32_t)(nextStep + stepsTillRecalc)));
+		{
+			const int32_t netSteps = (2 * (int32_t)(reverseStartStep - mp.cart.extruderReverseSteps - 1)) - (int32_t)nextStep;
+			nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)(netSteps - (int32_t)stepsTillRecalc));
+		}
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian decelerating with no reversal
-		nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+		{
+			const uint32_t netSteps = nextStep - 2 * mp.cart.extruderReverseSteps;
+			nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(netSteps + stepsTillRecalc));
+		}
 		break;
 
 	case DMState::deltaForwardsReversing:						// moving forwards
@@ -708,7 +716,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
 		// So if this is the last step and it is late, bring it forward to the expected finish time.
 		// Very rarely on a delta, the penultimate step may also be calculated late. Allow for that here in case it affects Cartesian axes too.
-		if (nextStep + stepsTillRecalc + 1 >= totalSteps)
+		if (isExtruder || nextStep + stepsTillRecalc + 1 >= totalSteps)
 		{
 			iNextCalcStepTime = dda.clocksNeeded;
 		}
