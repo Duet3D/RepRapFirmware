@@ -140,6 +140,7 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 		move->extruderDrives = 0;
 		move->numDrivers = canDriver.localDriver + 1;
 		move->zero = 0;
+		move->shapingPlan = params.shapingPlan.condensedPlan;
 
 		// Clear out the per-drive fields. Can't use a range-based FOR loop on a packed struct.
 		for (size_t drive = 0; drive < ARRAY_SIZE(move->perDrive); ++drive)
@@ -161,7 +162,6 @@ void CanMotion::AddAxisMovement(const PrepParams& params, DriverId canDriver, in
 	if (buf != nullptr)
 	{
 		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].steps = steps;
-		buf->msg.moveLinearShaped.shapingPlan = params.shapingPlan.condensedPlan;
 	}
 }
 
@@ -171,7 +171,7 @@ void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver
 	if (buf != nullptr)
 	{
 		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].extrusion = extrusion;
-		buf->msg.moveLinearShaped.shapingPlan = params.shapingPlan.condensedPlan;
+		buf->msg.moveLinearShaped.extruderDrives |= 1u << canDriver.localDriver;
 		buf->msg.moveLinearShaped.usePressureAdvance = usePressureAdvance;
 	}
 }
