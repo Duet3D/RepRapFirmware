@@ -32,7 +32,7 @@ struct PrepParams
 		float accelDistance;
 		float decelStartDistance;
 		float accelClocks, steadyClocks, decelClocks;
-		float acceleration, deceleration;
+		float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
 
 		// Calculate the steady clocks and set the total clocks in the DDA
 		void Finalise(float topSpeed) noexcept;
@@ -311,8 +311,8 @@ private:
 	float endCoordinates[MaxAxesPlusExtruders];		// The Cartesian coordinates at the end of the move plus extrusion amounts
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;							// How long is the move in hypercuboid space
-	float acceleration;								// The acceleration to use
-	float deceleration;								// The deceleration to use
+	float acceleration;								// The acceleration to use, always positive
+	float deceleration;								// The deceleration to use, always positive
     float requestedSpeed;							// The speed that the user asked for
     float virtualExtruderPosition;					// the virtual extruder position at the end of this move, used for pause/resume
 

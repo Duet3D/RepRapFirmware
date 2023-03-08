@@ -748,7 +748,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 				// Check for sensible values, print them if they look dubious
 				if (reprap.Debug(Module::Dda) && (reprap.Debug(Module::Move) || pdm->totalSteps > 1000000))
 				{
-					DebugPrintAll("rem");
+					DebugPrintAll("remu_err1");
 				}
 			}
 			else
@@ -773,9 +773,9 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 		return false;
 	}
 
-	if (reprap.Debug(Module::Dda) && reprap.Debug(Module::Move))	// temp show the prepared DDA if debug enabled for both modules
+	if (reprap.Debug(Module::Move) && (reprap.Debug(Module::Dda) || params.shapingPlan.debugPrint))		// show the prepared DDA if debug enabled for both modules
 	{
-		DebugPrintAll("rem");
+		DebugPrintAll("remu");
 	}
 
 	state = frozen;												// must do this last so that the ISR doesn't start executing it before we have finished setting it up
@@ -788,7 +788,6 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 {
 	afterPrepare.moveStartTime = StepTimer::ConvertToLocalTime(msg.whenToExecute);
-	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
 	flags.all = 0;
 	flags.isRemote = true;
 	flags.isPrintingMove = flags.usePressureAdvance = msg.usePressureAdvance;
@@ -796,29 +795,28 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	// Normalise the move to unit distance
 	totalDistance = 1.0;
 
+	// Calculate the speeds assuming no input shaping i.e. steady acceleration and deceleration
+	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
 	topSpeed = 2.0/(2 * msg.steadyClocks + (msg.initialSpeedFraction + 1.0) * msg.accelerationClocks + (msg.finalSpeedFraction + 1.0) * msg.decelClocks);
 	startSpeed = topSpeed * msg.initialSpeedFraction;
 	endSpeed = topSpeed * msg.finalSpeedFraction;
-
-	acceleration = (msg.accelerationClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.initialSpeedFraction))/msg.accelerationClocks;
-	deceleration = (msg.decelClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.finalSpeedFraction))/msg.decelClocks;
 
 	// Prepare for movement
 	PrepParams params;										// the default constructor clears params.plan to 'no shaping'
 
 	// Set up the unshaped values
-	params.unshaped.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
-	const float decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
-	params.unshaped.decelStartDistance = 1.0 - decelDistance;
 	params.unshaped.accelClocks = msg.accelerationClocks;
 	params.unshaped.steadyClocks = msg.steadyClocks;
 	params.unshaped.decelClocks = msg.decelClocks;
-	params.unshaped.acceleration = acceleration;
-	params.unshaped.deceleration = deceleration;
+	params.unshaped.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
+	const float decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
+	params.unshaped.decelStartDistance = 1.0 - decelDistance;
+	params.unshaped.acceleration = acceleration = (msg.accelerationClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.initialSpeedFraction))/msg.accelerationClocks;
+	params.unshaped.deceleration = deceleration = (msg.decelClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.finalSpeedFraction))/msg.decelClocks;
 
 	shapedSegments = unshapedSegments = nullptr;
 
-	// Set up the shaped segments if any input shaping is specified and we have any drivers that are not using pressure advance
+	// Set up the shaped segments if any input shaping is specified
 	if (msg.shapingPlan != 0)
 	{
 		// Set up the plan
@@ -863,7 +861,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 					// Check for sensible values, print them if they look dubious
 					if (reprap.Debug(Module::Dda) && (reprap.Debug(Module::Move) || pdm->totalSteps > 1000000))
 					{
-						DebugPrintAll("rem");
+						DebugPrintAll("rems_err1");
 					}
 				}
 				else
@@ -907,7 +905,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 					// Check for sensible values, print them if they look dubious
 					if (reprap.Debug(Module::Dda) && (reprap.Debug(Module::Move) || pdm->totalSteps > 1000000))
 					{
-						DebugPrintAll("rem");
+						DebugPrintAll("rems_err2");
 					}
 				}
 				else
@@ -939,9 +937,9 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 		return false;
 	}
 
-	if (reprap.Debug(Module::Dda) && reprap.Debug(Module::Move))	// temp show the prepared DDA if debug enabled for both modules
+	if (reprap.Debug(Module::Move) && (reprap.Debug(Module::Dda) || params.shapingPlan.debugPrint))		// show the prepared DDA if debug enabled for both modules
 	{
-		DebugPrintAll("rem");
+		DebugPrintAll("rems");
 	}
 
 	state = frozen;												// must do this last so that the ISR doesn't start executing it before we have finished setting it up
