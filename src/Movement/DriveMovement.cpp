@@ -502,7 +502,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	isDelta = false;
 	isExtruder = true;
 	nextStep = 0;									// must do this before calling NewExtruderSegment
-	totalSteps = 0;									// we don't use totalSteps but set it to 0 to avoid random values being printed in DebugPrint
+	totalSteps = 0;									// we don't use totalSteps but set it to 0 to avoid random values being printed by DebugPrint
 
 	if (!NewExtruderSegment())
 	{
@@ -716,7 +716,8 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
 		// So if this is the last step and it is late, bring it forward to the expected finish time.
 		// Very rarely on a delta, the penultimate step may also be calculated late. Allow for that here in case it affects Cartesian axes too.
-		if (isExtruder || nextStep + stepsTillRecalc + 1 >= totalSteps)
+		// Don't use totalSteps here because it isn't valid for extruders
+		if (currentSegment->GetNext() == nullptr && nextStep + stepsTillRecalc + 1 >= segmentStepLimit)
 		{
 			iNextCalcStepTime = dda.clocksNeeded;
 		}
