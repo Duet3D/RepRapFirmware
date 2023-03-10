@@ -118,14 +118,14 @@ void DDA::LogProbePosition() noexcept
 // Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 void PrepParams::SetFromDDA(const DDA& dda) noexcept
 {
-	unshaped.decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
+	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
 	// Due to rounding error, for an accelerate-decelerate move we may have accelDistance+decelDistance slightly greater than totalDistance.
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
-	unshaped.accelDistance = min<float>(dda.beforePrepare.accelDistance, unshaped.decelStartDistance);
-	unshaped.acceleration = dda.acceleration;
-	unshaped.deceleration = dda.deceleration;
-	unshaped.accelClocks = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
-	unshaped.decelClocks = (dda.topSpeed - dda.endSpeed)/dda.deceleration;
+	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
+	acceleration = dda.acceleration;
+	deceleration = dda.deceleration;
+	accelClocks = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
+	decelClocks = (dda.topSpeed - dda.endSpeed)/dda.deceleration;
 
 #if SUPPORT_CAN_EXPANSION
 	initialSpeedFraction = dda.startSpeed/dda.topSpeed;
@@ -134,7 +134,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 }
 
 // Calculate the steady clocks and set the total clocks in the DDA
-void PrepParams::PrepParamSet::Finalise(float topSpeed) noexcept
+void PrepParams::Finalise(float topSpeed) noexcept
 {
 	const float steadyDistance = decelStartDistance - accelDistance;
 	steadyClocks = (steadyDistance <= 0.0) ? 0.0 : steadyDistance/topSpeed;
@@ -143,7 +143,7 @@ void PrepParams::PrepParamSet::Finalise(float topSpeed) noexcept
 DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
 {
 	activeDMs = completedDMs = nullptr;
-	shapedSegments = unshapedSegments = nullptr;
+	segments = nullptr;
 	tool = nullptr;						// needed in case we pause before any moves have been done
 
 	// Set the endpoints to zero, because Move will ask for them.
@@ -179,19 +179,13 @@ void DDA::ReleaseDMs() noexcept
 	}
 	activeDMs = completedDMs = nullptr;
 
-	for (MoveSegment* seg = shapedSegments; seg != nullptr; )
+	for (MoveSegment* seg = segments; seg != nullptr; )
 	{
 		MoveSegment* const nextSeg = seg->GetNext();
 		MoveSegment::Release(seg);
 		seg = nextSeg;
 	}
-	for (MoveSegment* seg = unshapedSegments; seg != nullptr; )
-	{
-		MoveSegment* const nextSeg = seg->GetNext();
-		MoveSegment::Release(seg);
-		seg = nextSeg;
-	}
-	shapedSegments = unshapedSegments = nullptr;
+	segments = nullptr;
 }
 
 // Return the number of clocks this DDA still needs to execute.
@@ -268,8 +262,7 @@ void DDA::DebugPrint(const char *tag) const noexcept
 	DebugPrintVector(" vec", directionVector, MaxAxesPlusExtruders);
 	debugPrintf("\n" "a=%.4e d=%.4e reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=%04x\n",
 				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded, (uint32_t)filePos, flags.all);
-	MoveSegment::DebugPrintList('S', shapedSegments);
-	MoveSegment::DebugPrintList('U', unshapedSegments);
+	MoveSegment::DebugPrintList('S', segments);
 }
 
 // Print the DDA and active DMs
@@ -701,16 +694,16 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	PrepParams params;											// the default constructor clears params.plan to 'no shaping'
 
 	// Set up the unshaped values
-	params.unshaped.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
+	params.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
 	const float decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
-	params.unshaped.decelStartDistance = 1.0 - decelDistance;
-	params.unshaped.accelClocks = msg.accelerationClocks;
-	params.unshaped.steadyClocks = msg.steadyClocks;
-	params.unshaped.decelClocks = msg.decelClocks;
-	params.unshaped.acceleration = acceleration;
-	params.unshaped.deceleration = deceleration;
+	params.decelStartDistance = 1.0 - decelDistance;
+	params.accelClocks = msg.accelerationClocks;
+	params.steadyClocks = msg.steadyClocks;
+	params.decelClocks = msg.decelClocks;
+	params.acceleration = acceleration;
+	params.deceleration = deceleration;
 
-	shapedSegments = unshapedSegments = nullptr;
+	segments = nullptr;
 	activeDMs = completedDMs = nullptr;
 	afterPrepare.drivesMoving.Clear();
 
@@ -722,7 +715,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 		directionVector[drive] = (float)delta;
 		if (delta != 0)
 		{
-			EnsureUnshapedSegments(params);						// we are going to need unshaped segments
+			EnsureSegments(params);								// we are going to need segments
 			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
 			pdm->totalSteps = labs(delta);						// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 			pdm->direction = (delta >= 0);						// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
@@ -762,14 +755,14 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	// 2. Throw it away if there's no real movement.
 	if (activeDMs == nullptr)
 	{
-		// We may have set up the unshaped segments, in which case we must recycle them
-		for (MoveSegment* seg = unshapedSegments; seg != nullptr; )
+		// We may have set up the segments, in which case we must recycle them
+		for (MoveSegment* seg = segments; seg != nullptr; )
 		{
 			MoveSegment* const nextSeg = seg->GetNext();
 			MoveSegment::Release(seg);
 			seg = nextSeg;
 		}
-		unshapedSegments = nullptr;
+		segments = nullptr;
 		return false;
 	}
 
@@ -795,34 +788,20 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	// Normalise the move to unit distance
 	totalDistance = 1.0;
 
-	// Calculate the speeds assuming no input shaping i.e. steady acceleration and deceleration
-	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
-	topSpeed = 2.0/(2 * msg.steadyClocks + (msg.initialSpeedFraction + 1.0) * msg.accelerationClocks + (msg.finalSpeedFraction + 1.0) * msg.decelClocks);
-	startSpeed = topSpeed * msg.initialSpeedFraction;
-	endSpeed = topSpeed * msg.finalSpeedFraction;
-
 	// Prepare for movement
-	PrepParams params;										// the default constructor clears params.plan to 'no shaping'
+	PrepParams params;
+	params.shapingPlan.condensedPlan = msg.shapingPlan;
 
-	// Set up the unshaped values
-	params.unshaped.accelClocks = msg.accelerationClocks;
-	params.unshaped.steadyClocks = msg.steadyClocks;
-	params.unshaped.decelClocks = msg.decelClocks;
-	params.unshaped.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
-	const float decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
-	params.unshaped.decelStartDistance = 1.0 - decelDistance;
-	params.unshaped.acceleration = acceleration = (msg.accelerationClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.initialSpeedFraction))/msg.accelerationClocks;
-	params.unshaped.deceleration = deceleration = (msg.decelClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.finalSpeedFraction))/msg.decelClocks;
+	params.acceleration = acceleration = msg.acceleration;
+	params.deceleration = deceleration = msg.deceleration;
+	params.accelClocks = msg.accelerationClocks;
+	params.steadyClocks = msg.steadyClocks;
+	params.decelClocks = msg.decelClocks;
+	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
 
-	shapedSegments = unshapedSegments = nullptr;
-
-	// Set up the shaped segments if any input shaping is specified
-	if (msg.shapingPlan != 0)
-	{
-		// Set up the plan
-		params.shapingPlan.condensedPlan = msg.shapingPlan;
-		reprap.GetMove().GetAxisShaper().GetRemoteShapedSegments(*this, params);
-	}
+	// Set up the plan
+	segments = nullptr;
+	reprap.GetMove().GetAxisShaper().GetRemoteSegments(*this, params);
 
 	activeDMs = completedDMs = nullptr;
 	afterPrepare.drivesMoving.Clear();
@@ -877,11 +856,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = (float)delta;
 			if (delta != 0)
 			{
-				if (msg.shapingPlan == 0)
-				{
-					EnsureUnshapedSegments(params);				// we are going to need unshaped segments
-				}
-
+				EnsureSegments(params);							// we are going to need segments
 				DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
 				pdm->totalSteps = labs(delta);					// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 				pdm->direction = (delta >= 0);					// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
@@ -920,20 +895,14 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	// 2. Throw it away if there's no real movement.
 	if (activeDMs == nullptr)
 	{
-		// We may have set up the shaped and/or unshaped segments, in which case we must recycle them
-		for (MoveSegment* seg = unshapedSegments; seg != nullptr; )
+		// We may have set up the segments, in which case we must recycle them
+		for (MoveSegment* seg = segments; seg != nullptr; )
 		{
 			MoveSegment* const nextSeg = seg->GetNext();
 			MoveSegment::Release(seg);
 			seg = nextSeg;
 		}
-		for (MoveSegment* seg = shapedSegments; seg != nullptr; )
-		{
-			MoveSegment* const nextSeg = seg->GetNext();
-			MoveSegment::Release(seg);
-			seg = nextSeg;
-		}
-		shapedSegments = unshapedSegments = nullptr;
+		segments = nullptr;
 		return false;
 	}
 
@@ -1350,12 +1319,12 @@ pre(disableDeltaMapping || drive < MaxAxes)
 	}
 }
 
-// Set up unshapedSegments if we haven't done so already
-void DDA::EnsureUnshapedSegments(const PrepParams& params) noexcept
+// Set up the segments (without input shaping) if we haven't done so already
+void DDA::EnsureSegments(const PrepParams& params) noexcept
 {
-	if (unshapedSegments == nullptr)
+	if (segments == nullptr)
 	{
-		unshapedSegments = AxisShaper::GetUnshapedSegments(*this, params);
+		segments = AxisShaper::GetUnshapedSegments(*this, params);
 	}
 }
 
@@ -1374,7 +1343,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 #endif
 
 	// Prepare for movement
-	shapedSegments = unshapedSegments = nullptr;
+	segments = nullptr;
 
 	PrepParams params;										// the default constructor clears params.plan to 'no shaping'
 	if (flags.xyMoving)
@@ -1384,14 +1353,14 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 	else
 	{
 		params.SetFromDDA(*this);
-		params.unshaped.Finalise(topSpeed);
-		clocksNeeded = params.unshaped.TotalClocks();
+		params.Finalise(topSpeed);
+		clocksNeeded = params.TotalClocks();
 	}
 
 	// Copy the unshaped acceleration and deceleration back to the DDA because ManageLaserPower uses them
 	//TODO change ManageLaserPower to work on the shaped segments instead
-	acceleration = params.unshaped.acceleration;
-	deceleration = params.unshaped.deceleration;
+	acceleration = params.acceleration;
+	deceleration = params.deceleration;
 
 	if (simMode < SimulationMode::normal)
 	{
@@ -1453,7 +1422,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 						else
 #endif
 						{
-							EnsureUnshapedSegments(params);
+							EnsureSegments(params);
 							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders, DMState::idle);
 							pdm->direction = (delta >= 0);
 							pdm->totalSteps = labs(delta);
@@ -1482,10 +1451,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 			{
 				// On a delta we need to move all towers even if some of them have no net movement
 				platform.EnableDrivers(drive, false);
-				if (shapedSegments == nullptr)
-				{
-					EnsureUnshapedSegments(params);
-				}
+				EnsureSegments(params);
 
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (platform.GetDriversBitmap(drive) != 0						// if any of the drives is local
@@ -1537,10 +1503,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 				if (delta != 0)
 				{
 					platform.EnableDrivers(drive, false);
-					if (shapedSegments == nullptr)
-					{
-						EnsureUnshapedSegments(params);
-					}
+					EnsureSegments(params);
 					if (flags.continuousRotationShortcut && reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
 					{
 						// This is a continuous rotation axis, so we may have adjusted the move to cross the 180 degrees position
@@ -1641,10 +1604,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 						else
 #endif
 						{
-							if (shapedSegments == nullptr)
-							{
-								EnsureUnshapedSegments(params);
-							}
+							EnsureSegments(params);
 							DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
 							pdm->direction = (directionVector[drive] >= 0);
 							if (pdm->PrepareExtruder(*this, params, platform.DriveStepsPerUnit(drive) * directionVector[drive]))

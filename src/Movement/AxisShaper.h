@@ -47,7 +47,7 @@ public:
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept;
 
 	// Calculate the shaped segments for a move
-	void GetRemoteShapedSegments(DDA& dda, PrepParams& paramsg) const noexcept;
+	void GetRemoteSegments(DDA& dda, PrepParams& paramsg) const noexcept;
 #endif
 
 	// Plan input shaping for an individual move

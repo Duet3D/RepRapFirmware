@@ -112,7 +112,7 @@ bool DriveMovement::NewCartesianSegment() noexcept
 
 		segmentStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 
-#if 1	//DEBUG
+#if 0	//DEBUG
 		if (__get_BASEPRI() == 0)
 		{
 			debugPrintf("New cart seg: state %u A=%.4e B=%.4e C=%.4e ns=%" PRIu32 " ssl=%" PRIu32 "\n",
@@ -300,7 +300,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			}
 		}
 
-#if 1	//DEBUG
+#if 0	//DEBUG
 		if (__get_BASEPRI() == 0)
 		{
 			debugPrintf("New ex seg: state %u A=%.4e B=%.4e C=%.4e ns=%" PRIi32 " ssl=%" PRIi32 " rss=%" PRIi32 "\n",
@@ -333,7 +333,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	mp.cart.effectiveMmPerStep = 1.0/mp.cart.effectiveStepsPerMm;
 	isDelta = false;
 	isExtruder = false;
-	currentSegment = (dda.shapedSegments != nullptr) ? dda.shapedSegments : dda.unshapedSegments;
+	currentSegment = dda.segments;
 	nextStep = 0;									// must do this before calling NewCartesianSegment
 
 	if (!NewCartesianSegment())
@@ -448,7 +448,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	timeSoFar = 0.0;
 
 	isDelta = true;
-	currentSegment = (dda.shapedSegments != nullptr) ? dda.shapedSegments : dda.unshapedSegments;
+	currentSegment = dda.segments;
 
 	nextStep = 0;									// must do this before calling NewDeltaSegment
 	if (!NewDeltaSegment(dda))
@@ -486,7 +486,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	// distanceSoFar will accumulate the equivalent amount of totalDistance that the extruder moves forwards.
 	// It would be equal to totalDistance if there was no pressure advance and no extrusion pending.
 	ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
-#if 1	//DEBUG
+#if 0	//DEBUG
 	debugPrintf("pending %.2f\n", (double)shaper.GetExtrusionPending());
 #endif
 	distanceSoFar =	mp.cart.extrusionBroughtForwards = shaper.GetExtrusionPending() * effMmPerStep;
@@ -495,7 +495,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	// Calculate the total forward and reverse movement distances
 	mp.cart.pressureAdvanceK = (dda.flags.usePressureAdvance && shaper.GetKclocks() > 0.0) ? shaper.GetKclocks() : 0.0;
 
-	currentSegment = (dda.shapedSegments != nullptr) ? dda.shapedSegments : dda.unshapedSegments;
+	currentSegment = dda.segments;
 	isDelta = false;
 	isExtruder = true;
 	nextStep = 0;									// must do this before calling NewExtruderSegment

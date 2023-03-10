@@ -123,9 +123,9 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 		if (buf->next == nullptr)
 		{
 			// This is the first CAN-connected board for this movement
-			move->accelerationClocks = (uint32_t)params.unshaped.accelClocks;
-			move->steadyClocks = (uint32_t)params.unshaped.steadyClocks;
-			move->decelClocks = (uint32_t)params.unshaped.decelClocks;
+			move->accelerationClocks = (uint32_t)params.accelClocks;
+			move->steadyClocks = (uint32_t)params.steadyClocks;
+			move->decelClocks = (uint32_t)params.decelClocks;
 			currentMoveClocks = move->accelerationClocks + move->steadyClocks + move->decelClocks;
 		}
 		else
@@ -135,8 +135,8 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 			move->steadyClocks = buf->next->msg.moveLinear.steadyClocks;
 			move->decelClocks = buf->next->msg.moveLinear.decelClocks;
 		}
-		move->initialSpeedFraction = params.initialSpeedFraction;
-		move->finalSpeedFraction = params.finalSpeedFraction;
+		move->acceleration = params.acceleration;
+		move->deceleration = params.deceleration;
 		move->extruderDrives = 0;
 		move->numDrivers = canDriver.localDriver + 1;
 		move->zero = 0;

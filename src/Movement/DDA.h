@@ -16,34 +16,18 @@
 #include <Platform/Tasks.h>
 #include <GCodes/GCodes.h>			// for class RawMove
 
-#ifdef DUET_NG
 # define DDA_LOG_PROBE_CHANGES	0
-#else
-# define DDA_LOG_PROBE_CHANGES	0	// save memory on the wired Duet
-#endif
 
 class DDARing;
 
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
 struct PrepParams
 {
-	struct PrepParamSet
-	{
-		float accelDistance;
-		float decelStartDistance;
-		float accelClocks, steadyClocks, decelClocks;
-		float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
+	float accelDistance;
+	float decelStartDistance;
+	float accelClocks, steadyClocks, decelClocks;
+	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
 
-		// Calculate the steady clocks and set the total clocks in the DDA
-		void Finalise(float topSpeed) noexcept;
-
-		// Get the total clocks needed
-		float TotalClocks() const noexcept { return accelClocks + steadyClocks + decelClocks; }
-	};
-
-	// Parameters used for all types of motion
-	PrepParamSet unshaped;
-	PrepParamSet shaped;								// only valid if the shaping plan is not empty
 	InputShaperPlan shapingPlan;
 
 #if SUPPORT_CAN_EXPANSION
@@ -59,8 +43,14 @@ struct PrepParams
 	float zMovement;
 # endif
 	const LinearDeltaKinematics *dparams;
-	float a2plusb2;								// sum of the squares of the X and Y movement fractions
+	float a2plusb2;									// sum of the squares of the X and Y movement fractions
 #endif
+
+	// Calculate the steady clocks and set the total clocks in the DDA
+	void Finalise(float topSpeed) noexcept;
+
+	// Get the total clocks needed
+	float TotalClocks() const noexcept { return accelClocks + steadyClocks + decelClocks; }
 
 	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 	void SetFromDDA(const DDA& dda) noexcept;
@@ -250,7 +240,7 @@ private:
 	void ReleaseDMs() noexcept;
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be an acceleration-only move
-	void EnsureUnshapedSegments(const PrepParams& params) noexcept;
+	void EnsureSegments(const PrepParams& params) noexcept;
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
@@ -357,8 +347,7 @@ private:
 	// These three could possibly be moved into afterPrepare
 	DriveMovement* activeDMs;						// list of associated DMs that need steps, in step time order
 	DriveMovement* completedDMs;					// list of associated DMs that don't need any more steps
-	MoveSegment* shapedSegments;					// linked list of move segments used by axis DMs
-	MoveSegment* unshapedSegments;					// linked list of move segments used by extruder DMs
+	MoveSegment* segments;							// linked list of move segments used by axis DMs
 };
 
 // Find the DriveMovement record for a given drive even if it is completed, or return nullptr if there isn't one
