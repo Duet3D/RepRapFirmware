@@ -383,9 +383,6 @@ void AxisShaper::CalculateDerivedParameters() noexcept
 			u += speedChange;
 		}
 		overlappedDeltaVPerA = u;
-#if SUPPORT_REMOTE_COMMANDS
-		overlappedAPerDeltaV = 1.0/u;			// save this to avoid division when we calculate moves
-#endif
 	}
 }
 
@@ -449,63 +446,63 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 void AxisShaper::GetRemoteSegments(DDA& dda, PrepParams& params) const noexcept
 {
 	// Do the acceleration phase
-	float accelDistanceExInitialSpeed;									// the distance needed for acceleration minus the contribution from the initial speed
+	float accelDistanceExTopSpeed;									// the distance needed for acceleration minus the contribution from the top speed
 	float effectiveAccelTime;
 	if (params.shapingPlan.shapeAccelOverlapped)
 	{
 		effectiveAccelTime = overlappedDeltaVPerA;
-		accelDistanceExInitialSpeed = overlappedDistancePerA * params.acceleration;
+		accelDistanceExTopSpeed = (overlappedDistancePerA - (overlappedDeltaVPerA * params.accelClocks)) * params.acceleration;
 	}
 	else
 	{
 		effectiveAccelTime = params.accelClocks;
-		accelDistanceExInitialSpeed = 0.0;
+		accelDistanceExTopSpeed = 0.0;
 		if (params.shapingPlan.shapeAccelStart)
 		{
-			accelDistanceExInitialSpeed += extraDistanceAtStart * params.acceleration;
+			accelDistanceExTopSpeed += extraDistanceAtStart * params.acceleration;
 			effectiveAccelTime -= extraClocksAtStart;
 		}
 		if (params.shapingPlan.shapeAccelEnd)
 		{
-			accelDistanceExInitialSpeed += extraDistanceAtEnd * params.acceleration;
+			accelDistanceExTopSpeed += extraDistanceAtEnd * params.acceleration;
 			effectiveAccelTime -= extraClocksAtEnd;
 		}
-		accelDistanceExInitialSpeed += 0.5 * params.acceleration * fsquare(effectiveAccelTime);
+		accelDistanceExTopSpeed -= 0.5 * params.acceleration * fsquare(effectiveAccelTime);
 	}
 
 	// Do the deceleration phase
-	float decelDistanceExInitialSpeed;									// the distance needed for deceleration minus the contribution from the top speed
+	float decelDistanceExTopSpeed;									// the distance needed for deceleration minus the contribution from the top speed
 	float effectiveDecelTime;
 	if (params.shapingPlan.shapeDecelOverlapped)
 	{
 		effectiveDecelTime = overlappedDeltaVPerA;
-		decelDistanceExInitialSpeed = overlappedDistancePerA * params.deceleration;
+		decelDistanceExTopSpeed = overlappedDistancePerA * params.deceleration;
 	}
 	else
 	{
 		effectiveDecelTime = params.decelClocks;
-		decelDistanceExInitialSpeed = 0.0;
+		decelDistanceExTopSpeed = 0.0;
 		if (params.shapingPlan.shapeDecelStart)
 		{
-			decelDistanceExInitialSpeed += extraDistanceAtStart * params.deceleration;
+			decelDistanceExTopSpeed += extraDistanceAtStart * params.deceleration;
 			effectiveDecelTime -= extraClocksAtStart;
 		}
 		if (params.shapingPlan.shapeDecelEnd)
 		{
-			decelDistanceExInitialSpeed += extraDistanceAtEnd * params.deceleration;
+			decelDistanceExTopSpeed += extraDistanceAtEnd * params.deceleration;
 			effectiveDecelTime -= extraClocksAtEnd;
 		}
-		decelDistanceExInitialSpeed += 0.5 * params.deceleration * fsquare(effectiveDecelTime);
+		decelDistanceExTopSpeed -= 0.5 * params.deceleration * fsquare(effectiveDecelTime);
 	}
 
-	dda.topSpeed = (1.0 + accelDistanceExInitialSpeed + decelDistanceExInitialSpeed
-						+ 0.5 * (params.acceleration * fsquare(effectiveAccelTime) + params.deceleration * fsquare(effectiveDecelTime))
-				   )/dda.clocksNeeded;
+	dda.topSpeed = (1.0 - accelDistanceExTopSpeed - decelDistanceExTopSpeed)/dda.clocksNeeded;
 	dda.startSpeed = dda.topSpeed - params.acceleration * effectiveAccelTime;
 	dda.endSpeed = dda.topSpeed - params.deceleration * effectiveDecelTime;
-	params.accelDistance =      ((dda.topSpeed - (0.5 * effectiveAccelTime * params.accelClocks)) * params.accelClocks) + accelDistanceExInitialSpeed;
-	const float decelDistance = ((dda.topSpeed - (0.5 * effectiveDecelTime * params.decelClocks)) * params.decelClocks) + decelDistanceExInitialSpeed;
+	params.accelDistance =      accelDistanceExTopSpeed + dda.topSpeed * params.accelClocks;
+	const float decelDistance = decelDistanceExTopSpeed + dda.topSpeed * params.decelClocks;
 	params.decelStartDistance =  1.0 - decelDistance;
+
+//	debugPrintf("ad=%.4e dd=%.4e\n", (double)params.accelDistance, (double)decelDistance);
 
 	MoveSegment * const accelSegs = GetAccelerationSegments(dda, params);
 	MoveSegment * const decelSegs = GetDecelerationSegments(dda, params);

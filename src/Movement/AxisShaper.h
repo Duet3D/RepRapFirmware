@@ -106,9 +106,6 @@ private:
 	float overlappedShapingClocks;						// the acceleration or deceleration duration when we use overlapping, in step clocks
 	float overlappedDeltaVPerA;							// the effective acceleration time (velocity change per unit acceleration) when we use overlapping, in step clocks
 	float overlappedDistancePerA;						// the distance needed by an overlapped acceleration or deceleration, less the initial velocity contribution
-#if SUPPORT_REMOTE_COMMANDS
-	float overlappedAPerDeltaV;							// the base acceleration to use per unit velocity change when we use overlapping (reciprocal of overlappedDeltaVPerA)
-#endif
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */
