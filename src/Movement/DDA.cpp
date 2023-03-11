@@ -839,7 +839,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 					}
 
 					// Check for sensible values, print them if they look dubious
-					if (reprap.Debug(Module::Dda) && (reprap.Debug(Module::Move) || pdm->totalSteps > 1000000))
+					if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
 					{
 						DebugPrintAll("rems_err1");
 					}
@@ -879,7 +879,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 					}
 
 					// Check for sensible values, print them if they look dubious
-					if (reprap.Debug(Module::Dda) && (reprap.Debug(Module::Move) || pdm->totalSteps > 1000000))
+					if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
 					{
 						DebugPrintAll("rems_err2");
 					}
