@@ -462,15 +462,15 @@ void AxisShaper::GetRemoteSegments(DDA& dda, PrepParams& params) const noexcept
 	{
 		effectiveAccelTime = params.accelClocks;
 		accelDistanceExTopSpeedPerA = 0.0;
-		if (params.shapingPlan.shapeAccelStart)
-		{
-			effectiveAccelTime -= extraClocksAtStart;
-			accelDistanceExTopSpeedPerA += extraDistanceAtStart - effectiveAccelTime * extraClocksAtStart;
-		}
 		if (params.shapingPlan.shapeAccelEnd)
 		{
 			effectiveAccelTime -= extraClocksAtEnd;
 			accelDistanceExTopSpeedPerA += extraDistanceAtEnd;
+		}
+		if (params.shapingPlan.shapeAccelStart)
+		{
+			effectiveAccelTime -= extraClocksAtStart;
+			accelDistanceExTopSpeedPerA += extraDistanceAtStart - effectiveAccelTime * extraClocksAtStart;
 		}
 		accelDistanceExTopSpeedPerA -= 0.5 * fsquare(effectiveAccelTime);
 	}
@@ -491,12 +491,12 @@ void AxisShaper::GetRemoteSegments(DDA& dda, PrepParams& params) const noexcept
 		if (params.shapingPlan.shapeDecelStart)
 		{
 			effectiveDecelTime -= extraClocksAtStart;
-			decelDistanceExTopSpeedPerA += extraDistanceAtStart;
+			decelDistanceExTopSpeedPerA -= extraDistanceAtStart;
 		}
 		if (params.shapingPlan.shapeDecelEnd)
 		{
 			effectiveDecelTime -= extraClocksAtEnd;
-			decelDistanceExTopSpeedPerA += extraDistanceAtEnd - effectiveDecelTime * extraClocksAtEnd;
+			decelDistanceExTopSpeedPerA -= extraDistanceAtEnd + effectiveDecelTime * extraClocksAtEnd;
 		}
 		decelDistanceExTopSpeedPerA -= 0.5 * fsquare(effectiveDecelTime);
 	}
