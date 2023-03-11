@@ -422,8 +422,10 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 		}
 	}
 
-	//DEBUG
-//	debugPrintf("ad=%.4e dd=%.4e\n", (double)params.accelDistance, (double)(params.totalDistance - params.decelStartDistance));
+	if (reprap.Debug(Module::Move) && reprap.Debug(Module::Dda))
+	{
+		debugPrintf("plan=%u ad=%.4e dd=%.4e\n", (unsigned int)params.shapingPlan.condensedPlan, (double)params.accelDistance, (double)(params.totalDistance - params.decelStartDistance));
+	}
 
 	// If we are doing any input shaping then set up dda.shapedSegments, else leave it as null
 	if (params.shapingPlan.IsShaped())
@@ -480,7 +482,7 @@ void AxisShaper::GetRemoteSegments(DDA& dda, PrepParams& params) const noexcept
 	if (params.shapingPlan.shapeDecelOverlapped)
 	{
 		effectiveDecelTime = overlappedDeltaVPerA;
-		decelDistanceExTopSpeedPerA = overlappedDistancePerA;
+		decelDistanceExTopSpeedPerA = -overlappedDistancePerA;
 	}
 	else
 	{
@@ -507,8 +509,10 @@ void AxisShaper::GetRemoteSegments(DDA& dda, PrepParams& params) const noexcept
 	const float decelDistance = decelDistanceExTopSpeed + dda.topSpeed * params.decelClocks;
 	params.decelStartDistance =  1.0 - decelDistance;
 
-	//DEBUG
-//	debugPrintf("ad=%.4e dd=%.4e\n", (double)params.accelDistance, (double)decelDistance);
+	if (reprap.Debug(Module::Move) && reprap.Debug(Module::Dda))
+	{
+		debugPrintf("plan=%u ad=%.4e dd=%.4e\n", (unsigned int)params.shapingPlan.condensedPlan, (double)params.accelDistance, (double)decelDistance);
+	}
 
 	MoveSegment * const accelSegs = GetAccelerationSegments(dda, params);
 	MoveSegment * const decelSegs = GetDecelerationSegments(dda, params);
