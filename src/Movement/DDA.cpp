@@ -118,6 +118,7 @@ void DDA::LogProbePosition() noexcept
 // Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 void PrepParams::SetFromDDA(const DDA& dda) noexcept
 {
+	totalDistance = dda.totalDistance;
 	decelStartDistance = dda.totalDistance - dda.beforePrepare.decelDistance;
 	// Due to rounding error, for an accelerate-decelerate move we may have accelDistance+decelDistance slightly greater than totalDistance.
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
@@ -785,13 +786,13 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	flags.isRemote = true;
 	flags.isPrintingMove = flags.usePressureAdvance = msg.usePressureAdvance;
 
-	// Normalise the move to unit distance
-	totalDistance = 1.0;
 
 	// Prepare for movement
 	PrepParams params;
 	params.shapingPlan.condensedPlan = msg.shapingPlan;
 
+	// Normalise the move to unit distance
+	params.totalDistance = totalDistance = 1.0;
 	params.acceleration = acceleration = msg.acceleration;
 	params.deceleration = deceleration = msg.deceleration;
 	params.accelClocks = msg.accelerationClocks;

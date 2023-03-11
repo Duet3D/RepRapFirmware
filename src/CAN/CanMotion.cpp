@@ -135,8 +135,8 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 			move->steadyClocks = buf->next->msg.moveLinear.steadyClocks;
 			move->decelClocks = buf->next->msg.moveLinear.decelClocks;
 		}
-		move->acceleration = params.acceleration;
-		move->deceleration = params.deceleration;
+		move->acceleration = params.acceleration/params.totalDistance;			// scale the acceleration to correspond to unit distance
+		move->deceleration = params.deceleration/params.totalDistance;			// scale the deceleration to correspond to unit distance
 		move->extruderDrives = 0;
 		move->numDrivers = canDriver.localDriver + 1;
 		move->zero = 0;

@@ -23,6 +23,7 @@ class DDARing;
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
 struct PrepParams
 {
+	float totalDistance;
 	float accelDistance;
 	float decelStartDistance;
 	float accelClocks, steadyClocks, decelClocks;
