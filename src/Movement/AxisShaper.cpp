@@ -422,6 +422,9 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 		}
 	}
 
+	//DEBUG
+//	debugPrintf("ad=%.4e dd=%.4e\n", (double)params.accelDistance, (double)(params.totalDistance - params.decelStartDistance));
+
 	// If we are doing any input shaping then set up dda.shapedSegments, else leave it as null
 	if (params.shapingPlan.IsShaped())
 	{
@@ -446,54 +449,56 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 void AxisShaper::GetRemoteSegments(DDA& dda, PrepParams& params) const noexcept
 {
 	// Do the acceleration phase
-	float accelDistanceExTopSpeed;									// the distance needed for acceleration minus the contribution from the top speed
+	float accelDistanceExTopSpeedPerA;									// the distance needed for acceleration minus the contribution from the top speed, per unit acceleration, in stepClocks^2
 	float effectiveAccelTime;
 	if (params.shapingPlan.shapeAccelOverlapped)
 	{
 		effectiveAccelTime = overlappedDeltaVPerA;
-		accelDistanceExTopSpeed = (overlappedDistancePerA - (overlappedDeltaVPerA * params.accelClocks)) * params.acceleration;
+		accelDistanceExTopSpeedPerA = overlappedDistancePerA - effectiveAccelTime * params.accelClocks;
 	}
 	else
 	{
 		effectiveAccelTime = params.accelClocks;
-		accelDistanceExTopSpeed = 0.0;
+		accelDistanceExTopSpeedPerA = 0.0;
 		if (params.shapingPlan.shapeAccelStart)
 		{
-			accelDistanceExTopSpeed += extraDistanceAtStart * params.acceleration;
 			effectiveAccelTime -= extraClocksAtStart;
+			accelDistanceExTopSpeedPerA += extraDistanceAtStart - effectiveAccelTime * extraClocksAtStart;
 		}
 		if (params.shapingPlan.shapeAccelEnd)
 		{
-			accelDistanceExTopSpeed += extraDistanceAtEnd * params.acceleration;
 			effectiveAccelTime -= extraClocksAtEnd;
+			accelDistanceExTopSpeedPerA += extraDistanceAtEnd;
 		}
-		accelDistanceExTopSpeed -= 0.5 * params.acceleration * fsquare(effectiveAccelTime);
+		accelDistanceExTopSpeedPerA -= 0.5 * fsquare(effectiveAccelTime);
 	}
+	const float accelDistanceExTopSpeed = accelDistanceExTopSpeedPerA * params.acceleration;
 
 	// Do the deceleration phase
-	float decelDistanceExTopSpeed;									// the distance needed for deceleration minus the contribution from the top speed
+	float decelDistanceExTopSpeedPerA;									// the distance needed for deceleration minus the contribution from the top speed
 	float effectiveDecelTime;
 	if (params.shapingPlan.shapeDecelOverlapped)
 	{
 		effectiveDecelTime = overlappedDeltaVPerA;
-		decelDistanceExTopSpeed = overlappedDistancePerA * params.deceleration;
+		decelDistanceExTopSpeedPerA = overlappedDistancePerA;
 	}
 	else
 	{
 		effectiveDecelTime = params.decelClocks;
-		decelDistanceExTopSpeed = 0.0;
+		decelDistanceExTopSpeedPerA = 0.0;
 		if (params.shapingPlan.shapeDecelStart)
 		{
-			decelDistanceExTopSpeed += extraDistanceAtStart * params.deceleration;
 			effectiveDecelTime -= extraClocksAtStart;
+			decelDistanceExTopSpeedPerA += extraDistanceAtStart;
 		}
 		if (params.shapingPlan.shapeDecelEnd)
 		{
-			decelDistanceExTopSpeed += extraDistanceAtEnd * params.deceleration;
 			effectiveDecelTime -= extraClocksAtEnd;
+			decelDistanceExTopSpeedPerA += extraDistanceAtEnd - effectiveDecelTime * extraClocksAtEnd;
 		}
-		decelDistanceExTopSpeed -= 0.5 * params.deceleration * fsquare(effectiveDecelTime);
+		decelDistanceExTopSpeedPerA -= 0.5 * fsquare(effectiveDecelTime);
 	}
+	const float decelDistanceExTopSpeed = decelDistanceExTopSpeedPerA * params.deceleration;
 
 	dda.topSpeed = (1.0 - accelDistanceExTopSpeed - decelDistanceExTopSpeed)/dda.clocksNeeded;
 	dda.startSpeed = dda.topSpeed - params.acceleration * effectiveAccelTime;
@@ -502,6 +507,7 @@ void AxisShaper::GetRemoteSegments(DDA& dda, PrepParams& params) const noexcept
 	const float decelDistance = decelDistanceExTopSpeed + dda.topSpeed * params.decelClocks;
 	params.decelStartDistance =  1.0 - decelDistance;
 
+	//DEBUG
 //	debugPrintf("ad=%.4e dd=%.4e\n", (double)params.accelDistance, (double)decelDistance);
 
 	MoveSegment * const accelSegs = GetAccelerationSegments(dda, params);
