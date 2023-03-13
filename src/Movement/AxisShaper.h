@@ -11,7 +11,7 @@
 #include <RepRapFirmware.h>
 #include <General/NamedEnum.h>
 #include <ObjectModel/ObjectModel.h>
-#include "InputShaperPlan.h"
+#include <InputShaperPlan.h>
 
 // These names must be in alphabetical order and lowercase
 NamedEnum(InputShaperType, uint8_t,

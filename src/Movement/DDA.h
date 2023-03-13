@@ -31,11 +31,6 @@ struct PrepParams
 
 	InputShaperPlan shapingPlan;
 
-#if SUPPORT_CAN_EXPANSION
-	// Parameters used by CAN expansion
-	float initialSpeedFraction, finalSpeedFraction;
-#endif
-
 #if SUPPORT_LINEAR_DELTA
 	// Parameters used only for delta moves
 	float initialX, initialY;

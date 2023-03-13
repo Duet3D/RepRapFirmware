@@ -127,11 +127,6 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	deceleration = dda.deceleration;
 	accelClocks = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
 	decelClocks = (dda.topSpeed - dda.endSpeed)/dda.deceleration;
-
-#if SUPPORT_CAN_EXPANSION
-	initialSpeedFraction = dda.startSpeed/dda.topSpeed;
-	finalSpeedFraction = dda.endSpeed/dda.topSpeed;
-#endif
 }
 
 // Calculate the steady clocks and set the total clocks in the DDA
