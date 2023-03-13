@@ -9,10 +9,6 @@
 #define SRC_MOVEMENT_EXTRUDERSHAPER_H_
 
 #include <RepRapFirmware.h>
-#include "MoveSegment.h"
-
-class DDA;
-class BasicPrepParams;
 
 // This class implements MoveSegment generation for extruders with pressure advance.
 // It also tracks extrusion that has be commanded but not implemented because less than one full step has been accumulated.

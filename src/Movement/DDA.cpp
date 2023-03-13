@@ -649,9 +649,9 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 	acceleration = nextMove.acceleration;
 	deceleration = nextMove.deceleration;
 
-#if SUPPORT_LASER || SUPPORT_IOBITS
+# if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();
-#endif
+# endif
 
 	// Currently we normalise the vector sum of all motor movements to unit length.
 	totalDistance = Normalise(directionVector);
@@ -679,6 +679,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	// Normalise the move to unit distance
 	totalDistance = 1.0;
 
+	// Calculate the speeds and accelerations assuming unit movement length
 	topSpeed = 2.0/(2 * msg.steadyClocks + (msg.initialSpeedFraction + 1.0) * msg.accelerationClocks + (msg.finalSpeedFraction + 1.0) * msg.decelClocks);
 	startSpeed = topSpeed * msg.initialSpeedFraction;
 	endSpeed = topSpeed * msg.finalSpeedFraction;
@@ -689,7 +690,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	// Prepare for movement
 	PrepParams params;											// the default constructor clears params.plan to 'no shaping'
 
-	// Set up the unshaped values
+	// Set up the move parameters
 	params.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
 	const float decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
 	params.decelStartDistance = 1.0 - decelDistance;
