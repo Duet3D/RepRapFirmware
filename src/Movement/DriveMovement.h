@@ -81,7 +81,7 @@ private:
 	// Parameters common to Cartesian, delta and extruder moves
 
 	DriveMovement *nextDM;								// link to next DM that needs a step
-	MoveSegment *currentSegment;
+	const MoveSegment *currentSegment;
 
 	DMState state;										// whether this is active or not
 	uint8_t drive;										// the drive that this DM controls
