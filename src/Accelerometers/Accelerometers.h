@@ -23,6 +23,7 @@ class CanMessageAccelerometerData;
 namespace Accelerometers
 {
 	bool HasLocalAccelerometer() noexcept;
+	float GetLocalAccelerometerLastRunAverage(const int& axis) noexcept;
 	unsigned int GetLocalAccelerometerRuns() noexcept;
 	unsigned int GetLocalAccelerometerDataPoints() noexcept;
 	GCodeResult ConfigureAccelerometer(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);

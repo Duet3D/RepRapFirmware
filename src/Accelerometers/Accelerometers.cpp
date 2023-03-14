@@ -16,6 +16,7 @@
 #include <RTOSIface/RTOSIface.h>
 #include <Platform/TaskPriorities.h>
 #include <Hardware/Spi/SharedSpiDevice.h>
+#include <RRF3Common.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include <CanMessageFormats.h>
@@ -68,6 +69,7 @@ static volatile uint32_t numSamplesRequested;
 static uint8_t resolution = DefaultResolution;
 static uint8_t orientation = 20;							// +Z -> +Z, +X -> +X
 static volatile uint8_t axesRequested;
+static float lastRunAverages[NumAccelerometerAxes] = {0.0f, 0.0f, 0.0f};
 static FileStore* volatile accelerometerFile = nullptr;		// this is non-null when the accelerometer is running, null otherwise
 static unsigned int numLocalRunsCompleted = 0;
 static unsigned int lastRunNumSamplesReceived = 0;
@@ -80,17 +82,32 @@ static IoPort spiCsPort;
 static IoPort irqPort;
 
 // Add a local accelerometer run
-static void AddLocalAccelerometerRun(unsigned int numDataPoints) noexcept
+static void AddLocalAccelerometerRun(unsigned int numDataPoints, float averages[]) noexcept
 {
 	lastRunNumSamplesReceived = numDataPoints;
 	++numLocalRunsCompleted;
+
+	memcpyf(lastRunAverages, averages, NumAccelerometerAxes);
+
+	reprap.BoardsUpdated();
+}
+
+// Add a local failed accelerometer run
+static void AddLocalFailedAccelerometerRun() noexcept
+{
+	lastRunNumSamplesReceived = 0;
+	++numLocalRunsCompleted;
+
+	// reset the last run averages
+	for (float& f : lastRunAverages) { f = 0.0f; }
+
 	reprap.BoardsUpdated();
 }
 
 static uint8_t TranslateAxes(uint8_t axes) noexcept
 {
 	uint8_t rslt = 0;
-	for (unsigned int i = 0; i < 3; ++i)
+	for (unsigned int i = 0; i < NumAccelerometerAxes; ++i)
 	{
 		if (axes & (1u << i))
 		{
@@ -115,6 +132,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 			const uint16_t mask = (1u << resolution) - 1;
 			const int decimalPlaces = GetDecimalPlaces(resolution);
 			bool recordFailedStart = false;
+			float accumulatedSamples[NumAccelerometerAxes] = {0.0f, 0.0f, 0.0f};
 
 			if (accelerometer->StartCollecting(TranslateAxes(axesRequested)))
 			{
@@ -133,7 +151,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 						f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 						f->Close();
 						f = nullptr;
-						AddLocalAccelerometerRun(0);
+						AddLocalFailedAccelerometerRun();
 					}
 					else
 					{
@@ -158,7 +176,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 							String<StringLength50> temp;
 							temp.printf("%u", samplesWritten);
 
-							for (unsigned int axis = 0; axis < 3; ++axis)
+							for (unsigned int axis = 0; axis < NumAccelerometerAxes; ++axis)
 							{
 								if (axesRequested & (1u << axis))
 								{
@@ -180,6 +198,9 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 
 									// Append it to the buffer
 									temp.catf(",%.*f", decimalPlaces, (double)fVal);
+
+									// accumulate the values so they can be averaged later
+									accumulatedSamples[axis] += fVal;
 								}
 							}
 
@@ -215,7 +236,11 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 			{
 				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();
-				AddLocalAccelerometerRun(samplesWritten);
+
+				// find the average value for each axis
+				for (float& sample : accumulatedSamples) { sample /= float(samplesWritten); }
+
+				AddLocalAccelerometerRun(samplesWritten, accumulatedSamples);
 			}
 
 			accelerometer->StopCollecting();
@@ -457,12 +482,12 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 # if SUPPORT_CAN_EXPANSION
 		if (device.IsRemote())
 		{
-			reprap.GetExpansion().AddAccelerometerRun(device.boardAddress, 0);
+			reprap.GetExpansion().AddFailedAccelerometerRun(device.boardAddress);
 		}
 		else
 # endif
 		{
-			AddLocalAccelerometerRun(0);
+			AddLocalFailedAccelerometerRun();
 		}
 		return GCodeResult::error;
 	}
@@ -493,7 +518,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 			accelerometerFile->Close();
 			accelerometerFile = nullptr;
 			MassStorage::Delete(accelerometerFileName.c_str(), false);
-			reprap.GetExpansion().AddAccelerometerRun(device.boardAddress, 0);
+			reprap.GetExpansion().AddFailedAccelerometerRun(device.boardAddress);
 		}
 		return rslt;
 	}
@@ -530,6 +555,11 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 bool Accelerometers::HasLocalAccelerometer() noexcept
 {
 	return accelerometer != nullptr;
+}
+
+float Accelerometers::GetLocalAccelerometerLastRunAverage(const int &axis) noexcept
+{
+	return lastRunAverages[axis];
 }
 
 unsigned int Accelerometers::GetLocalAccelerometerDataPoints() noexcept
@@ -572,7 +602,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			accelerometerFile = nullptr;
-			reprap.GetExpansion().AddAccelerometerRun(src, 0);
+			reprap.GetExpansion().AddFailedAccelerometerRun(src);
 		}
 		else if (msg.axes != expectedRemoteAxes || msg.firstSampleNumber != expectedRemoteSampleNumber || src != expectedRemoteBoardAddress)
 		{
@@ -580,7 +610,7 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 			f->Close();
 			accelerometerFile = nullptr;
-			reprap.GetExpansion().AddAccelerometerRun(src, 0);
+			reprap.GetExpansion().AddFailedAccelerometerRun(src);
 		}
 		else
 		{
@@ -592,6 +622,8 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 			const unsigned int receivedResolution = msg.bitsPerSampleMinusOne + 1;
 			const uint16_t mask = (1u << receivedResolution) - 1;
 			const int decimalPlaces = GetDecimalPlaces(receivedResolution);
+			float accumulatedSamples[NumAccelerometerAxes] = {0.0f, 0.0f, 0.0f};
+
 			if (msg.overflowed)
 			{
 				++numRemoteOverflows;
@@ -632,6 +664,9 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 
 					// Append it to the buffer
 					temp.catf(",%.*f", decimalPlaces, (double)fVal);
+
+					// accumulate the values so they can be averaged later
+					accumulatedSamples[axis] += fVal;
 				}
 
 				temp.cat('\n');
@@ -647,7 +682,11 @@ void Accelerometers::ProcessReceivedData(CanAddress src, const CanMessageAcceler
 				f->Truncate();				// truncate the file in case we didn't write all the preallocated space
 				f->Close();
 				accelerometerFile = nullptr;
-				reprap.GetExpansion().AddAccelerometerRun(src, expectedRemoteSampleNumber);
+
+				// find the average value for each axis
+				for (float& sample : accumulatedSamples) { sample /= float(msg.numSamples); }
+
+				reprap.GetExpansion().AddAccelerometerRun(src, expectedRemoteSampleNumber, accumulatedSamples);
 			}
 		}
 	}
