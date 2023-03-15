@@ -353,10 +353,10 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 			stateText = "ready";
 			break;
 		case esNotifyWaiting:
-			stateText = "notifyWait";
+			stateText = "nWait";
 			break;
 		case esResourceWaiting:
-			stateText = "resourceWait:";
+			stateText = "rWait:";
 			break;
 		case esDelaying:
 			stateText = "delaying";

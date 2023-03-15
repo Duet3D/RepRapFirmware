@@ -527,7 +527,6 @@ bool DriveMovement::CalcNextStepTimeFull(const DDA &dda) noexcept
 pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 {
 	uint32_t shiftFactor = 0;										// assume single stepping
-
 	{
 		int32_t stepsToLimit = segmentStepLimit - nextStep;
 		// If there are no more steps left in this segment, skip to the next segment and use single stepping
@@ -539,15 +538,15 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 				nextStep -= 2 * (segmentStepLimit - reverseStartStep);	// set nextStep to the net steps taken (this may make nextStep negative)
 				if (!NewExtruderSegment())
 				{
-					const size_t logicalDrive =
-#if SUPPORT_REMOTE_COMMANDS
-												(dda.flags.isRemote) ? drive : LogicalDriveToExtruder(drive);
-#else
-												LogicalDriveToExtruder(drive);
-#endif
-					ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
 					if (dda.flags.isPrintingMove)
 					{
+						const size_t logicalDrive =
+#if SUPPORT_REMOTE_COMMANDS
+													(dda.flags.isRemote) ? drive : LogicalDriveToExtruder(drive);
+#else
+													LogicalDriveToExtruder(drive);
+#endif
+						ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
 						const int32_t netStepsDone = nextStep - 1;
 						shaper.SetExtrusionPending(distanceSoFar * mp.cart.effectiveStepsPerMm - (float)netStepsDone);
 					}
