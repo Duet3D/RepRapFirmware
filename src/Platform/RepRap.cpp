@@ -529,8 +529,6 @@ void RepRap::Init() noexcept
 	NVIC_SetPriority(WDT_IRQn, NvicPriorityWatchdog);								// set priority for watchdog interrupts
 	NVIC_ClearPendingIRQ(WDT_IRQn);
 	NVIC_EnableIRQ(WDT_IRQn);														// enable the watchdog early warning interrupt
-#elif defined(__LPC17xx__)
-	wdt_init(1);																	// set wdt to 1 second. reset the processor on a watchdog fault
 #else
 	{
 		// The clock frequency for both watchdogs is about 32768/128 = 256Hz
@@ -857,15 +855,9 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	platform->MessageF(mtype,
 		// Format string
 		"%s"											// firmware name
-#ifdef __LPC17xx__
-		" (%s)"											// lpcBoardName
-#endif
 		" version %s (%s%s) running on %s"				// firmware version, date, time, electronics
 #ifdef DUET_NG
 		"%s%s"											// optional DueX expansion board
-#endif
-#ifdef __LPC17xx__
-		" at %uMhz"										// clock speed
 #endif
 #if HAS_SBC_INTERFACE || SUPPORT_REMOTE_COMMANDS
 		" (%s mode)"									// standalone, SBC or expansion mode
@@ -874,16 +866,10 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 
 		// Parameters to match format string
 		FIRMWARE_NAME,
-#ifdef __LPC17xx__
-		lpcBoardName,
-#endif
 		VERSION, DATE, TIME_SUFFIX, platform->GetElectronicsString()
 #ifdef DUET_NG
 		, ((expansionName == nullptr) ? "" : " + ")
 		, ((expansionName == nullptr) ? "" : expansionName)
-#endif
-#ifdef __LPC17xx__
-		, (unsigned int)(SystemCoreClock/1000000)
 #endif
 #if HAS_SBC_INTERFACE || SUPPORT_REMOTE_COMMANDS
 		,
@@ -2474,10 +2460,6 @@ void RepRap::SetName(const char* nm) noexcept
 
 // Firmware update operations
 
-#ifdef __LPC17xx__
-    #include "LPC/FirmwareUpdate.hpp"
-#else
-
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
 bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const StringRef& filenameRef) noexcept
 {
@@ -2702,8 +2684,6 @@ void RepRap::StartIap(const char *filename) noexcept
 	for (;;) { }							// to keep gcc happy
 }
 
-#endif
-
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
 /*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b) noexcept
 {
@@ -2721,9 +2701,6 @@ void RepRap::StartIap(const char *filename) noexcept
 	(void)*(reinterpret_cast<const volatile char*>(0x20800000));
 #elif SAM3XA
 	(void)*(reinterpret_cast<const volatile char*>(0x20200000));
-#elif defined(__LPC17xx__)
-	// The LPC176x/5x generates Bus Fault exception when accessing a reserved memory address
-	(void)*(reinterpret_cast<const volatile char*>(0x00080000));
 #else
 # error Unsupported processor
 #endif

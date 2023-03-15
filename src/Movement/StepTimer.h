@@ -120,11 +120,7 @@ private:
 
 inline __attribute__((always_inline)) StepTimer::Ticks StepTimer::GetTimerTicks() noexcept
 {
-# if defined(__LPC17xx__)
-	return STEP_TC->TC;
-# else
 	return STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
-# endif
 }
 
 #endif
@@ -133,8 +129,6 @@ inline __attribute__((always_inline)) uint16_t StepTimer::GetTimerTicks16() noex
 {
 #if SAME5x
 	return (uint16_t)GetTimerTicks();
-#elif defined(__LPC17xx__)
-	return (uint16_t)STEP_TC->TC;
 #else
 	return (uint16_t)STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
 #endif

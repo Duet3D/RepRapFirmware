@@ -11,10 +11,6 @@
 #include "RepRapFirmware.h"
 #include "NetworkDefs.h"
 
-#if defined(__LPC17xx__) && HAS_RTOSPLUSTCP_NETWORKING
-# include "RTOSPlusTCPEthernetInterface.h"
-#endif
-
 class WiFiSocket;
 class W5500Socket;
 class RTOSPlusTCPEthernetSocket;
@@ -79,19 +75,7 @@ public:
 	// Count how many buffers there are in a chain
 	static unsigned int Count(NetworkBuffer*& ptr) noexcept;
 
-#if defined(__LPC17xx__)
-
-# if HAS_RTOSPLUSTCP_NETWORKING
-	static const size_t bufferSize = 1 * ipconfigTCP_MSS;
-# elif HAS_WIFI_NETWORKING
-	static const size_t bufferSize = 2048;
-# else
 	static const size_t bufferSize = 2 * 1024;
-# endif
-
-#else
-	static const size_t bufferSize = 2 * 1024;
-#endif
 
 private:
 	NetworkBuffer(NetworkBuffer *n) noexcept;

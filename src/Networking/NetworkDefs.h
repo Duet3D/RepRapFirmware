@@ -91,9 +91,7 @@ constexpr uint8_t MdnsMacAddress[6] = { 0x01, 0x00, 0x5E, 0x00, 0x00, 0xFB };
 constexpr uint8_t MdnsIPAddress[4] = { 224, 0, 0, 251 };
 constexpr TcpPort MdnsPort = 5353;
 
-#if defined(__LPC17xx__)
-constexpr size_t NetworkBufferCount = 2;			// number of MSS sized buffers
-#elif SAME70 || SAME5x
+#if SAME70 || SAME5x
 constexpr size_t NetworkBufferCount = 10;			// number of 2K network buffers
 #else
 constexpr size_t NetworkBufferCount = 6;			// number of 2K network buffers

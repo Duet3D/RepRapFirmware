@@ -19,7 +19,7 @@
 #if SAME5x
 # include <CoreIO.h>
 # include <hri_tc_e54.h>
-#elif !defined(__LPC17xx__)
+#else
 # include <tc/tc.h>
 # if SAME70 || SAM4E || SAM4S
 #  include <pmc/pmc.h>
@@ -84,21 +84,6 @@ void StepTimer::Init() noexcept
 	NVIC_SetPriority(StepTcIRQn, NvicPriorityStep);			    // Set the priority for this IRQ
 	NVIC_ClearPendingIRQ(StepTcIRQn);
 	NVIC_EnableIRQ(StepTcIRQn);
-#elif defined(__LPC17xx__)
-	//LPC has 32bit timers with 32bit prescalers
-	//Start a free running Timer using Match Registers to generate interrupts
-
-	// Setup the Prescaler such that every TC increment is equal to 1/StepClockRate
-	// The Prescale counter is incremented every Timer PCLK. When the Prescale counter reaches the value in PR+1, TC is then incremented
-	// Timer PCLK defaults to SystemCoreClock/4 on boot.
-	// Using a StepClockRate of 1MHz gives PR values of exactly 29 and 24 for the 1769 and 1786 respectively
-	Chip_Clock_EnablePeriphClock(SYSCTL_CLOCK_TIMER0);              // Enable power and clocking
-	STEP_TC->MCR = 0;											    // Disable all MRx interrupts
-	STEP_TC->PR = (getPclk(PCLK_TIMER0) / StepClockRate) - 1;	    // Set the Prescaler
-	STEP_TC->TC = 0x00;  										    // Restart the Timer Count
-	NVIC_SetPriority(STEP_TC_IRQN, NvicPriorityStep);			    // Set the priority for this IRQ
-	NVIC_EnableIRQ(STEP_TC_IRQN);
-	STEP_TC->TCR = (1 <<SBIT_CNTEN);							    // Start Timer
 #else
 	pmc_set_writeprotect(false);
 	pmc_enable_periph_clk(STEP_TC_ID);
@@ -234,8 +219,6 @@ void StepTimer::DisableTimerInterrupt() noexcept
 {
 #if SAME5x
 	StepTc->INTENCLR.reg = TC_INTFLAG_MC0;
-#elif defined(__LPC17xx__)
-	STEP_TC->MCR &= ~(1u<<SBIT_MR0I);								 // disable Int on MR1
 #else
 	STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;
 #endif
@@ -389,13 +372,6 @@ void STEP_TC_HANDLER() noexcept
 	if ((tcsr & TC_INTFLAG_MC0) != 0)								// the step interrupt uses MC0 compare
 	{
 		StepTc->INTENCLR.reg = TC_INTFLAG_MC0;						// disable the interrupt (no need to clear it, we do that before we re-enable it)
-#elif defined(__LPC17xx__)
-	uint32_t regval = STEP_TC->IR;
-	//find which Match Register triggered the interrupt
-	if (regval & (1u << SBIT_MRI0_IFM))								// Interrupt flag for match channel 1.
-	{
-		STEP_TC->IR |= (1u<<SBIT_MRI0_IFM);							// clear interrupt
-		STEP_TC->MCR  &= ~(1u<<SBIT_MR0I);							// Disable Int on MR0
 #else
 	// ATSAM processor code
 	uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;		// read the status register, which clears the status bits

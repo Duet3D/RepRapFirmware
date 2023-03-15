@@ -4477,33 +4477,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
-		// For case 913, see 906
-
-#if defined(__ALLIGATOR__)
-			case 914: 				// Set/Get J14 Expansion Voltage Level Translator on Port J5, 5.5V or 3.3V
-									// Get Piggy module presence status
-				if (gb.Seen('S'))
-				{
-					const int voltageValue = gb.GetIValue();
-					if (voltageValue != 5 && voltageValue != 3 )
-					{
-						reply.printf("The Expansion Voltage Translator does not support %dV. \n Only 5V or 3V are supported.",voltageValue);
-					}
-					else
-					{
-						// Change Voltage translator level
-						digitalWrite(ExpansionVoltageLevelPin, voltageValue == 5);
-					}
-				}
-				else
-				{
-					// Change Voltage translator level Status
-					reply.printf("The Voltage of Expansion Translator is %dV \nPiggy module %s",
-							digitalRead(ExpansionVoltageLevelPin) ? 5 : 3 ,
-							digitalRead(ExpansionPiggyDetectPin) ? "not detected" : "detected");
-				}
-				break;
-#endif
+			// For case 913, see 906
+			// case 914 was Alligator board specific
 
 #if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 			case 915:

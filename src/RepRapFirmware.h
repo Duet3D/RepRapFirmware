@@ -532,8 +532,6 @@ constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 #if SAME70 || SAME5x
 // All Duet 3 boards use a common step clock rate of 750kHz so that we can sync the clocks over CAN
 constexpr uint32_t StepClockRate = 48000000/64;								// 750kHz
-#elif defined(__LPC17xx__)
-constexpr uint32_t StepClockRate = 1000000;									// 1MHz
 #else
 constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2 and Maestro: use just under 1MHz
 #endif
@@ -650,17 +648,11 @@ const NvicPriority NvicPrioritySpi = 7;				// SPI is used for network transfers 
 // We have at least 16 priority levels
 // Use priority 2 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
-# if SAM4E || defined(__LPC17xx__)
+# if SAM4E
 const NvicPriority NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 # endif
 
 const NvicPriority NvicPriorityAuxUart = 3;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
-
-# if defined(__LPC17xx__)
-constexpr NvicPriority NvicPriorityTimerPWM = 4;
-constexpr NvicPriority NvicPriorityTimerServo = 5;
-# endif
-
 const NvicPriority NvicPriorityDriversSerialTMC = 5; // USART or UART used to control and monitor the smart drivers
 const NvicPriority NvicPriorityPins = 5;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const NvicPriority NvicPriorityStep = 6;			// step interrupt is next highest, it can preempt most other interrupts

@@ -194,12 +194,8 @@ public:
 #elif SAM4E || SAM4S || SAME5x
 	static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// the smallest sensible interval between calculations (40us) in step timer clocks
 	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
-#elif defined(__LPC17xx__)
-     static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// the smallest sensible interval between calculations (40us) in step timer clocks
-	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
-#else	// SAM3X
-	static constexpr uint32_t MinCalcInterval = (60 * StepClockRate)/1000000;				// the smallest sensible interval between calculations (40us) in step timer clocks
-	static constexpr uint32_t HiccupTime = (40 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
+#else
+# error Unsupported processor
 #endif
 	static constexpr uint32_t MaxStepInterruptTime = 10 * StepTimer::MinInterruptInterval;	// the maximum time we spend looping in the ISR, in step clocks
 	static constexpr uint32_t WakeupTime = (100 * StepClockRate)/1000000;					// stop resting 100us before the move is due to end
