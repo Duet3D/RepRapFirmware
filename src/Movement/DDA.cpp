@@ -704,11 +704,10 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	activeDMs = completedDMs = nullptr;
 	afterPrepare.drivesMoving.Clear();
 
-	const size_t numDrivers = min<size_t>(msg.numDrivers, min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave));
-	for (size_t drive = 0; drive < numDrivers; drive++)
+	for (size_t drive = 0; drive < NumDirectDrivers; drive++)
 	{
 		endPoint[drive] = prev->endPoint[drive];				// the steps for this move will be added later
-		const int32_t delta = msg.perDrive[drive].steps;
+		const int32_t delta = (drive < msg.numDrivers) ? msg.perDrive[drive].steps : 0;
 		directionVector[drive] = (float)delta;
 		if (delta != 0)
 		{
@@ -803,19 +802,22 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	activeDMs = completedDMs = nullptr;
 	afterPrepare.drivesMoving.Clear();
 
-	const size_t numDrivers = min<size_t>(msg.numDrivers, min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave));
-	for (size_t drive = 0; drive < numDrivers; drive++)
+	for (size_t drive = 0; drive < NumDirectDrivers; drive++)
 	{
 		endPoint[drive] = prev->endPoint[drive];						// the steps for this move will be added later
-		if ((msg.extruderDrives & (1u << drive)) != 0)
+		if (drive >= msg.numDrivers)
+		{
+			directionVector[drive] = 0.0;
+		}
+		else if ((msg.extruderDrives & (1u << drive)) != 0)
 		{
 			// It's an extruder
 			const float extrusionRequested = msg.perDrive[drive].extrusion;
 			directionVector[drive] = extrusionRequested;
-			if (extrusionRequested != 0)
+			if (extrusionRequested != 0.0)
 			{
 				DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
-				pdm->totalSteps = labs((float)extrusionRequested);		// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
+				pdm->totalSteps = labs(extrusionRequested);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 				pdm->direction = (extrusionRequested >= 0.0);			// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 				afterPrepare.drivesMoving.SetBit(drive);
 				reprap.GetPlatform().EnableDrivers(drive, false);
@@ -853,7 +855,6 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = (float)delta;
 			if (delta != 0)
 			{
-				EnsureSegments(params);							// we are going to need segments
 				DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
 				pdm->totalSteps = labs(delta);					// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 				pdm->direction = (delta >= 0);					// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
