@@ -316,7 +316,7 @@ typedef double floatc_t;							// type of matrix element used for calibration
 typedef float floatc_t;								// type of matrix element used for calibration
 #endif
 
-#if defined(DUET3) || defined(DUET3MINI)
+#if SUPPORT_CAN_EXPANSION
 typedef Bitmap<uint32_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
 #else
 typedef Bitmap<uint16_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
@@ -357,10 +357,14 @@ static_assert(MaxTriggers <= TriggerNumbersBitmap::MaxBits());
 static_assert(MaxTools <= ToolNumbersBitmap::MaxBits());
 static_assert(MaxAxes + 17 <= ParameterLettersBitmap::MaxBits());	// so that we have enough letters available for all the axes
 
-typedef uint16_t Pwm_t;							// Type of a PWM value when we don't want to use floats
+#if SUPPORT_REMOTE_COMMANDS
+static_assert(MaxExtruders >= NumDirectDrivers);					// so that we get enough ExtruderShapers and nonlinear extrusion data when in expansion mode
+#endif
+
+typedef uint16_t Pwm_t;						// Type of a PWM value when we don't want to use floats
 
 #if SUPPORT_IOBITS
-typedef uint16_t IoBits_t;						// Type of the port control bitmap (G1 P parameter)
+typedef uint16_t IoBits_t;					// Type of the port control bitmap (G1 P parameter)
 #endif
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
@@ -528,8 +532,6 @@ constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 #if SAME70 || SAME5x
 // All Duet 3 boards use a common step clock rate of 750kHz so that we can sync the clocks over CAN
 constexpr uint32_t StepClockRate = 48000000/64;								// 750kHz
-#elif defined(__LPC17xx__)
-constexpr uint32_t StepClockRate = 1000000;									// 1MHz
 #else
 constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2 and Maestro: use just under 1MHz
 #endif
@@ -646,17 +648,11 @@ const NvicPriority NvicPrioritySpi = 7;				// SPI is used for network transfers 
 // We have at least 16 priority levels
 // Use priority 2 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
-# if SAM4E || defined(__LPC17xx__)
+# if SAM4E
 const NvicPriority NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 # endif
 
 const NvicPriority NvicPriorityAuxUart = 3;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
-
-# if defined(__LPC17xx__)
-constexpr NvicPriority NvicPriorityTimerPWM = 4;
-constexpr NvicPriority NvicPriorityTimerServo = 5;
-# endif
-
 const NvicPriority NvicPriorityDriversSerialTMC = 5; // USART or UART used to control and monitor the smart drivers
 const NvicPriority NvicPriorityPins = 5;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const NvicPriority NvicPriorityStep = 6;			// step interrupt is next highest, it can preempt most other interrupts

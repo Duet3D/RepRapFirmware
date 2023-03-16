@@ -128,7 +128,7 @@ public:
 	GCodeResult SetFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
 	GCodeResult GetSetFeedForward(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
-	bool HasTemperatureFault() const noexcept { return heaterFault; }
+	bool HasTemperatureFault() const noexcept { return heaterFault; }			// used by the direct display menu system
 
 	void IterateExtruders(function_ref_noexcept<void(unsigned int) noexcept> f) const noexcept;
 	void IterateHeaters(function_ref_noexcept<void(int) noexcept> f) const noexcept;

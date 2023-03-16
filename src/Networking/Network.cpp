@@ -55,9 +55,7 @@
 # include "MulticastDiscovery/MulticastResponder.h"
 #endif
 
-#ifdef __LPC17xx__
-constexpr size_t NetworkStackWords = 375;
-#elif defined(DEBUG)
+#if defined(DEBUG)
 constexpr size_t NetworkStackWords = 1000;				// needs to be enough to support rr_model
 #else
 constexpr size_t NetworkStackWords = 600;				// needs to be enough to support rr_model

@@ -206,7 +206,7 @@ void GCodes::Init() noexcept
 	LedStripDriver::Init();
 #endif
 
-#if HAS_AUX_DEVICES && !defined(__LPC17xx__)
+#if HAS_AUX_DEVICES
 	SERIAL_AUX_DEVICE.SetInterruptCallback(GCodes::CommandEmergencyStop);
 #endif
 }

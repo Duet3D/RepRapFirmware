@@ -713,7 +713,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 4: // Spin spindle counter clockwise
 				{
 					MovementState& ms = GetMovementState(gb);
-					if (machineType == MachineType::cnc)
+#if SUPPORT_LASER
+					if (machineType == MachineType::laser)
+					{
+						if (code == 3 && gb.Seen('S'))
+						{
+							if (ms.segmentsLeft != 0)
+							{
+								return false;						// don't modify moves that haven't gone yet
+							}
+							ms.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetNonNegativeFValue());
+						}
+						else
+						{
+							result = GCodeResult::notSupportedInCurrentMode;
+						}
+					}
+					else
+#endif
 					{
 						// Determine what spindle number we are using
 						uint32_t slot;
@@ -747,69 +764,45 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 						spindle.SetState((code == 4) ? SpindleState::reverse : SpindleState::forward);
 					}
-#if SUPPORT_LASER
-					else if (machineType == MachineType::laser && code == 3 && gb.Seen('S'))
-					{
-						if (ms.segmentsLeft != 0)
-						{
-							return false;						// don't modify moves that haven't gone yet
-						}
-						ms.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetNonNegativeFValue());
-					}
-#endif
-					else
-					{
-						result = GCodeResult::notSupportedInCurrentMode;
-					}
 				}
 				break;
 
 			case 5: // Spindle motor off
 				{
 					MovementState& ms = GetMovementState(gb);
-					switch (machineType)
-					{
-					case MachineType::cnc:
-						{
-							// Determine what spindle number we are using
-							uint32_t slot;
-							if (gb.Seen('P'))
-							{
-								slot = gb.GetLimitedUIValue('P', MaxSpindles);
-							}
-							else if (ms.currentTool != nullptr && ms.currentTool->GetSpindleNumber() >= 0)
-							{
-								slot = ms.currentTool->GetSpindleNumber();
-							}
-							else
-							{
-								// Turn off every spindle if no 'P' parameter is present and the current tool does not have a spindle
-								for (size_t i = 0; i < MaxSpindles; i++)
-								{
-									platform.AccessSpindle(i).SetState(SpindleState::stopped);
-								}
-								break;
-							}
-
-							platform.AccessSpindle(slot).SetState(SpindleState::stopped);
-						}
-						break;
-
 #if SUPPORT_LASER
-					case MachineType::laser:
+					if (machineType == MachineType::laser)
+					{
+						if (ms.segmentsLeft != 0)
 						{
-							if (ms.segmentsLeft != 0)
-							{
-								return false;						// don't modify moves that haven't gone yet
-							}
-							ms.laserPwmOrIoBits.Clear();
+							return false;						// don't modify moves that haven't gone yet
 						}
-						break;
+						ms.laserPwmOrIoBits.Clear();
+					}
+					else
 #endif
+					{
+						// Determine what spindle number we are using
+						uint32_t slot;
+						if (gb.Seen('P'))
+						{
+							slot = gb.GetLimitedUIValue('P', MaxSpindles);
+						}
+						else if (ms.currentTool != nullptr && ms.currentTool->GetSpindleNumber() >= 0)
+						{
+							slot = ms.currentTool->GetSpindleNumber();
+						}
+						else
+						{
+							// Turn off every spindle if no 'P' parameter is present and the current tool does not have a spindle
+							for (size_t i = 0; i < MaxSpindles; i++)
+							{
+								platform.AccessSpindle(i).SetState(SpindleState::stopped);
+							}
+							break;
+						}
 
-					default:
-						result = GCodeResult::notSupportedInCurrentMode;
-						break;
+						platform.AccessSpindle(slot).SetState(SpindleState::stopped);
 					}
 				}
 				break;
@@ -1256,7 +1249,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					String<MaxFilenameLength> filename;
 					gb.GetUnprecedentedString(filename.GetRef());
-					result = (platform.Delete(Platform::GetGCodeDir(), filename.c_str())) ? GCodeResult::ok : GCodeResult::warning;
+					if (platform.Delete(Platform::GetGCodeDir(), filename.c_str()))
+					{
+						result =  GCodeResult::ok;
+					}
+					else
+					{
+						reply.copy("delete failed");
+						result = GCodeResult::error;
+					}
 				}
 				break;
 #endif
@@ -3123,7 +3124,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					gb.MustSee('P');
 					String<MaxFilenameLength> dirName;
 					gb.GetQuotedString(dirName.GetRef());
-					result = (MassStorage::MakeDirectory(dirName.c_str(), true)) ? GCodeResult::ok : GCodeResult::error;
+					if (MassStorage::MakeDirectory(dirName.c_str(), true))
+					{
+						result =  GCodeResult::ok;
+					}
+					else
+					{
+						reply.copy("failed to create folder");
+						result = GCodeResult::error;
+					}
 				}
 				break;
 
@@ -3136,7 +3145,33 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					gb.MustSee('T');
 					gb.GetQuotedString(newVal.GetRef());
 					const bool deleteExisting = (gb.Seen('D') && gb.GetUIValue() == 1);
-					result = (MassStorage::Rename(oldVal.c_str(), newVal.c_str(), deleteExisting, true)) ? GCodeResult::ok : GCodeResult::error;
+					if (MassStorage::Rename(oldVal.c_str(), newVal.c_str(), deleteExisting, true))
+					{
+						result = GCodeResult::ok ;
+					}
+					else
+					{
+						reply.copy("rename failed");
+						result = GCodeResult::error;
+					}
+				}
+				break;
+
+			case 472: // delete file/directory
+				{
+					gb.MustSee('P');
+					String<MaxFilenameLength> path;
+					gb.GetQuotedString(path.GetRef());
+					const bool recursive = (gb.Seen('R') && gb.GetUIValue() == 1);
+					if (MassStorage::Delete(path.GetRef(), ErrorMessageMode::messageAlways, recursive))
+					{
+						result = GCodeResult::ok;
+					}
+					else
+					{
+						reply.copy("delete failed");
+						result = GCodeResult::error;
+					}
 				}
 				break;
 #endif
@@ -3634,7 +3669,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			// case 573 was report heater average PWM but is no longer supported because you can use "echo heat/heaters[N].avgPwm" instead
 
 			case 574: // Set endstop configuration
-				result = platform.GetEndstops().HandleM574(gb, reply, outBuf);
+				result = platform.GetEndstops().HandleM574(gb, reply, outBuf);				// this will lock movement if it is going to make any changes
 				break;
 
 			case 575: // Set communications parameters
@@ -4442,33 +4477,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
-		// For case 913, see 906
-
-#if defined(__ALLIGATOR__)
-			case 914: 				// Set/Get J14 Expansion Voltage Level Translator on Port J5, 5.5V or 3.3V
-									// Get Piggy module presence status
-				if (gb.Seen('S'))
-				{
-					const int voltageValue = gb.GetIValue();
-					if (voltageValue != 5 && voltageValue != 3 )
-					{
-						reply.printf("The Expansion Voltage Translator does not support %dV. \n Only 5V or 3V are supported.",voltageValue);
-					}
-					else
-					{
-						// Change Voltage translator level
-						digitalWrite(ExpansionVoltageLevelPin, voltageValue == 5);
-					}
-				}
-				else
-				{
-					// Change Voltage translator level Status
-					reply.printf("The Voltage of Expansion Translator is %dV \nPiggy module %s",
-							digitalRead(ExpansionVoltageLevelPin) ? 5 : 3 ,
-							digitalRead(ExpansionPiggyDetectPin) ? "not detected" : "detected");
-				}
-				break;
-#endif
+			// For case 913, see 906
+			// case 914 was Alligator board specific
 
 #if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 			case 915:

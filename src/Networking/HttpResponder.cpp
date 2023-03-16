@@ -545,7 +545,11 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 	}
 	else if (StringEqualsIgnoreCase(request, "delete") && (parameter = GetKeyValue("name")) != nullptr)
 	{
-		const bool ok = MassStorage::Delete(parameter, false);
+		const char* const recursiveParam = GetKeyValue("recursive");
+		const bool recursive = (recursiveParam != nullptr && StringEqualsIgnoreCase(recursiveParam, "yes"));
+		String<MaxFilenameLength> path;
+		path.copy(parameter);
+		const bool ok = MassStorage::Delete(path.GetRef(), ErrorMessageMode::messageAlways, recursive);
 		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
 	else if (StringEqualsIgnoreCase(request, "filelist") && (parameter = GetKeyValue("dir")) != nullptr)

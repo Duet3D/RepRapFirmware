@@ -9,13 +9,9 @@
 #define SRC_MOVEMENT_EXTRUDERSHAPER_H_
 
 #include <RepRapFirmware.h>
-#include "MoveSegment.h"
-
-class DDA;
-class BasicPrepParams;
 
 // This class implements MoveSegment generation for extruders with pressure advance.
-// It also tracks extrusion that has be commanded but not implemented because less than one full step has been accumulated.
+// It also tracks extrusion that has been commanded but not implemented because less than one full step has been accumulated.
 // Currently it only supports linear pressure advance.
 class ExtruderShaper
 {
@@ -34,7 +30,7 @@ public:
 
 private:
 	float k;								// the pressure advance constant in step clocks
-	float extrusionPending;					// extrusion we have been asked to do but haven't because it is less than one microstep, in mm
+	float extrusionPending;					// extrusion we have been asked to do but haven't because it is less than one microstep, in microsteps
 };
 
 #endif /* SRC_MOVEMENT_EXTRUDERSHAPER_H_ */

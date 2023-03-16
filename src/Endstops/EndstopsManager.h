@@ -89,7 +89,8 @@ private:
 	// Translate end stop result to text
 	static const char *TranslateEndStopResult(bool hit, bool atHighEnd) noexcept;
 
-	ReadLockedPointer<Endstop> FindEndstop(size_t axis) const noexcept;
+	// Return a pointer to an endstop. Caller must already own a read lock on endstopsLock.
+	const Endstop *FindEndstopWhenLockOwned(size_t axis) const noexcept;
 
 	static ReadWriteLock endstopsLock;
 	static ReadWriteLock zProbesLock;

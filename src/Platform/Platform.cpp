@@ -57,8 +57,6 @@ static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA chan
 # include <AnalogIn.h>
 # include <DmacManager.h>
 using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have the AnalogIn namespace
-#elif defined(__LPC17xx__)
-# include "LPC/BoardConfig.h"
 #endif
 
 #include <Libraries/sd_mmc/sd_mmc.h>
@@ -505,8 +503,6 @@ void Platform::Init() noexcept
 	usbMutex.Create("USB");
 #if SAME5x && !CORE_USES_TINYUSB
     SERIAL_MAIN_DEVICE.Start();
-#elif defined(__LPC17xx__)
-	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
 #else
     SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
 #endif
@@ -537,11 +533,6 @@ void Platform::Init() noexcept
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	MassStorage::Init();
-#endif
-
-#ifdef __LPC17xx__
-	// Load HW pin assignments from sdcard
-	BoardConfig::Init();
 #endif
 
     // Ethernet networking defaults
@@ -588,14 +579,6 @@ void Platform::Init() noexcept
 # elif defined(DUET3MINI)
 	numSmartDrivers = MaxSmartDrivers;							// support the expansion board, but don't mind if it's missing
 # endif
-#endif
-
-#if defined(__LPC17xx__)
-	if (hasDriverCurrentControl)
-	{
-		mcp4451.begin();
-	}
-	Microstepping::Init(); // basic class to remember the Microstepping.
 #endif
 
 	// Initialise endstops. On Duet 2 this must be done after testing for an expansion board.
@@ -812,7 +795,7 @@ void Platform::Init() noexcept
 
 	// If MISO from a MAX31856 board breaks after initialising the MAX31856 then if MISO floats low and reads as all zeros, this looks like a temperature of 0C and no error.
 	// Enable the pullup resistor, with luck this will make it float high instead.
-#if defined(__LPC17xx__) || SAME5x
+#if SAME5x
 	// nothing to do here
 #else
 	pinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP);
@@ -1091,7 +1074,7 @@ void Platform::Spin() noexcept
 	// Diagnostics test
 	if (debugCode == (unsigned int)DiagnosticTestType::TestSpinLockup)
 	{
-		for (;;) {}
+		delay(30000);
 	}
 
 	// Check whether the TMC drivers need to be initialised.
@@ -1611,10 +1594,7 @@ void Platform::InitialiseInterrupts() noexcept
 	NVIC_SetPriority(XDMAC_IRQn, NvicPriorityDMA);
 #endif
 
-#ifdef __LPC17xx__
-	// Interrupt for GPIO pins. Only port 0 and 2 support interrupts and both share EINT3
-	NVIC_SetPriority(EINT3_IRQn, NvicPriorityPins);
-#elif SAME5x
+#if SAME5x
 	SetInterruptPriority(EIC_0_IRQn, 16, NvicPriorityPins);				// SAME5x EXINT has 16 contiguous IRQ numbers
 #else
 	NVIC_SetPriority(PIOA_IRQn, NvicPriorityPins);
@@ -1636,17 +1616,12 @@ void Platform::InitialiseInterrupts() noexcept
 	NVIC_SetPriority(UDP_IRQn, NvicPriorityUSB);
 #elif SAM3XA
 	NVIC_SetPriority(UOTGHS_IRQn, NvicPriorityUSB);
-#elif defined(__LPC17xx__)
-	NVIC_SetPriority(USB_IRQn, NvicPriorityUSB);
 #else
 # error Unsupported processor
 #endif
 
-#if defined(DUET_NG) || defined(DUET_M) || defined(DUET_06_085)
+#if defined(DUET_NG) || defined(DUET_M)
 	NVIC_SetPriority(I2C_IRQn, NvicPriorityTwi);
-#elif defined(__LPC17xx__)
-	NVIC_SetPriority(I2C0_IRQn, NvicPriorityTwi);
-	NVIC_SetPriority(I2C1_IRQn, NvicPriorityTwi);
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -1659,15 +1634,7 @@ void Platform::InitialiseInterrupts() noexcept
 # endif
 #endif
 
-#if defined(__LPC17xx__)
-	// set rest of the Timer Interrupt priorities
-	// Timer 0 is used for step generation (set elsewhere)
-	NVIC_SetPriority(TIMER1_IRQn, 8);                       //Timer 1 is currently unused
-	NVIC_SetPriority(TIMER2_IRQn, NvicPriorityTimerServo);  //Timer 2 runs the PWM for Servos at 50hz
-	NVIC_SetPriority(TIMER3_IRQn, NvicPriorityTimerPWM);    //Timer 3 runs the microsecond free running timer to generate heater/fan PWM
-#endif
-
-   // Tick interrupt for ADC conversions
+	// Tick interrupt for ADC conversions
 	tickState = 0;
 	currentFilterNumber = 0;
 }
@@ -2402,13 +2369,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		break;
 #endif
 
-#ifdef __LPC17xx__
-	// Diagnostic for LPC board configuration
-	case (int)DiagnosticTestType::PrintBoardConfiguration:
-		BoardConfig::Diagnostics(gb.GetResponseMessageType());
-		break;
-#endif
-
 	default:
 		break;
 	}
@@ -2981,22 +2941,6 @@ void Platform::UpdateMotorCurrent(size_t driver, float current) noexcept
 		{
 			SmartDrivers::SetCurrent(driver, current);
 		}
-#elif defined(__LPC17xx__)
-		if (hasDriverCurrentControl)
-		{
-			//Has digipots to set current control for drivers
-			//Current is in mA
-			const uint16_t pot = (unsigned short) (current * digipotFactor / 1000);
-			if (driver < 4)
-			{
-				mcp4451.setMCP4461Address(0x2C); //A0 and A1 Grounded. (001011 00)
-				mcp4451.setVolatileWiper(POT_WIPES[driver], pot);
-			}
-			else
-				mcp4451.setMCP4461Address(0x2D); //A0 Vcc, A1 Grounded. (001011 01)
-				mcp4451.setVolatileWiper(POT_WIPES[driver-4], pot);
-			}
-		}
 #else
 		// otherwise we can't set the motor current
 #endif
@@ -3088,10 +3032,6 @@ bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, in
 			// We ignore the interpolation on/off parameter so that e.g. M350 I1 E16:128 won't give an error if E1 supports interpolation but E0 doesn't.
 			return microsteps == 16;
 		}
-#elif defined(__ALLIGATOR__)
-		return Microstepping::Set(driver, microsteps); // no mode in Alligator board
-#elif defined(__LPC17xx__)
-		return Microstepping::Set(driver, microsteps);
 #else
 		// Assume only x16 microstepping supported
 		return microsteps == 16;
@@ -3866,8 +3806,6 @@ void Platform::ResetChannel(size_t chan) noexcept
 		SERIAL_MAIN_DEVICE.end();
 #if SAME5x && !CORE_USES_TINYUSB
         SERIAL_MAIN_DEVICE.Start();
-#elif defined(__LPC17xx__)
-		SERIAL_MAIN_DEVICE.begin(baudRates[0]);
 #else
         SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
 #endif
@@ -3988,15 +3926,6 @@ void Platform::SetBoardType(BoardType bt) noexcept
 # endif
 #elif defined(DUET_M)
 		board = BoardType::DuetM_10;
-#elif defined(DUET_06_085)
-		// Determine whether this is a Duet 0.6 or a Duet 0.8.5 board.
-		// If it is a 0.85 board then DAC0 (AKA digital pin 67) is connected to ground via a diode and a 2.15K resistor.
-		// So we enable the pullup (value 100K-150K) on pin 67 and read it, expecting a LOW on a 0.8.5 board and a HIGH on a 0.6 board.
-		// This may fail if anyone connects a load to the DAC0 pin on a Duet 0.6, hence we implement board selection in M115 as well.
-		pinMode(Dac0DigitalPin, INPUT_PULLUP);
-		delayMicroseconds(10);
-		board = (digitalRead(Dac0DigitalPin)) ? BoardType::Duet_06 : BoardType::Duet_085;
-		pinMode(Dac0DigitalPin, INPUT);			// turn pullup off
 #elif defined(PCCB_10)
 		board = BoardType::PCCB_v10;
 #else
@@ -4040,8 +3969,6 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::DuetM_10:				return "Duet Maestro 1.0";
 #elif defined(PCCB_10)
 	case BoardType::PCCB_v10:				return "PC001373";
-#elif defined(__LPC17xx__)
-	case BoardType::Lpc:					return LPC_ELECTRONICS_STRING;
 #else
 # error Undefined board type
 #endif
@@ -4079,8 +4006,6 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::DuetM_10:				return "duetmaestro100";
 #elif defined(PCCB_10)
 	case BoardType::PCCB_v10:				return "pc001373";
-#elif defined(__LPC17xx__)
-	case BoardType::Lpc:					return LPC_BOARD_STRING;
 #else
 # error Undefined board type
 #endif
@@ -4127,13 +4052,13 @@ bool Platform::IsDuetWiFi() const noexcept
 bool Platform::Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
-	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
+	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.GetRef(), ErrorMessageMode::messageUnlessMissing);
 }
 
 bool Platform::DeleteSysFile(const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
-	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.c_str(), true);
+	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.GetRef(), ErrorMessageMode::messageUnlessMissing);
 }
 
 #endif
