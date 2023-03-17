@@ -275,7 +275,6 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "gCodes",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetGCodeDir()),						ObjectModelEntryFlags::verbose },
 	{ "macros",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetMacroDir()),						ObjectModelEntryFlags::verbose },
 	{ "menu",					OBJECT_MODEL_FUNC_NOSELF(MENU_DIR),										ObjectModelEntryFlags::verbose },
-	{ "scans",					OBJECT_MODEL_FUNC_NOSELF(SCANS_DIRECTORY),								ObjectModelEntryFlags::verbose },
 	{ "system",					OBJECT_MODEL_FUNC_NOSELF(ExpressionValue::SpecialType::sysDir, 0),		ObjectModelEntryFlags::none },
 	{ "web",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetWebDir()),						ObjectModelEntryFlags::verbose },
 #endif
@@ -405,7 +404,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	7,																						// number of sub-tables
 	15 + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),						// root
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
-	8, 																						// directories
+	7, 																						// directories
 #else
 	0,																						// directories
 #endif

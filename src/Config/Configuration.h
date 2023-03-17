@@ -279,7 +279,6 @@ constexpr size_t MaxThumbnails = 4;						// Maximum number of thumbnail images r
 #define GCODE_DIR				"0:/gcodes/"			// Ditto - G-Codes
 #define DEFAULT_SYS_DIR			"0:/sys/"				// Ditto - System files (can be changed using M505)
 #define MACRO_DIR				"0:/macros/"			// Ditto - Macro files
-#define SCANS_DIRECTORY			"0:/scans/"				// Directory for uploaded 3D scans
 #define FILAMENTS_DIRECTORY		"0:/filaments/"			// Directory for filament configurations
 #define FIRMWARE_DIRECTORY		"0:/firmware/"			// Directory for firmware and IAP files
 #define MENU_DIR				"0:/menu/"				// Directory for menu files
