@@ -401,7 +401,7 @@ bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) cons
 		f->Close();
 		if (err)
 		{
-			MassStorage::Delete(fullName.c_str(), false);
+			(void)MassStorage::Delete(fullName.GetRef(), ErrorMessageMode::messageAlways);
 			reply.catf("Failed to save height map to file %s", fullName.c_str());
 		}
 		else

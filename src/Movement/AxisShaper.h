@@ -11,7 +11,7 @@
 #include <RepRapFirmware.h>
 #include <General/NamedEnum.h>
 #include <ObjectModel/ObjectModel.h>
-#include "InputShaperPlan.h"
+#include <InputShaperPlan.h>
 
 // These names must be in alphabetical order and lowercase
 NamedEnum(InputShaperType, uint8_t,
@@ -28,7 +28,11 @@ NamedEnum(InputShaperType, uint8_t,
 class DDA;
 class PrepParams;
 class MoveSegment;
+
+#if SUPPORT_REMOTE_COMMANDS
 struct CanMessageSetInputShaping;
+struct CanMessageMovementLinear;
+#endif
 
 class AxisShaper INHERIT_OBJECT_MODEL
 {
@@ -41,6 +45,9 @@ public:
 #if SUPPORT_REMOTE_COMMANDS
 	// Handle a request from the master board to set input shaping parameters
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept;
+
+	// Calculate the shaped segments for a move
+	void GetRemoteSegments(DDA& dda, PrepParams& paramsg) const noexcept;
 #endif
 
 	// Plan input shaping for an individual move

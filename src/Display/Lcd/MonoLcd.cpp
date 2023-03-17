@@ -38,9 +38,6 @@ void MonoLcd::Init(Pin p_csPin, Pin p_a0Pin, bool csPolarity, uint32_t freq, uin
 	device.SetCsPin(csPin);
 	device.SetCsPolarity(csPolarity);		// normally active high chip select for ST7920, active low for ST7567
 	pinMode(csPin, (csPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);
-#ifdef __LPC17xx__
-    device.sspChannel = LcdSpiChannel;
-#endif
 
 	startRow = numRows;
 	startCol = numCols;

@@ -1276,21 +1276,23 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 				{
 					if (longReply == nullptr && !OutputBuffer::Allocate(longReply))
 					{
-						return GCodeResult::notFinished;			// try again later
+						return GCodeResult::notFinished;					// try again later
 					}
 
-					uint32_t buffer[NumDwords(MaxDataLength + 1)];
+					uint32_t buffer[NumDwords(MaxDataLength + 1)];			// this is a 2K buffer on the stack, which is OK because we already allow more for delta calibration
 					memset(buffer, 0, sizeof(buffer));
 
 					const bool jsonFormat = gb.Seen('F') && gb.GetUIValue() == 1;
 					const int32_t rslt = SendCommand(NetworkCommand::networkGetScanResult, 0, 0, 0, nullptr, 0, buffer, sizeof(buffer));
 
-					if (rslt >= 0) {
+					if (rslt >= 0)
+					{
 						bool found = false;
 						longReply->copy((jsonFormat) ? "{\"networkScanResults\":[" : "Network Scan Results:");
 						WiFiScanData *data = reinterpret_cast<WiFiScanData*>(buffer);
 
-						for(int i = 0; data[i].ssid[0] != 0; i++) {
+						for (size_t i = 0; i < rslt/sizeof(WiFiScanData); i++)
+						{
 							if (jsonFormat && found)
 							{
 								longReply->cat(',');

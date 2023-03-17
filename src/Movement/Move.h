@@ -222,6 +222,12 @@ public:
 		MoveAvailable();
 	}
 
+	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept				// add a move from the ATE to the movement queue
+	{
+		rings[0].AddMoveFromRemote(msg);
+		MoveAvailable();
+	}
+
 	void StopDrivers(uint16_t whichDrives) noexcept
 	{
 		rings[0].StopDrivers(whichDrives);

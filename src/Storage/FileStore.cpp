@@ -164,7 +164,6 @@ bool FileStore::Open(const char *_ecv_array filePath, OpenMode mode, uint32_t pr
 	usageMode = (writing) ? FileUseMode::readWrite : FileUseMode::readOnly;
 	openCount = 1;
 # if HAS_MASS_STORAGE
-#  ifndef __LPC17xx__
 	if (preAllocSize != 0 && (mode == OpenMode::write || mode == OpenMode::writeWithCrc))
 	{
 		const FRESULT expandReturn = f_expand(&file, preAllocSize, 1);		// try to pre-allocate contiguous space - it doesn't matter if it fails
@@ -173,7 +172,6 @@ bool FileStore::Open(const char *_ecv_array filePath, OpenMode mode, uint32_t pr
 			debugPrintf("Preallocating %" PRIu32 " bytes returned %d\n", preAllocSize, (int)expandReturn);
 		}
 	}
-#  endif
 # endif
 	reprap.VolumesUpdated();
 	return true;

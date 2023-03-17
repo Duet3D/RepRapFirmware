@@ -23,8 +23,6 @@ void NonVolatileMemory::EnsureRead() noexcept
 	{
 #if SAME5x
 		memcpyu32(reinterpret_cast<uint32_t*>(&buffer), reinterpret_cast<const uint32_t *>(SEEPROM_ADDR), sizeof(buffer)/sizeof(uint32_t));
-#elif defined(__LPC17xx__)
-# error		//TODO
 #elif SAM4E || SAM4S || SAME70
 		Flash::ReadUserSignature(reinterpret_cast<uint32_t*>(&buffer), sizeof(buffer)/sizeof(uint32_t));
 #else
@@ -62,8 +60,6 @@ void NonVolatileMemory::EnsureWritten() noexcept
 		// Erase the page
 # if SAM4E || SAM4S || SAME70
 		Flash::EraseUserSignature();
-# elif defined(__LPC17xx__)
-		LPC_EraseSoftwareResetDataSlots();	// erase the last flash sector
 # endif
 		state = NvmState::writeNeeded;
 	}
@@ -77,8 +73,6 @@ void NonVolatileMemory::EnsureWritten() noexcept
 		{
 			Cache::Enable();
 		}
-# elif defined(__LPC17xx__)
-		LPC_WriteSoftwareResetData(slot, buffer, sizeof(buffer));
 # else
 #  error Unsupported processor
 # endif

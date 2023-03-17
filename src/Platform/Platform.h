@@ -136,8 +136,6 @@ enum class BoardType : uint8_t
 	DuetM_10 = 1,
 #elif defined(PCCB_10)
 	PCCB_v10 = 1
-#elif defined(__LPC17xx__)
-	Lpc = 1
 #else
 # error Unknown board
 #endif
@@ -173,10 +171,6 @@ enum class DiagnosticTestType : unsigned int
 	TimeCRC32 = 107,				// time how long it takes to calculate CRC32
 	TimeGetTimerTicks = 108,		// time now long it takes to read the step clock
 	UndervoltageEvent = 109,		// pretend an undervoltage condition has occurred
-
-#ifdef __LPC17xx__
-	PrintBoardConfiguration = 200,	// Prints out all pin/values loaded from SDCard to configure board
-#endif
 
 	SetWriteBuffer = 500,			// enable/disable the write buffer
 
@@ -852,10 +846,6 @@ private:
 
 #if HAS_STALL_DETECT
 	DriversBitmap logOnStallDrivers, eventOnStallDrivers;
-#endif
-
-#if defined(__LPC17xx__)
-	MCP4461 mcp4451;	// works for 5561 (only volatile setting commands)
 #endif
 
 	// Endstops

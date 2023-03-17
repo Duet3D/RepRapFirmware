@@ -154,7 +154,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 	pinMode(ActLedPin, (ActOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up activity LED and turn it off
 #endif
 
-#if !defined(DEBUG) && !defined(__LPC17xx__)	// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
+#if !defined(DEBUG)		// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
 	// Check the integrity of the firmware by checking the firmware CRC
 	{
 		const char *firmwareStart = reinterpret_cast<const char*>(SCB->VTOR & 0xFFFFFF80);
@@ -174,7 +174,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 			}
 		}
 	}
-#endif	// !defined(DEBUG) && !defined(__LPC17xx__)
+#endif	// !defined(DEBUG)
 
 	// Fill the free memory with a pattern so that we can check for stack usage and memory corruption
 	char *_ecv_array heapend = heapTop;
@@ -215,7 +215,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
 
-#if !defined(__LPC17xx__) && !SAME5x
+#if !SAME5x
 	// When doing a software reset, we disable the NRST input (User reset) to prevent the negative-going pulse that gets generated on it being held
 	// in the capacitor and changing the reset reason from Software to User. So enable it again here. We hope that the reset signal will have gone away by now.
 # ifndef RSTC_MR_KEY_PASSWD
@@ -258,10 +258,6 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 		reprap.Spin();
 	}
 }
-
-#ifdef __LPC17xx__
-	extern "C" size_t xPortGetTotalHeapSize( void );
-#endif
 
 // Return the amount of free handler stack space. It may be negative if the stack has overflowed into the area reserved for the heap.
 static ptrdiff_t GetHandlerFreeStack() noexcept
@@ -315,19 +311,13 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 		const char * const ramstart =
 #if SAME5x
 			(char *) HSRAM_ADDR;
-#elif defined(__LPC17xx__)
-			(char *) 0x10000000;
 #else
 			(char *) IRAM_ADDR;
 #endif
 		p.MessageF(mtype, "Static ram: %d\n", &_end - ramstart);
 
-#ifdef __LPC17xx__
-		p.MessageF(mtype, "Dynamic Memory (RTOS Heap 5): %d free, %d never used\n", xPortGetFreeHeapSize(), xPortGetMinimumEverFreeHeapSize() );
-#else
 		const struct mallinfo mi = mallinfo();
 		p.MessageF(mtype, "Dynamic ram: %d of which %d recycled\n", mi.uordblks, mi.fordblks);
-#endif
 		p.MessageF(mtype, "Never used RAM %d, free system stack %d words\n", GetNeverUsedRam(), GetHandlerFreeStack()/4);
 
 		//DEBUG
@@ -353,10 +343,10 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 			stateText = "ready";
 			break;
 		case esNotifyWaiting:
-			stateText = "notifyWait";
+			stateText = "nWait";
 			break;
 		case esResourceWaiting:
-			stateText = "resourceWait:";
+			stateText = "rWait:";
 			break;
 		case esDelaying:
 			stateText = "delaying";

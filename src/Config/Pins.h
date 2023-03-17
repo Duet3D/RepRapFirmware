@@ -26,8 +26,6 @@
 # elif defined(FMDC_V02) || defined(FMDC_V03)
 #  define DUET3MINI		1
 #  define PLATFORM FMDC
-# elif defined(__LPC17xx__)
-#  define PLATFORM LPC
 # else
 #  error Unknown platform
 # endif

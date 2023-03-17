@@ -89,7 +89,7 @@
  * From the distance limit we can work out the step limit N = D/(f*m).
  * From the segment times we can accumulate the start time ts of each segment.
  *
- * When starting a new axis segment we calculate actual coefficients A' B' C' as follows (Dprev is the distance limit of the previous segment, i.e. total length of previous moves):
+ * When starting a new axis segment we calculate actual coefficients A' B' C' as follows (Dprev is the distance limit of the previous segment, i.e. total length of previous segments):
  * For accel/decel segments:
  *   A' = B^2 - C*Dprev
  *   B' = B + ts
@@ -144,30 +144,52 @@ public:
 
 	MoveSegment(MoveSegment *p_next) noexcept;
 
-	float GetSegmentLength() const noexcept { return segLength; }
-	float GetSegmentTime() const noexcept { return segTime; }
-	float CalcNonlinearA(float startDistance) const noexcept;
-	float CalcNonlinearA(float startDistance, float pressureAdvanceK) const noexcept;
-	float CalcNonlinearB(float startTime) const noexcept;
-	float CalcNonlinearB(float startTime, float pressureAdvanceK) const noexcept;
-	float CalcLinearB(float startDistance, float startTime) const noexcept;
-	float CalcC(float mmPerStep) const noexcept;
-	float GetC() const noexcept { return c; }
-
-	void SetLinear(float pSegmentLength, float p_segTime, float p_c) noexcept;
-	void SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c) noexcept;
-	void SetReverse() noexcept;
-
-	MoveSegment *GetNext() const noexcept;
 	bool IsLinear() const noexcept;
 	bool IsAccelerating() const noexcept pre(!IsLinear());
 	bool IsLast() const noexcept;
 
+	// Get the segment length in mm
+	float GetSegmentLength() const noexcept { return segLength; }
+
+	// Get the segment duration in step clocks
+	float GetSegmentTime() const noexcept { return segTime; }
+
+	// Get the segment speed change in mm/step_clock. Only for accelerating or decelerating moves.
+	float GetNonlinearSpeedChange() const noexcept pre(!IsLinear()) { return acceleration * segTime; }
+
+	// Get the start speed for an accelerating or decelerating move
+	float GetNonlinearStartSpeed(float pressureAdvanceK) const noexcept pre(!IsLinear()) { return (pressureAdvanceK - b) * acceleration; }
+
+	// Get the end speed for an accelerating or decelerating move
+	float GetNonlinearEndSpeed(float pressureAdvanceK) const noexcept pre(!IsLinear()) { return (pressureAdvanceK - b + segTime) * acceleration; }
+
+	// Calculate the move A coefficient in step_clocks^2 for an accelerating or decelerating move
+	float CalcNonlinearA(float startDistance) const noexcept pre(!IsLinear());
+	float CalcNonlinearA(float startDistance, float pressureAdvanceK) pre(!IsLinear()) const noexcept pre(!IsLinear());
+
+	// Calculate the move B coefficient in step_clocks for an accelerating or decelerating move
+	float CalcNonlinearB(float startTime) const noexcept pre(!IsLinear());
+	float CalcNonlinearB(float startTime, float pressureAdvanceK) const noexcept pre(!IsLinear());
+
+	// Calculate the move B coefficient in step_clocks for a steady speed move
+	float CalcLinearB(float startDistance, float startTime) const noexcept pre(IsLinear());
+
+	// Calculate the move C coefficient in step_clocks/step for a linear move, or step_clocks^2/step for an accelerating or decelerating move
+	float CalcC(float mmPerStep) const noexcept;
+
+	// Return the C coefficient
+	float GetC() const noexcept { return c; }
+
+	void SetLinear(float pSegmentLength, float p_segTime, float p_c) noexcept post(IsLinear());
+	void SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c, float p_acceleration) noexcept post(!IsLinear());
+
+	MoveSegment *GetNext() const noexcept;
 	void SetNext(MoveSegment *p_next) noexcept;
 	void AddToTail(MoveSegment *tail) noexcept;
 	void DebugPrint(char ch) const noexcept;
+	static void DebugPrintList(char ch, const MoveSegment *segs) noexcept;
 
-	// Allocate a MoveSegment, clearing the Linear and Last flags
+	// Allocate a MoveSegment, clearing the flags
 	static MoveSegment *Allocate(MoveSegment *next) noexcept;
 
 	// Release a MoveSegment
@@ -176,6 +198,7 @@ public:
 	static void InitialAllocate(unsigned int num) noexcept;
 	static unsigned int NumCreated() noexcept { return numCreated; }
 
+#if 0
 	static constexpr unsigned int SFdistance = 10;
 	static constexpr unsigned int SFstepsPerMm = 16;
 	static constexpr unsigned int SFmmPerStep = 31;
@@ -187,9 +210,12 @@ public:
 	static constexpr uint32_t KmmPerStep = 1u << SFmmPerStep;				// a power of 2 for scaling the Z movement fraction
 	static constexpr uint32_t KdirectionVector = 1u << SFdirectionVector;	// a power of 2 for scaling the direction vector
 	static constexpr uint32_t Kdelta = 1u << SFdelta;						// a power of 2 for scaling delta motion calculations to reduce rounding error (but too high makes things worse)
+#endif
 
 private:
-	static constexpr uint32_t LinearFlag = 0x01;
+	// We can store up to 2 flag bits in the link field, because the next move segment in the list will be 4-byte aligned
+	static constexpr uint32_t LinearFlag = 0x01;			// set if this segment is linear, clear if it is accelerating or decelerating
+	static constexpr uint32_t SpareFlag = 0x02;				// unused flag bit
 	static constexpr uint32_t AllFlags = 0x03;
 
 	static MoveSegment *freeList;
@@ -201,7 +227,9 @@ private:
 	uint32_t nextAndFlags;									// pointer to the next segment, plus flag bits
 	float segLength;										// the length of this segment before applying the movement fraction
 	float segTime;											// the time in step clocks at which this move ends
-	float b, c;												// the move parameters (b is not needed for linear moves)
+	float c;												// the c move parameter, units are step_clocks/mm for linear moves, units are steps_clocks^2/mm for accelerating or decelerating moves
+	float b;												// the b move parameter, equal to -(u/a), units are step_clocks, not used by linear move segments
+	float acceleration;										// the acceleration during this segment, not used by linear move segments
 };
 
 // Create a new one, leaving the flags clear
@@ -226,12 +254,10 @@ inline bool MoveSegment::IsLinear() const noexcept
 	return nextAndFlags & LinearFlag;
 }
 
-
 inline bool MoveSegment::IsLast() const noexcept
 {
 	return GetNext() == nullptr;
 }
-
 
 inline float MoveSegment::CalcNonlinearA(float startDistance) const noexcept
 {
@@ -273,12 +299,13 @@ inline void MoveSegment::SetLinear(float pSegmentLength, float p_segTime, float 
 }
 
 // Set up an accelerating or decelerating move. We assume that the 'linear' flag is already clear.
-inline void MoveSegment::SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c) noexcept
+inline void MoveSegment::SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c, float p_acceleration) noexcept
 {
 	segLength = pSegmentLength;
 	segTime = p_segTime;
 	b = p_b;
 	c = p_c;
+	acceleration = p_acceleration;
 }
 
 // Given that this is an accelerating or decelerating move, return true if it is accelerating

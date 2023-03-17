@@ -5073,7 +5073,11 @@ FRESULT f_unlink (
 						res = dir_sdi(&sdj, 0);
 						if (res == FR_OK) {
 							res = DIR_READ_FILE(&sdj);			/* Test if the directory is empty */
+#if 1	//dc42
+							if (res == FR_OK) res = FR_NOT_EMPTY;	/* Not empty? */
+#else
 							if (res == FR_OK) res = FR_DENIED;	/* Not empty? */
+#endif
 							if (res == FR_NO_FILE) res = FR_OK;	/* Empty? */
 						}
 					}

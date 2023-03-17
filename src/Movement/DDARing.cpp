@@ -1031,6 +1031,19 @@ void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
 	}
 }
 
+// Add a move from the ATE to the movement queue
+void DDARing::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
+{
+	if (addPointer->GetState() == DDA::empty)
+	{
+		if (addPointer->InitFromRemote(msg))
+		{
+			addPointer = addPointer->GetNext();
+			scheduledMoves++;
+		}
+	}
+}
+
 void DDARing::StopDrivers(uint16_t whichDrives) noexcept
 {
 	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);

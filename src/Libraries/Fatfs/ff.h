@@ -296,6 +296,9 @@ typedef enum {
 	FR_NOT_ENOUGH_CORE,		/* (17) LFN working buffer could not be allocated */
 	FR_TOO_MANY_OPEN_FILES,	/* (18) Number of open files > FF_FS_LOCK */
 	FR_INVALID_PARAMETER	/* (19) Given parameter is invalid */
+#if 1	//dc42
+	, FR_NOT_EMPTY			/* (20) Can't delete directory because it is not empty */
+#endif
 } FRESULT;
 
 

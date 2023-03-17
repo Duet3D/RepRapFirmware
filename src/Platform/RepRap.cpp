@@ -275,7 +275,6 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "gCodes",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetGCodeDir()),						ObjectModelEntryFlags::verbose },
 	{ "macros",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetMacroDir()),						ObjectModelEntryFlags::verbose },
 	{ "menu",					OBJECT_MODEL_FUNC_NOSELF(MENU_DIR),										ObjectModelEntryFlags::verbose },
-	{ "scans",					OBJECT_MODEL_FUNC_NOSELF(SCANS_DIRECTORY),								ObjectModelEntryFlags::verbose },
 	{ "system",					OBJECT_MODEL_FUNC_NOSELF(ExpressionValue::SpecialType::sysDir, 0),		ObjectModelEntryFlags::none },
 	{ "web",					OBJECT_MODEL_FUNC_NOSELF(Platform::GetWebDir()),						ObjectModelEntryFlags::verbose },
 #endif
@@ -405,7 +404,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	7,																						// number of sub-tables
 	15 + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),						// root
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
-	8, 																						// directories
+	7, 																						// directories
 #else
 	0,																						// directories
 #endif
@@ -529,8 +528,6 @@ void RepRap::Init() noexcept
 	NVIC_SetPriority(WDT_IRQn, NvicPriorityWatchdog);								// set priority for watchdog interrupts
 	NVIC_ClearPendingIRQ(WDT_IRQn);
 	NVIC_EnableIRQ(WDT_IRQn);														// enable the watchdog early warning interrupt
-#elif defined(__LPC17xx__)
-	wdt_init(1);																	// set wdt to 1 second. reset the processor on a watchdog fault
 #else
 	{
 		// The clock frequency for both watchdogs is about 32768/128 = 256Hz
@@ -683,7 +680,7 @@ bool RepRap::RunStartupFile(const char *filename) noexcept
 		platform->MessageF(UsbMessage, "Executing %s... ", filename);
 		do
 		{
-			// GCodes::Spin will process the macro file and ensure IsDaemonBusy returns false when it's done
+			// GCodes::Spin will process the macro file and ensure IsTriggerBusy returns false when it's done
 			Spin();
 		} while (gCodes->IsTriggerBusy());
 		platform->Message(UsbMessage, "Done!\n");
@@ -693,7 +690,7 @@ bool RepRap::RunStartupFile(const char *filename) noexcept
 
 void RepRap::Exit() noexcept
 {
-#if HAS_HIGH_SPEED_SD && !SAME5x		// SAME5x MCI driver is RTOS_aware, so it doesn't need this
+#if HAS_HIGH_SPEED_SD && !SAME5x		// SAME5x MCI driver is RTOS-aware so it doesn't need this
 	hsmci_set_idle_func(nullptr);
 #endif
 	active = false;
@@ -857,15 +854,9 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	platform->MessageF(mtype,
 		// Format string
 		"%s"											// firmware name
-#ifdef __LPC17xx__
-		" (%s)"											// lpcBoardName
-#endif
 		" version %s (%s%s) running on %s"				// firmware version, date, time, electronics
 #ifdef DUET_NG
 		"%s%s"											// optional DueX expansion board
-#endif
-#ifdef __LPC17xx__
-		" at %uMhz"										// clock speed
 #endif
 #if HAS_SBC_INTERFACE || SUPPORT_REMOTE_COMMANDS
 		" (%s mode)"									// standalone, SBC or expansion mode
@@ -874,16 +865,10 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 
 		// Parameters to match format string
 		FIRMWARE_NAME,
-#ifdef __LPC17xx__
-		lpcBoardName,
-#endif
 		VERSION, DATE, TIME_SUFFIX, platform->GetElectronicsString()
 #ifdef DUET_NG
 		, ((expansionName == nullptr) ? "" : " + ")
 		, ((expansionName == nullptr) ? "" : expansionName)
-#endif
-#ifdef __LPC17xx__
-		, (unsigned int)(SystemCoreClock/1000000)
 #endif
 #if HAS_SBC_INTERFACE || SUPPORT_REMOTE_COMMANDS
 		,
@@ -1076,12 +1061,36 @@ void RepRap::Tick() noexcept
 				heat->SwitchOffAllLocalFromISR();								// can't call SwitchOffAll because remote heaters can't be turned off from inside a ISR
 				platform->EmergencyDisableDrivers();
 
-				// We now save the stack when we get stuck in a spin loop
-				__asm volatile("mrs r2, psp");
-				register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
-				SoftwareReset(
-					(heatTaskStuck) ? SoftwareResetReason::heaterWatchdog : SoftwareResetReason::stuckInSpin,
-					stackPtr + 5);												// discard uninteresting registers, keep LR PC PSR
+				// Save the stack of the stuck task when we get stuck in a spin loop
+				const uint32_t *relevantStackPtr;
+				const TaskHandle relevantTask = (heatTaskStuck) ? Heat::GetHeatTask() : Tasks::GetMainTask();
+				if (relevantTask == RTOSIface::GetCurrentTask())
+				{
+					__asm volatile("mrs r2, psp");
+					register const uint32_t * stackPtr asm ("r2");				// we want the PSP not the MSP
+					relevantStackPtr = stackPtr + 5;							// discard uninteresting registers, keep LR PC PSR
+				}
+				else
+				{
+					relevantStackPtr = const_cast<const uint32_t*>(pxTaskGetLastStackTop(relevantTask->GetFreeRTOSHandle()));
+					// All registers were saved on the stack, so to get useful return addresses we need to skip most of them.
+					// See the port.c files in FreeRTOS for the stack layouts
+#if SAME70 || SAM4E || SAME5x
+					// ARM Cortex M7 with double precision floating point, or ARM Cortex M4F
+					if ((relevantStackPtr[8] & 0x10) == 0)						// test EXC_RETURN FP bit
+					{
+						relevantStackPtr += 9 + 16;								// skip r4-r11 and r14 and s16-s31
+					}
+					else
+					{
+						relevantStackPtr += 9;									// skip r4-r11 and r14
+					}
+#else
+					// ARM Cortex M3 or M4 without floating point
+					relevantStackPtr += 8;										// skip r4-r11
+#endif
+				}
+				SoftwareReset((heatTaskStuck) ? SoftwareResetReason::heaterWatchdog : SoftwareResetReason::stuckInSpin, relevantStackPtr);
 			}
 		}
 	}
@@ -2450,10 +2459,6 @@ void RepRap::SetName(const char* nm) noexcept
 
 // Firmware update operations
 
-#ifdef __LPC17xx__
-    #include "LPC/FirmwareUpdate.hpp"
-#else
-
 // Check the prerequisites for updating the main firmware. Return True if satisfied, else print a message to 'reply' and return false.
 bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const StringRef& filenameRef) noexcept
 {
@@ -2678,8 +2683,6 @@ void RepRap::StartIap(const char *filename) noexcept
 	for (;;) { }							// to keep gcc happy
 }
 
-#endif
-
 // Helper function for diagnostic tests in Platform.cpp, to cause a deliberate divide-by-zero
 /*static*/ uint32_t RepRap::DoDivide(uint32_t a, uint32_t b) noexcept
 {
@@ -2697,9 +2700,6 @@ void RepRap::StartIap(const char *filename) noexcept
 	(void)*(reinterpret_cast<const volatile char*>(0x20800000));
 #elif SAM3XA
 	(void)*(reinterpret_cast<const volatile char*>(0x20200000));
-#elif defined(__LPC17xx__)
-	// The LPC176x/5x generates Bus Fault exception when accessing a reserved memory address
-	(void)*(reinterpret_cast<const volatile char*>(0x00080000));
 #else
 # error Unsupported processor
 #endif

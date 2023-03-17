@@ -367,7 +367,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 			reply.catf(" (%d)", v1);
 		}
 		reply.catf(", threshold %d, trigger height %.3f", adcValue, (double)-offsets[Z_AXIS]);
-		if (temperatureCoefficients[0] != 0.0)
+		if (temperatureCoefficients[0] != 0.0 || temperatureCoefficients[1] != 0.0)
 		{
 			reply.catf(" at %.1f" DEGREE_SYMBOL "C, temperature coefficients [%.1f/" DEGREE_SYMBOL "C, %.1f/" DEGREE_SYMBOL "C^2]",
 						(double)calibTemperature, (double)temperatureCoefficients[0], (double)temperatureCoefficients[1]);

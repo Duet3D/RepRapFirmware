@@ -96,25 +96,8 @@ constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400
 constexpr size_t MaxAxis0GridPoints = 41;				// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
 constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
-#elif SAM3XA
-constexpr size_t MaxGridProbePoints = 121;				// 121 allows us to probe 200x200 at 20mm intervals
-constexpr size_t MaxAxis0GridPoints = 21;				// Maximum number of grid points in one X row
-constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
-constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
-#elif __LPC17xx__
-# if defined(LPC_NETWORKING)
-constexpr size_t MaxGridProbePoints = 121;    			// 121 allows us to probe 200x200 at 20mm intervals
-constexpr size_t MaxAxis0GridPoints = 21;         		// Maximum number of grid points in one X row
-constexpr size_t MaxProbePoints = 32;       			// Maximum number of G30 probe points
-constexpr size_t MaxCalibrationPoints = 16; 			// Should a power of 2 for speed
-# else
-constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
-constexpr size_t MaxAxis0GridPoints = 41;				// Maximum number of grid points in one X row
-constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
-constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
-# endif
 #else
-# error
+# error unsupported processor
 #endif
 
 constexpr float DefaultGridSpacing = 20.0;				// Default bed probing grid spacing in mm
@@ -201,12 +184,8 @@ constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buf
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 26;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
-#elif __LPC17xx__
-constexpr uint16_t OUTPUT_BUFFER_SIZE = 256;            // How many bytes does each OutputBuffer hold?
-constexpr size_t OUTPUT_BUFFER_COUNT = 16;              // How many OutputBuffer instances do we have?
-constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;           // Number of reserved output buffers after long responses. Must be enough for an HTTP header
 #else
-# error
+# error Unsupported processor
 #endif
 
 constexpr size_t maxQueuedCodes = 16;					// How many codes can be queued?
@@ -300,7 +279,6 @@ constexpr size_t MaxThumbnails = 4;						// Maximum number of thumbnail images r
 #define GCODE_DIR				"0:/gcodes/"			// Ditto - G-Codes
 #define DEFAULT_SYS_DIR			"0:/sys/"				// Ditto - System files (can be changed using M505)
 #define MACRO_DIR				"0:/macros/"			// Ditto - Macro files
-#define SCANS_DIRECTORY			"0:/scans/"				// Directory for uploaded 3D scans
 #define FILAMENTS_DIRECTORY		"0:/filaments/"			// Directory for filament configurations
 #define FIRMWARE_DIRECTORY		"0:/firmware/"			// Directory for firmware and IAP files
 #define MENU_DIR				"0:/menu/"				// Directory for menu files
