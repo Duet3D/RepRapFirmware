@@ -62,7 +62,7 @@ public:
 
 	static void InitialAllocate(unsigned int num) noexcept;
 	static unsigned int NumCreated() noexcept { return numCreated; }
-	static DriveMovement *Allocate(size_t p_drive, DMState st) noexcept;
+	static DriveMovement *Allocate(size_t p_drive) noexcept;
 	static void Release(DriveMovement *item) noexcept;
 
 private:
@@ -134,7 +134,6 @@ private:
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // Return true if there are more steps to do. When finished, leave nextStep == totalSteps + 1.
-// This is also used for extruders on delta machines.
 // We inline this part to speed things up when we are doing double/quad/octal stepping.
 inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
 {

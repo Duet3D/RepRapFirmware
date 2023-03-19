@@ -42,7 +42,7 @@ struct PrepParams
 	float a2plusb2;									// sum of the squares of the X and Y movement fractions
 #endif
 
-	// Calculate the steady clocks and set the total clocks in the DDA
+	// Calculate and set the steady clocks
 	void Finalise(float topSpeed) noexcept;
 
 	// Get the total clocks needed
@@ -232,6 +232,7 @@ private:
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be an acceleration-only move
 	void EnsureSegments(const PrepParams& params) noexcept;
+	void ReleaseSegments() noexcept;
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const noexcept;
 
 #if SUPPORT_CAN_EXPANSION

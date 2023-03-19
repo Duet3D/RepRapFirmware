@@ -174,14 +174,7 @@ void DDA::ReleaseDMs() noexcept
 		dm = dnext;
 	}
 	activeDMs = completedDMs = nullptr;
-
-	for (MoveSegment* seg = segments; seg != nullptr; )
-	{
-		MoveSegment* const nextSeg = seg->GetNext();
-		MoveSegment::Release(seg);
-		seg = nextSeg;
-	}
-	segments = nullptr;
+	ReleaseSegments();
 }
 
 // Return the number of clocks this DDA still needs to execute.
@@ -712,7 +705,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 		if (delta != 0)
 		{
 			EnsureSegments(params);								// we are going to need segments
-			DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
+			DriveMovement* const pdm = DriveMovement::Allocate(drive);
 			pdm->totalSteps = labs(delta);						// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 			pdm->direction = (delta >= 0);						// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 			afterPrepare.drivesMoving.SetBit(drive);
@@ -752,13 +745,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 	if (activeDMs == nullptr)
 	{
 		// We may have set up the segments, in which case we must recycle them
-		for (MoveSegment* seg = segments; seg != nullptr; )
-		{
-			MoveSegment* const nextSeg = seg->GetNext();
-			MoveSegment::Release(seg);
-			seg = nextSeg;
-		}
-		segments = nullptr;
+		ReleaseSegments();
 		return false;
 	}
 
@@ -816,7 +803,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = extrusionRequested;
 			if (extrusionRequested != 0.0)
 			{
-				DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
+				DriveMovement* const pdm = DriveMovement::Allocate(drive);
 				pdm->totalSteps = labs(extrusionRequested);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 				pdm->direction = (extrusionRequested >= 0.0);			// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 				afterPrepare.drivesMoving.SetBit(drive);
@@ -855,7 +842,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = (float)delta;
 			if (delta != 0)
 			{
-				DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
+				DriveMovement* const pdm = DriveMovement::Allocate(drive);
 				pdm->totalSteps = labs(delta);					// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
 				pdm->direction = (delta >= 0);					// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 				afterPrepare.drivesMoving.SetBit(drive);
@@ -894,13 +881,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	if (activeDMs == nullptr)
 	{
 		// We may have set up the segments, in which case we must recycle them
-		for (MoveSegment* seg = segments; seg != nullptr; )
-		{
-			MoveSegment* const nextSeg = seg->GetNext();
-			MoveSegment::Release(seg);
-			seg = nextSeg;
-		}
-		segments = nullptr;
+		ReleaseSegments();
 		return false;
 	}
 
@@ -1326,6 +1307,17 @@ void DDA::EnsureSegments(const PrepParams& params) noexcept
 	}
 }
 
+void DDA::ReleaseSegments() noexcept
+{
+	for (MoveSegment* seg = segments; seg != nullptr; )
+	{
+		MoveSegment* const nextSeg = seg->GetNext();
+		MoveSegment::Release(seg);
+		seg = nextSeg;
+	}
+	segments = nullptr;
+}
+
 // Prepare this DDA for execution.
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
 void DDA::Prepare(SimulationMode simMode) noexcept
@@ -1421,7 +1413,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 #endif
 						{
 							EnsureSegments(params);
-							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders, DMState::idle);
+							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders);
 							pdm->direction = (delta >= 0);
 							pdm->totalSteps = labs(delta);
 							if (pdm->PrepareCartesianAxis(*this, params))
@@ -1458,7 +1450,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 # endif
 				   )
 				{
-					DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
+					DriveMovement* const pdm = DriveMovement::Allocate(drive);
 					pdm->direction = (delta >= 0);
 					pdm->totalSteps = labs(delta);								// this is net steps for now
 					if (pdm->PrepareDeltaAxis(*this, params))
@@ -1524,7 +1516,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 #endif
 					   )
 					{
-						DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
+						DriveMovement* const pdm = DriveMovement::Allocate(drive);
 						pdm->direction = (delta >= 0);
 						pdm->totalSteps = labs(delta);
 						if (pdm->PrepareCartesianAxis(*this, params))
@@ -1603,7 +1595,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 #endif
 						{
 							EnsureSegments(params);
-							DriveMovement* const pdm = DriveMovement::Allocate(drive, DMState::idle);
+							DriveMovement* const pdm = DriveMovement::Allocate(drive);
 							pdm->direction = (directionVector[drive] >= 0);
 							if (pdm->PrepareExtruder(*this, params, platform.DriveStepsPerUnit(drive) * directionVector[drive]))
 							{
@@ -2076,12 +2068,12 @@ void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 		DriveMovement * const nextToInsert = dmToInsert->nextDM;
 		if (dmToInsert->state >= DMState::firstMotionState)
 		{
-			InsertDM(dmToInsert);
 			if (dmToInsert->directionChanged)
 			{
 				dmToInsert->directionChanged = false;
 				p.SetDirection(dmToInsert->drive, dmToInsert->direction);
 			}
+			InsertDM(dmToInsert);
 		}
 		else
 		{
@@ -2143,11 +2135,8 @@ void DDA::SimulateSteppingDrivers(Platform& p) noexcept
 			DriveMovement * const nextToInsert = dmToInsert->nextDM;
 			if (dmToInsert->state >= DMState::firstMotionState)
 			{
+				dmToInsert->directionChanged = false;
 				InsertDM(dmToInsert);
-				if (dmToInsert->directionChanged)
-				{
-					dmToInsert->directionChanged = false;
-				}
 			}
 			else
 			{

@@ -28,7 +28,7 @@ void DriveMovement::InitialAllocate(unsigned int num) noexcept
 }
 
 // Allocate a DM, from the freelist if possible, else create a new one
-DriveMovement *DriveMovement::Allocate(size_t p_drive, DMState st) noexcept
+DriveMovement *DriveMovement::Allocate(size_t p_drive) noexcept
 {
 	DriveMovement * dm = freeList;
 	if (dm != nullptr)
@@ -42,7 +42,7 @@ DriveMovement *DriveMovement::Allocate(size_t p_drive, DMState st) noexcept
 		++numCreated;
 	}
 	dm->drive = (uint8_t)p_drive;
-	dm->state = st;
+	dm->state = DMState::idle;
 	return dm;
 }
 
@@ -448,6 +448,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	timeSoFar = 0.0;
 
 	isDelta = true;
+	isExtruder = false;
 	currentSegment = dda.segments;
 
 	nextStep = 0;									// must do this before calling NewDeltaSegment
@@ -471,6 +472,11 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 // effStepsPerMm is the number of extruder steps needed per mm of totalDistance before we apply pressure advance
 bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept
 {
+	const float effStepsPerMm = fabsf(signedEffStepsPerMm);
+	mp.cart.effectiveStepsPerMm = effStepsPerMm;
+	const float effMmPerStep = 1.0/effStepsPerMm;
+	mp.cart.effectiveMmPerStep = effMmPerStep;
+
 	const size_t logicalDrive =
 #if SUPPORT_REMOTE_COMMANDS
 								(dda.flags.isRemote) ? drive : LogicalDriveToExtruder(drive);
@@ -478,17 +484,12 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 								LogicalDriveToExtruder(drive);
 #endif
 
-	const float effStepsPerMm = fabsf(signedEffStepsPerMm);
-	mp.cart.effectiveStepsPerMm = effStepsPerMm;
-	const float effMmPerStep = 1.0/effStepsPerMm;
-	mp.cart.effectiveMmPerStep = effMmPerStep;
-
-	// distanceSoFar will accumulate the equivalent amount of totalDistance that the extruder moves forwards.
-	// It would be equal to totalDistance if there was no pressure advance and no extrusion pending.
 	ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
 #if 0	//DEBUG
 	debugPrintf("pending %.2f\n", (double)shaper.GetExtrusionPending());
 #endif
+	// distanceSoFar will accumulate the equivalent amount of totalDistance that the extruder moves forwards.
+	// It would be equal to totalDistance if there was no pressure advance and no extrusion pending.
 	distanceSoFar =	mp.cart.extrusionBroughtForwards = shaper.GetExtrusionPending() * effMmPerStep;
 	timeSoFar = 0.0;
 
