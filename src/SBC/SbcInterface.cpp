@@ -873,7 +873,7 @@ void SbcInterface::ExchangeData() noexcept
 
 		// Result of a deletion request
 		case SbcRequest::FileDeleteResult:
-			if (fileOperation == FileOperation::deleteFileOrDirectory)
+			if (fileOperation == FileOperation::deleteFileOrDirectory || fileOperation == FileOperation::deleteFileOrDirectoryRecursively)
 			{
 				fileSuccess = transfer.ReadBoolean();
 				fileOperation = FileOperation::none;
@@ -1017,6 +1017,9 @@ void SbcInterface::ExchangeData() noexcept
 
 		case FileOperation::deleteFileOrDirectory:
 			fileOperationPending = !transfer.WriteDeleteFileOrDirectory(filePath);
+			break;
+		case FileOperation::deleteFileOrDirectoryRecursively:
+			fileOperationPending = !transfer.WriteDeleteFileOrDirectory(filePath, true);
 			break;
 
 		case FileOperation::openRead:
@@ -1476,7 +1479,7 @@ bool SbcInterface::FileExists(const char *filename) noexcept
 	return fileSuccess;
 }
 
-bool SbcInterface::DeleteFileOrDirectory(const char *fileOrDirectory) noexcept
+bool SbcInterface::DeleteFileOrDirectory(const char *fileOrDirectory, bool recursive) noexcept
 {
 	// Don't do anything if the SBC is not connected
 	if (!IsConnected())
@@ -1488,7 +1491,7 @@ bool SbcInterface::DeleteFileOrDirectory(const char *fileOrDirectory) noexcept
 	MutexLocker locker(fileMutex);
 
 	filePath = fileOrDirectory;
-	if (!DoFileOperation(FileOperation::deleteFileOrDirectory))
+	if (!DoFileOperation(recursive ? FileOperation::deleteFileOrDirectoryRecursively : FileOperation::deleteFileOrDirectory))
 	{
 		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to delete %s\n", fileOrDirectory);
 		return false;

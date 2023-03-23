@@ -729,7 +729,7 @@ bool MassStorage::Delete(const StringRef& filePath, ErrorMessageMode errorMessag
 # if HAS_SBC_INTERFACE
 	if (reprap.UsingSbcInterface())
 	{
-		if (reprap.GetSbcInterface().DeleteFileOrDirectory(filePath.c_str()))
+		if (reprap.GetSbcInterface().DeleteFileOrDirectory(filePath.c_str(), recursive))
 		{
 			return true;
 		}

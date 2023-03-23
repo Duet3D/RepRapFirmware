@@ -1621,7 +1621,7 @@ bool DataTransfer::WriteCheckFileExists(const char *filename) noexcept
 	return true;
 }
 
-bool DataTransfer::WriteDeleteFileOrDirectory(const char *filename) noexcept
+bool DataTransfer::WriteDeleteFileOrDirectory(const char *filename, bool recursive) noexcept
 {
 	// Check if it fits
 	size_t filenameLength = strlen(filename);
@@ -1631,7 +1631,7 @@ bool DataTransfer::WriteDeleteFileOrDirectory(const char *filename) noexcept
 	}
 
 	// Write packet header
-	(void)WritePacketHeader(FirmwareRequest::DeleteFileOrDirectory, sizeof(StringHeader) + filenameLength);
+	(void)WritePacketHeader(recursive ? FirmwareRequest::DeleteFileOrDirectoryRecursively : FirmwareRequest::DeleteFileOrDirectory, sizeof(StringHeader) + filenameLength);
 
 	// Write header
 	StringHeader *header = WriteDataHeader<StringHeader>();

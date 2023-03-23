@@ -59,7 +59,7 @@ public:
 	bool GetFileChunk(const char *filename, uint32_t offset, char *buffer, uint32_t& bufferLength, uint32_t& fileLength) noexcept;
 
 	bool FileExists(const char *filename) noexcept;
-	bool DeleteFileOrDirectory(const char *fileOrDirectory) noexcept;
+	bool DeleteFileOrDirectory(const char *fileOrDirectory, bool recursive = false) noexcept;
 
 	FileHandle OpenFile(const char *filename, OpenMode mode, FilePosition& fileLength, uint32_t preAllocSize = 0) noexcept;
 	int ReadFile(FileHandle handle, char *buffer, size_t bufferLength) noexcept;
@@ -112,6 +112,7 @@ private:
 		none,
 		checkFileExists,
 		deleteFileOrDirectory,
+		deleteFileOrDirectoryRecursively,
 		openRead,
 		openWrite,
 		openAppend,
