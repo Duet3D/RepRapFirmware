@@ -216,6 +216,13 @@ paths:
                   required: true
                   schema:
                       type: string
+                - name: 'recursive'
+                  in: query
+                  description: 'Delete directory recursively (if applicable)'
+                  required: false
+                  schema:
+                      type: string
+                      enum: ['yes', 'no']
             responses:
                 '200':
                     description: 'File delete result'
