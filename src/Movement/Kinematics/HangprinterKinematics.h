@@ -59,14 +59,10 @@ private:
 	// Basic facts about movement system
 	const char* ANCHOR_CHARS = "ABCD";
 	static constexpr size_t HANGPRINTER_AXES = 4;
-	static constexpr size_t A_AXIS = 0;
-	static constexpr size_t B_AXIS = 1;
-	static constexpr size_t C_AXIS = 2;
-	static constexpr size_t D_AXIS = 3;
 
 	void Init() noexcept;
 	void Recalc() noexcept;
-	void ForwardTransform(float a, float b, float c, float d, float machinePos[3]) const noexcept;
+	void ForwardTransform(float const distances[HANGPRINTER_AXES], float machinePos[3]) const noexcept;
 	float MotorPosToLinePos(const int32_t motorPos, size_t axis) const noexcept;
 
 	void PrintParameters(const StringRef& reply) const noexcept;			// Print all the parameters for debugging
@@ -111,9 +107,8 @@ private:
 
 	float SpringK(float const springLength) const noexcept;
 	void StaticForces(float const machinePos[3], float F[4]) const noexcept;
-	void flexDistances(float const machinePos[3], float const distanceA,
-	                   float const distanceB, float const distanceC,
-	                   float const distanceD, float flex[HANGPRINTER_AXES]) const noexcept;
+	void flexDistances(float const machinePos[3], float const distances[HANGPRINTER_AXES],
+	                   float flex[HANGPRINTER_AXES]) const noexcept;
 
 #if DUAL_CAN
 	// Some CAN helpers

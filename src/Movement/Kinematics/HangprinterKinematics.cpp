@@ -131,7 +131,7 @@ void HangprinterKinematics::Recalc() noexcept
 	// "line length" == ("line position" + "line length in origin")
 	for (size_t i = 0; i < HANGPRINTER_AXES; ++i)
 	{
-        	distancesOrigin[i] = fastSqrtf(fsquare(anchors[i][0]) + fsquare(anchors[i][1]) + fsquare(anchors[i][2]));
+		distancesOrigin[i] = fastSqrtf(fsquare(anchors[i][0]) + fsquare(anchors[i][1]) + fsquare(anchors[i][2]));
 	}
 
 	//// Line buildup compensation
@@ -162,14 +162,14 @@ void HangprinterKinematics::Recalc() noexcept
 
 	// If no guy wire lengths are configured, assume a default configuration
 	// with all spools stationary located at the D anchor
-	if (guyWireLengths[A_AXIS] < 0.0F or
-	    guyWireLengths[B_AXIS] < 0.0F or
-	    guyWireLengths[C_AXIS] < 0.0F or
-	    guyWireLengths[D_AXIS] < 0.0F) {
-		guyWireLengths[A_AXIS] = hyp3(anchors[A_AXIS], anchors[D_AXIS]);
-		guyWireLengths[B_AXIS] = hyp3(anchors[B_AXIS], anchors[D_AXIS]);
-		guyWireLengths[C_AXIS] = hyp3(anchors[C_AXIS], anchors[D_AXIS]);
-		guyWireLengths[D_AXIS] = 0.0F;
+	if (guyWireLengths[0] < 0.0F or
+	    guyWireLengths[1] < 0.0F or
+	    guyWireLengths[2] < 0.0F or
+	    guyWireLengths[3] < 0.0F) {
+		guyWireLengths[0] = hyp3(anchors[0], anchors[3]);
+		guyWireLengths[1] = hyp3(anchors[1], anchors[3]);
+		guyWireLengths[2] = hyp3(anchors[2], anchors[3]);
+		guyWireLengths[3] = 0.0F;
 	}
 
 	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
@@ -365,65 +365,56 @@ inline float HangprinterKinematics::MotorPosToLinePos(const int32_t motorPos, si
 }
 
 
-void HangprinterKinematics::flexDistances(float const machinePos[3], float const distanceA,
-                                          float const distanceB, float const distanceC,
-                                          float const distanceD, float flex[HANGPRINTER_AXES]) const noexcept {
-	float springKs[HANGPRINTER_AXES] = {
-		SpringK(distanceA * mechanicalAdvantage[A_AXIS] + guyWireLengths[A_AXIS]),
-		SpringK(distanceB * mechanicalAdvantage[B_AXIS] + guyWireLengths[B_AXIS]),
-		SpringK(distanceC * mechanicalAdvantage[C_AXIS] + guyWireLengths[C_AXIS]),
-		SpringK(distanceD * mechanicalAdvantage[D_AXIS] + guyWireLengths[D_AXIS])
-	};
+void HangprinterKinematics::flexDistances(float const machinePos[3], float const distances[HANGPRINTER_AXES],
+                                          float flex[HANGPRINTER_AXES]) const noexcept {
+	float springKs[HANGPRINTER_AXES] = {0.0};
+	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+		springKs[i] = SpringK(distances[i] * mechanicalAdvantage[i] + guyWireLengths[i]);
+	}
 
 	float F[HANGPRINTER_AXES] = {0.0F}; // desired force in each direction
 	StaticForces(machinePos, F);
 
-	float relaxedSpringLengths[HANGPRINTER_AXES] = {
-		distanceA - F[A_AXIS] / (springKs[A_AXIS] * mechanicalAdvantage[A_AXIS]),
-		distanceB - F[B_AXIS] / (springKs[B_AXIS] * mechanicalAdvantage[B_AXIS]),
-		distanceC - F[C_AXIS] / (springKs[C_AXIS] * mechanicalAdvantage[C_AXIS]),
-		distanceD - F[D_AXIS] / (springKs[D_AXIS] * mechanicalAdvantage[D_AXIS])
+	float relaxedSpringLengths[HANGPRINTER_AXES] = {0.0};
+	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+		relaxedSpringLengths[i] = distances[i]- F[i] / (springKs[i] * mechanicalAdvantage[i]);
 	};
 
-	float linePos[HANGPRINTER_AXES] = {
-		relaxedSpringLengths[A_AXIS] - relaxedSpringLengthsOrigin[A_AXIS],
-		relaxedSpringLengths[B_AXIS] - relaxedSpringLengthsOrigin[B_AXIS],
-		relaxedSpringLengths[C_AXIS] - relaxedSpringLengthsOrigin[C_AXIS],
-		relaxedSpringLengths[D_AXIS] - relaxedSpringLengthsOrigin[D_AXIS]
+	float linePos[HANGPRINTER_AXES] = {0.0};
+	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+		relaxedSpringLengths[i] - relaxedSpringLengthsOrigin[i];
 	};
 
-	float distanceDifferences[HANGPRINTER_AXES] = {
-		distanceA - distancesOrigin[A_AXIS],
-		distanceB - distancesOrigin[B_AXIS],
-		distanceC - distancesOrigin[C_AXIS],
-		distanceD - distancesOrigin[D_AXIS]
+	float distanceDifferences[HANGPRINTER_AXES] = {0.0};
+	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+		distanceDifferences[i] = distances[i] - distancesOrigin[i];
 	};
 
-	flex[A_AXIS] = linePos[A_AXIS] - distanceDifferences[A_AXIS];
-	flex[B_AXIS] = linePos[B_AXIS] - distanceDifferences[B_AXIS];
-	flex[C_AXIS] = linePos[C_AXIS] - distanceDifferences[C_AXIS];
-	flex[D_AXIS] = linePos[D_AXIS] - distanceDifferences[D_AXIS];
+	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+		flex[i] = linePos[i] - distanceDifferences[i];
+
+	}
 }
 
 // Convert motor coordinates to machine coordinates.
 // Assumes lines are tight and anchor location norms are followed
 void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
-	float const distanceA = MotorPosToLinePos(motorPos[A_AXIS], A_AXIS) + distancesOrigin[A_AXIS];
-	float const distanceB = MotorPosToLinePos(motorPos[B_AXIS], B_AXIS) + distancesOrigin[B_AXIS];
-	float const distanceC = MotorPosToLinePos(motorPos[C_AXIS], C_AXIS) + distancesOrigin[C_AXIS];
-	float const distanceD = MotorPosToLinePos(motorPos[D_AXIS], D_AXIS) + distancesOrigin[D_AXIS];
-	ForwardTransform(distanceA, distanceB, distanceC, distanceD, machinePos);
+	float const distances[HANGPRINTER_AXES] = {0.0};
+	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+		MotorPosToLinePos(motorPos[i], i) + distancesOrigin[i];
+	};
+	ForwardTransform(distances, machinePos);
 
 	// Now we have an approximate machinePos
 	// Let's correct for line flex
 	float flex[HANGPRINTER_AXES] = { 0.0F };
-	flexDistances(machinePos, distanceA, distanceB, distanceC, distanceD, flex);
-	float const adjustedDistanceA = distanceA - flex[A_AXIS];
-	float const adjustedDistanceB = distanceB - flex[B_AXIS];
-	float const adjustedDistanceC = distanceC - flex[C_AXIS];
-	float const adjustedDistanceD = distanceD - flex[D_AXIS];
-	ForwardTransform(adjustedDistanceA, adjustedDistanceB, adjustedDistanceC, adjustedDistanceD, machinePos);
+	flexDistances(machinePos, distances, flex);
+	float const adjustedDistances[HANGPRINTER_AXES] = {0.0};
+	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+		float const adjustedDistances[i] = distances[i] - flex[i];
+	}
+	ForwardTransform(adjustedDistances, machinePos);
 }
 
 static bool isSameSide(float const v0[3], float const v1[3], float const v2[3], float const v3[3], float const p[3]){
@@ -709,10 +700,14 @@ bool HangprinterKinematics::WriteResumeSettings(FileStore *f) const noexcept
  *
  * Warning: truncation errors will typically be in the order of a few tens of microns.
  */
-void HangprinterKinematics::ForwardTransform(float const a, float const b, float const c, float const d, float machinePos[3]) const noexcept
+void HangprinterKinematics::ForwardTransform(float const distances[HANGPRINTER_AXES], float machinePos[3]) const noexcept
 {
 	// Force the anchor location norms Ax=0, Dx=0, Dy=0
 	// through a series of rotations.
+	static constexpr size_t A_AXIS = 0;
+	static constexpr size_t B_AXIS = 1;
+	static constexpr size_t C_AXIS = 2;
+	static constexpr size_t D_AXIS = 3;
 	float const x_angle = atanf(anchors[D_AXIS][Y_AXIS]/anchors[D_AXIS][Z_AXIS]);
 	float const rxt[3][3] = {{1, 0, 0}, {0, cosf(x_angle), sinf(x_angle)}, {0, -sinf(x_angle), cosf(x_angle)}};
 	float anchors_tmp0[4][3] = { 0 };
@@ -741,10 +736,10 @@ void HangprinterKinematics::ForwardTransform(float const a, float const b, float
 	const float Bsq = fsquare(distancesOrigin[B_AXIS]);
 	const float Csq = fsquare(distancesOrigin[C_AXIS]);
 	const float Dsq = fsquare(distancesOrigin[D_AXIS]);
-	const float aa = fsquare(a);
-	const float dd = fsquare(d);
-	const float k0b = (-fsquare(b) + Bsq - Dsq + dd) / (2.0 * anchors_tmp0[B_AXIS][X_AXIS]) + (anchors_tmp0[B_AXIS][Y_AXIS] / (2.0 * anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[B_AXIS][X_AXIS])) * (Dsq - Asq + aa - dd);
-	const float k0c = (-fsquare(c) + Csq - Dsq + dd) / (2.0 * anchors_tmp0[C_AXIS][X_AXIS]) + (anchors_tmp0[C_AXIS][Y_AXIS] / (2.0 * anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[C_AXIS][X_AXIS])) * (Dsq - Asq + aa - dd);
+	const float aa = fsquare(distances[A_AXIS]);
+	const float dd = fsquare(distances[D_AXIS]);
+	const float k0b = (-fsquare(distances[B_AXIS]) + Bsq - Dsq + dd) / (2.0 * anchors_tmp0[B_AXIS][X_AXIS]) + (anchors_tmp0[B_AXIS][Y_AXIS] / (2.0 * anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[B_AXIS][X_AXIS])) * (Dsq - Asq + aa - dd);
+	const float k0c = (-fsquare(distances[C_AXIS]) + Csq - Dsq + dd) / (2.0 * anchors_tmp0[C_AXIS][X_AXIS]) + (anchors_tmp0[C_AXIS][Y_AXIS] / (2.0 * anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[C_AXIS][X_AXIS])) * (Dsq - Asq + aa - dd);
 	const float k1b = (anchors_tmp0[B_AXIS][Y_AXIS] * (anchors_tmp0[A_AXIS][Z_AXIS] - anchors_tmp0[D_AXIS][Z_AXIS])) / (anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[B_AXIS][X_AXIS]) + (anchors_tmp0[D_AXIS][Z_AXIS] - anchors_tmp0[B_AXIS][Z_AXIS]) / anchors_tmp0[B_AXIS][X_AXIS];
 	const float k1c = (anchors_tmp0[C_AXIS][Y_AXIS] * (anchors_tmp0[A_AXIS][Z_AXIS] - anchors_tmp0[D_AXIS][Z_AXIS])) / (anchors_tmp0[A_AXIS][Y_AXIS] * anchors_tmp0[C_AXIS][X_AXIS]) + (anchors_tmp0[D_AXIS][Z_AXIS] - anchors_tmp0[C_AXIS][Z_AXIS]) / anchors_tmp0[C_AXIS][X_AXIS];
 
@@ -1086,38 +1081,40 @@ float HangprinterKinematics::SpringK(float const springLength) const noexcept {
 	return springKPerUnitLength / springLength;
 }
 
+
 void HangprinterKinematics::StaticForces(float const machinePos[3], float F[4]) const noexcept {
+	static constexpr size_t A_AXIS = 0;
+	static constexpr size_t B_AXIS = 1;
+	static constexpr size_t C_AXIS = 2;
+	static constexpr size_t D_AXIS = 3;
+
 	if (moverWeight_kg > 0.0001) { // mover weight more than one gram
 		// Size of D-force in Newtons
 		float const mg = moverWeight_kg * 9.81;
 		// Unit vector directions toward each anchor from mover
-		float const normA = hyp3(anchors[A_AXIS], machinePos);
-		float const normB = hyp3(anchors[B_AXIS], machinePos);
-		float const normC = hyp3(anchors[C_AXIS], machinePos);
-		float const normD = hyp3(anchors[D_AXIS], machinePos);
-		float ax = (anchors[A_AXIS][0] - machinePos[0])/normA;
-		float ay = (anchors[A_AXIS][1] - machinePos[1])/normA;
-		float az = (anchors[A_AXIS][2] - machinePos[2])/normA;
-		float bx = (anchors[B_AXIS][0] - machinePos[0])/normB;
-		float by = (anchors[B_AXIS][1] - machinePos[1])/normB;
-		float bz = (anchors[B_AXIS][2] - machinePos[2])/normB;
-		float cx = (anchors[C_AXIS][0] - machinePos[0])/normC;
-		float cy = (anchors[C_AXIS][1] - machinePos[1])/normC;
-		float cz = (anchors[C_AXIS][2] - machinePos[2])/normC;
-		float dx = (anchors[D_AXIS][0] - machinePos[0])/normD;
-		float dy = (anchors[D_AXIS][1] - machinePos[1])/normD;
-		float dz = (anchors[D_AXIS][2] - machinePos[2])/normD;
+		float norm[HANGPRINTER_AXES];
+		float a[HANGPRINTER_AXES][3];
+		for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+			norm[i] = hyp3(anchors[i], machinePos);
+			for (int j = 0; j < 3; ++j) {
+				dir[i][j] = (anchors[i][j] - machinePos[j]) / norm[i];
+			}
+		}
 
 		float D_mg = 0.0F;
 		float D_pre = 0.0F;
-		if (dz > 0.0001) {
-			D_mg = mg / dz;
+
+
+		if (dir[D_AXIS][Z_AXIS] > 0.0001) {
+			D_mg = mg / dir[D_AXIS][Z_AXIS];
 			D_pre = targetForce_Newton;
 		}
 		// The D-forces' z-component is always equal to mg + targetForce_Newton.
-		// This means ABC-motors combined pull downwards targetForce_Newton N.
-		// I don't know if that's always solvable.
-		// Still, my tests show that we get very reasonable flex compensation...
+		// The D-forces' z-component is always equal to mg +
+		// targetForce_Newton. This means ABC-motors combined pull
+		// downwards targetForce_Newton N. I don't know if that's always
+		// solvable. Still, my tests show that we get very reasonable
+		// flex compensation...
 
 		// Right hand side of the equation
 		// A + B + C + D + (0,0,-mg)' = 0
@@ -1137,71 +1134,71 @@ void HangprinterKinematics::StaticForces(float const machinePos[3], float F[4]) 
 		// x = B,
 		//     C
 		//
-		// anc y is
+		// and y is
 		//
 		//     -D*dx
 		// y = -D*dy     .
 		//     -D*dz + mg
 		//
-		float const yx_mg = -D_mg*dx;
-		float const yy_mg = -D_mg*dy;
-		float const yz_mg = -D_mg*dz + mg;
-		float const yx_pre = -D_pre*dx;
-		float const yy_pre = -D_pre*dy;
-		float const yz_pre = -D_pre*dz;
+		float yx_mg = -D_mg * dir[D_AXIS][X_AXIS];
+		float yy_mg = -D_mg * dir[D_AXIS][Y_AXIS];
+		float yz_mg = -D_mg * dir[D_AXIS][Z_AXIS] + mg;
+		float yx_pre = -D_pre * dir[D_AXIS][X_AXIS];
+		float yy_pre = -D_pre * dir[D_AXIS][Y_AXIS];
+		float yz_pre = -D_pre * dir[D_AXIS][Z_AXIS];
 
 		// Start with saving us from dividing by zero during Gaussian substitution
 		float constexpr eps = 0.00001;
-		bool const divZero0 = std::abs(ax) < eps;
+		bool const divZero0 = std::abs(dir[0][0]) < eps;
 		if (divZero0) {
-			float const tmpx = bx;
-			float const tmpy = by;
-			float const tmpz = bz;
-			bx = ax;
-			by = ay;
-			bz = az;
-			ax = tmpx;
-			ay = tmpy;
-			az = tmpz;
+			float const tmpx = dir[1][0];
+			float const tmpy = dir[1][1];
+			float const tmpz = dir[1][2];
+			dir[1][0] = dir[0][0];
+			dir[1][1] = dir[0][1];
+			dir[1][2] = dir[0][2];
+			dir[0][0] = tmpx;
+			dir[0][1] = tmpy;
+			dir[0][2] = tmpz;
 		}
-		bool const divZero1 = (std::abs(by - (bx / ax) * ay) < eps);
+		bool const divZero1 = (std::abs(dir[1][1] - (dir[1][0] / dir[0][0]) * dir[0][1]) < eps);
 		if (divZero1) {
-			float const tmpx = cx;
-			float const tmpy = cy;
-			float const tmpz = cz;
-			cx = bx;
-			cy = by;
-			cz = bz;
-			bx = tmpx;
-			by = tmpy;
-			bz = tmpz;
+			float const tmpx = dir[2][0];
+			float const tmpy = dir[2][1];
+			float const tmpz = dir[2][2];
+			dir[2][0] = dir[1][0];
+			dir[2][1] = dir[1][1];
+			dir[2][2] = dir[1][2];
+			dir[1][0] = tmpx;
+			dir[1][1] = tmpy;
+			dir[1][2] = tmpz;
 		}
-		bool const divZero2 = std::abs((cz - (cx / ax) * az) - ((cy - (cx / ax) * ay) / (by - (bx / ax) * ay)) * (bz - (bx / ax) * az)) < eps;
+		bool const divZero2 = std::abs((dir[2][2] - (dir[2][0] / dir[0][0]) * dir[0][2]) - ((dir[2][1] - (dir[2][0] / dir[0][0]) * dir[0][1]) / (dir[1][1] - (dir[1][0] / dir[0][0]) * dir[0][1])) * (dir[1][2] - (dir[1][0] / dir[0][0]) * dir[0][2])) < eps;
 		if (divZero2) {
-			float const tmpx = ax;
-			float const tmpy = ay;
-			float const tmpz = az;
-			ax = cx;
-			ay = cy;
-			az = cz;
-			cx = tmpx;
-			cy = tmpy;
-			cz = tmpz;
+			float const tmpx = dir[0][0];
+			float const tmpy = dir[0][1];
+			float const tmpz = dir[0][2];
+			dir[0][0] = dir[2][0];
+			dir[0][1] = dir[2][1];
+			dir[0][2] = dir[2][2];
+			dir[2][0] = tmpx;
+			dir[2][1] = tmpy;
+			dir[2][2] = tmpz;
 		}
 
 		// Solving the two systems by Gaussian substitution
-		float const q0 = bx / ax;
-		float const q1 = cx / ax;
-		float const q2_mg = yx_mg / ax;
-		float const q2_pre = yx_pre / ax;
-		float const q3 = by - q0 * ay;
-		float const q4 = cy - q1 * ay;
-		float const q5_mg = yy_mg - q2_mg * ay;
-		float const q5_pre = yy_pre - q2_pre * ay;
-		float const q6 = bz - q0 * az;
-		float const q7 = cz - q1 * az;
-		float const q8_mg = yz_mg - q2_mg * az;
-		float const q8_pre = yz_pre - q2_pre * az;
+		float const q0 = dir[1][0] / dir[0][0];
+		float const q1 = dir[2][0] / dir[0][0];
+		float const q2_mg = yx_mg / dir[0][0];
+		float const q2_pre = yx_pre / dir[0][0];
+		float const q3 = dir[1][1] - q0 * dir[0][1];
+		float const q4 = dir[2][1] - q1 * dir[0][1];
+		float const q5_mg = yy_mg - q2_mg * dir[0][1];
+		float const q5_pre = yy_pre - q2_pre * dir[0][1];
+		float const q6 = dir[1][2] - q0 * dir[0][2];
+		float const q7 = dir[2][2] - q1 * dir[0][2];
+		float const q8_mg = yz_mg - q2_mg * dir[0][2];
+		float const q8_pre = yz_pre - q2_pre * dir[0][2];
 		float const q9 = q4 / q3;
 		float const q10_mg = q5_mg / q3;
 		float const q10_pre = q5_pre / q3;
@@ -1255,15 +1252,16 @@ void HangprinterKinematics::StaticForces(float const machinePos[3], float F[4]) 
 		                         min(min(std::abs((maxPlannedForce_Newton[A_AXIS] - A_mg) / A_pre), std::abs((maxPlannedForce_Newton[B_AXIS] - B_mg) / B_pre)),
 		                             min(std::abs((maxPlannedForce_Newton[C_AXIS] - C_mg) / C_pre), std::abs((maxPlannedForce_Newton[D_AXIS] - D_mg) / D_pre))));
 
-		float const A_tot = A_mg + preFac * A_pre;
-		float const B_tot = B_mg + preFac * B_pre;
-		float const C_tot = C_mg + preFac * C_pre;
-		float const D_tot = D_mg + preFac * D_pre;
+		float totalForces[HANGPRINTER_AXES] = {
+			A_mg + preFac * A_pre,
+			B_mg + preFac * B_pre,
+			C_mg + preFac * C_pre,
+			D_mg + preFac * D_pre
+		};
 
-		F[0] = max(A_tot, minPlannedForce_Newton[A_AXIS]);
-		F[1] = max(B_tot, minPlannedForce_Newton[B_AXIS]);
-		F[2] = max(C_tot, minPlannedForce_Newton[C_AXIS]);
-		F[3] = max(D_tot, minPlannedForce_Newton[D_AXIS]);
+		for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+			F[i] = max(totalForces[i], minPlannedForce_Newton[i]);
+		}
 	}
 }
 
