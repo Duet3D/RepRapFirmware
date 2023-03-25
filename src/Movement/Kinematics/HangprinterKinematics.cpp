@@ -14,6 +14,7 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/Move.h>
 #include <CAN/CanInterface.h>
+#include <Math/Matrix.h>
 
 #include <General/Portability.h>
 
@@ -1092,26 +1093,19 @@ void HangprinterKinematics::StaticForces(float const machinePos[3], float F[4]) 
 	static constexpr size_t D_AXIS = 3;
 
 	if (moverWeight_kg > 0.0001) { // mover weight more than one gram
-		// Size of D-force in Newtons
-		float const mg = moverWeight_kg * 9.81;
-		// Unit vector directions toward each anchor from mover
-		float norm[HANGPRINTER_AXES];
-		float dir[HANGPRINTER_AXES][3];
-		for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
+		float norm[HANGPRINTER_AXES]; // Unit vector directions toward each anchor from mover
+		FixedMatrix<float, 3, 5> M;
+		for (size_t i = 0; i < HANGPRINTER_AXES - 1; ++i) {
 			norm[i] = hyp3(anchors[i], machinePos);
 			for (size_t j = 0; j < 3; ++j) {
-				dir[i][j] = (anchors[i][j] - machinePos[j]) / norm[i];
+				M(j, i) = (anchors[i][j] - machinePos[j]) / norm[i];
 			}
 		}
 
+		float const mg = moverWeight_kg * 9.81; // Size of gravity force in Newtons
 		float D_mg = 0.0F;
 		float D_pre = 0.0F;
 
-
-		if (dir[D_AXIS][Z_AXIS] > 0.0001) {
-			D_mg = mg / dir[D_AXIS][Z_AXIS];
-			D_pre = targetForce_Newton;
-		}
 		// The D-forces' z-component is always equal to mg + targetForce_Newton.
 		// The D-forces' z-component is always equal to mg +
 		// targetForce_Newton. This means ABC-motors combined pull
@@ -1142,129 +1136,50 @@ void HangprinterKinematics::StaticForces(float const machinePos[3], float F[4]) 
 		//     -D*dx
 		// y = -D*dy     .
 		//     -D*dz + mg
-		//
-		float yx_mg = -D_mg * dir[D_AXIS][X_AXIS];
-		float yy_mg = -D_mg * dir[D_AXIS][Y_AXIS];
-		float yz_mg = -D_mg * dir[D_AXIS][Z_AXIS] + mg;
-		float yx_pre = -D_pre * dir[D_AXIS][X_AXIS];
-		float yy_pre = -D_pre * dir[D_AXIS][Y_AXIS];
-		float yz_pre = -D_pre * dir[D_AXIS][Z_AXIS];
 
-		// Start with saving us from dividing by zero during Gaussian substitution
-		float constexpr eps = 0.00001;
-		bool const divZero0 = std::abs(dir[0][0]) < eps;
-		if (divZero0) {
-			float const tmpx = dir[1][0];
-			float const tmpy = dir[1][1];
-			float const tmpz = dir[1][2];
-			dir[1][0] = dir[0][0];
-			dir[1][1] = dir[0][1];
-			dir[1][2] = dir[0][2];
-			dir[0][0] = tmpx;
-			dir[0][1] = tmpy;
-			dir[0][2] = tmpz;
-		}
-		bool const divZero1 = (std::abs(dir[1][1] - (dir[1][0] / dir[0][0]) * dir[0][1]) < eps);
-		if (divZero1) {
-			float const tmpx = dir[2][0];
-			float const tmpy = dir[2][1];
-			float const tmpz = dir[2][2];
-			dir[2][0] = dir[1][0];
-			dir[2][1] = dir[1][1];
-			dir[2][2] = dir[1][2];
-			dir[1][0] = tmpx;
-			dir[1][1] = tmpy;
-			dir[1][2] = tmpz;
-		}
-		bool const divZero2 = std::abs((dir[2][2] - (dir[2][0] / dir[0][0]) * dir[0][2]) - ((dir[2][1] - (dir[2][0] / dir[0][0]) * dir[0][1]) / (dir[1][1] - (dir[1][0] / dir[0][0]) * dir[0][1])) * (dir[1][2] - (dir[1][0] / dir[0][0]) * dir[0][2])) < eps;
-		if (divZero2) {
-			float const tmpx = dir[0][0];
-			float const tmpy = dir[0][1];
-			float const tmpz = dir[0][2];
-			dir[0][0] = dir[2][0];
-			dir[0][1] = dir[2][1];
-			dir[0][2] = dir[2][2];
-			dir[2][0] = tmpx;
-			dir[2][1] = tmpy;
-			dir[2][2] = tmpz;
+		float const normD = hyp3(anchors[D_AXIS], machinePos);
+		if (anchors[D_AXIS][Z_AXIS] > machinePos[Z_AXIS]) { // D anchor above machine
+			D_mg = mg / ((anchors[D_AXIS][2] - machinePos[2]) / normD);
+			D_pre = targetForce_Newton;
 		}
 
-		// Solving the two systems by Gaussian substitution
-		float const q0 = dir[1][0] / dir[0][0];
-		float const q1 = dir[2][0] / dir[0][0];
-		float const q2_mg = yx_mg / dir[0][0];
-		float const q2_pre = yx_pre / dir[0][0];
-		float const q3 = dir[1][1] - q0 * dir[0][1];
-		float const q4 = dir[2][1] - q1 * dir[0][1];
-		float const q5_mg = yy_mg - q2_mg * dir[0][1];
-		float const q5_pre = yy_pre - q2_pre * dir[0][1];
-		float const q6 = dir[1][2] - q0 * dir[0][2];
-		float const q7 = dir[2][2] - q1 * dir[0][2];
-		float const q8_mg = yz_mg - q2_mg * dir[0][2];
-		float const q8_pre = yz_pre - q2_pre * dir[0][2];
-		float const q9 = q4 / q3;
-		float const q10_mg = q5_mg / q3;
-		float const q10_pre = q5_pre / q3;
-		float const q11 = q7 - q9 * q6;
-		float const q12_mg = q8_mg - q10_mg * q6;
-		float const q12_pre = q8_pre - q10_pre * q6;
-		float const q13_mg = q12_mg / q11;
-		float const q13_pre = q12_pre / q11;
-		float const q14_mg = q10_mg - q13_mg * q9;
-		float const q14_pre = q10_pre - q13_pre * q9;
-		float const q15_mg = q2_mg - q13_mg * q1;
-		float const q15_pre = q2_pre - q13_pre * q1;
-
-		// Size of the undetermined forces
-		float A_mg = q15_mg - q14_mg * q0;
-		float A_pre = q15_pre - q14_pre * q0;
-		float B_mg = q14_mg;
-		float B_pre = q14_pre;
-		float C_mg = q13_mg;
-		float C_pre = q13_pre;
-
-		if (divZero2) {
-			float const tmp_mg = A_mg;
-			A_mg = C_mg;
-			C_mg = tmp_mg;
-			float const tmp_pre = A_pre;
-			A_pre = C_pre;
-			C_pre = tmp_pre;
+		for (int i = 0; i < 3; ++i) {
+			float const dist = (anchors[D_AXIS][i] - machinePos[i]) / normD;
+			M(i, HANGPRINTER_AXES - 1) = -D_mg * dist;
+			M(i, HANGPRINTER_AXES) = -D_pre * dist;
 		}
-		if (divZero1) {
-			float const tmp_mg = C_mg;
-			C_mg = B_mg;
-			B_mg = tmp_mg;
-			float const tmp_pre = C_pre;
-			C_pre = B_pre;
-			B_pre = tmp_pre;
-		}
-		if (divZero0) {
-			float const tmp_mg = B_mg;
-			B_mg = A_mg;
-			A_mg = tmp_mg;
-			float const tmp_pre = B_pre;
-			B_pre = A_pre;
-			A_pre = tmp_pre;
-		}
+		M(Z_AXIS, D_AXIS) += mg;
 
-		// Assure at least targetForce in the ABC lines (first argument to outer min()),
-		// and that no line get more than max planned force (second argument to outer min()).
-		float const preFac = min(max(std::abs((targetForce_Newton - C_mg) / C_pre),
-		                             max(std::abs((targetForce_Newton - B_mg) / B_pre), std::abs((targetForce_Newton - A_mg) / A_pre))),
-		                         min(min(std::abs((maxPlannedForce_Newton[A_AXIS] - A_mg) / A_pre), std::abs((maxPlannedForce_Newton[B_AXIS] - B_mg) / B_pre)),
-		                             min(std::abs((maxPlannedForce_Newton[C_AXIS] - C_mg) / C_pre), std::abs((maxPlannedForce_Newton[D_AXIS] - D_mg) / D_pre))));
+    // Solve!
+		const bool ok = M.GaussJordan(3, 5);
 
-		float totalForces[HANGPRINTER_AXES] = {
-			A_mg + preFac * A_pre,
-			B_mg + preFac * B_pre,
-			C_mg + preFac * C_pre,
-			D_mg + preFac * D_pre
-		};
+    if (ok) {
+			// Size of the undetermined forces
+			float const A_mg = M(0, 3);
+			float const B_mg = M(1, 3);
+			float const C_mg = M(2, 3);
+			float const A_pre = M(0, 4);
+			float const B_pre = M(1, 4);
+			float const C_pre = M(2, 4);
 
-		for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
-			F[i] = max(totalForces[i], minPlannedForce_Newton[i]);
-		}
+			// Assure at least targetForce in the ABC lines (first argument to outer min()),
+			// and that no line get more than max planned force (second argument to outer min()).
+			float const preFac = min(max(std::abs((targetForce_Newton - C_mg) / C_pre),
+			                             max(std::abs((targetForce_Newton - B_mg) / B_pre), std::abs((targetForce_Newton - A_mg) / A_pre))),
+			                         min(min(std::abs((maxPlannedForce_Newton[A_AXIS] - A_mg) / A_pre), std::abs((maxPlannedForce_Newton[B_AXIS] - B_mg) / B_pre)),
+			                             min(std::abs((maxPlannedForce_Newton[C_AXIS] - C_mg) / C_pre), std::abs((maxPlannedForce_Newton[D_AXIS] - D_mg) / D_pre))));
+
+			float totalForces[HANGPRINTER_AXES] = {
+				A_mg + preFac * A_pre,
+				B_mg + preFac * B_pre,
+				C_mg + preFac * C_pre,
+				D_mg + preFac * D_pre
+			};
+
+			for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
+				F[i] = max(totalForces[i], minPlannedForce_Newton[i]);
+			}
+    }
 	}
 }
 
