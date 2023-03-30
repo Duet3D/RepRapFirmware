@@ -344,8 +344,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (ms.currentTool != nullptr)				// 2020-04-29: run tfree file even if not all axes have been homed
 			{
 				String<StringLength20> scratchString;
-				scratchString.printf("tfree%d.g", ms.currentTool->Number());
-				DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);		// don't pass the T code here because it may be negative
+				scratchString.printf(TFREE "%d.g", ms.currentTool->Number());
+				if (!DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode))		// don't pass the T code here because it may be negative
+				{
+					DoFileMacro(gb, TFREE ".g", false, ToolChangeMacroCode);
+				}
 			}
 		}
 		break;
@@ -404,8 +407,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				if ((ms.toolChangeParam & TPreBit) != 0)	// 2020-04-29: run tpre file even if not all axes have been homed
 				{
 					String<StringLength20> scratchString;
-					scratchString.printf("tpre%d.g", ms.newToolNumber);
-					DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);
+					scratchString.printf(TPRE "%d.g", ms.newToolNumber);
+					if (!DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode))
+					{
+						DoFileMacro(gb, TPRE ".g", false, ToolChangeMacroCode);
+					}
 				}
 			}
 		}
@@ -422,8 +428,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (ms.currentTool != nullptr && (ms.toolChangeParam & TPostBit) != 0)	// 2020-04-29: run tpost file even if not all axes have been homed
 			{
 				String<StringLength20> scratchString;
-				scratchString.printf("tpost%d.g", ms.newToolNumber);
-				DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode);
+				scratchString.printf(TPOST "%d.g", ms.newToolNumber);
+				if (!DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode))
+				{
+					DoFileMacro(gb, TPOST ".g", false, ToolChangeMacroCode);
+				}
 			}
 		}
 		break;
