@@ -1117,6 +1117,18 @@ void HttpResponder::ProcessRequest() noexcept
 		return;
 	}
 
+	// Check the case of absolute URIs in case the request came through a proxy
+	if (StringStartsWith(commandWords[1], "http://"))
+	{
+		const char *relativePath = strchr(commandWords[1] + 7, '/');
+		if (relativePath == nullptr)
+		{
+			RejectMessage("invalid absolute URI");
+			return;
+		}
+		commandWords[1] = relativePath;
+	}
+
 	// Reserve an output buffer before we process the request, or we won't be able to reply
 	if (outBuf != nullptr || OutputBuffer::Allocate(outBuf))
 	{
