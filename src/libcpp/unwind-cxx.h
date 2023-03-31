@@ -1,5 +1,5 @@
 // -*- C++ -*- Exception handling and frame unwind runtime interface routines.
-// Copyright (C) 2001-2020 Free Software Foundation, Inc.
+// Copyright (C) 2001-2023 Free Software Foundation, Inc.
 //
 // This file is part of GCC.
 //
@@ -24,8 +24,6 @@
 
 // This is derived from the C++ ABI for IA-64.  Where we diverge
 // for cross-architecture compatibility are noted with "@@@".
-
-// DC, 2020-01-11: this is a copy of the original, modified so as not to keep an emergency buffer pool, to reduce RAM usage.
 
 #ifndef _UNWIND_CXX_H
 #define _UNWIND_CXX_H 1
@@ -69,7 +67,7 @@ struct __cxa_exception
 
   // The C++ standard has entertaining rules wrt calling set_terminate
   // and set_unexpected in the middle of the exception cleanup process.
-  std::unexpected_handler unexpectedHandler;
+  std::terminate_handler unexpectedHandler;
   std::terminate_handler terminateHandler;
 
   // The caught exception stack threads through here.
@@ -123,7 +121,7 @@ struct __cxa_dependent_exception
 
   // The C++ standard has entertaining rules wrt calling set_terminate
   // and set_unexpected in the middle of the exception cleanup process.
-  std::unexpected_handler unexpectedHandler;
+  std::terminate_handler unexpectedHandler;
   std::terminate_handler terminateHandler;
 
   // The caught exception stack threads through here.
@@ -191,14 +189,14 @@ extern "C" void __cxa_tm_cleanup (void *, void *, unsigned int) throw();
 
 // Invokes given handler, dying appropriately if the user handler was
 // so inconsiderate as to return.
-extern void __terminate(std::terminate_handler) throw ()
+extern void __terminate(std::terminate_handler) throw () 
   __attribute__((__noreturn__));
-extern void __unexpected(std::unexpected_handler)
+extern void __unexpected(std::terminate_handler)
   __attribute__((__noreturn__));
 
 // The current installed user handlers.
 extern std::terminate_handler __terminate_handler;
-extern std::unexpected_handler __unexpected_handler;
+extern std::terminate_handler __unexpected_handler;
 
 // These are explicitly GNU C++ specific.
 
@@ -320,7 +318,7 @@ __gxx_caught_object(_Unwind_Exception* eo)
 #else // !__ARM_EABI_UNWINDER__
 // This is the primary exception class we report -- "GNUCC++\0".
 const _Unwind_Exception_Class __gxx_primary_exception_class
-= ((((((((_Unwind_Exception_Class) 'G'
+= ((((((((_Unwind_Exception_Class) 'G' 
 	 << 8 | (_Unwind_Exception_Class) 'N')
 	<< 8 | (_Unwind_Exception_Class) 'U')
        << 8 | (_Unwind_Exception_Class) 'C')
@@ -332,7 +330,7 @@ const _Unwind_Exception_Class __gxx_primary_exception_class
 // This is the dependent (from std::rethrow_exception) exception class we report
 // "GNUCC++\x01"
 const _Unwind_Exception_Class __gxx_dependent_exception_class
-= ((((((((_Unwind_Exception_Class) 'G'
+= ((((((((_Unwind_Exception_Class) 'G' 
 	 << 8 | (_Unwind_Exception_Class) 'N')
 	<< 8 | (_Unwind_Exception_Class) 'U')
        << 8 | (_Unwind_Exception_Class) 'C')
