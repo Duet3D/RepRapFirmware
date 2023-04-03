@@ -1329,6 +1329,22 @@ void Move::LaserTaskRun() noexcept
 
 #if SUPPORT_ASYNC_MOVES
 
+// Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
+// Returns the number of motor steps moved since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
+int32_t Move::GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept
+{
+	size_t ringNumber = 0;
+	for (size_t i = 0; i < NumMovementSystems; ++i)
+	{
+		if (reprap.GetGCodes().GetMovementState(i).GetAxesAndExtrudersOwned().IsBitSet(drive))
+		{
+			ringNumber = i;
+			break;
+		}
+	}
+	return rings[ringNumber].GetAccumulatedMovement(drive, isPrinting);
+}
+
 // Get and lock the aux move buffer. If successful, return a pointer to the buffer.
 // The caller must not attempt to lock the aux buffer more than once, and must call ReleaseAuxMove to release the buffer.
 AsyncMove *Move::LockAuxMove() noexcept

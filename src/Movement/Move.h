@@ -368,12 +368,16 @@ inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept
 	return (extruder < MaxExtruders) ? extruderShapers[extruder].GetKclocks() : 0.0;
 }
 
+#if !SUPPORT_ASYNC_MOVES
+
 // Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
-// Returns the number of motor steps moves since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
+// Returns the number of motor steps moved since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
 inline int32_t Move::GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept
 {
 	return rings[0].GetAccumulatedMovement(drive, isPrinting);
 }
+
+#endif
 
 #if HAS_SMART_DRIVERS
 
