@@ -20,8 +20,6 @@
 # undef exists
 #endif
 
-constexpr size_t MaxStringExpressionLength = StringLength100;
-
 namespace StackUsage
 {
 	// The following values are the number of bytes of stack space needed by the corresponding functions and functions they call,
