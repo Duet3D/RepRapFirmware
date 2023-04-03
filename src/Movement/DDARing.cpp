@@ -571,7 +571,7 @@ void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 	}
 }
 
-// This is called from the step ISR when the current move has been completed
+// This is called from the step ISR when the current move has been completed. It may also be called from other places.
 void DDARing::CurrentMoveCompleted() noexcept
 {
 	DDA * const cdda = currentDda;					// capture volatile variable
@@ -619,9 +619,9 @@ bool DDARing::SetWaitingToEmpty() noexcept
 // Get the number of steps taken by an extruder drive since the last time we called this function for that drive
 int32_t DDARing::GetAccumulatedMovement(size_t drive, bool& isPrinting) noexcept
 {
-	AtomicCriticalSectionLocker lock;
-	const int32_t ret = movementAccumulators[drive];
+	AtomicCriticalSectionLocker lock;							// we don't want a move to complete and the ISR update the movement accumulators while we are doing this
 	const DDA * const cdda = currentDda;						// capture volatile variable
+	const int32_t ret = movementAccumulators[drive];
 	const int32_t adjustment = (cdda == nullptr) ? 0 : cdda->GetStepsTaken(drive);
 	movementAccumulators[drive] = -adjustment;
 	isPrinting = extrudersPrinting;

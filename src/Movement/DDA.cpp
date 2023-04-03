@@ -1428,9 +1428,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 							}
 							else
 							{
-								pdm->state = DMState::idle;
-								pdm->nextDM = completedDMs;
-								completedDMs = pdm;
+								DriveMovement::Release(pdm);
 							}
 						}
 					}
@@ -1531,9 +1529,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 						}
 						else
 						{
-							pdm->state = DMState::idle;
-							pdm->nextDM = completedDMs;
-							completedDMs = pdm;
+							DriveMovement::Release(pdm);
 						}
 					}
 
@@ -2286,7 +2282,8 @@ void DDA::UpdateMovementAccumulators(volatile int32_t *accumulators) const noexc
 {
 	// To identify all the extruder movement, we can either loop through extruder numbers and search both DM lists for a DM for that drive,
 	// or we can iterate through both DM lists, checking whether the drive it is for is an extruder.
-#if 1
+	// It's probably quicker to iterate through DMs.
+	//
 	// Loop through DMs, checking whether each associated drive is an extruder and updating the movement accumulator if so.
 	// We could omit the check that the drive is an accumulator so that we update all accumulators, but we would still need to check for leadscrew adjustment moves.
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
@@ -2316,15 +2313,6 @@ void DDA::UpdateMovementAccumulators(volatile int32_t *accumulators) const noexc
 			dm = dm->nextDM;
 		}
 	}
-#else
-	// Loop through extruders
-	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
-	for (size_t extruder = 0; extruder < numExtruders; ++extruder)
-	{
-		const size_t drv = ExtruderToLogicalDrive(extruder);
-		accumulators[drv] += GetStepsTaken(drv);
-	}
-#endif
 }
 
 float DDA::GetTotalExtrusionRate() const noexcept

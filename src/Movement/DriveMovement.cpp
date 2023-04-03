@@ -536,7 +536,10 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			currentSegment = currentSegment->GetNext();
 			if (isExtruder)
 			{
-				nextStep -= 2 * (segmentStepLimit - reverseStartStep);	// set nextStep to the net steps taken (this may make nextStep negative)
+				{
+					AtomicCriticalSectionLocker lock;													// avoid a race with GetNetStepsTaken called by filament monitor code
+					reverseStartStep = nextStep = nextStep - 2 * (segmentStepLimit - reverseStartStep);	// set nextStep to the net steps taken (this may make nextStep negative)
+				}
 				if (!NewExtruderSegment())
 				{
 					if (dda.flags.isPrintingMove)
