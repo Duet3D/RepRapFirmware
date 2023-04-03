@@ -590,6 +590,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		}
 
 		msg->isPrinting = reprap.GetGCodes().IsReallyPrinting();
+		msg->zero = 0;
 
 		// Send the real time just once a second
 		const uint32_t realTime = (uint32_t)reprap.GetPlatform().GetDateTime();
