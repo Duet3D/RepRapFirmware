@@ -177,13 +177,13 @@ inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
 inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 {
 	int32_t netStepsTaken;
-	if (nextStep <= reverseStartStep)												// if no reverse phase, or not started it yet
+	if (directionReversed)															// if started reverse phase
 	{
-		netStepsTaken =  nextStep - 1;
+		netStepsTaken = nextStep - (2 * reverseStartStep) + 1;						// allowing for direction having changed
 	}
 	else
 	{
-		netStepsTaken = nextStep - (2 * reverseStartStep) + 1;						// allowing for direction having changed
+		netStepsTaken = nextStep - 1;
 	}
 	return (direction) ? netStepsTaken : -netStepsTaken;
 }

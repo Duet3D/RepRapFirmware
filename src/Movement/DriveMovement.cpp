@@ -162,7 +162,7 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 		if (nextStep == reverseStartStep)
 		{
 			direction = false;					// we must have been going up, so now we are going down
-			directionChanged = true;
+			directionChanged = directionReversed = true;
 		}
 
 		if (currentSegment->GetNext() == nullptr)
@@ -537,8 +537,9 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			if (isExtruder)
 			{
 				{
-					AtomicCriticalSectionLocker lock;													// avoid a race with GetNetStepsTaken called by filament monitor code
-					reverseStartStep = nextStep = nextStep - 2 * (segmentStepLimit - reverseStartStep);	// set nextStep to the net steps taken (this may make nextStep negative)
+					AtomicCriticalSectionLocker lock;										// avoid a race with GetNetStepsTaken called by filament monitor code
+					nextStep = nextStep - 2 * (segmentStepLimit - reverseStartStep);		// set nextStep to the net steps taken in the original direction (this may make nextStep negative)
+					CheckDirection(false);													// so that GetNetStepsTaken returns the correct value
 				}
 				if (!NewExtruderSegment())
 				{
@@ -631,8 +632,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			break;
 		}
 
-		direction = false;
-		directionChanged = directionReversed = true;
+		CheckDirection(true);
 		state = DMState::cartDecelReverse;
 		// no break
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.
@@ -650,7 +650,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		if (nextStep == reverseStartStep)
 		{
 			direction = false;
-			directionChanged = true;
+			directionChanged = directionReversed = true;
 			state = DMState::deltaNormal;
 		}
 		// no break

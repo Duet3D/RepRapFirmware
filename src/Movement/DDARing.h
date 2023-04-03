@@ -154,8 +154,8 @@ pre(getPointer->GetState() == DDA::frozen)
 	}
 	else if (!extrudersPrinting)
 	{
-		extrudersPrinting = true;
 		extrudersPrintingSince = millis();
+		extrudersPrinting = true;
 	}
 	currentDda = cdda;
 	cdda->Start(p, startTime);
