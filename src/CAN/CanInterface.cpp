@@ -203,6 +203,52 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept;
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept;
 
+// Status LED handling
+
+#if SUPPORT_MULTICAST_DISCOVERY
+
+// The STATUS LED is also used to identify one board among several visible to the user
+static volatile uint32_t identInitialClocks = 0;		// when we started identifying
+static volatile uint32_t identTotalClocks = 0;			// how many step clocks to identify for, zero means until cancelled
+static volatile bool identifying = false;
+
+void CanInterface::SetStatusLedIdentify(uint32_t seconds) noexcept
+{
+	identTotalClocks = seconds * StepClockRate;
+	identInitialClocks = StepTimer::GetTimerTicks();
+	identifying = true;
+}
+
+void CanInterface::SetStatusLedNormal() noexcept
+{
+	identifying = false;
+}
+
+#endif
+
+// This is called only from the CAN clock loop, so inline
+static inline void UpdateLed(uint32_t stepClocks) noexcept
+{
+#if SUPPORT_MULTICAST_DISCOVERY
+	if (identifying)
+	{
+		if (identTotalClocks != 0 && stepClocks - identInitialClocks >= identTotalClocks)
+		{
+			identifying = 0;							// stop identifying
+		}
+		else
+		{
+			// Blink the LED fast. This function gets called every 200ms, so that's the fastest we can blink it without having another task do it.
+			reprap.GetPlatform().InvertDiagLed();
+			return;
+		}
+	}
+#endif
+
+	// Blink the LED at about 1Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
+	reprap.GetPlatform().SetDiagLed((stepClocks & (1u << 19)) != 0);
+}
+
 static void InitReceiveFilters() noexcept
 {
 	// Set up a filter to receive all request messages addressed to us in FIFO 0
@@ -347,7 +393,7 @@ void CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 		memcpy(msg->uniqueId, reprap.GetPlatform().GetUniqueId().GetRaw(), sizeof(msg->uniqueId));
 		// Note, board type name, firmware version, firmware date and firmware time are limited to 43 characters in the new
 		// We use vertical-bar to separate the three fields: board type, firmware version, date/time
-		SafeSnprintf(msg->boardTypeAndFirmwareVersion, ARRAY_SIZE(msg->boardTypeAndFirmwareVersion), "%s|%s|%s%.6s", BOARD_SHORT_NAME, VERSION, IsoDate, TIME_SUFFIX);
+		SafeSnprintf(msg->boardTypeAndFirmwareVersion, ARRAY_SIZE(msg->boardTypeAndFirmwareVersion), "%s|%s|%s%.6s", BOARD_SHORT_NAME, VERSION, DATE, TIME_SUFFIX);
 		buf->dataLength = msg->GetActualDataLength();
 		SendMessageNoReplyNoFree(buf);
 	}
@@ -570,8 +616,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		SendCanMessage(TxBufferIndexTimeSync, 0, &buf);
 		++timeSyncMessagesSent;
 
-		// Blink the LED at about 2Hz. Duet 3 expansion boards will blink in sync when they have established clock sync with us.
-		digitalWrite(DiagPin, XNor(DiagOnPolarity, lastTimeSent & (1u << 19)) != 0);
+		UpdateLed(lastTimeSent);
 
 		// Delay until it is time again
 		vTaskDelayUntil(&lastWakeTime, CanClockIntervalMillis);
@@ -798,12 +843,12 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 				// We received an unexpected message. Don't tack it on to 'reply' because some replies contain important data, e.g. request for board short name.
 				if (buf->id.MsgType() == CanMessageType::standardReply)
 				{
-					reprap.GetPlatform().MessageF(WarningMessage, "Discarded std reply src=%u RID=%u exp %u \"%s\"\n",
-													buf->id.Src(), (unsigned int)buf->msg.standardReply.requestId, rid, buf->msg.standardReply.text);
+					reprap.GetPlatform().MessageF(WarningMessage, "Discarded std reply src=%u RID=%u exp=%u \"%.*s\"\n",
+													buf->id.Src(), (unsigned int)buf->msg.standardReply.requestId, rid, buf->msg.standardReply.GetTextLength(buf->dataLength), buf->msg.standardReply.text);
 				}
 				else
 				{
-					reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp %u\n",
+					reprap.GetPlatform().MessageF(WarningMessage, "Discarded msg src=%u typ=%u RID=%u exp=%u\n",
 													buf->id.Src(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->msg.standardReply.requestId, rid);
 				}
 			}
@@ -1128,10 +1173,10 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 	if (type == (uint16_t)DiagnosticTestType::AccessMemory)
 	{
 		gb.MustSee('A');
-		msg->param32[0] = gb.GetUIValue();
+		msg->param32[0] = (uint32_t)gb.GetIValue();			// allow negative values so that we can read high memory addresses
 		if (gb.Seen('V'))
 		{
-			msg->param32[1] = gb.GetUIValue();
+			msg->param32[1] = (uint32_t)gb.GetIValue();		// allow negative values so that we set high values
 			msg->param16 = 1;
 		}
 		else
@@ -1139,7 +1184,7 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 			msg->param16 = 0;
 		}
 	}
-	return SendRequestAndGetStandardReply(buf, rid, reply);			// we may not actually get a reply if the test is one that crashes the expansion board
+	return SendRequestAndGetStandardReply(buf, rid, reply);	// we may not actually get a reply if the test is one that crashes the expansion board
 }
 
 GCodeResult CanInterface::RemoteM408(uint32_t boardAddress, unsigned int type, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
@@ -1334,7 +1379,10 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	// Get the address of the board whose parameters we are changing
 	gb.MustSee('B');
 	const uint32_t oldAddress = gb.GetUIValue();
-	CheckCanAddress(oldAddress, gb);
+	if (oldAddress != 0)							// we must allow address 0 but CheckCanAddress doesn't allow it
+	{
+		CheckCanAddress(oldAddress, gb);
+	}
 
 	// Get the new timing details, if provided
 	CanTiming timing;
@@ -1490,15 +1538,14 @@ GCodeResult CanInterface::StartClosedLoopDataCollection(DriverId device, uint16_
 }
 
 #if DUAL_CAN
+
 CanId CanInterface::ODrive::ArbitrationId(DriverId const driver, uint8_t const cmd) noexcept {
 	const auto arbitration_id = (driver.boardAddress << 5) + cmd;
 	CanId canId;
 	canId.SetReceivedId(arbitration_id);
 	return canId;
 }
-#endif
 
-#if DUAL_CAN
 CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const driver, const StringRef& reply) noexcept
 {
 	// Detect any early return conditions
@@ -1523,17 +1570,12 @@ CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const dri
 
 	return buf;
 }
-#endif
 
-#if DUAL_CAN
 void CanInterface::ODrive::FlushCanReceiveHardware() noexcept
 {
 	while (CanInterface::ReceivePlainMessage(nullptr, 0)) { }
 }
-#endif
 
-
-#if DUAL_CAN
 bool CanInterface::ODrive::GetExpectedSimpleMessage(CanMessageBuffer *buf, DriverId const driver, uint8_t const cmd, const StringRef& reply) noexcept
 {
 	CanId const expectedId = ArbitrationId(driver, cmd);
@@ -1554,7 +1596,7 @@ bool CanInterface::ODrive::GetExpectedSimpleMessage(CanMessageBuffer *buf, Drive
 
 	return ok;
 }
-#endif
+#endif	// DUAL_CAN
 
 #endif
 

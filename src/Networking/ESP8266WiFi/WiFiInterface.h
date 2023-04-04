@@ -32,6 +32,18 @@ private:
 	uint32_t padding;
 };
 
+struct MessageBufferOut
+{
+	MessageHeaderSamToEsp hdr;
+	uint8_t data[MaxDataLength];	// data to send
+};
+
+struct alignas(16) MessageBufferIn
+{
+	MessageHeaderEspToSam hdr;
+	uint8_t data[MaxDataLength];	// data to send
+};
+
 // The main network class that drives the network.
 class WiFiInterface : public NetworkInterface
 {
@@ -58,7 +70,11 @@ public:
 	bool IsWiFiInterface() const noexcept override { return true; }
 
 	void UpdateHostname(const char *hostname) noexcept override;
+
 	IPAddress GetIPAddress() const noexcept override { return ipAddress; }
+	IPAddress GetNetmask() const noexcept override { return netmask; }
+	IPAddress GetGateway() const noexcept override { return gateway; }
+	bool UsingDhcp() const noexcept override { return usingDhcp; }
 	void SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress p_gateway) noexcept override;
 	GCodeResult SetMacAddress(const MacAddress& mac, const StringRef& reply) noexcept override;
 	const MacAddress& GetMacAddress() const noexcept override { return macAddress; }
@@ -116,18 +132,8 @@ private:
 
 	Platform& platform;
 	uint32_t lastTickMillis;
-
-	struct MessageBufferOut
-	{
-		MessageHeaderSamToEsp hdr;
-		uint8_t data[MaxDataLength];	// data to send
-	};
-
-	struct alignas(16) MessageBufferIn
-	{
-		MessageHeaderEspToSam hdr;
-		uint8_t data[MaxDataLength];	// data to send
-	};
+	bool lastDataReadyPinState;
+	uint8_t risingEdges;
 
 	MessageBufferOut *bufferOut;
 	MessageBufferIn *bufferIn;
@@ -138,7 +144,7 @@ private:
 	WiFiSocket *sockets[NumWiFiTcpSockets];
 	size_t currentSocket;
 
-	TcpPort portNumbers[NumProtocols];					// port number used for each protocol
+	TcpPort portNumbers[NumProtocols];				// port number used for each protocol
 	TcpPort ftpDataPort;
 	bool closeDataPort;
 	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
@@ -158,11 +164,13 @@ private:
 	unsigned int spiTxUnderruns;
 	unsigned int spiRxOverruns;
 	unsigned int reconnectCount;
-	unsigned int transferAlreadyPendingCount;
-	unsigned int readyTimeoutCount;
-	unsigned int responseTimeoutCount;
+	unsigned int transferAlreadyPendingCount = 0;
+	unsigned int readyTimeoutCount = 0;
+	unsigned int responseTimeoutCount = 0;
 
 	char wiFiServerVersion[16];
+
+	bool usingDhcp = true;
 
 	// For processing debug messages from the WiFi module
 	bool serialRunning;

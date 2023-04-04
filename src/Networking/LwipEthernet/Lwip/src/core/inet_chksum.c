@@ -257,15 +257,15 @@ lwip_standard_chksum(const void *dataptr, int len)
 
 /** Parts of the pseudo checksum which are common to IPv4 and IPv6 */
 static u16_t
-inet_cksum_pseudo_base(struct pbuf *p, u8_t proto, u16_t proto_len, u32_t acc)
+inet_cksum_pseudo_base(const struct pbuf *p, u8_t proto, u16_t proto_len, u32_t acc)
 {
-  struct pbuf *q;
+  const struct pbuf *q;
   int swapped = 0;
 
   /* iterate through all pbuf in chain */
   for (q = p; q != NULL; q = q->next) {
     LWIP_DEBUGF(INET_DEBUG, ("inet_chksum_pseudo(): checksumming pbuf %p (has next %p) \n",
-                             (void *)q, (void *)q->next));
+                             (const void *)q, (const void *)q->next));
     acc += LWIP_CHKSUM(q->payload, q->len);
     /*LWIP_DEBUGF(INET_DEBUG, ("inet_chksum_pseudo(): unwrapped lwip_chksum()=%"X32_F" \n", acc));*/
     /* just executing this next line is probably faster that the if statement needed
@@ -307,7 +307,7 @@ inet_cksum_pseudo_base(struct pbuf *p, u8_t proto, u16_t proto_len, u32_t acc)
  * @return checksum (as u16_t) to be saved directly in the protocol header
  */
 u16_t
-inet_chksum_pseudo(struct pbuf *p, u8_t proto, u16_t proto_len,
+inet_chksum_pseudo(const struct pbuf *p, u8_t proto, u16_t proto_len,
                    const ip4_addr_t *src, const ip4_addr_t *dest)
 {
   u32_t acc;
@@ -340,7 +340,7 @@ inet_chksum_pseudo(struct pbuf *p, u8_t proto, u16_t proto_len,
  * @return checksum (as u16_t) to be saved directly in the protocol header
  */
 u16_t
-ip6_chksum_pseudo(struct pbuf *p, u8_t proto, u16_t proto_len,
+ip6_chksum_pseudo(const struct pbuf *p, u8_t proto, u16_t proto_len,
                   const ip6_addr_t *src, const ip6_addr_t *dest)
 {
   u32_t acc = 0;
@@ -376,7 +376,7 @@ ip6_chksum_pseudo(struct pbuf *p, u8_t proto, u16_t proto_len,
  * @return checksum (as u16_t) to be saved directly in the protocol header
  */
 u16_t
-ip_chksum_pseudo(struct pbuf *p, u8_t proto, u16_t proto_len,
+ip_chksum_pseudo(const struct pbuf *p, u8_t proto, u16_t proto_len,
                  const ip_addr_t *src, const ip_addr_t *dest)
 {
 #if LWIP_IPV6
@@ -396,17 +396,17 @@ ip_chksum_pseudo(struct pbuf *p, u8_t proto, u16_t proto_len,
 
 /** Parts of the pseudo checksum which are common to IPv4 and IPv6 */
 static u16_t
-inet_cksum_pseudo_partial_base(struct pbuf *p, u8_t proto, u16_t proto_len,
+inet_cksum_pseudo_partial_base(const struct pbuf *p, u8_t proto, u16_t proto_len,
                                u16_t chksum_len, u32_t acc)
 {
-  struct pbuf *q;
+  const struct pbuf *q;
   int swapped = 0;
   u16_t chklen;
 
   /* iterate through all pbuf in chain */
   for (q = p; (q != NULL) && (chksum_len > 0); q = q->next) {
     LWIP_DEBUGF(INET_DEBUG, ("inet_chksum_pseudo(): checksumming pbuf %p (has next %p) \n",
-                             (void *)q, (void *)q->next));
+                             (const void *)q, (const void *)q->next));
     chklen = q->len;
     if (chklen > chksum_len) {
       chklen = chksum_len;
@@ -453,7 +453,7 @@ inet_cksum_pseudo_partial_base(struct pbuf *p, u8_t proto, u16_t proto_len,
  * @return checksum (as u16_t) to be saved directly in the protocol header
  */
 u16_t
-inet_chksum_pseudo_partial(struct pbuf *p, u8_t proto, u16_t proto_len,
+inet_chksum_pseudo_partial(const struct pbuf *p, u8_t proto, u16_t proto_len,
                            u16_t chksum_len, const ip4_addr_t *src, const ip4_addr_t *dest)
 {
   u32_t acc;
@@ -488,7 +488,7 @@ inet_chksum_pseudo_partial(struct pbuf *p, u8_t proto, u16_t proto_len,
  * @return checksum (as u16_t) to be saved directly in the protocol header
  */
 u16_t
-ip6_chksum_pseudo_partial(struct pbuf *p, u8_t proto, u16_t proto_len,
+ip6_chksum_pseudo_partial(const struct pbuf *p, u8_t proto, u16_t proto_len,
                           u16_t chksum_len, const ip6_addr_t *src, const ip6_addr_t *dest)
 {
   u32_t acc = 0;
@@ -523,7 +523,7 @@ ip6_chksum_pseudo_partial(struct pbuf *p, u8_t proto, u16_t proto_len,
  * @return checksum (as u16_t) to be saved directly in the protocol header
  */
 u16_t
-ip_chksum_pseudo_partial(struct pbuf *p, u8_t proto, u16_t proto_len,
+ip_chksum_pseudo_partial(const struct pbuf *p, u8_t proto, u16_t proto_len,
                          u16_t chksum_len, const ip_addr_t *src, const ip_addr_t *dest)
 {
 #if LWIP_IPV6
@@ -565,10 +565,10 @@ inet_chksum(const void *dataptr, u16_t len)
  * @return checksum (as u16_t) to be saved directly in the protocol header
  */
 u16_t
-inet_chksum_pbuf(struct pbuf *p)
+inet_chksum_pbuf(const struct pbuf *p)
 {
   u32_t acc;
-  struct pbuf *q;
+  const struct pbuf *q;
   int swapped = 0;
 
   acc = 0;

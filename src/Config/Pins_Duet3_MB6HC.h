@@ -11,15 +11,22 @@
 
 #define IAP_UPDATE_FILE			"Duet3_SDiap32_" BOARD_SHORT_NAME ".bin"
 #define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap32_" BOARD_SHORT_NAME ".bin"
+#define IAP_CAN_LOADER_FILE		"Duet3_CANiap32_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 
-// Features definition
-#define HAS_LWIP_NETWORKING		1
-#define HAS_WIFI_NETWORKING		0
-#define HAS_SBC_INTERFACE		1
+#define WIFI_FIRMWARE_FILE		"DuetWiFiModule_32S3.bin"
 
+// Features definition
+// Networking support
+#define HAS_LWIP_NETWORKING		1
+#define HAS_WIFI_NETWORKING		1
+#define WIFI_USES_ESP32			1
+
+// Storage support
+#define HAS_SBC_INTERFACE		1
 #define HAS_MASS_STORAGE		1
 #define HAS_HIGH_SPEED_SD		1
+
 #define HAS_CPU_TEMP_SENSOR		1
 
 #define SUPPORT_TMC51xx			1
@@ -45,6 +52,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
+#define SUPPORT_MULTICAST_DISCOVERY	1
 #define SUPPORT_ASYNC_MOVES		1
 #define ALLOCATE_DEFAULT_PORTS	0
 #define TRACK_OBJECT_NAMES		1
@@ -143,20 +151,32 @@ constexpr Pin SpiTempSensorCsPins[] = { PortAPin(5), PortAPin(6), PortDPin(20), 
 // Analogue pin numbers
 constexpr Pin PowerMonitorVinDetectPin = PortAPin(20);
 constexpr Pin PowerMonitorV12DetectPin = PortEPin(4);
-constexpr float PowerMonitorVoltageRange = (60.4 + 4.7)/4.7 * 3.3;			// voltage divider ratio times the reference voltage
+constexpr float PowerMonitorVoltageRange_v102 = (100.0 + 5.1)/5.1 * 3.3;	// voltage divider ratio times the reference voltage
+constexpr float PowerMonitorVoltageRange_v101 = (60.4 + 4.7)/4.7 * 3.3;		// voltage divider ratio times the reference voltage
 constexpr float V12MonitorVoltageRange = (60.4 + 4.7)/4.7 * 3.3;			// voltage divider ratio times the reference voltage
 
 // Digital pin number to turn the IR LED on (high) or off (low), also controls the DIAG LED
-constexpr Pin DiagPin = PortCPin(20);
-constexpr bool DiagOnPolarity = true;
-constexpr Pin ActLedPin = NoPin;
+constexpr Pin DiagPinPre102 = PortCPin(20);
+constexpr bool DiagOnPolarityPre102 = true;
+constexpr Pin ActLedPinPre102 = NoPin;
+
+constexpr Pin DiagPin102 = PortBPin(6);
+constexpr bool DiagOnPolarity102 = false;
+constexpr Pin ActLedPin102 = PortBPin(7);
 constexpr bool ActOnPolarity = false;
 
+// MB6HC 1.02 USB control
+constexpr Pin UsbPowerSwitchPin = PortCPin(6);
+constexpr Pin UsbModePin = PortCPin(20);
+constexpr Pin UsbDetectPin = PortCPin(19);
+
 // SD cards
-constexpr size_t NumSdCards = 2;											// we now allow one SPI-connected SD card to be configured at boot time
-constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(29), NoPin };		// the CD pin for the second SD card is allocated using M950
+// PD24 is SWD_EXT_RESET on pre-1.02 boards, PanelDue Card Detect on 1.20 and later
+// PD24 is not connected on pre-1.02 boards, SPI_CS4 on 1.02 and later
+constexpr size_t NumSdCards = 2;												// we now allow one SPI-connected SD card to be configured at boot time
+constexpr Pin SdCardDetectPins[NumSdCards] = { PortAPin(29), PortDPin(24) };	// the CD pin for the second SD card is allocated using M950 on MB6HC boards before version 1.02
 constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
-constexpr Pin SdSpiCSPins[1] = { NoPin };									// this one is allocated using M950
+constexpr Pin SdSpiCSPins[1] = { PortDPin(22) };								// this one is allocated using M950 on MB6HC boards before version 1.02
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 constexpr IRQn SdhcIRQn = HSMCI_IRQn;
 
@@ -170,7 +190,7 @@ constexpr uint32_t DotStarClockId = ID_QSPI;
 constexpr IRQn DotStarIRQn = QSPI_IRQn;
 
 // Ethernet
-constexpr Pin EthernetPhyInterruptPin = PortCPin(6);
+constexpr Pin EthernetPhyInterruptPinPre102 = PortCPin(6);
 constexpr Pin EthernetPhyResetPin = PortDPin(11);
 constexpr Pin EthernetPhyOtherPins[] = {
 		PortDPin(0), PortDPin(1), PortDPin(2), PortDPin(3), PortDPin(4),
@@ -267,7 +287,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC03 driver 4 dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC04 driver 4 step
 	{ TcOutput::tioa6,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out5"				},	// PC05 OUT5
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC06 EthernetPhyInterrupt
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC06 EthernetPhyInterrupt (up to v1.1), USB_PWR_EN (v1.2)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out4.tach"			},	// PC07 OUT4_TACH
 	{ TcOutput::tioa7,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out8"				},	// PC08 OUT8
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC09 driver 5 step
@@ -275,13 +295,13 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::tioa8,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out7"				},	// PC11 OUT7
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC12 CAN1_RX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_1,	PinCapability::none,	nullptr				},	// PC13 VssaSensePin
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC14 NC
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC14 NC (up to v1.1), ESP_EN (v1.2)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_2,	PinCapability::ainr,	"temp0"				},	// PC15 thermistor 0
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC16 driver 1 step
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC17 driver 1 diag
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC18 driver 0 step
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC19 ETH_LED_Y
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC20 DiagPin
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC19 ETH_LED_Y (up to v1.1), USB_UFP_DETECT(v1.2)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC20 DiagPin (up to v1.1), USB_STATE (v1.2)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PC21 UsbVBusPin
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs3"			},	// PC22 SPI CS3
 	{ TcOutput::tioa3,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"io7.out"			},	// PC23 IO7_OUT
@@ -369,6 +389,36 @@ constexpr Pin APIN_SBC_SPI_SCK = PortCPin(24);
 constexpr Pin APIN_SBC_SPI_SS0 = PortCPin(25);
 constexpr GpioPinFunction SBCPinPeriphMode = GpioPinFunction::C;
 
+constexpr Pin SbcTfrReadyPin = PortEPin(2);
+// Note, the DMAC peripheral IDs are hard-coded in DataTransfer
+
+// WiFi pins, mostly shared with the SBC interface
+#define ESP_SPI					SPI1
+#define ESP_SPI_INTERFACE_ID	ID_SPI1
+#define ESP_SPI_IRQn			SPI1_IRQn
+
+#if HAS_SBC_INTERFACE
+#define ESP_SPI_HANDLER			SPI1_WiFi_Handler	// SBC interface redirects the interrupt to here
+#else
+#define ESP_SPI_HANDLER			SPI1_Handler		// SBC interface redirects the interrupt to here
+#endif
+
+constexpr Pin APIN_ESP_SPI_MOSI = PortCPin(27);
+constexpr Pin APIN_ESP_SPI_MISO = PortCPin(26);
+constexpr Pin APIN_ESP_SPI_SCK  = PortCPin(24);
+constexpr Pin APIN_ESP_SPI_SS0  = PortCPin(25);
+constexpr GpioPinFunction SPIPeriphMode = GpioPinFunction::C;
+
+constexpr Pin APIN_SerialWiFi_TXD = PortDPin(19);
+constexpr Pin APIN_SerialWiFi_RXD = PortDPin(18);
+constexpr GpioPinFunction SerialWiFiPeriphMode = GpioPinFunction::C;
+
+constexpr Pin EspEnablePin = PortCPin(14);			// Low on this in holds the WiFi module in reset (ESP_EN)
+constexpr Pin EspDataReadyPin = PortAPin(2);		// Input from the WiFi module indicating that it wants to transfer data (ESP GPIO0)
+constexpr Pin SamTfrReadyPin = PortEPin(2);			// Output from the SAM to the WiFi module indicating we can accept a data transfer (ESP GPIO8)
+constexpr Pin SamCsPin = PortCPin(25);				// SPI NPCS pin, input from WiFi module
+// Note, the DMAC peripheral IDs are hard-coded in WiFiInterface
+
 // CAN
 constexpr Pin APIN_CAN0_RX = PortBPin(3);
 constexpr Pin APIN_CAN0_TX = PortBPin(2);
@@ -385,9 +435,6 @@ constexpr unsigned int CanDeviceNumber = 1;				// CAN-FD device number
 constexpr unsigned int SecondaryCanDeviceNumber = 0;	// plan CAN device number
 #endif
 
-constexpr Pin SbcTfrReadyPin = PortEPin(2);
-// Note, the DMAC peripheral IDs are hard-coded in DataTransfer
-
 // Timer allocation
 // Step timer is timer 0 aka TC0 channel 0. Also used as the CAN timestamp counter.
 #define STEP_TC				(TC0)
@@ -400,8 +447,8 @@ constexpr Pin SbcTfrReadyPin = PortEPin(2);
 
 // DMA channel allocation
 constexpr DmaChannel DmacChanHsmci = 0;			// this is hard coded in the ASF HSMCI driver
-//constexpr DmaChannel DmacChanWiFiTx = 1;		// only on v0.3 board
-//constexpr DmaChannel DmacChanWiFiRx = 2;		// only on v0.3 board
+constexpr DmaChannel DmacChanWiFiTx = 1;
+constexpr DmaChannel DmacChanWiFiRx = 2;
 constexpr DmaChannel DmacChanTmcTx = 3;
 constexpr DmaChannel DmacChanTmcRx = 4;
 constexpr DmaChannel DmacChanSbcTx = 5;

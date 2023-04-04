@@ -11,15 +11,19 @@
 
 #define IAP_UPDATE_FILE			"Duet3_SDiap32_" BOARD_SHORT_NAME ".bin"
 #define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap32_" BOARD_SHORT_NAME ".bin"
+#define IAP_CAN_LOADER_FILE		"Duet3_CANiap32_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 
 // Features definition
+// Networking support
 #define HAS_LWIP_NETWORKING		1
 #define HAS_WIFI_NETWORKING		0
-#define HAS_SBC_INTERFACE		1
 
+// Storage support
+#define HAS_SBC_INTERFACE		1
 #define HAS_MASS_STORAGE		1
 #define HAS_HIGH_SPEED_SD		1
+
 #define HAS_CPU_TEMP_SENSOR		1
 
 #define SUPPORT_TMC51xx			0
@@ -44,6 +48,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1
+#define SUPPORT_MULTICAST_DISCOVERY	1
 #define SUPPORT_ASYNC_MOVES		1
 #define ALLOCATE_DEFAULT_PORTS	0
 #define TRACK_OBJECT_NAMES		1
@@ -108,6 +113,8 @@ constexpr GpioPinFunction StepGatePinFunction = GpioPinFunction::C;			// TIOB11
 #define STEP_GATE_TC_ID		(ID_TC11)				// ID for peripheral clock and interrupt
 #define STEP_GATE_TC_CHAN	(2)
 
+constexpr uint32_t DefaultStandstillCurrentPercent = 71;					// needed to support expansion boards
+
 // Thermistor/PT1000 inputs
 constexpr Pin TEMP_SENSE_PINS[NumThermistorInputs] = { PortCPin(15), PortCPin(29), PortCPin(0), PortCPin(31) };	// Thermistor/PT1000 pins
 constexpr Pin VssaSensePin = PortCPin(13);
@@ -133,6 +140,11 @@ constexpr Pin DiagPin = PortBPin(6);										// diag/status LED
 constexpr Pin ActLedPin = PortBPin(7);										// activityLED
 constexpr bool DiagOnPolarity = false;
 constexpr bool ActOnPolarity = false;
+
+// MB6XD 1.01 USB control
+constexpr Pin UsbPowerSwitchPin = PortCPin(6);
+constexpr Pin UsbModePin = PortCPin(14);
+constexpr Pin UsbDetectPin = PortCPin(19);
 
 // SD cards
 constexpr size_t NumSdCards = 2;
@@ -249,7 +261,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC03 driver 4 dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC04 driver 4 step
 	{ TcOutput::tioa6,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out4"					},	// PC05 OUT4
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC06 EthernetPhyInterrupt
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC06 EthernetPhyInterrupt (up to v1.0), USB_PWR_EN (v1.1)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out3.tach"				},	// PC07 OUT3_TACH
 	{ TcOutput::tioa7,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out7"					},	// PC08 OUT7
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC09 driver 5 step
@@ -257,13 +269,13 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::tioa8,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out6"					},	// PC11 OUT6
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC12 CAN1_RX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_1,	PinCapability::none,	nullptr					},	// PC13 VssaSensePin
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC14 NC
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC14 NC (up to v1.0), USB_STATE (v1.1)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc1_2,	PinCapability::ainr,	"temp0"					},	// PC15 thermistor 0
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC16 driver 1 step
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"driver1.err"			},	// PC17 driver 1 err
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC18 driver 0 step
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC19 ETH_LED_Y
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC20 unused
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC19 ETH_LED_Y (up to v1.0), USB_UFP_DETECT (v1.1)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC20 driver 2 enable on V1.0 boards
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PC21 UsbVBusPin
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs4"				},	// PC22 SPI CS4
 	{ TcOutput::tioa3,	PwmOutput::none,	AdcInput::none,		PinCapability::rwpwm,	"io7.out,!io7.out.iso"	},	// PC23 IO7_OUT

@@ -11,7 +11,7 @@
 #include <AsyncSerial.h>
 
 extern AsyncSerial Serial;
-extern AsyncSerial Serial1;
+extern AsyncSerial SerialWiFi;
 
 #define SUPPORT_USB		1		// needed by SerialCDC.h
 #include <SerialCDC.h>

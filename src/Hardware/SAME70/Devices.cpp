@@ -37,6 +37,21 @@ USARTClass Serial1(USART2, USART2_IRQn, ID_USART2, 512, 512,
 					}
 				);
 
+#if defined(DUET3_MB6HC)
+AsyncSerial SerialWiFi(UART4, UART4_IRQn, ID_UART4, 512, 512,
+					[](AsyncSerial*) noexcept
+					{
+						SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);
+						SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);
+					},
+					[](AsyncSerial*) noexcept
+					{
+						ClearPinFunction(APIN_SerialWiFi_RXD);
+						ClearPinFunction(APIN_SerialWiFi_TXD);
+					}
+				);
+#endif
+
 SerialCDC SerialUSB;
 
 void UART2_Handler(void) noexcept
@@ -48,6 +63,13 @@ void USART2_Handler(void) noexcept
 {
 	Serial1.IrqHandler();
 }
+
+#if defined(DUET3_MB6HC)
+void UART4_Handler(void) noexcept
+{
+	SerialWiFi.IrqHandler();
+}
+#endif
 
 void SdhcInit() noexcept
 {
@@ -62,7 +84,6 @@ void SdhcInit() noexcept
 void EthernetInit() noexcept
 {
 	// Initialize Ethernet pins
-	pinMode(EthernetPhyInterruptPin, INPUT_PULLUP);
 	for (Pin p : EthernetPhyOtherPins)
 	{
 		SetPinFunction(p, EthernetPhyOtherPinsFunction);
@@ -78,10 +99,7 @@ void DeviceInit() noexcept
 	SdhcInit();
 	EthernetInit();
 
-#if defined(DUET3_MB6HC)
-	// Set up PB4..PB5 as normal I/O, not JTAG
-	matrix_set_system_io(CCFG_SYSIO_SYSIO4 | CCFG_SYSIO_SYSIO5);
-#elif defined(DUET3_MB6XD)
+#if defined(DUET3_MB6HC) || defined(DUET3_MB6XD)
 # ifdef DEBUG
 	// Set up PB4..PB5 as normal I/O, not JTAG. Leave PB6/7 pins as SWD. STATUS and ACT LEDs will not work.
 	matrix_set_system_io(CCFG_SYSIO_SYSIO4 | CCFG_SYSIO_SYSIO5);

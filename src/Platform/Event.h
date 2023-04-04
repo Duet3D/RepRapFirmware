@@ -72,7 +72,7 @@ public:
 	static void Diagnostics(MessageType mt, Platform& p) noexcept;
 
 private:
-	Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, uint8_t devNum, CanAddress p_ba, const char *_ecv_array format, va_list vargs) noexcept;
+	Event(Event *_ecv_null pnext, EventType et, uint16_t p_param, CanAddress p_ba, uint8_t devNum, const char *_ecv_array format, va_list vargs) noexcept;
 
 	Event *_ecv_null next;					// next event in a linked list
 	uint16_t param;							// details about the event, e.g. for a heater fault it is the type of the fault

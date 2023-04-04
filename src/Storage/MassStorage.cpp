@@ -193,7 +193,7 @@ static FileStore files[MAX_FILES];
 // Return the number of volumes, which on the 6HC is normally 1 but can be increased to 2
 size_t MassStorage::GetNumVolumes() noexcept
 {
-	return (sd1Ports[0].IsValid()) ? 2 : 1;		// we have 2 slots if the second one has a valid CS pin, else 1
+	return (reprap.GetPlatform().GetBoardType() >= BoardType::Duet3_6HC_v102 || sd1Ports[0].IsValid()) ? 2 : 1;		// we have 2 slots if the second one has a valid CS pin, else 1
 }
 
 // Configure additional SD card slots
@@ -211,6 +211,10 @@ GCodeResult MassStorage::ConfigureSdCard(GCodeBuffer& gb, const StringRef& reply
 		}
 		sd_mmc_change_cs_pin(1, sd1Ports[0].GetPin());
 		info[1].cdPin = sd1Ports[1].GetPin();
+		if (info[1].cdPin == NoPin)
+		{
+			info[1].cardState = CardDetectState::present;
+		}
 		reprap.VolumesUpdated();
 	}
 	else

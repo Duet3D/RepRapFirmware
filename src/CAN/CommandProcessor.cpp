@@ -58,7 +58,7 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 		String<MaxFilenameLength> fname;
 		fname.copy((msg.fileWanted == (unsigned int)FirmwareModule::bootloader) ? "Duet3Bootloader-" : "Duet3Firmware_");
 		fname.catn(msg.boardType, msg.GetBoardTypeLength(buf->dataLength));
-		fname.cat(".bin");
+		fname.cat((msg.uf2Format) ? ".uf2" : ".bin");
 
 		uint32_t fileOffset = msg.fileOffset, fileLength = 0;
 		uint32_t lreq = msg.lengthRequested;
@@ -294,7 +294,8 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 	{
 	case CanMessageReturnInfo::typeFirmwareVersion:
 	default:
-		reply.printf("%s (%s%s)", VERSION, DATE, TIME_SUFFIX);
+		// This must be formatted in a specific way for the ATE, starting with the electronics string
+		reply.printf("%s firmware version " VERSION " (%s%s)", reprap.GetPlatform().GetElectronicsString(), DATE, TIME_SUFFIX);
 		break;
 
 	case CanMessageReturnInfo::typeBoardName:
@@ -332,7 +333,13 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 
 	case CanMessageReturnInfo::typeDiagnosticsPart0:
 		extra = LastDiagnosticsPart;
-		reply.lcatf("%s (%s%s)", VERSION, DATE, TIME_SUFFIX);
+		// Report the firmware version and board type
+		reply.lcatf("%s version %s (%s%s) running on %s", FIRMWARE_NAME, VERSION, DATE, TIME_SUFFIX, reprap.GetPlatform().GetElectronicsString());
+		// Show the up time and reason for the last reset
+		{
+			const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
+			reply.lcatf("Last reset %02d:%02d:%02d ago, cause: %s", (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60), Platform::GetResetReasonText());
+		}
 		break;
 
 	case CanMessageReturnInfo::typeDiagnosticsPart0 + 1:
@@ -346,14 +353,17 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 		extra = LastDiagnosticsPart;
 		{
 			const size_t driver = msg.type - (CanMessageReturnInfo::typeDiagnosticsPart0 + 1);
-			reply.lcatf("Driver %u: position %" PRIi32 ", %.1f steps/mm"
+			if (driver < NumDirectDrivers)			// we have up to 7 drivers on the Duet 3 Mini but only 6 on the 6HC and 6XD
+			{
+				reply.lcatf("Driver %u: position %" PRIi32 ", %.1f steps/mm"
 #if HAS_SMART_DRIVERS
-				","
+					","
 #endif
-				, driver, reprap.GetMove().GetEndPoint(driver), (double)reprap.GetPlatform().DriveStepsPerUnit(driver));
+					, driver, reprap.GetMove().GetEndPoint(driver), (double)reprap.GetPlatform().DriveStepsPerUnit(driver));
 #if HAS_SMART_DRIVERS
-			SmartDrivers::AppendDriverStatus(driver, reply);
+				SmartDrivers::AppendDriverStatus(driver, reply);
 #endif
+			}
 		}
 		break;
 
@@ -365,11 +375,15 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 #elif HAS_VOLTAGE_MONITOR
 			reply.catf("VIN: %.1fV", (double)reprap.GetPlatform().GetCurrentPowerVoltage());
 #elif HAS_12V_MONITOR
-			reply.catf("V12: %.1fn", (double)reprap.GetPlatform().GetCurrentV12Voltage());
+			reply.catf("V12: %.1fV", (double)reprap.GetPlatform().GetCurrentV12Voltage());
 #endif
 #if HAS_CPU_TEMP_SENSOR
 			const MinCurMax temps = reprap.GetPlatform().GetMcuTemperatures();
-			reply.catf("MCU temperature: min %.1fC, current %.1fC, max %.1fC", (double)temps.minimum, (double)temps.current, (double)temps.maximum);
+			reply.catf(
+# if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
+				", "
+# endif
+				"MCU temperature: min %.1fC, current %.1fC, max %.1fC", (double)temps.minimum, (double)temps.current, (double)temps.maximum);
 #endif
 		}
 		break;
@@ -382,14 +396,42 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 	return GCodeResult::ok;
 }
 
-#endif
+static GCodeResult InitiateFirmwareUpdate(const CanMessageUpdateYourFirmware& msg, const StringRef& reply)
+{
+	if (msg.boardId != CanInterface::GetCanAddress() || msg.invertedBoardId != (uint8_t)~CanInterface::GetCanAddress() || (msg.module != 0 && msg.module != 3))
+	{
+		reply.printf("Invalid firmware update command received");
+		return GCodeResult::error;
+	}
+
+	if (msg.module == 0)
+	{
+		if (!reprap.GetPlatform().FileExists(FIRMWARE_DIRECTORY, IAP_CAN_LOADER_FILE))
+		{
+			reply.printf("In-application programming binary \"%s\" not found on board %u", FIRMWARE_DIRECTORY IAP_CAN_LOADER_FILE, CanInterface::GetCanAddress());
+			return GCodeResult::error;
+		}
+		reply.printf("Board %u starting firmware update", CanInterface::GetCanAddress());
+		reprap.ScheduleFirmwareUpdateOverCan();
+		return GCodeResult::ok;
+	}
+	reply.copy("unknown firmware module number");
+	return GCodeResult::error;
+}
+
+#endif	// SUPPORT_REMOTE_COMMANDS
 
 // Process a received broadcast or request message. Don't free the message buffer
 void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 {
 	if (buf->id.Src() != CanInterface::GetCanAddress())								// I don't think we should receive our own broadcasts, but in case we do...
 	{
-		if (buf->id.Dst() != CanId::BroadcastAddress)
+		if (   buf->id.Dst() != CanId::BroadcastAddress
+			&& buf->id.MsgType() != CanMessageType::fanTachoReport					// don't flash whenever we receive a regular status message
+			&& buf->id.MsgType() != CanMessageType::heatersStatusReport
+			&& buf->id.MsgType() != CanMessageType::boardStatusReport
+			&& buf->id.MsgType() != CanMessageType::driversStatusReport
+		   )
 		{
 			reprap.GetPlatform().OnProcessingCanMessage();
 		}
@@ -410,19 +452,45 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				StepTimer::ProcessTimeSyncMessage(buf->msg.sync, buf->dataLength, buf->timeStamp);
 				return;							// no reply needed
 
+			case CanMessageType::emergencyStop:
+				reprap.EmergencyStop();
+				reprap.ScheduleReset();
+				return;							// no reply needed
+
 			case CanMessageType::movementLinear:
 				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinear);
 				return;							// no reply needed
 
-#if USE_REMOTE_INPUT_SHAPING
+# if USE_REMOTE_INPUT_SHAPING
 			case CanMessageType::movementLinearShaped:
 				reprap.GetMove().AddShapedMoveFromRemote(buf->msg.moveLinearShaped);
 				return;							// no reply needed
-#endif
+# endif
+
+			case CanMessageType::stopMovement:
+				reprap.GetMove().StopDrivers(buf->msg.stopMovement.whichDrives);
+				return;							// no reply needed
+
+			case CanMessageType::revertPosition:
+				reprap.GetMove().RevertPosition(buf->msg.revertPosition);
+				return;							// no reply needed
 
 			case CanMessageType::acknowledgeAnnounce:
 				CanInterface::MainBoardAcknowledgedAnnounce();
 				return;
+
+			case CanMessageType::updateFirmware:
+				requestId = buf->msg.updateYourFirmware.requestId;
+				rslt = InitiateFirmwareUpdate(buf->msg.updateYourFirmware, replyRef);
+				break;
+
+			case CanMessageType::reset:
+				requestId = buf->msg.reset.requestId;
+				reply.printf("Board %u resetting", CanInterface::GetCanAddress());
+				reprap.EmergencyStop();
+				reprap.ScheduleReset();
+				rslt = GCodeResult::ok;
+				break;
 
 			case CanMessageType::returnInfo:
 				requestId = buf->msg.getInfo.requestId;

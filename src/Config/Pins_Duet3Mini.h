@@ -23,6 +23,7 @@
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".uf2"
 #define IAP_UPDATE_FILE			"Duet3_SDiap32_" BOARD_SHORT_NAME ".bin"
 #define IAP_UPDATE_FILE_SBC		"Duet3_SBCiap32_" BOARD_SHORT_NAME ".bin"
+#define IAP_CAN_LOADER_FILE		"Duet3_CANiap32_" BOARD_SHORT_NAME ".bin"
 constexpr uint32_t IAP_IMAGE_START = 0x20038000;
 
 #define WIFI_FIRMWARE_FILE		"DuetWiFiServer.bin"
@@ -299,8 +300,8 @@ constexpr Pin EspSclkPin = PortAPin(12);
 constexpr Pin EspSSPin = PortAPin(14);
 constexpr Pin WiFiSpiSercomPins[] = { EspSclkPin, EspMisoPin, EspSSPin, EspMosiPin };
 constexpr GpioPinFunction WiFiSpiSercomPinsMode = GpioPinFunction::D;
-constexpr IRQn WiFiSpiSercomIRQn = SERCOM4_3_IRQn;			// this is the SS Low interrupt, the only one we use
-#define ESP_SPI_HANDLER		SERCOM4_3_Handler
+constexpr IRQn WiFiSpiSercomIRQn = SERCOM4_1_IRQn;			// this is the SS Low interrupt, the only one we use
+#define ESP_SPI_HANDLER		SERCOM4_1_Handler
 
 constexpr Pin EspResetPin = EthernetPhyResetPin;
 constexpr Pin EspEnablePin = PortCPin(20);
@@ -316,8 +317,8 @@ constexpr Pin SbcSSPin = PortAPin(6);
 constexpr Pin SbcTfrReadyPin = PortAPin(3);
 constexpr Pin SbcSpiSercomPins[] = { PortAPin(4), PortAPin(5), PortAPin(6), PortAPin(7) };
 constexpr GpioPinFunction SbcSpiSercomPinsMode = GpioPinFunction::D;
-constexpr IRQn SbcSpiSercomIRQn = SERCOM0_3_IRQn;			// this is the SS Low interrupt, the only one we use
-#define SBC_SPI_HANDLER		SERCOM0_3_Handler
+constexpr IRQn SbcSpiSercomIRQn = SERCOM0_1_IRQn;			// this is the transfer complete interrupt, the only one we use
+#define SBC_SPI_HANDLER		SERCOM0_1_Handler
 
 // CAN
 constexpr unsigned int CanDeviceNumber = 1;					// we use CAN1

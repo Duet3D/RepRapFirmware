@@ -45,11 +45,6 @@
  */
 
 #include "ethernet_phy.h"
-
-#if 0	//dc42
-#include "pio/pio.h"
-#endif
-
 #include "../gmac.h"		// ASF3 gmac driver
 #include "conf_eth.h"
 
@@ -80,6 +75,8 @@ extern "C" {
 /* Ethernet PHY operation timeout */
 #define ETH_PHY_TIMEOUT 10
 
+extern void debugPrintf(const char *fmt, ...) noexcept;
+
 /**
  * \brief Find a valid PHY Address ( from addrStart to 31 ).
  *
@@ -89,8 +86,7 @@ extern "C" {
  *
  * \return 0xFF when no valid PHY address is found.
  */
-static uint8_t ethernet_phy_find_valid(Gmac *p_gmac, uint8_t uc_phy_addr,
-		uint8_t uc_start_addr)
+static uint8_t ethernet_phy_find_valid(Gmac *p_gmac, uint8_t uc_phy_addr, uint8_t uc_start_addr)
 {
 	uint32_t ul_value = 0;
 	uint8_t uc_rc = 0;
@@ -167,92 +163,6 @@ uint8_t ethernet_phy_init(Gmac *p_gmac, uint8_t uc_phy_addr, uint32_t mck)
 
 
 /**
- * \brief Get the Link & speed settings, and automatically set up the GMAC with the
- * settings.
- *
- * \param p_gmac   Pointer to the GMAC instance.
- * \param uc_phy_addr PHY address.
- * \param uc_apply_setting_flag Set to 0 to not apply the PHY configurations, else to apply.
- *
- * Return GMAC_OK if successfully, GMAC_TIMEOUT if timeout.
- */
-uint8_t ethernet_phy_set_link(Gmac *p_gmac, uint8_t uc_phy_addr,
-		uint8_t uc_apply_setting_flag)
-{
-	uint32_t ul_stat1;
-	uint32_t ul_stat2;
-	uint8_t uc_phy_address, uc_speed, uc_fd;
-	uint8_t uc_rc;
-
-	gmac_enable_management(p_gmac, true);
-
-	uc_phy_address = uc_phy_addr;
-
-	uc_rc = gmac_phy_read(p_gmac, uc_phy_address, GMII_BMSR, &ul_stat1);
-	if (uc_rc != GMAC_OK) {
-		/* Disable PHY management and start the GMAC transfer */
-		gmac_enable_management(p_gmac, false);
-
-		return uc_rc;
-	}
-
-	if ((ul_stat1 & GMII_LINK_STATUS) == 0) {
-		/* Disable PHY management and start the GMAC transfer */
-		gmac_enable_management(p_gmac, false);
-
-		return GMAC_INVALID;
-	}
-
-	if (uc_apply_setting_flag == 0) {
-		/* Disable PHY management and start the GMAC transfer */
-		gmac_enable_management(p_gmac, false);
-
-		return uc_rc;
-	}
-
-	/* Read advertisement */
-	uc_rc = gmac_phy_read(p_gmac, uc_phy_address, GMII_PCR1, &ul_stat2);
-	if (uc_rc != GMAC_OK) {
-		/* Disable PHY management and start the GMAC transfer */
-		gmac_enable_management(p_gmac, false);
-
-		return uc_rc;
-	}
-
-	if ((ul_stat1 & GMII_100BASE_TX_FD) && (ul_stat2 & GMII_OMI_100BASE_TX_FD)) {
-		/* Set GMAC for 100BaseTX and Full Duplex */
-		uc_speed = true;
-		uc_fd = true;
-	}
-
-	if ((ul_stat1 & GMII_10BASE_T_FD) && (ul_stat2 & GMII_OMI_10BASE_T_FD)) {
-		/* Set MII for 10BaseT and Full Duplex */
-		uc_speed = false;
-		uc_fd = true;
-	}
-
-	if ((ul_stat1 & GMII_100BASE_TX_HD) && (ul_stat2 & GMII_OMI_100BASE_TX_HD)) {
-		/* Set MII for 100BaseTX and Half Duplex */
-		uc_speed = true;
-		uc_fd = false;
-	}
-
-	if ((ul_stat1 & GMII_10BASE_T_HD) && (ul_stat2 & GMII_OMI_10BASE_T_HD)) {
-		/* Set MII for 10BaseT and Half Duplex */
-		uc_speed = false;
-		uc_fd = false;
-	}
-
-	gmac_set_speed(p_gmac, uc_speed);
-	gmac_enable_full_duplex(p_gmac, uc_fd);
-
-	/* Start the GMAC transfers */
-	gmac_enable_management(p_gmac, false);
-	return uc_rc;
-}
-
-
-/**
  * \brief Issue an auto negotiation of the PHY.
  *
  * \param p_gmac   Pointer to the GMAC instance.
@@ -295,8 +205,7 @@ uint8_t ethernet_phy_auto_negotiate(Gmac *p_gmac, uint8_t uc_phy_addr)
 		 * MII advertising for Next page.
 		 * 100BaseTxFD and HD, 10BaseTFD and HD, IEEE 802.3.
 		 */
-		ul_phy_anar = GMII_100TX_FDX | GMII_100TX_HDX | GMII_10_FDX | GMII_10_HDX |
-				GMII_AN_IEEE_802_3;
+		ul_phy_anar = GMII_100TX_FDX | GMII_100TX_HDX | GMII_10_FDX | GMII_10_HDX | GMII_AN_IEEE_802_3;
 		uc_rc = gmac_phy_write(p_gmac, uc_phy_addr, GMII_ANAR, ul_phy_anar);
 		if (uc_rc != GMAC_OK) {
 			gmac_enable_management(p_gmac, false);

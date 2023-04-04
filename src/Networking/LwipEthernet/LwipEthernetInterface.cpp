@@ -20,6 +20,10 @@
 #include <Networking/HttpResponder.h>
 #include <Networking/FtpResponder.h>
 #include <Networking/TelnetResponder.h>
+#if SUPPORT_MULTICAST_DISCOVERY
+# include <Networking/MulticastDiscovery/MulticastResponder.h>
+#endif
+
 #include <General/IP4String.h>
 #include <Version.h>								// version is reported by MDNS
 #include "GMAC/ethernet_sam.h"
@@ -46,7 +50,14 @@ extern "C"
 extern struct netif gs_net_if;
 }
 
-const char * const MdnsServiceStrings[NumProtocols] = { "_http", "_ftp", "_telnet" };
+const char * const MdnsServiceStrings[NumProtocols] =
+{
+	"_http", "_ftp", "_telnet",
+#if SUPPORT_MULTICAST_DISCOVERY
+	"_duet_discovery"
+#endif
+};
+
 const char * const MdnsTxtRecords[2] = { "product=" FIRMWARE_NAME, "version=" VERSION };
 const unsigned int MdnsTtl = 10 * 60;			// same value as on the Duet 0.6/0.8.5
 
@@ -59,15 +70,9 @@ Mutex lwipMutex;
 
 extern "C"
 {
-	// Task function to keep the GMAC and LwIP running
-	void DoEthernetTask()
-	{
-		ethernet_task();
-	}
-
 	// Callback functions for LWIP (may be called from ISR)
 	// This occasionally seems to get called with a null pcb argument, so check for that here
-	static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err)
+	static err_t conn_accept(void *arg, tcp_pcb *pcb, err_t err) noexcept
 	{
 		LWIP_UNUSED_ARG(arg);
 		LWIP_UNUSED_ARG(err);
@@ -142,9 +147,9 @@ void LwipEthernetInterface::Init() noexcept
 	lwipMutex.Create("LwipCore");
 
 	// Clear the PCBs
-	for (size_t i = 0; i < NumTcpPorts; ++i)
+	for (tcp_pcb*& pcb : listeningPcbs)
 	{
-		listeningPcbs[i] = nullptr;
+		pcb = nullptr;
 	}
 
 	macAddress = platform.GetDefaultMacAddress();
@@ -178,6 +183,7 @@ GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int 
 				RebuildMdnsServices();
 			}
 		}
+
 		ReportOneProtocol(protocol, reply);
 		return GCodeResult::ok;
 	}
@@ -205,7 +211,11 @@ GCodeResult LwipEthernetInterface::DisableProtocol(NetworkProtocol protocol, con
 
 void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 {
-	if (listeningPcbs[protocol] == nullptr)
+	if (   listeningPcbs[protocol] == nullptr
+#if SUPPORT_MULTICAST_DISCOVERY
+		&& protocol != MulticastDiscoveryProtocol
+#endif
+	   )
 	{
 		tcp_pcb *pcb = tcp_new();
 		if (pcb == nullptr)
@@ -245,6 +255,12 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 		sockets[TelnetSocketNumber]->Init(TelnetSocketNumber, portNumbers[protocol], protocol);
 		break;
 
+#if SUPPORT_MULTICAST_DISCOVERY
+	case MulticastDiscoveryProtocol:
+		MulticastResponder::Start(portNumbers[protocol]);
+		break;
+#endif
+
 	default:
 		break;
 	}
@@ -269,6 +285,12 @@ void LwipEthernetInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 	case TelnetProtocol:
 		sockets[TelnetSocketNumber]->TerminateAndDisable();
 		break;
+
+#if SUPPORT_MULTICAST_DISCOVERY
+	case MulticastDiscoveryProtocol:
+		MulticastResponder::Stop();
+		break;
+#endif
 
 	default:
 		break;
@@ -422,7 +444,7 @@ void LwipEthernetInterface::Spin() noexcept
 		if (ethernet_link_established())
 		{
 			// Check for incoming packets
-			DoEthernetTask();
+			ethernet_task();
 
 			// Have we obtained an IP address yet?
 			ethernet_get_ipaddress(ipAddress, netmask, gateway);
@@ -455,7 +477,7 @@ void LwipEthernetInterface::Spin() noexcept
 		if (ethernet_link_established())
 		{
 			// Check for incoming packets
-			DoEthernetTask();
+			ethernet_task();
 
 			// Poll the next TCP socket
 			sockets[nextSocketToPoll]->Poll();
@@ -485,10 +507,9 @@ void LwipEthernetInterface::Spin() noexcept
 
 void LwipEthernetInterface::Diagnostics(MessageType mtype) noexcept
 {
-	platform.MessageF(mtype, "- Ethernet -\nState: %s\n", GetStateName());
-	platform.MessageF(mtype, "Error counts: %u %u %u %u %u\nSocket states:",
-								rxErrorCount, rxBuffersNotFullyPopulatedCount, txErrorCount, txBufferNotFreeCount, txBufferTooShortCount);
-	for (LwipSocket *s : sockets)
+	platform.MessageF(mtype, "= Ethernet =\nState: %s\n", GetStateName());
+	ethernetif_diagnostics(mtype);
+	for (const LwipSocket *s : sockets)
 	{
 		platform.MessageF(mtype, " %d", s->GetState());
 	}
@@ -545,11 +566,6 @@ bool LwipEthernetInterface::ConnectionEstablished(tcp_pcb *pcb) noexcept
 
 	// No more free socket for this connection, terminate it
 	return false;
-}
-
-IPAddress LwipEthernetInterface::GetIPAddress() const noexcept
-{
-	return ipAddress;
 }
 
 void LwipEthernetInterface::SetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept

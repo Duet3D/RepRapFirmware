@@ -607,6 +607,9 @@ void RepRap::Init() noexcept
 
 		if (rslt == GCodeResult::ok)
 		{
+# if defined(DUET3_MB6HC)
+			network->CreateAdditionalInterface();		// do this now because config.g may refer to it
+# endif
 			// Run the configuration file
 			if (!RunStartupFile(GCodes::CONFIG_FILE) && !RunStartupFile(GCodes::CONFIG_BACKUP_FILE))
 			{
@@ -792,8 +795,30 @@ void RepRap::Spin() noexcept
 		diagnosticsDestination = MessageType::NoDestinationMessage;
 	}
 
-	// Check if we need to display a cold extrusion warning
 	const uint32_t now = millis();
+
+#if SUPPORT_REMOTE_COMMANDS
+	const DeferredCommand defCom = deferredCommand;			// capture volatile variable
+	if (defCom != DeferredCommand::none && now - whenDeferredCommandScheduled >= 250)
+	{
+		switch (defCom)
+		{
+		case DeferredCommand::reboot:
+			SoftwareReset(SoftwareResetReason::user);
+			break;
+
+		case DeferredCommand::updateFirmware:
+			UpdateFirmware(IAP_CAN_LOADER_FILE, "");
+			break;
+
+		default:
+			deferredCommand = DeferredCommand::none;
+			break;
+		}
+	}
+#endif
+
+	// Check if we need to display a cold extrusion warning
 	if (now - lastWarningMillis >= MinimumWarningInterval)
 	{
 		ReadLocker lock(toolListLock);
@@ -958,44 +983,58 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	justSentDiagnostics = true;
 }
 
-// Turn off the heaters, disable the motors, and deactivate the Heat and Move classes. Leave everything else working.
+// Turn off the heaters, disable the motors, and deactivate the Heat, Move and GCodes classes. Leave everything else working.
 void RepRap::EmergencyStop() noexcept
 {
 #ifdef DUET3_ATE
 	Duet3Ate::PowerOffEUT();
 #endif
 
-	stopped = true;								// a useful side effect of setting this is that it prevents Platform::Tick being called, which is needed when loading IAP into RAM
+	stopped = true;									// a useful side effect of setting this is that it prevents Platform::Tick being called, which is needed when loading IAP into RAM
 
 	// Do not turn off ATX power here. If the nozzles are still hot, don't risk melting any surrounding parts by turning fans off.
 	//platform->SetAtxPower(false);
 
-	platform->DisableAllDrivers();				// need to do this to ensure that any motor brakes are re-engaged
-
-	switch (gCodes->GetMachineType())
+#if SUPPORT_REMOTE_COMMANDS
+	if (CanInterface::InExpansionMode())
 	{
-	case MachineType::cnc:
-		for (size_t i = 0; i < MaxSpindles; i++)
+		platform->EmergencyDisableDrivers();		// disable all local drivers - need to do this to ensure that any motor brakes are re-engaged
+	}
+	else
+#endif
+	{
+		platform->DisableAllDrivers();				// disable all local and remote drivers - need to do this to ensure that any motor brakes are re-engaged
+
+		switch (gCodes->GetMachineType())
 		{
-			platform->AccessSpindle(i).SetState(SpindleState::stopped);
-		}
-		break;
+		case MachineType::cnc:
+			for (size_t i = 0; i < MaxSpindles; i++)
+			{
+				platform->AccessSpindle(i).SetState(SpindleState::stopped);
+			}
+			break;
 
 #if SUPPORT_LASER
-	case MachineType::laser:
-		platform->SetLaserPwm(0);
-		break;
+		case MachineType::laser:
+			platform->SetLaserPwm(0);
+			break;
 #endif
 
-	default:
-		break;
+		default:
+			break;
+		}
 	}
 
-	heat->Exit();								// this also turns off all heaters
-	move->Exit();								// this stops the motors stepping
+	heat->Exit();									// this also turns off all heaters
+	move->Exit();									// this stops the motors stepping
 
 #if SUPPORT_CAN_EXPANSION
-	expansion->EmergencyStop();
+# if SUPPORT_REMOTE_COMMANDS
+	if (!CanInterface::InExpansionMode())
+# endif
+	{
+		expansion->EmergencyStop();
+	}
 #endif
 
 	gCodes->EmergencyStop();
@@ -1320,12 +1359,36 @@ void RepRap::Tick() noexcept
 				heat->SwitchOffAllLocalFromISR();								// can't call SwitchOffAll because remote heaters can't be turned off from inside a ISR
 				platform->EmergencyDisableDrivers();
 
-				// We now save the stack when we get stuck in a spin loop
-				__asm volatile("mrs r2, psp");
-				register const uint32_t * stackPtr asm ("r2");					// we want the PSP not the MSP
-				SoftwareReset(
-					(heatTaskStuck) ? SoftwareResetReason::heaterWatchdog : SoftwareResetReason::stuckInSpin,
-					stackPtr + 5);												// discard uninteresting registers, keep LR PC PSR
+				// Save the stack of the stuck task when we get stuck in a spin loop
+				const uint32_t *relevantStackPtr;
+				const TaskHandle relevantTask = (heatTaskStuck) ? Heat::GetHeatTask() : Tasks::GetMainTask();
+				if (relevantTask == RTOSIface::GetCurrentTask())
+				{
+					__asm volatile("mrs r2, psp");
+					register const uint32_t * stackPtr asm ("r2");				// we want the PSP not the MSP
+					relevantStackPtr = stackPtr + 5;							// discard uninteresting registers, keep LR PC PSR
+				}
+				else
+				{
+					relevantStackPtr = const_cast<const uint32_t*>(pxTaskGetLastStackTop(relevantTask->GetFreeRTOSHandle()));
+					// All registers were saved on the stack, so to get useful return addresses we need to skip most of them.
+					// See the port.c files in FreeRTOS for the stack layouts
+#if SAME70 || SAM4E || SAME5x
+					// ARM Cortex M7 with double precision floating point, or ARM Cortex M4F
+					if ((relevantStackPtr[8] & 0x10) == 0)						// test EXC_RETURN FP bit
+					{
+						relevantStackPtr += 9 + 16;								// skip r4-r11 and r14 and s16-s31
+					}
+					else
+					{
+						relevantStackPtr += 9;									// skip r4-r11 and r14
+					}
+#else
+					// ARM Cortex M3 or M4 without floating point
+					relevantStackPtr += 8;										// skip r4-r11
+#endif
+				}
+				SoftwareReset((heatTaskStuck) ? SoftwareResetReason::heaterWatchdog : SoftwareResetReason::stuckInSpin, relevantStackPtr);
 			}
 		}
 	}
@@ -1863,7 +1926,7 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 
 	// Accelerations
 	response->cat(',');
-	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertAcceleration(platform->Acceleration(drive)); }, 2);
+	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertAcceleration(platform->NormalAcceleration(drive)); }, 2);
 
 	// Motor currents
 	response->cat(',');
@@ -2851,7 +2914,7 @@ bool RepRap::WriteToolParameters(FileStore *f, const bool forceWriteOffsets) noe
 				written = true;
 			}
 			scratchString.catf("G10 P%d", t->Number());
-			for (size_t axis = 0; axis < MaxAxes; ++axis)
+			for (size_t axis = 0; axis < gCodes->GetVisibleAxes(); ++axis)
 			{
 				if (forceWriteOffsets || axesProbed.IsBitSet(axis))
 				{
@@ -2918,14 +2981,15 @@ bool RepRap::CheckFirmwareUpdatePrerequisites(const StringRef& reply, const Stri
 	return true;
 }
 
-// Update the firmware. Prerequisites should be checked before calling this.
-void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
-{
 #if HAS_MASS_STORAGE
-	FileStore * iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, IAP_UPDATE_FILE, OpenMode::read);
+
+// Update the firmware. Prerequisites should be checked before calling this.
+void RepRap::UpdateFirmware(const char *iapFilename, const char *iapParam) noexcept
+{
+	FileStore * iapFile = platform->OpenFile(FIRMWARE_DIRECTORY, iapFilename, OpenMode::read);
 	if (iapFile == nullptr)
 	{
-		iapFile = platform->OpenFile(DEFAULT_SYS_DIR, IAP_UPDATE_FILE, OpenMode::read);
+		iapFile = platform->OpenFile(DEFAULT_SYS_DIR, iapFilename, OpenMode::read);
 		if (iapFile == nullptr)
 		{
 			// This should not happen because we already checked that the file exists, so use a simplified error message
@@ -2939,9 +3003,10 @@ void RepRap::UpdateFirmware(const StringRef& filenameRef) noexcept
 	// Use RAM-based IAP
 	iapFile->Read(reinterpret_cast<char *>(IAP_IMAGE_START), iapFile->Length());
 	iapFile->Close();
-	StartIap(filenameRef.c_str());
-#endif
+	StartIap(iapParam);
 }
+
+#endif
 
 void RepRap::PrepareToLoadIap() noexcept
 {
@@ -2959,7 +3024,7 @@ void RepRap::PrepareToLoadIap() noexcept
 
 	// The machine will be unresponsive for a few seconds, don't risk damaging the heaters.
 	// This also shuts down tasks and interrupts that might make use of the RAM that we are about to load the IAP binary into.
-	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it access Z probe object in RAM used by IAP
+	EmergencyStop();						// this also stops Platform::Tick being called, which is necessary because it may access a Z probe object in RAM which will be overwritten by the IAP
 	network->Exit();						// kill the network task to stop it overwriting RAM that we use to hold the IAP
 #if HAS_SMART_DRIVERS
 	SmartDrivers::Exit();					// stop the drivers being polled via SPI or UART because it may use data in the last 64Kb of RAM
@@ -2985,19 +3050,20 @@ void RepRap::PrepareToLoadIap() noexcept
 	ARM_MPU_Disable();						// make sure we can execute from RAM
 #endif
 
-#if 0
+#if 0	// this code doesn't work, it causes a watchdog reset
 	// Debug
-	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 60 * 1024);
+	memset(reinterpret_cast<char *>(IAP_IMAGE_START), 0x7E, 20 * 1024);
 	delay(2000);
-	for (char* p = reinterpret_cast<char *>(IAP_IMAGE_START); p < reinterpret_cast<char *>(IAP_IMAGE_START + (60 * 1024)); ++p)
+	for (char* p = reinterpret_cast<char *>(IAP_IMAGE_START); p < reinterpret_cast<char *>(IAP_IMAGE_START + (20 * 1024)); ++p)
 	{
 		if (*p != 0x7E)
 		{
-			debugPrintf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
+			SERIAL_AUX_DEVICE.printf("At %08" PRIx32 ": %02x\n", reinterpret_cast<uint32_t>(p), *p);
 		}
 	}
-	debugPrintf("Scan complete\n");
-	#endif
+	SERIAL_AUX_DEVICE.printf("Scan complete\n");
+	delay(1000);							// give it time to send the message
+#endif
 }
 
 void RepRap::StartIap(const char *filename) noexcept

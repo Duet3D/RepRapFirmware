@@ -87,7 +87,11 @@ void LocalFan::InternalRefresh(bool checkSensors) noexcept
 		([&reqVal, bangBangMode, this](unsigned int sensorNum, unsigned int) noexcept
 			{
 				const auto sensor = reprap.GetHeat().FindSensor(sensorNum);
-				if (sensor.IsNotNull())
+				if (sensor.IsNull())
+				{
+					reqVal = maxVal;					// sensor not found, so turn the fan fully on
+				}
+				else
 				{
 					//TODO we used to turn the fan on if the associated heater was being tuned
 					float ht;

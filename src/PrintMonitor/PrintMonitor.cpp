@@ -146,15 +146,17 @@ void PrintMonitor::Reset() noexcept
 	reprap.JobUpdated();
 }
 
-void PrintMonitor::UpdatePrintingFileInfo() noexcept
+// This function must be called whenever printingFileInfo has been updated
+void PrintMonitor::PrintingFileInfoUpdated() noexcept
 {
-	totalFilamentNeeded = printingFileInfo.filamentNeeded[0];
+	totalFilamentNeeded = printingFileInfo.filamentNeeded[0];		// assume we have at least one extruder
 	for (size_t extruder = 1; extruder < printingFileInfo.numFilaments; extruder++)
 	{
 		totalFilamentNeeded += printingFileInfo.filamentNeeded[extruder];
 	}
 	slicerTimeLeft = printingFileInfo.printTime;
 	printingFileParsed = true;
+	reprap.JobUpdated();
 }
 
 bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info) noexcept
@@ -176,13 +178,10 @@ bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info) noexcept
 
 void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info) noexcept
 {
-	{
-		WriteLocker locker(printMonitorLock);
-		filenameBeingPrinted.copy(filename);
-		printingFileInfo = info;
-		UpdatePrintingFileInfo();
-	}
-	reprap.JobUpdated();
+	WriteLocker locker(printMonitorLock);
+	filenameBeingPrinted.copy(filename);
+	printingFileInfo = info;
+	PrintingFileInfoUpdated();
 }
 
 GCodeResult PrintMonitor::ProcessM73(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
@@ -224,7 +223,7 @@ void PrintMonitor::Spin() noexcept
 			{
 				return;
 			}
-			UpdatePrintingFileInfo();
+			PrintingFileInfoUpdated();
 		}
 #else
 		return;
@@ -323,7 +322,7 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 		printingFileParsed = false;
 		if (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false) != GCodeResult::notFinished)
 		{
-			UpdatePrintingFileInfo();
+			PrintingFileInfoUpdated();
 		}
 		else
 		{

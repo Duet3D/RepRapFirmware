@@ -21,7 +21,7 @@
 # define USE_XDMAC			0		// use XDMA controller
 # define USE_DMAC_MANAGER	0		// use SAME5x DmacManager module
 
-#elif defined(DUET3) || defined(SAME70XPLD)
+#elif defined(DUET3)
 
 # define USE_DMAC			0		// use general DMA controller
 # define USE_XDMAC			1		// use XDMA controller
@@ -57,6 +57,10 @@ constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 # include <spi/spi.h>
 #endif
 
+#if defined(DUET3_MB6HC) && HAS_WIFI_NETWORKING
+extern void ESP_SPI_HANDLER() noexcept;
+#endif
+
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeMachineState.h>
 #include <Movement/Move.h>
@@ -90,9 +94,6 @@ static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
 #endif
 
 volatile bool dataReceived = false;		// warning: on the SAME5x this just means the transfer has started, not necessarily that it has ended!
-#if SAME5x
-uint32_t transferStartTime = 0;
-#endif
 volatile bool transferReadyHigh = false;
 volatile unsigned int spiTxUnderruns = 0, spiRxOverruns = 0;
 
@@ -321,7 +322,7 @@ pre(bytesToTransfer <= inBuffer.limit; bytesToTransfer <= outBuffer.limit)
 	// Enable SPI and notify the SBC we are ready
 #if SAME5x
 	SbcSpiSercom->SPI.INTFLAG.reg = 0xFF;						// clear any pending interrupts
-	SbcSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_SSL;	// enable the start of transfer (SS low) interrupt
+	SbcSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_TXC;	// enable the end of transfer interrupt
 	SbcSpiSercom->SPI.CTRLA.reg |= SERCOM_SPI_CTRLA_ENABLE;
 	while (SbcSpiSercom->SPI.SYNCBUSY.reg & (SERCOM_SPI_SYNCBUSY_SWRST | SERCOM_SPI_SYNCBUSY_ENABLE)) { };
 #else
@@ -336,9 +337,6 @@ pre(bytesToTransfer <= inBuffer.limit; bytesToTransfer <= outBuffer.limit)
 	NVIC_EnableIRQ(SBC_SPI_IRQn);
 
 	// Begin transfer
-#if SAME5x
-	transferStartTime = 0;
-#endif
 	transferReadyHigh = !transferReadyHigh;
 	digitalWrite(SbcTfrReadyPin, transferReadyHigh);
 }
@@ -351,19 +349,24 @@ pre(bytesToTransfer <= inBuffer.limit; bytesToTransfer <= outBuffer.limit)
 extern "C" void SBC_SPI_HANDLER() noexcept
 {
 #if SAME5x
-	// On the SAM5x we can't get an end-of-transfer interrupt, only a start-of-transfer interrupt.
-	// So we can't disable SPI or DMA in this ISR.
 	const uint8_t status = SbcSpiSercom->SPI.INTFLAG.reg;
-	if ((status & SERCOM_SPI_INTENSET_SSL) != 0)
+	if ((status & SERCOM_SPI_INTFLAG_TXC) != 0)
 	{
-		SbcSpiSercom->SPI.INTENCLR.reg = SERCOM_SPI_INTENSET_SSL;		// disable the interrupt
-		SbcSpiSercom->SPI.INTFLAG.reg = SERCOM_SPI_INTENSET_SSL;		// clear the status
+		SbcSpiSercom->SPI.INTENCLR.reg = SERCOM_SPI_INTENCLR_TXC;		// disable the interrupt
+		SbcSpiSercom->SPI.INTFLAG.reg = SERCOM_SPI_INTFLAG_TXC;			// clear the status
 
 		// Wake up the SBC task
 		dataReceived = true;
 		TaskBase::GiveFromISR(sbcTaskHandle);
 	}
 #else
+# if defined(DUET3_MB6HC) && HAS_WIFI_NETWORKING
+	if (!reprap.UsingSbcInterface())
+	{
+		ESP_SPI_HANDLER();
+		return;
+	}
+# endif
 	const uint32_t status = SBC_SPI->SPI_SR;							// read status and clear interrupt
 	SBC_SPI->SPI_IDR = SPI_IER_NSSR;									// disable the interrupt
 	if ((status & SPI_SR_NSSR) != 0)
@@ -767,18 +770,6 @@ TransferState DataTransfer::DoTransfer() noexcept
 	if (dataReceived)
 	{
 #if SAME5x
-		// Unfortunately the SAME5x doesn't have an end-of-transfer interrupt, but SPI transfers typically don't take long
-		if (!digitalRead(SbcSSPin))				// transfer is complete if SS is high
-		{
-			if (transferStartTime == 0)
-			{
-				transferStartTime = millis();
-				return TransferState::finishingTransfer;
-			}
-			return (millis() - transferStartTime > SpiMaxTransferTime) ? TransferState::connectionTimeout : TransferState::finishingTransfer;
-		}
-		transferStartTime = 0;
-
 		if (SbcSpiSercom->SPI.STATUS.bit.BUFOVF)
 		{
 			++spiRxOverruns;

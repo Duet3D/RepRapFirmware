@@ -158,6 +158,8 @@ struct DriverId
 	// Constructor used by ATE configurations and object model
 	DriverId(CanAddress addr, uint8_t drv) noexcept : localDriver(drv), boardAddress(addr) { }
 
+	CanAddress GetBoardAddress() const noexcept { return boardAddress; }
+
 	void SetFromBinary(uint32_t val) noexcept
 	{
 		localDriver = val & 0x000000FF;
@@ -200,6 +202,8 @@ struct DriverId
 
 	// Constructor used by object model
 	explicit DriverId(uint8_t drv) noexcept : localDriver(drv) { }
+
+	CanAddress GetBoardAddress() const noexcept { return 0; }
 
 	// Set the driver ID from the binary value, returning true if there was a nonzero board number so that the caller knows the address is not valid
 	bool SetFromBinary(uint32_t val) noexcept
@@ -605,7 +609,7 @@ const NvicPriority NvicPriorityEthernet = 7;		// priority for Ethernet interface
 # endif
 
 const NvicPriority NvicPriorityDMA = 7;				// end-of-DMA interrupt used by TMC drivers and HSMCI
-const NvicPriority NvicPrioritySpi = 7;				// SPI is used for network transfers on Duet WiFi/Duet vEthernet
+const NvicPriority NvicPrioritySpi = 7;				// SPI is used for network transfers on Duet WiFi/Duet Ethernet and for SBC transfers
 
 #elif __NVIC_PRIO_BITS >= 4
 // We have at least 16 priority levels

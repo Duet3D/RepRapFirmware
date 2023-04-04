@@ -52,8 +52,8 @@
 // IEEE defined Registers
 #define GMII_BMCR        0x00   // Basic Control
 #define GMII_BMSR        0x01   // Basic Status
-#define GMII_PHYID1      0x02   // PHY Idendifier 1
-#define GMII_PHYID2      0x03   // PHY Idendifier 2
+#define GMII_PHYID1      0x02   // PHY Identifier 1
+#define GMII_PHYID2      0x03   // PHY Identifier 2
 #define GMII_ANAR        0x04   // Auto_Negotiation Advertisement
 #define GMII_ANLPAR      0x05   // Auto_negotiation Link Partner Ability
 #define GMII_ANER        0x06   // Auto-negotiation Expansion

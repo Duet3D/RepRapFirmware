@@ -112,13 +112,14 @@ void LwipSocket::DataReceived(pbuf *data) noexcept
 	if (state != SocketState::closing)
 	{
 		// Store it for the NetworkResponder
-		if (receivedData == nullptr)
+		pbuf *const rdata = receivedData;
+		if (rdata == nullptr)
 		{
 			receivedData = data;
 		}
 		else
 		{
-			pbuf_cat(receivedData, data);
+			pbuf_cat(rdata, data);
 		}
 	}
 	else
@@ -256,30 +257,47 @@ bool LwipSocket::CanSend() const noexcept
 	return (state == SocketState::connected);
 }
 
+// Get the next received pbuf, skipping any empty ones (we can get empty ones from lwip)
+pbuf *LwipSocket::GetNextReceivedPbuf() noexcept
+{
+	pbuf *rdata;
+	while ((rdata = receivedData) != nullptr && rdata->len == 0)
+	{
+		debugPrintf("Discarding empty pbuf\n");
+		MutexLocker lock(lwipMutex);
+		receivedData = rdata->next;
+		rdata->next = nullptr;
+		pbuf_free(rdata);
+		readIndex = 0;
+	}
+	return rdata;
+}
+
 // Read 1 character from the receive buffers, returning true if successful
 bool LwipSocket::ReadChar(char& c) noexcept
 {
-	if (receivedData != nullptr)
+	pbuf *const rdata = GetNextReceivedPbuf();
+	if (rdata != nullptr)
 	{
-		const char * const data = (const char *)receivedData->payload;
+		const char * const data = (const char *)rdata->payload;
 		c = data[readIndex++];
 
-		if (readIndex >= receivedData->len)
+		const uint16_t rlen = rdata->len;
+		if (readIndex >= rlen)
 		{
-			// We've processed one more pbuf
+			// Free the buffer. Grab the mutex first to prevent lwip appending more data to it.
 			MutexLocker lock(lwipMutex);
 
+			receivedData = rdata->next;
+			rdata->next = nullptr;
+			pbuf_free(rdata);
+			readIndex = 0;
+
+			// Tell lwip we have taken this data
 			if (connectionPcb != nullptr)
 			{
-				tcp_recved(connectionPcb, receivedData->len);
+				tcp_recved(connectionPcb, rlen);
 			}
-
-			// Free the first item of the pbuf chain and move on to the next one
-			pbuf *currentBlock = receivedData;
-			receivedData = receivedData->next;
-			currentBlock->next = nullptr;
-			pbuf_free(currentBlock);
-			readIndex = 0;
 		}
 
 		return true;
@@ -292,11 +310,12 @@ bool LwipSocket::ReadChar(char& c) noexcept
 // Return a pointer to data in a buffer and a length available
 bool LwipSocket::ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept
 {
-	if (receivedData != nullptr)
+	pbuf *const rdata = GetNextReceivedPbuf();
+	if (rdata != nullptr)
 	{
-		const uint8_t * const data = (const uint8_t *)receivedData->payload;
+		const uint8_t * const data = (const uint8_t *)rdata->payload;
 		buffer = &data[readIndex];
-		len = receivedData->len - readIndex;
+		len = rdata->len - readIndex;
 		return true;
 	}
 
@@ -306,25 +325,27 @@ bool LwipSocket::ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept
 // Flag some data as taken from the receive buffers. We never take data from more than one buffer at a time.
 void LwipSocket::Taken(size_t len) noexcept
 {
-	if (receivedData != nullptr)
+	pbuf *const rdata = receivedData;
+	if (rdata != nullptr)			// should always be true
 	{
 		readIndex += len;
-		if (readIndex >= receivedData->len)
+		const uint16_t rlen = rdata->len;
+		if (readIndex >= rlen)
 		{
-			// Notify LwIP
+			// Free the buffer. Grab the mutex first to prevent lwip appending more data to it.
 			MutexLocker lock(lwipMutex);
 
+			// Free the first item of the pbuf chain if the number of taken bytes exceeds its size
+			receivedData = rdata->next;
+			rdata->next = nullptr;
+			pbuf_free(rdata);
+			readIndex = 0;
+
+			// Notify LwIP
 			if (connectionPcb != nullptr)
 			{
-				tcp_recved(connectionPcb, receivedData->len);
+				tcp_recved(connectionPcb, rlen);
 			}
-
-			// Free the first item of the pbuf chain if the number of taken bytes exceeds its size
-			pbuf *currentBlock = receivedData;
-			receivedData = receivedData->next;
-			currentBlock->next = nullptr;
-			pbuf_free(currentBlock);
-			readIndex = 0;
 		}
 	}
 }
@@ -346,8 +367,6 @@ void LwipSocket::Poll() noexcept
 		break;
 
 	case SocketState::connected:
-		// A connection has been established, but no responder has been found yet
-		// See if we can assign this socket
 		if (responderFound)
 		{
 			// Are we still waiting for data to be written?
@@ -415,13 +434,14 @@ void LwipSocket::Poll() noexcept
 	}
 }
 
-// Discard any received data for this transaction
+// Discard any received data for this transaction. Acquire the lwip mutex before calling this.
 void LwipSocket::DiscardReceivedData() noexcept
 {
-	if (receivedData != nullptr)
+	pbuf *const rdata = receivedData;
+	if (rdata != nullptr)
 	{
-		pbuf_free(receivedData);
 		receivedData = nullptr;
+		pbuf_free(rdata);
 	}
 	readIndex = 0;
 }

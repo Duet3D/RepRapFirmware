@@ -42,7 +42,7 @@ constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[
 	{ "enabled",			OBJECT_MODEL_FUNC(self->comparisonEnabled),		 														ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
 	{ "mag",				OBJECT_MODEL_FUNC((int32_t)self->magnitude),															ObjectModelEntryFlags::live },
-	{ "position",			OBJECT_MODEL_FUNC((int32_t)self->sensorValue),															ObjectModelEntryFlags::live },
+	{ "position",			OBJECT_MODEL_FUNC((int32_t)self->lastKnownPosition),													ObjectModelEntryFlags::live },
 #endif
 	{ "status",				OBJECT_MODEL_FUNC(self->GetStatusText()),																ObjectModelEntryFlags::live },
 	{ "type",				OBJECT_MODEL_FUNC_NOSELF("rotatingMagnet"), 															ObjectModelEntryFlags::none },
@@ -90,7 +90,7 @@ RotatingMagnetFilamentMonitor::RotatingMagnetFilamentMonitor(unsigned int drv, u
 void RotatingMagnetFilamentMonitor::Init() noexcept
 {
 	dataReceived = false;
-	sensorValue = 0;
+	sensorValue = lastKnownPosition = 0;
 	parityErrorCount = framingErrorCount = overrunErrorCount = polarityErrorCount = overdueCount = 0;
 	lastMeasurementTime = 0;
 	lastErrorCode = 0;
@@ -233,12 +233,6 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const Stri
 	return rslt;
 }
 
-// Return the current wheel angle
-float RotatingMagnetFilamentMonitor::GetCurrentPosition() const noexcept
-{
-	return (sensorValue & TypeMagnetAngleMask) * (360.0/1024.0);
-}
-
 // Deal with any received data
 void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 {
@@ -349,6 +343,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 		if (receivedPositionReport)
 		{
 			// We have a completed a position report
+			lastKnownPosition = sensorValue & TypeMagnetAngleMask;
 			const uint16_t angleChange = (val - sensorValue) & TypeMagnetAngleMask;			// angle change in range 0..1023
 			const int32_t movement = (angleChange <= 512) ? (int32_t)angleChange : (int32_t)angleChange - 1024;
 			movementMeasuredSinceLastSync += (float)movement/1024;
@@ -537,7 +532,8 @@ void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int 
 	if (dataReceived)
 	{
 		buf.catf("pos %.2f, errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32 "\n",
-					(double)GetCurrentPosition(), framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
+					(double)((float)lastKnownPosition * (360.0/1024.0)),
+					framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 	}
 	else
 	{

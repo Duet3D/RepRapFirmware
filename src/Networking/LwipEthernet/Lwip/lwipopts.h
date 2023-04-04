@@ -63,7 +63,7 @@
 
 /**
  * LWIP_NETIF_STATUS_CALLBACK==1: Support a callback function whenever an interface
- * changes its up/down status (i.e., due to DHCP IP acquistion)
+ * changes its up/down status (i.e., due to DHCP IP acquisition)
  */
 #define LWIP_NETIF_STATUS_CALLBACK	1
 
@@ -88,6 +88,15 @@
 #define DHCP_USED
 
 #define LWIP_CHKSUM_ALGORITHM		3		// use fastest checksum algorithm (does 8 bytes at a time)
+
+#define CHECKSUM_CHECK_IP			0		// use hardware checking of incoming IP checksums
+#define CHECKSUM_CHECK_UDP			0		// use hardware checking of incoming UDP checksums
+#define CHECKSUM_CHECK_TCP			0		// use hardware checking of incoming TCP checksums
+
+#define LWIP_DONT_PROVIDE_BYTEORDER_FUNCTIONS	1
+#define lwip_htons(_x)			__builtin_bswap16(_x)
+#define lwip_htonl(_x)			__builtin_bswap32(_x)
+#define SWAP_BYTES_IN_WORD(_x)	__builtin_bswap16(_x)
 
 /*
    ------------------------------------
@@ -116,22 +125,34 @@
 #define MEMP_NUM_UDP_PCB                3
 
 /**
- * MEMP_NUM_TCP_PCB: the number of simulatenously active TCP connections.
+ * MEMP_NUM_TCP_PCB: the number of simultaneously active TCP connections.
  * (requires the LWIP_TCP option)
  */
-#define MEMP_NUM_TCP_PCB                8
+#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+# define MEMP_NUM_TCP_PCB				10
+#else
+# define MEMP_NUM_TCP_PCB				8
+#endif
 
 /**
  * MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP connections.
  * (requires the LWIP_TCP option)
  */
-#define MEMP_NUM_TCP_PCB_LISTEN         7
+#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+# define MEMP_NUM_TCP_PCB_LISTEN		10
+#else
+# define MEMP_NUM_TCP_PCB_LISTEN		7
+#endif
 
 /**
  * MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments.
  * (requires the LWIP_TCP option)
  */
-#define MEMP_NUM_TCP_SEG                8
+#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+# define MEMP_NUM_TCP_SEG				10
+#else
+# define MEMP_NUM_TCP_SEG				8
+#endif
 
 /**
  * MEMP_NUM_REASSDATA: the number of IP packets simultaneously queued for
@@ -170,12 +191,17 @@
 /**
  * PBUF_POOL_SIZE: the number of buffers in the pbuf pool. Needs to be enough for IP packet reassembly.
  */
-#define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 12)
+#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+// We may as well use the remainder of the non-cached RAM block for additional pbufs
+# define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 15)
+#else
+# define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 12)
+#endif
 
 /**
  * PBUF_POOL_BUFSIZE: the size of each pbuf in the pbuf pool.
  */
-#define PBUF_POOL_BUFSIZE               GMAC_FRAME_LENTGH_MAX
+#define PBUF_POOL_BUFSIZE               GMAC_FRAME_LENGTH_MAX
 
 /*
    ----------------------------------
@@ -236,7 +262,7 @@ extern uint32_t random32(void) noexcept;
  * TCP_WND: The size of a TCP window.  This must be at least
  * (2 * TCP_MSS) for things to work well
  */
-#define TCP_WND                 (2 * TCP_MSS)
+#define TCP_WND                 (4 * TCP_MSS)
 
 /**
  * TCP_SND_BUF: TCP sender buffer space (bytes).
@@ -267,7 +293,7 @@ extern uint32_t random32(void) noexcept;
 #define LWIP_NETIF_HOSTNAME             1
 
 /** The maximum number of services per netif */
-#define MDNS_MAX_SERVICES               4
+#define MDNS_MAX_SERVICES               5		// increased from 4 to 5 to include _duet_discovery service
 
 
 /*

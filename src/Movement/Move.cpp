@@ -161,9 +161,9 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 
 	// 8. move.compensation.skew members
 	{ "compensateXY",			OBJECT_MODEL_FUNC(self->compensateXY),															ObjectModelEntryFlags::none },
-	{ "tanXY",					OBJECT_MODEL_FUNC(self->tanXY, 4),																ObjectModelEntryFlags::none },
-	{ "tanXZ",					OBJECT_MODEL_FUNC(self->tanXZ, 4),																ObjectModelEntryFlags::none },
-	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ, 4),																ObjectModelEntryFlags::none },
+	{ "tanXY",					OBJECT_MODEL_FUNC(self->tanXY(), 4),															ObjectModelEntryFlags::none },
+	{ "tanXZ",					OBJECT_MODEL_FUNC(self->tanXZ(), 4),															ObjectModelEntryFlags::none },
+	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ(), 4),															ObjectModelEntryFlags::none },
 
 #if SUPPORT_COORDINATE_ROTATION
 	// 8. move.rotation members
@@ -228,7 +228,7 @@ void Move::Init() noexcept
 	// Clear the transforms
 	SetIdentityTransform();
 	compensateXY = true;
-	tanXY = tanYZ = tanXZ = 0.0;
+	tangents[0] = tangents[1] = tangents[2] = 0.0;
 
 	usingMesh = useTaper = false;
 	zShift = 0.0;
@@ -618,11 +618,11 @@ void Move::AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexce
 		{
 			if (xAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] += (compensateXY ? tanXY*xyzPoint[lowestYAxis] : 0.0) + tanXZ*xyzPoint[Z_AXIS];
+				xyzPoint[axis] += (compensateXY ? tanXY() * xyzPoint[lowestYAxis] : 0.0) + tanXZ() * xyzPoint[Z_AXIS];
 			}
 			if (yAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] += (compensateXY ? 0.0 : tanXY*xyzPoint[lowestXAxis]) + tanYZ*xyzPoint[Z_AXIS];
+				xyzPoint[axis] += (compensateXY ? 0.0 : tanXY() * xyzPoint[lowestXAxis]) + tanYZ() * xyzPoint[Z_AXIS];
 			}
 		}
 	}
@@ -644,11 +644,11 @@ void Move::InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const
 		{
 			if (yAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] -= ((compensateXY ? 0.0 : tanXY*xyzPoint[lowestXAxis]) + tanYZ*xyzPoint[Z_AXIS]);
+				xyzPoint[axis] -= ((compensateXY ? 0.0 : tanXY() * xyzPoint[lowestXAxis]) + tanYZ() * xyzPoint[Z_AXIS]);
 			}
 			if (xAxes.IsBitSet(axis))
 			{
-				xyzPoint[axis] -= ((compensateXY ? tanXY*xyzPoint[lowestYAxis] : 0.0) + tanXZ*xyzPoint[Z_AXIS]);
+				xyzPoint[axis] -= ((compensateXY ? tanXY() * xyzPoint[lowestYAxis] : 0.0) + tanXZ() * xyzPoint[Z_AXIS]);
 			}
 		}
 	}
@@ -690,7 +690,7 @@ void Move::BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcep
 {
 	if (usingMesh)
 	{
-		const float toolHeight = xyzPoint[Z_AXIS] + Tool::GetOffset(tool, Z_AXIS);
+		const float toolHeight = xyzPoint[Z_AXIS] + Tool::GetOffset(tool, Z_AXIS);			// the requested nozzle height above the bed
 		if (!useTaper || toolHeight < taperHeight)
 		{
 			const float zCorrection = ComputeHeightCorrection(xyzPoint, tool);
@@ -1136,6 +1136,46 @@ GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequ
 						}
 				   );
 	return rslt;
+}
+
+void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
+{
+	// Construct a MovementLinear message to revert the position. The move must be shorter than clocksAllowed.
+	// When writing this, clocksAllowed was equivalent to 40ms.
+	// We allow 10ms delay time to allow the motor to stop and reverse direction, 10ms acceleration time, 5ms steady time and 10ms deceleration time.
+	CanMessageMovementLinear msg2;
+	msg2.accelerationClocks = msg2.decelClocks = msg.clocksAllowed/4;
+	msg2.steadyClocks = msg.clocksAllowed/8;
+	msg2.whenToExecute = StepTimer::GetMasterTime() + msg.clocksAllowed/4;
+	msg2.numDrivers = NumDirectDrivers;
+	msg2.pressureAdvanceDrives = 0;
+	msg2.seq = 0;
+	msg2.initialSpeedFraction = msg2.finalSpeedFraction = 0.0;
+
+	size_t index = 0;
+	bool needSteps = false;
+	const volatile int32_t * const lastMoveStepsTaken = rings[0].GetLastMoveStepsTaken();
+	constexpr size_t numDrivers = min<size_t>(NumDirectDrivers, MaxLinearDriversPerCanSlave);
+	for (size_t driver = 0; driver < numDrivers; ++driver)
+	{
+		int32_t steps = 0;
+		if (msg.whichDrives & (1u << driver))
+		{
+			const int32_t stepsWanted = msg.finalStepCounts[index++];
+			const int32_t stepsTaken = lastMoveStepsTaken[driver];
+			if (((stepsWanted >= 0 && stepsTaken > stepsWanted) || (stepsWanted <= 0 && stepsTaken < stepsWanted)))
+			{
+				steps = stepsWanted - stepsTaken;
+				needSteps = true;
+			}
+		}
+		msg2.perDrive[driver].steps = steps;
+	}
+
+	if (needSteps)
+	{
+		AddMoveFromRemote(msg2);
+	}
 }
 
 #endif

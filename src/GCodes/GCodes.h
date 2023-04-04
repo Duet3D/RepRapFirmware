@@ -504,7 +504,7 @@ private:
 	void SaveResumeInfo(bool wasPowerFailure) noexcept;
 #endif
 
-	void NewMoveAvailable(unsigned int sl) noexcept;							// Flag that a new move is available
+	void NewSingleSegmentMoveAvailable() noexcept;								// Flag that a new move is available
 	void NewMoveAvailable() noexcept;											// Flag that a new move is available
 
 	void SetMoveBufferDefaults() noexcept;										// Set up default values in the move buffer
@@ -687,9 +687,6 @@ private:
 	// Laser
 	float laserMaxPower;
 	bool laserPowerSticky;						// true if G1 S parameters are remembered across G1 commands
-
-	// Heater fault handler
-	uint32_t heaterFaultTimeout;				// how long we wait for the user to fix it before turning everything off
 
 	// Object cancellation
 	ObjectTracker buildObjects;

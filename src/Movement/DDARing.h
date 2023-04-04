@@ -92,6 +92,11 @@ public:
 # else
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept;				// add a move from the ATE to the movement queue
 # endif
+	void StopDrivers(uint16_t whichDrives) noexcept;
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+	const volatile int32_t *GetLastMoveStepsTaken() const noexcept { return lastMoveStepsTaken; }
 #endif
 
 protected:
@@ -127,6 +132,9 @@ private:
 	unsigned int stepErrors;													// count of step errors, for diagnostics
 
 	float simulationTime;														// Print time since we started simulating
+#if SUPPORT_REMOTE_COMMANDS
+	volatile int32_t lastMoveStepsTaken[NumDirectDrivers];						// how many steps were taken in the last move we did
+#endif
 	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 				// Accumulated motor steps, used by filament monitors
 	volatile uint32_t extrudersPrintingSince;									// The milliseconds clock time when extrudersPrinting was set to true
 

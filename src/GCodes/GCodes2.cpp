@@ -1268,14 +1268,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							break;
 
 						case MassStorage::InfoResult::ok:
-							reply.printf("SD card in slot %" PRIu32 ": capacity %.2fGb, partition size %.2fGb, free space %.2fGb, speed %.2fMBytes/sec, cluster size %" PRIu32 "%s",
+							reply.printf("SD card in slot %" PRIu32 ": capacity %.2fGB, partition size %.2fGB, free space %.2fGB, speed %.2fMBytes/sec, cluster size %" PRIu32 "%s",
 											slot,
 											(double)((float)returnedInfo.cardCapacity * 1e-9),
 											(double)((float)returnedInfo.partitionSize * 1e-9),
 											(double)((float)returnedInfo.freeSpace * 1e-9),
 											(double)((float)returnedInfo.speed * 1e-6),
 											(returnedInfo.clSize < 1024) ? returnedInfo.clSize : returnedInfo.clSize/1024,
-											(returnedInfo.clSize < 1024) ? " bytes" : "kb"
+											(returnedInfo.clSize < 1024) ? " bytes" : "kB"
 										);
 							break;
 						}
@@ -2178,13 +2178,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						reply.copy((frac == 1) ? "Reduced accelerations (mm/sec^2): " : "Accelerations (mm/sec^2): ");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertAcceleration(platform.Accelerations(frac == 1)[axis]));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertAcceleration(platform.Acceleration(axis, frac == 1)));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(platform.Accelerations(frac == 1)[ExtruderToLogicalDrive(extruder)]));
+							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(platform.Acceleration(ExtruderToLogicalDrive(extruder), frac == 1)));
 							sep = ':';
 						}
 					}
@@ -2511,7 +2511,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							SetMoveBufferDefaults();
 							moveState.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
 							moveState.tool = reprap.GetCurrentTool();
-							NewMoveAvailable(1);
+							moveState.linearAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetLinearAxes());
+							moveState.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetRotationalAxes());
+							NewSingleSegmentMoveAvailable();
 						}
 					}
 					else
@@ -3472,23 +3474,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 570: // Set/report heater monitoring
-				{
-					bool seen = false;
-					if (gb.Seen('S'))
-					{
-						seen = true;
-						heaterFaultTimeout = gb.GetUIValue() * (60 * 1000);
-					}
-					if (gb.Seen('H'))
-					{
-						seen = true;
-						result = reprap.GetHeat().ConfigureHeaterMonitoring(gb.GetUIValue(), gb, reply);
-					}
-					if (!seen)
-					{
-						reply.printf("Print will be terminated if a heater fault is not reset within %" PRIu32 " minutes", heaterFaultTimeout/(60 * 1000));
-					}
-				}
+				gb.MustSee('H');
+				result = reprap.GetHeat().ConfigureHeaterMonitoring(gb.GetUIValue(), gb, reply);
 				break;
 
 			case 571: // Set output on extrude
@@ -3502,12 +3489,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			// case 573 was report heater average PWM but is no longer supported because you can use "echo heat/heaters[N].avgPwm" instead
 
 			case 574: // Set endstop configuration
-				// We may be about to delete endstops, so make sure we are not executing a move that uses them
-				if (!LockMovementAndWaitForStandstill(gb))
-				{
-					return false;
-				}
-				result = platform.GetEndstops().HandleM574(gb, reply, outBuf);
+				result = platform.GetEndstops().HandleM574(gb, reply, outBuf);				// this will lock movement if it is going to make any changes
 				break;
 
 			case 575: // Set communications parameters
@@ -3935,22 +3917,26 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 673: // Align plane on rotary axis
-				if (numTotalAxes < U_AXIS)
+				if (numTotalAxes <= U_AXIS)
 				{
 					reply.copy("Insufficient axes configured");
 					result = GCodeResult::error;
 				}
-				else if (LockMovementAndWaitForStandstill(gb))
+				else if (!LockMovementAndWaitForStandstill(gb))
+				{
+					result = GCodeResult::notFinished;
+				}
+				else if (!AllAxesAreHomed())
+				{
+					reply.copy("Home the axes first");
+					result = GCodeResult::error;
+				}
+				else
 				{
 					Move& move = reprap.GetMove();
 					if (move.GetNumProbedProbePoints() < 2)
 					{
 						reply.copy("Insufficient probe points");
-						result = GCodeResult::error;
-					}
-					else if (!AllAxesAreHomed())
-					{
-						reply.copy("Home the axes first");
 						result = GCodeResult::error;
 					}
 					else
@@ -3977,11 +3963,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						SetMoveBufferDefaults();
 						if (axisToUse != 0)
 						{
+							if (!reprap.GetPlatform().IsAxisRotational(axisToUse))
+							{
+								reply.printf("%c axis is not rotary", axisLetters[axisToUse]);
+								result = GCodeResult::error;
+								break;
+							}
+
 							// An axis letter is given, so try to level the given axis
 							const float correctionAngle = atanf((z2 - z1) / (a2 - a1)) * 180.0 / M_PI;
 							const float correctionFactor = gb.Seen('S') ? gb.GetFValue() : 1.0;
 							moveState.coords[axisToUse] += correctionAngle * correctionFactor;
-
+							moveState.rotationalAxesMentioned = true;
 							reply.printf("%c axis is off by %.2f deg", axisLetters[axisToUse], (double)correctionAngle);
 							HandleReply(gb, GCodeResult::notFinished, reply.c_str());
 						}
@@ -4000,6 +3993,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 									((z4 - z3) * (a2 - a1) - (z2 - z1) * (a4 - a3));
 							moveState.coords[(x1 == x2) ? Y_AXIS : X_AXIS] += aS;
 							moveState.coords[Z_AXIS] += zS;
+							moveState.linearAxesMentioned = true;
 
 							reply.printf("%c is offset by %.2fmm, Z is offset by %.2fmm", (x2 == x1) ? 'Y' : 'X', (double)aS, (double)zS);
 							HandleReply(gb, GCodeResult::notFinished, reply.c_str());
@@ -4019,14 +4013,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						moveState.feedRate = gb.LatestMachineState().feedRate;
 						moveState.usingStandardFeedrate = true;
 						moveState.tool = reprap.GetCurrentTool();
-						NewMoveAvailable(1);
+						NewSingleSegmentMoveAvailable();
 
 						gb.SetState(GCodeState::waitingForSpecialMoveToComplete);
 					}
-				}
-				else
-				{
-					result = GCodeResult::notFinished;
 				}
 				break;
 
@@ -4268,7 +4258,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 906: // Set/report Motor currents
 			case 913: // Set/report motor current percent
-#if HAS_SMART_DRIVERS
+#if HAS_SMART_DRIVERS || SUPPORT_CAN_EXPANSION
 			case 917: // Set/report standstill motor current percentage
 #endif
 				{
@@ -4329,7 +4319,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					else
 					{
 						reply.copy(	(code == 913) ? "Motor current % of normal - "
-#if HAS_SMART_DRIVERS
+#if HAS_SMART_DRIVERS || SUPPORT_CAN_EXPANSION
 									: (code == 917) ? "Motor standstill current % of normal - "
 #endif
 											: "Motor current (mA) - "
@@ -4443,7 +4433,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 			case 915:
 				result = platform.ConfigureStallDetection(gb, reply, outBuf);
 				break;

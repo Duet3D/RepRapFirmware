@@ -80,6 +80,13 @@ bool StringParser::Put(char c) noexcept
 		++commandLength;
 	}
 
+	// We now discard CR if we are reading from file. It makes line number counting easier and it's unlikely that a pre-OSX Mac will be used with a Duet.
+	// When not reading from file we still accept CR as a line terminator, for compatibility with Putty and some other terminal emulators.
+	if (c == '\r' && gb.IsDoingFile())
+	{
+		return false;
+	}
+
 	if (c == 0 || c == '\n' || c == '\r')
 	{
 		return LineFinished();
@@ -433,7 +440,7 @@ void StringParser::CheckForMixedSpacesAndTabs() noexcept
 	if (seenMetaCommand && !warnedAboutMixedSpacesAndTabs && seenLeadingSpace && seenLeadingTab)
 	{
 		reprap.GetPlatform().MessageF(AddWarning(gb.GetResponseMessageType()),
-								"both space and tab characters used to indent blocks by line %" PRIu32, gb.GetLineNumber());
+								"both space and tab characters used to indent blocks at/before line %" PRIu32 "\n", gb.GetLineNumber());
 		warnedAboutMixedSpacesAndTabs = true;
 	}
 }

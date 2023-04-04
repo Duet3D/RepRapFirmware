@@ -45,14 +45,6 @@ Licence: GPL
 
 #if defined(DUET_NG)
 # include "DueXn.h"
-#elif defined(DUET_06_085)
-# include "MCP4461/MCP4461.h"
-#elif defined(__ALLIGATOR__)
-# include "DAC/DAC084S085.h"       // SPI DAC for motor current vref
-# include "EUI48/EUI48EEPROM.h"    // SPI EUI48 mac address EEPROM
-# include "Microstepping.h"
-#elif defined(__LPC17xx__)
-# include "MCP4461/MCP4461.h"
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -126,13 +118,13 @@ enum class BoardType : uint8_t
 #elif defined(DUET3_MB6HC)
 	Duet3_6HC_v06_100 = 1,
 	Duet3_6HC_v101 = 2,
+	Duet3_6HC_v102 = 3,
 #elif defined(DUET3_MB6XD)
 	Duet3_6XD_v01 = 1,
 	Duet3_6XD_v100 = 2,
+	Duet3_6XD_v101 = 3,
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	FMDC,
-#elif defined(SAME70XPLD)
-	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)
 	DuetWiFi_10 = 1,
 	DuetWiFi_102 = 2,
@@ -328,6 +320,7 @@ public:
 	void Exit() noexcept;									// Shut down tidily. Calling Init after calling this should reset to the beginning
 
 	void Diagnostics(MessageType mtype) noexcept;
+	static const char *GetResetReasonText() noexcept;
 	GCodeResult DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& buf, unsigned int d) THROWS(GCodeException);
 	static bool WasDeliberateError() noexcept { return deliberateError; }
 	void LogError(ErrorCode e) noexcept { errorCodeBits |= (uint32_t)e; }
@@ -480,8 +473,8 @@ public:
 	const float *_ecv_array GetDriveStepsPerUnit() const noexcept
 		{ return driveStepsPerUnit; }
 	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept;
-	float Acceleration(size_t axisOrExtruder) const noexcept;
-	const float *_ecv_array Accelerations(bool useReduced) const noexcept;
+	float NormalAcceleration(size_t axisOrExtruder) const noexcept;
+	float Acceleration(size_t axisOrExtruder, bool reduced) const noexcept;
 	void SetAcceleration(size_t axisOrExtruder, float value, bool reduced) noexcept;
 	float MaxFeedrate(size_t axisOrExtruder) const noexcept;
 	const float *_ecv_array MaxFeedrates() const noexcept { return maxFeedrates; }
@@ -498,6 +491,7 @@ public:
 
 	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
 	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }
+	inline bool IsAxisLinear(size_t axis) const noexcept { return linearAxes.IsBitSet(axis); }
 	inline bool IsAxisRotational(size_t axis) const noexcept { return rotationalAxes.IsBitSet(axis); }
 	inline bool IsAxisContinuous(size_t axis) const noexcept { return continuousAxes.IsBitSet(axis); }
 #if 0	// shortcut axes not implemented yet
@@ -614,7 +608,7 @@ public:
 	bool HasVinPower() const noexcept { return true; }
 #endif
 
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
 #endif
 
@@ -677,7 +671,20 @@ public:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	void OnProcessingCanMessage() noexcept;								// called when we start processing any CAN message except for regular messages e.g. time sync
+	void OnProcessingCanMessage() noexcept;										// called when we start processing any CAN message except for regular messages e.g. time sync
+#endif
+
+#if defined(DUET3_MB6HC)
+	static BoardType GetMB6HCBoardType() noexcept;								// this is safe to call before Platform has been created
+#endif
+#if defined(DUET3_MB6XD)
+	static BoardType GetMB6XDBoardType() noexcept;								// this is safe to call before Platform has been created
+#endif
+
+	void SetDiagLed(bool on) const noexcept;
+
+#if SUPPORT_MULTICAST_DISCOVERY
+	void InvertDiagLed() const noexcept;
 #endif
 
 protected:
@@ -705,7 +712,10 @@ private:
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
 #endif
 
-#ifdef DUET3_MB6XD
+#if defined(DUET3_MB6HC)
+	float AdcReadingToPowerVoltage(uint16_t adcVal) const noexcept;
+	uint16_t PowerVoltageToAdcReading(float voltage) const noexcept;
+#elif defined(DUET3_MB6XD)
 	void UpdateDriverTimings() noexcept;
 #endif
 
@@ -891,6 +901,16 @@ private:
 	uint16_t autoPauseReading, autoResumeReading;
 	uint32_t numVinUnderVoltageEvents, previousVinUnderVoltageEvents;
 	volatile uint32_t numVinOverVoltageEvents, previousVinOverVoltageEvents;
+
+#ifdef DUET3_MB6HC
+	float powerMonitorVoltageRange;
+	uint16_t driverPowerOnAdcReading;
+	uint16_t driverPowerOffAdcReading;
+	Pin DiagPin;
+	Pin ActLedPin;
+	bool DiagOnPolarity;
+#endif
+
 	bool autoSaveEnabled;
 
 	enum class AutoSaveState : uint8_t
@@ -968,14 +988,14 @@ inline float Platform::DriveStepsPerUnit(size_t drive) const noexcept
 	return driveStepsPerUnit[drive];
 }
 
-inline float Platform::Acceleration(size_t drive) const noexcept
+inline float Platform::NormalAcceleration(size_t drive) const noexcept
 {
 	return normalAccelerations[drive];
 }
 
-inline const float *_ecv_array Platform::Accelerations(bool useReduced) const noexcept
+inline float Platform::Acceleration(size_t drive, bool useReduced) const noexcept
 {
-	return (useReduced) ? reducedAccelerations : normalAccelerations;
+	return (useReduced) ? min<float>(reducedAccelerations[drive], normalAccelerations[drive]) : normalAccelerations[drive];
 }
 
 inline void Platform::SetAcceleration(size_t drive, float value, bool reduced) noexcept

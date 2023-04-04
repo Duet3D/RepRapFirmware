@@ -85,7 +85,7 @@ extern "C" {
 #define GMAC_TXD_LEN_MASK       (0x1FFF)    /**< Length of buffer */
 
 /** The MAC can support frame lengths up to 1536 bytes */
-#define GMAC_FRAME_LENTGH_MAX   1536
+#define GMAC_FRAME_LENGTH_MAX   1536
 
 #define GMAC_TX_UNITSIZE        (1518 + 2)  /**< Size for ETH frame length, rounded up to a multiple of 4 (may make the DMA more efficient) */
 

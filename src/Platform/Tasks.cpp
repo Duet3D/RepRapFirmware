@@ -53,7 +53,7 @@ static Task<MainTaskStackWords> mainTask;
 extern "C" [[noreturn]] void MainTask(void * pvParameters) noexcept;
 
 // Idle task data
-constexpr unsigned int IdleTaskStackWords = 50;				// currently we don't use the idle talk for anything, so this can be quite small
+constexpr unsigned int IdleTaskStackWords = 50;				// currently we don't use the idle task for anything, so this can be quite small
 static Task<IdleTaskStackWords> idleTask;
 
 extern "C" void vApplicationGetIdleTaskMemory(StaticTask_t **ppxIdleTaskTCBBuffer, StackType_t **ppxIdleTaskStackBuffer, uint32_t *pulIdleTaskStackSize) noexcept
@@ -103,13 +103,14 @@ extern "C" void ReleaseMallocMutex() noexcept
 // We don't want to use a static buffer because that is wasteful of RAM, given that only the crash handler uses it, we have interrupts disabled while we use it,
 // and we reset immediately afterwards.
 // Instead we use either the bottom or top of the main task stack.
-// Parameter 'stk' is the stack we are interested in, which we must not overwrite. The caller is either using the same stack a little lower, or the exception stack.
-void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
+// Parameter 'stk' is the stack we are interested in, which we must not overwrite; or null.
+// If it is not null then the caller is either using the same stack a little lower, or the exception stack.
+void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 {
 	constexpr size_t stackAllowance = 128;
 	static_assert((sizeof(NonVolatileMemory) & 3) == 0);
 	static_assert(MainTaskStackWords * 4 >= 2 * sizeof(NonVolatileMemory) + stackAllowance + 4);
-	const char * const cStack = reinterpret_cast<const char*>(stk);
+	const char * const cStack = reinterpret_cast<const char*>((stk == nullptr) ? GetStackPointer() : stk);
 
 	// See if we can use the bottom of the main task stack
 	char *ret = (char *)&mainTask + sizeof(TaskBase);
@@ -127,8 +128,27 @@ void *Tasks::GetNVMBuffer(const uint32_t *stk) noexcept
 // Application entry point
 [[noreturn]] void AppMain() noexcept
 {
+#if defined(DUET3_MB6HC)													// for MB6HC the Status and Activity pins and polarity depend on the board version
+	const BoardType bt = Platform::GetMB6HCBoardType();
+	const Pin DiagPin = (bt == BoardType::Duet3_6HC_v102) ? DiagPin102 : DiagPinPre102;
+	const Pin ActLedPin = (bt == BoardType::Duet3_6HC_v102) ? ActLedPin102 : ActLedPinPre102;
+	const bool DiagOnPolarity = (bt == BoardType::Duet3_6HC_v102) ? DiagOnPolarity102 : DiagOnPolarityPre102;
+	if (bt == BoardType::Duet3_6HC_v102)
+	{
+		pinMode(UsbPowerSwitchPin, OUTPUT_LOW);								// turn USB power off
+		pinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
+	}
+#endif
+#if defined(DUET3_MB6XD)
+	const BoardType bt = Platform::GetMB6XDBoardType();
+	if (bt == BoardType::Duet3_6XD_v101)
+	{
+		pinMode(UsbPowerSwitchPin, OUTPUT_LOW);								// turn USB power off
+		pinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
+	}
+#endif
 	pinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up status LED for debugging and turn it off
-#if defined(DUET3MINI) || defined(DUET3_MB6XD)
+#if defined(DUET3MINI) || defined(DUET3_MB6HC) || defined(DUET3_MB6XD)
 	pinMode(ActLedPin, (ActOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up activity LED and turn it off
 #endif
 
@@ -308,6 +328,9 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 #endif
 		p.MessageF(mtype, "Never used RAM %d, free system stack %d words\n", GetNeverUsedRam(), GetHandlerFreeStack()/4);
 
+		//DEBUG
+		//p.MessageF(mtype, "heap top %.08" PRIx32 ", limit %.08" PRIx32 "\n", (uint32_t)heapTop, (uint32_t)heapLimit);
+		//ENDDB
 	}	// end memory stats scope
 
 	const uint32_t timeSinceLastCall = TaskResetRunTimeCounter();

@@ -24,7 +24,7 @@
 #endif
 
 // Perform a software reset. 'stk' points to the exception stack (r0 r1 r2 r3 r12 lr pc xPSR) if the cause is an exception, otherwise it is nullptr.
-[[noreturn]] void SoftwareReset(SoftwareResetReason initialReason, const uint32_t *stk) noexcept
+[[noreturn]] void SoftwareReset(SoftwareResetReason initialReason, const uint32_t *_ecv_array null stk) noexcept
 {
 	IrqDisable();								// disable interrupts before we call any flash functions. We don't enable them again.
 	WatchdogReset();							// kick the watchdog

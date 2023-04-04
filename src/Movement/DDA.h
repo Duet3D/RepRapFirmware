@@ -131,6 +131,7 @@ public:
 # else
 	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
 # endif
+	void StopDrivers(uint16_t whichDrives) noexcept;
 #endif
 
 	const int32_t *DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates
@@ -343,10 +344,6 @@ private:
 #if SUPPORT_CAN_EXPANSION
 			DriversBitmap drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
 			static_assert(MaxAxesPlusExtruders <= DriversBitmap::MaxBits());
-#endif
-			// These are used only in delta calculations
-#if SUPPORT_LINEAR_DELTA && !MS_USE_FPU
-			int32_t cKc;							// The Z movement fraction multiplied by Kc and converted to integer
 #endif
 		} afterPrepare;
 	};

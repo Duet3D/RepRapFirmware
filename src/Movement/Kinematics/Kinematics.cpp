@@ -84,7 +84,7 @@ bool Kinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef&
 }
 
 // Try to configure the segmentation parameters. Return true if we did.
-bool Kinematics::TryConfigureSegmentation(GCodeBuffer& gb) noexcept
+bool Kinematics::TryConfigureSegmentation(GCodeBuffer& gb) THROWS(GCodeException)
 {
 	bool seen = false;
 	gb.TryGetFValue('S', segmentsPerSecond, seen);
@@ -227,7 +227,7 @@ void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDire
 	{
 		const Platform& platform = reprap.GetPlatform();
 		const float maxSpeed = min<float>(platform.MaxFeedrate(X_AXIS), platform.MaxFeedrate(Y_AXIS));
-		const float maxAcceleration = min<float>(platform.Acceleration(X_AXIS), platform.Acceleration(Y_AXIS));
+		const float maxAcceleration = min<float>(platform.NormalAcceleration(X_AXIS), platform.NormalAcceleration(Y_AXIS));
 		dda.LimitSpeedAndAcceleration(maxSpeed/xyFactor, maxAcceleration/xyFactor);
 	}
 }
