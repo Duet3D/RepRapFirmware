@@ -15,7 +15,7 @@
 
 #include <RTOSIface/RTOSIface.h>
 
-const FilePosition GCODE_HEADER_SIZE = 20000uL;		// How many bytes to read from the header - I (DC) have a Kisslicer file with a layer height comment 14Kb from the start
+const FilePosition GCODE_HEADER_SIZE = 100000uL;	// How many bytes to read from the header - increased in 3.4.5 to allow for large thumbnail files
 const FilePosition GCODE_FOOTER_SIZE = 400000uL;	// How many bytes to read from the footer
 
 #if SAME70 || SAME5x
