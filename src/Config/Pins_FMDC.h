@@ -294,8 +294,8 @@ constexpr Pin EspSclkPin = PortAPin(12);
 constexpr Pin EspSSPin = PortAPin(14);
 constexpr Pin WiFiSpiSercomPins[] = { EspSclkPin, EspMisoPin, EspSSPin, EspMosiPin };
 constexpr GpioPinFunction WiFiSpiSercomPinsMode = GpioPinFunction::D;
-constexpr IRQn WiFiSpiSercomIRQn = SERCOM4_3_IRQn;			// this is the SS Low interrupt, the only one we use
-#define ESP_SPI_HANDLER		SERCOM4_3_Handler
+constexpr IRQn WiFiSpiSercomIRQn = SERCOM4_1_IRQn;			// this is the transmit complete interrupt, the only one we use
+#define ESP_SPI_HANDLER		SERCOM4_1_Handler
 
 constexpr Pin EspResetPin = PortBPin(14);
 constexpr Pin EspEnablePin = PortCPin(11);
