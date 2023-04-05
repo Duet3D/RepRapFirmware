@@ -31,7 +31,7 @@ namespace StackUsage
 
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true, input);
-NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, datetime, degrees, fileexists, exists, floor, isnan, max, min, mod, radians, random, sin, sqrt, tan, vector);
+NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, datetime, degrees, exists, exp, fileexists, floor, isnan, log, max, min, mod, pow, radians, random, sin, sqrt, tan, vector);
 
 const char * const InvalidExistsMessage = "invalid 'exists' expression";
 
@@ -789,6 +789,20 @@ void ExpressionParser::EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2
 	}
 }
 
+// Get another operand, called when evaluating a function after we have evaluate the first operand.
+// We checked the stack for the call to ParseInternal for the first operand, no need to do it again.
+void ExpressionParser::GetNextOperand(ExpressionValue& operand, bool evaluate) THROWS(GCodeException)
+{
+	SkipWhiteSpace();
+	if (CurrentCharacter() != ',')
+	{
+		ThrowParseException("expected ','");
+	}
+	AdvancePointer();
+	SkipWhiteSpace();
+	ParseInternal(operand, evaluate, 0);
+}
+
 // Return true if the specified type has no literals and should therefore be converted to string when comparing with another value that is not of the same type.
 // We don't need to handle Port and UniqueId types here because we convent them to string before calling this.
 /*static*/ bool ExpressionParser::TypeHasNoLiterals(TypeCode t) noexcept
@@ -1261,16 +1275,8 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 			case Function::atan2:
 				{
 					ConvertToFloat(rslt, evaluate);
-					SkipWhiteSpace();
-					if (CurrentCharacter() != ',')
-					{
-						ThrowParseException("expected ','");
-					}
-					AdvancePointer();
-					SkipWhiteSpace();
 					ExpressionValue nextOperand;
-					// We recently checked the stack for a call to ParseInternal, no need to do it again
-					ParseInternal(nextOperand, evaluate, 0);
+					GetNextOperand(nextOperand, evaluate);
 					ConvertToFloat(nextOperand, evaluate);
 					rslt.fVal = atan2f(rslt.fVal, nextOperand.fVal);
 					rslt.param = MaxFloatDigitsDisplayedAfterPoint;
@@ -1317,16 +1323,8 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 			case Function::mod:
 				{
-					SkipWhiteSpace();
-					if (CurrentCharacter() != ',')
-					{
-						ThrowParseException("expected ','");
-					}
-					AdvancePointer();
-					SkipWhiteSpace();
 					ExpressionValue nextOperand;
-					// We recently checked the stack for a call to ParseInternal, no need to do it again
-					ParseInternal(nextOperand, evaluate, 0);
+					GetNextOperand(nextOperand, evaluate);
 					BalanceNumericTypes(rslt, nextOperand, evaluate);
 					if (rslt.GetType() == TypeCode::Float)
 					{
@@ -1471,18 +1469,9 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				{
 					ThrowParseException("expected non-negative integer");
 				}
-				SkipWhiteSpace();
-				if (CurrentCharacter() != ',')
-				{
-					ThrowParseException("expected ','");
-				}
-
-				AdvancePointer();			// skip the comma
-				SkipWhiteSpace();
 				{
 					ExpressionValue valueOperand;
-					// We recently checked the stack for a call to ParseInternal, no need to do it again
-					ParseInternal(valueOperand, evaluate, 0);
+					GetNextOperand(valueOperand, evaluate);
 					if (evaluate)
 					{
 						const size_t numElems = (size_t)rslt.iVal;
@@ -1499,6 +1488,29 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 						rslt.SetNull(nullptr);
 					}
 					break;
+				}
+				break;
+
+			case Function::exp:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = expf(rslt.fVal);
+				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				break;
+
+			case Function::log:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = logf(rslt.fVal);
+				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				break;
+
+			case Function::pow:
+				ConvertToFloat(rslt, evaluate);
+				{
+					ExpressionValue nextOperand;
+					GetNextOperand(nextOperand, evaluate);
+					ConvertToFloat(nextOperand, evaluate);
+					rslt.fVal = powf(rslt.fVal, nextOperand.fVal);
+					rslt.param = MaxFloatDigitsDisplayedAfterPoint;
 				}
 				break;
 

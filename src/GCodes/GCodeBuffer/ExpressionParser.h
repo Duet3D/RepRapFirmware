@@ -70,6 +70,7 @@ private:
 	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException);
 	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS(GCodeException);
 	void EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2, bool evaluate, bool isMax) THROWS(GCodeException);
+	void GetNextOperand(ExpressionValue& operand, bool evaluate) THROWS(GCodeException);
 	static bool TypeHasNoLiterals(TypeCode t) noexcept;
 
 	int GetColumn() const noexcept;
