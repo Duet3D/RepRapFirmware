@@ -394,6 +394,12 @@ inline constexpr unsigned int ParameterLetterToBitNumber(char c) noexcept
 	return (c <= 'Z') ? c - 'A' : c - ('a' - 26);
 }
 
+// Find the parameter letter corresponding to a  bit number
+inline constexpr unsigned int BitNumberToParameterLetter(unsigned int n) noexcept
+{
+	return (n < 26) ? 'A' + n : 'a' + (n - 26);
+}
+
 // Make a ParameterLettersBitmap representing a single letter
 inline constexpr ParameterLettersBitmap ParameterLetterToBitmap(char c) noexcept
 {
