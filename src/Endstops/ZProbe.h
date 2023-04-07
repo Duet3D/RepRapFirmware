@@ -21,6 +21,8 @@ public:
 	virtual GCodeResult AppendPinNames(const StringRef& str) noexcept = 0;		// not const because it may update the state too
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException);		// 'seen' is an in-out parameter
 	virtual GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept;
+	virtual float GetCalibratedReading() const noexcept { return 0.0; }
+	virtual void SetCalibrationPoint(float height) noexcept { }
 
 #if SUPPORT_CAN_EXPANSION
 	// Process a remote input change that relates to this Z probe

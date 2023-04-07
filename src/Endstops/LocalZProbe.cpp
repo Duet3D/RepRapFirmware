@@ -143,6 +143,17 @@ GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) noexcept
 	static_cast<LocalZProbe*>(param.vp)->Interrupt();
 }
 
+// Functions used only with scanning Z probes
+float LocalZProbe::GetCalibratedReading() const noexcept
+{
+	return 0.0;
+}
+
+void LocalZProbe::SetCalibrationPoint(float height) noexcept
+{
+	//TODO
+}
+
 // Kick off sending some program bytes
 GCodeResult LocalZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept
 {
