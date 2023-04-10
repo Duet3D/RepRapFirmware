@@ -116,6 +116,8 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 	catch (const GCodeException& e)
 	{
 		e.GetMessage(reply, &gb);
+		gb.StopTimer();
+		UnlockAll(gb);
 		HandleReply(gb, GCodeResult::error, reply.c_str());
 		return true;
 	}
