@@ -48,10 +48,11 @@
 #ifndef  _W5500_H_
 #define  _W5500_H_
 
-#include "Networking/W5500Ethernet/Wiznet/Ethernet/wizchip_conf.h"
+#include <Core.h>
+#include <Networking/W5500Ethernet/Wiznet/Ethernet/wizchip_conf.h>
 #include <cstdint>
 #include <cstddef>
-#include "spi/spi.h"
+#include <spi/spi.h>
 #include <General/IPAddress.h>
 
 // The following functions are defined in Network.cpp and used by this module
