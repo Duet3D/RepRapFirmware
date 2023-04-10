@@ -15,7 +15,7 @@
 #include <Movement/Kinematics/Kinematics.h>
 
 // Set up some default values in the move buffer for special moves, e.g. for Z probing and firmware retraction
-void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
+void MovementState::SetDefaults(size_t firstDriveToZero) noexcept
 {
 	moveType = 0;
 	isCoordinated = false;
@@ -28,13 +28,30 @@ void RawMove::SetDefaults(size_t firstDriveToZero) noexcept
 	inverseTimeMode = false;
 	linearAxesMentioned = false;
 	rotationalAxesMentioned = false;
+	scanningProbeMove = false;
+	laserPixelData.numPixels = 0;
 	filePos = noFilePosition;
 	movementTool = nullptr;
+	moveFractionToSkip = 0.0;
 	cosXyAngle = 1.0;
 	for (size_t drive = firstDriveToZero; drive < MaxAxesPlusExtruders; ++drive)
 	{
-		coords[drive] = 0.0;			// clear extrusion
+		coords[drive] = 0.0;					// clear extrusion
 	}
+}
+
+void MovementState::ClearMove() noexcept
+{
+	TaskCriticalSectionLocker lock;				// make sure that other tasks sees a consistent memory state
+
+	segmentsLeft = 0;
+	segMoveState = SegmentedMoveState::inactive;
+	doingArcMove = false;
+	checkEndstops = false;
+	reduceAcceleration = false;
+	moveType = 0;
+	applyM220M221 = false;
+	moveFractionToSkip = 0.0;
 }
 
 #if SUPPORT_ASYNC_MOVES
@@ -94,7 +111,6 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();
 #endif
-	ClearMove();
 	updateUserPositionGb = nullptr;
 	restartMoveFractionDone = 0.0;
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -113,20 +129,6 @@ void MovementState::ChangeExtrusionFactor(unsigned int extruder, float multiplie
 	{
 		coords[ExtruderToLogicalDrive(extruder)] *= multiplier;		// last move not gone, so update it
 	}
-}
-
-void MovementState::ClearMove() noexcept
-{
-	TaskCriticalSectionLocker lock;				// make sure that other tasks sees a consistent memory state
-
-	segmentsLeft = 0;
-	segMoveState = SegmentedMoveState::inactive;
-	doingArcMove = false;
-	checkEndstops = false;
-	reduceAcceleration = false;
-	moveType = 0;
-	applyM220M221 = false;
-	moveFractionToSkip = 0.0;
 }
 
 void MovementState::Diagnostics(MessageType mtype) noexcept

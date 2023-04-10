@@ -362,10 +362,10 @@ void HeightMap::SetGridHeight(size_t index, float height) noexcept
 unsigned int HeightMap::GetMinimumSegments(float deltaAxis0, float deltaAxis1) const noexcept
 {
 	const float axis0Distance = fabsf(deltaAxis0);
-	unsigned int axis0Segments = (axis0Distance > 0.0) ? (unsigned int)(axis0Distance * def.recipAxisSpacings[0] + 0.4) : 1;
+	const unsigned int axis0Segments = (unsigned int)(2 * axis0Distance * def.recipAxisSpacings[0]) + 1;
 
 	const float axis1Distance = fabsf(deltaAxis1);
-	unsigned int axis1Segments = (axis1Distance > 0.0) ? (unsigned int)(axis1Distance * def.recipAxisSpacings[1] + 0.4) : 1;
+	const unsigned int axis1Segments = (unsigned int)(2 * axis1Distance * def.recipAxisSpacings[1]) + 1;
 
 	return max<unsigned int>(axis0Segments, axis1Segments);
 }

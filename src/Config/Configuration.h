@@ -202,6 +202,8 @@ constexpr unsigned int MaxFilaments = 20;
 constexpr unsigned int MaxFilaments = 8;
 #endif
 
+constexpr size_t MaxLaserPixelsPerMove = 8;				// How many S parameters you can use on a single G1 command when laser engraving
+
 // Move system
 constexpr float DefaultFeedRate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min
 constexpr float MaximumG0FeedRate = 60000.0;			// The maximum feed rate for G0 commands in mm/min, if the M203 settings permit

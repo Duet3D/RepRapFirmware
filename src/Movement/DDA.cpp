@@ -403,16 +403,16 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 
 	// 3. Store some values
 	tool = nextMove.movementTool;
-	flags.checkEndstops = nextMove.checkEndstops;
 	filePos = nextMove.filePos;
 	virtualExtruderPosition = nextMove.moveStartVirtualExtruderPosition;
 	proportionDone = nextMove.proportionDone;
 	initialUserC0 = nextMove.initialUserC0;
 	initialUserC1 = nextMove.initialUserC1;
 
+	flags.checkEndstops = nextMove.checkEndstops;
 	flags.canPauseAfter = nextMove.canPauseAfter;
 	flags.usingStandardFeedrate = nextMove.usingStandardFeedrate;
-	flags.isPrintingMove = flags.xyMoving && forwardExtruding;				// require forward extrusion so that wipe-while-retracting doesn't count
+	flags.isPrintingMove = flags.xyMoving && forwardExtruding;					// require forward extrusion so that wipe-while-retracting doesn't count
 	flags.isNonPrintingExtruderMove = extrudersMoving && !flags.isPrintingMove;	// flag used by filament monitors - we can ignore Z movement
 	flags.usePressureAdvance = nextMove.usePressureAdvance;
 	flags.controlLaser = nextMove.isCoordinated && nextMove.checkEndstops == 0;

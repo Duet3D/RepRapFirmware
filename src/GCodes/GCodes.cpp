@@ -1079,6 +1079,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 	gb.SetState(newState);
 	pauseState = PauseState::pausing;
 
+
 	reprap.StateUpdated();																// test DWC/DSF that we have changed a restore point
 	return true;
 }
@@ -1951,26 +1952,26 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	if (rp != nullptr)
 	{
 		ms.laserPwmOrIoBits = rp->laserPwmOrIoBits;
+# if SUPPORT_LASER
+		ms.laserPixelData = rp->laserPixelData;
+# endif
 	}
 # if SUPPORT_LASER
 	else if (machineType == MachineType::laser)
 	{
 		if (gb.Seen('S'))
 		{
-			ms.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
+			float pixelBuffer[MaxLaserPixelsPerMove];
+			ms.laserPixelData.numPixels = MaxLaserPixelsPerMove;
+			gb.GetFloatArray(pixelBuffer, ms.laserPixelData.numPixels, false);
+			for (size_t i = 0; i < ms.laserPixelData.numPixels; ++i)
+			{
+				ms.laserPixelData.pixelPwm[i] = ConvertLaserPwm(pixelBuffer[i]);
+			}
 		}
-		else if (ms.moveType != 0)
+		else if (!laserPowerSticky)
 		{
-			ms.laserPwmOrIoBits.laserPwm = 0;			// it's a homing move or similar, so turn the laser off
-		}
-		else if (laserPowerSticky)
-		{
-			// Leave the laser PWM alone because this is what LaserWeb expects. If it is an uncoordinated move then the motion system will turn the laser off.
-			// This means that after a G0 move, the next G1 move will default to the same power as the previous G1 move, as LightBurn expects.
-		}
-		else
-		{
-			ms.laserPwmOrIoBits.laserPwm = 0;
+			ms.laserPixelData.numPixels = 0;
 		}
 	}
 # endif
@@ -2249,48 +2250,58 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		}
 
 		// Flag whether we should use pressure advance, if there is any extrusion in this move.
-		// We assume it is a normal printing move needing pressure advance if there is forward extrusion and XYU.. movement.
-		// The movement code will only apply pressure advance if there is forward extrusion, so we only need to check for XYU.. movement here.
+		// We assume it is a normal printing move needing pressure advance if there is forward extrusion and XYU... movement (we don't count Z).
+		// The movement code will only apply pressure advance if there is forward extrusion, so we only need to check for XYU... movement here.
+		if (ms.hasPositiveExtrusion)
 		{
 			AxesBitmap axesMentionedExceptZ = axesMentioned;
 			axesMentionedExceptZ.ClearBit(Z_AXIS);
-			ms.usePressureAdvance = ms.hasPositiveExtrusion && axesMentionedExceptZ.IsNonEmpty();
+			ms.usePressureAdvance = axesMentionedExceptZ.IsNonEmpty();
 		}
 
-		// Apply segmentation if necessary. To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
+		// Apply segmentation if necessary
 		// As soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
-		const Kinematics& kin = reprap.GetMove().GetKinematics();
-		const SegmentationType st = kin.GetSegmentationType();
-		if (st.useSegmentation && simulationMode != SimulationMode::normal && (ms.hasPositiveExtrusion || ms.isCoordinated || st.useG0Segmentation))
+#if SUPPORT_LASER
+		if (machineType == MachineType::laser && isCoordinated && ms.laserPixelData.numPixels != 0)
 		{
-			// This kinematics approximates linear motion by means of segmentation
-			float moveLengthSquared = fsquare(ms.currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(ms.currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]);
-			if (st.useZSegmentation)
-			{
-				moveLengthSquared += fsquare(ms.currentUserPosition[Z_AXIS] - initialUserPosition[Z_AXIS]);
-			}
-			const float moveLength = fastSqrtf(moveLengthSquared);
-			const float moveTime = moveLength/(ms.feedRate * StepClockRate);		// this is a best-case time, often the move will take longer
-			ms.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(moveLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
+			ms.totalSegments = ms.laserPixelData.numPixels;			// we must use one segment per pixel
 		}
 		else
+#endif
 		{
-			ms.totalSegments = 1;
-		}
-		if (reprap.GetMove().IsUsingMesh() && (ms.isCoordinated || machineType == MachineType::fff))
-		{
-			const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
-			const GridDefinition& grid = heightMap.GetGrid();
-			const unsigned int minMeshSegments = max<unsigned int>(
-					1,
-					heightMap.GetMinimumSegments(
-						ms.currentUserPosition[grid.GetAxisNumber(0)] - initialUserPosition[grid.GetAxisNumber(0)],
-						ms.currentUserPosition[grid.GetAxisNumber(1)] - initialUserPosition[grid.GetAxisNumber(1)]
-					)
-			);
-			if (minMeshSegments > ms.totalSegments)
+			const Kinematics& kin = reprap.GetMove().GetKinematics();
+			const SegmentationType st = kin.GetSegmentationType();
+			// To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
+			if (st.useSegmentation && simulationMode != SimulationMode::normal && (ms.hasPositiveExtrusion || ms.isCoordinated || st.useG0Segmentation))
 			{
-				ms.totalSegments = minMeshSegments;
+				// This kinematics approximates linear motion by means of segmentation
+				float moveLengthSquared = fsquare(ms.currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(ms.currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]);
+				if (st.useZSegmentation)
+				{
+					moveLengthSquared += fsquare(ms.currentUserPosition[Z_AXIS] - initialUserPosition[Z_AXIS]);
+				}
+				const float moveLength = fastSqrtf(moveLengthSquared);
+				const float moveTime = moveLength/(ms.feedRate * StepClockRate);		// this is a best-case time, often the move will take longer
+				ms.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(moveLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
+			}
+			else
+			{
+				ms.totalSegments = 1;
+			}
+
+			// If we are applying mesh compensation,  set the segment size to be smaller than the mesh spacing
+			if (reprap.GetMove().IsUsingMesh() && (ms.isCoordinated || machineType == MachineType::fff))
+			{
+				const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
+				const GridDefinition& grid = heightMap.GetGrid();
+				const unsigned int minMeshSegments = heightMap.GetMinimumSegments(
+							ms.currentUserPosition[grid.GetAxisNumber(0)] - initialUserPosition[grid.GetAxisNumber(0)],
+							ms.currentUserPosition[grid.GetAxisNumber(1)] - initialUserPosition[grid.GetAxisNumber(1)]
+						);
+				if (minMeshSegments > ms.totalSegments)
+				{
+					ms.totalSegments = minMeshSegments;
+				}
 			}
 		}
 	}
@@ -2725,7 +2736,7 @@ void GCodes::FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept
 
 			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 			{
-				ms.coords[ExtruderToLogicalDrive(extruder)] /= ms.totalSegments;	// change the extrusion to extrusion per segment
+				ms.coords[ExtruderToLogicalDrive(extruder)] /= ms.totalSegments;		// change the extrusion to extrusion per segment
 			}
 
 			if (ms.moveFractionToSkip != 0.0)
@@ -2784,6 +2795,14 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 
 	while (true)		// loop while we skip move segments
 	{
+		// If it's a straight move in laser mode, sort out the laser power
+		if (machineType == MachineType::laser && !ms.doingArcMove)
+		{
+			ms.laserPwmOrIoBits.laserPwm = (ms.isCoordinated && ms.segmentsLeft < ms.laserPixelData.numPixels)
+											? ms.laserPixelData.pixelPwm[ms.laserPixelData.numPixels - ms.segmentsLeft]
+												: 0;
+		}
+
 		m = ms;
 
 		if (ms.segmentsLeft == 1)
@@ -4332,6 +4351,9 @@ void GCodes::RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	ms.laserPwmOrIoBits = rp.laserPwmOrIoBits;
+#endif
+#if SUPPORT_LASER
+	ms.laserPixelData = rp.laserPixelData;
 #endif
 }
 
