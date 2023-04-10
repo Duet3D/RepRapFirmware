@@ -685,6 +685,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				float axesCoords[MaxAxes];
 				memcpy(axesCoords, ms.coords, sizeof(axesCoords));					// copy current coordinates of all other axes in case they are relevant to IsReachable
 				const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+				zp->PrepareForUse(false);											// needed to calculate the actual trigger height when using a scanning Z probe
 				axesCoords[axis0Num] = axis0Coord - zp->GetOffset(axis0Num);
 				axesCoords[axis1Num] = axis1Coord - zp->GetOffset(axis1Num);
 				axesCoords[Z_AXIS] = zp->GetStartingHeight();
@@ -1032,7 +1033,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				ms.coords[axis1Num] = grid.GetCoordinate(1, gridAxis1Index) - zp->GetOffset(axis1Num);
 				ms.coords[Z_AXIS] = zp->GetStartingHeight();
 				ms.feedRate = zp->GetProbingSpeed(0);
-				ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;		// assume that both linear and rotational axes might be moving
+				ms.linearAxesMentioned = platform.IsAxisLinear(axis0Num);
+				ms.rotationalAxesMentioned = platform.IsAxisRotational(axis0Num);
 				ms.segmentsLeftToStartAt = ms.totalSegments = (unsigned int)abs((int)lastAxis0Index - (int)gridAxis0Index);
 				ms.firstSegmentFractionToSkip = 0.0;
 				ms.scanningProbeMove = true;

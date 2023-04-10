@@ -2627,7 +2627,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	{
 		if (gb.Seen('S'))
 		{
-			ms.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
+			ms.laserPixelData.pixelPwm[0] = ConvertLaserPwm(gb.GetFValue());
+			ms.laserPixelData.numPixels = 1;
 		}
 		else if (laserPowerSticky)
 		{
@@ -2791,9 +2792,9 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 	{
 #if SUPPORT_LASER
 		// If it's a straight move in laser mode, sort out the laser power
-		if (machineType == MachineType::laser && !ms.doingArcMove)
+		if (machineType == MachineType::laser)
 		{
-			ms.laserPwmOrIoBits.laserPwm = (ms.isCoordinated && ms.segmentsLeft < ms.laserPixelData.numPixels)
+			ms.laserPwmOrIoBits.laserPwm = (ms.isCoordinated && ms.segmentsLeft < ms.laserPixelData.numPixels && !ms.doingArcMove)
 											? ms.laserPixelData.pixelPwm[ms.laserPixelData.numPixels - ms.segmentsLeft]
 												: (ms.isCoordinated && ms.laserPixelData.numPixels == 1)
 												  ? ms.laserPixelData.pixelPwm[0]
@@ -2816,7 +2817,7 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 			m.proportionDone = 1.0;
 			if (ms.doingArcMove)
 			{
-				m.canPauseAfter = true;					// we can pause after the final segment of an arc move
+				m.canPauseAfter = true;									// we can pause after the final segment of an arc move
 			}
 			ms.ClearMove();
 		}
@@ -2852,14 +2853,14 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 			for (size_t drive = 0; drive < numVisibleAxes; ++drive)
 			{
 				float newCoordinate;
-				if (ms.doingArcMove && axisMap1.IsBitSet(drive))
+				if (axisMap1.IsBitSet(drive))
 				{
-					// Axis1 or a substitute in the selected plane
+					// Axis1 or a substitute in the selected arc plane
 					newCoordinate = ms.arcCentre[drive] + ms.arcRadius * axisScaleFactors[drive] * ms.currentAngleSine;
 				}
-				else if (ms.doingArcMove && axisMap0.IsBitSet(drive))
+				else if (axisMap0.IsBitSet(drive))
 				{
-					// Axis0 or a substitute in the selected plane
+					// Axis0 or a substitute in the selected arc plane
 					newCoordinate = ms.arcCentre[drive] + ms.arcRadius * axisScaleFactors[drive] * ms.currentAngleCosine;
 				}
 				else
@@ -4795,6 +4796,7 @@ void GCodes::StartToolChange(GCodeBuffer& gb, MovementState& ms, uint8_t param) 
 void GCodes::SetMoveBufferDefaults(MovementState& ms) noexcept
 {
 	ms.SetDefaults(numTotalAxes);
+	memcpyf(ms.initialCoords, ms.coords, numVisibleAxes);
 }
 
 // Resource locking/unlocking
