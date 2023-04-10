@@ -148,6 +148,34 @@ void GCodes::DoManualBedProbe(GCodeBuffer& gb)
 	DoManualProbe(gb, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", AxesBitmap::MakeFromBits(Z_AXIS));
 }
 
+// Set up to do the first of a possibly multi-tap probe
+void GCodes::InitialiseTaps(bool fastThenSlow) noexcept
+{
+	tapsDone = (fastThenSlow) ? -1 : 0;
+	g30zHeightErrorSum = 0.0;
+	g30zHeightErrorLowestDiff = 1000.0;
+}
+
+// Take and store a reading from a scanning Z probe. Called by the Laser task.
+void GCodes::TakeScanningProbeReading() noexcept
+{
+	const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+	const float heightError = zp->GetCalibratedReading();
+	HeightMap& hm = reprap.GetMove().AccessHeightMap();
+	hm.SetGridHeight(gridAxis0Index, gridAxis1Index, heightError);
+	if (gridAxis0Index != lastAxis0Index)
+	{
+		if (gridAxis1Index & 1u)
+		{
+			--gridAxis0Index;
+		}
+		else
+		{
+			++gridAxis0Index;
+		}
+	}
+}
+
 // Define the probing grid, called when we see an M557 command
 GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
@@ -330,7 +358,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	}
 
 	ClearBedMapping();
-	gridAxis0index = gridAxis1index = 0;
+	gridAxis0Index = gridAxis1Index = 0;
 
 	gb.SetState(GCodeState::gridProbing1);
 	if (zp->GetProbeType() != ZProbeType::blTouch)

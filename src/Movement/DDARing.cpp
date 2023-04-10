@@ -528,9 +528,17 @@ void DDARing::Interrupt(Platform& p) noexcept
 // This is called when the state has been set to 'completed'. Step interrupts must be disabled or locked out when calling this.
 void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 {
+	bool wakeLaserTask = false;
+	if (cdda->IsScanningProbeMove())
+	{
+		reprap.GetMove().SetProbeReadingNeeded();
+		wakeLaserTask = true;						// wake the laser task to take a reading
+	}
+
 	// The following finish time is wrong if we aborted the move because of endstop or Z probe checks.
 	// However, following a move that checks endstops or the Z probe, we always wait for the move to complete before we schedule another, so this doesn't matter.
 	const uint32_t finishTime = cdda->GetMoveFinishTime();	// calculate when this move should finish
+
 	CurrentMoveCompleted();							// tell the DDA ring that the current move is complete
 
 	// Try to start a new move
@@ -540,7 +548,7 @@ void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 #if SUPPORT_LASER || SUPPORT_IOBITS
 		if (StartNextMove(p, finishTime))
 		{
-			Move::WakeLaserTaskFromISR();
+			wakeLaserTask = true;
 		}
 #else
 		(void)StartNextMove(p, finishTime);
@@ -568,6 +576,11 @@ void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 		}
 #endif
 		waitingForRingToEmpty = false;
+	}
+
+	if (wakeLaserTask)
+	{
+		Move::WakeLaserTaskFromISR();
 	}
 }
 

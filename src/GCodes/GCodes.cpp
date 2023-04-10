@@ -292,7 +292,7 @@ void GCodes::Reset() noexcept
 	doingToolChange = false;
 	doingManualBedProbe = false;
 #if SUPPORT_PROBE_POINTS_FILE
-	probePointsFileLoaded = false;
+	ClearProbePointsInvalid();
 #endif
 	deferredPauseCommandPending = nullptr;
 	firmwareUpdateModuleMap.Clear();
@@ -379,14 +379,6 @@ void GCodes::CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept
 		}
 		reprap.InputsUpdated();
 	}
-}
-
-// Set up to do the first of a possibly multi-tap probe
-void GCodes::InitialiseTaps(bool fastThenSlow) noexcept
-{
-	tapsDone = (fastThenSlow) ? -1 : 0;
-	g30zHeightErrorSum = 0.0;
-	g30zHeightErrorLowestDiff = 1000.0;
 }
 
 void GCodes::Spin() noexcept
@@ -1884,8 +1876,9 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	ms.isCoordinated = isCoordinated;
 	ms.checkEndstops = false;
 	ms.reduceAcceleration = false;
-	ms.movementTool = ms.currentTool;
 	ms.usePressureAdvance = false;
+	ms.scanningProbeMove = false;
+	ms.movementTool = ms.currentTool;
 	axesToSenseLength.Clear();
 
 	// Check to see if the move is a 'homing' move that endstops are checked on and for which X and Y axis mapping is not applied
@@ -2262,7 +2255,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		// Apply segmentation if necessary
 		// As soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
 #if SUPPORT_LASER
-		if (machineType == MachineType::laser && isCoordinated && ms.laserPixelData.numPixels != 0)
+		if (machineType == MachineType::laser && isCoordinated && ms.laserPixelData.numPixels > 1)
 		{
 			ms.totalSegments = ms.laserPixelData.numPixels;			// we must use one segment per pixel
 		}
@@ -2575,9 +2568,10 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	// Set up default move parameters
 	ms.checkEndstops = false;
 	ms.reduceAcceleration = false;
+	ms.scanningProbeMove = false;
+	ms.isCoordinated = true;
 	ms.moveType = 0;
 	ms.movementTool = ms.currentTool;
-	ms.isCoordinated = true;
 
 	// Set up the arc centre coordinates and record which axes behave like an X axis.
 	// The I and J parameters are always relative to present position.
@@ -2801,7 +2795,9 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 		{
 			ms.laserPwmOrIoBits.laserPwm = (ms.isCoordinated && ms.segmentsLeft < ms.laserPixelData.numPixels)
 											? ms.laserPixelData.pixelPwm[ms.laserPixelData.numPixels - ms.segmentsLeft]
-												: 0;
+												: (ms.isCoordinated && ms.laserPixelData.numPixels == 1)
+												  ? ms.laserPixelData.pixelPwm[0]
+													: 0;
 		}
 #endif
 		m = ms;
@@ -2855,23 +2851,24 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 
 			for (size_t drive = 0; drive < numVisibleAxes; ++drive)
 			{
+				float newCoordinate;
 				if (ms.doingArcMove && axisMap1.IsBitSet(drive))
 				{
 					// Axis1 or a substitute in the selected plane
-					ms.initialCoords[drive] = ms.arcCentre[drive] + ms.arcRadius * axisScaleFactors[drive] * ms.currentAngleSine;
+					newCoordinate = ms.arcCentre[drive] + ms.arcRadius * axisScaleFactors[drive] * ms.currentAngleSine;
 				}
 				else if (ms.doingArcMove && axisMap0.IsBitSet(drive))
 				{
 					// Axis0 or a substitute in the selected plane
-					ms.initialCoords[drive] = ms.arcCentre[drive] + ms.arcRadius * axisScaleFactors[drive] * ms.currentAngleCosine;
+					newCoordinate = ms.arcCentre[drive] + ms.arcRadius * axisScaleFactors[drive] * ms.currentAngleCosine;
 				}
 				else
 				{
 					// This axis is not moving in an arc
 					const float movementToDo = (ms.coords[drive] - ms.initialCoords[drive])/ms.segmentsLeft;
-					ms.initialCoords[drive] += movementToDo;
+					newCoordinate = ms.initialCoords[drive] += movementToDo;
 				}
-				m.coords[drive] = ms.initialCoords[drive];
+				m.coords[drive] = ms.initialCoords[drive] = newCoordinate;
 			}
 
 			if (ms.segmentsLeftToStartAt < ms.segmentsLeft)
@@ -2918,7 +2915,7 @@ void GCodes::NewSingleSegmentMoveAvailable(MovementState& ms) noexcept
 {
 	ms.totalSegments = 1;
 	__DMB();									// make sure that all the move details have been written first
-	ms.segmentsLeft = 1;				// set the number of segments to indicate that a move is available to be taken
+	ms.segmentsLeft = 1;						// set the number of segments to indicate that a move is available to be taken
 	reprap.GetMove().MoveAvailable();			// notify the Move task that we have a move
 }
 

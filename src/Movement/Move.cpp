@@ -319,7 +319,7 @@ void Move::Exit() noexcept
 					{
 						if (nextMove.moveType == 0)
 						{
-							AxisAndBedTransform(nextMove.coords, nextMove.movementTool, true);
+							AxisAndBedTransform(nextMove.coords, nextMove.movementTool, !nextMove.scanningProbeMove);
 						}
 
 						if (rings[0].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
@@ -1253,9 +1253,7 @@ void Move::WakeMoveTaskFromISR() noexcept
 	}
 }
 
-#if SUPPORT_LASER || SUPPORT_IOBITS
-
-// Laser and IOBits support
+// Laser, IOBits and scanning Z probe support
 
 Task<Move::LaserTaskStackWords> *Move::laserTask = nullptr;		// the task used to manage laser power or IOBits
 
@@ -1264,7 +1262,7 @@ extern "C" [[noreturn]] void LaserTaskStart(void * pvParameters) noexcept
 	reprap.GetMove().LaserTaskRun();
 }
 
-// This is called when laser mode is selected or IOBits is enabled
+// This is called when laser mode is selected or IOBits is enabled or a scanning Z probe is configured
 void Move::CreateLaserTask() noexcept
 {
 	TaskCriticalSectionLocker lock;
@@ -1300,17 +1298,23 @@ void Move::LaserTaskRun() noexcept
 		// Sleep until we are woken up by the start of a move
 		(void)TaskBase::Take();
 
-		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
+		GCodes& gcodes = reprap.GetGCodes();
+		if (probeReadingNeeded)
 		{
+			probeReadingNeeded = false;
+			gcodes.TakeScanningProbeReading();
+		}
 # if SUPPORT_LASER
+		else if (gcodes.GetMachineType() == MachineType::laser)
+		{
 			// Manage the laser power
 			uint32_t ticks;
 			while ((ticks = rings[0].ManageLaserPower()) != 0)
 			{
 				(void)TaskBase::Take(ticks);
 			}
-# endif
 		}
+# endif
 		else
 		{
 # if SUPPORT_IOBITS
@@ -1324,8 +1328,6 @@ void Move::LaserTaskRun() noexcept
 		}
 	}
 }
-
-#endif
 
 #if SUPPORT_ASYNC_MOVES
 

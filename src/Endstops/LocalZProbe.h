@@ -59,6 +59,7 @@ private:
 	// Variables used with scanning probes
 	bool isCalibrated = false;
 	// TODO calibration data, either a table or a set of coefficients
+	mutable float fakeHeightError;
 };
 
 // If this is a dumb modulated IR probe, set the IR LED on or off. Called from the tick ISR, so inlined for speed.

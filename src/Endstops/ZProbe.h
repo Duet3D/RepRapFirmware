@@ -40,7 +40,7 @@ public:
 	float GetConfiguredTriggerHeight() const noexcept { return -offsets[Z_AXIS]; }
 	float GetActualTriggerHeight() const noexcept { return actualTriggerHeight; }
 	float GetDiveHeight() const noexcept { return diveHeight; }
-	float GetStartingHeight() const noexcept { return diveHeight + GetActualTriggerHeight(); }
+	float GetStartingHeight() const noexcept;
 	float GetProbingSpeed(int tapsDone) const noexcept { return probeSpeeds[(tapsDone < 0) ? 0 : 1]; }
 	float HasTwoProbingSpeeds() const noexcept { return probeSpeeds[1] != probeSpeeds[0]; }
 	float GetTravelSpeed() const noexcept { return travelSpeed; }

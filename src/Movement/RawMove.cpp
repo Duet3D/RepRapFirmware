@@ -22,6 +22,7 @@ void MovementState::SetDefaults(size_t firstDriveToZero) noexcept
 	applyM220M221 = false;
 	usingStandardFeedrate = false;
 	usePressureAdvance = false;
+	doingArcMove = false;
 	checkEndstops = false;
 	reduceAcceleration = false;
 	hasPositiveExtrusion = false;

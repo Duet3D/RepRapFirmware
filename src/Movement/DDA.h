@@ -99,6 +99,7 @@ public:
 	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }			// Return true if this involves both XY movement and extrusion
 	bool UsingStandardFeedrate() const noexcept { return flags.usingStandardFeedrate; }
 	bool IsCheckingEndstops() const noexcept { return flags.checkEndstops; }
+	bool IsScanningProbeMove() const noexcept { return flags.scanningProbeMove; }
 
 	DDAState GetState() const noexcept { return state; }
 	DDA* GetNext() const noexcept { return next; }
@@ -274,7 +275,7 @@ private:
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
 					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
 					 controlLaser : 1,				// True if this move controls the laser or iobits
-					 hadHiccup : 1,	 	 	 		// True if we had a hiccup while executing a move from a remote master
+					 scanningProbeMove : 1,	 	 	// True if this is a scanning Z probe move
 					 isRemote : 1,					// True if this move was commanded from a remote
 					 wasAccelOnlyMove : 1;			// set by Prepare if this was an acceleration-only move, for the next move to look at
 		};

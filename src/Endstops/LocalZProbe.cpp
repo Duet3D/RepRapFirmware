@@ -121,6 +121,7 @@ bool LocalZProbe::SetProbing(bool isProbing) noexcept
 	{
 		modulationPort.WriteDigital(isProbing);
 	}
+	fakeHeightError = 0.0;		//TEMP
 	return true;
 }
 
@@ -146,7 +147,8 @@ GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) noexcept
 // Functions used only with scanning Z probes
 float LocalZProbe::GetCalibratedReading() const noexcept
 {
-	return 0.0;
+	fakeHeightError += 0.02;
+	return fakeHeightError;
 }
 
 void LocalZProbe::SetCalibrationPoint(float height) noexcept

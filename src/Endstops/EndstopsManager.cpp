@@ -712,6 +712,10 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 		if (Succeeded(rslt))
 		{
 			zProbes[probeNumber] = newProbe;
+			if (probeType == (uint32_t)ZProbeType::scanningAnalog)
+			{
+				Move::CreateLaserTask();					// scanning probes use the Laser task to take readings
+			}
 		}
 		return rslt;
 	}
