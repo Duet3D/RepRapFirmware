@@ -29,7 +29,9 @@ void MovementState::SetDefaults(size_t firstDriveToZero) noexcept
 	linearAxesMentioned = false;
 	rotationalAxesMentioned = false;
 	scanningProbeMove = false;
+#if SUPPORT_LASER
 	laserPixelData.numPixels = 0;
+#endif
 	filePos = noFilePosition;
 	movementTool = nullptr;
 	moveFractionToSkip = 0.0;

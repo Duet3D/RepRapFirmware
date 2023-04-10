@@ -2795,6 +2795,7 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 
 	while (true)		// loop while we skip move segments
 	{
+#if SUPPORT_LASER
 		// If it's a straight move in laser mode, sort out the laser power
 		if (machineType == MachineType::laser && !ms.doingArcMove)
 		{
@@ -2802,7 +2803,7 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 											? ms.laserPixelData.pixelPwm[ms.laserPixelData.numPixels - ms.segmentsLeft]
 												: 0;
 		}
-
+#endif
 		m = ms;
 
 		if (ms.segmentsLeft == 1)
