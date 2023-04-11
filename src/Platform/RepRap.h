@@ -232,7 +232,7 @@ private:
 	char GetStatusCharacter() const noexcept;
 	const char* GetStatusString() const noexcept;
 	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept;
-	bool RunStartupFile(const char *filename) noexcept;
+	bool RunStartupFile(const char *filename, bool isMainConfigFile) noexcept;
 
 	static constexpr uint32_t MaxTicksInSpinState = 20000;	// timeout before we reset the processor
 	static constexpr uint32_t HighTicksInSpinState = 16000;	// how long before we warn that timeout is approaching
