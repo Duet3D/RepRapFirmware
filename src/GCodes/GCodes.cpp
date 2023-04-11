@@ -348,10 +348,14 @@ FilePosition GCodes::GetPrintingFilePosition() const noexcept
 }
 
 // Start running the config file
-bool GCodes::RunConfigFile(const char* fileName) noexcept
+bool GCodes::RunConfigFile(const char* fileName, bool isMainConfigFile) noexcept
 {
-	runningConfigFile = DoFileMacro(*TriggerGCode(), fileName, false, AsyncSystemMacroCode);
-	return runningConfigFile;
+	const bool ret = DoFileMacro(*TriggerGCode(), fileName, false, AsyncSystemMacroCode);
+	if (ret && isMainConfigFile)
+	{
+		runningConfigFile = true;
+	}
+	return ret;
 }
 
 // Return true if the trigger G-code buffer is busy running config.g or a trigger file
@@ -365,8 +369,8 @@ void GCodes::CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept
 {
 	if (runningConfigFile && gb.GetChannel() == GCodeChannel::Trigger)
 	{
-		gb.LatestMachineState().GetPrevious()->CopyStateFrom(gb.LatestMachineState());	// so that M83 etc. in  nested file don't get forgotten
-		if (gb.LatestMachineState().GetPrevious()->GetPrevious() == nullptr)
+		gb.LatestMachineState().GetPrevious()->CopyStateFrom(gb.LatestMachineState());	// so that M83 etc. in nested files don't get forgotten
+		if (gb.LatestMachineState().GetPrevious()->GetPrevious() == nullptr)			// if we've finished running config.g rather than a macro it called
 		{
 			for (GCodeBuffer *gb2 : gcodeSources)
 			{
