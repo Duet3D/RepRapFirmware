@@ -159,17 +159,21 @@ void HangprinterKinematics::Recalc() noexcept
 	}
 
 	//// Flex compensation
+	static constexpr size_t A_AXIS = 0;
+	static constexpr size_t B_AXIS = 1;
+	static constexpr size_t C_AXIS = 2;
+	static constexpr size_t D_AXIS = 3;
 
 	// If no guy wire lengths are configured, assume a default configuration
 	// with all spools stationary located at the D anchor
-	if (guyWireLengths[0] < 0.0F or
-	    guyWireLengths[1] < 0.0F or
-	    guyWireLengths[2] < 0.0F or
-	    guyWireLengths[3] < 0.0F) {
-		guyWireLengths[0] = hyp3(anchors[0], anchors[3]);
-		guyWireLengths[1] = hyp3(anchors[1], anchors[3]);
-		guyWireLengths[2] = hyp3(anchors[2], anchors[3]);
-		guyWireLengths[3] = 0.0F;
+	if (guyWireLengths[A_AXIS] < 0.0F or
+	    guyWireLengths[B_AXIS] < 0.0F or
+	    guyWireLengths[C_AXIS] < 0.0F or
+	    guyWireLengths[D_AXIS] < 0.0F) {
+		guyWireLengths[A_AXIS] = hyp3(anchors[0], anchors[3]);
+		guyWireLengths[B_AXIS] = hyp3(anchors[1], anchors[3]);
+		guyWireLengths[C_AXIS] = hyp3(anchors[2], anchors[3]);
+		guyWireLengths[D_AXIS] = 0.0F;
 	}
 
 	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
@@ -367,32 +371,31 @@ inline float HangprinterKinematics::MotorPosToLinePos(const int32_t motorPos, si
 
 void HangprinterKinematics::flexDistances(float const machinePos[3], float const distances[HANGPRINTER_AXES],
                                           float flex[HANGPRINTER_AXES]) const noexcept {
-	float springKs[HANGPRINTER_AXES] = {0.0};
-	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+	float springKs[HANGPRINTER_AXES] = { 0.0F };
+	for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
 		springKs[i] = SpringK(distances[i] * mechanicalAdvantage[i] + guyWireLengths[i]);
 	}
 
-	float F[HANGPRINTER_AXES] = {0.0F}; // desired force in each direction
+	float F[HANGPRINTER_AXES] = { 0.0F }; // desired force in each direction
 	StaticForces(machinePos, F);
 
-	float relaxedSpringLengths[HANGPRINTER_AXES] = {0.0};
-	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+	float relaxedSpringLengths[HANGPRINTER_AXES] = { 0.0F };
+	for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
 		relaxedSpringLengths[i] = distances[i]- F[i] / (springKs[i] * mechanicalAdvantage[i]);
 	};
 
-	float linePos[HANGPRINTER_AXES] = {0.0};
-	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
-		relaxedSpringLengths[i] - relaxedSpringLengthsOrigin[i];
+	float linePos[HANGPRINTER_AXES] = { 0.0F };
+	for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
+		linePos[i] = relaxedSpringLengths[i] - relaxedSpringLengthsOrigin[i];
 	};
 
-	float distanceDifferences[HANGPRINTER_AXES] = {0.0};
-	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+	float distanceDifferences[HANGPRINTER_AXES] = { 0.0F };
+	for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
 		distanceDifferences[i] = distances[i] - distancesOrigin[i];
 	};
 
-	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+	for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
 		flex[i] = linePos[i] - distanceDifferences[i];
-
 	}
 }
 
@@ -400,9 +403,9 @@ void HangprinterKinematics::flexDistances(float const machinePos[3], float const
 // Assumes lines are tight and anchor location norms are followed
 void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
-	float const distances[HANGPRINTER_AXES] = {0.0};
-	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
-		MotorPosToLinePos(motorPos[i], i) + distancesOrigin[i];
+	float distances[HANGPRINTER_AXES] = { 0.0F };
+	for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
+		distances[i] = MotorPosToLinePos(motorPos[i], i) + distancesOrigin[i];
 	};
 	ForwardTransform(distances, machinePos);
 
@@ -410,9 +413,9 @@ void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 	// Let's correct for line flex
 	float flex[HANGPRINTER_AXES] = { 0.0F };
 	flexDistances(machinePos, distances, flex);
-	float const adjustedDistances[HANGPRINTER_AXES] = {0.0};
-	for (int i = 0; i < HANGPRINTER_AXES; ++i) {
-		float const adjustedDistances[i] = distances[i] - flex[i];
+	float adjustedDistances[HANGPRINTER_AXES] = { 0.0F };
+	for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
+		adjustedDistances[i] = distances[i] - flex[i];
 	}
 	ForwardTransform(adjustedDistances, machinePos);
 }
@@ -524,7 +527,7 @@ AxesBitmap HangprinterKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const noe
 	// If all of X, Y and Z have been specified then we know the positions of all 4 spool motors, otherwise we don't
 	if ((g92Axes & XyzAxes) == XyzAxes)
 	{
-		g92Axes.SetBit(D_AXIS);
+		g92Axes.SetBit(HANGPRINTER_AXES - 1);
 	}
 	else
 	{
@@ -1093,10 +1096,10 @@ void HangprinterKinematics::StaticForces(float const machinePos[3], float F[4]) 
 		float const mg = moverWeight_kg * 9.81;
 		// Unit vector directions toward each anchor from mover
 		float norm[HANGPRINTER_AXES];
-		float a[HANGPRINTER_AXES][3];
-		for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+		float dir[HANGPRINTER_AXES][3];
+		for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
 			norm[i] = hyp3(anchors[i], machinePos);
-			for (int j = 0; j < 3; ++j) {
+			for (size_t j = 0; j < 3; ++j) {
 				dir[i][j] = (anchors[i][j] - machinePos[j]) / norm[i];
 			}
 		}
@@ -1259,7 +1262,7 @@ void HangprinterKinematics::StaticForces(float const machinePos[3], float F[4]) 
 			D_mg + preFac * D_pre
 		};
 
-		for (int i = 0; i < HANGPRINTER_AXES; ++i) {
+		for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
 			F[i] = max(totalForces[i], minPlannedForce_Newton[i]);
 		}
 	}
