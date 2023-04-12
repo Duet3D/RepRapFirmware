@@ -15,7 +15,7 @@
 // Different modes can be configured for different tradeoffs in terms of printing volumes and speeds
 enum class HangprinterAnchorMode {
 	None, // All is reacheable in None anchor mode as printing volume
-	LastOnTop, // (Default) Rsults in a pyramid plus a prism below if the lower anchors are above the printing bed
+	LastOnTop, // (Default) Results in a pyramid plus a prism below if the lower anchors are above the printing bed
 	AllOnTop, // Result in a prism (speeds get limited, specially going down in Z)
 };
 
@@ -67,7 +67,7 @@ protected:
 
 private:
 	// Basic facts about movement system
-	const char* ANCHOR_CHARS = "ABCDIJKLO"; // anchors shouldn't be conflated with axes
+	const char* ANCHOR_CHARS = "ABCDIJKLO";
 	static constexpr size_t HANGPRINTER_MAX_ANCHORS = 5;
 
 	void Init() noexcept;

@@ -167,9 +167,6 @@ void HangprinterKinematics::Recalc() noexcept
 	}
 
 	//// Flex compensation
-	// If no guy wire lengths are configured, assume a default configuration
-	// with all spools stationary located at the last anchor,
-	// and that the last anchor is a top anchor
 	bool oneGuyWireNegative = false;
 	for (size_t i{0}; i < numAnchors; ++i) {
 		if (guyWireLengths[i] < 0.0F) {
@@ -177,11 +174,22 @@ void HangprinterKinematics::Recalc() noexcept
 			break;
 		}
 	}
-	if (oneGuyWireNegative) {
-		for (size_t i{0}; i < numAnchors - 1; ++i) {
-			guyWireLengths[i] = hyp3(anchors[i], anchors[numAnchors - 1]);
+
+	if (anchorMode == HangprinterAnchorMode::LastOnTop) {
+		// If no guy wire lengths are configured, assume a default configuration
+		// with all spools stationary located at the last anchor,
+		// and that the last anchor is a top anchor
+		if (oneGuyWireNegative) {
+			for (size_t i{0}; i < numAnchors - 1; ++i) {
+				guyWireLengths[i] = hyp3(anchors[i], anchors[numAnchors - 1]);
+			}
+			guyWireLengths[numAnchors - 1] = 0.0F;
 		}
-    guyWireLengths[numAnchors - 1] = 0.0F;
+	} else {
+		// Assumes no guyWires in all other cases
+		for (size_t i{0}; i < numAnchors; ++i) {
+			guyWireLengths[i] = 0.0F;
+		}
 	}
 
 	for (size_t i{0}; i < numAnchors; ++i) {
@@ -1149,8 +1157,8 @@ void HangprinterKinematics::StaticForces(float const machinePos[3], float F[HANG
 	static constexpr size_t B_AXIS = 1;
 	static constexpr size_t C_AXIS = 2;
 	static constexpr size_t D_AXIS = 3;
-  static constexpr size_t OLD_DEFAULT_NUM_ANCHORS = 4;
-  static constexpr size_t CARTESIAN_AXES = 3;
+	static constexpr size_t OLD_DEFAULT_NUM_ANCHORS = 4;
+	static constexpr size_t CARTESIAN_AXES = 3;
 
 	if (moverWeight_kg > 0.0001) { // mover weight more than one gram
 		float norm[OLD_DEFAULT_NUM_ANCHORS]; // Unit vector directions toward each anchor from mover
