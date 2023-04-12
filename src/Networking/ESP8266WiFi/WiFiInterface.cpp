@@ -93,6 +93,7 @@ const uint32_t WiFiFastResponseTimeoutMillis = 100;		// SPI timeout when when th
 const uint32_t WiFiWaitReadyMillis = 100;
 const uint32_t WiFiStartupMillis = 15000;				// Formatting the SPIFFS partition can take up to 10s.
 const uint32_t WiFiStableMillis = 100;
+const uint32_t WiFiStatusPollMillis = 500;				// Poll interval for status details of the WiFi module
 
 const unsigned int MaxHttpConnections = 4;
 
@@ -288,7 +289,7 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 	: platform(p), bufferOut(nullptr), bufferIn(nullptr), uploader(nullptr), espWaitingTask(nullptr),
 	  ftpDataPort(0), closeDataPort(false),
 	  requestedMode(WiFiState::disabled), currentMode(WiFiState::disabled), activated(false),
-	  espStatusChanged(false), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false), debugMessageChars(0)
+	  espStatusChanged(false), rssi(INT8_MIN), spiTxUnderruns(0), spiRxOverruns(0), serialRunning(false), debugMessageChars(0)
 {
 	wifiInterface = this;
 
@@ -328,16 +329,18 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 constexpr ObjectModelTableEntry WiFiInterface::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),				ObjectModelEntryFlags::none },
-	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->wiFiServerVersion),		ObjectModelEntryFlags::none },
-	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),				ObjectModelEntryFlags::none },
-	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),			ObjectModelEntryFlags::none },
-	{ "state",				OBJECT_MODEL_FUNC(self->GetStateName()),		ObjectModelEntryFlags::none },
-	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),				ObjectModelEntryFlags::none },
-	{ "type",				OBJECT_MODEL_FUNC_NOSELF("wifi"),				ObjectModelEntryFlags::none },
+	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),					ObjectModelEntryFlags::none },
+	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->wiFiServerVersion),			ObjectModelEntryFlags::none },
+	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),					ObjectModelEntryFlags::none },
+	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),				ObjectModelEntryFlags::none },
+	{ "numReconnects",		OBJECT_MODEL_FUNC((uint32_t)self->reconnectCount),	ObjectModelEntryFlags::none },
+	{ "signal",				OBJECT_MODEL_FUNC((int32_t)self->rssi),				ObjectModelEntryFlags::none },
+	{ "state",				OBJECT_MODEL_FUNC(self->GetStateName()),			ObjectModelEntryFlags::none },
+	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),					ObjectModelEntryFlags::none },
+	{ "type",				OBJECT_MODEL_FUNC_NOSELF("wifi"),					ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t WiFiInterface::objectModelTableDescriptor[] = { 1, 7 };
+constexpr uint8_t WiFiInterface::objectModelTableDescriptor[] = { 1, 9 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(WiFiInterface)
 
@@ -740,8 +743,23 @@ void WiFiInterface::Spin() noexcept
 					int32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
 					if (rc > 0)
 					{
+						memset(wiFiServerVersion, 0, sizeof(wiFiServerVersion));
 						SafeStrncpy(wiFiServerVersion, status.Value().versionText, ARRAY_SIZE(wiFiServerVersion));
-						macAddress.SetFromBytes(status.Value().macAddress);
+
+						// Parse the version string to obtain major and minor versions. Expecting a string of the format
+						// x.yn where x is the major version, y the minor version and n a development stage descriptor string.
+						const char *verStr = wiFiServerVersion;
+						majorVersion = minorVersion = 0;
+						majorVersion = StrToI32(verStr, &verStr);
+
+						if (majorVersion >= 1 && majorVersion <= 2) // The server versions valid for this RRF version
+						{
+							minorVersion = StrToI32(verStr + 1);
+						}
+						else
+						{
+							reprap.GetPlatform().MessageF(NetworkErrorMessage, "invalid wifi version detected: %s", wiFiServerVersion);
+						}
 
 						// Set the hostname before anything else is done
 						rc = SendCommand(NetworkCommand::networkSetHostName, 0, 0, 0, reprap.GetNetwork().GetHostname(), HostNameLength, nullptr, 0);
@@ -752,7 +770,7 @@ void WiFiInterface::Spin() noexcept
 #if SAME5x
 						// If running the RTOS-based WiFi module code, tell the module to increase SPI clock speed to 40MHz.
 						// This is safe on SAME5x processors but not on SAM4 processors.
-						if (isdigit(wiFiServerVersion[0]) && wiFiServerVersion[0] >= '2')
+						if (majorVersion >= 2)
 						{
 							rc = SendCommand(NetworkCommand::networkSetClockControl, 0, 0, 0x2001, nullptr, 0, nullptr, 0);
 							if (rc != ResponseEmpty)
@@ -887,6 +905,22 @@ void WiFiInterface::Spin() noexcept
 					}
 				}
 			}
+
+			// Update details that change constantly about the WiFi module
+			if (millis() - lastStatusPoll >= WiFiStatusPollMillis)
+			{
+				Receiver<NetworkStatusResponse> status;
+				const uint32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
+				if (rc > 0)
+				{
+					rssi = status.Value().rssi;
+					if (majorVersion >= 2)
+					{
+						reconnectCount = status.Value().numReconnects;
+					}
+				}
+				lastStatusPoll = millis();
+			}
 		}
 		break;
 
@@ -908,10 +942,19 @@ void WiFiInterface::Spin() noexcept
 				{
 					// Get our IP address, this needs to be correct for FTP to work
 					Receiver<NetworkStatusResponse> status;
-					if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
+					const uint32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
+					if (rc > 0)
 					{
 						ipAddress.SetV4LittleEndian(status.Value().ipAddress);
+						macAddress.SetFromBytes(status.Value().macAddress); // MAC address for AP and STA are separate and different
 						SafeStrncpy(actualSsid, status.Value().ssid, SsidLength);
+
+						if (majorVersion >= 2)
+						{
+							netmask.SetV4LittleEndian(status.Value().netmask);
+							gateway.SetV4LittleEndian(status.Value().gateway);
+							usingDhcp = status.Value().usingDhcpc;
+						}
 					}
 					InitSockets();
 					reconnectCount = 0;
@@ -919,8 +962,21 @@ void WiFiInterface::Spin() noexcept
 						TranslateWiFiState(currentMode),
 						actualSsid,
 						IP4String(ipAddress).c_str());
+
+					lastStatusPoll = 0;
 				}
 				break;
+			case WiFiState::idle:
+				{
+					uint8_t zero[6];
+					memset(zero, 0, sizeof(zero));
+					macAddress.SetFromBytes(zero);
+					SetIPAddress(DefaultIpAddress, DefaultNetMask, DefaultGateway);
+					strcpy(actualSsid, "(unknown)");
+					reconnectCount = 0;
+					rssi = INT8_MIN;
+					usingDhcp = false;
+				}
 
 			default:
 				if (requestedMode != WiFiState::connected)
@@ -1010,7 +1066,8 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 	{
 		Receiver<NetworkStatusResponse> status;
 		status.Value().clockReg = 0xFFFFFFFF;				// older WiFi firmware doesn't return this value, so preset it
-		if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
+		const uint32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
+		if (rc > 0)
 		{
 			NetworkStatusResponse& r = status.Value();
 			r.versionText[ARRAY_UPB(r.versionText)] = 0;
@@ -1022,17 +1079,47 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 
 			if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 			{
-				platform.MessageF(mtype, "WiFi IP address %s\n", IP4String(r.ipAddress).c_str());
+				if (majorVersion >= 2)
+				{
+					platform.MessageF(mtype, "WiFi IP address %s, netmask %s, gateway %s%s\n",
+						IP4String(r.ipAddress).c_str(), IP4String(r.netmask).c_str(), IP4String(r.gateway).c_str(),
+						currentMode == WiFiState::connected ? (r.usingDhcpc ? " (via DHCP)" : " (set manually)") : "");
+				}
+				else
+				{
+					platform.MessageF(mtype, "WiFi IP address %s\n", IP4String(r.ipAddress).c_str());
+				}
 			}
+
+			constexpr const char* SleepModes[4] = { "unknown", "none", "light", "modem" };
+			constexpr const char* ConnectionModes[4] =  { "none", "802.11b", "802.11g", "802.11n" };
 
 			if (currentMode == WiFiState::connected)
 			{
-				constexpr const char* SleepModes[4] = { "unknown", "none", "light", "modem" };
-				constexpr const char* ConnectionModes[4] =  { "none", "802.11b", "802.11g", "802.11n" };
-				platform.MessageF(mtype, "WiFi signal strength %ddBm, mode %s, reconnections %u, sleep mode %s\n", (int)r.rssi, ConnectionModes[r.phyMode], reconnectCount, SleepModes[r.sleepMode]);
+				if (majorVersion >= 2)
+				{
+					platform.MessageF(mtype, "WiFi signal strength %ddBm, mode %s, reconnections %u, sleep mode %s, channel %u (%s), auth %s\n",
+						(int)r.rssi, ConnectionModes[r.phyMode], reconnectCount, SleepModes[r.sleepMode],
+						r.channel, static_cast<HTMode>(r.ht) == HTMode::HT20 ? "20 MHz" : "40 MHz", GetWiFiAuthFriendlyStr(r.auth));
+				}
+				else
+				{
+					platform.MessageF(mtype, "WiFi signal strength %ddBm, mode %s, reconnections %u, sleep mode %s\n", (int)r.rssi, ConnectionModes[r.phyMode], reconnectCount, SleepModes[r.sleepMode]);
+				}
 			}
 			else if (currentMode == WiFiState::runningAsAccessPoint)
 			{
+				if (majorVersion >= 2)
+				{
+					platform.MessageF(mtype, "WiFi mode %s, sleep mode %s, channel %u (%s), auth %s\n",
+					ConnectionModes[r.phyMode], SleepModes[r.sleepMode], r.channel,
+					static_cast<HTMode>(r.ht)  == HTMode::HT20 ? "20 MHz" : "40 MHz", GetWiFiAuthFriendlyStr(r.auth));
+				}
+				else
+				{
+					platform.MessageF(mtype, "WiFi mode %s, sleep mode %s\n", ConnectionModes[r.phyMode], SleepModes[r.sleepMode]);
+				}
+
 				platform.MessageF(mtype, "Connected clients %u\n", (unsigned int)r.numClients);
 			}
 			// status, ssid and hostName not displayed
@@ -1146,7 +1233,7 @@ void WiFiInterface::EspRequestsTransfer() noexcept
 void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress p_gateway) noexcept
 {
 	ipAddress = p_ip;
-	usingDhcp = ipAddress.IsNull();
+	usingDhcp = false; // Mirror the value returned by the ESP module
 	netmask = p_netmask;
 	gateway = p_gateway;
 }
