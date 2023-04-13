@@ -115,29 +115,18 @@ constexpr float DefaultZProbeTemperature = 25.0;
 constexpr float DefaultZDive = 5.0;						// Millimetres
 constexpr float DefaultProbingSpeed = 2.0;				// Default Z probing speed mm/sec
 constexpr float DefaultZProbeTravelSpeed = 100.0;		// Default speed for travel to probe points
-
-#if !defined(DUET3) && !defined(DUET3MINI)				// for Duet 3 these are defined in Duet3Common.h in project CANLib
-constexpr size_t MaxZProbeProgramBytes = 8;				// Maximum number of bytes in a Z probe program
-#endif
-
 constexpr float DefaultZProbeTolerance = 0.03;			// How close the Z probe trigger height from consecutive taps must be
 constexpr uint8_t DefaultZProbeTaps = 1;				// The maximum number of times we probe each point
 constexpr int DefaultZProbeADValue = 500;				// Default trigger threshold
 
-constexpr float TRIANGLE_ZERO = -0.001;					// Millimetres
 constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres
 
 // String lengths. Try not to have too many different ones, because each one causes an instantiation of the String template
 constexpr size_t MaxMessageLength = 256;
 constexpr size_t MaxTitleLength = 61;
 
-#if SAM4E || SAM4S || SAME70 || SAME5x || defined(ESP_NETWORKING)
 constexpr size_t MaxFilenameLength = 120;				// Maximum length of a filename including the path
 constexpr size_t MaxVariableNameLength = 120;
-#else
-constexpr size_t MaxFilenameLength = 100;
-constexpr size_t MaxVariableNameLength = 100;
-#endif
 
 // Standard string lengths, to avoid having too many different instantiations of the String<n> template
 constexpr size_t StringLength20 = 20;
