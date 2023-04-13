@@ -5159,8 +5159,8 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 		switch (otherGb.syncState)
 		{
 		case GCodeBuffer::SyncState::running:
-			// Other input channel has carried on. If we are not the primary, wait until it has completed the command
-			if (thisGb.LatestMachineState().Executing() || otherGb.IsLaterThan(thisGb))
+			// Other input channel has carried on. If we are the primary, we have finished syncing.
+			if (thisGb.LatestMachineState().Executing() || !otherGb.OriginalMachineState().fileState.IsLive() || otherGb.IsLaterThan(thisGb))
 			{
 				thisGb.syncState = GCodeBuffer::SyncState::running;
 				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);
@@ -5184,7 +5184,7 @@ bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 			}
 
 			// We are not the primary, so wait for the other output channel to complete the current command
-			if (otherGb.IsLaterThan(thisGb))
+			if (!otherGb.OriginalMachineState().fileState.IsLive() || otherGb.IsLaterThan(thisGb))
 			{
 				thisGb.syncState = GCodeBuffer::SyncState::running;
 				//debugPrintf("Channel %u changed state to running, %u\n", thisGb.GetChannel().ToBaseType(), __LINE__);

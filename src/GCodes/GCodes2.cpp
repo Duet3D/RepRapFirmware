@@ -577,6 +577,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 400:
 		case 555:
 		case 596:
+		case 598:
 			// These commands are executed by all GCode processors, at least to start with
 			break;
 
