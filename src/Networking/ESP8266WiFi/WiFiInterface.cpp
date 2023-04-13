@@ -997,14 +997,14 @@ const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 
 void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 {
-	platform.MessageF(mtype, "= WiFi =\nNetwork state is %s\n", GetStateName());
-	platform.MessageF(mtype, "WiFi module is %s\n", TranslateWiFiState(currentMode));
-	platform.MessageF(mtype, "Failed messages: pending %u, notready %u, noresp %u\n", transferAlreadyPendingCount, readyTimeoutCount, responseTimeoutCount);
-
-#if 0
-	// The underrun/overrun counters don't work at present
-	platform.MessageF(mtype, "SPI underruns %u, overruns %u\n", spiTxUnderruns, spiRxOverruns);
-#endif
+	platform.MessageF(mtype,
+						"= WiFi =\nNetwork state is %s\n"
+						"Module is %s\n"
+						"Failed messages: pending %u, notready %u, noresp %u\n",
+						 	 GetStateName(),
+							 TranslateWiFiState(currentMode),
+							 transferAlreadyPendingCount, readyTimeoutCount, responseTimeoutCount
+					 );
 
 	if (GetState() != NetworkState::disabled && GetState() != NetworkState::starting1 && GetState() != NetworkState::starting2)
 	{
@@ -1014,11 +1014,11 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 		{
 			NetworkStatusResponse& r = status.Value();
 			r.versionText[ARRAY_UPB(r.versionText)] = 0;
-			platform.MessageF(mtype, "WiFi firmware version %s\n", r.versionText);
-			platform.MessageF(mtype, "WiFi MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			platform.MessageF(mtype, "Firmware version %s\n", r.versionText);
+			platform.MessageF(mtype, "MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
 								r.macAddress[0], r.macAddress[1], r.macAddress[2], r.macAddress[3], r.macAddress[4], r.macAddress[5]);
-			platform.MessageF(mtype, "WiFi Vcc %.2f, reset reason %s\n", (double)((float)r.vcc/1024), TranslateEspResetReason(r.resetReason));
-			platform.MessageF(mtype, "WiFi flash size %" PRIu32 ", free heap %" PRIu32 "\n", r.flashSize, r.freeHeap);
+			platform.MessageF(mtype, "Module reset reason: %s, Vcc %.2f, flash size %" PRIu32 ", free heap %" PRIu32 "\n",
+								TranslateEspResetReason(r.resetReason), (double)((float)r.vcc/1024), r.flashSize, r.freeHeap);
 
 			if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 			{
@@ -1027,9 +1027,9 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 
 			if (currentMode == WiFiState::connected)
 			{
-				constexpr const char* SleepModes[4] = { "unknown", "none", "light", "modem" };
 				constexpr const char* ConnectionModes[4] =  { "none", "802.11b", "802.11g", "802.11n" };
-				platform.MessageF(mtype, "WiFi signal strength %ddBm, mode %s, reconnections %u, sleep mode %s\n", (int)r.rssi, ConnectionModes[r.phyMode], reconnectCount, SleepModes[r.sleepMode]);
+				platform.MessageF(mtype, "Signal strength %ddBm, channel %u, mode %s, reconnections %u\n",
+											(int)r.rssi, r.channel, ConnectionModes[r.phyMode], reconnectCount);
 			}
 			else if (currentMode == WiFiState::runningAsAccessPoint)
 			{
@@ -1297,13 +1297,17 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 							{
 								longReply->cat(',');
 							}
+							const WiFiScanData& rec = data[i];
 							longReply->catf((jsonFormat)
-											? "{\"ssid\":\"%s\",\"rssi\":\"%d\",\"phymode\":\"%s\",\"auth\":\"%s\"}"
-											: "\nssid=%s rssi=%d phymode=%s auth=%s",
-												data[i].ssid,
-												data[i].rssi,
-												data[i].phymode == EspWiFiPhyMode::N ? "n" : data[i].phymode == EspWiFiPhyMode::G ? "g" : "b",
-												GetWiFiAuthFriendlyStr(data[i].auth));
+											? "{\"ssid\":\"%s\",\"chan\":%u,\"rssi\":\%d,\"phymode\":\"%s\",\"auth\":\"%s\",\"mac\":\"%02x:%02x:%02x:%02x:%02x:%02x\"}"
+											: "\nssid=%s chan=%u rssi=%d phymode=%s auth=%s mac=%02x:%02x:%02x:%02x:%02x:%02x",
+												rec.ssid,
+												rec.primaryChannel,
+												rec.rssi,
+												rec.phymode == EspWiFiPhyMode::N ? "n" : rec.phymode == EspWiFiPhyMode::G ? "g" : "b",
+												GetWiFiAuthFriendlyStr(rec.auth),
+												rec.mac[0], rec.mac[1], rec.mac[2], rec.mac[3], rec.mac[4], rec.mac[5]
+											);
 							found = true;
 						}
 
@@ -1988,8 +1992,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	digitalWrite(SamTfrReadyPin, true);
 
 	// Wait until the DMA transfer is complete, with timeout
-	// On factory reset, use the startup timeout, as it involves re-formatting the SPIFFS
-	// partition.
+	// On factory reset, use the startup timeout, as it involves re-formatting the SPIFFS partition.
 	const uint32_t timeout = (cmd == NetworkCommand::networkFactoryReset) ? WiFiStartupMillis :
 		(cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkDeleteSsid ||
 		 cmd == NetworkCommand::networkConfigureAccessPoint || cmd == NetworkCommand::networkRetrieveSsidData
