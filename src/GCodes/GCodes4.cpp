@@ -521,26 +521,50 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// Move the head back to the paused location
 		if (LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
-			const float currentZ = ms.coords[Z_AXIS];
+			SetMoveBufferDefaults(ms);
+			const bool restoreZ = (gb.GetState() != GCodeState::resuming1 || ms.coords[Z_AXIS] <= ms.pauseRestorePoint.moveCoords[Z_AXIS]);
+			AxesBitmap axesToAllocate;
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
-				ms.currentUserPosition[axis] = ms.pauseRestorePoint.moveCoords[axis];
+				if (   ms.currentUserPosition[axis] != ms.pauseRestorePoint.moveCoords[axis]
+					&& (restoreZ || axis != Z_AXIS)
+				   )
+				{
+					axesToAllocate.SetBit(axis);
+					if (platform.IsAxisLinear(axis))
+					{
+						ms.linearAxesMentioned = true;
+					}
+					else if (platform.IsAxisRotational(axis))
+					{
+						ms.rotationalAxesMentioned = true;
+					}
+				}
 			}
-			SetMoveBufferDefaults(ms);
+
+			try
+			{
+				AllocateAxes(gb, ms, axesToAllocate, ParameterLettersBitmap());
+			}
+			catch (const GCodeException& exc)
+			{
+				// We failed to allocate the axes that we need. This should not happen because the call to LockAllMovementSystemsAndWaitForStandstill should have released all axes.
+				gb.LatestMachineState().SetError(exc);
+				gb.SetState(GCodeState::normal);
+				break;
+			}
+
+			// AllocateAxes updates the user coordinates, so we need to set them up here not earlier
+			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+			{
+				if (axesToAllocate.IsBitSet(axis))
+				{
+					ms.currentUserPosition[axis] = ms.pauseRestorePoint.moveCoords[axis];
+				}
+			}
 			ToolOffsetTransform(ms);
 			ms.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
-			if (gb.GetState() == GCodeState::resuming1 && currentZ > ms.pauseRestorePoint.moveCoords[Z_AXIS])
-			{
-				// First move the head to the correct XY point, then move it down in a separate move
-				ms.coords[Z_AXIS] = currentZ;
-				gb.SetState(GCodeState::resuming2);
-			}
-			else
-			{
-				// Just move to the saved position in one go
-				gb.SetState(GCodeState::resuming3);
-			}
-			ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;	// assume that both linear and rotational axes might be moving
+			gb.SetState((restoreZ) ? GCodeState::resuming3 : GCodeState::resuming2);
 			NewSingleSegmentMoveAvailable(ms);
 		}
 		break;
