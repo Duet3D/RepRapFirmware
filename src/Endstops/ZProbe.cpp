@@ -140,6 +140,18 @@ void ZProbe::PrepareForUse(const bool probingAway) noexcept
 	}
 }
 
+float ZProbe::GetStartingHeight() const noexcept
+{
+	switch (type)
+	{
+	case ZProbeType::scanningAnalog:
+		return GetActualTriggerHeight();
+
+	default:
+		return diveHeight + GetActualTriggerHeight();
+	}
+}
+
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept

@@ -530,26 +530,58 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// Move the head back to the paused location
 		if (LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
-			const float currentZ = ms.coords[Z_AXIS];
+			SetMoveBufferDefaults(ms);
+			const bool restoreZ = (gb.GetState() != GCodeState::resuming1 || ms.coords[Z_AXIS] <= ms.pauseRestorePoint.moveCoords[Z_AXIS]);
+#if SUPPORT_ASYNC_MOVES
+			AxesBitmap axesToAllocate;
+#endif
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
-				ms.currentUserPosition[axis] = ms.pauseRestorePoint.moveCoords[axis];
+				if (   ms.currentUserPosition[axis] != ms.pauseRestorePoint.moveCoords[axis]
+					&& (restoreZ || axis != Z_AXIS)
+				   )
+				{
+#if SUPPORT_ASYNC_MOVES
+					axesToAllocate.SetBit(axis);
+#else
+					ms.currentUserPosition[axis] = ms.pauseRestorePoint.moveCoords[axis];
+#endif
+					if (platform.IsAxisLinear(axis))
+					{
+						ms.linearAxesMentioned = true;
+					}
+					else if (platform.IsAxisRotational(axis))
+					{
+						ms.rotationalAxesMentioned = true;
+					}
+				}
 			}
-			SetMoveBufferDefaults(ms);
+
+#if SUPPORT_ASYNC_MOVES
+			try
+			{
+				AllocateAxes(gb, ms, axesToAllocate, ParameterLettersBitmap());
+			}
+			catch (const GCodeException& exc)
+			{
+				// We failed to allocate the axes that we need. This should not happen because the call to LockAllMovementSystemsAndWaitForStandstill should have released all axes.
+				gb.LatestMachineState().SetError(exc);
+				gb.SetState(GCodeState::normal);
+				break;
+			}
+
+			// AllocateAxes updates the user coordinates, so we need to set them up here not earlier
+			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+			{
+				if (axesToAllocate.IsBitSet(axis))
+				{
+					ms.currentUserPosition[axis] = ms.pauseRestorePoint.moveCoords[axis];
+				}
+			}
+#endif
 			ToolOffsetTransform(ms);
 			ms.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
-			if (gb.GetState() == GCodeState::resuming1 && currentZ > ms.pauseRestorePoint.moveCoords[Z_AXIS])
-			{
-				// First move the head to the correct XY point, then move it down in a separate move
-				ms.coords[Z_AXIS] = currentZ;
-				gb.SetState(GCodeState::resuming2);
-			}
-			else
-			{
-				// Just move to the saved position in one go
-				gb.SetState(GCodeState::resuming3);
-			}
-			ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;	// assume that both linear and rotational axes might be moving
+			gb.SetState((restoreZ) ? GCodeState::resuming3 : GCodeState::resuming2);
 			NewSingleSegmentMoveAvailable(ms);
 		}
 		break;
@@ -681,19 +713,20 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// Move to the current probe point
 			Move& move = reprap.GetMove();
 			const HeightMap& hm = move.AccessHeightMap();
-			if (hm.CanProbePoint(gridAxis0index, gridAxis1index))
+			if (hm.CanProbePoint(gridAxis0Index, gridAxis1Index))
 			{
 				const GridDefinition& grid = hm.GetGrid();
-				const float axis0Coord = grid.GetCoordinate(0, gridAxis0index);
-				const float axis1Coord = grid.GetCoordinate(1, gridAxis1index);
+				const float axis0Coord = grid.GetCoordinate(0, gridAxis0Index);
+				const float axis1Coord = grid.GetCoordinate(1, gridAxis1Index);
 				const size_t axis0Num = grid.GetAxisNumber(0);
 				const size_t axis1Num = grid.GetAxisNumber(1);
 				AxesBitmap axes;
 				axes.SetBit(axis0Num);
 				axes.SetBit(axis1Num);
 				float axesCoords[MaxAxes];
-				memcpy(axesCoords, ms.coords, sizeof(axesCoords));				// copy current coordinates of all other axes in case they are relevant to IsReachable
+				memcpy(axesCoords, ms.coords, sizeof(axesCoords));					// copy current coordinates of all other axes in case they are relevant to IsReachable
 				const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+				zp->PrepareForUse(false);											// needed to calculate the actual trigger height when using a scanning Z probe
 				axesCoords[axis0Num] = axis0Coord - zp->GetOffset(axis0Num);
 				axesCoords[axis1Num] = axis1Coord - zp->GetOffset(axis1Num);
 				axesCoords[Z_AXIS] = zp->GetStartingHeight();
@@ -707,8 +740,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;		// assume that both linear and rotational axes might be moving
 					NewSingleSegmentMoveAvailable(ms);
 
-					InitialiseTaps(false);
-					gb.AdvanceState();
+					if (zp->GetProbeType() == ZProbeType::scanningAnalog)
+					{
+						gb.SetState(GCodeState::gridScanning1);
+					}
+					else
+					{
+						InitialiseTaps(false);
+						gb.AdvanceState();
+					}
 				}
 				else
 				{
@@ -872,7 +912,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 			if (acceptReading)
 			{
-				reprap.GetMove().AccessHeightMap().SetGridHeight(gridAxis0index, gridAxis1index, g30zHeightError);
+				reprap.GetMove().AccessHeightMap().SetGridHeight(gridAxis0Index, gridAxis1Index, g30zHeightError);
 				gb.AdvanceState();
 			}
 			else if (tapsDone < (int)zp->GetMaxTaps())
@@ -894,32 +934,32 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::gridProbing6:	// ready to compute the next probe point
 		{
 			const HeightMap& hm = reprap.GetMove().AccessHeightMap();
-			if (gridAxis1index & 1)
+			if (gridAxis1Index & 1u)
 			{
 				// Odd row, so decreasing X
-				if (gridAxis0index == 0)
+				if (gridAxis0Index == 0)
 				{
-					++gridAxis1index;
+					++gridAxis1Index;
 				}
 				else
 				{
-					--gridAxis0index;
+					--gridAxis0Index;
 				}
 			}
 			else
 			{
 				// Even row, so increasing X
-				if (gridAxis0index + 1 == hm.GetGrid().NumAxisPoints(0))
+				if (gridAxis0Index + 1u == hm.GetGrid().NumAxisPoints(0))
 				{
-					++gridAxis1index;
+					++gridAxis1Index;
 				}
 				else
 				{
-					++gridAxis0index;
+					++gridAxis0Index;
 				}
 			}
 
-			if (gridAxis1index == hm.GetGrid().NumAxisPoints(1))
+			if (gridAxis1Index == hm.GetGrid().NumAxisPoints(1))
 			{
 				// Done all the points
 				gb.AdvanceState();
@@ -967,6 +1007,118 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			reprap.GetPlatform().MessageF(LogWarn, "%s\n", reply.c_str());
 		}
 		gb.SetState(GCodeState::normal);
+		break;
+
+	// States used for grid scanning
+	case GCodeState::gridScanning1:		// Here when we have moved to the first accessible point at the start of a row
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
+		{
+			// Iterate through points on this row looking for the last reachable one
+			HeightMap& hm = reprap.GetMove().AccessHeightMap();
+			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+			zp->SetProbing(true);
+			const GridDefinition& grid = hm.GetGrid();
+			const size_t axis0Num = grid.GetAxisNumber(0);
+			const size_t axis1Num = grid.GetAxisNumber(1);
+			lastAxis0Index = gridAxis0Index;
+			for (;;)
+			{
+				size_t newAxis0Index;
+				if (gridAxis1Index & 1u)
+				{
+					// Odd row, so decreasing X
+					if (lastAxis0Index == 0)
+					{
+						break;
+					}
+					newAxis0Index = lastAxis0Index - 1;
+				}
+				else
+				{
+					// Even row, so increasing X
+					newAxis0Index = lastAxis0Index + 1;
+					if (newAxis0Index == hm.GetGrid().NumAxisPoints(0))
+					{
+						break;
+					}
+				}
+				if (!hm.CanProbePoint(newAxis0Index, gridAxis1Index))
+				{
+					break;
+				}
+
+				AxesBitmap axes;
+				axes.SetBit(axis0Num);
+				axes.SetBit(axis1Num);
+				float axesCoords[MaxAxes];
+				memcpy(axesCoords, ms.coords, sizeof(axesCoords));					// copy current coordinates of all other axes in case they are relevant to IsReachable
+				axesCoords[axis0Num] = grid.GetCoordinate(0, newAxis0Index) - zp->GetOffset(axis0Num);
+				axesCoords[axis1Num] = grid.GetCoordinate(1, gridAxis1Index) - zp->GetOffset(axis1Num);
+				axesCoords[Z_AXIS] = zp->GetStartingHeight();
+				if (!reprap.GetMove().IsAccessibleProbePoint(axesCoords, axes))
+				{
+					break;
+				}
+				lastAxis0Index = newAxis0Index;
+			}
+
+			// We are over the point given by [gridAxis0index, gridAxis1index]. Scan up to [lastAxis0Index, gridAxis1index]. This may be a single point.
+			const float heightError = zp->GetCalibratedReading();
+			hm.SetGridHeight(gridAxis0Index, gridAxis1Index, heightError);
+
+			gb.AdvanceState();
+			if (lastAxis0Index != gridAxis0Index)			// if more than one point
+			{
+				SetMoveBufferDefaults(ms);
+				ms.coords[axis0Num] = grid.GetCoordinate(0, lastAxis0Index) - zp->GetOffset(axis0Num);
+				ms.coords[axis1Num] = grid.GetCoordinate(1, gridAxis1Index) - zp->GetOffset(axis1Num);
+				ms.coords[Z_AXIS] = zp->GetStartingHeight();
+				ms.feedRate = zp->GetProbingSpeed(0);
+				ms.linearAxesMentioned = platform.IsAxisLinear(axis0Num);
+				ms.rotationalAxesMentioned = platform.IsAxisRotational(axis0Num);
+				ms.segmentsLeftToStartAt = ms.totalSegments = (unsigned int)abs((int)lastAxis0Index - (int)gridAxis0Index);
+				ms.firstSegmentFractionToSkip = 0.0;
+				ms.scanningProbeMove = true;
+
+				// Adjust the axis 0 index so that the laser task will store the reading at the correct location in the grid
+				if (gridAxis1Index & 1u)
+				{
+					--gridAxis0Index;
+				}
+				else
+				{
+					++gridAxis0Index;
+				}
+
+				NewMoveAvailable(ms);
+			}
+		}
+		break;
+
+	case GCodeState::gridScanning2:		// Here when we have scanned a row
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
+		{
+			// Save the reading at the end of the scan. If there was only one point then this overwrites the value we already saved, but that doesn't matter.
+			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+			zp->SetProbing(false);
+			HeightMap& hm = reprap.GetMove().AccessHeightMap();
+
+			// Advance to the start or end of the next row
+			++gridAxis1Index;
+			if (gridAxis1Index == hm.GetGrid().NumAxisPoints(1))
+			{
+				// Done all the points
+				gb.SetState(GCodeState::gridProbing7);
+				RetractZProbe(gb);
+			}
+			else
+			{
+				gridAxis0Index = (gridAxis1Index & 1u)
+									? hm.GetGrid().NumAxisPoints(0) - 1				// new row number is odd so go to the end of it
+									: 0;											// new row is even, so go to start of it
+				gb.SetState(GCodeState::gridProbing1);
+			}
+		}
 		break;
 
 	// States used for G30 probing

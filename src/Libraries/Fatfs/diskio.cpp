@@ -43,17 +43,16 @@
 
 #include <ecv_duet3d.h>
 
-#include "compiler.h"
+#include "RepRapFirmware.h"
+#include <Platform/RepRap.h>
+#include <Platform/Tasks.h>
+#include <Movement/StepTimer.h>
+
 #include "ff.h"				// for type definitions
 #include "diskio.h"
 
 #include <Libraries/sd_mmc/ctrl_access.h>
 #include <Libraries/sd_mmc/conf_sd_mmc.h>
-
-#include "RepRapFirmware.h"
-#include <Platform/RepRap.h>
-#include <Platform/Tasks.h>
-#include <Movement/StepTimer.h>
 
 #include <cstring>
 

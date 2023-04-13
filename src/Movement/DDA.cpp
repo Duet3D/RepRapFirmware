@@ -403,18 +403,19 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 
 	// 3. Store some values
 	tool = nextMove.movementTool;
-	flags.checkEndstops = nextMove.checkEndstops;
 	filePos = nextMove.filePos;
 	virtualExtruderPosition = nextMove.moveStartVirtualExtruderPosition;
 	proportionDone = nextMove.proportionDone;
 	initialUserC0 = nextMove.initialUserC0;
 	initialUserC1 = nextMove.initialUserC1;
 
+	flags.checkEndstops = nextMove.checkEndstops;
 	flags.canPauseAfter = nextMove.canPauseAfter;
 	flags.usingStandardFeedrate = nextMove.usingStandardFeedrate;
-	flags.isPrintingMove = flags.xyMoving && forwardExtruding;				// require forward extrusion so that wipe-while-retracting doesn't count
+	flags.isPrintingMove = flags.xyMoving && forwardExtruding;					// require forward extrusion so that wipe-while-retracting doesn't count
 	flags.isNonPrintingExtruderMove = extrudersMoving && !flags.isPrintingMove;	// flag used by filament monitors - we can ignore Z movement
 	flags.usePressureAdvance = nextMove.usePressureAdvance;
+	flags.scanningProbeMove = nextMove.scanningProbeMove;
 	flags.controlLaser = nextMove.isCoordinated && nextMove.checkEndstops == 0;
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a raw motor move
@@ -1428,9 +1429,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 							}
 							else
 							{
-								pdm->state = DMState::idle;
-								pdm->nextDM = completedDMs;
-								completedDMs = pdm;
+								DriveMovement::Release(pdm);
 							}
 						}
 					}
@@ -1531,9 +1530,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 						}
 						else
 						{
-							pdm->state = DMState::idle;
-							pdm->nextDM = completedDMs;
-							completedDMs = pdm;
+							DriveMovement::Release(pdm);
 						}
 					}
 
@@ -2286,7 +2283,8 @@ void DDA::UpdateMovementAccumulators(volatile int32_t *accumulators) const noexc
 {
 	// To identify all the extruder movement, we can either loop through extruder numbers and search both DM lists for a DM for that drive,
 	// or we can iterate through both DM lists, checking whether the drive it is for is an extruder.
-#if 1
+	// It's probably quicker to iterate through DMs.
+	//
 	// Loop through DMs, checking whether each associated drive is an extruder and updating the movement accumulator if so.
 	// We could omit the check that the drive is an accumulator so that we update all accumulators, but we would still need to check for leadscrew adjustment moves.
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
@@ -2316,15 +2314,6 @@ void DDA::UpdateMovementAccumulators(volatile int32_t *accumulators) const noexc
 			dm = dm->nextDM;
 		}
 	}
-#else
-	// Loop through extruders
-	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
-	for (size_t extruder = 0; extruder < numExtruders; ++extruder)
-	{
-		const size_t drv = ExtruderToLogicalDrive(extruder);
-		accumulators[drv] += GetStepsTaken(drv);
-	}
-#endif
 }
 
 float DDA::GetTotalExtrusionRate() const noexcept

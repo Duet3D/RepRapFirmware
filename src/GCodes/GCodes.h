@@ -120,7 +120,7 @@ public:
 	FilePosition GetPrintingFilePosition() const noexcept;						// Return the current position of the file being printed in bytes. May return noFilePosition if allowNoFilePos is true
 	void Diagnostics(MessageType mtype) noexcept;								// Send helpful information out
 
-	bool RunConfigFile(const char* fileName) noexcept;							// Start running the config file
+	bool RunConfigFile(const char* fileName, bool isMainConfigFile) noexcept;	// Start running a configuration file
 	bool IsTriggerBusy() const noexcept;										// Return true if the trigger G-code buffer is busy running config.g or a trigger file
 
 	bool IsAxisHomed(unsigned int axis) const noexcept							// Has the axis been homed?
@@ -216,6 +216,7 @@ public:
 	void ActivateHeightmap(bool activate) noexcept;									// (De-)Activate the height map
 
 	size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
+	void TakeScanningProbeReading() noexcept;										// Take and store a reading from a scanning Z probe
 
 	// These next two are public because they are used by class SbcInterface
 	void UnlockAll(const GCodeBuffer& gb) noexcept;									// Release all locks
@@ -493,6 +494,7 @@ private:
 	bool DoEmergencyPause() noexcept;														// Do an emergency pause following loss of power or a motor stall
 #endif
 
+	// Bed probing
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);	// Define the probing grid, returning true if error
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Load the height map from file
@@ -508,7 +510,6 @@ private:
 	ReadLockedPointer<ZProbe> SetZProbeNumber(GCodeBuffer& gb, char probeLetter) THROWS(GCodeException);	// Set up currentZProbeNumber and return the probe
 	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Probes at a given position - see the comment at the head of the function itself
 	void InitialiseTaps(bool fastThenSlow) noexcept;												// Set up to do the first of a possibly multi-tap probe
-	void SetBedEquationWithProbe(int sParam, const StringRef& reply) noexcept;						// Probes a series of points and sets the bed equation
 
 	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M581
 	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M582
@@ -696,7 +697,8 @@ private:
 	float g30zHeightErrorLowestDiff;			// the lowest difference we have seen between consecutive readings
 	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
-	size_t gridAxis0index, gridAxis1index;		// Which grid probe point is next
+	size_t gridAxis0Index, gridAxis1Index;		// Which grid probe point is next
+	size_t lastAxis0Index;						// The last grid probe point in this row to scan
 	bool doingManualBedProbe;					// true if we are waiting for the user to jog the nozzle until it touches the bed
 	bool hadProbingError;						// true if there was an error probing the last point
 	bool zDatumSetByProbing;					// true if the Z position was last set by probing, not by an endstop switch or by G92

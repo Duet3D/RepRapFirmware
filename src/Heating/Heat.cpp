@@ -809,6 +809,10 @@ void Heat::SwitchOff(int heater) noexcept
 	{
 		h->SwitchOff();
 		lastStandbyTools[heater] = nullptr;
+		if (heater == heaterBeingTuned)
+		{
+			heaterBeingTuned = -1;
+		}
 	}
 }
 
@@ -822,6 +826,11 @@ void Heat::SwitchOffAll(bool includingChamberAndBed) noexcept
 		if (h != nullptr && (includingChamberAndBed || !IsBedOrChamberHeater(heater)))
 		{
 			h->SwitchOff();
+			lastStandbyTools[heater] = nullptr;
+			if (heater == heaterBeingTuned)
+			{
+				heaterBeingTuned = -1;
+			}
 		}
 	}
 }

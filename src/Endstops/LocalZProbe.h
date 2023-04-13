@@ -19,12 +19,20 @@ public:
 	LocalZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::none) { }
 	~LocalZProbe() noexcept override;
 
-	void SetIREmitter(bool on) const noexcept override;
 	uint16_t GetRawReading() const noexcept override;
 	bool SetProbing(bool isProbing) noexcept override;
 	GCodeResult AppendPinNames(const StringRef& str) noexcept override;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
+
+	// Functions used only with modulated Z probes
+	void SetIREmitter(bool on) const noexcept override;
+
+	// Functions used only with programmable Z probes
 	GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept override;
+
+	// Functions used only with scanning Z probes
+	float GetCalibratedReading() const noexcept override;
+	void SetCalibrationPoint(float height) noexcept override;
 
 #if ALLOCATE_DEFAULT_PORTS
 	bool AssignPorts(const char *pinNames, const StringRef& reply) noexcept;
@@ -34,7 +42,7 @@ private:
 	IoPort inputPort;
 	IoPort modulationPort;			// the modulation port we are using
 
-	// Variable for programming Smart Effector and other programmable Z probes
+	// Variables for programming Smart Effector and other programmable Z probes
 	static void TimerInterrupt(CallbackParameter param) noexcept;
 	void Interrupt() noexcept;
 
@@ -47,6 +55,11 @@ private:
 	StepTimer::Ticks startTime;
 
 	static const unsigned int bitsPerSecond = 1000;
+
+	// Variables used with scanning probes
+	bool isCalibrated = false;
+	// TODO calibration data, either a table or a set of coefficients
+	mutable float fakeHeightError;
 };
 
 // If this is a dumb modulated IR probe, set the IR LED on or off. Called from the tick ISR, so inlined for speed.

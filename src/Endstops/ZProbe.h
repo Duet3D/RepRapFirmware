@@ -21,6 +21,8 @@ public:
 	virtual GCodeResult AppendPinNames(const StringRef& str) noexcept = 0;		// not const because it may update the state too
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException);		// 'seen' is an in-out parameter
 	virtual GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept;
+	virtual float GetCalibratedReading() const noexcept { return 0.0; }
+	virtual void SetCalibrationPoint(float height) noexcept { }
 
 #if SUPPORT_CAN_EXPANSION
 	// Process a remote input change that relates to this Z probe
@@ -38,7 +40,7 @@ public:
 	float GetConfiguredTriggerHeight() const noexcept { return -offsets[Z_AXIS]; }
 	float GetActualTriggerHeight() const noexcept { return actualTriggerHeight; }
 	float GetDiveHeight() const noexcept { return diveHeight; }
-	float GetStartingHeight() const noexcept { return diveHeight + GetActualTriggerHeight(); }
+	float GetStartingHeight() const noexcept;
 	float GetProbingSpeed(int tapsDone) const noexcept { return probeSpeeds[(tapsDone < 0) ? 0 : 1]; }
 	float HasTwoProbingSpeeds() const noexcept { return probeSpeeds[1] != probeSpeeds[0]; }
 	float GetTravelSpeed() const noexcept { return travelSpeed; }

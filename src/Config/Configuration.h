@@ -144,7 +144,7 @@ constexpr size_t StringLength20 = 20;
 constexpr size_t StringLength50 = 50;					// Used for pin names
 constexpr size_t StringLength100 = 100;					// Used for error messages
 constexpr size_t StringLength500 = 500;					// Used when writing the height map
-constexpr size_t StringLength256 = 256;
+constexpr size_t StringLength256 = 256;					// used for various thinhs
 
 constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
 constexpr size_t MaxFanNameLength = StringLength20;		// Maximum number of characters in a fan name
@@ -160,14 +160,11 @@ constexpr size_t RepRapPasswordLength = StringLength20;
 constexpr size_t MediumStringLength = MaxFilenameLength;
 constexpr size_t M117StringLength = MediumStringLength;
 constexpr size_t StringLengthLoggedCommand = StringLength100;	// Length of a string buffer for a command to be logged
+constexpr size_t MaxStringExpressionLength = StringLength256;
 
-#if SAM4E || SAM4S || SAME70 || SAME5x || defined(ESP_NETWORKING)
-// Increased GCODE_LENGTH on the SAM4 because M587 and M589 commands on the Duet WiFi can get very long and GCode meta commands can get even longer
+// Increased GCODE_LENGTH because M587 and M589 commands on the Duet WiFi can get very long and GCode meta commands can get even longer
 // Also if HAS_SBC_INTERFACE is enabled then it needs to be large enough to hold SBC commands sent in binary mode, see GCodeBuffer.h
 constexpr size_t MaxGCodeLength = 256;					// maximum number of non-comment characters in a line of GCode including the null terminator
-#else
-constexpr size_t MaxGCodeLength = 101;					// maximum number of non-comment characters in a line of GCode including the null terminator
-#endif
 
 // Define the maximum length of a GCode that we can queue to synchronise it to a move. Long enough for M150 R255 U255 B255 P255 S255 F1 encoded in binary mode (64 bytes).
 constexpr size_t ShortGCodeLength = 64;
@@ -204,6 +201,8 @@ constexpr unsigned int MaxFilaments = 20;
 #else
 constexpr unsigned int MaxFilaments = 8;
 #endif
+
+constexpr size_t MaxLaserPixelsPerMove = 8;				// How many S parameters you can use on a single G1 command when laser engraving
 
 // Move system
 constexpr float DefaultFeedRate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min

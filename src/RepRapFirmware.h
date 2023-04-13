@@ -367,6 +367,7 @@ typedef uint16_t Pwm_t;						// Type of a PWM value when we don't want to use fl
 typedef uint16_t IoBits_t;					// Type of the port control bitmap (G1 P parameter)
 #endif
 
+// Data stored in RawMove and in the DDA to handle laser PWM and/or IOBITS
 #if SUPPORT_LASER || SUPPORT_IOBITS
 union LaserPwmOrIoBits
 {
@@ -377,7 +378,7 @@ union LaserPwmOrIoBits
 	IoBits_t ioBits;						// I/O bits to set/clear at the start of this move
 #endif
 
-	void Clear()							// set to zero, whichever one it is
+	void Clear() noexcept					// set to zero, whichever one it is
 	{
 #if SUPPORT_LASER
 		laserPwm = 0;
@@ -388,10 +389,29 @@ union LaserPwmOrIoBits
 };
 #endif
 
+#if SUPPORT_LASER
+
+// Data stored in the MovemetState and in a RestorePoint to handle laser pixel clusters
+struct LaserPixelData
+{
+	size_t numPixels;
+	Pwm_t pixelPwm[MaxLaserPixelsPerMove];
+
+	void Clear() noexcept { numPixels = 0; }
+};
+
+#endif
+
 // Find the bit number corresponding to a parameter letter
 inline constexpr unsigned int ParameterLetterToBitNumber(char c) noexcept
 {
 	return (c <= 'Z') ? c - 'A' : c - ('a' - 26);
+}
+
+// Find the parameter letter corresponding to a  bit number
+inline constexpr unsigned int BitNumberToParameterLetter(unsigned int n) noexcept
+{
+	return (n < 26) ? 'A' + n : 'a' + (n - 26);
 }
 
 // Make a ParameterLettersBitmap representing a single letter

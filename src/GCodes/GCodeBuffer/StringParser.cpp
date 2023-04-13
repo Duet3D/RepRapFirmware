@@ -2017,7 +2017,7 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
 {
 	parametersPresent.Iterate([this, &vs, codeRunning](unsigned int bit, unsigned int count)
 								{
-									const char letter = 'A' + bit;
+									const char letter = BitNumberToParameterLetter(bit);
 									if ((letter != 'P' || codeRunning != 98) && Seen(letter))
 									{
 										ExpressionParser parser(gb, &gb.buffer[readPointer], &gb.buffer[commandEnd]);

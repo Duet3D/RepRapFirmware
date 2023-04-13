@@ -99,6 +99,7 @@ public:
 	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }			// Return true if this involves both XY movement and extrusion
 	bool UsingStandardFeedrate() const noexcept { return flags.usingStandardFeedrate; }
 	bool IsCheckingEndstops() const noexcept { return flags.checkEndstops; }
+	bool IsScanningProbeMove() const noexcept { return flags.scanningProbeMove; }
 
 	DDAState GetState() const noexcept { return state; }
 	DDA* GetNext() const noexcept { return next; }
@@ -267,14 +268,14 @@ private:
 					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
 					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
 					 hadLookaheadUnderrun : 1,		// True if the lookahead queue was not long enough to optimise this move
-					 xyMoving : 1,					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
+					 xyMoving : 1,					// True if movement along an X axis or a Y axis was requested, even it if's too small to do
 					 isLeadscrewAdjustmentMove : 1,	// True if this is a leadscrews adjustment move
 					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
 					 isNonPrintingExtruderMove : 1,	// True if this move is an extruder-only move, or involves reverse extrusion (and possibly axis movement too)
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
 					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
 					 controlLaser : 1,				// True if this move controls the laser or iobits
-					 hadHiccup : 1,	 	 	 		// True if we had a hiccup while executing a move from a remote master
+					 scanningProbeMove : 1,	 	 	// True if this is a scanning Z probe move
 					 isRemote : 1,					// True if this move was commanded from a remote
 					 wasAccelOnlyMove : 1;			// set by Prepare if this was an acceleration-only move, for the next move to look at
 		};

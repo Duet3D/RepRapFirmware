@@ -369,7 +369,7 @@ void STEP_TC_HANDLER() noexcept
 	uint8_t tcsr = StepTc->INTFLAG.reg;								// read the status register, which clears the status bits
 	tcsr &= StepTc->INTENSET.reg;									// select only enabled interrupts
 
-	if ((tcsr & TC_INTFLAG_MC0) != 0)								// the step interrupt uses MC0 compare
+	if (likely((tcsr & TC_INTFLAG_MC0) != 0))						// the step interrupt uses MC0 compare
 	{
 		StepTc->INTENCLR.reg = TC_INTFLAG_MC0;						// disable the interrupt (no need to clear it, we do that before we re-enable it)
 #else
@@ -377,7 +377,7 @@ void STEP_TC_HANDLER() noexcept
 	uint32_t tcsr = STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_SR;		// read the status register, which clears the status bits
 	tcsr &= STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IMR;				// select only enabled interrupts
 
-	if ((tcsr & TC_SR_CPBS) != 0)									// the timer interrupt uses RB compare
+	if (likely((tcsr & TC_SR_CPBS) != 0))							// the timer interrupt uses RB compare
 	{
 		STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_IDR = TC_IER_CPBS;		// disable the interrupt
 #endif

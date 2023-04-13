@@ -528,9 +528,17 @@ void DDARing::Interrupt(Platform& p) noexcept
 // This is called when the state has been set to 'completed'. Step interrupts must be disabled or locked out when calling this.
 void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 {
+	bool wakeLaserTask = false;
+	if (cdda->IsScanningProbeMove())
+	{
+		reprap.GetMove().SetProbeReadingNeeded();
+		wakeLaserTask = true;						// wake the laser task to take a reading
+	}
+
 	// The following finish time is wrong if we aborted the move because of endstop or Z probe checks.
 	// However, following a move that checks endstops or the Z probe, we always wait for the move to complete before we schedule another, so this doesn't matter.
 	const uint32_t finishTime = cdda->GetMoveFinishTime();	// calculate when this move should finish
+
 	CurrentMoveCompleted();							// tell the DDA ring that the current move is complete
 
 	// Try to start a new move
@@ -540,7 +548,7 @@ void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 #if SUPPORT_LASER || SUPPORT_IOBITS
 		if (StartNextMove(p, finishTime))
 		{
-			Move::WakeLaserTaskFromISR();
+			wakeLaserTask = true;
 		}
 #else
 		(void)StartNextMove(p, finishTime);
@@ -569,9 +577,14 @@ void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 #endif
 		waitingForRingToEmpty = false;
 	}
+
+	if (wakeLaserTask)
+	{
+		Move::WakeLaserTaskFromISR();
+	}
 }
 
-// This is called from the step ISR when the current move has been completed
+// This is called from the step ISR when the current move has been completed. It may also be called from other places.
 void DDARing::CurrentMoveCompleted() noexcept
 {
 	DDA * const cdda = currentDda;					// capture volatile variable
@@ -619,9 +632,9 @@ bool DDARing::SetWaitingToEmpty() noexcept
 // Get the number of steps taken by an extruder drive since the last time we called this function for that drive
 int32_t DDARing::GetAccumulatedMovement(size_t drive, bool& isPrinting) noexcept
 {
-	AtomicCriticalSectionLocker lock;
-	const int32_t ret = movementAccumulators[drive];
+	AtomicCriticalSectionLocker lock;							// we don't want a move to complete and the ISR update the movement accumulators while we are doing this
 	const DDA * const cdda = currentDda;						// capture volatile variable
+	const int32_t ret = movementAccumulators[drive];
 	const int32_t adjustment = (cdda == nullptr) ? 0 : cdda->GetStepsTaken(drive);
 	movementAccumulators[drive] = -adjustment;
 	isPrinting = extrudersPrinting;

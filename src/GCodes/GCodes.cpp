@@ -292,7 +292,7 @@ void GCodes::Reset() noexcept
 	doingToolChange = false;
 	doingManualBedProbe = false;
 #if SUPPORT_PROBE_POINTS_FILE
-	probePointsFileLoaded = false;
+	ClearProbePointsInvalid();
 #endif
 	deferredPauseCommandPending = nullptr;
 	firmwareUpdateModuleMap.Clear();
@@ -348,10 +348,14 @@ FilePosition GCodes::GetPrintingFilePosition() const noexcept
 }
 
 // Start running the config file
-bool GCodes::RunConfigFile(const char* fileName) noexcept
+bool GCodes::RunConfigFile(const char* fileName, bool isMainConfigFile) noexcept
 {
-	runningConfigFile = DoFileMacro(*TriggerGCode(), fileName, false, AsyncSystemMacroCode);
-	return runningConfigFile;
+	const bool ret = DoFileMacro(*TriggerGCode(), fileName, false, AsyncSystemMacroCode);
+	if (ret && isMainConfigFile)
+	{
+		runningConfigFile = true;
+	}
+	return ret;
 }
 
 // Return true if the trigger G-code buffer is busy running config.g or a trigger file
@@ -365,8 +369,8 @@ void GCodes::CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept
 {
 	if (runningConfigFile && gb.GetChannel() == GCodeChannel::Trigger)
 	{
-		gb.LatestMachineState().GetPrevious()->CopyStateFrom(gb.LatestMachineState());	// so that M83 etc. in  nested file don't get forgotten
-		if (gb.LatestMachineState().GetPrevious()->GetPrevious() == nullptr)
+		gb.LatestMachineState().GetPrevious()->CopyStateFrom(gb.LatestMachineState());	// so that M83 etc. in nested files don't get forgotten
+		if (gb.LatestMachineState().GetPrevious()->GetPrevious() == nullptr)			// if we've finished running config.g rather than a macro it called
 		{
 			for (GCodeBuffer *gb2 : gcodeSources)
 			{
@@ -379,14 +383,6 @@ void GCodes::CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept
 		}
 		reprap.InputsUpdated();
 	}
-}
-
-// Set up to do the first of a possibly multi-tap probe
-void GCodes::InitialiseTaps(bool fastThenSlow) noexcept
-{
-	tapsDone = (fastThenSlow) ? -1 : 0;
-	g30zHeightErrorSum = 0.0;
-	g30zHeightErrorLowestDiff = 1000.0;
 }
 
 void GCodes::Spin() noexcept
@@ -1078,6 +1074,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 
 	gb.SetState(newState);
 	pauseState = PauseState::pausing;
+
 
 	reprap.StateUpdated();																// test DWC/DSF that we have changed a restore point
 	return true;
@@ -1883,8 +1880,9 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	ms.isCoordinated = isCoordinated;
 	ms.checkEndstops = false;
 	ms.reduceAcceleration = false;
-	ms.movementTool = ms.currentTool;
 	ms.usePressureAdvance = false;
+	ms.scanningProbeMove = false;
+	ms.movementTool = ms.currentTool;
 	axesToSenseLength.Clear();
 
 	// Check to see if the move is a 'homing' move that endstops are checked on and for which X and Y axis mapping is not applied
@@ -1951,26 +1949,26 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	if (rp != nullptr)
 	{
 		ms.laserPwmOrIoBits = rp->laserPwmOrIoBits;
+# if SUPPORT_LASER
+		ms.laserPixelData = rp->laserPixelData;
+# endif
 	}
 # if SUPPORT_LASER
 	else if (machineType == MachineType::laser)
 	{
 		if (gb.Seen('S'))
 		{
-			ms.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
+			float pixelBuffer[MaxLaserPixelsPerMove];
+			ms.laserPixelData.numPixels = MaxLaserPixelsPerMove;
+			gb.GetFloatArray(pixelBuffer, ms.laserPixelData.numPixels, false);
+			for (size_t i = 0; i < ms.laserPixelData.numPixels; ++i)
+			{
+				ms.laserPixelData.pixelPwm[i] = ConvertLaserPwm(pixelBuffer[i]);
+			}
 		}
-		else if (ms.moveType != 0)
+		else if (!laserPowerSticky)
 		{
-			ms.laserPwmOrIoBits.laserPwm = 0;			// it's a homing move or similar, so turn the laser off
-		}
-		else if (laserPowerSticky)
-		{
-			// Leave the laser PWM alone because this is what LaserWeb expects. If it is an uncoordinated move then the motion system will turn the laser off.
-			// This means that after a G0 move, the next G1 move will default to the same power as the previous G1 move, as LightBurn expects.
-		}
-		else
-		{
-			ms.laserPwmOrIoBits.laserPwm = 0;
+			ms.laserPixelData.numPixels = 0;
 		}
 	}
 # endif
@@ -2249,48 +2247,58 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		}
 
 		// Flag whether we should use pressure advance, if there is any extrusion in this move.
-		// We assume it is a normal printing move needing pressure advance if there is forward extrusion and XYU.. movement.
-		// The movement code will only apply pressure advance if there is forward extrusion, so we only need to check for XYU.. movement here.
+		// We assume it is a normal printing move needing pressure advance if there is forward extrusion and XYU... movement (we don't count Z).
+		// The movement code will only apply pressure advance if there is forward extrusion, so we only need to check for XYU... movement here.
+		if (ms.hasPositiveExtrusion)
 		{
 			AxesBitmap axesMentionedExceptZ = axesMentioned;
 			axesMentionedExceptZ.ClearBit(Z_AXIS);
-			ms.usePressureAdvance = ms.hasPositiveExtrusion && axesMentionedExceptZ.IsNonEmpty();
+			ms.usePressureAdvance = axesMentionedExceptZ.IsNonEmpty();
 		}
 
-		// Apply segmentation if necessary. To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
+		// Apply segmentation if necessary
 		// As soon as we set segmentsLeft nonzero, the Move process will assume that the move is ready to take, so this must be the last thing we do.
-		const Kinematics& kin = reprap.GetMove().GetKinematics();
-		const SegmentationType st = kin.GetSegmentationType();
-		if (st.useSegmentation && simulationMode != SimulationMode::normal && (ms.hasPositiveExtrusion || ms.isCoordinated || st.useG0Segmentation))
+#if SUPPORT_LASER
+		if (machineType == MachineType::laser && isCoordinated && ms.laserPixelData.numPixels > 1)
 		{
-			// This kinematics approximates linear motion by means of segmentation
-			float moveLengthSquared = fsquare(ms.currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(ms.currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]);
-			if (st.useZSegmentation)
-			{
-				moveLengthSquared += fsquare(ms.currentUserPosition[Z_AXIS] - initialUserPosition[Z_AXIS]);
-			}
-			const float moveLength = fastSqrtf(moveLengthSquared);
-			const float moveTime = moveLength/(ms.feedRate * StepClockRate);		// this is a best-case time, often the move will take longer
-			ms.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(moveLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
+			ms.totalSegments = ms.laserPixelData.numPixels;			// we must use one segment per pixel
 		}
 		else
+#endif
 		{
-			ms.totalSegments = 1;
-		}
-		if (reprap.GetMove().IsUsingMesh() && (ms.isCoordinated || machineType == MachineType::fff))
-		{
-			const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
-			const GridDefinition& grid = heightMap.GetGrid();
-			const unsigned int minMeshSegments = max<unsigned int>(
-					1,
-					heightMap.GetMinimumSegments(
-						ms.currentUserPosition[grid.GetAxisNumber(0)] - initialUserPosition[grid.GetAxisNumber(0)],
-						ms.currentUserPosition[grid.GetAxisNumber(1)] - initialUserPosition[grid.GetAxisNumber(1)]
-					)
-			);
-			if (minMeshSegments > ms.totalSegments)
+			const Kinematics& kin = reprap.GetMove().GetKinematics();
+			const SegmentationType st = kin.GetSegmentationType();
+			// To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
+			if (st.useSegmentation && simulationMode != SimulationMode::normal && (ms.hasPositiveExtrusion || ms.isCoordinated || st.useG0Segmentation))
 			{
-				ms.totalSegments = minMeshSegments;
+				// This kinematics approximates linear motion by means of segmentation
+				float moveLengthSquared = fsquare(ms.currentUserPosition[X_AXIS] - initialUserPosition[X_AXIS]) + fsquare(ms.currentUserPosition[Y_AXIS] - initialUserPosition[Y_AXIS]);
+				if (st.useZSegmentation)
+				{
+					moveLengthSquared += fsquare(ms.currentUserPosition[Z_AXIS] - initialUserPosition[Z_AXIS]);
+				}
+				const float moveLength = fastSqrtf(moveLengthSquared);
+				const float moveTime = moveLength/(ms.feedRate * StepClockRate);		// this is a best-case time, often the move will take longer
+				ms.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(moveLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
+			}
+			else
+			{
+				ms.totalSegments = 1;
+			}
+
+			// If we are applying mesh compensation,  set the segment size to be smaller than the mesh spacing
+			if (reprap.GetMove().IsUsingMesh() && (ms.isCoordinated || machineType == MachineType::fff))
+			{
+				const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
+				const GridDefinition& grid = heightMap.GetGrid();
+				const unsigned int minMeshSegments = heightMap.GetMinimumSegments(
+							ms.currentUserPosition[grid.GetAxisNumber(0)] - initialUserPosition[grid.GetAxisNumber(0)],
+							ms.currentUserPosition[grid.GetAxisNumber(1)] - initialUserPosition[grid.GetAxisNumber(1)]
+						);
+				if (minMeshSegments > ms.totalSegments)
+				{
+					ms.totalSegments = minMeshSegments;
+				}
 			}
 		}
 	}
@@ -2564,9 +2572,10 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	// Set up default move parameters
 	ms.checkEndstops = false;
 	ms.reduceAcceleration = false;
+	ms.scanningProbeMove = false;
+	ms.isCoordinated = true;
 	ms.moveType = 0;
 	ms.movementTool = ms.currentTool;
-	ms.isCoordinated = true;
 
 	// Set up the arc centre coordinates and record which axes behave like an X axis.
 	// The I and J parameters are always relative to present position.
@@ -2622,7 +2631,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	{
 		if (gb.Seen('S'))
 		{
-			ms.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetFValue());
+			ms.laserPixelData.pixelPwm[0] = ConvertLaserPwm(gb.GetFValue());
+			ms.laserPixelData.numPixels = 1;
 		}
 		else if (laserPowerSticky)
 		{
@@ -2725,7 +2735,7 @@ void GCodes::FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept
 
 			for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 			{
-				ms.coords[ExtruderToLogicalDrive(extruder)] /= ms.totalSegments;	// change the extrusion to extrusion per segment
+				ms.coords[ExtruderToLogicalDrive(extruder)] /= ms.totalSegments;		// change the extrusion to extrusion per segment
 			}
 
 			if (ms.moveFractionToSkip != 0.0)
@@ -2784,6 +2794,17 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 
 	while (true)		// loop while we skip move segments
 	{
+#if SUPPORT_LASER
+		// If it's a straight move in laser mode, sort out the laser power
+		if (machineType == MachineType::laser)
+		{
+			ms.laserPwmOrIoBits.laserPwm = (ms.isCoordinated && ms.segmentsLeft < ms.laserPixelData.numPixels && !ms.doingArcMove)
+											? ms.laserPixelData.pixelPwm[ms.laserPixelData.numPixels - ms.segmentsLeft]
+												: (ms.isCoordinated && ms.laserPixelData.numPixels == 1)
+												  ? ms.laserPixelData.pixelPwm[0]
+													: 0;
+		}
+#endif
 		m = ms;
 
 		if (ms.segmentsLeft == 1)
@@ -2800,7 +2821,7 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 			m.proportionDone = 1.0;
 			if (ms.doingArcMove)
 			{
-				m.canPauseAfter = true;					// we can pause after the final segment of an arc move
+				m.canPauseAfter = true;									// we can pause after the final segment of an arc move
 			}
 			ms.ClearMove();
 		}
@@ -2835,23 +2856,24 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 
 			for (size_t drive = 0; drive < numVisibleAxes; ++drive)
 			{
-				if (ms.doingArcMove && axisMap1.IsBitSet(drive))
+				float newCoordinate;
+				if (axisMap1.IsBitSet(drive))
 				{
-					// Axis1 or a substitute in the selected plane
-					ms.initialCoords[drive] = ms.arcCentre[drive] + ms.arcRadius * axisScaleFactors[drive] * ms.currentAngleSine;
+					// Axis1 or a substitute in the selected arc plane
+					newCoordinate = ms.arcCentre[drive] + ms.arcRadius * axisScaleFactors[drive] * ms.currentAngleSine;
 				}
-				else if (ms.doingArcMove && axisMap0.IsBitSet(drive))
+				else if (axisMap0.IsBitSet(drive))
 				{
-					// Axis0 or a substitute in the selected plane
-					ms.initialCoords[drive] = ms.arcCentre[drive] + ms.arcRadius * axisScaleFactors[drive] * ms.currentAngleCosine;
+					// Axis0 or a substitute in the selected arc plane
+					newCoordinate = ms.arcCentre[drive] + ms.arcRadius * axisScaleFactors[drive] * ms.currentAngleCosine;
 				}
 				else
 				{
 					// This axis is not moving in an arc
 					const float movementToDo = (ms.coords[drive] - ms.initialCoords[drive])/ms.segmentsLeft;
-					ms.initialCoords[drive] += movementToDo;
+					newCoordinate = ms.initialCoords[drive] += movementToDo;
 				}
-				m.coords[drive] = ms.initialCoords[drive];
+				m.coords[drive] = ms.initialCoords[drive] = newCoordinate;
 			}
 
 			if (ms.segmentsLeftToStartAt < ms.segmentsLeft)
@@ -2898,7 +2920,7 @@ void GCodes::NewSingleSegmentMoveAvailable(MovementState& ms) noexcept
 {
 	ms.totalSegments = 1;
 	__DMB();									// make sure that all the move details have been written first
-	ms.segmentsLeft = 1;				// set the number of segments to indicate that a move is available to be taken
+	ms.segmentsLeft = 1;						// set the number of segments to indicate that a move is available to be taken
 	reprap.GetMove().MoveAvailable();			// notify the Move task that we have a move
 }
 
@@ -4333,6 +4355,9 @@ void GCodes::RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	ms.laserPwmOrIoBits = rp.laserPwmOrIoBits;
 #endif
+#if SUPPORT_LASER
+	ms.laserPixelData = rp.laserPixelData;
+#endif
 }
 
 // Convert user coordinates to head reference point coordinates, optionally allowing for X axis mapping
@@ -4775,6 +4800,7 @@ void GCodes::StartToolChange(GCodeBuffer& gb, MovementState& ms, uint8_t param) 
 void GCodes::SetMoveBufferDefaults(MovementState& ms) noexcept
 {
 	ms.SetDefaults(numTotalAxes);
+	memcpyf(ms.initialCoords, ms.coords, numVisibleAxes);
 }
 
 // Resource locking/unlocking

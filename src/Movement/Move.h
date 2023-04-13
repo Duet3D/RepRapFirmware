@@ -189,6 +189,9 @@ public:
 	unsigned int GetJerkPolicy() const noexcept { return jerkPolicy; }
 	void SetJerkPolicy(unsigned int jp) noexcept { jerkPolicy = jp; }
 
+	// Scanning Z probes
+	void SetProbeReadingNeeded() noexcept { probeReadingNeeded = true; }
+
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;			// Get the current step interval for this axis or extruder
 #endif
@@ -203,13 +206,12 @@ public:
 	static int32_t MotorMovementToSteps(size_t drive, float coord) noexcept;				// Convert a single motor position to number of steps
 	static float MotorStepsToMovement(size_t drive, int32_t endpoint) noexcept;				// Convert number of motor steps to motor position
 
-#if SUPPORT_LASER || SUPPORT_IOBITS
+	// We now use the laser task to take readings from scanning Z probes, so we always need it
 	[[noreturn]] void LaserTaskRun() noexcept;
 
 	static void CreateLaserTask() noexcept;													// create the laser task if we haven't already
 	static void WakeLaserTask() noexcept;													// wake up the laser task, called at the start of a new move
 	static void WakeLaserTaskFromISR() noexcept;											// wake up the laser task, called at the start of a new move
-#endif
 
 	static void WakeMoveTaskFromISR() noexcept;
 
@@ -312,12 +314,10 @@ private:
 	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
 	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
 	bool useTaper;										// True to taper off the compensation
+	bool probeReadingNeeded = false;					// true if the laser task needs to take a Z probe reading
 
-#if SUPPORT_LASER || SUPPORT_IOBITS
 	static constexpr size_t LaserTaskStackWords = 100;	// stack size in dwords for the laser and IOBits task
 	static Task<LaserTaskStackWords> *laserTask;		// the task used to manage laser power or IOBits
-#endif
-
 };
 
 //******************************************************************************************************
@@ -368,12 +368,16 @@ inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept
 	return (extruder < MaxExtruders) ? extruderShapers[extruder].GetKclocks() : 0.0;
 }
 
+#if !SUPPORT_ASYNC_MOVES
+
 // Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
-// Returns the number of motor steps moves since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
+// Returns the number of motor steps moved since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
 inline int32_t Move::GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept
 {
 	return rings[0].GetAccumulatedMovement(drive, isPrinting);
 }
+
+#endif
 
 #if HAS_SMART_DRIVERS
 

@@ -112,6 +112,17 @@ GCodeResult RemoteZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len
 	return GCodeResult::error;
 }
 
+// Functions used only with scanning Z probes
+float RemoteZProbe::GetCalibratedReading() const noexcept
+{
+	return 0.0;
+}
+
+void RemoteZProbe::SetCalibrationPoint(float height) noexcept
+{
+	//TODO
+}
+
 void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept
 {
 	if (src == boardAddress)

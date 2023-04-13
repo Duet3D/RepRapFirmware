@@ -37,7 +37,8 @@ struct RawMove
 			reduceAcceleration : 1,									// true if Z probing so we should limit the Z acceleration
 			inverseTimeMode : 1,									// true if executing the move in inverse time mode
 			linearAxesMentioned : 1,								// true if any linear axes were mentioned in the movement command
-			rotationalAxesMentioned: 1;								// true if any rotational axes were mentioned in the movement command
+			rotationalAxesMentioned: 1,								// true if any rotational axes were mentioned in the movement command
+			scanningProbeMove : 1;									// true if the laser task should be woken at the end of each segment to capture a height reading
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required
@@ -49,8 +50,6 @@ struct RawMove
 #endif
 
 	// If adding any more fields, keep the total size a multiple of 4 bytes so that we can use our optimised assignment operator
-
-	void SetDefaults(size_t firstDriveToZero) noexcept;				// set up default values
 
 	// GCC normally calls memcpy to assign objects of this class. We can do better because we know they must be 32-bit aligned.
 	RawMove& operator=(const RawMove& arg) noexcept
@@ -101,6 +100,7 @@ public:
 	void Init(MovementSystemNumber p_msNumber) noexcept;
 	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;			// change the extrusion factor of an extruder
 	const RestorePoint& GetRestorePoint(size_t n) const pre(n < NumTotalRestorePoints) { return restorePoints[n]; }
+	void SetDefaults(size_t firstDriveToZero) noexcept;										// set up default values
 	void ClearMove() noexcept;
 	void SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
 		pre(restorePointNumber < NumTotalRestorePoints);
@@ -134,15 +134,15 @@ public:
 	// The current user position now holds the requested user position after applying workplace coordinate offsets.
 	// So we must subtract the workplace coordinate offsets when we want to display them.
 	// We have chosen this approach because it allows us to switch workplace coordinates systems or turn off applying workplace offsets without having to update currentUserPosition.
-	float currentUserPosition[MaxAxes];								// The current position of the axes as commanded by the input gcode, after accounting for workplace offset,
+	float currentUserPosition[MaxAxes];								// the current position of the axes as commanded by the input gcode, after accounting for workplace offset,
 																	// before accounting for tool offset and Z hop
-	float latestVirtualExtruderPosition;							// The virtual extruder position of this movement system after completing pending moves
-	float virtualFanSpeed;											// Last speed given in a M106 command with no fan number
-	float currentZHop;												// The amount of Z hop that is currently applied
+	float latestVirtualExtruderPosition;							// the virtual extruder position of this movement system after completing pending moves
+	float virtualFanSpeed;											// the last speed given in a M106 command with no fan number
+	float currentZHop;												// the amount of Z hop that is currently applied
 	float initialCoords[MaxAxes];									// the initial positions of the axes
 	float previousX, previousY;										// the initial X and Y coordinates in user space of the previous move
 	float previousXYDistance;										// the XY length of that previous move
-	unsigned int currentCoordinateSystem;							// This is zero-based, where as the P parameter in the G10 command is 1-based
+	unsigned int currentCoordinateSystem;							// this is zero-based, where as the P parameter in the G10 command is 1-based
 	unsigned int segmentsLeft;										// the number of segments left to do in the current move, or 0 if no move available
 	unsigned int totalSegments;										// the total number of segments left in the complete move
 	unsigned int arcAxis0, arcAxis1;								// the axis numbers of the arc before we apply axis mapping
@@ -154,7 +154,7 @@ public:
 	float angleIncrementSine, angleIncrementCosine;					// the sine and cosine of the increment
 	float speedFactor;												// speed factor as a fraction (normally 1.0)
 	unsigned int segmentsTillNextFullCalc;							// how may more segments we can do before we need to do the full calculation instead of the quicker one
-	GCodeQueue *codeQueue;											// Stores certain codes for deferred execution
+	GCodeQueue *codeQueue;											// stores certain codes for deferred execution
 
 	GCodeBuffer *null updateUserPositionGb;							// if this is non-null then we need to update the user position from the machine position
 
@@ -176,7 +176,11 @@ public:
 	RestorePoint& resumeObjectRestorePoint = restorePoints[ResumeObjectRestorePointNumber];	// The position and feed rate when we resumed printing objects
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	FilePosition fileOffsetToPrint;									// The offset to print from
+	FilePosition fileOffsetToPrint;									// the offset to start printing from
+#endif
+
+#if SUPPORT_LASER
+	LaserPixelData laserPixelData;									// when in laser mode, the number of S parameters in the G1 move  and their values converted to laser PWM
 #endif
 
 	// Tool change. These variables can be global because movement is locked while doing a tool change, so only one per movement system can take place at a time.
