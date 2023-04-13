@@ -523,14 +523,20 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			SetMoveBufferDefaults(ms);
 			const bool restoreZ = (gb.GetState() != GCodeState::resuming1 || ms.coords[Z_AXIS] <= ms.pauseRestorePoint.moveCoords[Z_AXIS]);
+#if SUPPORT_ASYNC_MOVES
 			AxesBitmap axesToAllocate;
+#endif
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
 				if (   ms.currentUserPosition[axis] != ms.pauseRestorePoint.moveCoords[axis]
 					&& (restoreZ || axis != Z_AXIS)
 				   )
 				{
+#if SUPPORT_ASYNC_MOVES
 					axesToAllocate.SetBit(axis);
+#else
+					ms.currentUserPosition[axis] = ms.pauseRestorePoint.moveCoords[axis];
+#endif
 					if (platform.IsAxisLinear(axis))
 					{
 						ms.linearAxesMentioned = true;
@@ -542,6 +548,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 			}
 
+#if SUPPORT_ASYNC_MOVES
 			try
 			{
 				AllocateAxes(gb, ms, axesToAllocate, ParameterLettersBitmap());
@@ -562,6 +569,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.currentUserPosition[axis] = ms.pauseRestorePoint.moveCoords[axis];
 				}
 			}
+#endif
 			ToolOffsetTransform(ms);
 			ms.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
 			gb.SetState((restoreZ) ? GCodeState::resuming3 : GCodeState::resuming2);
