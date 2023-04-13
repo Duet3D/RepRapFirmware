@@ -1767,6 +1767,12 @@ void StringParser::WriteToFile() noexcept
 		}
 	}
 
+	size_t indent = commandIndent;
+	while (indent != 0)
+	{
+		fileBeingWritten->Write(' ');
+		--indent;
+	}
 	fileBeingWritten->Write(gb.buffer);
 	fileBeingWritten->Write('\n');
 	Init();
