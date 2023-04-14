@@ -1028,9 +1028,11 @@ bool GCodes::IsReallyPrintingOrResuming() const noexcept
 bool GCodes::IsHeatingUp() const noexcept
 {
 	int num;
-	return fileGCode->IsExecuting()
-		&& fileGCode->GetCommandLetter() == 'M'
-		&& ((num = fileGCode->GetCommandNumber()) == 109 || num == 116 || num == 190 || num == 191);
+	return fileGCode->GetState() == GCodeState::m109WaitForTemperature
+		|| (   fileGCode->IsExecuting()
+			&& fileGCode->GetCommandLetter() == 'M'
+			&& ((num = fileGCode->GetCommandNumber()) == 109 || num == 116 || num == 190 || num == 191)
+		   );
 }
 
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
