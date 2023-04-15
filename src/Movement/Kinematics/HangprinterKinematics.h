@@ -116,6 +116,8 @@ private:
 
 	float SpringK(float const springLength) const noexcept;
 	void StaticForces(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept;
+	void StaticForcesTetrahedron(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept;
+	void StaticForcesQuadrilateralPyramid(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept;
 	void flexDistances(float const machinePos[3], float const distances[HANGPRINTER_MAX_ANCHORS],
 	                   float flex[HANGPRINTER_MAX_ANCHORS]) const noexcept;
 

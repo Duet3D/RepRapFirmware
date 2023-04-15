@@ -1153,6 +1153,177 @@ float HangprinterKinematics::SpringK(float const springLength) const noexcept {
 
 
 void HangprinterKinematics::StaticForces(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept {
+	if (numAnchors == 4) {
+		StaticForcesTetrahedron(machinePos, F);
+	} else if (numAnchors == 5) {
+		StaticForcesQuadrilateralPyramid(machinePos, F);
+	}
+}
+
+void HangprinterKinematics::StaticForcesQuadrilateralPyramid(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept {
+	// A QuadrilateralPyramid has 5 corners, there's one anchor in each.
+	// There are many 4's in this function because 4 motors (the lower ones, ABCD)
+	// are assumed to have unknown forces.
+	// The forces in the top anchor is assumed to be known and constant, except for gravity's
+	// effects who are also known.
+	if (moverWeight_kg > 0.0001) {
+		// Space for four linear 4x4 systems, each with two solution columns,
+		// - one where the ABCD (lower) motors cancel out the stray xy-forces created by the top anchor's upwards pull (counteracting gravity),
+		// - one where the five motors get to cancel out each other, so we can run with pre-tension.
+		FixedMatrix<float, 4, 6> M[4];
+
+		float norm[5];
+		norm[4] = hyp3(anchors[4], machinePos);
+		for (int i = 0; i < 4; ++i) {
+			norm[i] = hyp3(anchors[i], machinePos);
+			for (int j = 0; j < 3; ++j) {
+				for (int k = 0; k < 4; ++k) {
+					// Fill 3x4 top left corner of system with
+					// unit vectors toward each ABCD anchor from mover
+					M[k](j, i) = (anchors[i][j] - machinePos[j]) / norm[i];
+				}
+			}
+			for (int k = 0; k < 4; ++k) {
+				// Set the four bottom-left 1x4 (rows) to be [1 0 0 0], [0 1 0 0], [0 0 1 0], and [0 0 0 1],
+				// for the four systems M[k]. This lets us set a constant in one of the solution vectors
+				// (bottom right corner of each matrix), and we then constrain one of the ABCD forces
+				// to be equal to this constant in each solution. The actual constant force is specified
+				// later, I'll leave a (C) there for reference.
+				if (k == i) {
+					M[k](3, i) = 1.0F;
+				} else {
+					M[k](3, i) = 0.0F;
+				}
+			}
+		}
+		float const mg = moverWeight_kg * 9.81;
+
+		float top_mg = 0.0F;
+		float top_pre = 0.0F;
+
+		if (anchors[4][Z_AXIS] > machinePos[Z_AXIS]) {
+			// These force constants will go into the solution column that has to do with gravity
+			top_mg = mg / ((anchors[4][Z_AXIS] - machinePos[Z_AXIS]) / norm[4]);
+			top_pre = targetForce_Newton;
+		}
+
+		// Indices for the two solution columns
+		size_t const sol_mg = 4;
+		size_t const sol_pt = 5;
+		for (int i = 0; i < 3; ++i) {
+			float const top_dist = (anchors[4][i] - machinePos[i]) / norm[4];
+			for (int k = 0; k < 4; ++k) {
+				M[k](i, sol_mg) = -top_mg * top_dist;  // gravity solution column
+				M[k](i, sol_pt) = -top_pre * top_dist; // pretension solution column
+			}
+		}
+		for (int k = 0; k < 4; ++k) {
+			// Cancel out top anchor's Z-force with gravity.
+			M[k](Z_AXIS, sol_mg) += mg; // == 0
+
+			// In each solution and every position, one line has this constant force.
+			// It has been alluded to earlier (C).
+			M[k](3, sol_mg) = 0.0; // One line has zero force in the gravity-solution
+			M[k](3, sol_pt) = 0.0; // The same line has zero force in the pre-tension solution
+		}
+
+		// Solve the four systems
+		for (int k = 0; k < 4; ++k) {
+			M[k].GaussJordan(4, 6);
+		}
+
+		// Need to decide which of our solutions to use,
+		// and if we use more than one we need to weigh
+		// them such that sum of weights is 1.0.
+		//
+		// We prefer solutions where all forces are positive,
+		// since lines can only pull, not push, so "negative" forces are
+		// impossible. We hopefully have some pre-tension from the machine's
+		// homing procedure that we can release, but once the
+		// line is slack it's slack.
+		bool allPositives[4] = { false, false, false, false };
+		size_t positivesCount = 0;
+		float const eps = 0.0001; // One force is set to a constant of 0.0 and we do have truncation errors
+		if (positivesCount == 0) {
+			for (size_t i{0}; i < 4; ++i) {
+				size_t internalPositivesCount = 0;
+				for (size_t j{0}; j < 4; ++j) {
+					if (M[i](j, sol_pt) > -eps) {
+						internalPositivesCount++;
+					}
+				}
+				if (internalPositivesCount > 3) {
+					allPositives[i] = true;
+					positivesCount++;
+				}
+			}
+		}
+		// However, if we have no solutions with only positive forces,
+		// we prefer the solutions with only one negative force.
+		// This gets us closer to continuous smooth behavior behaviour at edges
+		// of the build volume.
+		if (positivesCount == 0) {
+			for (size_t i{0}; i < 4; ++i) {
+				size_t internalPositivesCount = 0;
+				for (size_t j{0}; j < 4; ++j) {
+					if (M[i](j, sol_pt) > -eps) {
+						internalPositivesCount++;
+					}
+				}
+				if (internalPositivesCount == 3) {
+					allPositives[i] = true;
+					positivesCount++;
+				}
+			}
+		}
+
+		// Arrays to hold our weighted combinations of the four (pairs of) solutions
+		float p[4] = { 0.0F, 0.0F, 0.0F, 0.0F };
+		float m[4] = { 0.0F, 0.0F, 0.0F, 0.0F };
+		for (size_t i{0}; i < 4; ++i) {
+			for (size_t j{0}; j < 4; ++j) {
+				if (allPositives[j]) {
+					// We add each "positive-forced" solution,
+					// and weigh them equally, at 1, 1/2, 1/3, or 1/4.
+					float const weight = 1.0 / (float)positivesCount;
+					p[i] += M[j](i, sol_pt)*weight;
+					m[i] += M[j](i, sol_mg)*weight;
+				}
+			}
+		}
+
+		// The pre-tension solution can be scaled up or down however we want.
+		// Forces in those solution cancel each other out exactly, so any multiple of the solution is also a valid solution.
+		//
+		// (The gravity solution can't be scaled since it has to exactly counter act top-line forces that must exactly counter act gravity (mg))
+		//
+		// Use the scaling freedom of the pre-tension solution to assure that we have at least targetForce_Newton in the ABCD lines,
+		// and that no line (incl top-line) get more tension than the configured maxPlannedForce in that direction.
+		float  preFac = min(max(std::abs((targetForce_Newton - m[3]) / p[3]),
+		                             max(std::abs((targetForce_Newton - m[2]) / p[2]),
+		                                 max(std::abs((targetForce_Newton - m[1]) / p[1]), std::abs((targetForce_Newton - m[0]) / p[0])))),
+		                         min(std::abs((maxPlannedForce_Newton[4] - top_mg) / top_pre),
+		                             min(min(std::abs((maxPlannedForce_Newton[0] - m[0]) / p[0]), std::abs((maxPlannedForce_Newton[1] - m[1]) / p[1])),
+		                                 min(std::abs((maxPlannedForce_Newton[2] - m[2]) / p[2]), std::abs((maxPlannedForce_Newton[3] - m[3]) / p[3])))));
+
+		float tot[5] = { 0.0F, 0.0F, 0.0F, 0.0F, 0.0F };
+		tot[0] = m[0] + preFac * p[0];
+		tot[1] = m[1] + preFac * p[1];
+		tot[2] = m[2] + preFac * p[2];
+		tot[3] = m[3] + preFac * p[3];
+		tot[4] = top_mg + preFac * top_pre;
+
+		for (size_t i{0}; i < 5; ++i) {
+			// Negative, or very large forces can still have slipped through the preFac filter.
+			// Truncate away such forces and assign to the output variable.
+			// Voila.
+			// The min( ... ) shouldn't be needed here. Just better safe than sorry.
+			F[i] = min(max(tot[i], minPlannedForce_Newton[i]), maxPlannedForce_Newton[i]);
+		}
+	}
+}
+
+void HangprinterKinematics::StaticForcesTetrahedron(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept {
 	static constexpr size_t A_AXIS = 0;
 	static constexpr size_t B_AXIS = 1;
 	static constexpr size_t C_AXIS = 2;
@@ -1218,10 +1389,10 @@ void HangprinterKinematics::StaticForces(float const machinePos[3], float F[HANG
 		}
 		M(Z_AXIS, D_AXIS) += mg;
 
-    // Solve!
+		// Solve!
 		const bool ok = M.GaussJordan(CARTESIAN_AXES, 5);
 
-    if (ok) {
+		if (ok) {
 			// Size of the undetermined forces
 			float const A_mg = M(0, 3);
 			float const B_mg = M(1, 3);
@@ -1247,7 +1418,7 @@ void HangprinterKinematics::StaticForces(float const machinePos[3], float F[HANG
 			for (size_t i = 0; i < OLD_DEFAULT_NUM_ANCHORS; ++i) {
 				F[i] = max(totalForces[i], minPlannedForce_Newton[i]);
 			}
-    }
+		}
 	}
 }
 
