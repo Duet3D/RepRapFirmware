@@ -1232,49 +1232,11 @@ void HangprinterKinematics::StaticForcesQuadrilateralPyramid(float const machine
 			M[k].GaussJordan(4, 6);
 		}
 
-		// Need to decide which of our solutions to use,
-		// and if we use more than one we need to weigh
-		// them such that sum of weights is 1.0.
-		//
-		// We prefer solutions where all forces are positive,
-		// since lines can only pull, not push, so "negative" forces are
-		// impossible. We hopefully have some pre-tension from the machine's
-		// homing procedure that we can release, but once the
-		// line is slack it's slack.
-		bool allPositives[4] = { false, false, false, false };
-		size_t positivesCount = 0;
-		float const eps = 0.0001; // One force is set to a constant of 0.0 and we do have truncation errors
-		if (positivesCount == 0) {
-			for (size_t i{0}; i < 4; ++i) {
-				size_t internalPositivesCount = 0;
-				for (size_t j{0}; j < 4; ++j) {
-					if (M[i](j, sol_pt) > -eps) {
-						internalPositivesCount++;
-					}
-				}
-				if (internalPositivesCount > 3) {
-					allPositives[i] = true;
-					positivesCount++;
-				}
-			}
-		}
-		// However, if we have no solutions with only positive forces,
-		// we prefer the solutions with only one negative force.
-		// This gets us closer to continuous smooth behavior behaviour at edges
-		// of the build volume.
-		if (positivesCount == 0) {
-			for (size_t i{0}; i < 4; ++i) {
-				size_t internalPositivesCount = 0;
-				for (size_t j{0}; j < 4; ++j) {
-					if (M[i](j, sol_pt) > -eps) {
-						internalPositivesCount++;
-					}
-				}
-				if (internalPositivesCount == 3) {
-					allPositives[i] = true;
-					positivesCount++;
-				}
-			}
+		// Weigh/scale the pre-tension solutions so all have equal max force.
+		float norm_ABCD[4];
+		for(size_t k{0}; k < 4; ++k) {
+			norm_ABCD[k] = fastSqrtf(M[k](0, sol_pt) * M[k](0, sol_pt) + M[k](1, sol_pt) * M[k](1, sol_pt) + M[k](2, sol_pt) * M[k](2, sol_pt) +
+			                         M[k](3, sol_pt) * M[k](3, sol_pt));
 		}
 
 		// Arrays to hold our weighted combinations of the four (pairs of) solutions
@@ -1282,13 +1244,13 @@ void HangprinterKinematics::StaticForcesQuadrilateralPyramid(float const machine
 		float m[4] = { 0.0F, 0.0F, 0.0F, 0.0F };
 		for (size_t i{0}; i < 4; ++i) {
 			for (size_t j{0}; j < 4; ++j) {
-				if (allPositives[j]) {
-					// We add each "positive-forced" solution,
-					// and weigh them equally, at 1, 1/2, 1/3, or 1/4.
-					float const weight = 1.0 / (float)positivesCount;
-					p[i] += M[j](i, sol_pt)*weight;
-					m[i] += M[j](i, sol_mg)*weight;
-				}
+				// We add each "positive-forced" solution,
+				// and weigh them equally, at 1, 1/2, 1/3, or 1/4.
+				float const pt_weight = targetForce_Newton / norm_ABCD[j];
+				p[i] += M[j](i, sol_pt)*pt_weight;
+				// The gravity counter actions are scaled to exactly counter act gravity, and top-line forces neccesary to counter act gravity.
+				// So the resultant force of all four solutions is the same. Lets add a quarter of each solution to get back that resultant force.
+				m[i] += M[j](i, sol_mg)/4.0;
 			}
 		}
 
@@ -1416,7 +1378,7 @@ void HangprinterKinematics::StaticForcesTetrahedron(float const machinePos[3], f
 			};
 
 			for (size_t i = 0; i < OLD_DEFAULT_NUM_ANCHORS; ++i) {
-				F[i] = max(totalForces[i], minPlannedForce_Newton[i]);
+				F[i] = min(max(totalForces[i], minPlannedForce_Newton[i]), maxPlannedForce_Newton[i]);
 			}
 		}
 	}
