@@ -1167,117 +1167,119 @@ void HangprinterKinematics::StaticForcesQuadrilateralPyramid(float const machine
 	// The forces in the top anchor is assumed to be known and constant, except for gravity's
 	// effects who are also known.
 	if (moverWeight_kg < 0.0001) {
-		// Space for four linear 3x3 systems, each with two solution columns,
-		FixedMatrix<float, 3, 5> M[4];
+		return;
+	}
+	// Space for four linear 3x3 systems, each with two solution columns,
+	FixedMatrix<float, 3, 5> M[4];
 
-		float norm[5];
-		norm[4] = hyp3(anchors[4], machinePos);
-		for (int i = 0; i < 4; ++i) {
-			norm[i] = hyp3(anchors[i], machinePos);
-			for (int j = 0; j < 3; ++j) {
-				for (int k = 0; k < 4; ++k) {
-					// Fill 3x3 top left corner of system with
-					// unit vectors toward each ABCD anchor from mover
-					// If A is the column vector pointing towards A-anchor, we're building these
-					// four matrices:
-					// k=0: [BCD], A-direction skipped
-					// k=1: [ACD], B-direction skipped
-					// k=2: [ABD], C-direction skipped
-					// k=3: [ABC], D-direction skipped
-					if ( k != i) {
-						if ( i > k ) {
-							M[k](j, i - 1) = (anchors[i][j] - machinePos[j]) / norm[i];
-						} else {
-							M[k](j, i) = (anchors[i][j] - machinePos[j]) / norm[i];
-						}
+	float norm[5];
+	norm[4] = hyp3(anchors[4], machinePos);
+	for (int i = 0; i < 4; ++i) {
+		norm[i] = hyp3(anchors[i], machinePos);
+		for (int j = 0; j < 3; ++j) {
+			for (int k = 0; k < 4; ++k) {
+				// Fill 3x3 top left corner of system with
+				// unit vectors toward each ABCD anchor from mover
+				// If A is the column vector pointing towards A-anchor, we're building these
+				// four matrices:
+				// k=0: [BCD], A-direction skipped
+				// k=1: [ACD], B-direction skipped
+				// k=2: [ABD], C-direction skipped
+				// k=3: [ABC], D-direction skipped
+				if ( k != i) {
+					if ( i > k ) {
+						M[k](j, i - 1) = (anchors[i][j] - machinePos[j]) / norm[i];
+					} else {
+						M[k](j, i) = (anchors[i][j] - machinePos[j]) / norm[i];
 					}
 				}
 			}
 		}
-		float const mg = moverWeight_kg * 9.81;
+	}
+	float const mg = moverWeight_kg * 9.81;
 
-		float top_mg = 0.0F;
-		float top_pre = 0.0F;
+	float top_mg = 0.0F;
+	float top_pre = 0.0F;
 
-		if (anchors[4][Z_AXIS] > machinePos[Z_AXIS]) {
-			// These force constants will go into the solution column that has to do with gravity
-			top_mg = mg / ((anchors[4][Z_AXIS] - machinePos[Z_AXIS]) / norm[4]);
-			top_pre = targetForce_Newton;
-		}
+	if (anchors[4][Z_AXIS] > machinePos[Z_AXIS]) {
+		// These force constants will go into the solution column that has to do with gravity
+		top_mg = mg / ((anchors[4][Z_AXIS] - machinePos[Z_AXIS]) / norm[4]);
+		top_pre = targetForce_Newton;
+	}
 
-		// Indices for the two solution columns
-		size_t const sol_mg = 3;
-		size_t const sol_pt = 4;
-		for (int i = 0; i < 3; ++i) {
-			float const top_dist = (anchors[4][i] - machinePos[i]) / norm[4];
-			for (int k = 0; k < 4; ++k) {
-				M[k](i, sol_mg) = -top_mg * top_dist;  // gravity solution column
-				M[k](i, sol_pt) = -top_pre * top_dist; // pretension solution column
-			}
-		}
+	// Indices for the two solution columns
+	size_t const sol_mg = 3;
+	size_t const sol_pt = 4;
+	for (int i = 0; i < 3; ++i) {
+		float const top_dist = (anchors[4][i] - machinePos[i]) / norm[4];
 		for (int k = 0; k < 4; ++k) {
-			// Cancel out top anchor's Z-force with gravity.
-			M[k](Z_AXIS, sol_mg) += mg; // == 0
-		}
-
-		// Solve the four systems
-		for (int k = 0; k < 4; ++k) {
-			M[k].GaussJordan(3, 5);
-		}
-
-		// Weigh/scale the pre-tension solutions so all have equal max force.
-		float norm_ABCD[4];
-		for(size_t k{0}; k < 4; ++k) {
-			norm_ABCD[k] = fastSqrtf(M[k](0, sol_pt) * M[k](0, sol_pt) + M[k](1, sol_pt) * M[k](1, sol_pt) + M[k](2, sol_pt) * M[k](2, sol_pt));
-		}
-
-		// Arrays to hold our weighted combinations of the four (pairs of) solutions
-		float p[4] = { 0.0F, 0.0F, 0.0F, 0.0F };
-		float m[4] = { 0.0F, 0.0F, 0.0F, 0.0F };
-		for (size_t i{0}; i < 3; ++i) {
-			for (size_t j{0}; j < 4; ++j) {
-				float const pt_weight = targetForce_Newton / norm_ABCD[j];
-				// The gravity counter actions are scaled to exactly counter act gravity, and top-line forces neccesary to counter act gravity.
-				// So the resultant force of all four solutions is the same. Lets add a quarter of each solution to get back that resultant force.
-				float const mg_weight = 1.0/4.0;
-				// i can mean BCD, ACD, ABD, or ABC, depending on which matrix we're looking into
-				// Let's just translate that back into the solutions vectors
-				size_t const s = j <= i ? i + 1 : i;
-				p[s] += M[j](i, sol_pt)*pt_weight;
-				m[s] += M[j](i, sol_mg)*mg_weight;
-			}
-		}
-
-		// The pre-tension solution can be scaled up or down however we want.
-		// Forces in those solution cancel each other out exactly, so any multiple of the solution is also a valid solution.
-		//
-		// (The gravity solution can't be scaled since it has to exactly counter act top-line forces that must exactly counter act gravity (mg))
-		//
-		// Use the scaling freedom of the pre-tension solution to assure that we have at least targetForce_Newton in the ABCD lines,
-		// and that no line (incl top-line) get more tension than the configured maxPlannedForce in that direction.
-		float  preFac = min(max(std::abs((targetForce_Newton - m[3]) / p[3]),
-		                             max(std::abs((targetForce_Newton - m[2]) / p[2]),
-		                                 max(std::abs((targetForce_Newton - m[1]) / p[1]), std::abs((targetForce_Newton - m[0]) / p[0])))),
-		                         min(std::abs((maxPlannedForce_Newton[4] - top_mg) / top_pre),
-		                             min(min(std::abs((maxPlannedForce_Newton[0] - m[0]) / p[0]), std::abs((maxPlannedForce_Newton[1] - m[1]) / p[1])),
-		                                 min(std::abs((maxPlannedForce_Newton[2] - m[2]) / p[2]), std::abs((maxPlannedForce_Newton[3] - m[3]) / p[3])))));
-
-		float tot[5] = { 0.0F, 0.0F, 0.0F, 0.0F, 0.0F };
-		tot[0] = m[0] + preFac * p[0];
-		tot[1] = m[1] + preFac * p[1];
-		tot[2] = m[2] + preFac * p[2];
-		tot[3] = m[3] + preFac * p[3];
-		tot[4] = top_mg + preFac * top_pre;
-
-		for (size_t i{0}; i < 5; ++i) {
-			// Negative, or very large forces can still have slipped through the preFac filter.
-			// Truncate away such forces and assign to the output variable.
-			// Voila.
-			// The min( ... ) shouldn't be needed here. Just better safe than sorry.
-			F[i] = min(max(tot[i], minPlannedForce_Newton[i]), maxPlannedForce_Newton[i]);
+			M[k](i, sol_mg) = -top_mg * top_dist;  // gravity solution column
+			M[k](i, sol_pt) = -top_pre * top_dist; // pretension solution column
 		}
 	}
+	for (int k = 0; k < 4; ++k) {
+		// Cancel out top anchor's Z-force with gravity.
+		M[k](Z_AXIS, sol_mg) += mg; // == 0
+	}
+
+	// Solve the four systems
+	for (int k = 0; k < 4; ++k) {
+		M[k].GaussJordan(3, 5);
+	}
+
+	// Weigh/scale the pre-tension solutions so all have equal max force.
+	float norm_ABCD[4];
+	for(size_t k{0}; k < 4; ++k) {
+		norm_ABCD[k] = fastSqrtf(M[k](0, sol_pt) * M[k](0, sol_pt) + M[k](1, sol_pt) * M[k](1, sol_pt) + M[k](2, sol_pt) * M[k](2, sol_pt));
+	}
+
+	// Arrays to hold our weighted combinations of the four (pairs of) solutions
+	float p[4] = { 0.0F, 0.0F, 0.0F, 0.0F };
+	float m[4] = { 0.0F, 0.0F, 0.0F, 0.0F };
+	for (size_t i{0}; i < 3; ++i) {
+		for (size_t j{0}; j < 4; ++j) {
+			float const pt_weight = targetForce_Newton / norm_ABCD[j];
+			// The gravity counter actions are scaled to exactly counter act gravity, and top-line forces neccesary to counter act gravity.
+			// So the resultant force of all four solutions is the same. Lets add a quarter of each solution to get back that resultant force.
+			float const mg_weight = 1.0/4.0;
+			// i can mean BCD, ACD, ABD, or ABC, depending on which matrix we're looking into
+			// Let's just translate that back into the solutions vectors
+			size_t const s = j <= i ? i + 1 : i;
+			p[s] += M[j](i, sol_pt)*pt_weight;
+			m[s] += M[j](i, sol_mg)*mg_weight;
+		}
+	}
+
+	// The pre-tension solution can be scaled up or down however we want.
+	// Forces in those solution cancel each other out exactly, so any multiple of the solution is also a valid solution.
+	//
+	// (The gravity solution can't be scaled since it has to exactly counter act top-line forces that must exactly counter act gravity (mg))
+	//
+	// Use the scaling freedom of the pre-tension solution to assure that we have at least targetForce_Newton in the ABCD lines,
+	// and that no line (incl top-line) get more tension than the configured maxPlannedForce in that direction.
+	float  preFac = min(max(std::abs((targetForce_Newton - m[3]) / p[3]),
+	                             max(std::abs((targetForce_Newton - m[2]) / p[2]),
+	                                 max(std::abs((targetForce_Newton - m[1]) / p[1]), std::abs((targetForce_Newton - m[0]) / p[0])))),
+	                         min(std::abs((maxPlannedForce_Newton[4] - top_mg) / top_pre),
+	                             min(min(std::abs((maxPlannedForce_Newton[0] - m[0]) / p[0]), std::abs((maxPlannedForce_Newton[1] - m[1]) / p[1])),
+	                                 min(std::abs((maxPlannedForce_Newton[2] - m[2]) / p[2]), std::abs((maxPlannedForce_Newton[3] - m[3]) / p[3])))));
+
+	float tot[5] = { 0.0F, 0.0F, 0.0F, 0.0F, 0.0F };
+	tot[0] = m[0] + preFac * p[0];
+	tot[1] = m[1] + preFac * p[1];
+	tot[2] = m[2] + preFac * p[2];
+	tot[3] = m[3] + preFac * p[3];
+	tot[4] = top_mg + preFac * top_pre;
+
+	for (size_t i{0}; i < 5; ++i) {
+		// Negative, or very large forces can still have slipped through the preFac filter.
+		// Truncate away such forces and assign to the output variable.
+		// Voila.
+		// The min( ... ) shouldn't be needed here. Just better safe than sorry.
+		F[i] = min(max(tot[i], minPlannedForce_Newton[i]), maxPlannedForce_Newton[i]);
+	}
 }
+
 
 void HangprinterKinematics::StaticForcesTetrahedron(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept {
 	static constexpr size_t A_AXIS = 0;
