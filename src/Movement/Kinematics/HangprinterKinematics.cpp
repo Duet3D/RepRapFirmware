@@ -1166,11 +1166,9 @@ void HangprinterKinematics::StaticForcesQuadrilateralPyramid(float const machine
 	// are assumed to have unknown forces.
 	// The forces in the top anchor is assumed to be known and constant, except for gravity's
 	// effects who are also known.
-	if (moverWeight_kg > 0.0001) {
-		// Space for four linear 4x4 systems, each with two solution columns,
-		// - one where the ABCD (lower) motors cancel out the stray xy-forces created by the top anchor's upwards pull (counteracting gravity),
-		// - one where the five motors get to cancel out each other, so we can run with pre-tension.
-		FixedMatrix<float, 4, 6> M[4];
+	if (moverWeight_kg < 0.0001) {
+		// Space for four linear 3x3 systems, each with two solution columns,
+		FixedMatrix<float, 3, 5> M[4];
 
 		float norm[5];
 		norm[4] = hyp3(anchors[4], machinePos);
@@ -1178,21 +1176,21 @@ void HangprinterKinematics::StaticForcesQuadrilateralPyramid(float const machine
 			norm[i] = hyp3(anchors[i], machinePos);
 			for (int j = 0; j < 3; ++j) {
 				for (int k = 0; k < 4; ++k) {
-					// Fill 3x4 top left corner of system with
+					// Fill 3x3 top left corner of system with
 					// unit vectors toward each ABCD anchor from mover
-					M[k](j, i) = (anchors[i][j] - machinePos[j]) / norm[i];
-				}
-			}
-			for (int k = 0; k < 4; ++k) {
-				// Set the four bottom-left 1x4 (rows) to be [1 0 0 0], [0 1 0 0], [0 0 1 0], and [0 0 0 1],
-				// for the four systems M[k]. This lets us set a constant in one of the solution vectors
-				// (bottom right corner of each matrix), and we then constrain one of the ABCD forces
-				// to be equal to this constant in each solution. The actual constant force is specified
-				// later, I'll leave a (C) there for reference.
-				if (k == i) {
-					M[k](3, i) = 1.0F;
-				} else {
-					M[k](3, i) = 0.0F;
+					// If A is the column vector pointing towards A-anchor, we're building these
+					// four matrices:
+					// k=0: [BCD], A-direction skipped
+					// k=1: [ACD], B-direction skipped
+					// k=2: [ABD], C-direction skipped
+					// k=3: [ABC], D-direction skipped
+					if ( k != i) {
+						if ( i > k ) {
+							M[k](j, i - 1) = (anchors[i][j] - machinePos[j]) / norm[i];
+						} else {
+							M[k](j, i) = (anchors[i][j] - machinePos[j]) / norm[i];
+						}
+					}
 				}
 			}
 		}
@@ -1208,8 +1206,8 @@ void HangprinterKinematics::StaticForcesQuadrilateralPyramid(float const machine
 		}
 
 		// Indices for the two solution columns
-		size_t const sol_mg = 4;
-		size_t const sol_pt = 5;
+		size_t const sol_mg = 3;
+		size_t const sol_pt = 4;
 		for (int i = 0; i < 3; ++i) {
 			float const top_dist = (anchors[4][i] - machinePos[i]) / norm[4];
 			for (int k = 0; k < 4; ++k) {
@@ -1220,37 +1218,33 @@ void HangprinterKinematics::StaticForcesQuadrilateralPyramid(float const machine
 		for (int k = 0; k < 4; ++k) {
 			// Cancel out top anchor's Z-force with gravity.
 			M[k](Z_AXIS, sol_mg) += mg; // == 0
-
-			// In each solution and every position, one line has this constant force.
-			// It has been alluded to earlier (C).
-			M[k](3, sol_mg) = 0.0; // One line has zero force in the gravity-solution
-			M[k](3, sol_pt) = 0.0; // The same line has zero force in the pre-tension solution
 		}
 
 		// Solve the four systems
 		for (int k = 0; k < 4; ++k) {
-			M[k].GaussJordan(4, 6);
+			M[k].GaussJordan(3, 5);
 		}
 
 		// Weigh/scale the pre-tension solutions so all have equal max force.
 		float norm_ABCD[4];
 		for(size_t k{0}; k < 4; ++k) {
-			norm_ABCD[k] = fastSqrtf(M[k](0, sol_pt) * M[k](0, sol_pt) + M[k](1, sol_pt) * M[k](1, sol_pt) + M[k](2, sol_pt) * M[k](2, sol_pt) +
-			                         M[k](3, sol_pt) * M[k](3, sol_pt));
+			norm_ABCD[k] = fastSqrtf(M[k](0, sol_pt) * M[k](0, sol_pt) + M[k](1, sol_pt) * M[k](1, sol_pt) + M[k](2, sol_pt) * M[k](2, sol_pt));
 		}
 
 		// Arrays to hold our weighted combinations of the four (pairs of) solutions
 		float p[4] = { 0.0F, 0.0F, 0.0F, 0.0F };
 		float m[4] = { 0.0F, 0.0F, 0.0F, 0.0F };
-		for (size_t i{0}; i < 4; ++i) {
+		for (size_t i{0}; i < 3; ++i) {
 			for (size_t j{0}; j < 4; ++j) {
-				// We add each "positive-forced" solution,
-				// and weigh them equally, at 1, 1/2, 1/3, or 1/4.
 				float const pt_weight = targetForce_Newton / norm_ABCD[j];
-				p[i] += M[j](i, sol_pt)*pt_weight;
 				// The gravity counter actions are scaled to exactly counter act gravity, and top-line forces neccesary to counter act gravity.
 				// So the resultant force of all four solutions is the same. Lets add a quarter of each solution to get back that resultant force.
-				m[i] += M[j](i, sol_mg)/4.0;
+				float const mg_weight = 1.0/4.0;
+				// i can mean BCD, ACD, ABD, or ABC, depending on which matrix we're looking into
+				// Let's just translate that back into the solutions vectors
+				size_t const s = j <= i ? i + 1 : i;
+				p[s] += M[j](i, sol_pt)*pt_weight;
+				m[s] += M[j](i, sol_mg)*mg_weight;
 			}
 		}
 
