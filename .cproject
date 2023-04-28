@@ -609,7 +609,7 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Networking/LwipEthernet/Lwip}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Networking/LwipEthernet/Lwip/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Networking/MQTT/MQTT_C/include}&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/DuetWiFiSocketServer/src/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/DuetWifiSocketServer/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
