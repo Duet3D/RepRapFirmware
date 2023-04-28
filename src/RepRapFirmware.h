@@ -318,15 +318,16 @@ typedef float floatc_t;								// type of matrix element used for calibration
 
 #if SUPPORT_CAN_EXPANSION
 typedef Bitmap<uint32_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
+typedef Bitmap<uint64_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
 #else
 typedef Bitmap<uint16_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
+typedef Bitmap<uint32_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
 #endif
 typedef Bitmap<uint32_t> ExtrudersBitmap;			// Type of a bitmap representing a set of extruder drive numbers
 typedef Bitmap<uint32_t> DriversBitmap;				// Type of a bitmap representing a set of local driver numbers
 typedef Bitmap<uint32_t> FansBitmap;				// Type of a bitmap representing a set of fan numbers
 typedef Bitmap<uint32_t> HeatersBitmap;				// Type of a bitmap representing a set of heater numbers
 typedef Bitmap<uint16_t> DriverChannelsBitmap;		// Type of a bitmap representing a set of drivers that typically have a common cooling fan
-typedef Bitmap<uint32_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
 typedef Bitmap<uint32_t> TriggerNumbersBitmap;		// Type of a bitmap representing a set of trigger numbers
 typedef Bitmap<uint64_t> ToolNumbersBitmap;			// Type of a bitmap representing a set of tool numbers
 
