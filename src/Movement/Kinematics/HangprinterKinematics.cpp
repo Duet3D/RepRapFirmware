@@ -398,25 +398,25 @@ inline float HangprinterKinematics::MotorPosToLinePos(const int32_t motorPos, si
 
 void HangprinterKinematics::flexDistances(float const machinePos[3], float const distances[HANGPRINTER_MAX_ANCHORS],
                                           float flex[HANGPRINTER_MAX_ANCHORS]) const noexcept {
-	float springKs[numAnchors] = { 0.0F };
+	float springKs[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	for (size_t i = 0; i < numAnchors; ++i) {
 		springKs[i] = SpringK(distances[i] * mechanicalAdvantage[i] + guyWireLengths[i]);
 	}
 
-	float F[numAnchors] = { 0.0F }; // desired force in each direction
+	float F[HANGPRINTER_MAX_ANCHORS] = { 0.0F }; // desired force in each direction
 	StaticForces(machinePos, F);
 
-	float relaxedSpringLengths[numAnchors] = { 0.0F };
+	float relaxedSpringLengths[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	for (size_t i = 0; i < numAnchors; ++i) {
 		relaxedSpringLengths[i] = distances[i]- F[i] / (springKs[i] * mechanicalAdvantage[i]);
 	};
 
-	float linePos[numAnchors] = { 0.0F };
+	float linePos[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	for (size_t i = 0; i < numAnchors; ++i) {
 		linePos[i] = relaxedSpringLengths[i] - relaxedSpringLengthsOrigin[i];
 	};
 
-	float distanceDifferences[numAnchors] = { 0.0F };
+	float distanceDifferences[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	for (size_t i = 0; i < numAnchors; ++i) {
 		distanceDifferences[i] = distances[i] - distancesOrigin[i];
 	};
@@ -430,7 +430,7 @@ void HangprinterKinematics::flexDistances(float const machinePos[3], float const
 // Assumes lines are tight and anchor location norms are followed
 void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
-	float distances[numAnchors] = { 0.0F };
+	float distances[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	for (size_t i = 0; i < numAnchors; ++i) {
 		distances[i] = MotorPosToLinePos(motorPos[i], i) + distancesOrigin[i];
 	};
@@ -438,9 +438,9 @@ void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 
 	// Now we have an approximate machinePos
 	// Let's correct for line flex
-	float flex[numAnchors] = { 0.0F };
+	float flex[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	flexDistances(machinePos, distances, flex);
-	float adjustedDistances[numAnchors] = { 0.0F };
+	float adjustedDistances[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 	for (size_t i = 0; i < numAnchors; ++i) {
 		adjustedDistances[i] = distances[i] - flex[i];
 	}
@@ -509,7 +509,7 @@ bool HangprinterKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap ax
 
 		case HangprinterAnchorMode::AllOnTop:
 			return IsInsidePrismSides(coords, 0);
-	};
+	}
 
 	return reachable;
 }
@@ -738,12 +738,32 @@ bool HangprinterKinematics::WriteResumeSettings(FileStore *f) const noexcept
 
 #endif
 
+
+void HangprinterKinematics::ForwardTransform(float const distances[HANGPRINTER_MAX_ANCHORS], float machinePos[3]) const noexcept {
+	switch (anchorMode) {
+		case HangprinterAnchorMode::LastOnTop:
+			if (numAnchors == 4) {
+				ForwardTransformTetrahedron(distances, machinePos);
+				return;
+			} else if (numAnchors == 5) {
+				ForwardTransformQuadrilateralPyramid(distances, machinePos);
+				return;
+			}
+			// Intentional fall-through to next case
+			// if no forward transform
+		case HangprinterAnchorMode::None:
+		case HangprinterAnchorMode::AllOnTop:
+		default:
+			return;
+	}
+}
+
 /**
- * Hangprinter forward kinematics
+ * Hangprinter forward kinematics tetrahedron case (three low anchors, one high)
  * Basic idea is to subtract squared line lengths to get linear equations,
  * and then to solve with variable substitution.
  *
- * If we assume anchor location norms are followed
+ * If we assume (enforce by rotations) that anchor location norms are followed
  * Ax=0 Dx=0 Dy=0
  * then
  * we get a fairly clean derivation by
@@ -770,7 +790,7 @@ bool HangprinterKinematics::WriteResumeSettings(FileStore *f) const noexcept
  *
  * Warning: truncation errors will typically be in the order of a few tens of microns.
  */
-void HangprinterKinematics::ForwardTransform(float const distances[HANGPRINTER_MAX_ANCHORS], float machinePos[3]) const noexcept
+void HangprinterKinematics::ForwardTransformTetrahedron(float const distances[HANGPRINTER_MAX_ANCHORS], float machinePos[3]) const noexcept
 {
 	// Force the anchor location norms Ax=0, Dx=0, Dy=0
 	// through a series of rotations.
@@ -831,6 +851,118 @@ void HangprinterKinematics::ForwardTransform(float const distances[HANGPRINTER_M
 	}
 }
 
+static inline bool det(FixedMatrix<float, 3, 4> M){
+  return M(0, 0) * (M(1, 1) * M(2, 2) - M(1, 2) * M(2, 1)) + M(0, 1) * (M(1, 2) * M(2, 0) - M(2, 2) * M(1, 0)) + M(0, 2) * (M(1, 0) * M(2, 1) - M(1, 1) * M(2, 0));
+}
+
+static inline bool singular_3x3(FixedMatrix<float, 3, 4> M){
+  float const threshold = 1e-1;
+  return fabsf(det(M)) < threshold;
+}
+
+
+/* A quadrilateral pyramid has five anchors: four low and one high.
+ * Our input variable `distances` contain the distance (L2-norm, euclidian distance) from each corner
+ * to some point that is encapsulated by the five anchors.
+ * We want to determine the xyz-coordinates of that point.
+ *
+ * Since this gives us 5 known variables and 3 unknown, this is an overdetermined system,
+ * and we're not guaranteed that the 5 known variables define one exact point in space.
+ * The `distance` values have been calculated from motors' rotational positions, and they don't
+ * know if lines are slack or over tight, and much less which lines are slack and which are not in that case.
+ * The `distance` values will generally be slightly off, and define a region in which we might wiggle, instead of a point.
+ *
+ * We approach this by solving four linear systems and averaging over the result,
+ * which corresponds to all lines being ca equally slack.
+ *
+ * To get the four linear systems, we start with five non-linear ones.
+ * |A - p| = l_a
+ * |B - p| = l_b
+ * |C - p| = l_c
+ * |D - p| = l_d
+ * |I - p| = l_i,
+ *
+ * where p is our unknown (x, y, z), A is the xyz of our A-anchor, and I is the top anchor.
+ *
+ * Square both sides and move |A|² to the right hand side:
+ *
+ * -2*A*p  + |p|² = l_a² - |A|²
+ *
+ * Now subtract the last equation to get rid of |p|² (we expect the last equality to always hold, vertical lines are never slack).
+ *
+ * -2*A*p  - 2*I*p = l_a² - l_i² - (|A|² - |I|²)
+ *
+ * Divide by -2 and simplify to get four linear equations
+ *
+ * (A - I)*p  = -(l_a² - l_i² - (|A|² - |I|²))/2 = k_a
+ * (B - I)*p  = -(l_b² - l_i² - (|B|² - |I|²))/2 = k_b
+ * (C - I)*p  = -(l_c² - l_i² - (|C|² - |I|²))/2 = k_c
+ * (D - I)*p  = -(l_d² - l_i² - (|D|² - |I|²))/2 = k_d
+ *
+ * Say A' = A - I, and we get
+ *
+ * A'x A'y A'z | p_x   k_a
+ * B'x B'y B'z | p_y = k_b
+ * C'x C'y C'z | p_z   k_c
+ * D'x D'y D'z |       k_d
+ *
+ * This is a linear but still overdetermined system (4x3). Skip each row in turn to obtain four different 3x3 matrices, and four different solution vectors k.
+ * Solve each by GaussJordan elminiation and average over the result.
+ * Voila.
+ */
+void HangprinterKinematics::ForwardTransformQuadrilateralPyramid(float const distances[HANGPRINTER_MAX_ANCHORS], float machinePos[3]) const noexcept {
+	float anch_prim[4][3]{{0.0}};
+	float distancesOriginSq[5]{0.0};
+	float distancesSq[5]{0.0};
+	float k[4]{0.0};
+	FixedMatrix<float, 3, 4> M[4];
+	float machinePos_tmp[3]{0.0};
+
+	for (size_t i{0}; i < 4; ++i) {
+		for (size_t j{0}; j < 3; ++j) {
+			anch_prim[i][j] = anchors[i][j] - anchors[4][j];
+		}
+	}
+
+	for (size_t i{0}; i < 5; ++i) {
+		distancesOriginSq[i] = fsquare(distancesOrigin[i]);
+		distancesSq[i] = fsquare(distances[i]);
+	}
+
+	for (size_t i{0}; i < 4; ++i) {
+		k[i] = ((distancesOriginSq[i] - distancesOriginSq[4]) - (distancesSq[i] - distancesSq[4])) / 2.0;
+	}
+
+	for (size_t matrix_num{0}; matrix_num < 4; matrix_num++){
+		for (size_t row{0}; row < 3; ++row) {
+			size_t r = (row + matrix_num) % 4;
+			for (size_t col{0}; col < 3; ++col) {
+				M[matrix_num](row, col) = anch_prim[r][col];
+			}
+			M[matrix_num](row, 3) = k[r];
+		}
+	}
+
+	// Solve the four systems
+	size_t used{0};
+	for (int k = 0; k < 4; ++k) {
+		if (not singular_3x3(M[k])) {
+			used++;
+			M[k].GaussJordan(3, 4);
+			for (size_t i{0}; i < 3; ++i) {
+				machinePos_tmp[i] += M[k](i, 3);
+			}
+		}
+	}
+	if (used != 0) {
+		for (size_t i{0}; i < 3; ++i) {
+			machinePos[i] = machinePos_tmp[i]/static_cast<float>(used);
+		}
+	}
+
+}
+
+
 // Print all the parameters for debugging
 void HangprinterKinematics::PrintParameters(const StringRef& reply) const noexcept
 {
@@ -883,8 +1015,8 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3MotorCurren
 HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEstimate(DriverId const driver, bool const makeReference, const StringRef& reply, bool const subtractReference) THROWS(GCodeException)
 {
 	const uint8_t cmd = CANSimple::MSG_GET_ENCODER_ESTIMATES;
-	static CanAddress seenDrives[HANGPRINTER_MAX_ANCHORS] = { 0, 0, 0, 0, 0 };
-	static float referencePositions[HANGPRINTER_MAX_ANCHORS] = { 0.0, 0.0, 0.0, 0.0, 0.0 };
+	static CanAddress seenDrives[HANGPRINTER_MAX_ANCHORS] = { 0 };
+	static float referencePositions[HANGPRINTER_MAX_ANCHORS] = { 0.0 };
 	static size_t numSeenDrives = 0;
 	size_t thisDriveIdx = 0;
 
@@ -1153,10 +1285,23 @@ float HangprinterKinematics::SpringK(float const springLength) const noexcept {
 
 
 void HangprinterKinematics::StaticForces(float const machinePos[3], float F[HANGPRINTER_MAX_ANCHORS]) const noexcept {
-	if (numAnchors == 4) {
-		StaticForcesTetrahedron(machinePos, F);
-	} else if (numAnchors == 5) {
-		StaticForcesQuadrilateralPyramid(machinePos, F);
+	switch (anchorMode) {
+		case HangprinterAnchorMode::LastOnTop:
+			if (numAnchors == 4) {
+				StaticForcesTetrahedron(machinePos, F);
+				return;
+			} else if (numAnchors == 5) {
+				StaticForcesQuadrilateralPyramid(machinePos, F);
+				return;
+			}
+			// Intentional fall-through to next case
+			// if no line flex compensation
+		case HangprinterAnchorMode::None:
+		case HangprinterAnchorMode::AllOnTop:
+		default:
+			for (size_t i = 0; i < HANGPRINTER_MAX_ANCHORS; ++i){
+				F[i] = 0.0;
+			}
 	}
 }
 
@@ -1286,13 +1431,13 @@ void HangprinterKinematics::StaticForcesTetrahedron(float const machinePos[3], f
 	static constexpr size_t B_AXIS = 1;
 	static constexpr size_t C_AXIS = 2;
 	static constexpr size_t D_AXIS = 3;
-	static constexpr size_t OLD_DEFAULT_NUM_ANCHORS = 4;
+	static constexpr size_t FOUR_ANCH = 4;
 	static constexpr size_t CARTESIAN_AXES = 3;
 
 	if (moverWeight_kg > 0.0001) { // mover weight more than one gram
-		float norm[OLD_DEFAULT_NUM_ANCHORS]; // Unit vector directions toward each anchor from mover
-		FixedMatrix<float, CARTESIAN_AXES, OLD_DEFAULT_NUM_ANCHORS + 1> M;
-		for (size_t i = 0; i < OLD_DEFAULT_NUM_ANCHORS - 1; ++i) { // One anchor above mover
+		float norm[FOUR_ANCH]; // Unit vector directions toward each anchor from mover
+		FixedMatrix<float, CARTESIAN_AXES, FOUR_ANCH + 1> M;
+		for (size_t i = 0; i < FOUR_ANCH - 1; ++i) { // One anchor above mover
 			norm[i] = hyp3(anchors[i], machinePos);
 			for (size_t j = 0; j < CARTESIAN_AXES; ++j) {
 				M(j, i) = (anchors[i][j] - machinePos[j]) / norm[i];
@@ -1342,8 +1487,8 @@ void HangprinterKinematics::StaticForcesTetrahedron(float const machinePos[3], f
 
 		for (size_t i = 0; i < CARTESIAN_AXES; ++i) {
 			float const dist = (anchors[D_AXIS][i] - machinePos[i]) / normD;
-			M(i, OLD_DEFAULT_NUM_ANCHORS - 1) = -D_mg * dist;
-			M(i, OLD_DEFAULT_NUM_ANCHORS) = -D_pre * dist;
+			M(i, FOUR_ANCH - 1) = -D_mg * dist;
+			M(i, FOUR_ANCH) = -D_pre * dist;
 		}
 		M(Z_AXIS, D_AXIS) += mg;
 
@@ -1366,14 +1511,14 @@ void HangprinterKinematics::StaticForcesTetrahedron(float const machinePos[3], f
 			                         min(min(std::abs((maxPlannedForce_Newton[A_AXIS] - A_mg) / A_pre), std::abs((maxPlannedForce_Newton[B_AXIS] - B_mg) / B_pre)),
 			                             min(std::abs((maxPlannedForce_Newton[C_AXIS] - C_mg) / C_pre), std::abs((maxPlannedForce_Newton[D_AXIS] - D_mg) / D_pre))));
 
-			float totalForces[OLD_DEFAULT_NUM_ANCHORS] = {
+			float totalForces[FOUR_ANCH] = {
 				A_mg + preFac * A_pre,
 				B_mg + preFac * B_pre,
 				C_mg + preFac * C_pre,
 				D_mg + preFac * D_pre
 			};
 
-			for (size_t i = 0; i < OLD_DEFAULT_NUM_ANCHORS; ++i) {
+			for (size_t i = 0; i < FOUR_ANCH; ++i) {
 				F[i] = min(max(totalForces[i], minPlannedForce_Newton[i]), maxPlannedForce_Newton[i]);
 			}
 		}

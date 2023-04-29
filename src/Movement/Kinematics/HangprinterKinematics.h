@@ -73,6 +73,8 @@ private:
 	void Init() noexcept;
 	void Recalc() noexcept;
 	void ForwardTransform(float const distances[HANGPRINTER_MAX_ANCHORS], float machinePos[3]) const noexcept;
+	void ForwardTransformTetrahedron(float const distances[HANGPRINTER_MAX_ANCHORS], float machinePos[3]) const noexcept;
+	void ForwardTransformQuadrilateralPyramid(float const distances[HANGPRINTER_MAX_ANCHORS], float machinePos[3]) const noexcept;
 	float MotorPosToLinePos(const int32_t motorPos, size_t axis) const noexcept;
 
 	void PrintParameters(const StringRef& reply) const noexcept;			// Print all the parameters for debugging
