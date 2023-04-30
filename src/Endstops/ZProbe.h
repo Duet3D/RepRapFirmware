@@ -22,7 +22,6 @@ public:
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException);		// 'seen' is an in-out parameter
 	virtual GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept;
 	virtual float GetCalibratedReading() const noexcept { return 0.0; }
-	virtual void SetCalibrationPoint(float height) noexcept { }
 
 #if SUPPORT_CAN_EXPANSION
 	// Process a remote input change that relates to this Z probe
@@ -62,6 +61,11 @@ public:
 	void SetDeployedByUser(bool b) noexcept { isDeployedByUser = b; }
 	void SetLastStoppedHeight(float h) noexcept;
 
+	// Scanning Z probe support
+	bool IsScanning() const noexcept { return type == ZProbeType::scanningAnalog; }			// this is currently the only type of scanning probe we support
+	GCodeResult SetScanningCoefficients(float aParam, float bParam) noexcept;
+	GCodeResult ReportScanningCoefficients(const StringRef& reply) noexcept;
+
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept;
 #endif
@@ -91,11 +95,16 @@ protected:
 	float temperatureCoefficients[2];	// the variation of height with bed temperature and with the square of temperature
 	float diveHeight;					// the dive height we use when probing
 	float probeSpeeds[2];				// the initial speed of probing in mm per step clock
-	float travelSpeed;					// the speed at which we travel to the probe point ni mm per step clock
+	float travelSpeed;					// the speed at which we travel to the probe point in mm per step clock
 	float recoveryTime;					// Z probe recovery time
 	float tolerance;					// maximum difference between probe heights when doing >1 taps
 	float actualTriggerHeight;			// the actual trigger height of the probe, taking account of the temperature coefficient
 	float lastStopHeight;				// the height at which the last G30 probe move stopped
+
+	// Scanning support
+	float linearCoefficient;
+	float quadraticCoefficient;
+	bool isCalibrated = false;
 
 	bool isDeployedByUser;				// true if the user has used the M401 command to deploy this probe and not sent M402 to retract it
 };

@@ -101,6 +101,7 @@ uint16_t LocalZProbe::GetRawReading() const noexcept
 	case ZProbeType::analog:
 	case ZProbeType::dumbModulated:
 	case ZProbeType::alternateAnalog:
+	case ZProbeType::scanningAnalog:
 		return min<uint16_t>(inputPort.ReadAnalog() >> (AdcBits - 10), MaxReading);
 
 	case ZProbeType::digital:
@@ -121,7 +122,6 @@ bool LocalZProbe::SetProbing(bool isProbing) noexcept
 	{
 		modulationPort.WriteDigital(isProbing);
 	}
-	fakeHeightError = 0.0;		//TEMP
 	return true;
 }
 
@@ -147,13 +147,8 @@ GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) noexcept
 // Functions used only with scanning Z probes
 float LocalZProbe::GetCalibratedReading() const noexcept
 {
-	fakeHeightError += 0.02;
-	return fakeHeightError;
-}
-
-void LocalZProbe::SetCalibrationPoint(float height) noexcept
-{
-	//TODO
+	const float diff = (float)((int16_t)GetRawReading() - adcValue);
+	return diff * (linearCoefficient + (diff * quadraticCoefficient)) + GetActualTriggerHeight();
 }
 
 // Kick off sending some program bytes

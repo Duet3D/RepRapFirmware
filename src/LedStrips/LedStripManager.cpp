@@ -55,14 +55,14 @@ LedStripManager::LedStripManager()
 GCodeResult LedStripManager::CreateStrip(GCodeBuffer &gb, const StringRef &rslt)
 {
 	//TODO
-	return GCodeResult::error;
+	return GCodeResult::errorNotSupported;
 }
 
 // Handle M150
 GCodeResult LedStripManager::ExecM150(GCodeBuffer &gb, const StringRef &rslt)
 {
 	//TODO
-	return GCodeResult::error;
+	return GCodeResult::errorNotSupported;
 }
 
 // Return the number of LED strips, excluding trailing null entries

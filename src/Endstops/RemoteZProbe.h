@@ -35,7 +35,6 @@ public:
 
 	// Functions used only with scanning Z probes
 	float GetCalibratedReading() const noexcept override;
-	void SetCalibrationPoint(float height) noexcept override;
 
 	void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept override;
 

@@ -609,10 +609,15 @@ bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) con
 
 #endif
 
-// Handle M558
+// Handle M558 and M558.1
 GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
 	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
+
+	if (gb.GetCommandNumber() == 1)
+	{
+		return CalibrateScanningZProbe(gb, reply, probeNumber);
+	}
 
 	// Check what sort of Z probe we need and where it is, so see whether we need to delete any existing one and create a new one.
 	// If there is no probe, we need a new one; and if it is not a motor stall one then a port number must be given.
@@ -724,6 +729,39 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 	return zProbes[probeNumber]->Configure(gb, reply, seen);
 }
 
+// Calibrate a scanning Z probe
+GCodeResult EndstopsManager::CalibrateScanningZProbe(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException)
+{
+	ReadLocker lock(zProbesLock);
+	ZProbe * const zp = zProbes[probeNumber];
+	if (zp == nullptr)
+	{
+		reply.copy("invalid Z probe index");
+		return GCodeResult::error;
+	}
+
+	if (!zp->IsScanning())
+	{
+		reply.copy("not a scanning probe");
+		return GCodeResult::error;
+	}
+
+	if (gb.Seen('A'))
+	{
+		const float aParam = gb.GetFValue();
+		const float bParam = (gb.Seen('B')) ? gb.GetFValue() : 0.0;
+		return zp->SetScanningCoefficients(aParam, bParam);
+	}
+
+	if (gb.Seen('S'))
+	{
+		//TODO
+		return GCodeResult::errorNotSupported;
+	}
+
+	return zp->ReportScanningCoefficients(reply);
+}
+
 // Set or print the Z probe. Called by G31.
 // Note that G31 P or G31 P0 prints the parameters of the currently-selected Z probe.
 GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
@@ -733,7 +771,7 @@ GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply) 
 	ZProbe * const zp = zProbes[probeNumber];
 	if (zp == nullptr)
 	{
-		reply.copy("Invalid Z probe index");
+		reply.copy("invalid Z probe index");
 		return GCodeResult::error;
 	}
 

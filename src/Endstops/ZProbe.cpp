@@ -184,6 +184,7 @@ int ZProbe::GetReading() const noexcept
 		case ZProbeType::analog:				// Simple or intelligent IR sensor
 		case ZProbeType::alternateAnalog:		// Alternate sensor
 		case ZProbeType::digital:				// Switch connected to Z probe input
+		case ZProbeType::scanningAnalog:
 			zProbeVal = (int) ((p.GetZProbeOnFilter().GetSum() + p.GetZProbeOffFilter().GetSum()) / (2 * ZProbeAverageReadings));
 			break;
 
@@ -460,6 +461,27 @@ void ZProbe::SetLastStoppedHeight(float h) noexcept
 {
 	lastStopHeight = h;
 	reprap.SensorsUpdated();
+}
+
+// Scanning support
+GCodeResult ZProbe::SetScanningCoefficients(float aParam, float bParam) noexcept
+{
+	linearCoefficient = aParam;
+	quadraticCoefficient = bParam;
+	isCalibrated = true;
+	return GCodeResult::ok;
+}
+
+GCodeResult ZProbe::ReportScanningCoefficients(const StringRef& reply) noexcept
+{
+	if (isCalibrated)
+	{
+		reply.printf("A=%.2f B=%.1f", (double)linearCoefficient, (double)quadraticCoefficient);
+		return GCodeResult::ok;
+	}
+
+	reply.copy("Probe has not been calibrated");
+	return GCodeResult::error;
 }
 
 // End
