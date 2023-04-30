@@ -8,12 +8,12 @@
 #ifndef SRC_LEDSTRIPS_NEOPIXELLEDSTRIP_H_
 #define SRC_LEDSTRIPS_NEOPIXELLEDSTRIP_H_
 
-#include "LedStripBase.h"
+#include "LocalLedStrip.h"
 
-class NeoPixelLedStrip : public LedStripBase
+class NeoPixelLedStrip : public LocalLedStrip
 {
 public:
-	NeoPixelLedStrip();
+	NeoPixelLedStrip(uint32_t p_freq) noexcept;
 };
 
 #endif /* SRC_LEDSTRIPS_NEOPIXELLEDSTRIP_H_ */

@@ -8,12 +8,12 @@
 #ifndef SRC_LEDSTRIPS_DOTSTARLEDSTRIP_H_
 #define SRC_LEDSTRIPS_DOTSTARLEDSTRIP_H_
 
-#include "LedStripBase.h"
+#include "LocalLedStrip.h"
 
-class DotStarLedStrip : public LedStripBase
+class DotStarLedStrip : public LocalLedStrip
 {
 public:
-	DotStarLedStrip();
+	DotStarLedStrip(uint32_t p_freq) noexcept;
 };
 
 #endif /* SRC_LEDSTRIPS_DOTSTARLEDSTRIP_H_ */

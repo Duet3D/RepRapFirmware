@@ -7,9 +7,10 @@
 
 #include <LedStrips/DotStarLedStrip.h>
 
-DotStarLedStrip::DotStarLedStrip()
+DotStarLedStrip::DotStarLedStrip(uint32_t p_freq) noexcept : LocalLedStrip(p_freq)
 {
 	// TODO Auto-generated constructor stub
 
 }
 
+// End
