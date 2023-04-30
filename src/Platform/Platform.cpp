@@ -4574,13 +4574,13 @@ bool Platform::SetDateTime(time_t time) noexcept
 // Configure an I/O port
 GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// Exactly one of FHJPSR is allowed
+	// Exactly one of EFHJPSR is allowed (also D on MB6HC)
 	unsigned int charsPresent = 0;
 	for (char c :
 #ifdef DUET3_MB6HC
-		(const char[]){'D', 'R', 'J', 'F', 'H', 'P', 'S'}
+		(const char[]){'D', 'E', 'R', 'J', 'F', 'H', 'P', 'S'}
 #else
-		(const char[]){'R', 'J', 'F', 'H', 'P', 'S'}
+		(const char[]){'E', 'R', 'J', 'F', 'H', 'P', 'S'}
 #endif
 		)
 	{
@@ -4622,8 +4622,11 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 			return spindles[slot].Configure(gb, reply);
 		}
 
+	case 64:	// E
+		return ledStripManager.CreateStrip(gb, reply);
+
 #ifdef DUET3_MB6HC
-	case 64:	// D
+	case 128:	// D
 # if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface())
 		{

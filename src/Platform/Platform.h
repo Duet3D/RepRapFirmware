@@ -28,6 +28,7 @@ Licence: GPL
 #include <ObjectModel/ObjectModel.h>
 #include <Hardware/IoPorts.h>
 #include <Fans/FansManager.h>
+#include <LedStrips/LedStripManager.h>
 #include <TemperatureError.h>
 #include "OutputMemory.h"
 #include "UniqueId.h"
@@ -48,6 +49,7 @@ Licence: GPL
 #endif
 
 #if SUPPORT_CAN_EXPANSION
+# include <CanMessageFormats.h>
 # include <RemoteInputHandle.h>
 #endif
 
@@ -532,6 +534,8 @@ public:
 	void SetNonlinearExtrusion(size_t extruder, float a, float b, float limit) noexcept;
 #endif
 
+	LedStripManager& GetLedStripManager() noexcept { return ledStripManager; }
+
 	// Endstops and Z probe
 	EndstopsManager& GetEndstops() noexcept { return endstops; }
 	ReadLockedPointer<ZProbe> GetZProbeOrDefault(size_t probeNumber) noexcept { return endstops.GetZProbeOrDefault(probeNumber); }
@@ -740,6 +744,9 @@ private:
 #ifdef DUET_NG
 	ExpansionBoardType expansionBoard;
 #endif
+
+	// LED strips
+	LedStripManager ledStripManager;
 
 	bool active;
 	uint32_t errorCodeBits;
