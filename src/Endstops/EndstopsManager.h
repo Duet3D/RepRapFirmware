@@ -83,7 +83,7 @@ private:
 	void AddToActive(EndstopOrZProbe& e) noexcept;
 
 	// Calibrate a scanning Z probe
-	GCodeResult CalibrateScanningZProbe(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException);
+	GCodeResult HandleM558Point1(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException);
 
 #if SUPPORT_OBJECT_MODEL
 	size_t GetNumProbesToReport() const noexcept;

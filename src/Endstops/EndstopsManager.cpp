@@ -39,6 +39,7 @@ ReadWriteLock EndstopsManager::zProbesLock;
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...)				OBJECT_MODEL_FUNC_BODY(EndstopsManager, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...)			OBJECT_MODEL_FUNC_IF_BODY(EndstopsManager, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry EndstopsManager::objectModelArrayTable[] =
 {
@@ -616,7 +617,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 
 	if (gb.GetCommandNumber() == 1)
 	{
-		return CalibrateScanningZProbe(gb, reply, probeNumber);
+		return HandleM558Point1(gb, reply, probeNumber);
 	}
 
 	// Check what sort of Z probe we need and where it is, so see whether we need to delete any existing one and create a new one.
@@ -730,11 +731,10 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 }
 
 // Calibrate a scanning Z probe
-GCodeResult EndstopsManager::CalibrateScanningZProbe(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException)
+GCodeResult EndstopsManager::HandleM558Point1(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException)
 {
-	ReadLocker lock(zProbesLock);
-	ZProbe * const zp = zProbes[probeNumber];
-	if (zp == nullptr)
+	const auto zp = GetZProbe(probeNumber);
+	if (zp.IsNull())
 	{
 		reply.copy("invalid Z probe index");
 		return GCodeResult::error;
@@ -767,9 +767,8 @@ GCodeResult EndstopsManager::CalibrateScanningZProbe(GCodeBuffer& gb, const Stri
 GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
-	ReadLocker lock(zProbesLock);
-	ZProbe * const zp = zProbes[probeNumber];
-	if (zp == nullptr)
+	const auto zp = GetZProbe(probeNumber);
+	if (zp.IsNull())
 	{
 		reply.copy("invalid Z probe index");
 		return GCodeResult::error;
