@@ -696,7 +696,14 @@ private:
 	float g30PrevHeightError;					// the height error the previous time we probed
 	float g30zHeightErrorSum;					// the sum of the height errors for the current probe point
 	float g30zHeightErrorLowestDiff;			// the lowest difference we have seen between consecutive readings
-	float calibrationScanningRange;				// how much above and below the trigger height we go when calibrating a scanning probe
+
+	// Scanning Z probe calibration
+	float calibrationStartingHeight;			// how much above and below the trigger height we go when calibrating a scanning probe
+	float heightChangePerPoint;					// the height different between adjacent points
+	size_t numPointsToCollect;					// how many readings to take
+	size_t numCalibrationReadingsTaken;			// the number of calibration readings we have taken
+	int16_t calibrationReadings[MaxScanningProbeCalibrationPoints];
+
 	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
 	size_t gridAxis0Index, gridAxis1Index;		// Which grid probe point is next

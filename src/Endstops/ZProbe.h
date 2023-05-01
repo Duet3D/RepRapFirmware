@@ -48,7 +48,7 @@ public:
 	float GetLastStoppedHeight() const noexcept { return lastStopHeight; }
 	bool GetTurnHeatersOff() const noexcept { return misc.parts.turnHeatersOff; }
 	bool GetSaveToConfigOverride() const noexcept { return misc.parts.saveToConfigOverride; }
-	int GetAdcValue() const noexcept { return adcValue; }
+	int GetTargetAdcValue() const noexcept { return targetAdcValue; }
 	unsigned int GetMaxTaps() const { return misc.parts.maxTaps; }
 	int GetReading() const noexcept;
 	int GetSecondaryValues(int& v1) const noexcept;
@@ -78,7 +78,7 @@ protected:
 	uint8_t number;
 	ZProbeType type;
 	int8_t sensor;						// the sensor number used for temperature calibration
-	int16_t adcValue;					// the target ADC value, after inversion if enabled
+	int16_t targetAdcValue;					// the target ADC value, after inversion if enabled
 	union
 	{
 		struct

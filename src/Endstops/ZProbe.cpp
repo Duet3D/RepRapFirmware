@@ -79,7 +79,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "recoveryTime",				OBJECT_MODEL_FUNC(self->recoveryTime, 1), 													ObjectModelEntryFlags::none },
 	{ "speeds",						OBJECT_MODEL_FUNC_ARRAY(1), 																ObjectModelEntryFlags::none },
 	{ "temperatureCoefficients",	OBJECT_MODEL_FUNC_ARRAY(2), 																ObjectModelEntryFlags::none },
-	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->adcValue), 												ObjectModelEntryFlags::none },
+	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->targetAdcValue), 												ObjectModelEntryFlags::none },
 	{ "tolerance",					OBJECT_MODEL_FUNC(self->tolerance, 3), 														ObjectModelEntryFlags::none },
 	{ "travelSpeed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->travelSpeed), 1), 					ObjectModelEntryFlags::none },
 	{ "triggerHeight",				OBJECT_MODEL_FUNC(-self->offsets[Z_AXIS], 3), 												ObjectModelEntryFlags::none },
@@ -101,7 +101,7 @@ ZProbe::ZProbe(unsigned int num, ZProbeType p_type) noexcept : EndstopOrZProbe()
 
 void ZProbe::SetDefaults() noexcept
 {
-	adcValue = DefaultZProbeADValue;
+	targetAdcValue = DefaultZProbeADValue;
 	for (float& offset : offsets)
 	{
 		offset = 0.0;
@@ -161,7 +161,7 @@ bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexc
 	const char* axisLetters = reprap.GetGCodes().GetAxisLetters();
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	String<StringLength256> scratchString;
-	scratchString.printf("G31 K%u P%d", probeNumber, adcValue);
+	scratchString.printf("G31 K%u P%d", probeNumber, targetAdcValue);
 	for (size_t i = 0; i < numTotalAxes; ++i)
 	{
 		if (axisLetters[i] != 'Z')
@@ -241,7 +241,7 @@ int ZProbe::GetSecondaryValues(int& v1) const noexcept
 bool ZProbe::Stopped() const noexcept
 {
 	const int zProbeVal = GetReading();
-	return zProbeVal >= adcValue;
+	return zProbeVal >= targetAdcValue;
 }
 
 // Check whether the probe is triggered and return the action that should be performed. Called from the step ISR.
@@ -360,7 +360,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	if (gb.Seen('P'))
 	{
 		seen = true;
-		adcValue = gb.GetIValue();
+		targetAdcValue = gb.GetIValue();
 	}
 
 	if (seen)
@@ -381,7 +381,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		{
 			reply.catf(" (%d)", v1);
 		}
-		reply.catf(", threshold %d, trigger height %.3f", adcValue, (double)-offsets[Z_AXIS]);
+		reply.catf(", threshold %d, trigger height %.3f", targetAdcValue, (double)-offsets[Z_AXIS]);
 		if (temperatureCoefficients[0] != 0.0 || temperatureCoefficients[1] != 0.0)
 		{
 			reply.catf(" at %.1f" DEGREE_SYMBOL "C, temperature coefficients [%.1f/" DEGREE_SYMBOL "C, %.1f/" DEGREE_SYMBOL "C^2]",

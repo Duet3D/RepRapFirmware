@@ -849,7 +849,7 @@ GCodeResult GCodes::HandleM558Point1(GCodeBuffer& gb, const StringRef &reply, un
 
 	if (gb.Seen('S'))
 	{
-		calibrationScanningRange = gb.GetLimitedFValue('S', 0.1, zp->GetConfiguredTriggerHeight());
+		const float requestedScanningRange = gb.GetLimitedFValue('S', 0.1, zp->GetConfiguredTriggerHeight());
 
 #if SUPPORT_ASYNC_MOVES
 		AxesBitmap axesMoving;
@@ -859,6 +859,18 @@ GCodeResult GCodes::HandleM558Point1(GCodeBuffer& gb, const StringRef &reply, un
 #endif
 
 		currentZProbeNumber = probeNumber;
+
+		// Set the scanning range to a whole number of microsteps and calculate the microsteps per point
+		const unsigned int microstepsPerHalfScan = (unsigned int)(requestedScanningRange * platform.DriveStepsPerUnit(Z_AXIS));
+		constexpr unsigned int MaxCalibrationPointsPerHalfScan = (MaxScanningProbeCalibrationPoints - 1)/2;
+		const unsigned int microstepsPerPoint = (microstepsPerHalfScan + MaxCalibrationPointsPerHalfScan - 1)/MaxCalibrationPointsPerHalfScan;
+		heightChangePerPoint = microstepsPerPoint/platform.DriveStepsPerUnit(Z_AXIS);
+		const size_t pointsPerHalfScan = microstepsPerHalfScan/microstepsPerPoint;
+		calibrationStartingHeight = zp->GetActualTriggerHeight() + pointsPerHalfScan * heightChangePerPoint;
+		numPointsToCollect = 2 * pointsPerHalfScan + 1;
+		RRF_ASSERT(numPointsToCollect <= MaxScanningProbeCalibrationPoints);
+
+		// Deploy the probe and start the state machine
 		gb.SetState(GCodeState::probeCalibration1);
 		DeployZProbe(gb);
 		return GCodeResult::ok;
