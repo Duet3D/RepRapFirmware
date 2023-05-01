@@ -10,10 +10,14 @@
 
 #include "LedStripBase.h"
 
+#if SUPPORT_LED_STRIPS
+
 class RemoteLedStrip : public LedStripBase
 {
 public:
 	RemoteLedStrip();
 };
+
+#endif
 
 #endif /* SRC_LEDSTRIPS_REMOTELEDSTRIP_H_ */

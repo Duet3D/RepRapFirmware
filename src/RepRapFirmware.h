@@ -339,7 +339,7 @@ typedef Bitmap<uint32_t> ParameterLettersBitmap;	// Type of a bitmap representin
 constexpr char HighestAxisLetter = 'f';
 #endif
 
-#if defined(DUET3) || defined(DUET3MINI)
+#if SUPPORT_CAN_EXPANSION
 typedef Bitmap<uint64_t> SensorsBitmap;
 #else
 typedef Bitmap<uint32_t> SensorsBitmap;

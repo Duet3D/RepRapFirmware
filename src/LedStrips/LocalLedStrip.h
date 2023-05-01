@@ -10,6 +10,8 @@
 
 #include "LedStripBase.h"
 
+#if SUPPORT_LED_STRIPS
+
 // Define which types of LED strip this hardware supports
 #define SUPPORT_DMA_NEOPIXEL		(defined(DUET3_MB6HC) || defined(DUET3_MB6XD) || defined(DUET3MINI) || defined(PCCB_10))
 #define SUPPORT_DMA_DOTSTAR			(defined(DUET3_MB6HC) || defined(DUET3_MB6XD) || defined(PCCB_10))
@@ -64,6 +66,7 @@ public:
 	LocalLedStrip(uint32_t p_freq) noexcept;
 
 protected:
+	virtual bool IsNeopixel() const noexcept = 0;
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
 	void DmaSendChunkBuffer(size_t numBytes) noexcept;					// DMA the data. Must be a multiple of 2 bytes if USE_16BIT_SPI is true.
@@ -86,5 +89,7 @@ private:
 #endif
 
 };
+
+#endif
 
 #endif /* SRC_LEDSTRIPS_LOCALLEDSTRIP_H_ */

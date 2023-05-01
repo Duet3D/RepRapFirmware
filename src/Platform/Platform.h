@@ -28,7 +28,7 @@ Licence: GPL
 #include <ObjectModel/ObjectModel.h>
 #include <Hardware/IoPorts.h>
 #include <Fans/FansManager.h>
-#include <LedStrips/LedStripManager.h>
+
 #include <TemperatureError.h>
 #include "OutputMemory.h"
 #include "UniqueId.h"
@@ -43,6 +43,10 @@ Licence: GPL
 #include <Comms/PanelDueUpdater.h>
 #include <General/IPAddress.h>
 #include <General/function_ref.h>
+
+#if SUPPORT_LED_STRIPS
+# include <LedStrips/LedStripManager.h>
+#endif
 
 #if defined(DUET_NG)
 # include "DueXn.h"
@@ -534,7 +538,9 @@ public:
 	void SetNonlinearExtrusion(size_t extruder, float a, float b, float limit) noexcept;
 #endif
 
+#if SUPPORT_LED_STRIPS
 	LedStripManager& GetLedStripManager() noexcept { return ledStripManager; }
+#endif
 
 	// Endstops and Z probe
 	EndstopsManager& GetEndstops() noexcept { return endstops; }
@@ -745,8 +751,10 @@ private:
 	ExpansionBoardType expansionBoard;
 #endif
 
+#if SUPPORT_LED_STRIPS
 	// LED strips
 	LedStripManager ledStripManager;
+#endif
 
 	bool active;
 	uint32_t errorCodeBits;

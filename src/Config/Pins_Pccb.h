@@ -114,6 +114,7 @@ constexpr size_t MaxFans = 7;
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
 constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
+constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
 constexpr size_t NumSerialChannels = 1;				// The number of serial IO channels (USB only)
 #define SERIAL_MAIN_DEVICE serialUSB

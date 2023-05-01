@@ -6,6 +6,9 @@
  */
 
 #include <LedStrips/LocalLedStrip.h>
+
+#if SUPPORT_LED_STRIPS
+
 #include <Movement/StepTimer.h>
 
 LocalLedStrip::LocalLedStrip(uint32_t p_freq) noexcept : currentFrequency(p_freq)
@@ -124,7 +127,7 @@ void LocalLedStrip::SetupSpi() noexcept
 #  endif
 	QSPI->QSPI_SCR = QSPI_SCR_CPOL | QSPI_SCR_CPHA | QSPI_SCR_SCBR(SystemPeripheralClock()/currentFrequency - 1);
 	QSPI->QSPI_CR = QSPI_CR_QSPIEN;
-	if (ledType == LedType::neopixelRGB || ledType == LedType::neopixelRGBW)
+	if (IsNeopixel())
 	{
 		QSPI->QSPI_TDR = 0;													// send a word of zeros to set the data line low
 	}
@@ -132,5 +135,7 @@ void LocalLedStrip::SetupSpi() noexcept
 }
 
 #endif	// SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
+
+#endif	// SUPPORT_LED_STRIPS
 
 // End

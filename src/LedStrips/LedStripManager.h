@@ -10,6 +10,8 @@
 
 #include <ObjectModel/ObjectModel.h>
 
+#if SUPPORT_LED_STRIPS
+
 class LedStripBase;
 
 class LedStripManager INHERIT_OBJECT_MODEL
@@ -28,5 +30,7 @@ private:
 
 	LedStripBase *strips[MaxLedStrips];
 };
+
+#endif
 
 #endif /* SRC_LEDSTRIPS_LEDSTRIPMANAGER_H_ */

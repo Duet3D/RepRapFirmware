@@ -7,9 +7,14 @@
 
 #include <LedStrips/LedStripBase.h>
 
+#if SUPPORT_LED_STRIPS
+
 LedStripBase::LedStripBase()
 {
 	// TODO Auto-generated constructor stub
 
 }
 
+#endif
+
+// End

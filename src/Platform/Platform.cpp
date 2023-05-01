@@ -4576,13 +4576,7 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 {
 	// Exactly one of EFHJPSR is allowed (also D on MB6HC)
 	unsigned int charsPresent = 0;
-	for (char c :
-#ifdef DUET3_MB6HC
-		(const char[]){'D', 'E', 'R', 'J', 'F', 'H', 'P', 'S'}
-#else
-		(const char[]){'E', 'R', 'J', 'F', 'H', 'P', 'S'}
-#endif
-		)
+	for (char c : (const char[]){'D', 'E', 'R', 'J', 'F', 'H', 'P', 'S'})
 	{
 		charsPresent <<= 1;
 		if (gb.Seen(c))
@@ -4622,8 +4616,10 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 			return spindles[slot].Configure(gb, reply);
 		}
 
+#if SUPPORT_LED_STRIPS
 	case 64:	// E
 		return ledStripManager.CreateStrip(gb, reply);
+#endif
 
 #ifdef DUET3_MB6HC
 	case 128:	// D
@@ -4639,7 +4635,13 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 
 	default:
 #ifdef DUET3_MB6HC
-		reply.copy("exactly one of FHJPSRD must be given");
+# if SUPPORT_LED_STRIPS
+		reply.copy("exactly one of DEFHJPSR must be given");
+# else
+		reply.copy("exactly one of DFHJPSR must be given");
+# endif
+#elif SUPPORT_LED_STRIPS
+		reply.copy("exactly one of EFHJPSR must be given");
 #else
 		reply.copy("exactly one of FHJPSR must be given");
 #endif

@@ -5,7 +5,9 @@
  *      Author: David
  */
 
-#include <LedStrips/RemoteLedStrip.h>
+#include "RemoteLedStrip.h"
+
+#if SUPPORT_LED_STRIPS
 
 RemoteLedStrip::RemoteLedStrip()
 {
@@ -13,3 +15,6 @@ RemoteLedStrip::RemoteLedStrip()
 
 }
 
+#endif
+
+// End

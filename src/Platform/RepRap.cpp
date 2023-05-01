@@ -257,7 +257,9 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "heat",					OBJECT_MODEL_FUNC(self->heat),											ObjectModelEntryFlags::live },
 	{ "inputs",					OBJECT_MODEL_FUNC_ARRAY(2),												ObjectModelEntryFlags::live },
 	{ "job",					OBJECT_MODEL_FUNC(self->printMonitor),									ObjectModelEntryFlags::live },
+#if SUPPORT_LED_STRIPS
 	{ "ledStrips",				OBJECT_MODEL_FUNC(&self->platform->GetLedStripManager()),				ObjectModelEntryFlags::none },
+#endif
 	{ "limits",					OBJECT_MODEL_FUNC(self, 2),												ObjectModelEntryFlags::none },
 	{ "move",					OBJECT_MODEL_FUNC(self->move),											ObjectModelEntryFlags::live },
 	// Note, 'network' is needed even if there is no networking, because it contains the machine name
@@ -303,7 +305,9 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "gpOutPorts",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxGpOutPorts),						ObjectModelEntryFlags::verbose },
 	{ "heaters",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeaters),							ObjectModelEntryFlags::verbose },
 	{ "heatersPerTool",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxHeatersPerTool),					ObjectModelEntryFlags::verbose },
+#if SUPPORT_LED_STRIPS
 	{ "ledStrips",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxLedStrips),						ObjectModelEntryFlags::verbose },
+#endif
 	{ "monitorsPerHeater",		OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxMonitorsPerHeater),				ObjectModelEntryFlags::verbose },
 	{ "portsPerHeater",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxPortsPerHeater),					ObjectModelEntryFlags::verbose },
 	{ "restorePoints",			OBJECT_MODEL_FUNC_NOSELF((int32_t)NumVisibleRestorePoints),				ObjectModelEntryFlags::verbose },
@@ -405,13 +409,13 @@ ReadWriteLock *_ecv_null RepRap::GetObjectLock(unsigned int tableNumber) const n
 constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 {
 	7,																						// number of sub-tables
-	16 + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),						// root
+	15 + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE) + SUPPORT_LED_STRIPS,	// root
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
 	7, 																						// directories
 #else
 	0,																						// directories
 #endif
-	27,																						// limits
+	26 + SUPPORT_LED_STRIPS,																// limits
 	22 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
 	2,																						// state.beep
 	12 + HAS_NETWORKING + (2 * HAS_MASS_STORAGE) + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),	// seqs

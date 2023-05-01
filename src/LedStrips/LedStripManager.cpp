@@ -6,6 +6,9 @@
  */
 
 #include <LedStrips/LedStripManager.h>
+
+#if SUPPORT_LED_STRIPS
+
 #include "LedStripBase.h"
 
 // Object model table and functions
@@ -75,5 +78,7 @@ size_t LedStripManager::GetNumLedStrips() const noexcept
 	}
 	return ret;
 }
+
+#endif
 
 // End
