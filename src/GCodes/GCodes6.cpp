@@ -824,4 +824,47 @@ void GCodes::SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept
 	NewSingleSegmentMoveAvailable(ms);
 }
 
+// Calibrate a scanning Z probe. We have already checked the probe is a scanning one and that scanningRange is a sensible value.
+GCodeResult GCodes::HandleM558Point1(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException)
+{
+	const auto zp = platform.GetEndstops().GetZProbe(probeNumber);
+	if (zp.IsNull())
+	{
+		reply.copy("invalid Z probe index");
+		return GCodeResult::error;
+	}
+
+	if (!zp->IsScanning())
+	{
+		reply.printf("probe %u is not a scanning probe", probeNumber);
+		return GCodeResult::error;
+	}
+
+	if (gb.Seen('A'))
+	{
+		const float aParam = gb.GetFValue();
+		const float bParam = (gb.Seen('B')) ? gb.GetFValue() : 0.0;
+		return zp->SetScanningCoefficients(aParam, bParam);
+	}
+
+	if (gb.Seen('S'))
+	{
+		calibrationScanningRange = gb.GetLimitedFValue('S', 0.1, zp->GetConfiguredTriggerHeight());
+
+#if SUPPORT_ASYNC_MOVES
+		AxesBitmap axesMoving;
+		axesMoving.SetBit(Z_AXIS);
+		MovementState& ms = GetMovementState(gb);
+		AllocateAxes(gb, ms, axesMoving, ParameterLettersBitmap());		// allocate the Z axis
+#endif
+
+		currentZProbeNumber = probeNumber;
+		gb.SetState(GCodeState::probeCalibration1);
+		DeployZProbe(gb);
+		return GCodeResult::ok;
+	}
+
+	return zp->ReportScanningCoefficients(reply);
+}
+
 // End

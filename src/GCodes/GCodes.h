@@ -217,6 +217,7 @@ public:
 
 	size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
 	void TakeScanningProbeReading() noexcept;										// Take and store a reading from a scanning Z probe
+	GCodeResult HandleM558Point1(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException);		// Calibrate a scanning Z probe
 
 	// These next two are public because they are used by class SbcInterface
 	void UnlockAll(const GCodeBuffer& gb) noexcept;									// Release all locks
@@ -695,6 +696,7 @@ private:
 	float g30PrevHeightError;					// the height error the previous time we probed
 	float g30zHeightErrorSum;					// the sum of the height errors for the current probe point
 	float g30zHeightErrorLowestDiff;			// the lowest difference we have seen between consecutive readings
+	float calibrationScanningRange;				// how much above and below the trigger height we go when calibrating a scanning probe
 	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
 	size_t gridAxis0Index, gridAxis1Index;		// Which grid probe point is next

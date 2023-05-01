@@ -617,7 +617,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 
 	if (gb.GetCommandNumber() == 1)
 	{
-		return HandleM558Point1(gb, reply, probeNumber);
+		return reprap.GetGCodes().HandleM558Point1(gb, reply, probeNumber);
 	}
 
 	// Check what sort of Z probe we need and where it is, so see whether we need to delete any existing one and create a new one.
@@ -728,38 +728,6 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 
 	// If we get here then there is an existing probe of the correct type and we just need to change its configuration
 	return zProbes[probeNumber]->Configure(gb, reply, seen);
-}
-
-// Calibrate a scanning Z probe
-GCodeResult EndstopsManager::HandleM558Point1(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException)
-{
-	const auto zp = GetZProbe(probeNumber);
-	if (zp.IsNull())
-	{
-		reply.copy("invalid Z probe index");
-		return GCodeResult::error;
-	}
-
-	if (!zp->IsScanning())
-	{
-		reply.copy("not a scanning probe");
-		return GCodeResult::error;
-	}
-
-	if (gb.Seen('A'))
-	{
-		const float aParam = gb.GetFValue();
-		const float bParam = (gb.Seen('B')) ? gb.GetFValue() : 0.0;
-		return zp->SetScanningCoefficients(aParam, bParam);
-	}
-
-	if (gb.Seen('S'))
-	{
-		//TODO
-		return GCodeResult::errorNotSupported;
-	}
-
-	return zp->ReportScanningCoefficients(reply);
 }
 
 // Set or print the Z probe. Called by G31.

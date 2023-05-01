@@ -1554,6 +1554,16 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		break;
 
+	case GCodeState::probeCalibration1:
+		//TODO
+		gb.SetState(GCodeState::normal);
+		break;
+
+	case GCodeState::probeCalibration2:
+		//TODO
+		gb.SetState(GCodeState::normal);
+		break;
+
 	// Firmware retraction/un-retraction states
 	case GCodeState::doingFirmwareRetraction:
 		// We just did the retraction part of a firmware retraction, now we need to do the Z hop

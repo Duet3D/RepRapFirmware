@@ -110,6 +110,9 @@ enum class GCodeState : uint8_t
 	straightProbe2,
 	straightProbe3,
 
+	probeCalibration1,
+	probeCalibration2,
+
 	doingFirmwareRetraction,
 	doingFirmwareUnRetraction,
 	loadingFilament,
