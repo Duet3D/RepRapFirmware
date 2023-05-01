@@ -15,7 +15,12 @@
 class RemoteLedStrip : public LedStripBase
 {
 public:
-	RemoteLedStrip();
+	RemoteLedStrip() noexcept;
+
+	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) override THROWS(GCodeException);
+
+private:
+	CanAddress boardNumber;
 };
 
 #endif

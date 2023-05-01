@@ -17,6 +17,8 @@ class DotStarLedStrip : public LocalLedStrip
 public:
 	DotStarLedStrip(uint32_t p_freq) noexcept;
 
+	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) override THROWS(GCodeException);
+
 protected:
 	bool IsNeopixel() const noexcept override { return false; }
 };

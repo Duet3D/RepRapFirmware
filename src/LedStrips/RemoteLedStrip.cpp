@@ -9,10 +9,16 @@
 
 #if SUPPORT_LED_STRIPS
 
-RemoteLedStrip::RemoteLedStrip()
+RemoteLedStrip::RemoteLedStrip() noexcept
 {
 	// TODO Auto-generated constructor stub
 
+}
+
+GCodeResult RemoteLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
+{
+	//TODO
+	return GCodeResult::errorNotSupported;
 }
 
 #endif

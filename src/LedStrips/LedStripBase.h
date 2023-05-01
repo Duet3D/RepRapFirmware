@@ -17,6 +17,8 @@ class LedStripBase INHERIT_OBJECT_MODEL
 public:
 	LedStripBase();
 
+	virtual GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+
 protected:
 	DECLARE_OBJECT_MODEL
 };

@@ -10,6 +10,7 @@
 #if SUPPORT_LED_STRIPS
 
 #include "LedStripBase.h"
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -46,7 +47,7 @@ constexpr uint8_t LedStripManager::objectModelTableDescriptor[] =
 
 DEFINE_GET_OBJECT_MODEL_TABLE(LedStripManager)
 
-LedStripManager::LedStripManager()
+LedStripManager::LedStripManager() noexcept
 {
 	for (LedStripBase*& strip : strips)
 	{
@@ -55,17 +56,30 @@ LedStripManager::LedStripManager()
 }
 
 // Handle M950 with E parameter
-GCodeResult LedStripManager::CreateStrip(GCodeBuffer &gb, const StringRef &rslt)
+GCodeResult LedStripManager::CreateStrip(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
 	//TODO
 	return GCodeResult::errorNotSupported;
 }
 
 // Handle M150
-GCodeResult LedStripManager::ExecM150(GCodeBuffer &gb, const StringRef &rslt)
+GCodeResult LedStripManager::HandleM150(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
-	//TODO
-	return GCodeResult::errorNotSupported;
+	uint32_t stripNumber = 0;
+	bool dummy;
+	gb.TryGetLimitedUIValue('E', stripNumber, dummy, MaxLedStrips);
+
+	{
+		ReadLocker locker(lock);
+		LedStripBase *const strip = strips[stripNumber];
+		if (strip != nullptr)
+		{
+			return strip->HandleM150(gb, reply);
+		}
+	}
+
+	reply.printf("LED strip #%u has not been configured", (unsigned int)stripNumber);
+	return GCodeResult::error;
 }
 
 // Return the number of LED strips, excluding trailing null entries

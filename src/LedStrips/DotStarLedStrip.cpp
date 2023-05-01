@@ -15,6 +15,12 @@ DotStarLedStrip::DotStarLedStrip(uint32_t p_freq) noexcept : LocalLedStrip(p_fre
 
 }
 
+GCodeResult DotStarLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
+{
+	//TODO
+	return GCodeResult::errorNotSupported;
+}
+
 #endif
 
 // End

@@ -17,10 +17,10 @@ class LedStripBase;
 class LedStripManager INHERIT_OBJECT_MODEL
 {
 public:
-	LedStripManager();
+	LedStripManager() noexcept;
 
-	GCodeResult CreateStrip(GCodeBuffer& gb, const StringRef& rslt) THROWS(GCodeException);
-	GCodeResult ExecM150(GCodeBuffer& gb, const StringRef& rslt) THROWS(GCodeException);
+	GCodeResult CreateStrip(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
@@ -28,6 +28,7 @@ protected:
 private:
 	size_t GetNumLedStrips() const noexcept;
 
+	ReadWriteLock lock;
 	LedStripBase *strips[MaxLedStrips];
 };
 
