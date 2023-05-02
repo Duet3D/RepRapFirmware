@@ -28,7 +28,7 @@ protected:
 private:
 	size_t GetNumLedStrips() const noexcept;
 
-	ReadWriteLock lock;
+	ReadWriteLock ledLock;
 	LedStripBase *strips[MaxLedStrips];
 };
 

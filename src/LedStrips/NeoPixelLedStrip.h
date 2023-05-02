@@ -15,12 +15,18 @@
 class NeoPixelLedStrip : public LocalLedStrip
 {
 public:
-	NeoPixelLedStrip(uint32_t p_freq) noexcept;
+	NeoPixelLedStrip(bool p_isRGBW) noexcept;
 
-	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException) override;
+	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
+	bool IsBitBanged() const noexcept override;
 
 protected:
 	bool IsNeopixel() const noexcept override { return true; }
+
+	static constexpr uint32_t DefaultNeoPixelSpiClockFrequency = 2500000;		// must be between about 2MHz and about 4MHz
+
+	bool isRGBW;
 };
 
 #endif

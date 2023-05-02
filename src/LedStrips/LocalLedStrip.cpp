@@ -11,7 +11,8 @@
 
 #include <Movement/StepTimer.h>
 
-LocalLedStrip::LocalLedStrip(uint32_t p_freq) noexcept : currentFrequency(p_freq)
+LocalLedStrip::LocalLedStrip(LedStripType p_type, uint32_t p_freq) noexcept
+	: LedStripBase(p_type), currentFrequency(p_freq)
 {
 }
 

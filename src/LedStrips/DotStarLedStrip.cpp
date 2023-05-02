@@ -7,14 +7,21 @@
 
 #include <LedStrips/DotStarLedStrip.h>
 
-#if SUPPORT_LED_STRIPS
+#if SUPPORT_LED_STRIPS && SUPPORT_DMA_DOTSTAR
 
-DotStarLedStrip::DotStarLedStrip(uint32_t p_freq) noexcept : LocalLedStrip(p_freq)
+DotStarLedStrip::DotStarLedStrip() noexcept
+	: LocalLedStrip(LedStripType::DotStar, DefaultDotStarSpiClockFrequency)
 {
-	// TODO Auto-generated constructor stub
-
 }
 
+// Configure this strip
+GCodeResult DotStarLedStrip::Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException)
+{
+	//TODO
+	return GCodeResult::errorNotSupported;
+}
+
+// Send a M150 command to this strip
 GCodeResult DotStarLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
 	//TODO

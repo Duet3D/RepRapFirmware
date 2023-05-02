@@ -10,6 +10,13 @@
 #if SUPPORT_LED_STRIPS
 
 #include "LedStripBase.h"
+#include "DotStarLedStrip.h"
+#include "NeoPixelLedStrip.h"
+
+#if SUPPORT_CAN_EXPANSION
+#include "RemoteLedStrip.h"
+#endif
+
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 // Object model table and functions
@@ -58,8 +65,75 @@ LedStripManager::LedStripManager() noexcept
 // Handle M950 with E parameter
 GCodeResult LedStripManager::CreateStrip(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
-	//TODO
-	return GCodeResult::errorNotSupported;
+	const uint32_t stripNumber = gb.GetLimitedUIValue('E', MaxLedStrips);
+	const LedStripType ledType = (gb.Seen('T')) ? (LedStripType)gb.GetLimitedUIValue('T', 3) : LedStripType::NeoPixel_RGB;
+	gb.MustSee('C');
+	String<StringLength50> pinName;
+	gb.GetReducedString(pinName.GetRef());
+
+	WriteLocker lock(ledLock);
+	LedStripBase*& slot = strips[stripNumber];
+#if SUPPORT_CAN_EXPANSION
+	if (slot != nullptr)
+	{
+		slot->DeleteRemote();
+	}
+#endif
+	DeleteObject(slot);		//TODO handle this properly over CAN
+
+	LedStripBase *newStrip = nullptr;
+
+#if SUPPORT_CAN_EXPANSION
+	const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
+	if (board != CanInterface::GetCanAddress())
+	{
+		newStrip = new RemoteLedStrip((LedStripType)ledType, stripNumber, board);
+	}
+	else
+#endif
+	{
+		switch (ledType.RawValue())
+		{
+#if SUPPORT_DMA_DOTSTAR
+		case LedStripType::DotStar:
+			newStrip = new DotStarLedStrip();
+			break;
+#endif
+
+		case LedStripType::NeoPixel_RGB:
+			newStrip = new NeoPixelLedStrip(false);
+			break;
+
+		case LedStripType::NeoPixel_RGBW:
+			newStrip = new NeoPixelLedStrip(true);
+			break;
+
+		default:
+			reply.copy("Unsupported LED strip type");
+			return GCodeResult::error;
+		}
+	}
+
+	GCodeResult rslt;
+	try
+	{
+		rslt = newStrip->Configure(gb, reply, pinName.c_str());
+	}
+	catch (const GCodeException& ex)
+	{
+		ex.GetMessage(reply, &gb);
+		rslt = GCodeResult::error;
+	}
+
+	if (rslt <= GCodeResult::warning)
+	{
+		slot = newStrip;
+	}
+	else
+	{
+		delete newStrip;
+	}
+	return rslt;
 }
 
 // Handle M150
@@ -70,7 +144,7 @@ GCodeResult LedStripManager::HandleM150(GCodeBuffer &gb, const StringRef &reply)
 	gb.TryGetLimitedUIValue('E', stripNumber, dummy, MaxLedStrips);
 
 	{
-		ReadLocker locker(lock);
+		ReadLocker locker(ledLock);
 		LedStripBase *const strip = strips[stripNumber];
 		if (strip != nullptr)
 		{

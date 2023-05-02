@@ -10,17 +10,21 @@
 
 #include "LocalLedStrip.h"
 
-#if SUPPORT_LED_STRIPS
+#if SUPPORT_LED_STRIPS && SUPPORT_DMA_DOTSTAR
 
 class DotStarLedStrip : public LocalLedStrip
 {
 public:
-	DotStarLedStrip(uint32_t p_freq) noexcept;
+	DotStarLedStrip() noexcept;
 
-	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException) override;
+	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
+	bool IsBitBanged() const noexcept override { return false; }				// currently we only support DMA-driven DotStar strips
 
 protected:
 	bool IsNeopixel() const noexcept override { return false; }
+
+	static constexpr uint32_t DefaultDotStarSpiClockFrequency = 1000000;		// 1MHz default
 };
 
 #endif

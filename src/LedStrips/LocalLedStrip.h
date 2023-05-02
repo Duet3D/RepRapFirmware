@@ -12,11 +12,6 @@
 
 #if SUPPORT_LED_STRIPS
 
-// Define which types of LED strip this hardware supports
-#define SUPPORT_DMA_NEOPIXEL		(defined(DUET3_MB6HC) || defined(DUET3_MB6XD) || defined(DUET3MINI) || defined(PCCB_10))
-#define SUPPORT_DMA_DOTSTAR			(defined(DUET3_MB6HC) || defined(DUET3_MB6XD) || defined(PCCB_10))
-#define SUPPORT_BITBANG_NEOPIXEL	(defined(DUET3MINI_V04) || defined(DUET_NG))
-
 // Temporarily we use a static chunk buffer if fixed size. Define the size of this buffer.
 // We would do better to allocate it dynamically, however on the SAME70 it needs to be in non-cached RAM.
 #if defined(DUET3_MB6HC) || defined(DUET3_MB6XD)
@@ -63,7 +58,7 @@ constexpr size_t ChunkBufferSize = 60 * 16;							// DotStar LEDs use 4 bytes/LE
 class LocalLedStrip : public LedStripBase
 {
 public:
-	LocalLedStrip(uint32_t p_freq) noexcept;
+	LocalLedStrip(LedStripType p_type, uint32_t p_freq) noexcept;
 
 protected:
 	virtual bool IsNeopixel() const noexcept = 0;

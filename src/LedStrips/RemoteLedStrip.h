@@ -10,17 +10,22 @@
 
 #include "LedStripBase.h"
 
-#if SUPPORT_LED_STRIPS
+#if SUPPORT_LED_STRIPS && SUPPORT_CAN_EXPANSION
 
 class RemoteLedStrip : public LedStripBase
 {
 public:
-	RemoteLedStrip() noexcept;
+	RemoteLedStrip(LedStripType p_type, size_t p_slotNumber, CanAddress p_boardNumber) noexcept;
 
-	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException) override;
+	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
+	bool IsBitBanged() const noexcept override { return isBitBanged; }
+	void DeleteRemote() noexcept override;
 
 private:
+	size_t slotNumber;
 	CanAddress boardNumber;
+	bool isBitBanged;
 };
 
 #endif
