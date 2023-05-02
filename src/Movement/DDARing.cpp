@@ -8,6 +8,7 @@
 #include "DDARing.h"
 #include <Platform/RepRap.h>
 #include "Move.h"
+#include "RawMove.h"
 #include <Platform/Tasks.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Tools/Tool.h>
@@ -804,9 +805,10 @@ float DDARing::GetTotalExtrusionRate() const noexcept
 	return (cdda != nullptr) ? cdda->GetTotalExtrusionRate() : 0.0;
 }
 
-// Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
-// Called from GCodes by the Main task
-bool DDARing::PauseMoves(RestorePoint& rp) noexcept
+// Pause the print as soon as we can.
+// If we are able to skip any moves, return true and update ms.pauseRestorePoint to the first move we skipped.
+// If we can't skip any moves, update just the coordinates and laser PWM in ms.pauseRestorePoint and return false.
+bool DDARing::PauseMoves(MovementState& ms) noexcept
 {
 	// Find a move we can pause after.
 	// Ideally, we would adjust a move if necessary and possible so that we can pause after it, but for now we don't do that.
@@ -869,6 +871,7 @@ bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 	// We may be going to skip some moves. Get the end coordinate of the previous move.
 	DDA * const prevDda = addPointer->GetPrevious();
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
+	RestorePoint& rp = ms.pauseRestorePoint;
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		rp.moveCoords[axis] = prevDda->GetEndCoordinate(axis, false);
@@ -882,17 +885,15 @@ bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 
 	if (addPointer == savedDdaRingAddPointer)
 	{
-		return false;									// we can't skip any moves
+		return false;										// we can't skip any moves
 	}
 
 	dda = addPointer;
-	rp.proportionDone = dda->GetProportionDone(false);	// get the proportion of the current multi-segment move that has been completed
+	rp.proportionDone = dda->GetProportionDone(false);		// get the proportion of the current multi-segment move that has been completed
 	rp.initialUserC0 = dda->GetInitialUserC0();
 	rp.initialUserC1 = dda->GetInitialUserC1();
-	if (dda->UsingStandardFeedrate())
-	{
-		rp.feedRate = dda->GetRequestedSpeedMmPerClock();
-	}
+	const float rawFeedRate = (dda->UsingStandardFeedrate()) ? dda->GetRequestedSpeedMmPerClock() : ms.feedRate;	// this is the requested feed rate after applying the speed factor
+	rp.feedRate = rawFeedRate/ms.speedFactor;				// correct it for the speed factor, assuming that the speed factor hasn't changed
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
 

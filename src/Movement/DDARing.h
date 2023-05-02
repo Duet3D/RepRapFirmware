@@ -12,6 +12,8 @@
 
 #include "DDA.h"
 
+class MovementState;
+
 class DDARing INHERIT_OBJECT_MODEL
 {
 public:
@@ -73,7 +75,7 @@ public:
 	void LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept;						// Fetch the last point at the end of the last completed DDA
 	void ResetExtruderPositions() noexcept;												// Resets the extrusion amounts of the live coordinates
 
-	bool PauseMoves(RestorePoint& rp) noexcept;											// Pause the print as soon as we can, returning true if we were able to skip any
+	bool PauseMoves(MovementState& ms) noexcept;										// Pause the print as soon as we can, returning true if we were able to skip any moves in the queue
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 	bool LowPowerOrStallPause(RestorePoint& rp) noexcept;								// Pause the print immediately, returning true if we were able to
 #endif
