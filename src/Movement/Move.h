@@ -134,7 +134,7 @@ public:
 	void Simulate(SimulationMode simMode) noexcept;											// Enter or leave simulation mode
 	float GetSimulationTime() const noexcept { return mainDDARing.GetSimulationTime(); }	// Get the accumulated simulation time
 
-	bool PausePrint(RestorePoint& rp) noexcept;												// Pause the print as soon as we can, returning true if we were able to
+	bool PausePrint(RestorePoint& rp, float speedFactor) noexcept;							// Pause the print as soon as we can, returning true if we were able to
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 	bool LowPowerOrStallPause(RestorePoint& rp) noexcept;									// Pause the print immediately, returning true if we were able to
 #endif

@@ -451,9 +451,9 @@ bool Move::IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) co
 }
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
-bool Move::PausePrint(RestorePoint& rp) noexcept
+bool Move::PausePrint(RestorePoint& rp, float speedFactor) noexcept
 {
-	return mainDDARing.PauseMoves(rp);
+	return mainDDARing.PauseMoves(rp, speedFactor);
 }
 
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT

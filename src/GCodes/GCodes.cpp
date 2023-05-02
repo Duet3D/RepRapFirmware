@@ -876,7 +876,7 @@ void GCodes::DoPause(GCodeBuffer& gb, PrintPausedReason reason, GCodeState newSt
 		// Pausing a file print via another input source or for some other reason
 		pauseRestorePoint.feedRate = fileGCode->LatestMachineState().feedRate;				// set up the default
 
-		const bool movesSkipped = reprap.GetMove().PausePrint(pauseRestorePoint);			// tell Move we wish to pause the current print
+		const bool movesSkipped = reprap.GetMove().PausePrint(pauseRestorePoint, speedFactor);			// tell Move we wish to pause the current print
 		if (movesSkipped)
 		{
 			// The PausePrint call has filled in the restore point with machine coordinates

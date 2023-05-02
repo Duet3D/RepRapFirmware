@@ -70,7 +70,7 @@ public:
 	bool HaveLiveCoordinatesChanged() const noexcept { return liveCoordinatesChanged; }
 	void ResetExtruderPositions() noexcept;												// Resets the extrusion amounts of the live coordinates
 
-	bool PauseMoves(RestorePoint& rp) noexcept;											// Pause the print as soon as we can, returning true if we were able to skip any
+	bool PauseMoves(RestorePoint& rp, float speedFactor) noexcept;						// Pause the print as soon as we can, returning true if we were able to skip any
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 	bool LowPowerOrStallPause(RestorePoint& rp) noexcept;								// Pause the print immediately, returning true if we were able to
 #endif

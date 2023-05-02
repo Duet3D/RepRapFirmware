@@ -771,7 +771,7 @@ float DDARing::GetDecelerationMmPerSecSquared() const noexcept
 
 // Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
 // Called from GCodes by the Main task
-bool DDARing::PauseMoves(RestorePoint& rp) noexcept
+bool DDARing::PauseMoves(RestorePoint& rp, float speedFactor) noexcept
 {
 	// Find a move we can pause after.
 	// Ideally, we would adjust a move if necessary and possible so that we can pause after it, but for now we don't do that.
@@ -856,7 +856,7 @@ bool DDARing::PauseMoves(RestorePoint& rp) noexcept
 	rp.initialUserC1 = dda->GetInitialUserC1();
 	if (dda->UsingStandardFeedrate())
 	{
-		rp.feedRate = dda->GetRequestedSpeedMmPerClock();
+		rp.feedRate = dda->GetRequestedSpeedMmPerClock()/speedFactor;
 	}
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
