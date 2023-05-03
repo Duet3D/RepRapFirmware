@@ -19,7 +19,6 @@ public:
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException) override;
 	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
-	bool IsBitBanged() const noexcept override { return false; }				// currently we only support DMA-driven DotStar strips
 
 protected:
 	static constexpr uint32_t DefaultDotStarSpiClockFrequency = 1000000;		// 1MHz default

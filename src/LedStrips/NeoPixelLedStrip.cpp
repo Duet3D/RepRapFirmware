@@ -35,12 +35,6 @@ GCodeResult NeoPixelLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply
 	return GCodeResult::errorNotSupported;
 }
 
-bool NeoPixelLedStrip::IsBitBanged() const noexcept
-{
-	//TODO
-	return true;
-}
-
 #endif
 
 // End

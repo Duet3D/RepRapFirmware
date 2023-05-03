@@ -25,7 +25,7 @@ public:
 private:
 	size_t slotNumber;
 	CanAddress boardNumber;
-	uint8_t remoteProperties;
+	uint8_t remoteProperties;				// bit 0 means the remote driver uses DMA
 };
 
 #endif

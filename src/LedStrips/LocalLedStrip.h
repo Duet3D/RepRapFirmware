@@ -63,6 +63,7 @@ public:
 protected:
 	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName, bool& seen) THROWS(GCodeException);
 	GCodeResult CommonReportDetails(const StringRef& reply) noexcept;
+	bool IsBitBanged() const noexcept override { return !useDma; }
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
 	bool UsesDma() const noexcept { return useDma; }
