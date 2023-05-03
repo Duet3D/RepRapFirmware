@@ -54,6 +54,9 @@ public:
 	// Get the physical pin, or NoPin if the logical pin is not valid
 	Pin GetPin() const noexcept;
 
+	// Get the capabilities of the pin
+	PinCapability GetCapability() const noexcept;
+
 	// Initialise static data
 	static void Init() noexcept;
 

@@ -66,13 +66,26 @@ LedStripManager::LedStripManager() noexcept
 GCodeResult LedStripManager::CreateStrip(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
 	const uint32_t stripNumber = gb.GetLimitedUIValue('E', MaxLedStrips);
+	LedStripBase*& slot = strips[stripNumber];
+
+	if (!gb.Seen('C') && !gb.Seen('T'))
+	{
+		// Just reporting on an existing LED strip, or changing its minor parameters (not the pin name)
+		ReadLocker lock(ledLock);
+		if (slot == nullptr)
+		{
+			reply.printf("LED strip %u does not exist", (unsigned int)stripNumber);
+			return GCodeResult::error;
+		}
+		return slot->Configure(gb, reply, nullptr);
+	}
+
 	const LedStripType ledType = (gb.Seen('T')) ? (LedStripType)gb.GetLimitedUIValue('T', 3) : LedStripType::NeoPixel_RGB;
 	gb.MustSee('C');
 	String<StringLength50> pinName;
 	gb.GetReducedString(pinName.GetRef());
 
 	WriteLocker lock(ledLock);
-	LedStripBase*& slot = strips[stripNumber];
 #if SUPPORT_CAN_EXPANSION
 	if (slot != nullptr)
 	{

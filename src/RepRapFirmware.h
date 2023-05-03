@@ -103,6 +103,7 @@ enum class PinUsedBy : uint8_t
 	filamentMonitor,
 	temporaryInput,
 	sensor,
+	led,
 	sdCard
 };
 

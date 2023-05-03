@@ -269,7 +269,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_2,	PinCapability::none,	nullptr				},	// PA19 VSSA_MON
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_3,	PinCapability::ainr,	"temp0"				},	// PA20 Thermistor 0
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_8,	PinCapability::ainrw,	"exp.pa21,exp.36"	},	// PA21 Analogue, digital or UART expansion
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_9,	PinCapability::ainrw,	nullptr				},	// PA22 Analogue, digital or UART expansion
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_9,	PinCapability::npDmaW,	"led",				},	// PA22 USART 1 data (DotStar or Neopixel data)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA23 USART 1 SCLK (DotStar LED)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"stop0"				},	// PA24 Stop 0
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"stop1"				},	// PA25 Stop 1

@@ -9,11 +9,37 @@
 
 #if SUPPORT_LED_STRIPS
 
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>
 
 LocalLedStrip::LocalLedStrip(LedStripType p_type, uint32_t p_freq) noexcept
-	: LedStripBase(p_type), currentFrequency(p_freq)
+	: LedStripBase(p_type), frequency(p_freq)
 {
+}
+
+// Configure parameters that are common to all local LED strips i.e. port name, frequency, and whether DMA is used
+GCodeResult LocalLedStrip::CommonConfigure(GCodeBuffer &gb, const StringRef &reply, const char *_ecv_array pinName, bool &seen) THROWS(GCodeException)
+{
+	if (pinName != nullptr)
+	{
+		seen = true;
+		port.AssignPort(gb, reply, PinUsedBy::led, PinAccess::write0);
+#if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
+		useDma = (port.GetCapability() & PinCapability::npDma) != PinCapability::none;
+#endif
+	}
+
+	gb.TryGetUIValue('Q', frequency, seen);
+	return GCodeResult::ok;
+}
+
+// Report details that are common to all local LED strips i.e. port name, frequency, and whether DMA is used
+GCodeResult LocalLedStrip::CommonReportDetails(const StringRef &reply) noexcept
+{
+	reply.printf("%s strip on port", GetTypeText());
+	port.AppendPinName(reply);
+	reply.catf(" uses %s, frequency %" PRIu32 "Hz", (useDma) ? "DMA" : "bit-banging", frequency);
+	return GCodeResult::ok;
 }
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
@@ -70,27 +96,27 @@ void LocalLedStrip::DmaSendChunkBuffer(size_t numBytes) noexcept
 # else
 #  error Unsupported processor
 # endif
-	busy = true;
+	dmaBusy = true;
 }
 
 // Return true if DMA to the LEDs is in progress
 bool LocalLedStrip::DmaInProgress() noexcept
 {
-	if (busy)																// if we sent something
+	if (dmaBusy)																// if we sent something
 	{
 # if LEDSTRIP_USES_USART
-		if ((DotStarUsart->US_CSR & US_CSR_ENDTX) != 0)						// if we are no longer sending
+		if ((DotStarUsart->US_CSR & US_CSR_ENDTX) != 0)							// if we are no longer sending
 # elif SAME5x
 		if ((DmacManager::GetAndClearChannelStatus(DmacChanDotStarTx) & DMAC_CHINTFLAG_TCMPL) != 0)
 # elif SAME70
 		if ((xdmac_channel_get_interrupt_status(XDMAC, DmacChanDotStarTx) & XDMAC_CIS_BIS) != 0)	// if the last transfer has finished
 # endif
 		{
-			busy = false;													// we finished the last transfer
+			dmaBusy = false;													// we finished the last transfer
 			whenDmaFinished = StepTimer::GetTimerTicks();
 		}
 	}
-	return busy;
+	return dmaBusy;
 }
 
 // Setup the SPI peripheral. Only call this when the busy flag is not set.
@@ -106,7 +132,7 @@ void LocalLedStrip::SetupSpi() noexcept
 					| US_MR_CHMODE_NORMAL
 					| US_MR_CPOL
 					| US_MR_CLKO;
-	DotStarUsart->US_BRGR = SystemPeripheralClock()/currentFrequency;		// set SPI clock frequency
+	DotStarUsart->US_BRGR = SystemPeripheralClock()/frequency;		// set SPI clock frequency
 	DotStarUsart->US_CR = US_CR_RSTRX | US_CR_RSTTX | US_CR_RXDIS | US_CR_TXDIS | US_CR_RSTSTA;
 # elif SAME5x
 	// DotStar on Duet 3 Mini uses the QSPI peripheral
@@ -116,7 +142,7 @@ void LocalLedStrip::SetupSpi() noexcept
 #  else
 	QSPI->CTRLB.reg = QSPI_CTRLB_DATALEN_8BITS;								// SPI mode, 8 bits per transfer
 #  endif
-	QSPI->BAUD.reg = QSPI_BAUD_CPOL | QSPI_BAUD_CPHA | QSPI_BAUD_BAUD(SystemCoreClockFreq/currentFrequency - 1);
+	QSPI->BAUD.reg = QSPI_BAUD_CPOL | QSPI_BAUD_CPHA | QSPI_BAUD_BAUD(SystemCoreClockFreq/frequency - 1);
 	QSPI->CTRLA.reg = QSPI_CTRLA_ENABLE;
 # elif SAME70
 	// DotStar on Duet 3 uses the QSPI peripheral
@@ -126,7 +152,7 @@ void LocalLedStrip::SetupSpi() noexcept
 #  else
 	QSPI->QSPI_MR = QSPI_MR_NBBITS_8_BIT;									// SPI mode, 8 bits per transfer
 #  endif
-	QSPI->QSPI_SCR = QSPI_SCR_CPOL | QSPI_SCR_CPHA | QSPI_SCR_SCBR(SystemPeripheralClock()/currentFrequency - 1);
+	QSPI->QSPI_SCR = QSPI_SCR_CPOL | QSPI_SCR_CPHA | QSPI_SCR_SCBR(SystemPeripheralClock()/frequency - 1);
 	QSPI->QSPI_CR = QSPI_CR_QSPIEN;
 	if (IsNeopixel())
 	{

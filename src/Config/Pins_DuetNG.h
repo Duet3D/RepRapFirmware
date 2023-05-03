@@ -69,18 +69,20 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_LED_STRIPS		1
 
-#define SUPPORT_ROTARY_DELTA	0					// leave out rotary delta kinematics to save flash space
-
 #define VARIABLE_NUM_DRIVERS	SUPPORT_12864_LCD	// nonzero means that some pins may only support drivers if not used for other purposes e.g. LCD
 
 #if defined(USE_SBC)
 # define SUPPORT_HTTP			0
 # define SUPPORT_FTP			0
 # define SUPPORT_TELNET			0
+# define SUPPORT_ROTARY_DELTA	1
+
 #else
 # define SUPPORT_HTTP			1
 # define SUPPORT_FTP			1
 # define SUPPORT_TELNET			1
+# define SUPPORT_ROTARY_DELTA	0					// leave out rotary delta kinematics to save flash space
+# define SUPPORT_HANGPRINTER	0					// leave out hangprinter kinematics to save flash space
 #endif
 
 #define SUPPORT_ASYNC_MOVES		0

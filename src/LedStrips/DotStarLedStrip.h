@@ -22,8 +22,6 @@ public:
 	bool IsBitBanged() const noexcept override { return false; }				// currently we only support DMA-driven DotStar strips
 
 protected:
-	bool IsNeopixel() const noexcept override { return false; }
-
 	static constexpr uint32_t DefaultDotStarSpiClockFrequency = 1000000;		// 1MHz default
 };
 

@@ -19,13 +19,13 @@ public:
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException) override;
 	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
-	bool IsBitBanged() const noexcept override { return isBitBanged; }
+	bool IsBitBanged() const noexcept override { return (remoteProperties & 0x01) == 0; }
 	void DeleteRemote() noexcept override;
 
 private:
 	size_t slotNumber;
 	CanAddress boardNumber;
-	bool isBitBanged;
+	uint8_t remoteProperties;
 };
 
 #endif

@@ -27,13 +27,21 @@ class LedStripBase INHERIT_OBJECT_MODEL
 public:
 	LedStripBase(LedStripType p_type) noexcept : type(p_type) { }
 
+	// Configure or report on this LED strip. If pinName is not null then we are doing the initial configuration; else we are doing minor configuration or reporting.
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException) = 0;
+
+	// Handle a M150 command addressed to this strip
 	virtual GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) = 0;
+
+	// Test whether this strip is bit-banged and therefore requires motion to be stopped before sending a command
 	virtual bool IsBitBanged() const noexcept = 0;
 
 #if SUPPORT_CAN_EXPANSION
+	// If this strip is on a CAN-connectecd expansion board, delete the remote object
 	virtual void DeleteRemote() noexcept { }			// overridden in class RemoteLedStrip
 #endif
+
+	bool IsNeopixel() const noexcept { return type != LedStripType::DotStar; }
 
 	const char *_ecv_array GetTypeText() const noexcept;
 

@@ -17,8 +17,20 @@ DotStarLedStrip::DotStarLedStrip() noexcept
 // Configure this strip
 GCodeResult DotStarLedStrip::Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException)
 {
-	//TODO
-	return GCodeResult::errorNotSupported;
+	bool seen = false;
+	GCodeResult rslt = CommonConfigure(gb, reply, pinName, seen);
+	if (seen)
+	{
+		if (!UsesDma())
+		{
+			reply.copy("bit-banging not supported for DotStar LEDs");
+			return GCodeResult::error;
+		}
+		// Nothing specific to configure for DotStar strips in Duet3D builds
+		return rslt;
+	}
+
+	return CommonReportDetails(reply);
 }
 
 // Send a M150 command to this strip

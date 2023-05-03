@@ -61,28 +61,34 @@ public:
 	LocalLedStrip(LedStripType p_type, uint32_t p_freq) noexcept;
 
 protected:
-	virtual bool IsNeopixel() const noexcept = 0;
+	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName, bool& seen) THROWS(GCodeException);
+	GCodeResult CommonReportDetails(const StringRef& reply) noexcept;
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
+	bool UsesDma() const noexcept { return useDma; }
 	void DmaSendChunkBuffer(size_t numBytes) noexcept;					// DMA the data. Must be a multiple of 2 bytes if USE_16BIT_SPI is true.
 	bool DmaInProgress() noexcept;										// Return true if DMA to the LEDs is in progress
 	void SetupSpi() noexcept;											// Setup the SPI peripheral. Only call this when the busy flag is not set.
 #endif
 
 private:
-	uint32_t currentFrequency;											// the SPI frequency we are using
+	IoPort port;
+	uint32_t frequency;													// the SPI frequency we are using
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
 	uint32_t whenDmaFinished = 0;										// the time in step clocks when we determined that the DMA had finished
-	bool busy = false;													// true if DMA was started and is not known to have finished
+	bool useDma;
+	bool dmaBusy = false;												// true if DMA was started and is not known to have finished
+#else
+	static constexpr bool useDma = false;
 #endif
 
+	// Currently we use a common buffer for all local LED strips. Revise this when we have a mechanism for allocating/releasing non-cached RAM on the SAME70.
 #if SAME70
 	alignas(4) static __nocache uint8_t chunkBuffer[ChunkBufferSize];	// buffer for sending data to LEDs
 #else
 	alignas(4) static uint8_t chunkBuffer[ChunkBufferSize];				// buffer for sending data to LEDs
 #endif
-
 };
 
 #endif
