@@ -21,6 +21,7 @@ public:
 
 	GCodeResult CreateStrip(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	bool MustStopMovement(GCodeBuffer& gb) noexcept;				// Test whether this strip requires motion to be stopped before sending a command
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS

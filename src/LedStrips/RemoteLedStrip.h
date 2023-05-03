@@ -16,11 +16,11 @@ class RemoteLedStrip : public LedStripBase
 {
 public:
 	RemoteLedStrip(LedStripType p_type, size_t p_slotNumber, CanAddress p_boardNumber) noexcept;
+	~RemoteLedStrip() override;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException) override;
 	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
-	bool IsBitBanged() const noexcept override { return (remoteProperties & 0x01) == 0; }
-	void DeleteRemote() noexcept override;
+	bool MustStopMovement() const noexcept override { return (remoteProperties & 0x01) == 0; }
 
 private:
 	size_t slotNumber;

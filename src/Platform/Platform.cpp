@@ -4225,51 +4225,6 @@ void Platform::InitZProbeFilters() noexcept
 	zProbeOffFilter.Init(0);
 }
 
-#if SUPPORT_INKJET
-
-// Fire the inkjet (if any) in the given pattern
-// If there is no inkjet, false is returned; if there is one this returns true
-// So you can test for inkjet presence with if(platform->Inkjet(0))
-bool Platform::Inkjet(int bitPattern) noexcept
-{
-	if (inkjetBits < 0)
-		return false;
-	if (!bitPattern)
-		return true;
-
-	for(int8_t i = 0; i < inkjetBits; i++)
-	{
-		if (bitPattern & 1)
-		{
-			digitalWrite(inkjetSerialOut, 1);			// Write data to shift register
-
-			for(int8_t j = 0; j <= i; j++)
-			{
-				digitalWrite(inkjetShiftClock, HIGH);
-				digitalWrite(inkjetShiftClock, LOW);
-				digitalWrite(inkjetSerialOut, 0);
-			}
-
-			digitalWrite(inkjetStorageClock, HIGH);		// Transfers data from shift register to output register
-			digitalWrite(inkjetStorageClock, LOW);
-
-			digitalWrite(inkjetOutputEnable, LOW);		// Fire the droplet out
-			delayMicroseconds(inkjetFireMicroseconds);
-			digitalWrite(inkjetOutputEnable, HIGH);
-
-			digitalWrite(inkjetClear, LOW);				// Clear to 0
-			digitalWrite(inkjetClear, HIGH);
-
-			delayMicroseconds(inkjetDelayMicroseconds); // Wait for the next bit
-		}
-
-		bitPattern >>= 1; // Put the next bit in the units column
-	}
-
-	return true;
-}
-#endif
-
 #if HAS_CPU_TEMP_SENSOR
 
 // CPU temperature

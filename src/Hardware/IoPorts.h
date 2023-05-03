@@ -50,6 +50,8 @@ public:
 	AnalogChannelNumber GetAnalogChannel() const noexcept { return PinToAdcChannel(GetPin()); }
 
 	void WriteDigital(bool high) const noexcept;
+	void FastDigitalWriteLow() const noexcept pre(IsValid()) { fastDigitalWriteHigh(logicalPin); }
+	void FastDigitalWriteHigh() const noexcept pre(IsValid()) { fastDigitalWriteLow(logicalPin); }
 
 	// Get the physical pin, or NoPin if the logical pin is not valid
 	Pin GetPin() const noexcept;

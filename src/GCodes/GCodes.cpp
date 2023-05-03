@@ -39,10 +39,6 @@
 #include <Endstops/ZProbe.h>
 #include <ObjectModel/Variable.h>
 
-#if SUPPORT_LED_STRIPS
-# include <Fans/LedStripDriver.h>
-#endif
-
 #if HAS_SBC_INTERFACE
 # include <SBC/SbcInterface.h>
 #endif
@@ -201,10 +197,6 @@ void GCodes::Init() noexcept
 
 	laserMaxPower = DefaultMaxLaserPower;
 	laserPowerSticky = false;
-
-#if SUPPORT_LED_STRIPS
-	LedStripDriver::Init();
-#endif
 
 #if HAS_AUX_DEVICES
 	SERIAL_AUX_DEVICE.SetInterruptCallback(GCodes::CommandEmergencyStop);

@@ -18,6 +18,22 @@ RemoteLedStrip::RemoteLedStrip(LedStripType p_type, size_t p_slotNumber, CanAddr
 {
 }
 
+// Delete the remote strip
+RemoteLedStrip::~RemoteLedStrip() noexcept
+{
+	CanMessageGenericConstructor cons(M950LedParams);
+	try
+	{
+		cons.AddUParam('E', slotNumber);
+		cons.AddStringParam('C', "nil");
+		String<1> dummy;
+		(void)cons.SendAndGetResponse(CanMessageType::m950Led, boardNumber, dummy.GetRef());
+	}
+	catch (...)
+	{
+	}
+}
+
 // Configure this strip
 GCodeResult RemoteLedStrip::Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException)
 {
@@ -31,22 +47,6 @@ GCodeResult RemoteLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply) 
 {
 	//TODO
 	return GCodeResult::errorNotSupported;
-}
-
-// Delete the remote strip
-void RemoteLedStrip::DeleteRemote() noexcept
-{
-	CanMessageGenericConstructor cons(M950LedParams);
-	try
-	{
-		cons.AddUParam('E', slotNumber);
-		cons.AddStringParam('C', "nil");
-		String<1> dummy;
-		(void)cons.SendAndGetResponse(CanMessageType::m950Led, boardNumber, dummy.GetRef());
-	}
-	catch (...)
-	{
-	}
 }
 
 #endif

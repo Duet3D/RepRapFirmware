@@ -18,6 +18,8 @@
 #endif
 
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Platform/RepRap.h>
+#include <GCodes/GCodes.h>
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -86,12 +88,6 @@ GCodeResult LedStripManager::CreateStrip(GCodeBuffer &gb, const StringRef &reply
 	gb.GetReducedString(pinName.GetRef());
 
 	WriteLocker lock(ledLock);
-#if SUPPORT_CAN_EXPANSION
-	if (slot != nullptr)
-	{
-		slot->DeleteRemote();
-	}
-#endif
 	DeleteObject(slot);		//TODO handle this properly over CAN
 
 	LedStripBase *newStrip = nullptr;
@@ -161,12 +157,37 @@ GCodeResult LedStripManager::HandleM150(GCodeBuffer &gb, const StringRef &reply)
 		LedStripBase *const strip = strips[stripNumber];
 		if (strip != nullptr)
 		{
+			if (strip->MustStopMovement())
+			{
+				if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
+				{
+					return GCodeResult::notFinished;
+				}
+			}
 			return strip->HandleM150(gb, reply);
 		}
 	}
 
 	reply.printf("LED strip #%u has not been configured", (unsigned int)stripNumber);
 	return GCodeResult::error;
+}
+
+// Return true if we must stop movement before writing to the strip, e.g. because it will be sent by bit-banging with interrupts disabled
+bool LedStripManager::MustStopMovement(GCodeBuffer& gb) noexcept
+{
+	if (gb.Seen('F') && gb.GetUIValue() != 0)
+	{
+		return false;
+	}
+
+	const uint32_t stripNumber = (gb.Seen('E')) ? gb.GetUIValue() : 0;
+	if (stripNumber >= MaxLedStrips)
+	{
+		return false;
+	}
+
+	ReadLocker locker(ledLock);
+	return strips[stripNumber] != nullptr && strips[stripNumber]->MustStopMovement();
 }
 
 // Return the number of LED strips, excluding trailing null entries

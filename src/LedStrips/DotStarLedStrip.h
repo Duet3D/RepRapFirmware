@@ -21,7 +21,16 @@ public:
 	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
 
 protected:
-	static constexpr uint32_t DefaultDotStarSpiClockFrequency = 1000000;		// 1MHz default
+	size_t GetBytesPerLed() const noexcept override;
+
+private:
+	GCodeResult SendDotStarData(uint32_t data, uint32_t numLeds, bool following) noexcept;
+
+	static constexpr uint32_t DefaultDotStarSpiClockFrequency = 1000000;	// 1MHz default
+
+	unsigned int numRemaining = 0;											// how much of the current request remains after the current transfer
+	unsigned int totalSent = 0;												// total amount of data sent since the start frame
+	bool needStartFrame = true;
 };
 
 #endif

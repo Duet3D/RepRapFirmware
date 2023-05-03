@@ -12,17 +12,8 @@
 
 #if SUPPORT_LED_STRIPS
 
-// Temporarily we use a static chunk buffer if fixed size. Define the size of this buffer.
-// We would do better to allocate it dynamically, however on the SAME70 it needs to be in non-cached RAM.
 #if defined(DUET3_MB6HC) || defined(DUET3_MB6XD)
-// We have plenty of non-cached RAM left on Duet 3
-constexpr size_t ChunkBufferSize = 240 * 16;						// DotStar LEDs use 4 bytes/LED, NeoPixel RGBW use 16 bytes/LED
-#elif defined(DUET3MINI)
-constexpr size_t ChunkBufferSize = 80 * 16;							// NeoPixel RGBW use 16 bytes/LED (increased to 80 LEDs for Justin)
-#elif defined(DUET_NG)
-constexpr size_t ChunkBufferSize = 80 * 3;							// NeoPixel RGB use 3 bytes/LED
-#else
-constexpr size_t ChunkBufferSize = 60 * 16;							// DotStar LEDs use 4 bytes/LED, NeoPixel RGBW use 16 bytes/LED
+constexpr size_t DmaBufferSize = 240 * 16;						// DotStar LEDs use 4 bytes/LED, NeoPixel RGBW use 16 bytes/LED
 #endif
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
@@ -59,11 +50,26 @@ class LocalLedStrip : public LedStripBase
 {
 public:
 	LocalLedStrip(LedStripType p_type, uint32_t p_freq) noexcept;
+	~LocalLedStrip() override;
 
 protected:
+	struct LedParams
+	{
+		uint32_t red;
+		uint32_t green;
+		uint32_t blue;
+		uint32_t white;
+		uint32_t brightness;
+		uint32_t numLeds;
+		bool following;
+
+		bool GetM150Params(GCodeBuffer& gb) THROWS(GCodeException);
+	};
+
 	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName, bool& seen) THROWS(GCodeException);
 	GCodeResult CommonReportDetails(const StringRef& reply) noexcept;
-	bool IsBitBanged() const noexcept override { return !useDma; }
+	bool MustStopMovement() const noexcept override { return !useDma; }
+	virtual size_t GetBytesPerLed() const noexcept = 0;
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
 	bool UsesDma() const noexcept { return useDma; }
@@ -72,24 +78,27 @@ protected:
 	void SetupSpi() noexcept;											// Setup the SPI peripheral. Only call this when the busy flag is not set.
 #endif
 
-private:
 	IoPort port;
 	uint32_t frequency;													// the SPI frequency we are using
+	uint32_t whenTransferFinished = 0;									// the time in step clocks when we determined that the data transfer had finished
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
-	uint32_t whenDmaFinished = 0;										// the time in step clocks when we determined that the DMA had finished
 	bool useDma;
 	bool dmaBusy = false;												// true if DMA was started and is not known to have finished
 #else
 	static constexpr bool useDma = false;
 #endif
 
-	// Currently we use a common buffer for all local LED strips. Revise this when we have a mechanism for allocating/releasing non-cached RAM on the SAME70.
+	uint32_t maxLeds = DefaultMaxNumLeds;
+	size_t chunkBufferSize = 0;											// the size of the allocated buffer
+	uint8_t *chunkBuffer = nullptr;										// pointer to 32-bit aligned buffer for holding the data to send
+
 #if SAME70
-	alignas(4) static __nocache uint8_t chunkBuffer[ChunkBufferSize];	// buffer for sending data to LEDs
-#else
-	alignas(4) static uint8_t chunkBuffer[ChunkBufferSize];				// buffer for sending data to LEDs
+	alignas(4) static __nocache uint8_t dmaBuffer[DmaBufferSize];		// buffer for sending data to LEDs by DMA on SAME7x processors
 #endif
+
+private:
+	static constexpr size_t DefaultMaxNumLeds = 60;
 };
 
 #endif

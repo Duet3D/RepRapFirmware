@@ -12,14 +12,29 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>
 
+#if SAME70
+alignas(4) __nocache uint8_t LocalLedStrip::dmaBuffer[DmaBufferSize];		// buffer for sending data to LEDs by DMA on SAME7x processors
+#endif
+
 LocalLedStrip::LocalLedStrip(LedStripType p_type, uint32_t p_freq) noexcept
 	: LedStripBase(p_type), frequency(p_freq)
 {
 }
 
+LocalLedStrip::~LocalLedStrip()
+{
+#if SAME70
+	if (!useDma)							// when using DMA, SAME70 uses a static area in non-cached RAM for chunkBuffer
+#endif
+	{
+		delete chunkBuffer;
+	}
+}
+
 // Configure parameters that are common to all local LED strips i.e. port name, frequency, and whether DMA is used
 GCodeResult LocalLedStrip::CommonConfigure(GCodeBuffer &gb, const StringRef &reply, const char *_ecv_array pinName, bool &seen) THROWS(GCodeException)
 {
+	// Deal with the pin name
 	if (pinName != nullptr)
 	{
 		seen = true;
@@ -27,9 +42,26 @@ GCodeResult LocalLedStrip::CommonConfigure(GCodeBuffer &gb, const StringRef &rep
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
 		useDma = (port.GetCapability() & PinCapability::npDma) != PinCapability::none;
 #endif
+		// See if the maximum strip length was provided (the default value is set up by the constructor)
+		gb.TryGetUIValue('U', maxLeds, seen);
+
+		// Allocate the chunk buffer
+		chunkBufferSize = maxLeds * GetBytesPerLed();
+#if SAME70
+		if (useDma)
+		{
+			chunkBuffer = dmaBuffer;
+		}
+		else
+#endif
+		{
+			chunkBuffer = new uint8_t[chunkBufferSize];
+		}
 	}
 
+	// See if the frequency was provided
 	gb.TryGetUIValue('Q', frequency, seen);
+
 	return GCodeResult::ok;
 }
 
@@ -40,6 +72,33 @@ GCodeResult LocalLedStrip::CommonReportDetails(const StringRef &reply) noexcept
 	port.AppendPinName(reply);
 	reply.catf(" uses %s, frequency %" PRIu32 "Hz", (useDma) ? "DMA" : "bit-banging", frequency);
 	return GCodeResult::ok;
+}
+
+bool LocalLedStrip::LedParams::GetM150Params(GCodeBuffer& gb) THROWS(GCodeException)
+{
+	red = green = blue = white = 0;
+	brightness = 128;
+	numLeds = 1;
+	following = false;
+
+	bool seenColours = false;
+	gb.TryGetLimitedUIValue('R', red, seenColours, 256);
+	gb.TryGetLimitedUIValue('U', green, seenColours, 256);
+	gb.TryGetLimitedUIValue('B', blue, seenColours, 256);
+	gb.TryGetLimitedUIValue('W', white, seenColours, 256);					// W value is used by RGBW NeoPixels only
+
+	if (gb.Seen('P'))
+	{
+		brightness = gb.GetLimitedUIValue('P', 256);						// valid P values are 0-255
+	}
+	else if (gb.Seen('Y'))
+	{
+		brightness = gb.GetLimitedUIValue('Y',  32) << 3;					// valid Y values are 0-31
+	}
+
+	gb.TryGetUIValue('S', numLeds, seenColours);
+	gb.TryGetBValue('F', following, seenColours);
+	return seenColours;
 }
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
@@ -113,7 +172,7 @@ bool LocalLedStrip::DmaInProgress() noexcept
 # endif
 		{
 			dmaBusy = false;													// we finished the last transfer
-			whenDmaFinished = StepTimer::GetTimerTicks();
+			whenTransferFinished = StepTimer::GetTimerTicks();
 		}
 	}
 	return dmaBusy;
@@ -154,7 +213,7 @@ void LocalLedStrip::SetupSpi() noexcept
 #  endif
 	QSPI->QSPI_SCR = QSPI_SCR_CPOL | QSPI_SCR_CPHA | QSPI_SCR_SCBR(SystemPeripheralClock()/frequency - 1);
 	QSPI->QSPI_CR = QSPI_CR_QSPIEN;
-	if (IsNeopixel())
+	if (GetType() != LedStripType::DotStar)										// if it's a Neopixel strip
 	{
 		QSPI->QSPI_TDR = 0;													// send a word of zeros to set the data line low
 	}

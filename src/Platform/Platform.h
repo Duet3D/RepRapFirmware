@@ -78,18 +78,6 @@ constexpr size_t NumAdcFilters = NumThermistorInputs + 1;
 constexpr size_t NumAdcFilters = NumThermistorInputs;
 #endif
 
-/**************************************************************************************************/
-
-#if SUPPORT_INKJET
-
-// Inkjet (if any - no inkjet is flagged by INKJET_BITS negative)
-
-const int8_t INKJET_BITS = 12;							// How many nozzles? Set to -1 to disable this feature
-const int INKJET_FIRE_MICROSECONDS = 5;					// How long to fire a nozzle
-const int INKJET_DELAY_MICROSECONDS = 800;				// How long to wait before the next bit
-
-#endif
-
 // Z PROBE
 constexpr unsigned int ZProbeAverageReadings = 8;		// We average this number of readings with IR on, and the same number with IR off
 
