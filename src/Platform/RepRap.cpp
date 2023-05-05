@@ -1062,8 +1062,8 @@ void RepRap::Tick() noexcept
 			platform->Tick();
 			++ticksInSpinState;
 			++heatTaskIdleTicks;
-			const bool heatTaskStuck = (heatTaskIdleTicks >= MaxTicksInSpinState);
-			if (heatTaskStuck || ticksInSpinState >= MaxTicksInSpinState)		// if we stall for 20 seconds, save diagnostic data and reset
+			const bool heatTaskStuck = (heatTaskIdleTicks >= MaxHeatTaskTicksInSpinState);
+			if (heatTaskStuck || ticksInSpinState >= MaxMainTaskTicksInSpinState)		// if we stall for 20 seconds, save diagnostic data and reset
 			{
 				stopped = true;
 				heat->SwitchOffAllLocalFromISR();								// can't call SwitchOffAll because remote heaters can't be turned off from inside a ISR
@@ -1107,7 +1107,7 @@ void RepRap::Tick() noexcept
 // Return true if we are close to timeout
 bool RepRap::SpinTimeoutImminent() const noexcept
 {
-	return ticksInSpinState >= HighTicksInSpinState;
+	return ticksInSpinState >= HighMainTaskTicksInSpinState;
 }
 
 // Get the JSON status response for the web server (or later for the M105 command).
