@@ -24,6 +24,8 @@ static_assert(ARRAY_SIZE(serviceUnavailableResponse) <= OUTPUT_BUFFER_SIZE, "OUT
 
 const uint32_t HttpReceiveTimeout = 2000;
 
+const HttpSessionKey NoSessionKey = 0;
+
 // Text for a human-readable 404 page
 const char* const ErrorPagePart1 =
 	"<html>\n"
@@ -454,31 +456,32 @@ bool HttpResponder::CharFromClient(char c) noexcept
 bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer *&response, bool& keepOpen) noexcept
 {
 	keepOpen = false;	// assume we don't want to persist the connection
+
 	const char *parameter;
 	if (StringEqualsIgnoreCase(request, "connect") && (parameter = GetKeyValue("password")) != nullptr)
 	{
-		if (!CheckAuthenticated())
+		if (!reprap.NoPasswordSet() && !reprap.CheckPassword(parameter))
 		{
-			if (!reprap.CheckPassword(parameter))
-			{
-				// Wrong password
-				response->copy("{\"err\":1}");
-				reprap.GetPlatform().MessageF(LogWarn, "HTTP client %s attempted login with incorrect password\n", IP4String(GetRemoteIP()).c_str());
-				return true;
-			}
-			if (!Authenticate())
-			{
-				// No more HTTP sessions available
-				response->copy("{\"err\":2}");
-				reprap.GetPlatform().MessageF(LogWarn, "HTTP client %s attempted login but no more sessions available\n", IP4String(GetRemoteIP()).c_str());
-				return true;
-			}
+			// Wrong password
+			response->copy("{\"err\":1}");
+			reprap.GetPlatform().MessageF(LogWarn, "HTTP client %s attempted login with incorrect password\n", IP4String(GetRemoteIP()).c_str());
+			return true;
+		}
+
+		const char *sessionKeyParameter = GetKeyValue("sessionKey");
+		HttpSessionKey sessionKey = NoSessionKey;
+		if (!Authenticate((sessionKeyParameter != nullptr) && StringEqualsIgnoreCase(sessionKeyParameter, "yes"), sessionKey))
+		{
+			// No more HTTP sessions available
+			response->copy("{\"err\":2}");
+			reprap.GetPlatform().MessageF(LogWarn, "HTTP client %s attempted login but no more sessions available\n", IP4String(GetRemoteIP()).c_str());
+			return true;
 		}
 
 		// Client has been logged in
-		response->printf("{\"err\":0,\"sessionTimeout\":%" PRIu32 ",\"boardType\":\"%s\",\"apiLevel\":%u}",
-							HttpSessionTimeout, GetPlatform().GetBoardString(), ApiLevel);
-		reprap.GetPlatform().MessageF(LogWarn, "HTTP client %s login succeeded\n", IP4String(GetRemoteIP()).c_str());
+		response->printf("{\"err\":0,\"sessionTimeout\":%" PRIu32 ",\"boardType\":\"%s\",\"apiLevel\":%u,\"sessionKey\":%u}",
+							HttpSessionTimeout, GetPlatform().GetBoardString(), ApiLevel, sessionKey);
+		reprap.GetPlatform().MessageF(LogWarn, "HTTP client %s login succeeded (session key %u)\n", IP4String(GetRemoteIP()).c_str(), sessionKey);
 
 		// See if we can update the current RTC date and time
 		const char* const timeString = GetKeyValue("time");
@@ -674,6 +677,18 @@ const char* HttpResponder::GetKeyValue(const char *key) const noexcept
 	return nullptr;
 }
 
+HttpSessionKey HttpResponder::GetSessionKey() const noexcept
+{
+	for (size_t i = 0; i < numHeaderKeys; i++)
+	{
+		if (StringEqualsIgnoreCase(headers[i].key, "X-Session-Key"))
+		{
+			return StrToU32(headers[i].value);
+		}
+	}
+	return NoSessionKey;
+}
+
 // Called to process a FileInfo request, which may take several calls
 // Return true if complete
 bool HttpResponder::SendFileInfo(bool quitEarly) noexcept
@@ -708,16 +723,38 @@ bool HttpResponder::SendFileInfo(bool quitEarly) noexcept
 	return gotFileInfo;
 }
 
-// Authenticate current IP and return true on success
-bool HttpResponder::Authenticate() noexcept
+// Authenticate the client and return true on success including a new session key if supported
+bool HttpResponder::Authenticate(bool withSessionKey, HttpSessionKey &sessionKey) noexcept
 {
-	if (CheckAuthenticated())
-	{
-		return true;
-	}
-
 	if (numSessions < MaxHttpSessions)
 	{
+		if (withSessionKey)
+		{
+			bool keyUnique;
+			do
+			{
+				sessionKey = random32();
+				keyUnique = true;
+				for (size_t i = 0; i < numSessions; i++)
+				{
+					if (sessions[numSessions].key == sessionKey)
+					{
+						keyUnique = false;
+						break;
+					}
+				}
+			} while (sessionKey == NoSessionKey || !keyUnique);
+		}
+		else
+		{
+			sessionKey = NoSessionKey;
+			if (CheckAuthenticated())
+			{
+				// Don't register a second IP-based HTTP session
+				return true;
+			}
+		}
+		sessions[numSessions].key = sessionKey;
 		sessions[numSessions].ip = GetRemoteIP();
 		sessions[numSessions].lastQueryTime = millis();
 		sessions[numSessions].isPostUploading = false;
@@ -731,10 +768,11 @@ bool HttpResponder::Authenticate() noexcept
 // Check and update the authentication
 bool HttpResponder::CheckAuthenticated() noexcept
 {
+	const HttpSessionKey key = GetSessionKey();
 	const IPAddress remoteIP = GetRemoteIP();
 	for (size_t i = 0; i < numSessions; i++)
 	{
-		if (sessions[i].ip == remoteIP)
+		if (sessions[i].ip == remoteIP && sessions[i].key == key)
 		{
 			sessions[i].lastQueryTime = millis();
 			return true;
@@ -745,18 +783,18 @@ bool HttpResponder::CheckAuthenticated() noexcept
 
 bool HttpResponder::RemoveAuthentication() noexcept
 {
+	const HttpSessionKey key = GetSessionKey();
 	const IPAddress remoteIP = skt->GetRemoteIP();
 	for (size_t i = numSessions; i != 0; )
 	{
 		--i;
-		if (sessions[i].ip == remoteIP)
+		if (sessions[i].ip == remoteIP && sessions[i].key == key)
 		{
 			if (sessions[i].isPostUploading)
 			{
 				// Don't allow sessions with active POST uploads to be removed
 				return false;
 			}
-
 			RemoveSession(i);
 			return true;
 		}
@@ -977,13 +1015,15 @@ void HttpResponder::SendGCodeReply() noexcept
 // Send a JSON response to the current command. outBuf is non-null on entry.
 void HttpResponder::SendJsonResponse(const char *_ecv_array command) noexcept
 {
-	// Try to authorise the user automatically to retain compatibility with the old web interface
-	if (!CheckAuthenticated() && reprap.NoPasswordSet())
+	// Try to authorise the user automatically to retain compatibility with the old web interface.
+	// We must not handle rr_connect requests here, because that would prevent the generation of a session key
+	if (!StringEqualsIgnoreCase(command, "connect") && !CheckAuthenticated() && reprap.NoPasswordSet())
 	{
-		Authenticate();
+		HttpSessionKey dummy;
+		Authenticate(false, dummy);
 	}
 
-	// Update the authentication status and try to handle "text/plain" requests here
+	// Try to handle "text/plain" requests here
 	if (CheckAuthenticated())
 	{
 		if (StringEqualsIgnoreCase(command, "reply"))			// rr_reply
@@ -1165,7 +1205,7 @@ void HttpResponder::ProcessRequest() noexcept
 						);
 			if (reprap.GetNetwork().GetCorsSite() != nullptr)
 			{
-				outBuf->catf("Access-Control-Allow-Headers: Content-Type\r\n");
+				outBuf->catf("Access-Control-Allow-Headers: Content-Type, X-Session-Key\r\n");
 				AddCorsHeader();
 			}
 			outBuf->cat("\r\n");
@@ -1252,11 +1292,12 @@ void HttpResponder::ProcessRequest() noexcept
 					uploadedBytes = 0;
 
 					// Keep track of the connection that is now uploading
+					const HttpSessionKey key = GetSessionKey();
 					const IPAddress remoteIP = GetRemoteIP();
 					const uint16_t remotePort = skt->GetRemotePort();
 					for (size_t i = 0; i < numSessions; i++)
 					{
-						if (sessions[i].ip == remoteIP)
+						if (sessions[i].ip == remoteIP && sessions[i].key == key)
 						{
 							sessions[i].postPort = remotePort;
 							sessions[i].isPostUploading = true;
@@ -1346,10 +1387,11 @@ void HttpResponder::DoUpload() noexcept
 	if (uploadedBytes >= postFileLength)
 	{
 		// Reset POST upload state for this client
+		const HttpSessionKey key = GetSessionKey();
 		const IPAddress remoteIP = GetRemoteIP();
 		for (size_t i = 0; i < numSessions; i++)
 		{
-			if (sessions[i].ip == remoteIP && sessions[i].isPostUploading)
+			if (sessions[i].ip == remoteIP && sessions[i].key == key && sessions[i].isPostUploading)
 			{
 				sessions[i].isPostUploading = false;
 				sessions[i].lastQueryTime = millis();
@@ -1380,6 +1422,7 @@ void HttpResponder::CancelUpload() noexcept
 	{
 		for (size_t i = 0; i < numSessions; i++)
 		{
+			// Since this may called on socket disconnect, we cannot check session keys here
 			if (sessions[i].ip == skt->GetRemoteIP() && sessions[i].isPostUploading)
 			{
 				sessions[i].isPostUploading = false;

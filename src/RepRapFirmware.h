@@ -68,7 +68,8 @@ inline MessageType GetGenericMessageType(GCodeResult rslt)
 
 // API level definition.
 // ApiLevel 1 is the first level that supports rr_model.
-constexpr unsigned int ApiLevel = 1;
+// ApiLevel 2 supports unique session keys.
+constexpr unsigned int ApiLevel = 2;
 
 // Definitions needed by Pins.h and/or Configuration.h
 // Logical pins used for general output, servos, CCN and laser control

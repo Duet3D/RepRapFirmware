@@ -10,6 +10,8 @@
 
 #include "UploadingNetworkResponder.h"
 
+typedef unsigned int HttpSessionKey;
+
 class HttpResponder : public UploadingNetworkResponder
 {
 public:
@@ -67,6 +69,7 @@ private:
 	// HTTP sessions
 	struct HttpSession
 	{
+		HttpSessionKey key;
 		IPAddress ip;
 		const NetworkInterface *iface;
 		uint32_t lastQueryTime;
@@ -74,7 +77,7 @@ private:
 		bool isPostUploading;
 	};
 
-	bool Authenticate() noexcept;
+	bool Authenticate(bool withSessionKey, HttpSessionKey &sessionKey) noexcept;
 	bool CheckAuthenticated() noexcept;
 	bool RemoveAuthentication() noexcept;
 
@@ -94,6 +97,7 @@ private:
 #endif
 
 	const char* GetKeyValue(const char *_ecv_array key) const noexcept;	// return the value of the specified key, or nullptr if not present
+	HttpSessionKey GetSessionKey() const noexcept;	// try to get the optional X-Session-Key header value used to identify HTTP sessions
 
 	static void RemoveSession(size_t sessionToRemove) noexcept;
 
