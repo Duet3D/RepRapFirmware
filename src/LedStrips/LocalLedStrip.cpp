@@ -12,6 +12,10 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 #if SAME70
 alignas(4) __nocache uint8_t LocalLedStrip::dmaBuffer[DmaBufferSize];		// buffer for sending data to LEDs by DMA on SAME7x processors
 #endif
@@ -34,50 +38,89 @@ LocalLedStrip::~LocalLedStrip()
 // Configure parameters that are common to all local LED strips i.e. port name, frequency, and whether DMA is used
 GCodeResult LocalLedStrip::CommonConfigure(GCodeBuffer &gb, const StringRef &reply, const char *_ecv_array pinName, bool &seen) THROWS(GCodeException)
 {
+	// See if the frequency was provided
+	gb.TryGetUIValue('Q', frequency, seen);
+
 	// Deal with the pin name
 	if (pinName != nullptr)
 	{
 		seen = true;
 		port.AssignPort(gb, reply, PinUsedBy::led, PinAccess::write0);
-#if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
-		useDma = (port.GetCapability() & PinCapability::npDma) != PinCapability::none;
-#endif
+
 		// See if the maximum strip length was provided (the default value is set up by the constructor)
 		gb.TryGetUIValue('U', maxLeds, seen);
 
-		// Allocate the chunk buffer
-		const size_t bytesPerLed = GetBytesPerLed();
-		chunkBufferSize = maxLeds * bytesPerLed;
-
-#if SAME70
-		// On the SAME70 the DMA buffer must be in non-cached memory. We have an area statically allocated for this. Check that it is big enough
-		if (useDma)
-		{
-			if (chunkBufferSize > DmaBufferSize)
-			{
-				if (GetType() == LedStripType::DotStar)
-				{
-					chunkBufferSize = DmaBufferSize;			// we can send data to DotStar in multiple chunks, so just reduce the size
-				}
-				else
-				{
-					// For Neopixels we can't send the data in multiple chunks
-					reply.printf("maximum number of this type of LED supported on this port is %u", DmaBufferSize/bytesPerLed);
-					return GCodeResult::error;
-				}
-			}
-			chunkBuffer = dmaBuffer;
-		}
-		else
-#endif
-		{
-			chunkBuffer = new uint8_t[chunkBufferSize];
-		}
+		return AllocateChunkBuffer(reply);
 	}
 
-	// See if the frequency was provided
-	gb.TryGetUIValue('Q', frequency, seen);
+	return GCodeResult::ok;
+}
 
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult LocalLedStrip::CommonConfigure(CanMessageGenericParser& parser, const StringRef& reply, bool& seen) noexcept
+{
+	// See if the frequency was provided
+	if (parser.GetUintParam('Q', frequency))
+	{
+		seen = true;
+	}
+
+	// Deal with the pin name
+	String<StringLength50> pinName;
+	if (parser.GetStringParam('C', pinName.GetRef()))
+	{
+		seen = true;
+		port.AssignPort(pinName.c_str(), reply, PinUsedBy::led, PinAccess::write0);
+
+		// See if the maximum strip length was provided (the default value is set up by the constructor)
+		if (parser.GetUintParam('U', maxLeds))
+		{
+			seen = true;
+		}
+
+		return AllocateChunkBuffer(reply);
+	}
+
+	return GCodeResult::ok;
+}
+
+#endif
+
+// Allocate the chunk buffer and set up he useDma flag
+GCodeResult LocalLedStrip::AllocateChunkBuffer(const StringRef& reply) noexcept
+{
+#if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
+	useDma = (port.GetCapability() & PinCapability::npDma) != PinCapability::none;
+#endif
+
+	const size_t bytesPerLed = GetBytesPerLed();
+	chunkBufferSize = maxLeds * bytesPerLed;
+
+#if SAME70
+	// On the SAME70 the DMA buffer must be in non-cached memory. We have an area statically allocated for this. Check that it is big enough
+	if (useDma)
+	{
+		if (chunkBufferSize > DmaBufferSize)
+		{
+			if (GetType() == LedStripType::DotStar)
+			{
+				chunkBufferSize = DmaBufferSize;			// we can send data to DotStar in multiple chunks, so just reduce the size
+			}
+			else
+			{
+				// For Neopixels we can't send the data in multiple chunks
+				reply.printf("maximum number of this type of LED supported on this port is %u", DmaBufferSize/bytesPerLed);
+				return GCodeResult::error;
+			}
+		}
+		chunkBuffer = dmaBuffer;
+	}
+	else
+#endif
+	{
+		chunkBuffer = new uint8_t[chunkBufferSize];
+	}
 	return GCodeResult::ok;
 }
 

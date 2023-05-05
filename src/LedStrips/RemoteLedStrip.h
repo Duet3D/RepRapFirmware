@@ -22,6 +22,10 @@ public:
 	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
 	bool MustStopMovement() const noexcept override { return (remoteProperties & 0x01) == 0; }
 
+#if SUPPORT_REMOTE_COMMANDS
+	GCodeResult Configure(CanMessageGenericParser& parser, const StringRef& reply) noexcept override { return GCodeResult::remoteInternalError; }
+#endif
+
 private:
 	size_t slotNumber;
 	CanAddress boardNumber;

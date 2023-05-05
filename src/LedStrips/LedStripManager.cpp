@@ -14,7 +14,13 @@
 #include "NeoPixelLedStrip.h"
 
 #if SUPPORT_CAN_EXPANSION
-#include "RemoteLedStrip.h"
+# include "RemoteLedStrip.h"
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageFormats.h>
+# include <CanMessageGenericTables.h>
+# include <CanMessageGenericParser.h>
 #endif
 
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
@@ -82,13 +88,13 @@ GCodeResult LedStripManager::CreateStrip(GCodeBuffer &gb, const StringRef &reply
 		return slot->Configure(gb, reply, nullptr);
 	}
 
-	const LedStripType ledType = (gb.Seen('T')) ? (LedStripType)gb.GetLimitedUIValue('T', 3) : LedStripType::NeoPixel_RGB;
+	const LedStripType ledType = (gb.Seen('T')) ? (LedStripType)gb.GetLimitedUIValue('T', 3) : DefaultLedStripType;
 	gb.MustSee('C');
 	String<StringLength50> pinName;
 	gb.GetReducedString(pinName.GetRef());
 
 	WriteLocker lock(ledLock);
-	DeleteObject(slot);		//TODO handle this properly over CAN
+	DeleteObject(slot);
 
 	LedStripBase *newStrip = nullptr;
 
@@ -200,6 +206,75 @@ size_t LedStripManager::GetNumLedStrips() const noexcept
 	}
 	return ret;
 }
+
+#if SUPPORT_REMOTE_COMMANDS
+
+// Configure an LED strip. If success and the strip does not require motion to be paused when sending data to the strip, set bit 0 of 'extra'.
+GCodeResult LedStripManager::HandleM950Led(const CanMessageGeneric &msg, const StringRef& reply, uint8_t &extra) noexcept
+{
+	// Get and validate the port number
+	CanMessageGenericParser parser(msg, M950LedParams);
+	uint16_t stripNumber;
+	if (!parser.GetUintParam('E', stripNumber))
+	{
+		reply.copy("Missing strip number parameter in M950Led message");
+		return GCodeResult::error;
+	}
+	if (stripNumber >= MaxLedStrips)
+	{
+		reply.printf("LED strip number %u is too high for expansion board %u", stripNumber, CanInterface::GetCanAddress());
+		return GCodeResult::error;
+	}
+
+	uint8_t rawStripType;
+	const LedStripType t = (parser.GetUintParam('T', rawStripType)) ? (LedStripType)rawStripType : DefaultLedStripType;
+
+	LedStripBase*& slot = strips[stripNumber];
+	WriteLocker lock(ledLock);
+	DeleteObject(slot);
+
+	LedStripBase *newStrip = nullptr;
+	switch (t.RawValue())
+	{
+#if SUPPORT_DMA_DOTSTAR
+	case LedStripType::DotStar:
+		newStrip = new DotStarLedStrip();
+		break;
+#endif
+
+	case LedStripType::NeoPixel_RGB:
+		newStrip = new NeoPixelLedStrip(false);
+		break;
+
+	case LedStripType::NeoPixel_RGBW:
+		newStrip = new NeoPixelLedStrip(true);
+		break;
+
+	default:
+		reply.copy("Unsupported LED strip type");
+		return GCodeResult::error;
+	}
+
+	const GCodeResult rslt = newStrip->Configure(parser, reply);
+	if (rslt <= GCodeResult::warning)
+	{
+		slot = newStrip;
+	}
+	else
+	{
+		delete newStrip;
+	}
+	return rslt;
+}
+
+// Set the colours of a configured LED strip
+GCodeResult LedStripManager::HandleLedSetColours(const CanMessageGeneric &msg, const StringRef& reply) noexcept
+{
+	reply.copy("LED strips not supported by this expansion board");
+	return GCodeResult::error;
+}
+
+#endif
 
 #endif
 

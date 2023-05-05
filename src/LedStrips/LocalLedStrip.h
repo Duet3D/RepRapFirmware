@@ -67,6 +67,11 @@ protected:
 	};
 
 	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName, bool& seen) THROWS(GCodeException);
+
+#if SUPPORT_REMOTE_COMMANDS
+	GCodeResult CommonConfigure(CanMessageGenericParser& parser, const StringRef& reply, bool& seen) noexcept;
+#endif
+
 	GCodeResult CommonReportDetails(const StringRef& reply) noexcept;
 	bool MustStopMovement() const noexcept override { return !useDma; }
 	virtual size_t GetBytesPerLed() const noexcept = 0;
@@ -98,6 +103,8 @@ protected:
 #endif
 
 private:
+	GCodeResult AllocateChunkBuffer(const StringRef& reply) noexcept;
+
 	static constexpr size_t DefaultMaxNumLeds = 60;
 };
 

@@ -15,7 +15,9 @@
 #include <Hardware/IOPorts.h>
 #include <General/NamedEnum.h>
 
-NamedEnum(LedStripType, uint8_t, DotStar, NeoPixel_RGB, NeoPixel_RGBW);
+#if SUPPORT_REMOTE_COMMANDS
+class CanMessageGenericParser;
+#endif
 
 class LedStripBase INHERIT_OBJECT_MODEL
 {
@@ -25,6 +27,10 @@ public:
 
 	// Configure or report on this LED strip. If pinName is not null then we are doing the initial configuration; else we are doing minor configuration or reporting.
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException) = 0;
+
+#if SUPPORT_REMOTE_COMMANDS
+	virtual GCodeResult Configure(CanMessageGenericParser& parser, const StringRef& reply) noexcept = 0;
+#endif
 
 	// Handle a M150 command addressed to this strip
 	virtual GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) = 0;

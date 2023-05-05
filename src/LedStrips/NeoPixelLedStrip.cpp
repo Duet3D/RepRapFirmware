@@ -31,6 +31,23 @@ GCodeResult NeoPixelLedStrip::Configure(GCodeBuffer& gb, const StringRef& reply,
 	return CommonReportDetails(reply);
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult NeoPixelLedStrip::Configure(CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	bool seen = false;
+	GCodeResult rslt = CommonConfigure(parser, reply, seen);
+	if (seen)
+	{
+		// Nothing specific to configure for Neopixel strips in Duet3D builds
+		return rslt;
+	}
+
+	return CommonReportDetails(reply);
+}
+
+#endif
+
 // Send a M150 command to this strip
 GCodeResult NeoPixelLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
