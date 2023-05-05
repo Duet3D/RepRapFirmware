@@ -158,12 +158,10 @@ void DhtTemperatureSensor::Interrupt() noexcept
 
 void DhtTemperatureSensor::Poll() noexcept
 {
-	const auto now = millis();
-	if ((now - GetLastReadingTime()) >= MinimumReadInterval)
+	if ((millis() - GetLastReadingTime()) >= MinimumReadInterval)
 	{
 		TakeReading();
 	}
-	SetResult(GetStoredReading(), TemperatureError::ok);
 }
 
 void DhtTemperatureSensor::TakeReading() noexcept
