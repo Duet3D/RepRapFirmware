@@ -46,10 +46,26 @@ GCodeResult LocalLedStrip::CommonConfigure(GCodeBuffer &gb, const StringRef &rep
 		gb.TryGetUIValue('U', maxLeds, seen);
 
 		// Allocate the chunk buffer
-		chunkBufferSize = maxLeds * GetBytesPerLed();
+		const size_t bytesPerLed = GetBytesPerLed();
+		chunkBufferSize = maxLeds * bytesPerLed;
+
 #if SAME70
+		// On the SAME70 the DMA buffer must be in non-cached memory. We have an area statically allocated for this. Check that it is big enough
 		if (useDma)
 		{
+			if (chunkBufferSize > DmaBufferSize)
+			{
+				if (GetType() == LedStripType::DotStar)
+				{
+					chunkBufferSize = DmaBufferSize;			// we can send data to DotStar in multiple chunks, so just reduce the size
+				}
+				else
+				{
+					// For Neopixels we can't send the data in multiple chunks
+					reply.printf("maximum number of this type of LED supported on this port is %u", DmaBufferSize/bytesPerLed);
+					return GCodeResult::error;
+				}
+			}
 			chunkBuffer = dmaBuffer;
 		}
 		else
