@@ -496,10 +496,10 @@ bool Move::IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) co
 	return kinematics->IsReachable(axesCoords, axes);
 }
 
-// Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
-bool Move::PausePrint(unsigned int queueNumber, RestorePoint& rp) noexcept
+// Pause the print as soon as we can, returning true if we are able to skip any moves and updating ms.pauseRestorePoint to the first move we skipped.
+bool Move::PausePrint(MovementState& ms) noexcept
 {
-	return rings[queueNumber].PauseMoves(rp);
+	return rings[ms.GetMsNumber()].PauseMoves(ms);
 }
 
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT

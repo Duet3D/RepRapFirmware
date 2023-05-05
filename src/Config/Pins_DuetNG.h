@@ -59,7 +59,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 #define HAS_VREF_MONITOR		0
 #define ACTIVE_LOW_HEAT_ON		1
 
-#define SUPPORT_INKJET			0					// set nonzero to support inkjet control
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
@@ -69,18 +68,20 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;	// IAP is loaded into the last 
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_LED_STRIPS		1
 
-#define SUPPORT_ROTARY_DELTA	0					// leave out rotary delta kinematics to save flash space
-
 #define VARIABLE_NUM_DRIVERS	SUPPORT_12864_LCD	// nonzero means that some pins may only support drivers if not used for other purposes e.g. LCD
 
 #if defined(USE_SBC)
 # define SUPPORT_HTTP			0
 # define SUPPORT_FTP			0
 # define SUPPORT_TELNET			0
+# define SUPPORT_ROTARY_DELTA	1
+
 #else
 # define SUPPORT_HTTP			1
 # define SUPPORT_FTP			1
 # define SUPPORT_TELNET			1
+# define SUPPORT_ROTARY_DELTA	0					// leave out rotary delta kinematics to save flash space
+# define SUPPORT_HANGPRINTER	0					// leave out hangprinter kinematics to save flash space
 #endif
 
 #define SUPPORT_ASYNC_MOVES		0
@@ -125,6 +126,7 @@ constexpr size_t MaxFans = 12;
 constexpr unsigned int MaxTriggers = 16;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
 constexpr size_t MaxSpindles = 4;					// Maximum number of configurable spindles
+constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
 constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels not counting the WiFi serial connection (USB and one auxiliary UART)
 #define SERIAL_MAIN_DEVICE	serialUSB

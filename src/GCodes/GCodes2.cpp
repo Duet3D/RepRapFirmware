@@ -50,10 +50,6 @@
 # include <Display/Display.h>
 #endif
 
-#if SUPPORT_LED_STRIPS
-# include <Fans/LedStripDriver.h>
-#endif
-
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanInterface.h>
 # include <CAN/ExpansionManager.h>
@@ -642,7 +638,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		GCodeResult result;
 		if (gb.GetCommandFraction() > 0
-			&& code != 36 && code != 201 && code != 569 && code != 586 && code != 587 // these are the only M-codes we implement that can have fractional parts
+			&& code != 36 && code != 201 && code != 558 && code != 569 && code != 586 && code != 587 // these are the only M-codes we implement that can have fractional parts
 		   )
 		{
 			result = TryMacroFile(gb);
@@ -2247,7 +2243,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if SUPPORT_LED_STRIPS
 			case 150:
-				result = LedStripDriver::SetColours(gb, reply);
+				result = reprap.GetPlatform().GetLedStripManager().HandleM150(gb, reply);
 				break;
 #endif
 
@@ -3477,8 +3473,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = DefineGrid(gb, reply);
 				break;
 
-			case 558: // Set or report Z probe type and for which axes it is used
-				result = platform.GetEndstops().HandleM558(gb, reply);
+			case 558: // Set or report Z probe type and for which axes it is used; M558.1 calibrate Z probe
+				result = (gb.GetCommandFraction() > 1) ? TryMacroFile(gb) : platform.GetEndstops().HandleM558(gb, reply);
 				break;
 
 #if HAS_MASS_STORAGE
@@ -3772,19 +3768,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = WaitForPin(gb, reply);
 				break;
 
-#if SUPPORT_INKJET
-			case 578: // Fire Inkjet bits
-				if (!LockMovementAndWaitForStandstillNoSync())
-				{
-					return false;
-				}
-
-				if (gb.Seen('S')) // Need to handle the 'P' parameter too; see http://reprap.org/wiki/G-code#M578:_Fire_inkjet_bits
-				{
-					platform.Inkjet(gb.GetIValue());
-				}
-				break;
-#endif
+			// M598 was Fire Inkjet bits
 
 			case 579: // Scale Cartesian axes (mostly for Delta configurations)
 				{

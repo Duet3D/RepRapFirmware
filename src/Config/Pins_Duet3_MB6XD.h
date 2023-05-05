@@ -37,7 +37,8 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_CAN_EXPANSION	1
 #define DUAL_CAN				1					// support the second CAN interface as simple CAN (not FD)
 #define SUPPORT_LED_STRIPS		1
-#define SUPPORT_INKJET			0					// set nonzero to support inkjet control
+#define SUPPORT_DMA_DOTSTAR		1
+#define SUPPORT_DMA_NEOPIXEL	1
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
@@ -201,8 +202,8 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"pson"					},	// PA10 PS_ON
 	{ TcOutput::none,	PwmOutput::pwm0h0_b,AdcInput::none,		PinCapability::wpwm,	"out2"					},	// PA11 OUT2
 	{ TcOutput::none,	PwmOutput::pwm1h0_c,AdcInput::none,		PinCapability::wpwm,	"out8"					},	// PA12 OUT8
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PA13 DotStarMosi
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PA14 DotStarSclk
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::npDmaW,	"led"					},	// PA13 DotStarMosi
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"led.clk"				},	// PA14 DotStarSclk
 	{ TcOutput::tioa1,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"out3"					},	// PA15 OUT3
 	{ TcOutput::none,	PwmOutput::pwm0l2_c,AdcInput::none,		PinCapability::wpwm,	"out1"					},	// PA16 OUT1
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_6,	PinCapability::ainr,	"io7.in,!io7.in.iso"	},	// PA17 IO7_IN

@@ -39,10 +39,6 @@
 #include <Endstops/ZProbe.h>
 #include <ObjectModel/Variable.h>
 
-#if SUPPORT_LED_STRIPS
-# include <Fans/LedStripDriver.h>
-#endif
-
 #if HAS_SBC_INTERFACE
 # include <SBC/SbcInterface.h>
 #endif
@@ -201,10 +197,6 @@ void GCodes::Init() noexcept
 
 	laserMaxPower = DefaultMaxLaserPower;
 	laserPowerSticky = false;
-
-#if SUPPORT_LED_STRIPS
-	LedStripDriver::Init();
-#endif
 
 #if HAS_AUX_DEVICES
 	SERIAL_AUX_DEVICE.SetInterruptCallback(GCodes::CommandEmergencyStop);
@@ -951,9 +943,13 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 	for (MovementState& ms : moveStates)
 	{
 		ms.pausedInMacro = false;
-		ms.pauseRestorePoint.feedRate = ms.feedRate;
 
-		const bool movesSkipped = reprap.GetMove().PausePrint(ms.GetMsNumber(), ms.pauseRestorePoint);	// tell Move we wish to pause this queue
+		const bool movesSkipped = reprap.GetMove().PausePrint(ms);						// tell Move we wish to pause this queue
+# if SUPPORT_ASYNC_MOVES
+		GCodeBuffer& fgb = (ms.GetMsNumber() == 0) ? *FileGCode() : *File2GCode();
+# else
+		GCodeBuffer& fgb = *FileGCode();
+# endif
 		if (movesSkipped)
 		{
 			// The PausePrint call has filled in the restore point with machine coordinates
@@ -965,7 +961,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 			// We were not able to skip any moves, however we can skip the move that is waiting
 			ms.pauseRestorePoint.virtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
 			ms.pauseRestorePoint.filePos = ms.filePos;
-			ms.pauseRestorePoint.feedRate = ms.feedRate;
+			ms.pauseRestorePoint.feedRate = ms.feedRate/ms.speedFactor;
 			ms.pauseRestorePoint.proportionDone = ms.GetProportionDone();
 			ms.pauseRestorePoint.initialUserC0 = ms.initialUserC0;
 			ms.pauseRestorePoint.initialUserC1 = ms.initialUserC1;
@@ -975,17 +971,17 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 		else
 		{
 			// We were not able to skip any moves, and there is no move waiting
-			ms.pauseRestorePoint.feedRate = FileGCode()->LatestMachineState().feedRate;
+			ms.pauseRestorePoint.feedRate = fgb.LatestMachineState().feedRate;
 			ms.pauseRestorePoint.virtualExtruderPosition = ms.latestVirtualExtruderPosition;
 			ms.pauseRestorePoint.proportionDone = 0.0;
 
 			// TODO: when using RTOS there is a possible race condition in the following,
 			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
-			ms.pauseRestorePoint.filePos = FileGCode()->GetPrintingFilePosition(true);
-			while (FileGCode()->IsDoingFileMacro())														// must call this after GetFilePosition because this changes IsDoingFileMacro
+			ms.pauseRestorePoint.filePos = fgb.GetPrintingFilePosition(true);
+			while (fgb.IsDoingFileMacro())																// must call this after GetFilePosition because this changes IsDoingFileMacro
 			{
 				ms.pausedInMacro = true;
-				FileGCode()->PopState(false);
+				fgb.PopState(false);
 			}
 #if SUPPORT_LASER || SUPPORT_IOBITS
 			ms.pauseRestorePoint.laserPwmOrIoBits = ms.laserPwmOrIoBits;
@@ -1001,11 +997,6 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 #if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface())
 		{
-# if SUPPORT_ASYNC_MOVES
-			GCodeBuffer& fgb = (ms.GetMsNumber() == 0) ? *FileGCode() : *File2GCode();
-# else
-			GCodeBuffer& fgb = *FileGCode();
-# endif
 			fgb.Init();															// clear the next move
 			UnlockAll(fgb);														// release any locks it had
 		}
@@ -1017,11 +1008,6 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 			// The following could be delayed until we resume the print
 			if (ms.pauseRestorePoint.filePos != noFilePosition)
 			{
-# if SUPPORT_ASYNC_MOVES
-				GCodeBuffer& fgb = (ms.GetMsNumber() == 0) ? *FileGCode() : *File2GCode();
-# else
-			GCodeBuffer& fgb = *FileGCode();
-# endif
 				FileData& fdata = fgb.LatestMachineState().fileState;
 				if (fdata.IsLive())
 				{
@@ -1114,9 +1100,11 @@ bool GCodes::IsReallyPrintingOrResuming() const noexcept
 bool GCodes::IsHeatingUp() const noexcept
 {
 	int num;
-	return FileGCode()->GetState() == GCodeState::m109WaitForTemperature || (FileGCode()->IsExecuting()
-		&& FileGCode()->GetCommandLetter() == 'M'
-		&& ((num = FileGCode()->GetCommandNumber()) == 109 || num == 116 || num == 190 || num == 191));
+	return FileGCode()->GetState() == GCodeState::m109WaitForTemperature
+		|| (   FileGCode()->IsExecuting()
+			&& FileGCode()->GetCommandLetter() == 'M'
+			&& ((num = FileGCode()->GetCommandNumber()) == 109 || num == 116 || num == 190 || num == 191)
+		   );
 }
 
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
@@ -5359,7 +5347,7 @@ void GCodes::SetItemStandbyTemperature(unsigned int itemNumber, float temp) noex
 	}
 }
 
-// Evalue a visibility expression string
+// Evaluate a visibility expression string and return it
 bool GCodes::EvaluateConditionForDisplay(const char *_ecv_array str) const noexcept
 {
 	try
@@ -5380,12 +5368,12 @@ bool GCodes::EvaluateValueForDisplay(const char *_ecv_array str, ExpressionValue
 	{
 		ExpressionParser parser(*LcdGCode(), str, str + strlen(str));
 		expr = parser.Parse();
-		return true;
+		return false;
 	}
 	catch (GCodeException&)
 	{
 		expr.SetNull(nullptr);
-		return false;
+		return true;
 	}
 }
 

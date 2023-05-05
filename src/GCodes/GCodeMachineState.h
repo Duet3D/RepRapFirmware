@@ -110,6 +110,11 @@ enum class GCodeState : uint8_t
 	straightProbe2,
 	straightProbe3,
 
+	// These next 3 must be contiguous
+	probeCalibration1,
+	probeCalibration2,
+	probeCalibration3,
+
 	doingFirmwareRetraction,
 	doingFirmwareUnRetraction,
 	loadingFilament,

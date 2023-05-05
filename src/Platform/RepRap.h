@@ -179,8 +179,9 @@ private:
 	const char* GetStatusString() const noexcept;
 	bool RunStartupFile(const char *filename, bool isMainConfigFile) noexcept;
 
-	static constexpr uint32_t MaxTicksInSpinState = 20000;	// timeout before we reset the processor
-	static constexpr uint32_t HighTicksInSpinState = 16000;	// how long before we warn that timeout is approaching
+	static constexpr uint32_t MaxHeatTaskTicksInSpinState = 4000;	// timeout before we reset the processor if the heat task doesn't run
+	static constexpr uint32_t MaxMainTaskTicksInSpinState = 20000;	// timeout before we reset the processor if the main task doesn't run
+	static constexpr uint32_t HighMainTaskTicksInSpinState = 16000;	// how long before we warn that timeout is approaching
 
 	Platform* platform;
 	Network* network;

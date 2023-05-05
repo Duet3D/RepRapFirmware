@@ -485,6 +485,12 @@ Pin IoPort::GetPin() const noexcept
 	return (IsValid()) ? GetPinNoCheck() : NoPin;
 }
 
+// Get the capabilities of the pin
+PinCapability IoPort::GetCapability() const noexcept
+{
+	return (IsValid()) ? PinTable[GetPinNoCheck()].cap : PinCapability::none;
+}
+
 bool IoPort::ReadDigital() const noexcept
 {
 	if (IsValid())

@@ -11,7 +11,6 @@
 #include "GCodes.h"
 #include "GCodeBuffer/GCodeBuffer.h"
 #include <Movement/Move.h>
-#include <Fans/LedStripDriver.h>
 
 // GCodeQueue class
 
@@ -72,7 +71,7 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 
 #if SUPPORT_LED_STRIPS
 		case 150:	// set LED colours
-			shouldQueue = !LedStripDriver::MustStopMovement(gb);		// if it is going to call LockMovementAndWaitForStandstill then we mustn't queue it
+			shouldQueue = !reprap.GetPlatform().GetLedStripManager().MustStopMovement(gb);		// if it is going to call LockMovementAndWaitForStandstill then we mustn't queue it
 			break;
 #endif
 		// A note about M291:

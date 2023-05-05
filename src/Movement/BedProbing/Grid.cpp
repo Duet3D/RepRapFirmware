@@ -63,16 +63,9 @@ constexpr ObjectModelTableEntry GridDefinition::objectModelTable[] =
 	{ "mins",		OBJECT_MODEL_FUNC_ARRAY(2), 							ObjectModelEntryFlags::none },
 	{ "radius",		OBJECT_MODEL_FUNC(self->radius, 1),						ObjectModelEntryFlags::none },
 	{ "spacings",	OBJECT_MODEL_FUNC_ARRAY(3), 							ObjectModelEntryFlags::none },
-
-	{ "xMax",		OBJECT_MODEL_FUNC(self->maxs[0], 1),					ObjectModelEntryFlags::obsolete },
-	{ "xMin",		OBJECT_MODEL_FUNC(self->mins[0], 1),					ObjectModelEntryFlags::obsolete },
-	{ "xSpacing",	OBJECT_MODEL_FUNC(self->spacings[0], 1),				ObjectModelEntryFlags::obsolete },
-	{ "yMax",		OBJECT_MODEL_FUNC(self->maxs[1], 1),					ObjectModelEntryFlags::obsolete },
-	{ "yMin",		OBJECT_MODEL_FUNC(self->mins[1], 1),					ObjectModelEntryFlags::obsolete },
-	{ "ySpacing",	OBJECT_MODEL_FUNC(self->spacings[1], 1),				ObjectModelEntryFlags::obsolete },
 };
 
-constexpr uint8_t GridDefinition::objectModelTableDescriptor[] = { 1, 11 };
+constexpr uint8_t GridDefinition::objectModelTableDescriptor[] = { 1, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GridDefinition)
 

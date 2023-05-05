@@ -142,14 +142,14 @@ public:
 	void SetIdleTimeout(float timeout) noexcept;											// Set the idle timeout in seconds
 
 	void Simulate(SimulationMode simMode) noexcept;											// Enter or leave simulation mode
-	float GetSimulationTime() const noexcept { return rings[0].GetSimulationTime(); }	// Get the accumulated simulation time
+	float GetSimulationTime() const noexcept { return rings[0].GetSimulationTime(); }		// Get the accumulated simulation time
 
-	bool PausePrint(unsigned int queueNumber, RestorePoint& rp) noexcept;					// Pause the print as soon as we can, returning true if we were able to
+	bool PausePrint(MovementState& ms) noexcept;											// Pause the print as soon as we can, returning true if we were able to
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 	bool LowPowerOrStallPause(unsigned int queueNumber, RestorePoint& rp) noexcept;			// Pause the print immediately, returning true if we were able to
 #endif
 
-	bool NoLiveMovement() const noexcept { return rings[0].IsIdle(); }					// Is a move running, or are there any queued?
+	bool NoLiveMovement() const noexcept { return rings[0].IsIdle(); }						// Is a move running, or are there any queued?
 
 	uint32_t GetScheduledMoves() const noexcept { return rings[0].GetScheduledMoves(); }	// How many moves have been scheduled?
 	uint32_t GetCompletedMoves() const noexcept { return rings[0].GetCompletedMoves(); }	// How many moves have been completed?

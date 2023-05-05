@@ -82,6 +82,14 @@
 # define SUPPORT_LED_STRIPS		0
 #endif
 
+#ifndef SUPPORT_DMA_DOTSTAR
+# define SUPPORT_DMA_DOTSTAR	0
+#endif
+
+#ifndef SUPPORT_DMA_NEOPIXEL
+# define SUPPORT_DMA_NEOPIXEL	0
+#endif
+
 #ifndef SUPPORT_SPI_SENSORS
 # define SUPPORT_SPI_SENSORS	1
 #endif

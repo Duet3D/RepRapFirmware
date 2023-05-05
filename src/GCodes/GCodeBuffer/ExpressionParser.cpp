@@ -31,7 +31,7 @@ namespace StackUsage
 
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true, input);
-NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, datetime, degrees, exists, exp, fileexists, floor, isnan, log, max, min, mod, pow, radians, random, sin, sqrt, tan, vector);
+NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, ceil, cos, datetime, degrees, exists, exp, fileexists, floor, isnan, log, max, min, mod, pow, radians, random, sin, sqrt, tan, vector);
 
 const char * const InvalidExistsMessage = "invalid 'exists' expression";
 
@@ -1307,9 +1307,10 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				break;
 
 			case Function::floor:
+			case Function::ceil:
 				{
 					ConvertToFloat(rslt, evaluate);
-					const float f = floorf(rslt.fVal);
+					const float f = ((func.RawValue() == Function::floor) ? floorf : ceilf)(rslt.fVal);
 					if (f <= (float)std::numeric_limits<int32_t>::max() && f >= (float)std::numeric_limits<int32_t>::min())
 					{
 						rslt.SetInt((int32_t)f);
@@ -1504,13 +1505,26 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				break;
 
 			case Function::pow:
-				ConvertToFloat(rslt, evaluate);
 				{
 					ExpressionValue nextOperand;
 					GetNextOperand(nextOperand, evaluate);
+					BalanceNumericTypes(rslt, nextOperand, evaluate);
+
+					// If both operands are integer and the second one is non-negative, result is integer if it fits
+					const bool integerResult = (nextOperand.GetType() == TypeCode::Int32) && nextOperand.iVal >= 0;
+
+					ConvertToFloat(rslt, evaluate);
 					ConvertToFloat(nextOperand, evaluate);
-					rslt.fVal = powf(rslt.fVal, nextOperand.fVal);
-					rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+					const float fres = powf(rslt.fVal, nextOperand.fVal);
+					if (integerResult && fabsf(fres) <= std::numeric_limits<int32_t>::max())
+					{
+						rslt.SetInt(lrintf(fres));
+					}
+					else
+					{
+						rslt.fVal = fres;
+						rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+					}
 				}
 				break;
 

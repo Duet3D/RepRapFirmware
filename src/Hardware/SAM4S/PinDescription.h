@@ -20,6 +20,7 @@ enum class PinCapability: uint8_t
 	ain = 2u,
 	write = 4u,
 	pwm = 8u,
+	npDma = 16u,
 
 	// Combinations
 	ainr = 1u|2u,
@@ -27,12 +28,18 @@ enum class PinCapability: uint8_t
 	wpwm = 4u|8u,
 	rwpwm = 1u|4u|8u,
 	ainrw = 1u|2u|4u,
-	ainrwpwm = 1u|2u|4u|8u
+	ainrwpwm = 1u|2u|4u|8u,
+	npDmaW = 4u | 16u
 };
 
 constexpr inline PinCapability operator|(PinCapability a, PinCapability b) noexcept
 {
 	return (PinCapability)((uint8_t)a | (uint8_t)b);
+}
+
+constexpr inline PinCapability operator&(PinCapability a, PinCapability b) noexcept
+{
+	return (PinCapability)((uint8_t)a & (uint8_t)b);
 }
 
 // The pin description says what functions are available on each pin, filtered to avoid allocating the same function to more than one pin..

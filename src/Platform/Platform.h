@@ -28,6 +28,7 @@ Licence: GPL
 #include <ObjectModel/ObjectModel.h>
 #include <Hardware/IoPorts.h>
 #include <Fans/FansManager.h>
+
 #include <TemperatureError.h>
 #include "OutputMemory.h"
 #include "UniqueId.h"
@@ -43,11 +44,16 @@ Licence: GPL
 #include <General/IPAddress.h>
 #include <General/function_ref.h>
 
+#if SUPPORT_LED_STRIPS
+# include <LedStrips/LedStripManager.h>
+#endif
+
 #if defined(DUET_NG)
 # include "DueXn.h"
 #endif
 
 #if SUPPORT_CAN_EXPANSION
+# include <CanMessageFormats.h>
 # include <RemoteInputHandle.h>
 #endif
 
@@ -70,18 +76,6 @@ constexpr size_t CpuTempFilterIndex = NumThermistorInputs;
 constexpr size_t NumAdcFilters = NumThermistorInputs + 1;
 #else
 constexpr size_t NumAdcFilters = NumThermistorInputs;
-#endif
-
-/**************************************************************************************************/
-
-#if SUPPORT_INKJET
-
-// Inkjet (if any - no inkjet is flagged by INKJET_BITS negative)
-
-const int8_t INKJET_BITS = 12;							// How many nozzles? Set to -1 to disable this feature
-const int INKJET_FIRE_MICROSECONDS = 5;					// How long to fire a nozzle
-const int INKJET_DELAY_MICROSECONDS = 800;				// How long to wait before the next bit
-
 #endif
 
 // Z PROBE
@@ -532,6 +526,10 @@ public:
 	void SetNonlinearExtrusion(size_t extruder, float a, float b, float limit) noexcept;
 #endif
 
+#if SUPPORT_LED_STRIPS
+	LedStripManager& GetLedStripManager() noexcept { return ledStripManager; }
+#endif
+
 	// Endstops and Z probe
 	EndstopsManager& GetEndstops() noexcept { return endstops; }
 	ReadLockedPointer<ZProbe> GetZProbeOrDefault(size_t probeNumber) noexcept { return endstops.GetZProbeOrDefault(probeNumber); }
@@ -739,6 +737,11 @@ private:
 
 #ifdef DUET_NG
 	ExpansionBoardType expansionBoard;
+#endif
+
+#if SUPPORT_LED_STRIPS
+	// LED strips
+	LedStripManager ledStripManager;
 #endif
 
 	bool active;

@@ -1123,16 +1123,19 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	// States used for G30 probing
 	case GCodeState::probingAtPoint0:
-		// Initial state when executing G30 with a P parameter. Start by moving to the dive height at the current position.
-		SetMoveBufferDefaults(ms);
+		// Initial state when executing G30 with a P parameter. The Z probe has been deployed. Start by moving to the dive height at the current position.
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
-			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
-			ms.coords[Z_AXIS] = zp->GetStartingHeight();
-			ms.feedRate = zp->GetTravelSpeed();
+			SetMoveBufferDefaults(ms);
+			{
+				const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+				ms.coords[Z_AXIS] = zp->GetStartingHeight();
+				ms.feedRate = zp->GetTravelSpeed();
+			}
+			ms.linearAxesMentioned = true;
+			NewSingleSegmentMoveAvailable(ms);
+			gb.AdvanceState();
 		}
-		ms.linearAxesMentioned = true;
-		NewSingleSegmentMoveAvailable(ms);
-		gb.AdvanceState();
 		break;
 
 	case GCodeState::probingAtPoint1:
@@ -1552,6 +1555,106 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			gb.SetState(GCodeState::checkError);
 			RetractZProbe(gb);								// retract the probe before moving to the new state
 		}
+		break;
+
+	// Scanning probe calibration states
+	case GCodeState::probeCalibration1:
+		// We just deployed the Z probe, read to start calibrating. Move t the trigger height plus the scanning range.
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
+		{
+			SetMoveBufferDefaults(ms);
+			{
+				const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+				ms.coords[Z_AXIS] = calibrationStartingHeight;
+				ms.feedRate = zp->GetTravelSpeed();
+			}
+			ms.linearAxesMentioned = true;
+			numCalibrationReadingsTaken = 0;
+			NewSingleSegmentMoveAvailable(ms);
+			gb.AdvanceState();
+		}
+		break;
+
+	case GCodeState::probeCalibration2:
+		// We have moved to the trigger height plus scanning range
+		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
+		{
+			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+			if (numCalibrationReadingsTaken == 0)
+			{
+				zp->SetProbing(true);
+			}
+
+			calibrationReadings[numCalibrationReadingsTaken] = (int16_t)zp->GetRawReading() - zp->GetTargetAdcValue();
+			++numCalibrationReadingsTaken;
+			if (numCalibrationReadingsTaken == numPointsToCollect)
+			{
+				zp->SetProbing(false);
+				gb.AdvanceState();
+				RetractZProbe(gb);
+			}
+			else
+			{
+				SetMoveBufferDefaults(ms);
+				ms.coords[Z_AXIS] = calibrationStartingHeight - (numCalibrationReadingsTaken * heightChangePerPoint);
+				ms.feedRate = zp->GetProbingSpeed(1);
+				ms.linearAxesMentioned = true;
+				NewSingleSegmentMoveAvailable(ms);
+			}
+		}
+		break;
+
+	case GCodeState::probeCalibration3:
+		{
+			FixedMatrix<float, 3, 4> matrix;
+			matrix.Fill(0.0);
+
+			// Do a least squares fit of a parabola to the data
+			// Store { N, sum(X), sum(X^2), sum(Y) } in row 0
+			// Store { sum(X), sum(X^2), sum(X^3), sum(XY) } in row 1
+			// Store { sum(X^2), sum(X^3), sum(X^4), sum(X^2Y) } in row 1
+			matrix(0, 0) = (float)numCalibrationReadingsTaken;
+			for (size_t i = 0; i < numCalibrationReadingsTaken; ++i)
+			{
+				const float x = ((int)(numCalibrationReadingsTaken/2 - 1) - (int)i) * heightChangePerPoint;		// the height different from the trigger height
+				const float y = (float)calibrationReadings[i];													// the difference in reading from the target reading at the trigger height
+				const float x2 = fsquare(x);
+				const float x3 = x * x2;
+				const float x4 = fsquare(x2);
+				const float xy = x * y;
+				const float x2y = x2 * y;
+				matrix(0, 1) += x;
+				matrix(0, 2) += x2;
+				matrix(0, 3) += y;
+				matrix(1, 0) += x;
+				matrix(1, 1) += x2;
+				matrix(1, 2) += x3;
+				matrix(1, 3) += xy;
+				matrix(2, 0) += x2;
+				matrix(2, 1) += x3;
+				matrix(2, 2) += x4;
+				matrix(2, 3) += x2y;
+			}
+			matrix.GaussJordan(3, 4);
+
+			auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+			const float averageHeightError = matrix(0, 3);
+			const float aParam = matrix(1, 3);
+			const float bParam = matrix(2, 3);
+			zp->SetScanningCoefficients(aParam, bParam);
+			zp->ReportScanningCoefficients(reply);
+
+			// Calculate the RMS error after subtracting the mean error
+			float sumOfErrorSquares = 0.0;
+			for (size_t i = 0; i < numCalibrationReadingsTaken; ++i)
+			{
+				const float x = ((int)(numCalibrationReadingsTaken/2 - 1) - (int)i) * heightChangePerPoint;		// the height different from the trigger height
+				const float predictedValue = x * (aParam + (bParam * x)) + averageHeightError;					// the predicted value from the fitted curve
+				sumOfErrorSquares += fsquare((float)calibrationReadings[i] - predictedValue);
+			}
+			reply.catf(", mean error %3f, rms error %.3f", (double)averageHeightError, (double)sqrtf(sumOfErrorSquares/(float)numCalibrationReadingsTaken));
+		}
+		gb.SetState(GCodeState::normal);
 		break;
 
 	// Firmware retraction/un-retraction states

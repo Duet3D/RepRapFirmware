@@ -283,7 +283,7 @@ bool CoreKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const String
 		{
 			seen = true;
 			float motorFactors[MaxAxes];
-			size_t numMotors = MaxAxes;
+			size_t numMotors = reprap.GetGCodes().GetTotalAxes();
 			gb.GetFloatArray(motorFactors, numMotors, false);
 			for (size_t m = 0; m < numMotors; ++m)
 			{

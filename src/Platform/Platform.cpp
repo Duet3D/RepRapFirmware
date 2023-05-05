@@ -4225,51 +4225,6 @@ void Platform::InitZProbeFilters() noexcept
 	zProbeOffFilter.Init(0);
 }
 
-#if SUPPORT_INKJET
-
-// Fire the inkjet (if any) in the given pattern
-// If there is no inkjet, false is returned; if there is one this returns true
-// So you can test for inkjet presence with if(platform->Inkjet(0))
-bool Platform::Inkjet(int bitPattern) noexcept
-{
-	if (inkjetBits < 0)
-		return false;
-	if (!bitPattern)
-		return true;
-
-	for(int8_t i = 0; i < inkjetBits; i++)
-	{
-		if (bitPattern & 1)
-		{
-			digitalWrite(inkjetSerialOut, 1);			// Write data to shift register
-
-			for(int8_t j = 0; j <= i; j++)
-			{
-				digitalWrite(inkjetShiftClock, HIGH);
-				digitalWrite(inkjetShiftClock, LOW);
-				digitalWrite(inkjetSerialOut, 0);
-			}
-
-			digitalWrite(inkjetStorageClock, HIGH);		// Transfers data from shift register to output register
-			digitalWrite(inkjetStorageClock, LOW);
-
-			digitalWrite(inkjetOutputEnable, LOW);		// Fire the droplet out
-			delayMicroseconds(inkjetFireMicroseconds);
-			digitalWrite(inkjetOutputEnable, HIGH);
-
-			digitalWrite(inkjetClear, LOW);				// Clear to 0
-			digitalWrite(inkjetClear, HIGH);
-
-			delayMicroseconds(inkjetDelayMicroseconds); // Wait for the next bit
-		}
-
-		bitPattern >>= 1; // Put the next bit in the units column
-	}
-
-	return true;
-}
-#endif
-
 #if HAS_CPU_TEMP_SENSOR
 
 // CPU temperature
@@ -4574,15 +4529,9 @@ bool Platform::SetDateTime(time_t time) noexcept
 // Configure an I/O port
 GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// Exactly one of FHJPSR is allowed
+	// Exactly one of EFHJPSR is allowed (also D on MB6HC)
 	unsigned int charsPresent = 0;
-	for (char c :
-#ifdef DUET3_MB6HC
-		(const char[]){'D', 'R', 'J', 'F', 'H', 'P', 'S'}
-#else
-		(const char[]){'R', 'J', 'F', 'H', 'P', 'S'}
-#endif
-		)
+	for (char c : (const char[]){'D', 'E', 'R', 'J', 'F', 'H', 'P', 'S'})
 	{
 		charsPresent <<= 1;
 		if (gb.Seen(c))
@@ -4622,8 +4571,13 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 			return spindles[slot].Configure(gb, reply);
 		}
 
+#if SUPPORT_LED_STRIPS
+	case 64:	// E
+		return ledStripManager.CreateStrip(gb, reply);
+#endif
+
 #ifdef DUET3_MB6HC
-	case 64:	// D
+	case 128:	// D
 # if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface())
 		{
@@ -4636,7 +4590,13 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 
 	default:
 #ifdef DUET3_MB6HC
-		reply.copy("exactly one of FHJPSRD must be given");
+# if SUPPORT_LED_STRIPS
+		reply.copy("exactly one of DEFHJPSR must be given");
+# else
+		reply.copy("exactly one of DFHJPSR must be given");
+# endif
+#elif SUPPORT_LED_STRIPS
+		reply.copy("exactly one of EFHJPSR must be given");
 #else
 		reply.copy("exactly one of FHJPSR must be given");
 #endif

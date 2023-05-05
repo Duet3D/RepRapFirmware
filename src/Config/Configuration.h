@@ -104,6 +104,8 @@ constexpr float DefaultGridSpacing = 20.0;				// Default bed probing grid spacin
 
 static_assert(MaxCalibrationPoints <= MaxProbePoints, "MaxCalibrationPoints must be <= MaxProbePoints");
 
+constexpr size_t MaxScanningProbeCalibrationPoints = 33;	// The maximum number of heights we measure when calibrating a scanning probe. Use an odd number.
+
 // SD card
 constexpr uint32_t SdCardDetectDebounceMillis = 200;	// How long we give the SD card to settle in the socket
 constexpr unsigned int MaxSdCardTries = 5;				// Number of read or write attempts before giving up

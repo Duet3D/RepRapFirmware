@@ -342,7 +342,7 @@ void CanMessageGenericConstructor::AddFloatArrayParam(char c, const float *v, si
 	InsertValue(v, numV * sizeof(float), pos + sizeof(uint8_t));
 }
 
-GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) const noexcept
+GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply, uint8_t *extra) const noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -356,7 +356,7 @@ GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgT
 	CanMessageGeneric *m2 = buf->SetupGenericRequestMessage(rid, CanInterface::GetCanAddress(), dest, msgType, actualMessageLength);
 	memcpy(m2, &msg, actualMessageLength);
 	m2->requestId = rid;
-	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
+	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, extra);
 }
 
 #endif

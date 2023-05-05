@@ -824,4 +824,59 @@ void GCodes::SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept
 	NewSingleSegmentMoveAvailable(ms);
 }
 
+// Calibrate a scanning Z probe. We have already checked the probe is a scanning one and that scanningRange is a sensible value.
+GCodeResult GCodes::HandleM558Point1(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException)
+{
+	const auto zp = platform.GetEndstops().GetZProbe(probeNumber);
+	if (zp.IsNull())
+	{
+		reply.copy("invalid Z probe index");
+		return GCodeResult::error;
+	}
+
+	if (!zp->IsScanning())
+	{
+		reply.printf("probe %u is not a scanning probe", probeNumber);
+		return GCodeResult::error;
+	}
+
+	if (gb.Seen('A'))
+	{
+		const float aParam = gb.GetFValue();
+		const float bParam = (gb.Seen('B')) ? gb.GetFValue() : 0.0;
+		return zp->SetScanningCoefficients(aParam, bParam);
+	}
+
+	if (gb.Seen('S'))
+	{
+		const float requestedScanningRange = gb.GetLimitedFValue('S', 0.1, zp->GetConfiguredTriggerHeight());
+
+#if SUPPORT_ASYNC_MOVES
+		AxesBitmap axesMoving;
+		axesMoving.SetBit(Z_AXIS);
+		MovementState& ms = GetMovementState(gb);
+		AllocateAxes(gb, ms, axesMoving, ParameterLettersBitmap());		// allocate the Z axis
+#endif
+
+		currentZProbeNumber = probeNumber;
+
+		// Set the scanning range to a whole number of microsteps and calculate the microsteps per point
+		const unsigned int microstepsPerHalfScan = (unsigned int)(requestedScanningRange * platform.DriveStepsPerUnit(Z_AXIS));
+		constexpr unsigned int MaxCalibrationPointsPerHalfScan = (MaxScanningProbeCalibrationPoints - 1)/2;
+		const unsigned int microstepsPerPoint = (microstepsPerHalfScan + MaxCalibrationPointsPerHalfScan - 1)/MaxCalibrationPointsPerHalfScan;
+		heightChangePerPoint = microstepsPerPoint/platform.DriveStepsPerUnit(Z_AXIS);
+		const size_t pointsPerHalfScan = microstepsPerHalfScan/microstepsPerPoint;
+		calibrationStartingHeight = zp->GetActualTriggerHeight() + pointsPerHalfScan * heightChangePerPoint;
+		numPointsToCollect = 2 * pointsPerHalfScan + 1;
+		RRF_ASSERT(numPointsToCollect <= MaxScanningProbeCalibrationPoints);
+
+		// Deploy the probe and start the state machine
+		gb.SetState(GCodeState::probeCalibration1);
+		DeployZProbe(gb);
+		return GCodeResult::ok;
+	}
+
+	return zp->ReportScanningCoefficients(reply);
+}
+
 // End

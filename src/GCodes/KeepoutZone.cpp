@@ -164,11 +164,11 @@ bool KeepoutZone::DoesLineIntrude(const float startCoords[MaxAxes], const float 
 									});
 }
 
-// Class used to keep track of ranges of arcs that line inside the keepout zone
+// Class used to keep track of ranges of arcs that lie inside the keepout zone
 class ArcIntervals
 {
 public:
-	// Construct an initial range from startAnle to endAngle
+	// Construct an initial range from startAngle to endAngle
 	ArcIntervals(float startAngle, float endAngle) noexcept;
 
 	// Limit the existing range(s) by a new one
@@ -232,15 +232,26 @@ bool ArcIntervals::AddRangeLimit(float startAngle, float endAngle) noexcept
 	size_t j = 0;
 	if (endAngle < startAngle)
 	{
-		// This interval crosses Pi, so split it into two intervals and apply them separately to the existing intervals
+		// This interval crosses Pi, so split it into two intervals and apply them separately to the existing intervals.
+		// This may cause one or more existing intervals to be split into two.
 		for (size_t i = 0; i < numIntervals; ++i)
 		{
 			{
 				const float nextLowAngle = currentSet.lowAngle[i];
-				const float nextHighAngle = min<float>(currentSet.highAngle[i], startAngle);
+				const float nextHighAngle = min<float>(currentSet.highAngle[i], endAngle);
 				if (nextLowAngle < nextHighAngle)
 				{
 					// Copy this interval across with its new bounds
+#if 0	//DEBUG
+{
+	debugPrintf("Current set:");
+	for (size_t k = 0; k < numIntervals; ++k) { debugPrintf(" [%.2f:%.2f]", (double)currentSet.lowAngle[k], (double)currentSet.highAngle[k]); }
+	debugPrintf("\nNext set:");
+	for (size_t k = 0; k < j; ++k) { debugPrintf(" [%.2f:%.2f]", (double)nextSet.lowAngle[k], (double)nextSet.highAngle[k]); }
+	debugPrintf("\nStart %.2f end %.2f, trying to add 1: [%.2f:%.2f]\n", (double)startAngle, (double)endAngle, (double)nextLowAngle, (double)nextHighAngle);
+	delay(2);
+}
+#endif
 					RRF_ASSERT(j < 4);
 					nextSet.lowAngle[j] = nextLowAngle;
 					nextSet.highAngle[j] = nextHighAngle;
@@ -248,11 +259,21 @@ bool ArcIntervals::AddRangeLimit(float startAngle, float endAngle) noexcept
 				}
 			}
 			{
-				const float nextLowAngle = max<float>(currentSet.lowAngle[i], endAngle);
+				const float nextLowAngle = max<float>(currentSet.lowAngle[i], startAngle);
 				const float nextHighAngle = currentSet.highAngle[i];
 				if (nextLowAngle < nextHighAngle)
 				{
 					// Copy this interval across with its new bounds
+#if 0	//DEBUG
+{
+	debugPrintf("Current set:");
+	for (size_t k = 0; k < numIntervals; ++k) { debugPrintf(" [%.2f:%.2f]", (double)currentSet.lowAngle[k], (double)currentSet.highAngle[k]); }
+	debugPrintf("\nNext set:");
+	for (size_t k = 0; k < j; ++k) { debugPrintf(" [%.2f:%.2f]", (double)nextSet.lowAngle[k], (double)nextSet.highAngle[k]); }
+	debugPrintf("\nStart %.2f end %.2f, trying to add 2: [%.2f:%.2f]\n", (double)startAngle, (double)endAngle, (double)nextLowAngle, (double)nextHighAngle);
+	delay(2);
+}
+#endif
 					RRF_ASSERT(j < 4);
 					nextSet.lowAngle[j] = nextLowAngle;
 					nextSet.highAngle[j] = nextHighAngle;
@@ -270,6 +291,16 @@ bool ArcIntervals::AddRangeLimit(float startAngle, float endAngle) noexcept
 			const float nextHighAngle = min<float>(currentSet.highAngle[i], endAngle);
 			if (nextLowAngle < nextHighAngle)
 			{
+#if 0	//DEBUG
+{
+	debugPrintf("Current set:");
+	for (size_t k = 0; k < numIntervals; ++k) { debugPrintf(" [%.2f:%.2f]", (double)currentSet.lowAngle[k], (double)currentSet.highAngle[k]); }
+	debugPrintf("\nNext set:");
+	for (size_t k = 0; k < j; ++k) { debugPrintf(" [%.2f:%.2f]", (double)nextSet.lowAngle[k], (double)nextSet.highAngle[k]); }
+	debugPrintf("\nStart %.2f end %.2f, trying to add 3: [%.2f:%.2f]\n", (double)startAngle, (double)endAngle, (double)nextLowAngle, (double)nextHighAngle);
+	delay(2);
+}
+#endif
 				// Copy this interval across with its new bounds
 				nextSet.lowAngle[j] = nextLowAngle;
 				nextSet.highAngle[j] = nextHighAngle;
