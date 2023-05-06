@@ -203,9 +203,9 @@ constexpr float DefaultRetractSpeed = 1000.0;			// The default firmware retracti
 constexpr float DefaultRetractLength = 2.0;
 
 constexpr float MaxArcDeviation = 0.005;				// maximum deviation from ideal arc due to segmentation
-constexpr float MinArcSegmentLength = 0.1;				// G2 and G3 arc movement commands get split into segments at least this long
+constexpr float MinArcSegmentLength = 0.02;				// G2 and G3 arc movement commands get split into segments at least this long
 constexpr float MaxArcSegmentLength = 1.0;				// G2 and G3 arc movement commands get split into segments at most this long
-constexpr float MinArcSegmentsPerSec = 200.0;
+constexpr float MaxArcSegmentsPerSec = 200.0;
 constexpr float SegmentsPerFulArcCalculation = 8.0;		// we do the full sine/cosine calculation every this number of segments
 
 constexpr uint32_t DefaultIdleTimeout = 30000;			// Milliseconds

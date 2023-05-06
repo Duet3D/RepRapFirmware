@@ -2671,7 +2671,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	// We leave out the square term because it is very small
 	// In CNC applications even very small deviations can be visible, so we use a smaller segment length at low speeds
 	const float arcSegmentLength = constrain<float>
-									(	min<float>(fastSqrtf(8 * ms.arcRadius * MaxArcDeviation), ms.feedRate * StepClockRate * (1.0/MinArcSegmentsPerSec)),
+									(	min<float>(fastSqrtf(8 * ms.arcRadius * MaxArcDeviation), ms.feedRate * StepClockRate * (1.0/MaxArcSegmentsPerSec)),
 										MinArcSegmentLength,
 										MaxArcSegmentLength
 									);
