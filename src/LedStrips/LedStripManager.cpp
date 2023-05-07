@@ -136,8 +136,8 @@ GCodeResult LedStripManager::CreateStrip(GCodeBuffer &gb, const StringRef &reply
 	}
 	catch (const GCodeException& ex)
 	{
-		ex.GetMessage(reply, &gb);
-		rslt = GCodeResult::error;
+		delete newStrip;
+		throw;
 	}
 
 	if (rslt <= GCodeResult::warning)
