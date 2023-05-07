@@ -41,6 +41,9 @@ public:
 	// Get the LED strip type
 	LedStripType GetType() const noexcept { return type; }
 
+	// Return true if the LED strip type is NeoPixel
+	bool IsNeoPixel() const noexcept { return type != LedStripType::DotStar; }
+
 	// Get the LED strip type as text
 	const char *_ecv_array GetTypeText() const noexcept;
 

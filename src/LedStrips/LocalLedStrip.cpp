@@ -87,11 +87,27 @@ GCodeResult LocalLedStrip::CommonConfigure(CanMessageGenericParser& parser, cons
 
 #endif
 
-// Allocate the chunk buffer and set up he useDma flag
+// Allocate the chunk buffer and set up the useDma flag
 GCodeResult LocalLedStrip::AllocateChunkBuffer(const StringRef& reply) noexcept
 {
+	// Must set up useDma before calling GetBytesPerLed
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
 	useDma = (port.GetCapability() & PinCapability::npDma) != PinCapability::none;
+	if (useDma)
+	{
+		// Set up the SPI port. Currently at most one port per configuration is flagged as npDma capable.
+# if defined(DUET3MINI)
+		SetPinFunction(NeopixelOutPin, NeopixelOutPinFunction);
+		hri_mclk_set_AHBMASK_QSPI_bit(MCLK);
+		hri_mclk_clear_AHBMASK_QSPI_2X_bit(MCLK);			// we don't need the 2x clock
+		hri_mclk_set_APBCMASK_QSPI_bit(MCLK);
+# elif defined(DUET3_MB6HC) || defined(DUET3_MB6XD) || defined(PCCB_10)
+		SetPinFunction(DotStarMosiPin, DotStarPinMode);
+		SetPinFunction(DotStarSclkPin, DotStarPinMode);
+		pmc_enable_periph_clk(DotStarClockId);				// enable the clock to the USART or SPI peripheral
+# endif
+		SetupSpi();
+	}
 #endif
 
 	const size_t bytesPerLed = GetBytesPerLed();
@@ -103,15 +119,15 @@ GCodeResult LocalLedStrip::AllocateChunkBuffer(const StringRef& reply) noexcept
 	{
 		if (chunkBufferSize > DmaBufferSize)
 		{
-			if (GetType() == LedStripType::DotStar)
-			{
-				chunkBufferSize = DmaBufferSize;			// we can send data to DotStar in multiple chunks, so just reduce the size
-			}
-			else
+			if (IsNeoPixel())
 			{
 				// For Neopixels we can't send the data in multiple chunks
 				reply.printf("maximum number of this type of LED supported on this port is %u", DmaBufferSize/bytesPerLed);
 				return GCodeResult::error;
+			}
+			else
+			{
+				chunkBufferSize = DmaBufferSize;			// we can send data to DotStar in multiple chunks, so just reduce the size
 			}
 		}
 		chunkBuffer = dmaBuffer;
@@ -127,9 +143,13 @@ GCodeResult LocalLedStrip::AllocateChunkBuffer(const StringRef& reply) noexcept
 // Report details that are common to all local LED strips i.e. port name, frequency, and whether DMA is used
 GCodeResult LocalLedStrip::CommonReportDetails(const StringRef &reply) noexcept
 {
-	reply.printf("%s strip on port", GetTypeText());
+	reply.printf("%s strip on port \"", GetTypeText());
 	port.AppendPinName(reply);
-	reply.catf(" uses %s, frequency %" PRIu32 "Hz", (useDma) ? "DMA" : "bit-banging", frequency);
+	reply.catf("\" uses %s, frequency %" PRIu32 "Hz", (useDma) ? "DMA" : "bit-banging", frequency);
+	if (IsNeoPixel())
+	{
+		reply.catf(", max strip length %" PRIu32, maxLeds);
+	}
 	return GCodeResult::ok;
 }
 
@@ -272,7 +292,7 @@ void LocalLedStrip::SetupSpi() noexcept
 #  endif
 	QSPI->QSPI_SCR = QSPI_SCR_CPOL | QSPI_SCR_CPHA | QSPI_SCR_SCBR(SystemPeripheralClock()/frequency - 1);
 	QSPI->QSPI_CR = QSPI_CR_QSPIEN;
-	if (GetType() != LedStripType::DotStar)										// if it's a Neopixel strip
+	if (IsNeoPixel())														// if it's a Neopixel strip
 	{
 		QSPI->QSPI_TDR = 0;													// send a word of zeros to set the data line low
 	}

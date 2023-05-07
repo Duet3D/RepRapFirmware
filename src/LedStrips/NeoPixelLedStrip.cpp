@@ -76,8 +76,7 @@ GCodeResult NeoPixelLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply
 	{
 		BitBangNeoPixelData(params);
 	}
-	//TODO
-	return GCodeResult::errorNotSupported;
+	return GCodeResult::ok;
 }
 
 // Return the number of buffer bytes we need per LED
