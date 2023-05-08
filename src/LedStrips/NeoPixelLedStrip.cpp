@@ -177,6 +177,7 @@ GCodeResult NeoPixelLedStrip::BitBangNeoPixelData(const LedParams& params) noexc
 	{
 		const uint8_t *q = chunkBuffer;
 		uint32_t nextDelay = T0L;
+
 		IrqDisable();
 		uint32_t lastTransitionTime = SysTick->VAL & 0x00FFFFFF;
 		while (q < p)
@@ -184,21 +185,22 @@ GCodeResult NeoPixelLedStrip::BitBangNeoPixelData(const LedParams& params) noexc
 			uint8_t c = *q++;
 			for (unsigned int i = 0; i < 8; ++i)
 			{
-				if (c & 0x80)
+				// The high-level time is critical, the low-level time is not.
+				// On the SAME5x the high-level time easily gets extended too much, so do as little work as possible during that time.
+				lastTransitionTime = DelayCycles(lastTransitionTime, nextDelay);
+				const uint32_t thisDelay = (c & 0x80) ? T1H : T0H;
+				nextDelay = (c & 0x80) ? T1L : T0L;
+				if (port.GetTotalInvert())
 				{
-					lastTransitionTime = DelayCycles(lastTransitionTime, nextDelay);
-					port.FastDigitalWriteHigh();
-					lastTransitionTime = DelayCycles(lastTransitionTime, T1H);
 					port.FastDigitalWriteLow();
-					nextDelay = T1L;
+					lastTransitionTime = DelayCycles(lastTransitionTime, thisDelay);
+					port.FastDigitalWriteHigh();
 				}
 				else
 				{
-					lastTransitionTime = DelayCycles(lastTransitionTime, nextDelay);
 					port.FastDigitalWriteHigh();
-					lastTransitionTime = DelayCycles(lastTransitionTime, T0H);
+					lastTransitionTime = DelayCycles(lastTransitionTime, thisDelay);
 					port.FastDigitalWriteLow();
-					nextDelay = T0L;
 				}
 				c <<= 1;
 			}

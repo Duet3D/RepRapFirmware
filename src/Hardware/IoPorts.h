@@ -36,6 +36,7 @@ public:
 	void SetInvert(bool pInvert) noexcept;
 	void ToggleInvert(bool pInvert) noexcept;
 	bool IsHardwareInverted() const noexcept { return hardwareInvert; }
+	bool GetTotalInvert() const noexcept { return totalInvert; }
 
 	bool ReadDigital() const noexcept;
 	bool AttachInterrupt(StandardCallbackFunction callback, InterruptMode mode, CallbackParameter param) const noexcept;
@@ -50,8 +51,10 @@ public:
 	AnalogChannelNumber GetAnalogChannel() const noexcept { return PinToAdcChannel(GetPin()); }
 
 	void WriteDigital(bool high) const noexcept;
-	void FastDigitalWriteLow() const noexcept pre(IsValid()) { ((totalInvert) ? fastDigitalWriteHigh : fastDigitalWriteLow)(logicalPin); }
-	void FastDigitalWriteHigh() const noexcept pre(IsValid()) { ((totalInvert) ? fastDigitalWriteLow : fastDigitalWriteHigh)(logicalPin); }
+
+	// Warning: for speed when bit-banging Neopixels, FastDigitalWriteHigh and FastDigitalWriteLow do not take account of pin inversion!
+	void FastDigitalWriteLow() const noexcept pre(IsValid()) { fastDigitalWriteLow(logicalPin); }
+	void FastDigitalWriteHigh() const noexcept pre(IsValid()) { fastDigitalWriteHigh(logicalPin); }
 
 	// Get the physical pin, or NoPin if the logical pin is not valid
 	Pin GetPin() const noexcept;

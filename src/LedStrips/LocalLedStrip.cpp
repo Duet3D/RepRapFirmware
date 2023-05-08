@@ -45,7 +45,10 @@ GCodeResult LocalLedStrip::CommonConfigure(GCodeBuffer &gb, const StringRef &rep
 	if (pinName != nullptr)
 	{
 		seen = true;
-		port.AssignPort(pinName, reply, PinUsedBy::led, PinAccess::write0);
+		if (!port.AssignPort(pinName, reply, PinUsedBy::led, PinAccess::write0))
+		{
+			return GCodeResult::error;
+		}
 
 		// See if the maximum strip length was provided (the default value is set up by the constructor)
 		gb.TryGetUIValue('U', maxLeds, seen);
@@ -71,7 +74,10 @@ GCodeResult LocalLedStrip::CommonConfigure(CanMessageGenericParser& parser, cons
 	if (parser.GetStringParam('C', pinName.GetRef()))
 	{
 		seen = true;
-		port.AssignPort(pinName.c_str(), reply, PinUsedBy::led, PinAccess::write0);
+		if (!port.AssignPort(pinName.c_str(), reply, PinUsedBy::led, PinAccess::write0))
+		{
+			return GCodeResult::error;
+		}
 
 		// See if the maximum strip length was provided (the default value is set up by the constructor)
 		if (parser.GetUintParam('U', maxLeds))
