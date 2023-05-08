@@ -111,6 +111,13 @@ GCodeResult FansManager::ConfigureFanPort(GCodeBuffer& gb, const StringRef& repl
 
 #if SUPPORT_CAN_EXPANSION
 		const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
+#endif
+		if (StringEqualsIgnoreCase(pinName.c_str(), NoPinName))
+		{
+			return GCodeResult::ok;				// just deleting an existing fan
+		}
+
+#if SUPPORT_CAN_EXPANSION
 		if (board != CanInterface::GetCanAddress())
 		{
 			auto *newFan = new RemoteFan(fanNum, board);
