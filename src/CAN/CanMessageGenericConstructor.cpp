@@ -65,6 +65,7 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(G
 				break;
 
 			case ParamDescriptor::uint16:
+			case ParamDescriptor::pwmFreq:
 				StoreValue((uint16_t)min<uint32_t>(gb.GetUIValue(), std::numeric_limits<uint16_t>::max()));
 				break;
 
