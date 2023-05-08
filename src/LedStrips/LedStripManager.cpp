@@ -96,10 +96,18 @@ GCodeResult LedStripManager::CreateStrip(GCodeBuffer &gb, const StringRef &reply
 	WriteLocker lock(ledLock);
 	DeleteObject(slot);
 
+#if SUPPORT_CAN_EXPANSION
+	const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
+#endif
+
+	if (StringEqualsIgnoreCase(pinName.c_str(), NoPinName))
+	{
+		return GCodeResult::ok;							// just deleting an existing strip
+	}
+
 	LedStripBase *newStrip = nullptr;
 
 #if SUPPORT_CAN_EXPANSION
-	const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
 	if (board != CanInterface::GetCanAddress())
 	{
 		newStrip = new RemoteLedStrip((LedStripType)ledType, stripNumber, board);
