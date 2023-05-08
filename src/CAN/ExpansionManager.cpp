@@ -63,19 +63,29 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "runs",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerRuns),					ObjectModelEntryFlags::none },
 
 	// 5. closedLoop members
+	{ "pid",				OBJECT_MODEL_FUNC(self, 6),																						ObjectModelEntryFlags::none },
 	{ "points",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).closedLoopLastRunDataPoints),			ObjectModelEntryFlags::none },
 	{ "runs",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).closedLoopRuns),						ObjectModelEntryFlags::none },
+
+	// 6. closedLoop PID members
+	{ "a", 					OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).closedLoopATerm),								ObjectModelEntryFlags::none },
+	{ "d", 					OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).closedLoopDTerm),								ObjectModelEntryFlags::none },
+	{ "i", 					OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).closedLoopITerm),								ObjectModelEntryFlags::none },
+	{ "p", 					OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).closedLoopPTerm),								ObjectModelEntryFlags::none },
+	{ "v", 					OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).closedLoopVTerm),								ObjectModelEntryFlags::none }
+
 };
 
 constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 {
-	6,				// number of sections
+	7,				// number of sections
 	14,				// section 0: boards[]
 	3,				// section 1: mcuTemp
 	3,				// section 2: vIn
 	3,				// section 3: v12
 	2,				// section 4: accelerometer
-	2				// section 5: closed loop
+	3,				// section 5: closed loop
+	5				// 6. closedLoop PID members
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ExpansionManager)
@@ -219,6 +229,18 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 	}
 	board.hasAccelerometer = msg.hasAccelerometer;
 	board.hasClosedLoop = msg.hasClosedLoop;
+}
+
+void ExpansionManager::ProcessClosedLoopPIDStatus(const CanMessageBuffer *buf) noexcept {
+	const CanAddress address = buf->id.Src();
+	ExpansionBoardData& board = boards[address];
+	const CanMessageClosedLoopPIDStatus& msg = buf->msg.closedLoopPIDStatus;
+	board.closedLoopPTerm = msg.GetClosedLoopPTerm();
+	board.closedLoopITerm = msg.GetClosedLoopITerm();
+	board.closedLoopDTerm = msg.GetClosedLoopDTerm();
+	board.closedLoopATerm = msg.GetClosedLoopATerm();
+	board.closedLoopVTerm = msg.GetClosedLoopVTerm();
+	reprap.BoardsUpdated();
 }
 
 // Return a pointer to the expansion board, if it is present

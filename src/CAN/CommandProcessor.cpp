@@ -749,6 +749,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				ClosedLoop::ProcessReceivedData(buf->id.Src(), buf->msg.closedLoopData, buf->dataLength);
 				break;
 
+			case CanMessageType::closedLoopPIDStatus: //JER Process PID status message
+				reprap.GetExpansion().ProcessClosedLoopPIDStatus(buf);
+			break;
+
 			case CanMessageType::event:
 				Event::Add(buf->msg.event, buf->id.Src(), buf->dataLength);
 				break;
@@ -783,7 +787,6 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				}
 				break;
 #endif
-
 			default:
 				if (reprap.Debug(Module::Can))
 				{

@@ -39,6 +39,12 @@ struct ExpansionBoardData
 			 spare : 11;
 	BoardState state;
 	uint8_t numDrivers;
+	float closedLoopPTerm,
+		  closedLoopITerm,
+		  closedLoopDTerm,
+		  closedLoopATerm,
+		  closedLoopVTerm;
+
 };
 
 class ExpansionManager INHERIT_OBJECT_MODEL
@@ -51,6 +57,7 @@ public:
 
 	void ProcessAnnouncement(CanMessageBuffer *buf, bool isNewFormat) noexcept;
 	void ProcessBoardStatusReport(const CanMessageBuffer *buf) noexcept;
+	void ProcessClosedLoopPIDStatus(const CanMessageBuffer *buf) noexcept;
 
 	// Firmware update and related functions
 	GCodeResult ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
