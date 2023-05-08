@@ -14,7 +14,8 @@
 #include "CanInterface.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
-#define STRINGIZE(_v) #_v
+#define STRINGIZE2(_v)	#_v
+#define STRINGIZE(_v)	STRINGIZE2(_v)
 
 CanMessageGenericConstructor::CanMessageGenericConstructor(const ParamDescriptor *p_param) noexcept
 	: paramTable(p_param), dataLen(0)
@@ -150,7 +151,7 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(G
 				break;
 
 			default:
-				throw ConstructParseException("internal error at " __FILE__ "(" STRINGIZE(#__LINE__) ")");
+				throw ConstructParseException("internal error at " __FILE__ "(" STRINGIZE(__LINE__) ")");
 			}
 			msg.paramMap |= paramBit;
 		}
