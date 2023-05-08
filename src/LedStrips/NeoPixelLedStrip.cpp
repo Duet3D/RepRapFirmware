@@ -33,10 +33,10 @@ GCodeResult NeoPixelLedStrip::Configure(GCodeBuffer& gb, const StringRef& reply,
 
 #if SUPPORT_REMOTE_COMMANDS
 
-GCodeResult NeoPixelLedStrip::Configure(CanMessageGenericParser& parser, const StringRef& reply) noexcept
+GCodeResult NeoPixelLedStrip::Configure(CanMessageGenericParser& parser, const StringRef& reply, uint8_t& extra) noexcept
 {
 	bool seen = false;
-	GCodeResult rslt = CommonConfigure(parser, reply, seen);
+	GCodeResult rslt = CommonConfigure(parser, reply, seen, extra);
 	if (seen)
 	{
 		// Nothing specific to configure for Neopixel strips in Duet3D builds
@@ -44,6 +44,36 @@ GCodeResult NeoPixelLedStrip::Configure(CanMessageGenericParser& parser, const S
 	}
 
 	return CommonReportDetails(reply);
+}
+
+GCodeResult NeoPixelLedStrip::HandleM150(CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+#if SUPPORT_DMA_NEOPIXEL
+	if (DmaInProgress())													// if we are sending something
+	{
+		return GCodeResult::notFinished;
+	}
+#endif
+
+	if (needStartDelay && StepTimer::GetTimerTicks() - whenTransferFinished < MinNeoPixelResetTicks)
+	{
+		return GCodeResult::notFinished;									// give the NeoPixels time to reset
+	}
+
+	LedParams params;
+	params.GetM150Params(parser);
+
+#if SUPPORT_DMA_NEOPIXEL
+	if (UsesDma())
+	{
+		SpiSendNeoPixelData(params);
+	}
+	else
+#endif
+	{
+		BitBangNeoPixelData(params);
+	}
+	return GCodeResult::ok;
 }
 
 #endif

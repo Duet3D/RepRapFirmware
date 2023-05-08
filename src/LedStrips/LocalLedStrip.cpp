@@ -61,7 +61,8 @@ GCodeResult LocalLedStrip::CommonConfigure(GCodeBuffer &gb, const StringRef &rep
 
 #if SUPPORT_REMOTE_COMMANDS
 
-GCodeResult LocalLedStrip::CommonConfigure(CanMessageGenericParser& parser, const StringRef& reply, bool& seen) noexcept
+// Configure or reconfigure the LED strip. Bit 0 of 'extra' must be set on return iff interrupts do not need to be disabled for a long time when setting the strip colours.
+GCodeResult LocalLedStrip::CommonConfigure(CanMessageGenericParser& parser, const StringRef& reply, bool& seen, uint8_t& extra) noexcept
 {
 	// See if the frequency was provided
 	if (parser.GetUintParam('Q', frequency))
@@ -70,6 +71,7 @@ GCodeResult LocalLedStrip::CommonConfigure(CanMessageGenericParser& parser, cons
 	}
 
 	// Deal with the pin name
+	GCodeResult rslt;
 	String<StringLength50> pinName;
 	if (parser.GetStringParam('C', pinName.GetRef()))
 	{
@@ -80,15 +82,16 @@ GCodeResult LocalLedStrip::CommonConfigure(CanMessageGenericParser& parser, cons
 		}
 
 		// See if the maximum strip length was provided (the default value is set up by the constructor)
-		if (parser.GetUintParam('U', maxLeds))
-		{
-			seen = true;
-		}
-
-		return AllocateChunkBuffer(reply);
+		(void)parser.GetUintParam('U', maxLeds);
+		rslt = AllocateChunkBuffer(reply);
+	}
+	else
+	{
+		rslt = GCodeResult::ok;
 	}
 
-	return GCodeResult::ok;
+	extra = (useDma) ? 0x01 : 0;
+	return rslt;
 }
 
 #endif
@@ -159,18 +162,18 @@ GCodeResult LocalLedStrip::CommonReportDetails(const StringRef &reply) noexcept
 	return GCodeResult::ok;
 }
 
-bool LocalLedStrip::LedParams::GetM150Params(GCodeBuffer& gb) THROWS(GCodeException)
+void LocalLedStrip::LedParams::GetM150Params(GCodeBuffer& gb) THROWS(GCodeException)
 {
 	red = green = blue = white = 0;
 	brightness = 128;
 	numLeds = 1;
 	following = false;
 
-	bool seenColours = false;
-	gb.TryGetLimitedUIValue('R', red, seenColours, 256);
-	gb.TryGetLimitedUIValue('U', green, seenColours, 256);
-	gb.TryGetLimitedUIValue('B', blue, seenColours, 256);
-	gb.TryGetLimitedUIValue('W', white, seenColours, 256);					// W value is used by RGBW NeoPixels only
+	bool dummy = false;
+	gb.TryGetLimitedUIValue('R', red, dummy, 256);
+	gb.TryGetLimitedUIValue('U', green, dummy, 256);
+	gb.TryGetLimitedUIValue('B', blue, dummy, 256);
+	gb.TryGetLimitedUIValue('W', white, dummy, 256);						// W value is used by RGBW NeoPixels only
 
 	if (gb.Seen('P'))
 	{
@@ -181,10 +184,37 @@ bool LocalLedStrip::LedParams::GetM150Params(GCodeBuffer& gb) THROWS(GCodeExcept
 		brightness = gb.GetLimitedUIValue('Y',  32) << 3;					// valid Y values are 0-31
 	}
 
-	gb.TryGetUIValue('S', numLeds, seenColours);
-	gb.TryGetBValue('F', following, seenColours);
-	return seenColours;
+	gb.TryGetUIValue('S', numLeds, dummy);
+	gb.TryGetBValue('F', following, dummy);
 }
+
+#if SUPPORT_REMOTE_COMMANDS
+
+void LocalLedStrip::LedParams::GetM150Params(CanMessageGenericParser& parser) noexcept
+{
+	red = green = blue = white = 0;
+	brightness = 128;
+	numLeds = 1;
+	following = false;
+
+	(void)parser.GetUintParam('R', red);
+	(void)parser.GetUintParam('U', green);
+	(void)parser.GetUintParam('B', blue);
+	(void)parser.GetUintParam('W', white);									// W value is used by RGBW NeoPixels only
+
+	if (!parser.GetUintParam('P', brightness))								// P takes precedence over Y
+	{
+		if (parser.GetUintParam('Y',  brightness))
+		{
+			brightness <<= 3;												// valid Y values are 0-31
+		}
+	}
+
+	(void)parser.GetUintParam('S', numLeds);
+	(void)parser.GetBoolParam('F', following);
+}
+
+#endif
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
 

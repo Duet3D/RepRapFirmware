@@ -28,7 +28,7 @@ public:
 	bool MustStopMovement(GCodeBuffer& gb) noexcept;				// Test whether this strip requires motion to be stopped before sending a command
 
 #if SUPPORT_REMOTE_COMMANDS
-	GCodeResult HandleM950Led(const CanMessageGeneric &msg, const StringRef& reply, uint8_t &extra) noexcept;
+	GCodeResult HandleM950Led(const CanMessageGeneric &msg, const StringRef& reply, uint8_t& extra) noexcept;
 	GCodeResult HandleLedSetColours(const CanMessageGeneric &msg, const StringRef& reply) noexcept;
 #endif
 

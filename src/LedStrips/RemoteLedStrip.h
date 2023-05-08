@@ -23,7 +23,8 @@ public:
 	bool MustStopMovement() const noexcept override { return (remoteProperties & 0x01) == 0; }
 
 #if SUPPORT_REMOTE_COMMANDS
-	GCodeResult Configure(CanMessageGenericParser& parser, const StringRef& reply) noexcept override { return GCodeResult::remoteInternalError; }
+	GCodeResult Configure(CanMessageGenericParser& parser, const StringRef& reply, uint8_t& extra) noexcept override { return GCodeResult::remoteInternalError; }
+	GCodeResult HandleM150(CanMessageGenericParser& parser, const StringRef& reply) noexcept override { return GCodeResult::remoteInternalError; }
 #endif
 
 private:

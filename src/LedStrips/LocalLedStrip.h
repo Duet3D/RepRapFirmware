@@ -63,13 +63,16 @@ protected:
 		uint32_t numLeds;
 		bool following;
 
-		bool GetM150Params(GCodeBuffer& gb) THROWS(GCodeException);
+		void GetM150Params(GCodeBuffer& gb) THROWS(GCodeException);
+#if SUPPORT_REMOTE_COMMANDS
+		void GetM150Params(CanMessageGenericParser& parser) noexcept;
+#endif
 	};
 
 	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName, bool& seen) THROWS(GCodeException);
 
 #if SUPPORT_REMOTE_COMMANDS
-	GCodeResult CommonConfigure(CanMessageGenericParser& parser, const StringRef& reply, bool& seen) noexcept;
+	GCodeResult CommonConfigure(CanMessageGenericParser& parser, const StringRef& reply, bool& seen, uint8_t& extra) noexcept;
 #endif
 
 	GCodeResult CommonReportDetails(const StringRef& reply) noexcept;

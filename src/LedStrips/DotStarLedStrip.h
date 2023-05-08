@@ -21,7 +21,8 @@ public:
 	GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
 
 #if SUPPORT_REMOTE_COMMANDS
-	GCodeResult Configure(CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
+	GCodeResult Configure(CanMessageGenericParser& parser, const StringRef& reply, uint8_t& extra) noexcept override;
+	GCodeResult HandleM150(CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
 #endif
 
 protected:

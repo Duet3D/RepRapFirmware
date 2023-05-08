@@ -28,12 +28,16 @@ public:
 	// Configure or report on this LED strip. If pinName is not null then we are doing the initial configuration; else we are doing minor configuration or reporting.
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException) = 0;
 
-#if SUPPORT_REMOTE_COMMANDS
-	virtual GCodeResult Configure(CanMessageGenericParser& parser, const StringRef& reply) noexcept = 0;
-#endif
-
 	// Handle a M150 command addressed to this strip
 	virtual GCodeResult HandleM150(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) = 0;
+
+#if SUPPORT_REMOTE_COMMANDS
+	// Handle a configuration request received over CAN
+	virtual GCodeResult Configure(CanMessageGenericParser& parser, const StringRef& reply, uint8_t& extra) noexcept = 0;
+
+	// Handle a M150 command addressed received over CAN
+	virtual GCodeResult HandleM150(CanMessageGenericParser& parser, const StringRef& reply) noexcept = 0;
+#endif
 
 	// Test whether this strip is bit-banged and therefore requires motion to be stopped before sending a command
 	virtual bool MustStopMovement() const noexcept = 0;

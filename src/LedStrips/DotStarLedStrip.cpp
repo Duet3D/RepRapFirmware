@@ -35,10 +35,10 @@ GCodeResult DotStarLedStrip::Configure(GCodeBuffer& gb, const StringRef& reply, 
 
 #if SUPPORT_REMOTE_COMMANDS
 
-GCodeResult DotStarLedStrip::Configure(CanMessageGenericParser& parser, const StringRef& reply) noexcept
+GCodeResult DotStarLedStrip::Configure(CanMessageGenericParser& parser, const StringRef& reply, uint8_t& extra) noexcept
 {
 	bool seen = false;
-	GCodeResult rslt = CommonConfigure(parser, reply, seen);
+	GCodeResult rslt = CommonConfigure(parser, reply, seen, extra);
 	if (seen)
 	{
 		if (!UsesDma())
@@ -51,6 +51,35 @@ GCodeResult DotStarLedStrip::Configure(CanMessageGenericParser& parser, const St
 	}
 
 	return CommonReportDetails(reply);
+}
+
+GCodeResult DotStarLedStrip::HandleM150(CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	if (DmaInProgress())													// if we are sending something
+	{
+		return GCodeResult::notFinished;
+	}
+
+	LedParams params;
+	params.GetM150Params(parser);
+
+	// If there are no LEDs to set, we have finished unless we need to send a start frame to DotStar LEDs
+	if (params.numLeds == 0 && !needStartFrame && !params.following)
+	{
+		return GCodeResult::ok;
+	}
+	if (numRemaining != 0)
+	{
+		params.numLeds = numRemaining;
+	}
+
+# if USE_16BIT_SPI
+	// Swap bytes for 16-bit SPI
+	const uint32_t data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.blue & 255)) | ((params.green & 255) << 24) | ((params.red & 255) << 16);
+# else
+	const uint32_t data = (params.brightness >> 3) | 0xE0 | ((params.blue & 255) << 8) | ((params.green & 255) << 16) | ((params.red & 255) << 24);
+# endif
+	return SendDotStarData(data, params.numLeds, params.following);
 }
 
 #endif

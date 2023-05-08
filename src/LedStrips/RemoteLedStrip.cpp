@@ -39,14 +39,15 @@ GCodeResult RemoteLedStrip::Configure(GCodeBuffer& gb, const StringRef& reply, c
 {
 	CanMessageGenericConstructor cons(M950LedParams);
 	cons.PopulateFromCommand(gb);
-	return cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, reply, &remoteProperties);
+	return cons.SendAndGetResponse(CanMessageType::m950Led, boardNumber, reply, &remoteProperties);
 }
 
 // Send a M150 command to this strip
 GCodeResult RemoteLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
-	//TODO
-	return GCodeResult::errorNotSupported;
+	CanMessageGenericConstructor cons(M150Params);
+	cons.PopulateFromCommand(gb);
+	return cons.SendAndGetResponse(CanMessageType::writeLedStrip, boardNumber, reply, &remoteProperties);
 }
 
 #endif
