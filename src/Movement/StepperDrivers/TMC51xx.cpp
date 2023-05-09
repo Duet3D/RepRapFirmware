@@ -769,8 +769,9 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 		status = accumulatedDriveStatus;
 		if (clearAccumulated)
 		{
-			// In the following we can't just copy readRegisters[ReadDrvStat] into accumulatedDriveStatus, because we only want to set bits in accumulatedDriveStatus
-			// when they occur in 2 successive samples. So clear it instead.
+			// In the following we can't just copy readRegisters[ReadDrvStat] into accumulatedDriveStatus,
+			// because we only want to set certain bits in accumulatedDriveStatus when they occur in 2 successive samples.
+			// So clear it instead.
 			accumulatedDriveStatus = 0;
 		}
 	}
@@ -1561,7 +1562,7 @@ uint32_t SmartDrivers::GetRegister(size_t driver, SmartDriverRegister reg) noexc
 }
 
 // Read any register from a driver
-// This will return GCodeResult:notFinished for at least the first call, so it must be called repeatedly until it returns a different value.
+// This will return GCodeResult:notFinished for at least the first call if the driver number is valid, so it must be called repeatedly until it returns a different value.
 GCodeResult SmartDrivers::GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept
 {
 	if (driver < numTmc51xxDrivers)

@@ -1207,7 +1207,7 @@ void Platform::Spin() noexcept
 				}
 
 # if HAS_STALL_DETECT
-				if (stat.HasNewStallSince(oldStatus) && reprap.GetGCodes().IsReallyPrinting())
+				if (stat.HasNewStallSince(oldStatus))
 				{
 					// This stall is new so check whether we need to perform some action in response to the stall
 #  if SUPPORT_REMOTE_COMMANDS
@@ -1785,7 +1785,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 #elif HAS_SMART_DRIVERS
 		if (drive < numSmartDrivers)
 		{
-			const StandardDriverStatus status = SmartDrivers::GetStatus(drive);
+			const StandardDriverStatus status = SmartDrivers::GetStatus(drive, false, false);
 			status.AppendText(driverStatus.GetRef(), 0);
 			if (!status.notPresent)
 			{
@@ -4481,7 +4481,7 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 				SmartDrivers::AppendStallConfig(drive, reply);
 				buf->cat(reply.c_str());
 				buf->catf(", action on stall: %s",
-							(eventOnStallDrivers.IsBitSet(drive)) ? "run macro"
+							(eventOnStallDrivers.IsBitSet(drive)) ? "raise event"
 								: (logOnStallDrivers.IsBitSet(drive)) ? "log"
 									: "none"
 						  );
@@ -5395,7 +5395,7 @@ void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
 	msg->SetStandardFields(MaxSmartDrivers);
 	for (size_t driver = 0; driver < MaxSmartDrivers; ++driver)
 	{
-		msg->data[driver] = SmartDrivers::GetStatus(driver).AsU32();
+		msg->data[driver] = SmartDrivers::GetStatus(driver, false, false).AsU32();
 	}
 # else
 	msg->SetStandardFields(NumDirectDrivers);

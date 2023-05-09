@@ -37,7 +37,7 @@ namespace SmartDrivers
 	void SetStandstillCurrentPercent(size_t driver, float percent) noexcept;
 	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(size_t driver, SmartDriverRegister reg) noexcept;
-	StandardDriverStatus GetStatus(size_t driver, bool accumulated = false, bool clearAccumulated = false) noexcept;
+	StandardDriverStatus GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
 };
 
 #endif
