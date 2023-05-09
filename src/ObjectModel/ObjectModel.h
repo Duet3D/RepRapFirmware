@@ -116,6 +116,7 @@ struct ExpressionValue
 	// NOTE: When using these two constructors, the reference count in the handle must already be high enough to account for this expression referring to it.
 	// If the handle is newly created, that will normally be the case. If it already exists, the reference count will need to be incremented.
 	explicit ExpressionValue(StringHandle h) noexcept : type((uint32_t)TypeCode::HeapString), param(0), shVal(h) { }
+	explicit ExpressionValue(AutoStringHandle h) noexcept : type((uint32_t)TypeCode::HeapString), param(0), shVal(h.IncreaseRefCount()) { }
 	explicit ExpressionValue(ArrayHandle h) noexcept : type((uint32_t)TypeCode::HeapArray), param(0), ahVal(h) { }
 	// End note
 

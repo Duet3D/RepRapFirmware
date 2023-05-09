@@ -53,6 +53,8 @@ public:
 	~LocalLedStrip() override;
 
 protected:
+	DECLARE_OBJECT_MODEL
+
 	struct LedParams
 	{
 		uint32_t red;

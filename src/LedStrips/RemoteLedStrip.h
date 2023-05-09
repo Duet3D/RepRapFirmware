@@ -27,8 +27,12 @@ public:
 	GCodeResult HandleM150(CanMessageGenericParser& parser, const StringRef& reply) noexcept override { return GCodeResult::remoteInternalError; }
 #endif
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	size_t slotNumber;
+	AutoStringHandle pinNameString;
 	CanAddress boardNumber;
 	uint8_t remoteProperties;				// bit 0 means the remote driver uses DMA
 };

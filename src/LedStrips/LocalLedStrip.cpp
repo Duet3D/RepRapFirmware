@@ -20,6 +20,20 @@
 alignas(4) __nocache uint8_t LocalLedStrip::dmaBuffer[DmaBufferSize];		// buffer for sending data to LEDs by DMA on SAME7x processors
 #endif
 
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(LocalLedStrip, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry LocalLedStrip::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. kinematics members
+	{ "pin",			OBJECT_MODEL_FUNC(self->port), 					ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t LocalLedStrip::objectModelTableDescriptor[] = { 1, 1 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(LocalLedStrip, LedStripBase)
+
 LocalLedStrip::LocalLedStrip(LedStripType p_type, uint32_t p_freq) noexcept
 	: LedStripBase(p_type), frequency(p_freq)
 {

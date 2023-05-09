@@ -20,13 +20,14 @@
 constexpr ObjectModelTableEntry LedStripBase::objectModelTable[] =
 {
 	// 0.
-	{ "type",	OBJECT_MODEL_FUNC(self->GetTypeText()),	ObjectModelEntryFlags::none },
+	{ "stopMovement",	OBJECT_MODEL_FUNC(self->MustStopMovement()), 	ObjectModelEntryFlags::none },
+	{ "type",			OBJECT_MODEL_FUNC(self->GetTypeText()),			ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t LedStripBase::objectModelTableDescriptor[] =
 {
 	1,							// number of sections
-	1							// number in section 0
+	2							// number in section 0
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(LedStripBase)
