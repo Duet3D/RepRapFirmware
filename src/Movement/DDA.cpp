@@ -716,7 +716,6 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 										: pdm->PrepareCartesianAxis(*this, params);
 			if (stepsToDo)
 			{
-				pdm->directionChanged = pdm->directionReversed = false;
 				InsertDM(pdm);
 				const int32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
 				if (pdm->direction)
@@ -812,7 +811,6 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 				const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionRequested);
 				if (stepsToDo)
 				{
-					pdm->directionChanged = pdm->directionReversed = false;
 					InsertDM(pdm);
 					const int32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
 					if (pdm->direction)
@@ -851,7 +849,6 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 				const bool stepsToDo = pdm->PrepareCartesianAxis(*this, params);
 				if (stepsToDo)
 				{
-					pdm->directionChanged = pdm->directionReversed = false;
 					InsertDM(pdm);
 					const int32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
 					if (pdm->direction)
@@ -1419,7 +1416,6 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 							pdm->totalSteps = labs(delta);
 							if (pdm->PrepareCartesianAxis(*this, params))
 							{
-								pdm->directionChanged = pdm->directionReversed = false;
 								// Check for sensible values, print them if they look dubious
 								if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
 								{
@@ -1454,7 +1450,6 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 					pdm->totalSteps = labs(delta);								// this is net steps for now
 					if (pdm->PrepareDeltaAxis(*this, params))
 					{
-						pdm->directionChanged = pdm->directionReversed = false;
 						// Check for sensible values, print them if they look dubious
 						if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
 						{
@@ -1520,7 +1515,6 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 						pdm->totalSteps = labs(delta);
 						if (pdm->PrepareCartesianAxis(*this, params))
 						{
-							pdm->directionChanged = pdm->directionReversed = false;
 							// Check for sensible values, print them if they look dubious
 							if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
 							{
@@ -1596,7 +1590,6 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 							pdm->direction = (directionVector[drive] >= 0);
 							if (pdm->PrepareExtruder(*this, params, platform.DriveStepsPerUnit(drive) * directionVector[drive]))
 							{
-								pdm->directionChanged = pdm->directionReversed = false;
 								// Check for sensible values, debugPrint them if they look dubious
 								//TODO (note: totalSteps is no longer valid for extruders)
 								InsertDM(pdm);

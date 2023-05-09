@@ -335,6 +335,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	isExtruder = false;
 	currentSegment = dda.segments;
 	nextStep = 0;									// must do this before calling NewCartesianSegment
+	directionChanged = directionReversed = false;	// must clear these before we call NewCartesianSegment
 
 	if (!NewCartesianSegment())
 	{
@@ -446,12 +447,12 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 
 	distanceSoFar = 0.0;
 	timeSoFar = 0.0;
-
 	isDelta = true;
 	isExtruder = false;
 	currentSegment = dda.segments;
-
 	nextStep = 0;									// must do this before calling NewDeltaSegment
+	directionChanged = directionReversed = false;	// must clear these before we call NewDeltaSegment
+
 	if (!NewDeltaSegment(dda))
 	{
 		return false;
@@ -501,6 +502,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	isExtruder = true;
 	nextStep = 0;									// must do this before calling NewExtruderSegment
 	totalSteps = 0;									// we don't use totalSteps but set it to 0 to avoid random values being printed by DebugPrint
+	directionChanged = directionReversed = false;	// must clear these before we call NewExtruderSegment
 
 	if (!NewExtruderSegment())						// if no steps to do
 	{
