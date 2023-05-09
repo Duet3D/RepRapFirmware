@@ -238,6 +238,7 @@ GCodeResult LedStripManager::HandleM950Led(const CanMessageGeneric &msg, const S
 	const LedStripType t = (parser.GetUintParam('T', rawStripType)) ? (LedStripType)rawStripType : DefaultLedStripType;
 
 	LedStripBase*& slot = strips[stripNumber];
+	GCodeResult rslt;
 	WriteLocker lock(ledLock);
 	if (parser.HasParameter('C'))
 	{
@@ -263,10 +264,11 @@ GCodeResult LedStripManager::HandleM950Led(const CanMessageGeneric &msg, const S
 
 		default:
 			reply.copy("Unsupported LED strip type");
+			reprap.LedStripsUpdated();
 			return GCodeResult::error;
 		}
 
-		const GCodeResult rslt = newStrip->Configure(parser, reply, extra);
+		rslt = newStrip->Configure(parser, reply, extra);
 		if (rslt <= GCodeResult::warning)
 		{
 			slot = newStrip;
@@ -275,13 +277,14 @@ GCodeResult LedStripManager::HandleM950Led(const CanMessageGeneric &msg, const S
 		{
 			delete newStrip;
 		}
-		return rslt;
 	}
 	else
 	{
 		// Reconfiguring or reporting on an existing strip
-		return slot->Configure(parser, reply, extra);
+		rslt = slot->Configure(parser, reply, extra);
 	}
+	reprap.LedStripsUpdated();
+	return rslt;
 }
 
 // Set the colours of a configured LED strip

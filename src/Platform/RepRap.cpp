@@ -379,6 +379,9 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "heat",					OBJECT_MODEL_FUNC((int32_t)self->heatSeq),								ObjectModelEntryFlags::live },
 	{ "inputs",					OBJECT_MODEL_FUNC((int32_t)self->inputsSeq),							ObjectModelEntryFlags::live },
 	{ "job",					OBJECT_MODEL_FUNC((int32_t)self->jobSeq),								ObjectModelEntryFlags::live },
+#if SUPPORT_LED_STRIPS
+	{ "ledStrips",				OBJECT_MODEL_FUNC((int32_t)self->ledStripsSeq),							ObjectModelEntryFlags::live },
+#endif
 	// no need for 'limits' because it never changes
 	{ "move",					OBJECT_MODEL_FUNC((int32_t)self->moveSeq),								ObjectModelEntryFlags::live },
 	// Note, 'network' is needed even if there is no networking, because it contains the machine name
@@ -418,7 +421,7 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 	26 + SUPPORT_LED_STRIPS,																// limits
 	22 + HAS_VOLTAGE_MONITOR + SUPPORT_LASER,												// state
 	2,																						// state.beep
-	12 + HAS_NETWORKING + (2 * HAS_MASS_STORAGE) + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE),	// seqs
+	12 + HAS_NETWORKING + (2 * HAS_MASS_STORAGE) + (HAS_MASS_STORAGE | HAS_EMBEDDED_FILES | HAS_SBC_INTERFACE) + SUPPORT_LED_STRIPS,	// seqs
 	3																						// state.configErr
 };
 
@@ -431,7 +434,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 // Do nothing more in the constructor; put what you want in RepRap:Init()
 
 RepRap::RepRap() noexcept
-	: boardsSeq(0), directoriesSeq(0), fansSeq(0), heatSeq(0), inputsSeq(0), jobSeq(0), moveSeq(0), globalSeq(0),
+	: boardsSeq(0), directoriesSeq(0), fansSeq(0), heatSeq(0), inputsSeq(0), jobSeq(0), ledStripsSeq(0), moveSeq(0), globalSeq(0),
 	  networkSeq(0), scannerSeq(0), sensorsSeq(0), spindlesSeq(0), stateSeq(0), toolsSeq(0), volumesSeq(0),
 	  lastWarningMillis(0),
 	  ticksInSpinState(0), heatTaskIdleTicks(0),

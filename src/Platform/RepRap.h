@@ -150,6 +150,7 @@ public:
 	void GlobalUpdated() noexcept { ++globalSeq; }
 	void HeatUpdated() noexcept { ++heatSeq; }
 	void InputsUpdated() noexcept { ++inputsSeq; }
+	void LedStripsUpdated() noexcept { ++ledStripsSeq; }
 	void JobUpdated() noexcept { ++jobSeq; }
 	void MoveUpdated() noexcept { ++moveSeq; }
 	void NetworkUpdated() noexcept { ++networkSeq; }
@@ -212,7 +213,7 @@ private:
  	ExpansionManager *expansion;
 #endif
 
-	uint16_t boardsSeq, directoriesSeq, fansSeq, heatSeq, inputsSeq, jobSeq, moveSeq, globalSeq;
+	uint16_t boardsSeq, directoriesSeq, fansSeq, heatSeq, inputsSeq, jobSeq, ledStripsSeq, moveSeq, globalSeq;
 	uint16_t networkSeq, scannerSeq, sensorsSeq, spindlesSeq, stateSeq, toolsSeq, volumesSeq;
 
 	GlobalVariables globalVariables;
