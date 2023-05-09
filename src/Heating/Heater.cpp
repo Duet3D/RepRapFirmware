@@ -58,12 +58,13 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 	// 1. Heater.monitors[] members
 	{ "action",			OBJECT_MODEL_FUNC_IF(self->monitors[context.GetLastIndex()].GetTrigger() != HeaterMonitorTrigger::Disabled,
 												(int32_t)self->monitors[context.GetLastIndex()].GetAction()), 		ObjectModelEntryFlags::none },
-	{ "condition",		OBJECT_MODEL_FUNC(self->monitors[context.GetLastIndex()].GetTriggerName()), 			ObjectModelEntryFlags::none },
+	{ "condition",		OBJECT_MODEL_FUNC(self->monitors[context.GetLastIndex()].GetTriggerName()), 				ObjectModelEntryFlags::none },
 	{ "limit",			OBJECT_MODEL_FUNC_IF(self->monitors[context.GetLastIndex()].GetTrigger() != HeaterMonitorTrigger::Disabled,
 												self->monitors[context.GetLastIndex()].GetTemperatureLimit(), 1),	ObjectModelEntryFlags::none },
+	{ "sensor",			OBJECT_MODEL_FUNC((int32_t)self->monitors[context.GetLastIndex()].GetSensorNumber()), 		ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 13, 3 };
+constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 13, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
 

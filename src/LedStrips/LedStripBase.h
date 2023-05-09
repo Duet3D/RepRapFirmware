@@ -12,7 +12,7 @@
 
 #if SUPPORT_LED_STRIPS
 
-#include <Hardware/IOPorts.h>
+#include <Hardware/IoPorts.h>
 #include <General/NamedEnum.h>
 
 #if SUPPORT_REMOTE_COMMANDS
