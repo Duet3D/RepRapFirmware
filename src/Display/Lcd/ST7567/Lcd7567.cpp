@@ -40,7 +40,7 @@ Lcd7567::Lcd7567(const LcdFont * const fnts[], size_t nFonts) noexcept
 // Get the display type
 DisplayControllerType Lcd7567::GetControllerType() const noexcept
 {
-	return DisplayControllerType::ST7267;
+	return DisplayControllerType::ST7567;
 }
 
 void Lcd7567::HardwareInit() noexcept

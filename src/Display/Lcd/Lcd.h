@@ -16,7 +16,7 @@
 # include "Fonts/LcdFont.h"
 #endif
 
-NamedEnum(DisplayControllerType, uint8_t, none, ST7920, ST7267, ILI9488, numTypes);
+NamedEnum(DisplayControllerType, uint8_t, none, ST7920, ST7567, ILI9488, numTypes);
 
 typedef uint16_t PixelNumber;
 
