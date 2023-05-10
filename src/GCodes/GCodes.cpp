@@ -1870,7 +1870,6 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	ms.reduceAcceleration = false;
 	ms.usePressureAdvance = false;
 	ms.scanningProbeMove = false;
-	ms.movementTool = ms.currentTool;
 	axesToSenseLength.Clear();
 
 	// Check to see if the move is a 'homing' move that endstops are checked on and for which X and Y axis mapping is not applied
@@ -1879,12 +1878,15 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		bool dummy;
 		if (gb.TryGetLimitedUIValue('H', moveType, dummy, 5))
 		{
-			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
+			if (moveType != 0)
 			{
-				return false;
+				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
+				{
+					return false;
+				}
+				ms.moveType = moveType;
+				ms.movementTool = nullptr;
 			}
-			ms.moveType = moveType;
-			ms.movementTool = nullptr;
 		}
 	}
 
