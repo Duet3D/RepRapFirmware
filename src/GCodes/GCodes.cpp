@@ -373,7 +373,7 @@ FilePosition GCodes::GetFilePosition(bool allowNoFilePos) const noexcept
 // Start running the config file
 bool GCodes::RunConfigFile(const char* fileName, bool isMainConfigFile) noexcept
 {
-	const bool ret = DoFileMacro(*TriggerGCode(), fileName, false, AsyncSystemMacroCode);
+	const bool ret = DoFileMacro(*triggerGCode, fileName, false, AsyncSystemMacroCode);
 	if (ret && isMainConfigFile)
 	{
 		runningConfigFile = true;
