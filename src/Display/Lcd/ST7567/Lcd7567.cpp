@@ -9,6 +9,26 @@
 
 #if SUPPORT_12864_LCD
 
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...)		OBJECT_MODEL_FUNC_BODY(Lcd7567, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...)	OBJECT_MODEL_FUNC_IF_BODY(Lcd7567, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry Lcd7567::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. Lcd7567 members
+	{ "contrast",			OBJECT_MODEL_FUNC((int32_t)self->contrastRatio), 	ObjectModelEntryFlags::none },
+	{ "resistorRatio",		OBJECT_MODEL_FUNC((int32_t)self->resistorRatio), 	ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t Lcd7567::objectModelTableDescriptor[] = { 1, 2 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(Lcd7567, Lcd)
+
 constexpr unsigned int TILE_WIDTH = 8;
 constexpr unsigned int TILE_HEIGHT = 8;
 
@@ -18,9 +38,9 @@ Lcd7567::Lcd7567(const LcdFont * const fnts[], size_t nFonts) noexcept
 }
 
 // Get the display type
-const char *_ecv_array Lcd7567::GetDisplayTypeName() const noexcept
+DisplayControllerType Lcd7567::GetControllerType() const noexcept
 {
-	return "128x64 mono graphics with ST7567 controller";
+	return DisplayControllerType::ST7267;
 }
 
 void Lcd7567::HardwareInit() noexcept

@@ -5,6 +5,29 @@
 
 #if SUPPORT_DIRECT_LCD
 
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...)		OBJECT_MODEL_FUNC_BODY(Lcd, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...)	OBJECT_MODEL_FUNC_IF_BODY(Lcd, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry Lcd::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. Lcd members
+	{ "colourBits",				OBJECT_MODEL_FUNC((int32_t)self->GetColourBits()), 			ObjectModelEntryFlags::none },
+	{ "controller", 			OBJECT_MODEL_FUNC(self->GetControllerType().ToString()), 	ObjectModelEntryFlags::none },
+	{ "height",					OBJECT_MODEL_FUNC((int32_t)self->numRows), 					ObjectModelEntryFlags::none },
+	{ "spiFreq",				OBJECT_MODEL_FUNC((int32_t)self->GetSpiFrequency()), 		ObjectModelEntryFlags::none },
+	{ "width",					OBJECT_MODEL_FUNC((int32_t)self->numCols), 					ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t Lcd::objectModelTableDescriptor[] = { 1, 5 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(Lcd)
+
 #if USE_FONT_CHIP
 Lcd::Lcd(PixelNumber nr, PixelNumber nc, Pin fontCsPin) noexcept
 	: fontChip(fontCsPin),

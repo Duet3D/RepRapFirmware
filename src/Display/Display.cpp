@@ -65,13 +65,12 @@ constexpr ObjectModelTableEntry Display::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Display members
 #if SUPPORT_ROTARY_ENCODER
-	{ "pulsesPerClick",			OBJECT_MODEL_FUNC((int32_t)self->encoder->GetPulsesPerClick()), 	ObjectModelEntryFlags::none },
+	{ "encoder",	OBJECT_MODEL_FUNC_IF(self->encoder != nullptr, self->encoder, 0), 	ObjectModelEntryFlags::none },
 #endif
-	{ "spiFreq",				OBJECT_MODEL_FUNC((int32_t)self->lcd->GetSpiFrequency()), 			ObjectModelEntryFlags::none },
-	{ "typeName", 				OBJECT_MODEL_FUNC(self->lcd->GetDisplayTypeName()), 				ObjectModelEntryFlags::none },
+	{ "screen",		OBJECT_MODEL_FUNC_IF(self->lcd != nullptr, self->lcd, 0), 			ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Display::objectModelTableDescriptor[] = { 1, 2 + SUPPORT_ROTARY_ENCODER };
+constexpr uint8_t Display::objectModelTableDescriptor[] = { 1, 1 + SUPPORT_ROTARY_ENCODER };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Display)
 
@@ -228,7 +227,7 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 		DeleteObject(touchController);
 #endif
 		seen = true;
-		switch (gb.GetUIValue())
+		switch (gb.GetLimitedUIValue('P', (uint32_t)DisplayControllerType::numTypes))
 		{
 		case 0:		// no display
 			// We have already deleted the display, menu buffer and encoder, so nothing to do here
@@ -278,7 +277,7 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 #endif
 
 		default:
-			reply.copy("Unknown display type");
+			reply.copy("Unsupported display type");
 			return GCodeResult::error;
 		}
 	}
@@ -299,11 +298,21 @@ GCodeResult Display::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 	{
 		if (lcd != nullptr)
 		{
-			reply.printf("Direct connect display: %s, %.2fMHz"
+			reply.printf("Direct connect display: %ux%u ", lcd->GetNumCols(), lcd->GetNumRows());
+			const unsigned int bits = lcd->GetColourBits();
+			if (bits == 1)
+			{
+				reply.cat("mono");
+			}
+			else
+			{
+				reply.catf("%u-bit colour", bits);
+			}
+			reply.catf(" with %s controller, %.2fMHz"
 #if SUPPORT_ROTARY_ENCODER
 							", %d encoder pulses per click"
 #endif
-							, lcd->GetDisplayTypeName(), (double)(lcd->GetSpiFrequency() * 0.000001)
+							, lcd->GetControllerType().ToString(), (double)(lcd->GetSpiFrequency() * 0.000001)
 #if SUPPORT_ROTARY_ENCODER
 							, encoder->GetPulsesPerClick()
 #endif

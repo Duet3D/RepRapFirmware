@@ -26,9 +26,11 @@ public:
 	bool FlushSome() noexcept override;
 
 	// Get the display type
-	const char *_ecv_array GetDisplayTypeName() const noexcept override;
+	DisplayControllerType GetControllerType() const noexcept override;
 
 protected:
+	DECLARE_OBJECT_MODEL
+
 	void HardwareInit() noexcept override;
 
 private:
