@@ -66,6 +66,7 @@ protected:
 		bool following;
 
 		void GetM150Params(GCodeBuffer& gb) THROWS(GCodeException);
+		void ApplyBrightness() noexcept;
 #if SUPPORT_REMOTE_COMMANDS
 		void GetM150Params(CanMessageGenericParser& parser) noexcept;
 #endif

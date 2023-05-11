@@ -195,7 +195,7 @@ void LocalLedStrip::LedParams::GetM150Params(GCodeBuffer& gb) THROWS(GCodeExcept
 	}
 	else if (gb.Seen('Y'))
 	{
-		brightness = gb.GetLimitedUIValue('Y',  32) << 3;					// valid Y values are 0-31
+		brightness = (gb.GetLimitedUIValue('Y', 32) * 255)/31;				// valid Y values are 0-31
 	}
 
 	gb.TryGetUIValue('S', numLeds, dummy);
@@ -220,7 +220,7 @@ void LocalLedStrip::LedParams::GetM150Params(CanMessageGenericParser& parser) no
 	{
 		if (parser.GetUintParam('Y',  brightness))
 		{
-			brightness <<= 3;												// valid Y values are 0-31
+			brightness = (brightness * 255)/31;								// valid Y values are 0-31
 		}
 	}
 
@@ -229,6 +229,16 @@ void LocalLedStrip::LedParams::GetM150Params(CanMessageGenericParser& parser) no
 }
 
 #endif
+
+// Apply the brightness value to the red/green/blue/white values. This is needed for Neopixel strips, which don't have a 'brightness' value sent to them.
+void LocalLedStrip::LedParams::ApplyBrightness() noexcept
+{
+	red = ((red * brightness) + 255) >> 8;
+	green = ((green * brightness) + 255) >> 8;
+	blue = ((blue * brightness) + 255) >> 8;
+	white = ((white * brightness) + 255) >> 8;
+	brightness = 255;														// in case we call this again
+}
 
 #if SUPPORT_DMA_NEOPIXEL || SUPPORT_DMA_DOTSTAR
 

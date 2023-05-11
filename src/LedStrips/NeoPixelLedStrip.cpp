@@ -95,6 +95,7 @@ GCodeResult NeoPixelLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply
 
 	LedParams params;
 	params.GetM150Params(gb);
+	params.ApplyBrightness();
 
 #if SUPPORT_DMA_NEOPIXEL
 	if (UsesDma())
