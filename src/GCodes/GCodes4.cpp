@@ -1225,7 +1225,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.checkEndstops = true;
 					ms.reduceAcceleration = true;
 					ms.coords[Z_AXIS] = (IsAxisHomed(Z_AXIS))
-												? platform.AxisMinimum(Z_AXIS) - zp->GetDiveHeight() + zp->GetActualTriggerHeight()	// Z axis has been homed, so no point in going very far
+												? -zp->GetDiveHeight() + zp->GetActualTriggerHeight()	// Z axis has been homed, so no point in going very far
 												: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet, so treat this as a homing move
 					ms.feedRate = zp->GetProbingSpeed(tapsDone);
 					ms.linearAxesMentioned = true;
