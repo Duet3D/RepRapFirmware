@@ -2525,8 +2525,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (!seen)
 					{
-						reply.copy("Axis limits (mm)");
-						char sep = 's';
+						reply.copy("Axis limits (mm");
+						char sep = ')';
 						for (size_t axis = 0; axis < numTotalAxes; axis++)
 						{
 							reply.catf("%c %c%.1f:%.1f", sep, axisLetters[axis], (double)platform.AxisMinimum(axis), (double)platform.AxisMaximum(axis));
