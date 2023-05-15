@@ -754,7 +754,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::debugText:
-				reprap.GetPlatform().MessageF(GenericMessage, "Debug from %u: %.64s\n", buf->id.Src(), buf->msg.debugText.text);
+				reprap.GetPlatform().MessageF(GenericMessage, "Debug from %u: %.*s\n", buf->id.Src(), buf->msg.debugText.GetMaxTextLength(buf->dataLength), buf->msg.debugText.text);
 				break;
 
 #if SUPPORT_ACCELEROMETERS
