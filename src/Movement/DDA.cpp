@@ -768,7 +768,6 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	flags.isRemote = true;
 	flags.isPrintingMove = flags.usePressureAdvance = msg.usePressureAdvance;
 
-
 	// Prepare for movement
 	PrepParams params;
 	params.shapingPlan.condensedPlan = msg.shapingPlan;

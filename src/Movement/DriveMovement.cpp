@@ -9,9 +9,12 @@
 #include "DDA.h"
 #include "Move.h"
 #include "StepTimer.h"
-#include <Platform/RepRap.h>
 #include <Math/Isqrt.h>
-#include "Kinematics/LinearDeltaKinematics.h"
+#include <Platform/RepRap.h>
+
+#if SUPPORT_LINEAR_DELTA
+# include "Kinematics/LinearDeltaKinematics.h"
+#endif
 
 // Static members
 
@@ -61,15 +64,17 @@ void DriveMovement::DebugPrint() const noexcept
 		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " ssl=%" PRIu32 " A=%.4e B=%.4e C=%.4e dsf=%.4e tsf=%.1f",
 						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, segmentStepLimit,
 							(double)pA, (double)pB, (double)pC, (double)distanceSoFar, (double)timeSoFar);
-		if (isDelta)
+		if (isExtruder)
+		{
+			debugPrintf(" pa=%.3e ebf=%.3e\n", (double)mp.cart.pressureAdvanceK, (double)mp.cart.extrusionBroughtForwards);
+		}
+#if SUPPORT_LINEAR_DELTA
+		else if (isDelta)
 		{
 			debugPrintf(" hmz0s=%.4e minusAaPlusBbTimesS=%.4e dSquaredMinusAsquaredMinusBsquared=%.4e drev=%.4e\n",
 							(double)mp.delta.fHmz0s, (double)mp.delta.fMinusAaPlusBbTimesS, (double)mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared, (double)mp.delta.reverseStartDistance);
 		}
-		else if (isExtruder)
-		{
-			debugPrintf(" pa=%.3e ebf=%.3e\n", (double)mp.cart.pressureAdvanceK, (double)mp.cart.extrusionBroughtForwards);
-		}
+#endif
 		else
 		{
 			debugPrintf("\n");
@@ -241,7 +246,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
 			pB = currentSegment->CalcLinearB(startDistance, startTime);
 			state = DMState::cartLinear;
-			reverseStartStep = segmentStepLimit = (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
+			reverseStartStep = segmentStepLimit = (int32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 		}
 		else
 		{
@@ -471,6 +476,11 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 // If there are no steps to do, set nextStep = 0 so that DDARing::CurrentMoveCompleted doesn't add any steps to the movement accumulator
 // We have already generated the extruder segments and we know that there are some
 // effStepsPerMm is the number of extruder steps needed per mm of totalDistance before we apply pressure advance
+// A note on accumulating partial extruder steps:
+// We must only accumulate partial steps when the extrusion is forwards. If we try to accumulate partial steps on reverse extrusion too,
+// things go horribly wrong under particular circumstances. We use the pressure advance flag as a proxy for forward extrusion.
+// This means that partial extruder steps don't get accumulated on a reprime move, but that is probably a good thing because it will
+// behave in a similar way to a retraction move.
 bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept
 {
 	const float effStepsPerMm = fabsf(signedEffStepsPerMm);
@@ -508,7 +518,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	{
 		if (dda.flags.usePressureAdvance)
 		{
-			shaper.AddExtrusionPending(dda.totalDistance * effStepsPerMm);
+			shaper.AddExtrusionPending(dda.totalDistance * effStepsPerMm);	// add the requested motion to the extrusion pending
 		}
 		return false;								// quit if no steps to do
 	}
