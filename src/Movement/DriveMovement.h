@@ -14,7 +14,6 @@
 
 class LinearDeltaKinematics;
 class PrepParams;
-class ExtruderShaper;
 
 enum class DMState : uint8_t
 {
@@ -41,8 +40,8 @@ public:
 
 	DriveMovement(DriveMovement *next) noexcept;
 
-	void* operator new(size_t count) { return Tasks::AllocPermanent(count); }
-	void* operator new(size_t count, std::align_val_t align) { return Tasks::AllocPermanent(count, align); }
+	void* operator new(size_t count) noexcept { return Tasks::AllocPermanent(count); }
+	void* operator new(size_t count, std::align_val_t align) noexcept { return Tasks::AllocPermanent(count, align); }
 	void operator delete(void* ptr) noexcept {}
 	void operator delete(void* ptr, std::align_val_t align) noexcept {}
 
@@ -88,7 +87,7 @@ private:
 	uint8_t direction : 1,								// true=forwards, false=backwards
 			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
 			directionReversed : 1,						// true if we have reversed the requested motion direction because of pressure advance
-			isDelta : 1,								// true if this DM uses segment-free delta kinematics
+			isDelta : 1,								// true if this motor is executing a delta tower move
 			isExtruder : 1,								// true if this DM is for an extruder (only matters if !isDelta)
 					: 1,								// padding to make the next field last
 			stepsTakenThisSegment : 2;					// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
@@ -122,7 +121,7 @@ private:
 			float reverseStartDistance;					// the overall move distance at which movement reversal occurs
 		} delta;
 
-		struct CartesianParameters
+		struct CartesianParameters						// Parameters for Cartesian and extruder movement, including extruder pressure advance
 		{
 			float pressureAdvanceK;						// how much pressure advance is applied to this move
 			float effectiveStepsPerMm;					// the steps/mm multiplied by the movement fraction
@@ -210,7 +209,7 @@ inline void DriveMovement::CheckDirection(bool reversed) noexcept
 // Get the current full step interval for this axis or extruder
 inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const noexcept
 {
-	return (nextStep < totalSteps && nextStep > (1 << microstepShift))				// if at least 1 full step done
+	return ((nextStep >> microstepShift) != 0)										// if at least 1 full step done
 				? stepInterval << microstepShift									// return the interval between steps converted to full steps
 					: 0;
 }
