@@ -166,7 +166,7 @@ public:
 
 	// Calculate the move A coefficient in step_clocks^2 for an accelerating or decelerating move
 	float CalcNonlinearA(float startDistance) const noexcept pre(!IsLinear());
-	float CalcNonlinearA(float startDistance, float pressureAdvanceK) pre(!IsLinear()) const noexcept pre(!IsLinear());
+	float CalcNonlinearA(float startDistance, float pressureAdvanceK) const noexcept pre(!IsLinear());
 
 	// Calculate the move B coefficient in step_clocks for an accelerating or decelerating move
 	float CalcNonlinearB(float startTime) const noexcept pre(!IsLinear());
