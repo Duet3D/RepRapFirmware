@@ -265,7 +265,8 @@ struct DriverId
 NamedEnum(Module, uint8_t,
 			Platform, Network, Webserver, Gcodes, Move, Heat, Dda, unused1 /* was Roland */,
 			unused2 /* was Scanner*/, PrintMonitor, Storage, PortControl, DuetExpansion, FilamentSensors, WiFi, Display,
-			SbcInterface, Can,
+			SbcInterface,
+			CAN,					// uppercase to avoid eCv clash with type Can in Microchip driver file
 			none					// make this one last so that it is the number of real modules, one greater than the last real module number
 		 );
 

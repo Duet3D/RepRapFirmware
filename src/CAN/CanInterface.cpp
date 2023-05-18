@@ -795,7 +795,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 				break;
 			}
 
-			if (reprap.Debug(Module::Can))
+			if (reprap.Debug(Module::CAN))
 			{
 				buf->DebugPrint("Rx1:");
 			}
@@ -907,7 +907,7 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 	{
 		if (can0dev->ReceiveMessage(RxBufferIndexRequest, TaskBase::TimeoutUnlimited, &buf))
 		{
-			if (reprap.Debug(Module::Can))
+			if (reprap.Debug(Module::CAN))
 			{
 				buf.DebugPrint("Rx0:");
 			}
