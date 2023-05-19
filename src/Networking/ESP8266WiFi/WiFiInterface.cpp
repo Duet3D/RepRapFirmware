@@ -91,7 +91,12 @@ const uint32_t WiFiSlowResponseTimeoutMillis = 500;		// SPI timeout when when th
 const uint32_t WiFiFastResponseTimeoutMillis = 100;		// SPI timeout when when the ESP does not have to access SPIFFS filesystem. 20ms is too short on Duet 2 with both FTP and Telnet enabled.
 const uint32_t WiFiWaitReadyMillis = 100;
 const uint32_t WiFiStartupMillis = 15000;				// Formatting the SPIFFS partition can take up to 10s.
+
+#if WIFI_USES_ESP32
+const uint32_t WiFiStableMillis = 500;					// Spin() fails in state starting2 when starting wifi in config.g if we use 300 or lower here. When testing, 400 was OK.
+#else
 const uint32_t WiFiStableMillis = 100;
+#endif
 
 const unsigned int MaxHttpConnections = 4;
 
@@ -637,6 +642,7 @@ void WiFiInterface::Spin() noexcept
 			if (risingEdges >= 2) // the first rising edge is the one coming out of reset
 			{
 				lastTickMillis = now;
+				startupRetryCount = 0;
 				SetState(NetworkState::starting2);
 			}
 			else
@@ -652,7 +658,7 @@ void WiFiInterface::Spin() noexcept
 
 	case NetworkState::starting2:
 		{
-			// See if the ESP8266 has kept its pins at their stable values for long enough
+			// See if the WiFi module has kept its pins at their stable values for long enough
 			const uint32_t now = millis();
 			if (digitalRead(SamCsPin) && digitalRead(EspDataReadyPin) && !digitalRead(APIN_ESP_SPI_SCK))
 			{
@@ -691,12 +697,18 @@ void WiFiInterface::Spin() noexcept
 						SetState(NetworkState::active);
 						espStatusChanged = true;				// make sure we fetch the current state and enable the ESP interrupt
 					}
+					else if (startupRetryCount < 3)
+					{
+						// When we use the ESP32 module, the first startup attempt often fails when we try to start up straight after running config.g
+						++startupRetryCount;
+						lastTickMillis = now;
+					}
 					else
 					{
 						// Something went wrong, maybe a bad firmware image was flashed
 						// Disable the WiFi chip again in this case
-						platform.MessageF(NetworkErrorMessage, "failed to initialise WiFi module: %s\n", TranslateWiFiResponse(rc));
 						Stop();
+						platform.MessageF(NetworkErrorMessage, "failed to initialise WiFi module: %s\n", TranslateWiFiResponse(rc));
 					}
 				}
 			}

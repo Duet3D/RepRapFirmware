@@ -171,6 +171,7 @@ private:
 	char wiFiServerVersion[16];
 
 	bool usingDhcp = true;
+	uint8_t startupRetryCount;
 
 	// For processing debug messages from the WiFi module
 	bool serialRunning;
