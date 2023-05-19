@@ -3346,22 +3346,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 552: // Enable/Disable network and/or Set/Get IP address
 				if (CheckNetworkCommandAllowed(gb, reply, result))
 				{
+					Network& network = reprap.GetNetwork();
 					bool seen = false;
-					const unsigned int interface = (gb.Seen('I')) ? gb.GetUIValue() : 0;
-
+					const unsigned int interface = (gb.Seen('I')) ? gb.GetLimitedUIValue('I', network.GetNumNetworkInterfaces()) : 0;
 					String<SsidBufferLength> ssid;
+
 					if (reprap.GetNetwork().IsWiFiInterface(interface))
 					{
-						if (gb.Seen('S')) // Has the user turned the network on or off?
+						if (gb.Seen('P'))
 						{
-							const int enableValue = gb.GetIValue();
-							seen = true;
-
-							if (gb.Seen('P'))
-							{
-								gb.GetQuotedString(ssid.GetRef());
-							}
-							result = reprap.GetNetwork().EnableInterface(interface, enableValue, ssid.GetRef(), reply);
+							gb.GetQuotedString(ssid.GetRef());
 						}
 					}
 					else
@@ -3373,18 +3367,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							gb.GetIPAddress(eth);
 							platform.SetIPAddress(eth);
 						}
+					}
 
-						// Process this one last in case the IP address is changed and the network enabled in the same command
-						if (gb.Seen('S')) // Has the user turned the network on or off?
-						{
-							seen = true;
-							result = reprap.GetNetwork().EnableInterface(interface, gb.GetIValue(), ssid.GetRef(), reply);
-						}
+					// Process this one last in case the IP address is changed and the network enabled in the same command
+					if (gb.Seen('S'))						// has the user turned the network interface on or off?
+					{
+						seen = true;
+						result = network.EnableInterface(interface, gb.GetIValue(), ssid.GetRef(), reply);
 					}
 
 					if (!seen)
 					{
-						result = reprap.GetNetwork().GetNetworkState(interface, reply);
+						result = network.GetNetworkState(interface, reply);
 					}
 				}
 				break;

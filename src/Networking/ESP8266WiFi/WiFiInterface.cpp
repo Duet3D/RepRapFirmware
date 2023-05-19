@@ -127,7 +127,7 @@ static inline void DisableSpi() noexcept
 #endif
 }
 
-static inline void EnableSpi()
+static inline void EnableSpi() noexcept
 {
 #if SAME5x
 	WiFiSpiSercom->SPI.CTRLA.reg |= SERCOM_SPI_CTRLA_ENABLE;
@@ -138,7 +138,7 @@ static inline void EnableSpi()
 }
 
 // Clear the transmit and receive registers and put the SPI into slave mode, SPI mode 1
-static inline void ResetSpi()
+static inline void ResetSpi() noexcept
 {
 #if SAME5x
 	WiFiSpiSercom->SPI.CTRLA.reg |= SERCOM_SPI_CTRLA_SWRST;
@@ -232,7 +232,7 @@ static inline void DisableEspInterrupt() noexcept
 	detachInterrupt(EspDataReadyPin);
 }
 
-static const char* GetWiFiAuthFriendlyStr(WiFiAuth auth)
+static const char* GetWiFiAuthFriendlyStr(WiFiAuth auth) noexcept
 {
 	const char* res = "Unknown";
 
@@ -305,8 +305,8 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 		protocolEnabled[i] = (i == HttpProtocol);
 	}
 
-	strcpy(actualSsid, "(unknown)");
-	strcpy(wiFiServerVersion, "(unknown)");
+	actualSsid.copy("(unknown)");
+	wiFiServerVersion.copy("(unknown)");
 
 #ifdef DUET3MINI
 	serialWiFiDevice = new AsyncSerial(WiFiUartSercomNumber, WiFiUartRxPad, 512, 512, SerialWiFiPortInit, SerialWiFiPortDeinit);
@@ -323,21 +323,23 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(_ret) OBJECT_MODEL_FUNC_BODY(WiFiInterface, _ret)
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(WiFiInterface, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition,...) OBJECT_MODEL_FUNC_IF_BODY(WiFiInterface, _condition, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry WiFiInterface::objectModelTable[] =
 {
 	// These entries must be in alphabetical order
-	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),				ObjectModelEntryFlags::none },
-	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->wiFiServerVersion),		ObjectModelEntryFlags::none },
-	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),				ObjectModelEntryFlags::none },
-	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),			ObjectModelEntryFlags::none },
-	{ "state",				OBJECT_MODEL_FUNC(self->GetStateName()),		ObjectModelEntryFlags::none },
-	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),				ObjectModelEntryFlags::none },
-	{ "type",				OBJECT_MODEL_FUNC_NOSELF("wifi"),				ObjectModelEntryFlags::none },
+	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),															ObjectModelEntryFlags::none },
+	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->wiFiServerVersion.c_str()),											ObjectModelEntryFlags::none },
+	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),															ObjectModelEntryFlags::none },
+	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),														ObjectModelEntryFlags::none },
+	{ "ssid",				OBJECT_MODEL_FUNC_IF(self->GetState() == NetworkState::active, self->actualSsid.c_str()),	ObjectModelEntryFlags::none },
+	{ "state",				OBJECT_MODEL_FUNC(self->GetStateName()),													ObjectModelEntryFlags::none },
+	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),															ObjectModelEntryFlags::none },
+	{ "type",				OBJECT_MODEL_FUNC_NOSELF("wifi"),															ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t WiFiInterface::objectModelTableDescriptor[] = { 1, 7 };
+constexpr uint8_t WiFiInterface::objectModelTableDescriptor[] = { 1, 8 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(WiFiInterface)
 
@@ -586,7 +588,7 @@ GCodeResult WiFiInterface::GetNetworkState(const StringRef& reply) noexcept
 		reply.cat(TranslateWiFiState(currentMode));
 		if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 		{
-			reply.catf("%s, IP address %s", actualSsid, IP4String(ipAddress).c_str());
+			reply.catf("%s, IP address %s", actualSsid.c_str(), IP4String(ipAddress).c_str());
 		}
 		break;
 	default:
@@ -740,7 +742,7 @@ void WiFiInterface::Spin() noexcept
 					int32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
 					if (rc > 0)
 					{
-						SafeStrncpy(wiFiServerVersion, status.Value().versionText, ARRAY_SIZE(wiFiServerVersion));
+						wiFiServerVersion.copy(status.Value().versionText);
 						macAddress.SetFromBytes(status.Value().macAddress);
 
 						// Set the hostname before anything else is done
@@ -813,7 +815,7 @@ void WiFiInterface::Spin() noexcept
 			}
 			else if (requestedMode == WiFiState::connected)
 			{
-				rslt = SendCommand(NetworkCommand::networkStartClient, 0, 0, 0, requestedSsid, SsidLength, nullptr, 0);
+				rslt = SendCommand(NetworkCommand::networkStartClient, 0, 0, 0, requestedSsid.Pointer(), requestedSsid.Capacity(), nullptr, 0);
 			}
 			else if (requestedMode == WiFiState::runningAsAccessPoint)
 			{
@@ -911,13 +913,13 @@ void WiFiInterface::Spin() noexcept
 					if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
 					{
 						ipAddress.SetV4LittleEndian(status.Value().ipAddress);
-						SafeStrncpy(actualSsid, status.Value().ssid, SsidLength);
+						actualSsid.copy(status.Value().ssid);
 					}
 					InitSockets();
 					reconnectCount = 0;
 					platform.MessageF(NetworkInfoMessage, "WiFi module is %s%s, IP address %s\n",
 						TranslateWiFiState(currentMode),
-						actualSsid,
+						actualSsid.c_str(),
 						IP4String(ipAddress).c_str());
 				}
 				break;
@@ -1067,8 +1069,7 @@ GCodeResult WiFiInterface::EnableInterface(int mode, const StringRef& ssid, cons
 											: WiFiState::disabled;
 	if (modeRequested == WiFiState::connected)
 	{
-		memset(requestedSsid, 0, sizeof(requestedSsid));
-		SafeStrncpy(requestedSsid, ssid.c_str(), ARRAY_SIZE(requestedSsid));
+		requestedSsid.copy(ssid.c_str());
 	}
 
 	if (activated)
