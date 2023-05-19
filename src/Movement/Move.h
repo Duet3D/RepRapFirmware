@@ -154,6 +154,7 @@ public:
 	uint32_t GetScheduledMoves() const noexcept { return rings[0].GetScheduledMoves(); }	// How many moves have been scheduled?
 	uint32_t GetCompletedMoves() const noexcept { return rings[0].GetCompletedMoves(); }	// How many moves have been completed?
 	void ResetMoveCounters() noexcept { rings[0].ResetMoveCounters(); }
+	void UpdateExtrusionPendingLimits(float extrusionPending) noexcept;
 
 	HeightMap& AccessHeightMap() noexcept { return heightMap; }								// Access the bed probing grid
 	const GridDefinition& GetGrid() const noexcept { return heightMap.GetGrid(); }			// Get the grid definition
@@ -304,6 +305,8 @@ private:
 
 	Kinematics *kinematics;								// What kinematics we are using
 
+	float minExtrusionPending = 0.0, maxExtrusionPending = 0.0;
+
 	AxisShaper axisShaper;
 	ExtruderShaper extruderShapers[MaxExtruders];
 
@@ -326,6 +329,14 @@ private:
 inline void Move::GetCurrentMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, bool disableMotorMapping) const noexcept
 {
 	return rings[msNumber].GetCurrentMachinePosition(m, disableMotorMapping);
+}
+
+// Update the min and max extrusion pending values. These are reported by M122 to assist with debugging print quality issues.
+// Inlined because this is only called from one place.
+inline void Move::UpdateExtrusionPendingLimits(float extrusionPending) noexcept
+{
+	if (extrusionPending > maxExtrusionPending) { maxExtrusionPending = extrusionPending; }
+	else if (extrusionPending < minExtrusionPending) { minExtrusionPending = extrusionPending; }
 }
 
 #if SUPPORT_ASYNC_MOVES

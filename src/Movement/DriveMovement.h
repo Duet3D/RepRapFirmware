@@ -28,8 +28,10 @@ enum class DMState : uint8_t
 	cartDecelForwardsReversing,						// linear decelerating motion, expect reversal
 	cartDecelReverse,								// linear decelerating motion, reversed
 
+#if SUPPORT_LINEAR_DELTA
 	deltaNormal,									// moving forwards without reversing in this segment, or in reverse
 	deltaForwardsReversing,							// moving forwards to start with, reversing before the end of this segment
+#endif
 };
 
 // This class describes a single movement of one drive
@@ -109,6 +111,7 @@ private:
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	union
 	{
+#if SUPPORT_LINEAR_DELTA
 		struct DeltaParameters							// Parameters for delta movement
 		{
 			// The following don't depend on how the move is executed, so they could be set up in Init() if we use fixed acceleration/deceleration
@@ -120,19 +123,19 @@ private:
 			float fMinusAaPlusBbTimesS;
 			float reverseStartDistance;					// the overall move distance at which movement reversal occurs
 		} delta;
+#endif
 
 		struct CartesianParameters						// Parameters for Cartesian and extruder movement, including extruder pressure advance
 		{
 			float pressureAdvanceK;						// how much pressure advance is applied to this move
 			float effectiveStepsPerMm;					// the steps/mm multiplied by the movement fraction
 			float effectiveMmPerStep;					// reciprocal of [the steps/mm multiplied by the movement fraction]
-			float extrusionBroughtForwards;				// the amount of extrusion brought forwards from previous moves. Only needed for debug output.
 		} cart;
 	} mp;
 };
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
-// Return true if there are more steps to do. When finished, leave nextStep == totalSteps + 1.
+// Return true if there are more steps to do. When finished, leave nextStep == totalSteps + 1 and state == DMState::idle.
 // We inline this part to speed things up when we are doing double/quad/octal stepping.
 inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
 {
