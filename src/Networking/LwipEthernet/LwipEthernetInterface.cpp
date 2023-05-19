@@ -507,7 +507,7 @@ void LwipEthernetInterface::Spin() noexcept
 
 void LwipEthernetInterface::Diagnostics(MessageType mtype) noexcept
 {
-	platform.MessageF(mtype, "= Ethernet =\nState: %s\n", GetStateName());
+	platform.MessageF(mtype, "= Ethernet =\nInterface state: %s\n", GetStateName());
 	ethernetif_diagnostics(mtype);
 	for (const LwipSocket *s : sockets)
 	{

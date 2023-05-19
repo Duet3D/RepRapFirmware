@@ -5,7 +5,6 @@
  *      Authors: Christian and David
  */
 
-
 #include "WiFiInterface.h"
 
 #if HAS_WIFI_NETWORKING
@@ -92,7 +91,12 @@ const uint32_t WiFiSlowResponseTimeoutMillis = 500;		// SPI timeout when when th
 const uint32_t WiFiFastResponseTimeoutMillis = 100;		// SPI timeout when when the ESP does not have to access SPIFFS filesystem. 20ms is too short on Duet 2 with both FTP and Telnet enabled.
 const uint32_t WiFiWaitReadyMillis = 100;
 const uint32_t WiFiStartupMillis = 15000;				// Formatting the SPIFFS partition can take up to 10s.
+
+#if WIFI_USES_ESP32
+const uint32_t WiFiStableMillis = 500;					// Spin() fails in state starting2 when starting wifi in config.g if we use 300 or lower here. When testing, 400 was OK.
+#else
 const uint32_t WiFiStableMillis = 100;
+#endif
 
 const unsigned int MaxHttpConnections = 4;
 
@@ -332,7 +336,7 @@ constexpr ObjectModelTableEntry WiFiInterface::objectModelTable[] =
 	{ "actualIP",			OBJECT_MODEL_FUNC(self->ipAddress),															ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->wiFiServerVersion.c_str()),											ObjectModelEntryFlags::none },
 	{ "gateway",			OBJECT_MODEL_FUNC(self->gateway),															ObjectModelEntryFlags::none },
-	{ "mac",				OBJECT_MODEL_FUNC(self->macAddress),														ObjectModelEntryFlags::none },
+	{ "mac",				OBJECT_MODEL_FUNC_IF(self->GetState() == NetworkState::active, self->macAddress),			ObjectModelEntryFlags::none },
 	{ "ssid",				OBJECT_MODEL_FUNC_IF(self->GetState() == NetworkState::active, self->actualSsid.c_str()),	ObjectModelEntryFlags::none },
 	{ "state",				OBJECT_MODEL_FUNC(self->GetStateName()),													ObjectModelEntryFlags::none },
 	{ "subnet",				OBJECT_MODEL_FUNC(self->netmask),															ObjectModelEntryFlags::none },
@@ -712,6 +716,7 @@ void WiFiInterface::Spin() noexcept
 			if (risingEdges >= 2) // the first rising edge is the one coming out of reset
 			{
 				lastTickMillis = now;
+				startupRetryCount = 0;
 				SetState(NetworkState::starting2);
 			}
 			else
@@ -727,7 +732,7 @@ void WiFiInterface::Spin() noexcept
 
 	case NetworkState::starting2:
 		{
-			// See if the ESP8266 has kept its pins at their stable values for long enough
+			// See if the WiFi module has kept its pins at their stable values for long enough
 			const uint32_t now = millis();
 			if (digitalRead(SamCsPin) && digitalRead(EspDataReadyPin) && !digitalRead(APIN_ESP_SPI_SCK))
 			{
@@ -766,12 +771,17 @@ void WiFiInterface::Spin() noexcept
 						SetState(NetworkState::active);
 						espStatusChanged = true;				// make sure we fetch the current state and enable the ESP interrupt
 					}
+					else if (startupRetryCount < 3)
+					{
+						// When we use the ESP32 module, the first startup attempt often fails when we try to start up straight after running config.g
+						++startupRetryCount;
+						lastTickMillis = now;
+					}
 					else
 					{
-						// Something went wrong, maybe a bad firmware image was flashed
-						// Disable the WiFi chip again in this case
-						platform.MessageF(NetworkErrorMessage, "failed to initialise WiFi module: %s\n", TranslateWiFiResponse(rc));
+						// Something went wrong, maybe a bad firmware image was flashed. Disable the WiFi chip again in this case
 						Stop();
+						platform.MessageF(NetworkErrorMessage, "failed to initialise WiFi module: %s\n", TranslateWiFiResponse(rc));
 					}
 				}
 			}
@@ -1000,7 +1010,7 @@ const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 {
 	platform.MessageF(mtype,
-						"= WiFi =\nNetwork state is %s\n"
+						"= WiFi =\nInterface state: %s\n"
 						"Module is %s\n"
 						"Failed messages: pending %u, notready %u, noresp %u\n",
 						 	 GetStateName(),
@@ -2199,11 +2209,6 @@ void WiFiInterface::StartWiFi() noexcept
 #endif
 
 	digitalWrite(EspEnablePin, true);
-
-#if !SAME5x
-	SetPinFunction(APIN_SerialWiFi_TXD, SerialWiFiPeriphMode);	// connect the pins to the UART
-	SetPinFunction(APIN_SerialWiFi_RXD, SerialWiFiPeriphMode);	// connect the pins to the UART
-#endif
 
 #if WIFI_USES_ESP32
 	SERIAL_WIFI_DEVICE.begin(WiFiBaudRate_ESP32);				// initialise the UART, to receive debug info

@@ -175,6 +175,7 @@ private:
 
 	String<StringLength20> wiFiServerVersion;
 
+	uint8_t startupRetryCount;
 	bool usingDhcp = true;
 
 	// For processing debug messages from the WiFi module
