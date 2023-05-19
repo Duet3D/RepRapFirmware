@@ -73,7 +73,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 // The physical capabilities of the machine
 
 constexpr size_t NumDirectDrivers = 4;				// The maximum number of drives supported by the electronics
-
 constexpr size_t MaxSmartDrivers = NumDirectDrivers;	// The maximum number of smart drivers
 
 constexpr size_t MaxSensors = 32;

@@ -64,6 +64,14 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;
 #define SUPPORT_DMA_NEOPIXEL	1
 #define ALLOCATE_DEFAULT_PORTS	1
 
+// Disable at least some of the kinematics that we don't need
+#define SUPPORT_LINEAR_DELTA	0					// leave out linear delta kinematics to save flash space
+#define SUPPORT_ROTARY_DELTA	0					// leave out rotary delta kinematics to save flash space
+#define SUPPORT_HANGPRINTER		0					// leave out hangprinter kinematics to save flash space
+#define SUPPORT_POLAR			0					// leave out polar kinematics to save flash space
+#define SUPPORT_SCARA			0					// leave out SCARA kinematics to save flash space
+#define SUPPORT_FIVEBARSCARA	0					// leave out 5-bar SCARA kinematics to save flash space
+
 // The physical capabilities of the machine
 
 #if defined(PCCB_10)
