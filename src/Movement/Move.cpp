@@ -526,7 +526,7 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	p.MessageF(mtype,
 				"=== Move ===\nDMs created %u, segments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f"
 #if 1	//debug
-				", minexp %.2f, maxxp %.2f"
+				", ebfmin %.2f, ebfmax %.2f"
 #endif
 				"\n",
 						DriveMovement::NumCreated(), MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift
