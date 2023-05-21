@@ -752,6 +752,12 @@ void RepRap::Spin() noexcept
 	display->Spin();
 #endif
 
+#if SUPPORT_CAN_EXPANSION
+	ticksInSpinState = 0;
+	spinningModule = Module::Expansion;
+	expansion->Spin();
+#endif
+
 #if HAS_SBC_INTERFACE
 	// Keep the SBC task spinning from the main task in standalone mode to respond to a SBC if necessary
 	if (!UsingSbcInterface())

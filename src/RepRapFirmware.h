@@ -267,6 +267,7 @@ NamedEnum(Module, uint8_t,
 			unused2 /* was Scanner*/, PrintMonitor, Storage, PortControl, DuetExpansion, FilamentSensors, WiFi, Display,
 			SbcInterface,
 			CAN,					// uppercase to avoid eCv clash with type Can in Microchip driver file
+			Expansion,
 			none					// make this one last so that it is the number of real modules, one greater than the last real module number
 		 );
 

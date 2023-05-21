@@ -12,6 +12,7 @@
 #include <CAN/CanInterface.h>
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
+#include <Platform/Event.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
 #if SUPPORT_OBJECT_MODEL
@@ -85,6 +86,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(ExpansionManager)
 ExpansionBoardData::ExpansionBoardData() noexcept
 	: typeName(nullptr),
 	  accelerometerLastRunDataPoints(0), closedLoopLastRunDataPoints(0),
+	  whenLastStatusReportReceived(0),
 	  accelerometerRuns(0), closedLoopRuns(0),
 	  hasMcuTemp(false), hasVin(false), hasV12(false), hasAccelerometer(false),
 	  state(BoardState::unknown), numDrivers(0)
@@ -136,6 +138,11 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 	if (src <= CanId::MaxCanAddress)
 	{
 		ExpansionBoardData& board = boards[src];
+		board.whenLastStatusReportReceived = millis();
+		if (board.state == BoardState::running)
+		{
+			Event::AddEvent(EventType::expansion_reconnect, 0, src, 0, "");
+		}
 		board.hasVin = board.hasV12 = board.hasMcuTemp = false;
 		String<StringLength100> boardTypeAndFirmwareVersion;
 		if (isNewFormat)
@@ -192,6 +199,7 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 {
 	const CanAddress address = buf->id.Src();
 	ExpansionBoardData& board = boards[address];
+	board.whenLastStatusReportReceived = millis();
 	if (board.state != BoardState::running && board.state != BoardState::flashing)
 	{
 		UpdateBoardState(address, BoardState::running);
@@ -347,6 +355,21 @@ const ExpansionBoardData& ExpansionManager::FindIndexedBoard(unsigned int index)
 	lastIndexSearched = index;
 	lastAddressFound = address;
 	return boards[address];
+}
+
+// Check whether we have lost contact with any expansion boards
+void ExpansionManager::Spin() noexcept
+{
+	const uint32_t now = millis();
+	for (CanAddress addr = 1; addr <= CanId::MaxCanAddress; ++addr)
+	{
+		ExpansionBoardData& board = boards[addr];
+		if (board.state == BoardState::running && board.whenLastStatusReportReceived - now > StatusMessageTimeoutMillis)
+		{
+			UpdateBoardState(addr, BoardState::timedOut);
+			Event::AddEvent(EventType::expansion_timeout, 0, addr, 0, "");
+		}
+	}
 }
 
 void ExpansionManager::EmergencyStop() noexcept

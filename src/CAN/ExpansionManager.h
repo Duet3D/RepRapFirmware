@@ -18,7 +18,7 @@
 #include <General/NamedEnum.h>
 #include <Platform/UniqueId.h>
 
-NamedEnum(BoardState, uint8_t, unknown, flashing, flashFailed, resetting, running);
+NamedEnum(BoardState, uint8_t, unknown, flashing, flashFailed, resetting, running, timedOut);
 
 struct ExpansionBoardData
 {
@@ -28,6 +28,7 @@ struct ExpansionBoardData
 	MinCurMax mcuTemp, vin, v12;
 	uint32_t accelerometerLastRunDataPoints;
 	uint32_t closedLoopLastRunDataPoints;
+	uint32_t whenLastStatusReportReceived;
 	UniqueId uniqueId;
 	uint16_t accelerometerRuns;
 	uint16_t closedLoopRuns;
@@ -62,12 +63,16 @@ public:
 	void AddClosedLoopRun(CanAddress address, unsigned int numDataPoints) noexcept;
 	bool IsFlashing() const noexcept { return numBoardsFlashing != 0; }
 
+	void Spin() noexcept;
+
 	void EmergencyStop() noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+	static constexpr uint32_t StatusMessageTimeoutMillis = 5000;	// if we don't receive a board status message for this long we presume that communication has been lost
+
 	const ExpansionBoardData& FindIndexedBoard(unsigned int index) const noexcept;
 	void UpdateBoardState(CanAddress address, BoardState newState) noexcept;
 

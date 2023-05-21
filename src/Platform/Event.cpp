@@ -207,6 +207,14 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 			str.printf("MCU temperature warning: temperature %.1fC", (double)((float)ep->param/10));
 #endif
 			return WarningMessage;
+
+		case EventType::expansion_timeout:
+			str.printf("Expansion board %u stopped sending status", ep->boardAddress);
+			return ErrorMessage;
+
+		case EventType::expansion_reconnect:
+			str.printf("Expansion board %u reconnected", ep->boardAddress);
+			return ErrorMessage;
 		}
 	}
 	str.copy("Internal error in Event");
