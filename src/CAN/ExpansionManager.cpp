@@ -364,7 +364,7 @@ void ExpansionManager::Spin() noexcept
 	for (CanAddress addr = 1; addr <= CanId::MaxCanAddress; ++addr)
 	{
 		ExpansionBoardData& board = boards[addr];
-		if (board.state == BoardState::running && board.whenLastStatusReportReceived - now > StatusMessageTimeoutMillis)
+		if (board.state == BoardState::running && now - board.whenLastStatusReportReceived > StatusMessageTimeoutMillis)
 		{
 			UpdateBoardState(addr, BoardState::timedOut);
 			Event::AddEvent(EventType::expansion_timeout, 0, addr, 0, "");
