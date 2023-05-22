@@ -281,7 +281,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA22 SPI bus 1 MOSI
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA23 SPI bus 1 SPCK
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"spi.cs5,duex.cs5,exp.50"					},	// PA24 SPI bus 0 CS5
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA25 DIR_11 (was LCD_E)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"connlcd.en,connlcd.8"						},	// PA25 DIR_11 (was LCD_E)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA26 HSMCI MCDA2
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA27 HSMCI MCDA3
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PA28 HSMCI MCCDA
@@ -352,7 +352,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC25 E1_EN
 	{ TcOutput::tioa4,	PwmOutput::none,	AdcInput::none,		PinCapability::wpwm,	"fan1"										},	// PC26 Fan 1
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_13,	PinCapability::ainr,	"e5temp,duex.e5temp,exp.thermistor6,exp.38"	},	// PC27 Thermistor 6
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PC28 EN_11 (was LCD_RS)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"connlcd.rs,connlcd.6"						},	// PC28 EN_11 (was LCD_RS)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_9,	PinCapability::ainr,	"e2temp,duex.e2temp,exp.thermistor3,exp.35"	},	// PC29 Thermistor 3
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_10,	PinCapability::ainr,	"e3temp,duex.e3temp,exp.thermistor4,exp.36"	},	// PC30 Thermistor 4
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_11,	PinCapability::ainr,	"e4temp,duex.e4temp,exp.thermistor5,exp.37"	},	// PC31 Thermistor 5
@@ -376,10 +376,10 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"pson"										},	// PD15 PS_ON
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD16 E4_Dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD17 E5_Dir
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"connlcd.np,connlcd.5"						},	// PD18 EN_10 (was LCD DB7) also Neopixel on Mini 12864 display
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD19 DIR_10 (was LCD DB6)
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD20 STEP 10 (was LCD DB5)
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD21 STEP_11 and LCD buzzer (was LCD DB4)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"connlcd.np,connlcd.db7,connlcd.5"			},	// PD18 EN_10 (was LCD DB7) also Neopixel on Mini 12864 display
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"connlcd.db6,connlcd.7"						},	// PD19 DIR_10 (was LCD DB6)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"connlcd.db5,connlcd.9"						},	// PD20 STEP 10 (was LCD DB5)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"connlcd.db4,connlcd.10"					},	// PD21 STEP_11 and LCD buzzer (was LCD DB4)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD22 E3_Dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD23 E2_EN
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD24 E3_EN
