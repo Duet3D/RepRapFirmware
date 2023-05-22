@@ -737,18 +737,27 @@ void SbcInterface::ExchangeData() noexcept
 							break;
 						}
 
-						ExpressionParser indexParser(*gb, indexStart + 1, shortVarName.c_str() + shortVarName.strlen());
-						const uint32_t indexExpr = indexParser.ParseUnsigned();
-						indexStart = indexParser.GetEndptr();
-						if (*indexStart != ']')
+						try
 						{
-							expression.printf("missing ']' in '%s'", varName.c_str());
+							ExpressionParser indexParser(*gb, indexStart + 1, shortVarName.c_str() + shortVarName.strlen());
+							const uint32_t indexExpr = indexParser.ParseUnsigned();
+							indexStart = indexParser.GetEndptr();
+							if (*indexStart != ']')
+							{
+								expression.printf("missing ']' in '%s'", varName.c_str());
+								hadError = true;
+								break;
+							}
+
+							indices[numIndices++] = indexExpr;
+							++indexStart;								// skip the ']'
+						}
+						catch (const GCodeException& e)
+						{
+							e.GetMessage(expression.GetRef(), nullptr);
 							hadError = true;
 							break;
 						}
-
-						indices[numIndices++] = indexExpr;
-						++indexStart;								// skip the ']'
 					} while (*indexStart == '[');
 
 					if (hadError)

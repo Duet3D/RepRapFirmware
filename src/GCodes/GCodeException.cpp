@@ -28,6 +28,10 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 		}
 		reply.cat(": ");
 	}
+	else
+	{
+		reply.Clear();
+	}
 
 	// Print the command letter/number, if possible
 	if (gb != nullptr)
@@ -56,7 +60,7 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 	// Print the message and any parameter
 	if (message == nullptr)
 	{
-		reply.cat("<null error message>");					// should not happem
+		reply.cat("<null error message>");					// should not happen
 	}
 	else if (strstr(message, "%s"))
 	{
