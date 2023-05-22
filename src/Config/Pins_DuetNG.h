@@ -227,7 +227,6 @@ constexpr uint32_t LcdSpiClockFrequency = 2000000;             // 2.0MHz
 
 constexpr Pin EncoderPinB = PortCPin(7);		// connlcd.3	-> exp2.6
 constexpr Pin EncoderPinA = PortAPin(8);		// connlcd.4	-> exp2.8
-constexpr Pin LcdNeopixelOutPin = PortDPin(18);	// connlcd.5	-> exp1.5
 constexpr Pin LcdResetPin = PortCPin(28);		// connlcd.6	-> exp1.6
 constexpr Pin LcdA0Pin = PortDPin(19);			// connlcd.7	-> exp1.7
 constexpr Pin LcdCSPin = PortAPin(25);			// connlcd.8	-> exp1.8
@@ -377,7 +376,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"pson"										},	// PD15 PS_ON
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD16 E4_Dir
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD17 E5_Dir
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD18 EN_10 (was LCD DB7)
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"connlcd.np,connlcd.5"						},	// PD18 EN_10 (was LCD DB7) also Neopixel on Mini 12864 display
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD19 DIR_10 (was LCD DB6)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD20 STEP 10 (was LCD DB5)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr										},	// PD21 STEP_11 and LCD buzzer (was LCD DB4)
