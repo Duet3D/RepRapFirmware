@@ -19,7 +19,7 @@ constexpr ObjectModelTableEntry RemoteLedStrip::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "board",		OBJECT_MODEL_FUNC((uint32_t)self->boardNumber), 	ObjectModelEntryFlags::none },
+	{ "board",		OBJECT_MODEL_FUNC((int32_t)self->boardNumber), 		ObjectModelEntryFlags::none },
 	{ "pin",		OBJECT_MODEL_FUNC(self->pinNameString), 			ObjectModelEntryFlags::none },
 };
 

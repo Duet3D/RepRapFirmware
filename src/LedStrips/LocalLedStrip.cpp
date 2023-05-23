@@ -26,11 +26,14 @@ alignas(4) __nocache uint8_t LocalLedStrip::dmaBuffer[DmaBufferSize];		// buffer
 constexpr ObjectModelTableEntry LocalLedStrip::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
-	// 0. kinematics members
-	{ "pin",			OBJECT_MODEL_FUNC(self->port), 					ObjectModelEntryFlags::none },
+	// 0. LocalLedStrip members
+#if SUPPORT_CAN_EXPANSION
+	{ "board",		OBJECT_MODEL_FUNC_NOSELF((int32_t)CanInterface::GetCanAddress()), 	ObjectModelEntryFlags::none },
+#endif
+	{ "pin",		OBJECT_MODEL_FUNC(self->port), 										ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t LocalLedStrip::objectModelTableDescriptor[] = { 1, 1 };
+constexpr uint8_t LocalLedStrip::objectModelTableDescriptor[] = { 1, 1 + SUPPORT_CAN_EXPANSION };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(LocalLedStrip, LedStripBase)
 
