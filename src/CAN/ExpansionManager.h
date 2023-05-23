@@ -28,7 +28,7 @@ struct ExpansionBoardData
 	MinCurMax mcuTemp, vin, v12;
 	uint32_t accelerometerLastRunDataPoints;
 	uint32_t closedLoopLastRunDataPoints;
-	uint32_t whenLastStatusReportReceived;
+	volatile uint32_t whenLastStatusReportReceived;
 	UniqueId uniqueId;
 	uint16_t accelerometerRuns;
 	uint16_t closedLoopRuns;

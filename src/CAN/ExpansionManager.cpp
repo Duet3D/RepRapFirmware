@@ -360,14 +360,19 @@ const ExpansionBoardData& ExpansionManager::FindIndexedBoard(unsigned int index)
 // Check whether we have lost contact with any expansion boards
 void ExpansionManager::Spin() noexcept
 {
-	const uint32_t now = millis();
 	for (CanAddress addr = 1; addr <= CanId::MaxCanAddress; ++addr)
 	{
 		ExpansionBoardData& board = boards[addr];
-		if (board.state == BoardState::running && now - board.whenLastStatusReportReceived > StatusMessageTimeoutMillis)
+		if (board.state == BoardState::running)
 		{
-			UpdateBoardState(addr, BoardState::timedOut);
-			Event::AddEvent(EventType::expansion_timeout, 0, addr, 0, "");
+			// We can get interrupted here by the CanReceive task, which may update 'board.whenLastStatusReportReceived'.
+			// So read and save that value before we call millis().
+			const uint32_t lastTimeReceived = board.whenLastStatusReportReceived;	// capture volatile variable before we call millis()
+			if (millis() - lastTimeReceived > StatusMessageTimeoutMillis)
+			{
+				UpdateBoardState(addr, BoardState::timedOut);
+				Event::AddEvent(EventType::expansion_timeout, 0, addr, 0, "");
+			}
 		}
 	}
 }
