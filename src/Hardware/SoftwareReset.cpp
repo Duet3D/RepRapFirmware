@@ -80,7 +80,7 @@ void SoftwareResetData::Populate(uint16_t reason, const uint32_t *stk) noexcept
 #endif
 	// Get the task name if we can. There may be no task executing, so we must allow for this.
 	const TaskHandle_t currentTask = xTaskGetCurrentTaskHandle();
-	taskName = (currentTask == nullptr) ? 0x656e6f6e : LoadLE32(pcTaskGetName(currentTask));
+	taskName = (currentTask == nullptr) ? 0x656e6f6e : LoadLEU32(pcTaskGetName(currentTask));
 
 	sp = reinterpret_cast<uint32_t>(stk);
 	if (stk == nullptr)

@@ -271,11 +271,11 @@ void FGMCProtocol::cmdDnetinf(FGMC_ReqDownloadNetInfoHeader* pInCmdHeader, uint3
 	}
 	else
 	{
-		ifData.configuredIpAddress.SetV4LittleEndian(LoadLE32(pInCmdHeader->fgmc_ip_v4_static_address_));
+		ifData.configuredIpAddress.SetV4LittleEndian(LoadLEU32(pInCmdHeader->fgmc_ip_v4_static_address_));
 	}
 
-	ifData.configuredNetmask.SetV4LittleEndian(LoadLE32(pInCmdHeader->fgmc_ip_v4_static_netmask_));
-	ifData.configuredGateway.SetV4LittleEndian(LoadLE32(pInCmdHeader->fgmc_ip_v4_static_gateway_));
+	ifData.configuredNetmask.SetV4LittleEndian(LoadLEU32(pInCmdHeader->fgmc_ip_v4_static_netmask_));
+	ifData.configuredGateway.SetV4LittleEndian(LoadLEU32(pInCmdHeader->fgmc_ip_v4_static_gateway_));
 
 	// set new device name
 	// filter out " (X19)  / (X18)

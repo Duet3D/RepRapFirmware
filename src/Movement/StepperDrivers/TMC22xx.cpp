@@ -1555,7 +1555,7 @@ inline void TmcDriverState::TransferDone() noexcept
 			++numWrites;
 			registersToUpdate &= ~(1u << regnumBeingUpdated);
 			// The value to be written may have changed since we sent it, so check that we wrote the latest data
-			if (LoadBE32(const_cast<const uint8_t *>(sendData + 3)) != writeRegisters[regnumBeingUpdated])
+			if (LoadBEU32(const_cast<const uint8_t *>(sendData + 3)) != writeRegisters[regnumBeingUpdated])
 			{
 				registersToUpdate |= 1u << regnumBeingUpdated;
 			}

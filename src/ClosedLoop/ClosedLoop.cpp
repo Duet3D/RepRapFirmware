@@ -17,6 +17,7 @@
 # include <CAN/ExpansionManager.h>
 # include <GCodes/GCodeBuffer/GCodeBuffer.h>
 # include <CAN/CanMessageGenericConstructor.h>
+# include <General/Portability.h>
 # include <atomic>
 
 constexpr unsigned int MaxSamples = 65535;				// This comes from the fact CanMessageClosedLoopData->firstSampleNumber has a max value of 65535
@@ -25,6 +26,7 @@ constexpr uint32_t DataReceiveTimeout = 5000;			// Data receive timeout in milli
 static uint16_t rateRequested;							// The sampling rate
 static uint8_t modeRequested;							// The sampling mode(immediate or on next move)
 static uint32_t filterRequested;						// A filter for what data is collected
+static size_t dataBytesPerSample;						// How many bytes there will be in each sample
 static DriverId deviceRequested;						// The driver being sampled
 static uint8_t movementRequested;						// The movement to be made whilst recording
 static std::atomic<uint32_t> whenDataLastReceived;
@@ -42,22 +44,40 @@ static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned 
 
 	// Write the header line
 	{
+		static constexpr const char *headings[] =
+		{
+			",Raw Encoder Reading",
+			",Measured Motor Steps",
+			",Target Motor Steps",
+			",Current Error",
+			",PID Control Signal",
+			",PID P Term",
+			",PID I Term",
+			",PID D Term",
+
+			// The next two are out of order in the filter bits, they come at the end
+			",PID V Term",
+			",PID A Term",
+
+			",Measured Step Phase",
+			",Desired Step Phase",
+			",Phase Shift",
+			",Coil A Current",
+			",Coil B Current",
+		};
 		String<StringLength500> temp;
 		temp.copy("Sample,Timestamp");
-		if (filterRequested & CL_RECORD_RAW_ENCODER_READING)	{temp.cat(",Raw Encoder Reading");}
-		if (filterRequested & CL_RECORD_CURRENT_MOTOR_STEPS)  	{temp.cat(",Measured Motor Steps");}
-		if (filterRequested & CL_RECORD_TARGET_MOTOR_STEPS)  	{temp.cat(",Target Motor Steps");}
-		if (filterRequested & CL_RECORD_CURRENT_ERROR) 			{temp.cat(",Current Error");}
-		if (filterRequested & CL_RECORD_PID_CONTROL_SIGNAL)  	{temp.cat(",PID Control Signal");}
-		if (filterRequested & CL_RECORD_PID_P_TERM)  			{temp.cat(",PID P Term");}
-		if (filterRequested & CL_RECORD_PID_I_TERM)  			{temp.cat(",PID I Term");}
-		if (filterRequested & CL_RECORD_PID_D_TERM)  			{temp.cat(",PID D Term");}
-		if (filterRequested & CL_RECORD_STEP_PHASE)  			{temp.cat(",Measured Step Phase");}
-		if (filterRequested & CL_RECORD_DESIRED_STEP_PHASE)  	{temp.cat(",Desired Step Phase");}
-		if (filterRequested & CL_RECORD_PHASE_SHIFT)  			{temp.cat(",Phase Shift");}
-		if (filterRequested & CL_RECORD_COIL_A_CURRENT) 		{temp.cat(",Coil A Current");}
-		if (filterRequested & CL_RECORD_COIL_B_CURRENT) 		{temp.cat(",Coil B Current");}
-
+		uint16_t filter = (filterRequested & (CL_RECORD_CURRENT_STEP_PHASE - 1))
+						| ((filterRequested & (CL_RECORD_CURRENT_STEP_PHASE | CL_RECORD_DESIRED_STEP_PHASE | CL_RECORD_PHASE_SHIFT | CL_RECORD_COIL_A_CURRENT | CL_RECORD_COIL_B_CURRENT)) << 2)
+						| ((filterRequested & (CL_RECORD_PID_V_TERM | CL_RECORD_PID_A_TERM)) >> 5);
+		for (unsigned int i = 0; filter != 0; ++i)
+		{
+			if (filter & 1u)
+			{
+				temp.cat(headings[i]);
+			}
+			filter >>= 1;
+		}
 		temp.cat("\n");
 		f->Write(temp.c_str());							// this call could result in the file becoming invalidated
 	}
@@ -132,6 +152,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	modeRequested = parsedA;
 	rateRequested = parsedR;
 	filterRequested = parsedD;
+	dataBytesPerSample = ClosedLoopSampleLength(filterRequested);
 	deviceRequested = driverId;
 	movementRequested = parsedV;
 	numSamplesRequested = parsedS;
@@ -199,22 +220,35 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 			f->Write("Data lost\n");
 			CloseDataCollectionFile();
 		}
+		else if (dataBytesPerSample * msg.numSamples > CanMessageClosedLoopData::GetNumDataBytes(msgLen))
+		{
+			f->Write("Bad data received\n");
+			CloseDataCollectionFile();
+		}
 		else
 		{
-			unsigned int numSamples = msg.numSamples;
-			const size_t variableCount = msg.GetVariableCount();
-
-			while (numSamples != 0)
+			const uint8_t *dataPtr = msg.data;
+			for (unsigned int sampleIndex = 0; sampleIndex < msg.numSamples; ++sampleIndex)
 			{
 				// Compile the data
 				String<StringLength256> currentLine;
-				size_t sampleIndex = msg.numSamples - numSamples;
-				//TODO use more intelligent formatting depending on the data type, to reduce the amount of data written
-				currentLine.printf("%u", msg.firstSampleNumber + sampleIndex);
-				for (size_t i = 0; i < variableCount; i++)
-				{
-					currentLine.catf(",%.2f", (double)msg.data[sampleIndex*variableCount + i]);
-				}
+				currentLine.printf("%u", msg.firstSampleNumber + sampleIndex);		// sample number
+				currentLine.catf(",%.2f", (double)FetchLEF32(dataPtr));				// time stamp
+				if (filterRequested & CL_RECORD_RAW_ENCODER_READING)	{ currentLine.catf(",%" PRIi32,	FetchLEI32(dataPtr)); }
+				if (filterRequested & CL_RECORD_CURRENT_MOTOR_STEPS)  	{ currentLine.catf(",%.2f", (double)FetchLEF32(dataPtr)); }
+				if (filterRequested & CL_RECORD_TARGET_MOTOR_STEPS)  	{ currentLine.catf(",%.2f", (double)FetchLEF32(dataPtr)); }
+				if (filterRequested & CL_RECORD_CURRENT_ERROR) 			{ currentLine.catf(",%.2f", (double)FetchLEF32(dataPtr)); }
+				if (filterRequested & CL_RECORD_PID_CONTROL_SIGNAL)  	{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_PID_P_TERM)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_PID_I_TERM)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_PID_D_TERM)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_PID_V_TERM)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_PID_A_TERM)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_CURRENT_STEP_PHASE)  	{ currentLine.catf(",%u",	FetchLEU16(dataPtr)); }
+				if (filterRequested & CL_RECORD_DESIRED_STEP_PHASE)  	{ currentLine.catf(",%u",	FetchLEU16(dataPtr)); }
+				if (filterRequested & CL_RECORD_PHASE_SHIFT)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_COIL_A_CURRENT) 		{ currentLine.catf(",%d",	FetchLEI16(dataPtr)); }
+				if (filterRequested & CL_RECORD_COIL_B_CURRENT) 		{ currentLine.catf(",%d",	FetchLEI16(dataPtr)); }
 				currentLine.cat("\n");
 
 				// Write the data
@@ -222,7 +256,6 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 
 				// Increment the working variables
 				expectedRemoteSampleNumber++;
-				numSamples--;
 			}
 
 			if (msg.lastPacket)
@@ -230,6 +263,10 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 				if (msg.overflowed)
 				{
 					f->Write("Buffer overflowed\n");
+				}
+				if (msg.badSample)
+				{
+					f->Write("Data contains bad sample(s)\n");
 				}
 				CloseDataCollectionFile();
 			}

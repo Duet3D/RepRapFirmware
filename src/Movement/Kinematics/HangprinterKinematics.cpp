@@ -725,7 +725,7 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3MotorCurren
 		ok = (buf->dataLength == expectedResponseLength);
 		if (ok)
 		{
-			motorCurrent = LoadLEFloat(&(buf->msg.raw[4]));
+			motorCurrent = LoadLEF32(&(buf->msg.raw[4]));
 		}
 		else
 		{
@@ -790,7 +790,7 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 		ok = (buf->dataLength == expectedResponseLength);
 		if (ok)
 		{
-			encoderEstimate = LoadLEFloat(buf->msg.raw);
+			encoderEstimate = LoadLEF32(buf->msg.raw);
 			if (makeReference)
 			{
 				referencePositions[thisDriveIdx] = encoderEstimate;
