@@ -1551,7 +1551,8 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 					const size_t extruder = LogicalDriveToExtruder(drive);
 
 					// Check for cold extrusion/retraction. Do this now because we can't read temperatures from within the step ISR, also this works for CAN-connected extruders.
-					if (Tool::ExtruderMovementAllowed(tool, directionVector[drive] > 0, extruder))
+					// Don't check if it is a special move (indicated by flags.checkEndstops) because the 'tool' variable isn't valid for those moves
+					if (!flags.checkEndstops || Tool::ExtruderMovementAllowed(tool, directionVector[drive] > 0, extruder))
 					{
 						platform.EnableDrivers(drive, false);
 
