@@ -1551,54 +1551,59 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 				{
 					const size_t extruder = LogicalDriveToExtruder(drive);
 
-					// Check for cold extrusion/retraction. Do this now because we can't read temperatures from within the step ISR, also this works for CAN-connected extruders.
-					if (Tool::ExtruderMovementAllowed(tool, directionVector[drive] > 0, extruder))
+					// For special moves, 'tool' will be null, so we can't call Tool::ExtruderMovementAllowed at that point if checkEndstops is set.
+					// `Tool::ExtruderMovementAllowed` will always return false.
+					if (!flags.checkEndstops)
 					{
-						platform.EnableDrivers(drive, false);
-
-						if (directionVector[drive] > 0.0)
+						// Check for cold extrusion/retraction. Do this now because we can't read temperatures from within the step ISR, also this works for CAN-connected extruders.
+						if (Tool::ExtruderMovementAllowed(tool, directionVector[drive] > 0, extruder))
 						{
-							extrusionFraction += directionVector[drive];			// accumulate the total extrusion fraction
-						}
+							platform.EnableDrivers(drive, false);
+
+							if (directionVector[drive] > 0.0)
+							{
+								extrusionFraction += directionVector[drive];			// accumulate the total extrusion fraction
+							}
 
 #if SUPPORT_NONLINEAR_EXTRUSION
-						// Add the nonlinear extrusion correction to totalExtrusion.
-						// If we are given a stupidly short move to execute then clocksNeeded can be zero, which leads to NaNs in this code; so we need to guard against that.
-						if (flags.isPrintingMove && clocksNeeded != 0)
-						{
-							const NonlinearExtrusion& nl = platform.GetExtrusionCoefficients(extruder);
-							float& dv = directionVector[drive];
-							const float averageExtrusionSpeed = (totalDistance * dv * StepClockRate)/clocksNeeded;		// need speed in mm/sec for nonlinear extrusion calculation
-							const float factor = 1.0 + min<float>((averageExtrusionSpeed * nl.A) + (averageExtrusionSpeed * averageExtrusionSpeed * nl.B), nl.limit);
-							dv *= factor;
-						}
+							// Add the nonlinear extrusion correction to totalExtrusion.
+							// If we are given a stupidly short move to execute then clocksNeeded can be zero, which leads to NaNs in this code; so we need to guard against that.
+							if (flags.isPrintingMove && clocksNeeded != 0)
+							{
+								const NonlinearExtrusion& nl = platform.GetExtrusionCoefficients(extruder);
+								float& dv = directionVector[drive];
+								const float averageExtrusionSpeed = (totalDistance * dv * StepClockRate)/clocksNeeded;		// need speed in mm/sec for nonlinear extrusion calculation
+								const float factor = 1.0 + min<float>((averageExtrusionSpeed * nl.A) + (averageExtrusionSpeed * averageExtrusionSpeed * nl.B), nl.limit);
+								dv *= factor;
+							}
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-						afterPrepare.drivesMoving.SetBit(drive);
-						const DriverId driver = platform.GetExtruderDriver(extruder);
-						if (driver.IsRemote())
-						{
-							// The MovementLinearShaped message requires the extrusion amount in steps to be passed as a float. The remote board adds the PA and handles fractional steps.
-							CanMotion::AddExtruderMovement(params, driver, totalDistance * directionVector[drive] * platform.DriveStepsPerUnit(drive), flags.usePressureAdvance);
-						}
-						else
-#endif
-						{
-							EnsureSegments(params);
-							DriveMovement* const pdm = DriveMovement::Allocate(drive);
-							pdm->direction = (directionVector[drive] >= 0);
-							if (pdm->PrepareExtruder(*this, params, platform.DriveStepsPerUnit(drive) * directionVector[drive]))
+							afterPrepare.drivesMoving.SetBit(drive);
+							const DriverId driver = platform.GetExtruderDriver(extruder);
+							if (driver.IsRemote())
 							{
-								// Check for sensible values, debugPrint them if they look dubious
-								//TODO (note: totalSteps is no longer valid for extruders)
-								InsertDM(pdm);
+								// The MovementLinearShaped message requires the extrusion amount in steps to be passed as a float. The remote board adds the PA and handles fractional steps.
+								CanMotion::AddExtruderMovement(params, driver, totalDistance * directionVector[drive] * platform.DriveStepsPerUnit(drive), flags.usePressureAdvance);
 							}
 							else
+#endif
 							{
-								pdm->state = DMState::idle;
-								pdm->nextDM = completedDMs;
-								completedDMs = pdm;
+								EnsureSegments(params);
+								DriveMovement* const pdm = DriveMovement::Allocate(drive);
+								pdm->direction = (directionVector[drive] >= 0);
+								if (pdm->PrepareExtruder(*this, params, platform.DriveStepsPerUnit(drive) * directionVector[drive]))
+								{
+									// Check for sensible values, debugPrint them if they look dubious
+									//TODO (note: totalSteps is no longer valid for extruders)
+									InsertDM(pdm);
+								}
+								else
+								{
+									pdm->state = DMState::idle;
+									pdm->nextDM = completedDMs;
+									completedDMs = pdm;
+								}
 							}
 						}
 					}
