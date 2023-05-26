@@ -250,7 +250,7 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 				if (filterRequested & CL_RECORD_PHASE_SHIFT)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
 				if (filterRequested & CL_RECORD_COIL_A_CURRENT) 		{ currentLine.catf(",%d",	FetchLEI16(dataPtr)); }
 				if (filterRequested & CL_RECORD_COIL_B_CURRENT) 		{ currentLine.catf(",%d",	FetchLEI16(dataPtr)); }
-				if (filterRequested & CL_RECORD_MOTOR_CURRENT_FRACTION) { currentLine.catf(",%.1f",	FetchLEI16(dataPtr)); }
+				if (filterRequested & CL_RECORD_MOTOR_CURRENT_FRACTION) { currentLine.catf(",%.1f",	(double)FetchLEF16(dataPtr)); }
 				currentLine.cat("\n");
 
 				// Write the data
