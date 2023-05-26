@@ -618,11 +618,18 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROW
 	return h->ReportDetails(reply);
 }
 
-bool Heat::AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const noexcept
+bool Heat::SlowHeatersAtSetTemperatures(float tolerance) const noexcept
 {
-	for (size_t heater : ARRAY_INDICES(heaters))
+	for (size_t bedHeater : ARRAY_INDICES(bedHeaters))
 	{
-		if (!HeaterAtSetTemperature(heater, true, tolerance) && (includingBed || !IsBedHeater(heater)))
+		if (!HeaterAtSetTemperature(bedHeater, true, tolerance))
+		{
+			return false;
+		}
+	}
+	for (size_t chamberHeater : ARRAY_INDICES(heaters))
+	{
+		if (!HeaterAtSetTemperature(chamberHeater, true, tolerance))
 		{
 			return false;
 		}

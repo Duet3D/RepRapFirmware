@@ -568,8 +568,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 98:
 		case 99:
 		case 112:
+		case 116:
 		case 120:
 		case 121:
+		case 190:
+		case 191:
 		case 400:
 		case 555:
 		case 596:
@@ -1916,6 +1919,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					const float tolerance = (gb.Seen('S')) ? gb.GetPositiveFValue() : TemperatureCloseEnough;
 					bool seen = false;
+
 					if (gb.Seen('P'))
 					{
 						// Wait for the heaters associated with the specified tool to be ready
@@ -1929,7 +1933,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (gb.Seen('H'))
 					{
-						// Wait for specified heaters to be ready
+						// Wait for specified heater(s) to be ready
 						uint32_t heaters[MaxHeaters];
 						size_t heaterCount = MaxHeaters;
 						gb.GetUnsignedArray(heaters, heaterCount, false);
@@ -1984,8 +1988,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						seen = true;
 					}
 
-					// Wait for all heaters except chamber(s) to be ready
-					if (!seen && !reprap.GetHeat().AllHeatersAtSetTemperatures(true, tolerance))
+					// Wait for the current tool and slow heaters to be ready
+					if (!seen && (
+							!ToolHeatersAtSetTemperatures(GetMovementState(gb).GetLockedCurrentTool().Ptr(), true, tolerance) ||
+							!reprap.GetHeat().SlowHeatersAtSetTemperatures(tolerance)
+						))
 					{
 						isWaiting = true;
 						return false;

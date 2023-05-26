@@ -71,7 +71,7 @@ public:
 	void SetAsToolHeater(int8_t heater) const noexcept;					// called when a tool is created that uses this heater
 	bool IsBedOrChamberHeater(int heater) const noexcept;				// Queried by the Platform class
 
-	bool AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const noexcept;	// Is everything at temperature within tolerance?
+	bool SlowHeatersAtSetTemperatures(float tolerance) const noexcept;	// Are all slow heaters at temperature within tolerance?
 
 	void SwitchOffAll(bool includingChamberAndBed) noexcept;			// Turn all heaters off. Not safe to call from an ISR.
 	void SwitchOffAllLocalFromISR() noexcept;							// Turn off all local heaters. Safe to call from an ISR.
