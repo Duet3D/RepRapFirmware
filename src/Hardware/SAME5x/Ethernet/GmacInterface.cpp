@@ -689,7 +689,7 @@ void ethernetif_hardware_init() noexcept
 {
 	// Set up PHY clock
 	// GCLK2: XOSC1 direct, 25MHz output for Ethernet PHY
-	hri_gclk_write_GENCTRL_reg(GCLK, 2,
+	hri_gclk_write_GENCTRL_reg(GCLK, GclkNumEthernetPhy,
 			  GCLK_GENCTRL_DIV(1) | (0 << GCLK_GENCTRL_RUNSTDBY_Pos)
 			| (0 << GCLK_GENCTRL_DIVSEL_Pos) | (1 << GCLK_GENCTRL_OE_Pos)
 			| (0 << GCLK_GENCTRL_OOV_Pos) | (0 << GCLK_GENCTRL_IDC_Pos)
