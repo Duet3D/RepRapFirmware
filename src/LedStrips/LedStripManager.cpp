@@ -291,12 +291,8 @@ GCodeResult LedStripManager::HandleM950Led(const CanMessageGeneric &msg, const S
 GCodeResult LedStripManager::HandleLedSetColours(const CanMessageGeneric &msg, const StringRef& reply) noexcept
 {
 	CanMessageGenericParser parser(msg, M150Params);
-	uint16_t stripNumber;
-	if (!parser.GetUintParam('E', stripNumber))
-	{
-		reply.copy("Missing strip number parameter in M950Led message");
-		return GCodeResult::remoteInternalError;
-	}
+	uint16_t stripNumber = 0;								// strip number may be omitted, defaults to 0
+	parser.GetUintParam('E', stripNumber);
 	if (stripNumber >= MaxLedStrips)
 	{
 		reply.printf("LED strip number %u is too high for expansion board %u", stripNumber, CanInterface::GetCanAddress());
@@ -312,7 +308,7 @@ GCodeResult LedStripManager::HandleLedSetColours(const CanMessageGeneric &msg, c
 		}
 	}
 
-	reply.printf("LED strip #%u has not been configured", stripNumber);
+	reply.printf("Board %u does not have LED strip #%u", CanInterface::GetCanAddress(), stripNumber);
 	return GCodeResult::error;
 }
 
