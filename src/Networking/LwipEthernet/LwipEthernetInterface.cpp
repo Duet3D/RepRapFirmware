@@ -43,6 +43,7 @@ extern "C"
 
 #include "lwip/dhcp.h"
 #include "lwip/tcp.h"
+#include "lwip/timeouts.h"
 
 #include "lwip/apps/netbiosns.h"
 #include "lwip/apps/mdns.h"
@@ -443,8 +444,9 @@ void LwipEthernetInterface::Spin() noexcept
 	case NetworkState::obtainingIP:
 		if (ethernet_link_established())
 		{
-			// Check for incoming packets
+			// Check for incoming packets and pending timers
 			ethernet_task();
+			sys_check_timeouts();
 
 			// Have we obtained an IP address yet?
 			ethernet_get_ipaddress(ipAddress, netmask, gateway);
@@ -476,8 +478,9 @@ void LwipEthernetInterface::Spin() noexcept
 		// Check that the link is still up
 		if (ethernet_link_established())
 		{
-			// Check for incoming packets
+			// Check for incoming packets and pending timers
 			ethernet_task();
+			sys_check_timeouts();
 
 			// Poll the next TCP socket
 			sockets[nextSocketToPoll]->Poll();

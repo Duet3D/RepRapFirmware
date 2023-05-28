@@ -34,7 +34,7 @@ void AppInit() noexcept
 	// GCLK2 is used by the Ethernet version only. We initialise it in GmacInterface.
 
 	// GCLK5: FDPLL1, 90MHz for SDHC
-	hri_gclk_write_GENCTRL_reg(GCLK, 5,
+	hri_gclk_write_GENCTRL_reg(GCLK, GclkSdhc,
 			  GCLK_GENCTRL_DIV(2) | (0 << GCLK_GENCTRL_RUNSTDBY_Pos)
 			| (0 << GCLK_GENCTRL_DIVSEL_Pos) | (0 << GCLK_GENCTRL_OE_Pos)
 			| (0 << GCLK_GENCTRL_OOV_Pos) | (0 << GCLK_GENCTRL_IDC_Pos)
