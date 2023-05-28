@@ -766,7 +766,8 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 	{
 		AtomicCriticalSectionLocker lock;
 
-		status = accumulatedDriveStatus;
+		// In the following we must or-in the current drive status, otherwise an error such as S2G may appear to go away between two successive calls
+		status = accumulatedDriveStatus | readRegisters[ReadDrvStat];
 		if (clearAccumulated)
 		{
 			// In the following we can't just copy readRegisters[ReadDrvStat] into accumulatedDriveStatus,
