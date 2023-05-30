@@ -4338,7 +4338,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								}
 							}
 							seen = true;
-							result = max(result, platform.SetMotorCurrent(axis, gb.GetPositiveFValue(), code, reply));
+							result = max(result, platform.SetMotorCurrent(axis, gb.GetNonNegativeFValue(), code, reply));	// note, we must allow zero in M913 power fail scripts
 						}
 					}
 
