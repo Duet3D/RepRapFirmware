@@ -44,7 +44,7 @@ static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned 
 
 	// Write the header line
 	{
-		static constexpr const char *headings[] =
+		static constexpr const char *headings[16] =
 		{
 			",Raw Encoder Reading",
 			",Measured Motor Steps",
@@ -55,7 +55,7 @@ static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned 
 			",PID I Term",
 			",PID D Term",
 
-			// The next two are out of order in the filter bits, they come at the end
+			// The next two are out of order in the filter bits, they come later on
 			",PID V Term",
 			",PID A Term",
 
@@ -64,7 +64,7 @@ static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned 
 			",Phase Shift",
 			",Coil A Current",
 			",Coil B Current",
-			",Motor current fraction",
+			",Unknown",
 		};
 		String<StringLength500> temp;
 		temp.copy("Sample,Timestamp");
@@ -233,8 +233,7 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 			{
 				// Compile the data
 				String<StringLength256> currentLine;
-				currentLine.printf("%u", msg.firstSampleNumber + sampleIndex);		// sample number
-				currentLine.catf(",%.2f", (double)FetchLEF32(dataPtr));				// time stamp
+				currentLine.printf("%u,%.2f", msg.firstSampleNumber + sampleIndex, (double)FetchLEF32(dataPtr));	// sample number and time stamp
 				if (filterRequested & CL_RECORD_RAW_ENCODER_READING)	{ currentLine.catf(",%" PRIi32,	FetchLEI32(dataPtr)); }
 				if (filterRequested & CL_RECORD_CURRENT_MOTOR_STEPS)  	{ currentLine.catf(",%.2f", (double)FetchLEF32(dataPtr)); }
 				if (filterRequested & CL_RECORD_TARGET_MOTOR_STEPS)  	{ currentLine.catf(",%.2f", (double)FetchLEF32(dataPtr)); }
@@ -247,10 +246,9 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 				if (filterRequested & CL_RECORD_PID_A_TERM)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
 				if (filterRequested & CL_RECORD_CURRENT_STEP_PHASE)  	{ currentLine.catf(",%u",	FetchLEU16(dataPtr)); }
 				if (filterRequested & CL_RECORD_DESIRED_STEP_PHASE)  	{ currentLine.catf(",%u",	FetchLEU16(dataPtr)); }
-				if (filterRequested & CL_RECORD_PHASE_SHIFT)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_PHASE_SHIFT)  			{ currentLine.catf(",%u",	FetchLEU16(dataPtr)); }
 				if (filterRequested & CL_RECORD_COIL_A_CURRENT) 		{ currentLine.catf(",%d",	FetchLEI16(dataPtr)); }
 				if (filterRequested & CL_RECORD_COIL_B_CURRENT) 		{ currentLine.catf(",%d",	FetchLEI16(dataPtr)); }
-				if (filterRequested & CL_RECORD_MOTOR_CURRENT_FRACTION) { currentLine.catf(",%.1f",	(double)FetchLEF16(dataPtr)); }
 				currentLine.cat("\n");
 
 				// Write the data
