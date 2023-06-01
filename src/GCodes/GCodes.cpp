@@ -296,7 +296,7 @@ void GCodes::Reset() noexcept
 
 	buildObjects.Init();
 
-	cancelWait = isWaiting = displayNoToolWarning = false;
+	displayNoToolWarning = false;
 
 	for (const GCodeBuffer*& gbp : resourceOwners)
 	{
@@ -499,7 +499,7 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 #if HAS_SBC_INTERFACE
 		 && !gb.IsSendRequested()
 #endif
-		) || (isWaiting && !cancelWait)									// this is needed to get reports sent during M109 commands
+		) || (gb.IsWaitingForTemperatures())							// this is needed to get reports sent when the GB is waiting for temperatures to be reached
 	   )
 	{
 		CheckReportDue(gb, reply.GetRef());
@@ -1036,7 +1036,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 		ms.pauseRestorePoint.fanSpeed = ms.virtualFanSpeed;
 
 #if HAS_SBC_INTERFACE
-		if (reprap.UsingSbcInterface())
+		if (reprap.UsingSbcInterface() && ms.GetMsNumber() == 0)
 		{
 			// Prepare notification for the SBC
 			reprap.GetSbcInterface().SetPauseReason(ms.pauseRestorePoint.filePos, reason);
@@ -1060,9 +1060,9 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 
 	gb.SetState(newState);
 	pauseState = PauseState::pausing;
+	CancelWaitForTemperatures(true);
 
-
-	reprap.StateUpdated();																// test DWC/DSF that we have changed a restore point
+	reprap.StateUpdated();																// tell DWC/DSF that we have changed the state
 	return true;
 }
 
@@ -1096,15 +1096,38 @@ bool GCodes::IsReallyPrintingOrResuming() const noexcept
 	return reprap.GetPrintMonitor().IsPrinting() && (pauseState == PauseState::notPaused || pauseState == PauseState::resuming);
 }
 
-// Return true if the SD card print is waiting for a heater to reach temperature
+// Check if the print is being cancelled. This may be the case because the print was paused
+// and is now being cancelled (M0/M1/M2) or because or because the second file GB has
+// not finished executing after the first file GB had encountered an error.
+bool GCodes::IsCancellingPrint() const noexcept
+{
+	return (pauseState == PauseState::cancelling)
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+			|| (!reprap.GetPrintMonitor().IsPrinting() && pauseState == PauseState::notPaused && (FileGCode()->IsExecuting()
+# if SUPPORT_ASYNC_MOVES
+					|| File2GCode()->IsExecuting())
+# endif
+				)
+#endif
+			;
+}
+
+// Return true if the first file channel is waiting for a heater to reach temperature
 bool GCodes::IsHeatingUp() const noexcept
 {
-	int num;
-	return FileGCode()->GetState() == GCodeState::m109WaitForTemperature
-		|| (   FileGCode()->IsExecuting()
-			&& FileGCode()->GetCommandLetter() == 'M'
-			&& ((num = FileGCode()->GetCommandNumber()) == 109 || num == 116 || num == 190 || num == 191)
-		   );
+	return FileGCode()->IsWaitingForTemperatures();
+}
+
+// Stop waiting for temperatures to be reached, optionally just in the file(s) being printed
+void GCodes::CancelWaitForTemperatures(bool onlyInPrintFiles) noexcept
+{
+	for (GCodeBuffer *gb : gcodeSources)
+	{
+		if (gb != nullptr && gb->IsWaitingForTemperatures() && (!onlyInPrintFiles || (gb->IsFileChannel() && (!gb->IsDoingFileMacro() || gb->LatestMachineState().CanRestartMacro()))))
+		{
+			gb->CancelWaitForTemperatures();
+		}
+	}
 }
 
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
@@ -1164,7 +1187,7 @@ bool GCodes::DoEmergencyPause() noexcept
 
 
 #if HAS_SBC_INTERFACE
-		if (reprap.UsingSbcInterface())
+		if (reprap.UsingSbcInterface() && ms.GetMsNumber() == 0)
 		{
 			PrintPausedReason reason = platform.IsPowerOk() ? PrintPausedReason::stall : PrintPausedReason::lowVoltage;
 			reprap.GetSbcInterface().SetEmergencyPauseReason(ms.pauseRestorePoint.filePos, reason);
@@ -2931,6 +2954,7 @@ void GCodes::AbortPrint(GCodeBuffer& gb) noexcept
 	if (gb.IsFileChannel())						// if the current command came from a file being printed
 	{
 		StopPrint(StopPrintReason::abort);
+		gb.Init();								// invalidate the file channel here as the other one may be still busy (possibly in a macro)
 	}
 }
 
@@ -4150,9 +4174,6 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 	deferredPauseCommandPending = nullptr;
 	pauseState = PauseState::notPaused;
 
-#if HAS_SBC_INTERFACE || HAS_MASS_STORAGE
-	bool stoppingFromCode = FileGCode()->IsExecuting();		// the following method calls Init(), so check here if a code is being executed
-#endif
 #if HAS_SBC_INTERFACE || HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileGCode()->ClosePrintFile();
 # if SUPPORT_ASYNC_MOVES
@@ -4266,13 +4287,14 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 			platform.DeleteSysFile(RESUME_AFTER_POWER_FAIL_G);
 			if (FileGCode()->GetState() == GCodeState::normal)		// this should always be the case
 			{
-				const GCodeState newState = stoppingFromCode ? GCodeState::stoppingFromCode : GCodeState::stopping;
+				const GCodeState newState = FileGCode()->IsExecuting() ? GCodeState::stoppingFromCode : GCodeState::stopping;
 				FileGCode()->SetState(newState);					// set fileGCode (which should be the one calling this) to run stop.g
 			}
 		}
 #endif
 	}
 
+	CancelWaitForTemperatures(true);
 	reprap.GetPrintMonitor().StoppedPrint();				// must do this after printing the simulation details not before, because it clears the filename and pause time
 	buildObjects.Init();
 	FileGCode()->OriginalMachineState().variables.Clear();	// delete any local variables that the job file created

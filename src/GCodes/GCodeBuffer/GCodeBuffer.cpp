@@ -142,7 +142,7 @@ void GCodeBuffer::Reset() noexcept
 	isBinaryBuffer = false;
 	requestedMacroFile.Clear();
 	isWaitingForMacro = macroFileClosed = false;
-	macroJustStarted = macroFileError = macroFileEmpty = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
+	cancelWait = macroJustStarted = macroFileError = macroFileEmpty = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
 	machineState->lastCodeFromSbc = machineState->macroStartedByCode = false;
 #endif
 	Init();
@@ -201,6 +201,17 @@ bool GCodeBuffer::IsReportDue() noexcept
 		return true;
 	}
 	return false;
+}
+
+// Check if this GB is waiting for temperatures to be reached
+bool GCodeBuffer::IsWaitingForTemperatures() const noexcept
+{
+	int num;
+	return GetState() == GCodeState::m109WaitForTemperature
+		|| (   IsExecuting()
+			&& GetCommandLetter() == 'M'
+			&& ((num = GetCommandNumber()) == 109 || num == 116 || num == 190 || num == 191)
+		   );
 }
 
 // Write some debug info
@@ -1028,8 +1039,6 @@ void GCodeBuffer::ClosePrintFile() noexcept
 		}
 #endif
 	}
-
-	Init();
 }
 
 #if HAS_SBC_INTERFACE

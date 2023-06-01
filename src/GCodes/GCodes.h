@@ -157,9 +157,11 @@ public:
 
 	bool IsReallyPrinting() const noexcept;										// Return true if we are printing from SD card and not pausing, paused or resuming
 	bool IsReallyPrintingOrResuming() const noexcept;
+	bool IsCancellingPrint() const noexcept;
 	bool IsSimulating() const noexcept { return simulationMode != SimulationMode::off; }
 	bool IsDoingToolChange() const noexcept { return doingToolChange; }
 	bool IsHeatingUp() const noexcept;											// Return true if the SD card print is waiting for a heater to reach temperature
+	void CancelWaitForTemperatures(bool onlyInPrintFiles) noexcept;
 	bool IsRunningConfigFile() const noexcept { return runningConfigFile; }
 	bool SawM501InConfigFile() const noexcept { return m501SeenInConfigFile; }
 
@@ -775,8 +777,6 @@ private:
 #endif
 
 	int8_t lastAuxStatusReportType;				// The type of the last status report requested by PanelDue
-	bool isWaiting;								// True if waiting to reach temperature
-	bool cancelWait;							// Set true to cancel waiting
 	bool displayNoToolWarning;					// True if we need to display a 'no tool selected' warning
 	bool m501SeenInConfigFile;					// true if M501 was executed from config.g
 	bool daemonRunning;

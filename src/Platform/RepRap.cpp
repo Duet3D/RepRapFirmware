@@ -2404,7 +2404,7 @@ size_t RepRap::GetStatusIndex() const noexcept
 			: (gCodes->GetPauseState() == PauseState::pausing)			? 4		// Pausing
 			: (gCodes->GetPauseState() == PauseState::resuming)			? 5		// Resuming
 			: (gCodes->GetPauseState() == PauseState::paused)			? 6		// Paused
-			: (gCodes->GetPauseState() == PauseState::cancelling)		? 7		// Paused
+			: (gCodes->IsCancellingPrint())								? 7		// Cancelling
 			: (printMonitor->IsPrinting())
 			  	  ? ((gCodes->IsSimulating())							? 8		// Simulating
 			: 														  	  9		// Printing
