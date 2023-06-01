@@ -227,16 +227,27 @@ constexpr ObjectModelArrayTableEntry RepRap::objectModelArrayTable[] =
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return NumVisibleRestorePoints; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 																			{ return ExpressionValue(&((const RepRap*)self)->gCodes->GetCurrentMovementState(context).restorePoints[context.GetLastIndex()]); }
-	}
-
-#if HAS_MASS_STORAGE
-	,
+	},
 	// 8. Volume changes
 	{
 		nullptr,
+#if HAS_MASS_STORAGE
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return MassStorage::GetNumVolumes(); },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 																			{ return ExpressionValue((int32_t)MassStorage::GetVolumeSeq(context.GetLastIndex())); }
+#else
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 0; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(nullptr); }
+#endif
+	}
+#if SUPPORT_LED_STRIPS
+	,
+	// 9. LED strips
+	{
+		&LedStripManager::ledLock,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const RepRap*)self)->platform->GetLedStripManager().GetNumLedStrips(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return ExpressionValue(((const RepRap*)self)->platform->GetLedStripManager().GetLedStrip(context.GetLastIndex())); }
 	}
 #endif
 };
@@ -258,7 +269,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 	{ "inputs",					OBJECT_MODEL_FUNC_ARRAY(2),												ObjectModelEntryFlags::live },
 	{ "job",					OBJECT_MODEL_FUNC(self->printMonitor),									ObjectModelEntryFlags::live },
 #if SUPPORT_LED_STRIPS
-	{ "ledStrips",				OBJECT_MODEL_FUNC(&self->platform->GetLedStripManager()),				ObjectModelEntryFlags::none },
+	{ "ledStrips",				OBJECT_MODEL_FUNC_ARRAY(9),												ObjectModelEntryFlags::none },
 #endif
 	{ "limits",					OBJECT_MODEL_FUNC(self, 2),												ObjectModelEntryFlags::none },
 	{ "move",					OBJECT_MODEL_FUNC(self->move),											ObjectModelEntryFlags::live },

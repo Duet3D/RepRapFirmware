@@ -27,40 +27,7 @@
 #include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
 
-// Object model table and functions
-// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
-// Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
-
-// Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(LedStripManager, __VA_ARGS__)
-#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(LedStripManager, __VA_ARGS__)
-
-constexpr ObjectModelArrayTableEntry LedStripManager::objectModelArrayTable[] =
-{
-	// 0. LED strips
-	{
-		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const LedStripManager*)self)->GetNumLedStrips(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue(((const LedStripManager*)self)->strips[context.GetLastIndex()]); }
-	}
-};
-
-DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(LedStripManager)
-
-constexpr ObjectModelTableEntry LedStripManager::objectModelTable[] =
-{
-	// 0. ledStrips
-	{ "ledStrips",	OBJECT_MODEL_FUNC_ARRAY(0),	ObjectModelEntryFlags::none },
-};
-
-constexpr uint8_t LedStripManager::objectModelTableDescriptor[] =
-{
-	1,							// number of sections
-	1							// number in section 0
-};
-
-DEFINE_GET_OBJECT_MODEL_TABLE(LedStripManager)
+ReadWriteLock LedStripManager::ledLock;
 
 LedStripManager::LedStripManager() noexcept
 {
@@ -204,7 +171,7 @@ bool LedStripManager::MustStopMovement(GCodeBuffer& gb) noexcept
 	return strips[stripNumber] != nullptr && strips[stripNumber]->MustStopMovement();
 }
 
-// Return the number of LED strips, excluding trailing null entries
+// Return the number of LED strips, excluding trailing null entries. Called to build the object model.
 size_t LedStripManager::GetNumLedStrips() const noexcept
 {
 	size_t ret = MaxLedStrips;
@@ -213,6 +180,12 @@ size_t LedStripManager::GetNumLedStrips() const noexcept
 		--ret;
 	}
 	return ret;
+}
+
+// Retrieve an LED strip. Caller must acquire ledLock before calling this. Called to build the object model.
+const LedStripBase *LedStripManager::GetLedStrip(size_t index) const noexcept
+{
+	return (index < MaxLedStrips) ? strips[index] : nullptr;
 }
 
 #if SUPPORT_REMOTE_COMMANDS
