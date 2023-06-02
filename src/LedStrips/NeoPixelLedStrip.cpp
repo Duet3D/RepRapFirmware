@@ -211,7 +211,7 @@ GCodeResult NeoPixelLedStrip::BitBangNeoPixelData(const LedParams& params) noexc
 		uint32_t nextDelay = T0L;
 
 		IrqDisable();
-		uint32_t lastTransitionTime = SysTick->VAL & 0x00FFFFFF;
+		uint32_t lastTransitionTime = GetCurrentCycles();
 		while (q < p)
 		{
 			uint8_t c = *q++;
