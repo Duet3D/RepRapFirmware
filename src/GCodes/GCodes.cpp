@@ -2953,6 +2953,13 @@ void GCodes::AbortPrint(GCodeBuffer& gb) noexcept
 	(void)gb.AbortFile(true);					// stop executing any files or macros that this GCodeBuffer is running
 	if (gb.IsFileChannel())						// if the current command came from a file being printed
 	{
+#if HAS_SBC_INTERFACE && SUPPORT_ASYNC_MOVES
+		GCodeBuffer* otherGb = (gb.GetChannel() == GCodeChannel::File) ? File2GCode() : FileGCode();
+		if (otherGb->IsDoingFile() && (!otherGb->IsDoingFileMacro() || otherGb->LatestMachineState().CanRestartMacro()))
+		{
+			(void)otherGb->AbortFile(true);		// stop processing commands from the other file reader too
+		}
+#endif
 		StopPrint(StopPrintReason::abort);
 		gb.Init();								// invalidate the file channel here as the other one may be still busy (possibly in a macro)
 	}
