@@ -83,7 +83,6 @@ unsigned int MessageBox::numAutoCancelledMessages = 0;
 	mbox->title.copy(p_title);
 	mbox->mode = p_mode;
 	mbox->startTime = millis();
-	mbox->timeout = lrintf(max<float>(p_timeout, 0.0) * 1000.0);
 	mbox->controls = p_controls;
 	if (p_limits != nullptr)
 	{
@@ -99,6 +98,7 @@ unsigned int MessageBox::numAutoCancelledMessages = 0;
 	{
 		mbox->limits.canCancel = false;
 	}
+	mbox->timeout = (p_mode <= 1 || mbox->limits.canCancel) ? lrintf(max<float>(p_timeout, 0.0) * 1000.0) : 0;
 
 	if (mbp == &mboxList)
 	{
