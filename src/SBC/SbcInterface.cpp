@@ -280,7 +280,6 @@ void SbcInterface::ExchangeData() noexcept
 			{
 				txEnd = txPointer;
 				txPointer = 0;
-				sendBufferUpdate = true;
 			}
 
 			// Store the buffer header
@@ -293,6 +292,7 @@ void SbcInterface::ExchangeData() noexcept
 			const uint32_t *src = reinterpret_cast<const uint32_t *>(code);
 			memcpyu32(dst, src, packet->length / sizeof(uint32_t));
 			txPointer += bufferedCodeSize;
+			sendBufferUpdate = true;
 			break;
 		}
 
@@ -1000,12 +1000,13 @@ void SbcInterface::ExchangeData() noexcept
 
 	// Notify DSF about the available buffer space
 	DefragmentBufferedCodes();
-	if (!codeBufferAvailable || sendBufferUpdate)
 	{
 		TaskCriticalSectionLocker locker;
-
-		const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
-		sendBufferUpdate = !transfer.WriteCodeBufferUpdate(bufferSpace);
+		if (!codeBufferAvailable || sendBufferUpdate)
+		{
+			const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
+			sendBufferUpdate = !transfer.WriteCodeBufferUpdate(bufferSpace);
+		}
 	}
 
 	// Get another chunk of the file being requested
@@ -1449,6 +1450,7 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 					{
 						// Skipped non-pending codes, restart from the beginning
 						rxPointer = txEnd = 0;
+						sendBufferUpdate = true;
 					}
 
 					// About to overlap, continue from the start
@@ -1848,6 +1850,7 @@ void SbcInterface::DefragmentBufferedCodes() noexcept
 				memmoveu32(reinterpret_cast<uint32_t*>(codeBuffer + SpiCodeBufferSize - endBufferSize), reinterpret_cast<uint32_t*>(codeBuffer + rxPointer), endBufferSize / sizeof(uint32_t));
 				rxPointer = SpiCodeBufferSize - endBufferSize;
 				txEnd = SpiCodeBufferSize;
+				sendBufferUpdate = true;
 			}
 		}
 	}
@@ -1917,7 +1920,6 @@ void SbcInterface::InvalidateBufferedCodes(GCodeChannel channel) noexcept
 				if (codeHeader->channel == channel.RawValue())
 				{
 					bufHeader->isPending = false;
-					sendBufferUpdate = true;
 				}
 				else
 				{
@@ -1928,6 +1930,7 @@ void SbcInterface::InvalidateBufferedCodes(GCodeChannel channel) noexcept
 
 			if (updateRxPointer)
 			{
+				sendBufferUpdate = true;
 				if (readPointer == txPointer && txEnd == 0)
 				{
 					// Buffer is empty again, reset the pointers

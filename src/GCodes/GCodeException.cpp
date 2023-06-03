@@ -17,7 +17,7 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 	const bool inFile = gb != nullptr && gb->IsDoingFile();
 	if (inFile)
 	{
-		reply.copy((gb->IsDoingFileMacro()) ? "in file macro": "in GCode file");
+		reply.copy((gb->IsDoingFileMacro()) ? "in file macro" : "in GCode file");
 		if (line >= 0)
 		{
 			reply.catf(" line %d", line);
