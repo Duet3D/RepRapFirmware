@@ -17,10 +17,12 @@
 
 #include <General/Portability.h>
 
-constexpr float DefaultAnchors[4][3] = {{    0.0, -2000.0, -100.0},
+constexpr size_t DefaultNumAnchors = 4;
+constexpr float DefaultAnchors[5][3] = {{    0.0, -2000.0, -100.0},
                                         { 2000.0,  1000.0, -100.0},
                                         {-2000.0,  1000.0, -100.0},
-                                        {    0.0,     0.0, 3000.0}};
+                                        {    0.0,     0.0, 3000.0},
+                                        {    0.0,     0.0,    0.0}};
 constexpr float DefaultPrintRadius = 1500.0;
 
 #if SUPPORT_OBJECT_MODEL
@@ -43,19 +45,20 @@ constexpr ObjectModelArrayTableEntry HangprinterKinematics::objectModelArrayTabl
 	// 11. Anchors
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return HANGPRINTER_AXES; },
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return HANGPRINTER_MAX_ANCHORS; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 10 | (context.GetLastIndex() << 8), true); }
 	}
 };
 
-DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(HangprinterKinematics, RoundBedKinematics, 10)
+// TODO how are this 10 (now 13) and this 11 (now 14) calculated? make it a macro based on HANGPRINTER_MAX_ANCHORS
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(HangprinterKinematics, RoundBedKinematics, 13)
 
 constexpr ObjectModelTableEntry HangprinterKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "anchors",		OBJECT_MODEL_FUNC_ARRAY(11), 						ObjectModelEntryFlags::none },
-	{ "name",			OBJECT_MODEL_FUNC(self->GetName(true)), 			ObjectModelEntryFlags::none },
+	{ "anchors",		OBJECT_MODEL_FUNC_ARRAY(14), 					ObjectModelEntryFlags::none },
+	{ "name",		OBJECT_MODEL_FUNC(self->GetName(true)), 			ObjectModelEntryFlags::none },
 	{ "printRadius",	OBJECT_MODEL_FUNC(self->printRadius, 1), 			ObjectModelEntryFlags::none },
 };
 
@@ -83,22 +86,24 @@ void HangprinterKinematics::Init() noexcept
 	 * In practice you might want to compensate a bit more or a bit less */
 	constexpr float DefaultSpoolBuildupFactor = 0.007;
 	/* Measure and set spool radii with M669 to achieve better accuracy */
-	constexpr float DefaultSpoolRadii[4] = { 75.0, 75.0, 75.0, 75.0}; // HP4 default
+	constexpr float DefaultSpoolRadii[HANGPRINTER_MAX_ANCHORS] = { 75.0, 75.0, 75.0, 75.0, 75.0}; // HP4 default
 	/* If axis runs lines back through pulley system, set mechanical advantage accordingly with M669 */
-	constexpr uint32_t DefaultMechanicalAdvantage[4] = { 2, 2, 2, 4}; // HP4 default
-	constexpr uint32_t DefaultLinesPerSpool[4] = { 1, 1, 1, 1}; // HP4 default
-	constexpr uint32_t DefaultMotorGearTeeth[4] = {  20,  20,  20,  20}; // HP4 default
-	constexpr uint32_t DefaultSpoolGearTeeth[4] = { 255, 255, 255, 255}; // HP4 default
-	constexpr uint32_t DefaultFullStepsPerMotorRev[4] = { 25, 25, 25, 25};
+	constexpr uint32_t DefaultMechanicalAdvantage[HANGPRINTER_MAX_ANCHORS] = { 2, 2, 2, 2, 4}; // HP4 default
+	constexpr uint32_t DefaultLinesPerSpool[HANGPRINTER_MAX_ANCHORS] = { 1, 1, 1, 1, 1}; // HP4 default
+	constexpr uint32_t DefaultMotorGearTeeth[HANGPRINTER_MAX_ANCHORS] = {  20,  20,  20,  20,  20}; // HP4 default
+	constexpr uint32_t DefaultSpoolGearTeeth[HANGPRINTER_MAX_ANCHORS] = { 255, 255, 255, 255, 255}; // HP4 default
+	constexpr uint32_t DefaultFullStepsPerMotorRev[HANGPRINTER_MAX_ANCHORS] = { 25, 25, 25, 25, 25};
 	constexpr float DefaultMoverWeight_kg = 0.0F;          // Zero disables flex compensation feature.
 	constexpr float DefaultSpringKPerUnitLength = 20000.0F; // Garda 1.1 is somewhere in the range [20000, 100000]
-	constexpr float DefaultMinPlannedForce_Newton[4] = { 0.0F };
-	constexpr float DefaultMaxPlannedForce_Newton[4] = { 70.0F, 70.0F, 70.0F, 70.0F };
-	constexpr float DefaultGuyWireLengths[HANGPRINTER_AXES] = { -1.0F }; // If one of these are negative they will be calculated in Recalc() instead
+	constexpr float DefaultMinPlannedForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
+	constexpr float DefaultMaxPlannedForce_Newton[HANGPRINTER_MAX_ANCHORS] = { 70.0F, 70.0F, 70.0F, 70.0F, 70.0F };
+	constexpr float DefaultGuyWireLengths[HANGPRINTER_MAX_ANCHORS] = { -1.0F }; // If one of these are negative they will be calculated in Recalc() instead
 	constexpr float DefaultTargetForce_Newton = 20.0F; // 20 chosen quite arbitrarily
-	constexpr float DefaultTorqueConstants[HANGPRINTER_AXES] = { 0.0F };
+	constexpr float DefaultTorqueConstants[HANGPRINTER_MAX_ANCHORS] = { 0.0F };
 
 	ARRAY_INIT(anchors, DefaultAnchors);
+	anchorMode = HangprinterAnchorMode::LastOnTop;
+	numAnchors = DefaultNumAnchors;
 	printRadius = DefaultPrintRadius;
 	spoolBuildupFactor = DefaultSpoolBuildupFactor;
 	ARRAY_INIT(spoolRadii, DefaultSpoolRadii);
@@ -129,16 +134,15 @@ void HangprinterKinematics::Recalc() noexcept
 
 	// This is the difference between a "line length" and a "line position"
 	// "line length" == ("line position" + "line length in origin")
-	distancesOrigin[A_AXIS] = fastSqrtf(fsquare(anchors[A_AXIS][0]) + fsquare(anchors[A_AXIS][1]) + fsquare(anchors[A_AXIS][2]));
-	distancesOrigin[B_AXIS] = fastSqrtf(fsquare(anchors[B_AXIS][0]) + fsquare(anchors[B_AXIS][1]) + fsquare(anchors[B_AXIS][2]));
-	distancesOrigin[C_AXIS] = fastSqrtf(fsquare(anchors[C_AXIS][0]) + fsquare(anchors[C_AXIS][1]) + fsquare(anchors[C_AXIS][2]));
-	distancesOrigin[D_AXIS] = fastSqrtf(fsquare(anchors[D_AXIS][0]) + fsquare(anchors[D_AXIS][1]) + fsquare(anchors[D_AXIS][2]));
-
+	for (size_t i = 0; i < numAnchors; ++i)
+	{
+        	distancesOrigin[i] = fastSqrtf(fsquare(anchors[i][0]) + fsquare(anchors[i][1]) + fsquare(anchors[i][2]));
+	}
 
 	//// Line buildup compensation
-	float stepsPerUnitTimesRTmp[HANGPRINTER_AXES] = { 0.0 };
+	float stepsPerUnitTimesRTmp[HANGPRINTER_MAX_ANCHORS] = { 0.0 };
 	Platform& platform = reprap.GetPlatform(); // No const because we want to set drive steper per unit
-	for (size_t i = 0; i < HANGPRINTER_AXES; i++)
+	for (size_t i = 0; i < numAnchors; ++i)
 	{
 		const uint8_t driver = platform.GetAxisDriversConfig(i).driverNumbers[0].localDriver; // Only supports single driver
 		bool dummy;
@@ -173,12 +177,12 @@ void HangprinterKinematics::Recalc() noexcept
 		guyWireLengths[D_AXIS] = 0.0F;
 	}
 
-	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+	for (size_t i{0}; i < numAnchors; ++i) {
 		springKsOrigin[i] = SpringK(distancesOrigin[i] * mechanicalAdvantage[i] + guyWireLengths[i]);
 	}
 	float constexpr origin[3] = { 0.0F, 0.0F, 0.0F };
 	StaticForces(origin, fOrigin);
-	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+	for (size_t i{0}; i < numAnchors; ++i) {
 		relaxedSpringLengthsOrigin[i] = distancesOrigin[i] - fOrigin[i] / (springKsOrigin[i] * mechanicalAdvantage[i]);
 	}
 
@@ -203,11 +207,15 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 	if (mCode == 669)
 	{
 		const bool seenNonGeometry = TryConfigureSegmentation(gb);
-		gb.TryGetFloatArray('A', 3, anchors[A_AXIS], seen);
-		gb.TryGetFloatArray('B', 3, anchors[B_AXIS], seen);
-		gb.TryGetFloatArray('C', 3, anchors[C_AXIS], seen);
-		gb.TryGetFloatArray('D', 3, anchors[D_AXIS], seen);
-
+		if (gb.Seen('N'))
+		{
+			numAnchors = gb.GetUIValue();
+			seen = true;
+		}
+		for (size_t i = 0; i < numAnchors; ++i)
+		{
+			gb.TryGetFloatArray(ANCHOR_CHARS[i], 3, anchors[i], seen);
+		}
 		if (gb.Seen('P'))
 		{
 			printRadius = gb.GetPositiveFValue();
@@ -221,71 +229,106 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 		else if (!seenNonGeometry && !gb.Seen('K'))
 		{
 			Kinematics::Configure(mCode, gb, reply, error);
-			reply.lcatf(
-				"A:%.2f, %.2f, %.2f\n"
-				"B:%.2f, %.2f, %.2f\n"
-				"C:%.2f, %.2f, %.2f\n"
-				"D:%.2f, %.2f, %.2f\n"
-				"P:Print radius: %.1f",
-				(double)anchors[A_AXIS][X_AXIS], (double)anchors[A_AXIS][Y_AXIS], (double)anchors[A_AXIS][Z_AXIS],
-				(double)anchors[B_AXIS][X_AXIS], (double)anchors[B_AXIS][Y_AXIS], (double)anchors[B_AXIS][Z_AXIS],
-				(double)anchors[C_AXIS][X_AXIS], (double)anchors[C_AXIS][Y_AXIS], (double)anchors[C_AXIS][Z_AXIS],
-				(double)anchors[D_AXIS][X_AXIS], (double)anchors[D_AXIS][Y_AXIS], (double)anchors[D_AXIS][Z_AXIS],
-				(double)printRadius
-				);
+			for (size_t i = 0; i < numAnchors; ++i)
+			{
+				reply.lcatf("%c:%.2f, %.2f, %.2f",
+					    ANCHOR_CHARS[i], (double)anchors[i][X_AXIS], (double)anchors[i][Y_AXIS], (double)anchors[i][Z_AXIS]);
+			}
+			reply.lcatf("P:Print radius: %.1f", (double)printRadius);
 		}
 	}
 	else if (mCode == 666)
 	{
+		// 0=None, 1=last-top, 2=all-top, 3-half-top, etc
+		uint32_t unsignedAnchorMode = (uint32_t)anchorMode;
+		gb.TryGetUIValue('A', unsignedAnchorMode, seen);
+		if (unsignedAnchorMode <= (uint32_t)HangprinterAnchorMode::AllOnTop) {
+			anchorMode = (HangprinterAnchorMode)unsignedAnchorMode;
+		}
 		gb.TryGetFValue('Q', spoolBuildupFactor, seen);
-		gb.TryGetFloatArray('R', HANGPRINTER_AXES, spoolRadii, seen);
-		gb.TryGetUIArray('U', HANGPRINTER_AXES, mechanicalAdvantage, seen);
-		gb.TryGetUIArray('O', HANGPRINTER_AXES, linesPerSpool, seen);
-		gb.TryGetUIArray('L', HANGPRINTER_AXES, motorGearTeeth, seen);
-		gb.TryGetUIArray('H', HANGPRINTER_AXES, spoolGearTeeth, seen);
-		gb.TryGetUIArray('J', HANGPRINTER_AXES, fullStepsPerMotorRev, seen);
+		gb.TryGetFloatArray('R', numAnchors, spoolRadii, seen);
+		gb.TryGetUIArray('U', numAnchors, mechanicalAdvantage, seen);
+		gb.TryGetUIArray('O', numAnchors, linesPerSpool, seen);
+		gb.TryGetUIArray('L', numAnchors, motorGearTeeth, seen);
+		gb.TryGetUIArray('H', numAnchors, spoolGearTeeth, seen);
+		gb.TryGetUIArray('J', numAnchors, fullStepsPerMotorRev, seen);
 		gb.TryGetFValue('W', moverWeight_kg, seen);
 		gb.TryGetFValue('S', springKPerUnitLength, seen);
-		gb.TryGetFloatArray('I', HANGPRINTER_AXES, minPlannedForce_Newton, seen);
-		gb.TryGetFloatArray('X', HANGPRINTER_AXES, maxPlannedForce_Newton, seen);
-		gb.TryGetFloatArray('Y', HANGPRINTER_AXES, guyWireLengths, seen);
-		gb.TryGetFloatArray('C', HANGPRINTER_AXES, torqueConstants, seen);
+		gb.TryGetFloatArray('I', numAnchors, minPlannedForce_Newton, seen);
+		gb.TryGetFloatArray('X', numAnchors, maxPlannedForce_Newton, seen);
+		gb.TryGetFloatArray('Y', numAnchors, guyWireLengths, seen);
+		gb.TryGetFloatArray('C', numAnchors, torqueConstants, seen);
 		if (seen)
 		{
 			Recalc();
 		}
 		else
 		{
-			reply.printf(
-				"M666 Q%.4f\n"
-				"R%.2f:%.2f:%.2f:%.2f\n"
-				"U%d:%d:%d:%d\n"
-				"O%d:%d:%d:%d\n"
-				"L%d:%d:%d:%d\n"
-				"H%d:%d:%d:%d\n"
-				"J%d:%d:%d:%d\n"
-				"W%.2f\n"
-				"S%.2f\n"
-				"I%.1f:%.1f:%.1f:%.1f\n"
-				"X%.1f:%.1f:%.1f:%.1f\n"
-				"Y%.1f:%.1f:%.1f:%.1f\n"
-				"T%.1f\n"
-				"C%.4f:%.4f:%.4f:%.4f",
-				(double)spoolBuildupFactor,
-				(double)spoolRadii[A_AXIS], (double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS],
-				(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS], (int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS],
-				(int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS], (int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS],
-				(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS], (int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
-				(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS], (int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
-				(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS], (int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS],
-				(double)moverWeight_kg,
-				(double)springKPerUnitLength,
-				(double)minPlannedForce_Newton[A_AXIS], (double)minPlannedForce_Newton[B_AXIS], (double)minPlannedForce_Newton[C_AXIS], (double)minPlannedForce_Newton[D_AXIS],
-				(double)maxPlannedForce_Newton[A_AXIS], (double)maxPlannedForce_Newton[B_AXIS], (double)maxPlannedForce_Newton[C_AXIS], (double)maxPlannedForce_Newton[D_AXIS],
-				(double)guyWireLengths[A_AXIS], (double)guyWireLengths[B_AXIS], (double)guyWireLengths[C_AXIS], (double)guyWireLengths[D_AXIS],
-				(double)targetForce_Newton,
-				(double)torqueConstants[A_AXIS], (double)torqueConstants[B_AXIS], (double)torqueConstants[C_AXIS], (double)torqueConstants[D_AXIS]
-				);
+			reply.printf("M666 A%u Q%.4f\n", (unsigned)anchorMode, (double)spoolBuildupFactor);
+
+			reply.lcatf("R%.2f", (double)spoolRadii[0]);
+			for (size_t i = 1; i < numAnchors; ++i)
+			{
+				reply.catf(":%.2f", (double)spoolRadii[i]);
+			}
+
+			reply.lcatf("U%d", (int)mechanicalAdvantage[0]);
+			for (size_t i = 1; i < numAnchors; ++i)
+			{
+				reply.catf(":%d", (int)mechanicalAdvantage[i]);
+			}
+
+			reply.lcatf("O%d", (int)linesPerSpool[0]);
+			for (size_t i = 1; i < numAnchors; ++i)
+			{
+				reply.catf(":%d", (int)linesPerSpool[i]);
+			}
+
+			reply.lcatf("L%d", (int)motorGearTeeth[0]);
+			for (size_t i = 1; i < numAnchors; ++i)
+			{
+				reply.catf(":%d", (int)motorGearTeeth[i]);
+			}
+
+			reply.lcatf("H%d", (int)spoolGearTeeth[0]);
+			for (size_t i = 1; i < numAnchors; ++i)
+			{
+				reply.catf(":%d", (int)spoolGearTeeth[i]);
+			}
+
+			reply.lcatf("J%d", (int)fullStepsPerMotorRev[0]);
+			for (size_t i = 1; i < numAnchors; ++i)
+			{
+				reply.catf(":%d", (int)fullStepsPerMotorRev[i]);
+			}
+			reply.lcatf("W%.2f\n", (double)moverWeight_kg);
+			reply.lcatf("S%.2f\n", (double)springKPerUnitLength);
+
+			reply.lcatf("I%.1f", (double)minPlannedForce_Newton[0]);
+			for (size_t i = 1; i < numAnchors; ++i)
+			{
+				reply.catf(":%.1f", (double)minPlannedForce_Newton[i]);
+			}
+
+			reply.lcatf("X%.1f", (double)maxPlannedForce_Newton[0]);
+			for (size_t i = 1; i < numAnchors; ++i)
+			{
+				reply.catf(":%.1f", (double)maxPlannedForce_Newton[i]);
+			}
+
+			reply.lcatf("Y%.1f", (double)guyWireLengths[0]);
+			for (size_t i = 1; i < numAnchors; ++i)
+			{
+				reply.catf(":%.1f", (double)guyWireLengths[i]);
+			}
+			reply.lcatf("T%.1f\n", (double)targetForce_Newton);
+
+			reply.lcatf("C%.4f", (double)torqueConstants[0]);
+			for (size_t i = 1; i < numAnchors; ++i)
+			{
+				reply.catf(":%.4f", (double)torqueConstants[i]);
+			}
+
 		}
 	}
 	else
@@ -299,36 +342,34 @@ bool HangprinterKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 bool HangprinterKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[],
 													size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
-	float distances[HANGPRINTER_AXES];
-	distances[A_AXIS] = hyp3(machinePos, anchors[A_AXIS]);
-	distances[B_AXIS] = hyp3(machinePos, anchors[B_AXIS]);
-	distances[C_AXIS] = hyp3(machinePos, anchors[C_AXIS]);
-	distances[D_AXIS] = hyp3(machinePos, anchors[D_AXIS]);
+	float distances[numAnchors];
+	for (size_t i{0}; i < numAnchors; ++i) {
+		distances[i] = hyp3(machinePos, anchors[i]);
+	}
 
-
-	float springKs[HANGPRINTER_AXES];
-	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+	float springKs[numAnchors];
+	for (size_t i{0}; i < numAnchors; ++i) {
 		springKs[i] = SpringK(distances[i] * mechanicalAdvantage[i] + guyWireLengths[i]);
 	}
 
-	float F[HANGPRINTER_AXES] = {0.0F}; // desired force in each direction
+	float F[numAnchors] = {0.0F}; // desired force in each direction
 	StaticForces(machinePos, F);
 
-	float relaxedSpringLengths[HANGPRINTER_AXES];
-	for (size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+	float relaxedSpringLengths[numAnchors];
+	for (size_t i{0}; i < numAnchors; ++i) {
 		relaxedSpringLengths[i] = distances[i] - F[i] / (springKs[i] * mechanicalAdvantage[i]);
 		// The second term there is the mover's movement in mm due to flex
 	}
 
-	float linePos[HANGPRINTER_AXES];
-	for (size_t i = 0; i < HANGPRINTER_AXES; ++i) {
+	float linePos[numAnchors];
+	for (size_t i = 0; i < numAnchors; ++i) {
 		linePos[i] = relaxedSpringLengths[i] - relaxedSpringLengthsOrigin[i];
 	}
 
-	motorPos[A_AXIS] = lrintf(k0[A_AXIS] * (fastSqrtf(spoolRadiiSq[A_AXIS] + linePos[A_AXIS] * k2[A_AXIS]) - spoolRadii[A_AXIS]));
-	motorPos[B_AXIS] = lrintf(k0[B_AXIS] * (fastSqrtf(spoolRadiiSq[B_AXIS] + linePos[B_AXIS] * k2[B_AXIS]) - spoolRadii[B_AXIS]));
-	motorPos[C_AXIS] = lrintf(k0[C_AXIS] * (fastSqrtf(spoolRadiiSq[C_AXIS] + linePos[C_AXIS] * k2[C_AXIS]) - spoolRadii[C_AXIS]));
-	motorPos[D_AXIS] = lrintf(k0[D_AXIS] * (fastSqrtf(spoolRadiiSq[D_AXIS] + linePos[D_AXIS] * k2[D_AXIS]) - spoolRadii[D_AXIS]));
+	for (size_t i = 0; i < numAnchors; ++i)
+	{
+		motorPos[i] = lrintf(k0[i] * (fastSqrtf(spoolRadiiSq[i] + linePos[i] * k2[i]) - spoolRadii[i]));
+	}
 
 	return true;
 }
@@ -342,32 +383,33 @@ inline float HangprinterKinematics::MotorPosToLinePos(const int32_t motorPos, si
 
 void HangprinterKinematics::flexDistances(float const machinePos[3], float const distanceA,
                                           float const distanceB, float const distanceC,
-                                          float const distanceD, float flex[HANGPRINTER_AXES]) const noexcept {
-	float springKs[HANGPRINTER_AXES] = {
+                                          float const distanceD, float flex[HANGPRINTER_MAX_ANCHORS]) const noexcept {
+	// TODO do this thing for all anchors
+	float springKs[numAnchors] = {
 		SpringK(distanceA * mechanicalAdvantage[A_AXIS] + guyWireLengths[A_AXIS]),
 		SpringK(distanceB * mechanicalAdvantage[B_AXIS] + guyWireLengths[B_AXIS]),
 		SpringK(distanceC * mechanicalAdvantage[C_AXIS] + guyWireLengths[C_AXIS]),
 		SpringK(distanceD * mechanicalAdvantage[D_AXIS] + guyWireLengths[D_AXIS])
 	};
 
-	float F[HANGPRINTER_AXES] = {0.0F}; // desired force in each direction
+	float F[numAnchors] = {0.0F}; // desired force in each direction
 	StaticForces(machinePos, F);
 
-	float relaxedSpringLengths[HANGPRINTER_AXES] = {
+	float relaxedSpringLengths[numAnchors] = {
 		distanceA - F[A_AXIS] / (springKs[A_AXIS] * mechanicalAdvantage[A_AXIS]),
 		distanceB - F[B_AXIS] / (springKs[B_AXIS] * mechanicalAdvantage[B_AXIS]),
 		distanceC - F[C_AXIS] / (springKs[C_AXIS] * mechanicalAdvantage[C_AXIS]),
 		distanceD - F[D_AXIS] / (springKs[D_AXIS] * mechanicalAdvantage[D_AXIS])
 	};
 
-	float linePos[HANGPRINTER_AXES] = {
+	float linePos[numAnchors] = {
 		relaxedSpringLengths[A_AXIS] - relaxedSpringLengthsOrigin[A_AXIS],
 		relaxedSpringLengths[B_AXIS] - relaxedSpringLengthsOrigin[B_AXIS],
 		relaxedSpringLengths[C_AXIS] - relaxedSpringLengthsOrigin[C_AXIS],
 		relaxedSpringLengths[D_AXIS] - relaxedSpringLengthsOrigin[D_AXIS]
 	};
 
-	float distanceDifferences[HANGPRINTER_AXES] = {
+	float distanceDifferences[numAnchors] = {
 		distanceA - distancesOrigin[A_AXIS],
 		distanceB - distancesOrigin[B_AXIS],
 		distanceC - distancesOrigin[C_AXIS],
@@ -384,6 +426,7 @@ void HangprinterKinematics::flexDistances(float const machinePos[3], float const
 // Assumes lines are tight and anchor location norms are followed
 void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
+	// TODO Use all anchors when numAnchors > 4, to have less error
 	float const distanceA = MotorPosToLinePos(motorPos[A_AXIS], A_AXIS) + distancesOrigin[A_AXIS];
 	float const distanceB = MotorPosToLinePos(motorPos[B_AXIS], B_AXIS) + distancesOrigin[B_AXIS];
 	float const distanceC = MotorPosToLinePos(motorPos[C_AXIS], C_AXIS) + distancesOrigin[C_AXIS];
@@ -392,7 +435,7 @@ void HangprinterKinematics::MotorStepsToCartesian(const int32_t motorPos[], cons
 
 	// Now we have an approximate machinePos
 	// Let's correct for line flex
-	float flex[HANGPRINTER_AXES] = { 0.0F };
+	float flex[numAnchors] = { 0.0F };
 	flexDistances(machinePos, distanceA, distanceB, distanceC, distanceD, flex);
 	float const adjustedDistanceA = distanceA - flex[A_AXIS];
 	float const adjustedDistanceB = distanceB - flex[B_AXIS];
@@ -419,17 +462,53 @@ static bool isSameSide(float const v0[3], float const v1[3], float const v2[3], 
 	return dot0*dot1 > 0.0F;
 }
 
-static bool isInsideTetrahedron(float const point[3], float const tetrahedron[4][3]){
-	return isSameSide(tetrahedron[0], tetrahedron[1], tetrahedron[2], tetrahedron[3], point) &&
-	       isSameSide(tetrahedron[2], tetrahedron[1], tetrahedron[3], tetrahedron[0], point) &&
-	       isSameSide(tetrahedron[2], tetrahedron[3], tetrahedron[0], tetrahedron[1], point) &&
-	       isSameSide(tetrahedron[0], tetrahedron[3], tetrahedron[1], tetrahedron[2], point);
+bool HangprinterKinematics::IsInsidePyramidSides(float const coords[3]) const noexcept
+{
+	bool reachable = true;
+
+	// Check all the planes defined by triangle sides in the pyramid
+	for (size_t i = 0; reachable && i < numAnchors - 1; ++i) {
+		reachable = reachable && isSameSide(anchors[i], anchors[(i+1) % (numAnchors - 1)], anchors[numAnchors - 1], anchors[(i+2) % (numAnchors - 1)], coords);
+	}
+	return reachable;
 }
 
+bool HangprinterKinematics::IsInsidePrismSides(float const coords[3], unsigned const discount_last) const noexcept
+{
+	bool reachable = true;
+
+	// For each side of the base, check the plane formed by side and another point bellow them in z.
+	for (size_t i = 0; reachable && i < numAnchors - discount_last; ++i) {
+		float const lower_point[3] = {anchors[i][0], anchors[i][1], anchors[i][2] - 1};
+		reachable = reachable && isSameSide(anchors[i], anchors[(i+1) % (numAnchors - 1)], lower_point, anchors[(i+2) % (numAnchors - 1)], coords);
+	}
+	return reachable;
+}
+
+// For each triangle side in a pseudo-pyramid, check if the point is inside the pyramid (Except for the base)
+// Also check that any point below the line between two exterior anchors (all anchors are exterior except for the last one)
+// is in the "inside part" all the way down to min_Z, however low it may be.
+// To further limit the movements in the X and Y axes one can simply set a smaller print radius.
 bool HangprinterKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept /*override*/
 {
 	float const coords[3] = {axesCoords[X_AXIS], axesCoords[Y_AXIS], axesCoords[Z_AXIS]};
-	return isInsideTetrahedron(coords, anchors);
+	bool reachable = true;
+
+	switch (anchorMode) {
+		case HangprinterAnchorMode::None:
+			return true;
+
+		// This reaches a pyramid on top of the lower prism if the bed is below the lower anchors
+		case HangprinterAnchorMode::LastOnTop:
+		default:
+			reachable = IsInsidePyramidSides(coords);
+			return reachable && IsInsidePrismSides(coords, 1);
+
+		case HangprinterAnchorMode::AllOnTop:
+			return IsInsidePrismSides(coords, 0);
+	};
+
+	return reachable;
 }
 
 // Limit the Cartesian position that the user wants to move to returning true if we adjusted the position
@@ -508,7 +587,10 @@ AxesBitmap HangprinterKinematics::AxesAssumedHomed(AxesBitmap g92Axes) const noe
 	// If all of X, Y and Z have been specified then we know the positions of all 4 spool motors, otherwise we don't
 	if ((g92Axes & XyzAxes) == XyzAxes)
 	{
-		g92Axes.SetBit(D_AXIS);
+		for (size_t i = 3; i < numAnchors; ++i)
+		{
+			g92Axes.SetBit(i);
+		}
 	}
 	else
 	{
@@ -532,69 +614,116 @@ AxesBitmap HangprinterKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 // Write the parameters to a file, returning true if success
 bool HangprinterKinematics::WriteCalibrationParameters(FileStore *f) const noexcept
 {
-	bool ok = f->Write("; Hangprinter parameters\n");
-	if (ok)
+	bool ok = false;
+	String<255> scratchString;
+
+	scratchString.printf("; Hangprinter parameters\n");
+	scratchString.printf("M669 K6 ");
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf("N%d", numAnchors);
+	for (size_t i = 0; i < numAnchors; ++i)
 	{
-		String<100> scratchString;
-		scratchString.printf("M669 K6 A%.3f:%.3f:%.3f B%.3f:%.3f:%.3f",
-							(double)anchors[A_AXIS][X_AXIS], (double)anchors[A_AXIS][Y_AXIS], (double)anchors[A_AXIS][Z_AXIS],
-							(double)anchors[B_AXIS][X_AXIS], (double)anchors[B_AXIS][Y_AXIS], (double)anchors[B_AXIS][Z_AXIS]);
-		ok = f->Write(scratchString.c_str());
-		if (ok)
-		{
-			scratchString.printf(" C%.3f:%.3f:%.3f D%.3f:%.3f:%.3f P%.1f\n",
-								(double)anchors[C_AXIS][X_AXIS], (double)anchors[C_AXIS][Y_AXIS], (double)anchors[C_AXIS][Z_AXIS],
-								(double)anchors[D_AXIS][X_AXIS], (double)anchors[D_AXIS][Y_AXIS], (double)anchors[D_AXIS][Z_AXIS],
-								(double)printRadius);
-			ok = f->Write(scratchString.c_str());
-			if (ok)
-			{
-				scratchString.printf("M666 Q%.6f R%.3f:%.3f:%.3f:%.3f U%d:%d:%d:%d",
-									(double)spoolBuildupFactor, (double)spoolRadii[A_AXIS],
-									(double)spoolRadii[B_AXIS], (double)spoolRadii[C_AXIS], (double)spoolRadii[D_AXIS],
-									(int)mechanicalAdvantage[A_AXIS], (int)mechanicalAdvantage[B_AXIS],
-									(int)mechanicalAdvantage[C_AXIS], (int)mechanicalAdvantage[D_AXIS]
-						);
-				ok = f->Write(scratchString.c_str());
-				if (ok)
-				{
-					scratchString.printf(" O%d:%d:%d:%d L%d:%d:%d:%d H%d:%d:%d:%d J%d:%d:%d:%d",
-										(int)linesPerSpool[A_AXIS], (int)linesPerSpool[B_AXIS],
-										(int)linesPerSpool[C_AXIS], (int)linesPerSpool[D_AXIS],
-										(int)motorGearTeeth[A_AXIS], (int)motorGearTeeth[B_AXIS],
-										(int)motorGearTeeth[C_AXIS], (int)motorGearTeeth[D_AXIS],
-										(int)spoolGearTeeth[A_AXIS], (int)spoolGearTeeth[B_AXIS],
-										(int)spoolGearTeeth[C_AXIS], (int)spoolGearTeeth[D_AXIS],
-										(int)fullStepsPerMotorRev[A_AXIS], (int)fullStepsPerMotorRev[B_AXIS],
-										(int)fullStepsPerMotorRev[C_AXIS], (int)fullStepsPerMotorRev[D_AXIS]
-							);
-					ok = f->Write(scratchString.c_str());
-					if (ok)
-					{
-						scratchString.printf(" W%.2f S%.2f I%.1f:%.1f:%.1f:%.1f X%.1f:%.1f:%.1f:%.1f",
-							(double)moverWeight_kg, (double)springKPerUnitLength,
-							(double)minPlannedForce_Newton[A_AXIS], (double)minPlannedForce_Newton[B_AXIS],
-							(double)minPlannedForce_Newton[C_AXIS], (double)minPlannedForce_Newton[D_AXIS],
-							(double)maxPlannedForce_Newton[A_AXIS], (double)maxPlannedForce_Newton[B_AXIS],
-							(double)maxPlannedForce_Newton[C_AXIS], (double)maxPlannedForce_Newton[D_AXIS]
-						);
-						ok = f->Write(scratchString.c_str());
-						if (ok)
-						{
-							scratchString.printf(" Y%.1f:%.1f:%.1f:%.1f T%.1f C%.4f:%.4f:%.4f:%.4f\n",
-								(double)guyWireLengths[A_AXIS], (double)guyWireLengths[B_AXIS],
-								(double)guyWireLengths[C_AXIS], (double)guyWireLengths[D_AXIS],
-								(double)targetForce_Newton,
-								(double)torqueConstants[A_AXIS], (double)torqueConstants[B_AXIS],
-								(double)torqueConstants[C_AXIS], (double)torqueConstants[D_AXIS]
-							);
-							ok = f->Write(scratchString.c_str());
-						}
-					}
-				}
-			}
-		}
+		scratchString.catf("%c%.3f:%.3f:%.3f ", ANCHOR_CHARS[i], (double)anchors[i][X_AXIS], (double)anchors[i][Y_AXIS], (double)anchors[i][Z_AXIS]);
 	}
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf(" P%.1f", (double)printRadius);
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf("M666 A%u Q%.6f ", (unsigned)anchorMode, (double)spoolBuildupFactor);
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf("R%.3f", (double)spoolRadii[0]);
+	for (size_t i = 1; i < numAnchors; ++i)
+	{
+		scratchString.catf(":%.3f", (double)spoolRadii[i]);
+	}
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf(" U%.3f", (double)mechanicalAdvantage[0]);
+	for (size_t i = 1; i < numAnchors; ++i)
+	{
+		scratchString.catf(":%.3f", (double)mechanicalAdvantage[i]);
+	}
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf(" O%.3f", (double)linesPerSpool[0]);
+	for (size_t i = 1; i < numAnchors; ++i)
+	{
+		scratchString.catf(":%.3f", (double)linesPerSpool[i]);
+	}
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf(" L%.3f", (double)motorGearTeeth[0]);
+	for (size_t i = 1; i < numAnchors; ++i)
+	{
+		scratchString.catf(":%.3f", (double)motorGearTeeth[i]);
+	}
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf(" H%.3f", (double)spoolGearTeeth[0]);
+	for (size_t i = 1; i < numAnchors; ++i)
+	{
+		scratchString.catf(":%.3f", (double)spoolGearTeeth[i]);
+	}
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf(" J%.3f", (double)fullStepsPerMotorRev[0]);
+	for (size_t i = 1; i < numAnchors; ++i)
+	{
+		scratchString.catf(":%.3f", (double)fullStepsPerMotorRev[i]);
+	}
+	ok = f->Write(scratchString.c_str());
+
+	scratchString.printf(" W%.2f S%.2f", (double)moverWeight_kg, (double)springKPerUnitLength);
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf(" I%.1f", (double)minPlannedForce_Newton[0]);
+	for (size_t i = 1; i < numAnchors; ++i)
+	{
+		scratchString.catf(":%.1f", (double)minPlannedForce_Newton[i]);
+	}
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf(" X%.1f", (double)maxPlannedForce_Newton[0]);
+	for (size_t i = 1; i < numAnchors; ++i)
+	{
+		scratchString.catf(":%.1f", (double)maxPlannedForce_Newton[i]);
+	}
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf(" Y%.1f", (double)guyWireLengths[0]);
+	for (size_t i = 1; i < numAnchors; ++i)
+	{
+		scratchString.catf(":%.1f", (double)guyWireLengths[i]);
+	}
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf(" T%.1f", (double)targetForce_Newton);
+	ok = f->Write(scratchString.c_str());
+	if (!ok) return false;
+
+	scratchString.printf(" C%.4f", (double)torqueConstants[0]);
+	for (size_t i = 1; i < numAnchors; ++i)
+	{
+		scratchString.catf(":%.4f", (double)torqueConstants[i]);
+	}
+	ok = f->Write(scratchString.c_str());
+
 	return ok;
 }
 
@@ -698,10 +827,12 @@ void HangprinterKinematics::ForwardTransform(float const a, float const b, float
 // Print all the parameters for debugging
 void HangprinterKinematics::PrintParameters(const StringRef& reply) const noexcept
 {
-	reply.printf("Anchor coordinates (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f) (%.2f,%.2f,%.2f)\n",
-					(double)anchors[A_AXIS][X_AXIS], (double)anchors[A_AXIS][Y_AXIS], (double)anchors[A_AXIS][Z_AXIS],
-					(double)anchors[B_AXIS][X_AXIS], (double)anchors[B_AXIS][Y_AXIS], (double)anchors[B_AXIS][Z_AXIS],
-					(double)anchors[C_AXIS][X_AXIS], (double)anchors[C_AXIS][Y_AXIS], (double)anchors[C_AXIS][Z_AXIS]);
+	reply.printf("Anchor coordinates");
+	for (size_t i = 0; i < numAnchors; ++i)
+	{
+		reply.catf(" (%.2f,%.2f,%.2f)", (double)anchors[i][X_AXIS], (double)anchors[i][Y_AXIS], (double)anchors[i][Z_AXIS]);
+	}
+	reply.cat("\n");
 }
 
 #if DUAL_CAN
@@ -745,8 +876,8 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3MotorCurren
 HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEstimate(DriverId const driver, bool const makeReference, const StringRef& reply, bool const subtractReference) THROWS(GCodeException)
 {
 	const uint8_t cmd = CANSimple::MSG_GET_ENCODER_ESTIMATES;
-	static CanAddress seenDrives[HANGPRINTER_AXES] = { 0, 0, 0, 0 };
-	static float referencePositions[HANGPRINTER_AXES] = { 0.0, 0.0, 0.0, 0.0 };
+	static CanAddress seenDrives[HANGPRINTER_MAX_ANCHORS] = { 0, 0, 0, 0, 0 };
+	static float referencePositions[HANGPRINTER_MAX_ANCHORS] = { 0.0, 0.0, 0.0, 0.0, 0.0 };
 	static size_t numSeenDrives = 0;
 	size_t thisDriveIdx = 0;
 
@@ -757,15 +888,15 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 	bool const newOne = (thisDriveIdx == numSeenDrives);
 	if (newOne)
 	{
-		if (numSeenDrives < HANGPRINTER_AXES)
+		if (numSeenDrives < numAnchors)
 		{
 			seenDrives[thisDriveIdx] = driver.boardAddress;
 			numSeenDrives++;
 		}
 		else // we don't have space for a new one
 		{
-			reply.printf("Max CAN addresses we can reference is %d. Can't reference board %d.", HANGPRINTER_AXES, driver.boardAddress);
-			numSeenDrives = HANGPRINTER_AXES;
+			reply.printf("Max CAN addresses we can reference is %d. Can't reference board %d.", numAnchors, driver.boardAddress);
+			numSeenDrives = numAnchors;
 			return {};
 		}
 	}
@@ -826,14 +957,14 @@ HangprinterKinematics::ODriveAnswer HangprinterKinematics::GetODrive3EncoderEsti
 #if DUAL_CAN
 GCodeResult HangprinterKinematics::ReadODrive3AxisForce(DriverId const driver, const StringRef& reply, float setTorqueConstants[], uint32_t setMechanicalAdvantage[], uint32_t setSpoolGearTeeth[], uint32_t setMotorGearTeeth[], float setSpoolRadii[]) THROWS(GCodeException)
 {
-	static float torqueConstants_[HANGPRINTER_AXES] = { 0.0 };
-	static uint32_t mechanicalAdvantage_[HANGPRINTER_AXES] = { 0 };
-	static uint32_t spoolGearTeeth_[HANGPRINTER_AXES] = { 0 };
-	static uint32_t motorGearTeeth_[HANGPRINTER_AXES] = { 0 };
-	static float spoolRadii_[HANGPRINTER_AXES] = { 0.0 };
+	static float torqueConstants_[numAnchors] = { 0.0 };
+	static uint32_t mechanicalAdvantage_[numAnchors] = { 0 };
+	static uint32_t spoolGearTeeth_[numAnchors] = { 0 };
+	static uint32_t motorGearTeeth_[numAnchors] = { 0 };
+	static float spoolRadii_[numAnchors] = { 0.0 };
 	if (setTorqueConstants != nullptr && setMechanicalAdvantage != nullptr && setSpoolGearTeeth != nullptr &&
 			setMotorGearTeeth != nullptr && setSpoolRadii != nullptr) {
-		for(size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+		for(size_t i{0}; i < numAnchors; ++i) {
 			torqueConstants_[i] = setTorqueConstants[i];
 			mechanicalAdvantage_[i] = setMechanicalAdvantage[i];
 			spoolGearTeeth_[i] = setSpoolGearTeeth[i];
@@ -956,13 +1087,13 @@ GCodeResult HangprinterKinematics::SetODrive3TorqueMode(DriverId const driver, f
 																												uint32_t setMechanicalAdvantage[], uint32_t setSpoolGearTeeth[],
 																												uint32_t setMotorGearTeeth[], float setSpoolRadii[]) noexcept
 {
-	static uint32_t mechanicalAdvantage_[HANGPRINTER_AXES] = { 0 };
-	static uint32_t spoolGearTeeth_[HANGPRINTER_AXES] = { 0 };
-	static uint32_t motorGearTeeth_[HANGPRINTER_AXES] = { 0 };
-	static float spoolRadii_[HANGPRINTER_AXES] = { 0.0 };
+	static uint32_t mechanicalAdvantage_[numAnchors] = { 0 };
+	static uint32_t spoolGearTeeth_[numAnchors] = { 0 };
+	static uint32_t motorGearTeeth_[numAnchors] = { 0 };
+	static float spoolRadii_[numAnchors] = { 0.0 };
 	if (setMechanicalAdvantage != nullptr && setSpoolGearTeeth != nullptr &&
 			setMotorGearTeeth != nullptr && setSpoolRadii != nullptr) {
-		for(size_t i{0}; i < HANGPRINTER_AXES; ++i) {
+		for(size_t i{0}; i < numAnchors; ++i) {
 			mechanicalAdvantage_[i] = setMechanicalAdvantage[i];
 			spoolGearTeeth_[i] = setSpoolGearTeeth[i];
 			motorGearTeeth_[i] = setMotorGearTeeth[i];
