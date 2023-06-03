@@ -142,9 +142,10 @@ void GCodeBuffer::Reset() noexcept
 	isBinaryBuffer = false;
 	requestedMacroFile.Clear();
 	isWaitingForMacro = macroFileClosed = false;
-	cancelWait = macroJustStarted = macroFileError = macroFileEmpty = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
+	macroJustStarted = macroFileError = macroFileEmpty = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
 	machineState->lastCodeFromSbc = machineState->macroStartedByCode = false;
 #endif
+	cancelWait = false;
 	Init();
 }
 

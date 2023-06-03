@@ -342,6 +342,7 @@ private:
 
 	bool timerRunning;									// true if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
+	bool cancelWait;									// true to stop waiting for temperatures to be reached
 
 	alignas(4) char buffer[MaxGCodeLength];				// must be aligned because in SBC binary mode we do dword fetches from it
 
@@ -357,7 +358,6 @@ private:
 	String<MaxFilenameLength> requestedMacroFile;
 	bool isBinaryBuffer;
 	uint16_t
-		cancelWait : 1,				// Stop waiting for temperatures to be reached
 		macroJustStarted : 1,		// Whether the GB has just started a macro file
 		macroFileError : 1,			// Whether the macro file could be opened or if an error occurred
 		macroFileEmpty : 1,			// Whether the macro file is actually empty
@@ -454,7 +454,7 @@ inline bool GCodeBuffer::IsDoingLocalFile() const noexcept
 
 inline bool GCodeBuffer::IsCancelWaitRequested() noexcept
 {
-	bool b = cancelWait;
+	const bool b = cancelWait;
 	cancelWait = false;
 	return b;
 }

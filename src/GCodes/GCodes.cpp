@@ -1103,10 +1103,13 @@ bool GCodes::IsCancellingPrint() const noexcept
 {
 	return (pauseState == PauseState::cancelling)
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-			|| (!reprap.GetPrintMonitor().IsPrinting() && pauseState == PauseState::notPaused && (FileGCode()->IsExecuting()
+			|| (   !reprap.GetPrintMonitor().IsPrinting()
+				&& pauseState == PauseState::notPaused
+				&& (   FileGCode()->IsExecuting()
 # if SUPPORT_ASYNC_MOVES
-					|| File2GCode()->IsExecuting())
+					|| File2GCode()->IsExecuting()
 # endif
+				   )
 				)
 #endif
 			;
