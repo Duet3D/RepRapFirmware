@@ -8,17 +8,13 @@
 #ifndef SRC_TASKPRIORITIES_H_
 #define SRC_TASKPRIORITIES_H_
 
-// Task priorities
+// Task priorities. These must all be less than configMAX_PRIORITIES defined in FreeRTOSConfig.g.
 namespace TaskPriority
 {
 	constexpr unsigned int IdlePriority = 0;
 	constexpr unsigned int SpinPriority = 1;						// priority for tasks that rarely block
 #if HAS_SBC_INTERFACE
 	constexpr unsigned int SbcPriority = 2;							// priority for SBC task
-#endif
-#if defined(LPC_NETWORKING)
-    constexpr int TcpPriority  = 2;
-    //EMAC priority = 3 defined in FreeRTOSIPConfig.h
 #endif
     constexpr unsigned int HeatPriority = 3;
 	constexpr unsigned int UsbPriority = 3;							// priority of USB task when using tinyusb
