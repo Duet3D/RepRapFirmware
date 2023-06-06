@@ -458,7 +458,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::m109WaitForTemperature:
-		if (gb.IsCancelWaitRequested() || IsSimulating() || ToolHeatersAtSetTemperatures(ms.currentTool, gb.LatestMachineState().waitWhileCooling, TemperatureCloseEnough))
+		if (gb.IsCancelWaitRequested() || IsSimulating() || ToolHeatersAtSetTemperatures(ms.currentTool, gb.LatestMachineState().waitWhileCooling, TemperatureCloseEnough, gb.IsFileChannel()))
 		{
 			gb.SetState(GCodeState::normal);
 		}

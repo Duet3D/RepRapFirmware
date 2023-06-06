@@ -618,18 +618,18 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROW
 	return h->ReportDetails(reply);
 }
 
-bool Heat::SlowHeatersAtSetTemperatures(float tolerance) const noexcept
+bool Heat::SlowHeatersAtSetTemperatures(float tolerance, bool waitOnFault) const noexcept
 {
 	for (size_t bedHeater : ARRAY_INDICES(bedHeaters))
 	{
-		if (!HeaterAtSetTemperature(bedHeater, true, tolerance))
+		if (!HeaterAtSetTemperature(bedHeater, true, tolerance, waitOnFault))
 		{
 			return false;
 		}
 	}
 	for (size_t chamberHeater : ARRAY_INDICES(heaters))
 	{
-		if (!HeaterAtSetTemperature(chamberHeater, true, tolerance))
+		if (!HeaterAtSetTemperature(chamberHeater, true, tolerance, waitOnFault))
 		{
 			return false;
 		}
@@ -638,12 +638,17 @@ bool Heat::SlowHeatersAtSetTemperatures(float tolerance) const noexcept
 }
 
 //query an individual heater
-bool Heat::HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance) const noexcept
+bool Heat::HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance, bool waitOnFault) const noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
 	{
 		const HeaterStatus stat = h->GetStatus();
+		if (waitOnFault && stat == HeaterStatus::fault)
+		{
+			// Cannot reach target temperature if the heater has encountered a problem
+			return false;
+		}
 		if (stat == HeaterStatus::active || stat == HeaterStatus::standby)
 		{
 			const float dt = h->GetTemperature();

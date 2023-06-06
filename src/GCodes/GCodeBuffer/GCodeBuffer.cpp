@@ -142,7 +142,7 @@ void GCodeBuffer::Reset() noexcept
 	isBinaryBuffer = false;
 	requestedMacroFile.Clear();
 	isWaitingForMacro = macroFileClosed = false;
-	macroJustStarted = macroFileError = macroFileEmpty = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
+	macroJustStarted = macroJustFinished = macroFileError = macroFileEmpty = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
 	machineState->lastCodeFromSbc = machineState->macroStartedByCode = false;
 #endif
 	cancelWait = false;
@@ -298,7 +298,7 @@ void GCodeBuffer::PutBinary(const uint32_t *data, size_t len) noexcept
 {
 	machineState->lastCodeFromSbc = true;
 	isBinaryBuffer = true;
-	macroJustStarted = false;
+	macroJustStarted = macroJustFinished = false;
 	binaryParser.Put(data, len);
 }
 
@@ -1142,7 +1142,7 @@ void GCodeBuffer::MacroFileClosed() noexcept
 {
 	machineState->CloseFile();
 	macroJustStarted = false;
-	macroFileClosed = true;
+	macroJustFinished = macroFileClosed = true;
 	reprap.GetSbcInterface().EventOccurred();
 }
 
@@ -1206,8 +1206,11 @@ FilePosition GCodeBuffer::GetPrintingFilePosition(bool allowNoFilePos) const noe
 	}
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
-	const FilePosition pos = (IsDoingFileMacro())
-			? printFilePositionAtMacroStart						// the position before we started executing the macro
+	const FilePosition pos = (IsDoingFileMacro() || IsMacroFileClosed()
+# if HAS_SBC_INTERFACE
+				|| macroJustFinished							// wait for the next code from the SBC to update the job file position
+# endif
+			) ? printFilePositionAtMacroStart					// the position before we started executing the macro
 				: GetJobFilePosition();							// the actual position, allowing for bytes cached but not yet processed
 	return (pos != noFilePosition || allowNoFilePos) ? pos : 0;
 #else

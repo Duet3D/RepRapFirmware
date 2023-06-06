@@ -359,6 +359,7 @@ private:
 	bool isBinaryBuffer;
 	uint16_t
 		macroJustStarted : 1,		// Whether the GB has just started a macro file
+		macroJustFinished : 1,		// Whether the GB has just finished a macro file
 		macroFileError : 1,			// Whether the macro file could be opened or if an error occurred
 		macroFileEmpty : 1,			// Whether the macro file is actually empty
 		abortFile : 1,				// Whether to abort the last file on the stack

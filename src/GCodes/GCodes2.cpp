@@ -1923,7 +1923,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (gb.Seen('P'))
 					{
 						// Wait for the heaters associated with the specified tool to be ready
-						if (!ToolHeatersAtSetTemperatures(Tool::GetLockedTool(gb.GetIValue()).Ptr(), true, tolerance))
+						if (!ToolHeatersAtSetTemperatures(Tool::GetLockedTool(gb.GetIValue()).Ptr(), true, tolerance, gb.IsFileChannel()))
 						{
 							return false;
 						}
@@ -1939,7 +1939,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 						for (size_t i = 0; i < heaterCount; i++)
 						{
-							if (!reprap.GetHeat().HeaterAtSetTemperature(heaters[i], true, tolerance))
+							if (!reprap.GetHeat().HeaterAtSetTemperature(heaters[i], true, tolerance, gb.IsFileChannel()))
 							{
 								return false;
 							}
@@ -1960,7 +1960,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							for (size_t i = 0; i < MaxChamberHeaters; i++)
 							{
 								const int8_t heater = reprap.GetHeat().GetChamberHeater(i);
-								if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance))
+								if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance, gb.IsFileChannel()))
 								{
 									return false;
 								}
@@ -1974,7 +1974,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								if (chamberIndices[i] >= 0 && chamberIndices[i] < MaxChamberHeaters)
 								{
 									const int8_t heater = reprap.GetHeat().GetChamberHeater(chamberIndices[i]);
-									if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance))
+									if (heater >= 0 && !reprap.GetHeat().HeaterAtSetTemperature(heater, true, tolerance, gb.IsFileChannel()))
 									{
 										return false;
 									}
@@ -1986,8 +1986,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					// Wait for the current tool and slow heaters to be ready
 					if (!seen && (
-							!ToolHeatersAtSetTemperatures(GetMovementState(gb).GetLockedCurrentTool().Ptr(), true, tolerance) ||
-							!reprap.GetHeat().SlowHeatersAtSetTemperatures(tolerance)
+							!ToolHeatersAtSetTemperatures(GetMovementState(gb).GetLockedCurrentTool().Ptr(), true, tolerance, gb.IsFileChannel()) ||
+							!reprap.GetHeat().SlowHeatersAtSetTemperatures(tolerance, gb.IsFileChannel())
 						))
 					{
 						return false;
@@ -2280,7 +2280,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 						reprap.GetHeat().SetActiveTemperature(heater, temperature);		// may throw
 						result = reprap.GetHeat().SetActiveOrStandby(heater, nullptr, true, reply);
-						if (!reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TemperatureCloseEnough))
+						if (!reprap.GetHeat().HeaterAtSetTemperature(heater, waitWhenCooling, TemperatureCloseEnough, gb.IsFileChannel()))
 						{
 							return false;
 						}
