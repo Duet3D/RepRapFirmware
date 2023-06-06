@@ -670,12 +670,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 					StopPrint(StopPrintReason::normalCompletion);
 
-#if SUPPORT_ASYNC_MOVES && HAS_SBC_INTERFACE
+#if SUPPORT_ASYNC_MOVES
+					// M0/M1/M2 never finishes on the second file channel
+					File2GCode()->Init();
+# if HAS_SBC_INTERFACE
 					if (reprap.UsingSbcInterface())
 					{
-						// SBC requires a final response for M0/M1/M2 on File2
+						// SBC also requires a final response for M0/M1/M2 on the second file channel
 						HandleReply(*File2GCode(), GCodeResult::ok, "");
 					}
+# endif
 #endif
 				}
 				else if (pauseState == PauseState::paused)
