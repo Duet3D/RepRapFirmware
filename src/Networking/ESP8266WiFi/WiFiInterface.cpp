@@ -1162,6 +1162,95 @@ void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress 
 	gateway = p_gateway;
 }
 
+#if !defined(__LPC17xx__)
+size_t WiFiInterface::CheckCredential(GCodeBuffer &gb, bool file)
+{
+	static_assert(MaxCredentialChunkSize <= sizeof(bufferOut->data));
+	StringRef cred(reinterpret_cast<char*>(&(bufferOut->data)), MaxCredentialChunkSize);
+	gb.GetQuotedString(cred);
+
+	size_t sz = 0;
+
+	if (file)
+	{
+		FileStore *const f = platform.OpenSysFile(cred.c_str(), OpenMode::read);
+
+		if (f)
+		{
+			sz = f->Length();
+			f->Close();
+
+			if (!sz)
+			{
+				throw GCodeException(-1, -1, "File '%s' empty", cred.c_str());
+			}
+
+			sz++;  // plus null terminator
+		}
+		else
+		{
+			throw GCodeException(-1, -1, "File '%s' not found", cred.c_str());
+		}
+	}
+	else
+	{
+		sz = cred.strlen();
+	}
+
+	return sz;
+}
+
+int32_t WiFiInterface::SendCredential(size_t credIndex, const uint8_t *buffer, size_t bufferSize)
+{
+	return SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
+									static_cast<uint8_t>(AddEnterpriseSsidFlag::CREDENTIAL), credIndex,
+									buffer, bufferSize, nullptr, 0);
+}
+
+int32_t WiFiInterface::SendTextCredential(GCodeBuffer &gb, size_t credIndex)
+{
+	static_assert(MaxCredentialChunkSize <= sizeof(bufferOut->data));
+	StringRef cred(reinterpret_cast<char*>(&(bufferOut->data)), MaxCredentialChunkSize);
+	gb.GetQuotedString(cred);
+
+	// Text credentials are stored as a blob, and does not require the null terminator.
+	return SendCredential(credIndex, reinterpret_cast<const uint8_t*>(cred.c_str()), cred.strlen());
+}
+
+int32_t WiFiInterface::SendFileCredential(GCodeBuffer &gb, size_t credIndex)
+{
+	static_assert(MaxCredentialChunkSize <= sizeof(bufferOut->data));
+
+	StringRef fileName(reinterpret_cast<char*>(&(bufferOut->data)), MaxCredentialChunkSize);
+	gb.GetQuotedString(fileName);
+
+	FileStore *const cert = platform.OpenSysFile(fileName.c_str(), OpenMode::read);
+
+	// Send the contents of the file with a null terminator appended at the end. The authentication
+	// fails without the null terminator.
+	int32_t rslt = ResponseEmpty;
+
+	for(size_t total = 0, sz = 0; rslt == ResponseEmpty && total <= cert->Length(); total += sz)
+	{
+		rslt = ResponseUnknownError;
+
+		memset(bufferOut->data, 0, sizeof(bufferOut->data));
+		sz = cert->Read(bufferOut->data, MaxCredentialChunkSize);
+
+		if (sz < MaxCredentialChunkSize)
+		{
+			bufferOut->data[sz] = 0;
+			sz++;
+		}
+
+		rslt = SendCredential(credIndex, bufferOut->data, sz);
+	}
+
+	cert->Close();
+	return rslt;
+}
+#endif
+
 GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply) THROWS(GCodeException)
 {
 	switch (mcode)
@@ -1179,18 +1268,37 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					gb.GetQuotedString(ssid.GetRef());
 					SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
 
-					// Get the password
-					gb.MustSee('P');
+#if !defined(__LPC17xx__)
+					// Verify that the EAP protocol indicator has the same offset as the null terminator for the password
+					// for networks using pre-shared keys.
+					static_assert(offsetof(WirelessConfigurationData, eap.protocol) ==
+								offsetof(WirelessConfigurationData, password[sizeof(config.password) - sizeof(config.eap.protocol)]));
+					// If the above is true, this effectively sets the last character
+					// of the password to the null terminator.
+					config.eap.protocol = EAPProtocol::NONE;
+
+					if (gb.Seen('X'))
 					{
-						String<ARRAY_SIZE(config.password)> password;
-						gb.GetQuotedString(password.GetRef());
-						if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
+						auto param = gb.GetUIValue();
+						switch (param)
 						{
-							reply.copy("WiFi password must be at least 8 characters");
-							return GCodeResult::error;
+							case 0: // do nothing
+								break;
+							case 1:
+								config.eap.protocol = EAPProtocol::EAP_TLS;
+								break;
+							case 2:
+								config.eap.protocol = EAPProtocol::EAP_PEAP_MSCHAPV2;
+								break;
+							case 3:
+								config.eap.protocol = EAPProtocol::EAP_TTLS_MSCHAPV2;
+								break;
+							default:
+								throw GCodeException(-1, -1, "Invalid parameter X=%d", param);
+								break;
 						}
-						SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
 					}
+#endif
 
 					if (gb.Seen('I'))
 					{
@@ -1211,13 +1319,164 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						config.netmask = temp.GetV4LittleEndian();
 					}
 
-					const int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
-					if (rslt == ResponseEmpty)
+#if !defined(__LPC17xx__)
+					if (config.eap.protocol != EAPProtocol::NONE)
 					{
-						return GCodeResult::ok;
+						// Check all credential parameters and get their sizes.
+						if (gb.Seen('E'))
+						{
+							config.eap.credSizes.asMemb.caCert = CheckCredential(gb, true);
+						}
+
+						if (config.eap.protocol == EAPProtocol::EAP_TLS)
+						{
+							gb.MustSee('A');
+							{
+								config.eap.credSizes.asMemb.anonymousId = CheckCredential(gb);
+							}
+
+							gb.MustSee('U');
+							{
+								config.eap.credSizes.asMemb.tls.userCert = CheckCredential(gb, true);
+							}
+
+							gb.MustSee('P');
+							{
+								config.eap.credSizes.asMemb.tls.privateKey = CheckCredential(gb, true);
+							}
+
+							if (gb.Seen('Q'))
+							{
+								config.eap.credSizes.asMemb.tls.privateKeyPswd = CheckCredential(gb);
+							}
+						}
+						else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 ||
+									config.eap.protocol == EAPProtocol::EAP_TTLS_MSCHAPV2)
+						{
+							if (gb.Seen('A'))
+							{
+								config.eap.credSizes.asMemb.anonymousId = CheckCredential(gb);
+							}
+							gb.MustSee('U');
+							{
+								config.eap.credSizes.asMemb.peapttls.identity = CheckCredential(gb);
+							}
+
+							gb.MustSee('P');
+							{
+								config.eap.credSizes.asMemb.peapttls.password = CheckCredential(gb);
+							}
+						}
+						else { }
+
+						int32_t rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
+													static_cast<uint8_t>(AddEnterpriseSsidFlag::SSID), static_cast<int>(config.eap.protocol), &config, sizeof(config), nullptr, 0);
+
+						if (rslt == ResponseEmpty)
+						{
+							if (config.eap.credSizes.asMemb.caCert)
+							{
+								gb.MustSee('E');
+								{
+									rslt = SendFileCredential(gb, CredentialIndex(caCert));
+								}
+							}
+
+							if (rslt == ResponseEmpty)
+							{
+								if (config.eap.credSizes.asMemb.anonymousId)
+								{
+									gb.MustSee('A');
+									{
+										rslt = SendTextCredential(gb, CredentialIndex(anonymousId));
+									}
+								}
+
+								if (rslt == ResponseEmpty)
+								{
+									if (config.eap.protocol == EAPProtocol::EAP_TLS)
+									{
+										gb.MustSee('U');
+										{
+											rslt = SendFileCredential(gb, CredentialIndex(tls.userCert));
+										}
+
+										if (rslt == ResponseEmpty)
+										{
+											gb.MustSee('P');
+											{
+												rslt = SendFileCredential(gb, CredentialIndex(tls.privateKey));
+											}
+
+											if (rslt == ResponseEmpty)
+											{
+												if(config.eap.credSizes.asMemb.tls.privateKeyPswd)
+												{
+													gb.MustSee('Q');
+													rslt = SendTextCredential(gb, CredentialIndex(tls.privateKeyPswd));
+												}
+											}
+										}
+									}
+									else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 ||
+												config.eap.protocol == EAPProtocol::EAP_TTLS_MSCHAPV2)
+									{
+										gb.MustSee('U');
+										{
+											rslt = SendTextCredential(gb, CredentialIndex(peapttls.identity));
+										}
+
+										if (rslt == ResponseEmpty)
+										{
+											gb.MustSee('P');
+											{
+												rslt = SendTextCredential(gb, CredentialIndex(peapttls.password));
+											}
+										}
+									}
+								}
+							}
+						}
+
+						// If there is a previous error, report that instead. On error, cancel ongoing operation.
+						if (rslt == ResponseEmpty)
+						{
+							rslt = SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
+										static_cast<uint8_t>(AddEnterpriseSsidFlag::COMMIT), 0, nullptr, 0, nullptr, 0);
+
+							if (rslt == ResponseEmpty)
+							{
+								return GCodeResult::ok;
+							}
+						}
+
+						reply.printf("Failed to add enterprise SSID to remembered list: %s", TranslateWiFiResponse(rslt));
+						SendCommand(NetworkCommand::networkAddEnterpriseSsid, 0,
+								static_cast<uint8_t>(AddEnterpriseSsidFlag::CANCEL), 0, nullptr, 0, nullptr, 0);
 					}
 					else
+#endif
 					{
+						// Network uses pre-shared key, get that key
+						gb.MustSee('P');
+						{
+							String<ARRAY_SIZE(config.password)> password;
+							gb.GetQuotedString(password.GetRef());
+							if (password.strlen() < 8 && password.strlen() != 0)			// WPA2 passwords must be at least 8 characters
+							{
+								reply.copy("WiFi password must be at least 8 characters");
+								return GCodeResult::error;
+							}
+							SafeStrncpy(config.password, password.c_str(), ARRAY_SIZE(config.password));
+						}
+
+						int32_t rslt = SendCommand(NetworkCommand::networkAddSsid, 0, 0, 0, &config, sizeof(config), nullptr, 0);
+
+						if (rslt == ResponseEmpty)
+						{
+							return GCodeResult::ok;
+						}
+
 						reply.printf("Failed to add SSID to remembered list: %s", TranslateWiFiResponse(rslt));
 					}
 				}
@@ -1968,7 +2227,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	bufferOut->hdr.param32 = param32;
 	bufferOut->hdr.dataLength = (uint16_t)dataOutLength;
 	bufferOut->hdr.dataBufferAvailable = (uint16_t)dataInLength;
-	if (dataOut != nullptr)
+	if (dataOut != nullptr && dataOut != &(bufferOut->data))
 	{
 		memcpy(bufferOut->data, dataOut, dataOutLength);
 	}
@@ -2005,7 +2264,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	// Wait until the DMA transfer is complete, with timeout
 	// On factory reset, use the startup timeout, as it involves re-formatting the SPIFFS partition.
 	const uint32_t timeout = (cmd == NetworkCommand::networkFactoryReset) ? WiFiStartupMillis :
-		(cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkDeleteSsid ||
+		(cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkAddEnterpriseSsid || cmd == NetworkCommand::networkDeleteSsid ||
 		 cmd == NetworkCommand::networkConfigureAccessPoint || cmd == NetworkCommand::networkRetrieveSsidData
 			? WiFiSlowResponseTimeoutMillis : WiFiFastResponseTimeoutMillis);
 	do
