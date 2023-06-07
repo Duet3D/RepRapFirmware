@@ -1206,9 +1206,9 @@ FilePosition GCodeBuffer::GetPrintingFilePosition(bool allowNoFilePos) const noe
 	}
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
-	const FilePosition pos = (IsDoingFileMacro() || IsMacroFileClosed()
+	const FilePosition pos = (IsDoingFileMacro()
 # if HAS_SBC_INTERFACE
-				|| macroJustFinished							// wait for the next code from the SBC to update the job file position
+				|| IsMacroFileClosed() || macroJustFinished		// wait for the next code from the SBC to update the job file position
 # endif
 			) ? printFilePositionAtMacroStart					// the position before we started executing the macro
 				: GetJobFilePosition();							// the actual position, allowing for bytes cached but not yet processed
