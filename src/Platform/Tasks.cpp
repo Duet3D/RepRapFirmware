@@ -47,7 +47,8 @@ extern uint32_t _firmware_crc;			// defined in linker script
 constexpr unsigned int MainTaskStackWords = max<unsigned int>(1800, (MaxAxes * MaxAxes * 2) + 550);
 #else
 // On other processors we use matrixes of floats when doing auto calibration
-constexpr unsigned int MainTaskStackWords = max<unsigned int>(1110, (MaxAxes * MaxAxes * 2) + 550);
+// Increase minimum stack words to 1370 for WPA Enterprise support
+constexpr unsigned int MainTaskStackWords = max<unsigned int>(1370, (MaxAxes * MaxAxes * 2) + 550);
 #endif
 
 static Task<MainTaskStackWords> mainTask;

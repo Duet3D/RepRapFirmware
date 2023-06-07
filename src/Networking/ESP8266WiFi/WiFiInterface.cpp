@@ -1162,7 +1162,6 @@ void WiFiInterface::SetIPAddress(IPAddress p_ip, IPAddress p_netmask, IPAddress 
 	gateway = p_gateway;
 }
 
-#if !defined(__LPC17xx__)
 size_t WiFiInterface::CheckCredential(GCodeBuffer &gb, bool file)
 {
 	static_assert(MaxCredentialChunkSize <= sizeof(bufferOut->data));
@@ -1249,7 +1248,6 @@ int32_t WiFiInterface::SendFileCredential(GCodeBuffer &gb, size_t credIndex)
 	cert->Close();
 	return rslt;
 }
-#endif
 
 GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply) THROWS(GCodeException)
 {
@@ -1268,7 +1266,6 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					gb.GetQuotedString(ssid.GetRef());
 					SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
 
-#if !defined(__LPC17xx__)
 					// Verify that the EAP protocol indicator has the same offset as the null terminator for the password
 					// for networks using pre-shared keys.
 					static_assert(offsetof(WirelessConfigurationData, eap.protocol) ==
@@ -1298,7 +1295,6 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 								break;
 						}
 					}
-#endif
 
 					if (gb.Seen('I'))
 					{
@@ -1319,7 +1315,6 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 						config.netmask = temp.GetV4LittleEndian();
 					}
 
-#if !defined(__LPC17xx__)
 					if (config.eap.protocol != EAPProtocol::NONE)
 					{
 						// Check all credential parameters and get their sizes.
@@ -1455,7 +1450,6 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 								static_cast<uint8_t>(AddEnterpriseSsidFlag::CANCEL), 0, nullptr, 0, nullptr, 0);
 					}
 					else
-#endif
 					{
 						// Network uses pre-shared key, get that key
 						gb.MustSee('P');
