@@ -12,44 +12,24 @@
 #include "DriveMovement.h"
 #include "StepTimer.h"
 #include "MoveSegment.h"
-#include "InputShaperPlan.h"
+#include <InputShaperPlan.h>
 #include <Platform/Tasks.h>
 #include <GCodes/GCodes.h>			// for class RawMove
 
-#ifdef DUET_NG
 # define DDA_LOG_PROBE_CHANGES	0
-#else
-# define DDA_LOG_PROBE_CHANGES	0	// save memory on the wired Duet
-#endif
 
 class DDARing;
 
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
 struct PrepParams
 {
-	struct PrepParamSet
-	{
-		float accelDistance;
-		float decelStartDistance;
-		float accelClocks, steadyClocks, decelClocks;
-		float acceleration, deceleration;
+	float totalDistance;
+	float accelDistance;
+	float decelStartDistance;
+	float accelClocks, steadyClocks, decelClocks;
+	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
 
-		// Calculate the steady clocks and set the total clocks in the DDA
-		void Finalise(float topSpeed) noexcept;
-
-		// Get the total clocks needed
-		float TotalClocks() const noexcept { return accelClocks + steadyClocks + decelClocks; }
-	};
-
-	// Parameters used for all types of motion
-	PrepParamSet unshaped;
-	PrepParamSet shaped;								// only valid if the shaping plan is not empty
 	InputShaperPlan shapingPlan;
-
-#if SUPPORT_CAN_EXPANSION
-	// Parameters used by CAN expansion
-	float initialSpeedFraction, finalSpeedFraction;
-#endif
 
 #if SUPPORT_LINEAR_DELTA
 	// Parameters used only for delta moves
@@ -59,8 +39,14 @@ struct PrepParams
 	float zMovement;
 # endif
 	const LinearDeltaKinematics *dparams;
-	float a2plusb2;								// sum of the squares of the X and Y movement fractions
+	float a2plusb2;									// sum of the squares of the X and Y movement fractions
 #endif
+
+	// Calculate and set the steady clocks
+	void Finalise(float topSpeed) noexcept;
+
+	// Get the total clocks needed
+	float TotalClocks() const noexcept { return accelClocks + steadyClocks + decelClocks; }
 
 	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 	void SetFromDDA(const DDA& dda) noexcept;
@@ -113,6 +99,7 @@ public:
 	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }			// Return true if this involves both XY movement and extrusion
 	bool UsingStandardFeedrate() const noexcept { return flags.usingStandardFeedrate; }
 	bool IsCheckingEndstops() const noexcept { return flags.checkEndstops; }
+	bool IsScanningProbeMove() const noexcept { return flags.scanningProbeMove; }
 
 	DDAState GetState() const noexcept { return state; }
 	DDA* GetNext() const noexcept { return next; }
@@ -126,11 +113,8 @@ public:
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
-# if USE_REMOTE_INPUT_SHAPING
-	bool InitShapedFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
-# else
 	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
-# endif
+	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
 	void StopDrivers(uint16_t whichDrives) noexcept;
 #endif
 
@@ -138,6 +122,7 @@ public:
 	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;						// Force an end point
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept;
+	float GetRawEndCoordinate(size_t drive) const noexcept { return endCoordinates[drive]; }
 	void FetchEndPoints(int32_t ep[MaxAxesPlusExtruders]) const noexcept;
 	void FetchCurrentPositions(int32_t ep[MaxAxesPlusExtruders]) const noexcept;
 	void SetPositions(const float move[]) noexcept;									// Force the endpoints to be these
@@ -205,20 +190,15 @@ public:
 	// Note: the above measurements were taken some time ago, before some firmware optimisations.
 #if SAME70
 	// Use the same defaults as for the SAM4E for now.
-	static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// same as delta for now, but could be lower
+	static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// the smallest sensible interval between calculations (40us) in step timer clocks
 	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
 #elif SAM4E || SAM4S || SAME5x
-	static constexpr uint32_t MinCalcIntervalDelta = (40 * StepClockRate)/1000000; 			// the smallest sensible interval between calculations (40us) in step timer clocks
-	static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// same as delta for now, but could be lower
+	static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// the smallest sensible interval between calculations (40us) in step timer clocks
 	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
-#elif defined(__LPC17xx__)
-     static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// same as delta for now, but could be lower
-	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
-#else	// SAM3X
-	static constexpr uint32_t MinCalcInterval = (60 * StepClockRate)/1000000;				// same as delta for now, but could be lower
-	static constexpr uint32_t HiccupTime = (40 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
+#else
+# error Unsupported processor
 #endif
-	static constexpr uint32_t MaxStepInterruptTime = 10 * StepTimer::MinInterruptInterval;	// the maximum time we spend looping in the ISR , in step clocks
+	static constexpr uint32_t MaxStepInterruptTime = 10 * StepTimer::MinInterruptInterval;	// the maximum time we spend looping in the ISR, in step clocks
 	static constexpr uint32_t WakeupTime = (100 * StepClockRate)/1000000;					// stop resting 100us before the move is due to end
 	static constexpr uint32_t HiccupIncrement = HiccupTime/2;								// how much we increase the hiccup time by on each attempt
 
@@ -252,7 +232,8 @@ private:
 	void ReleaseDMs() noexcept;
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
 	bool IsAccelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be an acceleration-only move
-	void EnsureUnshapedSegments(const PrepParams& params) noexcept;
+	void EnsureSegments(const PrepParams& params) noexcept;
+	void ReleaseSegments() noexcept;
 	void DebugPrintVector(const char *name, const float *vec, size_t len) const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
@@ -287,14 +268,14 @@ private:
 					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
 					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
 					 hadLookaheadUnderrun : 1,		// True if the lookahead queue was not long enough to optimise this move
-					 xyMoving : 1,					// True if movement along an X axis or the Y axis was requested, even it if's too small to do
+					 xyMoving : 1,					// True if movement along an X axis or a Y axis was requested, even it if's too small to do
 					 isLeadscrewAdjustmentMove : 1,	// True if this is a leadscrews adjustment move
 					 usingStandardFeedrate : 1,		// True if this move uses the standard feed rate
 					 isNonPrintingExtruderMove : 1,	// True if this move is an extruder-only move, or involves reverse extrusion (and possibly axis movement too)
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
 					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
 					 controlLaser : 1,				// True if this move controls the laser or iobits
-					 hadHiccup : 1,	 	 	 		// True if we had a hiccup while executing a move from a remote master
+					 scanningProbeMove : 1,	 	 	// True if this is a scanning Z probe move
 					 isRemote : 1,					// True if this move was commanded from a remote
 					 wasAccelOnlyMove : 1;			// set by Prepare if this was an acceleration-only move, for the next move to look at
 		};
@@ -313,8 +294,8 @@ private:
 	float endCoordinates[MaxAxesPlusExtruders];		// The Cartesian coordinates at the end of the move plus extrusion amounts
 	float directionVector[MaxAxesPlusExtruders];	// The normalised direction vector - first 3 are XYZ Cartesian coordinates even on a delta
     float totalDistance;							// How long is the move in hypercuboid space
-	float acceleration;								// The acceleration to use
-	float deceleration;								// The deceleration to use
+	float acceleration;								// The acceleration to use, always positive
+	float deceleration;								// The deceleration to use, always positive
     float requestedSpeed;							// The speed that the user asked for
     float virtualExtruderPosition;					// the virtual extruder position at the end of this move, used for pause/resume
 
@@ -329,13 +310,12 @@ private:
 
 	union
 	{
-		// Values that are needed only before Prepare is called
+		// Values that are needed only before Prepare is called and in the first few lines of Prepare
 		struct
 		{
 			float accelDistance;
 			float decelDistance;
 			float targetNextSpeed;					// The speed that the next move would like to start at, used to keep track of the lookahead without making recursive calls
-			float maxAcceleration;					// the maximum allowed acceleration for this move according to the limits set by M201
 		} beforePrepare;
 
 		// Values that are not set or accessed before Prepare is called
@@ -343,10 +323,10 @@ private:
 		{
 			// These are calculated from the above and used in the ISR, so they are set up by Prepare()
 			uint32_t moveStartTime;					// clock count at which the move is due to start (before execution) or was started (during execution)
+			float averageExtrusionSpeed;			// the average extrusion speed in mm/sec, for applying heater feedforward
 
 #if SUPPORT_CAN_EXPANSION
-			DriversBitmap drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
-			static_assert(MaxAxesPlusExtruders <= DriversBitmap::MaxBits());
+			AxesBitmap drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
 #endif
 		} afterPrepare;
 	};
@@ -360,8 +340,7 @@ private:
 	// These three could possibly be moved into afterPrepare
 	DriveMovement* activeDMs;						// list of associated DMs that need steps, in step time order
 	DriveMovement* completedDMs;					// list of associated DMs that don't need any more steps
-	MoveSegment* shapedSegments;					// linked list of move segments used by axis DMs
-	MoveSegment* unshapedSegments;					// linked list of move segments used by extruder DMs
+	MoveSegment* segments;							// linked list of move segments used by axis DMs
 };
 
 // Find the DriveMovement record for a given drive even if it is completed, or return nullptr if there isn't one

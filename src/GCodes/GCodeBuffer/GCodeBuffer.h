@@ -42,10 +42,12 @@ enum class GCodeBufferState : uint8_t
 class GCodeBuffer INHERIT_OBJECT_MODEL
 {
 public:
+#ifndef __ECV__		//temporary!
 	friend class BinaryParser;
 	friend class StringParser;
+#endif
 
-	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
+	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
 	void Reset() noexcept;														// Reset it to its state after start-up
 	void Init() noexcept;														// Set it up to parse another G-code
 	void Diagnostics(MessageType mtype) noexcept;								// Write some debug info
@@ -182,7 +184,7 @@ public:
 	FilePosition GetPrintingFilePosition(bool allowNoFilePos) const noexcept;	// Get the file position in the printing file
 	void SavePrintingFilePosition() noexcept;
 
-	void WaitForAcknowledgement() noexcept;						// Flag that we are waiting for acknowledgement
+	void WaitForAcknowledgement(uint32_t seq) noexcept;			// Flag that we are waiting for acknowledgement
 	void ClosePrintFile() noexcept;								// Close the print file
 
 #if HAS_SBC_INTERFACE
@@ -226,7 +228,7 @@ public:
 	void SetState(GCodeState newState) noexcept;
 	void SetState(GCodeState newState, uint16_t param) noexcept;
 	void AdvanceState() noexcept;
-	void MessageAcknowledged(bool cancelled, ExpressionValue rslt) noexcept;
+	void MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionValue rslt) noexcept;
 
 	GCodeChannel GetChannel() const noexcept { return codeChannel; }
 	bool IsFileChannel() const noexcept
@@ -237,7 +239,7 @@ public:
 #endif
 				;
 	}
-	const char *GetIdentity() const noexcept { return codeChannel.ToString(); }
+	const char *_ecv_array GetIdentity() const noexcept { return codeChannel.ToString(); }
 	bool CanQueueCodes() const noexcept;
 	MessageType GetResponseMessageType() const noexcept;
 
@@ -266,6 +268,10 @@ public:
 
 	void ResetReportDueTimer() noexcept { whenReportDueTimerStarted = millis(); };
 	bool IsReportDue() noexcept;
+
+	bool IsWaitingForTemperatures() const noexcept;
+	void CancelWaitForTemperatures() noexcept { cancelWait = true; }
+	bool IsCancelWaitRequested() noexcept;
 
 	void RestartFrom(FilePosition pos) noexcept;
 
@@ -336,6 +342,7 @@ private:
 
 	bool timerRunning;									// true if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
+	bool cancelWait;									// true to stop waiting for temperatures to be reached
 
 	alignas(4) char buffer[MaxGCodeLength];				// must be aligned because in SBC binary mode we do dword fetches from it
 
@@ -350,8 +357,9 @@ private:
 	// Accessed only when the GB mutex is acquired
 	String<MaxFilenameLength> requestedMacroFile;
 	bool isBinaryBuffer;
-	uint8_t
+	uint16_t
 		macroJustStarted : 1,		// Whether the GB has just started a macro file
+		macroJustFinished : 1,		// Whether the GB has just finished a macro file
 		macroFileError : 1,			// Whether the macro file could be opened or if an error occurred
 		macroFileEmpty : 1,			// Whether the macro file is actually empty
 		abortFile : 1,				// Whether to abort the last file on the stack
@@ -443,6 +451,13 @@ inline bool GCodeBuffer::IsDoingLocalFile() const noexcept
 #else
 	return IsDoingFile();
 #endif
+}
+
+inline bool GCodeBuffer::IsCancelWaitRequested() noexcept
+{
+	const bool b = cancelWait;
+	cancelWait = false;
+	return b;
 }
 
 #endif /* SRC_GCODES_GCODEBUFFER_GCODEBUFFER_H */

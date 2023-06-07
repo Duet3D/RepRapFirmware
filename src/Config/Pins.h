@@ -26,8 +26,6 @@
 # elif defined(FMDC_V02) || defined(FMDC_V03)
 #  define DUET3MINI		1
 #  define PLATFORM FMDC
-# elif defined(__LPC17xx__)
-#  define PLATFORM LPC
 # else
 #  error Unknown platform
 # endif
@@ -82,6 +80,14 @@
 
 #ifndef SUPPORT_LED_STRIPS
 # define SUPPORT_LED_STRIPS		0
+#endif
+
+#ifndef SUPPORT_DMA_DOTSTAR
+# define SUPPORT_DMA_DOTSTAR	0
+#endif
+
+#ifndef SUPPORT_DMA_NEOPIXEL
+# define SUPPORT_DMA_NEOPIXEL	0
 #endif
 
 #ifndef SUPPORT_SPI_SENSORS
@@ -147,6 +153,10 @@
 # define SUPPORT_SLOW_DRIVERS	1
 #endif
 
+#ifndef SUPPORT_BRAKE_PWM
+# define SUPPORT_BRAKE_PWM		0
+#endif
+
 #ifndef HAS_12V_MONITOR
 # define HAS_12V_MONITOR		0
 # define ENFORCE_MIN_V12		0
@@ -195,6 +205,10 @@
 # define SUPPORT_TELNET			HAS_NETWORKING
 #endif
 
+#ifndef SUPPORT_MQTT
+# define SUPPORT_MQTT			0
+#endif
+
 #ifndef SUPPORT_MULTICAST_DISCOVERY
 # define SUPPORT_MULTICAST_DISCOVERY	0
 #endif
@@ -221,13 +235,14 @@
 # if SUPPORT_FTP
 #  error "FTP support requires mass storage"
 # endif
-# if SUPPORT_SCANNER
-#  error "Scanner support requires mass storage"
-# endif
 #endif
 
 #ifndef SUPPORT_ASYNC_MOVES
 # define SUPPORT_ASYNC_MOVES	0
+#endif
+
+#ifndef SUPPORT_KEEPOUT_ZONES
+# define SUPPORT_KEEPOUT_ZONES	0
 #endif
 
 #ifndef ALLOCATE_DEFAULT_PORTS

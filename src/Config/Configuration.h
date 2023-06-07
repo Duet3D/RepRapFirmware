@@ -31,30 +31,27 @@ constexpr unsigned int NumMovementSystems = 1;
 
 // Axes
 constexpr float DefaultAxisMaxFeedrate = 100.0;			// mm/sec
-constexpr float DefaultZMaxFeedrate = 5.0;
-constexpr float DefaultEMaxFeedrate = 20.0;
+constexpr float DefaultZMaxFeedrate = 20.0;
+constexpr float DefaultEMaxFeedrate = 100.0;
 
-constexpr float DefaultAxisAcceleration = 500.0;		// mm/sec^2
-constexpr float DefaultZAcceleration = 20.0;
-constexpr float DefaultEAcceleration = 250.0;
-
-constexpr float DefaultReducedAxisAcceleration = 1000.0;	// Maximum XY acceleration to use at the start of a homing move if stall endstops are being used
-constexpr float DefaultReducedZAcceleration = 250.0;		// Maximum Z acceleration to use at the start of a probing or stall endstop move
+constexpr float DefaultAxisAcceleration = 1000.0;		// mm/sec^2
+constexpr float DefaultZAcceleration = 200.0;
+constexpr float DefaultEAcceleration = 500.0;
 
 constexpr float DefaultAxisDriveStepsPerUnit = 80.0;	// steps/mm
-constexpr float DefaultZDriveStepsPerUnit = 4000.0;
+constexpr float DefaultZDriveStepsPerUnit = 800.0;
 constexpr float DefaultEDriveStepsPerUnit = 420.0;
 
 constexpr float DefaultAxisInstantDv = 15.0;			// mm/sec
-constexpr float DefaultZInstantDv = 0.2;
-constexpr float DefaultEInstantDv = 2.0;
+constexpr float DefaultZInstantDv = 10.0;
+constexpr float DefaultEInstantDv = 5.0;
 
 constexpr float DefaultMinFeedrate = 0.5;				// the default minimum movement speed in mm/sec (extruding moves will go slower than this if the extrusion rate demands it)
 constexpr float AbsoluteMinFeedrate = 0.01;				// the absolute minimum movement speed in mm/sec
 constexpr float MinimumJerk = 0.1;						// the minimum jerk in mm/sec
 constexpr float MinimumAcceleration = 0.1;				// the minimum acceleration in mm/sec^2
-constexpr float DefaultPrintingAcceleration = 20000.0;	// higher than the likely max acceleration defined by M201
-constexpr float DefaultTravelAcceleration = 20000.0;	// higher than the likely max acceleration defined by M201
+constexpr float DefaultPrintingAcceleration = 50000.0;	// higher than any likely max acceleration defined by M201
+constexpr float DefaultTravelAcceleration = 50000.0;	// higher than any likely max acceleration defined by M201
 
 constexpr float DefaultAxisMinimum = 0.0;
 constexpr float DefaultAxisMaximum = 200.0;
@@ -63,6 +60,8 @@ constexpr float DefaultFilamentDiameter = 1.75;			// the default filament diamet
 
 constexpr unsigned int MaxTools = 50;					// this limit is to stop the serialised object model getting too large
 constexpr unsigned int MinVisibleAxes = 2;				// the minimum number of axes that we allow to be visible
+
+constexpr float DefaultBacklashCorrectionDistanceFactor = 10.0;	// backlash correction is spread over (backlash amount * this) mm
 
 // Timeouts
 constexpr uint32_t LogFlushInterval = 15000;			// Milliseconds
@@ -76,10 +75,13 @@ constexpr unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliar
 constexpr uint32_t SERIAL_MAIN_TIMEOUT = 2000;			// timeout in ms for sending data to the main serial/USB port
 constexpr uint32_t AuxTimeout = 2000;					// timeout in ms for PanelDue replies
 
+// Message boxes
+constexpr unsigned int MaxMessageBoxes = 8;				// the maximum number of message boxes that can be queued
+
 #define PANEL_DUE_FIRMWARE_FILE "PanelDueFirmware.bin"
 
 // Conditional GCode support
-constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. Each level of indentation introduced a new block.
+constexpr unsigned int MaxBlockIndent = 10;				// maximum indentation of GCode. Each level of indentation introduces a new block.
 
 // Default Z probe values
 
@@ -94,30 +96,15 @@ constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400
 constexpr size_t MaxAxis0GridPoints = 41;				// Maximum number of grid points in one X row
 constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
 constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
-#elif SAM3XA
-constexpr size_t MaxGridProbePoints = 121;				// 121 allows us to probe 200x200 at 20mm intervals
-constexpr size_t MaxAxis0GridPoints = 21;				// Maximum number of grid points in one X row
-constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
-constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
-#elif __LPC17xx__
-# if defined(LPC_NETWORKING)
-constexpr size_t MaxGridProbePoints = 121;    			// 121 allows us to probe 200x200 at 20mm intervals
-constexpr size_t MaxAxis0GridPoints = 21;         		// Maximum number of grid points in one X row
-constexpr size_t MaxProbePoints = 32;       			// Maximum number of G30 probe points
-constexpr size_t MaxCalibrationPoints = 16; 			// Should a power of 2 for speed
-# else
-constexpr size_t MaxGridProbePoints = 441;				// 441 allows us to probe e.g. 400x400 at 20mm intervals
-constexpr size_t MaxAxis0GridPoints = 41;				// Maximum number of grid points in one X row
-constexpr size_t MaxProbePoints = 32;					// Maximum number of G30 probe points
-constexpr size_t MaxCalibrationPoints = 32;				// Should a power of 2 for speed
-# endif
 #else
-# error
+# error unsupported processor
 #endif
 
 constexpr float DefaultGridSpacing = 20.0;				// Default bed probing grid spacing in mm
 
 static_assert(MaxCalibrationPoints <= MaxProbePoints, "MaxCalibrationPoints must be <= MaxProbePoints");
+
+constexpr size_t MaxScanningProbeCalibrationPoints = 33;	// The maximum number of heights we measure when calibrating a scanning probe. Use an odd number.
 
 // SD card
 constexpr uint32_t SdCardDetectDebounceMillis = 200;	// How long we give the SD card to settle in the socket
@@ -130,36 +117,25 @@ constexpr float DefaultZProbeTemperature = 25.0;
 constexpr float DefaultZDive = 5.0;						// Millimetres
 constexpr float DefaultProbingSpeed = 2.0;				// Default Z probing speed mm/sec
 constexpr float DefaultZProbeTravelSpeed = 100.0;		// Default speed for travel to probe points
-
-#if !defined(DUET3) && !defined(DUET3MINI)				// for Duet 3 these are defined in Duet3Common.h in project CANLib
-constexpr size_t MaxZProbeProgramBytes = 8;				// Maximum number of bytes in a Z probe program
-#endif
-
 constexpr float DefaultZProbeTolerance = 0.03;			// How close the Z probe trigger height from consecutive taps must be
 constexpr uint8_t DefaultZProbeTaps = 1;				// The maximum number of times we probe each point
 constexpr int DefaultZProbeADValue = 500;				// Default trigger threshold
 
-constexpr float TRIANGLE_ZERO = -0.001;					// Millimetres
 constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres
 
 // String lengths. Try not to have too many different ones, because each one causes an instantiation of the String template
 constexpr size_t MaxMessageLength = 256;
 constexpr size_t MaxTitleLength = 61;
 
-#if SAM4E || SAM4S || SAME70 || SAME5x || defined(ESP_NETWORKING)
 constexpr size_t MaxFilenameLength = 120;				// Maximum length of a filename including the path
 constexpr size_t MaxVariableNameLength = 120;
-#else
-constexpr size_t MaxFilenameLength = 100;
-constexpr size_t MaxVariableNameLength = 100;
-#endif
 
 // Standard string lengths, to avoid having too many different instantiations of the String<n> template
 constexpr size_t StringLength20 = 20;
 constexpr size_t StringLength50 = 50;					// Used for pin names
 constexpr size_t StringLength100 = 100;					// Used for error messages
 constexpr size_t StringLength500 = 500;					// Used when writing the height map
-constexpr size_t StringLength256 = 256;
+constexpr size_t StringLength256 = 256;					// used for various thinhs
 
 constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
 constexpr size_t MaxFanNameLength = StringLength20;		// Maximum number of characters in a fan name
@@ -175,14 +151,11 @@ constexpr size_t RepRapPasswordLength = StringLength20;
 constexpr size_t MediumStringLength = MaxFilenameLength;
 constexpr size_t M117StringLength = MediumStringLength;
 constexpr size_t StringLengthLoggedCommand = StringLength100;	// Length of a string buffer for a command to be logged
+constexpr size_t MaxStringExpressionLength = StringLength256;
 
-#if SAM4E || SAM4S || SAME70 || SAME5x || defined(ESP_NETWORKING)
-// Increased GCODE_LENGTH on the SAM4 because M587 and M589 commands on the Duet WiFi can get very long and GCode meta commands can get even longer
+// Increased GCODE_LENGTH because M587 and M589 commands on the Duet WiFi can get very long and GCode meta commands can get even longer
 // Also if HAS_SBC_INTERFACE is enabled then it needs to be large enough to hold SBC commands sent in binary mode, see GCodeBuffer.h
 constexpr size_t MaxGCodeLength = 256;					// maximum number of non-comment characters in a line of GCode including the null terminator
-#else
-constexpr size_t MaxGCodeLength = 101;					// maximum number of non-comment characters in a line of GCode including the null terminator
-#endif
 
 // Define the maximum length of a GCode that we can queue to synchronise it to a move. Long enough for M150 R255 U255 B255 P255 S255 F1 encoded in binary mode (64 bytes).
 constexpr size_t ShortGCodeLength = 64;
@@ -199,12 +172,8 @@ constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buf
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 26;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
-#elif __LPC17xx__
-constexpr uint16_t OUTPUT_BUFFER_SIZE = 256;            // How many bytes does each OutputBuffer hold?
-constexpr size_t OUTPUT_BUFFER_COUNT = 16;              // How many OutputBuffer instances do we have?
-constexpr size_t RESERVED_OUTPUT_BUFFERS = 2;           // Number of reserved output buffers after long responses. Must be enough for an HTTP header
 #else
-# error
+# error Unsupported processor
 #endif
 
 constexpr size_t maxQueuedCodes = 16;					// How many codes can be queued?
@@ -224,6 +193,8 @@ constexpr unsigned int MaxFilaments = 20;
 constexpr unsigned int MaxFilaments = 8;
 #endif
 
+constexpr size_t MaxLaserPixelsPerMove = 8;				// How many S parameters you can use on a single G1 command when laser engraving
+
 // Move system
 constexpr float DefaultFeedRate = 3000.0;				// The initial requested feed rate after resetting the printer, in mm/min
 constexpr float MaximumG0FeedRate = 60000.0;			// The maximum feed rate for G0 commands in mm/min, if the M203 settings permit
@@ -232,9 +203,9 @@ constexpr float DefaultRetractSpeed = 1000.0;			// The default firmware retracti
 constexpr float DefaultRetractLength = 2.0;
 
 constexpr float MaxArcDeviation = 0.005;				// maximum deviation from ideal arc due to segmentation
-constexpr float MinArcSegmentLength = 0.1;				// G2 and G3 arc movement commands get split into segments at least this long
+constexpr float MinArcSegmentLength = 0.02;				// G2 and G3 arc movement commands get split into segments at least this long
 constexpr float MaxArcSegmentLength = 1.0;				// G2 and G3 arc movement commands get split into segments at most this long
-constexpr float MinArcSegmentsPerSec = 200.0;
+constexpr float MaxArcSegmentsPerSec = 200.0;
 constexpr float SegmentsPerFulArcCalculation = 8.0;		// we do the full sine/cosine calculation every this number of segments
 
 constexpr uint32_t DefaultIdleTimeout = 30000;			// Milliseconds
@@ -273,12 +244,8 @@ constexpr uint32_t I2cClockFreq = 100000;				// clock frequency in Hz. 100kHz is
 constexpr size_t MaxI2cBytes = 32;						// max bytes in M260 or M261 command
 
 // File handling
-#if defined(__LPC17xx__)
-# if defined (ESP_NETWORKING)
-constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
-# else
-constexpr size_t MAX_FILES = 4;							// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
-# endif
+#if defined(DUET3) || defined(DUET3MINI)
+constexpr size_t MAX_FILES = 20;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
 #else
 constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
 #endif
@@ -302,7 +269,6 @@ constexpr size_t MaxThumbnails = 4;						// Maximum number of thumbnail images r
 #define GCODE_DIR				"0:/gcodes/"			// Ditto - G-Codes
 #define DEFAULT_SYS_DIR			"0:/sys/"				// Ditto - System files (can be changed using M505)
 #define MACRO_DIR				"0:/macros/"			// Ditto - Macro files
-#define SCANS_DIRECTORY			"0:/scans/"				// Directory for uploaded 3D scans
 #define FILAMENTS_DIRECTORY		"0:/filaments/"			// Directory for filament configurations
 #define FIRMWARE_DIRECTORY		"0:/firmware/"			// Directory for firmware and IAP files
 #define MENU_DIR				"0:/menu/"				// Directory for menu files

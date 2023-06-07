@@ -8,19 +8,14 @@
 #ifndef SRC_MOVEMENT_AXISSHAPER_H_
 #define SRC_MOVEMENT_AXISSHAPER_H_
 
-#define SUPPORT_DAA		(0)
-
 #include <RepRapFirmware.h>
 #include <General/NamedEnum.h>
 #include <ObjectModel/ObjectModel.h>
-#include "InputShaperPlan.h"
+#include <InputShaperPlan.h>
 
 // These names must be in alphabetical order and lowercase
 NamedEnum(InputShaperType, uint8_t,
 	custom,
-#if SUPPORT_DAA
-	daa,
-#endif
 	ei2,
 	ei3,
 	mzv,
@@ -34,24 +29,38 @@ class DDA;
 class PrepParams;
 class MoveSegment;
 
+#if SUPPORT_REMOTE_COMMANDS
+struct CanMessageSetInputShaping;
+struct CanMessageMovementLinear;
+#endif
+
 class AxisShaper INHERIT_OBJECT_MODEL
 {
 public:
 	AxisShaper() noexcept;
 
-	float GetFrequency() const noexcept { return frequency; }
-	float GetDamping() const noexcept { return zeta; }
-	InputShaperType GetType() const noexcept { return type; }
-	void PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) const noexcept;
-
+	// Configure input shaping
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M593
 
+#if SUPPORT_REMOTE_COMMANDS
+	// Handle a request from the master board to set input shaping parameters
+	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept;
+
+	// Calculate the shaped segments for a move
+	void GetRemoteSegments(DDA& dda, PrepParams& paramsg) const noexcept;
+#endif
+
+	// Plan input shaping for an individual move
+	void PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) const noexcept;
+
+	// Calculate the move segments when input shaping is not used
 	static MoveSegment *GetUnshapedSegments(DDA& dda, const PrepParams& params) noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
+	void CalculateDerivedParameters() noexcept;
 	MoveSegment *GetAccelerationSegments(const DDA& dda, PrepParams& params) const noexcept;
 	MoveSegment *GetDecelerationSegments(const DDA& dda, PrepParams& params) const noexcept;
 	MoveSegment *FinishShapedSegments(const DDA& dda, const PrepParams& params, MoveSegment *accelSegs, MoveSegment *decelSegs) const noexcept;
@@ -72,12 +81,18 @@ private:
 	static constexpr float DefaultMinimumAcceleration = 10.0;
 	static constexpr float MinimumMiddleSegmentTime = 5.0/1000.0;	// minimum length of the segment between shaped start and shaped end of an acceleration or deceleration
 
-	unsigned int numExtraImpulses;						// the number of extra impulses
+	// Input shaping parameters input by the user
+	InputShaperType type;								// the type of the input shaper, from which we can find its name
 	float frequency;									// the undamped frequency in Hz
 	float zeta;											// the damping ratio, see https://en.wikipedia.org/wiki/Damping. 0 = undamped, 1 = critically damped.
 	float minimumAcceleration;							// the minimum value that we reduce average acceleration to in mm/sec^2
+
+	// Parameters that fully define the shaping
+	unsigned int numExtraImpulses;						// the number of extra impulses
 	float coefficients[MaxExtraImpulses];				// the coefficients of all the impulses
 	float durations[MaxExtraImpulses];					// the duration in step clocks of each impulse
+
+	// Secondary parameters, calculated from the primary ones
 	float totalShapingClocks;							// the total input shaping time in step clocks
 	float minimumShapingStartOriginalClocks;			// the minimum acceleration/deceleration time for which we can shape the start, without changing the acceleration/deceleration
 	float minimumShapingEndOriginalClocks;				// the minimum acceleration/deceleration time for which we can shape the start, without changing the acceleration/deceleration
@@ -91,7 +106,6 @@ private:
 	float overlappedShapingClocks;						// the acceleration or deceleration duration when we use overlapping, in step clocks
 	float overlappedDeltaVPerA;							// the effective acceleration time (velocity change per unit acceleration) when we use overlapping, in step clocks
 	float overlappedDistancePerA;						// the distance needed by an overlapped acceleration or deceleration, less the initial velocity contribution
-	InputShaperType type;								// the type of the input shaper, from which we can find its name
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */

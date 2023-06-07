@@ -59,6 +59,11 @@ constexpr uint32_t HeaterTaskStackWords = 420;			// task stack size in dwords, m
 
 static Task<HeaterTaskStackWords> heaterTask;
 
+TaskHandle Heat::GetHeatTask() noexcept
+{
+	return &heaterTask;
+}
+
 extern "C" [[noreturn]] void HeaterTaskStart(void * pvParameters) noexcept
 {
 	reprap.GetHeat().HeaterTask();
@@ -336,7 +341,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 		}
 
 #if SUPPORT_CAN_EXPANSION
-		CanMessageBuffer buf(nullptr);
+		CanMessageBuffer buf;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -613,11 +618,18 @@ GCodeResult Heat::ConfigureHeater(GCodeBuffer& gb, const StringRef& reply) THROW
 	return h->ReportDetails(reply);
 }
 
-bool Heat::AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const noexcept
+bool Heat::SlowHeatersAtSetTemperatures(float tolerance, bool waitOnFault) const noexcept
 {
-	for (size_t heater : ARRAY_INDICES(heaters))
+	for (size_t bedHeater : ARRAY_INDICES(bedHeaters))
 	{
-		if (!HeaterAtSetTemperature(heater, true, tolerance) && (includingBed || !IsBedHeater(heater)))
+		if (!HeaterAtSetTemperature(bedHeater, true, tolerance, waitOnFault))
+		{
+			return false;
+		}
+	}
+	for (size_t chamberHeater : ARRAY_INDICES(heaters))
+	{
+		if (!HeaterAtSetTemperature(chamberHeater, true, tolerance, waitOnFault))
 		{
 			return false;
 		}
@@ -626,12 +638,17 @@ bool Heat::AllHeatersAtSetTemperatures(bool includingBed, float tolerance) const
 }
 
 //query an individual heater
-bool Heat::HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance) const noexcept
+bool Heat::HeaterAtSetTemperature(int heater, bool waitWhenCooling, float tolerance, bool waitOnFault) const noexcept
 {
 	const auto h = FindHeater(heater);
 	if (h.IsNotNull())
 	{
 		const HeaterStatus stat = h->GetStatus();
+		if (waitOnFault && stat == HeaterStatus::fault)
+		{
+			// Cannot reach target temperature if the heater has encountered a problem
+			return false;
+		}
 		if (stat == HeaterStatus::active || stat == HeaterStatus::standby)
 		{
 			const float dt = h->GetTemperature();
@@ -804,6 +821,10 @@ void Heat::SwitchOff(int heater) noexcept
 	{
 		h->SwitchOff();
 		lastStandbyTools[heater] = nullptr;
+		if (heater == heaterBeingTuned)
+		{
+			heaterBeingTuned = -1;
+		}
 	}
 }
 
@@ -817,6 +838,11 @@ void Heat::SwitchOffAll(bool includingChamberAndBed) noexcept
 		if (h != nullptr && (includingChamberAndBed || !IsBedOrChamberHeater(heater)))
 		{
 			h->SwitchOff();
+			lastStandbyTools[heater] = nullptr;
+			if (heater == heaterBeingTuned)
+			{
+				heaterBeingTuned = -1;
+			}
 		}
 	}
 }

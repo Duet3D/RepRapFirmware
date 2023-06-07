@@ -55,8 +55,8 @@ public:
 	void DeferredDiagnostics(MessageType mtype) noexcept { diagnosticsDestination = mtype; }
 	void Timing(MessageType mtype) noexcept;
 
-	bool Debug(Module module) const noexcept { return debugMaps[module].IsNonEmpty(); }
-	DebugFlags GetDebugFlags(Module m) const noexcept { return debugMaps[m]; }
+	bool Debug(Module module) const noexcept { return debugMaps[module.ToBaseType()].IsNonEmpty(); }
+	DebugFlags GetDebugFlags(Module m) const noexcept { return debugMaps[m.ToBaseType()]; }
 	void SetDebug(Module m, uint32_t flags) noexcept;
 	void ClearDebug() noexcept;
 	void PrintDebug(MessageType mt) noexcept;
@@ -73,18 +73,12 @@ public:
 	Heat& GetHeat() const noexcept { return *heat; }
 	GCodes& GetGCodes() const noexcept { return *gCodes; }
 	Network& GetNetwork() const noexcept { return *network; }
-#if SUPPORT_SCANNER
-	Scanner& GetScanner() const noexcept { return *scanner; }
-#endif
 	PrintMonitor& GetPrintMonitor() const noexcept { return *printMonitor; }
 	FansManager& GetFansManager() const noexcept { return *fansManager; }
 
 	// Message box functions
-	ReadLockedPointer<const MessageBox> GetCurrentMessageBox() const noexcept;
-	bool SendAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits = nullptr) noexcept;
-	bool SendSimpleAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title) noexcept;
-	bool AcknowledgeMessageBox(uint32_t seq, bool& wasBlocking) noexcept;
-	void CheckMessageBoxTimeout() noexcept;
+	uint32_t SendAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits = nullptr) noexcept;
+	void SendSimpleAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title) noexcept;
 
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const noexcept { return *portControl; }
@@ -148,12 +142,15 @@ public:
 
 	void KickHeatTaskWatchdog() noexcept { heatTaskIdleTicks = 0; }
 
+	void SaveConfigError(const char *filename, unsigned int lineNumber, const char *errorMessage) noexcept;
+
 	void BoardsUpdated() noexcept { ++boardsSeq; }
 	void DirectoriesUpdated() noexcept { ++directoriesSeq; }
 	void FansUpdated() noexcept { ++fansSeq; }
 	void GlobalUpdated() noexcept { ++globalSeq; }
 	void HeatUpdated() noexcept { ++heatSeq; }
 	void InputsUpdated() noexcept { ++inputsSeq; }
+	void LedStripsUpdated() noexcept { ++ledStripsSeq; }
 	void JobUpdated() noexcept { ++jobSeq; }
 	void MoveUpdated() noexcept { ++moveSeq; }
 	void NetworkUpdated() noexcept { ++networkSeq; }
@@ -174,28 +171,31 @@ protected:
 
 private:
 	static void EncodeString(StringRef& response, const char* src, size_t spaceToLeave, bool allowControlChars = false, char prefix = 0) noexcept;
-	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<float(size_t)> func, unsigned int numDecimalDigits) noexcept;
-	static void AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<int(size_t)> func) noexcept;
-	static void AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref<const char *(size_t)> func) noexcept;
+	static void AppendFloatArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<float(size_t) noexcept> func, unsigned int numDecimalDigits) noexcept;
+	static void AppendIntArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<int(size_t) noexcept> func) noexcept;
+	static void AppendStringArray(OutputBuffer *buf, const char *name, size_t numValues, function_ref_noexcept<const char *(size_t) noexcept> func) noexcept;
 
 	size_t GetStatusIndex() const noexcept;
 	char GetStatusCharacter() const noexcept;
 	const char* GetStatusString() const noexcept;
-	bool RunStartupFile(const char *filename) noexcept;
+	bool RunStartupFile(const char *filename, bool isMainConfigFile) noexcept;
 
-	static constexpr uint32_t MaxTicksInSpinState = 20000;	// timeout before we reset the processor
-	static constexpr uint32_t HighTicksInSpinState = 16000;	// how long before we warn that timeout is approaching
+	static constexpr uint32_t MaxHeatTaskTicksInSpinState = 4000;	// timeout before we reset the processor if the heat task doesn't run
+	static constexpr uint32_t MaxMainTaskTicksInSpinState = 20000;	// timeout before we reset the processor if the main task doesn't run
+	static constexpr uint32_t HighMainTaskTicksInSpinState = 16000;	// how long before we warn that timeout is approaching
 
 	Platform* platform;
 	Network* network;
 	Move* move;
 	Heat* heat;
 	GCodes* gCodes;
-#if SUPPORT_SCANNER
-	Scanner* scanner;
-#endif
  	PrintMonitor* printMonitor;
  	FansManager* fansManager;
+
+ 	// Recording the first error message encountered in config.g
+ 	AutoStringHandle configErrorFilename;
+ 	unsigned int configErrorLine;
+ 	AutoStringHandle configErrorMessage;
 
 #if SUPPORT_IOBITS
  	PortControl *portControl;
@@ -213,7 +213,7 @@ private:
  	ExpansionManager *expansion;
 #endif
 
-	uint16_t boardsSeq, directoriesSeq, fansSeq, heatSeq, inputsSeq, jobSeq, moveSeq, globalSeq;
+	uint16_t boardsSeq, directoriesSeq, fansSeq, heatSeq, inputsSeq, jobSeq, ledStripsSeq, moveSeq, globalSeq;
 	uint16_t networkSeq, scannerSeq, sensorsSeq, spindlesSeq, stateSeq, toolsSeq, volumesSeq;
 
 	GlobalVariables globalVariables;
@@ -230,7 +230,7 @@ private:
 	volatile DeferredCommand deferredCommand;
 #endif
 
-	DebugFlags debugMaps[Module::numModules];
+	DebugFlags debugMaps[NumRealModules];
 
 	String<RepRapPasswordLength> password;
 	String<MachineNameLength> myName;
@@ -241,9 +241,6 @@ private:
 #if SUPPORT_DIRECT_LCD
 	uint16_t messageSequence;					// used by 12864 display to detect when there is a new message
 #endif
-
-	MessageBox *_ecv_null mboxList;				// linked list of message boxes
-	mutable ReadWriteLock mboxLock;
 
 	// Deferred diagnostics
 	MessageType diagnosticsDestination;

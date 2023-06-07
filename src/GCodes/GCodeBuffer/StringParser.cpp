@@ -70,14 +70,20 @@ inline void StringParser::StoreAndAddToChecksum(char c) noexcept
 	}
 }
 
-// Add a byte to the code being assembled.  If false is returned, the code is
-// not yet complete.  If true, it is complete and ready to be acted upon and 'indent'
-// is the number of leading white space characters..
+// Add a byte to the code being assembled.  If false is returned, the code is not yet complete.
+// If true, it is complete and ready to be acted upon and 'indent' is the number of leading white space characters.
 bool StringParser::Put(char c) noexcept
 {
 	if (c != 0)
 	{
 		++commandLength;
+	}
+
+	// We now discard CR if we are reading from file. It makes line number counting easier and it's unlikely that a pre-OSX Mac will be used with a Duet.
+	// When not reading from file we still accept CR as a line terminator, for compatibility with Putty and some other terminal emulators.
+	if (c == '\r' && gb.IsDoingFile())
+	{
+		return false;
 	}
 
 	if (c == 0 || c == '\n' || c == '\r')
@@ -324,7 +330,7 @@ bool StringParser::LineFinished() noexcept
 			missingChecksum = ((checksumRequired || crcRequired) && gb.LatestMachineState().GetPrevious() == nullptr);
 		}
 
-		if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
+		if (reprap.GetDebugFlags(Module::Gcodes).IsBitSet(gb.GetChannel().ToBaseType()) && fileBeingWritten == nullptr)
 		{
 			debugPrintf("%s%s: %s\n", gb.GetChannel().ToString(), ((badChecksum) ? "(bad-csum)" : (missingChecksum) ? "(no-csum)" : ""), gb.buffer);
 		}
@@ -568,6 +574,13 @@ void StringParser::ProcessIfCommand() THROWS(GCodeException)
 
 void StringParser::ProcessElseCommand(BlockType skippedBlockType) THROWS(GCodeException)
 {
+	// Users may be tempted to put a command after 'else' so flag an error if that happens
+	SkipWhiteSpace();
+	if (gb.buffer[readPointer] != 0)
+	{
+		throw ConstructParseException("unexpected characters after 'else'");
+	}
+
 	if (skippedBlockType == BlockType::ifFalseNoneTrue)
 	{
 		gb.GetBlockState().SetPlainBlock();				// execute the else-block, treating it like a plain block
@@ -659,6 +672,10 @@ void StringParser::ProcessContinueCommand() THROWS(GCodeException)
 
 void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeException)
 {
+#if SUPPORT_ASYNC_MOVES
+	if (isGlobal && !gb.Executing()) return;
+#endif
+
 	SkipWhiteSpace();
 
 	// Get the identifier
@@ -706,9 +723,14 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 
 void StringParser::ProcessSetCommand() THROWS(GCodeException)
 {
-	// Skip the "var." or "global." prefix
 	SkipWhiteSpace();
 	const bool isGlobal = StringStartsWith(gb.buffer + readPointer, "global.");
+
+#if SUPPORT_ASYNC_MOVES
+	if (isGlobal && !gb.Executing()) return;
+#endif
+
+	// Skip the "var." or "global." prefix and get access to the appropriate variable set
 	WriteLockedPointer<VariableSet> vset = (isGlobal)
 											? (readPointer += strlen("global."), reprap.GetGlobalVariablesForWriting())
 											: (StringStartsWith(gb.buffer + readPointer, "var."))
@@ -730,14 +752,6 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 		c = gb.buffer[readPointer];
 	} while (isalpha(c) || isdigit(c) || c == '_' );
 
-	// Expect '='
-	SkipWhiteSpace();
-	if (gb.buffer[readPointer] != '=')
-	{
-		throw ConstructParseException("expected '='");
-	}
-	++readPointer;
-
 	// Look up the identifier
 	Variable * const var = vset->Lookup(varName.c_str());
 	if (var == nullptr)
@@ -746,9 +760,53 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	}
 
 	SkipWhiteSpace();
+
+	// Check for index expressions after the identifier
+	uint32_t indices[MaxArrayIndices];
+	size_t numIndices = 0;
+	for (numIndices = 0; ; ++numIndices)
+	{
+		SkipWhiteSpace();
+		if (gb.buffer[readPointer] != '[')
+		{
+			break;
+		}
+		if (numIndices == MaxArrayIndices)
+		{
+			throw ConstructParseException("Too many array indices");
+		}
+
+		++readPointer;
+		ExpressionParser indexParser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
+		const uint32_t indexExpr = indexParser.ParseUnsigned();
+		readPointer = indexParser.GetEndptr() - gb.buffer;
+		if (gb.buffer[readPointer] != ']')
+		{
+			throw ConstructParseException("expected ']'");
+		}
+		indices[numIndices] = indexExpr;
+		++readPointer;
+	}
+
+	// Expect '='
+	if (gb.buffer[readPointer] != '=')
+	{
+		throw ConstructParseException("expected '='");
+	}
+	++readPointer;
+
 	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), commandIndent + readPointer);
 	ExpressionValue ev = parser.Parse();
-	var->Assign(ev);
+
+	if (numIndices == 0)
+	{
+		var->Assign(ev);
+	}
+	else
+	{
+		var->AssignIndexed(ev, numIndices, indices);
+	}
+
 	if (isGlobal)
 	{
 		reprap.GlobalUpdated();
@@ -784,10 +842,15 @@ void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 
 void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeException)
 {
+#if SUPPORT_ASYNC_MOVES
+	if (!gb.Executing()) return;
+#endif
+
 	SkipWhiteSpace();
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	FileData outputFile;
+	bool appendNewline = true;
 #endif
 
 	if (gb.buffer[readPointer] == '>')
@@ -800,6 +863,11 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 		{
 			openMode = OpenMode::append;
 			++readPointer;
+			if (gb.buffer[readPointer] == '>')
+			{
+				appendNewline = false;
+				++readPointer;
+			}
 		}
 		else
 		{
@@ -847,7 +915,10 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	if (outputFile.IsLive())
 	{
-		reply.cat('\n');
+		if (appendNewline)
+		{
+			reply.cat('\n');
+		}
 		const bool ok = outputFile.Write(reply.c_str());
 		outputFile.Close();
 		reply.Clear();
@@ -953,15 +1024,15 @@ void StringParser::DecodeCommand() noexcept
 	}
 	else if (   hasCommandNumber
 			 && commandLetter == 'G'
-			 && commandNumber <= 1
-			 && strchr(reprap.GetGCodes().GetAxisLetters(), cl) != nullptr
+			 && commandNumber <= 3
+			 && strchr(reprap.GetGCodes().GetAxisLetters(), cl) != nullptr			// this assumes that the first letter will always be an axis coordinate
 			 && (   reprap.GetGCodes().GetMachineType() == MachineType::cnc			// Fanuc style CNC
 				 || reprap.GetGCodes().GetMachineType() == MachineType::laser		// LaserWeb style
 				)
 			 && !isalpha(gb.buffer[commandStart + 1])								// make sure it isn't an if-command or other meta command
 			)
 	{
-		// Fanuc or LaserWeb-style GCode, repeat the existing G0/G1 command with the new parameters
+		// Fanuc or LaserWeb-style GCode, repeat the existing G0/G1/G2/G3 command with the new parameters
 		parameterStart = commandStart;
 		FindParameters();
 	}
@@ -1018,7 +1089,7 @@ void StringParser::FindParameters() noexcept
 					const char c2 = toupper(c);
 					if (escaped)
 					{
-						if (c2 >= 'A' && c2 <= 'F' && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
+						if (c2 >= 'A' && c2 <= toupper(HighestAxisLetter) && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
 						{
 							parametersPresent.SetBit(c2 - ('A' - 26));
 						}
@@ -1125,7 +1196,7 @@ bool StringParser::IsLastCommand() const noexcept
 	return commandEnd >= gcodeLineEnd;			// using >= here also covers the case where the buffer is empty and gcodeLineEnd has been set to zero
 }
 
-// Is 'c' in the G Code string? 'c' must be in A..Z or a..f
+// Is 'c' in the G Code string? 'c' must be in A..Z or a..HighestAxisLetter
 // Leave the pointer one after it for a subsequent read.
 bool StringParser::Seen(char c) noexcept
 {
@@ -1140,7 +1211,7 @@ bool StringParser::Seen(char c) noexcept
 	{
 		bit = c - 'A';
 	}
-	if (bit >= ParameterLettersBitmap::MaxBits() || !parametersPresent.IsBitSet(c - 'A'))
+	if (bit >= ParameterLettersBitmap::MaxBits() || !parametersPresent.IsBitSet(bit))
 	{
 		return false;
 	}
@@ -1696,6 +1767,12 @@ void StringParser::WriteToFile() noexcept
 		}
 	}
 
+	size_t indent = commandIndent;
+	while (indent != 0)
+	{
+		fileBeingWritten->Write(' ');
+		--indent;
+	}
 	fileBeingWritten->Write(gb.buffer);
 	fileBeingWritten->Write('\n');
 	Init();
@@ -1946,7 +2023,7 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
 {
 	parametersPresent.Iterate([this, &vs, codeRunning](unsigned int bit, unsigned int count)
 								{
-									const char letter = 'A' + bit;
+									const char letter = BitNumberToParameterLetter(bit);
 									if ((letter != 'P' || codeRunning != 98) && Seen(letter))
 									{
 										ExpressionParser parser(gb, &gb.buffer[readPointer], &gb.buffer[commandEnd]);

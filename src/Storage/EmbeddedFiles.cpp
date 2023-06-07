@@ -15,7 +15,7 @@
 #include <ObjectModel/ObjectModel.h>
 #include "FileStore.h"
 
-extern const uint32_t _firmware_end;
+extern const uint32_t _firmware_end[];
 
 struct EmbeddedFileDescriptor
 {

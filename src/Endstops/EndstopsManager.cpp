@@ -39,6 +39,7 @@ ReadWriteLock EndstopsManager::zProbesLock;
 
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...)				OBJECT_MODEL_FUNC_BODY(EndstopsManager, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...)			OBJECT_MODEL_FUNC_IF_BODY(EndstopsManager, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry EndstopsManager::objectModelArrayTable[] =
 {
@@ -53,7 +54,7 @@ constexpr ObjectModelArrayTableEntry EndstopsManager::objectModelArrayTable[] =
 		&endstopsLock,
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetTotalAxes(); },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-						{ return ExpressionValue(((const EndstopsManager*)self)->FindEndstop(context.GetLastIndex()).Ptr()); }
+						{ return ExpressionValue(((const EndstopsManager*)self)->FindEndstopWhenLockOwned(context.GetLastIndex())); }
 	},
 	// 2. Filament monitors
 	{
@@ -143,9 +144,11 @@ void EndstopsManager::Init() noexcept
 	defaultZProbe = new DummyZProbe(0);			// we must always have a non-null current Z probe so we use this one if none is defined
 }
 
-ReadLockedPointer<Endstop> EndstopsManager::FindEndstop(size_t axis) const noexcept
+// Return a pointer to an endstop. Caller must already own a read lock on endstopsLock.
+// We don't lock endstopsLock because if we already own a read lock and someone else is requesting a write lock, when using 3.4.x version of ReadWriteLock we will deadlock (fixed in 3.5).
+const Endstop *EndstopsManager::FindEndstopWhenLockOwned(size_t axis) const noexcept
 {
-	return ReadLockedPointer<Endstop>(endstopsLock, (axis < MaxAxes) ? axisEndstops[axis] : nullptr);
+	return (axis < MaxAxes) ? axisEndstops[axis] : nullptr;
 }
 
 ReadLockedPointer<ZProbe> EndstopsManager::GetZProbe(size_t index) const noexcept
@@ -218,7 +221,7 @@ bool EndstopsManager::EnableZProbe(size_t probeNumber, bool probingAway) noexcep
 	isHomingMove = false;
 	if (probeNumber < MaxZProbes && zProbes[probeNumber] != nullptr)
 	{
-		zProbes[probeNumber]->SetProbingAway(probingAway);
+		zProbes[probeNumber]->PrepareForUse(probingAway);
 		AddToActive(*zProbes[probeNumber]);
 	}
 	return true;
@@ -323,7 +326,8 @@ EndstopHitDetails EndstopsManager::CheckEndstops() noexcept
 	return ret;
 }
 
-// Configure the endstops in response to M574
+// Configure the endstops in response to M574.
+// Caller has not locked movement. If we make any changes, we must lock movement first in case a move using endstops is executing or about to be queued.
 GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf) THROWS(GCodeException)
 {
 	// First count how many axes we are configuring, and lock movement if necessary
@@ -456,9 +460,12 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 					return GCodeResult::error;
 #endif
 				case EndStopType::zProbeAsEndstop:
+				{
 					// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
-					ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos));
+					uint32_t zProbeNumber = gb.Seen('K') ? gb.GetUIValue() : 0;
+					ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos, zProbeNumber));
 					break;
+				}
 
 				case EndStopType::inputPin:
 					if (   axisEndstops[axis] == nullptr
@@ -603,10 +610,15 @@ bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) con
 
 #endif
 
-// Handle M558
+// Handle M558 and M558.1
 GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
 	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
+
+	if (gb.GetCommandNumber() == 1)
+	{
+		return reprap.GetGCodes().HandleM558Point1(gb, reply, probeNumber);
+	}
 
 	// Check what sort of Z probe we need and where it is, so see whether we need to delete any existing one and create a new one.
 	// If there is no probe, we need a new one; and if it is not a motor stall one then a port number must be given.
@@ -706,6 +718,10 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 		if (Succeeded(rslt))
 		{
 			zProbes[probeNumber] = newProbe;
+			if (probeType == (uint32_t)ZProbeType::scanningAnalog)
+			{
+				Move::CreateLaserTask();					// scanning probes use the Laser task to take readings
+			}
 		}
 		return rslt;
 	}
@@ -719,11 +735,10 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
-	ReadLocker lock(zProbesLock);
-	ZProbe * const zp = zProbes[probeNumber];
-	if (zp == nullptr)
+	const auto zp = GetZProbe(probeNumber);
+	if (zp.IsNull())
 	{
-		reply.copy("Invalid Z probe index");
+		reply.copy("invalid Z probe index");
 		return GCodeResult::error;
 	}
 

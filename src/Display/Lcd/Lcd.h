@@ -8,12 +8,15 @@
 #include <Print.h>
 #include <Hardware/Spi/SharedSpiClient.h>
 #include <General/SafeVsnprintf.h>
+#include <ObjectModel/ObjectModel.h>
 
 #if USE_FONT_CHIP
 # include "Fonts/ER3301_1.h"
 #else
 # include "Fonts/LcdFont.h"
 #endif
+
+NamedEnum(DisplayControllerType, uint8_t, none, ST7920, ST7567, ILI9488, numTypes);
 
 typedef uint16_t PixelNumber;
 
@@ -39,7 +42,7 @@ struct Colours
 // Class for driving graphical LCD
 
 // Derive the LCD class from the Print class so that we can print stuff to it in alpha mode
-class Lcd
+class Lcd INHERIT_OBJECT_MODEL
 {
 public:
 	// Construct a GLCD driver.
@@ -55,7 +58,10 @@ public:
 	virtual bool FlushSome() noexcept = 0;
 
 	// Get the display type
-	virtual const char *GetDisplayTypeName() const noexcept = 0;
+	virtual DisplayControllerType GetControllerType() const noexcept = 0;
+
+	// Get the number of colour bits
+	virtual uint32_t GetColourBits() const noexcept = 0;
 
 	// Get the SPI frequency
 	virtual uint32_t GetSpiFrequency() const noexcept = 0;
@@ -166,6 +172,8 @@ public:
 	int printf(const char *_ecv_array fmt, ...) noexcept;
 
 protected:
+	DECLARE_OBJECT_MODEL
+
 	// Clear part of the display
 	virtual void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, bool foreground) noexcept = 0;
 

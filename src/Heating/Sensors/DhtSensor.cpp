@@ -14,7 +14,7 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>
 
-constexpr uint16_t MinimumReadInterval = 2000;		// ms
+constexpr uint16_t MinimumReadInterval = 1000;		// ms
 constexpr uint8_t  MaximumReadTime = 20;			// ms
 constexpr uint8_t  MinimumOneBitLength = 50;		// microseconds
 constexpr uint32_t MinimumOneBitStepClocks = (StepClockRate * MinimumOneBitLength)/1000000;
@@ -158,12 +158,10 @@ void DhtTemperatureSensor::Interrupt() noexcept
 
 void DhtTemperatureSensor::Poll() noexcept
 {
-	const auto now = millis();
-	if ((now - GetLastReadingTime()) >= MinimumReadInterval)
+	if ((millis() - GetLastReadingTime()) >= MinimumReadInterval)
 	{
 		TakeReading();
 	}
-	SetResult(GetStoredReading(), TemperatureError::ok);
 }
 
 void DhtTemperatureSensor::TakeReading() noexcept

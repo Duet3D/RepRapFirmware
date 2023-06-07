@@ -4,6 +4,25 @@
 
 #include <Hardware/IoPorts.h>
 
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...)		OBJECT_MODEL_FUNC_BODY(RotaryEncoder, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...)	OBJECT_MODEL_FUNC_IF_BODY(RotaryEncoder, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry RotaryEncoder::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. RotaryEncoder members
+	{ "pulsesPerClick",			OBJECT_MODEL_FUNC((int32_t)self->ppc), 	ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t RotaryEncoder::objectModelTableDescriptor[] = { 1, 1 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(RotaryEncoder)
+
 RotaryEncoder::RotaryEncoder(Pin p0, Pin p1, Pin pb) noexcept
 	: pin0(p0), pin1(p1), pinButton(pb), ppc(1), encoderChange(0), encoderState(0), newPress(false), reverseDirection(false) {}
 

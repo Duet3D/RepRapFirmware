@@ -160,6 +160,7 @@ private:
 	IoPort port;
 	DriverId driverId;
 
+	uint8_t enableMode;													// 0 = disabled, 1 = enabled when SD card printing, 2 = always enabled
 	bool isrWasPrinting;
 	bool haveIsrStepsCommanded;
 	FilamentSensorStatus lastStatus;

@@ -2,11 +2,12 @@
 #define __RotaryEncoderIncluded
 
 #include "RepRapFirmware.h"
+#include <ObjectModel/ObjectModel.h>
 
 #if SUPPORT_ROTARY_ENCODER
 
 // Class to manage a rotary encoder with a push button
-class RotaryEncoder
+class RotaryEncoder INHERIT_OBJECT_MODEL
 {
 	const Pin pin0, pin1, pinButton;
 	int ppc;
@@ -29,6 +30,9 @@ public:
 	int GetChange() noexcept;
 	bool GetButtonPress() noexcept;
 	int GetPulsesPerClick() const noexcept { return ppc; }
+
+protected:
+	DECLARE_OBJECT_MODEL
 };
 
 #endif

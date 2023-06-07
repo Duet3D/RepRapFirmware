@@ -18,6 +18,9 @@ public:
 	MonoLcd(PixelNumber nr, PixelNumber nc, const LcdFont * const fnts[], size_t nFonts, SpiMode mode) noexcept;
 	virtual ~MonoLcd();
 
+	// Get the number of colour bits
+	uint32_t GetColourBits() const noexcept override final { return 1; }
+
 	// Get the SPI frequency
 	uint32_t GetSpiFrequency() const noexcept override final { return device.GetFrequency(); }
 

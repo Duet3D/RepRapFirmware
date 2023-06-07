@@ -65,7 +65,7 @@
 			}
 #endif
 		}
-		fullReason |= (uint8_t)reprap.GetSpinningModule();
+		fullReason |= reprap.GetSpinningModule().ToBaseType();
 		if (reprap.GetPlatform().WasDeliberateError())
 		{
 			fullReason |= (uint16_t)SoftwareResetReason::deliberate;
@@ -78,9 +78,7 @@
         mem->EnsureWritten();
 	}
 
-#if defined(__LPC17xx__)
-    LPC_SYSCTL->RSID = 0x3F;					// Clear bits in reset reasons stored in RSID
-#elif !SAME5x
+#if !SAME5x
 	RSTC->RSTC_MR = RSTC_MR_KEY_PASSWD;			// ignore any signal on the NRST pin for now so that the reset reason will show as Software
 #endif
 	ResetProcessor();
@@ -148,21 +146,14 @@ extern "C" [[noreturn]] __attribute__((externally_visible)) void wdtFaultDispatc
 	SoftwareReset(SoftwareResetReason::wdtFault, pulFaultStackAddress);
 }
 
-#ifdef __LPC17xx__
-extern "C" void WDT_IRQHandler() noexcept __attribute__((naked));
-void WDT_IRQHandler() noexcept
-{
-	LPC_WDT->MOD &=~((uint32_t)(1<<2)); //SD::clear timout flag before resetting to prevent the Smoothie bootloader going into DFU mode
-#else
-# if SAME70		// SAME70 has a separate interrupt line for the RSWDT
+#if SAME70		// SAME70 has a separate interrupt line for the RSWDT
 extern "C" void RSWDT_Handler() noexcept __attribute__((naked));
 void RSWDT_Handler() noexcept
-# else
+#else
 extern "C" void WDT_Handler() noexcept __attribute__((naked));
 void WDT_Handler() noexcept
-# endif
-{
 #endif
+{
 	__asm volatile
 	(
 		" tst lr, #4                                                \n"		/* test bit 2 of the EXC_RETURN in LR to determine which stack was in use */
@@ -252,27 +243,6 @@ void vAssertCalled(uint32_t line, const char *file) noexcept
 		" handler_asrt_address_const: .word assertCalledDispatcher  \n"
 	);
 }
-
-#ifdef __LPC17xx__
-[[noreturn]] void applicationMallocFailedCalledDispatcher(const uint32_t *pulFaultStackAddress) noexcept
-{
-	reprap.SoftwareReset(SoftwareResetReason::assertCalled, pulFaultStackAddress);
-}
-
-[[noreturn]] extern "C" void vApplicationMallocFailedHook() noexcept __attribute((naked));
-void vApplicationMallocFailedHook() noexcept
-{
-	 __asm volatile
-	(
-		" push {r0, r1, lr}											\n"        /* save parameters and call address */
-		" mov r0, sp												\n"
-		" ldr r2, handler_amf_address_const							\n"
-		" bx r2														\n"
-		" .align 2                                                  \n"		/* make the 2 LSBs zero at the next instruction */
-		" handler_amf_address_const: .word applicationMallocFailedCalledDispatcher  \n"
-	 );
-}
-#endif
 
 namespace std
 {

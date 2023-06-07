@@ -37,14 +37,14 @@ public:
 	TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0) noexcept override;
 	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 1; }
 	void Poll() noexcept override;
-	const char *GetShortSensorType() const noexcept override;
+	const char *_ecv_array GetShortSensorType() const noexcept override;
 
 	void Interrupt() noexcept;
 	void TakeReading() noexcept;
 	TemperatureError ProcessReadings(float& t, float& h) noexcept;
 
-	static constexpr const char *TypeNameDht21 = "dht21";
-	static constexpr const char *TypeNameDht22 = "dht22";
+	static constexpr const char *_ecv_array TypeNameDht21 = "dht21";
+	static constexpr const char *_ecv_array TypeNameDht22 = "dht22";
 
 private:
 
@@ -67,12 +67,12 @@ private:
 class DhtHumiditySensor : public AdditionalOutputSensor
 {
 public:
-	DhtHumiditySensor(unsigned int sensorNum) noexcept;
+	explicit DhtHumiditySensor(unsigned int sensorNum) noexcept;
 	~DhtHumiditySensor() noexcept;
 
-	const char *GetShortSensorType() const noexcept override { return TypeName; }
+	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 
-	static constexpr const char *TypeName = "dhthumidity";
+	static constexpr const char *_ecv_array TypeName = "dhthumidity";
 };
 
 #endif

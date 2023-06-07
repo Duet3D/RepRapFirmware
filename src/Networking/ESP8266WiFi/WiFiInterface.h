@@ -61,8 +61,8 @@ public:
 	void Stop() noexcept;
 
 	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
-	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept override;
-	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept override;
+	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept override;
+	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown = true) noexcept override;
 	GCodeResult ReportProtocols(const StringRef& reply) const noexcept override;
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
@@ -88,7 +88,7 @@ public:
 	void StartWiFi() noexcept;
 	void ResetWiFi() noexcept;
 	void ResetWiFiForUpload(bool external) noexcept;
-	const char *GetWiFiServerVersion() const noexcept { return wiFiServerVersion; }
+	const char *GetWiFiServerVersion() const noexcept { return wiFiServerVersion.c_str(); }
 	static const char* TranslateWiFiState(WiFiState w) noexcept;
 	void SpiInterrupt() noexcept;
 	void EspRequestsTransfer() noexcept;
@@ -100,17 +100,20 @@ protected:
 private:
 	void InitSockets() noexcept;
 	void TerminateSockets() noexcept;
-	void TerminateSockets(TcpPort port) noexcept;
+	void TerminateSockets(TcpPort port, bool local = true) noexcept;
 	void StopListening(TcpPort port) noexcept;
 
-	void StartProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumProtocols);
-
+	// Protocol socket operations - listen for incoming connections,
+	// create outgoing connection, kill existing listeners & connections.
+	void ListenProtocol(NetworkProtocol protocol) noexcept
+	pre(protocol < NumSelectableProtocols);
+	void ConnectProtocol(NetworkProtocol protocol) noexcept
+	pre(protocol < NumSelectableProtocols);
 	void ShutdownProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumProtocols);
+	pre(protocol < NumSelectableProtocols);
 
 	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
-	pre(protocol < NumProtocols);
+	pre(protocol < NumSelectableProtocols);
 
 	NetworkProtocol GetProtocolByLocalPort(TcpPort port) const noexcept;
 
@@ -124,6 +127,7 @@ private:
 	}
 
 	void SendListenCommand(TcpPort port, NetworkProtocol protocol, unsigned int maxConnections) noexcept;
+	void SendConnectCommand(TcpPort port, NetworkProtocol protocol, uint32_t ip) noexcept;
 	void GetNewStatus() noexcept;
 	void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept;
 
@@ -151,10 +155,11 @@ private:
 	WiFiSocket *sockets[NumWiFiTcpSockets];
 	size_t currentSocket;
 
-	TcpPort portNumbers[NumProtocols];				// port number used for each protocol
+	uint32_t ipAddresses[NumSelectableProtocols];
+	TcpPort portNumbers[NumSelectableProtocols];				// port number used for each protocol
 	TcpPort ftpDataPort;
 	bool closeDataPort;
-	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
+	bool protocolEnabled[NumSelectableProtocols];				// whether each protocol is enabled
 
 	WiFiState requestedMode;
 	WiFiState currentMode;
@@ -165,18 +170,19 @@ private:
 	IPAddress netmask;
 	IPAddress gateway;
 	MacAddress macAddress;
-	char requestedSsid[SsidLength + 1];
-	char actualSsid[SsidLength + 1];
+	String<SsidLength> requestedSsid;
+	String<SsidLength> actualSsid;
 
 	unsigned int spiTxUnderruns;
 	unsigned int spiRxOverruns;
 	unsigned int reconnectCount;
-	unsigned int transferAlreadyPendingCount;
-	unsigned int readyTimeoutCount;
-	unsigned int responseTimeoutCount;
+	unsigned int transferAlreadyPendingCount = 0;
+	unsigned int readyTimeoutCount = 0;
+	unsigned int responseTimeoutCount = 0;
 
-	char wiFiServerVersion[16];
+	String<StringLength20> wiFiServerVersion;
 
+	uint8_t startupRetryCount;
 	bool usingDhcp = true;
 
 	// For processing debug messages from the WiFi module

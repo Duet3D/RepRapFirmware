@@ -13,8 +13,8 @@ struct CanSensorReport;
 class TemperatureSensor INHERIT_OBJECT_MODEL
 {
 public:
-	TemperatureSensor(unsigned int sensorNum, const char *type) noexcept;
-	TemperatureSensor(const TemperatureSensor&) = delete;
+	TemperatureSensor(unsigned int sensorNum, const char *_ecv_array type) noexcept;
+	TemperatureSensor(const TemperatureSensor &_ecv_from) = delete;
 
 	// Virtual destructor
 	virtual ~TemperatureSensor() noexcept;
@@ -43,11 +43,11 @@ public:
 
 #if SUPPORT_OBJECT_MODEL
 	// Report the sensor type in the form corresponding to the Y parameter of M308.
-	virtual const char *GetShortSensorType() const noexcept = 0;
+	virtual const char *_ecv_array GetShortSensorType() const noexcept = 0;
 #endif
 
 	// Return the sensor type
-	const char *GetSensorType() const noexcept { return sensorType; }
+	const char *_ecv_array GetSensorType() const noexcept { return sensorType; }
 
 	// Return the sensor number
 	unsigned int GetSensorNumber() const noexcept { return sensorNumber; }
@@ -59,17 +59,17 @@ public:
 	void TryConfigureSensorName(GCodeBuffer& gb, bool& seen) THROWS(GCodeException);
 
 	// Set the name - normally called only once
-	void SetSensorName(const char *newName) noexcept;
+	void SetSensorName(const char *_ecv_array _ecv_null newName) noexcept;
 
 	// Get the name. Returns nullptr if no name has been assigned.
-	const char *GetSensorName() const noexcept { return sensorName; }
+	const char *_ecv_array GetSensorName() const noexcept { return sensorName; }
 
 	// Copy the basic details to the reply buffer
 	void CopyBasicDetails(const StringRef& reply) const noexcept;
 
 	// Get/set the next sensor in the linked list
-	TemperatureSensor *GetNext() const noexcept { return next; }
-	void SetNext(TemperatureSensor *n) noexcept { next = n; }
+	TemperatureSensor *_ecv_from GetNext() const noexcept { return next; }
+	void SetNext(TemperatureSensor *_ecv_from n) noexcept { next = n; }
 
 	// Get the smart drivers channel that this sensor monitors, or -1 if it doesn't
 	virtual int GetSmartDriversChannel() const noexcept { return -1; }
@@ -87,9 +87,9 @@ public:
 
 	// Factory method
 #if SUPPORT_CAN_EXPANSION
-	static TemperatureSensor *Create(unsigned int sensorNum, CanAddress boardAddress, const char *typeName, const StringRef& reply) noexcept;
+	static TemperatureSensor *_ecv_from Create(unsigned int sensorNum, CanAddress boardAddress, const char *_ecv_array typeName, const StringRef& reply) noexcept;
 #else
-	static TemperatureSensor *Create(unsigned int sensorNum, const char *typeName, const StringRef& reply) noexcept;
+	static TemperatureSensor *_ecv_from Create(unsigned int sensorNum, const char *_ecv_array typeName, const StringRef& reply) noexcept;
 #endif
 
 	// Try to get a temperature reading
@@ -106,10 +106,10 @@ protected:
 private:
 	static constexpr uint32_t TemperatureReadingTimeout = 2000;			// any reading older than this number of milliseconds is considered unreliable
 
-	TemperatureSensor *next;
+	TemperatureSensor *_ecv_from _ecv_null next;
 	unsigned int sensorNumber;											// the number of this sensor
-	const char * const sensorType;
-	const char *sensorName;
+	const char *_ecv_array const sensorType;
+	const char *_ecv_array _ecv_null sensorName;
 	float lastTemperature;
 	uint32_t whenLastRead;
 	TemperatureError lastResult, lastRealError;

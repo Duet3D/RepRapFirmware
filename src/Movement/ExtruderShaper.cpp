@@ -7,10 +7,6 @@
 
 #include "ExtruderShaper.h"
 
-#include <GCodes/GCodeBuffer/GCodeBuffer.h>
-#include <Platform/RepRap.h>
-#include "StepTimer.h"
-#include "DDA.h"
-#include "MoveSegment.h"
+// No code here yet because all members are inlined
 
 // End

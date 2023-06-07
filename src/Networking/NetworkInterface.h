@@ -28,10 +28,10 @@ public:
 	virtual int EnableState() const noexcept = 0;
 	virtual bool IsWiFiInterface() const noexcept = 0;
 
-	virtual GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept = 0;
+	virtual GCodeResult EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept = 0;
 	virtual bool IsProtocolEnabled(NetworkProtocol protocol) noexcept { return protocolEnabled[protocol]; }
 	virtual TcpPort GetProtocolPort(NetworkProtocol protocol) noexcept { return portNumbers[protocol]; }
-	virtual GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept = 0;
+	virtual GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown = true) noexcept = 0;
 	virtual GCodeResult ReportProtocols(const StringRef& reply) const noexcept = 0;
 
 	virtual IPAddress GetIPAddress() const noexcept = 0;
@@ -54,8 +54,8 @@ protected:
 	void SetState(NetworkState::RawType newState) noexcept;
 	const char *GetStateName() const noexcept { return state.ToString(); }
 
-	TcpPort portNumbers[NumProtocols];					// port number used for each protocol
-	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
+	TcpPort portNumbers[NumSelectableProtocols];					// port number used for each protocol
+	bool protocolEnabled[NumSelectableProtocols];				// whether each protocol is enabled
 
 private:
 	NetworkState state;

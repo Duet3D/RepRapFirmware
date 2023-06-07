@@ -33,10 +33,11 @@
 constexpr ObjectModelTableEntry GpOutputPort::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
-	{ "pwm",	OBJECT_MODEL_FUNC(self->lastPwm, 2),	ObjectModelEntryFlags::live },
+	{ "freq",	OBJECT_MODEL_FUNC((int32_t)self->GetPwmFrequency()),	ObjectModelEntryFlags::none },
+	{ "pwm",	OBJECT_MODEL_FUNC(self->lastPwm, 3),					ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t GpOutputPort::objectModelTableDescriptor[] = { 1, 1 };
+constexpr uint8_t GpOutputPort::objectModelTableDescriptor[] = { 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(GpOutputPort)
 

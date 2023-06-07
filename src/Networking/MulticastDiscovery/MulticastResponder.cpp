@@ -193,7 +193,7 @@ void MulticastResponder::SendResponse(uint8_t *data, size_t length) noexcept
 			}
 			else
 			{
-				if (reprap.Debug(moduleNetwork))
+				if (reprap.Debug(Module::Network))
 				{
 					debugPrintf("UDP send failed, err=%u\n", err);
 				}
@@ -201,14 +201,14 @@ void MulticastResponder::SendResponse(uint8_t *data, size_t length) noexcept
 		}
 		else
 		{
-			if (reprap.Debug(moduleNetwork))
+			if (reprap.Debug(Module::Network))
 			{
 				debugPrintf("pbuf_take returned error, length %u\n", length);
 			}
 		}
 		pbuf_free(pb);
 	}
-	else if (reprap.Debug(moduleNetwork))
+	else if (reprap.Debug(Module::Network))
 	{
 		debugPrintf("pbuf_alloc failed,length=%u\n", length);
 	}

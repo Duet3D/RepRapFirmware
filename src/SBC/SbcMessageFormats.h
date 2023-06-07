@@ -200,31 +200,32 @@ struct SeekFileHeader
 
 enum class FirmwareRequest : uint16_t
 {
-	ResendPacket = 0,					// Request the retransmission of the given packet
-	ObjectModel = 1,					// Response to an object model request
-	CodeBufferUpdate = 2,				// Update about the available code buffer size
-	Message = 3,						// Message from the firmware
-	ExecuteMacro = 4,					// Request execution of a macro file
-	AbortFile = 5,						// Request the current file to be closed
-	StackEvent_Obsolete = 6,			// Stack has been changed (unused)
-	PrintPaused = 7,					// Print has been paused
-	HeightMap_Obsolete = 8,				// Response to a heightmap request (no longer used)
-	Locked = 9,							// Movement has been locked and machine is in standstill
-	FileChunk = 10,            			// Request another chunk of a file (only used by CAN expansion board updates)
-	EvaluationResult = 11,				// Response to an expression evaluation request
-	DoCode = 12,						// Perform a G/M/T-code from a code input
-	WaitForMessageAcknowledgment = 13,	// Wait for a message to be acknowledged
-	MacroFileClosed = 14,				// Last macro file has been closed
-	MessageAcknowledged = 15,			// Pending message prompt has been acknowledged
-	VariableResult = 16,				// Result of a variable get or set request
-	CheckFileExists = 17,				// Check if a file exists
-	DeleteFileOrDirectory = 18,			// Delete a file or directory
-	OpenFile = 19,						// Open a file on the SBC
-	ReadFile = 20,						// Read from a file
-	WriteFile = 21,						// Write to a file
-	SeekFile = 22,						// Seek in a file
-	TruncateFile = 23,					// Truncate a file
-	CloseFile = 24						// Close a file again
+	ResendPacket = 0,						// Request the retransmission of the given packet
+	ObjectModel = 1,						// Response to an object model request
+	CodeBufferUpdate = 2,					// Update about the available code buffer size
+	Message = 3,							// Message from the firmware
+	ExecuteMacro = 4,						// Request execution of a macro file
+	AbortFile = 5,							// Request the current file to be closed
+	StackEvent_Obsolete = 6,				// Stack has been changed (unused)
+	PrintPaused = 7,						// Print has been paused
+	HeightMap_Obsolete = 8,					// Response to a heightmap request (no longer used)
+	Locked = 9,								// Movement has been locked and machine is in standstill
+	FileChunk = 10,            				// Request another chunk of a file (only used by CAN expansion board updates)
+	EvaluationResult = 11,					// Response to an expression evaluation request
+	DoCode = 12,							// Perform a G/M/T-code from a code input
+	WaitForMessageAcknowledgment = 13,		// Wait for a message to be acknowledged
+	MacroFileClosed = 14,					// Last macro file has been closed
+	MessageAcknowledged = 15,				// Pending message prompt has been acknowledged
+	VariableResult = 16,					// Result of a variable get or set request
+	CheckFileExists = 17,					// Check if a file exists
+	DeleteFileOrDirectory = 18,				// Delete a file or directory
+	OpenFile = 19,							// Open a file on the SBC
+	ReadFile = 20,							// Read from a file
+	WriteFile = 21,							// Write to a file
+	SeekFile = 22,							// Seek in a file
+	TruncateFile = 23,						// Truncate a file
+	CloseFile = 24,							// Close a file again
+	DeleteFileOrDirectoryRecursively = 25	// Delete a file or directory recursively
 };
 
 struct PrintPausedHeader

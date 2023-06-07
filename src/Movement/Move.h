@@ -108,6 +108,10 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
+	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept
+	{
+		return axisShaper.EutSetInputShaping(msg, dataLength, reply);
+	}
 #endif
 
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
@@ -138,18 +142,19 @@ public:
 	void SetIdleTimeout(float timeout) noexcept;											// Set the idle timeout in seconds
 
 	void Simulate(SimulationMode simMode) noexcept;											// Enter or leave simulation mode
-	float GetSimulationTime() const noexcept { return rings[0].GetSimulationTime(); }	// Get the accumulated simulation time
+	float GetSimulationTime() const noexcept { return rings[0].GetSimulationTime(); }		// Get the accumulated simulation time
 
-	bool PausePrint(unsigned int queueNumber, RestorePoint& rp) noexcept;					// Pause the print as soon as we can, returning true if we were able to
+	bool PausePrint(MovementState& ms) noexcept;											// Pause the print as soon as we can, returning true if we were able to
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 	bool LowPowerOrStallPause(unsigned int queueNumber, RestorePoint& rp) noexcept;			// Pause the print immediately, returning true if we were able to
 #endif
 
-	bool NoLiveMovement() const noexcept { return rings[0].IsIdle(); }					// Is a move running, or are there any queued?
+	bool NoLiveMovement() const noexcept { return rings[0].IsIdle(); }						// Is a move running, or are there any queued?
 
 	uint32_t GetScheduledMoves() const noexcept { return rings[0].GetScheduledMoves(); }	// How many moves have been scheduled?
 	uint32_t GetCompletedMoves() const noexcept { return rings[0].GetCompletedMoves(); }	// How many moves have been completed?
 	void ResetMoveCounters() noexcept { rings[0].ResetMoveCounters(); }
+	void UpdateExtrusionPendingLimits(float extrusionPending) noexcept;
 
 	HeightMap& AccessHeightMap() noexcept { return heightMap; }								// Access the bed probing grid
 	const GridDefinition& GetGrid() const noexcept { return heightMap.GetGrid(); }			// Get the grid definition
@@ -185,6 +190,9 @@ public:
 	unsigned int GetJerkPolicy() const noexcept { return jerkPolicy; }
 	void SetJerkPolicy(unsigned int jp) noexcept { jerkPolicy = jp; }
 
+	// Scanning Z probes
+	void SetProbeReadingNeeded() noexcept { probeReadingNeeded = true; }
+
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;			// Get the current step interval for this axis or extruder
 #endif
@@ -199,32 +207,29 @@ public:
 	static int32_t MotorMovementToSteps(size_t drive, float coord) noexcept;				// Convert a single motor position to number of steps
 	static float MotorStepsToMovement(size_t drive, int32_t endpoint) noexcept;				// Convert number of motor steps to motor position
 
-#if SUPPORT_LASER || SUPPORT_IOBITS
+	// We now use the laser task to take readings from scanning Z probes, so we always need it
 	[[noreturn]] void LaserTaskRun() noexcept;
 
 	static void CreateLaserTask() noexcept;													// create the laser task if we haven't already
 	static void WakeLaserTask() noexcept;													// wake up the laser task, called at the start of a new move
 	static void WakeLaserTaskFromISR() noexcept;											// wake up the laser task, called at the start of a new move
-#endif
 
 	static void WakeMoveTaskFromISR() noexcept;
 
 	static const TaskBase *GetMoveTaskHandle() noexcept { return &moveTask; }
 
 #if SUPPORT_REMOTE_COMMANDS
-# if USE_REMOTE_INPUT_SHAPING
-	void AddShapeddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept		// add a move from the ATE to the movement queue
-	{
-		rings[0].AddMoveFromRemote(msg);
-		MoveAvailable();
-	}
-# else
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept					// add a move from the ATE to the movement queue
 	{
 		rings[0].AddMoveFromRemote(msg);
 		MoveAvailable();
 	}
-# endif
+
+	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept				// add a move from the ATE to the movement queue
+	{
+		rings[0].AddMoveFromRemote(msg);
+		MoveAvailable();
+	}
 
 	void StopDrivers(uint16_t whichDrives) noexcept
 	{
@@ -300,21 +305,22 @@ private:
 
 	Kinematics *kinematics;								// What kinematics we are using
 
+	float minExtrusionPending = 0.0, maxExtrusionPending = 0.0;
+
 	AxisShaper axisShaper;
 	ExtruderShaper extruderShapers[MaxExtruders];
 
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
 
+	// Calibration and bed compensation
 	uint8_t numCalibratedFactors;
 	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
 	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
 	bool useTaper;										// True to taper off the compensation
+	bool probeReadingNeeded = false;					// true if the laser task needs to take a Z probe reading
 
-#if SUPPORT_LASER || SUPPORT_IOBITS
 	static constexpr size_t LaserTaskStackWords = 100;	// stack size in dwords for the laser and IOBits task
 	static Task<LaserTaskStackWords> *laserTask;		// the task used to manage laser power or IOBits
-#endif
-
 };
 
 //******************************************************************************************************
@@ -323,6 +329,14 @@ private:
 inline void Move::GetCurrentMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, bool disableMotorMapping) const noexcept
 {
 	return rings[msNumber].GetCurrentMachinePosition(m, disableMotorMapping);
+}
+
+// Update the min and max extrusion pending values. These are reported by M122 to assist with debugging print quality issues.
+// Inlined because this is only called from one place.
+inline void Move::UpdateExtrusionPendingLimits(float extrusionPending) noexcept
+{
+	if (extrusionPending > maxExtrusionPending) { maxExtrusionPending = extrusionPending; }
+	else if (extrusionPending < minExtrusionPending) { minExtrusionPending = extrusionPending; }
 }
 
 #if SUPPORT_ASYNC_MOVES
@@ -365,12 +379,16 @@ inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept
 	return (extruder < MaxExtruders) ? extruderShapers[extruder].GetKclocks() : 0.0;
 }
 
+#if !SUPPORT_ASYNC_MOVES
+
 // Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
-// Returns the number of motor steps moves since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
+// Returns the number of motor steps moved since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
 inline int32_t Move::GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept
 {
 	return rings[0].GetAccumulatedMovement(drive, isPrinting);
 }
+
+#endif
 
 #if HAS_SMART_DRIVERS
 

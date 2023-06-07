@@ -20,8 +20,6 @@
 # undef exists
 #endif
 
-constexpr size_t MaxStringExpressionLength = StringLength100;
-
 namespace StackUsage
 {
 	// The following values are the number of bytes of stack space needed by the corresponding functions and functions they call,
@@ -33,7 +31,7 @@ namespace StackUsage
 
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true, input);
-NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, cos, datetime, degrees, fileexists, exists, floor, isnan, max, min, mod, radians, random, sin, sqrt, tan);
+NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, ceil, cos, datetime, degrees, exists, exp, fileexists, floor, isnan, log, max, min, mod, pow, radians, random, sin, sqrt, tan, vector);
 
 const char * const InvalidExistsMessage = "invalid 'exists' expression";
 
@@ -107,17 +105,17 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 
 		case TypeCode::HeapArray:
 			{
-				if (indexValue < rslt.ahVal.GetNumElements())
+				ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
+				if (!rslt.ahVal.GetElement(indexValue, rslt))	// if index was out of bounds
 				{
-					rslt.ahVal.GetElement(indexValue, rslt);
-				}
-				else if (evaluate)
-				{
-					throw GCodeException(gb.GetLineNumber(), indexCol, "array index out of range");
-				}
-				else
-				{
-					rslt.SetNull(nullptr);
+					if (evaluate)
+					{
+						throw GCodeException(gb.GetLineNumber(), indexCol, "array index out of range");
+					}
+					else
+					{
+						rslt.SetNull(nullptr);
+					}
 				}
 			}
 			break;
@@ -649,6 +647,7 @@ uint32_t ExpressionParser::ParseUnsigned() THROWS(GCodeException)
 			return (uint32_t)val.iVal;
 		}
 		ThrowParseException("value must be non-negative");
+		// no break
 
 	default:
 		ThrowParseException("expected non-negative integer value");
@@ -788,6 +787,20 @@ void ExpressionParser::EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2
 	{
 		v1.iVal = (isMax ? max<int32_t> : min<int32_t>)(v1.iVal, v2.iVal);
 	}
+}
+
+// Get another operand, called when evaluating a function after we have evaluate the first operand.
+// We checked the stack for the call to ParseInternal for the first operand, no need to do it again.
+void ExpressionParser::GetNextOperand(ExpressionValue& operand, bool evaluate) THROWS(GCodeException)
+{
+	SkipWhiteSpace();
+	if (CurrentCharacter() != ',')
+	{
+		ThrowParseException("expected ','");
+	}
+	AdvancePointer();
+	SkipWhiteSpace();
+	ParseInternal(operand, evaluate, 0);
 }
 
 // Return true if the specified type has no literals and should therefore be converted to string when comparing with another value that is not of the same type.
@@ -986,7 +999,7 @@ void ExpressionParser::ApplyLengthOperator(ExpressionValue& val) const THROWS(GC
 
 	case TypeCode::HeapArray:
 		{
-			ReadLocker lock(Heap::heapLock);
+			ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
 			val.SetInt(val.ahVal.GetNumElements());
 		}
 		break;
@@ -1262,16 +1275,8 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 			case Function::atan2:
 				{
 					ConvertToFloat(rslt, evaluate);
-					SkipWhiteSpace();
-					if (CurrentCharacter() != ',')
-					{
-						ThrowParseException("expected ','");
-					}
-					AdvancePointer();
-					SkipWhiteSpace();
 					ExpressionValue nextOperand;
-					// We recently checked the stack for a call to ParseInternal, no need to do it again
-					ParseInternal(nextOperand, evaluate, 0);
+					GetNextOperand(nextOperand, evaluate);
 					ConvertToFloat(nextOperand, evaluate);
 					rslt.fVal = atan2f(rslt.fVal, nextOperand.fVal);
 					rslt.param = MaxFloatDigitsDisplayedAfterPoint;
@@ -1302,9 +1307,10 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				break;
 
 			case Function::floor:
+			case Function::ceil:
 				{
 					ConvertToFloat(rslt, evaluate);
-					const float f = floorf(rslt.fVal);
+					const float f = ((func.RawValue() == Function::floor) ? floorf : ceilf)(rslt.fVal);
 					if (f <= (float)std::numeric_limits<int32_t>::max() && f >= (float)std::numeric_limits<int32_t>::min())
 					{
 						rslt.SetInt((int32_t)f);
@@ -1318,16 +1324,8 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 			case Function::mod:
 				{
-					SkipWhiteSpace();
-					if (CurrentCharacter() != ',')
-					{
-						ThrowParseException("expected ','");
-					}
-					AdvancePointer();
-					SkipWhiteSpace();
 					ExpressionValue nextOperand;
-					// We recently checked the stack for a call to ParseInternal, no need to do it again
-					ParseInternal(nextOperand, evaluate, 0);
+					GetNextOperand(nextOperand, evaluate);
 					BalanceNumericTypes(rslt, nextOperand, evaluate);
 					if (rslt.GetType() == TypeCode::Float)
 					{
@@ -1354,18 +1352,21 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					{
 						ThrowParseException("operand is not an array");
 					}
-					ReadLocker lock(Heap::heapLock);
-					const size_t length = rslt.ahVal.GetNumElements();
-					if (length == 0)
+
+					ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
+					ExpressionValue rVal;
+					if (!rslt.ahVal.GetElement(0, rVal))
 					{
 						ThrowParseException("array has no elements");
 					}
-					ExpressionValue rVal;
-					rslt.ahVal.GetElement(0, rVal);
-					for (size_t i = 1; i < length; ++i)
+
+					for (size_t i = 1; ; ++i)
 					{
 						ExpressionValue nextVal;
-						rslt.ahVal.GetElement(i, nextVal);
+						if (!rslt.ahVal.GetElement(i, nextVal))
+						{
+							break;									// quit when index out of bounds
+						}
 						EvaluateMinOrMax(rVal, nextVal, evaluate, func.RawValue() == Function::max);
 					}
 					rslt = rVal;
@@ -1464,6 +1465,69 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				}
 				break;
 
+			case Function::vector:		// vector(numElements, elementValue)
+				if (evaluate && (rslt.GetType() != TypeCode::Int32 || rslt.iVal < 0))
+				{
+					ThrowParseException("expected non-negative integer");
+				}
+				{
+					ExpressionValue valueOperand;
+					GetNextOperand(valueOperand, evaluate);
+					if (evaluate)
+					{
+						const size_t numElems = (size_t)rslt.iVal;
+						ArrayHandle ah;
+						ah.Allocate(numElems);
+						for (size_t i = 0; i < numElems; ++i)
+						{
+							ah.AssignElement(i, valueOperand);
+						}
+						rslt.SetArrayHandle(ah);
+					}
+					else
+					{
+						rslt.SetNull(nullptr);
+					}
+					break;
+				}
+				break;
+
+			case Function::exp:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = expf(rslt.fVal);
+				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				break;
+
+			case Function::log:
+				ConvertToFloat(rslt, evaluate);
+				rslt.fVal = logf(rslt.fVal);
+				rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+				break;
+
+			case Function::pow:
+				{
+					ExpressionValue nextOperand;
+					GetNextOperand(nextOperand, evaluate);
+					BalanceNumericTypes(rslt, nextOperand, evaluate);
+
+					// If both operands are integer and the second one is non-negative, result is integer if it fits
+					const bool integerResult = (nextOperand.GetType() == TypeCode::Int32) && nextOperand.iVal >= 0;
+
+					ConvertToFloat(rslt, evaluate);
+					ConvertToFloat(nextOperand, evaluate);
+					const float fres = powf(rslt.fVal, nextOperand.fVal);
+					if (integerResult && fabsf(fres) <= std::numeric_limits<int32_t>::max())
+					{
+						rslt.SetInt(lrintf(fres));
+					}
+					else
+					{
+						rslt.fVal = fres;
+						rslt.param = MaxFloatDigitsDisplayedAfterPoint;
+					}
+				}
+				break;
+
 			default:
 				THROW_INTERNAL_ERROR;
 			}
@@ -1547,17 +1611,16 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 			{
 				ExpressionValue elem;
 				{
-					context.AddIndex();						// we are about to use up an index
+					context.AddIndex();								// we are about to use up an index
 					const int32_t index = context.GetLastIndex();
-					ReadLocker lock(Heap::heapLock);
-					if ((unsigned int)index > val.ahVal.GetNumElements())
+					ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
+					if (!val.ahVal.GetElement(index, elem))
 					{
 						ThrowParseException("Index out of range");
 					}
-					val.ahVal.GetElement(index, elem);
 				}
 
-				++pos;					// skip the '^'
+				++pos;												// skip the '^'
 				if (*pos == 0)
 				{
 					// End of the expression

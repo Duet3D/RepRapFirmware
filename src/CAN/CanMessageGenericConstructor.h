@@ -36,7 +36,7 @@ public:
 	void AddDriverIdParam(char c, DriverId did) THROWS(GCodeException);
 	void AddFloatArrayParam(char c, const float *v, size_t numV) THROWS(GCodeException);
 
-	GCodeResult SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) const noexcept;
+	GCodeResult SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply, uint8_t *extra = nullptr) const noexcept;
 
 private:
 	// Return the correct position in the data to insert a parameter. If successful, add the bit to the parameter map and pass back the expected parameter type and size; else throw.

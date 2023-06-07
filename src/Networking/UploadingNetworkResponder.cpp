@@ -32,7 +32,7 @@ void UploadingNetworkResponder::CancelUpload() noexcept
 		fileBeingUploaded.Close();
 		if (!filenameBeingProcessed.IsEmpty())
 		{
-			MassStorage::Delete(filenameBeingProcessed.c_str(), true);
+			(void)MassStorage::Delete(filenameBeingProcessed.GetRef(), ErrorMessageMode::messageAlways);
 			filenameBeingProcessed.Clear();
 		}
 	}
@@ -108,25 +108,24 @@ void UploadingNetworkResponder::FinishUpload(uint32_t fileLength, time_t fileLas
 		// Delete the file again if an error has occurred
 		if (!filenameBeingProcessed.IsEmpty())
 		{
-			const char *uploadFilename = filenameBeingProcessed.c_str();
 			if (uploadError)
 			{
 #if 0	// Temporary code to save files with upload errors and report successful uploads
 				String<MaxFilenameLength> newName;
 				MassStorage::CombineName(newName.GetRef(), Platform::GetGCodeDir(), "uploadError_");
 				newName.catf("%04u", (unsigned int)(millis() % 10000));
-				MassStorage::Rename(uploadFilename, newName.c_str(), true, true);
+				MassStorage::Rename(filenameBeingProcessed.c_str(), newName.c_str(), true, true);
 #else
-				MassStorage::Delete(uploadFilename, true);
+				(void)MassStorage::Delete(filenameBeingProcessed.GetRef(), ErrorMessageMode::messageUnlessMissing);
 #endif
 			}
 			else
 			{
 				String<MaxFilenameLength> origFilename;
-				origFilename.copy(uploadFilename, filenameBeingProcessed.GetRef().strlen() - strlen(UPLOAD_EXTENSION));
+				origFilename.copy(filenameBeingProcessed.c_str(), filenameBeingProcessed.GetRef().strlen() - strlen(UPLOAD_EXTENSION));
 
 				// Rename the uploaded file to it's original name
-				MassStorage::Rename(uploadFilename, origFilename.c_str(), true, true);
+				MassStorage::Rename(filenameBeingProcessed.c_str(), origFilename.c_str(), true, true);
 
 				if (fileLastModified != 0)
 				{

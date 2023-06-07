@@ -512,12 +512,12 @@ bool sd_mmc_spi_adtc_start(sdmmc_cmd_def_t cmd, uint32_t arg, uint16_t block_siz
 	{
 		sd_mmc_spi_response_32 = 0;
 		currentSpiClient->ReadPacket((uint8_t*) & sd_mmc_spi_response_32, 1);
-		sd_mmc_spi_response_32 = LoadLE32(&sd_mmc_spi_response_32);
+		sd_mmc_spi_response_32 = LoadLEU32(&sd_mmc_spi_response_32);
 	}
 	if (cmd & SDMMC_RESP_32)
 	{
 		currentSpiClient->ReadPacket((uint8_t*) & sd_mmc_spi_response_32, 4);
-		sd_mmc_spi_response_32 = LoadBE32(&sd_mmc_spi_response_32);
+		sd_mmc_spi_response_32 = LoadBEU32(&sd_mmc_spi_response_32);
 	}
 
 	sd_mmc_spi_block_size = block_size;
@@ -546,7 +546,7 @@ bool sd_mmc_spi_read_word(uint32_t* value) noexcept
 	}
 	// Read data
 	currentSpiClient->ReadPacket((uint8_t*)value, 4);
-	*value = LoadLE32(value);
+	*value = LoadLEU32(value);
 	sd_mmc_spi_transfert_pos += 4;
 
 	if (!(sd_mmc_spi_transfert_pos % sd_mmc_spi_block_size))
@@ -569,7 +569,7 @@ bool sd_mmc_spi_write_word(uint32_t value) noexcept
 	}
 
 	// Write data
-	value = LoadBE32(&value);
+	value = LoadBEU32(&value);
 	currentSpiClient->WritePacket((uint8_t*)&value, 4);
 	sd_mmc_spi_transfert_pos += 4;
 

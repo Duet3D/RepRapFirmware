@@ -458,14 +458,14 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				return;							// no reply needed
 
 			case CanMessageType::movementLinear:
+				//TODO check seq
 				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinear);
 				return;							// no reply needed
 
-# if USE_REMOTE_INPUT_SHAPING
 			case CanMessageType::movementLinearShaped:
-				reprap.GetMove().AddShapedMoveFromRemote(buf->msg.moveLinearShaped);
+				//TODO check seq
+				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinearShaped);
 				return;							// no reply needed
-# endif
 
 			case CanMessageType::stopMovement:
 				reprap.GetMove().StopDrivers(buf->msg.stopMovement.whichDrives);
@@ -565,6 +565,18 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetPlatform().EutHandleGpioWrite(buf->msg.writeGpio, replyRef);
 				break;
 
+			// LED strip commands
+			case CanMessageType::m950Led:
+				requestId = buf->msg.generic.requestId;
+				rslt = reprap.GetPlatform().GetLedStripManager().HandleM950Led(buf->msg.generic, replyRef, extra);
+				break;
+
+			case CanMessageType::writeLedStrip:
+				requestId = buf->msg.generic.requestId;
+				rslt = reprap.GetPlatform().GetLedStripManager().HandleLedSetColours(buf->msg.generic, replyRef);
+				break;
+
+			// Driver commands
 			case CanMessageType::setMotorCurrents:
 				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
 				rslt = reprap.GetPlatform().EutSetMotorCurrents(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
@@ -588,6 +600,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			case CanMessageType::setPressureAdvance:
 				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
 				rslt = reprap.GetMove().EutSetRemotePressureAdvance(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+				break;
+
+			case CanMessageType::setInputShaping:
+				requestId = buf->msg.setInputShaping.requestId;
+				rslt = reprap.GetMove().EutSetInputShaping(buf->msg.setInputShaping, buf->dataLength, replyRef);
 				break;
 
 			case CanMessageType::m569:
@@ -736,6 +753,10 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				Event::Add(buf->msg.event, buf->id.Src(), buf->dataLength);
 				break;
 
+			case CanMessageType::debugText:
+				reprap.GetPlatform().MessageF(GenericMessage, "Debug from %u: %.*s\n", buf->id.Src(), buf->msg.debugText.GetMaxTextLength(buf->dataLength), buf->msg.debugText.text);
+				break;
+
 #if SUPPORT_ACCELEROMETERS
 			case CanMessageType::accelerometerData:
 				Accelerometers::ProcessReceivedData(buf->id.Src(), buf->msg.accelerometerData, buf->dataLength);
@@ -768,7 +789,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 #endif
 
 			default:
-				if (reprap.Debug(moduleCan))
+				if (reprap.Debug(Module::CAN))
 				{
 					buf->DebugPrint("Rec: ");
 				}

@@ -35,6 +35,7 @@ enum class KinematicsType : uint8_t
 	markForged,
 	collinearTriperon,	// reserved for @oliof, see https://forum.duet3d.com/topic/11646/kinematics-type-number-allocation-for-colinear-tripteron
 	robot5axis,			// reserved for @joergS5, see https://forum.duet3d.com/post/172204
+	sixAxisDelta,		// reserved for @tkln, see https://forum.duet3d.com/post/314950
 
 	unknown				// this one must be last!
 };
@@ -228,7 +229,7 @@ protected:
 	bool LimitPositionFromAxis(float coords[], size_t firstAxis, size_t numVisibleAxes, AxesBitmap axesHomed) const noexcept;
 
 	// Try to configure the segmentation parameters
-	bool TryConfigureSegmentation(GCodeBuffer& gb) noexcept;
+	bool TryConfigureSegmentation(GCodeBuffer& gb) THROWS(GCodeException);
 
 	// Debugging functions
 	static void PrintMatrix(const char* s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0) noexcept;

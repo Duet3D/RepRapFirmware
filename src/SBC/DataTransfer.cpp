@@ -21,7 +21,7 @@
 # define USE_XDMAC			0		// use XDMA controller
 # define USE_DMAC_MANAGER	0		// use SAME5x DmacManager module
 
-#elif defined(DUET3) || defined(SAME70XPLD)
+#elif defined(DUET3)
 
 # define USE_DMAC			0		// use general DMA controller
 # define USE_XDMAC			1		// use XDMA controller
@@ -726,7 +726,7 @@ void DataTransfer::ExchangeData() noexcept
 
 void DataTransfer::RestartTransfer(bool ownRequest) noexcept
 {
-	if (reprap.Debug(moduleSbcInterface))
+	if (reprap.Debug(Module::SbcInterface))
 	{
 		debugPrintf(ownRequest ? "Resetting transfer\n" : "Resetting transfer due to Sbc request\n");
 	}
@@ -796,7 +796,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 			if (headerResponse == TransferResponse::BadResponse)
 			{
 				// SBC received a bad response code. We must have been happy if we got here, else RRF would have complained
-				if (reprap.Debug(moduleSbcInterface))
+				if (reprap.Debug(Module::SbcInterface))
 				{
 					debugPrintf("Retrying data response exchange\n");
 				}
@@ -807,7 +807,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 			const uint32_t checksum = CalcCRC32(reinterpret_cast<const char *>(&rxHeader), sizeof(TransferHeader) - sizeof(uint32_t));
 			if (rxHeader.crcHeader != checksum)
 			{
-				if (reprap.Debug(moduleSbcInterface))
+				if (reprap.Debug(Module::SbcInterface))
 				{
 					debugPrintf("Bad header CRC (expected %08" PRIx32 ", got %08" PRIx32 ")\n", rxHeader.crcHeader, checksum);
 				}
@@ -880,7 +880,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 			const uint32_t checksum = CalcCRC32(rxBuffer, rxHeader.dataLength);
 			if (rxHeader.crcData != checksum)
 			{
-				if (reprap.Debug(moduleSbcInterface))
+				if (reprap.Debug(Module::SbcInterface))
 				{
 					debugPrintf("Bad data CRC (expected %08" PRIx32 ", got %08" PRIx32 ")\n", rxHeader.crcData, checksum);
 				}
@@ -934,7 +934,7 @@ TransferState DataTransfer::DoTransfer() noexcept
 			else
 			{
 				// Retry failed, reset the connection
-				if (reprap.Debug(moduleSbcInterface))
+				if (reprap.Debug(Module::SbcInterface))
 				{
 					debugPrintf("Data response retry failed (sent %08" PRIx32 ", got %08" PRIx32 ")\n", txResponse, rxResponse);
 				}
@@ -1228,7 +1228,6 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	switch (value.GetType())
 	{
 	case TypeCode::None:
-	// FIXME Add support for arrays
 	case TypeCode::Bool:
 	case TypeCode::DriverId_tc:
 	case TypeCode::Uint32:
@@ -1254,7 +1253,6 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 	case TypeCode::HeapString:
 		payloadLength = expressionLength + value.shVal.GetLength();
 		break;
-
 	default:
 		rslt.printf("unsupported type code %d", (int)value.type);
 		payloadLength = expressionLength + rslt.strlen();
@@ -1334,6 +1332,37 @@ bool DataTransfer::WriteEvaluationResult(const char *expression, const Expressio
 		header->intValue = rslt.strlen();
 		WriteData(rslt.c_str(), rslt.strlen());
 		break;
+	}
+	return true;
+}
+
+bool DataTransfer::WriteEvaluationResult(const char *expression, OutputBuffer *json) noexcept
+{
+	// Check if we can write the JSON result
+	const size_t expressionLength = strlen(expression);
+	if (!CanWritePacket(sizeof(EvaluationResultHeader) + expressionLength + json->Length()))
+	{
+		OutputBuffer::ReleaseAll(json);
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::EvaluationResult, sizeof(EvaluationResultHeader) + expressionLength + json->Length());
+
+	// Write partial header
+	EvaluationResultHeader *header = WriteDataHeader<EvaluationResultHeader>();
+	header->expressionLength = expressionLength;
+
+	// Write expression
+	WriteData(expression, expressionLength);
+
+	// Write JSON
+	header->dataType = DataType::Expression;
+	header->intValue = json->Length();
+	while (json != nullptr)
+	{
+		WriteData(json->Data(), json->DataLength());
+		json = OutputBuffer::Release(json);
 	}
 	return true;
 }
@@ -1426,7 +1455,6 @@ bool DataTransfer::WriteSetVariableResult(const char *varName, const ExpressionV
 	String<StringLength50> rslt;
 	switch (value.GetType())
 	{
-	// FIXME Add support for arrays
 	case TypeCode::Bool:
 	case TypeCode::DriverId_tc:
 	case TypeCode::Uint32:
@@ -1440,7 +1468,7 @@ bool DataTransfer::WriteSetVariableResult(const char *varName, const ExpressionV
 	case TypeCode::IPAddress_tc:
 	case TypeCode::MacAddress_tc:
 	case TypeCode::DateTime_tc:
-		// All these types are represented as strings (FIXME: should we pass a DateTime over in raw format? Can DSF handle it?)
+		// All these types are represented as strings
 		value.AppendAsString(rslt.GetRef());
 		payloadLength = varNameLength + rslt.strlen();
 		break;
@@ -1508,10 +1536,41 @@ bool DataTransfer::WriteSetVariableResult(const char *varName, const ExpressionV
 	case TypeCode::IPAddress_tc:
 	default:
 		// We have already converted the value to a string in 'rslt'
-		header->dataType = DataType::String;
+		header->dataType = (value.GetType() == TypeCode::DateTime_tc) ? DataType::DateTime : DataType::String;
 		header->intValue = rslt.strlen();
 		WriteData(rslt.c_str(), rslt.strlen());
 		break;
+	}
+	return true;
+}
+
+bool DataTransfer::WriteSetVariableResult(const char *varName, OutputBuffer *json) noexcept
+{
+	// Check if we can write the JSON result
+	const size_t varNameLength = strlen(varName);
+	if (!CanWritePacket(sizeof(EvaluationResultHeader) + varNameLength + json->Length()))
+	{
+		OutputBuffer::ReleaseAll(json);
+		return false;
+	}
+
+	// Write packet header
+	(void)WritePacketHeader(FirmwareRequest::VariableResult, sizeof(EvaluationResultHeader) + varNameLength + json->Length());
+
+	// Write partial header
+	EvaluationResultHeader *header = WriteDataHeader<EvaluationResultHeader>();
+	header->expressionLength = varNameLength;
+
+	// Write variable name
+	WriteData(varName, varNameLength);
+
+	// Write JSON
+	header->dataType = DataType::Expression;
+	header->intValue = json->Length();
+	while (json != nullptr)
+	{
+		WriteData(json->Data(), json->DataLength());
+		json = OutputBuffer::Release(json);
 	}
 	return true;
 }
@@ -1562,7 +1621,7 @@ bool DataTransfer::WriteCheckFileExists(const char *filename) noexcept
 	return true;
 }
 
-bool DataTransfer::WriteDeleteFileOrDirectory(const char *filename) noexcept
+bool DataTransfer::WriteDeleteFileOrDirectory(const char *filename, bool recursive) noexcept
 {
 	// Check if it fits
 	size_t filenameLength = strlen(filename);
@@ -1572,7 +1631,7 @@ bool DataTransfer::WriteDeleteFileOrDirectory(const char *filename) noexcept
 	}
 
 	// Write packet header
-	(void)WritePacketHeader(FirmwareRequest::DeleteFileOrDirectory, sizeof(StringHeader) + filenameLength);
+	(void)WritePacketHeader(recursive ? FirmwareRequest::DeleteFileOrDirectoryRecursively : FirmwareRequest::DeleteFileOrDirectory, sizeof(StringHeader) + filenameLength);
 
 	// Write header
 	StringHeader *header = WriteDataHeader<StringHeader>();

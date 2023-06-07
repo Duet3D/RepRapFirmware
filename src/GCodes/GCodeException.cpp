@@ -17,7 +17,7 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 	const bool inFile = gb != nullptr && gb->IsDoingFile();
 	if (inFile)
 	{
-		reply.copy((gb->IsDoingFileMacro()) ? "in file macro": "in GCode file");
+		reply.copy((gb->IsDoingFileMacro()) ? "in file macro" : "in GCode file");
 		if (line >= 0)
 		{
 			reply.catf(" line %d", line);
@@ -27,6 +27,10 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 			}
 		}
 		reply.cat(": ");
+	}
+	else
+	{
+		reply.Clear();
 	}
 
 	// Print the command letter/number, if possible
@@ -56,7 +60,7 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 	// Print the message and any parameter
 	if (message == nullptr)
 	{
-		reply.cat("<null error message>");					// should not happem
+		reply.cat("<null error message>");					// should not happen
 	}
 	else if (strstr(message, "%s"))
 	{

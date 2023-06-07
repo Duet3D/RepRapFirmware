@@ -292,10 +292,11 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 			break;
 
 		case 'V':
+			// Visibility is allowed to be an object model expression
 			if (*args == '{')
 			{
 				++args;
-				strVis = args;
+				const char *_ecv_array str = args;
 				while (*args != '}' && *args != 0)
 				{
 					++args;
@@ -305,6 +306,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 					*args = 0;
 					++args;
 				}
+				strVis = AppendString(str);
 			}
 			else
 			{
@@ -317,10 +319,11 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 			break;
 
 		case 'N':
-			// 'value' command allows the N parameter to be an object mode string
+			// 'value' command allows the N parameter to be an object model expression
 			if (*args == '{' && StringEqualsIgnoreCase(commandWord, "value"))
 			{
-				strNparam = args;
+				++args;
+				const char *_ecv_array str = args;
 				while (*args != '}' && *args != 0)
 				{
 					++args;
@@ -330,6 +333,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 					*args = 0;
 					++args;
 				}
+				strNparam = AppendString(str);
 			}
 			else
 			{

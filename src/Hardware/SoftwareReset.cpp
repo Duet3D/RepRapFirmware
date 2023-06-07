@@ -80,7 +80,7 @@ void SoftwareResetData::Populate(uint16_t reason, const uint32_t *stk) noexcept
 #endif
 	// Get the task name if we can. There may be no task executing, so we must allow for this.
 	const TaskHandle_t currentTask = xTaskGetCurrentTaskHandle();
-	taskName = (currentTask == nullptr) ? 0x656e6f6e : LoadLE32(pcTaskGetName(currentTask));
+	taskName = (currentTask == nullptr) ? 0x656e6f6e : LoadLEU32(pcTaskGetName(currentTask));
 
 	sp = reinterpret_cast<uint32_t>(stk);
 	if (stk == nullptr)
@@ -97,6 +97,12 @@ void SoftwareResetData::Populate(uint16_t reason, const uint32_t *stk) noexcept
 		spare = 0;
 		for (uint32_t& stval : stack)
 		{
+#if __FPU_USED
+			if (&stval - stack == 8 && ResetReasonHasExceptionFrame(reason))
+			{
+				stk += 17;				// skip the FP registers
+			}
+#endif
 			stval = (stk < &_estack) ? *stk++ : 0xFFFFFFFF;
 		}
 	}
@@ -152,7 +158,7 @@ void SoftwareResetData::Printit(MessageType mtype, unsigned int slot) const noex
 #endif
 	reprap.GetPlatform().MessageF(mtype, "%s, %s spinning, available RAM %" PRIi32 ", slot %u\n",
 						scratchString.c_str(),
-						GetModuleName(resetReason & 0x1F),
+						Module(resetReason & 0x1F).ToString(),
 						neverUsedRam,
 						slot);
 

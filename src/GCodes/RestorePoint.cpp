@@ -80,6 +80,9 @@ void RestorePoint::Init() noexcept
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();
 #endif
+#if SUPPORT_LASER
+	laserPixelData.Clear();
+#endif
 }
 
 // End

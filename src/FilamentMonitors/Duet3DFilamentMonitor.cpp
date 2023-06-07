@@ -215,7 +215,7 @@ Duet3DFilamentMonitor::PollResult Duet3DFilamentMonitor::PollReceiveBuffer(uint1
 			break;
 
 		default:	// error recovery states
-			if (reprap.Debug(moduleFilamentSensors))
+			if (reprap.Debug(Module::FilamentSensors))
 			{
 				debugPrintf("Fil err %u\n", (unsigned int)state);
 			}

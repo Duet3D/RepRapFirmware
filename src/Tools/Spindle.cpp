@@ -152,11 +152,8 @@ void Spindle::SetRpm(uint32_t rpm) noexcept
 
 void Spindle::SetState(const SpindleState newState) noexcept
 {
-	if (state != newState)
-	{
-		state = newState;
-		SetRpm(configuredRpm);				// Depending on the configured SpindleState this might actually stop the spindle
-	}
+	state = newState;
+	SetRpm(configuredRpm);					// depending on the configured SpindleState this might actually stop the spindle
 }
 
 // End

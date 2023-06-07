@@ -43,9 +43,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 
 #define SUPPORT_CAN_EXPANSION	0
 
-#define SUPPORT_LED_STRIPS		0
-#define SUPPORT_INKJET			0					// set nonzero to support inkjet control
-#define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
+#define SUPPORT_LED_STRIPS		1
 #define SUPPORT_LASER			1					// support laser cutters and engravers using G1 S parameter
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
@@ -74,13 +72,14 @@ constexpr uint32_t IAP_IMAGE_START = 0x20028000;
 
 // The physical capabilities of the machine
 
-#include <Duet3Common.h>
-
 constexpr size_t NumDirectDrivers = 4;				// The maximum number of drives supported by the electronics
-
 constexpr size_t MaxSmartDrivers = NumDirectDrivers;	// The maximum number of smart drivers
 
+constexpr size_t MaxSensors = 32;
+
+constexpr size_t MaxHeaters = 4;					// The maximum number of heaters in the machine
 constexpr size_t MaxPortsPerHeater = 2;
+constexpr size_t MaxMonitorsPerHeater = 3;			// The maximum number of monitors per heater
 
 constexpr size_t MaxBedHeaters = 4;
 constexpr size_t MaxChamberHeaters = 4;
@@ -88,6 +87,10 @@ constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder 
 
 constexpr size_t NumThermistorInputs = 2;
 constexpr size_t NumTmcDriversSenseChannels = 1;
+
+constexpr size_t MaxZProbes = 2;
+constexpr size_t MaxGpInPorts = 10;
+constexpr size_t MaxGpOutPorts = 10;
 
 constexpr size_t MinAxes = 3;						// The minimum and default number of axes
 constexpr size_t MaxAxes = 4;						// The maximum number of movement axes in the machine
@@ -99,7 +102,12 @@ constexpr size_t MaxAxesPlusExtruders = 6;
 constexpr size_t MaxHeatersPerTool = 2;
 constexpr size_t MaxExtrudersPerTool = 2;
 
+constexpr size_t MaxFans = 6;
+
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
+
+constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
+constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
 constexpr size_t NumSerialChannels = 2;				// The number of serial IO channels (USB and one auxiliary UART)
 
@@ -299,8 +307,8 @@ constexpr Pin EspSclkPin = PortAPin(12);
 constexpr Pin EspSSPin = PortAPin(14);
 constexpr Pin WiFiSpiSercomPins[] = { EspSclkPin, EspMisoPin, EspSSPin, EspMosiPin };
 constexpr GpioPinFunction WiFiSpiSercomPinsMode = GpioPinFunction::D;
-constexpr IRQn WiFiSpiSercomIRQn = SERCOM4_3_IRQn;			// this is the SS Low interrupt, the only one we use
-#define ESP_SPI_HANDLER		SERCOM4_3_Handler
+constexpr IRQn WiFiSpiSercomIRQn = SERCOM4_1_IRQn;			// this is the transmit complete interrupt, the only one we use
+#define ESP_SPI_HANDLER		SERCOM4_1_Handler
 
 constexpr Pin EspResetPin = PortBPin(14);
 constexpr Pin EspEnablePin = PortCPin(11);

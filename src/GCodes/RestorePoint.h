@@ -27,6 +27,10 @@ public:
 	LaserPwmOrIoBits laserPwmOrIoBits;		// The output port bits setting for this move, or the laser power
 #endif
 
+#if SUPPORT_LASER
+	LaserPixelData laserPixelData;
+#endif
+
 	RestorePoint() noexcept;
 	void Init() noexcept;
 

@@ -21,6 +21,7 @@ Variable::~Variable()
 	val.Release();
 }
 
+// Assign a new value to this variable
 void Variable::Assign(ExpressionValue& ev) THROWS(GCodeException)
 {
 	switch (ev.GetType())
@@ -55,6 +56,16 @@ void Variable::Assign(ExpressionValue& ev) THROWS(GCodeException)
 		val = ev;
 		break;
 	}
+}
+
+// Assign a new value to an indexed part of this variable. There is always at least one index.
+void Variable::AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException)
+{
+	if (val.GetType() != TypeCode::HeapArray)
+	{
+		throw GCodeException("Expected an array expression");
+	}
+	val.ahVal.AssignIndexed(ev, numIndices, indices);
 }
 
 Variable* VariableSet::Lookup(const char *str) noexcept
@@ -165,7 +176,7 @@ void VariableSet::AssignFrom(VariableSet& other) noexcept
 	other.root = nullptr;
 }
 
-void VariableSet::IterateWhile(function_ref<bool(unsigned int, const Variable&) /*noexcept*/ > func) const noexcept
+void VariableSet::IterateWhile(function_ref_noexcept<bool(unsigned int, const Variable&) noexcept> func) const noexcept
 {
 	unsigned int num = 0;
 	for (const LinkedVariable *lv = root; lv != nullptr; lv = lv->next)

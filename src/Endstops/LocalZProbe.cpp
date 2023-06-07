@@ -101,6 +101,7 @@ uint16_t LocalZProbe::GetRawReading() const noexcept
 	case ZProbeType::analog:
 	case ZProbeType::dumbModulated:
 	case ZProbeType::alternateAnalog:
+	case ZProbeType::scanningAnalog:
 		return min<uint16_t>(inputPort.ReadAnalog() >> (AdcBits - 10), MaxReading);
 
 	case ZProbeType::digital:
@@ -141,6 +142,13 @@ GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) noexcept
 /*static*/ void LocalZProbe::TimerInterrupt(CallbackParameter param) noexcept
 {
 	static_cast<LocalZProbe*>(param.vp)->Interrupt();
+}
+
+// Functions used only with scanning Z probes
+float LocalZProbe::GetCalibratedReading() const noexcept
+{
+	const float diff = (float)((int16_t)GetRawReading() - targetAdcValue);
+	return diff * (linearCoefficient + (diff * quadraticCoefficient)) + GetActualTriggerHeight();
 }
 
 // Kick off sending some program bytes

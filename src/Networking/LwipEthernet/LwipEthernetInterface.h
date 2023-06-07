@@ -39,8 +39,8 @@ public:
 	void Diagnostics(MessageType mtype) noexcept override;
 
 	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
-	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept override;
-	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept override;
+	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept override;
+	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown = true) noexcept override;
 	GCodeResult ReportProtocols(const StringRef& reply) const noexcept override;
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
@@ -76,23 +76,23 @@ private:
 	void RebuildMdnsServices() noexcept;
 
 	void StartProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumProtocols);
+	pre(protocol < NumSelectableProtocols);
 
 	void ShutdownProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumProtocols);
+	pre(protocol < NumSelectableProtocols);
 
 	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
-	pre(protocol < NumProtocols);
+	pre(protocol < NumSelectableProtocols);
 
 	Platform& platform;
 
 	LwipSocket *sockets[NumEthernetSockets];
 	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
 
-	TcpPort portNumbers[NumProtocols];				// port number used for each protocol
-	bool protocolEnabled[NumProtocols];				// whether each protocol is enabled
+	TcpPort portNumbers[NumSelectableProtocols];				// port number used for each protocol
+	bool protocolEnabled[NumSelectableProtocols];				// whether each protocol is enabled
 	bool closeDataPort;
-	tcp_pcb *listeningPcbs[NumProtocols + 1];
+	tcp_pcb *listeningPcbs[NumTcpProtocols];
 
 	bool activated;
 	bool initialised;

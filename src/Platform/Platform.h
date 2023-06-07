@@ -28,6 +28,7 @@ Licence: GPL
 #include <ObjectModel/ObjectModel.h>
 #include <Hardware/IoPorts.h>
 #include <Fans/FansManager.h>
+
 #include <TemperatureError.h>
 #include "OutputMemory.h"
 #include "UniqueId.h"
@@ -43,11 +44,16 @@ Licence: GPL
 #include <General/IPAddress.h>
 #include <General/function_ref.h>
 
+#if SUPPORT_LED_STRIPS
+# include <LedStrips/LedStripManager.h>
+#endif
+
 #if defined(DUET_NG)
 # include "DueXn.h"
 #endif
 
 #if SUPPORT_CAN_EXPANSION
+# include <CanMessageFormats.h>
 # include <RemoteInputHandle.h>
 #endif
 
@@ -70,18 +76,6 @@ constexpr size_t CpuTempFilterIndex = NumThermistorInputs;
 constexpr size_t NumAdcFilters = NumThermistorInputs + 1;
 #else
 constexpr size_t NumAdcFilters = NumThermistorInputs;
-#endif
-
-/**************************************************************************************************/
-
-#if SUPPORT_INKJET
-
-// Inkjet (if any - no inkjet is flagged by INKJET_BITS negative)
-
-const int8_t INKJET_BITS = 12;							// How many nozzles? Set to -1 to disable this feature
-const int INKJET_FIRE_MICROSECONDS = 5;					// How long to fire a nozzle
-const int INKJET_DELAY_MICROSECONDS = 800;				// How long to wait before the next bit
-
 #endif
 
 // Z PROBE
@@ -122,10 +116,9 @@ enum class BoardType : uint8_t
 #elif defined(DUET3_MB6XD)
 	Duet3_6XD_v01 = 1,
 	Duet3_6XD_v100 = 2,
+	Duet3_6XD_v101 = 3,
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	FMDC,
-#elif defined(SAME70XPLD)
-	SAME70XPLD_0 = 1
 #elif defined(DUET_NG)
 	DuetWiFi_10 = 1,
 	DuetWiFi_102 = 2,
@@ -137,8 +130,6 @@ enum class BoardType : uint8_t
 	DuetM_10 = 1,
 #elif defined(PCCB_10)
 	PCCB_v10 = 1
-#elif defined(__LPC17xx__)
-	Lpc = 1
 #else
 # error Unknown board
 #endif
@@ -174,10 +165,6 @@ enum class DiagnosticTestType : unsigned int
 	TimeCRC32 = 107,				// time how long it takes to calculate CRC32
 	TimeGetTimerTicks = 108,		// time now long it takes to read the step clock
 	UndervoltageEvent = 109,		// pretend an undervoltage condition has occurred
-
-#ifdef __LPC17xx__
-	PrintBoardConfiguration = 200,	// Prints out all pin/values loaded from SDCard to configure board
-#endif
 
 	SetWriteBuffer = 500,			// enable/disable the write buffer
 
@@ -399,11 +386,6 @@ public:
 	void SetCommsProperties(size_t chan, uint32_t cp) noexcept;
 	uint32_t GetCommsProperties(size_t chan) const noexcept;
 
-#if defined(__ALLIGATOR__)
-	// Mac address from EUI48 EEPROM
-	EUI48EEPROM eui48MacAddress;
-#endif
-
 	// File functions
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	FileStore* OpenFile(const char *_ecv_array folder, const char *_ecv_array fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
@@ -473,8 +455,8 @@ public:
 	const float *_ecv_array GetDriveStepsPerUnit() const noexcept
 		{ return driveStepsPerUnit; }
 	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept;
-	float Acceleration(size_t axisOrExtruder) const noexcept;
-	const float *_ecv_array Accelerations(bool useReduced) const noexcept;
+	float NormalAcceleration(size_t axisOrExtruder) const noexcept;
+	float Acceleration(size_t axisOrExtruder, bool reduced) const noexcept;
 	void SetAcceleration(size_t axisOrExtruder, float value, bool reduced) noexcept;
 	float MaxFeedrate(size_t axisOrExtruder) const noexcept;
 	const float *_ecv_array MaxFeedrates() const noexcept { return maxFeedrates; }
@@ -488,6 +470,11 @@ public:
 	float AxisMinimum(size_t axis) const noexcept;
 	void SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept;
 	float AxisTotalLength(size_t axis) const noexcept;
+
+	GCodeResult ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M425
+	void UpdateBacklashSteps() noexcept;
+	int32_t ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept;
+	uint32_t GetBacklashCorrectionDistanceFactor() const noexcept { return backlashCorrectionDistanceFactor; }
 
 	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
 	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }
@@ -537,6 +524,10 @@ public:
 #if SUPPORT_NONLINEAR_EXTRUSION
 	const NonlinearExtrusion& GetExtrusionCoefficients(size_t extruder) const noexcept pre(extruder < MaxExtruders) { return nonlinearExtrusion[extruder]; }
 	void SetNonlinearExtrusion(size_t extruder, float a, float b, float limit) noexcept;
+#endif
+
+#if SUPPORT_LED_STRIPS
+	LedStripManager& GetLedStripManager() noexcept { return ledStripManager; }
 #endif
 
 	// Endstops and Z probe
@@ -651,6 +642,7 @@ public:
 #if SUPPORT_CAN_EXPANSION
 	void HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
 	GCodeResult UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtruders, const StringRef& reply) noexcept;
+	GCodeResult UpdateRemoteInputShaping(unsigned int numExtraImpulses, const float coefficients[], const float durations[], const StringRef& reply) const noexcept;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -677,6 +669,9 @@ public:
 #if defined(DUET3_MB6HC)
 	static BoardType GetMB6HCBoardType() noexcept;								// this is safe to call before Platform has been created
 #endif
+#if defined(DUET3_MB6XD)
+	static BoardType GetMB6XDBoardType() noexcept;								// this is safe to call before Platform has been created
+#endif
 
 	void SetDiagLed(bool on) const noexcept;
 
@@ -699,13 +694,17 @@ private:
 	float GetCpuTemperature() const noexcept;
 
 #if SUPPORT_CAN_EXPANSION
-	void IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > localFunc, function_ref<void(DriverId) /*noexcept*/ > remoteFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId) noexcept {}); }
-	void IterateRemoteDrivers(size_t axisOrExtruder, function_ref<void(DriverId) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, [](uint8_t) noexcept {}, func); }
+	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc, function_ref_noexcept<void(DriverId) noexcept> remoteFunc) noexcept;
+	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId) noexcept {}); }
+	void IterateRemoteDrivers(size_t axisOrExtruder, function_ref_noexcept<void(DriverId) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, [](uint8_t) noexcept {}, func); }
 #else
-	void IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > localFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, function_ref<void(uint8_t) /*noexcept*/ > func) noexcept { IterateDrivers(axisOrExtruder, func); }
+	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc) noexcept;
+	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func); }
 #endif
+
+	void InternalDisableDriver(size_t driver) noexcept;
+	void EngageBrake(size_t driver) noexcept;
+	void DisengageBrake(size_t driver) noexcept;
 
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
@@ -740,6 +739,11 @@ private:
 	ExpansionBoardType expansionBoard;
 #endif
 
+#if SUPPORT_LED_STRIPS
+	// LED strips
+	LedStripManager ledStripManager;
+#endif
+
 	bool active;
 	uint32_t errorCodeBits;
 
@@ -761,8 +765,19 @@ private:
 	bool driverErrPinsActiveLow;
 #endif
 
+	// Stepper motor brake control
+#if SUPPORT_BRAKE_PWM
+	PwmPort brakePorts[NumDirectDrivers];					// the brake ports for each driver
+	float brakeVoltages[NumDirectDrivers];
+	static constexpr float FullyOnBrakeVoltage = 100.0;		// this value means always use full voltage (don't PWM)
+	float currentBrakePwm[NumDirectDrivers];
+#else
 	IoPort brakePorts[NumDirectDrivers];					// the brake ports for each driver
-	uint16_t delayAfterBrakeOn[NumDirectDrivers];			// how many milliseconds we wait between turning the brake on and de-energising the driver
+#endif
+	MillisTimer brakeOffTimers[NumDirectDrivers];
+	MillisTimer motorOffTimers[NumDirectDrivers];
+	uint16_t brakeOffDelays[NumDirectDrivers];				// how many milliseconds we wait between energising the driver and energising the brake
+	uint16_t motorOffDelays[NumDirectDrivers];				// how many milliseconds we wait between de-energising the brake (to turn it on) and de-energising the driver
 
 	float motorCurrents[MaxAxesPlusExtruders];				// the normal motor current for each stepper driver
 	float motorCurrentFraction[MaxAxesPlusExtruders];		// the percentages of normal motor current that each driver is set to
@@ -784,6 +799,15 @@ private:
 #if 0	// shortcut axes not implemented yet
 	AxesBitmap shortcutAxes;								// axes that wrap modulo 360 and for which G0 may choose the shortest direction
 #endif
+
+	// Backlash compensation user configuration
+	float backlashMm[MaxAxes];								// amount of backlash in mm for each axis motor
+	uint32_t backlashCorrectionDistanceFactor;				// what multiple of the backlash we apply the correction over
+
+	// Backlash compensation system variables
+	uint32_t backlashSteps[MaxAxes];						// the backlash converted to microsteps
+	int32_t backlashStepsDue[MaxAxes];						// how many backlash compensation microsteps are due for each axis
+	AxesBitmap lastDirections;								// each bit is set if the corresponding axes motor last moved backwards
 
 #if SUPPORT_NONLINEAR_EXTRUSION
 	NonlinearExtrusion nonlinearExtrusion[MaxExtruders];	// nonlinear extrusion coefficients
@@ -825,10 +849,6 @@ private:
 
 #if HAS_STALL_DETECT
 	DriversBitmap logOnStallDrivers, eventOnStallDrivers;
-#endif
-
-#if defined(__LPC17xx__)
-	MCP4461 mcp4451;	// works for 5561 (only volatile setting commands)
 #endif
 
 	// Endstops
@@ -994,14 +1014,14 @@ inline float Platform::DriveStepsPerUnit(size_t drive) const noexcept
 	return driveStepsPerUnit[drive];
 }
 
-inline float Platform::Acceleration(size_t drive) const noexcept
+inline float Platform::NormalAcceleration(size_t drive) const noexcept
 {
 	return normalAccelerations[drive];
 }
 
-inline const float *_ecv_array Platform::Accelerations(bool useReduced) const noexcept
+inline float Platform::Acceleration(size_t drive, bool useReduced) const noexcept
 {
-	return (useReduced) ? reducedAccelerations : normalAccelerations;
+	return (useReduced) ? min<float>(reducedAccelerations[drive], normalAccelerations[drive]) : normalAccelerations[drive];
 }
 
 inline void Platform::SetAcceleration(size_t drive, float value, bool reduced) noexcept

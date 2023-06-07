@@ -28,9 +28,9 @@ LcdILI9488::~LcdILI9488()
 }
 
 // Get the display type
-const char *_ecv_array LcdILI9488::GetDisplayTypeName() const noexcept
+DisplayControllerType LcdILI9488::GetControllerType() const noexcept
 {
-	return "480x320 TFT with ILI9488 controller";
+	return DisplayControllerType::ILI9488;
 }
 
 // Initialise the TFT screen

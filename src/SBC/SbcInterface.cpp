@@ -29,12 +29,13 @@ extern char _estack;		// defined by the linker
 volatile OutputStack SbcInterface::gcodeReply;
 Mutex SbcInterface::gcodeReplyMutex;
 
+// This function is not used in this class
+const ObjectModelClassDescriptor *SbcInterface::GetObjectModelClassDescriptor() const noexcept { return nullptr; }
+
 // The SBC task's stack size needs to be enough to support rr_model and expression evaluation
 // In RRF 3.3beta3, 744 is only just enough for simple expression evaluation in a release build when using globals
 // In 3.3beta3.1 we have saved ~151 bytes (37 words) of stack compared to 3.3beta3
-#ifdef __LPC17xx__
-constexpr size_t SBCTaskStackWords = 375;
-#elif defined(DEBUG)
+#if defined(DEBUG)
 constexpr size_t SBCTaskStackWords = 1200;			// debug builds use more stack
 #else
 constexpr size_t SBCTaskStackWords = 1000;			// increased from 820 so that we can evaluate "abs(move.calibration.initial.deviation - move.calibration.final.deviation) < 0.000"
@@ -67,12 +68,6 @@ void SbcInterface::Init() noexcept
 		fileMutex.Create("SBCFile");
 		gcodeReplyMutex.Create("SBCReply");
 		codeBuffer = (char *)new uint32_t[(SpiCodeBufferSize + 3)/4];
-
-#if defined(DUET_NG) || defined(DUET3_MB6HC)
-		// Make sure that the Wifi module if present is disabled. The ESP Reset pin is already forced low in Platform::Init();
-		pinMode(EspEnablePin, OUTPUT_LOW);
-#endif
-
 		transfer.Init();
 		sbcTask = new Task<SBCTaskStackWords>();
 		sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SbcPriority);
@@ -200,7 +195,7 @@ void SbcInterface::ExchangeData() noexcept
 		const PacketHeader * const packet = transfer.ReadPacket();
 		if (packet == nullptr)
 		{
-			if (reprap.Debug(moduleSbcInterface))
+			if (reprap.Debug(Module::SbcInterface))
 			{
 				debugPrintf("Error trying to read next SPI packet\n");
 			}
@@ -285,7 +280,6 @@ void SbcInterface::ExchangeData() noexcept
 			{
 				txEnd = txPointer;
 				txPointer = 0;
-				sendBufferUpdate = true;
 			}
 
 			// Store the buffer header
@@ -298,6 +292,7 @@ void SbcInterface::ExchangeData() noexcept
 			const uint32_t *src = reinterpret_cast<const uint32_t *>(code);
 			memcpyu32(dst, src, packet->length / sizeof(uint32_t));
 			txPointer += bufferedCodeSize;
+			sendBufferUpdate = true;
 			break;
 		}
 
@@ -416,7 +411,7 @@ void SbcInterface::ExchangeData() noexcept
 				if (gb->IsWaitingForMacro() && !gb->IsMacroRequestPending())
 				{
 					gb->ResolveMacroRequest(error, true);
-					if (reprap.Debug(moduleSbcInterface))
+					if (reprap.Debug(Module::SbcInterface))
 					{
 						debugPrintf("Waiting macro completed on channel %u\n", channel.ToBaseType());
 					}
@@ -443,7 +438,7 @@ void SbcInterface::ExchangeData() noexcept
 							gb->SetFileFinished();
 						}
 
-						if (reprap.Debug(moduleSbcInterface))
+						if (reprap.Debug(Module::SbcInterface))
 						{
 							debugPrintf("Macro completed on channel %u\n", channel.ToBaseType());
 						}
@@ -557,7 +552,26 @@ void SbcInterface::ExchangeData() noexcept
 					{
 						ExpressionParser parser(*gb, expression.c_str(), expression.c_str() + expression.strlen());
 						const ExpressionValue val = parser.Parse();
-						packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), val);
+						if (val.GetType() == TypeCode::HeapArray)
+						{
+							// Write heap arrays as JSON
+							OutputBuffer *json;
+							if (OutputBuffer::Allocate(json))
+							{
+								ObjectExplorationContext context;
+								ReportHeapArrayAsJson(json, context, nullptr, val.ahVal, "");
+								packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), json);
+							}
+							else
+							{
+								packetAcknowledged = false;
+							}
+						}
+						else
+						{
+							// Write plain result
+							packetAcknowledged = transfer.WriteEvaluationResult(expression.c_str(), val);
+						}
 					}
 					else
 					{
@@ -700,9 +714,64 @@ void SbcInterface::ExchangeData() noexcept
 			}
 			WriteLockedPointer<VariableSet> vset = (isGlobal) ? reprap.GetGlobalVariablesForWriting() : WriteLockedPointer<VariableSet>(nullptr, &gb->GetVariables());
 
+			// Make a copy of the variable name excluding prefix so that we can terminate the name at the first '[' if necessary
+			String<MaxVariableNameLength> shortVarName;
+			shortVarName.copy(varName.c_str() + strlen(isGlobal ? "global." : "var."));
+
+			// Check for index expressions after the variable name. DSF will have stripped out any spaces except for those within index expressions.
+			uint32_t indices[MaxArrayIndices];
+			size_t numIndices = 0;
+			if (!createVariable)
+			{
+				const char* indexStart = strchr(shortVarName.c_str(), '[');
+				if (indexStart != nullptr)
+				{
+					const size_t firstIndexOffset = indexStart - shortVarName.c_str();
+					bool hadError = false;
+					do
+					{
+						if (numIndices == MaxArrayIndices)
+						{
+							expression.printf("too many array indices in '%s'", varName.c_str());
+							hadError = true;
+							break;
+						}
+
+						try
+						{
+							ExpressionParser indexParser(*gb, indexStart + 1, shortVarName.c_str() + shortVarName.strlen());
+							const uint32_t indexExpr = indexParser.ParseUnsigned();
+							indexStart = indexParser.GetEndptr();
+							if (*indexStart != ']')
+							{
+								expression.printf("missing ']' in '%s'", varName.c_str());
+								hadError = true;
+								break;
+							}
+
+							indices[numIndices++] = indexExpr;
+							++indexStart;								// skip the ']'
+						}
+						catch (const GCodeException& e)
+						{
+							e.GetMessage(expression.GetRef(), nullptr);
+							hadError = true;
+							break;
+						}
+					} while (*indexStart == '[');
+
+					if (hadError)
+					{
+						packetAcknowledged = transfer.WriteSetVariableError(varName.c_str(), expression.c_str());
+						break;
+					}
+
+					shortVarName[firstIndexOffset] = 0;					// terminate the short variable name at the first '['
+				}
+			}
+
 			// Check if the variable is valid
-			const char *shortVarName = varName.c_str() + strlen(isGlobal ? "global." : "var.");
-			Variable * const v = vset->Lookup(shortVarName);
+			Variable * const v = vset->Lookup(shortVarName.c_str());
 			if (createVariable && v != nullptr)
 			{
 				// For now we don't allow an existing variable to be reassigned using a 'var' or 'global' statement. We may need to allow it for 'global' statements.
@@ -727,14 +796,38 @@ void SbcInterface::ExchangeData() noexcept
 				if (v == nullptr)
 				{
 					// DSF doesn't provide indent values but instructs RRF to delete local variables when the current block ends
-					vset->InsertNew(shortVarName, ev, 0);
+					vset->InsertNew(shortVarName.c_str(), ev, 0);
 				}
-				else
+				else if (numIndices == 0)
 				{
 					v->Assign(ev);
 				}
+				else
+				{
+					v->AssignIndexed(ev, numIndices, indices);
+				}
 
-				transfer.WriteSetVariableResult(varName.c_str(), ev);
+				if (ev.GetType() == TypeCode::HeapArray)
+				{
+					// Write heap arrays as JSON
+					OutputBuffer *json;
+					if (OutputBuffer::Allocate(json))
+					{
+						ObjectExplorationContext context;
+						ReportHeapArrayAsJson(json, context, nullptr, ev.ahVal, "");
+						packetAcknowledged = transfer.WriteSetVariableResult(varName.c_str(), json);
+					}
+					else
+					{
+						packetAcknowledged = false;
+					}
+				}
+				else
+				{
+					// Write plain result
+					packetAcknowledged = transfer.WriteSetVariableResult(varName.c_str(), ev);
+				}
+
 				if (isGlobal)
 				{
 					reprap.GlobalUpdated();
@@ -789,7 +882,7 @@ void SbcInterface::ExchangeData() noexcept
 
 		// Result of a deletion request
 		case SbcRequest::FileDeleteResult:
-			if (fileOperation == FileOperation::deleteFileOrDirectory)
+			if (fileOperation == FileOperation::deleteFileOrDirectory || fileOperation == FileOperation::deleteFileOrDirectoryRecursively)
 			{
 				fileSuccess = transfer.ReadBoolean();
 				fileOperation = FileOperation::none;
@@ -907,12 +1000,13 @@ void SbcInterface::ExchangeData() noexcept
 
 	// Notify DSF about the available buffer space
 	DefragmentBufferedCodes();
-	if (!codeBufferAvailable || sendBufferUpdate)
 	{
 		TaskCriticalSectionLocker locker;
-
-		const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
-		sendBufferUpdate = !transfer.WriteCodeBufferUpdate(bufferSpace);
+		if (!codeBufferAvailable || sendBufferUpdate)
+		{
+			const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
+			sendBufferUpdate = !transfer.WriteCodeBufferUpdate(bufferSpace);
+		}
 	}
 
 	// Get another chunk of the file being requested
@@ -933,6 +1027,9 @@ void SbcInterface::ExchangeData() noexcept
 
 		case FileOperation::deleteFileOrDirectory:
 			fileOperationPending = !transfer.WriteDeleteFileOrDirectory(filePath);
+			break;
+		case FileOperation::deleteFileOrDirectoryRecursively:
+			fileOperationPending = !transfer.WriteDeleteFileOrDirectory(filePath, true);
 			break;
 
 		case FileOperation::openRead:
@@ -1012,7 +1109,7 @@ void SbcInterface::ExchangeData() noexcept
 			bool fromCode = gb->IsMacroStartedByCode();
 			if (transfer.WriteMacroRequest(channel, requestedMacroFile, fromCode))
 			{
-				if (reprap.Debug(moduleSbcInterface))
+				if (reprap.Debug(Module::SbcInterface))
 				{
 					debugPrintf("Requesting macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
 				}
@@ -1072,7 +1169,7 @@ void SbcInterface::ExchangeData() noexcept
 					bool fromCode = gb->IsMacroStartedByCode();
 					if (transfer.WriteMacroRequest(channel, requestedMacroFile, fromCode))
 					{
-						if (reprap.Debug(moduleSbcInterface))
+						if (reprap.Debug(Module::SbcInterface))
 						{
 							debugPrintf("Requesting non-blocking macro file '%s' (fromCode: %s)\n", requestedMacroFile, fromCode ? "true" : "false");
 						}
@@ -1200,7 +1297,7 @@ void SbcInterface::InvalidateResources() noexcept
 			gb->MacroRequestSent();
 		}
 		gb->AbortFile(true, false);
-		gb->MessageAcknowledged(true, ExpressionValue());
+		gb->MessageAcknowledged(true, 0, ExpressionValue());
 	}
 
 	// Abort the print (if applicable)
@@ -1353,6 +1450,7 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 					{
 						// Skipped non-pending codes, restart from the beginning
 						rxPointer = txEnd = 0;
+						sendBufferUpdate = true;
 					}
 
 					// About to overlap, continue from the start
@@ -1392,7 +1490,7 @@ bool SbcInterface::FileExists(const char *filename) noexcept
 	return fileSuccess;
 }
 
-bool SbcInterface::DeleteFileOrDirectory(const char *fileOrDirectory) noexcept
+bool SbcInterface::DeleteFileOrDirectory(const char *fileOrDirectory, bool recursive) noexcept
 {
 	// Don't do anything if the SBC is not connected
 	if (!IsConnected())
@@ -1404,7 +1502,7 @@ bool SbcInterface::DeleteFileOrDirectory(const char *fileOrDirectory) noexcept
 	MutexLocker locker(fileMutex);
 
 	filePath = fileOrDirectory;
-	if (!DoFileOperation(FileOperation::deleteFileOrDirectory))
+	if (!DoFileOperation(recursive ? FileOperation::deleteFileOrDirectoryRecursively : FileOperation::deleteFileOrDirectory))
 	{
 		reprap.GetPlatform().MessageF(ErrorMessage, "Timeout while trying to delete %s\n", fileOrDirectory);
 		return false;
@@ -1752,6 +1850,7 @@ void SbcInterface::DefragmentBufferedCodes() noexcept
 				memmoveu32(reinterpret_cast<uint32_t*>(codeBuffer + SpiCodeBufferSize - endBufferSize), reinterpret_cast<uint32_t*>(codeBuffer + rxPointer), endBufferSize / sizeof(uint32_t));
 				rxPointer = SpiCodeBufferSize - endBufferSize;
 				txEnd = SpiCodeBufferSize;
+				sendBufferUpdate = true;
 			}
 		}
 	}
@@ -1821,7 +1920,6 @@ void SbcInterface::InvalidateBufferedCodes(GCodeChannel channel) noexcept
 				if (codeHeader->channel == channel.RawValue())
 				{
 					bufHeader->isPending = false;
-					sendBufferUpdate = true;
 				}
 				else
 				{
@@ -1832,6 +1930,7 @@ void SbcInterface::InvalidateBufferedCodes(GCodeChannel channel) noexcept
 
 			if (updateRxPointer)
 			{
+				sendBufferUpdate = true;
 				if (readPointer == txPointer && txEnd == 0)
 				{
 					// Buffer is empty again, reset the pointers

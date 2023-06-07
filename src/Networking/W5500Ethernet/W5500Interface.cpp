@@ -30,7 +30,7 @@ W5500Interface::W5500Interface(Platform& p) noexcept
 	mdnsSocket = new W5500Socket(this);
 	mdnsResponder = new MdnsResponder(mdnsSocket);
 
-	for (size_t i = 0; i < NumProtocols; ++i)
+	for (size_t i = 0; i < NumSelectableProtocols; ++i)
 	{
 		portNumbers[i] = DefaultPortNumbers[i];
 		protocolEnabled[i] = (i == HttpProtocol);
@@ -75,7 +75,7 @@ void W5500Interface::Init() noexcept
 	macAddress = platform.GetDefaultMacAddress();
 }
 
-GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept
+GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
 {
 	if (secure != 0 && secure != -1)
 	{
@@ -83,7 +83,7 @@ GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, i
 		return GCodeResult::error;
 	}
 
-	if (protocol < NumProtocols)
+	if (protocol < NumSelectableProtocols)
 	{
 		MutexLocker lock(interfaceMutex);
 
@@ -117,16 +117,16 @@ GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, i
 
 bool W5500Interface::IsProtocolEnabled(NetworkProtocol protocol) noexcept
 {
-	return (protocol < NumProtocols) ? protocolEnabled[protocol] : false;
+	return (protocol < NumSelectableProtocols) ? protocolEnabled[protocol] : false;
 }
 
-GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply) noexcept
+GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown) noexcept
 {
-	if (protocol < NumProtocols)
+	if (protocol < NumSelectableProtocols)
 	{
 		MutexLocker lock(interfaceMutex);
 
-		if (GetState() == NetworkState::active)
+		if (shutdown && GetState() == NetworkState::active)
 		{
 			ResetSockets();
 		}
@@ -142,7 +142,7 @@ GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const Stri
 // Report the protocols and ports in use
 GCodeResult W5500Interface::ReportProtocols(const StringRef& reply) const noexcept
 {
-	for (size_t i = 0; i < NumProtocols; ++i)
+	for (size_t i = 0; i < NumSelectableProtocols; ++i)
 	{
 		ReportOneProtocol(i, reply);
 	}

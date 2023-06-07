@@ -15,9 +15,11 @@ class ZProbeEndstop final : public Endstop
 public:
 	DECLARE_FREELIST_NEW_DELETE(ZProbeEndstop)
 
-	ZProbeEndstop(uint8_t p_axis, EndStopPosition pos) noexcept;
+	ZProbeEndstop(uint8_t p_axis, EndStopPosition pos, size_t zProbeNum) noexcept;
 
 	EndStopType GetEndstopType() const noexcept override { return EndStopType::zProbeAsEndstop; }
+	bool IsZProbe() const noexcept override { return true; }
+	int GetZProbeNumber() const noexcept override { return zProbeNumber; }
 	bool Stopped() const noexcept override;
 	bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept override;
 	EndstopHitDetails CheckTriggered() noexcept override;

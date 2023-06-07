@@ -76,7 +76,8 @@ enum class ZProbeType : uint8_t
 	unfilteredDigital = 8,
 	blTouch = 9,
 	zMotorStall = 10,
-	numTypes = 11					// must be 1 higher than the last type
+	scanningAnalog = 11,
+	numTypes = 12					// must be 1 higher than the last type
 };
 
 #endif /* SRC_ENDSTOPS_ENDSTOPDEFS_H_ */

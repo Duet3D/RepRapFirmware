@@ -17,6 +17,8 @@
 # include <CAN/ExpansionManager.h>
 # include <GCodes/GCodeBuffer/GCodeBuffer.h>
 # include <CAN/CanMessageGenericConstructor.h>
+# include <General/Portability.h>
+# include <atomic>
 
 constexpr unsigned int MaxSamples = 65535;				// This comes from the fact CanMessageClosedLoopData->firstSampleNumber has a max value of 65535
 constexpr uint32_t DataReceiveTimeout = 5000;			// Data receive timeout in milliseconds
@@ -24,11 +26,12 @@ constexpr uint32_t DataReceiveTimeout = 5000;			// Data receive timeout in milli
 static uint16_t rateRequested;							// The sampling rate
 static uint8_t modeRequested;							// The sampling mode(immediate or on next move)
 static uint32_t filterRequested;						// A filter for what data is collected
+static size_t dataBytesPerSample;						// How many bytes there will be in each sample
 static DriverId deviceRequested;						// The driver being sampled
 static uint8_t movementRequested;						// The movement to be made whilst recording
-static uint32_t whenDataLastReceived;
-static volatile uint32_t numSamplesRequested;			// The number of samples to collect
-static FileStore* volatile closedLoopFile = nullptr;	// This is non-null when the data collection is running, null otherwise
+static std::atomic<uint32_t> whenDataLastReceived;
+static std::atomic<uint32_t> numSamplesRequested;			// The number of samples to collect
+static std::atomic<FileStore*> closedLoopFile = nullptr;	// This is non-null when the data collection is running, null otherwise
 
 static unsigned int expectedRemoteSampleNumber = 0;
 static CanAddress expectedRemoteBoardAddress = CanId::NoAddress;
@@ -39,41 +42,62 @@ static bool OpenDataCollectionFile(String<MaxFilenameLength> filename, unsigned 
 	FileStore * const f = MassStorage::OpenFile(filename.c_str(), OpenMode::write, size);
 	if (f == nullptr) { return false; }
 
-	whenDataLastReceived = millis();					// prevent another request closing the file
-
 	// Write the header line
 	{
+		static constexpr const char *headings[16] =
+		{
+			",Raw Encoder Reading",
+			",Measured Motor Steps",
+			",Target Motor Steps",
+			",Current Error",
+			",PID Control Signal",
+			",PID P Term",
+			",PID I Term",
+			",PID D Term",
+
+			// The next two are out of order in the filter bits, they come later on
+			",PID V Term",
+			",PID A Term",
+
+			",Measured Step Phase",
+			",Desired Step Phase",
+			",Phase Shift",
+			",Coil A Current",
+			",Coil B Current",
+			",Unknown",
+		};
 		String<StringLength500> temp;
 		temp.copy("Sample,Timestamp");
-		if (filterRequested & CL_RECORD_RAW_ENCODER_READING)	{temp.cat(",Raw Encoder Reading");}
-		if (filterRequested & CL_RECORD_CURRENT_MOTOR_STEPS)  	{temp.cat(",Measured Motor Steps");}
-		if (filterRequested & CL_RECORD_TARGET_MOTOR_STEPS)  	{temp.cat(",Target Motor Steps");}
-		if (filterRequested & CL_RECORD_CURRENT_ERROR) 			{temp.cat(",Current Error");}
-		if (filterRequested & CL_RECORD_PID_CONTROL_SIGNAL)  	{temp.cat(",PID Control Signal");}
-		if (filterRequested & CL_RECORD_PID_P_TERM)  			{temp.cat(",PID P Term");}
-		if (filterRequested & CL_RECORD_PID_I_TERM)  			{temp.cat(",PID I Term");}
-		if (filterRequested & CL_RECORD_PID_D_TERM)  			{temp.cat(",PID D Term");}
-		if (filterRequested & CL_RECORD_STEP_PHASE)  			{temp.cat(",Measured Step Phase");}
-		if (filterRequested & CL_RECORD_DESIRED_STEP_PHASE)  	{temp.cat(",Desired Step Phase");}
-		if (filterRequested & CL_RECORD_PHASE_SHIFT)  			{temp.cat(",Phase Shift");}
-		if (filterRequested & CL_RECORD_COIL_A_CURRENT) 		{temp.cat(",Coil A Current");}
-		if (filterRequested & CL_RECORD_COIL_B_CURRENT) 		{temp.cat(",Coil B Current");}
-
-		temp.Erase(temp.strlen(), 1);
+		uint16_t filter = (filterRequested & (CL_RECORD_CURRENT_STEP_PHASE - 1))
+						| ((filterRequested & (CL_RECORD_CURRENT_STEP_PHASE | CL_RECORD_DESIRED_STEP_PHASE | CL_RECORD_PHASE_SHIFT | CL_RECORD_COIL_A_CURRENT | CL_RECORD_COIL_B_CURRENT)) << 2)
+						| ((filterRequested & (CL_RECORD_PID_V_TERM | CL_RECORD_PID_A_TERM)) >> 5);
+		for (unsigned int i = 0; filter != 0; ++i)
+		{
+			if (filter & 1u)
+			{
+				temp.cat(headings[i]);
+			}
+			filter >>= 1;
+		}
 		temp.cat("\n");
-		f->Write(temp.c_str());			// this call could result in the file becoming invalidated
+		f->Write(temp.c_str());							// this call could result in the file becoming invalidated
 	}
 
-	closedLoopFile = f;
+	whenDataLastReceived = millis();					// prevent another request closing the file
+	closedLoopFile.store(f);
 	return true;
 }
 
+// Close the data collection file. Avoid a race between the two tasks that access it.
 static void CloseDataCollectionFile() noexcept
 {
-	closedLoopFile->Truncate();				// truncate the file in case we didn't write all the preallocated space
-	closedLoopFile->Close();
-	closedLoopFile = nullptr;
-	reprap.GetExpansion().AddClosedLoopRun(expectedRemoteBoardAddress, expectedRemoteSampleNumber);
+	FileStore *const f = closedLoopFile.exchange(nullptr);
+	if (f != nullptr)
+	{
+		f->Truncate();				// truncate the file in case we didn't write all the preallocated space
+		f->Close();
+		reprap.GetExpansion().AddClosedLoopRun(expectedRemoteBoardAddress, expectedRemoteSampleNumber);
+	}
 }
 
 // Handle M569.5 - Collect closed loop data
@@ -88,7 +112,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	if (!recording)
 	{
 		// No S parameter was given so this is a request for the recording status
-		if (closedLoopFile == nullptr)
+		if (closedLoopFile.load() == nullptr)
 		{
 			reply.copy("Closed loop data is not being collected");
 			return GCodeResult::warning;							// looks like the closed loop plugin relies on this being a warning
@@ -101,9 +125,10 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	}
 
 	// If we get here then the user is requesting a recording
-	if (closedLoopFile != nullptr)									// check if one is already happening
+	if (closedLoopFile.load() != nullptr)							// check if one is already happening
 	{
-		if (millis() - whenDataLastReceived >= DataReceiveTimeout)
+		const uint32_t wlr = whenDataLastReceived;					// load this volatile variable before calling millis()
+		if (millis() - wlr >= DataReceiveTimeout)
 		{
 			CloseDataCollectionFile();								// this case is to allow us to reset if data collection stalls
 			reply.copy("Closed loop data collection timed out, closing file");
@@ -128,6 +153,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	modeRequested = parsedA;
 	rateRequested = parsedR;
 	filterRequested = parsedD;
+	dataBytesPerSample = ClosedLoopSampleLength(filterRequested);
 	deviceRequested = driverId;
 	movementRequested = parsedV;
 	numSamplesRequested = parsedS;
@@ -178,7 +204,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 	if (rslt > GCodeResult::warning)
 	{
 		CloseDataCollectionFile();
-		MassStorage::Delete(closedLoopFileName.c_str(), false);
+		(void)MassStorage::Delete(closedLoopFileName.GetRef(), ErrorMessageMode::messageAlways);
 	}
 	return rslt;
 }
@@ -186,7 +212,7 @@ GCodeResult ClosedLoop::StartDataCollection(DriverId driverId, GCodeBuffer& gb, 
 // Process closed loop data received over CAN
 void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopData& msg, size_t msgLen) noexcept
 {
-	FileStore * const f = closedLoopFile;
+	FileStore * const f = closedLoopFile.load();
 	if (f != nullptr)
 	{
 		whenDataLastReceived = millis();
@@ -195,22 +221,34 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 			f->Write("Data lost\n");
 			CloseDataCollectionFile();
 		}
+		else if (dataBytesPerSample * msg.numSamples > CanMessageClosedLoopData::GetNumDataBytes(msgLen))
+		{
+			f->Write("Bad data received\n");
+			CloseDataCollectionFile();
+		}
 		else
 		{
-			unsigned int numSamples = msg.numSamples;
-			const size_t variableCount = msg.GetVariableCount();
-
-			while (numSamples != 0)
+			const uint8_t *dataPtr = msg.data;
+			for (unsigned int sampleIndex = 0; sampleIndex < msg.numSamples; ++sampleIndex)
 			{
 				// Compile the data
 				String<StringLength256> currentLine;
-				size_t sampleIndex = msg.numSamples - numSamples;
-				//TODO use more intelligent formatting depending on the data type, to reduce the amount of data written
-				currentLine.printf("%u", msg.firstSampleNumber + sampleIndex);
-				for (size_t i = 0; i < variableCount; i++)
-				{
-					currentLine.catf(",%.2f", (double)msg.data[sampleIndex*variableCount + i]);
-				}
+				currentLine.printf("%u,%.2f", msg.firstSampleNumber + sampleIndex, (double)FetchLEF32(dataPtr));	// sample number and time stamp
+				if (filterRequested & CL_RECORD_RAW_ENCODER_READING)	{ currentLine.catf(",%" PRIi32,	FetchLEI32(dataPtr)); }
+				if (filterRequested & CL_RECORD_CURRENT_MOTOR_STEPS)  	{ currentLine.catf(",%.2f", (double)FetchLEF32(dataPtr)); }
+				if (filterRequested & CL_RECORD_TARGET_MOTOR_STEPS)  	{ currentLine.catf(",%.2f", (double)FetchLEF32(dataPtr)); }
+				if (filterRequested & CL_RECORD_CURRENT_ERROR) 			{ currentLine.catf(",%.2f", (double)FetchLEF32(dataPtr)); }
+				if (filterRequested & CL_RECORD_PID_CONTROL_SIGNAL)  	{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_PID_P_TERM)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_PID_I_TERM)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_PID_D_TERM)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_PID_V_TERM)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_PID_A_TERM)  			{ currentLine.catf(",%.1f", (double)FetchLEF16(dataPtr)); }
+				if (filterRequested & CL_RECORD_CURRENT_STEP_PHASE)  	{ currentLine.catf(",%u",	FetchLEU16(dataPtr)); }
+				if (filterRequested & CL_RECORD_DESIRED_STEP_PHASE)  	{ currentLine.catf(",%u",	FetchLEU16(dataPtr)); }
+				if (filterRequested & CL_RECORD_PHASE_SHIFT)  			{ currentLine.catf(",%u",	FetchLEU16(dataPtr)); }
+				if (filterRequested & CL_RECORD_COIL_A_CURRENT) 		{ currentLine.catf(",%d",	FetchLEI16(dataPtr)); }
+				if (filterRequested & CL_RECORD_COIL_B_CURRENT) 		{ currentLine.catf(",%d",	FetchLEI16(dataPtr)); }
 				currentLine.cat("\n");
 
 				// Write the data
@@ -218,7 +256,6 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 
 				// Increment the working variables
 				expectedRemoteSampleNumber++;
-				numSamples--;
 			}
 
 			if (msg.lastPacket)
@@ -226,6 +263,10 @@ void ClosedLoop::ProcessReceivedData(CanAddress src, const CanMessageClosedLoopD
 				if (msg.overflowed)
 				{
 					f->Write("Buffer overflowed\n");
+				}
+				if (msg.badSample)
+				{
+					f->Write("Data contains bad sample(s)\n");
 				}
 				CloseDataCollectionFile();
 			}

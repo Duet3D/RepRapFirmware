@@ -20,7 +20,8 @@
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(ZProbe, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)				OBJECT_MODEL_FUNC_BODY(ZProbe, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(...)			OBJECT_MODEL_FUNC_IF_BODY(ZProbe, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 {
@@ -65,19 +66,20 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Probe members
+	{ "calibA",						OBJECT_MODEL_FUNC_IF(self->IsScanning(), self->linearCoefficient, 1), 						ObjectModelEntryFlags::none },
+	{ "calibB",						OBJECT_MODEL_FUNC_IF(self->IsScanning(), self->quadraticCoefficient, 1), 					ObjectModelEntryFlags::none },
 	{ "calibrationTemperature",		OBJECT_MODEL_FUNC(self->calibTemperature, 1), 												ObjectModelEntryFlags::none },
 	{ "deployedByUser",				OBJECT_MODEL_FUNC(self->isDeployedByUser), 													ObjectModelEntryFlags::none },
 	{ "disablesHeaters",			OBJECT_MODEL_FUNC((bool)self->misc.parts.turnHeatersOff), 									ObjectModelEntryFlags::none },
 	{ "diveHeight",					OBJECT_MODEL_FUNC(self->diveHeight, 1), 													ObjectModelEntryFlags::none },
+	{ "isCalibrated",				OBJECT_MODEL_FUNC_IF(self->IsScanning(), self->isCalibrated), 								ObjectModelEntryFlags::none },
 	{ "lastStopHeight",				OBJECT_MODEL_FUNC(self->lastStopHeight, 3), 												ObjectModelEntryFlags::none },
 	{ "maxProbeCount",				OBJECT_MODEL_FUNC((int32_t)self->misc.parts.maxTaps), 										ObjectModelEntryFlags::none },
 	{ "offsets",					OBJECT_MODEL_FUNC_ARRAY(0), 																ObjectModelEntryFlags::none },
 	{ "recoveryTime",				OBJECT_MODEL_FUNC(self->recoveryTime, 1), 													ObjectModelEntryFlags::none },
-	{ "speed",						OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->probeSpeeds[1]), 1),					ObjectModelEntryFlags::obsolete },
 	{ "speeds",						OBJECT_MODEL_FUNC_ARRAY(1), 																ObjectModelEntryFlags::none },
-	{ "temperatureCoefficient",		OBJECT_MODEL_FUNC(self->temperatureCoefficients[0], 5), 									ObjectModelEntryFlags::obsolete },
 	{ "temperatureCoefficients",	OBJECT_MODEL_FUNC_ARRAY(2), 																ObjectModelEntryFlags::none },
-	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->adcValue), 												ObjectModelEntryFlags::none },
+	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->targetAdcValue), 												ObjectModelEntryFlags::none },
 	{ "tolerance",					OBJECT_MODEL_FUNC(self->tolerance, 3), 														ObjectModelEntryFlags::none },
 	{ "travelSpeed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->travelSpeed), 1), 					ObjectModelEntryFlags::none },
 	{ "triggerHeight",				OBJECT_MODEL_FUNC(-self->offsets[Z_AXIS], 3), 												ObjectModelEntryFlags::none },
@@ -85,7 +87,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "value",						OBJECT_MODEL_FUNC_ARRAY(3), 																ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 18 };
+constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 19 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ZProbe)
 
@@ -99,7 +101,7 @@ ZProbe::ZProbe(unsigned int num, ZProbeType p_type) noexcept : EndstopOrZProbe()
 
 void ZProbe::SetDefaults() noexcept
 {
-	adcValue = DefaultZProbeADValue;
+	targetAdcValue = DefaultZProbeADValue;
 	for (float& offset : offsets)
 	{
 		offset = 0.0;
@@ -121,8 +123,13 @@ void ZProbe::SetDefaults() noexcept
 	sensor = -1;
 }
 
-float ZProbe::GetActualTriggerHeight() const noexcept
+// Prepare to use this Z probe
+void ZProbe::PrepareForUse(const bool probingAway) noexcept
 {
+	misc.parts.probingAway = probingAway;
+
+	// We can't read temperature sensors from within the step ISR so calculate the actual trigger height now
+	actualTriggerHeight = -offsets[Z_AXIS];
 	if (sensor >= 0)
 	{
 		TemperatureError err(TemperatureError::unknownError);
@@ -130,10 +137,21 @@ float ZProbe::GetActualTriggerHeight() const noexcept
 		if (err == TemperatureError::ok)
 		{
 			const float dt = temperature - calibTemperature;
-			return (dt * temperatureCoefficients[0]) + (fsquare(dt) * temperatureCoefficients[1]) - offsets[Z_AXIS];
+			actualTriggerHeight += (dt * temperatureCoefficients[0]) + (fsquare(dt) * temperatureCoefficients[1]);
 		}
 	}
-	return -offsets[Z_AXIS];
+}
+
+float ZProbe::GetStartingHeight() const noexcept
+{
+	switch (type)
+	{
+	case ZProbeType::scanningAnalog:
+		return GetActualTriggerHeight();
+
+	default:
+		return diveHeight + GetActualTriggerHeight();
+	}
 }
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -143,7 +161,7 @@ bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexc
 	const char* axisLetters = reprap.GetGCodes().GetAxisLetters();
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	String<StringLength256> scratchString;
-	scratchString.printf("G31 K%u P%d", probeNumber, adcValue);
+	scratchString.printf("G31 K%u P%d", probeNumber, targetAdcValue);
 	for (size_t i = 0; i < numTotalAxes; ++i)
 	{
 		if (axisLetters[i] != 'Z')
@@ -168,6 +186,7 @@ int ZProbe::GetReading() const noexcept
 		case ZProbeType::analog:				// Simple or intelligent IR sensor
 		case ZProbeType::alternateAnalog:		// Alternate sensor
 		case ZProbeType::digital:				// Switch connected to Z probe input
+		case ZProbeType::scanningAnalog:
 			zProbeVal = (int) ((p.GetZProbeOnFilter().GetSum() + p.GetZProbeOffFilter().GetSum()) / (2 * ZProbeAverageReadings));
 			break;
 
@@ -222,7 +241,7 @@ int ZProbe::GetSecondaryValues(int& v1) const noexcept
 bool ZProbe::Stopped() const noexcept
 {
 	const int zProbeVal = GetReading();
-	return zProbeVal >= adcValue;
+	return zProbeVal >= targetAdcValue;
 }
 
 // Check whether the probe is triggered and return the action that should be performed. Called from the step ISR.
@@ -341,7 +360,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	if (gb.Seen('P'))
 	{
 		seen = true;
-		adcValue = gb.GetIValue();
+		targetAdcValue = gb.GetIValue();
 	}
 
 	if (seen)
@@ -362,8 +381,8 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		{
 			reply.catf(" (%d)", v1);
 		}
-		reply.catf(", threshold %d, trigger height %.3f", adcValue, (double)-offsets[Z_AXIS]);
-		if (temperatureCoefficients[0] != 0.0)
+		reply.catf(", threshold %d, trigger height %.3f", targetAdcValue, (double)-offsets[Z_AXIS]);
+		if (temperatureCoefficients[0] != 0.0 || temperatureCoefficients[1] != 0.0)
 		{
 			reply.catf(" at %.1f" DEGREE_SYMBOL "C, temperature coefficients [%.1f/" DEGREE_SYMBOL "C, %.1f/" DEGREE_SYMBOL "C^2]",
 						(double)calibTemperature, (double)temperatureCoefficients[0], (double)temperatureCoefficients[1]);
@@ -444,6 +463,27 @@ void ZProbe::SetLastStoppedHeight(float h) noexcept
 {
 	lastStopHeight = h;
 	reprap.SensorsUpdated();
+}
+
+// Scanning support
+GCodeResult ZProbe::SetScanningCoefficients(float aParam, float bParam) noexcept
+{
+	linearCoefficient = aParam;
+	quadraticCoefficient = bParam;
+	isCalibrated = true;
+	return GCodeResult::ok;
+}
+
+GCodeResult ZProbe::ReportScanningCoefficients(const StringRef& reply) noexcept
+{
+	if (isCalibrated)
+	{
+		reply.printf("A=%.2f B=%.1f", (double)linearCoefficient, (double)quadraticCoefficient);
+		return GCodeResult::ok;
+	}
+
+	reply.copy("Probe has not been calibrated");
+	return GCodeResult::error;
 }
 
 // End

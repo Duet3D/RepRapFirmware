@@ -52,6 +52,7 @@ const char *_ecv_array SafeStrptime(const char *_ecv_array buf, const char *_ecv
 
 #include <CoreIO.h>
 #include <Devices.h>
+#include <General/NamedEnum.h>
 
 // The following are needed by many other files, so include them here
 #include <Platform/MessageType.h>
@@ -67,7 +68,8 @@ inline MessageType GetGenericMessageType(GCodeResult rslt)
 
 // API level definition.
 // ApiLevel 1 is the first level that supports rr_model.
-constexpr unsigned int ApiLevel = 1;
+// ApiLevel 2 supports unique session keys.
+constexpr unsigned int ApiLevel = 2;
 
 // Definitions needed by Pins.h and/or Configuration.h
 // Logical pins used for general output, servos, CCN and laser control
@@ -102,6 +104,7 @@ enum class PinUsedBy : uint8_t
 	filamentMonitor,
 	temporaryInput,
 	sensor,
+	led,
 	sdCard
 };
 
@@ -168,6 +171,8 @@ struct DriverId
 	// Constructor used by ATE configurations and object model
 	DriverId(CanAddress addr, uint8_t drv) noexcept : localDriver(drv), boardAddress(addr) { }
 
+	CanAddress GetBoardAddress() const noexcept { return boardAddress; }
+
 	void SetFromBinary(uint32_t val) noexcept
 	{
 		localDriver = val & 0x000000FF;
@@ -210,6 +215,8 @@ struct DriverId
 
 	// Constructor used by object model
 	explicit DriverId(uint8_t drv) noexcept : localDriver(drv) { }
+
+	CanAddress GetBoardAddress() const noexcept { return 0; }
 
 	// Set the driver ID from the binary value, returning true if there was a nonzero board number so that the caller knows the address is not valid
 	bool SetFromBinary(uint32_t val) noexcept
@@ -255,31 +262,16 @@ struct DriverId
 
 // Module numbers and names, used for diagnostics and debug
 // All of these including noModule must be <= 31 because we 'or' the module number into the software reset code
-enum Module : uint8_t
-{
-	modulePlatform = 0,
-	moduleNetwork = 1,
-	moduleWebserver = 2,
-	moduleGcodes = 3,
-	moduleMove = 4,
-	moduleHeat = 5,
-	moduleDda = 6,
-	moduleRoland = 7,
-	moduleScanner = 8,
-	modulePrintMonitor = 9,
-	moduleStorage = 10,
-	modulePortControl = 11,
-	moduleDuetExpansion = 12,
-	moduleFilamentSensors = 13,
-	moduleWiFi = 14,
-	moduleDisplay = 15,
-	moduleSbcInterface = 16,
-	moduleCan = 17,
-	numModules = 18,				// make this one greater than the last real module number
-	noModule = numModules
-};
+NamedEnum(Module, uint8_t,
+			Platform, Network, Webserver, Gcodes, Move, Heat, Dda, unused1 /* was Roland */,
+			unused2 /* was Scanner*/, PrintMonitor, Storage, PortControl, DuetExpansion, FilamentSensors, WiFi, Display,
+			SbcInterface,
+			CAN,					// uppercase to avoid eCv clash with type Can in Microchip driver file
+			Expansion,
+			none					// make this one last so that it is the number of real modules, one greater than the last real module number
+		 );
 
-const char *_ecv_array GetModuleName(uint8_t module) noexcept;
+constexpr size_t NumRealModules = Module::NumValues - 1;
 
 // Warn of what's to come, so we can use pointers and references to classes without including the entire header files
 class Network;
@@ -291,7 +283,6 @@ class Kinematics;
 class Heat;
 class TemperatureSensor;
 class Tool;
-class Roland;
 class Scanner;
 class PrintMonitor;
 class RepRap;
@@ -329,22 +320,30 @@ typedef double floatc_t;							// type of matrix element used for calibration
 typedef float floatc_t;								// type of matrix element used for calibration
 #endif
 
-#if defined(DUET3) || defined(DUET3MINI)
+#if SUPPORT_CAN_EXPANSION
 typedef Bitmap<uint32_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
+typedef Bitmap<uint64_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
 #else
 typedef Bitmap<uint16_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
+typedef Bitmap<uint32_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
 #endif
 typedef Bitmap<uint32_t> ExtrudersBitmap;			// Type of a bitmap representing a set of extruder drive numbers
 typedef Bitmap<uint32_t> DriversBitmap;				// Type of a bitmap representing a set of local driver numbers
 typedef Bitmap<uint32_t> FansBitmap;				// Type of a bitmap representing a set of fan numbers
 typedef Bitmap<uint32_t> HeatersBitmap;				// Type of a bitmap representing a set of heater numbers
 typedef Bitmap<uint16_t> DriverChannelsBitmap;		// Type of a bitmap representing a set of drivers that typically have a common cooling fan
-typedef Bitmap<uint32_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
 typedef Bitmap<uint32_t> TriggerNumbersBitmap;		// Type of a bitmap representing a set of trigger numbers
 typedef Bitmap<uint64_t> ToolNumbersBitmap;			// Type of a bitmap representing a set of tool numbers
-typedef Bitmap<uint32_t> ParameterLettersBitmap;	// Type of a bitmap representing a set of parameter letters in A..Z and a..f
 
-#if defined(DUET3) || defined(DUET3MINI)
+#if defined(DUET3)
+typedef Bitmap<uint64_t> ParameterLettersBitmap;	// Type of a bitmap representing a set of parameter letters in A..Z and a..z
+constexpr char HighestAxisLetter = 'z';
+#else
+typedef Bitmap<uint32_t> ParameterLettersBitmap;	// Type of a bitmap representing a set of parameter letters in A..Z and a..f
+constexpr char HighestAxisLetter = 'f';
+#endif
+
+#if SUPPORT_CAN_EXPANSION
 typedef Bitmap<uint64_t> SensorsBitmap;
 #else
 typedef Bitmap<uint32_t> SensorsBitmap;
@@ -361,13 +360,19 @@ static_assert(MaxSensors <= SensorsBitmap::MaxBits());
 static_assert(MaxGpInPorts <= InputPortsBitmap::MaxBits());
 static_assert(MaxTriggers <= TriggerNumbersBitmap::MaxBits());
 static_assert(MaxTools <= ToolNumbersBitmap::MaxBits());
+static_assert(MaxAxes + 17 <= ParameterLettersBitmap::MaxBits());	// so that we have enough letters available for all the axes
 
-typedef uint16_t Pwm_t;							// Type of a PWM value when we don't want to use floats
-
-#if SUPPORT_IOBITS
-typedef uint16_t IoBits_t;						// Type of the port control bitmap (G1 P parameter)
+#if SUPPORT_REMOTE_COMMANDS
+static_assert(MaxExtruders >= NumDirectDrivers);					// so that we get enough ExtruderShapers and nonlinear extrusion data when in expansion mode
 #endif
 
+typedef uint16_t Pwm_t;						// Type of a PWM value when we don't want to use floats
+
+#if SUPPORT_IOBITS
+typedef uint16_t IoBits_t;					// Type of the port control bitmap (G1 P parameter)
+#endif
+
+// Data stored in RawMove and in the DDA to handle laser PWM and/or IOBITS
 #if SUPPORT_LASER || SUPPORT_IOBITS
 union LaserPwmOrIoBits
 {
@@ -378,7 +383,7 @@ union LaserPwmOrIoBits
 	IoBits_t ioBits;						// I/O bits to set/clear at the start of this move
 #endif
 
-	void Clear()							// set to zero, whichever one it is
+	void Clear() noexcept					// set to zero, whichever one it is
 	{
 #if SUPPORT_LASER
 		laserPwm = 0;
@@ -389,10 +394,29 @@ union LaserPwmOrIoBits
 };
 #endif
 
+#if SUPPORT_LASER
+
+// Data stored in the MovemetState and in a RestorePoint to handle laser pixel clusters
+struct LaserPixelData
+{
+	size_t numPixels;
+	Pwm_t pixelPwm[MaxLaserPixelsPerMove];
+
+	void Clear() noexcept { numPixels = 0; }
+};
+
+#endif
+
 // Find the bit number corresponding to a parameter letter
 inline constexpr unsigned int ParameterLetterToBitNumber(char c) noexcept
 {
 	return (c <= 'Z') ? c - 'A' : c - ('a' - 26);
+}
+
+// Find the parameter letter corresponding to a  bit number
+inline constexpr unsigned int BitNumberToParameterLetter(unsigned int n) noexcept
+{
+	return (n < 26) ? 'A' + n : 'a' + (n - 26);
 }
 
 // Make a ParameterLettersBitmap representing a single letter
@@ -533,8 +557,6 @@ constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 #if SAME70 || SAME5x
 // All Duet 3 boards use a common step clock rate of 750kHz so that we can sync the clocks over CAN
 constexpr uint32_t StepClockRate = 48000000/64;								// 750kHz
-#elif defined(__LPC17xx__)
-constexpr uint32_t StepClockRate = 1000000;									// 1MHz
 #else
 constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2 and Maestro: use just under 1MHz
 #endif
@@ -651,17 +673,11 @@ const NvicPriority NvicPrioritySpi = 7;				// SPI is used for network transfers 
 // We have at least 16 priority levels
 // Use priority 2 or lower for interrupts where low latency is critical and FreeRTOS calls are not needed.
 
-# if SAM4E || defined(__LPC17xx__)
+# if SAM4E
 const NvicPriority NvicPriorityWatchdog = 0;		// the secondary watchdog has the highest priority
 # endif
 
 const NvicPriority NvicPriorityAuxUart = 3;			// UART is highest to avoid character loss (it has only a 1-character receive buffer)
-
-# if defined(__LPC17xx__)
-constexpr NvicPriority NvicPriorityTimerPWM = 4;
-constexpr NvicPriority NvicPriorityTimerServo = 5;
-# endif
-
 const NvicPriority NvicPriorityDriversSerialTMC = 5; // USART or UART used to control and monitor the smart drivers
 const NvicPriority NvicPriorityPins = 5;			// priority for GPIO pin interrupts - filament sensors must be higher than step
 const NvicPriority NvicPriorityStep = 6;			// step interrupt is next highest, it can preempt most other interrupts

@@ -32,8 +32,9 @@ Licence: GPL
 #include "GCodeChannel.h"
 #include "GCodeInput.h"
 #include "GCodeMachineState.h"
-#include <GCodes/CollisionAvoider.h>
-#include <GCodes/TriggerItem.h>
+#include "CollisionAvoider.h"
+#include "KeepoutZone.h"
+#include "TriggerItem.h"
 #include <Tools/Filament.h>
 #include <FilamentMonitors/FilamentMonitor.h>
 #include "RestorePoint.h"
@@ -119,7 +120,7 @@ public:
 	FilePosition GetPrintingFilePosition() const noexcept;						// Return the current position of the file being printed in bytes. May return noFilePosition if allowNoFilePos is true
 	void Diagnostics(MessageType mtype) noexcept;								// Send helpful information out
 
-	bool RunConfigFile(const char* fileName) noexcept;							// Start running the config file
+	bool RunConfigFile(const char* fileName, bool isMainConfigFile) noexcept;	// Start running a configuration file
 	bool IsTriggerBusy() const noexcept;										// Return true if the trigger G-code buffer is busy running config.g or a trigger file
 
 	bool IsAxisHomed(unsigned int axis) const noexcept							// Has the axis been homed?
@@ -156,9 +157,11 @@ public:
 
 	bool IsReallyPrinting() const noexcept;										// Return true if we are printing from SD card and not pausing, paused or resuming
 	bool IsReallyPrintingOrResuming() const noexcept;
+	bool IsCancellingPrint() const noexcept;
 	bool IsSimulating() const noexcept { return simulationMode != SimulationMode::off; }
 	bool IsDoingToolChange() const noexcept { return doingToolChange; }
 	bool IsHeatingUp() const noexcept;											// Return true if the SD card print is waiting for a heater to reach temperature
+	void CancelWaitForTemperatures(bool onlyInPrintFiles) noexcept;
 	bool IsRunningConfigFile() const noexcept { return runningConfigFile; }
 	bool SawM501InConfigFile() const noexcept { return m501SeenInConfigFile; }
 
@@ -215,6 +218,8 @@ public:
 	void ActivateHeightmap(bool activate) noexcept;									// (De-)Activate the height map
 
 	size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
+	void TakeScanningProbeReading() noexcept;										// Take and store a reading from a scanning Z probe
+	GCodeResult HandleM558Point1(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException);		// Calibrate a scanning Z probe
 
 	// These next two are public because they are used by class SbcInterface
 	void UnlockAll(const GCodeBuffer& gb) noexcept;									// Release all locks
@@ -240,6 +245,12 @@ public:
 		return workplaceCoordinates[GetConstMovementState(gb).currentCoordinateSystem][axis];
 	}
 
+#if SUPPORT_KEEPOUT_ZONES
+	size_t GetNumKeepoutZones() const noexcept { return (keepoutZone.IsDefined()) ? 1 : 0; }
+	bool IsKeepoutZoneDefined(size_t n) const noexcept { return n == 0 && keepoutZone.IsDefined(); }
+	const KeepoutZone *GetKeepoutZone(size_t) const noexcept { return &keepoutZone; }
+#endif
+
 #if SUPPORT_OBJECT_MODEL
 	float GetWorkplaceOffset(size_t axis, size_t workplaceNumber) const noexcept
 	{
@@ -259,12 +270,12 @@ public:
 
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
 
-	const MovementState& GetMovementState(unsigned int queueNumber) pre(queueNumber < NumMovementSystems) const noexcept { return moveStates[queueNumber]; }
+	const MovementState& GetMovementState(unsigned int queueNumber) const noexcept pre(queueNumber < NumMovementSystems) { return moveStates[queueNumber]; }
 	const MovementState& GetPrimaryMovementState() const noexcept { return moveStates[0]; }		// Temporary support for object model and status report values that only handle a single movement system
 	const MovementState& GetCurrentMovementState(const ObjectExplorationContext& context) const noexcept;
 	const MovementState& GetConstMovementState(const GCodeBuffer& gb) const noexcept;			// Get a reference to the movement state associated with the specified GCode buffer (there is a private non-const version)
 	bool IsHeaterUsedByDifferentCurrentTool(int heaterNumber, const Tool *tool) const noexcept;	// Check if the specified heater is used by a current tool other than the specified one
-	void MessageBoxClosed(bool cancelled, bool m292, ExpressionValue rslt) noexcept;
+	void MessageBoxClosed(bool cancelled, bool m292, uint32_t seq, ExpressionValue rslt) noexcept;
 
 # if HAS_VOLTAGE_MONITOR
 	const char *_ecv_array null GetPowerFailScript() const noexcept { return powerFailScript; }
@@ -289,7 +300,12 @@ public:
 	void SetRemotePrinting(bool isPrinting) noexcept { isRemotePrinting = isPrinting; }
 #endif
 
-	static constexpr const char *AllowedAxisLetters = "XYZUVWABCDabcdef";
+	static constexpr const char *AllowedAxisLetters =
+#if defined(DUET3)
+						"XYZUVWABCDabcdefghijklmnopqrstuvwxyz";
+#else
+						"XYZUVWABCDabcdef";
+#endif
 
 	// Standard macro filenames
 #define DEPLOYPROBE		"deployprobe"
@@ -440,7 +456,7 @@ private:
 	ReadLockedPointer<Tool> GetSpecifiedOrCurrentTool(GCodeBuffer& gb) THROWS(GCodeException);
 	GCodeResult ManageTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Create a new tool definition
 	void SetToolHeaters(const GCodeBuffer& gb, Tool *tool, float temperature) THROWS(GCodeException);	// Set all a tool's heaters active and standby temperatures, for M104/M109
-	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance) const noexcept;
+	bool ToolHeatersAtSetTemperatures(const Tool *tool, bool waitWhenCooling, float tolerance, bool waitOnFault) const noexcept;
 																							// Wait for the heaters associated with the specified tool to reach their set temperatures
 	void GenerateTemperatureReport(const GCodeBuffer& gb, const StringRef& reply) const noexcept;	// Store a standard-format temperature report in reply
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
@@ -481,6 +497,7 @@ private:
 	bool DoEmergencyPause() noexcept;														// Do an emergency pause following loss of power or a motor stall
 #endif
 
+	// Bed probing
 	GCodeResult DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);	// Define the probing grid, returning true if error
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	GCodeResult LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Load the height map from file
@@ -496,7 +513,6 @@ private:
 	ReadLockedPointer<ZProbe> SetZProbeNumber(GCodeBuffer& gb, char probeLetter) THROWS(GCodeException);	// Set up currentZProbeNumber and return the probe
 	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Probes at a given position - see the comment at the head of the function itself
 	void InitialiseTaps(bool fastThenSlow) noexcept;												// Set up to do the first of a possibly multi-tap probe
-	void SetBedEquationWithProbe(int sParam, const StringRef& reply) noexcept;						// Probes a series of points and sets the bed equation
 
 	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M581
 	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M582
@@ -562,6 +578,10 @@ private:
 	bool DoSync(GCodeBuffer& gb) noexcept;																	// sync with the other stream returning true if done, false if we need to wait for it
 	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;								// synchronise motion systems
 	void UpdateAllCoordinates(const GCodeBuffer& gb) noexcept;
+#endif
+
+#if SUPPORT_KEEPOUT_ZONES
+	GCodeResult DefineKeepoutZone(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Handle M599
 #endif
 
 #if SUPPORT_COORDINATE_ROTATION
@@ -678,9 +698,18 @@ private:
 	float g30PrevHeightError;					// the height error the previous time we probed
 	float g30zHeightErrorSum;					// the sum of the height errors for the current probe point
 	float g30zHeightErrorLowestDiff;			// the lowest difference we have seen between consecutive readings
+
+	// Scanning Z probe calibration
+	float calibrationStartingHeight;			// how much above and below the trigger height we go when calibrating a scanning probe
+	float heightChangePerPoint;					// the height different between adjacent points
+	size_t numPointsToCollect;					// how many readings to take
+	size_t numCalibrationReadingsTaken;			// the number of calibration readings we have taken
+	int16_t calibrationReadings[MaxScanningProbeCalibrationPoints];
+
 	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered
-	size_t gridAxis0index, gridAxis1index;		// Which grid probe point is next
+	size_t gridAxis0Index, gridAxis1Index;		// Which grid probe point is next
+	size_t lastAxis0Index;						// The last grid probe point in this row to scan
 	bool doingManualBedProbe;					// true if we are waiting for the user to jog the nozzle until it touches the bed
 	bool hadProbingError;						// true if there was an error probing the last point
 	bool zDatumSetByProbing;					// true if the Z position was last set by probing, not by an endstop switch or by G92
@@ -728,7 +757,10 @@ private:
 	AxesBitmap axesToSenseLength;				// The axes on which we are performing axis length sensing
 
 #if SUPPORT_ASYNC_MOVES
-	CollisionAvoider collisionChecker;
+	CollisionAvoider collisionChecker;			// currently we support just one collision avoider
+#endif
+#if SUPPORT_KEEPOUT_ZONES
+	KeepoutZone keepoutZone;					// currently we support just one keepout zone
 #endif
 
 #if HAS_MASS_STORAGE
@@ -745,8 +777,6 @@ private:
 #endif
 
 	int8_t lastAuxStatusReportType;				// The type of the last status report requested by PanelDue
-	bool isWaiting;								// True if waiting to reach temperature
-	bool cancelWait;							// Set true to cancel waiting
 	bool displayNoToolWarning;					// True if we need to display a 'no tool selected' warning
 	bool m501SeenInConfigFile;					// true if M501 was executed from config.g
 	bool daemonRunning;

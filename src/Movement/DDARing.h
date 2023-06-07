@@ -12,6 +12,8 @@
 
 #include "DDA.h"
 
+class MovementState;
+
 class DDARing INHERIT_OBJECT_MODEL
 {
 public:
@@ -73,7 +75,7 @@ public:
 	void LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept;						// Fetch the last point at the end of the last completed DDA
 	void ResetExtruderPositions() noexcept;												// Resets the extrusion amounts of the live coordinates
 
-	bool PauseMoves(RestorePoint& rp) noexcept;											// Pause the print as soon as we can, returning true if we were able to skip any
+	bool PauseMoves(MovementState& ms) noexcept;										// Pause the print as soon as we can, returning true if we were able to skip any moves in the queue
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 	bool LowPowerOrStallPause(RestorePoint& rp) noexcept;								// Pause the print immediately, returning true if we were able to
 #endif
@@ -90,11 +92,8 @@ public:
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 
 #if SUPPORT_REMOTE_COMMANDS
-# if USE_REMOTE_INPUT_SHAPING
-	void AddShapedMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;	// add a move from the ATE to the movement queue
-# else
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept;				// add a move from the ATE to the movement queue
-# endif
+	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;			// add a move from the ATE to the movement queue
 	void StopDrivers(uint16_t whichDrives) noexcept;
 #endif
 
@@ -157,8 +156,8 @@ pre(getPointer->GetState() == DDA::frozen)
 	}
 	else if (!extrudersPrinting)
 	{
-		extrudersPrinting = true;
 		extrudersPrintingSince = millis();
+		extrudersPrinting = true;
 	}
 	currentDda = cdda;
 	cdda->Start(p, startTime);

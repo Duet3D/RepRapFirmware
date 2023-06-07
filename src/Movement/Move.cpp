@@ -79,19 +79,27 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(rings); },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&((const Move*)self)->rings[context.GetLastIndex()]); }
-	}
+	},
 
 #if SUPPORT_COORDINATE_ROTATION
-	,
 	// 3. Rotation centre coordinates
 	{
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetGCodes().GetRotationCentre(context.GetLastIndex())); }
-	}
-};
-
+	},
 #endif
+
+#if SUPPORT_KEEPOUT_ZONES
+	// 4. Keepout zone list
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetNumKeepoutZones(); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return (reprap.GetGCodes().IsKeepoutZoneDefined(context.GetLastIndex())) ? ExpressionValue(reprap.GetGCodes().GetKeepoutZone(context.GetLastIndex())) : ExpressionValue(nullptr); }
+	},
+#endif
+};
 
 DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(Move)
 
@@ -100,11 +108,15 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	// Within each group, these entries must be in alphabetical order
 	// 0. Move members
 	{ "axes",					OBJECT_MODEL_FUNC_ARRAY(0), 																	ObjectModelEntryFlags::live },
+	{ "backlashFactor",			OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetPlatform().GetBacklashCorrectionDistanceFactor()),	ObjectModelEntryFlags::none },
 	{ "calibration",			OBJECT_MODEL_FUNC(self, 3),																		ObjectModelEntryFlags::none },
 	{ "compensation",			OBJECT_MODEL_FUNC(self, 6),																		ObjectModelEntryFlags::none },
 	{ "currentMove",			OBJECT_MODEL_FUNC(self, 2),																		ObjectModelEntryFlags::live },
 	{ "extruders",				OBJECT_MODEL_FUNC_ARRAY(1),																		ObjectModelEntryFlags::live },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 1),																		ObjectModelEntryFlags::none },
+#if SUPPORT_KEEPOUT_ZONES
+	{ "keepout",				OBJECT_MODEL_FUNC_ARRAY(4),																		ObjectModelEntryFlags::none },
+#endif
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
 	{ "limitAxes",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().LimitAxes()),										ObjectModelEntryFlags::none },
 	{ "noMovesBeforeHoming",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().NoMovesBeforeHoming()),								ObjectModelEntryFlags::none },
@@ -118,7 +130,6 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "travelAcceleration",		OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxTravelAcceleration()), 1),		ObjectModelEntryFlags::none },
 	{ "virtualEPos",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetCurrentMovementState(context).latestVirtualExtruderPosition, 5),		ObjectModelEntryFlags::live },
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber() - 1),				ObjectModelEntryFlags::none },
-	{ "workspaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber()),					ObjectModelEntryFlags::obsolete },
 
 	// 1. Move.Idle members
 	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor(), 1),						ObjectModelEntryFlags::none },
@@ -179,7 +190,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 constexpr uint8_t Move::objectModelTableDescriptor[] =
 {
 	9 + SUPPORT_COORDINATE_ROTATION,
-	17 + SUPPORT_WORKPLACE_COORDINATES,
+	17 + SUPPORT_WORKPLACE_COORDINATES + SUPPORT_KEEPOUT_ZONES,
 	2,
 	5 + SUPPORT_LASER,
 	3,
@@ -308,7 +319,7 @@ void Move::Exit() noexcept
 					{
 						if (nextMove.moveType == 0)
 						{
-							AxisAndBedTransform(nextMove.coords, nextMove.movementTool, true);
+							AxisAndBedTransform(nextMove.coords, nextMove.movementTool, !nextMove.scanningProbeMove);
 						}
 
 						if (rings[0].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
@@ -485,10 +496,10 @@ bool Move::IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) co
 	return kinematics->IsReachable(axesCoords, axes);
 }
 
-// Pause the print as soon as we can, returning true if we are able to skip any moves and updating 'rp' to the first move we skipped.
-bool Move::PausePrint(unsigned int queueNumber, RestorePoint& rp) noexcept
+// Pause the print as soon as we can, returning true if we are able to skip any moves and updating ms.pauseRestorePoint to the first move we skipped.
+bool Move::PausePrint(MovementState& ms) noexcept
 {
-	return rings[queueNumber].PauseMoves(rp);
+	return rings[ms.GetMsNumber()].PauseMoves(ms);
 }
 
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
@@ -512,8 +523,20 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	scratchString.copy(GetCompensationTypeString());
 
 	Platform& p = reprap.GetPlatform();
-	p.MessageF(mtype, "=== Move ===\nDMs created %u, segments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, comp offset %.3f\n",
-						DriveMovement::NumCreated(), MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift);
+	p.MessageF(mtype,
+				"=== Move ===\nDMs created %u, segments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f"
+#if 1	//debug
+				", ebfmin %.2f, ebfmax %.2f"
+#endif
+				"\n",
+						DriveMovement::NumCreated(), MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift
+#if 1
+						, (double)minExtrusionPending, (double)maxExtrusionPending
+#endif
+		);
+#if 1	//debug
+	minExtrusionPending = maxExtrusionPending = 0.0;
+#endif
 	longestGcodeWaitInterval = 0;
 
 #if 0	// debug only
@@ -579,7 +602,7 @@ int32_t Move::MotorMovementToSteps(size_t drive, float coord) noexcept
 void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
 	kinematics->MotorStepsToCartesian(motorPos, reprap.GetPlatform().GetDriveStepsPerUnit(), numVisibleAxes, numTotalAxes, machinePos);
-	if (reprap.Debug(moduleMove) && !inInterrupt())
+	if (reprap.Debug(Module::Move) && !inInterrupt())
 	{
 		debugPrintf("Forward transformed %" PRIi32 " %" PRIi32 " %" PRIi32 " to %.2f %.2f %.2f\n",
 			motorPos[0], motorPos[1], motorPos[2], (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
@@ -593,7 +616,7 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 {
 	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(),
 														reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), motorPos, isCoordinated);
-	if (reprap.Debug(moduleMove) && !inInterrupt())
+	if (reprap.Debug(Module::Move) && !inInterrupt())
 	{
 		if (!b)
 		{
@@ -604,7 +627,7 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 			}
 			debugPrintf("\n");
 		}
-		else if (reprap.Debug(moduleDda))
+		else if (reprap.Debug(Module::Dda))
 		{
 			debugPrintf("Transformed");
 			for (size_t i = 0; i < reprap.GetGCodes().GetVisibleAxes(); ++i)
@@ -894,7 +917,7 @@ bool Move::FinishedBedProbing(MovementSystemNumber msNumber, int sParam, const S
 	}
 	else
 	{
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			probePoints.DebugPrint(numPoints);
 		}
@@ -1242,9 +1265,7 @@ void Move::WakeMoveTaskFromISR() noexcept
 	}
 }
 
-#if SUPPORT_LASER || SUPPORT_IOBITS
-
-// Laser and IOBits support
+// Laser, IOBits and scanning Z probe support
 
 Task<Move::LaserTaskStackWords> *Move::laserTask = nullptr;		// the task used to manage laser power or IOBits
 
@@ -1253,7 +1274,7 @@ extern "C" [[noreturn]] void LaserTaskStart(void * pvParameters) noexcept
 	reprap.GetMove().LaserTaskRun();
 }
 
-// This is called when laser mode is selected or IOBits is enabled
+// This is called when laser mode is selected or IOBits is enabled or a scanning Z probe is configured
 void Move::CreateLaserTask() noexcept
 {
 	TaskCriticalSectionLocker lock;
@@ -1289,17 +1310,23 @@ void Move::LaserTaskRun() noexcept
 		// Sleep until we are woken up by the start of a move
 		(void)TaskBase::Take();
 
-		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
+		GCodes& gcodes = reprap.GetGCodes();
+		if (probeReadingNeeded)
 		{
+			probeReadingNeeded = false;
+			gcodes.TakeScanningProbeReading();
+		}
 # if SUPPORT_LASER
+		else if (gcodes.GetMachineType() == MachineType::laser)
+		{
 			// Manage the laser power
 			uint32_t ticks;
 			while ((ticks = rings[0].ManageLaserPower()) != 0)
 			{
 				(void)TaskBase::Take(ticks);
 			}
-# endif
 		}
+# endif
 		else
 		{
 # if SUPPORT_IOBITS
@@ -1314,9 +1341,23 @@ void Move::LaserTaskRun() noexcept
 	}
 }
 
-#endif
-
 #if SUPPORT_ASYNC_MOVES
+
+// Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
+// Returns the number of motor steps moved since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
+int32_t Move::GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept
+{
+	size_t ringNumber = 0;
+	for (size_t i = 0; i < NumMovementSystems; ++i)
+	{
+		if (reprap.GetGCodes().GetMovementState(i).GetAxesAndExtrudersOwned().IsBitSet(drive))
+		{
+			ringNumber = i;
+			break;
+		}
+	}
+	return rings[ringNumber].GetAccumulatedMovement(drive, isPrinting);
+}
 
 // Get and lock the aux move buffer. If successful, return a pointer to the buffer.
 // The caller must not attempt to lock the aux buffer more than once, and must call ReleaseAuxMove to release the buffer.

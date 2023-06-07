@@ -39,20 +39,22 @@ extern uint32_t _firmware_crc;			// defined in linker script
 
 // MAIN task data
 // The main task currently runs GCodes, so it needs to be large enough to hold the matrices used for delta auto calibration.
-// The worst case stack usage is after running delta auto calibration with Move debugging enabled.
-// The timer and idle tasks currently never do I/O, so they can be much smaller.
+// The worst case stack usage points are as follows:
+// 1. After running delta auto calibration with Move debugging enabled
+// 2. We create an array of (2 * MaxAxes^2) floats when inverting the movement matrix for Core kinematics.
 #if SAME70
-constexpr unsigned int MainTaskStackWords = 2060;			// on the SAME70 we use matrices of doubles
-#elif defined(__LPC17xx__)
-constexpr unsigned int MainTaskStackWords = 1110-(16*9);	// LPC builds only support 16 calibration points, so less space needed
+// On the SAME70 we use matrices of doubles when doing auto calibration, so we need 1800 words of stack even when MaxAxes is only 15
+constexpr unsigned int MainTaskStackWords = max<unsigned int>(1800, (MaxAxes * MaxAxes * 2) + 550);
 #else
-constexpr unsigned int MainTaskStackWords = 1370;			// on other processors we use matrixes of floats
+// On other processors we use matrixes of floats when doing auto calibration
+constexpr unsigned int MainTaskStackWords = max<unsigned int>(1110, (MaxAxes * MaxAxes * 2) + 550);
 #endif
 
 static Task<MainTaskStackWords> mainTask;
 extern "C" [[noreturn]] void MainTask(void * pvParameters) noexcept;
 
 // Idle task data
+// The timer and idle tasks currently never do I/O, so they don't need much stack.
 constexpr unsigned int IdleTaskStackWords = 50;				// currently we don't use the idle task for anything, so this can be quite small
 static Task<IdleTaskStackWords> idleTask;
 
@@ -139,12 +141,20 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 		pinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
 	}
 #endif
+#if defined(DUET3_MB6XD)
+	const BoardType bt = Platform::GetMB6XDBoardType();
+	if (bt == BoardType::Duet3_6XD_v101)
+	{
+		pinMode(UsbPowerSwitchPin, OUTPUT_LOW);								// turn USB power off
+		pinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP
+	}
+#endif
 	pinMode(DiagPin, (DiagOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up status LED for debugging and turn it off
 #if defined(DUET3MINI) || defined(DUET3_MB6HC) || defined(DUET3_MB6XD)
 	pinMode(ActLedPin, (ActOnPolarity) ? OUTPUT_LOW : OUTPUT_HIGH);			// set up activity LED and turn it off
 #endif
 
-#if !defined(DEBUG) && !defined(__LPC17xx__)	// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
+#if !defined(DEBUG)		// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
 	// Check the integrity of the firmware by checking the firmware CRC
 	{
 		const char *firmwareStart = reinterpret_cast<const char*>(SCB->VTOR & 0xFFFFFF80);
@@ -164,7 +174,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 			}
 		}
 	}
-#endif	// !defined(DEBUG) && !defined(__LPC17xx__)
+#endif	// !defined(DEBUG)
 
 	// Fill the free memory with a pattern so that we can check for stack usage and memory corruption
 	char *_ecv_array heapend = heapTop;
@@ -205,7 +215,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 	// We could also trap unaligned memory access, if we change the gcc options to not generate code that uses unaligned memory access.
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
 
-#if !defined(__LPC17xx__) && !SAME5x
+#if !SAME5x
 	// When doing a software reset, we disable the NRST input (User reset) to prevent the negative-going pulse that gets generated on it being held
 	// in the capacitor and changing the reset reason from Software to User. So enable it again here. We hope that the reset signal will have gone away by now.
 # ifndef RSTC_MR_KEY_PASSWD
@@ -248,10 +258,6 @@ extern "C" [[noreturn]] void MainTask(void *pvParameters) noexcept
 		reprap.Spin();
 	}
 }
-
-#ifdef __LPC17xx__
-	extern "C" size_t xPortGetTotalHeapSize( void );
-#endif
 
 // Return the amount of free handler stack space. It may be negative if the stack has overflowed into the area reserved for the heap.
 static ptrdiff_t GetHandlerFreeStack() noexcept
@@ -305,21 +311,18 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 		const char * const ramstart =
 #if SAME5x
 			(char *) HSRAM_ADDR;
-#elif defined(__LPC17xx__)
-			(char *) 0x10000000;
 #else
 			(char *) IRAM_ADDR;
 #endif
 		p.MessageF(mtype, "Static ram: %d\n", &_end - ramstart);
 
-#ifdef __LPC17xx__
-		p.MessageF(mtype, "Dynamic Memory (RTOS Heap 5): %d free, %d never used\n", xPortGetFreeHeapSize(), xPortGetMinimumEverFreeHeapSize() );
-#else
 		const struct mallinfo mi = mallinfo();
 		p.MessageF(mtype, "Dynamic ram: %d of which %d recycled\n", mi.uordblks, mi.fordblks);
-#endif
 		p.MessageF(mtype, "Never used RAM %d, free system stack %d words\n", GetNeverUsedRam(), GetHandlerFreeStack()/4);
 
+		//DEBUG
+		//p.MessageF(mtype, "heap top %.08" PRIx32 ", limit %.08" PRIx32 "\n", (uint32_t)heapTop, (uint32_t)heapLimit);
+		//ENDDB
 	}	// end memory stats scope
 
 	const uint32_t timeSinceLastCall = TaskResetRunTimeCounter();
@@ -340,10 +343,10 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 			stateText = "ready";
 			break;
 		case esNotifyWaiting:
-			stateText = "notifyWait";
+			stateText = "nWait";
 			break;
 		case esResourceWaiting:
-			stateText = "resourceWait:";
+			stateText = "rWait:";
 			break;
 		case esDelaying:
 			stateText = "delaying";
@@ -376,7 +379,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 
 		const float cpuPercent = (100 * (float)taskDetails.ulRunTimeCounter)/(float)timeSinceLastCall;
 		totalCpuPercent += cpuPercent;
-		p.MessageF(mtype, " %s(%s%s,%.1f%%,%u)", taskDetails.pcTaskName, stateText, mutexName, (double)cpuPercent, (unsigned int)taskDetails.usStackHighWaterMark);
+		p.MessageF(mtype, " %s(%u,%s%s,%.1f%%,%u)", taskDetails.pcTaskName, (unsigned int)taskDetails.uxCurrentPriority, stateText, mutexName, (double)cpuPercent, (unsigned int)taskDetails.usStackHighWaterMark);
 	}
 	p.MessageF(mtype, ", total %.1f%%\nOwned mutexes:", (double)totalCpuPercent);
 

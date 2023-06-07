@@ -52,7 +52,7 @@ size_t FilamentMonitor::GetNumMonitorsToReport() noexcept
 
 // Constructor
 FilamentMonitor::FilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
-	: driveNumber(drv), type(monitorType), driverId(did), lastStatus(FilamentSensorStatus::noDataReceived)
+	: driveNumber(drv), type(monitorType), driverId(did), enableMode(0), lastStatus(FilamentSensorStatus::noDataReceived)
 #if SUPPORT_CAN_EXPANSION
 	  , lastRemoteStatus(FilamentSensorStatus::noDataReceived), hasRemote(false)
 #endif
@@ -82,6 +82,12 @@ void FilamentMonitor::Disable() noexcept
 // For a remote filament monitor, this does the full configuration or query of the remote object instead, and we always return seen true because we don't need to report local status.
 GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) THROWS(GCodeException)
 {
+	if (gb.Seen('S'))
+	{
+		seen = true;
+		enableMode = gb.GetLimitedUIValue('S', 3);
+	}
+
 #if SUPPORT_CAN_EXPANSION
 	// Check that the port (if given) is on the same board as the extruder
 	String<StringLength20> portName;
@@ -90,7 +96,7 @@ GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& r
 		const CanAddress portAddress = IoPort::RemoveBoardAddress(portName.GetRef());
 		if (portAddress != driverId.boardAddress)
 		{
-			reply.copy("Filament monitor port must be on same board as extruder driver");
+			reply.copy("Filament monitor port must be connected to same CAN board as extruder driver");
 			return GCodeResult::error;
 		}
 	}
@@ -113,10 +119,13 @@ GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& r
 		haveIsrStepsCommanded = false;
 		if (interruptMode != InterruptMode::none && !port.AttachInterrupt(InterruptEntry, interruptMode, CallbackParameter(this)))
 		{
-			reply.copy("unsuitable pin");
+			reply.copy("no interrupt available on pin ");
+			port.AppendPinName(reply);
+			port.Release();
 			return GCodeResult::error;
 		}
 	}
+
 	return GCodeResult::ok;
 }
 
@@ -254,98 +263,107 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 	}
 }
 
+// Check the status of all the filament monitors.
+// Currently, the status for all filament monitors (on expansion boards as well as on the main board) is checked by the main board, which generates any necessary events.
 /*static*/ void FilamentMonitor::Spin() noexcept
 {
 #if SUPPORT_REMOTE_COMMANDS
-	CanMessageBuffer buf(nullptr);
+	CanMessageBuffer buf;
 	auto msg = buf.SetupStatusMessage<CanMessageFilamentMonitorsStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 	bool statusChanged = false;
 	bool haveMonitor = false;
 #endif
 
-	ReadLocker lock(filamentMonitorsLock);
-
-	for (size_t drv = 0; drv < NumFilamentMonitors; ++drv)
 	{
-		FilamentSensorStatus fst(FilamentSensorStatus::noMonitor);
-		if (filamentSensors[drv] != nullptr)
+		ReadLocker lock(filamentMonitorsLock);
+
+		for (size_t drv = 0; drv < NumFilamentMonitors; ++drv)
 		{
-#if SUPPORT_REMOTE_COMMANDS
-			haveMonitor = true;
-#endif
-			FilamentMonitor& fs = *filamentSensors[drv];
-#if SUPPORT_CAN_EXPANSION
-			if (fs.IsLocal())
-#endif
+			FilamentSensorStatus fst(FilamentSensorStatus::noMonitor);
+			if (filamentSensors[drv] != nullptr)
 			{
-				bool isPrinting;
-				bool fromIsr;
-				int32_t extruderStepsCommanded;
-				uint32_t locIsrMillis;
-				IrqDisable();
-				if (fs.haveIsrStepsCommanded)
-				{
-					extruderStepsCommanded = fs.isrExtruderStepsCommanded;
-					isPrinting = fs.isrWasPrinting;
-					locIsrMillis = fs.lastIsrMillis;
-					fs.haveIsrStepsCommanded = false;
-					IrqEnable();
-					fromIsr = true;
-				}
-				else
-				{
-					extruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(fs.driveNumber, isPrinting);		// get and clear the net extrusion commanded
-					IrqEnable();
-					fromIsr = false;
-					locIsrMillis = 0;
-				}
+#if SUPPORT_REMOTE_COMMANDS
+				haveMonitor = true;
+#endif
+				FilamentMonitor& fs = *filamentSensors[drv];
 				GCodes& gCodes = reprap.GetGCodes();
-				if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
-				{
-					const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(fs.driveNumber);
-					fst = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
-				}
-				else
-				{
-					fst = fs.Clear();
-				}
-			}
 #if SUPPORT_CAN_EXPANSION
-			else
-			{
-				fst = fs.lastRemoteStatus;
-			}
+				if (fs.IsLocal())
 #endif
-			if (fst != fs.lastStatus)
-			{
-#if SUPPORT_REMOTE_COMMANDS
-				statusChanged = true;
-#endif
-				fs.lastStatus = fst;
-				if (fst != FilamentSensorStatus::ok
-#if SUPPORT_REMOTE_COMMANDS
-					&& !CanInterface::InExpansionMode()
-#endif
-					)
 				{
-					const size_t extruder = LogicalDriveToExtruder(fs.driveNumber);
-					if (reprap.Debug(moduleFilamentSensors))
+					bool isPrinting;
+					bool fromIsr;
+					int32_t extruderStepsCommanded;
+					uint32_t locIsrMillis;
+					IrqDisable();
+					if (fs.haveIsrStepsCommanded)
 					{
-						debugPrintf("Filament error: extruder %u reports %s\n", extruder, fst.ToString());
+						extruderStepsCommanded = fs.isrExtruderStepsCommanded;
+						isPrinting = fs.isrWasPrinting;
+						locIsrMillis = fs.lastIsrMillis;
+						fs.haveIsrStepsCommanded = false;
+						IrqEnable();
+						fromIsr = true;
 					}
 					else
 					{
-						Event::AddEvent(EventType::filament_error, (uint16_t)fst.ToBaseType(), CanInterface::GetCanAddress(), extruder, "");
+						extruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(fs.driveNumber, isPrinting);		// get and clear the net extrusion commanded
+						IrqEnable();
+						fromIsr = false;
+						locIsrMillis = 0;
+					}
+					if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
+					{
+						const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(fs.driveNumber);
+						fst = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
+					}
+					else
+					{
+						fst = fs.Clear();
+					}
+				}
+#if SUPPORT_CAN_EXPANSION
+				else
+				{
+					fst = fs.lastRemoteStatus;
+				}
+#endif
+				if (fst != fs.lastStatus)
+				{
+#if SUPPORT_REMOTE_COMMANDS
+					statusChanged = true;
+#endif
+					if (reprap.Debug(Module::FilamentSensors))
+					{
+						debugPrintf("Extruder %u status change from %s to %s\n", LogicalDriveToExtruder(fs.driveNumber), fs.lastStatus.ToString(), fst.ToString());
+					}
+
+					fs.lastStatus = fst;
+					if (   fst != FilamentSensorStatus::ok && gCodes.IsReallyPrinting() && !gCodes.IsSimulating()
+#if SUPPORT_REMOTE_COMMANDS
+						&& !CanInterface::InExpansionMode()
+#endif
+					   )
+					{
+						const size_t extruder = LogicalDriveToExtruder(fs.driveNumber);
+						if (reprap.Debug(Module::FilamentSensors))
+						{
+							debugPrintf("Filament error: extruder %u reports %s\n", extruder, fst.ToString());
+						}
+						else
+						{
+							Event::AddEvent(EventType::filament_error, (uint16_t)fst.ToBaseType(), fs.driverId.GetBoardAddress(), extruder, "");
+						}
 					}
 				}
 			}
-		}
 #if SUPPORT_REMOTE_COMMANDS
-		if (drv < NumDirectDrivers)
-		{
-			msg->data[drv].Set(fst.ToBaseType());
-		}
+			if (drv < NumDirectDrivers)
+			{
+				msg->data[drv].Set(fst.ToBaseType());
+			}
 #endif
+		}
 	}
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -372,7 +390,12 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 			FilamentMonitor& fs = *filamentSensors[extruder];
 			if (fs.driverId.boardAddress == src && fs.driverId.localDriver < msg.numMonitorsReported)
 			{
-				fs.lastRemoteStatus = FilamentSensorStatus(msg.data[fs.driverId.localDriver].status);
+				const FilamentSensorStatus newStatus = FilamentSensorStatus(msg.data[fs.driverId.localDriver].status);
+				if (reprap.Debug(Module::FilamentSensors) && newStatus != fs.lastRemoteStatus)
+				{
+					debugPrintf("Remote extruder %u status change from %s to %s\n", LogicalDriveToExtruder(fs.driveNumber), fs.lastRemoteStatus.ToString(), newStatus.ToString());
+				}
+				fs.lastRemoteStatus = newStatus;
 			}
 		}
 	}

@@ -17,6 +17,7 @@
 #include <Platform/TaskPriorities.h>
 
 #if HAS_NETWORKING
+#include "NetworkClient.h"
 #include "NetworkBuffer.h"
 #include "NetworkInterface.h"
 
@@ -36,6 +37,8 @@
 # include "RTOSPlusTCPEthernet/RTOSPlusTCPEthernetInterface.h"
 #endif
 
+#include "MQTT/MqttClient.h"
+
 #if SUPPORT_HTTP
 # include "HttpResponder.h"
 #endif
@@ -45,13 +48,14 @@
 #if SUPPORT_TELNET
 # include "TelnetResponder.h"
 #endif
+#if SUPPORT_MQTT
+#include "MQTT/MqttClient.h"
+#endif
 #if SUPPORT_MULTICAST_DISCOVERY
 # include "MulticastDiscovery/MulticastResponder.h"
 #endif
 
-#ifdef __LPC17xx__
-constexpr size_t NetworkStackWords = 375;
-#elif defined(DEBUG)
+#if defined(DEBUG)
 constexpr size_t NetworkStackWords = 1000;				// needs to be enough to support rr_model
 #else
 constexpr size_t NetworkStackWords = 600;				// needs to be enough to support rr_model
@@ -82,7 +86,7 @@ void MacAddress::SetFromBytes(const uint8_t mb[6]) noexcept
 // Network members
 Network::Network(Platform& p) noexcept : platform(p)
 #if HAS_RESPONDERS
-			, responders(nullptr), nextResponderToPoll(nullptr)
+			, responders(nullptr), clients(nullptr), nextResponderToPoll(nullptr)
 #endif
 {
 #if HAS_NETWORKING
@@ -217,12 +221,12 @@ void Network::CreateAdditionalInterface() noexcept
 
 #endif
 
-GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, int secure, const StringRef& reply) noexcept
+GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
 {
 #if HAS_NETWORKING
 	if (interface < GetNumNetworkInterfaces())
 	{
-		return interfaces[interface]->EnableProtocol(protocol, port, secure, reply);
+		return interfaces[interface]->EnableProtocol(protocol, port, ip, secure, reply);
 	}
 
 	reply.printf("Invalid network interface '%d'\n", interface);
@@ -238,14 +242,31 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 #if HAS_NETWORKING
 	if (interface < GetNumNetworkInterfaces())
 	{
+		bool client = false;
+
+		// Check if a client handles the protocol. If so, termination is handled
+		// by the client itself, after attempting to disconnect gracefully.
+		for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
+		{
+			if (c->HandlesProtocol(protocol))
+			{
+				client = true;
+				break;
+			}
+		}
+
 		NetworkInterface * const iface = interfaces[interface];
-		const GCodeResult ret = iface->DisableProtocol(protocol, reply);
+		const GCodeResult ret = iface->DisableProtocol(protocol, reply, !client);
+
 		if (ret == GCodeResult::ok)
 		{
 #if HAS_RESPONDERS
-			for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+			if (!client)
 			{
-				r->Terminate(protocol, iface);
+				for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+				{
+					r->Terminate(protocol, iface);
+				}
 			}
 
 			// The following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
@@ -272,6 +293,12 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 
 #if SUPPORT_MULTICAST_DISCOVERY
 			case MulticastDiscoveryProtocol:
+				break;
+#endif
+
+#if SUPPORT_MQTT
+			case MqttProtocol:
+				MqttClient::Disable();
 				break;
 #endif
 
@@ -326,15 +353,16 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 			}
 
 #if SUPPORT_HTTP
-			// The following isn't quite right, because we shouldn't free up output buffers if another network interface is still enabled and serving this protocol.
-			// However, the only supported hardware with more than one network interface is the early Duet 3 prototype, so we'll leave this be.
-			HttpResponder::Disable();
+			HttpResponder::DisableInterface(iface);		// remove sessions that use this interface
 #endif
 #if SUPPORT_FTP
 			FtpResponder::Disable();
 #endif
 #if SUPPORT_TELNET
-			TelnetResponder::Disable();
+			TelnetResponder::Disable();					// ideally here we would leave any Telnet session using a different interface alone
+#endif
+#if SUPPORT_MQTT
+			MqttClient::Disable();
 #endif
 #endif // HAS_RESPONDERS
 		}
@@ -464,6 +492,13 @@ void Network::Activate() noexcept
 	MulticastResponder::Init();
 #endif
 
+#if SUPPORT_MQTT
+	for (size_t i = 0; i < NumMqttClients; ++i)
+	{
+		responders = clients = new MqttClient(responders, clients);
+	}
+#endif
+
 	// Finally, create the network task
 	networkTask.Create(NetworkLoop, "NETWORK", nullptr, TaskPriority::SpinPriority);
 #endif
@@ -488,6 +523,9 @@ void Network::Exit() noexcept
 #endif
 #if SUPPORT_TELNET
 	TelnetResponder::Disable();
+#endif
+#if SUPPORT_MQTT
+	MqttClient::Disable();
 #endif
 
 	if (TaskBase::GetCallerTaskHandle() != &networkTask)
@@ -763,6 +801,30 @@ bool Network::FindResponder(Socket *skt, NetworkProtocol protocol) noexcept
 	return false;
 }
 
+bool Network::StartClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept
+{
+#if HAS_RESPONDERS
+	for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
+	{
+		if (c->Start(protocol, interface))
+		{
+			return true;
+		}
+	}
+#endif
+	return false;
+}
+
+void Network::StopClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept
+{
+#if HAS_RESPONDERS
+	for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
+	{
+		c->Stop(protocol, interface);
+	}
+#endif
+}
+
 void Network::HandleHttpGCodeReply(const char *msg) noexcept
 {
 #if SUPPORT_HTTP
@@ -778,6 +840,13 @@ void Network::HandleTelnetGCodeReply(const char *msg) noexcept
 	TelnetResponder::HandleGCodeReply(msg);
 #endif
 }
+
+#if SUPPORT_MQTT
+void Network::MqttPublish(const char *msg) noexcept
+{
+	MqttClient::Publish(msg);
+}
+#endif
 
 void Network::HandleHttpGCodeReply(OutputBuffer *buf) noexcept
 {

@@ -10,6 +10,8 @@
 
 #include "UploadingNetworkResponder.h"
 
+typedef unsigned int HttpSessionKey;
+
 class HttpResponder : public UploadingNetworkResponder
 {
 public:
@@ -21,6 +23,7 @@ public:
 
 	static void InitStatic() noexcept;
 	static void Disable() noexcept;
+	static void DisableInterface(const NetworkInterface *iface) noexcept;
 	static void HandleGCodeReply(const char *_ecv_array reply) noexcept;
 	static void HandleGCodeReply(OutputBuffer *reply) noexcept;
 	static uint16_t GetReplySeq() noexcept { return seq; }
@@ -32,11 +35,7 @@ protected:
 	void SendData() noexcept override;
 
 private:
-#ifdef __LPC17xx__
-	static const size_t MaxHttpSessions = 2;            // maximum number of simultaneous HTTP sessions
-#else
 	static const size_t MaxHttpSessions = 8;			// maximum number of simultaneous HTTP sessions
-#endif
 	static const uint16_t WebMessageLength = 1460;		// maximum length of the web message we accept after decoding
 	static const size_t MaxCommandWords = 4;			// max number of space-separated words in the command
 	static const size_t MaxQualKeys = 5;				// max number of key/value pairs in the qualifier
@@ -70,13 +69,15 @@ private:
 	// HTTP sessions
 	struct HttpSession
 	{
+		HttpSessionKey key;
 		IPAddress ip;
+		const NetworkInterface *iface;
 		uint32_t lastQueryTime;
-		bool isPostUploading;
 		uint16_t postPort;
+		bool isPostUploading;
 	};
 
-	bool Authenticate() noexcept;
+	bool Authenticate(bool withSessionKey, HttpSessionKey &sessionKey) noexcept;
 	bool CheckAuthenticated() noexcept;
 	bool RemoveAuthentication() noexcept;
 
@@ -96,6 +97,7 @@ private:
 #endif
 
 	const char* GetKeyValue(const char *_ecv_array key) const noexcept;	// return the value of the specified key, or nullptr if not present
+	HttpSessionKey GetSessionKey() const noexcept;	// try to get the optional X-Session-Key header value used to identify HTTP sessions
 
 	static void RemoveSession(size_t sessionToRemove) noexcept;
 

@@ -40,6 +40,7 @@ void ArrayHandle::Allocate(size_t numElements) THROWS(GCodeException)
 	slotPtr = slot;
 }
 
+// Assign an element without making the array unique first
 void ArrayHandle::AssignElement(size_t index, ExpressionValue &val) THROWS(GCodeException)
 {
 	if (slotPtr != nullptr)
@@ -52,39 +53,90 @@ void ArrayHandle::AssignElement(size_t index, ExpressionValue &val) THROWS(GCode
 			return;
 		}
 	}
-	throw GCodeException("Array index out of bounds");
+	throw GCodeException("array index out of bounds");
 }
 
+// Make an array unique and assign an element, possibly nested
+void ArrayHandle::AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException)
+{
+	WriteLocker locker(Heap::heapLock);							// prevent other tasks modifying the heap
+	InternalAssignIndexed(ev, numIndices, indices);
+}
+
+// Make an array unique and assign an element, possibly nested
+void ArrayHandle::InternalAssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException)
+{
+	if (indices[0] >= GetNumElements())
+	{
+		throw GCodeException("array index out of bounds");
+	}
+	MakeUnique();
+	ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
+	if (numIndices == 1)
+	{
+		aSpace->elements[indices[0]] = ev;
+	}
+	else if (aSpace->elements[indices[0]].GetType() != TypeCode::HeapArray)
+	{
+		throw GCodeException("attempt to index into a non-array");
+	}
+	else
+	{
+		aSpace->elements[indices[0]].ahVal.InternalAssignIndexed(ev, numIndices - 1, indices + 1);
+	}
+}
+
+// Get the number of elements in a heap array
+// Caller must have a read lock or a write lock on heapLock before calling this!
 size_t ArrayHandle::GetNumElements() const noexcept
 {
+#if CHECK_HEAP_READ_LOCKED
+	Heap::heapLock.CheckHasReadOrWriteLock();
+#endif
 	if (slotPtr == nullptr)
 	{
 		return 0;
 	}
-	ReadLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
+#if CHECK_HANDLES
+	Heap::CheckSlotGood(slotPtr);
+#endif
 	return reinterpret_cast<const ArrayStorageSpace*>(slotPtr->storage)->count;
 }
 
-void ArrayHandle::GetElement(size_t index, ExpressionValue &rslt) const THROWS(GCodeException)
+// Retrieve an array element, returning false if the index is out of bounds
+// Caller must have a read lock on heapLock before calling this!
+bool ArrayHandle::GetElement(size_t index, ExpressionValue &rslt) const noexcept
 {
+#if CHECK_HEAP_READ_LOCKED
+	Heap::heapLock.CheckHasReadLock();
+#endif
 	if (slotPtr != nullptr)
 	{
-		ReadLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
+#if CHECK_HANDLES
+		Heap::CheckSlotGood(slotPtr);
+#endif
 		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
 		if (index < aSpace->count)
 		{
 			rslt = aSpace->elements[index];
-			return;
+			return true;
 		}
 	}
-	throw GCodeException("Array index out of bounds");
+	return false;
 }
 
+// Retrieve the type of an array element, or TypeCode::None if the index is out of range
+// Caller must have a read lock on heapLock before calling this!
 TypeCode ArrayHandle::GetElementType(size_t index) const noexcept
 {
+#if CHECK_HEAP_READ_LOCKED
+	Heap::heapLock.CheckHasReadLock();
+#endif
 	if (slotPtr != nullptr)
 	{
-		ReadLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
+#if CHECK_HANDLES
+		Heap::CheckSlotGood(slotPtr);
+#endif
 		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
 		if (index < aSpace->count)
 		{
@@ -100,10 +152,14 @@ void ArrayHandle::Delete() noexcept
 	if (slotPtr != nullptr)
 	{
 		ReadLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
-		ArrayStorageSpace *const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
-		for (size_t i = 0; i < aSpace->count; ++i)
+		if (slotPtr->refCount == 1)
 		{
-			aSpace->elements[i].~ExpressionValue();				// call destructor on the elements
+			// The call to Heap:::DeleteSlot will deallocate the slot, so release the contents first
+			ArrayStorageSpace *const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
+			for (size_t i = 0; i < aSpace->count; ++i)
+			{
+				aSpace->elements[i].~ExpressionValue();			// call destructor on the elements
+			}
 		}
 		Heap::DeleteSlot(slotPtr);
 		slotPtr = nullptr;										// clear the pointer to the handle entry
@@ -117,6 +173,31 @@ const ArrayHandle& ArrayHandle::IncreaseRefCount() const noexcept
 		Heap::IncreaseRefCount(slotPtr);
 	}
 	return *this;
+}
+
+/// Make this handle refer to non-shared array (the individual elements may be shared). Caller must already own a read lock on the heap.
+void ArrayHandle::MakeUnique() THROWS(GCodeException)
+{
+#if CHECK_HEAP_READ_LOCKED
+	Heap::heapLock.CheckHasReadOrWriteLock();
+#endif
+	if (slotPtr != nullptr && slotPtr->refCount > 1)
+	{
+		const ArrayStorageSpace * const aSpace = reinterpret_cast<const ArrayStorageSpace*>(slotPtr->storage);
+		const size_t count = aSpace->count;
+
+		ArrayHandle ah2;
+		ah2.Allocate(count);
+		ArrayStorageSpace * const aSpace2 = reinterpret_cast<ArrayStorageSpace*>(ah2.slotPtr->storage);
+
+		for (size_t i = 0; i < count; ++i)
+		{
+			aSpace2->elements[i] = aSpace->elements[i];
+		}
+
+		--slotPtr->refCount;
+		slotPtr = ah2.slotPtr;
+	}
 }
 
 // AutoArrayHandle members

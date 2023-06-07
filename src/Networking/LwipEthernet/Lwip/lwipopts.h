@@ -128,19 +128,31 @@
  * MEMP_NUM_TCP_PCB: the number of simultaneously active TCP connections.
  * (requires the LWIP_TCP option)
  */
-#define MEMP_NUM_TCP_PCB                8
+#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+# define MEMP_NUM_TCP_PCB				10
+#else
+# define MEMP_NUM_TCP_PCB				8
+#endif
 
 /**
  * MEMP_NUM_TCP_PCB_LISTEN: the number of listening TCP connections.
  * (requires the LWIP_TCP option)
  */
-#define MEMP_NUM_TCP_PCB_LISTEN         7
+#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+# define MEMP_NUM_TCP_PCB_LISTEN		10
+#else
+# define MEMP_NUM_TCP_PCB_LISTEN		7
+#endif
 
 /**
  * MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments.
  * (requires the LWIP_TCP option)
  */
-#define MEMP_NUM_TCP_SEG                8
+#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+# define MEMP_NUM_TCP_SEG				10
+#else
+# define MEMP_NUM_TCP_SEG				8
+#endif
 
 /**
  * MEMP_NUM_REASSDATA: the number of IP packets simultaneously queued for

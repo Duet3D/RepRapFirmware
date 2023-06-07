@@ -30,7 +30,7 @@ class OutputStack;
 //#define TRACK_FILE_CODES			// Uncomment this to enable code <-> code reply tracking for the file G-code channel
 
 // G-Code input class for an SPI channel
-class SbcInterface
+class SbcInterface INHERIT_OBJECT_MODEL
 {
 public:
 	SbcInterface() noexcept;
@@ -59,7 +59,7 @@ public:
 	bool GetFileChunk(const char *filename, uint32_t offset, char *buffer, uint32_t& bufferLength, uint32_t& fileLength) noexcept;
 
 	bool FileExists(const char *filename) noexcept;
-	bool DeleteFileOrDirectory(const char *fileOrDirectory) noexcept;
+	bool DeleteFileOrDirectory(const char *fileOrDirectory, bool recursive = false) noexcept;
 
 	FileHandle OpenFile(const char *filename, OpenMode mode, FilePosition& fileLength, uint32_t preAllocSize = 0) noexcept;
 	int ReadFile(FileHandle handle, char *buffer, size_t bufferLength) noexcept;
@@ -67,6 +67,9 @@ public:
 	bool SeekFile(FileHandle handle, FilePosition offset) noexcept;
 	bool TruncateFile(FileHandle handle) noexcept;
 	void CloseFile(FileHandle handle) noexcept;
+
+protected:
+	DECLARE_OBJECT_MODEL
 
 private:
 	DataTransfer transfer;
@@ -109,6 +112,7 @@ private:
 		none,
 		checkFileExists,
 		deleteFileOrDirectory,
+		deleteFileOrDirectoryRecursively,
 		openRead,
 		openWrite,
 		openAppend,

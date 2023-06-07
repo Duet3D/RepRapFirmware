@@ -136,9 +136,9 @@ void GCodes::DoManualProbe(GCodeBuffer& gb, const char *message, const char *tit
 {
 	if (Push(gb, true))													// stack the machine state including the file position and set the state to GCodeState::normal
 	{
-		gb.WaitForAcknowledgement();									// flag that we are waiting for acknowledgement
 		const MessageType mt = GetMessageBoxDevice(gb);
-		reprap.SendAlert(mt, message, title, 2, 0.0, axes);
+		const uint32_t seq = reprap.SendAlert(mt, message, title, 2, 0.0, axes);
+		gb.WaitForAcknowledgement(seq);									// flag that we are waiting for acknowledgement
 	}
 }
 
@@ -146,6 +146,34 @@ void GCodes::DoManualProbe(GCodeBuffer& gb, const char *message, const char *tit
 void GCodes::DoManualBedProbe(GCodeBuffer& gb)
 {
 	DoManualProbe(gb, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", AxesBitmap::MakeFromBits(Z_AXIS));
+}
+
+// Set up to do the first of a possibly multi-tap probe
+void GCodes::InitialiseTaps(bool fastThenSlow) noexcept
+{
+	tapsDone = (fastThenSlow) ? -1 : 0;
+	g30zHeightErrorSum = 0.0;
+	g30zHeightErrorLowestDiff = 1000.0;
+}
+
+// Take and store a reading from a scanning Z probe. Called by the Laser task.
+void GCodes::TakeScanningProbeReading() noexcept
+{
+	const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+	const float heightError = zp->GetCalibratedReading();
+	HeightMap& hm = reprap.GetMove().AccessHeightMap();
+	hm.SetGridHeight(gridAxis0Index, gridAxis1Index, heightError);
+	if (gridAxis0Index != lastAxis0Index)
+	{
+		if (gridAxis1Index & 1u)
+		{
+			--gridAxis0Index;
+		}
+		else
+		{
+			++gridAxis0Index;
+		}
+	}
 }
 
 // Define the probing grid, called when we see an M557 command
@@ -330,7 +358,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	}
 
 	ClearBedMapping();
-	gridAxis0index = gridAxis1index = 0;
+	gridAxis0Index = gridAxis1Index = 0;
 
 	gb.SetState(GCodeState::gridProbing1);
 	if (zp->GetProbeType() != ZProbeType::blTouch)
@@ -401,7 +429,7 @@ bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) cons
 		f->Close();
 		if (err)
 		{
-			MassStorage::Delete(fullName.c_str(), false);
+			(void)MassStorage::Delete(fullName.GetRef(), ErrorMessageMode::messageAlways);
 			reply.catf("Failed to save height map to file %s", fullName.c_str());
 		}
 		else
@@ -794,6 +822,61 @@ void GCodes::SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept
 	ms.linearAxesMentioned = reprap.GetPlatform().IsAxisLinear(m675Settings.axisNumber);
 	ms.rotationalAxesMentioned = reprap.GetPlatform().IsAxisRotational(m675Settings.axisNumber);
 	NewSingleSegmentMoveAvailable(ms);
+}
+
+// Calibrate a scanning Z probe. We have already checked the probe is a scanning one and that scanningRange is a sensible value.
+GCodeResult GCodes::HandleM558Point1(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException)
+{
+	const auto zp = platform.GetEndstops().GetZProbe(probeNumber);
+	if (zp.IsNull())
+	{
+		reply.copy("invalid Z probe index");
+		return GCodeResult::error;
+	}
+
+	if (!zp->IsScanning())
+	{
+		reply.printf("probe %u is not a scanning probe", probeNumber);
+		return GCodeResult::error;
+	}
+
+	if (gb.Seen('A'))
+	{
+		const float aParam = gb.GetFValue();
+		const float bParam = (gb.Seen('B')) ? gb.GetFValue() : 0.0;
+		return zp->SetScanningCoefficients(aParam, bParam);
+	}
+
+	if (gb.Seen('S'))
+	{
+		const float requestedScanningRange = gb.GetLimitedFValue('S', 0.1, zp->GetConfiguredTriggerHeight());
+
+#if SUPPORT_ASYNC_MOVES
+		AxesBitmap axesMoving;
+		axesMoving.SetBit(Z_AXIS);
+		MovementState& ms = GetMovementState(gb);
+		AllocateAxes(gb, ms, axesMoving, ParameterLettersBitmap());		// allocate the Z axis
+#endif
+
+		currentZProbeNumber = probeNumber;
+
+		// Set the scanning range to a whole number of microsteps and calculate the microsteps per point
+		const unsigned int microstepsPerHalfScan = (unsigned int)(requestedScanningRange * platform.DriveStepsPerUnit(Z_AXIS));
+		constexpr unsigned int MaxCalibrationPointsPerHalfScan = (MaxScanningProbeCalibrationPoints - 1)/2;
+		const unsigned int microstepsPerPoint = (microstepsPerHalfScan + MaxCalibrationPointsPerHalfScan - 1)/MaxCalibrationPointsPerHalfScan;
+		heightChangePerPoint = microstepsPerPoint/platform.DriveStepsPerUnit(Z_AXIS);
+		const size_t pointsPerHalfScan = microstepsPerHalfScan/microstepsPerPoint;
+		calibrationStartingHeight = zp->GetActualTriggerHeight() + pointsPerHalfScan * heightChangePerPoint;
+		numPointsToCollect = 2 * pointsPerHalfScan + 1;
+		RRF_ASSERT(numPointsToCollect <= MaxScanningProbeCalibrationPoints);
+
+		// Deploy the probe and start the state machine
+		gb.SetState(GCodeState::probeCalibration1);
+		DeployZProbe(gb);
+		return GCodeResult::ok;
+	}
+
+	return zp->ReportScanningCoefficients(reply);
 }
 
 // End

@@ -74,6 +74,8 @@ enum class GCodeState : uint8_t
 	flashing2,
 
 	stopping,
+	stoppingFromCode,
+	stopped,
 
 	// These next 9 must be contiguous
 	gridProbing1,
@@ -85,6 +87,10 @@ enum class GCodeState : uint8_t
 	gridProbing5,
 	gridProbing6,
 	gridProbing7,
+
+	// These next several must be contiguous
+	gridScanning1,
+	gridScanning2,
 
 	// These next 10 must be contiguous
 	probingAtPoint0,
@@ -103,6 +109,11 @@ enum class GCodeState : uint8_t
 	straightProbe1,
 	straightProbe2,
 	straightProbe3,
+
+	// These next 3 must be contiguous
+	probeCalibration1,
+	probeCalibration2,
+	probeCalibration3,
 
 	doingFirmwareRetraction,
 	doingFirmwareUnRetraction,
@@ -211,7 +222,7 @@ public:
 	ResourceBitmap lockedResources;
 	BlockState blockStates[MaxBlockIndent];
 	uint32_t lineNumber;
-
+	uint32_t msgBoxSeq;							// the sequence number of the message box that needs to be acknowledged, if waitingForAcknowledgement is true
 	uint32_t
 		selectedPlane : 2,
 		drivesRelative : 1,
@@ -256,7 +267,7 @@ public:
 	bool DoingFile() const noexcept;
 	void CloseFile() noexcept;
 
-	void WaitForAcknowledgement() noexcept;
+	void WaitForAcknowledgement(uint32_t seq) noexcept;
 
 #if HAS_SBC_INTERFACE
 	void SetFileExecuting() noexcept;

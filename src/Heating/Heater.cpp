@@ -58,12 +58,13 @@ constexpr ObjectModelTableEntry Heater::objectModelTable[] =
 	// 1. Heater.monitors[] members
 	{ "action",			OBJECT_MODEL_FUNC_IF(self->monitors[context.GetLastIndex()].GetTrigger() != HeaterMonitorTrigger::Disabled,
 												(int32_t)self->monitors[context.GetLastIndex()].GetAction()), 		ObjectModelEntryFlags::none },
-	{ "condition",		OBJECT_MODEL_FUNC(self->monitors[context.GetLastIndex()].GetTriggerName()), 			ObjectModelEntryFlags::none },
+	{ "condition",		OBJECT_MODEL_FUNC(self->monitors[context.GetLastIndex()].GetTriggerName()), 				ObjectModelEntryFlags::none },
 	{ "limit",			OBJECT_MODEL_FUNC_IF(self->monitors[context.GetLastIndex()].GetTrigger() != HeaterMonitorTrigger::Disabled,
 												self->monitors[context.GetLastIndex()].GetTemperatureLimit(), 1),	ObjectModelEntryFlags::none },
+	{ "sensor",			OBJECT_MODEL_FUNC((int32_t)self->monitors[context.GetLastIndex()].GetSensorNumber()), 		ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 13, 3 };
+constexpr uint8_t Heater::objectModelTableDescriptor[] = { 2, 13, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Heater)
 
@@ -353,7 +354,7 @@ void Heater::ReportTuningUpdate() noexcept
 
 void Heater::CalculateModel(HeaterParameters& params) noexcept
 {
-	if (reprap.Debug(moduleHeat))
+	if (reprap.Debug(Module::Heat))
 	{
 #define PLUS_OR_MINUS "\xC2\xB1"
 		reprap.GetPlatform().MessageF(GenericMessage,
@@ -442,7 +443,7 @@ void Heater::SetAndReportModelAfterTuning(bool usingFans) noexcept
 		}
 		reprap.GetPlatform().Message(LoggedGenericMessage, str.c_str());
 
-		if (reprap.Debug(moduleHeat))
+		if (reprap.Debug(Module::Heat))
 		{
 			str.printf("Long term gain %.1f/%.1f", (double)fanOffParams.GetNormalGain(), (double)fanOffParams.gain);
 			if (usingFans)

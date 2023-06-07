@@ -31,7 +31,7 @@ bool TelnetResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
 			responderState = ResponderState::justConnected;
 			connectTime = millis();
 			haveCompleteLine = false;
-			if (reprap.Debug(moduleWebserver))
+			if (reprap.Debug(Module::Webserver))
 			{
 				debugPrintf("Telnet connection accepted\n");
 			}
@@ -91,7 +91,7 @@ bool TelnetResponder::SendGCodeReply() noexcept
 			clearReply = true;
 		}
 
-		if (reprap.Debug(moduleWebserver))
+		if (reprap.Debug(Module::Webserver))
 		{
 			GetPlatform().MessageF(UsbMessage, "Sending G-Code reply to Telnet client %d of %d (length %u)\n", clientsServed, numSessions, gcodeReply->DataLength());
 		}

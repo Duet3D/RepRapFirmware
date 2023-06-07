@@ -43,7 +43,7 @@ void BinaryParser::DecodeCommand() noexcept
 {
 	if (gb.bufferState == GCodeBufferState::parsingGCode)
 	{
-		if (reprap.GetDebugFlags(moduleGcodes).IsBitSet(gb.GetChannel().ToBaseType()))
+		if (reprap.GetDebugFlags(Module::Gcodes).IsBitSet(gb.GetChannel().ToBaseType()))
 		{
 			String<MaxCodeBufferSize> buf;
 			AppendFullCommand(buf.GetRef());
@@ -63,7 +63,7 @@ void BinaryParser::DecodeCommand() noexcept
 				{
 					parametersPresent.SetBit(paramLetter - 'A');
 				}
-				else if (paramLetter >= 'a' && paramLetter <= 'f')
+				else if (paramLetter >= 'a' && paramLetter <= HighestAxisLetter)
 				{
 					parametersPresent.SetBit(paramLetter - ('a' - 26));
 				}
@@ -172,6 +172,8 @@ float BinaryParser::GetFValue() THROWS(GCodeException)
 			parser.CheckForExtraCharacters();
 		}
 		break;
+	case DataType::Null:
+		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 	default:
 		value = 0.0;
 		break;
@@ -207,6 +209,8 @@ int32_t BinaryParser::GetIValue() THROWS(GCodeException)
 			parser.CheckForExtraCharacters();
 		}
 		break;
+	case DataType::Null:
+		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 	default:
 		value = 0;
 		break;
@@ -242,6 +246,8 @@ uint32_t BinaryParser::GetUIValue() THROWS(GCodeException)
 			parser.CheckForExtraCharacters();
 		}
 		break;
+	case DataType::Null:
+		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 	default:
 		value = 0;
 		break;
@@ -314,6 +320,9 @@ DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 			SetDriverIdFromFloat(value, fval);
 		}
 		break;
+
+	case DataType::Null:
+		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 
 	default:
 		break;
@@ -463,6 +472,9 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty
 		}
 		break;
 
+	case DataType::Null:
+		throw ConstructParseException("expected a string expression");
+
 	default:
 		str.Clear();
 		break;
@@ -566,6 +578,7 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 		}
 		break;
 
+	case DataType::Null:
 	default:
 		length = 0;
 		return;
@@ -697,6 +710,7 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length) THROWS
 		lastIndex = seenParameter->intValue - 1;
 		break;
 
+	case DataType::Null:
 	default:
 		length = 0;
 		return;
@@ -834,7 +848,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 				break;
 			}
 			case DataType::Null:
-				s.cat("null");
+				s.cat(param->letter);
 				break;
 			}
 		}

@@ -271,7 +271,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(MovementSystemNumber msNumber, size
 	reprap.GetMove().SetInitialCalibrationDeviation(initialDeviation);
 	reprap.GetMove().SetLatestCalibrationDeviation(initialDeviation, 0);
 
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		PrintMatrix("Derivative matrix", derivativeMatrix, numPoints, numFactors);
 	}
@@ -297,7 +297,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(MovementSystemNumber msNumber, size
 		normalMatrix(i, numFactors) = temp;
 	}
 
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		PrintMatrix("Normal matrix", normalMatrix, numFactors, numFactors + 1);
 	}
@@ -314,7 +314,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(MovementSystemNumber msNumber, size
 		solution[i] = normalMatrix(i, numFactors);
 	}
 
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		PrintMatrix("Solved matrix", normalMatrix, numFactors, numFactors + 1);
 		PrintVector("Solution", solution, numFactors);
@@ -339,7 +339,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(MovementSystemNumber msNumber, size
 
 		finalDeviation.Set(finalSumOfSquares, finalSum, numPoints);
 
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			PrintVector("Residuals", residuals, numPoints);
 		}

@@ -402,7 +402,7 @@ void CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 // Send an event. The text will be truncated if it is longer than 55 characters.
 void CanInterface::RaiseEvent(EventType type, uint16_t param, uint8_t device, const char *format, va_list vargs) noexcept
 {
-	CanMessageBuffer buf(nullptr);
+	CanMessageBuffer buf;
 	auto msg = buf.SetupStatusMessage<CanMessageEvent>(GetCanAddress(), GetCurrentMasterAddress());
 	msg->eventType = type.ToBaseType();;
 	msg->deviceNumber = device;
@@ -487,7 +487,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 		if (inExpansionMode)
 		{
 			// In expansion mode this task just send notifications when the states of input handles change
-			CanMessageBuffer buf(nullptr);
+			CanMessageBuffer buf;
 			auto msg = buf.SetupStatusMessage<CanMessageInputChanged>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 			msg->states = 0;
 			msg->zero = 0;
@@ -553,7 +553,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 
 extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 {
-	CanMessageBuffer buf(nullptr);
+	CanMessageBuffer buf;
 	uint32_t lastWakeTime = xTaskGetTickCount();
 	uint32_t lastRealTimeSent = 0;
 
@@ -590,6 +590,7 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		}
 
 		msg->isPrinting = reprap.GetGCodes().IsReallyPrinting();
+		msg->zero = 0;
 
 		// Send the real time just once a second
 		const uint32_t realTime = (uint32_t)reprap.GetPlatform().GetDateTime();
@@ -765,7 +766,7 @@ GCodeResult CanInterface::SendRequestAndGetStandardReply(CanMessageBuffer *buf, 
 }
 
 // Send a request to an expansion board and append the response to 'reply'. The response may either be a standard reply or 'replyType'.
-GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra, CanMessageType replyType, function_ref<void(const CanMessageBuffer*) /*noexcept*/> callback) noexcept
+GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, CanRequestId rid, const StringRef& reply, uint8_t *extra, CanMessageType replyType, function_ref_noexcept<void(const CanMessageBuffer*) noexcept> callback) noexcept
 {
 	if (can0dev == nullptr)
 	{
@@ -794,7 +795,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 				break;
 			}
 
-			if (reprap.Debug(moduleCan))
+			if (reprap.Debug(Module::CAN))
 			{
 				buf->DebugPrint("Rx1:");
 			}
@@ -901,12 +902,12 @@ bool CanInterface::ReceivePlainMessage(CanMessageBuffer *null buf, uint32_t cons
 // The CanReceiver task
 extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 {
-	CanMessageBuffer buf(nullptr);
+	CanMessageBuffer buf;
 	for (;;)
 	{
 		if (can0dev->ReceiveMessage(RxBufferIndexRequest, TaskBase::TimeoutUnlimited, &buf))
 		{
-			if (reprap.Debug(moduleCan))
+			if (reprap.Debug(Module::CAN))
 			{
 				buf.DebugPrint("Rx0:");
 			}
@@ -977,7 +978,7 @@ pre(driver.IsRemote())
 	{
 	case -1:
 	case 0:
-		if (gb.SeenAny("RS"))
+		if (gb.SeenAny("DRSV"))
 		{
 			if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 			{
@@ -991,7 +992,7 @@ pre(driver.IsRemote())
 		}
 
 	case 1:
-		if (gb.SeenAny("STERID"))
+		if (gb.SeenAny("CDEHIRSTV"))
 		{
 			if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
 			{
@@ -1049,6 +1050,10 @@ pre(driver.IsRemote())
 		else
 		{
 			// First call, so send the tuning command
+			if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
+			{
+				return GCodeResult::notFinished;
+			}
 			CanMessageGenericConstructor cons(M569Point6Params);
 			cons.PopulateFromCommand(gb);
 			return cons.SendAndGetResponse(CanMessageType::m569p6, driver.boardAddress, reply);
@@ -1074,7 +1079,8 @@ pre(driver.IsRemote())
 #if DUAL_CAN
 	case 8:			// read axis force via secondary CAN
 		{
-			if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter) {
+			if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter)
+			{
 				return HangprinterKinematics::ReadODrive3AxisForce(driver, reply);
 			}
 			return GCodeResult::errorNotSupported;
@@ -1388,7 +1394,10 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 	// Get the address of the board whose parameters we are changing
 	gb.MustSee('B');
 	const uint32_t oldAddress = gb.GetUIValue();
-	CheckCanAddress(oldAddress, gb);
+	if (oldAddress != 0)							// we must allow address 0 but CheckCanAddress doesn't allow it
+	{
+		CheckCanAddress(oldAddress, gb);
+	}
 
 	// Get the new timing details, if provided
 	CanTiming timing;

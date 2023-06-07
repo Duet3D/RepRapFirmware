@@ -58,7 +58,7 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noex
 		error = asPercent = false;
 		textValue = nullptr;
 
-		if (omText != nullptr && valIndex == 501)
+		if (omText == nullptr && valIndex == 501)
 		{
 			// Item 501 is a special case because it is text, not a number. We store the current message sequence number in currentValue.
 			uint16_t newSeq;
@@ -186,9 +186,8 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noex
 					error = true;
 					break;
 				}
-
-				itemChanged = (error || currentValue != oldValue);
 			}
+			itemChanged = (error || currentValue != oldValue);
 		}
 
 		if (itemChanged || !drawn || (highlight != highlighted))

@@ -34,7 +34,7 @@ namespace CanMotion
 		volatile int32_t stopSteps[MaxLinearDriversPerCanSlave];
 	};
 
-	static CanMessageBuffer urgentMessageBuffer(nullptr);
+	static CanMessageBuffer urgentMessageBuffer;
 	static CanMessageBuffer *movementBufferList = nullptr;
 	static DriversStopList *volatile stopList = nullptr;
 	static uint32_t currentMoveClocks;
@@ -117,47 +117,30 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 
 		buf->next = movementBufferList;
 		movementBufferList = buf;
-
-#if USE_REMOTE_INPUT_SHAPING
-		auto move = buf->SetupRequestMessage<CanMessageMovementLinearShaped>(0, CanId::MasterAddress, canDriver.boardAddress);
-#else
-		auto move = buf->SetupRequestMessage<CanMessageMovementLinear>(0, CanInterface::GetCurrentMasterAddress(), canDriver.boardAddress);
-#endif
+		auto move = buf->SetupRequestMessage<CanMessageMovementLinearShaped>(0, CanInterface::GetCurrentMasterAddress(), canDriver.boardAddress);
 
 		// Common parameters
 		if (buf->next == nullptr)
 		{
 			// This is the first CAN-connected board for this movement
-			move->accelerationClocks = (uint32_t)params.unshaped.accelClocks;
-			move->steadyClocks = (uint32_t)params.unshaped.steadyClocks;
-			move->decelClocks = (uint32_t)params.unshaped.decelClocks;
+			move->accelerationClocks = (uint32_t)params.accelClocks;
+			move->steadyClocks = (uint32_t)params.steadyClocks;
+			move->decelClocks = (uint32_t)params.decelClocks;
 			currentMoveClocks = move->accelerationClocks + move->steadyClocks + move->decelClocks;
 		}
 		else
 		{
 			// Save some maths by using the values from the previous buffer
-#if USE_REMOTE_INPUT_SHAPING
-			move->accelerationClocks = buf->next->msg.moveLinearShaped.accelerationClocks;
-			move->steadyClocks = buf->next->msg.moveLinearShaped.steadyClocks;
-			move->decelClocks = buf->next->msg.moveLinearShaped.decelClocks;
-#else
 			move->accelerationClocks = buf->next->msg.moveLinear.accelerationClocks;
 			move->steadyClocks = buf->next->msg.moveLinear.steadyClocks;
 			move->decelClocks = buf->next->msg.moveLinear.decelClocks;
-#endif
 		}
-		move->initialSpeedFraction = params.initialSpeedFraction;
-		move->finalSpeedFraction = params.finalSpeedFraction;
-#if USE_REMOTE_INPUT_SHAPING
-		move->numDriversMinusOne = canDriver.localDriver;
-		move->moveTypes = 0;
-		move->shaperAccelPhasesMinusOne = params.shapingPlan.accelSegments - 1;
-		move->shaperDecelPhasesMinusOne = params.shapingPlan.decelSegments - 1;
-#else
-		move->pressureAdvanceDrives = 0;
+		move->acceleration = params.acceleration/params.totalDistance;			// scale the acceleration to correspond to unit distance
+		move->deceleration = params.deceleration/params.totalDistance;			// scale the deceleration to correspond to unit distance
+		move->extruderDrives = 0;
 		move->numDrivers = canDriver.localDriver + 1;
 		move->zero = 0;
-#endif
+		move->shapingPlan = params.shapingPlan.condensedPlan;
 
 		// Clear out the per-drive fields. Can't use a range-based FOR loop on a packed struct.
 		for (size_t drive = 0; drive < ARRAY_SIZE(move->perDrive); ++drive)
@@ -165,56 +148,33 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 			move->perDrive[drive].Init();
 		}
 	}
-#if USE_REMOTE_INPUT_SHAPING
-	else if (canDriver.localDriver > buf->msg.moveLinearShaped.numDriversMinusOne)
-	{
-		buf->msg.moveLinearShaped.numDriversMinusOne = canDriver.localDriver;
-	}
-#else
 	else if (canDriver.localDriver >= buf->msg.moveLinear.numDrivers)
 	{
 		buf->msg.moveLinear.numDrivers = canDriver.localDriver + 1;
 	}
-#endif
 	return buf;
 }
 
 // This is called by DDA::Prepare for each active CAN DM in the move
-#if USE_REMOTE_INPUT_SHAPING
-void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept
-#else
-void CanMotion::AddMovement(const PrepParams& params, DriverId canDriver, int32_t steps, bool usePressureAdvance) noexcept
-#endif
+void CanMotion::AddAxisMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept
 {
 	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
 	if (buf != nullptr)
 	{
-#if USE_REMOTE_INPUT_SHAPING
-		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].iSteps = steps;
-#else
-		buf->msg.moveLinear.perDrive[canDriver.localDriver].steps = steps;
-		if (usePressureAdvance)
-		{
-			buf->msg.moveLinear.pressureAdvanceDrives |= 1u << canDriver.localDriver;
-		}
-#endif
+		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].steps = steps;
 	}
 }
-
-#if USE_REMOTE_INPUT_SHAPING
 
 void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver, float extrusion, bool usePressureAdvance) noexcept
 {
 	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
 	if (buf != nullptr)
 	{
-		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].fDist = extrusion;
-		const auto mt = (usePressureAdvance) ? CanMessageMovementLinearShaped::MoveType::extruderWithPa : CanMessageMovementLinearShaped::MoveType::extruderNoPa;
-		buf->msg.moveLinearShaped.ChangeMoveTypeFromDefault(canDriver.localDriver, mt);
+		buf->msg.moveLinearShaped.perDrive[canDriver.localDriver].extrusion = extrusion;
+		buf->msg.moveLinearShaped.extruderDrives |= 1u << canDriver.localDriver;
+		buf->msg.moveLinearShaped.usePressureAdvance = usePressureAdvance;
 	}
 }
-
-#endif
 
 // This is called by DDA::Prepare when all DMs for CAN drives have been processed. Return the calculated move time in steps, or 0 if there are no CAN moves
 uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool simulating) noexcept
@@ -233,11 +193,7 @@ uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool 
 			do
 			{
 				CanMessageBuffer * const nextBuffer = buf->next;		// must get this before sending the buffer, because sending the buffer releases it
-#if USE_REMOTE_INPUT_SHAPING
-				CanMessageMovementLinear& msg = buf->msg.moveLinearShaped;
-#else
-				CanMessageMovementLinear& msg = buf->msg.moveLinear;
-#endif
+				CanMessageMovementLinearShaped& msg = buf->msg.moveLinearShaped;
 				if (msg.HasMotion())
 				{
 					msg.whenToExecute = moveStartTime;
@@ -363,11 +319,7 @@ void CanMotion::InternalStopDriverWhenProvisional(DriverId driver) noexcept
 
 	if (buf != nullptr)
 	{
-#if USE_REMOTE_INPUT_SHAPING
-		buf->msg.moveLinearShaped.perDrive[driver.localDriver].steps = 0;
-#else
 		buf->msg.moveLinear.perDrive[driver.localDriver].steps = 0;
-#endif
 	}
 }
 
@@ -467,19 +419,11 @@ void CanMotion::StopAll(const DDA& dda) noexcept
 		// We still send the messages so that the drives get enabled, but we set the steps to zero
 		for (CanMessageBuffer *buf = movementBufferList; buf != nullptr; buf = buf->next)
 		{
-#if USE_REMOTE_INPUT_SHAPING
-			buf->msg.moveLinearShaped.accelerationClocks = buf->msg.moveLinearShaped.decelClocks = buf->msg.moveLinearShaped.steadyClocks = 0;
-			for (size_t drive = 0; drive < ARRAY_SIZE(buf->msg.moveLinearShaped.perDrive); ++drive)
-			{
-				buf->msg.moveLinearShaped.perDrive[drive].steps = 0;
-			}
-#else
 			buf->msg.moveLinear.accelerationClocks = buf->msg.moveLinear.decelClocks = buf->msg.moveLinear.steadyClocks = 0;
 			for (size_t drive = 0; drive < ARRAY_SIZE(buf->msg.moveLinear.perDrive); ++drive)
 			{
 				buf->msg.moveLinear.perDrive[drive].steps = 0;
 			}
-#endif
 		}
 	}
 	else if (stopList != nullptr)

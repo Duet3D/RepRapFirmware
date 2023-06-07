@@ -24,6 +24,12 @@ public:
 
 	~LcdILI9488();
 
+	// Get the number of colour bits
+	uint32_t GetColourBits() const noexcept override { return 16; }
+
+	// Get the display type
+	DisplayControllerType GetControllerType() const noexcept override;
+
 	// Clear part of the display
 	void ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right, bool foreground) noexcept override;
 
@@ -47,9 +53,6 @@ public:
 	//  width = width of bitmap in pixels
 	//  data = bitmap image, must be ((width + 7)/8) bytes long
 	void BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, const uint8_t data[], bool invert) noexcept override;
-
-	// Get the display type
-	const char *_ecv_array GetDisplayTypeName() const noexcept override;
 
 protected:
 	// Initialise the TFT screen

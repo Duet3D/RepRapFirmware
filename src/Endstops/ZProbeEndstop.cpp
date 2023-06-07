@@ -13,7 +13,7 @@
 #include <Movement/Kinematics/Kinematics.h>
 
 // Z probe endstop
-ZProbeEndstop::ZProbeEndstop(uint8_t p_axis, EndStopPosition pos) noexcept : Endstop(p_axis, pos), zProbeNumber(0)
+ZProbeEndstop::ZProbeEndstop(uint8_t p_axis, EndStopPosition pos, size_t zProbeNum) noexcept : Endstop(p_axis, pos), zProbeNumber(zProbeNum)
 {
 }
 

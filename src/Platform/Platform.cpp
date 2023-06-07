@@ -11,7 +11,7 @@
 
  18 November 2012
 
- Adrian Bowyerinfo[1]
+ Adrian Bowyer
  RepRap Professional Ltd
  http://reprappro.com
 
@@ -32,7 +32,7 @@
 #include <FilamentMonitors/FilamentMonitor.h>
 #include "RepRap.h"
 #include "Heap.h"
-#include "Scanner.h"
+#include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include "Event.h"
 #include <Version.h>
 #include "Logger.h"
@@ -57,8 +57,6 @@ static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA chan
 # include <AnalogIn.h>
 # include <DmacManager.h>
 using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have the AnalogIn namespace
-#elif defined(__LPC17xx__)
-# include "LPC/BoardConfig.h"
 #endif
 
 #include <Libraries/sd_mmc/sd_mmc.h>
@@ -292,8 +290,9 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #endif
 
 	// 3. move.axes[] members
-	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
+	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(context.GetLastIndex())), 1),				ObjectModelEntryFlags::none },
 	{ "babystep",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetTotalBabyStepOffset(context.GetLastIndex()), 3),					ObjectModelEntryFlags::none },
+	{ "backlash",			OBJECT_MODEL_FUNC(self->backlashMm[context.GetLastIndex()], 3),													ObjectModelEntryFlags::none },
 	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 906))),								ObjectModelEntryFlags::none },
 	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(0),																						ObjectModelEntryFlags::none },
 	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),								ObjectModelEntryFlags::none },
@@ -309,6 +308,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #ifndef DUET_NG
 	{ "percentStstCurrent",	OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 917))),								ObjectModelEntryFlags::none },
 #endif
+	{ "reducedAcceleration", OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex(), true)), 1),			ObjectModelEntryFlags::none },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
 	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->driveStepsPerUnit[context.GetLastIndex()], 2),											ObjectModelEntryFlags::none },
 	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(reprap.GetGCodes().GetCurrentMovementState(context), context.GetLastIndex()), 3), ObjectModelEntryFlags::live },
@@ -316,7 +316,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "workplaceOffsets",	OBJECT_MODEL_FUNC_ARRAY(1),																						ObjectModelEntryFlags::none },
 
 	// 4. move.extruders[] members
-	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
+	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
 	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906))),								ObjectModelEntryFlags::none },
 	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),																		ObjectModelEntryFlags::none },
 	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 3),												ObjectModelEntryFlags::none },
@@ -378,10 +378,10 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	0,																		// section 2: vIn
 #endif
 #ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current
-	19,																		// section 3: move.axes[]
+	21,																		// section 3: move.axes[]
 	15,																		// section 4: move.extruders[]
 #else
-	20,																		// section 3: move.axes[]
+	22,																		// section 3: move.axes[]
 	16,																		// section 4: move.extruders[]
 #endif
 	3,																		// section 5: move.extruders[].nonlinear
@@ -455,14 +455,26 @@ Platform::Platform() noexcept :
 void Platform::Init() noexcept
 {
 #if HAS_LWIP_NETWORKING
-	pinMode(EthernetPhyResetPin, OUTPUT_LOW);			// reset the Ethernet Phy chip
+	pinMode(EthernetPhyResetPin, OUTPUT_LOW);					// reset the Ethernet Phy chip
 #endif
+
+	// Do any board-specific initialisation that needs to be done early and does not depend on the board revision
 
 	// Make sure the on-board drivers are disabled
 #if defined(DUET_NG) || defined(PCCB_10)
 	pinMode(GlobalTmc2660EnablePin, OUTPUT_HIGH);
 #elif defined(DUET_M) || defined(DUET3MINI)
 	pinMode(GlobalTmc22xxEnablePin, OUTPUT_HIGH);
+#elif defined(DUET3_MB6HC)
+	pinMode(GlobalTmc51xxEnablePin, OUTPUT_HIGH);
+#endif
+
+	// Make sure any WiFi module is held in reset
+#if defined(DUET_NG)
+	pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500
+	pinMode(EspEnablePin, OUTPUT_LOW);
+#elif defined(DUET3_MB6HC)
+	pinMode(EspEnablePin, OUTPUT_LOW);						// make sure that the Wifi module if present is disabled
 #endif
 
 	// Sort out which board we are running on (some firmware builds support more than one board variant)
@@ -491,8 +503,6 @@ void Platform::Init() noexcept
 	usbMutex.Create("USB");
 #if SAME5x && !CORE_USES_TINYUSB
     SERIAL_MAIN_DEVICE.Start();
-#elif defined(__LPC17xx__)
-	SERIAL_MAIN_DEVICE.begin(baudRates[0]);
 #else
     SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
 #endif
@@ -523,11 +533,6 @@ void Platform::Init() noexcept
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	MassStorage::Init();
-#endif
-
-#ifdef __LPC17xx__
-	// Load HW pin assignments from sdcard
-	BoardConfig::Init();
 #endif
 
     // Ethernet networking defaults
@@ -576,14 +581,6 @@ void Platform::Init() noexcept
 # endif
 #endif
 
-#if defined(__LPC17xx__)
-	if (hasDriverCurrentControl)
-	{
-		mcp4451.begin();
-	}
-	Microstepping::Init(); // basic class to remember the Microstepping.
-#endif
-
 	// Initialise endstops. On Duet 2 this must be done after testing for an expansion board.
 	endstops.Init();
 
@@ -594,16 +591,20 @@ void Platform::Init() noexcept
 		axisMaxima[axis] = DefaultAxisMaximum;
 
 		maxFeedrates[axis] = ConvertSpeedFromMmPerSec(DefaultAxisMaxFeedrate);
-		normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
-		reducedAccelerations[axis] = ConvertAcceleration(DefaultReducedAxisAcceleration);
+		reducedAccelerations[axis] = normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
 		driveStepsPerUnit[axis] = DefaultAxisDriveStepsPerUnit;
 		instantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
+
+		backlashMm[axis] = 0.0;
+		backlashSteps[axis] = 0;
+		backlashStepsDue[axis] = 0;
 	}
+
+	backlashCorrectionDistanceFactor = DefaultBacklashCorrectionDistanceFactor;
 
 	// We use different defaults for the Z axis
 	maxFeedrates[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZMaxFeedrate);
-	normalAccelerations[Z_AXIS] = ConvertAcceleration(DefaultZAcceleration);
-	reducedAccelerations[Z_AXIS] = ConvertAcceleration(DefaultReducedZAcceleration);
+	reducedAccelerations[Z_AXIS] = normalAccelerations[Z_AXIS] = ConvertAcceleration(DefaultZAcceleration);
 	driveStepsPerUnit[Z_AXIS] = DefaultZDriveStepsPerUnit;
 	instantDvs[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZInstantDv);
 
@@ -674,6 +675,14 @@ void Platform::Init() noexcept
 		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
 #if !defined(DUET3) && !defined(DUET3MINI)
 		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);										// this is OK for the TMC2660 CS pins too
+#endif
+
+		brakeOffDelays[driver] = 0;
+		motorOffDelays[driver] = DefaultDelayAfterBrakeOn;
+
+#if SUPPORT_BRAKE_PWM
+		currentBrakePwm[driver] = 0.0;
+		brakeVoltages[driver] = FullyOnBrakeVoltage;
 #endif
 	}
 
@@ -786,7 +795,7 @@ void Platform::Init() noexcept
 
 	// If MISO from a MAX31856 board breaks after initialising the MAX31856 then if MISO floats low and reads as all zeros, this looks like a temperature of 0C and no error.
 	// Enable the pullup resistor, with luck this will make it float high instead.
-#if defined(__LPC17xx__) || SAME5x
+#if SAME5x
 	// nothing to do here
 #else
 	pinMode(APIN_USART_SSPI_MISO, INPUT_PULLUP);
@@ -1065,7 +1074,7 @@ void Platform::Spin() noexcept
 	// Diagnostics test
 	if (debugCode == (unsigned int)DiagnosticTestType::TestSpinLockup)
 	{
-		for (;;) {}
+		delay(30000);
 	}
 
 	// Check whether the TMC drivers need to be initialised.
@@ -1198,7 +1207,7 @@ void Platform::Spin() noexcept
 				}
 
 # if HAS_STALL_DETECT
-				if (stat.HasNewStallSince(oldStatus) && reprap.GetGCodes().IsReallyPrinting())
+				if (stat.HasNewStallSince(oldStatus))
 				{
 					// This stall is new so check whether we need to perform some action in response to the stall
 #  if SUPPORT_REMOTE_COMMANDS
@@ -1225,6 +1234,29 @@ void Platform::Spin() noexcept
 # endif
 			}
 
+			// Brake control
+			if (brakeOffTimers[nextDriveToPoll].CheckAndStop(brakeOffDelays[nextDriveToPoll]))
+			{
+				DisengageBrake(nextDriveToPoll);
+			}
+			if (motorOffTimers[nextDriveToPoll].CheckAndStop(motorOffDelays[nextDriveToPoll]))
+			{
+				InternalDisableDriver(nextDriveToPoll);
+			}
+
+# if SUPPORT_BRAKE_PWM
+			// If the brake solenoid is activated, adjust the PWM if necessary
+			const float voltsVin = AdcReadingToPowerVoltage(currentVin);
+			if (currentBrakePwm[nextDriveToPoll] != 0.0 && voltsVin > 10.0)
+			{
+				const float newBrakePwm = min<float>(brakeVoltages[nextDriveToPoll]/voltsVin, 1.0);
+				if (fabsf(newBrakePwm - currentBrakePwm[nextDriveToPoll] >= 0.05))
+				{
+					brakePorts[nextDriveToPoll].WriteAnalog(newBrakePwm);
+					currentBrakePwm[nextDriveToPoll] = newBrakePwm;
+				}
+			}
+# endif
 			// Advance drive number ready for next time
 			++nextDriveToPoll;
 			if (nextDriveToPoll == NumDirectDrivers)
@@ -1562,10 +1594,7 @@ void Platform::InitialiseInterrupts() noexcept
 	NVIC_SetPriority(XDMAC_IRQn, NvicPriorityDMA);
 #endif
 
-#ifdef __LPC17xx__
-	// Interrupt for GPIO pins. Only port 0 and 2 support interrupts and both share EINT3
-	NVIC_SetPriority(EINT3_IRQn, NvicPriorityPins);
-#elif SAME5x
+#if SAME5x
 	SetInterruptPriority(EIC_0_IRQn, 16, NvicPriorityPins);				// SAME5x EXINT has 16 contiguous IRQ numbers
 #else
 	NVIC_SetPriority(PIOA_IRQn, NvicPriorityPins);
@@ -1587,17 +1616,12 @@ void Platform::InitialiseInterrupts() noexcept
 	NVIC_SetPriority(UDP_IRQn, NvicPriorityUSB);
 #elif SAM3XA
 	NVIC_SetPriority(UOTGHS_IRQn, NvicPriorityUSB);
-#elif defined(__LPC17xx__)
-	NVIC_SetPriority(USB_IRQn, NvicPriorityUSB);
 #else
 # error Unsupported processor
 #endif
 
-#if defined(DUET_NG) || defined(DUET_M) || defined(DUET_06_085)
+#if defined(DUET_NG) || defined(DUET_M)
 	NVIC_SetPriority(I2C_IRQn, NvicPriorityTwi);
-#elif defined(__LPC17xx__)
-	NVIC_SetPriority(I2C0_IRQn, NvicPriorityTwi);
-	NVIC_SetPriority(I2C1_IRQn, NvicPriorityTwi);
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -1610,15 +1634,7 @@ void Platform::InitialiseInterrupts() noexcept
 # endif
 #endif
 
-#if defined(__LPC17xx__)
-	// set rest of the Timer Interrupt priorities
-	// Timer 0 is used for step generation (set elsewhere)
-	NVIC_SetPriority(TIMER1_IRQn, 8);                       //Timer 1 is currently unused
-	NVIC_SetPriority(TIMER2_IRQn, NvicPriorityTimerServo);  //Timer 2 runs the PWM for Servos at 50hz
-	NVIC_SetPriority(TIMER3_IRQn, NvicPriorityTimerPWM);    //Timer 3 runs the microsecond free running timer to generate heater/fan PWM
-#endif
-
-   // Tick interrupt for ADC conversions
+	// Tick interrupt for ADC conversions
 	tickState = 0;
 	currentFilterNumber = 0;
 }
@@ -1769,7 +1785,7 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 #elif HAS_SMART_DRIVERS
 		if (drive < numSmartDrivers)
 		{
-			const StandardDriverStatus status = SmartDrivers::GetStatus(drive);
+			const StandardDriverStatus status = SmartDrivers::GetStatus(drive, false, false);
 			status.AppendText(driverStatus.GetRef(), 0);
 			if (!status.notPresent)
 			{
@@ -2162,7 +2178,7 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 				if (nval != sqrtf(val))
 				{
 					ok3 = false;
-					if (reprap.Debug(modulePlatform))
+					if (reprap.Debug(Module::Platform))
 					{
 						debugPrintf("val=%.7e sq=%.7e sqrtf=%.7e\n", (double)val, (double)nval, (double)sqrtf(val));
 					}
@@ -2212,11 +2228,11 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 	case (unsigned int)DiagnosticTestType::PrintObjectSizes:
 		reply.printf(
-				"Task %u, DDA %u, DM %u, MS %u, Tool %u, GCodeBuffer %u, heater %u"
+				"Task %u, DDA %u, DM %u, MS %u, Tool %u, GCodeBuffer %u, heater %u, mbox %u"
 #if HAS_NETWORKING
 				", HTTP resp %u, FTP resp %u, Telnet resp %u"
 #endif
-				, sizeof(TaskBase), sizeof(DDA), sizeof(DriveMovement), sizeof(MoveSegment), sizeof(Tool), sizeof(GCodeBuffer), sizeof(Heater)
+				, sizeof(TaskBase), sizeof(DDA), sizeof(DriveMovement), sizeof(MoveSegment), sizeof(Tool), sizeof(GCodeBuffer), sizeof(Heater), sizeof(MessageBox)
 #if HAS_NETWORKING
 				, sizeof(HttpResponder), sizeof(FtpResponder), sizeof(TelnetResponder)
 #endif
@@ -2247,9 +2263,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		MessageF(MessageType::GenericMessage,
 					"\nPrintMonitor %08" PRIx32 "-%08" PRIx32
 					"\nFansManager %08" PRIx32 "-%08" PRIx32
-#if SUPPORT_SCANNER
-					"\nScanner %08" PRIx32 "-%08" PRIx32
-#endif
 #if SUPPORT_IOBITS
 					"\nPortControl %08" PRIx32 "-%08" PRIx32
 #endif
@@ -2262,9 +2275,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 					, reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()), reinterpret_cast<uint32_t>(&reprap.GetPrintMonitor()) + sizeof(PrintMonitor) - 1
 					, reinterpret_cast<uint32_t>(&reprap.GetFansManager()), reinterpret_cast<uint32_t>(&reprap.GetFansManager()) + sizeof(FansManager) - 1
-#if SUPPORT_SCANNER
-					, reinterpret_cast<uint32_t>(&reprap.GetScanner()), reinterpret_cast<uint32_t>(&reprap.GetScanner()) + sizeof(Scanner) - 1
-#endif
 #if SUPPORT_IOBITS
 					, reinterpret_cast<uint32_t>(&reprap.GetPortControl()), reinterpret_cast<uint32_t>(&reprap.GetPortControl()) + sizeof(PortControl) - 1
 #endif
@@ -2359,13 +2369,6 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 		break;
 #endif
 
-#ifdef __LPC17xx__
-	// Diagnostic for LPC board configuration
-	case (int)DiagnosticTestType::PrintBoardConfiguration:
-		BoardConfig::Diagnostics(gb.GetResponseMessageType());
-		break;
-#endif
-
 	default:
 		break;
 	}
@@ -2437,7 +2440,7 @@ bool Platform::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float 
 #if SUPPORT_CAN_EXPANSION
 
 // Function to identify and iterate through all drivers attached to an axis or extruder
-void Platform::IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t)> localFunc, function_ref<void(DriverId)> remoteFunc) noexcept
+void Platform::IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc, function_ref_noexcept<void(DriverId) noexcept> remoteFunc) noexcept
 {
 	if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
 	{
@@ -2471,7 +2474,7 @@ void Platform::IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t)>
 #else
 
 // Function to identify and iterate through all drivers attached to an axis or extruder
-void Platform::IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t)> localFunc) noexcept
+void Platform::IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc) noexcept
 {
 	if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
 	{
@@ -2526,6 +2529,8 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexce
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
+		motorOffTimers[driver].Stop();
+
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 		if (driver < numSmartDrivers && !driversPowered)
 		{
@@ -2555,7 +2560,17 @@ void Platform::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexce
 #if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
 		}
 #endif
-		brakePorts[driver].WriteDigital(true);			// turn the brake solenoid on to disengage the brake
+		if (brakePorts[driver].IsValid() && !brakePorts[driver].ReadDigital())
+		{
+			if (brakeOffDelays[driver] != 0)
+			{
+				brakeOffTimers[driver].Start();
+			}
+			else
+			{
+				DisengageBrake(driver);
+			}
+		}
 	}
 }
 
@@ -2564,24 +2579,37 @@ void Platform::DisableOneLocalDriver(size_t driver) noexcept
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
-		brakePorts[driver].WriteDigital(false);			// turn the brake solenoid off to engage the brake
-#if defined(DUET3) && HAS_SMART_DRIVERS
-		SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
-#elif HAS_SMART_DRIVERS
-		if (driver < numSmartDrivers)
+		brakeOffTimers[driver].Stop();
+		EngageBrake(driver);
+		if (motorOffDelays[driver] != 0 && brakePorts[driver].IsValid() && brakePorts[driver].ReadDigital())
 		{
-			SmartDrivers::EnableDrive(driver, false);
+			motorOffTimers[driver].Start();
 		}
-# if !defined(DUET3MINI)		// Duet 5LC has no enable pins
 		else
 		{
-			digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
+			InternalDisableDriver(driver);
 		}
+	}
+}
+
+void Platform::InternalDisableDriver(size_t driver) noexcept
+{
+#if defined(DUET3) && HAS_SMART_DRIVERS
+	SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
+#elif HAS_SMART_DRIVERS
+	if (driver < numSmartDrivers)
+	{
+		SmartDrivers::EnableDrive(driver, false);
+	}
+# if !defined(DUET3MINI)		// Duet 5LC has no enable pins
+	else
+	{
+		digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
+	}
 # endif
 #else
-		digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
+	digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
 #endif
-	}
 }
 
 // Enable the local drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
@@ -2647,6 +2675,25 @@ void Platform::DisableAllDrivers() noexcept
 	}
 }
 
+void Platform::EngageBrake(size_t driver) noexcept
+{
+#if SUPPORT_BRAKE_PWM
+	currentBrakePwm[driver] = 0.0;
+#endif
+	brakePorts[driver].WriteDigital(false);			// turn the brake solenoid off to engage the brake
+}
+
+void Platform::DisengageBrake(size_t driver) noexcept
+{
+#if SUPPORT_BRAKE_PWM
+	// Set the PWM to deliver the requested voltage regardless of the VIN voltage
+	currentBrakePwm[driver] = min<float>(brakeVoltages[driver]/AdcReadingToPowerVoltage(max<uint16_t>(currentVin, 1)), 1.0);
+	brakePorts[driver].WriteAnalog(currentBrakePwm[driver]);
+#else
+	brakePorts[driver].WriteDigital(true);			// turn the brake solenoid on to disengage the brake
+#endif
+}
+
 // Set drives to idle hold if they are enabled. If a drive is disabled, leave it alone.
 // Must not be called from an ISR, or with interrupts disabled.
 void Platform::SetDriversIdle() noexcept
@@ -2684,6 +2731,15 @@ void Platform::SetDriversIdle() noexcept
 // Configure the brake port for a driver
 GCodeResult Platform::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
 {
+# if !SUPPORT_BRAKE_PWM
+	if (gb.Seen('V'))
+	{
+		// Don't allow a brake port to be configured if the user specified a voltage and we don't support PWM
+		reply.copy("Brake PWM not supported by this board");
+		return GCodeResult::error;
+	}
+# endif
+
 	bool seen = false;
 	if (gb.Seen('C'))
 	{
@@ -2692,21 +2748,36 @@ GCodeResult Platform::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef&
 		{
 			return GCodeResult::error;
 		}
-		delayAfterBrakeOn[driver] = DefaultDelayAfterBrakeOn;
+# if SUPPORT_BRAKE_PWM
+		brakePorts[driver].SetFrequency(BrakePwmFrequency);
+# endif
+		motorOffDelays[driver] = DefaultDelayAfterBrakeOn;
 	}
+
 	uint32_t val;
-	if (gb.TryGetLimitedUIValue('S', val, seen, 100))
+	if (gb.TryGetLimitedUIValue('S', val, seen, 1000))
 	{
-		delayAfterBrakeOn[driver] = val;
+		seen = true;
+		motorOffDelays[driver] = val;
 	}
+
+# if SUPPORT_BRAKE_PWM
+	gb.TryGetNonNegativeFValue('V', brakeVoltages[driver], seen);
+# endif
 
 	if (!seen)
 	{
 		reply.printf("Driver %u uses brake port ", driver);
 		brakePorts[driver].AppendPinName(reply);
-#if 0	// don't print this bit until we have implemented it!
+# if SUPPORT_BRAKE_PWM
+		if (brakeVoltages[driver] < FullyOnBrakeVoltage)
+		{
+			reply.catf(" with voltage limited to %.1f by PWM", (double)brakeVoltages[driver]);
+		}
+# endif
+# if 0	// don't print this bit until we have implemented it!
 		reply.catf(" and %ums delay after turning the brake on", delayAfterBrakeOn[driver]);
-#endif
+# endif
 	}
 	return GCodeResult::ok;
 }
@@ -2870,22 +2941,6 @@ void Platform::UpdateMotorCurrent(size_t driver, float current) noexcept
 		{
 			SmartDrivers::SetCurrent(driver, current);
 		}
-#elif defined(__LPC17xx__)
-		if (hasDriverCurrentControl)
-		{
-			//Has digipots to set current control for drivers
-			//Current is in mA
-			const uint16_t pot = (unsigned short) (current * digipotFactor / 1000);
-			if (driver < 4)
-			{
-				mcp4451.setMCP4461Address(0x2C); //A0 and A1 Grounded. (001011 00)
-				mcp4451.setVolatileWiper(POT_WIPES[driver], pot);
-			}
-			else
-				mcp4451.setMCP4461Address(0x2D); //A0 Vcc, A1 Grounded. (001011 01)
-				mcp4451.setVolatileWiper(POT_WIPES[driver-4], pot);
-			}
-		}
 #else
 		// otherwise we can't set the motor current
 #endif
@@ -2977,10 +3032,6 @@ bool Platform::SetDriverMicrostepping(size_t driver, unsigned int microsteps, in
 			// We ignore the interpolation on/off parameter so that e.g. M350 I1 E16:128 won't give an error if E1 supports interpolation but E0 doesn't.
 			return microsteps == 16;
 		}
-#elif defined(__ALLIGATOR__)
-		return Microstepping::Set(driver, microsteps); // no mode in Alligator board
-#elif defined(__LPC17xx__)
-		return Microstepping::Set(driver, microsteps);
 #else
 		// Assume only x16 microstepping supported
 		return microsteps == 16;
@@ -3178,11 +3229,7 @@ bool Platform::GetDriverStepTiming(size_t driver, float microseconds[4]) const n
 
 void Platform::AppendUsbReply(OutputBuffer *buffer) noexcept
 {
-	if (   !SERIAL_MAIN_DEVICE.IsConnected()
-#if SUPPORT_SCANNER
-		|| (reprap.GetScanner().IsRegistered() && !reprap.GetScanner().DoingGCodes())
-#endif
-	   )
+	if (!SERIAL_MAIN_DEVICE.IsConnected())
 	{
 		// If the serial USB line is not open, discard the message right away
 		OutputBuffer::ReleaseAll(buffer);
@@ -3311,6 +3358,13 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 		reprap.GetNetwork().HandleTelnetGCodeReply(message);
 	}
 
+#if SUPPORT_MQTT
+	if ((type & MqttMessage) != 0)
+	{
+		reprap.GetNetwork().MqttPublish(message);
+	}
+#endif
+
 	if ((type & Aux2Message) != 0)
 	{
 		AppendAuxReply(1, message, message[0] == '{' || (type & RawMessageFlag) != 0);
@@ -3334,27 +3388,23 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 	{
 		// Message that is to be sent via the USB line (non-blocking)
 		MutexLocker lock(usbMutex);
-#if SUPPORT_SCANNER
-		if (!reprap.GetScanner().IsRegistered() || reprap.GetScanner().DoingGCodes())
-#endif
+
+		// Ensure we have a valid buffer to write to that isn't referenced for other destinations
+		OutputBuffer *usbOutputBuffer = usbOutput.GetLastItem();
+		if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
 		{
-			// Ensure we have a valid buffer to write to that isn't referenced for other destinations
-			OutputBuffer *usbOutputBuffer = usbOutput.GetLastItem();
-			if (usbOutputBuffer == nullptr || usbOutputBuffer->IsReferenced())
+			if (OutputBuffer::Allocate(usbOutputBuffer))
 			{
-				if (OutputBuffer::Allocate(usbOutputBuffer))
+				if (usbOutput.Push(usbOutputBuffer))
 				{
-					if (usbOutput.Push(usbOutputBuffer))
-					{
-						usbOutputBuffer->cat(message);
-					}
-					// else the message buffer has been released, so discard the message
+					usbOutputBuffer->cat(message);
 				}
+				// else the message buffer has been released, so discard the message
 			}
-			else
-			{
-				usbOutputBuffer->cat(message);		// append the message
-			}
+		}
+		else
+		{
+			usbOutputBuffer->cat(message);		// append the message
 		}
 	}
 }
@@ -3756,8 +3806,6 @@ void Platform::ResetChannel(size_t chan) noexcept
 		SERIAL_MAIN_DEVICE.end();
 #if SAME5x && !CORE_USES_TINYUSB
         SERIAL_MAIN_DEVICE.Start();
-#elif defined(__LPC17xx__)
-		SERIAL_MAIN_DEVICE.begin(baudRates[0]);
 #else
         SERIAL_MAIN_DEVICE.Start(UsbVBusPin);
 #endif
@@ -3773,7 +3821,7 @@ void Platform::ResetChannel(size_t chan) noexcept
 
 #if defined(DUET3_MB6HC)
 
-// this is safe to call before Platform has been created
+// This is safe to call before Platform has been created
 /*static*/ BoardType Platform::GetMB6HCBoardType() noexcept
 {
 	// Driver 0 direction has a pulldown resistor on v0.6 and v1.0 boards, but not on v1.01 or v1.02 boards
@@ -3794,7 +3842,25 @@ void Platform::ResetChannel(size_t chan) noexcept
 
 #endif
 
-// Set the board type. This must be called quite early, because for some builds it relies on pins not having been programmed for their intended use yet.
+#if defined(DUET3_MB6XD)
+
+// This is safe to call before Platform has been created
+/*static*/ BoardType Platform::GetMB6XDBoardType() noexcept
+{
+	// Driver 0 direction has a pulldown resistor on v1.0  boards only
+	// Driver 5 direction has a pulldown resistor on 1.01 boards only
+	pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
+	pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
+	delayMicroseconds(20);									// give the pullup resistor time to work
+	return (!digitalRead(DIRECTION_PINS[5])) ? BoardType::Duet3_6XD_v101
+				: (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6XD_v01
+					: BoardType::Duet3_6XD_v100;
+}
+
+#endif
+
+// Set the board type/revision. This must be called quite early, because for some builds it relies on pins not having been programmed for their intended use yet.
+// Also do any specific initialisation that varies with the board revision.
 void Platform::SetBoardType(BoardType bt) noexcept
 {
 	if (bt == BoardType::Auto)
@@ -3825,17 +3891,11 @@ void Platform::SetBoardType(BoardType bt) noexcept
 		driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);
 		driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);
 #elif defined(DUET3_MB6XD)
-		// Driver 0 direction has a pulldown resistor on v1.0  boards, but not on v0.1 boards
-		pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
-		delayMicroseconds(20);									// give the pullup resistor time to work
-		board = (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6XD_v01 : BoardType::Duet3_6XD_v100;
+		board = GetMB6XDBoardType();
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 		board = BoardType::FMDC;
-#elif defined(SAME70XPLD)
-		board = BoardType::SAME70XPLD_0;
 #elif defined(DUET_NG)
 		// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
-		pinMode(EspResetPin, OUTPUT_LOW);						// reset the WiFi module or the W5500. We assume that this forces the ESP8266 UART output pin to high impedance.
 		pinMode(W5500ModuleSensePin, INPUT_PULLUP);				// set our UART receive pin to be an input pin and enable the pullup
 
 		// Set up the VSSA sense pin. Older Duet WiFis don't have it connected, so we enable the pulldown resistor to keep it inactive.
@@ -3866,25 +3926,8 @@ void Platform::SetBoardType(BoardType bt) noexcept
 # endif
 #elif defined(DUET_M)
 		board = BoardType::DuetM_10;
-#elif defined(DUET_06_085)
-		// Determine whether this is a Duet 0.6 or a Duet 0.8.5 board.
-		// If it is a 0.85 board then DAC0 (AKA digital pin 67) is connected to ground via a diode and a 2.15K resistor.
-		// So we enable the pullup (value 100K-150K) on pin 67 and read it, expecting a LOW on a 0.8.5 board and a HIGH on a 0.6 board.
-		// This may fail if anyone connects a load to the DAC0 pin on a Duet 0.6, hence we implement board selection in M115 as well.
-		pinMode(Dac0DigitalPin, INPUT_PULLUP);
-		delayMicroseconds(10);
-		board = (digitalRead(Dac0DigitalPin)) ? BoardType::Duet_06 : BoardType::Duet_085;
-		pinMode(Dac0DigitalPin, INPUT);			// turn pullup off
-#elif defined(__RADDS__)
-		board = BoardType::RADDS_15;
-#elif defined(__ALLIGATOR__)
-		board = BoardType::Alligator_2;
 #elif defined(PCCB_10)
 		board = BoardType::PCCB_v10;
-#elif defined(PCCB_08) || defined(PCCB_08_X5)
-		board = BoardType::PCCB_v08;
-#elif defined(__LPC17xx__)
-		board = BoardType::Lpc;
 #else
 # error Undefined board type
 #endif
@@ -3910,11 +3953,10 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or later";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "Duet 3 " BOARD_SHORT_NAME " v0.1";
-	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0 or later";
+	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0";
+	case BoardType::Duet3_6XD_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "Duet 3 " BOARD_SHORT_NAME;
-#elif defined(SAME70XPLD)
-	case BoardType::SAME70XPLD_0:			return "SAME70-XPLD";
 #elif defined(DUET_NG)
 	// This is the string that the Duet 2 ATE uses to identify the board. The version number must be at the end.
 	case BoardType::DuetWiFi_10:			return "Duet WiFi 1.0 or 1.01";
@@ -3927,8 +3969,6 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 	case BoardType::DuetM_10:				return "Duet Maestro 1.0";
 #elif defined(PCCB_10)
 	case BoardType::PCCB_v10:				return "PC001373";
-#elif defined(__LPC17xx__)
-	case BoardType::Lpc:					return LPC_ELECTRONICS_STRING;
 #else
 # error Undefined board type
 #endif
@@ -3950,12 +3990,11 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3_6HC_v101:			return "duet3mb6hc101";
 	case BoardType::Duet3_6HC_v102:			return "duet3mb6hc102";
 #elif defined(DUET3_MB6XD)
-	case BoardType::Duet3_6XD_v01:			return "duet3mb6xd001";					// we have only one version at present
-	case BoardType::Duet3_6XD_v100:			return "duet3mb6xd100";					// we have only one version at present
+	case BoardType::Duet3_6XD_v01:			return "duet3mb6xd001";
+	case BoardType::Duet3_6XD_v100:			return "duet3mb6xd100";
+	case BoardType::Duet3_6XD_v101:			return "duet3mb6xd101";
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "fmdc";
-#elif defined(SAME70XPLD)
-	case BoardType::SAME70XPLD_0:			return "same70xpld";
 #elif defined(DUET_NG)
 	case BoardType::DuetWiFi_10:			return "duetwifi10";
 	case BoardType::DuetWiFi_102:			return "duetwifi102";
@@ -3967,8 +4006,6 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::DuetM_10:				return "duetmaestro100";
 #elif defined(PCCB_10)
 	case BoardType::PCCB_v10:				return "pc001373";
-#elif defined(__LPC17xx__)
-	case BoardType::Lpc:					return LPC_BOARD_STRING;
 #else
 # error Undefined board type
 #endif
@@ -4015,13 +4052,13 @@ bool Platform::IsDuetWiFi() const noexcept
 bool Platform::Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
-	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.c_str(), true);
+	return MassStorage::CombineName(location.GetRef(), folder, filename) && MassStorage::Delete(location.GetRef(), ErrorMessageMode::messageUnlessMissing);
 }
 
 bool Platform::DeleteSysFile(const char *_ecv_array filename) const noexcept
 {
 	String<MaxFilenameLength> location;
-	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.c_str(), true);
+	return MakeSysFileName(location.GetRef(), filename) && MassStorage::Delete(location.GetRef(), ErrorMessageMode::messageUnlessMissing);
 }
 
 #endif
@@ -4187,51 +4224,6 @@ void Platform::InitZProbeFilters() noexcept
 	zProbeOnFilter.Init(0);
 	zProbeOffFilter.Init(0);
 }
-
-#if SUPPORT_INKJET
-
-// Fire the inkjet (if any) in the given pattern
-// If there is no inkjet, false is returned; if there is one this returns true
-// So you can test for inkjet presence with if(platform->Inkjet(0))
-bool Platform::Inkjet(int bitPattern) noexcept
-{
-	if (inkjetBits < 0)
-		return false;
-	if (!bitPattern)
-		return true;
-
-	for(int8_t i = 0; i < inkjetBits; i++)
-	{
-		if (bitPattern & 1)
-		{
-			digitalWrite(inkjetSerialOut, 1);			// Write data to shift register
-
-			for(int8_t j = 0; j <= i; j++)
-			{
-				digitalWrite(inkjetShiftClock, HIGH);
-				digitalWrite(inkjetShiftClock, LOW);
-				digitalWrite(inkjetSerialOut, 0);
-			}
-
-			digitalWrite(inkjetStorageClock, HIGH);		// Transfers data from shift register to output register
-			digitalWrite(inkjetStorageClock, LOW);
-
-			digitalWrite(inkjetOutputEnable, LOW);		// Fire the droplet out
-			delayMicroseconds(inkjetFireMicroseconds);
-			digitalWrite(inkjetOutputEnable, HIGH);
-
-			digitalWrite(inkjetClear, LOW);				// Clear to 0
-			digitalWrite(inkjetClear, HIGH);
-
-			delayMicroseconds(inkjetDelayMicroseconds); // Wait for the next bit
-		}
-
-		bitPattern >>= 1; // Put the next bit in the units column
-	}
-
-	return true;
-}
-#endif
 
 #if HAS_CPU_TEMP_SENSOR
 
@@ -4489,7 +4481,7 @@ GCodeResult Platform::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& 
 				SmartDrivers::AppendStallConfig(drive, reply);
 				buf->cat(reply.c_str());
 				buf->catf(", action on stall: %s",
-							(eventOnStallDrivers.IsBitSet(drive)) ? "run macro"
+							(eventOnStallDrivers.IsBitSet(drive)) ? "raise event"
 								: (logOnStallDrivers.IsBitSet(drive)) ? "log"
 									: "none"
 						  );
@@ -4537,15 +4529,9 @@ bool Platform::SetDateTime(time_t time) noexcept
 // Configure an I/O port
 GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// Exactly one of FHJPSR is allowed
+	// Exactly one of EFHJPSR is allowed (also D on MB6HC)
 	unsigned int charsPresent = 0;
-	for (char c :
-#ifdef DUET3_MB6HC
-		(const char[]){'D', 'R', 'J', 'F', 'H', 'P', 'S'}
-#else
-		(const char[]){'R', 'J', 'F', 'H', 'P', 'S'}
-#endif
-		)
+	for (char c : (const char[]){'D', 'E', 'R', 'J', 'F', 'H', 'P', 'S'})
 	{
 		charsPresent <<= 1;
 		if (gb.Seen(c))
@@ -4585,8 +4571,13 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 			return spindles[slot].Configure(gb, reply);
 		}
 
+#if SUPPORT_LED_STRIPS
+	case 64:	// E
+		return ledStripManager.CreateStrip(gb, reply);
+#endif
+
 #ifdef DUET3_MB6HC
-	case 64:	// D
+	case 128:	// D
 # if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface())
 		{
@@ -4599,12 +4590,100 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 
 	default:
 #ifdef DUET3_MB6HC
-		reply.copy("exactly one of FHJPSRD must be given");
+# if SUPPORT_LED_STRIPS
+		reply.copy("exactly one of DEFHJPSR must be given");
+# else
+		reply.copy("exactly one of DFHJPSR must be given");
+# endif
+#elif SUPPORT_LED_STRIPS
+		reply.copy("exactly one of EFHJPSR must be given");
 #else
 		reply.copy("exactly one of FHJPSR must be given");
 #endif
 		return GCodeResult::error;
 	}
+}
+
+// Process M425
+GCodeResult Platform::ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	bool seen = false;
+	size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
+	for (size_t i = 0; i < totalAxes; ++i)
+	{
+		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[i]))
+		{
+			seen = true;
+			backlashMm[i] = gb.GetNonNegativeFValue();
+		}
+	}
+
+	if (gb.Seen('S'))
+	{
+		seen = true;
+		backlashCorrectionDistanceFactor = gb.GetLimitedUIValue('S', 1, 101);
+	}
+
+	if (seen)
+	{
+		UpdateBacklashSteps();
+		reprap.MoveUpdated();
+	}
+	else
+	{
+		reply.copy("Backlash correction (mm)");
+		for (size_t i = 0; i < totalAxes; ++i)
+		{
+			reply.catf(" %c: %.3f", reprap.GetGCodes().GetAxisLetters()[i], (double)backlashMm[i]);
+		}
+		reply.catf(", correction distance multiplier %" PRIu32, backlashCorrectionDistanceFactor);
+	}
+	return GCodeResult::ok;
+}
+
+// Update the backlash correction in steps. Called when the configured backlash distance or steps/mm is changed.
+void Platform::UpdateBacklashSteps() noexcept
+{
+	for (size_t i = 0; i < reprap.GetGCodes().GetTotalAxes(); ++i)
+	{
+		backlashSteps[i] = backlashMm[i] * reprap.GetPlatform().DriveStepsPerUnit(i);
+	}
+}
+
+// Given the number of microsteps that an axis has been asked to move, return the number that it should actually move
+int32_t Platform::ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
+{
+	// If this drive has changed direction, update the backlash correction steps due
+	const bool backwards = (delta < 0);
+	int32_t& stepsDue = backlashStepsDue[drive];
+	if (backwards != lastDirections.IsBitSet(drive))
+	{
+		lastDirections.InvertBit(drive);		// Direction has reversed
+		int32_t temp = (int32_t)backlashSteps[drive];
+		if (backwards)
+		{
+			temp = -temp;
+		}
+		stepsDue += temp;
+	}
+
+	// Apply some or all of the compensation steps due
+	if (stepsDue != 0)
+	{
+		if (labs(stepsDue) * backlashCorrectionDistanceFactor <= labs(delta))		// avoid a division if we can
+		{
+			delta += stepsDue;
+			stepsDue = 0;
+		}
+		else
+		{
+			const int32_t maxAllowedSteps = (int32_t)max<uint32_t>((uint32_t)labs(delta)/backlashCorrectionDistanceFactor, 1u);
+			const int32_t stepsToDo = (stepsDue < 0) ? max<int32_t>(stepsDue, -maxAllowedSteps) : min<int32_t>(stepsDue, maxAllowedSteps);
+			stepsDue -= stepsToDo;
+			delta += stepsToDo;
+		}
+	}
+	return delta;
 }
 
 #if SUPPORT_CAN_EXPANSION
@@ -4636,10 +4715,45 @@ GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndE
 
 void Platform::OnProcessingCanMessage() noexcept
 {
-#if SUPPORT_CAN_EXPANSION
 	whenLastCanMessageProcessed = millis();
 	digitalWrite(ActLedPin, ActOnPolarity);				// turn the ACT LED on
-#endif
+}
+
+GCodeResult Platform::UpdateRemoteInputShaping(unsigned int numExtraImpulses, const float coefficients[], const float durations[], const StringRef& reply) const noexcept
+{
+	const ExpansionManager& expansion = reprap.GetExpansion();
+	GCodeResult res = GCodeResult::ok;
+	if (expansion.GetNumExpansionBoards() != 0)
+	{
+		// Build a CAN message to update the remote drivers
+		for (uint8_t addr = 0; addr < CanId::MaxCanAddress; ++addr)
+		{
+			if (addr != CanInterface::GetCanAddress())
+			{
+				const ExpansionBoardData *boardData = expansion.GetBoardDetails(addr);
+				if (boardData != nullptr && boardData->numDrivers != 0)
+				{
+					CanMessageBuffer *const buf = CanMessageBuffer::BlockingAllocate();
+					const CanRequestId rid = CanInterface::AllocateRequestId(addr, buf);
+					auto msg = buf->SetupRequestMessage<CanMessageSetInputShaping>(rid, CanInterface::GetCanAddress(), addr);
+					msg->numExtraImpulses = numExtraImpulses;
+					for (unsigned int i = 0; i < numExtraImpulses; ++i)
+					{
+						msg->impulses[i].coefficient = coefficients[i];
+						msg->impulses[i].duration = durations[i];
+					}
+					buf->dataLength = msg->GetActualDataLength();
+					msg->SetRequestId(rid);
+					const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, 0);
+					if (rslt > res)
+					{
+						res = rslt;
+					}
+				}
+			}
+		}
+	}
+	return res;
 }
 
 #endif
@@ -5151,17 +5265,50 @@ GCodeResult Platform::EutProcessM569Point7(const CanMessageGeneric& msg, const S
 		return GCodeResult::error;
 	}
 
+# if !SUPPORT_BRAKE_PWM
+	if (parser.HasParameter('V'))
+	{
+		// Don't allow a brake port to be configured if the user specified a voltage and we don't support PWM
+		reply.copy("Brake PWM not supported by this board");
+		return GCodeResult::error;
+	}
+# endif
+
+	bool seen = false;
 	if (parser.HasParameter('C'))
 	{
+		seen = true;
 		String<StringLength20> portName;
 		parser.GetStringParam('C', portName.GetRef());
-		return GetGCodeResultFromSuccess(brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, PinAccess::write0));
 		//TODO use the following instead when we track the enable state of each driver individually
-		//return GetGCodeResultFromSuccess(brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, (driverDisabled[drive]) ? PinAccess::write0 : PinAccess::write1));
+		//if (!brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, (driverDisabled[drive]) ? PinAccess::write0 : PinAccess::write1)) ...
+		if (brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, PinAccess::write0))
+		{
+			return GCodeResult::error;
+		}
+# if SUPPORT_BRAKE_PWM
+		brakePorts[drive].SetFrequency(BrakePwmFrequency);
+# endif
 	}
 
-	reply.printf("Driver %u.%u uses brake port ", CanInterface::GetCanAddress(), drive);
-	brakePorts[drive].AppendPinName(reply);
+# if SUPPORT_BRAKE_PWM
+	if (parser.GetFloatParam('V', brakeVoltages[drive]))
+	{
+		seen = true;
+	}
+# endif
+
+	if (!seen)
+	{
+		reply.printf("Driver %u.%u uses brake port ", CanInterface::GetCanAddress(), drive);
+		brakePorts[drive].AppendPinName(reply);
+# if SUPPORT_BRAKE_PWM
+		if (brakeVoltages[drive] < FullyOnBrakeVoltage)
+		{
+			reply.catf(" with voltage limited to %.1f by PWM", (double)brakeVoltages[drive]);
+		}
+# endif
+	}
 	return GCodeResult::ok;
 }
 
@@ -5248,7 +5395,7 @@ void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
 	msg->SetStandardFields(MaxSmartDrivers);
 	for (size_t driver = 0; driver < MaxSmartDrivers; ++driver)
 	{
-		msg->data[driver] = SmartDrivers::GetStatus(driver).AsU32();
+		msg->data[driver] = SmartDrivers::GetStatus(driver, false, false).AsU32();
 	}
 # else
 	msg->SetStandardFields(NumDirectDrivers);

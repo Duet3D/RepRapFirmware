@@ -54,6 +54,7 @@ void SwitchEndstop::ReleasePorts() noexcept
 	}
 }
 
+// Configure this endstop. A call to gb.Seen('P') has returned true before this is called.
 GCodeResult SwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	String<StringLength50> portNames;

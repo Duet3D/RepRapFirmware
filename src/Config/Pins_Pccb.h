@@ -54,15 +54,23 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;
 #define ENFORCE_MAX_VIN			1
 #define HAS_VREF_MONITOR		1
 
-#define SUPPORT_INKJET			0					// set nonzero to support inkjet control
-#define SUPPORT_SCANNER			0					// set zero to disable support for FreeLSS scanners
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		0					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_LED_STRIPS		1					// set nonzero to support DotStar LED strips
+#define SUPPORT_DMA_DOTSTAR		1
+#define SUPPORT_DMA_NEOPIXEL	1
 #define ALLOCATE_DEFAULT_PORTS	1
+
+// Disable at least some of the kinematics that we don't need
+#define SUPPORT_LINEAR_DELTA	0					// leave out linear delta kinematics to save flash space
+#define SUPPORT_ROTARY_DELTA	0					// leave out rotary delta kinematics to save flash space
+#define SUPPORT_HANGPRINTER		0					// leave out hangprinter kinematics to save flash space
+#define SUPPORT_POLAR			0					// leave out polar kinematics to save flash space
+#define SUPPORT_SCARA			0					// leave out SCARA kinematics to save flash space
+#define SUPPORT_FIVEBARSCARA	0					// leave out 5-bar SCARA kinematics to save flash space
 
 // The physical capabilities of the machine
 
@@ -115,6 +123,7 @@ constexpr size_t MaxFans = 7;
 constexpr unsigned int MaxTriggers = 16;			// Maximum number of triggers
 
 constexpr size_t MaxSpindles = 2;					// Maximum number of configurable spindles
+constexpr size_t MaxLedStrips = 2;					// Maximum number of LED strips
 
 constexpr size_t NumSerialChannels = 1;				// The number of serial IO channels (USB only)
 #define SERIAL_MAIN_DEVICE serialUSB
@@ -269,7 +278,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_2,	PinCapability::none,	nullptr				},	// PA19 VSSA_MON
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_3,	PinCapability::ainr,	"temp0"				},	// PA20 Thermistor 0
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_8,	PinCapability::ainrw,	"exp.pa21,exp.36"	},	// PA21 Analogue, digital or UART expansion
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_9,	PinCapability::ainrw,	nullptr				},	// PA22 Analogue, digital or UART expansion
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::adc0_9,	PinCapability::npDmaW,	"led",				},	// PA22 USART 1 data (DotStar or Neopixel data)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr				},	// PA23 USART 1 SCLK (DotStar LED)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"stop0"				},	// PA24 Stop 0
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"stop1"				},	// PA25 Stop 1

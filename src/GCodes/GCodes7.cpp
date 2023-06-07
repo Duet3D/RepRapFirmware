@@ -90,6 +90,9 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 		break;
 	}
 
+	// Display the message box on all relevant devices. Acknowledging any one of them clears them all.
+	const MessageType mt = GetMessageBoxDevice(gb);						// get the display device
+	const uint32_t seq = reprap.SendAlert(mt, message.c_str(), title.c_str(), (int)sParam, tParam, axisControls, &limits);
 	if (sParam >= 2)			// if it's a blocking message box
 	{
 		// Don't lock the movement system, because if we do then only the channel that issues the M291 can move the axes
@@ -102,13 +105,10 @@ GCodeResult GCodes::DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(
 		if (Push(gb, true))												// stack the machine state including the file position
 		{
 			UnlockMovement(gb);											// allow movement so that e.g. an SD card print can call M291 and then DWC or PanelDue can be used to jog axes
-			gb.WaitForAcknowledgement();								// flag that we are waiting for acknowledgement
+			gb.WaitForAcknowledgement(seq);								// flag that we are waiting for acknowledgement
 		}
 	}
 
-	// Display the message box on all relevant devices. Acknowledging any one of them clears them all.
-	const MessageType mt = GetMessageBoxDevice(gb);						// get the display device
-	reprap.SendAlert(mt, message.c_str(), title.c_str(), (int)sParam, tParam, axisControls, &limits);
 	return GCodeResult::ok;
 }
 
@@ -129,11 +129,11 @@ GCodeResult GCodes::AcknowledgeMessage(GCodeBuffer&gb, const StringRef& reply) T
 	}
 
 	bool wasBlocking;
-	if (reprap.AcknowledgeMessageBox(seq, wasBlocking))
+	if (MessageBox::Acknowledge(seq, wasBlocking))
 	{
 		if (wasBlocking)
 		{
-			MessageBoxClosed(cancelled, true, rslt);
+			MessageBoxClosed(cancelled, true, seq, rslt);
 		}
 		return GCodeResult::ok;
 	}
@@ -145,7 +145,7 @@ GCodeResult GCodes::AcknowledgeMessage(GCodeBuffer&gb, const StringRef& reply) T
 }
 
 // Deal with processing a M292 or timing out a message box
-void GCodes::MessageBoxClosed(bool cancelled, bool m292, ExpressionValue rslt) noexcept
+void GCodes::MessageBoxClosed(bool cancelled, bool m292, uint32_t seq, ExpressionValue rslt) noexcept
 {
 	platform.MessageF(MessageType::LogInfo,
 						"%s: cancelled=%s",
@@ -155,7 +155,7 @@ void GCodes::MessageBoxClosed(bool cancelled, bool m292, ExpressionValue rslt) n
 	{
 		if (targetGb != nullptr)
 		{
-			targetGb->MessageAcknowledged(cancelled, rslt);
+			targetGb->MessageAcknowledged(cancelled, seq, rslt);
 		}
 	}
 }

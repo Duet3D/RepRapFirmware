@@ -141,7 +141,7 @@ void LinearDeltaKinematics::Recalc() noexcept
 
 	printRadiusSquared = fsquare(printRadius);
 
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		debugPrintf("HCH:");
 		for (size_t i = 0; i < numTowers; ++i)
@@ -353,7 +353,7 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 											// Update the intermediate variables that have changed
 											again = true;
 											Q2 = P2 + fsquare(dz);
-											if (reprap.Debug(moduleMove))
+											if (reprap.Debug(Module::Move))
 											{
 												debugPrintf("Limit tower %u, t=%.2f\n", tower, (double)t);
 											}
@@ -378,7 +378,7 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 							{
 								finalCoords[Z_AXIS] -= proposedAdjustment;
 								limited = true;
-								if (reprap.Debug(moduleMove))
+								if (reprap.Debug(Module::Move))
 								{
 									debugPrintf("Limit tower %u\n", tower);
 								}
@@ -435,7 +435,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 		return true;
 	}
 
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());
@@ -490,7 +490,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 			}
 		}
 
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			PrintMatrix("Derivative matrix", derivativeMatrix, numPoints, numFactors);
 		}
@@ -516,7 +516,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 			normalMatrix(i, numFactors) = temp;
 		}
 
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			PrintMatrix("Normal matrix", normalMatrix, numFactors, numFactors + 1);
 		}
@@ -533,7 +533,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 			solution[i] = normalMatrix(i, numFactors);
 		}
 
-		if (reprap.Debug(moduleMove))
+		if (reprap.Debug(Module::Move))
 		{
 			PrintMatrix("Solved matrix", normalMatrix, numFactors, numFactors + 1);
 			PrintVector("Solution", solution, numFactors);
@@ -593,7 +593,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 
 			finalDeviation.Set(finalSumOfSquares, finalSum, numPoints);
 
-			if (reprap.Debug(moduleMove))
+			if (reprap.Debug(Module::Move))
 			{
 				PrintVector("Expected probe error", expectedResiduals, numPoints);
 			}
@@ -610,7 +610,7 @@ bool LinearDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 
 	// Print out the calculation time
 	//debugPrintf("Time taken %dms\n", (reprap.GetPlatform()->GetInterruptClocks() - startTime) * 1000 / DDA::stepClockRate);
-	if (reprap.Debug(moduleMove))
+	if (reprap.Debug(Module::Move))
 	{
 		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());

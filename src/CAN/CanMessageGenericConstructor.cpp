@@ -14,7 +14,8 @@
 #include "CanInterface.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
-#define STRINGIZE(_v) #_v
+#define STRINGIZE2(_v)	#_v
+#define STRINGIZE(_v)	STRINGIZE2(_v)
 
 CanMessageGenericConstructor::CanMessageGenericConstructor(const ParamDescriptor *p_param) noexcept
 	: paramTable(p_param), dataLen(0)
@@ -64,6 +65,7 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(G
 				break;
 
 			case ParamDescriptor::uint16:
+			case ParamDescriptor::pwmFreq:
 				StoreValue((uint16_t)min<uint32_t>(gb.GetUIValue(), std::numeric_limits<uint16_t>::max()));
 				break;
 
@@ -150,7 +152,7 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(G
 				break;
 
 			default:
-				throw ConstructParseException("internal error at " __FILE__ "(" STRINGIZE(#__LINE__) ")");
+				throw ConstructParseException("internal error at " __FILE__ "(" STRINGIZE(__LINE__) ")");
 			}
 			msg.paramMap |= paramBit;
 		}
@@ -342,7 +344,7 @@ void CanMessageGenericConstructor::AddFloatArrayParam(char c, const float *v, si
 	InsertValue(v, numV * sizeof(float), pos + sizeof(uint8_t));
 }
 
-GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply) const noexcept
+GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgType, CanAddress dest, const StringRef& reply, uint8_t *extra) const noexcept
 {
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
@@ -356,7 +358,7 @@ GCodeResult CanMessageGenericConstructor::SendAndGetResponse(CanMessageType msgT
 	CanMessageGeneric *m2 = buf->SetupGenericRequestMessage(rid, CanInterface::GetCanAddress(), dest, msgType, actualMessageLength);
 	memcpy(m2, &msg, actualMessageLength);
 	m2->requestId = rid;
-	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
+	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, extra);
 }
 
 #endif
