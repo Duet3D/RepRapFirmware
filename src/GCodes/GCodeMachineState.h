@@ -291,6 +291,7 @@ public:
 
 	bool CreateBlock(uint16_t indentLevel) noexcept;
 	void EndBlock() noexcept;
+	void ClearBlocks() noexcept;
 
 private:
 	GCodeMachineState *previous;

@@ -301,4 +301,11 @@ void GCodeMachineState::EndBlock() noexcept
 	}
 }
 
+void GCodeMachineState::ClearBlocks() noexcept
+{
+	blockNesting = 0;
+	CurrentBlockState().SetPlainBlock();
+	variables.Clear();
+}
+
 // End

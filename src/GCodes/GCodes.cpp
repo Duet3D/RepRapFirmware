@@ -4307,9 +4307,9 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 	CancelWaitForTemperatures(true);
 	reprap.GetPrintMonitor().StoppedPrint();				// must do this after printing the simulation details not before, because it clears the filename and pause time
 	buildObjects.Init();
-	FileGCode()->OriginalMachineState().variables.Clear();	// delete any local variables that the job file created
+	FileGCode()->OriginalMachineState().ClearBlocks();		// delete any local variables that the job file created
 #if SUPPORT_ASYNC_MOVES
-	File2GCode()->OriginalMachineState().variables.Clear();	// delete any local variables that the job file created
+	File2GCode()->OriginalMachineState().ClearBlocks();		// delete any local variables that the job file created
 #endif
 }
 
