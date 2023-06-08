@@ -186,8 +186,9 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noex
 					error = true;
 					break;
 				}
+				itemChanged = (error || currentValue != oldValue);
 			}
-			itemChanged = (error || currentValue != oldValue);
+			// else we are adjusting, so itemChanged should already be set
 		}
 
 		if (itemChanged || !drawn || (highlight != highlighted))
