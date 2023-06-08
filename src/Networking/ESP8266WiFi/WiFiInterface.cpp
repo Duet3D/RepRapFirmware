@@ -1266,12 +1266,10 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 					gb.GetQuotedString(ssid.GetRef());
 					SafeStrncpy(config.ssid, ssid.c_str(), ARRAY_SIZE(config.ssid));
 
-					// Verify that the EAP protocol indicator has the same offset as the null terminator for the password
-					// for networks using pre-shared keys.
+					// Verify that the EAP protocol indicator has the same offset as the null terminator for the password for networks using pre-shared keys.
 					static_assert(offsetof(WirelessConfigurationData, eap.protocol) ==
 								offsetof(WirelessConfigurationData, password[sizeof(config.password) - sizeof(config.eap.protocol)]));
-					// If the above is true, this effectively sets the last character
-					// of the password to the null terminator.
+					// If the above is true, this effectively sets the last character of the password to the null terminator.
 					config.eap.protocol = EAPProtocol::NONE;
 
 					if (gb.Seen('X'))
@@ -1345,8 +1343,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 								config.eap.credSizes.asMemb.tls.privateKeyPswd = CheckCredential(gb);
 							}
 						}
-						else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 ||
-									config.eap.protocol == EAPProtocol::EAP_TTLS_MSCHAPV2)
+						else if (config.eap.protocol == EAPProtocol::EAP_PEAP_MSCHAPV2 || config.eap.protocol == EAPProtocol::EAP_TTLS_MSCHAPV2)
 						{
 							if (gb.Seen('A'))
 							{
