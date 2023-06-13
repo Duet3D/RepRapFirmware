@@ -96,7 +96,8 @@ private:
 	void DoUpload() noexcept;
 #endif
 
-	const char* GetKeyValue(const char *_ecv_array key) const noexcept;	// return the value of the specified key, or nullptr if not present
+	const char *_ecv_array null GetKeyValue(const char *_ecv_array key) const noexcept;		// return the value of the specified key, or nullptr if not present
+	const char *_ecv_array null GetHeaderValue(const char *_ecv_array key) const noexcept;	// return the value of the specified header, or nullptr if not present
 	HttpSessionKey GetSessionKey() const noexcept;	// try to get the optional X-Session-Key header value used to identify HTTP sessions
 
 	static void RemoveSession(size_t sessionToRemove) noexcept;

@@ -665,7 +665,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 	return true;
 }
 
-const char* HttpResponder::GetKeyValue(const char *key) const noexcept
+const char *_ecv_array null HttpResponder::GetKeyValue(const char *_ecv_array key) const noexcept
 {
 	for (size_t i = 0; i < numQualKeys; ++i)
 	{
@@ -677,16 +677,22 @@ const char* HttpResponder::GetKeyValue(const char *key) const noexcept
 	return nullptr;
 }
 
-HttpSessionKey HttpResponder::GetSessionKey() const noexcept
+const char *_ecv_array null HttpResponder::GetHeaderValue(const char *_ecv_array key) const noexcept
 {
 	for (size_t i = 0; i < numHeaderKeys; i++)
 	{
-		if (StringEqualsIgnoreCase(headers[i].key, "X-Session-Key"))
+		if (StringEqualsIgnoreCase(headers[i].key, key))
 		{
-			return StrToU32(headers[i].value);
+			return headers[i].value;
 		}
 	}
-	return NoSessionKey;
+	return nullptr;
+}
+
+HttpSessionKey HttpResponder::GetSessionKey() const noexcept
+{
+	const char *const _ecv_array null val = GetHeaderValue("X-Session-Key");
+	return (val == nullptr) ? NoSessionKey : StrToU32(val);
 }
 
 // Called to process a FileInfo request, which may take several calls
@@ -1081,15 +1087,8 @@ void HttpResponder::SendJsonResponse(const char *_ecv_array command) noexcept
 	if (mayKeepOpen)
 	{
 		// Check that the browser wants to persist the connection too
-		for (size_t i = 0; i < numHeaderKeys; ++i)
-		{
-			if (StringEqualsIgnoreCase(headers[i].key, "Connection"))
-			{
-				// Comment out the following line to disable persistent connections
-				keepOpen = StringEqualsIgnoreCase(headers[i].value, "keep-alive");
-				break;
-			}
-		}
+		const char *const _ecv_array null val = GetHeaderValue("Connection");
+		keepOpen = (val != nullptr && StringEqualsIgnoreCase(val, "keep-alive"));
 	}
 
 	// Note that when using RTOS the following response should preferably be small enough to fit in a single buffer.
@@ -1232,15 +1231,11 @@ void HttpResponder::ProcessRequest() noexcept
 				if (filename != nullptr)
 				{
 					// See how many bytes we expect to read
-					bool contentLengthFound = false;
-					for (size_t i = 0; i < numHeaderKeys; i++)
+					const char *const _ecv_array null val = GetHeaderValue("Content-Length");
+					const bool contentLengthFound = (val != nullptr);
+					if (contentLengthFound)
 					{
-						if (StringEqualsIgnoreCase(headers[i].key, "Content-Length"))
-						{
-							postFileLength = StrToU32(headers[i].value);
-							contentLengthFound = true;
-							break;
-						}
+						postFileLength = StrToU32(val);
 					}
 
 					// Start POST file upload
