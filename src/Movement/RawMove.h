@@ -98,6 +98,7 @@ public:
 	MovementSystemNumber GetMsNumber() const noexcept { return msNumber; }
 	float GetProportionDone() const noexcept;												// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
 	void Init(MovementSystemNumber p_msNumber) noexcept;
+	void ResetLaser() noexcept;																// reset the laser parameters
 	void ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept;			// change the extrusion factor of an extruder
 	const RestorePoint& GetRestorePoint(size_t n) const pre(n < NumTotalRestorePoints) { return restorePoints[n]; }
 	void SetDefaults(size_t firstDriveToZero) noexcept;										// set up default values

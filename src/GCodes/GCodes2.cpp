@@ -3068,6 +3068,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 
 				machineType = MachineType::laser;
+				for (MovementState& ms : moveStates)
+				{
+					ms.ResetLaser();
+				}
+
 				Move::CreateLaserTask();
 
 				if (gb.Seen('C'))
@@ -3092,6 +3097,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						laserMaxPower = max<float>(1.0, gb.GetNonNegativeFValue());
 					}
 				}
+
 				reprap.StateUpdated();
 				break;
 #endif

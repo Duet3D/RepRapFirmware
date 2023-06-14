@@ -111,9 +111,8 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 	newToolNumber = -1;
 	previousToolNumber = -1;
 
-#if SUPPORT_LASER || SUPPORT_IOBITS
-	laserPwmOrIoBits.Clear();
-#endif
+	ResetLaser();
+
 	updateUserPositionGb = nullptr;
 	restartMoveFractionDone = 0.0;
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -124,6 +123,17 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 		rp.Init();
 	}
 	InitObjectCancellation();
+}
+
+// Reset the laser parameters (also resets iobits because that is shared with laser)
+void MovementState::ResetLaser() noexcept
+{
+#if SUPPORT_LASER
+	laserPixelData.numPixels = 0;
+#endif
+#if SUPPORT_LASER || SUPPORT_IOBITS
+	laserPwmOrIoBits.Clear();
+#endif
 }
 
 void MovementState::ChangeExtrusionFactor(unsigned int extruder, float multiplier) noexcept
