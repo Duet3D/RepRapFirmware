@@ -34,6 +34,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "firmwareDate",		OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareDate),		ObjectModelEntryFlags::none },
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareFileName),	ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareVersion),	ObjectModelEntryFlags::none },
+	{ "inductiveSensor",	OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasInductiveSensor, self, 6),				ObjectModelEntryFlags::none },
 	{ "maxMotors",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).numDrivers),							ObjectModelEntryFlags::none },
 	{ "mcuTemp",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasMcuTemp, self, 1),						ObjectModelEntryFlags::live },
 	{ "name",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::longName),			ObjectModelEntryFlags::none },
@@ -66,17 +67,20 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	// 5. closedLoop members
 	{ "points",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).closedLoopLastRunDataPoints),			ObjectModelEntryFlags::none },
 	{ "runs",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).closedLoopRuns),						ObjectModelEntryFlags::none },
+
+	// 6. inductiveSensor members (none yet)
 };
 
 constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 {
-	6,				// number of sections
-	14,				// section 0: boards[]
+	7,				// number of sections
+	15,				// section 0: boards[]
 	3,				// section 1: mcuTemp
 	3,				// section 2: vIn
 	3,				// section 3: v12
 	2,				// section 4: accelerometer
-	2				// section 5: closed loop
+	2,				// section 5: closed loop
+	0,				// section 6: inductive sensor
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ExpansionManager)
@@ -227,6 +231,7 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 	}
 	board.hasAccelerometer = msg.hasAccelerometer;
 	board.hasClosedLoop = msg.hasClosedLoop;
+	board.hasInductiveSensor = msg.hasInductiveSensor;
 }
 
 // Return a pointer to the expansion board, if it is present

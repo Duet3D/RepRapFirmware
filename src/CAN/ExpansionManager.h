@@ -37,7 +37,8 @@ struct ExpansionBoardData
 			 hasV12 : 1,
 			 hasAccelerometer : 1,
 			 hasClosedLoop : 1,
-			 spare : 11;
+			 hasInductiveSensor : 1,
+			 spare : 10;
 	BoardState state;
 	uint8_t numDrivers;
 };
