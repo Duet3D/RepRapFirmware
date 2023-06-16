@@ -64,9 +64,9 @@ bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 // Create a remote Z probe
 GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& reply) noexcept
 {
-	if (type != ZProbeType::unfilteredDigital && type != ZProbeType::blTouch)
+	if (type != ZProbeType::unfilteredDigital && type != ZProbeType::blTouch && type != ZProbeType::scanningAnalog)
 	{
-		reply.copy("M558: only Z probe types 8 and 9 are supported on expansion boards");
+		reply.copy("M558: only Z probe types 8, 9 and 11 are supported on expansion boards");
 		return GCodeResult::error;
 	}
 
@@ -78,7 +78,8 @@ GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& rep
 
 	RemoteInputHandle h;
 	h.Set(RemoteInputHandle::typeZprobe, number, 0);
-	const GCodeResult rc = CanInterface::CreateHandle(boardAddress, h, pinNames.c_str(), 0, ActiveProbeReportInterval, state, reply);
+	const uint16_t threshold = (type == ZProbeType::scanningAnalog) ? 1 : 0;		// nonzero threshold makes it an analog handle
+	const GCodeResult rc = CanInterface::CreateHandle(boardAddress, h, pinNames.c_str(), threshold, ActiveProbeReportInterval, state, reply);
 	if (rc < GCodeResult::error)						// don't set the handle unless it is valid, or we will get an error when this probe is deleted
 	{
 		handle = h;
