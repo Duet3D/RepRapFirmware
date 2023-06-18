@@ -19,12 +19,15 @@
 // Members of class RemoteZProbe
 RemoteZProbe::~RemoteZProbe()
 {
-	String<StringLength100> reply;
-	const GCodeResult rslt = CanInterface::DeleteHandle(boardAddress, handle, reply.GetRef());
-	if (rslt != GCodeResult::ok)
+	if (handle.IsValid())
 	{
-		reply.cat('\n');
-		reprap.GetPlatform().Message(GetGenericMessageType(rslt), reply.c_str());
+		String<StringLength100> reply;
+		const GCodeResult rslt = CanInterface::DeleteHandle(boardAddress, handle, reply.GetRef());
+		if (rslt != GCodeResult::ok)
+		{
+			reply.cat('\n');
+			reprap.GetPlatform().Message(GetGenericMessageType(rslt), reply.c_str());
+		}
 	}
 }
 
