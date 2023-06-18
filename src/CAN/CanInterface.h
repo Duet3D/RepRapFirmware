@@ -92,8 +92,8 @@ namespace CanInterface
 	GCodeResult GetHandlePinName(CanAddress boardAddress, RemoteInputHandle h, bool& currentState, const StringRef& reply) noexcept;
 	GCodeResult EnableHandle(CanAddress boardAddress, RemoteInputHandle h, bool enable, bool& currentState, const StringRef& reply) noexcept;
 	GCodeResult ChangeHandleResponseTime(CanAddress boardAddress, RemoteInputHandle h, uint16_t responseMillis, bool &currentState, const StringRef &reply) noexcept;
-	typedef void (*ReadHandlesCallbackFunction)(RemoteInputHandle h, uint16_t val) noexcept;
-	GCodeResult ReadRemoteHandles(CanAddress boardAddress, RemoteInputHandle mask, RemoteInputHandle pattern, ReadHandlesCallbackFunction callback, const StringRef &reply) noexcept;
+	typedef void (*ReadHandlesCallbackFunction)(CallbackParameter param, RemoteInputHandle h, uint32_t val) noexcept;
+	GCodeResult ReadRemoteHandles(CanAddress boardAddress, RemoteInputHandle mask, RemoteInputHandle pattern, ReadHandlesCallbackFunction callback, CallbackParameter param, const StringRef &reply) noexcept;
 
 	// Filament monitor functions
 	GCodeResult CreateFilamentMonitor(DriverId driver, uint8_t type, const GCodeBuffer& gb, const StringRef& reply) noexcept;

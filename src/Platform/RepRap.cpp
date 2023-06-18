@@ -1260,15 +1260,15 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 
 		// Probe
 		const auto zp = platform->GetZProbeOrDefault(0);
-		const int v0 = zp->GetReading();
-		int v1;
+		const int32_t v0 = zp->GetReading();
+		int32_t v1;
 		switch (zp->GetSecondaryValues(v1))
 		{
 			case 1:
-				response->catf("\"probeValue\":%d,\"probeSecondary\":[%d],", v0, v1);
+				response->catf("\"probeValue\":%" PRIi32 ",\"probeSecondary\":[%" PRIi32 "],", v0, v1);
 				break;
 			default:
-				response->catf("\"probeValue\":%d,", v0);
+				response->catf("\"probeValue\":%" PRIi32 ",", v0);
 				break;
 		}
 
@@ -1785,15 +1785,15 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 
 	// Send the Z probe value
 	const auto zp = platform->GetZProbeOrDefault(0);
-	const int v0 = zp->GetReading();
-	int v1;
+	const int32_t v0 = zp->GetReading();
+	int32_t v1;
 	switch (zp->GetSecondaryValues(v1))
 	{
 	case 1:
-		response->catf(",\"probe\":\"%d (%d)\"", v0, v1);
+		response->catf(",\"probe\":\"%" PRIi32 " (%" PRIi32 ")\"", v0, v1);
 		break;
 	default:
-		response->catf(",\"probe\":\"%d\"", v0);
+		response->catf(",\"probe\":\"%" PRIi32 "\"", v0);
 		break;
 	}
 

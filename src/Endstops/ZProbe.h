@@ -16,7 +16,7 @@ public:
 	ZProbe(unsigned int num, ZProbeType p_type) noexcept;
 
 	virtual void SetIREmitter(bool on) const noexcept = 0;			// caution, this is called from within the tick ISR
-	virtual uint16_t GetRawReading() const noexcept = 0;
+	virtual uint32_t GetRawReading() const noexcept = 0;
 	virtual bool SetProbing(bool isProbing) noexcept = 0;			// put the probe in the probing state, returning true if successful
 	virtual GCodeResult AppendPinNames(const StringRef& str) noexcept = 0;		// not const because it may update the state too
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException);		// 'seen' is an in-out parameter
@@ -50,8 +50,8 @@ public:
 	bool GetSaveToConfigOverride() const noexcept { return misc.parts.saveToConfigOverride; }
 	int GetTargetAdcValue() const noexcept { return targetAdcValue; }
 	unsigned int GetMaxTaps() const { return misc.parts.maxTaps; }
-	int GetReading() const noexcept;
-	int GetSecondaryValues(int& v1) const noexcept;
+	int32_t GetReading() const noexcept;
+	int32_t GetSecondaryValues(int32_t& v1) const noexcept;
 	bool IsDeployedByUser() const noexcept { return isDeployedByUser; }
 
 	void PrepareForUse(const bool probingAway) noexcept;
@@ -119,7 +119,7 @@ public:
 	~MotorStallZProbe() override { }
 
 	void SetIREmitter(bool on) const noexcept override { }
-	uint16_t GetRawReading() const noexcept override { return 4000; }
+	uint32_t GetRawReading() const noexcept override { return 4000; }
 	bool SetProbing(bool isProbing) noexcept override { return true; }
 	GCodeResult AppendPinNames(const StringRef& str) noexcept override { return GCodeResult::ok; }
 
@@ -136,7 +136,7 @@ public:
 	~DummyZProbe() noexcept override { }
 
 	void SetIREmitter(bool on) const noexcept override { }
-	uint16_t GetRawReading() const noexcept override { return 4000; }
+	uint32_t GetRawReading() const noexcept override { return 4000; }
 	bool SetProbing(bool isProbing) noexcept override { return true; }
 	GCodeResult AppendPinNames(const StringRef& str) noexcept override { return GCodeResult::ok; }
 

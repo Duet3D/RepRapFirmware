@@ -93,7 +93,7 @@ bool LocalZProbe::AssignPorts(const char* pinNames, const StringRef& reply) noex
 #endif
 
 // This is called by the tick ISR to get the raw Z probe reading to feed to the filter
-uint16_t LocalZProbe::GetRawReading() const noexcept
+uint32_t LocalZProbe::GetRawReading() const noexcept
 {
 	constexpr uint16_t MaxReading = 1000;
 	switch (type)
@@ -102,7 +102,7 @@ uint16_t LocalZProbe::GetRawReading() const noexcept
 	case ZProbeType::dumbModulated:
 	case ZProbeType::alternateAnalog:
 	case ZProbeType::scanningAnalog:
-		return min<uint16_t>(inputPort.ReadAnalog() >> (AdcBits - 10), MaxReading);
+		return min<uint32_t>(inputPort.ReadAnalog() >> (AdcBits - 10), MaxReading);
 
 	case ZProbeType::digital:
 	case ZProbeType::unfilteredDigital:

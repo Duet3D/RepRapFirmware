@@ -50,7 +50,7 @@ constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 		nullptr,
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return (((const ZProbe*)self)->type == ZProbeType::dumbModulated) ? 2 : 1; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-					{	int v1 = 0;
+					{	int32_t v1 = 0;
 						return ExpressionValue
 								(	(context.GetLastIndex() == 0)
 									? (int32_t)((const ZProbe*)self)->GetReading()
@@ -175,7 +175,7 @@ bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexc
 
 #endif
 
-int ZProbe::GetReading() const noexcept
+int32_t ZProbe::GetReading() const noexcept
 {
 	int zProbeVal = 0;
 	const Platform& p = reprap.GetPlatform();
@@ -186,18 +186,18 @@ int ZProbe::GetReading() const noexcept
 		case ZProbeType::analog:				// Simple or intelligent IR sensor
 		case ZProbeType::alternateAnalog:		// Alternate sensor
 		case ZProbeType::digital:				// Switch connected to Z probe input
-		case ZProbeType::scanningAnalog:
-			zProbeVal = (int) ((p.GetZProbeOnFilter().GetSum() + p.GetZProbeOffFilter().GetSum()) / (2 * ZProbeAverageReadings));
+			zProbeVal = (int32_t)((p.GetZProbeOnFilter().GetSum() + p.GetZProbeOffFilter().GetSum()) / (int32_t)(2 * ZProbeAverageReadings));
 			break;
 
 		case ZProbeType::dumbModulated:		// Dumb modulated IR sensor.
 			// We assume that zProbeOnFilter and zProbeOffFilter average the same number of readings.
 			// Because of noise, it is possible to get a negative reading, so allow for this.
-			zProbeVal = (int) (((int32_t)p.GetZProbeOnFilter().GetSum() - (int32_t)p.GetZProbeOffFilter().GetSum())/(int)ZProbeAverageReadings);
+			zProbeVal = ((int32_t)p.GetZProbeOnFilter().GetSum() - (int32_t)p.GetZProbeOffFilter().GetSum())/(int32_t)ZProbeAverageReadings;
 			break;
 
 		case ZProbeType::unfilteredDigital:		// Switch connected to Z probe input, no filtering
 		case ZProbeType::blTouch:				// blTouch is now unfiltered too
+		case ZProbeType::scanningAnalog:		// scanning analog probes are unfiltered for speed
 			zProbeVal = GetRawReading();
 			break;
 
@@ -220,7 +220,7 @@ int ZProbe::GetReading() const noexcept
 	return zProbeVal;
 }
 
-int ZProbe::GetSecondaryValues(int& v1) const noexcept
+int32_t ZProbe::GetSecondaryValues(int32_t& v1) const noexcept
 {
 	const Platform& p = reprap.GetPlatform();
 	if (p.GetZProbeOnFilter().IsValid() && p.GetZProbeOffFilter().IsValid())
@@ -376,10 +376,10 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	{
 		const int v0 = GetReading();
 		reply.printf("Z probe %u: current reading %d", number, v0);
-		int v1;
+		int32_t v1;
 		if (GetSecondaryValues(v1) == 1)
 		{
-			reply.catf(" (%d)", v1);
+			reply.catf(" (%" PRIi32 ")", v1);
 		}
 		reply.catf(", threshold %d, trigger height %.3f", targetAdcValue, (double)-offsets[Z_AXIS]);
 		if (temperatureCoefficients[0] != 0.0 || temperatureCoefficients[1] != 0.0)

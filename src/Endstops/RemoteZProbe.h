@@ -19,10 +19,10 @@ class RemoteZProbe final : public ZProbe
 public:
 	DECLARE_FREELIST_NEW_DELETE(RemoteZProbe)
 
-	RemoteZProbe(unsigned int num, CanAddress bn, ZProbeType p_type) noexcept : ZProbe(num, p_type), boardAddress(bn), state(false) { }
+	RemoteZProbe(unsigned int num, CanAddress bn, ZProbeType p_type) noexcept : ZProbe(num, p_type), boardAddress(bn), lastValue(0), state(false) { }
 	~RemoteZProbe() noexcept override;
 
-	uint16_t GetRawReading() const noexcept override;
+	uint32_t GetRawReading() const noexcept override;
 	bool SetProbing(bool isProbing) noexcept override;
 	GCodeResult AppendPinNames(const StringRef& str) noexcept override;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
@@ -37,13 +37,15 @@ public:
 	float GetCalibratedReading() const noexcept override;
 
 	void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept override;
+	void ScanningProbeCallback(RemoteInputHandle h, uint32_t val) noexcept;
 
 	GCodeResult Create(const StringRef& pinNames, const StringRef& reply) noexcept;
 
 private:
 	CanAddress boardAddress;
 	RemoteInputHandle handle;
-	bool state;
+	uint32_t lastValue;							// the most recent value received from a scanning analog Z probe
+	bool state;									// the state of a digital Z probe
 
 	static constexpr uint16_t ActiveProbeReportInterval = 2;
 	static constexpr uint16_t InactiveProbeReportInterval = 25;

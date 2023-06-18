@@ -19,7 +19,7 @@ public:
 	LocalZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::none) { }
 	~LocalZProbe() noexcept override;
 
-	uint16_t GetRawReading() const noexcept override;
+	uint32_t GetRawReading() const noexcept override;
 	bool SetProbing(bool isProbing) noexcept override;
 	GCodeResult AppendPinNames(const StringRef& str) noexcept override;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
