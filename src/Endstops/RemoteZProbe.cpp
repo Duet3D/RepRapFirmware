@@ -69,13 +69,13 @@ GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& rep
 {
 	if (type != ZProbeType::unfilteredDigital && type != ZProbeType::blTouch && type != ZProbeType::scanningAnalog)
 	{
-		reply.copy("M558: only Z probe types 8, 9 and 11 are supported on expansion boards");
+		reply.copy("only Z probe types 8, 9 and 11 are supported on expansion boards");
 		return GCodeResult::error;
 	}
 
 	if (strchr(pinNames.c_str(), '+') != nullptr)
 	{
-		reply.copy("M558: output port not supported on expansion boards");
+		reply.copy("expansion boards do not support Z probe output ports");
 		return GCodeResult::error;
 	}
 
@@ -97,9 +97,9 @@ GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, boo
 	{
 		seen = true;
 		const uint32_t newType = gb.GetUIValue();
-		if (newType != (uint32_t)ZProbeType::unfilteredDigital && newType != (uint32_t)ZProbeType::blTouch)
+		if (newType != (uint32_t)ZProbeType::unfilteredDigital && newType != (uint32_t)ZProbeType::blTouch && newType != (uint32_t)ZProbeType::scanningAnalog)
 		{
-			reply.copy("M558: only Z probe types 8 and 9 are supported on expansion boards");
+			reply.copy("only Z probe types 8, 9 and 11 are supported on expansion boards");
 			return GCodeResult::error;
 		}
 		type = (ZProbeType)newType;
