@@ -704,7 +704,7 @@ private:
 	float heightChangePerPoint;					// the height different between adjacent points
 	size_t numPointsToCollect;					// how many readings to take
 	size_t numCalibrationReadingsTaken;			// the number of calibration readings we have taken
-	int16_t calibrationReadings[MaxScanningProbeCalibrationPoints];
+	int32_t calibrationReadings[MaxScanningProbeCalibrationPoints];
 
 	uint32_t lastProbedTime;					// time in milliseconds that the probe was last triggered
 	volatile bool zProbeTriggered;				// Set by the step ISR when a move is aborted because the Z probe is triggered

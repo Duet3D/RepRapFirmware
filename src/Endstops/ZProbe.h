@@ -48,7 +48,7 @@ public:
 	float GetLastStoppedHeight() const noexcept { return lastStopHeight; }
 	bool GetTurnHeatersOff() const noexcept { return misc.parts.turnHeatersOff; }
 	bool GetSaveToConfigOverride() const noexcept { return misc.parts.saveToConfigOverride; }
-	int GetTargetAdcValue() const noexcept { return targetAdcValue; }
+	int32_t GetTargetAdcValue() const noexcept { return targetAdcValue; }
 	unsigned int GetMaxTaps() const { return misc.parts.maxTaps; }
 	int32_t GetReading() const noexcept;
 	int32_t GetSecondaryValues(int32_t& v1) const noexcept;
@@ -75,10 +75,7 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
-	uint8_t number;
-	ZProbeType type;
-	int8_t sensor;						// the sensor number used for temperature calibration
-	int16_t targetAdcValue;					// the target ADC value, after inversion if enabled
+	int32_t targetAdcValue;					// the target ADC value, after inversion if enabled
 	union
 	{
 		struct
@@ -106,6 +103,9 @@ protected:
 	float quadraticCoefficient;
 	bool isCalibrated = false;
 
+	uint8_t number;
+	ZProbeType type;
+	int8_t sensor;						// the sensor number used for temperature calibration
 	bool isDeployedByUser;				// true if the user has used the M401 command to deploy this probe and not sent M402 to retract it
 };
 

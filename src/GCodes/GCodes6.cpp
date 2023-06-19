@@ -857,7 +857,6 @@ GCodeResult GCodes::HandleM558Point1(GCodeBuffer& gb, const StringRef &reply, un
 		MovementState& ms = GetMovementState(gb);
 		AllocateAxes(gb, ms, axesMoving, ParameterLettersBitmap());		// allocate the Z axis
 #endif
-
 		currentZProbeNumber = probeNumber;
 
 		// Set the scanning range to a whole number of microsteps and calculate the microsteps per point

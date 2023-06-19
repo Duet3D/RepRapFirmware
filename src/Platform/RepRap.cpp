@@ -1484,7 +1484,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 		// Probe trigger threshold, trigger height, type
 		{
 			const auto zp = platform->GetZProbeOrDefault(0);
-			response->catf(",\"probe\":{\"threshold\":%d,\"height\":%.2f,\"type\":%u}",
+			response->catf(",\"probe\":{\"threshold\":%" PRIi32 ",\"height\":%.2f,\"type\":%u}",
 							zp->GetTargetAdcValue(), (double)zp->GetConfiguredTriggerHeight(), (unsigned int)zp->GetProbeType());
 		}
 

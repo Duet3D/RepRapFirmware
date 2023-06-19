@@ -1580,7 +1580,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				zp->SetProbing(true);
 			}
 
-			calibrationReadings[numCalibrationReadingsTaken] = (int16_t)zp->GetRawReading() - zp->GetTargetAdcValue();
+			calibrationReadings[numCalibrationReadingsTaken] = (int32_t)zp->GetRawReading() - zp->GetTargetAdcValue();
 			++numCalibrationReadingsTaken;
 			if (numCalibrationReadingsTaken == numPointsToCollect)
 			{

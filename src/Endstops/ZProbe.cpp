@@ -93,7 +93,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(ZProbe)
 
 #endif
 
-ZProbe::ZProbe(unsigned int num, ZProbeType p_type) noexcept : EndstopOrZProbe(), number(num), lastStopHeight(0.0), isDeployedByUser(false)
+ZProbe::ZProbe(unsigned int num, ZProbeType p_type) noexcept : EndstopOrZProbe(), lastStopHeight(0.0), number(num), isDeployedByUser(false)
 {
 	SetDefaults();
 	type = p_type;
@@ -161,7 +161,7 @@ bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexc
 	const char* axisLetters = reprap.GetGCodes().GetAxisLetters();
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 	String<StringLength256> scratchString;
-	scratchString.printf("G31 K%u P%d", probeNumber, targetAdcValue);
+	scratchString.printf("G31 K%u P%" PRIi32, probeNumber, targetAdcValue);
 	for (size_t i = 0; i < numTotalAxes; ++i)
 	{
 		if (axisLetters[i] != 'Z')
@@ -381,7 +381,7 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		{
 			reply.catf(" (%" PRIi32 ")", v1);
 		}
-		reply.catf(", threshold %d, trigger height %.3f", targetAdcValue, (double)-offsets[Z_AXIS]);
+		reply.catf(", threshold %" PRIi32 ", trigger height %.3f", targetAdcValue, (double)-offsets[Z_AXIS]);
 		if (temperatureCoefficients[0] != 0.0 || temperatureCoefficients[1] != 0.0)
 		{
 			reply.catf(" at %.1f" DEGREE_SYMBOL "C, temperature coefficients [%.1f/" DEGREE_SYMBOL "C, %.1f/" DEGREE_SYMBOL "C^2]",
