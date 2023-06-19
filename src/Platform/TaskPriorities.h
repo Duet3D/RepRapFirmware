@@ -31,6 +31,9 @@ namespace TaskPriority
 	constexpr unsigned int CanReceiverPriority = 6;
 	constexpr unsigned int Accelerometer = 6;
 	constexpr unsigned int CanClockPriority = 7;
+
+	// Assert that the highest priority one isn't too high
+	static_assert(CanClockPriority < configMAX_PRIORITIES);
 }
 
 #endif /* SRC_TASKPRIORITIES_H_ */
