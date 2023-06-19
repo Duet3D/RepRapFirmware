@@ -46,7 +46,7 @@ GCodeResult LedStripManager::CreateStrip(GCodeBuffer &gb, const StringRef &reply
 	if (!gb.Seen('C') && !gb.Seen('T') && !gb.Seen('U'))
 	{
 		// Just reporting on an existing LED strip, or changing its minor parameters (not the pin name)
-		ReadLocker lock(ledLock);
+		ReadLocker locker(ledLock);
 		if (slot == nullptr)
 		{
 			reply.printf("LED strip %u does not exist", (unsigned int)stripNumber);
