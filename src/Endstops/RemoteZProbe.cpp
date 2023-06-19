@@ -135,12 +135,16 @@ GCodeResult RemoteZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len
 }
 
 // Functions used only with scanning Z probes
+// Get the height compared to the nominal trigger height
 float RemoteZProbe::GetCalibratedReading() const noexcept
 {
 	String<1> dummyReply;
-	CanInterface::ReadRemoteHandles(boardAddress, handle, handle, GlobalScanningProbeCallback, CallbackParameter((void*)this), dummyReply.GetRef());
-	//TODO calibration
-	return lastValue >> 6;
+	if (CanInterface::ReadRemoteHandles(boardAddress, handle, handle, GlobalScanningProbeCallback, CallbackParameter((void*)this), dummyReply.GetRef()) == GCodeResult::ok)
+	{
+		const float diff = (float)((int32_t)lastValue - targetAdcValue);
+		return diff * (linearCoefficient + diff * quadraticCoefficient);
+	}
+	return 0.0;
 }
 
 // Callback function for digital Z probes
