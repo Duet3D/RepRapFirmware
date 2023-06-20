@@ -60,6 +60,7 @@ public:
 
 	ReadLockedPointer<ZProbe> GetZProbe(size_t index) const noexcept;
 	ReadLockedPointer<ZProbe> GetZProbeOrDefault(size_t index) const noexcept;
+	ZProbe *_ecv_null GetZProbeFromISR(size_t index) const noexcept;
 	ZProbe& GetDefaultZProbeFromISR() const noexcept;
 
 	void SetZProbeDefaults() noexcept;

@@ -119,7 +119,7 @@ constexpr float DefaultProbingSpeed = 2.0;				// Default Z probing speed mm/sec
 constexpr float DefaultZProbeTravelSpeed = 100.0;		// Default speed for travel to probe points
 constexpr float DefaultZProbeTolerance = 0.03;			// How close the Z probe trigger height from consecutive taps must be
 constexpr uint8_t DefaultZProbeTaps = 1;				// The maximum number of times we probe each point
-constexpr int DefaultZProbeADValue = 500;				// Default trigger threshold
+constexpr int32_t DefaultZProbeADValue = 500;			// Default trigger threshold
 
 constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres
 

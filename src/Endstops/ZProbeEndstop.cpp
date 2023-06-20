@@ -41,7 +41,8 @@ bool ZProbeEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDr
 EndstopHitDetails ZProbeEndstop::CheckTriggered() noexcept
 {
 	EndstopHitDetails rslt;				// initialised by default constructor
-	if (Stopped())
+	const ZProbe *zp = reprap.GetPlatform().GetEndstops().GetZProbeFromISR(zProbeNumber);
+	if (zp!= nullptr && zp->Stopped())
 	{
 		rslt.SetAction((stopAll) ? EndstopHitAction::stopAll : EndstopHitAction::stopAxis);
 		rslt.axis = GetAxis();

@@ -165,6 +165,11 @@ ReadLockedPointer<ZProbe> EndstopsManager::GetZProbeOrDefault(size_t index) cons
 										: defaultZProbe);
 }
 
+ZProbe *_ecv_null EndstopsManager::GetZProbeFromISR(size_t index) const noexcept
+{
+	return (index < ARRAY_SIZE(zProbes)) ? zProbes[index] : nullptr;
+}
+
 ZProbe& EndstopsManager::GetDefaultZProbeFromISR() const noexcept
 {
 	return (zProbes[0] != nullptr)

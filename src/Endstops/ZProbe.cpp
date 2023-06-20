@@ -237,10 +237,10 @@ int32_t ZProbe::GetSecondaryValues(int32_t& v1) const noexcept
 	return 0;
 }
 
-// Test whether we are at or near the stop
+// Test whether we are at or near the stop. May be called from an ISR as well and from a normal task context.
 bool ZProbe::Stopped() const noexcept
 {
-	const int zProbeVal = GetReading();
+	const int32_t zProbeVal = GetReading();
 	return zProbeVal >= targetAdcValue;
 }
 
