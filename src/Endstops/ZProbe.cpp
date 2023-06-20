@@ -177,7 +177,7 @@ bool ZProbe::WriteParameters(FileStore *f, unsigned int probeNumber) const noexc
 
 int32_t ZProbe::GetReading() const noexcept
 {
-	int zProbeVal = 0;
+	int32_t zProbeVal = 0;
 	const Platform& p = reprap.GetPlatform();
 	if (type == ZProbeType::unfilteredDigital || type == ZProbeType::blTouch || (p.GetZProbeOnFilter().IsValid() && p.GetZProbeOffFilter().IsValid()))
 	{
@@ -474,11 +474,18 @@ GCodeResult ZProbe::SetScanningCoefficients(float aParam, float bParam) noexcept
 	return GCodeResult::ok;
 }
 
+GCodeResult ZProbe::SetScanningCoefficients(float aParam, float bParam, int32_t valueAtTriggerHeight) noexcept
+{
+	SetScanningCoefficients(aParam, bParam);
+	targetAdcValue = valueAtTriggerHeight;
+	return GCodeResult::ok;
+}
+
 GCodeResult ZProbe::ReportScanningCoefficients(const StringRef& reply) noexcept
 {
 	if (isCalibrated)
 	{
-		reply.printf("A=%.2f B=%.1f", (double)linearCoefficient, (double)quadraticCoefficient);
+		reply.printf("A=%.3g B=%.3g", (double)linearCoefficient, (double)quadraticCoefficient);
 		return GCodeResult::ok;
 	}
 

@@ -64,6 +64,7 @@ public:
 	// Scanning Z probe support
 	bool IsScanning() const noexcept { return type == ZProbeType::scanningAnalog; }			// this is currently the only type of scanning probe we support
 	GCodeResult SetScanningCoefficients(float aParam, float bParam) noexcept;
+	GCodeResult SetScanningCoefficients(float aParam, float bParam, int32_t valueAtTriggerHeight) noexcept;
 	GCodeResult ReportScanningCoefficients(const StringRef& reply) noexcept;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE

@@ -620,7 +620,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 {
 	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
 
-	if (gb.GetCommandNumber() == 1)
+	if (gb.GetCommandFraction() == 1)
 	{
 		return reprap.GetGCodes().HandleM558Point1(gb, reply, probeNumber);
 	}

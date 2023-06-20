@@ -162,7 +162,7 @@ void GCodes::TakeScanningProbeReading() noexcept
 	const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
 	const float heightError = zp->GetCalibratedReading();
 	HeightMap& hm = reprap.GetMove().AccessHeightMap();
-	hm.SetGridHeight(gridAxis0Index, gridAxis1Index, heightError);
+	hm.SetGridHeight(gridAxis0Index, gridAxis1Index, -heightError);
 	if (gridAxis0Index != lastAxis0Index)
 	{
 		if (gridAxis1Index & 1u)
@@ -858,11 +858,12 @@ GCodeResult GCodes::HandleM558Point1(GCodeBuffer& gb, const StringRef &reply, un
 		AllocateAxes(gb, ms, axesMoving, ParameterLettersBitmap());		// allocate the Z axis
 #endif
 		currentZProbeNumber = probeNumber;
+		zp->PrepareForUse(false);										// needed to set actual trigger height allowing for temperature compensation
 
 		// Set the scanning range to a whole number of microsteps and calculate the microsteps per point
 		const unsigned int microstepsPerHalfScan = (unsigned int)(requestedScanningRange * platform.DriveStepsPerUnit(Z_AXIS));
 		constexpr unsigned int MaxCalibrationPointsPerHalfScan = (MaxScanningProbeCalibrationPoints - 1)/2;
-		const unsigned int microstepsPerPoint = (microstepsPerHalfScan + MaxCalibrationPointsPerHalfScan - 1)/MaxCalibrationPointsPerHalfScan;
+		const unsigned int microstepsPerPoint = max<unsigned int>((microstepsPerHalfScan + MaxCalibrationPointsPerHalfScan - 1)/MaxCalibrationPointsPerHalfScan, 1);
 		heightChangePerPoint = microstepsPerPoint/platform.DriveStepsPerUnit(Z_AXIS);
 		const size_t pointsPerHalfScan = microstepsPerHalfScan/microstepsPerPoint;
 		calibrationStartingHeight = zp->GetActualTriggerHeight() + pointsPerHalfScan * heightChangePerPoint;

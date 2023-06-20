@@ -46,7 +46,7 @@ extern uint32_t _firmware_crc;			// defined in linker script
 // On the SAME70 we use matrices of doubles when doing auto calibration, so we need 1800 words of stack even when MaxAxes is only 15
 constexpr unsigned int MainTaskStackWords = max<unsigned int>(1800, (MaxAxes * MaxAxes * 2) + 550);
 #else
-// On other processors we use matrixes of floats when doing auto calibration
+// On other processors we use matrices of floats when doing auto calibration
 // Increase minimum stack words to 1370 for WPA Enterprise support
 constexpr unsigned int MainTaskStackWords = max<unsigned int>(1370, (MaxAxes * MaxAxes * 2) + 550);
 #endif
