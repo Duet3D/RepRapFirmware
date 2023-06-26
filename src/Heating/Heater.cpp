@@ -650,7 +650,7 @@ void Heater::ClearModelAndMonitors() noexcept
 	modelSetByUser = monitorsSetByUser = false;
 }
 
-// This is called when this heater is declared to be a bed or chamber heater using M140 or M141
+// This is called when this heater is declared to be a tool heater using M563
 void Heater::SetAsToolHeater() noexcept
 {
 	if (!modelSetByUser)
@@ -665,7 +665,7 @@ void Heater::SetAsToolHeater() noexcept
 	}
 }
 
-// This is called when a heater is declared to be a tool heater using M563
+// This is called when a heater is declared to be a bed or chamber heater using M140 or M141
 void Heater::SetAsBedOrChamberHeater() noexcept
 {
 	if (!modelSetByUser)
