@@ -1015,22 +1015,36 @@ pre(driver.IsRemote())
 
 #if DUAL_CAN
 	case 3:			// read driver encoder via secondary CAN
+		if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter)
 		{
-			if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter) {
-				return HangprinterKinematics::ReadODrive3Encoder(driver, gb, reply);
-			}
-			return GCodeResult::errorNotSupported;
+			return HangprinterKinematics::ReadODrive3Encoder(driver, gb, reply);
 		}
-	case 4:			// set driver torque mode via secondary CAN
+		return GCodeResult::errorNotSupported;
+#endif
+
+	case 4:			// set driver torque mode
+		// M569.4 is supported both by Hangprinter with ODrives and experimentally by the EXP1HCL and M23CL boards.
+		// First check whether we have a suitable EXP1HCL or M23 driver at the specified CAN address.
+		// ODrive CAN addresses in this command are between 40 and 43 inclusive so the EXP1HCL or M23CL addresses should avoid that range when using Hangprinter kinematics.
 		{
-			if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter) {
-				gb.MustSee('T');
-				const float torque = gb.GetFValue();
-				return HangprinterKinematics::SetODrive3TorqueMode(driver, torque, reply);
+			const ExpansionBoardData *const boardData = reprap.GetExpansion().GetBoardDetails(driver.boardAddress);
+			if (boardData != nullptr && boardData->hasClosedLoop)
+			{
+				CanMessageGenericConstructor cons(M569Point4Params);
+				cons.PopulateFromCommand(gb);
+				return cons.SendAndGetResponse(CanMessageType::m569p4, driver.boardAddress, reply);
 			}
-			return GCodeResult::errorNotSupported;
+		}
+#if DUAL_CAN
+		if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter)
+		{
+			gb.MustSee('T');
+			const float torque = gb.GetFValue();
+			return HangprinterKinematics::SetODrive3TorqueMode(driver, torque, reply);
 		}
 #endif
+		reply.copy("not supported by this driver");
+		return GCodeResult::error;
 
 	case 5:
 		return ClosedLoop::StartDataCollection(driver, gb, reply);
@@ -1078,13 +1092,11 @@ pre(driver.IsRemote())
 		}
 #if DUAL_CAN
 	case 8:			// read axis force via secondary CAN
+		if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter)
 		{
-			if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter)
-			{
-				return HangprinterKinematics::ReadODrive3AxisForce(driver, reply);
-			}
-			return GCodeResult::errorNotSupported;
+			return HangprinterKinematics::ReadODrive3AxisForce(driver, reply);
 		}
+		return GCodeResult::errorNotSupported;
 #endif
 
 	default:
