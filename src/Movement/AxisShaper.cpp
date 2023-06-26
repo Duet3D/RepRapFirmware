@@ -391,32 +391,72 @@ void AxisShaper::CalculateDerivedParameters() noexcept
 // Currently we use a single input shaper for all axes, so the move segments are attached to the DDA not the DM
 void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) const noexcept
 {
-	params.SetFromDDA(dda);																// set up the provisional parameters
+	params.SetFromDDA(dda);												// set up the provisional parameters
 	if (numExtraImpulses != 0)
 	{
-		if (params.accelDistance < params.decelStartDistance)			// we can't do any shaping unless there is a steady speed segment that can be shortened
+		// Work out what the ideal plan is, then see how far we can achieve it
+		InputShaperPlan idealPlan;
+		const DDA *const nextDda = dda.GetNext();
+		const DDA *const prevDda = dda.GetPrevious();
+
+		if (params.accelDistance >= 0.0 && params.accelDistance < dda.totalDistance)
 		{
-			//TODO if we want to shape both acceleration and deceleration but the steady distance is zero or too short, we could reduce the top speed
-			if (params.accelDistance > 0.0)
+			const DDA::DDAState prevState = prevDda->state;
+			if ((prevState != DDA::DDAState::frozen && prevState != DDA::DDAState::executing) || !prevDda->flags.wasAccelOnlyMove)
 			{
-				if ((dda.GetPrevious()->state != DDA::DDAState::frozen && dda.GetPrevious()->state != DDA::DDAState::executing) || !dda.GetPrevious()->flags.wasAccelOnlyMove)
-				{
-					TryShapeAccelBoth(dda, params);
-				}
-				else if (params.accelClocks >= minimumShapingEndOriginalClocks)
-				{
-					TryShapeAccelEnd(dda, params);
-				}
+				idealPlan.shapeAccelStart = true;
 			}
-			if (params.decelStartDistance < dda.totalDistance)
+			if (params.accelDistance < dda.totalDistance || (nextDda->state == DDA::DDAState::provisional && nextDda->startSpeed >= nextDda->topSpeed))
 			{
-				if (dda.GetNext()->GetState() != DDA::DDAState::provisional || !dda.GetNext()->IsDecelerationMove())
+				idealPlan.shapeAccelEnd = true;
+			}
+		}
+
+		if (params.decelStartDistance > 0.0 && params.decelStartDistance < dda.totalDistance)
+		{
+			const DDA::DDAState nextState = nextDda->state;
+			if (nextState != DDA::DDAState::provisional || !nextDda->IsDecelerationMove())
+			{
+				idealPlan.shapeDecelEnd = true;
+			}
+			if (params.decelStartDistance > 0.0 || prevDda->endSpeed >= prevDda->topSpeed)
+			{
+				idealPlan.shapeDecelStart = true;
+			}
+		}
+
+		if (idealPlan.IsShaped())
+		{
+			if (params.accelDistance > 0.0 && params.decelStartDistance < dda.totalDistance)
+			{
+				// This move has both acceleration and deceleration. Therefore we can reduce the top speed in order to increase the steady speed phase,
+				// which may allow us to apply input shaping.
+				//TODO
+			}
+
+			if (params.accelDistance < params.decelStartDistance)			// we can't do any shaping unless there is a steady speed segment that can be shortened
+			{
+				if (params.accelDistance > 0.0 && idealPlan.shapeAccelEnd)
 				{
-					TryShapeDecelBoth(dda, params);
+					if (idealPlan.shapeAccelStart)
+					{
+						TryShapeAccelBoth(dda, params);
+					}
+					else if (params.accelClocks >= minimumShapingEndOriginalClocks)
+					{
+						TryShapeAccelEnd(dda, params);
+					}
 				}
-				else if (params.decelClocks >= minimumShapingStartOriginalClocks)
+				if (params.decelStartDistance < dda.totalDistance && idealPlan.shapeDecelStart)
 				{
-					TryShapeDecelStart(dda, params);
+					if (idealPlan.shapeDecelEnd)
+					{
+						TryShapeDecelBoth(dda, params);
+					}
+					else if (params.decelClocks >= minimumShapingStartOriginalClocks)
+					{
+						TryShapeDecelStart(dda, params);
+					}
 				}
 			}
 		}
