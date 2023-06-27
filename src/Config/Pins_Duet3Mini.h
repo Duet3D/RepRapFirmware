@@ -385,7 +385,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.enc.sw"	},	// PB09 ENC SW
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::none,	"ate.d5.diag"	},	// PB10 driver 5 diag
 	{ TcOutput::tc5_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out3"			},	// PB11 OUT3
-	{ TcOutput::none,	TccOutput::tcc3_0F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"io3.out","lcd.np"	},	// PB12 IO3_OUT and LCD Neopixel out
+	{ TcOutput::none,	TccOutput::tcc3_0F,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"io3.out,lcd.np"	},	// PB12 IO3_OUT and LCD Neopixel out
 	{ TcOutput::tc4_1,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	"out2"			},	// PB13 OUT2
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::wpwm,	nullptr			},	// PB14 CAN Tx
 	{ TcOutput::none,	TccOutput::none,	AdcInput::none,		SercomIo::none,		SercomIo::none,		Nx,	PinCapability::read,	nullptr			},	// PB15 CAN Rx
