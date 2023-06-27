@@ -34,6 +34,8 @@ namespace TaskPriority
 	constexpr unsigned int CanReceiverPriority = 6;
 	constexpr unsigned int Accelerometer = 6;
 	constexpr unsigned int CanClockPriority = 7;
+
+	static_assert(CanClockPriority < configMAX_PRIORITIES);
 }
 
 #endif /* SRC_TASKPRIORITIES_H_ */
