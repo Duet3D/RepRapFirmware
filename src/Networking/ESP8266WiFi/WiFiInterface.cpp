@@ -745,7 +745,7 @@ void WiFiInterface::Spin() noexcept
 					// Read the status to get the WiFi server version and MAC address
 					Receiver<NetworkStatusResponse> status;
 					int32_t rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
-					if (rc > 0)
+					if (rc >= (int32_t)MinimumStatusResponseLength)
 					{
 						wiFiServerVersion.copy(status.Value().versionText);
 						macAddress.SetFromBytes(status.Value().macAddress);
@@ -920,7 +920,7 @@ void WiFiInterface::Spin() noexcept
 				{
 					// Get our IP address, this needs to be correct for FTP to work
 					Receiver<NetworkStatusResponse> status;
-					if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
+					if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) >= (int32_t)MinimumStatusResponseLength)
 					{
 						ipAddress.SetV4LittleEndian(status.Value().ipAddress);
 						actualSsid.copy(status.Value().ssid);
@@ -1022,7 +1022,7 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 	{
 		Receiver<NetworkStatusResponse> status;
 		status.Value().clockReg = 0xFFFFFFFF;				// older WiFi firmware doesn't return this value, so preset it
-		if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) > 0)
+		if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) >= (int32_t)MinimumStatusResponseLength)
 		{
 			NetworkStatusResponse& r = status.Value();
 			r.versionText[ARRAY_UPB(r.versionText)] = 0;
