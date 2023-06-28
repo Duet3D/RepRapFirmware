@@ -88,7 +88,7 @@ public:
 	void StartWiFi() noexcept;
 	void ResetWiFi() noexcept;
 	void ResetWiFiForUpload(bool external) noexcept;
-	const char *GetWiFiServerVersion() const noexcept { return wiFiServerVersion; }
+	const char *GetWiFiServerVersion() const noexcept { return wiFiServerVersion.c_str(); }
 	static const char* TranslateWiFiState(WiFiState w) noexcept;
 	void SpiInterrupt() noexcept;
 	void EspRequestsTransfer() noexcept;
@@ -158,8 +158,8 @@ private:
 	IPAddress netmask;
 	IPAddress gateway;
 	MacAddress macAddress;
-	char requestedSsid[SsidLength + 1];
-	char actualSsid[SsidLength + 1];
+	String<SsidLength> requestedSsid;
+	String<SsidLength> actualSsid;
 
 	unsigned int spiTxUnderruns;
 	unsigned int spiRxOverruns;
@@ -168,7 +168,7 @@ private:
 	unsigned int readyTimeoutCount = 0;
 	unsigned int responseTimeoutCount = 0;
 
-	char wiFiServerVersion[16];
+	String<StringLength20> wiFiServerVersion;
 
 	bool usingDhcp = true;
 	uint8_t startupRetryCount;
