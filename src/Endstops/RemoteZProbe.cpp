@@ -141,8 +141,7 @@ float RemoteZProbe::GetCalibratedReading() const noexcept
 	String<1> dummyReply;
 	if (CanInterface::ReadRemoteHandles(boardAddress, handle, handle, GlobalScanningProbeCallback, CallbackParameter((void*)this), dummyReply.GetRef()) == GCodeResult::ok)
 	{
-		const float diff = (float)((int32_t)lastValue - targetAdcValue);
-		return scanCoefficients[0] + diff * (scanCoefficients[1] + diff * (scanCoefficients[2] + diff * scanCoefficients[3]));
+		return ConvertReadingToHeightDifference((int32_t)lastValue);
 	}
 	return 0.0;
 }

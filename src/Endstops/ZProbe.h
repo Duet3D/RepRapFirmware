@@ -66,6 +66,7 @@ public:
 	GCodeResult SetScanningCoefficients(float aParam, float bParam) noexcept;
 	GCodeResult ReportScanningCoefficients(const StringRef& reply) noexcept;
 	void CalibrateScanningProbe(const int32_t calibrationReadings[], size_t numCalibrationReadingsTaken, float heightChangePerPoint, const StringRef& reply) noexcept;
+	float ConvertReadingToHeightDifference(int32_t reading) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept;

@@ -147,8 +147,7 @@ GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) noexcept
 // Functions used only with scanning Z probes
 float LocalZProbe::GetCalibratedReading() const noexcept
 {
-	const float diff = (float)((int32_t)GetRawReading() - targetAdcValue);
-	return scanCoefficients[0] + diff * (scanCoefficients[1] + diff * (scanCoefficients[2] + diff * scanCoefficients[3])) + GetActualTriggerHeight();
+	return ConvertReadingToHeightDifference((int32_t)GetRawReading());
 }
 
 // Kick off sending some program bytes

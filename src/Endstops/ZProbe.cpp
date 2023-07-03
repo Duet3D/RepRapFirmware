@@ -483,6 +483,12 @@ GCodeResult ZProbe::SetScanningCoefficients(float aParam, float bParam) noexcept
 	return GCodeResult::ok;
 }
 
+float ZProbe::ConvertReadingToHeightDifference(int32_t reading) const noexcept
+{
+	const float diff = (float)(reading - targetAdcValue);
+	return scanCoefficients[0] + diff * (scanCoefficients[1] + diff * (scanCoefficients[2] + diff * scanCoefficients[3]));
+}
+
 GCodeResult ZProbe::ReportScanningCoefficients(const StringRef& reply) noexcept
 {
 	if (isCalibrated)
