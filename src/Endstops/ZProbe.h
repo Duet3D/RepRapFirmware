@@ -64,8 +64,8 @@ public:
 	// Scanning Z probe support
 	bool IsScanning() const noexcept { return type == ZProbeType::scanningAnalog; }			// this is currently the only type of scanning probe we support
 	GCodeResult SetScanningCoefficients(float aParam, float bParam) noexcept;
-	GCodeResult SetScanningCoefficients(float aParam, float bParam, int32_t valueAtTriggerHeight) noexcept;
 	GCodeResult ReportScanningCoefficients(const StringRef& reply) noexcept;
+	void CalibrateScanningProbe(const int32_t calibrationReadings[], size_t numCalibrationReadingsTaken, float heightChangePerPoint, const StringRef& reply) noexcept;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept;
@@ -100,8 +100,7 @@ protected:
 	float lastStopHeight;				// the height at which the last G30 probe move stopped
 
 	// Scanning support
-	float linearCoefficient;
-	float quadraticCoefficient;
+	float scanCoefficients[4];
 	bool isCalibrated = false;
 
 	uint8_t number;

@@ -513,6 +513,13 @@ struct ObjectModelClassDescriptor
 		static_assert((unsigned int)_index < sizeof(objectModelArrayTable)/sizeof(ObjectModelArrayTableEntry) + ArrayIndexOffset); \
 		return ExpressionValue(arg, _index, true); \
 	}
+#define OBJECT_MODEL_FUNC_ARRAY_IF_BODY(_class,_condition,_index) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept \
+	{ \
+		static_assert((unsigned int)_index >= ArrayIndexOffset); \
+		static_assert((unsigned int)_index < sizeof(objectModelArrayTable)/sizeof(ObjectModelArrayTableEntry) + ArrayIndexOffset); \
+		const _class * const self = static_cast<const _class*>(arg); \
+		return (_condition) ? ExpressionValue(arg, _index, true) : ExpressionValue(nullptr); \
+	}
 #define OBJECT_MODEL_FUNC_NOSELF(...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept { return ExpressionValue(__VA_ARGS__); }
 #define OBJECT_MODEL_FUNC_IF_NOSELF(_condition,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept \
 	{ return (_condition) ? ExpressionValue(__VA_ARGS__) : ExpressionValue(nullptr); }

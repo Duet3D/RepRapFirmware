@@ -148,7 +148,7 @@ GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) noexcept
 float LocalZProbe::GetCalibratedReading() const noexcept
 {
 	const float diff = (float)((int32_t)GetRawReading() - targetAdcValue);
-	return diff * (linearCoefficient + (diff * quadraticCoefficient)) + GetActualTriggerHeight();
+	return scanCoefficients[0] + diff * (scanCoefficients[1] + diff * (scanCoefficients[2] + diff * scanCoefficients[3])) + GetActualTriggerHeight();
 }
 
 // Kick off sending some program bytes

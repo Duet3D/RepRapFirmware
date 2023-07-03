@@ -12,6 +12,7 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Storage/FileStore.h>
 #include <Heating/Heat.h>
+#include <Math/Matrix.h>
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -22,6 +23,7 @@
 // Macro to build a standard lambda function that includes the necessary type conversions
 #define OBJECT_MODEL_FUNC(...)				OBJECT_MODEL_FUNC_BODY(ZProbe, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(...)			OBJECT_MODEL_FUNC_IF_BODY(ZProbe, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_ARRAY_IF(...)		OBJECT_MODEL_FUNC_ARRAY_IF_BODY(ZProbe, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 {
@@ -57,6 +59,13 @@ constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 									: (((const ZProbe*)self)->GetSecondaryValues(v1), v1)
 								);
 					}
+	},
+	// 4. Scanning probe coefficients
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 4; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return ExpressionValue(((const ZProbe*)self)->scanCoefficients[context.GetLastIndex()], 5); }
 	}
 };
 
@@ -66,8 +75,6 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Probe members
-	{ "calibA",						OBJECT_MODEL_FUNC_IF(self->IsScanning(), self->linearCoefficient, 1), 						ObjectModelEntryFlags::none },
-	{ "calibB",						OBJECT_MODEL_FUNC_IF(self->IsScanning(), self->quadraticCoefficient, 1), 					ObjectModelEntryFlags::none },
 	{ "calibrationTemperature",		OBJECT_MODEL_FUNC(self->calibTemperature, 1), 												ObjectModelEntryFlags::none },
 	{ "deployedByUser",				OBJECT_MODEL_FUNC(self->isDeployedByUser), 													ObjectModelEntryFlags::none },
 	{ "disablesHeaters",			OBJECT_MODEL_FUNC((bool)self->misc.parts.turnHeatersOff), 									ObjectModelEntryFlags::none },
@@ -77,6 +84,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "maxProbeCount",				OBJECT_MODEL_FUNC((int32_t)self->misc.parts.maxTaps), 										ObjectModelEntryFlags::none },
 	{ "offsets",					OBJECT_MODEL_FUNC_ARRAY(0), 																ObjectModelEntryFlags::none },
 	{ "recoveryTime",				OBJECT_MODEL_FUNC(self->recoveryTime, 1), 													ObjectModelEntryFlags::none },
+	{ "scanCoefficients",			OBJECT_MODEL_FUNC_ARRAY_IF(self->IsScanning(), 4), 										ObjectModelEntryFlags::none },
 	{ "speeds",						OBJECT_MODEL_FUNC_ARRAY(1), 																ObjectModelEntryFlags::none },
 	{ "temperatureCoefficients",	OBJECT_MODEL_FUNC_ARRAY(2), 																ObjectModelEntryFlags::none },
 	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->targetAdcValue), 												ObjectModelEntryFlags::none },
@@ -87,7 +95,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "value",						OBJECT_MODEL_FUNC_ARRAY(3), 																ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 19 };
+constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 18 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ZProbe)
 
@@ -468,16 +476,10 @@ void ZProbe::SetLastStoppedHeight(float h) noexcept
 // Scanning support
 GCodeResult ZProbe::SetScanningCoefficients(float aParam, float bParam) noexcept
 {
-	linearCoefficient = aParam;
-	quadraticCoefficient = bParam;
+	scanCoefficients[0] = scanCoefficients[3] = 0.0;
+	scanCoefficients[1] = aParam;
+	scanCoefficients[2] = bParam;
 	isCalibrated = true;
-	return GCodeResult::ok;
-}
-
-GCodeResult ZProbe::SetScanningCoefficients(float aParam, float bParam, int32_t valueAtTriggerHeight) noexcept
-{
-	SetScanningCoefficients(aParam, bParam);
-	targetAdcValue = valueAtTriggerHeight;
 	return GCodeResult::ok;
 }
 
@@ -485,12 +487,90 @@ GCodeResult ZProbe::ReportScanningCoefficients(const StringRef& reply) noexcept
 {
 	if (isCalibrated)
 	{
-		reply.printf("A=%.3g B=%.3g", (double)linearCoefficient, (double)quadraticCoefficient);
+		reply.printf("Scanning probe coefficients [%.3g %.3g %.3g %.3g]", (double)scanCoefficients[0], (double)scanCoefficients[1], (double)scanCoefficients[2], (double)scanCoefficients[3]);
 		return GCodeResult::ok;
 	}
 
 	reply.copy("Probe has not been calibrated");
 	return GCodeResult::error;
+}
+
+void ZProbe::CalibrateScanningProbe(const int32_t calibrationReadings[], size_t numCalibrationReadingsTaken, float heightChangePerPoint, const StringRef& reply) noexcept
+{
+	const int32_t referenceReading = calibrationReadings[numCalibrationReadingsTaken/2];
+	FixedMatrix<float, 4, 5> matrix;
+	matrix.Fill(0.0);
+
+	// Do a least squares fit of a cubic polynomial to the data
+	// Store { N, sum(X), sum(X^2), sum(X^3) sum(Y) } in row 0
+	// Store { sum(X), sum(X^2), sum(X^3), sum(X^4), sum(XY) } in row 1
+	// Store { sum(X^2), sum(X^3), sum(X^4), sum(X^5), sum(X^2Y) } in row 2
+	// Store { sum(X^3), sum(X^4), sum(X^5), sum(X^6), sum(X^3Y) } in row 3
+	matrix(0, 0) = (float)numCalibrationReadingsTaken;
+	for (size_t i = 0; i < numCalibrationReadingsTaken; ++i)
+	{
+		const float y = ((int)(numCalibrationReadingsTaken/2) - (int)i) * heightChangePerPoint;		// the height different from the trigger height
+		const float x = (float)(calibrationReadings[i] - referenceReading);							// the difference in reading from the target reading at the trigger height
+		const float x2 = fsquare(x);
+		const float x3 = x * x2;
+		const float x4 = fsquare(x2);
+		const float x5 = x * x4;
+		const float x6 = x3 * x3;
+		const float xy = x * y;
+		const float x2y = x2 * y;
+		const float x3y = x3 * y;
+		matrix(0, 1) += x;
+		matrix(0, 2) += x2;
+		matrix(0, 3) += x3;
+		matrix(0, 4) += y;
+		matrix(1, 0) += x;
+		matrix(1, 1) += x2;
+		matrix(1, 2) += x3;
+		matrix(1, 3) += x4;
+		matrix(1, 4) += xy;
+		matrix(2, 0) += x2;
+		matrix(2, 1) += x3;
+		matrix(2, 2) += x4;
+		matrix(2, 3) += x5;
+		matrix(2, 4) += x2y;
+		matrix(3, 0) += x3;
+		matrix(3, 1) += x4;
+		matrix(3, 2) += x5;
+		matrix(3, 3) += x6;
+		matrix(3, 4) += x3y;
+	}
+	matrix.GaussJordan(4, 5);
+
+	scanCoefficients[0] = matrix(0, 4);
+	scanCoefficients[1] = matrix(1, 4);
+	scanCoefficients[2] = matrix(2, 4);
+	scanCoefficients[3] = matrix(3, 4);
+	targetAdcValue = referenceReading;
+	isCalibrated = true;
+	ReportScanningCoefficients(reply);
+
+	// Calculate the RMS error after subtracting the mean error
+	float sumOfErrorSquares = 0.0;
+	for (size_t i = 0; i < numCalibrationReadingsTaken; ++i)
+	{
+		const float readingDiff = (float)(calibrationReadings[i] - referenceReading);
+		const float actualHeightDiff = ((int)(numCalibrationReadingsTaken/2) - (int)i) * heightChangePerPoint;	// the height different from the trigger height
+		const float predictedHeightDiff = scanCoefficients[0] + readingDiff * (scanCoefficients[1] + readingDiff * (scanCoefficients[2] + readingDiff * scanCoefficients[3]));	// the predicted value from the fitted curve
+		sumOfErrorSquares += fsquare(predictedHeightDiff - actualHeightDiff);
+	}
+
+	if (reprap.Debug(Module::Move))
+	{
+		debugPrintf("NumReadings: %u\nHeight interval: %.5f\nScanned data:", numCalibrationReadingsTaken, (double)heightChangePerPoint);
+		for (size_t i = 0; i < numCalibrationReadingsTaken; ++i)
+		{
+			debugPrintf("%c%" PRIi32, (i == 0) ? ' ' : ',', calibrationReadings[i] - referenceReading);
+		}
+		debugPrintf("\nFit: %.5f,%.5g,%.5g,%.5g\n", (double)scanCoefficients[0], (double)scanCoefficients[1], (double)scanCoefficients[2], (double)scanCoefficients[3]);
+	}
+
+	reply.catf(", reading at trigger height %" PRIi32 ", rms error %.3fmm",
+					referenceReading, (double)sqrtf(sumOfErrorSquares/(float)numCalibrationReadingsTaken));
 }
 
 // End

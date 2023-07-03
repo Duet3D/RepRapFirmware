@@ -1603,56 +1603,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	case GCodeState::probeCalibration3:
 		{
-			const int32_t referenceReading = calibrationReadings[numCalibrationReadingsTaken/2];
-			FixedMatrix<float, 3, 4> matrix;
-			matrix.Fill(0.0);
-
-			// Do a least squares fit of a parabola to the data
-			// Store { N, sum(X), sum(X^2), sum(Y) } in row 0
-			// Store { sum(X), sum(X^2), sum(X^3), sum(XY) } in row 1
-			// Store { sum(X^2), sum(X^3), sum(X^4), sum(X^2Y) } in row 2
-			matrix(0, 0) = (float)numCalibrationReadingsTaken;
-			for (size_t i = 0; i < numCalibrationReadingsTaken; ++i)
-			{
-				const float y = ((int)(numCalibrationReadingsTaken/2) - (int)i) * heightChangePerPoint;		// the height different from the trigger height
-				const float x = (float)(calibrationReadings[i] - referenceReading);							// the difference in reading from the target reading at the trigger height
-				const float x2 = fsquare(x);
-				const float x3 = x * x2;
-				const float x4 = fsquare(x2);
-				const float xy = x * y;
-				const float x2y = x2 * y;
-				matrix(0, 1) += x;
-				matrix(0, 2) += x2;
-				matrix(0, 3) += y;
-				matrix(1, 0) += x;
-				matrix(1, 1) += x2;
-				matrix(1, 2) += x3;
-				matrix(1, 3) += xy;
-				matrix(2, 0) += x2;
-				matrix(2, 1) += x3;
-				matrix(2, 2) += x4;
-				matrix(2, 3) += x2y;
-			}
-			matrix.GaussJordan(3, 4);
-
-			const float meanHeight = matrix(0, 3);
-			const float aParam = matrix(1, 3);
-			const float bParam = matrix(2, 3);
 			auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
-			zp->SetScanningCoefficients(aParam, bParam, referenceReading);
-			zp->ReportScanningCoefficients(reply);
-
-			// Calculate the RMS error after subtracting the mean error
-			float sumOfErrorSquares = 0.0;
-			for (size_t i = 0; i < numCalibrationReadingsTaken; ++i)
-			{
-				const float readingDiff = (float)(calibrationReadings[i] - referenceReading);
-				const float actualHeightDiff = ((int)(numCalibrationReadingsTaken/2 - 1) - (int)i) * heightChangePerPoint;	// the height different from the trigger height
-				const float predictedHeightDiff = readingDiff * (aParam + (bParam * readingDiff)) + meanHeight;				// the predicted value from the fitted curve
-				sumOfErrorSquares += fsquare(predictedHeightDiff - actualHeightDiff);
-			}
-			reply.catf(", value at trigger height %" PRIi32 ", mean error %.3fmm, rms error %.3fmm",
-							referenceReading, (double)meanHeight, (double)sqrtf(sumOfErrorSquares/(float)numCalibrationReadingsTaken));
+			zp->CalibrateScanningProbe(calibrationReadings, numCalibrationReadingsTaken, heightChangePerPoint, reply);
 		}
 		gb.SetState(GCodeState::normal);
 		break;
