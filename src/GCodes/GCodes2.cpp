@@ -1570,7 +1570,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (gb.Seen('P'))
 				{
 					String<MaxFilenameLength> filename;
-					gb.GetPossiblyQuotedString(filename.GetRef());
+					gb.GetQuotedString(filename.GetRef());
 					DoFileMacroWithParameters(gb, filename.c_str(), true, code);
 				}
 				else if (gb.Seen('R'))

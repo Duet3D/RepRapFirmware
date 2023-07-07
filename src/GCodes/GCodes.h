@@ -551,6 +551,7 @@ private:
 	void DoManualBedProbe(GCodeBuffer& gb);										// Do a manual bed probe
 	void DeployZProbe(GCodeBuffer& gb) noexcept;
 	void RetractZProbe(GCodeBuffer& gb) noexcept;
+	void CheckIfMoreTapsNeeded(GCodeBuffer& gb, const ZProbe& zp) noexcept;		// Decide whether we have probed the current point sufficient times
 
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept;	// Append a list of axes to a string
 
@@ -717,6 +718,7 @@ private:
 	bool hadProbingError;						// true if there was an error probing the last point
 	bool zDatumSetByProbing;					// true if the Z position was last set by probing, not by an endstop switch or by G92
 	int8_t tapsDone;							// how many times we tapped the current point at the slow speed
+	bool acceptReading;							// true if we are going to accept the reading of the previous tap
 	uint8_t currentZProbeNumber;				// which Z probe a G29 or G30 command is using
 #if SUPPORT_PROBE_POINTS_FILE
 	bool probePointsFileLoaded;					// true if we loaded a probe point file since we last cleared the grid

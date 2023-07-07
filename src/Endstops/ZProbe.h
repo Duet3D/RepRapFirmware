@@ -38,10 +38,10 @@ public:
 	float GetOffset(size_t axisNumber) const noexcept { return offsets[axisNumber]; }
 	float GetConfiguredTriggerHeight() const noexcept { return -offsets[Z_AXIS]; }
 	float GetActualTriggerHeight() const noexcept { return actualTriggerHeight; }
-	float GetDiveHeight() const noexcept { return diveHeight; }
-	float GetStartingHeight() const noexcept;
+	float GetDiveHeight(int tapsDone) const noexcept;
+	float GetStartingHeight(bool firstTap, float previousHeightError = 0.0) const noexcept;
 	float GetProbingSpeed(int tapsDone) const noexcept { return probeSpeeds[(tapsDone < 0) ? 0 : 1]; }
-	float HasTwoProbingSpeeds() const noexcept { return probeSpeeds[1] != probeSpeeds[0]; }
+	float FastThenSlowProbing() const noexcept { return probeSpeeds[1] < probeSpeeds[0]; }
 	float GetTravelSpeed() const noexcept { return travelSpeed; }
 	float GetRecoveryTime() const noexcept { return recoveryTime; }
 	float GetTolerance() const noexcept { return tolerance; }
@@ -92,8 +92,8 @@ protected:
 	float offsets[MaxAxes];				// the offset of the probe relative to the print head. The Z offset is the negation of the trigger height.
 	float calibTemperature;				// the temperature at which we did the calibration
 	float temperatureCoefficients[2];	// the variation of height with bed temperature and with the square of temperature
-	float diveHeight;					// the dive height we use when probing
-	float probeSpeeds[2];				// the initial speed of probing in mm per step clock
+	float diveHeights[2];				// the dive heights we use when probing in mm
+	float probeSpeeds[2];				// the speeds of probing in mm per step clock
 	float travelSpeed;					// the speed at which we travel to the probe point in mm per step clock
 	float recoveryTime;					// Z probe recovery time
 	float tolerance;					// maximum difference between probe heights when doing >1 taps
