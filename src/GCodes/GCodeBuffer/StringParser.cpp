@@ -2029,24 +2029,20 @@ void StringParser::SkipWhiteSpace() noexcept
 	}
 }
 
-void StringParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
+void StringParser::AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeException)
 {
-	parametersPresent.Iterate([this, &vs, codeRunning](unsigned int bit, unsigned int count)
+	parametersPresent.IterateWithExceptions([this, &vs, codeRunning](unsigned int bit, unsigned int count)
 								{
 									const char letter = BitNumberToParameterLetter(bit);
 									if ((letter != 'P' || codeRunning != 98) && Seen(letter))
 									{
+										const char c = gb.buffer[readPointer];
+										if (!isdigit(c) && c != '"' && c != '{' && c != '.')
+										{
+											throw ConstructParseException("invalid parameter value");
+										}
 										ExpressionParser parser(gb, &gb.buffer[readPointer], &gb.buffer[commandEnd]);
-										ExpressionValue ev;
-										try
-										{
-											ev = parser.Parse();
-										}
-										catch (const GCodeException&)
-										{
-											//TODO can we report the error anywhere?
-											ev.SetNull(nullptr);
-										}
+										ExpressionValue ev = parser.Parse();
 										char paramName[2] = { letter, 0 };
 										vs.InsertNewParameter(paramName, ev);
 									}

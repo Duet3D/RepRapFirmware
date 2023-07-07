@@ -85,7 +85,7 @@ public:
 
 	void PrintCommand(const StringRef& s) const noexcept;
 	void AppendFullCommand(const StringRef &s) const noexcept;
-	void AddParameters(VariableSet& vs, int codeRunning) noexcept;
+	void AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeException);
 
 	GCodeException ConstructParseException(const char *str) const noexcept;
 	GCodeException ConstructParseException(const char *str, const char *param) const noexcept;

@@ -2989,11 +2989,14 @@ void GCodes::EmergencyStop() noexcept
 // Simplified version of DoFileMacro, see below
 bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept
 {
+	VariableSet emptyVars;
+	return DoFileMacro(gb, fileName, reportMissing, codeRunning, emptyVars);
+}
+
+bool GCodes::DoFileMacroWithParameters(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) THROWS(GCodeException)
+{
 	VariableSet vars;
-	if (codeRunning >= 0)
-	{
-		gb.AddParameters(vars, codeRunning);
-	}
+	gb.AddParameters(vars, codeRunning);
 	return DoFileMacro(gb, fileName, reportMissing, codeRunning, vars);
 }
 
