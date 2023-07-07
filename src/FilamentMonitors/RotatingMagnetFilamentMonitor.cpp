@@ -27,8 +27,8 @@ const int32_t SyncDelayMillis = 10;
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(RotatingMagnetFilamentMonitor, __VA_ARGS__)
-#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(RotatingMagnetFilamentMonitor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(RotatingMagnetFilamentMonitor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(RotatingMagnetFilamentMonitor, _condition, __VA_ARGS__)
 
 constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[] =
 {

@@ -15,8 +15,8 @@
 
 #define ARC_DEBUG	0
 
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(KeepoutZone, __VA_ARGS__)
-#define OBJECT_MODEL_FUNC_IF(...) OBJECT_MODEL_FUNC_IF_BODY(KeepoutZone, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(KeepoutZone, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(KeepoutZone, _condition, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry KeepoutZone::objectModelArrayTable[] =
 {
