@@ -28,6 +28,9 @@ public:
 
 	static constexpr const char *_ecv_array TypeName = "rtdmax31865";
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	TemperatureError TryInitRtd() const noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;

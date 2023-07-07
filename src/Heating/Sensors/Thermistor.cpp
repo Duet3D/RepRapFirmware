@@ -47,10 +47,10 @@ static constexpr int32_t OversampledAdcRange = 1u << (AdcBits + AdcOversampleBit
 
 constexpr ObjectModelTableEntry Thermistor::objectModelTable[] =
 {
-	{ "beta",		OBJECT_MODEL_FUNC_IF(!self->isPT1000, self->beta, 0), 		ObjectModelEntryFlags::none },
-	{ "c",			OBJECT_MODEL_FUNC_IF(!self->isPT1000, self->shC, 4), 		ObjectModelEntryFlags::none },
-	{ "r25",		OBJECT_MODEL_FUNC_IF(!self->isPT1000, self->r25, 0), 		ObjectModelEntryFlags::none },
-	{ "seriesR",	OBJECT_MODEL_FUNC(self->seriesR, 0), 						ObjectModelEntryFlags::none }
+	{ "beta",	OBJECT_MODEL_FUNC_IF(!self->isPT1000, self->beta, 0), 		ObjectModelEntryFlags::none },
+	{ "c",		OBJECT_MODEL_FUNC_IF(!self->isPT1000, self->shC, 4), 		ObjectModelEntryFlags::none },
+	{ "r25",	OBJECT_MODEL_FUNC_IF(!self->isPT1000, self->r25, 0), 		ObjectModelEntryFlags::none },
+	{ "rRef",	OBJECT_MODEL_FUNC(self->seriesR, 0), 						ObjectModelEntryFlags::none }
 };
 
 constexpr uint8_t Thermistor::objectModelTableDescriptor[] = { 1, 4 };

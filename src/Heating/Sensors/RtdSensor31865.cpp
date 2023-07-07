@@ -42,6 +42,19 @@ const uint8_t Cr0ReadMask = 0b11011101;		// bits 1 and 5 auto clear, so ignore t
 
 const uint32_t DefaultRef = 400;
 
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(RtdSensor31865, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(RtdSensor31865, _condition, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry RtdSensor31865::objectModelTable[] =
+{
+	{ "rRef",	OBJECT_MODEL_FUNC(self->rrefTimes100/100), 	ObjectModelEntryFlags::none }
+};
+
+constexpr uint8_t RtdSensor31865::objectModelTableDescriptor[] = { 1, 1 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(RtdSensor31865, SensorWithPort)
+
 RtdSensor31865::RtdSensor31865(unsigned int sensorNum) noexcept
 	: SpiTemperatureSensor(sensorNum, "PT100 (MAX31865)", MAX31865_SpiMode, MAX31865_Frequency),
 	  rrefTimes100(DefaultRef * 100), cr0(DefaultCr0)
