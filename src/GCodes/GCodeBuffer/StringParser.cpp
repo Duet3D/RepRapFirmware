@@ -2039,7 +2039,7 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeE
 										const char c = gb.buffer[readPointer];
 										if (!isdigit(c) && c != '"' && c != '{' && c != '.')
 										{
-											throw ConstructParseException("invalid parameter value");
+											throw ConstructParseException("invalid value for parameter '%c'", (uint32_t)c);
 										}
 										ExpressionParser parser(gb, &gb.buffer[readPointer], &gb.buffer[commandEnd]);
 										ExpressionValue ev = parser.Parse();
