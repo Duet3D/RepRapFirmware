@@ -61,8 +61,7 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 	// Check for trailing index expressions
 	for (;;)
 	{
-		SkipWhiteSpace();
-		if (CurrentCharacter() != '[')
+		if (SkipWhiteSpace() != '[')
 		{
 			break;
 		}
@@ -155,8 +154,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 	static_assert(ARRAY_SIZE(priorities) == strlen(operators));
 
 	// Start by looking for a unary operator or opening bracket
-	SkipWhiteSpace();
-	const char c = CurrentCharacter();
+	const char c = SkipWhiteSpace();
 	switch (c)
 	{
 	case '"':
@@ -208,8 +206,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 
 	case '#':
 		AdvancePointer();
-		SkipWhiteSpace();
-		if (isalpha(CurrentCharacter()))
+		if (isalpha(SkipWhiteSpace()))
 		{
 			// Probably applying # to an object model array, so optimise by asking the OM for just the length
 			CheckStack(StackUsage::ParseIdentifierExpression);
@@ -261,8 +258,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 	// See if it is followed by a binary operator
 	do
 	{
-		SkipWhiteSpace();
-		char opChar = CurrentCharacter();
+		char opChar = SkipWhiteSpace();
 		if (opChar == 0)	// don't pass null to strchr
 		{
 			return;
@@ -646,15 +642,13 @@ void ExpressionParser::ParseArray(size_t& length, function_ref<void(ExpressionVa
 		{
 			processElement(ev, numElements);
 			++numElements;
-			if (CurrentCharacter() != EXPRESSION_LIST_SEPARATOR)
-			{
-				break;
-			}
+			if (CurrentCharacter() != EXPRESSION_LIST_SEPARATOR) break;
+			AdvancePointer();
+			if (SkipWhiteSpace() == '}') break;		// we allow a trailing command in an array
 			if (numElements == length)
 			{
 				ThrowParseException("Array too long");
 			}
-			AdvancePointer();
 			ev = Parse(true);
 		}
 	}
@@ -755,8 +749,7 @@ void ExpressionParser::ParseGeneralArray(ExpressionValue& firstElementAndResult,
 	do
 	{
 		AdvancePointer();					// skip the comma
-		SkipWhiteSpace();					// skip any following white space
-		if (CurrentCharacter() == '}')
+		if (SkipWhiteSpace() == '}')
 		{
 			break;							// we allow a trailing comma and it can be used to distinguish a 1-element array from a bracketed value
 		}
@@ -830,13 +823,11 @@ void ExpressionParser::EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2
 // We checked the stack for the call to ParseInternal for the first operand, no need to do it again.
 void ExpressionParser::GetNextOperand(ExpressionValue& operand, bool evaluate) THROWS(GCodeException)
 {
-	SkipWhiteSpace();
-	if (CurrentCharacter() != ',')
+	if (SkipWhiteSpace() != ',')
 	{
 		ThrowParseException("expected ','");
 	}
 	AdvancePointer();
-	SkipWhiteSpace();
 	ParseInternal(operand, evaluate, 0);
 }
 
@@ -1099,19 +1090,9 @@ void ExpressionParser::ApplyLengthOperator(ExpressionValue& val) const THROWS(GC
 	}
 }
 
-void ExpressionParser::SkipWhiteSpace() noexcept
-{
-	char c;
-	while ((c = CurrentCharacter()) == ' ' || c == '\t')
-	{
-		AdvancePointer();
-	}
-}
-
 void ExpressionParser::CheckForExtraCharacters() THROWS(GCodeException)
 {
-	SkipWhiteSpace();
-	if (CurrentCharacter() != 0)
+	if (SkipWhiteSpace() != 0)
 	{
 		ThrowParseException("Unexpected characters after expression");
 	}
@@ -1278,8 +1259,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 	}
 
 	// Check whether it is a function call
-	SkipWhiteSpace();
-	if (CurrentCharacter() == '(')
+	if (SkipWhiteSpace() == '(')
 	{
 		// It's a function call
 		if (context.WantExists())
@@ -1434,8 +1414,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 			case Function::max:
 			case Function::min:
-				SkipWhiteSpace();
-				if (CurrentCharacter() != ',')
+				if (SkipWhiteSpace() != ',')
 				{
 					// Only one operand, so it's min or max on an array
 					if (rslt.GetType() != TypeCode::HeapArray)
@@ -1467,13 +1446,11 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					do
 					{
 						AdvancePointer();			// skip the comma
-						SkipWhiteSpace();
 						ExpressionValue nextOperand;
 						// We recently checked the stack for a call to ParseInternal, no need to do it again
 						ParseInternal(nextOperand, evaluate, 0);
 						EvaluateMinOrMax(rslt, nextOperand, evaluate, func.RawValue() == Function::max);
-						SkipWhiteSpace();
-					} while (CurrentCharacter() == ',');
+					} while (SkipWhiteSpace() == ',');
 				}
 				break;
 
@@ -1623,8 +1600,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 			}
 		}
 
-		SkipWhiteSpace();
-		if (CurrentCharacter() != ')')
+		if (SkipWhiteSpace() != ')')
 		{
 			ThrowParseException("expected ')'");
 		}
@@ -1811,6 +1787,25 @@ void ExpressionParser::ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeExce
 char ExpressionParser::CurrentCharacter() const noexcept
 {
 	return (currentp < endp) ? *currentp : 0;
+}
+
+// Skip any whitespace and return the next character, or 0 if we have run out of string
+char ExpressionParser::SkipWhiteSpace() noexcept
+{
+	char c;
+	while ((c = CurrentCharacter()) == ' ' || c == '\t')
+	{
+		++currentp;
+	}
+	return c;
+}
+
+void ExpressionParser::AdvancePointer() noexcept
+{
+	if (currentp < endp)
+	{
+		++currentp;
+	}
 }
 
 int ExpressionParser::GetColumn() const noexcept

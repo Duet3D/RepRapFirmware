@@ -32,7 +32,6 @@ public:
 	void ParseUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException);
 	void ParseDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);
 
-	void SkipWhiteSpace() noexcept;
 	void CheckForExtraCharacters() THROWS(GCodeException);
 	const char *GetEndptr() const noexcept { return currentp; }
 
@@ -77,7 +76,8 @@ private:
 
 	int GetColumn() const noexcept;
 	char CurrentCharacter() const noexcept;
-	void AdvancePointer() noexcept { ++currentp; }		// could check that we havebn't reached endp but we should stop before that happens
+	void AdvancePointer() noexcept;
+	char SkipWhiteSpace() noexcept;
 
 	const char *currentp;
 	const char * const startp;
