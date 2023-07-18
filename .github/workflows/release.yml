@@ -47,3 +47,29 @@ jobs:
           localPath: ./assets
           remotePath: /var/rrf-pkg/${{ (github.event.release.prerelease && 'unstable') || 'stable' }}
 
+      # Upload assets to (un)stable-3.4 feed on pkg.duet3d.com
+      - if: contains(github.ref, '3.4')
+        name: Upload files to 3.4 feed
+        uses: Creepios/sftp-action@v1.0.3
+        with:
+          host: pkg.duet3d.com
+          port: 22
+          username: ${{ secrets.PKG_SSH_USER }}
+          password: ${{ secrets.PKG_SSH_PASS }}
+          privateKey: ${{ secrets.PKG_SSH_KEY }}
+          localPath: ./assets
+          remotePath: /var/rrf-pkg/${{ (github.event.release.prerelease && 'unstable') || 'stable' }}-3.4
+
+      # Upload assets to (un)stable-3.5 feed on pkg.duet3d.com
+      - if: contains(github.ref, '3.5')
+        name: Upload files to 3.5 feed
+        uses: Creepios/sftp-action@v1.0.3
+        with:
+          host: pkg.duet3d.com
+          port: 22
+          username: ${{ secrets.PKG_SSH_USER }}
+          password: ${{ secrets.PKG_SSH_PASS }}
+          privateKey: ${{ secrets.PKG_SSH_KEY }}
+          localPath: ./assets
+          remotePath: /var/rrf-pkg/${{ (github.event.release.prerelease && 'unstable') || 'stable' }}-3.5
+
