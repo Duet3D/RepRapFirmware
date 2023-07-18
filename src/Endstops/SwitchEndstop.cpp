@@ -56,7 +56,7 @@ void SwitchEndstop::ReleasePorts() noexcept
 
 GCodeResult SwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	String<StringLength50> portNames;
+	String<MaxMultiplePinNamesLength> portNames;
 	gb.GetReducedString(portNames.GetRef());
 	return Configure(portNames.c_str(), reply);
 }

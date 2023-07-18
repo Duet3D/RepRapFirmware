@@ -136,6 +136,7 @@ constexpr float SILLY_Z_VALUE = -9999.0;				// Millimetres
 // String lengths. Try not to have too many different ones, because each one causes an instantiation of the String template
 constexpr size_t MaxMessageLength = 256;
 constexpr size_t MaxTitleLength = 61;
+constexpr size_t MaxMultiplePinNamesLength = 61;		// 50 is not quite enough for 4 endstops such as !duex.e2Stop+!duex.e3Stop+!duex.e4Stop+!duex.e5Stop
 
 #if SAM4E || SAM4S || SAME70 || SAME5x || defined(ESP_NETWORKING)
 constexpr size_t MaxFilenameLength = 120;				// Maximum length of a filename including the path
@@ -150,7 +151,7 @@ constexpr size_t StringLength20 = 20;
 constexpr size_t StringLength50 = 50;					// Used for pin names
 constexpr size_t StringLength100 = 100;					// Used for error messages
 constexpr size_t StringLength500 = 500;					// Used when writing the height map
-constexpr size_t StringLength256 = 256;
+constexpr size_t StringLength256 = 256;					// Used for various things
 
 constexpr size_t MaxHeaterNameLength = StringLength20;	// Maximum number of characters in a heater name
 constexpr size_t MaxFanNameLength = StringLength20;		// Maximum number of characters in a fan name
