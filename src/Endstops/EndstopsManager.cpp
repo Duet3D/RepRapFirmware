@@ -406,7 +406,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 
 	if (gb.Seen('P'))					// we use P not C, because C may be an axis
 	{
-		// Setting the port number(s), so there must be just one axis and we must be using switch-type endstops
+		// Setting the port name(s), so there must be just one axis and we must be using switch-type endstops
 		if (axesSeen > 1 || inputType != EndStopType::inputPin)
 		{
 			reply.copy("Invalid use of P parameter");
