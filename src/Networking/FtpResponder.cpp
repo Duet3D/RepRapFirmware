@@ -675,25 +675,32 @@ void FtpResponder::ProcessLine() noexcept
 			const char *const pathname = GetParameter("LIST");
 			String<MaxFilenameLength> location;
 			MassStorage::CombineName(location.GetRef(), currentDirectory.c_str(), pathname);
-
-			// send announcement via ftp main port
-			outBuf->copy("150 Here comes the directory listing.\r\n");
-			Commit(ResponderState::sendingPasvData);
-
-			// build directory listing, dataBuf is sent later in the Spin loop
-			FileInfo fileInfo;
-			if (MassStorage::FindFirst(location.c_str(), fileInfo))
+			if (MassStorage::DirectoryExists(location.c_str()))
 			{
-				do {
-					// Example for a typical UNIX-like file list:
-					// "drwxr-xr-x    2 ftp      ftp             0 Apr 11 2013 bin\r\n"
-					const char dirChar = (fileInfo.isDirectory) ? 'd' : '-';
-					tm timeInfo;
-					gmtime_r(&fileInfo.lastModified, &timeInfo);
-					dataBuf->catf("%crw-rw-rw- 1 ftp ftp %13lu %s %02d %04d %s\r\n",
-							dirChar, fileInfo.size, MassStorage::GetMonthName(timeInfo.tm_mon + 1),
-							timeInfo.tm_mday, timeInfo.tm_year + 1900, fileInfo.fileName.c_str());
-				} while (MassStorage::FindNext(fileInfo));
+				// send announcement via ftp main port
+				outBuf->copy("150 Here comes the directory listing.\r\n");
+				Commit(ResponderState::sendingPasvData);
+
+				// build directory listing, dataBuf is sent later in the Spin loop
+				FileInfo fileInfo;
+				if (MassStorage::FindFirst(location.c_str(), fileInfo))
+				{
+					do {
+						// Example for a typical UNIX-like file list:
+						// "drwxr-xr-x    2 ftp      ftp             0 Apr 11 2013 bin\r\n"
+						const char dirChar = (fileInfo.isDirectory) ? 'd' : '-';
+						tm timeInfo;
+						gmtime_r(&fileInfo.lastModified, &timeInfo);
+						dataBuf->catf("%crw-rw-rw- 1 ftp ftp %13lu %s %02d %04d %s\r\n",
+								dirChar, fileInfo.size, MassStorage::GetMonthName(timeInfo.tm_mon + 1),
+								timeInfo.tm_mday, timeInfo.tm_year + 1900, fileInfo.fileName.c_str());
+					} while (MassStorage::FindNext(fileInfo));
+				}
+			}
+			else
+			{
+				outBuf->copy("550 Directory not found.\r\n");
+				Commit(ResponderState::pasvPortOpened);
 			}
 		}
 		// switch transfer mode (sends response, but doesn't have any effects)
