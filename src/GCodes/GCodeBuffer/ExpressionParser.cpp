@@ -61,8 +61,7 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 	// Check for trailing index expressions
 	for (;;)
 	{
-		SkipWhiteSpace();
-		if (CurrentCharacter() != '[')
+		if (SkipWhiteSpace() != '[')
 		{
 			break;
 		}
@@ -155,8 +154,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 	static_assert(ARRAY_SIZE(priorities) == strlen(operators));
 
 	// Start by looking for a unary operator or opening bracket
-	SkipWhiteSpace();
-	const char c = CurrentCharacter();
+	const char c = SkipWhiteSpace();
 	switch (c)
 	{
 	case '"':
@@ -208,8 +206,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 
 	case '#':
 		AdvancePointer();
-		SkipWhiteSpace();
-		if (isalpha(CurrentCharacter()))
+		if (isalpha(SkipWhiteSpace()))
 		{
 			// Probably applying # to an object model array, so optimise by asking the OM for just the length
 			CheckStack(StackUsage::ParseIdentifierExpression);
@@ -261,8 +258,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 	// See if it is followed by a binary operator
 	do
 	{
-		SkipWhiteSpace();
-		char opChar = CurrentCharacter();
+		char opChar = SkipWhiteSpace();
 		if (opChar == 0)	// don't pass null to strchr
 		{
 			return;
@@ -615,43 +611,16 @@ float ExpressionParser::ParseFloat() THROWS(GCodeException)
 
 int32_t ExpressionParser::ParseInteger() THROWS(GCodeException)
 {
-	const ExpressionValue val = Parse();
-	switch (val.GetType())
-	{
-	case TypeCode::Int32:
-		return val.iVal;
-
-	case TypeCode::Uint32:
-		if (val.uVal > (uint32_t)std::numeric_limits<int32_t>::max())
-		{
-			ThrowParseException("unsigned integer too large");
-		}
-		return (int32_t)val.uVal;
-
-	default:
-		ThrowParseException("expected integer value");
-	}
+	ExpressionValue val = Parse();
+	ConvertToInteger(val, true);
+	return val.iVal;
 }
 
 uint32_t ExpressionParser::ParseUnsigned() THROWS(GCodeException)
 {
-	const ExpressionValue val = Parse();
-	switch (val.GetType())
-	{
-	case TypeCode::Uint32:
-		return val.uVal;
-
-	case TypeCode::Int32:
-		if (val.iVal >= 0)
-		{
-			return (uint32_t)val.iVal;
-		}
-		ThrowParseException("value must be non-negative");
-		// no break
-
-	default:
-		ThrowParseException("expected non-negative integer value");
-	}
+	ExpressionValue val = Parse();
+	ConvertToUnsigned(val, true);
+	return val.uVal;
 }
 
 DriverId ExpressionParser::ParseDriverId() THROWS(GCodeException)
@@ -661,51 +630,113 @@ DriverId ExpressionParser::ParseDriverId() THROWS(GCodeException)
 	return val.GetDriverIdValue();
 }
 
-void ExpressionParser::ParseArray(size_t& length, function_ref<void(size_t index) THROWS(GCodeException)> processElement) THROWS(GCodeException)
+void ExpressionParser::ParseArray(size_t& length, function_ref<void(ExpressionValue& ev, size_t index) THROWS(GCodeException)> processElement) THROWS(GCodeException)
 {
 	size_t numElements = 0;
-	AdvancePointer();					// skip the '{'
-	while (numElements < length)
+	AdvancePointer();									// skip the '{'
+	ExpressionValue ev = Parse(true);					// parse the first element
+	if (CurrentCharacter() == EXPRESSION_LIST_SEPARATOR)
 	{
-		processElement(numElements);
-		++numElements;
-		if (CurrentCharacter() != EXPRESSION_LIST_SEPARATOR)
+		// We have an explicit list of elements, so each one must convert to the required type
+		for (;;)
 		{
-			break;
+			processElement(ev, numElements);
+			++numElements;
+			if (CurrentCharacter() != EXPRESSION_LIST_SEPARATOR) break;
+			AdvancePointer();
+			if (SkipWhiteSpace() == '}') break;		// we allow a trailing command in an array
+			if (numElements == length)
+			{
+				ThrowParseException("Array too long");
+			}
+			ev = Parse(true);
 		}
-		if (numElements == length)
-		{
-			ThrowParseException("Array too long");
-		}
-		AdvancePointer();				// skip the ','
 	}
+	else
+	{
+		// We have a single expression. If it is an array, convert the elements; else convert it into a sigle-expresison array.
+		switch (ev.GetType())
+		{
+		case TypeCode::HeapArray:
+			{
+				ReadLocker locker(Heap::heapLock);
+				const size_t len = ev.ahVal.GetNumElements();
+				if (len == 0)
+				{
+					ThrowParseException("expected a non-empty array");
+				}
+				if (len > length)
+				{
+					ThrowParseException("array too long");
+				}
+				while (numElements < len)
+				{
+					ExpressionValue ev2;
+					(void)ev.ahVal.GetElement(numElements, ev2);
+					processElement(ev2, numElements);
+					++numElements;
+				}
+			}
+			break;
+
+		case TypeCode::ObjectModelArray:
+			{
+				const ObjectModelArrayTableEntry *const entry = ev.omVal->FindObjectModelArrayEntry(ev.param & 0xFF);
+				ObjectExplorationContext context;
+				ReadLocker locker(entry->lockPointer);
+				const size_t len = entry->GetNumElements(ev.omVal, context);
+				if (len == 0)
+				{
+					ThrowParseException("expected a non-empty array");
+				}
+				if (len > length)
+				{
+					ThrowParseException("array too long");
+				}
+				while (numElements < len)
+				{
+					context.AddIndex(numElements);
+					ExpressionValue ev2 = entry->GetElement(ev.omVal, context);
+					context.RemoveIndex();
+					processElement(ev2, numElements);
+					++numElements;
+				}
+			}
+			break;
+
+		default:
+			processElement(ev, numElements);
+			++numElements;
+		}
+	}
+
 	if (CurrentCharacter() != '}')
 	{
 		ThrowParseException("Expected '}'");
 	}
-	AdvancePointer();					// skip the '{'
+	AdvancePointer();					// skip the '}'
 	length = numElements;
 }
 
 // This is called when we expect a non-empty float array parameter and we have encountered (but not skipped) '{'
 void ExpressionParser::ParseFloatArray(float arr[], size_t& length) THROWS(GCodeException)
 {
-	ParseArray(length, [this, &arr](size_t index) { arr[index] = ParseFloat(); });
+	ParseArray(length, [this, &arr](ExpressionValue& ev, size_t index) { ConvertToFloat(ev, true); arr[index] = ev.fVal; });
 }
 
 void ExpressionParser::ParseIntArray(int32_t arr[], size_t& length) THROWS(GCodeException)
 {
-	ParseArray(length, [this, &arr](size_t index) { arr[index] = ParseInteger(); });
+	ParseArray(length, [this, &arr](ExpressionValue& ev, size_t index) { ConvertToInteger(ev, true); arr[index] = ev.iVal; });
 }
 
 void ExpressionParser::ParseUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException)
 {
-	ParseArray(length, [this, &arr](size_t index) { arr[index] = ParseUnsigned(); });
+	ParseArray(length, [this, &arr](ExpressionValue& ev, size_t index) { ConvertToUnsigned(ev, true); arr[index] = ev.uVal; });
 }
 
 void ExpressionParser::ParseDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException)
 {
-	ParseArray(length, [this, &arr](size_t index) { arr[index] = ParseDriverId(); });
+	ParseArray(length, [this, &arr](ExpressionValue& ev, size_t index) { ConvertToDriverId(ev, true); arr[index] = ev.GetDriverIdValue(); });
 }
 
 // Parse the rest of an array. We have already parsed the first element and found but not skipped a comma. The array should be terminated with '}'.
@@ -718,8 +749,7 @@ void ExpressionParser::ParseGeneralArray(ExpressionValue& firstElementAndResult,
 	do
 	{
 		AdvancePointer();					// skip the comma
-		SkipWhiteSpace();					// skip any following white space
-		if (CurrentCharacter() == '}')
+		if (SkipWhiteSpace() == '}')
 		{
 			break;							// we allow a trailing comma and it can be used to distinguish a 1-element array from a bracketed value
 		}
@@ -793,13 +823,11 @@ void ExpressionParser::EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2
 // We checked the stack for the call to ParseInternal for the first operand, no need to do it again.
 void ExpressionParser::GetNextOperand(ExpressionValue& operand, bool evaluate) THROWS(GCodeException)
 {
-	SkipWhiteSpace();
-	if (CurrentCharacter() != ',')
+	if (SkipWhiteSpace() != ',')
 	{
 		ThrowParseException("expected ','");
 	}
 	AdvancePointer();
-	SkipWhiteSpace();
 	ParseInternal(operand, evaluate, 0);
 }
 
@@ -893,6 +921,59 @@ void ExpressionParser::ConvertToFloat(ExpressionValue& val, bool evaluate) const
 		break;
 	}
 	val.SetFloat(fVal, 1);
+}
+
+void ExpressionParser::ConvertToInteger(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
+{
+	switch (val.GetType())
+	{
+	case TypeCode::Int32:
+		break;
+
+	case TypeCode::Uint32:
+		if (val.uVal <= (uint32_t)std::numeric_limits<int32_t>::max())
+		{
+			val.SetInt((int32_t)val.uVal);
+			break;
+		}
+		if (evaluate)
+		{
+			ThrowParseException("unsigned integer too large");
+		}
+		val.SetInt(0);
+		break;
+
+	default:
+		if (evaluate)
+		{
+			ThrowParseException("expected integer value");
+		}
+		val.SetInt(0);
+		break;
+	}
+}
+
+void ExpressionParser::ConvertToUnsigned(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
+{
+	switch (val.GetType())
+	{
+	case TypeCode::Uint32:
+		break;
+
+	case TypeCode::Int32:
+		if (val.iVal >= 0)
+		{
+			val.SetUnsigned((uint32_t)val.iVal);
+			break;
+		}
+		// no break
+	default:
+		if (evaluate)
+		{
+			ThrowParseException("expected non-negative integer value");
+		}
+		val.SetUnsigned(0);
+	}
 }
 
 void ExpressionParser::ConvertToBool(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
@@ -1009,19 +1090,9 @@ void ExpressionParser::ApplyLengthOperator(ExpressionValue& val) const THROWS(GC
 	}
 }
 
-void ExpressionParser::SkipWhiteSpace() noexcept
-{
-	char c;
-	while ((c = CurrentCharacter()) == ' ' || c == '\t')
-	{
-		AdvancePointer();
-	}
-}
-
 void ExpressionParser::CheckForExtraCharacters() THROWS(GCodeException)
 {
-	SkipWhiteSpace();
-	if (CurrentCharacter() != 0)
+	if (SkipWhiteSpace() != 0)
 	{
 		ThrowParseException("Unexpected characters after expression");
 	}
@@ -1188,8 +1259,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 	}
 
 	// Check whether it is a function call
-	SkipWhiteSpace();
-	if (CurrentCharacter() == '(')
+	if (SkipWhiteSpace() == '(')
 	{
 		// It's a function call
 		if (context.WantExists())
@@ -1344,8 +1414,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 
 			case Function::max:
 			case Function::min:
-				SkipWhiteSpace();
-				if (CurrentCharacter() != ',')
+				if (SkipWhiteSpace() != ',')
 				{
 					// Only one operand, so it's min or max on an array
 					if (rslt.GetType() != TypeCode::HeapArray)
@@ -1377,13 +1446,11 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					do
 					{
 						AdvancePointer();			// skip the comma
-						SkipWhiteSpace();
 						ExpressionValue nextOperand;
 						// We recently checked the stack for a call to ParseInternal, no need to do it again
 						ParseInternal(nextOperand, evaluate, 0);
 						EvaluateMinOrMax(rslt, nextOperand, evaluate, func.RawValue() == Function::max);
-						SkipWhiteSpace();
-					} while (CurrentCharacter() == ',');
+					} while (SkipWhiteSpace() == ',');
 				}
 				break;
 
@@ -1533,8 +1600,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 			}
 		}
 
-		SkipWhiteSpace();
-		if (CurrentCharacter() != ')')
+		if (SkipWhiteSpace() != ')')
 		{
 			ThrowParseException("expected ')'");
 		}
@@ -1721,6 +1787,25 @@ void ExpressionParser::ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeExce
 char ExpressionParser::CurrentCharacter() const noexcept
 {
 	return (currentp < endp) ? *currentp : 0;
+}
+
+// Skip any whitespace and return the next character, or 0 if we have run out of string
+char ExpressionParser::SkipWhiteSpace() noexcept
+{
+	char c;
+	while ((c = CurrentCharacter()) == ' ' || c == '\t')
+	{
+		++currentp;
+	}
+	return c;
+}
+
+void ExpressionParser::AdvancePointer() noexcept
+{
+	if (currentp < endp)
+	{
+		++currentp;
+	}
 }
 
 int ExpressionParser::GetColumn() const noexcept

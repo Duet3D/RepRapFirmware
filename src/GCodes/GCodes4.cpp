@@ -724,13 +724,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				zp->PrepareForUse(false);											// needed to calculate the actual trigger height when using a scanning Z probe
 				axesCoords[axis0Num] = axis0Coord - zp->GetOffset(axis0Num);
 				axesCoords[axis1Num] = axis1Coord - zp->GetOffset(axis1Num);
-				axesCoords[Z_AXIS] = zp->GetStartingHeight();
+				axesCoords[Z_AXIS] = zp->GetStartingHeight(true);
 				if (move.IsAccessibleProbePoint(axesCoords, axes))
 				{
 					SetMoveBufferDefaults(ms);
 					ms.coords[axis0Num] = axesCoords[axis0Num];
 					ms.coords[axis1Num] = axesCoords[axis1Num];
-					ms.coords[Z_AXIS] = zp->GetStartingHeight();
+					ms.coords[Z_AXIS] = axesCoords[Z_AXIS];
 					ms.feedRate = zp->GetTravelSpeed();
 					ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;		// assume that both linear and rotational axes might be moving
 					NewSingleSegmentMoveAvailable(ms);
@@ -741,7 +741,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					}
 					else
 					{
-						InitialiseTaps(false);
+						InitialiseTaps(false);										// grid probing never does fast-then-slow probing
 						gb.AdvanceState();
 					}
 				}
@@ -818,7 +818,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					}
 					ms.checkEndstops = true;
 					ms.reduceAcceleration = true;
-					ms.coords[Z_AXIS] = -zp->GetDiveHeight() + zp->GetActualTriggerHeight();
+					ms.coords[Z_AXIS] = -zp->GetDiveHeight(-1) + zp->GetActualTriggerHeight();
 					ms.feedRate = zp->GetProbingSpeed(tapsDone);
 					ms.linearAxesMentioned = true;
 					NewSingleSegmentMoveAvailable(ms);
@@ -865,63 +865,34 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::gridProbing4a:	// ready to lift the probe after probing the current grid probe point
-		// Move back up to the dive height
-		SetMoveBufferDefaults(ms);
 		{
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
-			ms.coords[Z_AXIS] = zp->GetStartingHeight();
+			CheckIfMoreTapsNeeded(gb, *zp);
+
+			// Move back up to the dive height
+			SetMoveBufferDefaults(ms);
+			ms.coords[Z_AXIS] = zp->GetStartingHeight(acceptReading, g30zHeightError);
 			ms.feedRate = zp->GetTravelSpeed();
+			ms.linearAxesMentioned = true;
+			NewSingleSegmentMoveAvailable(ms);
+			gb.AdvanceState();
 		}
-		ms.linearAxesMentioned = true;
-		NewSingleSegmentMoveAvailable(ms);
-		gb.AdvanceState();
 		break;
 
 	case GCodeState::gridProbing5:	// finished probing a point and moved back to the dive height
 		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
-			// See whether we need to do any more taps
-			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
-			bool acceptReading = false;
-			if (zp->GetMaxTaps() < 2)
-			{
-				acceptReading = true;
-			}
-			else if (tapsDone >= 2)
-			{
-				g30zHeightErrorLowestDiff = min<float>(g30zHeightErrorLowestDiff, fabsf(g30zHeightError - g30PrevHeightError));
-				if (zp->GetTolerance() > 0.0)
-				{
-					if (g30zHeightErrorLowestDiff <= zp->GetTolerance())
-					{
-						g30zHeightError = (g30zHeightError + g30PrevHeightError)/2;
-						acceptReading = true;
-					}
-				}
-				else if (tapsDone == (int)zp->GetMaxTaps())
-				{
-					g30zHeightError = g30zHeightErrorSum/tapsDone;
-					acceptReading = true;
-				}
-			}
-
 			if (acceptReading)
 			{
 				reprap.GetMove().AccessHeightMap().SetGridHeight(gridAxis0Index, gridAxis1Index, g30zHeightError);
 				gb.AdvanceState();
 			}
-			else if (tapsDone < (int)zp->GetMaxTaps())
+			else
 			{
 				// Tap again
 				lastProbedTime = millis();
 				g30PrevHeightError = g30zHeightError;
 				gb.SetState(GCodeState::gridProbing2a);
-			}
-			else
-			{
-				gb.LatestMachineState().SetError("Z probe readings not consistent");
-				gb.SetState(GCodeState::checkError);
-				RetractZProbe(gb);
 			}
 		}
 		break;
@@ -1049,7 +1020,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				memcpy(axesCoords, ms.coords, sizeof(axesCoords));					// copy current coordinates of all other axes in case they are relevant to IsReachable
 				axesCoords[axis0Num] = grid.GetCoordinate(0, newAxis0Index) - zp->GetOffset(axis0Num);
 				axesCoords[axis1Num] = grid.GetCoordinate(1, gridAxis1Index) - zp->GetOffset(axis1Num);
-				axesCoords[Z_AXIS] = zp->GetStartingHeight();
+				axesCoords[Z_AXIS] = zp->GetStartingHeight(true);
 				if (!reprap.GetMove().IsAccessibleProbePoint(axesCoords, axes))
 				{
 					break;
@@ -1067,7 +1038,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				SetMoveBufferDefaults(ms);
 				ms.coords[axis0Num] = grid.GetCoordinate(0, lastAxis0Index) - zp->GetOffset(axis0Num);
 				ms.coords[axis1Num] = grid.GetCoordinate(1, gridAxis1Index) - zp->GetOffset(axis1Num);
-				ms.coords[Z_AXIS] = zp->GetStartingHeight();
+				ms.coords[Z_AXIS] = zp->GetStartingHeight(true);
 				ms.feedRate = zp->GetProbingSpeed(0);
 				ms.linearAxesMentioned = platform.IsAxisLinear(axis0Num);
 				ms.rotationalAxesMentioned = platform.IsAxisRotational(axis0Num);
@@ -1122,11 +1093,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			SetMoveBufferDefaults(ms);
-			{
-				const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
-				ms.coords[Z_AXIS] = zp->GetStartingHeight();
-				ms.feedRate = zp->GetTravelSpeed();
-			}
+			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
+			ms.coords[Z_AXIS] = zp->GetStartingHeight(true);
+			ms.feedRate = zp->GetTravelSpeed();
 			ms.linearAxesMentioned = true;
 			NewSingleSegmentMoveAvailable(ms);
 			gb.AdvanceState();
@@ -1141,12 +1110,12 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			SetMoveBufferDefaults(ms);
 			(void)reprap.GetMove().GetProbeCoordinates(g30ProbePointIndex, ms.coords[X_AXIS], ms.coords[Y_AXIS], true);
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
-			ms.coords[Z_AXIS] = zp->GetStartingHeight();
+			ms.coords[Z_AXIS] = zp->GetStartingHeight(true);
 			ms.feedRate = zp->GetTravelSpeed();
 			ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;		// assume that both linear and rotational axes might be moving
 			NewSingleSegmentMoveAvailable(ms);
 
-			InitialiseTaps(false);
+			InitialiseTaps(false);									// don't do fast-then-slow probing
 			gb.AdvanceState();
 		}
 		break;
@@ -1200,7 +1169,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					gb.LatestMachineState().SetError("Probe already triggered at start of probing move");
 					if (g30ProbePointIndex >= 0)
 					{
-						reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, zp->GetDiveHeight(), true, true);
+						reprap.GetMove().SetZBedProbePoint(g30ProbePointIndex, zp->GetDiveHeight(tapsDone), true, true);
 					}
 					gb.SetState(GCodeState::checkError);									// no point in doing anything else
 					RetractZProbe(gb);
@@ -1220,7 +1189,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.checkEndstops = true;
 					ms.reduceAcceleration = true;
 					ms.coords[Z_AXIS] = (IsAxisHomed(Z_AXIS))
-												? platform.AxisMinimum(Z_AXIS) - zp->GetDiveHeight() + zp->GetActualTriggerHeight()	// Z axis has been homed, so no point in going very far
+												? platform.AxisMinimum(Z_AXIS) - zp->GetDiveHeight(-1) + zp->GetActualTriggerHeight()	// Z axis has been homed, so no point in going very far
 												: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet, so treat this as a homing move
 					ms.feedRate = zp->GetProbingSpeed(tapsDone);
 					ms.linearAxesMentioned = true;
@@ -1314,16 +1283,19 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::probingAtPoint4a:
-		// Move back up to the dive height before we change anything, in particular before we adjust leadscrews
-		SetMoveBufferDefaults(ms);
 		{
+			// Decode whether we need more taps at the current point. This affects the dive height that we move back up to.
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
-			ms.coords[Z_AXIS] = zp->GetStartingHeight();
+			CheckIfMoreTapsNeeded(gb, *zp);
+
+			// Move back up to the dive height before we change anything, in particular before we adjust leadscrews
+			SetMoveBufferDefaults(ms);
+			ms.coords[Z_AXIS] = zp->GetStartingHeight(acceptReading, g30zHeightError);
 			ms.feedRate = zp->GetTravelSpeed();
+			ms.linearAxesMentioned = true;
+			NewSingleSegmentMoveAvailable(ms);
+			gb.AdvanceState();
 		}
-		ms.linearAxesMentioned = true;
-		NewSingleSegmentMoveAvailable(ms);
-		gb.AdvanceState();
 		break;
 
 	case GCodeState::probingAtPoint5:
@@ -1332,38 +1304,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			// See whether we need to do any more taps
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
-			bool acceptReading = false;
-			if (zp->GetMaxTaps() < 2 && tapsDone == 1)
-			{
-				acceptReading = true;
-			}
-			else if (tapsDone >= 2)
-			{
-				g30zHeightErrorLowestDiff = min<float>(g30zHeightErrorLowestDiff, fabsf(g30zHeightError - g30PrevHeightError));
-				if (zp->GetTolerance() > 0.0 && g30zHeightErrorLowestDiff <= zp->GetTolerance())
-				{
-					g30zHeightError = (g30zHeightError + g30PrevHeightError)/2;
-					acceptReading = true;
-				}
-			}
-
 			if (!acceptReading)
 			{
-				if (tapsDone < (int)zp->GetMaxTaps())
-				{
-					// Tap again
-					g30PrevHeightError = g30zHeightError;
-					lastProbedTime = millis();
-					gb.SetState(GCodeState::probingAtPoint2a);
-					break;
-				}
-
-				// We no longer flag this as a probing error, instead we take the average and issue a warning
-				g30zHeightError = g30zHeightErrorSum/tapsDone;
-				if (zp->GetTolerance() > 0.0)			// zero or negative tolerance means always average all readings, so no warning message
-				{
-					gb.LatestMachineState().SetError("Z probe readings not consistent");
-				}
+				// Tap again
+				g30PrevHeightError = g30zHeightError;
+				lastProbedTime = millis();
+				gb.SetState(GCodeState::probingAtPoint2a);
+				break;
 			}
 
 			if (g30ProbePointIndex >= 0)

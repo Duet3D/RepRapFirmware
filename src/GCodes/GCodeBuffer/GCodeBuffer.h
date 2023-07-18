@@ -284,7 +284,7 @@ public:
 	void MotionStopped() noexcept { motionCommanded = false; }
 	bool WasMotionCommanded() const noexcept { return motionCommanded; }
 
-	void AddParameters(VariableSet& vars, int codeRunning) noexcept;
+	void AddParameters(VariableSet& vars, int codeRunning) THROWS(GCodeException);
 	VariableSet& GetVariables() const noexcept;
 
 	[[noreturn]] void ThrowGCodeException(const char *msg) const THROWS(GCodeException);

@@ -15,6 +15,8 @@ class CanMessageGenericParser;
 class SensorWithPort : public TemperatureSensor
 {
 protected:
+	DECLARE_OBJECT_MODEL
+
 	SensorWithPort(unsigned int sensorNum, const char *type) noexcept;
 	~SensorWithPort() noexcept;
 

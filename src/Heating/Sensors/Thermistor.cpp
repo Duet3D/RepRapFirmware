@@ -41,6 +41,22 @@ static constexpr int32_t OversampledAdcRange = 1u << (AdcBits + AdcOversampleBit
 //
 // The parameters that can be configured in RRF are R25 (the resistance at 25C), Beta, and optionally C.
 
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(Thermistor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(Thermistor, _condition, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry Thermistor::objectModelTable[] =
+{
+	{ "beta",	OBJECT_MODEL_FUNC_IF(!self->isPT1000, self->beta, 0), 		ObjectModelEntryFlags::none },
+	{ "c",		OBJECT_MODEL_FUNC_IF(!self->isPT1000, self->shC, 4), 		ObjectModelEntryFlags::none },
+	{ "r25",	OBJECT_MODEL_FUNC_IF(!self->isPT1000, self->r25, 0), 		ObjectModelEntryFlags::none },
+	{ "rRef",	OBJECT_MODEL_FUNC(self->seriesR, 0), 						ObjectModelEntryFlags::none }
+};
+
+constexpr uint8_t Thermistor::objectModelTableDescriptor[] = { 1, 4 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(Thermistor, SensorWithPort)
+
 // Create an instance with default values
 Thermistor::Thermistor(unsigned int sensorNum, bool p_isPT1000) noexcept
 	: SensorWithPort(sensorNum, (p_isPT1000) ? "PT1000" : "Thermistor"),

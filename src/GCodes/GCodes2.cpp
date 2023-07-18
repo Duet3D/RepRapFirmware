@@ -328,13 +328,13 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					sparam = gb.GetIValue();
 				}
-				else if (DoFileMacro(gb, MESH_G, false, 29))	// no S parameter found so try to execute mesh.g
+				else if (DoFileMacroWithParameters(gb, MESH_G, false, 29))	// no S parameter found so try to execute mesh.g
 				{
 					break;
 				}
 				else
 				{
-					sparam = 0;									// mesh.g not found, so treat G29 the same as G29 S0
+					sparam = 0;												// mesh.g not found, so treat G29 the same as G29 S0
 				}
 
 				switch(sparam)
@@ -420,7 +420,7 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			// which means that no gcode source other than the one that executed G32 is allowed to jog the Z axis.
 			UnlockAll(gb);
 
-			DoFileMacro(gb, BED_EQUATION_G, true, 32);	// Try to execute bed.g
+			DoFileMacroWithParameters(gb, BED_EQUATION_G, true, 32);	// Try to execute bed.g
 			break;
 
 		case 38: // Straight probe - move until either the probe is triggered or the commanded move ends
@@ -1570,8 +1570,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (gb.Seen('P'))
 				{
 					String<MaxFilenameLength> filename;
-					gb.GetPossiblyQuotedString(filename.GetRef());
-					DoFileMacro(gb, filename.c_str(), true, code);
+					gb.GetQuotedString(filename.GetRef());
+					DoFileMacroWithParameters(gb, filename.c_str(), true, code);
 				}
 				else if (gb.Seen('R'))
 				{
@@ -4667,7 +4667,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 }
 
 // Try to find a macro file that implements a G or M command
-GCodeResult GCodes::TryMacroFile(GCodeBuffer& gb) noexcept
+GCodeResult GCodes::TryMacroFile(GCodeBuffer& gb) THROWS(GCodeException)
 {
 	const int code = gb.GetCommandNumber();
 	if (code >= 0 && code < 10000)
@@ -4682,7 +4682,7 @@ GCodeResult GCodes::TryMacroFile(GCodeBuffer& gb) noexcept
 		{
 			macroName.printf("%c%d.g", gb.GetCommandLetter(), code);
 		}
-		if (DoFileMacro(gb, macroName.c_str(), false, code))
+		if (DoFileMacroWithParameters(gb, macroName.c_str(), false, code))
 		{
 			return GCodeResult::ok;
 		}

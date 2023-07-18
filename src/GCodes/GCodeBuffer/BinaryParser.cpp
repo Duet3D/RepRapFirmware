@@ -855,7 +855,7 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 	}
 }
 
-void BinaryParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
+void BinaryParser::AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeException)
 {
 	if (bufferLength != 0 && header->numParameters != 0)
 	{
@@ -880,12 +880,10 @@ void BinaryParser::AddParameters(VariableSet& vs, int codeRunning) noexcept
 					break;
 
 				case DataType::Expression:
-					try
 					{
 						ExpressionParser parser(gb, seenParameterValue, seenParameterValue + param->intValue, -1);
 						ev = parser.Parse();
 					}
-					catch (const GCodeException&) { }			// TODO error handling
 					break;
 
 				case DataType::Float:

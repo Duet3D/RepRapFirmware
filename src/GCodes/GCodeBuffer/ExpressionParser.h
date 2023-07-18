@@ -32,7 +32,6 @@ public:
 	void ParseUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCodeException);
 	void ParseDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);
 
-	void SkipWhiteSpace() noexcept;
 	void CheckForExtraCharacters() THROWS(GCodeException);
 	const char *GetEndptr() const noexcept { return currentp; }
 
@@ -51,12 +50,14 @@ private:
 
 	void ParseGeneralArray(ExpressionValue& firstElementAndResult, bool evaluate) THROWS(GCodeException);
 
-	void ParseArray(size_t& length, function_ref<void(size_t index) THROWS(GCodeException)> processElement) THROWS(GCodeException);
+	void ParseArray(size_t& length, function_ref<void(ExpressionValue& ev, size_t index) THROWS(GCodeException)> processElement) THROWS(GCodeException);
 	time_t ParseDateTime(const char *s) const THROWS(GCodeException);
 
 	void GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, ObjectExplorationContext& context, bool isParameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException);
 
 	void ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
+	void ConvertToInteger(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
+	void ConvertToUnsigned(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToBool(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToString(ExpressionValue& val, bool evaluate) noexcept;
 	void ConvertToDriverId(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
@@ -75,7 +76,8 @@ private:
 
 	int GetColumn() const noexcept;
 	char CurrentCharacter() const noexcept;
-	void AdvancePointer() noexcept { ++currentp; }		// could check that we havebn't reached endp but we should stop before that happens
+	void AdvancePointer() noexcept;
+	char SkipWhiteSpace() noexcept;
 
 	const char *currentp;
 	const char * const startp;

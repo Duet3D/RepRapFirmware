@@ -379,8 +379,9 @@ private:
 
 	bool DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Get G Codes from a file and print them
 	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning, VariableSet& initialVariables) noexcept;
-	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept;
-																						// Run a GCode macro file, optionally report error if not found
+	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) noexcept;	// Run a GCode macro file, optionally report error if not found
+	bool DoFileMacroWithParameters(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning) THROWS(GCodeException);
+
 	void FileMacroCyclesReturn(GCodeBuffer& gb) noexcept;								// End a macro
 
 	bool ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Do a G, M or T Code
@@ -394,7 +395,7 @@ private:
 	void HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept;
 	void HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept;	// Handle G-Code replies
 
-	GCodeResult TryMacroFile(GCodeBuffer& gb) noexcept;												// Try to find a macro file that implements a G or M command
+	GCodeResult TryMacroFile(GCodeBuffer& gb) THROWS(GCodeException);								// Try to find a macro file that implements a G or M command
 
 	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeException) SPEED_CRITICAL;	// Execute a straight move
 	bool DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)							// Execute an arc move
@@ -544,10 +545,13 @@ private:
 	void CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept;				// Copy the feed rate etc. from the daemon to the input channels
 
 	MessageType GetMessageBoxDevice(GCodeBuffer& gb) const;						// Decide which device to display a message box on
+
+	// Z probe
 	void DoManualProbe(GCodeBuffer&, const char *message, const char *title, const AxesBitmap); // Do manual probe in arbitrary direction
 	void DoManualBedProbe(GCodeBuffer& gb);										// Do a manual bed probe
 	void DeployZProbe(GCodeBuffer& gb) noexcept;
 	void RetractZProbe(GCodeBuffer& gb) noexcept;
+	void CheckIfMoreTapsNeeded(GCodeBuffer& gb, const ZProbe& zp) noexcept;		// Decide whether we have probed the current point sufficient times
 
 	void AppendAxes(const StringRef& reply, AxesBitmap axes) const noexcept;	// Append a list of axes to a string
 
@@ -713,7 +717,8 @@ private:
 	bool doingManualBedProbe;					// true if we are waiting for the user to jog the nozzle until it touches the bed
 	bool hadProbingError;						// true if there was an error probing the last point
 	bool zDatumSetByProbing;					// true if the Z position was last set by probing, not by an endstop switch or by G92
-	int8_t tapsDone;							// how many times we tapped the current point
+	int8_t tapsDone;							// how many times we tapped the current point at the slow speed
+	bool acceptReading;							// true if we are going to accept the reading of the previous tap
 	uint8_t currentZProbeNumber;				// which Z probe a G29 or G30 command is using
 #if SUPPORT_PROBE_POINTS_FILE
 	bool probePointsFileLoaded;					// true if we loaded a probe point file since we last cleared the grid

@@ -21,9 +21,9 @@
 // Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
 
 // Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...)				OBJECT_MODEL_FUNC_BODY(ZProbe, __VA_ARGS__)
-#define OBJECT_MODEL_FUNC_IF(...)			OBJECT_MODEL_FUNC_IF_BODY(ZProbe, __VA_ARGS__)
-#define OBJECT_MODEL_FUNC_ARRAY_IF(...)		OBJECT_MODEL_FUNC_ARRAY_IF_BODY(ZProbe, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC(...)							OBJECT_MODEL_FUNC_BODY(ZProbe, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition, ...)			OBJECT_MODEL_FUNC_IF_BODY(ZProbe, _condition, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_ARRAY_IF(_condition, ...)		OBJECT_MODEL_FUNC_ARRAY_IF_BODY(ZProbe, _condition, __VA_ARGS__)
 
 constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 {
@@ -63,9 +63,16 @@ constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 	// 4. Scanning probe coefficients
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 4; },
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::scanCoefficients); },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 				{ return ExpressionValue(((const ZProbe*)self)->scanCoefficients[context.GetLastIndex()], 5); }
+	},
+	// 5. Dive heights
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::diveHeights); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return ExpressionValue(((const ZProbe*)self)->diveHeights[context.GetLastIndex()], 1); }
 	}
 };
 
@@ -78,13 +85,14 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "calibrationTemperature",		OBJECT_MODEL_FUNC(self->calibTemperature, 1), 												ObjectModelEntryFlags::none },
 	{ "deployedByUser",				OBJECT_MODEL_FUNC(self->isDeployedByUser), 													ObjectModelEntryFlags::none },
 	{ "disablesHeaters",			OBJECT_MODEL_FUNC((bool)self->misc.parts.turnHeatersOff), 									ObjectModelEntryFlags::none },
-	{ "diveHeight",					OBJECT_MODEL_FUNC(self->diveHeight, 1), 													ObjectModelEntryFlags::none },
+	{ "diveHeight",					OBJECT_MODEL_FUNC(self->diveHeights[0], 1), 												ObjectModelEntryFlags::obsolete },
+	{ "diveHeights",				OBJECT_MODEL_FUNC_ARRAY(5), 																ObjectModelEntryFlags::none },
 	{ "isCalibrated",				OBJECT_MODEL_FUNC_IF(self->IsScanning(), self->isCalibrated), 								ObjectModelEntryFlags::none },
 	{ "lastStopHeight",				OBJECT_MODEL_FUNC(self->lastStopHeight, 3), 												ObjectModelEntryFlags::none },
 	{ "maxProbeCount",				OBJECT_MODEL_FUNC((int32_t)self->misc.parts.maxTaps), 										ObjectModelEntryFlags::none },
 	{ "offsets",					OBJECT_MODEL_FUNC_ARRAY(0), 																ObjectModelEntryFlags::none },
 	{ "recoveryTime",				OBJECT_MODEL_FUNC(self->recoveryTime, 1), 													ObjectModelEntryFlags::none },
-	{ "scanCoefficients",			OBJECT_MODEL_FUNC_ARRAY_IF(self->IsScanning(), 4), 										ObjectModelEntryFlags::none },
+	{ "scanCoefficients",			OBJECT_MODEL_FUNC_ARRAY_IF(self->IsScanning(), 4), 											ObjectModelEntryFlags::none },
 	{ "speeds",						OBJECT_MODEL_FUNC_ARRAY(1), 																ObjectModelEntryFlags::none },
 	{ "temperatureCoefficients",	OBJECT_MODEL_FUNC_ARRAY(2), 																ObjectModelEntryFlags::none },
 	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->targetAdcValue), 												ObjectModelEntryFlags::none },
@@ -95,7 +103,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "value",						OBJECT_MODEL_FUNC_ARRAY(3), 																ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 18 };
+constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 19 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ZProbe)
 
@@ -120,7 +128,7 @@ void ZProbe::SetDefaults() noexcept
 	{
 		tc = 0.0;
 	}
-	diveHeight = DefaultZDive;
+	diveHeights[0] = diveHeights[1] = DefaultZDive;
 	probeSpeeds[0] = probeSpeeds[1] = ConvertSpeedFromMmPerSec(DefaultProbingSpeed);
 	travelSpeed = ConvertSpeedFromMmPerSec(DefaultZProbeTravelSpeed);
 	recoveryTime = 0.0;
@@ -150,7 +158,20 @@ void ZProbe::PrepareForUse(const bool probingAway) noexcept
 	}
 }
 
-float ZProbe::GetStartingHeight() const noexcept
+// Get the dive height that is in effect for the next tap
+float ZProbe::GetDiveHeight(int tapsDone) const noexcept
+{
+	if (FastThenSlowProbing())
+	{
+		++tapsDone;
+	}
+	return diveHeights[(tapsDone < 1) ? 0 : 1];
+}
+
+// Get the height we should move to when starting this probe.
+// If firstTap is true, always move to the primary dive height.
+// Otherwise if the secondary dive height is smaller than the primary, move to the secondary dive height plus the error.
+float ZProbe::GetStartingHeight(bool firstTap, float previousHeightError) const noexcept
 {
 	switch (type)
 	{
@@ -158,7 +179,8 @@ float ZProbe::GetStartingHeight() const noexcept
 		return GetActualTriggerHeight();
 
 	default:
-		return diveHeight + GetActualTriggerHeight();
+		return ((!firstTap && diveHeights[1] < diveHeights[0]) ? diveHeights[1] + previousHeightError : diveHeights[0])
+			+ GetActualTriggerHeight();
 	}
 }
 
@@ -409,7 +431,13 @@ GCodeResult ZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 
 GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& seen) THROWS(GCodeException)
 {
-	gb.TryGetFValue('H', diveHeight, seen);					// dive height
+	if (gb.Seen('H'))										// dive heights
+	{
+		size_t numHeights = 2;
+		gb.GetFloatArray(diveHeights, numHeights, true);
+		seen = true;
+	}
+
 	if (gb.Seen('F'))										// feed rate i.e. probing speed
 	{
 		float userProbeSpeeds[2];
@@ -449,8 +477,8 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 
 	reply.printf("Z Probe %u: type %u", number, (unsigned int)type);
 	const GCodeResult rslt = AppendPinNames(reply);
-	reply.catf(", dive height %.1fmm, probe speeds %d,%dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
-					(double)diveHeight,
+	reply.catf(", dive heights %.1f,%.1fmm, probe speeds %d,%dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
+					(double)diveHeights[0], (double)diveHeights[1],
 					(int)InverseConvertSpeedToMmPerMin(probeSpeeds[0]),
 					(int)InverseConvertSpeedToMmPerMin(probeSpeeds[1]),
 					(int)InverseConvertSpeedToMmPerMin(travelSpeed),

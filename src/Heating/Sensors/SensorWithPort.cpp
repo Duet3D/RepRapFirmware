@@ -12,6 +12,19 @@
 # include <CanMessageGenericParser.h>
 #endif
 
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(SensorWithPort, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(SensorWithPort, _condition, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry SensorWithPort::objectModelTable[] =
+{
+	{ "port",	OBJECT_MODEL_FUNC(self->port), 	ObjectModelEntryFlags::none }
+};
+
+constexpr uint8_t SensorWithPort::objectModelTableDescriptor[] = { 1, 1 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(SensorWithPort, TemperatureSensor)
+
 SensorWithPort::SensorWithPort(unsigned int sensorNum, const char *type) noexcept
 	: TemperatureSensor(sensorNum, type)
 {

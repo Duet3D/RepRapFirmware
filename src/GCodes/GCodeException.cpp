@@ -47,7 +47,7 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 		case 'T':
 			if (gb->HasCommandNumber())
 			{
-				reply.catf("%c%u: ", gb->GetCommandLetter(), gb->GetCommandNumber());
+				reply.catf("%c%d: ", gb->GetCommandLetter(), gb->GetCommandNumber());
 			}
 			break;
 

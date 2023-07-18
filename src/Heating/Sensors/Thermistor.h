@@ -35,6 +35,9 @@ public:
 	static constexpr const char *_ecv_array TypeNameThermistor = "thermistor";
 	static constexpr const char *_ecv_array TypeNamePT1000 = "pt1000";
 
+protected:
+	DECLARE_OBJECT_MODEL
+
 private:
 	void CalcDerivedParameters() noexcept;											// calculate shA and shB
 	int32_t GetRawReading(bool& valid) const noexcept;								// get the ADC reading
