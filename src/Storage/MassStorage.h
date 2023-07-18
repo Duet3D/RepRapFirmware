@@ -87,6 +87,10 @@ namespace MassStorage
 	GCodeResult Mount(size_t card, const StringRef& reply, bool reportSuccess) noexcept;
 	GCodeResult Unmount(size_t card, const StringRef& reply) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;
+
+# if SUPPORT_ASYNC_MOVES
+	FileStore *DuplicateOpenHandle(const FileStore *f) noexcept;	// Duplicate a file handle, with the duplicate having its own position in the file. Use only when files opened in read-only mode.
+# endif
 #endif
 
 #if HAS_MASS_STORAGE
@@ -102,10 +106,6 @@ namespace MassStorage
 	Mutex& GetVolumeMutex(size_t vol) noexcept;
 	void RecordSimulationTime(const char *_ecv_array printingFilePath, uint32_t simSeconds) noexcept;	// Append the simulated printing time to the end of the file
 	uint16_t GetVolumeSeq(unsigned int volume) noexcept;
-
-#if SUPPORT_ASYNC_MOVES
-	FileStore *DuplicateOpenHandle(const FileStore *f) noexcept;	// Duplicate a file handle, with the duplicate having its own position in the file. Use only when files opened in read-only mode.
-#endif
 
 	enum class InfoResult : uint8_t
 	{

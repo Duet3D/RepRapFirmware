@@ -4576,7 +4576,7 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 		return ledStripManager.CreateStrip(gb, reply);
 #endif
 
-#ifdef DUET3_MB6HC
+#if defined(DUET3_MB6HC) && HAS_MASS_STORAGE
 	case 128:	// D
 # if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface())
@@ -4589,7 +4589,7 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 #endif
 
 	default:
-#ifdef DUET3_MB6HC
+#if defined(DUET3_MB6HC) && HAS_MASS_STORAGE
 # if SUPPORT_LED_STRIPS
 		reply.copy("exactly one of DEFHJPSR must be given");
 # else

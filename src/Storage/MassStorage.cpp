@@ -186,6 +186,10 @@ static FileStore files[MAX_FILES];
 	return !hadError;
 }
 
+#if HAS_EMBEDDED_FILES && defined(DUET3_MB6HC)
+size_t MassStorage::GetNumVolumes() noexcept { return 1; }
+#endif
+
 #if HAS_MASS_STORAGE
 
 # ifdef DUET3_MB6HC
@@ -472,7 +476,7 @@ FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t p
 	return nullptr;
 }
 
-# if SUPPORT_ASYNC_MOVES
+# if (HAS_MASS_STORAGE || HAS_EMBEDDED_FILES) && SUPPORT_ASYNC_MOVES
 
 // Duplicate a file handle, with the duplicate having its own position in the file. Use only with files opened in read-only mode.
 FileStore *MassStorage::DuplicateOpenHandle(const FileStore *f) noexcept
