@@ -37,6 +37,26 @@ uint32_t FilamentMonitor::whenStatusLastSent = 0;
 
 #if SUPPORT_OBJECT_MODEL
 
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(FilamentMonitor, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry FilamentMonitor::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	{ "enableMode",			OBJECT_MODEL_FUNC((int32_t)self->GetEnableMode()),		ObjectModelEntryFlags::none },
+	{ "enabled",			OBJECT_MODEL_FUNC(self->GetEnableMode() != 0),		 	ObjectModelEntryFlags::obsolete },
+	{ "status",				OBJECT_MODEL_FUNC(self->GetStatusText()),				ObjectModelEntryFlags::live },
+	{ "type",				OBJECT_MODEL_FUNC(self->GetTypeText()), 				ObjectModelEntryFlags::none },
+};
+
+constexpr uint8_t FilamentMonitor::objectModelTableDescriptor[] = { 1, 4 };
+
+DEFINE_GET_OBJECT_MODEL_TABLE(FilamentMonitor)
+
 // Get the number of monitors to report in the OM
 size_t FilamentMonitor::GetNumMonitorsToReport() noexcept
 {
@@ -459,6 +479,15 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 // For a remote filament monitor, this does the full configuration or query of the remote object instead, and we always return seen true because we don't need to report local status.
 GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& parser, const StringRef& reply, InterruptMode interruptMode, bool& seen) noexcept
 {
+	if (parser.GetUintParam('S', enableMode))
+	{
+		seen = true;
+		if (enableMode > 2)
+		{
+			enableMode = 2;
+		}
+	}
+
 	String<StringLength20> portName;
 	if (parser.GetStringParam('C', portName.GetRef()))
 	{

@@ -23,6 +23,7 @@ public:
 	FilamentSensorStatus Clear() noexcept override;
 	void Diagnostics(MessageType mtype, unsigned int extruder) noexcept override;
 	bool Interrupt() noexcept override;
+	const char *_ecv_array GetTypeText() const noexcept override { return "pulsed"; }
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -46,7 +47,6 @@ private:
 	float mmPerPulse;
 	float minMovementAllowed, maxMovementAllowed;
 	float minimumExtrusionCheckLength;
-	bool comparisonEnabled;
 
 	// Other data
 	uint32_t sensorValue;									// how many pulses received

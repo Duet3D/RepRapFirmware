@@ -22,6 +22,7 @@ public:
 	FilamentSensorStatus Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept override;
 	FilamentSensorStatus Clear() noexcept override;
 	void Diagnostics(MessageType mtype, unsigned int extruder) noexcept override;
+	const char *_ecv_array GetTypeText() const noexcept override { return "laser"; }
 
 protected:
 	DECLARE_OBJECT_MODEL
@@ -80,7 +81,6 @@ private:
 	float calibrationFactor;
 	float minMovementAllowed, maxMovementAllowed;
 	float minimumExtrusionCheckLength;
-	bool comparisonEnabled;
 	bool checkNonPrintingMoves;
 
 	// Other data

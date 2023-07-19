@@ -14,31 +14,8 @@
 # include <CanMessageGenericParser.h>
 #endif
 
-#if SUPPORT_OBJECT_MODEL
-
-// Object model table and functions
-// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
-// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
-
-// Macro to build a standard lambda function that includes the necessary type conversions
-#define OBJECT_MODEL_FUNC(...) OBJECT_MODEL_FUNC_BODY(SimpleFilamentMonitor, __VA_ARGS__)
-
-constexpr ObjectModelTableEntry SimpleFilamentMonitor::objectModelTable[] =
-{
-	// Within each group, these entries must be in alphabetical order
-	{ "enabled",			OBJECT_MODEL_FUNC(self->enabled),		 			ObjectModelEntryFlags::none },
-	{ "status",				OBJECT_MODEL_FUNC(self->GetStatusText()),			ObjectModelEntryFlags::live },
-	{ "type",				OBJECT_MODEL_FUNC_NOSELF("simple"), 				ObjectModelEntryFlags::none },
-};
-
-constexpr uint8_t SimpleFilamentMonitor::objectModelTableDescriptor[] = { 1, 3 };
-
-DEFINE_GET_OBJECT_MODEL_TABLE(SimpleFilamentMonitor)
-
-#endif
-
 SimpleFilamentMonitor::SimpleFilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
-	: FilamentMonitor(drv, monitorType, did), highWhenNoFilament(monitorType == 2), filamentPresent(false), enabled(false)
+	: FilamentMonitor(drv, monitorType, did), highWhenNoFilament(monitorType == 2), filamentPresent(false)
 {
 }
 
@@ -48,12 +25,6 @@ GCodeResult SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& r
 	const GCodeResult rslt = CommonConfigure(gb, reply, InterruptMode::none, seen);
 	if (Succeeded(rslt))
 	{
-		if (gb.Seen('S'))
-		{
-			seen = true;
-			enabled = (gb.GetIValue() > 0);
-		}
-
 		if (seen)
 		{
 			Check(false, false, 0, 0.0);
@@ -64,7 +35,7 @@ GCodeResult SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& r
 			reply.copy("Simple filament sensor on pin ");
 			GetPort().AppendPinName(reply);
 			reply.catf(", %s, output %s when no filament, filament present: %s",
-						(enabled) ? "enabled" : "disabled",
+						(GetEnableMode() != 0) ? "enabled" : "disabled",
 						(highWhenNoFilament) ? "high" : "low",
 						(filamentPresent) ? "yes" : "no");
 		}
@@ -92,14 +63,14 @@ void SimpleFilamentMonitor::Poll() noexcept
 FilamentSensorStatus SimpleFilamentMonitor::Check(bool isPrinting, bool fromIsr, uint32_t isrMillis, float filamentConsumed) noexcept
 {
 	Poll();
-	return (!enabled || filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;
+	return (GetEnableMode() == 0 || filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;
 }
 
 // Clear the measurement state - called when we are not printing a file. Return the present/not present status if available.
 FilamentSensorStatus SimpleFilamentMonitor::Clear() noexcept
 {
 	Poll();
-	return (!enabled || filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;
+	return (GetEnableMode() == 0 || filamentPresent) ? FilamentSensorStatus::ok : FilamentSensorStatus::noFilament;
 }
 
 // Print diagnostic info for this sensor
@@ -118,14 +89,6 @@ GCodeResult SimpleFilamentMonitor::Configure(const CanMessageGenericParser& pars
 	const GCodeResult rslt = CommonConfigure(parser, reply, InterruptMode::none, seen);
 	if (rslt <= GCodeResult::warning)
 	{
-		uint16_t temp;
-		if (parser.GetUintParam('S', temp))
-		{
-			seen = true;
-			enabled = (temp > 0);
-		}
-
-
 		if (seen)
 		{
 			Check(false, false, 0, 0.0);
@@ -135,7 +98,7 @@ GCodeResult SimpleFilamentMonitor::Configure(const CanMessageGenericParser& pars
 			reply.copy("Simple filament sensor on pin ");
 			GetPort().AppendPinName(reply);
 			reply.catf(", %s, output %s when no filament, filament present: %s",
-						(enabled) ? "enabled" : "disabled",
+						(GetEnableMode() != 0) ? "enabled" : "disabled",
 						(highWhenNoFilament) ? "high" : "low",
 						(filamentPresent) ? "yes" : "no");
 		}

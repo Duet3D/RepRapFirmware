@@ -23,16 +23,13 @@ public:
 	FilamentSensorStatus Clear() noexcept override;
 	void Diagnostics(MessageType mtype, unsigned int extruder) noexcept override;
 	bool Interrupt() noexcept override;
-
-protected:
-	DECLARE_OBJECT_MODEL
+	const char *_ecv_array GetTypeText() const noexcept override { return "simple"; }
 
 private:
 	void Poll() noexcept;
 
 	bool highWhenNoFilament;
 	bool filamentPresent;
-	bool enabled;
 };
 
 #endif /* SRC_FILAMENTSENSORS_SIMPLEFILAMENTMONITOR_H_ */

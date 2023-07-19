@@ -39,13 +39,10 @@ constexpr ObjectModelTableEntry LaserFilamentMonitor::objectModelTable[] =
 #endif
 	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->IsLocal() && self->dataReceived && self->HaveCalibrationData(), self, 1), 	ObjectModelEntryFlags::live },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
-	{ "enabled",			OBJECT_MODEL_FUNC(self->comparisonEnabled),		 														ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
 	{ "position",			OBJECT_MODEL_FUNC((int32_t)self->sensorValue),															ObjectModelEntryFlags::live },
 	{ "shutter",			OBJECT_MODEL_FUNC((int32_t)self->shutter),																ObjectModelEntryFlags::live },
 #endif
-	{ "status",				OBJECT_MODEL_FUNC(self->GetStatusText()),																ObjectModelEntryFlags::live },
-	{ "type",				OBJECT_MODEL_FUNC_NOSELF("laser"), 																		ObjectModelEntryFlags::none },
 
 	// 1. LaserFilamentMonitor.calibrated members
 	{ "percentMax",			OBJECT_MODEL_FUNC(ConvertToPercent(self->maxMovementRatio)), 											ObjectModelEntryFlags::live },
@@ -65,15 +62,15 @@ constexpr uint8_t LaserFilamentMonitor::objectModelTableDescriptor[] =
 {
 	3,
 #ifdef DUET3_ATE
-	8,
-#else
 	5,
+#else
+	2,
 #endif
 	4,
 	5
 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE(LaserFilamentMonitor)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(LaserFilamentMonitor, FilamentMonitor)
 
 #endif
 
@@ -81,7 +78,7 @@ LaserFilamentMonitor::LaserFilamentMonitor(unsigned int drv, unsigned int monito
 	: Duet3DFilamentMonitor(drv, monitorType, did),
 	  calibrationFactor(1.0),
 	  minMovementAllowed(DefaultMinMovementAllowed), maxMovementAllowed(DefaultMaxMovementAllowed),
-	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), comparisonEnabled(false), checkNonPrintingMoves(false)
+	  minimumExtrusionCheckLength(DefaultMinimumExtrusionCheckLength), checkNonPrintingMoves(false)
 {
 	switchOpenMask = (monitorType == 6) ? TypeLaserSwitchOpenBitMask : 0;
 	Init();
@@ -149,12 +146,6 @@ GCodeResult LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& re
 			}
 		}
 
-		if (gb.Seen('S'))
-		{
-			seen = true;
-			comparisonEnabled = (gb.GetIValue() > 0);
-		}
-
 		if (gb.Seen('A'))
 		{
 			seen = true;
@@ -170,7 +161,7 @@ GCodeResult LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& re
 			reply.printf("Duet3D laser filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
 			GetPort().AppendPinName(reply);
 			reply.catf(", %s, allow %ld%% to %ld%%, check %s moves every %.1fmm, calibration factor %.3f, ",
-						(comparisonEnabled) ? "enabled" : "disabled",
+						(GetEnableMode() != 0) ? "enabled" : "disabled",
 						ConvertToPercent(minMovementAllowed),
 						ConvertToPercent(maxMovementAllowed),
 						(checkNonPrintingMoves) ? "all" : "printing",
@@ -381,7 +372,7 @@ FilamentSensorStatus LaserFilamentMonitor::Check(bool isPrinting, bool fromIsr, 
 		extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
 	}
 
-	return (comparisonEnabled) ? ret : FilamentSensorStatus::ok;
+	return (GetEnableMode() != 0) ? ret : FilamentSensorStatus::ok;
 }
 
 // Compare the amount commanded with the amount of extrusion measured, and set up for the next comparison
@@ -419,7 +410,7 @@ FilamentSensorStatus LaserFilamentMonitor::CheckFilament(float amountCommanded, 
 				totalMovementMeasured = -totalMovementMeasured;
 			}
 			minMovementRatio = maxMovementRatio = totalMovementMeasured/totalExtrusionCommanded;
-			if (comparisonEnabled)
+			if (GetEnableMode() != 0)
 			{
 				if (minMovementRatio < minMovementAllowed)
 				{
@@ -451,7 +442,7 @@ FilamentSensorStatus LaserFilamentMonitor::CheckFilament(float amountCommanded, 
 			{
 				minMovementRatio = ratio;
 			}
-			if (comparisonEnabled)
+			if (GetEnableMode() != 0)
 			{
 				if (ratio < minMovementAllowed)
 				{
@@ -475,7 +466,7 @@ FilamentSensorStatus LaserFilamentMonitor::Clear() noexcept
 	Reset();											// call this first so that haveStartBitData and synced are false when we call HandleIncomingData
 	HandleIncomingData();								// to keep the diagnostics up to date
 
-	return (!comparisonEnabled) ? FilamentSensorStatus::ok
+	return (GetEnableMode() == 0) ? FilamentSensorStatus::ok
 			: (!dataReceived) ? FilamentSensorStatus::noDataReceived
 				: (sensorError) ? FilamentSensorStatus::sensorError
 					: ((sensorValue & switchOpenMask) != 0) ? FilamentSensorStatus::noFilament
@@ -533,12 +524,6 @@ GCodeResult LaserFilamentMonitor::Configure(const CanMessageGenericParser& parse
 		}
 
 		uint16_t temp;
-		if (parser.GetUintParam('S', temp))
-		{
-			seen = true;
-			comparisonEnabled = (temp > 0);
-		}
-
 		if (parser.GetUintParam('A', temp))
 		{
 			seen = true;
@@ -554,7 +539,7 @@ GCodeResult LaserFilamentMonitor::Configure(const CanMessageGenericParser& parse
 			reply.printf("Duet3D laser filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
 			GetPort().AppendPinName(reply);
 			reply.catf(", %s, allow %ld%% to %ld%%, check every %.1fmm, calibration factor %.3f, ",
-						(comparisonEnabled) ? "enabled" : "disabled",
+						(GetEnableMode() != 0) ? "enabled" : "disabled",
 						ConvertToPercent(minMovementAllowed),
 						ConvertToPercent(maxMovementAllowed),
 						(double)minimumExtrusionCheckLength,
