@@ -7,7 +7,7 @@
 
 #include "ClosedLoop.h"
 
-#if SUPPORT_CAN_EXPANSION
+#if SUPPORT_CAN_EXPANSION && (HAS_MASS_STORAGE || HAS_SBC_INTERFACE)
 
 # include <Platform/RepRap.h>
 # include <CAN/CanInterface.h>

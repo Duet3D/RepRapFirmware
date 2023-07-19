@@ -10,7 +10,7 @@
 
 #include <RepRapFirmware.h>
 
-#if SUPPORT_CAN_EXPANSION
+#if SUPPORT_CAN_EXPANSION && (HAS_MASS_STORAGE || HAS_SBC_INTERFACE)
 # include <GCodes/GCodeException.h>
 
 class CanMessageClosedLoopData;

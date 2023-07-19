@@ -1046,8 +1046,10 @@ pre(driver.IsRemote())
 		reply.copy("not supported by this driver");
 		return GCodeResult::error;
 
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	case 5:
 		return ClosedLoop::StartDataCollection(driver, gb, reply);
+#endif
 
 	case 6:
 		if (gb.LatestMachineState().commandRepeated)

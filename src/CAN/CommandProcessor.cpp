@@ -745,9 +745,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), buf->msg.filamentMonitorsStatus);
 				break;
 
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 			case CanMessageType::closedLoopData:
 				ClosedLoop::ProcessReceivedData(buf->id.Src(), buf->msg.closedLoopData, buf->dataLength);
 				break;
+#endif
 
 			case CanMessageType::event:
 				Event::Add(buf->msg.event, buf->id.Src(), buf->dataLength);
