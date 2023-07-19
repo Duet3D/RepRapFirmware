@@ -332,7 +332,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 						fromIsr = false;
 						locIsrMillis = 0;
 					}
-					if (gCodes.IsReallyPrinting() && !gCodes.IsSimulating())
+					if ((fs.enableMode = 2 || gCodes.IsReallyPrinting()) && !gCodes.IsSimulating())
 					{
 						const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(fs.driveNumber);
 						fst = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
