@@ -23,7 +23,7 @@ public:
 	FilamentSensorStatus Clear() noexcept override;
 	void Diagnostics(MessageType mtype, unsigned int extruder) noexcept override;
 	bool Interrupt() noexcept override;
-	const char *_ecv_array GetTypeText() const noexcept override { return "simple"; }
+	const char *_ecv_array GetTypeText() const noexcept override { return "switch"; }
 
 private:
 	void Poll() noexcept;

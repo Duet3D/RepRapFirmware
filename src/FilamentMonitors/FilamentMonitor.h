@@ -138,7 +138,9 @@ protected:
 		return lrintf(100 * f);
 	}
 
-	bool IsLocal() const noexcept { return driverId.IsLocal(); }
+#if SUPPORT_CAN_EXPANSION
+	bool IsLocal() const noexcept { return boardAddress == CanInterface::GetCanAddress(); }
+#endif
 
 private:
 
@@ -173,6 +175,7 @@ private:
 	bool haveIsrStepsCommanded;
 	FilamentSensorStatus lastStatus;
 #if SUPPORT_CAN_EXPANSION
+	CanAddress boardAddress;
 	FilamentSensorStatus lastRemoteStatus;
 	bool hasRemote;
 #endif

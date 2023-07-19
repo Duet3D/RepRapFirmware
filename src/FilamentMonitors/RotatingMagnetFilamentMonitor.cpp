@@ -37,7 +37,11 @@ constexpr ObjectModelTableEntry RotatingMagnetFilamentMonitor::objectModelTable[
 #ifdef DUET3_ATE
 	{ "agc",				OBJECT_MODEL_FUNC((int32_t)self->agc),																	ObjectModelEntryFlags::live },
 #endif
-	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(self->IsLocal() && self->dataReceived && self->HaveCalibrationData(), self, 1), 	ObjectModelEntryFlags::live },
+	{ "calibrated", 		OBJECT_MODEL_FUNC_IF(
+#if SUPPORT_CAN_EXPANSION
+													self->IsLocal() &&
+#endif
+													self->dataReceived && self->HaveCalibrationData(), self, 1), 					ObjectModelEntryFlags::live },
 	{ "configured", 		OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 #ifdef DUET3_ATE
 	{ "mag",				OBJECT_MODEL_FUNC((int32_t)self->magnitude),															ObjectModelEntryFlags::live },

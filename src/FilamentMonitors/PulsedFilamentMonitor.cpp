@@ -34,7 +34,11 @@ constexpr ObjectModelTableEntry PulsedFilamentMonitor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. PulsedFilamentMonitor members
-	{ "calibrated", 	OBJECT_MODEL_FUNC_IF(self->IsLocal() && self->DataReceived() && self->HaveCalibrationData(), self, 1), 	ObjectModelEntryFlags::live },
+	{ "calibrated", 	OBJECT_MODEL_FUNC_IF(
+#if SUPPORT_CAN_EXPANSION
+												self->IsLocal() &&
+#endif
+												self->DataReceived() && self->HaveCalibrationData(), self, 1), 					ObjectModelEntryFlags::live },
 	{ "configured", 	OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
 
 	// 1. PulsedFilamentMonitor.calibrated members

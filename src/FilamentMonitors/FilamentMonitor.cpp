@@ -113,8 +113,8 @@ GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& r
 	String<StringLength20> portName;
 	if (gb.TryGetQuotedString('C', portName.GetRef(), seen))
 	{
-		const CanAddress portAddress = IoPort::RemoveBoardAddress(portName.GetRef());
-		if (portAddress != driverId.boardAddress)
+		boardAddress = IoPort::RemoveBoardAddress(portName.GetRef());
+		if (boardAddress != driverId.boardAddress && type > 2)				// unless it is a simple switch, the filament monitor must be connected to the same board as the driver
 		{
 			reply.copy("Filament monitor port must be connected to same CAN board as extruder driver");
 			return GCodeResult::error;
