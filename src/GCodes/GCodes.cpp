@@ -1810,7 +1810,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated, const char *& e
 			}
 			else if (gb.LatestMachineState().g53Active)
 			{
-				moveState.currentUserPosition[axis] = moveArg + GetCurrentToolOffset(axis);	// g53 ignores tool offsets as well as workplace coordinates
+				moveState.currentUserPosition[axis] = moveArg + GetCurrentToolOffset(axis)/axisScaleFactors[axis];	// g53 ignores tool offsets as well as workplace coordinates
 			}
 			else if (gb.LatestMachineState().runningSystemMacro)
 			{
@@ -2060,7 +2060,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		}
 		else if (gb.LatestMachineState().g53Active)
 		{
-			newAxisPos[0] += GetCurrentToolOffset(axis0);
+			newAxisPos[0] += GetCurrentToolOffset(axis0)/axisScaleFactors[axis0];
 		}
 		else if (!gb.LatestMachineState().runningSystemMacro)
 		{
@@ -2081,7 +2081,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 		}
 		else if (gb.LatestMachineState().g53Active)
 		{
-			newAxisPos[1] += GetCurrentToolOffset(axis1);
+			newAxisPos[1] += GetCurrentToolOffset(axis1)/axisScaleFactors[axis1];
 		}
 		else if (!gb.LatestMachineState().runningSystemMacro)
 		{
@@ -2196,7 +2196,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise, const char *& err)
 			}
 			else if (gb.LatestMachineState().g53Active)
 			{
-				moveState.currentUserPosition[axis] = moveArg + GetCurrentToolOffset(axis);	// g53 ignores tool offsets as well as workplace coordinates
+				moveState.currentUserPosition[axis] = moveArg + GetCurrentToolOffset(axis)/axisScaleFactors[axis];	// g53 ignores tool offsets as well as workplace coordinates
 			}
 			else if (gb.LatestMachineState().runningSystemMacro)
 			{
