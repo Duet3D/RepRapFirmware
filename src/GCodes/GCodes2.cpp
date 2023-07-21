@@ -3258,7 +3258,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				if (gb.Seen('S'))
 				{
 					const float value = gb.GetFValue();
-					if (value >= 10.0)			// avoid divide by zero and silly results
+					if (value >= 1.0)			// avoid divide by zero and silly results
 					{
 						for (size_t axis = 0; axis <= Z_AXIS; axis++)
 						{
