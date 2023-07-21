@@ -135,13 +135,14 @@ GCodeResult GCodes::AcknowledgeMessage(GCodeBuffer&gb, const StringRef& reply) T
 		{
 			MessageBoxClosed(cancelled, true, seq, rslt);
 		}
-		return GCodeResult::ok;
 	}
 	else
 	{
-		reply.copy("no active message box");
-		return GCodeResult::error;
+		// If a user acknowledges or cancels a non-blocking message box that has a timeout, it can happen that the M292 command can't be executed for some time;
+		// so that when it is executed the message box has already timed out (issue 730). So don't report an error in this case.
+		// Do nothing
 	}
+	return GCodeResult::ok;
 }
 
 // Deal with processing a M292 or timing out a message box
