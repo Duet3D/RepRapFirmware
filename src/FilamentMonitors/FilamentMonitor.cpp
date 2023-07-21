@@ -109,18 +109,6 @@ GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& r
 	}
 
 #if SUPPORT_CAN_EXPANSION
-	// Check that the port (if given) is on the same board as the extruder
-	String<StringLength20> portName;
-	if (gb.TryGetQuotedString('C', portName.GetRef(), seen))
-	{
-		boardAddress = IoPort::RemoveBoardAddress(portName.GetRef());
-		if (boardAddress != driverId.boardAddress && type > 2)				// unless it is a simple switch, the filament monitor must be connected to the same board as the driver
-		{
-			reply.copy("Filament monitor port must be connected to same CAN board as extruder driver");
-			return GCodeResult::error;
-		}
-	}
-
 	if (!IsLocal())
 	{
 		seen = true;				// this tells the local filament monitor not to report anything
@@ -165,6 +153,12 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 // Handle M591
 /*static*/ GCodeResult FilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, unsigned int extruder) THROWS(GCodeException)
 {
+	// Don't allow C parameter without P parameter
+	if (gb.Seen('C'))
+	{
+		gb.MustSee('P');
+	}
+
 	bool seen = false;
 	uint32_t newSensorType;
 	gb.TryGetUIValue('P', newSensorType, seen);
@@ -187,12 +181,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 			return GCodeResult::ok;												// M591 D# P0 just deletes any existing sensor
 		}
 
-		gb.MustSee('C');														// make sure the port name parameter is present
-		sensor = Create(extruder, newSensorType, gb, reply);					// create the new sensor
-		if (sensor == nullptr)
-		{
-			return GCodeResult::error;
-		}
+		sensor = Create(extruder, newSensorType, gb, reply);					// create the new sensor (may throw)
 
 		try
 		{
@@ -225,11 +214,25 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 	return sensor->Configure(gb, reply, seen);									// configure or report on the existing sensor (may throw)
 }
 
-// Factory function to create a filament monitor
-/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) noexcept
+// Factory function to create a filament monitor.
+// If successful, return the filament monitor object; else throw a GCodeException.
+/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const size_t drv = ExtruderToLogicalDrive(extruder);
 	const DriverId did = reprap.GetPlatform().GetExtruderDriver(extruder);
+	gb.MustSee('C');															// make sure the port name parameter is present
+
+#if SUPPORT_CAN_EXPANSION
+	// Find out which board the sensor is connected to
+	String<StringLength50> portName;
+	gb.GetQuotedString(portName.GetRef());
+	const CanAddress locBoardAddress = IoPort::RemoveBoardAddress(portName.GetRef());
+	if (locBoardAddress != did.boardAddress && monitorType > 2)					// unless it is a simple switch, the filament monitor must be connected to the same board as the driver
+	{
+		gb.ThrowGCodeException("Filament monitor port must be connected to same CAN board as extruder driver");
+	}
+#endif
+
 	FilamentMonitor *fm;
 	switch (monitorType)
 	{
@@ -253,11 +256,11 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 		break;
 
 	default:	// no sensor, or unknown sensor
-		reply.printf("Unknown filament monitor type %u", monitorType);
-		return nullptr;
+		gb.ThrowGCodeException("Unknown filament monitor type %u", monitorType);
 	}
 #if SUPPORT_CAN_EXPANSION
-	if (fm != nullptr && !fm->IsLocal())
+	fm->boardAddress = locBoardAddress;
+	if (!fm->IsLocal())
 	{
 		// Create the remote filament monitor on the expansion board
 		if (CanInterface::CreateFilamentMonitor(fm->driverId, monitorType, gb, reply) != GCodeResult::ok)

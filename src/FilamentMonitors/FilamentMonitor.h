@@ -145,7 +145,7 @@ protected:
 private:
 
 	// Create a filament sensor returning null if not a valid sensor type
-	static FilamentMonitor *Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) noexcept;
+	static FilamentMonitor *Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	static void InterruptEntry(CallbackParameter param) noexcept;
 
 	static constexpr size_t NumFilamentMonitors =
