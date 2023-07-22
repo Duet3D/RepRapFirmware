@@ -1010,9 +1010,9 @@ const char* WiFiInterface::TranslateEspResetReason(uint32_t reason) noexcept
 void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 {
 	platform.MessageF(mtype,
-						"= WiFi =\nInterface state: %s\n"
+						"=== WiFi ===\nInterface state: %s\n"
 						"Module is %s\n"
-						"Failed messages: pending %u, notready %u, noresp %u\n",
+						"Failed messages: pending %u, notrdy %u, noresp %u\n",
 						 	 GetStateName(),
 							 TranslateWiFiState(currentMode),
 							 transferAlreadyPendingCount, readyTimeoutCount, responseTimeoutCount
