@@ -2037,7 +2037,7 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeE
 									if ((letter != 'P' || codeRunning != 98) && Seen(letter))
 									{
 										const char c = gb.buffer[readPointer];
-										if (!isdigit(c) && c != '"' && c != '{' && c != '.')
+										if (!isdigit(c) && c != '"' && c != '{' && c != '.' && c != '-' && c != '+')
 										{
 											throw ConstructParseException("invalid value for parameter '%c'", (uint32_t)c);
 										}
