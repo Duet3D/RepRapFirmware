@@ -1669,7 +1669,7 @@ bool GCodes::Push(GCodeBuffer& gb, bool withinSameFile) noexcept
 	const bool ok = gb.PushState(withinSameFile);
 	if (!ok)
 	{
-		platform.Message(ErrorMessage, "Push(): stack overflow\n");
+		platform.MessageF(ErrorMessage, "Push(): stack overflow on %s\n", gb.GetChannel().ToString());
 		AbortPrint(gb);
 	}
 	return ok;
@@ -1680,7 +1680,7 @@ void GCodes::Pop(GCodeBuffer& gb, bool withinSameFile) noexcept
 {
 	if (!gb.PopState(withinSameFile))
 	{
-		platform.Message(ErrorMessage, "Pop(): stack underflow\n");
+		platform.MessageF(ErrorMessage, "Pop(): stack underflow on %s\n", gb.GetChannel().ToString());
 	}
 	reprap.InputsUpdated();
 }
