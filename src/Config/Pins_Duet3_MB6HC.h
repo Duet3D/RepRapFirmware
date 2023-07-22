@@ -23,9 +23,16 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define WIFI_USES_ESP32			1
 
 // Storage support
-#define HAS_SBC_INTERFACE		1
-#define HAS_MASS_STORAGE		1
-#define HAS_HIGH_SPEED_SD		1
+#ifdef USE_EMBEDDED_FILES
+# define HAS_EMBEDDED_FILES		1
+# define HAS_SBC_INTERFACE		0
+# define HAS_MASS_STORAGE		0
+# define HAS_HIGH_SPEED_SD		0
+#else
+# define HAS_SBC_INTERFACE		1
+# define HAS_MASS_STORAGE		1
+# define HAS_HIGH_SPEED_SD		1
+#endif
 
 #define HAS_CPU_TEMP_SENSOR		1
 
@@ -47,15 +54,25 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_BME280			1
-#define SUPPORT_ACCELEROMETERS	1
 #define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
-#define SUPPORT_FTP				1
+
+#ifdef USE_EMBEDDED_FILES
+#define SUPPORT_ACCELEROMETERS	0
+# define SUPPORT_FTP			0
+# define SUPPORT_MULTICAST_DISCOVERY	0
+# define SUPPORT_REMOTE_COMMANDS		0
+# define SUPPORT_PROBE_POINTS_FILE		0
+#else
+#define SUPPORT_ACCELEROMETERS	1
+# define SUPPORT_FTP			1
+# define SUPPORT_MULTICAST_DISCOVERY	1
+# define SUPPORT_PROBE_POINTS_FILE		1
+#endif
+
 #define SUPPORT_TELNET			1
 #define SUPPORT_MQTT			1
-#define SUPPORT_MULTICAST_DISCOVERY	1
 #define SUPPORT_ASYNC_MOVES		1
-#define SUPPORT_PROBE_POINTS_FILE	1
 #define SUPPORT_BRAKE_PWM		1
 #define SUPPORT_KEEPOUT_ZONES	1
 
