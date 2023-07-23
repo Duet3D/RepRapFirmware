@@ -244,17 +244,22 @@ constexpr uint32_t DefaultCoolConfReg = 0;
 
 // DRV_STATUS register
 constexpr uint8_t REGNUM_DRV_STATUS = 0x6F;
+constexpr uint32_t TMC_RR_S2VS = 3 << 12;				// short to VS indicator (1 bit for each phase)
 constexpr uint32_t TMC_RR_SG = 1 << 24;					// stall detected
 constexpr uint32_t TMC_RR_OT = 1 << 25;					// over temperature shutdown
 constexpr uint32_t TMC_RR_OTPW = 1 << 26;				// over temperature warning
-constexpr uint32_t TMC_RR_S2G = (3 << 27) | (3 << 12);	// short to ground indicator (1 bit for each phase) + short to VS indicator
-constexpr uint32_t TMC_RR_OLA = 1 << 29;				// open load A
-constexpr uint32_t TMC_RR_OLB = 1 << 30;				// open load B
+constexpr uint32_t TMC_RR_S2G = 3 << 27;				// short to ground indicator (1 bit for each phase)
+constexpr uint32_t TMC_RR_OL = 3 << 29;					// open load (1 bit for each phase)
 constexpr uint32_t TMC_RR_STST = 1 << 31;				// standstill detected
 constexpr uint32_t TMC_RR_SGRESULT = 0x3FF;				// 10-bit stallGuard2 result
 
-constexpr unsigned int TMC_RR_STST_BIT_POS = 31;
+constexpr unsigned int TMC_RR_S2VS_BIT_POS = 12;
 constexpr unsigned int TMC_RR_SG_BIT_POS = 24;
+constexpr unsigned int TMC_RR_OT_BIT_POS = 25;
+constexpr unsigned int TMC_RR_OTPW_BIT_POS = 26;
+constexpr unsigned int TMC_RR_S2G_BIT_POS = 27;
+constexpr unsigned int TMC_RR_OL_BIT_POS = 29;
+constexpr unsigned int TMC_RR_STST_BIT_POS = 31;
 
 // PWMCONF register
 constexpr uint8_t REGNUM_PWMCONF = 0x70;
@@ -795,9 +800,11 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 
 	// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status, but the TMC51xx uses different bit assignments
 	StandardDriverStatus rslt;
-	rslt.all = (status >> (25 - 0)) & (0x0F << 0);			// this puts the ot, otpw, s2ga and s2gb bits in the right place
-	rslt.all |= (status >> (12 - 4)) & (3u << 4);			// put s2vsa and s2vsb in the right place
-	rslt.all |= (status >> (29 - 6)) & (3u << 6);			// put ola and olb in the right place
+	rslt.all =  ExtractBit(status, TMC_RR_OTPW_BIT_POS, StandardDriverStatus::OtpwBitPos);
+	rslt.all |= ExtractBit(status, TMC_RR_OT_BIT_POS, StandardDriverStatus::OtBitPos);
+	rslt.all |= ExtractTwoBits(status, TMC_RR_S2G_BIT_POS, StandardDriverStatus::S2gBitsPos);		// put the s2ga and s2gb bits in the right place
+	rslt.all |= ExtractTwoBits(status, TMC_RR_S2VS_BIT_POS, StandardDriverStatus::S2vsBitsPos);		// put s2vsa and s2vsb in the right place
+	rslt.all |= ExtractTwoBits(status, TMC_RR_OL_BIT_POS, StandardDriverStatus::OpenLoadBitsPos);	// put ola and olb in the right place
 	rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
 	rslt.all |= ExtractBit(status, TMC_RR_SG_BIT_POS, StandardDriverStatus::StallBitPos);			// put the stall bit in the right place
 	rslt.sgresultMin = minSgLoadRegister;
@@ -932,7 +939,7 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 				}
 			}
 
-			if ((regVal & (TMC_RR_OLA | TMC_RR_OLB)) != 0)
+			if ((regVal & TMC_RR_OL) != 0)
 			{
 				if (   (regVal & TMC_RR_STST) != 0
 					|| interval == 0
@@ -940,7 +947,7 @@ void TmcDriverState::TransferSucceeded(const uint8_t *rcvDataBlock) noexcept
 					|| motorCurrent < MinimumOpenLoadMotorCurrent
 				   )
 				{
-					regVal &= ~(TMC_RR_OLA | TMC_RR_OLB);				// open load bits are unreliable at standstill, low speeds, and low current
+					regVal &= ~TMC_RR_OL;								// open load bits are unreliable at standstill, low speeds, and low current
 				}
 			}
 
