@@ -53,6 +53,7 @@ constexpr unsigned int MainTaskStackWords = max<unsigned int>(1370, (MaxAxes * M
 
 static Task<MainTaskStackWords> mainTask;
 extern "C" [[noreturn]] void MainTask(void * pvParameters) noexcept;
+extern DeviceVectors exception_table;
 
 // Idle task data
 // The timer and idle tasks currently never do I/O, so they don't need much stack.
@@ -157,18 +158,20 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 
 #if !defined(DEBUG)		// don't check the CRC of a debug build because debugger breakpoints mess up the CRC
 	// Check the integrity of the firmware by checking the firmware CRC
+	// If we have embedded files then the CRC is stored after those files, so we need to fetch the CRC address form the vector table
 	{
 		const char *firmwareStart = reinterpret_cast<const char*>(SCB->VTOR & 0xFFFFFF80);
+		const char *firmwareCrcAddr = (const char*)exception_table.pfnReserved1_Handler;
 		CRC32 crc;
-		crc.Update(firmwareStart, (const char*)&_firmware_crc - firmwareStart);
-		if (crc.Get() != _firmware_crc)
+		crc.Update(firmwareStart, firmwareCrcAddr - firmwareStart);
+		if (crc.Get() != *((const uint32_t*)firmwareCrcAddr))
 		{
 			// CRC failed so flash the diagnostic LED 3 times, pause and repeat. This is the same error code used by the Duet 3 expansion boards bootloader.
 			for (unsigned int i = 0; ; ++i)
 			{
 				const bool on = (i & 1) == 0 && (i & 15) < 6;				// turn LED on if count is 0, 2, 4 or 16, 18, 20 etc. otherwise turn it off
 				digitalWrite(DiagPin, XNor(on, DiagOnPolarity));
-				for (unsigned int j = 0; j < 500; ++j)
+				for (unsigned int j = 0; j < 250; ++j)
 				{
 					delayMicroseconds(1000);								// delayMicroseconds only works with low values of delay so do 1ms at a time
 				}
