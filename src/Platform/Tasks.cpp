@@ -161,7 +161,12 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 	// If we have embedded files then the CRC is stored after those files, so we need to fetch the CRC address form the vector table
 	{
 		const char *firmwareStart = reinterpret_cast<const char*>(SCB->VTOR & 0xFFFFFF80);
-		const char *firmwareCrcAddr = (const char*)exception_table.pfnReserved1_Handler;
+		const char *firmwareCrcAddr = (const char*)exception_table
+# if SAME5x
+										.pvReservedM9;
+# else
+										.pfnReserved1_Handler;
+# endif
 		CRC32 crc;
 		crc.Update(firmwareStart, firmwareCrcAddr - firmwareStart);
 		if (crc.Get() != *((const uint32_t*)firmwareCrcAddr))
