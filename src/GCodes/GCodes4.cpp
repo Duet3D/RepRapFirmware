@@ -367,51 +367,15 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				UpdateCurrentUserPosition(gb);			// the tool offset may have changed, so get the current position
 			}
 
-#if SUPPORT_ASYNC_MOVES && PREALLOCATE_TOOL_AXES
-			// Whenever we release axes, we must update lastKnownMachinePositions for those axes first so that whoever allocates them next gets the correct positions
-			ms.SaveOwnAxisCoordinates();
 			gb.AdvanceState();
 
-			ReadLockedPointer<Tool> newTool = Tool::GetLockedTool(ms.newToolNumber);
-			if (newTool.IsNull())
+			if (Tool::GetLockedTool(ms.newToolNumber).IsNotNull() && (ms.toolChangeParam & TPreBit) != 0)	// 2020-04-29: run tpre file even if not all axes have been homed
 			{
-				// Release the axes and extruders that this movement system owns
-				ms.ReleaseAllOwnedAxesAndExtruders();
-			}
-			else
-			{
-				// Allocate the axes and extruders that the new tool uses, and release all others
-				const AxesBitmap newToolAxes = newTool->GetXYAxesAndExtruders();
-				const AxesBitmap axesToAllocate = newToolAxes & ~ms.GetAxesAndExtrudersOwned();
-				const AxesBitmap axesToRelease = ms.GetAxesAndExtrudersOwned() & ~newToolAxes;
-				ms.ReleaseAxesAndExtruders(axesToRelease);
-				try
+				String<StringLength20> scratchString;
+				scratchString.printf(TPRE "%d.g", ms.newToolNumber);
+				if (!DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode))
 				{
-					AllocateAxes(gb, ms, axesToAllocate, ParameterLettersToBitmap("XY"));
-				}
-				catch (const GCodeException& exc)
-				{
-					// We failed to allocate the new axes/extruders that we need
-					// Release all axes and extruders that this movement system owns
-					ms.ReleaseAllOwnedAxesAndExtruders();
-					gb.LatestMachineState().SetError(exc);
-					gb.SetState(GCodeState::normal);
-					break;
-				}
-				newTool.Release();						// release the tool list lock before we run tpre
-#else
-			gb.AdvanceState();
-			if (Tool::GetLockedTool(ms.newToolNumber).IsNotNull())
-			{
-#endif
-				if ((ms.toolChangeParam & TPreBit) != 0)	// 2020-04-29: run tpre file even if not all axes have been homed
-				{
-					String<StringLength20> scratchString;
-					scratchString.printf(TPRE "%d.g", ms.newToolNumber);
-					if (!DoFileMacro(gb, scratchString.c_str(), false, ToolChangeMacroCode))
-					{
-						DoFileMacro(gb, TPRE ".g", false, ToolChangeMacroCode);
-					}
+					DoFileMacro(gb, TPRE ".g", false, ToolChangeMacroCode);
 				}
 			}
 		}
@@ -421,8 +385,41 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::m109ToolChange2:					// select the new tool if it exists and run tpost
 		if (LockCurrentMovementSystemAndWaitForStandstill(gb))	// wait for tpre.g to finish executing
 		{
+#if SUPPORT_ASYNC_MOVES
+# if PREALLOCATE_TOOL_AXES
+			{
+				auto newTool = Tool::GetLockedTool(ms.newToolNumber);
+				if (newTool.IsNull())
+				{
+					ms.ReleaseAllOwnedAxesAndExtruders();	// release all axes and extruders that this movement system owns
+				}
+				else
+				{
+					const AxesBitmap newToolAxes = newTool->GetXYAxesAndExtruders();
+					const AxesBitmap axesToRelease = ms.GetAxesAndExtrudersOwned() & ~newToolAxes;
+					ms.ReleaseAxesAndExtruders(axesToRelease);
+
+					const AxesBitmap axesToAllocate = newToolAxes & ~ms.GetAxesAndExtrudersOwned();
+					try
+					{
+						AllocateAxes(gb, ms, axesToAllocate, ParameterLettersToBitmap("XY"));
+					}
+					catch (const GCodeException& exc)
+					{
+						// We failed to allocate the new axes/extruders that we need. Release all axes and extruders that this movement system owns.
+						ms.ReleaseAllOwnedAxesAndExtruders();
+						gb.LatestMachineState().SetError(exc);
+						gb.SetState(GCodeState::normal);
+						break;
+					}
+				}
+			}
+# else
+			ms.ReleaseAllOwnedAxesAndExtruders();
+# endif
+#endif
 			ms.SelectTool(ms.newToolNumber, IsSimulating());
-			UpdateCurrentUserPosition(gb);				// get the actual position of the new tool
+			UpdateCurrentUserPosition(gb);				// get the user position of the XY axes for the new tool
 
 			gb.AdvanceState();
 			if (ms.currentTool != nullptr && (ms.toolChangeParam & TPostBit) != 0)	// 2020-04-29: run tpost file even if not all axes have been homed
