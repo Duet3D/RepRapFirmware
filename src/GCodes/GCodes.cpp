@@ -547,13 +547,18 @@ bool GCodes::StartNextGCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 #endif
 			)
 	{
-		// Delay 1 or 10 seconds, then try to open and run daemon.g. No error if it is not found.
+		// Check whether the daemon really is idle and not executing daemon.g, not just waiting for a M291 acknowledgement or something else
 		if (   !reprap.IsProcessingConfig()
-			&& gb.DoDwellTime((daemonRunning) ? 10000 : 1000)
+			&& gb.LatestMachineState().GetPrevious() == nullptr
+			&& !gb.LatestMachineState().fileState.IsLive()
 		   )
 		{
-			daemonRunning = true;
-			return DoFileMacro(gb, DAEMON_G, false, AsyncSystemMacroCode);
+			// Delay 1 or 10 seconds, then try to open and run daemon.g. No error if it is not found.
+			if (gb.DoDwellTime((daemonRunning) ? 10000 : 1000))
+			{
+				daemonRunning = true;
+				return DoFileMacro(gb, DAEMON_G, false, AsyncSystemMacroCode);
+			}
 		}
 	}
 	else

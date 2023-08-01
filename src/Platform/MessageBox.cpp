@@ -44,9 +44,11 @@ uint32_t MessageBox::startTime;
 unsigned int MessageBox::numMessages = 0;
 unsigned int MessageBox::numAutoCancelledMessages = 0;
 
-// Create a message box. Caller should own the lock first.
+// Create a message box. Caller must have a write lock on the message box lock first.
 /*static*/ uint32_t MessageBox::Create(const char *msg, const char *p_title, int p_mode, float p_timeout, AxesBitmap p_controls, MessageBoxLimits *_ecv_null p_limits) noexcept
 {
+	// Find the end of the message box list. On the way, if we already have the maximum allowed number of messages in the list, time out the oldest non-blocking one.
+	// Also reduce the timeout of any remaining non-blocking message boxes to 1 second.
 	MessageBox **mbp = &mboxList;
 	while (*mbp != nullptr)
 	{
@@ -72,7 +74,7 @@ unsigned int MessageBox::numAutoCancelledMessages = 0;
 	if (numMessages >= MaxMessageBoxes)
 	{
 		// Message box queue is still full, so time out the oldest message even though it is blocking
-		MessageBox *mb = mboxList;
+		MessageBox *const mb = mboxList;
 		mboxList = mb->next;
 		mb->TimeOut();
 		++numAutoCancelledMessages;
@@ -156,8 +158,8 @@ float MessageBox::GetTimeLeft() const noexcept
 		if (mb != nullptr && mb->timeout != 0 && millis() - startTime >= mb->timeout)
 		{
 			mboxList = mb->next;
-			startTime = millis();
 			mb->TimeOut();
+			startTime = millis();				// restart the timeout for the next message box (if any) in the list
 			return true;
 		}
 	}
@@ -165,7 +167,7 @@ float MessageBox::GetTimeLeft() const noexcept
 	return false;
 }
 
-// Time out this message box
+// Time out and delete this message box
 void MessageBox::TimeOut() noexcept
 {
 	if (IsBlocking())
