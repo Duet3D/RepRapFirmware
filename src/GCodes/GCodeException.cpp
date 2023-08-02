@@ -28,6 +28,10 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 		}
 		reply.cat(": ");
 	}
+	else if (column >= 0)
+	{
+		reply.printf("at column %d: ", column + 1);
+	}
 	else
 	{
 		reply.Clear();
