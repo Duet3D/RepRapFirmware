@@ -161,6 +161,10 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 		ParseQuotedString(val);
 		break;
 
+	case '\'':
+		ParseCharacter(val);
+		break;
+
 	case '-':
 		AdvancePointer();
 		CheckStack(StackUsage::ParseInternal);
@@ -1781,6 +1785,18 @@ void ExpressionParser::ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeExce
 			ThrowParseException("string too long");
 		}
 	}
+}
+
+void ExpressionParser::ParseCharacter(ExpressionValue& rslt) THROWS(GCodeException)
+{
+	AdvancePointer();
+	rslt.SetChar(CurrentCharacter());
+	AdvancePointer();
+	if (CurrentCharacter() != '\'')
+	{
+		ThrowParseException("expected \"'\"");
+	}
+	AdvancePointer();
 }
 
 // Return the current character, or 0 if we have run out of string

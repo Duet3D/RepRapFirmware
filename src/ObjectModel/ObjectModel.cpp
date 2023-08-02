@@ -351,6 +351,13 @@ void ExpressionValue::SetInt(int32_t i) noexcept
 	iVal = i;
 }
 
+void ExpressionValue::SetChar(char c) noexcept
+{
+	Release();
+	type = (uint32_t)TypeCode::Char;
+	cVal = c;
+}
+
 void ExpressionValue::SetFloat(float f, uint32_t digits) noexcept { Release(); type = (uint32_t)TypeCode::Float; fVal = f; param = digits; }
 
 void ExpressionValue::SetDriverId(DriverId did) noexcept

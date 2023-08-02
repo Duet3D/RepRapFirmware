@@ -141,6 +141,7 @@ struct ExpressionValue
 
 	void SetBool(bool b) noexcept;
 	void SetInt(int32_t i) noexcept;
+	void SetChar(char c) noexcept;
 	void SetFloat(float f, uint32_t digits) noexcept;
 	void SetFloat(float f) noexcept { SetFloat(f, MaxFloatDigitsDisplayedAfterPoint); }
 	void SetCString(const char *_ecv_array s) noexcept { Release(); type = (uint32_t)TypeCode::CString; sVal = s; }
