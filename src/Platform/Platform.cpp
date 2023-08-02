@@ -921,19 +921,19 @@ void Platform::Exit() noexcept
 void Platform::SetIPAddress(IPAddress ip) noexcept
 {
 	ipAddress = ip;
-	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, gateWay, netMask);
+	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, netMask, gateWay);
 }
 
 void Platform::SetGateWay(IPAddress gw) noexcept
 {
 	gateWay = gw;
-	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, gateWay, netMask);
+	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, netMask, gateWay);
 }
 
 void Platform::SetNetMask(IPAddress nm) noexcept
 {
 	netMask = nm;
-	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, gateWay, netMask);
+	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, netMask, gateWay);
 }
 
 // Flush messages to USB and aux, returning true if there is more to send
