@@ -31,9 +31,10 @@ namespace StackUsage
 
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true, input);
-NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, ceil, cos, datetime, degrees, exists, exp, fileexists, floor, isnan, log, max, min, mod, pow, radians, random, sin, sqrt, tan, vector);
+NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, ceil, cos, datetime, degrees, exists, exp, fileexists, floor, isnan, log, max, min, mod, pow, radians, random, read, sin, sqrt, tan, vector);
 
-const char * const InvalidExistsMessage = "invalid 'exists' expression";
+const char *const InvalidExistsMessage = "invalid 'exists' expression";
+const char *const ExpectedNonNegativeIntMessage = "expected non-negative integer";
 
 ExpressionParser::ExpressionParser(const GCodeBuffer& p_gb, const char *text, const char *textLimit, int p_column) noexcept
 	: currentp(text), startp(text), endp(textLimit), gb(p_gb), column(p_column)
@@ -809,7 +810,7 @@ void ExpressionParser::BalanceNumericTypes(ExpressionValue& val1, ExpressionValu
 }
 
 // Balance types v2 and v2 and store the min or max of them in v1
-void ExpressionParser::EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2, bool evaluate, bool isMax) THROWS(GCodeException)
+void ExpressionParser::EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2, bool evaluate, bool isMax) const THROWS(GCodeException)
 {
 	BalanceNumericTypes(v1, v2, evaluate);
 	if (v1.GetType() == TypeCode::Float)
@@ -821,6 +822,13 @@ void ExpressionParser::EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2
 	{
 		v1.iVal = (isMax ? max<int32_t> : min<int32_t>)(v1.iVal, v2.iVal);
 	}
+}
+
+// Open a file and read array elements from it.
+// On entry, 'rslt' holds the filename. On return it holds the result array.
+void ExpressionParser::ReadArrayFromFile(ExpressionValue& rslt, unsigned int offset, unsigned int length, char delimiter) const THROWS(GCodeException)
+{
+	ThrowParseException("not yet implemented");
 }
 
 // Get another operand, called when evaluating a function after we have evaluate the first operand.
@@ -843,7 +851,7 @@ void ExpressionParser::GetNextOperand(ExpressionValue& operand, bool evaluate) T
 }
 
 // Balance types for a comparison operator
-void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) THROWS(GCodeException)
+void ExpressionParser::BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException)
 {
 	// First convert any Uint64 or Uint32 operands to float
 	if (val1.GetType() == TypeCode::Uint64 || val1.GetType() == TypeCode::Uint32)
@@ -974,7 +982,7 @@ void ExpressionParser::ConvertToUnsigned(ExpressionValue& val, bool evaluate) co
 	default:
 		if (evaluate)
 		{
-			ThrowParseException("expected non-negative integer value");
+			ThrowParseException(ExpectedNonNegativeIntMessage);
 		}
 		val.SetUnsigned(0);
 	}
@@ -992,7 +1000,7 @@ void ExpressionParser::ConvertToBool(ExpressionValue& val, bool evaluate) const 
 	}
 }
 
-void ExpressionParser::ConvertToString(ExpressionValue& val, bool evaluate) noexcept
+void ExpressionParser::ConvertToString(ExpressionValue& val, bool evaluate) const noexcept
 {
 	if (!val.IsStringType())
 	{
@@ -1536,10 +1544,43 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				}
 				break;
 
+			case Function::read:
+				{
+					if (evaluate && rslt.GetType() != TypeCode::CString && rslt.GetType() != TypeCode::HeapArray)
+					{
+						ThrowParseException("expected string operand");
+					}
+
+					ExpressionValue integerOperand;
+					GetNextOperand(integerOperand, evaluate);
+					if (evaluate && (integerOperand.GetType() != TypeCode::Int32 || integerOperand.iVal < 0))
+					{
+						ThrowParseException(ExpectedNonNegativeIntMessage);
+					}
+					const unsigned int offset = (unsigned int)integerOperand.iVal;
+
+					GetNextOperand(integerOperand, evaluate);
+					if (evaluate && (integerOperand.GetType() != TypeCode::Int32 || integerOperand.iVal < 0))
+					{
+						ThrowParseException(ExpectedNonNegativeIntMessage);
+					}
+
+					ExpressionValue delimiterOperand;
+					GetNextOperand(delimiterOperand, evaluate);
+					if (evaluate && delimiterOperand.GetType() != TypeCode::Char)
+					{
+						ThrowParseException("expected character operand");
+					}
+
+					ReadArrayFromFile(rslt, offset, (unsigned int)integerOperand.iVal, delimiterOperand.cVal);
+					ThrowParseException("not yet supported");
+				}
+				break;
+
 			case Function::vector:		// vector(numElements, elementValue)
 				if (evaluate && (rslt.GetType() != TypeCode::Int32 || rslt.iVal < 0))
 				{
-					ThrowParseException("expected non-negative integer");
+					ThrowParseException(ExpectedNonNegativeIntMessage);
 				}
 				{
 					ExpressionValue valueOperand;
