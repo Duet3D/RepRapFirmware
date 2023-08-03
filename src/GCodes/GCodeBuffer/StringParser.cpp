@@ -18,7 +18,7 @@
 
 // Replace the default definition of THROW_INTERNAL_ERROR by one that gives line information
 #undef THROW_INTERNAL_ERROR
-#define THROW_INTERNAL_ERROR	throw ConstructParseException("internal error at file " __FILE__ "(%d)", __LINE__)
+#define THROW_INTERNAL_ERROR	ThrowGCodeException("internal error at file " __FILE__ "(%d)", __LINE__)
 
 #if HAS_MASS_STORAGE
 static constexpr char eofString[] = EOF_STRING;		// What's at the end of an HTML file?
