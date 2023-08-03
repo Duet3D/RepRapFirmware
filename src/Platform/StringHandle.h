@@ -11,7 +11,7 @@
 #include <RepRapFirmware.h>
 #include "Heap.h"
 
-// Note: StringHandle is a union member in ExpressionValue, therefore it must be no larger than 32 bits and it  cannot have a non-trivial destructor, copy constructor etc.
+// Note: StringHandle is a union member in ExpressionValue, therefore it must be no larger than 32 bits and it cannot have a non-trivial destructor, copy constructor etc.
 // This means that when an object containing a StringHandle is copied or destroyed, that object must handle the reference count.
 // Classes other than ExpressionValue should use AutoStringHandle instead;
 class StringHandle
