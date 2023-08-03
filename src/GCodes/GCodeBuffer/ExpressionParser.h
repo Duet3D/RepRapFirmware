@@ -14,6 +14,19 @@
 
 class VariableSet;
 
+// Small class to read from file, checking for end of line or end of file and counting the characters read
+class LineReader
+{
+public:
+	LineReader(FileStore *pf) noexcept : f(pf), charsRead(0), fileFinished(false) { }
+
+	void ReadChar(char& c) noexcept;
+
+	FileStore *f;
+	size_t charsRead;
+	bool fileFinished;
+};
+
 class ExpressionParser
 {
 public:
@@ -76,7 +89,7 @@ private:
 	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException);
 	void __attribute__((noinline)) EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2, bool evaluate, bool isMax) const THROWS(GCodeException);
 	void __attribute__((noinline)) ReadArrayFromFile(ExpressionValue& rslt, unsigned int offset, unsigned int length, char delimiter) const THROWS(GCodeException);
-	bool ReadArrayElementFromFile(ExpressionValue& rslt, FileStore *f, size_t& startColumn, char delimiter) const THROWS(GCodeException);
+	void ReadArrayElementFromFile(ExpressionValue& rslt, LineReader& reader, char delimiter) const THROWS(GCodeException);
 	void GetNextOperand(ExpressionValue& operand, bool evaluate) THROWS(GCodeException);
 	static bool TypeHasNoLiterals(TypeCode t) noexcept;
 
