@@ -51,16 +51,6 @@ private:
 	// Insert a value in the data, returning true if it wouldn't fit
 	void InsertValue(const void *vp, size_t sz, size_t pos) THROWS(GCodeException);
 
-	static GCodeException ConstructParseException(const char *errMsg) noexcept
-	{
-		return GCodeException(-1, -1, errMsg);
-	}
-
-	static GCodeException ConstructParseException(const char *errMsg, uint32_t param) noexcept
-	{
-		return GCodeException(-1, -1, errMsg, param);
-	}
-
 	const ParamDescriptor * const paramTable;
 	size_t dataLen;
 	CanMessageGeneric msg;

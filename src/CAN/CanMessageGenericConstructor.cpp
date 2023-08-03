@@ -28,7 +28,7 @@ void CanMessageGenericConstructor::StoreValue(const void *vp, size_t sz) THROWS(
 {
 	if (dataLen + sz > sizeof(msg.data))
 	{
-		throw ConstructParseException("CAN message too long");
+		ThrowGCodeException("CAN message too long");
 	}
 	memcpy(msg.data + dataLen, vp, sz);
 	dataLen += sz;
@@ -39,7 +39,7 @@ void CanMessageGenericConstructor::InsertValue(const void *vp, size_t sz, size_t
 {
 	if (dataLen + sz > sizeof(msg.data))
 	{
-		throw ConstructParseException("CAN message too long");
+		ThrowGCodeException("CAN message too long");
 	}
 	memmove(msg.data + pos + sz, msg.data + pos, dataLen - pos);
 	memcpy(msg.data + pos, vp, sz);
@@ -98,7 +98,7 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(G
 					gb.GetQuotedString(str.GetRef());
 					if (str.strlen() != 1)
 					{
-						throw ConstructParseException("expected single-character quoted string after '%c'", (uint32_t)d->letter);
+						ThrowGCodeException("expected single-character quoted string after '%c'", (uint32_t)d->letter);
 					}
 					StoreValue(str[0]);
 				}
@@ -152,7 +152,7 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(G
 				break;
 
 			default:
-				throw ConstructParseException("internal error at " __FILE__ "(" STRINGIZE(__LINE__) ")");
+				ThrowGCodeException("internal error at " __FILE__ "(" STRINGIZE(__LINE__) ")");
 			}
 			msg.paramMap |= paramBit;
 		}
@@ -172,7 +172,7 @@ unsigned int CanMessageGenericConstructor::FindInsertPoint(char c, ParamDescript
 		{
 			if (present)
 			{
-				throw ConstructParseException("duplicate parameter");
+				ThrowGCodeException("duplicate parameter");
 			}
 			msg.paramMap |= paramBit;
 			t = d->type;
@@ -198,7 +198,7 @@ unsigned int CanMessageGenericConstructor::FindInsertPoint(char c, ParamDescript
 		}
 		paramBit <<= 1;
 	}
-	throw ConstructParseException("wrong parameter letter");
+	ThrowGCodeException("wrong parameter letter");
 }
 
 //TODO factor out the common code in the following several routines
@@ -209,7 +209,7 @@ void CanMessageGenericConstructor::AddU64Param(char c, uint64_t v) THROWS(GCodeE
 	const unsigned int pos = FindInsertPoint(c, t, sz);
 	if (t != ParamDescriptor::uint64)
 	{
-		throw ConstructParseException("u64val wrong parameter type");
+		ThrowGCodeException("u64val wrong parameter type");
 	}
 	InsertValue(&v, sz, pos);
 }
@@ -228,19 +228,19 @@ void CanMessageGenericConstructor::AddUParam(char c, uint32_t v) THROWS(GCodeExc
 	case ParamDescriptor::pwmFreq:
 		if (v >= (1u << 16))
 		{
-			throw ConstructParseException("uval too large");
+			ThrowGCodeException("uval too large");
 		}
 		break;
 
 	case ParamDescriptor::uint8:
 		if (v >= (1u << 8))
 		{
-			throw ConstructParseException("uval too large");
+			ThrowGCodeException("uval too large");
 		}
 		break;
 
 	default:
-		throw ConstructParseException("uval wrong parameter type");
+		ThrowGCodeException("uval wrong parameter type");
 	}
 
 	InsertValue(&v, sz, pos);
@@ -259,19 +259,19 @@ void CanMessageGenericConstructor::AddIParam(char c, int32_t v) THROWS(GCodeExce
 	case ParamDescriptor::int16:
 		if (v >= (int32_t)(1u << 15) || v < -(int32_t)(1u << 15))
 		{
-			throw ConstructParseException("ival too large");
+			ThrowGCodeException("ival too large");
 		}
 		break;
 
 	case ParamDescriptor::uint8:
 		if (v >= (int32_t)(1u << 7) || v < -(int32_t)(1u << 7))
 		{
-			throw ConstructParseException("ival too large");
+			ThrowGCodeException("ival too large");
 		}
 		break;
 
 	default:
-		throw ConstructParseException("ival wrong parameter type");
+		ThrowGCodeException("ival wrong parameter type");
 	}
 
 	InsertValue(&v, sz, pos);
@@ -284,7 +284,7 @@ void CanMessageGenericConstructor::AddFParam(char c, float v) THROWS(GCodeExcept
 	const unsigned int pos = FindInsertPoint(c, t, sz);
 	if (t != ParamDescriptor::float_p)
 	{
-		throw ConstructParseException("fval wrong parameter type");
+		ThrowGCodeException("fval wrong parameter type");
 	}
 	InsertValue(&v, sz, pos);
 }
@@ -296,7 +296,7 @@ void CanMessageGenericConstructor::AddCharParam(char c, char v) THROWS(GCodeExce
 	const unsigned int pos = FindInsertPoint(c, t, sz);
 	if (t != ParamDescriptor::char_p)
 	{
-		throw ConstructParseException("cval wrong parameter type");
+		ThrowGCodeException("cval wrong parameter type");
 	}
 	InsertValue(&v, sz, pos);
 }
@@ -314,7 +314,7 @@ void CanMessageGenericConstructor::AddStringParam(char c, const char *v) THROWS(
 		break;
 
 	default:
-		throw ConstructParseException("sval wrong parameter type");
+		ThrowGCodeException("sval wrong parameter type");
 	}
 }
 
@@ -325,7 +325,7 @@ void CanMessageGenericConstructor::AddDriverIdParam(char c, DriverId did) THROWS
 	const unsigned int pos = FindInsertPoint(c, t, sz);
 	if (t != ParamDescriptor::localDriver)
 	{
-		throw ConstructParseException("didval wrong parameter type");
+		ThrowGCodeException("didval wrong parameter type");
 	}
 
 	InsertValue(&did.localDriver, sz, pos);
@@ -338,7 +338,7 @@ void CanMessageGenericConstructor::AddFloatArrayParam(char c, const float *v, si
 	const unsigned int pos = FindInsertPoint(c, t, sz);
 	if (t != ParamDescriptor::float_array || numV != sz)
 	{
-		throw ConstructParseException("fval array wrong parameter type or length");
+		ThrowGCodeException("fval array wrong parameter type or length");
 	}
 	InsertValue(&numV, sizeof(uint8_t), pos);
 	InsertValue(v, numV * sizeof(float), pos + sizeof(uint8_t));

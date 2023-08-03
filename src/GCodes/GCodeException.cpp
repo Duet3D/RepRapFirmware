@@ -80,4 +80,14 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 	}
 }
 
+[[noreturn]] void ThrowGCodeException(const char *errMsg) THROWS(GCodeException)
+{
+	throw GCodeException(-1, -1, errMsg);
+}
+
+[[noreturn]] void ThrowGCodeException(const char *errMsg, uint32_t param) THROWS(GCodeException)
+{
+	throw GCodeException(-1, -1, errMsg, param);
+}
+
 // End
