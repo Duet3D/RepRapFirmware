@@ -40,27 +40,30 @@ private:
 	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *str, const char *param) const THROWS(GCodeException);
 	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *str, uint32_t param) const THROWS(GCodeException);
 
-	void ParseInternal(ExpressionValue& val, bool evaluate, uint8_t priority) THROWS(GCodeException);
-	void ParseExpectKet(ExpressionValue& rslt, bool evaluate, char expectedKet) THROWS(GCodeException);
+	void __attribute__((noinline)) ParseInternal(ExpressionValue& val, bool evaluate, uint8_t priority) THROWS(GCodeException);
+	void __attribute__((noinline)) ParseExpectKet(ExpressionValue& rslt, bool evaluate, char expectedKet) THROWS(GCodeException);
 	void __attribute__((noinline)) ParseNumber(ExpressionValue& rslt) noexcept
 		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
 	void __attribute__((noinline)) ParseIdentifierExpression(ExpressionValue& rslt, bool evaluate, bool applyLengthOperator, bool applyExists) THROWS(GCodeException)
 		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
 	void __attribute__((noinline)) ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeException);
+
 	void ParseCharacter(ExpressionValue& rslt) THROWS(GCodeException);
-
 	void ParseGeneralArray(ExpressionValue& firstElementAndResult, bool evaluate) THROWS(GCodeException);
-
 	void ParseArray(size_t& length, function_ref<void(ExpressionValue& ev, size_t index) THROWS(GCodeException)> processElement) THROWS(GCodeException);
-	time_t ParseDateTime(const char *s) const THROWS(GCodeException);
 
-	void GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, ObjectExplorationContext& context, bool isParameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException);
+	time_t __attribute__((noinline)) ParseDateTime(const char *s) const THROWS(GCodeException);
+
+	void __attribute__((noinline)) GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, ObjectExplorationContext& context, bool isParameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException);
 
 	void ConvertToFloat(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToInteger(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToUnsigned(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ConvertToBool(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
-	void ConvertToString(ExpressionValue& val, bool evaluate) const noexcept;
+
+	// The following must be declared 'noinline' because it allocates a large buffer on the stack and its caller is recursive
+	void __attribute__((noinline)) ConvertToString(ExpressionValue& val, bool evaluate) const noexcept;
+
 	void ConvertToDriverId(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 	void ApplyLengthOperator(ExpressionValue& val) const THROWS(GCodeException);
 
@@ -71,8 +74,9 @@ private:
 
 	void BalanceNumericTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException);
 	void BalanceTypes(ExpressionValue& val1, ExpressionValue& val2, bool evaluate) const THROWS(GCodeException);
-	void EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2, bool evaluate, bool isMax) const THROWS(GCodeException);
-	void ReadArrayFromFile(ExpressionValue& rslt, unsigned int offset, unsigned int length, char delimiter) const THROWS(GCodeException);
+	void __attribute__((noinline)) EvaluateMinOrMax(ExpressionValue& v1, ExpressionValue& v2, bool evaluate, bool isMax) const THROWS(GCodeException);
+	void __attribute__((noinline)) ReadArrayFromFile(ExpressionValue& rslt, unsigned int offset, unsigned int length, char delimiter) const THROWS(GCodeException);
+	bool ReadArrayElementFromFile(ExpressionValue& rslt, FileStore *f, size_t& startColumn, char delimiter) const THROWS(GCodeException);
 	void GetNextOperand(ExpressionValue& operand, bool evaluate) THROWS(GCodeException);
 	static bool TypeHasNoLiterals(TypeCode t) noexcept;
 

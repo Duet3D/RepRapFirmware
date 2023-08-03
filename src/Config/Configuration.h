@@ -251,6 +251,8 @@ constexpr size_t MAX_FILES = 20;						// Must be large enough to handle the max 
 constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
 #endif
 
+constexpr size_t MaxFileReadArrayElements = 50;			// Maximum number of array elements we are allowed to read in a read() function
+
 constexpr size_t FILE_BUFFER_SIZE = 128;
 
 constexpr size_t MaxThumbnails = 4;						// Maximum number of thumbnail images read from the job file that we store and report
