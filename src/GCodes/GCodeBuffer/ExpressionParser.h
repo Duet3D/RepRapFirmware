@@ -15,15 +15,30 @@
 class VariableSet;
 
 // Small class to read from file, checking for end of line or end of file and counting the characters read
+// We could improve the efficiency by buffering a small number of characters
 class LineReader
 {
 public:
-	LineReader(FileStore *pf) noexcept : f(pf), charsRead(0), fileFinished(false) { }
+	LineReader(FileStore *pf) noexcept : f(pf), charsRead(0), currentCharacter(0), fileFinished(false) { }
 
-	void ReadChar(char& c) noexcept;
+	// Read a character into currentCharacter. If we reach end of file or end of line, set the character to 0 and fileFinished to true.
+	void ReadChar() noexcept;
 
+	// While the current character is space or tab, read another character
+	void SkipTabsAndSpaces() noexcept;
+
+	// Retrieval functions
+	char CurrentCharacter() const noexcept { return currentCharacter; }
+	bool FileFinished() const noexcept { return fileFinished; }
+	size_t CharsRead() const noexcept { return charsRead; }
+
+	// Close the file
+	void Close() noexcept { f->Close(); }
+
+private:
 	FileStore *f;
 	size_t charsRead;
+	char currentCharacter;
 	bool fileFinished;
 };
 

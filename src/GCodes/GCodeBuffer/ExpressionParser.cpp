@@ -31,21 +31,29 @@ namespace StackUsage
 }
 
 // Read a character from the text file.
-// If we reach end of line or end of file, set the returned character to 0 and set fileFinished to true.
-// Elese return teh character we read and increment the character count.
-void LineReader::ReadChar(char& c) noexcept
+// If we reach end of line or end of file, set currentCharacter to 0 and set fileFinished to true.
+// Else increment the character count and set currentCharacter to the character we read.
+void LineReader::ReadChar() noexcept
 {
 	if (!fileFinished)
 	{
-		fileFinished = (!f->Read(c) || c == '\r' || c == '\n');
+		fileFinished = (!f->Read(currentCharacter) || currentCharacter == '\r' || currentCharacter == '\n');
 	}
 	if (fileFinished)
 	{
-		c = 0;
+		currentCharacter = 0;
 	}
 	else
 	{
 		++charsRead;
+	}
+}
+
+void LineReader::SkipTabsAndSpaces() noexcept
+{
+	while (currentCharacter == ' ' || currentCharacter == '\t')
+	{
+		ReadChar();
 	}
 }
 
@@ -869,11 +877,10 @@ void ExpressionParser::ReadArrayFromFile(ExpressionValue& rslt, unsigned int off
 		}
 	}
 
-	// We could implement a BufferedFileReader class here, but for now we read from the file one character at a time.
 	LineReader reader(f);
 	ExpressionValue elements[MaxFileReadArrayElements];
 	size_t elemIndex = 0;
-	while (elemIndex < length && !reader.fileFinished)
+	while (elemIndex < length && !reader.FileFinished())
 	{
 		// Parse an element to potentially add to the array
 		ReadArrayElementFromFile(elements[elemIndex], reader, delimiter);
@@ -887,7 +894,7 @@ void ExpressionParser::ReadArrayFromFile(ExpressionValue& rslt, unsigned int off
 		}
 	}
 
-	f->Close();
+	reader.Close();
 
 	// Move the array to the heap
 	ArrayHandle ah;
@@ -904,80 +911,73 @@ void ExpressionParser::ReadArrayFromFile(ExpressionValue& rslt, unsigned int off
 // On return, startColumn has been updated. Returns true if we reached the end of the file or end of the line, else false and the delimiter has been read.
 void ExpressionParser::ReadArrayElementFromFile(ExpressionValue& rslt, LineReader& reader, char delimiter) const THROWS(GCodeException)
 {
-	char c;
-
-	// Skip leading spaces and tabs
-	do
-	{
-		reader.ReadChar(c);
-	} while (c == ' ' || c == '\t');
-
-	if (reader.fileFinished || c == delimiter)
+	reader.ReadChar();
+	reader.SkipTabsAndSpaces();
+	if (reader.FileFinished() || reader.CurrentCharacter() == delimiter)
 	{
 		rslt.SetNull(nullptr);
 	}
 	else
 	{
 		bool err = false;
-		const size_t elemStart = reader.charsRead;
-		if (c == '\'')
+		if (reader.CurrentCharacter() == '\'')
 		{
 			// Parse a character literal
-			reader.ReadChar(c);
-			if (reader.fileFinished)
+			reader.ReadChar();
+			if (reader.FileFinished())
 			{
 				err = true;
 			}
 			else
 			{
-				const char resultChar = c;
-				reader.ReadChar(c);
-				if (c != '\'')
+				const char resultChar = reader.CurrentCharacter();
+				reader.ReadChar();
+				if (reader.CurrentCharacter() != '\'')
 				{
 					err = true;
 				}
 				else
 				{
 					rslt.SetChar(resultChar);
-					reader.ReadChar(c);
+					reader.ReadChar();
 				}
 			}
 		}
-		else if (c == '"')
+		else if (reader.CurrentCharacter() == '"')
 		{
 			// Parse a string literal, allowing for double quote inside it
 			String<StringLength100> element;
 			for (;;)
 			{
-				reader.ReadChar(c);
-				if (reader.fileFinished)
+				reader.ReadChar();
+				if (reader.FileFinished())
 				{
 					err = true;
 					break;
 				}
-				if (c == '"')
+				if (reader.CurrentCharacter() == '"')
 				{
-					reader.ReadChar(c);
-					if (c != '"')
+					reader.ReadChar();
+					if (reader.CurrentCharacter() != '"')
 					{
 						break;
 					}
 				}
-				element.cat(c);
+				element.cat(reader.CurrentCharacter());
 			}
 			if (!err)
 			{
 				rslt.SetStringHandle(StringHandle(element.c_str()));
 			}
 		}
-		else if (c == '+' || c == '-' || isdigit(c))
+		else if (reader.CurrentCharacter() == '+' || reader.CurrentCharacter() == '-' || isdigit(reader.CurrentCharacter()))
 		{
 			NumericConverter conv;
-			err = !conv.Accumulate(c, NumericConverter::AcceptSignedFloat | NumericConverter::AcceptHex,
-										[&reader, &c]()->char
+			err = !conv.Accumulate(reader.CurrentCharacter(), NumericConverter::AcceptSignedFloat | NumericConverter::AcceptHex,
+										[&reader]()->char
 										{
-											reader.ReadChar(c);
-											return c;
+											reader.ReadChar();
+											return reader.CurrentCharacter();
 										}
 								  );
 			if (!err)
@@ -997,23 +997,20 @@ void ExpressionParser::ReadArrayElementFromFile(ExpressionValue& rslt, LineReade
 			err = true;
 		}
 
-		// Skip an trailing spaces or tabs until we reach end of line or the delimiter
+		// Skip any trailing spaces or tabs until we reach end of line or the delimiter
 		if (!err)
 		{
-			while (c == ' ' || c == '\t')
-			{
-				reader.ReadChar(c);
-			}
+			reader.SkipTabsAndSpaces();
 		}
 
-		if (!reader.fileFinished && c != delimiter)
+		if (!reader.FileFinished() && reader.CurrentCharacter() != delimiter)
 		{
 			err = true;
 		}
 
 		if (err)
 		{
-			ThrowParseException("read() function: error reading literal at column %u", elemStart);
+			ThrowParseException("in read() function: CSV format error at column %u", reader.CharsRead());
 		}
 	}
 }
