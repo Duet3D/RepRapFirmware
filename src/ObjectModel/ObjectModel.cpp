@@ -158,15 +158,15 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 			ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
 			for (size_t i = 0; ; ++i)
 			{
-				if (i != 0)
-				{
-					str.cat(',');
-				}
-
 				ExpressionValue val;
 				if (!ahVal.GetElement(i, val))
 				{
 					break;									// reached the end of the array
+				}
+
+				if (i != 0)
+				{
+					str.cat(',');
 				}
 				val.AppendAsString(str);
 			}
