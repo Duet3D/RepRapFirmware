@@ -352,7 +352,7 @@ bool StringParser::CheckMetaCommand(const StringRef& reply) THROWS(GCodeExceptio
 {
 	if (overflowed)
 	{
-		throw GCodeException(gb.GetLineNumber(), ARRAY_SIZE(gb.buffer) + commandIndent - 1, "GCode command too long");
+		throw GCodeException(&gb, ARRAY_SIZE(gb.buffer) + commandIndent - 1, "GCode command too long");
 	}
 
 	const bool doingFile = gb.IsDoingFile();
@@ -878,11 +878,11 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 		FileStore * const f = reprap.GetPlatform().OpenSysFile(filename.c_str(), openMode);
 		if (f == nullptr)
 		{
-			throw GCodeException(gb.GetLineNumber(), readPointer + commandIndent, "Failed to create or open file");
+			throw GCodeException(&gb, readPointer + commandIndent, "Failed to create or open file");
 		}
 		outputFile.Set(f);
 #else
-		throw GCodeException(gb.GetLineNumber(), readPointer + commandIndent, "Can't write to this file system");
+		throw GCodeException(&gb, readPointer + commandIndent, "Can't write to this file system");
 #endif
 	}
 
@@ -924,7 +924,7 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 		reply.Clear();
 		if (!ok)
 		{
-			throw GCodeException(gb.GetLineNumber(), -1, "Failed to write to redirect file");
+			throw GCodeException(&gb, -1, "Failed to write to redirect file");
 		}
 	}
 #endif
@@ -2052,17 +2052,17 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeE
 
 GCodeException StringParser::ConstructParseException(const char *str) const noexcept
 {
-	return GCodeException(gb.GetLineNumber(), GetColumn(), str);
+	return GCodeException(&gb, GetColumn(), str);
 }
 
 GCodeException StringParser::ConstructParseException(const char *str, const char *param) const noexcept
 {
-	return GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
+	return GCodeException(&gb, GetColumn(), str, param);
 }
 
 GCodeException StringParser::ConstructParseException(const char *str, uint32_t param) const noexcept
 {
-	return GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
+	return GCodeException(&gb, GetColumn(), str, param);
 }
 
 // Get the current column if we can, else return -1
