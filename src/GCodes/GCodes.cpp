@@ -1961,7 +1961,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		}
 		else
 		{
-			gb.ThrowGCodeException("G0/G1: bad restore point number");
+			gb.ThrowGCodeException("bad restore point number");
 		}
 	}
 
@@ -2032,7 +2032,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			// If it is a special move on a delta, movement must be relative.
 			if (ms.moveType != 0 && !gb.LatestMachineState().axesRelative && reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta)
 			{
-				gb.ThrowGCodeException("G0/G1: attempt to move individual motors of a delta machine to absolute positions");
+				gb.ThrowGCodeException("attempt to move individual motors of a delta machine to absolute positions");
 			}
 
 			axesMentioned.SetBit(axis);
@@ -2109,7 +2109,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 
 		if (!doingManualBedProbe && CheckEnoughAxesHomed(axesMentioned))
 		{
-			gb.ThrowGCodeException("G0/G1: insufficient axes homed");
+			gb.ThrowGCodeException("insufficient axes homed");
 		}
 	}
 	else
@@ -2227,7 +2227,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		case LimitPositionResult::adjustedAndIntermediateUnreachable:
 			if (machineType != MachineType::fff)
 			{
-				gb.ThrowGCodeException("G0/G1: target position outside machine limits");	// it's a laser or CNC so this is a definite error
+				gb.ThrowGCodeException("target position outside machine limits");	// it's a laser or CNC so this is a definite error
 			}
 			ToolOffsetInverseTransform(ms);									// make sure the limits are reflected in the user position
 			if (lp == LimitPositionResult::adjusted)
@@ -2253,7 +2253,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 					break;
 				}
 			}
-			gb.ThrowGCodeException("G0/G1: target position not reachable from current position");		// we can't bring the move within limits, so this is a definite error
+			gb.ThrowGCodeException("target position not reachable from current position");		// we can't bring the move within limits, so this is a definite error
 			// no break
 
 		case LimitPositionResult::ok:
@@ -2427,7 +2427,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		// The distance between start and end points must not be zero
 		if (dSquared == 0.0)
 		{
-			gb.ThrowGCodeException("G2/G3: distance between start and end points must not be zero when specifying a radius");
+			gb.ThrowGCodeException("distance between start and end points must not be zero when specifying a radius");
 		}
 
 		// The perpendicular must have a real length (possibly zero)
@@ -2443,7 +2443,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		{
 			if (hSquared < -0.02 * fsquare(rParam))							// allow the radius to be up to 1% too short
 			{
-				gb.ThrowGCodeException("G2/G3: radius is too small to reach endpoint");
+				gb.ThrowGCodeException("radius is too small to reach endpoint");
 			}
 			hDivD = 0.0;													// this has the effect of increasing the radius slightly so that the maths works
 		}
@@ -2480,7 +2480,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 		if (iParam == 0.0 && jParam == 0.0)			// at least one of IJK must be specified and nonzero
 		{
-			gb.ThrowGCodeException("G2/G3: no I J K or R parameter");
+			gb.ThrowGCodeException("no I J K or R parameter");
 		}
 	}
 
@@ -2547,7 +2547,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 	if (CheckEnoughAxesHomed(realAxesMoving))
 	{
-		gb.ThrowGCodeException("G2/G3: insufficient axes homed");
+		gb.ThrowGCodeException("insufficient axes homed");
 	}
 
 	// Compute the initial and final angles. Do this before we possibly rotate the coordinates of the arc centre.
@@ -2587,7 +2587,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 
 	if (reprap.GetMove().GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, axesVirtuallyHomed, true, limitAxes) != LimitPositionResult::ok)
 	{
-		gb.ThrowGCodeException("G2/G3: outside machine limits");				// abandon the move
+		gb.ThrowGCodeException("outside machine limits");				// abandon the move
 	}
 
 	// Set up default move parameters
