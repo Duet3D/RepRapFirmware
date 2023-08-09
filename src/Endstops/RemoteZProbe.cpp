@@ -146,6 +146,17 @@ float RemoteZProbe::GetCalibratedReading() const noexcept
 	return 0.0;
 }
 
+// Tell the probe to calibrate its drive level
+GCodeResult RemoteZProbe::CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	int32_t driveLevel = -2;			// default to just reporting the drive level
+	bool dummy = false;
+	gb.TryGetIValue('S', driveLevel, dummy);
+	uint8_t returnedDriveLevel;
+	const uint16_t param = (driveLevel >= 0) ? (uint16_t)driveLevel : (driveLevel == -1) ? 0xFFFF : 0xFFFE;
+	return CanInterface::SetHandleDriveLevel(boardAddress, handle, param, returnedDriveLevel, reply);
+}
+
 // Callback function for digital Z probes
 void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept
 {

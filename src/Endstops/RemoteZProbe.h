@@ -26,6 +26,8 @@ public:
 	bool SetProbing(bool isProbing) noexcept override;
 	GCodeResult AppendPinNames(const StringRef& str) noexcept override;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
+	GCodeResult Create(const StringRef& pinNames, const StringRef& reply) noexcept;
+	void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept override;
 
 	// Functions used only with modulated Z probes
 	void SetIREmitter(bool on) const noexcept override { }
@@ -35,11 +37,8 @@ public:
 
 	// Functions used only with scanning Z probes
 	float GetCalibratedReading() const noexcept override;
-
-	void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept override;
+	GCodeResult CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
 	void ScanningProbeCallback(RemoteInputHandle h, uint32_t val) noexcept;
-
-	GCodeResult Create(const StringRef& pinNames, const StringRef& reply) noexcept;
 
 private:
 	CanAddress boardAddress;

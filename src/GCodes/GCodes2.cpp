@@ -3469,8 +3469,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = DefineGrid(gb, reply);
 				break;
 
-			case 558: // Set or report Z probe type and for which axes it is used; M558.1 calibrate Z probe
-				result = (gb.GetCommandFraction() > 1) ? TryMacroFile(gb) : platform.GetEndstops().HandleM558(gb, reply);
+			case 558: // Set or report Z probe type and for which axes it is used; M558.1 calibrate Z probe; M558.2 calibrate scanning Z probe drive strength
+				result = (gb.GetCommandFraction() > 2) ? TryMacroFile(gb) : platform.GetEndstops().HandleM558(gb, reply);
 				break;
 
 #if HAS_MASS_STORAGE

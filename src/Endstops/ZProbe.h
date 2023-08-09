@@ -23,6 +23,9 @@ public:
 	virtual GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept;
 	virtual float GetCalibratedReading() const noexcept { return 0.0; }
 
+	// The following should never be called for a non-scanning probe, so by default we just return error with no message
+	virtual GCodeResult CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) { return GCodeResult::error; }
+
 #if SUPPORT_CAN_EXPANSION
 	// Process a remote input change that relates to this Z probe
 	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept { }

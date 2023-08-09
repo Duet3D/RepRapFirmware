@@ -619,10 +619,9 @@ bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) con
 GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
 	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
-
-	if (gb.GetCommandFraction() == 1)
+	if (gb.GetCommandFraction() > 0)
 	{
-		return reprap.GetGCodes().HandleM558Point1(gb, reply, probeNumber);
+		return reprap.GetGCodes().HandleM558Point1or2(gb, reply, probeNumber);
 	}
 
 	// Check what sort of Z probe we need and where it is, so see whether we need to delete any existing one and create a new one.
