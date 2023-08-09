@@ -17,21 +17,21 @@ GCodeException::GCodeException(const GCodeBuffer *null gb, int col, const char *
 		line = gb->GetLineNumber();
 		if (gb->IsDoingFileMacro())
 		{
-			source = GCodeExceptionSource::MACRO;
+			source = GCodeExceptionSource::macro;
 		}
 		else if (gb->IsDoingFile())
 		{
-			source = GCodeExceptionSource::FILE;
+			source = GCodeExceptionSource::file;
 		}
 		else
 		{
-			source = GCodeExceptionSource::OTHER;
+			source = GCodeExceptionSource::other;
 			line = -1;
 		}
 	}
 	else
 	{
-		source = GCodeExceptionSource::OTHER;
+		source = GCodeExceptionSource::other;
 		line = -1;
 	}
 }
@@ -50,21 +50,19 @@ GCodeException::GCodeException(const GCodeBuffer *null gb, int col, const char *
 void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null gb) const noexcept
 {
 	// Print the file location, if possible
-	if (gb != nullptr)
+	switch(source)
 	{
-		switch(source)
-		{
-		case GCodeExceptionSource::FILE:
-			reply.copy("in GCode file");
-			break;
-		case GCodeExceptionSource::MACRO:
-			reply.copy("in file macro");
-			break;
-		case GCodeExceptionSource::OTHER:
-		default:
-			break;
-		}
+	case GCodeExceptionSource::file:
+		reply.copy("in GCode file");
+		break;
+	case GCodeExceptionSource::macro:
+		reply.copy("in file macro");
+		break;
+	case GCodeExceptionSource::other:
+	default:
+		break;
 	}
+
 	if (line >= 0)
 	{
 		reply.catf(" line %d", line);
