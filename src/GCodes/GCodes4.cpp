@@ -1524,28 +1524,40 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				zp->SetProbing(true);
 			}
 
-			delay(25);												// allow some settling time
+			delay(20);												// allow some settling time
 			(void)zp->GetCalibratedReading();						// needed to update the raw reading
-			calibrationReadings[numCalibrationReadingsTaken] = (int32_t)zp->GetRawReading();
-			++numCalibrationReadingsTaken;
-			if (numCalibrationReadingsTaken == numPointsToCollect)
+			const uint32_t reading = zp->GetRawReading();
+			if (reading == 0)
 			{
-				zp->SetProbing(false);
-				gb.AdvanceState();
-				RetractZProbe(gb);
+				// A reading of zero indicates an error e.g. LDC1612 amplitude error
+				reply.copy("sensor error during calibration");
+				stateMachineResult = GCodeResult::error;
+				gb.SetState(GCodeState::normal);
 			}
 			else
 			{
-				SetMoveBufferDefaults(ms);
-				ms.coords[Z_AXIS] = calibrationStartingHeight - (numCalibrationReadingsTaken * heightChangePerPoint);
-				ms.feedRate = zp->GetProbingSpeed(1);
-				ms.linearAxesMentioned = true;
-				NewSingleSegmentMoveAvailable(ms);
+				calibrationReadings[numCalibrationReadingsTaken] = (int32_t)reading;
+				++numCalibrationReadingsTaken;
+				if (numCalibrationReadingsTaken == numPointsToCollect)
+				{
+					zp->SetProbing(false);
+					gb.AdvanceState();
+					RetractZProbe(gb);
+				}
+				else
+				{
+					SetMoveBufferDefaults(ms);
+					ms.coords[Z_AXIS] = calibrationStartingHeight - (numCalibrationReadingsTaken * heightChangePerPoint);
+					ms.feedRate = zp->GetProbingSpeed(1);
+					ms.linearAxesMentioned = true;
+					NewSingleSegmentMoveAvailable(ms);
+				}
 			}
 		}
 		break;
 
 	case GCodeState::probeCalibration3:
+		// We have finished taking calibration readings
 		{
 			auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
 			zp->CalibrateScanningProbe(calibrationReadings, numCalibrationReadingsTaken, heightChangePerPoint, reply);
