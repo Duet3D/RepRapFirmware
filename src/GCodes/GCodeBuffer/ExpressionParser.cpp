@@ -59,7 +59,7 @@ void LineReader::SkipTabsAndSpaces() noexcept
 
 // These can't be declared locally inside ParseIdentifierExpression because NamedEnum includes static data
 NamedEnum(NamedConstant, unsigned int, _false, iterations, line, _null, pi, _result, _true, input);
-NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, ceil, cos, datetime, degrees, exists, exp, fileexists, floor, isnan, log, max, min, mod, pow, radians, random, read, sin, sqrt, tan, vector);
+NamedEnum(Function, unsigned int, abs, acos, asin, atan, atan2, ceil, cos, datetime, degrees, exists, exp, fileexists, fileread, floor, isnan, log, max, min, mod, pow, radians, random, sin, sqrt, tan, vector);
 
 const char *const InvalidExistsMessage = "invalid 'exists' expression";
 const char *const ExpectedNonNegativeIntMessage = "expected non-negative integer";
@@ -859,7 +859,7 @@ void ExpressionParser::ReadArrayFromFile(ExpressionValue& rslt, unsigned int off
 {
 	if (length > MaxFileReadArrayElements)
 	{
-		ThrowParseException("read() function: too many elements requested");
+		ThrowParseException("fileRead function: too many elements requested");
 	}
 
 	FileStore *f;
@@ -873,7 +873,7 @@ void ExpressionParser::ReadArrayFromFile(ExpressionValue& rslt, unsigned int off
 		f = MassStorage::OpenFile(fname.c_str(), OpenMode::read, 0);
 		if (f == nullptr)
 		{
-			ThrowParseException("read() function: failed to open file");
+			ThrowParseException("fileRead function: failed to open file");
 		}
 	}
 
@@ -1728,7 +1728,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 				}
 				break;
 
-			case Function::read:
+			case Function::fileread:
 				{
 					if (evaluate && rslt.GetType() != TypeCode::CString && rslt.GetType() != TypeCode::HeapString)
 					{
