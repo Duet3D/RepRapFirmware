@@ -847,7 +847,8 @@ GCodeResult GCodes::HandleM558Point1or2(GCodeBuffer& gb, const StringRef &reply,
 		{
 			const float aParam = gb.GetFValue();
 			const float bParam = (gb.Seen('B')) ? gb.GetFValue() : 0.0;
-			return zp->SetScanningCoefficients(aParam, bParam);
+			const float cParam = (gb.Seen('C')) ? gb.GetFValue() : 0.0;
+			return zp->SetScanningCoefficients(aParam, bParam, cParam);
 		}
 
 		if (gb.Seen('S'))
