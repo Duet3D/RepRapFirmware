@@ -10,27 +10,71 @@
 #include <General/StringRef.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
+GCodeException::GCodeException(const GCodeBuffer *null gb, int col, const char *_ecv_array msg) noexcept : column(col), message(msg)
+{
+	if (gb != nullptr)
+	{
+		line = gb->GetLineNumber();
+		if (gb->IsDoingFileMacro())
+		{
+			source = GCodeExceptionSource::macro;
+		}
+		else if (gb->IsDoingFile())
+		{
+			source = GCodeExceptionSource::file;
+		}
+		else
+		{
+			source = GCodeExceptionSource::other;
+			line = -1;
+		}
+	}
+	else
+	{
+		source = GCodeExceptionSource::other;
+		line = -1;
+	}
+}
+
+GCodeException::GCodeException(const GCodeBuffer *null gb, int col, const char *_ecv_array msg, uint32_t uparam) noexcept : GCodeException(gb, col, msg)
+{
+	param.u = uparam;
+}
+
+GCodeException::GCodeException(const GCodeBuffer *null gb, int col, const char *_ecv_array msg, const char *_ecv_array sparam) noexcept : GCodeException(gb, col, msg)
+{
+	stringParam.copy(sparam);
+}
+
 // Construct the error message. This will be prefixed with "Error: " when it is returned to the user.
 void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null gb) const noexcept
 {
 	// Print the file location, if possible
-	const bool inFile = gb != nullptr && gb->IsDoingFile();
-	if (inFile)
+	switch(source)
 	{
-		reply.copy((gb->IsDoingFileMacro()) ? "in file macro" : "in GCode file");
-		if (line >= 0)
+	case GCodeExceptionSource::file:
+		reply.copy("in GCode file");
+		break;
+	case GCodeExceptionSource::macro:
+		reply.copy("in file macro");
+		break;
+	case GCodeExceptionSource::other:
+	default:
+		break;
+	}
+
+	if (line >= 0)
+	{
+		reply.catf(" line %d", line);
+		if (column >= 0)
 		{
-			reply.catf(" line %d", line);
-			if (column >= 0)
-			{
-				reply.catf(" column %d", column + 1);
-			}
+			reply.catf(" column %d", column + 1);
 		}
 		reply.cat(": ");
 	}
 	else if (column >= 0)
 	{
-		reply.printf("at column %d: ", column + 1);
+		reply.catf(" at column %d: ", column + 1);
 	}
 	else
 	{

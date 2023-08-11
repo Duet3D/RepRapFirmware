@@ -448,7 +448,7 @@ void CanInterface::CheckCanAddress(uint32_t address, const GCodeBuffer& gb) THRO
 {
 	if (address == 0 || address > CanId::MaxCanAddress)
 	{
-		throw GCodeException(gb.GetLineNumber(), -1, "CAN address out of range");
+		throw GCodeException(&gb, -1, "CAN address out of range");
 	}
 }
 

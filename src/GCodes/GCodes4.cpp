@@ -92,7 +92,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				break;
 			}
-			gb.LatestMachineState().SetError("G1/G2/G3: intermediate position outside machine limits");
+			gb.LatestMachineState().SetError("intermediate position outside machine limits");
 			gb.SetState(GCodeState::normal);
 			if (machineType != MachineType::fff)
 			{

@@ -432,7 +432,7 @@ void GCodeBuffer::MustSee(char c) THROWS(GCodeException)
 {
 	if (!Seen(c))
 	{
-		throw GCodeException(GetLineNumber(), -1, "missing parameter '%c'", (uint32_t)c);
+		throw GCodeException(this, -1, "missing parameter '%c'", (uint32_t)c);
 	}
 }
 
@@ -441,7 +441,7 @@ char GCodeBuffer::MustSee(char c1, char c2) THROWS(GCodeException)
 {
 	if (Seen(c1)) { return c1; }
 	if (Seen(c2)) { return c2; }
-	throw GCodeException(GetLineNumber(), -1, "missing parameter '%c'", (uint32_t)c1);
+	throw GCodeException(this, -1, "missing parameter '%c'", (uint32_t)c1);
 }
 
 // Get a float after a key letter
@@ -460,7 +460,7 @@ float GCodeBuffer::GetPositiveFValue() THROWS(GCodeException)
 							stringParser.GetColumn();
 	const float val = GetFValue();
 	if (val > 0.0) { return val; }
-	throw GCodeException(GetLineNumber(), column, "value must be greater than zero");
+	throw GCodeException(this, column, "value must be greater than zero");
 }
 
 // Get a float after a key letter and check that it is greater than or equal to zero
@@ -473,7 +473,7 @@ float GCodeBuffer::GetNonNegativeFValue() THROWS(GCodeException)
 							stringParser.GetColumn();
 	const float val = GetFValue();
 	if (val >= 0.0) { return val; }
-	throw GCodeException(GetLineNumber(), column, "value must be not less than zero");
+	throw GCodeException(this, column, "value must be not less than zero");
 }
 
 float GCodeBuffer::GetLimitedFValue(char c, float minValue, float maxValue) THROWS(GCodeException)
@@ -485,8 +485,8 @@ float GCodeBuffer::GetLimitedFValue(char c, float minValue, float maxValue) THRO
 #endif
 							stringParser.GetColumn();
 	const float ret = GetFValue();
-	if (ret < minValue) { throw GCodeException(GetLineNumber(), column, "parameter '%c' too low", (uint32_t)c); }
-	if (ret > maxValue) { throw GCodeException(GetLineNumber(), column, "parameter '%c' too high", (uint32_t)c); }
+	if (ret < minValue) { throw GCodeException(this, column, "parameter '%c' too low", (uint32_t)c); }
+	if (ret > maxValue) { throw GCodeException(this, column, "parameter '%c' too high", (uint32_t)c); }
 	return ret;
 }
 
@@ -527,11 +527,11 @@ int32_t GCodeBuffer::GetLimitedIValue(char c, int32_t minValue, int32_t maxValue
 	const int32_t ret = GetIValue();
 	if (ret < minValue)
 	{
-		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too low", (uint32_t)c);
+		throw GCodeException(this, -1, "parameter '%c' too low", (uint32_t)c);
 	}
 	if (ret > maxValue)
 	{
-		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too high", (uint32_t)c);
+		throw GCodeException(this, -1, "parameter '%c' too high", (uint32_t)c);
 	}
 	return ret;
 }
@@ -549,11 +549,11 @@ uint32_t GCodeBuffer::GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxV
 	const uint32_t ret = GetUIValue();
 	if (ret < minValue)
 	{
-		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too low", (uint32_t)c);
+		throw GCodeException(this, -1, "parameter '%c' too low", (uint32_t)c);
 	}
 	if (ret >= maxValuePlusOne)
 	{
-		throw GCodeException(GetLineNumber(), -1, "parameter '%c' too high", (uint32_t)c);
+		throw GCodeException(this, -1, "parameter '%c' too high", (uint32_t)c);
 	}
 	return ret;
 }
@@ -1321,7 +1321,7 @@ void GCodeBuffer::ThrowGCodeException(const char *msg) const THROWS(GCodeExcepti
 						(isBinaryBuffer) ? -1 :
 #endif
 							stringParser.GetColumn();
-	throw GCodeException(GetLineNumber(), column, msg);
+	throw GCodeException(this, column, msg);
 }
 
 void GCodeBuffer::ThrowGCodeException(const char *msg, uint32_t param) const THROWS(GCodeException)
@@ -1331,7 +1331,7 @@ void GCodeBuffer::ThrowGCodeException(const char *msg, uint32_t param) const THR
 						(isBinaryBuffer) ? -1 :
 #endif
 							stringParser.GetColumn();
-	throw GCodeException(GetLineNumber(), column, msg, param);
+	throw GCodeException(this, column, msg, param);
 }
 
 #if SUPPORT_COORDINATE_ROTATION

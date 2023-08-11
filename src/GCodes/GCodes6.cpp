@@ -641,11 +641,11 @@ size_t GCodes::FindAxisLetter(GCodeBuffer& gb) THROWS(GCodeException)
 			{
 				return axis;
 			}
-			throw GCodeException(gb.GetLineNumber(), -1, "%c axis has not been homed", (uint32_t)axisLetters[axis]);
+			throw GCodeException(&gb, -1, "%c axis has not been homed", (uint32_t)axisLetters[axis]);
 		}
 	}
 
-	throw GCodeException(gb.GetLineNumber(), -1, "No axis specified");
+	throw GCodeException(&gb, -1, "No axis specified");
 }
 
 // Deal with a M585

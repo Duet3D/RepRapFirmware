@@ -927,17 +927,17 @@ void BinaryParser::AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeE
 
 GCodeException BinaryParser::ConstructParseException(const char *str) const noexcept
 {
-	return GCodeException(header->lineNumber, -1, str);
+	return GCodeException(&gb, -1, str);
 }
 
 GCodeException BinaryParser::ConstructParseException(const char *str, const char *param) const noexcept
 {
-	return GCodeException(header->lineNumber, -1, str, param);
+	return GCodeException(&gb, -1, str, param);
 }
 
 GCodeException BinaryParser::ConstructParseException(const char *str, uint32_t param) const noexcept
 {
-	return GCodeException(header->lineNumber, -1, str, param);
+	return GCodeException(&gb, -1, str, param);
 }
 
 #endif

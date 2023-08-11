@@ -122,7 +122,7 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 				}
 				else if (evaluate)
 				{
-					throw GCodeException(gb.GetLineNumber(), indexCol, "array index out of range");
+					throw GCodeException(&gb, indexCol, "array index out of range");
 				}
 				else
 				{
@@ -138,7 +138,7 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 				{
 					if (evaluate)
 					{
-						throw GCodeException(gb.GetLineNumber(), indexCol, "array index out of range");
+						throw GCodeException(&gb, indexCol, "array index out of range");
 					}
 					else
 					{
@@ -151,7 +151,7 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 		default:
 			if (evaluate)
 			{
-				throw GCodeException(gb.GetLineNumber(), indexCol, "left operand of [ ] is not an array");
+				throw GCodeException(&gb, indexCol, "left operand of [ ] is not an array");
 			}
 			rslt.SetNull(nullptr);
 			break;
@@ -2056,17 +2056,17 @@ int ExpressionParser::GetColumn() const noexcept
 
 void ExpressionParser::ThrowParseException(const char *str) const THROWS(GCodeException)
 {
-	throw GCodeException(gb.GetLineNumber(), GetColumn(), str);
+	throw GCodeException(&gb, GetColumn(), str);
 }
 
 void ExpressionParser::ThrowParseException(const char *str, const char *param) const THROWS(GCodeException)
 {
-	throw GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
+	throw GCodeException(&gb, GetColumn(), str, param);
 }
 
 void ExpressionParser::ThrowParseException(const char *str, uint32_t param) const THROWS(GCodeException)
 {
-	throw GCodeException(gb.GetLineNumber(), GetColumn(), str, param);
+	throw GCodeException(&gb, GetColumn(), str, param);
 }
 
 // Call this before making a recursive call, or before calling a function that needs a lot of stack from a recursive function
@@ -2084,7 +2084,7 @@ void ExpressionParser::CheckStack(uint32_t calledFunctionStackUsage) const THROW
 	// The stack is in danger of overflowing. Throw an exception if we have enough stack to do so (ideally, this should always be the case)
 	if (stackLimit + StackUsage::Throw <= stackPtr)
 	{
-		throw GCodeException(gb.GetLineNumber(), GetColumn(), "Expression nesting too deep");
+		throw GCodeException(&gb, GetColumn(), "Expression nesting too deep");
 	}
 
 	// Not enough stack left to throw an exception
