@@ -51,6 +51,7 @@ NamedEnum(NetworkState, uint8_t,
 	starting1,					// starting up (used by WiFi networking)
 	starting2,					// starting up (used by WiFi networking)
 	changingMode,				// running and in the process of switching between modes (used by WiFi networking)
+	idle,						// wifi module is running but in idle mode
 	establishingLink,			// starting up, waiting for link
 	obtainingIP,				// link established, waiting for DHCP
 	connected,					// just established a connection
