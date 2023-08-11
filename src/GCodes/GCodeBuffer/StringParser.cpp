@@ -1167,7 +1167,7 @@ void StringParser::SetFinished() noexcept
 // It is also called to get the position within a macro file when executing a while loop in that file.
 FilePosition StringParser::GetFilePosition() const noexcept
 {
-#if HAS_MASS_STORAGE
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	if (gb.LatestMachineState().DoingFile()
 # if HAS_SBC_INTERFACE
 		&& !reprap.UsingSbcInterface()
