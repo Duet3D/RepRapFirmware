@@ -2307,15 +2307,17 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 				ms.totalSegments = 1;
 			}
 
-			// If we are applying mesh compensation,  set the segment size to be smaller than the mesh spacing
-			if (reprap.GetMove().IsUsingMesh() && (ms.isCoordinated || machineType == MachineType::fff))
+			// If we are applying mesh compensation, set the segment size to be smaller than the mesh spacing.
+			// Do not use segmentation if the requested tool Z position is higher than the configured taper height
+			const float taperHeight = reprap.GetMove().GetTaperHeight();
+			if (reprap.GetMove().IsUsingMesh() && (ms.isCoordinated || machineType == MachineType::fff) && (taperHeight == 0.0F || ms.coords[Z_AXIS] < taperHeight))
 			{
 				const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
 				const GridDefinition& grid = heightMap.GetGrid();
 				const unsigned int minMeshSegments = heightMap.GetMinimumSegments(
-							ms.currentUserPosition[grid.GetAxisNumber(0)] - initialUserPosition[grid.GetAxisNumber(0)],
-							ms.currentUserPosition[grid.GetAxisNumber(1)] - initialUserPosition[grid.GetAxisNumber(1)]
-						);
+						ms.currentUserPosition[grid.GetAxisNumber(0)] - initialUserPosition[grid.GetAxisNumber(0)],
+						ms.currentUserPosition[grid.GetAxisNumber(1)] - initialUserPosition[grid.GetAxisNumber(1)]
+				);
 				if (minMeshSegments > ms.totalSegments)
 				{
 					ms.totalSegments = minMeshSegments;
