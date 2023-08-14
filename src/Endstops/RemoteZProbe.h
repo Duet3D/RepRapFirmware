@@ -46,8 +46,8 @@ private:
 	uint32_t lastValue;							// the most recent value received from a scanning analog Z probe
 	bool state;									// the state of a digital Z probe
 
-	static constexpr uint16_t ActiveProbeReportInterval = 2;
-	static constexpr uint16_t InactiveProbeReportInterval = 25;
+	static constexpr uint32_t ActiveProbeReportInterval = 2;
+	static constexpr uint32_t InactiveProbeReportInterval = 25;
 };
 
 #endif

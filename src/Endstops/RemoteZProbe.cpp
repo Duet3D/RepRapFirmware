@@ -153,7 +153,9 @@ GCodeResult RemoteZProbe::CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& 
 	bool dummy = false;
 	gb.TryGetIValue('S', driveLevel, dummy);
 	uint8_t returnedDriveLevel;
-	const uint16_t param = (driveLevel >= 0) ? (uint16_t)driveLevel : (driveLevel == -1) ? 0xFFFF : 0xFFFE;
+	const uint32_t param = (driveLevel >= 0) ? (uint16_t)driveLevel
+							: (driveLevel == -1) ? CanMessageChangeInputMonitorNew::paramAutoCalibrateDriveLevelAndReport
+								: CanMessageChangeInputMonitorNew::paramReportDriveLevel;
 	return CanInterface::SetHandleDriveLevel(boardAddress, handle, param, returnedDriveLevel, reply);
 }
 
