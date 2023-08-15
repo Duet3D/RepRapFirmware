@@ -168,6 +168,15 @@ void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, 
 	}
 }
 
+// Process a remote reading that relates to this Z probe
+void RemoteZProbe::UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint32_t reading) noexcept
+{
+	if (src == boardAddress)
+	{
+		lastValue = reading;
+	}
+}
+
 // Callback function for scanning analog Z probes
 void RemoteZProbe::ScanningProbeCallback(RemoteInputHandle h, uint32_t val) noexcept
 {

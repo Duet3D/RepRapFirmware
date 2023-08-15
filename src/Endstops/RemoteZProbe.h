@@ -29,6 +29,9 @@ public:
 	GCodeResult Create(const StringRef& pinNames, const StringRef& reply) noexcept;
 	void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept override;
 
+	// Process a remote reading that relates to this Z probe
+	void UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint32_t reading) noexcept override;
+
 	// Functions used only with modulated Z probes
 	void SetIREmitter(bool on) const noexcept override { }
 

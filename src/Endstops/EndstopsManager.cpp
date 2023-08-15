@@ -792,6 +792,18 @@ void EndstopsManager::HandleRemoteZProbeChange(CanAddress src, uint8_t handleMaj
 	}
 }
 
+void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t reading) noexcept
+{
+	if (handleMajor < ARRAY_SIZE(zProbes))
+	{
+		ZProbe * const zp = zProbes[handleMajor];
+		if (zp != nullptr)
+		{
+			zp->UpdateRemoteReading(src, handleMinor, reading);
+		}
+	}
+}
+
 // This is called when we update endstop states because of a message from a remote board.
 // In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to DDA::CheckEndstops().
 void EndstopsManager::OnEndstopOrZProbeStatesChanged() noexcept

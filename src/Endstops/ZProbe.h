@@ -29,6 +29,9 @@ public:
 #if SUPPORT_CAN_EXPANSION
 	// Process a remote input change that relates to this Z probe
 	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept { }
+
+	// Process a remote reading that relates to this Z probe
+	virtual void UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint32_t reading) noexcept { }
 #endif
 
 	bool Stopped() const noexcept override;

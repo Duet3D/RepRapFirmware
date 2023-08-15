@@ -232,6 +232,19 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 	board.hasAccelerometer = msg.hasAccelerometer;
 	board.hasClosedLoop = msg.hasClosedLoop;
 	board.hasInductiveSensor = msg.hasInductiveSensor;
+
+	size_t offset = msg.GetAnalogHandlesOffset();
+	for (unsigned int i = 0; i < msg.numAnalogHandles && offset + sizeof(AnalogHandleData) < buf->dataLength; ++i)
+	{
+		AnalogHandleData data;
+		memcpy(&data, (const uint8_t*)&msg + offset, sizeof(AnalogHandleData));
+		offset += sizeof(AnalogHandleData);
+		// Currently only Z probes use analog handles, so ask the EndstopsManager to deal with it
+		if (data.handle.u.parts.type == RemoteInputHandle::typeZprobe)
+		{
+			reprap.GetPlatform().GetEndstops().HandleRemoteAnalogZProbeValueChange(address, data.handle.u.parts.major, data.handle.u.parts.minor, data.reading);
+		}
+	}
 }
 
 // Return a pointer to the expansion board, if it is present
