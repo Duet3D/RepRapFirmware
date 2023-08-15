@@ -883,7 +883,15 @@ void ExpressionParser::ReadArrayFromFile(ExpressionValue& rslt, unsigned int off
 	while (elemIndex < length && !reader.FileFinished())
 	{
 		// Parse an element to potentially add to the array
-		ReadArrayElementFromFile(elements[elemIndex], reader, delimiter);
+		try
+		{
+			ReadArrayElementFromFile(elements[elemIndex], reader, delimiter);
+		}
+		catch (...)
+		{
+			reader.Close();
+			throw;
+		}
 		if (offset != 0)
 		{
 			--offset;					// skip adding this element
