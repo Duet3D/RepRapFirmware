@@ -622,14 +622,14 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetPlatform().EutProcessM569Point7(buf->msg.generic, replyRef);
 				break;
 
-			case CanMessageType::createInputMonitor:
-				requestId = buf->msg.createInputMonitor.requestId;
-				rslt = InputMonitor::Create(buf->msg.createInputMonitor, buf->dataLength, replyRef, extra);
+			case CanMessageType::createInputMonitorNew:
+				requestId = buf->msg.createInputMonitorNew.requestId;
+				rslt = InputMonitor::Create(buf->msg.createInputMonitorNew, buf->dataLength, replyRef, extra);
 				break;
 
-			case CanMessageType::changeInputMonitor:
-				requestId = buf->msg.changeInputMonitor.requestId;
-				rslt = InputMonitor::Change(buf->msg.changeInputMonitor, replyRef, extra);
+			case CanMessageType::changeInputMonitorNew:
+				requestId = buf->msg.changeInputMonitorNew.requestId;
+				rslt = InputMonitor::Change(buf->msg.changeInputMonitorNew, replyRef, extra);
 				break;
 
 			case CanMessageType::readInputsRequest:

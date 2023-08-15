@@ -160,7 +160,7 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	return false;
 }
 
-/*static*/ GCodeResult InputMonitor::Create(const CanMessageCreateInputMonitor& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept
+/*static*/ GCodeResult InputMonitor::Create(const CanMessageCreateInputMonitorNew& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept
 {
 	WriteLocker lock(listLock);
 
@@ -196,9 +196,9 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	return GCodeResult::error;
 }
 
-/*static*/ GCodeResult InputMonitor::Change(const CanMessageChangeInputMonitor& msg, const StringRef& reply, uint8_t& extra) noexcept
+/*static*/ GCodeResult InputMonitor::Change(const CanMessageChangeInputMonitorNew& msg, const StringRef& reply, uint8_t& extra) noexcept
 {
-	if (msg.action == CanMessageChangeInputMonitor::actionDelete)
+	if (msg.action == CanMessageChangeInputMonitorNew::actionDelete)
 	{
 		WriteLocker lock(listLock);
 
@@ -221,27 +221,27 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	GCodeResult rslt;
 	switch (msg.action)
 	{
-	case CanMessageChangeInputMonitor::actionDoMonitor:
+	case CanMessageChangeInputMonitorNew::actionDoMonitor:
 		rslt = (m->Activate(true)) ? GCodeResult::ok : GCodeResult::error;
 		break;
 
-	case CanMessageChangeInputMonitor::actionDontMonitor:
+	case CanMessageChangeInputMonitorNew::actionDontMonitor:
 		m->Deactivate();
 		rslt = GCodeResult::ok;
 		break;
 
-	case CanMessageChangeInputMonitor::actionReturnPinName:
+	case CanMessageChangeInputMonitorNew::actionReturnPinName:
 		m->port.AppendPinName(reply);
 		reply.catf(", min interval %ums", m->minInterval);
 		rslt = GCodeResult::ok;
 		break;
 
-	case CanMessageChangeInputMonitor::actionChangeThreshold:
+	case CanMessageChangeInputMonitorNew::actionChangeThreshold:
 		m->threshold = msg.param;
 		rslt = GCodeResult::ok;
 		break;
 
-	case CanMessageChangeInputMonitor::actionChangeMinInterval:
+	case CanMessageChangeInputMonitorNew::actionChangeMinInterval:
 		m->minInterval = msg.param;
 		rslt = GCodeResult::ok;
 		break;

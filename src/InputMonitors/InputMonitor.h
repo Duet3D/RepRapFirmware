@@ -16,8 +16,8 @@
 #include <RTOSIface/RTOSIface.h>
 #include <General/FreelistManager.h>
 
-struct CanMessageCreateInputMonitor;
-struct CanMessageChangeInputMonitor;
+struct CanMessageCreateInputMonitorNew;
+struct CanMessageChangeInputMonitorNew;
 struct CanMessageInputChanged;
 class CanMessageBuffer;
 
@@ -30,8 +30,8 @@ public:
 
 	static void Init() noexcept;
 
-	static GCodeResult Create(const CanMessageCreateInputMonitor& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept;
-	static GCodeResult Change(const CanMessageChangeInputMonitor& msg, const StringRef& reply, uint8_t& extra) noexcept;
+	static GCodeResult Create(const CanMessageCreateInputMonitorNew& msg, size_t dataLength, const StringRef& reply, uint8_t& extra) noexcept;
+	static GCodeResult Change(const CanMessageChangeInputMonitorNew& msg, const StringRef& reply, uint8_t& extra) noexcept;
 
 	static uint32_t AddStateChanges(CanMessageInputChanged *msg) noexcept;
 	static void ReadInputs(CanMessageBuffer *buf) noexcept;
