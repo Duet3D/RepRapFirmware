@@ -475,6 +475,12 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 			{
 				if (gb.LatestMachineState().GetPrevious() == nullptr)
 				{
+#if HAS_SBC_INTERFACE
+					if (reprap.UsingSbcInterface())
+					{
+						gb.AbortFile(false);
+					}
+#endif
 					StopPrint(StopPrintReason::userCancelled);
 				}
 				else
