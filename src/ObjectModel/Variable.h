@@ -19,7 +19,7 @@
 class Variable
 {
 public:
-	Variable(const char *_ecv_array str, ExpressionValue& pVal, int8_t pScope) THROWS(GCodeException);
+	Variable(const char *_ecv_array str, ExpressionValue& pVal, int16_t pScope) THROWS(GCodeException);
 	~Variable();
 
 	ReadLockedPointer<const char> GetName() const noexcept { return name.Get(); }
@@ -31,7 +31,7 @@ public:
 private:
 	StringHandle name;
 	ExpressionValue val;
-	int8_t scope;								// -1 for a parameter, else the block nesting level when it was created
+	int16_t scope;								// -1 for a parameter, else the block nesting level when it was created
 };
 
 // Class to represent a collection of variables.
@@ -48,7 +48,7 @@ public:
 
 	Variable *Lookup(const char *_ecv_array str) noexcept;
 	const Variable *Lookup(const char *_ecv_array str, size_t length) const noexcept pre(length <= strlen(str));
-	void InsertNew(const char *str, ExpressionValue pVal, int8_t pScope) THROWS(GCodeException);
+	void InsertNew(const char *str, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException);
 	void InsertNewParameter(const char *str, ExpressionValue pVal) THROWS(GCodeException) { InsertNew(str, pVal, -1); }
 	void EndScope(uint8_t blockNesting) noexcept;
 	void Delete(const char *str) noexcept;
@@ -61,7 +61,7 @@ private:
 	{
 		DECLARE_FREELIST_NEW_DELETE(LinkedVariable)
 
-		LinkedVariable(const char *_ecv_array str, ExpressionValue pVal, int8_t pScope, LinkedVariable *p_next) THROWS(GCodeException)
+		LinkedVariable(const char *_ecv_array str, ExpressionValue pVal, int16_t pScope, LinkedVariable *p_next) THROWS(GCodeException)
 			: next(p_next), v(str, pVal, pScope) {}
 
 		LinkedVariable * null next;

@@ -9,7 +9,7 @@
 #include <Platform/OutputMemory.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
-Variable::Variable(const char *str, ExpressionValue& pVal, int8_t pScope) THROWS(GCodeException)
+Variable::Variable(const char *str, ExpressionValue& pVal, int16_t pScope) THROWS(GCodeException)
 	: name(str), val(), scope(pScope)
 {
 	Assign(pVal);				// this may throw
@@ -96,7 +96,7 @@ const Variable* VariableSet::Lookup(const char *str, size_t length) const noexce
 	return nullptr;
 }
 
-void VariableSet::InsertNew(const char *str, ExpressionValue pVal, int8_t pScope) THROWS(GCodeException)
+void VariableSet::InsertNew(const char *str, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException)
 {
 	LinkedVariable * const toInsert = new LinkedVariable(str, pVal, pScope, root);
 	root = toInsert;
