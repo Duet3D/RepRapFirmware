@@ -52,10 +52,12 @@ public:
 #endif
 
 	// Plan input shaping for an individual move
-	void PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) const noexcept;
+	void PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) noexcept;
 
 	// Calculate the move segments when input shaping is not used
 	static MoveSegment *GetUnshapedSegments(DDA& dda, const PrepParams& params) noexcept;
+
+	void Diagnostics(MessageType mtype) noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
@@ -117,6 +119,10 @@ private:
 	float overlappedShapingClocks;						// the acceleration or deceleration duration when we use overlapping, in step clocks
 	float overlappedDeltaVPerA;							// the effective acceleration time (velocity change per unit acceleration) when we use overlapping, in step clocks
 	float overlappedDistancePerA;						// the distance needed by an overlapped acceleration or deceleration, less the initial velocity contribution
+
+	uint32_t movesShapedFirstTry = 0;
+	uint32_t movesShapedOnRetry = 0;
+	uint32_t movesTooShortToShape = 0;
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */

@@ -397,7 +397,7 @@ void AxisShaper::CalculateDerivedParameters() noexcept
 // Plan input shaping, generate the MoveSegment, and set up the basic move parameters.
 // On entry, params.shapingPlan is set to 'no shaping'.
 // Currently we use a single input shaper for all axes, so the move segments are attached to the DDA not the DM
-void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) const noexcept
+void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) noexcept
 {
 	params.SetFromDDA(dda);												// set up the provisional parameters
 	if (numExtraImpulses != 0)
@@ -438,7 +438,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 		{
 #if 1
 			// Calculate the shaping we need if we preserve the original top speed
-			for (;;)
+			for (unsigned int tries = 0; ; ++tries)
 			{
 				AccelOrDecelPlan proposedAccelPlan;
 				if (idealPlan.shapeAccelEnd)
@@ -493,12 +493,21 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 					{
 						ImplementDecelShaping(dda, params, proposedDecelPlan);
 					}
+					if (tries == 0)
+					{
+						++movesShapedFirstTry;
+					}
+					else
+					{
+						++movesShapedOnRetry;
+					}
 					break;
 				}
 
 				// Consider adjusting the top speed to make applying one or both plans possible
 				// Consider applying just one of the plans
 				//TODO
+				++movesTooShortToShape;
 				break;
 			}
 #else
@@ -1159,6 +1168,13 @@ inline float AxisShaper::GetExtraDecelStartDistance(float topSpeed, float decele
 inline float AxisShaper::GetExtraDecelEndDistance(float endSpeed, float deceleration) const noexcept
 {
 	return (extraClocksAtEnd * endSpeed) - (extraDistanceAtEnd * deceleration);
+}
+
+void AxisShaper::Diagnostics(MessageType mtype) noexcept
+{
+	reprap.GetPlatform().MessageF(mtype, "Moves shaped first try %" PRIu32 ", on retry %" PRIu32 ", too short %" PRIu32 "\n",
+							movesShapedFirstTry, movesShapedOnRetry, movesTooShortToShape);
+	movesShapedFirstTry = movesShapedOnRetry = movesTooShortToShape = 0;
 }
 
 // Calculate the move segments when input shaping is not in use

@@ -575,6 +575,7 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	scratchString.Clear();
 	StepTimer::Diagnostics(scratchString.GetRef());
 	p.MessageF(mtype, "%s\n", scratchString.c_str());
+	axisShaper.Diagnostics(mtype);
 
 	for (size_t i = 0; i < ARRAY_SIZE(rings); ++i)
 	{
