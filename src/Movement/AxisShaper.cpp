@@ -579,7 +579,7 @@ void AxisShaper::TryShapeAccelEnd(const DDA& dda, PrepParams& params) const noex
 	}
 }
 
-void AxisShaper::TryShapeAccelBoth(DDA& dda, PrepParams& params) const noexcept
+void AxisShaper::TryShapeAccelBoth(const DDA& dda, PrepParams& params) const noexcept
 {
 	const float speedIncrease = dda.topSpeed - dda.startSpeed;
 	if (speedIncrease <= overlappedDeltaVPerA * params.acceleration)
@@ -658,7 +658,7 @@ void AxisShaper::TryShapeDecelStart(const DDA& dda, PrepParams& params) const no
 	}
 }
 
-void AxisShaper::TryShapeDecelBoth(DDA& dda, PrepParams& params) const noexcept
+void AxisShaper::TryShapeDecelBoth(const DDA& dda, PrepParams& params) const noexcept
 {
 	const float speedDecrease = dda.topSpeed - dda.endSpeed;
 	if (speedDecrease <= overlappedDeltaVPerA * params.deceleration)
