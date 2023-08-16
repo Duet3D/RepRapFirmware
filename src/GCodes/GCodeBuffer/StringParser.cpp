@@ -405,10 +405,7 @@ bool StringParser::CheckMetaCommand(const StringRef& reply) THROWS(GCodeExceptio
 		if (commandIndent > gb.GetBlockIndent())
 		{
 			// Indentation has increased so start new block(s)
-			if (!gb.CurrentFileMachineState().CreateBlock(commandIndent))
-			{
-				throw ConstructParseException("blocks nested too deeply");
-			}
+			gb.CurrentFileMachineState().CreateBlock(commandIndent);
 		}
 	}
 

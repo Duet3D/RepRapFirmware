@@ -26,13 +26,13 @@ GCodeMachineState::GCodeMachineState() noexcept
 #endif
 	  stateParameter(0),
 	  compatibility(Compatibility::RepRapFirmware),
-	  previous(nullptr), errorMessage(nullptr),
+	  previous(nullptr), currentBlockState(new BlockState(nullptr)), errorMessage(nullptr),
 	  blockNesting(0), state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
 #if SUPPORT_ASYNC_MOVES
 	  , commandedQueueNumber(0), ownQueueNumber(0), executeAllCommands(true)
 #endif
 {
-	blockStates[0].SetPlainBlock(0);
+	currentBlockState->SetPlainBlock(0);
 }
 
 // Copy constructor. This chains the new one to the previous one.
@@ -55,7 +55,7 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 	  lastCodeFromSbc(prev.lastCodeFromSbc), macroStartedByCode(prev.macroStartedByCode), fileFinished(prev.fileFinished),
 #endif
 	  compatibility(prev.compatibility),
-	  previous(&prev), errorMessage(nullptr),
+	  previous(&prev), currentBlockState(new BlockState(nullptr)), errorMessage(nullptr),
 	  blockNesting((withinSameFile) ? prev.blockNesting : 0),
 	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok)
 #if SUPPORT_ASYNC_MOVES
@@ -64,15 +64,26 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 {
 	if (withinSameFile)
 	{
-		for (size_t i = 0; i <= blockNesting; ++i)
+		// Copy the block states from the previous MachineState to the new one
+		const BlockState *src = prev.currentBlockState;
+		BlockState *dst = currentBlockState;
+		for (;;)
 		{
-			blockStates[i] = prev.blockStates[i];
+			*dst = *src;
+			src = src->GetPrevious();
+			if (src == nullptr)
+			{
+				break;
+			}
+			BlockState *const newDst = new BlockState(nullptr);
+			dst->SetPrevious(newDst);
+			dst = newDst;
 		}
 		macroRestartable = prev.macroRestartable;
 	}
 	else
 	{
-		blockStates[0].SetPlainBlock(0);
+		currentBlockState->SetPlainBlock(0);
 		macroRestartable = false;
 	}
 }
@@ -82,6 +93,12 @@ GCodeMachineState::~GCodeMachineState() noexcept
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	fileState.Close();
 #endif
+	while (currentBlockState != nullptr)
+	{
+		BlockState *const tempBs = currentBlockState;
+		currentBlockState = currentBlockState->GetPrevious();
+		delete tempBs;
+	}
 }
 
 // Return true if all nested macros we are running are restartable
@@ -251,51 +268,34 @@ void GCodeMachineState::SetState(GCodeState newState) noexcept
 	state = newState;
 }
 
-GCodeMachineState::BlockState& GCodeMachineState::CurrentBlockState() noexcept
-{
-	return blockStates[blockNesting];
-}
-
-const GCodeMachineState::BlockState& GCodeMachineState::CurrentBlockState() const noexcept
-{
-	return blockStates[blockNesting];
-}
-
 // Get the number of iterations of the closest enclosing loop in the current file, or -1 if there is on enclosing loop
 int32_t GCodeMachineState::GetIterations() const noexcept
 {
-	uint8_t i = blockNesting;
-	while (true)
+	for (const BlockState *bs = currentBlockState; bs != nullptr; bs = bs->GetPrevious())
 	{
-		if (blockStates[i].GetType() == BlockType::loop)
+		if (bs->GetType() == BlockType::loop)
 		{
-			return blockStates[i].GetIterations();
+			return bs->GetIterations();
 		}
-		if (i == 0)
-		{
-			return -1;
-		}
-		--i;
 	}
+	return -1;
 }
 
 // Create a new block returning true if successful, false if maximum indent level exceeded
-bool GCodeMachineState::CreateBlock(uint16_t indentLevel) noexcept
+void GCodeMachineState::CreateBlock(uint16_t indentLevel) noexcept
 {
-	if (blockNesting + 1 == ARRAY_SIZE(blockStates))
-	{
-		return false;
-	}
-
+	currentBlockState = new BlockState(currentBlockState);
 	++blockNesting;
-	CurrentBlockState().SetPlainBlock(indentLevel);
-	return true;
+	currentBlockState->SetPlainBlock(indentLevel);
 }
 
 void GCodeMachineState::EndBlock() noexcept
 {
 	if (blockNesting != 0)
 	{
+		BlockState *const oldBs = currentBlockState;
+		currentBlockState = currentBlockState->GetPrevious();
+		delete oldBs;
 		--blockNesting;
 		variables.EndScope(blockNesting);
 	}
@@ -303,8 +303,11 @@ void GCodeMachineState::EndBlock() noexcept
 
 void GCodeMachineState::ClearBlocks() noexcept
 {
-	blockNesting = 0;
-	CurrentBlockState().SetPlainBlock();
+	while (blockNesting != 0)
+	{
+		EndBlock();
+	}
+	currentBlockState->SetPlainBlock();
 	variables.Clear();
 }
 

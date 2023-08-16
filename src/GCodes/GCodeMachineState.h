@@ -167,7 +167,12 @@ public:
 	class BlockState
 	{
 	public:
+		DECLARE_FREELIST_NEW_DELETE(GCodeMachineState::BlockState)
+
+		BlockState(BlockState *prev) noexcept : prev(prev) { }
 		BlockType GetType() const noexcept { return blockType; }
+		BlockState *GetPrevious() const noexcept { return prev; }
+		void SetPrevious(BlockState *p) noexcept { prev = p; }
 		uint32_t GetIterations() const noexcept { return iterationsDone; }
 		uint32_t GetLineNumber() const noexcept { return lineNumber; }
 		FilePosition GetFilePosition() const noexcept { return fpos; }
@@ -183,6 +188,7 @@ public:
 		void IncrementIterations() noexcept { ++iterationsDone; }
 
 	private:
+		BlockState *prev;
 		FilePosition fpos;											// the file offset at which the current block started
 		uint32_t lineNumber;										// the line number at which the current block started
 		uint32_t iterationsDone;									// the number of iterations completed of the innermost while-loop
@@ -193,7 +199,7 @@ public:
 	DECLARE_FREELIST_NEW_DELETE(GCodeMachineState)
 
 	GCodeMachineState() noexcept;
-	GCodeMachineState(GCodeMachineState&, bool withinSameFile) noexcept;	// this chains the new one to the previous one
+	GCodeMachineState(GCodeMachineState& prev, bool withinSameFile) noexcept;	// this chains the new one to the previous one
 	GCodeMachineState(const GCodeMachineState&) = delete;			// copying these would be a bad idea
 
 	~GCodeMachineState() noexcept;
@@ -203,8 +209,9 @@ public:
 	inline void AdvanceState() noexcept { state = static_cast<GCodeState>(static_cast<uint8_t>(state) + 1); }
 
 	GCodeMachineState *GetPrevious() const noexcept { return previous; }
+
 	GCodeMachineState *Pop() const noexcept;
-	uint8_t GetBlockNesting() const noexcept { return blockNesting; }
+	uint16_t GetBlockNesting() const noexcept { return blockNesting; }
 
 	void SetMacroRestartable(bool b) noexcept { macroRestartable = b; }
 	bool CanRestartMacro() const noexcept;
@@ -220,7 +227,6 @@ public:
 	// Note, having a bit set in lockedResources doesn't necessarily mean that we own the lock!
 	// It means we acquired the lock at this stack level, and haven't released it at this level. It may have been released at a more nested level, or stolen from us (see GrabResource).
 	ResourceBitmap lockedResources;
-	BlockState blockStates[MaxBlockIndent];
 	uint32_t lineNumber;
 	uint32_t msgBoxSeq;							// the sequence number of the message box that needs to be acknowledged, if waitingForAcknowledgement is true
 	uint32_t
@@ -285,18 +291,19 @@ public:
 	// Called after running config.g and after running resurrect.g
 	void CopyStateFrom(const GCodeMachineState& other) noexcept;
 
-	BlockState& CurrentBlockState() noexcept;
-	const BlockState& CurrentBlockState() const noexcept;
+	BlockState& CurrentBlockState() noexcept { return *currentBlockState; }
+	const BlockState& CurrentBlockState() const noexcept { return *currentBlockState; }
 	int32_t GetIterations() const noexcept;
 
-	bool CreateBlock(uint16_t indentLevel) noexcept;
+	void CreateBlock(uint16_t indentLevel) noexcept;
 	void EndBlock() noexcept;
 	void ClearBlocks() noexcept;
 
 private:
 	GCodeMachineState *previous;
+	BlockState *currentBlockState;
 	GCodeException errorMessage;				// we use a GCodeException to store a possible message and a parameter
-	uint8_t blockNesting;
+	uint16_t blockNesting;
 	GCodeState state;
 	GCodeResult stateMachineResult;				// the worst status (ok, warning or error) that we encountered while running the state machine
 
