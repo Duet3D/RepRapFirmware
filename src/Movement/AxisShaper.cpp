@@ -430,7 +430,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 			if (params.accelDistance > 0.0 && params.decelStartDistance < dda.totalDistance)
 			{
 				// This move has both acceleration and deceleration. Therefore we can reduce the top speed in order to increase the steady speed phase,
-				// which may allow us to apply input shaping.
+				// which may allow us to apply input shaping and also reduces vibration.
 				//TODO
 			}
 
@@ -626,15 +626,9 @@ bool AxisShaper::ImplementAccelShaping(const DDA& dda, PrepParams& params, float
 {
 	if (newAccelDistance <= params.decelStartDistance)
 	{
-		const float speedIncrease = dda.topSpeed - dda.startSpeed;
-		const float unshapedAccelClocks = 2 * (dda.topSpeed * newAccelClocks - newAccelDistance)/speedIncrease;
-		const float unshapedAccelDistance = (dda.startSpeed + dda.topSpeed) * unshapedAccelClocks * 0.5;
-		if (unshapedAccelDistance <= params.decelStartDistance)
-		{
-			params.accelDistance = newAccelDistance;
-			params.accelClocks = newAccelClocks;
-			return true;
-		}
+		params.accelDistance = newAccelDistance;
+		params.accelClocks = newAccelClocks;
+		return true;
 	}
 
 	return false;
@@ -686,7 +680,6 @@ void AxisShaper::TryShapeDecelBoth(const DDA& dda, PrepParams& params) const noe
 		{
 			params.shapingPlan.shapeDecelStart = params.shapingPlan.shapeDecelEnd = true;
 			params.deceleration = newDeceleration;
-			//params.shapingPlan.debugPrint = true;
 		}
 	}
 	else
@@ -705,15 +698,9 @@ bool AxisShaper::ImplementDecelShaping(const DDA& dda, PrepParams& params, float
 {
 	if (params.accelDistance <= newDecelStartDistance)
 	{
-		const float speedDecrease = dda.topSpeed - dda.endSpeed;
-		const float unshapedDecelClocks = 2 * (dda.topSpeed * newDecelClocks - (dda.totalDistance - newDecelStartDistance))/speedDecrease;
-		const float unshapedDecelDistance = (dda.topSpeed + dda.endSpeed) * unshapedDecelClocks * 0.5;
-		if (params.accelDistance + unshapedDecelDistance <= dda.totalDistance)
-		{
-			params.decelStartDistance = newDecelStartDistance;
-			params.decelClocks = newDecelClocks;
-			return true;
-		}
+		params.decelStartDistance = newDecelStartDistance;
+		params.decelClocks = newDecelClocks;
+		return true;
 	}
 
 	return false;
