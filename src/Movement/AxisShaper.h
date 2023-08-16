@@ -28,6 +28,7 @@ NamedEnum(InputShaperType, uint8_t,
 class DDA;
 class PrepParams;
 class MoveSegment;
+struct AccelOrDecelPlan;
 
 #if SUPPORT_REMOTE_COMMANDS
 struct CanMessageSetInputShaping;
@@ -68,6 +69,16 @@ private:
 	float GetExtraAccelEndDistance(float topSpeed, float acceleration) const noexcept;
 	float GetExtraDecelStartDistance(float topSpeed, float deceleration) const noexcept;
 	float GetExtraDecelEndDistance(float endSpeed, float deceleration) const noexcept;
+
+	// New input shaping functions
+	void ProposeShapeAccelEnd(const DDA& dda, const PrepParams& params, AccelOrDecelPlan& proposal) const noexcept;
+	void ProposeShapeAccelBoth(const DDA& dda, const PrepParams& params, AccelOrDecelPlan& proposal) const noexcept;
+	void ProposeShapeDecelStart(const DDA& dda, const PrepParams& params, AccelOrDecelPlan& proposal) const noexcept;
+	void ProposeShapeDecelBoth(const DDA& dda, const PrepParams& params, AccelOrDecelPlan& proposal) const noexcept;
+	void ImplementAccelShaping(const DDA& dda, PrepParams& params, const AccelOrDecelPlan& proposal) const noexcept;
+	void ImplementDecelShaping(const DDA& dda, PrepParams& params, const AccelOrDecelPlan& proposal) const noexcept;
+
+	// Old input shaping functions
 	void TryShapeAccelEnd(const DDA& dda, PrepParams& params) const noexcept;
 	void TryShapeAccelBoth(const DDA& dda, PrepParams& params) const noexcept;
 	void TryShapeDecelStart(const DDA& dda, PrepParams& params) const noexcept;
