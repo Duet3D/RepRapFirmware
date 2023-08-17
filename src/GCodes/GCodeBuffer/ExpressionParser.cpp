@@ -1018,7 +1018,7 @@ void ExpressionParser::ReadArrayElementFromFile(ExpressionValue& rslt, LineReade
 
 		if (err)
 		{
-			ThrowParseException("in read() function: CSV format error at column %u", reader.CharsRead());
+			ThrowParseException("in fileread() function: format error at column %u", reader.CharsRead());
 		}
 	}
 }
