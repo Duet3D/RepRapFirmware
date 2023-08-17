@@ -69,9 +69,9 @@ private:
 	float GetExtraDecelStartDistance(float topSpeed, float deceleration) const noexcept;
 	float GetExtraDecelEndDistance(float endSpeed, float deceleration) const noexcept;
 	void TryShapeAccelEnd(const DDA& dda, PrepParams& params) const noexcept;
-	void TryShapeAccelBoth(DDA& dda, PrepParams& params) const noexcept;
+	void TryShapeAccelBoth(const DDA& dda, PrepParams& params) const noexcept;
 	void TryShapeDecelStart(const DDA& dda, PrepParams& params) const noexcept;
-	void TryShapeDecelBoth(DDA& dda, PrepParams& params) const noexcept;
+	void TryShapeDecelBoth(const DDA& dda, PrepParams& params) const noexcept;
 	bool ImplementAccelShaping(const DDA& dda, PrepParams& params, float newAccelDistance, float newAccelClocks) const noexcept;
 	bool ImplementDecelShaping(const DDA& dda, PrepParams& params, float newDecelStartDistance, float newDecelClocks) const noexcept;
 
