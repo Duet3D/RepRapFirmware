@@ -56,7 +56,8 @@ enum class DataType : uint8_t
 	BoolArray = 11,			// bool[] (uint8_t[])
 	ULong = 12,				// uint64_t
 	DateTime = 13,			// datetime string in ISO-conform formatting
-	Null = 14				// null value
+	Null = 14,				// null value
+	Char = 15				// char value (int32_t)
 };
 
 struct CodeChannelHeader
