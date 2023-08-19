@@ -27,7 +27,8 @@ namespace StackUsage
 	constexpr uint32_t ParseInternal = 80;
 	constexpr uint32_t ParseIdentifierExpression = 288;
 	constexpr uint32_t GetObjectValueUsingTableNumber = 48;
-	constexpr uint32_t ReadArrayFromFile = 472;
+	constexpr uint32_t ReadArrayFromFile = 384;
+	constexpr uint32_t ParseGeneralArray = 360;
 }
 
 // Read a character from the text file.
@@ -80,6 +81,7 @@ void ExpressionParser::ParseExpectKet(ExpressionValue& rslt, bool evaluate, char
 	}
 	else if (CurrentCharacter() == ',' && closingBracket == '}')
 	{
+		CheckStack(StackUsage::ParseGeneralArray);
 		ParseGeneralArray(rslt, evaluate);
 	}
 	else
@@ -776,11 +778,15 @@ void ExpressionParser::ParseDriverIdArray(DriverId arr[], size_t& length) THROWS
 void ExpressionParser::ParseGeneralArray(ExpressionValue& firstElementAndResult, bool evaluate) THROWS(GCodeException)
 {
 	// Parse the array elements into a temporary array
-	ExpressionValue elements[10];
+	ExpressionValue elements[MaxLiteralArrayElements];
 	elements[0] = std::move(firstElementAndResult);
 	size_t index = 1;
 	do
 	{
+		if (index == MaxLiteralArrayElements)
+		{
+			ThrowParseException("too many array elements");
+		}
 		AdvancePointer();					// skip the comma
 		if (SkipWhiteSpace() == '}')
 		{
@@ -788,7 +794,7 @@ void ExpressionParser::ParseGeneralArray(ExpressionValue& firstElementAndResult,
 		}
 		ParseInternal(elements[index], evaluate, 0);
 		++index;
-	} while (index < ARRAY_SIZE(elements) && CurrentCharacter() == ',');
+	} while (CurrentCharacter() == ',');
 
 	if (CurrentCharacter() != '}')
 	{

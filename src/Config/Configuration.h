@@ -251,7 +251,8 @@ constexpr size_t MAX_FILES = 20;						// Must be large enough to handle the max 
 constexpr size_t MAX_FILES = 10;						// Must be large enough to handle the max number of concurrent web requests + file being printed + macros being executed + log file
 #endif
 
-constexpr size_t MaxFileReadArrayElements = 50;			// Maximum number of array elements we are allowed to read in a read() function
+constexpr size_t MaxLiteralArrayElements = 40;			// Maximum number of array elements we are allowed in a literal array
+constexpr size_t MaxFileReadArrayElements = 40;			// Maximum number of array elements we are allowed to read in a read() function
 
 constexpr size_t FILE_BUFFER_SIZE = 128;
 
