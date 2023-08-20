@@ -6,6 +6,7 @@
  */
 
 #include "DDA.h"
+#include "MoveDebugFlags.h"
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include "Move.h"
@@ -728,7 +729,9 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 				}
 
 				// Check for sensible values, print them if they look dubious
-				if (reprap.Debug(Module::Dda) && (reprap.Debug(Module::Move) || pdm->totalSteps > 1000000))
+				if (   reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves)
+					|| (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
+				   )
 				{
 					DebugPrintAll("remu_err1");
 				}
@@ -749,7 +752,9 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 		return false;
 	}
 
-	if (reprap.Debug(Module::Move) && (reprap.Debug(Module::Dda) || params.shapingPlan.debugPrint))		// show the prepared DDA if debug enabled for both modules
+	if (   reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves)
+		|| params.shapingPlan.debugPrint						// show the prepared DDA if debug enabled for both modules
+	   )
 	{
 		DebugPrintAll("remu");
 	}
@@ -822,7 +827,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 					}
 
 					// Check for sensible values, print them if they look dubious
-					if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
+					if (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
 					{
 						DebugPrintAll("rems_err1");
 					}
@@ -860,7 +865,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 					}
 
 					// Check for sensible values, print them if they look dubious
-					if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
+					if (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
 					{
 						DebugPrintAll("rems_err2");
 					}
@@ -882,7 +887,9 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 		return false;
 	}
 
-	if (reprap.Debug(Module::Move) && (reprap.Debug(Module::Dda) || params.shapingPlan.debugPrint))		// show the prepared DDA if debug enabled for both modules
+	if (   reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves)
+		|| params.shapingPlan.debugPrint
+	   )
 	{
 		DebugPrintAll("rems");
 	}
@@ -1048,7 +1055,7 @@ pre(state == provisional)
 				if (laDDA->beforePrepare.targetNextSpeed < laDDA->endSpeed * 0.99)
 				{
 					ring.RecordLookaheadError();
-					if (reprap.Debug(Module::Move))
+					if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
 					{
 						debugPrintf("DDA.cpp(%d) tn=%f ", __LINE__, (double)laDDA->beforePrepare.targetNextSpeed);
 						laDDA->DebugPrint("la");
@@ -1181,7 +1188,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 				{
 					// The acceleration increase is greater than we expect from rounding error, so record an error
 					ring.RecordLookaheadError();
-					if (reprap.Debug(Module::Move))
+					if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
 					{
 						debugPrintf("DDA.cpp(%d) na=%f", __LINE__, (double)newAcceleration);
 						DebugPrint("rm");
@@ -1199,7 +1206,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 				{
 					// The deceleration increase is greater than we expect from rounding error, so record an error
 					ring.RecordLookaheadError();
-					if (reprap.Debug(Module::Move))
+					if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Lookahead))
 					{
 						debugPrintf("DDA.cpp(%d) nd=%f", __LINE__, (double)newDeceleration);
 						DebugPrint("rm");
@@ -1416,7 +1423,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 							if (pdm->PrepareCartesianAxis(*this, params))
 							{
 								// Check for sensible values, print them if they look dubious
-								if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
+								if (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
 								{
 									DebugPrintAll("pr_err1");
 								}
@@ -1450,7 +1457,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 					if (pdm->PrepareDeltaAxis(*this, params))
 					{
 						// Check for sensible values, print them if they look dubious
-						if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
+						if (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
 						{
 							DebugPrintAll("pr_err2");
 						}
@@ -1515,7 +1522,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 						if (pdm->PrepareCartesianAxis(*this, params))
 						{
 							// Check for sensible values, print them if they look dubious
-							if (reprap.Debug(Module::Dda) && pdm->totalSteps > 1000000)
+							if (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
 							{
 								DebugPrintAll("pr_err3");
 							}
@@ -1641,7 +1648,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 
 		afterPrepare.averageExtrusionSpeed = (extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded;
 
-		if (reprap.Debug(Module::Move) && (reprap.Debug(Module::Dda) || params.shapingPlan.debugPrint))		// show the prepared DDA if debug enabled for both modules
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves) || params.shapingPlan.debugPrint)		// show the prepared DDA if debug enabled for both modules
 		{
 			DebugPrintAll("pr");
 		}

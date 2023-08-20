@@ -12,6 +12,7 @@
 #include "StepTimer.h"
 #include "DDA.h"
 #include "MoveSegment.h"
+#include "MoveDebugFlags.h"
 
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
@@ -285,7 +286,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			{
 				reply.catf(" %.2f", (double)(durations[i] * StepClocksToMillis));
 			}
-			if (reprap.Debug(Module::Move))
+			if (reprap.GetDebugFlags(Module::InputShaping).IsBitSet(InputShapingDebugFlags::All))
 			{
 				reply.catf(" odpa=%.4e odvpa=%.4e ovc=", (double)overlappedDistancePerA, (double)overlappedDeltaVPerA);
 				for (unsigned int i = 0; i < 2 * numExtraImpulses; ++i)
@@ -525,6 +526,11 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 					break;
 				}
 
+				if (triesDone != 0 && reprap.Debug(Module::InputShaping))
+				{
+					debugPrintf("Last IS try failed, done %u\n", triesDone);
+				}
+
 				float newTopSpeed;
 				switch (triesDone)
 				{
@@ -562,10 +568,13 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 					&& newTopSpeed >= dda.topSpeed * 0.5
 				   )
 				{
-					debugPrintf("IS reducing top speed: try %u startv=%.3e endv=%.3e oldtop=%.3e newtop=%.3e acc=%.3e dec=%.3e dist=%.3f oldExtraDist=%.3g\n",
-									triesDone,
-									(double)dda.startSpeed, (double)dda.endSpeed, (double)dda.topSpeed, (double)newTopSpeed, (double)dda.acceleration, (double)dda.deceleration,
-									(double)dda.totalDistance, (double)extraDistanceNeeded);
+					if (reprap.GetDebugFlags(Module::InputShaping).IsAnyBitSet(InputShapingDebugFlags::Retries, InputShapingDebugFlags::All))
+					{
+						debugPrintf("IS reducing top speed: try %u startv=%.3e endv=%.3e oldtop=%.3e newtop=%.3e acc=%.3e dec=%.3e dist=%.3f oldExtraDist=%.3g\n",
+										triesDone,
+										(double)dda.startSpeed, (double)dda.endSpeed, (double)dda.topSpeed, (double)newTopSpeed, (double)dda.acceleration, (double)dda.deceleration,
+										(double)dda.totalDistance, (double)extraDistanceNeeded);
+					}
 					dda.topSpeed = newTopSpeed;
 					if (newTopSpeed > dda.startSpeed)
 					{
@@ -597,17 +606,20 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 					// Consider applying just one of the plans
 					//TODO
 					++movesTooShortToShape;
-					debugPrintf("IS failed: tries %u startv=%.3e endv=%.3e topv=%.3e newtop=%.3e acc=%.3e dec=%.3g dist=%.3f\n",
-									triesDone,
-									(double)dda.startSpeed, (double)dda.endSpeed, (double)dda.topSpeed, (double)newTopSpeed, (double)dda.acceleration, (double)dda.deceleration,
-									(double)dda.totalDistance);
+					if (reprap.GetDebugFlags(Module::InputShaping).IsAnyBitSet(InputShapingDebugFlags::Retries, InputShapingDebugFlags::All))
+					{
+						debugPrintf("IS giving up: tries %u startv=%.3e endv=%.3e topv=%.3e newtop=%.3e acc=%.3e dec=%.3g dist=%.3f\n",
+										triesDone,
+										(double)dda.startSpeed, (double)dda.endSpeed, (double)dda.topSpeed, (double)newTopSpeed, (double)dda.acceleration, (double)dda.deceleration,
+										(double)dda.totalDistance);
+					}
 					break;
 				}
 			}
 		}
 	}
 
-	if (reprap.Debug(Module::Move) && reprap.Debug(Module::Dda))
+	if (reprap.GetDebugFlags(Module::InputShaping).IsBitSet(InputShapingDebugFlags::All))
 	{
 		debugPrintf("plan=%u ad=%.4e dd=%.4e\n", (unsigned int)params.shapingPlan.condensedPlan, (double)params.accelDistance, (double)(params.totalDistance - params.decelStartDistance));
 	}
@@ -694,7 +706,7 @@ void AxisShaper::GetRemoteSegments(DDA& dda, PrepParams& params) const noexcept
 	const float decelDistance = decelDistanceExTopSpeed + dda.topSpeed * params.decelClocks;
 	params.decelStartDistance =  1.0 - decelDistance;
 
-	if (reprap.Debug(Module::Move) && reprap.Debug(Module::Dda))
+	if (reprap.GetDebugFlags(Module::InputShaping).IsBitSet(InputShapingDebugFlags::All))
 	{
 		debugPrintf("plan=%u ad=%.4e dd=%.4e\n", (unsigned int)params.shapingPlan.condensedPlan, (double)params.accelDistance, (double)decelDistance);
 	}
@@ -978,7 +990,7 @@ MoveSegment *AxisShaper::GetAccelerationSegments(const DDA& dda, PrepParams& par
 			const float segTime = params.accelClocks - accumulatedSegTime;
 			endAccelSegs->SetNonLinear(endDistance - startDistance, segTime, b, c, params.acceleration);
 		}
-		else if (reprap.Debug(Module::Move))
+		else if (reprap.Debug(Module::InputShaping))
 		{
 			debugPrintf("Missing steady accel segment\n");
 			params.shapingPlan.debugPrint = true;
@@ -1087,7 +1099,7 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, PrepParams& par
 			const float segTime = params.decelClocks - accumulatedSegTime;
 			endDecelSegs->SetNonLinear(endDistance - startDistance, segTime, b, c, -params.deceleration);
 		}
-		else if (reprap.Debug(Module::Move))
+		else if (reprap.Debug(Module::InputShaping))
 		{
 			debugPrintf("Missing steady decel segment\n");
 			params.shapingPlan.debugPrint = true;

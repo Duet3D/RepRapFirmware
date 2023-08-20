@@ -294,7 +294,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 		return true;
 	}
 
-	if (reprap.Debug(Module::Move))
+	if (reprap.Debug(Module::Kinematics))
 	{
 		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());
@@ -349,7 +349,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 			}
 		}
 
-		if (reprap.Debug(Module::Move))
+		if (reprap.Debug(Module::Kinematics))
 		{
 			PrintMatrix("Derivative matrix", derivativeMatrix, numPoints, numFactors);
 		}
@@ -375,7 +375,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 			normalMatrix(i, numFactors) = temp;
 		}
 
-		if (reprap.Debug(Module::Move))
+		if (reprap.Debug(Module::Kinematics))
 		{
 			PrintMatrix("Normal matrix", normalMatrix, numFactors, numFactors + 1);
 		}
@@ -392,7 +392,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 			solution[i] = normalMatrix(i, numFactors);
 		}
 
-		if (reprap.Debug(Module::Move))
+		if (reprap.Debug(Module::Kinematics))
 		{
 			PrintMatrix("Solved matrix", normalMatrix, numFactors, numFactors + 1);
 			PrintVector("Solution", solution, numFactors);
@@ -445,7 +445,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 
 			finalDeviation.Set(finalSumOfSquares, finalSum, numPoints);
 
-			if (reprap.Debug(Module::Move))
+			if (reprap.Debug(Module::Kinematics))
 			{
 				PrintVector("Expected probe error", expectedResiduals, numPoints);
 			}
@@ -462,7 +462,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 
 	// Print out the calculation time
 	//debugPrintf("Time taken %dms\n", (reprap.GetPlatform()->GetInterruptClocks() - startTime) * 1000 / DDA::stepClockRate);
-	if (reprap.Debug(Module::Move))
+	if (reprap.Debug(Module::Kinematics))
 	{
 		String<StringLength256> scratchString;
 		PrintParameters(scratchString.GetRef());
@@ -781,7 +781,7 @@ void RotaryDeltaKinematics::ForwardTransform(float Ha, float Hb, float Hc, float
 	machinePos[Y_AXIS] = -(R * z + T)/P;
 	machinePos[Z_AXIS] = z;
 
-	if (reprap.Debug(Module::Move))
+	if (reprap.Debug(Module::Kinematics))
 	{
 		debugPrintf("Trilaterated (%.2f, %.2f, %.2f)" DEGREE_SYMBOL " to X=%.2f Y=%.2f Z=%.2f\n",
 			(double)Ha, (double)Hb, (double)Hc,

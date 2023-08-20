@@ -8,6 +8,7 @@
 #include "DDARing.h"
 #include <Platform/RepRap.h>
 #include "Move.h"
+#include "MoveDebugFlags.h"
 #include "RawMove.h"
 #include <Platform/Tasks.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
@@ -176,7 +177,7 @@ void DDARing::RecycleDDAs() noexcept
 		// Check for step errors and record/print them if we have any, before we lose the DMs
 		if (checkPointer->HasStepError())
 		{
-			if (reprap.Debug(Module::Move))
+			if (reprap.GetDebugFlags(Module::Move).IsAnyBitSet(MoveDebugFlags::PrintBadMoves, MoveDebugFlags::PrintAllMoves))
 			{
 				checkPointer->DebugPrintAll("rd");
 			}
@@ -271,7 +272,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 	if (simulationMode != SimulationMode::off && cdda != nullptr)
 	{
 		simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
-		if (simulationMode == SimulationMode::debug && reprap.Debug(Module::Dda))
+		if (simulationMode == SimulationMode::debug && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::SimulateSteppingDrivers))
 		{
 			do
 			{

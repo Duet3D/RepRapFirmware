@@ -25,6 +25,14 @@ NamedEnum(InputShaperType, uint8_t,
 	zvddd,
 );
 
+namespace InputShapingDebugFlags
+{
+	// Bit numbers in the input shaping debug bitmap
+	constexpr unsigned int Errors = 0;
+	constexpr unsigned int Retries = 1;
+	constexpr unsigned int All = 2;
+}
+
 class DDA;
 class PrepParams;
 class MoveSegment;
