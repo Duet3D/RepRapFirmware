@@ -80,13 +80,10 @@ private:
 	void ImplementAccelShaping(const DDA& dda, PrepParams& params, const AccelOrDecelPlan& proposal) const noexcept;
 	void ImplementDecelShaping(const DDA& dda, PrepParams& params, const AccelOrDecelPlan& proposal) const noexcept;
 
-	// Old input shaping functions
-	void TryShapeAccelEnd(const DDA& dda, PrepParams& params) const noexcept;
-	void TryShapeAccelBoth(const DDA& dda, PrepParams& params) const noexcept;
-	void TryShapeDecelStart(const DDA& dda, PrepParams& params) const noexcept;
-	void TryShapeDecelBoth(const DDA& dda, PrepParams& params) const noexcept;
-	bool ImplementAccelShaping(const DDA& dda, PrepParams& params, float newAccelDistance, float newAccelClocks) const noexcept;
-	bool ImplementDecelShaping(const DDA& dda, PrepParams& params, float newDecelStartDistance, float newDecelClocks) const noexcept;
+	bool TryReduceTopSpeedOverlapBoth(const DDA& dda, const PrepParams& params, float& newTopSpeed) const noexcept;
+	bool TryReduceTopSpeedOverlapAccel(const DDA& dda, const PrepParams& params, float& newTopSpeed) const noexcept;
+	bool TryReduceTopSpeedOverlapDecel(const DDA& dda, const PrepParams& params, float& newTopSpeed) const noexcept;
+	bool TryReduceTopSpeedOverlapNeither(const DDA& dda, const PrepParams& params, float& newTopSpeed) const noexcept;
 
 	static constexpr unsigned int MaxExtraImpulses = 4;
 	static constexpr float DefaultFrequency = 40.0;
@@ -106,7 +103,7 @@ private:
 	float durations[MaxExtraImpulses];					// the duration in step clocks of each impulse
 
 	// Secondary parameters, calculated from the primary ones
-	float totalShapingClocks;							// the total input shaping time in step clocks
+	float totalShapingClocks;							// the total time in step clocks for shaping the start or end of an acceleration or deceleration
 	float minimumShapingStartOriginalClocks;			// the minimum acceleration/deceleration time for which we can shape the start, without changing the acceleration/deceleration
 	float minimumShapingEndOriginalClocks;				// the minimum acceleration/deceleration time for which we can shape the start, without changing the acceleration/deceleration
 	float minimumNonOverlappedOriginalClocks;			// the minimum original acceleration or deceleration time using non-overlapped start and end shaping
@@ -119,10 +116,13 @@ private:
 	float overlappedShapingClocks;						// the acceleration or deceleration duration when we use overlapping, in step clocks
 	float overlappedDeltaVPerA;							// the effective acceleration time (velocity change per unit acceleration) when we use overlapping, in step clocks
 	float overlappedDistancePerA;						// the distance needed by an overlapped acceleration or deceleration, less the initial velocity contribution
+	float overlappedDistancePerDv;						// the distance needed by an overlapped acceleration or deceleration per unit speed change, less the initial velocity contribution
 
 	uint32_t movesShapedFirstTry = 0;
 	uint32_t movesShapedOnRetry = 0;
 	uint32_t movesTooShortToShape = 0;
+	uint32_t movesWrongShapeToShape = 0;
+	uint32_t movesWrongContextToShape = 0;
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */
