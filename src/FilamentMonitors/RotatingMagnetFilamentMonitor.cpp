@@ -167,11 +167,11 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const Stri
 			reply.printf("Duet3D rotating magnet filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
 			GetPort().AppendPinName(reply);
 			reply.catf(", %s, sensitivity %.2fmm/rev, allow %ld%% to %ld%%, check %s moves every %.1fmm, ",
-						(GetEnableMode() != 0) ? "enabled" : "disabled",
+						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when printing from SD card" : "disabled",
 						(double)mmPerRev,
 						ConvertToPercent(minMovementAllowed),
 						ConvertToPercent(maxMovementAllowed),
-						(checkNonPrintingMoves) ? "all" : "printing",
+						(checkNonPrintingMoves) ? "all extruding" : "printing",
 						(double)minimumExtrusionCheckLength);
 
 			if (!dataReceived)

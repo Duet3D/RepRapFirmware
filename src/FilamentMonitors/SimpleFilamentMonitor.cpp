@@ -35,7 +35,7 @@ GCodeResult SimpleFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& r
 			reply.copy("Simple filament sensor on pin ");
 			GetPort().AppendPinName(reply);
 			reply.catf(", %s, output %s when no filament, filament present: %s",
-						(GetEnableMode() != 0) ? "enabled" : "disabled",
+						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when printing from SD card" : "disabled",
 						(highWhenNoFilament) ? "high" : "low",
 						(filamentPresent) ? "yes" : "no");
 		}
