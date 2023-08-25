@@ -226,6 +226,9 @@ ArcIntervals::ArcIntervals(float startAngle, float endAngle) noexcept
 // Return true if there are no intervals left.
 bool ArcIntervals::AddRangeLimit(float startAngle, float endAngle) noexcept
 {
+#if ARC_DEBUG
+	debugPrintf("Adding range limit %.3f to %.3f\n", (double)startAngle, (double)endAngle);
+#endif
 	const IntervalSet& currentSet = intervals[currentSetNumber];
 	currentSetNumber ^= 1;
 	IntervalSet& nextSet = intervals[currentSetNumber];
@@ -242,7 +245,7 @@ bool ArcIntervals::AddRangeLimit(float startAngle, float endAngle) noexcept
 				if (nextLowAngle < nextHighAngle)
 				{
 					// Copy this interval across with its new bounds
-#if 0	//DEBUG
+#if ARC_DEBUG
 {
 	debugPrintf("Current set:");
 	for (size_t k = 0; k < numIntervals; ++k) { debugPrintf(" [%.2f:%.2f]", (double)currentSet.lowAngle[k], (double)currentSet.highAngle[k]); }
@@ -264,7 +267,7 @@ bool ArcIntervals::AddRangeLimit(float startAngle, float endAngle) noexcept
 				if (nextLowAngle < nextHighAngle)
 				{
 					// Copy this interval across with its new bounds
-#if 0	//DEBUG
+#if ARC_DEBUG
 {
 	debugPrintf("Current set:");
 	for (size_t k = 0; k < numIntervals; ++k) { debugPrintf(" [%.2f:%.2f]", (double)currentSet.lowAngle[k], (double)currentSet.highAngle[k]); }
@@ -291,7 +294,7 @@ bool ArcIntervals::AddRangeLimit(float startAngle, float endAngle) noexcept
 			const float nextHighAngle = min<float>(currentSet.highAngle[i], endAngle);
 			if (nextLowAngle < nextHighAngle)
 			{
-#if 0	//DEBUG
+#if ARC_DEBUG
 {
 	debugPrintf("Current set:");
 	for (size_t k = 0; k < numIntervals; ++k) { debugPrintf(" [%.2f:%.2f]", (double)currentSet.lowAngle[k], (double)currentSet.highAngle[k]); }
@@ -367,15 +370,19 @@ bool KeepoutZone::DoesArcIntrude(const float startCoords[MaxAxes], const float e
 		return false;
 	}
 
+#if ARC_DEBUG
+	debugPrintf("Checking arc: centre X%.3f Y%.3f R%.3f start %.3f end %.3f clockwise %u\n",
+					(double)arcCentres[0], (double)arcCentres[1], (double)arcRadius, (double)startAngle, (double)endAngle, clockwise);
+#endif
+
 	// From now on, work on angles not on move proportion. There may be up to 4 angle intervals in which the circle falls inside the rectangle.
 	// Convert the 'p' interval to one or two angle intervals. We handle the clockwise/anticlockwise distinction here.
-	float tempLowAngle, tempHighAngle;
 	if (clockwise)
 	{
 		// Angle is decreasing from startAngle to endAngle
 		if (wholeCircle)
 		{
-			// If we are describing a whole circle then we might be passed the same angle twice or they might already differ by 2*pi
+			// If we are describing a whole circle then we might have equal start and end angles or they might already differ by 2*pi
 			startAngle = endAngle + TwoPi;
 		}
 		else if (endAngle > startAngle)
@@ -383,15 +390,13 @@ bool KeepoutZone::DoesArcIntrude(const float startCoords[MaxAxes], const float e
 			// The arc does cross the boundary between negative and positive angles
 			startAngle += TwoPi;				// make startAngle > endAngle
 		}
-		tempHighAngle = pLow * endAngle + (1.0 - pLow) * startAngle;
-		tempLowAngle = pHigh * endAngle + (1.0 - pHigh) * startAngle;
 	}
 	else
 	{
 		// Angle is increasing from startAngle to endAngle
 		if (wholeCircle)
 		{
-			// If we are describing a whole circle then we might be passed the same angle twice or they might already differ by 2*pi
+			// If we are describing a whole circle then we might have equal start and end angles or they might already differ by 2*pi
 			endAngle = startAngle + TwoPi;
 		}
 		else if (endAngle < startAngle)
@@ -399,10 +404,9 @@ bool KeepoutZone::DoesArcIntrude(const float startCoords[MaxAxes], const float e
 			// The arc does cross the boundary between negative and positive angles
 			endAngle += TwoPi;				// make endAngle > startAngle
 		}
-		tempLowAngle = pLow * endAngle + (1.0 - pLow) * startAngle;
-		tempHighAngle = pHigh * endAngle + (1.0 - pHigh) * startAngle;
 	}
-
+	const float tempHighAngle = pLow * endAngle + (1.0 - pLow) * startAngle;
+	const float tempLowAngle = pHigh * endAngle + (1.0 - pHigh) * startAngle;
 
 #if ARC_DEBUG
 	debugPrintf("pLow=%.3f pHigh=%.3f whole=%u tempLow=%.2f tempHigh=%.2F\n", (double)pLow, (double)pHigh, wholeCircle, (double)tempLowAngle, (double)tempHighAngle);
@@ -478,9 +482,9 @@ bool KeepoutZone::DoesArcIntrude(const float startCoords[MaxAxes], const float e
 										if (sin2 < 1.0 && sin2 > -1.0)
 										{
 											const float aHigh = asinf(sin2);
-											// The circle crosses the upper limit at angles between -pi and -aHigh and between aHigh and pi
+											// The circle crosses the upper limit at angles between aHigh and (pi - aHigh)
 											float aHigh2 = ((aHigh < 0.0) ? -Pi : Pi) - aHigh;
-											if (angleIntervals.AddRangeLimit(aHigh2, aHigh))
+											if (angleIntervals.AddRangeLimit(aHigh, aHigh2))
 											{
 												return false;
 											}
