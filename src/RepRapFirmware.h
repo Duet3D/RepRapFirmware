@@ -263,7 +263,7 @@ struct DriverId
 // Module numbers and names, used for diagnostics and debug
 // All of these including noModule must be <= 31 because we 'or' the module number into the software reset code
 NamedEnum(Module, uint8_t,
-			Platform, Network, Webserver, Gcodes, Move, Heat, Dda, unused1 /* was Roland */,
+			Platform, Network, Webserver, Gcodes, Move, Heat, Kinematics /* was DDA */, InputShaping /* was Roland */,
 			unused2 /* was Scanner*/, PrintMonitor, Storage, PortControl, DuetExpansion, FilamentSensors, WiFi, Display,
 			SbcInterface,
 			CAN,					// uppercase to avoid eCv clash with type Can in Microchip driver file

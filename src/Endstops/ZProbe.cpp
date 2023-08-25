@@ -13,6 +13,7 @@
 #include <Storage/FileStore.h>
 #include <Heating/Heat.h>
 #include <Math/Matrix.h>
+#include <Movement/MoveDebugFlags.h>
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -594,7 +595,7 @@ void ZProbe::CalibrateScanningProbe(const int32_t calibrationReadings[], size_t 
 		sumOfErrorSquares += fsquare(predictedHeightDiff - actualHeightDiff);
 	}
 
-	if (reprap.Debug(Module::Move))
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::ZProbing))
 	{
 		debugPrintf("NumReadings: %u\nHeight interval: %.5f\nScanned data:", numCalibrationReadingsTaken, (double)heightChangePerPoint);
 		for (size_t i = 0; i < numCalibrationReadingsTaken; ++i)

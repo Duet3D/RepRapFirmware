@@ -34,6 +34,7 @@
  */
 
 #include "Move.h"
+#include "MoveDebugFlags.h"
 #include "StepTimer.h"
 #include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
@@ -575,6 +576,7 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	scratchString.Clear();
 	StepTimer::Diagnostics(scratchString.GetRef());
 	p.MessageF(mtype, "%s\n", scratchString.c_str());
+	axisShaper.Diagnostics(mtype);
 
 	for (size_t i = 0; i < ARRAY_SIZE(rings); ++i)
 	{
@@ -602,7 +604,7 @@ int32_t Move::MotorMovementToSteps(size_t drive, float coord) noexcept
 void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
 	kinematics->MotorStepsToCartesian(motorPos, reprap.GetPlatform().GetDriveStepsPerUnit(), numVisibleAxes, numTotalAxes, machinePos);
-	if (reprap.Debug(Module::Move) && !inInterrupt())
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintTransforms) && !inInterrupt())
 	{
 		debugPrintf("Forward transformed %" PRIi32 " %" PRIi32 " %" PRIi32 " to %.2f %.2f %.2f\n",
 			motorPos[0], motorPos[1], motorPos[2], (double)machinePos[0], (double)machinePos[1], (double)machinePos[2]);
@@ -616,7 +618,7 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 {
 	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(),
 														reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), motorPos, isCoordinated);
-	if (reprap.Debug(Module::Move) && !inInterrupt())
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintTransforms) && !inInterrupt())
 	{
 		if (!b)
 		{
@@ -627,7 +629,7 @@ bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorP
 			}
 			debugPrintf("\n");
 		}
-		else if (reprap.Debug(Module::Dda))
+		else
 		{
 			debugPrintf("Transformed");
 			for (size_t i = 0; i < reprap.GetGCodes().GetVisibleAxes(); ++i)
@@ -917,7 +919,7 @@ bool Move::FinishedBedProbing(MovementSystemNumber msNumber, int sParam, const S
 	}
 	else
 	{
-		if (reprap.Debug(Module::Move))
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::ZProbing))
 		{
 			probePoints.DebugPrint(numPoints);
 		}

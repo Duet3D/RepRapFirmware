@@ -78,8 +78,8 @@ constexpr size_t NumDirectDrivers = 7;				// The maximum number of drives suppor
 constexpr size_t MaxSmartDrivers = NumDirectDrivers;	// The maximum number of smart drivers
 
 #if SUPPORT_CAN_EXPANSION
-constexpr size_t MaxCanDrivers = 7;					// enough to support another Mini5+ as an expansion board
-constexpr unsigned int MaxCanBoards = 4;
+constexpr size_t MaxCanDrivers = 8;					// enough to support another Mini5+ as an expansion board plus a tool board, or eight closed-loop motors
+constexpr unsigned int MaxCanBoards = 8;			// enough to support eight closed loop motors
 #endif
 
 constexpr size_t MaxPortsPerHeater = 2;

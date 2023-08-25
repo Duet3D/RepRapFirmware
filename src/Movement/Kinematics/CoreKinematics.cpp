@@ -151,7 +151,7 @@ void CoreKinematics::Recalc() noexcept
 		}
 	}
 
-	if (reprap.Debug(Module::Move))
+	if (reprap.Debug(Module::Kinematics))
 	{
 		PrintMatrix("Inverse", inverseMatrix);
 		PrintMatrix("Forward", forwardMatrix);

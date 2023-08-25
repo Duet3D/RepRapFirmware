@@ -25,9 +25,18 @@ NamedEnum(InputShaperType, uint8_t,
 	zvddd,
 );
 
+namespace InputShapingDebugFlags
+{
+	// Bit numbers in the input shaping debug bitmap
+	constexpr unsigned int Errors = 0;
+	constexpr unsigned int Retries = 1;
+	constexpr unsigned int All = 2;
+}
+
 class DDA;
 class PrepParams;
 class MoveSegment;
+struct AccelOrDecelPlan;
 
 #if SUPPORT_REMOTE_COMMANDS
 struct CanMessageSetInputShaping;
@@ -47,14 +56,16 @@ public:
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept;
 
 	// Calculate the shaped segments for a move
-	void GetRemoteSegments(DDA& dda, PrepParams& paramsg) const noexcept;
+	void GetRemoteSegments(DDA& dda, PrepParams& params) const noexcept;
 #endif
 
 	// Plan input shaping for an individual move
-	void PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) const noexcept;
+	void PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) noexcept;
 
 	// Calculate the move segments when input shaping is not used
 	static MoveSegment *GetUnshapedSegments(DDA& dda, const PrepParams& params) noexcept;
+
+	void Diagnostics(MessageType mtype) noexcept;
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
@@ -68,12 +79,19 @@ private:
 	float GetExtraAccelEndDistance(float topSpeed, float acceleration) const noexcept;
 	float GetExtraDecelStartDistance(float topSpeed, float deceleration) const noexcept;
 	float GetExtraDecelEndDistance(float endSpeed, float deceleration) const noexcept;
-	void TryShapeAccelEnd(const DDA& dda, PrepParams& params) const noexcept;
-	void TryShapeAccelBoth(const DDA& dda, PrepParams& params) const noexcept;
-	void TryShapeDecelStart(const DDA& dda, PrepParams& params) const noexcept;
-	void TryShapeDecelBoth(const DDA& dda, PrepParams& params) const noexcept;
-	bool ImplementAccelShaping(const DDA& dda, PrepParams& params, float newAccelDistance, float newAccelClocks) const noexcept;
-	bool ImplementDecelShaping(const DDA& dda, PrepParams& params, float newDecelStartDistance, float newDecelClocks) const noexcept;
+
+	// New input shaping functions
+	void ProposeShapeAccelEnd(const DDA& dda, const PrepParams& params, AccelOrDecelPlan& proposal) const noexcept;
+	void ProposeShapeAccelBoth(const DDA& dda, const PrepParams& params, AccelOrDecelPlan& proposal) const noexcept;
+	void ProposeShapeDecelStart(const DDA& dda, const PrepParams& params, AccelOrDecelPlan& proposal) const noexcept;
+	void ProposeShapeDecelBoth(const DDA& dda, const PrepParams& params, AccelOrDecelPlan& proposal) const noexcept;
+	void ImplementAccelShaping(const DDA& dda, PrepParams& params, const AccelOrDecelPlan& proposal) const noexcept;
+	void ImplementDecelShaping(const DDA& dda, PrepParams& params, const AccelOrDecelPlan& proposal) const noexcept;
+
+	bool TryReduceTopSpeedFullyShapeBoth(const DDA& dda, const PrepParams& params, float& newTopSpeed, InputShaperPlan& plan) const noexcept;
+	bool TryReduceTopSpeedFullyShapeAccel(const DDA& dda, const PrepParams& params, float& newTopSpeed, InputShaperPlan& plan) const noexcept;
+	bool TryReduceTopSpeedFullyShapeDecel(const DDA& dda, const PrepParams& params, float& newTopSpeed, InputShaperPlan& plan) const noexcept;
+	bool TryReduceTopSpeedFullyShapeNeither(const DDA& dda, const PrepParams& params, float& newTopSpeed, InputShaperPlan& plan) const noexcept;
 
 	static constexpr unsigned int MaxExtraImpulses = 4;
 	static constexpr float DefaultFrequency = 40.0;
@@ -93,7 +111,7 @@ private:
 	float durations[MaxExtraImpulses];					// the duration in step clocks of each impulse
 
 	// Secondary parameters, calculated from the primary ones
-	float totalShapingClocks;							// the total input shaping time in step clocks
+	float totalShapingClocks;							// the total time in step clocks for shaping the start or end of an acceleration or deceleration
 	float minimumShapingStartOriginalClocks;			// the minimum acceleration/deceleration time for which we can shape the start, without changing the acceleration/deceleration
 	float minimumShapingEndOriginalClocks;				// the minimum acceleration/deceleration time for which we can shape the start, without changing the acceleration/deceleration
 	float minimumNonOverlappedOriginalClocks;			// the minimum original acceleration or deceleration time using non-overlapped start and end shaping
@@ -106,6 +124,13 @@ private:
 	float overlappedShapingClocks;						// the acceleration or deceleration duration when we use overlapping, in step clocks
 	float overlappedDeltaVPerA;							// the effective acceleration time (velocity change per unit acceleration) when we use overlapping, in step clocks
 	float overlappedDistancePerA;						// the distance needed by an overlapped acceleration or deceleration, less the initial velocity contribution
+	float overlappedDistancePerDv;						// the distance needed by an overlapped acceleration or deceleration per unit speed change, less the initial velocity contribution
+
+	uint32_t movesShapedFirstTry = 0;
+	uint32_t movesShapedOnRetry = 0;
+	uint32_t movesTooShortToShape = 0;
+	uint32_t movesWrongShapeToShape = 0;
+	uint32_t movesCouldPossiblyShape = 0;
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */

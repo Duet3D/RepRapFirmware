@@ -743,6 +743,9 @@ void BinaryParser::WriteParameters(const StringRef& s, bool quoteStrings) const 
 			const CodeParameter *param = reinterpret_cast<const CodeParameter*>(parameterStart + i * sizeof(CodeParameter));
 			switch (param->type)
 			{
+			case DataType::Char:
+				s.catf("%c%c", param->letter, (int)param->intValue);
+				break;
 			case DataType::Int:
 				s.catf("%c%" PRId32, param->letter, param->intValue);
 				break;
