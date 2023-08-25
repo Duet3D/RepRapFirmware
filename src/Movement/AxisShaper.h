@@ -56,7 +56,7 @@ public:
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept;
 
 	// Calculate the shaped segments for a move
-	void GetRemoteSegments(DDA& dda, PrepParams& paramsg) const noexcept;
+	void GetRemoteSegments(DDA& dda, PrepParams& params) const noexcept;
 #endif
 
 	// Plan input shaping for an individual move
@@ -88,10 +88,10 @@ private:
 	void ImplementAccelShaping(const DDA& dda, PrepParams& params, const AccelOrDecelPlan& proposal) const noexcept;
 	void ImplementDecelShaping(const DDA& dda, PrepParams& params, const AccelOrDecelPlan& proposal) const noexcept;
 
-	bool TryReduceTopSpeedOverlapBoth(const DDA& dda, const PrepParams& params, float& newTopSpeed) const noexcept;
-	bool TryReduceTopSpeedOverlapAccel(const DDA& dda, const PrepParams& params, float& newTopSpeed) const noexcept;
-	bool TryReduceTopSpeedOverlapDecel(const DDA& dda, const PrepParams& params, float& newTopSpeed) const noexcept;
-	bool TryReduceTopSpeedOverlapNeither(const DDA& dda, const PrepParams& params, float& newTopSpeed) const noexcept;
+	bool TryReduceTopSpeedFullyShapeBoth(const DDA& dda, const PrepParams& params, float& newTopSpeed, InputShaperPlan& plan) const noexcept;
+	bool TryReduceTopSpeedFullyShapeAccel(const DDA& dda, const PrepParams& params, float& newTopSpeed, InputShaperPlan& plan) const noexcept;
+	bool TryReduceTopSpeedFullyShapeDecel(const DDA& dda, const PrepParams& params, float& newTopSpeed, InputShaperPlan& plan) const noexcept;
+	bool TryReduceTopSpeedFullyShapeNeither(const DDA& dda, const PrepParams& params, float& newTopSpeed, InputShaperPlan& plan) const noexcept;
 
 	static constexpr unsigned int MaxExtraImpulses = 4;
 	static constexpr float DefaultFrequency = 40.0;
@@ -130,7 +130,7 @@ private:
 	uint32_t movesShapedOnRetry = 0;
 	uint32_t movesTooShortToShape = 0;
 	uint32_t movesWrongShapeToShape = 0;
-	uint32_t movesWrongContextToShape = 0;
+	uint32_t movesCouldPossiblyShape = 0;
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */

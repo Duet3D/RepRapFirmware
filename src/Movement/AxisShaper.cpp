@@ -405,33 +405,26 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 	if (numExtraImpulses != 0)
 	{
 		// Work out what the ideal plan is, then see how far we can achieve it
-		InputShaperPlan idealPlan;
-		const DDA *const nextDda = dda.GetNext();
-		const DDA *const prevDda = dda.GetPrevious();
+		InputShaperPlan idealPlan;										// plan gets cleared to empty by the constructor
 
 		if (params.accelDistance >= 0.0 && params.accelDistance < dda.totalDistance)
 		{
+			idealPlan.shapeAccelEnd = true;
+			const DDA *const prevDda = dda.GetPrevious();
 			const DDA::DDAState prevState = prevDda->state;
 			if ((prevState != DDA::DDAState::frozen && prevState != DDA::DDAState::executing) || !prevDda->flags.wasAccelOnlyMove)
 			{
 				idealPlan.shapeAccelStart = true;
 			}
-			if (params.accelDistance < dda.totalDistance || (nextDda->state == DDA::DDAState::provisional && nextDda->startSpeed >= nextDda->topSpeed))
-			{
-				idealPlan.shapeAccelEnd = true;
-			}
 		}
 
 		if (params.decelStartDistance > 0.0 && params.decelStartDistance < dda.totalDistance)
 		{
-			const DDA::DDAState nextState = nextDda->state;
-			if (nextState != DDA::DDAState::provisional || !nextDda->IsDecelerationMove())
+			idealPlan.shapeDecelStart = true;
+			const DDA *const nextDda = dda.GetNext();
+			if (nextDda->state != DDA::DDAState::provisional || !nextDda->IsDecelerationMove())
 			{
 				idealPlan.shapeDecelEnd = true;
-			}
-			if (params.decelStartDistance > 0.0 || prevDda->endSpeed >= prevDda->topSpeed)
-			{
-				idealPlan.shapeDecelStart = true;
 			}
 		}
 
@@ -489,8 +482,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 				}
 
 				// See if we can implement both plans
-				const float extraDistanceNeeded = proposedAccelPlan.distance + proposedDecelPlan.distance - dda.totalDistance;
-				if (extraDistanceNeeded <= 0.0)
+				if (proposedAccelPlan.distance + proposedDecelPlan.distance <= dda.totalDistance)
 				{
 					if (proposedAccelPlan.plan.HasAccelShaping())
 					{
@@ -500,6 +492,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 					{
 						ImplementDecelShaping(dda, params, proposedDecelPlan);
 					}
+
 					if (triesDone == 0)
 					{
 						++movesShapedFirstTry;
@@ -511,69 +504,58 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 					break;
 				}
 
+				// We failed to implement the shaping plan
+				if (triesDone != 0)
+				{
+					if (reprap.Debug(Module::InputShaping))
+					{
+						debugPrintf("Last IS try failed, done %u\n", triesDone);
+					}
+					break;
+				}
+
 				// Consider reducing the top speed to make applying one or both plans possible
-				// We can only reduce the top speed if it is greater than both the start speed and the end speed
-				if (!(dda.topSpeed > dda.startSpeed && dda.topSpeed > dda.endSpeed))
+				bool success;
+				float newTopSpeed;
+				if (idealPlan.shapeAccelEnd && idealPlan.shapeDecelStart)
+				{
+					if (idealPlan.shapeAccelStart)
+					{
+						if (idealPlan.shapeDecelEnd)
+						{
+							success = TryReduceTopSpeedFullyShapeBoth(dda, params, newTopSpeed, idealPlan);
+						}
+						else
+						{
+							success = TryReduceTopSpeedFullyShapeAccel(dda, params, newTopSpeed, idealPlan);
+							if (!success) { ++movesCouldPossiblyShape; }	//TEMP
+						}
+					}
+					else if (idealPlan.shapeDecelEnd)
+					{
+						success = TryReduceTopSpeedFullyShapeDecel(dda, params, newTopSpeed, idealPlan);
+						if (!success) { ++movesCouldPossiblyShape; }		//TEMP
+					}
+					else
+					{
+						success = TryReduceTopSpeedFullyShapeNeither(dda, params, newTopSpeed, idealPlan);
+						if (!success) { ++movesCouldPossiblyShape; }		//TEMP
+					}
+				}
+				else
 				{
 					++movesWrongShapeToShape;
 					break;
 				}
 
-				// For now we don't try to adjust to speed on moves that are preceded by acceleration or followed by deceleration (we expect these to be rare)
-				if (!(idealPlan.shapeAccelStart && idealPlan.shapeAccelEnd && idealPlan.shapeDecelStart && idealPlan.shapeDecelEnd))
-				{
-					++movesWrongContextToShape;
-					break;
-				}
-
-				if (triesDone != 0 && reprap.Debug(Module::InputShaping))
-				{
-					debugPrintf("Last IS try failed, done %u\n", triesDone);
-				}
-
-				float newTopSpeed;
-				switch (triesDone)
-				{
-				case 0:
-					if (TryReduceTopSpeedOverlapBoth(dda, params, newTopSpeed))
-					{
-						break;
-					}
-					++triesDone;
-					//no break
-				case 1:
-					if (TryReduceTopSpeedOverlapAccel(dda, params, newTopSpeed))
-					{
-						break;
-					}
-					++triesDone;
-					//no break
-				case 2:
-					if (TryReduceTopSpeedOverlapDecel(dda, params, newTopSpeed))
-					{
-						break;
-					}
-					++triesDone;
-					//no break
-				case 3:
-					if (TryReduceTopSpeedOverlapBoth(dda, params, newTopSpeed))
-					{
-						break;
-					}
-					++triesDone;
-				}
-				if (   triesDone < 4
-					&& newTopSpeed >= dda.startSpeed
-					&& newTopSpeed >= dda.endSpeed
-					&& newTopSpeed >= dda.topSpeed * 0.5
-				   )
+				if (success && newTopSpeed >= dda.topSpeed * 0.5)
 				{
 					if (reprap.GetDebugFlags(Module::InputShaping).IsAnyBitSet(InputShapingDebugFlags::Retries, InputShapingDebugFlags::All))
 					{
-						debugPrintf("IS reducing top speed: try %u startv=%.3e endv=%.3e oldtop=%.3e newtop=%.3e acc=%.3e dec=%.3e dist=%.3f oldExtraDist=%.3g\n",
+						debugPrintf("IS reducing top speed: try %u startv=%.3e endv=%.3e oldtop=%.3e newtop=%.3e acc=%.3e dec=%.3e dist=%.3f oldExtraDist=%.3g accd=%.3g\n",
 										triesDone,
 										(double)dda.startSpeed, (double)dda.endSpeed, (double)dda.topSpeed, (double)newTopSpeed, (double)dda.acceleration, (double)dda.deceleration,
-										(double)dda.totalDistance, (double)extraDistanceNeeded);
+										(double)dda.totalDistance, (double)(proposedAccelPlan.distance + proposedDecelPlan.distance - dda.totalDistance), (double)params.accelDistance);
 					}
 					dda.topSpeed = newTopSpeed;
 					if (newTopSpeed > dda.startSpeed)
@@ -718,8 +700,8 @@ void AxisShaper::GetRemoteSegments(DDA& dda, PrepParams& params) const noexcept
 
 #endif
 
-// Try to reduce topSpeed to enable shaping to take place
-bool AxisShaper::TryReduceTopSpeedOverlapBoth(const DDA& dda, const PrepParams& params, float& newTopSpeed) const noexcept
+// Try to reduce topSpeed to enable shaping to take place, given that we wish to fully shape both the acceleration and deceleration phases.
+bool AxisShaper::TryReduceTopSpeedFullyShapeBoth(const DDA& dda, const PrepParams& params, float& newTopSpeed, InputShaperPlan& plan) const noexcept
 {
 	// Calculate the maximum top speed that gives us enough distance to apply overlapped shaping at both ends
 	//	overlappedAaccelerationDistance = startSpeed * overlappedShapingClocka + (newTopSpeed - startSpeed) * overlappedDistancePerDv
@@ -729,29 +711,31 @@ bool AxisShaper::TryReduceTopSpeedOverlapBoth(const DDA& dda, const PrepParams& 
 	// This gives the calculation below:
 	newTopSpeed = (dda.totalDistance - (dda.startSpeed + dda.endSpeed) * (overlappedShapingClocks - overlappedDistancePerDv))/(2 * overlappedDistancePerDv + durations[0]);
 
-	// It can happen that newTopSpeed is higher than the existing top speed and requires acceleration/deceleration higher than requested.
-	const float maxOverlappedAccelTopSpeed = dda.startSpeed + params.acceleration * overlappedDeltaVPerA;
-	const float maxOverlappedDecelTopSpeed = dda.endSpeed + params.deceleration * overlappedDeltaVPerA;
-
-	if (   maxOverlappedAccelTopSpeed >= newTopSpeed
-		&& maxOverlappedDecelTopSpeed >= newTopSpeed
-	   )
+	// The new top speed is only viable if it is greater than both the start speed and the end speed
+	if (newTopSpeed >= dda.startSpeed && newTopSpeed >= dda.endSpeed)
 	{
-		return true;
+		// The new top speed is viable as regards distance, however it can happen that newTopSpeed is higher than the existing top speed and requires acceleration/deceleration higher than requested.
+		const float maxOverlappedAccelTopSpeed = dda.startSpeed + params.acceleration * overlappedDeltaVPerA;
+		const float maxOverlappedDecelTopSpeed = dda.endSpeed + params.deceleration * overlappedDeltaVPerA;
+		if (maxOverlappedAccelTopSpeed >= newTopSpeed && maxOverlappedDecelTopSpeed >= newTopSpeed)
+		{
+			return true;
+		}
+
+		// If the proposed new top speed is only a little higher than the maximum, reduce it to the maximum
+		const float limitingTopSpeed = min<float>(maxOverlappedAccelTopSpeed, maxOverlappedDecelTopSpeed);
+		if (limitingTopSpeed >= 0.75 * newTopSpeed)
+		{
+			newTopSpeed = limitingTopSpeed;
+			return true;
+		}
+
+		// Try to use non-overlapped shaping during the acceleration and/or the deceleration
+		// TODO
+		return false;
 	}
 
-	// If the proposed new top speed is only a little higher than the maximum, reduce it to the maximum
-	const float limitingTopSpeed = min<float>(maxOverlappedAccelTopSpeed, maxOverlappedDecelTopSpeed);
-	if (limitingTopSpeed >= 0.75 * newTopSpeed)
-	{
-		newTopSpeed = limitingTopSpeed;
-		return true;
-	}
-	return false;
-}
-
-bool AxisShaper::TryReduceTopSpeedOverlapAccel(const DDA& dda, const PrepParams& params, float& newTopSpeed) const noexcept
-{
+	// Not enough distance available to shape both acceleration and deceleration even if we reduce the top speed
 	if (dda.endSpeed < dda.startSpeed)
 	{
 		// It sometimes happens that the top speed is only a little higher than the end speed. If this is the case, try making the top speed equal to the end speed.
@@ -760,15 +744,8 @@ bool AxisShaper::TryReduceTopSpeedOverlapAccel(const DDA& dda, const PrepParams&
 			newTopSpeed = dda.startSpeed;
 			return true;
 		}
-		// Try overlapping the acceleration but not the deceleration
-		//TODO
 	}
-	return false;
-}
-
-bool AxisShaper::TryReduceTopSpeedOverlapDecel(const DDA& dda, const PrepParams& params, float& newTopSpeed) const noexcept
-{
-	if (dda.startSpeed < dda.endSpeed)
+	else if (dda.startSpeed < dda.endSpeed)
 	{
 		// It sometimes happens that the top speed is only a little higher than the end speed. If this is the case, try making the top speed equal to the end speed.
 		if (dda.endSpeed >= 0.75 * dda.topSpeed)
@@ -776,15 +753,27 @@ bool AxisShaper::TryReduceTopSpeedOverlapDecel(const DDA& dda, const PrepParams&
 			newTopSpeed = dda.endSpeed;
 			return true;
 		}
-		// Try overlapping the deceleration but not the acceleration
-		//TODO
 	}
+
 	return false;
 }
 
-bool AxisShaper::TryReduceTopSpeedOverlapNeither(const DDA& dda, const PrepParams& params, float& newTopSpeed) const noexcept
+// Try to reduce top speed where acceleration is fully shaped but deceleration only shaped at the start (so we can
+bool AxisShaper::TryReduceTopSpeedFullyShapeAccel(const DDA& dda, const PrepParams& params, float& newTopSpeed, InputShaperPlan& plan) const noexcept
 {
-	//TODO try both non-overlapped
+	//TODO
+	return false;
+}
+
+bool AxisShaper::TryReduceTopSpeedFullyShapeDecel(const DDA& dda, const PrepParams& params, float& newTopSpeed, InputShaperPlan& plan) const noexcept
+{
+	//TODO
+	return false;
+}
+
+bool AxisShaper::TryReduceTopSpeedFullyShapeNeither(const DDA& dda, const PrepParams& params, float& newTopSpeed, InputShaperPlan& plan) const noexcept
+{
+	//TODO
 	return false;
 }
 
@@ -1169,9 +1158,9 @@ inline float AxisShaper::GetExtraDecelEndDistance(float endSpeed, float decelera
 
 void AxisShaper::Diagnostics(MessageType mtype) noexcept
 {
-	reprap.GetPlatform().MessageF(mtype, "Moves shaped first try %" PRIu32 ", on retry %" PRIu32 ", too short %" PRIu32 ", wrong shape %" PRIu32 ", wrong context %" PRIu32 "\n",
-							movesShapedFirstTry, movesShapedOnRetry, movesTooShortToShape, movesWrongShapeToShape, movesWrongContextToShape);
-	movesShapedFirstTry = movesShapedOnRetry = movesTooShortToShape = movesWrongShapeToShape = movesWrongContextToShape = 0;
+	reprap.GetPlatform().MessageF(mtype, "Moves shaped first try %" PRIu32 ", on retry %" PRIu32 ", too short %" PRIu32 ", wrong shape %" PRIu32 ", maybepossible %" PRIu32 "\n",
+							movesShapedFirstTry, movesShapedOnRetry, movesTooShortToShape, movesWrongShapeToShape, movesCouldPossiblyShape);
+	movesShapedFirstTry = movesShapedOnRetry = movesTooShortToShape = movesWrongShapeToShape = movesCouldPossiblyShape = 0;
 }
 
 // Calculate the move segments when input shaping is not in use
