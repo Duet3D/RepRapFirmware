@@ -971,7 +971,7 @@ bool GCodeBuffer::PopState(bool withinSameFile) noexcept
 		machineState = ms->Pop();						// get the previous state and copy down any error message
 		delete ms;
 	} while (!withinSameFile && !poppedFileState);
-	IF_NOT_BINARY(stringParser.ResetIndentation());
+	IF_NOT_BINARY(stringParser.ResetIndentationAfterPop());
 
 	reprap.InputsUpdated();
 	return true;

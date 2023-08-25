@@ -1139,9 +1139,12 @@ void StringParser::PutCommand(const char *str) noexcept
 	} while (c != 0);
 }
 
-void StringParser::ResetIndentation() noexcept
+void StringParser::ResetIndentationAfterPop() noexcept
 {
-	indentToSkipTo = (gb.GetBlockIndent() > 0) ? gb.GetBlockIndent() : NoIndentSkip;
+	if (indentToSkipTo != NoIndentSkip)
+	{
+		indentToSkipTo = (gb.GetBlockIndent() > 0) ? gb.GetBlockIndent() : NoIndentSkip;
+	}
 }
 
 void StringParser::SetFinished() noexcept
