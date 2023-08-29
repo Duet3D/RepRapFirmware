@@ -484,7 +484,7 @@ bool KeepoutZone::DoesArcIntrude(const float startCoords[MaxAxes], const float e
 											const float aHigh = asinf(sin2);
 											// The circle crosses the upper limit at angles between aHigh and (pi - aHigh)
 											float aHigh2 = ((aHigh < 0.0) ? -Pi : Pi) - aHigh;
-											if (angleIntervals.AddRangeLimit(aHigh, aHigh2))
+											if (angleIntervals.AddRangeLimit(aHigh2, aHigh))
 											{
 												return false;
 											}
