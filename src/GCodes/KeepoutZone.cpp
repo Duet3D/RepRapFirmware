@@ -13,7 +13,7 @@
 #include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
 
-#define ARC_DEBUG	0
+#define ARC_DEBUG	1
 
 #define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(KeepoutZone, __VA_ARGS__)
 #define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(KeepoutZone, _condition, __VA_ARGS__)
@@ -171,24 +171,38 @@ public:
 	// Construct an initial range from startAngle to endAngle
 	ArcIntervals(float startAngle, float endAngle) noexcept;
 
-	// Limit the existing range(s) by a new one
+	// Take a copy of the current interval set, limit each interval to a range, and add it to nextSet
 	bool AddRangeLimit(float startAngle, float endAngle) noexcept;
+
+	// Make nextSet current and clear nextSet
+	void SwitchIntervals() noexcept;
+
+	// Check whether we have any intervals left
+	bool HaveInterval() const noexcept { return numCurrentIntervals != 0; }
+
+	// Clear this out
+	void Clear() noexcept { numCurrentIntervals = 0; }
 
 private:
 	// Print the ranges to debug
-	void DebugPrint(const char *str) noexcept;
+	void DebugPrint(const char *str) const noexcept;
 
+	static constexpr size_t MaxIntervals = 4;
+
+	// Struct to represent up to four prohibited angle ranges
 	struct IntervalSet
 	{
-		float lowAngle[4];
-		float highAngle[4];
+		float lowAngle[MaxIntervals];
+		float highAngle[MaxIntervals];
 	};
+
+	// Two interval sets so that we can switch between them - allows us to restrict the intervals without needing to copy an interval set
 	IntervalSet intervals[2];
-	size_t numIntervals;
-	unsigned int currentSetNumber;
+	size_t numCurrentIntervals;						// how many intervals are in currentSet
+	unsigned int currentSetNumber;					// which set is the the current set, always 0 or 1
 };
 
-// Construct an initial range from startAngle to endAngle. Both are in the range -Pi to 3*Pi and the difference is no more than 2 * Pi.
+// Construct an initial range from startAngle to endAngle. Both are in the range -Pi to Pi.
 ArcIntervals::ArcIntervals(float startAngle, float endAngle) noexcept
 {
 	currentSetNumber = 0;
@@ -199,22 +213,14 @@ ArcIntervals::ArcIntervals(float startAngle, float endAngle) noexcept
 		intervals[0].lowAngle[0] = startAngle;
 		intervals[0].highAngle[0] = Pi;
 		intervals[0].lowAngle[1] = -Pi;
-		intervals[0].highAngle[1] = endAngle - Pi;
-		numIntervals = 2;
+		intervals[0].highAngle[1] = endAngle;
+		numCurrentIntervals = 2;
 	}
 	else
 	{
-		if (startAngle >= Pi)
-		{
-			intervals[0].lowAngle[0] = startAngle - TwoPi;
-			intervals[0].highAngle[0] = endAngle - TwoPi;
-		}
-		else
-		{
-			intervals[0].lowAngle[0] = startAngle;
-			intervals[0].highAngle[0] = endAngle;
-		}
-		numIntervals = 1;
+		intervals[0].lowAngle[0] = startAngle;
+		intervals[0].highAngle[0] = endAngle;
+		numCurrentIntervals = 1;
 	}
 
 #if ARC_DEBUG
@@ -232,12 +238,12 @@ bool ArcIntervals::AddRangeLimit(float startAngle, float endAngle) noexcept
 	const IntervalSet& currentSet = intervals[currentSetNumber];
 	currentSetNumber ^= 1;
 	IntervalSet& nextSet = intervals[currentSetNumber];
-	size_t j = 0;
+	size_t numNextIntervals = 0;
 	if (endAngle < startAngle)
 	{
 		// This interval crosses Pi, so split it into two intervals and apply them separately to the existing intervals.
 		// This may cause one or more existing intervals to be split into two.
-		for (size_t i = 0; i < numIntervals; ++i)
+		for (size_t i = 0; i < numCurrentIntervals; ++i)
 		{
 			{
 				const float nextLowAngle = currentSet.lowAngle[i];
@@ -245,20 +251,18 @@ bool ArcIntervals::AddRangeLimit(float startAngle, float endAngle) noexcept
 				if (nextLowAngle < nextHighAngle)
 				{
 					// Copy this interval across with its new bounds
+					RRF_ASSERT(numNextIntervals < MaxIntervals);
+					nextSet.lowAngle[numNextIntervals] = nextLowAngle;
+					nextSet.highAngle[numNextIntervals] = nextHighAngle;
+					++numNextIntervals;
 #if ARC_DEBUG
-{
-	debugPrintf("Current set:");
-	for (size_t k = 0; k < numIntervals; ++k) { debugPrintf(" [%.2f:%.2f]", (double)currentSet.lowAngle[k], (double)currentSet.highAngle[k]); }
-	debugPrintf("\nNext set:");
-	for (size_t k = 0; k < j; ++k) { debugPrintf(" [%.2f:%.2f]", (double)nextSet.lowAngle[k], (double)nextSet.highAngle[k]); }
-	debugPrintf("\nStart %.2f end %.2f, trying to add 1: [%.2f:%.2f]\n", (double)startAngle, (double)endAngle, (double)nextLowAngle, (double)nextHighAngle);
-	delay(2);
-}
+					{
+						debugPrintf("Next set (1):");
+						for (size_t k = 0; k < numNextIntervals; ++k) { debugPrintf(" [%.3f:%.3f]", (double)nextSet.lowAngle[k], (double)nextSet.highAngle[k]); }
+						debugPrintf("\n");
+						delay(2);
+					}
 #endif
-					RRF_ASSERT(j < 4);
-					nextSet.lowAngle[j] = nextLowAngle;
-					nextSet.highAngle[j] = nextHighAngle;
-					++j;
 				}
 			}
 			{
@@ -267,20 +271,18 @@ bool ArcIntervals::AddRangeLimit(float startAngle, float endAngle) noexcept
 				if (nextLowAngle < nextHighAngle)
 				{
 					// Copy this interval across with its new bounds
+					RRF_ASSERT(numNextIntervals < MaxIntervals);
+					nextSet.lowAngle[numNextIntervals] = nextLowAngle;
+					nextSet.highAngle[numNextIntervals] = nextHighAngle;
+					++numNextIntervals;
 #if ARC_DEBUG
-{
-	debugPrintf("Current set:");
-	for (size_t k = 0; k < numIntervals; ++k) { debugPrintf(" [%.2f:%.2f]", (double)currentSet.lowAngle[k], (double)currentSet.highAngle[k]); }
-	debugPrintf("\nNext set:");
-	for (size_t k = 0; k < j; ++k) { debugPrintf(" [%.2f:%.2f]", (double)nextSet.lowAngle[k], (double)nextSet.highAngle[k]); }
-	debugPrintf("\nStart %.2f end %.2f, trying to add 2: [%.2f:%.2f]\n", (double)startAngle, (double)endAngle, (double)nextLowAngle, (double)nextHighAngle);
-	delay(2);
-}
+					{
+						debugPrintf("Next set (2):");
+						for (size_t k = 0; k < numNextIntervals; ++k) { debugPrintf(" [%.3f:%.3f]", (double)nextSet.lowAngle[k], (double)nextSet.highAngle[k]); }
+						debugPrintf("\n");
+						delay(2);
+					}
 #endif
-					RRF_ASSERT(j < 4);
-					nextSet.lowAngle[j] = nextLowAngle;
-					nextSet.highAngle[j] = nextHighAngle;
-					++j;
 				}
 			}
 		}
@@ -288,46 +290,45 @@ bool ArcIntervals::AddRangeLimit(float startAngle, float endAngle) noexcept
 	else
 	{
 		// This range limit does not cross Pi, so just apply it to the existing intervals
-		for (size_t i = 0; i < numIntervals; ++i)
+		for (size_t i = 0; i < numCurrentIntervals; ++i)
 		{
 			const float nextLowAngle = max<float>(currentSet.lowAngle[i], startAngle);
 			const float nextHighAngle = min<float>(currentSet.highAngle[i], endAngle);
 			if (nextLowAngle < nextHighAngle)
 			{
-#if ARC_DEBUG
-{
-	debugPrintf("Current set:");
-	for (size_t k = 0; k < numIntervals; ++k) { debugPrintf(" [%.2f:%.2f]", (double)currentSet.lowAngle[k], (double)currentSet.highAngle[k]); }
-	debugPrintf("\nNext set:");
-	for (size_t k = 0; k < j; ++k) { debugPrintf(" [%.2f:%.2f]", (double)nextSet.lowAngle[k], (double)nextSet.highAngle[k]); }
-	debugPrintf("\nStart %.2f end %.2f, trying to add 3: [%.2f:%.2f]\n", (double)startAngle, (double)endAngle, (double)nextLowAngle, (double)nextHighAngle);
-	delay(2);
-}
-#endif
 				// Copy this interval across with its new bounds
-				nextSet.lowAngle[j] = nextLowAngle;
-				nextSet.highAngle[j] = nextHighAngle;
-				++j;
+				RRF_ASSERT(numNextIntervals < MaxIntervals);
+				nextSet.lowAngle[numNextIntervals] = nextLowAngle;
+				nextSet.highAngle[numNextIntervals] = nextHighAngle;
+				++numNextIntervals;
+#if ARC_DEBUG
+				{
+					debugPrintf("Next set (3):");
+					for (size_t k = 0; k < numNextIntervals; ++k) { debugPrintf(" [%.3f:%.3f]", (double)nextSet.lowAngle[k], (double)nextSet.highAngle[k]); }
+					debugPrintf("\n");
+					delay(2);
+				}
+#endif
 			}
 		}
 	}
-	numIntervals = j;
+	numCurrentIntervals = numNextIntervals;
 
 #if ARC_DEBUG
 	DebugPrint("add");
 #endif
 
-	return j == 0;
+	return numNextIntervals == 0;
 }
 
 // Print the ranges to debug
-void ArcIntervals::DebugPrint(const char *str) noexcept
+void ArcIntervals::DebugPrint(const char *str) const noexcept
 {
 	const IntervalSet& currentSet = intervals[currentSetNumber];
-	debugPrintf("Intervals %s:", str);
-	for (size_t i = 0; i < numIntervals; ++i)
+	debugPrintf("Intervals after %s:", str);
+	for (size_t i = 0; i < numCurrentIntervals; ++i)
 	{
-		debugPrintf(" %.2f:%.2f", (double)currentSet.lowAngle[i], (double)currentSet.highAngle[i]);
+		debugPrintf(" %.3f:%.3f", (double)currentSet.lowAngle[i], (double)currentSet.highAngle[i]);
 	}
 	debugPrintf("\n");
 }
@@ -376,121 +377,133 @@ bool KeepoutZone::DoesArcIntrude(const float startCoords[MaxAxes], const float e
 #endif
 
 	// From now on, work on angles not on move proportion. There may be up to 4 angle intervals in which the circle falls inside the rectangle.
-	// Convert the 'p' interval to one or two angle intervals. We handle the clockwise/anticlockwise distinction here.
-	if (clockwise)
+	// Convert the 'p' interval to one or two angle intervals
+	float initLowAngle, initHighAngle;
+	if (wholeCircle && pLow == 0.0 && pHigh == 1.0)
 	{
-		// Angle is decreasing from startAngle to endAngle
-		if (wholeCircle)
-		{
-			// If we are describing a whole circle then we might have equal start and end angles or they might already differ by 2*pi
-			startAngle = endAngle + TwoPi;
-		}
-		else if (endAngle > startAngle)
-		{
-			// The arc does cross the boundary between negative and positive angles
-			startAngle += TwoPi;				// make startAngle > endAngle
-		}
+		// We can special case this
+		initLowAngle = -Pi;
+		initHighAngle = Pi;
 	}
 	else
 	{
-		// Angle is increasing from startAngle to endAngle
-		if (wholeCircle)
+		// If it's a clockwise movement (angle decreasing) then replace it by an anticlockwise movement (angle increasing)
+		if (clockwise)
 		{
-			// If we are describing a whole circle then we might have equal start and end angles or they might already differ by 2*pi
-			endAngle = startAngle + TwoPi;
+			std::swap(startAngle, endAngle);
 		}
-		else if (endAngle < startAngle)
+
+		if (endAngle <= startAngle)
 		{
-			// The arc does cross the boundary between negative and positive angles
-			endAngle += TwoPi;				// make endAngle > startAngle
+			// The arc crosses the boundary between negative and positive angles. Add 2*Pi to the end angle to avoid a discontinuity.
+			endAngle += TwoPi;					// make endAngle > startAngle (this could make endAngle up to 3*pi)
 		}
+		initLowAngle = pLow * endAngle + (1.0 - pLow) * startAngle;
+		initHighAngle = pHigh * endAngle + (1.0 - pHigh) * startAngle;
+
+		// Re-normalise the angles to be in the range -pi to pi
+		if (initLowAngle > Pi) { initLowAngle -= TwoPi; }
+		if (initHighAngle > Pi) { initHighAngle -= TwoPi; }
 	}
-	const float tempHighAngle = pLow * endAngle + (1.0 - pLow) * startAngle;
-	const float tempLowAngle = pHigh * endAngle + (1.0 - pHigh) * startAngle;
 
 #if ARC_DEBUG
-	debugPrintf("pLow=%.3f pHigh=%.3f whole=%u tempLow=%.2f tempHigh=%.2F\n", (double)pLow, (double)pHigh, wholeCircle, (double)tempLowAngle, (double)tempHighAngle);
+	debugPrintf("pLow=%.3f pHigh=%.3f whole=%u initLow=%.3f initHigh=%.3f\n", (double)pLow, (double)pHigh, wholeCircle, (double)initLowAngle, (double)initHighAngle);
 #endif
 
-	ArcIntervals angleIntervals(tempLowAngle, tempHighAngle);
+	ArcIntervals angleIntervals(initLowAngle, initHighAngle);
+
+#if ARC_DEBUG
+	debugPrintf("Iterating cosine axes\n");
+#endif
 
 	// Handle the axis whose coordinates vary with the cosine of the angle
-	return cosineAxes.IterateWhile([this, arcCentres, arcRadius, &angleIntervals](unsigned int axis, unsigned int)->bool
+	cosineAxes.IterateWhile([this, arcCentres, arcRadius, &angleIntervals](unsigned int axis, unsigned int)->bool
+								{
+									// Check for the circle being wholly outside the keepout zone
+									if (arcCentres[axis] + arcRadius <= coords[axis][0] || arcCentres[axis] - arcRadius >= coords[axis][1])
 									{
-										// Check for the circle being wholly outside the keepout zone
-										if (arcCentres[axis] + arcRadius <= coords[axis][0] || arcCentres[axis] - arcRadius >= coords[axis][1])
-										{
-											return false;		// fully outside, so stop iterating
-										}
+										angleIntervals.Clear();			// fully outside, so there is no angle interval that violates the keepout zone
+										return false;					// stop iterating
+									}
 
-										// Check for the circle being wholly inside the keepout zone
-										if (arcCentres[axis] + arcRadius <= coords[axis][1] && arcCentres[axis] - arcRadius >= coords[axis][0])
-										{
-											return true;		// fully inside, so no need to check this axis further
-										}
-
-										const float cos1 = (coords[axis][0] - arcCentres[axis])/arcRadius;
-										if (cos1 < 1.0 && cos1 > -1.0)
-										{
-											const float aLow = acosf(cos1);
-											// The circle crosses the lower limit at angles between -aLow up to +aLow
-											if (angleIntervals.AddRangeLimit(-aLow, aLow))
-											{
-												return false;
-											}
-										}
-
-										const float cos2 = (coords[axis][1] - arcCentres[axis])/arcRadius;
-										if (cos2 < 1.0 && cos2 > -1.0)
-										{
-											const float aHigh = acosf(cos2);
-											// The circle crosses the upper limit at angles between -pi and -aHigh and between aHigh and pi
-											if (angleIntervals.AddRangeLimit(aHigh, -aHigh))
-											{
-												return false;
-											}
-										}
-										return true;
-									})
-		&& sineAxes.IterateWhile([this, arcCentres, arcRadius, &angleIntervals](unsigned int axis, unsigned int)->bool
+									// Check for the circle being wholly inside the keepout zone
+									if (arcCentres[axis] + arcRadius <= coords[axis][1] && arcCentres[axis] - arcRadius >= coords[axis][0])
 									{
-										// Check for the circle being wholly outside the keepout zone
-										if (arcCentres[axis] + arcRadius <= coords[axis][0] || arcCentres[axis] - arcRadius >= coords[axis][1])
-										{
-											return false;		// fully outside, so stop iterating
-										}
+										return true;					// fully inside, so no need to check this axis further, but check other axes
+									}
 
-										// Check for the circle being wholly inside the keepout zone
-										if (arcCentres[axis] + arcRadius <= coords[axis][1] && arcCentres[axis] - arcRadius >= coords[axis][0])
+									const float cos1 = (coords[axis][0] - arcCentres[axis])/arcRadius;
+									if (cos1 < 1.0 && cos1 > -1.0)
+									{
+										const float aLow = acosf(cos1);
+										// The circle is to the right of the left hand limit at angles between -aLow up to +aLow
+										if (angleIntervals.AddRangeLimit(-aLow, aLow))
 										{
-											return true;		// fully inside, so no need to check this axis further
+											return false;				// if no angle intervals left then we can stop iterating
 										}
+									}
 
-										const float sin1 = (coords[axis][0] - arcCentres[axis])/arcRadius;
-										if (sin1 < 1.0 && sin1 > -1.0)
+									const float cos2 = (coords[axis][1] - arcCentres[axis])/arcRadius;
+									if (cos2 < 1.0 && cos2 > -1.0)
+									{
+										const float aHigh = acosf(cos2);
+										// The circle is to the left of the right hand limit at angles between aHigh and pi and between -pi and -aHigh
+										if (angleIntervals.AddRangeLimit(aHigh, -aHigh))
 										{
-											const float aLow = asinf(sin1);
-											// The circle crosses the lower limit angle between aLow and (pi - aLow)
-											const float aLow2 = ((aLow < 0.0) ? -Pi : Pi) - aLow;
-											if (angleIntervals.AddRangeLimit(aLow, aLow2))
-											{
-												return false;
-											}
+											return false;				// if no angle intervals left then we can stop iterating
 										}
+									}
+									return true;						// carry on iterating axes
+								});
 
-										const float sin2 = (coords[axis][1] - arcCentres[axis])/arcRadius;
-										if (sin2 < 1.0 && sin2 > -1.0)
+	if (angleIntervals.HaveInterval())
+	{
+#if ARC_DEBUG
+		debugPrintf("Iterating sine axes\n");
+#endif
+		sineAxes.IterateWhile([this, arcCentres, arcRadius, &angleIntervals](unsigned int axis, unsigned int)->bool
+								{
+									// Check for the circle being wholly outside the keepout zone
+									if (arcCentres[axis] + arcRadius <= coords[axis][0] || arcCentres[axis] - arcRadius >= coords[axis][1])
+									{
+										angleIntervals.Clear();			// fully outside, so there is no angle interval that violates the keepout zone
+										return false;					// stop iterating
+									}
+
+									// Check for the circle being wholly inside the keepout zone
+									if (arcCentres[axis] + arcRadius <= coords[axis][1] && arcCentres[axis] - arcRadius >= coords[axis][0])
+									{
+										return true;					// fully inside, so no need to check this axis further but check other axes
+									}
+
+									const float sin1 = (coords[axis][0] - arcCentres[axis])/arcRadius;
+									if (sin1 < 1.0 && sin1 > -1.0)
+									{
+										const float aLow = asinf(sin1);
+										// The circle is above the lower limit angle between aLow and (pi - aLow)
+										const float aLow2 = ((aLow < 0.0) ? -Pi : Pi) - aLow;
+										if (angleIntervals.AddRangeLimit(aLow, aLow2))
 										{
-											const float aHigh = asinf(sin2);
-											// The circle crosses the upper limit at angles between aHigh and (pi - aHigh)
-											float aHigh2 = ((aHigh < 0.0) ? -Pi : Pi) - aHigh;
-											if (angleIntervals.AddRangeLimit(aHigh2, aHigh))
-											{
-												return false;
-											}
+											return false;
 										}
-										return true;
-									});
+									}
+
+									const float sin2 = (coords[axis][1] - arcCentres[axis])/arcRadius;
+									if (sin2 < 1.0 && sin2 > -1.0)
+									{
+										const float aHigh = asinf(sin2);
+										// The circle is below the upper limit at angles between (pi - aHigh) and aHigh
+										float aHigh2 = ((aHigh < 0.0) ? -Pi : Pi) - aHigh;
+										if (angleIntervals.AddRangeLimit(aHigh2, aHigh))
+										{
+											return false;
+										}
+									}
+									return true;
+								});
+	}
+
+	return angleIntervals.HaveInterval();
 }
 
 #endif
