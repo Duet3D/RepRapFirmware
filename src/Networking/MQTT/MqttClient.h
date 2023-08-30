@@ -69,7 +69,7 @@ private:
 
 	static MqttClient *instance;
 
-	// MQTT configuration, shared by all MqttClient's
+	// MQTT configuration, shared by all MqttClient
 	static char *username;
 	static char *password;
 	static char *id;
@@ -77,10 +77,8 @@ private:
 	static char *willMessage;
 	static size_t keepAlive;
 	static char *publishTopic;
-	static uint8_t publishQos;
-	static bool duplicate;
-	static bool retain;
 	static Subscription *subs;
+	static uint8_t connectFlags;
 
 	static MqttClient *clients; // List of all MQTT clients
 };

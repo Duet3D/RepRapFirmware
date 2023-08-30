@@ -160,8 +160,12 @@ bool MqttClient::Spin() noexcept
 						// If not specified, publish under the hostname
 						const char *const topic = publishTopic ? publishTopic : reprap.GetNetwork().GetHostname();
 
-						flags |= (publishQos == 0) ? MQTT_PUBLISH_QOS_0 :
-									(publishQos == 1 ? MQTT_PUBLISH_QOS_1 : MQTT_PUBLISH_QOS_2);
+						// TODO: Extract from M118
+						int qos = 0;
+						bool retain = false, duplicate = false;
+
+						flags |= (qos == 0) ? MQTT_PUBLISH_QOS_0 :
+									(qos == 1 ? MQTT_PUBLISH_QOS_1 : MQTT_PUBLISH_QOS_2);
 						flags |= (retain) ? MQTT_PUBLISH_RETAIN : 0;
 						flags |= (duplicate) ? MQTT_PUBLISH_DUP : 0;
 
@@ -211,7 +215,8 @@ bool MqttClient::Accept(Socket *s) noexcept
 	{
 		skt = s;
 		mqtt_reinit(&client, skt, sendBuf, SendBufferSize, recvBuf, ReceiveBufferSize);
-		mqtt_connect(&client, id, willTopic, willMessage, strlen(willMessage), username, password, MQTT_CONNECT_CLEAN_SESSION, keepAlive);
+
+		mqtt_connect(&client, id, willTopic, willMessage, strlen(willMessage), username, password, connectFlags , keepAlive);
 		responderState = ResponderState::connecting;
 		messageTimer = millis();
 		return true;
@@ -354,10 +359,35 @@ void MqttClient::ConnectionLost() noexcept
 		}
 	}
 
-	if (gb.Seen('W')) //  Will message and topic
+	if (gb.Seen('W')) //  LWT message, topic, retain and qos
 	{
 		// Set the will message
 		gb.GetQuotedString(param.GetRef());
+
+		int qos = 0;
+		int retain = 0;
+
+		// Check qos
+		if (gb.Seen('Q'))
+		{
+			qos = gb.GetIValue();
+			if (qos < 0 || qos > 2)
+			{
+				reply.copy("Invalid will QOS");
+				return GCodeResult::badOrMissingParameter;
+			}
+		}
+
+		// Check retain flag
+		if (gb.Seen('R'))
+		{
+			retain = gb.GetIValue();
+			if (retain < 0 || retain > 1)
+			{
+				reply.copy("Invalid will retain flag");
+				return GCodeResult::badOrMissingParameter;
+			}
+		}
 
 		if (!setMemb(willMessage))
 		{
@@ -376,14 +406,31 @@ void MqttClient::ConnectionLost() noexcept
 			}
 		}
 
+		switch (qos)
+		{
+		case 1:
+			connectFlags |= MQTT_CONNECT_WILL_QOS_1;
+			break;
+
+		case 2:
+			connectFlags |= MQTT_CONNECT_WILL_QOS_2;
+			break;
+
+		case 0:
+		default:
+			connectFlags |= MQTT_CONNECT_WILL_QOS_0;
+			break;
+		}
+
+		if (retain)
+		{
+			connectFlags |= MQTT_CONNECT_WILL_RETAIN;
+		}
+
 		if (reprap.Debug(Module::Webserver))
 		{
-			debugPrintf("Will message set to '%s'", willMessage);
-			if (willTopic)
-			{
-				debugPrintf("with topic '%s'", willTopic);
-			}
-			debugPrintf("\n");
+			debugPrintf("Will message set to '%s' with topic '%s', QOS=%d, retain = %s\n",
+						willMessage, willTopic, qos, retain ? "true": "false");
 		}
 	}
 
@@ -444,50 +491,13 @@ void MqttClient::ConnectionLost() noexcept
 		}
 	}
 
-	if (gb.Seen('P')) // Publish
+	if (gb.Seen('P')) // Publish default topic, i.e. when topic in M118 is not specified
 	{
 		gb.GetQuotedString(param.GetRef());
 
 		if (!setMemb(publishTopic))
 		{
 			return GCodeResult::error;
-		}
-
-		retain = duplicate = 0;
-		publishQos = 0;
-
-		if (gb.Seen('R'))
-		{
-			retain = gb.GetIValue();
-		}
-
-		if (gb.Seen('D'))
-		{
-			duplicate = gb.GetIValue();
-		}
-
-		if (gb.Seen('Q'))
-		{
-			int qos = gb.GetIValue();
-
-			if (qos < 0 || qos > 2)
-			{
-				reply.copy("Invalid publish QOS");
-				return GCodeResult::badOrMissingParameter;
-			}
-			else
-			{
-				publishQos = qos;
-				if (reprap.Debug(Module::Webserver))
-				{
-					debugPrintf("MQTT publish QOS set to %d\n", publishQos);
-				}
-			}
-		}
-
-		if (reprap.Debug(Module::Webserver))
-		{
-			debugPrintf("Publish topic '%s', with settings duplicate = %d retain = %d qos = %d\n", publishTopic, retain, duplicate, publishQos);
 		}
 	}
 
@@ -546,9 +556,7 @@ char *MqttClient::willMessage = nullptr;
 size_t MqttClient::keepAlive = MqttClient::DefaultKeepAlive;
 
 char *MqttClient::publishTopic = nullptr;
-uint8_t MqttClient:: publishQos = 0;
-bool MqttClient::duplicate = false;
-bool MqttClient::retain = false;
+uint8_t MqttClient::connectFlags = MQTT_CONNECT_CLEAN_SESSION;
 
 MqttClient::Subscription *MqttClient::subs = nullptr;
 MqttClient *MqttClient::clients = nullptr;
