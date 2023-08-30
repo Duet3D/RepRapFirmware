@@ -343,9 +343,8 @@ void MqttClient::ConnectionLost() noexcept
 		}
 	}
 
-	if (gb.Seen('C'))
+	if (gb.Seen('C')) // Client ID
 	{
-		// Set the client ID
 		gb.GetQuotedString(param.GetRef());
 
 		if (!setMemb(id))
@@ -434,18 +433,18 @@ void MqttClient::ConnectionLost() noexcept
 		}
 	}
 
-	if (gb.Seen('S')) // Subscription
+	if (gb.Seen('S')) // Subscribe topic
 	{
 		gb.GetQuotedString(param.GetRef());
 
-		// Check the QOS first
+		// Check the max QOS first
 		int qos = 0;
-		if (gb.Seen('Q'))
+		if (gb.Seen('M'))
 		{
 			qos = gb.GetIValue();
 			if (qos < 0 || qos > 2)
 			{
-				reply.copy("Invalid subscription QOS");
+				reply.copy("Invalid subscription max QOS");
 				return GCodeResult::badOrMissingParameter;
 			}
 		}
@@ -486,7 +485,7 @@ void MqttClient::ConnectionLost() noexcept
 
 			if (reprap.Debug(Module::Webserver))
 			{
-				debugPrintf("MQTT added topic %s with QOS %d to subscriptions\n", param.c_str(), qos);
+				debugPrintf("MQTT client added topic %s with max QOS %d to subscriptions\n", param.c_str(), qos);
 			}
 		}
 	}
