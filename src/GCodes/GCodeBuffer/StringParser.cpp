@@ -624,7 +624,7 @@ void StringParser::ProcessWhileCommand() THROWS(GCodeException)
 	}
 	else
 	{
-		gb.GetBlockState().SetLoopBlock(GetFilePosition(), gb.GetLineNumber());
+		gb.GetBlockState().SetLoopBlock(GetFilePosition(), gb.GetLineNumber() - 1);
 	}
 
 	if (!EvaluateCondition())
