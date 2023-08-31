@@ -1092,7 +1092,8 @@ FilePosition StringParser::GetFilePosition() const noexcept
 # endif
 	   )
 	{
-		return gb.LatestMachineState().fileState.GetPosition() - gb.fileInput->BytesCached() - commandLength + commandStart;
+		const FileData &file = gb.LatestMachineState().fileState;
+		return file.GetPosition() - gb.fileInput->BytesCached(file) - commandLength + commandStart;
 	}
 #endif
 	return noFilePosition;
