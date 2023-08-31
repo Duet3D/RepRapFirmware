@@ -268,15 +268,21 @@ void FileGCodeInput::Reset(const FileData &file) noexcept
 	}
 }
 
+// How many bytes have been cached for the given file?
+size_t FileGCodeInput::BytesCached(const FileData &file) const noexcept
+{
+	return (lastFileRead == file) ? RegularGCodeInput::BytesCached() : 0;
+}
+
 // Read another chunk of G-codes from the file and return true if more data is available
 GCodeInputReadResult FileGCodeInput::ReadFromFile(FileData &file) noexcept
 {
-	const size_t bytesCached = BytesCached();
+	size_t bytesCached = RegularGCodeInput::BytesCached();
 
 	// Keep track of the last file we read from
-	if (lastFileRead.IsLive() && lastFileRead != file)
+	if (lastFileRead != file)
 	{
-		if (bytesCached > 0)
+		if (lastFileRead.IsLive() && bytesCached > 0)
 		{
 			// Rewind back to the right position so we can resume at the right position later.
 			// This may be necessary when nested macros are executed.
@@ -284,8 +290,10 @@ GCodeInputReadResult FileGCodeInput::ReadFromFile(FileData &file) noexcept
 		}
 
 		RegularGCodeInput::Reset();
+		bytesCached = 0;
+
+		lastFileRead.CopyFrom(file);
 	}
-	lastFileRead.CopyFrom(file);
 
 	// Read more from the file
 	if (bytesCached < GCodeInputFileReadThreshold)
