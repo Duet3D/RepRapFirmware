@@ -17,16 +17,10 @@
 
 MqttClient::MqttClient(NetworkResponder *n, NetworkClient *c) noexcept
 	: NetworkClient(n, c),
-	  prevSub(nullptr), currSub(nullptr), currBuf(nullptr), messageTimer(0), next(clients)
+	  prevSub(nullptr), currSub(nullptr), messageTimer(0), next(clients)
 {
 	clients = this;
-
-	publishMutex.Create("MqttPublishBuffer");
-
-	memset(sendBuf, 0, sizeof(sendBuf));
-	memset(recvBuf, 0, sizeof(recvBuf));
-
-	mqtt_init(&client, skt, sendBuf, sizeof(sendBuf), recvBuf, sizeof(recvBuf), PublishCallback);
+	sendBuf = recvBuf = nullptr;
 }
 
 bool MqttClient::Spin() noexcept
@@ -134,7 +128,6 @@ bool MqttClient::Spin() noexcept
 						else
 						{
 							// No more topics, prepare to publish messages
-							currBuf = nullptr;
 							responderState = ResponderState::active;
 						}
 					}
@@ -143,40 +136,7 @@ bool MqttClient::Spin() noexcept
 
 			case ResponderState::active:
 				{
-					MutexLocker lock(publishMutex);
-
-					if (currBuf)
-					{
-						outBuf = OutputBuffer::Release(currBuf);
-						res = true;
-					}
-
-					currBuf = outBuf;
-
-					if (currBuf)
-					{
-						const char *flags = currBuf->Data();
-
-						const char *messageLen = flags + 1;
-						const char *message = messageLen + 1;
-
-						const char *topic = message + *messageLen;
-
-						if (strlen(topic) < 1)
-						{
-							topic = publishTopic;
-						}
-
-						const MQTTErrors mqttErr = mqtt_publish(&client, topic, message, *messageLen, *flags);
-						if (mqttErr == MQTT_ERROR_SEND_BUFFER_IS_FULL)
-						{
-							currBuf = nullptr; // retry to publish the same buffer on the next loop
-						}
-						else
-						{
-							res = true;
-						}
-					}
+					res = true;
 				}
 				break;
 
@@ -212,7 +172,17 @@ bool MqttClient::Accept(Socket *s) noexcept
 	if (responderState == ResponderState::free)
 	{
 		skt = s;
-		mqtt_reinit(&client, skt, sendBuf, SendBufferSize, recvBuf, ReceiveBufferSize);
+
+		if (sendBuf && recvBuf)
+		{
+			mqtt_reinit(&client, skt, sendBuf, SendBufferSize, recvBuf, ReceiveBufferSize);
+		}
+		else
+		{
+			sendBuf = new uint8_t[SendBufferSize];
+			recvBuf = new uint8_t[ReceiveBufferSize];
+			mqtt_init(&client, skt, sendBuf, SendBufferSize, recvBuf, ReceiveBufferSize, PublishCallback);
+		}
 
 		mqtt_connect(&client, id, willTopic, willMessage, strlen(willMessage), username, password, connectFlags , keepAlive);
 		responderState = ResponderState::connecting;
@@ -512,61 +482,45 @@ void MqttClient::ConnectionLost() noexcept
 	{
 		if (c->responderState == ResponderState::active)
 		{
-			if (strlen(msg) < OUTPUT_BUFFER_SIZE - 1)
+			uint8_t flags = 0;
+
+			switch (qos)
 			{
-				MutexLocker lock(c->publishMutex);
-				OutputBuffer *buf = nullptr;
+			case 1:
+				flags |= MQTT_PUBLISH_QOS_1;
+				break;
 
-				if (OutputBuffer::Allocate(buf))
-				{
-					uint8_t flags = 0;
+			case 2:
+				flags |= MQTT_PUBLISH_QOS_2;
+				break;
 
-					switch (qos)
-					{
-					case 1:
-						flags |= MQTT_PUBLISH_QOS_1;
-						break;
-
-					case 2:
-						flags |= MQTT_PUBLISH_QOS_2;
-						break;
-
-					case 0:
-					default:
-						flags |= MQTT_PUBLISH_QOS_0;
-						break;
-					}
-
-					if (retain)
-					{
-						flags |= MQTT_PUBLISH_RETAIN;
-					}
-
-					if (dup)
-					{
-						flags |= MQTT_PUBLISH_DUP;
-					}
-
-					buf->cat(flags);
-
-					buf->cat(strlen(msg));
-					buf->cat(msg);
-
-					buf->cat(topic);
-
-					buf->cat(static_cast<char>(0));
-
-					if (c->outBuf)
-					{
-						c->outBuf->Append(buf);
-					}
-					else
-					{
-						c->outBuf = buf;
-					}
-				}
+			case 0:
+			default:
+				flags |= MQTT_PUBLISH_QOS_0;
+				break;
 			}
-		};
+
+			if (retain)
+			{
+				flags |= MQTT_PUBLISH_RETAIN;
+			}
+
+			if (dup)
+			{
+				flags |= MQTT_PUBLISH_DUP;
+			}
+
+			const MQTTErrors mqttErr = mqtt_publish(&c->client, topic, msg, strlen(msg), flags);
+
+			if (mqttErr != MQTT_OK)
+			{
+				GetPlatform().MessageF(UsbMessage, "Failed to publish MQTT message with error '%" PRId16 "'\n", mqttErr);
+			}
+		}
+		else
+		{
+			GetPlatform().MessageF(UsbMessage, "Failed to publish MQTT message, client not active");
+		}
 	}
 }
 

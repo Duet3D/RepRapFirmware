@@ -32,8 +32,9 @@ public:
 	static void Publish(const char *msg, const char *topic, int qos, bool retain, bool dup) noexcept;
 
 private:
-	static const int SendBufferSize = 2048;
+	static const int SendBufferSize = 1024;
 	static const int ReceiveBufferSize = 1024;
+
 	static const size_t DefaultKeepAlive = 400;
 	static const size_t MessageTimeout = 5000;
 	static const size_t ReconnectCooldown = 1000;
@@ -50,21 +51,17 @@ private:
 		struct Subscription *next;
 	};
 
-
 	bool Start() noexcept override;
 	void Stop() noexcept override;
 	void ConnectionLost() noexcept override;
 	static void PublishCallback(void** state, struct mqtt_response_publish *published);
 
+	uint8_t *sendBuf, *recvBuf;
 	mqtt_client client;
-	uint8_t sendBuf[SendBufferSize];
-	uint8_t recvBuf[ReceiveBufferSize];
 
 	Subscription *prevSub, *currSub; // Used for subscribing to topics
-	OutputBuffer *currBuf; // Current message being published
 
 	uint32_t messageTimer;	// General purpose variable for keeping track of queued messages timeout
-	Mutex publishMutex;
 
 	MqttClient *next;
 
