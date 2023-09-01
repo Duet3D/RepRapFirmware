@@ -2052,7 +2052,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 #if HAS_MASS_STORAGE
-					if (gb.Seen('L'))
+					if (gb.Seen('L') && type != MqttMessage)
 					{
 						// If we haven't seen a P parameter but seen the L parameter we are going to log
 						// only to log file so reset message type first
@@ -2082,12 +2082,55 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (result != GCodeResult::error)
 					{
 						// Append newline and send the message to the destinations,
-						// except for MqttMessage
-						if (type != MqttMessage)
+						// except for MqttMessage if supported
+#if SUPPORT_MQTT
+						if (type == MqttMessage)
+						{
+							String<MaxGCodeLength> topic;
+							if (gb.Seen('T'))
+							{
+								gb.GetQuotedString(topic.GetRef());
+							}
+
+							int32_t qos = 0;
+							if (gb.Seen('Q'))
+							{
+								qos = gb.GetIValue();
+								if (qos < 0 || qos > 2)
+								{
+									reply.printf("Invalid value for QOS, Q%" PRIi32, qos);
+									result = GCodeResult::error;
+								}
+							}
+
+							int32_t retain = 0;
+							if (gb.Seen('R'))
+							{
+								retain = gb.GetIValue();
+								if (retain < 0 || retain > 1)
+								{
+									reply.printf("Invalid value for retain flag, R%" PRIi32, retain);
+								}
+							}
+
+							int32_t dup = 0;
+							if (gb.Seen('D'))
+							{
+								dup = gb.GetIValue();
+								if (dup < 0 || dup > 1)
+								{
+									reply.printf("Invalid value for duplicate flag, D%" PRIi32, dup);
+								}
+							}
+
+							reprap.GetNetwork().MqttPublish(message.c_str(), topic.c_str(), qos, retain, dup);
+						}
+						else
+#endif
 						{
 							message.cat('\n');
+							platform.Message(type, message.c_str());
 						}
-						platform.Message(type, message.c_str());
 					}
 				}
 				break;

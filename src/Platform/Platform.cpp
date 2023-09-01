@@ -3358,13 +3358,6 @@ void Platform::RawMessage(MessageType type, const char *_ecv_array message) noex
 		reprap.GetNetwork().HandleTelnetGCodeReply(message);
 	}
 
-#if SUPPORT_MQTT
-	if ((type & MqttMessage) != 0)
-	{
-		reprap.GetNetwork().MqttPublish(message);
-	}
-#endif
-
 	if ((type & Aux2Message) != 0)
 	{
 		AppendAuxReply(1, message, message[0] == '{' || (type & RawMessageFlag) != 0);

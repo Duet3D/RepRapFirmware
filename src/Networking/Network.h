@@ -119,7 +119,7 @@ public:
 	void HandleTelnetGCodeReply(OutputBuffer *buf) noexcept;
 
 #if SUPPORT_MQTT
-	void MqttPublish(const char *msg) noexcept;
+	void MqttPublish(const char *msg, const char *topic, int qos, bool retain, bool dup) noexcept;
 #endif
 
 	uint32_t GetHttpReplySeq() noexcept;

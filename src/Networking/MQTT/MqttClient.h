@@ -29,7 +29,7 @@ public:
 
 	static GCodeResult Configure(GCodeBuffer &gb, const StringRef& reply) THROWS(GCodeException);
 	static void Disable() noexcept;
-	static void Publish(const char *msg) noexcept;
+	static void Publish(const char *msg, const char *topic, int qos, bool retain, bool dup) noexcept;
 
 private:
 	static const int SendBufferSize = 2048;
@@ -49,6 +49,7 @@ private:
 		uint8_t qos;
 		struct Subscription *next;
 	};
+
 
 	bool Start() noexcept override;
 	void Stop() noexcept override;

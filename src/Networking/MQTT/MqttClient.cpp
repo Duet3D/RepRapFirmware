@@ -155,21 +155,19 @@ bool MqttClient::Spin() noexcept
 
 					if (currBuf)
 					{
-						uint8_t flags = 0;
+						const char *flags = currBuf->Data();
 
-						// If not specified, publish under the hostname
-						const char *const topic = publishTopic ? publishTopic : reprap.GetNetwork().GetHostname();
+						const char *messageLen = flags + 1;
+						const char *message = messageLen + 1;
 
-						// TODO: Extract from M118
-						int qos = 0;
-						bool retain = false, duplicate = false;
+						const char *topic = message + *messageLen;
 
-						flags |= (qos == 0) ? MQTT_PUBLISH_QOS_0 :
-									(qos == 1 ? MQTT_PUBLISH_QOS_1 : MQTT_PUBLISH_QOS_2);
-						flags |= (retain) ? MQTT_PUBLISH_RETAIN : 0;
-						flags |= (duplicate) ? MQTT_PUBLISH_DUP : 0;
+						if (strlen(topic) < 1)
+						{
+							topic = publishTopic;
+						}
 
-						const MQTTErrors mqttErr = mqtt_publish(&client, topic, currBuf->Data(), currBuf->DataLength(), flags);
+						const MQTTErrors mqttErr = mqtt_publish(&client, topic, message, *messageLen, *flags);
 						if (mqttErr == MQTT_ERROR_SEND_BUFFER_IS_FULL)
 						{
 							currBuf = nullptr; // retry to publish the same buffer on the next loop
@@ -508,7 +506,7 @@ void MqttClient::ConnectionLost() noexcept
 	// Nothing needed here
 }
 
-/* static */void MqttClient::Publish(const char *msg) noexcept
+/* static */void MqttClient::Publish(const char *msg, const char *topic, int qos, bool retain, bool dup) noexcept
 {
 	for (MqttClient *c = clients; c != nullptr; c = c->next)
 	{
@@ -518,9 +516,45 @@ void MqttClient::ConnectionLost() noexcept
 			{
 				MutexLocker lock(c->publishMutex);
 				OutputBuffer *buf = nullptr;
+
 				if (OutputBuffer::Allocate(buf))
 				{
-					buf->copy(msg);
+					uint8_t flags = 0;
+
+					switch (qos)
+					{
+					case 1:
+						flags |= MQTT_PUBLISH_QOS_1;
+						break;
+
+					case 2:
+						flags |= MQTT_PUBLISH_QOS_2;
+						break;
+
+					case 0:
+					default:
+						flags |= MQTT_PUBLISH_QOS_0;
+						break;
+					}
+
+					if (retain)
+					{
+						flags |= MQTT_PUBLISH_RETAIN;
+					}
+
+					if (dup)
+					{
+						flags |= MQTT_PUBLISH_DUP;
+					}
+
+					buf->cat(flags);
+
+					buf->cat(strlen(msg));
+					buf->cat(msg);
+
+					buf->cat(topic);
+
+					buf->cat(static_cast<char>(0));
 
 					if (c->outBuf)
 					{

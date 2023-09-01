@@ -842,9 +842,9 @@ void Network::HandleTelnetGCodeReply(const char *msg) noexcept
 }
 
 #if SUPPORT_MQTT
-void Network::MqttPublish(const char *msg) noexcept
+void Network::MqttPublish(const char *msg, const char *topic, int qos, bool retain, bool dup) noexcept
 {
-	MqttClient::Publish(msg);
+	MqttClient::Publish(msg, topic, qos, retain, dup);
 }
 #endif
 
