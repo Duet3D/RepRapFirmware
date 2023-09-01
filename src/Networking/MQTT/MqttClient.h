@@ -32,12 +32,12 @@ public:
 	static void Publish(const char *msg, const char *topic, int qos, bool retain, bool dup) noexcept;
 
 private:
-	static const int SendBufferSize = 1024;
-	static const int ReceiveBufferSize = 1024;
+	static constexpr int SendBufferSize = 1024;
+	static constexpr int ReceiveBufferSize = 1024;
 
-	static const size_t DefaultKeepAlive = 400;
-	static const size_t MessageTimeout = 5000;
-	static const size_t ReconnectCooldown = 1000;
+	static constexpr size_t DefaultKeepAlive = 400;
+	static constexpr size_t MessageTimeout = 5000;
+	static constexpr size_t ReconnectCooldown = 1000;
 
 	struct Subscription
 	{
