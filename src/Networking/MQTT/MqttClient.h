@@ -68,8 +68,6 @@ private:
 
 	MqttClient *next;
 
-	static MqttClient *instance;
-
 	// MQTT configuration, shared by all MqttClient
 	static char *username;
 	static char *password;
