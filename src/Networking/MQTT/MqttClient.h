@@ -72,7 +72,6 @@ private:
 	static char *willTopic;
 	static char *willMessage;
 	static size_t keepAlive;
-	static char *publishTopic;
 	static Subscription *subs;
 	static uint8_t connectFlags;
 

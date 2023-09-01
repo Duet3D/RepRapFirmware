@@ -458,16 +458,6 @@ void MqttClient::ConnectionLost() noexcept
 		}
 	}
 
-	if (gb.Seen('P')) // Publish default topic, i.e. when topic in M118 is not specified
-	{
-		gb.GetQuotedString(param.GetRef());
-
-		if (!setMemb(publishTopic))
-		{
-			return GCodeResult::error;
-		}
-	}
-
 	return GCodeResult::ok;
 }
 
@@ -542,7 +532,6 @@ char *MqttClient::willTopic = nullptr;
 char *MqttClient::willMessage = nullptr;
 size_t MqttClient::keepAlive = MqttClient::DefaultKeepAlive;
 
-char *MqttClient::publishTopic = nullptr;
 uint8_t MqttClient::connectFlags = MQTT_CONNECT_CLEAN_SESSION;
 
 MqttClient::Subscription *MqttClient::subs = nullptr;

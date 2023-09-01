@@ -2052,7 +2052,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 #if HAS_MASS_STORAGE
-					if (gb.Seen('L') && type != MqttMessage)
+					if (gb.Seen('L'))
 					{
 						// If we haven't seen a P parameter but seen the L parameter we are going to log
 						// only to log file so reset message type first
@@ -2084,13 +2084,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// Append newline and send the message to the destinations,
 						// except for MqttMessage if supported
 #if SUPPORT_MQTT
-						if (type == MqttMessage)
+						if (type & MqttMessage)
 						{
+							bool fail = false;
 							String<MaxGCodeLength> topic;
-							if (gb.Seen('T'))
-							{
-								gb.GetQuotedString(topic.GetRef());
-							}
+							gb.MustSee('T');
+							gb.GetQuotedString(topic.GetRef());
 
 							int32_t qos = 0;
 							if (gb.Seen('Q'))
@@ -2100,6 +2099,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								{
 									reply.printf("Invalid value for QOS, Q%" PRIi32, qos);
 									result = GCodeResult::error;
+									fail = true;
 								}
 							}
 
@@ -2110,6 +2110,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								if (retain < 0 || retain > 1)
 								{
 									reply.printf("Invalid value for retain flag, R%" PRIi32, retain);
+									result = GCodeResult::error;
+									fail = true;
 								}
 							}
 
@@ -2120,10 +2122,15 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								if (dup < 0 || dup > 1)
 								{
 									reply.printf("Invalid value for duplicate flag, D%" PRIi32, dup);
+									result = GCodeResult::error;
+									fail = true;
 								}
 							}
 
-							reprap.GetNetwork().MqttPublish(message.c_str(), topic.c_str(), qos, retain, dup);
+							if (!fail)
+							{
+								reprap.GetNetwork().MqttPublish(message.c_str(), topic.c_str(), qos, retain, dup);
+							}
 						}
 						else
 #endif
@@ -3855,6 +3862,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 					switch (gb.GetCommandFraction())
 					{
+						const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 						case -1:
 							{
 								bool seen = false;
