@@ -96,7 +96,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "scanCoefficients",			OBJECT_MODEL_FUNC_ARRAY_IF(self->IsScanning(), 4), 											ObjectModelEntryFlags::none },
 	{ "speeds",						OBJECT_MODEL_FUNC_ARRAY(1), 																ObjectModelEntryFlags::none },
 	{ "temperatureCoefficients",	OBJECT_MODEL_FUNC_ARRAY(2), 																ObjectModelEntryFlags::none },
-	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->targetAdcValue), 												ObjectModelEntryFlags::none },
+	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->targetAdcValue), 											ObjectModelEntryFlags::none },
 	{ "tolerance",					OBJECT_MODEL_FUNC(self->tolerance, 3), 														ObjectModelEntryFlags::none },
 	{ "travelSpeed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->travelSpeed), 1), 					ObjectModelEntryFlags::none },
 	{ "triggerHeight",				OBJECT_MODEL_FUNC(-self->offsets[Z_AXIS], 3), 												ObjectModelEntryFlags::none },
