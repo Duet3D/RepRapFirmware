@@ -493,10 +493,7 @@ void Network::Activate() noexcept
 #endif
 
 #if SUPPORT_MQTT
-	for (size_t i = 0; i < NumMqttClients; ++i)
-	{
-		responders = clients = new MqttClient(responders, clients);
-	}
+	responders = clients = MqttClient::Init(responders, clients);
 #endif
 
 	// Finally, create the network task

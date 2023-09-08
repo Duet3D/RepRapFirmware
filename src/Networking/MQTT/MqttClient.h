@@ -18,7 +18,7 @@
 class MqttClient : public NetworkClient
 {
 public:
-	MqttClient(NetworkResponder *n, NetworkClient *c) noexcept;
+	static MqttClient *Init(NetworkResponder *n, NetworkClient *c) noexcept;
 
 	bool Spin() noexcept override;
 	bool Accept(Socket *s) noexcept override;
@@ -32,6 +32,8 @@ public:
 	static void Publish(const char *msg, const char *topic, int qos, bool retain, bool dup) noexcept;
 
 private:
+	MqttClient(NetworkResponder *n, NetworkClient *c) noexcept;
+
 	static constexpr int SendBufferSize = 1024;
 	static constexpr int ReceiveBufferSize = 1024;
 
@@ -66,14 +68,15 @@ private:
 	MqttClient *next;
 
 	// MQTT configuration, shared by all MqttClient
-	static char *username;
-	static char *password;
-	static char *id;
-	static char *willTopic;
-	static char *willMessage;
-	static size_t keepAlive;
-	static Subscription *subs;
-	static uint8_t connectFlags;
+	char *username;
+	char *password;
+	char *id;
+	char *willTopic;
+	char *willMessage;
+	Subscription *subs;
+	size_t keepAlive;
+	uint8_t connectFlags;
+
 
 	static MqttClient *clients; // List of all MQTT clients
 };

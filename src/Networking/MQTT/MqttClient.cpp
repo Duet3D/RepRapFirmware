@@ -16,11 +16,19 @@
 #include "mqtt.h"
 
 MqttClient::MqttClient(NetworkResponder *n, NetworkClient *c) noexcept
-	: NetworkClient(n, c),
-	  prevSub(nullptr), currSub(nullptr), messageTimer(0), next(clients)
+	: NetworkClient(n, c), prevSub(nullptr), currSub(nullptr), messageTimer(0), next(clients)
 {
 	clients = this;
 	sendBuf = recvBuf = nullptr;
+
+	username = nullptr;
+	password = nullptr;
+	id = nullptr;
+	willTopic = nullptr;
+	willMessage = nullptr;
+	keepAlive = MqttClient::DefaultKeepAlive;
+	connectFlags = MQTT_CONNECT_CLEAN_SESSION;
+	subs = nullptr;
 }
 
 bool MqttClient::Spin() noexcept
@@ -245,14 +253,12 @@ void MqttClient::ConnectionLost() noexcept
 
 /* static */ GCodeResult MqttClient::Configure(GCodeBuffer &gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// Since the config is shared, make sure the protocol is not active on any interface.
-	for (MqttClient *c = clients; c != nullptr; c = c->next)
+	MqttClient *client = clients;
+
+	if (client->responderState != ResponderState::free)
 	{
-		if (c->responderState != ResponderState::free)
-		{
-			reply.copy("Unable to configure MQTT when active on an interface");
-			return GCodeResult::error;
-		}
+		reply.copy("Unable to configure MQTT when active on an interface");
+		return GCodeResult::error;
 	}
 
 	String<MaxGCodeLength> param;
@@ -285,7 +291,7 @@ void MqttClient::ConnectionLost() noexcept
 		// Set username
 		gb.GetQuotedString(param.GetRef());
 
-		if (!setMemb(username))
+		if (!setMemb(client->username))
 		{
 			return GCodeResult::error;
 		}
@@ -295,23 +301,23 @@ void MqttClient::ConnectionLost() noexcept
 		if (gb.Seen('K'))
 		{
 			gb.GetQuotedString(param.GetRef());
-			if (!setMemb(password))
+			if (!setMemb(client->password))
 			{
-				clearMemb(username);
+				clearMemb(client->username);
 				return GCodeResult::error;
 			}
 		}
 		else
 		{
-			clearMemb(password);
+			clearMemb(client->password);
 		}
 
 		if (reprap.Debug(Module::Webserver))
 		{
-			debugPrintf("Username set to '%s'", username);
-			if (password)
+			debugPrintf("Username set to '%s'", client->username);
+			if (client->password)
 			{
-				debugPrintf("with password '%s'", password);
+				debugPrintf("with password '%s'", client->password);
 			}
 			debugPrintf("\n");
 		}
@@ -321,14 +327,14 @@ void MqttClient::ConnectionLost() noexcept
 	{
 		gb.GetQuotedString(param.GetRef());
 
-		if (!setMemb(id))
+		if (!setMemb(client->id))
 		{
 			return GCodeResult::error;
 		}
 
 		if (reprap.Debug(Module::Webserver))
 		{
-			debugPrintf("Client ID set to '%s'\n", id);
+			debugPrintf("Client ID set to '%s'\n", client->id);
 		}
 	}
 
@@ -362,7 +368,7 @@ void MqttClient::ConnectionLost() noexcept
 			}
 		}
 
-		if (!setMemb(willMessage))
+		if (!setMemb(client->willMessage))
 		{
 			return GCodeResult::error;
 		}
@@ -372,9 +378,9 @@ void MqttClient::ConnectionLost() noexcept
 		gb.MustSee('T');
 		{
 			gb.GetQuotedString(param.GetRef());
-			if (!setMemb(willTopic))
+			if (!setMemb(client->willTopic))
 			{
-				clearMemb(willMessage);
+				clearMemb(client->willMessage);
 				return GCodeResult::error;
 			}
 		}
@@ -382,28 +388,28 @@ void MqttClient::ConnectionLost() noexcept
 		switch (qos)
 		{
 		case 1:
-			connectFlags |= MQTT_CONNECT_WILL_QOS_1;
+			client->connectFlags |= MQTT_CONNECT_WILL_QOS_1;
 			break;
 
 		case 2:
-			connectFlags |= MQTT_CONNECT_WILL_QOS_2;
+			client->connectFlags |= MQTT_CONNECT_WILL_QOS_2;
 			break;
 
 		case 0:
 		default:
-			connectFlags |= MQTT_CONNECT_WILL_QOS_0;
+			client->connectFlags |= MQTT_CONNECT_WILL_QOS_0;
 			break;
 		}
 
 		if (retain)
 		{
-			connectFlags |= MQTT_CONNECT_WILL_RETAIN;
+			client->connectFlags |= MQTT_CONNECT_WILL_RETAIN;
 		}
 
 		if (reprap.Debug(Module::Webserver))
 		{
-			debugPrintf("Will message set to '%s' with topic '%s', QOS=%d, retain = %s\n",
-						willMessage, willTopic, qos, retain ? "true": "false");
+			debugPrintf("Set will message '%s' with topic '%s', QOS=%d, retain = %s\n",
+						client->willMessage, client->willTopic, qos, retain ? "true": "false");
 		}
 	}
 
@@ -418,14 +424,14 @@ void MqttClient::ConnectionLost() noexcept
 			qos = gb.GetIValue();
 			if (qos < 0 || qos > 2)
 			{
-				reply.copy("Invalid subscription max QOS");
+				reply.copy("Invalid max QOS");
 				return GCodeResult::badOrMissingParameter;
 			}
 		}
 
 		// Then check if the topic is already in the subscriptions,
 		Subscription *sub;
-		for (sub = subs; sub != nullptr; sub = sub->next)
+		for (sub = client->subs; sub != nullptr; sub = sub->next)
 		{
 			if (strcmp(sub->topic, param.c_str()) == 0)
 			{
@@ -446,7 +452,7 @@ void MqttClient::ConnectionLost() noexcept
 
 			if (!sub)
 			{
-				reply.copy("Unable to allocate mem");
+				reply.copy("Unable to allocate memory");
 				return GCodeResult::error;
 			}
 
@@ -454,12 +460,12 @@ void MqttClient::ConnectionLost() noexcept
 			sub->qos = qos;
 
 			// Append to list of subscriptions
-			sub->next = subs;
-			subs = sub;
+			sub->next = client->subs;
+			client->subs = sub;
 
 			if (reprap.Debug(Module::Webserver))
 			{
-				debugPrintf("MQTT client added topic %s with max QOS %d to subscriptions\n", param.c_str(), qos);
+				debugPrintf("Topic '%s' added with max QOS=%d to subscriptions\n", param.c_str(), qos);
 			}
 		}
 	}
@@ -474,49 +480,47 @@ void MqttClient::ConnectionLost() noexcept
 
 /* static */void MqttClient::Publish(const char *msg, const char *topic, int qos, bool retain, bool dup) noexcept
 {
-	for (MqttClient *c = clients; c != nullptr; c = c->next)
+	MqttClient *client = clients;
+	if (client->responderState == ResponderState::active)
 	{
-		if (c->responderState == ResponderState::active)
+		uint8_t flags = 0;
+
+		switch (qos)
 		{
-			uint8_t flags = 0;
+		case 1:
+			flags |= MQTT_PUBLISH_QOS_1;
+			break;
 
-			switch (qos)
-			{
-			case 1:
-				flags |= MQTT_PUBLISH_QOS_1;
-				break;
+		case 2:
+			flags |= MQTT_PUBLISH_QOS_2;
+			break;
 
-			case 2:
-				flags |= MQTT_PUBLISH_QOS_2;
-				break;
-
-			case 0:
-			default:
-				flags |= MQTT_PUBLISH_QOS_0;
-				break;
-			}
-
-			if (retain)
-			{
-				flags |= MQTT_PUBLISH_RETAIN;
-			}
-
-			if (dup)
-			{
-				flags |= MQTT_PUBLISH_DUP;
-			}
-
-			const MQTTErrors mqttErr = mqtt_publish(&c->client, topic, msg, strlen(msg), flags);
-
-			if (mqttErr != MQTT_OK)
-			{
-				GetPlatform().MessageF(UsbMessage, "Failed to publish MQTT message with error '%" PRId16 "'\n", mqttErr);
-			}
+		case 0:
+		default:
+			flags |= MQTT_PUBLISH_QOS_0;
+			break;
 		}
-		else
+
+		if (retain)
 		{
-			GetPlatform().MessageF(UsbMessage, "Failed to publish MQTT message, client not active\n");
+			flags |= MQTT_PUBLISH_RETAIN;
 		}
+
+		if (dup)
+		{
+			flags |= MQTT_PUBLISH_DUP;
+		}
+
+		const MQTTErrors mqttErr = mqtt_publish(&client->client, topic, msg, strlen(msg), flags);
+
+		if (mqttErr != MQTT_OK)
+		{
+			GetPlatform().MessageF(UsbMessage, "Failed to publish MQTT message with error '%" PRId16 "'\n", mqttErr);
+		}
+	}
+	else
+	{
+		GetPlatform().MessageF(UsbMessage, "Failed to publish MQTT message, client not active\n");
 	}
 }
 
@@ -530,17 +534,13 @@ void MqttClient::ConnectionLost() noexcept
 	GetPlatform().MessageF(UsbMessage, "Received message from topic '%s': '%s'\n", topic, message);
 }
 
+MqttClient *MqttClient::Init(NetworkResponder *n, NetworkClient *c) noexcept
+{
+	return new MqttClient(n, c);
+}
+
 /* Static members */
-char *MqttClient::username = nullptr;
-char *MqttClient::password = nullptr;
-char *MqttClient::id = nullptr;
-char *MqttClient::willTopic = nullptr;
-char *MqttClient::willMessage = nullptr;
-size_t MqttClient::keepAlive = MqttClient::DefaultKeepAlive;
 
-uint8_t MqttClient::connectFlags = MQTT_CONNECT_CLEAN_SESSION;
-
-MqttClient::Subscription *MqttClient::subs = nullptr;
 MqttClient *MqttClient::clients = nullptr;
 
 #endif

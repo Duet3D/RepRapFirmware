@@ -31,10 +31,6 @@ const size_t NumHttpResponders = 4;		// the number of concurrent HTTP requests w
 const size_t NumTelnetResponders = 1;	// the number of concurrent Telnet sessions we support
 #endif // not SAME70
 
-#if SUPPORT_MQTT
-const size_t NumMqttClients = 1; 		// initial support is limited to 1 instance
-#endif
-
 const size_t NumFtpResponders = 1;		// the number of concurrent FTP sessions we support
 
 #define HAS_RESPONDERS	(SUPPORT_HTTP || SUPPORT_FTP || SUPPORT_TELNET)
