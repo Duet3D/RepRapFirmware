@@ -136,7 +136,13 @@ bool MqttClient::Spin() noexcept
 
 			case ResponderState::active:
 				{
-					res = true;
+					struct mqtt_queued_message* msg = mqtt_mq_find(&client.mq, MQTT_CONTROL_PUBLISH, NULL);
+					bool publishing = (msg && msg->state != MQTT_QUEUED_COMPLETE);
+
+				 	if (publishing)
+					{
+						res = true;
+					}
 				}
 				break;
 
@@ -509,7 +515,7 @@ void MqttClient::ConnectionLost() noexcept
 		}
 		else
 		{
-			GetPlatform().MessageF(UsbMessage, "Failed to publish MQTT message, client not active");
+			GetPlatform().MessageF(UsbMessage, "Failed to publish MQTT message, client not active\n");
 		}
 	}
 }
