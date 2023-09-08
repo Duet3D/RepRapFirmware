@@ -88,6 +88,7 @@ void NetworkClient::Terminate(NetworkProtocol protocol, NetworkInterface *iface)
 	if ((HandlesProtocol(protocol) || protocol == AnyProtocol) && interface == iface)
 	{
 		Terminate();
+		interface = nullptr;
 	}
 }
 
@@ -102,7 +103,6 @@ bool NetworkClient::Start() noexcept
 void NetworkClient::ConnectionLost() noexcept
 {
 	NetworkResponder::ConnectionLost();
-	interface = nullptr;
 }
 
 NetworkClient *NetworkClient::clients = nullptr;

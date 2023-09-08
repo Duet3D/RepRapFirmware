@@ -24,7 +24,6 @@ public:
 	bool Accept(Socket *s) noexcept override;
 	void Terminate() noexcept override;
 	void Diagnostics(MessageType mtype) const noexcept override;
-
 	bool HandlesProtocol(NetworkProtocol p) noexcept override;
 
 	static GCodeResult Configure(GCodeBuffer &gb, const StringRef& reply) THROWS(GCodeException);
@@ -77,6 +76,7 @@ private:
 	size_t keepAlive;
 	uint8_t connectFlags;
 
+	NetworkInterface *enabledInterface;
 
 	static MqttClient *clients; // List of all MQTT clients
 };

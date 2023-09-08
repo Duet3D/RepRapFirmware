@@ -162,7 +162,7 @@ bool MqttClient::Spin() noexcept
 					// If received ACK for DISCONNECT regardless of result, or the time has expired.
 					if (!disconnecting || millis() - messageTimer >= MqttClient::MessageTimeout)
 					{
-						ConnectionLost();
+						NetworkClient::Terminate(MqttProtocol, interface);
 						if (reprap.Debug(Module::Webserver))
 						{
 							debugPrintf("MQTT disconnected\n");
