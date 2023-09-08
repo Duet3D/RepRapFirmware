@@ -3859,9 +3859,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 586: // Configure network protocols
 				if (CheckNetworkCommandAllowed(gb, reply, result))
 				{
+					const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 					switch (gb.GetCommandFraction())
 					{
-						const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 						case -1:
 							{
 								bool seen = false;
