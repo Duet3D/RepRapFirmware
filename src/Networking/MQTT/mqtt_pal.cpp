@@ -60,6 +60,8 @@ void mqtt_pal_mutex_init(mqtt_pal_mutex_t *mutex)
 {
 	static uint8_t count = 0;
 	constexpr char format[] = "MQTTClient%d";
+	// Size should be fine, can accomodate up to 99; while we don't expect
+	// more than a couple.
 	char name[sizeof(format)] = { 0 };
 	SafeSnprintf(name, sizeof(name), format, count);
 	mutex->m = new Mutex();

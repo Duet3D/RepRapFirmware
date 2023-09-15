@@ -57,7 +57,8 @@ private:
 	void ConnectionLost() noexcept override;
 	static void PublishCallback(void** state, struct mqtt_response_publish *published);
 
-	uint8_t *sendBuf, *recvBuf;
+	uint8_t sendBuf[SendBufferSize];
+	uint8_t recvBuf[ReceiveBufferSize];
 	mqtt_client client;
 
 	Subscription *prevSub, *currSub; // Used for subscribing to topics
@@ -75,6 +76,7 @@ private:
 	Subscription *subs;
 	size_t keepAlive;
 	uint8_t connectFlags;
+	bool inited;
 
 	NetworkInterface *enabledInterface;
 
