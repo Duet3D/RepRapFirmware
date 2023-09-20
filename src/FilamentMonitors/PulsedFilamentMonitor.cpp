@@ -135,8 +135,8 @@ GCodeResult PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& r
 		{
 			reply.copy("Pulse-type filament monitor on pin ");
 			GetPort().AppendPinName(reply);
-			reply.catf(", %s, sensitivity %.3fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
-						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when printing from SD card" : "disabled",
+			reply.catf(", %s, %.3fmm/pulse, allowed movement %ld%% to %ld%%, check every %.1fmm, ",
+						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when SD printing" : "disabled",
 						(double)mmPerPulse,
 						ConvertToPercent(minMovementAllowed),
 						ConvertToPercent(maxMovementAllowed),
@@ -148,7 +148,7 @@ GCodeResult PulsedFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& r
 			}
 			else if (HaveCalibrationData())
 			{
-				reply.catf("measured sensitivity %.3fmm/pulse, measured minimum %ld%%, maximum %ld%% over %.1fmm\n",
+				reply.catf("measured %.3fmm/pulse, min %ld%%, max %ld%% over %.1fmm\n",
 					(double)MeasuredSensitivity(),
 					ConvertToPercent(minMovementRatio),
 					ConvertToPercent(maxMovementRatio),
