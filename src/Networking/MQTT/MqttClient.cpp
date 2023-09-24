@@ -16,9 +16,8 @@
 #include "mqtt.h"
 
 MqttClient::MqttClient(NetworkResponder *n, NetworkClient *c) noexcept
-	: NetworkClient(n, c), prevSub(nullptr), currSub(nullptr), messageTimer(0), next(clients)
+	: NetworkClient(n, c), prevSub(nullptr), currSub(nullptr), messageTimer(0)
 {
-	clients = this;
 	username = nullptr;
 	password = nullptr;
 	id = nullptr;
@@ -269,10 +268,7 @@ void MqttClient::ConnectionLost() noexcept
 
 /* static */ GCodeResult MqttClient::Configure(GCodeBuffer &gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// There is only one client for now, enforced by making MqttClient a singleton.
-	MqttClient *client = clients;
-
-	if (client->responderState != ResponderState::free)
+	if (instance->responderState != ResponderState::free)
 	{
 		reply.copy("Unable to configure MQTT when active on an interface");
 		return GCodeResult::error;
@@ -308,7 +304,7 @@ void MqttClient::ConnectionLost() noexcept
 		// Set username
 		gb.GetQuotedString(param.GetRef());
 
-		if (!setMemb(client->username))
+		if (!setMemb(instance->username))
 		{
 			return GCodeResult::error;
 		}
@@ -318,23 +314,23 @@ void MqttClient::ConnectionLost() noexcept
 		if (gb.Seen('K'))
 		{
 			gb.GetQuotedString(param.GetRef());
-			if (!setMemb(client->password))
+			if (!setMemb(instance->password))
 			{
-				clearMemb(client->username);
+				clearMemb(instance->username);
 				return GCodeResult::error;
 			}
 		}
 		else
 		{
-			clearMemb(client->password);
+			clearMemb(instance->password);
 		}
 
 		if (reprap.Debug(Module::Webserver))
 		{
-			debugPrintf("Username set to '%s'", client->username);
-			if (client->password)
+			debugPrintf("Username set to '%s'", instance->username);
+			if (instance->password)
 			{
-				debugPrintf("with password '%s'", client->password);
+				debugPrintf("with password '%s'", instance->password);
 			}
 			debugPrintf("\n");
 		}
@@ -344,14 +340,14 @@ void MqttClient::ConnectionLost() noexcept
 	{
 		gb.GetQuotedString(param.GetRef());
 
-		if (!setMemb(client->id))
+		if (!setMemb(instance->id))
 		{
 			return GCodeResult::error;
 		}
 
 		if (reprap.Debug(Module::Webserver))
 		{
-			debugPrintf("Client ID set to '%s'\n", client->id);
+			debugPrintf("Client ID set to '%s'\n", instance->id);
 		}
 	}
 
@@ -372,7 +368,7 @@ void MqttClient::ConnectionLost() noexcept
 		gb.TryGetLimitedUIValue('R', retain, seen, 2);
 
 
-		if (!setMemb(client->willMessage))
+		if (!setMemb(instance->willMessage))
 		{
 			return GCodeResult::error;
 		}
@@ -382,9 +378,9 @@ void MqttClient::ConnectionLost() noexcept
 		gb.MustSee('T');
 		{
 			gb.GetQuotedString(param.GetRef());
-			if (!setMemb(client->willTopic))
+			if (!setMemb(instance->willTopic))
 			{
-				clearMemb(client->willMessage);
+				clearMemb(instance->willMessage);
 				return GCodeResult::error;
 			}
 		}
@@ -414,12 +410,12 @@ void MqttClient::ConnectionLost() noexcept
 
 		// Create mask from relevant flags
 		static constexpr uint8_t mask = MQTT_CONNECT_WILL_QOS_0 | MQTT_CONNECT_WILL_QOS_1 | MQTT_CONNECT_WILL_QOS_2 | MQTT_CONNECT_WILL_RETAIN;
-		client->connectFlags = (client->connectFlags & ~mask) | (flags & mask);
+		instance->connectFlags = (instance->connectFlags & ~mask) | (flags & mask);
 
 		if (reprap.Debug(Module::Webserver))
 		{
-			debugPrintf("Set will message '%s' with topic '%s', QOS=%d, retain = %s\n",
-						client->willMessage, client->willTopic, qos, retain ? "true": "false");
+			debugPrintf("Set will message '%s' with topic '%s', QOS=%lu, retain = %s\n",
+						instance->willMessage, instance->willTopic, qos, retain ? "true": "false");
 		}
 	}
 
@@ -435,7 +431,7 @@ void MqttClient::ConnectionLost() noexcept
 
 		// Then check if the topic is already in the subscriptions,
 		Subscription *sub;
-		for (sub = client->subs; sub != nullptr; sub = sub->next)
+		for (sub = instance->subs; sub != nullptr; sub = sub->next)
 		{
 			if (strcmp(sub->topic, param.c_str()) == 0)
 			{
@@ -469,8 +465,8 @@ void MqttClient::ConnectionLost() noexcept
 			sub->qos = qos;
 
 			// Append to list of subscriptions
-			sub->next = client->subs;
-			client->subs = sub;
+			sub->next = instance->subs;
+			instance->subs = sub;
 
 			if (reprap.Debug(Module::Webserver))
 			{
@@ -489,8 +485,7 @@ void MqttClient::ConnectionLost() noexcept
 
 /* static */void MqttClient::Publish(const char *msg, const char *topic, int qos, bool retain, bool dup) noexcept
 {
-	MqttClient *client = clients;
-	if (client->responderState == ResponderState::active)
+	if (instance->responderState == ResponderState::active)
 	{
 		uint8_t flags = 0;
 
@@ -520,7 +515,7 @@ void MqttClient::ConnectionLost() noexcept
 			flags |= MQTT_PUBLISH_DUP;
 		}
 
-		const MQTTErrors err = mqtt_publish(&client->client, topic, msg, strlen(msg), flags);
+		const MQTTErrors err = mqtt_publish(&instance->client, topic, msg, strlen(msg), flags);
 
 		if (err != MQTT_OK)
 		{
@@ -545,11 +540,12 @@ void MqttClient::ConnectionLost() noexcept
 
 MqttClient *MqttClient::Init(NetworkResponder *n, NetworkClient *c) noexcept
 {
-	return new MqttClient(n, c);
+	instance = new MqttClient(n, c);
+	return instance;
 }
 
 /* Static members */
 
-MqttClient *MqttClient::clients = nullptr;
+MqttClient *MqttClient::instance = nullptr;
 
 #endif

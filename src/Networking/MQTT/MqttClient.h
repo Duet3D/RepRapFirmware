@@ -65,7 +65,7 @@ private:
 
 	uint32_t messageTimer;	// General purpose variable for keeping track of queued messages timeout
 
-	MqttClient *next;
+	static MqttClient *instance;
 
 	// MQTT configuration, shared by all MqttClient
 	char *username;
@@ -79,8 +79,6 @@ private:
 	bool inited;
 
 	NetworkInterface *enabledInterface;
-
-	static MqttClient *clients; // List of all MQTT clients
 };
 
 #endif	// SUPPORT_MQTT
