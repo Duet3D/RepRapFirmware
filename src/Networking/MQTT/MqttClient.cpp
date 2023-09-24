@@ -360,30 +360,17 @@ void MqttClient::ConnectionLost() noexcept
 		// Set the will message
 		gb.GetQuotedString(param.GetRef());
 
-		int qos = 0;
-		int retain = 0;
+		uint32_t qos = 0;
+		uint32_t retain = 0;
+		bool seen = false;
 
 		// Check qos
-		if (gb.Seen('Q'))
-		{
-			qos = gb.GetIValue();
-			if (qos < 0 || qos > 2)
-			{
-				reply.copy("Invalid will QOS");
-				return GCodeResult::badOrMissingParameter;
-			}
-		}
+		gb.TryGetLimitedUIValue('Q', qos, seen, 3);
+
 
 		// Check retain flag
-		if (gb.Seen('R'))
-		{
-			retain = gb.GetIValue();
-			if (retain < 0 || retain > 1)
-			{
-				reply.copy("Invalid will retain flag");
-				return GCodeResult::badOrMissingParameter;
-			}
-		}
+		gb.TryGetLimitedUIValue('R', retain, seen, 2);
+
 
 		if (!setMemb(client->willMessage))
 		{
@@ -440,17 +427,11 @@ void MqttClient::ConnectionLost() noexcept
 	{
 		gb.GetQuotedString(param.GetRef());
 
+		bool seen = false;
+
 		// Check the max QOS first
-		int qos = 0;
-		if (gb.Seen('O'))
-		{
-			qos = gb.GetIValue();
-			if (qos < 0 || qos > 2)
-			{
-				reply.copy("Invalid max QOS");
-				return GCodeResult::badOrMissingParameter;
-			}
-		}
+		uint32_t qos = 0;
+		gb.TryGetLimitedUIValue('O', qos, seen, 3);
 
 		// Then check if the topic is already in the subscriptions,
 		Subscription *sub;

@@ -2086,43 +2086,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.MustSee('T');
 						gb.GetQuotedString(topic.GetRef());
 
-						int32_t qos = 0;
-						if (gb.Seen('Q'))
-						{
-							qos = gb.GetIValue();
-							if (qos < 0 || qos > 2)
-							{
-								reply.printf("Invalid value for QOS, Q%" PRIi32, qos);
-								result = GCodeResult::error;
-							}
-						}
+						bool seen = false;
 
-						int32_t retain = 0;
-						if (gb.Seen('R') && result != GCodeResult::error)
-						{
-							retain = gb.GetIValue();
-							if (retain < 0 || retain > 1)
-							{
-								reply.printf("Invalid value for retain flag, R%" PRIi32, retain);
-								result = GCodeResult::error;
-							}
-						}
+						uint32_t qos = 0;
+						gb.TryGetLimitedUIValue('Q', qos, seen, 3);
 
-						int32_t dup = 0;
-						if (gb.Seen('D') && result != GCodeResult::error)
-						{
-							dup = gb.GetIValue();
-							if (dup < 0 || dup > 1)
-							{
-								reply.printf("Invalid value for duplicate flag, D%" PRIi32, dup);
-								result = GCodeResult::error;
-							}
-						}
+						uint32_t retain = 0;
+						gb.TryGetLimitedUIValue('R', retain, seen, 2);
 
-						if (result != GCodeResult::error)
-						{
-							reprap.GetNetwork().MqttPublish(message.c_str(), topic.c_str(), qos, retain, dup);
-						}
+						uint32_t dup = 0;
+						gb.TryGetLimitedUIValue('D', dup, seen, 2);
+
+						reprap.GetNetwork().MqttPublish(message.c_str(), topic.c_str(), qos, retain, dup);
 					}
 #endif
 
