@@ -58,15 +58,9 @@ ssize_t mqtt_pal_recvall(mqtt_pal_socket_handle fd, void* buf, size_t sz, int fl
 
 void mqtt_pal_mutex_init(mqtt_pal_mutex_t *mutex)
 {
-	static uint8_t count = 0;
-	constexpr char format[] = "MQTTClient%d";
-	// Size should be fine, can accomodate up to 99; while we don't expect
-	// more than a couple.
-	char name[sizeof(format)] = { 0 };
-	SafeSnprintf(name, sizeof(name), format, count);
+	static const char name[] = "MQTTClient";
 	mutex->m = new Mutex();
 	mutex->m->Create(name);
-	count++;
 }
 
 void mqtt_pal_mutex_lock(mqtt_pal_mutex_t *mutex)
