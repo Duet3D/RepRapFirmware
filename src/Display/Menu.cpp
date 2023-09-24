@@ -364,14 +364,25 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 			}
 			++args;
 			((ch == 'T') ? text : (ch == 'A') ? action : (ch == 'I') ? dirpath : fname) = args;
-			while (*args != '"' && *args != 0)
+
+			// Parse and terminate the string argument, replacing pairs of double quote characters by single double quote characters
 			{
-				++args;
-			}
-			if (*args == '"')
-			{
-				*args = 0;
-				++args;
+				char *args2 = args;
+				char ch2;
+				while ((ch2 = *args) != 0)
+				{
+					++args;
+					if (ch2 == '"')
+					{
+						if (*args != ch2)
+						{
+							break;					// just one double quote character, so end of string argument
+						}
+						++args;						// it's two double quote characters, so skip one of them
+					}
+					*args2++ = ch2;					// copy the character to the correct position in case we replaced some pairs of double quote characters
+				}
+				*args2 = 0;							// terminate the string
 			}
 			break;
 
