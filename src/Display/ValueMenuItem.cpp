@@ -75,6 +75,7 @@ void ValueMenuItem::Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noex
 			if (omText != nullptr)
 			{
 				error = reprap.GetGCodes().EvaluateValueForDisplay(omText, currentValue);
+				itemChanged = (error || currentValue != oldValue);
 			}
 			else if (adjusting != AdjustMode::adjusting)
 			{
