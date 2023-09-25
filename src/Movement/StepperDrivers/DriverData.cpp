@@ -25,9 +25,9 @@ constexpr ObjectModelTableEntry DriverData::objectModelTable[] =
 	{ "avg",				OBJECT_MODEL_FUNC((float)self->averageCurrentFraction, 2), 	ObjectModelEntryFlags::live },
 	{ "max",				OBJECT_MODEL_FUNC((float)self->maxCurrentFraction, 2), 		ObjectModelEntryFlags::live },
 
-	// 3/ closedLoop.positionError members
-	{ "avg",				OBJECT_MODEL_FUNC((float)self->averagePositionError, 2), 	ObjectModelEntryFlags::live },
-	{ "max",				OBJECT_MODEL_FUNC((float)self->maxPositionError, 2), 		ObjectModelEntryFlags::live },
+	// 3. closedLoop.positionError members
+	{ "max",				OBJECT_MODEL_FUNC((float)self->maxAbsPositionError, 2), 	ObjectModelEntryFlags::live },
+	{ "rms",				OBJECT_MODEL_FUNC((float)self->rmsPositionError, 2), 		ObjectModelEntryFlags::live },
 };
 
 constexpr uint8_t DriverData::objectModelTableDescriptor[] = { 4, 2, 2, 2, 2 };

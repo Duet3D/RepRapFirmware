@@ -286,13 +286,13 @@ void ExpansionManager::ProcessDriveStatusReport(const CanMessageBuffer *buf) noe
 				dd.status.all = msg.closedLoopData[driver].status;
 				dd.averageCurrentFraction = msg.closedLoopData[driver].averageCurrentFraction;
 				dd.maxCurrentFraction = msg.closedLoopData[driver].maxCurrentFraction;
-				dd.averagePositionError = msg.closedLoopData[driver].averagePositionError;
-				dd.maxPositionError = msg.closedLoopData[driver].maxPositionError;
+				dd.rmsPositionError = msg.closedLoopData[driver].rmsPositionError;
+				dd.maxAbsPositionError = msg.closedLoopData[driver].maxAbsPositionError;
 				dd.haveClosedLoopData = true;
 			}
 			else
 			{
-				dd.status.all = msg.openLoopData[driver];
+				dd.status.all = msg.openLoopData[driver].status;
 			}
 		}
 

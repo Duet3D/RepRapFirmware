@@ -5392,16 +5392,16 @@ void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
 {
 	CanMessageDriversStatus * const msg = buf.SetupStatusMessage<CanMessageDriversStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 # if HAS_SMART_DRIVERS
-	msg->SetStandardFields(MaxSmartDrivers);
+	msg->SetStandardFields(MaxSmartDrivers, false);
 	for (size_t driver = 0; driver < MaxSmartDrivers; ++driver)
 	{
-		msg->openLoopData[driver] = SmartDrivers::GetStatus(driver, false, false).AsU32();
+		msg->openLoopData[driver].status = SmartDrivers::GetStatus(driver, false, false).AsU32();
 	}
 # else
-	msg->SetStandardFields(NumDirectDrivers);
+	msg->SetStandardFields(NumDirectDrivers, false);
 	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
-		msg->openLoopData[driver] = HasDriverError(driver) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0u;
+		msg->openLoopData[driver].status = HasDriverError(driver) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0u;
 	}
 # endif
 	buf.dataLength = msg->GetActualDataLength();
