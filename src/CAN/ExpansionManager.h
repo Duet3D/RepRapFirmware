@@ -17,6 +17,7 @@
 #include <CanMessageBuffer.h>
 #include <General/NamedEnum.h>
 #include <Platform/UniqueId.h>
+#include <Movement/StepperDrivers/DriverData.h>
 
 NamedEnum(BoardState, uint8_t, unknown, flashing, flashFailed, resetting, running, timedOut);
 
@@ -24,12 +25,15 @@ struct ExpansionBoardData
 {
 	ExpansionBoardData() noexcept;
 
+	bool HasDrivers() const noexcept { return numDrivers != 0 && driverData != nullptr; }
+
 	const char *_ecv_array typeName;
 	MinCurMax mcuTemp, vin, v12;
 	uint32_t accelerometerLastRunDataPoints;
 	uint32_t closedLoopLastRunDataPoints;
 	volatile uint32_t whenLastStatusReportReceived;
 	UniqueId uniqueId;
+	DriverData *driverData;									// an array numDrivers long of objects, or nullptr if numDrivers is zero
 	uint16_t accelerometerRuns;
 	uint16_t closedLoopRuns;
 	uint16_t hasMcuTemp : 1,
@@ -53,6 +57,7 @@ public:
 
 	void ProcessAnnouncement(CanMessageBuffer *buf, bool isNewFormat) noexcept;
 	void ProcessBoardStatusReport(const CanMessageBuffer *buf) noexcept;
+	void ProcessDriveStatusReport(const CanMessageBuffer *buf) noexcept;
 
 	// Firmware update and related functions
 	GCodeResult ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
@@ -69,13 +74,15 @@ public:
 	void EmergencyStop() noexcept;
 
 protected:
-	DECLARE_OBJECT_MODEL
+	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
 	static constexpr uint32_t StatusMessageTimeoutMillis = 5000;	// if we don't receive a board status message for this long we presume that communication has been lost
 
 	const ExpansionBoardData& FindIndexedBoard(unsigned int index) const noexcept;
 	void UpdateBoardState(CanAddress address, BoardState newState) noexcept;
+
+	static ReadWriteLock boardsLock;
 
 	unsigned int numExpansionBoards;
 	unsigned int numBoardsFlashing;

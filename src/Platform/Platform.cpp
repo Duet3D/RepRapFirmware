@@ -5395,13 +5395,13 @@ void Platform::SendDriversStatus(CanMessageBuffer& buf) noexcept
 	msg->SetStandardFields(MaxSmartDrivers);
 	for (size_t driver = 0; driver < MaxSmartDrivers; ++driver)
 	{
-		msg->data[driver] = SmartDrivers::GetStatus(driver, false, false).AsU32();
+		msg->openLoopData[driver] = SmartDrivers::GetStatus(driver, false, false).AsU32();
 	}
 # else
 	msg->SetStandardFields(NumDirectDrivers);
 	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
-		msg->data[driver] = HasDriverError(driver) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0u;
+		msg->openLoopData[driver] = HasDriverError(driver) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0u;
 	}
 # endif
 	buf.dataLength = msg->GetActualDataLength();

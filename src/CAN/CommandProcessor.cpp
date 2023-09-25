@@ -718,7 +718,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				break;
 
 			case CanMessageType::driversStatusReport:
-				//TODO
+				reprap.GetExpansion().ProcessDriveStatusReport(buf);
 				break;
 
 			case CanMessageType::boardStatusReport:
