@@ -151,6 +151,16 @@ bool MqttClient::Spin() noexcept
 					{
 						res = true;
 					}
+					else
+					{
+						// Workaround for a temporary bug where the error MQTT_ERROR_SEND_BUFFER_IS_FULL
+						// is not cleared even if the send buffer has been drained already.
+						if (err == MQTT_ERROR_SEND_BUFFER_IS_FULL)
+						{
+							client.error = MQTT_OK;
+							res = true;
+						}
+					}
 				}
 				break;
 
