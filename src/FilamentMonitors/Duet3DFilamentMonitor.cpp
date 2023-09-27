@@ -1,5 +1,5 @@
 /*
- * Duet3DFilamentSensor.cpp
+ * Duet3DFilamentMonitor.cpp
  *
  *  Created on: 20 Jul 2017
  *      Author: David
