@@ -1,5 +1,5 @@
 /*
- * Duet3DFilamentSensor.h
+ * Duet3DFilamentMonitor.h
  *
  *  Created on: 20 Jul 2017
  *      Author: David
@@ -14,12 +14,20 @@
 
 class Duet3DFilamentMonitor : public FilamentMonitor
 {
-public:
+protected:
+	DECLARE_OBJECT_MODEL
+
 	Duet3DFilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept;
 
 	bool Interrupt() noexcept override;
 
-protected:
+#if SUPPORT_CAN_EXPANSION
+	void UpdateLiveData(const FilamentMonitorDataNew& data) noexcept override;
+#endif
+#if SUPPORT_REMOTE_COMMANDS
+	void GetLiveData(FilamentMonitorDataNew& data) const noexcept override;
+#endif
+
 	void InitReceiveBuffer() noexcept;
 
 	enum class PollResult : uint8_t
@@ -32,9 +40,16 @@ protected:
 	bool IsReceiving() const noexcept;
 	bool IsWaitingForStartBit() const noexcept;
 
-protected:
 	uint32_t overrunErrorCount;
 	uint32_t polarityErrorCount;
+
+	// Live data reported in the object model
+	float totalExtrusionCommanded = 0.0;
+	int16_t avgPercentage;
+	int16_t minPercentage;
+	int16_t maxPercentage;
+	int16_t lastPercentage;
+	bool hasLiveData = false;
 
 private:
 	static constexpr size_t EdgeCaptureBufferSize = 64;				// must be a power of 2

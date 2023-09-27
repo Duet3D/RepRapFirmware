@@ -395,6 +395,21 @@ GCodeResult PulsedFilamentMonitor::Configure(const CanMessageGenericParser& pars
 	return rslt;
 }
 
+// Store collected data in a CAN message slot
+void PulsedFilamentMonitor::GetLiveData(FilamentMonitorDataNew& data) const noexcept
+{
+	data.hasLiveData = false;
+}
+
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+
+void PulsedFilamentMonitor::UpdateLiveData(const FilamentMonitorDataNew& data) noexcept
+{
+	// nothing needed here
+}
+
 #endif
 
 // End

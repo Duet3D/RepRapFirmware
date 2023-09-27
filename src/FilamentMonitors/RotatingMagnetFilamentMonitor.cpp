@@ -74,7 +74,7 @@ constexpr uint8_t RotatingMagnetFilamentMonitor::objectModelTableDescriptor[] =
 	5
 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(RotatingMagnetFilamentMonitor, FilamentMonitor)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(RotatingMagnetFilamentMonitor, Duet3DFilamentMonitor)
 
 #endif
 
@@ -107,6 +107,7 @@ void RotatingMagnetFilamentMonitor::Init() noexcept
 void RotatingMagnetFilamentMonitor::Reset() noexcept
 {
 	extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
+	lastMovementRatio = 0.0;
 	magneticMonitorState = MagneticMonitorState::idle;
 	haveStartBitData = false;
 	synced = false;							// force a resync
@@ -451,19 +452,7 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCo
 			}
 			float ratio = totalMovementMeasured/totalExtrusionCommanded;
 			minMovementRatio = maxMovementRatio = ratio;
-
-			if (GetEnableMode() != 0)
-			{
-				ratio *= mmPerRev;
-				if (ratio < minMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooLittleMovement;
-				}
-				else if (ratio > maxMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooMuchMovement;
-				}
-			}
+			lastMovementRatio = ratio * mmPerRev;
 			magneticMonitorState = MagneticMonitorState::comparing;
 		}
 		break;
@@ -476,7 +465,7 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCo
 				amountMeasured = -amountMeasured;
 			}
 			totalMovementMeasured += amountMeasured;
-			float ratio = amountMeasured/amountCommanded;
+			const float ratio = amountMeasured/amountCommanded;
 			if (ratio > maxMovementRatio)
 			{
 				maxMovementRatio = ratio;
@@ -485,23 +474,36 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::CheckFilament(float amountCo
 			{
 				minMovementRatio = ratio;
 			}
-
-			if (GetEnableMode() != 0)
-			{
-				ratio *= mmPerRev;
-				if (ratio < minMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooLittleMovement;
-				}
-				else if (ratio > maxMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooMuchMovement;
-				}
-			}
+			lastMovementRatio = ratio * mmPerRev;
 		}
 		break;
 	}
 
+	if (magneticMonitorState == MagneticMonitorState::comparing)
+	{
+		if (GetEnableMode() != 0)
+		{
+			if (lastMovementRatio < minMovementAllowed)
+			{
+				ret = FilamentSensorStatus::tooLittleMovement;
+			}
+			else if (lastMovementRatio > maxMovementAllowed)
+			{
+				ret = FilamentSensorStatus::tooMuchMovement;
+			}
+		}
+
+		// Update values for the object model
+		avgPercentage = ConvertToPercent(totalMovementMeasured * mmPerRev/totalExtrusionCommanded);
+		minPercentage = ConvertToPercent(minMovementRatio * mmPerRev);
+		maxPercentage = ConvertToPercent(maxMovementRatio * mmPerRev);
+		lastPercentage = ConvertToPercent(lastMovementRatio);
+		hasLiveData = true;
+	}
+	else
+	{
+		hasLiveData = false;
+	}
 	return ret;
 }
 
@@ -510,6 +512,7 @@ FilamentSensorStatus RotatingMagnetFilamentMonitor::Clear() noexcept
 {
 	Reset();											// call this first so that haveStartBitData and synced are false when we call HandleIncomingData
 	HandleIncomingData();								// to keep the diagnostics up to date
+	hasLiveData = false;
 
 	return (GetEnableMode() == 0) ? FilamentSensorStatus::ok
 			: (!dataReceived) ? FilamentSensorStatus::noDataReceived

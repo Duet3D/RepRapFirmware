@@ -26,6 +26,33 @@
 #include <Movement/StepTimer.h>
 #include <Platform/RepRap.h>
 
+// Object model table and functions
+// Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
+// Otherwise the table will be allocated in RAM instead of flash, which wastes too much RAM.
+
+// Macro to build a standard lambda function that includes the necessary type conversions
+#define OBJECT_MODEL_FUNC(...)					OBJECT_MODEL_FUNC_BODY(Duet3DFilamentMonitor, __VA_ARGS__)
+#define OBJECT_MODEL_FUNC_IF(_condition, ...)	OBJECT_MODEL_FUNC_IF_BODY(Duet3DFilamentMonitor, _condition, __VA_ARGS__)
+
+constexpr ObjectModelTableEntry Duet3DFilamentMonitor::objectModelTable[] =
+{
+	// Within each group, these entries must be in alphabetical order
+	// 0. Duet3DFilamentMonitor members
+	{ "avgPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->avgPercentage),		ObjectModelEntryFlags::live },
+	{ "lastPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->lastPercentage),		ObjectModelEntryFlags::live },
+	{ "maxPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->maxPercentage),		ObjectModelEntryFlags::live },
+	{ "minPercentage",		OBJECT_MODEL_FUNC_IF(self->hasLiveData, (int32_t)self->minPercentage),		ObjectModelEntryFlags::live },
+	{ "totalExtrusion",		OBJECT_MODEL_FUNC(self->totalExtrusionCommanded, 1),						ObjectModelEntryFlags::live },
+};
+
+constexpr uint8_t Duet3DFilamentMonitor::objectModelTableDescriptor[] =
+{
+	1,
+	5
+};
+
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(Duet3DFilamentMonitor, FilamentMonitor)
+
 // Constructors
 Duet3DFilamentMonitor::Duet3DFilamentMonitor(unsigned int drv, unsigned int monitorType, DriverId did) noexcept
 	: FilamentMonitor(drv, monitorType, did), overrunErrorCount(0), polarityErrorCount(0)
@@ -237,5 +264,40 @@ bool Duet3DFilamentMonitor::IsWaitingForStartBit() const noexcept
 {
 	return state == RxdState::waitingForStartBit;
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+void Duet3DFilamentMonitor::UpdateLiveData(const FilamentMonitorDataNew& data) noexcept
+{
+	if (data.hasLiveData)
+	{
+		totalExtrusionCommanded = (float)data.calibrationLength;
+		avgPercentage = data.avgPercentage;
+		minPercentage = data.minPercentage;
+		maxPercentage = data.maxPercentage;
+		lastPercentage = data.lastPercentage;
+	}
+	hasLiveData = data.hasLiveData;
+}
+
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+
+// Store collected data in a CAN message slot
+void Duet3DFilamentMonitor::GetLiveData(FilamentMonitorDataNew& data) const noexcept
+{
+	if (hasLiveData)
+	{
+		data.calibrationLength = (uint32_t)lrintf(totalExtrusionCommanded);
+		data.avgPercentage = avgPercentage;
+		data.minPercentage = minPercentage;
+		data.maxPercentage = maxPercentage;
+		data.lastPercentage = lastPercentage;
+	}
+	data.hasLiveData = hasLiveData;
+}
+
+#endif
 
 // End

@@ -74,7 +74,7 @@ constexpr uint8_t LaserFilamentMonitor::objectModelTableDescriptor[] =
 	5
 };
 
-DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(LaserFilamentMonitor, FilamentMonitor)
+DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(LaserFilamentMonitor, Duet3DFilamentMonitor)
 
 #endif
 
@@ -105,6 +105,7 @@ void LaserFilamentMonitor::Init() noexcept
 void LaserFilamentMonitor::Reset() noexcept
 {
 	extrusionCommandedThisSegment = extrusionCommandedSinceLastSync = movementMeasuredThisSegment = movementMeasuredSinceLastSync = 0.0;
+	lastMovementRatio = 0.0;
 	laserMonitorState = LaserMonitorState::idle;
 	haveStartBitData = false;
 	synced = false;							// force a resync
@@ -412,54 +413,55 @@ FilamentSensorStatus LaserFilamentMonitor::CheckFilament(float amountCommanded, 
 			{
 				totalMovementMeasured = -totalMovementMeasured;
 			}
-			minMovementRatio = maxMovementRatio = totalMovementMeasured/totalExtrusionCommanded;
-			if (GetEnableMode() != 0)
-			{
-				if (minMovementRatio < minMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooLittleMovement;
-				}
-				else if (maxMovementRatio > maxMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooMuchMovement;
-				}
-			}
+			minMovementRatio = maxMovementRatio = lastMovementRatio = totalMovementMeasured/totalExtrusionCommanded;
 			laserMonitorState = LaserMonitorState::comparing;
 		}
 		break;
 
 	case LaserMonitorState::comparing:
+		totalExtrusionCommanded += amountCommanded;
+		if (backwards)
 		{
-			totalExtrusionCommanded += amountCommanded;
-			if (backwards)
-			{
-				extrusionMeasured = -extrusionMeasured;
-			}
-			totalMovementMeasured += extrusionMeasured;
-			const float ratio = extrusionMeasured/amountCommanded;
-			if (ratio > maxMovementRatio)
-			{
-				maxMovementRatio = ratio;
-			}
-			else if (ratio < minMovementRatio)
-			{
-				minMovementRatio = ratio;
-			}
-			if (GetEnableMode() != 0)
-			{
-				if (ratio < minMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooLittleMovement;
-				}
-				else if (ratio > maxMovementAllowed)
-				{
-					ret = FilamentSensorStatus::tooMuchMovement;
-				}
-			}
+			extrusionMeasured = -extrusionMeasured;
+		}
+		totalMovementMeasured += extrusionMeasured;
+		lastMovementRatio = extrusionMeasured/amountCommanded;
+		if (lastMovementRatio > maxMovementRatio)
+		{
+			maxMovementRatio = lastMovementRatio;
+		}
+		else if (lastMovementRatio < minMovementRatio)
+		{
+			minMovementRatio = lastMovementRatio;
 		}
 		break;
 	}
 
+	if (laserMonitorState == LaserMonitorState::comparing)
+	{
+		if (GetEnableMode() != 0)
+		{
+			if (lastMovementRatio < minMovementAllowed)
+			{
+				ret = FilamentSensorStatus::tooLittleMovement;
+			}
+			else if (lastMovementRatio > maxMovementAllowed)
+			{
+				ret = FilamentSensorStatus::tooMuchMovement;
+			}
+		}
+
+		// Update values for the object model
+		avgPercentage = ConvertToPercent(totalMovementMeasured/totalExtrusionCommanded);
+		minPercentage = ConvertToPercent(minMovementRatio);
+		maxPercentage = ConvertToPercent(maxMovementRatio);
+		lastPercentage = ConvertToPercent(lastMovementRatio);
+		hasLiveData = true;
+	}
+	else
+	{
+		hasLiveData = false;
+	}
 	return ret;
 }
 
@@ -468,6 +470,7 @@ FilamentSensorStatus LaserFilamentMonitor::Clear() noexcept
 {
 	Reset();											// call this first so that haveStartBitData and synced are false when we call HandleIncomingData
 	HandleIncomingData();								// to keep the diagnostics up to date
+	hasLiveData = false;
 
 	return (GetEnableMode() == 0) ? FilamentSensorStatus::ok
 			: (!dataReceived) ? FilamentSensorStatus::noDataReceived

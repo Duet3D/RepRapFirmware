@@ -33,6 +33,7 @@ FilamentMonitor *FilamentMonitor::filamentSensors[NumFilamentMonitors] = { 0 };
 
 #if SUPPORT_REMOTE_COMMANDS
 uint32_t FilamentMonitor::whenStatusLastSent = 0;
+size_t FilamentMonitor::firstDriveToSend = 0;
 #endif
 
 #if SUPPORT_OBJECT_MODEL
@@ -292,9 +293,11 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 {
 #if SUPPORT_REMOTE_COMMANDS
 	CanMessageBuffer buf;
-	auto msg = buf.SetupStatusMessage<CanMessageFilamentMonitorsStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
-	bool statusChanged = false;
-	bool haveMonitor = false;
+	auto msg = buf.SetupStatusMessage<CanMessageFilamentMonitorsStatusNew>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+	size_t slotIndex = 0;
+	size_t firstDriveNotSent = NumDirectDrivers;
+	Bitmap<uint32_t> driversReported;
+	bool forceSend = false;
 #endif
 
 	{
@@ -305,9 +308,6 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 			FilamentSensorStatus fst(FilamentSensorStatus::noMonitor);
 			if (filamentSensors[drv] != nullptr)
 			{
-#if SUPPORT_REMOTE_COMMANDS
-				haveMonitor = true;
-#endif
 				FilamentMonitor& fs = *filamentSensors[drv];
 				GCodes& gCodes = reprap.GetGCodes();
 #if SUPPORT_CAN_EXPANSION
@@ -344,6 +344,33 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 					{
 						fst = fs.Clear();
 					}
+
+#if SUPPORT_REMOTE_COMMANDS
+					if (CanInterface::InExpansionMode())
+					{
+						if (drv >= firstDriveToSend && drv < NumDirectDrivers)
+						{
+							if (slotIndex < ARRAY_SIZE(msg->data))
+							{
+								auto& slot = msg->data[slotIndex];
+								slot.status = fst.ToBaseType();
+								fs.GetLiveData(slot);
+								if (fst != fs.lastStatus || slot.hasLiveData)
+								{
+									forceSend = true;
+									fs.lastStatus = fst;
+								}
+								driversReported.SetBit(drv);
+								++slotIndex;
+							}
+							else if (drv < firstDriveNotSent)
+							{
+								firstDriveNotSent = drv;
+							}
+						}
+						continue;
+					}
+#endif
 				}
 #if SUPPORT_CAN_EXPANSION
 				else
@@ -351,78 +378,73 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 					fst = fs.lastRemoteStatus;
 				}
 #endif
-				if (fst != fs.lastStatus)
-				{
+				if (   fst != fs.lastStatus
 #if SUPPORT_REMOTE_COMMANDS
-					statusChanged = true;
+					&& !CanInterface::InExpansionMode()
 #endif
-					if (reprap.Debug(Module::FilamentSensors))
-					{
-						debugPrintf("Extruder %u status change from %s to %s\n", LogicalDriveToExtruder(fs.driveNumber), fs.lastStatus.ToString(), fst.ToString());
-					}
-
+					)
+				{
 					fs.lastStatus = fst;
 					if (   fst != FilamentSensorStatus::ok
-#if SUPPORT_REMOTE_COMMANDS
-						&& !CanInterface::InExpansionMode()
-#endif
 						&& !gCodes.IsSimulating()
 						&& (fs.GetEnableMode() == 2 || (fs.GetEnableMode() == 1 && gCodes.IsReallyPrinting()))
 					   )
 					{
 						const size_t extruder = LogicalDriveToExtruder(fs.driveNumber);
-						if (reprap.Debug(Module::FilamentSensors))
-						{
-							debugPrintf("Filament error: extruder %u reports %s\n", extruder, fst.ToString());
-						}
-						else
-						{
-							Event::AddEvent(EventType::filament_error, (uint16_t)fst.ToBaseType(), fs.driverId.GetBoardAddress(), extruder, "");
-						}
+						Event::AddEvent(EventType::filament_error, (uint16_t)fst.ToBaseType(), fs.driverId.GetBoardAddress(), extruder, "");
 					}
 				}
 			}
-#if SUPPORT_REMOTE_COMMANDS
-			if (drv < NumDirectDrivers)
-			{
-				msg->data[drv].Set(fst.ToBaseType());
-			}
-#endif
 		}
 	}
 
 #if SUPPORT_REMOTE_COMMANDS
-	if (CanInterface::InExpansionMode() && (statusChanged || (haveMonitor && millis() - whenStatusLastSent >= StatusUpdateInterval)))
+	if (CanInterface::InExpansionMode())
 	{
-		msg->SetStandardFields(NumDirectDrivers);
-		buf.dataLength = msg->GetActualDataLength();
-		CanInterface::SendMessageNoReplyNoFree(&buf);
-		whenStatusLastSent = millis();
+		if (slotIndex != 0 && (forceSend || millis() - whenStatusLastSent >= StatusUpdateInterval))
+		{
+			msg->SetStandardFields(driversReported);
+			buf.dataLength = msg->GetActualDataLength();
+			CanInterface::SendMessageNoReplyNoFree(&buf);
+			whenStatusLastSent = millis();
+		}
+		firstDriveToSend = (firstDriveNotSent < NumDirectDrivers) ? firstDriveNotSent : 0;
 	}
 #endif
 }
 
 #if SUPPORT_CAN_EXPANSION
 
-/*static*/ void FilamentMonitor::UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatus& msg) noexcept
+/*static*/ void FilamentMonitor::UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatusNew& msg) noexcept
 {
-	ReadLocker lock(filamentMonitorsLock);
+	Bitmap<uint32_t> drivers(msg.driversReported);
+	size_t slotIndex = 0;
 
-	for (size_t extruder = 0; extruder < MaxExtruders; ++extruder)
+	ReadLocker lock(filamentMonitorsLock);
+	while (!drivers.IsEmpty())
 	{
-		if (filamentSensors[extruder] != nullptr)
+		const unsigned int driverNumber = drivers.LowestSetBit();
+
+		for (size_t extruder = 0; extruder < MaxExtruders; ++extruder)
 		{
-			FilamentMonitor& fs = *filamentSensors[extruder];
-			if (fs.driverId.boardAddress == src && fs.driverId.localDriver < msg.numMonitorsReported)
+			if (filamentSensors[extruder] != nullptr)
 			{
-				const FilamentSensorStatus newStatus = FilamentSensorStatus(msg.data[fs.driverId.localDriver].status);
-				if (reprap.Debug(Module::FilamentSensors) && newStatus != fs.lastRemoteStatus)
+				FilamentMonitor& fs = *filamentSensors[extruder];
+				if (fs.driverId.boardAddress == src && fs.driverId.localDriver == driverNumber)
 				{
-					debugPrintf("Remote extruder %u status change from %s to %s\n", LogicalDriveToExtruder(fs.driveNumber), fs.lastRemoteStatus.ToString(), newStatus.ToString());
+					const auto& slot = msg.data[slotIndex];
+					const FilamentSensorStatus newStatus = FilamentSensorStatus(slot.status);
+					if (reprap.Debug(Module::FilamentSensors) && newStatus != fs.lastRemoteStatus)
+					{
+						debugPrintf("Remote extruder %u status change from %s to %s\n", LogicalDriveToExtruder(fs.driveNumber), fs.lastRemoteStatus.ToString(), newStatus.ToString());
+					}
+					fs.lastRemoteStatus = newStatus;
+					fs.UpdateLiveData(slot);
 				}
-				fs.lastRemoteStatus = newStatus;
 			}
 		}
+		drivers.ClearBit(driverNumber);
+		++slotIndex;
 	}
 }
 

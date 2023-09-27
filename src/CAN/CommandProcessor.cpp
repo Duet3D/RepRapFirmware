@@ -741,8 +741,8 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				reprap.GetExpansion().ProcessAnnouncement(buf, true);
 				break;
 
-			case CanMessageType::filamentMonitorsStatusReport:
-				FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), buf->msg.filamentMonitorsStatus);
+			case CanMessageType::filamentMonitorsStatusReportNew:
+				FilamentMonitor::UpdateRemoteFilamentStatus(buf->id.Src(), buf->msg.filamentMonitorsStatusNew);
 				break;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
