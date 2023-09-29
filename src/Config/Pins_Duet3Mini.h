@@ -19,6 +19,7 @@
 # else
 #  define FIRMWARE_NAME			"RepRapFirmware for Duet 3 Mini 5+"
 # endif
+#define BOARD_USES_UF2_BINARY	1
 
 #define IAP_FIRMWARE_FILE		"Duet3Firmware_" BOARD_SHORT_NAME ".uf2"
 #define IAP_UPDATE_FILE			"Duet3_SDiap32_" BOARD_SHORT_NAME ".bin"

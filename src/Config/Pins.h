@@ -282,6 +282,10 @@
 # define SUPPORT_HANGPRINTER	1
 #endif
 
+#ifndef BOARD_USES_UF2_BINARY
+# define BOARD_USES_UF2_BINARY	0
+#endif
+
 // We must define MCU_HAS_UNIQUE_ID as either 0 or 1 so we can use it in maths
 #if SAM4E || SAM4S || SAME70 || SAME5x
 # define MCU_HAS_UNIQUE_ID		1

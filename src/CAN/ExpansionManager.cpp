@@ -320,6 +320,7 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 	}
 
 	// Ask the board for its type and check we have the firmware file for it
+	uint8_t extra;
 	{
 		CanMessageBuffer * const buf1 = CanInterface::AllocateBuffer(&gb);
 		CanRequestId rid1 = CanInterface::AllocateRequestId(boardAddress, buf1);
@@ -327,7 +328,7 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 
 		msg1->type = (moduleNumber == (unsigned int)FirmwareModule::bootloader) ? CanMessageReturnInfo::typeBootloaderName : CanMessageReturnInfo::typeBoardName;
 		{
-			const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf1, rid1, reply);
+			const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf1, rid1, reply, &extra);
 			if (rslt != GCodeResult::ok)
 			{
 				return rslt;
@@ -338,7 +339,8 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 	String<StringLength50> firmwareFilename;
 	firmwareFilename.copy((moduleNumber == 3) ? "Duet3Bootloader-" : "Duet3Firmware_");
 	firmwareFilename.cat(reply.c_str());
-	firmwareFilename.cat((strcmp(reply.c_str(), "Mini5plus") == 0) ? ".uf2" : ".bin");
+	// If we are updating the main firmware binary, set the extension to ".uf2" if the expansion board requested it or (for backwards compatibility) if it is a Duet 3 Mini
+	firmwareFilename.cat(moduleNumber == 0 && ((extra & 0x01) != 0 || strcmp(reply.c_str(), "Mini5plus") == 0) ? ".uf2" : ".bin");
 
 	reply.Clear();
 

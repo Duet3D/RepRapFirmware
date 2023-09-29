@@ -300,6 +300,9 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 
 	case CanMessageReturnInfo::typeBoardName:
 		reply.copy(BOARD_SHORT_NAME);
+#if BOARD_USES_UF2_BINARY
+		extra |= 0x01;
+#endif
 		break;
 
 	case CanMessageReturnInfo::typeBootloaderName:
