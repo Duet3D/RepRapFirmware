@@ -50,7 +50,10 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "closedLoop",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasClosedLoop, self, 5),					ObjectModelEntryFlags::none },
 	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY_IF(self->FindIndexedBoard(context.GetLastIndex()).HasDrivers(), 0),						ObjectModelEntryFlags::live },
 	{ "firmwareDate",		OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareDate),		ObjectModelEntryFlags::none },
-	{ "firmwareFileName",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareFileName),	ObjectModelEntryFlags::none },
+	{ "firmwareFileName",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName,
+												(self->FindIndexedBoard(context.GetLastIndex()).usesUf2Binary)
+												? ExpansionDetail::firmwareFileNameUf2
+													: ExpansionDetail::firmwareFileNameBin),												ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareVersion),	ObjectModelEntryFlags::none },
 	{ "inductiveSensor",	OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasInductiveSensor, self, 6),				ObjectModelEntryFlags::none },
 	{ "maxMotors",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).numDrivers),							ObjectModelEntryFlags::none },
@@ -204,11 +207,13 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 			if (isNewFormat)
 			{
 				board.numDrivers = buf->msg.announceNew.numDrivers;
+				board.usesUf2Binary = buf->msg.announceNew.usesUf2Binary;
 				board.uniqueId.SetFromRemote(buf->msg.announceNew.uniqueId);
 			}
 			else
 			{
 				board.numDrivers = buf->msg.announceOld.numDrivers;
+				board.usesUf2Binary = false;
 				board.uniqueId.Clear();
 			}
 			board.driverData = new DriverData[board.numDrivers];

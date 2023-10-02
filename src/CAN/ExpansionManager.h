@@ -42,7 +42,8 @@ struct ExpansionBoardData
 			 hasAccelerometer : 1,
 			 hasClosedLoop : 1,
 			 hasInductiveSensor : 1,
-			 spare : 10;
+			 usesUf2Binary : 1,
+			 spare : 9;
 	BoardState state;
 	uint8_t numDrivers;
 };

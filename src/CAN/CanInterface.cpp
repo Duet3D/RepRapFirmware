@@ -389,6 +389,7 @@ void CanInterface::SendAnnounce(CanMessageBuffer *buf) noexcept
 		auto msg = buf->SetupBroadcastMessage<CanMessageAnnounceNew>(myAddress);
 		msg->timeSinceStarted = millis();
 		msg->numDrivers = NumDirectDrivers;
+		msg->usesUf2Binary = BOARD_USES_UF2_BINARY;
 		msg->zero = 0;
 		memcpy(msg->uniqueId, reprap.GetPlatform().GetUniqueId().GetRaw(), sizeof(msg->uniqueId));
 		// Note, board type name, firmware version, firmware date and firmware time are limited to 43 characters in the new

@@ -28,7 +28,7 @@ class CanExpansionBoardDetails;
 
 enum class ExpansionDetail : uint32_t
 {
-	shortName, firmwareVersion, firmwareFileName, firmwareDate, longName
+	shortName, firmwareVersion, firmwareFileNameBin, firmwareFileNameUf2, firmwareDate, longName
 };
 
 #endif

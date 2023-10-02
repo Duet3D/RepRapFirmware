@@ -425,10 +425,11 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 			}
 			break;
 
-		case ExpansionDetail::firmwareFileName:
+		case ExpansionDetail::firmwareFileNameBin:
+		case ExpansionDetail::firmwareFileNameUf2:
 			rslt.cat("Duet3Firmware_");
 			rslt.catn(sVal, indexOfDivider1);
-			rslt.cat((strncmp(sVal, "Mini5plus", indexOfDivider1) == 0) ? ".uf2" : ".bin");
+			rslt.cat(((ExpansionDetail)param == ExpansionDetail::firmwareFileNameUf2 || strncmp(sVal, "Mini5plus", indexOfDivider1) == 0) ? ".uf2" : ".bin");
 			break;
 
 		case ExpansionDetail::firmwareDate:
