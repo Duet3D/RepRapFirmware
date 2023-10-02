@@ -642,7 +642,7 @@ public:
 #if SUPPORT_CAN_EXPANSION
 	void HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
 	GCodeResult UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtruders, const StringRef& reply) noexcept;
-	GCodeResult UpdateRemoteInputShaping(unsigned int numExtraImpulses, const float coefficients[], const float durations[], const StringRef& reply) const noexcept;
+	GCodeResult UpdateRemoteInputShaping(unsigned int numExtraImpulses, const float coefficients[], float interval, const StringRef& reply) const noexcept;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS

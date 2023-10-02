@@ -128,6 +128,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	deceleration = dda.deceleration;
 	accelClocks = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
 	decelClocks = (dda.topSpeed - dda.endSpeed)/dda.deceleration;
+	useInputShaping = dda.flags.xyMoving;
 }
 
 // Calculate the steady clocks and set the total clocks in the DDA
@@ -752,9 +753,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 		return false;
 	}
 
-	if (   reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves)
-		|| params.shapingPlan.debugPrint						// show the prepared DDA if debug enabled for both modules
-	   )
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves))
 	{
 		DebugPrintAll("remu");
 	}
@@ -775,7 +774,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 
 	// Prepare for movement
 	PrepParams params;
-	params.shapingPlan.condensedPlan = msg.shapingPlan;
+	params.useInputShaping = msg.useLateInputShaping;
 
 	// Normalise the move to unit distance
 	params.totalDistance = totalDistance = 1.0;
@@ -788,7 +787,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 
 	// Set up the plan
 	segments = nullptr;
-	reprap.GetMove().GetAxisShaper().GetRemoteSegments(*this, params);
+	EnsureSegments(params);												// we are probably going to need segments
 
 	activeDMs = completedDMs = nullptr;
 	afterPrepare.drivesMoving.Clear();
@@ -887,9 +886,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 		return false;
 	}
 
-	if (   reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves)
-		|| params.shapingPlan.debugPrint
-	   )
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves))
 	{
 		DebugPrintAll("rems");
 	}
@@ -1337,24 +1334,11 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 #endif
 
 	// Prepare for movement
-	segments = nullptr;
-
 	PrepParams params;										// the default constructor clears params.plan to 'no shaping'
-	if (flags.xyMoving)
-	{
-		reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);	// this will set up shapedSegments if we are doing any shaping
-	}
-	else
-	{
-		params.SetFromDDA(*this);
-		params.Finalise(topSpeed);
-		clocksNeeded = params.TotalClocks();
-	}
-
-	// Copy the unshaped acceleration and deceleration back to the DDA because ManageLaserPower uses them
-	//TODO change ManageLaserPower to work on the shaped segments instead
-	acceleration = params.acceleration;
-	deceleration = params.deceleration;
+	params.SetFromDDA(*this);
+	params.Finalise(topSpeed);
+	clocksNeeded = params.TotalClocks();
+	segments = nullptr;										// we defer generating segments until we know that at least one local motor is moving
 
 	if (simMode < SimulationMode::normal)
 	{
@@ -1648,7 +1632,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 
 		afterPrepare.averageExtrusionSpeed = (extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded;
 
-		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves) || params.shapingPlan.debugPrint)		// show the prepared DDA if debug enabled for both modules
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves))		// show the prepared DDA if debug enabled for both modules
 		{
 			DebugPrintAll("pr");
 		}

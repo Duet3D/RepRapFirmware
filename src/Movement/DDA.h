@@ -12,7 +12,6 @@
 #include "DriveMovement.h"
 #include "StepTimer.h"
 #include "MoveSegment.h"
-#include <InputShaperPlan.h>
 #include <Platform/Tasks.h>
 #include <GCodes/GCodes.h>			// for class RawMove
 
@@ -29,8 +28,6 @@ struct PrepParams
 	float accelClocks, steadyClocks, decelClocks;
 	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
 
-	InputShaperPlan shapingPlan;
-
 #if SUPPORT_LINEAR_DELTA
 	// Parameters used only for delta moves
 	float initialX, initialY;
@@ -41,6 +38,8 @@ struct PrepParams
 	const LinearDeltaKinematics *dparams;
 	float a2plusb2;									// sum of the squares of the X and Y movement fractions
 #endif
+
+	bool useInputShaping;
 
 	// Calculate and set the steady clocks
 	void Finalise(float topSpeed) noexcept;

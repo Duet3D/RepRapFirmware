@@ -139,8 +139,8 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 		move->deceleration = params.deceleration/params.totalDistance;			// scale the deceleration to correspond to unit distance
 		move->extruderDrives = 0;
 		move->numDrivers = canDriver.localDriver + 1;
-		move->zero = 0;
-		move->shapingPlan = params.shapingPlan.condensedPlan;
+		move->zero1 = move->zero2 = 0;
+		move->useLateInputShaping = params.useInputShaping;
 
 		// Clear out the per-drive fields. Can't use a range-based FOR loop on a packed struct.
 		for (size_t drive = 0; drive < ARRAY_SIZE(move->perDrive); ++drive)
