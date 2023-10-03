@@ -31,6 +31,13 @@ constexpr ObjectModelArrayTableEntry AxisShaper::objectModelArrayTable[] =
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
 											-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->coefficients[context.GetLastIndex()], 3); }
 	},
+	// 1. Durations
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const AxisShaper*)self)->numExtraImpulses; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept
+											-> ExpressionValue { return ExpressionValue(((const AxisShaper*)self)->durations[context.GetLastIndex()] * (1.0/StepClockRate), 5); }
+	}
 };
 
 DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(AxisShaper)
@@ -41,8 +48,8 @@ constexpr ObjectModelTableEntry AxisShaper::objectModelTable[] =
 	// 0. InputShaper members
 	{ "amplitudes",				OBJECT_MODEL_FUNC_ARRAY(0), 								ObjectModelEntryFlags::none },
 	{ "damping",				OBJECT_MODEL_FUNC(self->zeta, 2), 							ObjectModelEntryFlags::none },
+	{ "durations",				OBJECT_MODEL_FUNC_ARRAY(1), 								ObjectModelEntryFlags::none },
 	{ "frequency",				OBJECT_MODEL_FUNC(self->frequency, 2), 						ObjectModelEntryFlags::none },
-	{ "interval",				OBJECT_MODEL_FUNC(self->interval, 3),						ObjectModelEntryFlags::none },
 	{ "type", 					OBJECT_MODEL_FUNC(self->type.ToString()), 					ObjectModelEntryFlags::none },
 };
 
@@ -124,8 +131,31 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				gb.MustSee('H');
 				gb.GetFloatArray(coefficients, numAmplitudes, false);
 
-				// Get the impulse interval, if provided
-				interval = (gb.Seen('T')) ? gb.GetFValue() * StepClockRate : 0.5 * dampedPeriod;
+				// Get the impulse durations, if provided
+				if (gb.Seen('T'))
+				{
+					size_t numDurations = numAmplitudes;
+					gb.GetFloatArray(durations, numDurations, true);
+
+					// Check we have the same number of both
+					if (numDurations != numAmplitudes)
+					{
+						reply.copy("Too few durations given");
+						type = InputShaperType::none;
+						return GCodeResult::error;
+					}
+					for (unsigned int i = 0; i < numAmplitudes; ++i)
+					{
+						durations[i] *= StepClockRate;			// convert from seconds to step clocks
+					}
+				}
+				else
+				{
+					for (unsigned int i = 0; i < numAmplitudes; ++i)
+					{
+						durations[i] = 0.5 * dampedPeriod;
+					}
+				}
 				numExtraImpulses = numAmplitudes;
 			}
 			break;
@@ -142,7 +172,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			    coefficients[0] = a3/sum;
 			    coefficients[1] = (a2 + a3)/sum;
 			}
-			interval = 0.375 * dampedPeriod;
+			durations[0] = durations[1] = 0.375 * dampedPeriod;
 			numExtraImpulses = 2;
 			break;
 
@@ -152,7 +182,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[0] = 1.0/j;
 				coefficients[1] = coefficients[0] + 2.0 * k/j;
 			}
-			interval = 0.5 * dampedPeriod;
+			durations[0] = durations[1] = 0.5 * dampedPeriod;
 			numExtraImpulses = 2;
 			break;
 
@@ -163,7 +193,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[1] = coefficients[0] + 3.0 * k/j;
 				coefficients[2] = coefficients[1] + 3.0 * fsquare(k)/j;
 			}
-			interval = 0.5 * dampedPeriod;
+			durations[0] = durations[1] = durations[2] = 0.5 * dampedPeriod;
 			numExtraImpulses = 3;
 			break;
 
@@ -175,7 +205,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[2] = coefficients[1] + 6.0 * fsquare(k)/j;
 				coefficients[3] = coefficients[2] + 4.0 * fcube(k)/j;
 			}
-			interval = 0.5 * dampedPeriod;
+			durations[0] = durations[1] = durations[2] = durations[3] = 0.5 * dampedPeriod;
 			numExtraImpulses = 4;
 			break;
 
@@ -186,7 +216,9 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[0] = (0.16054)                     + (0.76699)                     * zeta + (2.26560)                     * zetaSquared + (-1.22750)                     * zetaCubed;
 				coefficients[1] = (0.16054 + 0.33911)           + (0.76699 + 0.45081)           * zeta + (2.26560 - 2.58080)           * zetaSquared + (-1.22750 + 1.73650)           * zetaCubed;
 				coefficients[2] = (0.16054 + 0.33911 + 0.34089) + (0.76699 + 0.45081 - 0.61533) * zeta + (2.26560 - 2.58080 - 0.68765) * zetaSquared + (-1.22750 + 1.73650 + 0.42261) * zetaCubed;
-				interval = 0.5 * dampedPeriod;		// this is an approximation
+				durations[0] = ((0.49890)           + ( 0.16270          ) * zeta + (          -0.54262) * zetaSquared + (          6.16180) * zetaCubed) * dampedPeriod;
+				durations[1] = ((0.99748 - 0.49890) + ( 0.18382 - 0.16270) * zeta + (-1.58270 + 0.54262) * zetaSquared + (8.17120 - 6.16180) * zetaCubed) * dampedPeriod;
+				durations[2] = ((1.49920 - 0.99748) + (-0.09297 - 0.18382) * zeta + (-0.28338 + 1.58270) * zetaSquared + (1.85710 - 8.17120) * zetaCubed) * dampedPeriod;
 			}
 			numExtraImpulses = 3;
 			break;
@@ -199,7 +231,11 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[1] = (0.11275 + 0.23698)                     + (0.76632 + 0.61164)                     * zeta + (3.29160 - 2.57850)                     * zetaSquared + (-1.44380 + 4.85220)                     * zetaCubed;
 				coefficients[2] = (0.11275 + 0.23698 + 0.30008)           + (0.76632 + 0.61164 - 0.19062)           * zeta + (3.29160 - 2.57850 - 2.14560)           * zetaSquared + (-1.44380 + 4.85220 + 0.13744)           * zetaCubed;
 				coefficients[3] = (0.11275 + 0.23698 + 0.30008 + 0.23775) + (0.76632 + 0.61164 - 0.19062 - 0.73297) * zeta + (3.29160 - 2.57850 - 2.14560 + 0.46885) * zetaSquared + (-1.44380 + 4.85220 + 0.13744 - 2.08650) * zetaCubed;
-				interval = 0.5 * dampedPeriod;		// this is an approximation
+
+				durations[0] = ((0.49974)           + (0.23834)            * zeta + (0.44559)            * zetaSquared + (12.4720)           * zetaCubed) * dampedPeriod;
+				durations[1] = ((0.99849 - 0.49974) + (0.29808 - 0.23834)  * zeta + (-2.36460 - 0.44559) * zetaSquared + (23.3990 - 12.4720) * zetaCubed) * dampedPeriod;
+				durations[2] = ((1.49870 - 0.99849) + (0.10306 - 0.29808)  * zeta + (-2.01390 + 2.36460) * zetaSquared + (17.0320 - 23.3990) * zetaCubed) * dampedPeriod;
+				durations[3] = ((1.99960 - 1.49870) + (-0.28231 - 0.10306) * zeta + (0.61536 + 2.01390)  * zetaSquared + (5.40450 - 17.0320) * zetaCubed) * dampedPeriod;
 			}
 			numExtraImpulses = 4;
 			break;
@@ -208,7 +244,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		reprap.MoveUpdated();
 
 #if SUPPORT_CAN_EXPANSION
-		return reprap.GetPlatform().UpdateRemoteInputShaping(numExtraImpulses, coefficients, interval, reply);
+		return reprap.GetPlatform().UpdateRemoteInputShaping(numExtraImpulses, coefficients, durations, reply);
 #else
 		// Fall through to return GCodeResult::ok
 #endif
@@ -227,7 +263,11 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			{
 				reply.catf(" %.3f", (double)coefficients[i]);
 			}
-			reply.catf(" with interval %.2fms", (double)(interval * StepClocksToMillis));
+			reply.cat(" with durations (ms)");
+			for (unsigned int i = 0; i < numExtraImpulses; ++i)
+			{
+				reply.catf(" %.2f", (double)(durations[i] * StepClocksToMillis));
+			}
 		}
 	}
 	return GCodeResult::ok;
@@ -244,7 +284,7 @@ GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShaping& msg,
 		for (size_t i = 0; i < numExtraImpulses; ++i)
 		{
 			coefficients[i] = msg.impulses[i].coefficient;
-			interval = msg.impulses[0].duration;			//TODO change message type
+			durations[i] = msg.impulses[i].duration;
 		}
 		return GCodeResult::ok;
 	}

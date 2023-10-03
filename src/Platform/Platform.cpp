@@ -4719,7 +4719,7 @@ void Platform::OnProcessingCanMessage() noexcept
 	digitalWrite(ActLedPin, ActOnPolarity);				// turn the ACT LED on
 }
 
-GCodeResult Platform::UpdateRemoteInputShaping(unsigned int numExtraImpulses, const float coefficients[], float interval, const StringRef& reply) const noexcept
+GCodeResult Platform::UpdateRemoteInputShaping(unsigned int numExtraImpulses, const float coefficients[], const float durations[], const StringRef& reply) const noexcept
 {
 	const ExpansionManager& expansion = reprap.GetExpansion();
 	GCodeResult res = GCodeResult::ok;
@@ -4740,7 +4740,7 @@ GCodeResult Platform::UpdateRemoteInputShaping(unsigned int numExtraImpulses, co
 					for (unsigned int i = 0; i < numExtraImpulses; ++i)
 					{
 						msg->impulses[i].coefficient = coefficients[i];
-						msg->impulses[i].duration = interval;				//TODO change message type
+						msg->impulses[i].duration = durations[i];
 					}
 					buf->dataLength = msg->GetActualDataLength();
 					msg->SetRequestId(rid);

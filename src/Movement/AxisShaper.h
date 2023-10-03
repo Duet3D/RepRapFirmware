@@ -76,7 +76,7 @@ private:
 	// Parameters that fully define the shaping
 	unsigned int numExtraImpulses;						// the number of extra impulses
 	float coefficients[MaxExtraImpulses];				// the coefficients of all the impulses
-	float interval;										// the interval in step clocks between impulses
+	float durations[MaxExtraImpulses];					// the duration in step clocks of each impulse
 
 };
 

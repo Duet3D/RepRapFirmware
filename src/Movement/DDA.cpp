@@ -664,7 +664,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 // Set up a remote move. Return true if it represents real movement, else false.
 // All values have already been converted to step clocks and the total distance has been normalised to 1.0.
 // This one handles the old format movement message, used by older versions of RRF and the ATE
-bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
+bool DDA::InitFromRemote(DDARing& ring, const CanMessageMovementLinear& msg) noexcept
 {
 	afterPrepare.moveStartTime = StepTimer::ConvertToLocalTime(msg.whenToExecute);
 	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
@@ -765,7 +765,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 // Set up a remote move. Return true if it represents real movement, else false.
 // All values have already been converted to step clocks and the total distance has been normalised to 1.0.
 // This version handles the new movement message that includes the input shaping plan and passes extruder movement as distance, not steps
-bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
+bool DDA::InitFromRemote(DDARing& ring, const CanMessageMovementLinearShaped& msg) noexcept
 {
 	afterPrepare.moveStartTime = StepTimer::ConvertToLocalTime(msg.whenToExecute);
 	flags.all = 0;
@@ -1321,7 +1321,7 @@ void DDA::ReleaseSegments() noexcept
 
 // Prepare this DDA for execution.
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
-void DDA::Prepare(SimulationMode simMode) noexcept
+void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 {
 	flags.wasAccelOnlyMove = IsAccelerationMove();			// save this for the next move to look at
 

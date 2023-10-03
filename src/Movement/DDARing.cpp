@@ -418,7 +418,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, u
 #endif
 		  )
 	{
-		firstUnpreparedMove->Prepare(simulationMode);
+		firstUnpreparedMove->Prepare(*this, simulationMode);
 		moveTimeLeft += firstUnpreparedMove->GetTimeLeft();
 		++alreadyPrepared;
 		firstUnpreparedMove = firstUnpreparedMove->GetNext();
@@ -1038,7 +1038,7 @@ void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
 {
 	if (addPointer->GetState() == DDA::empty)
 	{
-		if (addPointer->InitFromRemote(msg))
+		if (addPointer->InitFromRemote(*this, msg))
 		{
 			addPointer = addPointer->GetNext();
 			scheduledMoves++;
@@ -1051,7 +1051,7 @@ void DDARing::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexc
 {
 	if (addPointer->GetState() == DDA::empty)
 	{
-		if (addPointer->InitFromRemote(msg))
+		if (addPointer->InitFromRemote(*this, msg))
 		{
 			addPointer = addPointer->GetNext();
 			scheduledMoves++;

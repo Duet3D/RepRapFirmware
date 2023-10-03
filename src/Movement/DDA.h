@@ -92,7 +92,7 @@ public:
 	void SetPrevious(DDA *p) noexcept { prev = p; }
 	void Complete() noexcept { state = completed; }
 	bool Free() noexcept;
-	void Prepare(SimulationMode simMode) noexcept SPEED_CRITICAL;					// Calculate all the values and freeze this DDA
+	void Prepare(DDARing& ring, SimulationMode simMode) noexcept SPEED_CRITICAL;					// Calculate all the values and freeze this DDA
 	bool HasStepError() const noexcept;
 	bool CanPauseAfter() const noexcept;
 	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }			// Return true if this involves both XY movement and extrusion
@@ -112,8 +112,8 @@ public:
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
-	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
-	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
+	bool InitFromRemote(DDARing& ring, const CanMessageMovementLinear& msg) noexcept;
+	bool InitFromRemote(DDARing& ring, const CanMessageMovementLinearShaped& msg) noexcept;
 	void StopDrivers(uint16_t whichDrives) noexcept;
 #endif
 
