@@ -19,9 +19,10 @@ const SpiMode lisMode = SpiMode::mode3;
 
 static constexpr uint8_t WhoAmIValue_3DH = 0x33;
 static constexpr uint8_t WhoAmIValue_3DSH = 0x3F;
+static constexpr uint8_t WhoAmIValue_2DW = 0x44;
 
 LIS3DH::LIS3DH(SharedSpiDevice& dev, uint32_t freq, Pin p_csPin, Pin p_int1Pin) noexcept
-	: SharedSpiClient(dev, freq, lisMode, p_csPin, false), taskWaiting(nullptr), is3DSH(false), int1Pin(p_int1Pin)
+	: SharedSpiClient(dev, freq, lisMode, p_csPin, false), taskWaiting(nullptr), accelerometerType(AccelerometerType::LIS3DH), int1Pin(p_int1Pin)
 {
 }
 
@@ -33,12 +34,17 @@ bool LIS3DH::CheckPresent() noexcept
 	{
 		if (val == WhoAmIValue_3DH)
 		{
-			is3DSH = false;
+			accelerometerType = AccelerometerType::LIS3DH;
 			return true;
 		}
 		else if (val == WhoAmIValue_3DSH)
 		{
-			is3DSH = true;
+			accelerometerType = AccelerometerType::LIS3DSH;
+			return true;
+		}
+		else if (val == WhoAmIValue_2DW)
+		{
+			accelerometerType = AccelerometerType::LIS2DW;
 			return true;
 		}
 	}
@@ -48,7 +54,7 @@ bool LIS3DH::CheckPresent() noexcept
 // Return the type name of the accelerometer. Only valid after checkPresent returns true.
 const char *LIS3DH::GetTypeName() const noexcept
 {
-	return (is3DSH) ? "LIS3DSH" : "LIS3DH";
+	return accelerometerType.ToString();
 }
 
 uint8_t LIS3DH::ReadStatus() noexcept
@@ -62,14 +68,15 @@ uint8_t LIS3DH::ReadStatus() noexcept
 bool LIS3DH::Configure(uint16_t& samplingRate, uint8_t& resolution) noexcept
 {
 	bool ok;
-	if (is3DSH)
+	switch (accelerometerType.RawValue())
 	{
+	case AccelerometerType::LIS3DSH:
 		resolution = 16;
 		// We first need to make sure that the address increment bit in control register 6 is set
-		ok = WriteRegister(LisRegister::CtrlReg6, 1u << 4);
+		ok = WriteRegister(LisRegister::CtrlReg6_3DSH, 1u << 4);
 		if (ok)
 		{
-			// Set up control registers 1 and 4 according to the selected sampling rate and resolution. The BDA but must be zero when using the FIFO, see app note AN3393.
+			// Set up control registers 1 and 4 according to the selected sampling rate and resolution. The BDA bit must be zero when using the FIFO, see app note AN3393.
 			if (samplingRate == 0 || samplingRate >= 1200)
 			{
 				samplingRate = 1600;										// select 1600Hz if we asked for the default, or for 1200 or higher
@@ -98,69 +105,113 @@ bool LIS3DH::Configure(uint16_t& samplingRate, uint8_t& resolution) noexcept
 		if (ok)
 		{
 			// Set the fifo mode
-			ok = WriteRegister(LisRegister::FifoControl, (2u << 5) | (FifoInterruptLevel - 1));
+			ok = WriteRegister(LisRegister::FifoControl, (2u << 5) | (FifoInterruptLevel - 1));		// FIFO stream mode
 		}
-	}
-	else
-	{
+		break;
+
+	case AccelerometerType::LIS3DH:
+	default:
 		// Set up control registers 1 and 4 according to the selected sampling rate and resolution
 		ctrlReg_0x20 = 0;												// collect no axes for now
-		uint8_t ctrlReg_0x23 = (1u << 7);								// set block data update
-		if (resolution >= 12)											// if high resolution mode
 		{
-			resolution = 12;
-			ctrlReg_0x23 |= (1u << 3);									// set HR
-		}
-		else if (resolution < 10)										// if low res mode
-		{
-			resolution = 8;
-			ctrlReg_0x20 |= (1u << 3);									// set LP
-		}
-		else
-		{
-			resolution = 10;
-		}
-
-		uint8_t odr;
-		if (samplingRate == 0 || samplingRate >= 1000)
-		{
-			if (resolution >= 10)
+			uint8_t ctrlReg_0x23 = (1u << 7);								// set block data update
+			if (resolution >= 12)											// if high resolution mode
 			{
-				odr = 0x9;												// in 10- or 12-bit mode, so select 1.344kHz (next lowest is 400Hz)
-				samplingRate = 1344;
+				resolution = 12;
+				ctrlReg_0x23 |= (1u << 3);									// set HR
 			}
-			else if (samplingRate >= 5000)
+			else if (resolution < 10)										// if low res mode
 			{
-				odr = 0x9;												// select 5.376kHz
-				samplingRate = 5376;
+				resolution = 8;
+				ctrlReg_0x20 |= (1u << 3);									// set LP
 			}
 			else
 			{
-				odr = 0x8;												// select 1.6kHz
-				samplingRate = 1600;
+				resolution = 10;
 			}
-		}
-		else
-		{
-			odr = 0x7;
-			samplingRate = 400;											// we don't support lower than 400Hz because it isn't useful
+
+			uint8_t odr;
+			if (samplingRate == 0 || samplingRate >= 1000)
+			{
+				if (resolution >= 10)
+				{
+					odr = 0x9;												// in 10- or 12-bit mode, so select 1.344kHz (next lowest is 400Hz)
+					samplingRate = 1344;
+				}
+				else if (samplingRate >= 5000)
+				{
+					odr = 0x9;												// select 5.376kHz
+					samplingRate = 5376;
+				}
+				else
+				{
+					odr = 0x8;												// select 1.6kHz
+					samplingRate = 1600;
+				}
+			}
+			else
+			{
+				odr = 0x7;
+				samplingRate = 400;											// we don't support lower than 400Hz because it isn't useful
+			}
+
+			ctrlReg_0x20 |= (odr << 4);
+
+			// Set up the control registers, except set ctrlReg1 to 0 to select power down mode
+			dataBuffer[0] = 0;												// ctrlReg1: for now select power down mode
+			dataBuffer[1] = 0;												// ctrlReg2: high pass filter not used
+			dataBuffer[2] = (1u << 2);										// ctrlReg3: enable fifo watermark interrupt
+			dataBuffer[3] = ctrlReg_0x23;
+			dataBuffer[4] = (1u << 6);										// ctrlReg5: enable fifo
+			dataBuffer[5] = 0;												// ctrlReg6: INT2 disabled, active high interrupts
 		}
 
-		ctrlReg_0x20 |= (odr << 4);
-
-		// Set up the control registers, except set ctrlReg1 to 0 to select power down mode
-		dataBuffer[0] = 0;												// ctrlReg1: for now select power down mode
-		dataBuffer[1] = 0;												// ctrlReg2: high pass filter not used
-		dataBuffer[2] = (1u << 2);										// ctrlReg3: enable fifo watermark interrupt
-		dataBuffer[3] = ctrlReg_0x23;
-		dataBuffer[4] = (1u << 6);										// ctrlReg5: enable fifo
-		dataBuffer[5] = 0;												// ctrlReg6: INT2 disabled, active high interrupts
 		ok = WriteRegisters(LisRegister::Ctrl_0x20, 6);
 		if (ok)
 		{
 			// Set the fifo mode
-			ok = WriteRegister(LisRegister::FifoControl, (2u << 6) | (FifoInterruptLevel - 1));
+			ok = WriteRegister(LisRegister::FifoControl, (2u << 6) | (FifoInterruptLevel - 1));		// FIFO stream mode
 		}
+		break;
+
+	case AccelerometerType::LIS2DW:
+		resolution = 14;
+		// We first need to make sure that the address increment bit in control register 2 is set
+		ok = WriteRegister(LisRegister::CtrlReg2_2DW, 1u << 2);
+		if (ok)
+		{
+			// Set up control registers 1 and 4 according to the selected sampling rate and resolution. The BDA bit must be zero when using the FIFO, see app note AN3393.
+			if (samplingRate == 0 || samplingRate >= 1200)
+			{
+				samplingRate = 1600;										// select 1600Hz if we asked for the default, or for 1200 or higher
+				ctrlReg_0x20 = 0x90 |(1u << 2);
+			}
+			else if (samplingRate >= 600)
+			{
+				samplingRate = 800;											// select 800Hz if we asked for 600 or higher
+				ctrlReg_0x20 = 0x80 |(1u << 2);
+			}
+			else
+			{
+				samplingRate = 400;											// set 400Hz, lower isn't useful
+				ctrlReg_0x20 = 0x70 |(1u << 2);
+			}
+
+			// Set up the control registers, except set ctrlReg1 to 0 to select power down mode
+			dataBuffer[0] = 0;												// ctrlReg1: for now select power down mode
+			dataBuffer[1] = (1u << 7) | (1u << 2);							// ctrlReg2: BOOT, address auto increment
+			dataBuffer[2] = 0;												// ctrlReg3: push-pull interrupt output, interrupt active high
+			dataBuffer[3] = (1u << 1);										// ctrlReg4: INT1 fifo threshold interrupt enabled
+			dataBuffer[4] = 0;												// ctrlReg5: INT2 disabled
+			dataBuffer[5] = (1u << 2);										// ctrlReg6: max bandwidth, low pass filter path, +/-2g full scale, low noise mode
+			ok = WriteRegisters(LisRegister::Ctrl_0x20, 6);
+		}
+		if (ok)
+		{
+			// Set the fifo mode
+			ok = WriteRegister(LisRegister::FifoControl, (6u << 5) | (FifoInterruptLevel - 1));		// FIFO continuous mode
+		}
+		break;
 	}
 	return ok;
 }
@@ -170,14 +221,38 @@ void Int1Interrupt(CallbackParameter p) noexcept;						// forward declaration
 // Start collecting data, returning true if successful
 bool LIS3DH:: StartCollecting(uint8_t axes) noexcept
 {
+	uint8_t ctrlRegValue = ctrlReg_0x20;
+
 	// Clear the fifo
-	uint8_t val;
-	while (ReadRegister(LisRegister::FifoSource, val) && (val & (1u << 5)) == 0)	// while fifo not empty
+	switch (accelerometerType.RawValue())
 	{
-		if (!ReadRegisters(LisRegister::OutXL, 6))
+	case AccelerometerType::LIS3DH:
+	case AccelerometerType::LIS3DSH:
 		{
-			return false;
+			uint8_t val;
+			while (ReadRegister(LisRegister::FifoSource, val) && (val & (1u << 5)) == 0)	// while fifo not empty
+			{
+				if (!ReadRegisters(LisRegister::OutXL, 6))
+				{
+					return false;
+				}
+			}
 		}
+		ctrlRegValue |= (axes & 7);
+		break;
+
+	case AccelerometerType::LIS2DW:
+		{
+			uint8_t val;
+			while (ReadRegister(LisRegister::FifoSource, val) && (val & 0x3F) != 0)			// while fifo not empty
+			{
+				if (!ReadRegisters(LisRegister::OutXL, 6))
+				{
+					return false;
+				}
+			}
+		}
+		break;
 	}
 
 	totalNumRead = 0;
@@ -191,7 +266,7 @@ bool LIS3DH:: StartCollecting(uint8_t axes) noexcept
 		return false;
 	}
 
-	const bool ok = WriteRegister(LisRegister::Ctrl_0x20, ctrlReg_0x20 | (axes & 7));
+	const bool ok = WriteRegister(LisRegister::Ctrl_0x20, ctrlRegValue);
 	return ok && attachInterrupt(int1Pin, Int1Interrupt, InterruptMode::rising, CallbackParameter(this));
 }
 
@@ -216,16 +291,28 @@ unsigned int LIS3DH::CollectData(const uint16_t **collectedData, uint16_t &dataR
 		return 0;
 	}
 
-	uint8_t numToRead = fifoStatus & 0x1F;
-	if (numToRead == 0 && (fifoStatus & 0x20) == 0)
+	uint8_t numToRead;
+	switch (accelerometerType.RawValue())
 	{
-		numToRead = 32;
+	case AccelerometerType::LIS3DH:
+	case AccelerometerType::LIS3DSH:
+	default:
+		numToRead = fifoStatus & 0x1F;
+		if (numToRead == 0 && (fifoStatus & 0x20) == 0)
+		{
+			numToRead = 32;
+		}
+		break;
+
+	case AccelerometerType::LIS2DW:
+		numToRead = fifoStatus & 0x3F;
+		break;
 	}
 
 	if (numToRead != 0)
 	{
 		// Read the data
-		// When the auto-increment bit is set in the register number, after reading register 0x2D it wraps back to 0x28
+		// When the auto-increment bit is set, after reading register 0x2D it wraps back to 0x28
 		// The datasheet doesn't mention this but ST app note AN3308 does
 		if (!ReadRegisters(LisRegister::OutXL, 6 * numToRead))
 		{
@@ -258,9 +345,9 @@ bool LIS3DH::ReadRegisters(LisRegister reg, size_t numToRead) noexcept
 	}
 	delayMicroseconds(1);
 	// On the LIS3DH, bit 6 must be set to 1 to auto-increment the address when doing reading multiple registers
-	// On the LIS3DSH, bit 6 is an extra register address bit, so we must not set it.
+	// On the LIS3DSH and LIS2DW, bit 6 is an extra register address bit, so we must not set it.
 	// So that we can read the WHO_AM_I register of both chips before we know which chip we have, only set bit 6 if we have a LIS3DH and we are reading multiple registers.
-	transferBuffer[1] = (uint8_t)reg | ((numToRead > 1 && !is3DSH) ? 0xC0 : 0x80);
+	transferBuffer[1] = (uint8_t)reg | ((numToRead < 2 || accelerometerType != AccelerometerType::LIS3DH) ? 0x80 : 0xC0);
 	const bool ret = TransceivePacket(transferBuffer + 1, transferBuffer + 1, 1 + numToRead);
 	Deselect();
 	return ret;
@@ -277,7 +364,7 @@ bool LIS3DH::WriteRegisters(LisRegister reg, size_t numToWrite) noexcept
 	{
 		return false;
 	}
-	transferBuffer[1] = (numToWrite < 2 || is3DSH) ? (uint8_t)reg : (uint8_t)reg | 0x40;		// set auto increment bit if LIS3DH
+	transferBuffer[1] = (numToWrite < 2 || accelerometerType != AccelerometerType::LIS3DH) ? (uint8_t)reg : (uint8_t)reg | 0x40;		// set auto increment bit if LIS3DH
 	const bool ret = TransceivePacket(transferBuffer + 1, transferBuffer + 1, 1 + numToWrite);
 	Deselect();
 	return ret;
