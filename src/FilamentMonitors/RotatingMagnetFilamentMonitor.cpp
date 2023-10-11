@@ -131,7 +131,14 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const Stri
 	{
 		if (seen)
 		{
-			Init();				// Init() resets dataReceived and version, so only do it if the port has been configured
+			if (gb.Seen('C'))
+			{
+				Init();				// Init() resets dataReceived and version, so only do it if the port has been configured
+			}
+			else
+			{
+				Reset();
+			}
 		}
 
 		gb.TryGetFValue('L', mmPerRev, seen);
