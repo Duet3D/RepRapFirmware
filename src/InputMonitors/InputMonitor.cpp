@@ -303,6 +303,7 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 }
 
 // Read the specified inputs. The incoming message is a CanMessageReadInputsRequest. We return a CanMessageReadInputsReply in the same buffer.
+// Return error if we didn't have any of the requested inputs.
 /*static*/ void InputMonitor::ReadInputs(CanMessageBuffer *buf) noexcept
 {
 	// Extract data before we overwrite the message
@@ -330,7 +331,7 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	}
 
 	reply->numReported = count;
-	reply->resultCode = (uint32_t)GCodeResult::ok;
+	reply->resultCode = (uint32_t)((count == 0) ? GCodeResult::error : GCodeResult::ok);
 	buf->dataLength = reply->GetActualDataLength();
 }
 
