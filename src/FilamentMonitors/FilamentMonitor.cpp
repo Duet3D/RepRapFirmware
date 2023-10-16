@@ -267,7 +267,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 		if (CanInterface::CreateFilamentMonitor(fm->driverId, monitorType, gb, reply) != GCodeResult::ok)
 		{
 			delete fm;
-			return nullptr;
+			gb.ThrowGCodeException("Failed to create filament monitor on CAN-connected expansion board");
 		}
 		fm->hasRemote = true;
 	}
