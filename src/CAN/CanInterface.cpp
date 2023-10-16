@@ -801,7 +801,10 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 				buf->DebugPrint("Rx1:");
 			}
 
-			const bool matchesRequest = buf->id.Src() == dest && (buf->msg.standardReply.requestId == rid || buf->msg.standardReply.requestId == CanRequestIdAcceptAlways);
+			// The following code allows for the possibility of receiving a StandardReply (e.g. because an error occurred) when we were expecting a different reply.
+			// It assumes that any custom reply we may want has the requestId in the same place as a StandardReply.
+			const bool matchesRequest = buf->id.Src() == dest
+										&& (buf->msg.standardReply.requestId == rid || buf->msg.standardReply.requestId == CanRequestIdAcceptAlways);
 			if (matchesRequest && buf->id.MsgType() == CanMessageType::standardReply && buf->msg.standardReply.fragmentNumber == fragmentsReceived)
 			{
 				if (fragmentsReceived == 0)
