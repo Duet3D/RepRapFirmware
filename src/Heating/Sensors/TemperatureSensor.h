@@ -19,20 +19,29 @@ public:
 	// Virtual destructor
 	virtual ~TemperatureSensor() noexcept;
 
+	// Configure the sensor from M308 parameters.
+	// If we find any parameters, process them, if successful then initialise the sensor and return GCodeResult::ok.
+	// If an error occurs while processing the parameters, return GCodeResult::error and write an error message to 'reply.
+	// if we find no relevant parameters, report the current parameters to 'reply' and return 'false'.
+	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException);
+
+	// Try to get a temperature reading
+	virtual void Poll() noexcept = 0;
+
 	// Try to get a temperature reading
 	virtual TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0) noexcept;
 
 	// How many additional outputs does this sensor have
 	virtual const uint8_t GetNumAdditionalOutputs() const noexcept { return 0; }
 
-	// Get the most recent reading without checking for timeout
-	float GetStoredReading() const noexcept { return lastTemperature; }
+	// Get the smart drivers channel that this sensor monitors, or -1 if it doesn't
+	virtual int GetSmartDriversChannel() const noexcept { return -1; }
 
-	// Configure the sensor from M308 parameters.
-	// If we find any parameters, process them, if successful then initialise the sensor and return GCodeResult::ok.
-	// If an error occurs while processing the parameters, return GCodeResult::error and write an error message to 'reply.
-	// if we find no relevant parameters, report the current parameters to 'reply' and return 'false'.
-	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException);
+	// How long after a reading before we consider the reading to be unreliable - this has to be increased for DHT sensors
+	virtual uint32_t GetTemperatureReadingTimeout() const noexcept { return DefaultTemperatureReadingTimeout; }
+
+	// Report the sensor type in the form corresponding to the Y parameter of M308.
+	virtual const char *_ecv_array GetShortSensorType() const noexcept = 0;
 
 #if SUPPORT_REMOTE_COMMANDS
 	// Configure the sensor from M308 parameters.
@@ -41,10 +50,16 @@ public:
 	virtual GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept;
 #endif
 
-#if SUPPORT_OBJECT_MODEL
-	// Report the sensor type in the form corresponding to the Y parameter of M308.
-	virtual const char *_ecv_array GetShortSensorType() const noexcept = 0;
+#if SUPPORT_CAN_EXPANSION
+	// Get the expansion board address. Overridden for remote sensors.
+	virtual CanAddress GetBoardAddress() const noexcept;
+
+	// Update the temperature, if it is a remote sensor. Overridden in class RemoteSensor.
+	virtual void UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report) noexcept;
 #endif
+
+	// Get the most recent reading without checking for timeout
+	float GetStoredReading() const noexcept { return lastTemperature; }
 
 	// Return the sensor type
 	const char *_ecv_array GetSensorType() const noexcept { return sensorType; }
@@ -70,18 +85,6 @@ public:
 	// Get/set the next sensor in the linked list
 	TemperatureSensor *_ecv_from GetNext() const noexcept { return next; }
 	void SetNext(TemperatureSensor *_ecv_from n) noexcept { next = n; }
-
-	// Get the smart drivers channel that this sensor monitors, or -1 if it doesn't
-	virtual int GetSmartDriversChannel() const noexcept { return -1; }
-
-#if SUPPORT_CAN_EXPANSION
-	// Get the expansion board address. Overridden for remote sensors.
-	virtual CanAddress GetBoardAddress() const noexcept;
-
-	// Update the temperature, if it is a remote sensor. Overridden in class RemoteSensor.
-	virtual void UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report) noexcept;
-#endif
-
 	// Get the time of the last reading
 	uint32_t GetLastReadingTime() const noexcept { return whenLastRead; }
 
@@ -92,9 +95,6 @@ public:
 	static TemperatureSensor *_ecv_from Create(unsigned int sensorNum, const char *_ecv_array typeName, const StringRef& reply) noexcept;
 #endif
 
-	// Try to get a temperature reading
-	virtual void Poll() noexcept = 0;
-
 	static TemperatureError GetPT100Temperature(float& t, uint16_t ohmsx100) noexcept;		// shared function used by two derived classes and the ATE
 
 protected:
@@ -104,10 +104,10 @@ protected:
 	void SetResult(TemperatureError rslt) noexcept;
 
 private:
-	static constexpr uint32_t TemperatureReadingTimeout = 2000;			// any reading older than this number of milliseconds is considered unreliable
+	static constexpr uint32_t DefaultTemperatureReadingTimeout = 2000;			// any reading older than this number of milliseconds is considered unreliable
 
 	TemperatureSensor *_ecv_from _ecv_null next;
-	unsigned int sensorNumber;											// the number of this sensor
+	unsigned int sensorNumber;													// the number of this sensor
 	const char *_ecv_array const sensorType;
 	const char *_ecv_array _ecv_null sensorName;
 	float lastTemperature;
