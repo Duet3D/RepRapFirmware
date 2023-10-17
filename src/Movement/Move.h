@@ -319,7 +319,7 @@ private:
 	bool useTaper;										// True to taper off the compensation
 	bool probeReadingNeeded = false;					// true if the laser task needs to take a Z probe reading
 
-	static constexpr size_t LaserTaskStackWords = 200;	// stack size in dwords for the laser and IOBits task (increased to support scanning Z probes)
+	static constexpr size_t LaserTaskStackWords = 300;	// stack size in dwords for the laser and IOBits task (increased to support scanning Z probes)
 	static Task<LaserTaskStackWords> *laserTask;		// the task used to manage laser power or IOBits
 };
 
