@@ -88,7 +88,7 @@ void InputMonitor::DigitalInterrupt() noexcept
 	}
 }
 
-void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
+void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 {
 	const bool newState = reading >= threshold;
 	if (newState != state)
@@ -112,7 +112,7 @@ void InputMonitor::AnalogInterrupt(uint16_t reading) noexcept
 	static_cast<InputMonitor*>(cbp.vp)->DigitalInterrupt();
 }
 
-/*static*/ void InputMonitor::CommonAnalogPortInterrupt(CallbackParameter cbp, uint16_t reading) noexcept
+/*static*/ void InputMonitor::CommonAnalogPortInterrupt(CallbackParameter cbp, uint32_t reading) noexcept
 {
 	static_cast<InputMonitor*>(cbp.vp)->AnalogInterrupt(reading);
 }
