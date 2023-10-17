@@ -424,7 +424,7 @@ void CanInterface::MainBoardAcknowledgedAnnounce() noexcept
 // Allocate a CAN request ID
 // Currently we reserve the top bit of the 12-bit request ID so that CanRequestIdAcceptAlways is distinct from any genuine request ID.
 // Currently we use a single RID sequence for all destination addresses. In future we may use a separate sequence for each address.
-// The message buffer is provided so that if the board is not known, we can use the buffer to as it to announce itself
+// The message buffer is provided so that if the board is not known, we can use the buffer to send a message to it to announce ourselves, but this is not yet implemented
 CanRequestId CanInterface::AllocateRequestId(CanAddress destination, CanMessageBuffer *buf) noexcept
 {
 	static uint16_t rid = 0;
@@ -787,11 +787,12 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 		reprap.GetPlatform().OnProcessingCanMessage();
 
 		const uint32_t whenStartedWaiting = millis();
+		uint32_t timeWaiting = 0;
 		unsigned int fragmentsReceived = 0;
 		for (;;)
 		{
-			const uint32_t timeWaiting = millis() - whenStartedWaiting;
-			if (!can0dev->ReceiveMessage(RxBufferIndexResponse, UsualResponseTimeout - timeWaiting, buf))
+			const uint32_t timeout = (timeWaiting < UsualResponseTimeout) ? UsualResponseTimeout - timeWaiting : 1;
+			if (!can0dev->ReceiveMessage(RxBufferIndexResponse, timeout, buf))
 			{
 				break;
 			}
@@ -857,6 +858,7 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 													buf->id.Src(), (unsigned int)buf->id.MsgType(), (unsigned int)buf->msg.standardReply.requestId, rid);
 				}
 			}
+			timeWaiting = millis() - whenStartedWaiting;
 		}
 	}
 
