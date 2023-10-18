@@ -156,7 +156,9 @@ void IoPort::Release() noexcept
 	if (IsValid() && !isSharedInput)
 	{
 		DetachInterrupt();
+#if SAME5x
 		ClearAnalogCallback();
+#endif
 		portUsedBy[logicalPin] = PinUsedBy::unused;
 		logicalPinModes[logicalPin] = PIN_MODE_NOT_CONFIGURED;
 	}
