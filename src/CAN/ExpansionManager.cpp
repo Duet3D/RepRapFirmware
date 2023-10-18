@@ -203,7 +203,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 			}
 
 			board.typeName = newTypeName;
-			DeleteObject(board.driverData);
+			DeleteArray(board.driverData);
 			if (isNewFormat)
 			{
 				board.numDrivers = buf->msg.announceNew.numDrivers;
