@@ -1373,9 +1373,9 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	}
 	else
 	{
-		unsigned int messagesQueuedForSending, messagesReceived, messagesLost, busOffCount;
-		can0dev->GetAndClearStats(messagesQueuedForSending, messagesReceived, messagesLost, busOffCount);
-		p.MessageF(mtype, "Messages queued %u, received %u, lost %u, boc %u\n", messagesQueuedForSending, messagesReceived, messagesLost, busOffCount);
+		CanDevice::CanStats stats;
+		can0dev->GetAndClearStats(stats);
+		p.MessageF(mtype, "Messages queued %u, received %u, lost %u, errs %u, boc %u\n", stats.messagesQueuedForSending, stats.messagesReceived, stats.messagesLost, stats.protocolErrors, stats.busOffCount);
 	}
 
 	p.MessageF(mtype,
