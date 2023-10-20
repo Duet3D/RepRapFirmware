@@ -65,8 +65,6 @@ constexpr float MinJumpWidth = 0.05;
 constexpr float MaxJumpWidth = 0.5;
 constexpr float DefaultJumpWidth = 0.25;
 
-constexpr const char *_ecv_array NoCanBufferMessage = "no CAN buffer available";
-
 static Mutex transactionMutex;
 
 static uint32_t lastTimeSent = 0;
@@ -662,8 +660,7 @@ template<class T> static GCodeResult SetRemoteDriverValues(const CanDriversData<
 		CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
-			reply.lcat(NoCanBufferMessage);
-			return GCodeResult::error;
+			return GCodeResult::noCanBuffer;
 		}
 		const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
 		CanMessageMultipleDrivesRequest<T> * const msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest<T>>(rid, CanInterface::GetCanAddress(), boardAddress, mt);
@@ -699,8 +696,7 @@ static GCodeResult SetRemoteDriverStates(const CanDriversList& drivers, const St
 		CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 		if (buf == nullptr)
 		{
-			reply.lcat(NoCanBufferMessage);
-			return GCodeResult::error;
+			return GCodeResult::noCanBuffer;
 		}
 		const CanRequestId rid = (fromMoveTask) ? CanRequestIdNoReplyNeeded : CanInterface::AllocateRequestId(boardAddress, buf);
 		const auto msg = buf->SetupRequestMessage<CanMessageMultipleDrivesRequest<DriverStateControl>>(rid, CanInterface::GetCanAddress(), boardAddress, CanMessageType::setDriverStates);
@@ -863,8 +859,8 @@ GCodeResult CanInterface::SendRequestAndGetCustomReply(CanMessageBuffer *buf, Ca
 	}
 
 	CanMessageBuffer::Free(buf);
-	reply.lcatf("Response timeout: CAN addr %u, req type %u, RID=%u", dest, (unsigned int)msgType, (unsigned int)rid);
-	return GCodeResult::error;
+	reply.lcatf("CAN response timeout: board %u, req type %u, RID %u", dest, (unsigned int)msgType, (unsigned int)rid);
+	return GCodeResult::canResponseTimeout;
 }
 
 // Send a response to an expansion board and free the buffer
@@ -1152,8 +1148,7 @@ static GCodeResult GetRemoteInfo(uint8_t infoType, uint32_t boardAddress, uint8_
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy(NoCanBufferMessage);
-		return GCodeResult::error;
+		return GCodeResult::noCanBuffer;
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
@@ -1244,8 +1239,7 @@ GCodeResult CanInterface::CreateHandle(CanAddress boardAddress, RemoteInputHandl
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy(NoCanBufferMessage);
-		return GCodeResult::error;
+		return GCodeResult::noCanBuffer;
 	}
 
 	const CanRequestId rid = AllocateRequestId(boardAddress, buf);
@@ -1276,8 +1270,7 @@ static GCodeResult ChangeInputMonitor(CanAddress boardAddress, RemoteInputHandle
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy(NoCanBufferMessage);
-		return GCodeResult::error;
+		return GCodeResult::noCanBuffer;
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
@@ -1342,8 +1335,7 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy(NoCanBufferMessage);
-		return GCodeResult::error;
+		return GCodeResult::noCanBuffer;
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
@@ -1420,8 +1412,7 @@ GCodeResult CanInterface::WriteGpio(CanAddress boardAddress, uint8_t portNumber,
 	CanMessageBuffer * const buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy(NoCanBufferMessage);
-		return GCodeResult::error;
+		return GCodeResult::noCanBuffer;
 	}
 
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
@@ -1614,7 +1605,6 @@ CanMessageBuffer * CanInterface::ODrive::PrepareSimpleMessage(DriverId const dri
 	CanMessageBuffer * buf = CanMessageBuffer::Allocate();
 	if (buf == nullptr)
 	{
-		reply.copy(NoCanBufferMessage);
 		return nullptr;
 	}
 

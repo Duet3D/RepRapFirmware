@@ -4864,6 +4864,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		rslt = GCodeResult::error;
 		break;
 
+#if SUPPORT_CAN_EXPANSION
 	case GCodeResult::remoteInternalError:
 		if (!gb.IsDoingLocalFile())
 		{
@@ -4873,6 +4874,16 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		reply.cat("CAN-connected board reported internal error");
 		rslt = GCodeResult::error;
 		break;
+
+	case GCodeResult::noCanBuffer:
+		reply.lcat(NoCanBufferMessage);
+		break;
+
+	case GCodeResult::canResponseTimeout:
+		// Usually we have a more detailed message in 'reply' already, but if not then add a standard message
+		if (reply.IsEmpty()) { reply.copy("CAN response timeout"); }
+		break;
+#endif
 
 	case GCodeResult::error:
 	case GCodeResult::warning:
