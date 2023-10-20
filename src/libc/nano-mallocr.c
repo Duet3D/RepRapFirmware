@@ -57,6 +57,7 @@
 #include <assert.h>
 #else
 #define assert(x) ((void)0)
+#include <stdint.h>							// for uint32_t
 extern void vAssertCalled(uint32_t line, const char *file) noexcept;
 #endif
 
