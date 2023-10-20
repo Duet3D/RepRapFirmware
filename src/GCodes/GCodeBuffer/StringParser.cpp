@@ -624,7 +624,7 @@ void StringParser::ProcessWhileCommand() THROWS(GCodeException)
 	}
 	else
 	{
-		gb.GetBlockState().SetLoopBlock(GetFilePosition(), gb.GetLineNumber());
+		gb.GetBlockState().SetLoopBlock(GetFilePosition(), gb.GetLineNumber() - 1);
 	}
 
 	if (!EvaluateCondition())
@@ -1092,7 +1092,8 @@ FilePosition StringParser::GetFilePosition() const noexcept
 # endif
 	   )
 	{
-		return gb.LatestMachineState().fileState.GetPosition() - gb.fileInput->BytesCached() - commandLength + commandStart;
+		const FileData &file = gb.LatestMachineState().fileState;
+		return file.GetPosition() - gb.fileInput->BytesCached(file) - commandLength + commandStart;
 	}
 #endif
 	return noFilePosition;
