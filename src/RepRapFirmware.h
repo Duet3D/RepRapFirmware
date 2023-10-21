@@ -560,13 +560,13 @@ constexpr float TwoPi = 3.141592653589793 * 2.0;
 constexpr float DegreesToRadians = 3.141592653589793/180.0;
 constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 
-// The step clock is used for timing step pulses and oyther fine-resolution timer purposes
+// The step clock is used for timing step pulses and other fine-resolution timer purposes
 
 #if SAME70 || SAME5x
 // All Duet 3 boards use a common step clock rate of 750kHz so that we can sync the clocks over CAN
 constexpr uint32_t StepClockRate = 48000000/64;								// 750kHz
 #else
-constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2 and Maestro: use just under 1MHz
+constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2, PCCB Maestro: use just under 1MHz
 #endif
 
 constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;
