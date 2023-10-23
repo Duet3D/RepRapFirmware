@@ -31,7 +31,7 @@ public:
 	GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept override;
 
 	// Functions used only with scanning Z probes
-	float GetCalibratedReading() const noexcept override;
+	GCodeResult GetCalibratedReading(float& val) const noexcept override;
 
 #if ALLOCATE_DEFAULT_PORTS
 	bool AssignPorts(const char *pinNames, const StringRef& reply) noexcept;

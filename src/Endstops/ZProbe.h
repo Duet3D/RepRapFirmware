@@ -21,7 +21,7 @@ public:
 	virtual GCodeResult AppendPinNames(const StringRef& str) noexcept = 0;		// not const because it may update the state too
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException);		// 'seen' is an in-out parameter
 	virtual GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept;
-	virtual float GetCalibratedReading() const noexcept { return 0.0; }
+	virtual GCodeResult GetCalibratedReading(float& val) const noexcept { return GCodeResult::error; }
 
 	// The following should never be called for a non-scanning probe, so by default we just return error with no message
 	virtual GCodeResult CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) { return GCodeResult::error; }

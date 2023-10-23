@@ -39,7 +39,7 @@ public:
 	GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept override;
 
 	// Functions used only with scanning Z probes
-	float GetCalibratedReading() const noexcept override;
+	GCodeResult GetCalibratedReading(float& val) const noexcept override;
 	GCodeResult CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
 	void ScanningProbeCallback(RemoteInputHandle h, uint32_t val) noexcept;
 

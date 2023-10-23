@@ -936,7 +936,18 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::gridProbing7:
-		// Finished probing the grid, and retracted the probe if necessary
+		// Finished probing or scanning the grid, and retracted the probe if necessary
+		if (scanningResult != GCodeResult::ok)
+		{
+			stateMachineResult = scanningResult;
+			// scanningResult may contain a CAN error code, or will be GCodeResult::error if it was a generic bad reading error
+			if (scanningResult == GCodeResult::error)
+			{
+				reply.copy("Bad reading from scanning probe - try recalibrating the probe");
+			}
+			reprap.GetMove().AccessHeightMap().ClearGridHeights();
+		}
+		else
 		{
 			float minError, maxError;
 			Deviation deviation;
@@ -1025,35 +1036,47 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				lastAxis0Index = newAxis0Index;
 			}
 
-			// We are over the point given by [gridAxis0index, gridAxis1index]. Scan up to [lastAxis0Index, gridAxis1index]. This may be a single point.
-			const float heightError = zp->GetCalibratedReading();
-			hm.SetGridHeight(gridAxis0Index, gridAxis1Index, -heightError);
-
 			gb.AdvanceState();
-			if (lastAxis0Index != gridAxis0Index)			// if more than one point
+
+			// We are over the point given by [gridAxis0index, gridAxis1index]. Scan up to [lastAxis0Index, gridAxis1index]. This may be a single point.
+			float heightError;
+			const GCodeResult rslt = zp->GetCalibratedReading(heightError);
+			if (rslt != GCodeResult::ok)
 			{
-				SetMoveBufferDefaults(ms);
-				ms.coords[axis0Num] = grid.GetCoordinate(0, lastAxis0Index) - zp->GetOffset(axis0Num);
-				ms.coords[axis1Num] = grid.GetCoordinate(1, gridAxis1Index) - zp->GetOffset(axis1Num);
-				ms.coords[Z_AXIS] = zp->GetStartingHeight(true);
-				ms.feedRate = zp->GetProbingSpeed(0);
-				ms.linearAxesMentioned = platform.IsAxisLinear(axis0Num);
-				ms.rotationalAxesMentioned = platform.IsAxisRotational(axis0Num);
-				ms.segmentsLeftToStartAt = ms.totalSegments = (unsigned int)abs((int)lastAxis0Index - (int)gridAxis0Index);
-				ms.firstSegmentFractionToSkip = 0.0;
-				ms.scanningProbeMove = true;
-
-				// Adjust the axis 0 index so that the laser task will store the reading at the correct location in the grid
-				if (gridAxis1Index & 1u)
+				if (scanningResult == GCodeResult::ok)
 				{
-					--gridAxis0Index;
+					scanningResult = rslt;
 				}
-				else
-				{
-					++gridAxis0Index;
-				}
+			}
+			else
+			{
+				hm.SetGridHeight(gridAxis0Index, gridAxis1Index, -heightError);
 
-				NewMoveAvailable(ms);
+				if (lastAxis0Index != gridAxis0Index)			// if more than one point
+				{
+					SetMoveBufferDefaults(ms);
+					ms.coords[axis0Num] = grid.GetCoordinate(0, lastAxis0Index) - zp->GetOffset(axis0Num);
+					ms.coords[axis1Num] = grid.GetCoordinate(1, gridAxis1Index) - zp->GetOffset(axis1Num);
+					ms.coords[Z_AXIS] = zp->GetStartingHeight(true);
+					ms.feedRate = zp->GetProbingSpeed(0);
+					ms.linearAxesMentioned = platform.IsAxisLinear(axis0Num);
+					ms.rotationalAxesMentioned = platform.IsAxisRotational(axis0Num);
+					ms.segmentsLeftToStartAt = ms.totalSegments = (unsigned int)abs((int)lastAxis0Index - (int)gridAxis0Index);
+					ms.firstSegmentFractionToSkip = 0.0;
+					ms.scanningProbeMove = true;
+
+					// Adjust the axis 0 index so that the laser task will store the reading at the correct location in the grid
+					if (gridAxis1Index & 1u)
+					{
+						--gridAxis0Index;
+					}
+					else
+					{
+						++gridAxis0Index;
+					}
+
+					NewMoveAvailable(ms);
+				}
 			}
 		}
 		break;
@@ -1061,9 +1084,16 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::gridScanning2:		// Here when we have scanned a row
 		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
-			// Save the reading at the end of the scan. If there was only one point then this overwrites the value we already saved, but that doesn't matter.
 			const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
 			zp->SetProbing(false);
+
+			if (scanningResult != GCodeResult::ok)
+			{
+				gb.SetState(GCodeState::gridProbing7);
+				RetractZProbe(gb);
+				break;
+			}
+
 			HeightMap& hm = reprap.GetMove().AccessHeightMap();
 
 			// Advance to the start or end of the next row
@@ -1524,8 +1554,9 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				zp->SetProbing(true);
 			}
 
-			delay(20);												// allow some settling time
-			(void)zp->GetCalibratedReading();						// needed to update the raw reading
+			delay(20);																// allow some settling time
+			float dummyHeightError;
+			(void)zp->GetCalibratedReading(dummyHeightError);						// needed to update the raw reading
 			const uint32_t reading = zp->GetRawReading();
 			if (reading == 0)
 			{
