@@ -380,6 +380,9 @@ constexpr uint32_t DefaultChopConfReg = 0x00000053 | CHOPCONF_VSENSE_HIGH;	// th
 constexpr uint32_t ChopConf256mstep = DefaultChopConfReg;	// the default uses x256 microstepping already
 #endif
 
+constexpr uint32_t CHOPCONF_BITS_MASK_2209 = 0xFF0387FF;	// all bits except the reserved ones
+constexpr uint32_t CHOPCONF_BITS_MASK_2240 = 0xFFFDDFFF;	// all bits except the reserved ones
+
 // DRV_STATUS register
 constexpr uint8_t REGNUM_DRV_STATUS = 0x6F;
 
@@ -1611,11 +1614,14 @@ inline void TmcDriverState::TransferDone() noexcept
 			}
 			else if (registerToRead == ReadChopConf)
 			{
-				// Sometimes the CHOPCONF register VSENSE bit gets cleared unexpectedly. Now we monitor it to check that the register has the correct value.
-				if (regVal != writeRegisters[WriteChopConf] && (registersToUpdate & (1u << WriteChopConf)) == 0)
+				if (!isTmc2240)
 				{
-					registersToUpdate |= (1u << WriteChopConf);
-					++badChopConfErrors;
+					// Sometimes the CHOPCONF register VSENSE bit gets cleared unexpectedly. Now we monitor it to check that the register has the correct value.
+					if (((regVal ^ writeRegisters[WriteChopConf]) & CHOPCONF_BITS_MASK_2209) != 0 && (registersToUpdate & (1u << WriteChopConf)) == 0)
+					{
+						registersToUpdate |= (1u << WriteChopConf);
+						++badChopConfErrors;
+					}
 				}
 			}
 #if HAS_STALL_DETECT
