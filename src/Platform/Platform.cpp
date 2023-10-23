@@ -2708,7 +2708,7 @@ void Platform::DisengageBrake(size_t driver) noexcept
 StandardDriverStatus Platform::GetLocalDriverStatus(size_t driver) const noexcept
 {
 #if defined(DUET3_MB6XD)
-	return StandardDriverStatus((HasDriverError(driver)) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0;
+	return StandardDriverStatus((HasDriverError(driver)) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0);
 #else
 	return SmartDrivers::GetStatus(driver, false, false);		// it's safe to call this even when driver >= MaxSmartDrivers
 #endif
