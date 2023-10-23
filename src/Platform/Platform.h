@@ -636,6 +636,7 @@ private:
 	void InternalDisableDriver(size_t driver) noexcept;
 	void EngageBrake(size_t driver) noexcept;
 	void DisengageBrake(size_t driver) noexcept;
+	StandardDriverStatus GetLocalDriverStatus(size_t driver) const noexcept;
 
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;

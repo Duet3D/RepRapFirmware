@@ -217,6 +217,12 @@ constexpr ObjectModelArrayTableEntry Platform::objectModelArrayTable[] =
 		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumCoordinateSystems; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 				{ return ExpressionValue(reprap.GetGCodes().GetWorkplaceOffset(context.GetIndex(1), context.GetLastIndex()), 3); }
+	},
+	// 2. boards[0].drivers
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumDirectDrivers; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 10); }
 	}
 };
 
@@ -240,6 +246,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #if SUPPORT_DIRECT_LCD
 	{ "directDisplay",		OBJECT_MODEL_FUNC_IF_NOSELF(reprap.GetDisplay().IsPresent(), &reprap.GetDisplay()),					ObjectModelEntryFlags::none },
 #endif
+	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(2),																			ObjectModelEntryFlags::live },
 	{ "firmwareDate",		OBJECT_MODEL_FUNC_NOSELF(DATE),																		ObjectModelEntryFlags::none },
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
 	{ "firmwareName",		OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_NAME),															ObjectModelEntryFlags::none },
@@ -360,12 +367,15 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "points",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerDataPoints()),						ObjectModelEntryFlags::none },
 	{ "runs",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerRuns()),								ObjectModelEntryFlags::none },
 #endif
+
+	// 10. boards[0].drivers[]
+	{ "status",				OBJECT_MODEL_FUNC(self->GetLocalDriverStatus(context.GetLastIndex()).all),									ObjectModelEntryFlags::live },
 };
 
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
-	10,																		// number of sections
-	9 + SUPPORT_ACCELEROMETERS + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR
+	11,																		// number of sections
+	10 + SUPPORT_ACCELEROMETERS + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR
 	  + SUPPORT_CAN_EXPANSION + SUPPORT_DIRECT_LCD + MCU_HAS_UNIQUE_ID + HAS_WIFI_NETWORKING,		// section 0: boards[0]
 #if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp
@@ -397,6 +407,7 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 #else
 	0,
 #endif
+	1,
 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Platform)
@@ -2691,6 +2702,15 @@ void Platform::DisengageBrake(size_t driver) noexcept
 	brakePorts[driver].WriteAnalog(currentBrakePwm[driver]);
 #else
 	brakePorts[driver].WriteDigital(true);			// turn the brake solenoid on to disengage the brake
+#endif
+}
+
+StandardDriverStatus Platform::GetLocalDriverStatus(size_t driver) const noexcept
+{
+#if defined(DUET3_MB6XD)
+	return StandardDriverStatus((HasDriverError(driver)) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0;
+#else
+	return SmartDrivers::GetStatus(driver, false, false);		// it's safe to call this even when driver >= MaxSmartDrivers
 #endif
 }
 
