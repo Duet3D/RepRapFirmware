@@ -50,7 +50,7 @@ constexpr ObjectModelTableEntry AxisShaper::objectModelTable[] =
 	{ "damping",				OBJECT_MODEL_FUNC(self->zeta, 2), 							ObjectModelEntryFlags::none },
 	{ "durations",				OBJECT_MODEL_FUNC_ARRAY(1), 								ObjectModelEntryFlags::none },
 	{ "frequency",				OBJECT_MODEL_FUNC(self->frequency, 2), 						ObjectModelEntryFlags::none },
-	{ "minAcceleration",		OBJECT_MODEL_FUNC(self->minimumAcceleration, 1),			ObjectModelEntryFlags::none },
+	{ "reductionLimit",			OBJECT_MODEL_FUNC(self->reductionLimit, 2),					ObjectModelEntryFlags::none },
 	{ "type", 					OBJECT_MODEL_FUNC(self->type.ToString()), 					ObjectModelEntryFlags::none },
 };
 
@@ -70,7 +70,7 @@ AxisShaper::AxisShaper() noexcept
 	: type(InputShaperType::none),
 	  frequency(DefaultFrequency),
 	  zeta(DefaultDamping),
-	  minimumAcceleration(ConvertAcceleration(DefaultMinimumAcceleration)),
+	  reductionLimit(DefaultReductionLimit),
 	  numExtraImpulses(0)
 {
 }
@@ -100,7 +100,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 	if (gb.Seen('L'))
 	{
 		seen = true;
-		minimumAcceleration = ConvertAcceleration(max<float>(gb.GetNonNegativeFValue(), 1.0));			// very low accelerations cause problems with the maths
+		reductionLimit = ConvertAcceleration(constrain<float>(gb.GetNonNegativeFValue(), 0.01, 1.0));	// very low accelerations cause problems with the maths
 	}
 	if (gb.Seen('S'))
 	{
@@ -272,8 +272,8 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 	}
 	else
 	{
-		reply.printf("Input shaping '%s' at %.1fHz damping factor %.2f, min. acceleration %.1f",
-						type.ToString(), (double)frequency, (double)zeta, (double)InverseConvertAcceleration(minimumAcceleration));
+		reply.printf("Input shaping '%s' at %.1fHz damping factor %.2f, min. reduction %.1f",
+						type.ToString(), (double)frequency, (double)zeta, (double)reductionLimit);
 		if (numExtraImpulses != 0)
 		{
 			reply.cat(", impulses");
@@ -746,7 +746,7 @@ bool AxisShaper::TryReduceTopSpeedFullyShapeBoth(const DDA& dda, const PrepParam
 	if (dda.endSpeed < dda.startSpeed)
 	{
 		// It sometimes happens that the top speed is only a little higher than the end speed. If this is the case, try making the top speed equal to the end speed.
-		if (dda.startSpeed >= 0.75 * dda.topSpeed)
+		if (dda.startSpeed >= dda.topSpeed * reductionLimit)
 		{
 			newTopSpeed = dda.startSpeed;
 			return true;
@@ -755,7 +755,7 @@ bool AxisShaper::TryReduceTopSpeedFullyShapeBoth(const DDA& dda, const PrepParam
 	else if (dda.startSpeed < dda.endSpeed)
 	{
 		// It sometimes happens that the top speed is only a little higher than the end speed. If this is the case, try making the top speed equal to the end speed.
-		if (dda.endSpeed >= 0.75 * dda.topSpeed)
+		if (dda.endSpeed >= dda.topSpeed * reductionLimit)
 		{
 			newTopSpeed = dda.endSpeed;
 			return true;
@@ -804,7 +804,7 @@ void AxisShaper::ProposeShapeAccelBoth(const DDA& dda, const PrepParams& params,
 	{
 		// We can use overlapped shaping
 		const float newAcceleration = speedIncrease/overlappedDeltaVPerA;
-		if (newAcceleration >= minimumAcceleration)
+		if (newAcceleration >= dda.acceleration * reductionLimit)
 		{
 			proposal.distance = (dda.startSpeed * overlappedShapingClocks) + (newAcceleration * overlappedDistancePerA);
 			proposal.clocks = overlappedShapingClocks;
@@ -817,7 +817,7 @@ void AxisShaper::ProposeShapeAccelBoth(const DDA& dda, const PrepParams& params,
 		// The speed change is too high to allow overlapping, but non-overlapped shaping will give a very short steady acceleration segment.
 		// Reduce the acceleration slightly to lengthen that segment.
 		const float newAcceleration = speedIncrease/minimumNonOverlappedOriginalClocks;
-		if (newAcceleration >= minimumAcceleration)
+		if (newAcceleration >= dda.acceleration * reductionLimit)
 		{
 			const float newUnshapedAccelDistance = (dda.startSpeed + 0.5 * newAcceleration * minimumNonOverlappedOriginalClocks) * minimumNonOverlappedOriginalClocks;
 			const float extraAccelDistance = GetExtraAccelStartDistance(dda.startSpeed, newAcceleration) + GetExtraAccelEndDistance(dda.topSpeed, newAcceleration);
@@ -857,7 +857,7 @@ void AxisShaper::ProposeShapeDecelBoth(const DDA& dda, const PrepParams& params,
 	{
 		// We can use overlapped shaping
 		const float newDeceleration = speedDecrease/overlappedDeltaVPerA;
-		if (newDeceleration >= minimumAcceleration)
+		if (newDeceleration >= dda.deceleration * reductionLimit)
 		{
 			const float newDecelDistance = (dda.topSpeed * overlappedShapingClocks) - (newDeceleration * overlappedDistancePerA);
 			proposal.distance = newDecelDistance;
@@ -871,7 +871,7 @@ void AxisShaper::ProposeShapeDecelBoth(const DDA& dda, const PrepParams& params,
 		// The speed change is too high to allow overlapping, but non-overlapped shaping will give a very short steady acceleration segment.
 		// Reduce the acceleration slightly to lengthen that segment.
 		const float newDeceleration = speedDecrease/minimumNonOverlappedOriginalClocks;
-		if (newDeceleration >= minimumAcceleration)
+		if (newDeceleration >= dda.deceleration * reductionLimit)
 		{
 			const float newUnshapedDecelDistance = (dda.endSpeed + (0.5 * newDeceleration * minimumNonOverlappedOriginalClocks)) * minimumNonOverlappedOriginalClocks;
 			const float extraDecelDistance = GetExtraDecelStartDistance(dda.topSpeed, newDeceleration) + GetExtraDecelEndDistance(dda.endSpeed, newDeceleration);

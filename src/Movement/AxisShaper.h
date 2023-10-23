@@ -96,14 +96,14 @@ private:
 	static constexpr unsigned int MaxExtraImpulses = 4;
 	static constexpr float DefaultFrequency = 40.0;
 	static constexpr float DefaultDamping = 0.1;
-	static constexpr float DefaultMinimumAcceleration = 10.0;
+	static constexpr float DefaultReductionLimit = 0.25;
 	static constexpr float MinimumMiddleSegmentTime = 5.0/1000.0;	// minimum length of the segment between shaped start and shaped end of an acceleration or deceleration
 
 	// Input shaping parameters input by the user
 	InputShaperType type;								// the type of the input shaper, from which we can find its name
 	float frequency;									// the undamped frequency in Hz
 	float zeta;											// the damping ratio, see https://en.wikipedia.org/wiki/Damping. 0 = undamped, 1 = critically damped.
-	float minimumAcceleration;							// the minimum value that we reduce average acceleration to in mm/sec^2
+	float reductionLimit;								// the minimum amount that we reduce average acceleration or speed to as a fraction of the original value
 
 	// Parameters that fully define the shaping
 	unsigned int numExtraImpulses;						// the number of extra impulses
