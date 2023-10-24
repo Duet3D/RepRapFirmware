@@ -12,6 +12,18 @@
 
 #if SUPPORT_TMC22xx
 
+#ifndef SUPPORT_TMC2240
+# define SUPPORT_TMC2240	0
+#endif
+
+#ifndef SUPPORT_TMC2209
+# define SUPPORT_TMC2209	1
+#endif
+
+#ifndef SUPPORT_TMC2208
+# define SUPPORT_TMC2208	0
+#endif
+
 #include "DriverMode.h"
 
 namespace SmartDrivers
@@ -50,6 +62,9 @@ namespace SmartDrivers
 	StandardDriverStatus GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
 #if HAS_STALL_DETECT
 	DriversBitmap GetStalledDrivers(DriversBitmap driversOfInterest) noexcept;
+#endif
+#if SUPPORT_TMC2240 && !(SUPPORT_TMC2208 || SUPPORT_TMC2209)
+	float GetDriverTemperature(size_t driver) noexcept;
 #endif
 };
 

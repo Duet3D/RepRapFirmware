@@ -26,10 +26,14 @@ constexpr uint32_t IAP_IMAGE_START = 0x20018000;
 
 #define HAS_CPU_TEMP_SENSOR		1
 #define HAS_HIGH_SPEED_SD		1
-#define SUPPORT_TMC22xx			1
 #define HAS_VOLTAGE_MONITOR		1
 #define ENFORCE_MAX_VIN			0
 #define HAS_VREF_MONITOR		1
+
+#define SUPPORT_TMC22xx			1
+#define SUPPORT_TMC2208			1
+#define SUPPORT_TMC2209			0
+#define SUPPORT_TMC2240			0
 
 #define SUPPORT_LED_STRIPS		1
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
