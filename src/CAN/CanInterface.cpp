@@ -1163,10 +1163,9 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 {
 	CanInterface::CheckCanAddress(boardAddress, gb);
 
-	if (type <= 15)
+	if (type == 0)
 	{
 		Platform& p = reprap.GetPlatform();
-
 		uint8_t currentPart = 0;
 		uint8_t lastPart;
 		GCodeResult res;
@@ -1194,6 +1193,13 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 		return res;
 	}
 
+	if (type == 1)
+	{
+		// Request a test report
+		CanMessageGenericConstructor cons(M122P1Params);
+		return cons.SendAndGetResponse(CanMessageType::testReport, boardAddress, reply);
+	}
+
 	// It's a diagnostic test
 	CanMessageBuffer * const buf = AllocateBuffer(&gb);
 	const CanRequestId rid = CanInterface::AllocateRequestId(boardAddress, buf);
@@ -1206,7 +1212,7 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 		msg->param32[0] = (uint32_t)gb.GetIValue();			// allow negative values so that we can read high memory addresses
 		if (gb.Seen('V'))
 		{
-			msg->param32[1] = (uint32_t)gb.GetIValue();		// allow negative values so that we set high values
+			msg->param32[1] = (uint32_t)gb.GetIValue();		// allow negative values so that we can set high values
 			msg->param16 = 1;
 		}
 		else
