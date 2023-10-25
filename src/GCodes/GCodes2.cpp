@@ -2091,11 +2091,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						uint32_t qos = 0;
 						gb.TryGetLimitedUIValue('Q', qos, seen, 3);
 
-						uint32_t retain = 0;
-						gb.TryGetLimitedUIValue('R', retain, seen, 2);
+						bool retain = 0;
+						gb.TryGetBValue('R', retain, seen);
 
-						uint32_t dup = 0;
-						gb.TryGetLimitedUIValue('D', dup, seen, 2);
+						bool dup = 0;
+						gb.TryGetBValue('D', dup, seen);
 
 						reprap.GetNetwork().MqttPublish(message.c_str(), topic.c_str(), qos, retain, dup);
 					}

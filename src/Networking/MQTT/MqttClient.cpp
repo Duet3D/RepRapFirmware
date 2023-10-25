@@ -367,7 +367,7 @@ void MqttClient::ConnectionLost() noexcept
 		gb.GetQuotedString(param.GetRef());
 
 		uint32_t qos = 0;
-		uint32_t retain = 0;
+		bool retain = 0;
 		bool seen = false;
 
 		// Check qos
@@ -375,7 +375,7 @@ void MqttClient::ConnectionLost() noexcept
 
 
 		// Check retain flag
-		gb.TryGetLimitedUIValue('R', retain, seen, 2);
+		gb.TryGetBValue('R', retain, seen);
 
 
 		if (!setMemb(instance->willMessage))
