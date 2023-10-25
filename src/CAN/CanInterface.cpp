@@ -1197,6 +1197,7 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 	{
 		// Request a test report
 		CanMessageGenericConstructor cons(M122P1Params);
+		cons.PopulateFromCommand(gb);
 		return cons.SendAndGetResponse(CanMessageType::testReport, boardAddress, reply);
 	}
 
