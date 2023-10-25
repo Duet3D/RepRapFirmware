@@ -555,7 +555,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 					break;
 				}
 
-				if (success && newTopSpeed >= dda.topSpeed * 0.5)
+				if (success && newTopSpeed >= dda.topSpeed * reductionLimit)
 				{
 					if (reprap.GetDebugFlags(Module::InputShaping).IsAnyBitSet(InputShapingDebugFlags::Retries, InputShapingDebugFlags::All))
 					{
@@ -746,7 +746,7 @@ bool AxisShaper::TryReduceTopSpeedFullyShapeBoth(const DDA& dda, const PrepParam
 	if (dda.endSpeed < dda.startSpeed)
 	{
 		// It sometimes happens that the top speed is only a little higher than the end speed. If this is the case, try making the top speed equal to the end speed.
-		if (dda.startSpeed >= dda.topSpeed * reductionLimit)
+		if (dda.startSpeed >= 0.75 * dda.topSpeed)
 		{
 			newTopSpeed = dda.startSpeed;
 			return true;
@@ -755,7 +755,7 @@ bool AxisShaper::TryReduceTopSpeedFullyShapeBoth(const DDA& dda, const PrepParam
 	else if (dda.startSpeed < dda.endSpeed)
 	{
 		// It sometimes happens that the top speed is only a little higher than the end speed. If this is the case, try making the top speed equal to the end speed.
-		if (dda.endSpeed >= dda.topSpeed * reductionLimit)
+		if (dda.endSpeed >= 0.75 * dda.topSpeed)
 		{
 			newTopSpeed = dda.endSpeed;
 			return true;
