@@ -745,7 +745,9 @@ private:
 	uint16_t numWrites;										// how many successful writes we had
 	uint16_t numTimeouts;									// how many times a transfer timed out
 	uint16_t numDmaErrors;
+#if SUPPORT_TMC2208 || SUPPORT_TMC2209
 	uint16_t badChopConfErrors;
+#endif
 
 #if TMC22xx_HAS_ENABLE_PINS
 	Pin enablePin;											// the enable pin of this driver, if it has its own
@@ -1160,7 +1162,10 @@ pre(!driversPowered)
 	failedOp = 0xFF;
 	registerToRead = 0;
 	lastIfCount = 0;
-	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = badChopConfErrors = 0;
+	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = 0;
+#if SUPPORT_TMC2208 || SUPPORT_TMC2209
+	badChopConfErrors = 0;
+#endif
 #if HAS_STALL_DETECT
 	ResetLoadRegisters();
 #endif
@@ -1556,14 +1561,25 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 	}
 #endif
 
-	reply.catf(", read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u, CC errors %u",
-					readErrors, writeErrors, lastIfCount, numReads, numWrites, numTimeouts, numDmaErrors, badChopConfErrors);
+	reply.catf(", read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u",
+					readErrors, writeErrors, lastIfCount, numReads, numWrites, numTimeouts, numDmaErrors);
+#if SUPPORT_TMC2208 || SUPPORT_TMC2209
+# if SUPPORT_TMC2240
+	if (!isTmc2240)
+# endif
+	{
+		reply.catf(", CC errors %u", badChopConfErrors);
+	}
+#endif
 	if (failedOp != 0xFF)
 	{
 		reply.catf(", failedOp 0x%02x", failedOp);
 		failedOp = 0xFF;
 	}
-	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = badChopConfErrors = 0;
+	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = 0;
+#if SUPPORT_TMC2208 || SUPPORT_TMC2209
+	badChopConfErrors = 0;
+#endif
 }
 
 // This is called by the ISR when the SPI transfer has completed
