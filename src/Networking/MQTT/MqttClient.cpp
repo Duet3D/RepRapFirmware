@@ -456,7 +456,7 @@ void MqttClient::ConnectionLost() noexcept
 
 			if (reprap.Debug(Module::Webserver))
 			{
-				debugPrintf("Subscription topic '%s' max QOS changed to %d \n", param.c_str(), qos);
+				debugPrintf("Subscription topic '%s' max QOS changed to %" PRIu32 "\n", param.c_str(), qos);
 			}
 		}
 		else
@@ -480,7 +480,7 @@ void MqttClient::ConnectionLost() noexcept
 
 			if (reprap.Debug(Module::Webserver))
 			{
-				debugPrintf("Topic '%s' added with max QOS=%d to subscriptions\n", param.c_str(), qos);
+				debugPrintf("Topic '%s' added with max QOS=%" PRIu32 " to subscriptions\n", param.c_str(), qos);
 			}
 		}
 	}
