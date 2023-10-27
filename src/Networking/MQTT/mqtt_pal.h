@@ -26,11 +26,14 @@ typedef time_t mqtt_pal_time_t;
 extern uint32_t millis() noexcept;
 #define MQTT_PAL_TIME() (millis() / 1000)
 
-// Mutex - define to nothing; MQTT-C is used in a single thread context.
-typedef int mqtt_pal_mutex_t;
-#define MQTT_PAL_MUTEX_LOCK(x)
-#define MQTT_PAL_MUTEX_INIT(x)
-#define MQTT_PAL_MUTEX_UNLOCK(x)
+typedef struct
+{
+	struct Mutex *m;
+} mqtt_pal_mutex_t;
+
+#define MQTT_PAL_MUTEX_INIT(m)          mqtt_pal_mutex_init(m)
+#define MQTT_PAL_MUTEX_LOCK(m)          mqtt_pal_mutex_lock(m)
+#define MQTT_PAL_MUTEX_UNLOCK(m)        mqtt_pal_mutex_unlock(m)
 
 // Byte order functions
 #define MQTT_PAL_HTONS(s) __builtin_bswap16(s)
@@ -80,6 +83,10 @@ ssize_t mqtt_pal_sendall(mqtt_pal_socket_handle fd, const void* buf, size_t len,
  * - Otherwise, return MQTT_ERROR_SOCKET_ERROR.
  */
 ssize_t mqtt_pal_recvall(mqtt_pal_socket_handle fd, void* buf, size_t bufsz, int flags);
+
+void mqtt_pal_mutex_init(mqtt_pal_mutex_t *mutex);
+void mqtt_pal_mutex_lock(mqtt_pal_mutex_t *mutex);
+void mqtt_pal_mutex_unlock(mqtt_pal_mutex_t *mutex);
 
 #ifdef __cplusplus
 }

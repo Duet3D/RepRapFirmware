@@ -2079,14 +2079,32 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 #endif
 
+#if SUPPORT_MQTT
+					if ((type & MqttMessage) && (result != GCodeResult::error))
+					{
+						String<MaxGCodeLength> topic;
+						gb.MustSee('T');
+						gb.GetQuotedString(topic.GetRef());
+
+						bool seen = false;
+
+						uint32_t qos = 0;
+						gb.TryGetLimitedUIValue('Q', qos, seen, 3);
+
+						bool retain = 0;
+						gb.TryGetBValue('R', retain, seen);
+
+						bool dup = 0;
+						gb.TryGetBValue('D', dup, seen);
+
+						reprap.GetNetwork().MqttPublish(message.c_str(), topic.c_str(), qos, retain, dup);
+					}
+#endif
+
 					if (result != GCodeResult::error)
 					{
 						// Append newline and send the message to the destinations,
-						// except for MqttMessage
-						if (type != MqttMessage)
-						{
-							message.cat('\n');
-						}
+						message.cat('\n');
 						platform.Message(type, message.c_str());
 					}
 				}
