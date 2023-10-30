@@ -588,17 +588,25 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 
 		if (seen)
 		{
-			Init();
+			if (parser.HasParameter('C'))
+			{
+				Init();				// Init() resets dataReceived and version, so only do it if the port has been configured
+			}
+			else
+			{
+				Reset();
+			}
 		}
 		else
 		{
-			reply.printf("Duet3D rotating magnet filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
+			reply.printf("Duet3D magnetic filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
 			GetPort().AppendPinName(reply);
-			reply.catf(", %s, sensitivity %.2fmm/rev, allow %ld%% to %ld%%, check every %.1fmm, ",
-						(GetEnableMode() != 0) ? "enabled" : "disabled",
+			reply.catf(", %s, %.2fmm/rev, allow %ld%% to %ld%%, check %s moves every %.1fmm, ",
+						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when SD printing" : "disabled",
 						(double)mmPerRev,
 						ConvertToPercent(minMovementAllowed),
 						ConvertToPercent(maxMovementAllowed),
+						(checkNonPrintingMoves) ? "all extruding" : "printing",
 						(double)minimumExtrusionCheckLength);
 
 			if (!dataReceived)
@@ -607,7 +615,6 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 			}
 			else
 			{
-				reply.catf("version %u, ", version);
 				if (switchOpenMask != 0)
 				{
 					reply.cat(((sensorValue & switchOpenMask) != 0) ? "no filament, " : "filament present, ");
@@ -639,7 +646,7 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 				else if (HaveCalibrationData())
 				{
 					const float measuredMmPerRev = MeasuredSensitivity();
-					reply.catf("measured sensitivity %.2fmm/rev, min %ld%% max %ld%% over %.1fmm\n",
+					reply.catf("measured %.2fmm/rev, min %ld%% max %ld%% over %.1fmm\n",
 						(double)measuredMmPerRev,
 						ConvertToPercent(minMovementRatio * measuredMmPerRev),
 						ConvertToPercent(maxMovementRatio * measuredMmPerRev),
