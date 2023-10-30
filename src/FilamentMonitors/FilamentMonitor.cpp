@@ -212,7 +212,12 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 		return GCodeResult::ok;
 	}
 
-	return sensor->Configure(gb, reply, seen);									// configure or report on the existing sensor (may throw)
+	const GCodeResult rslt = sensor->Configure(gb, reply, seen);									// configure or report on the existing sensor (may throw)
+	if (seen)
+	{
+		reprap.SensorsUpdated();
+	}
+	return rslt;
 }
 
 // Factory function to create a filament monitor.
