@@ -493,13 +493,14 @@ void LaserFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder)
 	buf.printf("Extruder %u: ", extruder);
 	if (dataReceived)
 	{
-		buf.catf("pos %.2f, errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32 "\n",
-					(double)GetCurrentPosition(), framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
+		buf.catf("pos %.2f", (double)GetCurrentPosition());
 	}
 	else
 	{
-		buf.cat("no data received\n");
+		buf.cat("no data received");
 	}
+	buf.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32,
+				framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 	reprap.GetPlatform().Message(mtype, buf.c_str());
 }
 

@@ -533,16 +533,17 @@ void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int 
 {
 	String<StringLength256> buf;
 	buf.printf("Extruder %u: ", extruder);
+
 	if (dataReceived)
 	{
-		buf.catf("pos %.2f, errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32 "\n",
-					(double)((float)lastKnownPosition * (360.0/1024.0)),
-					framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
+		buf.catf("pos %.2f", (double)(float)(sensorValue * (360.0/1024.0)));
 	}
 	else
 	{
-		buf.cat("no data received\n");
+		buf.cat("no data received");
 	}
+	buf.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32,
+				framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 	reprap.GetPlatform().Message(mtype, buf.c_str());
 }
 
