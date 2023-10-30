@@ -582,6 +582,7 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 		return GCodeResult::error;
 	}
 
+	fm->boardAddress = CanInterface::GetCanAddress();
 	filamentSensors[p_driver] = fm;
 	return GCodeResult::ok;
 }
