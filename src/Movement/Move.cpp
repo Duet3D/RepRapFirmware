@@ -1352,13 +1352,19 @@ int32_t Move::GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept
 	size_t ringNumber = 0;
 	for (size_t i = 0; i < NumMovementSystems; ++i)
 	{
-		if (reprap.GetGCodes().GetMovementState(i).GetAxesAndExtrudersOwned().IsBitSet(drive))
+		if (
+#if SUPPORT_REMOTE_COMMANDS
+			CanInterface::InExpansionMode() ||
+#endif
+			reprap.GetGCodes().GetMovementState(i).GetAxesAndExtrudersOwned().IsBitSet(drive))
 		{
-			ringNumber = i;
-			break;
+			return rings[ringNumber].GetAccumulatedMovement(drive, isPrinting);
 		}
 	}
-	return rings[ringNumber].GetAccumulatedMovement(drive, isPrinting);
+
+	// We didn't find a movement system that owns the extruder
+	isPrinting = false;
+	return 0;
 }
 
 // Get and lock the aux move buffer. If successful, return a pointer to the buffer.

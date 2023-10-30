@@ -144,7 +144,7 @@ protected:
 	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) THROWS(GCodeException);
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult CommonConfigure(const CanMessageGenericParser& parser, const StringRef& reply, InterruptMode interruptMode, bool& seen) noexcept;
-	uint8_t GetDriver() const noexcept { return driverId.localDriver; }
+	uint8_t GetDriver() const noexcept { return driveNumber; }
 #endif
 
 	const IoPort& GetPort() const noexcept { return port; }

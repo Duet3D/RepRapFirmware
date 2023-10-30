@@ -772,6 +772,8 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	flags.all = 0;
 	flags.isRemote = true;
 	flags.isPrintingMove = flags.usePressureAdvance = msg.usePressureAdvance;
+	// TODO For now we treat any non-printing move as a non-printing extruder move. Better to pass a flag for it in the CAN message.
+	flags.isNonPrintingExtruderMove = !flags.isPrintingMove;
 
 	// Prepare for movement
 	PrepParams params;
