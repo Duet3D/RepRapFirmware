@@ -112,6 +112,13 @@ void SimpleFilamentMonitor::GetLiveData(FilamentMonitorDataNew& data) const noex
 	data.hasLiveData = false;
 }
 
+// Print diagnostic info for this sensor
+void SimpleFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
+{
+	Poll();
+	reply.lcatf("Driver %u: %s", GetDriver(), (filamentPresent) ? "ok" : "no filament");
+}
+
 #endif
 
 #if SUPPORT_CAN_EXPANSION

@@ -655,6 +655,22 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 	return rslt;
 }
 
+// Print diagnostic info for this sensor
+void RotatingMagnetFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
+{
+	reply.lcatf("Driver %u: ", GetDriver());
+	if (dataReceived)
+	{
+		reply.catf("pos %.2f", (double)(float)(sensorValue * (360.0/1024.0)));
+	}
+	else
+	{
+		reply.cat("no data received");
+	}
+	reply.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32,
+				framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
+}
+
 #endif
 
 // End

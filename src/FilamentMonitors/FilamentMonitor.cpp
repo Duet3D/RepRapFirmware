@@ -648,6 +648,27 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 	}
 }
 
+// Send diagnostics info
+/*static*/ void FilamentMonitor::GetDiagnostics(const StringRef& reply) noexcept
+{
+	bool first = true;
+	ReadLocker lock(filamentMonitorsLock);
+
+	for (size_t i = 0; i < NumDirectDrivers; ++i)
+	{
+		FilamentMonitor * const fs = filamentSensors[i];
+		if (fs != nullptr)
+		{
+			if (first)
+			{
+				reply.lcat("=== Filament sensors ===\n");
+				first = false;
+			}
+			fs->Diagnostics(reply);
+		}
+	}
+}
+
 #endif
 
 // End

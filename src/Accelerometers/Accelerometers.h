@@ -31,6 +31,10 @@ namespace Accelerometers
 #if SUPPORT_CAN_EXPANSION
 	void ProcessReceivedData(CanAddress src, const CanMessageAccelerometerData& msg, size_t msgLen) noexcept;
 #endif
+#if 0	// We don't currently support accelerometers on main boards used as expansion boards
+//#if SUPPORT_REMOTE_COMMANDS
+	void Diagnostics(const StringRef& reply) noexcept;
+#endif
 }
 
 #endif
