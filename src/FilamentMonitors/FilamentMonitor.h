@@ -156,7 +156,7 @@ protected:
 	}
 
 #if SUPPORT_CAN_EXPANSION
-	bool IsLocal() const noexcept { return boardAddress == CanInterface::GetCanAddress(); }
+	bool IsLocal() const noexcept { return driverId.GetBoardAddress() == CanInterface::GetCanAddress(); }
 #endif
 
 private:
@@ -182,17 +182,16 @@ private:
 
 	int32_t isrExtruderStepsCommanded;
 	uint32_t lastIsrMillis;
-	unsigned int driveNumber;
+	unsigned int driveNumber;											// the logical drive number that represents this extruder (but the actual drive number if in expansion mode)
 	unsigned int type;
 	IoPort port;
-	DriverId driverId;
+	DriverId driverId;													// the board address and physical driver that the logical drive number maps to
 
 	uint8_t enableMode;													// 0 = disabled, 1 = enabled when SD card printing, 2 = always enabled
 	bool isrWasPrinting;
 	bool haveIsrStepsCommanded;
 	FilamentSensorStatus lastStatus;
 #if SUPPORT_CAN_EXPANSION
-	CanAddress boardAddress;
 	FilamentSensorStatus lastRemoteStatus;
 	bool hasRemote;
 #endif

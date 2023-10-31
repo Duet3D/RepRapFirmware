@@ -631,7 +631,7 @@ bool DDARing::SetWaitingToEmpty() noexcept
 	return ret;
 }
 
-// Get the number of steps taken by an extruder drive since the last time we called this function for that drive
+// Get the number of steps taken by a logical drive since the last time we called this function for that drive
 int32_t DDARing::GetAccumulatedMovement(size_t drive, bool& isPrinting) noexcept
 {
 	AtomicCriticalSectionLocker lock;							// we don't want a move to complete and the ISR update the movement accumulators while we are doing this

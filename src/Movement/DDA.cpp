@@ -19,6 +19,10 @@
 # include <CAN/CanMotion.h>
 #endif
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CAN/CanInterface.h>
+#endif
+
 #ifdef DUET_NG
 # define DDA_MOVE_DEBUG	(0)
 #else
@@ -2289,15 +2293,25 @@ void DDA::UpdateMovementAccumulators(volatile int32_t *accumulators) const noexc
 	//
 	// Loop through DMs, checking whether each associated drive is an extruder and updating the movement accumulator if so.
 	// We could omit the check that the drive is an accumulator so that we update all accumulators, but we would still need to check for leadscrew adjustment moves.
-	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
-	if (numExtruders != 0)
+	const unsigned int firstExtruderDrive =
+#if SUPPORT_REMOTE_COMMANDS
+		(CanInterface::InExpansionMode())
+			? 0 :
+#endif
+				ExtruderToLogicalDrive(reprap.GetGCodes().GetNumExtruders() - 1);
+	const unsigned int lastExtruderDrive =
+#if SUPPORT_REMOTE_COMMANDS
+		(CanInterface::InExpansionMode())
+			? NumDirectDrivers - 1 :
+#endif
+				MaxAxesPlusExtruders - 1;
+	if (firstExtruderDrive < lastExtruderDrive)
 	{
-		const unsigned int firstExtruderDrive = ExtruderToLogicalDrive(numExtruders - 1);
 		for (const DriveMovement* dm = activeDMs; dm != nullptr; )
 		{
 			const uint8_t drv = dm->drive;
 			if (   drv >= firstExtruderDrive						// check that it's an extruder (to save the call to GetStepsTaken)
-				&& drv < MaxAxesPlusExtruders						// check that it's not a direct leadscrew move
+				&& drv <= lastExtruderDrive							// check that it's not a direct leadscrew move
 			   )
 			{
 				accumulators[drv] += dm->GetNetStepsTaken();
@@ -2308,7 +2322,7 @@ void DDA::UpdateMovementAccumulators(volatile int32_t *accumulators) const noexc
 		{
 			const uint8_t drv = dm->drive;
 			if (   drv >= firstExtruderDrive						// check that it's an extruder (to save the call to GetStepsTaken)
-				&& drv < MaxAxesPlusExtruders						// check that it's not a direct leadscrew move
+				&& drv <= lastExtruderDrive							// check that it's not a direct leadscrew move
 			   )
 			{
 				accumulators[drv] += dm->GetNetStepsTaken();
