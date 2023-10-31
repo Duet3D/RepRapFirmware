@@ -124,7 +124,7 @@ ExpansionManager::ExpansionManager() noexcept : numExpansionBoards(0), numBoards
 	// The boards table array is initialised by its constructor. Note, boards[0] is not used.
 }
 
-// Update the state of a board
+// Update the state of a board. Caller should have a write lock on boardsLock before calling this.
 void ExpansionManager::UpdateBoardState(CanAddress address, BoardState newState) noexcept
 {
 	ExpansionBoardData& board = boards[address];
@@ -138,6 +138,7 @@ void ExpansionManager::UpdateBoardState(CanAddress address, BoardState newState)
 		{
 			++numExpansionBoards;
 			lastIndexSearched = 0;
+			lastAddressFound = 0;
 		}
 		else if (oldState == BoardState::flashing && numBoardsFlashing != 0)
 		{
@@ -152,6 +153,7 @@ void ExpansionManager::UpdateBoardState(CanAddress address, BoardState newState)
 		{
 			--numExpansionBoards;
 			lastIndexSearched = 0;
+			lastAddressFound = 0;
 		}
 		reprap.BoardsUpdated();
 	}
@@ -164,61 +166,63 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 	if (src <= CanId::MaxCanAddress)
 	{
 		ExpansionBoardData& board = boards[src];
-		WriteLocker lock(boardsLock);
+		{
+			WriteLocker lock(boardsLock);
 
-		board.whenLastStatusReportReceived = millis();
-		if (board.state == BoardState::running)
-		{
-			Event::AddEvent(EventType::expansion_reconnect, 0, src, 0, "");
-		}
-		board.hasVin = board.hasV12 = board.hasMcuTemp = false;
-		String<StringLength100> boardTypeAndFirmwareVersion;
-		if (isNewFormat)
-		{
-			boardTypeAndFirmwareVersion.copy(buf->msg.announceNew.boardTypeAndFirmwareVersion, CanMessageAnnounceNew::GetMaxTextLength(buf->dataLength));
-		}
-		else
-		{
-			boardTypeAndFirmwareVersion.copy(buf->msg.announceOld.boardTypeAndFirmwareVersion, CanMessageAnnounceOld::GetMaxTextLength(buf->dataLength));
-		}
-		UpdateBoardState(src, BoardState::unknown);
-		if (board.typeName == nullptr || strcmp(board.typeName, boardTypeAndFirmwareVersion.c_str()) != 0)
-		{
-			// To save memory, see if we already have another board with the same type name
-			const char *newTypeName = nullptr;
-			for (const ExpansionBoardData& data : boards)
+			board.whenLastStatusReportReceived = millis();
+			if (board.state == BoardState::running)
 			{
-				if (data.typeName != nullptr && strcmp(boardTypeAndFirmwareVersion.c_str(), data.typeName) == 0)
-				{
-					newTypeName = data.typeName;
-					break;
-				}
+				Event::AddEvent(EventType::expansion_reconnect, 0, src, 0, "");
 			}
-
-			if (newTypeName == nullptr)
-			{
-				char * const temp = new char[boardTypeAndFirmwareVersion.strlen() + 1];
-				strcpy(temp, boardTypeAndFirmwareVersion.c_str());
-				newTypeName = temp;
-			}
-
-			board.typeName = newTypeName;
-			DeleteArray(board.driverData);
+			board.hasVin = board.hasV12 = board.hasMcuTemp = false;
+			String<StringLength100> boardTypeAndFirmwareVersion;
 			if (isNewFormat)
 			{
-				board.numDrivers = buf->msg.announceNew.numDrivers;
-				board.usesUf2Binary = buf->msg.announceNew.usesUf2Binary;
-				board.uniqueId.SetFromRemote(buf->msg.announceNew.uniqueId);
+				boardTypeAndFirmwareVersion.copy(buf->msg.announceNew.boardTypeAndFirmwareVersion, CanMessageAnnounceNew::GetMaxTextLength(buf->dataLength));
 			}
 			else
 			{
-				board.numDrivers = buf->msg.announceOld.numDrivers;
-				board.usesUf2Binary = false;
-				board.uniqueId.Clear();
+				boardTypeAndFirmwareVersion.copy(buf->msg.announceOld.boardTypeAndFirmwareVersion, CanMessageAnnounceOld::GetMaxTextLength(buf->dataLength));
 			}
-			board.driverData = new DriverData[board.numDrivers];
+			UpdateBoardState(src, BoardState::unknown);
+			if (board.typeName == nullptr || strcmp(board.typeName, boardTypeAndFirmwareVersion.c_str()) != 0)
+			{
+				// To save memory, see if we already have another board with the same type name
+				const char *newTypeName = nullptr;
+				for (const ExpansionBoardData& data : boards)
+				{
+					if (data.typeName != nullptr && strcmp(boardTypeAndFirmwareVersion.c_str(), data.typeName) == 0)
+					{
+						newTypeName = data.typeName;
+						break;
+					}
+				}
+
+				if (newTypeName == nullptr)
+				{
+					char * const temp = new char[boardTypeAndFirmwareVersion.strlen() + 1];
+					strcpy(temp, boardTypeAndFirmwareVersion.c_str());
+					newTypeName = temp;
+				}
+
+				board.typeName = newTypeName;
+				DeleteArray(board.driverData);
+				if (isNewFormat)
+				{
+					board.numDrivers = buf->msg.announceNew.numDrivers;
+					board.usesUf2Binary = buf->msg.announceNew.usesUf2Binary;
+					board.uniqueId.SetFromRemote(buf->msg.announceNew.uniqueId);
+				}
+				else
+				{
+					board.numDrivers = buf->msg.announceOld.numDrivers;
+					board.usesUf2Binary = false;
+					board.uniqueId.Clear();
+				}
+				board.driverData = new DriverData[board.numDrivers];
+			}
+			UpdateBoardState(src, BoardState::running);
 		}
-		UpdateBoardState(src, BoardState::running);
 
 		// Tell the sending board that we don't need any more announcements from it
 		buf->SetupRequestMessage<CanMessageAcknowledgeAnnounce>(0, CanInterface::GetCanAddress(), src);
@@ -234,6 +238,7 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 	board.whenLastStatusReportReceived = millis();
 	if (board.state != BoardState::running && board.state != BoardState::flashing)
 	{
+		WriteLocker lock(boardsLock);
 		UpdateBoardState(address, BoardState::running);
 	}
 
@@ -366,6 +371,7 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 	const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf2, rid2, reply);
 	if (rslt == GCodeResult::ok)
 	{
+		WriteLocker lock(boardsLock);
 		UpdateBoardState(boardAddress, BoardState::flashing);
 	}
 	return rslt;
@@ -373,11 +379,13 @@ GCodeResult ExpansionManager::UpdateRemoteFirmware(uint32_t boardAddress, GCodeB
 
 void ExpansionManager::UpdateFinished(CanAddress address) noexcept
 {
+	WriteLocker lock(boardsLock);
 	UpdateBoardState(address, BoardState::resetting);
 }
 
 void ExpansionManager::UpdateFailed(CanAddress address) noexcept
 {
+	WriteLocker lock(boardsLock);
 	UpdateBoardState(address, BoardState::flashFailed);
 }
 
@@ -409,7 +417,11 @@ const ExpansionBoardData& ExpansionManager::FindIndexedBoard(unsigned int index)
 	// The common case is where we are looking for the same board as last time, so check for that first
 	if (index == lastIndexSearched)
 	{
-		return boards[lastAddressFound];
+		const unsigned int addr = lastAddressFound;
+		if (index == lastIndexSearched)					// check it again in case we got interrupted
+		{
+			return boards[addr];
+		}
 	}
 
 	// If index 0 or out of range, return the dummy entry for the main board
@@ -460,7 +472,10 @@ void ExpansionManager::Spin() noexcept
 			const uint32_t lastTimeReceived = board.whenLastStatusReportReceived;	// capture volatile variable before we call millis()
 			if (millis() - lastTimeReceived > StatusMessageTimeoutMillis)
 			{
-				UpdateBoardState(addr, BoardState::timedOut);
+				{
+					WriteLocker lock(boardsLock);
+					UpdateBoardState(addr, BoardState::timedOut);
+				}
 				Event::AddEvent(EventType::expansion_timeout, 0, addr, 0, "");
 			}
 		}
