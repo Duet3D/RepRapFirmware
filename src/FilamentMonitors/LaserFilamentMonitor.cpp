@@ -623,7 +623,7 @@ void LaserFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
 	{
 		reply.cat("no data received");
 	}
-	reply.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32,
+	reply.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32 "\n",
 				framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 }
 

@@ -479,7 +479,11 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 		{
 			if (first)
 			{
+#if 1	//TEMP DEBUG
+				reprap.GetPlatform().MessageF(mtype, "=== Filament sensors ===\ncheck %" PRIu32 " clear %" PRIu32 "\n", checkCalls, clearCalls);
+#else
 				reprap.GetPlatform().Message(mtype, "=== Filament sensors ===\n");
+#endif
 				first = false;
 			}
 			filamentSensors[i]->Diagnostics(mtype, i);

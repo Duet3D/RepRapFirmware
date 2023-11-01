@@ -542,7 +542,7 @@ void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int 
 	{
 		buf.cat("no data received");
 	}
-	buf.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32,
+	buf.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32 "\n",
 				framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 	reprap.GetPlatform().Message(mtype, buf.c_str());
 }
