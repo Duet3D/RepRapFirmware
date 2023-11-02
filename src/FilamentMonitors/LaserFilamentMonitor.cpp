@@ -172,7 +172,7 @@ GCodeResult LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& re
 		{
 			reply.printf("Duet3D laser filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
 			GetPort().AppendPinName(reply);
-			reply.catf(", %s, allow %ld%% to %ld%%, check %s moves every %.1fmm, calibration factor %.3f, ",
+			reply.catf(", %s, allow %ld%% to %ld%%, check %s moves every %.1fmm, cal. factor %.3f, ",
 						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when SD printing" : "disabled",
 						ConvertToPercent(minMovementAllowed),
 						ConvertToPercent(maxMovementAllowed),
@@ -193,10 +193,6 @@ GCodeResult LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& re
 				if (imageQuality != 0)
 				{
 					reply.catf("quality %u, ", imageQuality);
-				}
-				if (version >= 2)
-				{
-					reply.catf("brightness %u, shutter %u, ", brightness, shutter);
 				}
 				if (sensorError)
 				{
@@ -494,12 +490,16 @@ void LaserFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder)
 	if (dataReceived)
 	{
 		buf.catf("pos %.2f", (double)GetCurrentPosition());
+		if (version >= 2)
+		{
+			buf.catf(", brightness %u, shutter %u", brightness, shutter);
+		}
 	}
 	else
 	{
 		buf.cat("no data received");
 	}
-	buf.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32,
+	buf.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32 "\n",
 				framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 	reprap.GetPlatform().Message(mtype, buf.c_str());
 }
@@ -559,7 +559,7 @@ GCodeResult LaserFilamentMonitor::Configure(const CanMessageGenericParser& parse
 		{
 			reply.printf("Duet3D laser filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
 			GetPort().AppendPinName(reply);
-			reply.catf(", %s, allow %ld%% to %ld%%, check %s moves every %.1fmm, calibration factor %.3f, ",
+			reply.catf(", %s, allow %ld%% to %ld%%, check %s moves every %.1fmm, cal. factor %.3f, ",
 						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when SD printing" : "disabled",
 						ConvertToPercent(minMovementAllowed),
 						ConvertToPercent(maxMovementAllowed),
@@ -580,10 +580,6 @@ GCodeResult LaserFilamentMonitor::Configure(const CanMessageGenericParser& parse
 				if (imageQuality != 0)
 				{
 					reply.catf("quality %u, ", imageQuality);
-				}
-				if (version >= 2)
-				{
-					reply.catf("brightness %u, shutter %u, ", brightness, shutter);
 				}
 				if (sensorError)
 				{
@@ -618,12 +614,16 @@ void LaserFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
 	if (dataReceived)
 	{
 		reply.catf("pos %.2f", (double)GetCurrentPosition());
+		if (version >= 2)
+		{
+			reply.catf(", brightness %u, shutter %u", brightness, shutter);
+		}
 	}
 	else
 	{
 		reply.cat("no data received");
 	}
-	reply.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32 "\n",
+	reply.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32,
 				framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 }
 
