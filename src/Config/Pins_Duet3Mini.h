@@ -178,8 +178,10 @@ constexpr float MaximumMotorCurrent = 2000.0;
 //constexpr float MaximumStandstillCurrent = 1500.0;						// this is not currently enforced
 
 #if SUPPORT_TMC2240
+constexpr uint32_t Tmc2240CurrentRange = 0x03;								// which current range we set the TMC2240 to (3A)
+constexpr uint32_t Tmc2240SlopeControl = 0x01;								// which slope control we set the TMC2240 to (200V/us)
 constexpr float Tmc2240Rref = 14.0;											// TMC2240 reference resistor on Duet 3 Mini2+ prototype, in Kohms
-constexpr float Tmc2240FullScaleCurrent = 36000/Tmc2240Rref;				// in mA, assuming we set the range bits in the DRV_CONF register to 01b
+constexpr float Tmc2240FullScaleCurrent = 36000/Tmc2240Rref;				// in mA, assuming we set the range bits in the DRV_CONF register to 0x03
 constexpr float Tmc2240CsMultiplier = 32.0/Tmc2240FullScaleCurrent;
 constexpr float MaximumTmc2240MotorCurrent = 2500.0;
 #endif

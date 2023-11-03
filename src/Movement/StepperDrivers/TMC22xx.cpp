@@ -250,9 +250,9 @@ constexpr uint32_t FACTORY_CONF_OTTRIM_157_143 = 0x03 << FACTORY_CONF_OTTRIM_SHI
 constexpr uint8_t REGNUM_DRV_CONF40 = 0x0A;
 
 constexpr unsigned int DRV_CONF40_CURRENT_RANGE_SHIFT = 0;
-constexpr uint32_t DRV_CONF40_CURRENT_RANGE_MASK = 0x03;										// 0 = 100V/us, 1 = 200V/us, 2 = 400V/us, 3 - 800V/us
+constexpr uint32_t DRV_CONF40_CURRENT_RANGE_MASK = 0x03;										// 0 = 1A, 1 = 2A, 2 = 3A, 3 = 3A peak current
 constexpr unsigned int DRV_CONF40_SLOPE_CONTROL_SHIFT = 4;
-constexpr uint32_t DRV_CONF40_SLOPE_CONTROL_MASK = 0x03 << DRV_CONF40_SLOPE_CONTROL_SHIFT;		// 0 = 1A, 1 = 2A, 2 = 3A, 3 = 3A peak current
+constexpr uint32_t DRV_CONF40_SLOPE_CONTROL_MASK = 0x03 << DRV_CONF40_SLOPE_CONTROL_SHIFT;		// 0 = 100V/us, 1 = 200V/us, 2 = 400V/us, 3 = 800V/us
 
 // GLOBAL_SCALER register (TMC2240 only)
 constexpr uint8_t REGNUM_GLOVAL_SCALER40 = 0x0B;
@@ -1145,7 +1145,9 @@ pre(!driversPowered)
 	if (isTmc2240)
 # endif
 	{
-		UpdateRegister(WriteDrvConf, 0x02);								// set range to maximum
+		static_assert(Tmc2240CurrentRange <= 3);
+		static_assert(Tmc2240SlopeControl <= 3);
+		UpdateRegister(WriteDrvConf, (Tmc2240CurrentRange << DRV_CONF40_CURRENT_RANGE_SHIFT) | (Tmc2240SlopeControl << DRV_CONF40_SLOPE_CONTROL_SHIFT));	// set current range and slope control
 	}
 #endif
 
