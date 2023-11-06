@@ -528,7 +528,8 @@ public:
 
 	uint32_t GetSteppingEnabledDrivers() const noexcept { return steppingEnabledDriversBitmap; }
 	void DisableSteppingDriver(uint8_t driver) noexcept { steppingEnabledDriversBitmap &= ~StepPins::CalcDriverBitmap(driver); }
-	void EnableAllSteppingDrivers() noexcept { steppingEnabledDriversBitmap = 0xFFFFFFFFu; }
+	void EnableAllSteppingDrivers() noexcept { if (!preventDriverEnable) { steppingEnabledDriversBitmap = 0xFFFFFFFFu; } }
+	void SetPreventDriverEnable() noexcept { preventDriverEnable = true; }
 
 #ifdef DUET3_MB6XD
 	bool HasDriverError(size_t driver) const noexcept;
@@ -742,6 +743,7 @@ private:
 #endif
 
 	bool active;
+	bool preventDriverEnable;
 	uint32_t errorCodeBits;
 
 	void InitialiseInterrupts() noexcept;

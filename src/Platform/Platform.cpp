@@ -424,7 +424,7 @@ Platform::Platform() noexcept :
 #if HAS_MASS_STORAGE
 	logger(nullptr),
 #endif
-	board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
+	board(DEFAULT_BOARD_TYPE), active(false), preventDriverEnable(false), errorCodeBits(0),
 	nextDriveToPoll(0),
 	lastFanCheckTime(0),
 #if SUPPORT_PANELDUE_FLASH
@@ -2572,7 +2572,7 @@ void Platform::DisableOneLocalDriver(size_t driver) noexcept
 // Enable the local drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
 void Platform::EnableDrivers(size_t axisOrExtruder, bool unconditional) noexcept
 {
-	if (unconditional || driverState[axisOrExtruder] != DriverStatus::enabled)
+	if (unconditional || (driverState[axisOrExtruder] != DriverStatus::enabled && !preventDriverEnable))
 	{
 		driverState[axisOrExtruder] = DriverStatus::enabled;
 		const float requiredCurrent = motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder];

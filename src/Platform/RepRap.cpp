@@ -1004,6 +1004,7 @@ void RepRap::EmergencyStop() noexcept
 	else
 #endif
 	{
+		platform->SetPreventDriverEnable();         // prevent any conditional call to EnableDrivers
 		platform->DisableAllDrivers();				// disable all local and remote drivers - need to do this to ensure that any motor brakes are re-engaged
 
 		switch (gCodes->GetMachineType())
