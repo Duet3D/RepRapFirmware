@@ -2439,7 +2439,7 @@ void Platform::IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t)>
 			}
 		}
 	}
-	else if (axisOrExtruder < MaxAxesPlusExtruders)
+	else if (axisOrExtruder < MaxAxesPlusExtruders && LogicalDriveToExtruder(axisOrExtruder) < reprap.GetGCodes().GetNumExtruders())
 	{
 		const DriverId id = extruderDrivers[LogicalDriveToExtruder(axisOrExtruder)];
 		if (id.IsLocal())
@@ -2466,7 +2466,7 @@ void Platform::IterateDrivers(size_t axisOrExtruder, function_ref<void(uint8_t)>
 			localFunc(id.localDriver);
 		}
 	}
-	else if (axisOrExtruder < MaxAxesPlusExtruders)
+	else if (axisOrExtruder < MaxAxesPlusExtruders && LogicalDriveToExtruder(axisOrExtruder) < reprap.GetGCodes().GetNumExtruders())
 	{
 		const DriverId id = extruderDrivers[LogicalDriveToExtruder(axisOrExtruder)];
 		localFunc(id.localDriver);
