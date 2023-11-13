@@ -277,6 +277,12 @@ void Move::Exit() noexcept
 {
 	for (;;)
 	{
+		if (reprap.IsStopped())
+		{
+			// Emergency stop has been commanded, so terminate this task to prevent new moves being prepared and executed
+			moveTask.TerminateAndUnlink();
+		}
+
 		// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
 		rings[0].RecycleDDAs();
 #if SUPPORT_ASYNC_MOVES
