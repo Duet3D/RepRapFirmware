@@ -157,6 +157,15 @@ namespace CanInterface
 extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute__((naked));
 #define RRF_ASSERT(_expr) do { if (!(_expr)) { vAssertCalled(__LINE__, __FILE__); } } while (false)
 
+// Function and macro to track return address corruption
+inline uint32_t GetStackValue(uint32_t dwordOffset) noexcept
+{
+    register const volatile uint32_t* sp asm ("sp");
+    return sp[dwordOffset];
+}
+
+#define CheckStackValue(dwordOffset, val) do { if (GetStackValue(dwordOffset) != val) { vAssertCalled(__LINE__, __FILE__); } } while (false)
+
 // Type of a driver identifier
 struct DriverId
 {
