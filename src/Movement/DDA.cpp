@@ -2305,7 +2305,7 @@ void DDA::UpdateMovementAccumulators(volatile int32_t *accumulators) const noexc
 			? NumDirectDrivers - 1 :
 #endif
 				MaxAxesPlusExtruders - 1;
-	if (firstExtruderDrive < lastExtruderDrive)
+	if (firstExtruderDrive <= lastExtruderDrive)
 	{
 		for (const DriveMovement* dm = activeDMs; dm != nullptr; )
 		{

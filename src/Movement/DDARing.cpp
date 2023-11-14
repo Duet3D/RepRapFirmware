@@ -601,7 +601,7 @@ void DDARing::CurrentMoveCompleted() noexcept
 	// Accumulate the extrusion from this move
 	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
 	{
-		liveCoordinates[drive] += currentDda->GetRawEndCoordinate(drive);
+		liveCoordinates[drive] += cdda->GetRawEndCoordinate(drive);
 	}
 
 	// Disable interrupts before we touch any extrusion accumulators until after we set currentDda to null, in case the filament monitor interrupt has higher priority than ours
