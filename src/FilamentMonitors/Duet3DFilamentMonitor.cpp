@@ -77,7 +77,7 @@ bool Duet3DFilamentMonitor::Interrupt() noexcept
 	{
 		if (GetPort().ReadDigital())
 		{
-			if ((writePointer & 1) == 0)							// low-to-high transitions should occur on odd indices
+			if ((writePointer & 1u) == 0)							// low-to-high transitions should occur on odd indices
 			{
 				++polarityErrorCount;
 				return false;
@@ -89,7 +89,7 @@ bool Duet3DFilamentMonitor::Interrupt() noexcept
 		}
 		else
 		{
-			if ((writePointer & 1) != 0)							// high-to-low transitions should occur on even indices
+			if ((writePointer & 1u) != 0)							// high-to-low transitions should occur on even indices
 			{
 				++polarityErrorCount;
 				return false;
