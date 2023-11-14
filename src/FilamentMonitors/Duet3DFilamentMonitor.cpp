@@ -94,7 +94,9 @@ bool Duet3DFilamentMonitor::Interrupt() noexcept
 				++polarityErrorCount;
 				return false;
 			}
-			now -= 40;												// partial correction for skew caused by debounce filter on older Duet endstop inputs (measured skew = 74)
+#if defined(DUET_NG) || defined(DUET_M)
+			now -= 40;												// partial correction for skew caused by debounce filter on older Duet 2 and Maestro endstop inputs (measured skew = 74)
+#endif
 		}
 
 		edgeCaptures[writePointer] = now;							// record the time at which this edge was detected
