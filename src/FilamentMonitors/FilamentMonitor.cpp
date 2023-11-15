@@ -291,7 +291,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 	}
 }
 
-static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
+static uint32_t inIsrCalls = 0, notInIsrCalls = 0;		//TEMP DEBUG
 
 // Check the status of all the filament monitors.
 // Currently, the status for all filament monitors (on expansion boards as well as on the main board) is checked by the main board, which generates any necessary events.
@@ -333,6 +333,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 						fs.haveIsrStepsCommanded = false;
 						IrqEnable();
 						fromIsr = true;
+						++inIsrCalls;
 					}
 					else
 					{
@@ -340,17 +341,16 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 						IrqEnable();
 						fromIsr = false;
 						locIsrMillis = 0;
+						++notInIsrCalls;
 					}
 					if ((fs.enableMode == 2 || gCodes.IsReallyPrinting()) && !gCodes.IsSimulating())
 					{
 						const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(fs.driveNumber);
 						fst = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
-						++checkCalls;
 					}
 					else
 					{
 						fst = fs.Clear();
-						++clearCalls;
 					}
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -480,7 +480,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 			if (first)
 			{
 #if 1	//TEMP DEBUG
-				reprap.GetPlatform().MessageF(mtype, "=== Filament sensors ===\ncheck %" PRIu32 " clear %" PRIu32 "\n", checkCalls, clearCalls);
+				reprap.GetPlatform().MessageF(mtype, "=== Filament sensors ===\nin %" PRIu32 " notIn %" PRIu32 "\n", inIsrCalls, notInIsrCalls);
 #else
 				reprap.GetPlatform().Message(mtype, "=== Filament sensors ===\n");
 #endif
@@ -672,7 +672,7 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 			if (first)
 			{
 #if 1	//TEMP DEBUG
-				reply.lcatf("=== Filament sensors ===\ncheck %" PRIu32 " clear %" PRIu32 "\n", checkCalls, clearCalls);
+				reply.lcatf("=== Filament sensors ===\nin %" PRIu32 " notIn %" PRIu32 "\n", inIsrCalls, notInIsrCalls);
 #else
 				reply.lcat("=== Filament sensors ===\n");
 #endif

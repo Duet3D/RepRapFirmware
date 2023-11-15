@@ -235,6 +235,8 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const Stri
 	return rslt;
 }
 
+static unsigned int debugNumComplete = 0, debugNumPosReport = 0, debugNumPosWithStartBit = 0, debugNumPosWithStartBitAndExtrusion = 0;
+
 // Deal with any received data
 void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 {
@@ -246,6 +248,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 		bool receivedPositionReport = false;
 		if (res == PollResult::complete)
 		{
+			++debugNumComplete;
 			// We have a completed a position report. Check the parity.
 			uint8_t data8 = (uint8_t)((val >> 8) ^ val);
 			data8 ^= (data8 >> 4);
@@ -344,6 +347,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 
 		if (receivedPositionReport)
 		{
+			++debugNumPosReport;
 			// We have a completed a position report
 			lastKnownPosition = sensorValue & TypeMagnetAngleMask;
 			const uint16_t angleChange = (val - sensorValue) & TypeMagnetAngleMask;			// angle change in range 0..1023
@@ -354,6 +358,8 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 
 			if (haveStartBitData)					// if we have a synchronised value for the amount of extrusion commanded
 			{
+				++debugNumPosWithStartBit;
+				if (fabsf(extrusionCommandedAtCandidateStartBit) > 0.01) { ++debugNumPosWithStartBitAndExtrusion; }
 				if (synced)
 				{
 					if (   checkNonPrintingMoves
@@ -537,6 +543,7 @@ void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int 
 	if (dataReceived)
 	{
 		buf.catf("pos %.2f", (double)(float)(sensorValue * (360.0/1024.0)));
+		buf.catf(", debug %u %u %u %u %.2f", debugNumComplete, debugNumPosReport, debugNumPosWithStartBit, debugNumPosWithStartBitAndExtrusion, (double)extrusionCommandedThisSegment);
 	}
 	else
 	{
