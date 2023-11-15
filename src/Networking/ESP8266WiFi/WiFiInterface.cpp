@@ -2178,6 +2178,10 @@ void WiFiInterface::SetupSpi() noexcept
 // Send a command to the ESP and get the result
 int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, uint32_t param32, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept
 {
+#if SAME5x	//TEMP DEBUG
+	const uint32_t ra = GetStackValue(9);
+	RRF_ASSERT(ra > 0x00004300 && ra < 0x000C6000);
+#endif
 	if (GetState() == NetworkState::disabled)
 	{
 		if (reprap.Debug(Module::WiFi))
@@ -2231,6 +2235,9 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	espWaitingTask = TaskBase::GetCallerTaskHandle();
 	transferPending = true;
 
+#if SAME5x	//TEMP DEBUG
+	CheckStackValue(9, ra);
+#endif
 	Cache::FlushBeforeDMASend(bufferOut, (dataOut != nullptr) ? sizeof(bufferOut->hdr) + dataOutLength : sizeof(bufferOut->hdr));
 
 #if SAME5x
@@ -2294,7 +2301,13 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 #endif
 
 	// Look at the response
+#if SAME5x	//TEMP DEBUG
+	CheckStackValue(9, ra);
+#endif
 	Cache::InvalidateAfterDMAReceive(&bufferIn->hdr, sizeof(bufferIn->hdr));
+#if SAME5x	//TEMP DEBUG
+	CheckStackValue(9, ra);
+#endif
 	if (bufferIn->hdr.formatVersion != MyFormatVersion)
 	{
 		if (reprap.Debug(Module::WiFi))
@@ -2317,7 +2330,13 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	{
 		const size_t sizeToCopy = min<size_t>(dataInLength, (size_t)response);
 		Cache::InvalidateAfterDMAReceive(bufferIn->data, sizeToCopy);
+#if SAME5x	//TEMP DEBUG
+		CheckStackValue(9, ra);
+#endif
 		memcpy(dataIn, bufferIn->data, sizeToCopy);
+#if SAME5x	//TEMP DEBUG
+		CheckStackValue(9, ra);
+#endif
 	}
 
 	if (response < 0 && reprap.Debug(Module::WiFi))
@@ -2325,6 +2344,9 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		debugPrintf("Network command %d socket %u returned error: %s\n", (int)cmd, socketNum, TranslateWiFiResponse(response));
 	}
 
+#if SAME5x	//TEMP DEBUG
+	CheckStackValue(9, ra);
+#endif
 	return response;
 }
 
