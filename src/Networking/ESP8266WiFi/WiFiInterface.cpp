@@ -2286,6 +2286,9 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	} while (transferPending);
 
 	espWaitingTask = nullptr;
+#if SAME5x	//TEMP DEBUG
+	CheckStackValue(9, ra);
+#endif
 
 #if SAME5x
 	{
