@@ -212,7 +212,12 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 		return GCodeResult::ok;
 	}
 
-	return sensor->Configure(gb, reply, seen);									// configure or report on the existing sensor (may throw)
+	const GCodeResult rslt = sensor->Configure(gb, reply, seen);									// configure or report on the existing sensor (may throw)
+	if (seen)
+	{
+		reprap.SensorsUpdated();
+	}
+	return rslt;
 }
 
 // Factory function to create a filament monitor.
@@ -260,14 +265,13 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 		gb.ThrowGCodeException("Unknown filament monitor type %u", monitorType);
 	}
 #if SUPPORT_CAN_EXPANSION
-	fm->boardAddress = locBoardAddress;
 	if (!fm->IsLocal())
 	{
 		// Create the remote filament monitor on the expansion board
 		if (CanInterface::CreateFilamentMonitor(fm->driverId, monitorType, gb, reply) != GCodeResult::ok)
 		{
 			delete fm;
-			return nullptr;
+			gb.ThrowGCodeException("Failed to create filament monitor on CAN-connected expansion board");
 		}
 		fm->hasRemote = true;
 	}
@@ -286,6 +290,8 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 		fm->lastIsrMillis = millis();
 	}
 }
+
+static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 
 // Check the status of all the filament monitors.
 // Currently, the status for all filament monitors (on expansion boards as well as on the main board) is checked by the main board, which generates any necessary events.
@@ -339,10 +345,12 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 					{
 						const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(fs.driveNumber);
 						fst = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
+						++checkCalls;
 					}
 					else
 					{
 						fst = fs.Clear();
+						++clearCalls;
 					}
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -471,7 +479,11 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 		{
 			if (first)
 			{
+#if 1	//TEMP DEBUG
+				reprap.GetPlatform().MessageF(mtype, "=== Filament sensors ===\ncheck %" PRIu32 " clear %" PRIu32 "\n", checkCalls, clearCalls);
+#else
 				reprap.GetPlatform().Message(mtype, "=== Filament sensors ===\n");
+#endif
 				first = false;
 			}
 			filamentSensors[i]->Diagnostics(mtype, i);
@@ -549,14 +561,12 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 
 	WriteLocker lock(filamentMonitorsLock);
 
-	// Delete any existing filament monitor
-	FilamentMonitor *fm = nullptr;
-	std::swap(fm, filamentSensors[p_driver]);
-	delete fm;
+	DeleteObject(filamentSensors[p_driver]);					// delete any existing filament monitor
+	FilamentMonitor *fm;
 
 	// Create the new one
 	const uint8_t monitorType = msg.type;
-	switch (msg.type)
+	switch (monitorType)
 	{
 	case 1:		// active high switch
 	case 2:		// active low switch
@@ -644,6 +654,31 @@ GCodeResult FilamentMonitor::CommonConfigure(const CanMessageGenericParser& pars
 		if (fm != nullptr)
 		{
 			DeleteObject(fm);
+		}
+	}
+}
+
+// Send diagnostics info
+/*static*/ void FilamentMonitor::GetDiagnostics(const StringRef& reply) noexcept
+{
+	bool first = true;
+	ReadLocker lock(filamentMonitorsLock);
+
+	for (size_t i = 0; i < NumDirectDrivers; ++i)
+	{
+		FilamentMonitor * const fs = filamentSensors[i];
+		if (fs != nullptr)
+		{
+			if (first)
+			{
+#if 1	//TEMP DEBUG
+				reply.lcatf("=== Filament sensors ===\ncheck %" PRIu32 " clear %" PRIu32 "\n", checkCalls, clearCalls);
+#else
+				reply.lcat("=== Filament sensors ===\n");
+#endif
+				first = false;
+			}
+			fs->Diagnostics(reply);
 		}
 	}
 }

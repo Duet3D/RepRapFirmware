@@ -277,6 +277,12 @@ void Move::Exit() noexcept
 {
 	for (;;)
 	{
+		if (reprap.IsStopped())
+		{
+			// Emergency stop has been commanded, so terminate this task to prevent new moves being prepared and executed
+			moveTask.TerminateAndUnlink();
+		}
+
 		// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
 		rings[0].RecycleDDAs();
 #if SUPPORT_ASYNC_MOVES
@@ -1347,18 +1353,24 @@ void Move::LaserTaskRun() noexcept
 
 // Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
 // Returns the number of motor steps moved since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
-int32_t Move::GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept
+int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noexcept
 {
-	size_t ringNumber = 0;
-	for (size_t i = 0; i < NumMovementSystems; ++i)
+	for (size_t ringNumber = 0; ringNumber < NumMovementSystems; ++ringNumber)
 	{
-		if (reprap.GetGCodes().GetMovementState(i).GetAxesAndExtrudersOwned().IsBitSet(drive))
+		if (
+#if SUPPORT_REMOTE_COMMANDS
+			CanInterface::InExpansionMode() ||
+#endif
+			reprap.GetGCodes().GetMovementState(ringNumber).GetAxesAndExtrudersOwned().IsBitSet(logicalDrive)
+		   )
 		{
-			ringNumber = i;
-			break;
+			return rings[ringNumber].GetAccumulatedMovement(logicalDrive, isPrinting);
 		}
 	}
-	return rings[ringNumber].GetAccumulatedMovement(drive, isPrinting);
+
+	// We didn't find a movement system that owns the extruder
+	isPrinting = false;
+	return 0;
 }
 
 // Get and lock the aux move buffer. If successful, return a pointer to the buffer.

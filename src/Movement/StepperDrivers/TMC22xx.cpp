@@ -33,10 +33,6 @@
 # error HAS_STALL_DETECT not defined
 #endif
 
-#ifndef SUPPORT_TMC2240
-# define SUPPORT_TMC2240	0
-#endif
-
 #if SUPPORT_TMC2240 && !HAS_STALL_DETECT
 # error Must set HAS_STALL_DETECT with SUPPORT_TMC2240
 #endif
@@ -44,7 +40,6 @@
 #define TMC22xx_SINGLE_UART		(TMC22xx_SINGLE_DRIVER || TMC22xx_HAS_MUX || TMC22xx_USE_SLAVEADDR)
 
 #define RESET_MICROSTEP_COUNTERS_AT_INIT	0		// Duets use pulldown resistors on the step pins, so we don't get phantom microsteps at power up
-#define USE_FAST_CRC	1
 
 #include <Platform/RepRap.h>
 #include <Platform/TaskPriorities.h>
@@ -123,6 +118,7 @@ static bool currentMuxState;
 // GCONF register (0x00, RW)
 constexpr uint8_t REGNUM_GCONF = 0x00;
 
+#if SUPPORT_TMC2209 || SUPPORT_TMC2208
 // Bit assignments for TMC2208/09
 constexpr uint32_t GCONF09_USE_VREF = 1 << 0;				// use external VRef
 constexpr uint32_t GCONF09_INT_RSENSE = 1 << 1;				// use internal sense resistors
@@ -136,6 +132,7 @@ constexpr uint32_t GCONF09_MULTISTEP_FILT = 1 << 8;			// pulse generation optimi
 constexpr uint32_t GCONF09_TEST_MODE = 1 << 9;				// test mode, do not set this bit for normal operation
 
 constexpr uint32_t DefaultGConfReg09 = GCONF09_UART | GCONF09_MSTEP_REG | GCONF09_MULTISTEP_FILT | GCONF09_SPREAD_CYCLE;
+#endif
 
 #if SUPPORT_TMC2240
 // Bit assignments for TMC2240
@@ -253,9 +250,9 @@ constexpr uint32_t FACTORY_CONF_OTTRIM_157_143 = 0x03 << FACTORY_CONF_OTTRIM_SHI
 constexpr uint8_t REGNUM_DRV_CONF40 = 0x0A;
 
 constexpr unsigned int DRV_CONF40_CURRENT_RANGE_SHIFT = 0;
-constexpr uint32_t DRV_CONF40_CURRENT_RANGE_MASK = 0x03;										// 0 = 100V/us, 1 = 200V/us, 2 = 400V/us, 3 - 800V/us
+constexpr uint32_t DRV_CONF40_CURRENT_RANGE_MASK = 0x03;										// 0 = 1A, 1 = 2A, 2 = 3A, 3 = 3A peak current
 constexpr unsigned int DRV_CONF40_SLOPE_CONTROL_SHIFT = 4;
-constexpr uint32_t DRV_CONF40_SLOPE_CONTROL_MASK = 0x03 << DRV_CONF40_SLOPE_CONTROL_SHIFT;		// 0 = 1A, 1 = 2A, 2 = 3A, 3 = 3A peak current
+constexpr uint32_t DRV_CONF40_SLOPE_CONTROL_MASK = 0x03 << DRV_CONF40_SLOPE_CONTROL_SHIFT;		// 0 = 100V/us, 1 = 200V/us, 2 = 400V/us, 3 = 800V/us
 
 // GLOBAL_SCALER register (TMC2240 only)
 constexpr uint8_t REGNUM_GLOVAL_SCALER40 = 0x0B;
@@ -380,25 +377,30 @@ constexpr uint32_t DefaultChopConfReg = 0x00000053 | CHOPCONF_VSENSE_HIGH;	// th
 constexpr uint32_t ChopConf256mstep = DefaultChopConfReg;	// the default uses x256 microstepping already
 #endif
 
+constexpr uint32_t CHOPCONF_BITS_MASK_2209 = 0xFF0387FF;	// all bits except the reserved ones
+constexpr uint32_t CHOPCONF_BITS_MASK_2240 = 0xFFFDDFFF;	// all bits except the reserved ones
+
 // DRV_STATUS register
 constexpr uint8_t REGNUM_DRV_STATUS = 0x6F;
 
 // Values for TMC2208/2224 and TMC2209
+#if SUPPORT_TMC2208 || SUPPORT_TMC2209
 constexpr uint32_t TMC_RR_OT_2209 = 1u << 1;			// over temperature shutdown
 constexpr uint32_t TMC_RR_OTPW_2209 = 1u << 0;			// over temperature warning
 constexpr uint32_t TMC_RR_S2G_2209 = 3u << 2;			// short to ground indicators (2 bits)
 constexpr uint32_t TMC_RR_S2VS_2209 = 3u << 4;			// short to Vs indicators (2 bits)
 constexpr uint32_t TMC_RR_OLA_2209 = 1u << 6;			// open load A
 constexpr uint32_t TMC_RR_OLB_2209 = 1u << 7;			// open load B
-constexpr uint32_t TMC_RR_STST = 1u << 31;				// standstill detected (same bit on 2209 and 2240)
 constexpr uint32_t TMC_RR_OPW_2209_120 = 1u << 8;		// temperature threshold exceeded
 constexpr uint32_t TMC_RR_OPW_2209_143 = 1u << 9;		// temperature threshold exceeded
 constexpr uint32_t TMC_RR_OPW_2209_150 = 1u << 10;		// temperature threshold exceeded
 constexpr uint32_t TMC_RR_OPW_2209_157 = 1u << 11;		// temperature threshold exceeded
 constexpr uint32_t TMC_RR_TEMPBITS_2209 = 15u << 8;		// all temperature threshold bits
 constexpr uint32_t TMC_RR_RESERVED_2209 = (15u << 12) | (0x01FF << 21);	// reserved bits
+#endif
 
 // Values for TMC2240
+#if SUPPORT_TMC2240
 constexpr uint32_t TMC_RR_SGRESULT_MASK_2240 = 1023;	// StallGuard result
 constexpr uint32_t TMC_RR_S2VS_2240 = 3u << 12;			// short to Vs indicators (2 bits)
 constexpr uint32_t TMC_RR_OT_2240 = 1u << 25;			// over temperature shutdown
@@ -412,7 +414,9 @@ constexpr unsigned int TMC_RR_OT_BIT_POS_2240 = 25;
 constexpr unsigned int TMC_RR_OTPW_BIT_POS_2240 = 26;
 constexpr unsigned int TMC_RR_S2G_BITS_POS_2240 = 27;
 constexpr unsigned int TMC_RR_OPENLOAD_BITS_POS_2240 = 29;
+#endif
 
+constexpr uint32_t TMC_RR_STST = 1u << 31;				// standstill detected (same bit on 2209 and 2240)
 constexpr unsigned int TMC_RR_STST_BIT_POS = 31;		// same position for 2209 and 2240
 
 // PWMCONF register
@@ -516,12 +520,7 @@ static constexpr uint8_t InitialReceiveCrc = CRCAddByte(CRCAddByte(0, 0x05), 0xF
 static constexpr uint8_t InitialSendCRC = CRCAddByte(InitialByteCRC, 0x00);
 
 // CRC of a complete request to read the IFCOUNT register
-static constexpr uint8_t ReadIfcountCRC =
-# if USE_FAST_CRC
-	SlowReflect(CRCAddByte(InitialSendCRC, REGNUM_IFCOUNT));
-# else
-	CRCAddByte(InitialSendCRC, REGNUM_IFCOUNT);
-# endif
+static constexpr uint8_t ReadIfcountCRC = SlowReflect(CRCAddByte(InitialSendCRC, REGNUM_IFCOUNT));
 
 #endif
 
@@ -538,7 +537,7 @@ public:
 #if HAS_STALL_DETECT
 							, Pin p_diagPin
 #endif
-#if SUPPORT_TMC2240
+#if SUPPORT_TMC2240 && (SUPPORT_TMC2208 || SUPPORT_TMC2209)
 							, bool p_isTmc2240
 #endif
 			 ) noexcept;
@@ -589,6 +588,10 @@ public:
 
 	void UpdateChopConfRegister() noexcept;					// calculate the chopper control register and flag it for sending
 
+#if SUPPORT_TMC2240
+	float GetDriverTemperature() const noexcept;
+#endif
+
 #if RESET_MICROSTEP_COUNTERS_AT_INIT
 	void SetMicrostepping256() noexcept;					// temporarily set microstepping to x256 without overwriting the user setting
 
@@ -628,8 +631,10 @@ private:
 #if TMC22xx_USE_SLAVEADDR
 	uint8_t GetSlaveAddr() const noexcept
 	{
-# if SUPPORT_TMC2240
+# if SUPPORT_TMC2240 && (SUPPORT_TMC2208 || SUPPORT_TMC2209)
 		return driverNumber & ((isTmc2240) ? 7u : 3u);
+# elif SUPPORT_TMC2240
+		return driverNumber & 7u;
 # else
 		return driverNumber & 3u;
 # endif
@@ -687,7 +692,7 @@ private:
 	static constexpr unsigned int ReadChopConf = 3;			// chopper control register - we read it to detect the VSENSE bit getting cleared
 	static constexpr unsigned int ReadPwmScale = 4;			// PWM scaling
 	static constexpr unsigned int ReadPwmAuto = 5;			// PWM scaling
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT && SUPPORT_TMC2209
 	static constexpr unsigned int ReadSgResult = 6;			// stallguard result, TMC2209 only
 #endif
 #if SUPPORT_TMC2240
@@ -729,10 +734,10 @@ private:
 
 	// To write a register, we send one 8-byte packet to write it, then a 4-byte packet to ask for the IFCOUNT register, then we receive an 8-byte packet containing IFCOUNT.
 	// This is the message we send - volatile because we care about when it is written
-	static volatile uint8_t sendData[12];
+	alignas(4) static volatile uint8_t sendData[12];
 
 	// Buffer for the message we receive when reading data. The first 4 or 12 bytes bytes are our own transmitted data.
-	static volatile uint8_t receiveData[20];
+	alignas(4) static volatile uint8_t receiveData[20];
 
 	uint16_t readErrors;									// how many read errors we had
 	uint16_t writeErrors;									// how many write errors we had
@@ -740,7 +745,9 @@ private:
 	uint16_t numWrites;										// how many successful writes we had
 	uint16_t numTimeouts;									// how many times a transfer timed out
 	uint16_t numDmaErrors;
+#if SUPPORT_TMC2208 || SUPPORT_TMC2209
 	uint16_t badChopConfErrors;
+#endif
 
 #if TMC22xx_HAS_ENABLE_PINS
 	Pin enablePin;											// the enable pin of this driver, if it has its own
@@ -761,7 +768,7 @@ private:
 	volatile uint8_t specialReadRegisterNumber;				// the special register number we are reading
 	volatile uint8_t specialWriteRegisterNumber;			// the special register number we are writing
 	bool enabled;											// true if driver is enabled
-#if SUPPORT_TMC2240
+#if SUPPORT_TMC2240 && (SUPPORT_TMC2208 || SUPPORT_TMC2209)
 	bool isTmc2240;											// true for TMC2240, false for TMC2208/09/24
 #endif
 #if RESET_MICROSTEP_COUNTERS_AT_INIT
@@ -824,7 +831,7 @@ constexpr uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 	REGNUM_PWMCONF,
 	REGNUM_TPWMTHRS,
 #if HAS_STALL_DETECT
-	// The rest are on TMC2209 only
+	// The rest are on TMC2209 and TMC2240 only
 	REGNUM_TCOOLTHRS,
 	REGNUM_SGTHRS,
 	REGNUM_COOLCONF,
@@ -842,8 +849,10 @@ constexpr uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 	REGNUM_CHOPCONF,
 	REGNUM_PWM_SCALE,
 	REGNUM_PWM_AUTO,
-#if HAS_STALL_DETECT
+#if HAS_STALL_DETECT && SUPPORT_TMC2209
 	REGNUM_SG_RESULT					// TMC2209 only - for TMC2240 we read REGNUM_ADC_TEMP instead
+#elif SUPPORT_TMC2240
+	REGNUM_ADC_TEMP
 #endif
 };
 
@@ -902,12 +911,7 @@ inline void TmcDriverState::SetupDMASend(uint8_t regNum, uint32_t regVal) noexce
 		crc = CRCAddByte(crc, byte);
 	}
 
-	sendData[SendDataCRCIndex0] =
-#if USE_FAST_CRC
-		Reflect(crc);
-#else
-		crc;
-#endif
+	sendData[SendDataCRCIndex0] = Reflect(crc);
 
 #if TMC22xx_USE_SLAVEADDR
 	sendData[SendDataCRCIndex1] = readIfCountCRC;
@@ -965,12 +969,7 @@ inline void TmcDriverState::SetupDMARead(uint8_t regNum) noexcept
 	uint8_t crc = InitialSendCRC;
 #endif
 	sendData[2] = regNum;
-	sendData[3] =
-#if USE_FAST_CRC
-		Reflect(CRCAddByte(crc, regNum));
-#else
-		CRCAddByte(crc, regNum);
-#endif
+	sendData[3] = Reflect(CRCAddByte(crc, regNum));
 
 	Cache::FlushBeforeDMASend(sendData, sizeof(sendData));
 	Cache::FlushBeforeDMAReceive(receiveData, sizeof(receiveData));
@@ -1007,11 +1006,15 @@ inline void TmcDriverState::SetupDMARead(uint8_t regNum) noexcept
 bool TmcDriverState::IsStealthChop() const noexcept
 {
 	const uint32_t gconf = writeRegisters[WriteGConf];
-	return
 #if SUPPORT_TMC2240
-			(isTmc2240) ? (gconf & GCONF40_EN_PWM_MODE) != 0 :
+# if SUPPORT_TMC2208 || SUPPORT_TMC2209
+	return (isTmc2240) ? (gconf & GCONF40_EN_PWM_MODE) != 0 : (gconf & GCONF09_SPREAD_CYCLE) == 0;
+# else
+	return (gconf & GCONF40_EN_PWM_MODE) != 0;
+# endif
+#else
+	return (gconf & GCONF09_SPREAD_CYCLE) == 0;
 #endif
-				(gconf & GCONF09_SPREAD_CYCLE) == 0;
 }
 
 // Update the maximum step pulse interval at which we consider open load detection to be reliable
@@ -1073,7 +1076,7 @@ void TmcDriverState::Init(uint32_t p_driverNumber
 #if HAS_STALL_DETECT
 							, Pin p_diagPin
 #endif
-#if SUPPORT_TMC2240
+#if SUPPORT_TMC2240 && (SUPPORT_TMC2208 || SUPPORT_TMC2209)
 							, bool p_isTmc2240
 #endif
 ) noexcept
@@ -1081,7 +1084,7 @@ pre(!driversPowered)
 {
 	driverNumber = p_driverNumber;
 	axisNumber = p_driverNumber;										// assume straight-through axis mapping initially
-#if SUPPORT_TMC2240
+#if SUPPORT_TMC2240 && (SUPPORT_TMC2208 || SUPPORT_TMC2209)
 	isTmc2240 = p_isTmc2240;
 #endif
 #if TMC22xx_HAS_ENABLE_PINS
@@ -1105,12 +1108,7 @@ pre(!driversPowered)
 
 #if TMC22xx_USE_SLAVEADDR
 	initialSendCRC = CRCAddByte(InitialByteCRC, GetSlaveAddr());		// CRC of the first 2 bytes of any transmission
-	readIfCountCRC =
-# if USE_FAST_CRC
-		Reflect(CRCAddByte(initialSendCRC, REGNUM_IFCOUNT));
-# else
-		CRCAddByte(initialSendCRC, REGNUM_IFCOUNT);
-# endif
+	readIfCountCRC = Reflect(CRCAddByte(initialSendCRC, REGNUM_IFCOUNT));
 #endif
 	enabled = false;
 #if RESET_MICROSTEP_COUNTERS_AT_INIT
@@ -1122,9 +1120,15 @@ pre(!driversPowered)
 	standstillCurrentFraction = (uint8_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 255);
 	UpdateRegister(WriteGConf,
 #if SUPPORT_TMC2240
-								(isTmc2240) ? DefaultGConfReg40 :
+# if SUPPORT_TMC2208 || SUPPORT_TMC2209
+								(isTmc2240) ? DefaultGConfReg40 : DefaultGConfReg09
+# else
+								DefaultGConfReg40
+# endif
+#else
+								DefaultGConfReg09
 #endif
-									DefaultGConfReg09);
+								);
 	UpdateRegister(WriteSlaveConf, DefaultSlaveConfReg);
 	configuredChopConfReg = DefaultChopConfReg;
 	SetMicrostepping(DefaultMicrosteppingShift, DefaultInterpolation);	// this also updates the chopper control register
@@ -1137,9 +1141,13 @@ pre(!driversPowered)
 	UpdateRegister(WriteCoolconf, 0);									// coolStep disabled
 #endif
 #if SUPPORT_TMC2240
+# if SUPPORT_TMC2208 || SUPPORT_TMC2209
 	if (isTmc2240)
+# endif
 	{
-		UpdateRegister(WriteDrvConf, 0x02);								// set range to maximum
+		static_assert(Tmc2240CurrentRange <= 3);
+		static_assert(Tmc2240SlopeControl <= 3);
+		UpdateRegister(WriteDrvConf, (Tmc2240CurrentRange << DRV_CONF40_CURRENT_RANGE_SHIFT) | (Tmc2240SlopeControl << DRV_CONF40_SLOPE_CONTROL_SHIFT));	// set current range and slope control
 	}
 #endif
 
@@ -1156,7 +1164,10 @@ pre(!driversPowered)
 	failedOp = 0xFF;
 	registerToRead = 0;
 	lastIfCount = 0;
-	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = badChopConfErrors = 0;
+	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = 0;
+#if SUPPORT_TMC2208 || SUPPORT_TMC2209
+	badChopConfErrors = 0;
+#endif
 #if HAS_STALL_DETECT
 	ResetLoadRegisters();
 #endif
@@ -1359,29 +1370,31 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 	switch (mode)
 	{
 	case (unsigned int)DriverMode::spreadCycle:
+		UpdateRegister(WriteGConf,
 #if SUPPORT_TMC2240
-		if (isTmc2240)
-		{
-			UpdateRegister(WriteGConf, writeRegisters[WriteGConf] & ~GCONF40_EN_PWM_MODE);
-		}
-		else
+# if SUPPORT_TMC2208 || SUPPORT_TMC2209
+								(isTmc2240) ? writeRegisters[WriteGConf] & ~GCONF40_EN_PWM_MODE : writeRegisters[WriteGConf] | GCONF09_SPREAD_CYCLE
+# else
+								writeRegisters[WriteGConf] & ~GCONF40_EN_PWM_MODE
+# endif
+#else
+								writeRegisters[WriteGConf] | GCONF09_SPREAD_CYCLE
 #endif
-		{
-			UpdateRegister(WriteGConf, writeRegisters[WriteGConf] | GCONF09_SPREAD_CYCLE);
-		}
+								);
 		return true;
 
 	case (unsigned int)DriverMode::stealthChop:
+		UpdateRegister(WriteGConf,
 #if SUPPORT_TMC2240
-		if (isTmc2240)
-		{
-			UpdateRegister(WriteGConf, writeRegisters[WriteGConf] | GCONF40_EN_PWM_MODE);
-		}
-		else
+# if SUPPORT_TMC2208 || SUPPORT_TMC2209
+								(isTmc2240) ? writeRegisters[WriteGConf] | GCONF40_EN_PWM_MODE : writeRegisters[WriteGConf] & ~GCONF09_SPREAD_CYCLE
+# else
+								writeRegisters[WriteGConf] | GCONF40_EN_PWM_MODE
+# endif
+#else
+								writeRegisters[WriteGConf] & ~GCONF09_SPREAD_CYCLE
 #endif
-		{
-			UpdateRegister(WriteGConf, writeRegisters[WriteGConf] & ~GCONF09_SPREAD_CYCLE);
-		}
+								);
 		return true;
 
 	default:
@@ -1399,7 +1412,7 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 void TmcDriverState::SetCurrent(float current) noexcept
 {
 	motorCurrent = constrain<float>(current, 50.0,
-#if SUPPORT_TMC2240
+#if SUPPORT_TMC2240 && (SUPPORT_TMC2208 || SUPPORT_TMC2209)
 													(isTmc2240) ? MaximumTmc2240MotorCurrent :
 #endif
 													MaximumMotorCurrent
@@ -1410,7 +1423,7 @@ void TmcDriverState::SetCurrent(float current) noexcept
 void TmcDriverState::UpdateCurrent() noexcept
 {
 	const float idealIRunCs = motorCurrent *
-#if SUPPORT_TMC2240
+#if SUPPORT_TMC2240 && (SUPPORT_TMC2208 || SUPPORT_TMC2209)
 								((isTmc2240) ? Tmc2240CsMultiplier : DriverCsMultiplier);
 #else
 								DriverCsMultiplier;
@@ -1463,13 +1476,21 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 			{
 				status &=
 #if SUPPORT_TMC2240
-										(isTmc2240) ? ~(TMC_RR_OLA_2240 | TMC_RR_OLB_2240) :
+# if SUPPORT_TMC2208 || SUPPORT_TMC2209
+						(isTmc2240) ? ~(TMC_RR_OLA_2240 | TMC_RR_OLB_2240) : ~(TMC_RR_OLA_2209 | TMC_RR_OLB_2209)
+# else
+						~(TMC_RR_OLA_2240 | TMC_RR_OLB_2240)
+# endif
+#else
+						~(TMC_RR_OLA_2209 | TMC_RR_OLB_2209)
 #endif
-														~(TMC_RR_OLA_2209 | TMC_RR_OLB_2209);
+						;
 			}
 		}
 #if SUPPORT_TMC2240
+# if SUPPORT_TMC2208 || SUPPORT_TMC2209
 		if (isTmc2240)
+# endif
 		{
 			rslt.all = ExtractBit(status, TMC_RR_OT_BIT_POS_2240, StandardDriverStatus::OtBitPos)
 						| ExtractBit(status, TMC_RR_OTPW_BIT_POS_2240, StandardDriverStatus::OtpwBitPos)
@@ -1477,12 +1498,15 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 						| ExtractTwoBits(status, TMC_RR_S2VS_BITS_POS_2240, StandardDriverStatus::S2vsBitsPos)
 						| ExtractTwoBits(status, TMC_RR_OPENLOAD_BITS_POS_2240, StandardDriverStatus::OpenLoadBitsPos);
 		}
+# if SUPPORT_TMC2208 || SUPPORT_TMC2209
 		else
-#endif
 		{
-			// The lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status
-			rslt.all = status & 0x000000FF;
+			rslt.all = status & 0x000000FF;		// the lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status
 		}
+# endif
+#else
+		rslt.all = status & 0x000000FF;			// the lowest 8 bits of StandardDriverStatus have the same meanings as for the TMC2209 status
+#endif
 		rslt.all |= ExtractBit(status, TMC_RR_STST_BIT_POS, StandardDriverStatus::StandstillBitPos);	// put the standstill bit in the right place
 #if HAS_STALL_DETECT
 		if (IoPort::ReadPin(diagPin))
@@ -1499,6 +1523,15 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 	}
 	return rslt;
 }
+
+#if SUPPORT_TMC2240
+
+float TmcDriverState::GetDriverTemperature() const noexcept
+{
+	return (float)(((readRegisters[ReadAdcTemp] & ADC_TEMP_MASK) >> ADC_TEMP_SHIFT) - 2038) * (1.0/7.7);
+}
+
+#endif
 
 // Append any additional driver status to a string, and reset values as appropriate
 void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
@@ -1522,20 +1555,33 @@ void TmcDriverState::AppendDriverStatus(const StringRef& reply) noexcept
 	ResetLoadRegisters();
 #endif
 #if SUPPORT_TMC2240
+# if SUPPORT_TMC2208 || SUPPORT_TMC2209
 	if (isTmc2240)
+# endif
 	{
-		reply.catf(", temp %.1fC", (double)((float)(((readRegisters[ReadAdcTemp] & ADC_TEMP_MASK) >> ADC_TEMP_SHIFT) - 2038)/7.7));
+		reply.catf(", temp %.1fC", (double)GetDriverTemperature());
 	}
 #endif
 
-	reply.catf(", read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u, CC errors %u",
-					readErrors, writeErrors, lastIfCount, numReads, numWrites, numTimeouts, numDmaErrors, badChopConfErrors);
+	reply.catf(", read errors %u, write errors %u, ifcnt %u, reads %u, writes %u, timeouts %u, DMA errors %u",
+					readErrors, writeErrors, lastIfCount, numReads, numWrites, numTimeouts, numDmaErrors);
+#if SUPPORT_TMC2208 || SUPPORT_TMC2209
+# if SUPPORT_TMC2240
+	if (!isTmc2240)
+# endif
+	{
+		reply.catf(", CC errors %u", badChopConfErrors);
+	}
+#endif
 	if (failedOp != 0xFF)
 	{
 		reply.catf(", failedOp 0x%02x", failedOp);
 		failedOp = 0xFF;
 	}
-	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = badChopConfErrors = 0;
+	readErrors = writeErrors = numReads = numWrites = numTimeouts = numDmaErrors = 0;
+#if SUPPORT_TMC2208 || SUPPORT_TMC2209
+	badChopConfErrors = 0;
+#endif
 }
 
 // This is called by the ISR when the SPI transfer has completed
@@ -1570,7 +1616,7 @@ inline void TmcDriverState::TransferDone() noexcept
 	else if (driversState != DriversState::noPower)		// we don't check the CRC, so only accept the result if power is still good
 	{
 		const uint8_t readRegNumber = (registerToRead >= NumReadRegisters) ? specialReadRegisterNumber
-#if SUPPORT_TMC2240
+#if SUPPORT_TMC2240 && SUPPORT_TMC2209
 											: (registerToRead == ReadSgResult && isTmc2240) ? REGNUM_ADC_TEMP	// on TMC2240 read ADC_TEMP instead of SGRESULT
 #endif
 												: ReadRegNumbers[registerToRead];
@@ -1594,12 +1640,20 @@ inline void TmcDriverState::TransferDone() noexcept
 				{
 					regVal &=
 #if SUPPORT_TMC2240
-								(isTmc2240) ? ~(TMC_RR_OLA_2240 | TMC_RR_OLB_2240) :
+# if SUPPORT_TMC2208 || SUPPORT_TMC2209
+								(isTmc2240) ? ~(TMC_RR_OLA_2240 | TMC_RR_OLB_2240) : ~(TMC_RR_OLA_2209 | TMC_RR_OLB_2209)
+# else
+								~(TMC_RR_OLA_2240 | TMC_RR_OLB_2240)
+# endif
+#else
+								~(TMC_RR_OLA_2209 | TMC_RR_OLB_2209)
 #endif
-									~(TMC_RR_OLA_2209 | TMC_RR_OLB_2209);				// open load bits are unreliable at standstill and low speeds
+								;				// open load bits are unreliable at standstill and low speeds
 				}
 #if SUPPORT_TMC2240
+# if SUPPORT_TMC2208 || SUPPORT_TMC2209
 				if (isTmc2240)
+# endif
 				{
 					const uint16_t sgResult = regVal & TMC_RR_SGRESULT_MASK_2240;
 					if (sgResult < minSgLoadRegister)
@@ -1609,16 +1663,23 @@ inline void TmcDriverState::TransferDone() noexcept
 				}
 #endif
 			}
+#if SUPPORT_TMC2208 || SUPPORT_TMC2209
 			else if (registerToRead == ReadChopConf)
 			{
-				// Sometimes the CHOPCONF register VSENSE bit gets cleared unexpectedly. Now we monitor it to check that the register has the correct value.
-				if (regVal != writeRegisters[WriteChopConf] && (registersToUpdate & (1u << WriteChopConf)) == 0)
+# if SUPPORT_TMC2240
+				if (!isTmc2240)
+# endif
 				{
-					registersToUpdate |= (1u << WriteChopConf);
-					++badChopConfErrors;
+					// Sometimes the CHOPCONF register VSENSE bit gets cleared unexpectedly. Now we monitor it to check that the register has the correct value.
+					if (((regVal ^ writeRegisters[WriteChopConf]) & CHOPCONF_BITS_MASK_2209) != 0 && (registersToUpdate & (1u << WriteChopConf)) == 0)
+					{
+						registersToUpdate |= (1u << WriteChopConf);
+						++badChopConfErrors;
+					}
 				}
 			}
-#if HAS_STALL_DETECT
+#endif
+#if HAS_STALL_DETECT && SUPPORT_TMC2209
 			else if (registerToRead == ReadSgResult
 # if SUPPORT_TMC2240
 					&& !isTmc2240
@@ -1748,7 +1809,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 #endif
 
 		const uint8_t readRegNumber = (registerToRead >= NumReadRegisters) ? specialReadRegisterNumber
-#if SUPPORT_TMC2240
+#if SUPPORT_TMC2240 && SUPPORT_TMC2209
 											: (registerToRead == ReadSgResult && isTmc2240) ? REGNUM_ADC_TEMP	// on TMC2240 read ADC_TEMP instead of SGRESULT
 #endif
 												: ReadRegNumbers[registerToRead];
@@ -1843,6 +1904,7 @@ bool DoTransaction(size_t driverNumber)
 #else
 	dmaFinished = false;
 #endif
+	TaskBase::ClearCurrentTaskNotifyCount();
 	currentDriver->StartTransfer();
 
 	// Wait for the end-of-transfer interrupt
@@ -2162,7 +2224,7 @@ void SmartDrivers::Init() noexcept
 #if HAS_STALL_DETECT
 								, DriverDiagPins[drive]
 #endif
-#if SUPPORT_TMC2240
+#if SUPPORT_TMC2240 && (SUPPORT_TMC2208 || SUPPORT_TMC2209)
 # ifdef DUET3MINI
 								, hasTmc2240Expansion && drive >= 5		// drivers 5 and 6 may be TMC2240
 # else
@@ -2485,6 +2547,15 @@ DriversBitmap SmartDrivers::GetStalledDrivers(DriversBitmap driversOfInterest) n
 								}
 							 );
 	return rslt;
+}
+
+#endif
+
+#if SUPPORT_TMC2240 && !(SUPPORT_TMC2208 || SUPPORT_TMC2209)
+
+float SmartDrivers::GetDriverTemperature(size_t driver) noexcept
+{
+	return (driver < GetNumTmcDrivers()) ? driverStates[driver].GetDriverTemperature() : 0.0;
 }
 
 #endif

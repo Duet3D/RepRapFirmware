@@ -270,11 +270,11 @@ void MovementState::InitObjectCancellation() noexcept
 
 // Return the current machine axis and extruder coordinates. They are needed only to service status requests from DWC, PanelDue, M114.
 // Transforming the machine motor coordinates to Cartesian coordinates is quite expensive, and a status request or object model request will call this for each axis.
-// So we cache the latest coordinates and only update them if it is some time since we last did
+// So we cache the latest coordinates and only update them if it is some time since we last did, or if we have just waited for movement to stop.
 // Interrupts are assumed enabled on entry
 float MovementState::LiveCoordinate(unsigned int axisOrExtruder) const noexcept
 {
-	if (millis() - latestLiveCoordinatesFetchedAt > 200)
+	if (forceLiveCoordinatesUpdate || millis() - latestLiveCoordinatesFetchedAt > 200)
 	{
 		reprap.GetMove().GetLiveCoordinates(msNumber, currentTool, latestLiveCoordinates);
 		latestLiveCoordinatesFetchedAt = millis();

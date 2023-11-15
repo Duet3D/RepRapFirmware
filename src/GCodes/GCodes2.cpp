@@ -2079,14 +2079,32 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 #endif
 
+#if SUPPORT_MQTT
+					if ((type & MqttMessage) && (result != GCodeResult::error))
+					{
+						String<MaxGCodeLength> topic;
+						gb.MustSee('T');
+						gb.GetQuotedString(topic.GetRef());
+
+						bool seen = false;
+
+						uint32_t qos = 0;
+						gb.TryGetLimitedUIValue('Q', qos, seen, 3);
+
+						bool retain = 0;
+						gb.TryGetBValue('R', retain, seen);
+
+						bool dup = 0;
+						gb.TryGetBValue('D', dup, seen);
+
+						reprap.GetNetwork().MqttPublish(message.c_str(), topic.c_str(), qos, retain, dup);
+					}
+#endif
+
 					if (result != GCodeResult::error)
 					{
 						// Append newline and send the message to the destinations,
-						// except for MqttMessage
-						if (type != MqttMessage)
-						{
-							message.cat('\n');
-						}
+						message.cat('\n');
 						platform.Message(type, message.c_str());
 					}
 				}
@@ -4864,6 +4882,7 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		rslt = GCodeResult::error;
 		break;
 
+#if SUPPORT_CAN_EXPANSION
 	case GCodeResult::remoteInternalError:
 		if (!gb.IsDoingLocalFile())
 		{
@@ -4873,6 +4892,16 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 		reply.cat("CAN-connected board reported internal error");
 		rslt = GCodeResult::error;
 		break;
+
+	case GCodeResult::noCanBuffer:
+		reply.lcat(NoCanBufferMessage);
+		break;
+
+	case GCodeResult::canResponseTimeout:
+		// Usually we have a more detailed message in 'reply' already, but if not then add a standard message
+		if (reply.IsEmpty()) { reply.copy("CAN response timeout"); }
+		break;
+#endif
 
 	case GCodeResult::error:
 	case GCodeResult::warning:

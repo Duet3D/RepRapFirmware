@@ -77,9 +77,11 @@ bool Duet3DFilamentMonitor::Interrupt() noexcept
 	{
 		if (GetPort().ReadDigital())
 		{
-			if ((writePointer & 1) == 0)							// low-to-high transitions should occur on odd indices
+			if ((writePointer & 1u) == 0)							// low-to-high transitions should occur on odd indices
 			{
 				++polarityErrorCount;
+				// Either we received a short glitch that had finished by the time we serviced the interrupt, or we missed the previous interrupt
+				// Currently we assume it was a glitch, so we log it but otherwise ignore it.
 				return false;
 			}
 			if (state == RxdState::waitingForStartBit && writePointer == edgeCaptureReadPointer && !HaveIsrStepsCommanded())
@@ -89,12 +91,16 @@ bool Duet3DFilamentMonitor::Interrupt() noexcept
 		}
 		else
 		{
-			if ((writePointer & 1) != 0)							// high-to-low transitions should occur on even indices
+			if ((writePointer & 1u) != 0)							// high-to-low transitions should occur on even indices
 			{
 				++polarityErrorCount;
+				// Either we received a short glitch that had finished by the time we serviced the interrupt, or we missed the previous interrupt
+				// Currently we assume it was a glitch, so we log it but otherwise ignore it.
 				return false;
 			}
-			now -= 40;												// partial correction for skew caused by debounce filter on older Duet endstop inputs (measured skew = 74)
+#if defined(DUET_NG) || defined(DUET_M)
+			now -= 40;												// partial correction for skew caused by debounce filter on older Duet 2 and Maestro endstop inputs (measured skew = 74)
+#endif
 		}
 
 		edgeCaptures[writePointer] = now;							// record the time at which this edge was detected

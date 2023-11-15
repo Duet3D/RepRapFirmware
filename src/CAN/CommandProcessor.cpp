@@ -394,6 +394,11 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 	case CanMessageReturnInfo::typeDiagnosticsPart0 + 9:
 		extra = LastDiagnosticsPart;
 		StepTimer::Diagnostics(reply);
+#if 0	// We don't currently support accelerometers on main boards used as expansion boards
+//#if SUPPORT_ACCELEROMETERS
+		Accelerometers::Diagnostics(reply);
+#endif
+		FilamentMonitor::GetDiagnostics(reply);
 		break;
 	}
 	return GCodeResult::ok;

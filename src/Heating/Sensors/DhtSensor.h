@@ -37,6 +37,7 @@ public:
 	TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0) noexcept override;
 	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 1; }
 	void Poll() noexcept override;
+	uint32_t GetTemperatureReadingTimeout() const noexcept override { return MinimumReadInterval + 500; }
 	const char *_ecv_array GetShortSensorType() const noexcept override;
 
 	void Interrupt() noexcept;
@@ -47,6 +48,7 @@ public:
 	static constexpr const char *_ecv_array TypeNameDht22 = "dht22";
 
 private:
+	static constexpr uint32_t MinimumReadInterval = 2100;		// ms - datasheet https://www.sparkfun.com/datasheets/Sensors/Temperature/DHT22.pdf says "Collecting period should be : >2 second"
 
 #if SAME5x
 	// On the SAME5c we need a separate port to get the interrupt, because the output ports don't support interrupts

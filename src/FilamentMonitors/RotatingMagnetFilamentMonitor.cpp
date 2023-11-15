@@ -131,7 +131,14 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const Stri
 	{
 		if (seen)
 		{
-			Init();				// Init() resets dataReceived and version, so only do it if the port has been configured
+			if (gb.Seen('C'))
+			{
+				Init();				// Init() resets dataReceived and version, so only do it if the port has been configured
+			}
+			else
+			{
+				Reset();
+			}
 		}
 
 		gb.TryGetFValue('L', mmPerRev, seen);
@@ -526,16 +533,17 @@ void RotatingMagnetFilamentMonitor::Diagnostics(MessageType mtype, unsigned int 
 {
 	String<StringLength256> buf;
 	buf.printf("Extruder %u: ", extruder);
+
 	if (dataReceived)
 	{
-		buf.catf("pos %.2f, errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32 "\n",
-					(double)((float)lastKnownPosition * (360.0/1024.0)),
-					framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
+		buf.catf("pos %.2f", (double)(float)(sensorValue * (360.0/1024.0)));
 	}
 	else
 	{
-		buf.cat("no data received\n");
+		buf.cat("no data received");
 	}
+	buf.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32 "\n",
+				framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 	reprap.GetPlatform().Message(mtype, buf.c_str());
 }
 
@@ -581,17 +589,25 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 
 		if (seen)
 		{
-			Init();
+			if (parser.HasParameter('C'))
+			{
+				Init();				// Init() resets dataReceived and version, so only do it if the port has been configured
+			}
+			else
+			{
+				Reset();
+			}
 		}
 		else
 		{
-			reply.printf("Duet3D rotating magnet filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
+			reply.printf("Duet3D magnetic filament monitor v%u%s on pin ", version, (switchOpenMask != 0) ? " with switch" : "");
 			GetPort().AppendPinName(reply);
-			reply.catf(", %s, sensitivity %.2fmm/rev, allow %ld%% to %ld%%, check every %.1fmm, ",
-						(GetEnableMode() != 0) ? "enabled" : "disabled",
+			reply.catf(", %s, %.2fmm/rev, allow %ld%% to %ld%%, check %s moves every %.1fmm, ",
+						(GetEnableMode() == 2) ? "enabled always" : (GetEnableMode() == 1) ? "enabled when SD printing" : "disabled",
 						(double)mmPerRev,
 						ConvertToPercent(minMovementAllowed),
 						ConvertToPercent(maxMovementAllowed),
+						(checkNonPrintingMoves) ? "all extruding" : "printing",
 						(double)minimumExtrusionCheckLength);
 
 			if (!dataReceived)
@@ -600,7 +616,6 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 			}
 			else
 			{
-				reply.catf("version %u, ", version);
 				if (switchOpenMask != 0)
 				{
 					reply.cat(((sensorValue & switchOpenMask) != 0) ? "no filament, " : "filament present, ");
@@ -632,7 +647,7 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 				else if (HaveCalibrationData())
 				{
 					const float measuredMmPerRev = MeasuredSensitivity();
-					reply.catf("measured sensitivity %.2fmm/rev, min %ld%% max %ld%% over %.1fmm\n",
+					reply.catf("measured %.2fmm/rev, min %ld%% max %ld%% over %.1fmm\n",
 						(double)measuredMmPerRev,
 						ConvertToPercent(minMovementRatio * measuredMmPerRev),
 						ConvertToPercent(maxMovementRatio * measuredMmPerRev),
@@ -646,6 +661,22 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(const CanMessageGenericPars
 		}
 	}
 	return rslt;
+}
+
+// Print diagnostic info for this sensor
+void RotatingMagnetFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
+{
+	reply.lcatf("Driver %u: ", GetDriver());
+	if (dataReceived)
+	{
+		reply.catf("pos %.2f", (double)(float)(sensorValue * (360.0/1024.0)));
+	}
+	else
+	{
+		reply.cat("no data received");
+	}
+	reply.catf(", errs: frame %" PRIu32 " parity %" PRIu32 " ovrun %" PRIu32 " pol %" PRIu32 " ovdue %" PRIu32,
+				framingErrorCount, parityErrorCount, overrunErrorCount, polarityErrorCount, overdueCount);
 }
 
 #endif

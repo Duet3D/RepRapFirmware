@@ -1168,13 +1168,19 @@ void StringParser::SetFinished() noexcept
 FilePosition StringParser::GetFilePosition() const noexcept
 {
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	if (gb.LatestMachineState().DoingFile()
+	const GCodeMachineState* ms = gb.machineState;
+	while (ms->waitingForAcknowledgement && ms->GetPrevious() != nullptr)
+	{
+		ms = ms->GetPrevious();
+	}
+
+	if (ms->DoingFile()
 # if HAS_SBC_INTERFACE
 		&& !reprap.UsingSbcInterface()
 # endif
 	   )
 	{
-		const FileData &file = gb.LatestMachineState().fileState;
+		const FileData &file = ms->fileState;
 		return file.GetPosition() - gb.fileInput->BytesCached(file) - commandLength + commandStart;
 	}
 #endif

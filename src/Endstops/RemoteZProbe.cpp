@@ -15,6 +15,7 @@
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <limits>
 
 static void GlobalScanningProbeCallback(CallbackParameter param, RemoteInputHandle h, uint32_t val) noexcept
 {
@@ -95,7 +96,8 @@ GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& rep
 		handle = h;
 		if (type == ZProbeType::scanningAnalog)
 		{
-			(void)GetCalibratedReading();				// get an initial reading for the object model
+			float dummyValue;
+			(void)GetCalibratedReading(dummyValue);				// get an initial reading for the object model
 		}
 	}
 	return rc;
@@ -135,27 +137,53 @@ GCodeResult RemoteZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len
 }
 
 // Functions used only with scanning Z probes
+
 // Get the height compared to the nominal trigger height
-float RemoteZProbe::GetCalibratedReading() const noexcept
+GCodeResult RemoteZProbe::GetCalibratedReading(float& val) const noexcept
 {
 	String<1> dummyReply;
-	if (CanInterface::ReadRemoteHandles(boardAddress, handle, handle, GlobalScanningProbeCallback, CallbackParameter((void*)this), dummyReply.GetRef()) == GCodeResult::ok)
+	const GCodeResult rslt = CanInterface::ReadRemoteHandles(boardAddress, handle, handle, GlobalScanningProbeCallback, CallbackParameter((void*)this), dummyReply.GetRef());
+	if (rslt != GCodeResult::ok)
 	{
-		return ConvertReadingToHeightDifference((int32_t)lastValue);
+		return rslt;
 	}
-	return 0.0;
+
+	if (lastValue != 0 && lastValue != ScanningSensorBadReadingVal)		// zero and ScanningSensorBadReadingVal indicate errors reading the probe
+	{
+		const float reading = ConvertReadingToHeightDifference((int32_t)lastValue);
+		if (!std::isnan(reading) && !std::isinf(reading) && fabsf(reading) < diveHeights[1])
+		{
+			val = reading;
+			return GCodeResult::ok;
+		}
+	}
+	return GCodeResult::error;
 }
 
 // Tell the probe to calibrate its drive level
 GCodeResult RemoteZProbe::CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	int32_t driveLevel = -2;			// default to just reporting the drive level
-	bool dummy = false;
-	gb.TryGetIValue('S', driveLevel, dummy);
+	uint32_t param;
+	if (gb.Seen('S'))
+	{
+		const int32_t driveLevel = gb.GetLimitedIValue('S', -1, 31);
+		if (driveLevel < 0)
+		{
+			param = CanMessageChangeInputMonitorNew::paramAutoCalibrateDriveLevelAndReport;
+		}
+		else
+		{
+			uint32_t offset = 0;
+			bool dummy = false;
+			gb.TryGetLimitedUIValue('R', offset, dummy, CanMessageChangeInputMonitorNew::maxParamOffset + 1);
+			param = (offset << CanMessageChangeInputMonitorNew::paramOffsetShift) | (uint32_t)driveLevel;
+		}
+	}
+	else
+	{
+		param = CanMessageChangeInputMonitorNew::paramReportDriveLevel;
+	}
 	uint8_t returnedDriveLevel;
-	const uint32_t param = (driveLevel >= 0) ? (uint16_t)driveLevel
-							: (driveLevel == -1) ? CanMessageChangeInputMonitorNew::paramAutoCalibrateDriveLevelAndReport
-								: CanMessageChangeInputMonitorNew::paramReportDriveLevel;
 	return CanInterface::SetHandleDriveLevel(boardAddress, handle, param, returnedDriveLevel, reply);
 }
 

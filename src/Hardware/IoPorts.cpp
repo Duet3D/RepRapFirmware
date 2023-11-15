@@ -155,7 +155,10 @@ void IoPort::Release() noexcept
 {
 	if (IsValid() && !isSharedInput)
 	{
-		detachInterrupt(GetPinNoCheck());
+		DetachInterrupt();
+#if SAME5x
+		ClearAnalogCallback();
+#endif
 		portUsedBy[logicalPin] = PinUsedBy::unused;
 		logicalPinModes[logicalPin] = PIN_MODE_NOT_CONFIGURED;
 	}
@@ -173,7 +176,7 @@ void IoPort::DetachInterrupt() const noexcept
 {
 	if (IsValid() && !isSharedInput)
 	{
-		detachInterrupt(GetPinNoCheck());
+		detachInterrupt(logicalPin);
 	}
 }
 
@@ -181,12 +184,12 @@ void IoPort::DetachInterrupt() const noexcept
 
 bool IoPort::SetAnalogCallback(AnalogInCallbackFunction fn, CallbackParameter cbp, uint32_t ticksPerCall) noexcept
 {
-	return AnalogIn::SetCallback(GetAnalogChannel(), fn, cbp, ticksPerCall, false);
+	return IsValid() && !isSharedInput && AnalogIn::SetCallback(GetAnalogChannel(), fn, cbp, ticksPerCall, false);
 }
 
 void IoPort::ClearAnalogCallback() noexcept
 {
-	(void)AnalogIn::SetCallback(GetAnalogChannel(), nullptr, CallbackParameter(), 1, false);
+	(void)SetAnalogCallback(nullptr, CallbackParameter(), 1);
 }
 
 #endif

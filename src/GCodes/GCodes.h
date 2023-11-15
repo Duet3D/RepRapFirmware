@@ -716,6 +716,7 @@ private:
 	size_t lastAxis0Index;						// The last grid probe point in this row to scan
 	bool doingManualBedProbe;					// true if we are waiting for the user to jog the nozzle until it touches the bed
 	bool hadProbingError;						// true if there was an error probing the last point
+	GCodeResult scanningResult;					// set if we had a bad value when scanning the bed
 	bool zDatumSetByProbing;					// true if the Z position was last set by probing, not by an endstop switch or by G92
 	int8_t tapsDone;							// how many times we tapped the current point at the slow speed
 	bool acceptReading;							// true if we are going to accept the reading of the previous tap

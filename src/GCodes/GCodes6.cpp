@@ -160,9 +160,22 @@ void GCodes::InitialiseTaps(bool fastThenSlow) noexcept
 void GCodes::TakeScanningProbeReading() noexcept
 {
 	const auto zp = platform.GetZProbeOrDefault(currentZProbeNumber);
-	const float heightError = zp->GetCalibratedReading();
-	HeightMap& hm = reprap.GetMove().AccessHeightMap();
-	hm.SetGridHeight(gridAxis0Index, gridAxis1Index, -heightError);
+	float heightError;
+	const GCodeResult rslt = zp->GetCalibratedReading(heightError);
+
+	// Scanning Z probes can return bad readings if the probe reports an error. Don't store them in the height map, they mess up XY movement.
+	if (rslt != GCodeResult::ok)
+	{
+		if (scanningResult != GCodeResult::ok)
+		{
+			scanningResult = rslt;
+		}
+	}
+	else
+	{
+		reprap.GetMove().AccessHeightMap().SetGridHeight(gridAxis0Index, gridAxis1Index, -heightError);
+	}
+
 	if (gridAxis0Index != lastAxis0Index)
 	{
 		if (gridAxis1Index & 1u)
@@ -359,6 +372,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 
 	ClearBedMapping();
 	gridAxis0Index = gridAxis1Index = 0;
+	scanningResult = GCodeResult::ok;
 
 	gb.SetState(GCodeState::gridProbing1);
 	if (zp->GetProbeType() != ZProbeType::blTouch)

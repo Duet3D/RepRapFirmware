@@ -37,13 +37,13 @@ public:
 	static void ReadInputs(CanMessageBuffer *buf) noexcept;
 
 	static void CommonDigitalPortInterrupt(CallbackParameter cbp) noexcept;
-	static void CommonAnalogPortInterrupt(CallbackParameter cbp, uint16_t reading) noexcept;
+	static void CommonAnalogPortInterrupt(CallbackParameter cbp, uint32_t reading) noexcept;
 
 private:
 	bool Activate(bool useInterrupt) noexcept;
 	void Deactivate() noexcept;
 	void DigitalInterrupt() noexcept;
-	void AnalogInterrupt(uint16_t reading) noexcept;
+	void AnalogInterrupt(uint32_t reading) noexcept;
 	uint16_t GetAnalogValue() const noexcept;
 
 	static bool Delete(uint16_t hndl) noexcept;
@@ -54,7 +54,7 @@ private:
 	IoPort port;
 	uint16_t handle;
 	uint16_t minInterval;
-	uint16_t threshold;
+	uint32_t threshold;
 	bool active;
 	volatile bool state;
 	volatile bool sendDue;

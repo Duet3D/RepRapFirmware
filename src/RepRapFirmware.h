@@ -157,6 +157,15 @@ namespace CanInterface
 extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute__((naked));
 #define RRF_ASSERT(_expr) do { if (!(_expr)) { vAssertCalled(__LINE__, __FILE__); } } while (false)
 
+// Function and macro to track return address corruption
+inline uint32_t GetStackValue(uint32_t dwordOffset) noexcept
+{
+    register const volatile uint32_t* sp asm ("sp");
+    return sp[dwordOffset];
+}
+
+#define CheckStackValue(dwordOffset, val) do { if (GetStackValue(dwordOffset) != val) { vAssertCalled(__LINE__, __FILE__); } } while (false)
+
 // Type of a driver identifier
 struct DriverId
 {
@@ -505,6 +514,14 @@ template <typename T> void DeleteObject(T *null & ptr) noexcept
 	delete p2;
 }
 
+// Function to delete an array of objects and clear the pointer. Safe to call even if the pointer is already null.
+template <typename T> void DeleteArray(T*& ptr) noexcept
+{
+	T *null p2 = nullptr;
+	std::swap(ptr, p2);
+	delete[] p2;
+}
+
 // Function to make a pointer point to a new object and delete the existing object, if any. T2 must be the same as T or derived from it.
 template <typename T, typename T2> void ReplaceObject(T *null & ptr, T2* pNew) noexcept
 {
@@ -552,13 +569,13 @@ constexpr float TwoPi = 3.141592653589793 * 2.0;
 constexpr float DegreesToRadians = 3.141592653589793/180.0;
 constexpr float RadiansToDegrees = 180.0/3.141592653589793;
 
-// The step clock is used for timing step pulses and oyther fine-resolution timer purposes
+// The step clock is used for timing step pulses and other fine-resolution timer purposes
 
 #if SAME70 || SAME5x
 // All Duet 3 boards use a common step clock rate of 750kHz so that we can sync the clocks over CAN
 constexpr uint32_t StepClockRate = 48000000/64;								// 750kHz
 #else
-constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2 and Maestro: use just under 1MHz
+constexpr uint32_t StepClockRate = SystemCoreClockFreq/128;					// Duet 2, PCCB Maestro: use just under 1MHz
 #endif
 
 constexpr uint64_t StepClockRateSquared = (uint64_t)StepClockRate * StepClockRate;

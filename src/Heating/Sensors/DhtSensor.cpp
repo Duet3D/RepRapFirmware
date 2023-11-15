@@ -14,7 +14,6 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/StepTimer.h>
 
-constexpr uint16_t MinimumReadInterval = 1000;		// ms
 constexpr uint8_t  MaximumReadTime = 20;			// ms
 constexpr uint8_t  MinimumOneBitLength = 50;		// microseconds
 constexpr uint32_t MinimumOneBitStepClocks = (StepClockRate * MinimumOneBitLength)/1000000;

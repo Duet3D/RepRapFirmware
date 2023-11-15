@@ -1672,6 +1672,7 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSys
 		//TODO when SbcInterface stops calling this from its own task, get rid of this, it isn't correct any more anyway
 		ms.updateUserPositionGb = &gb;
 	}
+	ms.forceLiveCoordinatesUpdate = true;				// make sure that immediately after e.g. M400 the machine position is fetched correctly (issue 921)
 	return true;
 }
 

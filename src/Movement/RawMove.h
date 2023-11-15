@@ -189,15 +189,17 @@ public:
 	int16_t previousToolNumber;										// the tool number we were using before the last tool change, or -1 if we weren't using a tool
 	uint8_t toolChangeParam;
 
-	bool doingArcMove;												// true if we are doing an arc move
-	bool xyPlane;													// true if the G17/G18/G19 selected plane of the arc move is XY in the original user coordinates
-	SegmentedMoveState segMoveState;
-	bool pausedInMacro;												// if we are paused then this is true if we paused while fileGCode was executing a macro
-
 	// Object cancellation variables
 	int currentObjectNumber;										// the current object number, or a negative value if it isn't an object
 	bool currentObjectCancelled;									// true if the current object should not be printed
 	bool printingJustResumed;										// true if we have just restarted printing
+
+	// Misc
+	bool doingArcMove;												// true if we are doing an arc move
+	bool xyPlane;													// true if the G17/G18/G19 selected plane of the arc move is XY in the original user coordinates
+	SegmentedMoveState segMoveState;
+	bool pausedInMacro;												// if we are paused then this is true if we paused while fileGCode was executing a macro
+	bool forceLiveCoordinatesUpdate = true;							// true if we want to force latestLiveCoordinates to be updated
 
 private:
 	MovementSystemNumber msNumber;

@@ -115,7 +115,7 @@ constexpr size_t MaxAxes = 10;						// The maximum number of movement axes in th
 constexpr size_t MaxDriversPerAxis = 6;				// The maximum number of stepper drivers assigned to one axis (increased to 6 for Modix)
 
 constexpr size_t MaxExtruders = 7;					// The maximum number of extruders
-constexpr size_t MaxAxesPlusExtruders = 12;
+constexpr size_t MaxAxesPlusExtruders = NumDirectDrivers;
 
 constexpr size_t MaxHeatersPerTool = 8;
 constexpr size_t MaxExtrudersPerTool = 8;

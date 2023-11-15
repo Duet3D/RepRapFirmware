@@ -145,15 +145,16 @@ GCodeResult LocalZProbe::AppendPinNames(const StringRef& str) noexcept
 }
 
 // Functions used only with scanning Z probes
-float LocalZProbe::GetCalibratedReading() const noexcept
+GCodeResult LocalZProbe::GetCalibratedReading(float& val) const noexcept
 {
-	return ConvertReadingToHeightDifference((int32_t)GetRawReading());
+	val = ConvertReadingToHeightDifference((int32_t)GetRawReading());
+	return GCodeResult::ok;
 }
 
 // Kick off sending some program bytes
 GCodeResult LocalZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept
 {
-	timer.CancelCallback();										// make quite certain that this timer isn't already pending
+	timer.CancelCallback();									// make quite certain that this timer isn't already pending
 
 	for (size_t i = 0; i < len; ++i)
 	{
@@ -164,7 +165,7 @@ GCodeResult LocalZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len,
 	bitsSent = 0;
 	bitTime = StepTimer::GetTickRate()/bitsPerSecond;
 
-	modulationPort.WriteDigital(false);				// start with 2 bits of zero
+	modulationPort.WriteDigital(false);						// start with 2 bits of zero
 	startTime = StepTimer::GetTimerTicks();
 	timer.SetCallback(LocalZProbe::TimerInterrupt, CallbackParameter(this));
 	timer.ScheduleCallback(startTime + 2 * bitTime);

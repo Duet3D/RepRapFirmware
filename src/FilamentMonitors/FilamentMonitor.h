@@ -78,6 +78,9 @@ public:
 
 	// Delete all filament monitors
 	static void DeleteAll() noexcept;
+
+	// Generate diagnostics info
+	static void GetDiagnostics(const StringRef& reply) noexcept;
 #endif
 
 	// This must be public so that the array descriptor in class RepRap can lock it
@@ -128,6 +131,9 @@ protected:
 
 	// Store collected data in a CAN message slot returning true if there was data worth sending
 	virtual void GetLiveData(FilamentMonitorDataNew& data) const noexcept = 0;
+
+	// Print diagnostic info for this sensor
+	virtual void Diagnostics(const StringRef& reply) noexcept = 0;
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -138,6 +144,7 @@ protected:
 	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) THROWS(GCodeException);
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult CommonConfigure(const CanMessageGenericParser& parser, const StringRef& reply, InterruptMode interruptMode, bool& seen) noexcept;
+	uint8_t GetDriver() const noexcept { return driveNumber; }
 #endif
 
 	const IoPort& GetPort() const noexcept { return port; }
@@ -149,7 +156,7 @@ protected:
 	}
 
 #if SUPPORT_CAN_EXPANSION
-	bool IsLocal() const noexcept { return boardAddress == CanInterface::GetCanAddress(); }
+	bool IsLocal() const noexcept { return driverId.GetBoardAddress() == CanInterface::GetCanAddress(); }
 #endif
 
 private:
@@ -175,17 +182,16 @@ private:
 
 	int32_t isrExtruderStepsCommanded;
 	uint32_t lastIsrMillis;
-	unsigned int driveNumber;
+	unsigned int driveNumber;											// the logical drive number that represents this extruder (but the actual drive number if in expansion mode)
 	unsigned int type;
 	IoPort port;
-	DriverId driverId;
+	DriverId driverId;													// the board address and physical driver that the logical drive number maps to
 
 	uint8_t enableMode;													// 0 = disabled, 1 = enabled when SD card printing, 2 = always enabled
 	bool isrWasPrinting;
 	bool haveIsrStepsCommanded;
 	FilamentSensorStatus lastStatus;
 #if SUPPORT_CAN_EXPANSION
-	CanAddress boardAddress;
 	FilamentSensorStatus lastRemoteStatus;
 	bool hasRemote;
 #endif

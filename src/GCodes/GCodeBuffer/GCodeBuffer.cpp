@@ -370,6 +370,12 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 bool GCodeBuffer::IsLaterThan(const GCodeBuffer& other) const noexcept
 {
 	unsigned int ourDepth = GetStackDepth();
+	if (ourDepth == 0 && !machineState->DoingFile())
+	{
+		// This input is not executing from file, so treat it as having advanced past any sync points already
+		return true;
+	}
+
 	unsigned int otherDepth = other.GetStackDepth();
 	const GCodeMachineState *ourState = machineState;
 	const GCodeMachineState *otherState = other.machineState;

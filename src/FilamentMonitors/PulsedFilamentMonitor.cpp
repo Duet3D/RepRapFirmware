@@ -401,6 +401,14 @@ void PulsedFilamentMonitor::GetLiveData(FilamentMonitorDataNew& data) const noex
 	data.hasLiveData = false;
 }
 
+// Print diagnostic info for this sensor
+void PulsedFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
+{
+	Poll();
+	const char* const statusText = (samplesReceived < 2) ? "no data received" : "ok";
+	reply.lcatf("Driver %u: %s", GetDriver(), statusText);
+}
+
 #endif
 
 #if SUPPORT_CAN_EXPANSION

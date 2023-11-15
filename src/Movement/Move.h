@@ -179,7 +179,7 @@ public:
 
 	void AdjustLeadscrews(const floatc_t corrections[]) noexcept;							// Called by some Kinematics classes to adjust the leadscrews
 
-	int32_t GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept;				// Return and reset the accumulated commanded extrusion amount
+	int32_t GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noexcept;		// Return and reset the accumulated commanded extrusion amount
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept;									// Write settings for resuming the print
@@ -319,7 +319,7 @@ private:
 	bool useTaper;										// True to taper off the compensation
 	bool probeReadingNeeded = false;					// true if the laser task needs to take a Z probe reading
 
-	static constexpr size_t LaserTaskStackWords = 200;	// stack size in dwords for the laser and IOBits task (increased to support scanning Z probes)
+	static constexpr size_t LaserTaskStackWords = 300;	// stack size in dwords for the laser and IOBits task (increased to support scanning Z probes)
 	static Task<LaserTaskStackWords> *laserTask;		// the task used to manage laser power or IOBits
 };
 
