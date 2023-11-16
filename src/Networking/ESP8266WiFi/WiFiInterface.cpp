@@ -1486,7 +1486,8 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 
 					const bool jsonFormat = gb.Seen('F') && gb.GetUIValue() == 1;
 
-					const size_t declaredBufferLength = (MaxRememberedNetworks + 1) * ReducedWirelessConfigurationDataSize;		// enough for all the remembered SSID data
+					constexpr size_t declaredBufferLength = (MaxRememberedNetworks + 1) * ReducedWirelessConfigurationDataSize;		// enough for all the remembered SSID data
+					static_assert(declaredBufferLength <= MaxDataLength);
 					uint32_t buffer[NumDwords(declaredBufferLength)];
 					const int32_t rslt = SendCommand(NetworkCommand::networkRetrieveSsidData, 0, 0, 0, nullptr, 0, buffer, declaredBufferLength);
 					if (rslt >= 0)
