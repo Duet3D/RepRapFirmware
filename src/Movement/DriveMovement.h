@@ -112,6 +112,33 @@ private:
 	union
 	{
 #if SUPPORT_LINEAR_DELTA
+		/* Note, the equation for distance travelled along the planned straight path in terms of carriage height is:
+				s=(sqrt(
+						+(-dy^2-dx^2)*h^2
+
+						+2*(dy^2+dx^2)*z0*h
+						-2*dy*dz*(y0-yt)*h
+						-2*dx*dz*(x0-xt)*h
+
+						+2*dx*dz*(x0-xt)*z0
+						+2*dy*dz*(y0-yt)*z0
+						+2*dx*dy*(x0-xt)*(y0-yt)
+
+						-(dy^2+dx^2)*z0^2
+						-(dz^2+dx^2)*(y0-yt)^2
+						-(dz^2+dy^2)*(x0-xt)^2
+						+L^2*(dz^2+dy^2+dx^2)
+					   )
+				   -dy*(y0-yt)
+				   -dx*(x0-xt)
+				   +dz*h
+				   -dz*z0
+			  	  )/(dz^2+dy^2+dx^2)
+
+			which is of the form:
+		  	  	 s = (sqrt(A*h^2 + B*h + C) + D*h + E)/F
+			which can be normalised by integrating F into the other constants.
+		*/
 		struct DeltaParameters							// Parameters for delta movement
 		{
 			// The following don't depend on how the move is executed, so they could be set up in Init() if we use fixed acceleration/deceleration
