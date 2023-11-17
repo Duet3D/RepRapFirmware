@@ -184,7 +184,7 @@ void IoPort::DetachInterrupt() const noexcept
 
 bool IoPort::SetAnalogCallback(AnalogInCallbackFunction fn, CallbackParameter cbp, uint32_t ticksPerCall) noexcept
 {
-	return IsValid() && !isSharedInput && AnalogIn::SetCallback(GetAnalogChannel(), fn, cbp, ticksPerCall, false);
+	return IsValid() && !isSharedInput && AnalogIn::SetCallback(GetAnalogChannel(), fn, cbp, ticksPerCall);
 }
 
 void IoPort::ClearAnalogCallback() noexcept
