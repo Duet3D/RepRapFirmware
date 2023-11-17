@@ -31,7 +31,7 @@ void MovementState::SetDefaults(size_t firstDriveToZero) noexcept
 	rotationalAxesMentioned = false;
 	scanningProbeMove = false;
 #if SUPPORT_LASER
-	laserPixelData.numPixels = 0;
+	laserPixelData.Clear();
 #endif
 	filePos = noFilePosition;
 	movementTool = nullptr;
@@ -129,7 +129,7 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 void MovementState::ResetLaser() noexcept
 {
 #if SUPPORT_LASER
-	laserPixelData.numPixels = 0;
+	laserPixelData.Clear();
 #endif
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	laserPwmOrIoBits.Clear();
@@ -176,6 +176,9 @@ void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	rp.laserPwmOrIoBits = laserPwmOrIoBits;
+#endif
+#if SUPPORT_LASER
+	rp.laserPixelData = laserPixelData;
 #endif
 }
 
