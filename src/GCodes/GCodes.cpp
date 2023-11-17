@@ -905,7 +905,7 @@ bool GCodes::DoSynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCode
 #if SUPPORT_LASER
 	if (machineType == MachineType::laser)
 	{
-		ms.laserPwmOrIoBits.laserPwm = 0;		// turn off the laser when we start moving
+		ms.laserPixelData.Clear();				// turn off the laser when we start moving
 	}
 #endif
 
@@ -1040,7 +1040,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 #if SUPPORT_LASER
 		if (machineType == MachineType::laser)
 		{
-			ms.laserPwmOrIoBits.laserPwm = 0;		// turn off the laser when we start moving
+			ms.laserPixelData.Clear();				// turn off the laser when we start moving
 		}
 #endif
 
@@ -1997,7 +1997,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		}
 		else if (!laserPowerSticky)
 		{
-			ms.laserPixelData.numPixels = 0;
+			ms.laserPixelData.Clear();
 		}
 	}
 # endif
@@ -2248,12 +2248,12 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			if (   ms.isCoordinated
 				&& (   (machineType == MachineType::fff && !ms.hasPositiveExtrusion)
 #if SUPPORT_LASER || SUPPORT_IOBITS
-					|| (machineType == MachineType::laser && ms.laserPwmOrIoBits.laserPwm == 0)
+					|| (machineType == MachineType::laser && ms.laserPixelData.numPixels == 0)
 #endif
 				   )
 			   )
 			{
-				// It's a coordinated travel move on a 3D printer or laser cutter, so see whether an uncoordinated move will work
+				// It's a coordinated travel move on a 3D printer or laser cutter, with no extrusion or laser, so see whether an uncoordinated move will work
 				const LimitPositionResult lp2 = reprap.GetMove().GetKinematics().LimitPosition(ms.coords, ms.initialCoords, numVisibleAxes, axesToLimit, false, limitAxes);
 				if (lp2 == LimitPositionResult::ok)
 				{
@@ -2671,7 +2671,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		}
 		else
 		{
-			ms.laserPwmOrIoBits.laserPwm = 0;
+			ms.laserPixelData.Clear();
 		}
 	}
 #endif
@@ -2996,7 +2996,7 @@ void GCodes::EmergencyStop() noexcept
 #if SUPPORT_LASER
 	for (MovementState& ms : moveStates)
 	{
-		ms.laserPwmOrIoBits.laserPwm = 0;
+		ms.laserPixelData.Clear();
 	}
 #endif
 }
@@ -4220,7 +4220,7 @@ void GCodes::StopPrint(StopPrintReason reason) noexcept
 		ms.segmentsLeft = 0;
 		ms.codeQueue->Clear();
 #if SUPPORT_LASER
-		ms.laserPwmOrIoBits.laserPwm = 0;
+		ms.laserPixelData.Clear();
 #endif
 		// Deal with the Z hop from a G10 that has not been undone by G11
 		if (ms.currentTool != nullptr && ms.currentTool->IsRetracted())

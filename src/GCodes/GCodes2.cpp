@@ -726,7 +726,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								return false;						// don't modify moves that haven't gone yet
 							}
-							ms.laserPwmOrIoBits.laserPwm = ConvertLaserPwm(gb.GetNonNegativeFValue());
+							ms.laserPixelData.pixelPwm[0] = ConvertLaserPwm(gb.GetNonNegativeFValue());
+							ms.laserPixelData.numPixels = 1;
 						}
 						else
 						{
