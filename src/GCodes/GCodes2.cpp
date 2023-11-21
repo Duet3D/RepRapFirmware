@@ -782,7 +782,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							return false;						// don't modify moves that haven't gone yet
 						}
-						ms.laserPwmOrIoBits.Clear();
+						ms.laserPixelData.Clear();
 					}
 					else
 #endif
