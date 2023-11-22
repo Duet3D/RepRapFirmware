@@ -26,7 +26,7 @@ void DhtDataTransition(CallbackParameter cp) noexcept
 
 // Class DhtTemperatureSensor members
 DhtTemperatureSensor::DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType t) noexcept
-	: SensorWithPort(sensorNum, "DHT-temperature"), type(t)
+	: SensorWithPort(sensorNum, "DHT-temperature"), lastReadingAttemptTime(0), type(t)
 {
 }
 
@@ -157,7 +157,7 @@ void DhtTemperatureSensor::Interrupt() noexcept
 
 void DhtTemperatureSensor::Poll() noexcept
 {
-	if ((millis() - GetLastReadingTime()) >= MinimumReadInterval)
+	if ((millis() - lastReadingAttemptTime) >= MinimumReadInterval)
 	{
 		TakeReading();
 	}
@@ -189,7 +189,7 @@ void DhtTemperatureSensor::TakeReading() noexcept
 		port.SetMode(PinAccess::readWithPullup_InternalUseOnly);
 
 		// It appears that switching the pin to an output disables the interrupt, so we need to call attachInterrupt here
-		// We are likely to get an immediate interrupt at this point corresponding to the low-to-high transition. We must ignore this.
+		// We are likely to get an immediate interrupt at this point corresponding to the low-to-high transition. The ISR will ignore this.
 		irqPort.AttachInterrupt(DhtDataTransition, InterruptMode::change, CallbackParameter(this));
 		delayMicroseconds(2);				// give the interrupt time to occur
 		lastPulseTime = 0;
@@ -200,6 +200,7 @@ void DhtTemperatureSensor::TakeReading() noexcept
 	// We don't have the ISR wake the process up, because that would require the priority of the pin change interrupt to be reduced.
 	// So we just delay for long enough for the data to have been sent. It takes typically 4 to 5ms.
 	delay(MaximumReadTime);
+	lastReadingAttemptTime = millis();
 
 	irqPort.DetachInterrupt();
 
@@ -219,6 +220,7 @@ void DhtTemperatureSensor::TakeReading() noexcept
 	{
 		SetResult(rslt);
 		lastHumidity = BadErrorTemperature;
+		badTemperatureCount = 0;
 	}
 }
 
