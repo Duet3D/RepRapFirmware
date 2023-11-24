@@ -343,6 +343,12 @@ static uint32_t inIsrCalls = 0, notInIsrCalls = 0;		//TEMP DEBUG
 						locIsrMillis = 0;
 						++notInIsrCalls;
 					}
+#if 1	//DEBUG
+					if (labs(extruderStepsCommanded) > 5000)
+					{
+						reprap.GetPlatform().MessageF(GenericMessage, "DEBUG: %" PRIi32 " extruder steps commanded, from ISR=%u, wasPrinting=%u\n", extruderStepsCommanded, fromIsr, isPrinting);
+					}
+#endif
 					if ((fs.enableMode == 2 || gCodes.IsReallyPrinting()) && !gCodes.IsSimulating())
 					{
 						const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(fs.driveNumber);

@@ -428,6 +428,7 @@ inline bool DDA::CanPauseAfter() const noexcept
 }
 
 // Return the number of net steps already taken in this move by a particular drive
+// This must be called either from the step ISR or with interrupts disabled
 inline int32_t DDA::GetStepsTaken(size_t drive) const noexcept
 {
 	const DriveMovement * const dmp = FindDM(drive);

@@ -201,6 +201,7 @@ inline void DriveMovement::CheckDirection(bool reversed) noexcept
 {
 	if (reversed != directionReversed)
 	{
+		AtomicCriticalSectionLocker lock;											// keep direction and directionReversed in sync for filament monitor
 		directionReversed = !directionReversed;										// this can be done by an xor so hopefully more efficient than assignment
 		direction = !direction;
 		directionChanged = true;

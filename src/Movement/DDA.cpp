@@ -2292,13 +2292,13 @@ void DDA::UpdateMovementAccumulators(volatile int32_t *accumulators) const noexc
 	// It's probably quicker to iterate through DMs.
 	//
 	// Loop through DMs, checking whether each associated drive is an extruder and updating the movement accumulator if so.
-	// We could omit the check that the drive is an accumulator so that we update all accumulators, but we would still need to check for leadscrew adjustment moves.
+	// We could omit the check that the drive is an extruder so that we update all accumulators, but we would still need to check for leadscrew adjustment moves.
 	const unsigned int firstExtruderDrive =
 #if SUPPORT_REMOTE_COMMANDS
 		(CanInterface::InExpansionMode())
 			? 0 :
 #endif
-				ExtruderToLogicalDrive(reprap.GetGCodes().GetNumExtruders() - 1);
+				ExtruderToLogicalDrive(reprap.GetGCodes().GetNumExtruders()) + 1;
 	const unsigned int lastExtruderDrive =
 #if SUPPORT_REMOTE_COMMANDS
 		(CanInterface::InExpansionMode())

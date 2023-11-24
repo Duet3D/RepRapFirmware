@@ -636,8 +636,8 @@ int32_t DDARing::GetAccumulatedMovement(size_t drive, bool& isPrinting) noexcept
 {
 	AtomicCriticalSectionLocker lock;							// we don't want a move to complete and the ISR update the movement accumulators while we are doing this
 	const DDA * const cdda = currentDda;						// capture volatile variable
-	const int32_t ret = movementAccumulators[drive];
 	const int32_t adjustment = (cdda == nullptr) ? 0 : cdda->GetStepsTaken(drive);
+	const int32_t ret = movementAccumulators[drive];
 	movementAccumulators[drive] = -adjustment;
 	isPrinting = extrudersPrinting;
 	return ret + adjustment;
