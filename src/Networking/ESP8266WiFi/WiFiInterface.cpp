@@ -100,8 +100,11 @@ const uint32_t WiFiStableMillis = 100;
 
 const unsigned int MaxHttpConnections = 4;
 
+// Low level functions for controlling the SPI interface and associated DMA controller
+
 #if SAME5x
 
+// Initialise the serial port to the ESP module. This is used to pass debug information.
 void SerialWiFiPortInit(AsyncSerial*) noexcept
 {
 	for (Pin p : WiFiUartSercomPins)
@@ -120,7 +123,7 @@ void SerialWiFiPortDeinit(AsyncSerial*) noexcept
 
 #endif
 
-// Static functions
+// SPI control functions
 static inline void DisableSpi() noexcept
 {
 #if SAME5x
@@ -156,7 +159,338 @@ static inline void ResetSpi() noexcept
 #endif
 }
 
-static void spi_dma_disable() noexcept;
+#if USE_PDC
+static Pdc *spi_pdc;
+#endif
+
+#if USE_XDMAC
+
+// XDMAC hardware
+static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
+
+#endif
+
+#if !USE_PDC
+
+static inline void spi_rx_dma_enable() noexcept
+{
+# if USE_DMAC
+	dmac_channel_enable(DMAC, DmacChanWiFiRx);
+# endif
+
+# if USE_XDMAC
+	xdmac_channel_enable(XDMAC, DmacChanWiFiRx);
+# endif
+
+# if USE_DMAC_MANAGER
+	DmacManager::EnableChannel(DmacChanWiFiRx, DmacPrioWiFi);
+# endif
+}
+
+static inline void spi_tx_dma_enable() noexcept
+{
+# if USE_DMAC
+	dmac_channel_enable(DMAC, DmacChanWiFiTx);
+# endif
+
+# if USE_XDMAC
+	xdmac_channel_enable(XDMAC, DmacChanWiFiTx);
+# endif
+
+# if USE_DMAC_MANAGER
+	DmacManager::EnableChannel(DmacChanWiFiTx, DmacPrioWiFi);
+# endif
+}
+
+static inline void spi_rx_dma_disable() noexcept
+{
+# if USE_DMAC
+	dmac_channel_disable(DMAC, DmacChanWiFiRx);
+# endif
+
+# if USE_XDMAC
+	xdmac_channel_disable(XDMAC, DmacChanWiFiRx);
+# endif
+
+# if USE_DMAC_MANAGER
+	DmacManager::DisableChannel(DmacChanWiFiRx);
+# endif
+}
+
+static inline void spi_tx_dma_disable() noexcept
+{
+# if USE_DMAC
+	dmac_channel_disable(DMAC, DmacChanWiFiTx);
+# endif
+
+# if USE_XDMAC
+	xdmac_channel_disable(XDMAC, DmacChanWiFiTx);
+# endif
+
+#if USE_DMAC_MANAGER
+	DmacManager::DisableChannel(DmacChanWiFiTx);
+#endif
+}
+
+#endif
+
+static inline void spi_dma_enable() noexcept
+{
+#if USE_PDC
+	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN | PERIPH_PTCR_RXTEN);
+#else
+	spi_rx_dma_enable();
+	spi_tx_dma_enable();
+#endif
+}
+
+static inline void spi_dma_disable() noexcept
+{
+#if USE_PDC
+	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS | PERIPH_PTCR_RXTDIS);
+#else
+	spi_tx_dma_disable();
+	spi_rx_dma_disable();
+#endif
+}
+
+#if !SAME5x
+
+static bool spi_dma_check_rx_complete() noexcept
+{
+#if USE_PDC
+	return true;
+#endif
+
+#if USE_DMAC
+	const uint32_t status = DMAC->DMAC_CHSR;
+	if (   ((status & (DMAC_CHSR_ENA0 << DmacChanWiFiRx)) == 0)		// controller is not enabled, perhaps because it finished a full buffer transfer
+		|| ((status & (DMAC_CHSR_EMPT0 << DmacChanWiFiRx)) != 0)	// controller is enabled, probably suspended, and the FIFO is empty
+	   )
+	{
+		// Disable the channel.
+		// We also need to set the resume bit, otherwise it remains suspended when we re-enable it.
+		DMAC->DMAC_CHDR = (DMAC_CHDR_DIS0 << DmacChanWiFiRx) | (DMAC_CHDR_RES0 << DmacChanWiFiRx);
+		return true;
+	}
+#endif
+
+#if USE_XDMAC
+	if ((XDMAC->XDMAC_GS & (1u << DmacChanWiFiRx)) == 0)
+	{
+		return true;			// channel is not enabled
+	}
+
+	if ((XDMAC->XDMAC_CHID[DmacChanWiFiRx].XDMAC_CC & (XDMAC_CC_RDIP | XDMAC_CC_WRIP)) == 0)
+	{
+		XDMAC->XDMAC_GD = (1u << DmacChanWiFiRx);						// disable the channel, which flushes the FIFO
+		while ((XDMAC->XDMAC_GS & (1u << DmacChanWiFiRx)) != 0) { }		// wait for disable to complete
+		return true;
+	}
+#endif
+
+	return false;
+}
+
+#endif
+
+static void spi_tx_dma_setup(const void *buf, uint32_t transferLength) noexcept
+{
+#if USE_PDC
+	pdc_packet_t pdc_spi_packet;
+	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
+	pdc_spi_packet.ul_size = transferLength;
+	pdc_tx_init(spi_pdc, &pdc_spi_packet, NULL);
+#endif
+
+#if USE_DMAC
+	DMAC->DMAC_EBCISR;		// clear any pending interrupts
+
+	dmac_channel_set_source_addr(DMAC, DmacChanWiFiTx, reinterpret_cast<uint32_t>(buf));
+	dmac_channel_set_destination_addr(DMAC, DmacChanWiFiTx, reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_TDR)));
+	dmac_channel_set_descriptor_addr(DMAC, DmacChanWiFiTx, 0);
+	dmac_channel_set_ctrlA(DMAC, DmacChanWiFiTx, transferLength | DMAC_CTRLA_SRC_WIDTH_WORD | DMAC_CTRLA_DST_WIDTH_BYTE);
+	dmac_channel_set_ctrlB(DMAC, DmacChanWiFiTx,
+		DMAC_CTRLB_SRC_DSCR | DMAC_CTRLB_DST_DSCR | DMAC_CTRLB_FC_MEM2PER_DMA_FC | DMAC_CTRLB_SRC_INCR_INCREMENTING | DMAC_CTRLB_DST_INCR_FIXED);
+#endif
+
+#if USE_XDMAC
+	xdmac_disable_interrupt(XDMAC, DmacChanWiFiTx);
+
+	xdmac_tx_cfg.mbr_ubc = transferLength;
+	xdmac_tx_cfg.mbr_sa = reinterpret_cast<uint32_t>(buf);
+	xdmac_tx_cfg.mbr_da = reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_TDR));
+	xdmac_tx_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN |
+			XDMAC_CC_MBSIZE_SINGLE |
+			XDMAC_CC_DSYNC_MEM2PER |
+			XDMAC_CC_CSIZE_CHK_1 |
+			XDMAC_CC_DWIDTH_BYTE |
+			XDMAC_CC_SIF_AHB_IF0 |
+			XDMAC_CC_DIF_AHB_IF1 |
+			XDMAC_CC_SAM_INCREMENTED_AM |
+			XDMAC_CC_DAM_FIXED_AM |
+			XDMAC_CC_PERID((uint32_t)DmaTrigSource::spi1tx);
+	xdmac_tx_cfg.mbr_bc = 0;
+	xdmac_tx_cfg.mbr_ds = 0;
+	xdmac_tx_cfg.mbr_sus = 0;
+	xdmac_tx_cfg.mbr_dus = 0;
+	xdmac_configure_transfer(XDMAC, DmacChanWiFiTx, &xdmac_tx_cfg);
+
+	xdmac_channel_set_descriptor_control(XDMAC, DmacChanWiFiTx, 0);
+#endif
+
+#if USE_DMAC_MANAGER
+	DmacManager::SetSourceAddress(DmacChanWiFiTx, buf);
+	DmacManager::SetDestinationAddress(DmacChanWiFiTx, &(WiFiSpiSercom->SPI.DATA.reg));
+	DmacManager::SetBtctrl(DmacChanWiFiTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_NOACT);
+	DmacManager::SetDataLength(DmacChanWiFiTx, (transferLength + 3) >> 2);			// must do this one last
+	DmacManager::SetTriggerSourceSercomTx(DmacChanWiFiTx, WiFiSpiSercomNumber);
+#endif
+}
+
+static void spi_rx_dma_setup(void *buf, uint32_t transferLength) noexcept
+{
+#if USE_PDC
+	pdc_packet_t pdc_spi_packet;
+	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
+	pdc_spi_packet.ul_size = transferLength;
+	pdc_rx_init(spi_pdc, &pdc_spi_packet, NULL);
+#endif
+
+#if USE_DMAC
+	DMAC->DMAC_EBCISR;		// clear any pending interrupts
+
+	dmac_channel_set_source_addr(DMAC, DmacChanWiFiRx, reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_RDR)));
+	dmac_channel_set_destination_addr(DMAC, DmacChanWiFiRx, reinterpret_cast<uint32_t>(buf));
+	dmac_channel_set_descriptor_addr(DMAC, DmacChanWiFiRx, 0);
+	dmac_channel_set_ctrlA(DMAC, DmacChanWiFiRx, transferLength | DMAC_CTRLA_SRC_WIDTH_BYTE | DMAC_CTRLA_DST_WIDTH_WORD);
+	dmac_channel_set_ctrlB(DMAC, DmacChanWiFiRx,
+		DMAC_CTRLB_SRC_DSCR | DMAC_CTRLB_DST_DSCR | DMAC_CTRLB_FC_PER2MEM_DMA_FC | DMAC_CTRLB_SRC_INCR_FIXED | DMAC_CTRLB_DST_INCR_INCREMENTING);
+#endif
+
+#if USE_XDMAC
+	xdmac_disable_interrupt(XDMAC, DmacChanWiFiRx);
+
+	xdmac_rx_cfg.mbr_ubc = transferLength;
+	xdmac_rx_cfg.mbr_da = reinterpret_cast<uint32_t>(buf);
+	xdmac_rx_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_RDR));
+	xdmac_rx_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN |
+			XDMAC_CC_MBSIZE_SINGLE |
+			XDMAC_CC_DSYNC_PER2MEM |
+			XDMAC_CC_CSIZE_CHK_1 |
+			XDMAC_CC_DWIDTH_BYTE|
+			XDMAC_CC_SIF_AHB_IF1 |
+			XDMAC_CC_DIF_AHB_IF0 |
+			XDMAC_CC_SAM_FIXED_AM |
+			XDMAC_CC_DAM_INCREMENTED_AM |
+			XDMAC_CC_PERID((uint32_t)DmaTrigSource::spi1rx);
+	xdmac_rx_cfg.mbr_bc = 0;
+	xdmac_tx_cfg.mbr_ds = 0;
+	xdmac_rx_cfg.mbr_sus = 0;
+	xdmac_rx_cfg.mbr_dus = 0;
+	xdmac_configure_transfer(XDMAC, DmacChanWiFiRx, &xdmac_rx_cfg);
+
+	xdmac_channel_set_descriptor_control(XDMAC, DmacChanWiFiRx, 0);
+#endif
+
+#if USE_DMAC_MANAGER
+	DmacManager::SetSourceAddress(DmacChanWiFiRx, &(WiFiSpiSercom->SPI.DATA.reg));
+	DmacManager::SetDestinationAddress(DmacChanWiFiRx, buf);
+	DmacManager::SetBtctrl(DmacChanWiFiRx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_INT);
+	DmacManager::SetDataLength(DmacChanWiFiRx, (transferLength + 3) >> 2);			// must do this one last
+	DmacManager::SetTriggerSourceSercomRx(DmacChanWiFiRx, WiFiSpiSercomNumber);
+#endif
+}
+
+/**
+ * \brief Set SPI slave transfer.
+ */
+void WiFiInterface::spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept
+{
+	spi_dma_disable();					// if we don't do this we get strange crashes on the Duet 3 Mini
+	DisableSpi();
+	spi_rx_dma_setup(bufferIn, dataInSize + sizeof(MessageHeaderEspToSam));
+	spi_tx_dma_setup(bufferOut, dataOutSize + sizeof(MessageHeaderSamToEsp));
+	spi_dma_enable();
+}
+
+// Set up the SPI system
+void WiFiInterface::SetupSpi() noexcept
+{
+	// Initialise the DMAC
+#if USE_PDC
+	spi_pdc = spi_get_pdc_base(ESP_SPI);
+	// The PDCs are masters 2 and 3 and the SRAM is slave 0. Give the PDCs the highest priority.
+	matrix_set_master_burst_type(0, MATRIX_ULBT_8_BEAT_BURST);
+	matrix_set_slave_default_master_type(0, MATRIX_DEFMSTR_LAST_DEFAULT_MASTER);
+	matrix_set_slave_priority(0, (3 << MATRIX_PRAS0_M2PR_Pos) | (3 << MATRIX_PRAS0_M3PR_Pos));
+	matrix_set_slave_slot_cycle(0, 8);
+#endif
+
+#if USE_DMAC
+	pmc_enable_periph_clk(ID_DMAC);
+	dmac_init(DMAC);
+	dmac_set_priority_mode(DMAC, DMAC_PRIORITY_ROUND_ROBIN);
+	dmac_enable(DMAC);
+
+	// The DMAC is master 4 and the SRAM is slave 0. Give the DMAC the highest priority.
+	matrix_set_slave_default_master_type(0, MATRIX_DEFMSTR_LAST_DEFAULT_MASTER);
+	matrix_set_slave_priority(0, (3 << MATRIX_PRAS0_M4PR_Pos));
+	// Set the slave slot cycle limit.
+	// If we leave it at the default value of 511 clock cycles, we get transmit underruns due to the HSMCI using the bus for too long.
+	// A value of 8 seems to work. I haven't tried other values yet.
+	matrix_set_slave_slot_cycle(0, 8);
+#endif
+
+#if USE_XDMAC
+	pmc_enable_periph_clk(ID_XDMAC);
+#endif
+
+#if USE_DMAC_MANAGER
+	// Nothing to do here
+#endif
+
+	// Set up the SPI pins
+#if SAME5x
+	for (Pin p : WiFiSpiSercomPins)
+	{
+		SetPinFunction(p, WiFiSpiSercomPinsMode);
+	}
+
+	Serial::EnableSercomClock(WiFiSpiSercomNumber);
+#else
+	SetPinFunction(APIN_ESP_SPI_SCK, SPIPeriphMode);
+	SetPinFunction(APIN_ESP_SPI_MOSI, SPIPeriphMode);
+	SetPinFunction(APIN_ESP_SPI_MISO, SPIPeriphMode);
+	SetPinFunction(APIN_ESP_SPI_SS0, SPIPeriphMode);
+
+	pmc_enable_periph_clk(ESP_SPI_INTERFACE_ID);
+#endif
+
+	spi_dma_disable();
+	ResetSpi();									// on the SAM4E this clears the transmit and receive registers and put the SPI into slave mode
+
+#if USE_DMAC
+	// Configure DMA RX channel
+	dmac_channel_set_configuration(DMAC, DmacChanWiFiRx,
+			DMAC_CFG_SRC_PER(DMA_HW_ID_SPI_RX) | DMAC_CFG_SRC_H2SEL | DMAC_CFG_SOD | DMAC_CFG_FIFOCFG_ASAP_CFG);
+
+	// Configure DMA TX channel
+	dmac_channel_set_configuration(DMAC, DmacChanWiFiTx,
+			DMAC_CFG_DST_PER(DMA_HW_ID_SPI_TX) | DMAC_CFG_DST_H2SEL | DMAC_CFG_SOD | DMAC_CFG_FIFOCFG_ASAP_CFG);
+#endif
+
+#if SAME5x
+	WiFiSpiSercom->SPI.INTENCLR.reg = 0xFF;		// disable all interrupts
+	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;		// clear any pending interrupts
+#else
+	(void)ESP_SPI->SPI_SR;						// clear any pending interrupt
+	ESP_SPI->SPI_IDR = SPI_IER_NSSR;			// disable the interrupt
+#endif
+
+	NVIC_SetPriority(ESP_SPI_IRQn, NvicPrioritySpi);
+	NVIC_EnableIRQ(ESP_SPI_IRQn);
+}
 
 #if !SAME5x
 static bool spi_dma_check_rx_complete() noexcept;
@@ -1843,339 +2177,6 @@ void WiFiInterface::TerminateDataPort() noexcept
 	}
 }
 
-#if USE_PDC
-static Pdc *spi_pdc;
-#endif
-
-#if USE_XDMAC
-
-// XDMAC hardware
-static xdmac_channel_config_t xdmac_tx_cfg, xdmac_rx_cfg;
-
-#endif
-
-#if !USE_PDC
-
-static inline void spi_rx_dma_enable() noexcept
-{
-# if USE_DMAC
-	dmac_channel_enable(DMAC, DmacChanWiFiRx);
-# endif
-
-# if USE_XDMAC
-	xdmac_channel_enable(XDMAC, DmacChanWiFiRx);
-# endif
-
-# if USE_DMAC_MANAGER
-	DmacManager::EnableChannel(DmacChanWiFiRx, DmacPrioWiFi);
-# endif
-}
-
-static inline void spi_tx_dma_enable() noexcept
-{
-# if USE_DMAC
-	dmac_channel_enable(DMAC, DmacChanWiFiTx);
-# endif
-
-# if USE_XDMAC
-	xdmac_channel_enable(XDMAC, DmacChanWiFiTx);
-# endif
-
-# if USE_DMAC_MANAGER
-	DmacManager::EnableChannel(DmacChanWiFiTx, DmacPrioWiFi);
-# endif
-}
-
-static inline void spi_rx_dma_disable() noexcept
-{
-# if USE_DMAC
-	dmac_channel_disable(DMAC, DmacChanWiFiRx);
-# endif
-
-# if USE_XDMAC
-	xdmac_channel_disable(XDMAC, DmacChanWiFiRx);
-# endif
-
-# if USE_DMAC_MANAGER
-	DmacManager::DisableChannel(DmacChanWiFiRx);
-# endif
-}
-
-static inline void spi_tx_dma_disable() noexcept
-{
-# if USE_DMAC
-	dmac_channel_disable(DMAC, DmacChanWiFiTx);
-# endif
-
-# if USE_XDMAC
-	xdmac_channel_disable(XDMAC, DmacChanWiFiTx);
-# endif
-
-#if USE_DMAC_MANAGER
-	DmacManager::DisableChannel(DmacChanWiFiTx);
-#endif
-}
-
-#endif
-
-static void spi_dma_disable() noexcept
-{
-#if USE_PDC
-	pdc_disable_transfer(spi_pdc, PERIPH_PTCR_TXTDIS | PERIPH_PTCR_RXTDIS);
-#else
-	spi_tx_dma_disable();
-	spi_rx_dma_disable();
-#endif
-}
-
-static inline void spi_dma_enable() noexcept
-{
-#if USE_PDC
-	pdc_enable_transfer(spi_pdc, PERIPH_PTCR_TXTEN | PERIPH_PTCR_RXTEN);
-#else
-	spi_rx_dma_enable();
-	spi_tx_dma_enable();
-#endif
-}
-
-#if !SAME5x
-
-static bool spi_dma_check_rx_complete() noexcept
-{
-#if USE_PDC
-	return true;
-#endif
-
-#if USE_DMAC
-	const uint32_t status = DMAC->DMAC_CHSR;
-	if (   ((status & (DMAC_CHSR_ENA0 << DmacChanWiFiRx)) == 0)		// controller is not enabled, perhaps because it finished a full buffer transfer
-		|| ((status & (DMAC_CHSR_EMPT0 << DmacChanWiFiRx)) != 0)	// controller is enabled, probably suspended, and the FIFO is empty
-	   )
-	{
-		// Disable the channel.
-		// We also need to set the resume bit, otherwise it remains suspended when we re-enable it.
-		DMAC->DMAC_CHDR = (DMAC_CHDR_DIS0 << DmacChanWiFiRx) | (DMAC_CHDR_RES0 << DmacChanWiFiRx);
-		return true;
-	}
-#endif
-
-#if USE_XDMAC
-	if ((XDMAC->XDMAC_GS & (1u << DmacChanWiFiRx)) == 0)
-	{
-		return true;			// channel is not enabled
-	}
-
-	if ((XDMAC->XDMAC_CHID[DmacChanWiFiRx].XDMAC_CC & (XDMAC_CC_RDIP | XDMAC_CC_WRIP)) == 0)
-	{
-		XDMAC->XDMAC_GD = (1u << DmacChanWiFiRx);						// disable the channel, which flushes the FIFO
-		while ((XDMAC->XDMAC_GS & (1u << DmacChanWiFiRx)) != 0) { }		// wait for disable to complete
-		return true;
-	}
-#endif
-
-	return false;
-}
-
-#endif
-
-static void spi_tx_dma_setup(const void *buf, uint32_t transferLength) noexcept
-{
-#if USE_PDC
-	pdc_packet_t pdc_spi_packet;
-	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
-	pdc_spi_packet.ul_size = transferLength;
-	pdc_tx_init(spi_pdc, &pdc_spi_packet, NULL);
-#endif
-
-#if USE_DMAC
-	DMAC->DMAC_EBCISR;		// clear any pending interrupts
-
-	dmac_channel_set_source_addr(DMAC, DmacChanWiFiTx, reinterpret_cast<uint32_t>(buf));
-	dmac_channel_set_destination_addr(DMAC, DmacChanWiFiTx, reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_TDR)));
-	dmac_channel_set_descriptor_addr(DMAC, DmacChanWiFiTx, 0);
-	dmac_channel_set_ctrlA(DMAC, DmacChanWiFiTx, transferLength | DMAC_CTRLA_SRC_WIDTH_WORD | DMAC_CTRLA_DST_WIDTH_BYTE);
-	dmac_channel_set_ctrlB(DMAC, DmacChanWiFiTx,
-		DMAC_CTRLB_SRC_DSCR | DMAC_CTRLB_DST_DSCR | DMAC_CTRLB_FC_MEM2PER_DMA_FC | DMAC_CTRLB_SRC_INCR_INCREMENTING | DMAC_CTRLB_DST_INCR_FIXED);
-#endif
-
-#if USE_XDMAC
-	xdmac_disable_interrupt(XDMAC, DmacChanWiFiTx);
-
-	xdmac_tx_cfg.mbr_ubc = transferLength;
-	xdmac_tx_cfg.mbr_sa = reinterpret_cast<uint32_t>(buf);
-	xdmac_tx_cfg.mbr_da = reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_TDR));
-	xdmac_tx_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN |
-			XDMAC_CC_MBSIZE_SINGLE |
-			XDMAC_CC_DSYNC_MEM2PER |
-			XDMAC_CC_CSIZE_CHK_1 |
-			XDMAC_CC_DWIDTH_BYTE |
-			XDMAC_CC_SIF_AHB_IF0 |
-			XDMAC_CC_DIF_AHB_IF1 |
-			XDMAC_CC_SAM_INCREMENTED_AM |
-			XDMAC_CC_DAM_FIXED_AM |
-			XDMAC_CC_PERID((uint32_t)DmaTrigSource::spi1tx);
-	xdmac_tx_cfg.mbr_bc = 0;
-	xdmac_tx_cfg.mbr_ds = 0;
-	xdmac_tx_cfg.mbr_sus = 0;
-	xdmac_tx_cfg.mbr_dus = 0;
-	xdmac_configure_transfer(XDMAC, DmacChanWiFiTx, &xdmac_tx_cfg);
-
-	xdmac_channel_set_descriptor_control(XDMAC, DmacChanWiFiTx, 0);
-#endif
-
-#if USE_DMAC_MANAGER
-	DmacManager::SetSourceAddress(DmacChanWiFiTx, buf);
-	DmacManager::SetDestinationAddress(DmacChanWiFiTx, &(WiFiSpiSercom->SPI.DATA.reg));
-	DmacManager::SetBtctrl(DmacChanWiFiTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_NOACT);
-	DmacManager::SetDataLength(DmacChanWiFiTx, (transferLength + 3) >> 2);			// must do this one last
-	DmacManager::SetTriggerSourceSercomTx(DmacChanWiFiTx, WiFiSpiSercomNumber);
-#endif
-}
-
-static void spi_rx_dma_setup(void *buf, uint32_t transferLength) noexcept
-{
-#if USE_PDC
-	pdc_packet_t pdc_spi_packet;
-	pdc_spi_packet.ul_addr = reinterpret_cast<uint32_t>(buf);
-	pdc_spi_packet.ul_size = transferLength;
-	pdc_rx_init(spi_pdc, &pdc_spi_packet, NULL);
-#endif
-
-#if USE_DMAC
-	DMAC->DMAC_EBCISR;		// clear any pending interrupts
-
-	dmac_channel_set_source_addr(DMAC, DmacChanWiFiRx, reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_RDR)));
-	dmac_channel_set_destination_addr(DMAC, DmacChanWiFiRx, reinterpret_cast<uint32_t>(buf));
-	dmac_channel_set_descriptor_addr(DMAC, DmacChanWiFiRx, 0);
-	dmac_channel_set_ctrlA(DMAC, DmacChanWiFiRx, transferLength | DMAC_CTRLA_SRC_WIDTH_BYTE | DMAC_CTRLA_DST_WIDTH_WORD);
-	dmac_channel_set_ctrlB(DMAC, DmacChanWiFiRx,
-		DMAC_CTRLB_SRC_DSCR | DMAC_CTRLB_DST_DSCR | DMAC_CTRLB_FC_PER2MEM_DMA_FC | DMAC_CTRLB_SRC_INCR_FIXED | DMAC_CTRLB_DST_INCR_INCREMENTING);
-#endif
-
-#if USE_XDMAC
-	xdmac_disable_interrupt(XDMAC, DmacChanWiFiRx);
-
-	xdmac_rx_cfg.mbr_ubc = transferLength;
-	xdmac_rx_cfg.mbr_da = reinterpret_cast<uint32_t>(buf);
-	xdmac_rx_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(ESP_SPI->SPI_RDR));
-	xdmac_rx_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN |
-			XDMAC_CC_MBSIZE_SINGLE |
-			XDMAC_CC_DSYNC_PER2MEM |
-			XDMAC_CC_CSIZE_CHK_1 |
-			XDMAC_CC_DWIDTH_BYTE|
-			XDMAC_CC_SIF_AHB_IF1 |
-			XDMAC_CC_DIF_AHB_IF0 |
-			XDMAC_CC_SAM_FIXED_AM |
-			XDMAC_CC_DAM_INCREMENTED_AM |
-			XDMAC_CC_PERID((uint32_t)DmaTrigSource::spi1rx);
-	xdmac_rx_cfg.mbr_bc = 0;
-	xdmac_tx_cfg.mbr_ds = 0;
-	xdmac_rx_cfg.mbr_sus = 0;
-	xdmac_rx_cfg.mbr_dus = 0;
-	xdmac_configure_transfer(XDMAC, DmacChanWiFiRx, &xdmac_rx_cfg);
-
-	xdmac_channel_set_descriptor_control(XDMAC, DmacChanWiFiRx, 0);
-#endif
-
-#if USE_DMAC_MANAGER
-	DmacManager::SetSourceAddress(DmacChanWiFiRx, &(WiFiSpiSercom->SPI.DATA.reg));
-	DmacManager::SetDestinationAddress(DmacChanWiFiRx, buf);
-	DmacManager::SetBtctrl(DmacChanWiFiRx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_DST | DMAC_BTCTRL_DSTINC | DMAC_BTCTRL_BEATSIZE_WORD | DMAC_BTCTRL_BLOCKACT_INT);
-	DmacManager::SetDataLength(DmacChanWiFiRx, (transferLength + 3) >> 2);			// must do this one last
-	DmacManager::SetTriggerSourceSercomRx(DmacChanWiFiRx, WiFiSpiSercomNumber);
-#endif
-}
-
-/**
- * \brief Set SPI slave transfer.
- */
-void WiFiInterface::spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept
-{
-	spi_dma_disable();					// if we don't do this we get strange crashes on the Duet 3 Mini
-	DisableSpi();
-	spi_rx_dma_setup(bufferIn, dataInSize + sizeof(MessageHeaderEspToSam));
-	spi_tx_dma_setup(bufferOut, dataOutSize + sizeof(MessageHeaderSamToEsp));
-	spi_dma_enable();
-}
-
-// Set up the SPI system
-void WiFiInterface::SetupSpi() noexcept
-{
-	// Initialise the DMAC
-#if USE_PDC
-	spi_pdc = spi_get_pdc_base(ESP_SPI);
-	// The PDCs are masters 2 and 3 and the SRAM is slave 0. Give the PDCs the highest priority.
-	matrix_set_master_burst_type(0, MATRIX_ULBT_8_BEAT_BURST);
-	matrix_set_slave_default_master_type(0, MATRIX_DEFMSTR_LAST_DEFAULT_MASTER);
-	matrix_set_slave_priority(0, (3 << MATRIX_PRAS0_M2PR_Pos) | (3 << MATRIX_PRAS0_M3PR_Pos));
-	matrix_set_slave_slot_cycle(0, 8);
-#endif
-
-#if USE_DMAC
-	pmc_enable_periph_clk(ID_DMAC);
-	dmac_init(DMAC);
-	dmac_set_priority_mode(DMAC, DMAC_PRIORITY_ROUND_ROBIN);
-	dmac_enable(DMAC);
-
-	// The DMAC is master 4 and the SRAM is slave 0. Give the DMAC the highest priority.
-	matrix_set_slave_default_master_type(0, MATRIX_DEFMSTR_LAST_DEFAULT_MASTER);
-	matrix_set_slave_priority(0, (3 << MATRIX_PRAS0_M4PR_Pos));
-	// Set the slave slot cycle limit.
-	// If we leave it at the default value of 511 clock cycles, we get transmit underruns due to the HSMCI using the bus for too long.
-	// A value of 8 seems to work. I haven't tried other values yet.
-	matrix_set_slave_slot_cycle(0, 8);
-#endif
-
-#if USE_XDMAC
-	pmc_enable_periph_clk(ID_XDMAC);
-#endif
-
-#if USE_DMAC_MANAGER
-	// Nothing to do here
-#endif
-
-	// Set up the SPI pins
-#if SAME5x
-	for (Pin p : WiFiSpiSercomPins)
-	{
-		SetPinFunction(p, WiFiSpiSercomPinsMode);
-	}
-
-	Serial::EnableSercomClock(WiFiSpiSercomNumber);
-#else
-	SetPinFunction(APIN_ESP_SPI_SCK, SPIPeriphMode);
-	SetPinFunction(APIN_ESP_SPI_MOSI, SPIPeriphMode);
-	SetPinFunction(APIN_ESP_SPI_MISO, SPIPeriphMode);
-	SetPinFunction(APIN_ESP_SPI_SS0, SPIPeriphMode);
-
-	pmc_enable_periph_clk(ESP_SPI_INTERFACE_ID);
-#endif
-
-	spi_dma_disable();
-	ResetSpi();									// on the SAM4E this clears the transmit and receive registers and put the SPI into slave mode
-
-#if USE_DMAC
-	// Configure DMA RX channel
-	dmac_channel_set_configuration(DMAC, DmacChanWiFiRx,
-			DMAC_CFG_SRC_PER(DMA_HW_ID_SPI_RX) | DMAC_CFG_SRC_H2SEL | DMAC_CFG_SOD | DMAC_CFG_FIFOCFG_ASAP_CFG);
-
-	// Configure DMA TX channel
-	dmac_channel_set_configuration(DMAC, DmacChanWiFiTx,
-			DMAC_CFG_DST_PER(DMA_HW_ID_SPI_TX) | DMAC_CFG_DST_H2SEL | DMAC_CFG_SOD | DMAC_CFG_FIFOCFG_ASAP_CFG);
-#endif
-
-#if SAME5x
-	WiFiSpiSercom->SPI.INTENCLR.reg = 0xFF;		// disable all interrupts
-	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;		// clear any pending interrupts
-#else
-	(void)ESP_SPI->SPI_SR;						// clear any pending interrupt
-	ESP_SPI->SPI_IDR = SPI_IER_NSSR;			// disable the interrupt
-#endif
-
-	NVIC_SetPriority(ESP_SPI_IRQn, NvicPrioritySpi);
-	NVIC_EnableIRQ(ESP_SPI_IRQn);
-}
-
 // Send a command to the ESP and get the result
 int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, uint32_t param32, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept
 {
@@ -2242,8 +2243,9 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	Cache::FlushBeforeDMASend(bufferOut, (dataOut != nullptr) ? sizeof(bufferOut->hdr) + dataOutLength : sizeof(bufferOut->hdr));
 
 #if SAME5x
+    ResetSpi();													// in case the DMA transfered an extra work
     spi_slave_dma_setup(dataOutLength, dataInLength);
-	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;		// clear any pending interrupts
+	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;						// clear any pending interrupts
 	WiFiSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_TXC;	// enable the end of transmit interrupt
 	EnableSpi();
 #else
@@ -2266,7 +2268,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	digitalWrite(SamTfrReadyPin, true);
 
 	// Wait until the DMA transfer is complete, with timeout
-	// On factory reset, use the startup timeout, as it involves re-formatting the SPIFFS partition.
+	// On factory reset, use the startup timeout as factory reset involves re-formatting the SPIFFS partition.
 	const uint32_t timeout = (cmd == NetworkCommand::networkFactoryReset) ? WiFiStartupMillis :
 		(cmd == NetworkCommand::networkAddSsid || cmd == NetworkCommand::networkAddEnterpriseSsid || cmd == NetworkCommand::networkDeleteSsid ||
 		 cmd == NetworkCommand::networkConfigureAccessPoint || cmd == NetworkCommand::networkRetrieveSsidData
@@ -2275,18 +2277,18 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	{
 		if (!TaskBase::Take(timeout))
 		{
+			transferPending = false;
+			spi_dma_disable();
+			DisableSpi();
+			++responseTimeoutCount;
 			if (reprap.Debug(Module::WiFi))
 			{
 				debugPrintf("ResponseTimeout, pending=%d\n", (int)transferPending);
 			}
-			transferPending = false;
-			spi_dma_disable();
-			++responseTimeoutCount;
 			return ResponseTimeout;
 		}
 	} while (transferPending);
 
-	espWaitingTask = nullptr;
 #if SAME5x	//TEMP DEBUG
 	CheckStackValue(9, ra);
 #endif
@@ -2297,8 +2299,8 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		{
 			++spiRxOverruns;
 		}
-		DisableSpi();
 		spi_dma_disable();
+		DisableSpi();
 	}
 #else
 	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
