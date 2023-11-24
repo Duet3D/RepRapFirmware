@@ -15,7 +15,8 @@
 #include <Tools/Tool.h>
 
 #if SUPPORT_CAN_EXPANSION
-# include "CAN/CanMotion.h"
+# include <CAN/CanMotion.h>
+# include <CAN/CanInterface.h>
 #endif
 
 constexpr uint32_t MoveStartPollInterval = 10;					// delay in milliseconds between checking whether we should start moves
@@ -586,32 +587,43 @@ void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 	}
 }
 
+unsigned int cmcErrors = 0, gam1Errors = 0, gam2Errors = 0;		//DEBUG
+
 // This is called from the step ISR when the current move has been completed. It may also be called from other places.
 void DDARing::CurrentMoveCompleted() noexcept
 {
-	DDA * const cdda = currentDda;					// capture volatile variable
+	const DDA * const cdda = currentDda;				// capture volatile variable
 
+	{
+		AtomicCriticalSectionLocker lock;				// disable interrupts before we touch the extrusion accumulators, in case the filament monitor interrupt has higher priority
 #if SUPPORT_REMOTE_COMMANDS
-	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
-	{
-		lastMoveStepsTaken[driver] = cdda->GetStepsTaken(driver);
-	}
-#endif
-
-	// Accumulate the extrusion from this move
-	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
-	{
-		liveCoordinates[drive] += cdda->GetRawEndCoordinate(drive);
-	}
-
-	// Disable interrupts before we touch any extrusion accumulators until after we set currentDda to null, in case the filament monitor interrupt has higher priority than ours
-	{
-		AtomicCriticalSectionLocker lock;
-		cdda->UpdateMovementAccumulators(movementAccumulators);
-		if (cdda->IsCheckingEndstops())
+		if (CanInterface::InExpansionMode())
 		{
-			Move::WakeMoveTaskFromISR();			// wake the Move task if we were checking endstops
+			for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+			{
+				const int32_t stepsTaken = cdda->GetStepsTaken(driver);
+				lastMoveStepsTaken[driver] = stepsTaken;
+				movementAccumulators[driver] += stepsTaken;
+			}
 		}
+		else
+#endif
+		{
+			// Accumulate the extrusion from this move
+			for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
+			{
+				liveCoordinates[drive] += cdda->GetRawEndCoordinate(drive);
+				const int32_t stepsTaken = cdda->GetStepsTaken(drive);
+				if (labs(stepsTaken) > 5000) { ++cmcErrors; }	//DEBUG
+				movementAccumulators[drive] += stepsTaken;
+			}
+
+			if (cdda->IsCheckingEndstops())
+			{
+				Move::WakeMoveTaskFromISR();		// wake the Move task if we were checking endstops
+			}
+		}
+
 		currentDda = nullptr;						// once we have done this, the DDA can be recycled by the Move task
 	}
 
@@ -637,7 +649,9 @@ int32_t DDARing::GetAccumulatedMovement(size_t drive, bool& isPrinting) noexcept
 	AtomicCriticalSectionLocker lock;							// we don't want a move to complete and the ISR update the movement accumulators while we are doing this
 	const DDA * const cdda = currentDda;						// capture volatile variable
 	const int32_t adjustment = (cdda == nullptr) ? 0 : cdda->GetStepsTaken(drive);
+	if (labs(adjustment) > 5000) { ++gam1Errors; }
 	const int32_t ret = movementAccumulators[drive];
+	if (labs(ret) > 5000) { ++gam2Errors; }
 	movementAccumulators[drive] = -adjustment;
 	isPrinting = extrudersPrinting;
 	return ret + adjustment;

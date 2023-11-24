@@ -1353,7 +1353,7 @@ void Move::LaserTaskRun() noexcept
 
 // Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
 // Returns the number of motor steps moved since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
-// This is called from the filament monitor ISR and from FilamentMonitor::Spin
+// This is called from the filament monitor ISR and from FilamentMonitor::Spin with interrupts disabled
 int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noexcept
 {
 	for (size_t ringNumber = 0; ringNumber < NumMovementSystems; ++ringNumber)

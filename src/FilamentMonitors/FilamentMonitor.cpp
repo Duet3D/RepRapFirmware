@@ -293,6 +293,8 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 
 static uint32_t inIsrCalls = 0, notInIsrCalls = 0;		//TEMP DEBUG
 
+extern unsigned int cmcErrors, gam1Errors, gam2Errors;
+
 // Check the status of all the filament monitors.
 // Currently, the status for all filament monitors (on expansion boards as well as on the main board) is checked by the main board, which generates any necessary events.
 /*static*/ void FilamentMonitor::Spin() noexcept
@@ -346,7 +348,8 @@ static uint32_t inIsrCalls = 0, notInIsrCalls = 0;		//TEMP DEBUG
 #if 1	//DEBUG
 					if (labs(extruderStepsCommanded) > 5000)
 					{
-						reprap.GetPlatform().MessageF(GenericMessage, "DEBUG: %" PRIi32 " extruder steps commanded, from ISR=%u, wasPrinting=%u\n", extruderStepsCommanded, fromIsr, isPrinting);
+						reprap.GetPlatform().MessageF(GenericMessage, "DEBUG: %" PRIi32 " extruder steps commanded, from ISR=%u, wasPrinting=%u, errs %u %u %u\n",
+														extruderStepsCommanded, fromIsr, isPrinting, cmcErrors, gam1Errors, gam2Errors);
 					}
 #endif
 					if ((fs.enableMode == 2 || gCodes.IsReallyPrinting()) && !gCodes.IsSimulating())
