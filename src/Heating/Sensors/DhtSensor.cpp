@@ -202,7 +202,10 @@ void DhtTemperatureSensor::TakeReading() noexcept
 	delay(MaximumReadTime);
 	lastReadingAttemptTime = millis();
 
+	// Data should have been received at this point.
+	// Pull the DATA line to HIGH again, because the pull-up resistor alone may be insufficient for the sensor to remain stable.
 	irqPort.DetachInterrupt();
+	port.SetMode(PinAccess::write1);
 
 	// Attempt to convert the signal into temp+RH values
 	float t;
