@@ -37,14 +37,6 @@ public:
 
 	float PushBabyStepping(size_t axis, float amount) noexcept;							// Try to push some babystepping through the lookahead queue, returning the amount pushed
 
-	void Interrupt(Platform& p) noexcept SPEED_CRITICAL;								// Check endstops, generate step pulses
-	void OnMoveCompleted(DDA *cdda, Platform& p) noexcept;								// called when the state has been set to 'completed'
-	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;							// Schedule the next step interrupt, returning true if we failed because it is due immediately
-	void CurrentMoveCompleted() noexcept SPEED_CRITICAL;								// Signal that the current move has just been completed
-
-	uint32_t ExtruderPrintingSince() const noexcept { return extrudersPrintingSince; }	// When we started doing normal moves after the most recent extruder-only move
-	int32_t GetAccumulatedMovement(size_t drive, bool& isPrinting) noexcept;
-
 	uint32_t GetScheduledMoves() const noexcept { return scheduledMoves; }				// How many moves have been scheduled?
 	uint32_t GetCompletedMoves() const noexcept { return completedMoves; }				// How many moves have been completed?
 	void ResetMoveCounters() noexcept { scheduledMoves = completedMoves = 0; }
@@ -52,17 +44,11 @@ public:
 	float GetSimulationTime() const noexcept { return simulationTime; }
 	void ResetSimulationTime() noexcept { simulationTime = 0.0; }
 
-#if HAS_SMART_DRIVERS
-	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;
-#endif
-
-	DDA *GetCurrentDDA() const noexcept { return currentDda; }							// Return the DDA of the currently-executing move, or nullptr
-
-	float GetRequestedSpeedMmPerSec() const noexcept;
-	float GetTopSpeedMmPerSec() const noexcept;
-	float GetAccelerationMmPerSecSquared() const noexcept;
-	float GetDecelerationMmPerSecSquared() const noexcept;
-	float GetTotalExtrusionRate() const noexcept;
+	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(lastRequestedSpeed); }
+	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(lastTopSpeed); }
+	float GetAccelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(lastAcceleration); }
+	float GetDecelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(lastDeceleration); }
+	float GetTotalExtrusionRate() const noexcept { return InverseConvertSpeedToMmPerSec(lastExtrusionRate); }
 
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the position at the end of the last queued move in untransformed coords
 #if SUPPORT_ASYNC_MOVES
@@ -105,17 +91,11 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	bool StartNextMove(Platform& p, uint32_t startTime) noexcept SPEED_CRITICAL;		// Start the next move, returning true if laser or IObits need to be controlled
 	uint32_t PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept;
 
-	static void TimerCallback(CallbackParameter p) noexcept;
-
-	DDA* volatile currentDda;
 	DDA* addPointer;
 	DDA* volatile getPointer;
 	DDA* checkPointer;
-
-	StepTimer timer;															// Timer object to control getting step interrupts
 
 	volatile float liveCoordinates[MaxAxesPlusExtruders];						// The endpoint that the machine moved to in the last completed move
 
@@ -125,6 +105,14 @@ private:
 	uint32_t scheduledMoves;													// Move counters for the code queue
 	volatile uint32_t completedMoves;											// This one is modified by an ISR, hence volatile
 	volatile int32_t numHiccups;												// Modified in the ISR
+
+//	int32_t endPoint[MaxAxesPlusExtruders];								  		// Machine coordinates of the endpoint of the last dispatched move
+
+	float lastRequestedSpeed = 0.0;												// the requested speed of the last move that was dispatched to the segment queue
+	float lastTopSpeed = 0.0;													// the actual top speed of the last move that was dispatched to the segment queue
+	float lastAcceleration = 0.0;												// the actual acceleration of the last move that was dispatched to the segment queue
+	float lastDeceleration = 0.0;												// the actual deceleration of the last move that was dispatched to the segment queue
+	float lastExtrusionRate = 0.0;												// the extrusion rate of the last move that was dispatched to the segment queue
 
 	unsigned int numLookaheadUnderruns;											// How many times we have run out of moves to adjust during lookahead
 	unsigned int numPrepareUnderruns;											// How many times we wanted a new move but there were only un-prepared moves in the queue
@@ -136,7 +124,6 @@ private:
 #if SUPPORT_REMOTE_COMMANDS
 	volatile int32_t lastMoveStepsTaken[NumDirectDrivers];						// how many steps were taken in the last move we did
 #endif
-	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 				// Accumulated motor steps, used by filament monitors
 	volatile uint32_t extrudersPrintingSince;									// The milliseconds clock time when extrudersPrinting was set to true
 
 	volatile bool extrudersPrinting;											// Set whenever an extruder starts a printing move, cleared by a non-printing extruder move
@@ -166,22 +153,6 @@ pre(getPointer->GetState() == DDA::frozen)
 #else
 	return false;
 #endif
-}
-
-#if HAS_SMART_DRIVERS
-inline uint32_t DDARing::GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept
-{
-	const DDA * const cdda = currentDda;		// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetStepInterval(axis, microstepShift) : 0;
-}
-#endif
-
-// Schedule the next step interrupt for this DDA ring
-// Base priority must be >= NvicPriorityStep when calling this
-inline bool DDARing::ScheduleNextStepInterrupt() noexcept
-{
-	DDA * const cdda = currentDda;				// capture volatile variable
-	return (cdda != nullptr) && cdda->ScheduleNextStepInterrupt(timer);
 }
 
 #endif /* SRC_MOVEMENT_DDARING_H_ */

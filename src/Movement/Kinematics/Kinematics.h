@@ -168,7 +168,7 @@ public:
 
 	// This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 	// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
-	virtual void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept = 0;
+	virtual void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], Move& move) const noexcept = 0;
 
 	// Return the type of homing we do
 	virtual HomingMode GetHomingMode() const noexcept = 0;

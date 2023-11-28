@@ -38,14 +38,9 @@ enum class DMState : uint8_t
 class DriveMovement
 {
 public:
-	friend class DDA;
+	friend class Move;
 
-	DriveMovement(DriveMovement *next) noexcept;
-
-	void* operator new(size_t count) noexcept { return Tasks::AllocPermanent(count); }
-	void* operator new(size_t count, std::align_val_t align) noexcept { return Tasks::AllocPermanent(count, align); }
-	void operator delete(void* ptr) noexcept {}
-	void operator delete(void* ptr, std::align_val_t align) noexcept {}
+	DriveMovement() noexcept;
 
 	bool CalcNextStepTime(const DDA &dda) noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
@@ -61,11 +56,6 @@ public:
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
 #endif
 
-	static void InitialAllocate(unsigned int num) noexcept;
-	static unsigned int NumCreated() noexcept { return numCreated; }
-	static DriveMovement *Allocate(size_t p_drive) noexcept;
-	static void Release(DriveMovement *item) noexcept;
-
 private:
 	bool CalcNextStepTimeFull(const DDA &dda) noexcept SPEED_CRITICAL;
 	bool NewCartesianSegment() noexcept SPEED_CRITICAL;
@@ -75,9 +65,6 @@ private:
 #endif
 
 	void CheckDirection(bool reversed) noexcept;
-
-	static DriveMovement *freeList;
-	static unsigned int numCreated;
 
 	// Parameters common to Cartesian, delta and extruder moves
 
@@ -215,13 +202,6 @@ inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 		netStepsTaken = nextStep - 1;
 	}
 	return (direction) ? netStepsTaken : -netStepsTaken;
-}
-
-// This is inlined because it is only called from one place
-inline void DriveMovement::Release(DriveMovement *item) noexcept
-{
-	item->nextDM = freeList;
-	freeList = item;
 }
 
 inline void DriveMovement::CheckDirection(bool reversed) noexcept

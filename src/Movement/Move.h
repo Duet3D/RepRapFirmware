@@ -16,6 +16,9 @@
 #include "BedProbing/RandomProbePointSet.h"
 #include "BedProbing/Grid.h"
 #include "Kinematics/Kinematics.h"
+#include "MoveSegment.h"
+#include "DriveMovement.h"
+#include "StepTimer.h"
 #include <GCodes/RestorePoint.h>
 #include <Math/Deviation.h>
 
@@ -107,6 +110,10 @@ public:
 	float GetPressureAdvanceClocks(size_t extruder) const noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
+	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
+	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
+	void StopDrivers(uint16_t whichDrives) noexcept;
+
 	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept
 	{
@@ -176,6 +183,7 @@ public:
 	float GetAccelerationMmPerSecSquared() const noexcept { return rings[0].GetAccelerationMmPerSecSquared(); }
 	float GetDecelerationMmPerSecSquared() const noexcept { return rings[0].GetDecelerationMmPerSecSquared(); }
 	float GetTotalExtrusionRate() const noexcept { return rings[0].GetTotalExtrusionRate(); }
+	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;
 
 	void AdjustLeadscrews(const floatc_t corrections[]) noexcept;							// Called by some Kinematics classes to adjust the leadscrews
 
@@ -193,6 +201,8 @@ public:
 	// Scanning Z probes
 	void SetProbeReadingNeeded() noexcept { probeReadingNeeded = true; }
 
+	int32_t GetStepsTaken(size_t logicalDrive) const noexcept;
+
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;			// Get the current step interval for this axis or extruder
 #endif
@@ -203,6 +213,8 @@ public:
 	GCodeResult ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Configure height following
 	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Start/stop height following
 #endif
+
+	void Interrupt() noexcept;
 
 	static int32_t MotorMovementToSteps(size_t drive, float coord) noexcept;				// Convert a single motor position to number of steps
 	static float MotorStepsToMovement(size_t drive, int32_t endpoint) noexcept;				// Convert number of motor steps to motor position
@@ -215,8 +227,9 @@ public:
 	static void WakeLaserTaskFromISR() noexcept;											// wake up the laser task, called at the start of a new move
 
 	static void WakeMoveTaskFromISR() noexcept;
-
 	static const TaskBase *GetMoveTaskHandle() noexcept { return &moveTask; }
+
+	static void TimerCallback(CallbackParameter p) noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept					// add a move from the ATE to the movement queue
@@ -229,11 +242,6 @@ public:
 	{
 		rings[0].AddMoveFromRemote(msg);
 		MoveAvailable();
-	}
-
-	void StopDrivers(uint16_t whichDrives) noexcept
-	{
-		rings[0].StopDrivers(whichDrives);
 	}
 
 	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
@@ -259,13 +267,73 @@ private:
 
 	const char *GetCompensationTypeString() const noexcept;
 
+	float tanXY() const noexcept { return tangents[0]; }
+	float tanYZ() const noexcept { return tangents[1]; }
+	float tanXZ() const noexcept { return tangents[2]; }
+
+	void DeactivateDM(size_t drive) noexcept;
+	void CheckEndstops(Platform& platform) noexcept;
+	void StepDrivers(Platform& p, uint32_t now) noexcept SPEED_CRITICAL;			// Take one step of the DDA, called by timer interrupt.
+	void SimulateSteppingDrivers(Platform& p) noexcept;								// For debugging use
+	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;						// Schedule the next interrupt, returning true if we can't because it is already due
+	void StopDrive(size_t drive) noexcept;											// stop movement of a drive and recalculate the endpoint
+	void InsertDM(DriveMovement *dm) noexcept;										// insert a DM into the active list, keeping it in step time order
+
+#if SUPPORT_CAN_EXPANSION
+	uint32_t InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
+#else
+	void InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
+#endif
+
+	// Note on the following constant:
+	// If we calculate the step interval on every clock, we reach a point where the calculation time exceeds the step interval.
+	// The worst case is pure Z movement on a delta. On a Mini Kossel with 80 steps/mm with this firmware running on a Duet (84MHx SAM3X8 processor),
+	// the calculation can just be managed in time at speeds of 15000mm/min (step interval 50us), but not at 20000mm/min (step interval 37.5us).
+	// Therefore, where the step interval falls below 60us, we don't calculate on every step.
+	// Note: the above measurements were taken some time ago, before some firmware optimisations.
+#if SAME70
+	// Use the same defaults as for the SAM4E for now.
+	static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// the smallest sensible interval between calculations (40us) in step timer clocks
+	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
+#elif SAM4E || SAM4S || SAME5x
+	static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// the smallest sensible interval between calculations (40us) in step timer clocks
+	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
+#else
+# error Unsupported processor
+#endif
+	static constexpr uint32_t MaxStepInterruptTime = 10 * StepTimer::MinInterruptInterval;	// the maximum time we spend looping in the ISR, in step clocks
+	static constexpr uint32_t WakeupTime = (100 * StepClockRate)/1000000;					// stop resting 100us before the move is due to end
+	static constexpr uint32_t HiccupIncrement = HiccupTime/2;								// how much we increase the hiccup time by on each attempt
+
+	static constexpr uint32_t UsualMinimumPreparedTime = StepClockRate/10;					// 100ms
+	static constexpr uint32_t AbsoluteMinimumPreparedTime = StepClockRate/20;				// 50ms
+
 	// Move task stack size
 	// 250 is not enough when Move and DDA debug are enabled
 	// deckingman's system (MB6HC with CAN expansion) needs at least 365 in 3.3beta3
 	static constexpr unsigned int MoveTaskStackWords = 450;
 	static Task<MoveTaskStackWords> moveTask;
 
+	static constexpr size_t LaserTaskStackWords = 300;	// stack size in dwords for the laser and IOBits task (increased to support scanning Z probes)
+	static Task<LaserTaskStackWords> *laserTask;		// the task used to manage laser power or IOBits
+
+	// Member data
 	DDARing rings[NumMovementSystems];
+
+	DriveMovement dms[MaxAxesPlusExtruders];
+	MoveSegment *segments[MaxAxesPlusExtruders];
+	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 	// Accumulated motor steps, used by filament monitors
+	int32_t axisPositions[MaxAxesPlusExtruders];
+
+#ifdef DUET3_MB6XD
+	volatile uint32_t lastStepHighTime;								// when we last started a step pulse
+#else
+	volatile uint32_t lastStepLowTime;								// when we last completed a step pulse to a slow driver
+#endif
+	volatile uint32_t lastDirChangeTime;							// when we last change the DIR signal to a slow driver
+
+	StepTimer timer;												// Timer object to control getting step interrupts
+	DriveMovement *activeDMs;
 
 #if SUPPORT_ASYNC_MOVES
 	AsyncMove auxMove;
@@ -285,13 +353,10 @@ private:
 
 	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
+	uint32_t numHiccups = 0;
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
 	bool compensateXY;									// If true then we compensate for XY skew by adjusting the Y coordinate; else we adjust the X coordinate
-
-	float tanXY() const noexcept { return tangents[0]; }
-	float tanYZ() const noexcept { return tangents[1]; }
-	float tanXZ() const noexcept { return tangents[2]; }
 
 	HeightMap heightMap;    							// The grid definition in use and height map for G29 bed probing
 	RandomProbePointSet probePoints;					// G30 bed probe points
@@ -318,9 +383,7 @@ private:
 	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
 	bool useTaper;										// True to taper off the compensation
 	bool probeReadingNeeded = false;					// true if the laser task needs to take a Z probe reading
-
-	static constexpr size_t LaserTaskStackWords = 300;	// stack size in dwords for the laser and IOBits task (increased to support scanning Z probes)
-	static Task<LaserTaskStackWords> *laserTask;		// the task used to manage laser power or IOBits
+	bool checkingEndstops;								// true if we are doing an isolated move that checks endstops
 };
 
 //******************************************************************************************************
@@ -379,13 +442,58 @@ inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept
 	return (extruder < MaxExtruders) ? extruderShapers[extruder].GetKclocks() : 0.0;
 }
 
-#if !SUPPORT_ASYNC_MOVES
-
-// Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
-// Returns the number of motor steps moved since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
-inline int32_t Move::GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noexcept
+// Schedule the next interrupt, returning true if we can't because it is already due
+// Base priority must be >= NvicPriorityStep when calling this
+inline __attribute__((always_inline)) bool Move::ScheduleNextStepInterrupt() noexcept
 {
-	return rings[0].GetAccumulatedMovement(drive, isPrinting);
+	if (activeDMs != nullptr)
+	{
+		return timer.ScheduleCallbackFromIsr(activeDMs->nextStepTime);
+	}
+	return false;
+}
+
+// Insert the specified drive into the step list, in step time order.
+// We insert the drive before any existing entries with the same step time for best performance. Now that we generate step pulses
+// for multiple motors simultaneously, there is no need to preserve round-robin order.
+inline void Move::InsertDM(DriveMovement *dm) noexcept
+{
+	DriveMovement **dmp = &activeDMs;
+	while (*dmp != nullptr && (*dmp)->nextStepTime < dm->nextStepTime)
+	{
+		dmp = &((*dmp)->nextDM);
+	}
+	dm->nextDM = *dmp;
+	*dmp = dm;
+}
+
+// Force an end point
+inline void Move::SetDriveCoordinate(int32_t a, size_t drive) noexcept
+{
+	endPoint[drive] = a;
+	flags.endCoordinatesValid = false;
+}
+
+#if SUPPORT_CAN_EXPANSION
+
+// Insert a hiccup, returning the amount of time inserted
+// Note, clocksNeeded may be less than DDA:WakeupTime but that doesn't matter, the subtraction will wrap around and push the new moveStartTime on a little
+inline __attribute__((always_inline)) uint32_t Move::InsertHiccup(uint32_t whenNextInterruptWanted) noexcept
+{
+	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
+	const uint32_t oldStartTime = afterPrepare.moveStartTime;
+	afterPrepare.moveStartTime = whenNextInterruptWanted - ticksDueAfterStart;
+	return afterPrepare.moveStartTime - oldStartTime;
+}
+
+#else
+
+// Insert a hiccup
+// Note, clocksNeeded may be less than DDA:WakeupTime but that doesn't matter, the subtraction will wrap around and push the new moveStartTime on a little
+inline __attribute__((always_inline)) void Move::InsertHiccup(uint32_t whenNextInterruptWanted) noexcept
+{
+	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
+	afterPrepare.moveStartTime = whenNextInterruptWanted - ticksDueAfterStart;
 }
 
 #endif
@@ -396,7 +504,9 @@ inline int32_t Move::GetAccumulatedExtrusion(size_t drive, bool& isPrinting) noe
 // This is called from the stepper drivers SPI interface ISR
 inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept
 {
-	return (simulationMode == SimulationMode::off) ? rings[0].GetStepInterval(axis, microstepShift) : 0;
+	if (simulationMode == SimulationMode::off) { return 0; }
+	AtomicCriticalSectionLocker lock;
+	return (segments[axis] == nullptr) ? 0 : dms[axis].GetStepInterval(microstepShift);
 }
 
 #endif

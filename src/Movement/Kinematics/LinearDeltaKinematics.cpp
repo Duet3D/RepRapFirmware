@@ -1028,20 +1028,20 @@ bool LinearDeltaKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
-void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
+void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], Move& move) const noexcept
 {
 	if (axis < numTowers)
 	{
 		if (highEnd)
 		{
-			dda.SetDriveCoordinate(lrintf(homedCarriageHeights[axis] * stepsPerMm[axis]), axis);
+			move.SetDriveCoordinate(lrintf(homedCarriageHeights[axis] * stepsPerMm[axis]), axis);
 		}
 	}
 	else
 	{
 		// Assume that any additional axes are linear
 		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
-		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		move.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 	}
 }
 

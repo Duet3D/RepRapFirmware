@@ -227,7 +227,6 @@ Move::Move() noexcept
 #if SUPPORT_ASYNC_MOVES
 	rings[1].Init1(AuxDdaRingLength);
 #endif
-	DriveMovement::InitialAllocate(InitialNumDms);
 }
 
 void Move::Init() noexcept
@@ -255,6 +254,19 @@ void Move::Init() noexcept
 	simulationMode = SimulationMode::off;
 	longestGcodeWaitInterval = 0;
 	bedLevellingMoveAvailable = false;
+	activeDMs = nullptr;
+	for (MoveSegment*& seg : segments)
+	{
+		seg = nullptr;
+	}
+	for (volatile int32_t& acc : movementAccumulators)
+	{
+		acc = 0;
+	}
+	for (int32_t& pos : axisPositions)
+	{
+		pos = 0;
+	}
 
 	moveTask.Create(MoveStart, "Move", this, TaskPriority::MovePriority);
 }
@@ -275,6 +287,8 @@ void Move::Exit() noexcept
 
 [[noreturn]] void Move::MoveLoop() noexcept
 {
+
+	timer.SetCallback(Move::TimerCallback, CallbackParameter(this));
 	for (;;)
 	{
 		if (reprap.IsStopped())
@@ -531,12 +545,12 @@ void Move::Diagnostics(MessageType mtype) noexcept
 
 	Platform& p = reprap.GetPlatform();
 	p.MessageF(mtype,
-				"=== Move ===\nDMs created %u, segments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f"
+				"=== Move ===\nSegments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f"
 #if 1	//debug
 				", ebfmin %.2f, ebfmax %.2f"
 #endif
 				"\n",
-						DriveMovement::NumCreated(), MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift
+						MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift
 #if 1
 						, (double)minExtrusionPending, (double)maxExtrusionPending
 #endif
@@ -1349,30 +1363,410 @@ void Move::LaserTaskRun() noexcept
 	}
 }
 
-#if SUPPORT_ASYNC_MOVES
-
 // Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
 // Returns the number of motor steps moved since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
 // This is called from the filament monitor ISR and from FilamentMonitor::Spin
 int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noexcept
 {
-	for (size_t ringNumber = 0; ringNumber < NumMovementSystems; ++ringNumber)
+	AtomicCriticalSectionLocker lock;							// we don't want a move to complete and the ISR update the movement accumulators while we are doing this
+	const int32_t ret = movementAccumulators[logicalDrive];
+	const int32_t adjustment = GetStepsTaken(logicalDrive);
+	movementAccumulators[logicalDrive] = -adjustment;
+	isPrinting = extrudersPrinting;
+	return ret + adjustment;
+}
+
+// ISR for the step interrupt
+void Move::Interrupt() noexcept
+{
+	if (activeDMs != nullptr)
 	{
-		if (
-#if SUPPORT_REMOTE_COMMANDS
-			CanInterface::InExpansionMode() ||
-#endif
-			reprap.GetGCodes().GetMovementState(ringNumber).GetAxesAndExtrudersOwned().IsBitSet(logicalDrive)
-		   )
+		Platform& p = reprap.GetPlatform();
+		uint32_t now = StepTimer::GetTimerTicks();
+		const uint32_t isrStartTime = now;
+		for (;;)
 		{
-			return rings[ringNumber].GetAccumulatedMovement(logicalDrive, isPrinting);
+			// Generate steps for the current move segments
+			StepDrivers(p, now);								// check endstops if necessary and step the drivers
+
+			// Schedule a callback at the time when the next step is due, and quit unless it is due immediately
+			if (!ScheduleNextStepInterrupt())
+			{
+				break;
+			}
+
+			// The next step is due immediately. Check whether we have been in this ISR for too long already and need to take a break
+			now = StepTimer::GetTimerTicks();
+			const uint32_t clocksTaken = now - isrStartTime;
+			if (clocksTaken >= MaxStepInterruptTime)
+			{
+				// Force a break by updating the move start time.
+				++numHiccups;
+#if SUPPORT_CAN_EXPANSION
+				uint32_t cumulativeHiccupTime = 0;
+#endif
+				for (uint32_t hiccupTime = HiccupTime; ; hiccupTime += HiccupIncrement)
+				{
+#if SUPPORT_CAN_EXPANSION
+					cumulativeHiccupTime += InsertHiccup(now + hiccupTime);
+#else
+					cdda->InsertHiccup(now + hiccupTime);
+#endif
+					// Reschedule the next step interrupt. This time it should succeed if the hiccup time was long enough.
+					if (!ScheduleNextStepInterrupt())
+					{
+#if SUPPORT_CAN_EXPANSION
+						CanMotion::InsertHiccup(cumulativeHiccupTime);
+#endif
+						return;
+					}
+					// We probably had an interrupt that delayed us further. Recalculate the hiccup length, also we increase the hiccup time on each iteration.
+					now = StepTimer::GetTimerTicks();
+				}
+			}
+		}
+	}
+}
+
+// Move timer callback function
+/*static*/ void Move::TimerCallback(CallbackParameter p) noexcept
+{
+	static_cast<Move*>(p.vp)->Interrupt();
+}
+
+// Remove this drive from the list of drives with steps due and put it in the completed list
+// Called from the step ISR only.
+void Move::DeactivateDM(size_t drive) noexcept
+{
+	DriveMovement **dmp = &activeDMs;
+	while (*dmp != nullptr)
+	{
+		DriveMovement * const dm = *dmp;
+		if (dm->drive == drive)
+		{
+			(*dmp) = dm->nextDM;
+			dm->state = DMState::idle;
+			break;
+		}
+		dmp = &(dm->nextDM);
+	}
+}
+
+// Check the endstops, given that we know that this move checks endstops.
+// Either this move is currently executing (DDARing.currentDDA == this) and the state is 'executing', or we have almost finished preparing it and the state is 'provisional'.
+void Move::CheckEndstops(Platform& platform) noexcept
+{
+	for (;;)
+	{
+		const EndstopHitDetails hitDetails = platform.GetEndstops().CheckEndstops();
+		switch (hitDetails.GetAction())
+		{
+		case EndstopHitAction::stopAll:
+			MoveAborted();											// set the state to completed and recalculate the endpoints
+#if SUPPORT_CAN_EXPANSION
+			CanMotion::StopAll(*this);
+#endif
+			if (hitDetails.isZProbe)
+			{
+				reprap.GetGCodes().MoveStoppedByZProbe();
+			}
+			else if (hitDetails.setAxisLow)
+			{
+				kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, platform.GetDriveStepsPerUnit(), *this);
+				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+			}
+			else if (hitDetails.setAxisHigh)
+			{
+				kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, platform.GetDriveStepsPerUnit(), *this);
+				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+			}
+			return;
+
+		case EndstopHitAction::stopAxis:
+			StopDrive(hitDetails.axis);								// we must stop the drive before we mess with its coordinates
+#if SUPPORT_CAN_EXPANSION
+			CanMotion::StopAxis(*this, hitDetails.axis);
+#endif
+			if (hitDetails.setAxisLow)
+			{
+				kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, platform.GetDriveStepsPerUnit(), *this);
+				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+			}
+			else if (hitDetails.setAxisHigh)
+			{
+				reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, true, platform.GetDriveStepsPerUnit(), *this);
+				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+			}
+			break;
+
+		case EndstopHitAction::stopDriver:
+#if SUPPORT_CAN_EXPANSION
+			if (hitDetails.driver.IsRemote())
+			{
+				CanMotion::StopDriver(*this, hitDetails.axis, hitDetails.driver);
+			}
+			else
+#endif
+			{
+				platform.DisableSteppingDriver(hitDetails.driver.localDriver);
+			}
+			if (hitDetails.setAxisLow)
+			{
+				kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, platform.GetDriveStepsPerUnit(), *this);
+				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+			}
+			else if (hitDetails.setAxisHigh)
+			{
+				kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, platform.GetDriveStepsPerUnit(), *this);
+				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+			}
+			break;
+
+		default:
+			return;
+		}
+	}
+}
+
+// Generate the step pulses of internal drivers used by this DDA
+// Sets the status to 'completed' if the move is complete and the next move should be started
+void Move::StepDrivers(Platform& p, uint32_t now) noexcept
+{
+	// Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
+	if (checkingEndstops)		// if any homing switches or the Z probe is enabled in this move
+	{
+		CheckEndstops(p);			// call out to a separate function because this may help cache usage in the more common and time-critical case where we don't call it
+		if (state == completed)		// we may have completed the move due to triggering an endstop switch or Z probe
+		{
+			return;
 		}
 	}
 
-	// We didn't find a movement system that owns the extruder
-	isPrinting = false;
-	return 0;
+	uint32_t driversStepping = 0;
+	DriveMovement* dm = activeDMs;
+	const uint32_t elapsedTime = (now - afterPrepare.moveStartTime) + StepTimer::MinInterruptInterval;
+#if 0	//DEBUG
+	if (dm != nullptr && elapsedTime >= dm->nextStepTime)
+	{
+		const uint32_t delay = elapsedTime - dm->nextStepTime;
+		if (dm->nextStep != 1)
+		{
+			if (delay > maxDelay) { maxDelay = delay; }
+			if (delay > lastDelay && (delay - lastDelay) > maxDelayIncrease) { maxDelayIncrease = delay - lastDelay; }
+		}
+		lastDelay = delay;
+	}
+#endif	//END DEBUG
+	while (dm != nullptr && elapsedTime >= dm->nextStepTime)		// if the next step is due
+	{
+		driversStepping |= p.GetDriversBitmap(dm->drive);
+#if 0	// debug only
+		++stepsDone[dm->drive];
+#endif
+		dm = dm->nextDM;
+	}
+
+	driversStepping &= p.GetSteppingEnabledDrivers();
+
+#ifdef DUET3_MB6XD
+	if (driversStepping != 0)
+	{
+		// Wait until step low and direction setup time have elapsed
+		const uint32_t locLastStepPulseTime = lastStepHighTime;
+		const uint32_t locLastDirChangeTime = lastDirChangeTime;
+		while (now - locLastStepPulseTime < p.GetSlowDriverStepPeriodClocks() || now - locLastDirChangeTime < p.GetSlowDriverDirSetupClocks())
+		{
+			now = StepTimer::GetTimerTicks();
+		}
+
+		StepPins::StepDriversLow(StepPins::AllDriversBitmap & (~driversStepping));		// disable the step pins of the drivers we don't want to step
+		StepPins::StepDriversHigh(driversStepping);										// set up the drivers that we do want to step
+
+		// Trigger the TC so that it generates a step pulse
+		STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_SWTRG;
+		lastStepHighTime = StepTimer::GetTimerTicks();
+	}
+
+	// Calculate the next step times. We must do this even if no local drivers are stepping in case endstops or Z probes are active.
+	for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
+	{
+		(void)dm2->CalcNextStepTime(*this);							// calculate next step times
+	}
+#else
+# if SUPPORT_SLOW_DRIVERS											// if supporting slow drivers
+	if ((driversStepping & p.GetSlowDriversBitmap()) != 0)			// if using some slow drivers
+	{
+		// Wait until step low and direction setup time have elapsed
+		uint32_t lastStepPulseTime = lastStepLowTime;
+		while (now - lastStepPulseTime < p.GetSlowDriverStepLowClocks() || now - lastDirChangeTime < p.GetSlowDriverDirSetupClocks())
+		{
+			now = StepTimer::GetTimerTicks();
+		}
+
+		StepPins::StepDriversHigh(driversStepping);					// step drivers high
+		lastStepPulseTime = StepTimer::GetTimerTicks();
+
+		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
+		{
+			(void)dm2->CalcNextStepTime(*this);						// calculate next step times
+		}
+
+		while (StepTimer::GetTimerTicks() - lastStepPulseTime < p.GetSlowDriverStepHighClocks()) {}
+		StepPins::StepDriversLow(driversStepping);					// step drivers low
+		lastStepLowTime = StepTimer::GetTimerTicks();
+	}
+	else
+# endif
+	{
+		StepPins::StepDriversHigh(driversStepping);					// step drivers high
+# if SAME70
+		__DSB();													// without this the step pulse can be far too short
+# endif
+		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
+		{
+			(void)dm2->CalcNextStepTime(*this);						// calculate next step times
+		}
+
+		StepPins::StepDriversLow(driversStepping);					// step drivers low
+	}
+#endif
+
+	// Remove those drives from the list, update the direction pins where necessary, and re-insert them so as to keep the list in step-time order.
+	DriveMovement *dmToInsert = activeDMs;							// head of the chain we need to re-insert
+	activeDMs = dm;													// remove the chain from the list
+	while (dmToInsert != dm)										// note that both of these may be nullptr
+	{
+		DriveMovement * const nextToInsert = dmToInsert->nextDM;
+		if (dmToInsert->state >= DMState::firstMotionState)
+		{
+			if (dmToInsert->directionChanged)
+			{
+				dmToInsert->directionChanged = false;
+				p.SetDirection(dmToInsert->drive, dmToInsert->direction);
+			}
+			InsertDM(dmToInsert);
+		}
+		else
+		{
+			dmToInsert->nextDM = completedDMs;
+			completedDMs = dmToInsert;
+		}
+		dmToInsert = nextToInsert;
+	}
+
+	// If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
+	if (activeDMs == nullptr)
+	{
+		// We set a move as current up to MovementStartDelayClocks (about 10ms) before it is due to start.
+		// We need to make sure it has really started, or we can get arithmetic wrap round in the case that there are no local drivers stepping.
+		const uint32_t timeRunning = StepTimer::GetTimerTicks() - afterPrepare.moveStartTime;
+		if (   timeRunning + WakeupTime >= clocksNeeded				// if it looks like the move has almost finished
+			&& timeRunning < 0 - AbsoluteMinimumPreparedTime		// and it really has started
+			)
+		{
+			state = completed;
+		}
+	}
 }
+
+// Simulate stepping the drivers, for debugging.
+// This is basically a copy of DDA::StepDrivers except that instead of being called from the timer ISR and generating steps,
+// it is called from the Move task and outputs info on the step timings. It ignores endstops.
+void Move::SimulateSteppingDrivers(Platform& p) noexcept
+{
+	static uint32_t lastStepTime;
+	static bool checkTiming = false;
+	static uint8_t lastDrive = 0;
+
+	DriveMovement* dm = activeDMs;
+	if (dm != nullptr)
+	{
+		const uint32_t dueTime = dm->nextStepTime;
+		while (dm != nullptr && dueTime >= dm->nextStepTime)			// if the next step is due
+		{
+			const uint32_t timeDiff = dm->nextStepTime - lastStepTime;
+			const bool badTiming = checkTiming && dm->drive == lastDrive && (timeDiff < 10 || timeDiff > 100000000);
+			debugPrintf("%10" PRIu32 " D%u %c%s", dm->nextStepTime, dm->drive, (dm->direction) ? 'F' : 'B', (badTiming) ? " *\n" : "\n");
+			lastDrive = dm->drive;
+			dm = dm->nextDM;
+		}
+		lastStepTime = dueTime;
+		checkTiming = true;
+
+		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
+		{
+			(void)dm2->CalcNextStepTime(*this);							// calculate next step times
+		}
+
+		// Remove those drives from the list, update the direction pins where necessary, and re-insert them so as to keep the list in step-time order.
+		DriveMovement *dmToInsert = activeDMs;							// head of the chain we need to re-insert
+		activeDMs = dm;													// remove the chain from the list
+		while (dmToInsert != dm)										// note that both of these may be nullptr
+		{
+			DriveMovement * const nextToInsert = dmToInsert->nextDM;
+			if (dmToInsert->state >= DMState::firstMotionState)
+			{
+				dmToInsert->directionChanged = false;
+				InsertDM(dmToInsert);
+			}
+			dmToInsert = nextToInsert;
+		}
+	}
+
+	// If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
+	if (activeDMs == nullptr)
+	{
+		checkTiming = false;		// don't check the timing of the first step in the next move
+		state = completed;
+	}
+}
+
+// Stop a drive and re-calculate the corresponding endpoint.
+// For extruder drivers, we need to be able to calculate how much of the extrusion was completed after calling this.
+void Move::StopDrive(size_t drive) noexcept
+{
+	if (segments[drive] != nullptr)
+	{
+		if (drive < reprap.GetGCodes().GetTotalAxes())
+		{
+			endPoint[drive] += dms[drive].GetNetStepsTaken();
+			flags.endCoordinatesValid = false;			// the XYZ position is no longer valid
+		}
+		DeactivateDM(drive);
+
+#if !SUPPORT_CAN_EXPANSION
+		if (activeDMs == nullptr)
+		{
+			state = completed;
+		}
+#endif
+	}
+
+#if SUPPORT_CAN_EXPANSION
+	afterPrepare.drivesMoving.ClearBit(drive);
+	if (afterPrepare.drivesMoving.IsEmpty())
+	{
+		state = completed;
+	}
+#endif
+}
+
+void Move::StopDrivers(uint16_t whichDrives) noexcept
+{
+	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);
+	DDA *cdda = currentDda;							// capture volatile
+	if (cdda != nullptr)
+	{
+		cdda->StopDrivers(whichDrives);
+		if (cdda->GetState() == DDA::completed)
+		{
+			CurrentMoveCompleted();					// tell the DDA ring that the current move is complete
+		}
+	}
+	RestoreBasePriority(oldPrio);
+}
+
+#if SUPPORT_ASYNC_MOVES
 
 // Get and lock the aux move buffer. If successful, return a pointer to the buffer.
 // The caller must not attempt to lock the aux buffer more than once, and must call ReleaseAuxMove to release the buffer.

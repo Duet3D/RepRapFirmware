@@ -62,9 +62,6 @@ void DDARing::Init1(unsigned int numDdas) noexcept
 	dda->SetPrevious(addPointer);
 
 	getPointer = checkPointer = addPointer;
-	currentDda = nullptr;
-
-	timer.SetCallback(DDARing::TimerCallback, CallbackParameter(this));
 }
 
 // This must be called from Move::Init, not from the Move constructor, because it indirectly refers to the GCodes module which must therefore be initialised first
@@ -454,79 +451,6 @@ float DDARing::PushBabyStepping(size_t axis, float amount) noexcept
 	return addPointer->AdvanceBabyStepping(*this, axis, amount);
 }
 
-// ISR for the step interrupt
-void DDARing::Interrupt(Platform& p) noexcept
-{
-	DDA* cdda = currentDda;										// capture volatile variable
-	if (cdda != nullptr)
-	{
-		uint32_t now = StepTimer::GetTimerTicks();
-		const uint32_t isrStartTime = now;
-		for (;;)
-		{
-			// Generate a step for the current move
-			cdda->StepDrivers(p, now);							// check endstops if necessary and step the drivers
-			if (cdda->GetState() == DDA::completed)
-			{
-#if SUPPORT_CAN_EXPANSION
-				if (cdda->IsCheckingEndstops())
-				{
-					CanMotion::FinishMoveUsingEndstops();		// Tell CAN-connected drivers to revert their position
-				}
-#endif
-				OnMoveCompleted(cdda, p);
-				cdda = currentDda;
-				if (cdda == nullptr)
-				{
-					break;
-				}
-			}
-
-			// Schedule a callback at the time when the next step is due, and quit unless it is due immediately
-			if (!cdda->ScheduleNextStepInterrupt(timer))
-			{
-				break;
-			}
-
-			// The next step is due immediately. Check whether we have been in this ISR for too long already and need to take a break
-			now = StepTimer::GetTimerTicks();
-			const uint32_t clocksTaken = now - isrStartTime;
-			if (clocksTaken >= DDA::MaxStepInterruptTime)
-			{
-				// Force a break by updating the move start time.
-				++numHiccups;
-#if SUPPORT_CAN_EXPANSION
-				uint32_t cumulativeHiccupTime = 0;
-#endif
-				for (uint32_t hiccupTime = DDA::HiccupTime; ; hiccupTime += DDA::HiccupIncrement)
-				{
-#if SUPPORT_CAN_EXPANSION
-					cumulativeHiccupTime += cdda->InsertHiccup(now + hiccupTime);
-#else
-					cdda->InsertHiccup(now + hiccupTime);
-#endif
-					// Reschedule the next step interrupt. This time it should succeed if the hiccup time was long enough.
-					if (!cdda->ScheduleNextStepInterrupt(timer))
-					{
-#if SUPPORT_CAN_EXPANSION
-						CanMotion::InsertHiccup(cumulativeHiccupTime);
-#endif
-						return;
-					}
-					// We probably had an interrupt that delayed us further. Recalculate the hiccup length, also we increase the hiccup time on each iteration.
-					now = StepTimer::GetTimerTicks();
-				}
-			}
-		}
-	}
-}
-
-// DDARing timer callback function
-/*static*/ void DDARing::TimerCallback(CallbackParameter p) noexcept
-{
-	static_cast<DDARing*>(p.vp)->Interrupt(reprap.GetPlatform());
-}
-
 // This is called when the state has been set to 'completed'. Step interrupts must be disabled or locked out when calling this.
 void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 {
@@ -629,18 +553,6 @@ bool DDARing::SetWaitingToEmpty() noexcept
 		waitingForRingToEmpty = false;
 	}
 	return ret;
-}
-
-// Get the number of steps taken by a logical drive since the last time we called this function for that drive
-int32_t DDARing::GetAccumulatedMovement(size_t drive, bool& isPrinting) noexcept
-{
-	AtomicCriticalSectionLocker lock;							// we don't want a move to complete and the ISR update the movement accumulators while we are doing this
-	const DDA * const cdda = currentDda;						// capture volatile variable
-	const int32_t ret = movementAccumulators[drive];
-	const int32_t adjustment = (cdda == nullptr) ? 0 : cdda->GetStepsTaken(drive);
-	movementAccumulators[drive] = -adjustment;
-	isPrinting = extrudersPrinting;
-	return ret + adjustment;
 }
 
 // Return the untransformed machine coordinates
@@ -774,36 +686,6 @@ void DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 			IrqEnable();
 		}
 	}
-}
-
-float DDARing::GetRequestedSpeedMmPerSec() const noexcept
-{
-	const DDA* const cdda = currentDda;					// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetRequestedSpeedMmPerSec() : 0.0;
-}
-
-float DDARing::GetTopSpeedMmPerSec() const noexcept
-{
-	const DDA* const cdda = currentDda;					// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetTopSpeedMmPerSec() : 0.0;
-}
-
-float DDARing::GetAccelerationMmPerSecSquared() const noexcept
-{
-	const DDA* const cdda = currentDda;					// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetAccelerationMmPerSecSquared() : 0.0;
-}
-
-float DDARing::GetDecelerationMmPerSecSquared() const noexcept
-{
-	const DDA* const cdda = currentDda;					// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetDecelerationMmPerSecSquared() : 0.0;
-}
-
-float DDARing::GetTotalExtrusionRate() const noexcept
-{
-	const DDA* const cdda = currentDda;					// capture volatile variable
-	return (cdda != nullptr) ? cdda->GetTotalExtrusionRate() : 0.0;
 }
 
 // Pause the print as soon as we can.
@@ -1057,21 +939,6 @@ void DDARing::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexc
 			scheduledMoves++;
 		}
 	}
-}
-
-void DDARing::StopDrivers(uint16_t whichDrives) noexcept
-{
-	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);
-	DDA *cdda = currentDda;							// capture volatile
-	if (cdda != nullptr)
-	{
-		cdda->StopDrivers(whichDrives);
-		if (cdda->GetState() == DDA::completed)
-		{
-			CurrentMoveCompleted();					// tell the DDA ring that the current move is complete
-		}
-	}
-	RestoreBasePriority(oldPrio);
 }
 
 #endif

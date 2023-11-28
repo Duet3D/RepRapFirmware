@@ -14,6 +14,7 @@
 #include <Storage/MassStorage.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/DDA.h>
+#include <Movement/Move.h>
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -275,21 +276,21 @@ bool PolarKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
-void PolarKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
+void PolarKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], Move& move) const noexcept
 {
 	switch(axis)
 	{
 	case X_AXIS:	// radius
-		dda.SetDriveCoordinate(lrintf(homedRadius * stepsPerMm[axis]), axis);
+		move.SetDriveCoordinate(lrintf(homedRadius * stepsPerMm[axis]), axis);
 		break;
 
 	case Y_AXIS:	// bed
-		dda.SetDriveCoordinate(0, axis);
+		move.SetDriveCoordinate(0, axis);
 		break;
 
 	default:
 		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
-		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		move.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		break;
 	}
 }

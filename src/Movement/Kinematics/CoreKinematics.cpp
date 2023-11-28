@@ -391,7 +391,7 @@ bool CoreKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
-void CoreKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
+void CoreKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], Move& move) const noexcept
 {
 	const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
 	if (HasSharedMotor(axis))
@@ -400,14 +400,14 @@ void CoreKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const fl
 		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 		for (size_t axis = 0; axis < numTotalAxes; ++axis)
 		{
-			tempCoordinates[axis] = dda.GetEndCoordinate(axis, false);
+			tempCoordinates[axis] = move.GetEndCoordinate(axis, false);
 		}
 		tempCoordinates[axis] = hitPoint;
-		dda.SetPositions(tempCoordinates);
+		move.SetPositions(tempCoordinates);
 	}
 	else
 	{
-		dda.SetDriveCoordinate(lrintf(hitPoint * inverseMatrix(axis, axis) * stepsPerMm[axis]), axis);
+		move.SetDriveCoordinate(lrintf(hitPoint * inverseMatrix(axis, axis) * stepsPerMm[axis]), axis);
 	}
 }
 

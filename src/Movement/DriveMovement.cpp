@@ -18,39 +18,8 @@
 
 // Static members
 
-DriveMovement *DriveMovement::freeList = nullptr;
-unsigned int DriveMovement::numCreated = 0;
-
-void DriveMovement::InitialAllocate(unsigned int num) noexcept
-{
-	while (num > numCreated)
-	{
-		freeList = new DriveMovement(freeList);
-		++numCreated;
-	}
-}
-
-// Allocate a DM, from the freelist if possible, else create a new one
-DriveMovement *DriveMovement::Allocate(size_t p_drive) noexcept
-{
-	DriveMovement * dm = freeList;
-	if (dm != nullptr)
-	{
-		freeList = dm->nextDM;
-		dm->nextDM = nullptr;
-	}
-	else
-	{
-		dm = new DriveMovement(nullptr);
-		++numCreated;
-	}
-	dm->drive = (uint8_t)p_drive;
-	dm->state = DMState::idle;
-	return dm;
-}
-
 // Constructors
-DriveMovement::DriveMovement(DriveMovement *next) noexcept : nextDM(next)
+DriveMovement::DriveMovement() noexcept
 {
 }
 

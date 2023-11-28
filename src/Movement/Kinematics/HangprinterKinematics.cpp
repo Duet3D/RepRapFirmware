@@ -579,7 +579,7 @@ bool HangprinterKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
-void HangprinterKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
+void HangprinterKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], Move& move) const noexcept
 {
 	// Hangprinter homing is not supported
 }
@@ -749,8 +749,8 @@ void HangprinterKinematics::ForwardTransform(float const distances[HANGPRINTER_M
 				ForwardTransformQuadrilateralPyramid(distances, machinePos);
 				return;
 			}
-			// Intentional fall-through to next case
-			// if no forward transform
+			// Intentional fall-through to next case if no forward transform
+			//no break
 		case HangprinterAnchorMode::None:
 		case HangprinterAnchorMode::AllOnTop:
 		default:
