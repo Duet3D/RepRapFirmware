@@ -125,8 +125,6 @@ public:
 	float GetInitialUserC0() const noexcept { return initialUserC0; }
 	float GetInitialUserC1() const noexcept { return initialUserC1; }
 
-	void MoveAborted() noexcept;
-
 	uint32_t GetClocksNeeded() const noexcept { return clocksNeeded; }
 	bool IsGoodToPrepare() const noexcept;
 	bool IsNonPrintingExtruderMove() const noexcept { return flags.isNonPrintingExtruderMove; }

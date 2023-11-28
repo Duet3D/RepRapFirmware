@@ -277,6 +277,7 @@ private:
 	void SimulateSteppingDrivers(Platform& p) noexcept;								// For debugging use
 	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;						// Schedule the next interrupt, returning true if we can't because it is already due
 	void StopDrive(size_t drive) noexcept;											// stop movement of a drive and recalculate the endpoint
+	void MoveAborted() noexcept;													// cancel the current isolated move
 	void InsertDM(DriveMovement *dm) noexcept;										// insert a DM into the active list, keeping it in step time order
 
 #if SUPPORT_CAN_EXPANSION
@@ -477,10 +478,10 @@ inline void Move::SetDriveCoordinate(int32_t a, size_t drive) noexcept
 #if SUPPORT_CAN_EXPANSION
 
 // Insert a hiccup, returning the amount of time inserted
-// Note, clocksNeeded may be less than DDA:WakeupTime but that doesn't matter, the subtraction will wrap around and push the new moveStartTime on a little
+// Note, clocksNeeded may be less than WakeupTime but that doesn't matter, the subtraction will wrap around and push the new moveStartTime on a little
 inline __attribute__((always_inline)) uint32_t Move::InsertHiccup(uint32_t whenNextInterruptWanted) noexcept
 {
-	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
+	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - WakeupTime;
 	const uint32_t oldStartTime = afterPrepare.moveStartTime;
 	afterPrepare.moveStartTime = whenNextInterruptWanted - ticksDueAfterStart;
 	return afterPrepare.moveStartTime - oldStartTime;
@@ -489,10 +490,10 @@ inline __attribute__((always_inline)) uint32_t Move::InsertHiccup(uint32_t whenN
 #else
 
 // Insert a hiccup
-// Note, clocksNeeded may be less than DDA:WakeupTime but that doesn't matter, the subtraction will wrap around and push the new moveStartTime on a little
+// Note, clocksNeeded may be less than WakeupTime but that doesn't matter, the subtraction will wrap around and push the new moveStartTime on a little
 inline __attribute__((always_inline)) void Move::InsertHiccup(uint32_t whenNextInterruptWanted) noexcept
 {
-	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - DDA::WakeupTime;
+	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - WakeupTime;
 	afterPrepare.moveStartTime = whenNextInterruptWanted - ticksDueAfterStart;
 }
 

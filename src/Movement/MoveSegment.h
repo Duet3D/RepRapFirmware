@@ -136,8 +136,11 @@
 
 #include <RepRapFirmware.h>
 #include <Platform/Tasks.h>
+#include <new>		// for align_val_t
 
-class MoveSegment
+// We force MoveSegments to be 8-byte aligned so that we can use the lowest 3 bits of their addresses as flag bits
+// We have two types of them: this one, and a larger one for delta movement.
+class alignas(8) MoveSegment
 {
 public:
 	void* operator new(size_t count) noexcept { return Tasks::AllocPermanent(count); }
@@ -147,8 +150,15 @@ public:
 
 	MoveSegment(MoveSegment *p_next) noexcept;
 
+	// Read the values of the flag bits
 	bool IsLinear() const noexcept;
+	bool IsDelta() const noexcept;
+	bool UsePressureAdvance() const noexcept;
+
+	// Given that this is not a constant-speed segment, test whether it is accelerating or decelerating
 	bool IsAccelerating() const noexcept pre(!IsLinear());
+
+	// Test whether there is another segment after this one
 	bool IsLast() const noexcept;
 
 	// Get the segment length in mm
@@ -198,33 +208,22 @@ public:
 	// Allocate a MoveSegment, clearing the flags
 	static MoveSegment *Allocate(MoveSegment *next) noexcept;
 
-	// Release a MoveSegment
+	// Release a MoveSegment or a DeltaMoveSegment
 	static void Release(MoveSegment *item) noexcept;
 
-	static void InitialAllocate(unsigned int num) noexcept;
 	static unsigned int NumCreated() noexcept { return numCreated; }
 
-#if 0
-	static constexpr unsigned int SFdistance = 10;
-	static constexpr unsigned int SFstepsPerMm = 16;
-	static constexpr unsigned int SFmmPerStep = 31;
-	static constexpr unsigned int SFdirectionVector = 20;
-	static constexpr unsigned int SFdelta = 9;
-
-	static constexpr uint32_t Kdistance = 1u << SFdistance;					// a power of 2 used to multiply distances by so we can store them as integers
-	static constexpr uint32_t KstepsPerMm = 1u << SFstepsPerMm;				// a power of 2 used to multiply steps/mm by so we can store them as integers
-	static constexpr uint32_t KmmPerStep = 1u << SFmmPerStep;				// a power of 2 for scaling the Z movement fraction
-	static constexpr uint32_t KdirectionVector = 1u << SFdirectionVector;	// a power of 2 for scaling the direction vector
-	static constexpr uint32_t Kdelta = 1u << SFdelta;						// a power of 2 for scaling delta motion calculations to reduce rounding error (but too high makes things worse)
-#endif
-
 private:
-	// We can store up to 2 flag bits in the link field, because the next move segment in the list will be 4-byte aligned
+	// We can store up to 3 flag bits in the link field, because the next move segment in the list will be 8-byte aligned
+	static_assert(sizeof(MoveSegment*) == sizeof(uint32_t));
+
 	static constexpr uint32_t LinearFlag = 0x01;			// set if this segment is linear, clear if it is accelerating or decelerating
-	static constexpr uint32_t SpareFlag = 0x02;				// unused flag bit
-	static constexpr uint32_t AllFlags = 0x03;
+	static constexpr uint32_t DeltaFlag = 0x02;				// set if this is a delta movement segment
+	static constexpr uint32_t PressureAdvanceFlag = 0x04;	// set if pressure advance should be applied to this segment
+	static constexpr uint32_t AllFlags = 0x07;
 
 	static MoveSegment *freeList;
+	static MoveSegment *deltaFreeList;
 	static unsigned int numCreated;
 
 	static_assert(sizeof(MoveSegment*) == sizeof(uint32_t));
@@ -258,6 +257,16 @@ inline void MoveSegment::SetNext(MoveSegment *p_next) noexcept
 inline bool MoveSegment::IsLinear() const noexcept
 {
 	return nextAndFlags & LinearFlag;
+}
+
+inline bool MoveSegment::IsDelta() const noexcept
+{
+	return nextAndFlags & DeltaFlag;
+}
+
+inline bool MoveSegment::UsePressureAdvance() const noexcept
+{
+	return nextAndFlags & PressureAdvanceFlag;
 }
 
 inline bool MoveSegment::IsLast() const noexcept
@@ -334,11 +343,23 @@ inline bool MoveSegment::IsAccelerating() const noexcept
 	return c > 0.0;
 }
 
-// Release a single MoveSegment. Not thread-safe.
-inline void MoveSegment::Release(MoveSegment *item) noexcept
+class alignas(8) DeltaMoveSegment : public MoveSegment
 {
-	item->nextAndFlags = reinterpret_cast<uint32_t>(freeList);
-	freeList = item;
-}
+public:
+	void* operator new(size_t count) noexcept { return Tasks::AllocPermanent(count); }
+	void* operator new(size_t count, std::align_val_t align) noexcept { return Tasks::AllocPermanent(count, align); }
+	void operator delete(void* ptr) noexcept {}
+	void operator delete(void* ptr, std::align_val_t align) noexcept {}
+
+	DeltaMoveSegment(MoveSegment *p_next) noexcept;
+
+	// Allocate a MoveSegment, clearing the flags
+	static DeltaMoveSegment *Allocate(MoveSegment *next) noexcept;
+
+	// Print the extra bits in a delta move segment
+	void DebugPrintDelta() const noexcept;
+
+	//TODO
+};
 
 #endif /* SRC_MOVEMENT_MOVESEGMENT_H_ */

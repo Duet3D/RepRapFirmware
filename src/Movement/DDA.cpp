@@ -1757,21 +1757,6 @@ pre(state == frozen)
 	}
 }
 
-// This is called when we abort a move because we have hit an endstop.
-// It stops all drives and adjusts the end points of the current move to account for how far through the move we got.
-// The caller must call MoveCompleted at some point after calling this.
-void DDA::MoveAborted() noexcept
-{
-	if (state == executing)
-	{
-		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
-		{
-			StopDrive(drive);
-		}
-	}
-	state = completed;
-}
-
 // Return the proportion of the extrusion in the complete multi-segment move that has already been done.
 // The move was either not started or was aborted.
 float DDA::GetProportionDone(bool moveWasAborted) const noexcept

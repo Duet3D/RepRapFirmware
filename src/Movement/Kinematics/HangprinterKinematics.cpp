@@ -1296,6 +1296,7 @@ void HangprinterKinematics::StaticForces(float const machinePos[3], float F[HANG
 			}
 			// Intentional fall-through to next case
 			// if no line flex compensation
+			// no break
 		case HangprinterAnchorMode::None:
 		case HangprinterAnchorMode::AllOnTop:
 		default:

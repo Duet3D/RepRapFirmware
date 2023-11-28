@@ -10,6 +10,7 @@
 
 #include <RepRapFirmware.h>
 #include <RTOSIface/RTOSIface.h>
+#include <new>		// for align_val_t
 
 namespace Tasks
 {

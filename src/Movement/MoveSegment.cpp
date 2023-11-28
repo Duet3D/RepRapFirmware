@@ -10,16 +10,8 @@
 // Static members
 
 MoveSegment *MoveSegment::freeList = nullptr;
+MoveSegment *MoveSegment::deltaFreeList = nullptr;
 unsigned int MoveSegment::numCreated = 0;
-
-void MoveSegment::InitialAllocate(unsigned int num) noexcept
-{
-	while (num > numCreated)
-	{
-		freeList = new MoveSegment(freeList);
-		++numCreated;
-	}
-}
 
 // Allocate a MoveSegment, from the freelist if possible, else create a new one. Not thread-safe. Clears the flags.
 MoveSegment *MoveSegment::Allocate(MoveSegment *next) noexcept
@@ -38,6 +30,21 @@ MoveSegment *MoveSegment::Allocate(MoveSegment *next) noexcept
 	return ms;
 }
 
+// Release a single MoveSegment. Not thread-safe.
+inline void MoveSegment::Release(MoveSegment *item) noexcept
+{
+	if (item->IsDelta())
+	{
+		item->nextAndFlags = reinterpret_cast<uint32_t>(deltaFreeList);
+		deltaFreeList = (DeltaMoveSegment*)item;
+	}
+	else
+	{
+		item->nextAndFlags = reinterpret_cast<uint32_t>(freeList);
+		freeList = item;
+	}
+}
+
 void MoveSegment::AddToTail(MoveSegment *tail) noexcept
 {
 	MoveSegment *seg = this;
@@ -53,12 +60,17 @@ void MoveSegment::DebugPrint(char ch) const noexcept
 	debugPrintf("%c d=%.4e t=%.1f ", ch, (double)segLength, (double)segTime);
 	if (IsLinear())
 	{
-		debugPrintf("c=%.4e\n", (double)c);
+		debugPrintf("c=%.4", (double)c);
 	}
 	else
 	{
-		debugPrintf("b=%.4e c=%.4e a=%.4e\n", (double)b, (double)c, (double)acceleration);
+		debugPrintf("b=%.4e c=%.4e a=%.4", (double)b, (double)c, (double)acceleration);
 	}
+	if (IsDelta())
+	{
+		((const DeltaMoveSegment*)this)->DebugPrintDelta();
+	}
+	debugPrintf("\n");
 }
 
 /*static*/ void MoveSegment::DebugPrintList(char ch, const MoveSegment *segs) noexcept
@@ -75,6 +87,29 @@ void MoveSegment::DebugPrint(char ch) const noexcept
 			segs = segs->GetNext();
 		}
 	}
+}
+
+// Allocate a MoveSegment, from the freelist if possible, else create a new one. Not thread-safe. Clears the flags.
+DeltaMoveSegment *DeltaMoveSegment::Allocate(MoveSegment *next) noexcept
+{
+	DeltaMoveSegment * ms = deltaFreeList;
+	if (ms != nullptr)
+	{
+		deltaFreeList = ms->GetNext();
+		ms->nextAndFlags = reinterpret_cast<uint32_t>(next) | DeltaFlag;
+	}
+	else
+	{
+		ms = new DeltaMoveSegment(next);
+		++numCreated;
+	}
+	return ms;
+}
+
+// Print the extra bits in a delta move segment
+void DeltaMoveSegment::DebugPrintDelta() const noexcept
+{
+	debugPrintf(", delta");		//TODO
 }
 
 // End

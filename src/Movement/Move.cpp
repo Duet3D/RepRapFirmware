@@ -274,6 +274,7 @@ void Move::Init() noexcept
 void Move::Exit() noexcept
 {
 	StepTimer::DisableTimerInterrupt();
+	timer.CancelCallback();
 	rings[0].Exit();
 #if SUPPORT_ASYNC_MOVES
 	rings[1].Exit();
@@ -564,8 +565,8 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	scratchString.copy("Steps requested/done:");
 	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
-		scratchString.catf(" %" PRIu32 "/%" PRIu32, DDA::stepsRequested[driver], DDA::stepsDone[driver]);
-		DDA::stepsRequested[driver] = DDA::stepsDone[driver] = 0;
+		scratchString.catf(" %" PRIu32 "/%" PRIu32, stepsRequested[driver], stepsDone[driver]);
+		stepsRequested[driver] = stepsDone[driver] = 0;
 	}
 	scratchString.cat('\n');
 	p.Message(mtype, scratchString.c_str());
@@ -575,10 +576,10 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	// Temporary code to print Z probe trigger positions
 	p.Message(mtype, "Probe change coordinates:");
 	char ch = ' ';
-	for (size_t i = 0; i < DDA::numLoggedProbePositions; ++i)
+	for (size_t i = 0; i < numLoggedProbePositions; ++i)
 	{
 		float xyzPos[XYZ_AXES];
-		MotorStepsToCartesian(DDA::loggedProbePositions + (XYZ_AXES * i), XYZ_AXES, XYZ_AXES, xyzPos);
+		MotorStepsToCartesian(loggedProbePositions + (XYZ_AXES * i), XYZ_AXES, XYZ_AXES, xyzPos);
 		p.MessageF(mtype, "%c%.2f,%.2f", ch, xyzPos[X_AXIS], xyzPos[Y_AXIS]);
 		ch = ',';
 	}
@@ -1670,7 +1671,7 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 }
 
 // Simulate stepping the drivers, for debugging.
-// This is basically a copy of DDA::StepDrivers except that instead of being called from the timer ISR and generating steps,
+// This is basically a copy of StepDrivers except that instead of being called from the timer ISR and generating steps,
 // it is called from the Move task and outputs info on the step timings. It ignores endstops.
 void Move::SimulateSteppingDrivers(Platform& p) noexcept
 {
@@ -1749,6 +1750,21 @@ void Move::StopDrive(size_t drive) noexcept
 		state = completed;
 	}
 #endif
+}
+
+// This is called when we abort a move because we have hit an endstop.
+// It stops all drives and adjusts the end points of the current move to account for how far through the move we got.
+// The caller must call MoveCompleted at some point after calling this.
+void Move::MoveAborted() noexcept
+{
+	if (state == executing)
+	{
+		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
+		{
+			StopDrive(drive);
+		}
+	}
+	state = completed;
 }
 
 void Move::StopDrivers(uint16_t whichDrives) noexcept

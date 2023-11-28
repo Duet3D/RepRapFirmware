@@ -16,8 +16,6 @@
 # include "Kinematics/LinearDeltaKinematics.h"
 #endif
 
-// Static members
-
 // Constructors
 DriveMovement::DriveMovement() noexcept
 {
