@@ -95,7 +95,7 @@ void DDARing::Exit() noexcept
 		getPointer = getPointer->GetNext();
 	}
 
-	while (checkPointer->GetState() == DDA::completed)
+	while (checkPointer->GetState() == DDA::scheduled)
 	{
 		(void)checkPointer->Free();
 		checkPointer = checkPointer->GetNext();
@@ -154,7 +154,7 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 void DDARing::RecycleDDAs() noexcept
 {
 	// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
-	while (checkPointer->GetState() == DDA::completed && checkPointer != currentDda)	// we haven't finished with a completed DDA until it is no longer the current DDA!
+	while (checkPointer->GetState() == DDA::scheduled)
 	{
 		// Check for step errors and record/print them if we have any, before we lose the DMs
 		if (checkPointer->HasStepError())
@@ -392,9 +392,9 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, u
 	// If the number of prepared moves will execute in less than the minimum time, prepare another move.
 	// Try to avoid preparing deceleration-only moves too early
 	while (	  firstUnpreparedMove->GetState() == DDA::provisional
-		   && moveTimeLeft < (int32_t)Move::UsualMinimumPreparedTime	// prepare moves one tenth of a second ahead of when they will be needed
+		   && moveTimeLeft < (int32_t)MoveTiming::UsualMinimumPreparedTime	// prepare moves one tenth of a second ahead of when they will be needed
 		   && alreadyPrepared * 2 < numDdasInRing						// but don't prepare more than half the ring, to handle accelerate/decelerate moves in small segments
-		   && (firstUnpreparedMove->IsGoodToPrepare() || moveTimeLeft < (int32_t)Move::AbsoluteMinimumPreparedTime)
+		   && (firstUnpreparedMove->IsGoodToPrepare() || moveTimeLeft < (int32_t)MoveTiming::AbsoluteMinimumPreparedTime)
 #if SUPPORT_CAN_EXPANSION
 		   && CanMotion::CanPrepareMove()
 #endif
@@ -415,7 +415,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, u
 			return 1;
 		}
 
-		const int32_t clocksTillWakeup = moveTimeLeft - (int32_t)Move::UsualMinimumPreparedTime;					// calculate how long before we run out of prepared moves, less the usual advance prepare time
+		const int32_t clocksTillWakeup = moveTimeLeft - (int32_t)MoveTiming::UsualMinimumPreparedTime;					// calculate how long before we run out of prepared moves, less the usual advance prepare time
 		return (clocksTillWakeup <= 0) ? 2 : min<uint32_t>((uint32_t)clocksTillWakeup/(StepClockRate/1000), 2);		// wake up at that time, but delay for at least 2 ticks
 	}
 

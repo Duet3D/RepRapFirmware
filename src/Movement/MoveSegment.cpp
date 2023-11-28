@@ -14,17 +14,17 @@ DeltaMoveSegment *MoveSegment::deltaFreeList = nullptr;
 unsigned int MoveSegment::numCreated = 0;
 
 // Allocate a MoveSegment, from the freelist if possible, else create a new one. Not thread-safe. Clears the flags.
-MoveSegment *MoveSegment::Allocate(MoveSegment *next) noexcept
+MoveSegment *MoveSegment::Allocate(MoveSegment *p_next) noexcept
 {
 	MoveSegment * ms = freeList;
 	if (ms != nullptr)
 	{
-		freeList = ms->GetNext();
-		ms->nextAndFlags = reinterpret_cast<uint32_t>(next);
+		freeList = next;
+		ms->next = p_next;
 	}
 	else
 	{
-		ms = new MoveSegment(next);
+		ms = new MoveSegment(p_next);
 		++numCreated;
 	}
 	return ms;
@@ -35,12 +35,12 @@ inline void MoveSegment::Release(MoveSegment *item) noexcept
 {
 	if (item->IsDelta())
 	{
-		item->nextAndFlags = reinterpret_cast<uint32_t>(deltaFreeList);
+		item->next = deltaFreeList;
 		deltaFreeList = (DeltaMoveSegment*)item;
 	}
 	else
 	{
-		item->nextAndFlags = reinterpret_cast<uint32_t>(freeList);
+		item->next = freeList;
 		freeList = item;
 	}
 }
@@ -90,17 +90,18 @@ void MoveSegment::DebugPrint(char ch) const noexcept
 }
 
 // Allocate a MoveSegment, from the freelist if possible, else create a new one. Not thread-safe. Clears the flags.
-DeltaMoveSegment *DeltaMoveSegment::Allocate(MoveSegment *next) noexcept
+DeltaMoveSegment *DeltaMoveSegment::Allocate(MoveSegment *p_next) noexcept
 {
 	DeltaMoveSegment * ms = deltaFreeList;
 	if (ms != nullptr)
 	{
-		deltaFreeList = ms->GetNext();
-		ms->nextAndFlags = reinterpret_cast<uint32_t>(next) | DeltaFlag;
+		deltaFreeList = (DeltaMoveSegment*)ms->next;
+		ms->next = p_next;
+		ms->isDelta = 1;
 	}
 	else
 	{
-		ms = new DeltaMoveSegment(next);
+		ms = new DeltaMoveSegment(p_next);
 		++numCreated;
 	}
 	return ms;
@@ -109,7 +110,9 @@ DeltaMoveSegment *DeltaMoveSegment::Allocate(MoveSegment *next) noexcept
 // Print the extra bits in a delta move segment
 void DeltaMoveSegment::DebugPrintDelta() const noexcept
 {
-	debugPrintf(", delta");		//TODO
+	debugPrintf(" dv=[%.3f %.3f %.3f] minusAaPlusBbTimesS=%.4e dSquaredMinusAsquaredMinusBsquared=%.4e",
+				(double)dv[0], (double)dv[1], (double)dv[2], (double)fMinusAaPlusBbTimesS, (double)fDSquaredMinusAsquaredMinusBsquaredTimesSsquared);
+	//TODO
 }
 
 // End

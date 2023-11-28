@@ -353,7 +353,7 @@ void CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcep
 	}
 	else
 	{
-		const DriveMovement * const dm = dda.FindDM(axis);
+		const DriveMovement * const dm = reprap.GetMove().FindDM(axis);
 		if (dm != nullptr)
 		{
 			if (InternalStopDriverWhenMoving(driver, dm->GetNetStepsTaken()))

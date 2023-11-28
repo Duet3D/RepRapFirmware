@@ -6,6 +6,7 @@
  */
 
 #include "DriveMovement.h"
+#include "MoveTiming.h"
 #include "DDA.h"
 #include "Move.h"
 #include "StepTimer.h"
@@ -34,8 +35,8 @@ void DriveMovement::DebugPrint() const noexcept
 #if SUPPORT_LINEAR_DELTA
 		if (isDelta)
 		{
-			debugPrintf(" hmz0s=%.4e minusAaPlusBbTimesS=%.4e dSquaredMinusAsquaredMinusBsquared=%.4e drev=%.4e\n",
-							(double)mp.delta.fHmz0s, (double)mp.delta.fMinusAaPlusBbTimesS, (double)mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared, (double)mp.delta.reverseStartDistance);
+			debugPrintf(" hmz0s=%.4e drev=%.4e\n",
+						(double)mp.delta.fHmz0s, (double)mp.delta.reverseStartDistance);
 		}
 		else
 #endif
@@ -99,7 +100,7 @@ bool DriveMovement::NewCartesianSegment() noexcept
 #if SUPPORT_LINEAR_DELTA
 
 // This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
-bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
+bool DriveMovement::NewDeltaSegment() noexcept
 {
 	while (true)
 	{
@@ -142,10 +143,10 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 		else
 		{
 			// Work out how many whole steps we have moved up or down at the end of this segment
-			const float sDx = distanceSoFar * dda.directionVector[0];
-			const float sDy = distanceSoFar * dda.directionVector[1];
+			const float sDx = distanceSoFar * ((const DeltaMoveSegment*)currentSegment)->GetDv()[0];
+			const float sDy = distanceSoFar * ((const DeltaMoveSegment*)currentSegment)->GetDv()[1];
 			int32_t netStepsAtEnd = (int32_t)floorf(fastSqrtf(mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + mp.delta.fTwoA) + sDy * (sDy + mp.delta.fTwoB)))
-												+ (distanceSoFar * dda.directionVector[2] - mp.delta.h0MinusZ0) * stepsPerMm);
+												+ (distanceSoFar * ((const DeltaMoveSegment*)currentSegment)->GetDv()[2] - mp.delta.h0MinusZ0) * stepsPerMm);
 
 			// If there is a reversal then we only ever move up by (reverseStartStep - 1) steps, so netStepsAtEnd should be less than reverseStartStep.
 			// However, because of rounding error, it might possibly be equal.
@@ -313,7 +314,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
 	reverseStartStep = totalSteps + 1;				// no reverse phase
-	return CalcNextStepTimeFull(dda);				// calculate the scheduled time of the first step
+	return CalcNextStepTimeFull(move);				// calculate the scheduled time of the first step
 }
 
 #if SUPPORT_LINEAR_DELTA
@@ -419,7 +420,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	nextStep = 1;									// must do this before calling NewDeltaSegment
 	directionChanged = directionReversed = false;	// must clear these before we call NewDeltaSegment
 
-	if (!NewDeltaSegment(dda))
+	if (!NewDeltaSegment())
 	{
 		return false;
 	}
@@ -427,7 +428,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	// Prepare for the first step
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
-	return CalcNextStepTimeFull(dda);				// calculate the scheduled time of the first step
+	return CalcNextStepTimeFull(move);				// calculate the scheduled time of the first step
 }
 
 #endif	// SUPPORT_LINEAR_DELTA
@@ -507,7 +508,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	// Prepare for the first step
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
-	return CalcNextStepTimeFull(dda);				// calculate the scheduled time of the first step
+	return CalcNextStepTimeFull(move);				// calculate the scheduled time of the first step
 }
 
 // Version of fastSqrtf that allows for slightly negative operands caused by rounding error
@@ -523,7 +524,7 @@ static inline float fastLimSqrtf(float f) noexcept
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // We have already incremented nextStep and checked that it does not exceed totalSteps, so at least one more step is due
 // Return true if all OK, false to abort this move because the calculation has gone wrong
-bool DriveMovement::CalcNextStepTimeFull(const DDA &dda) noexcept
+bool DriveMovement::CalcNextStepTimeFull(Move& move) noexcept
 pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 {
 	uint32_t shiftFactor = 0;										// assume single stepping
@@ -540,13 +541,14 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 					nextStep = nextStep - 2 * (segmentStepLimit - reverseStartStep);		// set nextStep to the net steps taken in the original direction (this may make nextStep negative)
 					CheckDirection(false);													// so that GetNetStepsTaken returns the correct value
 				}
+				const bool wasUsingPA = currentSegment->UsePressureAdvance();
 				if (!NewExtruderSegment())
 				{
-					if (dda.flags.usePressureAdvance)
+					if (wasUsingPA)
 					{
 						const size_t logicalDrive =
 #if SUPPORT_REMOTE_COMMANDS
-													(dda.flags.isRemote) ? drive : LogicalDriveToExtruder(drive);
+													(currentSegment->IsRemote()) ? drive : LogicalDriveToExtruder(drive);
 #else
 													LogicalDriveToExtruder(drive);
 #endif
@@ -562,7 +564,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			{
 				const bool more =
 #if SUPPORT_LINEAR_DELTA
-								(isDelta) ? NewDeltaSegment(dda) :
+								(isDelta) ? NewDeltaSegment() :
 #endif
 									NewCartesianSegment();
 				if (!more)
@@ -592,13 +594,13 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 				stepsToLimit = reverseStartStep - nextStep;
 			}
 
-			if (stepsToLimit > 1 && stepInterval < Move::MinCalcInterval)
+			if (stepsToLimit > 1 && stepInterval < MoveTiming::MinCalcInterval)
 			{
-				if (stepInterval < Move::MinCalcInterval/4 && stepsToLimit > 8)
+				if (stepInterval < MoveTiming::MinCalcInterval/4 && stepsToLimit > 8)
 				{
 					shiftFactor = 3;							// octal stepping
 				}
-				else if (stepInterval < Move::MinCalcInterval/2 && stepsToLimit > 4)
+				else if (stepInterval < MoveTiming::MinCalcInterval/2 && stepsToLimit > 4)
 				{
 					shiftFactor = 2;							// quad stepping
 				}
@@ -668,9 +670,9 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 				mp.delta.fHmz0s -= steps;						// get new carriage height above Z in steps
 			}
 
-			const float hmz0sc = mp.delta.fHmz0s * dda.directionVector[Z_AXIS];
-			const float t1 = mp.delta.fMinusAaPlusBbTimesS + hmz0sc;
-			const float t2a = mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(mp.delta.fHmz0s) + fsquare(t1);
+			const float hmz0sc = mp.delta.fHmz0s * ((const DeltaMoveSegment*)currentSegment)->GetDv()[2];
+			const float t1 = ((const DeltaMoveSegment*)currentSegment)->GetfMinusAaPlusBbTimesS() + hmz0sc;
+			const float t2a = ((const DeltaMoveSegment*)currentSegment)->GetfDSquaredMinusAsquaredMinusBsquaredTimesSsquared() - fsquare(mp.delta.fHmz0s) + fsquare(t1);
 			// Due to rounding error we can end up trying to take the square root of a negative number if we do not take precautions here
 			const float t2 = fastLimSqrtf(t2a);
 			const float ds = (direction) ? t1 - t2 : t1 + t2;
@@ -707,7 +709,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 
 	uint32_t iNextCalcStepTime = (uint32_t)nextCalcStepTime;
 
-	if (iNextCalcStepTime > dda.clocksNeeded)
+	if (iNextCalcStepTime > currentSegment->GetSegmentTime())
 	{
 		// The calculation makes this step late.
 		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
@@ -716,7 +718,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// Don't use totalSteps here because it isn't valid for extruders
 		if (currentSegment->GetNext() == nullptr && nextStep + stepsTillRecalc + 1 >= segmentStepLimit)
 		{
-			iNextCalcStepTime = dda.clocksNeeded;
+			iNextCalcStepTime = currentSegment->GetSegmentTime();
 		}
 		else
 		{

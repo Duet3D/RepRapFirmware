@@ -1223,7 +1223,7 @@ pre(disableDeltaMapping || drive < MaxAxes)
 
 // Prepare this DDA for execution.
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
-void DDA::Prepare(SimulationMode simMode) noexcept
+void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 {
 	flags.wasAccelOnlyMove = IsAccelerationMove();			// save this for the next move to look at
 
@@ -1237,16 +1237,9 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 
 	// Prepare for movement
 	PrepParams params;										// the default constructor clears params.plan to 'no shaping'
-	if (flags.xyMoving)
-	{
-		reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);	// this will set up shapedSegments if we are doing any shaping
-	}
-	else
-	{
-		params.SetFromDDA(*this);
-		params.Finalise(topSpeed);
-		clocksNeeded = params.TotalClocks();
-	}
+	params.SetFromDDA(*this);
+	params.Finalise(topSpeed);
+	clocksNeeded = params.TotalClocks();
 
 	// Copy the unshaped acceleration and deceleration back to the DDA because ManageLaserPower uses them
 	//TODO change ManageLaserPower to work on the shaped segments instead
@@ -1273,7 +1266,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 		}
 #endif
 
-		activeDMs = completedDMs = nullptr;
+		activeDMs = nullptr;
 
 #if SUPPORT_CAN_EXPANSION
 		CanMotion::StartMovement();
@@ -1522,7 +1515,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 		const DDAState st = prev->state;
 		afterPrepare.moveStartTime = (st == DDAState::executing || st == DDAState::frozen)
 						? prev->afterPrepare.moveStartTime + prev->clocksNeeded			// this move will follow the previous one, so calculate the start time assuming no more hiccups
-							: StepTimer::GetTimerTicks() + AbsoluteMinimumPreparedTime;	// else this move is the first so start it after a short delay
+							: StepTimer::GetTimerTicks() + MoveTiming::AbsoluteMinimumPreparedTime;	// else this move is the first so start it after a short delay
 
 		if (flags.checkEndstops)
 		{

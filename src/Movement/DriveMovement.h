@@ -42,7 +42,7 @@ public:
 
 	DriveMovement() noexcept;
 
-	bool CalcNextStepTime(const DDA &dda) noexcept SPEED_CRITICAL;
+	bool CalcNextStepTime(Move& move) noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 #if SUPPORT_LINEAR_DELTA
 	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
@@ -57,11 +57,11 @@ public:
 #endif
 
 private:
-	bool CalcNextStepTimeFull(const DDA &dda) noexcept SPEED_CRITICAL;
+	bool CalcNextStepTimeFull(Move& move) noexcept SPEED_CRITICAL;
 	bool NewCartesianSegment() noexcept SPEED_CRITICAL;
 	bool NewExtruderSegment() noexcept SPEED_CRITICAL;
 #if SUPPORT_LINEAR_DELTA
-	bool NewDeltaSegment(const DDA& dda) noexcept SPEED_CRITICAL;
+	bool NewDeltaSegment() noexcept SPEED_CRITICAL;
 #endif
 
 	void CheckDirection(bool reversed) noexcept;
@@ -132,9 +132,9 @@ private:
 			float fTwoA;
 			float fTwoB;
 			float h0MinusZ0;							// the height subtended by the rod at the start of the move
-			float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
+//			float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
 			float fHmz0s;								// the starting height less the starting Z height, multiplied by the Z movement fraction (can go negative)
-			float fMinusAaPlusBbTimesS;
+//			float fMinusAaPlusBbTimesS;
 			float reverseStartDistance;					// the overall move distance at which movement reversal occurs
 		} delta;
 #endif
@@ -151,7 +151,7 @@ private:
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // Return true if there are more steps to do. When finished, leave nextStep == totalSteps + 1 and state == DMState::idle.
 // We inline this part to speed things up when we are doing double/quad/octal stepping.
-inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
+inline bool DriveMovement::CalcNextStepTime(Move& move) noexcept
 {
 	++nextStep;
 	if (nextStep <= totalSteps || isExtruder)
@@ -170,7 +170,7 @@ inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
 #endif
 			return true;
 		}
-		if (CalcNextStepTimeFull(dda))
+		if (CalcNextStepTimeFull(move))
 		{
 			return true;
 		}

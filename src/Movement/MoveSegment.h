@@ -138,11 +138,10 @@
 #include <Platform/Tasks.h>
 #include <new>		// for align_val_t
 
-// We force MoveSegments to be 8-byte aligned so that we can use the lowest 3 bits of their addresses as flag bits
 // We have two types of them: this one, and a larger one for delta movement.
 class DeltaMoveSegment;
 
-class alignas(8) MoveSegment
+class MoveSegment
 {
 public:
 	void* operator new(size_t count) noexcept { return Tasks::AllocPermanent(count); }
@@ -156,6 +155,7 @@ public:
 	bool IsLinear() const noexcept;
 	bool IsDelta() const noexcept;
 	bool UsePressureAdvance() const noexcept;
+	bool IsRemote() const noexcept;
 
 	// Given that this is not a constant-speed segment, test whether it is accelerating or decelerating
 	bool IsAccelerating() const noexcept pre(!IsLinear());
@@ -208,30 +208,28 @@ public:
 	static void DebugPrintList(char ch, const MoveSegment *segs) noexcept;
 
 	// Allocate a MoveSegment, clearing the flags
-	static MoveSegment *Allocate(MoveSegment *next) noexcept;
+	static MoveSegment *Allocate(MoveSegment *p_next) noexcept;
 
 	// Release a MoveSegment or a DeltaMoveSegment
 	static void Release(MoveSegment *item) noexcept;
 
 	static unsigned int NumCreated() noexcept { return numCreated; }
 
-private:
-	// We can store up to 3 flag bits in the link field, because the next move segment in the list will be 8-byte aligned
-	static_assert(sizeof(MoveSegment*) == sizeof(uint32_t));
-
-	static constexpr uint32_t LinearFlag = 0x01;			// set if this segment is linear, clear if it is accelerating or decelerating
-	static constexpr uint32_t DeltaFlag = 0x02;				// set if this is a delta movement segment
-	static constexpr uint32_t PressureAdvanceFlag = 0x04;	// set if pressure advance should be applied to this segment
-	static constexpr uint32_t AllFlags = 0x07;
-
+protected:
 	static MoveSegment *freeList;
 	static DeltaMoveSegment *deltaFreeList;
 	static unsigned int numCreated;
 
-	static_assert(sizeof(MoveSegment*) == sizeof(uint32_t));
-
-	// The 'nextAndFlags' field is a MoveSegment pointer with two flag bits in the bottom two bits
-	uint32_t nextAndFlags;									// pointer to the next segment, plus flag bits
+private:
+	MoveSegment *next;										// pointer to the next segment
+	uint32_t isDelta : 1,
+			 isLinear : 1,
+			 isExtruder : 1,
+			 usePressureAdvance : 1
+#if SUPPORT_REMOTE_COMMANDS
+		   , isRemote : 1
+#endif
+			 ;
 	float segLength;										// the length of this segment before applying the movement fraction
 	float segTime;											// the time in step clocks at which this move ends
 	float c;												// the c move parameter, units are step_clocks/mm for linear moves, units are steps_clocks^2/mm for accelerating or decelerating moves
@@ -241,39 +239,47 @@ private:
 
 // Create a new one, leaving the flags clear
 inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
-	: nextAndFlags(reinterpret_cast<uint32_t>(p_next))				// this also clears the flags
+	: next(p_next), isDelta(0), isLinear(0), isExtruder(0), usePressureAdvance(0)
+#if SUPPORT_REMOTE_COMMANDS
+	   , isRemote(0)
+#endif
 {
 	// remaining fields are not initialised
 }
 
 inline MoveSegment *MoveSegment::GetNext() const noexcept
 {
-	return reinterpret_cast<MoveSegment*>(nextAndFlags & (~AllFlags));
+	return next;
 }
 
 inline void MoveSegment::SetNext(MoveSegment *p_next) noexcept
 {
-	nextAndFlags = (nextAndFlags & AllFlags) | reinterpret_cast<uint32_t>(p_next);
+	next = p_next;
 }
 
 inline bool MoveSegment::IsLinear() const noexcept
 {
-	return nextAndFlags & LinearFlag;
+	return isLinear;
 }
 
 inline bool MoveSegment::IsDelta() const noexcept
 {
-	return nextAndFlags & DeltaFlag;
+	return isDelta;
 }
 
 inline bool MoveSegment::UsePressureAdvance() const noexcept
 {
-	return nextAndFlags & PressureAdvanceFlag;
+	return usePressureAdvance;
+}
+
+inline bool MoveSegment::IsRemote() const noexcept
+{
+	return isRemote;
 }
 
 inline bool MoveSegment::IsLast() const noexcept
 {
-	return GetNext() == nullptr;
+	return next == nullptr;
 }
 
 inline float MoveSegment::CalcNonlinearA(float startDistance) const noexcept
@@ -326,7 +332,7 @@ inline void MoveSegment::SetLinear(float pSegmentLength, float p_segTime, float 
 	segTime = p_segTime;
 	b = 0.0;
 	c = p_c;
-	nextAndFlags |= LinearFlag;
+	isLinear = true;
 }
 
 // Set up an accelerating or decelerating move. We assume that the 'linear' flag is already clear.
@@ -355,12 +361,20 @@ public:
 
 	DeltaMoveSegment(MoveSegment *p_next) noexcept;
 
+	const float *GetDv() const noexcept { return dv; }
+	float GetfMinusAaPlusBbTimesS() const noexcept { return fMinusAaPlusBbTimesS; }
+	float GetfDSquaredMinusAsquaredMinusBsquaredTimesSsquared() const noexcept { return fDSquaredMinusAsquaredMinusBsquaredTimesSsquared; }
+
 	// Allocate a MoveSegment, clearing the flags
-	static DeltaMoveSegment *Allocate(MoveSegment *next) noexcept;
+	static DeltaMoveSegment *Allocate(MoveSegment *p_next) noexcept;
 
 	// Print the extra bits in a delta move segment
 	void DebugPrintDelta() const noexcept;
 
+private:
+	float fMinusAaPlusBbTimesS;
+	float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
+	float dv[3];			// the XYZ movement fractions
 	//TODO
 };
 

@@ -9,6 +9,7 @@
 #define MOVE_H_
 
 #include <RepRapFirmware.h>
+#include "MoveTiming.h"
 #include "AxisShaper.h"
 #include "ExtruderShaper.h"
 #include "DDARing.h"
@@ -247,29 +248,6 @@ public:
 	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
 #endif
 
-	// Note on the following constant:
-	// If we calculate the step interval on every clock, we reach a point where the calculation time exceeds the step interval.
-	// The worst case is pure Z movement on a delta. On a Mini Kossel with 80 steps/mm with this firmware running on a Duet (84MHx SAM3X8 processor),
-	// the calculation can just be managed in time at speeds of 15000mm/min (step interval 50us), but not at 20000mm/min (step interval 37.5us).
-	// Therefore, where the step interval falls below 60us, we don't calculate on every step.
-	// Note: the above measurements were taken some time ago, before some firmware optimisations.
-#if SAME70
-	// Use the same defaults as for the SAM4E for now.
-	static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// the smallest sensible interval between calculations (40us) in step timer clocks
-	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
-#elif SAM4E || SAM4S || SAME5x
-	static constexpr uint32_t MinCalcInterval = (40 * StepClockRate)/1000000;				// the smallest sensible interval between calculations (40us) in step timer clocks
-	static constexpr uint32_t HiccupTime = (30 * StepClockRate)/1000000;					// how long we hiccup for in step timer clocks
-#else
-# error Unsupported processor
-#endif
-	static constexpr uint32_t MaxStepInterruptTime = 10 * StepTimer::MinInterruptInterval;	// the maximum time we spend looping in the ISR, in step clocks
-	static constexpr uint32_t WakeupTime = (100 * StepClockRate)/1000000;					// stop resting 100us before the move is due to end
-	static constexpr uint32_t HiccupIncrement = HiccupTime/2;								// how much we increase the hiccup time by on each attempt
-
-	static constexpr uint32_t UsualMinimumPreparedTime = StepClockRate/10;					// 100ms
-	static constexpr uint32_t AbsoluteMinimumPreparedTime = StepClockRate/20;				// 50ms
-
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
@@ -481,7 +459,7 @@ inline void Move::SetDriveCoordinate(int32_t a, size_t drive) noexcept
 // Note, clocksNeeded may be less than WakeupTime but that doesn't matter, the subtraction will wrap around and push the new moveStartTime on a little
 inline __attribute__((always_inline)) uint32_t Move::InsertHiccup(uint32_t whenNextInterruptWanted) noexcept
 {
-	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - WakeupTime;
+	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - MoveTiming::WakeupTime;
 	const uint32_t oldStartTime = afterPrepare.moveStartTime;
 	afterPrepare.moveStartTime = whenNextInterruptWanted - ticksDueAfterStart;
 	return afterPrepare.moveStartTime - oldStartTime;
@@ -493,7 +471,7 @@ inline __attribute__((always_inline)) uint32_t Move::InsertHiccup(uint32_t whenN
 // Note, clocksNeeded may be less than WakeupTime but that doesn't matter, the subtraction will wrap around and push the new moveStartTime on a little
 inline __attribute__((always_inline)) void Move::InsertHiccup(uint32_t whenNextInterruptWanted) noexcept
 {
-	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - WakeupTime;
+	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - MoveTiming::WakeupTime;
 	afterPrepare.moveStartTime = whenNextInterruptWanted - ticksDueAfterStart;
 }
 

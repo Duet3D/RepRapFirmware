@@ -1399,14 +1399,14 @@ void Move::Interrupt() noexcept
 			// The next step is due immediately. Check whether we have been in this ISR for too long already and need to take a break
 			now = StepTimer::GetTimerTicks();
 			const uint32_t clocksTaken = now - isrStartTime;
-			if (clocksTaken >= MaxStepInterruptTime)
+			if (clocksTaken >= MoveTiming::MaxStepInterruptTime)
 			{
 				// Force a break by updating the move start time.
 				++numHiccups;
 #if SUPPORT_CAN_EXPANSION
 				uint32_t cumulativeHiccupTime = 0;
 #endif
-				for (uint32_t hiccupTime = HiccupTime; ; hiccupTime += HiccupIncrement)
+				for (uint32_t hiccupTime = MoveTiming::HiccupTime; ; hiccupTime += MoveTiming::HiccupIncrement)
 				{
 #if SUPPORT_CAN_EXPANSION
 					cumulativeHiccupTime += InsertHiccup(now + hiccupTime);
@@ -1661,8 +1661,8 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 		// We set a move as current up to MovementStartDelayClocks (about 10ms) before it is due to start.
 		// We need to make sure it has really started, or we can get arithmetic wrap round in the case that there are no local drivers stepping.
 		const uint32_t timeRunning = StepTimer::GetTimerTicks() - afterPrepare.moveStartTime;
-		if (   timeRunning + WakeupTime >= clocksNeeded				// if it looks like the move has almost finished
-			&& timeRunning < 0 - AbsoluteMinimumPreparedTime		// and it really has started
+		if (   timeRunning + MoveTiming::WakeupTime >= clocksNeeded				// if it looks like the move has almost finished
+			&& timeRunning < 0 - MoveTiming::AbsoluteMinimumPreparedTime		// and it really has started
 			)
 		{
 			state = completed;
@@ -1757,15 +1757,13 @@ void Move::StopDrive(size_t drive) noexcept
 // The caller must call MoveCompleted at some point after calling this.
 void Move::MoveAborted() noexcept
 {
-	if (state == executing)
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 	{
-		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
-		{
-			StopDrive(drive);
-		}
+		StopDrive(drive);
 	}
-	state = completed;
 }
+
+#if SUPPORT_REMOTE_COMMANDS
 
 void Move::StopDrivers(uint16_t whichDrives) noexcept
 {
@@ -1781,6 +1779,8 @@ void Move::StopDrivers(uint16_t whichDrives) noexcept
 	}
 	RestoreBasePriority(oldPrio);
 }
+
+#endif
 
 #if SUPPORT_ASYNC_MOVES
 

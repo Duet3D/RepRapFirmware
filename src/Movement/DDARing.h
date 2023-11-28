@@ -80,7 +80,6 @@ public:
 #if SUPPORT_REMOTE_COMMANDS
 	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept;				// add a move from the ATE to the movement queue
 	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;			// add a move from the ATE to the movement queue
-	void StopDrivers(uint16_t whichDrives) noexcept;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
