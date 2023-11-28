@@ -140,6 +140,8 @@
 
 // We force MoveSegments to be 8-byte aligned so that we can use the lowest 3 bits of their addresses as flag bits
 // We have two types of them: this one, and a larger one for delta movement.
+class DeltaMoveSegment;
+
 class alignas(8) MoveSegment
 {
 public:
@@ -223,7 +225,7 @@ private:
 	static constexpr uint32_t AllFlags = 0x07;
 
 	static MoveSegment *freeList;
-	static MoveSegment *deltaFreeList;
+	static DeltaMoveSegment *deltaFreeList;
 	static unsigned int numCreated;
 
 	static_assert(sizeof(MoveSegment*) == sizeof(uint32_t));

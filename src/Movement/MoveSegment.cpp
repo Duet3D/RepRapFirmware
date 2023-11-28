@@ -10,7 +10,7 @@
 // Static members
 
 MoveSegment *MoveSegment::freeList = nullptr;
-MoveSegment *MoveSegment::deltaFreeList = nullptr;
+DeltaMoveSegment *MoveSegment::deltaFreeList = nullptr;
 unsigned int MoveSegment::numCreated = 0;
 
 // Allocate a MoveSegment, from the freelist if possible, else create a new one. Not thread-safe. Clears the flags.
@@ -60,11 +60,11 @@ void MoveSegment::DebugPrint(char ch) const noexcept
 	debugPrintf("%c d=%.4e t=%.1f ", ch, (double)segLength, (double)segTime);
 	if (IsLinear())
 	{
-		debugPrintf("c=%.4", (double)c);
+		debugPrintf("c=%.4e", (double)c);
 	}
 	else
 	{
-		debugPrintf("b=%.4e c=%.4e a=%.4", (double)b, (double)c, (double)acceleration);
+		debugPrintf("b=%.4e c=%.4e a=%.4e", (double)b, (double)c, (double)acceleration);
 	}
 	if (IsDelta())
 	{

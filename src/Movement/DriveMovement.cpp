@@ -592,13 +592,13 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 				stepsToLimit = reverseStartStep - nextStep;
 			}
 
-			if (stepsToLimit > 1 && stepInterval < DDA::MinCalcInterval)
+			if (stepsToLimit > 1 && stepInterval < Move::MinCalcInterval)
 			{
-				if (stepInterval < DDA::MinCalcInterval/4 && stepsToLimit > 8)
+				if (stepInterval < Move::MinCalcInterval/4 && stepsToLimit > 8)
 				{
 					shiftFactor = 3;							// octal stepping
 				}
-				else if (stepInterval < DDA::MinCalcInterval/2 && stepsToLimit > 4)
+				else if (stepInterval < Move::MinCalcInterval/2 && stepsToLimit > 4)
 				{
 					shiftFactor = 2;							// quad stepping
 				}
