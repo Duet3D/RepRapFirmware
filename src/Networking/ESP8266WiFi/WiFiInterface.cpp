@@ -2299,7 +2299,15 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		{
 			++spiRxOverruns;
 		}
+#if 1
+		CheckStackValue(9, ra);
+		spi_tx_dma_disable();
+		CheckStackValue(9, ra);
+		spi_rx_dma_disable();
+		CheckStackValue(9, ra);
+#else
 		spi_dma_disable();
+#endif
 		DisableSpi();
 	}
 #else
