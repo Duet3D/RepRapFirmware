@@ -18,6 +18,24 @@
 # include "CAN/CanMotion.h"
 #endif
 
+/* Note on how the DDA ring works, using the new step-generation code that implements late input shaping:
+ * A DDA represents a straight-line move with at least one of an acceleration segment, a steady speed segment, and a deceleration segment.
+ * A single G0 or G1 command may be represented by a single DDA, or by multiple DDAs when the move has been segmented.
+ *
+ * DDAs are added to a ring in response to G0, G1, G2 and G3 commands and when RRF generates movement automatically (e.g. probing moves).
+ * A newly-added DDA is in state 'provisional' and has its end speed set to zero. In this state its speed, acceleration and deceleration can be modified.
+ * These modifications happen as other DDAs are added to the ring and the DDAs are adjusted to give a smooth transition between them.
+ *
+ * Shortly before a move is due to be executed, DDA::Prepare is called. This causes the move parameters to be frozen.
+ * Move segments are generated, and/or the move details are sent to CAN-connected expansion boards. The DDA state is set to "scheduled".
+ *
+ * The scheduled DDA remains in the ring until the time for it to finish executing has passed, in order that we can report on
+ * the parameters of the currently-executing move, e.g. requested and top speeds, extrusion rate, and extrusion amount for the filament monitor.
+ *
+ * When a move requires that endstops and/or Z probes are active, all other moves are completed before starting it, and no new moves are allowed
+ * to be added to the ring until it completes. So it is the only move in the ring with state 'scheduled'.
+ */
+
 constexpr uint32_t MoveStartPollInterval = 10;					// delay in milliseconds between checking whether we should start moves
 
 // Object model table and functions
@@ -154,25 +172,27 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 void DDARing::RecycleDDAs() noexcept
 {
 	// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
-	while (checkPointer->GetState() == DDA::scheduled)
+	// Only this function modifies checkPointer but it has to be declared volatile because other tasks may read it
+	DDA *nvCheckPointer;
+	while ((nvCheckPointer = checkPointer)->HasExpired())
 	{
-		// Check for step errors and record/print them if we have any, before we lose the DMs
-		if (checkPointer->HasStepError())
+		// Check for step errors and record/print them if we have any
+		if (nvCheckPointer->HasStepError())
 		{
 			if (reprap.GetDebugFlags(Module::Move).IsAnyBitSet(MoveDebugFlags::PrintBadMoves, MoveDebugFlags::PrintAllMoves))
 			{
-				checkPointer->DebugPrintAll("rd");
+				nvCheckPointer->DebugPrint("rd");
 			}
 			++stepErrors;
 			reprap.GetPlatform().LogError(ErrorCode::BadMove);
 		}
 
 		// Now release the DMs and check for underrun
-		if (checkPointer->Free())
+		if (nvCheckPointer->Free())
 		{
 			++numLookaheadUnderruns;
 		}
-		checkPointer = checkPointer->GetNext();
+		checkPointer = nvCheckPointer->GetNext();
 	}
 }
 
@@ -671,6 +691,36 @@ void DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 			IrqEnable();
 		}
 	}
+}
+
+float DDARing::GetRequestedSpeedMmPerSec() const noexcept
+{
+	const DDA* const cdda = checkPointer;					// capture volatile variable
+	return (cdda->state == DDA::scheduled) ? cdda->GetRequestedSpeedMmPerSec() : 0.0;
+}
+
+float DDARing::GetTopSpeedMmPerSec() const noexcept
+{
+	const DDA* const cdda = checkPointer;					// capture volatile variable
+	return (cdda->state == DDA::scheduled) ? cdda->GetTopSpeedMmPerSec() : 0.0;
+}
+
+float DDARing::GetAccelerationMmPerSecSquared() const noexcept
+{
+	const DDA* const cdda = checkPointer;					// capture volatile variable
+	return (cdda->state == DDA::scheduled) ? cdda->GetAccelerationMmPerSecSquared() : 0.0;
+}
+
+float DDARing::GetDecelerationMmPerSecSquared() const noexcept
+{
+	const DDA* const cdda = checkPointer;					// capture volatile variable
+	return (cdda->state == DDA::scheduled) ? cdda->GetDecelerationMmPerSecSquared() : 0.0;
+}
+
+float DDARing::GetTotalExtrusionRate() const noexcept
+{
+	const DDA* const cdda = checkPointer;					// capture volatile variable
+	return (cdda->state == DDA::scheduled) ? cdda->GetTotalExtrusionRate() : 0.0;
 }
 
 // Pause the print as soon as we can.

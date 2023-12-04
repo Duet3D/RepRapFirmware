@@ -94,9 +94,7 @@ private:
 
 	DDA* addPointer;
 	DDA* volatile getPointer;
-	DDA* checkPointer;
-
-	volatile float liveCoordinates[MaxAxesPlusExtruders];						// The endpoint that the machine moved to in the last completed move
+	DDA* volatile checkPointer;
 
 	unsigned int numDdasInRing;
 	uint32_t gracePeriod;														// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead

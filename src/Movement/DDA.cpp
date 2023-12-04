@@ -1221,7 +1221,7 @@ pre(disableDeltaMapping || drive < MaxAxes)
 	}
 }
 
-// Prepare this DDA for execution.
+// Dispatch this DDA to the move segment queue for execution.
 // This must not be called with interrupts disabled, because it calls Platform::EnableDrive.
 void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 {

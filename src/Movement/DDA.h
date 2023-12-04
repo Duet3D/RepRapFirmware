@@ -108,11 +108,11 @@ public:
 	void FetchCurrentPositions(int32_t ep[MaxAxesPlusExtruders]) const noexcept;
 	void SetPositions(const float move[]) noexcept;									// Force the endpoints to be these
 	FilePosition GetFilePosition() const noexcept { return filePos; }
-	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
-	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(requestedSpeed); }
-	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(topSpeed); }
-	float GetAccelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(acceleration); }
-	float GetDecelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(deceleration); }
+	float GetRequestedSpeedMmPerClock() const noexcept;
+	float GetRequestedSpeedMmPerSec() const noexcept;
+	float GetTopSpeedMmPerSec() const noexcept;
+	float GetAccelerationMmPerSecSquared() const noexcept;
+	float GetDecelerationMmPerSecSquared() const noexcept;
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float GetTotalExtrusionRate() const noexcept;
 
@@ -126,6 +126,7 @@ public:
 	float GetInitialUserC1() const noexcept { return initialUserC1; }
 
 	uint32_t GetClocksNeeded() const noexcept { return clocksNeeded; }
+	bool HasExpired() const noexcept;
 	bool IsGoodToPrepare() const noexcept;
 	bool IsNonPrintingExtruderMove() const noexcept { return flags.isNonPrintingExtruderMove; }
 	void UpdateMovementAccumulators(volatile int32_t *accumulators) const noexcept;
@@ -285,11 +286,16 @@ inline bool DDA::CanPauseAfter() const noexcept
 		;
 }
 
-
 // This is called by DDARing::LiveCoordinates to get the endpoints of a move that has been completed
 inline void DDA::FetchEndPoints(int32_t ep[MaxAxesPlusExtruders]) const noexcept
 {
 	memcpyi32(ep, endPoint, MaxAxesPlusExtruders);
+}
+
+// This is called from DDARing only
+inline bool DDA::HasExpired() const noexcept
+{
+	return state == scheduled && StepTimer::GetTimerTicks() - (afterPrepare.moveStartTime + clocksNeeded) < 0xFF000000;
 }
 
 #endif /* DDA_H_ */
