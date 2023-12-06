@@ -2240,20 +2240,13 @@ float DDA::GetProportionDone(bool moveWasAborted) const noexcept
 
 bool DDA::HasStepError() const noexcept
 {
-#if 0	//debug
-	if (hadHiccup)
+	for (const DriveMovement* dm = completedDMs; dm != nullptr; )
 	{
-		return true;			// temporary for debugging DAA
-	}
-#endif
-
-	for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
-	{
-		const DriveMovement* const pdm = FindDM(drive);
-		if (pdm != nullptr && pdm->state == DMState::stepError)
+		if (dm->state == DMState::stepError1 || dm->state == DMState::stepError2 || dm->state == DMState::stepError3)
 		{
 			return true;
 		}
+		dm = dm->nextDM;
 	}
 	return false;
 }

@@ -18,7 +18,9 @@ class PrepParams;
 enum class DMState : uint8_t
 {
 	idle = 0,
-	stepError,
+	stepError1,
+	stepError2,
+	stepError3,
 
 	// All higher values are various states of motion
 	firstMotionState,
@@ -65,6 +67,8 @@ public:
 	static unsigned int NumCreated() noexcept { return numCreated; }
 	static DriveMovement *Allocate(size_t p_drive) noexcept;
 	static void Release(DriveMovement *item) noexcept;
+
+	static int32_t maxStepsLate;
 
 private:
 	bool CalcNextStepTimeFull(const DDA &dda) noexcept SPEED_CRITICAL;
