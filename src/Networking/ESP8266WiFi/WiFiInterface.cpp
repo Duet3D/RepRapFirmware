@@ -2243,6 +2243,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	Cache::FlushBeforeDMASend(bufferOut, (dataOut != nullptr) ? sizeof(bufferOut->hdr) + dataOutLength : sizeof(bufferOut->hdr));
 
 #if SAME5x
+	SetWatchpoint(0, reinterpret_cast<const void*>(ra));
     ResetSpi();													// in case the DMA transfered an extra work
     spi_slave_dma_setup(dataOutLength, dataInLength);
 	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;						// clear any pending interrupts
@@ -2285,6 +2286,9 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 			{
 				debugPrintf("ResponseTimeout, pending=%d\n", (int)transferPending);
 			}
+#if SAME5x	//TEMP DEBUG
+			ClearWatchpoint(0);
+#endif
 			return ResponseTimeout;
 		}
 	} while (transferPending);
@@ -2314,13 +2318,14 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
 #endif
 
-	// Look at the response
+		// Look at the response
 #if SAME5x	//TEMP DEBUG
 	CheckStackValue(9, ra);
 #endif
 	Cache::InvalidateAfterDMAReceive(&bufferIn->hdr, sizeof(bufferIn->hdr));
 #if SAME5x	//TEMP DEBUG
 	CheckStackValue(9, ra);
+	ClearWatchpoint(0);
 #endif
 	if (bufferIn->hdr.formatVersion != MyFormatVersion)
 	{
