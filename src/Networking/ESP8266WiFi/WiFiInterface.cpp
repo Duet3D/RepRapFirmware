@@ -2243,7 +2243,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	Cache::FlushBeforeDMASend(bufferOut, (dataOut != nullptr) ? sizeof(bufferOut->hdr) + dataOutLength : sizeof(bufferOut->hdr));
 
 #if SAME5x
-	SetWatchpoint(0, reinterpret_cast<const void*>(ra));
+	SetWatchpoint(0, const_cast<const uint32_t*>(GetStackOffset(9)));
     ResetSpi();													// in case the DMA transfered an extra work
     spi_slave_dma_setup(dataOutLength, dataInLength);
 	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;						// clear any pending interrupts
