@@ -166,6 +166,12 @@ inline uint32_t GetStackValue(uint32_t dwordOffset) noexcept
 
 #define CheckStackValue(dwordOffset, val) do { if (GetStackValue(dwordOffset) != val) { vAssertCalled(__LINE__, __FILE__); } } while (false)
 
+inline volatile uint32_t *GetStackOffset(uint32_t dwordOffset) noexcept
+{
+    register volatile uint32_t* sp asm ("sp");
+    return &sp[dwordOffset];
+}
+
 // Functions to set and clear data watchpoints
 inline void SetWatchpoint(unsigned int number, const void* addr, unsigned int addrBits = 2) noexcept
 {
