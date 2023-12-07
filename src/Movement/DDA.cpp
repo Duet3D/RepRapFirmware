@@ -2242,7 +2242,7 @@ bool DDA::HasStepError() const noexcept
 {
 	for (const DriveMovement* dm = completedDMs; dm != nullptr; )
 	{
-		if (dm->state == DMState::stepError1 || dm->state == DMState::stepError2 || dm->state == DMState::stepError3)
+		if (dm->state >= DMState::stepError1 && dm->state < DMState::firstMotionState)
 		{
 			return true;
 		}

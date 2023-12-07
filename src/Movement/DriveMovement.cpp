@@ -62,7 +62,10 @@ void DriveMovement::DebugPrint() const noexcept
 	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));
 	if (state != DMState::idle)
 	{
-		const char *const errText = (state == DMState::stepError1) ? " ERR1:" : (state == DMState::stepError2) ? " ERR2:" : (state == DMState::stepError3) ? " ERR3:" : ":";
+		const char *const errText = (state == DMState::stepError1) ? " ERR1:"
+									: (state == DMState::stepError2) ? " ERR2:"
+										: (state == DMState::stepError3) ? " ERR3:"
+											: ":";
 		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " ssl=%" PRIu32 " A=%.4e B=%.4e C=%.4e dsf=%.4e tsf=%.1f",
 						c, errText, (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, segmentStepLimit,
 							(double)pA, (double)pB, (double)pC, (double)distanceSoFar, (double)timeSoFar);

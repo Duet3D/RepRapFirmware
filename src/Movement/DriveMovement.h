@@ -67,8 +67,7 @@ public:
 	static unsigned int NumCreated() noexcept { return numCreated; }
 	static DriveMovement *Allocate(size_t p_drive) noexcept;
 	static void Release(DriveMovement *item) noexcept;
-
-	static int32_t maxStepsLate;
+	static int32_t GetAndClearMaxStepsLate() noexcept;
 
 private:
 	bool CalcNextStepTimeFull(const DDA &dda) noexcept SPEED_CRITICAL;
@@ -82,6 +81,7 @@ private:
 
 	static DriveMovement *freeList;
 	static unsigned int numCreated;
+	static int32_t maxStepsLate;
 
 	// Parameters common to Cartesian, delta and extruder moves
 
@@ -209,6 +209,13 @@ inline void DriveMovement::CheckDirection(bool reversed) noexcept
 		direction = !direction;
 		directionChanged = true;
 	}
+}
+
+inline int32_t DriveMovement::GetAndClearMaxStepsLate() noexcept
+{
+	const int32_t ret = maxStepsLate;
+	maxStepsLate = 0;
+	return ret;
 }
 
 #if HAS_SMART_DRIVERS

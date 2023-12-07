@@ -536,13 +536,12 @@ void Move::Diagnostics(MessageType mtype) noexcept
 				", ebfmin %.2f, ebfmax %.2f"
 #endif
 				"\n",
-						DriveMovement::NumCreated(), MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, DriveMovement::maxStepsLate
+						DriveMovement::NumCreated(), MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, DriveMovement::GetAndClearMaxStepsLate()
 #if 1
 						, (double)minExtrusionPending, (double)maxExtrusionPending
 #endif
 		);
 	longestGcodeWaitInterval = 0;
-	DriveMovement::maxStepsLate = 0;
 #if 1	//debug
 	minExtrusionPending = maxExtrusionPending = 0.0;
 #endif
