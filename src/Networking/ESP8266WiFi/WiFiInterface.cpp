@@ -2177,6 +2177,8 @@ void WiFiInterface::TerminateDataPort() noexcept
 	}
 }
 
+uint32_t testWatchpointFlag = 0;
+
 // Send a command to the ESP and get the result
 int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, uint32_t param32, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept
 {
@@ -2320,11 +2322,16 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 
 		// Look at the response
 #if SAME5x	//TEMP DEBUG
-	CheckStackValue(9, ra);
+	CheckStackValue(9, ra);			//***** This is the check that occasionally fails ******
 #endif
 	Cache::InvalidateAfterDMAReceive(&bufferIn->hdr, sizeof(bufferIn->hdr));
 #if SAME5x	//TEMP DEBUG
 	CheckStackValue(9, ra);
+	// Test code to make sure the watchpoint is working. Use M122 P1007 to set testWatchpointFlag nonzero.
+	if (testWatchpointFlag != 0)
+	{
+		*GetStackOffset(9) = 0x12345678;
+	}
 	ClearWatchpoint(0);
 #endif
 	if (bufferIn->hdr.formatVersion != MyFormatVersion)
