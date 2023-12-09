@@ -1643,7 +1643,7 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 			if (dmToInsert->directionChanged)
 			{
 				dmToInsert->directionChanged = false;
-				p.SetDirection(dmToInsert->drive, dmToInsert->direction);
+				SetDirection(dmToInsert->drive, dmToInsert->direction);
 			}
 			InsertDM(dmToInsert);
 		}
@@ -1670,6 +1670,27 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 	}
 }
 
+void Move::SetDirection(Platform& p, size_t axisOrExtruder, bool direction) noexcept
+{
+#ifdef DUET3_MB6XD
+	while (StepTimer::GetTimerTicks() - lastStepHighTime < GetSlowDriverDirHoldClocksFromLeadingEdge()) { }
+#else
+	const bool isSlowDriver = (p.GetDriversBitmap(axisOrExtruder) & p.GetSlowDriversBitmap()) != 0;
+	if (isSlowDriver)
+	{
+		while (StepTimer::GetTimerTicks() - lastStepLowTime < p.GetSlowDriverDirHoldClocksFromTrailingEdge()) { }
+	}
+#endif
+
+	p.SetDriverDirection(axisOrExtruder, direction);
+
+#ifndef DUET3_MB6XD
+	if (isSlowDriver)
+#endif
+	{
+		lastDirChangeTime = StepTimer::GetTimerTicks();
+	}
+}
 // Simulate stepping the drivers, for debugging.
 // This is basically a copy of StepDrivers except that instead of being called from the timer ISR and generating steps,
 // it is called from the Move task and outputs info on the step timings. It ignores endstops.

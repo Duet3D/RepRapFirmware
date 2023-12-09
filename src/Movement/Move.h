@@ -194,7 +194,7 @@ public:
 	bool WriteResumeSettings(FileStore *f) const noexcept;									// Write settings for resuming the print
 #endif
 
-	uint32_t ExtruderPrintingSince() const noexcept { return rings[0].ExtruderPrintingSince(); }	// When we started doing normal moves after the most recent extruder-only move
+	uint32_t ExtruderPrintingSince() const noexcept;										// When we started doing normal moves after the most recent extruder-only move
 
 	unsigned int GetJerkPolicy() const noexcept { return jerkPolicy; }
 	void SetJerkPolicy(unsigned int jp) noexcept { jerkPolicy = jp; }
@@ -280,6 +280,7 @@ private:
 	void StopDrive(size_t drive) noexcept;											// stop movement of a drive and recalculate the endpoint
 	void MoveAborted() noexcept;													// cancel the current isolated move
 	void InsertDM(DriveMovement *dm) noexcept;										// insert a DM into the active list, keeping it in step time order
+	void SetDirection(Platform& p, size_t axisOrExtruder, bool direction) noexcept;	// set the direction of a driver, observing timing requirements
 
 #if SUPPORT_CAN_EXPANSION
 	uint32_t InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
@@ -446,11 +447,17 @@ inline void Move::InsertDM(DriveMovement *dm) noexcept
 	*dmp = dm;
 }
 
+#if 0	//TODO remove or fix this code
 // Force an end point
 inline void Move::SetDriveCoordinate(int32_t a, size_t drive) noexcept
 {
 	endPoint[drive] = a;
 	flags.endCoordinatesValid = false;
+}
+
+inline uint32_t Move::ExtruderPrintingSince() const noexcept
+{
+	return rings[0].ExtruderPrintingSince();	// When we started doing normal moves after the most recent extruder-only move
 }
 
 #if SUPPORT_CAN_EXPANSION
@@ -476,6 +483,7 @@ inline __attribute__((always_inline)) void Move::InsertHiccup(uint32_t whenNextI
 }
 
 #endif
+#endif	//TODO
 
 #if HAS_SMART_DRIVERS
 

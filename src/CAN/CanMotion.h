@@ -18,7 +18,8 @@ namespace CanMotion
 {
 	void Init() noexcept;
 	void StartMovement() noexcept;
-	void AddAxisMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept;
+	void AddLinearAxisMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept;
+	void AddDeltaAxisMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept;
 	void AddExtruderMovement(const PrepParams& params, DriverId canDriver, float extrusion, bool usePressureAdvance) noexcept;
 	uint32_t FinishMovement(const DDA& dda, uint32_t moveStartTime, bool simulating) noexcept;
 	bool CanPrepareMove() noexcept;

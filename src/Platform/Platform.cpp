@@ -2506,18 +2506,9 @@ void Platform::IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(
 
 // This is called from the step ISR as well as other places, so keep it fast
 // If drive >= DRIVES then we are setting an individual motor direction
-void Platform::SetDirection(size_t axisOrExtruder, bool direction) noexcept
+// It is the responsibility of the caller to ensure that minimum timings between step pulses and direction changes are observed.
+void Platform::SetDriverDirection(size_t axisOrExtruder, bool direction) noexcept
 {
-#ifdef DUET3_MB6XD
-	while (StepTimer::GetTimerTicks() - DDA::lastStepHighTime < GetSlowDriverDirHoldClocksFromLeadingEdge()) { }
-#else
-	const bool isSlowDriver = (GetDriversBitmap(axisOrExtruder) & GetSlowDriversBitmap()) != 0;
-	if (isSlowDriver)
-	{
-		while (StepTimer::GetTimerTicks() - DDA::lastStepLowTime < GetSlowDriverDirHoldClocksFromTrailingEdge()) { }
-	}
-#endif
-
 	if (axisOrExtruder < MaxAxesPlusExtruders)
 	{
 		IterateLocalDrivers(axisOrExtruder, [this, direction](uint8_t driver) { this->SetDriverDirection(driver, direction); });
@@ -2525,13 +2516,6 @@ void Platform::SetDirection(size_t axisOrExtruder, bool direction) noexcept
 	else if (axisOrExtruder < MaxAxesPlusExtruders + NumDirectDrivers)
 	{
 		SetDriverDirection(axisOrExtruder - MaxAxesPlusExtruders, direction);
-	}
-
-#ifndef DUET3_MB6XD
-	if (isSlowDriver)
-#endif
-	{
-		DDA::lastDirChangeTime = StepTimer::GetTimerTicks();
 	}
 }
 

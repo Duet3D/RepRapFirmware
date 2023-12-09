@@ -1266,8 +1266,6 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		}
 #endif
 
-		activeDMs = nullptr;
-
 #if SUPPORT_CAN_EXPANSION
 		CanMotion::StartMovement();
 #endif
@@ -1283,6 +1281,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 #if SUPPORT_CAN_EXPANSION
 		afterPrepare.drivesMoving.Clear();
 #endif
+		Move& move = reprap.GetMove();
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 		{
 			if (flags.isLeadscrewAdjustmentMove)
@@ -1301,28 +1300,12 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 #if SUPPORT_CAN_EXPANSION
 						if (driver.IsRemote())
 						{
-							CanMotion::AddAxisMovement(params, driver, delta);
+							CanMotion::AddLinearAxisMovement(params, driver, delta);
 						}
 						else
 #endif
 						{
-							EnsureSegments(params);
-							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders);
-							pdm->direction = (delta >= 0);
-							pdm->totalSteps = labs(delta);
-							if (pdm->PrepareCartesianAxis(*this, params))
-							{
-								// Check for sensible values, print them if they look dubious
-								if (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
-								{
-									DebugPrint("pr_err1");
-								}
-								InsertDM(pdm);
-							}
-							else
-							{
-								DriveMovement::Release(pdm);
-							}
+							move.AddLinearSegments(driver.localDriver + MaxAxesPlusExtruders, startTime, params, delta, false);
 						}
 					}
 				}
@@ -1332,33 +1315,10 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			{
 				// On a delta we need to move all towers even if some of them have no net movement
 				platform.EnableDrivers(drive, false);
-				EnsureSegments(params);
-
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
-				if (platform.GetDriversBitmap(drive) != 0						// if any of the drives is local
-# if SUPPORT_CAN_EXPANSION
-						|| flags.checkEndstops									// if checking endstops, create a DM even if there are no local drives involved
-# endif
-				   )
+				if (platform.GetDriversBitmap(drive) != 0)						// if any of the drives is local
 				{
-					DriveMovement* const pdm = DriveMovement::Allocate(drive);
-					pdm->direction = (delta >= 0);
-					pdm->totalSteps = labs(delta);								// this is net steps for now
-					if (pdm->PrepareDeltaAxis(*this, params))
-					{
-						// Check for sensible values, print them if they look dubious
-						if (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
-						{
-							DebugPrint("pr_err2");
-						}
-						InsertDM(pdm);
-					}
-					else
-					{
-						pdm->state = DMState::idle;
-						pdm->nextDM = completedDMs;
-						completedDMs = pdm;
-					}
+					move.AddDeltaSegments(drive, startTime, params, delta, false);
 				}
 
 # if SUPPORT_CAN_EXPANSION
@@ -1369,7 +1329,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 					const DriverId driver = config.driverNumbers[i];
 					if (driver.IsRemote())
 					{
-						CanMotion::AddAxisMovement(params, driver, delta);
+						CanMotion::AddDeltaAxisMovement(params, driver, delta);
 					}
 				}
 # endif
@@ -1383,7 +1343,6 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 				if (delta != 0)
 				{
 					platform.EnableDrivers(drive, false);
-					EnsureSegments(params);
 					if (flags.continuousRotationShortcut && reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
 					{
 						// This is a continuous rotation axis, so we may have adjusted the move to cross the 180 degrees position
@@ -1400,28 +1359,9 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 
 					delta = platform.ApplyBacklashCompensation(drive, delta);
 
-					if (   platform.GetDriversBitmap(drive) != 0				// if any of the drives is local
-#if SUPPORT_CAN_EXPANSION
-						|| flags.checkEndstops									// if checking endstops or a Z probe, create a DM even if there are no local drives involved
-#endif
-					   )
+					if (platform.GetDriversBitmap(drive) != 0)				// if any of the drives is local
 					{
-						DriveMovement* const pdm = DriveMovement::Allocate(drive);
-						pdm->direction = (delta >= 0);
-						pdm->totalSteps = labs(delta);
-						if (pdm->PrepareCartesianAxis(*this, params))
-						{
-							// Check for sensible values, print them if they look dubious
-							if (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
-							{
-								DebugPrint("pr_err3");
-							}
-							InsertDM(pdm);
-						}
-						else
-						{
-							DriveMovement::Release(pdm);
-						}
+						move.AddLinearSegments(drive, startTime, params, delta, flags.isPrintingMove);
 					}
 
 #if SUPPORT_CAN_EXPANSION
@@ -1432,7 +1372,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						const DriverId driver = config.driverNumbers[i];
 						if (driver.IsRemote())
 						{
-							CanMotion::AddAxisMovement(params, driver, delta);
+							CanMotion::AddLinearAxisMovement(params, driver, delta);
 						}
 					}
 #endif
@@ -1474,29 +1414,16 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 #if SUPPORT_CAN_EXPANSION
 						afterPrepare.drivesMoving.SetBit(drive);
 						const DriverId driver = platform.GetExtruderDriver(extruder);
+						const float delta = totalDistance * directionVector[drive] * platform.DriveStepsPerUnit(drive);
 						if (driver.IsRemote())
 						{
 							// The MovementLinearShaped message requires the extrusion amount in steps to be passed as a float. The remote board adds the PA and handles fractional steps.
-							CanMotion::AddExtruderMovement(params, driver, totalDistance * directionVector[drive] * platform.DriveStepsPerUnit(drive), flags.usePressureAdvance);
+							CanMotion::AddExtruderMovement(params, driver, delta, flags.usePressureAdvance);
 						}
 						else
 #endif
 						{
-							EnsureSegments(params);
-							DriveMovement* const pdm = DriveMovement::Allocate(drive);
-							pdm->direction = (directionVector[drive] >= 0);
-							if (pdm->PrepareExtruder(*this, params, platform.DriveStepsPerUnit(drive) * directionVector[drive]))
-							{
-								// Check for sensible values, debugPrint them if they look dubious
-								//TODO (note: totalSteps is no longer valid for extruders)
-								InsertDM(pdm);
-							}
-							else
-							{
-								pdm->state = DMState::idle;
-								pdm->nextDM = completedDMs;
-								completedDMs = pdm;
-							}
+							move.AddExtruderSegments(drive, startTime, params, delta, flags.usePressureAdvance);
 						}
 					}
 				}
@@ -1722,7 +1649,7 @@ pre(state == frozen)
 
 		for (const DriveMovement* pdm = activeDMs; pdm != nullptr; pdm = pdm->nextDM)
 		{
-			p.SetDirection(pdm->drive, pdm->direction);
+			reprap.GetMove().SetDirection(pdm->drive, pdm->direction);
 		}
 
 #if SUPPORT_REMOTE_COMMANDS

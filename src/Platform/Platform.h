@@ -353,7 +353,7 @@ public:
 	// Movement
 	void EmergencyStop() noexcept;
 	size_t GetNumActualDirectDrivers() const noexcept;
-	void SetDirection(size_t axisOrExtruder, bool direction) noexcept;
+	void SetDriverDirection(size_t axisOrExtruder, bool direction) noexcept;
 	void SetDirectionValue(size_t driver, bool dVal) noexcept;
 	bool GetDirectionValue(size_t driver) const noexcept;
 	void SetDriverAbsoluteDirection(size_t driver, bool dVal) noexcept;

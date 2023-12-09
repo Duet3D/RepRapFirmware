@@ -11,6 +11,7 @@
 #include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/DDA.h>
+#include <Movement/Move.h>
 
 #if SUPPORT_OBJECT_MODEL
 

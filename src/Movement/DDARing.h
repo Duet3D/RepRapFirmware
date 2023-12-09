@@ -128,6 +128,7 @@ private:
 	volatile bool waitingForRingToEmpty;										// True if Move has signalled that we are waiting for this ring to empty
 };
 
+#if 0	//TODO save this code for now to remind us how to start the laser, remove it when e have srted that out
 // Start the next move. Return true if laser or IO bits need to be active
 // Must be called with base priority greater than or equal to the step interrupt, to avoid a race with the step ISR.
 inline bool DDARing::StartNextMove(Platform& p, uint32_t startTime) noexcept
@@ -151,5 +152,6 @@ pre(getPointer->GetState() == DDA::frozen)
 	return false;
 #endif
 }
+#endif
 
 #endif /* SRC_MOVEMENT_DDARING_H_ */
