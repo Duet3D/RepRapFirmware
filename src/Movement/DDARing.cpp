@@ -829,6 +829,7 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 
+#if 0	//TODO
 // Pause the print immediately, returning true if we were able to
 bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 {
@@ -915,24 +916,24 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 }
 
 #endif
+#endif
 
 void DDARing::Diagnostics(MessageType mtype, unsigned int ringNumber) noexcept
 {
-	const DDA * const cdda = currentDda;
 	reprap.GetPlatform().MessageF(mtype,
-									"=== DDARing %u ===\nScheduled moves %" PRIu32 ", completed %" PRIu32 ", hiccups %" PRIu32 ", stepErrors %u, LaErrors %u, Underruns [%u, %u, %u], CDDA state %d\n",
-									ringNumber, scheduledMoves, completedMoves, numHiccups, stepErrors, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns, numNoMoveUnderruns,
-									(cdda == nullptr) ? -1 : (int)cdda->GetState());
+									"=== DDARing %u ===\nScheduled moves %" PRIu32 ", completed %" PRIu32 ", hiccups %" PRIu32 ", stepErrors %u, LaErrors %u, Underruns [%u, %u, %u]\n",
+									ringNumber, scheduledMoves, completedMoves, numHiccups, stepErrors, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns, numNoMoveUnderruns
+								 );
 	numHiccups = stepErrors = numLookaheadUnderruns = numPrepareUnderruns = numNoMoveUnderruns = numLookaheadErrors = 0;
 }
 
 #if SUPPORT_LASER
 
 // Manage the laser power. Return the number of ticks until we should be called again, or 0 to be called at the start of the next move.
-uint32_t DDARing::ManageLaserPower() const noexcept
+uint32_t DDARing::ManageLaserPower() noexcept
 {
 	SetBasePriority(NvicPriorityStep);							// lock out step interrupts
-	DDA * const cdda = currentDda;								// capture volatile variable
+	const DDA * const cdda = GetCurrentDDA();					// capture volatile variable
 	if (cdda != nullptr)
 	{
 		const uint32_t ret = cdda->ManageLaserPower();
@@ -955,7 +956,7 @@ void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
 {
 	if (addPointer->GetState() == DDA::empty)
 	{
-		if (addPointer->InitFromRemote(*this, msg))
+		if (addPointer->InitFromRemote(msg))
 		{
 			addPointer = addPointer->GetNext();
 			scheduledMoves++;
@@ -968,7 +969,7 @@ void DDARing::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexc
 {
 	if (addPointer->GetState() == DDA::empty)
 	{
-		if (addPointer->InitFromRemote(*this, msg))
+		if (addPointer->InitFromRemote(msg))
 		{
 			addPointer = addPointer->GetNext();
 			scheduledMoves++;

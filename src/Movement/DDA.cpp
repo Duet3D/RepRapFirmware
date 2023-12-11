@@ -161,6 +161,16 @@ DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
 #endif
 }
 
+// Return the number of clocks this DDA still needs to execute.
+// This could be slightly negative, if the move is overdue for completion.
+int32_t DDA::GetTimeLeft() const noexcept
+pre(state == executing || state == frozen || state == completed)
+{
+	return (state == completed) ? 0
+			: (state == executing) ? (int32_t)(afterPrepare.moveStartTime + clocksNeeded - StepTimer::GetTimerTicks())
+			: (int32_t)clocksNeeded;
+}
+
 void DDA::DebugPrintVector(const char *name, const float *vec, size_t len) const noexcept
 {
 	debugPrintf("%s=", name);
@@ -582,7 +592,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 
 #endif
 
-#if 0 //SUPPORT_REMOTE_COMMANDS
+#if SUPPORT_REMOTE_COMMANDS
 
 // Set up a remote move. Return true if it represents real movement, else false.
 // All values have already been converted to step clocks and the total distance has been normalised to 1.0.

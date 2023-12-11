@@ -64,7 +64,7 @@ uint32_t PortControl::UpdatePorts() noexcept
 		}
 		cdda = cdda->GetNext();
 		st = cdda->GetState();
-	} while (st == DDA::executing || st == DDA::frozen);
+	} while (st == DDA::scheduled);
 
 	SetBasePriority(0);
 	UpdatePorts(0);

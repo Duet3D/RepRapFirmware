@@ -98,6 +98,13 @@ public:
 	DDAState GetState() const noexcept { return state; }
 	DDA* GetNext() const noexcept { return next; }
 	DDA* GetPrevious() const noexcept { return prev; }
+	int32_t GetTimeLeft() const noexcept;
+
+#if SUPPORT_REMOTE_COMMANDS
+	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
+	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
+	void StopDrivers(uint16_t whichDrives) noexcept;
+#endif
 
 	const int32_t *DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates
 	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;						// Force an end point

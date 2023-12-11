@@ -35,6 +35,7 @@ public:
 	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
 	uint32_t GetGracePeriod() const noexcept { return gracePeriod; }					// Return the minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
+	const DDA *GetCurrentDDA() noexcept;												// If a move from this ring should be executing now, fetch its DDA
 	float PushBabyStepping(size_t axis, float amount) noexcept;							// Try to push some babystepping through the lookahead queue, returning the amount pushed
 
 	uint32_t GetScheduledMoves() const noexcept { return scheduledMoves; }				// How many moves have been scheduled?
@@ -67,7 +68,7 @@ public:
 #endif
 
 #if SUPPORT_LASER
-	uint32_t ManageLaserPower() const noexcept;											// Manage the laser power
+	uint32_t ManageLaserPower() noexcept;												// Manage the laser power
 #endif
 
 	void RecordLookaheadError() noexcept { ++numLookaheadErrors; }						// Record a lookahead error
