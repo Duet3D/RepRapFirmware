@@ -2314,7 +2314,11 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 #else
 		spi_dma_disable();
 #endif
+#if 1
+		ResetSpi();
+#else
 		DisableSpi();
+#endif
 	}
 #else
 	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
