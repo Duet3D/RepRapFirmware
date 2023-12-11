@@ -20,6 +20,7 @@
 
 DriveMovement *DriveMovement::freeList = nullptr;
 unsigned int DriveMovement::numCreated = 0;
+int32_t DriveMovement::maxStepsLate = 0;
 
 void DriveMovement::InitialAllocate(unsigned int num) noexcept
 {
@@ -61,8 +62,12 @@ void DriveMovement::DebugPrint() const noexcept
 	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));
 	if (state != DMState::idle)
 	{
+		const char *const errText = (state == DMState::stepError1) ? " ERR1:"
+									: (state == DMState::stepError2) ? " ERR2:"
+										: (state == DMState::stepError3) ? " ERR3:"
+											: ":";
 		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " ssl=%" PRIu32 " A=%.4e B=%.4e C=%.4e dsf=%.4e tsf=%.1f",
-						c, (state == DMState::stepError) ? " ERR:" : ":", (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, segmentStepLimit,
+						c, errText, (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, segmentStepLimit,
 							(double)pA, (double)pB, (double)pC, (double)distanceSoFar, (double)timeSoFar);
 #if SUPPORT_LINEAR_DELTA
 		if (isDelta)
@@ -600,8 +605,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 									NewCartesianSegment();
 				if (!more)
 				{
-					state = DMState::stepError;
-					nextStep += 100000000;							// so we can tell what happened in the debug print
+					state = DMState::stepError1;
 					return false;
 				}
 			}
@@ -651,17 +655,17 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	switch (state)
 	{
 	case DMState::cartLinear:									// linear steady speed
-		nextCalcStepTime = pB + (float)(nextStep + stepsTillRecalc) * pC;
+		nextCalcStepTime = pB + (float)(nextStep + (int32_t)stepsTillRecalc) * pC;
 		break;
 
 	case DMState::cartAccel:									// Cartesian accelerating
-		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)(nextStep + (int32_t)stepsTillRecalc));
 		break;
 
 	case DMState::cartDecelForwardsReversing:
-		if (nextStep + stepsTillRecalc < reverseStartStep)
+		if (nextStep + (int32_t)stepsTillRecalc < reverseStartStep)
 		{
-			nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+			nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + (int32_t)stepsTillRecalc));
 			break;
 		}
 
@@ -676,7 +680,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian decelerating with no reversal
-		nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + stepsTillRecalc));
+		nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + (int32_t)stepsTillRecalc));
 		break;
 
 #if SUPPORT_LINEAR_DELTA
@@ -711,8 +715,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			// Now feed ds into the step algorithm for Cartesian motion
 			if (ds < 0.0)
 			{
-				state = DMState::stepError;
-				nextStep += 110000000;							// so that we can tell what happened in the debug print
+				state = DMState::stepError2;
 				return false;
 			}
 
@@ -746,16 +749,19 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
 		// So if this is the last step and it is late, bring it forward to the expected finish time.
 		// Very rarely on a delta, the penultimate step may also be calculated late. Allow for that here in case it affects Cartesian axes too.
+		// 2023-12-06: we now allow any step to be late but we record the maximum number
 		// Don't use totalSteps here because it isn't valid for extruders
-		if (currentSegment->GetNext() == nullptr && nextStep + stepsTillRecalc + 1 >= segmentStepLimit)
+		if (currentSegment->GetNext() == nullptr)
 		{
 			iNextCalcStepTime = dda.clocksNeeded;
+			const int32_t nextCalcStep = nextStep + (int32_t)stepsTillRecalc;
+			const int32_t stepsLate = segmentStepLimit - nextCalcStep;
+			if (stepsLate > maxStepsLate) { maxStepsLate = stepsLate; }
 		}
 		else
 		{
-			// We don't expect any step except the last to be late
-			state = DMState::stepError;
-			nextStep += 120000000 + stepsTillRecalc;		// so we can tell what happened in the debug print
+			// We don't expect any segment except the last to have late steps
+			state = DMState::stepError3;
 			stepInterval = iNextCalcStepTime;				//DEBUG
 			return false;
 		}
