@@ -12,6 +12,7 @@
 #include <Movement/Move.h>
 #include <Platform/RepRap.h>
 #include <Storage/FileStore.h>
+#include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Math/Deviation.h>
 

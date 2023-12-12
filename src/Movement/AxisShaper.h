@@ -39,7 +39,6 @@ struct AccelOrDecelPlan;
 
 #if SUPPORT_REMOTE_COMMANDS
 struct CanMessageSetInputShaping;
-struct CanMessageMovementLinear;
 #endif
 
 class AxisShaper INHERIT_OBJECT_MODEL

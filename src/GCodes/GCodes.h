@@ -39,6 +39,7 @@ Licence: GPL
 #include <FilamentMonitors/FilamentMonitor.h>
 #include "RestorePoint.h"
 #include "StraightProbeSettings.h"
+#include "SimulationMode.h"
 #include <Movement/BedProbing/Grid.h>
 
 const char feedrateLetter = 'F';						// GCode feedrate
@@ -84,14 +85,6 @@ struct M675Settings
 	float feedRate;
 	float backoffDistance;		// back off distance
 	float minDistance;			// the position we reached when probing towards minimum
-};
-
-enum class SimulationMode : uint8_t
-{	off = 0,				// not simulating
-	debug,					// simulating step generation
-	normal,					// not generating steps, just timing
-	partial,				// generating DDAs but doing nothing with them
-	highest = partial
 };
 
 class SbcInterface;

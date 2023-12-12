@@ -138,9 +138,9 @@ private:
 			float fTwoA;
 			float fTwoB;
 			float h0MinusZ0;							// the height subtended by the rod at the start of the move
-//			float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
+			float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
 			float fHmz0s;								// the starting height less the starting Z height, multiplied by the Z movement fraction (can go negative)
-//			float fMinusAaPlusBbTimesS;
+			float fMinusAaPlusBbTimesS;
 			float reverseStartDistance;					// the overall move distance at which movement reversal occurs
 		} delta;
 #endif

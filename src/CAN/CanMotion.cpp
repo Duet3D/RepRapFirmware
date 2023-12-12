@@ -12,6 +12,9 @@
 #include <CanMessageBuffer.h>
 #include <CanMessageFormats.h>
 #include "CanInterface.h"
+#include <Platform/Platform.h>
+#include <GCodes/GCodes.h>
+#include <Movement/Move.h>
 #include <General/FreelistManager.h>
 
 namespace CanMotion
@@ -131,9 +134,9 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 		else
 		{
 			// Save some maths by using the values from the previous buffer
-			move->accelerationClocks = buf->next->msg.moveLinear.accelerationClocks;
-			move->steadyClocks = buf->next->msg.moveLinear.steadyClocks;
-			move->decelClocks = buf->next->msg.moveLinear.decelClocks;
+			move->accelerationClocks = buf->next->msg.moveLinearShaped.accelerationClocks;
+			move->steadyClocks = buf->next->msg.moveLinearShaped.steadyClocks;
+			move->decelClocks = buf->next->msg.moveLinearShaped.decelClocks;
 		}
 		move->acceleration = params.acceleration/params.totalDistance;			// scale the acceleration to correspond to unit distance
 		move->deceleration = params.deceleration/params.totalDistance;			// scale the deceleration to correspond to unit distance
@@ -148,9 +151,9 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 			move->perDrive[drive].Init();
 		}
 	}
-	else if (canDriver.localDriver >= buf->msg.moveLinear.numDrivers)
+	else if (canDriver.localDriver >= buf->msg.moveLinearShaped.numDrivers)
 	{
-		buf->msg.moveLinear.numDrivers = canDriver.localDriver + 1;
+		buf->msg.moveLinearShaped.numDrivers = canDriver.localDriver + 1;
 	}
 	return buf;
 }
@@ -326,7 +329,7 @@ void CanMotion::InternalStopDriverWhenProvisional(DriverId driver) noexcept
 
 	if (buf != nullptr)
 	{
-		buf->msg.moveLinear.perDrive[driver.localDriver].steps = 0;
+		buf->msg.moveLinearShaped.perDrive[driver.localDriver].steps = 0;
 	}
 }
 
@@ -426,10 +429,10 @@ void CanMotion::StopAll(const DDA& dda) noexcept
 		// We still send the messages so that the drives get enabled, but we set the steps to zero
 		for (CanMessageBuffer *buf = movementBufferList; buf != nullptr; buf = buf->next)
 		{
-			buf->msg.moveLinear.accelerationClocks = buf->msg.moveLinear.decelClocks = buf->msg.moveLinear.steadyClocks = 0;
-			for (size_t drive = 0; drive < ARRAY_SIZE(buf->msg.moveLinear.perDrive); ++drive)
+			buf->msg.moveLinearShaped.accelerationClocks = buf->msg.moveLinearShaped.decelClocks = buf->msg.moveLinearShaped.steadyClocks = 0;
+			for (size_t drive = 0; drive < ARRAY_SIZE(buf->msg.moveLinearShaped.perDrive); ++drive)
 			{
-				buf->msg.moveLinear.perDrive[drive].steps = 0;
+				buf->msg.moveLinearShaped.perDrive[drive].steps = 0;
 			}
 		}
 	}

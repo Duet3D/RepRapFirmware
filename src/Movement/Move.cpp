@@ -37,6 +37,7 @@
 #include "MoveDebugFlags.h"
 #include "StepTimer.h"
 #include <Platform/Platform.h>
+#include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Tools/Tool.h>
 #include <Endstops/ZProbe.h>
@@ -263,7 +264,7 @@ void Move::Init() noexcept
 	{
 		acc = 0;
 	}
-	for (int32_t& pos : axisPositions)
+	for (int32_t& pos : axisPositionsAfterScheduledMoves)
 	{
 		pos = 0;
 	}
@@ -1211,12 +1212,12 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 	// Construct a MovementLinear message to revert the position. The move must be shorter than clocksAllowed.
 	// When writing this, clocksAllowed was equivalent to 40ms.
 	// We allow 10ms delay time to allow the motor to stop and reverse direction, 10ms acceleration time, 5ms steady time and 10ms deceleration time.
-	CanMessageMovementLinear msg2;
+	CanMessageMovementLinearShaped msg2;
 	msg2.accelerationClocks = msg2.decelClocks = msg.clocksAllowed/4;
 	msg2.steadyClocks = msg.clocksAllowed/8;
 	msg2.whenToExecute = StepTimer::GetMasterTime() + msg.clocksAllowed/4;
 	msg2.numDrivers = NumDirectDrivers;
-	msg2.pressureAdvanceDrives = 0;
+	msg2.extruderDrives = 0;
 	msg2.seq = 0;
 	msg2.initialSpeedFraction = msg2.finalSpeedFraction = 0.0;
 
@@ -1534,36 +1535,16 @@ void Move::CheckEndstops(Platform& platform) noexcept
 void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 {
 	// Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
-	if (checkingEndstops)		// if any homing switches or the Z probe is enabled in this move
+	if (checkingEndstops)					// if any homing switches or the Z probe is enabled in this move
 	{
-		CheckEndstops(p);			// call out to a separate function because this may help cache usage in the more common and time-critical case where we don't call it
-		if (state == completed)		// we may have completed the move due to triggering an endstop switch or Z probe
-		{
-			return;
-		}
+		CheckEndstops(p);					// call out to a separate function because this may help cache usage in the more common and time-critical case where we don't call it
 	}
 
 	uint32_t driversStepping = 0;
 	DriveMovement* dm = activeDMs;
-	const uint32_t elapsedTime = (now - afterPrepare.moveStartTime) + StepTimer::MinInterruptInterval;
-#if 0	//DEBUG
-	if (dm != nullptr && elapsedTime >= dm->nextStepTime)
-	{
-		const uint32_t delay = elapsedTime - dm->nextStepTime;
-		if (dm->nextStep != 1)
-		{
-			if (delay > maxDelay) { maxDelay = delay; }
-			if (delay > lastDelay && (delay - lastDelay) > maxDelayIncrease) { maxDelayIncrease = delay - lastDelay; }
-		}
-		lastDelay = delay;
-	}
-#endif	//END DEBUG
-	while (dm != nullptr && elapsedTime >= dm->nextStepTime)		// if the next step is due
+	while (dm != nullptr && (int32_t)(now - dm->nextStepTime) >= 0)		// if the next step is due
 	{
 		driversStepping |= p.GetDriversBitmap(dm->drive);
-#if 0	// debug only
-		++stepsDone[dm->drive];
-#endif
 		dm = dm->nextDM;
 	}
 
@@ -1648,20 +1629,6 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 			InsertDM(dmToInsert);
 		}
 		dmToInsert = nextToInsert;
-	}
-
-	// If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
-	if (activeDMs == nullptr)
-	{
-		// We set a move as current up to MovementStartDelayClocks (about 10ms) before it is due to start.
-		// We need to make sure it has really started, or we can get arithmetic wrap round in the case that there are no local drivers stepping.
-		const uint32_t timeRunning = StepTimer::GetTimerTicks() - afterPrepare.moveStartTime;
-		if (   timeRunning + MoveTiming::WakeupTime >= clocksNeeded				// if it looks like the move has almost finished
-			&& timeRunning < 0 - MoveTiming::AbsoluteMinimumPreparedTime		// and it really has started
-			)
-		{
-			state = completed;
-		}
 	}
 }
 

@@ -13,11 +13,14 @@
 #include "StepTimer.h"
 #include "MoveSegment.h"
 #include <Platform/Tasks.h>
-#include <GCodes/GCodes.h>			// for class RawMove
+#include "RawMove.h"
+#include <GCodes/SimulationMode.h>
 
 # define DDA_LOG_PROBE_CHANGES	0
 
 class DDARing;
+class LinearDeltaKinematics;
+class CanMessageMovementLinearShaped;
 
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
 struct PrepParams
@@ -100,7 +103,6 @@ public:
 	uint32_t GetTimeLeft() const noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
-	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
 	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
 	void StopDrivers(uint16_t whichDrives) noexcept;
 #endif

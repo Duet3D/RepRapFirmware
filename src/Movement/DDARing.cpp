@@ -10,8 +10,10 @@
 #include "Move.h"
 #include "MoveDebugFlags.h"
 #include "RawMove.h"
+#include <Platform/Platform.h>
 #include <Platform/Tasks.h>
 #include <Platform/PortControl.h>
+#include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Tools/Tool.h>
 
@@ -114,7 +116,7 @@ void DDARing::Exit() noexcept
 		getPointer = getPointer->GetNext();
 	}
 
-	while (checkPointer->GetState() == DDA::scheduled)
+	while (checkPointer->GetState() == DDA::completed)
 	{
 		(void)checkPointer->Free();
 		checkPointer = checkPointer->GetNext();
@@ -994,19 +996,6 @@ uint32_t DDARing::ManageIOBits() noexcept
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
-
-// Add a move from the ATE to the movement queue
-void DDARing::AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept
-{
-	if (addPointer->GetState() == DDA::empty)
-	{
-		if (addPointer->InitFromRemote(msg))
-		{
-			addPointer = addPointer->GetNext();
-			scheduledMoves++;
-		}
-	}
-}
 
 // Add a move from the ATE to the movement queue
 void DDARing::AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept

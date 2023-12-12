@@ -51,6 +51,9 @@ const unsigned int NumDms = 20 * 5;												// suitable for e.g. a delta + 2-
 
 #endif
 
+template<class T> class CanMessageMultipleDrivesRequest;
+class CanMessageRevertPosition;
+
 // This is the master movement class.  It controls all movement in the machine.
 class Move INHERIT_OBJECT_MODEL
 {
@@ -111,7 +114,6 @@ public:
 	float GetPressureAdvanceClocks(size_t extruder) const noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
-	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
 	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
 	void StopDrivers(uint16_t whichDrives) noexcept;
 
@@ -238,12 +240,6 @@ public:
 	static void TimerCallback(CallbackParameter p) noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
-	void AddMoveFromRemote(const CanMessageMovementLinear& msg) noexcept					// add a move from the ATE to the movement queue
-	{
-		rings[0].AddMoveFromRemote(msg);
-		MoveAvailable();
-	}
-
 	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept				// add a move from the ATE to the movement queue
 	{
 		rings[0].AddMoveFromRemote(msg);
@@ -308,14 +304,14 @@ private:
 	DriveMovement dms[MaxAxesPlusExtruders];
 	MoveSegment *segments[MaxAxesPlusExtruders];
 	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 	// Accumulated motor steps, used by filament monitors
-	int32_t axisPositions[MaxAxesPlusExtruders];
+	int32_t axisPositionsAfterScheduledMoves[MaxAxesPlusExtruders];	// The axis positions that will result after all scheduled movement has completed normally
 
 #ifdef DUET3_MB6XD
 	volatile uint32_t lastStepHighTime;								// when we last started a step pulse
 #else
 	volatile uint32_t lastStepLowTime;								// when we last completed a step pulse to a slow driver
 #endif
-	volatile uint32_t lastDirChangeTime;							// when we last change the DIR signal to a slow driver
+	volatile uint32_t lastDirChangeTime;							// when we last changed the DIR signal to a slow driver
 
 	StepTimer timer;												// Timer object to control getting step interrupts
 	DriveMovement *activeDMs;
@@ -333,8 +329,8 @@ private:
 	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
 
-	uint32_t whenLastMoveAdded;							// The time when we last added a move to the main DDA ring
-	uint32_t whenIdleTimerStarted;						// The approximate time at which the state last changed, except we don't record timing->idle
+	uint32_t whenLastMoveAdded;							// The time when we last added a move to any DDA ring
+	uint32_t whenIdleTimerStarted;						// The approximate time at which the state last changed, except we don't record timing -> idle
 
 	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
@@ -357,8 +353,8 @@ private:
 
 	float minExtrusionPending = 0.0, maxExtrusionPending = 0.0;
 
-	AxisShaper axisShaper;
-	ExtruderShaper extruderShapers[MaxExtruders];
+	AxisShaper axisShaper;								// the input shaping that we use for axes - currently just one for all axes
+	ExtruderShaper extruderShapers[MaxExtruders];		// the pressure advance object we use for each extruder
 
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
 

@@ -11,7 +11,9 @@
 #include "Move.h"
 #include "StepTimer.h"
 #include <Math/Isqrt.h>
+#include <Platform/Platform.h>
 #include <Platform/RepRap.h>
+#include <GCodes/GCodes.h>
 
 #if SUPPORT_LINEAR_DELTA
 # include "Kinematics/LinearDeltaKinematics.h"

@@ -14,6 +14,7 @@
 #include <Endstops/EndstopsManager.h>
 #include "Kinematics/LinearDeltaKinematics.h"
 #include <Tools/Tool.h>
+#include <GCodes/GCodes.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanMotion.h>
@@ -606,107 +607,6 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 
 // Set up a remote move. Return true if it represents real movement, else false.
 // All values have already been converted to step clocks and the total distance has been normalised to 1.0.
-// This one handles the old format movement message, used by older versions of RRF and the ATE
-bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
-{
-	afterPrepare.moveStartTime = StepTimer::ConvertToLocalTime(msg.whenToExecute);
-	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
-	flags.all = 0;
-	flags.isRemote = true;
-	flags.isPrintingMove = flags.usePressureAdvance = (msg.pressureAdvanceDrives != 0);
-
-	// Normalise the move to unit distance
-	totalDistance = 1.0;
-
-	// Calculate the speeds and accelerations assuming unit movement length
-	topSpeed = 2.0/(2 * msg.steadyClocks + (msg.initialSpeedFraction + 1.0) * msg.accelerationClocks + (msg.finalSpeedFraction + 1.0) * msg.decelClocks);
-	startSpeed = topSpeed * msg.initialSpeedFraction;
-	endSpeed = topSpeed * msg.finalSpeedFraction;
-
-	acceleration = (msg.accelerationClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.initialSpeedFraction))/msg.accelerationClocks;
-	deceleration = (msg.decelClocks == 0) ? 0.0 : (topSpeed * (1.0 - msg.finalSpeedFraction))/msg.decelClocks;
-
-	// Prepare for movement
-	PrepParams params;											// the default constructor clears params.plan to 'no shaping'
-
-	// Set up the move parameters
-	params.accelDistance = topSpeed * (1.0 + msg.initialSpeedFraction) * msg.accelerationClocks * 0.5;
-	const float decelDistance = topSpeed * (1.0 + msg.finalSpeedFraction) * msg.decelClocks * 0.5;
-	params.decelStartDistance = 1.0 - decelDistance;
-	params.accelClocks = msg.accelerationClocks;
-	params.steadyClocks = msg.steadyClocks;
-	params.decelClocks = msg.decelClocks;
-	params.acceleration = acceleration;
-	params.deceleration = deceleration;
-
-	afterPrepare.drivesMoving.Clear();
-
-	for (size_t drive = 0; drive < NumDirectDrivers; drive++)
-	{
-		endPoint[drive] = prev->endPoint[drive];				// the steps for this move will be added later
-		const int32_t delta = (drive < msg.numDrivers) ? msg.perDrive[drive].steps : 0;
-		directionVector[drive] = (float)delta;
-		if (delta != 0)
-		{
-			EnsureSegments(params);								// we are going to need segments
-			DriveMovement* const pdm = DriveMovement::Allocate(drive);
-			pdm->totalSteps = labs(delta);						// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
-			pdm->direction = (delta >= 0);						// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
-			afterPrepare.drivesMoving.SetBit(drive);
-			reprap.GetPlatform().EnableDrivers(drive, false);
-			const bool stepsToDo = ((msg.pressureAdvanceDrives & (1u << drive)) != 0)
-									? pdm->PrepareExtruder(*this, params, (float)delta)
-										: pdm->PrepareCartesianAxis(*this, params);
-			if (stepsToDo)
-			{
-				InsertDM(pdm);
-				const int32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
-				if (pdm->direction)
-				{
-					endPoint[drive] += netSteps;
-				}
-				else
-				{
-					endPoint[drive] -= netSteps;
-				}
-
-				// Check for sensible values, print them if they look dubious
-				if (   reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves)
-					|| (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
-				   )
-				{
-					DebugPrint("remu_err1");
-				}
-			}
-			else
-			{
-				// No steps to do, so release the DM
-				DriveMovement::Release(pdm);
-			}
-		}
-	}
-
-	// 2. Throw it away if there's no real movement.
-	if (activeDMs == nullptr)
-	{
-		// We may have set up the segments, in which case we must recycle them
-		ReleaseSegments();
-		return false;
-	}
-
-	if (   reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves)
-		|| params.shapingPlan.debugPrint						// show the prepared DDA if debug enabled for both modules
-	   )
-	{
-		DebugPrint("remu");
-	}
-
-	state = frozen;												// must do this last so that the ISR doesn't start executing it before we have finished setting it up
-	return true;
-}
-
-// Set up a remote move. Return true if it represents real movement, else false.
-// All values have already been converted to step clocks and the total distance has been normalised to 1.0.
 // This version handles the new movement message that includes the input shaping plan and passes extruder movement as distance, not steps
 bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 {
@@ -729,10 +629,8 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	params.decelClocks = msg.decelClocks;
 	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
 
-	// Set up the plan
-	reprap.GetMove().GetAxisShaper().GetRemoteSegments(*this, params);
-
 	afterPrepare.drivesMoving.Clear();
+	Move& move = reprap.GetMove();
 
 	for (size_t drive = 0; drive < NumDirectDrivers; drive++)
 	{
@@ -748,36 +646,9 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = extrusionRequested;
 			if (extrusionRequested != 0.0)
 			{
-				DriveMovement* const pdm = DriveMovement::Allocate(drive);
-				pdm->totalSteps = labs(extrusionRequested);				// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
-				pdm->direction = (extrusionRequested >= 0.0);			// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
-				afterPrepare.drivesMoving.SetBit(drive);
+				move.AddExtruderSegments(drive, msg.whenToExecute, params, msg.perDrive[drive].steps, msg.usePressureAdvance);
+				//TODO will Move do the following?
 				reprap.GetPlatform().EnableDrivers(drive, false);
-				const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionRequested);
-				if (stepsToDo)
-				{
-					InsertDM(pdm);
-					const int32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
-					if (pdm->direction)
-					{
-						endPoint[drive] += netSteps;
-					}
-					else
-					{
-						endPoint[drive] -= netSteps;
-					}
-
-					// Check for sensible values, print them if they look dubious
-					if (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
-					{
-						DebugPrint("rems_err1");
-					}
-				}
-				else
-				{
-					// No steps to do, so release the DM
-					DriveMovement::Release(pdm);
-				}
 			}
 		}
 		else
@@ -786,46 +657,12 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = (float)delta;
 			if (delta != 0)
 			{
-				DriveMovement* const pdm = DriveMovement::Allocate(drive);
-				pdm->totalSteps = labs(delta);					// for now this is the number of net steps, but gets adjusted later if there is a reverse in direction
-				pdm->direction = (delta >= 0);					// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
+				move.AddLinearSegments(drive, msg.whenToExecute, params, delta, msg.useInputShaping);
 				afterPrepare.drivesMoving.SetBit(drive);
+				//TODO will Move do the following?
 				reprap.GetPlatform().EnableDrivers(drive, false);
-				const bool stepsToDo = pdm->PrepareCartesianAxis(*this, params);
-				if (stepsToDo)
-				{
-					InsertDM(pdm);
-					const int32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
-					if (pdm->direction)
-					{
-						endPoint[drive] += netSteps;
-					}
-					else
-					{
-						endPoint[drive] -= netSteps;
-					}
-
-					// Check for sensible values, print them if they look dubious
-					if (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
-					{
-						DebugPrint("rems_err2");
-					}
-				}
-				else
-				{
-					// No steps to do, so release the DM
-					DriveMovement::Release(pdm);
-				}
 			}
 		}
-	}
-
-	// 2. Throw it away if there's no real movement.
-	if (activeDMs == nullptr)
-	{
-		// We may have set up the segments, in which case we must recycle them
-		ReleaseSegments();
-		return false;
 	}
 
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves))
@@ -833,7 +670,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 		DebugPrint("rems");
 	}
 
-	state = frozen;												// must do this last so that the ISR doesn't start executing it before we have finished setting it up
+	state = committed;
 	return true;
 }
 

@@ -7,6 +7,7 @@
 
 #include "AxisShaper.h"
 
+#include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Platform/RepRap.h>
 #include "StepTimer.h"
