@@ -70,6 +70,9 @@ public:
 #if SUPPORT_LASER
 	uint32_t ManageLaserPower() noexcept;												// Manage the laser power
 #endif
+#if SUPPORT_IOBITS
+	uint32_t ManageIOBits() noexcept;													// Manage the IOBITS (G1 P parameter)
+#endif
 
 	void RecordLookaheadError() noexcept { ++numLookaheadErrors; }						// Record a lookahead error
 	void Diagnostics(MessageType mtype, unsigned int ringNumber) noexcept;

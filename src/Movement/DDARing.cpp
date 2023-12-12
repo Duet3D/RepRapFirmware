@@ -11,6 +11,7 @@
 #include "MoveDebugFlags.h"
 #include "RawMove.h"
 #include <Platform/Tasks.h>
+#include <Platform/PortControl.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Tools/Tool.h>
 
@@ -943,6 +944,50 @@ uint32_t DDARing::ManageLaserPower() noexcept
 	// If we get here then there is no active laser move
 	SetBasePriority(0);
 	reprap.GetPlatform().SetLaserPwm(0);						// turn off the laser
+	return 0;
+}
+
+#endif
+
+#if SUPPORT_IOBITS
+
+// Manage the IOBITS (G1 P parameter)
+uint32_t DDARing::ManageIOBits() noexcept
+{
+	PortControl& pc = reprap.GetPortControl();
+	if (pc.IsConfigured())
+	{
+		SetBasePriority(NvicPriorityStep);
+		const DDA * cdda = GetCurrentDDA();
+		if (cdda == nullptr)
+		{
+			// Movement has stopped, so turn all ports off
+			SetBasePriority(0);
+			pc.UpdatePorts(0);
+			return 0;
+		}
+
+		// Find the DDA whose IO port bits we should set now
+		const uint32_t now = StepTimer::GetTimerTicks() + pc.GetAdvanceClocks();
+		uint32_t moveEndTime = cdda->GetMoveStartTime();
+		DDA::DDAState st = cdda->GetState();
+		do
+		{
+			moveEndTime += cdda->GetClocksNeeded();
+			if ((int32_t)(moveEndTime - now) >= 0)
+			{
+				SetBasePriority(0);
+				pc.UpdatePorts(cdda->GetIoBits());
+				return (moveEndTime - now + StepClockRate/1000 - 1)/(StepClockRate/1000);
+			}
+			cdda = cdda->GetNext();
+			st = cdda->GetState();
+		} while (st == DDA::committed);
+
+		SetBasePriority(0);
+		pc.UpdatePorts(0);
+		return 0;
+	}
 	return 0;
 }
 

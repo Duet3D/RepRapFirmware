@@ -7,9 +7,6 @@
 
 #include "PortControl.h"
 #include "GCodes/GCodeBuffer/GCodeBuffer.h"
-#include "Movement/Move.h"
-#include "Movement/DDA.h"
-#include "Movement/StepTimer.h"
 
 #if SUPPORT_IOBITS
 
@@ -29,46 +26,6 @@ void PortControl::Exit() noexcept
 {
 	UpdatePorts(0);
 	numConfiguredPorts = 0;
-}
-
-// Update the IO bits. Return the number of milliseconds before we need to be called again, or 0 to be called when movement restarts.
-uint32_t PortControl::UpdatePorts() noexcept
-{
-	if (numConfiguredPorts == 0)
-	{
-		return 0;
-	}
-
-	SetBasePriority(NvicPriorityStep);
-	const DDA * cdda = reprap.GetMove().GetMainDDARing().GetCurrentDDA();
-	if (cdda == nullptr)
-	{
-		// Movement has stopped, so turn all ports off
-		SetBasePriority(0);
-		UpdatePorts(0);
-		return 0;
-	}
-
-	// Find the DDA whose IO port bits we should set now
-	const uint32_t now = StepTimer::GetTimerTicks() + advanceClocks;
-	uint32_t moveEndTime = cdda->GetMoveStartTime();
-	DDA::DDAState st = cdda->GetState();
-	do
-	{
-		moveEndTime += cdda->GetClocksNeeded();
-		if ((int32_t)(moveEndTime - now) >= 0)
-		{
-			SetBasePriority(0);
-			UpdatePorts(cdda->GetIoBits());
-			return (moveEndTime - now + StepClockRate/1000 - 1)/(StepClockRate/1000);
-		}
-		cdda = cdda->GetNext();
-		st = cdda->GetState();
-	} while (st == DDA::committed);
-
-	SetBasePriority(0);
-	UpdatePorts(0);
-	return 0;
 }
 
 // Set up the GPIO ports returning true if error
@@ -129,6 +86,7 @@ bool PortControl::Configure(GCodeBuffer& gb, const StringRef& reply)
 	return false;
 }
 
+// Set the ports to the requested state
 void PortControl::UpdatePorts(IoBits_t newPortState) noexcept
 {
 	if (newPortState != currentPortState)

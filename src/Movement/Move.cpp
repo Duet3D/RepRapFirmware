@@ -1355,7 +1355,7 @@ void Move::LaserTaskRun() noexcept
 # if SUPPORT_IOBITS
 			// Manage the IOBits
 			uint32_t ticks;
-			while ((ticks = reprap.GetPortControl().UpdatePorts()) != 0)
+			while ((ticks = rings[0].ManageIOBits()) != 0)
 			{
 				(void)TaskBase::Take(ticks);
 			}

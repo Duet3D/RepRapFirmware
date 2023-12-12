@@ -21,11 +21,14 @@ public:
 	PortControl() noexcept;
 	void Init() noexcept;
 	void Exit() noexcept;
-	uint32_t UpdatePorts() noexcept;
 	bool Configure(GCodeBuffer& gb, const StringRef& reply);
 
-private:
+	// Functions called by DDARing
 	void UpdatePorts(IoBits_t newPortState) noexcept;
+	bool IsConfigured() const noexcept { return numConfiguredPorts != 0; }
+	uint32_t GetAdvanceClocks() const noexcept { return advanceClocks; }
+
+private:
 
 	static const size_t MaxPorts = 16;		// the port bitmap is currently a 16-bit word
 
