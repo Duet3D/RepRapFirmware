@@ -220,7 +220,6 @@ protected:
 	static DeltaMoveSegment *deltaFreeList;
 	static unsigned int numCreated;
 
-private:
 	MoveSegment *next;										// pointer to the next segment
 	uint32_t isDelta : 1,
 			 isLinear : 1,

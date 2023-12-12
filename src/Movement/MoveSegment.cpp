@@ -19,7 +19,7 @@ MoveSegment *MoveSegment::Allocate(MoveSegment *p_next) noexcept
 	MoveSegment * ms = freeList;
 	if (ms != nullptr)
 	{
-		freeList = next;
+		freeList = ms->next;
 		ms->next = p_next;
 	}
 	else

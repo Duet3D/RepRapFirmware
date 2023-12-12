@@ -1643,14 +1643,9 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 			if (dmToInsert->directionChanged)
 			{
 				dmToInsert->directionChanged = false;
-				SetDirection(dmToInsert->drive, dmToInsert->direction);
+				SetDirection(p, dmToInsert->drive, dmToInsert->direction);
 			}
 			InsertDM(dmToInsert);
-		}
-		else
-		{
-			dmToInsert->nextDM = completedDMs;
-			completedDMs = dmToInsert;
 		}
 		dmToInsert = nextToInsert;
 	}
@@ -1739,7 +1734,6 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 	if (activeDMs == nullptr)
 	{
 		checkTiming = false;		// don't check the timing of the first step in the next move
-		state = completed;
 	}
 }
 
@@ -1768,7 +1762,7 @@ void Move::StopDrive(size_t drive) noexcept
 	afterPrepare.drivesMoving.ClearBit(drive);
 	if (afterPrepare.drivesMoving.IsEmpty())
 	{
-		state = completed;
+		state = DDA::completed;
 	}
 #endif
 }

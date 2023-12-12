@@ -125,6 +125,11 @@ public:
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
 	ExtruderShaper& GetExtruderShaper(size_t extruder) noexcept { return extruderShapers[extruder]; }
 
+	// Functions called by DDA::Prepare to generate segments for executing DDAs
+	void AddLinearSegments(size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping) noexcept;
+	void AddDeltaSegments(size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping) noexcept;
+	void AddExtruderSegments(size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool UsePressureAdvance) noexcept;
+
 	void Diagnostics(MessageType mtype) noexcept;							// Report useful stuff
 
 	// Kinematics and related functions

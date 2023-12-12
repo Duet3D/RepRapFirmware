@@ -91,7 +91,7 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
-	uint32_t PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept;
+	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept;
 
 	DDA* addPointer;
 	DDA* volatile getPointer;

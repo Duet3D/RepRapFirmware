@@ -303,10 +303,9 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 		const DDA* const currentMove = cdda;						// save for later
 
 		// Count how many prepared or executing moves we have and how long they will take
-		int32_t preparedTime = 0;
+		uint32_t preparedTime = 0;
 		unsigned int preparedCount = 0;
-		DDA::DDAState st;
-		while ((st = cdda->GetState()) == DDA::completed || st == DDA::executing || st == DDA::frozen)
+		while (cdda->GetState() == DDA::committed)
 		{
 			preparedTime += cdda->GetTimeLeft();
 			++preparedCount;
@@ -407,14 +406,14 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 
 // Prepare some moves. moveTimeLeft is the total length remaining of moves that are already executing or prepared.
 // Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or TaskBase::TimeoutUnlimited if there are no unprepared moves left.
-uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept
+uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept
 {
 	// If the number of prepared moves will execute in less than the minimum time, prepare another move.
 	// Try to avoid preparing deceleration-only moves too early
 	while (	  firstUnpreparedMove->GetState() == DDA::provisional
 		   && moveTimeLeft < (int32_t)MoveTiming::UsualMinimumPreparedTime	// prepare moves one tenth of a second ahead of when they will be needed
 		   && alreadyPrepared * 2 < numDdasInRing						// but don't prepare more than half the ring, to handle accelerate/decelerate moves in small segments
-		   && (firstUnpreparedMove->IsGoodToPrepare() || moveTimeLeft < (int32_t)MoveTiming::AbsoluteMinimumPreparedTime)
+		   && (firstUnpreparedMove->IsGoodToPrepare() || moveTimeLeft < MoveTiming::AbsoluteMinimumPreparedTime)
 #if SUPPORT_CAN_EXPANSION
 		   && CanMotion::CanPrepareMove()
 #endif
@@ -435,7 +434,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, int32_t moveTimeLeft, u
 			return 1;
 		}
 
-		const int32_t clocksTillWakeup = moveTimeLeft - (int32_t)MoveTiming::UsualMinimumPreparedTime;					// calculate how long before we run out of prepared moves, less the usual advance prepare time
+		const int32_t clocksTillWakeup = moveTimeLeft - MoveTiming::UsualMinimumPreparedTime;						// calculate how long before we run out of prepared moves, less the usual advance prepare time
 		return (clocksTillWakeup <= 0) ? 2 : min<uint32_t>((uint32_t)clocksTillWakeup/(StepClockRate/1000), 2);		// wake up at that time, but delay for at least 2 ticks
 	}
 

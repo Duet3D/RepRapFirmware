@@ -65,7 +65,8 @@ public:
 	{
 		empty,				// empty or being filled in
 		provisional,		// ready, but could be subject to modifications
-		scheduled,			// has been converted into move segments already
+		committed,			// has been converted into move segments already
+		completed			// this move has been completed e.g. because an endstop or probe has stopped it
 	};
 
 	DDA(DDA* n) noexcept;
@@ -85,10 +86,8 @@ public:
 
 	void SetNext(DDA *n) noexcept { next = n; }
 	void SetPrevious(DDA *p) noexcept { prev = p; }
-	void Complete() noexcept { state = scheduled; }
 	bool Free() noexcept;
 	void Prepare(DDARing& ring, SimulationMode simMode) noexcept SPEED_CRITICAL;					// Calculate all the values and freeze this DDA
-	bool HasStepError() const noexcept;
 	bool CanPauseAfter() const noexcept;
 	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }			// Return true if this involves both XY movement and extrusion
 	bool UsingStandardFeedrate() const noexcept { return flags.usingStandardFeedrate; }
@@ -98,7 +97,7 @@ public:
 	DDAState GetState() const noexcept { return state; }
 	DDA* GetNext() const noexcept { return next; }
 	DDA* GetPrevious() const noexcept { return prev; }
-	int32_t GetTimeLeft() const noexcept;
+	uint32_t GetTimeLeft() const noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	bool InitFromRemote(const CanMessageMovementLinear& msg) noexcept;
@@ -302,7 +301,7 @@ inline void DDA::FetchEndPoints(int32_t ep[MaxAxesPlusExtruders]) const noexcept
 // This is called from DDARing only
 inline bool DDA::HasExpired() const noexcept
 {
-	return state == scheduled && StepTimer::GetTimerTicks() - (afterPrepare.moveStartTime + clocksNeeded) < 0xFF000000;
+	return state == committed && (int32_t)(StepTimer::GetTimerTicks() - (afterPrepare.moveStartTime + clocksNeeded)) >= 0;
 }
 
 #endif /* DDA_H_ */

@@ -162,13 +162,23 @@ DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
 }
 
 // Return the number of clocks this DDA still needs to execute.
-// This could be slightly negative, if the move is overdue for completion.
-int32_t DDA::GetTimeLeft() const noexcept
+uint32_t DDA::GetTimeLeft() const noexcept
 pre(state == executing || state == frozen || state == completed)
 {
-	return (state == completed) ? 0
-			: (state == executing) ? (int32_t)(afterPrepare.moveStartTime + clocksNeeded - StepTimer::GetTimerTicks())
-			: (int32_t)clocksNeeded;
+	switch (state)
+	{
+	case provisional:
+		return clocksNeeded;
+	case committed:
+		{
+			const int32_t timeExecuting = (int32_t)(StepTimer::GetTimerTicks() - afterPrepare.moveStartTime);
+			return (timeExecuting <= 0) ? clocksNeeded							// move has not started yet
+					: ((uint32_t)timeExecuting > clocksNeeded) ? 0				// move has completed
+						: clocksNeeded - (uint32_t)timeExecuting;				// move is part way through
+		}
+	default:
+		return 0;
+	}
 }
 
 void DDA::DebugPrintVector(const char *name, const float *vec, size_t len) const noexcept
@@ -922,7 +932,7 @@ pre(state == provisional)
 				else
 				{
 					// This move is a deceleration-only move but we can't adjust the previous one
-					if (st == frozen)
+					if (st == committed)
 					{
 						laDDA->flags.hadLookaheadUnderrun = true;
 					}
@@ -1246,15 +1256,19 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 #endif
 
 	// Prepare for movement
-	PrepParams params;										// the default constructor clears params.plan to 'no shaping'
+	PrepParams params;
 	params.SetFromDDA(*this);
 	params.Finalise(topSpeed);
 	clocksNeeded = params.TotalClocks();
 
 	// Copy the unshaped acceleration and deceleration back to the DDA because ManageLaserPower uses them
-	//TODO change ManageLaserPower to work on the shaped segments instead
 	acceleration = params.acceleration;
 	deceleration = params.deceleration;
+
+	const uint32_t now = StepTimer::GetTimerTicks();
+	afterPrepare.moveStartTime =  (prev->state == committed && (int32_t)(prev->afterPrepare.moveStartTime + prev->clocksNeeded - now) >= 0)
+									? prev->afterPrepare.moveStartTime + prev->clocksNeeded		// this move follows directly after the previous one
+									: now + MoveTiming::AbsoluteMinimumPreparedTime;			// else this move is the first so start it after a short delay
 
 	if (simMode < SimulationMode::normal)
 	{
@@ -1315,7 +1329,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						else
 #endif
 						{
-							move.AddLinearSegments(driver.localDriver + MaxAxesPlusExtruders, startTime, params, delta, false);
+							move.AddLinearSegments(driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, delta, false);
 						}
 					}
 				}
@@ -1328,7 +1342,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (platform.GetDriversBitmap(drive) != 0)						// if any of the drives is local
 				{
-					move.AddDeltaSegments(drive, startTime, params, delta, false);
+					move.AddDeltaSegments(drive, afterPrepare.moveStartTime, params, delta, true);
 				}
 
 # if SUPPORT_CAN_EXPANSION
@@ -1371,7 +1385,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 
 					if (platform.GetDriversBitmap(drive) != 0)				// if any of the drives is local
 					{
-						move.AddLinearSegments(drive, startTime, params, delta, flags.isPrintingMove);
+						move.AddLinearSegments(drive, afterPrepare.moveStartTime, params, delta, true);
 					}
 
 #if SUPPORT_CAN_EXPANSION
@@ -1433,7 +1447,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						else
 #endif
 						{
-							move.AddExtruderSegments(drive, startTime, params, delta, flags.usePressureAdvance);
+							move.AddExtruderSegments(drive, afterPrepare.moveStartTime, params, delta, flags.usePressureAdvance);
 						}
 					}
 				}
@@ -1448,11 +1462,6 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			additionalAxisMotorsToEnable.ClearBit(drive);
 			platform.EnableDrivers(drive, false);
 		}
-
-		const DDAState st = prev->state;
-		afterPrepare.moveStartTime = (st == DDAState::executing || st == DDAState::frozen)
-						? prev->afterPrepare.moveStartTime + prev->clocksNeeded			// this move will follow the previous one, so calculate the start time assuming no more hiccups
-							: StepTimer::GetTimerTicks() + MoveTiming::AbsoluteMinimumPreparedTime;	// else this move is the first so start it after a short delay
 
 		if (flags.checkEndstops)
 		{
@@ -1475,7 +1484,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 
 		afterPrepare.averageExtrusionSpeed = (extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded;
 
-		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves) || params.shapingPlan.debugPrint)		// show the prepared DDA if debug enabled for both modules
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves))		// show the prepared DDA if debug enabled for both modules
 		{
 			DebugPrint("pr");
 		}
@@ -1498,7 +1507,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 
 	if (state != completed)
 	{
-		state = frozen;					// must do this last so that the ISR doesn't start executing it before we have finished setting it up
+		state = committed;					// must do this last so that the ISR doesn't start executing it before we have finished setting it up
 	}
 }
 
@@ -1719,19 +1728,6 @@ float DDA::GetProportionDone(bool moveWasAborted) const noexcept
 		}
 	}
 	return proportionDoneSoFar;
-}
-
-bool DDA::HasStepError() const noexcept
-{
-	for (const DriveMovement* dm = completedDMs; dm != nullptr; )
-	{
-		if (dm->state >= DMState::stepError1 && dm->state < DMState::firstMotionState)
-		{
-			return true;
-		}
-		dm = dm->nextDM;
-	}
-	return false;
 }
 
 // Free up this DDA, returning true if the lookahead underrun flag was set
