@@ -125,8 +125,6 @@ public:
 	void StopPrinting(GCodeBuffer& gb) noexcept;
 	void ResumePrinting(GCodeBuffer& gb) noexcept;
 
-	float LiveCoordinate(unsigned int axisOrExtruder) const noexcept;
-
 	void Diagnostics(MessageType mtype) noexcept;
 
 	// These variables are currently all public, but we ought to make most of them private
@@ -167,9 +165,6 @@ public:
 	float restartInitialUserC0;										// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
 	float restartInitialUserC1;										// if the print was paused during an arc move, the user Y coordinate at the start of that move (from M26)
 
-	mutable float latestLiveCoordinates[MaxAxesPlusExtruders];		// the most recent set of live coordinates that we fetched
-	mutable uint32_t latestLiveCoordinatesFetchedAt = 0;			// when we fetched the live coordinates
-
 	RestorePoint restorePoints[NumTotalRestorePoints];
 	RestorePoint& pauseRestorePoint = restorePoints[PauseRestorePointNumber];				// The position and feed rate when we paused the print
 	RestorePoint& toolChangeRestorePoint = restorePoints[ToolChangeRestorePointNumber];		// The position and feed rate when we freed a tool
@@ -199,7 +194,6 @@ public:
 	bool xyPlane;													// true if the G17/G18/G19 selected plane of the arc move is XY in the original user coordinates
 	SegmentedMoveState segMoveState;
 	bool pausedInMacro;												// if we are paused then this is true if we paused while fileGCode was executing a macro
-	bool forceLiveCoordinatesUpdate = true;							// true if we want to force latestLiveCoordinates to be updated
 
 private:
 	MovementSystemNumber msNumber;

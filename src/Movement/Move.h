@@ -191,7 +191,12 @@ public:
 	float GetAccelerationMmPerSecSquared() const noexcept { return rings[0].GetAccelerationMmPerSecSquared(); }
 	float GetDecelerationMmPerSecSquared() const noexcept { return rings[0].GetDecelerationMmPerSecSquared(); }
 	float GetTotalExtrusionRate() const noexcept { return rings[0].GetTotalExtrusionRate(); }
-	void SetDriveCoordinate(int32_t a, size_t drive) noexcept;
+
+	const int32_t *GetDriveEndPositions() const noexcept { return drivePositionsAfterScheduledMoves; }
+	void SetDriveEndPosition(size_t axis, int32_t val) noexcept { drivePositionsAfterScheduledMoves[axis] = val; }
+	void SetAxisEndPosition(size_t axis, float pos) noexcept;
+	float LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept;
+	void ForceLiveCoordinatesUpdate() noexcept { forceLiveCoordinatesUpdate = true; }
 
 	void AdjustLeadscrews(const floatc_t corrections[]) noexcept;							// Called by some Kinematics classes to adjust the leadscrews
 
@@ -223,6 +228,7 @@ public:
 #endif
 
 	void Interrupt() noexcept;
+	void CheckEndstops(Platform& platform) noexcept;
 
 	static int32_t MotorMovementToSteps(size_t drive, float coord) noexcept;				// Convert a single motor position to number of steps
 	static float MotorStepsToMovement(size_t drive, int32_t endpoint) noexcept;				// Convert number of motor steps to motor position
@@ -274,7 +280,6 @@ private:
 	float tanXZ() const noexcept { return tangents[2]; }
 
 	void DeactivateDM(size_t drive) noexcept;
-	void CheckEndstops(Platform& platform) noexcept;
 	void StepDrivers(Platform& p, uint32_t now) noexcept SPEED_CRITICAL;			// Take one step of the DDA, called by timer interrupt.
 	void SimulateSteppingDrivers(Platform& p) noexcept;								// For debugging use
 	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;						// Schedule the next interrupt, returning true if we can't because it is already due
@@ -303,8 +308,12 @@ private:
 
 	DriveMovement dms[MaxAxesPlusExtruders];
 	MoveSegment *segments[MaxAxesPlusExtruders];
-	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 	// Accumulated motor steps, used by filament monitors
-	int32_t axisPositionsAfterScheduledMoves[MaxAxesPlusExtruders];	// The axis positions that will result after all scheduled movement has completed normally
+	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 		// Accumulated motor steps, used by filament monitors
+	int32_t drivePositionsAfterScheduledMoves[MaxAxesPlusExtruders];	// The drive positions that will result after all scheduled movement has completed normally
+
+	mutable float latestLiveCoordinates[MaxAxesPlusExtruders];		// the most recent set of live coordinates that we fetched
+	mutable uint32_t latestLiveCoordinatesFetchedAt = 0;			// when we fetched the live coordinates
+	mutable bool forceLiveCoordinatesUpdate = true;					// true if we want to force latestLiveCoordinates to be updated
 
 #ifdef DUET3_MB6XD
 	volatile uint32_t lastStepHighTime;								// when we last started a step pulse

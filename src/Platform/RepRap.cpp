@@ -1167,11 +1167,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	// Machine coordinates
 	const MovementState& ms = gCodes->GetPrimaryMovementState();				// we only report the primary in this response
 	response->cat(',');
-	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return ms.LiveCoordinate(axis); }, 3);
+	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return move->LiveMachineCoordinate(axis); }, 3);
 
 	// Actual extruder positions since power up, last G92 or last M23
 	response->cat(',');
-	AppendFloatArray(response, "extr", Tool::GetExtrudersInUse(), [this, &ms](size_t extruder) noexcept { return ms.LiveCoordinate(ExtruderToLogicalDrive(extruder)); }, 1);
+	AppendFloatArray(response, "extr", Tool::GetExtrudersInUse(), [this, &ms](size_t extruder) noexcept { return move->LiveMachineCoordinate(ExtruderToLogicalDrive(extruder)); }, 1);
 
 	// Current speeds
 	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)move->GetRequestedSpeedMmPerSec(), (double)move->GetTopSpeedMmPerSec());
@@ -1771,7 +1771,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 
 	// Machine coordinates
 	response->cat(',');
-	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return ms.LiveCoordinate(axis); }, 3);
+	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return move->LiveMachineCoordinate(axis); }, 3);
 
 	// Send the speed and extruder override factors
 	response->catf(",\"sfactor\":%.1f,", (double)(gCodes->GetPrimarySpeedFactor() * 100.0));

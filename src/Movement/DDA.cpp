@@ -657,7 +657,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = (float)delta;
 			if (delta != 0)
 			{
-				move.AddLinearSegments(drive, msg.whenToExecute, params, delta, msg.useInputShaping);
+				move.AddLinearSegments(drive, msg.whenToExecute, params, delta, msg.useLateInputShaping);
 				afterPrepare.drivesMoving.SetBit(drive);
 				//TODO will Move do the following?
 				reprap.GetPlatform().EnableDrivers(drive, false);
@@ -672,20 +672,6 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 
 	state = committed;
 	return true;
-}
-
-void DDA::StopDrivers(uint16_t whichDrives) noexcept
-{
-	if (state == executing)
-	{
-		for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
-		{
-			if (whichDrives & (1u << drive))
-			{
-				StopDrive(drive);
-			}
-		}
-	}
 }
 
 #endif	// SUPPORT_REMOTE_COMMANDS
@@ -1306,7 +1292,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			// This is especially important when using CAN-connected motors or endstops, because we rely on receiving "endstop changed" messages.
 			// Moves that check endstops are always run as isolated moves, so there can be no move in progress and the endstops must already be primed.
 			platform.EnableAllSteppingDrivers();
-			CheckEndstops(platform);									// this may modify pending CAN moves, and may set status 'completed'
+			move.CheckEndstops(platform);									// this may modify pending CAN moves, and may set status 'completed'
 		}
 
 #if SUPPORT_CAN_EXPANSION
@@ -1505,7 +1491,7 @@ pre(state == frozen)
 
 		for (const DriveMovement* pdm = activeDMs; pdm != nullptr; pdm = pdm->nextDM)
 		{
-			reprap.GetMove().SetDirection(pdm->drive, pdm->direction);
+			reprap.GetMove().SetDirection(p, pdm->drive, pdm->direction);
 		}
 
 #if SUPPORT_REMOTE_COMMANDS

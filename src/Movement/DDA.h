@@ -101,10 +101,10 @@ public:
 	DDA* GetNext() const noexcept { return next; }
 	DDA* GetPrevious() const noexcept { return prev; }
 	uint32_t GetTimeLeft() const noexcept;
+	void Complete() noexcept { state = completed; }
 
 #if SUPPORT_REMOTE_COMMANDS
 	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
-	void StopDrivers(uint16_t whichDrives) noexcept;
 #endif
 
 	const int32_t *DriveCoordinates() const noexcept { return endPoint; }			// Get endpoints of a move in machine coordinates

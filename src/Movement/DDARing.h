@@ -23,7 +23,6 @@ public:
 	void Init2() noexcept;
 	void Exit() noexcept;
 
-	void RecycleDDAs() noexcept;
 	bool CanAddMove() const noexcept;
 	bool AddStandardMove(const RawMove &nextMove, bool doMotorMapping) noexcept SPEED_CRITICAL;	// Set up a new move, returning true if it represents real movement
 	bool AddSpecialMove(float feedRate, const float coords[MaxDriversPerAxis]) noexcept;

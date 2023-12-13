@@ -905,24 +905,24 @@ void FiveBarScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, 
 	switch (axis)
 	{
 	case X_AXIS:	// Left arm homing switch
-		move.SetDriveCoordinate(lrintf(homingAngleL * stepsPerMm[axis]), axis);
+		move.SetDriveEndPosition(axis, lrintf(homingAngleL * stepsPerMm[axis]));
 		break;
 
 	case Y_AXIS:	// Left arm homing switch
-		move.SetDriveCoordinate(lrintf(homingAngleR * stepsPerMm[axis]), axis);
+		move.SetDriveEndPosition(axis, lrintf(homingAngleR * stepsPerMm[axis]));
 		break;
 
 	case Z_AXIS:	// Z axis homing switch
 		{
 			const float hitPoint = ((highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis));
-			move.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+			move.SetDriveEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
 		}
 		break;
 
 	default:		// Additional axis
 		{
 			const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
-			move.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+			move.SetDriveEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
 		}
 		break;
 	}

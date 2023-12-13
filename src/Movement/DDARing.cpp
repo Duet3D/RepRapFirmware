@@ -172,33 +172,6 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 	return GCodeResult::ok;
 }
 
-void DDARing::RecycleDDAs() noexcept
-{
-	// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
-	// Only this function modifies checkPointer but it has to be declared volatile because other tasks may read it
-	DDA *nvCheckPointer;
-	while ((nvCheckPointer = checkPointer)->HasExpired())
-	{
-		// Check for step errors and record/print them if we have any
-		if (nvCheckPointer->HasStepError())
-		{
-			if (reprap.GetDebugFlags(Module::Move).IsAnyBitSet(MoveDebugFlags::PrintBadMoves, MoveDebugFlags::PrintAllMoves))
-			{
-				nvCheckPointer->DebugPrint("rd");
-			}
-			++stepErrors;
-			reprap.GetPlatform().LogError(ErrorCode::BadMove);
-		}
-
-		// Now release the DMs and check for underrun
-		if (nvCheckPointer->Free())
-		{
-			++numLookaheadUnderruns;
-		}
-		checkPointer = nvCheckPointer->GetNext();
-	}
-}
-
 bool DDARing::CanAddMove() const noexcept
 {
 	 if (   addPointer->GetState() == DDA::empty
@@ -270,38 +243,55 @@ bool DDARing::AddAsyncMove(const AsyncMove& nextMove) noexcept
 // Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or TaskBase::TimeoutUnlimited if there are no unprepared moves left.
 uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool shouldStartMove) noexcept
 {
-	DDA *cdda = currentDda;											// capture volatile variable
+	DDA *cdda = getPointer;											// capture volatile variable
 
 	// If we are simulating, simulate completion of the current move.
 	// Do this here rather than at the end, so that when simulating, currentDda is non-null for most of the time and IsExtruding() returns the correct value
-	if (simulationMode != SimulationMode::off && cdda != nullptr)
+	if (simulationMode != SimulationMode::off)
 	{
-		simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
-		if (simulationMode == SimulationMode::debug && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::SimulateSteppingDrivers))
+		// Simulate one move
+		if (cdda->GetState() == DDA::committed)
 		{
-			do
+			simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
+			if (simulationMode == SimulationMode::debug && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::SimulateSteppingDrivers))
 			{
-				cdda->SimulateSteppingDrivers(reprap.GetPlatform());
-			} while (cdda->GetState() != DDA::completed);
+				do
+				{
+					cdda->SimulateSteppingDrivers(reprap.GetPlatform());
+				} while (cdda->GetState() != DDA::completed);
+			}
+			else
+			{
+				cdda->Complete();
+			}
+
+			getPointer = cdda = cdda->GetNext();
 		}
-		else
+	}
+	else
+	{
+		// See if we can retire any completed moves
+		while (cdda->GetState() == DDA::completed || cdda->HasExpired())
 		{
-			cdda->Complete();
-		}
-		CurrentMoveCompleted();										// this sets currentDda to nullptr and advances getPointer
-		DDA * const gp  = getPointer;								// capture volatile variable
-		if (gp->GetState() == DDA::frozen)
-		{
-			cdda = currentDda = gp;									// set up the next move to be simulated
-		}
-		else
-		{
-			cdda = nullptr;
+			if (cdda->HasStepError())
+			{
+				if (reprap.GetDebugFlags(Module::Move).IsAnyBitSet(MoveDebugFlags::PrintBadMoves, MoveDebugFlags::PrintAllMoves))
+				{
+					cdda->DebugPrint("rd");
+				}
+				++stepErrors;
+				reprap.GetPlatform().LogError(ErrorCode::BadMove);
+			}
+			if (cdda->Free())
+			{
+				++numLookaheadUnderruns;
+			}
+			getPointer = cdda = cdda->GetNext();
 		}
 	}
 
 	// If we are already moving, see whether we need to prepare any more moves
-	if (cdda != nullptr)
+	if (cdda->GetState() == DDA::committed)
 	{
 		const DDA* const currentMove = cdda;						// save for later
 
@@ -341,34 +331,30 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 	}
 
 	// No DDA is executing, so start executing a new one if possible
-	DDA * dda = getPointer;											// capture volatile variable
 	if (   shouldStartMove											// if the Move code told us that we should start a move in any case...
 		|| waitingForSpace											// ...or the Move code told us it was waiting for space in the ring...
 		|| waitingForRingToEmpty									// ...or GCodes is waiting for all moves to finish...
-		|| dda->IsCheckingEndstops()								// ...or checking endstops, so we can't schedule the following move
+		|| cdda->IsCheckingEndstops()								// ...or checking endstops, so we can't schedule the following move
 #if SUPPORT_REMOTE_COMMANDS
-		|| dda->GetState() == DDA::frozen							// ...or the move has already been frozen (it's probably a remote move)
+		|| cdda->GetState() == DDA::committed						// ...or the move has already been committed (it's probably a remote move)
 #endif
 	   )
 	{
-		uint32_t ret = PrepareMoves(dda, 0, 0, simulationMode);
+		uint32_t ret = PrepareMoves(cdda, 0, 0, simulationMode);
 
-		if (dda->GetState() == DDA::completed)
+		if (cdda->GetState() == DDA::completed)
 		{
 			// We prepared the move but found there was nothing to do because endstops are already triggered
-			getPointer = dda = dda->GetNext();
+			getPointer = cdda = cdda->GetNext();
 			completedMoves++;
 		}
-		else if (dda->GetState() == DDA::frozen)
+		else if (cdda->GetState() == DDA::committed)
 		{
 			if (simulationMode != SimulationMode::off)
 			{
-				currentDda = dda;									// pretend we are executing this move
 				return 0;											// we don't want any delay because we want Spin() to be called again soon to complete this move
 			}
 
-			Platform& p = reprap.GetPlatform();
-			SetBasePriority(NvicPriorityStep);						// shut out step interrupt
 			if (waitingForSpace)
 			{
 				// The Move task told us it is waiting for space in the ring, so wake it up soon after we expect the move to finish
@@ -378,31 +364,11 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 					ret = moveTime;
 				}
 			}
-			const bool wakeLaser = StartNextMove(p, StepTimer::GetTimerTicks());
-			if (ScheduleNextStepInterrupt())
-			{
-				Interrupt(p);
-			}
-			SetBasePriority(0);
-			liveCoordinatesValid = false;
-
-#if SUPPORT_LASER || SUPPORT_IOBITS
-			if (wakeLaser)
-			{
-				Move::WakeLaserTask();
-			}
-			else
-			{
-				p.SetLaserPwm(0);
-			}
-#else
-			(void)wakeLaser;
-#endif
 		}
 		return ret;
 	}
 
-	return (dda->GetState() == DDA::provisional)
+	return (cdda->GetState() == DDA::provisional)
 			? MoveStartPollInterval									// there are moves in the queue but it is not time to prepare them yet
 				: TaskBase::TimeoutUnlimited;						// the queue is empty, nothing to do until new moves arrive
 }
@@ -693,36 +659,6 @@ void DDARing::LiveCoordinates(float m[MaxAxesPlusExtruders]) noexcept
 			IrqEnable();
 		}
 	}
-}
-
-float DDARing::GetRequestedSpeedMmPerSec() const noexcept
-{
-	const DDA* const cdda = checkPointer;					// capture volatile variable
-	return (cdda->state == DDA::scheduled) ? cdda->GetRequestedSpeedMmPerSec() : 0.0;
-}
-
-float DDARing::GetTopSpeedMmPerSec() const noexcept
-{
-	const DDA* const cdda = checkPointer;					// capture volatile variable
-	return (cdda->state == DDA::scheduled) ? cdda->GetTopSpeedMmPerSec() : 0.0;
-}
-
-float DDARing::GetAccelerationMmPerSecSquared() const noexcept
-{
-	const DDA* const cdda = checkPointer;					// capture volatile variable
-	return (cdda->state == DDA::scheduled) ? cdda->GetAccelerationMmPerSecSquared() : 0.0;
-}
-
-float DDARing::GetDecelerationMmPerSecSquared() const noexcept
-{
-	const DDA* const cdda = checkPointer;					// capture volatile variable
-	return (cdda->state == DDA::scheduled) ? cdda->GetDecelerationMmPerSecSquared() : 0.0;
-}
-
-float DDARing::GetTotalExtrusionRate() const noexcept
-{
-	const DDA* const cdda = checkPointer;					// capture volatile variable
-	return (cdda->state == DDA::scheduled) ? cdda->GetTotalExtrusionRate() : 0.0;
 }
 
 // Pause the print as soon as we can.

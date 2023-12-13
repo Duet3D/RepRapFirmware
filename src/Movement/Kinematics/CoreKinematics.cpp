@@ -397,18 +397,11 @@ void CoreKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const fl
 	const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
 	if (HasSharedMotor(axis))
 	{
-		float tempCoordinates[MaxAxes];
-		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
-		for (size_t axis = 0; axis < numTotalAxes; ++axis)
-		{
-			tempCoordinates[axis] = move.GetEndCoordinate(axis, false);
-		}
-		tempCoordinates[axis] = hitPoint;
-		move.SetPositions(tempCoordinates);
+		move.SetAxisEndPosition(axis, hitPoint);
 	}
 	else
 	{
-		move.SetDriveCoordinate(lrintf(hitPoint * inverseMatrix(axis, axis) * stepsPerMm[axis]), axis);
+		move.SetDriveEndPosition(axis, lrintf(hitPoint * inverseMatrix(axis, axis) * stepsPerMm[axis]));
 	}
 }
 

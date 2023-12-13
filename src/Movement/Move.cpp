@@ -264,7 +264,7 @@ void Move::Init() noexcept
 	{
 		acc = 0;
 	}
-	for (int32_t& pos : axisPositionsAfterScheduledMoves)
+	for (int32_t& pos : drivePositionsAfterScheduledMoves)
 	{
 		pos = 0;
 	}
@@ -298,12 +298,6 @@ void Move::Exit() noexcept
 			// Emergency stop has been commanded, so terminate this task to prevent new moves being prepared and executed
 			moveTask.TerminateAndUnlink();
 		}
-
-		// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
-		rings[0].RecycleDDAs();
-#if SUPPORT_ASYNC_MOVES
-		rings[1].RecycleDDAs();
-#endif
 
 		bool moveRead = false;
 
@@ -1209,7 +1203,7 @@ GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequ
 
 void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 {
-	// Construct a MovementLinear message to revert the position. The move must be shorter than clocksAllowed.
+	// Construct a MovementLinearShaped message to revert the position. The move must be shorter than clocksAllowed.
 	// When writing this, clocksAllowed was equivalent to 40ms.
 	// We allow 10ms delay time to allow the motor to stop and reverse direction, 10ms acceleration time, 5ms steady time and 10ms deceleration time.
 	CanMessageMovementLinearShaped msg2;
@@ -1219,7 +1213,10 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 	msg2.numDrivers = NumDirectDrivers;
 	msg2.extruderDrives = 0;
 	msg2.seq = 0;
-	msg2.initialSpeedFraction = msg2.finalSpeedFraction = 0.0;
+
+	// We start and finish at zero speed, so we move (3/8)*clocksAllowed*topSpeed distance. Since we normalise moves to unit distance, this is equal to one.
+	// So topSpeed is 8/(3 * clocksAllowed) and acceleration is (8/(3 * clocksAllowed))/(clocksAllowed/4) = 32/(3 * clocksAllowed^2).
+	msg2.acceleration = msg2.deceleration = 32.0/(3.0 * msg.clocksAllowed * msg.clocksAllowed);
 
 	size_t index = 0;
 	bool needSteps = false;
@@ -1250,11 +1247,21 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 #endif
 
 // Return the current machine axis and extruder coordinates. They are needed only to service status requests from DWC, PanelDue, M114.
-// This is quite expensive, so it should only be called from class MovemebntState, which caches the results.
-void Move::GetLiveCoordinates(unsigned int msNumber, const Tool *tool, float coordsOut[MaxAxesPlusExtruders]) noexcept
+// Return the current machine axis and extruder coordinates. They are needed only to service status requests from DWC, PanelDue, M114.
+// Transforming the machine motor coordinates to Cartesian coordinates is quite expensive, and a status request or object model request will call this for each axis.
+// So we cache the latest coordinates and only update them if it is some time since we last did, or if we have just waited for movement to stop.
+// Interrupts are assumed enabled on entry
+float Move::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 {
-	rings[msNumber].LiveCoordinates(coordsOut);
-	InverseAxisAndBedTransform(coordsOut, tool);
+	if (forceLiveCoordinatesUpdate || millis() - latestLiveCoordinatesFetchedAt > 200)
+	{
+		qq;		//TODO work back from the end coordinates through the executing and pending segments
+		qq;		//TODO forward kinematics transform
+		InverseAxisAndBedTransform(coordsOut, tool);
+		forceLiveCoordinatesUpdate = false;
+		latestLiveCoordinatesFetchedAt = millis();
+	}
+	return latestLiveCoordinates[axisOrExtruder];
 }
 
 void Move::SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) noexcept
@@ -1455,7 +1462,7 @@ void Move::DeactivateDM(size_t drive) noexcept
 }
 
 // Check the endstops, given that we know that this move checks endstops.
-// Either this move is currently executing (DDARing.currentDDA == this) and the state is 'executing', or we have almost finished preparing it and the state is 'provisional'.
+// Either this move is currently executing and this is called from the step ISR, or we have almost finished preparing the move its DDA state is 'provisional'.
 void Move::CheckEndstops(Platform& platform) noexcept
 {
 	for (;;)

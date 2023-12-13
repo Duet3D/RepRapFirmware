@@ -281,16 +281,16 @@ void PolarKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 	switch(axis)
 	{
 	case X_AXIS:	// radius
-		move.SetDriveCoordinate(lrintf(homedRadius * stepsPerMm[axis]), axis);
+		move.SetDriveEndPosition(axis, lrintf(homedRadius * stepsPerMm[axis]));
 		break;
 
 	case Y_AXIS:	// bed
-		move.SetDriveCoordinate(0, axis);
+		move.SetDriveEndPosition(axis, 0);
 		break;
 
 	default:
 		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
-		move.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		move.SetDriveEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
 		break;
 	}
 }

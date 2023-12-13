@@ -355,7 +355,7 @@ bool CanMotion::InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noe
 }
 
 // This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
-void CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcept
+void CanMotion::StopDriver(Move& move, size_t axis, DriverId driver) noexcept
 {
 	if (dda.GetState() == DDA::DDAState::provisional)
 	{
@@ -375,7 +375,7 @@ void CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcep
 }
 
 // This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
-void CanMotion::StopAxis(const DDA& dda, size_t axis) noexcept
+void CanMotion::StopAxis(Move& move, size_t axis) noexcept
 {
 	const Platform& p = reprap.GetPlatform();
 	if (axis < reprap.GetGCodes().GetTotalAxes())
@@ -422,7 +422,7 @@ void CanMotion::StopAxis(const DDA& dda, size_t axis) noexcept
 }
 
 // This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
-void CanMotion::StopAll(const DDA& dda) noexcept
+void CanMotion::StopAll(Move& move) noexcept
 {
 	if (dda.GetState() == DDA::DDAState::provisional)
 	{

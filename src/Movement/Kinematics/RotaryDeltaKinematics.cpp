@@ -681,14 +681,14 @@ void RotaryDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 		if (highEnd)
 		{
 			const float hitPoint = maxArmAngle + endstopAdjustments[axis];
-			move.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+			move.SetDriveEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
 		}
 	}
 	else
 	{
 		// Assume that any additional axes are linear
 		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
-		move.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		move.SetDriveEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
 	}
 }
 
