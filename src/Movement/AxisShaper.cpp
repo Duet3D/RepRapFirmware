@@ -100,7 +100,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 	if (gb.Seen('L'))
 	{
 		seen = true;
-		reductionLimit = ConvertAcceleration(constrain<float>(gb.GetNonNegativeFValue(), 0.01, 1.0));	// very low accelerations cause problems with the maths
+		reductionLimit = constrain<float>(gb.GetNonNegativeFValue(), 0.01, 1.0);	// very low accelerations cause problems with the maths
 	}
 	if (gb.Seen('S'))
 	{
