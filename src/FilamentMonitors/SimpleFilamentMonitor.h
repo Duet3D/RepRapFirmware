@@ -31,7 +31,7 @@ protected:
 
 	void Diagnostics(MessageType mtype, unsigned int extruder) noexcept override;
 	bool Interrupt() noexcept override;
-	const char *_ecv_array GetTypeText() const noexcept override { return "switch"; }
+	const char *_ecv_array GetTypeText() const noexcept override { return "simple"; }
 
 private:
 	void Poll() noexcept;
