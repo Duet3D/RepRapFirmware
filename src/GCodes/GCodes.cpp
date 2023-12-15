@@ -113,11 +113,11 @@ GCodes::GCodes(Platform& p) noexcept :
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Telnet)] = nullptr;
 #endif // SUPPORT_TELNET || HAS_SBC_INTERFACE
 #if defined(SERIAL_MAIN_DEVICE)
-# if SAME5x
+# if SAME5x && !CORE_USES_TINYUSB
 	// SAME5x USB driver already uses an efficient buffer for receiving data from USB
 	StreamGCodeInput * const usbInput = new StreamGCodeInput(SERIAL_MAIN_DEVICE);
 # else
-	// Old USB driver is inefficient when read in single-character mode
+	// Old USB driver and tinyusb drivers are inefficient when read in single-character mode
 	BufferedStreamGCodeInput * const usbInput = new BufferedStreamGCodeInput(SERIAL_MAIN_DEVICE);
 # endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);

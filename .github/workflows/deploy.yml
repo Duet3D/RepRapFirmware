@@ -1,0 +1,230 @@
+name: Build and and deploy firmware
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deployment target"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+        - dev
+        - unstable-3.5
+        - stable-3.5
+      version:
+        description: "Version"
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: "Check out CANlib"
+        uses: actions/checkout@v3
+        with:
+          repository: "Duet3D/CANlib"
+          ref: "3.5-dev"
+          path: "./CANlib"
+
+      - name: "Check out CoreN2G"
+        uses: actions/checkout@v3
+        with:
+          repository: "Duet3D/CoreN2G"
+          ref: "3.5-dev"
+          path: "./CoreN2G"
+
+      - name: "Check out Duet3Bootloader"
+        uses: actions/checkout@v3
+        with:
+          repository: "Duet3D/Duet3Bootloader"
+          ref: "dev"
+          path: "./Duet3Bootloader"
+
+      - name: "Check out Duet3Expansion"
+        uses: actions/checkout@v3
+        with:
+          repository: "Duet3D/Duet3Expansion"
+          ref: "3.5-dev"
+          path: "./Duet3Expansion"
+
+      - name: "Check out DuetWiFiSocketServer"
+        uses: actions/checkout@v3
+        with:
+          repository: "Duet3D/DuetWiFiSocketServer"
+          ref: "dev"
+          path: "./DuetWiFiSocketServer"
+
+      - name: "Check out FreeRTOS"
+        uses: actions/checkout@v3
+        with:
+          repository: "Duet3D/FreeRTOS"
+          ref: "3.4-dev"
+          path: "./FreeRTOS"
+
+      - name: "Check out Qfplib-M0-full"
+        uses: actions/checkout@v3
+        with:
+          repository: "Duet3D/Qfplib-M0-full"
+          ref: "master"
+          path: "./Qfplib-M0-full"
+
+      - name: "Check out RepRapFirmware"
+        uses: actions/checkout@v3
+        with:
+          repository: "Duet3D/RepRapFirmware"
+          ref: "3.5-dev"
+          path: "./RepRapFirmware"
+
+      - name: "Check out RRFLibraries"
+        uses: actions/checkout@v3
+        with:
+          repository: "Duet3D/RRFLibraries"
+          ref: "3.5-dev"
+          path: "./RRFLibraries"
+
+      - name: "Prepare CrcAppender"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download -R Duet3D/CrcAppender --pattern "CrcAppender-linux-x64"
+          chmod +x ./CrcAppender-linux-x64
+          sudo mv ./CrcAppender-linux-x64 /usr/bin/CrcAppender
+
+      - name: "Adjust versions"
+        run: |
+          sed -i "s/# define MAIN_VERSION.\+/# define MAIN_VERSION \"${{ inputs.version }}\"/g" ./RepRapFirmware/src/Version.h
+          sed -i "s/# define VERSION_TEXT.\+/# define VERSION_TEXT \"${{ inputs.version }}\"/g" ./Duet3Bootloader/src/Version.h
+          sed -i "s/# define VERSION.\+/# define VERSION \"${{ inputs.version }}\"/g" ./Duet3Expansion/src/Version.h
+
+      - name: "Set up Eclipse-CDT"
+        run: |
+          sudo apt-get install -y libarchive-tools default-jre
+          curl -L -O "https://pkg.duet3d.com/eclipse-cpp-2023-09-R-linux-gtk-x86_64.tar.gz"
+          sudo bsdtar -x -f ./eclipse-cpp-2023-09-R-linux-gtk-x86_64.tar.gz -C /opt
+
+      - name: "Set up ARM GCC"
+        run: |
+          curl -L -o ./arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz "https://developer.arm.com/-/media/Files/downloads/gnu/12.2.rel1/binrel/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz?rev=7bd049b7a3034e64885fa1a71c12f91d&hash=732D909FA8F68C0E1D0D17D08E057619"
+          bsdtar -x -f ./arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz
+
+      - name: "Set up Eclipse workspace"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -importAll ./
+
+      - name: "Build RepRapFirmware Duet2_SBC"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "RepRapFirmware/Duet2_SBC"
+
+      - name: "Build RepRapFirmare Duet3Mini5plus"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "RepRapFirmware/Duet3Mini5plus"
+
+      - name: "Build RepRapFirmare Duet3_MB6HC"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "RepRapFirmware/Duet3_MB6HC"
+
+      - name: "Build RepRapFirmare Duet3_MB6XD"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "RepRapFirmware/Duet3_MB6XD"
+
+      - name: "Build Duet3Bootloader Duet3_MB6HC"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Bootloader/Duet3_MB6HC"
+
+      - name: "Build Duet3Bootloader Duet3_MB6XD"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Bootloader/Duet3_MB6XD"
+
+      - name: "Build Duet3Bootloader Duet3_Mini5plus"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Bootloader/Duet3_Mini5plus"
+
+      - name: "Build Duet3Bootloader SAMC21"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Bootloader/SAMC21"
+
+      - name: "Build Duet3Bootloader SAME5x"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Bootloader/SAME5x"
+
+      - name: "Build Duet3Bootloader SAMMYC21"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Bootloader/SAMMYC21"
+
+      - name: "Build Duet3Expansion EXP1HCL"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Expansion/EXP1HCL"
+
+      - name: "Build Duet3Expansion EXP1XD"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Expansion/EXP1XD"
+
+      - name: "Build Duet3Expansion EXP3HC"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Expansion/EXP3HC"
+
+      - name: "Build Duet3Expansion M23CL"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Expansion/M23CL"
+
+      - name: "Build Duet3Expansion SAMMYC21"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Expansion/SAMMYC21"
+
+      - name: "Build Duet3Expansion SZP"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Expansion/SZP"
+
+      - name: "Build Duet3Expansion TOOL1LC"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Expansion/TOOL1LC"
+
+      - name: "Build Duet3Expansion TOOL1RR"
+        run: |
+          /opt/eclipse/eclipse --launcher.suppressErrors -nosplash -application org.eclipse.cdt.managedbuilder.core.headlessbuild -data ./workspace -E ArmGccPath=$GITHUB_WORKSPACE/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi/bin -cleanBuild "Duet3Expansion/TOOL1RR"
+
+      - name: "Arrange files"
+        run: |
+          mv ./RepRapFirmware/*/*.bin ./
+          mv ./RepRapFirmware/*/*.uf2 ./
+          mv ./RepRapFirmware/*/*.map ./
+          mv ./Duet3Bootloader/*/*.bin ./
+          mv ./Duet3Bootloader/*/*.map ./
+          mv ./Duet3Expansion/*/*.bin ./
+          mv ./Duet3Expansion/*/*.map ./
+          rm ./Duet3Firmware_Mini5plus.bin
+
+      - name: "Attach binaries"
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: |
+            ./*.bin
+            ./*.uf2
+
+      - name: "Attach symbols"
+        uses: actions/upload-artifact@v3
+        with:
+          name: symbols
+          path: |
+            ./*.map
+
+      - name: "Prepare files for upload"
+        run: |
+          mkdir files
+          mv ./*.bin ./files/
+          mv ./*.uf2 ./files/
+
+      - name: "Upload files to dev feed"
+        uses: Creepios/sftp-action@v1.0.3
+        with:
+          host: pkg.duet3d.com
+          port: 22
+          username: ${{ secrets.PKG_SSH_USER }}
+          password: ${{ secrets.PKG_SSH_PASS }}
+          privateKey: ${{ secrets.PKG_SSH_KEY }}
+          localPath: ./files
+          remotePath: /var/rrf-pkg/dev
+
