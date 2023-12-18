@@ -85,8 +85,6 @@ public:
 	bool InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept;			// Set up an async move
 #endif
 
-	void Start(Platform& p, uint32_t tim) noexcept SPEED_CRITICAL;					// Start executing the DDA, i.e. move the move.
-
 	void SetNext(DDA *n) noexcept { next = n; }
 	void SetPrevious(DDA *p) noexcept { prev = p; }
 	bool Free() noexcept;
@@ -112,8 +110,6 @@ public:
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept;
 	float GetRawEndCoordinate(size_t drive) const noexcept { return endCoordinates[drive]; }
-	void FetchEndPoints(int32_t ep[MaxAxesPlusExtruders]) const noexcept;
-	void FetchCurrentPositions(int32_t ep[MaxAxesPlusExtruders]) const noexcept;
 	void SetPositions(const float move[]) noexcept;									// Force the endpoints to be these
 	FilePosition GetFilePosition() const noexcept { return filePos; }
 	float GetRequestedSpeedMmPerClock() const noexcept;
@@ -292,12 +288,6 @@ inline bool DDA::CanPauseAfter() const noexcept
 		&& next->state == DDAState::provisional
 #endif
 		;
-}
-
-// This is called by DDARing::LiveCoordinates to get the endpoints of a move that has been completed
-inline void DDA::FetchEndPoints(int32_t ep[MaxAxesPlusExtruders]) const noexcept
-{
-	memcpyi32(ep, endPoint, MaxAxesPlusExtruders);
 }
 
 // This is called from DDARing only

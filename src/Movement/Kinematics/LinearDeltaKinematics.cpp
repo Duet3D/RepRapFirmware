@@ -1036,14 +1036,14 @@ void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 	{
 		if (highEnd)
 		{
-			move.SetDriveEndPosition(axis, lrintf(homedCarriageHeights[axis] * stepsPerMm[axis]));
+			move.SetMotorEndPosition(axis, lrintf(homedCarriageHeights[axis] * stepsPerMm[axis]));
 		}
 	}
 	else
 	{
 		// Assume that any additional axes are linear
 		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
-		move.SetDriveEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
+		move.SetMotorEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
 	}
 }
 

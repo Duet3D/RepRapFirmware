@@ -1019,19 +1019,6 @@ void DDA::MatchSpeeds() noexcept
 	}
 }
 
-// This is called by DDARing::LiveCoordinates to get the endpoints of a move that is being executed
-void DDA::FetchCurrentPositions(int32_t ep[MaxAxesPlusExtruders]) const noexcept
-{
-	memcpyi32(ep, prev->endPoint, MaxAxesPlusExtruders);
-	if (!flags.isLeadscrewAdjustmentMove)			// driver numbers are out of the usual range for leadscrew adjustment moves
-	{
-		for (const DriveMovement* dm = activeDMs; dm != nullptr; dm = dm->nextDM)
-		{
-			ep[dm->drive] += dm->GetNetStepsTaken();
-		}
-	}
-}
-
 // This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered
 void DDA::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
 {
@@ -1461,61 +1448,6 @@ float DDA::NormaliseLinearMotion(AxesBitmap linearAxes) noexcept
 	for (size_t d = 0; d < dimensions; d++)
 	{
 		v[d] = fabsf(v[d]);
-	}
-}
-
-// Start executing this move. Must be called with interrupts disabled or basepri >= set interrupt priority, to avoid a race condition.
-void DDA::Start(Platform& p, uint32_t tim) noexcept
-pre(state == frozen)
-{
-	if ((int32_t)(tim - afterPrepare.moveStartTime ) > 25)
-	{
-		afterPrepare.moveStartTime = tim;			// this move is late starting, so record the actual start time
-	}
-	state = executing;
-
-#if DDA_LOG_PROBE_CHANGES
-	if ((endStopsToCheck & LogProbeChanges) != 0)
-	{
-		numLoggedProbePositions = 0;
-		probeTriggered = false;
-	}
-#endif
-
-	if (activeDMs != nullptr)
-	{
-		if (!flags.checkEndstops)
-		{
-			p.EnableAllSteppingDrivers();							// make sure that all drivers are enabled
-		}
-
-		for (const DriveMovement* pdm = activeDMs; pdm != nullptr; pdm = pdm->nextDM)
-		{
-			reprap.GetMove().SetDirection(p, pdm->drive, pdm->direction);
-		}
-
-#if SUPPORT_REMOTE_COMMANDS
-		if (!flags.isRemote)
-#endif
-		{
-			if (afterPrepare.averageExtrusionSpeed != 0.0)
-			{
-				p.ExtrudeOn();
-				if (tool != nullptr)
-				{
-					// Pass the extrusion speed averaged over the whole move in mm/sec
-					tool->ApplyFeedForward(afterPrepare.averageExtrusionSpeed);
-				}
-			}
-			else
-			{
-				p.ExtrudeOff();
-				if (tool != nullptr)
-				{
-					tool->StopFeedForward();
-				}
-			}
-		}
 	}
 }
 

@@ -264,7 +264,7 @@ void Move::Init() noexcept
 	{
 		acc = 0;
 	}
-	for (int32_t& pos : drivePositionsAfterScheduledMoves)
+	for (int32_t& pos : motorPositionsAfterScheduledMoves)
 	{
 		pos = 0;
 	}
@@ -1253,11 +1253,42 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 // Interrupts are assumed enabled on entry
 float Move::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 {
-	if (forceLiveCoordinatesUpdate || millis() - latestLiveCoordinatesFetchedAt > 200)
+	if (forceLiveCoordinatesUpdate || (millis() - latestLiveCoordinatesFetchedAt > 200 && !liveCoordinatesValid))
 	{
-		qq;		//TODO work back from the end coordinates through the executing and pending segments
-		qq;		//TODO forward kinematics transform
-		InverseAxisAndBedTransform(coordsOut, tool);
+		const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();		// do this before we disable interrupts
+		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();			// do this before we disable interrupts
+
+		// Get the positions of each motor
+		int32_t currentMotorPositions[MaxAxesPlusExtruders];
+		bool motionPending = false;
+		motionAdded = false;
+		for (size_t i = 0; i < MaxAxesPlusExtruders; ++i)
+		{
+			currentMotorPositions[i] = dms[i].GetCurrentPosition();
+			if (segments[i] != nullptr)
+			{
+				motionPending = true;
+			}
+		}
+
+		MotorStepsToCartesian(currentMotorPositions, numVisibleAxes, numTotalAxes, latestLiveCoordinates);		// this is slow, so do it with interrupts enabled
+
+		// Add extrusion so far in the current move to the accumulated extrusion
+		for (size_t i = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); i < MaxAxesPlusExtruders; ++i)
+		{
+			latestLiveCoordinates[i] = currentMotorPositions[i] / reprap.GetPlatform().DriveStepsPerUnit(i);
+		}
+
+		// Optimisation: if no movement, save the positions for next time
+		{
+			AtomicCriticalSectionLocker lock;
+			if (!motionPending && !motionAdded)
+			{
+				liveCoordinatesValid = true;
+			}
+		}
+
+		InverseAxisAndBedTransform(latestLiveCoordinates, tool);
 		forceLiveCoordinatesUpdate = false;
 		latestLiveCoordinatesFetchedAt = millis();
 	}
@@ -1715,30 +1746,9 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 // For extruder drivers, we need to be able to calculate how much of the extrusion was completed after calling this.
 void Move::StopDrive(size_t drive) noexcept
 {
-	if (segments[drive] != nullptr)
-	{
-		if (drive < reprap.GetGCodes().GetTotalAxes())
-		{
-			endPoint[drive] += dms[drive].GetNetStepsTaken();
-			flags.endCoordinatesValid = false;			// the XYZ position is no longer valid
-		}
-		DeactivateDM(drive);
-
-#if !SUPPORT_CAN_EXPANSION
-		if (activeDMs == nullptr)
-		{
-			state = completed;
-		}
-#endif
-	}
-
-#if SUPPORT_CAN_EXPANSION
-	afterPrepare.drivesMoving.ClearBit(drive);
-	if (afterPrepare.drivesMoving.IsEmpty())
-	{
-		state = DDA::completed;
-	}
-#endif
+	dms[drive].StopDriver();
+	ReleaseSegments(segments[drive]);
+	motorPositionsAfterScheduledMoves[drive] = dms[drive].GetCurrentPosition();
 }
 
 // This is called when we abort a move because we have hit an endstop.
@@ -1754,19 +1764,15 @@ void Move::MoveAborted() noexcept
 
 #if SUPPORT_REMOTE_COMMANDS
 
+// Stop some drivers and update the corresponding motor positions
 void Move::StopDrivers(uint16_t whichDrives) noexcept
 {
-	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);
-	DDA *cdda = currentDda;							// capture volatile
-	if (cdda != nullptr)
-	{
-		cdda->StopDrivers(whichDrives);
-		if (cdda->GetState() == DDA::completed)
-		{
-			CurrentMoveCompleted();					// tell the DDA ring that the current move is complete
-		}
-	}
-	RestoreBasePriority(oldPrio);
+	DriversBitmap dr(whichDrives);
+	dr.Iterate([this](size_t drive, unsigned int)
+				{
+					StopDrive(drive);
+				}
+			  );
 }
 
 #endif

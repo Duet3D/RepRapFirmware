@@ -73,7 +73,7 @@ public:
 			pre(queueNumber < NumMovementSystems);							// Set the current position to be this without transforming them first
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
-	void GetLivePositions(int32_t pos[MaxAxesPlusExtruders], MovementSystemNumber msNumber) const noexcept;
+	int32_t GetLiveMotorPosition(size_t axis) const noexcept;
 	void GetLiveCoordinates(unsigned int msNumber, const Tool *tool, float coordsOut[MaxAxesPlusExtruders]) noexcept;
 																			// Gives the last point at the end of the last complete DDA
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
@@ -192,8 +192,8 @@ public:
 	float GetDecelerationMmPerSecSquared() const noexcept { return rings[0].GetDecelerationMmPerSecSquared(); }
 	float GetTotalExtrusionRate() const noexcept { return rings[0].GetTotalExtrusionRate(); }
 
-	const int32_t *GetDriveEndPositions() const noexcept { return drivePositionsAfterScheduledMoves; }
-	void SetDriveEndPosition(size_t axis, int32_t val) noexcept { drivePositionsAfterScheduledMoves[axis] = val; }
+	const int32_t *GetMotorEndPositions() const noexcept { return motorPositionsAfterScheduledMoves; }
+	void SetMotorEndPosition(size_t axis, int32_t val) noexcept { motorPositionsAfterScheduledMoves[axis] = val; }
 	void SetAxisEndPosition(size_t axis, float pos) noexcept;
 	float LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept;
 	void ForceLiveCoordinatesUpdate() noexcept { forceLiveCoordinatesUpdate = true; }
@@ -287,6 +287,7 @@ private:
 	void MoveAborted() noexcept;													// cancel the current isolated move
 	void InsertDM(DriveMovement *dm) noexcept;										// insert a DM into the active list, keeping it in step time order
 	void SetDirection(Platform& p, size_t axisOrExtruder, bool direction) noexcept;	// set the direction of a driver, observing timing requirements
+	void ReleaseSegments(MoveSegment*& segs) noexcept;								// release a chain of segments and set it to nullptr
 
 #if SUPPORT_CAN_EXPANSION
 	uint32_t InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
@@ -309,11 +310,13 @@ private:
 	DriveMovement dms[MaxAxesPlusExtruders];
 	MoveSegment *segments[MaxAxesPlusExtruders];
 	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 		// Accumulated motor steps, used by filament monitors
-	int32_t drivePositionsAfterScheduledMoves[MaxAxesPlusExtruders];	// The drive positions that will result after all scheduled movement has completed normally
+	int32_t motorPositionsAfterScheduledMoves[MaxAxesPlusExtruders];	// The motor positions that will result after all scheduled movement has completed normally
 
 	mutable float latestLiveCoordinates[MaxAxesPlusExtruders];		// the most recent set of live coordinates that we fetched
 	mutable uint32_t latestLiveCoordinatesFetchedAt = 0;			// when we fetched the live coordinates
 	mutable bool forceLiveCoordinatesUpdate = true;					// true if we want to force latestLiveCoordinates to be updated
+	mutable bool liveCoordinatesValid = false;						// true if the latestLiveCoordinates should be valid
+	mutable volatile bool motionAdded = false;						// set when any move segments are added
 
 #ifdef DUET3_MB6XD
 	volatile uint32_t lastStepHighTime;								// when we last started a step pulse
@@ -408,9 +411,9 @@ inline void Move::SetRawPosition(const float positions[MaxAxesPlusExtruders], Mo
 	rings[msNumber].SetPositions(positions);
 }
 
-inline void Move::GetLivePositions(int32_t pos[MaxAxesPlusExtruders], MovementSystemNumber msNumber) const noexcept
+inline int32_t Move::GetLiveMotorPosition(size_t axis) const noexcept
 {
-	return rings[msNumber].GetCurrentMotorPositions(pos);
+	return dms[axis].GetCurrentPosition();
 }
 
 // Perform motor endpoint adjustment

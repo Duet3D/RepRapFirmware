@@ -401,7 +401,7 @@ void CoreKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const fl
 	}
 	else
 	{
-		move.SetDriveEndPosition(axis, lrintf(hitPoint * inverseMatrix(axis, axis) * stepsPerMm[axis]));
+		move.SetMotorEndPosition(axis, lrintf(hitPoint * inverseMatrix(axis, axis) * stepsPerMm[axis]));
 	}
 }
 

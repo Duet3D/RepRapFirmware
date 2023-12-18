@@ -412,31 +412,31 @@ void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 	case X_AXIS:	// proximal joint homing switch
 		{
 			const float hitPoint = (highEnd) ? thetaLimits[1] : thetaLimits[0];
-			move.SetDriveEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
+			move.SetMotorEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
 		}
 		break;
 
 	case Y_AXIS:	// distal joint homing switch
 		{
 			const float hitPoint = ((highEnd) ? psiLimits[1] : psiLimits[0])
-									- (((float)move.GetDriveEndPositions()[X_AXIS] * crosstalk[0])/stepsPerMm[X_AXIS]);
-			move.SetDriveEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
+									- (((float)move.GetMotorEndPositions()[X_AXIS] * crosstalk[0])/stepsPerMm[X_AXIS]);
+			move.SetMotorEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
 		}
 		break;
 
 	case Z_AXIS:	// Z axis homing switch
 		{
 			const float hitPoint = ((highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis))
-									- (((float)move.GetDriveEndPositions()[X_AXIS] * crosstalk[1])/stepsPerMm[X_AXIS])
-									- (((float)move.GetDriveEndPositions()[Y_AXIS] * crosstalk[2])/stepsPerMm[Y_AXIS]);
-			move.SetDriveEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
+									- (((float)move.GetMotorEndPositions()[X_AXIS] * crosstalk[1])/stepsPerMm[X_AXIS])
+									- (((float)move.GetMotorEndPositions()[Y_AXIS] * crosstalk[2])/stepsPerMm[Y_AXIS]);
+			move.SetMotorEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
 		}
 		break;
 
 	default:		// Additional axis
 		{
 			const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
-			move.SetDriveEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
+			move.SetMotorEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
 		}
 		break;
 	}
