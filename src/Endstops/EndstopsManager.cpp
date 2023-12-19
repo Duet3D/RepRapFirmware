@@ -804,26 +804,6 @@ void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_
 	}
 }
 
-// This is called when we update endstop states because of a message from a remote board.
-// In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to DDA::CheckEndstops().
-void EndstopsManager::OnEndstopOrZProbeStatesChanged() noexcept
-{
-	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
-
-	const DDA * const currentDda = reprap.GetMove().GetMainDDARing().GetCurrentDDA();
-	if (currentDda != nullptr && currentDda->IsCheckingEndstops())
-	{
-		Platform& p = reprap.GetPlatform();
-		currentDda->CheckEndstops(p);
-		if (currentDda->GetState() == DDA::completed)
-		{
-			reprap.GetMove().GetMainDDARing().OnMoveCompleted(currentDda, p);
-		}
-	}
-
-	RestoreBasePriority(oldPrio);										// allow step interrupts again
-}
-
 #endif
 
 // End

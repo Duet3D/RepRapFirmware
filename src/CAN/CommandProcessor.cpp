@@ -280,7 +280,7 @@ static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddres
 
 	if (endstopStatesChanged)
 	{
-		reprap.GetPlatform().GetEndstops().OnEndstopOrZProbeStatesChanged();
+		reprap.GetMove().OnEndstopOrZProbeStatesChanged();
 	}
 }
 

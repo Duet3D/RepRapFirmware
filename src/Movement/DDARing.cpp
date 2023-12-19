@@ -253,18 +253,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 		if (cdda->GetState() == DDA::committed)
 		{
 			simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
-			if (simulationMode == SimulationMode::debug && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::SimulateSteppingDrivers))
-			{
-				do
-				{
-					cdda->SimulateSteppingDrivers(reprap.GetPlatform());
-				} while (cdda->GetState() != DDA::completed);
-			}
-			else
-			{
-				cdda->Complete();
-			}
-
+			cdda->Complete();
 			getPointer = cdda = cdda->GetNext();
 		}
 	}
@@ -273,15 +262,6 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 		// See if we can retire any completed moves
 		while (cdda->GetState() == DDA::completed || cdda->HasExpired())
 		{
-			if (cdda->HasStepError())
-			{
-				if (reprap.GetDebugFlags(Module::Move).IsAnyBitSet(MoveDebugFlags::PrintBadMoves, MoveDebugFlags::PrintAllMoves))
-				{
-					cdda->DebugPrint("rd");
-				}
-				++stepErrors;
-				reprap.GetPlatform().LogError(ErrorCode::BadMove);
-			}
 			if (cdda->Free())
 			{
 				++numLookaheadUnderruns;
@@ -424,65 +404,6 @@ float DDARing::PushBabyStepping(size_t axis, float amount) noexcept
 	return addPointer->AdvanceBabyStepping(*this, axis, amount);
 }
 
-// This is called when the state has been set to 'completed'. Step interrupts must be disabled or locked out when calling this.
-void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
-{
-	bool wakeLaserTask = false;
-	if (cdda->IsScanningProbeMove())
-	{
-		reprap.GetMove().SetProbeReadingNeeded();
-		wakeLaserTask = true;						// wake the laser task to take a reading
-	}
-
-	// The following finish time is wrong if we aborted the move because of endstop or Z probe checks.
-	// However, following a move that checks endstops or the Z probe, we always wait for the move to complete before we schedule another, so this doesn't matter.
-	const uint32_t finishTime = cdda->GetMoveFinishTime();	// calculate when this move should finish
-
-	CurrentMoveCompleted();							// tell the DDA ring that the current move is complete
-
-	// Try to start a new move
-	const DDA::DDAState st = getPointer->GetState();
-	if (st == DDA::frozen)
-	{
-#if SUPPORT_LASER || SUPPORT_IOBITS
-		if (StartNextMove(p, finishTime))
-		{
-			wakeLaserTask = true;
-		}
-#else
-		(void)StartNextMove(p, finishTime);
-#endif
-	}
-	else
-	{
-		if (st == DDA::provisional)
-		{
-			++numPrepareUnderruns;					// there are more moves available, but they are not prepared yet. Signal an underrun.
-		}
-		else if (!waitingForRingToEmpty)
-		{
-			++numNoMoveUnderruns;
-		}
-		p.ExtrudeOff();								// turn off ancillary PWM
-		if (cdda->GetTool() != nullptr)
-		{
-			cdda->GetTool()->StopFeedForward();
-		}
-#if SUPPORT_LASER
-		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
-		{
-			p.SetLaserPwm(0);						// turn off the laser
-		}
-#endif
-		waitingForRingToEmpty = false;
-	}
-
-	if (wakeLaserTask)
-	{
-		Move::WakeLaserTaskFromISR();
-	}
-}
-
 // Tell the DDA ring that the caller is waiting for it to empty. Returns true if it is already empty.
 bool DDARing::SetWaitingToEmpty() noexcept
 {
@@ -530,35 +451,7 @@ void DDARing::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) 
 void DDARing::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
 {
 	AtomicCriticalSectionLocker lock;
-	liveCoordinatesValid = false;
 	addPointer->GetPrevious()->SetPositions(move);
-}
-
-// Reset the extruder positions. Should only be called when the DDA ring is empty.
-void DDARing::ResetExtruderPositions() noexcept
-{
-	AtomicCriticalSectionLocker lock;
-	liveCoordinatesValid = false;
-	for (size_t eDrive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); eDrive < MaxAxesPlusExtruders; eDrive++)
-	{
-		liveCoordinates[eDrive] = 0.0;
-	}
-}
-
-// Perform motor endpoint adjustment
-void DDARing::AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept
-{
-	DDA * const lastQueuedMove = addPointer->GetPrevious();
-	const int32_t * const endCoordinates = lastQueuedMove->DriveCoordinates();
-	const float * const driveStepsPerUnit = reprap.GetPlatform().GetDriveStepsPerUnit();
-
-	for (size_t drive = 0; drive < numMotors; ++drive)
-	{
-		const int32_t ep = endCoordinates[drive] + lrintf(adjustment[drive] * driveStepsPerUnit[drive]);
-		lastQueuedMove->SetDriveCoordinate(ep, drive);
-	}
-
-	liveCoordinatesValid = false;		// force the live XYZ position to be recalculated
 }
 
 // Pause the print as soon as we can.
@@ -592,34 +485,28 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 	// We can pause before a move if it is the first segment in that move.
 	// The caller should set up rp.feedrate to the default feed rate for the file gcode source before calling this.
 
-	TaskCriticalSectionLocker lock;						// prevent the Move task changing data while we look at it
+	TaskCriticalSectionLocker lock;							// prevent the Move task changing data while we look at it
 
 	const DDA * const savedDdaRingAddPointer = addPointer;
-	bool pauseOkHere;
 
 	IrqDisable();
-	DDA *dda = currentDda;
-	if (dda == nullptr)
+	DDA *dda = getPointer;
+	if (dda != savedDdaRingAddPointer)
 	{
-		pauseOkHere = true;								// no move was executing, so we have already paused here whether it was a good idea or not.
-		dda = getPointer;
-	}
-	else
-	{
-		pauseOkHere = dda->CanPauseAfter();
+		bool pauseOkHere = dda->CanPauseAfter();
 		dda = dda->GetNext();
-	}
 
-	while (dda != savedDdaRingAddPointer)				// while there are queued moves
-	{
-		if (pauseOkHere)								// if we can pause before executing the move that dda refers to
+		while (dda != savedDdaRingAddPointer)				// while there are queued moves
 		{
-			addPointer = dda;
-			dda->Free();								// set the move status to empty so that when we re-enable interrupts the ISR doesn't start executing it
-			break;
+			if (pauseOkHere)								// if we can pause before executing the move that dda refers to
+			{
+				addPointer = dda;
+				dda->Free();								// set the move status to empty so that when we re-enable interrupts the ISR doesn't start executing it
+				break;
+			}
+			pauseOkHere = dda->CanPauseAfter();
+			dda = dda->GetNext();
 		}
-		pauseOkHere = dda->CanPauseAfter();
-		dda = dda->GetNext();
 	}
 
 	IrqEnable();
@@ -645,7 +532,7 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 	}
 
 	dda = addPointer;
-	rp.proportionDone = dda->GetProportionDone(false);		// get the proportion of the current multi-segment move that has been completed
+	rp.proportionDone = dda->GetProportionDone();			// get the proportion of the current multi-segment move that has been completed
 	rp.initialUserC0 = dda->GetInitialUserC0();
 	rp.initialUserC1 = dda->GetInitialUserC1();
 	const float rawFeedRate = (dda->UsingStandardFeedrate()) ? dda->GetRequestedSpeedMmPerClock() : ms.feedRate;	// this is the requested feed rate after applying the speed factor

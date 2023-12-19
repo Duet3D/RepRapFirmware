@@ -1493,8 +1493,8 @@ void Move::DeactivateDM(size_t drive) noexcept
 }
 
 // Check the endstops, given that we know that this move checks endstops.
-// Either this move is currently executing and this is called from the step ISR, or we have almost finished preparing the move its DDA state is 'provisional'.
-void Move::CheckEndstops(Platform& platform) noexcept
+// If executingMove is set then the move is already being executed; otherwise we are preparing to commit the move.
+void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 {
 	for (;;)
 	{
@@ -1504,7 +1504,7 @@ void Move::CheckEndstops(Platform& platform) noexcept
 		case EndstopHitAction::stopAll:
 			MoveAborted();											// set the state to completed and recalculate the endpoints
 #if SUPPORT_CAN_EXPANSION
-			CanMotion::StopAll(*this);
+			CanMotion::StopAll(executingMove);
 #endif
 			if (hitDetails.isZProbe)
 			{
@@ -1525,7 +1525,7 @@ void Move::CheckEndstops(Platform& platform) noexcept
 		case EndstopHitAction::stopAxis:
 			StopDrive(hitDetails.axis);								// we must stop the drive before we mess with its coordinates
 #if SUPPORT_CAN_EXPANSION
-			CanMotion::StopAxis(*this, hitDetails.axis);
+			CanMotion::StopAxis(executingMove, hitDetails.axis);
 #endif
 			if (hitDetails.setAxisLow)
 			{
@@ -1543,7 +1543,7 @@ void Move::CheckEndstops(Platform& platform) noexcept
 #if SUPPORT_CAN_EXPANSION
 			if (hitDetails.driver.IsRemote())
 			{
-				CanMotion::StopDriver(*this, hitDetails.axis, hitDetails.driver);
+				CanMotion::StopDriver(executingMove, hitDetails.axis, hitDetails.driver);
 			}
 			else
 #endif
@@ -1569,13 +1569,12 @@ void Move::CheckEndstops(Platform& platform) noexcept
 }
 
 // Generate the step pulses of internal drivers used by this DDA
-// Sets the status to 'completed' if the move is complete and the next move should be started
 void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 {
 	// Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
 	if (checkingEndstops)					// if any homing switches or the Z probe is enabled in this move
 	{
-		CheckEndstops(p);					// call out to a separate function because this may help cache usage in the more common and time-critical case where we don't call it
+		CheckEndstops(p, true);				// call out to a separate function because this may help cache usage in the more common and time-critical case where we don't call it
 	}
 
 	uint32_t driversStepping = 0;
@@ -1743,7 +1742,6 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 }
 
 // Stop a drive and re-calculate the corresponding endpoint.
-// For extruder drivers, we need to be able to calculate how much of the extrusion was completed after calling this.
 void Move::StopDrive(size_t drive) noexcept
 {
 	dms[drive].StopDriver();
@@ -1753,7 +1751,6 @@ void Move::StopDrive(size_t drive) noexcept
 
 // This is called when we abort a move because we have hit an endstop.
 // It stops all drives and adjusts the end points of the current move to account for how far through the move we got.
-// The caller must call MoveCompleted at some point after calling this.
 void Move::MoveAborted() noexcept
 {
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
@@ -1761,6 +1758,100 @@ void Move::MoveAborted() noexcept
 		StopDrive(drive);
 	}
 }
+
+// THIS CODE IS NOT USED. It's here because we need to replicate the functionality somewhere else.
+void Move::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
+{
+	bool wakeLaserTask = false;
+	if (cdda->IsScanningProbeMove())
+	{
+		reprap.GetMove().SetProbeReadingNeeded();
+		wakeLaserTask = true;						// wake the laser task to take a reading
+	}
+
+	// The following finish time is wrong if we aborted the move because of endstop or Z probe checks.
+	// However, following a move that checks endstops or the Z probe, we always wait for the move to complete before we schedule another, so this doesn't matter.
+	const uint32_t finishTime = cdda->GetMoveFinishTime();	// calculate when this move should finish
+
+	CurrentMoveCompleted();							// tell the DDA ring that the current move is complete
+
+	// Try to start a new move
+	const DDA::DDAState st = getPointer->GetState();
+	if (st == DDA::frozen)
+	{
+#if SUPPORT_LASER || SUPPORT_IOBITS
+		if (StartNextMove(p, finishTime))
+		{
+			wakeLaserTask = true;
+		}
+#else
+		(void)StartNextMove(p, finishTime);
+#endif
+	}
+	else
+	{
+		if (st == DDA::provisional)
+		{
+			++numPrepareUnderruns;					// there are more moves available, but they are not prepared yet. Signal an underrun.
+		}
+		else if (!waitingForRingToEmpty)
+		{
+			++numNoMoveUnderruns;
+		}
+		p.ExtrudeOff();								// turn off ancillary PWM
+		if (cdda->GetTool() != nullptr)
+		{
+			cdda->GetTool()->StopFeedForward();
+		}
+#if SUPPORT_LASER
+		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
+		{
+			p.SetLaserPwm(0);						// turn off the laser
+		}
+#endif
+		waitingForRingToEmpty = false;
+	}
+
+	if (wakeLaserTask)
+	{
+		Move::WakeLaserTaskFromISR();
+	}
+}
+
+// Perform motor endpoint adjustment
+void Move::AdjustMotorPositions(MovementSystemNumber msNumber, const float adjustment[], size_t numMotors) noexcept
+{
+	qq;
+}
+
+void Move::ResetExtruderPositions() noexcept
+{
+	qq;
+}
+
+#if SUPPORT_CAN_EXPANSION
+
+// This is called when we update endstop states because of a message from a remote board.
+// In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to DDA::CheckEndstops().
+void Move::OnEndstopOrZProbeStatesChanged() noexcept
+{
+	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
+
+	const DDA * const currentDda = GetMainDDARing().GetCurrentDDA();
+	if (currentDda != nullptr && currentDda->IsCheckingEndstops())
+	{
+		Platform& p = reprap.GetPlatform();
+		CheckEndstops(p, true);
+		if (currentDda->GetState() == DDA::completed)
+		{
+			GetMainDDARing().OnMoveCompleted(currentDda, p);
+		}
+	}
+
+	RestoreBasePriority(oldPrio);										// allow step interrupts again
+}
+
+#endif
 
 #if SUPPORT_REMOTE_COMMANDS
 

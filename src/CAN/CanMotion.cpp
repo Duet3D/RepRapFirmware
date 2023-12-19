@@ -355,9 +355,9 @@ bool CanMotion::InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noe
 }
 
 // This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
-void CanMotion::StopDriver(Move& move, size_t axis, DriverId driver) noexcept
+void CanMotion::StopDriver(bool executingMove, size_t axis, DriverId driver) noexcept
 {
-	if (dda.GetState() == DDA::DDAState::provisional)
+	if (!executingMove)
 	{
 		InternalStopDriverWhenProvisional(driver);
 	}
@@ -375,13 +375,13 @@ void CanMotion::StopDriver(Move& move, size_t axis, DriverId driver) noexcept
 }
 
 // This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
-void CanMotion::StopAxis(Move& move, size_t axis) noexcept
+void CanMotion::StopAxis(bool executingMove, size_t axis) noexcept
 {
 	const Platform& p = reprap.GetPlatform();
 	if (axis < reprap.GetGCodes().GetTotalAxes())
 	{
 		const AxisDriversConfig& cfg = p.GetAxisDriversConfig(axis);
-		if (dda.GetState() == DDA::DDAState::provisional)
+		if (!executingMove)
 		{
 			for (size_t i = 0; i < cfg.numDrivers; ++i)
 			{
@@ -417,14 +417,14 @@ void CanMotion::StopAxis(Move& move, size_t axis) noexcept
 	else
 	{
 		const DriverId driver = p.GetExtruderDriver(LogicalDriveToExtruder(axis));
-		StopDriver(dda, axis, driver);
+		StopDriver(executingMove, axis, driver);
 	}
 }
 
 // This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
-void CanMotion::StopAll(Move& move) noexcept
+void CanMotion::StopAll(bool executingMove) noexcept
 {
-	if (dda.GetState() == DDA::DDAState::provisional)
+	if (!executingMove)
 	{
 		// We still send the messages so that the drives get enabled, but we set the steps to zero
 		for (CanMessageBuffer *buf = movementBufferList; buf != nullptr; buf = buf->next)

@@ -1279,7 +1279,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			// This is especially important when using CAN-connected motors or endstops, because we rely on receiving "endstop changed" messages.
 			// Moves that check endstops are always run as isolated moves, so there can be no move in progress and the endstops must already be primed.
 			platform.EnableAllSteppingDrivers();
-			move.CheckEndstops(platform);									// this may modify pending CAN moves, and may set status 'completed'
+			move.CheckEndstops(platform, false);									// this may modify pending CAN moves, and may set status 'completed'
 		}
 
 #if SUPPORT_CAN_EXPANSION
@@ -1453,36 +1453,12 @@ float DDA::NormaliseLinearMotion(AxesBitmap linearAxes) noexcept
 
 // Return the proportion of the extrusion in the complete multi-segment move that has already been done.
 // The move was either not started or was aborted.
-float DDA::GetProportionDone(bool moveWasAborted) const noexcept
+float DDA::GetProportionDone() const noexcept
 {
 	// Get the proportion of extrusion already done at the start of this segment
-	float proportionDoneSoFar = (filePos != noFilePosition && filePos == prev->filePos)
+	return (filePos != noFilePosition && filePos == prev->filePos)
 									? prev->proportionDone
 										: 0.0;
-	if (moveWasAborted)
-	{
-		// The move was aborted, so subtract how much was done
-		if (proportionDone > proportionDoneSoFar)
-		{
-			int32_t stepsTaken = 0;
-			float extrusionRequested = 0;
-			for (size_t extruder = 0; extruder < reprap.GetGCodes().GetNumExtruders(); ++extruder)
-			{
-				const size_t logicalDrive = ExtruderToLogicalDrive(extruder);
-				const DriveMovement* const pdm = FindDM(logicalDrive);
-				if (pdm != nullptr)								// if this extruder is active
-				{
-					stepsTaken += pdm->GetNetStepsTaken();
-					extrusionRequested += totalDistance * directionVector[logicalDrive];
-				}
-			}
-			if (extrusionRequested > 0.0)										// if the move has net extrusion
-			{
-				proportionDoneSoFar += ((proportionDone - proportionDoneSoFar) * stepsTaken) / extrusionRequested;
-			}
-		}
-	}
-	return proportionDoneSoFar;
 }
 
 // Free up this DDA, returning true if the lookahead underrun flag was set

@@ -125,7 +125,7 @@ public:
 	float GetTotalDistance() const noexcept { return totalDistance; }
 	void LimitSpeedAndAcceleration(float maxSpeed, float maxAcceleration) noexcept;	// Limit the speed an acceleration of this move
 
-	float GetProportionDone(bool moveWasAborted) const noexcept;					// Return the proportion of extrusion for the complete multi-segment move already done
+	float GetProportionDone() const noexcept;										// Return the proportion of extrusion for the complete multi-segment move already done
 	float GetInitialUserC0() const noexcept { return initialUserC0; }
 	float GetInitialUserC1() const noexcept { return initialUserC1; }
 

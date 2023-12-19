@@ -65,10 +65,6 @@ public:
 	[[noreturn]] void MoveLoop() noexcept;									// Main loop called by the Move task
 
 	void GetCurrentMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
-#if SUPPORT_ASYNC_MOVES
-	void GetPartialMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, AxesBitmap whichAxes) const noexcept
-			pre(queueNumber < NumMovementSystems);							// Get the current position of some axes from one of the rings
-#endif
 	void SetRawPosition(const float positions[MaxAxesPlusExtruders], MovementSystemNumber msNumber) noexcept
 			pre(queueNumber < NumMovementSystems);							// Set the current position to be this without transforming them first
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept;
@@ -122,6 +118,14 @@ public:
 	{
 		return axisShaper.EutSetInputShaping(msg, dataLength, reply);
 	}
+
+	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept				// add a move to the movement queue when we are in expansion board mode
+	{
+		rings[0].AddMoveFromRemote(msg);
+		MoveAvailable();
+	}
+
+	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
 #endif
 
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
@@ -183,6 +187,15 @@ public:
 # endif
 #endif
 
+#if SUPPORT_ASYNC_MOVES
+	void GetPartialMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, AxesBitmap whichAxes) const noexcept
+			pre(queueNumber < NumMovementSystems);							// Get the current position of some axes from one of the rings
+	AsyncMove *LockAuxMove() noexcept;														// Get and lock the aux move buffer
+	void ReleaseAuxMove(bool hasNewMove) noexcept;											// Release the aux move buffer and optionally signal that it contains a move
+	GCodeResult ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Configure height following
+	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Start/stop height following
+#endif
+
 	const RandomProbePointSet& GetProbePoints() const noexcept { return probePoints; }		// Return the probe point set constructed from G30 commands
 
 	DDARing& GetMainDDARing() noexcept { return rings[0]; }
@@ -220,15 +233,12 @@ public:
 	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;			// Get the current step interval for this axis or extruder
 #endif
 
-#if SUPPORT_ASYNC_MOVES
-	AsyncMove *LockAuxMove() noexcept;														// Get and lock the aux move buffer
-	void ReleaseAuxMove(bool hasNewMove) noexcept;											// Release the aux move buffer and optionally signal that it contains a move
-	GCodeResult ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Configure height following
-	GCodeResult StartHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Start/stop height following
+#if SUPPORT_CAN_EXPANSION
+	void OnEndstopOrZProbeStatesChanged() noexcept;
 #endif
 
 	void Interrupt() noexcept;
-	void CheckEndstops(Platform& platform) noexcept;
+	void CheckEndstops(Platform& platform, bool executingMove) noexcept;
 
 	static int32_t MotorMovementToSteps(size_t drive, float coord) noexcept;				// Convert a single motor position to number of steps
 	static float MotorStepsToMovement(size_t drive, int32_t endpoint) noexcept;				// Convert number of motor steps to motor position
@@ -244,16 +254,6 @@ public:
 	static const TaskBase *GetMoveTaskHandle() noexcept { return &moveTask; }
 
 	static void TimerCallback(CallbackParameter p) noexcept;
-
-#if SUPPORT_REMOTE_COMMANDS
-	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept				// add a move from the ATE to the movement queue
-	{
-		rings[0].AddMoveFromRemote(msg);
-		MoveAvailable();
-	}
-
-	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
-#endif
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
@@ -414,20 +414,6 @@ inline void Move::SetRawPosition(const float positions[MaxAxesPlusExtruders], Mo
 inline int32_t Move::GetLiveMotorPosition(size_t axis) const noexcept
 {
 	return dms[axis].GetCurrentPosition();
-}
-
-// Perform motor endpoint adjustment
-inline void Move::AdjustMotorPositions(MovementSystemNumber msNumber, const float adjustment[], size_t numMotors) noexcept
-{
-	rings[msNumber].AdjustMotorPositions(adjustment, numMotors);
-}
-
-inline void Move::ResetExtruderPositions() noexcept
-{
-	for (DDARing& r : rings)
-	{
-		r.ResetExtruderPositions();
-	}
 }
 
 inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept

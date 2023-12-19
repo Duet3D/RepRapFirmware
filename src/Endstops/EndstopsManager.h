@@ -70,7 +70,6 @@ public:
 	void HandleRemoteEndstopChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
 	void HandleRemoteZProbeChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
 	void HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, uint32_t reading) noexcept;
-	void OnEndstopOrZProbeStatesChanged() noexcept;
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
