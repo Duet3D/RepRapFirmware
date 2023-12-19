@@ -1498,9 +1498,9 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 		switch (hitDetails.GetAction())
 		{
 		case EndstopHitAction::stopAll:
-			StopAllDrivers();											// set the state to completed and recalculate the endpoints
+			StopAllDrivers(executingMove);											// set the state to completed and recalculate the endpoints
 #if SUPPORT_CAN_EXPANSION
-			CanMotion::StopAll(executingMove);
+			CanMotion::FinishedStoppingDrivers();
 #endif
 			if (hitDetails.isZProbe)
 			{
@@ -1519,9 +1519,9 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 			return;
 
 		case EndstopHitAction::stopAxis:
-			StopDrive(hitDetails.axis);								// we must stop the drive before we mess with its coordinates
+			StopAxisOrExtruder(executingMove, hitDetails.axis);						// we must stop the drive before we mess with its coordinates
 #if SUPPORT_CAN_EXPANSION
-			CanMotion::StopAxis(executingMove, hitDetails.axis);
+			CanMotion::FinishedStoppingDrivers();
 #endif
 			if (hitDetails.setAxisLow)
 			{
@@ -1539,7 +1539,21 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 #if SUPPORT_CAN_EXPANSION
 			if (hitDetails.driver.IsRemote())
 			{
-				CanMotion::StopDriver(executingMove, hitDetails.axis, hitDetails.driver);
+				if (executingMove)
+				{
+					int32_t netStepsTaken;
+					if (dms[hitDetails.axis].GetNetStepsTaken(netStepsTaken))
+					{
+						CanMotion::StopDriverWhenExecuting(hitDetails.driver, netStepsTaken);
+#if SUPPORT_CAN_EXPANSION
+						CanMotion::FinishedStoppingDrivers();
+#endif
+					}
+				}
+				else
+				{
+					CanMotion::StopDriverWhenProvisional(hitDetails.driver);
+				}
 			}
 			else
 #endif
@@ -1737,12 +1751,64 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 	}
 }
 
-// Stop a drive and re-calculate the end position
-void Move::StopDrive(size_t drive) noexcept
+// This is called when we abort a move because we have hit an endstop.
+// It stops all drives and adjusts the end points of the current move to account for how far through the move we got.
+void Move::StopAllDrivers(bool executingMove) noexcept
 {
-	dms[drive].StopDriver();
-	//TODO stop any CAN-connected drivers and send the CAN message
-	motorPositionsAfterScheduledMoves[drive] = dms[drive].GetCurrentMotorPosition();
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
+	{
+		StopAxisOrExtruder(executingMove, drive);
+	}
+}
+
+// Stop a drive and re-calculate the end position. Return true if any remote drivers were scheduled to be stopped.
+void Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
+{
+	int32_t netStepsTaken;
+	const bool wasMoving = dms[logicalDrive].StopDriver(netStepsTaken);
+#if SUPPORT_CAN_EXPANSION
+	const Platform& p = reprap.GetPlatform();
+	if (logicalDrive < reprap.GetGCodes().GetTotalAxes())
+	{
+		const AxisDriversConfig& cfg = p.GetAxisDriversConfig(logicalDrive);
+		for (size_t i = 0; i < cfg.numDrivers; ++i)
+		{
+			const DriverId driver = cfg.driverNumbers[i];
+			if (driver.IsRemote())
+			{
+				if (executingMove)
+				{
+					if (wasMoving)
+					{
+						CanMotion::StopDriverWhenExecuting(driver, netStepsTaken);
+					}
+				}
+				else
+				{
+					CanMotion::StopDriverWhenProvisional(driver);
+				}
+			}
+		}
+	}
+	else
+	{
+		const DriverId driver = p.GetExtruderDriver(LogicalDriveToExtruder(logicalDrive));
+		if (executingMove)
+		{
+			if (wasMoving)
+			{
+				CanMotion::StopDriverWhenExecuting(driver, netStepsTaken);
+			}
+		}
+		else
+		{
+			CanMotion::StopDriverWhenProvisional(driver);
+		}
+	}
+#else
+	(void)wasMoving;
+#endif
+	motorPositionsAfterScheduledMoves[logicalDrive] = dms[logicalDrive].GetCurrentMotorPosition();
 }
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -1750,22 +1816,11 @@ void Move::StopDrive(size_t drive) noexcept
 // Stop a drive and re-calculate the end position
 void Move::StopDriveFromRemote(size_t drive) noexcept
 {
-	dms[drive].StopDriver();
+	dms[drive].StopDriverFromRemote();
 	motorPositionsAfterScheduledMoves[drive] = dms[drive].GetCurrentMotorPosition();
 }
 
 #endif
-
-// This is called when we abort a move because we have hit an endstop.
-// It stops all drives and adjusts the end points of the current move to account for how far through the move we got.
-void Move::StopAllDrivers() noexcept
-{
-	for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
-	{
-		StopDrive(drive);
-	}
-	//TODO finalise CAN message
-}
 
 // THIS CODE IS NOT USED. It's here because we need to replicate the functionality somewhere else.
 void Move::OnMoveCompleted(DDA *cdda, Platform& p) noexcept

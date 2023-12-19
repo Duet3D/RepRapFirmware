@@ -29,12 +29,12 @@ namespace CanMotion
 
 	// The next 4 functions may be called from the step ISR, so they can't send CAN messages directly
 	void InsertHiccup(uint32_t numClocks) noexcept;
-	void StopAll(bool executingMove) noexcept;
-	void StopAxis(bool executingMove, size_t axis) noexcept;
-	void StopDriver(bool executingMove, size_t axis, DriverId driver) noexcept
+	void StopDriverWhenProvisional(DriverId driver) noexcept
 		pre(driver.IsRemote());
-	void FinishMoveUsingEndstops() noexcept;
-	bool FinishedReverting() noexcept;
+	bool StopDriverWhenExecuting(DriverId driver, int32_t netStepsTaken) noexcept
+		pre(driver.IsRemote());
+	void FinishedStoppingDrivers() noexcept;
+	bool RevertStoppedDrivers() noexcept;
 }
 
 #endif

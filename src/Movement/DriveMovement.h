@@ -52,9 +52,12 @@ public:
 	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept SPEED_CRITICAL;
 
 	void DebugPrint() const noexcept;
-	int32_t GetNetStepsTaken() const noexcept;
 	int32_t GetCurrentMotorPosition() const noexcept;
-	void StopDriver() noexcept;											// Stop this driver and update the position
+	bool StopDriver(int32_t& netStepsTaken) noexcept;					// if the driver is moving, stop it, update the position and pass back the net steps taken
+#if SUPPORT_REMOTE_COMMANDS
+	void StopDriverFromRemote() noexcept;
+#endif
+	bool GetNetStepsTaken(int32_t& netStepsTaken) const noexcept;		// like stopDriver but doesn't stop the driver
 	void SetMotorPosition(int32_t pos) noexcept;
 	void AdjustMotorPosition(int32_t adjustment) noexcept;
 	bool MotionPending() const noexcept { return segments != nullptr; }
@@ -205,9 +208,13 @@ inline bool DriveMovement::CalcNextStepTime() noexcept
 
 // Return the number of net steps already taken for the move in the forwards direction.
 // We have already taken nextSteps - 1 steps
-inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
+inline bool DriveMovement::GetNetStepsTaken(int32_t& netStepsTaken) const noexcept
 {
-	int32_t netStepsTaken;
+	if (segments == nullptr)
+	{
+		return false;
+	}
+
 	if (directionReversed)															// if started reverse phase
 	{
 		netStepsTaken = nextStep - (2 * reverseStartStep) + 1;						// allowing for direction having changed
@@ -216,7 +223,11 @@ inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 	{
 		netStepsTaken = nextStep - 1;
 	}
-	return (direction) ? netStepsTaken : -netStepsTaken;
+	if (direction)
+	{
+		netStepsTaken = -netStepsTaken;
+	}
+	return true;
 }
 
 inline void DriveMovement::CheckDirection(bool reversed) noexcept

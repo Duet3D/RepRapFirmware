@@ -47,7 +47,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::abortWhenMovementFinished:
 		if (   LockCurrentMovementSystemAndWaitForStandstill(gb)		// movement should already be locked, but we need to wait for standstill and fetch the current position
 #if SUPPORT_CAN_EXPANSION
-			&& CanMotion::FinishedReverting()
+			&& CanMotion::RevertStoppedDrivers()
 #endif
 		   )
 		{
