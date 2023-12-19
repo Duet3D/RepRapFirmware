@@ -285,7 +285,7 @@ floatc_t RotaryDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, 
 
 // Perform auto calibration. Caller already owns the movement lock.
 // Return true if an error occurred.
-bool RotaryDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
+bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	constexpr size_t NumDeltaFactors = 7;		// maximum number of rotary delta machine factors we can adjust
 
@@ -423,7 +423,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 			{
 				heightAdjust[drive] = solution[drive];
 			}
-			reprap.GetMove().AdjustMotorPositions(msNumber, heightAdjust, DELTA_AXES);
+			reprap.GetMove().AdjustMotorPositions(heightAdjust, DELTA_AXES);
 		}
 
 		// Calculate the expected probe heights using the new parameters

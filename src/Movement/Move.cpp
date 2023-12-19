@@ -256,10 +256,6 @@ void Move::Init() noexcept
 	longestGcodeWaitInterval = 0;
 	bedLevellingMoveAvailable = false;
 	activeDMs = nullptr;
-	for (MoveSegment*& seg : segments)
-	{
-		seg = nullptr;
-	}
 	for (volatile int32_t& acc : movementAccumulators)
 	{
 		acc = 0;
@@ -918,7 +914,7 @@ void Move::SetXYCompensation(bool xyCompensation)
 // Calibrate or set the bed equation after probing, returning true if an error occurred
 // sParam is the value of the S parameter in the G30 command that provoked this call.
 // Caller already owns the GCode movement lock.
-bool Move::FinishedBedProbing(MovementSystemNumber msNumber, int sParam, const StringRef& reply) noexcept
+bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
 {
 	bool error = false;
 	const size_t numPoints = probePoints.NumberOfProbePoints();
@@ -952,7 +948,7 @@ bool Move::FinishedBedProbing(MovementSystemNumber msNumber, int sParam, const S
 		}
 		else if (kinematics->SupportsAutoCalibration())
 		{
-			error = kinematics->DoAutoCalibration(msNumber, sParam, probePoints, reply);
+			error = kinematics->DoAutoCalibration(sParam, probePoints, reply);
 		}
 		else
 		{
@@ -1265,7 +1261,7 @@ float Move::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 		for (size_t i = 0; i < MaxAxesPlusExtruders; ++i)
 		{
 			currentMotorPositions[i] = dms[i].GetCurrentPosition();
-			if (segments[i] != nullptr)
+			if (dms[i].MotionPending())
 			{
 				motionPending = true;
 			}
@@ -1502,7 +1498,7 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 		switch (hitDetails.GetAction())
 		{
 		case EndstopHitAction::stopAll:
-			MoveAborted();											// set the state to completed and recalculate the endpoints
+			StopAllDrivers();											// set the state to completed and recalculate the endpoints
 #if SUPPORT_CAN_EXPANSION
 			CanMotion::StopAll(executingMove);
 #endif
@@ -1741,17 +1737,27 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 	}
 }
 
-// Stop a drive and re-calculate the corresponding endpoint.
+// Stop a drive and re-calculate the end position
 void Move::StopDrive(size_t drive) noexcept
 {
 	dms[drive].StopDriver();
-	ReleaseSegments(segments[drive]);
 	motorPositionsAfterScheduledMoves[drive] = dms[drive].GetCurrentPosition();
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
+// Stop a drive and re-calculate the end position
+void Move::StopDriveFromRemote(size_t drive) noexcept
+{
+	dms[drive].StopDriver();
+	motorPositionsAfterScheduledMoves[drive] = dms[drive].GetCurrentPosition();
+}
+
+#endif
+
 // This is called when we abort a move because we have hit an endstop.
 // It stops all drives and adjusts the end points of the current move to account for how far through the move we got.
-void Move::MoveAborted() noexcept
+void Move::StopAllDrivers() noexcept
 {
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 	{
@@ -1818,15 +1824,29 @@ void Move::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 	}
 }
 
-// Perform motor endpoint adjustment
-void Move::AdjustMotorPositions(MovementSystemNumber msNumber, const float adjustment[], size_t numMotors) noexcept
+// Adjust the motor endpoints without moving the motors. Called after auto-calibrating a linear delta or rotary delta machine.
+void Move::AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept
 {
-	qq;
+	DDA * const lastQueuedMove = addPointer->GetPrevious();
+	const int32_t * const endCoordinates = lastQueuedMove->DriveCoordinates();
+	const float * const driveStepsPerUnit = reprap.GetPlatform().GetDriveStepsPerUnit();
+
+	for (size_t drive = 0; drive < numMotors; ++drive)
+	{
+		const int32_t ep = endCoordinates[drive] + lrintf(adjustment[drive] * driveStepsPerUnit[drive]);
+		lastQueuedMove->SetDriveCoordinate(ep, drive);
+	}
+
+	liveCoordinatesValid = false;		// force the live XYZ position to be recalculated
 }
 
+// Reset all extruder positions to zero. Called when we start a print.
 void Move::ResetExtruderPositions() noexcept
 {
-	qq;
+	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
+	{
+		dms[drive].SetMotorPosition(0);
+	}
 }
 
 #if SUPPORT_CAN_EXPANSION
@@ -1836,18 +1856,7 @@ void Move::ResetExtruderPositions() noexcept
 void Move::OnEndstopOrZProbeStatesChanged() noexcept
 {
 	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
-
-	const DDA * const currentDda = GetMainDDARing().GetCurrentDDA();
-	if (currentDda != nullptr && currentDda->IsCheckingEndstops())
-	{
-		Platform& p = reprap.GetPlatform();
-		CheckEndstops(p, true);
-		if (currentDda->GetState() == DDA::completed)
-		{
-			GetMainDDARing().OnMoveCompleted(currentDda, p);
-		}
-	}
-
+	CheckEndstops(reprap.GetPlatform(), true);
 	RestoreBasePriority(oldPrio);										// allow step interrupts again
 }
 
@@ -1856,12 +1865,12 @@ void Move::OnEndstopOrZProbeStatesChanged() noexcept
 #if SUPPORT_REMOTE_COMMANDS
 
 // Stop some drivers and update the corresponding motor positions
-void Move::StopDrivers(uint16_t whichDrives) noexcept
+void Move::StopDriversFromRemote(uint16_t whichDrives) noexcept
 {
 	DriversBitmap dr(whichDrives);
 	dr.Iterate([this](size_t drive, unsigned int)
 				{
-					StopDrive(drive);
+					StopDriveFromRemote(drive);
 				}
 			  );
 }

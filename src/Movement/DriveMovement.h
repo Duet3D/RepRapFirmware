@@ -55,6 +55,7 @@ public:
 	int32_t GetNetStepsTaken() const noexcept;
 	int32_t GetCurrentPosition() const noexcept;
 	void StopDriver() noexcept;											// Stop this driver and update the position
+	void SetMotorPosition(int32_t pos) noexcept;
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
@@ -71,13 +72,14 @@ private:
 #endif
 
 	void CheckDirection(bool reversed) noexcept;
+	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr
 
 	static int32_t maxStepsLate;
 
 	// Parameters common to Cartesian, delta and extruder moves
 
 	DriveMovement *nextDM;								// link to next DM that needs a step
-	const MoveSegment *currentSegment;					// pointer to the current segment for this driver
+	MoveSegment *segments = nullptr;					// pointer to the segment list for this driver
 
 	DMState state;										// whether this is active or not
 	uint8_t drive;										// the drive that this DM controls
@@ -233,12 +235,11 @@ inline int32_t DriveMovement::GetAndClearMaxStepsLate() noexcept
 
 #if HAS_SMART_DRIVERS
 
-// Get the current full step interval for this axis or extruder
+// Get the current full step interval for this axis or extruder, or zero if no motion in progress
 inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const noexcept
 {
-	return ((nextStep >> microstepShift) != 0)										// if at least 1 full step done
-				? stepInterval << microstepShift									// return the interval between steps converted to full steps
-					: 0;
+	return (segments == nullptr || (nextStep >> microstepShift) == 0) ? 0
+			: stepInterval << microstepShift;									// return the interval between steps converted to full steps
 }
 
 #endif

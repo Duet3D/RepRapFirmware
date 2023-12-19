@@ -471,7 +471,7 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				return;							// no reply needed
 
 			case CanMessageType::stopMovement:
-				reprap.GetMove().StopDrivers(buf->msg.stopMovement.whichDrives);
+				reprap.GetMove().StopDriversFromRemote(buf->msg.stopMovement.whichDrives);
 				return;							// no reply needed
 
 			case CanMessageType::revertPosition:

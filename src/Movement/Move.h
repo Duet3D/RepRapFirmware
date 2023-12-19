@@ -82,7 +82,7 @@ public:
 	void SetXYBedProbePoint(size_t index, float x, float y) noexcept;		// Record the X and Y coordinates of a probe point
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError) noexcept; // Record the Z coordinate of a probe point
 	float GetProbeCoordinates(int count, float& x, float& y, bool wantNozzlePosition) const noexcept; // Get pre-recorded probe coordinates
-	bool FinishedBedProbing(MovementSystemNumber msNumber, int sParam, const StringRef& reply) noexcept;	// Calibrate or set the bed equation after probing
+	bool FinishedBedProbing(int sParam, const StringRef& reply) noexcept;	// Calibrate or set the bed equation after probing
 	void SetAxisCompensation(unsigned int axis, float tangent) noexcept;	// Set an axis-pair compensation angle
 	float AxisCompensation(unsigned int axis) const noexcept;				// The tangent value
 	bool IsXYCompensated() const;											// Check if XY axis compensation applies to the X or Y axis
@@ -111,13 +111,8 @@ public:
 
 #if SUPPORT_REMOTE_COMMANDS
 	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
-	void StopDrivers(uint16_t whichDrives) noexcept;
-
-	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
-	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept
-	{
-		return axisShaper.EutSetInputShaping(msg, dataLength, reply);
-	}
+	void StopDriversFromRemote(uint16_t whichDrives) noexcept;
+	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
 
 	void AddMoveFromRemote(const CanMessageMovementLinearShaped& msg) noexcept				// add a move to the movement queue when we are in expansion board mode
 	{
@@ -125,7 +120,11 @@ public:
 		MoveAvailable();
 	}
 
-	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
+	GCodeResult EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
+	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept
+	{
+		return axisShaper.EutSetInputShaping(msg, dataLength, reply);
+	}
 #endif
 
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
@@ -145,7 +144,7 @@ public:
 																							// Convert Cartesian coordinates to delta motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept;
 																							// Convert motor coordinates to machine coordinates
-	void AdjustMotorPositions(MovementSystemNumber msNumber, const float adjustment[], size_t numMotors) noexcept;			// Perform motor endpoint adjustment
+	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;			// Perform motor endpoint adjustment after auto calibration
 	const char* GetGeometryString() const noexcept { return kinematics->GetName(true); }
 	bool IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
 
@@ -284,10 +283,12 @@ private:
 	void SimulateSteppingDrivers(Platform& p) noexcept;								// For debugging use
 	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;						// Schedule the next interrupt, returning true if we can't because it is already due
 	void StopDrive(size_t drive) noexcept;											// stop movement of a drive and recalculate the endpoint
-	void MoveAborted() noexcept;													// cancel the current isolated move
+#if SUPPORT_REMOTE_COMMANDS
+	void StopDriveFromRemote(size_t drive) noexcept;
+#endif
+	void StopAllDrivers() noexcept;													// cancel the current isolated move
 	void InsertDM(DriveMovement *dm) noexcept;										// insert a DM into the active list, keeping it in step time order
 	void SetDirection(Platform& p, size_t axisOrExtruder, bool direction) noexcept;	// set the direction of a driver, observing timing requirements
-	void ReleaseSegments(MoveSegment*& segs) noexcept;								// release a chain of segments and set it to nullptr
 
 #if SUPPORT_CAN_EXPANSION
 	uint32_t InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
@@ -307,8 +308,7 @@ private:
 	// Member data
 	DDARing rings[NumMovementSystems];
 
-	DriveMovement dms[MaxAxesPlusExtruders];
-	MoveSegment *segments[MaxAxesPlusExtruders];
+	DriveMovement dms[MaxAxesPlusExtruders + NumDirectDrivers];
 	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 		// Accumulated motor steps, used by filament monitors
 	int32_t motorPositionsAfterScheduledMoves[MaxAxesPlusExtruders];	// The motor positions that will result after all scheduled movement has completed normally
 
@@ -492,7 +492,7 @@ inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t axis
 {
 	if (simulationMode == SimulationMode::off) { return 0; }
 	AtomicCriticalSectionLocker lock;
-	return (segments[axis] == nullptr) ? 0 : dms[axis].GetStepInterval(microstepShift);
+	return dms[axis].GetStepInterval(microstepShift);
 }
 
 #endif
