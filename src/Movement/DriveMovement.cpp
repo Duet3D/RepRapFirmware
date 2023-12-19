@@ -324,7 +324,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
 	reverseStartStep = totalSteps + 1;				// no reverse phase
-	return CalcNextStepTimeFull(move);				// calculate the scheduled time of the first step
+	return CalcNextStepTimeFull();					// calculate the scheduled time of the first step
 }
 
 #if SUPPORT_LINEAR_DELTA
@@ -438,7 +438,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	// Prepare for the first step
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
-	return CalcNextStepTimeFull(move);				// calculate the scheduled time of the first step
+	return CalcNextStepTimeFull();					// calculate the scheduled time of the first step
 }
 
 #endif	// SUPPORT_LINEAR_DELTA
@@ -518,7 +518,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	// Prepare for the first step
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
-	return CalcNextStepTimeFull(move);				// calculate the scheduled time of the first step
+	return CalcNextStepTimeFull();					// calculate the scheduled time of the first step
 }
 
 // Version of fastSqrtf that allows for slightly negative operands caused by rounding error
@@ -534,7 +534,7 @@ static inline float fastLimSqrtf(float f) noexcept
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // We have already incremented nextStep and checked that it does not exceed totalSteps, so at least one more step is due
 // Return true if all OK, false to abort this move because the calculation has gone wrong
-bool DriveMovement::CalcNextStepTimeFull(Move& move) noexcept
+bool DriveMovement::CalcNextStepTimeFull() noexcept
 pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 {
 	uint32_t shiftFactor = 0;										// assume single stepping

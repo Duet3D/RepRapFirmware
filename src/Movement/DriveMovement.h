@@ -44,7 +44,7 @@ public:
 
 	DriveMovement() noexcept;
 
-	bool CalcNextStepTime(Move& move) noexcept SPEED_CRITICAL;
+	bool CalcNextStepTime() noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 #if SUPPORT_LINEAR_DELTA
 	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
@@ -53,9 +53,12 @@ public:
 
 	void DebugPrint() const noexcept;
 	int32_t GetNetStepsTaken() const noexcept;
-	int32_t GetCurrentPosition() const noexcept;
+	int32_t GetCurrentMotorPosition() const noexcept;
 	void StopDriver() noexcept;											// Stop this driver and update the position
 	void SetMotorPosition(int32_t pos) noexcept;
+	void AdjustMotorPosition(int32_t adjustment) noexcept;
+	bool MotionPending() const noexcept { return segments != nullptr; }
+	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
@@ -64,7 +67,7 @@ public:
 	static int32_t GetAndClearMaxStepsLate() noexcept;
 
 private:
-	bool CalcNextStepTimeFull(Move& move) noexcept SPEED_CRITICAL;
+	bool CalcNextStepTimeFull() noexcept SPEED_CRITICAL;
 	bool NewCartesianSegment() noexcept SPEED_CRITICAL;
 	bool NewExtruderSegment() noexcept SPEED_CRITICAL;
 #if SUPPORT_LINEAR_DELTA
@@ -163,7 +166,7 @@ private:
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // Return true if there are more steps to do. When finished, leave nextStep == totalSteps + 1 and state == DMState::idle.
 // We inline this part to speed things up when we are doing double/quad/octal stepping.
-inline bool DriveMovement::CalcNextStepTime(Move& move) noexcept
+inline bool DriveMovement::CalcNextStepTime() noexcept
 {
 	++nextStep;
 	if (nextStep <= totalSteps || isExtruder)
@@ -182,7 +185,7 @@ inline bool DriveMovement::CalcNextStepTime(Move& move) noexcept
 #endif
 			return true;
 		}
-		if (CalcNextStepTimeFull(move))
+		if (CalcNextStepTimeFull())
 		{
 			return true;
 		}

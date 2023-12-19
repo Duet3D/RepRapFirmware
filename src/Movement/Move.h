@@ -308,8 +308,8 @@ private:
 	// Member data
 	DDARing rings[NumMovementSystems];
 
-	DriveMovement dms[MaxAxesPlusExtruders + NumDirectDrivers];
-	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 		// Accumulated motor steps, used by filament monitors
+	DriveMovement dms[MaxAxesPlusExtruders + NumDirectDrivers];		// One DriveMovement object per logical drive, plus an extra one for each local driver to support bed levelling moves
+	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 	// Accumulated motor steps, used by filament monitors
 	int32_t motorPositionsAfterScheduledMoves[MaxAxesPlusExtruders];	// The motor positions that will result after all scheduled movement has completed normally
 
 	mutable float latestLiveCoordinates[MaxAxesPlusExtruders];		// the most recent set of live coordinates that we fetched
@@ -376,7 +376,7 @@ private:
 	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
 	bool useTaper;										// True to taper off the compensation
 	bool probeReadingNeeded = false;					// true if the laser task needs to take a Z probe reading
-	bool checkingEndstops;								// true if we are doing an isolated move that checks endstops
+	bool checkingEndstops = false;						// true if we are doing an isolated move that checks endstops
 };
 
 //******************************************************************************************************
@@ -413,7 +413,7 @@ inline void Move::SetRawPosition(const float positions[MaxAxesPlusExtruders], Mo
 
 inline int32_t Move::GetLiveMotorPosition(size_t axis) const noexcept
 {
-	return dms[axis].GetCurrentPosition();
+	return dms[axis].GetCurrentMotorPosition();
 }
 
 inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept

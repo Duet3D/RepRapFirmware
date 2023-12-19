@@ -1247,6 +1247,7 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 // Transforming the machine motor coordinates to Cartesian coordinates is quite expensive, and a status request or object model request will call this for each axis.
 // So we cache the latest coordinates and only update them if it is some time since we last did, or if we have just waited for movement to stop.
 // Interrupts are assumed enabled on entry
+// Note, this no longer applies inverse mesh bed compensation or axis skew compensation to the returned machine coordinates, so they are the compensated coordinates!
 float Move::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 {
 	if (forceLiveCoordinatesUpdate || (millis() - latestLiveCoordinatesFetchedAt > 200 && !liveCoordinatesValid))
@@ -1260,7 +1261,7 @@ float Move::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 		motionAdded = false;
 		for (size_t i = 0; i < MaxAxesPlusExtruders; ++i)
 		{
-			currentMotorPositions[i] = dms[i].GetCurrentPosition();
+			currentMotorPositions[i] = dms[i].GetCurrentMotorPosition();
 			if (dms[i].MotionPending())
 			{
 				motionPending = true;
@@ -1284,7 +1285,6 @@ float Move::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 			}
 		}
 
-		InverseAxisAndBedTransform(latestLiveCoordinates, tool);
 		forceLiveCoordinatesUpdate = false;
 		latestLiveCoordinatesFetchedAt = millis();
 	}
@@ -1408,7 +1408,7 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 	const int32_t ret = movementAccumulators[logicalDrive];
 	const int32_t adjustment = GetStepsTaken(logicalDrive);
 	movementAccumulators[logicalDrive] = -adjustment;
-	isPrinting = extrudersPrinting;
+	isPrinting = dms[logicalDrive].IsPrintingExtruderMovement();
 	return ret + adjustment;
 }
 
@@ -1623,7 +1623,7 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 		{
-			(void)dm2->CalcNextStepTime(*this);						// calculate next step times
+			(void)dm2->CalcNextStepTime();							// calculate next step times
 		}
 
 		while (StepTimer::GetTimerTicks() - lastStepPulseTime < p.GetSlowDriverStepHighClocks()) {}
@@ -1639,7 +1639,7 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 # endif
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 		{
-			(void)dm2->CalcNextStepTime(*this);						// calculate next step times
+			(void)dm2->CalcNextStepTime();							// calculate next step times
 		}
 
 		StepPins::StepDriversLow(driversStepping);					// step drivers low
@@ -1712,7 +1712,7 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 		{
-			(void)dm2->CalcNextStepTime(*this);							// calculate next step times
+			(void)dm2->CalcNextStepTime();								// calculate next step times
 		}
 
 		// Remove those drives from the list, update the direction pins where necessary, and re-insert them so as to keep the list in step-time order.
@@ -1741,7 +1741,8 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 void Move::StopDrive(size_t drive) noexcept
 {
 	dms[drive].StopDriver();
-	motorPositionsAfterScheduledMoves[drive] = dms[drive].GetCurrentPosition();
+	//TODO stop any CAN-connected drivers and send the CAN message
+	motorPositionsAfterScheduledMoves[drive] = dms[drive].GetCurrentMotorPosition();
 }
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -1750,7 +1751,7 @@ void Move::StopDrive(size_t drive) noexcept
 void Move::StopDriveFromRemote(size_t drive) noexcept
 {
 	dms[drive].StopDriver();
-	motorPositionsAfterScheduledMoves[drive] = dms[drive].GetCurrentPosition();
+	motorPositionsAfterScheduledMoves[drive] = dms[drive].GetCurrentMotorPosition();
 }
 
 #endif
@@ -1763,6 +1764,7 @@ void Move::StopAllDrivers() noexcept
 	{
 		StopDrive(drive);
 	}
+	//TODO finalise CAN message
 }
 
 // THIS CODE IS NOT USED. It's here because we need to replicate the functionality somewhere else.
@@ -1825,16 +1827,14 @@ void Move::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 }
 
 // Adjust the motor endpoints without moving the motors. Called after auto-calibrating a linear delta or rotary delta machine.
+// There must be no pending movement when calling this!
 void Move::AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept
 {
-	DDA * const lastQueuedMove = addPointer->GetPrevious();
-	const int32_t * const endCoordinates = lastQueuedMove->DriveCoordinates();
 	const float * const driveStepsPerUnit = reprap.GetPlatform().GetDriveStepsPerUnit();
-
 	for (size_t drive = 0; drive < numMotors; ++drive)
 	{
-		const int32_t ep = endCoordinates[drive] + lrintf(adjustment[drive] * driveStepsPerUnit[drive]);
-		lastQueuedMove->SetDriveCoordinate(ep, drive);
+		dms[drive].AdjustMotorPosition(lrintf(adjustment[drive] * driveStepsPerUnit[drive]));
+		motorPositionsAfterScheduledMoves[drive] = dms[drive].GetCurrentMotorPosition();
 	}
 
 	liveCoordinatesValid = false;		// force the live XYZ position to be recalculated
