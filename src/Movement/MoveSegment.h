@@ -178,28 +178,24 @@ public:
 	// Get the end speed for an accelerating or decelerating move
 	float GetNonlinearEndSpeed(float pressureAdvanceK) const noexcept pre(!IsLinear()) { return (pressureAdvanceK - b + segTime) * acceleration; }
 
-	// Calculate the move A coefficient in step_clocks^2 for an accelerating or decelerating move
-	float CalcNonlinearA(float startDistance) const noexcept pre(!IsLinear());
-	float CalcNonlinearA(float startDistance, float pressureAdvanceK) const noexcept pre(!IsLinear());
+	// Get the move A coefficient in step_clocks^2 for an accelerating or decelerating move
+	float GetNonlinearA() const noexcept pre(!IsLinear()) { return a; }
 
-	// Calculate the move B coefficient in step_clocks for an accelerating or decelerating move
-	float CalcNonlinearB(float startTime) const noexcept pre(!IsLinear());
-	float CalcNonlinearB(float startTime, float pressureAdvanceK) const noexcept pre(!IsLinear());
+	// Get the move B coefficient for an accelerating or decelerating move
+	float GetNonlinearB() const noexcept pre(!IsLinear()) { return b; }
 
-	// Calculate the move B coefficient in step_clocks for a steady speed move
-	float CalcLinearB(float startDistance, float startTime) const noexcept pre(IsLinear());
+	// Get the move B coefficient in step_clocks for a steady speed move
+	float GetLinearB() const noexcept pre(IsLinear()) { return b; }
 
-	// Calculate the move C coefficient in step_clocks/step for a linear move, or step_clocks^2/step for an accelerating or decelerating move
-	float CalcCFromMmPerStep(float mmPerStep) const noexcept;
-
-	// Calculate the move C coefficient in step_clocks/step for a linear move, or step_clocks^2/step for an accelerating or decelerating move
-	float CalcCFromStepsPerMm(float stepsPerMm) const noexcept;
+	// Get the C move coefficient for either type of move
+	float GetC() const noexcept pre(!IsLinear()) { return c; }
 
 	// For a decelerating move, calculate the distance before the move reverses
 	float GetDistanceToReverse(float startSpeed) const noexcept;
 
-	void SetLinear(float pSegmentLength, float p_segTime, float p_c) noexcept post(IsLinear());
-	void SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c, float p_acceleration) noexcept post(!IsLinear());
+	void SetLinear(float pSegmentLength, float p_segTime, float p_b, float p_c) noexcept post(IsLinear());
+	void SetNonLinear(float pSegmentLength, float p_segTime, float p_a, float p_b, float p_c, float p_acceleration) noexcept post(!IsLinear());
+	void SetPressureAdvance(bool p_usePressureAdvance) noexcept { usePressureAdvance = p_usePressureAdvance; }
 
 	MoveSegment *GetNext() const noexcept;
 	void SetNext(MoveSegment *p_next) noexcept;
@@ -223,7 +219,6 @@ protected:
 	MoveSegment *next;										// pointer to the next segment
 	uint32_t isDelta : 1,
 			 isLinear : 1,
-			 isExtruder : 1,
 			 usePressureAdvance : 1
 #if SUPPORT_REMOTE_COMMANDS
 		   , isRemote : 1
@@ -231,14 +226,15 @@ protected:
 			 ;
 	float segLength;										// the length of this segment before applying the movement fraction
 	float segTime;											// the time in step clocks at which this move ends
-	float c;												// the c move parameter, units are step_clocks/mm for linear moves, units are steps_clocks^2/mm for accelerating or decelerating moves
-	float b;												// the b move parameter, equal to -(u/a), units are step_clocks, not used by linear move segments
+	float a;												// the A parameter, not used for linear segments
+	float b;												// the B move parameter
+	float c;												// the C move parameter, units are step_clocks/mm for linear moves, units are steps_clocks^2/mm for accelerating or decelerating moves
 	float acceleration;										// the acceleration during this segment, not used by linear move segments
 };
 
 // Create a new one, leaving the flags clear
 inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
-	: next(p_next), isDelta(0), isLinear(0), isExtruder(0), usePressureAdvance(0)
+	: next(p_next), isDelta(0), isLinear(0), usePressureAdvance(0)
 #if SUPPORT_REMOTE_COMMANDS
 	   , isRemote(0)
 #endif
@@ -281,42 +277,6 @@ inline bool MoveSegment::IsLast() const noexcept
 	return next == nullptr;
 }
 
-inline float MoveSegment::CalcNonlinearA(float startDistance) const noexcept
-{
-	return fsquare(b) - startDistance * c;
-}
-
-inline float MoveSegment::CalcNonlinearA(float startDistance, float pressureAdvanceK) const noexcept
-{
-	return fsquare(b - pressureAdvanceK) - startDistance * c;
-}
-
-inline float MoveSegment::CalcNonlinearB(float startTime) const noexcept
-{
-	return b + startTime;
-}
-
-inline float MoveSegment::CalcNonlinearB(float startTime, float pressureAdvanceK) const noexcept
-{
-	return (b - pressureAdvanceK) + startTime;
-}
-
-inline float MoveSegment::CalcLinearB(float startDistance, float startTime) const noexcept
-{
-	return startTime - (startDistance * c);
-}
-
-inline float MoveSegment::CalcCFromMmPerStep(float mmPerStep) const noexcept
-{
-	return c * mmPerStep;
-}
-
-// Calculate the move C coefficient in step_clocks/step for a linear move, or step_clocks^2/step for an accelerating or decelerating move
-inline float MoveSegment::CalcCFromStepsPerMm(float stepsPerMm) const noexcept
-{
-	return c/stepsPerMm;
-}
-
 // For a decelerating move with positive start speed, calculate the distance before the move reverses
 // From (v^2-u^2) = 2as, if v=0 then s=-u^2/2a = u^2/2d
 // But c = -2/d, so d = -2/c, so s = u^2/(-4/c) = 0.25 * u^2 * c.
@@ -325,20 +285,21 @@ inline float MoveSegment::GetDistanceToReverse(float startSpeed) const noexcept
 	return fsquare(startSpeed) * c * (-0.25);
 }
 
-inline void MoveSegment::SetLinear(float pSegmentLength, float p_segTime, float p_c) noexcept
+inline void MoveSegment::SetLinear(float pSegmentLength, float p_segTime, float p_b, float p_c) noexcept
 {
 	segLength = pSegmentLength;
 	segTime = p_segTime;
-	b = 0.0;
+	b = p_b;
 	c = p_c;
 	isLinear = true;
 }
 
 // Set up an accelerating or decelerating move. We assume that the 'linear' flag is already clear.
-inline void MoveSegment::SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c, float p_acceleration) noexcept
+inline void MoveSegment::SetNonLinear(float pSegmentLength, float p_segTime, float p_a, float p_b, float p_c, float p_acceleration) noexcept
 {
 	segLength = pSegmentLength;
 	segTime = p_segTime;
+	a = p_a;
 	b = p_b;
 	c = p_c;
 	acceleration = p_acceleration;
@@ -367,6 +328,8 @@ public:
 	float GetfMinusAaPlusBbTimesS() const noexcept { return fMinusAaPlusBbTimesS; }
 	float GetfDSquaredMinusAsquaredMinusBsquaredTimesSsquared() const noexcept { return fDSquaredMinusAsquaredMinusBsquaredTimesSsquared; }
 
+	void SetDeltaParameters(const float *p_dv, float p_fTwoS, float p_fTwoB, float p_m0MinusZ0, float p_fMinusAaPlusBbTimesS, float p_fDSquaredMinusAsquaredMinusBsquaredTimesSsquared) noexcept;
+
 	// Allocate a MoveSegment, clearing the flags
 	static DeltaMoveSegment *Allocate(MoveSegment *p_next) noexcept;
 
@@ -381,6 +344,26 @@ private:
 	float dv[3];			// the XYZ movement fractions
 	//TODO
 };
+
+// Create a new one, leaving the flags clear
+inline DeltaMoveSegment::DeltaMoveSegment(MoveSegment *p_next) noexcept : MoveSegment(p_next)
+{
+	isDelta = 1;
+	// remaining fields are not initialised
+}
+
+// Set the parameters that are specific to delta movement
+inline void DeltaMoveSegment::SetDeltaParameters(const float *p_dv, float p_fTwoA, float p_fTwoB, float p_h0MinusZ0, float p_fMinusAaPlusBbTimesS, float p_fDSquaredMinusAsquaredMinusBsquaredTimesSsquared) noexcept
+{
+	dv[0]= p_dv[0];
+	dv[1] = p_dv[1];
+	dv[2] = p_dv[2];
+	fTwoA = p_fTwoA;
+	fTwoB = p_fTwoB;
+	h0MinusZ0 = p_h0MinusZ0;
+	fMinusAaPlusBbTimesS = p_fMinusAaPlusBbTimesS;
+	fDSquaredMinusAsquaredMinusBsquaredTimesSsquared = p_fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
+}
 
 // Release a single MoveSegment. Not thread-safe.
 inline void MoveSegment::Release(MoveSegment *item) noexcept

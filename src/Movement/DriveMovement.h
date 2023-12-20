@@ -12,7 +12,6 @@
 #include <Platform/Tasks.h>
 #include "MoveSegment.h"
 
-class LinearDeltaKinematics;
 class PrepParams;
 
 enum class DMState : uint8_t
@@ -62,6 +61,7 @@ public:
 	void AdjustMotorPosition(int32_t adjustment) noexcept;
 	bool MotionPending() const noexcept { return segments != nullptr; }
 	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
+	void AppendSegments(MoveSegment* ms) noexcept;
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
@@ -109,10 +109,6 @@ private:
 
 	int32_t positionAtMoveStart = 0;					// the microstep position of the motor. If the motor is moving then this is the position at the start of the move.
 	float movementAccumulator;							// the accumulated movement since GetAccumulatedMovement was last called. Only used for extruders.
-
-	float distanceSoFar;								// the accumulated distance at the end of the current move segment
-	float timeSoFar;									// the accumulated taken for this current DDA at the end of the current move segment
-	float pA, pB, pC;									// the move parameters for the current move segment. pA is not used when performing a move at constant speed.
 
 	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
 	union

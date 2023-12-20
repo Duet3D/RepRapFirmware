@@ -299,41 +299,4 @@ void AxisShaper::Diagnostics(MessageType mtype) noexcept
 	// We no longer report anything here
 }
 
-// Calculate the move segments when input shaping is not in use
-/*static*/ MoveSegment *AxisShaper::GetUnshapedSegments(DDA& dda, const PrepParams& params) noexcept
-{
-	// Deceleration phase
-	MoveSegment * tempSegments;
-	if (params.decelClocks > 0.0)
-	{
-		tempSegments = MoveSegment::Allocate(nullptr);
-		const float b = dda.topSpeed/params.deceleration;
-		const float c = -2.0/params.deceleration;
-		tempSegments->SetNonLinear(dda.totalDistance - params.decelStartDistance, params.decelClocks, b, c, -params.deceleration);
-	}
-	else
-	{
-		tempSegments = nullptr;
-	}
-
-	// Steady speed phase
-	if (params.steadyClocks > 0.0)
-	{
-		tempSegments = MoveSegment::Allocate(tempSegments);
-		const float c = 1.0/dda.topSpeed;
-		tempSegments->SetLinear(params.decelStartDistance - params.accelDistance, params.steadyClocks, c);
-	}
-
-	// Acceleration phase
-	if (params.accelClocks > 0.0)
-	{
-		tempSegments = MoveSegment::Allocate(tempSegments);
-		const float b = dda.startSpeed/(-params.acceleration);
-		const float c = 2.0/params.acceleration;
-		tempSegments->SetNonLinear(params.accelDistance, params.accelClocks, b, c, params.acceleration);
-	}
-
-	return tempSegments;
-}
-
 // End

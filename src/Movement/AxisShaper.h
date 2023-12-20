@@ -54,9 +54,6 @@ public:
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept;
 #endif
 
-	// Calculate the move segments when input shaping is not used
-	static MoveSegment *GetUnshapedSegments(DDA& dda, const PrepParams& params) noexcept;
-
 	void Diagnostics(MessageType mtype) noexcept;
 
 protected:

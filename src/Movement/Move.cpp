@@ -43,6 +43,10 @@
 #include <Endstops/ZProbe.h>
 #include <Platform/TaskPriorities.h>
 
+#if SUPPORT_LINEAR_DELTA
+# include "Kinematics/LinearDeltaKinematics.h"
+#endif
+
 #if SUPPORT_IOBITS
 # include <Platform/PortControl.h>
 #endif
@@ -1411,6 +1415,214 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 	isPrinting = dms[logicalDrive].IsPrintingExtruderMovement();
 	return ret + adjustment;
 }
+
+void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, float pressureAdvanceClocks) noexcept
+{
+	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(logicalDrive);
+	const float mmPerStep = 1.0/stepsPerMm;
+
+	// Deceleration phase
+	MoveSegment * tempSegments;
+	if (params.decelClocks > 0.0)
+	{
+		tempSegments = MoveSegment::Allocate(nullptr);
+		const float b = dda.topSpeed/params.deceleration - pressureAdvanceClocks;
+		const float c = -2.0/params.deceleration;
+		//TODO isn't pressureAdvanceClocks more involved in the following?
+		tempSegments->SetNonLinear(dda.totalDistance - params.decelStartDistance, params.decelClocks, fsquare(b) - (params.decelStartDistance * c), b + params.accelClocks + params.steadyClocks, c * mmPerStep, -params.deceleration);
+		tempSegments->SetPressureAdvance(pressureAdvanceClocks != 0.0);
+	}
+	else
+	{
+		tempSegments = nullptr;
+	}
+
+	// Steady speed phase
+	if (params.steadyClocks > 0.0)
+	{
+		tempSegments = MoveSegment::Allocate(tempSegments);
+		const float c = 1.0/dda.topSpeed;
+		//TODO isn't pressureAdvanceClocks involved in the following?
+		tempSegments->SetLinear(params.decelStartDistance - params.accelDistance, params.steadyClocks, params.accelClocks - (params.accelDistance * c), c * mmPerStep);
+		tempSegments->SetPressureAdvance(pressureAdvanceClocks != 0.0);
+	}
+
+	// Acceleration phase
+	if (params.accelClocks > 0.0)
+	{
+		tempSegments = MoveSegment::Allocate(tempSegments);
+		const float b = dda.startSpeed/(-params.acceleration) - pressureAdvanceClocks;
+		const float c = 2.0/params.acceleration;
+		tempSegments->SetNonLinear(params.accelDistance, params.accelClocks, fsquare(b), b , c * mmPerStep, params.acceleration);
+		tempSegments->SetPressureAdvance(pressureAdvanceClocks != 0.0);
+	}
+
+	dms[logicalDrive].AppendSegments(tempSegments);
+}
+
+#if SUPPORT_LINEAR_DELTA
+
+void Move::AddDeltaSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping) noexcept
+{
+	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(logicalDrive);
+	const float mmPerStep = 1.0/stepsPerMm;
+	const float A = params.initialX - params.dparams->GetTowerX(logicalDrive);
+	const float B = params.initialY - params.dparams->GetTowerY(logicalDrive);
+	const float aAplusbB = A * dda.directionVector[X_AXIS] + B * dda.directionVector[Y_AXIS];
+	const float dSquaredMinusAsquaredMinusBsquared = params.dparams->GetDiagonalSquared(logicalDrive) - fsquare(A) - fsquare(B);
+	const float h0MinusZ0 = fastSqrtf(dSquaredMinusAsquaredMinusBsquared);
+
+	bool direction;
+	int32_t totalSteps;
+	if (steps < 0)
+	{
+		direction = false;
+		totalSteps = -steps;
+	}
+	else
+	{
+		direction = true;
+		totalSteps = steps;
+	}
+
+	const float fTwoA = 2.0 * A;
+	const float fTwoB = 2.0 * B;
+	const float fHmz0s = h0MinusZ0 * stepsPerMm;
+	const float fMinusAaPlusBbTimesS = -(aAplusbB * stepsPerMm);
+	const float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared = dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm);
+
+	float reverseStartDistance;
+	int32_t reverseStartStep;
+
+	// Calculate the distance at which we need to reverse direction.
+	if (params.a2plusb2 <= 0.0)
+	{
+		// Pure Z movement. We can't use the main calculation because it divides by params.a2plusb2.
+		direction = (dda.directionVector[Z_AXIS] >= 0.0);
+		reverseStartDistance = (direction) ? dda.totalDistance + 1.0 : -1.0;	// so that we never reverse and NewDeltaSegment knows which way we are going
+		reverseStartStep = totalSteps + 1;
+	}
+	else
+	{
+		// The distance to reversal is the solution to a quadratic equation. One root corresponds to the carriages being below the bed,
+		// the other root corresponds to the carriages being above the bed.
+		const float drev = ((dda.directionVector[Z_AXIS] * fastSqrtf(params.a2plusb2 * params.dparams->GetDiagonalSquared(logicalDrive) - fsquare(A * dda.directionVector[Y_AXIS] - B * dda.directionVector[X_AXIS])))
+							- aAplusbB)/params.a2plusb2;
+		reverseStartDistance = drev;
+		if (drev <= 0.0)
+		{
+			// No reversal, going down
+			reverseStartStep = totalSteps + 1;
+			direction = false;
+		}
+		else if (drev >= dda.totalDistance)
+		{
+			// No reversal, going up
+			reverseStartStep = totalSteps + 1;
+			direction = true;
+		}
+		else																	// the reversal point is within range
+		{
+			// Calculate how many steps we need to move up before reversing
+			const float hrev = dda.directionVector[Z_AXIS] * drev + fastSqrtf(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - params.a2plusb2 * fsquare(drev));
+			const int32_t numStepsUp = (int32_t)((hrev - h0MinusZ0) * stepsPerMm);
+
+			// We may be going down but almost at the peak height already, in which case we don't really have a reversal.
+			// However, we could be going up by a whole step due to rounding, so we need to check the direction
+			if (numStepsUp < 1)
+			{
+				if (direction)
+				{
+					reverseStartDistance = dda.totalDistance + 1.0;	// indicate that there is no reversal
+				}
+				else
+				{
+					reverseStartDistance = -1.0;						// so that we know we have reversed already
+					reverseStartStep = totalSteps + 1;
+				}
+			}
+			else if (direction && numStepsUp <= totalSteps)
+			{
+				// If numStepsUp == totalSteps then the reverse segment is too small to do.
+				// If numStepsUp < totalSteps then there has been a rounding error, because we are supposed to move up more than the calculated number of steps we move up.
+				// This can happen if the calculated reversal is very close to the end of the move, because we round the final step positions to the nearest step, which may be up.
+				// Either way, don't do a reverse segment.
+				reverseStartStep = totalSteps + 1;
+				reverseStartDistance = dda.totalDistance + 1.0;
+			}
+			else
+			{
+				reverseStartStep = numStepsUp + 1;
+
+				// Correct the initial direction and the total number of steps
+				if (direction)
+				{
+					// Net movement is up, so we will go up first and then down by a lesser amount
+					totalSteps = (2 * numStepsUp) - totalSteps;
+				}
+				else
+				{
+					// Net movement is down, so we will go up first and then down by a greater amount
+					direction = true;
+					totalSteps = (2 * numStepsUp) + totalSteps;
+				}
+			}
+		}
+	}
+
+	distanceSoFar = 0.0;
+	timeSoFar = 0.0;
+	nextStep = 1;									// must do this before calling NewDeltaSegment
+	directionChanged = directionReversed = false;	// must clear these before we call NewDeltaSegment
+
+	if (!NewDeltaSegment())
+	{
+		return false;
+	}
+
+	// Prepare for the first step
+	nextStepTime = 0;
+	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
+
+	//TODO: add steps etc.
+	// Deceleration phase
+	DeltaMoveSegment * tempSegments;
+	if (params.decelClocks > 0.0)
+	{
+		tempSegments = DeltaMoveSegment::Allocate(nullptr);
+		const float b = dda.topSpeed/params.deceleration;
+		const float c = -2.0/params.deceleration;
+		tempSegments->SetNonLinear(dda.totalDistance - params.decelStartDistance, params.decelClocks, fsquare(b) - (params.decelStartDistance * c), b + params.accelClocks + params.steadyClocks, c * mmPerStep, -params.deceleration);
+		tempSegments->SetDeltaParameters(dda.directionVector, fTwoA, fTwoB, h0MinusZ0, fMinusAaPlusBbTimesS, fDSquaredMinusAsquaredMinusBsquaredTimesSsquared);
+	}
+	else
+	{
+		tempSegments = nullptr;
+	}
+
+	// Steady speed phase
+	if (params.steadyClocks > 0.0)
+	{
+		tempSegments = DeltaMoveSegment::Allocate(tempSegments);
+		const float c = 1.0/dda.topSpeed;
+		tempSegments->SetLinear(params.decelStartDistance - params.accelDistance, params.steadyClocks, params.accelClocks - (params.accelDistance * c), c * mmPerStep);
+		tempSegments->SetDeltaParameters(dda.directionVector, fTwoA, fTwoB, h0MinusZ0, fMinusAaPlusBbTimesS, fDSquaredMinusAsquaredMinusBsquaredTimesSsquared);
+	}
+
+	// Acceleration phase
+	if (params.accelClocks > 0.0)
+	{
+		tempSegments = DeltaMoveSegment::Allocate(tempSegments);
+		const float b = dda.startSpeed/(-params.acceleration);
+		const float c = 2.0/params.acceleration;
+		tempSegments->SetNonLinear(params.accelDistance, params.accelClocks, fsquare(b), b, c * mmPerStep, params.acceleration);
+		tempSegments->SetDeltaParameters(dda.directionVector, fTwoA, fTwoB, h0MinusZ0, fMinusAaPlusBbTimesS, fDSquaredMinusAsquaredMinusBsquaredTimesSsquared);
+	}
+
+	dms[logicalDrive].AppendSegments(tempSegments);
+}
+
+#endif
 
 // ISR for the step interrupt
 void Move::Interrupt() noexcept

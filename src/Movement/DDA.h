@@ -58,9 +58,9 @@ struct PrepParams
 class DDA
 {
 	friend class DriveMovement;
-	friend class AxisShaper;
 	friend class ExtruderShaper;
 	friend class PrepParams;
+	friend class Move;
 
 public:
 
