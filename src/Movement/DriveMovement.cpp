@@ -60,14 +60,14 @@ void DriveMovement::DebugPrint() const noexcept
 	}
 }
 
-// This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
-bool DriveMovement::NewCartesianSegment() noexcept
+// This is called when segments has just been changed to a new segment. Return the new segment to execute, or nullptr.
+MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 {
 	while (true)
 	{
 		if (segments == nullptr)
 		{
-			return false;
+			return nullptr;
 		}
 
 		// Work out the movement limit in steps
@@ -100,7 +100,7 @@ bool DriveMovement::NewCartesianSegment() noexcept
 #endif
 		if (nextStep < segmentStepLimit)
 		{
-			return true;
+			return segments;
 		}
 
 		segments = segments->GetNext();						// skip this segment
@@ -109,14 +109,14 @@ bool DriveMovement::NewCartesianSegment() noexcept
 
 #if SUPPORT_LINEAR_DELTA
 
-// This is called when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
-bool DriveMovement::NewDeltaSegment() noexcept
+// This is called when segments has just been changed to a new segment. Return the new segment to execute, or nullptr.
+MoveSegment *DriveMovement::NewDeltaSegment() noexcept
 {
 	while (true)
 	{
 		if (segments == nullptr)
 		{
-			return false;
+			return nullptr;
 		}
 
 		const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
@@ -153,10 +153,12 @@ bool DriveMovement::NewDeltaSegment() noexcept
 		else
 		{
 			// Work out how many whole steps we have moved up or down at the end of this segment
-			const float sDx = distanceSoFar * ((const DeltaMoveSegment*)segments)->GetDv()[0];
-			const float sDy = distanceSoFar * ((const DeltaMoveSegment*)segments)->GetDv()[1];
-			int32_t netStepsAtEnd = (int32_t)floorf(fastSqrtf(mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared - fsquare(stepsPerMm) * (sDx * (sDx + mp.delta.fTwoA) + sDy * (sDy + mp.delta.fTwoB)))
-												+ (distanceSoFar * ((const DeltaMoveSegment*)segments)->GetDv()[2] - mp.delta.h0MinusZ0) * stepsPerMm);
+			const DeltaMoveSegment *const deltaSeg = (const DeltaMoveSegment*)segments;
+			const float sDx = distanceSoFar * deltaSeg->GetDv()[0];
+			const float sDy = distanceSoFar * deltaSeg->GetDv()[1];
+			int32_t netStepsAtEnd = (int32_t)floorf(fastSqrtf(deltaSeg->GetfDSquaredMinusAsquaredMinusBsquaredTimesSsquared() - fsquare(stepsPerMm) * (sDx * (sDx + deltaSeg->GetfTwoA())
+																+ sDy * (sDy + deltaSeg->GetfTwoB())))
+													+ (distanceSoFar * deltaSeg->GetDv()[2] - deltaSeg->GetH0MinusZ0()) * stepsPerMm);
 
 			// If there is a reversal then we only ever move up by (reverseStartStep - 1) steps, so netStepsAtEnd should be less than reverseStartStep.
 			// However, because of rounding error, it might possibly be equal.
@@ -190,7 +192,7 @@ bool DriveMovement::NewDeltaSegment() noexcept
 
 		if (segmentStepLimit > nextStep)
 		{
-			return true;
+			return segments;
 		}
 
 		segments = segments->GetNext();
@@ -199,14 +201,14 @@ bool DriveMovement::NewDeltaSegment() noexcept
 
 #endif // SUPPORT_LINEAR_DELTA
 
-// This is called for an extruder driver when currentSegment has just been changed to a new segment. Return true if there is a new segment to execute.
-bool DriveMovement::NewExtruderSegment() noexcept
+// This is called for an extruder driver when segments has just been changed to a new segment. Return the new segment to execute, or nullptr.
+MoveSegment *DriveMovement::NewExtruderSegment() noexcept
 {
 	while (true)
 	{
 		if (segments == nullptr)
 		{
-			return false;
+			return nullptr;
 		}
 
 		const float startDistance = distanceSoFar;
@@ -287,12 +289,14 @@ bool DriveMovement::NewExtruderSegment() noexcept
 #endif
 		if (nextStep < segmentStepLimit)
 		{
-			return true;
+			return segments;
 		}
 
 		segments = segments->GetNext();						// skip this segment
 	}
 }
+
+#if 0	///these will be removed
 
 // Prepare this DM for a Cartesian axis move, returning true if there are steps to do
 bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept
@@ -521,6 +525,8 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	return CalcNextStepTimeFull();					// calculate the scheduled time of the first step
 }
 
+#endif
+
 // Version of fastSqrtf that allows for slightly negative operands caused by rounding error
 static inline float fastLimSqrtf(float f) noexcept
 {
@@ -537,13 +543,16 @@ static inline float fastLimSqrtf(float f) noexcept
 bool DriveMovement::CalcNextStepTimeFull() noexcept
 pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 {
+	MoveSegment *currentSegment = segments;
 	uint32_t shiftFactor = 0;										// assume single stepping
 	{
 		int32_t stepsToLimit = segmentStepLimit - nextStep;
 		// If there are no more steps left in this segment, skip to the next segment and use single stepping
 		if (stepsToLimit == 0)
 		{
-			segments = segments->GetNext();
+			MoveSegment *oldSegment = currentSegment;
+			segments = currentSegment = oldSegment->GetNext();
+			MoveSegment::Release(oldSegment);
 			if (isExtruder)
 			{
 				{
@@ -551,35 +560,36 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 					nextStep = nextStep - 2 * (segmentStepLimit - reverseStartStep);		// set nextStep to the net steps taken in the original direction (this may make nextStep negative)
 					CheckDirection(false);													// so that GetNetStepsTaken returns the correct value
 				}
-				const bool wasUsingPA = segments->UsePressureAdvance();
-				if (!NewExtruderSegment())
+				const bool wasUsingPA = oldSegment->UsePressureAdvance();
+				currentSegment = NewExtruderSegment();
+				if (currentSegment != nullptr)
 				{
 					if (wasUsingPA)
 					{
 						const size_t logicalDrive =
 #if SUPPORT_REMOTE_COMMANDS
-													(segments->IsRemote()) ? drive : LogicalDriveToExtruder(drive);
-#else
-													LogicalDriveToExtruder(drive);
+											(currentSegment->IsRemote()) ? drive :
 #endif
+												LogicalDriveToExtruder(drive);
 						ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
 						const int32_t netStepsDone = nextStep - 1;
 						const float stepsCarriedForward = (distanceSoFar - (float)netStepsDone * mp.cart.effectiveMmPerStep) * mp.cart.effectiveStepsPerMm;
 						shaper.SetExtrusionPending(stepsCarriedForward);
 					}
+					state = DMState::idle;
 					return false;
 				}
 			}
 			else
 			{
-				const bool more =
+				currentSegment =
 #if SUPPORT_LINEAR_DELTA
 								(isDelta) ? NewDeltaSegment() :
 #endif
 									NewCartesianSegment();
-				if (!more)
+				if (currentSegment == nullptr)
 				{
-					state = DMState::stepError1;
+					state = DMState::idle;
 					return false;
 				}
 			}

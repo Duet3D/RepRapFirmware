@@ -71,10 +71,10 @@ public:
 
 private:
 	bool CalcNextStepTimeFull() noexcept SPEED_CRITICAL;
-	bool NewCartesianSegment() noexcept SPEED_CRITICAL;
-	bool NewExtruderSegment() noexcept SPEED_CRITICAL;
+	MoveSegment *NewCartesianSegment() noexcept SPEED_CRITICAL;
+	MoveSegment *NewExtruderSegment() noexcept SPEED_CRITICAL;
 #if SUPPORT_LINEAR_DELTA
-	bool NewDeltaSegment() noexcept SPEED_CRITICAL;
+	MoveSegment *NewDeltaSegment() noexcept SPEED_CRITICAL;
 #endif
 
 	void CheckDirection(bool reversed) noexcept;
@@ -118,9 +118,9 @@ private:
 	union
 	{
 #if SUPPORT_LINEAR_DELTA
-		/* Note, the equation for distance travelled along the planned straight path in terms of carriage height is:
+		/* The equation for distance travelled along the planned straight path in terms of carriage height is:
 				s=(sqrt(
-						+(-dy^2-dx^2)*h^2
+						-(dy^2+dx^2)*h^2
 
 						+2*(dy^2+dx^2)*z0*h
 						-2*dy*dz*(y0-yt)*h
@@ -144,15 +144,33 @@ private:
 			which is of the form:
 		  	  	 s = (sqrt(A*h^2 + B*h + C) + D*h + E)/F
 			which can be normalised by incorporating F into the other constants.
+
+			We can also express it in terms of (h-z0):
+				s=(sqrt(
+					  	-(dy^2+dx^2)*(h-z0)^2
+
+						-2*dy*dz*(y0-yt)*(h-z0)
+						-2*dx*dz*(x0-xt)*(h-z0)
+
+						+2*dx*dy*(x0-xt)*(y0-yt)
+
+						-(dz^2+dx^2)*(y0-yt)^2
+						-(dz^2+dy^2)*(x0-xt)^2
+						+L^2*(dz^2+dy^2+dx^2)
+					   )
+				   -dy*(y0-yt)
+				   -dx*(x0-xt)
+				   +dz*(h-z0)
+			  	  )/(dz^2+dy^2+dx^2)
 		*/
 		struct DeltaParameters							// Parameters for delta movement
 		{
-			float fTwoA;
-			float fTwoB;
-			float h0MinusZ0;							// the height subtended by the rod at the start of the move
+			float fTwoA;								// 2*(x0-xt)
+			float fTwoB;								// 2*(y0-yt)
+			float h0MinusZ0;							// h0-z0
 			float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
 			float fHmz0s;								// the starting height less the starting Z height, multiplied by the Z movement fraction (can go negative)
-			float fMinusAaPlusBbTimesS;
+			float fMinusAaPlusBbTimesS;					// -((x0-xt)*dx + (y0-yt)*dy) * steps_per_mm
 			float reverseStartDistance;					// the overall move distance at which movement reversal occurs
 		} delta;
 #endif

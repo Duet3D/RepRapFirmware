@@ -34,7 +34,7 @@ public:
 	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
 	uint32_t GetGracePeriod() const noexcept { return gracePeriod; }					// Return the minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
-	const DDA *GetCurrentDDA() noexcept;												// If a move from this ring should be executing now, fetch its DDA
+	const DDA *GetCurrentDDA() const noexcept;											// If a move from this ring should be executing now, fetch its DDA
 	float PushBabyStepping(size_t axis, float amount) noexcept;							// Try to push some babystepping through the lookahead queue, returning the amount pushed
 
 	uint32_t GetScheduledMoves() const noexcept { return scheduledMoves; }				// How many moves have been scheduled?
@@ -44,11 +44,11 @@ public:
 	float GetSimulationTime() const noexcept { return simulationTime; }
 	void ResetSimulationTime() noexcept { simulationTime = 0.0; }
 
-	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(lastRequestedSpeed); }
-	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(lastTopSpeed); }
-	float GetAccelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(lastAcceleration); }
-	float GetDecelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(lastDeceleration); }
-	float GetTotalExtrusionRate() const noexcept { return InverseConvertSpeedToMmPerSec(lastExtrusionRate); }
+	float GetRequestedSpeedMmPerSec() const noexcept;
+	float GetTopSpeedMmPerSec() const noexcept;
+	float GetAccelerationMmPerSecSquared() const noexcept;
+	float GetDecelerationMmPerSecSquared() const noexcept;
+	float GetTotalExtrusionRate() const noexcept;
 
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the position at the end of the last queued move in untransformed coords
 #if SUPPORT_ASYNC_MOVES
@@ -100,14 +100,6 @@ private:
 	uint32_t scheduledMoves;													// Move counters for the code queue
 	volatile uint32_t completedMoves;											// This one is modified by an ISR, hence volatile
 	volatile int32_t numHiccups;												// Modified in the ISR
-
-//	int32_t endPoint[MaxAxesPlusExtruders];								  		// Machine coordinates of the endpoint of the last dispatched move
-
-	float lastRequestedSpeed = 0.0;												// the requested speed of the last move that was dispatched to the segment queue
-	float lastTopSpeed = 0.0;													// the actual top speed of the last move that was dispatched to the segment queue
-	float lastAcceleration = 0.0;												// the actual acceleration of the last move that was dispatched to the segment queue
-	float lastDeceleration = 0.0;												// the actual deceleration of the last move that was dispatched to the segment queue
-	float lastExtrusionRate = 0.0;												// the extrusion rate of the last move that was dispatched to the segment queue
 
 	unsigned int numLookaheadUnderruns;											// How many times we have run out of moves to adjust during lookahead
 	unsigned int numPrepareUnderruns;											// How many times we wanted a new move but there were only un-prepared moves in the queue

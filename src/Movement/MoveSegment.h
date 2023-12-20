@@ -361,6 +361,9 @@ public:
 	DeltaMoveSegment(MoveSegment *p_next) noexcept;
 
 	const float *GetDv() const noexcept { return dv; }
+	float GetfTwoA() const noexcept { return fTwoA; }
+	float GetfTwoB() const noexcept { return fTwoB; }
+	float GetH0MinusZ0() const noexcept { return h0MinusZ0; }
 	float GetfMinusAaPlusBbTimesS() const noexcept { return fMinusAaPlusBbTimesS; }
 	float GetfDSquaredMinusAsquaredMinusBsquaredTimesSsquared() const noexcept { return fDSquaredMinusAsquaredMinusBsquaredTimesSsquared; }
 
@@ -371,10 +374,27 @@ public:
 	void DebugPrintDelta() const noexcept;
 
 private:
+	float fTwoA, fTwoB;
+	float h0MinusZ0;
 	float fMinusAaPlusBbTimesS;
 	float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
 	float dv[3];			// the XYZ movement fractions
 	//TODO
 };
+
+// Release a single MoveSegment. Not thread-safe.
+inline void MoveSegment::Release(MoveSegment *item) noexcept
+{
+	if (item->IsDelta())
+	{
+		item->next = deltaFreeList;
+		deltaFreeList = (DeltaMoveSegment*)item;
+	}
+	else
+	{
+		item->next = freeList;
+		freeList = item;
+	}
+}
 
 #endif /* SRC_MOVEMENT_MOVESEGMENT_H_ */

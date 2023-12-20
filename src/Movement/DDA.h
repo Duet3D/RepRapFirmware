@@ -112,11 +112,11 @@ public:
 	float GetRawEndCoordinate(size_t drive) const noexcept { return endCoordinates[drive]; }
 	void SetPositions(const float move[]) noexcept;									// Force the endpoints to be these
 	FilePosition GetFilePosition() const noexcept { return filePos; }
-	float GetRequestedSpeedMmPerClock() const noexcept;
-	float GetRequestedSpeedMmPerSec() const noexcept;
-	float GetTopSpeedMmPerSec() const noexcept;
-	float GetAccelerationMmPerSecSquared() const noexcept;
-	float GetDecelerationMmPerSecSquared() const noexcept;
+	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
+	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(requestedSpeed); }
+	float GetTopSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(topSpeed); }
+	float GetAccelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(acceleration); }
+	float GetDecelerationMmPerSecSquared() const noexcept { return InverseConvertAcceleration(deceleration); }
 	float GetVirtualExtruderPosition() const noexcept { return virtualExtruderPosition; }
 	float GetTotalExtrusionRate() const noexcept;
 

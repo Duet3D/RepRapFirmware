@@ -30,21 +30,6 @@ MoveSegment *MoveSegment::Allocate(MoveSegment *p_next) noexcept
 	return ms;
 }
 
-// Release a single MoveSegment. Not thread-safe.
-inline void MoveSegment::Release(MoveSegment *item) noexcept
-{
-	if (item->IsDelta())
-	{
-		item->next = deltaFreeList;
-		deltaFreeList = (DeltaMoveSegment*)item;
-	}
-	else
-	{
-		item->next = freeList;
-		freeList = item;
-	}
-}
-
 void MoveSegment::AddToTail(MoveSegment *tail) noexcept
 {
 	MoveSegment *seg = this;

@@ -1822,6 +1822,8 @@ void Move::StopDriveFromRemote(size_t drive) noexcept
 
 #endif
 
+#if 0
+
 // THIS CODE IS NOT USED. It's here because we need to replicate the functionality somewhere else.
 void Move::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 {
@@ -1880,6 +1882,8 @@ void Move::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 		Move::WakeLaserTaskFromISR();
 	}
 }
+
+#endif
 
 // Adjust the motor endpoints without moving the motors. Called after auto-calibrating a linear delta or rotary delta machine.
 // There must be no pending movement when calling this!

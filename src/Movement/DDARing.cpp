@@ -454,6 +454,57 @@ void DDARing::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
 	addPointer->GetPrevious()->SetPositions(move);
 }
 
+// Get the DDA that should currently be executing, or nullptr if no move from this ring should be executing
+const DDA *DDARing::GetCurrentDDA() const noexcept
+{
+	TaskCriticalSectionLocker lock;
+	const DDA *cdda = checkPointer;
+	while (cdda->GetState() == DDA::completed)
+	{
+		cdda = cdda->GetNext();
+	}
+	const uint32_t now = StepTimer::GetTimerTicks();
+	while (cdda->GetState() == DDA::committed)
+	{
+		const uint32_t timeRunning = cdda->GetMoveStartTime() - now;
+		if ((int32_t)timeRunning < 0) { break; }			// move has not started yet
+		if (timeRunning < cdda->GetClocksNeeded()) { return cdda; }
+		cdda = cdda->GetNext();
+	}
+	return nullptr;
+}
+
+// Get various data for reporting in the OM
+float DDARing::GetRequestedSpeedMmPerSec() const noexcept
+{
+	const DDA* const cdda = GetCurrentDDA();
+	return (cdda != nullptr) ? cdda->GetRequestedSpeedMmPerSec() : 0.0;
+}
+
+float DDARing::GetTopSpeedMmPerSec() const noexcept
+{
+	const DDA* const cdda = GetCurrentDDA();
+	return (cdda != nullptr) ? cdda->GetTopSpeedMmPerSec() : 0.0;
+}
+
+float DDARing::GetAccelerationMmPerSecSquared() const noexcept
+{
+	const DDA* const cdda = GetCurrentDDA();
+	return (cdda != nullptr) ? cdda->GetAccelerationMmPerSecSquared() : 0.0;
+}
+
+float DDARing::GetDecelerationMmPerSecSquared() const noexcept
+{
+	const DDA* const cdda = GetCurrentDDA();
+	return (cdda != nullptr) ? cdda->GetDecelerationMmPerSecSquared() : 0.0;
+}
+
+float DDARing::GetTotalExtrusionRate() const noexcept
+{
+	const DDA* const cdda = GetCurrentDDA();
+	return (cdda != nullptr) ? cdda->GetTotalExtrusionRate() : 0.0;
+}
+
 // Pause the print as soon as we can.
 // If we are able to skip any moves, return true and update ms.pauseRestorePoint to the first move we skipped.
 // If we can't skip any moves, update just the coordinates and laser PWM in ms.pauseRestorePoint and return false.
