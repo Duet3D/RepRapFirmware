@@ -131,7 +131,7 @@ public:
 	ExtruderShaper& GetExtruderShaper(size_t extruder) noexcept { return extruderShapers[extruder]; }
 
 	// Functions called by DDA::Prepare to generate segments for executing DDAs
-	void AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, float pressureAdvanceClocks) noexcept;
+	void AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, bool usePressureAdvance) noexcept;
 #if SUPPORT_LINEAR_DELTA
 	void AddDeltaSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping) noexcept;
 #endif

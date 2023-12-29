@@ -49,6 +49,10 @@ public:
 	// Configure input shaping
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M593
 
+	size_t GetNumImpulses() const noexcept { return numImpulses; }
+	float GetImpulseSize(size_t n) const noexcept { return coefficients[n]; }
+	float GetImpulseDelay(size_t n) const noexcept { return delays[n]; }
+
 #if SUPPORT_REMOTE_COMMANDS
 	// Handle a request from the master board to set input shaping parameters
 	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept;
@@ -60,7 +64,7 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
-	static constexpr unsigned int MaxExtraImpulses = 4;
+	static constexpr unsigned int MaxImpulses = 5;
 	static constexpr float DefaultFrequency = 40.0;
 	static constexpr float DefaultDamping = 0.05;
 
@@ -70,10 +74,9 @@ private:
 	float zeta;											// the damping ratio, see https://en.wikipedia.org/wiki/Damping. 0 = undamped, 1 = critically damped.
 
 	// Parameters that fully define the shaping
-	unsigned int numExtraImpulses;						// the number of extra impulses
-	float coefficients[MaxExtraImpulses];				// the coefficients of all the impulses
-	float durations[MaxExtraImpulses];					// the duration in step clocks of each impulse
-
+	unsigned int numImpulses;							// the number of impulses
+	float coefficients[MaxImpulses];					// the coefficients of all the impulses, must add up to 1.0
+	float delays[MaxImpulses];							// the start delay in step clocks of each impulse
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */

@@ -61,7 +61,7 @@ public:
 	void AdjustMotorPosition(int32_t adjustment) noexcept;
 	bool MotionPending() const noexcept { return segments != nullptr; }
 	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
-	void AppendSegments(MoveSegment* ms) noexcept;
+	void AddSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, bool usePressureAdvance) noexcept;
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
@@ -106,6 +106,7 @@ private:
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
+	float pA, pB, pC;									// the movement parameters of the current segment
 
 	int32_t positionAtMoveStart = 0;					// the microstep position of the motor. If the motor is moving then this is the position at the start of the move.
 	float movementAccumulator;							// the accumulated movement since GetAccumulatedMovement was last called. Only used for extruders.

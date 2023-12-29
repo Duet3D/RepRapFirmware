@@ -1416,48 +1416,43 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 	return ret + adjustment;
 }
 
-void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, float pressureAdvanceClocks) noexcept
+void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, bool usePressureAdvance) noexcept
 {
-	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(logicalDrive);
-	const float mmPerStep = 1.0/stepsPerMm;
-
-	// Deceleration phase
-	MoveSegment * tempSegments;
-	if (params.decelClocks > 0.0)
+	// Acceleration phase
+	if (params.accelClocks > 0.0)
 	{
-		tempSegments = MoveSegment::Allocate(nullptr);
-		const float b = dda.topSpeed/params.deceleration - pressureAdvanceClocks;
-		const float c = -2.0/params.deceleration;
-		//TODO isn't pressureAdvanceClocks more involved in the following?
-		tempSegments->SetNonLinear(dda.totalDistance - params.decelStartDistance, params.decelClocks, fsquare(b) - (params.decelStartDistance * c), b + params.accelClocks + params.steadyClocks, c * mmPerStep, -params.deceleration);
-		tempSegments->SetPressureAdvance(pressureAdvanceClocks != 0.0);
-	}
-	else
-	{
-		tempSegments = nullptr;
+		const float accelDistance = params.accelDistance * dda.directionVector[logicalDrive];
+		for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
+		{
+			const float factor = axisShaper.GetImpulseSize(index);
+			dms[logicalDrive].AddSegment(startTime + axisShaper.GetImpulseDelay(index), params.accelClocks,
+								accelDistance * factor, dda.startSpeed * factor, dda.acceleration * factor, usePressureAdvance);
+		}
 	}
 
 	// Steady speed phase
 	if (params.steadyClocks > 0.0)
 	{
-		tempSegments = MoveSegment::Allocate(tempSegments);
-		const float c = 1.0/dda.topSpeed;
-		//TODO isn't pressureAdvanceClocks involved in the following?
-		tempSegments->SetLinear(params.decelStartDistance - params.accelDistance, params.steadyClocks, params.accelClocks - (params.accelDistance * c), c * mmPerStep);
-		tempSegments->SetPressureAdvance(pressureAdvanceClocks != 0.0);
+		const float steadyDistance = (params.decelStartDistance - params.accelDistance) * dda.directionVector[logicalDrive];
+		for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
+		{
+			const float factor = axisShaper.GetImpulseSize(index);
+			dms[logicalDrive].AddSegment(startTime + params.accelClocks + axisShaper.GetImpulseDelay(index), dda.clocksNeeded - params.accelClocks,
+											steadyDistance * factor, dda.topSpeed * factor, 0, false);
+		}
 	}
 
-	// Acceleration phase
-	if (params.accelClocks > 0.0)
+	// Deceleration phase
+	if (params.decelClocks != 0)
 	{
-		tempSegments = MoveSegment::Allocate(tempSegments);
-		const float b = dda.startSpeed/(-params.acceleration) - pressureAdvanceClocks;
-		const float c = 2.0/params.acceleration;
-		tempSegments->SetNonLinear(params.accelDistance, params.accelClocks, fsquare(b), b , c * mmPerStep, params.acceleration);
-		tempSegments->SetPressureAdvance(pressureAdvanceClocks != 0.0);
+		const float decelDistance = (dda.totalDistance - params.decelStartDistance) * dda.directionVector[logicalDrive];
+		for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
+		{
+			const float factor = axisShaper.GetImpulseSize(index);
+			dms[logicalDrive].AddSegment(startTime + params.accelClocks + params.steadyClocks + axisShaper.GetImpulseDelay(index), params.decelClocks,
+											decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), usePressureAdvance);
+		}
 	}
-
-	dms[logicalDrive].AppendSegments(tempSegments);
 }
 
 #if SUPPORT_LINEAR_DELTA

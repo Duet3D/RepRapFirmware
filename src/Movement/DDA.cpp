@@ -1257,8 +1257,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						else
 #endif
 						{
-							const float pressureAdvanceClocks = (flags.usePressureAdvance) ? reprap.GetMove().GetExtruderShaper(extruder).GetKclocks() : 0.0;
-							move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, flags.xyMoving, pressureAdvanceClocks);
+							move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, flags.xyMoving && !flags.checkEndstops, flags.usePressureAdvance);
 						}
 					}
 				}
