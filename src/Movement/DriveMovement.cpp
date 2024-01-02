@@ -60,6 +60,13 @@ void DriveMovement::DebugPrint() const noexcept
 	}
 }
 
+// Set the steps/mm for this driver
+void DriveMovement::SetStepsPerMm(float p_stepsPerMm) noexcept
+{
+	stepsPerMm = p_stepsPerMm;
+	mmPerStep = 1.0/p_stepsPerMm;
+}
+
 // This is called when segments has just been changed to a new segment. Return the new segment to execute, or nullptr.
 MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 {
@@ -70,16 +77,28 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 			return nullptr;
 		}
 
-		// Work out the movement limit in steps
+		// Calculate the movement parameters
 		if (segments->IsLinear())
 		{
 			state = DMState::cartLinear;
+			// Calculate the B and C coefficients for a linear move such that t = B + C*n
+			pB = -segments->GetS0() * (mmPerStep/segments->GetU());
+			pC = mmPerStep/segments->GetU();
 		}
 		else
 		{
 			state = (segments->IsAccelerating()) ? DMState::cartAccel : DMState::cartDecelNoReverse;
+			// Calculate the A, B and C coefficients for an accelerating or decelerating move such that t = B + sqrt(A + C*n)
+			pB = -segments->GetU()/segments->GetA();
+			if (segments->UsePressureAdvance())
+			{
+				pB -= extruderShaper.GetKclocks();
+			}
+			pC = 2.0/segments->GetA();
+			pA = fsquare(pB) - pC * segments->GetS0() * mmPerStep;
 		}
 
+		// Save the movement limit in steps
 		segmentStepLimit = segments->GetSteps();
 
 #if 0	//DEBUG
@@ -89,6 +108,7 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 						(unsigned int)state, (double)pA, (double)pB, (double)pC, nextStep, segmentStepLimit);
 		}
 #endif
+		nextStep = 1;
 		if (nextStep < segmentStepLimit)
 		{
 			return segments;
@@ -109,8 +129,6 @@ MoveSegment *DriveMovement::NewDeltaSegment() noexcept
 		{
 			return nullptr;
 		}
-
-		const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
 
 		// Work out whether we reverse in this segment and the movement limit in steps.
 		// First check whether the first step in this segment is the previously-calculated reverse start step, and if so then do the reversal.
@@ -533,15 +551,9 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 				{
 					if (wasUsingPA)
 					{
-						const size_t logicalDrive =
-#if SUPPORT_REMOTE_COMMANDS
-											(currentSegment->IsRemote()) ? drive :
-#endif
-												LogicalDriveToExtruder(drive);
-						ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
 						const int32_t netStepsDone = nextStep - 1;
 						const float stepsCarriedForward = (distanceSoFar - (float)netStepsDone * mp.cart.effectiveMmPerStep) * mp.cart.effectiveStepsPerMm;
-						shaper.SetExtrusionPending(stepsCarriedForward);
+						extruderShaper.SetExtrusionPending(stepsCarriedForward);
 					}
 					state = DMState::idle;
 					return false;

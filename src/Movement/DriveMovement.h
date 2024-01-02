@@ -11,6 +11,7 @@
 #include <RepRapFirmware.h>
 #include <Platform/Tasks.h>
 #include "MoveSegment.h"
+#include "ExtruderShaper.h"
 
 class PrepParams;
 
@@ -42,6 +43,8 @@ public:
 	friend class Move;
 
 	DriveMovement() noexcept;
+
+	void SetStepsPerMm(float p_stepsPerMm) noexcept;
 
 	bool CalcNextStepTime() noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
@@ -86,6 +89,11 @@ private:
 
 	DriveMovement *nextDM;								// link to next DM that needs a step
 	MoveSegment *segments = nullptr;					// pointer to the segment list for this driver
+
+	float stepsPerMm;
+	float mmPerStep;
+
+	ExtruderShaper extruderShaper;						// pressure advance control
 
 	DMState state;										// whether this is active or not
 	uint8_t drive;										// the drive that this DM controls

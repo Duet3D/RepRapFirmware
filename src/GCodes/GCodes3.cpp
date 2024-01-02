@@ -568,6 +568,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 
 	if (seen || seenExtrude)
 	{
+		reprap.GetMove().UpdateStepsPerMm();
 		reprap.MoveUpdated();
 		if (numVisibleAxes > originalVisibleAxes)
 		{

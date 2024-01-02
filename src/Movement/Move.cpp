@@ -269,6 +269,8 @@ void Move::Init() noexcept
 		pos = 0;
 	}
 
+	UpdateStepsPerMm();						// copy the default steps/mm across from Platform
+
 	moveTask.Create(MoveStart, "Move", this, TaskPriority::MovePriority);
 }
 
@@ -285,6 +287,18 @@ void Move::Exit() noexcept
 	laserTask = nullptr;
 #endif
 	moveTask.TerminateAndUnlink();
+}
+
+// This is called when steps/mm is set for any axis or extruder, and when e create an axis or extruder
+void Move::UpdateStepsPerMm() noexcept
+{
+	for (size_t axis = 0; axis < MaxAxesPlusExtruders; ++axis)
+	{
+		if (axis < reprap.GetGCodes().GetTotalAxes() || axis >= MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders())
+		{
+			dms[axis].SetStepsPerMm(reprap.GetPlatform().DriveStepsPerUnit(axis));
+		}
+	}
 }
 
 [[noreturn]] void Move::MoveLoop() noexcept
@@ -1113,7 +1127,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 					rslt = GCodeResult::error;
 					break;
 				}
-				extruderShapers[extruder].SetKseconds(advance);
+				GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
 #if SUPPORT_CAN_EXPANSION
 				const DriverId did = platform.GetExtruderDriver(extruder);
 				if (did.IsRemote())
@@ -1136,7 +1150,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 #if SUPPORT_CAN_EXPANSION
 				ct->IterateExtruders([this, advance, &canDriversToUpdate](unsigned int extruder)
 										{
-											extruderShapers[extruder].SetKseconds(advance);
+											GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
 											const DriverId did = reprap.GetPlatform().GetExtruderDriver(extruder);
 											if (did.IsRemote())
 											{
@@ -1167,7 +1181,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 	char c = ':';
 	for (size_t i = 0; i < reprap.GetGCodes().GetNumExtruders(); ++i)
 	{
-		reply.catf("%c %.3f", c, (double)extruderShapers[i].GetKseconds());
+		reply.catf("%c %.3f", c, (double)GetExtruderShaperForExtruder(i).GetKseconds());
 		c = ',';
 	}
 	return GCodeResult::ok;
@@ -1194,7 +1208,7 @@ GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequ
 							}
 							else
 							{
-								extruderShapers[driver].SetKseconds(msg.values[count]);
+								dms[driver].extruderShaper.SetKseconds(msg.values[count]);
 							}
 						}
 				   );
@@ -1434,10 +1448,11 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	if (params.steadyClocks > 0.0)
 	{
 		const float steadyDistance = (params.decelStartDistance - params.accelDistance) * dda.directionVector[logicalDrive];
+		const float originalStartClocks = startTime + params.accelClocks;
 		for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 		{
 			const float factor = axisShaper.GetImpulseSize(index);
-			dms[logicalDrive].AddSegment(startTime + params.accelClocks + axisShaper.GetImpulseDelay(index), dda.clocksNeeded - params.accelClocks,
+			dms[logicalDrive].AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), dda.clocksNeeded - params.accelClocks,
 											steadyDistance * factor, dda.topSpeed * factor, 0, false);
 		}
 	}
@@ -1446,13 +1461,18 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	if (params.decelClocks != 0)
 	{
 		const float decelDistance = (dda.totalDistance - params.decelStartDistance) * dda.directionVector[logicalDrive];
+		const float originalStartClocks = startTime + params.accelClocks + params.steadyClocks;
 		for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 		{
 			const float factor = axisShaper.GetImpulseSize(index);
-			dms[logicalDrive].AddSegment(startTime + params.accelClocks + params.steadyClocks + axisShaper.GetImpulseDelay(index), params.decelClocks,
+			dms[logicalDrive].AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), params.decelClocks,
 											decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), usePressureAdvance);
 		}
 	}
+
+	//TODO if there is currently no movement, schedule an interrupt to start executing this segment
+	//TODO if an interrupt is already scheduled then we may need to bring it forwards
+	// We may choose to do the above in AddSegment instead of here
 }
 
 #if SUPPORT_LINEAR_DELTA
@@ -1572,12 +1592,11 @@ void Move::AddDeltaSegments(const DDA& dda, size_t logicalDrive, uint32_t startT
 
 	if (!NewDeltaSegment())
 	{
-		return false;
+		return;
 	}
 
 	// Prepare for the first step
 	nextStepTime = 0;
-	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
 
 	//TODO: add steps etc.
 	// Deceleration phase

@@ -526,7 +526,7 @@ void RepRap::Init() noexcept
 #if SUPPORT_CAN_EXPANSION
 	CanInterface::Init();
 #endif
-	move->Init();
+	move->Init();						// Must be called later than Platform::Init
 	heat->Init();
 	fansManager->Init();
 	printMonitor->Init();

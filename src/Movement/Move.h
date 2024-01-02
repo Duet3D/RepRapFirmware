@@ -101,13 +101,16 @@ public:
 	void SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) noexcept;
 	void SetInitialCalibrationDeviation(const Deviation& d) noexcept;
 	void SetLatestMeshDeviation(const Deviation& d) noexcept;
+	void UpdateStepsPerMm() noexcept;										// called when steps/mm is set for any axis or extruder
 
 	float PushBabyStepping(MovementSystemNumber msNumber, size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 
 	GCodeResult ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// process M595
 	GCodeResult ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M572
 
-	float GetPressureAdvanceClocks(size_t extruder) const noexcept;
+	ExtruderShaper& GetExtruderShaperForExtruder(size_t extruder) noexcept;
+	float GetPressureAdvanceClocksForLogicalDrive(size_t drive) const noexcept;
+	float GetPressureAdvanceClocksForExtruder(size_t extruder) const noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
 	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
@@ -128,7 +131,6 @@ public:
 #endif
 
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
-	ExtruderShaper& GetExtruderShaper(size_t extruder) noexcept { return extruderShapers[extruder]; }
 
 	// Functions called by DDA::Prepare to generate segments for executing DDAs
 	void AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, bool usePressureAdvance) noexcept;
@@ -367,7 +369,6 @@ private:
 	float minExtrusionPending = 0.0, maxExtrusionPending = 0.0;
 
 	AxisShaper axisShaper;								// the input shaping that we use for axes - currently just one for all axes
-	ExtruderShaper extruderShapers[MaxExtruders];		// the pressure advance object we use for each extruder
 
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
 
@@ -417,9 +418,19 @@ inline int32_t Move::GetLiveMotorPosition(size_t axis) const noexcept
 	return dms[axis].GetCurrentMotorPosition();
 }
 
-inline float Move::GetPressureAdvanceClocks(size_t extruder) const noexcept
+ExtruderShaper& Move::GetExtruderShaperForExtruder(size_t extruder) noexcept
 {
-	return (extruder < MaxExtruders) ? extruderShapers[extruder].GetKclocks() : 0.0;
+	return dms[ExtruderToLogicalDrive(extruder)].extruderShaper;
+}
+
+inline float Move::GetPressureAdvanceClocksForLogicalDrive(size_t drive) const noexcept
+{
+	return dms[drive].extruderShaper.GetKclocks();
+}
+
+inline float Move::GetPressureAdvanceClocksForExtruder(size_t extruder) const noexcept
+{
+	return (extruder < MaxExtruders) ? GetPressureAdvanceClocksForLogicalDrive(ExtruderToLogicalDrive(extruder)) : 0.0;
 }
 
 // Schedule the next interrupt, returning true if we can't because it is already due

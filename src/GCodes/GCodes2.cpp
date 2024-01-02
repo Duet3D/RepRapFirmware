@@ -1508,6 +1508,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (seen)
 					{
 						platform.UpdateBacklashSteps();
+						reprap.GetMove().UpdateStepsPerMm();
 					}
 
 					if (gb.Seen(extrudeLetter))
