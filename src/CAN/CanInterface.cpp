@@ -1237,7 +1237,7 @@ GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeB
 
 void CanInterface::WakeAsyncSenderFromIsr() noexcept
 {
-	canSenderTask.GiveFromISR(NotifyIndices::CanAsyncSender);
+	canSenderTask.GiveFromISR(NotifyIndices::CanSender);
 }
 
 // Remote handle functions

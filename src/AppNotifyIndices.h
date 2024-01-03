@@ -25,7 +25,6 @@ namespace NotifyIndices
 #endif
 	constexpr uint32_t I2C = FirstAvailableApp;
 	constexpr uint32_t Spi = FirstAvailableApp;
-	constexpr uint32_t CanAsyncSender = FirstAvailableApp;
 	constexpr uint32_t AccelerometerHardware = FirstAvailableApp + 1;
 	constexpr uint32_t HeightController = FirstAvailableApp + 2;
 	constexpr uint32_t AccelerometerDataCollector = FirstAvailableApp + 2;
