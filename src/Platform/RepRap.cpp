@@ -22,6 +22,7 @@
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
 #include <Accelerometers/Accelerometers.h>
+#include <CoreNotifyIndices.h>
 #include "Version.h"
 
 #ifdef DUET_NG
@@ -102,7 +103,7 @@ extern "C" void HSMCI_Handler() noexcept
 #if SAME70
 	XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CID = 0xFFFFFFFF;			// disable all DMA interrupts for this channel
 #endif
-	TaskBase::GiveFromISR(hsmciTask);									// wake up the task
+	TaskBase::GiveFromISR(hsmciTask, NotifyIndices::Sdhc);				// wake up the task
 }
 
 #if SAME70
@@ -114,7 +115,7 @@ void HsmciDmaCallback(CallbackParameter cb, DmaCallbackReason reason) noexcept
 	XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CID = 0xFFFFFFFF;			// disable all DMA interrupts for this channel
 	if (hsmciTask != nullptr)
 	{
-		TaskBase::GiveFromISR(hsmciTask);
+		TaskBase::GiveFromISR(hsmciTask, NotifyIndices::Sdhc);
 		hsmciTask = nullptr;
 	}
 }
@@ -140,7 +141,7 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 		XDMAC->XDMAC_CHID[DmacChanHsmci].XDMAC_CIE = dmaBits;
 		XDMAC->XDMAC_GIE = 1u << DmacChanHsmci;
 #endif
-		if (!TaskBase::Take(200))
+		if (!TaskBase::TakeIndexed(NotifyIndices::Sdhc, 200))
 		{
 			// We timed out waiting for the HSMCI operation to complete
 			reprap.GetPlatform().LogError(ErrorCode::HsmciTimeout);

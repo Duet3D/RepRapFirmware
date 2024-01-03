@@ -23,6 +23,7 @@
 #include <Hardware/SoftwareReset.h>
 #include <Hardware/ExceptionHandlers.h>
 #include <Platform/TaskPriorities.h>
+#include <AppNotifyIndices.h>
 
 extern char _estack;		// defined by the linker
 
@@ -115,11 +116,11 @@ void SbcInterface::Spin() noexcept
 			switch (state)
 			{
 			case TransferState::doingFullTransfer:
-				hadTimeout = !TaskBase::Take(isConnected ? SpiConnectionTimeout : TaskBase::TimeoutUnlimited);
+				hadTimeout = !TaskBase::TakeIndexed(NotifyIndices::SbcInterface, isConnected ? SpiConnectionTimeout : TaskBase::TimeoutUnlimited);
 				hadSbcTimeout = hadTimeout && millis() - transferStartTime < SpiConnectionTimeout + SbcYieldTimeout;
 				break;
 			case TransferState::doingPartialTransfer:
-				hadTimeout = !TaskBase::Take(SpiTransferTimeout);
+				hadTimeout = !TaskBase::TakeIndexed(NotifyIndices::SbcInterface, SpiTransferTimeout);
 				hadSbcTimeout = hadTimeout && millis() - transferStartTime < SpiTransferTimeout + SbcYieldTimeout;
 				break;
 			case TransferState::finishingTransfer:
@@ -161,7 +162,7 @@ void SbcInterface::Spin() noexcept
 			if (hadReset)
 			{
 				// Let the main task invalidate resources before processing new data
-				TaskBase::Take(SbcYieldTimeout);
+				TaskBase::TakeIndexed(NotifyIndices::SbcInterface, SbcYieldTimeout);
 			}
 		}
 
@@ -974,7 +975,7 @@ void SbcInterface::ExchangeData() noexcept
 		!fileOperationPending && fileOperation == FileOperation::none)
 	{
 		delaying = true;
-		if (!TaskBase::Take((numOpenFiles != 0) ? maxFileOpenDelay : maxDelayBetweenTransfers))
+		if (!TaskBase::TakeIndexed(NotifyIndices::SbcInterface, (numOpenFiles != 0) ? maxFileOpenDelay : maxDelayBetweenTransfers))
 		{
 			delaying = false;
 		}
@@ -1676,14 +1677,14 @@ void SbcInterface::CloseFile(FileHandle handle) noexcept
 bool SbcInterface::DoFileOperation(FileOperation f) noexcept
 {
 	fileOperation = f;
-	TaskBase::ClearCurrentTaskNotifyCount();
+	TaskBase::ClearCurrentTaskNotifyCount(NotifyIndices::SbcInterface);
 	fileOperationPending.store(true, std::memory_order_release);
 
 	// Let the SBC task process this request as quickly as possible
 	const bool isDelaying = delaying.exchange(false);
 	if (isDelaying)
 	{
-		sbcTask->Give();
+		sbcTask->Give(NotifyIndices::SbcInterface);
 	}
 
 	const bool rslt = fileSemaphore.Take(SpiMaxRequestTime);
@@ -1817,7 +1818,7 @@ void SbcInterface::EventOccurred(bool timeCritical) noexcept
 		const bool isDelaying = delaying.exchange(false);
 		if (isDelaying)
 		{
-			sbcTask->Give();
+			sbcTask->Give(NotifyIndices::SbcInterface);
 		}
 	}
 }

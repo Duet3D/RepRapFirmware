@@ -7,6 +7,7 @@
 
 #include "I2C.h"
 #include <Platform/Tasks.h>
+#include <AppNotifyIndices.h>
 
 #if defined(I2C_IFACE)
 static bool i2cInitialised = false;
@@ -38,7 +39,7 @@ static TaskHandle twiTask = nullptr;			// the task that is waiting for a TWI com
 extern "C" void WIRE_ISR_HANDLER() noexcept
 {
 	WIRE_INTERFACE->TWI_IDR = 0xFFFFFFFF;
-	TaskBase::GiveFromISR(twiTask);				// wake up the task
+	TaskBase::GiveFromISR(twiTask, NotifyIndices::I2C);		// wake up the task
 	twiTask = nullptr;
 }
 
@@ -53,7 +54,7 @@ uint32_t I2C::statusWaitFunc(Twi *twi, uint32_t bitsToWaitFor) noexcept
 		twi->TWI_IDR = 0xFFFFFFFF;
 		twi->TWI_IER = bitsToWaitFor;
 		NVIC_EnableIRQ(I2C_IRQn);
-		ok = TaskBase::Take(2);
+		ok = TaskBase::TakeIndexed(NotifyIndices::I2C, 2);
 		twiTask = nullptr;
 		twi->TWI_IDR = 0xFFFFFFFF;
 		sr = twi->TWI_SR;

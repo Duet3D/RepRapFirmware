@@ -41,6 +41,7 @@
 #include <Tools/Tool.h>
 #include <Endstops/ZProbe.h>
 #include <Platform/TaskPriorities.h>
+#include <AppNotifyIndices.h>
 
 #if SUPPORT_IOBITS
 # include <Platform/PortControl.h>
@@ -436,7 +437,7 @@ void Move::Exit() noexcept
 		// 3. In order to implement idle timeout, we must wake up regularly anyway, say every half second
 		if (!moveRead && nextPrepareDelay != 0)
 		{
-			TaskBase::Take(min<uint32_t>(nextPrepareDelay, 500));
+			TaskBase::TakeIndexed(NotifyIndices::Move, min<uint32_t>(nextPrepareDelay, 500));
 		}
 	}
 }
@@ -446,7 +447,7 @@ void Move::MoveAvailable() noexcept
 {
 	if (moveTask.IsRunning())
 	{
-		moveTask.Give();
+		moveTask.Give(NotifyIndices::Move);
 	}
 }
 
@@ -1269,7 +1270,7 @@ void Move::WakeMoveTaskFromISR() noexcept
 {
 	if (moveTask.IsRunning())
 	{
-		moveTask.GiveFromISR();
+		moveTask.GiveFromISR(NotifyIndices::Move);
 	}
 }
 
@@ -1298,7 +1299,7 @@ void Move::WakeLaserTask() noexcept
 {
 	if (laserTask != nullptr)
 	{
-		laserTask->Give();
+		laserTask->Give(NotifyIndices::Laser);
 	}
 }
 
@@ -1307,7 +1308,7 @@ void Move::WakeLaserTaskFromISR() noexcept
 {
 	if (laserTask != nullptr)
 	{
-		laserTask->GiveFromISR();
+		laserTask->GiveFromISR(NotifyIndices::Laser);
 	}
 }
 
@@ -1316,7 +1317,7 @@ void Move::LaserTaskRun() noexcept
 	for (;;)
 	{
 		// Sleep until we are woken up by the start of a move
-		(void)TaskBase::Take();
+		(void)TaskBase::TakeIndexed(NotifyIndices::Laser);
 
 		GCodes& gcodes = reprap.GetGCodes();
 		if (probeReadingNeeded)
@@ -1331,7 +1332,7 @@ void Move::LaserTaskRun() noexcept
 			uint32_t ticks;
 			while ((ticks = rings[0].ManageLaserPower()) != 0)
 			{
-				(void)TaskBase::Take(ticks);
+				(void)TaskBase::TakeIndexed(NotifyIndices::Laser, ticks);
 			}
 		}
 # endif
@@ -1342,7 +1343,7 @@ void Move::LaserTaskRun() noexcept
 			uint32_t ticks;
 			while ((ticks = reprap.GetPortControl().UpdatePorts()) != 0)
 			{
-				(void)TaskBase::Take(ticks);
+				(void)TaskBase::TakeIndexed(NotifyIndices::Laser, ticks);
 			}
 # endif
 		}

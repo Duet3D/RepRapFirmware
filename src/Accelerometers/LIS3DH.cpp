@@ -11,6 +11,7 @@
 
 #include <Hardware/IoPorts.h>
 #include <Movement/StepTimer.h>
+#include <AppNotifyIndices.h>
 
 constexpr uint32_t Lis3dSpiTimeout = 25;							// timeout while waiting for the SPI bus
 constexpr uint32_t DataCollectionTimeout = (1000 * 32)/400 + 2;		// timeout whole collecting data, enough to fill the FIFO at 400Hz
@@ -277,7 +278,7 @@ unsigned int LIS3DH::CollectData(const uint16_t **collectedData, uint16_t &dataR
 	taskWaiting = TaskBase::GetCallerTaskHandle();
 	while (!digitalRead(int1Pin))
 	{
-		if (!TaskBase::Take(DataCollectionTimeout))
+		if (!TaskBase::TakeIndexed(NotifyIndices::AccelerometerHardware, DataCollectionTimeout))
 		{
 			return 0;
 		}
@@ -394,7 +395,7 @@ void LIS3DH::Int1Isr() noexcept
 		firstInterruptTime = now;
 	}
 	lastInterruptTime = now;
-	TaskBase::GiveFromISR(taskWaiting);
+	TaskBase::GiveFromISR(taskWaiting, NotifyIndices::AccelerometerHardware);
 	taskWaiting = nullptr;
 }
 
