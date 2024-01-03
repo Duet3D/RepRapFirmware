@@ -13,6 +13,7 @@
 #include <Hardware/I2C.h>
 #include <Platform/TaskPriorities.h>
 #include <Interrupts.h>
+#include <AppNotifyIndices.h>
 
 namespace DuetExpansion
 {
@@ -73,7 +74,7 @@ namespace DuetExpansion
 		if (taskWaiting)
 		{
 			taskWaiting = false;
-			dueXTask->GiveFromISR();
+			dueXTask->GiveFromISR(NotifyIndices::DueX);
 		}
 	}
 
@@ -83,13 +84,13 @@ namespace DuetExpansion
 		for (;;)
 		{
 			taskWaiting = false;						// make sure we are not notified while we do the I2C transaction
-			TaskBase::ClearCurrentTaskNotifyCount();
+			TaskBase::ClearCurrentTaskNotifyCount(NotifyIndices::DueX);
 			dueXnInputBits = dueXnExpander.digitalReadAll();
 			taskWaiting = true;
 			++dueXnReadCount;
 			if (digitalRead(DueX_INT))
 			{
-				(void)TaskBase::Take();
+				(void)TaskBase::TakeIndexed(NotifyIndices::DueX);
 			}
 		}
 	}

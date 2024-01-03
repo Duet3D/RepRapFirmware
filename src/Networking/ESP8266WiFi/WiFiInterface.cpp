@@ -20,6 +20,7 @@
 #include <General/IP4String.h>
 #include "WiFiSocket.h"
 #include <Cache.h>
+#include <AppNotifyIndices.h>
 
 static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and MessageFormats.h don't match");
 
@@ -2265,7 +2266,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 			? WiFiSlowResponseTimeoutMillis : WiFiFastResponseTimeoutMillis);
 	do
 	{
-		if (!TaskBase::Take(timeout))
+		if (!TaskBase::TakeIndexed(NotifyIndices::WiFi, timeout))
 		{
 			if (reprap.Debug(Module::WiFi))
 			{
@@ -2450,7 +2451,7 @@ void WiFiInterface::SpiInterrupt() noexcept
 		{
 			digitalWrite(SamTfrReadyPin, false);						// stop signalling that we are ready for another transfer
 			transferPending = false;
-			TaskBase::GiveFromISR(espWaitingTask);
+			TaskBase::GiveFromISR(espWaitingTask, NotifyIndices::WiFi);
 		}
 	}
 }

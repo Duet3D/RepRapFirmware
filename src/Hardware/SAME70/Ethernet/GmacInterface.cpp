@@ -58,6 +58,7 @@ extern "C" {
 #include <Platform/TaskPriorities.h>
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
+#include <AppNotifyIndices.h>
 
 extern Mutex lwipMutex;
 
@@ -173,7 +174,7 @@ extern "C" void GMAC_Handler() noexcept
 	/* RX interrupts. */
 	if (ul_isr & GMAC_INT_GROUP)
 	{
-		ethernetTask.GiveFromISR();
+		ethernetTask.GiveFromISR(NotifyIndices::EthernetHardware);
 	}
 }
 
@@ -526,7 +527,7 @@ extern "C" [[noreturn]] void gmac_task(void *pvParameters) noexcept
 		}
 
 		// Wait for the RX notification from the ISR
-		TaskBase::Take((ps_gmac_dev->rxPbufsFullyPopulated) ? 1000 : 20);
+		TaskBase::TakeIndexed(NotifyIndices::EthernetHardware, (ps_gmac_dev->rxPbufsFullyPopulated) ? 1000 : 20);
 	}
 }
 

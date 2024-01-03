@@ -371,24 +371,35 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 			break;
 		}
 
-		const char *mutexName = "";
-		if (taskDetails.eCurrentState == esResourceWaiting)
-		{
-			const Mutex *m = Mutex::GetMutexList();
-			while (m != nullptr)
-			{
-				if ((const void *)m == taskDetails.pvResource)
-				{
-					mutexName = m->GetName();
-					break;
-				}
-				m = m->GetNext();
-			}
-		}
-
 		const float cpuPercent = (100 * (float)taskDetails.ulRunTimeCounter)/(float)timeSinceLastCall;
 		totalCpuPercent += cpuPercent;
-		p.MessageF(mtype, " %s(%u,%s%s,%.1f%%,%u)", taskDetails.pcTaskName, (unsigned int)taskDetails.uxCurrentPriority, stateText, mutexName, (double)cpuPercent, (unsigned int)taskDetails.usStackHighWaterMark);
+		String<StringLength50> str;
+		str.printf(" %s(%u,%s", taskDetails.pcTaskName, (unsigned int)taskDetails.uxCurrentPriority, stateText);
+		switch (taskDetails.eCurrentState)
+		{
+		case esResourceWaiting:
+			{
+				const Mutex *m = Mutex::GetMutexList();
+				while (m != nullptr)
+				{
+					if ((const void *)m == taskDetails.pvResource)
+					{
+						str.catf(" %s", m->GetName());
+						break;
+					}
+				}
+			}
+			break;
+
+		case esNotifyWaiting:
+			str.catf(" %" PRIu32, taskDetails.notifyIndex);
+			break;
+
+		default:
+			break;
+		}
+		str.catf(",%.1f%%,%u)", (double)cpuPercent, (unsigned int)taskDetails.usStackHighWaterMark);
+		p.Message(mtype, str.c_str());
 	}
 	p.MessageF(mtype, ", total %.1f%%\nOwned mutexes:", (double)totalCpuPercent);
 

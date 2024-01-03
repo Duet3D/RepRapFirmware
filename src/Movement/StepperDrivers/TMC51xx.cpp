@@ -16,6 +16,7 @@
 #include <Movement/Move.h>
 #include <DmacManager.h>
 #include <Platform/TaskPriorities.h>
+#include <AppNotifyIndices.h>
 #include <General/Portability.h>
 #include <Endstops/Endstop.h>
 
@@ -1190,7 +1191,7 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 #endif
 	dmaFinishedReason = reason;
 	fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
-	tmcTask.GiveFromISR();
+	tmcTask.GiveFromISR(NotifyIndices::Tmc);
 }
 
 extern "C" [[noreturn]] void TmcLoop(void *) noexcept
@@ -1200,7 +1201,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 	{
 		if (driversState == DriversState::noPower)
 		{
-			TaskBase::Take();
+			TaskBase::TakeIndexed(NotifyIndices::Tmc);
 		}
 		else if (driversState == DriversState::notInitialised)
 		{
@@ -1262,7 +1263,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			AtomicCriticalSectionLocker lock2;
 
 			fastDigitalWriteLow(GlobalTmc51xxCSPin);			// set CS low
-			TaskBase::ClearCurrentTaskNotifyCount();
+			TaskBase::ClearCurrentTaskNotifyCount(NotifyIndices::Tmc);
 			EnableEndOfTransferInterrupt();
 			ResetSpi();
 			EnableDma();
@@ -1270,7 +1271,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		}
 
 		// Wait for the end-of-transfer interrupt
-		timedOut = !TaskBase::Take(TransferTimeout);
+		timedOut = !TaskBase::TakeIndexed(NotifyIndices::Tmc, TransferTimeout);
 		DisableEndOfTransferInterrupt();
 		DisableDma();
 
@@ -1500,7 +1501,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 		if (driversState == DriversState::noPower)
 		{
 			driversState = DriversState::notInitialised;
-			tmcTask.Give();									// wake up the TMC task because the drivers need to be initialised
+			tmcTask.Give(NotifyIndices::Tmc);				// wake up the TMC task because the drivers need to be initialised
 		}
 	}
 	else if (driversState != DriversState::shutDown)
