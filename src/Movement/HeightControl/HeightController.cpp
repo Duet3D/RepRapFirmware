@@ -16,6 +16,7 @@
 #include <Heating/Sensors/TemperatureSensor.h>
 #include <Movement/Move.h>
 #include <Platform/TaskPriorities.h>
+#include <AppNotifyIndices.h>
 
 constexpr unsigned int HeightControlMovementSystemNumber = 1;
 
@@ -116,7 +117,7 @@ GCodeResult HeightController::StartHeightFollowing(GCodeBuffer& gb, const String
 			if (state == PidState::stopped)
 			{
 				state = PidState::starting;
-				heightControllerTask->Give();
+				heightControllerTask->Give(NotifyIndices::HeightController);
 			}
 		}
 		else
@@ -145,7 +146,7 @@ void HeightController::Stop() noexcept
 	{
 		if (state == PidState::stopped)
 		{
-			(void)TaskBase::Take();
+			(void)TaskBase::TakeIndexed(NotifyIndices::HeightController);
 
 			// Here when we get woken up again, normally because the state has been changed to 'starting'. So get ready to start.
 			lastWakeTime = xTaskGetTickCount();

@@ -28,6 +28,7 @@ Licence: GPL
 #include <Tools/Tool.h>
 #include <Platform/TaskPriorities.h>
 #include <General/Portability.h>
+#include <AppNotifyIndices.h>
 
 #if SUPPORT_DHT_SENSOR
 # include "Sensors/DhtSensor.h"
@@ -337,7 +338,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 		int32_t delayTime = (int32_t)(nextWakeTime - millis());
 		if (delayTime > 0)
 		{
-			TaskBase::Take((uint32_t)delayTime);
+			TaskBase::TakeIndexed(NotifyIndices::Heat, (uint32_t)delayTime);
 		}
 
 #if SUPPORT_CAN_EXPANSION

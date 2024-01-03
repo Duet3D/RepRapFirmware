@@ -16,6 +16,7 @@
 #include <RTOSIface/RTOSIface.h>
 #include <Platform/TaskPriorities.h>
 #include <Hardware/Spi/SharedSpiDevice.h>
+#include <AppNotifyIndices.h>
 
 #if SUPPORT_CAN_EXPANSION
 # include <CanMessageFormats.h>
@@ -104,7 +105,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 {
 	for (;;)
 	{
-		TaskBase::Take();
+		TaskBase::TakeIndexed(NotifyIndices::AccelerometerDataCollector);
 		FileStore * f = accelerometerFile;			// capture volatile variable
 		if (f != nullptr)
 		{
@@ -502,7 +503,7 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	successfulStart = false;
 	failedStart = false;
 	accelerometerFile = f;
-	accelerometerTask->Give();
+	accelerometerTask->Give(NotifyIndices::AccelerometerDataCollector);
 	const uint32_t startTime = millis();
 	do
 	{
