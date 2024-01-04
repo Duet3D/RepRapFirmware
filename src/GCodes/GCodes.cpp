@@ -173,9 +173,7 @@ void GCodes::Init() noexcept
 	axisLetters[0] = 'X';
 	axisLetters[1] = 'Y';
 	axisLetters[2] = 'Z';
-#if SUPPORT_ASYNC_MOVES
 	allAxisLetters = ParameterLettersToBitmap("XYZ");
-#endif
 
 	numExtruders = 0;
 
@@ -1895,6 +1893,22 @@ bool GCodes::CheckEnoughAxesHomed(AxesBitmap axesToMove) noexcept
 	return (reprap.GetMove().GetKinematics().MustBeHomedAxes(axesToMove, noMovesBeforeHoming) & ~axesVirtuallyHomed).IsNonEmpty();
 }
 
+// Test whether a set of axes and a current Z height involves mesh bed compensation
+// Caller must set up ms.isCoodinated before calling this
+bool GCodes::IsUsingMeshCompensation(const MovementState& ms, ParameterLettersBitmap axesMentioned) const noexcept
+{
+	if ((ms.isCoordinated || machineType == MachineType::fff) && reprap.GetMove().IsUsingMesh())
+	{
+		const GridDefinition& grid = reprap.GetMove().GetGrid();
+		if (axesMentioned.IsAnyBitSet(ParameterLetterToBitNumber(grid.GetAxisLetter(0)), ParameterLetterToBitNumber(grid.GetAxisLetter(1))))
+		{
+			const float taperHeight = reprap.GetMove().GetTaperHeight();
+			return (taperHeight == 0.0 || ms.currentUserPosition[Z_AXIS] < taperHeight);
+		}
+	}
+	return false;
+}
+
 // Execute a straight move. We have already acquired the movement lock and waited for the previous move to be taken.
 // Return false if we can't execute it yet, throw an exception if we can't execute it at all, and return true if we have queued it.
 bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeException)
@@ -1909,6 +1923,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	ms.reduceAcceleration = false;
 	ms.usePressureAdvance = false;
 	ms.scanningProbeMove = false;
+
 	axesToSenseLength.Clear();
 
 	// Check to see if the move is a 'homing' move that endstops are checked on and for which X and Y axis mapping is not applied
@@ -1932,8 +1947,14 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 #if SUPPORT_ASYNC_MOVES
 	// We need to check for moving unowned axes right at the start in case we need to fetch axis positions before processing the command
 	ParameterLettersBitmap axisLettersMentioned = gb.AllParameters() & allAxisLetters;
+	bool meshCompensationInUse;
 	if (ms.moveType == 0)
 	{
+		meshCompensationInUse = IsUsingMeshCompensation(ms, axisLettersMentioned);
+		if (meshCompensationInUse)
+		{
+			axisLettersMentioned.SetBit(ParameterLetterToBitNumber('Z'));		// if we are using mesh compensation then Z will probably be moving
+		}
 		axisLettersMentioned.ClearBits(ms.GetOwnedAxisLetters());
 		if (axisLettersMentioned.IsNonEmpty())
 		{
@@ -1942,6 +1963,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	}
 	else
 	{
+		meshCompensationInUse = false;
 		AllocateAxesDirectFromLetters(gb, ms, axisLettersMentioned);
 	}
 #endif
@@ -2317,8 +2339,10 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 
 			// If we are applying mesh compensation, set the segment size to be smaller than the mesh spacing.
 			// Do not use segmentation if the requested tool Z position is higher than the configured taper height
-			const float taperHeight = reprap.GetMove().GetTaperHeight();
-			if (reprap.GetMove().IsUsingMesh() && (ms.isCoordinated || machineType == MachineType::fff) && (taperHeight == 0.0F || ms.coords[Z_AXIS] < taperHeight))
+#if !SUPPORT_ASYNC_MOVES
+			const bool meshCompensationInUse = IsUsingMeshCompensation(ms, gb.AllParameters() & allAxisLetters);
+#endif
+			if (meshCompensationInUse)
 			{
 				const HeightMap& heightMap = reprap.GetMove().AccessHeightMap();
 				const GridDefinition& grid = heightMap.GetGrid();
@@ -2349,17 +2373,30 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 // If an error occurs, return true with 'err' assigned
 bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 {
+	MovementState& ms = GetMovementState(gb);
+
+	// Set up default move parameters
+	ms.movementTool = ms.currentTool;
+	ms.moveType = 0;
+	ms.isCoordinated = true;													// must set this before calling IsUsingMeshCompensation
+	ms.checkEndstops = false;
+	ms.reduceAcceleration = false;
+	ms.scanningProbeMove = false;
+
 	// The planes are XY, ZX and YZ depending on the G17/G18/G19 setting. We must use ZX instead of XZ to get the correct arc direction.
 	const unsigned int selectedPlane = gb.LatestMachineState().selectedPlane;
 	const unsigned int axis0 = (unsigned int[]){ X_AXIS, Z_AXIS, Y_AXIS }[selectedPlane];
 	const unsigned int axis1 = (axis0 + 1) % 3;
-	MovementState& ms = GetMovementState(gb);
 
 #if SUPPORT_ASYNC_MOVES
 	// We need to check for moving unowned axes right at the start in case we need to fetch axis positions before processing the command
 	ParameterLettersBitmap axisLettersMentioned = gb.AllParameters() & allAxisLetters;
 	axisLettersMentioned.SetBit(ParameterLetterToBitNumber('X') + axis0);		// add in the implicit axes
 	axisLettersMentioned.SetBit(ParameterLetterToBitNumber('X') + axis1);
+	if (IsUsingMeshCompensation(ms, axisLettersMentioned))
+	{
+		axisLettersMentioned.SetBit(ParameterLetterToBitNumber('Z'));			// if we are using mesh compensation then Z will probably be moving
+	}
 	axisLettersMentioned.ClearBits(ms.GetOwnedAxisLetters());
 	if (axisLettersMentioned.IsNonEmpty())
 	{
@@ -2599,14 +2636,6 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	{
 		gb.ThrowGCodeException("outside machine limits");				// abandon the move
 	}
-
-	// Set up default move parameters
-	ms.checkEndstops = false;
-	ms.reduceAcceleration = false;
-	ms.scanningProbeMove = false;
-	ms.isCoordinated = true;
-	ms.moveType = 0;
-	ms.movementTool = ms.currentTool;
 
 	// Set up the arc centre coordinates and record which axes behave like an X axis.
 	// The I and J parameters are always relative to present position.
@@ -5255,6 +5284,7 @@ void GCodes::UpdateAllCoordinates(const GCodeBuffer& gb) noexcept
 {
 	MovementState& ms = GetMovementState(gb);
 	memcpyf(ms.coords, MovementState::GetLastKnownMachinePositions(), MaxAxes);
+	reprap.GetMove().InverseAxisAndBedTransform(ms.coords, ms.currentTool);
 	UpdateUserPositionFromMachinePosition(gb, ms);
 	reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), true);
 }
