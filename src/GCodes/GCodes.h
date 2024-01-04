@@ -510,6 +510,7 @@ private:
 # endif
 #endif
 	void ClearBedMapping() noexcept;																// Stop using bed compensation
+	bool IsUsingMeshCompensation(const MovementState& ms, ParameterLettersBitmap axesMentioned) const noexcept;	// Test whether a set of axes and a current Z height involves mesh bed compensation
 	GCodeResult ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Start probing the grid, returning true if we didn't because of an error
 	ReadLockedPointer<ZProbe> SetZProbeNumber(GCodeBuffer& gb, char probeLetter) THROWS(GCodeException);	// Set up currentZProbeNumber and return the probe
 	GCodeResult ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Probes at a given position - see the comment at the head of the function itself
@@ -677,9 +678,7 @@ private:
 	FileData fileToPrint;						// The next file to print
 #endif
 
-#if SUPPORT_ASYNC_MOVES
 	ParameterLettersBitmap allAxisLetters;		// Which axis letters are in use
-#endif
 	char axisLetters[MaxAxes + 1];				// The names of the axes, with a null terminator
 	bool limitAxes;								// Don't think outside the box
 	bool noMovesBeforeHoming;					// Don't allow movement prior to homing the associates axes
