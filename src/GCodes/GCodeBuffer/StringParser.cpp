@@ -290,6 +290,9 @@ bool StringParser::LineFinished() noexcept
 	{
 		++gb.CurrentFileMachineState().lineNumber;
 	}
+#if SUPPORT_ASYNC_MOVES
+	gb.CurrentFileMachineState().fpos = GetFilePosition();
+#endif
 
 	if (gcodeLineEnd == 0)
 	{
@@ -396,6 +399,9 @@ bool StringParser::CheckMetaCommand(const StringRef& reply) THROWS(GCodeExceptio
 			{
 				// Go back to the start of the loop and re-evaluate the while-part
 				gb.CurrentFileMachineState().lineNumber = gb.GetBlockState().GetLineNumber();
+#if SUPPORT_ASYNC_MOVES
+				gb.CurrentFileMachineState().fpos = gb.GetBlockState().GetFilePosition();
+#endif
 				gb.RestartFrom(gb.GetBlockState().GetFilePosition());
 				Init();
 				return true;
@@ -664,6 +670,9 @@ void StringParser::ProcessContinueCommand() THROWS(GCodeException)
 
 	// Go back to the start of the loop and re-evaluate the while-part
 	gb.CurrentFileMachineState().lineNumber = gb.GetBlockState().GetLineNumber();
+#if SUPPORT_ASYNC_MOVES
+	gb.CurrentFileMachineState().fpos = gb.GetBlockState().GetFilePosition();
+#endif
 	gb.RestartFrom(gb.GetBlockState().GetFilePosition());
 }
 
