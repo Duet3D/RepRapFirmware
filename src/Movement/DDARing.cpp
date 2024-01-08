@@ -136,18 +136,15 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 			return GCodeResult::notFinished;
 		}
 
-		ptrdiff_t memoryNeeded = 0;
 		if (numDdasWanted > numDdasInRing)
 		{
-			memoryNeeded += (numDdasWanted - numDdasInRing) * (sizeof(DDA) + 8);
-		}
-		if (memoryNeeded != 0)
-		{
+			// Use int64_t for the multiplication to guard against overflow (issue 939)
+			int64_t memoryNeeded = (int64_t)(numDdasWanted - numDdasInRing) * (sizeof(DDA) + 8);
 			memoryNeeded += 1024;					// allow some margin
 			const ptrdiff_t memoryAvailable = Tasks::GetNeverUsedRam();
 			if (memoryNeeded >= memoryAvailable)
 			{
-				reply.printf("insufficient RAM (available %d, needed %d)", memoryAvailable, memoryNeeded);
+				reply.printf("insufficient RAM (available %d, needed %" PRIi64 ")", memoryAvailable, memoryNeeded);
 				return GCodeResult::error;
 			}
 

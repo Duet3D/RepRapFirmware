@@ -260,6 +260,8 @@ public:
 	Compatibility compatibility;				// which firmware we are emulating
 
 #if SUPPORT_ASYNC_MOVES
+	FilePosition fpos = noFilePosition;			// the file offset at which the current block started
+
 	void SetCommandedQueue(MovementSystemNumber qn) noexcept { commandedQueueNumber = qn; }
 	MovementSystemNumber GetCommandedQueue() const noexcept { return commandedQueueNumber; }
 	bool Executing() const noexcept { return executeAllCommands || commandedQueueNumber == ownQueueNumber; }

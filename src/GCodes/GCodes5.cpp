@@ -287,17 +287,17 @@ GCodeResult GCodes::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& repl
 	{
 		// For backwards compatibility with old versions of Marlin (e.g. for Cura and the Prusa fork of slic3r), set both accelerations
 		seen = true;
-		ms.maxTravelAcceleration = ms.maxPrintingAcceleration = gb.GetAcceleration();
+		ms.maxTravelAcceleration = ms.maxPrintingAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
 	}
 	if (gb.Seen('P'))
 	{
 		seen = true;
-		ms.maxPrintingAcceleration = gb.GetAcceleration();
+		ms.maxPrintingAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
 	}
 	if (gb.Seen('T'))
 	{
 		seen = true;
-		ms.maxTravelAcceleration = gb.GetAcceleration();
+		ms.maxTravelAcceleration = max<float>(gb.GetAcceleration(), ConvertAcceleration(MinimumAcceleration));
 	}
 	if (seen)
 	{

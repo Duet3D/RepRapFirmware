@@ -393,11 +393,11 @@ bool GCodeBuffer::IsLaterThan(const GCodeBuffer& other) const noexcept
 	bool oursIsLater = false;
 	while (ourState != nullptr)
 	{
-		if (ourState->lineNumber > otherState->lineNumber)
+		if (ourState->fpos > otherState->fpos)
 		{
 			oursIsLater = true;
 		}
-		else if (ourState->lineNumber < otherState->lineNumber)
+		else if (ourState->fpos < otherState->fpos)
 		{
 			oursIsLater = false;
 		}
