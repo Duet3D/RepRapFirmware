@@ -126,14 +126,14 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 			return GCodeResult::notFinished;
 		}
 
-		ptrdiff_t memoryNeeded = 0;
+		int64_t memoryNeeded = 0;										// use int64_t for the multiplication to guard against overflow (issue 939)
 		if (numDdasWanted > numDdasInRing)
 		{
-			memoryNeeded += (numDdasWanted - numDdasInRing) * (sizeof(DDA) + 8);
+			memoryNeeded += (int64_t)(numDdasWanted - numDdasInRing) * (sizeof(DDA) + 8);
 		}
 		if (numDMsWanted > DriveMovement::NumCreated())
 		{
-			memoryNeeded += (numDMsWanted - DriveMovement::NumCreated()) * (sizeof(DriveMovement) + 8);
+			memoryNeeded += (int64_t)(numDMsWanted - DriveMovement::NumCreated()) * (sizeof(DriveMovement) + 8);
 		}
 		if (memoryNeeded != 0)
 		{
@@ -141,7 +141,7 @@ GCodeResult DDARing::ConfigureMovementQueue(GCodeBuffer& gb, const StringRef& re
 			const ptrdiff_t memoryAvailable = Tasks::GetNeverUsedRam();
 			if (memoryNeeded >= memoryAvailable)
 			{
-				reply.printf("insufficient RAM (available %d, needed %d)", memoryAvailable, memoryNeeded);
+				reply.printf("insufficient RAM (available %d, needed %" PRIi64 ")", memoryAvailable, memoryNeeded);
 				return GCodeResult::error;
 			}
 
