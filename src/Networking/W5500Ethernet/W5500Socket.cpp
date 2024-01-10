@@ -224,7 +224,7 @@ void W5500Socket::Poll() noexcept
 				{
 					if (reprap.Debug(Module::Network))
 					{
-						debugPrintf("Timed out waiting for resonder for port %u\n", localPort);
+						debugPrintf("Timed out waiting for responder for port %u\n", localPort);
 					}
 					Terminate();
 				}
