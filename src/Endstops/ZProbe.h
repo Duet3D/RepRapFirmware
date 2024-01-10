@@ -21,7 +21,10 @@ public:
 	virtual GCodeResult AppendPinNames(const StringRef& str) noexcept = 0;		// not const because it may update the state too
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException);		// 'seen' is an in-out parameter
 	virtual GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept;
+
+	// The following should only be called for scanning Z probes, so for other types they return these default values
 	virtual GCodeResult GetCalibratedReading(float& val) const noexcept { return GCodeResult::error; }
+	virtual float GetLatestHeight() const noexcept { return 0.0; }
 
 	// The following should never be called for a non-scanning probe, so by default we just return error with no message
 	virtual GCodeResult CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) { return GCodeResult::error; }
@@ -78,10 +81,12 @@ public:
 	bool WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept;
 #endif
 
-	static constexpr unsigned int MaxTapsLimit = 31;	// must be low enough to fit in the maxTaps field
+	static constexpr unsigned int MaxTapsLimit = 31;			// must be low enough to fit in the maxTaps field
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
+
+	float GetTriggerHeightCompensation() const noexcept;		// return the amount by which the trigger height is increased by temperature compensation
 
 	int32_t targetAdcValue;					// the target ADC value, after inversion if enabled
 	union
