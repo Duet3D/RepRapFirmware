@@ -370,7 +370,7 @@ void WiFiInterface::Init() noexcept
 
 GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
 {
-	if (secure != 0 && secure != -1)
+	if (secure > 0)
 	{
 		reply.copy("Error: this firmware does not support TLS");
 	}
@@ -503,6 +503,12 @@ GCodeResult WiFiInterface::ReportProtocols(const StringRef& reply) const noexcep
 {
 	for (size_t i = 0; i < NumSelectableProtocols; ++i)
 	{
+#if !SUPPORT_MULTICAST_DISCOVERY
+		if (i == MulticastDiscoveryProtocol) { continue; }
+#endif
+#if !SUPPORT_MQTT
+		if (i == MqttProtocol) { continue; }
+#endif
 		ReportOneProtocol(i, reply);
 	}
 	return GCodeResult::ok;
