@@ -60,7 +60,8 @@ const char * const MdnsServiceStrings[NumSelectableProtocols] =
 };
 
 const char * const MdnsTxtRecords[2] = { "product=" FIRMWARE_NAME, "version=" VERSION };
-const unsigned int MdnsTtl = 10 * 60;			// same value as on the Duet 0.6/0.8.5
+constexpr unsigned int MdnsTtl = 10 * 60;			// same value as on the Duet 0.6/0.8.5
+constexpr uint8_t ListenBacklog = 8;
 
 /*-----------------------------------------------------------------------------------*/
 
@@ -226,7 +227,7 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 		else
 		{
 			tcp_bind(pcb, IP_ADDR_ANY, portNumbers[protocol]);
-			pcb = tcp_listen(pcb);
+			pcb = tcp_listen_with_backlog(pcb, ListenBacklog);
 			if (pcb == nullptr)
 			{
 				platform.Message(ErrorMessage, "tcp_listen call failed\n");
@@ -638,7 +639,7 @@ void LwipEthernetInterface::OpenDataPort(TcpPort port) noexcept
 	else
 	{
 		tcp_bind(pcb, IP_ADDR_ANY, port);
-		pcb = tcp_listen(pcb);
+		pcb = tcp_listen_with_backlog(pcb, 0);
 		if (pcb == nullptr)
 		{
 			platform.Message(ErrorMessage, "tcp_listen call failed\n");
