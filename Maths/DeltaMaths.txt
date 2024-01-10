@@ -1,0 +1,91 @@
+Solution of equation for delta motion
+=====================================
+
+Let x = xt + xo + fx*ds, y = yt + yo + fy*dy, h = h0 + dh = f*dz
+
+where xo is the initial X offset from the tower, yo is trhe initial Y offset from the tower,
+ds is the linear distance travelled along the effector with XYZ components fx*ds, fy*dy and fz*dz,
+h0 is the initial carriage height, dh is the change in carriage height required when moving distance ds
+
+Then to solve for ds (the travel along the path) in terms of dh (the travel of the carriage):
+
+ds=(-sqrt(
+		  fy^2*yo^2
+		 +fx^2*xo^2
+		 +fz^2*h0^2
+		 
+		 +2*fx*fy*xo*yo
+		 +2*(-fy*fz*h0-dh*fy*fz)*yo
+		 +2*(-fx*fz*h0-dh*fx*fz)*xo
+		 +2*(-fy^2-fx^2)*dh*h0
+		 
+		 -dh^2*(fx^2+fy^2)
+		)
+	-fy*yo
+	-fx*xo
+	+fz*h0
+	+fz*dh
+   )/(fz^2+fy^2+fx^2)
+
+Splitting this into terms that depend on dh^2, dh and others:
+
+ds=(-sqrt(
+		 -(fx^2+fy^2)           *dh^2
+		 
+		 -2*(fy*yo + fx*xo)*fz  *dh
+		 -2*(fy^2  + fx^2 )*h0  *dh
+		 
+		 +fy^2*yo^2
+		 +fx^2*xo^2
+		 +fz^2*h0^2
+		 
+		 +2*fx*fy*xo*yo
+		 -2*fz*h0*(fy*yo + fx*xo)
+		 
+		)
+	-fy*yo
+	-fx*xo
+	+fz*h0
+	+fz    *dh
+   )/(fz^2+fy^2+fx^2)
+
+Factorising this:
+
+ds=(-sqrt(
+		 -2*(fx^2+fy^2)         *dh^2
+		 
+		 -2*(fy*yo + fx*xo)*fz  *dh
+		 -2*(fy^2  + fx^2 )*h0  *dh
+		 
+		 +(fy*yo + fx*xo - fz*h0)^2
+		)
+	-fy*yo
+	-fx*xo
+	+fz*h0
+	+fz    *dh
+   )/(fz^2+fy^2+fx^2)
+
+This is of the form:
+
+ds = (-sqrt(A * dh^2 + B * dh + C) + D * dh + E)/(fz^2+fy^2+fx^2)
+
+If no other axes are moving, or if we normalise the movement vector so that this holds, then fz^2+fy^2+fx^2 = 1. In that case:
+
+A = -2*(fx^2+fy^2)
+B = A * h0 - 2*(fy*yo + fx*xo)*fz
+C = (fx*xo + fy*yo - fz*h0)^2
+D = fz
+E = fz*h0 - fy*yo - fx*xo
+
+If movement is in the Z direction only then fx and fy are both zero and fz is 1. In that case:
+
+A = 0
+B = 0
+C = h0^2
+D = 1
+E = h0
+
+So in this case, ds = -sqrt(h0^2) + dh + h0 
+                    = dh
+
+D. Crocker, 2024-01-08
