@@ -138,7 +138,7 @@ GCodeResult RemoteZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len
 
 // Functions used only with scanning Z probes
 
-// Get the height compared to the nominal trigger height
+// Fetch a new reading and get the height compared to the nominal trigger height
 GCodeResult RemoteZProbe::GetCalibratedReading(float& val) const noexcept
 {
 	String<1> dummyReply;
@@ -158,6 +158,22 @@ GCodeResult RemoteZProbe::GetCalibratedReading(float& val) const noexcept
 		}
 	}
 	return GCodeResult::error;
+}
+
+// Get the height reading corresponding to the latest reading received. Use to return the height n the object model.
+float RemoteZProbe::GetLatestHeight() const noexcept
+{
+	if (lastValue != 0 && lastValue != ScanningSensorBadReadingVal)		// zero and ScanningSensorBadReadingVal indicate errors reading the probe
+	{
+		const float heightDiff = ConvertReadingToHeightDifference((int32_t)lastValue);
+		if (!std::isnan(heightDiff) && !std::isinf(heightDiff))
+		{
+			// The nominal trigger height is -offsets[Z_AXIS] so we need t add this to heightDiff.
+			// To get a more accurate height, subtract the amount by which the trigger height increases dur to temperature compensation.
+			return heightDiff - offsets[Z_AXIS] - GetTriggerHeightCompensation();
+		}
+	}
+	return 0.0;
 }
 
 // Tell the probe to calibrate its drive level

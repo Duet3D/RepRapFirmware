@@ -66,7 +66,7 @@ constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 		nullptr,
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::scanCoefficients); },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue(((const ZProbe*)self)->scanCoefficients[context.GetLastIndex()], 5); }
+				{ return ExpressionValue(((const ZProbe*)self)->scanCoefficients[context.GetLastIndex()], 7); }
 	},
 	// 5. Dive heights
 	{
@@ -91,6 +91,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "isCalibrated",				OBJECT_MODEL_FUNC_IF(self->IsScanning(), self->isCalibrated), 								ObjectModelEntryFlags::none },
 	{ "lastStopHeight",				OBJECT_MODEL_FUNC(self->lastStopHeight, 3), 												ObjectModelEntryFlags::none },
 	{ "maxProbeCount",				OBJECT_MODEL_FUNC((int32_t)self->misc.parts.maxTaps), 										ObjectModelEntryFlags::none },
+	{ "measuredHeight",				OBJECT_MODEL_FUNC_IF(self->IsScanning() && self->isCalibrated, self->GetLatestHeight()),	ObjectModelEntryFlags::live },
 	{ "offsets",					OBJECT_MODEL_FUNC_ARRAY(0), 																ObjectModelEntryFlags::none },
 	{ "recoveryTime",				OBJECT_MODEL_FUNC(self->recoveryTime, 1), 													ObjectModelEntryFlags::none },
 	{ "scanCoefficients",			OBJECT_MODEL_FUNC_ARRAY_IF(self->IsScanning(), 4), 											ObjectModelEntryFlags::none },
@@ -104,7 +105,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "value",						OBJECT_MODEL_FUNC_ARRAY(3), 																ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 19 };
+constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 20 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ZProbe)
 
@@ -146,7 +147,12 @@ void ZProbe::PrepareForUse(const bool probingAway) noexcept
 	misc.parts.probingAway = probingAway;
 
 	// We can't read temperature sensors from within the step ISR so calculate the actual trigger height now
-	actualTriggerHeight = -offsets[Z_AXIS];
+	actualTriggerHeight = -offsets[Z_AXIS] + GetTriggerHeightCompensation();
+}
+
+// Return the amount by which the trigger height is increased by temperature compensation
+float ZProbe::GetTriggerHeightCompensation() const noexcept
+{
 	if (sensor >= 0)
 	{
 		TemperatureError err(TemperatureError::unknownError);
@@ -154,9 +160,10 @@ void ZProbe::PrepareForUse(const bool probingAway) noexcept
 		if (err == TemperatureError::ok)
 		{
 			const float dt = temperature - calibTemperature;
-			actualTriggerHeight += (dt * temperatureCoefficients[0]) + (fsquare(dt) * temperatureCoefficients[1]);
+			return (dt * temperatureCoefficients[0]) + (fsquare(dt) * temperatureCoefficients[1]);
 		}
 	}
+	return 0.0;
 }
 
 // Get the dive height that is in effect for the next tap
@@ -510,6 +517,7 @@ GCodeResult ZProbe::SetScanningCoefficients(float aParam, float bParam, float cP
 	scanCoefficients[2] = bParam;
 	scanCoefficients[3] =  cParam;
 	isCalibrated = true;
+	reprap.SensorsUpdated();
 	return GCodeResult::ok;
 }
 
@@ -583,6 +591,7 @@ void ZProbe::CalibrateScanningProbe(const int32_t calibrationReadings[], size_t 
 	scanCoefficients[3] = matrix(3, 4);
 	targetAdcValue = referenceReading;
 	isCalibrated = true;
+	reprap.SensorsUpdated();
 	ReportScanningCoefficients(reply);
 
 	// Calculate the RMS error after subtracting the mean error
