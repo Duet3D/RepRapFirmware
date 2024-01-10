@@ -1922,7 +1922,10 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	ms.checkEndstops = false;
 	ms.reduceAcceleration = false;
 	ms.usePressureAdvance = false;
+
+#if SUPPORT_SCANNING_PROBES
 	ms.scanningProbeMove = false;
+#endif
 
 	axesToSenseLength.Clear();
 
@@ -2381,7 +2384,10 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	ms.isCoordinated = true;													// must set this before calling IsUsingMeshCompensation
 	ms.checkEndstops = false;
 	ms.reduceAcceleration = false;
+
+#if SUPPORT_SCANNING_PROBES
 	ms.scanningProbeMove = false;
+#endif
 
 	// The planes are XY, ZX and YZ depending on the G17/G18/G19 setting. We must use ZX instead of XZ to get the correct arc direction.
 	const unsigned int selectedPlane = gb.LatestMachineState().selectedPlane;

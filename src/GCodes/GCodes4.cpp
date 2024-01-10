@@ -732,11 +732,13 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;		// assume that both linear and rotational axes might be moving
 					NewSingleSegmentMoveAvailable(ms);
 
+#if SUPPORT_SCANNING_PROBES
 					if (zp->GetProbeType() == ZProbeType::scanningAnalog)
 					{
 						gb.SetState(GCodeState::gridScanning1);
 					}
 					else
+#endif
 					{
 						InitialiseTaps(false);										// grid probing never does fast-then-slow probing
 						gb.AdvanceState();
@@ -983,6 +985,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		gb.SetState(GCodeState::normal);
 		break;
 
+#if SUPPORT_SCANNING_PROBES
+
 	// States used for grid scanning
 	case GCodeState::gridScanning1:		// Here when we have moved to the first accessible point at the start of a row
 		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
@@ -1113,6 +1117,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 		}
 		break;
+
+#endif
 
 	// States used for G30 probing
 	case GCodeState::probingAtPoint0:
@@ -1526,6 +1532,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		break;
 
+#if SUPPORT_SCANNING_PROBES
+
 	// Scanning probe calibration states
 	case GCodeState::probeCalibration1:
 		// We just deployed the Z probe, read to start calibrating. Move t the trigger height plus the scanning range.
@@ -1595,6 +1603,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		}
 		gb.SetState(GCodeState::normal);
 		break;
+
+#endif
 
 	// Firmware retraction/un-retraction states
 	case GCodeState::doingFirmwareRetraction:

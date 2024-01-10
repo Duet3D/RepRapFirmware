@@ -156,6 +156,8 @@ void GCodes::InitialiseTaps(bool fastThenSlow) noexcept
 	g30zHeightErrorLowestDiff = 1000.0;
 }
 
+#if SUPPORT_SCANNING_PROBES
+
 // Take and store a reading from a scanning Z probe. Called by the Laser task.
 void GCodes::TakeScanningProbeReading() noexcept
 {
@@ -188,6 +190,8 @@ void GCodes::TakeScanningProbeReading() noexcept
 		}
 	}
 }
+
+#endif
 
 // Define the probing grid, called when we see an M557 command
 GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
@@ -838,6 +842,8 @@ void GCodes::SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept
 	NewSingleSegmentMoveAvailable(ms);
 }
 
+#if SUPPORT_SCANNING_PROBES
+
 // Calibrate height vs. reading for a scanning Z probe. We have already checked the probe is a scanning one and that scanningRange is a sensible value.
 GCodeResult GCodes::HandleM558Point1or2(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException)
 {
@@ -899,6 +905,8 @@ GCodeResult GCodes::HandleM558Point1or2(GCodeBuffer& gb, const StringRef &reply,
 	// Else must be M558.2: Calibrate drive level
 	return zp->CalibrateDriveLevel(gb, reply);
 }
+
+#endif
 
 // Decode whether we have done enough taps and will accept the reading. Sets member variable acceptReading accordingly.
 // Returns true if we need to give a "Z probe readings not consistent" warning.

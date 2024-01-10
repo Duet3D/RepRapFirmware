@@ -327,7 +327,13 @@ void Move::Exit() noexcept
 					{
 						if (nextMove.moveType == 0)
 						{
-							AxisAndBedTransform(nextMove.coords, nextMove.movementTool, !nextMove.scanningProbeMove);
+							AxisAndBedTransform(nextMove.coords, nextMove.movementTool,
+#if SUPPORT_SCANNING_PROBES
+													!nextMove.scanningProbeMove
+#else
+													true
+#endif
+													);
 						}
 
 						if (rings[0].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
@@ -1320,13 +1326,17 @@ void Move::LaserTaskRun() noexcept
 		(void)TaskBase::TakeIndexed(NotifyIndices::Laser);
 
 		GCodes& gcodes = reprap.GetGCodes();
+#if SUPPORT_SCANNING_PROBES
 		if (probeReadingNeeded)
 		{
 			probeReadingNeeded = false;
 			gcodes.TakeScanningProbeReading();
 		}
+		else
+#endif
+
 # if SUPPORT_LASER
-		else if (gcodes.GetMachineType() == MachineType::laser)
+			if (gcodes.GetMachineType() == MachineType::laser)
 		{
 			// Manage the laser power
 			uint32_t ticks;

@@ -22,12 +22,14 @@ public:
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException);		// 'seen' is an in-out parameter
 	virtual GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept;
 
+#if SUPPORT_SCANNING_PROBES
 	// The following should only be called for scanning Z probes, so for other types they return these default values
 	virtual GCodeResult GetCalibratedReading(float& val) const noexcept { return GCodeResult::error; }
 	virtual float GetLatestHeight() const noexcept { return 0.0; }
 
 	// The following should never be called for a non-scanning probe, so by default we just return error with no message
 	virtual GCodeResult CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) { return GCodeResult::error; }
+#endif
 
 #if SUPPORT_CAN_EXPANSION
 	// Process a remote input change that relates to this Z probe
@@ -70,12 +72,14 @@ public:
 	void SetDeployedByUser(bool b) noexcept { isDeployedByUser = b; }
 	void SetLastStoppedHeight(float h) noexcept;
 
+#if SUPPORT_SCANNING_PROBES
 	// Scanning Z probe support
 	bool IsScanning() const noexcept { return type == ZProbeType::scanningAnalog; }			// this is currently the only type of scanning probe we support
 	GCodeResult SetScanningCoefficients(float aParam, float bParam, float cParam) noexcept;
 	GCodeResult ReportScanningCoefficients(const StringRef& reply) noexcept;
 	void CalibrateScanningProbe(const int32_t calibrationReadings[], size_t numCalibrationReadingsTaken, float heightChangePerPoint, const StringRef& reply) noexcept;
 	float ConvertReadingToHeightDifference(int32_t reading) const noexcept;
+#endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept;
@@ -111,9 +115,11 @@ protected:
 	float actualTriggerHeight;			// the actual trigger height of the probe, taking account of the temperature coefficient
 	float lastStopHeight;				// the height at which the last G30 probe move stopped
 
+#if SUPPORT_SCANNING_PROBES
 	// Scanning support
 	float scanCoefficients[4];
 	bool isCalibrated = false;
+#endif
 
 	uint8_t number;
 	ZProbeType type;

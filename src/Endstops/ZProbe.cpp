@@ -61,20 +61,22 @@ constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 								);
 					}
 	},
-	// 4. Scanning probe coefficients
+	// 4. Dive heights
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::diveHeights); },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return ExpressionValue(((const ZProbe*)self)->diveHeights[context.GetLastIndex()], 1); }
+	},
+#if SUPPORT_SCANNING_PROBES
+	// 5. Scanning probe coefficients
 	{
 		nullptr,
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::scanCoefficients); },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 				{ return ExpressionValue(((const ZProbe*)self)->scanCoefficients[context.GetLastIndex()], 7); }
 	},
-	// 5. Dive heights
-	{
-		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::diveHeights); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
-				{ return ExpressionValue(((const ZProbe*)self)->diveHeights[context.GetLastIndex()], 1); }
-	}
+#endif
 };
 
 DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(ZProbe)
@@ -87,14 +89,20 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "deployedByUser",				OBJECT_MODEL_FUNC(self->isDeployedByUser), 													ObjectModelEntryFlags::none },
 	{ "disablesHeaters",			OBJECT_MODEL_FUNC((bool)self->misc.parts.turnHeatersOff), 									ObjectModelEntryFlags::none },
 	{ "diveHeight",					OBJECT_MODEL_FUNC(self->diveHeights[0], 1), 												ObjectModelEntryFlags::obsolete },
-	{ "diveHeights",				OBJECT_MODEL_FUNC_ARRAY(5), 																ObjectModelEntryFlags::none },
+	{ "diveHeights",				OBJECT_MODEL_FUNC_ARRAY(4), 																ObjectModelEntryFlags::none },
+#if SUPPORT_SCANNING_PROBES
 	{ "isCalibrated",				OBJECT_MODEL_FUNC_IF(self->IsScanning(), self->isCalibrated), 								ObjectModelEntryFlags::none },
+#endif
 	{ "lastStopHeight",				OBJECT_MODEL_FUNC(self->lastStopHeight, 3), 												ObjectModelEntryFlags::none },
 	{ "maxProbeCount",				OBJECT_MODEL_FUNC((int32_t)self->misc.parts.maxTaps), 										ObjectModelEntryFlags::none },
+#if SUPPORT_SCANNING_PROBES
 	{ "measuredHeight",				OBJECT_MODEL_FUNC_IF(self->IsScanning() && self->isCalibrated, self->GetLatestHeight()),	ObjectModelEntryFlags::live },
+#endif
 	{ "offsets",					OBJECT_MODEL_FUNC_ARRAY(0), 																ObjectModelEntryFlags::none },
 	{ "recoveryTime",				OBJECT_MODEL_FUNC(self->recoveryTime, 1), 													ObjectModelEntryFlags::none },
-	{ "scanCoefficients",			OBJECT_MODEL_FUNC_ARRAY_IF(self->IsScanning(), 4), 											ObjectModelEntryFlags::none },
+#if SUPPORT_SCANNING_PROBES
+	{ "scanCoefficients",			OBJECT_MODEL_FUNC_ARRAY_IF(self->IsScanning(), 5), 											ObjectModelEntryFlags::none },
+#endif
 	{ "speeds",						OBJECT_MODEL_FUNC_ARRAY(1), 																ObjectModelEntryFlags::none },
 	{ "temperatureCoefficients",	OBJECT_MODEL_FUNC_ARRAY(2), 																ObjectModelEntryFlags::none },
 	{ "threshold",					OBJECT_MODEL_FUNC((int32_t)self->targetAdcValue), 											ObjectModelEntryFlags::none },
@@ -105,7 +113,7 @@ constexpr ObjectModelTableEntry ZProbe::objectModelTable[] =
 	{ "value",						OBJECT_MODEL_FUNC_ARRAY(3), 																ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 20 };
+constexpr uint8_t ZProbe::objectModelTableDescriptor[] = { 1, 17 + 3 * SUPPORT_SCANNING_PROBES };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(ZProbe)
 
@@ -509,6 +517,8 @@ void ZProbe::SetLastStoppedHeight(float h) noexcept
 	reprap.SensorsUpdated();
 }
 
+#if SUPPORT_SCANNING_PROBES
+
 // Scanning support
 GCodeResult ZProbe::SetScanningCoefficients(float aParam, float bParam, float cParam) noexcept
 {
@@ -617,5 +627,7 @@ void ZProbe::CalibrateScanningProbe(const int32_t calibrationReadings[], size_t 
 	reply.catf(", reading at trigger height %" PRIi32 ", rms error %.3fmm",
 					referenceReading, (double)sqrtf(sumOfErrorSquares/(float)numCalibrationReadingsTaken));
 }
+
+#endif
 
 // End

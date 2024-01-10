@@ -531,11 +531,14 @@ void DDARing::Interrupt(Platform& p) noexcept
 void DDARing::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 {
 	bool wakeLaserTask = false;
+
+#if SUPPORT_SCANNING_PROBES
 	if (cdda->IsScanningProbeMove())
 	{
 		reprap.GetMove().SetProbeReadingNeeded();
 		wakeLaserTask = true;						// wake the laser task to take a reading
 	}
+#endif
 
 	// The following finish time is wrong if we aborted the move because of endstop or Z probe checks.
 	// However, following a move that checks endstops or the Z probe, we always wait for the move to complete before we schedule another, so this doesn't matter.
