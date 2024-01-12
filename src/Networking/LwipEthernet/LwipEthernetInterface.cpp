@@ -305,28 +305,6 @@ void LwipEthernetInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 	}
 }
 
-// Report the protocols and ports in use
-GCodeResult LwipEthernetInterface::ReportProtocols(const StringRef& reply) const noexcept
-{
-	for (size_t i = 0; i < NumSelectableProtocols; ++i)
-	{
-		ReportOneProtocol(i, reply);
-	}
-	return GCodeResult::ok;
-}
-
-void LwipEthernetInterface::ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
-{
-	if (protocolEnabled[protocol])
-	{
-		reply.lcatf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
-	}
-	else
-	{
-		reply.lcatf("%s is disabled", ProtocolNames[protocol]);
-	}
-}
-
 // This is called at the end of config.g processing.
 // Start the network if it was enabled
 void LwipEthernetInterface::Activate() noexcept

@@ -30,7 +30,7 @@ public:
 
 	virtual GCodeResult EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept = 0;
 	virtual GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown = true) noexcept = 0;
-	virtual GCodeResult ReportProtocols(const StringRef& reply) const noexcept = 0;
+	GCodeResult ReportProtocols(const StringRef& reply) const noexcept;
 
 	virtual IPAddress GetIPAddress() const noexcept = 0;
 	virtual IPAddress GetNetmask() const noexcept = 0;
@@ -51,6 +51,8 @@ protected:
 	NetworkState::RawType GetState() const noexcept { return state.RawValue(); }
 	void SetState(NetworkState::RawType newState) noexcept;
 	const char *GetStateName() const noexcept { return state.ToString(); }
+	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
+		pre(protocol < NumSelectableProtocols);
 
 	TcpPort portNumbers[NumSelectableProtocols];					// port number used for each protocol
 	bool protocolEnabled[NumSelectableProtocols];				// whether each protocol is enabled

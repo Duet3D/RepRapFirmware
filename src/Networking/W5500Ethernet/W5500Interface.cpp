@@ -134,28 +134,6 @@ GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const Stri
 	return GCodeResult::error;
 }
 
-// Report the protocols and ports in use
-GCodeResult W5500Interface::ReportProtocols(const StringRef& reply) const noexcept
-{
-	for (size_t i = 0; i < NumSelectableProtocols; ++i)
-	{
-		ReportOneProtocol(i, reply);
-	}
-	return GCodeResult::ok;
-}
-
-void W5500Interface::ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
-{
-	if (protocolEnabled[protocol])
-	{
-		reply.lcatf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
-	}
-	else
-	{
-		reply.lcatf("%s is disabled", ProtocolNames[protocol]);
-	}
-}
-
 // This is called at the end of config.g processing.
 // Start the network if it was enabled
 void W5500Interface::Activate() noexcept

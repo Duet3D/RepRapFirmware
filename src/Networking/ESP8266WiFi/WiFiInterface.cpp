@@ -498,34 +498,6 @@ void WiFiInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 	}
 }
 
-// Report the protocols and ports in use
-GCodeResult WiFiInterface::ReportProtocols(const StringRef& reply) const noexcept
-{
-	for (size_t i = 0; i < NumSelectableProtocols; ++i)
-	{
-#if !SUPPORT_MULTICAST_DISCOVERY
-		if (i == MulticastDiscoveryProtocol) { continue; }
-#endif
-#if !SUPPORT_MQTT
-		if (i == MqttProtocol) { continue; }
-#endif
-		ReportOneProtocol(i, reply);
-	}
-	return GCodeResult::ok;
-}
-
-void WiFiInterface::ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
-{
-	if (protocolEnabled[protocol])
-	{
-		reply.lcatf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
-	}
-	else
-	{
-		reply.lcatf("%s is disabled", ProtocolNames[protocol]);
-	}
-}
-
 NetworkProtocol WiFiInterface::GetProtocolByLocalPort(TcpPort port) const noexcept
 {
 	if (port == ftpDataPort)
