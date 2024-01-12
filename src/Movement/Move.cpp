@@ -1324,8 +1324,9 @@ void Move::LaserTaskRun() noexcept
 	{
 		// Sleep until we are woken up by the start of a move
 		(void)TaskBase::TakeIndexed(NotifyIndices::Laser);
-
+#if SUPPORT_SCANNING_PROBES || SUPPORT_LASER
 		GCodes& gcodes = reprap.GetGCodes();
+#endif
 #if SUPPORT_SCANNING_PROBES
 		if (probeReadingNeeded)
 		{
@@ -1345,8 +1346,8 @@ void Move::LaserTaskRun() noexcept
 				(void)TaskBase::TakeIndexed(NotifyIndices::Laser, ticks);
 			}
 		}
-# endif
 		else
+# endif
 		{
 # if SUPPORT_IOBITS
 			// Manage the IOBits
