@@ -29,7 +29,6 @@ public:
 	virtual bool IsWiFiInterface() const noexcept = 0;
 
 	virtual GCodeResult EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept = 0;
-	virtual bool IsProtocolEnabled(NetworkProtocol protocol) noexcept { return protocolEnabled[protocol]; }
 	virtual TcpPort GetProtocolPort(NetworkProtocol protocol) noexcept { return portNumbers[protocol]; }
 	virtual GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown = true) noexcept = 0;
 	virtual GCodeResult ReportProtocols(const StringRef& reply) const noexcept = 0;

@@ -115,11 +115,6 @@ GCodeResult W5500Interface::EnableProtocol(NetworkProtocol protocol, int port, u
 	return GCodeResult::error;
 }
 
-bool W5500Interface::IsProtocolEnabled(NetworkProtocol protocol) noexcept
-{
-	return (protocol < NumSelectableProtocols) ? protocolEnabled[protocol] : false;
-}
-
 GCodeResult W5500Interface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown) noexcept
 {
 	if (protocol < NumSelectableProtocols)
