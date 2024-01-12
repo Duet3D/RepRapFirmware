@@ -60,7 +60,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: "Duet3D/FreeRTOS"
-          ref: "3.4-dev"
+          ref: "3.5-dev"
           path: "./FreeRTOS"
 
       - name: "Check out Qfplib-M0-full"
