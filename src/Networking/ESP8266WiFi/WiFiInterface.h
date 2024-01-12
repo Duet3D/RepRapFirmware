@@ -61,8 +61,6 @@ public:
 	void Stop() noexcept;
 
 	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
-	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept override;
-	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown = true) noexcept override;
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
 	int EnableState() const noexcept override;
@@ -96,6 +94,12 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL
 
+	// Disable a network protocol that is enabled. If 'permanent' is true we will leave this protocol disables, otherwise we are about to re-enable it with different parameters.
+	void IfaceStartProtocol(NetworkProtocol protocol) noexcept override;
+
+	// Enable a network protocol that is currently disabled
+	void IfaceShutdownProtocol(NetworkProtocol protocol, bool permanent) noexcept override;
+
 private:
 	void InitSockets() noexcept;
 	void TerminateSockets() noexcept;
@@ -104,12 +108,8 @@ private:
 
 	// Protocol socket operations - listen for incoming connections,
 	// create outgoing connection, kill existing listeners & connections.
-	void ListenProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumSelectableProtocols);
 	void ConnectProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumSelectableProtocols);
-	void ShutdownProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumSelectableProtocols);
+		pre(protocol < NumSelectableProtocols);
 
 	NetworkProtocol GetProtocolByLocalPort(TcpPort port) const noexcept;
 
@@ -149,11 +149,8 @@ private:
 	WiFiSocket *sockets[NumWiFiTcpSockets];
 	size_t currentSocket;
 
-	uint32_t ipAddresses[NumSelectableProtocols];
-	TcpPort portNumbers[NumSelectableProtocols];				// port number used for each protocol
 	TcpPort ftpDataPort;
 	bool closeDataPort;
-	bool protocolEnabled[NumSelectableProtocols];				// whether each protocol is enabled
 
 	WiFiState requestedMode;
 	WiFiState currentMode;

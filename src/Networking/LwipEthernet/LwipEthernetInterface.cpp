@@ -106,13 +106,6 @@ LwipEthernetInterface::LwipEthernetInterface(Platform& p) noexcept
 	{
 		sockets[i] = new LwipSocket(this);
 	}
-
-	// Initialise default ports
-	for (size_t i = 0; i < NumSelectableProtocols; ++i)
-	{
-		portNumbers[i] = DefaultPortNumbers[i];
-		protocolEnabled[i] = (i == HttpProtocol);
-	}
 }
 
 #if SUPPORT_OBJECT_MODEL
@@ -144,7 +137,6 @@ DEFINE_GET_OBJECT_MODEL_TABLE(LwipEthernetInterface)
 void LwipEthernetInterface::Init() noexcept
 {
 	interfaceMutex.Create("LwipIface");
-	//TODO we don't yet use this mutex anywhere!
 
 	lwipMutex.Create("LwipCore");
 
@@ -157,58 +149,19 @@ void LwipEthernetInterface::Init() noexcept
 	macAddress = platform.GetDefaultMacAddress();
 }
 
-GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
+void LwipEthernetInterface::IfaceStartProtocol(NetworkProtocol protocol) noexcept
 {
-	if (secure != 0 && secure != -1)
-	{
-		reply.copy("this firmware does not support TLS");
-		return GCodeResult::error;
-	}
-
-	if (protocol < NumSelectableProtocols)
-	{
-		const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
-		if (portToUse != portNumbers[protocol] && GetState() == NetworkState::active)
-		{
-			// We need to shut down and restart the protocol if it is active because the port number has changed
-			ShutdownProtocol(protocol);
-			protocolEnabled[protocol] = false;
-		}
-		portNumbers[protocol] = portToUse;
-		if (!protocolEnabled[protocol])
-		{
-			// Enable the corresponding socket
-			protocolEnabled[protocol] = true;
-			if (GetState() == NetworkState::active)
-			{
-				StartProtocol(protocol);
-				RebuildMdnsServices();
-			}
-		}
-
-		ReportOneProtocol(protocol, reply);
-		return GCodeResult::ok;
-	}
-
-	reply.copy("Invalid protocol parameter");
-	return GCodeResult::error;
+	StartProtocol(protocol);
+	RebuildMdnsServices();
 }
 
-GCodeResult LwipEthernetInterface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown) noexcept
+void LwipEthernetInterface::IfaceShutdownProtocol(NetworkProtocol protocol, bool permanent) noexcept
 {
-	if (protocol < NumSelectableProtocols)
+	ShutdownProtocol(protocol);
+	if (permanent)
 	{
-		if (shutdown && GetState() == NetworkState::active)
-		{
-			ShutdownProtocol(protocol);
-		}
-		protocolEnabled[protocol] = false;
-		ReportOneProtocol(protocol, reply);
-		return GCodeResult::ok;
+		RebuildMdnsServices();
 	}
-
-	reply.copy("Invalid protocol parameter");
-	return GCodeResult::error;
 }
 
 void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept

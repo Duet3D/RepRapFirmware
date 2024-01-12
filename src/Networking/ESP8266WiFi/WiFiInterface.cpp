@@ -303,13 +303,6 @@ WiFiInterface::WiFiInterface(Platform& p) noexcept
 		skt = new WiFiSocket(this);
 	}
 
-	for (size_t i = 0; i < NumSelectableProtocols; ++i)
-	{
-		ipAddresses[i] = AnyIp;
-		portNumbers[i] = DefaultPortNumbers[i];
-		protocolEnabled[i] = (i == HttpProtocol);
-	}
-
 	actualSsid.copy("(unknown)");
 	wiFiServerVersion.copy("(unknown)");
 
@@ -368,67 +361,8 @@ void WiFiInterface::Init() noexcept
 	currentSocket = 0;
 }
 
-GCodeResult WiFiInterface::EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
+void WiFiInterface::IfaceStartProtocol(NetworkProtocol protocol) noexcept
 {
-	if (secure > 0)
-	{
-		reply.copy("Error: this firmware does not support TLS");
-	}
-	else if (protocol < NumSelectableProtocols)
-	{
-		const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
-		MutexLocker lock(interfaceMutex);
-
-		if ((portToUse != portNumbers[protocol] || ip != ipAddresses[protocol]) && GetState() == NetworkState::active)
-		{
-			// We need to shut down and restart the protocol if it is active because the port number has changed.
-			// Note that clients will probably be unable to close their connections gracefully.
-			ShutdownProtocol(protocol);
-			protocolEnabled[protocol] = false;
-		}
-		ipAddresses[protocol] = ip;
-		portNumbers[protocol] = portToUse;
-		if (!protocolEnabled[protocol])
-		{
-			protocolEnabled[protocol] = true;
-			if (GetState() == NetworkState::active)
-			{
-				// Only start listeners here, connection requests for clients are made in the main loop.
-				ListenProtocol(protocol);
-				// mDNS announcement is done by the WiFi Server firmware
-			}
-		}
-		ReportOneProtocol(protocol, reply);
-		return GCodeResult::ok;
-	}
-
-	reply.copy("Invalid protocol parameter");
-	return GCodeResult::error;
-}
-
-GCodeResult WiFiInterface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown) noexcept
-{
-	if (protocol < NumSelectableProtocols)
-	{
-		MutexLocker lock(interfaceMutex);
-
-		if (shutdown && GetState() == NetworkState::active)
-		{
-			ShutdownProtocol(protocol);
-		}
-		protocolEnabled[protocol] = false;
-		ReportOneProtocol(protocol, reply);
-		return GCodeResult::ok;
-	}
-
-	reply.copy("Invalid protocol parameter");
-	return GCodeResult::error;
-}
-
-void WiFiInterface::ListenProtocol(NetworkProtocol protocol) noexcept
-{
-	MutexLocker lock(interfaceMutex);
-
 	switch(protocol)
 	{
 	case HttpProtocol:
@@ -446,27 +380,11 @@ void WiFiInterface::ListenProtocol(NetworkProtocol protocol) noexcept
 	default:
 		break;
 	}
+	// mDNS announcement is done by the WiFi Server firmware
 }
 
-void WiFiInterface::ConnectProtocol(NetworkProtocol protocol) noexcept
+void WiFiInterface::IfaceShutdownProtocol(NetworkProtocol protocol, bool permanent) noexcept
 {
-	MutexLocker lock(interfaceMutex);
-
-	switch(protocol)
-	{
-	case MqttProtocol:
-		SendConnectCommand(portNumbers[protocol], protocol, ipAddresses[protocol]);
-		break;
-
-	default:
-		break;
-	}
-}
-
-void WiFiInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
-{
-	MutexLocker lock(interfaceMutex);
-
 	switch(protocol)
 	{
 	case HttpProtocol:
@@ -491,6 +409,21 @@ void WiFiInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 
 	case MqttProtocol:
 		TerminateSockets(portNumbers[protocol], false);
+		break;
+
+	default:
+		break;
+	}
+}
+
+void WiFiInterface::ConnectProtocol(NetworkProtocol protocol) noexcept
+{
+	MutexLocker lock(interfaceMutex);
+
+	switch(protocol)
+	{
+	case MqttProtocol:
+		SendConnectCommand(portNumbers[protocol], protocol, ipAddresses[protocol]);
 		break;
 
 	default:
@@ -1728,11 +1661,13 @@ GCodeResult WiFiInterface::SetMacAddress(const MacAddress& mac, const StringRef&
 
 void WiFiInterface::InitSockets() noexcept
 {
+	MutexLocker lock(interfaceMutex);
+
 	for (size_t i = 0; i < NumSelectableProtocols; ++i)
 	{
 		if (protocolEnabled[i])
 		{
-			ListenProtocol(i);
+			IfaceStartProtocol(i);
 		}
 	}
 	currentSocket = 0;
