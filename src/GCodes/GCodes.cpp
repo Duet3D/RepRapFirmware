@@ -5070,7 +5070,7 @@ bool GCodes::CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply,
 	if (reprap.UsingSbcInterface())
 	{
 		// Networking is disabled when using the SBC interface, to save RAM
-		reply.copy("Network-related commands are not supported when using an attached Single Board Computer");
+		reply.copy("On-board firmware cannot process network-related commands when using an attached Single Board Computer");
 		result = GCodeResult::error;
 		return false;
 	}
