@@ -197,7 +197,7 @@ void W5500Socket::Poll() noexcept
 			break;
 
 		case SOCK_UDP:					// Socket is ready to receive UDP data
-			ReceiveData();
+			(void)ReceiveData();
 			break;
 
 		case SOCK_LISTEN:				// Socket is listening but no client has connected to it yet
@@ -233,16 +233,22 @@ void W5500Socket::Poll() noexcept
 			if (state == SocketState::connected)
 			{
 				// See if the socket has received any data
-				ReceiveData();
+				(void)ReceiveData();
 			}
 			break;
 
 		case SOCK_CLOSE_WAIT:			// A client has asked to disconnect
-			// Check for further incoming packets before this socket is finally closed.
-			// This must be done to ensure that FTP uploads are not cut off.
-			ReceiveData();
-
-			state = SocketState::peerDisconnecting;
+			// Check for further incoming packets before this socket is finally closed. This must be done to ensure that FTP uploads are not cut off.
+			if (ReceiveData())
+			{
+				state = SocketState::peerDisconnecting;
+			}
+			else
+			{
+				// Occasionally sockets got stuck in the peerDisconnecting state. Try force-closing the socket if there is no more data.
+				ExecCommand(socketNum, Sn_CR_DISCON);
+				state = SocketState::closing;
+			}
 			break;
 
 		case SOCK_CLOSED:
@@ -255,8 +261,8 @@ void W5500Socket::Poll() noexcept
 	}
 }
 
-// Try to receive more incoming data from the socket. The mutex is already owned.
-void W5500Socket::ReceiveData() noexcept
+// Try to receive more incoming data from the socket. The mutex is already owned. Return true if we received any data.
+bool W5500Socket::ReceiveData() noexcept
 {
 	const uint16_t len = getSn_RX_RSR(socketNum);
 	if (len != 0 && len <= NetworkBuffer::bufferSize)
@@ -291,7 +297,9 @@ void W5500Socket::ReceiveData() noexcept
 			}
 		}
 //		else debugPrintf("no buffer\n");
+		return true;
 	}
+	return false;
 }
 
 // Discard any received data for this transaction. The mutex is already owned.
