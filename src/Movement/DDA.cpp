@@ -17,9 +17,6 @@
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanMotion.h>
-#endif
-
-#if SUPPORT_REMOTE_COMMANDS
 # include <CAN/CanInterface.h>
 #endif
 
@@ -1641,7 +1638,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 			// This is especially important when using CAN-connected motors or endstops, because we rely on receiving "endstop changed" messages.
 			// Moves that check endstops are always run as isolated moves, so there can be no move in progress and the endstops must already be primed.
 			platform.EnableAllSteppingDrivers();
-			CheckEndstops(platform);									// this may modify pending CAN moves, and may set status 'completed'
+			(void)CheckEndstops(platform);									// this may modify pending CAN moves, and may set status 'completed'
 		}
 
 #if SUPPORT_CAN_EXPANSION
@@ -1815,9 +1812,18 @@ float DDA::NormaliseLinearMotion(AxesBitmap linearAxes) noexcept
 
 // Check the endstops, given that we know that this move checks endstops.
 // Either this move is currently executing (DDARing.currentDDA == this) and the state is 'executing', or we have almost finished preparing it and the state is 'provisional'.
+// In the first case we may be called from the step ISR or from EndstopsManager::OnEndstopOrZProbeStatesChanged
+#if SUPPORT_CAN_EXPANSION
+// Returns true if the caller needs to wake the async sender task because CAN-connected drivers need to be stopped
+bool DDA::CheckEndstops(Platform& platform) noexcept
+#else
 void DDA::CheckEndstops(Platform& platform) noexcept
+#endif
 {
-	for (;;)
+#if SUPPORT_CAN_EXPANSION
+	bool wakeAsyncSender = false;
+#endif
+	while (true)
 	{
 		const EndstopHitDetails hitDetails = platform.GetEndstops().CheckEndstops();
 		switch (hitDetails.GetAction())
@@ -1825,7 +1831,7 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 		case EndstopHitAction::stopAll:
 			MoveAborted();											// set the state to completed and recalculate the endpoints
 #if SUPPORT_CAN_EXPANSION
-			CanMotion::StopAll(*this);
+			if (CanMotion::StopAll(*this)) { wakeAsyncSender = true; }
 #endif
 			if (hitDetails.isZProbe)
 			{
@@ -1841,12 +1847,16 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 				reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, true, platform.GetDriveStepsPerUnit(), *this);
 				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
 			}
+#if SUPPORT_CAN_EXPANSION
+			return wakeAsyncSender;
+#else
 			return;
+#endif
 
 		case EndstopHitAction::stopAxis:
 			StopDrive(hitDetails.axis);								// we must stop the drive before we mess with its coordinates
 #if SUPPORT_CAN_EXPANSION
-			CanMotion::StopAxis(*this, hitDetails.axis);
+			if (CanMotion::StopAxis(*this, hitDetails.axis)) { wakeAsyncSender = true; }
 #endif
 			if (hitDetails.setAxisLow)
 			{
@@ -1864,7 +1874,7 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 #if SUPPORT_CAN_EXPANSION
 			if (hitDetails.driver.IsRemote())
 			{
-				CanMotion::StopDriver(*this, hitDetails.axis, hitDetails.driver);
+				if (CanMotion::StopDriver(*this, hitDetails.axis, hitDetails.driver)) { wakeAsyncSender = true; }
 			}
 			else
 #endif
@@ -1884,7 +1894,11 @@ void DDA::CheckEndstops(Platform& platform) noexcept
 			break;
 
 		default:
+#if SUPPORT_CAN_EXPANSION
+			return wakeAsyncSender;
+#else
 			return;
+#endif
 		}
 	}
 }
@@ -1969,7 +1983,11 @@ void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 	// Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
 	if (flags.checkEndstops)		// if any homing switches or the Z probe is enabled in this move
 	{
+#if SUPPORT_CAN_EXPANSION
+		if (CheckEndstops(p)) { CanInterface::WakeAsyncSender(); }
+#else
 		CheckEndstops(p);			// call out to a separate function because this may help cache usage in the more common and time-critical case where we don't call it
+#endif
 		if (state == completed)		// we may have completed the move due to triggering an endstop switch or Z probe
 		{
 			return;

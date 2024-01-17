@@ -83,7 +83,7 @@ void InputMonitor::DigitalInterrupt() noexcept
 		if (active)
 		{
 			sendDue = true;
-			CanInterface::WakeAsyncSenderFromIsr();
+			CanInterface::WakeAsyncSender();
 		}
 	}
 }
@@ -97,7 +97,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 		if (active)
 		{
 			sendDue = true;
-			CanInterface::WakeAsyncSenderFromIsr();
+			CanInterface::WakeAsyncSender();
 		}
 	}
 }
@@ -258,7 +258,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 
 // Check the input monitors and add any pending ones to the message
 // Return the number of ticks before we should be woken again, or TaskBase::TimeoutUnlimited if we shouldn't be work until an input changes state
-/*static*/ uint32_t InputMonitor::AddStateChanges(CanMessageInputChanged *msg) noexcept
+/*static*/ uint32_t InputMonitor::AddStateChanges(CanMessageInputChangedNew *msg) noexcept
 {
 	uint32_t timeToWait = TaskBase::TimeoutUnlimited;
 	ReadLocker lock(listLock);
@@ -278,7 +278,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 					monitorState = p->state;
 				}
 
-				if (msg->AddEntry(p->handle, monitorState))
+				if (msg->AddEntry(p->handle, p->GetAnalogValue(), monitorState))
 				{
 					p->whenLastSent = now;
 				}
@@ -324,7 +324,7 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 		if ((h->handle & mask) == pattern)
 		{
 			reply->results[count].handle.Set(h->handle);
-			reply->results[count].value = h->GetAnalogValue();
+			StoreLEU32(&reply->results[count].reading, h->GetAnalogValue());
 			++count;
 		}
 		h = h->next;

@@ -178,7 +178,11 @@ public:
 #endif
 
 	DriveMovement *FindDM(size_t drive) const noexcept;								// find the DM for a drive if there is one even if it is completed
+#if SUPPORT_CAN_EXPANSION
+	bool CheckEndstops(Platform& platform) noexcept;
+#else
 	void CheckEndstops(Platform& platform) noexcept;
+#endif
 
 	void DebugPrint(const char *tag) const noexcept;								// print the DDA only
 	void DebugPrintAll(const char *tag) const noexcept;								// print the DDA and active DMs

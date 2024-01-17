@@ -37,7 +37,7 @@ constexpr ObjectModelArrayTableEntry ZProbe::objectModelArrayTable[] =
 	// 1. Speeds
 	{
 		nullptr,
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(ZProbe::probeSpeeds); },
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return (((const ZProbe*)self)->type == ZProbeType::scanningAnalog) ? 3 : 2; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
 					{ return ExpressionValue(InverseConvertSpeedToMmPerMin(((const ZProbe*)self)->probeSpeeds[context.GetLastIndex()]), 1); }
 	},
@@ -139,7 +139,7 @@ void ZProbe::SetDefaults() noexcept
 		tc = 0.0;
 	}
 	diveHeights[0] = diveHeights[1] = DefaultZDive;
-	probeSpeeds[0] = probeSpeeds[1] = ConvertSpeedFromMmPerSec(DefaultProbingSpeed);
+	probeSpeeds[0] = probeSpeeds[1] = probeSpeeds[2] = ConvertSpeedFromMmPerSec(DefaultProbingSpeed);
 	travelSpeed = ConvertSpeedFromMmPerSec(DefaultZProbeTravelSpeed);
 	recoveryTime = 0.0;
 	tolerance = DefaultZProbeTolerance;
@@ -456,11 +456,12 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 
 	if (gb.Seen('F'))										// feed rate i.e. probing speed
 	{
-		float userProbeSpeeds[2];
-		size_t numSpeeds = 2;
+		float userProbeSpeeds[3];
+		size_t numSpeeds = 3;
 		gb.GetFloatArray(userProbeSpeeds, numSpeeds, true);
 		probeSpeeds[0] = ConvertSpeedFromMmPerMin(userProbeSpeeds[0]);
 		probeSpeeds[1] = ConvertSpeedFromMmPerMin(userProbeSpeeds[1]);
+		probeSpeeds[2] = (numSpeeds == 3) ? ConvertSpeedFromMmPerMin(userProbeSpeeds[2]) : probeSpeeds[0];
 		seen = true;
 	}
 
@@ -493,10 +494,15 @@ GCodeResult ZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, bool& see
 
 	reply.printf("Z Probe %u: type %u", number, (unsigned int)type);
 	const GCodeResult rslt = AppendPinNames(reply);
-	reply.catf(", dive heights %.1f,%.1fmm, probe speeds %d,%dmm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
+	reply.catf(", dive heights %.1f,%.1fmm, probe speeds %d,%d",
 					(double)diveHeights[0], (double)diveHeights[1],
 					(int)InverseConvertSpeedToMmPerMin(probeSpeeds[0]),
-					(int)InverseConvertSpeedToMmPerMin(probeSpeeds[1]),
+					(int)InverseConvertSpeedToMmPerMin(probeSpeeds[1]));
+	if (type == ZProbeType::scanningAnalog)
+	{
+		reply.catf(",%d", (int)InverseConvertSpeedToMmPerMin(probeSpeeds[2]));
+	}
+	reply.catf("mm/min, travel speed %dmm/min, recovery time %.2f sec, heaters %s, max taps %u, max diff %.2f",
 					(int)InverseConvertSpeedToMmPerMin(travelSpeed),
 					(double)recoveryTime,
 					(misc.parts.turnHeatersOff) ? "suspended" : "normal",

@@ -1062,7 +1062,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.coords[axis0Num] = grid.GetCoordinate(0, lastAxis0Index) - zp->GetOffset(axis0Num);
 					ms.coords[axis1Num] = grid.GetCoordinate(1, gridAxis1Index) - zp->GetOffset(axis1Num);
 					ms.coords[Z_AXIS] = zp->GetStartingHeight(true);
-					ms.feedRate = zp->GetProbingSpeed(0);
+					ms.feedRate = zp->GetScanningSpeed();
 					ms.linearAxesMentioned = platform.IsAxisLinear(axis0Num);
 					ms.rotationalAxesMentioned = platform.IsAxisRotational(axis0Num);
 					ms.segmentsLeftToStartAt = ms.totalSegments = (unsigned int)abs((int)lastAxis0Index - (int)gridAxis0Index);

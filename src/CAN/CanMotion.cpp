@@ -304,7 +304,7 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 void CanMotion::InsertHiccup(uint32_t numClocks) noexcept
 {
 	hiccupToInsert += numClocks;
-	CanInterface::WakeAsyncSenderFromIsr();
+	CanInterface::WakeAsyncSender();
 }
 
 // Flag a CAN-connected driver as not moving when we haven't sent the movement message yet
@@ -345,7 +345,8 @@ bool CanMotion::InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noe
 }
 
 // This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
-void CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcept
+// Returns true if the caller needs to wake the sync sender task (we don't do that here because it causes problems in some contexts)
+bool CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcept
 {
 	if (dda.GetState() == DDA::DDAState::provisional)
 	{
@@ -356,20 +357,20 @@ void CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcep
 		const DriveMovement * const dm = dda.FindDM(axis);
 		if (dm != nullptr)
 		{
-			if (InternalStopDriverWhenMoving(driver, dm->GetNetStepsTaken()))
-			{
-				CanInterface::WakeAsyncSenderFromIsr();
-			}
+			return InternalStopDriverWhenMoving(driver, dm->GetNetStepsTaken());
 		}
 	}
+	return false;
 }
 
 // This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
-void CanMotion::StopAxis(const DDA& dda, size_t axis) noexcept
+// Returns true if the caller needs to wake the sync sender task (we don't do that here because it causes problems in some contexts)
+bool CanMotion::StopAxis(const DDA& dda, size_t axis) noexcept
 {
 	const Platform& p = reprap.GetPlatform();
 	if (axis < reprap.GetGCodes().GetTotalAxes())
 	{
+		bool wakeAsyncSender = false;
 		const AxisDriversConfig& cfg = p.GetAxisDriversConfig(axis);
 		if (dda.GetState() == DDA::DDAState::provisional)
 		{
@@ -387,32 +388,27 @@ void CanMotion::StopAxis(const DDA& dda, size_t axis) noexcept
 			const DriveMovement * const dm = dda.FindDM(axis);
 			if (dm != nullptr)
 			{
-				bool somethingStopped = false;
 				const uint32_t steps = dm->GetNetStepsTaken();
 				for (size_t i = 0; i < cfg.numDrivers; ++i)
 				{
 					const DriverId driver = cfg.driverNumbers[i];
 					if (driver.IsRemote() && InternalStopDriverWhenMoving(driver, steps))
 					{
-						somethingStopped = true;
+						wakeAsyncSender = true;
 					}
-				}
-				if (somethingStopped)
-				{
-					CanInterface::WakeAsyncSenderFromIsr();
 				}
 			}
 		}
+		return wakeAsyncSender;
 	}
-	else
-	{
-		const DriverId driver = p.GetExtruderDriver(LogicalDriveToExtruder(axis));
-		StopDriver(dda, axis, driver);
-	}
+
+	const DriverId exDriver = p.GetExtruderDriver(LogicalDriveToExtruder(axis));
+	return StopDriver(dda, axis, exDriver);
 }
 
-// This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
-void CanMotion::StopAll(const DDA& dda) noexcept
+// This is called from the step ISR with DDA state executing, or from the CAN receiver task with state executing, or from the Move task with DDA state provisional
+// Returns true if the caller needs to wake the sync sender task (we don't do that here because it causes problems in some contexts)
+bool CanMotion::StopAll(const DDA& dda) noexcept
 {
 	if (dda.GetState() == DDA::DDAState::provisional)
 	{
@@ -464,8 +460,9 @@ void CanMotion::StopAll(const DDA& dda) noexcept
 		}
 
 		revertAll = true;
-		CanInterface::WakeAsyncSenderFromIsr();
+		return true;
 	}
+	return false;
 }
 
 // This is called by the step ISR when a movement that uses endstops or a probe has completed.
@@ -475,7 +472,7 @@ void CanMotion::FinishMoveUsingEndstops() noexcept
 	if (!revertAll)
 	{
 		revertAll = true;
-		CanInterface::WakeAsyncSenderFromIsr();
+		CanInterface::WakeAsyncSender();
 	}
 }
 

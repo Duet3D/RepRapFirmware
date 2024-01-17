@@ -251,6 +251,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "firmwareFileName",	OBJECT_MODEL_FUNC_NOSELF(IAP_FIRMWARE_FILE),														ObjectModelEntryFlags::none },
 	{ "firmwareName",		OBJECT_MODEL_FUNC_NOSELF(FIRMWARE_NAME),															ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC_NOSELF(VERSION),																	ObjectModelEntryFlags::none },
+	{ "freeRam",			OBJECT_MODEL_FUNC_NOSELF((int32_t)Tasks::GetNeverUsedRam()),										ObjectModelEntryFlags::live },
 #if HAS_SBC_INTERFACE
 	{ "iapFileNameSBC",		OBJECT_MODEL_FUNC_NOSELF(IAP_UPDATE_FILE_SBC),														ObjectModelEntryFlags::none },
 #endif
@@ -375,7 +376,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 constexpr uint8_t Platform::objectModelTableDescriptor[] =
 {
 	11,																		// number of sections
-	10 + SUPPORT_ACCELEROMETERS + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR
+	11 + SUPPORT_ACCELEROMETERS + HAS_SBC_INTERFACE + HAS_MASS_STORAGE + HAS_VOLTAGE_MONITOR + HAS_12V_MONITOR + HAS_CPU_TEMP_SENSOR
 	  + SUPPORT_CAN_EXPANSION + SUPPORT_DIRECT_LCD + MCU_HAS_UNIQUE_ID + HAS_WIFI_NETWORKING,		// section 0: boards[0]
 #if HAS_CPU_TEMP_SENSOR
 	3,																		// section 1: mcuTemp

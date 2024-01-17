@@ -28,6 +28,7 @@ struct ExpansionBoardData
 	bool HasDrivers() const noexcept { return numDrivers != 0 && driverData != nullptr; }
 
 	const char *_ecv_array typeName;
+	int32_t neverUsedRam;
 	MinCurMax mcuTemp, vin, v12;
 	uint32_t accelerometerLastRunDataPoints;
 	uint32_t closedLoopLastRunDataPoints;
