@@ -181,10 +181,8 @@ constexpr size_t maxQueuedCodes = 16;					// How many codes can be queued?
 
 #if SAME70 || SAME5x
 constexpr size_t MaxTrackedObjects = 40;				// How many build plate objects we track. Each one needs 16 bytes of storage, in addition to the string space.
-constexpr size_t ObjectNamesStringSpace = 1000;			// How much space we reserve for the names of objects on the build plate
 #else
 constexpr size_t MaxTrackedObjects = 20;				// How many build plate objects we track. Each one needs 16 bytes of storage, in addition to the string space.
-constexpr size_t ObjectNamesStringSpace = 500;			// How much space we reserve for the names of objects on the build plate
 #endif
 
 // How many filaments we can return in the file information. Each one uses 4 bytes of statically-allocated RAM.
