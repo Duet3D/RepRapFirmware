@@ -86,6 +86,7 @@ private:
 constexpr IPAddress DefaultIpAddress;				// will be initialised to 0 by constructor
 constexpr IPAddress DefaultNetMask(0x00FFFFFF);		// equivalent to 255.255.255.0. Use constexpr constructor to avoid it being allocated in RAM.
 constexpr IPAddress DefaultGateway;					// will be initialised to 0 by constructor
+constexpr uint32_t AcceptAnyIp = 0;
 
 constexpr uint8_t MdnsMacAddress[6] = { 0x01, 0x00, 0x5E, 0x00, 0x00, 0xFB };
 constexpr uint8_t MdnsIPAddress[4] = { 224, 0, 0, 251 };

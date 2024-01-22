@@ -27,7 +27,8 @@ public:
 	GCodeResult AppendPinNames(const StringRef& str) noexcept override;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException) override;
 	GCodeResult Create(const StringRef& pinNames, const StringRef& reply) noexcept;
-	void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept override;
+	void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState, uint32_t reading) noexcept override;
+	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) override THROWS(GCodeException);
 
 	// Process a remote reading that relates to this Z probe
 	void UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint32_t reading) noexcept override;
@@ -41,6 +42,8 @@ public:
 	// Functions used only with scanning Z probes
 	GCodeResult GetCalibratedReading(float& val) const noexcept override;
 	GCodeResult CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) override;
+	float GetLatestHeight() const noexcept override;
+
 	void ScanningProbeCallback(RemoteInputHandle h, uint32_t val) noexcept;
 
 private:

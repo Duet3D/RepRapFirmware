@@ -61,9 +61,6 @@ public:
 	void Stop() noexcept;
 
 	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
-	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept override;
-	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown = true) noexcept override;
-	GCodeResult ReportProtocols(const StringRef& reply) const noexcept override;
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
 	int EnableState() const noexcept override;
@@ -97,6 +94,12 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL
 
+	// Disable a network protocol that is enabled. If 'permanent' is true we will leave this protocol disables, otherwise we are about to re-enable it with different parameters.
+	void IfaceStartProtocol(NetworkProtocol protocol) noexcept override;
+
+	// Enable a network protocol that is currently disabled
+	void IfaceShutdownProtocol(NetworkProtocol protocol, bool permanent) noexcept override;
+
 private:
 	void InitSockets() noexcept;
 	void TerminateSockets() noexcept;
@@ -105,15 +108,8 @@ private:
 
 	// Protocol socket operations - listen for incoming connections,
 	// create outgoing connection, kill existing listeners & connections.
-	void ListenProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumSelectableProtocols);
 	void ConnectProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumSelectableProtocols);
-	void ShutdownProtocol(NetworkProtocol protocol) noexcept
-	pre(protocol < NumSelectableProtocols);
-
-	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
-	pre(protocol < NumSelectableProtocols);
+		pre(protocol < NumSelectableProtocols);
 
 	NetworkProtocol GetProtocolByLocalPort(TcpPort port) const noexcept;
 
@@ -131,12 +127,10 @@ private:
 	void GetNewStatus() noexcept;
 	void spi_slave_dma_setup(uint32_t dataOutSize, uint32_t dataInSize) noexcept;
 
-#if !defined(__LPC17xx__)
 	int32_t SendCredential(size_t credIndex, const uint8_t *buffer, size_t bufferSize);
 	int32_t SendFileCredential(GCodeBuffer &gb, size_t credIndex);
 	int32_t SendTextCredential(GCodeBuffer &gb, size_t credIndex);
 	size_t CheckCredential(GCodeBuffer &gb, bool file = false) THROWS(GCodeException);
-#endif
 
 	static const char* TranslateWiFiResponse(int32_t response) noexcept;
 	static const char* TranslateEspResetReason(uint32_t reason) noexcept;
@@ -155,11 +149,8 @@ private:
 	WiFiSocket *sockets[NumWiFiTcpSockets];
 	size_t currentSocket;
 
-	uint32_t ipAddresses[NumSelectableProtocols];
-	TcpPort portNumbers[NumSelectableProtocols];				// port number used for each protocol
 	TcpPort ftpDataPort;
 	bool closeDataPort;
-	bool protocolEnabled[NumSelectableProtocols];				// whether each protocol is enabled
 
 	WiFiState requestedMode;
 	WiFiState currentMode;

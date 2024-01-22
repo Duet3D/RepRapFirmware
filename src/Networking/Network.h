@@ -26,8 +26,13 @@ const size_t MaxNetworkInterfaces = 1;
 const size_t NumHttpResponders = 6;		// the number of concurrent HTTP requests we can process
 const size_t NumTelnetResponders = 2;	// the number of concurrent Telnet sessions we support
 #else
-// Limit the number of HTTP responders to 4 because they take around 2K of memory each
+// Limit the number of HTTP responders to 4 because they take around 2.5K of memory each
+# if defined(DUET_NG) || defined(DUET_M)
+// We now support only 3 HTTP sockets on Duet 2 Ethernet, so it's probably not worth supporting 4 responders and we would rather have the extra RAM
+const size_t NumHttpResponders = 3;		// the number of concurrent HTTP requests we can process
+# else
 const size_t NumHttpResponders = 4;		// the number of concurrent HTTP requests we can process
+# endif
 const size_t NumTelnetResponders = 1;	// the number of concurrent Telnet sessions we support
 #endif // not SAME70
 

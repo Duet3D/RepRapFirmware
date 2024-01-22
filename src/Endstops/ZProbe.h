@@ -21,14 +21,20 @@ public:
 	virtual GCodeResult AppendPinNames(const StringRef& str) noexcept = 0;		// not const because it may update the state too
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException);		// 'seen' is an in-out parameter
 	virtual GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept;
+	virtual GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// this is overridden in class RemoteZProbe
+
+#if SUPPORT_SCANNING_PROBES
+	// The following should only be called for scanning Z probes, so for other types they return these default values
 	virtual GCodeResult GetCalibratedReading(float& val) const noexcept { return GCodeResult::error; }
+	virtual float GetLatestHeight() const noexcept { return 0.0; }
 
 	// The following should never be called for a non-scanning probe, so by default we just return error with no message
 	virtual GCodeResult CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException) { return GCodeResult::error; }
+#endif
 
 #if SUPPORT_CAN_EXPANSION
 	// Process a remote input change that relates to this Z probe
-	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept { }
+	virtual void HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState, uint32_t reading) noexcept { }
 
 	// Process a remote reading that relates to this Z probe
 	virtual void UpdateRemoteReading(CanAddress src, uint8_t handleMinor, uint32_t reading) noexcept { }
@@ -47,6 +53,7 @@ public:
 	float GetDiveHeight(int tapsDone) const noexcept;
 	float GetStartingHeight(bool firstTap, float previousHeightError = 0.0) const noexcept;
 	float GetProbingSpeed(int tapsDone) const noexcept { return probeSpeeds[(tapsDone < 0) ? 0 : 1]; }
+	float GetScanningSpeed() const noexcept { return probeSpeeds[2]; }
 	float FastThenSlowProbing() const noexcept { return probeSpeeds[1] < probeSpeeds[0]; }
 	float GetTravelSpeed() const noexcept { return travelSpeed; }
 	float GetRecoveryTime() const noexcept { return recoveryTime; }
@@ -61,27 +68,30 @@ public:
 	bool IsDeployedByUser() const noexcept { return isDeployedByUser; }
 
 	void PrepareForUse(const bool probingAway) noexcept;
-	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void SetTriggerHeight(float height) noexcept { offsets[Z_AXIS] = -height; }
 	void SetSaveToConfigOverride() noexcept { misc.parts.saveToConfigOverride = true; }
 	void SetDeployedByUser(bool b) noexcept { isDeployedByUser = b; }
 	void SetLastStoppedHeight(float h) noexcept;
 
+#if SUPPORT_SCANNING_PROBES
 	// Scanning Z probe support
 	bool IsScanning() const noexcept { return type == ZProbeType::scanningAnalog; }			// this is currently the only type of scanning probe we support
 	GCodeResult SetScanningCoefficients(float aParam, float bParam, float cParam) noexcept;
 	GCodeResult ReportScanningCoefficients(const StringRef& reply) noexcept;
 	void CalibrateScanningProbe(const int32_t calibrationReadings[], size_t numCalibrationReadingsTaken, float heightChangePerPoint, const StringRef& reply) noexcept;
 	float ConvertReadingToHeightDifference(int32_t reading) const noexcept;
+#endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteParameters(FileStore *f, unsigned int probeNumber) const noexcept;
 #endif
 
-	static constexpr unsigned int MaxTapsLimit = 31;	// must be low enough to fit in the maxTaps field
+	static constexpr unsigned int MaxTapsLimit = 31;			// must be low enough to fit in the maxTaps field
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
+
+	float GetTriggerHeightCompensation() const noexcept;		// return the amount by which the trigger height is increased by temperature compensation
 
 	int32_t targetAdcValue;					// the target ADC value, after inversion if enabled
 	union
@@ -99,16 +109,18 @@ protected:
 	float calibTemperature;				// the temperature at which we did the calibration
 	float temperatureCoefficients[2];	// the variation of height with bed temperature and with the square of temperature
 	float diveHeights[2];				// the dive heights we use when probing in mm
-	float probeSpeeds[2];				// the speeds of probing in mm per step clock
+	float probeSpeeds[3];				// the speeds of probing in mm per step clock. First is probing speed, second is travel speed, third is scanning speed.
 	float travelSpeed;					// the speed at which we travel to the probe point in mm per step clock
 	float recoveryTime;					// Z probe recovery time
 	float tolerance;					// maximum difference between probe heights when doing >1 taps
 	float actualTriggerHeight;			// the actual trigger height of the probe, taking account of the temperature coefficient
 	float lastStopHeight;				// the height at which the last G30 probe move stopped
 
+#if SUPPORT_SCANNING_PROBES
 	// Scanning support
 	float scanCoefficients[4];
 	bool isCalibrated = false;
+#endif
 
 	uint8_t number;
 	ZProbeType type;

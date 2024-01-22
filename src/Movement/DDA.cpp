@@ -18,9 +18,6 @@
 
 #if SUPPORT_CAN_EXPANSION
 # include <CAN/CanMotion.h>
-#endif
-
-#if SUPPORT_REMOTE_COMMANDS
 # include <CAN/CanInterface.h>
 #endif
 
@@ -361,7 +358,9 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	flags.isPrintingMove = flags.xyMoving && forwardExtruding;					// require forward extrusion so that wipe-while-retracting doesn't count
 	flags.isNonPrintingExtruderMove = extrudersMoving && !flags.isPrintingMove;	// flag used by filament monitors - we can ignore Z movement
 	flags.usePressureAdvance = nextMove.usePressureAdvance;
+#if SUPPORT_SCANNING_PROBES
 	flags.scanningProbeMove = nextMove.scanningProbeMove;
+#endif
 	flags.controlLaser = nextMove.isCoordinated && nextMove.checkEndstops == 0;
 
 	// The end coordinates will be valid at the end of this move if it does not involve endstop checks and is not a raw motor move
@@ -1279,7 +1278,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			// This is especially important when using CAN-connected motors or endstops, because we rely on receiving "endstop changed" messages.
 			// Moves that check endstops are always run as isolated moves, so there can be no move in progress and the endstops must already be primed.
 			platform.EnableAllSteppingDrivers();
-			move.CheckEndstops(platform, false);									// this may modify pending CAN moves, and may set status 'completed'
+			(void)move.CheckEndstops(platform, false);									// this may modify pending CAN moves, and may set status 'completed'
 		}
 
 #if SUPPORT_CAN_EXPANSION

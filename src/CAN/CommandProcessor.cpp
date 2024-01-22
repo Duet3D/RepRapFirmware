@@ -250,27 +250,28 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 }
 
 // Handle an input state change message
-static void HandleInputStateChanged(const CanMessageInputChanged& msg, CanAddress src) noexcept
+static void HandleInputStateChanged(const CanMessageInputChangedNew& msg, CanAddress src) noexcept
 {
 	bool endstopStatesChanged = false;
+	Platform& p = reprap.GetPlatform();
 	for (unsigned int i = 0; i < msg.numHandles; ++i)
 	{
-		const RemoteInputHandle handle(msg.handles[i]);
+		const RemoteInputHandle handle(msg.results[i].handle);
 		const bool state = (msg.states & (1u << i)) != 0;
 		switch (handle.u.parts.type)
 		{
 		case RemoteInputHandle::typeEndstop:
-			reprap.GetPlatform().GetEndstops().HandleRemoteEndstopChange(src, handle.u.parts.major, handle.u.parts.minor, state);
+			p.GetEndstops().HandleRemoteEndstopChange(src, handle.u.parts.major, handle.u.parts.minor, state);
 			endstopStatesChanged = true;
 			break;
 
 		case RemoteInputHandle::typeZprobe:
-			reprap.GetPlatform().GetEndstops().HandleRemoteZProbeChange(src, handle.u.parts.major, handle.u.parts.minor, state);
+			p.GetEndstops().HandleRemoteZProbeChange(src, handle.u.parts.major, handle.u.parts.minor, state, LoadLEU32(&msg.results[i].reading));
 			endstopStatesChanged = true;
 			break;
 
 		case RemoteInputHandle::typeGpIn:
-			reprap.GetPlatform().HandleRemoteGpInChange(src, handle.u.parts.major, handle.u.parts.minor, state);
+			p.HandleRemoteGpInChange(src, handle.u.parts.major, handle.u.parts.minor, state);
 			break;
 
 		default:
@@ -703,9 +704,9 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			// Handle messages received in normal operation mode
 			switch (id)
 			{
-			case CanMessageType::inputStateChanged:
+			case CanMessageType::inputStateChangedNew:
 				//TODO we should preferably handle this one using a separate high-priority queue or buffer
-				HandleInputStateChanged(buf->msg.inputChanged, buf->id.Src());
+				HandleInputStateChanged(buf->msg.inputChangedNew, buf->id.Src());
 				break;
 
 			case CanMessageType::firmwareBlockRequest:

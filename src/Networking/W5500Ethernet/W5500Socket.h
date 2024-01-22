@@ -33,7 +33,7 @@ public:
 
 private:
 	void ReInit() noexcept;
-	void ReceiveData() noexcept;
+	bool ReceiveData() noexcept;
 	void DiscardReceivedData() noexcept;
 
 	NetworkBuffer *receivedData;						// List of buffers holding received data

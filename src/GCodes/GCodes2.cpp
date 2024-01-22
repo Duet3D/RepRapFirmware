@@ -641,7 +641,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		GCodeResult result;
 		if (gb.GetCommandFraction() > 0
-			&& code != 36 && code != 201 && code != 558 && code != 569 && code != 586 && code != 587 // these are the only M-codes we implement that can have fractional parts
+			&& code != 36 && code != 201
+#if SUPPORT_SCANNING_PROBES
+			&& code != 558
+#endif
+			&& code != 569 && code != 586 && code != 587 // these are the only M-codes we implement that can have fractional parts
 		   )
 		{
 			result = TryMacroFile(gb);
@@ -3490,7 +3494,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 558: // Set or report Z probe type and for which axes it is used; M558.1 calibrate Z probe; M558.2 calibrate scanning Z probe drive strength
-				result = (gb.GetCommandFraction() > 2) ? TryMacroFile(gb) : platform.GetEndstops().HandleM558(gb, reply);
+				result =
+#if SUPPORT_SCANNING_PROBES
+						(gb.GetCommandFraction() > 2) ? TryMacroFile(gb) :
+#endif
+							platform.GetEndstops().HandleM558(gb, reply);
 				break;
 
 #if HAS_MASS_STORAGE

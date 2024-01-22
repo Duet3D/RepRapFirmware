@@ -23,6 +23,7 @@ Licence: GPL
 #include "HeaterMonitor.h"
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
+#include <Platform/Tasks.h>
 #include "Sensors/TemperatureSensor.h"
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Tools/Tool.h>
@@ -492,6 +493,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 				{
 					CanMessageBoardStatus * const boardStatusMsg = buf.SetupStatusMessage<CanMessageBoardStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 					boardStatusMsg->Clear();
+					boardStatusMsg->neverUsedRam = Tasks::GetNeverUsedRam();
 
 					// We must add fields in the following order: VIN, V12, MCU temperature
 					size_t index = 0;

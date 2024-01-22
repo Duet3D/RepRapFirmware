@@ -55,6 +55,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 												? ExpansionDetail::firmwareFileNameUf2
 													: ExpansionDetail::firmwareFileNameBin),												ObjectModelEntryFlags::none },
 	{ "firmwareVersion",	OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).typeName, ExpansionDetail::firmwareVersion),	ObjectModelEntryFlags::none },
+	{ "freeRam",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).neverUsedRam),						ObjectModelEntryFlags::live },
 	{ "inductiveSensor",	OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasInductiveSensor, self, 6),				ObjectModelEntryFlags::none },
 	{ "maxMotors",			OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).numDrivers),							ObjectModelEntryFlags::none },
 	{ "mcuTemp",			OBJECT_MODEL_FUNC_IF(self->FindIndexedBoard(context.GetLastIndex()).hasMcuTemp, self, 1),						ObjectModelEntryFlags::live },
@@ -95,7 +96,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 {
 	7,				// number of sections
-	16,				// section 0: boards[]
+	17,				// section 0: boards[]
 	3,				// section 1: mcuTemp
 	3,				// section 2: vIn
 	3,				// section 3: v12
@@ -109,7 +110,7 @@ DEFINE_GET_OBJECT_MODEL_TABLE(ExpansionManager)
 #endif
 
 ExpansionBoardData::ExpansionBoardData() noexcept
-	: typeName(nullptr),
+	: typeName(nullptr), neverUsedRam(0),
 	  accelerometerLastRunDataPoints(0), closedLoopLastRunDataPoints(0),
 	  whenLastStatusReportReceived(0),
 	  driverData(nullptr),
@@ -169,6 +170,7 @@ void ExpansionManager::ProcessAnnouncement(CanMessageBuffer *buf, bool isNewForm
 		{
 			WriteLocker lock(boardsLock);
 
+			board.neverUsedRam = 0;
 			board.whenLastStatusReportReceived = millis();
 			if (board.state == BoardState::running)
 			{
@@ -243,6 +245,7 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 	}
 
 	const CanMessageBoardStatus& msg = buf->msg.boardStatus;
+	board.neverUsedRam = msg.neverUsedRam;
 
 	// We must process the data in the correct order, to ensure that we pick up the right values
 	size_t index = 0;

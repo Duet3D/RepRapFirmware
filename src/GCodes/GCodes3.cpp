@@ -1329,9 +1329,11 @@ void GCodes::DeployZProbe(GCodeBuffer& gb) noexcept
 	{
 		String<StringLength20> fileName;
 		fileName.printf(DEPLOYPROBE "%u.g", currentZProbeNumber);
-		if (!DoFileMacro(gb, fileName.c_str(), false, SystemHelperMacroCode) && currentZProbeNumber == 0)
+		if (!DoFileMacro(gb, fileName.c_str(), false, SystemHelperMacroCode))
 		{
-			DoFileMacro(gb, DEPLOYPROBE ".g", false, SystemHelperMacroCode);
+			VariableSet vars;
+			vars.InsertNewParameter("K", ExpressionValue((int32_t)currentZProbeNumber));
+			DoFileMacro(gb, DEPLOYPROBE ".g", false, SystemHelperMacroCode, vars);
 		}
 	}
 }
@@ -1345,8 +1347,10 @@ void GCodes::RetractZProbe(GCodeBuffer& gb) noexcept
 	{
 		String<StringLength20> fileName;
 		fileName.printf(RETRACTPROBE "%u.g", currentZProbeNumber);
-		if (!DoFileMacro(gb, fileName.c_str(), false, SystemHelperMacroCode) && currentZProbeNumber == 0)
+		if (!DoFileMacro(gb, fileName.c_str(), false, SystemHelperMacroCode))
 		{
+			VariableSet vars;
+			vars.InsertNewParameter("K", ExpressionValue((int32_t)currentZProbeNumber));
 			DoFileMacro(gb, RETRACTPROBE ".g", false, SystemHelperMacroCode);
 		}
 	}

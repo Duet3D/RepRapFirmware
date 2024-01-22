@@ -29,7 +29,9 @@ void MovementState::SetDefaults(size_t firstDriveToZero) noexcept
 	inverseTimeMode = false;
 	linearAxesMentioned = false;
 	rotationalAxesMentioned = false;
+#if SUPPORT_SCANNING_PROBES
 	scanningProbeMove = false;
+#endif
 #if SUPPORT_LASER
 	laserPixelData.Clear();
 #endif
