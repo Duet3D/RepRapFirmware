@@ -65,6 +65,7 @@ public:
 	bool MotionPending() const noexcept { return segments != nullptr; }
 	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
 	void AddSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, bool usePressureAdvance) noexcept;
+	void AddDeltaSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, const float *dv, float initialXoffsetFromTower, float initialYoffsetFromTower, float initialH) noexcept;
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
@@ -87,7 +88,7 @@ private:
 
 	// Parameters common to Cartesian, delta and extruder moves
 
-	DriveMovement *nextDM;								// link to next DM that needs a step
+	DriveMovement *nextDM = nullptr;					// link to next DM that needs a step
 	MoveSegment *segments = nullptr;					// pointer to the segment list for this driver
 
 	float stepsPerMm;
@@ -95,7 +96,7 @@ private:
 
 	ExtruderShaper extruderShaper;						// pressure advance control
 
-	DMState state;										// whether this is active or not
+	DMState state = DMState::idle;						// whether this is active or not
 	uint8_t drive;										// the drive that this DM controls
 	uint8_t direction : 1,								// true=forwards, false=backwards
 			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
@@ -106,7 +107,6 @@ private:
 			stepsTakenThisSegment : 2;					// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
-	int32_t totalSteps;									// total number of steps for this move, always positive, but zero for extruders
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 
 	// These values change as the step is executed
@@ -114,7 +114,8 @@ private:
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
-	float pA, pB, pC;									// the movement parameters of the current segment
+	float q, t0, p;										// the movement parameters of the current segment
+	float distanceCarriedForwards = 0.0;				// the residual distance (less than one microstep) that was pending at the end of the previous segment
 
 	int32_t positionAtMoveStart = 0;					// the microstep position of the motor. If the motor is moving then this is the position at the start of the move.
 	float movementAccumulator;							// the accumulated movement since GetAccumulatedMovement was last called. Only used for extruders.
@@ -195,7 +196,7 @@ private:
 inline bool DriveMovement::CalcNextStepTime() noexcept
 {
 	++nextStep;
-	if (nextStep <= totalSteps || isExtruder)
+	if (nextStep <= segmentStepLimit || isExtruder)
 	{
 		if (stepsTillRecalc != 0)
 		{

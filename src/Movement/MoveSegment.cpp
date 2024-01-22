@@ -42,7 +42,7 @@ void MoveSegment::AddToTail(MoveSegment *tail) noexcept
 
 void MoveSegment::DebugPrint(char ch) const noexcept
 {
-	debugPrintf("%c n=%" PRIi32 " t=%" PRIu32 " s0=%.4e u=%.4e a=%.4e", ch, steps, (uint32_t)duration, (double)s0, (double)u, (double)a);
+	debugPrintf("%c t=%" PRIu32 " u=%.4e a=%.4e", ch, (uint32_t)duration, (double)u, (double)a);
 	if (IsDelta())
 	{
 		((const DeltaMoveSegment*)this)->DebugPrintDelta();
@@ -66,7 +66,7 @@ void MoveSegment::DebugPrint(char ch) const noexcept
 	}
 }
 
-// Allocate a MoveSegment, from the freelist if possible, else create a new one. Not thread-safe. Clears the flags.
+// Allocate a MoveSegment, from the freelist if possible, else create a new one. Not thread-safe. Sets the delta flag, clears the other flags.
 DeltaMoveSegment *DeltaMoveSegment::Allocate(MoveSegment *p_next) noexcept
 {
 	DeltaMoveSegment * ms = deltaFreeList;
@@ -87,9 +87,7 @@ DeltaMoveSegment *DeltaMoveSegment::Allocate(MoveSegment *p_next) noexcept
 // Print the extra bits in a delta move segment
 void DeltaMoveSegment::DebugPrintDelta() const noexcept
 {
-	debugPrintf(" dv=[%.3f %.3f %.3f] minusAaPlusBbTimesS=%.4e dSquaredMinusAsquaredMinusBsquared=%.4e",
-				(double)dv[0], (double)dv[1], (double)dv[2], (double)fMinusAaPlusBbTimesS, (double)fDSquaredMinusAsquaredMinusBsquaredTimesSsquared);
-	//TODO
+	debugPrintf(" dA=%.4e dB=%.4e dC=%.4e dD=%.4e dE=%.4e", (double)deltaA, (double)deltaB, (double)deltaC, (double)deltaD, (double)deltaE);
 }
 
 // End

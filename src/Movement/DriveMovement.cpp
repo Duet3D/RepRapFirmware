@@ -39,9 +39,9 @@ void DriveMovement::DebugPrint() const noexcept
 									: (state == DMState::stepError2) ? " ERR2:"
 										: (state == DMState::stepError3) ? " ERR3:"
 											: ":";
-		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " ssl=%" PRIu32 " A=%.4e B=%.4e C=%.4e",
-						c, errText, (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, segmentStepLimit,
-							(double)pA, (double)pB, (double)pC);
+		debugPrintf("DM%c%s dir=%c next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " ssl=%" PRIu32 " A=%.4e B=%.4e C=%.4e",
+						c, errText, (direction) ? 'F' : 'B', nextStep, reverseStartStep, stepInterval, segmentStepLimit,
+							(double)q, (double)t0, (double)p);
 #if SUPPORT_LINEAR_DELTA
 		if (isDelta)
 		{
@@ -81,36 +81,38 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 		if (segments->IsLinear())
 		{
 			state = DMState::cartLinear;
-			// Calculate the B and C coefficients for a linear move such that t = B + C*n
-			pB = -segments->GetS0() * (mmPerStep/segments->GetU());
-			pC = mmPerStep/segments->GetU();
+			// Calculate the B and C coefficients for a linear move such that t = t0 + p*n
+			t0 = -segments->GetS0() * (mmPerStep/segments->GetU());
+			p = mmPerStep/segments->GetU();
 		}
 		else
 		{
 			state = (segments->IsAccelerating()) ? DMState::cartAccel : DMState::cartDecelNoReverse;
-			// Calculate the A, B and C coefficients for an accelerating or decelerating move such that t = B + sqrt(A + C*n)
-			pB = -segments->GetU()/segments->GetA();
+			// Calculate the A, B and C coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q)
+			t0 = -segments->GetU()/segments->GetA();
 			if (segments->UsePressureAdvance())
 			{
-				pB -= extruderShaper.GetKclocks();
+				t0 -= extruderShaper.GetKclocks();
 			}
-			pC = 2.0/segments->GetA();
-			pA = fsquare(pB) - pC * segments->GetS0() * mmPerStep;
+			p = 2.0/segments->GetA();
+			q = fsquare(t0) - p * segments->GetS0() * mmPerStep;
 		}
 
 		// Save the movement limit in steps
-		segmentStepLimit = segments->GetSteps();
+		segmentStepLimit = qq;		//TODO calculate segmentStepLimit and reverseStartStep
+		reverseStartStep = qq;
 
-#if 0	//DEBUG
-		if (__get_BASEPRI() == 0)
-		{
-			debugPrintf("New cart seg: state %u A=%.4e B=%.4e C=%.4e ns=%" PRIu32 " ssl=%" PRIu32 "\n",
-						(unsigned int)state, (double)pA, (double)pB, (double)pC, nextStep, segmentStepLimit);
-		}
-#endif
 		nextStep = 1;
 		if (nextStep < segmentStepLimit)
 		{
+			qq;										//TODO set direction, clear direction changed
+#if 0	//DEBUG
+			if (__get_BASEPRI() == 0)
+			{
+				debugPrintf("New cart seg: state %u A=%.4e B=%.4e C=%.4e ns=%" PRIu32 " ssl=%" PRIu32 "\n",
+							(unsigned int)state, (double)q, (double)t0, (double)p, nextStep, segmentStepLimit);
+			}
+#endif
 			return segments;
 		}
 
@@ -269,7 +271,7 @@ MoveSegment *DriveMovement::NewExtruderSegment() noexcept
 		if (__get_BASEPRI() == 0)
 		{
 			debugPrintf("New ex seg: state %u A=%.4e B=%.4e C=%.4e ns=%" PRIi32 " ssl=%" PRIi32 " rss=%" PRIi32 "\n",
-						(unsigned int)state, (double)pA, (double)pB, (double)pC, nextStep, segmentStepLimit, reverseStartStep);
+						(unsigned int)state, (double)q, (double)t0, (double)p, nextStep, segmentStepLimit, reverseStartStep);
 		}
 #endif
 		if (nextStep < segmentStepLimit)
@@ -618,17 +620,17 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	switch (state)
 	{
 	case DMState::cartLinear:									// linear steady speed
-		nextCalcStepTime = pB + (float)(nextStep + (int32_t)stepsTillRecalc) * pC;
+		nextCalcStepTime = t0 + (float)(nextStep + (int32_t)stepsTillRecalc) * p;
 		break;
 
 	case DMState::cartAccel:									// Cartesian accelerating
-		nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)(nextStep + (int32_t)stepsTillRecalc));
+		nextCalcStepTime = t0 + fastLimSqrtf(d0 + p * (float)(nextStep + (int32_t)stepsTillRecalc));
 		break;
 
 	case DMState::cartDecelForwardsReversing:
 		if (nextStep + (int32_t)stepsTillRecalc < reverseStartStep)
 		{
-			nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + (int32_t)stepsTillRecalc));
+			nextCalcStepTime = t0 - fastLimSqrtf(q + p * (float)(nextStep + (int32_t)stepsTillRecalc));
 			break;
 		}
 
@@ -638,12 +640,12 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.
 		{
 			const int32_t netSteps = (2 * (reverseStartStep - 1)) - nextStep;
-			nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)(netSteps - (int32_t)stepsTillRecalc));
+			nextCalcStepTime = t0 + fastLimSqrtf(q + p * (float)(netSteps - (int32_t)stepsTillRecalc));
 		}
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian decelerating with no reversal
-		nextCalcStepTime = pB - fastLimSqrtf(pA + pC * (float)(nextStep + (int32_t)stepsTillRecalc));
+		nextCalcStepTime = t0 - fastLimSqrtf(d0 + p * (float)(nextStep + (int32_t)stepsTillRecalc));
 		break;
 
 #if SUPPORT_LINEAR_DELTA
@@ -682,10 +684,10 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 				return false;
 			}
 
-			const float pCds = pC * ds;
-			nextCalcStepTime = (segments->IsLinear()) ? pB + pCds
-								: (segments->IsAccelerating()) ? pB + fastLimSqrtf(pA + pCds)
-									 : pB - fastLimSqrtf(pA + pCds);
+			const float pCds = p * ds;
+			nextCalcStepTime = (segments->IsLinear()) ? t0 + pCds
+								: (segments->IsAccelerating()) ? t0 + fastLimSqrtf(q + pCds)
+									 : t0 - fastLimSqrtf(q + pCds);
 		}
 		break;
 #endif

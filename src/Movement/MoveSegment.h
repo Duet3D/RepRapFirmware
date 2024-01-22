@@ -50,9 +50,6 @@ public:
 	// Given that this is not a constant-speed segment, test whether it is accelerating or decelerating
 	bool IsAccelerating() const noexcept { return a > 0.0; }
 
-	// Get the number of steps in this segment
-	int32_t GetSteps() const noexcept { return steps; }
-
 	// Get the segment duration in step clocks
 	float GetStartTime() const noexcept { return startTime; }
 
@@ -110,7 +107,6 @@ protected:
 #endif
 			 ;
 	uint32_t startTime;										// when this segment should start
-	int32_t steps;											// the number of microsteps in this segment
 	float duration;											// the duration in step clocks of this segment
 	float s0;												// the movement carried forward from the previous segment
 	float u;												// the initial speed
@@ -158,6 +154,15 @@ inline float MoveSegment::GetDistanceToReverse() const noexcept
 	return fsquare(u)/-(2 * a);
 }
 
+// For delta movement the linear distance moved as a function of required carriage height is given by:
+//	ds = D * dh + E +/- sqrt(A * dh^2 + B * dh + C)
+// where:
+//	A = -2*(fx^2+fy^2)
+//	B = A * h0 - 2*(fy*yo + fx*xo)*fz
+//	C = (fx*xo + fy*yo - fz*h0)^2
+//	D = fz
+//	E = fz*h0 - fy*yo - fx*xo
+
 class alignas(8) DeltaMoveSegment : public MoveSegment
 {
 public:
@@ -168,14 +173,13 @@ public:
 
 	DeltaMoveSegment(MoveSegment *p_next) noexcept;
 
-	const float *GetDv() const noexcept { return dv; }
-	float GetfTwoA() const noexcept { return fTwoA; }
-	float GetfTwoB() const noexcept { return fTwoB; }
-	float GetH0MinusZ0() const noexcept { return h0MinusZ0; }
-	float GetfMinusAaPlusBbTimesS() const noexcept { return fMinusAaPlusBbTimesS; }
-	float GetfDSquaredMinusAsquaredMinusBsquaredTimesSsquared() const noexcept { return fDSquaredMinusAsquaredMinusBsquaredTimesSsquared; }
+	float GetDeltaA() const noexcept { return deltaA; }
+	float GetDeltaB() const noexcept { return deltaB; }
+	float GetDeltaC() const noexcept { return deltaC; }
+	float GetDeltaD() const noexcept { return deltaD; }
+	float GetDeltaE() const noexcept { return deltaE; }
 
-	void SetDeltaParameters(const float *p_dv, float p_fTwoS, float p_fTwoB, float p_m0MinusZ0, float p_fMinusAaPlusBbTimesS, float p_fDSquaredMinusAsquaredMinusBsquaredTimesSsquared) noexcept;
+	void SetDeltaParameters(const float *dv, float initialXoffsetFromTower, float initialYoffsetFromTower, float initialH) noexcept;
 
 	// Allocate a MoveSegment, clearing the flags
 	static DeltaMoveSegment *Allocate(MoveSegment *p_next) noexcept;
@@ -184,12 +188,7 @@ public:
 	void DebugPrintDelta() const noexcept;
 
 private:
-	float fTwoA, fTwoB;
-	float h0MinusZ0;
-	float fMinusAaPlusBbTimesS;
-	float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
-	float dv[3];			// the XYZ movement fractions
-	//TODO
+	float deltaA, deltaB, deltaC, deltaD, deltaE;
 };
 
 // Create a new one, leaving the flags clear
@@ -199,17 +198,14 @@ inline DeltaMoveSegment::DeltaMoveSegment(MoveSegment *p_next) noexcept : MoveSe
 	// remaining fields are not initialised
 }
 
-// Set the parameters that are specific to delta movement
-inline void DeltaMoveSegment::SetDeltaParameters(const float *p_dv, float p_fTwoA, float p_fTwoB, float p_h0MinusZ0, float p_fMinusAaPlusBbTimesS, float p_fDSquaredMinusAsquaredMinusBsquaredTimesSsquared) noexcept
+// Set the parameters that are specific to delta movement. Vector dv must be normalised so that the sum of squares of the XYZ components is one.
+inline void DeltaMoveSegment::SetDeltaParameters(const float *dv, float initialXoffsetFromTower, float initialYoffsetFromTower, float initialH) noexcept
 {
-	dv[0]= p_dv[0];
-	dv[1] = p_dv[1];
-	dv[2] = p_dv[2];
-	fTwoA = p_fTwoA;
-	fTwoB = p_fTwoB;
-	h0MinusZ0 = p_h0MinusZ0;
-	fMinusAaPlusBbTimesS = p_fMinusAaPlusBbTimesS;
-	fDSquaredMinusAsquaredMinusBsquaredTimesSsquared = p_fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
+	deltaA = -2 * (fsquare(dv[0]) + fsquare(dv[1]));
+	deltaB = deltaA * initialH - 2 * (dv[0] * initialXoffsetFromTower + dv[1] * initialYoffsetFromTower) * dv[2];
+	deltaC = fsquare(dv[0] * initialXoffsetFromTower + dv[1] * initialYoffsetFromTower + dv[2] * initialH);
+	deltaD = dv[2];
+	deltaE = dv[2] * initialH - 2 * (dv[0] * initialXoffsetFromTower + dv[1] * initialYoffsetFromTower);
 }
 
 // Release a single MoveSegment. Not thread-safe.

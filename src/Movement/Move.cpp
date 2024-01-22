@@ -1431,17 +1431,25 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 	return ret + adjustment;
 }
 
+// Add some linear segments to be executed by a driver, taking account of possible input shaping. This is used by linear axes and by extruders.
 void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, bool usePressureAdvance) noexcept
 {
 	// Acceleration phase
 	if (params.accelClocks > 0.0)
 	{
 		const float accelDistance = params.accelDistance * dda.directionVector[logicalDrive];
-		for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
+		if (useInputShaping)
 		{
-			const float factor = axisShaper.GetImpulseSize(index);
-			dms[logicalDrive].AddSegment(startTime + axisShaper.GetImpulseDelay(index), params.accelClocks,
-								accelDistance * factor, dda.startSpeed * factor, dda.acceleration * factor, usePressureAdvance);
+			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
+			{
+				const float factor = axisShaper.GetImpulseSize(index);
+				dms[logicalDrive].AddSegment(startTime + axisShaper.GetImpulseDelay(index), params.accelClocks,
+									accelDistance * factor, dda.startSpeed * factor, dda.acceleration * factor, usePressureAdvance);
+			}
+		}
+		else
+		{
+			dms[logicalDrive].AddSegment(startTime, params.accelClocks, accelDistance, dda.startSpeed, dda.acceleration, usePressureAdvance);
 		}
 	}
 
@@ -1450,11 +1458,18 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	{
 		const float steadyDistance = (params.decelStartDistance - params.accelDistance) * dda.directionVector[logicalDrive];
 		const float originalStartClocks = startTime + params.accelClocks;
-		for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
+		if (useInputShaping)
 		{
-			const float factor = axisShaper.GetImpulseSize(index);
-			dms[logicalDrive].AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), dda.clocksNeeded - params.accelClocks,
-											steadyDistance * factor, dda.topSpeed * factor, 0, false);
+			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
+			{
+				const float factor = axisShaper.GetImpulseSize(index);
+				dms[logicalDrive].AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), dda.clocksNeeded - params.accelClocks,
+												steadyDistance * factor, dda.topSpeed * factor, 0.0, false);
+			}
+		}
+		else
+		{
+			dms[logicalDrive].AddSegment(originalStartClocks, dda.clocksNeeded - params.accelClocks, steadyDistance, dda.topSpeed, 0, false);
 		}
 	}
 
@@ -1463,11 +1478,18 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	{
 		const float decelDistance = (dda.totalDistance - params.decelStartDistance) * dda.directionVector[logicalDrive];
 		const float originalStartClocks = startTime + params.accelClocks + params.steadyClocks;
-		for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
+		if (useInputShaping)
 		{
-			const float factor = axisShaper.GetImpulseSize(index);
-			dms[logicalDrive].AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), params.decelClocks,
-											decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), usePressureAdvance);
+			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
+			{
+				const float factor = axisShaper.GetImpulseSize(index);
+				dms[logicalDrive].AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), params.decelClocks,
+												decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), usePressureAdvance);
+			}
+		}
+		else
+		{
+			dms[logicalDrive].AddSegment(originalStartClocks, params.decelClocks, decelDistance, dda.topSpeed, -(dda.deceleration), usePressureAdvance);
 		}
 	}
 
@@ -1480,6 +1502,50 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 
 void Move::AddDeltaSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping) noexcept
 {
+	// Until we find a way to combine overlapped delta segments, we don't support input shaping for delta moves
+	(void)useInputShaping;
+
+	float xOffset = params.initialX - params.dparams->GetTowerX(logicalDrive);
+	float yOffset = params.initialY - params.dparams->GetTowerY(logicalDrive);
+	float initialH = qq;
+
+	// Acceleration phase
+	if (params.accelClocks > 0.0) {
+		const float accelDistance = params.accelDistance * dda.directionVector[logicalDrive];
+		dms[logicalDrive].AddDeltaSegment(startTime, params.accelClocks, accelDistance, dda.startSpeed, dda.acceleration, dda.directionVector, xOffset, yOffset, initialH);
+		if (params.steadyClocks + params.decelClocks == 0.0) {
+			return;
+		}
+		startTime += params.accelClocks;
+		xOffset += params.accelDistance * dda.directionVector[0];
+		yOffset += params.accelDistance * dda.directionVector[1];
+		initialH = qq;
+	}
+
+	// Steady speed phase
+	if (params.steadyClocks > 0.0) 	{
+		const float steadyDistance = (params.decelStartDistance - params.accelDistance) * dda.directionVector[logicalDrive];
+		dms[logicalDrive].AddDeltaSegment(startTime, dda.clocksNeeded - params.accelClocks, steadyDistance, dda.topSpeed, 0.0, dda.directionVector, xOffset, yOffset, initialH);
+		if (params.decelClocks == 0.0) {
+			return;
+		}
+		startTime += params.steadyClocks;
+		xOffset += steadyDistance * dda.directionVector[0];
+		yOffset += steadyDistance * dda.directionVector[1];
+		initialH = qq;
+	}
+
+	// Deceleration phase
+	if (params.decelClocks != 0) {
+		const float decelDistance = (dda.totalDistance - params.decelStartDistance) * dda.directionVector[logicalDrive];
+		dms[logicalDrive].AddDeltaSegment(startTime, params.decelClocks, decelDistance, dda.topSpeed, -(dda.deceleration), dda.directionVector, xOffset, yOffset, initialH);
+	}
+
+	//TODO if there is currently no movement, schedule an interrupt to start executing this segment
+	//TODO if an interrupt is already scheduled then we may need to bring it forwards
+	// We may choose to do the above in AddSegment instead of here
+
+#if 0	// we may need to use some of this code in NewDeltaSegment
 	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(logicalDrive);
 	const float mmPerStep = 1.0/stepsPerMm;
 	const float A = params.initialX - params.dparams->GetTowerX(logicalDrive);
@@ -1591,50 +1657,7 @@ void Move::AddDeltaSegments(const DDA& dda, size_t logicalDrive, uint32_t startT
 	nextStep = 1;									// must do this before calling NewDeltaSegment
 	directionChanged = directionReversed = false;	// must clear these before we call NewDeltaSegment
 
-	if (!NewDeltaSegment())
-	{
-		return;
-	}
-
-	// Prepare for the first step
-	nextStepTime = 0;
-
-	//TODO: add steps etc.
-	// Deceleration phase
-	DeltaMoveSegment * tempSegments;
-	if (params.decelClocks > 0.0)
-	{
-		tempSegments = DeltaMoveSegment::Allocate(nullptr);
-		const float b = dda.topSpeed/params.deceleration;
-		const float c = -2.0/params.deceleration;
-		tempSegments->SetNonLinear(dda.totalDistance - params.decelStartDistance, params.decelClocks, fsquare(b) - (params.decelStartDistance * c), b + params.accelClocks + params.steadyClocks, c * mmPerStep, -params.deceleration);
-		tempSegments->SetDeltaParameters(dda.directionVector, fTwoA, fTwoB, h0MinusZ0, fMinusAaPlusBbTimesS, fDSquaredMinusAsquaredMinusBsquaredTimesSsquared);
-	}
-	else
-	{
-		tempSegments = nullptr;
-	}
-
-	// Steady speed phase
-	if (params.steadyClocks > 0.0)
-	{
-		tempSegments = DeltaMoveSegment::Allocate(tempSegments);
-		const float c = 1.0/dda.topSpeed;
-		tempSegments->SetLinear(params.decelStartDistance - params.accelDistance, params.steadyClocks, params.accelClocks - (params.accelDistance * c), c * mmPerStep);
-		tempSegments->SetDeltaParameters(dda.directionVector, fTwoA, fTwoB, h0MinusZ0, fMinusAaPlusBbTimesS, fDSquaredMinusAsquaredMinusBsquaredTimesSsquared);
-	}
-
-	// Acceleration phase
-	if (params.accelClocks > 0.0)
-	{
-		tempSegments = DeltaMoveSegment::Allocate(tempSegments);
-		const float b = dda.startSpeed/(-params.acceleration);
-		const float c = 2.0/params.acceleration;
-		tempSegments->SetNonLinear(params.accelDistance, params.accelClocks, fsquare(b), b, c * mmPerStep, params.acceleration);
-		tempSegments->SetDeltaParameters(dda.directionVector, fTwoA, fTwoB, h0MinusZ0, fMinusAaPlusBbTimesS, fDSquaredMinusAsquaredMinusBsquaredTimesSsquared);
-	}
-
-	dms[logicalDrive].AppendSegments(tempSegments);
+#endif
 }
 
 #endif
