@@ -37,8 +37,11 @@ struct RawMove
 			reduceAcceleration : 1,									// true if Z probing so we should limit the Z acceleration
 			inverseTimeMode : 1,									// true if executing the move in inverse time mode
 			linearAxesMentioned : 1,								// true if any linear axes were mentioned in the movement command
-			rotationalAxesMentioned: 1,								// true if any rotational axes were mentioned in the movement command
-			scanningProbeMove : 1;									// true if the laser task should be woken at the end of each segment to capture a height reading
+			rotationalAxesMentioned: 1								// true if any rotational axes were mentioned in the movement command
+#if SUPPORT_SCANNING_PROBES
+			, scanningProbeMove : 1									// true if the laser task should be woken at the end of each segment to capture a height reading
+#endif
+			;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits laserPwmOrIoBits;								// the laser PWM or port bit settings required

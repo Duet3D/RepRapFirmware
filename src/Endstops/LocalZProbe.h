@@ -30,8 +30,10 @@ public:
 	// Functions used only with programmable Z probes
 	GCodeResult SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept override;
 
+#if SUPPORT_SCANNING_PROBES
 	// Functions used only with scanning Z probes
 	GCodeResult GetCalibratedReading(float& val) const noexcept override;
+#endif
 
 #if ALLOCATE_DEFAULT_PORTS
 	bool AssignPorts(const char *pinNames, const StringRef& reply) noexcept;

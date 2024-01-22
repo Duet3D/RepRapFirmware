@@ -304,4 +304,9 @@
 # define SUPPORT_REMOTE_COMMANDS		(SUPPORT_CAN_EXPANSION && !defined(DUET3_ATE))
 #endif
 
+#ifndef SUPPORT_SCANNING_PROBES
+// Currently we can only attach scanning Z probes via CAN, so to save flash memory space and a small amount of RAM on Duet 2 we disable it
+# define SUPPORT_SCANNING_PROBES		(SUPPORT_CAN_EXPANSION)
+#endif
+
 #endif // PINS_H__

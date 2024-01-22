@@ -488,7 +488,7 @@ extern "C" [[noreturn]] void CanSenderLoop(void *) noexcept
 		{
 			// In expansion mode this task just send notifications when the states of input handles change
 			CanMessageBuffer buf;
-			auto msg = buf.SetupStatusMessage<CanMessageInputChanged>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+			auto msg = buf.SetupStatusMessage<CanMessageInputChangedNew>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 			msg->states = 0;
 			msg->zero = 0;
 			msg->numHandles = 0;
@@ -1221,6 +1221,7 @@ GCodeResult CanInterface::RemoteDiagnostics(MessageType mt, uint32_t boardAddres
 		{
 			msg->param16 = 0;
 		}
+		msg->param32[2] = (gb.Seen('R')) ? gb.GetUIValue() : 1;
 	}
 	return SendRequestAndGetStandardReply(buf, rid, reply);	// we may not actually get a reply if the test is one that crashes the expansion board
 }
@@ -1235,9 +1236,16 @@ GCodeResult CanInterface::GetRemoteFirmwareDetails(uint32_t boardAddress, GCodeB
 	return GetRemoteInfo(CanMessageReturnInfo::typeFirmwareVersion, boardAddress, 0, gb, reply);
 }
 
-void CanInterface::WakeAsyncSenderFromIsr() noexcept
+void CanInterface::WakeAsyncSender() noexcept
 {
-	canSenderTask.GiveFromISR(NotifyIndices::CanSender);
+	if (inInterrupt())
+	{
+		canSenderTask.GiveFromISR(NotifyIndices::CanSender);
+	}
+	else
+	{
+		canSenderTask.Give(NotifyIndices::CanSender);
+	}
 }
 
 // Remote handle functions
@@ -1333,6 +1341,17 @@ GCodeResult CanInterface::ChangeHandleResponseTime(CanAddress boardAddress, Remo
 	return ret;
 }
 
+GCodeResult CanInterface::ChangeHandleThreshold(CanAddress boardAddress, RemoteInputHandle h, uint32_t threshold, bool &currentState, const StringRef &reply) noexcept
+{
+	uint8_t rVal;
+	const GCodeResult ret =  ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionChangeThreshold, threshold, &rVal, reply);
+	if (ret < GCodeResult::error)
+	{
+		currentState = (rVal != 0);
+	}
+	return ret;
+}
+
 GCodeResult CanInterface::SetHandleDriveLevel(CanAddress boardAddress, RemoteInputHandle h, uint32_t driveLevel, uint8_t &returnedDriveLevel, const StringRef &reply) noexcept
 {
 	return ChangeInputMonitor(boardAddress, h, CanMessageChangeInputMonitorNew::actionSetDriveLevel, driveLevel, &returnedDriveLevel, reply);
@@ -1356,7 +1375,7 @@ GCodeResult CanInterface::ReadRemoteHandles(CanAddress boardAddress, RemoteInput
 																	auto response = buf->msg.readInputsReply;
 																	for (unsigned int i = 0; i < response.numReported; ++i)
 																	{
-																		callback(param, response.results[i].handle, LoadLEU32(&response.results[i].value));
+																		callback(param, response.results[i].handle, LoadLEU32(&response.results[i].reading));
 																	}
 																});
 	return rslt;

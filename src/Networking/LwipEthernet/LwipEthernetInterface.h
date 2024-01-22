@@ -39,9 +39,6 @@ public:
 	void Diagnostics(MessageType mtype) noexcept override;
 
 	GCodeResult EnableInterface(int mode, const StringRef& ssid, const StringRef& reply) noexcept override;			// enable or disable the network
-	GCodeResult EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept override;
-	GCodeResult DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown = true) noexcept override;
-	GCodeResult ReportProtocols(const StringRef& reply) const noexcept override;
 
 	GCodeResult GetNetworkState(const StringRef& reply) noexcept override;
 	int EnableState() const noexcept override;
@@ -67,6 +64,12 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL
 
+	// Disable a network protocol that is enabled. If 'permanent' is true we will leave this protocol disables, otherwise we are about to re-enable it with different parameters.
+	void IfaceShutdownProtocol(NetworkProtocol protocol, bool permanent) noexcept override;
+
+	// Enable a network protocol that is currently disabled
+	void IfaceStartProtocol(NetworkProtocol protocol) noexcept override;
+
 private:
 	void Start() noexcept;
 	void Stop() noexcept;
@@ -81,16 +84,11 @@ private:
 	void ShutdownProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumSelectableProtocols);
 
-	void ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
-	pre(protocol < NumSelectableProtocols);
-
 	Platform& platform;
 
 	LwipSocket *sockets[NumEthernetSockets];
 	size_t nextSocketToPoll;						// next TCP socket number to poll for read/write operations
 
-	TcpPort portNumbers[NumSelectableProtocols];				// port number used for each protocol
-	bool protocolEnabled[NumSelectableProtocols];				// whether each protocol is enabled
 	bool closeDataPort;
 	tcp_pcb *listeningPcbs[NumTcpProtocols];
 

@@ -88,9 +88,16 @@ enum class GCodeState : uint8_t
 	gridProbing6,
 	gridProbing7,
 
+#if SUPPORT_SCANNING_PROBES
 	// These next several must be contiguous
 	gridScanning1,
 	gridScanning2,
+
+	// These next 3 must be contiguous
+	probeCalibration1,
+	probeCalibration2,
+	probeCalibration3,
+#endif
 
 	// These next 10 must be contiguous
 	probingAtPoint0,
@@ -109,11 +116,6 @@ enum class GCodeState : uint8_t
 	straightProbe1,
 	straightProbe2,
 	straightProbe3,
-
-	// These next 3 must be contiguous
-	probeCalibration1,
-	probeCalibration2,
-	probeCalibration3,
 
 	doingFirmwareRetraction,
 	doingFirmwareUnRetraction,

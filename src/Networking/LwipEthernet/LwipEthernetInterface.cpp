@@ -60,7 +60,8 @@ const char * const MdnsServiceStrings[NumSelectableProtocols] =
 };
 
 const char * const MdnsTxtRecords[2] = { "product=" FIRMWARE_NAME, "version=" VERSION };
-const unsigned int MdnsTtl = 10 * 60;			// same value as on the Duet 0.6/0.8.5
+constexpr unsigned int MdnsTtl = 10 * 60;			// same value as on the Duet 0.6/0.8.5
+constexpr uint8_t ListenBacklog = 8;
 
 /*-----------------------------------------------------------------------------------*/
 
@@ -105,13 +106,6 @@ LwipEthernetInterface::LwipEthernetInterface(Platform& p) noexcept
 	{
 		sockets[i] = new LwipSocket(this);
 	}
-
-	// Initialise default ports
-	for (size_t i = 0; i < NumSelectableProtocols; ++i)
-	{
-		portNumbers[i] = DefaultPortNumbers[i];
-		protocolEnabled[i] = (i == HttpProtocol);
-	}
 }
 
 #if SUPPORT_OBJECT_MODEL
@@ -143,7 +137,6 @@ DEFINE_GET_OBJECT_MODEL_TABLE(LwipEthernetInterface)
 void LwipEthernetInterface::Init() noexcept
 {
 	interfaceMutex.Create("LwipIface");
-	//TODO we don't yet use this mutex anywhere!
 
 	lwipMutex.Create("LwipCore");
 
@@ -156,58 +149,19 @@ void LwipEthernetInterface::Init() noexcept
 	macAddress = platform.GetDefaultMacAddress();
 }
 
-GCodeResult LwipEthernetInterface::EnableProtocol(NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
+void LwipEthernetInterface::IfaceStartProtocol(NetworkProtocol protocol) noexcept
 {
-	if (secure != 0 && secure != -1)
-	{
-		reply.copy("this firmware does not support TLS");
-		return GCodeResult::error;
-	}
-
-	if (protocol < NumSelectableProtocols)
-	{
-		const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
-		if (portToUse != portNumbers[protocol] && GetState() == NetworkState::active)
-		{
-			// We need to shut down and restart the protocol if it is active because the port number has changed
-			ShutdownProtocol(protocol);
-			protocolEnabled[protocol] = false;
-		}
-		portNumbers[protocol] = portToUse;
-		if (!protocolEnabled[protocol])
-		{
-			// Enable the corresponding socket
-			protocolEnabled[protocol] = true;
-			if (GetState() == NetworkState::active)
-			{
-				StartProtocol(protocol);
-				RebuildMdnsServices();
-			}
-		}
-
-		ReportOneProtocol(protocol, reply);
-		return GCodeResult::ok;
-	}
-
-	reply.copy("Invalid protocol parameter");
-	return GCodeResult::error;
+	StartProtocol(protocol);
+	RebuildMdnsServices();
 }
 
-GCodeResult LwipEthernetInterface::DisableProtocol(NetworkProtocol protocol, const StringRef& reply, bool shutdown) noexcept
+void LwipEthernetInterface::IfaceShutdownProtocol(NetworkProtocol protocol, bool permanent) noexcept
 {
-	if (protocol < NumSelectableProtocols)
+	ShutdownProtocol(protocol);
+	if (permanent)
 	{
-		if (shutdown && GetState() == NetworkState::active)
-		{
-			ShutdownProtocol(protocol);
-		}
-		protocolEnabled[protocol] = false;
-		ReportOneProtocol(protocol, reply);
-		return GCodeResult::ok;
+		RebuildMdnsServices();
 	}
-
-	reply.copy("Invalid protocol parameter");
-	return GCodeResult::error;
 }
 
 void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
@@ -226,7 +180,7 @@ void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 		else
 		{
 			tcp_bind(pcb, IP_ADDR_ANY, portNumbers[protocol]);
-			pcb = tcp_listen(pcb);
+			pcb = tcp_listen_with_backlog(pcb, ListenBacklog);
 			if (pcb == nullptr)
 			{
 				platform.Message(ErrorMessage, "tcp_listen call failed\n");
@@ -301,28 +255,6 @@ void LwipEthernetInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 	{
 		tcp_close(listeningPcbs[protocol]);
 		listeningPcbs[protocol] = nullptr;
-	}
-}
-
-// Report the protocols and ports in use
-GCodeResult LwipEthernetInterface::ReportProtocols(const StringRef& reply) const noexcept
-{
-	for (size_t i = 0; i < NumSelectableProtocols; ++i)
-	{
-		ReportOneProtocol(i, reply);
-	}
-	return GCodeResult::ok;
-}
-
-void LwipEthernetInterface::ReportOneProtocol(NetworkProtocol protocol, const StringRef& reply) const noexcept
-{
-	if (protocolEnabled[protocol])
-	{
-		reply.lcatf("%s is enabled on port %u", ProtocolNames[protocol], portNumbers[protocol]);
-	}
-	else
-	{
-		reply.lcatf("%s is disabled", ProtocolNames[protocol]);
 	}
 }
 
@@ -638,7 +570,7 @@ void LwipEthernetInterface::OpenDataPort(TcpPort port) noexcept
 	else
 	{
 		tcp_bind(pcb, IP_ADDR_ANY, port);
-		pcb = tcp_listen(pcb);
+		pcb = tcp_listen_with_backlog(pcb, 0);
 		if (pcb == nullptr)
 		{
 			platform.Message(ErrorMessage, "tcp_listen call failed\n");

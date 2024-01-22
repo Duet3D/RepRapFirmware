@@ -226,8 +226,10 @@ public:
 	unsigned int GetJerkPolicy() const noexcept { return jerkPolicy; }
 	void SetJerkPolicy(unsigned int jp) noexcept { jerkPolicy = jp; }
 
+#if SUPPORT_SCANNING_PROBES
 	// Scanning Z probes
 	void SetProbeReadingNeeded() noexcept { probeReadingNeeded = true; }
+#endif
 
 	int32_t GetStepsTaken(size_t logicalDrive) const noexcept;
 
@@ -377,8 +379,13 @@ private:
 	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
 	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
 	bool useTaper;										// True to taper off the compensation
-	bool probeReadingNeeded = false;					// true if the laser task needs to take a Z probe reading
+#if SUPPORT_SCANNING_PROBES
+	bool probeReadingNeeded = false;					// true if the laser task needs to take a scanning Z probe reading
+#endif
 	bool checkingEndstops = false;						// true if we are doing an isolated move that checks endstops
+
+	static constexpr size_t LaserTaskStackWords = 300;	// stack size in dwords for the laser and IOBits task (increased to support scanning Z probes)
+	static Task<LaserTaskStackWords> *laserTask;		// the task used to manage laser power or IOBits
 };
 
 //******************************************************************************************************

@@ -63,7 +63,15 @@ uint32_t RemoteZProbe::GetRawReading() const noexcept
 bool RemoteZProbe::SetProbing(bool isProbing) noexcept
 {
 	String<StringLength100> reply;
-	const GCodeResult rslt = CanInterface::ChangeHandleResponseTime(boardAddress, handle, (isProbing) ? ActiveProbeReportInterval : InactiveProbeReportInterval, state, reply.GetRef());
+	GCodeResult rslt = GCodeResult::ok;
+	if (isProbing && type == ZProbeType::scanningAnalog)
+	{
+		rslt = CanInterface::ChangeHandleThreshold(boardAddress, handle, targetAdcValue, state, reply.GetRef());
+	}
+	if (rslt == GCodeResult::ok)
+	{
+		rslt = CanInterface::ChangeHandleResponseTime(boardAddress, handle, (isProbing) ? ActiveProbeReportInterval : InactiveProbeReportInterval, state, reply.GetRef());
+	}
 	if (rslt != GCodeResult::ok)
 	{
 		reply.cat('\n');
@@ -89,7 +97,7 @@ GCodeResult RemoteZProbe::Create(const StringRef& pinNames, const StringRef& rep
 
 	RemoteInputHandle h;
 	h.Set(RemoteInputHandle::typeZprobe, number, 0);
-	const uint16_t threshold = (type == ZProbeType::scanningAnalog) ? 1 : 0;		// nonzero threshold makes it an analog handle
+	const uint16_t threshold = (type == ZProbeType::scanningAnalog) ? DefaultZProbeADValue : 0;		// nonzero threshold makes it an analog handle
 	const GCodeResult rc = CanInterface::CreateHandle(boardAddress, h, pinNames.c_str(), threshold, ActiveProbeReportInterval, state, reply);
 	if (rc < GCodeResult::error)						// don't set the handle unless it is valid, or we will get an error when this probe is deleted
 	{
@@ -129,6 +137,17 @@ GCodeResult RemoteZProbe::Configure(GCodeBuffer& gb, const StringRef &reply, boo
 	return ZProbe::Configure(gb, reply, seen);
 }
 
+GCodeResult RemoteZProbe::HandleG31(GCodeBuffer& gb, const StringRef& reply) /*override*/ THROWS(GCodeException)
+{
+	GCodeResult rslt = ZProbe::HandleG31(gb, reply);
+	if (type == ZProbeType::scanningAnalog && gb.Seen('P') && (rslt == GCodeResult::ok || rslt <= GCodeResult::warning))
+	{
+		const GCodeResult rslt2 = CanInterface::ChangeHandleThreshold(boardAddress, handle, targetAdcValue, state, reply);
+		if (rslt2 > rslt) { rslt = rslt2; }
+	}
+	return rslt;
+}
+
 GCodeResult RemoteZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len, const StringRef& reply) noexcept
 {
 	//TODO
@@ -138,7 +157,7 @@ GCodeResult RemoteZProbe::SendProgram(const uint32_t zProbeProgram[], size_t len
 
 // Functions used only with scanning Z probes
 
-// Get the height compared to the nominal trigger height
+// Fetch a new reading and get the height compared to the nominal trigger height
 GCodeResult RemoteZProbe::GetCalibratedReading(float& val) const noexcept
 {
 	String<1> dummyReply;
@@ -158,6 +177,22 @@ GCodeResult RemoteZProbe::GetCalibratedReading(float& val) const noexcept
 		}
 	}
 	return GCodeResult::error;
+}
+
+// Get the height reading corresponding to the latest reading received. Use to return the height n the object model.
+float RemoteZProbe::GetLatestHeight() const noexcept
+{
+	if (lastValue != 0 && lastValue != ScanningSensorBadReadingVal)		// zero and ScanningSensorBadReadingVal indicate errors reading the probe
+	{
+		const float heightDiff = ConvertReadingToHeightDifference((int32_t)lastValue);
+		if (!std::isnan(heightDiff) && !std::isinf(heightDiff))
+		{
+			// The nominal trigger height is -offsets[Z_AXIS] so we need t add this to heightDiff.
+			// To get a more accurate height, subtract the amount by which the trigger height increases dur to temperature compensation.
+			return heightDiff - offsets[Z_AXIS] - GetTriggerHeightCompensation();
+		}
+	}
+	return 0.0;
 }
 
 // Tell the probe to calibrate its drive level
@@ -188,11 +223,12 @@ GCodeResult RemoteZProbe::CalibrateDriveLevel(GCodeBuffer& gb, const StringRef& 
 }
 
 // Callback function for digital Z probes
-void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState) noexcept
+void RemoteZProbe::HandleRemoteInputChange(CanAddress src, uint8_t handleMinor, bool newState, uint32_t reading) noexcept
 {
 	if (src == boardAddress)
 	{
 		state = newState;
+		lastValue = reading;
 	}
 }
 
