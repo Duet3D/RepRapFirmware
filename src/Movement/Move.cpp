@@ -1751,17 +1751,26 @@ void Move::DeactivateDM(size_t drive) noexcept
 
 // Check the endstops, given that we know that this move checks endstops.
 // If executingMove is set then the move is already being executed; otherwise we are preparing to commit the move.
+#if SUPPORT_CAN_EXPANSION
+// Returns true if the caller needs to wake the async sender task because CAN-connected drivers need to be stopped
+bool Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
+#else
 void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
+#endif
 {
-	for (;;)
+#if SUPPORT_CAN_EXPANSION
+	bool wakeAsyncSender = false;
+#endif
+	while (true)
 	{
 		const EndstopHitDetails hitDetails = platform.GetEndstops().CheckEndstops();
 		switch (hitDetails.GetAction())
 		{
 		case EndstopHitAction::stopAll:
-			StopAllDrivers(executingMove);											// set the state to completed and recalculate the endpoints
 #if SUPPORT_CAN_EXPANSION
-			CanMotion::FinishedStoppingDrivers();
+			if (StopAllDrivers(executingMove)) { wakeAsyncSender = true; }
+#else
+			StopAllDrivers(executingMove);
 #endif
 			if (hitDetails.isZProbe)
 			{
@@ -1777,12 +1786,18 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 				kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, platform.GetDriveStepsPerUnit(), *this);
 				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
 			}
+#if SUPPORT_CAN_EXPANSION
+			return wakeAsyncSender;
+#else
 			return;
+#endif
 
 		case EndstopHitAction::stopAxis:
-			StopAxisOrExtruder(executingMove, hitDetails.axis);						// we must stop the drive before we mess with its coordinates
+			// We must stop the drive before we mess with its coordinates
 #if SUPPORT_CAN_EXPANSION
-			CanMotion::FinishedStoppingDrivers();
+			if (StopAxisOrExtruder(executingMove, hitDetails.axis)) { wakeAsyncSender = true; }
+#else
+			StopAxisOrExtruder(executingMove, hitDetails.axis);
 #endif
 			if (hitDetails.setAxisLow)
 			{
@@ -1803,20 +1818,14 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 				if (executingMove)
 				{
 					int32_t netStepsTaken;
-					if (dms[hitDetails.axis].GetNetStepsTaken(netStepsTaken))
-					{
-						CanMotion::StopDriverWhenExecuting(hitDetails.driver, netStepsTaken);
-#if SUPPORT_CAN_EXPANSION
-						CanMotion::FinishedStoppingDrivers();
-#endif
-					}
+					const bool wasMoving = dms[hitDetails.axis].StopDriver(netStepsTaken);
+					if (wasMoving && CanMotion::StopDriverWhenExecuting(hitDetails.driver, netStepsTaken)) { wakeAsyncSender = true; }
 				}
 				else
 				{
 					CanMotion::StopDriverWhenProvisional(hitDetails.driver);
 				}
 			}
-			else
 #endif
 			{
 				platform.DisableSteppingDriver(hitDetails.driver.localDriver);
@@ -1834,7 +1843,11 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 			break;
 
 		default:
+#if SUPPORT_CAN_EXPANSION
+			return wakeAsyncSender;
+#else
 			return;
+#endif
 		}
 	}
 }
@@ -2014,19 +2027,22 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 
 // This is called when we abort a move because we have hit an endstop.
 // It stops all drives and adjusts the end points of the current move to account for how far through the move we got.
-void Move::StopAllDrivers(bool executingMove) noexcept
+bool Move::StopAllDrivers(bool executingMove) noexcept
 {
+	bool wakeAsyncSender = false;
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 	{
-		StopAxisOrExtruder(executingMove, drive);
+		if (StopAxisOrExtruder(executingMove, drive)) { wakeAsyncSender = true; }
 	}
+	return wakeAsyncSender;
 }
 
 // Stop a drive and re-calculate the end position. Return true if any remote drivers were scheduled to be stopped.
-void Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
+bool Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
 {
 	int32_t netStepsTaken;
 	const bool wasMoving = dms[logicalDrive].StopDriver(netStepsTaken);
+	bool wakeAsyncSender = false;
 #if SUPPORT_CAN_EXPANSION
 	const Platform& p = reprap.GetPlatform();
 	if (logicalDrive < reprap.GetGCodes().GetTotalAxes())
@@ -2041,7 +2057,7 @@ void Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
 				{
 					if (wasMoving)
 					{
-						CanMotion::StopDriverWhenExecuting(driver, netStepsTaken);
+						if (CanMotion::StopDriverWhenExecuting(driver, netStepsTaken)) { wakeAsyncSender = true; }
 					}
 				}
 				else
@@ -2058,7 +2074,7 @@ void Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
 		{
 			if (wasMoving)
 			{
-				CanMotion::StopDriverWhenExecuting(driver, netStepsTaken);
+				if (CanMotion::StopDriverWhenExecuting(driver, netStepsTaken)) { wakeAsyncSender = true; }
 			}
 		}
 		else
@@ -2070,6 +2086,7 @@ void Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
 	(void)wasMoving;
 #endif
 	motorPositionsAfterScheduledMoves[logicalDrive] = dms[logicalDrive].GetCurrentMotorPosition();
+	return wakeAsyncSender;
 }
 
 #if SUPPORT_REMOTE_COMMANDS

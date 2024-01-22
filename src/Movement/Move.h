@@ -242,7 +242,12 @@ public:
 #endif
 
 	void Interrupt() noexcept;
+
+#if SUPPORT_CAN_EXPANSION
+	bool CheckEndstops(Platform& platform, bool executingMove) noexcept;
+#else
 	void CheckEndstops(Platform& platform, bool executingMove) noexcept;
+#endif
 
 	static int32_t MotorMovementToSteps(size_t drive, float coord) noexcept;				// Convert a single motor position to number of steps
 	static float MotorStepsToMovement(size_t drive, int32_t endpoint) noexcept;				// Convert number of motor steps to motor position
@@ -287,11 +292,11 @@ private:
 	void StepDrivers(Platform& p, uint32_t now) noexcept SPEED_CRITICAL;			// Take one step of the DDA, called by timer interrupt.
 	void SimulateSteppingDrivers(Platform& p) noexcept;								// For debugging use
 	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;						// Schedule the next interrupt, returning true if we can't because it is already due
-	void StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept;		// stop movement of a drive and recalculate the endpoint
+	bool StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept;		// stop movement of a drive and recalculate the endpoint
 #if SUPPORT_REMOTE_COMMANDS
 	void StopDriveFromRemote(size_t drive) noexcept;
 #endif
-	void StopAllDrivers(bool executingMove) noexcept;								// cancel the current isolated move
+	bool StopAllDrivers(bool executingMove) noexcept;								// cancel the current isolated move
 	void InsertDM(DriveMovement *dm) noexcept;										// insert a DM into the active list, keeping it in step time order
 	void SetDirection(Platform& p, size_t axisOrExtruder, bool direction) noexcept;	// set the direction of a driver, observing timing requirements
 
@@ -307,8 +312,8 @@ private:
 	static constexpr unsigned int MoveTaskStackWords = 450;
 	static Task<MoveTaskStackWords> moveTask;
 
-	static constexpr size_t LaserTaskStackWords = 300;	// stack size in dwords for the laser and IOBits task (increased to support scanning Z probes)
-	static Task<LaserTaskStackWords> *laserTask;		// the task used to manage laser power or IOBits
+	static constexpr size_t LaserTaskStackWords = 300;				// stack size in dwords for the laser and IOBits task (increased to support scanning Z probes)
+	static Task<LaserTaskStackWords> *laserTask;					// the task used to manage laser power or IOBits
 
 	// Member data
 	DDARing rings[NumMovementSystems];
@@ -383,9 +388,6 @@ private:
 	bool probeReadingNeeded = false;					// true if the laser task needs to take a scanning Z probe reading
 #endif
 	bool checkingEndstops = false;						// true if we are doing an isolated move that checks endstops
-
-	static constexpr size_t LaserTaskStackWords = 300;	// stack size in dwords for the laser and IOBits task (increased to support scanning Z probes)
-	static Task<LaserTaskStackWords> *laserTask;		// the task used to manage laser power or IOBits
 };
 
 //******************************************************************************************************
