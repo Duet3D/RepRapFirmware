@@ -240,6 +240,7 @@ constexpr uint8_t REGNUM_COOLCONF = 0x6D;
 constexpr uint32_t COOLCONF_SGFILT = 1 << 24;				// set to update stallGuard status every 4 full steps instead of every full step
 constexpr uint32_t COOLCONF_SGT_SHIFT = 16;
 constexpr uint32_t COOLCONF_SGT_MASK = 127 << COOLCONF_SGT_SHIFT;	// stallguard threshold (signed)
+constexpr uint32_t COOLCONF_COOL_MASK = (1u << 16) - 1;
 
 constexpr uint32_t DefaultCoolConfReg = 0;
 
@@ -558,7 +559,7 @@ bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal) noexc
 		return true;
 
 	case SmartDriverRegister::coolStep:
-		UpdateRegister(WriteTcoolthrs, regVal & ((1u << 20) - 1));
+		UpdateRegister(WriteCoolConf, (writeRegisters[WriteCoolConf] & ~COOLCONF_COOL_MASK) | (regVal & COOLCONF_COOL_MASK));
 		return true;
 
 	case SmartDriverRegister::hdec:

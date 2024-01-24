@@ -674,7 +674,7 @@ void LocalHeater::DoTuningStep() noexcept
 				break;
 			}
 
-			const uint32_t timeoutMinutes = (isBedOrChamberHeater) ? 30 : 7;
+			const uint32_t timeoutMinutes = (isBedOrChamberHeater) ? BedOrChamberTuningTargetTemperatureTimeout : ToolHeaterTuningTargetTemperatureTimeout;
 			if (heatingTime >= timeoutMinutes * 60 * (uint32_t)SecondsToMillis)
 			{
 				reprap.GetPlatform().Message(GenericMessage, "Auto tune cancelled because target temperature was not reached\n");
