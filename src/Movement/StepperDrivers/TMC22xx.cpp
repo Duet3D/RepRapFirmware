@@ -295,6 +295,10 @@ constexpr uint8_t REGNUM_VACTUAL = 0x22;		// wo, 24 bits signed, sets motor velo
 // Stallguard registers (TMC2209 and TMC2240 only)
 constexpr uint8_t REGNUM_TCOOLTHRS = 0x14;		// wo, 20-bit lower threshold velocity. CoolStep and the StallGuard DIAG output are enabled above this speed.
 
+constexpr uint8_t REGNUM_SG_THRS_09 = 0x40;		// w0, 8-bit stall detection threshold. Stall is signalled when SG_RESULT <= SGTHRS * 2.
+constexpr uint8_t REGNUM_SG_RESULT_09 = 0x41;	// 10-bit StallGard result, read-only. Bits 0 and 9 are always 0.
+constexpr uint8_t REGNUM_COOLCONF_09 = 0x42;	// 16-bit CoolStep control
+
 #if SUPPORT_TMC2240
 constexpr uint8_t REGNUM_DIRECT_MODE = 0x2D;
 constexpr uint8_t REGNUM_ENCMODE = 0x38;
@@ -302,11 +306,10 @@ constexpr uint8_t REGNUM_X_ENC = 0x39;
 constexpr uint8_t REGNUM_ENC_CONST = 0x3A;
 constexpr uint8_t REGNUM_ENC_STATUS = 0x3B;
 constexpr uint8_t REGNUM_ENC_LATCH = 0x3C;
+constexpr uint8_t REGNUM_COOLCONF_40 = 0x6D;
+constexpr uint8_t REGNUM_SG4_THRS = 0x74;
+constexpr uint8_t REGNUM_SG4_RESULT = 0x75;
 #endif
-
-constexpr uint8_t REGNUM_SGTHRS = 0x40;			// w0, 8-bit stall detection threshold. Stall is signalled when SG_RESULT <= SGTHRS * 2.
-constexpr uint8_t REGNUM_SG_RESULT = 0x41;		// 10-bit StallGard result, read-only. Bits 0 and 9 are always 0.
-constexpr uint8_t REGNUM_COOLCONF = 0x42;		// 16-bit CoolStep control
 
 constexpr uint32_t SG_RESULT_MASK = 1023;
 
@@ -621,6 +624,8 @@ private:
 	void UpdateRegister(size_t regIndex, uint32_t regVal) noexcept;
 	void UpdateCurrent() noexcept;
 	void UpdateMaxOpenLoadStepInterval() noexcept;
+	uint8_t GetReadRegNumber(size_t regIndex) const noexcept;
+	uint8_t GetWriteRegNumber(size_t regIndex) const noexcept;
 
 #if HAS_STALL_DETECT
 	void ResetLoadRegisters() noexcept
@@ -679,7 +684,9 @@ private:
 #endif
 	static constexpr unsigned int WriteSpecial = NumWriteRegisters;
 
-#if HAS_STALL_DETECT
+#if SUPPORT_TMC2240
+	static constexpr unsigned int NumReadRegisters = 8;			// the number of registers that we read from on a TMC2240
+#elif HAS_STALL_DETECT
 	static constexpr unsigned int NumReadRegisters = 7;			// the number of registers that we read from on a TMC2209
 #else
 	static constexpr unsigned int NumReadRegisters = 6;			// the number of registers that we read from on a TMC2208/2224
@@ -693,11 +700,11 @@ private:
 	static constexpr unsigned int ReadChopConf = 3;			// chopper control register - we read it to detect the VSENSE bit getting cleared
 	static constexpr unsigned int ReadPwmScale = 4;			// PWM scaling
 	static constexpr unsigned int ReadPwmAuto = 5;			// PWM scaling
-#if HAS_STALL_DETECT && SUPPORT_TMC2209
-	static constexpr unsigned int ReadSgResult = 6;			// stallguard result, TMC2209 only
+#if HAS_STALL_DETECT
+	static constexpr unsigned int ReadSgResult = 6;			// stallguard result
 #endif
 #if SUPPORT_TMC2240
-	static constexpr unsigned int ReadAdcTemp = 6;			// driver temperature, TMC2240 only
+	static constexpr unsigned int ReadAdcTemp = 7;			// driver temperature, TMC2240 only
 #endif
 	static constexpr unsigned int ReadSpecial = NumReadRegisters;
 
@@ -834,13 +841,28 @@ constexpr uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 #if HAS_STALL_DETECT
 	// The rest are on TMC2209 and TMC2240 only
 	REGNUM_TCOOLTHRS,
-	REGNUM_SGTHRS,
-	REGNUM_COOLCONF,
+# if SUPPORT_TMC2240 && !SUPPORT_TMC2209
+	REGNUM_SG4_THRS,
+	REGNUM_COOLCONF_40,
+# else
+	REGNUM_SG_THRS_09,
+	REGNUM_COOLCONF_09,
+# endif
 #endif
 #if SUPPORT_TMC2240
 	REGNUM_DRV_CONF40
 #endif
 };
+
+inline uint8_t TmcDriverState::GetWriteRegNumber(size_t regIndex) const noexcept
+{
+	return (regIndex == WriteSpecial) ? specialWriteRegisterNumber :
+#if SUPPORT_TMC2240 && SUPPORT_TMC2209
+			(isTmc2240 && regIndex == WriteSgthrs) ? REGNUM_SG4_THRS :
+				(isTmc2240 && regIndex == WriteCoolconf) ? REGNUM_COOLCONF_40 :
+#endif
+					WriteRegNumbers[regIndex];
+}
 
 constexpr uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 {
@@ -850,12 +872,26 @@ constexpr uint8_t TmcDriverState::ReadRegNumbers[NumReadRegisters] =
 	REGNUM_CHOPCONF,
 	REGNUM_PWM_SCALE,
 	REGNUM_PWM_AUTO,
-#if HAS_STALL_DETECT && SUPPORT_TMC2209
-	REGNUM_SG_RESULT					// TMC2209 only - for TMC2240 we read REGNUM_ADC_TEMP instead
-#elif SUPPORT_TMC2240
+#if HAS_STALL_DETECT
+# if SUPPORT_TMC2240 && !SUPPORT_TMC2209
+	REGNUM_SG4_RESULT,
+# else
+	REGNUM_SG_RESULT_09,
+# endif
+#endif
+#if SUPPORT_TMC2240
 	REGNUM_ADC_TEMP
 #endif
 };
+
+inline uint8_t TmcDriverState::GetReadRegNumber(size_t regIndex) const noexcept
+{
+	return (regIndex == ReadSpecial) ? specialReadRegisterNumber :
+#if SUPPORT_TMC2240 && SUPPORT_TMC2209
+			(isTmc2240 && regIndex == ReadSgResult) ? REGNUM_SG4_RESULT :
+#endif
+				ReadRegNumbers[regIndex];
+}
 
 // State structures for all drivers
 static TmcDriverState driverStates[MaxSmartDrivers];
@@ -1334,7 +1370,7 @@ GCodeResult TmcDriverState::SetAnyRegister(const StringRef& reply, uint8_t regNu
 {
 	for (size_t i = 0; i < NumWriteRegisters; ++i)
 	{
-		if (regNum == WriteRegNumbers[i])
+		if (regNum == GetWriteRegNumber(i))
 		{
 			UpdateRegister(i, regVal);
 			return GCodeResult::ok;
@@ -1596,7 +1632,7 @@ inline void TmcDriverState::TransferDone() noexcept
 		// We could read IFCNT once to get the initial value, but doing the first write twice does no harm.
 		if (   regnumBeingUpdated <= NumWriteRegisters
 			&& currentIfCount == (uint8_t)(lastIfCount + 1)
-			&& (sendData[2] & 0x7F) == ((regnumBeingUpdated == WriteSpecial) ? specialWriteRegisterNumber : WriteRegNumbers[regnumBeingUpdated])
+			&& (sendData[2] & 0x7F) == GetWriteRegNumber(regnumBeingUpdated)
 		   )
 		{
 			++numWrites;
@@ -1616,11 +1652,7 @@ inline void TmcDriverState::TransferDone() noexcept
 	}
 	else if (driversState != DriversState::noPower)		// we don't check the CRC, so only accept the result if power is still good
 	{
-		const uint8_t readRegNumber = (registerToRead >= NumReadRegisters) ? specialReadRegisterNumber
-#if SUPPORT_TMC2240 && SUPPORT_TMC2209
-											: (registerToRead == ReadSgResult && isTmc2240) ? REGNUM_ADC_TEMP	// on TMC2240 read ADC_TEMP instead of SGRESULT
-#endif
-												: ReadRegNumbers[registerToRead];
+		const uint8_t readRegNumber = GetReadRegNumber(registerToRead);
 		if (sendData[2] == readRegNumber
 			&& readRegNumber == receiveData[6]
 			&& receiveData[4] == 0x05
@@ -1786,8 +1818,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 #else
 		uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX;										// reset transmitter and receiver
 #endif
-		const uint8_t regNumber = (regNum < WriteSpecial) ? WriteRegNumbers[regNum] : specialWriteRegisterNumber;
-		SetupDMASend(regNumber, writeRegisters[regNum]);									// set up the DMAC
+		SetupDMASend(GetWriteRegNumber(regNum), writeRegisters[regNum]);									// set up the DMAC
 #if TMC22xx_USES_SERCOM
 		dmaFinishedReason = DmaCallbackReason::none;
 		DmacManager::EnableCompletedInterrupt(DmacChanTmcRx);
@@ -1809,12 +1840,7 @@ inline void TmcDriverState::StartTransfer() noexcept
 		uart->UART_CR = UART_CR_RSTRX | UART_CR_RSTTX;										// reset transmitter and receiver
 #endif
 
-		const uint8_t readRegNumber = (registerToRead >= NumReadRegisters) ? specialReadRegisterNumber
-#if SUPPORT_TMC2240 && SUPPORT_TMC2209
-											: (registerToRead == ReadSgResult && isTmc2240) ? REGNUM_ADC_TEMP	// on TMC2240 read ADC_TEMP instead of SGRESULT
-#endif
-												: ReadRegNumbers[registerToRead];
-		SetupDMARead(readRegNumber);														// set up the DMAC
+		SetupDMARead(GetReadRegNumber(registerToRead));														// set up the DMAC
 
 #if TMC22xx_USES_SERCOM
 		dmaFinishedReason = DmaCallbackReason::none;

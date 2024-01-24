@@ -16,8 +16,8 @@
 #include <Movement/Move.h>
 #include <DmacManager.h>
 #include <Platform/TaskPriorities.h>
-#include <AppNotifyIndices.h>
 #include <General/Portability.h>
+#include <AppNotifyIndices.h>
 #include <Endstops/Endstop.h>
 
 #if SAME5x || SAMC21
