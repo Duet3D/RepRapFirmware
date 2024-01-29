@@ -721,7 +721,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				zp->PrepareForUse(false);											// needed to calculate the actual trigger height when using a scanning Z probe
 				axesCoords[axis0Num] = axis0Coord - zp->GetOffset(axis0Num);
 				axesCoords[axis1Num] = axis1Coord - zp->GetOffset(axis1Num);
-				axesCoords[Z_AXIS] = zp->GetStartingHeight(true);
+				axesCoords[Z_AXIS] =
+#if SUPPORT_SCANNING_PROBES
+									(zp->GetProbeType() == ZProbeType::scanningAnalog) ? zp->GetScanningHeight() :
+#endif
+										zp->GetStartingHeight(true);
 				if (move.IsAccessibleProbePoint(axesCoords, axes))
 				{
 					SetMoveBufferDefaults(ms);
