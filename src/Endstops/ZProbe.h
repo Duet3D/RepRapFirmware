@@ -76,6 +76,7 @@ public:
 #if SUPPORT_SCANNING_PROBES
 	// Scanning Z probe support
 	bool IsScanning() const noexcept { return type == ZProbeType::scanningAnalog; }			// this is currently the only type of scanning probe we support
+	float GetScanningHeight() const noexcept;
 	GCodeResult SetScanningCoefficients(float aParam, float bParam, float cParam) noexcept;
 	GCodeResult ReportScanningCoefficients(const StringRef& reply) noexcept;
 	void CalibrateScanningProbe(const int32_t calibrationReadings[], size_t numCalibrationReadingsTaken, float heightChangePerPoint, const StringRef& reply) noexcept;

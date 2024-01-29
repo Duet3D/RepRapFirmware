@@ -189,16 +189,18 @@ float ZProbe::GetDiveHeight(int tapsDone) const noexcept
 // Otherwise if the secondary dive height is smaller than the primary, move to the secondary dive height plus the error.
 float ZProbe::GetStartingHeight(bool firstTap, float previousHeightError) const noexcept
 {
-	switch (type)
-	{
-	case ZProbeType::scanningAnalog:
-		return GetActualTriggerHeight();
-
-	default:
-		return ((!firstTap && diveHeights[1] < diveHeights[0]) ? diveHeights[1] + previousHeightError : diveHeights[0])
+	return ((!firstTap && diveHeights[1] < diveHeights[0]) ? diveHeights[1] + previousHeightError : diveHeights[0])
 			+ GetActualTriggerHeight();
-	}
 }
+
+#if SUPPORT_SCANNING_PROBES
+
+float ZProbe::GetScanningHeight() const noexcept
+{
+	return GetActualTriggerHeight();
+}
+
+#endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
