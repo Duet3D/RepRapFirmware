@@ -62,7 +62,6 @@ void W5500Socket::ReInit() noexcept
 	if (protocol != MdnsProtocol)
 	{
 		state = SocketState::inactive;
-
 		socket(socketNum, Sn_MR_TCP, localPort, 0x00);
 	}
 	else
