@@ -589,6 +589,10 @@ public:
 	void SendDriversStatus(CanMessageBuffer& buf) noexcept;
 #endif
 
+#if SUPPORT_ISR_DEBUG
+	static bool IsrDebugPutc(char c) noexcept;
+#endif
+
 #if VARIABLE_NUM_DRIVERS
 	void AdjustNumDrivers(size_t numDriversNotAvailable) noexcept;
 #endif

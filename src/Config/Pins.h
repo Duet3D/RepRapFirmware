@@ -245,6 +245,10 @@
 # define SUPPORT_KEEPOUT_ZONES	0
 #endif
 
+#ifndef SUPPORT_ISR_DEBUG
+# define SUPPORT_ISR_DEBUG		0					// support debugPrintf calls from an interrupt context - needs a RAM buffer so default to off
+#endif
+
 #ifndef ALLOCATE_DEFAULT_PORTS
 # define ALLOCATE_DEFAULT_PORTS	0
 #endif
