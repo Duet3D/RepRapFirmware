@@ -21,6 +21,7 @@ enum class DMState : uint8_t
 	stepError1,
 	stepError2,
 	stepError3,
+	stepError4,
 
 	// All higher values are various states of motion
 	firstMotionState,
@@ -68,6 +69,8 @@ public:
 	static DriveMovement *Allocate(size_t p_drive) noexcept;
 	static void Release(DriveMovement *item) noexcept;
 	static int32_t GetAndClearMaxStepsLate() noexcept;
+	static int32_t GetAndClearMinStepInterval() noexcept;
+	static unsigned int GetAndClearBadSegmentCalcs() noexcept;
 
 private:
 	bool CalcNextStepTimeFull(const DDA &dda) noexcept SPEED_CRITICAL;
@@ -82,6 +85,8 @@ private:
 	static DriveMovement *freeList;
 	static unsigned int numCreated;
 	static int32_t maxStepsLate;
+	static unsigned int badSegmentCalcs;
+	static int32_t minStepInterval;
 
 	// Parameters common to Cartesian, delta and extruder moves
 
@@ -215,6 +220,21 @@ inline int32_t DriveMovement::GetAndClearMaxStepsLate() noexcept
 {
 	const int32_t ret = maxStepsLate;
 	maxStepsLate = 0;
+	return ret;
+}
+
+inline int32_t DriveMovement::GetAndClearMinStepInterval() noexcept
+{
+	const int32_t ret = minStepInterval;
+	minStepInterval = 0;
+	return ret;
+
+}
+
+inline unsigned int DriveMovement::GetAndClearBadSegmentCalcs() noexcept
+{
+	const unsigned int ret = badSegmentCalcs;
+	badSegmentCalcs = 0;
 	return ret;
 }
 

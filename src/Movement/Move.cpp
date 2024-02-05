@@ -538,12 +538,18 @@ void Move::Diagnostics(MessageType mtype) noexcept
 
 	Platform& p = reprap.GetPlatform();
 	p.MessageF(mtype,
-				"=== Move ===\nDMs created %u, segments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f, max steps late %" PRIi32
+				"=== Move ===\nDMs created %u, segments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f"
+#if 1	//debug
+				", max steps late %" PRIi32 ", min interval %" PRIi32 ", bad calcs %u"
+#endif
 #if 1	//debug
 				", ebfmin %.2f, ebfmax %.2f"
 #endif
 				"\n",
-						DriveMovement::NumCreated(), MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, DriveMovement::GetAndClearMaxStepsLate()
+						DriveMovement::NumCreated(), MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift,
+#if 1	//debug
+						DriveMovement::GetAndClearMaxStepsLate(), DriveMovement::GetAndClearMinStepInterval(), DriveMovement::GetAndClearBadSegmentCalcs()
+#endif
 #if 1
 						, (double)minExtrusionPending, (double)maxExtrusionPending
 #endif

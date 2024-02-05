@@ -21,6 +21,8 @@
 DriveMovement *DriveMovement::freeList = nullptr;
 unsigned int DriveMovement::numCreated = 0;
 int32_t DriveMovement::maxStepsLate = 0;
+unsigned int DriveMovement::badSegmentCalcs = 0;
+int32_t DriveMovement::minStepInterval = 0;
 
 void DriveMovement::InitialAllocate(unsigned int num) noexcept
 {
@@ -65,7 +67,8 @@ void DriveMovement::DebugPrint() const noexcept
 		const char *const errText = (state == DMState::stepError1) ? " ERR1:"
 									: (state == DMState::stepError2) ? " ERR2:"
 										: (state == DMState::stepError3) ? " ERR3:"
-											: ":";
+											: (state == DMState::stepError4) ? " ERR4:"
+												: ":";
 		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " ssl=%" PRIu32 " A=%.4e B=%.4e C=%.4e dsf=%.4e tsf=%.1f",
 						c, errText, (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, segmentStepLimit,
 							(double)pA, (double)pB, (double)pC, (double)distanceSoFar, (double)timeSoFar);
@@ -97,7 +100,6 @@ bool DriveMovement::NewCartesianSegment() noexcept
 			return false;
 		}
 
-		// Work out the movement limit in steps
 		pC = currentSegment->CalcCFromMmPerStep(mp.cart.effectiveMmPerStep);
 		if (currentSegment->IsLinear())
 		{
@@ -116,6 +118,7 @@ bool DriveMovement::NewCartesianSegment() noexcept
 		distanceSoFar += currentSegment->GetSegmentLength();
 		timeSoFar += currentSegment->GetSegmentTime();
 
+		// Work out the movement limit in steps
 		segmentStepLimit = (currentSegment->GetNext() == nullptr) ? totalSteps + 1 : (uint32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
 
 #if 0	//DEBUG
@@ -127,6 +130,16 @@ bool DriveMovement::NewCartesianSegment() noexcept
 #endif
 		if (nextStep < segmentStepLimit)
 		{
+			// Check that the square root term won't go negative, except possibly on the last step due to rounding error
+			if (!currentSegment->IsLinear() && nextStep <= segmentStepLimit - 2 && pA + pC * (segmentStepLimit - 2) < 0.0)
+			{
+				++badSegmentCalcs;
+#if 0	//DEBUG
+				debugPrintf("Bad cart seg: state %u A=%.4e B=%.4e C=%.4e ns=%" PRIu32 " ssl=%" PRIu32 " ts=%" PRIi32 "\n",
+							(unsigned int)state, (double)pA, (double)pB, (double)pC, nextStep, segmentStepLimit, totalSteps);
+#endif
+			}
+
 			return true;
 		}
 
@@ -551,11 +564,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 // Version of fastSqrtf that allows for slightly negative operands caused by rounding error
 static inline float fastLimSqrtf(float f) noexcept
 {
-#if 1
-	return fastSqrtf(f);							// the fastSqrtf function in RRFLibraries already returns zero if the operand is negative
-#else
-	return (f > 0.0) ? fastSqrtf(f) : 0.0;
-#endif
+	return (f <= 0.0) ? 0.0 : fastSqrtf(f);
 }
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
@@ -731,18 +740,13 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		return false;
 	}
 
-#if 0	//DEBUG
 	if (std::isnan(nextCalcStepTime) || nextCalcStepTime < 0.0)
 	{
-		state = DMState::stepError;
-		nextStep += 140000000 + stepsTillRecalc;			// so we can tell what happened in the debug print
-		distanceSoFar = nextCalcStepTime;					//DEBUG
+		state = DMState::stepError4;
 		return false;
 	}
-#endif
 
 	uint32_t iNextCalcStepTime = (uint32_t)nextCalcStepTime;
-
 	if (iNextCalcStepTime > dda.clocksNeeded)
 	{
 		// The calculation makes this step late.
@@ -767,21 +771,26 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		}
 	}
 
-	// When crossing between movement phases with high microstepping, due to rounding errors the next step may appear to be due before the last one
-	stepInterval = (iNextCalcStepTime > nextStepTime)
-					? (iNextCalcStepTime - nextStepTime) >> shiftFactor	// calculate the time per step, ready for next time
-					: 0;
-
-#if 0	//DEBUG
-	if (isExtruder && stepInterval < 20 /*&& nextStep + stepsTillRecalc + 1 < totalSteps*/)
+	if (nextStep == 1)
 	{
-		state = DMState::stepError;
-		nextStep += 130000000 + stepsTillRecalc;			// so we can tell what happened in the debug print
-		return false;
+		nextStepTime = iNextCalcStepTime;									// shiftFactor must be 0
 	}
-#endif
+	else
+	{
+		// When crossing between movement phases with high microstepping, due to rounding errors the next step may appear to be due before the last one
+		const int32_t interval = iNextCalcStepTime - nextStepTime;
+		if (interval > 0)
+		{
+			stepInterval = (uint32_t)interval >> shiftFactor;				// calculate the time per step, ready for next time
+		}
+		else
+		{
+			if (interval < minStepInterval) { minStepInterval = interval; }
+			stepInterval = 0;
+		}
 
-	nextStepTime = iNextCalcStepTime - (stepsTillRecalc * stepInterval);
+		nextStepTime = iNextCalcStepTime - (stepsTillRecalc * stepInterval);
+	}
 	return true;
 }
 
