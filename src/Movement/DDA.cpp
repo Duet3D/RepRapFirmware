@@ -2170,7 +2170,7 @@ void DDA::SimulateSteppingDrivers(Platform& p) noexcept
 		}
 	}
 
-	// If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
+	// If there are no more steps to do, flag the move as complete
 	if (activeDMs == nullptr)
 	{
 		checkTiming = false;		// don't check the timing of the first step in the next move
