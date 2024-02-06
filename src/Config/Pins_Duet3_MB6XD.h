@@ -54,7 +54,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_PROBE_POINTS_FILE	1
 #define SUPPORT_BRAKE_PWM		1
 #define SUPPORT_KEEPOUT_ZONES	1
-#define SUPPORT_ISR_DEBUG		1					// support debugPrintf calls from an interrupt context
 
 #define USE_MPU					1					// Needed if USE_CACHE is set, so that we can have non-cacheable memory regions
 #define USE_CACHE				1

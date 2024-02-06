@@ -214,22 +214,17 @@ bool MillisTimer::CheckAndStop(uint32_t timeoutMillis) noexcept
 // For debug use
 void debugPrintf(const char *_ecv_array fmt, ...) noexcept
 {
-#if SUPPORT_ISR_DEBUG
 	va_list vargs;
 	va_start(vargs, fmt);
-	vuprintf(Platform::IsrDebugPutc, fmt, vargs);
-	va_end(vargs);
-#else
-	// Calls to debugPrintf() from with ISRs are unsafe, both because of timing issues and because the call to Platform::MessageF tries to acquire a mutex.
-	// So ignore the call if we are coming from within an ISR.
-	if (__get_BASEPRI() == 0 && !inInterrupt())		// we need both tests
+	if (Platform::HasDebugBuffer())
 	{
-		va_list vargs;
-		va_start(vargs, fmt);
-		reprap.GetPlatform().DebugMessage(fmt, vargs);
-		va_end(vargs);
+		vuprintf(Platform::IsrDebugPutc, fmt, vargs);
 	}
-#endif
+	else if (__get_BASEPRI() == 0 && !inInterrupt())		// we need both tests to make sure it is safe to write to USB
+	{
+		reprap.GetPlatform().DebugMessage(fmt, vargs);
+	}
+	va_end(vargs);
 }
 
 // Convert a float to double for passing to printf etc. If it is a NaN or infinity, convert it to 9999.9 to avoid getting JSON parse errors.
