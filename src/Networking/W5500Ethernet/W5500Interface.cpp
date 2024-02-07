@@ -89,13 +89,25 @@ void W5500Interface::IfaceStartProtocol(NetworkProtocol protocol) noexcept
 		{
 			sockets[skt]->Init(skt, portNumbers[HttpProtocol], HttpProtocol);
 		}
+		if (!protocolEnabled[FtpProtocol])
+		{
+			sockets[FtpCommandSocket]->Init(FtpCommandSocket, portNumbers[HttpProtocol], HttpProtocol);
+			sockets[FtpDataSocket]->Init(FtpDataSocket, portNumbers[HttpProtocol], HttpProtocol);
+		}
+		if (!protocolEnabled[TelnetProtocol])
+		{
+			sockets[TelnetSocket]->Init(TelnetSocket, portNumbers[HttpProtocol], HttpProtocol);
+		}
 		break;
 
 	case FtpProtocol:
+		sockets[FtpCommandSocket]->TerminateAndDisable();				// in case it was being used for HTTP
+		sockets[FtpDataSocket]->TerminateAndDisable();					// in case it was being used for HTTP
 		sockets[FtpCommandSocket]->Init(FtpCommandSocket, portNumbers[FtpProtocol], FtpProtocol);
 		break;
 
 	case TelnetProtocol:
+		sockets[TelnetSocket]->TerminateAndDisable();					// in case it was being used for HTTP
 		sockets[TelnetSocket]->Init(TelnetSocket, portNumbers[TelnetProtocol], TelnetProtocol);
 		break;
 
@@ -119,10 +131,19 @@ void W5500Interface::IfaceShutdownProtocol(NetworkProtocol protocol, bool perman
 	case FtpProtocol:
 		sockets[FtpCommandSocket]->TerminateAndDisable();
 		sockets[FtpDataSocket]->TerminateAndDisable();
+		if (permanent && protocolEnabled[HttpProtocol])
+		{
+			sockets[FtpCommandSocket]->Init(FtpCommandSocket, portNumbers[HttpProtocol], HttpProtocol);
+			sockets[FtpDataSocket]->Init(FtpDataSocket, portNumbers[HttpProtocol], HttpProtocol);
+		}
 		break;
 
 	case TelnetProtocol:
 		sockets[TelnetSocket]->TerminateAndDisable();
+		if (permanent && protocolEnabled[HttpProtocol])
+		{
+			sockets[TelnetSocket]->Init(TelnetSocket, portNumbers[HttpProtocol], HttpProtocol);
+		}
 		break;
 
 	default:
@@ -425,20 +446,21 @@ void W5500Interface::InitSockets() noexcept
 	for (SocketNumber skt = 0; skt < NumW5500TcpSockets; ++skt)
 	{
 		sockets[skt]->TerminateAndDisable();
-		if (skt >= FirstHttpSocket && skt < NumHttpSockets && protocolEnabled[HttpProtocol])
+		if (skt == FtpCommandSocket && protocolEnabled[FtpProtocol])
 		{
-			// HTTP
-			sockets[skt]->Init(skt, portNumbers[HttpProtocol], HttpProtocol);
-		}
-		else if (skt == FtpCommandSocket && protocolEnabled[FtpProtocol])
-		{
-			// FTP
 			sockets[skt]->Init(skt, portNumbers[FtpProtocol], FtpProtocol);
+		}
+		else if (skt == FtpDataSocket && protocolEnabled[FtpProtocol])
+		{
+			// Leave the socket disabled, ready for FTP to use
 		}
 		else if (skt == TelnetSocket && protocolEnabled[TelnetProtocol])
 		{
-			// Telnet
 			sockets[skt]->Init(skt, portNumbers[TelnetProtocol], TelnetProtocol);
+		}
+		else if (protocolEnabled[HttpProtocol])
+		{
+			sockets[skt]->Init(skt, portNumbers[HttpProtocol], HttpProtocol);
 		}
 	}
 

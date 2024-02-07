@@ -1351,7 +1351,7 @@ void GCodes::RetractZProbe(GCodeBuffer& gb) noexcept
 		{
 			VariableSet vars;
 			vars.InsertNewParameter("K", ExpressionValue((int32_t)currentZProbeNumber));
-			DoFileMacro(gb, RETRACTPROBE ".g", false, SystemHelperMacroCode);
+			DoFileMacro(gb, RETRACTPROBE ".g", false, SystemHelperMacroCode, vars);
 		}
 	}
 }

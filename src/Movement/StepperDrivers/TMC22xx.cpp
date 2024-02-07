@@ -1343,8 +1343,12 @@ uint32_t TmcDriverState::GetRegister(SmartDriverRegister reg) const noexcept
 	case SmartDriverRegister::pwmAuto:
 		return readRegisters[ReadPwmAuto];
 
-	case SmartDriverRegister::hdec:
+#if HAS_STALL_DETECT
 	case SmartDriverRegister::coolStep:
+		return writeRegisters[WriteCoolconf];
+#endif
+
+	case SmartDriverRegister::hdec:
 	default:
 		return 0;
 	}

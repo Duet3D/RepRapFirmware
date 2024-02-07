@@ -721,7 +721,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				zp->PrepareForUse(false);											// needed to calculate the actual trigger height when using a scanning Z probe
 				axesCoords[axis0Num] = axis0Coord - zp->GetOffset(axis0Num);
 				axesCoords[axis1Num] = axis1Coord - zp->GetOffset(axis1Num);
-				axesCoords[Z_AXIS] = zp->GetStartingHeight(true);
+				axesCoords[Z_AXIS] =
+#if SUPPORT_SCANNING_PROBES
+									(zp->GetProbeType() == ZProbeType::scanningAnalog) ? zp->GetScanningHeight() :
+#endif
+										zp->GetStartingHeight(true);
 				if (move.IsAccessibleProbePoint(axesCoords, axes))
 				{
 					SetMoveBufferDefaults(ms);
@@ -1032,7 +1036,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				memcpy(axesCoords, ms.coords, sizeof(axesCoords));					// copy current coordinates of all other axes in case they are relevant to IsReachable
 				axesCoords[axis0Num] = grid.GetCoordinate(0, newAxis0Index) - zp->GetOffset(axis0Num);
 				axesCoords[axis1Num] = grid.GetCoordinate(1, gridAxis1Index) - zp->GetOffset(axis1Num);
-				axesCoords[Z_AXIS] = zp->GetStartingHeight(true);
+				axesCoords[Z_AXIS] = zp->GetScanningHeight();
 				if (!reprap.GetMove().IsAccessibleProbePoint(axesCoords, axes))
 				{
 					break;
@@ -1061,7 +1065,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					SetMoveBufferDefaults(ms);
 					ms.coords[axis0Num] = grid.GetCoordinate(0, lastAxis0Index) - zp->GetOffset(axis0Num);
 					ms.coords[axis1Num] = grid.GetCoordinate(1, gridAxis1Index) - zp->GetOffset(axis1Num);
-					ms.coords[Z_AXIS] = zp->GetStartingHeight(true);
+					ms.coords[Z_AXIS] = zp->GetScanningHeight();
 					ms.feedRate = zp->GetScanningSpeed();
 					ms.linearAxesMentioned = platform.IsAxisLinear(axis0Num);
 					ms.rotationalAxesMentioned = platform.IsAxisRotational(axis0Num);

@@ -126,6 +126,7 @@ float RotatingMagnetFilamentMonitor::MeasuredSensitivity() const noexcept
 // Configure this sensor, returning true if error and setting 'seen' if we processed any configuration parameters
 GCodeResult RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& seen) THROWS(GCodeException)
 {
+	const uint8_t oldEnableMode = GetEnableMode();
 	const GCodeResult rslt = CommonConfigure(gb, reply, InterruptMode::change, seen);
 	if (Succeeded(rslt))
 	{
@@ -133,11 +134,15 @@ GCodeResult RotatingMagnetFilamentMonitor::Configure(GCodeBuffer& gb, const Stri
 		{
 			if (gb.Seen('C'))
 			{
-				Init();				// Init() resets dataReceived and version, so only do it if the port has been configured
+				Init();								// Init() resets dataReceived and version, so only do it if the port has been configured
 			}
 			else
 			{
 				Reset();
+				if (oldEnableMode == 0 && GetEnableMode() != 0)
+				{
+					totalExtrusionCommanded = totalMovementMeasured = 0.0;	// force recalibration if the monitor is disabled then enabled
+				}
 			}
 		}
 

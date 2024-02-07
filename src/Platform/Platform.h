@@ -614,6 +614,10 @@ public:
 	const char *_ecv_array null GetExpansionBoardName() const noexcept { return (hasTmc2240Expansion) ? "Duet3 Mini 2+ (TMC2240)" : nullptr; }
 #endif
 
+	static bool HasDebugBuffer() noexcept;
+	static bool IsrDebugPutc(char c) noexcept;
+	static bool SetDebugBufferSize(uint32_t size) noexcept;
+
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 

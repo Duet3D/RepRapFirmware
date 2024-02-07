@@ -1800,6 +1800,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 111: // Debug level
 				{
 					bool seen = false;
+					if (gb.Seen('B'))
+					{
+						seen = true;
+						if (!Platform::SetDebugBufferSize(gb.GetUIValue()))
+						{
+							// We don't bother with an error message here because this is a debugging function, but we do report that there has been an error
+							result = GCodeResult::error;
+							break;
+						}
+					}
 					uint32_t flags = 0;
 					Module module = Module::none;
 					if (gb.Seen('S'))

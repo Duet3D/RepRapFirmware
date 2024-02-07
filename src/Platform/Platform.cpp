@@ -463,6 +463,37 @@ Platform::Platform() noexcept :
 {
 }
 
+static RingBuffer<char> isrDebugBuffer;
+
+// Return true if we have a debug buffer
+bool Platform::HasDebugBuffer() noexcept
+{
+	return isrDebugBuffer.GetCapacity() != 0;
+}
+
+// Write a character to the debug buffer
+bool Platform::IsrDebugPutc(char c) noexcept
+{
+	if (c != 0)
+	{
+		const bool b = isrDebugBuffer.PutItem(c);
+		return b;
+	}
+
+	return true;
+}
+
+// Set the size of the debug buffer returning true if successful
+bool Platform::SetDebugBufferSize(uint32_t size) noexcept
+{
+	if ((size & (size - 1)) == 0)
+	{
+		isrDebugBuffer.Init(size);
+		return true;
+	}
+	return false;
+}
+
 // Initialise the Platform. Note: this is the first module to be initialised, so don't call other modules from here!
 void Platform::Init() noexcept
 {
@@ -1057,6 +1088,15 @@ void Platform::Spin() noexcept
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	MassStorage::Spin();
 #endif
+
+	// Check for debug messages
+	while (!isrDebugBuffer.IsEmpty())
+	{
+		char buf[101];
+		const unsigned int charsRead = isrDebugBuffer.GetBlock(buf, sizeof(buf) - 1);
+		buf[charsRead] = 0;
+		Message(GenericMessage, buf);
+	}
 
 	// Try to flush messages to serial ports
 	(void)FlushMessages();

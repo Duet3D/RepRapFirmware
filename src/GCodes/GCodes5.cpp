@@ -180,7 +180,7 @@ GCodeResult GCodes::HandleM486(GCodeBuffer &gb, const StringRef &reply, OutputBu
 		const int num = gb.GetIValue();
 		if (num >= 0 && num < (int)MaxTrackedObjects && gb.Seen('A'))
 		{
-			String<StringLength50> objectName;
+			String<StringLength100> objectName;
 			gb.GetQuotedString(objectName.GetRef());
 			buildObjects.SetM486Label(num, objectName.c_str());
 		}
