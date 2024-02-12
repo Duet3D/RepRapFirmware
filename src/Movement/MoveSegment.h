@@ -301,7 +301,7 @@ inline float MoveSegment::CalcCFromStepsPerMm(float stepsPerMm) const noexcept
 	return c/stepsPerMm;
 }
 
-// For a decelerating move with positive start speed, calculate the distance before the move reverses
+// For a decelerating move with positive start speed, calculate the distance from the start of the segment before the move reverses
 // From (v^2-u^2) = 2as, if v=0 then s=-u^2/2a = u^2/2d
 // But c = -2/d, so d = -2/c, so s = u^2/(-4/c) = 0.25 * u^2 * c.
 inline float MoveSegment::GetDistanceToReverse(float startSpeed) const noexcept

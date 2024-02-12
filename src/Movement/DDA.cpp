@@ -250,7 +250,12 @@ void DDA::DebugPrint(const char *tag) const noexcept
 	}
 
 	debugPrintf(" s=%.4e", (double)totalDistance);
+#if 1
+	DebugPrintVector(" vec", directionVector, numAxes);
+	DebugPrintVector(" ext", directionVector + (MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders()), reprap.GetGCodes().GetNumExtruders());
+#else
 	DebugPrintVector(" vec", directionVector, MaxAxesPlusExtruders);
+#endif
 	debugPrintf("\n" "a=%.4e d=%.4e reqv=%.4e startv=%.4e topv=%.4e endv=%.4e cks=%" PRIu32 " fp=%" PRIu32 " fl=%04x\n",
 				(double)acceleration, (double)deceleration, (double)requestedSpeed, (double)startSpeed, (double)topSpeed, (double)endSpeed, clocksNeeded, (uint32_t)filePos, flags.all);
 	MoveSegment::DebugPrintList('S', segments);
@@ -2136,7 +2141,7 @@ void DDA::SimulateSteppingDrivers(Platform& p) noexcept
 		const uint32_t dueTime = dm->nextStepTime;
 		while (dm != nullptr && dueTime >= dm->nextStepTime)			// if the next step is due
 		{
-			const uint32_t timeDiff = dm->nextStepTime - lastStepTime;
+			const int32_t timeDiff = (int32_t)(dm->nextStepTime - lastStepTime);
 			const bool badTiming = checkTiming && dm->drive == lastDrive && (timeDiff < 10 || timeDiff > 100000000);
 			debugPrintf("%10" PRIu32 " D%u %c%s", dm->nextStepTime, dm->drive, (dm->direction) ? 'F' : 'B', (badTiming) ? " *\n" : "\n");
 			lastDrive = dm->drive;
