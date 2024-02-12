@@ -297,11 +297,11 @@ bool DriveMovement::NewExtruderSegment() noexcept
 					{
 						// This segment starts forwards and then reverses. Either or both of the forward and reverse segments may be small enough to need no steps.
 						const float distanceToReverse = currentSegment->GetDistanceToReverse(startSpeed) + startDistance;
-						const int32_t netStepsToReverse = (int32_t)(distanceToReverse * mp.cart.effectiveStepsPerMm);
-						if (nextStep <= netStepsToReverse)
+						const int32_t netStepsBeforeReverse = (int32_t)(distanceToReverse * mp.cart.effectiveStepsPerMm);
+						if (nextStep <= netStepsBeforeReverse)
 						{
 							// There is at least one step before we reverse
-							reverseStartStep = netStepsToReverse + 1;
+							reverseStartStep = netStepsBeforeReverse + 1;
 							state = DMState::cartDecelForwardsReversing;
 							CheckDirection(false);
 						}
@@ -683,7 +683,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// no break
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.
 		{
-			const int32_t netSteps = (2 * (reverseStartStep - 1)) - nextStep;
+			const int32_t netSteps = 2 * reverseStartStep - nextStep - 1;
 			nextCalcStepTime = pB + fastLimSqrtf(pA + pC * (float)(netSteps - (int32_t)stepsTillRecalc));
 		}
 		break;
@@ -786,6 +786,14 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		else
 		{
 			if (interval < minStepInterval) { minStepInterval = interval; }
+#if 1	//DEBUG
+			if (interval < -1000)
+			{
+				debugPrintf("Bad interval %" PRIi32 " dr=%u, ns=%" PRIi32 "\n", interval, drive, nextStep);
+				DebugPrint();
+				dda.DebugPrint("dda: ");
+			}
+#endif
 			stepInterval = 0;
 		}
 
