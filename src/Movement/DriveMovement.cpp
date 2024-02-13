@@ -69,7 +69,7 @@ void DriveMovement::DebugPrint() const noexcept
 										: (state == DMState::stepError3) ? " ERR3:"
 											: (state == DMState::stepError4) ? " ERR4:"
 												: ":";
-		debugPrintf("DM%c%s dir=%c steps=%" PRIu32 " next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " ssl=%" PRIu32 " A=%.4e B=%.4e C=%.4e dsf=%.4e tsf=%.1f",
+		debugPrintf("DM%c%s dir=%c steps=%" PRIi32 " next=%" PRIi32 " rev=%" PRIi32 " interval=%" PRIu32 " ssl=%" PRIi32 " A=%.4e B=%.4e C=%.4e dsf=%.4e tsf=%.1f",
 						c, errText, (direction) ? 'F' : 'B', totalSteps, nextStep, reverseStartStep, stepInterval, segmentStepLimit,
 							(double)pA, (double)pB, (double)pC, (double)distanceSoFar, (double)timeSoFar);
 #if SUPPORT_LINEAR_DELTA
@@ -267,8 +267,8 @@ bool DriveMovement::NewExtruderSegment() noexcept
 			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * stepNumber)
 			pA = currentSegment->CalcNonlinearA(startDistance, mp.cart.pressureAdvanceK);
 			pB = currentSegment->CalcNonlinearB(startTime, mp.cart.pressureAdvanceK);
-			distanceSoFar += currentSegment->GetNonlinearSpeedChange() * mp.cart.pressureAdvanceK;		// add the extra extrusion due to pressure advance to the extrusion done at the end of this move
-			const int32_t netStepsAtSegmentEnd = (int32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm);
+			distanceSoFar += currentSegment->GetNonlinearSpeedChange() * mp.cart.pressureAdvanceK;				// add the extra extrusion due to pressure advance to the extrusion done at the end of this move
+			const int32_t netStepsAtSegmentEnd = (int32_t)floorf(distanceSoFar * mp.cart.effectiveStepsPerMm);	// we must round towards minus infinity here because distanceSoFar may be negative
 			const float endSpeed = currentSegment->GetNonlinearEndSpeed(mp.cart.pressureAdvanceK);
 			if (currentSegment->IsAccelerating())
 			{
@@ -787,7 +787,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		{
 			if (interval < minStepInterval) { minStepInterval = interval; }
 #if 1	//DEBUG
-			if (interval < -1000)
+			if (interval < -100)
 			{
 				debugPrintf("Bad interval %" PRIi32 " dr=%u, ns=%" PRIi32 "\n", interval, drive, nextStep);
 				DebugPrint();
