@@ -39,7 +39,7 @@ void DriveMovement::DebugPrint() const noexcept
 									: (state == DMState::stepError2) ? " ERR2:"
 										: (state == DMState::stepError3) ? " ERR3:"
 											: ":";
-		debugPrintf("DM%c%s dir=%c next=%" PRIu32 " rev=%" PRIu32 " interval=%" PRIu32 " ssl=%" PRIu32 " A=%.4e B=%.4e C=%.4e",
+		debugPrintf("DM%c%s dir=%c next=%" PRIi32 " rev=%" PRIi32 " interval=%" PRIu32 " ssl=%" PRIi32 " A=%.4e B=%.4e C=%.4e",
 						c, errText, (direction) ? 'F' : 'B', nextStep, reverseStartStep, stepInterval, segmentStepLimit,
 							(double)q, (double)t0, (double)p);
 #if SUPPORT_LINEAR_DELTA
@@ -216,8 +216,8 @@ MoveSegment *DriveMovement::NewExtruderSegment() noexcept
 		else
 		{
 			// Set up pA, pB, pC such that for forward motion, time = pB + sqrt(pA + pC * stepNumber)
-			distanceSoFar += segments->GetSpeedChange() * mp.cart.pressureAdvanceK;		// add the extra extrusion due to pressure advance to the extrusion done at the end of this move
-			const int32_t netStepsAtSegmentEnd = (int32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm);
+			distanceSoFar += segments->GetSpeedChange() * mp.cart.pressureAdvanceK;								// add the extra extrusion due to pressure advance to the extrusion done at the end of this move
+			const int32_t netStepsAtSegmentEnd = (int32_t)floorf(distanceSoFar * mp.cart.effectiveStepsPerMm);	// we must round towards minus infinity here because distanceSoFar may be negative
 			const float endSpeed = segments->GetEndSpeed(mp.cart.pressureAdvanceK);
 			if (segments->IsAccelerating())
 			{
@@ -250,7 +250,7 @@ MoveSegment *DriveMovement::NewExtruderSegment() noexcept
 						if (nextStep <= netStepsToReverse)
 						{
 							// There is at least one step before we reverse
-							reverseStartStep = netStepsToReverse + 1;
+							reverseStartStep = netStepsBeforeReverse + 1;
 							state = DMState::cartDecelForwardsReversing;
 							CheckDirection(false);
 						}
@@ -639,7 +639,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// no break
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.
 		{
-			const int32_t netSteps = (2 * (reverseStartStep - 1)) - nextStep;
+			const int32_t netSteps = 2 * reverseStartStep - nextStep - 1;
 			nextCalcStepTime = t0 + fastLimSqrtf(q + p * (float)(netSteps - (int32_t)stepsTillRecalc));
 		}
 		break;
@@ -732,10 +732,31 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		}
 	}
 
-	// When crossing between movement phases with high microstepping, due to rounding errors the next step may appear to be due before the last one
-	stepInterval = (iNextCalcStepTime > nextStepTime)
-					? (iNextCalcStepTime - nextStepTime) >> shiftFactor	// calculate the time per step, ready for next time
-					: 0;
+	if (nextStep == 1)
+	{
+		nextStepTime = iNextCalcStepTime;									// shiftFactor must be 0
+	}
+	else
+	{
+		// When crossing between movement phases with high microstepping, due to rounding errors the next step may appear to be due before the last one
+		const int32_t interval = (int32_t)(iNextCalcStepTime - nextStepTime);
+		if (interval > 0)
+		{
+			stepInterval = (uint32_t)interval >> shiftFactor;				// calculate the time per step, ready for next time
+		}
+		else
+		{
+			if (interval < minStepInterval) { minStepInterval = interval; }
+#if 1	//DEBUG
+			if (interval < -100)
+			{
+				debugPrintf("Bad interval %" PRIi32 " dr=%u, ns=%" PRIi32 "\n", interval, drive, nextStep);
+				DebugPrint();
+				dda.DebugPrint("dda: ");
+			}
+#endif
+			stepInterval = 0;
+		}
 
 #if 0	//DEBUG
 	if (isExtruder && stepInterval < 20 /*&& nextStep + stepsTillRecalc + 1 < totalSteps*/)

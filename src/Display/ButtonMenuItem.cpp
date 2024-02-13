@@ -50,14 +50,18 @@ void ButtonMenuItem::UpdateWidthAndHeight(Lcd& lcd) noexcept
 	}
 }
 
-// TODO WS1: if we overflow the command or directory string, we should probably offer a return value that tells the caller to do nothing...
+// TODO if we overflow the command or directory string, we should probably offer a return value that tells the caller to do nothing...
 bool ButtonMenuItem::Select(const StringRef& cmd) noexcept
 {
 	const int nReplacementIndex = StringContains(command, "#0");
 	if (-1 != nReplacementIndex)
 	{
 		cmd.copy(command, nReplacementIndex);
+		// 2024-02-13: M98 command now requires double quote characters around the filename string
+		cmd.cat('"');
 		cmd.cat(m_acFile);
+		cmd.cat('"');
+		cmd.cat(command + nReplacementIndex + 2);
 	}
 	else
 	{
