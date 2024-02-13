@@ -778,7 +778,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	else
 	{
 		// When crossing between movement phases with high microstepping, due to rounding errors the next step may appear to be due before the last one
-		const int32_t interval = iNextCalcStepTime - nextStepTime;
+		const int32_t interval = (int32_t)(iNextCalcStepTime - nextStepTime);
 		if (interval > 0)
 		{
 			stepInterval = (uint32_t)interval >> shiftFactor;				// calculate the time per step, ready for next time
