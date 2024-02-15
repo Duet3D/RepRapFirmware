@@ -133,7 +133,7 @@ void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 	reply.catf(" type %s, reading %.1f, last error: %s", sensorType, (double)lastTemperature, lastRealError.ToString());
 }
 
-// Configure then heater name, if it is provided
+// Configure the sensor name, if it is provided
 void TemperatureSensor::TryConfigureSensorName(GCodeBuffer& gb, bool& seen) THROWS(GCodeException)
 {
 	String<MaxHeaterNameLength> buf;
