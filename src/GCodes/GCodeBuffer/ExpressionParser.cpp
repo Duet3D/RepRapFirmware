@@ -1925,6 +1925,11 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 					ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
 					if (!val.ahVal.GetElement(index, elem))
 					{
+						if (context.WantExists())
+						{
+							rslt.SetBool(false);
+							return;
+						}
 						ThrowParseException("Index out of range");
 					}
 				}
@@ -1933,7 +1938,14 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 				if (*pos == 0)
 				{
 					// End of the expression
-					rslt = elem;
+					if (context.WantExists())
+					{
+						rslt.SetBool(true);
+					}
+					else
+					{
+						rslt = elem;
+					}
 					return;
 				}
 				if (*pos == '^')
