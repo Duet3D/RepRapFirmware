@@ -131,6 +131,8 @@ bool DriveMovement::NewCartesianSegment() noexcept
 #endif
 		if (nextStep < segmentStepLimit)
 		{
+			reverseStartStep = segmentStepLimit;						// need to set this so that CalcNextStepTime works properly
+
 			// Check that the square root term won't go negative, except possibly on the last step due to rounding error
 			if (!currentSegment->IsLinear() && nextStep <= segmentStepLimit - 2 && pA + pC * (segmentStepLimit - 2) < 0.0)
 			{
@@ -366,7 +368,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	// Prepare for the first step
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
-	reverseStartStep = totalSteps + 1;				// no reverse phase
+	stepInterval = 0;								// to keep the debug output deterministic
 	return CalcNextStepTimeFull(dda);				// calculate the scheduled time of the first step
 }
 
@@ -481,6 +483,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	// Prepare for the first step
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
+	stepInterval = 0;								// to keep the debug output deterministic
 	return CalcNextStepTimeFull(dda);				// calculate the scheduled time of the first step
 }
 
@@ -561,6 +564,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	// Prepare for the first step
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
+	stepInterval = 0;								// to keep the debug output deterministic
 	return CalcNextStepTimeFull(dda);				// calculate the scheduled time of the first step
 }
 
