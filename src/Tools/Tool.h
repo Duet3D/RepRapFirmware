@@ -146,6 +146,8 @@ public:
 	void Standby() noexcept;
 	void UpdateExtruderAndHeaterCount(uint16_t &numExtruders, uint16_t &numHeaters) const noexcept;
 
+	void ClearExtrusionPending() const noexcept;
+
 #if SUPPORT_ASYNC_MOVES && PREALLOCATE_TOOL_AXES
 	AxesBitmap GetXYAxesAndExtruders() const noexcept;
 #endif

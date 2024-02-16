@@ -31,6 +31,7 @@
 #include <Heating/Heat.h>
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
+#include <Movement/Move.h>
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -940,6 +941,12 @@ void Tool::StopFeedForward() const noexcept
 	{
 		heat.SetExtrusionFeedForward(heaters[i], 0.0);
 	}
+}
+
+// Clear the pending extrusion for all extruders used by this tool
+void Tool::ClearExtrusionPending() const noexcept
+{
+	IterateExtruders([](unsigned int n)->void { reprap.GetMove().GetExtruderShaper(n).ClearExtrusionPending(); });
 }
 
 #if SUPPORT_ASYNC_MOVES && PREALLOCATE_TOOL_AXES

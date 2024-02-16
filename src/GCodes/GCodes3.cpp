@@ -117,6 +117,12 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 	if (gb.Seen(extrudeLetter))
 	{
 		ms.latestVirtualExtruderPosition = gb.GetDistance();
+		// To make results more consistent when debugging extrusion issues we now also reset the extrusion pending
+		const auto t = ms.GetLockedCurrentTool();
+		if (t.IsNotNull())
+		{
+			t->ClearExtrusionPending();
+		}
 	}
 
 	if (axesIncluded.IsNonEmpty())
