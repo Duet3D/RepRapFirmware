@@ -104,6 +104,7 @@ bool DriveMovement::NewCartesianSegment() noexcept
 		if (currentSegment->IsLinear())
 		{
 			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
+			pA = 0.0;																							// clear this to make debugging easier
 			pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
 			state = DMState::cartLinear;
 		}
@@ -164,6 +165,7 @@ bool DriveMovement::NewDeltaSegment(const DDA& dda) noexcept
 		if (currentSegment->IsLinear())
 		{
 			// Set up pB, pC such that for forward motion, time = pB + pC * (distanceMoved * steps/mm)
+			pA = 0.0;													// clear this to make debugging easier
 			pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
 		}
 		else
@@ -258,6 +260,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 		if (currentSegment->IsLinear())
 		{
 			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
+			pA = 0.0;																							// clear this to make debugging easier
 			pB = currentSegment->CalcLinearB(startDistance, startTime);
 			state = DMState::cartLinear;
 			reverseStartStep = segmentStepLimit = (int32_t)(distanceSoFar * mp.cart.effectiveStepsPerMm) + 1;
