@@ -121,7 +121,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 		const auto t = ms.GetLockedCurrentTool();
 		if (t.IsNotNull())
 		{
-			t->ClearExtrusionPending();
+			t->ClearExtrusionPending();						// note, this is not effective for remote extruders
 		}
 	}
 
