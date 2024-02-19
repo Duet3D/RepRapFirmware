@@ -2239,7 +2239,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 			{
 				const GCodeFileInfo::ThumbnailInfo& inf = info.thumbnails[index];
 				response->catf("%c{\"width\":%u,\"height\":%u,\"format\":\"%s\",\"offset\":%" PRIu32 ",\"size\":%" PRIu32 "}",
-								((index == 0) ? '[' : ','), inf.height, inf.width, inf.format.ToString(), inf.offset, inf.size);
+								((index == 0) ? '[' : ','), inf.width, inf.height, inf.format.ToString(), inf.offset, inf.size);
 				++index;
 			}
 			while (index < MaxThumbnails && info.thumbnails[index].IsValid());

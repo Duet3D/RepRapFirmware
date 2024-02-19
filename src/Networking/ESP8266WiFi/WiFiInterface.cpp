@@ -1168,6 +1168,13 @@ int32_t WiFiInterface::SendFileCredential(GCodeBuffer &gb, size_t credIndex)
 
 GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply) THROWS(GCodeException)
 {
+	// If we are trying and failing to connect in a loop here, we are likely to get an SPI timeout.
+	if (requestedMode == WiFiState::connected && currentMode != WiFiState::connected)
+	{
+		reply.copy("use M552 to abandon the current connection attempt before using this command");
+		return GCodeResult::error;
+	}
+
 	switch (mcode)
 	{
 	case 587:	// Add WiFi network or list remembered networks
