@@ -27,6 +27,7 @@ public:
 	void SetKseconds(float val) noexcept { k = val * StepClockRate; }			// set pressure advance in seconds
 	float GetExtrusionPending() const noexcept { return extrusionPending; }
 	void SetExtrusionPending(float ep) noexcept { extrusionPending = ep; }
+	void ClearExtrusionPending() noexcept { extrusionPending = 0; }
 
 private:
 	float k;								// the pressure advance constant in step clocks

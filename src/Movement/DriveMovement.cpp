@@ -80,6 +80,9 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 		// Calculate the movement parameters
 		if (segments->IsLinear())
 		{
+			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
+			pA = 0.0;																							// clear this to make debugging easier
+			pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
 			state = DMState::cartLinear;
 			// Calculate the B and C coefficients for a linear move such that t = t0 + p*n
 			t0 = -segments->GetS0() * (mmPerStep/segments->GetU());
@@ -100,12 +103,13 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 
 		// Save the movement limit in steps
 		segmentStepLimit = qq;		//TODO calculate segmentStepLimit and reverseStartStep
-		reverseStartStep = qq;
 
 		nextStep = 1;
 		if (nextStep < segmentStepLimit)
 		{
-			qq;										//TODO set direction, clear direction changed
+			reverseStartStep = segmentStepLimit;			// need to set this so that CalcNextStepTime works properly
+			qq;												//TODO set direction, clear direction changed
+
 #if 0	//DEBUG
 			if (__get_BASEPRI() == 0)
 			{
@@ -314,7 +318,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	// Prepare for the first step
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
-	reverseStartStep = totalSteps + 1;				// no reverse phase
+	stepInterval = 0;								// to keep the debug output deterministic
 	return CalcNextStepTimeFull();					// calculate the scheduled time of the first step
 }
 
@@ -429,6 +433,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	// Prepare for the first step
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
+	stepInterval = 0;								// to keep the debug output deterministic
 	return CalcNextStepTimeFull();					// calculate the scheduled time of the first step
 }
 
@@ -509,6 +514,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	// Prepare for the first step
 	nextStepTime = 0;
 	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
+	stepInterval = 0;								// to keep the debug output deterministic
 	return CalcNextStepTimeFull();					// calculate the scheduled time of the first step
 }
 
