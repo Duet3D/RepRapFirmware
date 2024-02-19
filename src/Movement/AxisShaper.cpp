@@ -573,7 +573,8 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 										(double)dda.startSpeed, (double)dda.endSpeed, (double)dda.topSpeed, (double)newTopSpeed, (double)dda.acceleration, (double)dda.deceleration,
 										(double)dda.totalDistance, (double)(proposedAccelPlan.distance + proposedDecelPlan.distance - dda.totalDistance), (double)params.accelDistance);
 					}
-					dda.topSpeed = newTopSpeed;
+					params.topSpeed = newTopSpeed;
+					params.modified = true;
 					if (newTopSpeed > dda.startSpeed)
 					{
 						params.accelClocks = (newTopSpeed - dda.startSpeed)/params.acceleration;
@@ -596,7 +597,6 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 						params.decelStartDistance = dda.totalDistance;
 						idealPlan.shapeDecelStart = idealPlan.shapeDecelEnd = false;
 					}
-					params.steadyClocks = (params.decelStartDistance - params.accelDistance)/newTopSpeed;
 					++triesDone;		// try something different if this fails
 				}
 				else
@@ -625,15 +625,20 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 	// If we are doing any input shaping then set up dda.shapedSegments, else leave it as null
 	if (params.shapingPlan.IsShaped())
 	{
+		dda.topSpeed = params.topSpeed;								// in case we reduced topSpeed
+		params.Finalise();											// this sets up params.shaped.steadyClocks, which is needed by FinishShapedSegments
+		dda.clocksNeeded = params.TotalClocks();
 		MoveSegment * const accelSegs = GetAccelerationSegments(dda, params);
 		MoveSegment * const decelSegs = GetDecelerationSegments(dda, params);
-		params.Finalise(dda.topSpeed);									// this sets up params.shaped.steadyClocks, which is needed by FinishShapedSegments
-		dda.clocksNeeded = params.TotalClocks();
 		dda.segments = FinishShapedSegments(dda, params, accelSegs, decelSegs);
 	}
 	else
 	{
-		params.Finalise(dda.topSpeed);									// this sets up params.steadyClocks
+		if (params.modified)
+		{
+			params.SetFromDDA(dda);									// restore params to what it was originally
+		}
+		params.Finalise();											// this sets up params.steadyClocks
 		dda.clocksNeeded = params.TotalClocks();
 	}
 
@@ -797,7 +802,7 @@ bool AxisShaper::TryReduceTopSpeedFullyShapeNeither(const DDA& dda, const PrepPa
 // This does not check that we have enough spare steady distance to implement the plan
 void AxisShaper::ProposeShapeAccelEnd(const DDA& dda, const PrepParams& params, AccelOrDecelPlan& proposal) const noexcept
 {
-	const float extraAccelDistance = GetExtraAccelEndDistance(dda.topSpeed, params.acceleration);
+	const float extraAccelDistance = GetExtraAccelEndDistance(params.topSpeed, params.acceleration);
 	proposal.distance = params.accelDistance + extraAccelDistance;
 	proposal.clocks = params.accelClocks + extraClocksAtEnd;
 	proposal.acceleration = params.acceleration;
@@ -808,7 +813,7 @@ void AxisShaper::ProposeShapeAccelEnd(const DDA& dda, const PrepParams& params, 
 // This does not check that we have enough spare steady distance to implement the plan
 void AxisShaper::ProposeShapeAccelBoth(const DDA& dda, const PrepParams& params, AccelOrDecelPlan& proposal) const noexcept
 {
-	const float speedIncrease = dda.topSpeed - dda.startSpeed;
+	const float speedIncrease = params.topSpeed - dda.startSpeed;
 	if (speedIncrease <= overlappedDeltaVPerA * params.acceleration)
 	{
 		// We can use overlapped shaping
@@ -829,7 +834,7 @@ void AxisShaper::ProposeShapeAccelBoth(const DDA& dda, const PrepParams& params,
 		if (newAcceleration >= dda.acceleration * reductionLimit)
 		{
 			const float newUnshapedAccelDistance = (dda.startSpeed + 0.5 * newAcceleration * minimumNonOverlappedOriginalClocks) * minimumNonOverlappedOriginalClocks;
-			const float extraAccelDistance = GetExtraAccelStartDistance(dda.startSpeed, newAcceleration) + GetExtraAccelEndDistance(dda.topSpeed, newAcceleration);
+			const float extraAccelDistance = GetExtraAccelStartDistance(dda.startSpeed, newAcceleration) + GetExtraAccelEndDistance(params.topSpeed, newAcceleration);
 			proposal.distance = newUnshapedAccelDistance + extraAccelDistance;
 			proposal.clocks = minimumNonOverlappedOriginalClocks + extraClocksAtStart + extraClocksAtEnd;
 			proposal.acceleration = newAcceleration;
@@ -838,7 +843,7 @@ void AxisShaper::ProposeShapeAccelBoth(const DDA& dda, const PrepParams& params,
 	}
 	else
 	{
-		const float extraAccelDistance = GetExtraAccelStartDistance(dda.startSpeed, params.acceleration) + GetExtraAccelEndDistance(dda.topSpeed, params.acceleration);
+		const float extraAccelDistance = GetExtraAccelStartDistance(dda.startSpeed, params.acceleration) + GetExtraAccelEndDistance(params.topSpeed, params.acceleration);
 		proposal.distance = params.accelDistance + extraAccelDistance;
 		proposal.clocks = params.accelClocks + extraClocksAtStart + extraClocksAtEnd;
 		proposal.acceleration = params.acceleration;
@@ -850,7 +855,7 @@ void AxisShaper::ProposeShapeAccelBoth(const DDA& dda, const PrepParams& params,
 // This does not check that we have enough spare steady distance to implement the plan and that it doesn't breach the minimum acceleration
 void AxisShaper::ProposeShapeDecelStart(const DDA& dda, const PrepParams& params, AccelOrDecelPlan& proposal) const noexcept
 {
-	const float extraDecelDistance = GetExtraDecelStartDistance(dda.topSpeed, params.deceleration);
+	const float extraDecelDistance = GetExtraDecelStartDistance(params.topSpeed, params.deceleration);
 	proposal.distance = dda.totalDistance - params.decelStartDistance + extraDecelDistance;
 	proposal.clocks = params.decelClocks + extraClocksAtStart;
 	proposal.acceleration = params.deceleration;
@@ -861,14 +866,14 @@ void AxisShaper::ProposeShapeDecelStart(const DDA& dda, const PrepParams& params
 // This does not check that we have enough spare steady distance to implement the plan and that it doesn't breach the minimum acceleration
 void AxisShaper::ProposeShapeDecelBoth(const DDA& dda, const PrepParams& params, AccelOrDecelPlan& proposal) const noexcept
 {
-	const float speedDecrease = dda.topSpeed - dda.endSpeed;
+	const float speedDecrease = params.topSpeed - dda.endSpeed;
 	if (speedDecrease <= overlappedDeltaVPerA * params.deceleration)
 	{
 		// We can use overlapped shaping
 		const float newDeceleration = speedDecrease/overlappedDeltaVPerA;
 		if (newDeceleration >= dda.deceleration * reductionLimit)
 		{
-			const float newDecelDistance = (dda.topSpeed * overlappedShapingClocks) - (newDeceleration * overlappedDistancePerA);
+			const float newDecelDistance = (params.topSpeed * overlappedShapingClocks) - (newDeceleration * overlappedDistancePerA);
 			proposal.distance = newDecelDistance;
 			proposal.clocks = overlappedShapingClocks;
 			proposal.acceleration = newDeceleration;
@@ -883,7 +888,7 @@ void AxisShaper::ProposeShapeDecelBoth(const DDA& dda, const PrepParams& params,
 		if (newDeceleration >= dda.deceleration * reductionLimit)
 		{
 			const float newUnshapedDecelDistance = (dda.endSpeed + (0.5 * newDeceleration * minimumNonOverlappedOriginalClocks)) * minimumNonOverlappedOriginalClocks;
-			const float extraDecelDistance = GetExtraDecelStartDistance(dda.topSpeed, newDeceleration) + GetExtraDecelEndDistance(dda.endSpeed, newDeceleration);
+			const float extraDecelDistance = GetExtraDecelStartDistance(params.topSpeed, newDeceleration) + GetExtraDecelEndDistance(dda.endSpeed, newDeceleration);
 			proposal.distance = newUnshapedDecelDistance + extraDecelDistance;
 			proposal.clocks = minimumNonOverlappedOriginalClocks + extraClocksAtStart + extraClocksAtEnd;
 			proposal.acceleration = newDeceleration;

@@ -129,10 +129,12 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	deceleration = dda.deceleration;
 	accelClocks = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
 	decelClocks = (dda.topSpeed - dda.endSpeed)/dda.deceleration;
+	topSpeed = dda.topSpeed;
+	modified = false;
 }
 
 // Calculate the steady clocks and set the total clocks in the DDA
-void PrepParams::Finalise(float topSpeed) noexcept
+void PrepParams::Finalise() noexcept
 {
 	const float steadyDistance = decelStartDistance - accelDistance;
 	steadyClocks = (steadyDistance <= 0.0) ? 0.0 : steadyDistance/topSpeed;
@@ -1357,7 +1359,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 	else
 	{
 		params.SetFromDDA(*this);
-		params.Finalise(topSpeed);
+		params.Finalise();
 		clocksNeeded = params.TotalClocks();
 	}
 
