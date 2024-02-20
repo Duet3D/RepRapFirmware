@@ -442,6 +442,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 			for (;;)
 			{
 				AccelOrDecelPlan proposedAccelPlan;
+				proposedAccelPlan.distance = params.accelDistance;
 				if (idealPlan.shapeAccelEnd)
 				{
 					if (idealPlan.shapeAccelStart)
@@ -452,21 +453,10 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 					{
 						ProposeShapeAccelEnd(dda, params, proposedAccelPlan);
 					}
-					else
-					{
-						// We can't implement acceleration end shaping because the acceleration phase is too short
-						// As we're not applying shaping, we only need to store the original distance in the proposal
-						proposedAccelPlan.distance = params.accelDistance;
-					}
-				}
-				else
-				{
-					// We never implement acceleration start shaping unless we also implement acceleration end shaping; so we're not looking to shape acceleration at all.
-					// As we're not applying acceleration shaping, we only need to store the original distance in the proposal
-					proposedAccelPlan.distance = params.accelDistance;
 				}
 
 				AccelOrDecelPlan proposedDecelPlan;
+				proposedDecelPlan.distance = dda.totalDistance - params.decelStartDistance;
 				if (idealPlan.shapeDecelStart)
 				{
 					if (idealPlan.shapeDecelEnd)
@@ -477,16 +467,6 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 					{
 						ProposeShapeDecelStart(dda, params, proposedDecelPlan);
 					}
-					else
-					{
-						// As we're not applying shaping, we only need to store the original distance in the proposal
-						proposedDecelPlan.distance = dda.totalDistance - params.decelStartDistance;
-					}
-				}
-				else
-				{
-					// As we're not applying shaping, we only need to store the original distance in the proposal
-					proposedDecelPlan.distance = dda.totalDistance - params.decelStartDistance;
 				}
 
 				// If we didn't actually propose any shaping because of minimum acceleration limit, quit
