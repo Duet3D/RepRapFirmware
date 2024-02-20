@@ -60,7 +60,7 @@ public:
 #endif
 
 	// Plan input shaping for an individual move
-	void PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) noexcept;
+	void PlanShaping(DDA& dda, PrepParams& params) noexcept;
 
 	// Calculate the move segments when input shaping is not used
 	static MoveSegment *GetUnshapedSegments(DDA& dda, const PrepParams& params) noexcept;
@@ -113,7 +113,7 @@ private:
 	// Secondary parameters, calculated from the primary ones
 	float totalShapingClocks;							// the total time in step clocks for shaping the start or end of an acceleration or deceleration
 	float minimumShapingStartOriginalClocks;			// the minimum acceleration/deceleration time for which we can shape the start, without changing the acceleration/deceleration
-	float minimumShapingEndOriginalClocks;				// the minimum acceleration/deceleration time for which we can shape the start, without changing the acceleration/deceleration
+	float minimumShapingEndOriginalClocks;				// the minimum acceleration/deceleration time for which we can shape the end, without changing the acceleration/deceleration
 	float minimumNonOverlappedOriginalClocks;			// the minimum original acceleration or deceleration time using non-overlapped start and end shaping
 	float extraClocksAtStart;							// the extra time needed to shape the start of acceleration or deceleration
 	float extraClocksAtEnd;								// the extra time needed to shape the end of acceleration or deceleration

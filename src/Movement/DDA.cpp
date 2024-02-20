@@ -1352,21 +1352,16 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 	segments = nullptr;
 
 	PrepParams params;										// the default constructor clears params.plan to 'no shaping'
+	params.SetFromDDA(*this);
 	if (flags.xyMoving)
 	{
-		reprap.GetMove().GetAxisShaper().PlanShaping(*this, params, flags.xyMoving);	// this will set up shapedSegments if we are doing any shaping
+		reprap.GetMove().GetAxisShaper().PlanShaping(*this, params);
 	}
 	else
 	{
-		params.SetFromDDA(*this);
 		params.Finalise();
 		clocksNeeded = params.TotalClocks();
 	}
-
-	// Copy the unshaped acceleration and deceleration back to the DDA because ManageLaserPower uses them
-	//TODO change ManageLaserPower to work on the shaped segments instead
-	acceleration = params.acceleration;
-	deceleration = params.deceleration;
 
 	if (simMode < SimulationMode::normal)
 	{
@@ -1583,7 +1578,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 #if SUPPORT_NONLINEAR_EXTRUSION
 						// Add the nonlinear extrusion correction to totalExtrusion.
 						// If we are given a stupidly short move to execute then clocksNeeded can be zero, which leads to NaNs in this code; so we need to guard against that.
-						if (flags.isPrintingMove && clocksNeeded != 0)
+						if (flags.isPrintingMove && clocksNeeded > 0)
 						{
 							const NonlinearExtrusion& nl = platform.GetExtrusionCoefficients(extruder);
 							float& dv = directionVector[drive];
