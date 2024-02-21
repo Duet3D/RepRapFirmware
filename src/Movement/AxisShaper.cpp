@@ -611,6 +611,20 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 		MoveSegment * const accelSegs = GetAccelerationSegments(dda, params);
 		MoveSegment * const decelSegs = GetDecelerationSegments(dda, params);
 		dda.segments = FinishShapedSegments(dda, params, accelSegs, decelSegs);
+#if 1	//debug
+		// Check that the calculated distance of each segment agrees with its length
+		unsigned int n = 0;
+		for (const MoveSegment *seg = dda.segments; seg != nullptr; seg = seg->GetNext())
+		{
+			const float diff = seg->GetCalculatedDistance() - seg->GetSegmentLength();
+			if (fabsf(diff) * 1000 > seg->GetSegmentLength())
+			{
+				debugPrintf("Seg length diff %.2e at %u\n", (double)diff, n);
+				MoveSegment::DebugPrintList('S', dda.segments);
+			}
+			++n;
+		}
+#endif
 	}
 	else
 	{
