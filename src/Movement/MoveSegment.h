@@ -203,6 +203,7 @@ public:
 	void AddToTail(MoveSegment *tail) noexcept;
 	void DebugPrint(char ch) const noexcept;
 	static void DebugPrintList(char ch, const MoveSegment *segs) noexcept;
+	static void DebugCheckSegments(const MoveSegment *segs) noexcept;
 
 	// Allocate a MoveSegment, clearing the flags
 	static MoveSegment *Allocate(MoveSegment *next) noexcept;

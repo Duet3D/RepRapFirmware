@@ -553,6 +553,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 										(double)dda.startSpeed, (double)dda.endSpeed, (double)dda.topSpeed, (double)newTopSpeed, (double)dda.acceleration, (double)dda.deceleration,
 										(double)dda.totalDistance, (double)(proposedAccelPlan.distance + proposedDecelPlan.distance - dda.totalDistance), (double)params.accelDistance);
 					}
+
 					params.topSpeed = newTopSpeed;
 					params.modified = true;
 					if (newTopSpeed > dda.startSpeed)
@@ -612,18 +613,7 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 		MoveSegment * const decelSegs = GetDecelerationSegments(dda, params);
 		dda.segments = FinishShapedSegments(dda, params, accelSegs, decelSegs);
 #if 1	//debug
-		// Check that the calculated distance of each segment agrees with its length
-		unsigned int n = 0;
-		for (const MoveSegment *seg = dda.segments; seg != nullptr; seg = seg->GetNext())
-		{
-			const float diff = seg->GetCalculatedDistance() - seg->GetSegmentLength();
-			if (fabsf(diff) * 1000 > seg->GetSegmentLength())
-			{
-				debugPrintf("Seg length diff %.2e at %u\n", (double)diff, n);
-				MoveSegment::DebugPrintList('S', dda.segments);
-			}
-			++n;
-		}
+		MoveSegment::DebugCheckSegments(dda.segments);
 #endif
 	}
 	else
@@ -891,7 +881,7 @@ void AxisShaper::ProposeShapeDecelBoth(const DDA& dda, const PrepParams& params,
 	}
 	else
 	{
-		const float extraDecelDistance = GetExtraDecelStartDistance(dda.topSpeed, params.deceleration) + GetExtraDecelEndDistance(dda.endSpeed, params.deceleration);
+		const float extraDecelDistance = GetExtraDecelStartDistance(params.topSpeed, params.deceleration) + GetExtraDecelEndDistance(dda.endSpeed, params.deceleration);
 		proposal.distance = dda.totalDistance - params.decelStartDistance + extraDecelDistance;
 		proposal.clocks = params.decelClocks + extraClocksAtStart + extraClocksAtEnd;
 		proposal.acceleration = params.deceleration;
@@ -1062,11 +1052,11 @@ MoveSegment *AxisShaper::GetDecelerationSegments(const DDA& dda, PrepParams& par
 				endDecelSegs = MoveSegment::Allocate(endDecelSegs);
 				const float deceleration = params.deceleration * (1.0 - coefficients[i]);
 				const float segTime = durations[i];
-				const float speedDecreasee = deceleration * segTime;
-				segStartSpeed += speedDecreasee;
+				const float speedDecrease = deceleration * segTime;
+				segStartSpeed += speedDecrease;
 				const float b = segStartSpeed/deceleration;
 				const float c = -2.0/deceleration;
-				const float segLen = (segStartSpeed + (-0.5 * speedDecreasee)) * segTime;
+				const float segLen = (segStartSpeed - (0.5 * speedDecrease)) * segTime;
 				endDecelSegs->SetNonLinear(segLen, segTime, b, c, -deceleration);
 				endDistance -= segLen;
 			}

@@ -77,4 +77,21 @@ void MoveSegment::DebugPrint(char ch) const noexcept
 	}
 }
 
+// Check that the calculated distance of each segment agrees with its length
+/*static*/ void MoveSegment::DebugCheckSegments(const MoveSegment *segs) noexcept
+{
+	unsigned int n = 0;
+	while (segs != nullptr)
+	{
+		const float diff = segs->GetCalculatedDistance() - segs->GetSegmentLength();
+		if (fabsf(diff) * 1000 > segs->GetSegmentLength())
+		{
+			debugPrintf("Seg length diff %.2e at %u\n", (double)diff, n);
+			MoveSegment::DebugPrintList('S', segs);
+		}
+		++n;
+		segs = segs->GetNext();
+	}
+}
+
 // End
