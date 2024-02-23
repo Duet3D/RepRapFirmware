@@ -130,7 +130,17 @@ void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 	{
 		reply.catf(" (%s)", sensorName);
 	}
-	reply.catf(" type %s, reading %.1f, last error: %s", sensorType, (double)lastTemperature, lastRealError.ToString());
+	reply.catf(" type %s", sensorType);
+	AppendPinDetails(reply);
+	reply.catf(", last error %s, ", lastRealError.ToString());
+	if (slopeAdjustment != 0.0 || offsetAdjustment != 0.0)
+	{
+		reply.catf("offset adjustment %.1f, slope adjustment %.2f, adjusted reading %.1f", (double)offsetAdjustment, (double)slopeAdjustment, (double)lastTemperature);
+	}
+	else
+	{
+		reply.catf("reading %.1f", (double)lastTemperature);
+	}
 }
 
 // Configure parameters that are common to all sensors and stored in the base class
@@ -148,7 +158,7 @@ void TemperatureSensor::ConfigureCommonParameters(GCodeBuffer& gb, bool& seen) T
 void TemperatureSensor::SetResult(float t, TemperatureError rslt) noexcept
 {
 	lastResult = rslt;
-	lastTemperature = t;
+	lastTemperature = (t * (1.0 + slopeAdjustment)) + offsetAdjustment;
 	whenLastRead = millis();
 	if (rslt != TemperatureError::ok)
 	{

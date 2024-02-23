@@ -47,6 +47,9 @@ public:
 	static constexpr const char *_ecv_array TypeNameDht21 = "dht21";
 	static constexpr const char *_ecv_array TypeNameDht22 = "dht22";
 
+protected:
+	void AppendPinDetails(const StringRef& reply) const noexcept override;
+
 private:
 	static constexpr uint32_t MinimumReadInterval = 2100;			// ms - datasheet https://www.sparkfun.com/datasheets/Sensors/Temperature/DHT22.pdf says "Collecting period should be : >2 second"
 

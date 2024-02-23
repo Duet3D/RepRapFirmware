@@ -73,16 +73,10 @@ bool SensorWithPort::ConfigurePort(const CanMessageGenericParser& parser, const 
 #endif
 
 // Copy the basic details to the reply buffer. This hides the version in the base class.
-void SensorWithPort::CopyBasicDetails(const StringRef& reply) const noexcept
+void SensorWithPort::AppendPinDetails(const StringRef& reply) const noexcept
 {
-	reply.printf("Sensor %u", GetSensorNumber());
-	if (GetSensorName() != nullptr)
-	{
-		reply.catf(" (%s)", GetSensorName());
-	}
-	reply.catf(" type %s using pin ", GetSensorType());
+	reply.cat(" using pin ");
 	port.AppendPinName(reply);
-	reply.catf(", reading %.1f, last error: %s", (double)GetStoredReading(), GetLastError().ToString());
 }
 
 // End
