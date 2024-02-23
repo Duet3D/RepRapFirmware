@@ -112,6 +112,8 @@ private:
 	const char *_ecv_array _ecv_null sensorName;
 	float lastTemperature;
 	uint32_t whenLastRead;
+	float offsetAdjustment = 0.0;
+	float slopeAdjustment = 0.0;
 	TemperatureError lastResult, lastRealError;
 };
 

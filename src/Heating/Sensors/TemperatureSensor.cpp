@@ -137,13 +137,12 @@ void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 void TemperatureSensor::ConfigureCommonParameters(GCodeBuffer& gb, bool& seen) THROWS(GCodeException)
 {
 	String<MaxHeaterNameLength> buf;
-	bool localSeen = false;
-	gb.TryGetQuotedString('A', buf.GetRef(), localSeen);
-	if (localSeen)
+	if (gb.TryGetQuotedString('A', buf.GetRef(), seen))
 	{
 		SetSensorName(buf.c_str());
-		seen = true;
 	}
+	gb.TryGetLimitedFValue('U', offsetAdjustment, seen, -20.0, 20.0);
+	gb.TryGetLimitedFValue('V', slopeAdjustment, seen, -0.2, 0.2);
 }
 
 void TemperatureSensor::SetResult(float t, TemperatureError rslt) noexcept

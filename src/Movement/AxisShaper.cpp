@@ -92,21 +92,9 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		}
 	}
 
-	if (gb.Seen('F'))
-	{
-		seen = true;
-		frequency = gb.GetLimitedFValue('F', MinimumInputShapingFrequency, MaximumInputShapingFrequency);
-	}
-	if (gb.Seen('L'))
-	{
-		seen = true;
-		reductionLimit = constrain<float>(gb.GetNonNegativeFValue(), 0.01, 1.0);	// very low accelerations cause problems with the maths
-	}
-	if (gb.Seen('S'))
-	{
-		seen = true;
-		zeta = gb.GetLimitedFValue('S', 0.0, 0.99);
-	}
+	gb.TryGetLimitedFValue('F', frequency, seen, MinimumInputShapingFrequency, MaximumInputShapingFrequency);
+	gb.TryGetLimitedFValue('L', reductionLimit, seen, 0.01, 1.0);
+	gb.TryGetLimitedFValue('S', zeta, seen, 0.0, 0.99);
 
 	if (gb.Seen('P'))
 	{
