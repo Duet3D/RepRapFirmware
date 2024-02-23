@@ -40,7 +40,7 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
 		}
 	}
 
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
 	if (!changed && !gb.Seen('Y'))
 	{
 		// No parameters were provided, so report the current configuration

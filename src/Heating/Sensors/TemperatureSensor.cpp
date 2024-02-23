@@ -99,7 +99,7 @@ void TemperatureSensor::SetSensorName(const char *_ecv_array _ecv_null newName) 
 // Default implementation of Configure, for sensors that have no configurable parameters
 GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
 	if (!changed && !gb.Seen('Y'))
 	{
 		// No parameters were provided, so report the current configuration
@@ -133,8 +133,8 @@ void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 	reply.catf(" type %s, reading %.1f, last error: %s", sensorType, (double)lastTemperature, lastRealError.ToString());
 }
 
-// Configure the sensor name, if it is provided
-void TemperatureSensor::TryConfigureSensorName(GCodeBuffer& gb, bool& seen) THROWS(GCodeException)
+// Configure parameters that are common to all sensors and stored in the base class
+void TemperatureSensor::ConfigureCommonParameters(GCodeBuffer& gb, bool& seen) THROWS(GCodeException)
 {
 	String<MaxHeaterNameLength> buf;
 	bool localSeen = false;

@@ -80,7 +80,7 @@ GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& re
 	}
 #endif
 
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
 
 	// It's a new sensor
 	if (gb.Seen('Y'))

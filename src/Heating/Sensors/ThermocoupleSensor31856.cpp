@@ -73,7 +73,7 @@ GCodeResult ThermocoupleSensor31856::Configure(GCodeBuffer& gb, const StringRef&
 	{
 		return GCodeResult::error;
 	}
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
 	if (gb.Seen('F'))
 	{
 		changed = true;

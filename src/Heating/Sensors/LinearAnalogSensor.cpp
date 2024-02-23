@@ -39,7 +39,7 @@ GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& repl
 
 	gb.TryGetFValue('B', lowTemp, changed);
 	gb.TryGetFValue('C', highTemp, changed);
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
 	if (gb.Seen('F'))
 	{
 		changed = true;

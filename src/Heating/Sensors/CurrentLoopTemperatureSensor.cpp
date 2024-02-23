@@ -44,7 +44,7 @@ GCodeResult CurrentLoopTemperatureSensor::Configure(GCodeBuffer& gb, const Strin
 	gb.TryGetFValue('H', tempAt20mA, changed);
 	gb.TryGetUIValue('C', chipChannel, changed);
 	gb.TryGetUIValue('D', isDifferential, changed);
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
 	return FinishConfiguring(changed, reply);
 }
 

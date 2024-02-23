@@ -68,7 +68,7 @@ GCodeResult RtdSensor31865::Configure(GCodeBuffer& gb, const StringRef& reply, b
 	{
 		return GCodeResult::error;
 	}
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
 	if (gb.Seen('F'))
 	{
 		changed = true;
