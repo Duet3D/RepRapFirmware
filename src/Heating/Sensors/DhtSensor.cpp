@@ -24,9 +24,19 @@ void DhtDataTransition(CallbackParameter cp) noexcept
 	static_cast<DhtTemperatureSensor*>(cp.vp)->Interrupt();
 }
 
+static const char *GetLongSensorTypeName(DhtSensorType t) noexcept
+{
+	switch (t)
+	{
+	case DhtSensorType::Dht21:			return "DHT21-temperature";
+	case DhtSensorType::Dht22:			return "DHT22-temperature";
+	default:							return "DHT-unknown";
+	}
+}
+
 // Class DhtTemperatureSensor members
 DhtTemperatureSensor::DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType t) noexcept
-	: SensorWithPort(sensorNum, "DHT-temperature"), lastReadingAttemptTime(0), type(t)
+	: SensorWithPort(sensorNum, GetLongSensorTypeName(t)), lastReadingAttemptTime(0), type(t)
 {
 }
 

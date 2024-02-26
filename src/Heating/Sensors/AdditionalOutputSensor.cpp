@@ -45,9 +45,14 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
 	{
 		// No parameters were provided, so report the current configuration
 		CopyBasicDetails(reply);
-		reply.catf(", additional output %d of sensor %d", outputNumber, parentSensor);
 	}
 	return GCodeResult::ok;
+}
+
+// Append the pin details to the reply buffer
+void AdditionalOutputSensor::AppendPinDetails(const StringRef& reply) const noexcept
+{
+	reply.catf(" using additional output %d of sensor %d", outputNumber, parentSensor);
 }
 
 #if SUPPORT_REMOTE_COMMANDS

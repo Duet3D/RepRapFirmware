@@ -24,6 +24,9 @@ public:
 	void Poll() noexcept override;
 
 protected:
+	// Append the pin details to the reply buffer
+	void AppendPinDetails(const StringRef& reply) const noexcept override;
+
 	uint8_t parentSensor;
 	uint8_t outputNumber;
 
