@@ -3952,19 +3952,6 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 	}
 #endif
 
-#if HAS_AUX_DEVICES
-	// Second UART device, e.g. dc42's PanelDue. Do NOT use emulation for this one!
-	if (   (&gb == AuxGCode() && !platform.IsAuxRaw(0))
-# ifdef SERIAL_AUX2_DEVICE
-		|| (&gb == Aux2GCode() && !platform.IsAuxRaw(1))
-# endif
-	   )
-	{
-		platform.AppendAuxReply(0, reply, (*reply)[0] == '{');
-		return;
-	}
-#endif
-
 	const MessageType type = gb.GetResponseMessageType();
 	const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
 
