@@ -3477,34 +3477,16 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 #endif
 
 	// Now send the message to all the destinations
-	size_t numDestinations = 0;
-	if ((type & (AuxMessage | ImmediateAuxMessage)) != 0)
-	{
-		++numDestinations;
-	}
-	if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
-	{
-		++numDestinations;
-	}
-	if ((type & HttpMessage) != 0)
-	{
-		++numDestinations;
-	}
-	if ((type & TelnetMessage) != 0)
-	{
-		++numDestinations;
-	}
-#if HAS_SBC_INTERFACE
-	if (reprap.UsingSbcInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
-	{
-		++numDestinations;
-	}
-#endif
+	unsigned int numDestinations = 0;
+	if ((type & (AuxMessage | ImmediateAuxMessage)) != 0)	{ ++numDestinations; }
 #ifdef SERIAL_AUX2_DEVICE
-	if ((type & Aux2Message) != 0)
-	{
-		++numDestinations;
-	}
+	if ((type & Aux2Message) != 0)							{ ++numDestinations; }
+#endif
+	if ((type & (UsbMessage | BlockingUsbMessage)) != 0)	{ ++numDestinations; }
+	if ((type & HttpMessage) != 0)							{ ++numDestinations; }
+	if ((type & TelnetMessage) != 0)						{ ++numDestinations; }
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)) { ++numDestinations; }
 #endif
 
 	if (numDestinations == 0)
@@ -3520,6 +3502,13 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 			AppendAuxReply(0, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 
+#ifdef SERIAL_AUX2_DEVICE
+		if ((type & Aux2Message) != 0)
+		{
+			AppendAuxReply(1, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
+		}
+#endif
+
 		if ((type & HttpMessage) != 0)
 		{
 			reprap.GetNetwork().HandleHttpGCodeReply(buffer);
@@ -3528,11 +3517,6 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 		if ((type & TelnetMessage) != 0)
 		{
 			reprap.GetNetwork().HandleTelnetGCodeReply(buffer);
-		}
-
-		if ((type & Aux2Message) != 0)
-		{
-			AppendAuxReply(1, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 
 		if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
