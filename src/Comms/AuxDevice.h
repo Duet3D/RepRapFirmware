@@ -24,7 +24,7 @@ public:
 	void Disable() noexcept;
 
 	bool IsRaw() const noexcept { return raw; }
-	void SetRaw(bool p_raw) { raw = p_raw; }
+	void SetRaw(bool p_raw) noexcept { raw = p_raw; }
 
 	void SendPanelDueMessage(const char* msg) noexcept;
 	void AppendAuxReply(const char *msg, bool rawMessage) noexcept;
