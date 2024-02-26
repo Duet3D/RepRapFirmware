@@ -45,7 +45,7 @@ constexpr ObjectModelTableEntry TemperatureSensor::objectModelTable[] =
 	{ "lastReading",	OBJECT_MODEL_FUNC(self->lastTemperature, 2), 	ObjectModelEntryFlags::live },
 	{ "name",			OBJECT_MODEL_FUNC(self->sensorName), 			ObjectModelEntryFlags::none },
 	{ "offsetAdj",		OBJECT_MODEL_FUNC(self->offsetAdjustment, 1), 	ObjectModelEntryFlags::none },
-	{ "slopeAdj",		OBJECT_MODEL_FUNC(self->slopeAdjustment, 1), 	ObjectModelEntryFlags::none },
+	{ "slopeAdj",		OBJECT_MODEL_FUNC(self->slopeAdjustment, 3), 	ObjectModelEntryFlags::none },
 	{ "state",			OBJECT_MODEL_FUNC(self->lastResult.ToString()),	ObjectModelEntryFlags::none },
 	{ "type",			OBJECT_MODEL_FUNC(self->GetShortSensorType()), 	ObjectModelEntryFlags::none },
 };
@@ -137,7 +137,7 @@ void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 	reply.catf(", last error %s, ", lastRealError.ToString());
 	if (slopeAdjustment != 0.0 || offsetAdjustment != 0.0)
 	{
-		reply.catf("offset adjustment %.1f, slope adjustment %.2f, adjusted reading %.1f", (double)offsetAdjustment, (double)slopeAdjustment, (double)lastTemperature);
+		reply.catf("offset adjustment %.1f, slope adjustment %.3f, adjusted reading %.1f", (double)offsetAdjustment, (double)slopeAdjustment, (double)lastTemperature);
 	}
 	else
 	{
