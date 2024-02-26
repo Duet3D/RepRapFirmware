@@ -44,11 +44,13 @@ constexpr ObjectModelTableEntry TemperatureSensor::objectModelTable[] =
 	// 0. TemperatureSensor members
 	{ "lastReading",	OBJECT_MODEL_FUNC(self->lastTemperature, 2), 	ObjectModelEntryFlags::live },
 	{ "name",			OBJECT_MODEL_FUNC(self->sensorName), 			ObjectModelEntryFlags::none },
+	{ "offsetAdj",		OBJECT_MODEL_FUNC(self->offsetAdjustment, 1), 	ObjectModelEntryFlags::none },
+	{ "slopeAdj",		OBJECT_MODEL_FUNC(self->slopeAdjustment, 1), 	ObjectModelEntryFlags::none },
 	{ "state",			OBJECT_MODEL_FUNC(self->lastResult.ToString()),	ObjectModelEntryFlags::none },
 	{ "type",			OBJECT_MODEL_FUNC(self->GetShortSensorType()), 	ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t TemperatureSensor::objectModelTableDescriptor[] = { 1, 4 };
+constexpr uint8_t TemperatureSensor::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(TemperatureSensor)
 
