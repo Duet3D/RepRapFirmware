@@ -23,7 +23,7 @@ LocalFan::LocalFan(unsigned int fanNum) noexcept
 	: Fan(fanNum),
 	  lastPwm(-1.0),									// force a refresh
 	  lastVal(-1.0),
-	  fanInterruptCount(0), fanLastResetTime(0), fanInterval(0),
+	  tachoInterruptCount(0), tachoLastResetTime(0), tachoInterval(0),
 	  blipping(false)
 {
 }
@@ -41,15 +41,29 @@ GCodeResult LocalFan::ReportPortDetails(const StringRef& str) const noexcept
 	port.AppendFullDetails(str);
 	if (tachoPort.IsValid())
 	{
-		str.cat(" tacho");
+		str.cat(", tacho");
 		tachoPort.AppendBasicDetails(str);
+		str.catf(", %.1f pulses per revolution", (double)(StepClockRate * TachoMaxInterruptCount * 60.0/tachoMultiplier));
+	}
+	else
+	{
+		str.cat(", no tacho");
 	}
 	return GCodeResult::ok;
 }
 
-GCodeResult LocalFan::SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept
+GCodeResult LocalFan::SetFanParameters(bool setFreq, PwmFrequency freq, bool setPpr, float ppr, const StringRef& reply) noexcept
 {
-	port.SetFrequency(freq);
+	if (setFreq)
+	{
+		port.SetFrequency(freq);
+		pwmFreq = freq;
+	}
+	if (setPpr)
+	{
+		tachoMultiplier = (uint32_t)(StepClockRate * TachoMaxInterruptCount * 60.0/ppr);
+		tachoPulsesPerRev = ppr;
+	}
 	return GCodeResult::ok;
 }
 
@@ -199,20 +213,20 @@ int32_t LocalFan::GetRPM() const noexcept
 	// When the fan stops, we get no interrupts and fanInterval stops getting updated. We must recognise this and return zero.
 	return (!tachoPort.IsValid())
 			? -1																			// we return -1 if there is no tacho configured
-			: (fanInterval != 0 && StepTimer::GetTimerTicks() - fanLastResetTime < 3 * StepClockRate)	// if we have a reading and it is less than 3 seconds old
-			  ? (StepClockRate * fanMaxInterruptCount * (60/2))/fanInterval					// then calculate RPM assuming 2 interrupts per rev
+			: (tachoInterval != 0 && StepTimer::GetTimerTicks() - tachoLastResetTime < 3 * StepClockRate)	// if we have a reading and it is less than 3 seconds old
+			  ? tachoMultiplier/tachoInterval												// then calculate RPM
 			  : 0;																			// else assume fan is off or tacho not connected
 }
 
 void LocalFan::Interrupt() noexcept
 {
-	++fanInterruptCount;
-	if (fanInterruptCount == fanMaxInterruptCount)
+	++tachoInterruptCount;
+	if (tachoInterruptCount == TachoMaxInterruptCount)
 	{
 		const uint32_t now = StepTimer::GetTimerTicks();
-		fanInterval = now - fanLastResetTime;
-		fanLastResetTime = now;
-		fanInterruptCount = 0;
+		tachoInterval = now - tachoLastResetTime;
+		tachoLastResetTime = now;
+		tachoInterruptCount = 0;
 	}
 }
 

@@ -58,7 +58,7 @@ public:
 	static ReadWriteLock fansLock;
 
 private:
-	LocalFan *CreateLocalFan(uint32_t fanNum, const char *_ecv_array pinNames, PwmFrequency freq, const StringRef& reply) noexcept;
+	LocalFan *CreateLocalFan(uint32_t fanNum, const char *_ecv_array pinNames, PwmFrequency freq, float pulsesPerRev, const StringRef& reply) noexcept;
 
 	Fan *_ecv_from fans[MaxFans];
 };
