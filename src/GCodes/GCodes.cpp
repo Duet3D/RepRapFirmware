@@ -1705,7 +1705,7 @@ void GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& m
 	// Deal with feed rate, also determine whether M220 and M221 speed and extrusion factors apply to this move
 	if (ms.isCoordinated || machineType == MachineType::fff)
 	{
-		ms.applyM220M221 = (ms.moveType == 0 && isPrintingMove && !gb.IsDoingFileMacro());
+		ms.applyM220M221 = (ms.moveType == 0 && isPrintingMove && !gb.LatestMachineState().runningSystemMacro);
 		ms.inverseTimeMode = gb.LatestMachineState().inverseTimeMode;
 		if (ms.inverseTimeMode)
 		{
