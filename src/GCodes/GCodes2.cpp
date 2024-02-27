@@ -1006,10 +1006,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					break;
 				}
 
-				if (code == 32 && !LockAllMovementSystemsAndWaitForStandstill(gb))
+#if SUPPORT_ASYNC_MOVES
+				if (!DoSync(gb))
 				{
 					return false;
 				}
+#else
+				if (code == 32 && !LockCurrentMovementSystemAndWaitForStandstill(gb))
+				{
+					return false;
+				}
+#endif
 				{
 					String<MaxFilenameLength> filename;
 					gb.GetUnprecedentedString(filename.GetRef());
@@ -1056,11 +1063,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				else
 				{
-					if (!LockAllMovementSystemsAndWaitForStandstill(gb))
+#if SUPPORT_ASYNC_MOVES
+					if (!DoSync(gb))
 					{
 						return false;
 					}
-
+#else
+					if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
+					{
+						return false;
+					}
+#endif
 					if (pauseState == PauseState::paused)
 					{
 #if HAS_VOLTAGE_MONITOR
@@ -1321,20 +1334,27 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					break;
 				}
 				break;
+#endif
 
 			case 37:	// Simulation mode on/off, or simulate a whole file
-# if HAS_SBC_INTERFACE
+#if HAS_SBC_INTERFACE
 				if (reprap.UsingSbcInterface() && !gb.IsBinary())
 				{
 					reply.copy("M37 can be only started from the SBC interface");
 					result = GCodeResult::error;
 				}
 				else
-# endif
+#endif
 				{
+#if SUPPORT_ASYNC_MOVES
+					if (!DoSync(gb))
+					{
+						return false;
+					}
+#endif
 					bool seen = false;
+#if HAS_MASS_STORAGE
 					String<MaxFilenameLength> simFileName;
-
 					gb.TryGetPossiblyQuotedString('P', simFileName.GetRef(), seen);
 					if (seen)
 					{
@@ -1342,6 +1362,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						result = SimulateFile(gb, reply, simFileName.GetRef(), updateFile);
 					}
 					else
+#endif
 					{
 						uint32_t newSimulationMode;
 						gb.TryGetLimitedUIValue('S', newSimulationMode, seen, (uint32_t)SimulationMode::highest + 1);
@@ -1357,7 +1378,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				break;
-#endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 			case 38: // Report SHA1 of file
