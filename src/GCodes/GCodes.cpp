@@ -93,9 +93,10 @@ GCodes::GCodes(Platform& p) noexcept :
 	FileGCodeInput * const file2Input = nullptr;
 # endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)] = new GCodeBuffer(GCodeChannel::File2, nullptr, file2Input, GenericMessage);
+	File2GCode()->ExecuteOnlyQueue(1);								// only execute commands for movement system 1 (do this here so that the initial value of 'active' is correct in the object model)
 	moveStates[1].codeQueue = new GCodeQueue();
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)] = new GCodeBuffer(GCodeChannel::Queue2, moveStates[1].codeQueue, fileInput, GenericMessage);
-	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]->SetActiveQueueNumber(1);							// so that all commands read from this queue get executed on queue #1 instead of the default #0
+	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]->SetActiveQueueNumber(1);		// so that all commands read from this queue get executed on queue #1 instead of the default #0
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)] = nullptr;
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)] = nullptr;
