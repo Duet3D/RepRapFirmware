@@ -2050,7 +2050,6 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 // 'offset' is the offset into the file of the thumbnail data that the caller wants.
 // It is up to the caller to get the offset right, however we must fail gracefully if the caller passes us a bad offset.
 // The offset should always be either the initial offset or the 'next' value passed in a previous call, so it should always be the start of a line.
-// 'encapsulateThumbnail' defines whether the thumbnail shall be encapsulated as a "thumbnail" property of the root object
 OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition offset, bool forM31point1) noexcept
 {
 	constexpr unsigned int ThumbnailMaxDataSizeM31 = 1024;			// small enough for PanelDue to buffer
