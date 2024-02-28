@@ -44,11 +44,13 @@ constexpr ObjectModelTableEntry TemperatureSensor::objectModelTable[] =
 	// 0. TemperatureSensor members
 	{ "lastReading",	OBJECT_MODEL_FUNC(self->lastTemperature, 2), 	ObjectModelEntryFlags::live },
 	{ "name",			OBJECT_MODEL_FUNC(self->sensorName), 			ObjectModelEntryFlags::none },
+	{ "offsetAdj",		OBJECT_MODEL_FUNC(self->offsetAdjustment, 1), 	ObjectModelEntryFlags::none },
+	{ "slopeAdj",		OBJECT_MODEL_FUNC(self->slopeAdjustment, 3), 	ObjectModelEntryFlags::none },
 	{ "state",			OBJECT_MODEL_FUNC(self->lastResult.ToString()),	ObjectModelEntryFlags::none },
 	{ "type",			OBJECT_MODEL_FUNC(self->GetShortSensorType()), 	ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t TemperatureSensor::objectModelTableDescriptor[] = { 1, 4 };
+constexpr uint8_t TemperatureSensor::objectModelTableDescriptor[] = { 1, 6 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(TemperatureSensor)
 
@@ -99,7 +101,7 @@ void TemperatureSensor::SetSensorName(const char *_ecv_array _ecv_null newName) 
 // Default implementation of Configure, for sensors that have no configurable parameters
 GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
 	if (!changed && !gb.Seen('Y'))
 	{
 		// No parameters were provided, so report the current configuration
@@ -130,26 +132,35 @@ void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 	{
 		reply.catf(" (%s)", sensorName);
 	}
-	reply.catf(" type %s, reading %.1f, last error: %s", sensorType, (double)lastTemperature, lastRealError.ToString());
+	reply.catf(" type %s", sensorType);
+	AppendPinDetails(reply);
+	reply.catf(", last error %s, ", lastRealError.ToString());
+	if (slopeAdjustment != 0.0 || offsetAdjustment != 0.0)
+	{
+		reply.catf("offset adjustment %.1f, slope adjustment %.3f, adjusted reading %.1f", (double)offsetAdjustment, (double)slopeAdjustment, (double)lastTemperature);
+	}
+	else
+	{
+		reply.catf("reading %.1f", (double)lastTemperature);
+	}
 }
 
-// Configure the sensor name, if it is provided
-void TemperatureSensor::TryConfigureSensorName(GCodeBuffer& gb, bool& seen) THROWS(GCodeException)
+// Configure parameters that are common to all sensors and stored in the base class
+void TemperatureSensor::ConfigureCommonParameters(GCodeBuffer& gb, bool& seen) THROWS(GCodeException)
 {
 	String<MaxHeaterNameLength> buf;
-	bool localSeen = false;
-	gb.TryGetQuotedString('A', buf.GetRef(), localSeen);
-	if (localSeen)
+	if (gb.TryGetQuotedString('A', buf.GetRef(), seen))
 	{
 		SetSensorName(buf.c_str());
-		seen = true;
 	}
+	gb.TryGetLimitedFValue('U', offsetAdjustment, seen, -20.0, 20.0);
+	gb.TryGetLimitedFValue('V', slopeAdjustment, seen, -0.2, 0.2);
 }
 
 void TemperatureSensor::SetResult(float t, TemperatureError rslt) noexcept
 {
 	lastResult = rslt;
-	lastTemperature = t;
+	lastTemperature = (t * (1.0 + slopeAdjustment)) + offsetAdjustment;
 	whenLastRead = millis();
 	if (rslt != TemperatureError::ok)
 	{

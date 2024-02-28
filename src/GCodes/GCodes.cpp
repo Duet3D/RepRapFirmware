@@ -93,9 +93,10 @@ GCodes::GCodes(Platform& p) noexcept :
 	FileGCodeInput * const file2Input = nullptr;
 # endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)] = new GCodeBuffer(GCodeChannel::File2, nullptr, file2Input, GenericMessage);
+	File2GCode()->ExecuteOnlyQueue(1);								// only execute commands for movement system 1 (do this here so that the initial value of 'active' is correct in the object model)
 	moveStates[1].codeQueue = new GCodeQueue();
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)] = new GCodeBuffer(GCodeChannel::Queue2, moveStates[1].codeQueue, fileInput, GenericMessage);
-	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]->SetActiveQueueNumber(1);							// so that all commands read from this queue get executed on queue #1 instead of the default #0
+	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]->SetActiveQueueNumber(1);		// so that all commands read from this queue get executed on queue #1 instead of the default #0
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)] = nullptr;
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)] = nullptr;
@@ -1704,7 +1705,7 @@ void GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& m
 	// Deal with feed rate, also determine whether M220 and M221 speed and extrusion factors apply to this move
 	if (ms.isCoordinated || machineType == MachineType::fff)
 	{
-		ms.applyM220M221 = (ms.moveType == 0 && isPrintingMove && !gb.IsDoingFileMacro());
+		ms.applyM220M221 = (ms.moveType == 0 && isPrintingMove && !gb.LatestMachineState().runningSystemMacro);
 		ms.inverseTimeMode = gb.LatestMachineState().inverseTimeMode;
 		if (ms.inverseTimeMode)
 		{
@@ -3946,19 +3947,6 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 	if (gb.IsBinary())
 	{
 		platform.Message(gb.GetResponseMessageType(), reply);
-		return;
-	}
-#endif
-
-#if HAS_AUX_DEVICES
-	// Second UART device, e.g. dc42's PanelDue. Do NOT use emulation for this one!
-	if (   (&gb == AuxGCode() && !platform.IsAuxRaw(0))
-# ifdef SERIAL_AUX2_DEVICE
-		|| (&gb == Aux2GCode() && !platform.IsAuxRaw(1))
-# endif
-	   )
-	{
-		platform.AppendAuxReply(0, reply, (*reply)[0] == '{');
 		return;
 	}
 #endif

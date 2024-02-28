@@ -25,12 +25,13 @@ constexpr ObjectModelTableEntry Fan::objectModelTable[] =
 	// 0. Fan members
 	{ "actualValue",		OBJECT_MODEL_FUNC(self->GetPwm(), 2), 															ObjectModelEntryFlags::live },
 	{ "blip",				OBJECT_MODEL_FUNC(0.001f * (float)self->blipTime, 2), 											ObjectModelEntryFlags::none },
-	{ "frequency",			OBJECT_MODEL_FUNC((int32_t)self->GetPwmFrequency()), 											ObjectModelEntryFlags::none },
+	{ "frequency",			OBJECT_MODEL_FUNC((int32_t)self->pwmFreq), 														ObjectModelEntryFlags::none },
 	{ "max",				OBJECT_MODEL_FUNC(self->maxVal, 2), 															ObjectModelEntryFlags::none },
 	{ "min",				OBJECT_MODEL_FUNC(self->minVal, 2), 															ObjectModelEntryFlags::none },
 	{ "name",				OBJECT_MODEL_FUNC(self->name.c_str()), 															ObjectModelEntryFlags::none },
 	{ "requestedValue",		OBJECT_MODEL_FUNC(self->val, 2), 																ObjectModelEntryFlags::live },
 	{ "rpm",				OBJECT_MODEL_FUNC(self->GetRPM()), 																ObjectModelEntryFlags::live },
+	{ "tachoPpr",			OBJECT_MODEL_FUNC(self->tachoPulsesPerRev, 1), 													ObjectModelEntryFlags::none },
 	{ "thermostatic",		OBJECT_MODEL_FUNC(self, 1), 																	ObjectModelEntryFlags::none },
 
 	// 1. Fan.thermostatic members
@@ -40,7 +41,7 @@ constexpr ObjectModelTableEntry Fan::objectModelTable[] =
 	{ "sensors",			OBJECT_MODEL_FUNC(self->sensorsMonitored),														ObjectModelEntryFlags::none },	// empty if not thermostatic
 };
 
-constexpr uint8_t Fan::objectModelTableDescriptor[] = { 2, 9, 4 };
+constexpr uint8_t Fan::objectModelTableDescriptor[] = { 2, 10, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Fan)
 
@@ -51,6 +52,8 @@ Fan::Fan(unsigned int fanNum) noexcept
 	  val(0.0),
 	  minVal(DefaultMinFanPwm),
 	  maxVal(1.0),										// 100% maximum fan speed
+	  tachoPulsesPerRev(DefaultFanTachoPulsesPerRev),
+	  pwmFreq(DefaultFanPwmFreq),
 	  blipTime(DefaultFanBlipTime)
 {
 	triggerTemperatures[0] = triggerTemperatures[1] = DefaultHotEndFanTemperature;

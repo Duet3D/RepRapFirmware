@@ -125,6 +125,8 @@ public:
 	bool TryGetUIValue(char c, uint32_t& val, bool& seen) THROWS(GCodeException);
 	bool TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32_t maxValuePlusOne) THROWS(GCodeException);
 	bool TryGetNonNegativeFValue(char c, float& val, bool& seen) THROWS(GCodeException);
+	bool TryGetLimitedFValue(char c, float& val, bool& seen, float minValue, float maxValue) THROWS(GCodeException)
+		pre(minvalue <= maxValue);
 	bool TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeException);
 	void TryGetFloatArray(char c, size_t numVals, float vals[], bool& seen, bool doPad = false) THROWS(GCodeException);
 	void TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& seen, bool doPad = false) THROWS(GCodeException);

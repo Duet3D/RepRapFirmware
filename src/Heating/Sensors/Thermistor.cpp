@@ -264,7 +264,7 @@ GCodeResult Thermistor::Configure(GCodeBuffer& gb, const StringRef& reply, bool&
 		changed = true;
 	}
 
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
 
 	if (!changed)
 	{

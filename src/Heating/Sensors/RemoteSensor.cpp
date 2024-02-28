@@ -32,7 +32,7 @@ RemoteSensor::~RemoteSensor()
 
 GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
 	CanMessageGenericConstructor cons(M308NewParams);
 	cons.PopulateFromCommand(gb);
 	const GCodeResult ret = cons.SendAndGetResponse(CanMessageType::m308New, boardAddress, reply);

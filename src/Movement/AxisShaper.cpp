@@ -85,16 +85,8 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		}
 	}
 
-	if (gb.Seen('F'))
-	{
-		seen = true;
-		frequency = gb.GetLimitedFValue('F', MinimumInputShapingFrequency, MaximumInputShapingFrequency);
-	}
-	if (gb.Seen('S'))
-	{
-		seen = true;
-		zeta = gb.GetLimitedFValue('S', 0.0, 0.99);
-	}
+	gb.TryGetLimitedFValue('F', frequency, seen, MinimumInputShapingFrequency, MaximumInputShapingFrequency);
+	gb.TryGetLimitedFValue('S', zeta, seen, 0.0, 0.99);
 
 	if (gb.Seen('P'))
 	{

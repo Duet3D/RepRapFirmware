@@ -919,7 +919,31 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 	if (beforePrepare.accelDistance + beforePrepare.decelDistance < totalDistance)
 	{
 		// This move reaches its top speed
-		topSpeed = requestedSpeed;
+		// It sometimes happens that we get a very short acceleration or deceleration segment. Remove any such segments by reducing the top speed to the start or end speed.
+		if (startSpeed >= endSpeed)
+		{
+			if (startSpeed + acceleration * MinimumAccelOrDecelClocks > requestedSpeed)
+			{
+				topSpeed = startSpeed;
+				beforePrepare.accelDistance = 0.0;
+			}
+			else
+			{
+				topSpeed = requestedSpeed;
+			}
+		}
+		else
+		{
+			if (endSpeed + deceleration * MinimumAccelOrDecelClocks > requestedSpeed)
+			{
+				topSpeed = endSpeed;
+				beforePrepare.decelDistance = 0.0;
+			}
+			else
+			{
+				topSpeed = requestedSpeed;
+			}
+		}
 	}
 	else
 	{

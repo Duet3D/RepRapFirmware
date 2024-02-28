@@ -58,8 +58,10 @@ public:
 	virtual void UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report) noexcept;
 #endif
 
+#if 0	// no longer used
 	// Get the most recent reading without checking for timeout
 	float GetStoredReading() const noexcept { return lastTemperature; }
+#endif
 
 	// Return the sensor type
 	const char *_ecv_array GetSensorType() const noexcept { return sensorType; }
@@ -71,7 +73,7 @@ public:
 	TemperatureError GetLastError() const noexcept { return lastRealError; }
 
 	// Configure the sensor name, if it is provided
-	void TryConfigureSensorName(GCodeBuffer& gb, bool& seen) THROWS(GCodeException);
+	void ConfigureCommonParameters(GCodeBuffer& gb, bool& seen) THROWS(GCodeException);
 
 	// Set the name - normally called only once
 	void SetSensorName(const char *_ecv_array _ecv_null newName) noexcept;
@@ -102,6 +104,7 @@ protected:
 
 	void SetResult(float t, TemperatureError rslt) noexcept;
 	void SetResult(TemperatureError rslt) noexcept;
+	virtual void AppendPinDetails(const StringRef& reply) const noexcept { }	// append the details of the pin(s) used, only done for some sensor types
 
 private:
 	static constexpr uint32_t DefaultTemperatureReadingTimeout = 2000;			// any reading older than this number of milliseconds is considered unreliable
@@ -112,6 +115,8 @@ private:
 	const char *_ecv_array _ecv_null sensorName;
 	float lastTemperature;
 	uint32_t whenLastRead;
+	float offsetAdjustment = 0.0;
+	float slopeAdjustment = 0.0;
 	TemperatureError lastResult, lastRealError;
 };
 

@@ -715,6 +715,17 @@ bool GCodeBuffer::TryGetNonNegativeFValue(char c, float& val, bool& seen) THROWS
 	return false;
 }
 
+bool GCodeBuffer::TryGetLimitedFValue(char c, float& val, bool& seen, float minValue, float maxValue) THROWS(GCodeException)
+{
+	if (Seen(c))
+	{
+		val = GetLimitedFValue(c, minValue, maxValue);
+		seen = true;
+		return true;
+	}
+	return false;
+}
+
 // If the specified parameter character is found, fetch 'value' and set 'seen'. Otherwise leave val and seen alone.
 bool GCodeBuffer::TryGetUIValue(char c, uint32_t& val, bool& seen) THROWS(GCodeException)
 {

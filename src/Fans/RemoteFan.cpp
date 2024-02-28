@@ -16,7 +16,7 @@
 
 RemoteFan::RemoteFan(unsigned int fanNum, CanAddress boardNum) noexcept
 	: Fan(fanNum),
-	  lastRpm(-1), lastPwm(-1.0), whenLastReportReceived(0), frequency(DefaultFanPwmFreq),
+	  lastRpm(-1), lastPwm(-1.0), whenLastReportReceived(0),
 	  boardNumber(boardNum)
 {
 }
@@ -51,15 +51,17 @@ bool RemoteFan::IsEnabled() const noexcept
 	return true;
 }
 
-GCodeResult RemoteFan::SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept
+GCodeResult RemoteFan::SetFanParameters(bool setFreq, PwmFrequency freq, bool setPpr, float ppr, const StringRef& reply) noexcept
 {
 	CanMessageGenericConstructor cons(M950FanParams);
 	cons.AddUParam('F', fanNumber);
-	cons.AddUParam('Q', freq);
+	if (setFreq) { cons.AddUParam('Q', freq); }
+	if (setPpr) { cons.AddFParam('K', ppr); }
 	const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, reply);
 	if (rslt <= GCodeResult::warning)
 	{
-		frequency = freq;
+		if (setFreq) { pwmFreq = freq; }
+		if (setPpr) { tachoPulsesPerRev = ppr; }
 	}
 	return rslt;
 }
@@ -121,16 +123,18 @@ GCodeResult RemoteFan::Refresh(const StringRef& reply) noexcept
 	return CanInterface::SendRequestAndGetStandardReply(buf, rid, reply);
 }
 
-GCodeResult RemoteFan::ConfigurePort(const char* pinNames, PwmFrequency freq, const StringRef& reply) noexcept
+GCodeResult RemoteFan::ConfigurePort(const char* pinNames, PwmFrequency freq, float ppr, const StringRef& reply) noexcept
 {
 	CanMessageGenericConstructor cons(M950FanParams);
 	cons.AddUParam('F', fanNumber);
 	cons.AddUParam('Q', freq);
 	cons.AddStringParam('C', pinNames);
+	cons.AddFParam('K', ppr);
 	const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::m950Fan, boardNumber, reply);
 	if (rslt <= GCodeResult::warning)
 	{
-		frequency = freq;
+		pwmFreq = freq;
+		tachoPulsesPerRev = ppr;
 	}
 	return rslt;
 }
