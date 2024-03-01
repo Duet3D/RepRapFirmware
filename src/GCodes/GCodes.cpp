@@ -93,7 +93,6 @@ GCodes::GCodes(Platform& p) noexcept :
 	FileGCodeInput * const file2Input = nullptr;
 # endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)] = new GCodeBuffer(GCodeChannel::File2, nullptr, file2Input, GenericMessage);
-	File2GCode()->ExecuteOnlyQueue(1);								// only execute commands for movement system 1 (do this here so that the initial value of 'active' is correct in the object model)
 	moveStates[1].codeQueue = new GCodeQueue();
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)] = new GCodeBuffer(GCodeChannel::Queue2, moveStates[1].codeQueue, fileInput, GenericMessage);
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]->SetActiveQueueNumber(1);		// so that all commands read from this queue get executed on queue #1 instead of the default #0
@@ -3339,10 +3338,7 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 		FileGCode()->LatestMachineState().volumetricExtrusion = false;		// default to non-volumetric extrusion
 		FileGCode()->LatestMachineState().selectedPlane = 0;				// default G2 and G3 moves to XY plane
 #if SUPPORT_ASYNC_MOVES
-		FileGCode()->ExecuteOnlyQueue(0);									// only execute commands for movement system 0
-		File2GCode()->LatestMachineState().volumetricExtrusion = false;		// default to non-volumetric extrusion
-		File2GCode()->LatestMachineState().selectedPlane = 0;				// default G2 and G3 moves to XY plane
-		File2GCode()->ExecuteOnlyQueue(1);									// only execute commands for movement system 1
+		FileGCode()->ExecuteAll();											// execute commands for all movement systems initially
 #endif
 	}
 
@@ -3372,17 +3368,10 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 		FileGCode()->OriginalMachineState().fileState.MoveFrom(fileToPrint);
 		FileGCode()->GetFileInput()->Reset(FileGCode()->OriginalMachineState().fileState);
-# if SUPPORT_ASYNC_MOVES
-		File2GCode()->OriginalMachineState().fileState.MoveFrom(copyFileToPrint);
-		File2GCode()->GetFileInput()->Reset(File2GCode()->OriginalMachineState().fileState);
-# endif
 #endif
 	}
 
 	FileGCode()->StartNewFile();
-#if SUPPORT_ASYNC_MOVES
-	File2GCode()->StartNewFile();
-#endif
 
 	reprap.GetPrintMonitor().StartedPrint();
 	platform.MessageF(LogWarn,
@@ -5183,6 +5172,11 @@ void GCodes::AllocateAxesDirectFromLetters(const GCodeBuffer& gb, MovementState&
 // Return true if synced, false if we need to wait longer.
 bool GCodes::SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept
 {
+	if (thisGb.ExecutingAll())
+	{
+		return LockAllMovementSystemsAndWaitForStandstill(thisGb);
+	}
+
 	if (!LockMovementSystemAndWaitForStandstill(thisGb, thisGb.GetOwnQueueNumber()))
 	{
 		return false;

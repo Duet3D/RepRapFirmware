@@ -366,6 +366,37 @@ int8_t GCodeBuffer::GetCommandFraction() const noexcept
 
 #if SUPPORT_ASYNC_MOVES
 
+// Copy the entire file state from the other GCode buffer to ourselves. Called to copy the state of the File stream to File2.
+void GCodeBuffer::ForkFrom(const GCodeBuffer& other) noexcept
+{
+	GCodeMachineState *ms = other.machineState->ForkChain();
+	std::swap(ms, machineState);
+
+	// We should have a single old MachineState object, but to avoid memory leaks allow for the possibility of having a chain
+	while (ms != nullptr)
+	{
+		GCodeMachineState *const msToDelete = ms;
+		ms = ms->GetPrevious();
+		delete msToDelete;
+	}
+
+	printFilePositionAtMacroStart = other.printFilePositionAtMacroStart;
+	machineState->fileState.Seek(other.GetJobFilePosition());
+	GetVariables().AssignFrom(other.GetVariables());
+
+# if HAS_SBC_INTERFACE
+	if (isBinaryBuffer)
+	{
+		//TODO
+	}
+	else
+# endif
+	{
+		GetFileInput()->Reset(machineState->fileState);
+		stringParser.StartNewFile();
+	}
+}
+
 // Determine whether this input channel is at a strictly later point than the other one
 bool GCodeBuffer::IsLaterThan(const GCodeBuffer& other) const noexcept
 {

@@ -4025,6 +4025,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			// For cases 600 and 601, see 226
 
+#if SUPPORT_ASYNC_MOVES
+			case 606:	// fork input reader
+				result = ForkInputReader(gb, reply);
+				break;
+#endif
+
 			// M650 (set peel move parameters) and M651 (execute peel move) are no longer handled specially. Use macros to specify what they should do.
 
 #if SUPPORT_LINEAR_DELTA

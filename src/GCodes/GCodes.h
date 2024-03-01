@@ -577,6 +577,7 @@ private:
 	GCodeResult SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M596
 	GCodeResult CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Handle M597
 	GCodeResult SyncMovementSystems(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M598
+	GCodeResult ForkInputReader(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Handle M606
 	GCodeResult ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);				// Handle M400
 	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes, ParameterLettersBitmap axLetters) THROWS(GCodeException);	// allocate axes to a movement state
 	void AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException);
