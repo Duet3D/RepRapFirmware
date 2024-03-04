@@ -1214,7 +1214,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 			case 26: // Set SD position
 				// This is used between executing M23 to set up the file to print, and M24 to print it
+				// When using multiple motion systems, execute M26 once in the context of each motion system
 				gb.MustSee('S');
+				static_assert(sizeof(FilePosition) == sizeof(uint32_t), "Only 32 bits of file position are read");
 				{
 					MovementState& ms = GetMovementState(gb);
 					ms.fileOffsetToPrint = (FilePosition)gb.GetUIValue();

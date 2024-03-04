@@ -119,6 +119,9 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 	restartMoveFractionDone = 0.0;
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	fileOffsetToPrint = 0;
+# if SUPPORT_ASYNC_MOVES
+	fileOffsetToSkipTo = 0;
+# endif
 #endif
 	for (RestorePoint& rp : restorePoints)
 	{
