@@ -1302,6 +1302,7 @@ bool GCodes::LowVoltageResume() noexcept
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
+// Write the resurrect.g file
 void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 {
 	const char* const printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
@@ -1314,9 +1315,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 		}
 		else
 		{
-			const MovementState& ms = GetPrimaryMovementState();		//TODO save resume info for all movement states
 			String<StringLength256> buf;
-			RestorePoint& pauseRestorePoint = ms.pauseRestorePoint;		//TODO handle pausing when multiple motion system are active
 
 			// Write the header comment
 			buf.printf("; File \"%s\" resume print after %s", printingFilename, (wasPowerFailure) ? "power failure" : "print paused");
@@ -1330,190 +1329,23 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 			bool ok = f->Write(buf.c_str())
 					&& reprap.GetHeat().WriteBedAndChamberTempSettings(f)	// turn on bed and chamber heaters
 					&& reprap.GetMove().WriteResumeSettings(f);				// load grid, if we are using one
+
 			if (ok)
 			{
-				// Write a G92 command to say where the head is. This is useful if we can't Z-home the printer with a print on the bed and the Z steps/mm is high.
-				// The paused coordinates include any tool offsets and baby step offsets, so remove those.
-				// We used to send T-1 here ensure that no tool is selected, in case config.g selects one and it has an offset.
-				// We no longer do that because on some tool changers it is possible to home X and Y with a tool loaded.
-				buf.copy("G92");
-				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+#if SUPPORT_ASYNC_MOVES
+				for (size_t i = 0; ok && i < NumMovementSystems; ++i)
 				{
-					const float totalOffset = currentBabyStepOffsets[axis] - ms.GetCurrentToolOffset(axis);
-					buf.catf(" %c%.3f", axisLetters[axis], (double)(pauseRestorePoint.moveCoords[axis] - totalOffset));
+					buf.printf("M596 P%u\n", i);
+					ok = f->Write(buf.c_str()) && SaveMoveStateResumeInfo(moveStates[i], f, printingFilename, buf.GetRef());
 				}
-				buf.cat("\nG60 S1\n");										// save the coordinates as restore point 1 too
-				ok = f->Write(buf.c_str());
-			}
-			if (ok)
-			{
-				ok = WriteToolSettings(f, ms);								// set tool temperatures, tool mix ratios etc. and select the current tool without running tool change files
-			}
-			if (ok)
-			{
-				buf.printf("M98 P\"%s\"\n", RESUME_PROLOGUE_G);				// call the prologue
-				ok = f->Write(buf.c_str());
-			}
-			if (ok)
-			{
-				buf.copy("M116\nM290");										// wait for temperatures and start writing baby stepping offsets
-				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-				{
-					buf.catf(" %c%.3f", axisLetters[axis], (double)GetTotalBabyStepOffset(axis));
-				}
-				buf.cat(" R0\n");
-				ok = f->Write(buf.c_str());									// write baby stepping offsets
-			}
-
-			// Now that we have homed, we can run the tool change files for the current tool
-			if (ok)
-			{
-				const int toolNumber =  ms.GetCurrentToolNumber();
-				if (toolNumber >= 0)
-				{
-					buf.printf("T-1 P0\nT%d P6\n", toolNumber);				// deselect the current tool without running tfree, and select it running tpre and tpost
-					if (ms.currentTool->GetSpindleNumber() >= 0)
-					{
-						// Set the spindle RPM
-						const Spindle& spindle = platform.AccessSpindle(ms.currentTool->GetSpindleNumber() >= 0);
-						switch (spindle.GetState().RawValue())
-						{
-						case SpindleState::stopped:
-						default:
-							break;											// selecting the tool will have stopped the spindle
-
-						case SpindleState::forward:
-							buf.catf("M3 S%" PRIu32 " G4 S2\n", spindle.GetRpm());
-							break;
-
-						case SpindleState::reverse:
-							buf.catf("M4 S%" PRIu32 " G4 S2\n", spindle.GetRpm());
-							break;
-						}
-					}
-					ok = f->Write(buf.c_str());								// write tool selection
-				}
-
-			}
-
-#if SUPPORT_WORKPLACE_COORDINATES
-			// Restore the coordinate offsets of all workplaces
-			if (ok)
-			{
-				ok = WriteWorkplaceCoordinates(f);
-			}
-
-			if (ok)
-			{
-				// Switch to the correct workplace. 'currentCoordinateSystem' is 0-based.
-				//TODO handle multiple motion systems!
-				if (ms.currentCoordinateSystem <= 5)
-				{
-					buf.printf("G%u\n", 54 + ms.currentCoordinateSystem);
-				}
-				else
-				{
-					buf.printf("G59.%u\n", ms.currentCoordinateSystem - 5);
-				}
-				ok = f->Write(buf.c_str());
-			}
+				if (ok) { ok = f->Write("M596 P0\n"); }
 #else
-			if (ok)
-			{
-				buf.copy("M206");
-				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-				{
-					buf.catf(" %c%.3f", axisLetters[axis], (double)-workplaceCoordinates[0][axis]);
-				}
-				buf.cat('\n');
-				ok = f->Write(buf.c_str());
-			}
+				ok = SaveMoveStateResumeInfo(moveStates[0], f, printingFilename, buf.GetRef());
 #endif
-			if (ok && FileGCode()->OriginalMachineState().volumetricExtrusion)
-			{
-				buf.copy("M200 ");
-				char c = 'D';
-				for (size_t i = 0; i < numExtruders; ++i)
-				{
-					buf.catf("%c%.03f", c, (double)volumetricExtrusionFactors[i]);
-					c = ':';
-				}
-				buf.cat('\n');
-				ok = f->Write(buf.c_str());									// write volumetric extrusion factors
 			}
 			if (ok)
 			{
-				buf.printf("M106 S%.2f\n", (double)ms.virtualFanSpeed);
-				ok = f->Write(buf.c_str())									// set the speed of the print fan after we have selected the tool
-					&& reprap.GetFansManager().WriteFanSettings(f);			// set the speeds of all non-thermostatic fans after setting the default fan speed
-			}
-			if (ok)
-			{
-				buf.printf("M116\nG92 E%.5f\n%s\n%s\n", (double)ms.latestVirtualExtruderPosition,
-						(FileGCode()->OriginalMachineState().drivesRelative) ? "M83" : "M82",
-							(FileGCode()->OriginalMachineState().inverseTimeMode) ? "G93" : "G94");
-				ok = f->Write(buf.c_str());									// write virtual extruder position, absolute/relative extrusion flag, and inverse time mode/normal mode flag
-			}
-			if (ok)
-			{
-				ok = buildObjects.WriteObjectDirectory(f);					// write the state of printing objects
-			}
-			if (ok)
-			{
-				const unsigned int selectedPlane = FileGCode()->OriginalMachineState().selectedPlane;
-				buf.printf("G%u\nM23 \"%s\"\nM26 S%" PRIu32, selectedPlane + 17, printingFilename, pauseRestorePoint.filePos);
-				if (pauseRestorePoint.proportionDone > 0.0)
-				{
-					buf.catf(" P%.3f %c%.3f %c%.3f",
-							(double)pauseRestorePoint.proportionDone,
-							(selectedPlane == 2) ? 'Y' : 'X', (double)pauseRestorePoint.initialUserC0,
-							(selectedPlane == 0) ? 'Y' : 'Z', (double)pauseRestorePoint.initialUserC1);
-				}
-				buf.cat('\n');
-				ok = f->Write(buf.c_str());									// write G17/18/19, filename and file position, and if necessary proportion done and initial XY position
-			}
-			if (ok)
-			{
-				// Build the commands to restore the head position. These assume that we are working in mm.
-				// Start with a vertical move to 2mm above the final Z position
-				buf.printf("G0 F6000 Z%.3f\n", (double)(pauseRestorePoint.moveCoords[Z_AXIS] + 2.0));
-
-				// Now set all the other axes
-				buf.cat("G0 F6000");
-				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-				{
-					if (axis != Z_AXIS)
-					{
-						buf.catf(" %c%.3f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
-					}
-				}
-
-				// Now move down to the correct Z height
-				buf.catf("\nG0 F6000 Z%.3f\n", (double)pauseRestorePoint.moveCoords[Z_AXIS]);
-
-				// Set the feed rate
-				buf.catf("G1 F%.1f", (double)InverseConvertSpeedToMmPerMin(pauseRestorePoint.feedRate));
-#if SUPPORT_LASER
-				if (machineType == MachineType::laser)
-				{
-					buf.catf(" S%u", (unsigned int)pauseRestorePoint.laserPwmOrIoBits.laserPwm);
-				}
-				else
-				{
-#endif
-#if SUPPORT_IOBITS
-					buf.catf(" P%u", (unsigned int)pauseRestorePoint.laserPwmOrIoBits.ioBits);
-#endif
-#if SUPPORT_LASER
-				}
-#endif
-				buf.cat("\n");
-				ok = f->Write(buf.c_str());									// restore feed rate and output bits or laser power
-			}
-			if (ok)
-			{
-				buf.printf("%s\nM24\n", (FileGCode()->OriginalMachineState().usingInches) ? "G20" : "G21");
-				ok = f->Write(buf.c_str());									// restore inches/mm and resume printing
+				ok = f->Write("M24\n");									// resume printing
 			}
 			if (!f->Close())
 			{
@@ -1530,6 +1362,195 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 			}
 		}
 	}
+}
+
+// Write a portion of the resurrect.g file for a single movement system
+// 'buf' is a convenient 256-byte buffer we can use
+bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const f, const char *printingFilename, const StringRef& buf) noexcept
+{
+	RestorePoint& pauseRestorePoint = ms.pauseRestorePoint;		//TODO handle pausing when multiple motion system are active
+
+	// Write a G92 command to say where the head is. This is useful if we can't Z-home the printer with a print on the bed and the Z steps/mm is high.
+	// The paused coordinates include any tool offsets and baby step offsets, so remove those.
+	// We used to send T-1 here ensure that no tool is selected, in case config.g selects one and it has an offset.
+	// We no longer do that because on some tool changers it is possible to home X and Y with a tool loaded.
+	buf.copy("G92");
+	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+	{
+		const float totalOffset = currentBabyStepOffsets[axis] - ms.GetCurrentToolOffset(axis);
+		buf.catf(" %c%.3f", axisLetters[axis], (double)(pauseRestorePoint.moveCoords[axis] - totalOffset));
+	}
+	buf.cat("\nG60 S1\n");										// save the coordinates as restore point 1 too
+	bool ok = f->Write(buf.c_str());
+	if (ok)
+	{
+		ok = WriteToolSettings(f, ms);							// set tool temperatures, tool mix ratios etc. and select the current tool without running tool change files
+	}
+	if (ok)
+	{
+		buf.printf("M98 P\"%s\"\n", RESUME_PROLOGUE_G);			// call the prologue
+		ok = f->Write(buf.c_str());
+	}
+	if (ok)
+	{
+		buf.copy("M116\nM290");									// wait for temperatures and start writing baby stepping offsets
+		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+		{
+			buf.catf(" %c%.3f", axisLetters[axis], (double)GetTotalBabyStepOffset(axis));
+		}
+		buf.cat(" R0\n");
+		ok = f->Write(buf.c_str());								// write baby stepping offsets
+	}
+
+	// Now that we have homed, we can run the tool change files for the current tool
+	if (ok)
+	{
+		const int toolNumber =  ms.GetCurrentToolNumber();
+		if (toolNumber >= 0)
+		{
+			buf.printf("T-1 P0\nT%d P6\n", toolNumber);			// deselect the current tool without running tfree, and select it running tpre and tpost
+			if (ms.currentTool->GetSpindleNumber() >= 0)
+			{
+				// Set the spindle RPM
+				const Spindle& spindle = platform.AccessSpindle(ms.currentTool->GetSpindleNumber() >= 0);
+				switch (spindle.GetState().RawValue())
+				{
+				case SpindleState::stopped:
+				default:
+					break;										// selecting the tool will have stopped the spindle
+
+				case SpindleState::forward:
+					buf.catf("M3 S%" PRIu32 " G4 S2\n", spindle.GetRpm());
+					break;
+
+				case SpindleState::reverse:
+					buf.catf("M4 S%" PRIu32 " G4 S2\n", spindle.GetRpm());
+					break;
+				}
+			}
+			ok = f->Write(buf.c_str());							// write tool selection
+		}
+	}
+
+#if SUPPORT_WORKPLACE_COORDINATES
+	// Restore the coordinate offsets of all workplaces
+	if (ok)
+	{
+		ok = WriteWorkplaceCoordinates(f);
+	}
+
+	if (ok)
+	{
+		// Switch to the correct workplace. 'currentCoordinateSystem' is 0-based.
+		//TODO handle multiple motion systems!
+		if (ms.currentCoordinateSystem <= 5)
+		{
+			buf.printf("G%u\n", 54 + ms.currentCoordinateSystem);
+		}
+		else
+		{
+			buf.printf("G59.%u\n", ms.currentCoordinateSystem - 5);
+		}
+		ok = f->Write(buf.c_str());
+	}
+#else
+	if (ok)
+	{
+		buf.copy("M206");
+		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+		{
+			buf.catf(" %c%.3f", axisLetters[axis], (double)-workplaceCoordinates[0][axis]);
+		}
+		buf.cat('\n');
+		ok = f->Write(buf.c_str());
+	}
+#endif
+	if (ok && FileGCode()->OriginalMachineState().volumetricExtrusion)
+	{
+		buf.copy("M200 ");
+		char c = 'D';
+		for (size_t i = 0; i < numExtruders; ++i)
+		{
+			buf.catf("%c%.03f", c, (double)volumetricExtrusionFactors[i]);
+			c = ':';
+		}
+		buf.cat('\n');
+		ok = f->Write(buf.c_str());									// write volumetric extrusion factors
+	}
+	if (ok)
+	{
+		buf.printf("M106 S%.2f\n", (double)ms.virtualFanSpeed);
+		ok = f->Write(buf.c_str())									// set the speed of the print fan after we have selected the tool
+			&& reprap.GetFansManager().WriteFanSettings(f);			// set the speeds of all non-thermostatic fans after setting the default fan speed
+	}
+	if (ok)
+	{
+		buf.printf("M116\nG92 E%.5f\n%s\n%s\n", (double)ms.latestVirtualExtruderPosition,
+				(FileGCode()->OriginalMachineState().drivesRelative) ? "M83" : "M82",
+					(FileGCode()->OriginalMachineState().inverseTimeMode) ? "G93" : "G94");
+		ok = f->Write(buf.c_str());									// write virtual extruder position, absolute/relative extrusion flag, and inverse time mode/normal mode flag
+	}
+	if (ok)
+	{
+		ok = buildObjects.WriteObjectDirectory(f);					// write the state of printing objects
+	}
+	if (ok)
+	{
+		const unsigned int selectedPlane = FileGCode()->OriginalMachineState().selectedPlane;
+		buf.printf("G%u\nM23 \"%s\"\nM26 S%" PRIu32, selectedPlane + 17, printingFilename, pauseRestorePoint.filePos);
+		if (pauseRestorePoint.proportionDone > 0.0)
+		{
+			buf.catf(" P%.3f %c%.3f %c%.3f",
+					(double)pauseRestorePoint.proportionDone,
+					(selectedPlane == 2) ? 'Y' : 'X', (double)pauseRestorePoint.initialUserC0,
+					(selectedPlane == 0) ? 'Y' : 'Z', (double)pauseRestorePoint.initialUserC1);
+		}
+		buf.cat('\n');
+		ok = f->Write(buf.c_str());									// write G17/18/19, filename and file position, and if necessary proportion done and initial XY position
+	}
+	if (ok)
+	{
+		// Build the commands to restore the head position. These assume that we are working in mm.
+		// Start with a vertical move to 2mm above the final Z position
+		buf.printf("G0 F6000 Z%.3f\n", (double)(pauseRestorePoint.moveCoords[Z_AXIS] + 2.0));
+
+		// Now set all the other axes
+		buf.cat("G0 F6000");
+		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+		{
+			if (axis != Z_AXIS)
+			{
+				buf.catf(" %c%.3f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
+			}
+		}
+
+		// Now move down to the correct Z height
+		buf.catf("\nG0 F6000 Z%.3f\n", (double)pauseRestorePoint.moveCoords[Z_AXIS]);
+
+		// Set the feed rate
+		buf.catf("G1 F%.1f", (double)InverseConvertSpeedToMmPerMin(pauseRestorePoint.feedRate));
+#if SUPPORT_LASER
+		if (machineType == MachineType::laser)
+		{
+			buf.catf(" S%u", (unsigned int)pauseRestorePoint.laserPwmOrIoBits.laserPwm);
+		}
+		else
+		{
+#endif
+#if SUPPORT_IOBITS
+			buf.catf(" P%u", (unsigned int)pauseRestorePoint.laserPwmOrIoBits.ioBits);
+#endif
+#if SUPPORT_LASER
+		}
+#endif
+		buf.cat("\n");
+		ok = f->Write(buf.c_str());									// restore feed rate and output bits or laser power
+	}
+	if (ok)
+	{
+		ok = f->Write((FileGCode()->OriginalMachineState().usingInches) ? "G20\n" : "G21\n");	// restore inches/mm
+	}
+	return ok;
 }
 
 #endif
@@ -3331,6 +3352,9 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 		for (MovementState& ms : moveStates)
 		{
 			ms.fileOffsetToPrint = 0;
+# if SUPPORT_ASYNC_MOVES
+			ms.fileOffsetToSkipTo = 0;
+# endif
 			ms.restartMoveFractionDone = 0.0;
 			ms.latestVirtualExtruderPosition = ms.moveStartVirtualExtruderPosition = 0.0;
 		}

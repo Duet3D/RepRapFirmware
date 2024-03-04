@@ -563,6 +563,7 @@ private:
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	void SaveResumeInfo(bool wasPowerFailure) noexcept;
+	bool SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const f, const char *printingFilename, const StringRef& buf) noexcept;
 #endif
 
 	void NewSingleSegmentMoveAvailable(MovementState& ms) noexcept;				// Flag that a new move is available

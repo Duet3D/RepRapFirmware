@@ -181,6 +181,9 @@ public:
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	FilePosition fileOffsetToPrint;									// the offset to start printing from
+# if SUPPORT_ASYNC_MOVES
+	FilePosition fileOffsetToSkipTo;								// when resuming in single-reader mode, skip commands until this file offset
+# endif
 #endif
 
 #if SUPPORT_LASER
