@@ -1339,13 +1339,17 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 					ok = f->Write(buf.c_str()) && SaveMoveStateResumeInfo(moveStates[i], f, printingFilename, buf.GetRef());
 				}
 				if (ok) { ok = f->Write("M596 P0\n"); }
+				if (ok && !FileGCode()->ExecutingAll())
+				{
+					ok = f->Write("M606 S1\n");								// if we forked the input reader, add the fork command
+				}
 #else
 				ok = SaveMoveStateResumeInfo(moveStates[0], f, printingFilename, buf.GetRef());
 #endif
 			}
 			if (ok)
 			{
-				ok = f->Write("M24\n");									// resume printing
+				ok = f->Write("M24\n");										// resume printing
 			}
 			if (!f->Close())
 			{
@@ -1368,7 +1372,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 // 'buf' is a convenient 256-byte buffer we can use
 bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const f, const char *printingFilename, const StringRef& buf) noexcept
 {
-	const RestorePoint& pauseRestorePoint = ms.GetPauseRestorePoint();		//TODO handle pausing when multiple motion system are active
+	const RestorePoint& pauseRestorePoint = ms.GetPauseRestorePoint();
 
 	// Write a G92 command to say where the head is. This is useful if we can't Z-home the printer with a print on the bed and the Z steps/mm is high.
 	// The paused coordinates include any tool offsets and baby step offsets, so remove those.

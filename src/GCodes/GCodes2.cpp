@@ -71,6 +71,25 @@
 // It is called repeatedly for a given code until it returns true for that code.
 bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
+#if SUPPORT_ASYNC_MOVES
+	// If we are running multiple motion systems in single input stream mode and we have resumed after a pause, then we may need to skip some commands
+	{
+		FilePosition offsetToSkipTo;
+		if (   &gb == FileGCode()
+			&& gb.ExecutingAll()
+			&& (offsetToSkipTo = GetMovementState(gb).fileOffsetToSkipTo) != 0
+			&& !(gb.GetCommandLetter() == 'M' && gb.HasCommandNumber() && gb.GetCommandNumber() == 596)
+		   )
+		{
+			if (gb.GetJobFilePosition() < offsetToSkipTo)
+			{
+				return true;
+			}
+			GetMovementState(gb).fileOffsetToSkipTo = 0;			// clear this to speed up the test next time
+		}
+	}
+#endif
+
 	try
 	{
 		switch (gb.GetCommandLetter())
