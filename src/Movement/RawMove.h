@@ -108,6 +108,7 @@ public:
 	void ClearMove() noexcept;
 	void SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
 		pre(restorePointNumber < NumTotalRestorePoints);
+	void ResumeAfterPause() noexcept;
 
 	// Tool management
 	void SelectTool(int toolNumber, bool simulating) noexcept;

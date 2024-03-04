@@ -583,18 +583,40 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			// We no longer restore the paused fan speeds automatically on resuming, because that messes up the print cooling fan speed if a tool change has been done
 			// They can be restored manually in resume.g if required
-			ms.moveStartVirtualExtruderPosition = ms.latestVirtualExtruderPosition = ms.GetPauseRestorePoint().virtualExtruderPosition;			// reset the extruder position in case we are receiving absolute extruder moves
+#if SUPPORT_ASYNC_MOVES
+			FilePosition earliestFileOffset = 0;				// initialisation needed only to suppress compiler warning
+			for (MovementState& ms : moveStates)
+			{
+				ms.ResumeAfterPause();
+				if (ms.GetMsNumber() == 0 || ms.GetPauseRestorePoint().filePos < earliestFileOffset)
+				{
+					earliestFileOffset = ms.GetPauseRestorePoint().filePos;
+				}
+				GCodeBuffer* fgb = GetFileGCode(ms.GetMsNumber());
+				fgb->LatestMachineState().feedRate = ms.GetPauseRestorePoint().feedRate;
+				if (ms.pausedInMacro)
+				{
+					fgb->OriginalMachineState().firstCommandAfterRestart = true;
+				}
+			}
+
+			// If the file input stream has been forked then we are good to go.
+			// If File is executing both streams then we need to restart it from the earliest offset.
+			if (FileGCode()->ExecutingAll())
+			{
+				FileGCode()->RestartFrom(earliestFileOffset);
+			}
+#else
+			ms.ResumeAfterPause();
 			FileGCode()->LatestMachineState().feedRate = ms.GetPauseRestorePoint().feedRate;
-			ms.moveFractionToSkip = ms.GetPauseRestorePoint().proportionDone;
-			ms.restartInitialUserC0 = ms.GetPauseRestorePoint().initialUserC0;
-			ms.restartInitialUserC1 = ms.GetPauseRestorePoint().initialUserC1;
-			reply.copy("Printing resumed");
-			platform.Message(LogWarn, "Printing resumed\n");
-			pauseState = PauseState::notPaused;
 			if (ms.pausedInMacro)
 			{
 				FileGCode()->OriginalMachineState().firstCommandAfterRestart = true;
 			}
+#endif
+			reply.copy("Printing resumed");
+			platform.Message(LogWarn, "Printing resumed\n");
+			pauseState = PauseState::notPaused;
 			gb.SetState(GCodeState::normal);
 		}
 		break;

@@ -187,6 +187,18 @@ void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes
 #endif
 }
 
+// Restore current values from the pause restore point
+void MovementState::ResumeAfterPause() noexcept
+{
+	moveStartVirtualExtruderPosition = latestVirtualExtruderPosition = GetPauseRestorePoint().virtualExtruderPosition;	// reset the extruder position in case we are receiving absolute extruder moves
+	moveFractionToSkip = GetPauseRestorePoint().proportionDone;
+	restartInitialUserC0 = GetPauseRestorePoint().initialUserC0;
+	restartInitialUserC1 = GetPauseRestorePoint().initialUserC1;
+#if SUPPORT_ASYNC_MOVES
+	fileOffsetToSkipTo = GetPauseRestorePoint().filePos;
+#endif
+}
+
 // Select the specified tool, putting the existing current tool into standby
 void MovementState::SelectTool(int toolNumber, bool simulating) noexcept
 {

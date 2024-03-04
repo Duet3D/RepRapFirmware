@@ -956,7 +956,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 
 		const bool movesSkipped = reprap.GetMove().PausePrint(ms);						// tell Move we wish to pause this queue
 # if SUPPORT_ASYNC_MOVES
-		GCodeBuffer& fgb = (ms.GetMsNumber() == 0) ? *FileGCode() : *File2GCode();
+		GCodeBuffer& fgb = *GetFileGCode(ms.GetMsNumber());
 # else
 		GCodeBuffer& fgb = *FileGCode();
 # endif
@@ -1021,7 +1021,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 				FileData& fdata = fgb.LatestMachineState().fileState;
 				if (fdata.IsLive())
 				{
-					fgb.RestartFrom(ms.GetPauseRestorePoint().filePos);				// TODO we ought to restore the line number too, but currently we don't save it
+					fgb.RestartFrom(ms.GetPauseRestorePoint().filePos);			// TODO we ought to restore the line number too, but currently we don't save it
 					UnlockAll(fgb);												// release any locks it had
 				}
 			}
