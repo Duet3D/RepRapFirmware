@@ -174,10 +174,12 @@ public:
 	mutable uint32_t latestLiveCoordinatesFetchedAt = 0;			// when we fetched the live coordinates
 
 	RestorePoint restorePoints[NumTotalRestorePoints];
-	RestorePoint& pauseRestorePoint = restorePoints[PauseRestorePointNumber];				// The position and feed rate when we paused the print
-	RestorePoint& toolChangeRestorePoint = restorePoints[ToolChangeRestorePointNumber];		// The position and feed rate when we freed a tool
-	RestorePoint& simulationRestorePoint = restorePoints[SimulationRestorePointNumber];		// The position and feed rate when we started simulating
-	RestorePoint& resumeObjectRestorePoint = restorePoints[ResumeObjectRestorePointNumber];	// The position and feed rate when we resumed printing objects
+
+	RestorePoint& GetPauseRestorePoint() noexcept { return restorePoints[PauseRestorePointNumber]; }				// The position and feed rate when we paused the print
+	const RestorePoint& GetPauseRestorePoint() const noexcept { return restorePoints[PauseRestorePointNumber]; }	// The position and feed rate when we paused the print
+	RestorePoint& GetToolChangeRestorePoint() noexcept { return restorePoints[ToolChangeRestorePointNumber]; }		// The position and feed rate when we freed a tool
+	RestorePoint& GetSimulationRestorePoint() noexcept { return restorePoints[SimulationRestorePointNumber]; }		// The position and feed rate when we started simulating
+	RestorePoint& GetResumeObjectRestorePoint() noexcept { return restorePoints[ResumeObjectRestorePointNumber]; }	// The position and feed rate when we resumed printing objects
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	FilePosition fileOffsetToPrint;									// the offset to start printing from

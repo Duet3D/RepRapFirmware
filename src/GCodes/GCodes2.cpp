@@ -1006,30 +1006,38 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					break;
 				}
 
-#if SUPPORT_ASYNC_MOVES
+# if SUPPORT_ASYNC_MOVES
 				if (!DoSync(gb))
 				{
 					return false;
 				}
-#else
+
+				// Currently, both movement systems must execute the same file
+				for (MovementState& ms : moveStates)
+				{
+					ms.fileOffsetToPrint = 0;				// clear this for now, M26 may change it later
+					ms.fileOffsetToSkipTo = 0;
+				}
+# else
 				if (code == 32 && !LockCurrentMovementSystemAndWaitForStandstill(gb))
 				{
 					return false;
 				}
-#endif
+				moveStates[0].fileOffsetToPrint = 0;
+# endif
 				{
 					String<MaxFilenameLength> filename;
 					gb.GetUnprecedentedString(filename.GetRef());
 					if (
-#if HAS_SBC_INTERFACE
+# if HAS_SBC_INTERFACE
 						reprap.UsingSbcInterface()
-# if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#  if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 						||
+#  endif
 # endif
-#endif
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+# if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 						QueueFileToPrint(filename.c_str(), reply)
-#endif
+# endif
 					   )
 					{
 						reprap.GetPrintMonitor().StartingPrint(filename.c_str());

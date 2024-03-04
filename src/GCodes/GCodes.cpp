@@ -825,8 +825,8 @@ void GCodes::EndSimulation(GCodeBuffer *null gb) noexcept
 	// Ending a simulation, so restore the position
 	const MovementSystemNumber msNumber = (gb == nullptr) ? 0 : gb->GetActiveQueueNumber();	//TODO handle null gb properly
 	MovementState& ms = moveStates[msNumber];
-	RestorePosition(ms.simulationRestorePoint, gb);
-	ms.SelectTool(ms.simulationRestorePoint.toolNumber, true);
+	RestorePosition(ms.GetSimulationRestorePoint(), gb);
+	ms.SelectTool(ms.GetSimulationRestorePoint().toolNumber, true);
 	ToolOffsetTransform(ms);
 	reprap.GetMove().SetNewPosition(ms.coords, msNumber, true);
 	axesVirtuallyHomed = axesHomed;
@@ -907,21 +907,21 @@ bool GCodes::DoSynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCode
 	}
 #endif
 
-	ms.pauseRestorePoint.toolNumber = ms.GetCurrentToolNumber();
-	ms.pauseRestorePoint.fanSpeed = ms.virtualFanSpeed;
+	ms.GetPauseRestorePoint().toolNumber = ms.GetCurrentToolNumber();
+	ms.GetPauseRestorePoint().fanSpeed = ms.virtualFanSpeed;
 
 #if HAS_SBC_INTERFACE
 	if (reprap.UsingSbcInterface())
 	{
 		// Prepare notification for the SBC
-		reprap.GetSbcInterface().SetPauseReason(ms.pauseRestorePoint.filePos, reason);
+		reprap.GetSbcInterface().SetPauseReason(ms.GetPauseRestorePoint().filePos, reason);
 	}
 #endif
 
-	if (ms.pauseRestorePoint.filePos == noFilePosition)
+	if (ms.GetPauseRestorePoint().filePos == noFilePosition)
 	{
 		// Make sure we expose usable values (which noFilePosition is not)
-		ms.pauseRestorePoint.filePos = 0;
+		ms.GetPauseRestorePoint().filePos = 0;
 	}
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -963,45 +963,45 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 		if (movesSkipped)
 		{
 			// The PausePrint call has filled in the restore point with machine coordinates
-			ToolOffsetInverseTransform(ms, ms.pauseRestorePoint.moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
+			ToolOffsetInverseTransform(ms, ms.GetPauseRestorePoint().moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
 			ms.ClearMove();
 		}
 		else if (ms.segmentsLeft != 0)
 		{
 			// We were not able to skip any moves, however we can skip the move that is waiting
-			ms.pauseRestorePoint.virtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
-			ms.pauseRestorePoint.filePos = ms.filePos;
-			ms.pauseRestorePoint.feedRate = ms.feedRate/ms.speedFactor;
-			ms.pauseRestorePoint.proportionDone = ms.GetProportionDone();
-			ms.pauseRestorePoint.initialUserC0 = ms.initialUserC0;
-			ms.pauseRestorePoint.initialUserC1 = ms.initialUserC1;
-			ToolOffsetInverseTransform(ms, ms.pauseRestorePoint.moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
+			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
+			ms.GetPauseRestorePoint().filePos = ms.filePos;
+			ms.GetPauseRestorePoint().feedRate = ms.feedRate/ms.speedFactor;
+			ms.GetPauseRestorePoint().proportionDone = ms.GetProportionDone();
+			ms.GetPauseRestorePoint().initialUserC0 = ms.initialUserC0;
+			ms.GetPauseRestorePoint().initialUserC1 = ms.initialUserC1;
+			ToolOffsetInverseTransform(ms, ms.GetPauseRestorePoint().moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
 			ms.ClearMove();
 		}
 		else
 		{
 			// We were not able to skip any moves, and there is no move waiting
-			ms.pauseRestorePoint.feedRate = fgb.LatestMachineState().feedRate;
-			ms.pauseRestorePoint.virtualExtruderPosition = ms.latestVirtualExtruderPosition;
-			ms.pauseRestorePoint.proportionDone = 0.0;
+			ms.GetPauseRestorePoint().feedRate = fgb.LatestMachineState().feedRate;
+			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.latestVirtualExtruderPosition;
+			ms.GetPauseRestorePoint().proportionDone = 0.0;
 
 			// TODO: when using RTOS there is a possible race condition in the following,
 			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
-			ms.pauseRestorePoint.filePos = fgb.GetPrintingFilePosition(true);
+			ms.GetPauseRestorePoint().filePos = fgb.GetPrintingFilePosition(true);
 			while (fgb.IsDoingFileMacro())																// must call this after GetFilePosition because this changes IsDoingFileMacro
 			{
 				ms.pausedInMacro = true;
 				fgb.PopState(false);
 			}
 #if SUPPORT_LASER || SUPPORT_IOBITS
-			ms.pauseRestorePoint.laserPwmOrIoBits = ms.laserPwmOrIoBits;
+			ms.GetPauseRestorePoint().laserPwmOrIoBits = ms.laserPwmOrIoBits;
 #endif
 		}
 
 		// Replace the paused machine coordinates by user coordinates, which we updated earlier if they were returned by Move::PausePrint
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			ms.pauseRestorePoint.moveCoords[axis] = ms.currentUserPosition[axis];
+			ms.GetPauseRestorePoint().moveCoords[axis] = ms.currentUserPosition[axis];
 		}
 
 #if HAS_SBC_INTERFACE
@@ -1016,12 +1016,12 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 #if HAS_MASS_STORAGE
 			// If we skipped any moves, reset the file pointer to the start of the first move we need to replay
 			// The following could be delayed until we resume the print
-			if (ms.pauseRestorePoint.filePos != noFilePosition)
+			if (ms.GetPauseRestorePoint().filePos != noFilePosition)
 			{
 				FileData& fdata = fgb.LatestMachineState().fileState;
 				if (fdata.IsLive())
 				{
-					fgb.RestartFrom(ms.pauseRestorePoint.filePos);				// TODO we ought to restore the line number too, but currently we don't save it
+					fgb.RestartFrom(ms.GetPauseRestorePoint().filePos);				// TODO we ought to restore the line number too, but currently we don't save it
 					UnlockAll(fgb);												// release any locks it had
 				}
 			}
@@ -1032,7 +1032,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 
 		if (reprap.Debug(Module::Gcodes))
 		{
-			platform.MessageF(GenericMessage, "Paused print, file offset=%" PRIu32 "\n", ms.pauseRestorePoint.filePos);
+			platform.MessageF(GenericMessage, "Paused print, file offset=%" PRIu32 "\n", ms.GetPauseRestorePoint().filePos);
 		}
 
 #if SUPPORT_LASER
@@ -1042,21 +1042,21 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 		}
 #endif
 
-		ms.pauseRestorePoint.toolNumber = ms.GetCurrentToolNumber();
-		ms.pauseRestorePoint.fanSpeed = ms.virtualFanSpeed;
+		ms.GetPauseRestorePoint().toolNumber = ms.GetCurrentToolNumber();
+		ms.GetPauseRestorePoint().fanSpeed = ms.virtualFanSpeed;
 
 #if HAS_SBC_INTERFACE
 		if (reprap.UsingSbcInterface() && ms.GetMsNumber() == 0)
 		{
 			// Prepare notification for the SBC
-			reprap.GetSbcInterface().SetPauseReason(ms.pauseRestorePoint.filePos, reason);
+			reprap.GetSbcInterface().SetPauseReason(ms.GetPauseRestorePoint().filePos, reason);
 		}
 #endif
 
-		if (ms.pauseRestorePoint.filePos == noFilePosition)
+		if (ms.GetPauseRestorePoint().filePos == noFilePosition)
 		{
 			// Make sure we expose usable values (which noFilePosition is not)
-			ms.pauseRestorePoint.filePos = 0;
+			ms.GetPauseRestorePoint().filePos = 0;
 		}
 	}
 
@@ -1162,39 +1162,39 @@ bool GCodes::DoEmergencyPause() noexcept
 		// but before the gcode buffer has been re-initialised ready for the next command. So start a critical section.
 		TaskCriticalSectionLocker lock;
 
-		const bool movesSkipped = reprap.GetMove().LowPowerOrStallPause(ms.GetMsNumber(), ms.pauseRestorePoint);
+		const bool movesSkipped = reprap.GetMove().LowPowerOrStallPause(ms.GetMsNumber(), ms.GetPauseRestorePoint());
 		if (movesSkipped)
 		{
 			// The PausePrint call has filled in the restore point with machine coordinates
-			ToolOffsetInverseTransform(ms, ms.pauseRestorePoint.moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
+			ToolOffsetInverseTransform(ms, ms.GetPauseRestorePoint().moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
 			ms.ClearMove();
 		}
 		else if (ms.segmentsLeft != 0 && ms.filePos != noFilePosition)
 		{
 			// We were not able to skip any moves, however we can skip the remaining segments of this current move
 			ToolOffsetInverseTransform(ms, ms.initialCoords, ms.currentUserPosition);
-			ms.pauseRestorePoint.feedRate = ms.feedRate;
-			ms.pauseRestorePoint.virtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
-			ms.pauseRestorePoint.filePos = ms.filePos;
-			ms.pauseRestorePoint.proportionDone = ms.GetProportionDone();
-			ms.pauseRestorePoint.initialUserC0 = ms.initialUserC0;
-			ms.pauseRestorePoint.initialUserC1 = ms.initialUserC1;
+			ms.GetPauseRestorePoint().feedRate = ms.feedRate;
+			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.moveStartVirtualExtruderPosition;
+			ms.GetPauseRestorePoint().filePos = ms.filePos;
+			ms.GetPauseRestorePoint().proportionDone = ms.GetProportionDone();
+			ms.GetPauseRestorePoint().initialUserC0 = ms.initialUserC0;
+			ms.GetPauseRestorePoint().initialUserC1 = ms.initialUserC1;
 #if SUPPORT_LASER || SUPPORT_IOBITS
-			ms.pauseRestorePoint.laserPwmOrIoBits = ms.laserPwmOrIoBits;
+			ms.GetPauseRestorePoint().laserPwmOrIoBits = ms.laserPwmOrIoBits;
 #endif
 			ms.ClearMove();
 		}
 		else
 		{
 			// We were not able to skip any moves, and if there is a move waiting then we can't skip that one either
-			ms.pauseRestorePoint.feedRate = FileGCode()->LatestMachineState().feedRate;
-			ms.pauseRestorePoint.virtualExtruderPosition = ms.latestVirtualExtruderPosition;
+			ms.GetPauseRestorePoint().feedRate = FileGCode()->LatestMachineState().feedRate;
+			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.latestVirtualExtruderPosition;
 
-			ms.pauseRestorePoint.filePos = FileGCode()->GetPrintingFilePosition(true);	//TODO separate restore point per channel
-			ms.pauseRestorePoint.proportionDone = 0.0;
+			ms.GetPauseRestorePoint().filePos = FileGCode()->GetPrintingFilePosition(true);	//TODO separate restore point per channel
+			ms.GetPauseRestorePoint().proportionDone = 0.0;
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
-			ms.pauseRestorePoint.laserPwmOrIoBits = ms.laserPwmOrIoBits;
+			ms.GetPauseRestorePoint().laserPwmOrIoBits = ms.laserPwmOrIoBits;
 #endif
 		}
 
@@ -1203,7 +1203,7 @@ bool GCodes::DoEmergencyPause() noexcept
 		if (reprap.UsingSbcInterface() && ms.GetMsNumber() == 0)
 		{
 			PrintPausedReason reason = platform.IsPowerOk() ? PrintPausedReason::stall : PrintPausedReason::lowVoltage;
-			reprap.GetSbcInterface().SetEmergencyPauseReason(ms.pauseRestorePoint.filePos, reason);
+			reprap.GetSbcInterface().SetEmergencyPauseReason(ms.GetPauseRestorePoint().filePos, reason);
 		}
 #endif
 
@@ -1212,16 +1212,16 @@ bool GCodes::DoEmergencyPause() noexcept
 		// Replace the paused machine coordinates by user coordinates, which we updated earlier
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			ms.pauseRestorePoint.moveCoords[axis] = ms.currentUserPosition[axis];
+			ms.GetPauseRestorePoint().moveCoords[axis] = ms.currentUserPosition[axis];
 		}
 
-		if (ms.pauseRestorePoint.filePos == noFilePosition)
+		if (ms.GetPauseRestorePoint().filePos == noFilePosition)
 		{
 			// Make sure we expose usable values (which noFilePosition is not)
-			ms.pauseRestorePoint.filePos = 0;
+			ms.GetPauseRestorePoint().filePos = 0;
 		}
-		ms.pauseRestorePoint.toolNumber = ms.GetCurrentToolNumber();
-		ms.pauseRestorePoint.fanSpeed = ms.virtualFanSpeed;
+		ms.GetPauseRestorePoint().toolNumber = ms.GetCurrentToolNumber();
+		ms.GetPauseRestorePoint().fanSpeed = ms.virtualFanSpeed;
 	}
 
 	pauseState = PauseState::paused;
@@ -1368,7 +1368,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 // 'buf' is a convenient 256-byte buffer we can use
 bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const f, const char *printingFilename, const StringRef& buf) noexcept
 {
-	RestorePoint& pauseRestorePoint = ms.pauseRestorePoint;		//TODO handle pausing when multiple motion system are active
+	const RestorePoint& pauseRestorePoint = ms.GetPauseRestorePoint();		//TODO handle pausing when multiple motion system are active
 
 	// Write a G92 command to say where the head is. This is useful if we can't Z-home the printer with a print on the bed and the Z steps/mm is high.
 	// The paused coordinates include any tool offsets and baby step offsets, so remove those.
