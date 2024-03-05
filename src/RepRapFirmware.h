@@ -653,11 +653,7 @@ static inline constexpr float InverseConvertAcceleration(float accel) noexcept
 constexpr unsigned int MaxFloatDigitsDisplayedAfterPoint = 7;
 const char *_ecv_array GetFloatFormatString(float val, unsigned int numDigitsAfterPoint) noexcept;
 
-#if SUPPORT_WORKPLACE_COORDINATES
 constexpr size_t NumCoordinateSystems = 9;							// G54 up to G59.3
-#else
-constexpr size_t NumCoordinateSystems = 1;
-#endif
 
 #define DEGREE_SYMBOL	"\xC2\xB0"									// degree-symbol encoding in UTF8
 

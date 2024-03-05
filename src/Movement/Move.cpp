@@ -183,7 +183,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ(), 4),															ObjectModelEntryFlags::none },
 
 #if SUPPORT_COORDINATE_ROTATION
-	// 8. move.rotation members
+	// 9. move.rotation members
 	{ "angle",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRotationAngle()),								ObjectModelEntryFlags::none },
 	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(3),																		ObjectModelEntryFlags::none },
 #endif
@@ -192,7 +192,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 constexpr uint8_t Move::objectModelTableDescriptor[] =
 {
 	9 + SUPPORT_COORDINATE_ROTATION,
-	17 + SUPPORT_WORKPLACE_COORDINATES + SUPPORT_KEEPOUT_ZONES,
+	17 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES,
 	2,
 	5 + SUPPORT_LASER,
 	3,

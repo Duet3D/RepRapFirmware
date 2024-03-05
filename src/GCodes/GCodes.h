@@ -450,11 +450,9 @@ private:
 
 	GCodeResult OffsetAxes(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Set/report offsets
 
-#if SUPPORT_WORKPLACE_COORDINATES
 	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute) THROWS(GCodeException);	// Set workspace coordinates
-# if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteWorkplaceCoordinates(FileStore *f) const noexcept;
-# endif
 #endif
 
 	ReadLockedPointer<Tool> GetSpecifiedOrCurrentTool(GCodeBuffer& gb) THROWS(GCodeException);

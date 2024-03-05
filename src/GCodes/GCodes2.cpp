@@ -233,7 +233,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		case 10: // Set/report offsets and temperatures, or retract
 			{
-#if SUPPORT_WORKPLACE_COORDINATES
 				if (gb.Seen('L'))
 				{
 					const uint32_t ival = gb.GetUIValue();
@@ -258,7 +257,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				else
-#endif
 				{
 					BREAK_IF_NOT_EXECUTING
 					bool modifyingTool = gb.Seen('P') || gb.Seen('R') || gb.Seen('S');
@@ -456,7 +454,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			gb.LatestMachineState().g53Active = true;
 			break;
 
-#if SUPPORT_WORKPLACE_COORDINATES
 		case 54:	// Switch to coordinate system 1
 		case 55:	// Switch to coordinate system 2
 		case 56:	// Switch to coordinate system 3
@@ -485,7 +482,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 			}
 			break;
-#endif
 
 		case 60: // Save position
 			BREAK_IF_NOT_EXECUTING

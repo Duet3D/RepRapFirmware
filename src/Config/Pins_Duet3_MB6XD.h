@@ -44,7 +44,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_BME280			1
 #define SUPPORT_ACCELEROMETERS	1
-#define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_FTP				1
 #define SUPPORT_TELNET			1

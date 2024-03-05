@@ -1318,7 +1318,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 			String<StringLength256> buf;
 
 			// Write the header comment
-			buf.printf("; File \"%s\" resume print after %s", printingFilename, (wasPowerFailure) ? "power failure" : "print paused");
+			buf.printf("; Resume printing file \"%s\" after %s", printingFilename, (wasPowerFailure) ? "power failure" : "print paused");
 			tm timeInfo;
 			if (platform.GetDateTime(timeInfo))
 			{
@@ -1374,7 +1374,7 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 {
 	const RestorePoint& pauseRestorePoint = ms.GetPauseRestorePoint();
 
-	// Write a G92 command to say where the head is. This is useful if we can't Z-home the printer with a print on the bed and the Z steps/mm is high.
+	// Write a G92 command to say where all the axes are. This is useful if we can't Z-home the printer with a print on the bed and the Z steps/mm is high.
 	// The paused coordinates include any tool offsets and baby step offsets, so remove those.
 	// We used to send T-1 here ensure that no tool is selected, in case config.g selects one and it has an offset.
 	// We no longer do that because on some tool changers it is possible to home X and Y with a tool loaded.
@@ -1436,7 +1436,6 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 		}
 	}
 
-#if SUPPORT_WORKPLACE_COORDINATES
 	// Restore the coordinate offsets of all workplaces
 	if (ok)
 	{
@@ -1457,18 +1456,6 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 		}
 		ok = f->Write(buf.c_str());
 	}
-#else
-	if (ok)
-	{
-		buf.copy("M206");
-		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-		{
-			buf.catf(" %c%.3f", axisLetters[axis], (double)-workplaceCoordinates[0][axis]);
-		}
-		buf.cat('\n');
-		ok = f->Write(buf.c_str());
-	}
-#endif
 	if (ok && FileGCode()->OriginalMachineState().volumetricExtrusion)
 	{
 		buf.copy("M200 ");
@@ -4690,12 +4677,10 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 		ok = WriteToolParameters(f, p10);
 	}
 
-#if SUPPORT_WORKPLACE_COORDINATES
 	if (ok)
 	{
 		ok = WriteWorkplaceCoordinates(f);
 	}
-#endif
 
 	if (!f->Close())
 	{
