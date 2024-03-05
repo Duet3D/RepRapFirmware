@@ -58,6 +58,7 @@ body:
       - label: Maestro Dual Driver Expansion
       - label: Duet3-6HC
       - label: Duet3-3HC
+      - label: Duet3-6XD
       - label: Duet3-1XD
       - label: Duet3-1LC
       - label: Duet3-Tool Distribution Board
