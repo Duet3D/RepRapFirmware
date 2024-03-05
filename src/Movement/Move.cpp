@@ -125,7 +125,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxPrintingAcceleration()), 1),	ObjectModelEntryFlags::none },
 	{ "queue",					OBJECT_MODEL_FUNC_ARRAY(2),																		ObjectModelEntryFlags::none },
 #if SUPPORT_COORDINATE_ROTATION
-	{ "rotation",				OBJECT_MODEL_FUNC(self, 44),																	ObjectModelEntryFlags::none },
+	{ "rotation",				OBJECT_MODEL_FUNC(self, 9),																		ObjectModelEntryFlags::none },
 #endif
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimarySpeedFactor(), 2),						ObjectModelEntryFlags::none },

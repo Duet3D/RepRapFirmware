@@ -1293,6 +1293,7 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		}
 #endif
 		UpdateCurrentUserPosition(gb);
+		reprap.MoveUpdated();
 	}
 	return GCodeResult::ok;
 }
