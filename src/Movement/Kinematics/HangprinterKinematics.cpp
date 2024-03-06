@@ -39,30 +39,31 @@ constexpr float DefaultPrintRadius = 1500.0;
 
 constexpr ObjectModelArrayTableEntry HangprinterKinematics::objectModelArrayTable[] =
 {
-	// 10. Coordinates of one anchor
+	// 0. Coordinates of one anchor
 	{
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 3; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const HangprinterKinematics *)self)->anchors[context.GetIndex(1)][context.GetLastIndex()], 1); }
 	},
-	// 11. Anchors
+	// 1. Anchors
 	{
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return HANGPRINTER_MAX_ANCHORS; },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 10 | (context.GetLastIndex() << 8), true); }
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 0, true); }
 	}
 };
 
-// TODO how are this 10 (now 13) and this 11 (now 14) calculated? make it a macro based on HANGPRINTER_MAX_ANCHORS
-DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(HangprinterKinematics, RoundBedKinematics, 13)
+constexpr size_t NumArrayTableEntriesInParents = 0;			// RoundbetKinematics and its parent class Kinematics have no array table entries
+
+DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(HangprinterKinematics, RoundBedKinematics, NumArrayTableEntriesInParents)
 
 constexpr ObjectModelTableEntry HangprinterKinematics::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. kinematics members
-	{ "anchors",		OBJECT_MODEL_FUNC_ARRAY(14), 					ObjectModelEntryFlags::none },
-	{ "name",		OBJECT_MODEL_FUNC(self->GetName(true)), 			ObjectModelEntryFlags::none },
-	{ "printRadius",	OBJECT_MODEL_FUNC(self->printRadius, 1), 			ObjectModelEntryFlags::none },
+	{ "anchors",		OBJECT_MODEL_FUNC_ARRAY(NumArrayTableEntriesInParents + 1), ObjectModelEntryFlags::none },
+	{ "name",			OBJECT_MODEL_FUNC(self->GetName(true)), 					ObjectModelEntryFlags::none },
+	{ "printRadius",	OBJECT_MODEL_FUNC(self->printRadius, 1), 					ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t HangprinterKinematics::objectModelTableDescriptor[] = { 1, 3 };
