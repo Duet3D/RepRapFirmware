@@ -248,7 +248,8 @@ void FansManager::Init() noexcept
 		String<1> dummy;
 		fans[i] = CreateLocalFan(i,
 									DefaultFanPinNames[i],
-									i < ARRAY_SIZE(DefaultFanPwmFrequencies) && DefaultFanPwmFrequencies[i] != 0 ? DefaultFanPwmFrequencies[i] : DefaultFanPwmFreq,
+									(i < ARRAY_SIZE(DefaultFanPwmFrequencies) && DefaultFanPwmFrequencies[i] != 0) ? DefaultFanPwmFrequencies[i] : DefaultFanPwmFreq,
+									2.0,
 									dummy.GetRef()
 								);
 	}
