@@ -693,16 +693,16 @@ void Tool::DefineMix(const float m[]) noexcept
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
-// Write the tool's settings to file returning true if successful. The settings written leave the tool selected unless it is off.
-bool Tool::WriteSettings(FileStore *f) const noexcept
+// Write the tool's settings to file returning true if successful
+bool Tool::WriteSettings(FileStore *f, const StringRef& buf) const noexcept
 {
-	String<StringLength50> buf;
 	bool ok = true;
+	buf.printf("M568 P%u  A%u", myNumber, (state == ToolState::active) ? 2 : (state == ToolState::standby) ? 1 : 0);
 
 	// Set up active and standby heater temperatures
 	if (heaterCount != 0)
 	{
-		buf.printf("G10 P%d ", myNumber);
+		buf.cat(' ');
 		char c = 'S';
 		for (size_t i = 0; i < heaterCount; ++i)
 		{
@@ -716,15 +716,19 @@ bool Tool::WriteSettings(FileStore *f) const noexcept
 			buf.catf("%c%d", c, (int)standbyTemperatures[i]);
 			c = ':';
 		}
-		buf.cat('\n');
-		ok = f->Write(buf.c_str());
 	}
-
-	if (ok && state != ToolState::off)
+	if (ok && driveCount > 1)
 	{
-		ok = buf.printf("T%d P0\n", myNumber);
+		buf.catf("M567 P%u ", myNumber);
+		char c = 'E';
+		for (size_t i = 0; i < driveCount; ++i)
+		{
+			buf.catf("%c%.2f", c, (double)mix[i]);
+			c = ':';
+		}
 	}
-
+	buf.cat('\n');
+	ok = f->Write(buf.c_str());
 	return ok;
 }
 

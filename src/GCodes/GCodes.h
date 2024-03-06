@@ -479,7 +479,7 @@ private:
 	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	bool WriteToolSettings(FileStore *f, const MovementState& ms) const noexcept;			// save some information for the resume file
+	bool WriteToolSettings(FileStore *f, const StringRef& buf) const noexcept;				// save some information for the resume file
 	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const noexcept;	// save some information in config-override.g
 #endif
 
@@ -636,6 +636,8 @@ private:
 	GCodeBuffer* File2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)]; }
 	GCodeBuffer* Queue2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]; }
 	GCodeBuffer* GetFileGCode(unsigned int msNumber) const noexcept { return (msNumber == 0) ? FileGCode() : File2GCode(); }
+#else
+	GCodeBuffer* GetFileGCode(unsigned int msNumber) const noexcept { return FileGCode(); }
 #endif
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling

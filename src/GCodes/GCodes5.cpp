@@ -333,36 +333,14 @@ GCodeResult GCodes::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& repl
 
 // Save some resume information, returning true if successful
 // We assume that the tool configuration doesn't change, only the temperatures and the mix
-bool GCodes::WriteToolSettings(FileStore *f, const MovementState& ms) const noexcept
+bool GCodes::WriteToolSettings(FileStore *f, const StringRef& buf) const noexcept
 {
-	// First write the settings of all tools except the current one and the command to select them if they are on standby
+	// First write the settings of all tools
 	bool ok = true;
 	ReadLocker lock(Tool::toolListLock);
 	for (const Tool *t = Tool::GetToolList(); t != nullptr && ok; t = t->Next())
 	{
-		if (t != ms.currentTool)
-		{
-			ok = t->WriteSettings(f);
-		}
-	}
-
-	// Finally write the settings of the active tool and the commands to select it. If no current tool, just deselect all tools.
-	if (ok)
-	{
-		if (ms.currentTool == nullptr)
-		{
-			ok = f->Write("T-1 P0\n");
-		}
-		else
-		{
-			ok = ms.currentTool->WriteSettings(f);
-			if (ok)
-			{
-				String<StringLength20> buf;
-				buf.printf("T%u P0\n", ms.currentTool->Number());
-				ok = f->Write(buf.c_str());
-			}
-		}
+		ok = t->WriteSettings(f, buf);
 	}
 	return ok;
 }

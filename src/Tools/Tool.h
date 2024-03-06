@@ -117,7 +117,7 @@ public:
 	void SetSpindleRpm(uint32_t rpm, bool isCurrentTool) THROWS(GCodeException);
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	bool WriteSettings(FileStore *f) const noexcept;							// write the tool's settings to file
+	bool WriteSettings(FileStore *f, const StringRef& buf) const noexcept;		// write the tool's settings to file
 #endif
 
 	float GetToolHeaterActiveTemperature(size_t heaterNumber) const noexcept;
