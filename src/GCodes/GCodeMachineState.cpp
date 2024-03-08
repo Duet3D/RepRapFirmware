@@ -7,6 +7,7 @@
 
 #include "GCodeMachineState.h"
 #include <Platform/RepRap.h>
+#include <Storage/MassStorage.h>
 
 #include <limits>
 
@@ -93,7 +94,7 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 GCodeMachineState::GCodeMachineState(GCodeMachineState& copyFrom, GCodeMachineState *prev, unsigned int oldExecuteQueue, unsigned int newExecuteQueue) noexcept
 	: feedRate(copyFrom.feedRate),
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	  fileState(copyFrom.fileState),
+	  fileState(),
 #endif
 #if HAS_SBC_INTERFACE
 	  fileId(copyFrom.fileId),
@@ -115,6 +116,19 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& copyFrom, GCodeMachineSt
 	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok),
 	  commandedQueueNumber(copyFrom.commandedQueueNumber), ownQueueNumber(newExecuteQueue), executeAllCommands(false)
 {
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	if (copyFrom.fileState.IsLive())
+	{
+		if (localPush)
+		{
+			fileState.CopyFrom(prev->fileState);
+		}
+		else
+		{
+			fileState.Set(MassStorage::DuplicateOpenHandle(copyFrom.fileState.GetUnderlyingFile()));
+		}
+	}
+#endif
 	copyFrom.ownQueueNumber = oldExecuteQueue;
 	copyFrom.executeAllCommands = false;
 

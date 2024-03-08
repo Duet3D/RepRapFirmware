@@ -3368,20 +3368,6 @@ bool GCodes::QueueFileToPrint(const char* fileName, const StringRef& reply) noex
 // We must hold the movement lock and wait for all moves to finish before calling this because of the calls to ResetMoveCounters and ResetExtruderPositions.
 void GCodes::StartPrinting(bool fromStart) noexcept
 {
-#if (HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES) && SUPPORT_ASYNC_MOVES
-	FileData copyFileToPrint;
-# if HAS_SBC_INTERFACE
-	if (!reprap.UsingSbcInterface())
-# endif
-	{
-		copyFileToPrint.Set(MassStorage::DuplicateOpenHandle(fileToPrint.GetUnderlyingFile()));
-		if (!copyFileToPrint.IsLive())
-		{
-			return;
-		}
-	}
-#endif
-
 	buildObjects.Init();
 	for (MovementState& ms : moveStates)
 	{
@@ -3416,7 +3402,11 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	{
 		fileToPrint.Seek(moveStates[0].fileOffsetToPrint);
 # if SUPPORT_ASYNC_MOVES
-		copyFileToPrint.Seek(moveStates[1].fileOffsetToPrint);
+		if (!FileGCode()->ExecutingAll())
+		{
+			// Running M23 when the File reader has already been forked, probably by the resume-after-power-fail code
+			//TODO
+		}
 # endif
 	}
 #endif
