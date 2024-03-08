@@ -68,7 +68,7 @@ TemperatureSensor::~TemperatureSensor() noexcept
 }
 
 // Return the latest temperature reading
-TemperatureError TemperatureSensor::GetLatestTemperature(float& t, uint8_t outputNumber) noexcept
+TemperatureError TemperatureSensor::GetLatestTemperature(float& t) noexcept
 {
 	// We must read whenLastRead *before* we call millis(). Otherwise, a task switch to the heater task could occur after we call millis and before we read whenLastRead,
 	// so that when we read whenLastRead its value is greater than the result from millis().
@@ -80,6 +80,13 @@ TemperatureError TemperatureSensor::GetLatestTemperature(float& t, uint8_t outpu
 	}
 	t = lastTemperature;
 	return lastResult;
+}
+
+// Return the value of an additional output. Default implementation for sensors with no additional output.
+TemperatureError TemperatureSensor::GetAdditionalOutput(float& t, uint8_t outputNumber) noexcept
+{
+	t = BadErrorTemperature;
+	return TemperatureError::invalidOutputNumber;
 }
 
 // Set the name - normally called only once, so we allow heap memory to be allocated

@@ -26,7 +26,7 @@ public:
 #endif
 
 	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 2; }
-	TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0) noexcept override;
+	TemperatureError GetAdditionalOutput(float& t, uint8_t outputNumber) noexcept override;
 	void Poll() noexcept override;
 	const char *GetShortSensorType() const noexcept override { return TypeName; }
 

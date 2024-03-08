@@ -28,8 +28,8 @@ public:
 	// Try to get a temperature reading
 	virtual void Poll() noexcept = 0;
 
-	// Try to get a temperature reading
-	virtual TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0) noexcept;
+	// Try to get an additional output temperature reading
+	virtual TemperatureError GetAdditionalOutput(float& t, uint8_t outputNumber) noexcept;
 
 	// How many additional outputs does this sensor have
 	virtual const uint8_t GetNumAdditionalOutputs() const noexcept { return 0; }
@@ -58,10 +58,8 @@ public:
 	virtual void UpdateRemoteTemperature(CanAddress src, const CanSensorReport& report) noexcept;
 #endif
 
-#if 0	// no longer used
-	// Get the most recent reading without checking for timeout
-	float GetStoredReading() const noexcept { return lastTemperature; }
-#endif
+	// Try to get a temperature reading
+	TemperatureError GetLatestTemperature(float& t) noexcept;
 
 	// Return the sensor type
 	const char *_ecv_array GetSensorType() const noexcept { return sensorType; }
