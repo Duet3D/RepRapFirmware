@@ -92,6 +92,10 @@ void CanMessageGenericConstructor::PopulateFromCommand(GCodeBuffer& gb) THROWS(G
 				StoreValue(gb.GetFValue());
 				break;
 
+			case ParamDescriptor::float16_p:
+				StoreValue((float16_t)gb.GetFValue());
+				break;
+
 			case ParamDescriptor::char_p:
 				{
 					String<StringLength20> str;
