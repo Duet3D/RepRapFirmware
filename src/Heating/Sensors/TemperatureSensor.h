@@ -70,21 +70,16 @@ public:
 	// Return the code for the most recent error
 	TemperatureError GetLastError() const noexcept { return lastRealError; }
 
-	// Configure the sensor name, if it is provided
-	void ConfigureCommonParameters(GCodeBuffer& gb, bool& seen) THROWS(GCodeException);
-
 	// Set the name - normally called only once
 	void SetSensorName(const char *_ecv_array _ecv_null newName) noexcept;
 
 	// Get the name. Returns nullptr if no name has been assigned.
 	const char *_ecv_array GetSensorName() const noexcept { return sensorName; }
 
-	// Copy the basic details to the reply buffer
-	void CopyBasicDetails(const StringRef& reply) const noexcept;
-
 	// Get/set the next sensor in the linked list
 	TemperatureSensor *_ecv_from GetNext() const noexcept { return next; }
 	void SetNext(TemperatureSensor *_ecv_from n) noexcept { next = n; }
+
 	// Get the time of the last reading
 	uint32_t GetLastReadingTime() const noexcept { return whenLastRead; }
 
@@ -100,15 +95,22 @@ public:
 protected:
 	DECLARE_OBJECT_MODEL
 
+	virtual void AppendPinDetails(const StringRef& reply) const noexcept { }				// append the details of the pin(s) used, only done for some sensor types
+
+	void ConfigureCommonParameters(GCodeBuffer& gb, bool& seen) THROWS(GCodeException);		// configure the sensor name and reading adjustment parameters
+	void CopyBasicDetails(const StringRef& reply) const noexcept;							// copy the common details to the reply buffer - not called for remote sensors
 	void SetResult(float t, TemperatureError rslt) noexcept;
 	void SetResult(TemperatureError rslt) noexcept;
-	virtual void AppendPinDetails(const StringRef& reply) const noexcept { }	// append the details of the pin(s) used, only done for some sensor types
+
+#if SUPPORT_CAN_EXPANSION
+	void ClearAdjustments() noexcept { offsetAdjustment = slopeAdjustment = 0.0; }			// clear the adjustment parameters
+#endif
 
 private:
-	static constexpr uint32_t DefaultTemperatureReadingTimeout = 2000;			// any reading older than this number of milliseconds is considered unreliable
+	static constexpr uint32_t DefaultTemperatureReadingTimeout = 2000;						// any reading older than this number of milliseconds is considered unreliable
 
 	TemperatureSensor *_ecv_from _ecv_null next;
-	unsigned int sensorNumber;													// the number of this sensor
+	unsigned int sensorNumber;																// the number of this sensor
 	const char *_ecv_array const sensorType;
 	const char *_ecv_array _ecv_null sensorName;
 	float lastTemperature;
