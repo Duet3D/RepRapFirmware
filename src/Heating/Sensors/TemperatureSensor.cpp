@@ -42,12 +42,12 @@ constexpr ObjectModelTableEntry TemperatureSensor::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. TemperatureSensor members
-	{ "lastReading",	OBJECT_MODEL_FUNC(self->lastTemperature, 2), 	ObjectModelEntryFlags::live },
-	{ "name",			OBJECT_MODEL_FUNC(self->sensorName), 			ObjectModelEntryFlags::none },
-	{ "offsetAdj",		OBJECT_MODEL_FUNC(self->offsetAdjustment, 1), 	ObjectModelEntryFlags::none },
-	{ "slopeAdj",		OBJECT_MODEL_FUNC(self->slopeAdjustment, 3), 	ObjectModelEntryFlags::none },
-	{ "state",			OBJECT_MODEL_FUNC(self->lastResult.ToString()),	ObjectModelEntryFlags::none },
-	{ "type",			OBJECT_MODEL_FUNC(self->GetShortSensorType()), 	ObjectModelEntryFlags::none },
+	{ "lastReading",	OBJECT_MODEL_FUNC(self->lastTemperature, 2), 						ObjectModelEntryFlags::live },
+	{ "name",			OBJECT_MODEL_FUNC(self->sensorName), 								ObjectModelEntryFlags::none },
+	{ "offsetAdj",		OBJECT_MODEL_FUNC(self->offsetAdjustment, 1), 						ObjectModelEntryFlags::none },
+	{ "slopeAdj",		OBJECT_MODEL_FUNC(self->slopeAdjustment, 3), 						ObjectModelEntryFlags::none },
+	{ "state",			OBJECT_MODEL_FUNC(((TemperatureError)self->lastResult).ToString()),	ObjectModelEntryFlags::none },
+	{ "type",			OBJECT_MODEL_FUNC(self->GetShortSensorType()), 						ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t TemperatureSensor::objectModelTableDescriptor[] = { 1, 6 };
@@ -122,7 +122,9 @@ GCodeResult TemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& reply
 // Default implementation of Configure, for sensors that have no configurable parameters
 GCodeResult TemperatureSensor::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
 {
-	if (!parser.HasParameter('Y'))
+	bool seen = parser.HasParameter('Y');
+	ConfigureCommonParameters(parser, seen);
+	if (!seen)
 	{
 		// No parameters were provided, so report the current configuration
 		CopyBasicDetails(reply);
@@ -141,7 +143,7 @@ void TemperatureSensor::CopyBasicDetails(const StringRef& reply) const noexcept
 	}
 	reply.catf(" type %s", sensorType);
 	AppendPinDetails(reply);
-	reply.catf(", last error %s, ", lastRealError.ToString());
+	reply.catf(", last error %s, ", ((TemperatureError)lastRealError).ToString());
 	if (slopeAdjustment != 0.0 || offsetAdjustment != 0.0)
 	{
 		reply.catf("offset adjustment %.1f, slope adjustment %.3f, adjusted reading %.1f", (double)offsetAdjustment, (double)slopeAdjustment, (double)lastTemperature);
@@ -164,6 +166,17 @@ void TemperatureSensor::ConfigureCommonParameters(GCodeBuffer& gb, bool& seen) T
 	gb.TryGetLimitedFValue('V', slopeAdjustment, seen, -0.2, 0.2);
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
+// Configure the reading adjustment parameters
+void TemperatureSensor::ConfigureCommonParameters(const CanMessageGenericParser& parser, bool& seen) noexcept
+{
+	if (parser.GetFloatParam('U', offsetAdjustment)) { seen = true; }
+	if (parser.GetFloatParam('V', slopeAdjustment)) { seen = true; }
+}
+
+#endif
+
 void TemperatureSensor::SetResult(float t, TemperatureError rslt) noexcept
 {
 	lastResult = rslt;
@@ -178,7 +191,8 @@ void TemperatureSensor::SetResult(float t, TemperatureError rslt) noexcept
 // This version is used for unsuccessful readings only
 void TemperatureSensor::SetResult(TemperatureError rslt) noexcept
 {
-	lastResult = lastRealError = rslt;
+	lastResult = rslt;
+	lastRealError = rslt;
 	lastTemperature = BadErrorTemperature;
 	whenLastRead = millis();
 }

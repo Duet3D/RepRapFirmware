@@ -12,6 +12,10 @@
 
 #include <AnalogIn.h>
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 #if SAME5x
 using AnalogIn::AdcBits;
 #else
@@ -67,6 +71,49 @@ GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& repl
 	}
 	return GCodeResult::ok;
 }
+
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult LinearAnalogSensor::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	bool seen = false;
+	if (!ConfigurePort(parser, reply, PinAccess::readAnalog, seen))
+	{
+		return GCodeResult::error;
+	}
+
+	ConfigureCommonParameters(parser, seen);
+	if (parser.GetFloatParam('B', lowTemp))
+	{
+		seen = true;
+	}
+	if (parser.GetFloatParam('C', highTemp))
+	{
+		seen = true;
+	}
+	if (parser.GetBoolParam('F', filtered))
+	{
+		seen = true;
+	}
+	if (seen)
+	{
+		const bool wasFiltered = filtered;
+		CalcDerivedParameters();
+		if (adcFilterChannel < 0 && wasFiltered)
+		{
+			reply.copy("filtering not supported on this port");
+			return GCodeResult::warning;
+		}
+	}
+	else
+	{
+		CopyBasicDetails(reply);
+		reply.catf(", %sfiltered, range %.1f to %.1f", (filtered) ? "" : "un", (double)lowTemp, (double)highTemp);
+	}
+	return GCodeResult::ok;
+}
+
+#endif
 
 void LinearAnalogSensor::Poll() noexcept
 {

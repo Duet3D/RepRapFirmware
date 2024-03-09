@@ -98,6 +98,9 @@ protected:
 	virtual void AppendPinDetails(const StringRef& reply) const noexcept { }				// append the details of the pin(s) used, only done for some sensor types
 
 	void ConfigureCommonParameters(GCodeBuffer& gb, bool& seen) THROWS(GCodeException);		// configure the sensor name and reading adjustment parameters
+#if SUPPORT_REMOTE_COMMANDS
+	void ConfigureCommonParameters(const CanMessageGenericParser& parser, bool& seen) noexcept;	// configure the reading adjustment parameters
+#endif
 	void CopyBasicDetails(const StringRef& reply) const noexcept;							// copy the common details to the reply buffer - not called for remote sensors
 	void SetResult(float t, TemperatureError rslt) noexcept;
 	void SetResult(TemperatureError rslt) noexcept;
@@ -117,7 +120,7 @@ private:
 	uint32_t whenLastRead;
 	float offsetAdjustment = 0.0;
 	float slopeAdjustment = 0.0;
-	TemperatureError lastResult, lastRealError;
+	volatile TemperatureError lastResult, lastRealError;
 };
 
 #endif // TEMPERATURESENSOR_H

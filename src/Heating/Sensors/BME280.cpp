@@ -677,6 +677,7 @@ GCodeResult BME280TemperatureSensor::Configure(const CanMessageGenericParser& pa
 	{
 		return GCodeResult::error;
 	}
+	ConfigureCommonParameters(parser, seen);
 	return FinishConfiguring(seen, reply);
 }
 

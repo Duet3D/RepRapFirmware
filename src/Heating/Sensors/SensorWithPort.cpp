@@ -53,7 +53,7 @@ bool SensorWithPort::ConfigurePort(GCodeBuffer& gb, const StringRef& reply, PinA
 
 #if SUPPORT_REMOTE_COMMANDS
 
-// Try to configure the port
+// Try to configure the port. Return true if success or the port string is not given but the port is already valid, false if error.
 bool SensorWithPort::ConfigurePort(const CanMessageGenericParser& parser, const StringRef& reply, PinAccess access, bool& seen)
 {
 	String<StringLength20> portName;
@@ -72,7 +72,7 @@ bool SensorWithPort::ConfigurePort(const CanMessageGenericParser& parser, const 
 
 #endif
 
-// Copy the basic details to the reply buffer. This hides the version in the base class.
+// Copy the pin details to the reply buffer
 void SensorWithPort::AppendPinDetails(const StringRef& reply) const noexcept
 {
 	reply.cat(" using pin ");
