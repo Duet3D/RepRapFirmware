@@ -40,28 +40,32 @@ GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& repl
 	{
 		return GCodeResult::error;
 	}
-
-	gb.TryGetFValue('B', lowTemp, changed);
-	gb.TryGetFValue('C', highTemp, changed);
-	ConfigureCommonParameters(gb, changed);
 	if (gb.Seen('F'))
 	{
 		changed = true;
 		filtered = gb.GetIValue() >= 1;
 	}
+	const bool portOrFilterChanged = changed;
+
+	gb.TryGetFValue('B', lowTemp, changed);
+	gb.TryGetFValue('C', highTemp, changed);
+	ConfigureCommonParameters(gb, changed);
 
 	if (changed)
 	{
 		const bool wasFiltered = filtered;
 		CalcDerivedParameters();
-		if (adcFilterChannel >= 0)
+		if (portOrFilterChanged)
 		{
-			reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init(0);
-		}
-		else if (wasFiltered)
-		{
-			reply.copy("filtering not supported on this port");
-			return GCodeResult::warning;
+			if (adcFilterChannel >= 0)
+			{
+				reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init(0);
+			}
+			else if (wasFiltered)
+			{
+				reply.copy("filtering not supported on this port");
+				return GCodeResult::warning;
+			}
 		}
 	}
 	else
