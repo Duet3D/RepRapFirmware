@@ -20,7 +20,7 @@ public:
 
 	// Overridden base class functions. See Kinematics.h for descriptions.
 	const char *GetName(bool forStatusReport) const noexcept override;
-	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, bool& error) THROWS(GCodeException) override;
+	bool Configure(unsigned int mCode, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf, bool& error) THROWS(GCodeException) override;
 	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
 	bool SupportsAutoCalibration() const noexcept override { return true; }
@@ -50,13 +50,20 @@ protected:
 	OBJECT_MODEL_ARRAY(anchors)
 	OBJECT_MODEL_ARRAY(anchorCoordinates)
 
+	bool IsReachablePyramid(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
+	bool IsReachablePrism(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
+
 private:
 	// Basic facts about movement system
-	static constexpr size_t HANGPRINTER_AXES = 4;
+	const char* ANCHOR_CHARS = "ABCDEFHIJ"; // Skip the G, since it is reserved in G-code
+	static constexpr size_t HANGPRINTER_MAX_AXES = 9;
 	static constexpr size_t A_AXIS = 0;
 	static constexpr size_t B_AXIS = 1;
 	static constexpr size_t C_AXIS = 2;
 	static constexpr size_t D_AXIS = 3;
+	// LastTopRestDown (default) has a single anchor on top and produces pyramid-shaped printing volumes
+	// AllTop has a all anchors on top and produces prism-shaped printing volumes
+	enum AnchorsSetup {LastTopRestDown, AllTop}; // Allowed setups for placing the anchors
 
 	void Init() noexcept;
 	void Recalc() noexcept;
@@ -66,16 +73,18 @@ private:
 
 	void PrintParameters(const StringRef& reply) const noexcept;									// Print all the parameters for debugging
 
-	float anchors[HANGPRINTER_AXES][3];				// XYZ coordinates of the anchors
+	size_t numAnchors;
+	float anchors[HANGPRINTER_MAX_AXES][3];				// XYZ coordinates of the anchors
+	AnchorsSetup anchorsSetup;
 	float printRadius;
 	// Line buildup compensation
 	float spoolBuildupFactor;
-	float spoolRadii[HANGPRINTER_AXES];
-	uint32_t mechanicalAdvantage[HANGPRINTER_AXES], linesPerSpool[HANGPRINTER_AXES];
-	uint32_t motorGearTeeth[HANGPRINTER_AXES], spoolGearTeeth[HANGPRINTER_AXES], fullStepsPerMotorRev[HANGPRINTER_AXES];
+	float spoolRadii[HANGPRINTER_MAX_AXES];
+	uint32_t mechanicalAdvantage[HANGPRINTER_MAX_AXES], linesPerSpool[HANGPRINTER_MAX_AXES];
+	uint32_t motorGearTeeth[HANGPRINTER_MAX_AXES], spoolGearTeeth[HANGPRINTER_MAX_AXES], fullStepsPerMotorRev[HANGPRINTER_MAX_AXES];
 
 	// Derived parameters
-	float k0[HANGPRINTER_AXES], spoolRadiiSq[HANGPRINTER_AXES], k2[HANGPRINTER_AXES], lineLengthsOrigin[HANGPRINTER_AXES];
+	float k0[HANGPRINTER_MAX_AXES], spoolRadiiSq[HANGPRINTER_MAX_AXES], k2[HANGPRINTER_MAX_AXES], lineLengthsOrigin[HANGPRINTER_MAX_AXES];
 	float printRadiusSquared;
 
 #if DUAL_CAN
