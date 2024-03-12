@@ -512,22 +512,6 @@ private:
 // Macro to create a SimpleRange from an array
 #define ARRAY_INDICES(_arr) (SimpleRange<size_t>(ARRAY_SIZE(_arr)))
 
-// A simple milliseconds timer class
-class MillisTimer
-{
-public:
-	MillisTimer() noexcept { running = false; }
-	void Start() noexcept;
-	void Stop() noexcept { running = false; }
-	bool CheckNoStop(uint32_t timeoutMillis) const noexcept;
-	bool CheckAndStop(uint32_t timeoutMillis) noexcept;
-	bool IsRunning() const noexcept { return running; }
-
-private:
-	uint32_t whenStarted;
-	bool running;
-};
-
 // Function to delete an object and clear the pointer. Safe to call even if the pointer is already null.
 template <typename T> void DeleteObject(T *null & ptr) noexcept
 {

@@ -181,32 +181,6 @@ const char *_ecv_array GetFloatFormatString(float val, unsigned int numDigitsAft
 	return FormatStrings[min<unsigned int>(numDigitsAfterPoint, maxDigitsAfterPoint)];
 }
 
-// class MillisTimer members
-
-// Start or restart the timer
-void MillisTimer::Start() noexcept
-{
-	whenStarted = millis();
-	running = true;
-}
-
-// Check whether the timer is running and a timeout has expired, but don't stop it
-bool MillisTimer::CheckNoStop(uint32_t timeoutMillis) const noexcept
-{
-	return running && millis() - whenStarted >= timeoutMillis;
-}
-
-// Check whether a timeout has expired and stop the timer if it has, else leave it running if it was running
-bool MillisTimer::CheckAndStop(uint32_t timeoutMillis) noexcept
-{
-	const bool ret = CheckNoStop(timeoutMillis);
-	if (ret)
-	{
-		running = false;
-	}
-	return ret;
-}
-
 //*************************************************************************************************
 
 // Utilities and storage not part of any class
