@@ -2244,7 +2244,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 		return GCodeResult::ok;
 	}
 
-	response->copy("{\"err\":1}\n");
+	response->printf("{\"err\":1,\"fileName\":\"%.s\"}", ((specificFile) ? filename : printMonitor->GetPrintingFilename()));
 	return GCodeResult::warning;
 }
 

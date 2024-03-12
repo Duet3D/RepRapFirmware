@@ -34,7 +34,7 @@ public:
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
 #endif
 
-	TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0) noexcept override;
+	TemperatureError GetAdditionalOutput(float& t, uint8_t outputNumber) noexcept override;
 	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 1; }
 	void Poll() noexcept override;
 	uint32_t GetTemperatureReadingTimeout() const noexcept override { return (MinimumReadInterval * (MaxDhtBadTemperatureCount + 1)) + 500; }

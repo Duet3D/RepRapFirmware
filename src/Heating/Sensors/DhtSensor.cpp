@@ -119,18 +119,16 @@ void DhtTemperatureSensor::AppendPinDetails(const StringRef& reply) const noexce
 
 #endif
 
-TemperatureError DhtTemperatureSensor::GetLatestTemperature(float &t, uint8_t outputNumber) noexcept
+TemperatureError DhtTemperatureSensor::GetAdditionalOutput(float &t, uint8_t outputNumber) noexcept
 {
-	if (outputNumber > 1)
+	if (outputNumber != 1)
 	{
 		t = BadErrorTemperature;
 		return TemperatureError::invalidOutputNumber;
 	}
+
 	const auto result = TemperatureSensor::GetLatestTemperature(t);
-	if (outputNumber == 1)
-	{
-		t = lastHumidity;
-	}
+	t = lastHumidity;
 	return result;
 }
 
