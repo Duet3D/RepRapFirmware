@@ -2230,9 +2230,9 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 		}
 
 		// See if we have any thumbnails
+		response->cat(",\"thumbnails\":");
 		if (info.thumbnails[0].IsValid())
 		{
-			response->cat(",\"thumbnails\":");
 			size_t index = 0;
 			do
 			{
@@ -2242,8 +2242,12 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 				++index;
 			}
 			while (index < MaxThumbnails && info.thumbnails[index].IsValid());
-			response->cat(']');
 		}
+		else
+		{
+			response->cat('[');
+		}
+		response->cat(']');
 
 		response->catf(",\"generatedBy\":\"%.s\"}\n", info.generatedBy.c_str());
 		return GCodeResult::ok;
