@@ -535,6 +535,7 @@ ObjectExplorationContext::ObjectExplorationContext(const GCodeBuffer *_ecv_null 
 			break;
 		case 'a':
 			startElement = 0;
+			truncateLongArrays = false;
 			while (isdigit(*reportFlags))
 			{
 				startElement = (10 * startElement) + (*reportFlags - '0');
