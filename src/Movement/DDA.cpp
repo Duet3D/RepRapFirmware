@@ -798,6 +798,12 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	params.decelClocks = msg.decelClocks;
 	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
 
+	// We occasionally receive a message with zero clocks needed. This messes up the calculations, so add one steady clock in this case.
+	if (clocksNeeded == 0)
+	{
+		clocksNeeded = params.steadyClocks = 1;
+	}
+
 	// Set up the plan
 	segments = nullptr;
 	reprap.GetMove().GetAxisShaper().GetRemoteSegments(*this, params);
