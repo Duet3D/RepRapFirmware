@@ -625,15 +625,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	// Pass file- and system-related commands to the SBC service if they came from somewhere else.
 	// They will be passed back to us via a binary buffer or separate SPI message if necessary.
 	if (   reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected() && !gb.IsBinary()
-		&& (   code == 0 || code == 1 || code == 2
-			|| code == 20 || code == 21 || code == 22 || code == 23 || code == 24 || code == 26 || code == 27 || code == 28
-			|| code == 30 || code == 32 || code == 36 || code == 37 || code == 38 || code == 39
-			|| code == 112
-			|| code == 470 || code == 471
-			|| code == 503 || code == 505
-			|| code == 540 || code == 550 || code == 552 || code == 586 || (code >= 587 && code <= 589)
-			|| code == 703
-			|| code == 905 || code == 929 || code == 997 || code == 999
+		&& (   (code >=  0 && code <= 2)
+			|| (code >= 20 && code <= 24) || (code >= 26 && code <= 30)
+			||  code == 32 || code == 36 || code == 37 || code == 38 || code == 39
+			|| (code == 98 && gb.Seen('R'))
+			||  code == 112
+			||  code == 121
+			|| (code >= 470 && code <= 472)
+			||  code == 503 || code == 505
+			||  code == 540 || (code >= 550 && code <= 552) || (code >= 586 && code <= 589)
+			||  code == 596 || code == 606
+			||  code == 703
+			||  code == 905 || code == 929 || code == 997 || code == 999
 		   )
 	   )
 	{
