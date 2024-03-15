@@ -3409,9 +3409,6 @@ void GCodes::StartPrinting(bool fromStart) noexcept
 	if (fromStart)
 	{
 		DoFileMacro(*FileGCode(), START_G, false, AsyncSystemMacroCode);		// get fileGCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
-#if SUPPORT_ASYNC_MOVES
-		DoFileMacro(*File2GCode(), START_G, false, AsyncSystemMacroCode);		// get file2GCode to execute the start macro so that any M82/M83 codes will be executed in the correct context
-#endif
 	}
 	else
 	{

@@ -384,7 +384,7 @@ void GCodeBuffer::ForkFrom(const GCodeBuffer& other) noexcept
 	GetVariables().AssignFrom(other.GetVariables());
 
 # if HAS_SBC_INTERFACE
-	if (!isBinaryBuffer)
+	if (!isBinaryBuffer && !reprap.UsingSbcInterface())
 # endif
 	{
 		machineState->fileState.Seek(other.GetJobFilePosition());
