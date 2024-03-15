@@ -147,17 +147,25 @@ GCodeResult GCodes::SyncMovementSystems(GCodeBuffer& gb, const StringRef& reply)
 // Handle M606
 GCodeResult GCodes::ForkInputReader(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	if (gb.GetChannel() != GCodeChannel::File)
+	if (gb.Seen('S'))
 	{
-		reply.copy("this command is valid only when running a job from a stored file");
-		return GCodeResult::warning;
+		if (gb.GetChannel() != GCodeChannel::File)
+		{
+			reply.copy("this command is valid only when running a job from a stored file");
+			return GCodeResult::warning;
+		}
+
+		(void)gb.GetLimitedUIValue('S', 1, 2);			// currently only S1 is valid
+
+		if (gb.ExecutingAll())							// ignore the command if we are already forked
+		{
+			File2GCode()->ForkFrom(gb);					// duplicate the input settings and file stack of File to File2
+			reprap.InputsUpdated();
+		}
 	}
-
-	(void)gb.GetLimitedUIValue('S', 1, 2);			// currently only S1 is valid
-
-	if (gb.ExecutingAll())							// ignore the command if we are already forked
+	else
 	{
-		File2GCode()->ForkFrom(gb);					// duplicate the input settings and file stack of File to File2
+		reply.printf("File reader is running in %s mode", (FileGCode()->ExecutingAll()) ? "standard" : "forked");
 	}
 	return GCodeResult::ok;
 }
