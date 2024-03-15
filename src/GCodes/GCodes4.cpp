@@ -550,13 +550,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 
 #if SUPPORT_ASYNC_MOVES
+			//TODO the following fails if we have already used the second motion system to restore axes for the second tool
 			try
 			{
 				AllocateAxes(gb, ms, axesToAllocate, ParameterLettersBitmap());
 			}
 			catch (const GCodeException& exc)
 			{
-				// We failed to allocate the axes that we need. This should not happen because the call to LockAllMovementSystemsAndWaitForStandstill should have released all axes.
+				// We failed to allocate the axes that we need
 				gb.LatestMachineState().SetError(exc);
 				gb.SetState(GCodeState::normal);
 				break;

@@ -588,7 +588,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 121:
 		case 190:
 		case 191:
-		case 400:
 		case 555:
 		case 596:
 		case 598:
