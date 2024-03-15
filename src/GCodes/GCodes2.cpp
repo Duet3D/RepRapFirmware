@@ -680,7 +680,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					// Stopping a job because of a command in the file
 #if SUPPORT_ASYNC_MOVES
-					if (!DoSync(gb) || &gb == File2GCode())
+					if (!DoSync(gb))
 					{
 						return false;
 					}
@@ -690,19 +690,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						return false;
 					}
 #endif
-					StopPrint(StopPrintReason::normalCompletion);
-
-#if SUPPORT_ASYNC_MOVES
-					// M0/M1/M2 never finishes on the second file channel
-					File2GCode()->Init();
-# if HAS_SBC_INTERFACE
-					if (reprap.UsingSbcInterface())
-					{
-						// SBC also requires a final response for M0/M1/M2 on the second file channel
-						HandleReply(*File2GCode(), GCodeResult::ok, "");
-					}
-# endif
-#endif
+					StopPrint(&gb, StopPrintReason::normalCompletion);
 				}
 				else if (pauseState == PauseState::paused)
 				{
@@ -712,7 +700,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						return false;
 					}
 					const bool wasSimulating = IsSimulating();		// simulationMode may get cleared by CancelPrint
-					StopPrint(StopPrintReason::userCancelled);
+					StopPrint(nullptr, StopPrintReason::userCancelled);
 					if (!wasSimulating)								// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 					{
 						// If cancel.g exists then run it and do nothing else

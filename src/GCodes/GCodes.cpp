@@ -437,7 +437,7 @@ void GCodes::Spin() noexcept
 	// Need to check if the print has been stopped by the SBC
 	if (reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsPrintAborted())
 	{
-		StopPrint(StopPrintReason::abort);
+		StopPrint(nullptr, StopPrintReason::abort);
 	}
 #endif
 
@@ -480,7 +480,7 @@ bool GCodes::SpinGCodeBuffer(GCodeBuffer& gb) noexcept
 						gb.AbortFile(false);
 					}
 #endif
-					StopPrint(StopPrintReason::userCancelled);
+					StopPrint(nullptr, StopPrintReason::userCancelled);
 				}
 				else
 				{
@@ -620,22 +620,13 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					return false;
 				}
-
-				if (&gb == FileGCode())
-				{
-					StopPrint(StopPrintReason::normalCompletion);
-				}
-				else
-				{
-					UnlockAll(gb);
-				}
 # else
 				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))			// wait until movement has finished and deferred command queue has caught up
 				{
 					return false;
 				}
-				StopPrint(StopPrintReason::normalCompletion);
-#endif
+# endif
+				StopPrint(&gb, StopPrintReason::normalCompletion);
 				return true;
 			}
 
@@ -770,32 +761,13 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					return false;
 				}
-
-				if (&gb == FileGCode())
-				{
-					if (reprap.Debug(Module::Gcodes))
-					{
-						debugPrintf("File stopping print\n");
-					}
-					StopPrint(StopPrintReason::normalCompletion);
-				}
-				else
-				{
-					if (reprap.Debug(Module::Gcodes))
-					{
-						debugPrintf("Other stopping print\n");
-					}
-					UnlockAll(gb);
-					fd.Close();
-				}
 # else
 				if (!LockCurrentMovementSystemAndWaitForStandstill(gb))			// wait until movement has finished and deferred command queue has caught up
 				{
 					return false;
 				}
-
-				StopPrint(StopPrintReason::normalCompletion);
 # endif
+				StopPrint(&gb, StopPrintReason::normalCompletion);
 			}
 			else
 			{
@@ -3077,7 +3049,7 @@ void GCodes::AbortPrint(GCodeBuffer& gb) noexcept
 			(void)otherGb->AbortFile(true);		// stop processing commands from the other file reader too
 		}
 #endif
-		StopPrint(StopPrintReason::abort);
+		StopPrint(nullptr, StopPrintReason::abort);
 		gb.Init();								// invalidate the file channel here as the other one may be still busy (possibly in a macro)
 	}
 }
@@ -4265,24 +4237,41 @@ float GCodes::GetRawExtruderTotalByDrive(size_t extruder) const noexcept
 
 // Cancel the current SD card print.
 // This is called from Pid.cpp when there is a heater fault, and from elsewhere in this module.
-// When called to stop a print normally, this is called by fileGCode but not by file2GCode.
-void GCodes::StopPrint(StopPrintReason reason) noexcept
+// When called to stop a print normally, this is called by both fileGCode and file2GCode.
+// If the reason is normal completion then gbp is either File or File2; otherwise it is nullptr.
+void GCodes::StopPrint(GCodeBuffer *gbp, StopPrintReason reason) noexcept
 {
 	deferredPauseCommandPending = nullptr;
 	pauseState = PauseState::notPaused;
 
 #if HAS_SBC_INTERFACE || HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	FileGCode()->ClosePrintFile();
+	if (gbp != nullptr)
+	{
+		gbp->ClosePrintFile();
+		UnlockAll(*gbp);
 # if SUPPORT_ASYNC_MOVES
-	File2GCode()->ClosePrintFile();
+		if (gbp == FileGCode())
+		{
+			gbp->ExecuteAll();					// un-fork
+		}
+		else
+		{
+			return;								// we are a forked input stream so just exit
+		}
 # endif
+	}
+	else
+	{
+		FileGCode()->ClosePrintFile();
+		UnlockAll(*FileGCode());
+# if SUPPORT_ASYNC_MOVES
+		File2GCode()->ClosePrintFile();
+		UnlockAll(*File2GCode());
+# endif
+	}
 #endif
 
 	// Don't call ResetMoveCounters here because we can't be sure that the movement queue is empty
-	UnlockAll(*FileGCode());
-#if SUPPORT_ASYNC_MOVES
-	UnlockAll(*File2GCode());
-#endif
 
 	for (MovementState& ms : moveStates)
 	{
