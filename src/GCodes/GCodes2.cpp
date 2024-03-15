@@ -4044,7 +4044,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_ASYNC_MOVES
 			case 606:	// fork input reader
 				result = ForkInputReader(gb, reply);
-				reprap.InputsUpdated();
 				break;
 #endif
 
