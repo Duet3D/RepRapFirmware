@@ -1134,6 +1134,7 @@ void GCodeBuffer::SetPrintFinished() noexcept
 		}
 		reprap.GetSbcInterface().EventOccurred();
 	}
+	printFilePositionAtMacroStart = noFilePosition;
 }
 
 // This is only called when using the SBC interface and returns if the macro file could be opened
