@@ -71,6 +71,25 @@
 // It is called repeatedly for a given code until it returns true for that code.
 bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
+#if SUPPORT_ASYNC_MOVES
+	// If we are running multiple motion systems in single input stream mode and we have resumed after a pause, then we may need to skip some commands
+	{
+		FilePosition offsetToSkipTo;
+		if (   &gb == FileGCode()
+			&& gb.ExecutingAll()
+			&& (offsetToSkipTo = GetMovementState(gb).fileOffsetToSkipTo) != 0
+			&& !(gb.GetCommandLetter() == 'M' && gb.HasCommandNumber() && gb.GetCommandNumber() == 596)
+		   )
+		{
+			if (gb.GetJobFilePosition() < offsetToSkipTo)
+			{
+				return true;
+			}
+			GetMovementState(gb).fileOffsetToSkipTo = 0;			// clear this to speed up the test next time
+		}
+	}
+#endif
+
 	try
 	{
 		switch (gb.GetCommandLetter())
@@ -214,7 +233,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 		case 10: // Set/report offsets and temperatures, or retract
 			{
-#if SUPPORT_WORKPLACE_COORDINATES
 				if (gb.Seen('L'))
 				{
 					const uint32_t ival = gb.GetUIValue();
@@ -239,7 +257,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 				}
 				else
-#endif
 				{
 					BREAK_IF_NOT_EXECUTING
 					bool modifyingTool = gb.Seen('P') || gb.Seen('R') || gb.Seen('S');
@@ -437,7 +454,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			gb.LatestMachineState().g53Active = true;
 			break;
 
-#if SUPPORT_WORKPLACE_COORDINATES
 		case 54:	// Switch to coordinate system 1
 		case 55:	// Switch to coordinate system 2
 		case 56:	// Switch to coordinate system 3
@@ -466,7 +482,6 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 			}
 			break;
-#endif
 
 		case 60: // Save position
 			BREAK_IF_NOT_EXECUTING
@@ -610,15 +625,18 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	// Pass file- and system-related commands to the SBC service if they came from somewhere else.
 	// They will be passed back to us via a binary buffer or separate SPI message if necessary.
 	if (   reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected() && !gb.IsBinary()
-		&& (   code == 0 || code == 1 || code == 2
-			|| code == 20 || code == 21 || code == 22 || code == 23 || code == 24 || code == 26 || code == 27 || code == 28
-			|| code == 30 || code == 32 || code == 36 || code == 37 || code == 38 || code == 39
-			|| code == 112
-			|| code == 470 || code == 471
-			|| code == 503 || code == 505
-			|| code == 540 || code == 550 || code == 552 || code == 586 || (code >= 587 && code <= 589)
-			|| code == 703
-			|| code == 905 || code == 929 || code == 997 || code == 999
+		&& (   (code >=  0 && code <= 2)
+			|| (code >= 20 && code <= 24) || (code >= 26 && code <= 30)
+			||  code == 32 || code == 36 || code == 37 || code == 38 || code == 39
+			|| (code == 98 && gb.Seen('R'))
+			||  code == 112
+			||  code == 121
+			|| (code >= 470 && code <= 472)
+			||  code == 503 || code == 505
+			||  code == 540 || (code >= 550 && code <= 552) || (code >= 586 && code <= 589)
+			||  code == 596 || code == 606
+			||  code == 703
+			||  code == 905 || code == 929 || code == 997 || code == 999
 		   )
 	   )
 	{
@@ -662,7 +680,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					// Stopping a job because of a command in the file
 #if SUPPORT_ASYNC_MOVES
-					if (!DoSync(gb) || &gb == File2GCode())
+					if (!DoSync(gb))
 					{
 						return false;
 					}
@@ -672,19 +690,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						return false;
 					}
 #endif
-					StopPrint(StopPrintReason::normalCompletion);
-
-#if SUPPORT_ASYNC_MOVES
-					// M0/M1/M2 never finishes on the second file channel
-					File2GCode()->Init();
-# if HAS_SBC_INTERFACE
-					if (reprap.UsingSbcInterface())
-					{
-						// SBC also requires a final response for M0/M1/M2 on the second file channel
-						HandleReply(*File2GCode(), GCodeResult::ok, "");
-					}
-# endif
-#endif
+					StopPrint(&gb, StopPrintReason::normalCompletion);
 				}
 				else if (pauseState == PauseState::paused)
 				{
@@ -694,7 +700,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						return false;
 					}
 					const bool wasSimulating = IsSimulating();		// simulationMode may get cleared by CancelPrint
-					StopPrint(StopPrintReason::userCancelled);
+					StopPrint(nullptr, StopPrintReason::userCancelled);
 					if (!wasSimulating)								// don't run any macro files or turn heaters off etc. if we were simulating before we stopped the print
 					{
 						// If cancel.g exists then run it and do nothing else
@@ -1006,30 +1012,38 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					break;
 				}
 
-#if SUPPORT_ASYNC_MOVES
+# if SUPPORT_ASYNC_MOVES
 				if (!DoSync(gb))
 				{
 					return false;
 				}
-#else
+
+				// Currently, both movement systems must execute the same file
+				for (MovementState& ms : moveStates)
+				{
+					ms.fileOffsetToPrint = 0;				// clear this for now, M26 may change it later
+					ms.fileOffsetToSkipTo = 0;
+				}
+# else
 				if (code == 32 && !LockCurrentMovementSystemAndWaitForStandstill(gb))
 				{
 					return false;
 				}
-#endif
+				moveStates[0].fileOffsetToPrint = 0;
+# endif
 				{
 					String<MaxFilenameLength> filename;
 					gb.GetUnprecedentedString(filename.GetRef());
 					if (
-#if HAS_SBC_INTERFACE
+# if HAS_SBC_INTERFACE
 						reprap.UsingSbcInterface()
-# if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#  if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 						||
+#  endif
 # endif
-#endif
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+# if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 						QueueFileToPrint(filename.c_str(), reply)
-#endif
+# endif
 					   )
 					{
 						reprap.GetPrintMonitor().StartingPrint(filename.c_str());
@@ -1214,7 +1228,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 			case 26: // Set SD position
 				// This is used between executing M23 to set up the file to print, and M24 to print it
+				// When using multiple motion systems, execute M26 once in the context of each motion system
 				gb.MustSee('S');
+				static_assert(sizeof(FilePosition) == sizeof(uint32_t), "Only 32 bits of file position are read");
 				{
 					MovementState& ms = GetMovementState(gb);
 					ms.fileOffsetToPrint = (FilePosition)gb.GetUIValue();
@@ -4024,6 +4040,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 			// For cases 600 and 601, see 226
+
+#if SUPPORT_ASYNC_MOVES
+			case 606:	// fork input reader
+				result = ForkInputReader(gb, reply);
+				break;
+#endif
 
 			// M650 (set peel move parameters) and M651 (execute peel move) are no longer handled specially. Use macros to specify what they should do.
 

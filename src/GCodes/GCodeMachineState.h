@@ -202,6 +202,9 @@ public:
 
 	GCodeMachineState() noexcept;
 	GCodeMachineState(GCodeMachineState& prev, bool withinSameFile) noexcept;	// this chains the new one to the previous one
+#if SUPPORT_ASYNC_MOVES
+	GCodeMachineState(GCodeMachineState& copyFrom, GCodeMachineState *prev, unsigned int oldExecuteQueue, unsigned int newExecuteQueue) noexcept;
+#endif
 	GCodeMachineState(const GCodeMachineState&) = delete;			// copying these would be a bad idea
 
 	~GCodeMachineState() noexcept;
@@ -272,6 +275,7 @@ public:
 	MovementSystemNumber GetOwnQueue() const noexcept { return ownQueueNumber; }
 	bool ExecutingAll() const noexcept { return executeAllCommands; }
 	MovementSystemNumber GetQueueNumberToLock() const noexcept { return (executeAllCommands) ? commandedQueueNumber : ownQueueNumber; }
+	GCodeMachineState *ForkChain() noexcept;	// fork the state
 #endif
 
 	bool DoingFile() const noexcept;

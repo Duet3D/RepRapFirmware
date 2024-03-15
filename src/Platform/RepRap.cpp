@@ -1157,12 +1157,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	// So we report 9999.9 instead.
 
 	// First the user coordinates
-#if SUPPORT_WORKPLACE_COORDINATES
 	response->catf(",\"wpl\":%u,", gCodes->GetPrimaryWorkplaceCoordinateSystemNumber());
-#else
-	response->cat(',');
-#endif
-
 	AppendFloatArray(response, "xyz", numVisibleAxes, [this](size_t axis) noexcept { return gCodes->GetUserCoordinate(gCodes->GetPrimaryMovementState(), axis); }, 3);
 
 	// Machine coordinates

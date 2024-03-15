@@ -153,7 +153,12 @@ protected:
 	static constexpr unsigned int TuningHeaterMaxIdleCycles = 10;
 	static constexpr unsigned int MinTuningHeaterCycles = 5;
 	static constexpr unsigned int MaxTuningHeaterCycles = 25;
+
+	static constexpr float MinTuningHeaterPwm = 0.1;
+	static constexpr float MinTuningHysteresis = 1.0;
 	static constexpr float DefaultTuningHysteresis = 5.0;
+	static constexpr float MaxTuningHysteresis = 20.0;
+	static constexpr float MinTuningFanPwm = 0.1;
 	static constexpr float DefaultTuningFanPwm = 0.7;
 	static constexpr float TuningPeakTempDrop = 2.0;		// must be well below TuningHysteresis
 	static constexpr float HeaterSettledCoolingTimeRatio = 0.93;

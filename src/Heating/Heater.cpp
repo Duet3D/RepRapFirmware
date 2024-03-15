@@ -298,9 +298,9 @@ GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansB
 	// Get and store the optional parameters
 	tuningTargetTemp = targetTemp;
 	tuningFans = fans;
-	tuningPwm = (gb.Seen('P')) ? gb.GetLimitedFValue('P', 0.1, 1.0) : GetModel().GetMaxPwm();
-	tuningHysteresis = (gb.Seen('Y')) ? gb.GetLimitedFValue('Y', 1.0, 20.0) : DefaultTuningHysteresis;
-	tuningFanPwm = (gb.Seen('F')) ? gb.GetLimitedFValue('F', 0.1, 1.0) : DefaultTuningFanPwm;
+	tuningPwm = (gb.Seen('P')) ? gb.GetLimitedFValue('P', MinTuningHeaterPwm, 1.0) : GetModel().GetMaxPwm();
+	tuningHysteresis = (gb.Seen('Y')) ? gb.GetLimitedFValue('Y', MinTuningHysteresis, MaxTuningHysteresis) : DefaultTuningHysteresis;
+	tuningFanPwm = (gb.Seen('F')) ? gb.GetLimitedFValue('F', MinTuningFanPwm, 1.0) : DefaultTuningFanPwm;
 	tuningQuietMode = gb.Seen('Q') && gb.GetUIValue() != 0;
 
 	const GCodeResult rslt = StartAutoTune(reply, seenA, ambientTemp);

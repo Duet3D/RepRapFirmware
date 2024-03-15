@@ -119,6 +119,9 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 	restartMoveFractionDone = 0.0;
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	fileOffsetToPrint = 0;
+# if SUPPORT_ASYNC_MOVES
+	fileOffsetToSkipTo = 0;
+# endif
 #endif
 	for (RestorePoint& rp : restorePoints)
 	{
@@ -181,6 +184,18 @@ void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes
 #endif
 #if SUPPORT_LASER
 	rp.laserPixelData = laserPixelData;
+#endif
+}
+
+// Restore current values from the pause restore point
+void MovementState::ResumeAfterPause() noexcept
+{
+	moveStartVirtualExtruderPosition = latestVirtualExtruderPosition = GetPauseRestorePoint().virtualExtruderPosition;	// reset the extruder position in case we are receiving absolute extruder moves
+	moveFractionToSkip = GetPauseRestorePoint().proportionDone;
+	restartInitialUserC0 = GetPauseRestorePoint().initialUserC0;
+	restartInitialUserC1 = GetPauseRestorePoint().initialUserC1;
+#if SUPPORT_ASYNC_MOVES
+	fileOffsetToSkipTo = GetPauseRestorePoint().filePos;
 #endif
 }
 

@@ -7,6 +7,7 @@
 
 #include "GCodeMachineState.h"
 #include <Platform/RepRap.h>
+#include <Storage/MassStorage.h>
 
 #include <limits>
 
@@ -45,7 +46,7 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 	  fileId(prev.fileId),
 #endif
 	  lockedResources(prev.lockedResources),
-	  lineNumber(0),
+	  lineNumber((withinSameFile) ? prev.lineNumber : 0),
 	  selectedPlane(prev.selectedPlane), drivesRelative(prev.drivesRelative), axesRelative(prev.axesRelative),
 	  doingFileMacro(prev.doingFileMacro), waitWhileCooling(prev.waitWhileCooling), runningM501(prev.runningM501), runningM502(prev.runningM502),
 	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(prev.runningSystemMacro), usingInches(prev.usingInches),
@@ -88,6 +89,69 @@ GCodeMachineState::GCodeMachineState(GCodeMachineState& prev, bool withinSameFil
 	}
 }
 
+#if SUPPORT_ASYNC_MOVES
+
+GCodeMachineState::GCodeMachineState(GCodeMachineState& copyFrom, GCodeMachineState *prev, unsigned int oldExecuteQueue, unsigned int newExecuteQueue) noexcept
+	: feedRate(copyFrom.feedRate),
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	  fileState(),
+#endif
+#if HAS_SBC_INTERFACE
+	  fileId(copyFrom.fileId),
+#endif
+	  lockedResources(copyFrom.lockedResources),
+	  lineNumber(copyFrom.lineNumber),
+	  selectedPlane(copyFrom.selectedPlane), drivesRelative(copyFrom.drivesRelative), axesRelative(copyFrom.axesRelative),
+	  doingFileMacro(copyFrom.doingFileMacro), waitWhileCooling(copyFrom.waitWhileCooling), runningM501(copyFrom.runningM501), runningM502(copyFrom.runningM502),
+	  volumetricExtrusion(false), g53Active(false), runningSystemMacro(copyFrom.runningSystemMacro), usingInches(copyFrom.usingInches),
+	  waitingForAcknowledgement(false), messageAcknowledged(false), localPush(copyFrom.localPush),
+	  macroRestartable(copyFrom.macroRestartable), firstCommandAfterRestart(copyFrom.firstCommandAfterRestart), commandRepeated(copyFrom.commandRepeated),
+	  inverseTimeMode(copyFrom.inverseTimeMode),
+#if HAS_SBC_INTERFACE
+	  lastCodeFromSbc(copyFrom.lastCodeFromSbc), macroStartedByCode(copyFrom.macroStartedByCode), fileFinished(copyFrom.fileFinished),
+#endif
+	  compatibility(copyFrom.compatibility),
+	  previous(prev), currentBlockState(new BlockState(nullptr)), errorMessage(nullptr),
+	  blockNesting(copyFrom.blockNesting),
+	  state(GCodeState::normal), stateMachineResult(GCodeResult::ok),
+	  commandedQueueNumber(copyFrom.commandedQueueNumber), ownQueueNumber(newExecuteQueue), executeAllCommands(false)
+{
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+	if (copyFrom.fileState.IsLive())
+	{
+		if (localPush)
+		{
+			fileState.CopyFrom(prev->fileState);
+		}
+		else
+		{
+			fileState.Set(MassStorage::DuplicateOpenHandle(copyFrom.fileState.GetUnderlyingFile()));
+		}
+	}
+#endif
+	copyFrom.ownQueueNumber = oldExecuteQueue;
+	copyFrom.executeAllCommands = false;
+
+	// Copy the block states from the previous MachineState to the new one
+	const BlockState *src = copyFrom.currentBlockState;
+	BlockState *dst = currentBlockState;
+	for (;;)
+	{
+		*dst = *src;
+		src = src->GetPrevious();
+		if (src == nullptr)
+		{
+			break;
+		}
+		BlockState *const newDst = new BlockState(nullptr);
+		dst->SetPrevious(newDst);
+		dst = newDst;
+	}
+}
+
+#endif
+
+// Destructor. This deletes any associated BlockState objects but not any linked MachineState objects.
 GCodeMachineState::~GCodeMachineState() noexcept
 {
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
@@ -310,5 +374,17 @@ void GCodeMachineState::ClearBlocks() noexcept
 	currentBlockState->SetPlainBlock();
 	variables.Clear();
 }
+
+#if SUPPORT_ASYNC_MOVES
+
+// Clone a whole chain of these objects, ensuring that the file positions are correct
+// This is recursive but we don't expect the recursion to be very deep.
+GCodeMachineState *GCodeMachineState::ForkChain() noexcept
+{
+	GCodeMachineState *newPrev = (previous == nullptr) ? nullptr : previous->ForkChain();
+	return new GCodeMachineState(*this, newPrev, 0, 1);
+}
+
+#endif
 
 // End

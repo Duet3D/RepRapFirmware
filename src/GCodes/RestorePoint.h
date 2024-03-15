@@ -14,7 +14,7 @@
 class RestorePoint INHERIT_OBJECT_MODEL
 {
 public:
-	float moveCoords[MaxAxes];				// The axis locations when we paused
+	float moveCoords[MaxAxes];				// The user coordinates when we paused
 	float feedRate;							// The feed rate for the current move
 	float virtualExtruderPosition;			// The virtual extruder position at the start of this move
 	float proportionDone;					// How much of this move we have already done (zero unless we interrupted a move)
