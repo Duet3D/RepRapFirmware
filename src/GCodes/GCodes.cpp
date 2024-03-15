@@ -1368,6 +1368,12 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				ok = reprap.GetFansManager().WriteFanSettings(f);			// set the speeds of all non-thermostatic fans after setting the default fan speeds
 			}
 
+			if (ok)
+			{
+				buf.printf("M302 P%u\n", (reprap.GetHeat().ColdExtrude()) ? 1 : 0);
+				ok = f->Write(buf.c_str());									// write cold extrusion enabled/disabled
+			}
+
 #if SUPPORT_ASYNC_MOVES
 			// If we were running in forked mode, fork the input reader
 			if (ok && !FileGCode()->ExecutingAll())
