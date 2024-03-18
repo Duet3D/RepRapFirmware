@@ -60,21 +60,19 @@ FopDt::FopDt() noexcept
 	Reset();
 }
 
-// Check the model parameters are sensible, if they are then save them and return true.
-bool FopDt::SetParameters(float phr, float pbcr, float pfcr, float pcrExponent, float pdt, float pMaxPwm, float temperatureLimit, float pVoltage, bool pUsePid, bool pInverted) noexcept
+// Check the model parameters are sensible, if they are then save them and return true. If not then write an error message to reply and return false.
+bool FopDt::SetParameters(float phr, float pbcr, float pfcr, float pcrExponent, float pdt, float pMaxPwm, float pVoltage, bool pUsePid, bool pInverted, const StringRef& reply) noexcept
 {
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
-	const float maxTempIncrease = max<float>(1500.0, temperatureLimit + 500.0);
-	if (   phr/pbcr > 0.1															// minimum 10C temperature rise (same as with earlier heater model)
-		&& EstimateMaxTemperatureRise(phr, pbcr, pcrExponent) <= maxTempIncrease	// max temperature increase within limits
-		&& pfcr >= 0.0
-		&& pcrExponent >= 1.0
-		&& pcrExponent <= 1.6
-		&& pdt > 0.099
-		&& pdt * pbcr <= 50.0														// dead time less than half cooling time constant
-		&& pMaxPwm > 0.0099
-		&& pMaxPwm <= 1.0
-	   )
+	const char *const err =
+		  (phr/pbcr < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
+		: (pfcr < 0.0) ? "fan reduces cooling rate"
+		: (pcrExponent < 1.0 || pcrExponent > 1.6) ? "cooling rate exponent out of range"
+		: (pdt <= 0.0099) ? "dead time too small"
+		: (pdt * pbcr > 50.0) ? "dead time too close to cooling time constant"		// dead time less than half the cooling time constant
+		: (pMaxPwm <= 0.0099 || pMaxPwm > 1.0) ? "PWM out of range"
+		: nullptr;
+	if (err == nullptr)
 	{
 		heatingRate = phr;
 		basicCoolingRate = pbcr;
@@ -89,26 +87,25 @@ bool FopDt::SetParameters(float phr, float pbcr, float pfcr, float pcrExponent, 
 		CalcPidConstants(100.0);
 		return true;
 	}
+	reply.printf("bad model parameters: %s", err);
 	return false;
 }
 
 #if SUPPORT_REMOTE_COMMANDS
 
-bool FopDt::SetParameters(const CanMessageHeaterModelNewNew& msg, float temperatureLimit) noexcept
+// Check the model parameters are sensible, if they are then save them and return true. If not then write an error message to reply and return false.
+bool FopDt::SetParameters(const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept
 {
 	// DC 2017-06-20: allow S down to 0.01 for one of our OEMs (use > 0.0099 because >= 0.01 doesn't work due to rounding error)
-	const float maxTempIncrease = max<float>(1500.0, temperatureLimit + 500.0);
-	if (   msg.heatingRate/msg.basicCoolingRate > 0.1								// minimum 10C temperature rise (same as with earlier heater model)
-		&& EstimateMaxTemperatureRise(msg.heatingRate, msg.basicCoolingRate, msg.coolingRateExponent) <= maxTempIncrease
-																					// max temperature increase within limits
-		&& msg.fanCoolingRate >= 0.0
-		&& msg.coolingRateExponent >= 1.0
-		&& msg.coolingRateExponent <= 1.6
-		&& msg.deadTime > 0.099
-		&& msg.deadTime * msg.basicCoolingRate <= 50.0								// dead time less than half the cooling time constant
-		&& msg.maxPwm > 0.0099
-		&& msg.maxPwm <= 1.0
-	   )
+	const char *const err =
+		  (msg.heatingRate/msg.basicCoolingRate < 0.1) ? "estimated temperature rise too small"					// minimum 10C temperature rise (same as with earlier heater model)
+		: (msg.fanCoolingRate < 0.0) ? "fan reduces cooling rate"
+		: (msg.coolingRateExponent < 1.0 || msg.coolingRateExponent > 1.6) ? "cooling rate exponent out of range"
+		: (msg.deadTime <= 0.0099) ? "dead time too small"
+		: (msg.deadTime * msg.basicCoolingRate > 50.0) ? "dead time too close to cooling time constant"			// dead time less than half the cooling time constant
+		: (msg.maxPwm <= 0.0099 || msg.maxPwm > 1.0) ? "PWM out of range"
+		: nullptr;
+	if (err == nullptr)
 	{
 		heatingRate = msg.heatingRate;
 		basicCoolingRate = msg.basicCoolingRate;
@@ -132,6 +129,7 @@ bool FopDt::SetParameters(const CanMessageHeaterModelNewNew& msg, float temperat
 		enabled = true;
 		return true;
 	}
+	reply.printf("bad model parameters: %s", err);
 	return false;
 }
 

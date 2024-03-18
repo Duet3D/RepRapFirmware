@@ -226,7 +226,7 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 GCodeResult Heater::SetModel(float hr, float bcr, float fcr, float coolingRateExponent, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
 {
 	GCodeResult rslt;
-	if (model.SetParameters(hr, bcr, fcr, coolingRateExponent, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
+	if (model.SetParameters(hr, bcr, fcr, coolingRateExponent, td, maxPwm, voltage, usePid, inverted, reply))
 	{
 		if (model.IsEnabled())
 		{
@@ -251,7 +251,6 @@ GCodeResult Heater::SetModel(float hr, float bcr, float fcr, float coolingRateEx
 	}
 	else
 	{
-		reply.copy("bad model parameters");
 		rslt = GCodeResult::error;
 	}
 
@@ -704,8 +703,7 @@ GCodeResult Heater::SetFaultDetectionParameters(const CanMessageSetHeaterFaultDe
 
 GCodeResult Heater::SetModel(unsigned int heater, const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept
 {
-	const float temperatureLimit = GetHighestTemperatureLimit();
-	const bool rslt = model.SetParameters(msg, temperatureLimit);
+	const bool rslt = model.SetParameters(msg, reply);
 	if (rslt)
 	{
 		if (model.IsEnabled())
@@ -719,7 +717,6 @@ GCodeResult Heater::SetModel(unsigned int heater, const CanMessageHeaterModelNew
 		return GCodeResult::ok;
 	}
 
-	reply.copy("bad model parameters");
 	return GCodeResult::error;
 }
 
