@@ -1324,14 +1324,14 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				}
 #endif
 				// We no longer use G92 to restore the positions because we don't know whether a tool is loaded.
-				buf.printf("M21\nM98 P\"%s\"", RESUME_PROLOGUE_G);		// set units to mm and call the prologue
+				buf.printf("M21\nM98 P\"%s\"", RESUME_PROLOGUE_G);		// set units to mm and call the prologue, passing the machine positions of the axes
 				for (size_t i = 0; i < numVisibleAxes; ++i)
 				{
 					buf.catf(" %c%.3f", axisLetters[i], (double)coords[i]);
 				}
 
 				// Set babystepping offsets
-				buf.cat("M290 R0");
+				buf.cat("\nM290 R0");
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
 					buf.catf(" %c%.3f", axisLetters[axis], (double)GetTotalBabyStepOffset(axis));
@@ -1507,7 +1507,12 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 		{
 			buf.printf("G0 F6000 Z%.3f\n", (double)(pauseRestorePoint.moveCoords[Z_AXIS] + 2.0));
 		}
-
+#if SUPPORT_ASYNC_MOVES
+		else
+		{
+			buf.Clear();
+		}
+#endif
 		// Now set all the other axes
 		buf.cat("G0 F6000");
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
@@ -5213,6 +5218,19 @@ void GCodes::AllocateAxesDirectFromLetters(const GCodeBuffer& gb, MovementState&
 		}
 	}
 	AllocateAxes(gb, ms, newAxes, ParameterLettersBitmap());			// don't own the letters!
+}
+
+// Test whether an axis is unowned
+bool GCodes::IsAxisFree(unsigned int axis) const noexcept
+{
+	for (const MovementState& ms : moveStates)
+	{
+		if (ms.GetAxesAndExtrudersOwned().IsBitSet(axis))
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 // Synchronise motion systems and update user coordinates.

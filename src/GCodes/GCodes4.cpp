@@ -522,22 +522,71 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// Move the head back to the paused location
 		if (LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
-			SetMoveBufferDefaults(ms);
-			const bool restoreZ = (gb.GetState() != GCodeState::resuming1 || ms.coords[Z_AXIS] <= ms.GetPauseRestorePoint().moveCoords[Z_AXIS]);
 #if SUPPORT_ASYNC_MOVES
-			AxesBitmap axesToAllocate;
-#endif
+			bool zPendingRestore = false;
+			for (MovementState& tempMs : moveStates)
+			{
+				SetMoveBufferDefaults(tempMs);
+				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+				{
+					// We may restore this axis if either this motion system owns it or this is motion system 0 and the axis is free
+					if (   (tempMs.GetAxesAndExtrudersOwned().IsBitSet(axis) || (tempMs.GetMsNumber() == 0 && IsAxisFree(axis)))
+						&& tempMs.currentUserPosition[axis] != tempMs.GetPauseRestorePoint().moveCoords[axis]
+					   )
+					{
+						// This motion system may restore the position of this axis
+						if (axis == Z_AXIS)
+						{
+							if (tempMs.coords[Z_AXIS] > tempMs.GetPauseRestorePoint().moveCoords[Z_AXIS])
+							{
+								continue;											// don't restore Z at all
+							}
+							if (state == GCodeState::resuming1)
+							{
+								zPendingRestore = true;								// restore Z next time
+								continue;
+							}
+						}
+
+						if (!tempMs.GetAxesAndExtrudersOwned().IsBitSet(axis))		// if we don't own the axis
+						{
+							try
+							{
+								AllocateAxes(gb, tempMs, AxesBitmap::MakeFromBits(axis), ParameterLettersBitmap());
+							}
+							catch (const GCodeException& exc)
+							{
+								continue;											// we failed to allocate the axis - should not happen
+							}
+						}
+
+						// AllocateAxes updates the user coordinates, so we need to set them up here not earlier
+						tempMs.currentUserPosition[axis] = tempMs.GetPauseRestorePoint().moveCoords[axis];
+						if (platform.IsAxisLinear(axis))
+						{
+							tempMs.linearAxesMentioned = true;
+						}
+						else if (platform.IsAxisRotational(axis))
+						{
+							tempMs.rotationalAxesMentioned = true;
+						}
+					}
+				}
+
+				ToolOffsetTransform(tempMs);
+				tempMs.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
+				NewSingleSegmentMoveAvailable(tempMs);
+			}
+			gb.SetState((zPendingRestore) ? GCodeState::resuming2 : GCodeState::resuming3);
+#else
+			const bool restoreZ = (gb.GetState() != GCodeState::resuming1 || ms.coords[Z_AXIS] <= ms.GetPauseRestorePoint().moveCoords[Z_AXIS]);
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
 				if (   ms.currentUserPosition[axis] != ms.GetPauseRestorePoint().moveCoords[axis]
 					&& (restoreZ || axis != Z_AXIS)
 				   )
 				{
-#if SUPPORT_ASYNC_MOVES
-					axesToAllocate.SetBit(axis);
-#else
 					ms.currentUserPosition[axis] = ms.GetPauseRestorePoint().moveCoords[axis];
-#endif
 					if (platform.IsAxisLinear(axis))
 					{
 						ms.linearAxesMentioned = true;
@@ -549,33 +598,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 			}
 
-#if SUPPORT_ASYNC_MOVES
-			//TODO the following fails if we have already used the second motion system to restore axes for the second tool
-			try
-			{
-				AllocateAxes(gb, ms, axesToAllocate, ParameterLettersBitmap());
-			}
-			catch (const GCodeException& exc)
-			{
-				// We failed to allocate the axes that we need
-				gb.LatestMachineState().SetError(exc);
-				gb.SetState(GCodeState::normal);
-				break;
-			}
-
-			// AllocateAxes updates the user coordinates, so we need to set them up here not earlier
-			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-			{
-				if (axesToAllocate.IsBitSet(axis))
-				{
-					ms.currentUserPosition[axis] = ms.GetPauseRestorePoint().moveCoords[axis];
-				}
-			}
-#endif
 			ToolOffsetTransform(ms);
 			ms.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
 			gb.SetState((restoreZ) ? GCodeState::resuming3 : GCodeState::resuming2);
 			NewSingleSegmentMoveAvailable(ms);
+#endif
 		}
 		break;
 
@@ -586,18 +613,22 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// They can be restored manually in resume.g if required
 #if SUPPORT_ASYNC_MOVES
 			FilePosition earliestFileOffset = 0;				// initialisation needed only to suppress compiler warning
-			for (MovementState& ms : moveStates)
+			for (MovementState& tempMs : moveStates)
 			{
-				ms.ResumeAfterPause();
-				if (ms.GetMsNumber() == 0 || ms.GetPauseRestorePoint().filePos < earliestFileOffset)
+				tempMs.ReleaseNonToolAxesAndExtruders();
+				tempMs.ResumeAfterPause();
+				if (tempMs.GetMsNumber() == 0 || tempMs.GetPauseRestorePoint().filePos < earliestFileOffset)
 				{
-					earliestFileOffset = ms.GetPauseRestorePoint().filePos;
+					earliestFileOffset = tempMs.GetPauseRestorePoint().filePos;
 				}
-				GCodeBuffer* fgb = GetFileGCode(ms.GetMsNumber());
-				fgb->LatestMachineState().feedRate = ms.GetPauseRestorePoint().feedRate;
-				if (ms.pausedInMacro)
+				if (tempMs.GetMsNumber() == 0 || !FileGCode()->ExecutingAll())
 				{
-					fgb->OriginalMachineState().firstCommandAfterRestart = true;
+					GCodeBuffer* fgb = GetFileGCode(tempMs.GetMsNumber());
+					fgb->LatestMachineState().feedRate = tempMs.GetPauseRestorePoint().feedRate;
+					if (tempMs.pausedInMacro)
+					{
+						fgb->OriginalMachineState().firstCommandAfterRestart = true;
+					}
 				}
 			}
 

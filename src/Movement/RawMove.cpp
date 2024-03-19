@@ -319,6 +319,17 @@ void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 	ownedAxisLetters.Clear();										// clear the cache of owned axis letters
 }
 
+// Release all axes and extruders we own except those used by our current tool
+void MovementState::ReleaseNonToolAxesAndExtruders() noexcept
+{
+	AxesBitmap axesToRelease = GetAxesAndExtrudersOwned();
+	if (currentTool != nullptr)
+	{
+		axesToRelease &= ~currentTool->GetXYAxesAndExtruders();
+	}
+	ReleaseAxesAndExtruders(axesToRelease);
+}
+
 // Allocate additional axes
 AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept
 {
