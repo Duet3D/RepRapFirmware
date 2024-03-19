@@ -83,6 +83,7 @@ constexpr ObjectModelTableEntry ExpansionManager::objectModelTable[] =
 	{ "min",				OBJECT_MODEL_FUNC(self->FindIndexedBoard(context.GetLastIndex()).v12.minimum, 1),								ObjectModelEntryFlags::none },
 
 	// 4. accelerometer members
+	{ "orientation",		OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerOrientation),			ObjectModelEntryFlags::none },
 	{ "points",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerLastRunDataPoints),		ObjectModelEntryFlags::none },
 	{ "runs",				OBJECT_MODEL_FUNC((int32_t)self->FindIndexedBoard(context.GetLastIndex()).accelerometerRuns),					ObjectModelEntryFlags::none },
 
@@ -100,7 +101,7 @@ constexpr uint8_t ExpansionManager::objectModelTableDescriptor[] =
 	3,				// section 1: mcuTemp
 	3,				// section 2: vIn
 	3,				// section 3: v12
-	2,				// section 4: accelerometer
+	3,				// section 4: accelerometer
 	2,				// section 5: closed loop
 	0,				// section 6: inductive sensor
 };
@@ -404,6 +405,11 @@ void ExpansionManager::AddClosedLoopRun(CanAddress address, unsigned int numData
 	boards[address].closedLoopLastRunDataPoints = numDataPoints;
 	++boards[address].closedLoopRuns;
 	reprap.BoardsUpdated();
+}
+
+void ExpansionManager::SaveAccelerometerOrientation(CanAddress address, uint8_t orientation) noexcept
+{
+	boards[address].accelerometerOrientation = orientation;
 }
 
 GCodeResult ExpansionManager::ResetRemote(uint32_t boardAddress, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)

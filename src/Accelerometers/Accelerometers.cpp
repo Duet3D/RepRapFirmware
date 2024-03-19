@@ -57,8 +57,6 @@ static unsigned int GetDecimalPlaces(uint8_t dataResolution) noexcept
 
 #include "LIS3DH.h"
 
-constexpr uint8_t DefaultResolution = 10;
-
 constexpr size_t AccelerometerTaskStackWords = 400;			// big enough to handle printf and file writes
 static Task<AccelerometerTaskStackWords> *accelerometerTask;
 
@@ -66,8 +64,8 @@ static LIS3DH *accelerometer = nullptr;
 
 static uint16_t samplingRate = 0;							// 0 means use the default
 static volatile uint32_t numSamplesRequested;
-static uint8_t resolution = DefaultResolution;
-static uint8_t orientation = 20;							// +Z -> +Z, +X -> +X
+static uint8_t resolution = DefaultAccelerometerResolution;
+static uint8_t orientation = DefaultAccelerometerOrientation;
 static volatile uint8_t axesRequested;
 static FileStore* volatile accelerometerFile = nullptr;		// this is non-null when the accelerometer is running, null otherwise
 static unsigned int numLocalRunsCompleted = 0;
@@ -275,7 +273,13 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 	{
 		CanMessageGenericConstructor cons(M955Params);
 		cons.PopulateFromCommand(gb);
-		return cons.SendAndGetResponse(CanMessageType::accelerometerConfig, device.boardAddress, reply);
+		const GCodeResult rslt = cons.SendAndGetResponse(CanMessageType::accelerometerConfig, device.boardAddress, reply);
+		if (rslt <= GCodeResult::warning && gb.Seen('I'))
+		{
+			const uint8_t remoteOrientation = (uint8_t)gb.GetUIValue();
+			reprap.GetExpansion().SaveAccelerometerOrientation(device.GetBoardAddress(), (uint8_t)remoteOrientation);
+		}
+		return rslt;
 	}
 # endif
 
@@ -541,6 +545,11 @@ unsigned int Accelerometers::GetLocalAccelerometerDataPoints() noexcept
 unsigned int Accelerometers::GetLocalAccelerometerRuns() noexcept
 {
 	return numLocalRunsCompleted;
+}
+
+uint8_t Accelerometers::GetLocalAccelerometerOrientation() noexcept
+{
+	return orientation;
 }
 
 void Accelerometers::Exit() noexcept
