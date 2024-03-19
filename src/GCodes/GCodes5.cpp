@@ -60,9 +60,19 @@ void GCodes::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bo
 // Handle M400
 GCodeResult GCodes::ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	const unsigned int param = (gb.Seen('P')) ? gb.GetLimitedUIValue('P', 2) : 0;
-	const bool finished = (param == 1) ? LockAllMovementSystemsAndWaitForStandstill(gb) : LockCurrentMovementSystemAndWaitForStandstill(gb);
-	return (finished) ? GCodeResult::ok : GCodeResult::notFinished;
+	if (LockCurrentMovementSystemAndWaitForStandstill(gb))
+	{
+		uint32_t param = 0;
+		bool seen = false;
+		gb.TryGetLimitedUIValue('S', param, seen, 2);
+		if (param != 1)
+		{
+			// M400 releases axes/extruders that are not owned by the current tool unless the S1 parameter is present
+			GetMovementState(gb).ReleaseNonToolAxesAndExtruders();
+		}
+		return GCodeResult::ok;
+	}
+	return GCodeResult::notFinished;
 }
 
 // Handle M596
