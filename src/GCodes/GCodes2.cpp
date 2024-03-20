@@ -1132,11 +1132,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						else
 # endif
 						{
-							const bool fromStart = (moveStates[0].fileOffsetToPrint == 0)
-# if SUPPORT_ASYNC_MOVES
-												&& (moveStates[1].fileOffsetToPrint == 0)
-# endif
-												;
+							const bool fromStart = (moveStates[0].fileOffsetToPrint == 0);
 							if (!fromStart)
 							{
 								// We executed M26 to set the file offset, which normally means that we are executing resurrect.g.
