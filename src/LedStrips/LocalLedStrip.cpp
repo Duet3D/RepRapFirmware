@@ -257,19 +257,19 @@ void LocalLedStrip::DmaSendChunkBuffer(size_t numBytes) noexcept
 	usartPdc->PERIPH_PTCR = PERIPH_PTCR_TXTEN;								// enable the PDC to send data
 	DotStarUsart->US_CR = US_CR_TXEN;										// enable transmitter
 # elif SAME5x
-	DmacManager::DisableChannel(DmacChanDotStarTx);
-	DmacManager::SetTriggerSource(DmacChanDotStarTx, DmaTrigSource::qspi_tx);
+	DmacManager::DisableChannel(DmacChanLedTx);
+	DmacManager::SetTriggerSource(DmacChanLedTx, DmaTrigSource::qspi_tx);
 #  if USE_16BIT_SPI
-	DmacManager::SetBtctrl(DmacChanDotStarTx, DMAC_BTCTRL_STEPSIZE_X2 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_HWORD | DMAC_BTCTRL_BLOCKACT_NOACT);
+	DmacManager::SetBtctrl(DmacChanLedTx, DMAC_BTCTRL_STEPSIZE_X2 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_HWORD | DMAC_BTCTRL_BLOCKACT_NOACT);
 #  else
-	DmacManager::SetBtctrl(DmacChanDotStarTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_BYTE | DMAC_BTCTRL_BLOCKACT_NOACT);
+	DmacManager::SetBtctrl(DmacChanLedTx, DMAC_BTCTRL_STEPSIZE_X1 | DMAC_BTCTRL_STEPSEL_SRC | DMAC_BTCTRL_SRCINC | DMAC_BTCTRL_BEATSIZE_BYTE | DMAC_BTCTRL_BLOCKACT_NOACT);
 #  endif
-	DmacManager::SetSourceAddress(DmacChanDotStarTx, chunkBuffer);
-	DmacManager::SetDestinationAddress(DmacChanDotStarTx, &QSPI->TXDATA.reg);
-	DmacManager::SetDataLength(DmacChanDotStarTx, numBytes);				// must do this last!
-	DmacManager::EnableChannel(DmacChanDotStarTx, DmacPrioDotStar);
+	DmacManager::SetSourceAddress(DmacChanLedTx, chunkBuffer);
+	DmacManager::SetDestinationAddress(DmacChanLedTx, &QSPI->TXDATA.reg);
+	DmacManager::SetDataLength(DmacChanLedTx, numBytes);				// must do this last!
+	DmacManager::EnableChannel(DmacChanLedTx, DmacPrioLed);
 # elif SAME70
-	xdmac_channel_disable(XDMAC, DmacChanDotStarTx);
+	xdmac_channel_disable(XDMAC, DmacChanLedTx);
 	xdmac_channel_config_t p_cfg = {0, 0, 0, 0, 0, 0, 0, 0};
 	p_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN
 					| XDMAC_CC_MBSIZE_SINGLE
@@ -292,8 +292,8 @@ void LocalLedStrip::DmaSendChunkBuffer(size_t numBytes) noexcept
 #  endif
 	p_cfg.mbr_sa = reinterpret_cast<uint32_t>(chunkBuffer);
 	p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(QSPI->QSPI_TDR));
-	xdmac_configure_transfer(XDMAC, DmacChanDotStarTx, &p_cfg);
-	xdmac_channel_enable(XDMAC, DmacChanDotStarTx);
+	xdmac_configure_transfer(XDMAC, DmacChanLedTx, &p_cfg);
+	xdmac_channel_enable(XDMAC, DmacChanLedTx);
 # else
 #  error Unsupported processor
 # endif
@@ -308,9 +308,9 @@ bool LocalLedStrip::DmaInProgress() noexcept
 # if LEDSTRIP_USES_USART
 		if ((DotStarUsart->US_CSR & US_CSR_ENDTX) != 0)							// if we are no longer sending
 # elif SAME5x
-		if ((DmacManager::GetAndClearChannelStatus(DmacChanDotStarTx) & DMAC_CHINTFLAG_TCMPL) != 0)
+		if ((DmacManager::GetAndClearChannelStatus(DmacChanLedTx) & DMAC_CHINTFLAG_TCMPL) != 0)
 # elif SAME70
-		if ((xdmac_channel_get_interrupt_status(XDMAC, DmacChanDotStarTx) & XDMAC_CIS_BIS) != 0)	// if the last transfer has finished
+		if ((xdmac_channel_get_interrupt_status(XDMAC, DmacChanLedTx) & XDMAC_CIS_BIS) != 0)	// if the last transfer has finished
 # endif
 		{
 			dmaBusy = false;													// we finished the last transfer

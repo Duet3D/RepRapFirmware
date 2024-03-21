@@ -471,7 +471,7 @@ constexpr DmaChannel DmacChanTmcTx = 3;
 constexpr DmaChannel DmacChanTmcRx = 4;
 constexpr DmaChannel DmacChanSbcTx = 5;
 constexpr DmaChannel DmacChanSbcRx = 6;
-constexpr DmaChannel DmacChanDotStarTx = 7;
+constexpr DmaChannel DmacChanLedTx = 7;
 
 constexpr size_t NumDmaChannelsUsed = 8;
 
