@@ -834,6 +834,7 @@ GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 	{
 		const uint32_t address = gb.GetUIValue();
 		uint32_t numToReceive = 0;
+		GCodeResult Result = GCodeResult::ok;
 		bool seenR;
 		gb.TryGetUIValue('R', numToReceive, seenR);
 		int32_t values[MaxI2cBytes];
@@ -853,6 +854,7 @@ GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 			if (numToSend + numToReceive > MaxI2cBytes)
 			{
 				numToReceive = MaxI2cBytes - numToSend;
+				Result = GCodeResult::error;
 			}
 			uint8_t bValues[MaxI2cBytes];
 			for (size_t i = 0; i < numToSend; ++i)
@@ -870,20 +872,91 @@ GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 			}
 			else if (numToReceive != 0)
 			{
-				reply.copy("Received");
-				if (bytesTransferred == numToSend)
+				// At this moment transfer completed successfully, may be truncated due to insufficient i2c buffer.
+				// We check if S parameter exists. If not, the received bytes are printed in hex format to replay.
+				// If yes, then we try to store received bytes in specified variable
+				// checking possible errors:
+				//    - total transfer length exceeds MaxI2cBytes
+				//    - unknown read buffer variable
+				//    - wrong type of read buffer (requires an array of integers)
+				//    - insufficient read buffer length
+				// In case of error, the result of gcode is set to ERROR, the reason is reported in reply.
+
+				if (!gb.Seen('S'))
 				{
-					reply.cat(" nothing");
+					reply.copy("Received");
+					if (bytesTransferred == numToSend)
+					{
+						reply.cat(" nothing");
+					}
+					else
+					{
+						for (size_t i = numToSend; i < bytesTransferred; ++i)
+						{
+							reply.catf(" %02x", bValues[i]);
+						}
+					}
 				}
 				else
 				{
-					for (size_t i = numToSend; i < bytesTransferred; ++i)
+					if (Result != GCodeResult::ok)
 					{
-						reply.catf(" %02x", bValues[i]);
+						reply.cat(" Total transfer length exceeds MaxI2cBytes");
+					}
+					else
+					{
+						String<MaxVariableNameLength> varName;
+						gb.GetQuotedString(varName.GetRef(), true);
+						WriteLockedPointer<VariableSet> vset = WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables());
+						Variable *const var = vset->Lookup(varName.c_str());
+
+						if (var == nullptr)
+						{
+							Result = GCodeResult::error;
+							reply.catf(" Unknown read buffer variable '%s'.", varName.c_str());
+						}
+						else if ((*var).GetValue().GetType() != TypeCode::HeapArray)
+						{
+							Result = GCodeResult::error;
+							reply.catf(" Incorrect read buffer type %i (requires an array of integers)",
+									(int) (*var).GetValue().GetType());
+						}
+
+						if (Result == GCodeResult::ok)
+						{
+							ReadLocker lock(Heap::heapLock);
+							if ((*var).GetValue().ahVal.GetNumElements() < numToReceive)
+							{
+								Result = GCodeResult::error;
+								reply.cat(" Insufficient read buffer array length");
+							}
+							else
+								for (size_t i = 0; i < numToReceive; ++i)
+								{
+									if ((*var).GetValue().ahVal.GetElementType(i) != TypeCode::Int32)
+									{
+										Result = GCodeResult::error;
+										reply.catf(" Incorrect read buffer array element type %i (requires int)",
+												(int) (*var).GetValue().ahVal.GetElementType(i));
+										break;
+									}
+								}
+
+							lock.Release();
+							if (Result == GCodeResult::ok)
+							{
+								ExpressionValue ev;
+								for (size_t i = 0; i < numToReceive; ++i)
+								{
+									ev.SetInt(bValues[numToSend + i]);
+									(*var).GetValue().ahVal.AssignElement(i, ev);
+								}
+							}
+						}
 					}
 				}
 			}
-			return (bytesTransferred == numToSend + numToReceive) ? GCodeResult::ok : GCodeResult::error;
+			return Result;
 		}
 	}
 
