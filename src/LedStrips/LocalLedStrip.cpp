@@ -171,7 +171,15 @@ GCodeResult LocalLedStrip::CommonReportDetails(const StringRef &reply) noexcept
 {
 	reply.printf("%s strip on port \"", GetTypeText());
 	port.AppendPinName(reply);
-	reply.catf("\" uses %s, frequency %" PRIu32 "Hz", (useDma) ? "DMA" : "bit-banging", frequency);
+	reply.cat("\" uses ");
+	if (useDma)
+	{
+		reply.catf("DMA, frequency %" PRIu32 "Hz", frequency);
+	}
+	else
+	{
+		reply.cat("bit-banging");
+	}
 	if (IsNeoPixel())
 	{
 		reply.catf(", max strip length %" PRIu32, maxLeds);
