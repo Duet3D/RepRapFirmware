@@ -50,15 +50,7 @@ void MoveSegment::AddToTail(MoveSegment *tail) noexcept
 
 void MoveSegment::DebugPrint(char ch) const noexcept
 {
-	debugPrintf("%c d=%.4e t=%.1f ", ch, (double)segLength, (double)segTime);
-	if (IsLinear())
-	{
-		debugPrintf("c=%.4e\n", (double)c);
-	}
-	else
-	{
-		debugPrintf("b=%.4e c=%.4e a=%.4e\n", (double)b, (double)c, (double)acceleration);
-	}
+	debugPrintf("%c d=%.4e t=%.1f b=%+.4e c=%+.4e a=%+.4e\n", ch, (double)segLength, (double)segTime, (double)b, (double)c, (double)acceleration);
 }
 
 /*static*/ void MoveSegment::DebugPrintList(char ch, const MoveSegment *segs) noexcept

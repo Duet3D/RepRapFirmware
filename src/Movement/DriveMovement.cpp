@@ -794,7 +794,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		{
 			if (interval < minStepInterval) { minStepInterval = interval; }
 #if 1	//DEBUG
-			if (interval < -100)
+			if (interval < -20)
 			{
 				debugPrintf("Bad interval %" PRIi32 " dr=%u, ns=%" PRIi32 "\n", interval, drive, nextStep);
 				DebugPrint();
