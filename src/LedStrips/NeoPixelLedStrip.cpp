@@ -67,12 +67,12 @@ GCodeResult NeoPixelLedStrip::HandleM150(CanMessageGenericParser& parser, const 
 #if SUPPORT_DMA_NEOPIXEL
 	if (UsesDma())
 	{
-		SpiSendNeoPixelData(params);
+		SpiSendData(params);
 	}
 	else
 #endif
 	{
-		BitBangNeoPixelData(params);
+		BitBangData(params);
 	}
 	return GCodeResult::ok;
 }
@@ -101,7 +101,7 @@ GCodeResult NeoPixelLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply
 #if SUPPORT_DMA_NEOPIXEL
 	if (UsesDma())
 	{
-		SpiSendNeoPixelData(params);
+		SpiSendData(params);
 	}
 	else
 #endif
@@ -143,7 +143,7 @@ static void EncodeNeoPixelByte(uint8_t *p, uint8_t val) noexcept
 }
 
 // Send data to NeoPixel LEDs by DMA to SPI
-GCodeResult NeoPixelLedStrip::SpiSendNeoPixelData(const LedParams& params) noexcept
+GCodeResult NeoPixelLedStrip::SpiSendData(const LedParams& params) noexcept
 {
 	const unsigned int bytesPerLed = (isRGBW) ? 16 : 12;
 	unsigned int numLeds = params.numLeds;
