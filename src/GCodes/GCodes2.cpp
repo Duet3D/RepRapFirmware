@@ -309,13 +309,21 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		case 17:	// Select XY plane for G2/G3
 		case 18:	// Select XZ plane
 		case 19:	// Select YZ plane
-			if (!LockCurrentMovementSystemAndWaitForStandstill(gb))			// do this in case a G2 or G3 command is in progress
+			// If the plane is changing, wait for motion to stop so that if we get a power failure then the selected plane will match
+			// any not-yet-executed arc moves in the queue and we can resurrect those moves.
+			// However, some generators prefix every G2/G3 command with G17/18/19 so don't wait if the plane is not changing.
 			{
-				return false;
+				const unsigned int newPlane = (unsigned int)code - 17;
+				if (newPlane != gb.LatestMachineState().selectedPlane)
+				{
+					if (!LockCurrentMovementSystemAndWaitForStandstill(gb))
+					{
+						return false;
+					}
+					gb.LatestMachineState().selectedPlane = newPlane;
+					reprap.InputsUpdated();
+				}
 			}
-
-			gb.LatestMachineState().selectedPlane = code - 17;
-			reprap.InputsUpdated();
 			break;
 
 		case 20: // Inches (which century are we living in, here?)
