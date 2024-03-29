@@ -560,6 +560,7 @@ inline size_t LogicalDriveToExtruder(size_t drive) noexcept { return MaxAxesPlus
 
 const AxesBitmap DefaultXAxisMapping = AxesBitmap::MakeFromBits(X_AXIS);	// by default, X is mapped to X
 const AxesBitmap DefaultYAxisMapping = AxesBitmap::MakeFromBits(Y_AXIS);	// by default, Y is mapped to Y
+const AxesBitmap DefaultZAxisMapping = AxesBitmap::MakeFromBits(Z_AXIS);	// by default, Z is mapped to Z
 const AxesBitmap XyzAxes = AxesBitmap::MakeLowestNBits(XYZ_AXES);
 const AxesBitmap XyAxes = AxesBitmap::MakeLowestNBits(XY_AXES);
 

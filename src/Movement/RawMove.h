@@ -119,6 +119,7 @@ public:
 	void SetPreviousToolNumber() noexcept;
 	AxesBitmap GetCurrentXAxes() const noexcept;											// Get the current axes used as X axes
 	AxesBitmap GetCurrentYAxes() const noexcept;											// Get the current axes used as Y axes
+	AxesBitmap GetCurrentZAxes() const noexcept;											// Get the current axes used as Y axes
 	AxesBitmap GetCurrentAxisMapping(unsigned int axis) const noexcept;
 	float GetCurrentToolOffset(size_t axis) const noexcept;									// Get an axis offset of the current tool
 
