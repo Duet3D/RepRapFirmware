@@ -60,7 +60,7 @@ static unsigned int GetDecimalPlaces(uint8_t dataResolution) noexcept
 constexpr size_t AccelerometerTaskStackWords = 400;			// big enough to handle printf and file writes
 static Task<AccelerometerTaskStackWords> *accelerometerTask;
 
-static LIS3DH *accelerometer = nullptr;
+static LISAccelerometer *accelerometer = nullptr;
 
 static uint16_t samplingRate = 0;							// 0 means use the default
 static volatile uint32_t numSamplesRequested;
@@ -315,7 +315,7 @@ GCodeResult Accelerometers::ConfigureAccelerometer(GCodeBuffer& gb, const String
 		}
 
 		const uint32_t spiFrequency = (gb.Seen('Q')) ? gb.GetLimitedUIValue('Q', 500000, 10000001) : DefaultAccelerometerSpiFrequency;
-		auto temp = new LIS3DH(SharedSpiDevice::GetMainSharedSpiDevice(), spiFrequency, spiCsPort.GetPin(), irqPort.GetPin());
+		auto temp = new LISAccelerometer(SharedSpiDevice::GetMainSharedSpiDevice(), spiFrequency, spiCsPort.GetPin(), irqPort.GetPin());
 		if (temp->CheckPresent())
 		{
 			accelerometer = temp;
