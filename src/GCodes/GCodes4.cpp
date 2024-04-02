@@ -535,17 +535,10 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					   )
 					{
 						// This motion system may restore the position of this axis
-						if (axis == Z_AXIS)
+						if (axis == Z_AXIS && state == GCodeState::resuming1)
 						{
-							if (tempMs.coords[Z_AXIS] > tempMs.GetPauseRestorePoint().moveCoords[Z_AXIS])
-							{
-								continue;											// don't restore Z at all
-							}
-							if (state == GCodeState::resuming1)
-							{
-								zPendingRestore = true;								// restore Z next time
-								continue;
-							}
+							zPendingRestore = true;								// restore Z next time
+							continue;
 						}
 
 						if (!tempMs.GetAxesAndExtrudersOwned().IsBitSet(axis))		// if we don't own the axis
