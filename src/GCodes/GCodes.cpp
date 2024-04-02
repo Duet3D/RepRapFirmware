@@ -3727,14 +3727,14 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	if (gb.Seen('Z'))
 	{
 		uint32_t zMapping[MaxAxes];
-		size_t yCount = numVisibleAxes;
-		gb.GetUnsignedArray(zMapping, yCount, false);
-		zMap = AxesBitmap::MakeFromArray(zMapping, yCount) & AxesBitmap::MakeLowestNBits(numVisibleAxes);
+		size_t zCount = numVisibleAxes;
+		gb.GetUnsignedArray(zMapping, zCount, false);
+		zMap = AxesBitmap::MakeFromArray(zMapping, zCount) & AxesBitmap::MakeLowestNBits(numVisibleAxes);
 		seen = true;
 	}
 	else
 	{
-		zMap = DefaultZAxisMapping;					// by default map X axis straight through
+		zMap = DefaultZAxisMapping;					// by default map Z axis straight through
 	}
 
 	if (xMap.Intersects(yMap) || xMap.Intersects(zMap) || yMap.Intersects(zMap))
