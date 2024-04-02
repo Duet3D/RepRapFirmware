@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include "LIS3DH.h"
+#include "LISAccelerometer.h"
 
 #if SUPPORT_ACCELEROMETERS
 
