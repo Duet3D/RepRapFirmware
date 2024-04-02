@@ -122,7 +122,7 @@ GCodes::GCodes(Platform& p) noexcept :
 # endif
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = new GCodeBuffer(GCodeChannel::USB, usbInput, fileInput, UsbMessage, Compatibility::Marlin);
 #elif HAS_SBC_INTERFACE
-	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = new GCodeBuffer(GCodeChannel::USB, nullptr, fileInput, UsbMessage, Compatibility::marlin);
+	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = new GCodeBuffer(GCodeChannel::USB, nullptr, fileInput, UsbMessage, Compatibility::Marlin);
 #else
 	gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::USB)] = nullptr;
 #endif
