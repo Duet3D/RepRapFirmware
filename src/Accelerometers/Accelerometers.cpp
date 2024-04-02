@@ -55,7 +55,7 @@ static unsigned int GetDecimalPlaces(uint8_t dataResolution) noexcept
 
 // Local accelerometer handling
 
-#include "LIS3DH.h"
+#include "LISAccelerometer.h"
 
 constexpr size_t AccelerometerTaskStackWords = 400;			// big enough to handle printf and file writes
 static Task<AccelerometerTaskStackWords> *accelerometerTask;
