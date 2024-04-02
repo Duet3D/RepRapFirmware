@@ -53,7 +53,7 @@ constexpr ObjectModelArrayTableEntry Tool::objectModelArrayTable[] =
 	// 1. Axes
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(((const Tool*)self)->axisMapping); },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->axisMapping[context.GetLastIndex()]); }
 	},
 	// 2 Extruders
@@ -141,7 +141,8 @@ uint16_t Tool::activeToolHeaters = 0;
 uint16_t Tool::numToolsToReport = 0;
 
 // Create a new tool and return a pointer to it. If an error occurs, put an error message in 'reply' and return nullptr.
-/*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *toolName, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, size_t sCount, int8_t spindleNo, const StringRef& reply) noexcept
+/*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *toolName, int32_t d[], size_t dCount, int32_t h[], size_t hCount,
+								AxesBitmap xMap, AxesBitmap yMap, AxesBitmap zMap, FansBitmap fanMap, int filamentDrive, size_t sCount, int8_t spindleNo, const StringRef& reply) noexcept
 {
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
@@ -224,6 +225,7 @@ uint16_t Tool::numToolsToReport = 0;
 	t->heaterCount = (uint8_t)hCount;
 	t->axisMapping[0] = xMap;
 	t->axisMapping[1] = yMap;
+	t->axisMapping[2] = zMap;
 	t->fanMapping = fanMap;
 	t->heaterFault = false;
 	t->axisOffsetsProbed.Clear();
@@ -345,6 +347,11 @@ uint16_t Tool::numToolsToReport = 0;
 /*static*/ AxesBitmap Tool::GetYAxes(const Tool *tool) noexcept
 {
 	return (tool == nullptr) ? DefaultYAxisMapping : tool->axisMapping[1];
+}
+
+/*static*/ AxesBitmap Tool::GetZAxes(const Tool *tool) noexcept
+{
+	return (tool == nullptr) ? DefaultZAxisMapping : tool->axisMapping[2];
 }
 
 /*static*/ AxesBitmap Tool::GetAxisMapping(const Tool *tool, unsigned int axis) noexcept
@@ -485,6 +492,17 @@ void Tool::PrintTool(const StringRef& reply) const noexcept
 		if (axisMapping[1].IsBitSet(yi))
 		{
 			reply.catf("%c%c", sep, reprap.GetGCodes().GetAxisLetters()[yi]);
+			sep = ',';
+		}
+	}
+
+	reply.cat("; zmap:");
+	sep = ' ';
+	for (size_t zi = 0; zi < MaxAxes; ++zi)
+	{
+		if (axisMapping[2].IsBitSet(zi))
+		{
+			reply.catf("%c%c", sep, reprap.GetGCodes().GetAxisLetters()[zi]);
 			sep = ',';
 		}
 	}

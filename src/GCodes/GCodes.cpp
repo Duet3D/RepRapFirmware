@@ -2176,7 +2176,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		}
 		else
 		{
-			realAxesMoving = axesMentioned & ~AxesBitmap::MakeFromBits(X_AXIS, Y_AXIS);
+			realAxesMoving = axesMentioned & ~AxesBitmap::MakeFromBits(X_AXIS, Y_AXIS, Z_AXIS);
 			if (axesMentioned.IsBitSet(X_AXIS))
 			{
 				realAxesMoving |= ms.currentTool->GetXAxisMap();
@@ -2184,6 +2184,10 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			if (axesMentioned.IsBitSet(Y_AXIS))
 			{
 				realAxesMoving |= ms.currentTool->GetYAxisMap();
+			}
+			if (axesMentioned.IsBitSet(Z_AXIS))
+			{
+				realAxesMoving |= ms.currentTool->GetZAxisMap();
 			}
 		}
 
@@ -2634,7 +2638,7 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	}
 	else
 	{
-		realAxesMoving = axesMentioned & ~AxesBitmap::MakeFromBits(X_AXIS, Y_AXIS);
+		realAxesMoving = axesMentioned & ~AxesBitmap::MakeFromBits(X_AXIS, Y_AXIS, Z_AXIS);
 		if (axesMentioned.IsBitSet(X_AXIS))
 		{
 			realAxesMoving |= ms.currentTool->GetXAxisMap();
@@ -2642,6 +2646,10 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 		if (axesMentioned.IsBitSet(Y_AXIS))
 		{
 			realAxesMoving |= ms.currentTool->GetYAxisMap();
+		}
+		if (axesMentioned.IsBitSet(Z_AXIS))
+		{
+			realAxesMoving |= ms.currentTool->GetZAxisMap();
 		}
 	}
 
@@ -3714,9 +3722,24 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		yMap = DefaultYAxisMapping;					// by default map X axis straight through
 	}
 
-	if (xMap.Intersects(yMap))
+	// Check Z axis mapping
+	AxesBitmap zMap;
+	if (gb.Seen('Z'))
 	{
-		reply.copy("Cannot map both X and Y to the same axis");
+		uint32_t zMapping[MaxAxes];
+		size_t yCount = numVisibleAxes;
+		gb.GetUnsignedArray(zMapping, yCount, false);
+		zMap = AxesBitmap::MakeFromArray(zMapping, yCount) & AxesBitmap::MakeLowestNBits(numVisibleAxes);
+		seen = true;
+	}
+	else
+	{
+		yMap = DefaultYAxisMapping;					// by default map X axis straight through
+	}
+
+	if (xMap.Intersects(yMap) || xMap.Intersects(zMap) || yMap.Intersects(zMap))
+	{
+		reply.copy("Cannot map two or more of X,Y,Z to the same axis");
 		return GCodeResult::error;
 	}
 
@@ -3774,7 +3797,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
-			Tool* const tool = Tool::Create(toolNumber, name.c_str(), drives, dCount, heaters, hCount, xMap, yMap, fanMap, filamentDrive, sCount, spindleNumber, reply);
+			Tool* const tool = Tool::Create(toolNumber, name.c_str(), drives, dCount, heaters, hCount, xMap, yMap, zMap, fanMap, filamentDrive, sCount, spindleNumber, reply);
 			if (tool == nullptr)
 			{
 				return GCodeResult::error;
@@ -4482,17 +4505,20 @@ void GCodes::ToolOffsetTransform(const MovementState& ms, const float coordsIn[M
 	{
 		const AxesBitmap xAxes = ms.currentTool->GetXAxisMap();
 		const AxesBitmap yAxes = ms.currentTool->GetYAxisMap();
+		const AxesBitmap zAxes = ms.currentTool->GetZAxisMap();
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
 			if (   (axis != X_AXIS || xAxes.IsBitSet(X_AXIS))
 				&& (axis != Y_AXIS || yAxes.IsBitSet(Y_AXIS))
+				&& (axis != Z_AXIS || zAxes.IsBitSet(Z_AXIS))
 			   )
 			{
 				const float totalOffset = currentBabyStepOffsets[axis] - ms.currentTool->GetOffset(axis);
 				const size_t inputAxis = (explicitAxes.IsBitSet(axis)) ? axis
 										: (xAxes.IsBitSet(axis)) ? X_AXIS
 											: (yAxes.IsBitSet(axis)) ? Y_AXIS
-												: axis;
+												: (zAxes.IsBitSet(axis)) ? Z_AXIS
+													: axis;
 				coordsOut[axis] = (coordsIn[inputAxis] * axisScaleFactors[axis]) + totalOffset;
 			}
 		}
@@ -4521,8 +4547,9 @@ void GCodes::ToolOffsetInverseTransform(const MovementState& ms, const float coo
 	{
 		const AxesBitmap xAxes = ms.GetCurrentXAxes();
 		const AxesBitmap yAxes = ms.GetCurrentYAxes();
-		float xCoord = 0.0, yCoord = 0.0;
-		size_t numXAxes = 0, numYAxes = 0;
+		const AxesBitmap zAxes = ms.GetCurrentZAxes();
+		float xCoord = 0.0, yCoord = 0.0, zCoord = 0.0;
+		size_t numXAxes = 0, numYAxes = 0, numZAxes = 0;
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
 			const float totalOffset = currentBabyStepOffsets[axis] - ms.currentTool->GetOffset(axis);
@@ -4538,6 +4565,11 @@ void GCodes::ToolOffsetInverseTransform(const MovementState& ms, const float coo
 				yCoord += coord;
 				++numYAxes;
 			}
+			if (zAxes.IsBitSet(axis))
+			{
+				zCoord += coord;
+				++numZAxes;
+			}
 		}
 		if (numXAxes != 0)
 		{
@@ -4546,6 +4578,10 @@ void GCodes::ToolOffsetInverseTransform(const MovementState& ms, const float coo
 		if (numYAxes != 0)
 		{
 			coordsOut[Y_AXIS] = yCoord/numYAxes;
+		}
+		if (numZAxes != 0)
+		{
+			coordsOut[Z_AXIS] = zCoord/numZAxes;
 		}
 	}
 	coordsOut[Z_AXIS] -= ms.currentZHop/axisScaleFactors[Z_AXIS];

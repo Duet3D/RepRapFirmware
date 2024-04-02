@@ -258,6 +258,12 @@ AxesBitmap MovementState::GetCurrentYAxes() const noexcept
 	return Tool::GetYAxes(currentTool);
 }
 
+// Get the current axes used as Y axis
+AxesBitmap MovementState::GetCurrentZAxes() const noexcept
+{
+	return Tool::GetZAxes(currentTool);
+}
+
 // Get an axis offset of the current tool
 float MovementState::GetCurrentToolOffset(size_t axis) const noexcept
 {

@@ -157,6 +157,12 @@ namespace CanInterface
 extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute__((naked));
 #define RRF_ASSERT(_expr) do { if (!(_expr)) { vAssertCalled(__LINE__, __FILE__); } } while (false)
 
+#ifdef __ECV__			// eCv doesn't understand the gcc asm syntax in these functions
+
+# define CheckStackValue(dwordOffset, val) do { } while (false)
+
+#else
+
 // Function and macro to track return address corruption
 inline uint32_t GetStackValue(uint32_t dwordOffset) noexcept
 {
@@ -164,7 +170,7 @@ inline uint32_t GetStackValue(uint32_t dwordOffset) noexcept
     return sp[dwordOffset];
 }
 
-#define CheckStackValue(dwordOffset, val) do { if (GetStackValue(dwordOffset) != val) { vAssertCalled(__LINE__, __FILE__); } } while (false)
+# define CheckStackValue(dwordOffset, val) do { if (GetStackValue(dwordOffset) != val) { vAssertCalled(__LINE__, __FILE__); } } while (false)
 
 inline volatile uint32_t *GetStackOffset(uint32_t dwordOffset) noexcept
 {
@@ -172,6 +178,7 @@ inline volatile uint32_t *GetStackOffset(uint32_t dwordOffset) noexcept
     return &sp[dwordOffset];
 }
 
+#endif
 // Functions to set and clear data watchpoints
 inline void SetWatchpoint(unsigned int number, const void* addr, unsigned int addrBits = 2) noexcept
 {
@@ -294,8 +301,8 @@ struct DriverId
 // Module numbers and names, used for diagnostics and debug
 // All of these including noModule must be <= 31 because we 'or' the module number into the software reset code
 NamedEnum(Module, uint8_t,
-			Platform, Network, Webserver, Gcodes, Move, Heat, Kinematics /* was DDA */, InputShaping /* was Roland */,
-			unused /* was Scanner*/, PrintMonitor, Storage, PortControl, DuetExpansion, FilamentSensors, WiFi, Display,
+			mPlatform, mNetwork, Webserver, Gcodes, mMove, mHeat, mKinematics /* was DDA */, InputShaping /* was Roland */,
+			unused /* was Scanner*/, mPrintMonitor, Storage, PortControl, DuetExpansion, FilamentSensors, WiFi, mDisplay,
 			SbcInterface,
 			CAN,					// uppercase to avoid eCv clash with type Can in Microchip driver file
 			Expansion,
@@ -560,6 +567,7 @@ inline size_t LogicalDriveToExtruder(size_t drive) noexcept { return MaxAxesPlus
 
 const AxesBitmap DefaultXAxisMapping = AxesBitmap::MakeFromBits(X_AXIS);	// by default, X is mapped to X
 const AxesBitmap DefaultYAxisMapping = AxesBitmap::MakeFromBits(Y_AXIS);	// by default, Y is mapped to Y
+const AxesBitmap DefaultZAxisMapping = AxesBitmap::MakeFromBits(Z_AXIS);	// by default, Z is mapped to Z
 const AxesBitmap XyzAxes = AxesBitmap::MakeLowestNBits(XYZ_AXES);
 const AxesBitmap XyAxes = AxesBitmap::MakeLowestNBits(XY_AXES);
 
