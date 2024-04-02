@@ -3734,7 +3734,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 	}
 	else
 	{
-		yMap = DefaultYAxisMapping;					// by default map X axis straight through
+		zMap = DefaultZAxisMapping;					// by default map X axis straight through
 	}
 
 	if (xMap.Intersects(yMap) || xMap.Intersects(zMap) || yMap.Intersects(zMap))
