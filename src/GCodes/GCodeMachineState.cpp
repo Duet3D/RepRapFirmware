@@ -9,7 +9,7 @@
 #include <Platform/RepRap.h>
 #include <Storage/MassStorage.h>
 
-#include <limits>
+#include <climits>
 
 // Create a default initialised GCodeMachineState
 GCodeMachineState::GCodeMachineState() noexcept

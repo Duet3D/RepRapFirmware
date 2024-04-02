@@ -14,7 +14,7 @@
 #include <General/NumericConverter.h>
 #include <Hardware/ExceptionHandlers.h>
 
-#include <limits>
+#include <climits>
 
 #ifdef exists
 # undef exists

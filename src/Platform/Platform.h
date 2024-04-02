@@ -610,7 +610,7 @@ public:
 	void InvertDiagLed() const noexcept;
 #endif
 
-#if defined(DUET3MINI) && SUPPORT_TMC2240
+#if defined(DUET3MINI) && SUPPORT_TMC2240 != 0
 	const char *_ecv_array null GetExpansionBoardName() const noexcept { return (hasTmc2240Expansion) ? "Duet3 Mini 2+ (TMC2240)" : nullptr; }
 #endif
 
@@ -779,7 +779,7 @@ private:
 	bool warnDriversNotPowered;
 #endif
 
-#if defined(DUET3MINI) && SUPPORT_TMC2240
+#if defined(DUET3MINI) && SUPPORT_TMC2240 != 0
 	bool hasTmc2240Expansion;
 #endif
 
