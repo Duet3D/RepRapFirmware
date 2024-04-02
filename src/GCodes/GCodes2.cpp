@@ -73,19 +73,38 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 {
 #if SUPPORT_ASYNC_MOVES
 	// If we are running multiple motion systems in single input stream mode and we have resumed after a pause, then we may need to skip some commands
+	// Also if we did a synchronous pause then we need to sip the pause command
 	{
-		FilePosition offsetToSkipTo;
-		if (   &gb == FileGCode()
-			&& gb.ExecutingAll()
-			&& (offsetToSkipTo = GetMovementState(gb).fileOffsetToSkipTo) != 0
-			&& !(gb.GetCommandLetter() == 'M' && gb.HasCommandNumber() && gb.GetCommandNumber() == 596)
-		   )
+		if (&gb == FileGCode() && gb.ExecutingAll())
 		{
-			if (gb.GetJobFilePosition() < offsetToSkipTo)
+			const FilePosition offsetToSkipTo = GetMovementState(gb).fileOffsetToSkipTo;
+			if (offsetToSkipTo != 0)
 			{
-				return true;
+				const FilePosition jobFilePos = gb.GetJobFilePosition();
+				if (jobFilePos < offsetToSkipTo)
+				{
+					// Skip any command except M596
+					if (!(gb.GetCommandLetter() == 'M' && gb.HasCommandNumber() && gb.GetCommandNumber() == 596))
+					{
+						return true;
+					}
+				}
+				else if (jobFilePos == offsetToSkipTo)
+				{
+					// If we paused on a synchronous pause command, skip it
+					int commandNumber;
+					if (   gb.GetCommandLetter() == 'M'
+						&& ((commandNumber = gb.GetCommandNumber()) == 226 || commandNumber == 600 || commandNumber == 601 || commandNumber == 25)
+					   )
+					{
+						return true;
+					}
+				}
+				else
+				{
+					GetMovementState(gb).fileOffsetToSkipTo = 0;			// clear this to speed up the test next time
+				}
 			}
-			GetMovementState(gb).fileOffsetToSkipTo = 0;			// clear this to speed up the test next time
 		}
 	}
 #endif
@@ -1232,9 +1251,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 26: // Set SD position
 				// This is used between executing M23 to set up the file to print, and M24 to print it
 				// When using multiple motion systems, execute M26 once in the context of each motion system
-				gb.MustSee('S');
-				static_assert(sizeof(FilePosition) == sizeof(uint32_t), "Only 32 bits of file position are read");
 				{
+					static_assert(sizeof(FilePosition) == sizeof(uint32_t), "Only 32 bits of file position are read");
+					gb.MustSee('S');
 					MovementState& ms = GetMovementState(gb);
 					ms.fileOffsetToPrint = (FilePosition)gb.GetUIValue();
 					ms.restartMoveFractionDone = (gb.Seen('P')) ? constrain<float>(gb.GetFValue(), 0.0, 1.0) : 0.0;
@@ -4295,7 +4314,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				break;
 
-#if false
+#if 0
 			// This code is not finished yet
 			case 674: // Set Z to center point
 				if (LockMovementAndWaitForStandstill(gb))
