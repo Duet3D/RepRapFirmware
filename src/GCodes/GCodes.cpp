@@ -3686,9 +3686,24 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		yMap = DefaultYAxisMapping;					// by default map X axis straight through
 	}
 
-	if (xMap.Intersects(yMap))
+	// Check Z axis mapping
+	AxesBitmap zMap;
+	if (gb.Seen('Z')
 	{
-		reply.copy("Cannot map both X and Y to the same axis");
+		uint32_t zMapping[MaxAxes];
+		size_t zCount = numVisibleAxes;
+		gb.GetUnsignedArray(zMapping, zCount, false);
+		zMap = AxesBitmap::MakeFromArray(zMapping, zCount) & AxesBitmap::MakeLowestNBits(numVisibleAxes);
+		seen = true;
+	}
+	else
+	{
+		zMap = DefaultZAxisMapping;					// by default map X axis straight through
+	}
+
+	if (xMap.Intersects(yMap) || xMap.Intersects(zMap) || yMap.Intersects(zMap))
+	{
+		reply.copy("Cannot map two or more of X,Y,Z to the same axis");
 		return GCodeResult::error;
 	}
 
