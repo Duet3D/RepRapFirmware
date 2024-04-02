@@ -17,9 +17,9 @@
 #endif
 
 #if SAME5x
-using AnalogIn::AdcBits;
+constexpr unsigned int AdcBits = AnalogIn::AdcBits;
 #else
-using LegacyAnalogIn::AdcBits;
+constexpr unsigned int AdcBits = LegacyAnalogIn::AdcBits;
 #endif
 
 // ADC resolution

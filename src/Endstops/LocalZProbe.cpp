@@ -12,13 +12,12 @@
 #include <Platform/Platform.h>
 
 #include <AnalogIn.h>
-using
+
 #if SAME5x
-	AnalogIn
+constexpr unsigned int AdcBits = AnalogIn::AdcBits;
 #else
-	LegacyAnalogIn
+constexpr unsigned int AdcBits = LegacyAnalogIn::AdcBits;
 #endif
-	::AdcBits;
 
 // Members of class LocalZProbe
 LocalZProbe::~LocalZProbe() noexcept
