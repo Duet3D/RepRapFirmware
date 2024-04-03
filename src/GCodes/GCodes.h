@@ -636,7 +636,7 @@ private:
 #if SUPPORT_ASYNC_MOVES
 	GCodeBuffer* File2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)]; }
 	GCodeBuffer* Queue2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]; }
-	GCodeBuffer* GetFileGCode(unsigned int msNumber) const noexcept { return (msNumber == 0) ? FileGCode() : File2GCode(); }
+	GCodeBuffer* GetFileGCode(unsigned int msNumber) const noexcept;
 #else
 	GCodeBuffer* GetFileGCode(unsigned int msNumber) const noexcept { return FileGCode(); }
 #endif

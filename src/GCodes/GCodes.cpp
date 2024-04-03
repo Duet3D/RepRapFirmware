@@ -1133,7 +1133,7 @@ bool GCodes::DoEmergencyPause() noexcept
 		const bool movesSkipped = reprap.GetMove().LowPowerOrStallPause(ms.GetMsNumber(), ms.GetPauseRestorePoint());
 		if (movesSkipped)
 		{
-			// The PausePrint call has filled in the restore point with machine coordinates
+			// The LowPowerOrStallPause call has filled in the restore point with machine coordinates
 			ToolOffsetInverseTransform(ms, ms.GetPauseRestorePoint().moveCoords, ms.currentUserPosition);	// transform the returned coordinates to user coordinates
 			ms.ClearMove();
 		}
@@ -1611,6 +1611,12 @@ void GCodes::Diagnostics(MessageType mtype) noexcept
 }
 
 #if SUPPORT_ASYNC_MOVES
+
+// Get the file GCode buffer that processes commands for this movement system
+GCodeBuffer* GCodes::GetFileGCode(unsigned int msNumber) const noexcept
+{
+	return (msNumber == 0 || FileGCode()->ExecutingAll()) ? FileGCode() : File2GCode();
+}
 
 // Lock the movement system that we currently use and wait for it to stop
 bool GCodes::LockCurrentMovementSystemAndWaitForStandstill(GCodeBuffer& gb) noexcept
