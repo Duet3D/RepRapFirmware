@@ -626,10 +626,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 
 			// If the file input stream has been forked then we are good to go.
-			// If File is executing both streams then we need to restart it from the earliest offset.
+			// If File is executing both streams then we need to restart it from the earliest offset and using the movement system that was active at that point.
 			if (FileGCode()->ExecutingAll())
 			{
 				FileGCode()->RestartFrom(earliestFileOffset);
+				const MovementSystemNumber msNumber = (moveStates[0].GetPauseRestorePoint().filePos > earliestFileOffset) ? 1
+														: (moveStates[1].GetPauseRestorePoint().filePos > earliestFileOffset) ? 0
+															: pausedMovementSystemNumber;
+				FileGCode()->SetActiveQueueNumber(msNumber);
 			}
 #else
 			ms.ResumeAfterPause();

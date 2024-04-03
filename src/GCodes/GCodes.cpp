@@ -248,6 +248,7 @@ void GCodes::Reset() noexcept
 
 #if SUPPORT_ASYNC_MOVES
 	MovementState::GlobalInit(numVisibleAxes);
+	pausedMovementSystemNumber = 0;
 #endif
 
 	for (MovementSystemNumber i = 0; i < NumMovementSystems; ++i)
@@ -869,6 +870,13 @@ bool GCodes::DoSynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCode
 	}
 
 	MovementState& ms = GetMovementState(gb);
+#if SUPPORT_ASYNC_MOVES
+	if (gb.ExecutingAll())
+	{
+		pausedMovementSystemNumber = ms.GetMsNumber();
+	}
+#endif
+
 	ms.pausedInMacro = false;
 	ms.SavePosition(PauseRestorePointNumber, numVisibleAxes, gb.LatestMachineState().feedRate, gb.GetJobFilePosition());
 
@@ -953,10 +961,16 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 			ms.GetPauseRestorePoint().virtualExtruderPosition = ms.latestVirtualExtruderPosition;
 			ms.GetPauseRestorePoint().proportionDone = 0.0;
 
+#if SUPPORT_ASYNC_MOVES
+			if (fgb.ExecutingAll())
+			{
+				pausedMovementSystemNumber = fgb.GetActiveQueueNumber();									// this will used if we didn't skip any moves
+			}
+#endif
 			// TODO: when using RTOS there is a possible race condition in the following,
 			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
 			ms.GetPauseRestorePoint().filePos = fgb.GetPrintingFilePosition(true);
-			while (fgb.IsDoingFileMacro())																// must call this after GetFilePosition because this changes IsDoingFileMacro
+			while (fgb.IsDoingFileMacro())																	// must call this after GetFilePosition because this changes IsDoingFileMacro
 			{
 				ms.pausedInMacro = true;
 				fgb.PopState(false);

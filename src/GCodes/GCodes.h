@@ -770,6 +770,7 @@ private:
 
 #if SUPPORT_ASYNC_MOVES
 	CollisionAvoider collisionChecker;			// currently we support just one collision avoider
+	MovementSystemNumber pausedMovementSystemNumber;
 #endif
 #if SUPPORT_KEEPOUT_ZONES
 	KeepoutZone keepoutZone;					// currently we support just one keepout zone
