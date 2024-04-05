@@ -18,6 +18,8 @@ class PrepParams;
 enum class DMState : uint8_t
 {
 	idle = 0,
+
+	// All states from stepError1 to just less than firstMotionState must be error states, see function DDA::HasStepEreor
 	stepError1,
 	stepError2,
 	stepError3,
@@ -171,7 +173,11 @@ inline bool DriveMovement::CalcNextStepTime(const DDA &dda) noexcept
 		}
 	}
 
-	state = DMState::idle;
+	if (state >= DMState::firstMotionState)	// don't change the state if there was a step error
+	{
+		state = DMState::idle;
+	}
+
 #ifdef DUET3_MB6HC							// we need to increase the minimum step pulse length to be long enough for the TMC5160
 			asm volatile("nop");
 			asm volatile("nop");
