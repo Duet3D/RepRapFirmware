@@ -69,10 +69,11 @@ void MoveSegment::DebugPrint(char ch) const noexcept
 	}
 }
 
-// Check that the calculated distance of each segment agrees with its length
-/*static*/ void MoveSegment::DebugCheckSegments(const MoveSegment *segs) noexcept
+// Check that the calculated distance of each segment agrees with its length. If it doesn't then report it and return true.
+/*static*/ bool MoveSegment::DebugCheckSegments(const MoveSegment *segs) noexcept
 {
 	unsigned int n = 0;
+	bool foundBadSegment = false;
 	while (segs != nullptr)
 	{
 		const float diff = segs->GetCalculatedDistance() - segs->GetSegmentLength();
@@ -80,10 +81,12 @@ void MoveSegment::DebugPrint(char ch) const noexcept
 		{
 			debugPrintf("Seg length diff %.2e at %u\n", (double)diff, n);
 			MoveSegment::DebugPrintList('S', segs);
+			foundBadSegment = true;
 		}
 		++n;
 		segs = segs->GetNext();
 	}
+	return foundBadSegment;
 }
 
 // End

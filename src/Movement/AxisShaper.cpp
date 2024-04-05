@@ -600,8 +600,11 @@ void AxisShaper::PlanShaping(DDA& dda, PrepParams& params, bool shapingEnabled) 
 		MoveSegment * const accelSegs = GetAccelerationSegments(dda, params);
 		MoveSegment * const decelSegs = GetDecelerationSegments(dda, params);
 		dda.segments = FinishShapedSegments(dda, params, accelSegs, decelSegs);
-#if 1	//debug
-		MoveSegment::DebugCheckSegments(dda.segments);
+#if 0	//debug
+		if (MoveSegment::DebugCheckSegments(dda.segments))
+		{
+			dda.DebugPrintAll("dcs");
+		}
 #endif
 	}
 	else

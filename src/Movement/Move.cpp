@@ -564,11 +564,11 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	minExtrusionPending = maxExtrusionPending = 0.0;
 #endif
 
-#if 0	// debug only
+#if DDA_DEBUG_STEP_COUNT
 	scratchString.copy("Steps requested/done:");
 	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
-		scratchString.catf(" %" PRIu32 "/%" PRIu32, DDA::stepsRequested[driver], DDA::stepsDone[driver]);
+		scratchString.catf(" %" PRIi32 "/%" PRIi32, DDA::stepsRequested[driver], DDA::stepsDone[driver]);
 		DDA::stepsRequested[driver] = DDA::stepsDone[driver] = 0;
 	}
 	scratchString.cat('\n');

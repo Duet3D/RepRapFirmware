@@ -358,13 +358,6 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 					}
 				}
 			}
-
-#if 0	// debug only
-			if (delta != 0)
-			{
-				stepsRequested[drive] += labs(delta);
-			}
-#endif
 		}
 		else if (LogicalDriveToExtruder(drive) < reprap.GetGCodes().GetNumExtruders())
 		{
@@ -1487,6 +1480,9 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 				EnsureSegments(params);
 
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
+# if DDA_DEBUG_STEP_COUNT
+				stepsRequested[drive] += delta;
+# endif
 				if (platform.GetDriversBitmap(drive) != 0						// if any of the drives is local
 # if SUPPORT_CAN_EXPANSION
 						|| flags.checkEndstops									// if checking endstops, create a DM even if there are no local drives involved
@@ -1534,6 +1530,9 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 				int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (delta != 0)
 				{
+#if DDA_DEBUG_STEP_COUNT
+					stepsRequested[drive] += delta;
+#endif
 					platform.EnableDrivers(drive, false);
 					EnsureSegments(params);
 					if (flags.continuousRotationShortcut && reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
@@ -2002,9 +2001,9 @@ volatile uint32_t DDA::lastStepLowTime = 0;
 #endif
 volatile uint32_t DDA::lastDirChangeTime = 0;
 
-#if 0	// debug only
-uint32_t DDA::stepsRequested[NumDirectDrivers];
-uint32_t DDA::stepsDone[NumDirectDrivers];
+#if DDA_DEBUG_STEP_COUNT
+int32_t DDA::stepsRequested[NumDirectDrivers];
+int32_t DDA::stepsDone[NumDirectDrivers];
 #endif
 
 #if 0	//debug
@@ -2049,8 +2048,8 @@ void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 	while (dm != nullptr && elapsedTime >= dm->nextStepTime)		// if the next step is due
 	{
 		driversStepping |= p.GetDriversBitmap(dm->drive);
-#if 0	// debug only
-		++stepsDone[dm->drive];
+#if DDA_DEBUG_STEP_COUNT
+		stepsDone[dm->drive] += (dm->direction) ? 1 : -1;
 #endif
 		dm = dm->nextDM;
 	}

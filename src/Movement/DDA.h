@@ -17,6 +17,7 @@
 #include <GCodes/GCodes.h>			// for class RawMove
 
 # define DDA_LOG_PROBE_CHANGES	0
+# define DDA_DEBUG_STEP_COUNT	0
 
 class DDARing;
 
@@ -227,8 +228,8 @@ public:
 #endif
 	static volatile uint32_t lastDirChangeTime;								// when we last change the DIR signal to a slow driver
 
-#if 0	// debug only
-	static uint32_t stepsRequested[NumDirectDrivers], stepsDone[NumDirectDrivers];
+#if DDA_DEBUG_STEP_COUNT
+	static int32_t stepsRequested[NumDirectDrivers], stepsDone[NumDirectDrivers];
 #endif
 
 private:
