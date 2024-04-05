@@ -1096,7 +1096,7 @@ void Platform::Spin() noexcept
 		char buf[101];
 		const unsigned int charsRead = isrDebugBuffer.GetBlock(buf, sizeof(buf) - 1);
 		buf[charsRead] = 0;
-		Message(GenericMessage, buf);
+		Message(UsbMessage, buf);
 	}
 
 	// Try to flush messages to serial ports
