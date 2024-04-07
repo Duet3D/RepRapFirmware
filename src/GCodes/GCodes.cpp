@@ -1338,7 +1338,7 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 				}
 #endif
 				// We no longer use G92 to restore the positions because we don't know whether a tool is loaded.
-				buf.printf("M21\nM98 P\"%s\"", RESUME_PROLOGUE_G);		// set units to mm and call the prologue, passing the machine positions of the axes
+				buf.printf("G21\nM98 P\"%s\"", RESUME_PROLOGUE_G);		// set units to mm and call the prologue, passing the machine positions of the axes
 				for (size_t i = 0; i < numVisibleAxes; ++i)
 				{
 					buf.catf(" %c%.3f", axisLetters[i], (double)coords[i]);
