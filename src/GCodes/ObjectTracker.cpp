@@ -180,7 +180,12 @@ bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
 	for (size_t i = 0; ok && i < min<unsigned int>(numObjects, MaxTrackedObjects); ++i)
 	{
 		String<StringLength100> buf;
-		buf.printf("M486 S%u A\"%s\"\n", i, objectDirectory[i].name.Get().Ptr());
+		buf.printf("M486 S%u", i);
+		if (!objectDirectory[i].name.IsNull())
+		{
+			buf.catf(" A\"%s\"", objectDirectory[i].name.Get().Ptr());
+		}
+		buf.cat('\n');
 		ok = f->Write(buf.c_str());
 	}
 
@@ -194,15 +199,6 @@ bool ObjectTracker::WriteObjectDirectory(FileStore *f) const noexcept
 												return f->Write(buf.c_str());
 											});
 	}
-
-	// Write the current object
-	if (ok)
-	{
-		String<StringLength20> buf;
-		buf.printf("M486 S%d\n", reprap.GetGCodes().GetPrimaryMovementState().currentObjectNumber);
-		ok = f->Write(buf.c_str());
-	}
-
 	return ok;
 }
 

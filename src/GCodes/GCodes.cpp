@@ -1420,12 +1420,14 @@ void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 // 'buf' is a convenient 256-byte buffer we can use
 bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const f, const char *printingFilename, const StringRef& buf) noexcept
 {
-	const RestorePoint& pauseRestorePoint = ms.GetPauseRestorePoint();
+	// Write the current printing object
+	buf.printf("M486 S%d\n", ms.currentObjectNumber);
+	bool ok = f->Write(buf.c_str());
+
 
 	// Now that we have homed, we can run the tool change files for the current tool
-	bool ok = true;
 	const int toolNumber =  ms.GetCurrentToolNumber();
-	if (toolNumber >= 0)
+	if (ok && toolNumber >= 0)
 	{
 		buf.printf("T%d\n", toolNumber);					// select the required tool
 		if (ms.currentTool->GetSpindleNumber() >= 0)
@@ -1489,6 +1491,8 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 					(oms.inverseTimeMode) ? "G93" : "G94");
 		ok = f->Write(buf.c_str());									// write virtual extruder position, absolute/relative extrusion flag, and inverse time mode/normal mode flag
 	}
+
+	const RestorePoint& pauseRestorePoint = ms.GetPauseRestorePoint();
 	if (ok)
 	{
 		const unsigned int selectedPlane = oms.selectedPlane;
@@ -1510,25 +1514,25 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 		buf.cat('\n');
 		ok = f->Write(buf.c_str());									// write G17/18/19, filename and file position, and if necessary proportion done and initial XY position
 	}
+
+#if SUPPORT_ASYNC_MOVES
+	const AxesBitmap ownedAxes = ms.GetAxesAndExtrudersOwned();
+	if (ok && ownedAxes.IsBitSet(Z_AXIS))
+#else
 	if (ok)
+#endif
 	{
 		// Build the commands to restore the head position. These assume that we are working in mm.
 		// Start with a vertical move to 2mm above the final Z position
-#if SUPPORT_ASYNC_MOVES
-		const AxesBitmap ownedAxes = ms.GetAxesAndExtrudersOwned();
-		if (ownedAxes.IsBitSet(Z_AXIS))
-#endif
-		{
-			buf.printf("G0 F6000 Z%.3f\n", (double)(pauseRestorePoint.moveCoords[Z_AXIS] + 2.0));
-		}
-#if SUPPORT_ASYNC_MOVES
-		else
-		{
-			buf.Clear();
-		}
-#endif
+		buf.printf("G0 F6000 Z%.3f\n", (double)(pauseRestorePoint.moveCoords[Z_AXIS] + 2.0));
+		ok = f->Write(buf.c_str());
+	}
+
+	if (ok)
+	{
 		// Now set all the other axes
-		buf.cat("G0 F6000");
+		buf.copy("G0 F6000");
+		bool restoredAxes = false;
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
 #if SUPPORT_ASYNC_MOVES
@@ -1556,21 +1560,31 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 			if (axis != Z_AXIS)
 #endif
 			{
-
+				restoredAxes = true;
 				buf.catf(" %c%.3f", axisLetters[axis], (double)pauseRestorePoint.moveCoords[axis]);
 			}
 		}
-
-		// Now move down to the correct Z height
-#if SUPPORT_ASYNC_MOVES
-		if (ownedAxes.IsBitSet(Z_AXIS))
-#endif
+		if (restoredAxes)
 		{
-			buf.catf("\nG0 F6000 Z%.3f\n", (double)pauseRestorePoint.moveCoords[Z_AXIS]);
+			buf.cat('\n');
+			ok = f->Write(buf.c_str());
 		}
+	}
 
+	// Now move down to the correct Z height
+#if SUPPORT_ASYNC_MOVES
+	if (ok && ownedAxes.IsBitSet(Z_AXIS))
+#else
+	if (ok)
+#endif
+	{
+		buf.printf("G0 F6000 Z%.3f\n", (double)pauseRestorePoint.moveCoords[Z_AXIS]);
+		ok = f->Write(buf.c_str());
+	}
+	if (ok)
+	{
 		// Set the feed rate
-		buf.catf("G1 F%.1f", (double)InverseConvertSpeedToMmPerMin(pauseRestorePoint.feedRate));
+		buf.printf("G1 F%.1f", (double)InverseConvertSpeedToMmPerMin(pauseRestorePoint.feedRate));
 #if SUPPORT_LASER
 		if (machineType == MachineType::laser)
 		{
@@ -1585,6 +1599,11 @@ bool GCodes::SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const 
 #endif
 		buf.cat("\n");
 		ok = f->Write(buf.c_str());									// restore feed rate and output bits or laser power
+	}
+	if (ok)
+	{
+		buf.printf("M204 P%.1f T%.1f\n", (double)InverseConvertAcceleration(ms.maxPrintingAcceleration), (double)InverseConvertAcceleration(ms.maxTravelAcceleration));
+		ok = f->Write(buf.c_str());									// restore printing and travel accelerations
 	}
 	if (ok)
 	{
