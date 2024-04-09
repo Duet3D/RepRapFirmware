@@ -303,7 +303,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 	size_t slotIndex = 0;
 	size_t firstDriveNotSent = NumDirectDrivers;
 	Bitmap<uint32_t> driversReported;
-	bool forceSend = false;
+	bool forceSend = false, haveLiveData = false;
 #endif
 
 	{
@@ -363,10 +363,14 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 								auto& slot = msg->data[slotIndex];
 								slot.status = fst.ToBaseType();
 								fs.GetLiveData(slot);
-								if (fst != fs.lastStatus || slot.hasLiveData)
+								if (fst != fs.lastStatus)
 								{
 									forceSend = true;
 									fs.lastStatus = fst;
+								}
+								else if (slot.hasLiveData)
+								{
+									haveLiveData = true;
 								}
 								driversReported.SetBit(drv);
 								++slotIndex;
@@ -409,7 +413,14 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 #if SUPPORT_REMOTE_COMMANDS
 	if (CanInterface::InExpansionMode())
 	{
-		if (slotIndex != 0 && (forceSend || millis() - whenStatusLastSent >= StatusUpdateInterval))
+		uint32_t now;
+		if (   slotIndex != 0
+			&& (   forceSend
+				|| (now = millis()) - whenStatusLastSent >= StatusUpdateInterval
+				|| (haveLiveData && now - whenStatusLastSent >= LiveStatusUpdateInterval)
+
+			   )
+		   )
 		{
 			msg->SetStandardFields(driversReported);
 			buf.dataLength = msg->GetActualDataLength();

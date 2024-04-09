@@ -2417,7 +2417,7 @@ size_t RepRap::GetStatusIndex() const noexcept
 			: (gCodes->IsCancellingPrint())								? 7		// Cancelling
 			: (printMonitor->IsPrinting())
 			  	  ? ((gCodes->IsSimulating())							? 8		// Simulating
-			: 														  	  9		// Printing
+			  		  : 												  9		// Printing
 			  	  	)
 			: (gCodes->IsDoingToolChange())								? 10	// Changing tool
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement() ||
