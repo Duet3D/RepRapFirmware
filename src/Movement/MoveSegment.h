@@ -59,9 +59,6 @@ public:
 	// Get the segment speed change in mm/step_clock
 	float GetSpeedChange() const noexcept { return a * duration; }
 
-	// Get the distance carries forward from the previous segment
-	float GetS0() const noexcept { return s0; }
-
 	// Get the initial speed
 	float GetU() const noexcept { return u; }
 
@@ -108,7 +105,6 @@ protected:
 			 ;
 	uint32_t startTime;										// when this segment should start
 	float duration;											// the duration in step clocks of this segment
-	float s0;												// the movement carried forward from the previous segment
 	float u;												// the initial speed
 	float a;												// the acceleration during this segment
 };
