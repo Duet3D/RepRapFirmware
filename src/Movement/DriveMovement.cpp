@@ -80,25 +80,67 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 		// Calculate the movement parameters
 		if (segments->IsLinear())
 		{
-			state = DMState::cartLinear;
-			// Calculate the B and C coefficients for a linear move such that t = t0 + p*n
-			t0 = -segments->GetS0() * (mmPerStep/segments->GetU());
+			// n * mmPerStep = distanceCarriedForwards + u * t
+			// Therefore t = -distanceCarriedForwards/u + n * mmPerStep/u
+			// Calculate the t0 and p coefficients such that t = t0 + p*n
+			t0 = -distanceCarriedForwards /segments->GetU();
 			p = mmPerStep/segments->GetU();
+			q = 0.0;								// to make the debug output consistent
+			const float distance = distanceCarriedForwards + segments->GetU() * segments->GetDuration();
+			const int32_t netSteps = (int32_t)(distance * stepsPerMm);
+			if (netSteps < 0)
+			{
+				netSteps = -netSteps;
+				direction = false;
+			}
+			else
+			{
+				direction = true;
+			}
+			reverseStartStep = segmentStepLimit = netSteps + 1;
+			state = DMState::cartLinear;
 		}
 		else
 		{
-			state = (segments->IsAccelerating()) ? DMState::cartAccel : DMState::cartDecelNoReverse;
-			// Calculate the A, B and C coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q)
+			// n * mmPerStep = distanceCarriedForwards + u * t + 0.5 * a * t^2
+			// Therefore 0.5 * t^2 + u * t/a + (distanceCarriedForwards - mmPerStep * n)/a = 0
+			// Therefore t = -u/a +/- sqrt((u/a)^2 - 2 * (distanceCarriedForwards - mmPerStep * n)/a)
+			// Calculate the t0, p and q coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q)
 			t0 = -segments->GetU()/segments->GetA();
-			if (segments->UsePressureAdvance())
+			p = 2 * mmPerStep/segments->GetA();
+			q = fsquare(t0) - 2 * distanceCarriedForwards/segments->GetA();
+			const float netDistance = distanceCarriedForwards + (segments->GetU() + 0.5 * segments->GetA() * segments->GetDuration) * segments->GetDuration();
+			const float timeToReverse = segments->GetU()/(-segments->GetA());
+			if (timeToReverse < 0.0)
 			{
-				t0 -= extruderShaper.GetKclocks();
+				// Any reversal is in the past
+				qq;
+				state = DMState::cartAccelNoReverse;
 			}
-			p = 2.0/segments->GetA();
-			q = fsquare(t0) - p * segments->GetS0() * mmPerStep;
+			else if (timeToReverse < segments->duration)
+			{
+				// Reversal is in this segment, but it may be beyond the last step we are going to take
+				const float distanceToReverse = segments->GetDistanceToReverse();
+				if (qq)
+				{
+					qq;
+					state = DMState::cartAccelReversing;
+				}
+				else
+				{
+					qq;
+					state = DMState::cartAccelNoReverse;
+				}
+			}
+			else
+			{
+				qq;
+				state = DMState::cartAccelNoReverse;
+			}
 		}
 
 		// Save the movement limit in steps
+		const int32_t netStepsToSegmentEnd = (int32_t)floorf(segments->GetDistance() * stepsPerMm);
 		segmentStepLimit = qq;		//TODO calculate segmentStepLimit and reverseStartStep
 		reverseStartStep = qq;
 

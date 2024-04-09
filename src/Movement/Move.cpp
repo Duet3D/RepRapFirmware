@@ -1858,7 +1858,11 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 	// Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
 	if (checkingEndstops)					// if any homing switches or the Z probe is enabled in this move
 	{
+#if SUPPORT_CAN_EXPANSION
+		if (CheckEndstops(p, true)) { CanInterface::WakeAsyncSender(); }
+#else
 		CheckEndstops(p, true);				// call out to a separate function because this may help cache usage in the more common and time-critical case where we don't call it
+#endif
 	}
 
 	uint32_t driversStepping = 0;
