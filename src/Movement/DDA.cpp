@@ -126,17 +126,12 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	// Due to rounding error, for an accelerate-decelerate move we may have accelDistance+decelDistance slightly greater than totalDistance.
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
 	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
+	const float steadyDistance = decelStartDistance - accelDistance;
+	steadyClocks = (steadyDistance <= 0.0) ? 0.0 : steadyDistance/dda.topSpeed;
 	acceleration = dda.acceleration;
 	deceleration = dda.deceleration;
 	accelClocks = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
 	decelClocks = (dda.topSpeed - dda.endSpeed)/dda.deceleration;
-}
-
-// Calculate the steady clocks and set the total clocks in the DDA
-void PrepParams::Finalise(float topSpeed) noexcept
-{
-	const float steadyDistance = decelStartDistance - accelDistance;
-	steadyClocks = (steadyDistance <= 0.0) ? 0.0 : steadyDistance/topSpeed;
 }
 
 DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
@@ -627,11 +622,6 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 		clocksNeeded = params.steadyClocks = 1;
 	}
 
-	// Set up the plan
-	segments = nullptr;
-	reprap.GetMove().GetAxisShaper().GetRemoteSegments(*this, params);
-
-	activeDMs = completedDMs = nullptr;
 	afterPrepare.drivesMoving.Clear();
 	Move& move = reprap.GetMove();
 
@@ -1095,7 +1085,6 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 	// Prepare for movement
 	PrepParams params;
 	params.SetFromDDA(*this);
-	params.Finalise(topSpeed);
 	clocksNeeded = params.TotalClocks();
 
 	// Copy the unshaped acceleration and deceleration back to the DDA because ManageLaserPower uses them

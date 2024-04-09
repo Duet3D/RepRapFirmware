@@ -80,13 +80,10 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 		// Calculate the movement parameters
 		if (segments->IsLinear())
 		{
-			// Set up pB, pC such that for forward motion, time = pB + pC * stepNumber
-			pA = 0.0;																							// clear this to make debugging easier
-			pB = currentSegment->CalcLinearB(distanceSoFar, timeSoFar);
-			state = DMState::cartLinear;
-			// Calculate the B and C coefficients for a linear move such that t = t0 + p*n
-			t0 = -segments->GetS0() * (mmPerStep/segments->GetU());
-			p = mmPerStep/segments->GetU();
+			// n * mmPerStep = distanceCarriedForwards + u * t
+			// Therefore t = -distanceCarriedForwards/u + n * mmPerStep/u
+			// Calculate the t0 and p coefficients such that t = t0 + p*n
+			t0 = -distanceCarriedForwards /segments->GetU();			p = mmPerStep/segments->GetU();
 			q = 0.0;								// to make the debug output consistent
 			const float distance = distanceCarriedForwards + segments->GetU() * segments->GetDuration();
 			const int32_t netSteps = (int32_t)(distance * stepsPerMm);
@@ -111,44 +108,43 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 			t0 = -segments->GetU()/segments->GetA();
 			p = 2 * mmPerStep/segments->GetA();
 			q = fsquare(t0) - 2 * distanceCarriedForwards/segments->GetA();
-			const float netDistance = distanceCarriedForwards + (segments->GetU() + 0.5 * segments->GetA() * segments->GetDuration) * segments->GetDuration();
+			const float netDistance = distanceCarriedForwards + (segments->GetU() + 0.5 * segments->GetA() * segments->GetDuration()) * segments->GetDuration();
 			const float timeToReverse = segments->GetU()/(-segments->GetA());
 			if (timeToReverse < 0.0)
 			{
 				// Any reversal is in the past
 				qq;
-				state = DMState::cartAccelNoReverse;
+				state = DMState::cartAccel;
 			}
-			else if (timeToReverse < segments->duration)
+			else if (timeToReverse < segments->GetDuration())
 			{
 				// Reversal is in this segment, but it may be beyond the last step we are going to take
 				const float distanceToReverse = segments->GetDistanceToReverse();
 				if (qq)
 				{
 					qq;
-					state = DMState::cartAccelReversing;
+					state = DMState::cartDecelForwardsReversing;
 				}
 				else
 				{
 					qq;
-					state = DMState::cartAccelNoReverse;
+					state = DMState::cartDecelNoReverse;
 				}
 			}
 			else
 			{
 				qq;
-				state = DMState::cartAccelNoReverse;
+				state = DMState::cartDecelNoReverse;
 			}
 		}
 
 		// Save the movement limit in steps
 		const int32_t netStepsToSegmentEnd = (int32_t)floorf(segments->GetDistance() * stepsPerMm);
 		segmentStepLimit = qq;		//TODO calculate segmentStepLimit and reverseStartStep
-
+		reverseStartStep = qq;
 		nextStep = 1;
 		if (nextStep < segmentStepLimit)
 		{
-			reverseStartStep = segmentStepLimit;			// need to set this so that CalcNextStepTime works properly
 			qq;												//TODO set direction, clear direction changed
 
 #if 0	//DEBUG
@@ -674,7 +670,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		break;
 
 	case DMState::cartAccel:									// Cartesian accelerating
-		nextCalcStepTime = t0 + fastLimSqrtf(d0 + p * (float)(nextStep + (int32_t)stepsTillRecalc));
+		nextCalcStepTime = t0 + fastLimSqrtf(q + p * (float)(nextStep + (int32_t)stepsTillRecalc));
 		break;
 
 	case DMState::cartDecelForwardsReversing:
@@ -695,7 +691,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian decelerating with no reversal
-		nextCalcStepTime = t0 - fastLimSqrtf(d0 + p * (float)(nextStep + (int32_t)stepsTillRecalc));
+		nextCalcStepTime = t0 - fastLimSqrtf(q + p * (float)(nextStep + (int32_t)stepsTillRecalc));
 		break;
 
 #if SUPPORT_LINEAR_DELTA
@@ -765,10 +761,9 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// So if this is the last step and it is late, bring it forward to the expected finish time.
 		// 2023-12-06: we now allow any step to be late but we record the maximum number.
 		// 2024-040-5: we now allow steps to be late on any segment, not just the last one, because a segment may be 0 or 1 step long and on deltas the last 2 steps may be calculated late.
-		// Note, totalSteps isn't valid for extruders
-		iNextCalcStepTime = dda.clocksNeeded;
+		iNextCalcStepTime = segments->GetDuration();
 		const int32_t nextCalcStep = nextStep + (int32_t)stepsTillRecalc;
-		const int32_t stepsLate = ((isExtruder) ? segmentStepLimit : totalSteps) - nextCalcStep;
+		const int32_t stepsLate = segmentStepLimit  - nextCalcStep;
 		if (stepsLate > maxStepsLate) { maxStepsLate = stepsLate; }
 	}
 
@@ -787,22 +782,14 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		else
 		{
 			if (interval < minStepInterval) { minStepInterval = interval; }
-#if 1	//DEBUG
-			if (interval < -20)
-			{
-				debugPrintf("Bad interval %" PRIi32 " dr=%u, ns=%" PRIi32 "\n", interval, drive, nextStep);
-				DebugPrint();
-				dda.DebugPrint("dda: ");
-			}
-#endif
 			stepInterval = 0;
 		}
+	}
 
 #if 0	//DEBUG
 	if (isExtruder && stepInterval < 20 /*&& nextStep + stepsTillRecalc + 1 < totalSteps*/)
 	{
 		state = DMState::stepError;
-		nextStep += 130000000 + stepsTillRecalc;			// so we can tell what happened in the debug print
 		return false;
 	}
 #endif

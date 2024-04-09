@@ -47,9 +47,6 @@ struct PrepParams
 
 	bool useInputShaping;
 
-	// Calculate and set the steady clocks
-	void Finalise() noexcept;
-
 	// Get the total clocks needed
 	float TotalClocks() const noexcept { return accelClocks + steadyClocks + decelClocks; }
 
@@ -172,6 +169,8 @@ public:
 #endif
 
 private:
+	static constexpr float MinimumAccelOrDecelClocks = 10.0;				// Minimum number of acceleration or deceleration clocks we try to ensure
+
 	void RecalculateMove(DDARing& ring) noexcept SPEED_CRITICAL;
 	void MatchSpeeds() noexcept SPEED_CRITICAL;
 	bool IsDecelerationMove() const noexcept;								// return true if this move is or have been might have been intended to be a deceleration-only move
