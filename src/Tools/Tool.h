@@ -59,6 +59,7 @@ public:
 			int32_t h[], size_t hCount,
 			AxesBitmap xMap,
 			AxesBitmap yMap,
+			AxesBitmap zMap,
 			FansBitmap fanMap,
 			int filamentDrive,
 			size_t sCount,
@@ -67,6 +68,7 @@ public:
 	static void Delete(Tool *t) noexcept { delete t; }
 	static AxesBitmap GetXAxes(const Tool *tool) noexcept;
 	static AxesBitmap GetYAxes(const Tool *tool) noexcept;
+	static AxesBitmap GetZAxes(const Tool *tool) noexcept;
 	static AxesBitmap GetAxisMapping(const Tool *tool, unsigned int axis) noexcept;
 	static float GetOffset(const Tool *tool, size_t axis) noexcept pre(axis < MaxAxes);
 	static void FlagTemperatureFault(int8_t dudHeater) noexcept;
@@ -99,6 +101,7 @@ public:
 	void PrintTool(const StringRef& reply) const noexcept;
 	AxesBitmap GetXAxisMap() const noexcept { return axisMapping[0]; }
 	AxesBitmap GetYAxisMap() const noexcept { return axisMapping[1]; }
+	AxesBitmap GetZAxisMap() const noexcept { return axisMapping[2]; }
 	FansBitmap GetFanMapping() const noexcept { return fanMapping; }
 	Filament *GetFilament() const noexcept { return filament; }
 	const char *GetFilamentName() const noexcept;
@@ -117,7 +120,7 @@ public:
 	void SetSpindleRpm(uint32_t rpm, bool isCurrentTool) THROWS(GCodeException);
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	bool WriteSettings(FileStore *f) const noexcept;							// write the tool's settings to file
+	bool WriteSettings(FileStore *f, const StringRef& buf) const noexcept;		// write the tool's settings to file
 #endif
 
 	float GetToolHeaterActiveTemperature(size_t heaterNumber) const noexcept;
@@ -193,7 +196,7 @@ private:
 	uint8_t driveCount;
 	uint8_t heaterCount;
 	uint16_t myNumber;
-	AxesBitmap axisMapping[2];
+	AxesBitmap axisMapping[3];					// allow X, Y and Z to be mapped
 	AxesBitmap axisOffsetsProbed;
 
 	uint8_t drives[MaxExtrudersPerTool];

@@ -54,7 +54,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors
 #define SUPPORT_BME280			1
-#define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
 
 #ifdef USE_EMBEDDED_FILES
@@ -472,7 +471,7 @@ constexpr DmaChannel DmacChanTmcTx = 3;
 constexpr DmaChannel DmacChanTmcRx = 4;
 constexpr DmaChannel DmacChanSbcTx = 5;
 constexpr DmaChannel DmacChanSbcRx = 6;
-constexpr DmaChannel DmacChanDotStarTx = 7;
+constexpr DmaChannel DmacChanLedTx = 7;
 
 constexpr size_t NumDmaChannelsUsed = 8;
 

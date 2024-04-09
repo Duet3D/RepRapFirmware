@@ -226,7 +226,7 @@ GCodeResult Heater::SetOrReportModel(unsigned int heater, GCodeBuffer& gb, const
 GCodeResult Heater::SetModel(float hr, float bcr, float fcr, float coolingRateExponent, float td, float maxPwm, float voltage, bool usePid, bool inverted, const StringRef& reply) noexcept
 {
 	GCodeResult rslt;
-	if (model.SetParameters(hr, bcr, fcr, coolingRateExponent, td, maxPwm, GetHighestTemperatureLimit(), voltage, usePid, inverted))
+	if (model.SetParameters(hr, bcr, fcr, coolingRateExponent, td, maxPwm, voltage, usePid, inverted, reply))
 	{
 		if (model.IsEnabled())
 		{
@@ -251,7 +251,6 @@ GCodeResult Heater::SetModel(float hr, float bcr, float fcr, float coolingRateEx
 	}
 	else
 	{
-		reply.copy("bad model parameters");
 		rslt = GCodeResult::error;
 	}
 
@@ -298,9 +297,9 @@ GCodeResult Heater::StartAutoTune(GCodeBuffer& gb, const StringRef& reply, FansB
 	// Get and store the optional parameters
 	tuningTargetTemp = targetTemp;
 	tuningFans = fans;
-	tuningPwm = (gb.Seen('P')) ? gb.GetLimitedFValue('P', 0.1, 1.0) : GetModel().GetMaxPwm();
-	tuningHysteresis = (gb.Seen('Y')) ? gb.GetLimitedFValue('Y', 1.0, 20.0) : DefaultTuningHysteresis;
-	tuningFanPwm = (gb.Seen('F')) ? gb.GetLimitedFValue('F', 0.1, 1.0) : DefaultTuningFanPwm;
+	tuningPwm = (gb.Seen('P')) ? gb.GetLimitedFValue('P', MinTuningHeaterPwm, 1.0) : GetModel().GetMaxPwm();
+	tuningHysteresis = (gb.Seen('Y')) ? gb.GetLimitedFValue('Y', MinTuningHysteresis, MaxTuningHysteresis) : DefaultTuningHysteresis;
+	tuningFanPwm = (gb.Seen('F')) ? gb.GetLimitedFValue('F', MinTuningFanPwm, 1.0) : DefaultTuningFanPwm;
 	tuningQuietMode = gb.Seen('Q') && gb.GetUIValue() != 0;
 
 	const GCodeResult rslt = StartAutoTune(reply, seenA, ambientTemp);
@@ -704,8 +703,7 @@ GCodeResult Heater::SetFaultDetectionParameters(const CanMessageSetHeaterFaultDe
 
 GCodeResult Heater::SetModel(unsigned int heater, const CanMessageHeaterModelNewNew& msg, const StringRef& reply) noexcept
 {
-	const float temperatureLimit = GetHighestTemperatureLimit();
-	const bool rslt = model.SetParameters(msg, temperatureLimit);
+	const bool rslt = model.SetParameters(msg, reply);
 	if (rslt)
 	{
 		if (model.IsEnabled())
@@ -719,7 +717,6 @@ GCodeResult Heater::SetModel(unsigned int heater, const CanMessageHeaterModelNew
 		return GCodeResult::ok;
 	}
 
-	reply.copy("bad model parameters");
 	return GCodeResult::error;
 }
 

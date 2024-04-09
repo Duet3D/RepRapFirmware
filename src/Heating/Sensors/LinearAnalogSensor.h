@@ -16,6 +16,10 @@ public:
 	explicit LinearAnalogSensor(unsigned int sensorNum) noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
+#if SUPPORT_REMOTE_COMMANDS
+	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
+#endif
+
 	void Poll() noexcept override;
 	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 

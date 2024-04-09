@@ -14,10 +14,10 @@
 
 #include <Hardware/Spi/SharedSpiClient.h>
 
-class LIS3DH : public SharedSpiClient
+class LISAccelerometer : public SharedSpiClient
 {
 public:
-	LIS3DH(SharedSpiDevice& dev, uint32_t freq, Pin p_csPin, Pin p_int1Pin) noexcept;
+	LISAccelerometer(SharedSpiDevice& dev, uint32_t freq, Pin p_csPin, Pin p_int1Pin) noexcept;
 
 	// Do a quick test to check whether the accelerometer is present, returning true if it is
 	bool CheckPresent() noexcept;

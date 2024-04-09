@@ -56,7 +56,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20010000;
 
 #define SUPPORT_IOBITS			0					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		0					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
-#define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_OBJECT_MODEL	1
 #define SUPPORT_12864_LCD		0					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_LED_STRIPS		1					// set nonzero to support DotStar LED strips

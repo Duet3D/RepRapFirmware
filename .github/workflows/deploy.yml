@@ -99,6 +99,7 @@ jobs:
 
       - name: "Set up Eclipse-CDT"
         run: |
+          sudo apt-get update -y
           sudo apt-get install -y libarchive-tools default-jre
           curl -L -O "https://pkg.duet3d.com/eclipse-cpp-2023-09-R-linux-gtk-x86_64.tar.gz"
           sudo bsdtar -x -f ./eclipse-cpp-2023-09-R-linux-gtk-x86_64.tar.gz -C /opt

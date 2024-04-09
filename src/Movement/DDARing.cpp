@@ -562,7 +562,7 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 	// We may be going to skip some moves. Get the end coordinate of the previous move.
 	DDA * const prevDda = addPointer->GetPrevious();
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
-	RestorePoint& rp = ms.pauseRestorePoint;
+	RestorePoint& rp = ms.GetPauseRestorePoint();
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		rp.moveCoords[axis] = prevDda->GetEndCoordinate(axis, false);

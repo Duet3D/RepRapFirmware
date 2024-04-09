@@ -60,9 +60,19 @@ void GCodes::ReportToolTemperatures(const StringRef& reply, const Tool *tool, bo
 // Handle M400
 GCodeResult GCodes::ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	const unsigned int param = (gb.Seen('P')) ? gb.GetLimitedUIValue('P', 2) : 0;
-	const bool finished = (param == 1) ? LockAllMovementSystemsAndWaitForStandstill(gb) : LockCurrentMovementSystemAndWaitForStandstill(gb);
-	return (finished) ? GCodeResult::ok : GCodeResult::notFinished;
+	if (LockCurrentMovementSystemAndWaitForStandstill(gb))
+	{
+		uint32_t param = 0;
+		bool seen = false;
+		gb.TryGetLimitedUIValue('S', param, seen, 2);
+		if (param != 1)
+		{
+			// M400 releases axes/extruders that are not owned by the current tool unless the S1 parameter is present
+			GetMovementState(gb).ReleaseNonToolAxesAndExtruders();
+		}
+		return GCodeResult::ok;
+	}
+	return GCodeResult::notFinished;
 }
 
 // Handle M596
@@ -142,6 +152,32 @@ GCodeResult GCodes::CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) 
 GCodeResult GCodes::SyncMovementSystems(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	return (DoSync(gb)) ? GCodeResult::ok : GCodeResult::notFinished;
+}
+
+// Handle M606
+GCodeResult GCodes::ForkInputReader(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	if (gb.Seen('S'))
+	{
+		if (gb.GetChannel() != GCodeChannel::File)
+		{
+			reply.copy("this command is valid only when running a job from a stored file");
+			return GCodeResult::warning;
+		}
+
+		(void)gb.GetLimitedUIValue('S', 1, 2);			// currently only S1 is valid
+
+		if (gb.ExecutingAll())							// ignore the command if we are already forked
+		{
+			File2GCode()->ForkFrom(gb);					// duplicate the input settings and file stack of File to File2
+			reprap.InputsUpdated();
+		}
+	}
+	else
+	{
+		reply.printf("File reader is running in %s mode", (FileGCode()->ExecutingAll()) ? "standard" : "forked");
+	}
+	return GCodeResult::ok;
 }
 
 #endif
@@ -315,36 +351,14 @@ GCodeResult GCodes::ConfigureAccelerations(GCodeBuffer&gb, const StringRef& repl
 
 // Save some resume information, returning true if successful
 // We assume that the tool configuration doesn't change, only the temperatures and the mix
-bool GCodes::WriteToolSettings(FileStore *f, const MovementState& ms) const noexcept
+bool GCodes::WriteToolSettings(FileStore *f, const StringRef& buf) const noexcept
 {
-	// First write the settings of all tools except the current one and the command to select them if they are on standby
+	// First write the settings of all tools
 	bool ok = true;
 	ReadLocker lock(Tool::toolListLock);
 	for (const Tool *t = Tool::GetToolList(); t != nullptr && ok; t = t->Next())
 	{
-		if (t != ms.currentTool)
-		{
-			ok = t->WriteSettings(f);
-		}
-	}
-
-	// Finally write the settings of the active tool and the commands to select it. If no current tool, just deselect all tools.
-	if (ok)
-	{
-		if (ms.currentTool == nullptr)
-		{
-			ok = f->Write("T-1 P0\n");
-		}
-		else
-		{
-			ok = ms.currentTool->WriteSettings(f);
-			if (ok)
-			{
-				String<StringLength20> buf;
-				buf.printf("T%u P0\n", ms.currentTool->Number());
-				ok = f->Write(buf.c_str());
-			}
-		}
+		ok = t->WriteSettings(f, buf);
 	}
 	return ok;
 }

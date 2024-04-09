@@ -155,7 +155,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// went (i.e. the difference between our start and end positions) and if we need to
 				// incorporate any correction factors. That's why we only need to set the final tool
 				// offset to this value in order to finish the tool probing.
-				const float coord = ms.toolChangeRestorePoint.moveCoords[m585Settings.axisNumber] - ms.currentUserPosition[m585Settings.axisNumber] + m585Settings.offset;
+				const float coord = ms.GetToolChangeRestorePoint().moveCoords[m585Settings.axisNumber] - ms.currentUserPosition[m585Settings.axisNumber] + m585Settings.offset;
 				ms.currentTool->SetOffset(m585Settings.axisNumber, coord, true);
 			}
 			gb.SetState(GCodeState::normal);
@@ -329,8 +329,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::m109ToolChange0:					// run tfree for the old tool (if any)
 		doingToolChange = true;
 		SavePosition(gb, ToolChangeRestorePointNumber);
-		ms.toolChangeRestorePoint.toolNumber = ms.GetCurrentToolNumber();
-		ms.toolChangeRestorePoint.fanSpeed = ms.virtualFanSpeed;
+		ms.GetToolChangeRestorePoint().toolNumber = ms.GetCurrentToolNumber();
+		ms.GetToolChangeRestorePoint().fanSpeed = ms.virtualFanSpeed;
 		ms.SetPreviousToolNumber();
 		reprap.StateUpdated();							// tell DWC/DSF that a restore point, nextToolNumber and the previousToolNumber have been updated
 		gb.AdvanceState();
@@ -438,7 +438,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 	case GCodeState::m109ToolChangeComplete:
 		if (LockCurrentMovementSystemAndWaitForStandstill(gb))	// wait for the move to height to finish
 		{
-			gb.LatestMachineState().feedRate = ms.toolChangeRestorePoint.feedRate;
+			gb.LatestMachineState().feedRate = ms.GetToolChangeRestorePoint().feedRate;
 			// We don't restore the default fan speed in case the user wants to use a different one for the new tool
 			doingToolChange = false;
 
@@ -494,7 +494,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			reply.printf((gb.GetState() == GCodeState::filamentChangePause2) ? "Printing paused for filament change at" : "Printing paused at");
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
-				reply.catf(" %c%.1f", axisLetters[axis], (double)ms.pauseRestorePoint.moveCoords[axis]);
+				reply.catf(" %c%.1f", axisLetters[axis], (double)ms.GetPauseRestorePoint().moveCoords[axis]);
 			}
 			platform.MessageF(LogWarn, "%s\n", reply.c_str());
 			pauseState = PauseState::paused;
@@ -522,22 +522,64 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// Move the head back to the paused location
 		if (LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
-			SetMoveBufferDefaults(ms);
-			const bool restoreZ = (gb.GetState() != GCodeState::resuming1 || ms.coords[Z_AXIS] <= ms.pauseRestorePoint.moveCoords[Z_AXIS]);
 #if SUPPORT_ASYNC_MOVES
-			AxesBitmap axesToAllocate;
-#endif
+			bool zPendingRestore = false;
+			for (MovementState& tempMs : moveStates)
+			{
+				SetMoveBufferDefaults(tempMs);
+				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
+				{
+					// We may restore this axis if either this motion system owns it or this is motion system 0 and the axis is free
+					if (   (tempMs.GetAxesAndExtrudersOwned().IsBitSet(axis) || (tempMs.GetMsNumber() == 0 && IsAxisFree(axis)))
+						&& tempMs.currentUserPosition[axis] != tempMs.GetPauseRestorePoint().moveCoords[axis]
+					   )
+					{
+						// This motion system may restore the position of this axis
+						if (axis == Z_AXIS && state == GCodeState::resuming1)
+						{
+							zPendingRestore = true;								// restore Z next time
+							continue;
+						}
+
+						if (!tempMs.GetAxesAndExtrudersOwned().IsBitSet(axis))		// if we don't own the axis
+						{
+							try
+							{
+								AllocateAxes(gb, tempMs, AxesBitmap::MakeFromBits(axis), ParameterLettersBitmap());
+							}
+							catch (const GCodeException& exc)
+							{
+								continue;											// we failed to allocate the axis - should not happen
+							}
+						}
+
+						// AllocateAxes updates the user coordinates, so we need to set them up here not earlier
+						tempMs.currentUserPosition[axis] = tempMs.GetPauseRestorePoint().moveCoords[axis];
+						if (platform.IsAxisLinear(axis))
+						{
+							tempMs.linearAxesMentioned = true;
+						}
+						else if (platform.IsAxisRotational(axis))
+						{
+							tempMs.rotationalAxesMentioned = true;
+						}
+					}
+				}
+
+				ToolOffsetTransform(tempMs);
+				tempMs.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
+				NewSingleSegmentMoveAvailable(tempMs);
+			}
+			gb.SetState((zPendingRestore) ? GCodeState::resuming2 : GCodeState::resuming3);
+#else
+			const bool restoreZ = (gb.GetState() != GCodeState::resuming1 || ms.coords[Z_AXIS] <= ms.GetPauseRestorePoint().moveCoords[Z_AXIS]);
 			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 			{
-				if (   ms.currentUserPosition[axis] != ms.pauseRestorePoint.moveCoords[axis]
+				if (   ms.currentUserPosition[axis] != ms.GetPauseRestorePoint().moveCoords[axis]
 					&& (restoreZ || axis != Z_AXIS)
 				   )
 				{
-#if SUPPORT_ASYNC_MOVES
-					axesToAllocate.SetBit(axis);
-#else
-					ms.currentUserPosition[axis] = ms.pauseRestorePoint.moveCoords[axis];
-#endif
+					ms.currentUserPosition[axis] = ms.GetPauseRestorePoint().moveCoords[axis];
 					if (platform.IsAxisLinear(axis))
 					{
 						ms.linearAxesMentioned = true;
@@ -549,32 +591,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				}
 			}
 
-#if SUPPORT_ASYNC_MOVES
-			try
-			{
-				AllocateAxes(gb, ms, axesToAllocate, ParameterLettersBitmap());
-			}
-			catch (const GCodeException& exc)
-			{
-				// We failed to allocate the axes that we need. This should not happen because the call to LockAllMovementSystemsAndWaitForStandstill should have released all axes.
-				gb.LatestMachineState().SetError(exc);
-				gb.SetState(GCodeState::normal);
-				break;
-			}
-
-			// AllocateAxes updates the user coordinates, so we need to set them up here not earlier
-			for (size_t axis = 0; axis < numVisibleAxes; ++axis)
-			{
-				if (axesToAllocate.IsBitSet(axis))
-				{
-					ms.currentUserPosition[axis] = ms.pauseRestorePoint.moveCoords[axis];
-				}
-			}
-#endif
 			ToolOffsetTransform(ms);
 			ms.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
 			gb.SetState((restoreZ) ? GCodeState::resuming3 : GCodeState::resuming2);
 			NewSingleSegmentMoveAvailable(ms);
+#endif
 		}
 		break;
 
@@ -583,18 +604,48 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		{
 			// We no longer restore the paused fan speeds automatically on resuming, because that messes up the print cooling fan speed if a tool change has been done
 			// They can be restored manually in resume.g if required
-			ms.moveStartVirtualExtruderPosition = ms.latestVirtualExtruderPosition = ms.pauseRestorePoint.virtualExtruderPosition;			// reset the extruder position in case we are receiving absolute extruder moves
-			FileGCode()->LatestMachineState().feedRate = ms.pauseRestorePoint.feedRate;
-			ms.moveFractionToSkip = ms.pauseRestorePoint.proportionDone;
-			ms.restartInitialUserC0 = ms.pauseRestorePoint.initialUserC0;
-			ms.restartInitialUserC1 = ms.pauseRestorePoint.initialUserC1;
-			reply.copy("Printing resumed");
-			platform.Message(LogWarn, "Printing resumed\n");
-			pauseState = PauseState::notPaused;
+#if SUPPORT_ASYNC_MOVES
+			FilePosition earliestFileOffset = 0;				// initialisation needed only to suppress compiler warning
+			for (MovementState& tempMs : moveStates)
+			{
+				tempMs.ReleaseNonToolAxesAndExtruders();
+				tempMs.ResumeAfterPause();
+				if (tempMs.GetMsNumber() == 0 || tempMs.GetPauseRestorePoint().filePos < earliestFileOffset)
+				{
+					earliestFileOffset = tempMs.GetPauseRestorePoint().filePos;
+				}
+				if (tempMs.GetMsNumber() == 0 || !FileGCode()->ExecutingAll())
+				{
+					GCodeBuffer* fgb = GetFileGCode(tempMs.GetMsNumber());
+					fgb->LatestMachineState().feedRate = tempMs.GetPauseRestorePoint().feedRate;
+					if (tempMs.pausedInMacro)
+					{
+						fgb->OriginalMachineState().firstCommandAfterRestart = true;
+					}
+				}
+			}
+
+			// If the file input stream has been forked then we are good to go.
+			// If File is executing both streams then we need to restart it from the earliest offset and using the movement system that was active at that point.
+			if (FileGCode()->ExecutingAll())
+			{
+				FileGCode()->RestartFrom(earliestFileOffset);
+				const MovementSystemNumber msNumber = (moveStates[0].GetPauseRestorePoint().filePos > earliestFileOffset) ? 1
+														: (moveStates[1].GetPauseRestorePoint().filePos > earliestFileOffset) ? 0
+															: pausedMovementSystemNumber;
+				FileGCode()->SetActiveQueueNumber(msNumber);
+			}
+#else
+			ms.ResumeAfterPause();
+			FileGCode()->LatestMachineState().feedRate = ms.GetPauseRestorePoint().feedRate;
 			if (ms.pausedInMacro)
 			{
 				FileGCode()->OriginalMachineState().firstCommandAfterRestart = true;
 			}
+#endif
+			reply.copy("Printing resumed");
+			platform.Message(LogWarn, "Printing resumed\n");
+			pauseState = PauseState::notPaused;
 			gb.SetState(GCodeState::normal);
 		}
 		break;

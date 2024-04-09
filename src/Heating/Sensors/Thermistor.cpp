@@ -21,13 +21,12 @@
 #endif
 
 #include <AnalogIn.h>
-using
+
 #if SAME5x
-	AnalogIn
+constexpr unsigned int AdcBits = AnalogIn::AdcBits;
 #else
-	LegacyAnalogIn
+constexpr unsigned int AdcBits = LegacyAnalogIn::AdcBits;
 #endif
-	::AdcBits;
 
 // For the theory behind ADC oversampling, see http://www.atmel.com/Images/doc8003.pdf
 static constexpr unsigned int AdcOversampleBits = 2;							// we use 2-bit oversampling

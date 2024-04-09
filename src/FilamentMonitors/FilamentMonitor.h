@@ -176,6 +176,7 @@ private:
 
 #if SUPPORT_REMOTE_COMMANDS
 	static constexpr uint32_t StatusUpdateInterval = 2000;				// how often we send status reports when there isn't a change
+	static constexpr uint32_t LiveStatusUpdateInterval = 250;			// how often we report live status
 	static uint32_t whenStatusLastSent;
 	static size_t firstDriveToSend;
 #endif

@@ -1160,6 +1160,7 @@ void StringParser::ResetIndentationAfterPop() noexcept
 	}
 }
 
+// Flag this command as completed
 void StringParser::SetFinished() noexcept
 {
 	if (commandEnd < gcodeLineEnd)

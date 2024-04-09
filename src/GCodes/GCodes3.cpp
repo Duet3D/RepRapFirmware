@@ -61,6 +61,7 @@ GCodeResult GCodes::SavePosition(GCodeBuffer& gb, const StringRef& reply) THROWS
 }
 
 // This handles G92. Return true if completed, false if it needs to be called again.
+// Note, in the NIST specification G53 doesn't affect how G92 is interpreted.
 GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 #if SUPPORT_COORDINATE_ROTATION
@@ -193,8 +194,6 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 	return GCodeResult::ok;
 }
 
-#if SUPPORT_WORKPLACE_COORDINATES
-
 // Set workspace coordinates
 GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute)
 {
@@ -251,7 +250,7 @@ GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef&
 	return GCodeResult::ok;
 }
 
-# if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Save all the workplace coordinate offsets to file returning true if successful. Used by M500 and by SaveResumeInfo.
 bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const noexcept
@@ -279,9 +278,6 @@ bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const noexcept
 }
 
 #endif
-
-#endif
-
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
@@ -1298,6 +1294,7 @@ GCodeResult GCodes::HandleG68(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 		}
 #endif
 		UpdateCurrentUserPosition(gb);
+		reprap.MoveUpdated();
 	}
 	return GCodeResult::ok;
 }

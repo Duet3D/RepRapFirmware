@@ -17,6 +17,7 @@
 #include <GCodes/SimulationMode.h>
 
 # define DDA_LOG_PROBE_CHANGES	0
+# define DDA_DEBUG_STEP_COUNT	0
 
 class DDARing;
 class LinearDeltaKinematics;

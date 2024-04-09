@@ -56,7 +56,6 @@ constexpr uint32_t IAP_IMAGE_START = 0x20038000;
 #define SUPPORT_IOBITS			1					// set to support P parameter in G0/G1 commands
 #define SUPPORT_DHT_SENSOR		1					// set nonzero to support DHT temperature/humidity sensors (requires RTOS)
 #define SUPPORT_BME280			1
-#define SUPPORT_WORKPLACE_COORDINATES	1			// set nonzero to support G10 L2 and G53..59
 #define SUPPORT_12864_LCD		1					// set nonzero to support 12864 LCD and rotary encoder
 #define SUPPORT_ACCELEROMETERS	1
 #define SUPPORT_OBJECT_MODEL	1
@@ -491,7 +490,7 @@ constexpr DmaChannel DmacChanSbcTx = 0;
 constexpr DmaChannel DmacChanSbcRx = 1;
 constexpr DmaChannel DmacChanWiFiTx = 2;
 constexpr DmaChannel DmacChanWiFiRx = 3;
-constexpr DmaChannel DmacChanDotStarTx = 4;
+constexpr DmaChannel DmacChanLedTx = 4;
 constexpr DmaChannel DmacChanTmcTx = 5;
 constexpr DmaChannel DmacChanTmcRx = 6;
 
@@ -503,7 +502,7 @@ constexpr DmaPriority DmacPrioTmcTx = 0;
 constexpr DmaPriority DmacPrioTmcRx = 1;				// the baud rate is 100kbps so this is not very critical
 constexpr DmaPriority DmacPrioWiFi = 2;					// high speed SPI in slave mode
 constexpr DmaPriority DmacPrioSbc = 2;					// high speed SPI in slave mode
-constexpr DmaPriority DmacPrioDotStar = 1;				// QSPI in master mode
+constexpr DmaPriority DmacPrioLed = 1;				// QSPI in master mode
 
 // Timer allocation
 // TC2 and TC3 are used for step pulse generation and software timers

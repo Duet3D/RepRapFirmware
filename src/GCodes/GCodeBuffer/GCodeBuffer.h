@@ -156,6 +156,7 @@ public:
 	bool Executing() const noexcept { return machineState->Executing(); }	// Return true if this GCodeBuffer for executing commands addressed to the current queue
 	bool ExecutingAll() const noexcept { return machineState->ExecutingAll(); }
 	size_t GetQueueNumberToLock() const noexcept { return machineState->GetQueueNumberToLock(); }
+	void ForkFrom(const GCodeBuffer& other) noexcept;
 #endif
 
 	void SetCommsProperties(uint32_t arg) noexcept;

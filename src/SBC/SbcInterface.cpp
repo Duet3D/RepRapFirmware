@@ -364,16 +364,6 @@ void SbcInterface::ExchangeData() noexcept
 			break;
 		}
 
-		// Set value in the object model
-		case SbcRequest::SetObjectModel:
-		{
-			const size_t dataLength = packet->length;
-			const char * const data = transfer.ReadData(dataLength);
-			// TODO implement this
-			(void)data;
-			break;
-		}
-
 		// Print is about to be started, set file print info
 		case SbcRequest::SetPrintFileInfo:
 		{

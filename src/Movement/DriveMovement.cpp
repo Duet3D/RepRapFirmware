@@ -165,7 +165,7 @@ MoveSegment *DriveMovement::NewDeltaSegment() noexcept
 			// If there is no reversal then reverseStartStep is set to totalSteps + 1, so netStepsAtEnd must again be less than reverseStartStep.
 			if (netStepsAtEnd >= reverseStartStep)
 			{
-				netStepsAtEnd = reverseStartStep - 1;							// correct the rounding error - we know that reverseStartStep cannot be 0 so subtracting 1 is safe
+				netStepsAtEnd = reverseStartStep - 1;								// correct the rounding error - we know that reverseStartStep cannot be 0 so subtracting 1 is safe
 			}
 
 			if (!direction)
@@ -173,10 +173,10 @@ MoveSegment *DriveMovement::NewDeltaSegment() noexcept
 				// We are going down so any reversal has already happened
 				state = DMState::deltaNormal;
 				segmentStepLimit = (nextStep >= reverseStartStep)
-									? (2 * reverseStartStep) - netStepsAtEnd	// we went up (reverseStartStep-1) steps, now we are going down to netStepsAtEnd
-										: -netStepsAtEnd;						// we are just going down to netStepsAtEnd
+									? (2 * reverseStartStep) - netStepsAtEnd + 1	// we went up (reverseStartStep-1) steps, now we are going down to netStepsAtEnd
+										: -netStepsAtEnd + 1;						// we are just going down to netStepsAtEnd
 			}
-			else if (distanceSoFar <= mp.delta.reverseStartDistance)
+			else if (reverseStartStep > totalSteps || distanceSoFar <= mp.delta.reverseStartDistance)
 			{
 				// This segment is purely upwards motion of the tower
 				state = DMState::deltaNormal;
@@ -185,7 +185,7 @@ MoveSegment *DriveMovement::NewDeltaSegment() noexcept
 			else
 			{
 				// This segment ends with reverse motion
-				segmentStepLimit = (2 * reverseStartStep) - netStepsAtEnd;
+				segmentStepLimit = (2 * reverseStartStep) - netStepsAtEnd + 1;
 				state = DMState::deltaForwardsReversing;
 			}
 		}
@@ -340,6 +340,7 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 	mp.delta.fHmz0s = h0MinusZ0 * stepsPerMm;
 	mp.delta.fMinusAaPlusBbTimesS = -(aAplusbB * stepsPerMm);
 	mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared = dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm);
+	reverseStartStep = totalSteps + 1;						// set up the default
 
 	// Calculate the distance at which we need to reverse direction.
 	if (params.a2plusb2 <= 0.0)
@@ -347,7 +348,6 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 		// Pure Z movement. We can't use the main calculation because it divides by params.a2plusb2.
 		direction = (dda.directionVector[Z_AXIS] >= 0.0);
 		mp.delta.reverseStartDistance = (direction) ? dda.totalDistance + 1.0 : -1.0;	// so that we never reverse and NewDeltaSegment knows which way we are going
-		reverseStartStep = totalSteps + 1;
 	}
 	else
 	{
@@ -359,13 +359,11 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 		if (drev <= 0.0)
 		{
 			// No reversal, going down
-			reverseStartStep = totalSteps + 1;
 			direction = false;
 		}
 		else if (drev >= dda.totalDistance)
 		{
 			// No reversal, going up
-			reverseStartStep = totalSteps + 1;
 			direction = true;
 		}
 		else																	// the reversal point is within range
@@ -378,14 +376,14 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 			// However, we could be going up by a whole step due to rounding, so we need to check the direction
 			if (numStepsUp < 1)
 			{
-				if (direction)
+				if (direction)													// if the overall movement is up
 				{
-					mp.delta.reverseStartDistance = dda.totalDistance + 1.0;	// indicate that there is no reversal
+					// totalSteps must be 1
+					mp.delta.reverseStartDistance = dda.totalDistance + 1.0;	// indicate that there is no reversal, we're just going up 1 step
 				}
-				else
+				else															// overall movement is down, jusr skip the up bit
 				{
 					mp.delta.reverseStartDistance = -1.0;						// so that we know we have reversed already
-					reverseStartStep = totalSteps + 1;
 				}
 			}
 			else if (direction && numStepsUp <= totalSteps)
@@ -394,7 +392,6 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 				// If numStepsUp < totalSteps then there has been a rounding error, because we are supposed to move up more than the calculated number of steps we move up.
 				// This can happen if the calculated reversal is very close to the end of the move, because we round the final step positions to the nearest step, which may be up.
 				// Either way, don't do a reverse segment.
-				reverseStartStep = totalSteps + 1;
 				mp.delta.reverseStartDistance = dda.totalDistance + 1.0;
 			}
 			else
@@ -415,6 +412,12 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 				}
 			}
 		}
+	}
+
+	// At this point we may have totalSteps = 0. In this case we must cancel the move, because the code always takes the first step.
+	if (totalSteps == 0)
+	{
+		return false;
 	}
 
 	distanceSoFar = 0.0;
@@ -595,7 +598,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		}
 		else
 		{
-			if (reverseStartStep < segmentStepLimit && nextStep < reverseStartStep)
+			if (reverseStartStep < segmentStepLimit && nextStep <= reverseStartStep)
 			{
 				stepsToLimit = reverseStartStep - nextStep;
 			}
@@ -666,7 +669,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	case DMState::deltaNormal:
 		// Calculate d*s where d = distance the head has travelled, s = steps/mm for this drive
 		{
-			const float steps = (float)(1u << shiftFactor);
+			const float steps = (float)(stepsTillRecalc + 1);
 			if (direction)
 			{
 				mp.delta.fHmz0s += steps;						// get new carriage height above Z in steps
@@ -686,6 +689,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			// Now feed ds into the step algorithm for Cartesian motion
 			if (ds < 0.0)
 			{
+//				debugPrintf("step err2\n");
 				state = DMState::stepError2;
 				return false;
 			}
@@ -705,9 +709,8 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 #if 0	//DEBUG
 	if (std::isnan(nextCalcStepTime) || nextCalcStepTime < 0.0)
 	{
-		state = DMState::stepError;
-		nextStep += 140000000 + stepsTillRecalc;			// so we can tell what happened in the debug print
-		distanceSoFar = nextCalcStepTime;					//DEBUG
+//		debugPrintf("step err3\n");
+		state = DMState::stepError3;
 		return false;
 	}
 #endif
@@ -719,23 +722,13 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// The calculation makes this step late.
 		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
 		// So if this is the last step and it is late, bring it forward to the expected finish time.
-		// Very rarely on a delta, the penultimate step may also be calculated late. Allow for that here in case it affects Cartesian axes too.
-		// 2023-12-06: we now allow any step to be late but we record the maximum number
-		// Don't use totalSteps here because it isn't valid for extruders
-		if (segments->GetNext() == nullptr)
-		{
-			iNextCalcStepTime = segments->GetDuration();
-			const int32_t nextCalcStep = nextStep + (int32_t)stepsTillRecalc;
-			const int32_t stepsLate = segmentStepLimit - nextCalcStep;
-			if (stepsLate > maxStepsLate) { maxStepsLate = stepsLate; }
-		}
-		else
-		{
-			// We don't expect any segment except the last to have late steps
-			state = DMState::stepError3;
-			stepInterval = iNextCalcStepTime;				//DEBUG
-			return false;
-		}
+		// 2023-12-06: we now allow any step to be late but we record the maximum number.
+		// 2024-040-5: we now allow steps to be late on any segment, not just the last one, because a segment may be 0 or 1 step long and on deltas the last 2 steps may be calculated late.
+		// Note, totalSteps isn't valid for extruders
+		iNextCalcStepTime = dda.clocksNeeded;
+		const int32_t nextCalcStep = nextStep + (int32_t)stepsTillRecalc;
+		const int32_t stepsLate = ((isExtruder) ? segmentStepLimit : totalSteps) - nextCalcStep;
+		if (stepsLate > maxStepsLate) { maxStepsLate = stepsLate; }
 	}
 
 	if (nextStep == 1)
@@ -754,7 +747,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		{
 			if (interval < minStepInterval) { minStepInterval = interval; }
 #if 1	//DEBUG
-			if (interval < -100)
+			if (interval < -20)
 			{
 				debugPrintf("Bad interval %" PRIi32 " dr=%u, ns=%" PRIi32 "\n", interval, drive, nextStep);
 				DebugPrint();

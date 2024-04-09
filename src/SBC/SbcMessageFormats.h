@@ -244,7 +244,7 @@ enum class SbcRequest : uint16_t
     Reset = 1,									// Reset the controller
     Code = 2,									// Request execution of a G/M/T-code
     GetObjectModel = 3,							// Request a part of the machine's object model
-    SetObjectModel = 4,							// Set a value in the machine's object model
+    SetObjectModel_deprecated = 4,				// Set a value in the machine's object model (never implemented)
 	SetPrintFileInfo = 5,						// Print is about to be started, set file print information
     PrintStopped = 6,							// Print has been stopped, reset file print information
     MacroCompleted = 7,							// Notification that a macro file has been fully processed

@@ -17,13 +17,12 @@
 #include <AnalogOut.h>
 #include <Interrupts.h>
 #include <AnalogIn.h>
-using
+
 #if SAME5x
-	AnalogIn
+constexpr unsigned int AdcBits = AnalogIn::AdcBits;
 #else
-	LegacyAnalogIn
+constexpr unsigned int AdcBits = LegacyAnalogIn::AdcBits;
 #endif
-	::AdcBits;
 
 #if SUPPORT_CAN_EXPANSION
 # include <CanId.h>
