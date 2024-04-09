@@ -24,9 +24,19 @@ void DhtDataTransition(CallbackParameter cp) noexcept
 	static_cast<DhtTemperatureSensor*>(cp.vp)->Interrupt();
 }
 
+static const char *GetLongSensorTypeName(DhtSensorType t) noexcept
+{
+	switch (t)
+	{
+	case DhtSensorType::Dht21:			return "DHT21-temperature";
+	case DhtSensorType::Dht22:			return "DHT22-temperature";
+	default:							return "DHT-unknown";
+	}
+}
+
 // Class DhtTemperatureSensor members
 DhtTemperatureSensor::DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType t) noexcept
-	: SensorWithPort(sensorNum, "DHT-temperature"), lastReadingAttemptTime(0), type(t)
+	: SensorWithPort(sensorNum, GetLongSensorTypeName(t)), lastReadingAttemptTime(0), type(t)
 {
 }
 
@@ -80,7 +90,7 @@ GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& re
 	}
 #endif
 
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
 
 	// It's a new sensor
 	if (gb.Seen('Y'))
@@ -91,51 +101,34 @@ GCodeResult DhtTemperatureSensor::Configure(GCodeBuffer& gb, const StringRef& re
 
 	if (!changed)
 	{
-#if SAME5x
-		reply.printf("Sensor %u", GetSensorNumber());
-		if (GetSensorName() != nullptr)
-		{
-			reply.catf(" (%s)", GetSensorName());
-		}
-		reply.catf(" type %s using pins ", GetSensorType());
-		const IoPort* const portAddrs[] = { &port, &interruptPort };
-		IoPort::AppendPinNames(reply, 2, portAddrs);
-		reply.catf(", reading %.1f, last error: %s", (double)GetStoredReading(), GetLastError().ToString());
-#else
 		CopyBasicDetails(reply);
-#endif
-
-		const char *sensorTypeString;
-		switch (type)
-		{
-		case DhtSensorType::Dht21:
-			sensorTypeString = "DHT21";
-			break;
-		case DhtSensorType::Dht22:
-			sensorTypeString = "DHT22";
-			break;
-		default:
-			sensorTypeString = "unknown";
-			break;
-		}
-		reply.catf(", sensor type %s", sensorTypeString);
 	}
 
 	return GCodeResult::ok;
 }
 
-TemperatureError DhtTemperatureSensor::GetLatestTemperature(float &t, uint8_t outputNumber) noexcept
+#if SAME5x
+
+// SAME5x may need two pins so we override this function
+void DhtTemperatureSensor::AppendPinDetails(const StringRef& reply) const noexcept
 {
-	if (outputNumber > 1)
+	reply.cat(" using pins ");
+	const IoPort* const portAddrs[] = { &port, &interruptPort };
+	IoPort::AppendPinNames(reply, 2, portAddrs);
+}
+
+#endif
+
+TemperatureError DhtTemperatureSensor::GetAdditionalOutput(float &t, uint8_t outputNumber) noexcept
+{
+	if (outputNumber != 1)
 	{
 		t = BadErrorTemperature;
 		return TemperatureError::invalidOutputNumber;
 	}
+
 	const auto result = TemperatureSensor::GetLatestTemperature(t);
-	if (outputNumber == 1)
-	{
-		t = lastHumidity;
-	}
+	t = lastHumidity;
 	return result;
 }
 

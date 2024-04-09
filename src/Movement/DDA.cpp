@@ -292,13 +292,6 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 					}
 				}
 			}
-
-#if 0	// debug only
-			if (delta != 0)
-			{
-				stepsRequested[drive] += labs(delta);
-			}
-#endif
 		}
 		else if (LogicalDriveToExtruder(drive) < reprap.GetGCodes().GetNumExtruders())
 		{
@@ -628,6 +621,17 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	params.decelClocks = msg.decelClocks;
 	clocksNeeded = msg.accelerationClocks + msg.steadyClocks + msg.decelClocks;
 
+	// We occasionally receive a message with zero clocks needed. This messes up the calculations, so add one steady clock in this case.
+	if (clocksNeeded == 0)
+	{
+		clocksNeeded = params.steadyClocks = 1;
+	}
+
+	// Set up the plan
+	segments = nullptr;
+	reprap.GetMove().GetAxisShaper().GetRemoteSegments(*this, params);
+
+	activeDMs = completedDMs = nullptr;
 	afterPrepare.drivesMoving.Clear();
 	Move& move = reprap.GetMove();
 
@@ -919,7 +923,31 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 	if (beforePrepare.accelDistance + beforePrepare.decelDistance < totalDistance)
 	{
 		// This move reaches its top speed
-		topSpeed = requestedSpeed;
+		// It sometimes happens that we get a very short acceleration or deceleration segment. Remove any such segments by reducing the top speed to the start or end speed.
+		if (startSpeed >= endSpeed)
+		{
+			if (startSpeed + acceleration * MinimumAccelOrDecelClocks > requestedSpeed)
+			{
+				topSpeed = startSpeed;
+				beforePrepare.accelDistance = 0.0;
+			}
+			else
+			{
+				topSpeed = requestedSpeed;
+			}
+		}
+		else
+		{
+			if (endSpeed + deceleration * MinimumAccelOrDecelClocks > requestedSpeed)
+			{
+				topSpeed = endSpeed;
+				beforePrepare.decelDistance = 0.0;
+			}
+			else
+			{
+				topSpeed = requestedSpeed;
+			}
+		}
 	}
 	else
 	{
@@ -1149,7 +1177,14 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 				// On a delta we need to move all towers even if some of them have no net movement
 				platform.EnableDrivers(drive, false);
 				const int32_t delta = endPoint[drive] - prev->endPoint[drive];
-				if (platform.GetDriversBitmap(drive) != 0)						// if any of the drives is local
+# if DDA_DEBUG_STEP_COUNT
+				stepsRequested[drive] += delta;
+# endif
+				if (platform.GetDriversBitmap(drive) != 0						// if any of the drives is local
+# if SUPPORT_CAN_EXPANSION
+						|| flags.checkEndstops									// if checking endstops, create a DM even if there are no local drives involved
+# endif
+				   )
 				{
 					move.AddDeltaSegments(*this, drive, afterPrepare.moveStartTime, params, delta, true);
 				}
@@ -1175,6 +1210,9 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 				int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (delta != 0)
 				{
+#if DDA_DEBUG_STEP_COUNT
+					stepsRequested[drive] += delta;
+#endif
 					platform.EnableDrivers(drive, false);
 					if (flags.continuousRotationShortcut && reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
 					{

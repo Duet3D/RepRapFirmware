@@ -81,23 +81,6 @@ void SbcInterface::Init() noexcept
 	}
 }
 
-void SbcInterface::Spin() noexcept
-{
-	state = transfer.DoTransfer();
-	if (state == TransferState::connectionTimeout || (lastTransferTime != 0 && millis() - lastTransferTime > SpiTransferTimeout) ||
-		state == TransferState::connectionReset || state == TransferState::finished)
-	{
-		// Don't process anything, just kick off the next transfer to report we're operating in standalone mode
-		transfer.ResetConnection(true);
-		lastTransferTime = 0;
-	}
-	else if (state == TransferState::doingPartialTransfer && lastTransferTime == 0)
-	{
-		// Make sure the full transfer is restarted if a timeout occurs
-		lastTransferTime = millis();
-	}
-}
-
 [[noreturn]] void SbcInterface::TaskLoop() noexcept
 {
 	transfer.InitFromTask();
@@ -235,65 +218,78 @@ void SbcInterface::ExchangeData() noexcept
 
 			const CodeHeader *code = reinterpret_cast<const CodeHeader*>(transfer.ReadData(packet->length));
 			const GCodeChannel channel(code->channel);
-			GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
-			if (gb->IsInvalidated())
+			if (channel.IsValid())
 			{
-				// Don't deal with codes that will be thrown away
-				break;
-			}
-
-			// Check if a GB is waiting for a macro file to be started
-			if (gb->IsWaitingForMacro() && !gb->IsMacroRequestPending())
-			{
-				gb->ResolveMacroRequest(false, false);
-#ifdef TRACK_FILE_CODES
-				if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
+				GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+				if (gb == nullptr)
 				{
-					fileMacrosRunning++;
+					REPORT_INTERNAL_ERROR;
+					break;
 				}
+
+				if (gb->IsInvalidated())
+				{
+					// Don't deal with codes that will be thrown away
+					break;
+				}
+
+				// Check if a GB is waiting for a macro file to be started
+				if (gb->IsWaitingForMacro() && !gb->IsMacroRequestPending())
+				{
+					gb->ResolveMacroRequest(false, false);
+#ifdef TRACK_FILE_CODES
+					if (gb->IsFileChannel())
+					{
+						fileMacrosRunning++;
+					}
 #endif
-			}
+				}
 
-			// Don't process any more codes if we failed to store them last time...
-			if (!codeBufferAvailable)
-			{
-				packetAcknowledged = false;
-				break;
-			}
+				// Don't process any more codes if we failed to store them last time...
+				if (!codeBufferAvailable)
+				{
+					packetAcknowledged = false;
+					break;
+				}
 
-			TaskCriticalSectionLocker locker;
+				TaskCriticalSectionLocker locker;
 
-			// Make sure no existing codes are overwritten
-			uint16_t bufferedCodeSize = sizeof(BufferedCodeHeader) + packet->length;
-			if ((txEnd == 0 && bufferedCodeSize > max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer)) ||
-				(txEnd != 0 && bufferedCodeSize > rxPointer - txPointer))
-			{
+				// Make sure no existing codes are overwritten
+				uint16_t bufferedCodeSize = sizeof(BufferedCodeHeader) + packet->length;
+				if ((txEnd == 0 && bufferedCodeSize > max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer)) ||
+						(txEnd != 0 && bufferedCodeSize > rxPointer - txPointer))
+				{
 #if false
-				// This isn't enabled because the debug call plus critical section would lead to software resets
-				debugPrintf("Failed to store code, RX/TX %d/%d-%d\n", rxPointer, txPointer, txEnd);
+					// This isn't enabled because the debug call plus critical section would lead to software resets
+					debugPrintf("Failed to store code, RX/TX %d/%d-%d\n", rxPointer, txPointer, txEnd);
 #endif
-				packetAcknowledged = codeBufferAvailable = false;
-				break;
-			}
+					packetAcknowledged = codeBufferAvailable = false;
+					break;
+				}
 
-			// Overlap if necessary
-			if (txPointer + bufferedCodeSize > SpiCodeBufferSize)
+				// Overlap if necessary
+				if (txPointer + bufferedCodeSize > SpiCodeBufferSize)
+				{
+					txEnd = txPointer;
+					txPointer = 0;
+				}
+
+				// Store the buffer header
+				BufferedCodeHeader *bufHeader = reinterpret_cast<BufferedCodeHeader *>(codeBuffer + txPointer);
+				bufHeader->isPending = true;
+				bufHeader->length = packet->length;
+
+				// Store the corresponding code. Binary codes are always aligned on a 4-byte boundary
+				uint32_t *dst = reinterpret_cast<uint32_t *>(codeBuffer + txPointer + sizeof(BufferedCodeHeader));
+				const uint32_t *src = reinterpret_cast<const uint32_t *>(code);
+				memcpyu32(dst, src, packet->length / sizeof(uint32_t));
+				txPointer += bufferedCodeSize;
+				sendBufferUpdate = true;
+			}
+			else
 			{
-				txEnd = txPointer;
-				txPointer = 0;
+				REPORT_INTERNAL_ERROR;
 			}
-
-			// Store the buffer header
-			BufferedCodeHeader *bufHeader = reinterpret_cast<BufferedCodeHeader *>(codeBuffer + txPointer);
-			bufHeader->isPending = true;
-			bufHeader->length = packet->length;
-
-			// Store the corresponding code. Binary codes are always aligned on a 4-byte boundary
-			uint32_t *dst = reinterpret_cast<uint32_t *>(codeBuffer + txPointer + sizeof(BufferedCodeHeader));
-			const uint32_t *src = reinterpret_cast<const uint32_t *>(code);
-			memcpyu32(dst, src, packet->length / sizeof(uint32_t));
-			txPointer += bufferedCodeSize;
-			sendBufferUpdate = true;
 			break;
 		}
 
@@ -351,16 +347,6 @@ void SbcInterface::ExchangeData() noexcept
 			break;
 		}
 
-		// Set value in the object model
-		case SbcRequest::SetObjectModel:
-		{
-			const size_t dataLength = packet->length;
-			const char * const data = transfer.ReadData(dataLength);
-			// TODO implement this
-			(void)data;
-			break;
-		}
-
 		// Print is about to be started, set file print info
 		case SbcRequest::SetPrintFileInfo:
 		{
@@ -379,19 +365,27 @@ void SbcInterface::ExchangeData() noexcept
 				// Stop the print with the given reason
 				printAborted = true;
 				InvalidateBufferedCodes(GCodeChannel::File);
+#if SUPPORT_ASYNC_MOVES
 				InvalidateBufferedCodes(GCodeChannel::File2);
+#endif
 			}
 			else
 			{
 				// Just mark the print files as finished
 				GCodeBuffer * const fileGb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File);
-				GCodeBuffer * const file2Gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File2);
 				MutexLocker fileLocker(fileGb->mutex, SbcYieldTimeout);
+#if SUPPORT_ASYNC_MOVES
+				GCodeBuffer * const file2Gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel::File2);
 				MutexLocker file2Locker(file2Gb->mutex, SbcYieldTimeout);
 				if (fileLocker.IsAcquired() && file2Locker.IsAcquired())
+#else
+				if (fileLocker.IsAcquired())
+#endif
 				{
 					fileGb->SetPrintFinished();
+#if SUPPORT_ASYNC_MOVES
 					file2Gb->SetPrintFinished();
+#endif
 				}
 				else
 				{
@@ -409,6 +403,12 @@ void SbcInterface::ExchangeData() noexcept
 			if (channel.IsValid())
 			{
 				GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+				if (gb == nullptr)
+				{
+					REPORT_INTERNAL_ERROR;
+					break;
+				}
+
 				if (gb->IsWaitingForMacro() && !gb->IsMacroRequestPending())
 				{
 					gb->ResolveMacroRequest(error, true);
@@ -431,7 +431,7 @@ void SbcInterface::ExchangeData() noexcept
 						else
 						{
 #ifdef TRACK_FILE_CODES
-							if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
+							if (gb->IsFileChannel())
 							{
 								fileMacrosClosing++;
 							}
@@ -464,6 +464,12 @@ void SbcInterface::ExchangeData() noexcept
 			if (channel.IsValid())
 			{
 				GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+				if (gb == nullptr)
+				{
+					REPORT_INTERNAL_ERROR;
+					break;
+				}
+
 				MutexLocker locker(gb->mutex, SbcYieldTimeout);
 				if (locker.IsAcquired() && reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(*gb))
 				{
@@ -488,6 +494,12 @@ void SbcInterface::ExchangeData() noexcept
 			if (channel.IsValid())
 			{
 				GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+				if (gb == nullptr)
+				{
+					REPORT_INTERNAL_ERROR;
+					break;
+				}
+
 				MutexLocker locker(gb->mutex, SbcYieldTimeout);
 				if (locker.IsAcquired())
 				{
@@ -532,13 +544,18 @@ void SbcInterface::ExchangeData() noexcept
 			if (channel.IsValid())
 			{
 				GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+				if (gb == nullptr)
+				{
+					REPORT_INTERNAL_ERROR;
+					break;
+				}
 
 				// If there is a macro file waiting, the first instruction must be conditional. Don't block any longer...
 				if (gb->IsWaitingForMacro())
 				{
 					gb->ResolveMacroRequest(false, false);
 #ifdef TRACK_FILE_CODES
-					if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
+					if (gb->IsFileChannel())
 					{
 						fileMacrosRunning++;
 					}
@@ -624,12 +641,18 @@ void SbcInterface::ExchangeData() noexcept
 			if (channel.IsValid())
 			{
 				GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+				if (gb == nullptr)
+				{
+					REPORT_INTERNAL_ERROR;
+					break;
+				}
+
 				if (gb->IsWaitingForMacro() && !gb->IsMacroRequestPending())
 				{
 					// File exists and is open, but no code has arrived yet
 					gb->ResolveMacroRequest(false, false);
 #ifdef TRACK_FILE_CODES
-					if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
+					if (gb->IsFileChannel())
 					{
 						fileMacrosRunning++;
 					}
@@ -659,6 +682,12 @@ void SbcInterface::ExchangeData() noexcept
 			if (channel.IsValid())
 			{
 				GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+				if (gb == nullptr)
+				{
+					REPORT_INTERNAL_ERROR;
+					break;
+				}
+
 				if (gb->IsWaitingForMacro())
 				{
 					gb->ResolveMacroRequest(true, false);
@@ -699,6 +728,12 @@ void SbcInterface::ExchangeData() noexcept
 			}
 
 			GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+			if (gb == nullptr)
+			{
+				REPORT_INTERNAL_ERROR;
+				break;
+			}
+
 			MutexLocker lock(gb->mutex, SbcYieldTimeout);
 			if (!lock.IsAcquired())
 			{
@@ -858,6 +893,12 @@ void SbcInterface::ExchangeData() noexcept
 			}
 
 			GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+			if (gb == nullptr)
+			{
+				REPORT_INTERNAL_ERROR;
+				break;
+			}
+
 			MutexLocker lock(gb->mutex, SbcYieldTimeout);
 			if (!lock.IsAcquired())
 			{
@@ -1088,6 +1129,11 @@ void SbcInterface::ExchangeData() noexcept
 	{
 		const GCodeChannel channel(i);
 		GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(channel);
+		if (gb == nullptr)
+		{
+			// Skip GBs that are not available due to the build configuration
+			continue;
+		}
 
 		// Invalidate buffered codes if required
 		if (gb->IsInvalidated())
@@ -1134,7 +1180,7 @@ void SbcInterface::ExchangeData() noexcept
 				if (gb->IsAbortRequested() && transfer.WriteAbortFileRequest(channel, gb->IsAbortAllRequested()))
 				{
 #ifdef TRACK_FILE_CODES
-					if (channel == GCodeChannel::File || channel == GCodeChannel::File2)
+					if (gb->IsFileChannel())
 					{
 						if (gb->IsAbortAllRequested())
 						{
@@ -1286,7 +1332,13 @@ void SbcInterface::InvalidateResources() noexcept
 	// Close all open G-code files
 	for (size_t i = 0; i < NumGCodeChannels; i++)
 	{
-		GCodeBuffer *gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel(i));
+		GCodeBuffer * const gb = reprap.GetGCodes().GetGCodeBuffer(GCodeChannel(i));
+		if (gb == nullptr)
+		{
+			// Skip GBs that are not available due to the build configuration
+			break;
+		}
+
 		if (gb->IsWaitingForMacro())
 		{
 			gb->ResolveMacroRequest(true, false);
@@ -1403,7 +1455,7 @@ bool SbcInterface::FillBuffer(GCodeBuffer &gb) noexcept
 								OutputBuffer *buf;
 								if (OutputBuffer::Allocate(buf))
 								{
-									String<SHORT_GCODE_LENGTH> codeString;
+									String<StringLength100> codeString;
 									gb.PrintCommand(codeString.GetRef());
 									buf->printf("Code %s did not return a code result, delta %d, running macros %d\n", codeString.c_str(), fileCodesRead - fileCodesHandled - fileMacrosRunning, fileMacrosRunning);
 									gcodeReply.Push(buf, WarningMessage);

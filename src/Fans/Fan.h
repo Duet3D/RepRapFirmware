@@ -26,11 +26,10 @@ public:
 
 	virtual ~Fan() noexcept override { }
 	virtual bool Check(bool checkSensors) noexcept = 0;						// update the fan PWM returning true if it is a thermostatic fan that is on
-	virtual GCodeResult SetPwmFrequency(PwmFrequency freq, const StringRef& reply) noexcept = 0;
+	virtual GCodeResult SetFanParameters(bool setFreq, PwmFrequency freq, bool setPpr, float ppr, const StringRef& reply) noexcept = 0;
 	virtual bool IsEnabled() const noexcept = 0;
 	virtual int32_t GetRPM() const noexcept = 0;
 	virtual float GetPwm() const noexcept = 0;
-	virtual PwmFrequency GetPwmFrequency() const noexcept = 0;
 	virtual GCodeResult ReportPortDetails(const StringRef& str) const noexcept = 0;
 #if SUPPORT_CAN_EXPANSION
 	virtual void UpdateFromRemote(CanAddress src, const FanReport& report) noexcept = 0;
@@ -77,6 +76,8 @@ protected:
 	float minVal;
 	float maxVal;
 	float triggerTemperatures[2];
+	float tachoPulsesPerRev;
+	PwmFrequency pwmFreq;
 	uint32_t blipTime;										// how long we blip the fan for, in milliseconds
 	SensorsBitmap sensorsMonitored;
 

@@ -31,6 +31,10 @@ bool SpiTemperatureSensor::ConfigurePort(const CanMessageGenericParser& parser, 
 {
 	const bool ret = SensorWithPort::ConfigurePort(parser, reply, PinAccess::write1, seen);
 	device.SetCsPin(port.GetPin());
+	if (ret)
+	{
+		ConfigureCommonParameters(parser, seen);
+	}
 	return ret;
 }
 

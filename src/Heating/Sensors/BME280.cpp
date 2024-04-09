@@ -664,7 +664,7 @@ GCodeResult BME280TemperatureSensor::Configure(GCodeBuffer &gb, const StringRef 
 	{
 		return GCodeResult::error;
 	}
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
 	return FinishConfiguring(changed, reply);
 }
 
@@ -677,6 +677,7 @@ GCodeResult BME280TemperatureSensor::Configure(const CanMessageGenericParser& pa
 	{
 		return GCodeResult::error;
 	}
+	ConfigureCommonParameters(parser, seen);
 	return FinishConfiguring(seen, reply);
 }
 
@@ -725,22 +726,22 @@ GCodeResult BME280TemperatureSensor::FinishConfiguring(bool changed, const Strin
 	return GCodeResult::ok;
 }
 
-TemperatureError BME280TemperatureSensor::GetLatestTemperature(float &t, uint8_t outputNumber) noexcept
+TemperatureError BME280TemperatureSensor::GetAdditionalOutput(float &t, uint8_t outputNumber) noexcept
 {
-	if (outputNumber > 2)
+	const auto result = TemperatureSensor::GetLatestTemperature(t);
+	switch (outputNumber)
 	{
+	case 1:
+		t = compPressure;
+		break;
+
+	case 2:
+		t = compHumidity;
+		break;
+
+	default:
 		t = BadErrorTemperature;
 		return TemperatureError::invalidOutputNumber;
-	}
-
-	const auto result = TemperatureSensor::GetLatestTemperature(t);
-	if (outputNumber == 1)
-	{
-		t = compPressure;
-	}
-	else if (outputNumber == 2)
-	{
-		t = compHumidity;
 	}
 	return result;
 }

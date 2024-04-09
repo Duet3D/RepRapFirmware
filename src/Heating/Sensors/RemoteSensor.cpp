@@ -32,7 +32,8 @@ RemoteSensor::~RemoteSensor()
 
 GCodeResult RemoteSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
+	ClearAdjustments();											// clear the local offset and slope adjustments because the remote sensor will apply them
 	CanMessageGenericConstructor cons(M308NewParams);
 	cons.PopulateFromCommand(gb);
 	const GCodeResult ret = cons.SendAndGetResponse(CanMessageType::m308New, boardAddress, reply);

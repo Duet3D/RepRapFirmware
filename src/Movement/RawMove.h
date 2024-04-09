@@ -91,6 +91,7 @@ public:
 	ParameterLettersBitmap GetOwnedAxisLetters() const noexcept { return ownedAxisLetters; } // Get the letters denoting axes that this movement system owns
 	AxesBitmap AllocateAxes(AxesBitmap axes, ParameterLettersBitmap axisLetters) noexcept;	// try to allocate the requested axes, if we can't then return the axes we can't allocate
 	void ReleaseAllOwnedAxesAndExtruders() noexcept;
+	void ReleaseNonToolAxesAndExtruders() noexcept;
 	void ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept;
 	void ReleaseAxisLetter(char letter) noexcept;											// stop claiming that we own an axis letter (if we do) but don't release the associated axis
 	void SaveOwnAxisCoordinates() noexcept;													// fetch and save the coordinates of axes we own to lastKnownMachinePositions
@@ -108,6 +109,7 @@ public:
 	void ClearMove() noexcept;
 	void SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
 		pre(restorePointNumber < NumTotalRestorePoints);
+	void ResumeAfterPause() noexcept;
 
 	// Tool management
 	void SelectTool(int toolNumber, bool simulating) noexcept;
@@ -117,6 +119,7 @@ public:
 	void SetPreviousToolNumber() noexcept;
 	AxesBitmap GetCurrentXAxes() const noexcept;											// Get the current axes used as X axes
 	AxesBitmap GetCurrentYAxes() const noexcept;											// Get the current axes used as Y axes
+	AxesBitmap GetCurrentZAxes() const noexcept;											// Get the current axes used as Y axes
 	AxesBitmap GetCurrentAxisMapping(unsigned int axis) const noexcept;
 	float GetCurrentToolOffset(size_t axis) const noexcept;									// Get an axis offset of the current tool
 
@@ -169,13 +172,18 @@ public:
 	float restartInitialUserC1;										// if the print was paused during an arc move, the user Y coordinate at the start of that move (from M26)
 
 	RestorePoint restorePoints[NumTotalRestorePoints];
-	RestorePoint& pauseRestorePoint = restorePoints[PauseRestorePointNumber];				// The position and feed rate when we paused the print
-	RestorePoint& toolChangeRestorePoint = restorePoints[ToolChangeRestorePointNumber];		// The position and feed rate when we freed a tool
-	RestorePoint& simulationRestorePoint = restorePoints[SimulationRestorePointNumber];		// The position and feed rate when we started simulating
-	RestorePoint& resumeObjectRestorePoint = restorePoints[ResumeObjectRestorePointNumber];	// The position and feed rate when we resumed printing objects
+
+	RestorePoint& GetPauseRestorePoint() noexcept { return restorePoints[PauseRestorePointNumber]; }				// The position and feed rate when we paused the print
+	const RestorePoint& GetPauseRestorePoint() const noexcept { return restorePoints[PauseRestorePointNumber]; }	// The position and feed rate when we paused the print
+	RestorePoint& GetToolChangeRestorePoint() noexcept { return restorePoints[ToolChangeRestorePointNumber]; }		// The position and feed rate when we freed a tool
+	RestorePoint& GetSimulationRestorePoint() noexcept { return restorePoints[SimulationRestorePointNumber]; }		// The position and feed rate when we started simulating
+	RestorePoint& GetResumeObjectRestorePoint() noexcept { return restorePoints[ResumeObjectRestorePointNumber]; }	// The position and feed rate when we resumed printing objects
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	FilePosition fileOffsetToPrint;									// the offset to start printing from
+# if SUPPORT_ASYNC_MOVES
+	FilePosition fileOffsetToSkipTo;								// when resuming in single-reader mode, skip commands until this file offset
+# endif
 #endif
 
 #if SUPPORT_LASER

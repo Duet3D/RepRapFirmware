@@ -157,6 +157,12 @@ namespace CanInterface
 extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute__((naked));
 #define RRF_ASSERT(_expr) do { if (!(_expr)) { vAssertCalled(__LINE__, __FILE__); } } while (false)
 
+#ifdef __ECV__			// eCv doesn't understand the gcc asm syntax in these functions
+
+# define CheckStackValue(dwordOffset, val) do { } while (false)
+
+#else
+
 // Function and macro to track return address corruption
 inline uint32_t GetStackValue(uint32_t dwordOffset) noexcept
 {
@@ -164,7 +170,7 @@ inline uint32_t GetStackValue(uint32_t dwordOffset) noexcept
     return sp[dwordOffset];
 }
 
-#define CheckStackValue(dwordOffset, val) do { if (GetStackValue(dwordOffset) != val) { vAssertCalled(__LINE__, __FILE__); } } while (false)
+# define CheckStackValue(dwordOffset, val) do { if (GetStackValue(dwordOffset) != val) { vAssertCalled(__LINE__, __FILE__); } } while (false)
 
 inline volatile uint32_t *GetStackOffset(uint32_t dwordOffset) noexcept
 {
@@ -172,6 +178,7 @@ inline volatile uint32_t *GetStackOffset(uint32_t dwordOffset) noexcept
     return &sp[dwordOffset];
 }
 
+#endif
 // Functions to set and clear data watchpoints
 inline void SetWatchpoint(unsigned int number, const void* addr, unsigned int addrBits = 2) noexcept
 {
@@ -512,22 +519,6 @@ private:
 // Macro to create a SimpleRange from an array
 #define ARRAY_INDICES(_arr) (SimpleRange<size_t>(ARRAY_SIZE(_arr)))
 
-// A simple milliseconds timer class
-class MillisTimer
-{
-public:
-	MillisTimer() noexcept { running = false; }
-	void Start() noexcept;
-	void Stop() noexcept { running = false; }
-	bool CheckNoStop(uint32_t timeoutMillis) const noexcept;
-	bool CheckAndStop(uint32_t timeoutMillis) noexcept;
-	bool IsRunning() const noexcept { return running; }
-
-private:
-	uint32_t whenStarted;
-	bool running;
-};
-
 // Function to delete an object and clear the pointer. Safe to call even if the pointer is already null.
 template <typename T> void DeleteObject(T *null & ptr) noexcept
 {
@@ -576,6 +567,7 @@ inline size_t LogicalDriveToExtruder(size_t drive) noexcept { return MaxAxesPlus
 
 const AxesBitmap DefaultXAxisMapping = AxesBitmap::MakeFromBits(X_AXIS);	// by default, X is mapped to X
 const AxesBitmap DefaultYAxisMapping = AxesBitmap::MakeFromBits(Y_AXIS);	// by default, Y is mapped to Y
+const AxesBitmap DefaultZAxisMapping = AxesBitmap::MakeFromBits(Z_AXIS);	// by default, Z is mapped to Z
 const AxesBitmap XyzAxes = AxesBitmap::MakeLowestNBits(XYZ_AXES);
 const AxesBitmap XyAxes = AxesBitmap::MakeLowestNBits(XY_AXES);
 
@@ -653,11 +645,7 @@ static inline constexpr float InverseConvertAcceleration(float accel) noexcept
 constexpr unsigned int MaxFloatDigitsDisplayedAfterPoint = 7;
 const char *_ecv_array GetFloatFormatString(float val, unsigned int numDigitsAfterPoint) noexcept;
 
-#if SUPPORT_WORKPLACE_COORDINATES
 constexpr size_t NumCoordinateSystems = 9;							// G54 up to G59.3
-#else
-constexpr size_t NumCoordinateSystems = 1;
-#endif
 
 #define DEGREE_SYMBOL	"\xC2\xB0"									// degree-symbol encoding in UTF8
 

@@ -27,7 +27,6 @@ AdditionalOutputSensor::~AdditionalOutputSensor() noexcept
 GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
 	GCodeResult rslt = GCodeResult::ok;
-
 	if (gb.Seen('P'))
 	{
 		changed = true;
@@ -40,29 +39,44 @@ GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& 
 		}
 	}
 
-	TryConfigureSensorName(gb, changed);
+	ConfigureCommonParameters(gb, changed);
 	if (!changed && !gb.Seen('Y'))
 	{
 		// No parameters were provided, so report the current configuration
 		CopyBasicDetails(reply);
-		reply.catf(", additional output %d of sensor %d", outputNumber, parentSensor);
 	}
-	return GCodeResult::ok;
+	return rslt;
+}
+
+// Append the pin details to the reply buffer
+void AdditionalOutputSensor::AppendPinDetails(const StringRef& reply) const noexcept
+{
+	reply.catf(" using additional output %d of sensor %d", outputNumber, parentSensor);
 }
 
 #if SUPPORT_REMOTE_COMMANDS
 
 GCodeResult AdditionalOutputSensor::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
 {
+	GCodeResult rslt = GCodeResult::ok;
+	bool changed = false;
 	String<StringLength20> pParam;
 	if (parser.GetStringParam('P', pParam.GetRef()))
 	{
-		return ConfigurePort(pParam.c_str(), reply);
+		changed = true;
+		rslt = ConfigurePort(pParam.c_str(), reply);
+		if (rslt > GCodeResult::warning)
+		{
+			return rslt;
+		}
 	}
 
-	CopyBasicDetails(reply);
-	reply.catf(", additional output %d of sensor %d", outputNumber, parentSensor);
-	return GCodeResult::ok;
+	ConfigureCommonParameters(parser, changed);
+	if (!changed)
+	{
+		CopyBasicDetails(reply);
+	}
+	return rslt;
 }
 
 #endif
@@ -138,7 +152,7 @@ void AdditionalOutputSensor::Poll() noexcept
 		SetResult(TemperatureError::invalidOutputNumber);
 		return;
 	}
-	const auto err = parent->GetLatestTemperature(t, this->outputNumber);
+	const auto err = parent->GetAdditionalOutput(t, this->outputNumber);
 	if (err == TemperatureError::ok)
 	{
 		SetResult(t, err);

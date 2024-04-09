@@ -12,10 +12,14 @@
 
 #include <AnalogIn.h>
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 #if SAME5x
-using AnalogIn::AdcBits;
+constexpr unsigned int AdcBits = AnalogIn::AdcBits;
 #else
-using LegacyAnalogIn::AdcBits;
+constexpr unsigned int AdcBits = LegacyAnalogIn::AdcBits;
 #endif
 
 // ADC resolution
@@ -36,25 +40,70 @@ GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& repl
 	{
 		return GCodeResult::error;
 	}
-
-	gb.TryGetFValue('B', lowTemp, changed);
-	gb.TryGetFValue('C', highTemp, changed);
-	TryConfigureSensorName(gb, changed);
 	if (gb.Seen('F'))
 	{
 		changed = true;
 		filtered = gb.GetIValue() >= 1;
 	}
+	const bool portOrFilterChanged = changed;
+
+	gb.TryGetFValue('B', lowTemp, changed);
+	gb.TryGetFValue('C', highTemp, changed);
+	ConfigureCommonParameters(gb, changed);
 
 	if (changed)
 	{
 		const bool wasFiltered = filtered;
 		CalcDerivedParameters();
-		if (adcFilterChannel >= 0)
+		if (portOrFilterChanged)
 		{
-			reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init(0);
+			if (adcFilterChannel >= 0)
+			{
+				reprap.GetPlatform().GetAdcFilter(adcFilterChannel).Init(0);
+			}
+			else if (wasFiltered)
+			{
+				reply.copy("filtering not supported on this port");
+				return GCodeResult::warning;
+			}
 		}
-		else if (wasFiltered)
+	}
+	else
+	{
+		CopyBasicDetails(reply);
+		reply.catf(", %sfiltered, range %.1f to %.1f", (filtered) ? "" : "un", (double)lowTemp, (double)highTemp);
+	}
+	return GCodeResult::ok;
+}
+
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult LinearAnalogSensor::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
+{
+	bool seen = false;
+	if (!ConfigurePort(parser, reply, PinAccess::readAnalog, seen))
+	{
+		return GCodeResult::error;
+	}
+
+	ConfigureCommonParameters(parser, seen);
+	if (parser.GetFloatParam('B', lowTemp))
+	{
+		seen = true;
+	}
+	if (parser.GetFloatParam('C', highTemp))
+	{
+		seen = true;
+	}
+	if (parser.GetBoolParam('F', filtered))
+	{
+		seen = true;
+	}
+	if (seen)
+	{
+		const bool wasFiltered = filtered;
+		CalcDerivedParameters();
+		if (adcFilterChannel < 0 && wasFiltered)
 		{
 			reply.copy("filtering not supported on this port");
 			return GCodeResult::warning;
@@ -67,6 +116,8 @@ GCodeResult LinearAnalogSensor::Configure(GCodeBuffer& gb, const StringRef& repl
 	}
 	return GCodeResult::ok;
 }
+
+#endif
 
 void LinearAnalogSensor::Poll() noexcept
 {

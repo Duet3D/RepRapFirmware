@@ -371,7 +371,7 @@ private:
 	void DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps);
 
 	void StartPrinting(bool fromStart) noexcept;								// Start printing the file already selected
-	void StopPrint(StopPrintReason reason) noexcept;							// Stop the current print
+	void StopPrint(GCodeBuffer *gbp, StopPrintReason reason) noexcept;			// Stop the current print
 
 	bool DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept;					// Get G Codes from a file and print them
 	bool DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissing, int codeRunning, VariableSet& initialVariables) noexcept;
@@ -443,11 +443,9 @@ private:
 
 	GCodeResult OffsetAxes(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Set/report offsets
 
-#if SUPPORT_WORKPLACE_COORDINATES
 	GCodeResult GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute) THROWS(GCodeException);	// Set workspace coordinates
-# if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteWorkplaceCoordinates(FileStore *f) const noexcept;
-# endif
 #endif
 
 	ReadLockedPointer<Tool> GetSpecifiedOrCurrentTool(GCodeBuffer& gb) THROWS(GCodeException);
@@ -474,7 +472,7 @@ private:
 	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	bool WriteToolSettings(FileStore *f, const MovementState& ms) const noexcept;			// save some information for the resume file
+	bool WriteToolSettings(FileStore *f, const StringRef& buf) const noexcept;				// save some information for the resume file
 	bool WriteToolParameters(FileStore *f, const bool forceWriteOffsets) const noexcept;	// save some information in config-override.g
 #endif
 
@@ -556,6 +554,7 @@ private:
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	void SaveResumeInfo(bool wasPowerFailure) noexcept;
+	bool SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const f, const char *printingFilename, const StringRef& buf) noexcept;
 #endif
 
 	void NewSingleSegmentMoveAvailable(MovementState& ms) noexcept;				// Flag that a new move is available
@@ -570,12 +569,14 @@ private:
 	GCodeResult SelectMovementQueue(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M596
 	GCodeResult CollisionAvoidance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Handle M597
 	GCodeResult SyncMovementSystems(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M598
+	GCodeResult ForkInputReader(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);			// Handle M606
 	GCodeResult ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);				// Handle M400
 	void AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes, ParameterLettersBitmap axLetters) THROWS(GCodeException);	// allocate axes to a movement state
 	void AllocateAxisLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException);
 																											// allocate axes by letter
 	void AllocateAxesDirectFromLetters(const GCodeBuffer& gb, MovementState& ms, ParameterLettersBitmap axLetters) THROWS(GCodeException);
 																											// allocate axes by letter for a special move
+	bool IsAxisFree(unsigned int axis) const noexcept;														// test whether an axis is unowned
 	bool DoSync(GCodeBuffer& gb) noexcept;																	// sync with the other stream returning true if done, false if we need to wait for it
 	bool SyncWith(GCodeBuffer& thisGb, const GCodeBuffer& otherGb) noexcept;								// synchronise motion systems
 	void UpdateAllCoordinates(const GCodeBuffer& gb) noexcept;
@@ -628,6 +629,9 @@ private:
 #if SUPPORT_ASYNC_MOVES
 	GCodeBuffer* File2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::File2)]; }
 	GCodeBuffer* Queue2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]; }
+	GCodeBuffer* GetFileGCode(unsigned int msNumber) const noexcept;
+#else
+	GCodeBuffer* GetFileGCode(unsigned int msNumber) const noexcept { return FileGCode(); }
 #endif
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling
@@ -759,6 +763,7 @@ private:
 
 #if SUPPORT_ASYNC_MOVES
 	CollisionAvoider collisionChecker;			// currently we support just one collision avoider
+	MovementSystemNumber pausedMovementSystemNumber;
 #endif
 #if SUPPORT_KEEPOUT_ZONES
 	KeepoutZone keepoutZone;					// currently we support just one keepout zone

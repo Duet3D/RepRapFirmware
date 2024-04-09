@@ -31,6 +31,7 @@
 #include <Heating/Heat.h>
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
+#include <Movement/Move.h>
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -52,7 +53,7 @@ constexpr ObjectModelArrayTableEntry Tool::objectModelArrayTable[] =
 	// 1. Axes
 	{
 		nullptr,					// no lock needed
-		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ARRAY_SIZE(((const Tool*)self)->axisMapping); },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->axisMapping[context.GetLastIndex()]); }
 	},
 	// 2 Extruders
@@ -140,7 +141,8 @@ uint16_t Tool::activeToolHeaters = 0;
 uint16_t Tool::numToolsToReport = 0;
 
 // Create a new tool and return a pointer to it. If an error occurs, put an error message in 'reply' and return nullptr.
-/*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *toolName, int32_t d[], size_t dCount, int32_t h[], size_t hCount, AxesBitmap xMap, AxesBitmap yMap, FansBitmap fanMap, int filamentDrive, size_t sCount, int8_t spindleNo, const StringRef& reply) noexcept
+/*static*/ Tool *Tool::Create(unsigned int toolNumber, const char *toolName, int32_t d[], size_t dCount, int32_t h[], size_t hCount,
+								AxesBitmap xMap, AxesBitmap yMap, AxesBitmap zMap, FansBitmap fanMap, int filamentDrive, size_t sCount, int8_t spindleNo, const StringRef& reply) noexcept
 {
 	const size_t numExtruders = reprap.GetGCodes().GetNumExtruders();
 	if (dCount > ARRAY_SIZE(Tool::drives))
@@ -223,6 +225,7 @@ uint16_t Tool::numToolsToReport = 0;
 	t->heaterCount = (uint8_t)hCount;
 	t->axisMapping[0] = xMap;
 	t->axisMapping[1] = yMap;
+	t->axisMapping[2] = zMap;
 	t->fanMapping = fanMap;
 	t->heaterFault = false;
 	t->axisOffsetsProbed.Clear();
@@ -344,6 +347,11 @@ uint16_t Tool::numToolsToReport = 0;
 /*static*/ AxesBitmap Tool::GetYAxes(const Tool *tool) noexcept
 {
 	return (tool == nullptr) ? DefaultYAxisMapping : tool->axisMapping[1];
+}
+
+/*static*/ AxesBitmap Tool::GetZAxes(const Tool *tool) noexcept
+{
+	return (tool == nullptr) ? DefaultZAxisMapping : tool->axisMapping[2];
 }
 
 /*static*/ AxesBitmap Tool::GetAxisMapping(const Tool *tool, unsigned int axis) noexcept
@@ -484,6 +492,17 @@ void Tool::PrintTool(const StringRef& reply) const noexcept
 		if (axisMapping[1].IsBitSet(yi))
 		{
 			reply.catf("%c%c", sep, reprap.GetGCodes().GetAxisLetters()[yi]);
+			sep = ',';
+		}
+	}
+
+	reply.cat("; zmap:");
+	sep = ' ';
+	for (size_t zi = 0; zi < MaxAxes; ++zi)
+	{
+		if (axisMapping[2].IsBitSet(zi))
+		{
+			reply.catf("%c%c", sep, reprap.GetGCodes().GetAxisLetters()[zi]);
 			sep = ',';
 		}
 	}
@@ -692,16 +711,16 @@ void Tool::DefineMix(const float m[]) noexcept
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
-// Write the tool's settings to file returning true if successful. The settings written leave the tool selected unless it is off.
-bool Tool::WriteSettings(FileStore *f) const noexcept
+// Write the tool's settings to file returning true if successful
+bool Tool::WriteSettings(FileStore *f, const StringRef& buf) const noexcept
 {
-	String<StringLength50> buf;
 	bool ok = true;
+	buf.printf("M568 P%u  A%u", myNumber, (state == ToolState::active) ? 2 : (state == ToolState::standby) ? 1 : 0);
 
 	// Set up active and standby heater temperatures
 	if (heaterCount != 0)
 	{
-		buf.printf("G10 P%d ", myNumber);
+		buf.cat(' ');
 		char c = 'S';
 		for (size_t i = 0; i < heaterCount; ++i)
 		{
@@ -715,15 +734,19 @@ bool Tool::WriteSettings(FileStore *f) const noexcept
 			buf.catf("%c%d", c, (int)standbyTemperatures[i]);
 			c = ':';
 		}
-		buf.cat('\n');
-		ok = f->Write(buf.c_str());
 	}
-
-	if (ok && state != ToolState::off)
+	if (ok && driveCount > 1)
 	{
-		ok = buf.printf("T%d P0\n", myNumber);
+		buf.catf("M567 P%u ", myNumber);
+		char c = 'E';
+		for (size_t i = 0; i < driveCount; ++i)
+		{
+			buf.catf("%c%.2f", c, (double)mix[i]);
+			c = ':';
+		}
 	}
-
+	buf.cat('\n');
+	ok = f->Write(buf.c_str());
 	return ok;
 }
 
@@ -940,6 +963,12 @@ void Tool::StopFeedForward() const noexcept
 	{
 		heat.SetExtrusionFeedForward(heaters[i], 0.0);
 	}
+}
+
+// Clear the pending extrusion for all extruders used by this tool
+void Tool::ClearExtrusionPending() const noexcept
+{
+	IterateExtruders([](unsigned int n)->void { reprap.GetMove().GetExtruderShaper(n).ClearExtrusionPending(); });
 }
 
 #if SUPPORT_ASYNC_MOVES && PREALLOCATE_TOOL_AXES

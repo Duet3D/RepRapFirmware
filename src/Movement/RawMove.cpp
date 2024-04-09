@@ -119,6 +119,9 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 	restartMoveFractionDone = 0.0;
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 	fileOffsetToPrint = 0;
+# if SUPPORT_ASYNC_MOVES
+	fileOffsetToSkipTo = 0;
+# endif
 #endif
 	for (RestorePoint& rp : restorePoints)
 	{
@@ -184,6 +187,18 @@ void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes
 #endif
 }
 
+// Restore current values from the pause restore point
+void MovementState::ResumeAfterPause() noexcept
+{
+	moveStartVirtualExtruderPosition = latestVirtualExtruderPosition = GetPauseRestorePoint().virtualExtruderPosition;	// reset the extruder position in case we are receiving absolute extruder moves
+	moveFractionToSkip = GetPauseRestorePoint().proportionDone;
+	restartInitialUserC0 = GetPauseRestorePoint().initialUserC0;
+	restartInitialUserC1 = GetPauseRestorePoint().initialUserC1;
+#if SUPPORT_ASYNC_MOVES
+	fileOffsetToSkipTo = GetPauseRestorePoint().filePos;
+#endif
+}
+
 // Select the specified tool, putting the existing current tool into standby
 void MovementState::SelectTool(int toolNumber, bool simulating) noexcept
 {
@@ -243,6 +258,12 @@ AxesBitmap MovementState::GetCurrentYAxes() const noexcept
 	return Tool::GetYAxes(currentTool);
 }
 
+// Get the current axes used as Y axis
+AxesBitmap MovementState::GetCurrentZAxes() const noexcept
+{
+	return Tool::GetZAxes(currentTool);
+}
+
 // Get an axis offset of the current tool
 float MovementState::GetCurrentToolOffset(size_t axis) const noexcept
 {
@@ -288,6 +309,17 @@ void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 	axesAndExtrudersOwned &= ~axesToRelease;						// clear the axes/extruders we have been asked to release
 	axesAndExtrudersMoved.ClearBits(axesToRelease);					// remove them from the own axes/extruders
 	ownedAxisLetters.Clear();										// clear the cache of owned axis letters
+}
+
+// Release all axes and extruders we own except those used by our current tool
+void MovementState::ReleaseNonToolAxesAndExtruders() noexcept
+{
+	AxesBitmap axesToRelease = GetAxesAndExtrudersOwned();
+	if (currentTool != nullptr)
+	{
+		axesToRelease &= ~currentTool->GetXYAxesAndExtruders();
+	}
+	ReleaseAxesAndExtruders(axesToRelease);
 }
 
 // Allocate additional axes

@@ -821,6 +821,10 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 
 void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 {
+#if SUPPORT_ASYNC_MOVES
+	if (!gb.Executing()) return;
+#endif
+
 	SkipWhiteSpace();
 	if (gb.buffer[readPointer] != 0)
 	{
@@ -1156,6 +1160,7 @@ void StringParser::ResetIndentationAfterPop() noexcept
 	}
 }
 
+// Flag this command as completed
 void StringParser::SetFinished() noexcept
 {
 	if (commandEnd < gcodeLineEnd)

@@ -43,15 +43,11 @@
 
 // Apply default values to anything not configured
 #ifndef SUPPORT_NONLINEAR_EXTRUSION
-# define SUPPORT_NONLINEAR_EXTRUSION		1		// for now this is always enabled
-#endif
-
-#ifndef SUPPORT_WORKPLACE_COORDINATES
-# define SUPPORT_WORKPLACE_COORDINATES		0
+# define SUPPORT_NONLINEAR_EXTRUSION	1		// for now this is always enabled
 #endif
 
 #ifndef SUPPORT_COORDINATE_ROTATION
-# define SUPPORT_COORDINATE_ROTATION	SUPPORT_WORKPLACE_COORDINATES
+# define SUPPORT_COORDINATE_ROTATION	1
 #endif
 
 #ifndef SUPPORT_LASER
@@ -71,7 +67,7 @@
 #endif
 
 #ifndef USE_FONT_CHIP
-# define USE_FONT_CHIP		0
+# define USE_FONT_CHIP			0
 #endif
 
 #define SUPPORT_DIRECT_LCD		(SUPPORT_12864_LCD || SUPPORT_ILI9488_LCD)

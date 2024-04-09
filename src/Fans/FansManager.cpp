@@ -41,7 +41,7 @@ ReadLockedPointer<Fan> FansManager::FindFan(size_t fanNum) const noexcept
 }
 
 // Create and return a local fan. if it fails, return nullptr with the error message in 'reply'.
-LocalFan *FansManager::CreateLocalFan(uint32_t fanNum, const char *_ecv_array pinNames, PwmFrequency freq, const StringRef& reply) noexcept
+LocalFan *FansManager::CreateLocalFan(uint32_t fanNum, const char *_ecv_array pinNames, PwmFrequency freq, float pulsesPerRev, const StringRef& reply) noexcept
 {
 	LocalFan *newFan = new LocalFan(fanNum);
 	if (!newFan->AssignPorts(pinNames, reply))
@@ -49,7 +49,7 @@ LocalFan *FansManager::CreateLocalFan(uint32_t fanNum, const char *_ecv_array pi
 		delete newFan;
 		return nullptr;
 	}
-	(void)newFan->SetPwmFrequency(freq, reply);
+	(void)newFan->SetFanParameters(true, freq, true, pulsesPerRev, reply);
 	return newFan;
 }
 
@@ -98,6 +98,13 @@ bool FansManager::WriteFanSettings(FileStore *f) const noexcept
 GCodeResult FansManager::ConfigureFanPort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const uint32_t fanNum = gb.GetLimitedUIValue('F', MaxFans);
+
+	const bool seenFreq = gb.Seen('Q');
+	const PwmFrequency newFreq = (seenFreq) ? gb.GetPwmFrequency() : DefaultFanPwmFreq;
+
+	const bool seenPpr = gb.Seen('K');
+	const float newPpr = (seenPpr) ? gb.GetLimitedFValue('K', MinFanPulsesPerRev, MaxFanPulsesPerRev) : DefaultFanTachoPulsesPerRev;
+
 	const bool seenPin = gb.Seen('C');
 	if (seenPin)
 	{
@@ -106,8 +113,6 @@ GCodeResult FansManager::ConfigureFanPort(GCodeBuffer& gb, const StringRef& repl
 
 		WriteLocker lock(fansLock);
 		DeleteObject(fans[fanNum]);
-
-		const PwmFrequency freq = (gb.Seen('Q')) ? gb.GetPwmFrequency() : DefaultFanPwmFreq;
 
 #if SUPPORT_CAN_EXPANSION
 		const CanAddress board = IoPort::RemoveBoardAddress(pinName.GetRef());
@@ -121,7 +126,7 @@ GCodeResult FansManager::ConfigureFanPort(GCodeBuffer& gb, const StringRef& repl
 		if (board != CanInterface::GetCanAddress())
 		{
 			auto *newFan = new RemoteFan(fanNum, board);
-			const GCodeResult rslt = newFan->ConfigurePort(pinName.c_str(), freq, reply);
+			const GCodeResult rslt = newFan->ConfigurePort(pinName.c_str(), newFreq, newPpr, reply);
 			if (rslt == GCodeResult::ok)
 			{
 				fans[fanNum] = newFan;
@@ -133,7 +138,7 @@ GCodeResult FansManager::ConfigureFanPort(GCodeBuffer& gb, const StringRef& repl
 			return rslt;
 		}
 #endif
-		fans[fanNum] = CreateLocalFan(fanNum, pinName.c_str(), freq, reply);
+		fans[fanNum] = CreateLocalFan(fanNum, pinName.c_str(), newFreq, newPpr, reply);
 		reprap.FansUpdated();
 		return (fans[fanNum] == nullptr) ? GCodeResult::error : GCodeResult::ok;
 	}
@@ -141,18 +146,14 @@ GCodeResult FansManager::ConfigureFanPort(GCodeBuffer& gb, const StringRef& repl
 	const auto fan = FindFan(fanNum);
 	if (fan.IsNull())
 	{
-		reply.printf("Fan %u does not exist", (unsigned int)fanNum);
+		reply.printf("Fan %u not found", (unsigned int)fanNum);
 		return GCodeResult::error;
 	}
 
-	if (gb.Seen('Q'))
-	{
-		const GCodeResult rslt = fan->SetPwmFrequency(gb.GetPwmFrequency(), reply);
-		reprap.FansUpdated();
-		return rslt;
-	}
-
-	return fan->ReportPortDetails(reply);
+	// If we get here we're setting the PWM frequency or tacho pulses/rev, or neither
+	return (seenFreq || seenPpr)
+			? fan->SetFanParameters(seenFreq, newFreq, seenPpr, newPpr, reply)
+				: fan->ReportPortDetails(reply);
 }
 
 // Set or report the parameters for the specified fan
@@ -247,7 +248,8 @@ void FansManager::Init() noexcept
 		String<1> dummy;
 		fans[i] = CreateLocalFan(i,
 									DefaultFanPinNames[i],
-									i < ARRAY_SIZE(DefaultFanPwmFrequencies) && DefaultFanPwmFrequencies[i] != 0 ? DefaultFanPwmFrequencies[i] : DefaultFanPwmFreq,
+									(i < ARRAY_SIZE(DefaultFanPwmFrequencies) && DefaultFanPwmFrequencies[i] != 0) ? DefaultFanPwmFrequencies[i] : DefaultFanPwmFreq,
+									DefaultFanTachoPulsesPerRev,
 									dummy.GetRef()
 								);
 	}
@@ -316,6 +318,8 @@ GCodeResult FansManager::ConfigureFanPort(const CanMessageGeneric& msg, const St
 
 	PwmFrequency freq = DefaultFanPwmFreq;
 	const bool seenFreq = parser.GetUintParam('Q', freq);
+	float pulsesPerRev = DefaultFanTachoPulsesPerRev;
+	const bool seenPpr = parser.GetFloatParam('K', pulsesPerRev);
 
 	String<StringLength50> pinNames;
 	if (parser.GetStringParam('C', pinNames.GetRef()))
@@ -326,7 +330,7 @@ GCodeResult FansManager::ConfigureFanPort(const CanMessageGeneric& msg, const St
 		std::swap(oldFan, fans[fanNum]);
 		delete oldFan;
 
-		fans[fanNum] = CreateLocalFan(fanNum, pinNames.c_str(), freq, reply);
+		fans[fanNum] = CreateLocalFan(fanNum, pinNames.c_str(), freq, pulsesPerRev, reply);
 		return (fans[fanNum] == nullptr) ? GCodeResult::error : GCodeResult::ok;
 	}
 
@@ -337,7 +341,9 @@ GCodeResult FansManager::ConfigureFanPort(const CanMessageGeneric& msg, const St
 		return GCodeResult::error;
 	}
 
-	return (seenFreq) ? fan->SetPwmFrequency(freq, reply) : fan->ReportPortDetails(reply);
+	return (seenFreq || seenPpr)
+			? fan->SetFanParameters(seenFreq, freq, seenPpr, pulsesPerRev, reply)
+				: fan->ReportPortDetails(reply);
 }
 
 // Set or report the parameters for the specified fan

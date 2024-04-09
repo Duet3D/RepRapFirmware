@@ -95,11 +95,11 @@ jobs:
       - name: "Adjust versions"
         run: |
           sed -i "s/# define MAIN_VERSION.\+/# define MAIN_VERSION \"${{ inputs.version }}\"/g" ./RepRapFirmware/src/Version.h
-          sed -i "s/# define VERSION_TEXT.\+/# define VERSION_TEXT \"${{ inputs.version }}\"/g" ./Duet3Bootloader/src/Version.h
-          sed -i "s/# define VERSION.\+/# define VERSION \"${{ inputs.version }}\"/g" ./Duet3Expansion/src/Version.h
+          sed -i "s/#define VERSION.\+/#define VERSION \"${{ inputs.version }}\"/g" ./Duet3Expansion/src/Version.h
 
       - name: "Set up Eclipse-CDT"
         run: |
+          sudo apt-get update -y
           sudo apt-get install -y libarchive-tools default-jre
           curl -L -O "https://pkg.duet3d.com/eclipse-cpp-2023-09-R-linux-gtk-x86_64.tar.gz"
           sudo bsdtar -x -f ./eclipse-cpp-2023-09-R-linux-gtk-x86_64.tar.gz -C /opt

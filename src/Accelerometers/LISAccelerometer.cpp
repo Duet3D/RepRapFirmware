@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include "LIS3DH.h"
+#include "LISAccelerometer.h"
 
 #if SUPPORT_ACCELEROMETERS
 
@@ -22,13 +22,13 @@ static constexpr uint8_t WhoAmIValue_3DH = 0x33;
 static constexpr uint8_t WhoAmIValue_3DSH = 0x3F;
 static constexpr uint8_t WhoAmIValue_2DW = 0x44;
 
-LIS3DH::LIS3DH(SharedSpiDevice& dev, uint32_t freq, Pin p_csPin, Pin p_int1Pin) noexcept
+LISAccelerometer::LISAccelerometer(SharedSpiDevice& dev, uint32_t freq, Pin p_csPin, Pin p_int1Pin) noexcept
 	: SharedSpiClient(dev, freq, lisMode, p_csPin, false), taskWaiting(nullptr), accelerometerType(AccelerometerType::LIS3DH), int1Pin(p_int1Pin)
 {
 }
 
 // Do a quick test to check whether the accelerometer is present. If it is, return true and set the type.
-bool LIS3DH::CheckPresent() noexcept
+bool LISAccelerometer::CheckPresent() noexcept
 {
 	uint8_t val;
 	if (ReadRegister(LisRegister::WhoAmI, val))
@@ -53,12 +53,12 @@ bool LIS3DH::CheckPresent() noexcept
 }
 
 // Return the type name of the accelerometer. Only valid after checkPresent returns true.
-const char *LIS3DH::GetTypeName() const noexcept
+const char *LISAccelerometer::GetTypeName() const noexcept
 {
 	return accelerometerType.ToString();
 }
 
-uint8_t LIS3DH::ReadStatus() noexcept
+uint8_t LISAccelerometer::ReadStatus() noexcept
 {
 	uint8_t val;
 	return (ReadRegister(LisRegister::Status, val)) ? val : 0xFF;
@@ -66,7 +66,7 @@ uint8_t LIS3DH::ReadStatus() noexcept
 
 // Configure the accelerometer to collect for the requested axis at or near the requested sampling rate and the requested resolution in bits.
 // Update the sampling rate and resolution to the actual values used.
-bool LIS3DH::Configure(uint16_t& samplingRate, uint8_t& resolution) noexcept
+bool LISAccelerometer::Configure(uint16_t& samplingRate, uint8_t& resolution) noexcept
 {
 	bool ok;
 	switch (accelerometerType.RawValue())
@@ -220,7 +220,7 @@ bool LIS3DH::Configure(uint16_t& samplingRate, uint8_t& resolution) noexcept
 void Int1Interrupt(CallbackParameter p) noexcept;						// forward declaration
 
 // Start collecting data, returning true if successful
-bool LIS3DH:: StartCollecting(uint8_t axes) noexcept
+bool LISAccelerometer:: StartCollecting(uint8_t axes) noexcept
 {
 	uint8_t ctrlRegValue = ctrlReg_0x20;
 
@@ -272,7 +272,7 @@ bool LIS3DH:: StartCollecting(uint8_t axes) noexcept
 }
 
 // Collect some data from the FIFO, suspending until the data is available
-unsigned int LIS3DH::CollectData(const uint16_t **collectedData, uint16_t &dataRate, bool &overflowed) noexcept
+unsigned int LISAccelerometer::CollectData(const uint16_t **collectedData, uint16_t &dataRate, bool &overflowed) noexcept
 {
 	// Wait until we have some data
 	taskWaiting = TaskBase::GetCallerTaskHandle();
@@ -332,13 +332,13 @@ unsigned int LIS3DH::CollectData(const uint16_t **collectedData, uint16_t &dataR
 }
 
 // Stop collecting data
-void LIS3DH::StopCollecting() noexcept
+void LISAccelerometer::StopCollecting() noexcept
 {
 	WriteRegister(LisRegister::Ctrl_0x20, 0);
 }
 
 // Read registers into dataBuffer
-bool LIS3DH::ReadRegisters(LisRegister reg, size_t numToRead) noexcept
+bool LISAccelerometer::ReadRegisters(LisRegister reg, size_t numToRead) noexcept
 {
 	if (!Select(Lis3dSpiTimeout))
 	{
@@ -355,7 +355,7 @@ bool LIS3DH::ReadRegisters(LisRegister reg, size_t numToRead) noexcept
 }
 
 // Write registers from dataBuffer
-bool LIS3DH::WriteRegisters(LisRegister reg, size_t numToWrite) noexcept
+bool LISAccelerometer::WriteRegisters(LisRegister reg, size_t numToWrite) noexcept
 {
 	if ((uint8_t)reg < 0x1E)						// don't overwrite the factory calibration values
 	{
@@ -371,7 +371,7 @@ bool LIS3DH::WriteRegisters(LisRegister reg, size_t numToWrite) noexcept
 	return ret;
 }
 
-bool LIS3DH::ReadRegister(LisRegister reg, uint8_t& val) noexcept
+bool LISAccelerometer::ReadRegister(LisRegister reg, uint8_t& val) noexcept
 {
 	const bool ret = ReadRegisters(reg, 1);
 	if (ret)
@@ -381,13 +381,13 @@ bool LIS3DH::ReadRegister(LisRegister reg, uint8_t& val) noexcept
 	return ret;
 }
 
-bool LIS3DH::WriteRegister(LisRegister reg, uint8_t val) noexcept
+bool LISAccelerometer::WriteRegister(LisRegister reg, uint8_t val) noexcept
 {
 	dataBuffer[0] = val;
 	return WriteRegisters(reg, 1);
 }
 
-void LIS3DH::Int1Isr() noexcept
+void LISAccelerometer::Int1Isr() noexcept
 {
 	const uint32_t now = StepTimer::GetTimerTicks();
 	if (totalNumRead == 0)
@@ -401,7 +401,7 @@ void LIS3DH::Int1Isr() noexcept
 
 void Int1Interrupt(CallbackParameter p) noexcept
 {
-	static_cast<LIS3DH*>(p.vp)->Int1Isr();
+	static_cast<LISAccelerometer*>(p.vp)->Int1Isr();
 }
 
 #endif

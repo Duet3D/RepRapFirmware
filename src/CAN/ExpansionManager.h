@@ -47,6 +47,7 @@ struct ExpansionBoardData
 			 spare : 9;
 	BoardState state;
 	uint8_t numDrivers;
+	uint8_t accelerometerOrientation = DefaultAccelerometerOrientation;
 };
 
 class ExpansionManager INHERIT_OBJECT_MODEL
@@ -69,6 +70,7 @@ public:
 	void UpdateFailed(CanAddress address) noexcept;
 	void AddAccelerometerRun(CanAddress address, unsigned int numDataPoints) noexcept;
 	void AddClosedLoopRun(CanAddress address, unsigned int numDataPoints) noexcept;
+	void SaveAccelerometerOrientation(CanAddress address, uint8_t orientation) noexcept;
 	bool IsFlashing() const noexcept { return numBoardsFlashing != 0; }
 
 	void Spin() noexcept;

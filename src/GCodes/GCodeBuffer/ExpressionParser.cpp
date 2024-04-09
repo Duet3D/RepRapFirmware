@@ -14,7 +14,7 @@
 #include <General/NumericConverter.h>
 #include <Hardware/ExceptionHandlers.h>
 
-#include <limits>
+#include <climits>
 
 #ifdef exists
 # undef exists
@@ -988,10 +988,11 @@ void ExpressionParser::ReadArrayElementFromFile(ExpressionValue& rslt, LineReade
 		{
 			NumericConverter conv;
 			err = !conv.Accumulate(reader.CurrentCharacter(), NumericConverter::AcceptSignedFloat | NumericConverter::AcceptHex,
-										[&reader]()->char
+										[&reader, delimiter]()->char
 										{
 											reader.ReadChar();
-											return reader.CurrentCharacter();
+											const char c = reader.CurrentCharacter();
+											return (c == delimiter) ? 0 : c;				// allow '.' to be used as the delimiter
 										}
 								  );
 			if (!err)
@@ -1925,6 +1926,11 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 					ReadLocker lock(Heap::heapLock);				// must have a read lock on heapLock when calling GetNumElements or GetElement
 					if (!val.ahVal.GetElement(index, elem))
 					{
+						if (context.WantExists())
+						{
+							rslt.SetBool(false);
+							return;
+						}
 						ThrowParseException("Index out of range");
 					}
 				}
@@ -1933,7 +1939,14 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 				if (*pos == 0)
 				{
 					// End of the expression
-					rslt = elem;
+					if (context.WantExists())
+					{
+						rslt.SetBool(true);
+					}
+					else
+					{
+						rslt = elem;
+					}
 					return;
 				}
 				if (*pos == '^')

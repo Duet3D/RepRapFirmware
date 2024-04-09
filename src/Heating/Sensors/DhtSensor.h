@@ -34,7 +34,7 @@ public:
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
 #endif
 
-	TemperatureError GetLatestTemperature(float& t, uint8_t outputNumber = 0) noexcept override;
+	TemperatureError GetAdditionalOutput(float& t, uint8_t outputNumber) noexcept override;
 	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 1; }
 	void Poll() noexcept override;
 	uint32_t GetTemperatureReadingTimeout() const noexcept override { return (MinimumReadInterval * (MaxDhtBadTemperatureCount + 1)) + 500; }
@@ -46,6 +46,11 @@ public:
 
 	static constexpr const char *_ecv_array TypeNameDht21 = "dht21";
 	static constexpr const char *_ecv_array TypeNameDht22 = "dht22";
+
+protected:
+#if SAME5x
+	void AppendPinDetails(const StringRef& reply) const noexcept override;
+#endif
 
 private:
 	static constexpr uint32_t MinimumReadInterval = 2100;			// ms - datasheet https://www.sparkfun.com/datasheets/Sensors/Temperature/DHT22.pdf says "Collecting period should be : >2 second"

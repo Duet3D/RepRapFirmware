@@ -365,6 +365,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 
 #if SUPPORT_ACCELEROMETERS
 	// 9. boards[0].accelerometer members
+	{ "orientation",		OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerOrientation()),						ObjectModelEntryFlags::none },
 	{ "points",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerDataPoints()),						ObjectModelEntryFlags::none },
 	{ "runs",				OBJECT_MODEL_FUNC_NOSELF((int32_t)Accelerometers::GetLocalAccelerometerRuns()),								ObjectModelEntryFlags::none },
 #endif
@@ -404,7 +405,7 @@ constexpr uint8_t Platform::objectModelTableDescriptor[] =
 	2,																		// section 7: move.axes[].microstepping
 	2,																		// section 8: move.extruders[].microstepping
 #if SUPPORT_ACCELEROMETERS
-	2,																		// section 9: boards[0].accelerometer
+	3,																		// section 9: boards[0].accelerometer
 #else
 	0,
 #endif
@@ -1095,7 +1096,7 @@ void Platform::Spin() noexcept
 		char buf[101];
 		const unsigned int charsRead = isrDebugBuffer.GetBlock(buf, sizeof(buf) - 1);
 		buf[charsRead] = 0;
-		Message(GenericMessage, buf);
+		Message(UsbMessage, buf);
 	}
 
 	// Try to flush messages to serial ports
@@ -3461,34 +3462,16 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 #endif
 
 	// Now send the message to all the destinations
-	size_t numDestinations = 0;
-	if ((type & (AuxMessage | ImmediateAuxMessage)) != 0)
-	{
-		++numDestinations;
-	}
-	if ((type & (UsbMessage | BlockingUsbMessage)) != 0)
-	{
-		++numDestinations;
-	}
-	if ((type & HttpMessage) != 0)
-	{
-		++numDestinations;
-	}
-	if ((type & TelnetMessage) != 0)
-	{
-		++numDestinations;
-	}
-#if HAS_SBC_INTERFACE
-	if (reprap.UsingSbcInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0))
-	{
-		++numDestinations;
-	}
-#endif
+	unsigned int numDestinations = 0;
+	if ((type & (AuxMessage | ImmediateAuxMessage)) != 0)	{ ++numDestinations; }
 #ifdef SERIAL_AUX2_DEVICE
-	if ((type & Aux2Message) != 0)
-	{
-		++numDestinations;
-	}
+	if ((type & Aux2Message) != 0)							{ ++numDestinations; }
+#endif
+	if ((type & (UsbMessage | BlockingUsbMessage)) != 0)	{ ++numDestinations; }
+	if ((type & HttpMessage) != 0)							{ ++numDestinations; }
+	if ((type & TelnetMessage) != 0)						{ ++numDestinations; }
+#if HAS_SBC_INTERFACE
+	if (reprap.UsingSbcInterface() && ((type & GenericMessage) == GenericMessage || (type & BinaryCodeReplyFlag) != 0)) { ++numDestinations; }
 #endif
 
 	if (numDestinations == 0)
@@ -3504,6 +3487,13 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 			AppendAuxReply(0, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 
+#ifdef SERIAL_AUX2_DEVICE
+		if ((type & Aux2Message) != 0)
+		{
+			AppendAuxReply(1, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
+		}
+#endif
+
 		if ((type & HttpMessage) != 0)
 		{
 			reprap.GetNetwork().HandleHttpGCodeReply(buffer);
@@ -3512,11 +3502,6 @@ void Platform::Message(const MessageType type, OutputBuffer *buffer) noexcept
 		if ((type & TelnetMessage) != 0)
 		{
 			reprap.GetNetwork().HandleTelnetGCodeReply(buffer);
-		}
-
-		if ((type & Aux2Message) != 0)
-		{
-			AppendAuxReply(1, buffer, ((*buffer)[0] == '{') || (type & RawMessageFlag) != 0);
 		}
 
 		if ((type & (UsbMessage | BlockingUsbMessage)) != 0)

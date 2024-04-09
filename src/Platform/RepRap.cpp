@@ -770,16 +770,6 @@ void RepRap::Spin() noexcept
 	expansion->Spin();
 #endif
 
-#if HAS_SBC_INTERFACE
-	// Keep the SBC task spinning from the main task in standalone mode to respond to a SBC if necessary
-	if (!UsingSbcInterface())
-	{
-		ticksInSpinState = 0;
-		spinningModule = Module::SbcInterface;
-		sbcInterface->Spin();
-	}
-#endif
-
 	ticksInSpinState = 0;
 	spinningModule = Module::none;
 
@@ -1157,12 +1147,7 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	// So we report 9999.9 instead.
 
 	// First the user coordinates
-#if SUPPORT_WORKPLACE_COORDINATES
 	response->catf(",\"wpl\":%u,", gCodes->GetPrimaryWorkplaceCoordinateSystemNumber());
-#else
-	response->cat(',');
-#endif
-
 	AppendFloatArray(response, "xyz", numVisibleAxes, [this](size_t axis) noexcept { return gCodes->GetUserCoordinate(gCodes->GetPrimaryMovementState(), axis); }, 3);
 
 	// Machine coordinates
@@ -2050,7 +2035,6 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 // 'offset' is the offset into the file of the thumbnail data that the caller wants.
 // It is up to the caller to get the offset right, however we must fail gracefully if the caller passes us a bad offset.
 // The offset should always be either the initial offset or the 'next' value passed in a previous call, so it should always be the start of a line.
-// 'encapsulateThumbnail' defines whether the thumbnail shall be encapsulated as a "thumbnail" property of the root object
 OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition offset, bool forM31point1) noexcept
 {
 	constexpr unsigned int ThumbnailMaxDataSizeM31 = 1024;			// small enough for PanelDue to buffer
@@ -2231,26 +2215,30 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 		}
 
 		// See if we have any thumbnails
+		response->cat(",\"thumbnails\":");
 		if (info.thumbnails[0].IsValid())
 		{
-			response->cat(",\"thumbnails\":");
 			size_t index = 0;
 			do
 			{
 				const GCodeFileInfo::ThumbnailInfo& inf = info.thumbnails[index];
 				response->catf("%c{\"width\":%u,\"height\":%u,\"format\":\"%s\",\"offset\":%" PRIu32 ",\"size\":%" PRIu32 "}",
-								((index == 0) ? '[' : ','), inf.height, inf.width, inf.format.ToString(), inf.offset, inf.size);
+								((index == 0) ? '[' : ','), inf.width, inf.height, inf.format.ToString(), inf.offset, inf.size);
 				++index;
 			}
 			while (index < MaxThumbnails && info.thumbnails[index].IsValid());
-			response->cat(']');
 		}
+		else
+		{
+			response->cat('[');
+		}
+		response->cat(']');
 
 		response->catf(",\"generatedBy\":\"%.s\"}\n", info.generatedBy.c_str());
 		return GCodeResult::ok;
 	}
 
-	response->copy("{\"err\":1}\n");
+	response->printf("{\"err\":1,\"fileName\":\"%.s\"}", ((specificFile) ? filename : printMonitor->GetPrintingFilename()));
 	return GCodeResult::warning;
 }
 
@@ -2419,7 +2407,7 @@ size_t RepRap::GetStatusIndex() const noexcept
 			: (gCodes->IsCancellingPrint())								? 7		// Cancelling
 			: (printMonitor->IsPrinting())
 			  	  ? ((gCodes->IsSimulating())							? 8		// Simulating
-			: 														  	  9		// Printing
+			  		  : 												  9		// Printing
 			  	  	)
 			: (gCodes->IsDoingToolChange())								? 10	// Changing tool
 			: (gCodes->DoingFileMacro() || !move->NoLiveMovement() ||

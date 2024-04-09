@@ -226,6 +226,7 @@ public:
 	bool WantExists() const noexcept { return wantExists; }
 	bool ShouldIncludeNulls() const noexcept { return includeNulls; }
 	bool ShouldIncludeImportant() const noexcept { return includeImportant; }
+	bool TruncateLongArrays() const noexcept { return truncateLongArrays; }
 	uint64_t GetStartMillis() const { return startMillis; }
 	size_t GetInitialBufferOffset() const noexcept { return initialBufOffset; }
 
@@ -259,7 +260,8 @@ private:
 				includeNulls : 1,
 				excludeVerbose : 1,
 				excludeObsolete : 1,
-				obsoleteFieldQueried : 1;
+				obsoleteFieldQueried : 1,
+				truncateLongArrays : 1;
 };
 
 // Entry to describe an array of objects or values. These must be brace-initializable into flash memory.

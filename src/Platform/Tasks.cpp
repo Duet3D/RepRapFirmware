@@ -33,10 +33,6 @@ const uint8_t memPattern = 0xA5;		// this must be the same pattern as FreeRTOS b
 // Define replacement standard library functions
 #include <syscalls.h>
 
-#ifndef DEBUG
-extern uint32_t _firmware_crc;			// defined in linker script
-#endif
-
 // MAIN task data
 // The main task currently runs GCodes, so it needs to be large enough to hold the matrices used for delta auto calibration.
 // The worst case stack usage points are as follows:
