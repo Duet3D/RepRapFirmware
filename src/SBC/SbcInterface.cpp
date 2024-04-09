@@ -81,23 +81,6 @@ void SbcInterface::Init() noexcept
 	}
 }
 
-void SbcInterface::Spin() noexcept
-{
-	state = transfer.DoTransfer();
-	if (state == TransferState::connectionTimeout || (lastTransferTime != 0 && millis() - lastTransferTime > SpiTransferTimeout) ||
-		state == TransferState::connectionReset || state == TransferState::finished)
-	{
-		// Don't process anything, just kick off the next transfer to report we're operating in standalone mode
-		transfer.ResetConnection(true);
-		lastTransferTime = 0;
-	}
-	else if (state == TransferState::doingPartialTransfer && lastTransferTime == 0)
-	{
-		// Make sure the full transfer is restarted if a timeout occurs
-		lastTransferTime = millis();
-	}
-}
-
 [[noreturn]] void SbcInterface::TaskLoop() noexcept
 {
 	transfer.InitFromTask();
