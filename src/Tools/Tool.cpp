@@ -968,7 +968,7 @@ void Tool::StopFeedForward() const noexcept
 // Clear the pending extrusion for all extruders used by this tool
 void Tool::ClearExtrusionPending() const noexcept
 {
-	IterateExtruders([](unsigned int n)->void { reprap.GetMove().GetExtruderShaperForExtruder(n).ClearExtrusionPending(); });
+	IterateExtruders([](unsigned int n)->void { reprap.GetMove().ClearExtruderMovementPending(n); });
 }
 
 #if SUPPORT_ASYNC_MOVES && PREALLOCATE_TOOL_AXES

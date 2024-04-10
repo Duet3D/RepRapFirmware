@@ -66,12 +66,17 @@ public:
 	void AdjustMotorPosition(int32_t adjustment) noexcept;
 	bool MotionPending() const noexcept { return segments != nullptr; }
 	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
+
 	void AddSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, bool usePressureAdvance) noexcept;
+#if SUPPORT_LINEAR_DELTA
 	void AddDeltaSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, const float *dv, float initialXoffsetFromTower, float initialYoffsetFromTower, float initialH) noexcept;
+#endif
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
 #endif
+
+	void ClearMovementPending() noexcept { distanceCarriedForwards = 0.0; }
 
 	static int32_t GetAndClearMaxStepsLate() noexcept;
 	static int32_t GetAndClearMinStepInterval() noexcept;
@@ -80,7 +85,6 @@ public:
 private:
 	bool CalcNextStepTimeFull() noexcept SPEED_CRITICAL;
 	MoveSegment *NewCartesianSegment() noexcept SPEED_CRITICAL;
-	MoveSegment *NewExtruderSegment() noexcept SPEED_CRITICAL;
 #if SUPPORT_LINEAR_DELTA
 	MoveSegment *NewDeltaSegment() noexcept SPEED_CRITICAL;
 #endif
@@ -113,87 +117,22 @@ private:
 			stepsTakenThisSegment : 2;					// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
-	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
-
-	// These values change as the step is executed
-	int32_t nextStep;									// number of steps already done. For extruders this gets reset to the net steps already done at the start of each segment, so it can go negative.
+	int32_t netStepsThisSegment;						// the (signed) net number of steps in the current segment
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
-	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
-	uint32_t stepInterval;								// how many clocks between steps
+	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 	float q, t0, p;										// the movement parameters of the current segment
 	float distanceCarriedForwards = 0.0;				// the residual distance (less than one microstep) that was pending at the end of the previous segment
 
-	int32_t positionAtMoveStart = 0;					// the microstep position of the motor. If the motor is moving then this is the position at the start of the move.
+	// These values change as the segment is executed
+	int32_t nextStep;									// number of steps already done. For extruders this gets reset to the net steps already done at the start of each segment, so it can go negative.
+	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
+	uint32_t stepInterval;								// how many clocks between steps
+
 	float movementAccumulator;							// the accumulated movement since GetAccumulatedMovement was last called. Only used for extruders.
 
-	// Parameters unique to a style of move (Cartesian, delta or extruder). Currently, extruders and Cartesian moves use the same parameters.
-	union
-	{
 #if SUPPORT_LINEAR_DELTA
-		/* The equation for distance travelled along the planned straight path in terms of carriage height is:
-				s=(sqrt(
-						-(dy^2+dx^2)*h^2
-
-						+2*(dy^2+dx^2)*z0*h
-						-2*dy*dz*(y0-yt)*h
-						-2*dx*dz*(x0-xt)*h
-
-						+2*dx*dz*(x0-xt)*z0
-						+2*dy*dz*(y0-yt)*z0
-						+2*dx*dy*(x0-xt)*(y0-yt)
-
-						-(dy^2+dx^2)*z0^2
-						-(dz^2+dx^2)*(y0-yt)^2
-						-(dz^2+dy^2)*(x0-xt)^2
-						+L^2*(dz^2+dy^2+dx^2)
-					   )
-				   -dy*(y0-yt)
-				   -dx*(x0-xt)
-				   +dz*h
-				   -dz*z0
-			  	  )/(dz^2+dy^2+dx^2)
-
-			which is of the form:
-		  	  	 s = (sqrt(A*h^2 + B*h + C) + D*h + E)/F
-			which can be normalised by incorporating F into the other constants.
-
-			We can also express it in terms of (h-z0):
-				s=(sqrt(
-					  	-(dy^2+dx^2)*(h-z0)^2
-
-						-2*dy*dz*(y0-yt)*(h-z0)
-						-2*dx*dz*(x0-xt)*(h-z0)
-
-						+2*dx*dy*(x0-xt)*(y0-yt)
-
-						-(dz^2+dx^2)*(y0-yt)^2
-						-(dz^2+dy^2)*(x0-xt)^2
-						+L^2*(dz^2+dy^2+dx^2)
-					   )
-				   -dy*(y0-yt)
-				   -dx*(x0-xt)
-				   +dz*(h-z0)
-			  	  )/(dz^2+dy^2+dx^2)
-		*/
-		struct DeltaParameters							// Parameters for delta movement
-		{
-			float fTwoA;								// 2*(x0-xt)
-			float fTwoB;								// 2*(y0-yt)
-			float h0MinusZ0;							// h0-z0
-			float fDSquaredMinusAsquaredMinusBsquaredTimesSsquared;
-			float fHmz0s;								// the starting height less the starting Z height, multiplied by the Z movement fraction (can go negative)
-			float fMinusAaPlusBbTimesS;					// -((x0-xt)*dx + (y0-yt)*dy) * steps_per_mm
-			float reverseStartDistance;					// the overall move distance at which movement reversal occurs
-		} delta;
+	float dh;											// the change in the height of this carriage since the start of the segment
 #endif
-
-		struct CartesianParameters						// Parameters for Cartesian and extruder movement, including extruder pressure advance
-		{
-			float pressureAdvanceK;						// how much pressure advance is applied to this move
-			float effectiveStepsPerMm;					// the steps/mm multiplied by the movement fraction
-			float effectiveMmPerStep;					// reciprocal of steps/mm
-		} cart;
-	} mp;
 };
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.

@@ -109,6 +109,7 @@ public:
 	GCodeResult ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M572
 
 	ExtruderShaper& GetExtruderShaperForExtruder(size_t extruder) noexcept;
+	void ClearExtruderMovementPending(size_t extruder) noexcept;
 	float GetPressureAdvanceClocksForLogicalDrive(size_t drive) const noexcept;
 	float GetPressureAdvanceClocksForExtruder(size_t extruder) const noexcept;
 

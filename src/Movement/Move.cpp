@@ -626,6 +626,12 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	}
 }
 
+// Clear the movement pending value for an extruder
+void Move::ClearExtruderMovementPending(size_t extruder) noexcept
+{
+	dms[ExtruderToLogicalDrive(extruder)].ClearMovementPending();
+}
+
 // Set the current position to be this
 void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], MovementSystemNumber msNumber, bool doBedCompensation) noexcept
 {

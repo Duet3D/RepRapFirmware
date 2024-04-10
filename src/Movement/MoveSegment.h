@@ -56,9 +56,6 @@ public:
 	// Get the segment duration in step clocks
 	float GetDuration() const noexcept { return duration; }
 
-	// Get the segment speed change in mm/step_clock
-	float GetSpeedChange() const noexcept { return a * duration; }
-
 	// Get the initial speed
 	float GetU() const noexcept { return u; }
 
@@ -70,6 +67,9 @@ public:
 
 	// Get the actual ending speed when pressure advance is being applied
 	float GetEndSpeed(float pressureAdvanceK) const noexcept { return u + a * (pressureAdvanceK + duration); }
+
+	// Get the length
+	float GetLength() const noexcept { return  (u + 0.5 * a * duration) * duration; }
 
 	// For a decelerating move, calculate the distance before the move reverses
 	float GetDistanceToReverse() const noexcept;
@@ -158,6 +158,11 @@ inline float MoveSegment::GetDistanceToReverse() const noexcept
 //	C = (fx*xo + fy*yo - fz*h0)^2
 //	D = fz
 //	E = fz*h0 - fy*yo - fx*xo
+// where:
+//  dh is the increase in carriage height
+//  fx, fy and fz are the fraction of the distance moved that are in the x, y and z directions (i.e. [fx,fy,fz] is the direction vector)
+//  h0 is the initial carriage height
+//  x0, y0 are the initial X and Y offsets from the tower position
 
 class alignas(8) DeltaMoveSegment : public MoveSegment
 {
