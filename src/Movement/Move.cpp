@@ -566,6 +566,12 @@ bool Move::LowPowerOrStallPause(unsigned int queueNumber, RestorePoint& rp) noex
 	return rings[queueNumber].LowPowerOrStallPause(rp);
 }
 
+// Stop generating steps
+void Move::CancelStepping() noexcept
+{
+	StepTimer::DisableTimerInterrupt();
+}
+
 #endif
 
 void Move::Diagnostics(MessageType mtype) noexcept
@@ -643,6 +649,12 @@ void Move::Diagnostics(MessageType mtype) noexcept
 void Move::ClearExtruderMovementPending(size_t extruder) noexcept
 {
 	dms[ExtruderToLogicalDrive(extruder)].ClearMovementPending();
+}
+
+// Return when we started doing normal moves after the most recent extruder-only move, in millisecond ticks
+uint32_t Move::ExtruderPrintingSince(size_t logicalDrive) const noexcept
+{
+	return dms[logicalDrive].extruderPrintingSince;
 }
 
 // Set the current position to be this

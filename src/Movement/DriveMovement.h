@@ -48,14 +48,14 @@ public:
 	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept SPEED_CRITICAL;
 
 	void DebugPrint() const noexcept;
-	int32_t GetCurrentMotorPosition() const noexcept;
+	int32_t GetCurrentMotorPosition() const noexcept { return currentMotorPosition; }
 	bool StopDriver(int32_t& netStepsTaken) noexcept;					// if the driver is moving, stop it, update the position and pass back the net steps taken
 #if SUPPORT_REMOTE_COMMANDS
 	void StopDriverFromRemote() noexcept;
 #endif
 	bool GetNetStepsTaken(int32_t& netStepsTaken) const noexcept;		// like stopDriver but doesn't stop the driver
-	void SetMotorPosition(int32_t pos) noexcept;
-	void AdjustMotorPosition(int32_t adjustment) noexcept;
+	void SetMotorPosition(int32_t pos) noexcept { currentMotorPosition = pos; }
+	void AdjustMotorPosition(int32_t adjustment) noexcept { currentMotorPosition += adjustment; }
 	bool MotionPending() const noexcept { return segments != nullptr; }
 	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
 
@@ -69,7 +69,6 @@ public:
 
 	static int32_t GetAndClearMaxStepsLate() noexcept;
 	static int32_t GetAndClearMinStepInterval() noexcept;
-	static unsigned int GetAndClearBadSegmentCalcs() noexcept;
 
 private:
 	bool CalcNextStepTimeFull() noexcept SPEED_CRITICAL;
@@ -79,7 +78,6 @@ private:
 	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr
 
 	static int32_t maxStepsLate;
-	static unsigned int badSegmentCalcs;
 	static int32_t minStepInterval;
 
 	// Parameters common to Cartesian, delta and extruder moves
@@ -107,13 +105,15 @@ private:
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 	float q, t0, p;										// the movement parameters of the current segment
 	float distanceCarriedForwards = 0.0;				// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
+	int32_t currentMotorPosition;
 
 	// These values change as the segment is executed
 	int32_t nextStep;									// number of steps already done. For extruders this gets reset to the net steps already done at the start of each segment, so it can go negative.
 	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
 
-	float movementAccumulator;							// the accumulated movement since GetAccumulatedMovement was last called. Only used for extruders.
+	float movementAccumulator = 0.0;					// the accumulated movement since GetAccumulatedMovement was last called. Only used for extruders.
+	uint32_t extruderPrintingSince = 0;					// the millis ticks when this extruder started doing printing moves
 };
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
@@ -207,13 +207,6 @@ inline int32_t DriveMovement::GetAndClearMinStepInterval() noexcept
 	minStepInterval = 0;
 	return ret;
 
-}
-
-inline unsigned int DriveMovement::GetAndClearBadSegmentCalcs() noexcept
-{
-	const unsigned int ret = badSegmentCalcs;
-	badSegmentCalcs = 0;
-	return ret;
 }
 
 #if HAS_SMART_DRIVERS

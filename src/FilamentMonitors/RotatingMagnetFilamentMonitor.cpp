@@ -362,7 +362,7 @@ void RotatingMagnetFilamentMonitor::HandleIncomingData() noexcept
 				if (synced)
 				{
 					if (   checkNonPrintingMoves
-						|| (wasPrintingAtStartBit && (int32_t)(lastSyncTime - reprap.GetMove().ExtruderPrintingSince()) >= SyncDelayMillis)
+						|| (wasPrintingAtStartBit && (int32_t)(lastSyncTime - reprap.GetMove().ExtruderPrintingSince(GetDriver())) >= SyncDelayMillis)
 					   )
 					{
 						// We can use this measurement

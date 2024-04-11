@@ -34,8 +34,6 @@ public:
 	void operator delete(void* ptr) noexcept {}
 	void operator delete(void* ptr, std::align_val_t align) noexcept {}
 
-	MoveSegment(MoveSegment *p_next) noexcept;
-
 	// Read the values of the flag bits
 	bool IsLinear() const noexcept { return a == 0; }		//TODO: should we ignore very small accelerations, to avoid rounding error in the calculation?
 	bool IsRemote() const noexcept;
@@ -86,7 +84,8 @@ protected:
 	static unsigned int numCreated;
 
 	MoveSegment *next;										// pointer to the next segment
-	uint32_t initialDirection : 1							// set if the initial direction is forwards
+	uint32_t initialDirection : 1,							// set if the initial direction is forwards
+			 isPrintingMove : 1								// for extruder segments, indicates whether this is a printing move (i.e. forwards and with associated axis movement)
 #if SUPPORT_REMOTE_COMMANDS
 		   , isRemote : 1									// set if we are in expansion board mode and this segment came from a move commanded by the main board
 #endif
@@ -95,6 +94,9 @@ protected:
 	float duration;											// the duration in ticks of this segment
 	float u;												// the initial speed in steps per tick
 	float a;												// the acceleration during this segment in steps per tick squared
+
+private:
+	MoveSegment(MoveSegment *p_next) noexcept;
 };
 
 // Create a new one, leaving the flags clear

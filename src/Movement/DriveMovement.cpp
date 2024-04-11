@@ -18,6 +18,7 @@
 // Static members
 
 int32_t DriveMovement::maxStepsLate = 0;
+int32_t DriveMovement::minStepInterval = 0;
 
 // Constructors
 DriveMovement::DriveMovement() noexcept

@@ -452,10 +452,10 @@ void DDARing::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
 }
 
 // Get the DDA that should currently be executing, or nullptr if no move from this ring should be executing
-const DDA *DDARing::GetCurrentDDA() const noexcept
+DDA *DDARing::GetCurrentDDA() const noexcept
 {
 	TaskCriticalSectionLocker lock;
-	const DDA *cdda = checkPointer;
+	DDA *cdda = checkPointer;
 	while (cdda->GetState() == DDA::completed)
 	{
 		cdda = cdda->GetNext();
@@ -602,7 +602,6 @@ bool DDARing::PauseMoves(MovementState& ms) noexcept
 
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 
-#if 0	//TODO
 // Pause the print immediately, returning true if we were able to
 bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 {
@@ -612,22 +611,19 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 	bool abortedMove = false;
 
 	IrqDisable();
-	DDA *dda = currentDda;
+	DDA *dda = GetCurrentDDA();
 	if (dda != nullptr && dda->GetFilePosition() != noFilePosition)
 	{
 		// We are executing a move that has a file address, so we can interrupt it
-		timer.CancelCallback();
+		reprap.GetMove().CancelStepping();
+		abortedMove = true;
 #if SUPPORT_LASER
 		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
 		{
 			reprap.GetPlatform().SetLaserPwm(0);
 		}
 #endif
-		dda->MoveAborted();
-		CurrentMoveCompleted();							// updates live endpoints, extrusion, ddaRingGetPointer, currentDda etc.
-		--completedMoves;								// this move wasn't really completed
-		--scheduledMoves;								// ...but it is no longer scheduled either
-		abortedMove = true;
+		--scheduledMoves;								// this move is no longer scheduled
 	}
 	else
 	{
@@ -658,7 +654,7 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 	rp.feedRate = dda->GetRequestedSpeedMmPerClock();
 	rp.virtualExtruderPosition = dda->GetVirtualExtruderPosition();
 	rp.filePos = dda->GetFilePosition();
-	rp.proportionDone = dda->GetProportionDone(abortedMove);	// store how much of the complete multi-segment move's extrusion has been done
+	rp.proportionDone = dda->GetProportionDone();		// store how much of the complete multi-segment move's extrusion has been done
 	rp.initialUserC0 = dda->GetInitialUserC0();
 	rp.initialUserC1 = dda->GetInitialUserC1();
 
@@ -688,7 +684,6 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 	return true;
 }
 
-#endif
 #endif
 
 void DDARing::Diagnostics(MessageType mtype, unsigned int ringNumber) noexcept

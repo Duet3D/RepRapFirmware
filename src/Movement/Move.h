@@ -169,6 +169,7 @@ public:
 	bool PausePrint(MovementState& ms) noexcept;											// Pause the print as soon as we can, returning true if we were able to
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
 	bool LowPowerOrStallPause(unsigned int queueNumber, RestorePoint& rp) noexcept;			// Pause the print immediately, returning true if we were able to
+	void CancelStepping() noexcept;															// Stop generating steps
 #endif
 
 	bool NoLiveMovement() const noexcept { return rings[0].IsIdle(); }						// Is a move running, or are there any queued?
@@ -222,7 +223,7 @@ public:
 	bool WriteResumeSettings(FileStore *f) const noexcept;									// Write settings for resuming the print
 #endif
 
-	uint32_t ExtruderPrintingSince() const noexcept;										// When we started doing normal moves after the most recent extruder-only move
+	uint32_t ExtruderPrintingSince(size_t logicalDrive) const noexcept;						// When we started doing normal moves after the most recent extruder-only move
 
 	unsigned int GetJerkPolicy() const noexcept { return jerkPolicy; }
 	void SetJerkPolicy(unsigned int jp) noexcept { jerkPolicy = jp; }

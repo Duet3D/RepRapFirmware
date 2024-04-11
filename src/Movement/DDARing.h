@@ -34,7 +34,7 @@ public:
 	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
 	uint32_t GetGracePeriod() const noexcept { return gracePeriod; }					// Return the minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
-	const DDA *GetCurrentDDA() const noexcept;											// If a move from this ring should be executing now, fetch its DDA
+	DDA *GetCurrentDDA() const noexcept;												// If a move from this ring should be executing now, fetch its DDA
 	float PushBabyStepping(size_t axis, float amount) noexcept;							// Try to push some babystepping through the lookahead queue, returning the amount pushed
 
 	uint32_t GetScheduledMoves() const noexcept { return scheduledMoves; }				// How many moves have been scheduled?

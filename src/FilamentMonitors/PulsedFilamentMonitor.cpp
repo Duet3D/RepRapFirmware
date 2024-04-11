@@ -194,7 +194,7 @@ void PulsedFilamentMonitor::Poll() noexcept
 
 	if (haveInterruptData)					// if we have a synchronised value for the amount of extrusion commanded
 	{
-		if (wasPrintingAtInterrupt && (int32_t)(lastSyncTime - reprap.GetMove().ExtruderPrintingSince()) > SyncDelayMillis)
+		if (wasPrintingAtInterrupt && (int32_t)(lastSyncTime - reprap.GetMove().ExtruderPrintingSince(GetDriver())) > SyncDelayMillis)
 		{
 			// We can use this measurement
 			extrusionCommandedThisSegment += extrusionCommandedAtInterrupt;
