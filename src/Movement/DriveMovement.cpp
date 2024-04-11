@@ -15,10 +15,6 @@
 #include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
 
-#if SUPPORT_LINEAR_DELTA
-# include "Kinematics/LinearDeltaKinematics.h"
-#endif
-
 // Static members
 
 int32_t DriveMovement::maxStepsLate = 0;
@@ -39,19 +35,9 @@ void DriveMovement::DebugPrint() const noexcept
 									: (state == DMState::stepError2) ? " ERR2:"
 										: (state == DMState::stepError3) ? " ERR3:"
 											: ":";
-		debugPrintf("DM%c%s dir=%c next=%" PRIi32 " rev=%" PRIi32 " interval=%" PRIu32 " ssl=%" PRIi32 " A=%.4e B=%.4e C=%.4e",
+		debugPrintf("DM%c%s dir=%c next=%" PRIi32 " rev=%" PRIi32 " interval=%" PRIu32 " ssl=%" PRIi32 " A=%.4e B=%.4e C=%.4e\n",
 						c, errText, (direction) ? 'F' : 'B', nextStep, reverseStartStep, stepInterval, segmentStepLimit,
 							(double)q, (double)t0, (double)p);
-#if SUPPORT_LINEAR_DELTA
-		if (isDelta)
-		{
-			debugPrintf(" dh=%.4e\n", (double)dh);
-		}
-		else
-#endif
-		{
-			debugPrintf("\n");
-		}
 	}
 	else
 	{
@@ -183,86 +169,6 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 	}
 }
 
-#if SUPPORT_LINEAR_DELTA
-
-// This is called when 'segments' has just been changed to a new segment. Return the new segment to execute, or nullptr if there are no more segments.
-MoveSegment *DriveMovement::NewDeltaSegment() noexcept
-{
-	while (true)
-	{
-		if (segments == nullptr)
-		{
-			return nullptr;
-		}
-
-		// Work out whether we reverse in this segment and the movement limit in steps.
-		//	ds = D * dh + E +/- sqrt(A * dh^2 + B * dh + C), A is always <= 0
-		const float maxDh = qq;
-		
-		// First check whether the first step in this segment is the previously-calculated reverse start step, and if so then do the reversal.
-		if (nextStep == reverseStartStep)
-		{
-			direction = false;					// we must have been going up, so now we are going down
-			directionChanged = directionReversed = true;
-		}
-
-		if (segments->GetNext() == nullptr)
-		{
-			// This is the last segment, so the phase step limit is the number of total steps, and we can avoid some calculation
-			segmentStepLimit = totalSteps + 1;
-			state = (reverseStartStep <= totalSteps && nextStep < reverseStartStep) ? DMState::deltaForwardsReversing : DMState::deltaNormal;
-		}
-		else
-		{
-			// Work out how many whole steps we have moved up or down at the end of this segment
-			const DeltaMoveSegment *const deltaSeg = (const DeltaMoveSegment*)segments;
-			const float sDx = distanceSoFar * deltaSeg->GetDv()[0];
-			const float sDy = distanceSoFar * deltaSeg->GetDv()[1];
-			int32_t netStepsAtEnd = (int32_t)floorf(fastSqrtf(deltaSeg->GetfDSquaredMinusAsquaredMinusBsquaredTimesSsquared() - fsquare(stepsPerMm) * (sDx * (sDx + deltaSeg->GetfTwoA())
-																+ sDy * (sDy + deltaSeg->GetfTwoB())))
-													+ (distanceSoFar * deltaSeg->GetDv()[2] - deltaSeg->GetH0MinusZ0()) * stepsPerMm);
-
-			// If there is a reversal then we only ever move up by (reverseStartStep - 1) steps, so netStepsAtEnd should be less than reverseStartStep.
-			// However, because of rounding error, it might possibly be equal.
-			// If there is no reversal then reverseStartStep is set to totalSteps + 1, so netStepsAtEnd must again be less than reverseStartStep.
-			if (netStepsAtEnd >= reverseStartStep)
-			{
-				netStepsAtEnd = reverseStartStep - 1;								// correct the rounding error - we know that reverseStartStep cannot be 0 so subtracting 1 is safe
-			}
-
-			if (!direction)
-			{
-				// We are going down so any reversal has already happened
-				state = DMState::deltaNormal;
-				segmentStepLimit = (nextStep >= reverseStartStep)
-									? (2 * reverseStartStep) - netStepsAtEnd + 1	// we went up (reverseStartStep-1) steps, now we are going down to netStepsAtEnd
-										: -netStepsAtEnd + 1;						// we are just going down to netStepsAtEnd
-			}
-			else if (reverseStartStep > totalSteps || distanceSoFar <= mp.delta.reverseStartDistance)
-			{
-				// This segment is purely upwards motion of the tower
-				state = DMState::deltaNormal;
-				segmentStepLimit = netStepsAtEnd + 1;
-			}
-			else
-			{
-				// This segment ends with reverse motion
-				segmentStepLimit = (2 * reverseStartStep) - netStepsAtEnd + 1;
-				state = DMState::deltaForwardsReversing;
-			}
-		}
-
-		if (segmentStepLimit > nextStep)
-		{
-			return segments;
-		}
-
-		segments = segments->GetNext();
-	}
-}
-
-#endif // SUPPORT_LINEAR_DELTA
-
 #if 0	///these will be removed
 
 // Prepare this DM for a Cartesian axis move, returning true if there are steps to do
@@ -298,127 +204,6 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	return CalcNextStepTimeFull();					// calculate the scheduled time of the first step
 }
 
-#if SUPPORT_LINEAR_DELTA
-
-// Prepare this DM for a Delta axis move, returning true if there are steps to do
-bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept
-{
-	const float stepsPerMm = reprap.GetPlatform().DriveStepsPerUnit(drive);
-	const float A = params.initialX - params.dparams->GetTowerX(drive);
-	const float B = params.initialY - params.dparams->GetTowerY(drive);
-	const float aAplusbB = A * dda.directionVector[X_AXIS] + B * dda.directionVector[Y_AXIS];
-	const float dSquaredMinusAsquaredMinusBsquared = params.dparams->GetDiagonalSquared(drive) - fsquare(A) - fsquare(B);
-	const float h0MinusZ0 = fastSqrtf(dSquaredMinusAsquaredMinusBsquared);
-
-	mp.delta.h0MinusZ0 = h0MinusZ0;
-	mp.delta.fTwoA = 2.0 * A;
-	mp.delta.fTwoB = 2.0 * B;
-	mp.delta.fHmz0s = h0MinusZ0 * stepsPerMm;
-	mp.delta.fMinusAaPlusBbTimesS = -(aAplusbB * stepsPerMm);
-	mp.delta.fDSquaredMinusAsquaredMinusBsquaredTimesSsquared = dSquaredMinusAsquaredMinusBsquared * fsquare(stepsPerMm);
-	reverseStartStep = totalSteps + 1;						// set up the default
-
-	// Calculate the distance at which we need to reverse direction.
-	if (params.a2plusb2 <= 0.0)
-	{
-		// Pure Z movement. We can't use the main calculation because it divides by params.a2plusb2.
-		direction = (dda.directionVector[Z_AXIS] >= 0.0);
-		mp.delta.reverseStartDistance = (direction) ? dda.totalDistance + 1.0 : -1.0;	// so that we never reverse and NewDeltaSegment knows which way we are going
-	}
-	else
-	{
-		// The distance to reversal is the solution to a quadratic equation. One root corresponds to the carriages being below the bed,
-		// the other root corresponds to the carriages being above the bed.
-		const float drev = ((dda.directionVector[Z_AXIS] * fastSqrtf(params.a2plusb2 * params.dparams->GetDiagonalSquared(drive) - fsquare(A * dda.directionVector[Y_AXIS] - B * dda.directionVector[X_AXIS])))
-							- aAplusbB)/params.a2plusb2;
-		mp.delta.reverseStartDistance = drev;
-		if (drev <= 0.0)
-		{
-			// No reversal, going down
-			direction = false;
-		}
-		else if (drev >= dda.totalDistance)
-		{
-			// No reversal, going up
-			direction = true;
-		}
-		else																	// the reversal point is within range
-		{
-			// Calculate how many steps we need to move up before reversing
-			const float hrev = dda.directionVector[Z_AXIS] * drev + fastSqrtf(dSquaredMinusAsquaredMinusBsquared - 2 * drev * aAplusbB - params.a2plusb2 * fsquare(drev));
-			const int32_t numStepsUp = (int32_t)((hrev - mp.delta.h0MinusZ0) * stepsPerMm);
-
-			// We may be going down but almost at the peak height already, in which case we don't really have a reversal.
-			// However, we could be going up by a whole step due to rounding, so we need to check the direction
-			if (numStepsUp < 1)
-			{
-				if (direction)													// if the overall movement is up
-				{
-					// totalSteps must be 1
-					mp.delta.reverseStartDistance = dda.totalDistance + 1.0;	// indicate that there is no reversal, we're just going up 1 step
-				}
-				else															// overall movement is down, jusr skip the up bit
-				{
-					mp.delta.reverseStartDistance = -1.0;						// so that we know we have reversed already
-				}
-			}
-			else if (direction && numStepsUp <= totalSteps)
-			{
-				// If numStepsUp == totalSteps then the reverse segment is too small to do.
-				// If numStepsUp < totalSteps then there has been a rounding error, because we are supposed to move up more than the calculated number of steps we move up.
-				// This can happen if the calculated reversal is very close to the end of the move, because we round the final step positions to the nearest step, which may be up.
-				// Either way, don't do a reverse segment.
-				mp.delta.reverseStartDistance = dda.totalDistance + 1.0;
-			}
-			else
-			{
-				reverseStartStep = numStepsUp + 1;
-
-				// Correct the initial direction and the total number of steps
-				if (direction)
-				{
-					// Net movement is up, so we will go up first and then down by a lesser amount
-					totalSteps = (2 * numStepsUp) - totalSteps;
-				}
-				else
-				{
-					// Net movement is down, so we will go up first and then down by a greater amount
-					direction = true;
-					totalSteps = (2 * numStepsUp) + totalSteps;
-				}
-			}
-		}
-	}
-
-	// At this point we may have totalSteps = 0. In this case we must cancel the move, because the code always takes the first step.
-	if (totalSteps == 0)
-	{
-		return false;
-	}
-
-	distanceSoFar = 0.0;
-	timeSoFar = 0.0;
-	isDelta = true;
-	isExtruder = false;
-	segments = dda.segments;
-	nextStep = 1;									// must do this before calling NewDeltaSegment
-	directionChanged = directionReversed = false;	// must clear these before we call NewDeltaSegment
-
-	if (!NewDeltaSegment())
-	{
-		return false;
-	}
-
-	// Prepare for the first step
-	nextStepTime = 0;
-	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
-	stepInterval = 0;								// to keep the debug output deterministic
-	return CalcNextStepTimeFull();					// calculate the scheduled time of the first step
-}
-
-#endif	// SUPPORT_LINEAR_DELTA
-
-// Prepare this DM for an extruder move, returning true if there are steps to do
 // If there are no steps to do, set nextStep = 0 so that DDARing::CurrentMoveCompleted doesn't add any steps to the movement accumulator
 // We have already generated the extruder segments and we know that there are some
 // effStepsPerMm is the number of extruder steps needed per mm of totalDistance before we apply pressure advance
@@ -526,11 +311,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			MoveSegment *oldSegment = currentSegment;
 			segments = currentSegment = oldSegment->GetNext();
 			MoveSegment::Release(oldSegment);
-			currentSegment =
-#if SUPPORT_LINEAR_DELTA
-							(isDelta) ? NewDeltaSegment() :
-#endif
-								NewCartesianSegment();
+			currentSegment = NewCartesianSegment();
 			if (currentSegment == nullptr)
 			{
 				state = DMState::idle;
@@ -610,50 +391,6 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	case DMState::cartDecelNoReverse:							// Cartesian decelerating with no reversal
 		nextCalcStepTime = t0 - fastLimSqrtf(q + p * (float)(nextStep + (int32_t)stepsTillRecalc));
 		break;
-
-#if SUPPORT_LINEAR_DELTA
-	case DMState::deltaForwardsReversing:						// moving forwards
-		if (nextStep == reverseStartStep)
-		{
-			direction = false;
-			directionChanged = directionReversed = true;
-			state = DMState::deltaNormal;
-		}
-		// no break
-	case DMState::deltaNormal:
-		// Calculate d*s where d = distance the head has travelled, s = steps/mm for this drive
-		{
-			const float heightChange = (float)(stepsTillRecalc + 1) * mmPerStep;
-			if (direction)
-			{
-				dh += heightChange;						// get new carriage height above Z
-			}
-			else
-			{
-				dh -= heightChange;						// get new carriage height above Z
-			}
-
-			// See MoveSegment.h: ds = D * dh + E +/- sqrt(A * dh^2 + B * dh + C)
-			const DeltaMoveSegment* deltaSeg = (const DeltaMoveSegment*)segments;
-			// Due to rounding error we can end up trying to take the square root of a negative number if we do not take precautions here
-			//TODO take correct root in the following
-			const float ds = deltaSeg->GetDeltaD() * dh + deltaSeg->GetDeltaE() + fastLimSqrtf((deltaSeg->GetDeltaA() * dh + deltaSeg->GetDeltaB()) * dh + deltaSeg->GetDeltaC());
-
-			// Now feed ds into the step algorithm for Cartesian motion
-			if (ds < 0.0)
-			{
-//				debugPrintf("step err2\n");
-				state = DMState::stepError2;
-				return false;
-			}
-
-			const float pCds = p * ds;
-			nextCalcStepTime = (segments->IsLinear()) ? t0 + pCds
-								: (segments->IsAccelerating()) ? t0 + fastLimSqrtf(q + pCds)
-									 : t0 - fastLimSqrtf(q + pCds);
-		}
-		break;
-#endif
 
 	default:
 		return false;

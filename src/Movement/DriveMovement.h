@@ -31,11 +31,6 @@ enum class DMState : uint8_t
 	cartDecelNoReverse,
 	cartDecelForwardsReversing,						// linear decelerating motion, expect reversal
 	cartDecelReverse,								// linear decelerating motion, reversed
-
-#if SUPPORT_LINEAR_DELTA
-	deltaNormal,									// moving forwards without reversing in this segment, or in reverse
-	deltaForwardsReversing,							// moving forwards to start with, reversing before the end of this segment
-#endif
 };
 
 // This class describes a single movement of one drive
@@ -50,9 +45,6 @@ public:
 
 	bool CalcNextStepTime() noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
-#if SUPPORT_LINEAR_DELTA
-	bool PrepareDeltaAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
-#endif
 	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept SPEED_CRITICAL;
 
 	void DebugPrint() const noexcept;
@@ -68,9 +60,6 @@ public:
 	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
 
 	void AddSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, bool usePressureAdvance) noexcept;
-#if SUPPORT_LINEAR_DELTA
-	void AddDeltaSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, const float *dv, float initialXoffsetFromTower, float initialYoffsetFromTower, float initialH) noexcept;
-#endif
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
@@ -85,9 +74,6 @@ public:
 private:
 	bool CalcNextStepTimeFull() noexcept SPEED_CRITICAL;
 	MoveSegment *NewCartesianSegment() noexcept SPEED_CRITICAL;
-#if SUPPORT_LINEAR_DELTA
-	MoveSegment *NewDeltaSegment() noexcept SPEED_CRITICAL;
-#endif
 
 	void CheckDirection(bool reversed) noexcept;
 	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr
@@ -129,10 +115,6 @@ private:
 	uint32_t stepInterval;								// how many clocks between steps
 
 	float movementAccumulator;							// the accumulated movement since GetAccumulatedMovement was last called. Only used for extruders.
-
-#if SUPPORT_LINEAR_DELTA
-	float dh;											// the change in the height of this carriage since the start of the segment
-#endif
 };
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.

@@ -166,13 +166,6 @@ void CanMotion::AddLinearAxisMovement(const PrepParams& params, DriverId canDriv
 	}
 }
 
-// This is called by DDA::Prepare for each active CAN DM in the move
-void CanMotion::AddDeltaAxisMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept
-{
-	//TODO currently this executes a linear movement, which is only OK if it was finely segmented
-	AddLinearAxisMovement(params, canDriver, steps);
-}
-
 void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver, float extrusion, bool usePressureAdvance) noexcept
 {
 	CanMessageBuffer * const buf = GetBuffer(params, canDriver);

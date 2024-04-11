@@ -20,7 +20,6 @@
 # define DDA_DEBUG_STEP_COUNT	0
 
 class DDARing;
-class LinearDeltaKinematics;
 class CanMessageMovementLinearShaped;
 
 // Struct for passing parameters to the DriveMovement Prepare methods, also accessed by the input shaper
@@ -33,18 +32,6 @@ struct PrepParams
 	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
 	float topSpeed;									// the top speed, may be modified by the input shaper
 	bool modified;									// true if this has been modified since we set it from the DDA
-
-#if SUPPORT_LINEAR_DELTA
-	// Parameters used only for delta moves
-	float initialX, initialY;
-# if SUPPORT_CAN_EXPANSION
-	float finalX, finalY;
-	float zMovement;
-# endif
-	const LinearDeltaKinematics *dparams;
-	float a2plusb2;									// sum of the squares of the X and Y movement fractions
-#endif
-
 	bool useInputShaping;
 
 	// Get the total clocks needed
@@ -202,9 +189,6 @@ private:
 		struct
 		{
 			uint16_t endCoordinatesValid : 1,		// True if endCoordinates can be relied
-#if SUPPORT_LINEAR_DELTA
-					 isDeltaMovement : 1,			// True if this is a delta printer movement
-#endif
 					 canPauseAfter : 1,				// True if we can pause at the end of this move
 					 isPrintingMove : 1,			// True if this move includes XY movement and extrusion
 					 usePressureAdvance : 1,		// True if pressure advance should be applied to any forward extrusion
