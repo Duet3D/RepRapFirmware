@@ -150,14 +150,29 @@ inline float MoveSegment::GetDistanceToReverse() const noexcept
 	return fsquare(u)/-(2 * a);
 }
 
-// For delta movement the linear distance moved as a function of required carriage height is given by:
+// For delta movement the carriage height h0+dh is given by:
+//  (h0 + dh - z)^2 = L^2 - x^2 - y^2
+// where L is the rod length, z0 is the  and x,y,z are the effector X and Y distances from the tower and the Z height
+// Substituting x = x0 + fx*ds, y = y0 + fx*dy, z=z0 + fz*ds:
+//  (h0 + dh - z0 - fz*ds)^2 = L^2 - (x0 + fx*ds)^2 - (y0 + fy*ds)^2
+// Expanding:
+//  h0^2 + dh^2 + z0^2 + (fz*ds)^2 + 2*h0*dh - 2*h0*z0 - 2*h0*fz*ds - 2*dh*z0 - 2*dh*fz*ds + 2*z0*fz*ds = L^2 - x0^2 - (fx*ds)^2 - 2*x0*fx*ds - y0^2 - (fy*ds)^2 - 2*y0*fy*ds
+// Subtract the following:
+//  (h0 - z0)^2 = L^2 + x0^2 + y0^2
+// to give:
+//  dh^2 + (fz*ds)^2 + 2*h0*dh - 2*h0*fz*ds - 2*dh*z0 - 2*dh*fz*ds + 2*z0*fz*ds = -(fx*ds)^2 - 2*x0*fx*ds - (fy*ds)^2 - 2*y0*fy*ds
+// Rearrange:
+//  ds^2*(fz^2 + fx^2 + fy^2) + ds*2*(-h0*fz - dh*fz + z0*fz + x0*fx + y0*fy) + 2*dh*(h0 - z0) - dh^2 = 0
+// Substituting fx^2 + fy^2 + fz^2 = 1:
+//  ds^2 + ds*2*(-h0*fz - dh*fz + z0*fz + x0*fx + y0*fy) + dh*(2*h0 - 2*z0 - dh) = 0
+// Solving for ds, this means that the linear distance moved as a function of required carriage height is given by:
 //	ds = D * dh + E +/- sqrt(A * dh^2 + B * dh + C)
 // where:
-//	A = -2*(fx^2+fy^2)
-//	B = A * h0 - 2*(fy*yo + fx*xo)*fz
-//	C = (fx*xo + fy*yo - fz*h0)^2
-//	D = fz
-//	E = fz*h0 - fy*yo - fx*xo
+ok//	A = -2*(fx^2+fy^2)
+//	B = A * h0 - 2*(fy*y0 + fx*x0)*fz
+//	C = (fx*x0 + fy*y0 - fz*h0)^2
+ok//	D = fz
+ok//	E = fz*h0 - fy*y0 - fx*x0 - fz*z0
 // where:
 //  dh is the increase in carriage height
 //  fx, fy and fz are the fraction of the distance moved that are in the x, y and z directions (i.e. [fx,fy,fz] is the direction vector)

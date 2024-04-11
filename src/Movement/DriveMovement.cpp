@@ -185,7 +185,7 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 
 #if SUPPORT_LINEAR_DELTA
 
-// This is called when segments has just been changed to a new segment. Return the new segment to execute, or nullptr.
+// This is called when 'segments' has just been changed to a new segment. Return the new segment to execute, or nullptr if there are no more segments.
 MoveSegment *DriveMovement::NewDeltaSegment() noexcept
 {
 	while (true)
@@ -196,6 +196,9 @@ MoveSegment *DriveMovement::NewDeltaSegment() noexcept
 		}
 
 		// Work out whether we reverse in this segment and the movement limit in steps.
+		//	ds = D * dh + E +/- sqrt(A * dh^2 + B * dh + C), A is always <= 0
+		const float maxDh = qq;
+		
 		// First check whether the first step in this segment is the previously-calculated reverse start step, and if so then do the reversal.
 		if (nextStep == reverseStartStep)
 		{
