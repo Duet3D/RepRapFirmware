@@ -88,7 +88,6 @@ private:
 	MoveSegment *segments = nullptr;					// pointer to the segment list for this driver
 
 	float stepsPerMm;
-	float mmPerStep;
 
 	ExtruderShaper extruderShaper;						// pressure advance control
 
@@ -107,7 +106,7 @@ private:
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 	float q, t0, p;										// the movement parameters of the current segment
-	float distanceCarriedForwards = 0.0;				// the residual distance (less than one microstep) that was pending at the end of the previous segment
+	float distanceCarriedForwards = 0.0;				// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
 
 	// These values change as the segment is executed
 	int32_t nextStep;									// number of steps already done. For extruders this gets reset to the net steps already done at the start of each segment, so it can go negative.

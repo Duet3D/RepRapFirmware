@@ -145,7 +145,8 @@ void HangprinterKinematics::Recalc() noexcept
 
 	//// Line buildup compensation
 	float stepsPerUnitTimesRTmp[HANGPRINTER_MAX_ANCHORS] = { 0.0 };
-	Platform& platform = reprap.GetPlatform(); // No const because we want to set drive steper per unit
+	const Platform& platform = reprap.GetPlatform();
+	Move& move = reprap.GetMove();								 // No const because we want to set drive steps per unit
 	for (size_t i = 0; i < numAnchors; ++i)
 	{
 		const uint8_t driver = platform.GetAxisDriversConfig(i).driverNumbers[0].localDriver; // Only supports single driver
@@ -154,7 +155,7 @@ void HangprinterKinematics::Recalc() noexcept
 			(
 				(float)(mechanicalAdvantage[i])
 				* fullStepsPerMotorRev[i]
-				* platform.GetMicrostepping(driver, dummy)
+				* move.GetMicrostepping(driver, dummy)
 				* spoolGearTeeth[i]
 			)
 			/ (2.0 * Pi * motorGearTeeth[i]);
@@ -164,7 +165,7 @@ void HangprinterKinematics::Recalc() noexcept
 		spoolRadiiSq[i] = spoolRadii[i] * spoolRadii[i];
 
 		// Calculate the steps per unit that is correct at the origin
-		platform.SetDriveStepsPerUnit(i, stepsPerUnitTimesRTmp[i] / spoolRadii[i], 0);
+		move.SetDriveStepsPerUnit(i, stepsPerUnitTimesRTmp[i] / spoolRadii[i], 0);
 	}
 
 	//// Flex compensation

@@ -49,7 +49,6 @@ void DriveMovement::DebugPrint() const noexcept
 void DriveMovement::SetStepsPerMm(float p_stepsPerMm) noexcept
 {
 	stepsPerMm = p_stepsPerMm;
-	mmPerStep = 1.0/p_stepsPerMm;
 }
 
 // This is called when segments has just been changed to a new segment. Return the new segment to execute, or nullptr.
@@ -70,10 +69,10 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 			// Therefore t = -distanceCarriedForwards/u + n * mmPerStep/u
 			// Calculate the t0 and p coefficients such that t = t0 + p*n
 			t0 = -distanceCarriedForwards/segments->GetU() + segments->GetStartTime();
-			p = mmPerStep/segments->GetU();
+			p = 1.0/segments->GetU();
 			q = 0.0;								// to make the debug output consistent
 			const float segmentDistance = distanceCarriedForwards + segments->GetU() * segments->GetDuration();
-			netStepsThisSegment = (int32_t)(segmentDistance * stepsPerMm);
+			netStepsThisSegment = (int32_t)segmentDistance;
 			if (netStepsThisSegment < 0)
 			{
 				newDirection = false;
@@ -94,11 +93,11 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 			// Calculate the t0, p and q coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q)
 			const float uDivA = segments->GetU()/segments->GetA();
 			t0 = segments->GetStartTime() - uDivA;
-			p = 2 * mmPerStep/segments->GetA();
+			p = 2.0/segments->GetA();
 			q = fsquare(uDivA) - 2 * distanceCarriedForwards/segments->GetA();
 
 			const float segmentDistance = distanceCarriedForwards + segments->GetLength();
-			netStepsThisSegment = (int32_t)(segmentDistance * stepsPerMm);
+			netStepsThisSegment = (int32_t)segmentDistance;
 			if (uDivA >= 0.0)
 			{
 				// Any reversal is in the past
@@ -119,7 +118,7 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 			{
 				// Reversal is in this segment, but it may be the first step, or may be beyond the last step we are going to take
 				const float distanceToReverse = segments->GetDistanceToReverse() + distanceCarriedForwards;
-				const int32_t netStepsBeforeReverse = (int32_t)(distanceToReverse * stepsPerMm);
+				const int32_t netStepsBeforeReverse = (int32_t)distanceToReverse;
 				if (netStepsBeforeReverse <= 0)
 				{
 					newDirection = false;
@@ -307,7 +306,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// If there are no more steps left in this segment, skip to the next segment and use single stepping
 		if (stepsToLimit == 0)
 		{
-			distanceCarriedForwards += currentSegment->GetLength() - netStepsThisSegment * mmPerStep;
+			distanceCarriedForwards += currentSegment->GetLength() - netStepsThisSegment;
 			MoveSegment *oldSegment = currentSegment;
 			segments = currentSegment = oldSegment->GetNext();
 			MoveSegment::Release(oldSegment);

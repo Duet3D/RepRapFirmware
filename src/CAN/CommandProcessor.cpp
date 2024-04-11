@@ -363,7 +363,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 #if HAS_SMART_DRIVERS
 					","
 #endif
-					, driver, (double)reprap.GetPlatform().DriveStepsPerUnit(driver));
+					, driver, (double)reprap.GetMove().DriveStepsPerUnit(driver));
 #if HAS_SMART_DRIVERS
 				SmartDrivers::AppendDriverStatus(driver, reply);
 #endif

@@ -64,6 +64,16 @@ public:
 
 	[[noreturn]] void MoveLoop() noexcept;									// Main loop called by the Move task
 
+	float DriveStepsPerUnit(size_t axisOrExtruder) const noexcept;
+	const float *_ecv_array GetDriveStepsPerUnit() const noexcept { return driveStepsPerUnit; }
+	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept;
+
+	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode, const StringRef& reply) noexcept;
+	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const noexcept;
+	unsigned int GetMicrostepping(size_t axisOrExtruder) const noexcept { return microstepping[axisOrExtruder] & 0x7FFF; }
+	bool GetMicrostepInterpolation(size_t axisOrExtruder) const noexcept { return (microstepping[axisOrExtruder] & 0x8000) != 0; }
+	uint16_t GetRawMicrostepping(size_t axisOrExtruder) const noexcept { return microstepping[axisOrExtruder]; }
+
 	void GetCurrentMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
 	void SetRawPosition(const float positions[MaxAxesPlusExtruders], MovementSystemNumber msNumber) noexcept
 			pre(queueNumber < NumMovementSystems);							// Set the current position to be this without transforming them first
@@ -101,7 +111,6 @@ public:
 	void SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) noexcept;
 	void SetInitialCalibrationDeviation(const Deviation& d) noexcept;
 	void SetLatestMeshDeviation(const Deviation& d) noexcept;
-	void UpdateStepsPerMm() noexcept;										// called when steps/mm is set for any axis or extruder
 
 	float PushBabyStepping(MovementSystemNumber msNumber, size_t axis, float amount) noexcept;				// Try to push some babystepping through the lookahead queue
 
@@ -241,8 +250,8 @@ public:
 	void CheckEndstops(Platform& platform, bool executingMove) noexcept;
 #endif
 
-	static int32_t MotorMovementToSteps(size_t drive, float coord) noexcept;				// Convert a single motor position to number of steps
-	static float MotorStepsToMovement(size_t drive, int32_t endpoint) noexcept;				// Convert number of motor steps to motor position
+	int32_t MotorMovementToSteps(size_t drive, float coord) const noexcept;					// Convert a single motor position to number of steps
+	float MotorStepsToMovement(size_t drive, int32_t endpoint) const noexcept;				// Convert number of motor steps to motor position
 
 	// We now use the laser task to take readings from scanning Z probes, so we always need it
 	[[noreturn]] void LaserTaskRun() noexcept;
@@ -311,8 +320,11 @@ private:
 	DDARing rings[NumMovementSystems];
 
 	DriveMovement dms[MaxAxesPlusExtruders + NumDirectDrivers];		// One DriveMovement object per logical drive, plus an extra one for each local driver to support bed levelling moves
+
 	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 	// Accumulated motor steps, used by filament monitors
 	int32_t motorPositionsAfterScheduledMoves[MaxAxesPlusExtruders];	// The motor positions that will result after all scheduled movement has completed normally
+	float driveStepsPerUnit[MaxAxesPlusExtruders];
+	uint16_t microstepping[MaxAxesPlusExtruders];					// the microstepping used for each axis or extruder, top bit is set if interpolation enabled
 
 	mutable float latestLiveCoordinates[MaxAxesPlusExtruders];		// the most recent set of live coordinates that we fetched
 	mutable uint32_t latestLiveCoordinatesFetchedAt = 0;			// when we fetched the live coordinates
@@ -419,7 +431,7 @@ inline int32_t Move::GetLiveMotorPosition(size_t axis) const noexcept
 	return dms[axis].GetCurrentMotorPosition();
 }
 
-ExtruderShaper& Move::GetExtruderShaperForExtruder(size_t extruder) noexcept
+inline ExtruderShaper& Move::GetExtruderShaperForExtruder(size_t extruder) noexcept
 {
 	return dms[ExtruderToLogicalDrive(extruder)].extruderShaper;
 }

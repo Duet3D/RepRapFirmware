@@ -3867,13 +3867,13 @@ void GCodes::DisableDrives() noexcept
 
 bool GCodes::ChangeMicrostepping(size_t axisOrExtruder, unsigned int microsteps, bool interp, const StringRef& reply) const noexcept
 {
-	bool dummy;
-	const unsigned int oldSteps = platform.GetMicrostepping(axisOrExtruder, dummy);
-	const bool success = platform.SetMicrostepping(axisOrExtruder, microsteps, interp, reply);
+	Move& move = reprap.GetMove();
+	const unsigned int oldSteps = move.GetMicrostepping(axisOrExtruder);
+	const bool success = move.SetMicrostepping(axisOrExtruder, microsteps, interp, reply);
 	if (success)
 	{
 		// We changed the microstepping, so adjust the steps/mm to compensate
-		platform.SetDriveStepsPerUnit(axisOrExtruder, platform.DriveStepsPerUnit(axisOrExtruder), oldSteps);
+		move.SetDriveStepsPerUnit(axisOrExtruder, move.DriveStepsPerUnit(axisOrExtruder), oldSteps);
 	}
 	return success;
 }

@@ -271,8 +271,6 @@ void Move::Init() noexcept
 		pos = 0;
 	}
 
-	UpdateStepsPerMm();						// copy the default steps/mm across from Platform
-
 	moveTask.Create(MoveStart, "Move", this, TaskPriority::MovePriority);
 }
 
@@ -291,16 +289,35 @@ void Move::Exit() noexcept
 	moveTask.TerminateAndUnlink();
 }
 
-// This is called when steps/mm is set for any axis or extruder, and when e create an axis or extruder
-void Move::UpdateStepsPerMm() noexcept
+// Set the microstepping for local drivers, returning true if successful. All drivers for the same axis must use the same microstepping.
+// Caller must deal with remote drivers.
+bool Move::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool interp, const StringRef& reply) noexcept
 {
-	for (size_t axis = 0; axis < MaxAxesPlusExtruders; ++axis)
+	//TODO check that it is a valid microstep setting
+	microstepping[axisOrExtruder] = (interp) ? microsteps | 0x8000 : microsteps;
+	reprap.MoveUpdated();
+	return reprap.GetPlatform().SetDriversMicrostepping(axisOrExtruder, microsteps, interp, reply);
+}
+
+// Get the microstepping for an axis or extruder
+unsigned int Move::GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const noexcept
+{
+	interpolation = (microstepping[axisOrExtruder] & 0x8000) != 0;
+	return microstepping[axisOrExtruder] & 0x7FFF;
+}
+
+void Move::SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept
+{
+	if (requestedMicrostepping != 0)
 	{
-		if (axis < reprap.GetGCodes().GetTotalAxes() || axis >= MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders())
+		const uint32_t currentMicrostepping = microstepping[axisOrExtruder] & 0x7FFF;
+		if (currentMicrostepping != requestedMicrostepping)
 		{
-			dms[axis].SetStepsPerMm(reprap.GetPlatform().DriveStepsPerUnit(axis));
+			value = value * (float)currentMicrostepping / (float)requestedMicrostepping;
 		}
 	}
+	driveStepsPerUnit[axisOrExtruder] = max<float>(value, 1.0);	// don't allow zero or negative
+	reprap.MoveUpdated();
 }
 
 [[noreturn]] void Move::MoveLoop() noexcept
@@ -638,16 +655,16 @@ void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], Movemen
 }
 
 // Convert distance to steps for a particular drive
-int32_t Move::MotorMovementToSteps(size_t drive, float coord) noexcept
+int32_t Move::MotorMovementToSteps(size_t drive, float coord) const noexcept
 {
-	return lrintf(coord * reprap.GetPlatform().DriveStepsPerUnit(drive));
+	return lrintf(coord * driveStepsPerUnit[drive]);
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
 // This is computationally expensive on a delta or SCARA machine, so only call it when necessary, and never from the step ISR.
 void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
-	kinematics->MotorStepsToCartesian(motorPos, reprap.GetPlatform().GetDriveStepsPerUnit(), numVisibleAxes, numTotalAxes, machinePos);
+	kinematics->MotorStepsToCartesian(motorPos, driveStepsPerUnit, numVisibleAxes, numTotalAxes, machinePos);
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintTransforms))
 	{
 		debugPrintf("Forward transformed %" PRIi32 " %" PRIi32 " %" PRIi32 " to %.2f %.2f %.2f\n",
@@ -660,7 +677,7 @@ void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes
 // This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered, DDA::SetPositions and Move::EndPointToMachine
 bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const noexcept
 {
-	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(),
+	const bool b = kinematics->CartesianToMotorSteps(machinePos, driveStepsPerUnit,
 														reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), motorPos, isCoordinated);
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintTransforms))
 	{
@@ -995,9 +1012,9 @@ bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
 	return error;
 }
 
-/*static*/ float Move::MotorStepsToMovement(size_t drive, int32_t endpoint) noexcept
+float Move::MotorStepsToMovement(size_t drive, int32_t endpoint) const noexcept
 {
-	return ((float)(endpoint))/reprap.GetPlatform().DriveStepsPerUnit(drive);
+	return ((float)(endpoint))/driveStepsPerUnit[drive];
 }
 
 // Return the transformed machine coordinates
@@ -1305,7 +1322,7 @@ float Move::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 		// Add extrusion so far in the current move to the accumulated extrusion
 		for (size_t i = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); i < MaxAxesPlusExtruders; ++i)
 		{
-			latestLiveCoordinates[i] = currentMotorPositions[i] / reprap.GetPlatform().DriveStepsPerUnit(i);
+			latestLiveCoordinates[i] = currentMotorPositions[i] / driveStepsPerUnit[i];
 		}
 
 		// Optimisation: if no movement, save the positions for next time
@@ -1621,12 +1638,12 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 			}
 			else if (hitDetails.setAxisLow)
 			{
-				kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, platform.GetDriveStepsPerUnit(), *this);
+				kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerUnit, *this);
 				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
 			}
 			else if (hitDetails.setAxisHigh)
 			{
-				kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, platform.GetDriveStepsPerUnit(), *this);
+				kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerUnit, *this);
 				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
 			}
 #if SUPPORT_CAN_EXPANSION
@@ -1644,12 +1661,12 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 #endif
 			if (hitDetails.setAxisLow)
 			{
-				kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, platform.GetDriveStepsPerUnit(), *this);
+				kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerUnit, *this);
 				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
 			}
 			else if (hitDetails.setAxisHigh)
 			{
-				reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, true, platform.GetDriveStepsPerUnit(), *this);
+				reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerUnit, *this);
 				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
 			}
 			break;
@@ -1675,12 +1692,12 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 			}
 			if (hitDetails.setAxisLow)
 			{
-				kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, platform.GetDriveStepsPerUnit(), *this);
+				kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerUnit, *this);
 				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
 			}
 			else if (hitDetails.setAxisHigh)
 			{
-				kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, platform.GetDriveStepsPerUnit(), *this);
+				kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerUnit, *this);
 				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
 			}
 			break;
@@ -2014,7 +2031,6 @@ void Move::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
 // There must be no pending movement when calling this!
 void Move::AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept
 {
-	const float * const driveStepsPerUnit = reprap.GetPlatform().GetDriveStepsPerUnit();
 	for (size_t drive = 0; drive < numMotors; ++drive)
 	{
 		dms[drive].AdjustMotorPosition(lrintf(adjustment[drive] * driveStepsPerUnit[drive]));

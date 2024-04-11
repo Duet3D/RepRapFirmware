@@ -302,7 +302,7 @@ void PolarKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalise
 	int32_t turntableMovement = dda.DriveCoordinates()[1] - dda.GetPrevious()->DriveCoordinates()[1];
 	if (turntableMovement != 0)
 	{
-		const float stepsPerDegree = reprap.GetPlatform().DriveStepsPerUnit(1);
+		const float stepsPerDegree = reprap.GetMove().DriveStepsPerUnit(1);
 		if (continuousRotationShortcut)
 		{
 			const int32_t stepsPerRotation = lrintf(360.0 * stepsPerDegree);
