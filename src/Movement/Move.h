@@ -64,7 +64,7 @@ public:
 
 	[[noreturn]] void MoveLoop() noexcept;									// Main loop called by the Move task
 
-	float DriveStepsPerUnit(size_t axisOrExtruder) const noexcept;
+	float DriveStepsPerUnit(size_t axisOrExtruder) const noexcept pre(axisPrExtruder < MaxAxesPlusExtruders) { return driveStepsPerUnit[axisOrExtruder]; }
 	const float *_ecv_array GetDriveStepsPerUnit() const noexcept { return driveStepsPerUnit; }
 	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept;
 

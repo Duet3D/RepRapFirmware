@@ -107,6 +107,13 @@ inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
 	// remaining fields are not initialised
 }
 
+// Release a MoveSegment.  Not thread-safe.
+inline void MoveSegment::Release(MoveSegment *item) noexcept
+{
+	item->next = freeList;
+	freeList = item;
+}
+
 inline MoveSegment *MoveSegment::GetNext() const noexcept
 {
 	return next;
