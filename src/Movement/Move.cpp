@@ -1352,6 +1352,20 @@ float Move::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 	return latestLiveCoordinates[axisOrExtruder];
 }
 
+// Change the position of one axis and adjust the corresponding motor positions. Called when an endstop on a CoreXY or similar system with a shared motor is triggered.
+void Move::SetAxisEndPosition(size_t axis, float pos) noexcept
+{
+	// the following is the old code, needs to be replaced
+	float tempCoordinates[MaxAxes];
+	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
+	for (size_t axis = 0; axis < numTotalAxes; ++axis)
+	{
+		tempCoordinates[axis] = dda.GetEndCoordinate(axis, false);
+	}
+	tempCoordinates[axis] = hitPoint;
+	dda.SetPositions(tempCoordinates);
+}
+
 void Move::SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) noexcept
 {
 	latestCalibrationDeviation = d;
