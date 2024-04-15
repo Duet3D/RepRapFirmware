@@ -211,7 +211,7 @@ public:
 
 	const int32_t *GetMotorEndPositions() const noexcept { return motorPositionsAfterScheduledMoves; }
 	void SetMotorEndPosition(size_t axis, int32_t val) noexcept { motorPositionsAfterScheduledMoves[axis] = val; }
-	void SetAxisEndPosition(size_t axis, float pos) noexcept;
+	void SetAxisEndPosition(size_t axis, float pos, AxesBitmap controllingDrives) noexcept;
 	float LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept;
 	void ForceLiveCoordinatesUpdate() noexcept { forceLiveCoordinatesUpdate = true; }
 
@@ -283,6 +283,7 @@ private:
 	void AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;				// Take a position and apply the axis-angle compensations
 	void InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;		// Go from an axis transformed point back to user coordinates
 	float ComputeHeightCorrection(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;	// Compute the height correction needed at a point, ignoring taper
+	void UpdateLiveMachineCoordinates() const noexcept;											// force an update of the live machine coordinates
 
 	const char *GetCompensationTypeString() const noexcept;
 

@@ -451,6 +451,13 @@ void DDARing::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
 	addPointer->GetPrevious()->SetPositions(move);
 }
 
+// Set the positions of some of the axis motors. Called after homing an axis.
+void DDARing::SetAxisMotorEndPoints(const int32_t *newMotorPositions, AxesBitmap whichDrives) noexcept
+{
+	AtomicCriticalSectionLocker lock;
+	addPointer->GetPrevious()->SetAxisPositions(newMotorPositions, whichDrives);
+}
+
 // Get the DDA that should currently be executing, or nullptr if no move from this ring should be executing
 DDA *DDARing::GetCurrentDDA() const noexcept
 {

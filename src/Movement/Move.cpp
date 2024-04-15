@@ -687,6 +687,7 @@ void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes
 // Convert Cartesian coordinates to motor steps, axes only, returning true if successful.
 // Used to perform movement and G92 commands.
 // This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered, DDA::SetPositions and Move::EndPointToMachine
+// If isCoordinated is false then multi-mode kinematics such as SCARA are allowed to switch mode if necessary to make the specified machine position reachable
 bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const noexcept
 {
 	const bool b = kinematics->CartesianToMotorSteps(machinePos, driveStepsPerUnit,
@@ -1313,57 +1314,74 @@ float Move::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 {
 	if (forceLiveCoordinatesUpdate || (millis() - latestLiveCoordinatesFetchedAt > 200 && !liveCoordinatesValid))
 	{
-		const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();		// do this before we disable interrupts
-		const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();			// do this before we disable interrupts
-
-		// Get the positions of each motor
-		int32_t currentMotorPositions[MaxAxesPlusExtruders];
-		bool motionPending = false;
-		motionAdded = false;
-		for (size_t i = 0; i < MaxAxesPlusExtruders; ++i)
-		{
-			currentMotorPositions[i] = dms[i].GetCurrentMotorPosition();
-			if (dms[i].MotionPending())
-			{
-				motionPending = true;
-			}
-		}
-
-		MotorStepsToCartesian(currentMotorPositions, numVisibleAxes, numTotalAxes, latestLiveCoordinates);		// this is slow, so do it with interrupts enabled
-
-		// Add extrusion so far in the current move to the accumulated extrusion
-		for (size_t i = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); i < MaxAxesPlusExtruders; ++i)
-		{
-			latestLiveCoordinates[i] = currentMotorPositions[i] / driveStepsPerUnit[i];
-		}
-
-		// Optimisation: if no movement, save the positions for next time
-		{
-			AtomicCriticalSectionLocker lock;
-			if (!motionPending && !motionAdded)
-			{
-				liveCoordinatesValid = true;
-			}
-		}
-
+		UpdateLiveMachineCoordinates();
 		forceLiveCoordinatesUpdate = false;
 		latestLiveCoordinatesFetchedAt = millis();
 	}
 	return latestLiveCoordinates[axisOrExtruder];
 }
 
-// Change the position of one axis and adjust the corresponding motor positions. Called when an endstop on a CoreXY or similar system with a shared motor is triggered.
-void Move::SetAxisEndPosition(size_t axis, float pos) noexcept
+// Force an update of the live machine coordinates
+void Move::UpdateLiveMachineCoordinates() const noexcept
 {
-	// the following is the old code, needs to be replaced
-	float tempCoordinates[MaxAxes];
-	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
-	for (size_t axis = 0; axis < numTotalAxes; ++axis)
+	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();		// do this before we disable interrupts
+	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();			// do this before we disable interrupts
+
+	// Get the positions of each motor
+	int32_t currentMotorPositions[MaxAxesPlusExtruders];
+	bool motionPending = false;
+	motionAdded = false;
+	for (size_t i = 0; i < MaxAxesPlusExtruders; ++i)
 	{
-		tempCoordinates[axis] = dda.GetEndCoordinate(axis, false);
+		currentMotorPositions[i] = dms[i].GetCurrentMotorPosition();
+		if (dms[i].MotionPending())
+		{
+			motionPending = true;
+		}
 	}
-	tempCoordinates[axis] = hitPoint;
-	dda.SetPositions(tempCoordinates);
+
+	MotorStepsToCartesian(currentMotorPositions, numVisibleAxes, numTotalAxes, latestLiveCoordinates);		// this is slow, so do it with interrupts enabled
+
+	// Add extrusion so far in the current move to the accumulated extrusion
+	for (size_t i = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); i < MaxAxesPlusExtruders; ++i)
+	{
+		latestLiveCoordinates[i] = currentMotorPositions[i] / driveStepsPerUnit[i];
+	}
+
+	// Optimisation: if no movement, save the positions for next time
+	{
+		AtomicCriticalSectionLocker lock;
+		if (!motionPending && !motionAdded)
+		{
+			liveCoordinatesValid = true;
+		}
+	}
+}
+
+// Change the position of one axis and adjust the corresponding motor positions.
+// Called when an endstop on a CoreXY or similar system with a shared motor is triggered. Motion will have been stopped already.
+void Move::SetAxisEndPosition(size_t axis, float pos, AxesBitmap controllingDrives) noexcept
+{
+	UpdateLiveMachineCoordinates();
+	// Don't change latestLiveCoordinates directly because it could get overwritten by another call to UpdateLiveMachineCoordinates
+	float newLiveCoordinates[MaxAxes];
+	memcpyf(newLiveCoordinates, latestLiveCoordinates, MaxAxes);
+	newLiveCoordinates[axis] = pos;
+	int32_t newMotorPositions[MaxAxes];
+	if (CartesianToMotorSteps(newLiveCoordinates, newMotorPositions, true))
+	{
+		// Set the new motor positions
+		controllingDrives.Iterate([this, newMotorPositions](unsigned int drive, unsigned int)->void
+									{
+										dms[drive].SetCurrentMotorPosition(newMotorPositions[drive]);
+									}
+								 );
+		for (size_t i = 0; i < NumMovementSystems; ++i)
+		{
+			rings[i].SetAxisMotorEndPoints(newMotorPositions, controllingDrives);
+		}
+		UpdateLiveMachineCoordinates();
+	}
 }
 
 void Move::SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) noexcept
@@ -1486,7 +1504,7 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 {
 	AtomicCriticalSectionLocker lock;							// we don't want a move to complete and the ISR update the movement accumulators while we are doing this
 	const int32_t ret = movementAccumulators[logicalDrive];
-	const int32_t adjustment = GetStepsTaken(logicalDrive);
+	const int32_t adjustment = dms[logicalDrive].GetNetStepsTaken();
 	movementAccumulators[logicalDrive] = -adjustment;
 	isPrinting = dms[logicalDrive].IsPrintingExtruderMovement();
 	return ret + adjustment;

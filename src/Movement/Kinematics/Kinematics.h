@@ -40,13 +40,6 @@ enum class KinematicsType : uint8_t
 	unknown				// this one must be last!
 };
 
-// Different types of low-level motion we support
-enum class MotionType : uint8_t
-{
-	linear,
-	segmentFreeDelta
-};
-
 // Class used to define homing mode
 enum class HomingMode : uint8_t
 {
@@ -153,9 +146,6 @@ public:
 	// Return the initial Cartesian coordinates we assume after switching to this kinematics
 	virtual void GetAssumedInitialPosition(size_t numAxes, float positions[]) const noexcept;
 
-	// Override this one if any axes do not use the linear motion code (e.g. for segmentation-free delta motion)
-	virtual MotionType GetMotionType(size_t axis) const noexcept { return MotionType::linear; }
-
 	// This function is called when a request is made to home the axes in 'toBeHomed' and the axes in 'alreadyHomed' have already been homed.
 	// If we can't proceed because other axes need to be homed first, return those axes.
 	// If we can proceed with homing some axes, set 'filename' to the name of the homing file to be called and return 0. Optionally, update 'alreadyHomed' to indicate
@@ -198,7 +188,7 @@ public:
 	// Return a bitmap of the motors that cause movement of a particular axis or tower.
 	// This is used to determine which motors we need to enable to move a particular axis, and which motors to monitor for stall detect homing.
 	// For example, the first XY move made by a CoreXY machine may be a diagonal move, and it's important to enable the non-moving motor too.
-	virtual AxesBitmap GetConnectedAxes(size_t axis) const noexcept;
+	virtual AxesBitmap GetControllingDrives(size_t axis) const noexcept;
 
 	// Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
 	// This is called to determine whether we can babystep the specified axis independently of regular motion.

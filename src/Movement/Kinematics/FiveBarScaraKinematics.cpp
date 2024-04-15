@@ -939,7 +939,7 @@ AxesBitmap FiveBarScaraKinematics::GetLinearAxes() const noexcept
 	return AxesBitmap::MakeFromBits(Z_AXIS);
 }
 
-AxesBitmap FiveBarScaraKinematics::GetConnectedAxes(size_t axis) const noexcept
+AxesBitmap FiveBarScaraKinematics::GetControllingDrives(size_t axis) const noexcept
 {
 	return (axis == X_AXIS || axis == Y_AXIS)
 			? XyAxes

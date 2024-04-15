@@ -56,6 +56,7 @@ public:
 #endif
 
 	void SetPositions(const float move[MaxAxesPlusExtruders]) noexcept;					// Force the machine coordinates to be these
+	void SetAxisMotorEndPoints(const int32_t *newMotorPositions, AxesBitmap whichDrives) noexcept;
 
 	bool PauseMoves(MovementState& ms) noexcept;										// Pause the print as soon as we can, returning true if we were able to skip any moves in the queue
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT

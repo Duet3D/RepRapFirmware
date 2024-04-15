@@ -43,7 +43,7 @@ public:
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], Move& move) const noexcept override;
 	bool IsContinuousRotationAxis(size_t axis) const noexcept override;
 	AxesBitmap GetLinearAxes() const noexcept override;
-	AxesBitmap GetConnectedAxes(size_t axis) const noexcept override;
+	AxesBitmap GetControllingDrives(size_t axis) const noexcept override;
 
 protected:
 	DECLARE_OBJECT_MODEL

@@ -49,11 +49,12 @@ public:
 
 	void DebugPrint() const noexcept;
 	int32_t GetCurrentMotorPosition() const noexcept { return currentMotorPosition; }
+	void SetCurrentMotorPosition(int32_t pos) noexcept { currentMotorPosition = pos; }
 	bool StopDriver(int32_t& netStepsTaken) noexcept;					// if the driver is moving, stop it, update the position and pass back the net steps taken
 #if SUPPORT_REMOTE_COMMANDS
 	void StopDriverFromRemote() noexcept;
 #endif
-	bool GetNetStepsTaken(int32_t& netStepsTaken) const noexcept;		// like stopDriver but doesn't stop the driver
+	int32_t GetNetStepsTaken() const noexcept;							// return the number of steps taken in the current segment
 	void SetMotorPosition(int32_t pos) noexcept { currentMotorPosition = pos; }
 	void AdjustMotorPosition(int32_t adjustment) noexcept { currentMotorPosition += adjustment; }
 	bool MotionPending() const noexcept { return segments != nullptr; }
@@ -160,28 +161,20 @@ inline bool DriveMovement::CalcNextStepTime() noexcept
 	return false;
 }
 
-// Return the number of net steps already taken for the move in the forwards direction.
+// Return the number of net steps already taken for the current segment in the forwards direction.
 // We have already taken nextSteps - 1 steps
-inline bool DriveMovement::GetNetStepsTaken(int32_t& netStepsTaken) const noexcept
+// Caller must disable interrupts befofe calling this
+inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 {
 	if (segments == nullptr)
 	{
-		return false;
+		return 0;
 	}
 
-	if (directionReversed)															// if started reverse phase
-	{
-		netStepsTaken = nextStep - (2 * reverseStartStep) + 1;						// allowing for direction having changed
-	}
-	else
-	{
-		netStepsTaken = nextStep - 1;
-	}
-	if (direction)
-	{
-		netStepsTaken = -netStepsTaken;
-	}
-	return true;
+	const int32_t netStepsTaken = (directionReversed) 								// if started reverse phase
+									? nextStep - (2 * reverseStartStep) + 1			// allowing for direction having changed
+										: nextStep - 1;
+	return (direction) ? -netStepsTaken : netStepsTaken;
 }
 
 inline void DriveMovement::CheckDirection(bool reversed) noexcept

@@ -1,11 +1,12 @@
 Next steps for new movement system+IS
 =====================================
 
-Keep a single machine position, based on current motor positions, not one per MS
-then Implement Move::SetAxisEndPosition
+Can we keep a single machine position, based on current motor positions, not one per MS?
 
 Segment generation code to store values in steps not mm in MoveSegment
 
 Implement remaining missing functions
 
 Eventually, store end position in segments. End positions specified by user must be exact numbers of motor steps. Segment boundaries may be fractional steps.
+
+Fix ExtruderPrintingSince, need to update variable extruderPrintingSince when we start a prinitng extruder move after not doing one

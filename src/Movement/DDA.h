@@ -101,6 +101,7 @@ public:
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept;
 	float GetRawEndCoordinate(size_t drive) const noexcept { return endCoordinates[drive]; }
 	void SetPositions(const float move[]) noexcept;									// Force the endpoints to be these
+	void SetAxisPositions(const int32_t *newMotorPositions, AxesBitmap whichDrives) noexcept;
 	FilePosition GetFilePosition() const noexcept { return filePos; }
 	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
 	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(requestedSpeed); }

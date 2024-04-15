@@ -416,7 +416,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 		float maxDistance = 0.0;
 		for (size_t axis = 0; axis < numTotalAxes; ++axis)
 		{
-			if (k.GetMotionType(axis) == MotionType::segmentFreeDelta && normalisedDirectionVector[axis] > maxDistance)
+			if (k.GetKinematicsType() == KinematicsType::linearDelta && normalisedDirectionVector[axis] > maxDistance)
 			{
 				maxDistance = normalisedDirectionVector[axis];
 			}
@@ -544,7 +544,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 		// This doesn't matter for the current application because we don't use either of these fields.
 
 		// If it's a delta then we can only do async tower moves in the Z direction and on any additional linear axes
-		const size_t axisToUse = (reprap.GetMove().GetKinematics().GetMotionType(drive) == MotionType::segmentFreeDelta) ? Z_AXIS : drive;
+		const size_t axisToUse = (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta && drive <= Z_AXIS) ? Z_AXIS : drive;
 		directionVector[drive] = nextMove.movements[axisToUse];
 		const int32_t delta = lrintf(nextMove.movements[axisToUse] * reprap.GetMove().DriveStepsPerUnit(drive));
 		endPoint[drive] = prev->endPoint[drive] + delta;
@@ -1030,6 +1030,15 @@ void DDA::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
 	flags.endCoordinatesValid = true;
 }
 
+void DDA::SetAxisPositions(const int32_t *newMotorPositions, AxesBitmap whichDrives) noexcept
+{
+	whichDrives.Iterate([this, newMotorPositions](unsigned int drive, unsigned int)->void
+							{
+								endCoordinates[drive] = newMotorPositions[drive];
+							}
+					   );
+}
+
 // Get a Cartesian end coordinate from this move
 float DDA::GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept
 pre(disableDeltaMapping || drive < MaxAxes)
@@ -1168,7 +1177,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 					}
 #endif
 					axisMotorsEnabled.SetBit(drive);
-					additionalAxisMotorsToEnable |= reprap.GetMove().GetKinematics().GetConnectedAxes(drive);
+					additionalAxisMotorsToEnable |= reprap.GetMove().GetKinematics().GetControllingDrives(drive);
 				}
 			}
 			else

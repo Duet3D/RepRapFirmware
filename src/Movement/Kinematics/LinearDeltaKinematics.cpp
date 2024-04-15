@@ -639,12 +639,6 @@ bool LinearDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomPro
     return false;
 }
 
-// Return the type of motion computation needed by an axis
-MotionType LinearDeltaKinematics::GetMotionType(size_t axis) const noexcept
-{
-	return (axis < numTowers) ? MotionType::segmentFreeDelta : MotionType::linear;
-}
-
 // Compute the derivative of height with respect to a parameter at the specified motor endpoints.
 // 'deriv' indicates the parameter as follows:
 // 0, 1, 2 = X, Y, Z tower endstop adjustments
