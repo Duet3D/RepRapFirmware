@@ -177,6 +177,13 @@ inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 	return (direction) ? -netStepsTaken : netStepsTaken;
 }
 
+// Return true if this is an extruder executing a printing move
+// Call must disable interrupts before calling this
+inline bool DriveMovement::IsPrintingExtruderMovement() const noexcept
+{
+	return segments != nullptr && segments->IsPrintingMove();
+}
+
 inline void DriveMovement::CheckDirection(bool reversed) noexcept
 {
 	if (reversed != directionReversed)

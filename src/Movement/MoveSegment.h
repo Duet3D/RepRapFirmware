@@ -36,7 +36,11 @@ public:
 
 	// Read the values of the flag bits
 	bool IsLinear() const noexcept { return a == 0; }		//TODO: should we ignore very small accelerations, to avoid rounding error in the calculation?
-	bool IsRemote() const noexcept;
+	bool IsPrintingMove() const noexcept { return isPrintingMove; }
+
+#if SUPPORT_REMOTE_COMMANDS
+	bool IsRemote() const noexcept { return isRemote; }
+#endif
 
 	// Given that this is not a constant-speed segment, test whether it is accelerating or decelerating
 	bool IsAccelerating() const noexcept { return a > 0.0; }
@@ -124,11 +128,6 @@ inline MoveSegment *MoveSegment::GetNext() const noexcept
 inline void MoveSegment::SetNext(MoveSegment *p_next) noexcept
 {
 	next = p_next;
-}
-
-inline bool MoveSegment::IsRemote() const noexcept
-{
-	return isRemote;
 }
 
 // For a decelerating move with positive start speed, calculate the distance before the move reverses

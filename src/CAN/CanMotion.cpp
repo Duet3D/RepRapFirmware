@@ -346,6 +346,18 @@ bool CanMotion::StopDriverWhenExecuting(DriverId driver, int32_t netStepsTaken) 
 	return false;
 }
 
+// Revert any stopped drivers that we haven't already and return true when there are no drivers to revert
+bool CanMotion::RevertStoppedDrivers() noexcept
+{
+	if (!revertAll && !revertedAll)							// if not started reverting yet
+	{
+		revertAll = true;
+		CanInterface::WakeAsyncSender();
+		return false;
+	}
+	return !revertAll || (revertedAll && millis() - whenRevertedAll >= TotalDriverPositionRevertMillis);
+}
+
 #endif
 
 // End
