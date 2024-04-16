@@ -106,6 +106,8 @@ private:
 	void __attribute__((noinline)) ReadArrayFromFile(ExpressionValue& rslt, unsigned int offset, unsigned int length, char delimiter) const THROWS(GCodeException);
 	void ReadArrayElementFromFile(ExpressionValue& rslt, LineReader& reader, char delimiter) const THROWS(GCodeException);
 	void GetNextOperand(ExpressionValue& operand, bool evaluate) THROWS(GCodeException);
+	void __attribute__((noinline)) ApplyObjectModelArrayIndex(ExpressionValue& rslt, int indexCol, uint32_t indexValue, bool evaluate) THROWS(GCodeException);
+
 	static bool TypeHasNoLiterals(TypeCode t) noexcept;
 
 	int GetColumn() const noexcept;
