@@ -498,12 +498,6 @@ void DataTransfer::Init() noexcept
 	// A value of 8 seems to work. I haven't tried other values yet.
 	matrix_set_slave_slot_cycle(0, 8);
 #endif
-
-	if (!reprap.UsingSbcInterface())
-	{
-		// Start off the first transfer in standalone mode
-		StartNextTransfer();
-	}
 }
 
 void DataTransfer::InitFromTask() noexcept
