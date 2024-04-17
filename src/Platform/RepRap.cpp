@@ -631,9 +631,6 @@ void RepRap::Init() noexcept
 			delay(3000);								// Wait a few seconds so users have a chance to see this
 			platform->MessageF(AddWarning(UsbMessage), "%s\n", reply.c_str());
 		}
-# if HAS_SBC_INTERFACE
-		sbcInterface->Init();
-# endif
 	}
 #elif defined(DUET_NG)
 	// It's the SBC build of Duet 2 firmware. Enable the PanelDue port so that the ATE can test it.
@@ -647,6 +644,8 @@ void RepRap::Init() noexcept
 #if HAS_SBC_INTERFACE
 	if (usingSbcInterface)
 	{
+		sbcInterface->Init();
+
 		// Keep spinning until the SBC connects
 		while (!sbcInterface->IsConnected())
 		{
