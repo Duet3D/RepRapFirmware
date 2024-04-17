@@ -303,11 +303,7 @@ private:
 	void InsertDM(DriveMovement *dm) noexcept;										// insert a DM into the active list, keeping it in step time order
 	void SetDirection(Platform& p, size_t axisOrExtruder, bool direction) noexcept;	// set the direction of a driver, observing timing requirements
 
-#if SUPPORT_CAN_EXPANSION
-	uint32_t InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
-#else
-	void InsertHiccup(uint32_t whenNextInterruptWanted) noexcept;
-#endif
+	void InsertHiccup(uint32_t duration) noexcept;
 
 	// Move task stack size
 	// 250 is not enough when Move and DDA debug are enabled
@@ -362,6 +358,7 @@ private:
 
 	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
+	uint32_t cumulativeHiccupTime = 0;					// how much we currently delay movement due to hiccups
 	uint32_t numHiccups = 0;
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes

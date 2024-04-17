@@ -1604,20 +1604,20 @@ void Move::Interrupt() noexcept
 				// Force a break by updating the move start time.
 				++numHiccups;
 #if SUPPORT_CAN_EXPANSION
-				uint32_t cumulativeHiccupTime = 0;
+				uint32_t hiccupTimeInserted = 0;
 #endif
 				for (uint32_t hiccupTime = MoveTiming::HiccupTime; ; hiccupTime += MoveTiming::HiccupIncrement)
 				{
 #if SUPPORT_CAN_EXPANSION
-					cumulativeHiccupTime += InsertHiccup(now + hiccupTime);
-#else
-					cdda->InsertHiccup(now + hiccupTime);
+					hiccupTimeInserted += hiccupTime;
 #endif
+					InsertHiccup(hiccupTime);
+
 					// Reschedule the next step interrupt. This time it should succeed if the hiccup time was long enough.
 					if (!ScheduleNextStepInterrupt())
 					{
 #if SUPPORT_CAN_EXPANSION
-						CanMotion::InsertHiccup(cumulativeHiccupTime);
+						CanMotion::InsertHiccup(hiccupTimeInserted);
 #endif
 						return;
 					}
@@ -2091,6 +2091,24 @@ void Move::ResetExtruderPositions() noexcept
 	{
 		dms[drive].SetMotorPosition(0);
 	}
+}
+
+// Insert a hiccup of the specified duration
+void Move::InsertHiccup(uint32_t duration) noexcept
+{
+	cumulativeHiccupTime += duration;
+#if SUPPORT_CAN_EXPANSION
+# if SUPPORT_REMOTE_COMMANDS
+	if (CanInterface::InExpansionMode())
+	{
+		//TODO request the main board to introduce a hiccup
+	}
+	else
+# endif
+	{
+		//TODO notify CAN-connected expansion boards of the change
+	}
+#endif
 }
 
 #if SUPPORT_CAN_EXPANSION
