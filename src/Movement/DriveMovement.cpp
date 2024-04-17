@@ -451,4 +451,34 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	return true;
 }
 
+// If the driver is moving, stop it, update the position and pass back the net steps taken in the executing segment.
+// Return true if the drive was moving.
+bool DriveMovement::StopDriver(int32_t& netStepsTaken) noexcept
+{
+	AtomicCriticalSectionLocker lock;
+
+	MoveSegment *seg = nullptr;
+	std::swap(seg, segments);
+	if (seg != nullptr)
+	{
+		netStepsTaken = GetNetStepsTaken();
+		currentMotorPosition += netStepsTaken;
+		MoveSegment::Release(seg);
+		return true;
+	}
+
+	netStepsTaken = 0;
+	return false;
+}
+
+#if SUPPORT_REMOTE_COMMANDS
+
+void DriveMovement::StopDriverFromRemote() noexcept
+{
+	int32_t dummy;
+	(void)StopDriver(dummy);
+}
+
+#endif
+
 // End
