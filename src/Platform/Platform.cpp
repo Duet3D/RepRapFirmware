@@ -32,6 +32,7 @@
 #include <FilamentMonitors/FilamentMonitor.h>
 #include "RepRap.h"
 #include "Heap.h"
+#include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include "Event.h"
 #include <Version.h>
@@ -318,7 +319,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 #endif
 	{ "reducedAcceleration", OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex(), true)), 1),			ObjectModelEntryFlags::none },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
-	{ "stepsPerMm",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().DriveStepsPerUnit(context.GetLastIndex()), 2),						ObjectModelEntryFlags::none },
+	{ "stepsPerMm",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().DriveStepsPerMm(context.GetLastIndex()), 2),						ObjectModelEntryFlags::none },
 	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(reprap.GetGCodes().GetCurrentMovementState(context), context.GetLastIndex()), 3), ObjectModelEntryFlags::live },
 	{ "visible",			OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()),				ObjectModelEntryFlags::none },
 	{ "workplaceOffsets",	OBJECT_MODEL_FUNC_ARRAY(1),																						ObjectModelEntryFlags::none },
@@ -341,7 +342,7 @@ constexpr ObjectModelTableEntry Platform::objectModelTable[] =
 	{ "pressureAdvance",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetPressureAdvanceClocksForExtruder(context.GetLastIndex())/StepClockRate, 3),				ObjectModelEntryFlags::none },
 	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1)), 					ObjectModelEntryFlags::live },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
-	{ "stepsPerMm",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().DriveStepsPerUnit(ExtruderToLogicalDrive(context.GetLastIndex())), 2),						ObjectModelEntryFlags::none },
+	{ "stepsPerMm",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().DriveStepsPerMm(ExtruderToLogicalDrive(context.GetLastIndex())), 2),						ObjectModelEntryFlags::none },
 
 	// 5. move.extruders[].nonlinear members
 	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].A, 3),									ObjectModelEntryFlags::none },
@@ -636,7 +637,7 @@ void Platform::Init() noexcept
 
 		maxFeedrates[axis] = ConvertSpeedFromMmPerSec(DefaultAxisMaxFeedrate);
 		reducedAccelerations[axis] = normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
-		reprap.GetMove().SetDriveStepsPerUnit(axis, DefaultAxisDriveStepsPerUnit, 0);
+		reprap.GetMove().SetDriveStepsPerMm(axis, DefaultAxisDriveStepsPerUnit, 0);
 		instantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
 
 		backlashMm[axis] = 0.0;
@@ -649,7 +650,7 @@ void Platform::Init() noexcept
 	// We use different defaults for the Z axis
 	maxFeedrates[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZMaxFeedrate);
 	reducedAccelerations[Z_AXIS] = normalAccelerations[Z_AXIS] = ConvertAcceleration(DefaultZAcceleration);
-	reprap.GetMove().SetDriveStepsPerUnit(Z_AXIS, DefaultZDriveStepsPerUnit, 0);
+	reprap.GetMove().SetDriveStepsPerMm(Z_AXIS, DefaultZDriveStepsPerUnit, 0);
 	instantDvs[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZInstantDv);
 
 	// Extruders
@@ -657,7 +658,7 @@ void Platform::Init() noexcept
 	{
 		maxFeedrates[drive] = ConvertSpeedFromMmPerSec(DefaultEMaxFeedrate);
 		normalAccelerations[drive] = reducedAccelerations[drive] = ConvertAcceleration(DefaultEAcceleration);
-		reprap.GetMove().SetDriveStepsPerUnit(drive, DefaultEDriveStepsPerUnit, 0);
+		reprap.GetMove().SetDriveStepsPerMm(drive, DefaultEDriveStepsPerUnit, 0);
 		instantDvs[drive] = ConvertSpeedFromMmPerSec(DefaultEInstantDv);
 	}
 
@@ -4643,7 +4644,7 @@ void Platform::UpdateBacklashSteps() noexcept
 {
 	for (size_t i = 0; i < reprap.GetGCodes().GetTotalAxes(); ++i)
 	{
-		backlashSteps[i] = backlashMm[i] * reprap.GetMove().DriveStepsPerUnit(i);
+		backlashSteps[i] = backlashMm[i] * reprap.GetMove().DriveStepsPerMm(i);
 	}
 }
 
@@ -4699,7 +4700,7 @@ GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndE
 	const Move& move = reprap.GetMove();
 	axesAndExtruders.Iterate([this, move, &data](unsigned int axisOrExtruder, unsigned int count) noexcept
 								{
-									const StepsPerUnitAndMicrostepping driverData(move.DriveStepsPerUnit(axisOrExtruder), move.GetRawMicrostepping(axisOrExtruder));
+									const StepsPerUnitAndMicrostepping driverData(move.DriveStepsPerMm(axisOrExtruder), move.GetRawMicrostepping(axisOrExtruder));
 									this->IterateRemoteDrivers(axisOrExtruder,
 																[&data, &driverData](DriverId driver) noexcept
 																{
@@ -4942,7 +4943,7 @@ GCodeResult Platform::EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleD
 							}
 							else
 							{
-								reprap.GetMove().SetDriveStepsPerUnit(driver, msg.values[count].GetStepsPerUnit(), 0);
+								reprap.GetMove().SetDriveStepsPerMm(driver, msg.values[count].GetStepsPerUnit(), 0);
 #if HAS_SMART_DRIVERS
 								const uint16_t rawMicrostepping = msg.values[count].GetMicrostepping();
 								const uint16_t microsteppingOnly = rawMicrostepping & 0x03FF;
@@ -5149,7 +5150,7 @@ GCodeResult Platform::EutProcessM569(const CanMessageGeneric& msg, const StringR
 		{
 			const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
 			bool bdummy;
-			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * Platform::DriveStepsPerUnit(drive));
+			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * reprap.GetMove().DriveStepsPerMm(drive));
 			reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
 		}
 # endif
@@ -5169,7 +5170,7 @@ GCodeResult Platform::EutProcessM569(const CanMessageGeneric& msg, const StringR
 		{
 			const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
 			bool bdummy;
-			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * reprap.GetMove().DriveStepsPerUnit(drive));
+			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * reprap.GetMove().DriveStepsPerMm(drive));
 			const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
 			const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
 			const unsigned int pwmScaleSum = pwmScale & 0xFF;

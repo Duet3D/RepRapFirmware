@@ -20,7 +20,10 @@
 #include <Movement/StepTimer.h>
 #include <Movement/Move.h>
 #include <RTOSIface/RTOSIface.h>
+#include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 #include <Platform/TaskPriorities.h>
+#include <GCodes/GCodes.h>
 #include <GCodes/GCodeException.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <ClosedLoop/ClosedLoop.h>

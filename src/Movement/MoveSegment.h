@@ -64,10 +64,19 @@ public:
 	float GetEndSpeed(float pressureAdvanceK) const noexcept { return u + a * (pressureAdvanceK + duration); }
 
 	// Get the length
-	float GetLength() const noexcept { return  (u + 0.5 * a * duration) * duration; }
+	float GetLength() const noexcept { return distance; }
 
 	// For a decelerating move, calculate the distance before the move reverses
 	float GetDistanceToReverse() const noexcept;
+
+	// Set the parameters of this segment
+	void SetParameters(uint32_t p_startTime, float p_duration, float p_distance, float p_u, float p_a, bool p_isPrintingMove) noexcept;
+
+	// Split this segment in two, returning a pointer to the second part
+	MoveSegment *Split(uint32_t firstDuration) noexcept;
+
+	// Merge the parameters for another segment with the same start time and duration into this one
+	void Merge(float p_distance, float p_u, float p_a, bool p_isPrintingMove) noexcept;
 
 	MoveSegment *GetNext() const noexcept;
 	void SetNext(MoveSegment *p_next) noexcept;
@@ -83,6 +92,8 @@ public:
 
 	static unsigned int NumCreated() noexcept { return numCreated; }
 
+	static constexpr int32_t MinDuration = 10;
+
 protected:
 	static MoveSegment *freeList;
 	static unsigned int numCreated;
@@ -96,6 +107,7 @@ protected:
 			 ;
 	uint32_t startTime;										// when this segment should start, in step clock ticks
 	float duration;											// the duration in ticks of this segment
+	float distance;											// the number of steps moved
 	float u;												// the initial speed in steps per tick
 	float a;												// the acceleration during this segment in steps per tick squared
 
@@ -134,6 +146,39 @@ inline void MoveSegment::SetNext(MoveSegment *p_next) noexcept
 inline float MoveSegment::GetDistanceToReverse() const noexcept
 {
 	return fsquare(u)/-(2 * a);
+}
+
+// Set the parameters of this segment
+inline void MoveSegment::SetParameters(uint32_t p_startTime, float p_duration, float p_distance, float p_u, float p_a, bool p_isPrintingMove) noexcept
+{
+	startTime = p_startTime;
+	duration = p_duration;
+	distance = p_distance;
+	u = p_u;
+	a = p_a;
+	isPrintingMove = p_isPrintingMove;
+}
+
+// Split this segment in two, returning a pointer to the new second part
+inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
+{
+	MoveSegment *const secondSeg = Allocate(next);
+	const float firstDistance = (u + 0.5 * a * firstDuration) * firstDuration;
+	const float secondDistance = distance - firstDistance;
+	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, secondDistance, u + a * (float)firstDuration, a, isPrintingMove);
+	duration = firstDuration;
+	distance = firstDistance;
+	next = secondSeg;
+	return secondSeg;
+}
+
+// Merge the parameters for another segment with the same start time and duration into this one
+inline void MoveSegment::Merge(float p_distance, float p_u, float p_a, bool p_isPrintingMove) noexcept
+{
+	distance += p_distance;
+	u += p_u;
+	a += p_a;
+	isPrintingMove = isPrintingMove && p_isPrintingMove;
 }
 
 #endif /* SRC_MOVEMENT_MOVESEGMENT_H_ */

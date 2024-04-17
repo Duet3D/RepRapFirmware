@@ -3873,7 +3873,7 @@ bool GCodes::ChangeMicrostepping(size_t axisOrExtruder, unsigned int microsteps,
 	if (success)
 	{
 		// We changed the microstepping, so adjust the steps/mm to compensate
-		move.SetDriveStepsPerUnit(axisOrExtruder, move.DriveStepsPerUnit(axisOrExtruder), oldSteps);
+		move.SetDriveStepsPerMm(axisOrExtruder, move.DriveStepsPerMm(axisOrExtruder), oldSteps);
 	}
 	return success;
 }

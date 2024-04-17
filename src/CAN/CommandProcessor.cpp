@@ -16,10 +16,11 @@
 #include <Platform/Event.h>
 #include <Heating/Heat.h>
 #include "ExpansionManager.h"
-# include <ClosedLoop/ClosedLoop.h>
+#include <ClosedLoop/ClosedLoop.h>
+#include <Movement/Move.h>
+#include <FilamentMonitors/FilamentMonitor.h>
 
 #ifndef DUET3_ATE
-# include <Movement/Move.h>
 # include <InputMonitors/InputMonitor.h>
 # include <Version.h>
 
@@ -363,7 +364,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 #if HAS_SMART_DRIVERS
 					","
 #endif
-					, driver, (double)reprap.GetMove().DriveStepsPerUnit(driver));
+					, driver, (double)reprap.GetMove().DriveStepsPerMm(driver));
 #if HAS_SMART_DRIVERS
 				SmartDrivers::AppendDriverStatus(driver, reply);
 #endif

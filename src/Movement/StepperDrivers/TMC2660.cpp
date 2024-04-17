@@ -11,6 +11,7 @@
 
 #include "TMC2660.h"
 #include <Platform/RepRap.h>
+#include <Platform/Platform.h>
 #include <Movement/Move.h>
 #include <Movement/StepTimer.h>
 #include <Endstops/Endstop.h>
@@ -705,7 +706,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 		threshold -= 128;
 	}
 	const uint32_t fullstepsPerSecond = StepClockRate/maxStallStepInterval;
-	const float speed = ((fullstepsPerSecond << microstepShiftFactor)/reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
+	const float speed = ((fullstepsPerSecond << microstepShiftFactor)/reprap.GetMove().DriveStepsPerMm(axisNumber));
 	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep %" PRIx32,
 				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed, registers[SmartEnable] & 0xFFFF);
 }

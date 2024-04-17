@@ -125,6 +125,7 @@ public:
 	bool IsGoodToPrepare() const noexcept;
 	bool IsNonPrintingExtruderMove() const noexcept { return flags.isNonPrintingExtruderMove; }
 	void UpdateMovementAccumulators(volatile int32_t *accumulators) const noexcept;
+	uint32_t GetMoveStartTime() const noexcept { return afterPrepare.moveStartTime; }
 
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }
@@ -136,7 +137,6 @@ public:
 #endif
 
 #if SUPPORT_IOBITS
-	uint32_t GetMoveStartTime() const noexcept { return afterPrepare.moveStartTime; }
 	IoBits_t GetIoBits() const noexcept { return laserPwmOrIoBits.ioBits; }
 #endif
 

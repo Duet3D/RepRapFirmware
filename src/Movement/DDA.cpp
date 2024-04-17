@@ -271,7 +271,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				const Move& move = reprap.GetMove();
 				endPoint[drive] = move.MotorMovementToSteps(drive, nextMove.coords[drive]);
 				const int32_t delta = endPoint[drive] - positionNow[drive];
-				directionVector[drive] = (float)delta/move.DriveStepsPerUnit(drive);
+				directionVector[drive] = (float)delta/move.DriveStepsPerMm(drive);
 				if (delta != 0)
 				{
 					if (reprap.GetPlatform().IsAxisRotational(drive))
@@ -477,7 +477,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	for (size_t driver = 0; driver < MaxDriversPerAxis; ++driver)
 	{
 		directionVector[driver] = adjustments[driver];			// for leadscrew adjustment moves, store the adjustment needed in directionVector
-		const int32_t delta = lrintf(adjustments[driver] * reprap.GetMove().DriveStepsPerUnit(Z_AXIS));
+		const int32_t delta = lrintf(adjustments[driver] * reprap.GetMove().DriveStepsPerMm(Z_AXIS));
 		if (delta != 0)
 		{
 			realMove = true;
@@ -546,7 +546,7 @@ bool DDA::InitAsyncMove(DDARing& ring, const AsyncMove& nextMove) noexcept
 		// If it's a delta then we can only do async tower moves in the Z direction and on any additional linear axes
 		const size_t axisToUse = (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::linearDelta && drive <= Z_AXIS) ? Z_AXIS : drive;
 		directionVector[drive] = nextMove.movements[axisToUse];
-		const int32_t delta = lrintf(nextMove.movements[axisToUse] * reprap.GetMove().DriveStepsPerUnit(drive));
+		const int32_t delta = lrintf(nextMove.movements[axisToUse] * reprap.GetMove().DriveStepsPerMm(drive));
 		endPoint[drive] = prev->endPoint[drive] + delta;
 		endCoordinates[drive] = prev->endCoordinates[drive];
 		if (delta != 0)
@@ -875,7 +875,7 @@ float DDA::AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcep
 
 		// Even if there is no babystepping to do this move, we may need to adjust the end coordinates
 		cdda->endCoordinates[Z_AXIS] += babySteppingDone;
-		cdda->endPoint[Z_AXIS] += (int32_t)(babySteppingDone * reprap.GetMove().DriveStepsPerUnit(Z_AXIS));
+		cdda->endPoint[Z_AXIS] += (int32_t)(babySteppingDone * reprap.GetMove().DriveStepsPerMm(Z_AXIS));
 
 		// Now do the next move
 		cdda = cdda->next;
@@ -1116,7 +1116,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 				const AxisDriversConfig& config = platform.GetAxisDriversConfig(Z_AXIS);
 				if (drive < config.numDrivers)
 				{
-					const int32_t delta = lrintf(directionVector[drive] * totalDistance * move.DriveStepsPerUnit(Z_AXIS));
+					const int32_t delta = lrintf(directionVector[drive] * totalDistance * move.DriveStepsPerMm(Z_AXIS));
 					const DriverId driver = config.driverNumbers[drive];
 					if (delta != 0)
 					{
@@ -1146,7 +1146,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 					if (flags.continuousRotationShortcut && reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
 					{
 						// This is a continuous rotation axis, so we may have adjusted the move to cross the 180 degrees position
-						const int32_t stepsPerRotation = lrintf(360.0 * move.DriveStepsPerUnit(drive));
+						const int32_t stepsPerRotation = lrintf(360.0 * move.DriveStepsPerMm(drive));
 						if (delta > stepsPerRotation/2)
 						{
 							delta -= stepsPerRotation;
@@ -1211,10 +1211,11 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						}
 #endif
 
+						const float delta = totalDistance * directionVector[drive] * move.DriveStepsPerMm(drive);
+
 #if SUPPORT_CAN_EXPANSION
 						afterPrepare.drivesMoving.SetBit(drive);
 						const DriverId driver = platform.GetExtruderDriver(extruder);
-						const float delta = totalDistance * directionVector[drive] * move.DriveStepsPerUnit(drive);
 						if (driver.IsRemote())
 						{
 							// The MovementLinearShaped message requires the extrusion amount in steps to be passed as a float. The remote board adds the PA and handles fractional steps.

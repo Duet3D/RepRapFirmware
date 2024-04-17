@@ -52,27 +52,126 @@ void DriveMovement::SetStepsPerMm(float p_stepsPerMm) noexcept
 	stepsPerMm = p_stepsPerMm;
 }
 
-// This is called when segments has just been changed to a new segment. Return the new segment to execute, or nullptr.
-MoveSegment *DriveMovement::NewCartesianSegment() noexcept
+// Add a segment into the list. If the list is not empty then the new segment may overlap segments already in the list but will never start earlier than the first existing one.
+void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, bool usePressureAdvance) noexcept
+{
+	if (usePressureAdvance)
+	{
+		const float extraSpeed = a * extruderShaper.GetKclocks();
+		u += extraSpeed;
+		distance += extraSpeed * (float)duration;
+	}
+
+	// Convert from mm to steps
+	u *= stepsPerMm;
+	a *= stepsPerMm;
+	distance *= stepsPerMm;
+
+	MoveSegment *prev = nullptr;
+
+	// Shut out the step interrupt while we mess with the segments
+	AtomicCriticalSectionLocker lock;
+
+	// Find the earliest existing segment that the new one will overlap
+	MoveSegment *seg = segments;
+	int32_t offset;
+	while (seg != nullptr)
+	{
+		offset = (int32_t)(startTime - seg->GetStartTime());
+		if (   offset <= 0												// new segment starts before the old one does
+			|| (float)(offset + MoveSegment::MinDuration) < seg->GetDuration()
+		   )
+		{
+			// The segment we wish to add starts before the one at 'seg' ends. It should not start before the one at 'seg' starts, but if it does then just postpone it.
+			// If it starts significantly later, split the existing segment
+			if (offset < MoveSegment::MinDuration)
+			{
+				startTime = seg->GetStartTime();
+			}
+			else
+			{
+				// Split the existing segment
+				prev = seg;
+				seg = seg->Split((uint32_t)offset);
+			}
+
+			// The segment we wish to add now starts at the same time as 'seg' but it may end earlier or later than the one at 'seg' does.
+			const int32_t timeDifference = (int32_t)(seg->GetDuration() - duration);
+			if (timeDifference < -MoveSegment::MinDuration)
+			{
+				// Add the new segment in two (or more) parts
+				const float firstDistance = (u + 0.5 * a * seg->GetDuration()) * seg->GetDuration();
+				seg->Merge(firstDistance, u, a, usePressureAdvance);
+				distance -= firstDistance;
+				startTime += seg->GetDuration();
+				u += a * seg->GetDuration();
+				duration = -timeDifference;
+				prev = seg;
+				seg = seg->GetNext();
+				continue;
+			}
+
+			// New segment ends earlier or at the same time as the old one
+			if (timeDifference > MoveSegment::MinDuration)
+			{
+				// Split the existing segment in two
+				seg->Split(duration);
+			}
+			else
+			{
+				// Make the new segment duration fit the existing one by adjusting the initial speed slightly
+				u = ((u * duration) - (a * (float)timeDifference * (duration + 0.5 * (float)timeDifference)))/seg->GetDuration();
+				duration = seg->GetDuration();
+			}
+
+			// The new segment and the existing one now have the same start time and duration, so merge them
+			seg->Merge(distance, u, a, usePressureAdvance);
+			return;
+		}
+
+		if (offset < seg->GetDuration())
+		{
+			startTime = seg->GetStartTime() + seg->GetDuration() - duration;	// delay the start of the segment slightly to avoid creating very short segments
+		}
+		prev = seg;
+		seg = seg->GetNext();
+	}
+
+	// The new segment (or what's left of it) needs to be added at the end
+	seg = MoveSegment::Allocate(nullptr);
+	seg->SetParameters(startTime, distance, duration, u, a, usePressureAdvance);
+	if (prev == nullptr)
+	{
+		segments = seg;
+	}
+	else
+	{
+		prev->SetNext(seg);
+	}
+}
+
+// This is called when 'segments' has just been changed to a new segment. Return the new segment to execute, or nullptr.
+MoveSegment *DriveMovement::NewSegment() noexcept
 {
 	while (true)
 	{
-		if (segments == nullptr)
+		MoveSegment *seg = segments;			// capture volatile variable
+		if (seg == nullptr)
 		{
 			return nullptr;
 		}
 
 		// Calculate the movement parameters
 		bool newDirection;
-		if (segments->IsLinear())
+		if (seg->IsLinear())
 		{
 			// n * mmPerStep = distanceCarriedForwards + u * t
 			// Therefore t = -distanceCarriedForwards/u + n * mmPerStep/u
 			// Calculate the t0 and p coefficients such that t = t0 + p*n
-			t0 = -distanceCarriedForwards/segments->GetU() + segments->GetStartTime();
-			p = 1.0/segments->GetU();
+			t0 = -distanceCarriedForwards/segments->GetU() + seg->GetStartTime();
+			p = 1.0/seg->GetU();
 			q = 0.0;								// to make the debug output consistent
-			const float segmentDistance = distanceCarriedForwards + segments->GetU() * segments->GetDuration();
+			const float segmentDistance = distanceCarriedForwards + seg->GetU() * seg->GetDuration();
 			netStepsThisSegment = (int32_t)segmentDistance;
 			if (netStepsThisSegment < 0)
 			{
@@ -92,12 +191,12 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 			// Therefore 0.5 * t^2 + u * t/a + (distanceCarriedForwards - mmPerStep * n)/a = 0
 			// Therefore t = -u/a +/- sqrt((u/a)^2 - 2 * (distanceCarriedForwards - mmPerStep * n)/a)
 			// Calculate the t0, p and q coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q)
-			const float uDivA = segments->GetU()/segments->GetA();
-			t0 = segments->GetStartTime() - uDivA;
-			p = 2.0/segments->GetA();
-			q = fsquare(uDivA) - 2 * distanceCarriedForwards/segments->GetA();
+			const float uDivA = seg->GetU()/seg->GetA();
+			t0 = seg->GetStartTime() - uDivA;
+			p = 2.0/seg->GetA();
+			q = fsquare(uDivA) - 2 * distanceCarriedForwards/seg->GetA();
 
-			const float segmentDistance = distanceCarriedForwards + segments->GetLength();
+			const float segmentDistance = distanceCarriedForwards + seg->GetLength();
 			netStepsThisSegment = (int32_t)segmentDistance;
 			if (uDivA >= 0.0)
 			{
@@ -162,10 +261,12 @@ MoveSegment *DriveMovement::NewCartesianSegment() noexcept
 			debugPrintf("New cart seg: state %u q=%.4e t0=%.4e p=%.4e ns=%" PRIu32 " ssl=%" PRIu32 "\n",
 							(unsigned int)state, (double)q, (double)t0, (double)p, nextStep, segmentStepLimit);
 #endif
-			return segments;
+			return seg;
 		}
 
-		segments = segments->GetNext();						// skip this segment
+		MoveSegment *oldSeg = seg;
+		segments = seg = seg->GetNext();						// skip this segment
+		MoveSegment::Release(oldSeg);
 	}
 }
 
@@ -192,7 +293,7 @@ bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& param
 	nextStep = 1;									// must do this before calling NewCartesianSegment
 	directionChanged = directionReversed = false;	// must clear these before we call NewCartesianSegment
 
-	if (!NewCartesianSegment())
+	if (!NewSegment())
 	{
 		return false;
 	}
@@ -311,7 +412,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			MoveSegment *oldSegment = currentSegment;
 			segments = currentSegment = oldSegment->GetNext();
 			MoveSegment::Release(oldSegment);
-			currentSegment = NewCartesianSegment();
+			currentSegment = NewSegment();
 			if (currentSegment == nullptr)
 			{
 				state = DMState::idle;
@@ -458,7 +559,7 @@ bool DriveMovement::StopDriver(int32_t& netStepsTaken) noexcept
 	AtomicCriticalSectionLocker lock;
 
 	MoveSegment *seg = nullptr;
-	std::swap(seg, segments);
+	std::swap(seg, const_cast<MoveSegment*&>(segments));
 	if (seg != nullptr)
 	{
 		netStepsTaken = GetNetStepsTaken();

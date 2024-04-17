@@ -1560,7 +1560,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								return false;
 							}
-							move.SetDriveStepsPerUnit(axis, gb.GetPositiveFValue(), ustepMultiplier);
+							move.SetDriveStepsPerMm(axis, gb.GetPositiveFValue(), ustepMultiplier);
 #if SUPPORT_CAN_EXPANSION
 							axesToUpdate.SetBit(axis);
 #endif
@@ -1591,7 +1591,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_CAN_EXPANSION
 							axesToUpdate.SetBit(drive);
 #endif
-							move.SetDriveStepsPerUnit(drive, eVals[e], ustepMultiplier);
+							move.SetDriveStepsPerMm(drive, eVals[e], ustepMultiplier);
 						}
 					}
 
@@ -1617,13 +1617,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						reply.copy("Steps/mm: ");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.3f, ", axisLetters[axis], (double)move.DriveStepsPerUnit(axis));
+							reply.catf("%c: %.3f, ", axisLetters[axis], (double)move.DriveStepsPerMm(axis));
 						}
 						reply.catf("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.3f", sep, (double)move.DriveStepsPerUnit(ExtruderToLogicalDrive(extruder)));
+							reply.catf("%c%.3f", sep, (double)move.DriveStepsPerMm(ExtruderToLogicalDrive(extruder)));
 							sep = ':';
 						}
 					}

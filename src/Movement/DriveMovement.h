@@ -73,7 +73,7 @@ public:
 
 private:
 	bool CalcNextStepTimeFull() noexcept SPEED_CRITICAL;
-	MoveSegment *NewCartesianSegment() noexcept SPEED_CRITICAL;
+	MoveSegment *NewSegment() noexcept SPEED_CRITICAL;
 
 	void CheckDirection(bool reversed) noexcept;
 	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr
@@ -84,7 +84,7 @@ private:
 	// Parameters common to Cartesian, delta and extruder moves
 
 	DriveMovement *nextDM = nullptr;					// link to next DM that needs a step
-	MoveSegment *segments = nullptr;					// pointer to the segment list for this driver
+	MoveSegment *volatile segments = nullptr;			// pointer to the segment list for this driver
 
 	float stepsPerMm;
 

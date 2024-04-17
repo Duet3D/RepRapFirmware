@@ -1191,7 +1191,7 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 				const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
 				const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
 				bool bdummy;
-				const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * platform.DriveStepsPerUnit(axis));
+				const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * reprap.GetMove().DriveStepsPerMm(axis));
 				reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
 			}
 # endif
@@ -1212,7 +1212,7 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 				const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
 				const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
 				bool bdummy;
-				const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * reprap.GetMove().DriveStepsPerUnit(axis));
+				const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * reprap.GetMove().DriveStepsPerMm(axis));
 				const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
 				const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
 				const unsigned int pwmScaleSum = pwmScale & 0xFF;

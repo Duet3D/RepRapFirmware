@@ -13,6 +13,7 @@
 
 #include <RTOSIface/RTOSIface.h>
 #include <Platform/Platform.h>
+#include <Platform/RepRap.h>
 #include <Movement/Move.h>
 #include <DmacManager.h>
 #include <Platform/TaskPriorities.h>
@@ -862,10 +863,10 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 		threshold -= 128;
 	}
 	const uint32_t fullstepsPerSecond = StepClockRate/maxStallStepInterval;
-	const float speed1 = ((fullstepsPerSecond << microstepShiftFactor)/reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
+	const float speed1 = ((fullstepsPerSecond << microstepShiftFactor)/reprap.GetMove().DriveStepsPerMm(axisNumber));
 	const uint32_t tcoolthrs = writeRegisters[WriteTcoolthrs] & ((1ul << 20) - 1u);
 	bool bdummy;
-	const float speed2 = ((float)TmcClockSpeed * GetMicrostepping(bdummy))/(256 * tcoolthrs * reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
+	const float speed2 = ((float)TmcClockSpeed * GetMicrostepping(bdummy))/(256 * tcoolthrs * reprap.GetMove().DriveStepsPerMm(axisNumber));
 	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep threshold %" PRIu32 " (%.1f mm/sec)",
 				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed1, tcoolthrs, (double)speed2);
 }

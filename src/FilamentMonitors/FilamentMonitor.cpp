@@ -344,7 +344,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 					}
 					if ((fs.enableMode == 2 || gCodes.IsReallyPrinting()) && !gCodes.IsSimulating())
 					{
-						const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetMove().DriveStepsPerUnit(fs.driveNumber);
+						const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetMove().DriveStepsPerMm(fs.driveNumber);
 						fst = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
 						++checkCalls;
 					}

@@ -885,7 +885,7 @@ GCodeResult GCodes::HandleM558Point1or2(GCodeBuffer& gb, const StringRef &reply,
 			zp->PrepareForUse(false);										// needed to set actual trigger height allowing for temperature compensation
 
 			// Set the scanning range to a whole number of microsteps and calculate the microsteps per point
-			const float zStepsPerMm = reprap.GetMove().DriveStepsPerUnit(Z_AXIS);
+			const float zStepsPerMm = reprap.GetMove().DriveStepsPerMm(Z_AXIS);
 			const unsigned int microstepsPerHalfScan = (unsigned int)(requestedScanningRange * zStepsPerMm);
 			constexpr unsigned int MaxCalibrationPointsPerHalfScan = (MaxScanningProbeCalibrationPoints - 1)/2;
 			const unsigned int microstepsPerPoint = max<unsigned int>((microstepsPerHalfScan + MaxCalibrationPointsPerHalfScan - 1)/MaxCalibrationPointsPerHalfScan, 1);

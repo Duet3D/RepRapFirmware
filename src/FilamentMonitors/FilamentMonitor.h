@@ -115,6 +115,9 @@ protected:
 	// Check that this monitor still refers to a valid extruder
 	bool IsValid(size_t extruderNumber) const noexcept;
 
+	// Get the logical driver number of the extruder that this filament monitor watches
+	uint8_t GetDriver() const noexcept { return driveNumber; }
+
 	// Get the status of the filament monitor as a string
 	const char *GetStatusText() const noexcept { return lastStatus.ToString(); }
 
@@ -144,7 +147,6 @@ protected:
 	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) THROWS(GCodeException);
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult CommonConfigure(const CanMessageGenericParser& parser, const StringRef& reply, InterruptMode interruptMode, bool& seen) noexcept;
-	uint8_t GetDriver() const noexcept { return driveNumber; }
 #endif
 
 	const IoPort& GetPort() const noexcept { return port; }

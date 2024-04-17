@@ -165,7 +165,7 @@ void HangprinterKinematics::Recalc() noexcept
 		spoolRadiiSq[i] = spoolRadii[i] * spoolRadii[i];
 
 		// Calculate the steps per unit that is correct at the origin
-		move.SetDriveStepsPerUnit(i, stepsPerUnitTimesRTmp[i] / spoolRadii[i], 0);
+		move.SetDriveStepsPerMm(i, stepsPerUnitTimesRTmp[i] / spoolRadii[i], 0);
 	}
 
 	//// Flex compensation

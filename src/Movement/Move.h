@@ -64,9 +64,8 @@ public:
 
 	[[noreturn]] void MoveLoop() noexcept;									// Main loop called by the Move task
 
-	float DriveStepsPerUnit(size_t axisOrExtruder) const noexcept pre(axisPrExtruder < MaxAxesPlusExtruders) { return driveStepsPerUnit[axisOrExtruder]; }
-	const float *_ecv_array GetDriveStepsPerUnit() const noexcept { return driveStepsPerUnit; }
-	void SetDriveStepsPerUnit(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept;
+	float DriveStepsPerMm(size_t axisOrExtruder) const noexcept pre(axisPrExtruder < MaxAxesPlusExtruders) { return driveStepsPerMm[axisOrExtruder]; }
+	void SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept;
 
 	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode, const StringRef& reply) noexcept;
 	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const noexcept;
@@ -321,7 +320,7 @@ private:
 
 	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 	// Accumulated motor steps, used by filament monitors
 	int32_t motorPositionsAfterScheduledMoves[MaxAxesPlusExtruders];	// The motor positions that will result after all scheduled movement has completed normally
-	float driveStepsPerUnit[MaxAxesPlusExtruders];
+	float driveStepsPerMm[MaxAxesPlusExtruders];
 	uint16_t microstepping[MaxAxesPlusExtruders];					// the microstepping used for each axis or extruder, top bit is set if interpolation enabled
 
 	mutable float latestLiveCoordinates[MaxAxesPlusExtruders];		// the most recent set of live coordinates that we fetched
