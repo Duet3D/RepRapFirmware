@@ -2194,6 +2194,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		}
 	}
 
+	AxesBitmap realAxesMoving;				// we'll need this later but only if ms.moveType == 0
 	if (ms.moveType ==  0)
 	{
 #if SUPPORT_COORDINATE_ROTATION
@@ -2208,7 +2209,6 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		}
 #endif
 		// Check and record which real axes this movement system is moving
-		AxesBitmap realAxesMoving;
 		if (ms.currentTool == nullptr)
 		{
 			realAxesMoving = axesMentioned;
@@ -2230,7 +2230,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			}
 		}
 
-		if (!doingManualBedProbe && CheckEnoughAxesHomed(axesMentioned))
+		if (!doingManualBedProbe && CheckEnoughAxesHomed(realAxesMoving))
 		{
 			gb.ThrowGCodeException("insufficient axes homed");
 		}
@@ -2337,7 +2337,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		// 2. If a linear axis is being limited, but the move is for a rotational axis that is already in the correct position,
 		//    then the code in DDA::InitStandardMove will throw it away because neither linearAxesMoving nor rotationalAxesMoving will be set.
 		//    This was an actual problem on my tool changer.
-		AxesBitmap axesToLimit = axesVirtuallyHomed & axesMentioned;
+		AxesBitmap axesToLimit = axesVirtuallyHomed & realAxesMoving;
 		if (doingManualBedProbe)
 		{
 			axesToLimit.ClearBit(Z_AXIS);									// if doing a manual Z probe, don't limit the Z movement
