@@ -68,7 +68,25 @@ GCodeResult GCodes::ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(
 		if (param != 1)
 		{
 			// M400 releases axes/extruders that are not owned by the current tool unless the S1 parameter is present
-			GetMovementState(gb).ReleaseNonToolAxesAndExtruders();
+			// Workaround for loss of correct coordinates when M400 is used in deployprobe.g or retractprobe.g
+			// *************** THIS IS NOT A FIX, IT IS A WORKAROUND. THE UNDERLYING ISSUE (MOVEMENT OCCURRING WHEN AXES ARE NOT OWNED) NEEDS TO BE FIXED. **************
+			bool doingProbing = false;
+			const GCodeMachineState *mc = &gb.LatestMachineState();
+			do
+			{
+				if (mc->GetState() >= GCodeState::firstProbingState && mc->GetState() <= GCodeState::lastProbingState)
+				{
+					doingProbing = true;
+					break;
+				}
+				mc = mc->GetPrevious();
+			}
+			while (mc != nullptr);
+			if (!doingProbing)
+			// End of workaround
+			{
+				GetMovementState(gb).ReleaseNonToolAxesAndExtruders();
+			}
 		}
 		return GCodeResult::ok;
 	}
