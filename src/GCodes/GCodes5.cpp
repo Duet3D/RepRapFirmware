@@ -68,8 +68,8 @@ GCodeResult GCodes::ExecuteM400(GCodeBuffer& gb, const StringRef& reply) THROWS(
 		if (param != 1)
 		{
 			// M400 releases axes/extruders that are not owned by the current tool unless the S1 parameter is present
-			// Workaround for loss of correct coordinates when M400 is used in deployprobe.g or retractprobe.g
-			// *************** THIS IS NOT A FIX, IT IS A WORKAROUND. THE UNDERLYING ISSUE (MOVEMENT OCCURRING WHEN AXES ARE NOT OWNED) NEEDS TO BE FIXED. **************
+			// Workaround for loss of correct coordinates when M400 is used in deployprobe.g or retractprobe.g (issue 978)
+			// Review this after we have implemented a check for moving unowned axes and/or automatic axis allocation for internally-generated moves
 			bool doingProbing = false;
 			const GCodeMachineState *mc = &gb.LatestMachineState();
 			do
