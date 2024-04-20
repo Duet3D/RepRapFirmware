@@ -97,7 +97,7 @@ void StepTimer::Init() noexcept
 	constexpr uint32_t divisor = (64ull * (SystemCoreClockFreq/2))/(48000000u);
 	static_assert(divisor <= 256 && divisor >= 100);
 
-	// TC0 can use either PCLK6 or PCLK7 depending on the setting in the bus matrix Peripheral Clock Configuration Register. Default is PCLK6.
+	// TC0 channel 0 can use either PCLK6 or PCLK7 depending on the setting in the bus matrix Peripheral Clock Configuration Register. Default is PCLK6.
 	pmc_disable_pck(PMC_PCK_6);
 	pmc_switch_pck_to_mck(PMC_PCK_6, PMC_PCK_PRES(divisor - 1));
 	pmc_enable_pck(PMC_PCK_6);

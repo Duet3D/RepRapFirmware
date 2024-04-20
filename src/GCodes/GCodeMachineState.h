@@ -24,20 +24,6 @@ enum class GCodeState : uint8_t
 	waitingForSpecialMoveToComplete,					// doing a special move, so we must wait for it to finish before processing another GCode
 	waitingForSegmentedMoveToGo,						// doing an arc move, so we must check whether it completes normally
 
-	// This group must be contiguous
-	probingToolOffset1,
-	probingToolOffset2,
-	probingToolOffset3,
-	probingToolOffset4,
-
-	// These next 7 must be contiguous
-	findCenterOfCavity1,
-	findCenterOfCavity2,
-	findCenterOfCavity3,
-	findCenterOfCavity4,
-	findCenterOfCavity5,
-	findCenterOfCavity6,
-
 	homing1,
 	homing2,
 
@@ -77,8 +63,11 @@ enum class GCodeState : uint8_t
 	stoppingFromCode,
 	stopped,
 
+	//********** Start of states from which deployprobe/retractprobe macros can be called **********
+	firstProbingState,
+
 	// These next 9 must be contiguous
-	gridProbing1,
+	gridProbing1 = firstProbingState,
 	gridProbing2a,
 	gridProbing2b,
 	gridProbing3,
@@ -100,7 +89,7 @@ enum class GCodeState : uint8_t
 #endif
 
 	// These next 10 must be contiguous
-	probingAtPoint0,
+	probingAtPoint0 ,
 	probingAtPoint1,
 	probingAtPoint2a,
 	probingAtPoint2b,
@@ -116,6 +105,23 @@ enum class GCodeState : uint8_t
 	straightProbe1,
 	straightProbe2,
 	straightProbe3,
+
+	// This group must be contiguous
+	probingToolOffset1,
+	probingToolOffset2,
+	probingToolOffset3,
+	probingToolOffset4,
+
+	// These next 7 must be contiguous
+	findCenterOfCavity1,
+	findCenterOfCavity2,
+	findCenterOfCavity3,
+	findCenterOfCavity4,
+	findCenterOfCavity5,
+	findCenterOfCavity6,
+
+	lastProbingState = findCenterOfCavity6,
+	//************ End of probing states
 
 	doingFirmwareRetraction,
 	doingFirmwareUnRetraction,
