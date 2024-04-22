@@ -4520,7 +4520,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						bool dummy;
 						gb.TryGetFValue('R', resumeVoltage, dummy);
 
-						String<80> powerFailString;
+						String<StringLength256> powerFailString;
 						bool seenCommandString = false;
 						gb.TryGetQuotedString('P', powerFailString.GetRef(), seenCommandString);
 						if (seenCommandString)
