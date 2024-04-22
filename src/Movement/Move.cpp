@@ -274,6 +274,10 @@ void Move::Init() noexcept
 	{
 		ms = 16 | 0x8000;
 	}
+	for (size_t drv = 0; drv < MaxAxesPlusExtruders + NumDirectDrivers; ++drv)
+	{
+		dms[drv].Init(drv);
+	}
 
 	moveTask.Create(MoveStart, "Move", this, TaskPriority::MovePriority);
 }
@@ -461,6 +465,14 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 			nextPrepareDelay = auxPrepareDelay;
 		}
 #endif
+
+		if (simulationMode == SimulationMode::debug && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::SimulateSteppingDrivers))
+		{
+			while (activeDMs != nullptr)
+			{
+				SimulateSteppingDrivers(reprap.GetPlatform());
+			}
+		}
 
 		// Reduce motor current to standby if the rings have been idle for long enough
 		if (   rings[0].IsIdle()
@@ -1519,8 +1531,11 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 }
 
 // Add some linear segments to be executed by a driver, taking account of possible input shaping. This is used by linear axes and by extruders.
+// We never add a segment that starts earlier than any existing segments, but we may add segments when there are none already.
 void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, bool usePressureAdvance) noexcept
 {
+	DriveMovement* const dmp = &dms[logicalDrive];
+
 	// Acceleration phase
 	if (params.accelClocks > 0.0)
 	{
@@ -1530,13 +1545,13 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 			{
 				const float factor = axisShaper.GetImpulseSize(index);
-				dms[logicalDrive].AddSegment(startTime + axisShaper.GetImpulseDelay(index), params.accelClocks,
+				dmp->AddSegment(startTime + axisShaper.GetImpulseDelay(index), params.accelClocks,
 									accelDistance * factor, dda.startSpeed * factor, dda.acceleration * factor, usePressureAdvance);
 			}
 		}
 		else
 		{
-			dms[logicalDrive].AddSegment(startTime, params.accelClocks, accelDistance, dda.startSpeed, dda.acceleration, usePressureAdvance);
+			dmp->AddSegment(startTime, params.accelClocks, accelDistance, dda.startSpeed, dda.acceleration, usePressureAdvance);
 		}
 	}
 
@@ -1550,13 +1565,13 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 			{
 				const float factor = axisShaper.GetImpulseSize(index);
-				dms[logicalDrive].AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), dda.clocksNeeded - params.accelClocks,
+				dmp->AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), dda.clocksNeeded - params.accelClocks,
 												steadyDistance * factor, dda.topSpeed * factor, 0.0, false);
 			}
 		}
 		else
 		{
-			dms[logicalDrive].AddSegment(originalStartClocks, dda.clocksNeeded - params.accelClocks, steadyDistance, dda.topSpeed, 0, false);
+			dmp->AddSegment(originalStartClocks, dda.clocksNeeded - params.accelClocks, steadyDistance, dda.topSpeed, 0, false);
 		}
 	}
 
@@ -1570,19 +1585,40 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 			{
 				const float factor = axisShaper.GetImpulseSize(index);
-				dms[logicalDrive].AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), params.decelClocks,
+				dmp->AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), params.decelClocks,
 												decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), usePressureAdvance);
 			}
 		}
 		else
 		{
-			dms[logicalDrive].AddSegment(originalStartClocks, params.decelClocks, decelDistance, dda.topSpeed, -(dda.deceleration), usePressureAdvance);
+			dmp->AddSegment(originalStartClocks, params.decelClocks, decelDistance, dda.topSpeed, -(dda.deceleration), usePressureAdvance);
 		}
 	}
 
-	//TODO if there is currently no movement, schedule an interrupt to start executing this segment
-	//TODO if an interrupt is already scheduled then we may need to bring it forwards
-	// We may choose to do the above in AddSegment instead of here
+	// If this DM now has segments and it was not already in the list for step generation, insert it in the list
+	{
+		AtomicCriticalSectionLocker lock;
+		if (dmp->segments != nullptr)
+		{
+			const DriveMovement *adp = activeDMs;
+			while (adp != dmp)																// if they are equal then this DM is already in the active list
+			{
+				if (adp == nullptr)
+				{
+					InsertDM(dmp);
+					if (activeDMs == dmp && simulationMode == SimulationMode::off)			// if this is now the first DM in the active list
+					{
+						if (ScheduleNextStepInterrupt())
+						{
+							Interrupt();
+						}
+					}
+					break;
+				}
+				adp = adp->nextDM;
+			}
+		}
+	}
 }
 
 // ISR for the step interrupt

@@ -39,7 +39,8 @@ class DriveMovement
 public:
 	friend class Move;
 
-	DriveMovement() noexcept;
+	DriveMovement() noexcept { }
+	void Init(size_t drv) noexcept;
 
 	void SetStepsPerMm(float p_stepsPerMm) noexcept;
 
@@ -83,21 +84,20 @@ private:
 
 	// Parameters common to Cartesian, delta and extruder moves
 
-	DriveMovement *nextDM = nullptr;					// link to next DM that needs a step
-	MoveSegment *volatile segments = nullptr;			// pointer to the segment list for this driver
+	DriveMovement *nextDM ;								// link to next DM that needs a step
+	MoveSegment *volatile segments;						// pointer to the segment list for this driver
 
 	float stepsPerMm;
 
 	ExtruderShaper extruderShaper;						// pressure advance control
 
-	DMState state = DMState::idle;						// whether this is active or not
+	DMState state;										// whether this is active or not
 	uint8_t drive;										// the drive that this DM controls
 	uint8_t direction : 1,								// true=forwards, false=backwards
 			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
 			directionReversed : 1,						// true if we have reversed the requested motion direction because of pressure advance
-			isDelta : 1,								// true if this motor is executing a delta tower move
-			isExtruder : 1,								// true if this DM is for an extruder (only matters if !isDelta)
-					: 1,								// padding to make the next field last
+			isExtruder : 1,								// true if this DM is for an extruder
+					: 2,								// padding to make the next field last
 			stepsTakenThisSegment : 2;					// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
@@ -105,7 +105,7 @@ private:
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 	float q, t0, p;										// the movement parameters of the current segment
-	float distanceCarriedForwards = 0.0;				// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
+	float distanceCarriedForwards;						// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
 	int32_t currentMotorPosition;
 
 	// These values change as the segment is executed

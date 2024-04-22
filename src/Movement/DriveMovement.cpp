@@ -20,12 +20,17 @@
 int32_t DriveMovement::maxStepsLate = 0;
 int32_t DriveMovement::minStepInterval = 0;
 
-// Constructors
-DriveMovement::DriveMovement() noexcept
-{
-}
-
 // Non static members
+
+void DriveMovement::Init(size_t drv) noexcept
+{
+	drive = (uint8_t)drv;
+	state = DMState::idle;
+	distanceCarriedForwards = 0.0;
+	currentMotorPosition = 0;
+	nextDM = nullptr;
+	segments = nullptr;
+}
 
 void DriveMovement::DebugPrint() const noexcept
 {
@@ -143,6 +148,10 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 	if (prev == nullptr)
 	{
 		segments = seg;
+		if (NewSegment())
+		{
+			CalcNextStepTimeFull();
+		}
 	}
 	else
 	{
