@@ -107,7 +107,7 @@ constexpr size_t MaxExtruders = 20;					// The maximum number of extruders
 constexpr size_t MaxAxesPlusExtruders = 32;			// May be <= MaxAxes + MaxExtruders
 
 constexpr size_t MaxHeatersPerTool = 20;			// Increased in 3.4 due to OEM requirement
-constexpr size_t MaxExtrudersPerTool = 10;			// Increased in 3.4 due to OEM requirement
+constexpr size_t MaxExtrudersPerTool = 12;			// Increased in 3.5.2 because a user needs 12 on a 6HC
 
 constexpr unsigned int MaxTriggers = 32;			// Must be <= 32 because we store a bitmap of pending triggers in a uint32_t
 
