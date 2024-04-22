@@ -270,6 +270,10 @@ void Move::Init() noexcept
 	{
 		pos = 0;
 	}
+	for (uint16_t& ms : microstepping)
+	{
+		ms = 16 | 0x8000;
+	}
 
 	moveTask.Create(MoveStart, "Move", this, TaskPriority::MovePriority);
 }

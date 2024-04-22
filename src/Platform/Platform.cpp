@@ -4697,9 +4697,9 @@ void Platform::HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8
 GCodeResult Platform::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtruders, const StringRef& reply) noexcept
 {
 	CanDriversData<StepsPerUnitAndMicrostepping> data;
-	const Move& move = reprap.GetMove();
-	axesAndExtruders.Iterate([this, move, &data](unsigned int axisOrExtruder, unsigned int count) noexcept
+	axesAndExtruders.Iterate([this, &data](unsigned int axisOrExtruder, unsigned int count) noexcept
 								{
+									const Move& move = reprap.GetMove();
 									const StepsPerUnitAndMicrostepping driverData(move.DriveStepsPerMm(axisOrExtruder), move.GetRawMicrostepping(axisOrExtruder));
 									this->IterateRemoteDrivers(axisOrExtruder,
 																[&data, &driverData](DriverId driver) noexcept

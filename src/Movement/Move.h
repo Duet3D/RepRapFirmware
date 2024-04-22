@@ -64,21 +64,21 @@ public:
 
 	[[noreturn]] void MoveLoop() noexcept;									// Main loop called by the Move task
 
-	float DriveStepsPerMm(size_t axisOrExtruder) const noexcept pre(axisPrExtruder < MaxAxesPlusExtruders) { return driveStepsPerMm[axisOrExtruder]; }
-	void SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept;
+	float DriveStepsPerMm(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return driveStepsPerMm[axisOrExtruder]; }
+	void SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept pre(axisOrExtruder < MaxAxesPlusExtruders);
 
-	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode, const StringRef& reply) noexcept;
-	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const noexcept;
-	unsigned int GetMicrostepping(size_t axisOrExtruder) const noexcept { return microstepping[axisOrExtruder] & 0x7FFF; }
-	bool GetMicrostepInterpolation(size_t axisOrExtruder) const noexcept { return (microstepping[axisOrExtruder] & 0x8000) != 0; }
-	uint16_t GetRawMicrostepping(size_t axisOrExtruder) const noexcept { return microstepping[axisOrExtruder]; }
+	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode, const StringRef& reply) noexcept pre(axisOrExtruder < MaxAxesdPlusExtruders);
+	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders);
+	unsigned int GetMicrostepping(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return microstepping[axisOrExtruder] & 0x7FFF; }
+	bool GetMicrostepInterpolation(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return (microstepping[axisOrExtruder] & 0x8000) != 0; }
+	uint16_t GetRawMicrostepping(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return microstepping[axisOrExtruder]; }
 
 	void GetCurrentMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
 	void SetRawPosition(const float positions[MaxAxesPlusExtruders], MovementSystemNumber msNumber) noexcept
 			pre(queueNumber < NumMovementSystems);							// Set the current position to be this without transforming them first
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
-	int32_t GetLiveMotorPosition(size_t axis) const noexcept;
+	int32_t GetLiveMotorPosition(size_t axis) const noexcept pre(axis < MaxAxesPlusExtruders);
 	void GetLiveCoordinates(unsigned int msNumber, const Tool *tool, float coordsOut[MaxAxesPlusExtruders]) noexcept;
 																			// Gives the last point at the end of the last complete DDA
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
