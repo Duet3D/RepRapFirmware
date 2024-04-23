@@ -45,8 +45,8 @@ public:
 	// Given that this is not a constant-speed segment, test whether it is accelerating or decelerating
 	bool IsAccelerating() const noexcept { return a > 0.0; }
 
-	// Get the segment duration in step clocks
-	float GetStartTime() const noexcept { return startTime; }
+	// Get the segment start time in step clocks
+	uint32_t GetStartTime() const noexcept { return startTime; }
 
 	// Get the segment duration in step clocks
 	float GetDuration() const noexcept { return duration; }

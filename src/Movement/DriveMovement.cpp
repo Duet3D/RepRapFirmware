@@ -167,7 +167,7 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 			// n * mmPerStep = distanceCarriedForwards + u * t
 			// Therefore t = -distanceCarriedForwards/u + n * mmPerStep/u
 			// Calculate the t0 and p coefficients such that t = t0 + p*n
-			t0 = -distanceCarriedForwards/segments->GetU() + seg->GetStartTime();
+			t0 = -distanceCarriedForwards/segments->GetU();
 			p = 1.0/seg->GetU();
 			q = 0.0;								// to make the debug output consistent
 			const float segmentDistance = distanceCarriedForwards + seg->GetU() * seg->GetDuration();
@@ -191,7 +191,7 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 			// Therefore t = -u/a +/- sqrt((u/a)^2 - 2 * (distanceCarriedForwards - mmPerStep * n)/a)
 			// Calculate the t0, p and q coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q)
 			const float uDivA = seg->GetU()/seg->GetA();
-			t0 = seg->GetStartTime() - uDivA;
+			t0 = -uDivA;
 			p = 2.0/seg->GetA();
 			q = fsquare(uDivA) - 2 * distanceCarriedForwards/seg->GetA();
 
@@ -387,11 +387,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 // Version of fastSqrtf that allows for slightly negative operands caused by rounding error
 static inline float fastLimSqrtf(float f) noexcept
 {
-#if 1
-	return fastSqrtf(f);							// the fastSqrtf function in RRFLibraries already returns zero if the operand is negative
-#else
 	return (f > 0.0) ? fastSqrtf(f) : 0.0;
-#endif
 }
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
@@ -464,17 +460,17 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	switch (state)
 	{
 	case DMState::cartLinear:									// linear steady speed
-		nextCalcStepTime = t0 + (float)(nextStep + (int32_t)stepsTillRecalc) * p;
+		nextCalcStepTime = (float)(nextStep + (int32_t)stepsTillRecalc) * p;
 		break;
 
 	case DMState::cartAccel:									// Cartesian accelerating
-		nextCalcStepTime = t0 + fastLimSqrtf(q + p * (float)(nextStep + (int32_t)stepsTillRecalc));
+		nextCalcStepTime = fastLimSqrtf(q + p * (float)(nextStep + (int32_t)stepsTillRecalc));
 		break;
 
 	case DMState::cartDecelForwardsReversing:
 		if (nextStep + (int32_t)stepsTillRecalc < reverseStartStep)
 		{
-			nextCalcStepTime = t0 - fastLimSqrtf(q + p * (float)(nextStep + (int32_t)stepsTillRecalc));
+			nextCalcStepTime = -fastLimSqrtf(q + p * (float)(nextStep + (int32_t)stepsTillRecalc));
 			break;
 		}
 
@@ -484,22 +480,24 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.
 		{
 			const int32_t netSteps = 2 * reverseStartStep - nextStep - 1;
-			nextCalcStepTime = t0 + fastLimSqrtf(q + p * (float)(netSteps - (int32_t)stepsTillRecalc));
+			nextCalcStepTime = fastLimSqrtf(q + p * (float)(netSteps - (int32_t)stepsTillRecalc));
 		}
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian decelerating with no reversal
-		nextCalcStepTime = t0 - fastLimSqrtf(q + p * (float)(nextStep + (int32_t)stepsTillRecalc));
+		nextCalcStepTime = -fastLimSqrtf(q + p * (float)(nextStep + (int32_t)stepsTillRecalc));
 		break;
 
 	default:
 		return false;
 	}
 
-#if 0	//DEBUG
+	nextCalcStepTime += t0;
+
+#if 1	//DEBUG
 	if (std::isnan(nextCalcStepTime) || nextCalcStepTime < 0.0)
 	{
-//		debugPrintf("step err3\n");
+		debugPrintf("step err3, %.2f\n", (double)nextCalcStepTime);
 		state = DMState::stepError3;
 		return false;
 	}
@@ -516,13 +514,14 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// 2024-040-5: we now allow steps to be late on any segment, not just the last one, because a segment may be 0 or 1 step long and on deltas the last 2 steps may be calculated late.
 		iNextCalcStepTime = segments->GetDuration();
 		const int32_t nextCalcStep = nextStep + (int32_t)stepsTillRecalc;
-		const int32_t stepsLate = segmentStepLimit  - nextCalcStep;
+		const int32_t stepsLate = segmentStepLimit - nextCalcStep;
 		if (stepsLate > maxStepsLate) { maxStepsLate = stepsLate; }
 	}
 
+	iNextCalcStepTime += segments->GetStartTime();
 	if (nextStep == 1)
 	{
-		nextStepTime = iNextCalcStepTime + segments->GetStartTime();
+		nextStepTime = iNextCalcStepTime;
 	}
 	else
 	{
@@ -546,7 +545,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		}
 #endif
 
-		nextStepTime = iNextCalcStepTime - (stepsTillRecalc * stepInterval) + segments->GetStartTime();
+		nextStepTime = iNextCalcStepTime - (stepsTillRecalc * stepInterval);
 	}
 
 	return true;
