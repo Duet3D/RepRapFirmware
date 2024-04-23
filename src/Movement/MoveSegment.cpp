@@ -41,7 +41,7 @@ void MoveSegment::AddToTail(MoveSegment *tail) noexcept
 
 void MoveSegment::DebugPrint(char ch) const noexcept
 {
-	debugPrintf("%c t=%" PRIu32 " u=%.4e a=%.4e\n", ch, (uint32_t)duration, (double)u, (double)a);
+	debugPrintf("%c s=%" PRIu32 " t=%.2f d=%.2f u=%.4e a=%.4e\n", ch, (uint32_t)startTime, (double)duration, (double)distance, (double)u, (double)a);
 }
 
 /*static*/ void MoveSegment::DebugPrintList(char ch, const MoveSegment *segs) noexcept

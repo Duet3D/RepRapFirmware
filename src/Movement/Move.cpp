@@ -277,6 +277,13 @@ void Move::Init() noexcept
 	for (size_t drv = 0; drv < MaxAxesPlusExtruders + NumDirectDrivers; ++drv)
 	{
 		dms[drv].Init(drv);
+		if (drv < MaxAxesPlusExtruders)
+		{
+			const float stepsPerMm = (drv >= MaxAxes) ? DefaultEDriveStepsPerUnit
+										: (drv == Z_AXIS) ? DefaultZDriveStepsPerUnit
+											: DefaultAxisDriveStepsPerUnit;
+			SetDriveStepsPerMm(drv, stepsPerMm, 0);				//TODO what about steps/mm for the direct driver numbers?
+		}
 	}
 
 	moveTask.Create(MoveStart, "Move", this, TaskPriority::MovePriority);
@@ -328,7 +335,6 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 
 	value = max<float>(value, 1.0);							// don't allow zero or negative
 	driveStepsPerMm[axisOrExtruder] = value;
-	dms[axisOrExtruder].SetStepsPerMm(value);				// store a copy in the DM for fast access
 	reprap.MoveUpdated();
 }
 
@@ -1534,7 +1540,12 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 // We never add a segment that starts earlier than any existing segments, but we may add segments when there are none already.
 void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, bool usePressureAdvance) noexcept
 {
+	debugPrintf("AddLin: st=%" PRIu32 " steps=%" PRIi32 "\n", startTime, steps);
+	dda.DebugPrint("addlin");
+	params.DebugPrint();
+
 	DriveMovement* const dmp = &dms[logicalDrive];
+	const float stepsPerMm = driveStepsPerMm[logicalDrive];
 
 	// Acceleration phase
 	if (params.accelClocks > 0.0)
@@ -1544,14 +1555,14 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 		{
 			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 			{
-				const float factor = axisShaper.GetImpulseSize(index);
+				const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
 				dmp->AddSegment(startTime + axisShaper.GetImpulseDelay(index), params.accelClocks,
 									accelDistance * factor, dda.startSpeed * factor, dda.acceleration * factor, usePressureAdvance);
 			}
 		}
 		else
 		{
-			dmp->AddSegment(startTime, params.accelClocks, accelDistance, dda.startSpeed, dda.acceleration, usePressureAdvance);
+			dmp->AddSegment(startTime, params.accelClocks, accelDistance * stepsPerMm, dda.startSpeed * stepsPerMm, dda.acceleration * stepsPerMm, usePressureAdvance);
 		}
 	}
 
@@ -1564,14 +1575,14 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 		{
 			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 			{
-				const float factor = axisShaper.GetImpulseSize(index);
+				const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
 				dmp->AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), dda.clocksNeeded - params.accelClocks,
 												steadyDistance * factor, dda.topSpeed * factor, 0.0, false);
 			}
 		}
 		else
 		{
-			dmp->AddSegment(originalStartClocks, dda.clocksNeeded - params.accelClocks, steadyDistance, dda.topSpeed, 0, false);
+			dmp->AddSegment(originalStartClocks, dda.clocksNeeded - params.accelClocks, steadyDistance * stepsPerMm, dda.topSpeed * stepsPerMm, 0, false);
 		}
 	}
 
@@ -1584,14 +1595,14 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 		{
 			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 			{
-				const float factor = axisShaper.GetImpulseSize(index);
+				const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
 				dmp->AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), params.decelClocks,
 												decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), usePressureAdvance);
 			}
 		}
 		else
 		{
-			dmp->AddSegment(originalStartClocks, params.decelClocks, decelDistance, dda.topSpeed, -(dda.deceleration), usePressureAdvance);
+			dmp->AddSegment(originalStartClocks, params.decelClocks, decelDistance * stepsPerMm, dda.topSpeed * stepsPerMm, -(dda.deceleration * stepsPerMm), usePressureAdvance);
 		}
 	}
 
@@ -1943,7 +1954,12 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 		{
 			const uint32_t timeDiff = dm->nextStepTime - lastStepTime;
 			const bool badTiming = checkTiming && dm->drive == lastDrive && (timeDiff < 10 || timeDiff > 100000000);
-			debugPrintf("%10" PRIu32 " D%u %c%s", dm->nextStepTime, dm->drive, (dm->direction) ? 'F' : 'B', (badTiming) ? " *\n" : "\n");
+			if (dm->nextStep == 1)
+			{
+				dm->DebugPrint();
+				MoveSegment::DebugPrintList('s', dm->segments);
+			}
+			debugPrintf("%10" PRIu32 " D%u %c ns=%" PRIi32 "%s", dm->nextStepTime, dm->drive, (dm->direction) ? 'F' : 'B', dm->nextStep, (badTiming) ? " *\n" : "\n");
 			lastDrive = dm->drive;
 			dm = dm->nextDM;
 		}

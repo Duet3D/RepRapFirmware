@@ -39,6 +39,8 @@ struct PrepParams
 
 	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 	void SetFromDDA(const DDA& dda) noexcept;
+
+	void DebugPrint() const noexcept;
 };
 
 // This defines a single coordinated movement of one or several motors

@@ -41,9 +41,9 @@ void DriveMovement::DebugPrint() const noexcept
 									: (state == DMState::stepError2) ? " ERR2:"
 										: (state == DMState::stepError3) ? " ERR3:"
 											: ":";
-		debugPrintf("DM%c%s dir=%c next=%" PRIi32 " rev=%" PRIi32 " interval=%" PRIu32 " ssl=%" PRIi32 " A=%.4e B=%.4e C=%.4e\n",
-						c, errText, (direction) ? 'F' : 'B', nextStep, reverseStartStep, stepInterval, segmentStepLimit,
-							(double)q, (double)t0, (double)p);
+		debugPrintf("DM%c%s state=%u dir=%c next=%" PRIi32 " rev=%" PRIi32 " interval=%" PRIu32 " ssl=%" PRIi32 " q=%.4e t0=%.4e p=%.4e dcf=%.2f\n",
+						c, errText, (unsigned int)state, (direction) ? 'F' : 'B', nextStep, reverseStartStep, stepInterval, segmentStepLimit,
+							(double)q, (double)t0, (double)p, (double)distanceCarriedForwards);
 	}
 	else
 	{
@@ -51,13 +51,8 @@ void DriveMovement::DebugPrint() const noexcept
 	}
 }
 
-// Set the steps/mm for this driver
-void DriveMovement::SetStepsPerMm(float p_stepsPerMm) noexcept
-{
-	stepsPerMm = p_stepsPerMm;
-}
-
 // Add a segment into the list. If the list is not empty then the new segment may overlap segments already in the list but will never start earlier than the first existing one.
+// The units of the input parameters are steps for distance and step clocks for time.
 void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, bool usePressureAdvance) noexcept
 {
 	if (usePressureAdvance)
@@ -66,11 +61,6 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 		u += extraSpeed;
 		distance += extraSpeed * (float)duration;
 	}
-
-	// Convert from mm to steps
-	u *= stepsPerMm;
-	a *= stepsPerMm;
-	distance *= stepsPerMm;
 
 	MoveSegment *prev = nullptr;
 
@@ -144,11 +134,11 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 
 	// The new segment (or what's left of it) needs to be added at the end
 	seg = MoveSegment::Allocate(nullptr);
-	seg->SetParameters(startTime, distance, duration, u, a, usePressureAdvance);
+	seg->SetParameters(startTime, duration, distance, u, a, usePressureAdvance);
 	if (prev == nullptr)
 	{
 		segments = seg;
-		if (NewSegment())
+		if (NewSegment() != nullptr)
 		{
 			CalcNextStepTimeFull();
 		}
@@ -532,7 +522,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 
 	if (nextStep == 1)
 	{
-		nextStepTime = iNextCalcStepTime;									// shiftFactor must be 0
+		nextStepTime = iNextCalcStepTime + segments->GetStartTime();
 	}
 	else
 	{
@@ -547,17 +537,18 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 			if (interval < minStepInterval) { minStepInterval = interval; }
 			stepInterval = 0;
 		}
-	}
 
 #if 0	//DEBUG
-	if (isExtruder && stepInterval < 20 /*&& nextStep + stepsTillRecalc + 1 < totalSteps*/)
-	{
-		state = DMState::stepError;
-		return false;
-	}
+		if (isExtruder && stepInterval < 20 /*&& nextStep + stepsTillRecalc + 1 < totalSteps*/)
+		{
+			state = DMState::stepError;
+			return false;
+		}
 #endif
 
-	nextStepTime = iNextCalcStepTime - (stepsTillRecalc * stepInterval) + segments->GetStartTime();
+		nextStepTime = iNextCalcStepTime - (stepsTillRecalc * stepInterval) + segments->GetStartTime();
+	}
+
 	return true;
 }
 

@@ -637,7 +637,6 @@ void Platform::Init() noexcept
 
 		maxFeedrates[axis] = ConvertSpeedFromMmPerSec(DefaultAxisMaxFeedrate);
 		reducedAccelerations[axis] = normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
-		reprap.GetMove().SetDriveStepsPerMm(axis, DefaultAxisDriveStepsPerUnit, 0);
 		instantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
 
 		backlashMm[axis] = 0.0;
@@ -650,7 +649,6 @@ void Platform::Init() noexcept
 	// We use different defaults for the Z axis
 	maxFeedrates[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZMaxFeedrate);
 	reducedAccelerations[Z_AXIS] = normalAccelerations[Z_AXIS] = ConvertAcceleration(DefaultZAcceleration);
-	reprap.GetMove().SetDriveStepsPerMm(Z_AXIS, DefaultZDriveStepsPerUnit, 0);
 	instantDvs[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZInstantDv);
 
 	// Extruders
@@ -658,7 +656,6 @@ void Platform::Init() noexcept
 	{
 		maxFeedrates[drive] = ConvertSpeedFromMmPerSec(DefaultEMaxFeedrate);
 		normalAccelerations[drive] = reducedAccelerations[drive] = ConvertAcceleration(DefaultEAcceleration);
-		reprap.GetMove().SetDriveStepsPerMm(drive, DefaultEDriveStepsPerUnit, 0);
 		instantDvs[drive] = ConvertSpeedFromMmPerSec(DefaultEInstantDv);
 	}
 

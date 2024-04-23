@@ -42,8 +42,6 @@ public:
 	DriveMovement() noexcept { }
 	void Init(size_t drv) noexcept;
 
-	void SetStepsPerMm(float p_stepsPerMm) noexcept;
-
 	bool CalcNextStepTime() noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept SPEED_CRITICAL;
@@ -87,8 +85,6 @@ private:
 	DriveMovement *nextDM ;								// link to next DM that needs a step
 	MoveSegment *volatile segments;						// pointer to the segment list for this driver
 
-	float stepsPerMm;
-
 	ExtruderShaper extruderShaper;						// pressure advance control
 
 	DMState state;										// whether this is active or not
@@ -110,7 +106,7 @@ private:
 
 	// These values change as the segment is executed
 	int32_t nextStep;									// number of steps already done. For extruders this gets reset to the net steps already done at the start of each segment, so it can go negative.
-	uint32_t nextStepTime;								// how many clocks after the start of this move the next step is due
+	uint32_t nextStepTime;								// when the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
 
 	float movementAccumulator = 0.0;					// the accumulated movement since GetAccumulatedMovement was last called. Only used for extruders.

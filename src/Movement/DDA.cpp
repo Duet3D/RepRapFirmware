@@ -134,6 +134,12 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	decelClocks = (dda.topSpeed - dda.endSpeed)/dda.deceleration;
 }
 
+void PrepParams::DebugPrint() const noexcept
+{
+	debugPrintf("pp: td=%.3e ad=%.3e dsd=%.3e a=%.3e d=%.3e ac=%.3e sc=%.3e dc=%.3e\n",
+					(double)totalDistance, (double)accelDistance, (double)decelStartDistance, (double)acceleration, (double)deceleration, (double)accelClocks, (double)steadyClocks, (double)decelClocks);
+}
+
 DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
 {
 	tool = nullptr;						// needed in case we pause before any moves have been done
