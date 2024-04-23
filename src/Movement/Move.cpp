@@ -1564,45 +1564,45 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 		{
 			dmp->AddSegment(startTime, params.accelClocks, accelDistance * stepsPerMm, dda.startSpeed * stepsPerMm, dda.acceleration * stepsPerMm, usePressureAdvance);
 		}
+		startTime += params.accelClocks;
 	}
 
 	// Steady speed phase
 	if (params.steadyClocks > 0.0)
 	{
 		const float steadyDistance = (params.decelStartDistance - params.accelDistance) * dda.directionVector[logicalDrive];
-		const float originalStartClocks = startTime + params.accelClocks;
 		if (useInputShaping)
 		{
 			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 			{
 				const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
-				dmp->AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), dda.clocksNeeded - params.accelClocks,
+				dmp->AddSegment(startTime + axisShaper.GetImpulseDelay(index), dda.clocksNeeded - params.accelClocks,
 												steadyDistance * factor, dda.topSpeed * factor, 0.0, false);
 			}
 		}
 		else
 		{
-			dmp->AddSegment(originalStartClocks, dda.clocksNeeded - params.accelClocks, steadyDistance * stepsPerMm, dda.topSpeed * stepsPerMm, 0, false);
+			dmp->AddSegment(startTime, dda.clocksNeeded - params.accelClocks, steadyDistance * stepsPerMm, dda.topSpeed * stepsPerMm, 0, false);
 		}
+		startTime += params.steadyClocks;
 	}
 
 	// Deceleration phase
 	if (params.decelClocks != 0)
 	{
 		const float decelDistance = (dda.totalDistance - params.decelStartDistance) * dda.directionVector[logicalDrive];
-		const float originalStartClocks = startTime + params.accelClocks + params.steadyClocks;
 		if (useInputShaping)
 		{
 			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 			{
 				const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
-				dmp->AddSegment(originalStartClocks + axisShaper.GetImpulseDelay(index), params.decelClocks,
+				dmp->AddSegment(startTime + axisShaper.GetImpulseDelay(index), params.decelClocks,
 												decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), usePressureAdvance);
 			}
 		}
 		else
 		{
-			dmp->AddSegment(originalStartClocks, params.decelClocks, decelDistance * stepsPerMm, dda.topSpeed * stepsPerMm, -(dda.deceleration * stepsPerMm), usePressureAdvance);
+			dmp->AddSegment(startTime, params.decelClocks, decelDistance * stepsPerMm, dda.topSpeed * stepsPerMm, -(dda.deceleration * stepsPerMm), usePressureAdvance);
 		}
 	}
 
