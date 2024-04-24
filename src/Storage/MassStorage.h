@@ -60,7 +60,11 @@ namespace MassStorage
 
 	inline size_t GetNumVolumes() noexcept
 	{
-		return NumSdCards;
+		return NumSdCards
+#if SUPPORT_USB_DRIVE
+		+ NumUsbDrives
+#endif
+		;
 	}
 #endif
 

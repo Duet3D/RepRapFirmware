@@ -23,7 +23,13 @@ static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
 
 #include "SdCardVolume.h"
 
+#if SUPPORT_USB_DRIVE
+#include "UsbVolume.h"
+static_assert(FF_VOLUMES >= NumSdCards + NumUsbDrives);
+#else
 static_assert(FF_VOLUMES >= NumSdCards);
+#endif
+
 // A note on using mutexes:
 // Each storage volume has its own mutex. There is also one for the file table, and one for the find first/find next buffer.
 // The FatFS subsystem locks and releases the appropriate volume mutex when it is called.
@@ -41,7 +47,16 @@ alignas(4) static __nocache char writeBufferStorage[NumFileWriteBuffers][FileWri
 # endif
 
 static SdCardVolume sdVolumes[NumSdCards] = { SdCardVolume("SDO", 0),  SdCardVolume("SD1", 1) };
-static StorageVolume* storageVolumes[] = { &sdVolumes[0], &sdVolumes[1] };
+#if SUPPORT_USB_DRIVE
+static UsbVolume usbVolumes[NumUsbDrives] = { UsbVolume("USB0", 2), UsbVolume("USB1", 3) };
+#endif
+
+static StorageVolume* storageVolumes[] = { &sdVolumes[0], &sdVolumes[1],
+#if SUPPORT_USB_DRIVE
+	&usbVolumes[0], &usbVolumes[1]
+#endif
+};
+
 static DIR findDir;
 #endif
 

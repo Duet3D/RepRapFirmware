@@ -28,10 +28,12 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 # define HAS_SBC_INTERFACE		0
 # define HAS_MASS_STORAGE		0
 # define HAS_HIGH_SPEED_SD		0
+# define SUPPORT_USB_DRIVE		0
 #else
 # define HAS_SBC_INTERFACE		1
 # define HAS_MASS_STORAGE		1
 # define HAS_HIGH_SPEED_SD		1
+# define SUPPORT_USB_DRIVE		1
 #endif
 
 #define HAS_CPU_TEMP_SENSOR		1
@@ -200,6 +202,11 @@ constexpr Pin SdWriteProtectPins[NumSdCards] = { NoPin, NoPin };
 constexpr Pin SdSpiCSPins[1] = { PortDPin(22) };								// this one is allocated using M950 on MB6HC boards before version 1.02
 constexpr uint32_t ExpectedSdCardSpeed = 25000000;
 constexpr IRQn SdhcIRQn = HSMCI_IRQn;
+
+#if SUPPORT_USB_DRIVE
+// USB Drives
+constexpr size_t NumUsbDrives = 2;
+#endif
 
 // DotStar LED control
 #define LEDSTRIP_USES_USART	0
