@@ -73,6 +73,7 @@ public:
 private:
 	bool CalcNextStepTimeFull() noexcept SPEED_CRITICAL;
 	MoveSegment *NewSegment() noexcept SPEED_CRITICAL;
+	bool ScheduleFirstSegment() noexcept;
 
 	void CheckDirection(bool reversed) noexcept;
 	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr

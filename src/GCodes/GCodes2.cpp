@@ -584,9 +584,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 	// In simulation mode we don't execute most M-commands
 	if (   IsSimulating()
-		&& (code < 20 || code > 37)
-		&& code != 0 && code != 1 && code != 82 && code != 83 && code != 105 && code != 109 && code != 111 && code != 112 && code != 122
-		&& code != 200 && code != 204 && code != 207 && code != 408 && code != 409 && code != 486 && code != 999)
+		&& (code < 20 || code > 37)													// allow file operations while simulating
+		&& code != 0 && code != 1 && code != 82 && code != 83
+		&& code != 105 && code != 109 && code != 111 && code != 112 && code != 122
+		&& code != 200 && code != 204 && code != 205 && code != 207
+		&& code != 408 && code != 409 && code != 486
+		&& code != 572 && code != 593												// allow changes to PA and IS while simulating
+		&& code != 997 && code != 999												// allow reset and firmware update while simulating
+	   )
 	{
 		HandleReply(gb, GCodeResult::ok, "");
 		return true;			// we don't simulate most M codes

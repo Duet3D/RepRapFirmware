@@ -141,15 +141,22 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 	if (prev == nullptr)
 	{
 		segments = seg;
-		if (NewSegment() != nullptr)
-		{
-			CalcNextStepTimeFull();
-		}
 	}
 	else
 	{
 		prev->SetNext(seg);
 	}
+}
+
+// Set up to schedule the first segment, returning true if there is a segment to be processed
+bool DriveMovement::ScheduleFirstSegment() noexcept
+{
+	if (NewSegment() != nullptr)
+	{
+		CalcNextStepTimeFull();
+		return true;
+	}
+	return false;
 }
 
 // This is called when 'segments' has just been changed to a new segment. Return the new segment to execute, or nullptr.
@@ -165,8 +172,7 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 
 		// Calculate the movement parameters
 		bool newDirection;
-		const float segmentDistance = distanceCarriedForwards + seg->GetLength();
-		netStepsThisSegment = (int32_t)(segmentDistance + distanceCarriedForwards);
+		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
 		if (seg->IsLinear())
 		{
 			// n * mmPerStep = distanceCarriedForwards + u * t
@@ -290,9 +296,8 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		if (stepsToLimit == 0)
 		{
 			distanceCarriedForwards += currentSegment->GetLength() - netStepsThisSegment;
-			MoveSegment *oldSegment = currentSegment;
-			segments = currentSegment = oldSegment->GetNext();
-			MoveSegment::Release(oldSegment);
+			segments = currentSegment->GetNext();
+			MoveSegment::Release(currentSegment);
 			currentSegment = NewSegment();
 			if (currentSegment == nullptr)
 			{

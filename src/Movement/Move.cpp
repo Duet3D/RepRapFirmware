@@ -1546,6 +1546,7 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 
 	DriveMovement* const dmp = &dms[logicalDrive];
 	const float stepsPerMm = driveStepsPerMm[logicalDrive];
+	const MoveSegment *const oldSegs = dmp->segments;
 
 	// Acceleration phase
 	if (params.accelClocks > 0.0)
@@ -1606,10 +1607,12 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 		}
 	}
 
-	// If this DM now has segments and it was not already in the list for step generation, insert it in the list
+	// If there were no segments attached to this DM initially, we need to schedule the interrupt for the new segment at the start of the list.
+	// Don't do this until we have added all the segments for this move, because the first segment we added may have been modified and/or split when we added further segments
+	if (oldSegs == nullptr)
 	{
 		AtomicCriticalSectionLocker lock;
-		if (dmp->segments != nullptr)
+		if (dmp->ScheduleFirstSegment())
 		{
 			const DriveMovement *adp = activeDMs;
 			while (adp != dmp)																// if they are equal then this DM is already in the active list
