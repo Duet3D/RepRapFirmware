@@ -45,6 +45,7 @@
 #include <Hardware/I2C.h>
 #include <Hardware/NonVolatileMemory.h>
 #include <Storage/CRC32.h>
+#include <Storage/SdCardVolume.h>
 #include <Accelerometers/Accelerometers.h>
 
 #if SAM4E || SAM4S || SAME70
@@ -60,8 +61,6 @@ static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA chan
 # include <DmacManager.h>
 using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have the AnalogIn namespace
 #endif
-
-#include <Libraries/sd_mmc/sd_mmc.h>
 
 #if HAS_WIFI_NETWORKING
 # include <Comms/FirmwareUpdater.h>
@@ -1494,16 +1493,20 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			}
 
 #if HAS_MASS_STORAGE
+			MassStorage::SdCardReturnedInfo sdInfo;
+			MassStorage::InfoResult res = MassStorage::GetVolumeInfo(0, sdInfo);
+
 			// Check the SD card detect and speed
-			if (!MassStorage::IsCardDetected(0))
+			if (res == MassStorage::InfoResult::noCard)
 			{
 				buf->copy("SD card 0 not detected");
 				testFailed = true;
 			}
 # if HAS_HIGH_SPEED_SD
-			else if (sd_mmc_get_interface_speed(0) != ExpectedSdCardSpeed)
+			else if (sdInfo.speed != ExpectedSdCardSpeed)
 			{
-				buf->printf("SD card speed %.2fMbytes/sec is unexpected", (double)((float)sd_mmc_get_interface_speed(0) * 0.000001));
+
+				buf->printf("SD card speed %.2fMbytes/sec is unexpected", (double)((float)sdInfo.speed * 0.000001));
 				testFailed = true;
 			}
 # endif
@@ -3828,7 +3831,7 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 			return GCodeResult::error;
 		}
 # endif
-		return MassStorage::ConfigureSdCard(gb, reply);
+		return SdCardVolume::Configure(gb, reply);
 #endif
 
 	default:
