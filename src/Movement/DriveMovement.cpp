@@ -55,13 +55,7 @@ void DriveMovement::DebugPrint() const noexcept
 // The units of the input parameters are steps for distance and step clocks for time.
 void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, bool usePressureAdvance) noexcept
 {
-	// Adjust sign of initial speed and acceleration to account for direction, so that we can superimpose segments with different directions
-	if (distance < 0.0)
-	{
-		u = -u;
-		a = -a;
-	}
-
+	// Adjust the initial speed and distance to account for pressure advance
 	if (usePressureAdvance)
 	{
 		const float extraSpeed = a * extruderShaper.GetKclocks();
@@ -69,9 +63,11 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 		distance += extraSpeed * (float)duration;
 	}
 
+	debugPrintf("Adding seg: st=%" PRIu32 " t=%" PRIu32 " dist=%.2f u=%.3e a=%.3e\n", startTime, duration, (double)distance, (double)u, (double)a);
 	MoveSegment *prev = nullptr;
 
-	// Shut out the step interrupt while we mess with the segments
+	// Shut out the step interrupt and task switching while we mess with the segments
+	// TODO probably only need to shut out task switching here, or shut out the step interrupt but leave the UART interrupt enabled
 	AtomicCriticalSectionLocker lock;
 
 	// Find the earliest existing segment that the new one will overlap
@@ -98,16 +94,18 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 			}
 
 			// The segment we wish to add now starts at the same time as 'seg' but it may end earlier or later than the one at 'seg' does.
-			const int32_t timeDifference = (int32_t)((uint32_t)seg->GetDuration() - duration);
-			if (timeDifference < -MoveSegment::MinDuration)
+			const int32_t timeDifference = (int32_t)(duration - (uint32_t)seg->GetDuration());
+			if (timeDifference > MoveSegment::MinDuration)
 			{
-				// Add the new segment in two (or more) parts
-				const float firstDistance = (u + 0.5 * a * seg->GetDuration()) * seg->GetDuration();
+				// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
+				const float firstDistance = (u + 0.5 * a * seg->GetDuration()) * seg->GetDuration();	// distance moved by the first part of the new segment
+				debugPrintf("merge1, fd=%.2f, dist=%.2f into ", (double)firstDistance, (double)distance);
+				seg->DebugPrint('m');
 				seg->Merge(firstDistance, u, a, usePressureAdvance);
 				distance -= firstDistance;
 				startTime += seg->GetDuration();
 				u += a * seg->GetDuration();
-				duration = -timeDifference;
+				duration = (uint32_t)timeDifference;
 				prev = seg;
 				seg = seg->GetNext();
 				continue;
@@ -128,6 +126,8 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 
 			// The new segment and the existing one now have the same start time and duration, so merge them
 			seg->Merge(distance, u, a, usePressureAdvance);
+debugPrintf("merge2, dist=%.2f giving:\n", (double)distance);
+MoveSegment::DebugPrintList('m', segments);
 			return;
 		}
 
@@ -146,6 +146,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 	{
 		prev->SetNext(seg);
 	}
+MoveSegment::DebugPrintList('r', segments);
 }
 
 // Set up to schedule the first segment, returning true if there is a segment to be processed

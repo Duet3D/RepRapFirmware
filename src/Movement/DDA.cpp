@@ -1082,7 +1082,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 	// Prepare for movement
 	PrepParams params;
 	params.SetFromDDA(*this);
-	clocksNeeded = params.TotalClocks();
+	clocksNeeded = (uint32_t)params.TotalClocks();
 
 	// Copy the unshaped acceleration and deceleration back to the DDA because ManageLaserPower uses them
 	acceleration = params.acceleration;

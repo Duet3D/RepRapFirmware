@@ -73,7 +73,7 @@ public:
 	void SetParameters(uint32_t p_startTime, float p_duration, float p_distance, float p_u, float p_a, bool p_isPrintingMove) noexcept;
 
 	// Split this segment in two, returning a pointer to the second part
-	MoveSegment *Split(uint32_t firstDuration) noexcept;
+	MoveSegment *Split(uint32_t firstDuration) noexcept pre(firstDuration < duration);
 
 	// Merge the parameters for another segment with the same start time and duration into this one
 	void Merge(float p_distance, float p_u, float p_a, bool p_isPrintingMove) noexcept;
@@ -164,8 +164,8 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 {
 	MoveSegment *const secondSeg = Allocate(next);
 	const float firstDistance = (u + 0.5 * a * firstDuration) * firstDuration;
-	const float secondDistance = distance - firstDistance;
-	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, secondDistance, u + a * (float)firstDuration, a, isPrintingMove);
+	secondSeg->SetParameters(startTime + firstDuration, duration - (float)firstDuration, distance - firstDistance, u + a * (float)firstDuration, a, isPrintingMove);
+	debugPrintf("split at %" PRIu32 ", fd=%.2f, sd=%.2f\n", firstDuration, (double)firstDistance, (double)(distance - firstDistance));
 	duration = firstDuration;
 	distance = firstDistance;
 	next = secondSeg;
