@@ -63,7 +63,10 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 		distance += extraSpeed * (float)duration;
 	}
 
+#if 0
 	debugPrintf("Adding seg: st=%" PRIu32 " t=%" PRIu32 " dist=%.2f u=%.3e a=%.3e\n", startTime, duration, (double)distance, (double)u, (double)a);
+#endif
+
 	MoveSegment *prev = nullptr;
 
 	// Shut out the step interrupt and task switching while we mess with the segments
@@ -99,7 +102,9 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 			{
 				// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
 				const float firstDistance = (u + 0.5 * a * seg->GetDuration()) * seg->GetDuration();	// distance moved by the first part of the new segment
+#if 0
 				debugPrintf("merge1, fd=%.2f, dist=%.2f into ", (double)firstDistance, (double)distance);
+#endif
 				seg->DebugPrint('m');
 				seg->Merge(firstDistance, u, a, usePressureAdvance);
 				distance -= firstDistance;
@@ -126,8 +131,10 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 
 			// The new segment and the existing one now have the same start time and duration, so merge them
 			seg->Merge(distance, u, a, usePressureAdvance);
-debugPrintf("merge2, dist=%.2f giving:\n", (double)distance);
-MoveSegment::DebugPrintList('m', segments);
+#if 0
+			debugPrintf("merge2, dist=%.2f giving:\n", (double)distance);
+			MoveSegment::DebugPrintList('m', segments);
+#endif
 			return;
 		}
 
@@ -146,7 +153,9 @@ MoveSegment::DebugPrintList('m', segments);
 	{
 		prev->SetNext(seg);
 	}
-MoveSegment::DebugPrintList('r', segments);
+#if 0
+	MoveSegment::DebugPrintList('r', segments);
+#endif
 }
 
 // Set up to schedule the first segment, returning true if there is a segment to be processed
@@ -154,8 +163,7 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 {
 	if (NewSegment() != nullptr)
 	{
-		CalcNextStepTimeFull();
-		return true;
+		return CalcNextStepTimeFull();
 	}
 	return false;
 }
@@ -259,14 +267,14 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 				directionChanged = true;
 			}
 
-#if 1	//DEBUG
+#if 0	//DEBUG
 			debugPrintf("New cart seg: state %u q=%.4e t0=%.4e p=%.4e ns=%" PRIi32 " ssl=%" PRIi32 "\n",
 							(unsigned int)state, (double)q, (double)t0, (double)p, nextStep, segmentStepLimit);
 #endif
 			return seg;
 		}
 
-#if 1
+#if 0
 		debugPrintf("skipping seg: state %u q=%.4e t0=%.4e p=%.4e ns=%" PRIi32 " ssl=%" PRIi32 "\n",
 						(unsigned int)state, (double)q, (double)t0, (double)p, nextStep, segmentStepLimit);
 		seg->DebugPrint('k');
@@ -387,14 +395,14 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 
 	nextCalcStepTime += t0;
 
-#if 1	//DEBUG
 	if (std::isnan(nextCalcStepTime) || nextCalcStepTime < 0.0)
 	{
+#if 0	//DEBUG
 		debugPrintf("step err3, %.2f\n", (double)nextCalcStepTime);
+#endif
 		state = DMState::stepError3;
 		return false;
 	}
-#endif
 
 	uint32_t iNextCalcStepTime = (uint32_t)nextCalcStepTime;
 
@@ -450,13 +458,15 @@ bool DriveMovement::StopDriver(int32_t& netStepsTaken) noexcept
 {
 	AtomicCriticalSectionLocker lock;
 
-	MoveSegment *seg = nullptr;
-	std::swap(seg, const_cast<MoveSegment*&>(segments));
-	if (seg != nullptr)
+	if (state != DMState::idle)
 	{
+		state = DMState::idle;
+		reprap.GetMove().DeactivateDM(this);
 		netStepsTaken = GetNetStepsTaken();
 		currentMotorPosition += netStepsTaken;
-		MoveSegment::Release(seg);
+		MoveSegment *seg = nullptr;
+		std::swap(seg, const_cast<MoveSegment*&>(segments));
+		MoveSegment::ReleaseAll(seg);
 		return true;
 	}
 

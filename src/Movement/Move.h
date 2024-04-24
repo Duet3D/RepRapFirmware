@@ -253,6 +253,8 @@ public:
 	int32_t MotorMovementToSteps(size_t drive, float coord) const noexcept;					// Convert a single motor position to number of steps
 	float MotorStepsToMovement(size_t drive, int32_t endpoint) const noexcept;				// Convert number of motor steps to motor position
 
+	void DeactivateDM(DriveMovement *dmToRemove) noexcept;									// remove a DM from the active list
+
 	// We now use the laser task to take readings from scanning Z probes, so we always need it
 	[[noreturn]] void LaserTaskRun() noexcept;
 
@@ -290,7 +292,6 @@ private:
 	float tanYZ() const noexcept { return tangents[1]; }
 	float tanXZ() const noexcept { return tangents[2]; }
 
-	void DeactivateDM(size_t drive) noexcept;
 	void StepDrivers(Platform& p, uint32_t now) noexcept SPEED_CRITICAL;			// Take one step of the DDA, called by timer interrupt.
 	void SimulateSteppingDrivers(Platform& p) noexcept;								// For debugging use
 	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;						// Schedule the next interrupt, returning true if we can't because it is already due
@@ -351,6 +352,7 @@ private:
 
 	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
+	unsigned int stepErrors;							// count of step errors, for diagnostics
 
 	uint32_t whenLastMoveAdded;							// The time when we last added a move to any DDA ring
 	uint32_t whenIdleTimerStarted;						// The approximate time at which the state last changed, except we don't record timing -> idle

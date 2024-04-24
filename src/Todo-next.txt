@@ -1,6 +1,10 @@
 Next steps for new movement system+IS
 =====================================
 
+Set Move.CheckEndstops when executing movement that checks endstops or a Z probe
+
+If a move checks endstops and the endstop is already triggered during Prepare, it remains busy for the length of the homing move, even though it doesn't move
+
 Can we keep a single machine position, based on current motor positions, not one per MS?
 
 Eventually, store end position in segments. End positions specified by user must be exact numbers of motor steps. Segment boundaries may be fractional steps.

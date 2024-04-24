@@ -142,18 +142,13 @@ inline bool DriveMovement::CalcNextStepTime() noexcept
 		}
 	}
 
-	if (state >= DMState::firstMotionState)	// don't change the state if there was a step error
-	{
-		state = DMState::idle;
-	}
-
 #ifdef DUET3_MB6HC							// we need to increase the minimum step pulse length to be long enough for the TMC5160
-			asm volatile("nop");
-			asm volatile("nop");
-			asm volatile("nop");
-			asm volatile("nop");
-			asm volatile("nop");
-			asm volatile("nop");
+		asm volatile("nop");
+		asm volatile("nop");
+		asm volatile("nop");
+		asm volatile("nop");
+		asm volatile("nop");
+		asm volatile("nop");
 #endif
 	return false;
 }

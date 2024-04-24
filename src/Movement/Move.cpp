@@ -260,6 +260,7 @@ void Move::Init() noexcept
 
 	simulationMode = SimulationMode::off;
 	longestGcodeWaitInterval = 0;
+	stepErrors = 0;
 	bedLevellingMoveAvailable = false;
 	activeDMs = nullptr;
 	for (volatile int32_t& acc : movementAccumulators)
@@ -612,17 +613,18 @@ void Move::Diagnostics(MessageType mtype) noexcept
 
 	Platform& p = reprap.GetPlatform();
 	p.MessageF(mtype,
-				"=== Move ===\nSegments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f, max steps late %" PRIi32
+				"=== Move ===\nSegments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f, stepErrors %u, max steps late %" PRIi32
 #if 1	//debug
 				", ebfmin %.2f, ebfmax %.2f"
 #endif
 				"\n",
-						MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, DriveMovement::GetAndClearMaxStepsLate()
+						MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, stepErrors, DriveMovement::GetAndClearMaxStepsLate()
 #if 1
 						, (double)minExtrusionPending, (double)maxExtrusionPending
 #endif
 		);
 	longestGcodeWaitInterval = 0;
+	stepErrors = 0;
 #if 1	//debug
 	minExtrusionPending = maxExtrusionPending = 0.0;
 #endif
@@ -1633,6 +1635,11 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 				adp = adp->nextDM;
 			}
 		}
+		else if (dmp->state != DMState::idle)
+		{
+			++stepErrors;
+			dmp->state = DMState::idle;
+		}
 	}
 }
 
@@ -1696,13 +1703,13 @@ void Move::Interrupt() noexcept
 
 // Remove this drive from the list of drives with steps due and put it in the completed list
 // Called from the step ISR only.
-void Move::DeactivateDM(size_t drive) noexcept
+void Move::DeactivateDM(DriveMovement *dmToRemove) noexcept
 {
 	DriveMovement **dmp = &activeDMs;
 	while (*dmp != nullptr)
 	{
 		DriveMovement * const dm = *dmp;
-		if (dm->drive == drive)
+		if (dm == dmToRemove)
 		{
 			(*dmp) = dm->nextDM;
 			dm->state = DMState::idle;
@@ -1789,6 +1796,7 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 					CanMotion::StopDriverWhenProvisional(hitDetails.driver);
 				}
 			}
+			else
 #endif
 			{
 				platform.DisableSteppingDriver(hitDetails.driver.localDriver);
@@ -1915,6 +1923,11 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 				SetDirection(p, dmToInsert->drive, dmToInsert->direction);
 			}
 			InsertDM(dmToInsert);
+		}
+		else if (dmToInsert->state != DMState::idle)
+		{
+			++stepErrors;
+			dmToInsert->state = DMState::idle;
 		}
 		dmToInsert = nextToInsert;
 	}

@@ -87,9 +87,13 @@ public:
 	// Allocate a MoveSegment, clearing the flags
 	static MoveSegment *Allocate(MoveSegment *p_next) noexcept;
 
-	// Release a MoveSegment or a DeltaMoveSegment
+	// Release a MoveSegment
 	static void Release(MoveSegment *item) noexcept;
 
+	// Release all MoveSegments in a chain
+	static void ReleaseAll(MoveSegment *item) noexcept;
+
+	// Return the number of MoveSegment objects that have been created
 	static unsigned int NumCreated() noexcept { return numCreated; }
 
 	static constexpr int32_t MinDuration = 10;
@@ -165,7 +169,9 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 	MoveSegment *const secondSeg = Allocate(next);
 	const float firstDistance = (u + 0.5 * a * firstDuration) * firstDuration;
 	secondSeg->SetParameters(startTime + firstDuration, duration - (float)firstDuration, distance - firstDistance, u + a * (float)firstDuration, a, isPrintingMove);
+#if 0
 	debugPrintf("split at %" PRIu32 ", fd=%.2f, sd=%.2f\n", firstDuration, (double)firstDistance, (double)(distance - firstDistance));
+#endif
 	duration = firstDuration;
 	distance = firstDistance;
 	next = secondSeg;

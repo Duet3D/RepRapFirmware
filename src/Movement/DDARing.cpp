@@ -88,7 +88,6 @@ void DDARing::Init1(unsigned int numDdas) noexcept
 // This must be called from Move::Init, not from the Move constructor, because it indirectly refers to the GCodes module which must therefore be initialised first
 void DDARing::Init2() noexcept
 {
-	stepErrors = 0;
 	numLookaheadUnderruns = numPrepareUnderruns = numNoMoveUnderruns = numLookaheadErrors = 0;
 	waitingForRingToEmpty = false;
 
@@ -696,10 +695,10 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 void DDARing::Diagnostics(MessageType mtype, unsigned int ringNumber) noexcept
 {
 	reprap.GetPlatform().MessageF(mtype,
-									"=== DDARing %u ===\nScheduled moves %" PRIu32 ", completed %" PRIu32 ", hiccups %" PRIu32 ", stepErrors %u, LaErrors %u, Underruns [%u, %u, %u]\n",
-									ringNumber, scheduledMoves, completedMoves, numHiccups, stepErrors, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns, numNoMoveUnderruns
+									"=== DDARing %u ===\nScheduled moves %" PRIu32 ", completed %" PRIu32 ", hiccups %" PRIu32 ", LaErrors %u, Underruns [%u, %u, %u]\n",
+									ringNumber, scheduledMoves, completedMoves, numHiccups, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns, numNoMoveUnderruns
 								 );
-	numHiccups = stepErrors = numLookaheadUnderruns = numPrepareUnderruns = numNoMoveUnderruns = numLookaheadErrors = 0;
+	numHiccups = numLookaheadUnderruns = numPrepareUnderruns = numNoMoveUnderruns = numLookaheadErrors = 0;
 }
 
 #if SUPPORT_LASER

@@ -106,7 +106,6 @@ private:
 	unsigned int numPrepareUnderruns;											// How many times we wanted a new move but there were only un-prepared moves in the queue
 	unsigned int numNoMoveUnderruns;											// How many times we wanted a new move but there were none
 	unsigned int numLookaheadErrors;											// How many times our lookahead algorithm failed
-	unsigned int stepErrors;													// count of step errors, for diagnostics
 
 	float simulationTime;														// Print time since we started simulating
 #if SUPPORT_REMOTE_COMMANDS

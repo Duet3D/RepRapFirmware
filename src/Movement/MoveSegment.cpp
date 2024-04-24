@@ -29,6 +29,17 @@ MoveSegment *MoveSegment::Allocate(MoveSegment *p_next) noexcept
 	return ms;
 }
 
+// Release a MoveSegment
+void MoveSegment::ReleaseAll(MoveSegment *item) noexcept
+{
+	while (item != nullptr)
+	{
+		MoveSegment *itemToRelease = item;
+		item = item->next;
+		Release(itemToRelease);
+	}
+}
+
 void MoveSegment::AddToTail(MoveSegment *tail) noexcept
 {
 	MoveSegment *seg = this;
