@@ -42,19 +42,11 @@ public:
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const noexcept override;
 	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const noexcept override;
 	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept override;
-	bool QueryTerminateHomingMove(size_t axis) const noexcept override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], Move& move) const noexcept override;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
-
-	AxesBitmap GetLinearAxes() const noexcept override;
-
-    // Public functions specific to this class
-	float GetDiagonalSquared(size_t tower) const noexcept { return D2[tower]; }
-    float GetTowerX(size_t axis) const noexcept { return towerX[axis]; }
-    float GetTowerY(size_t axis) const noexcept { return towerY[axis]; }
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS

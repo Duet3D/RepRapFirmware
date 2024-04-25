@@ -152,10 +152,6 @@ public:
 	// that some additional axes should be considered not homed.
 	virtual AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept;
 
-	// This function is called from the step ISR when an endstop switch is triggered during homing.
-	// Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
-	virtual bool QueryTerminateHomingMove(size_t axis) const noexcept = 0;
-
 	// This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 	// Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
 	virtual void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], Move& move) const noexcept = 0;

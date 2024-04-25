@@ -394,15 +394,6 @@ AxesBitmap ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap a
 	return ret;
 }
 
-// This function is called from the step ISR when an endstop switch is triggered during homing.
-// Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
-bool ScaraKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
-{
-	// If crosstalk causes the axis motor concerned to affect other axes then must terminate the entire move
-	return (axis == X_AXIS && (crosstalk[0] != 0.0 || crosstalk[1] != 0.0))
-		|| (axis == Y_AXIS && crosstalk[2] != 0.0);
-}
-
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
 void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], Move& move) const noexcept
