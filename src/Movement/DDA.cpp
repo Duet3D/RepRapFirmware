@@ -347,7 +347,6 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	flags.canPauseAfter = nextMove.canPauseAfter;
 	flags.usingStandardFeedrate = nextMove.usingStandardFeedrate;
 	flags.isPrintingMove = flags.xyMoving && forwardExtruding;					// require forward extrusion so that wipe-while-retracting doesn't count
-	flags.isNonPrintingExtruderMove = extrudersMoving && !flags.isPrintingMove;	// flag used by filament monitors - we can ignore Z movement
 	flags.usePressureAdvance = nextMove.usePressureAdvance;
 #if SUPPORT_SCANNING_PROBES
 	flags.scanningProbeMove = nextMove.scanningProbeMove;
@@ -605,7 +604,6 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	flags.isRemote = true;
 	flags.isPrintingMove = flags.usePressureAdvance = msg.usePressureAdvance;
 	// TODO For now we treat any non-printing move as a non-printing extruder move. Better to pass a flag for it in the CAN message.
-	flags.isNonPrintingExtruderMove = !flags.isPrintingMove;
 
 	// Prepare for movement
 	PrepParams params;
@@ -625,6 +623,10 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 		clocksNeeded = params.steadyClocks = 1;
 	}
 
+	MovementFlags segFlags;
+	segFlags.Clear();
+	segFlags.nonPrintingMove = !msg.usePressureAdvance;
+
 	afterPrepare.drivesMoving.Clear();
 	Move& move = reprap.GetMove();
 
@@ -642,7 +644,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = extrusionRequested;
 			if (extrusionRequested != 0.0)
 			{
-				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, msg.perDrive[drive].steps, msg.useLateInputShaping, msg.usePressureAdvance);
+				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, msg.perDrive[drive].steps, msg.useLateInputShaping, segFlags);
 				//TODO will Move do the following?
 				reprap.GetPlatform().EnableDrivers(drive, false);
 			}
@@ -653,7 +655,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = (float)delta;
 			if (delta != 0)
 			{
-				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, delta, msg.useLateInputShaping, false);
+				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, delta, msg.useLateInputShaping, segFlags);
 				afterPrepare.drivesMoving.SetBit(drive);
 				//TODO will Move do the following?
 				reprap.GetPlatform().EnableDrivers(drive, false);
@@ -1110,6 +1112,10 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 #if SUPPORT_CAN_EXPANSION
 		afterPrepare.drivesMoving.Clear();
 #endif
+		MovementFlags segFlags;
+		segFlags.Clear();
+		segFlags.checkEndstops = flags.checkEndstops;
+		segFlags.nonPrintingMove = !flags.isPrintingMove;
 		Move& move = reprap.GetMove();
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 		{
@@ -1134,7 +1140,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						else
 #endif
 						{
-							move.AddLinearSegments(*this, driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, delta, false, false);
+							move.AddLinearSegments(*this, driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, delta, false, segFlags);
 						}
 					}
 				}
@@ -1167,7 +1173,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 
 					if (platform.GetDriversBitmap(drive) != 0)				// if any of the drives is local
 					{
-						move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, flags.xyMoving && !flags.checkEndstops, false);
+						move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, flags.xyMoving && !flags.checkEndstops, segFlags);
 					}
 
 #if SUPPORT_CAN_EXPANSION
@@ -1230,7 +1236,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						else
 #endif
 						{
-							move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, flags.xyMoving && !flags.checkEndstops, flags.usePressureAdvance);
+							move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, flags.xyMoving && !flags.checkEndstops, segFlags);
 						}
 					}
 				}

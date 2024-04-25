@@ -1,9 +1,15 @@
 Next steps for new movement system+IS
 =====================================
 
-Set Move.CheckEndstops when executing movement that checks endstops or a Z probe
+[done] Set Move.CheckEndstops when executing movement that checks endstops or a Z probe
 
 If a move checks endstops and the endstop is already triggered during Prepare, it remains busy for the length of the homing move, even though it doesn't move
+
+[done] DM must init and maintain (existing) flag isExtruder
+
+Take account of raw motor moves when deciding whether to use IS. Maybe move useIS into MovementFlags?
+
+[done] Init DM.segFlags when starting a new segment, clear it when we run out of segments
 
 Can we keep a single machine position, based on current motor positions, not one per MS?
 
@@ -13,3 +19,5 @@ Fix ExtruderPrintingSince, need to update variable extruderPrintingSince when we
 
 Use cumulativeHiccupTime and notify hiccups to expansion boards
 Allow for expansion boards introducing hiccups
+
+Set up params.useInputShaping, needed for CAN

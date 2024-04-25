@@ -30,6 +30,8 @@ void DriveMovement::Init(size_t drv) noexcept
 	currentMotorPosition = 0;
 	nextDM = nullptr;
 	segments = nullptr;
+	isExtruder = false;
+	segmentFlags.Init();
 }
 
 void DriveMovement::DebugPrint() const noexcept
@@ -53,10 +55,10 @@ void DriveMovement::DebugPrint() const noexcept
 
 // Add a segment into the list. If the list is not empty then the new segment may overlap segments already in the list but will never start earlier than the first existing one.
 // The units of the input parameters are steps for distance and step clocks for time.
-void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, bool usePressureAdvance) noexcept
+void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, MovementFlags moveFlags) noexcept
 {
 	// Adjust the initial speed and distance to account for pressure advance
-	if (usePressureAdvance)
+	if (isExtruder && !moveFlags.nonPrintingMove)
 	{
 		const float extraSpeed = a * extruderShaper.GetKclocks();
 		u += extraSpeed;
@@ -106,7 +108,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 				debugPrintf("merge1, fd=%.2f, dist=%.2f into ", (double)firstDistance, (double)distance);
 #endif
 				seg->DebugPrint('m');
-				seg->Merge(firstDistance, u, a, usePressureAdvance);
+				seg->Merge(firstDistance, u, a, moveFlags);
 				distance -= firstDistance;
 				startTime += seg->GetDuration();
 				u += a * seg->GetDuration();
@@ -130,7 +132,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 			}
 
 			// The new segment and the existing one now have the same start time and duration, so merge them
-			seg->Merge(distance, u, a, usePressureAdvance);
+			seg->Merge(distance, u, a, moveFlags);
 #if 0
 			debugPrintf("merge2, dist=%.2f giving:\n", (double)distance);
 			MoveSegment::DebugPrintList('m', segments);
@@ -144,7 +146,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 
 	// The new segment (or what's left of it) needs to be added at the end
 	seg = MoveSegment::Allocate(nullptr);
-	seg->SetParameters(startTime, duration, distance, u, a, usePressureAdvance);
+	seg->SetParameters(startTime, duration, distance, u, a, moveFlags);
 	if (prev == nullptr)
 	{
 		segments = seg;
@@ -176,6 +178,7 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 		MoveSegment *seg = segments;			// capture volatile variable
 		if (seg == nullptr)
 		{
+			segmentFlags.Init();
 			return nullptr;
 		}
 
@@ -266,6 +269,8 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 				direction = newDirection;
 				directionChanged = true;
 			}
+
+			segmentFlags = seg->GetFlags();
 
 #if 0	//DEBUG
 			debugPrintf("New cart seg: state %u q=%.4e t0=%.4e p=%.4e ns=%" PRIi32 " ssl=%" PRIi32 "\n",

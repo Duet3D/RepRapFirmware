@@ -523,6 +523,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 					reprap.MoveUpdated();
 				}
 				platform.SetAxisDriversConfig(drive, numValues, drivers);
+				reprap.GetMove().SetAsExtruder(drive, false);
 #if SUPPORT_CAN_EXPANSION
 				axesToUpdate.SetBit(drive);
 #endif
@@ -541,8 +542,10 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 		for (size_t i = 0; i < numValues; ++i)
 		{
 			platform.SetExtruderDriver(i, drivers[i]);
+			const size_t drive = ExtruderToLogicalDrive(i);
+			reprap.GetMove().SetAsExtruder(drive, true);
 #if SUPPORT_CAN_EXPANSION
-			axesToUpdate.SetBit(ExtruderToLogicalDrive(i));
+			axesToUpdate.SetBit(drive);
 #endif
 		}
 		if (FilamentMonitor::CheckDriveAssignments(reply) && rslt == GCodeResult::ok)

@@ -58,8 +58,10 @@ public:
 	void AdjustMotorPosition(int32_t adjustment) noexcept { currentMotorPosition += adjustment; }
 	bool MotionPending() const noexcept { return segments != nullptr; }
 	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
+	bool CheckingEndstops() const noexcept;								// returns true when executing a move that checks endstops or Z probe
 
-	void AddSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, bool usePressureAdvance) noexcept;
+	void AddSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, MovementFlags moveFlags) noexcept;
+	void SetAsExtruder(bool p_isExtruder) noexcept { isExtruder = p_isExtruder; }
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
@@ -102,6 +104,7 @@ private:
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 	float q, t0, p;										// the movement parameters of the current segment
+	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
 	float distanceCarriedForwards;						// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
 	int32_t currentMotorPosition;
 
@@ -173,7 +176,7 @@ inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 // Call must disable interrupts before calling this
 inline bool DriveMovement::IsPrintingExtruderMovement() const noexcept
 {
-	return segments != nullptr && segments->IsPrintingMove();
+	return !segmentFlags.nonPrintingMove;
 }
 
 inline void DriveMovement::CheckDirection(bool reversed) noexcept

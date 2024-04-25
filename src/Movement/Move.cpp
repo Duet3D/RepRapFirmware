@@ -1540,7 +1540,7 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 
 // Add some linear segments to be executed by a driver, taking account of possible input shaping. This is used by linear axes and by extruders.
 // We never add a segment that starts earlier than any existing segments, but we may add segments when there are none already.
-void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, bool usePressureAdvance) noexcept
+void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, MovementFlags moveFlags) noexcept
 {
 	debugPrintf("AddLin: st=%" PRIu32 " steps=%" PRIi32 "\n", startTime, steps);
 	dda.DebugPrint("addlin");
@@ -1550,7 +1550,8 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	const float stepsPerMm = driveStepsPerMm[logicalDrive] * dda.directionVector[logicalDrive];
 	const MoveSegment *const oldSegs = dmp->segments;
 
-	//TODO for each movement phase, if the phase is longer than the shaping period then it would be more efficient to add pre-merged segments, rather than add segments then split and merge them
+	//TODO for each movement phase, if the phase is longer than the shaping period then it would be more efficient to add pre-merged segments, rather than add segments and then split and merge them
+	//TODO but we probably need to switch to fixed delay interval (which is probably a good thing to do anyway) to make that easer to do
 	// Acceleration phase
 	if (params.accelClocks > 0.0)
 	{
@@ -1561,12 +1562,12 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			{
 				const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
 				dmp->AddSegment(startTime + axisShaper.GetImpulseDelay(index), (uint32_t)params.accelClocks,
-									accelDistance * factor, dda.startSpeed * factor, dda.acceleration * factor, usePressureAdvance);
+									accelDistance * factor, dda.startSpeed * factor, dda.acceleration * factor, moveFlags);
 			}
 		}
 		else
 		{
-			dmp->AddSegment(startTime, (uint32_t)params.accelClocks, accelDistance * stepsPerMm, dda.startSpeed * stepsPerMm, dda.acceleration * stepsPerMm, usePressureAdvance);
+			dmp->AddSegment(startTime, (uint32_t)params.accelClocks, accelDistance * stepsPerMm, dda.startSpeed * stepsPerMm, dda.acceleration * stepsPerMm, moveFlags);
 		}
 		startTime += params.accelClocks;
 	}
@@ -1581,12 +1582,12 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			{
 				const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
 				dmp->AddSegment(startTime + axisShaper.GetImpulseDelay(index), (uint32_t)params.steadyClocks,
-												steadyDistance * factor, dda.topSpeed * factor, 0.0, false);
+												steadyDistance * factor, dda.topSpeed * factor, 0.0, moveFlags);
 			}
 		}
 		else
 		{
-			dmp->AddSegment(startTime, (uint32_t)params.steadyClocks, steadyDistance * stepsPerMm, dda.topSpeed * stepsPerMm, 0.0, false);
+			dmp->AddSegment(startTime, (uint32_t)params.steadyClocks, steadyDistance * stepsPerMm, dda.topSpeed * stepsPerMm, 0.0, moveFlags);
 		}
 		startTime += (uint32_t)params.steadyClocks;
 	}
@@ -1601,17 +1602,17 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			{
 				const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
 				dmp->AddSegment(startTime + axisShaper.GetImpulseDelay(index), (uint32_t)params.decelClocks,
-												decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), usePressureAdvance);
+												decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), moveFlags);
 			}
 		}
 		else
 		{
-			dmp->AddSegment(startTime, (uint32_t)params.decelClocks, decelDistance * stepsPerMm, dda.topSpeed * stepsPerMm, -(dda.deceleration * stepsPerMm), usePressureAdvance);
+			dmp->AddSegment(startTime, (uint32_t)params.decelClocks, decelDistance * stepsPerMm, dda.topSpeed * stepsPerMm, -(dda.deceleration * stepsPerMm), moveFlags);
 		}
 	}
 
 	// If there were no segments attached to this DM initially, we need to schedule the interrupt for the new segment at the start of the list.
-	// Don't do this until we have added all the segments for this move, because the first segment we added may have been modified and/or split when we added further segments
+	// Don't do this until we have added all the segments for this move, because the first segment we added may have been modified and/or split when we added further segments to implement input shaping
 	if (oldSegs == nullptr)
 	{
 		AtomicCriticalSectionLocker lock;
@@ -1826,22 +1827,33 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 // Generate the step pulses of internal drivers used by this DDA
 void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 {
-	// Check endstop switches and Z probe if asked. This is not speed critical because fast moves do not use endstops or the Z probe.
-	if (checkingEndstops)					// if any homing switches or the Z probe is enabled in this move
+	uint32_t driversStepping = 0;
+	MovementFlags flags;
+	flags.Clear();
+	DriveMovement* dm = activeDMs;
+	while (dm != nullptr && (int32_t)(now - dm->nextStepTime) >= 0)			// if the next step is due
+	{
+		driversStepping |= p.GetDriversBitmap(dm->drive);
+		flags |= dm->segmentFlags;
+		dm = dm->nextDM;
+	}
+
+	if (flags.checkEndstops)
 	{
 #if SUPPORT_CAN_EXPANSION
 		if (CheckEndstops(p, true)) { CanInterface::WakeAsyncSender(); }
 #else
-		CheckEndstops(p, true);				// call out to a separate function because this may help cache usage in the more common and time-critical case where we don't call it
+		CheckEndstops(p, true);												// call out to a separate function because this may help cache locality in the more common and time-critical case where we don't call it
 #endif
-	}
 
-	uint32_t driversStepping = 0;
-	DriveMovement* dm = activeDMs;
-	while (dm != nullptr && (int32_t)(now - dm->nextStepTime) >= 0)		// if the next step is due
-	{
-		driversStepping |= p.GetDriversBitmap(dm->drive);
-		dm = dm->nextDM;
+		// Calling CheckEndstops may have removed DMs from the active list, also it takes time; so re-check which drives need steps
+		now = StepTimer::GetTimerTicks();
+		dm = activeDMs;
+		while (dm != nullptr && (int32_t)(now - dm->nextStepTime) >= 0)		// if the next step is due
+		{
+			driversStepping |= p.GetDriversBitmap(dm->drive);
+			dm = dm->nextDM;
+		}
 	}
 
 	driversStepping &= p.GetSteppingEnabledDrivers();

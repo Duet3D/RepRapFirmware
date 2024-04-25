@@ -26,6 +26,39 @@
 #include <Platform/Tasks.h>
 #include <new>		// for align_val_t
 
+union MovementFlags
+{
+	uint32_t all;												// this is to provide a means to clear all the flags n one go
+	struct
+	{
+		// In the following we invert
+		uint32_t nonPrintingMove : 1,							// true if the move that generated this segment does not have both forwards extrusion and associated axis movement; used for filament monitoring
+				 checkEndstops : 1								// true if we need to check endstops or Z probe while executing this segment
+#if 0 //SUPPORT_REMOTE_COMMANDS
+			   , isRemote : 1									// set if we are in expansion board mode and this segment came from a move commanded by the main board
+#endif
+				 ;
+	};
+
+	constexpr void Clear() noexcept { all = 0; }
+
+	constexpr void Init() noexcept { all = 0; nonPrintingMove = true; }
+
+	// This operator sets checkingEndstops if either of the segments to be combined checks endstops, and sets nonPrintingMove if either of them is a non printing move
+	MovementFlags operator|(const MovementFlags other) const noexcept
+	{
+		MovementFlags ret;
+		ret.all = all | other.all;
+		return ret;
+	}
+
+	MovementFlags& operator|=(const MovementFlags other) noexcept
+	{
+		all |= other.all;
+		return *this;
+	}
+};
+
 class MoveSegment
 {
 public:
@@ -36,9 +69,9 @@ public:
 
 	// Read the values of the flag bits
 	bool IsLinear() const noexcept { return a == 0; }		//TODO: should we ignore very small accelerations, to avoid rounding error in the calculation?
-	bool IsPrintingMove() const noexcept { return isPrintingMove; }
+	MovementFlags GetFlags() const noexcept { return flags; }
 
-#if SUPPORT_REMOTE_COMMANDS
+#if 0 //SUPPORT_REMOTE_COMMANDS
 	bool IsRemote() const noexcept { return isRemote; }
 #endif
 
@@ -70,13 +103,13 @@ public:
 	float GetDistanceToReverse() const noexcept;
 
 	// Set the parameters of this segment
-	void SetParameters(uint32_t p_startTime, float p_duration, float p_distance, float p_u, float p_a, bool p_isPrintingMove) noexcept;
+	void SetParameters(uint32_t p_startTime, float p_duration, float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept;
 
 	// Split this segment in two, returning a pointer to the second part
 	MoveSegment *Split(uint32_t firstDuration) noexcept pre(firstDuration < duration);
 
 	// Merge the parameters for another segment with the same start time and duration into this one
-	void Merge(float p_distance, float p_u, float p_a, bool p_isPrintingMove) noexcept;
+	void Merge(float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept;
 
 	MoveSegment *GetNext() const noexcept;
 	void SetNext(MoveSegment *p_next) noexcept;
@@ -103,12 +136,7 @@ protected:
 	static unsigned int numCreated;
 
 	MoveSegment *next;										// pointer to the next segment
-	uint32_t initialDirection : 1,							// set if the initial direction is forwards
-			 isPrintingMove : 1								// for extruder segments, indicates whether this is a printing move (i.e. forwards and with associated axis movement)
-#if SUPPORT_REMOTE_COMMANDS
-		   , isRemote : 1									// set if we are in expansion board mode and this segment came from a move commanded by the main board
-#endif
-			 ;
+	MovementFlags flags;
 	uint32_t startTime;										// when this segment should start, in step clock ticks
 	float duration;											// the duration in ticks of this segment
 	float distance;											// the number of steps moved
@@ -122,9 +150,6 @@ private:
 // Create a new one, leaving the flags clear
 inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
 	: next(p_next)
-#if SUPPORT_REMOTE_COMMANDS
-	   , isRemote(0)
-#endif
 {
 	// remaining fields are not initialised
 }
@@ -153,14 +178,14 @@ inline float MoveSegment::GetDistanceToReverse() const noexcept
 }
 
 // Set the parameters of this segment
-inline void MoveSegment::SetParameters(uint32_t p_startTime, float p_duration, float p_distance, float p_u, float p_a, bool p_isPrintingMove) noexcept
+inline void MoveSegment::SetParameters(uint32_t p_startTime, float p_duration, float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept
 {
 	startTime = p_startTime;
 	duration = p_duration;
 	distance = p_distance;
 	u = p_u;
 	a = p_a;
-	isPrintingMove = p_isPrintingMove;
+	flags = p_flags;
 }
 
 // Split this segment in two, returning a pointer to the new second part
@@ -168,7 +193,7 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 {
 	MoveSegment *const secondSeg = Allocate(next);
 	const float firstDistance = (u + 0.5 * a * firstDuration) * firstDuration;
-	secondSeg->SetParameters(startTime + firstDuration, duration - (float)firstDuration, distance - firstDistance, u + a * (float)firstDuration, a, isPrintingMove);
+	secondSeg->SetParameters(startTime + firstDuration, duration - (float)firstDuration, distance - firstDistance, u + a * (float)firstDuration, a, flags);
 #if 0
 	debugPrintf("split at %" PRIu32 ", fd=%.2f, sd=%.2f\n", firstDuration, (double)firstDistance, (double)(distance - firstDistance));
 #endif
@@ -179,12 +204,12 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 }
 
 // Merge the parameters for another segment with the same start time and duration into this one
-inline void MoveSegment::Merge(float p_distance, float p_u, float p_a, bool p_isPrintingMove) noexcept
+inline void MoveSegment::Merge(float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept
 {
 	distance += p_distance;
 	u += p_u;
 	a += p_a;
-	isPrintingMove = isPrintingMove && p_isPrintingMove;
+	flags |= p_flags;
 }
 
 #endif /* SRC_MOVEMENT_MOVESEGMENT_H_ */

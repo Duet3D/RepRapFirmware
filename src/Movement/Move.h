@@ -67,6 +67,8 @@ public:
 	float DriveStepsPerMm(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return driveStepsPerMm[axisOrExtruder]; }
 	void SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept pre(axisOrExtruder < MaxAxesPlusExtruders);
 
+	void SetAsExtruder(size_t drive, bool isExtruder) noexcept pre(drive < MaxAxesPlusExtruders) { dms[drive].SetAsExtruder(isExtruder); }
+
 	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode, const StringRef& reply) noexcept pre(axisOrExtruder < MaxAxesdPlusExtruders);
 	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders);
 	unsigned int GetMicrostepping(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return microstepping[axisOrExtruder] & 0x7FFF; }
@@ -142,7 +144,7 @@ public:
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
 
 	// Functions called by DDA::Prepare to generate segments for executing DDAs
-	void AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, bool usePressureAdvance) noexcept;
+	void AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, MovementFlags moveFlags) noexcept;
 
 	void Diagnostics(MessageType mtype) noexcept;							// Report useful stuff
 
@@ -391,7 +393,6 @@ private:
 #if SUPPORT_SCANNING_PROBES
 	bool probeReadingNeeded = false;					// true if the laser task needs to take a scanning Z probe reading
 #endif
-	bool checkingEndstops = false;						// true if we are doing an isolated move that checks endstops
 };
 
 //******************************************************************************************************
@@ -470,44 +471,6 @@ inline void Move::InsertDM(DriveMovement *dm) noexcept
 	dm->nextDM = *dmp;
 	*dmp = dm;
 }
-
-#if 0	//TODO remove or fix this code
-// Force an end point
-inline void Move::SetDriveCoordinate(int32_t a, size_t drive) noexcept
-{
-	endPoint[drive] = a;
-	flags.endCoordinatesValid = false;
-}
-
-inline uint32_t Move::ExtruderPrintingSince() const noexcept
-{
-	return rings[0].ExtruderPrintingSince();	// When we started doing normal moves after the most recent extruder-only move
-}
-
-#if SUPPORT_CAN_EXPANSION
-
-// Insert a hiccup, returning the amount of time inserted
-// Note, clocksNeeded may be less than WakeupTime but that doesn't matter, the subtraction will wrap around and push the new moveStartTime on a little
-inline __attribute__((always_inline)) uint32_t Move::InsertHiccup(uint32_t whenNextInterruptWanted) noexcept
-{
-	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - MoveTiming::WakeupTime;
-	const uint32_t oldStartTime = afterPrepare.moveStartTime;
-	afterPrepare.moveStartTime = whenNextInterruptWanted - ticksDueAfterStart;
-	return afterPrepare.moveStartTime - oldStartTime;
-}
-
-#else
-
-// Insert a hiccup
-// Note, clocksNeeded may be less than WakeupTime but that doesn't matter, the subtraction will wrap around and push the new moveStartTime on a little
-inline __attribute__((always_inline)) void Move::InsertHiccup(uint32_t whenNextInterruptWanted) noexcept
-{
-	const uint32_t ticksDueAfterStart = (activeDMs != nullptr) ? activeDMs->nextStepTime : clocksNeeded - MoveTiming::WakeupTime;
-	afterPrepare.moveStartTime = whenNextInterruptWanted - ticksDueAfterStart;
-}
-
-#endif
-#endif	//TODO
 
 #if HAS_SMART_DRIVERS
 
