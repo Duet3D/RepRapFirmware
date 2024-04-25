@@ -48,6 +48,10 @@
 #include <Storage/SdCardVolume.h>
 #include <Accelerometers/Accelerometers.h>
 
+#if SUPPORT_USB_DRIVE
+#include <TinyUsbInterface.h>
+#endif
+
 #if SAM4E || SAM4S || SAME70
 # include <AnalogIn.h>
 using LegacyAnalogIn::AdcBits;
@@ -2052,6 +2056,48 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 {
 	// Get the channel specified by the command and the corresponding GCode buffer
 	const size_t chan = gb.GetLimitedUIValue('P', NumSerialChannels);
+
+	bool modeChangeSeen = false;
+	bool hostMode = false;
+	gb.TryGetBValue('H', hostMode, modeChangeSeen);
+
+#if SUPPORT_USB_DRIVE
+	if (chan == 0)
+	{
+		bool result = SetUsbHostMode(hostMode, reply);
+
+		// If setting to host mode then return result immediately. However, if setting to device,
+		// check that succeeded first so that the rest of the M575 code can be executed.
+		if (hostMode)
+		{
+			return result ? GCodeResult::ok : GCodeResult::error;
+		}
+		else
+		{
+			if (!result)
+			{
+				return GCodeResult::error;
+			}
+		}
+	}
+	else
+	{
+		// H=1 is only valid on channel 0, otherwise ignored.
+		if (hostMode)
+		{
+			reply.printf("USB host mode not supported on channel other than 0");
+			return GCodeResult::error;
+		}
+	}
+#else
+	// H=0 is ignored when USB host not supported.
+	if (modeChangeSeen && hostMode)
+	{
+		reply.printf("USB host mode not supported");
+		return GCodeResult::error;
+	}
+#endif
+
 	GCodeBuffer * const gbp = reprap.GetGCodes().GetSerialGCodeBuffer(chan);
 
 #if HAS_AUX_DEVICES
@@ -2183,6 +2229,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			}
 		}
 	}
+
 	return GCodeResult::ok;
 }
 
@@ -3272,6 +3319,18 @@ void Platform::SetBaudRate(size_t chan, uint32_t br) noexcept
 	}
 #endif
 }
+
+#if SUPPORT_USB_DRIVE
+bool Platform::SetUsbHostMode(bool hostMode, const StringRef& reply) noexcept
+{
+#if CORE_USES_TINYUSB && CFG_TUH_ENABLED
+	return CoreUsbSetHostMode(hostMode, reply);
+#else
+	reply.copy("Host mode not supported by USB stack");
+	return false; // unimplemented if not using tinyUSB
+#endif
+}
+#endif
 
 uint32_t Platform::GetBaudRate(size_t chan) const noexcept
 {
