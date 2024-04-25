@@ -634,6 +634,8 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src/tinyusb/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.preprocessor.def.867237257" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
@@ -816,6 +818,8 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src/tinyusb/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.preprocessor.def.818921811" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
@@ -1159,6 +1163,8 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/atmel/SAME54_DFP/1.1.134/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src/tinyusb/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.preprocessor.def.1547676211" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAME54P20A__"/>
@@ -1339,6 +1345,8 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Hardware/SAME5x}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/src/Hardware/SAME5x/Ethernet}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src/tinyusb/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.preprocessor.def.1275759816" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAME54P20A__"/>
@@ -1519,6 +1527,8 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/src}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/Duet3ATE/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src/tinyusb/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.preprocessor.def.380145251" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAME54P20A__"/>
@@ -1711,6 +1721,8 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src/tinyusb/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.preprocessor.def.1806394874" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
@@ -1895,6 +1907,8 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src/tinyusb/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.preprocessor.def.1973576809" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
@@ -2063,6 +2077,8 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/atmel/SAME51_DFP/1.1.139/include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CoreN2G/src/arm/CMSIS/5.4.0/CMSIS/Core/Include}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src/tinyusb/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.preprocessor.def.778041473" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAME51N19A__"/>
@@ -2248,6 +2264,8 @@
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/FreeRTOS/src/portable/GCC/ARM_CM7/r0p1}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/RRFLibraries/src}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/CANlib/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src/tinyusb/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/LibTinyusb/src}&quot;"/>
 								</option>
 								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="false" id="gnu.cpp.compiler.option.preprocessor.def.1985321912" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="__SAME70Q20B__"/>
