@@ -1644,6 +1644,16 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	}
 }
 
+// Return true if none of the drives passed has any movement pending
+bool Move::AreDrivesStopped(AxesBitmap drives) const noexcept
+{
+	return drives.IterateWhile([this](unsigned int drive, unsigned int index)->bool
+								{
+									return dms[drive].segments == nullptr;
+								}
+							  );
+}
+
 // ISR for the step interrupt
 void Move::Interrupt() noexcept
 {

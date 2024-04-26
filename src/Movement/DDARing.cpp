@@ -82,7 +82,7 @@ void DDARing::Init1(unsigned int numDdas) noexcept
 	addPointer->SetNext(dda);
 	dda->SetPrevious(addPointer);
 
-	getPointer = checkPointer = addPointer;
+	getPointer = addPointer;
 }
 
 // This must be called from Move::Init, not from the Move constructor, because it indirectly refers to the GCodes module which must therefore be initialised first
@@ -109,16 +109,11 @@ void DDARing::Init2() noexcept
 void DDARing::Exit() noexcept
 {
 	// Clear the DDA ring so that we don't report any moves as pending
-	while (getPointer != addPointer)
+	DDA *gp;										// use a local variable to avoid loading volatile variable getPointer too often
+	while ((gp = getPointer) != addPointer)
 	{
-		getPointer->Complete();
-		getPointer = getPointer->GetNext();
-	}
-
-	while (checkPointer->GetState() == DDA::completed)
-	{
-		(void)checkPointer->Free();
-		checkPointer = checkPointer->GetNext();
+		gp->Free();
+		getPointer = gp = gp->GetNext();
 	}
 }
 
@@ -249,14 +244,17 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 		if (cdda->GetState() == DDA::committed)
 		{
 			simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
-			cdda->Complete();
+			if (cdda->Free())
+			{
+				++numLookaheadUnderruns;
+			}
 			getPointer = cdda = cdda->GetNext();
 		}
 	}
 	else
 	{
 		// See if we can retire any completed moves
-		while (cdda->GetState() == DDA::completed || cdda->HasExpired())
+		while (cdda->GetState() == DDA::committed && cdda->HasExpired())
 		{
 			if (cdda->Free())
 			{
@@ -317,14 +315,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 	   )
 	{
 		uint32_t ret = PrepareMoves(cdda, 0, 0, simulationMode);
-
-		if (cdda->GetState() == DDA::completed)
-		{
-			// We prepared the move but found there was nothing to do because endstops are already triggered
-			getPointer = cdda = cdda->GetNext();
-			completedMoves++;
-		}
-		else if (cdda->GetState() == DDA::committed)
+		if (cdda->GetState() == DDA::committed)
 		{
 			if (simulationMode != SimulationMode::off)
 			{
@@ -461,11 +452,7 @@ void DDARing::SetAxisMotorEndPoints(const int32_t *newMotorPositions, AxesBitmap
 DDA *DDARing::GetCurrentDDA() const noexcept
 {
 	TaskCriticalSectionLocker lock;
-	DDA *cdda = checkPointer;
-	while (cdda->GetState() == DDA::completed)
-	{
-		cdda = cdda->GetNext();
-	}
+	DDA *cdda = getPointer;
 	const uint32_t now = StepTimer::GetTimerTicks();
 	while (cdda->GetState() == DDA::committed)
 	{

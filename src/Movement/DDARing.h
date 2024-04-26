@@ -91,11 +91,10 @@ protected:
 private:
 	uint32_t PrepareMoves(DDA *firstUnpreparedMove, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept;
 
-	DDA* addPointer;
-	DDA* volatile getPointer;
-	DDA* volatile checkPointer;
+	DDA* addPointer;															// Pointer to the next DDA that we can use to add a new move, if this DDA is free
+	DDA* volatile getPointer;													// Pointer to the oldest committed or provisional move, if not equal to addPointer
 
-	unsigned int numDdasInRing;
+	unsigned int numDdasInRing;													// The number of DDAs that this ring contains
 	uint32_t gracePeriod;														// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
 	uint32_t scheduledMoves;													// Move counters for the code queue

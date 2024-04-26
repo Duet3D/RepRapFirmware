@@ -181,7 +181,7 @@ void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver
 uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool simulating) noexcept
 {
 	uint32_t clocks = 0;
-	if (simulating || dda.GetState() == DDA::completed)
+	if (simulating)
 	{
 		FreeMovementBuffers();											// it turned out that there was nothing to move
 	}

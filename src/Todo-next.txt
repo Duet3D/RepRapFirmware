@@ -1,23 +1,26 @@
 Next steps for new movement system+IS
 =====================================
 
-[done] Set Move.CheckEndstops when executing movement that checks endstops or a Z probe
-
-If a move checks endstops and the endstop is already triggered during Prepare, it remains busy for the length of the homing move, even though it doesn't move
-
+[done a different way] Set Move.checkEndstops when executing movement that checks endstops or a Z probe
 [done] DM must init and maintain (existing) flag isExtruder
+[done] Init DM.segFlags when starting a new segment, clear it when we run out of segments
+[done, testing] Handle retiring commited moves properly
+[done] If a move checks endstops and the endstop is already triggered during Prepare, it remains busy for the length of the homing move, even though it doesn't move.
+[done] We get the same delay when an endstop stops movement.
 
 Take account of raw motor moves when deciding whether to use IS. Maybe move useIS into MovementFlags?
-
-[done] Init DM.segFlags when starting a new segment, clear it when we run out of segments
 
 Can we keep a single machine position, based on current motor positions, not one per MS?
 
 Eventually, store end position in segments. End positions specified by user must be exact numbers of motor steps. Segment boundaries may be fractional steps.
 
-Fix ExtruderPrintingSince, need to update variable extruderPrintingSince when we start a prinitng extruder move after not doing one
+Fix ExtruderPrintingSince, need to update variable extruderPrintingSince when we start a printing extruder move after not doing one - in NewSegmnent?
 
 Use cumulativeHiccupTime and notify hiccups to expansion boards
+
 Allow for expansion boards introducing hiccups
 
 Set up params.useInputShaping, needed for CAN
+
+At the end of Prepare, don't send the move over CAN if it won't happen because endstps are already triggered - previous it checked for state=completed
+Also, check whether/how we handle individual drives not moving because their endstops have triggered - that may be enough to handle the above.

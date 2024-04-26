@@ -57,8 +57,7 @@ public:
 	{
 		empty,				// empty or being filled in
 		provisional,		// ready, but could be subject to modifications
-		committed,			// has been converted into move segments already
-		completed			// this move has been completed e.g. because an endstop or probe has stopped it
+		committed			// has been converted into move segments already
 	};
 
 	DDA(DDA* n) noexcept;
@@ -91,7 +90,6 @@ public:
 	DDA* GetNext() const noexcept { return next; }
 	DDA* GetPrevious() const noexcept { return prev; }
 	uint32_t GetTimeLeft() const noexcept;
-	void Complete() noexcept { state = completed; }
 
 #if SUPPORT_REMOTE_COMMANDS
 	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
@@ -123,7 +121,7 @@ public:
 	float GetInitialUserC1() const noexcept { return initialUserC1; }
 
 	uint32_t GetClocksNeeded() const noexcept { return clocksNeeded; }
-	bool HasExpired() const noexcept;
+	bool HasExpired() const noexcept pre(state == committed);
 	bool IsGoodToPrepare() const noexcept;
 	void UpdateMovementAccumulators(volatile int32_t *accumulators) const noexcept;
 	uint32_t GetMoveStartTime() const noexcept { return afterPrepare.moveStartTime; }
@@ -255,10 +253,7 @@ private:
 			// These are calculated from the above and used in the ISR, so they are set up by Prepare()
 			uint32_t moveStartTime;					// clock count at which the move is due to start (before execution) or was started (during execution)
 			float averageExtrusionSpeed;			// the average extrusion speed in mm/sec, for applying heater feedforward
-
-#if SUPPORT_CAN_EXPANSION
-			AxesBitmap drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving
-#endif
+			AxesBitmap drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving and to determine when a nve that checks endsts has terminated
 		} afterPrepare;
 	};
 
@@ -283,12 +278,6 @@ inline bool DDA::CanPauseAfter() const noexcept
 		&& next->state == DDAState::provisional
 #endif
 		;
-}
-
-// This is called from DDARing only
-inline bool DDA::HasExpired() const noexcept
-{
-	return state == committed && (int32_t)(StepTimer::GetTimerTicks() - (afterPrepare.moveStartTime + clocksNeeded)) >= 0;
 }
 
 #endif /* DDA_H_ */

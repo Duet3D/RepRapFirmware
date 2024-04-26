@@ -1109,9 +1109,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 
 		float extrusionFraction = 0.0;
 		AxesBitmap additionalAxisMotorsToEnable, axisMotorsEnabled;
-#if SUPPORT_CAN_EXPANSION
 		afterPrepare.drivesMoving.Clear();
-#endif
 		MovementFlags segFlags;
 		segFlags.Clear();
 		segFlags.checkEndstops = flags.checkEndstops;
@@ -1121,9 +1119,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		{
 			if (flags.isLeadscrewAdjustmentMove)
 			{
-#if SUPPORT_CAN_EXPANSION
 				afterPrepare.drivesMoving.SetBit(Z_AXIS);
-#endif
 				// For a leadscrew adjustment move, the first N elements of the direction vector are the adjustments to the N Z motors
 				const AxisDriversConfig& config = platform.GetAxisDriversConfig(Z_AXIS);
 				if (drive < config.numDrivers)
@@ -1176,8 +1172,9 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, flags.xyMoving && !flags.checkEndstops, segFlags);
 					}
 
-#if SUPPORT_CAN_EXPANSION
 					afterPrepare.drivesMoving.SetBit(drive);
+
+#if SUPPORT_CAN_EXPANSION
 					const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
 					for (size_t i = 0; i < config.numDrivers; ++i)
 					{
@@ -1225,8 +1222,9 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 
 						const float delta = totalDistance * directionVector[drive] * move.DriveStepsPerMm(drive);
 
-#if SUPPORT_CAN_EXPANSION
 						afterPrepare.drivesMoving.SetBit(drive);
+
+#if SUPPORT_CAN_EXPANSION
 						const DriverId driver = platform.GetExtruderDriver(extruder);
 						if (driver.IsRemote())
 						{
@@ -1258,7 +1256,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			// This is especially important when using CAN-connected motors or endstops, because we rely on receiving "endstop changed" messages.
 			// Moves that check endstops are always run as isolated moves, so there can be no move in progress and the endstops must already be primed.
 			platform.EnableAllSteppingDrivers();
-			(void)move.CheckEndstops(platform, false);									// this may modify pending CAN moves, and may set status 'completed'
+			(void)move.CheckEndstops(platform, false);									// this may modify pending CAN moves
 		}
 
 #if SUPPORT_CAN_EXPANSION
@@ -1294,10 +1292,17 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 #endif
 	}
 
-	if (state != completed)
+	state = committed;					// must do this last so that the ISR doesn't start executing it before we have finished setting it up
+}
+
+// Check whether a committed move has finished
+bool DDA::HasExpired() const noexcept
+{
+	if (flags.checkEndstops)
 	{
-		state = committed;					// must do this last so that the ISR doesn't start executing it before we have finished setting it up
+		return reprap.GetMove().AreDrivesStopped(afterPrepare.drivesMoving);
 	}
+	return (int32_t)(StepTimer::GetTimerTicks() - (afterPrepare.moveStartTime + clocksNeeded)) >= 0;
 }
 
 // Take a unit positive-hyperquadrant vector, and return the factor needed to obtain
