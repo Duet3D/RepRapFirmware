@@ -135,7 +135,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 			{
 				zDatumSetByProbing = false;
 			}
-			reprap.MoveUpdated();				// because we may have updated axesHomed or zDatumSetByProbing
+			reprap.MoveUpdated();							// because we may have updated axesHomed or zDatumSetByProbing
 		}
 	}
 

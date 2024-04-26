@@ -145,6 +145,7 @@ public:
 
 	// Functions called by DDA::Prepare to generate segments for executing DDAs
 	void AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, MovementFlags moveFlags) noexcept;
+	void SetHomingDda(size_t drive, DDA *dda) noexcept pre(drive < MaxAxesPlusExtruders);
 
 	bool AreDrivesStopped(AxesBitmap drives) const noexcept;								// return true if none of the drives passed has any movement pending
 
@@ -212,9 +213,6 @@ public:
 	float GetDecelerationMmPerSecSquared() const noexcept { return rings[0].GetDecelerationMmPerSecSquared(); }
 	float GetTotalExtrusionRate() const noexcept { return rings[0].GetTotalExtrusionRate(); }
 
-	const int32_t *GetMotorEndPositions() const noexcept { return motorPositionsAfterScheduledMoves; }
-	void SetMotorEndPosition(size_t axis, int32_t val) noexcept { motorPositionsAfterScheduledMoves[axis] = val; }
-	void SetAxisEndPosition(size_t axis, float pos, AxesBitmap controllingDrives) noexcept;
 	float LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept;
 	void ForceLiveCoordinatesUpdate() noexcept { forceLiveCoordinatesUpdate = true; }
 

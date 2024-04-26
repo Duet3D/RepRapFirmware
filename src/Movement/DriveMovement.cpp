@@ -32,6 +32,7 @@ void DriveMovement::Init(size_t drv) noexcept
 	segments = nullptr;
 	isExtruder = false;
 	segmentFlags.Init();
+	homingDda = nullptr;
 }
 
 void DriveMovement::DebugPrint() const noexcept

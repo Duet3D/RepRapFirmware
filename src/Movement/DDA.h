@@ -264,6 +264,13 @@ private:
 #endif
 };
 
+// Force an end point
+inline void DDA::SetDriveCoordinate(int32_t a, size_t drive) noexcept
+{
+	endPoint[drive] = a;
+	flags.endCoordinatesValid = false;
+}
+
 // Return true if there is no reason to delay preparing this move
 inline bool DDA::IsGoodToPrepare() const noexcept
 {

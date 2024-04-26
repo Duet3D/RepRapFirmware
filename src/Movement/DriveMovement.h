@@ -88,6 +88,7 @@ private:
 	DriveMovement *nextDM ;								// link to next DM that needs a step
 	MoveSegment *volatile segments;						// pointer to the segment list for this driver
 
+	DDA *homingDda;										// if we are checking endstops then this is the DDA that represents the move
 	ExtruderShaper extruderShaper;						// pressure advance control
 
 	DMState state;										// whether this is active or not

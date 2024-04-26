@@ -29,7 +29,7 @@ public:
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const noexcept override;
 	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const noexcept override;
 	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept override;
-	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], Move& move) const noexcept override;
+	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept override;
 	void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept override;
 	bool IsContinuousRotationAxis(size_t axis) const noexcept override;
 	AxesBitmap GetLinearAxes() const noexcept override;

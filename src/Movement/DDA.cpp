@@ -1166,6 +1166,10 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 					}
 
 					delta = platform.ApplyBacklashCompensation(drive, delta);
+					if (flags.checkEndstops)
+					{
+						move.SetHomingDda(drive, this);
+					}
 
 					if (platform.GetDriversBitmap(drive) != 0)				// if any of the drives is local
 					{
@@ -1223,6 +1227,10 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						const float delta = totalDistance * directionVector[drive] * move.DriveStepsPerMm(drive);
 
 						afterPrepare.drivesMoving.SetBit(drive);
+						if (flags.checkEndstops)
+						{
+							move.SetHomingDda(drive, this);
+						}
 
 #if SUPPORT_CAN_EXPANSION
 						const DriverId driver = platform.GetExtruderDriver(extruder);
@@ -1250,6 +1258,9 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			platform.EnableDrivers(drive, false);
 		}
 
+		afterPrepare.averageExtrusionSpeed = (extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded;
+
+		state = committed;																// must do this before we call CheckEndstops
 		if (flags.checkEndstops)
 		{
 			// Before we send movement commands to remote drives, if any endstop switches we are monitoring are already set, make sure we don't start the motors concerned.
@@ -1268,8 +1279,6 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			clocksNeeded = canClocksNeeded;
 		}
 #endif
-
-		afterPrepare.averageExtrusionSpeed = (extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded;
 
 		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves))		// show the prepared DDA if debug enabled for both modules
 		{
@@ -1291,8 +1300,6 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		savedMovePointer = (savedMovePointer + 1) % NumSavedMoves;
 #endif
 	}
-
-	state = committed;					// must do this last so that the ISR doesn't start executing it before we have finished setting it up
 }
 
 // Check whether a committed move has finished

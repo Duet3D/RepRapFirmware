@@ -396,38 +396,38 @@ AxesBitmap ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap a
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
-void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], Move& move) const noexcept
+void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
 {
 	switch (axis)
 	{
 	case X_AXIS:	// proximal joint homing switch
 		{
 			const float hitPoint = (highEnd) ? thetaLimits[1] : thetaLimits[0];
-			move.SetMotorEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		}
 		break;
 
 	case Y_AXIS:	// distal joint homing switch
 		{
 			const float hitPoint = ((highEnd) ? psiLimits[1] : psiLimits[0])
-									- (((float)move.GetMotorEndPositions()[X_AXIS] * crosstalk[0])/stepsPerMm[X_AXIS]);
-			move.SetMotorEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
+									- ((dda.DriveCoordinates()[X_AXIS] * crosstalk[0])/stepsPerMm[X_AXIS]);
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		}
 		break;
 
 	case Z_AXIS:	// Z axis homing switch
 		{
 			const float hitPoint = ((highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis))
-									- (((float)move.GetMotorEndPositions()[X_AXIS] * crosstalk[1])/stepsPerMm[X_AXIS])
-									- (((float)move.GetMotorEndPositions()[Y_AXIS] * crosstalk[2])/stepsPerMm[Y_AXIS]);
-			move.SetMotorEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
+									- ((dda.DriveCoordinates()[X_AXIS] * crosstalk[1])/stepsPerMm[X_AXIS])
+									- ((dda.DriveCoordinates()[Y_AXIS] * crosstalk[2])/stepsPerMm[Y_AXIS]);
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		}
 		break;
 
 	default:		// Additional axis
 		{
 			const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
-			move.SetMotorEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		}
 		break;
 	}

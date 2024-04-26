@@ -22,5 +22,5 @@ Allow for expansion boards introducing hiccups
 
 Set up params.useInputShaping, needed for CAN
 
-At the end of Prepare, don't send the move over CAN if it won't happen because endstps are already triggered - previous it checked for state=completed
-Also, check whether/how we handle individual drives not moving because their endstops have triggered - that may be enough to handle the above.
+At the end of Prepare, don't send the move over CAN if it won't happen because endstops are already triggered - previously it checked for state=completed
+Also, check whether/how in CanMotion we handle individual drives not moving because their endstops have triggered - that may be enough to handle the above.

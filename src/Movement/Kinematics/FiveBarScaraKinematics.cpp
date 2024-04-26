@@ -893,29 +893,29 @@ AxesBitmap FiveBarScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesB
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
-void FiveBarScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], Move& move) const noexcept
+void FiveBarScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
 {
 	switch (axis)
 	{
 	case X_AXIS:	// Left arm homing switch
-		move.SetMotorEndPosition(axis, lrintf(homingAngleL * stepsPerMm[axis]));
+		dda.SetDriveCoordinate(lrintf(homingAngleL * stepsPerMm[axis]), axis);
 		break;
 
 	case Y_AXIS:	// Left arm homing switch
-		move.SetMotorEndPosition(axis, lrintf(homingAngleR * stepsPerMm[axis]));
+		dda.SetDriveCoordinate(lrintf(homingAngleR * stepsPerMm[axis]), axis);
 		break;
 
 	case Z_AXIS:	// Z axis homing switch
 		{
 			const float hitPoint = ((highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis));
-			move.SetMotorEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		}
 		break;
 
 	default:		// Additional axis
 		{
 			const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
-			move.SetMotorEndPosition(axis, lrintf(hitPoint * stepsPerMm[axis]));
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		}
 		break;
 	}

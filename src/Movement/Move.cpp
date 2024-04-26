@@ -1386,32 +1386,6 @@ void Move::UpdateLiveMachineCoordinates() const noexcept
 	}
 }
 
-// Change the position of one axis and adjust the corresponding motor positions.
-// Called when an endstop on a CoreXY or similar system with a shared motor is triggered. Motion will have been stopped already.
-void Move::SetAxisEndPosition(size_t axis, float pos, AxesBitmap controllingDrives) noexcept
-{
-	UpdateLiveMachineCoordinates();
-	// Don't change latestLiveCoordinates directly because it could get overwritten by another call to UpdateLiveMachineCoordinates
-	float newLiveCoordinates[MaxAxes];
-	memcpyf(newLiveCoordinates, latestLiveCoordinates, MaxAxes);
-	newLiveCoordinates[axis] = pos;
-	int32_t newMotorPositions[MaxAxes];
-	if (CartesianToMotorSteps(newLiveCoordinates, newMotorPositions, true))
-	{
-		// Set the new motor positions
-		controllingDrives.Iterate([this, newMotorPositions](unsigned int drive, unsigned int)->void
-									{
-										dms[drive].SetCurrentMotorPosition(newMotorPositions[drive]);
-									}
-								 );
-		for (size_t i = 0; i < NumMovementSystems; ++i)
-		{
-			rings[i].SetAxisMotorEndPoints(newMotorPositions, controllingDrives);
-		}
-		UpdateLiveMachineCoordinates();
-	}
-}
-
 void Move::SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) noexcept
 {
 	latestCalibrationDeviation = d;
@@ -1542,9 +1516,11 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 // We never add a segment that starts earlier than any existing segments, but we may add segments when there are none already.
 void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, MovementFlags moveFlags) noexcept
 {
+#if 0	//debug
 	debugPrintf("AddLin: st=%" PRIu32 " steps=%" PRIi32 "\n", startTime, steps);
 	dda.DebugPrint("addlin");
 	params.DebugPrint();
+#endif
 
 	DriveMovement* const dmp = &dms[logicalDrive];
 	const float stepsPerMm = driveStepsPerMm[logicalDrive] * dda.directionVector[logicalDrive];
@@ -1642,6 +1618,12 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			dmp->state = DMState::idle;
 		}
 	}
+}
+
+// Store the DDA that is executing a homing move involving this drive. Called from DDA::Prepare.
+void Move::SetHomingDda(size_t drive, DDA *dda) noexcept
+{
+	dms[drive].homingDda = dda;
 }
 
 // Return true if none of the drives passed has any movement pending
@@ -1745,6 +1727,7 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 	while (true)
 	{
 		const EndstopHitDetails hitDetails = platform.GetEndstops().CheckEndstops();
+
 		switch (hitDetails.GetAction())
 		{
 		case EndstopHitAction::stopAll:
@@ -1757,15 +1740,23 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 			{
 				reprap.GetGCodes().MoveStoppedByZProbe();
 			}
-			else if (hitDetails.setAxisLow)
+			else
 			{
-				kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerMm, *this);
-				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
-			}
-			else if (hitDetails.setAxisHigh)
-			{
-				kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *this);
-				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+				// Get the DDA associated with the axis that has triggered
+				DDA *homingDda = dms[hitDetails.axis].homingDda;
+				if (homingDda != nullptr && homingDda->GetState() == DDA::committed && homingDda->IsCheckingEndstops())
+				{
+					if (hitDetails.setAxisLow)
+					{
+						kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerMm, *homingDda);
+						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+					}
+					else if (hitDetails.setAxisHigh)
+					{
+						kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *homingDda);
+						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+					}
+				}
 			}
 #if SUPPORT_CAN_EXPANSION
 			return wakeAsyncSender;
@@ -1780,15 +1771,22 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 #else
 			StopAxisOrExtruder(executingMove, hitDetails.axis);
 #endif
-			if (hitDetails.setAxisLow)
 			{
-				kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerMm, *this);
-				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
-			}
-			else if (hitDetails.setAxisHigh)
-			{
-				reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *this);
-				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+				// Get the DDA associated with the axis that has triggered
+				DDA *homingDda = dms[hitDetails.axis].homingDda;
+				if (homingDda != nullptr && homingDda->GetState() == DDA::committed && homingDda->IsCheckingEndstops())
+				{
+					if (hitDetails.setAxisLow)
+					{
+						kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerMm, *homingDda);
+						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+					}
+					else if (hitDetails.setAxisHigh)
+					{
+						reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *homingDda);
+						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+					}
+				}
 			}
 			break;
 
@@ -1812,15 +1810,23 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 			{
 				platform.DisableSteppingDriver(hitDetails.driver.localDriver);
 			}
-			if (hitDetails.setAxisLow)
+
 			{
-				kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerMm, *this);
-				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
-			}
-			else if (hitDetails.setAxisHigh)
-			{
-				kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *this);
-				reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+				// Get the DDA associated with the axis that has triggered
+				DDA *homingDda = dms[hitDetails.axis].homingDda;
+				if (homingDda != nullptr && homingDda->GetState() == DDA::committed && homingDda->IsCheckingEndstops())
+				{
+					if (hitDetails.setAxisLow)
+					{
+						kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerMm, *homingDda);
+						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+					}
+					else if (hitDetails.setAxisHigh)
+					{
+						kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *homingDda);
+						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+					}
+				}
 			}
 			break;
 
