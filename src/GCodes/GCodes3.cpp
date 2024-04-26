@@ -75,8 +75,8 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 	MovementState& ms = GetMovementState(gb);
 	AxesBitmap axesIncluded;
 
-#if SUPPORT_ASYNC_MOVES
-	// Check for setting unowned axes before processing the command
+	// Don't wait for the machine to stop if only extruder drives are being reset.
+	// This avoids blobs and seams when the gcode uses absolute E coordinates and periodically includes G92 E0.
 	ParameterLettersBitmap axisLettersMentioned = gb.AllParameters() & allAxisLetters;
 	if (axisLettersMentioned.IsNonEmpty())
 	{
@@ -84,30 +84,19 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 		{
 			return GCodeResult::notFinished;
 		}
+#if SUPPORT_ASYNC_MOVES
+		// Check for setting unowned axes before processing the command
 		axisLettersMentioned.ClearBits(ms.GetOwnedAxisLetters());
 		if (axisLettersMentioned.IsNonEmpty())
 		{
 			AllocateAxisLetters(gb, ms, axisLettersMentioned);
 		}
-#else
-	{
 #endif
-		// Don't wait for the machine to stop if only extruder drives are being reset.
-		// This avoids blobs and seams when the gcode uses absolute E coordinates and periodically includes G92 E0.
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
 			if (gb.Seen(axisLetters[axis]))
 			{
 				const float axisValue = gb.GetDistance();
-#if !SUPPORT_ASYNC_MOVES
-				if (axesIncluded.IsEmpty())
-				{
-					if (!LockCurrentMovementSystemAndWaitForStandstill(gb))	// lock movement and get current coordinates
-					{
-						return GCodeResult::notFinished;
-					}
-				}
-#endif
 				axesIncluded.SetBit(axis);
 				ms.currentUserPosition[axis] = axisValue;
 			}
