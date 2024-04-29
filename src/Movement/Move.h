@@ -144,7 +144,7 @@ public:
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
 
 	// Functions called by DDA::Prepare to generate segments for executing DDAs
-	void AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, MovementFlags moveFlags) noexcept;
+	void AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, float steps, bool useInputShaping, MovementFlags moveFlags) noexcept;
 	void SetHomingDda(size_t drive, DDA *dda) noexcept pre(drive < MaxAxesPlusExtruders);
 
 	bool AreDrivesStopped(AxesBitmap drives) const noexcept;								// return true if none of the drives passed has any movement pending

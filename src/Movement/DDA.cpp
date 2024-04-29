@@ -644,15 +644,15 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = extrusionRequested;
 			if (extrusionRequested != 0.0)
 			{
-				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, msg.perDrive[drive].steps, msg.useLateInputShaping, segFlags);
+				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, extrusionRequested, msg.useLateInputShaping, segFlags);
 				//TODO will Move do the following?
 				reprap.GetPlatform().EnableDrivers(drive, false);
 			}
 		}
 		else
 		{
-			const int32_t delta = msg.perDrive[drive].steps;
-			directionVector[drive] = (float)delta;
+			const float delta = (float)msg.perDrive[drive].steps;
+			directionVector[drive] = delta;
 			if (delta != 0)
 			{
 				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, delta, msg.useLateInputShaping, segFlags);
@@ -1136,7 +1136,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						else
 #endif
 						{
-							move.AddLinearSegments(*this, driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, delta, false, segFlags);
+							move.AddLinearSegments(*this, driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (float)delta, false, segFlags);
 						}
 					}
 				}
@@ -1173,7 +1173,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 
 					if (platform.GetDriversBitmap(drive) != 0)				// if any of the drives is local
 					{
-						move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, flags.xyMoving && !flags.checkEndstops, segFlags);
+						move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, (float)delta, flags.xyMoving && !flags.checkEndstops, segFlags);
 					}
 
 					afterPrepare.drivesMoving.SetBit(drive);

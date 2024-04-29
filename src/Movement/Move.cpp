@@ -1514,7 +1514,7 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 
 // Add some linear segments to be executed by a driver, taking account of possible input shaping. This is used by linear axes and by extruders.
 // We never add a segment that starts earlier than any existing segments, but we may add segments when there are none already.
-void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, int32_t steps, bool useInputShaping, MovementFlags moveFlags) noexcept
+void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, float steps, bool useInputShaping, MovementFlags moveFlags) noexcept
 {
 #if 0	//debug
 	debugPrintf("AddLin: st=%" PRIu32 " steps=%" PRIi32 "\n", startTime, steps);
@@ -1523,7 +1523,7 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 #endif
 
 	DriveMovement* const dmp = &dms[logicalDrive];
-	const float stepsPerMm = driveStepsPerMm[logicalDrive] * dda.directionVector[logicalDrive];
+	const float stepsPerMm = steps/dda.totalDistance;
 	const MoveSegment *const oldSegs = dmp->segments;
 
 	//TODO for each movement phase, if the phase is longer than the shaping period then it would be more efficient to add pre-merged segments, rather than add segments and then split and merge them
