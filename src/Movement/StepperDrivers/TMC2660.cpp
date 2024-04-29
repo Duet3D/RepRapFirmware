@@ -706,7 +706,8 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 		threshold -= 128;
 	}
 	const uint32_t fullstepsPerSecond = StepClockRate/maxStallStepInterval;
-	const float speed = ((fullstepsPerSecond << microstepShiftFactor)/reprap.GetMove().DriveStepsPerMm(axisNumber));
+	const float stepsPerMm = reprap.GetMove().DriveStepsPerMm(axisNumber);
+	const float speed = (float)(fullstepsPerSecond << microstepShiftFactor)/stepsPerMm;
 	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep %" PRIx32,
 				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed, registers[SmartEnable] & 0xFFFF);
 }

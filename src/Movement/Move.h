@@ -237,7 +237,7 @@ public:
 	int32_t GetStepsTaken(size_t logicalDrive) const noexcept;
 
 #if HAS_SMART_DRIVERS
-	uint32_t GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept;			// Get the current step interval for this axis or extruder
+	uint32_t GetStepInterval(size_t drive, uint32_t microstepShift) const noexcept;			// Get the current step interval for this axis or extruder
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -476,11 +476,14 @@ inline void Move::InsertDM(DriveMovement *dm) noexcept
 
 // Get the current step interval for this axis or extruder, or 0 if it is not moving
 // This is called from the stepper drivers SPI interface ISR
-inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t axis, uint32_t microstepShift) const noexcept
+inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t drive, uint32_t microstepShift) const noexcept
 {
-	if (simulationMode == SimulationMode::off) { return 0; }
-	AtomicCriticalSectionLocker lock;
-	return dms[axis].GetStepInterval(microstepShift);
+	if (likely(simulationMode == SimulationMode::off))
+	{
+		AtomicCriticalSectionLocker lock;
+		return dms[drive].GetStepInterval(microstepShift);
+	}
+	return 0;
 }
 
 #endif
