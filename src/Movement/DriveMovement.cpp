@@ -106,9 +106,8 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 				// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
 				const float firstDistance = (u + 0.5 * a * seg->GetDuration()) * seg->GetDuration();	// distance moved by the first part of the new segment
 #if 0
-				debugPrintf("merge1, fd=%.2f, dist=%.2f into ", (double)firstDistance, (double)distance);
+				debugPrintf("merge1: ");
 #endif
-				seg->DebugPrint('m');
 				seg->Merge(firstDistance, u, a, moveFlags);
 				distance -= firstDistance;
 				startTime += seg->GetDuration();
@@ -135,7 +134,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 			// The new segment and the existing one now have the same start time and duration, so merge them
 			seg->Merge(distance, u, a, moveFlags);
 #if 0
-			debugPrintf("merge2, dist=%.2f giving:\n", (double)distance);
+			debugPrintf("merge2: ");
 			MoveSegment::DebugPrintList('m', segments);
 #endif
 			return;
@@ -186,12 +185,10 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 		// Calculate the movement parameters
 		bool newDirection;
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
-		if (seg->IsLinear())
+		if (seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0))
 		{
-			// n * mmPerStep = distanceCarriedForwards + u * t
-			// Therefore t = -distanceCarriedForwards/u + n * mmPerStep/u
-			// Calculate the t0 and p coefficients such that t = t0 + p*n
-			t0 = -distanceCarriedForwards/segments->GetU();
+			// n = distanceCarriedForwards + u * t
+			// Therefore t = -distanceCarriedForwards/u + n/u = t0 + n/u
 			if (seg->GetU() < 0)
 			{
 				newDirection = false;
@@ -210,13 +207,10 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 		}
 		else
 		{
-			// n * mmPerStep = distanceCarriedForwards + u * t + 0.5 * a * t^2
-			// Therefore 0.5 * t^2 + u * t/a + (distanceCarriedForwards - mmPerStep * n)/a = 0
-			// Therefore t = -u/a +/- sqrt((u/a)^2 - 2 * (distanceCarriedForwards - mmPerStep * n)/a)
-			// Calculate the t0, p and q coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q)
-			t0 = -(seg->GetU()/seg->GetA());
-
-			// Set up the initial direction
+			// n = distanceCarriedForwards + u * t + 0.5 * a * t^2
+			// Therefore 0.5 * t^2 + u * t/a + (distanceCarriedForwards - n)/a = 0
+			// Therefore t = -u/a +/- sqrt((u/a)^2 - 2 * (distanceCarriedForwards - n)/a)
+			// Calculate the t0, p and q coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q) and set up the initial direction
 			newDirection = (seg->GetU() == 0.0) ? (seg->GetA() > 0.0) : (seg->GetU() > 0.0);
 			float multiplier = (newDirection) ? 1.0 : -1.0;
 			int32_t stepsInInitialDirection = (newDirection) ? netStepsThisSegment : -netStepsThisSegment;
@@ -260,6 +254,12 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 			}
 			p = (2.0 * multiplier)/seg->GetA();
 			q = fsquare(t0) - 2.0 * multiplier * distanceCarriedForwards/seg->GetA();
+#if 0
+			if (std::isinf(q))
+			{
+				debugPrintf("t0=%.1f mult=%.1f dcf=%.3e a=%.4e\n", (double)t0, (double)multiplier, (double)distanceCarriedForwards, (double)seg->GetA());
+			}
+#endif
 		}
 
 		nextStep = 1;
@@ -405,6 +405,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 	{
 #if 0	//DEBUG
 		debugPrintf("step err3, %.2f\n", (double)nextCalcStepTime);
+		DebugPrint();
 #endif
 		state = DMState::stepError3;
 		return false;
@@ -447,7 +448,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 #if 0	//DEBUG
 		if (isExtruder && stepInterval < 20 /*&& nextStep + stepsTillRecalc + 1 < totalSteps*/)
 		{
-			state = DMState::stepError;
+			state = DMState::stepError1;
 			return false;
 		}
 #endif

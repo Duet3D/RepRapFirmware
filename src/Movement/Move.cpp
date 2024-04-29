@@ -260,7 +260,8 @@ void Move::Init() noexcept
 
 	simulationMode = SimulationMode::off;
 	longestGcodeWaitInterval = 0;
-	stepErrors = 0;
+	stepErrors = numHiccups = 0;
+	cumulativeHiccupTime = 0;
 	bedLevellingMoveAvailable = false;
 	activeDMs = nullptr;
 	for (volatile int32_t& acc : movementAccumulators)
@@ -613,18 +614,18 @@ void Move::Diagnostics(MessageType mtype) noexcept
 
 	Platform& p = reprap.GetPlatform();
 	p.MessageF(mtype,
-				"=== Move ===\nSegments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f, stepErrors %u, max steps late %" PRIi32
+				"=== Move ===\nSegments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f, hiccups %u, stepErrors %u, max steps late %" PRIi32
 #if 1	//debug
 				", ebfmin %.2f, ebfmax %.2f"
 #endif
 				"\n",
-						MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, stepErrors, DriveMovement::GetAndClearMaxStepsLate()
+						MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, numHiccups, stepErrors, DriveMovement::GetAndClearMaxStepsLate()
 #if 1
 						, (double)minExtrusionPending, (double)maxExtrusionPending
 #endif
 		);
 	longestGcodeWaitInterval = 0;
-	stepErrors = 0;
+	stepErrors = numHiccups = 0;
 #if 1	//debug
 	minExtrusionPending = maxExtrusionPending = 0.0;
 #endif
@@ -1863,6 +1864,7 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 #endif
 
 		// Calling CheckEndstops may have removed DMs from the active list, also it takes time; so re-check which drives need steps
+		driversStepping = 0;
 		now = StepTimer::GetTimerTicks();
 		dm = activeDMs;
 		while (dm != nullptr && (int32_t)(now - dm->nextStepTime) >= 0)		// if the next step is due
@@ -2026,6 +2028,10 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 			{
 				dmToInsert->directionChanged = false;
 				InsertDM(dmToInsert);
+			}
+			else if (dmToInsert->state != DMState::idle)
+			{
+				dmToInsert->DebugPrint();
 			}
 			dmToInsert = nextToInsert;
 		}

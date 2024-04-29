@@ -111,10 +111,22 @@ public:
 	// Merge the parameters for another segment with the same start time and duration into this one
 	void Merge(float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept;
 
+	// Normalise this segment by removing very small accelerations that cause problems, update t0, return true if it is linear
+	bool NormaliseAndCheckLinear(float distanceCarriedForwards, float& t0) noexcept;
+
+	// Get the next segment in this list
 	MoveSegment *GetNext() const noexcept;
+
+	// Set the next segment in this list
 	void SetNext(MoveSegment *p_next) noexcept;
+
+	// Add a segment to the end of this list
 	void AddToTail(MoveSegment *tail) noexcept;
+
+	// Print this segment to the debug channel
 	void DebugPrint(char ch) const noexcept;
+
+	// Print list of segments
 	static void DebugPrintList(char ch, const MoveSegment *segs) noexcept;
 
 	// Allocate a MoveSegment, clearing the flags
@@ -129,11 +141,11 @@ public:
 	// Return the number of MoveSegment objects that have been created
 	static unsigned int NumCreated() noexcept { return numCreated; }
 
-	static constexpr int32_t MinDuration = 10;
+	static constexpr int32_t MinDuration = 10;				// the minimum duration in step clocks that we consider sensible
 
 protected:
-	static MoveSegment *freeList;
-	static unsigned int numCreated;
+	static MoveSegment *freeList;							// list of recycled segment objects
+	static unsigned int numCreated;							// total number of segment objects created
 
 	MoveSegment *next;										// pointer to the next segment
 	MovementFlags flags;
@@ -152,6 +164,34 @@ inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
 	: next(p_next)
 {
 	// remaining fields are not initialised
+}
+
+// Normalise this segment by removing very small accelerations that cause problems, update t0, return true if it is linear
+// Called only from DriveMovement::NewSegment. Speed critical, hence inline and the rather unusual behaviour.
+// Returns true with:
+//  if the segment is constant speed: t0 = time from start of segment at which the speed would have been/will be/would be zero (for an accelerating move),
+//  if the segment has acceleration or deceleration: t0 = time from start of segment at which the distance would be/will be/would have been zero (for a constant speed move)
+inline bool MoveSegment::NormaliseAndCheckLinear(float distanceCarriedForwards, float& t0) noexcept
+{
+	if (a == 0.0)
+	{
+		// The move is constant speed
+		t0 = -distanceCarriedForwards/u;
+		return true;
+	}
+
+	// The move has acceleration or deceleration, but it may be small enough to cause problems with the calculations.
+	// This is most likely to happen when we square t0 in the subsequent calculations.
+	t0 = -u/a;
+	if (likely(fabsf(t0) < 1.0e5))
+	{
+		return false;
+	}
+
+	// The acceleration/deceleration is small enough to cause calculation problems, so change it to a linear move
+	u += 0.5 * a * duration;
+	a = 0.0;
+	return true;
 }
 
 // Release a MoveSegment.  Not thread-safe.
@@ -206,6 +246,10 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 // Merge the parameters for another segment with the same start time and duration into this one
 inline void MoveSegment::Merge(float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept
 {
+#if 0
+	debugPrintf("merge d=%.2f u=%.4e a=%.4e into ", (double)p_distance, (double)p_u, (double)p_a);
+	DebugPrint('o');
+#endif
 	distance += p_distance;
 	u += p_u;
 	a += p_a;

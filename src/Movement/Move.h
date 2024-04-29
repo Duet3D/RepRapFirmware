@@ -355,6 +355,7 @@ private:
 	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
 	unsigned int stepErrors;							// count of step errors, for diagnostics
+	unsigned int numHiccups;
 
 	uint32_t whenLastMoveAdded;							// The time when we last added a move to any DDA ring
 	uint32_t whenIdleTimerStarted;						// The approximate time at which the state last changed, except we don't record timing -> idle
@@ -362,7 +363,6 @@ private:
 	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
 	uint32_t cumulativeHiccupTime = 0;					// how much we currently delay movement due to hiccups
-	uint32_t numHiccups = 0;
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
 	bool compensateXY;									// If true then we compensate for XY skew by adjusting the Y coordinate; else we adjust the X coordinate

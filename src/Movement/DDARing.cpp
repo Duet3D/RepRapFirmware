@@ -61,7 +61,7 @@ constexpr uint8_t DDARing::objectModelTableDescriptor[] = { 1, 2 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(DDARing)
 
-DDARing::DDARing() noexcept : gracePeriod(DefaultGracePeriod), scheduledMoves(0), completedMoves(0), numHiccups(0)
+DDARing::DDARing() noexcept : gracePeriod(DefaultGracePeriod), scheduledMoves(0), completedMoves(0)
 {
 }
 
@@ -246,6 +246,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 			simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
 			if (cdda->Free())
 			{
+				++completedMoves;
 				++numLookaheadUnderruns;
 			}
 			getPointer = cdda = cdda->GetNext();
@@ -258,6 +259,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 		{
 			if (cdda->Free())
 			{
+				++completedMoves;
 				++numLookaheadUnderruns;
 			}
 			getPointer = cdda = cdda->GetNext();
@@ -682,10 +684,10 @@ bool DDARing::LowPowerOrStallPause(RestorePoint& rp) noexcept
 void DDARing::Diagnostics(MessageType mtype, unsigned int ringNumber) noexcept
 {
 	reprap.GetPlatform().MessageF(mtype,
-									"=== DDARing %u ===\nScheduled moves %" PRIu32 ", completed %" PRIu32 ", hiccups %" PRIu32 ", LaErrors %u, Underruns [%u, %u, %u]\n",
-									ringNumber, scheduledMoves, completedMoves, numHiccups, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns, numNoMoveUnderruns
+									"=== DDARing %u ===\nScheduled moves %" PRIu32 ", completed %" PRIu32 ", LaErrors %u, Underruns [%u, %u, %u]\n",
+									ringNumber, scheduledMoves, completedMoves, numLookaheadErrors, numLookaheadUnderruns, numPrepareUnderruns, numNoMoveUnderruns
 								 );
-	numHiccups = numLookaheadUnderruns = numPrepareUnderruns = numNoMoveUnderruns = numLookaheadErrors = 0;
+	numLookaheadUnderruns = numPrepareUnderruns = numNoMoveUnderruns = numLookaheadErrors = 0;
 }
 
 #if SUPPORT_LASER

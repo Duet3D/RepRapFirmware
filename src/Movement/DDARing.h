@@ -97,9 +97,8 @@ private:
 	unsigned int numDdasInRing;													// The number of DDAs that this ring contains
 	uint32_t gracePeriod;														// The minimum idle time in milliseconds, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
-	uint32_t scheduledMoves;													// Move counters for the code queue
-	volatile uint32_t completedMoves;											// This one is modified by an ISR, hence volatile
-	volatile int32_t numHiccups;												// Modified in the ISR
+	uint32_t scheduledMoves;													// Number of moves scheduled in this ring
+	uint32_t completedMoves;													// Number of moves completed in this ring
 
 	unsigned int numLookaheadUnderruns;											// How many times we have run out of moves to adjust during lookahead
 	unsigned int numPrepareUnderruns;											// How many times we wanted a new move but there were only un-prepared moves in the queue
