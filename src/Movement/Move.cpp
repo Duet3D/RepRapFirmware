@@ -1528,64 +1528,52 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	const float stepsPerMm = steps/dda.totalDistance;
 	const MoveSegment *const oldSegs = dmp->segments;
 
-	//TODO for each movement phase, if the phase is longer than the shaping period then it would be more efficient to add pre-merged segments, rather than add segments and then split and merge them
-	//TODO but we probably need to switch to fixed delay interval (which is probably a good thing to do anyway) to make that easer to do
-	// Acceleration phase
-	if (params.accelClocks > 0.0)
-	{
-		const float accelDistance = params.accelDistance;
-		if (useInputShaping)
-		{
-			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
-			{
-				const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
-				dmp->AddSegment(startTime + axisShaper.GetImpulseDelay(index), (uint32_t)params.accelClocks,
-									accelDistance * factor, dda.startSpeed * factor, dda.acceleration * factor, moveFlags);
-			}
-		}
-		else
-		{
-			dmp->AddSegment(startTime, (uint32_t)params.accelClocks, accelDistance * stepsPerMm, dda.startSpeed * stepsPerMm, dda.acceleration * stepsPerMm, moveFlags);
-		}
-		startTime += params.accelClocks;
-	}
+	// The algorithm for merging segments into existing segments currently assumes that there are no gaps between the existing segments.
+	// To ensure this, we must add all of the acceleration, steady speed, and deceleration parts of a move for one impulse before proceeding to the next impulse
 
-	// Steady speed phase
-	if (params.steadyClocks > 0.0)
+	const uint32_t steadyStartTime = startTime + params.accelClocks;
+	const uint32_t decelStartTime = steadyStartTime + params.steadyClocks;
+	const float steadyDistance = params.decelStartDistance - params.accelDistance;
+	const float decelDistance = dda.totalDistance - params.decelStartDistance;
+
+	if (useInputShaping)
 	{
-		const float steadyDistance = params.decelStartDistance - params.accelDistance;
-		if (useInputShaping)
+		for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 		{
-			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
+			const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
+			if (params.accelClocks > 0.0)
 			{
-				const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
-				dmp->AddSegment(startTime + axisShaper.GetImpulseDelay(index), (uint32_t)params.steadyClocks,
+				dmp->AddSegment(startTime + axisShaper.GetImpulseDelay(index), (uint32_t)params.accelClocks,
+									params.accelDistance * factor, dda.startSpeed * factor, dda.acceleration * factor, moveFlags);
+			}
+			if (params.steadyClocks > 0.0)
+			{
+				dmp->AddSegment(steadyStartTime + axisShaper.GetImpulseDelay(index), (uint32_t)params.steadyClocks,
 												steadyDistance * factor, dda.topSpeed * factor, 0.0, moveFlags);
 			}
-		}
-		else
-		{
-			dmp->AddSegment(startTime, (uint32_t)params.steadyClocks, steadyDistance * stepsPerMm, dda.topSpeed * stepsPerMm, 0.0, moveFlags);
-		}
-		startTime += (uint32_t)params.steadyClocks;
-	}
-
-	// Deceleration phase
-	if (params.decelClocks != 0)
-	{
-		const float decelDistance = dda.totalDistance - params.decelStartDistance;
-		if (useInputShaping)
-		{
-			for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
+			if (params.decelClocks != 0)
 			{
-				const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
-				dmp->AddSegment(startTime + axisShaper.GetImpulseDelay(index), (uint32_t)params.decelClocks,
+				dmp->AddSegment(decelStartTime + axisShaper.GetImpulseDelay(index), (uint32_t)params.decelClocks,
 												decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), moveFlags);
 			}
 		}
-		else
+	}
+	else
+	{
+		if (params.accelClocks > 0.0)
 		{
-			dmp->AddSegment(startTime, (uint32_t)params.decelClocks, decelDistance * stepsPerMm, dda.topSpeed * stepsPerMm, -(dda.deceleration * stepsPerMm), moveFlags);
+			dmp->AddSegment(startTime, (uint32_t)params.accelClocks,
+								params.accelDistance * stepsPerMm, dda.startSpeed * stepsPerMm, dda.acceleration * stepsPerMm, moveFlags);
+		}
+		if (params.steadyClocks > 0.0)
+		{
+			dmp->AddSegment(steadyStartTime, (uint32_t)params.steadyClocks,
+											steadyDistance * stepsPerMm, dda.topSpeed * stepsPerMm, 0.0, moveFlags);
+		}
+		if (params.decelClocks != 0)
+		{
+			dmp->AddSegment(decelStartTime, (uint32_t)params.decelClocks,
+											decelDistance * stepsPerMm, dda.topSpeed * stepsPerMm, -(dda.deceleration * stepsPerMm), moveFlags);
 		}
 	}
 
