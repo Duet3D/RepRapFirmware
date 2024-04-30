@@ -1517,11 +1517,12 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 // We never add a segment that starts earlier than any existing segments, but we may add segments when there are none already.
 void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, float steps, bool useInputShaping, MovementFlags moveFlags) noexcept
 {
-#if 0	//debug
-	debugPrintf("AddLin: st=%" PRIu32 " steps=%" PRIi32 "\n", startTime, steps);
-	dda.DebugPrint("addlin");
-	params.DebugPrint();
-#endif
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
+	{
+		debugPrintf("AddLin: st=%" PRIu32 " steps=%.1f\n", startTime, (double)steps);
+		dda.DebugPrint("addlin");
+		params.DebugPrint();
+	}
 
 	DriveMovement* const dmp = &dms[logicalDrive];
 	const float stepsPerMm = steps/dda.totalDistance;
@@ -2229,8 +2230,9 @@ void Move::InsertHiccup(uint32_t duration) noexcept
 void Move::OnEndstopOrZProbeStatesChanged() noexcept
 {
 	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
-	CheckEndstops(reprap.GetPlatform(), true);
+	const bool wakeAsyncSender = CheckEndstops(reprap.GetPlatform(), true);
 	RestoreBasePriority(oldPrio);										// allow step interrupts again
+	if (wakeAsyncSender) { CanInterface::WakeAsyncSender(); }
 }
 
 #endif

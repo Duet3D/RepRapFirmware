@@ -1280,7 +1280,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		}
 #endif
 
-		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves))		// show the prepared DDA if debug enabled for both modules
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintAllMoves))		// show the prepared DDA if debug enabled
 		{
 			DebugPrint("pr");
 		}

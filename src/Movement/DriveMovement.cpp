@@ -9,6 +9,7 @@
 #include "MoveTiming.h"
 #include "DDA.h"
 #include "Move.h"
+#include "MoveDebugFlags.h"
 #include "StepTimer.h"
 #include <Math/Isqrt.h>
 #include <Platform/Platform.h>
@@ -66,9 +67,10 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 		distance += extraSpeed * (float)duration;
 	}
 
-#if 0
-	debugPrintf("Adding seg: st=%" PRIu32 " t=%" PRIu32 " dist=%.2f u=%.3e a=%.3e\n", startTime, duration, (double)distance, (double)u, (double)a);
-#endif
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
+	{
+		debugPrintf("Adding seg: st=%" PRIu32 " t=%" PRIu32 " dist=%.2f u=%.3e a=%.3e\n", startTime, duration, (double)distance, (double)u, (double)a);
+	}
 
 	MoveSegment *prev = nullptr;
 
@@ -395,7 +397,9 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		break;
 
 	default:
+#if 0
 		debugPrintf("DMstate %u, quitting\n", (unsigned int)state);
+#endif
 		return false;
 	}
 
