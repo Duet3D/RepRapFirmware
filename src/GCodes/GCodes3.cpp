@@ -1318,7 +1318,7 @@ void GCodes::ChangeExtrusionFactor(unsigned int extruder, float factor) noexcept
 // The required next state must be set up (e.g. by gb.SetState()) before calling this
 void GCodes::DeployZProbe(GCodeBuffer& gb) noexcept
 {
-	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(currentZProbeNumber);
+	auto zp = platform.GetEndstops().GetZProbe(currentZProbeNumber);
 	if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none && !zp->IsDeployedByUser())
 	{
 		String<StringLength20> fileName;
@@ -1336,7 +1336,7 @@ void GCodes::DeployZProbe(GCodeBuffer& gb) noexcept
 // The required next state must be set up (e.g. by gb.SetState()) before calling this
 void GCodes::RetractZProbe(GCodeBuffer& gb) noexcept
 {
-	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(currentZProbeNumber);
+	auto zp = platform.GetEndstops().GetZProbe(currentZProbeNumber);
 	if (zp.IsNotNull() && zp->GetProbeType() != ZProbeType::none && !zp->IsDeployedByUser())
 	{
 		String<StringLength20> fileName;

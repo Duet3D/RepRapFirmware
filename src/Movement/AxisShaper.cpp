@@ -76,7 +76,6 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 	bool seen = false;
 
 	// If we are changing the type, frequency, damping or custom parameters, we will change multiple stored values used by the motion planner, so wait until movement has stopped.
-	// Changing just the minimum acceleration is OK because no other variables depend on it.
 	if (gb.SeenAny("FSPHT"))
 	{
 		if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
@@ -197,6 +196,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[0] = 1.0/j;
 				coefficients[1] = coefficients[0] + 3.0 * k/j;
 				coefficients[2] = coefficients[1] + 3.0 * fsquare(k)/j;
+				coefficients[3] = 1.0 - coefficients[0] - coefficients[1] - coefficients[2];
 			}
 			delays[0] = 0;
 			delays[1] = 0.5 * dampedPeriod;
@@ -212,6 +212,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[1] = coefficients[0] + 4.0 * k/j;
 				coefficients[2] = coefficients[1] + 6.0 * fsquare(k)/j;
 				coefficients[3] = coefficients[2] + 4.0 * fcube(k)/j;
+				coefficients[4] = 1.0 - coefficients[0] - coefficients[1] - coefficients[2] - coefficients[3];
 			}
 			delays[0] = 0;
 			delays[1] = 0.5 * dampedPeriod;
@@ -245,6 +246,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[1] = (0.11275 + 0.23698)                     + (0.76632 + 0.61164)                     * zeta + (3.29160 - 2.57850)                     * zetaSquared + (-1.44380 + 4.85220)                     * zetaCubed;
 				coefficients[2] = (0.11275 + 0.23698 + 0.30008)           + (0.76632 + 0.61164 - 0.19062)           * zeta + (3.29160 - 2.57850 - 2.14560)           * zetaSquared + (-1.44380 + 4.85220 + 0.13744)           * zetaCubed;
 				coefficients[3] = (0.11275 + 0.23698 + 0.30008 + 0.23775) + (0.76632 + 0.61164 - 0.19062 - 0.73297) * zeta + (3.29160 - 2.57850 - 2.14560 + 0.46885) * zetaSquared + (-1.44380 + 4.85220 + 0.13744 - 2.08650) * zetaCubed;
+				coefficients[4] = 1.0 - coefficients[0] - coefficients[1] - coefficients[2] - coefficients[3];
 
 				delays[0] = 0;
 				delays[1] = (0.49974 + (0.23834)  * zeta + (0.44559)  * zetaSquared + (12.4720) * zetaCubed) * dampedPeriod;

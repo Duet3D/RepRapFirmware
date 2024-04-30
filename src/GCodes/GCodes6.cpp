@@ -113,7 +113,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 ReadLockedPointer<ZProbe> GCodes::SetZProbeNumber(GCodeBuffer& gb, char probeLetter) THROWS(GCodeException)
 {
 	const uint32_t probeNumber = (gb.Seen(probeLetter)) ? gb.GetLimitedUIValue(probeLetter, MaxZProbes) : 0;
-	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(probeNumber);
+	auto zp = platform.GetEndstops().GetZProbe(probeNumber);
 	if (zp.IsNull())
 	{
 		gb.ThrowGCodeException("Z probe %u not found", probeNumber);
