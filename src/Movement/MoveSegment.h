@@ -26,6 +26,8 @@
 #include <Platform/Tasks.h>
 #include <new>		// for align_val_t
 
+#define SEGMENT_DEBUG	(0)
+
 union MovementFlags
 {
 	uint32_t all;												// this is to provide a means to clear all the flags n one go
@@ -234,7 +236,7 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 	MoveSegment *const secondSeg = Allocate(next);
 	const float firstDistance = (u + 0.5 * a * firstDuration) * firstDuration;
 	secondSeg->SetParameters(startTime + firstDuration, duration - (float)firstDuration, distance - firstDistance, u + a * (float)firstDuration, a, flags);
-#if 0
+#if SEGMENT_DEBUG
 	debugPrintf("split at %" PRIu32 ", fd=%.2f, sd=%.2f\n", firstDuration, (double)firstDistance, (double)(distance - firstDistance));
 #endif
 	duration = firstDuration;
@@ -246,7 +248,7 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 // Merge the parameters for another segment with the same start time and duration into this one
 inline void MoveSegment::Merge(float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept
 {
-#if 0
+#if SEGMENT_DEBUG
 	debugPrintf("merge d=%.2f u=%.4e a=%.4e into ", (double)p_distance, (double)p_u, (double)p_a);
 	DebugPrint('o');
 #endif

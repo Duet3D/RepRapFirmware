@@ -107,7 +107,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 			{
 				// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
 				const float firstDistance = (u + 0.5 * a * seg->GetDuration()) * seg->GetDuration();	// distance moved by the first part of the new segment
-#if 1
+#if SEGMENT_DEBUG
 				debugPrintf("merge1: ");
 #endif
 				seg->Merge(firstDistance, u, a, moveFlags);
@@ -129,22 +129,22 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 			else
 			{
 				// Make the new segment duration fit the existing one by adjusting the initial speed slightly
-#if 1
+#if SEGMENT_DEBUG
 				debugPrintf("Adjusting t=%" PRIu32 " u=%.4e a=%.4e", duration, (double)u, (double)a);
 #endif
 				u = ((u * duration) - (a * (float)timeDifference * (duration + 0.5 * (float)timeDifference)))/seg->GetDuration();
 				duration = seg->GetDuration();
-#if 1
+#if SEGMENT_DEBUG
 				debugPrintf(" to t=%" PRIu32 " u=%.4e a=%.4e\n", duration, (double)u, (double)a);
 #endif
 			}
 
 			// The new segment and the existing one now have the same start time and duration, so merge them
-#if 1
+#if SEGMENT_DEBUG
 			debugPrintf("merge2: ");
 #endif
 			seg->Merge(distance, u, a, moveFlags);
-#if 1
+#if SEGMENT_DEBUG
 			MoveSegment::DebugPrintList('m', segments);
 #endif
 			return;
@@ -165,7 +165,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 	{
 		prev->SetNext(seg);
 	}
-#if 1
+#if SEGMENT_DEBUG
 	MoveSegment::DebugPrintList('r', segments);
 #endif
 }
