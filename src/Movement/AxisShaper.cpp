@@ -112,49 +112,48 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		const float dampedFrequency = frequency * sqrtOneMinusZetaSquared;
 		const float dampedPeriod = StepClockRate/dampedFrequency;
 		const float k = expf(-zeta * Pi/sqrtOneMinusZetaSquared);
-		delays[0] = 0;
+		delays[0] = 0;								// this never changes
+		coefficients[0] = 1.0;						// set this up in case of an early return
+
 		switch (type.RawValue())
 		{
 		case InputShaperType::none:
 			numImpulses = 1;
-			coefficients[0] = 1.0;
 			break;
 
 		case InputShaperType::custom:
 			{
 				// Get the coefficients
-				size_t numAmplitudes = MaxImpulses;
+				size_t numAmplitudes = MaxImpulses - 1;
 				gb.MustSee('H');
 				gb.GetFloatArray(coefficients, numAmplitudes, false);
 
 				// Get the impulse delays, if provided
 				if (gb.Seen('T'))
 				{
-					size_t numDelays = MaxImpulses;
-					gb.GetFloatArray(delays, numDelays, true);
+					size_t numDelays = MaxImpulses - 1;
+					gb.GetFloatArray(delays + 1, numDelays, true);
 
 					// Check we have the same number of both
 					if (numDelays != numAmplitudes)
 					{
 						reply.copy("Number of delays must be same as number of amplitudes");
 						type = InputShaperType::none;
-						delays[0] = 0;
-						coefficients[0] = 1.0;
 						return GCodeResult::error;
 					}
-					for (unsigned int i = 0; i < numAmplitudes; ++i)
+					for (unsigned int i = 1; i <= numAmplitudes; ++i)
 					{
 						delays[i] *= StepClockRate;			// convert from seconds to step clocks
 					}
 				}
 				else
 				{
-					for (unsigned int i = 0; i < numAmplitudes; ++i)
+					for (unsigned int i = 1; i <= numAmplitudes; ++i)
 					{
 						delays[i] = 0.5 * dampedPeriod * i;
 					}
 				}
-				numImpulses = numAmplitudes;
+				numImpulses = numAmplitudes + 1;
 			}
 			break;
 
@@ -169,9 +168,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			    const float sum = (a1 + a2 + a3);
 			    coefficients[0] = a3/sum;
 			    coefficients[1] = a2/sum;
-			    coefficients[2] = a1/sum;
 			}
-			delays[0] = 0;
 			delays[1] = 0.375 * dampedPeriod;
 			delays[2] = 2 * delays[1];
 			numImpulses = 3;
@@ -182,9 +179,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				const float j = fsquare(1.0 + k);
 				coefficients[0] = 1.0/j;
 				coefficients[1] = 2.0 * k/j;
-				coefficients[2] = 1.0 - coefficients[0] - coefficients[1];
 			}
-			delays[0] = 0;
 			delays[1] = 0.5 * dampedPeriod;
 			delays[2] = dampedPeriod;
 			numImpulses = 3;
@@ -194,11 +189,9 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			{
 				const float j = fcube(1.0 + k);
 				coefficients[0] = 1.0/j;
-				coefficients[1] = coefficients[0] + 3.0 * k/j;
-				coefficients[2] = coefficients[1] + 3.0 * fsquare(k)/j;
-				coefficients[3] = 1.0 - coefficients[0] - coefficients[1] - coefficients[2];
+				coefficients[1] = 3.0 * k/j;
+				coefficients[2] = 3.0 * fsquare(k)/j;
 			}
-			delays[0] = 0;
 			delays[1] = 0.5 * dampedPeriod;
 			delays[2] = dampedPeriod;
 			delays[3] = 1.5 * dampedPeriod;
@@ -209,12 +202,10 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			{
 				const float j = fsquare(fsquare(1.0 + k));
 				coefficients[0] = 1.0/j;
-				coefficients[1] = coefficients[0] + 4.0 * k/j;
-				coefficients[2] = coefficients[1] + 6.0 * fsquare(k)/j;
-				coefficients[3] = coefficients[2] + 4.0 * fcube(k)/j;
-				coefficients[4] = 1.0 - coefficients[0] - coefficients[1] - coefficients[2] - coefficients[3];
+				coefficients[1] = 4.0 * k/j;
+				coefficients[2] = 6.0 * fsquare(k)/j;
+				coefficients[3] = 4.0 * fcube(k)/j;
 			}
-			delays[0] = 0;
 			delays[1] = 0.5 * dampedPeriod;
 			delays[2] = dampedPeriod;
 			delays[3] = 1.5 * dampedPeriod;
@@ -226,11 +217,9 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			{
 				const float zetaSquared = fsquare(zeta);
 				const float zetaCubed = zetaSquared * zeta;
-				coefficients[0] = (0.16054)                     + (0.76699)                     * zeta + (2.26560)                     * zetaSquared + (-1.22750)                     * zetaCubed;
-				coefficients[1] = (0.16054 + 0.33911)           + (0.76699 + 0.45081)           * zeta + (2.26560 - 2.58080)           * zetaSquared + (-1.22750 + 1.73650)           * zetaCubed;
-				coefficients[2] = (0.16054 + 0.33911 + 0.34089) + (0.76699 + 0.45081 - 0.61533) * zeta + (2.26560 - 2.58080 - 0.68765) * zetaSquared + (-1.22750 + 1.73650 + 0.42261) * zetaCubed;
-				coefficients[3] = 1.0 - coefficients[0] - coefficients[1] - coefficients[2];
-				delays[0] = 0;
+				coefficients[0] = (0.16054) + ( 0.76699)	* zeta + ( 2.26560)	* zetaSquared + (-1.22750)	* zetaCubed;
+				coefficients[1] = (0.33911) + ( 0.45081)	* zeta + (-2.58080)	* zetaSquared + ( 1.73650)	* zetaCubed;
+				coefficients[2] = (0.34089)	+ (-0.61533)	* zeta + (-0.68765)	* zetaSquared + ( 0.42261)	* zetaCubed;
 				delays[1] = (0.49890 + ( 0.16270) * zeta + (-0.54262) * zetaSquared + (6.16180) * zetaCubed) * dampedPeriod;
 				delays[2] = (0.99748 + ( 0.18382) * zeta + (-1.58270) * zetaSquared + (8.17120) * zetaCubed) * dampedPeriod;
 				delays[3] = (1.49920 + (-0.09297) * zeta + (-0.28338) * zetaSquared + (1.85710) * zetaCubed) * dampedPeriod;
@@ -242,13 +231,11 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			{
 				const float zetaSquared = fsquare(zeta);
 				const float zetaCubed = zetaSquared * zeta;
-				coefficients[0] = (0.11275)                               + 0.76632                                 * zeta + (3.29160)                               * zetaSquared + (-1.44380)                               * zetaCubed;
-				coefficients[1] = (0.11275 + 0.23698)                     + (0.76632 + 0.61164)                     * zeta + (3.29160 - 2.57850)                     * zetaSquared + (-1.44380 + 4.85220)                     * zetaCubed;
-				coefficients[2] = (0.11275 + 0.23698 + 0.30008)           + (0.76632 + 0.61164 - 0.19062)           * zeta + (3.29160 - 2.57850 - 2.14560)           * zetaSquared + (-1.44380 + 4.85220 + 0.13744)           * zetaCubed;
-				coefficients[3] = (0.11275 + 0.23698 + 0.30008 + 0.23775) + (0.76632 + 0.61164 - 0.19062 - 0.73297) * zeta + (3.29160 - 2.57850 - 2.14560 + 0.46885) * zetaSquared + (-1.44380 + 4.85220 + 0.13744 - 2.08650) * zetaCubed;
-				coefficients[4] = 1.0 - coefficients[0] - coefficients[1] - coefficients[2] - coefficients[3];
+				coefficients[0] = (0.11275)	+ ( 0.76632)	* zeta + ( 3.29160)	* zetaSquared + (-1.44380)	* zetaCubed;
+				coefficients[1] = (0.23698)	+ ( 0.61164)	* zeta + (-2.57850)	* zetaSquared + ( 4.85220)	* zetaCubed;
+				coefficients[2] = (0.30008)	+ (-0.19062)	* zeta + (-2.14560)	* zetaSquared + ( 0.13744)	* zetaCubed;
+				coefficients[3] = (0.23775)	+ (-0.73297)	* zeta + ( 0.46885) * zetaSquared + (-2.08650)	* zetaCubed;
 
-				delays[0] = 0;
 				delays[1] = (0.49974 + (0.23834)  * zeta + (0.44559)  * zetaSquared + (12.4720) * zetaCubed) * dampedPeriod;
 				delays[2] = (0.99849 + (0.29808)  * zeta + (-2.36460) * zetaSquared + (23.3990) * zetaCubed) * dampedPeriod;
 				delays[3] = (1.49870 + (0.10306)  * zeta + (-2.01390) * zetaSquared + (17.0320) * zetaCubed) * dampedPeriod;
@@ -257,6 +244,14 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			numImpulses = 5;
 			break;
 		}
+
+		// The sum of the coefficients must total 1, use this to fill in the last coefficient
+		float sum = 0.0;
+		for (size_t i = 0; i + 1 < numImpulses; ++i)
+		{
+			sum += coefficients[i];
+		}
+		coefficients[numImpulses - 1] = 1.0 - sum;
 
 		reprap.MoveUpdated();
 
