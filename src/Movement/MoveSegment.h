@@ -184,14 +184,16 @@ inline bool MoveSegment::NormaliseAndCheckLinear(float distanceCarriedForwards, 
 
 	// The move has acceleration or deceleration, but it may be small enough to cause problems with the calculations.
 	// This is most likely to happen when we square t0 in the subsequent calculations.
+	// The maximum value that can be represented by a float is a little more than 3.4e38, so t0 values greater than about 1e19 may cause trouble
 	t0 = -u/a;
-	if (likely(fabsf(t0) < 1.0e5))
+	if (likely(fabsf(t0) <= 1.0e19))
 	{
 		return false;
 	}
 
 	// The acceleration/deceleration is small enough to cause calculation problems, so change it to a linear move
 	u += 0.5 * a * duration;
+	t0 = -distanceCarriedForwards/u;
 	a = 0.0;
 	return true;
 }
