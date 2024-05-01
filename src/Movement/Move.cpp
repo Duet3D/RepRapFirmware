@@ -1643,6 +1643,12 @@ void Move::Interrupt() noexcept
 			// Generate steps for the current move segments
 			StepDrivers(p, now);								// check endstops if necessary and step the drivers
 
+			if (activeDMs == nullptr)
+			{
+				WakeMoveTaskFromISR();							// we may have just completed a special move, so wake up the Move task so that it can notice that
+				break;
+			}
+
 			// Schedule a callback at the time when the next step is due, and quit unless it is due immediately
 			if (!ScheduleNextStepInterrupt())
 			{
