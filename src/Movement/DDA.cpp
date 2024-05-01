@@ -274,7 +274,6 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 			else
 			{
 				// Raw motor move on a visible axis
-				const Move& move = reprap.GetMove();
 				endPoint[drive] = move.MotorMovementToSteps(drive, nextMove.coords[drive]);
 				const int32_t delta = endPoint[drive] - positionNow[drive];
 				directionVector[drive] = (float)delta/move.DriveStepsPerMm(drive);
@@ -1171,7 +1170,11 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						move.SetHomingDda(drive, this);
 					}
 
-					if (platform.GetDriversBitmap(drive) != 0)				// if any of the drives is local
+					if (platform.GetDriversBitmap(drive) != 0					// if any of the drives is local
+#if SUPPORT_CAN_EXPANSION
+						|| flags.checkEndstops									// if checking endstops or a Z probe, create segments even if there are no local drives involved
+#endif
+					   )
 					{
 						move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, (float)delta, flags.xyMoving && !flags.checkEndstops, segFlags);
 					}
