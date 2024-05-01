@@ -27,6 +27,7 @@
 #endif
 
 StepTimer * volatile StepTimer::pendingList = nullptr;
+uint32_t StepTimer::movementDelay = 0;											// how many timer ticks the move timer is behind the raw timer
 
 #if STEP_TIMER_DEBUG
 uint32_t StepTimer::maxInterval = 0;
@@ -404,6 +405,13 @@ void StepTimer::SetCallback(TimerCallbackFunction cb, CallbackParameter param) n
 bool StepTimer::ScheduleCallbackFromIsr(Ticks when) noexcept
 {
 	whenDue = when;
+	return ScheduleCallbackFromIsr();
+}
+
+// As ScheduleCallback but base priority >= NvicPriorityStep when called. Can be called from within a callback.
+bool StepTimer::ScheduleMovementCallbackFromIsr(Ticks when) noexcept
+{
+	whenDue = when + movementDelay;
 	return ScheduleCallbackFromIsr();
 }
 

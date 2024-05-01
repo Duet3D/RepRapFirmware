@@ -305,8 +305,6 @@ private:
 	void InsertDM(DriveMovement *dm) noexcept;										// insert a DM into the active list, keeping it in step time order
 	void SetDirection(Platform& p, size_t axisOrExtruder, bool direction) noexcept;	// set the direction of a driver, observing timing requirements
 
-	void InsertHiccup(uint32_t duration) noexcept;
-
 	// Move task stack size
 	// 250 is not enough when Move and DDA debug are enabled
 	// deckingman's system (MB6HC with CAN expansion) needs at least 365 in 3.3beta3
@@ -362,7 +360,7 @@ private:
 
 	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
-	uint32_t cumulativeHiccupTime = 0;					// how much we currently delay movement due to hiccups
+	uint32_t lastReportedMovementDelay;					// The movement delay when we last reported it in the diagnostics
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
 	bool compensateXY;									// If true then we compensate for XY skew by adjusting the Y coordinate; else we adjust the X coordinate
@@ -453,7 +451,7 @@ inline __attribute__((always_inline)) bool Move::ScheduleNextStepInterrupt() noe
 {
 	if (activeDMs != nullptr)
 	{
-		return timer.ScheduleCallbackFromIsr(activeDMs->nextStepTime);
+		return timer.ScheduleMovementCallbackFromIsr(activeDMs->nextStepTime);
 	}
 	return false;
 }

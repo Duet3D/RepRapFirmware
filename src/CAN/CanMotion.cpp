@@ -41,7 +41,6 @@ namespace CanMotion
 	static CanMessageBuffer *movementBufferList = nullptr;
 	static DriversStopList *volatile stopList = nullptr;
 	static uint32_t currentMoveClocks;
-	static volatile uint32_t hiccupToInsert = 0;
 	static volatile bool revertAll = false;
 	static volatile bool revertedAll = false;
 	static volatile uint32_t whenRevertedAll;
@@ -304,8 +303,9 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 
 void CanMotion::InsertHiccup(uint32_t numClocks) noexcept
 {
-	hiccupToInsert += numClocks;
-	CanInterface::WakeAsyncSender();
+	//TODO sort out how we tell expansion boards about hiccups
+//	hiccupToInsert += numClocks;
+//	CanInterface::WakeAsyncSender();
 }
 
 // Flag a CAN-connected driver as not moving when we haven't sent the movement message yet

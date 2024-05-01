@@ -170,7 +170,7 @@ pre(state == executing || state == frozen || state == completed)
 		return clocksNeeded;
 	case committed:
 		{
-			const int32_t timeExecuting = (int32_t)(StepTimer::GetTimerTicks() - afterPrepare.moveStartTime);
+			const int32_t timeExecuting = (int32_t)(StepTimer::GetMovementTimerTicks() - afterPrepare.moveStartTime);
 			return (timeExecuting <= 0) ? clocksNeeded							// move has not started yet
 					: ((uint32_t)timeExecuting > clocksNeeded) ? 0				// move has completed
 						: clocksNeeded - (uint32_t)timeExecuting;				// move is part way through
@@ -1090,7 +1090,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 	acceleration = params.acceleration;
 	deceleration = params.deceleration;
 
-	const uint32_t now = StepTimer::GetTimerTicks();
+	const uint32_t now = StepTimer::GetMovementTimerTicks();
 	afterPrepare.moveStartTime =  (prev->state == committed && (int32_t)(prev->afterPrepare.moveStartTime + prev->clocksNeeded - now) >= 0)
 									? prev->afterPrepare.moveStartTime + prev->clocksNeeded		// this move follows directly after the previous one
 									: now + MoveTiming::AbsoluteMinimumPreparedTime;			// else this move is the first so start it after a short delay
@@ -1309,7 +1309,7 @@ bool DDA::HasExpired() const noexcept
 	{
 		return reprap.GetMove().AreDrivesStopped(afterPrepare.drivesMoving);
 	}
-	return (int32_t)(StepTimer::GetTimerTicks() - (afterPrepare.moveStartTime + clocksNeeded)) >= 0;
+	return (int32_t)(StepTimer::GetMovementTimerTicks() - (afterPrepare.moveStartTime + clocksNeeded)) >= 0;
 }
 
 // Take a unit positive-hyperquadrant vector, and return the factor needed to obtain
@@ -1497,7 +1497,7 @@ uint32_t DDA::ManageLaserPower() const noexcept
 		return 0;
 	}
 
-	const uint32_t clocksMoving = StepTimer::GetTimerTicks() - afterPrepare.moveStartTime;
+	const uint32_t clocksMoving = StepTimer::GetMovementTimerTicks() - afterPrepare.moveStartTime;
 	if (clocksMoving >= clocksNeeded)			// this also covers the case of now < startTime
 	{
 		// Something has gone wrong with the timing. Set zero laser power, but try again soon.

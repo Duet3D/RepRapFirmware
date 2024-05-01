@@ -455,7 +455,7 @@ DDA *DDARing::GetCurrentDDA() const noexcept
 {
 	TaskCriticalSectionLocker lock;
 	DDA *cdda = getPointer;
-	const uint32_t now = StepTimer::GetTimerTicks();
+	const uint32_t now = StepTimer::GetMovementTimerTicks();
 	while (cdda->GetState() == DDA::committed)
 	{
 		const uint32_t timeRunning = cdda->GetMoveStartTime() - now;
@@ -731,7 +731,7 @@ uint32_t DDARing::ManageIOBits() noexcept
 		}
 
 		// Find the DDA whose IO port bits we should set now
-		const uint32_t now = StepTimer::GetTimerTicks() + pc.GetAdvanceClocks();
+		const uint32_t now = StepTimer::GetMovementTimerTicks() + pc.GetAdvanceClocks();
 		uint32_t moveEndTime = cdda->GetMoveStartTime();
 		DDA::DDAState st = cdda->GetState();
 		do

@@ -261,7 +261,7 @@ void Move::Init() noexcept
 	simulationMode = SimulationMode::off;
 	longestGcodeWaitInterval = 0;
 	stepErrors = numHiccups = 0;
-	cumulativeHiccupTime = 0;
+	lastReportedMovementDelay = 0;
 	bedLevellingMoveAvailable = false;
 	activeDMs = nullptr;
 	for (volatile int32_t& acc : movementAccumulators)
@@ -612,14 +612,18 @@ void Move::Diagnostics(MessageType mtype) noexcept
 #endif
 	scratchString.copy(GetCompensationTypeString());
 
+	const uint32_t currentMovementDelay = StepTimer::GetMovementDelay();
+	const float delayToReport = (currentMovementDelay - lastReportedMovementDelay) * (1000.0/(float)StepTimer::GetTickRate());
+	lastReportedMovementDelay = currentMovementDelay;
+
 	Platform& p = reprap.GetPlatform();
 	p.MessageF(mtype,
-				"=== Move ===\nSegments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f, hiccups %u, stepErrors %u, max steps late %" PRIi32
+				"=== Move ===\nSegments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f, hiccups %u, hiccup time %.2fms, stepErrors %u, max steps late %" PRIi32
 #if 1	//debug
 				", ebfmin %.2f, ebfmax %.2f"
 #endif
 				"\n",
-						MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, numHiccups, stepErrors, DriveMovement::GetAndClearMaxStepsLate()
+						MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, numHiccups, (double)delayToReport, stepErrors, DriveMovement::GetAndClearMaxStepsLate()
 #if 1
 						, (double)minExtrusionPending, (double)maxExtrusionPending
 #endif
@@ -1632,7 +1636,7 @@ void Move::Interrupt() noexcept
 	if (activeDMs != nullptr)
 	{
 		Platform& p = reprap.GetPlatform();
-		uint32_t now = StepTimer::GetTimerTicks();
+		uint32_t now = StepTimer::GetMovementTimerTicks();
 		const uint32_t isrStartTime = now;
 		for (;;)
 		{
@@ -1646,9 +1650,9 @@ void Move::Interrupt() noexcept
 			}
 
 			// The next step is due immediately. Check whether we have been in this ISR for too long already and need to take a break
-			now = StepTimer::GetTimerTicks();
-			const uint32_t clocksTaken = now - isrStartTime;
-			if (clocksTaken >= MoveTiming::MaxStepInterruptTime)
+			now = StepTimer::GetMovementTimerTicks();
+			const int32_t clocksTaken = (int32_t)(now - isrStartTime);
+			if (clocksTaken >= (int32_t)MoveTiming::MaxStepInterruptTime)
 			{
 				// Force a break by updating the move start time.
 				++numHiccups;
@@ -1660,18 +1664,27 @@ void Move::Interrupt() noexcept
 #if SUPPORT_CAN_EXPANSION
 					hiccupTimeInserted += hiccupTime;
 #endif
-					InsertHiccup(hiccupTime);
+					StepTimer::IncreaseMovementDelay(hiccupTime);
 
 					// Reschedule the next step interrupt. This time it should succeed if the hiccup time was long enough.
 					if (!ScheduleNextStepInterrupt())
 					{
 #if SUPPORT_CAN_EXPANSION
-						CanMotion::InsertHiccup(hiccupTimeInserted);
+# if SUPPORT_REMOTE_COMMANDS
+						if (CanInterface::InExpansionMode())
+						{
+							//TODO tell the main board we are behind schedule
+						}
+						else
+# endif
+						{
+							CanMotion::InsertHiccup(hiccupTimeInserted);		// notify expansion boards of the increased delay
+						}
 #endif
 						return;
 					}
 					// We probably had an interrupt that delayed us further. Recalculate the hiccup length, also we increase the hiccup time on each iteration.
-					now = StepTimer::GetTimerTicks();
+					now = StepTimer::GetMovementTimerTicks();
 				}
 			}
 		}
@@ -1854,7 +1867,7 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 
 		// Calling CheckEndstops may have removed DMs from the active list, also it takes time; so re-check which drives need steps
 		driversStepping = 0;
-		now = StepTimer::GetTimerTicks();
+		now = StepTimer::GetMovementTimerTicks();
 		dm = activeDMs;
 		while (dm != nullptr && (int32_t)(now - dm->nextStepTime) >= 0)		// if the next step is due
 		{
@@ -1895,10 +1908,11 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 	{
 		// Wait until step low and direction setup time have elapsed
 		uint32_t lastStepPulseTime = lastStepLowTime;
-		while (now - lastStepPulseTime < p.GetSlowDriverStepLowClocks() || now - lastDirChangeTime < p.GetSlowDriverDirSetupClocks())
+		uint32_t rawNow;
+		do
 		{
-			now = StepTimer::GetTimerTicks();
-		}
+			rawNow = StepTimer::GetTimerTicks();
+		} while (rawNow - lastStepPulseTime < p.GetSlowDriverStepLowClocks() || rawNow - lastDirChangeTime < p.GetSlowDriverDirSetupClocks());
 
 		StepPins::StepDriversHigh(driversStepping);					// step drivers high
 		lastStepPulseTime = StepTimer::GetTimerTicks();
@@ -2191,24 +2205,6 @@ void Move::ResetExtruderPositions() noexcept
 	{
 		dms[drive].SetMotorPosition(0);
 	}
-}
-
-// Insert a hiccup of the specified duration
-void Move::InsertHiccup(uint32_t duration) noexcept
-{
-	cumulativeHiccupTime += duration;
-#if SUPPORT_CAN_EXPANSION
-# if SUPPORT_REMOTE_COMMANDS
-	if (CanInterface::InExpansionMode())
-	{
-		//TODO request the main board to introduce a hiccup
-	}
-	else
-# endif
-	{
-		//TODO notify CAN-connected expansion boards of the change
-	}
-#endif
 }
 
 #if SUPPORT_CAN_EXPANSION
