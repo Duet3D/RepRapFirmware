@@ -78,25 +78,71 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 	// TODO probably only need to shut out task switching here, or shut out the step interrupt but leave the UART interrupt enabled
 	AtomicCriticalSectionLocker lock;
 
-	// Find the earliest existing segment that the new one will overlap
+	// Find the earliest existing segment that the new one will come before (i.e. new one starts before existing one) or will overlap (i.e. the new one starts before the existing segment ends)
 	MoveSegment *seg = segments;
 	int32_t offset;
 	while (seg != nullptr)
 	{
 		offset = (int32_t)(startTime - seg->GetStartTime());
-		if (   offset <= 0												// new segment starts before the old one does
-			|| (float)(offset + MoveSegment::MinDuration) < (uint32_t)seg->GetDuration()
-		   )
+		if (offset <= 0)														// if the new segment starts before the existing one starts, or at the same time
 		{
-			// The segment we wish to add starts before the one at 'seg' ends. It should not start before the one at 'seg' starts, but if it does then just postpone it.
-			// If it starts significantly later, split the existing segment
-			if (offset < MoveSegment::MinDuration)
+			if (offset >= -MoveSegment::MinDuration)							// if it starts only slightly earlier
 			{
-				startTime = seg->GetStartTime();
+				startTime = seg->GetStartTime();								// then just delay the new segment slightly, to avoid creating a tiny segment
+				offset = 0;
 			}
-			else
+			else if (offset + (int32_t)duration <= MoveSegment::MinDuration)	// if the new segment doesn't overlap the existing one significantly
 			{
-				// Split the existing segment
+				if (offset + (int32_t)duration > 0)								// if the new segment does overlap the existing one a little
+				{
+					// Shorten the new segment slightly so than it fits before the existing segment
+#if SEGMENT_DEBUG
+					debugPrintf("Adjusting t=%" PRIu32 " u=%.4e a=%.4e", duration, (double)u, (double)a);
+#endif
+					const int32_t durationIncrease = -(int32_t)duration - offset;	// get the (negative) increase in segment duration
+					const float oldDuration = (float)duration;
+					duration = -offset;
+					u = (u * oldDuration - a * durationIncrease * (oldDuration + 0.5 * durationIncrease))/(float)duration;
+#if SEGMENT_DEBUG
+					debugPrintf(" to t=%" PRIu32 " u=%.4e a=%.4e\n", duration, (double)u, (double)a);
+#endif
+				}
+				break;															// now insert the new segment before the existing one
+			}
+			else																// new segment overlaps the existing one significantly
+			{
+				// Insert part of the new segment before the existing one, then merge the rest
+				const uint32_t firstDuration = -offset;
+				const float firstDistance = (u + 0.5 * a * (float)firstDuration) * (float)firstDuration;
+				seg = MoveSegment::Allocate(seg);
+				seg->SetParameters(startTime, (float)firstDuration, firstDistance, u, a, moveFlags);
+				if (prev == nullptr)
+				{
+					segments = seg;
+				}
+				else
+				{
+					prev->SetNext(seg);
+				}
+				duration -= firstDuration;
+				startTime += firstDuration;
+				distance -= firstDistance;
+				u += a * firstDuration;
+				prev = seg;
+				seg = seg->GetNext();
+				offset = 0;
+			}
+		}
+
+		// If we get here then the new segment starts later or at the same time as the existing one
+		if (offset + MoveSegment::MinDuration < (int32_t)seg->GetDuration())	// if the segment we are adding starts before the existing one ends
+		{
+			if (offset < MoveSegment::MinDuration)								// if it's only slightly earlier
+			{
+				startTime = seg->GetStartTime();								// postpone it a little
+			}
+			else																// else split the existing segment
+			{
 				prev = seg;
 				seg = seg->Split((uint32_t)offset);
 			}
@@ -154,8 +200,8 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 		seg = seg->GetNext();
 	}
 
-	// The new segment (or what's left of it) needs to be added at the end
-	seg = MoveSegment::Allocate(nullptr);
+	// The new segment (or what's left of it) needs to be added before 'seg' which may be null
+	seg = MoveSegment::Allocate(seg);
 	seg->SetParameters(startTime, duration, distance, u, a, moveFlags);
 	if (prev == nullptr)
 	{

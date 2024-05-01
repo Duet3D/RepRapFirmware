@@ -143,7 +143,7 @@ public:
 	// Return the number of MoveSegment objects that have been created
 	static unsigned int NumCreated() noexcept { return numCreated; }
 
-	static constexpr int32_t MinDuration = 10;				// the minimum duration in step clocks that we consider sensible
+	static constexpr int32_t MinDuration = 10;				// the minimum duration in movement clock ticks that we consider sensible
 
 protected:
 	static MoveSegment *freeList;							// list of recycled segment objects
@@ -151,11 +151,11 @@ protected:
 
 	MoveSegment *next;										// pointer to the next segment
 	MovementFlags flags;
-	uint32_t startTime;										// when this segment should start, in step clock ticks
-	float duration;											// the duration in ticks of this segment
+	uint32_t startTime;										// when this segment should start, in movement clock ticks
+	float duration;											// the duration of this segment in movement ticks
 	float distance;											// the number of steps moved
-	float u;												// the initial speed in steps per tick
-	float a;												// the acceleration during this segment in steps per tick squared
+	float u;												// the initial speed in steps per movement tick
+	float a;												// the acceleration during this segment in steps per movement tick squared
 
 private:
 	MoveSegment(MoveSegment *p_next) noexcept;
