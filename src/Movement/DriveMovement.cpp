@@ -67,7 +67,9 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 		distance += extraSpeed * (float)duration;
 	}
 
+#if !SEGMENT_DEBUG
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
+#endif
 	{
 		debugPrintf("Adding seg: st=%" PRIu32 " t=%" PRIu32 " dist=%.2f u=%.3e a=%.3e\n", startTime, duration, (double)distance, (double)u, (double)a);
 	}
@@ -86,12 +88,16 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 		offset = (int32_t)(startTime - seg->GetStartTime());
 		if (offset <= 0)														// if the new segment starts before the existing one starts, or at the same time
 		{
-			if (offset >= -MoveSegment::MinDuration)							// if it starts only slightly earlier
+			if (offset > -MoveSegment::MinDuration)								// if it starts only slightly earlier
 			{
-				startTime = seg->GetStartTime();								// then just delay the new segment slightly, to avoid creating a tiny segment
+				startTime = seg->GetStartTime();								// then just delay and shorten the new segment slightly, to avoid creating a tiny segment
+				const float durationIncrease = (float)offset;					// get the (negative) increase in segment duration
+				const float oldDuration = (float)duration;
+				duration += offset;
+				u = (u * oldDuration - a * durationIncrease * (oldDuration + 0.5 * durationIncrease))/(float)duration;
 				offset = 0;
 			}
-			else if (offset + (int32_t)duration <= MoveSegment::MinDuration)	// if the new segment doesn't overlap the existing one significantly
+			else if (offset + (int32_t)duration <= MoveSegment::MinDuration)	// if the new segment starts earlier than the existing one and ends before or only slight later than the existing one starts
 			{
 				if (offset + (int32_t)duration > 0)								// if the new segment does overlap the existing one a little
 				{
@@ -99,7 +105,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 #if SEGMENT_DEBUG
 					debugPrintf("Adjusting t=%" PRIu32 " u=%.4e a=%.4e", duration, (double)u, (double)a);
 #endif
-					const int32_t durationIncrease = -(int32_t)duration - offset;	// get the (negative) increase in segment duration
+					const int32_t durationIncrease = -offset - (int32_t)duration;	// get the (negative) increase in segment duration
 					const float oldDuration = (float)duration;
 					duration = -offset;
 					u = (u * oldDuration - a * durationIncrease * (oldDuration + 0.5 * durationIncrease))/(float)duration;
@@ -127,7 +133,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 				duration -= firstDuration;
 				startTime += firstDuration;
 				distance -= firstDistance;
-				u += a * firstDuration;
+				u += a * (float)firstDuration;
 				prev = seg;
 				seg = seg->GetNext();
 				offset = 0;
@@ -135,7 +141,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 		}
 
 		// If we get here then the new segment starts later or at the same time as the existing one
-		if (offset + MoveSegment::MinDuration < (int32_t)seg->GetDuration())	// if the segment we are adding starts before the existing one ends
+		if (offset + MoveSegment::MinDuration < (int32_t)seg->GetDuration())	// if the segment we are adding starts significantly before the existing one ends
 		{
 			if (offset < MoveSegment::MinDuration)								// if it's only slightly earlier
 			{

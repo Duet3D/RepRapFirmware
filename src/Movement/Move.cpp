@@ -2015,7 +2015,10 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 				dm->DebugPrint();
 				MoveSegment::DebugPrintList('s', dm->segments);
 			}
-			debugPrintf("%10" PRIu32 " D%u %c ns=%" PRIi32 "%s", dm->nextStepTime, dm->drive, (dm->direction) ? 'F' : 'B', dm->nextStep, (badTiming) ? " *\n" : "\n");
+#if 0
+			if (badTiming || dm->nextStep == 1 || dm->nextStep + 1 == dm->segmentStepLimit)
+#endif
+				debugPrintf("%10" PRIu32 " D%u %c ns=%" PRIi32 "%s", dm->nextStepTime, dm->drive, (dm->direction) ? 'F' : 'B', dm->nextStep, (badTiming) ? " *\n" : "\n");
 			lastDrive = dm->drive;
 			dm = dm->nextDM;
 		}
