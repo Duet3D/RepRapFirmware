@@ -158,7 +158,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 #endif
 				seg->Merge(firstDistance, u, a, moveFlags);
 				distance -= firstDistance;
-				startTime += seg->GetDuration();
+				startTime += (uint32_t)seg->GetDuration();
 				u += a * seg->GetDuration();
 				duration = (uint32_t)timeDifference;
 				prev = seg;
@@ -309,7 +309,7 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 				state = DMState::cartDecelNoReverse;
 			}
 			p = (2.0 * multiplier)/seg->GetA();
-			q = fsquare(t0) - 2.0 * multiplier * distanceCarriedForwards/seg->GetA();
+			q = fsquare(t0) - p * distanceCarriedForwards;
 #if 0
 			if (std::isinf(q))
 			{

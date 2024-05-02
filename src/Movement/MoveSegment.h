@@ -170,31 +170,40 @@ inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
 
 // Normalise this segment by removing very small accelerations that cause problems, update t0, return true if it is linear
 // Called only from DriveMovement::NewSegment. Speed critical, hence inline and the rather unusual behaviour.
-// Returns true with:
-//  if the segment is constant speed: t0 = time from start of segment at which the speed would have been/will be/would be zero (for an accelerating move),
-//  if the segment has acceleration or deceleration: t0 = time from start of segment at which the distance would be/will be/would have been zero (for a constant speed move)
+// Returns:
+//  true if the segment is constant speed, with t0 = time from start of segment at which the distance would be/will be/would have been zero
+//  false if the segment has acceleration or deceleration, with t0 = time from start of segment at which the speed would have been/will be/would be zero
 inline bool MoveSegment::NormaliseAndCheckLinear(float distanceCarriedForwards, float& t0) noexcept
 {
-	if (a == 0.0)
+	if (a != 0.0)
 	{
-		// The move is constant speed
-		t0 = -distanceCarriedForwards/u;
-		return true;
+		// The move has acceleration or deceleration, but it may be small enough to cause problems with the calculations.
+		// The reason is that the step time is calculated as:
+		//   time_from_segment_start = t0 +/- sqrt(q - p*n)
+		// where q equals t0^2 or something very close to it. This gives rise to two issues:
+		// 1. The maximum value that can be represented by a float is a little more than 3.4e38, so t0 values greater than about 1e19 cause trouble when we square them to calculate q.
+		// 2. Rounding error may cause large errors in the step time, when t0 can't represented to within a small number of step clocks
+		// Issue #2 causes problems when abs(t0) exceeds about 2^24 because then the number of step clocks can't be represented exactly.
+		// Here are two possible ways round this:
+		// 1. When t0 gets large we can use the Maclaurin expansion of sqrt(q - p*n) to give:
+		//    time_from_segment_start ~= p*n/(2 * sqrt(q + p*n))
+		// This is accurate to within about 1 clock on the last step N when (p*N)^4 < 8*(q + p*N)^3
+		// so approximately when (p*N)^4 < 8*q^3, or very roughly when p*N << q
+		// However, using the Maclaurin expansion requires an extra division in each step calculation, which we would prefer to avoid.
+		// 2. We can convert the segment to a constant-speed segment, on the assumption that the speed won't change much during it. This is what we currently do.
+		t0 = -u/a;
+		if (likely(fabsf(t0) <= 4 * 16777216.0))
+		{
+			return false;
+		}
+
+		// The acceleration/deceleration is small enough to cause calculation problems, so change it to a linear move
+		u += 0.5 * a * duration;				// adjust the initial speed to preserve the total distance
+		a = 0.0;
 	}
 
-	// The move has acceleration or deceleration, but it may be small enough to cause problems with the calculations.
-	// This is most likely to happen when we square t0 in the subsequent calculations.
-	// The maximum value that can be represented by a float is a little more than 3.4e38, so t0 values greater than about 1e19 may cause trouble
-	t0 = -u/a;
-	if (likely(fabsf(t0) <= 1.0e19))
-	{
-		return false;
-	}
-
-	// The acceleration/deceleration is small enough to cause calculation problems, so change it to a linear move
-	u += 0.5 * a * duration;
+	// The move is constant speed
 	t0 = -distanceCarriedForwards/u;
-	a = 0.0;
 	return true;
 }
 
