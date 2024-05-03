@@ -78,7 +78,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 
 	// Shut out the step interrupt and task switching while we mess with the segments
 	// TODO probably only need to shut out task switching here, or shut out the step interrupt but leave the UART interrupt enabled
-	AtomicCriticalSectionLocker lock;
+	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
 
 	// Find the earliest existing segment that the new one will come before (i.e. new one starts before existing one) or will overlap (i.e. the new one starts before the existing segment ends)
 	MoveSegment *seg = segments;
@@ -143,14 +143,18 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 		// If we get here then the new segment starts later or at the same time as the existing one
 		if (offset + MoveSegment::MinDuration < (int32_t)seg->GetDuration())	// if the segment we are adding starts significantly before the existing one ends
 		{
-			if (offset < MoveSegment::MinDuration)								// if it's only slightly earlier
+			if (offset < MoveSegment::MinDuration)								// if it starts only slightly before the existing segment ends
 			{
-				startTime = seg->GetStartTime();								// postpone it a little
+				startTime = seg->GetStartTime();								// postpone and shorten it a little
+				const int32_t durationIncrease = -offset;						// get the (negative) increase in segment duration
+				const float oldDuration = (float)duration;
+				duration -= offset;
+				u = (u * oldDuration - a * durationIncrease * (oldDuration + 0.5 * durationIncrease))/(float)duration;
 			}
 			else																// else split the existing segment
 			{
-				prev = seg;
 				seg = seg->Split((uint32_t)offset);
+				// 'prev' is now wrong but we're not about to insert anything before 'seg'
 			}
 
 			// The segment we wish to add now starts at the same time as 'seg' but it may end earlier or later than the one at 'seg' does.
@@ -199,6 +203,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 #if SEGMENT_DEBUG
 			MoveSegment::DebugPrintList('m', segments);
 #endif
+			RestoreBasePriority(oldPrio);
 			return;
 		}
 
@@ -220,6 +225,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 #if SEGMENT_DEBUG
 	MoveSegment::DebugPrintList('r', segments);
 #endif
+	RestoreBasePriority(oldPrio);
 }
 
 // Set up to schedule the first segment, returning true if there is a segment to be processed
@@ -471,6 +477,10 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		debugPrintf("step err3, %.2f\n", (double)nextCalcStepTime);
 		DebugPrint();
 #endif
+		// Give up on this segment
+		segments = currentSegment->GetNext();
+		MoveSegment::Release(currentSegment);
+		currentSegment = NewSegment();
 		state = DMState::stepError3;
 		return false;
 	}
