@@ -1530,7 +1530,6 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 
 	DriveMovement* const dmp = &dms[logicalDrive];
 	const float stepsPerMm = steps/dda.totalDistance;
-	const MoveSegment *const oldSegs = dmp->segments;
 
 	// The algorithm for merging segments into existing segments currently assumes that there are no gaps between the existing segments.
 	// To ensure this, we must add all of the acceleration, steady speed, and deceleration parts of a move for one impulse before proceeding to the next impulse
@@ -1583,7 +1582,7 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 
 	// If there were no segments attached to this DM initially, we need to schedule the interrupt for the new segment at the start of the list.
 	// Don't do this until we have added all the segments for this move, because the first segment we added may have been modified and/or split when we added further segments to implement input shaping
-	if (oldSegs == nullptr)
+	if (dmp->state == DMState::idle)
 	{
 		AtomicCriticalSectionLocker lock;
 		if (dmp->ScheduleFirstSegment())
@@ -2015,7 +2014,7 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 				dm->DebugPrint();
 				MoveSegment::DebugPrintList('s', dm->segments);
 			}
-#if 0
+#if 1
 			if (badTiming || dm->nextStep == 1 || dm->nextStep + 1 == dm->segmentStepLimit)
 #endif
 				debugPrintf("%10" PRIu32 " D%u %c ns=%" PRIi32 "%s", dm->nextStepTime, dm->drive, (dm->direction) ? 'F' : 'B', dm->nextStep, (badTiming) ? " *\n" : "\n");

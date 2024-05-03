@@ -122,9 +122,6 @@ public:
 	// Set the next segment in this list
 	void SetNext(MoveSegment *p_next) noexcept;
 
-	// Add a segment to the end of this list
-	void AddToTail(MoveSegment *tail) noexcept;
-
 	// Print this segment to the debug channel
 	void DebugPrint(char ch) const noexcept;
 
@@ -210,8 +207,10 @@ inline bool MoveSegment::NormaliseAndCheckLinear(float distanceCarriedForwards, 
 // Release a MoveSegment.  Not thread-safe.
 inline void MoveSegment::Release(MoveSegment *item) noexcept
 {
+	const irqflags_t iflags = IrqSave();
 	item->next = freeList;
 	freeList = item;
+	IrqRestore(iflags);
 }
 
 inline MoveSegment *MoveSegment::GetNext() const noexcept

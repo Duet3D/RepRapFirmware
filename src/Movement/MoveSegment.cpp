@@ -12,19 +12,22 @@
 MoveSegment *MoveSegment::freeList = nullptr;
 unsigned int MoveSegment::numCreated = 0;
 
-// Allocate a MoveSegment, from the freelist if possible, else create a new one. Not thread-safe. Clears the flags.
+// Allocate a MoveSegment, from the freelist if possible, else create a new one
 MoveSegment *MoveSegment::Allocate(MoveSegment *p_next) noexcept
 {
+	const irqflags_t iflags = IrqSave();
 	MoveSegment * ms = freeList;
 	if (ms != nullptr)
 	{
 		freeList = ms->next;
+		IrqRestore(iflags);
 		ms->next = p_next;
 	}
 	else
 	{
-		ms = new MoveSegment(p_next);
 		++numCreated;
+		IrqRestore(iflags);
+		ms = new MoveSegment(p_next);
 	}
 	return ms;
 }
@@ -38,16 +41,6 @@ void MoveSegment::ReleaseAll(MoveSegment *item) noexcept
 		item = item->next;
 		Release(itemToRelease);
 	}
-}
-
-void MoveSegment::AddToTail(MoveSegment *tail) noexcept
-{
-	MoveSegment *seg = this;
-	while (seg->GetNext() != nullptr)
-	{
-		seg = seg->GetNext();
-	}
-	seg->SetNext(tail);
 }
 
 void MoveSegment::DebugPrint(char ch) const noexcept

@@ -1270,7 +1270,9 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			// This is especially important when using CAN-connected motors or endstops, because we rely on receiving "endstop changed" messages.
 			// Moves that check endstops are always run as isolated moves, so there can be no move in progress and the endstops must already be primed.
 			platform.EnableAllSteppingDrivers();
+			const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);				// shut out the step interrupt
 			(void)move.CheckEndstops(platform, false);									// this may modify pending CAN moves
+			RestoreBasePriority(oldPrio);
 		}
 
 #if SUPPORT_CAN_EXPANSION
