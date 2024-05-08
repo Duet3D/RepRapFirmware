@@ -33,9 +33,9 @@ union MovementFlags
 	uint32_t all;												// this is to provide a means to clear all the flags n one go
 	struct
 	{
-		// In the following we invert
 		uint32_t nonPrintingMove : 1,							// true if the move that generated this segment does not have both forwards extrusion and associated axis movement; used for filament monitoring
-				 checkEndstops : 1								// true if we need to check endstops or Z probe while executing this segment
+				 checkEndstops : 1,								// true if we need to check endstops or Z probe while executing this segment
+				 noShaping : 1									// true if input shaping should be disabled for this move
 #if 0 //SUPPORT_REMOTE_COMMANDS
 			   , isRemote : 1									// set if we are in expansion board mode and this segment came from a move commanded by the main board
 #endif

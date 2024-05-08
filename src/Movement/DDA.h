@@ -81,6 +81,7 @@ public:
 	bool IsPrintingMove() const noexcept { return flags.isPrintingMove; }			// Return true if this involves both XY movement and extrusion
 	bool UsingStandardFeedrate() const noexcept { return flags.usingStandardFeedrate; }
 	bool IsCheckingEndstops() const noexcept { return flags.checkEndstops; }
+	bool NoShaping() const noexcept { return flags.noShaping; }
 
 #if SUPPORT_SCANNING_PROBES
 	bool IsScanningProbeMove() const noexcept { return flags.scanningProbeMove; }
@@ -199,7 +200,8 @@ private:
 					 continuousRotationShortcut : 1, // True if continuous rotation axes take shortcuts
 					 checkEndstops : 1,				// True if this move monitors endstops or Z probe
 					 controlLaser : 1,				// True if this move controls the laser or iobits
-					 wasAccelOnlyMove : 1			// set by Prepare if this was an acceleration-only move, for the next move to look at
+					 wasAccelOnlyMove : 1,			// set by Prepare if this was an acceleration-only move, for the next move to look at
+					 noShaping : 1					// set if input shaping should be disabled for this move e.g. for a G1 H2 move
 #if SUPPORT_SCANNING_PROBES
 					 , scanningProbeMove : 1 	 	// True if this is a scanning Z probe move
 #endif

@@ -1088,6 +1088,15 @@ void Platform::Spin() noexcept
 	MassStorage::Spin();
 #endif
 
+	// Check for movement errors
+	Move& move = reprap.GetMove();
+	if (move.HasMovementError())
+	{
+		Message(AddError(MessageType::GenericMessage), "Movement halted because a step timing error occurred. Please reset the controller.\n");
+		move.GenerateMovementErrorDebug();
+		move.ResetAfterError();
+	}
+
 	// Check for debug messages
 	while (!isrDebugBuffer.IsEmpty())
 	{
@@ -2279,11 +2288,11 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 
 	case (unsigned int)DiagnosticTestType::PrintObjectSizes:
 		reply.printf(
-				"Task %u, DDA %u, DM %u, MS %u, Tool %u, GCodeBuffer %u, heater %u, mbox %u"
+				"Task %u, DDA %u, DDARing %u, DM %u, MS %u, Tool %u, GCodeBuffer %u, heater %u, mbox %u"
 #if HAS_NETWORKING
 				", HTTP resp %u, FTP resp %u, Telnet resp %u"
 #endif
-				, sizeof(TaskBase), sizeof(DDA), sizeof(DriveMovement), sizeof(MoveSegment), sizeof(Tool), sizeof(GCodeBuffer), sizeof(Heater), sizeof(MessageBox)
+				, sizeof(TaskBase), sizeof(DDA), sizeof(DDARing), sizeof(DriveMovement), sizeof(MoveSegment), sizeof(Tool), sizeof(GCodeBuffer), sizeof(Heater), sizeof(MessageBox)
 #if HAS_NETWORKING
 				, sizeof(HttpResponder), sizeof(FtpResponder), sizeof(TelnetResponder)
 #endif

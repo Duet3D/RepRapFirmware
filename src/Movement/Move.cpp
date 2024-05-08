@@ -226,6 +226,7 @@ Move::Move() noexcept
 	  heightController(nullptr),
 #endif
 	  jerkPolicy(0),
+	  stepErrorState(StepErrorState::noError),
 	  numCalibratedFactors(0)
 {
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
@@ -260,7 +261,7 @@ void Move::Init() noexcept
 
 	simulationMode = SimulationMode::off;
 	longestGcodeWaitInterval = 0;
-	stepErrors = numHiccups = 0;
+	numHiccups = 0;
 	lastReportedMovementDelay = 0;
 	bedLevellingMoveAvailable = false;
 	activeDMs = nullptr;
@@ -306,6 +307,31 @@ void Move::Exit() noexcept
 	moveTask.TerminateAndUnlink();
 }
 
+void Move::GenerateMovementErrorDebug() noexcept
+{
+	if (reprap.Debug(Module::Move))
+	{
+		const DDA *cdda = rings[0].GetCurrentDDA();
+		if (cdda == nullptr)
+		{
+			debugPrintf("No current DDA\n");
+		}
+		else
+		{
+			cdda->DebugPrint("Current DDA");
+		}
+
+		debugPrintf("Failing DM:\n");
+		for (const DriveMovement& dm : dms)
+		{
+			if (dm.HasError())
+			{
+				dm.DebugPrint();
+			}
+		}
+	}
+}
+
 // Set the microstepping for local drivers, returning true if successful. All drivers for the same axis must use the same microstepping.
 // Caller must deal with remote drivers.
 bool Move::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool interp, const StringRef& reply) noexcept
@@ -346,7 +372,7 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 	timer.SetCallback(Move::TimerCallback, CallbackParameter(this));
 	for (;;)
 	{
-		if (reprap.IsStopped())
+		if (reprap.IsStopped() || stepErrorState != StepErrorState::noError)
 		{
 			// Emergency stop has been commanded, so terminate this task to prevent new moves being prepared and executed
 			moveTask.TerminateAndUnlink();
@@ -618,18 +644,18 @@ void Move::Diagnostics(MessageType mtype) noexcept
 
 	Platform& p = reprap.GetPlatform();
 	p.MessageF(mtype,
-				"=== Move ===\nSegments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f, hiccups %u, hiccup time %.2fms, stepErrors %u, max steps late %" PRIi32
+				"=== Move ===\nSegments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f, hiccups %u, hiccup time %.2fms, max steps late %" PRIi32
 #if 1	//debug
 				", ebfmin %.2f, ebfmax %.2f"
 #endif
 				"\n",
-						MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, numHiccups, (double)delayToReport, stepErrors, DriveMovement::GetAndClearMaxStepsLate()
+						MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, numHiccups, (double)delayToReport, DriveMovement::GetAndClearMaxStepsLate()
 #if 1
 						, (double)minExtrusionPending, (double)maxExtrusionPending
 #endif
 		);
 	longestGcodeWaitInterval = 0;
-	stepErrors = numHiccups = 0;
+	numHiccups = 0;
 #if 1	//debug
 	minExtrusionPending = maxExtrusionPending = 0.0;
 #endif
@@ -1519,7 +1545,7 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 
 // Add some linear segments to be executed by a driver, taking account of possible input shaping. This is used by linear axes and by extruders.
 // We never add a segment that starts earlier than any existing segments, but we may add segments when there are none already.
-void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, float steps, bool useInputShaping, MovementFlags moveFlags) noexcept
+void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, float steps, MovementFlags moveFlags) noexcept
 {
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
 	{
@@ -1534,12 +1560,30 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	// The algorithm for merging segments into existing segments currently assumes that there are no gaps between the existing segments.
 	// To ensure this, we must add all of the acceleration, steady speed, and deceleration parts of a move for one impulse before proceeding to the next impulse
 
-	const uint32_t steadyStartTime = startTime + params.accelClocks;
-	const uint32_t decelStartTime = steadyStartTime + params.steadyClocks;
+	const uint32_t steadyStartTime = startTime + (uint32_t)params.accelClocks;
+	const uint32_t decelStartTime = steadyStartTime + (uint32_t)params.steadyClocks;
 	const float steadyDistance = params.decelStartDistance - params.accelDistance;
 	const float decelDistance = dda.totalDistance - params.decelStartDistance;
 
-	if (useInputShaping)
+	if (moveFlags.noShaping)
+	{
+		if (params.accelClocks > 0.0)
+		{
+			dmp->AddSegment(startTime, (uint32_t)params.accelClocks,
+								params.accelDistance * stepsPerMm, dda.startSpeed * stepsPerMm, dda.acceleration * stepsPerMm, moveFlags);
+		}
+		if (params.steadyClocks > 0.0)
+		{
+			dmp->AddSegment(steadyStartTime, (uint32_t)params.steadyClocks,
+											steadyDistance * stepsPerMm, dda.topSpeed * stepsPerMm, 0.0, moveFlags);
+		}
+		if (params.decelClocks != 0)
+		{
+			dmp->AddSegment(decelStartTime, (uint32_t)params.decelClocks,
+											decelDistance * stepsPerMm, dda.topSpeed * stepsPerMm, -(dda.deceleration * stepsPerMm), moveFlags);
+		}
+	}
+	else
 	{
 		for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 		{
@@ -1559,24 +1603,6 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 				dmp->AddSegment(decelStartTime + axisShaper.GetImpulseDelay(index), (uint32_t)params.decelClocks,
 												decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), moveFlags);
 			}
-		}
-	}
-	else
-	{
-		if (params.accelClocks > 0.0)
-		{
-			dmp->AddSegment(startTime, (uint32_t)params.accelClocks,
-								params.accelDistance * stepsPerMm, dda.startSpeed * stepsPerMm, dda.acceleration * stepsPerMm, moveFlags);
-		}
-		if (params.steadyClocks > 0.0)
-		{
-			dmp->AddSegment(steadyStartTime, (uint32_t)params.steadyClocks,
-											steadyDistance * stepsPerMm, dda.topSpeed * stepsPerMm, 0.0, moveFlags);
-		}
-		if (params.decelClocks != 0)
-		{
-			dmp->AddSegment(decelStartTime, (uint32_t)params.decelClocks,
-											decelDistance * stepsPerMm, dda.topSpeed * stepsPerMm, -(dda.deceleration * stepsPerMm), moveFlags);
 		}
 	}
 
@@ -1604,11 +1630,6 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 				}
 				adp = adp->nextDM;
 			}
-		}
-		else if (dmp->state != DMState::idle)
-		{
-			++stepErrors;
-			dmp->state = DMState::idle;
 		}
 	}
 }
@@ -1642,7 +1663,7 @@ void Move::Interrupt() noexcept
 			// Generate steps for the current move segments
 			StepDrivers(p, now);								// check endstops if necessary and step the drivers
 
-			if (activeDMs == nullptr)
+			if (activeDMs == nullptr || stepErrorState != StepErrorState::noError )
 			{
 				WakeMoveTaskFromISR();							// we may have just completed a special move, so wake up the Move task so that it can notice that
 				break;
@@ -1718,6 +1739,12 @@ void Move::DeactivateDM(DriveMovement *dmToRemove) noexcept
 		}
 		dmp = &(dm->nextDM);
 	}
+}
+
+// Stop all movement because of a step error. May be called from an ISR.
+void Move::LogStepError() noexcept
+{
+	stepErrorState = StepErrorState::haveError;
 }
 
 // Check the endstops, given that we know that this move checks endstops.
@@ -1962,11 +1989,6 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 			}
 			InsertDM(dmToInsert);
 		}
-		else if (dmToInsert->state != DMState::idle)
-		{
-			++stepErrors;
-			dmToInsert->state = DMState::idle;
-		}
 		dmToInsert = nextToInsert;
 	}
 }
@@ -2004,6 +2026,9 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 	DriveMovement* dm = activeDMs;
 	if (dm != nullptr)
 	{
+		// Generating and sending the debug output can take a lot of time, so to avoid shutting out high priority tasks, reduce our priority
+		const unsigned int oldPriority = TaskBase::GetCurrentTaskPriority();
+		TaskBase::SetCurrentTaskPriority(TaskPriority::SpinPriority);
 		const uint32_t dueTime = dm->nextStepTime;
 		while (dm != nullptr && dueTime >= dm->nextStepTime)			// if the next step is due
 		{
@@ -2015,9 +2040,11 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 				MoveSegment::DebugPrintList('s', dm->segments);
 			}
 #if 1
-			if (badTiming || dm->nextStep == 1 || dm->nextStep + 1 == dm->segmentStepLimit)
+			if (badTiming || (dm->nextStep & 255) == 1 || dm->nextStep + 1 == dm->segmentStepLimit)
 #endif
+			{
 				debugPrintf("%10" PRIu32 " D%u %c ns=%" PRIi32 "%s", dm->nextStepTime, dm->drive, (dm->direction) ? 'F' : 'B', dm->nextStep, (badTiming) ? " *\n" : "\n");
+			}
 			lastDrive = dm->drive;
 			dm = dm->nextDM;
 		}
@@ -2040,15 +2067,11 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 				dmToInsert->directionChanged = false;
 				InsertDM(dmToInsert);
 			}
-			else if (dmToInsert->state != DMState::idle)
-			{
-				dmToInsert->DebugPrint();
-			}
 			dmToInsert = nextToInsert;
 		}
+		TaskBase::SetCurrentTaskPriority(oldPriority);
 	}
 
-	// If there are no more steps to do and the time for the move has nearly expired, flag the move as complete
 	if (activeDMs == nullptr)
 	{
 		checkTiming = false;		// don't check the timing of the first step in the next move

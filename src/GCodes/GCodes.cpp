@@ -2253,9 +2253,13 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 				ms.reduceAcceleration = reduceAcceleration;
 			}
 			ms.checkEndstops = true;
+			ms.noShaping = true;
 			break;
 
 		case 2:
+			ms.noShaping = true;
+			break;
+
 		default:
 			break;
 		}

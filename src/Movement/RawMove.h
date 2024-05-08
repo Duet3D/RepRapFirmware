@@ -34,6 +34,7 @@ struct RawMove
 			isCoordinated : 1,										// true if this is a coordinated move
 			usingStandardFeedrate : 1,								// true if this move uses the standard feed rate
 			checkEndstops : 1,										// true if any endstops or the Z probe can terminate the move
+			noShaping : 1,											// true if input shaping should be disabled e.g. for a G1 H2 move
 			reduceAcceleration : 1,									// true if Z probing so we should limit the Z acceleration
 			inverseTimeMode : 1,									// true if executing the move in inverse time mode
 			linearAxesMentioned : 1,								// true if any linear axes were mentioned in the movement command

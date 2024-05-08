@@ -343,6 +343,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	initialUserC1 = nextMove.initialUserC1;
 
 	flags.checkEndstops = nextMove.checkEndstops;
+	flags.noShaping = nextMove.noShaping;
 	flags.canPauseAfter = nextMove.canPauseAfter;
 	flags.usingStandardFeedrate = nextMove.usingStandardFeedrate;
 	flags.isPrintingMove = flags.xyMoving && forwardExtruding;					// require forward extrusion so that wipe-while-retracting doesn't count
@@ -625,6 +626,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 	MovementFlags segFlags;
 	segFlags.Clear();
 	segFlags.nonPrintingMove = !msg.usePressureAdvance;
+	segFlags.noShaping = !msg.useLateInputShaping;
 
 	afterPrepare.drivesMoving.Clear();
 	Move& move = reprap.GetMove();
@@ -643,7 +645,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = extrusionRequested;
 			if (extrusionRequested != 0.0)
 			{
-				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, extrusionRequested, msg.useLateInputShaping, segFlags);
+				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, extrusionRequested, segFlags);
 				//TODO will Move do the following?
 				reprap.GetPlatform().EnableDrivers(drive, false);
 			}
@@ -654,7 +656,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = delta;
 			if (delta != 0)
 			{
-				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, delta, msg.useLateInputShaping, segFlags);
+				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, delta, segFlags);
 				afterPrepare.drivesMoving.SetBit(drive);
 				//TODO will Move do the following?
 				reprap.GetPlatform().EnableDrivers(drive, false);
@@ -1112,6 +1114,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		MovementFlags segFlags;
 		segFlags.Clear();
 		segFlags.checkEndstops = flags.checkEndstops;
+		segFlags.noShaping = flags.noShaping || !flags.xyMoving || flags.isLeadscrewAdjustmentMove;
 		segFlags.nonPrintingMove = !flags.isPrintingMove;
 		Move& move = reprap.GetMove();
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
@@ -1135,7 +1138,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						else
 #endif
 						{
-							move.AddLinearSegments(*this, driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (float)delta, false, segFlags);
+							move.AddLinearSegments(*this, driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (float)delta, segFlags);
 						}
 					}
 				}
@@ -1176,7 +1179,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 #endif
 					   )
 					{
-						move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, (float)delta, flags.xyMoving && !flags.checkEndstops, segFlags);
+						move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, (float)delta, segFlags);
 					}
 
 					afterPrepare.drivesMoving.SetBit(drive);
@@ -1205,7 +1208,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 
 					// Check for cold extrusion/retraction. Do this now because we can't read temperatures from within the step ISR, also this works for CAN-connected extruders.
 					// Don't check if it is a special move (indicated by flags.checkEndstops) because the 'tool' variable isn't valid for those moves
-					if (flags.checkEndstops || Tool::ExtruderMovementAllowed(tool, directionVector[drive] > 0, extruder))
+					if (move.GetSimulationMode() != SimulationMode::off || flags.checkEndstops || Tool::ExtruderMovementAllowed(tool, directionVector[drive] > 0, extruder))
 					{
 						platform.EnableDrivers(drive, false);
 
@@ -1245,7 +1248,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						else
 #endif
 						{
-							move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, flags.xyMoving && !flags.checkEndstops, segFlags);
+							move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, segFlags);
 						}
 					}
 				}

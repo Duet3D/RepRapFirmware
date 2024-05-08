@@ -69,6 +69,8 @@ public:
 
 	void ClearMovementPending() noexcept { distanceCarriedForwards = 0.0; }
 
+	bool HasError() const noexcept { return state != DMState::idle && state < DMState::firstMotionState; }
+
 	static int32_t GetAndClearMaxStepsLate() noexcept;
 	static int32_t GetAndClearMinStepInterval() noexcept;
 
@@ -79,6 +81,7 @@ private:
 
 	void CheckDirection(bool reversed) noexcept;
 	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr
+	bool LogStepError() noexcept;						// tell the Move class that we had a step error
 
 	static int32_t maxStepsLate;
 	static int32_t minStepInterval;
@@ -124,42 +127,26 @@ private:
 inline bool DriveMovement::CalcNextStepTime() noexcept
 {
 	++nextStep;
-	if (nextStep <= segmentStepLimit || isExtruder)
+	if (stepsTillRecalc != 0)
 	{
-		if (stepsTillRecalc != 0)
-		{
-			--stepsTillRecalc;				// we are doing double/quad/octal stepping
-			nextStepTime += stepInterval;
+		--stepsTillRecalc;					// we are doing double/quad/octal stepping
+		nextStepTime += stepInterval;
 #ifdef DUET3_MB6HC							// we need to increase the minimum step pulse length to be long enough for the TMC5160
-			asm volatile("nop");
-			asm volatile("nop");
-			asm volatile("nop");
-			asm volatile("nop");
-			asm volatile("nop");
-			asm volatile("nop");
+		asm volatile("nop");
+		asm volatile("nop");
+		asm volatile("nop");
+		asm volatile("nop");
+		asm volatile("nop");
+		asm volatile("nop");
 #endif
-			return true;
-		}
-		if (CalcNextStepTimeFull())
-		{
-			return true;
-		}
+		return true;
 	}
-
-#ifdef DUET3_MB6HC							// we need to increase the minimum step pulse length to be long enough for the TMC5160
-		asm volatile("nop");
-		asm volatile("nop");
-		asm volatile("nop");
-		asm volatile("nop");
-		asm volatile("nop");
-		asm volatile("nop");
-#endif
-	return false;
+	return CalcNextStepTimeFull();
 }
 
 // Return the number of net steps already taken for the current segment in the forwards direction.
 // We have already taken nextSteps - 1 steps
-// Caller must disable interrupts befofe calling this
+// Caller must disable interrupts before calling this
 inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 {
 	if (segments == nullptr)

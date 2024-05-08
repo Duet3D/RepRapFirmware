@@ -7,8 +7,7 @@ Next steps for new movement system+IS
 [done, testing] Handle retiring commited moves properly
 [done] If a move checks endstops and the endstop is already triggered during Prepare, it remains busy for the length of the homing move, even though it doesn't move.
 [done] We get the same delay when an endstop stops movement.
-
-Take account of raw motor moves when deciding whether to use IS. Maybe move useIS into MovementFlags?
+[done] Take account of raw motor moves when deciding whether to use IS. Maybe move useIS into MovementFlags?
 
 Can we keep a single machine position, based on current motor positions, not one per MS?
 
@@ -24,3 +23,8 @@ Set up params.useInputShaping, needed for CAN
 
 At the end of Prepare, don't send the move over CAN if it won't happen because endstops are already triggered - previously it checked for state=completed
 Also, check whether/how in CanMotion we handle individual drives not moving because their endstops have triggered - that may be enough to handle the above.
+
+Bugs:
+- Pauses after G1 H2 moves, especially if expansion boards are involved
+- [done]"Tool was not driven because its temperatres were not high enough" in simulation mode
+- In simulation mode at least, stops processing X driver segments, then runs out of memory

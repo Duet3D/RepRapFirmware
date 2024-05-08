@@ -364,6 +364,7 @@ uint16_t Tool::numToolsToReport = 0;
 	return (tool == nullptr) ? 0.0 : tool->offset[axis];
 }
 
+// Check whether extruder movement is allowed. As a side effect, if it isn't then set the appropriate bit in prohibitedExtrusionTools.
 /*static*/ bool Tool::ExtruderMovementAllowed(const Tool *tool, bool forwards, unsigned int extruder) noexcept
 {
 	if (reprap.GetHeat().ColdExtrude())

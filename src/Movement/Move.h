@@ -144,7 +144,7 @@ public:
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
 
 	// Functions called by DDA::Prepare to generate segments for executing DDAs
-	void AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, float steps, bool useInputShaping, MovementFlags moveFlags) noexcept;
+	void AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, float steps, MovementFlags moveFlags) noexcept;
 	void SetHomingDda(size_t drive, DDA *dda) noexcept pre(drive < MaxAxesPlusExtruders);
 
 	bool AreDrivesStopped(AxesBitmap drives) const noexcept;								// return true if none of the drives passed has any movement pending
@@ -169,6 +169,7 @@ public:
 
 	void Simulate(SimulationMode simMode) noexcept;											// Enter or leave simulation mode
 	float GetSimulationTime() const noexcept { return rings[0].GetSimulationTime(); }		// Get the accumulated simulation time
+	SimulationMode GetSimulationMode() const noexcept { return simulationMode; }
 
 	bool PausePrint(MovementState& ms) noexcept;											// Pause the print as soon as we can, returning true if we were able to
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
@@ -257,6 +258,12 @@ public:
 
 	void DeactivateDM(DriveMovement *dmToRemove) noexcept;									// remove a DM from the active list
 
+	// Movement error handling
+	void LogStepError() noexcept;															// stop all movement because of a step error
+	bool HasMovementError() const noexcept;
+	void ResetAfterError() noexcept;
+	void GenerateMovementErrorDebug() noexcept;
+
 	// We now use the laser task to take readings from scanning Z probes, so we always need it
 	[[noreturn]] void LaserTaskRun() noexcept;
 
@@ -275,10 +282,17 @@ protected:
 private:
 	enum class MoveState : uint8_t
 	{
-		idle,			// no moves being executed or in queue, motors are at idle hold
+		idle = 0,		// no moves being executed or in queue, motors are at idle hold
 		collecting,		// no moves currently being executed but we are collecting moves ready to execute them
 		executing,		// we are executing moves
 		timing			// no moves being executed or in queue, motors are at full current
+	};
+
+	enum class StepErrorState : uint8_t
+	{
+		noError = 0,	// no error
+		haveError,		// had an error, movement is stopped
+		resetting		// had an error, ready to reset it
 	};
 
 	void BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;				// Take a position and apply the bed compensations
@@ -352,7 +366,6 @@ private:
 
 	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
-	unsigned int stepErrors;							// count of step errors, for diagnostics
 	unsigned int numHiccups;
 
 	uint32_t whenLastMoveAdded;							// The time when we last added a move to any DDA ring
@@ -382,6 +395,8 @@ private:
 	AxisShaper axisShaper;								// the input shaping that we use for axes - currently just one for all axes
 
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
+
+	volatile StepErrorState stepErrorState;
 
 	// Calibration and bed compensation
 	uint8_t numCalibratedFactors;
@@ -468,6 +483,19 @@ inline void Move::InsertDM(DriveMovement *dm) noexcept
 	}
 	dm->nextDM = *dmp;
 	*dmp = dm;
+}
+
+inline bool Move::HasMovementError() const noexcept
+{
+	return stepErrorState == StepErrorState::haveError;
+}
+
+inline void Move::ResetAfterError() noexcept
+{
+	if (HasMovementError())
+	{
+		stepErrorState = StepErrorState::resetting;
+	}
 }
 
 #if HAS_SMART_DRIVERS
