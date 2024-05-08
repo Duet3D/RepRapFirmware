@@ -49,6 +49,7 @@ void Filament::LoadAssignment() noexcept
 		return;
 	}
 
+	bool filamentLoaded = false;
 	char buffer[FilamentNameLength + 64];
 	if (file->ReadLine(buffer, sizeof(buffer)) > 0 && StringStartsWith(buffer, FilamentAssignmentFileComment))
 	{
@@ -68,6 +69,7 @@ void Filament::LoadAssignment() noexcept
 					}
 
 					name.copy(filament);
+					filamentLoaded = true;
 					break;
 				}
 			}
@@ -75,6 +77,12 @@ void Filament::LoadAssignment() noexcept
 	}
 
 	file->Close();
+
+	if (filamentLoaded)
+	{
+		// Filaments are mapped per extruder, so make sure the move key is updated
+		reprap.MoveUpdated();
+	}
 #endif
 }
 
