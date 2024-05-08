@@ -1608,30 +1608,27 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 
 	// If there were no segments attached to this DM initially, we need to schedule the interrupt for the new segment at the start of the list.
 	// Don't do this until we have added all the segments for this move, because the first segment we added may have been modified and/or split when we added further segments to implement input shaping
+	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);					// shut out the step interrupt
 	if (dmp->state == DMState::idle)
 	{
-		AtomicCriticalSectionLocker lock;
 		if (dmp->ScheduleFirstSegment())
 		{
-			const DriveMovement *adp = activeDMs;
-			while (adp != dmp)																// if they are equal then this DM is already in the active list
+			if (simulationMode == SimulationMode::off)
 			{
-				if (adp == nullptr)
+				SetDirection(reprap.GetPlatform(), dmp->drive, dmp->direction);
+			}
+			dmp->directionChanged = false;
+			InsertDM(dmp);
+			if (activeDMs == dmp && simulationMode == SimulationMode::off)			// if this is now the first DM in the active list
+			{
+				if (ScheduleNextStepInterrupt())
 				{
-					InsertDM(dmp);
-					if (activeDMs == dmp && simulationMode == SimulationMode::off)			// if this is now the first DM in the active list
-					{
-						if (ScheduleNextStepInterrupt())
-						{
-							Interrupt();
-						}
-					}
-					break;
+					Interrupt();
 				}
-				adp = adp->nextDM;
 			}
 		}
 	}
+	RestoreBasePriority(oldPrio);
 }
 
 // Store the DDA that is executing a homing move involving this drive. Called from DDA::Prepare.
@@ -2030,10 +2027,10 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 		const unsigned int oldPriority = TaskBase::GetCurrentTaskPriority();
 		TaskBase::SetCurrentTaskPriority(TaskPriority::SpinPriority);
 		const uint32_t dueTime = dm->nextStepTime;
-		while (dm != nullptr && dueTime >= dm->nextStepTime)			// if the next step is due
+		while (dm != nullptr && (int32_t)(dueTime >= dm->nextStepTime) >= 0)			// if the next step is due
 		{
-			const uint32_t timeDiff = dm->nextStepTime - lastStepTime;
-			const bool badTiming = checkTiming && dm->drive == lastDrive && (timeDiff < 10 || timeDiff > 100000000);
+			uint32_t timeDiff;
+			const bool badTiming = checkTiming && dm->drive == lastDrive && ((timeDiff = dm->nextStepTime - lastStepTime) < 10 || timeDiff > 100000000);
 			if (dm->nextStep == 1)
 			{
 				dm->DebugPrint();

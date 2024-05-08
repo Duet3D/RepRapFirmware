@@ -472,12 +472,13 @@ inline __attribute__((always_inline)) bool Move::ScheduleNextStepInterrupt() noe
 }
 
 // Insert the specified drive into the step list, in step time order.
-// We insert the drive before any existing entries with the same step time for best performance. Now that we generate step pulses
-// for multiple motors simultaneously, there is no need to preserve round-robin order.
+// We insert the drive before any existing entries with the same step time for best performance.
+// Now that we generate step pulses for multiple motors simultaneously, there is no need to preserve round-robin order.
+// Base priority must be >= NvicPriorityStep when calling this, unless we are simulating.
 inline void Move::InsertDM(DriveMovement *dm) noexcept
 {
 	DriveMovement **dmp = &activeDMs;
-	while (*dmp != nullptr && (*dmp)->nextStepTime < dm->nextStepTime)
+	while (*dmp != nullptr && (int32_t)((*dmp)->nextStepTime - dm->nextStepTime) < 0)
 	{
 		dmp = &((*dmp)->nextDM);
 	}

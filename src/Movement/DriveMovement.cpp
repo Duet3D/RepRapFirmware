@@ -250,15 +250,17 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 	return false;
 }
 
-// This is called when 'segments' has just been changed to a new segment. Return the new segment to execute, or nullptr.
+// This is called when 'segments' has just been changed to a new segment.
+// Return the new segment to execute. If there is no segment to execute, set state to idle and return nullptr.
 MoveSegment *DriveMovement::NewSegment() noexcept
 {
 	while (true)
 	{
-		MoveSegment *seg = segments;			// capture volatile variable
+		MoveSegment *seg = segments;				// capture volatile variable
 		if (seg == nullptr)
 		{
 			segmentFlags.Init();
+			state = DMState::idle;					// if we have been round this loop already then we will have changed the state, so reset it to idle
 			return nullptr;
 		}
 
@@ -387,11 +389,11 @@ bool DriveMovement::LogStepError() noexcept
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // We have already incremented nextStep and checked that it does not exceed totalSteps, so at least one more step is due
-// Return true if all OK.
+// Return true if all OK and there are more steps to do.
 // If no more segments to execute, return false with state = DMState::idle.
 // If a step error occurs, call LogStepError and return false with state set to the error state.
 bool DriveMovement::CalcNextStepTimeFull() noexcept
-pre(nextStep <= totalSteps; stepsTillRecalc == 0)
+pre(stepsTillRecalc == 0; segments != nullptr)
 {
 	MoveSegment *currentSegment = segments;
 	uint32_t shiftFactor = 0;										// assume single stepping
@@ -400,15 +402,14 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		// If there are no more steps left in this segment, skip to the next segment and use single stepping
 		if (stepsToLimit <= 0)
 		{
-			distanceCarriedForwards += currentSegment->GetLength() - netStepsThisSegment;
+			distanceCarriedForwards += currentSegment->GetLength() - (float)netStepsThisSegment;
 			segments = currentSegment->GetNext();
 			const uint32_t prevEndTime = currentSegment->GetStartTime() + lrintf(currentSegment->GetDuration());
 			MoveSegment::Release(currentSegment);
 			currentSegment = NewSegment();
 			if (currentSegment == nullptr)
 			{
-				state = DMState::idle;
-				return false;
+				return false;										// the call to NewSegment has already set the state to idle
 			}
 			if (unlikely(currentSegment->GetStartTime() < prevEndTime))
 			{
@@ -560,7 +561,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 		if (isExtruder && stepInterval < 20 /*&& nextStep + stepsTillRecalc + 1 < totalSteps*/)
 		{
 			state = DMState::stepError1;
-			return false;
+			return LogStepError();
 		}
 #endif
 

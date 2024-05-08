@@ -24,7 +24,13 @@ Set up params.useInputShaping, needed for CAN
 At the end of Prepare, don't send the move over CAN if it won't happen because endstops are already triggered - previously it checked for state=completed
 Also, check whether/how in CanMotion we handle individual drives not moving because their endstops have triggered - that may be enough to handle the above.
 
+Keep DM.currentMotorPosition up to date, currently DWC displays Machine Position as all zeros
+
+Segment moves to keep them shorter than 2^31 step clocks
+
 Bugs:
 - Pauses after G1 H2 moves, especially if expansion boards are involved
 - [done]"Tool was not driven because its temperatres were not high enough" in simulation mode
-- In simulation mode at least, stops processing X driver segments, then runs out of memory
+- [done] In simulation mode at least, stops processing X driver segments, then runs out of memory
+- In M122 report, completed moves shows as 0 at least when simulating
+- Avoid zero-length/zero-duration moves
