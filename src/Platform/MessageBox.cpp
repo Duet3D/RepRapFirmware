@@ -100,7 +100,7 @@ unsigned int MessageBox::numAutoCancelledMessages = 0;
 	{
 		mbox->limits.canCancel = false;
 	}
-	mbox->timeout = (p_mode <= 1 || mbox->limits.canCancel) ? lrintf(max<float>(p_timeout, 0.0) * 1000.0) : 0;
+	mbox->timeout = (p_mode <= 1 || p_mode == 4 || mbox->limits.canCancel) ? lrintf(max<float>(p_timeout, 0.0) * 1000.0) : 0;
 
 	if (mbp == &mboxList)
 	{
