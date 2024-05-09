@@ -34,5 +34,5 @@ Bugs:
 - [done] In simulation mode at least, stops processing X driver segments, then runs out of memory
 - [done] In M122 report, completed moves shows as 0 at least when simulating
 - [done] Test print doesn't heat bed or extruder but heating works manually from DWC
+- [no fault] Spurious filament monitor errors - this was on a tool board
 - Avoid zero-length/zero-duration moves
-- Spurious filament monitor errors - this was on a tool board
