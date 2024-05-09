@@ -257,9 +257,9 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 		// See if we can retire any completed moves
 		while (cdda->GetState() == DDA::committed && cdda->HasExpired())
 		{
+			++completedMoves;
 			if (cdda->Free())
 			{
-				++completedMoves;
 				++numLookaheadUnderruns;
 			}
 			getPointer = cdda = cdda->GetNext();
