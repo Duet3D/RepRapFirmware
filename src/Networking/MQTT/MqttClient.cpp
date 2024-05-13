@@ -534,7 +534,42 @@ void MqttClient::ConnectionLost() noexcept
 	}
 	else
 	{
-		GetPlatform().MessageF(UsbMessage, "Failed to publish MQTT message, client not active\n");
+		if (instance)
+		{
+			if (instance->skt)
+			{
+				const char *stateStr = "state invalid";
+				switch (instance->responderState)
+				{
+				case ResponderState::connecting:
+					stateStr = "is connecting to server";
+					break;
+				case ResponderState::subscribing:
+					stateStr = "is subscribing to topics";
+					break;
+				case ResponderState::disconnecting:
+					stateStr = "is disconnecting from server";
+					break;
+				case ResponderState::free:
+					stateStr = "is inactive";
+					break;
+				default:
+					break;
+				}
+
+				GetPlatform().MessageF(UsbMessage, "Failed to publish MQTT message, MQTT client %s.\n", stateStr);
+			}
+			else
+			{
+				GetPlatform().MessageF(UsbMessage, "Failed to publish MQTT message, no TCP socket to server. "
+												   "MQTT might not be enabled, still establishing a connection to server, "
+												   "or lost connection to the server.\n");
+			}
+		}
+		else
+		{
+			GetPlatform().MessageF(UsbMessage, "Failed to publish MQTT message, network not yet activated.\n");
+		}
 	}
 }
 
