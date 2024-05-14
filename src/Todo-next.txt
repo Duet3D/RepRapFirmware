@@ -28,11 +28,25 @@ Keep DM.currentMotorPosition up to date, currently DWC displays Machine Position
 
 Segment moves to keep them shorter than 2^31 step clocks
 
+Auto-generated moves on delta printers: need to segment them, except for Z probing moves
+
+Do we still need GetNetStepsTaken? Can we use the step counts instead?
+
+In the DM have a direction variable set to +1 or -1, to reduce conditional jumps
+
+Move 'wasTrigered' into ZProbe, cleat it on SetProbing(true), return it on SetProbing(false)
+
+Change ZProbe::wasDeployedByUser to a count?
+
 Bugs:
-- Pauses after G1 H2 moves, especially if expansion boards are involved
 - [done]"Tool was not driven because its temperatres were not high enough" in simulation mode
 - [done] In simulation mode at least, stops processing X driver segments, then runs out of memory
 - [done] In M122 report, completed moves shows as 0 at least when simulating
 - [done] Test print doesn't heat bed or extruder but heating works manually from DWC
 - [no fault] Spurious filament monitor errors - this was on a tool board
+- [done] Step error when moving delta printer in X direction
+- [done] Requested speed and top speed always show zero
+- [temporary fix] Pauses after G1 H2 moves, especially if expansion boards are involved
 - Avoid zero-length/zero-duration moves
+- Delta printer auto calibration not working
+- Z probing not working

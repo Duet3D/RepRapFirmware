@@ -269,10 +269,6 @@ void Move::Init() noexcept
 	{
 		acc = 0;
 	}
-	for (int32_t& pos : motorPositionsAfterScheduledMoves)
-	{
-		pos = 0;
-	}
 	for (uint16_t& ms : microstepping)
 	{
 		ms = 16 | 0x8000;
@@ -536,10 +532,10 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 		// We need to be woken when one of the following is true:
 		// 1. If moves are being executed and there are unprepared moves in the queue, when it is time to prepare more moves.
 		// 2. If the queue was full and all moves in it were prepared, when we have completed one or more moves.
-		// 3. In order to implement idle timeout, we must wake up regularly anyway, say every half second
+		// 3. In order to implement idle timeout, we must wake up regularly anyway, say every half second (MoveTiming::StandardMoveWakeupInterval)
 		if (!moveRead && nextPrepareDelay != 0)
 		{
-			TaskBase::TakeIndexed(NotifyIndices::Move, min<uint32_t>(nextPrepareDelay, 500));
+			TaskBase::TakeIndexed(NotifyIndices::Move, nextPrepareDelay);
 		}
 	}
 }
@@ -717,12 +713,12 @@ uint32_t Move::ExtruderPrintingSince(size_t logicalDrive) const noexcept
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], MovementSystemNumber msNumber, bool doBedCompensation) noexcept
+void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], const MovementState& ms, bool doBedCompensation) noexcept
 {
 	float newPos[MaxAxesPlusExtruders];
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
-	AxisAndBedTransform(newPos, reprap.GetGCodes().GetMovementState(msNumber).currentTool, doBedCompensation);
-	SetRawPosition(newPos, msNumber);
+	AxisAndBedTransform(newPos, ms.currentTool, doBedCompensation);
+	SetRawPosition(newPos, ms.GetMsNumber(), ms.GetAxesAndExtrudersOwned());
 }
 
 // Convert distance to steps for a particular drive
@@ -1371,7 +1367,7 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 // Note, this no longer applies inverse mesh bed compensation or axis skew compensation to the returned machine coordinates, so they are the compensated coordinates!
 float Move::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 {
-	if (forceLiveCoordinatesUpdate || (millis() - latestLiveCoordinatesFetchedAt > 200 && !liveCoordinatesValid))
+	if (forceLiveCoordinatesUpdate || (millis() - latestLiveCoordinatesFetchedAt > MoveTiming::MachineCoordinateUpdateInterval && !liveCoordinatesValid))
 	{
 		UpdateLiveMachineCoordinates();
 		forceLiveCoordinatesUpdate = false;
@@ -1771,6 +1767,7 @@ void Move::CheckEndstops(Platform& platform, bool executingMove) noexcept
 			if (hitDetails.isZProbe)
 			{
 				reprap.GetGCodes().MoveStoppedByZProbe();
+//				debugPrintf("Notified stopped by probe\n");
 			}
 			else
 			{
@@ -1896,8 +1893,8 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 
 		// Calling CheckEndstops may have removed DMs from the active list, also it takes time; so re-check which drives need steps
 		driversStepping = 0;
-		now = StepTimer::GetMovementTimerTicks();
 		dm = activeDMs;
+		now = StepTimer::GetMovementTimerTicks();
 		while (dm != nullptr && (int32_t)(now - dm->nextStepTime) >= 0)		// if the next step is due
 		{
 			driversStepping |= p.GetDriversBitmap(dm->drive);
@@ -1929,6 +1926,7 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 	// Calculate the next step times. We must do this even if no local drivers are stepping in case endstops or Z probes are active.
 	for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 	{
+		dm2->TakenStep();
 		(void)dm2->CalcNextStepTime();								// calculate next step times
 	}
 #else
@@ -1948,6 +1946,7 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 		{
+			dm2->TakenStep();
 			(void)dm2->CalcNextStepTime();							// calculate next step times
 		}
 
@@ -1964,6 +1963,7 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 # endif
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 		{
+			dm2->TakenStep();
 			(void)dm2->CalcNextStepTime();							// calculate next step times
 		}
 
@@ -1988,6 +1988,8 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 		}
 		dmToInsert = nextToInsert;
 	}
+
+	liveCoordinatesValid = false;
 }
 
 void Move::SetDirection(Platform& p, size_t axisOrExtruder, bool direction) noexcept
@@ -2135,7 +2137,6 @@ bool Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
 #else
 	(void)wasMoving;
 #endif
-	motorPositionsAfterScheduledMoves[logicalDrive] = dms[logicalDrive].GetCurrentMotorPosition();
 	return wakeAsyncSender;
 }
 
@@ -2145,7 +2146,6 @@ bool Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
 void Move::StopDriveFromRemote(size_t drive) noexcept
 {
 	dms[drive].StopDriverFromRemote();
-	motorPositionsAfterScheduledMoves[drive] = dms[drive].GetCurrentMotorPosition();
 }
 
 #endif
@@ -2220,7 +2220,6 @@ void Move::AdjustMotorPositions(const float adjustment[], size_t numMotors) noex
 	for (size_t drive = 0; drive < numMotors; ++drive)
 	{
 		dms[drive].AdjustMotorPosition(lrintf(adjustment[drive] * driveStepsPerMm[drive]));
-		motorPositionsAfterScheduledMoves[drive] = dms[drive].GetCurrentMotorPosition();
 	}
 
 	liveCoordinatesValid = false;		// force the live XYZ position to be recalculated

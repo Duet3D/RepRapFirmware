@@ -126,7 +126,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 #if SUPPORT_ASYNC_MOVES
 		ms.OwnedAxisCoordinatesUpdated(axesIncluded);		// save coordinates of any owned axes we changed
 #endif
-		reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), true);
+		reprap.GetMove().SetNewPosition(ms.coords, ms, true);
 		if (!IsSimulating())
 		{
 			axesHomed |= reprap.GetMove().GetKinematics().AxesAssumedHomed(axesIncluded);
@@ -569,7 +569,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 			for (MovementState& ms : moveStates)
 			{
 				ToolOffsetTransform(ms);										// ensure that the position of any new axes are updated in moveBuffer
-				reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), true);			// tell the Move system where the axes are
+				reprap.GetMove().SetNewPosition(ms.coords, ms, true);			// tell the Move system where the axes are
 			}
 		}
 #if SUPPORT_CAN_EXPANSION

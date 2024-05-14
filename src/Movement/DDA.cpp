@@ -343,7 +343,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	initialUserC1 = nextMove.initialUserC1;
 
 	flags.checkEndstops = nextMove.checkEndstops;
-	flags.noShaping = nextMove.noShaping;
+	flags.isolatedMove = nextMove.checkEndstops || nextMove.moveType != 0;
 	flags.canPauseAfter = nextMove.canPauseAfter;
 	flags.usingStandardFeedrate = nextMove.usingStandardFeedrate;
 	flags.isPrintingMove = flags.xyMoving && forwardExtruding;					// require forward extrusion so that wipe-while-retracting doesn't count
@@ -1028,24 +1028,17 @@ void DDA::MatchSpeeds() noexcept
 }
 
 // This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered
-void DDA::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
+void DDA::SetPositions(const float position[MaxAxes], AxesBitmap driversMoved) noexcept
 {
-	(void)reprap.GetMove().CartesianToMotorSteps(move, endPoint, true);
+	Move& move = reprap.GetMove();
+	(void)move.CartesianToMotorSteps(position, endPoint, true);
 	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
 	for (size_t axis = 0; axis < numAxes; ++axis)
 	{
-		endCoordinates[axis] = move[axis];
+		endCoordinates[axis] = position[axis];
 	}
 	flags.endCoordinatesValid = true;
-}
-
-void DDA::SetAxisPositions(const int32_t *newMotorPositions, AxesBitmap whichDrives) noexcept
-{
-	whichDrives.Iterate([this, newMotorPositions](unsigned int drive, unsigned int)->void
-							{
-								endCoordinates[drive] = newMotorPositions[drive];
-							}
-					   );
+	driversMoved.Iterate([&move, this](unsigned int driver, unsigned int)->void { move.SetMotorPosition(driver, this->endPoint[driver]); });
 }
 
 // Get a Cartesian end coordinate from this move
@@ -1114,7 +1107,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		MovementFlags segFlags;
 		segFlags.Clear();
 		segFlags.checkEndstops = flags.checkEndstops;
-		segFlags.noShaping = flags.noShaping || !flags.xyMoving || flags.isLeadscrewAdjustmentMove;
+		segFlags.noShaping = flags.isolatedMove || !flags.xyMoving || flags.isLeadscrewAdjustmentMove;
 		segFlags.nonPrintingMove = !flags.isPrintingMove;
 		Move& move = reprap.GetMove();
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
@@ -1313,11 +1306,9 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 // Check whether a committed move has finished
 bool DDA::HasExpired() const noexcept
 {
-	if (flags.checkEndstops)
-	{
-		return reprap.GetMove().AreDrivesStopped(afterPrepare.drivesMoving);
-	}
-	return (int32_t)(StepTimer::GetMovementTimerTicks() - (afterPrepare.moveStartTime + clocksNeeded)) >= 0;
+	return (flags.isolatedMove)
+			? reprap.GetMove().AreDrivesStopped(afterPrepare.drivesMoving)
+				: (int32_t)(StepTimer::GetMovementTimerTicks() - GetMoveFinishTime()) >= 0;
 }
 
 // Take a unit positive-hyperquadrant vector, and return the factor needed to obtain

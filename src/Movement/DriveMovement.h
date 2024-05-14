@@ -43,6 +43,7 @@ public:
 	void Init(size_t drv) noexcept;
 
 	bool CalcNextStepTime() noexcept SPEED_CRITICAL;
+	void TakenStep() noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept SPEED_CRITICAL;
 
@@ -121,6 +122,13 @@ private:
 	uint32_t extruderPrintingSince = 0;					// the millis ticks when this extruder started doing printing moves
 };
 
+// Update the step counter because we have taken a step
+inline void DriveMovement::TakenStep() noexcept
+{
+	const int32_t adjustment = (direction << 1) - 1;	// to avoid a conditional jump, calculate +1 or -1 according to direction
+	currentMotorPosition += adjustment;					// adjust the current position
+}
+
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // Return true if there are more steps to do. When finished, leave nextStep == totalSteps + 1 and state == DMState::idle.
 // We inline this part to speed things up when we are doing double/quad/octal stepping.
@@ -157,7 +165,7 @@ inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 	const int32_t netStepsTaken = (directionReversed) 								// if started reverse phase
 									? nextStep - (2 * reverseStartStep) + 1			// allowing for direction having changed
 										: nextStep - 1;
-	return (direction) ? -netStepsTaken : netStepsTaken;
+	return (direction) ? netStepsTaken : -netStepsTaken;
 }
 
 // Return true if this is an extruder executing a printing move

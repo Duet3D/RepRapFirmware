@@ -99,7 +99,7 @@ void DDARing::Init2() noexcept
 		{
 			pos[i] = 0.0;
 		}
-		SetPositions(pos);
+		SetPositions(pos, AxesBitmap::MakeLowestNBits(MaxAxesPlusExtruders));
 	}
 
 	extrudersPrinting = false;
@@ -231,8 +231,8 @@ bool DDARing::AddAsyncMove(const AsyncMove& nextMove) noexcept
 #endif
 
 // Try to process moves in the ring. Called by the Move task.
-// Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or TaskBase::TimeoutUnlimited if there are no unprepared moves left.
-uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool shouldStartMove) noexcept
+// Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or MoveTiming::StandardMoveWakeupInterval if there are no unprepared moves left.
+uint32_t DDARing::Spin(SimulationMode simulationMode, bool signalMoveCompletion, bool shouldStartMove) noexcept
 {
 	DDA *cdda = getPointer;											// capture volatile variable
 
@@ -244,9 +244,9 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 		if (cdda->GetState() == DDA::committed)
 		{
 			simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
+			++completedMoves;
 			if (cdda->Free())
 			{
-				++completedMoves;
 				++numLookaheadUnderruns;
 			}
 			getPointer = cdda = cdda->GetNext();
@@ -258,6 +258,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 		while (cdda->GetState() == DDA::committed && cdda->HasExpired())
 		{
 			++completedMoves;
+			//debugPrintf("Retiring move: now=%" PRIu32 " start=%" PRIu32 " dur=%" PRIu32 "\n", StepTimer::GetMovementTimerTicks(), cdda->GetMoveStartTime(), cdda->GetClocksNeeded());
 			if (cdda->Free())
 			{
 				++numLookaheadUnderruns;
@@ -282,7 +283,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 			if (cdda == addPointer)
 			{
 				return (simulationMode == SimulationMode::off)
-						? TaskBase::TimeoutUnlimited				// all the moves we have are already prepared, so nothing to do until new moves arrive
+						? MoveTiming::StandardMoveWakeupInterval	// all the moves we have are already prepared, so nothing to do until new moves arrive
 							: 0;
 			}
 		}
@@ -293,10 +294,10 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 			return 0;
 		}
 
-		if (waitingForSpace)
+		if (signalMoveCompletion || waitingForRingToEmpty || cdda->IsIsolatedMove())
 		{
-			// The Move task told us it is waiting for space in the ring, so we need to wake it up soon after we expect the move to finish
-			const uint32_t moveTime = currentMove->GetClocksNeeded()/StepClockRate + 1;		// the move time plus 1ms
+			// Wake up the Move task shortly after we expect the current move to finish
+			const uint32_t moveTime = (currentMove->GetMoveFinishTime() - StepTimer::GetMovementTimerTicks())/(StepClockRate/1000) + 2;	// 1ms ticks until the move finishes plus 2ms
 			if (moveTime < ret)
 			{
 				ret = moveTime;
@@ -308,12 +309,8 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 
 	// No DDA is executing, so start executing a new one if possible
 	if (   shouldStartMove											// if the Move code told us that we should start a move in any case...
-		|| waitingForSpace											// ...or the Move code told us it was waiting for space in the ring...
 		|| waitingForRingToEmpty									// ...or GCodes is waiting for all moves to finish...
-		|| cdda->IsCheckingEndstops()								// ...or checking endstops, so we can't schedule the following move
-#if SUPPORT_REMOTE_COMMANDS
-		|| cdda->GetState() == DDA::committed						// ...or the move has already been committed (it's probably a remote move)
-#endif
+		|| cdda->IsIsolatedMove()									// ...or checking endstops or another isolated move, so we can't schedule the following move
 	   )
 	{
 		uint32_t ret = PrepareMoves(cdda, 0, 0, simulationMode);
@@ -324,10 +321,10 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 				return 0;											// we don't want any delay because we want Spin() to be called again soon to complete this move
 			}
 
-			if (waitingForSpace)
+			if (signalMoveCompletion || waitingForRingToEmpty || cdda->IsIsolatedMove())
 			{
 				// The Move task told us it is waiting for space in the ring, so wake it up soon after we expect the move to finish
-				const uint32_t moveTime = getPointer->GetClocksNeeded()/StepClockRate + 1;	// the move time plus 1ms
+				const uint32_t moveTime = (cdda->GetMoveFinishTime() - StepTimer::GetMovementTimerTicks())/(StepClockRate/1000) + 2;	// 1ms ticks until the move finishes plus 2ms
 				if (moveTime < ret)
 				{
 					ret = moveTime;
@@ -339,11 +336,11 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 
 	return (cdda->GetState() == DDA::provisional)
 			? MoveStartPollInterval									// there are moves in the queue but it is not time to prepare them yet
-				: TaskBase::TimeoutUnlimited;						// the queue is empty, nothing to do until new moves arrive
+				: MoveTiming::StandardMoveWakeupInterval;			// the queue is empty, nothing to do until new moves arrive
 }
 
 // Prepare some moves. moveTimeLeft is the total length remaining of moves that are already executing or prepared.
-// Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or TaskBase::TimeoutUnlimited if there are no unprepared moves left.
+// Return the maximum time in milliseconds that should elapse before we prepare further unprepared moves that are already in the ring, or MoveTiming::StandardMoveWakeupInterval if there are no unprepared moves left.
 uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t moveTimeLeft, unsigned int alreadyPrepared, SimulationMode simulationMode) noexcept
 {
 	// If the number of prepared moves will execute in less than the minimum time, prepare another move.
@@ -377,7 +374,7 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t moveTimeLeft, 
 	}
 
 	// There are no moves waiting to be prepared
-	return TaskBase::TimeoutUnlimited;
+	return MoveTiming::StandardMoveWakeupInterval;
 }
 
 // Return true if this DDA ring is idle
@@ -437,17 +434,10 @@ void DDARing::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) 
 
 // Set the initial machine coordinates for the next move to be added to the specified values, by setting the final coordinates of the last move in the queue
 // The last move in the queue must have already been set up by the Move process before this is called.
-void DDARing::SetPositions(const float move[MaxAxesPlusExtruders]) noexcept
+void DDARing::SetPositions(const float positions[MaxAxesPlusExtruders], AxesBitmap axes) noexcept
 {
 	AtomicCriticalSectionLocker lock;
-	addPointer->GetPrevious()->SetPositions(move);
-}
-
-// Set the positions of some of the axis motors. Called after homing an axis.
-void DDARing::SetAxisMotorEndPoints(const int32_t *newMotorPositions, AxesBitmap whichDrives) noexcept
-{
-	AtomicCriticalSectionLocker lock;
-	addPointer->GetPrevious()->SetAxisPositions(newMotorPositions, whichDrives);
+	addPointer->GetPrevious()->SetPositions(positions, axes);
 }
 
 // Get the DDA that should currently be executing, or nullptr if no move from this ring should be executing
@@ -458,10 +448,10 @@ DDA *DDARing::GetCurrentDDA() const noexcept
 	const uint32_t now = StepTimer::GetMovementTimerTicks();
 	while (cdda->GetState() == DDA::committed)
 	{
-		const uint32_t timeRunning = cdda->GetMoveStartTime() - now;
+		const uint32_t timeRunning = now - cdda->GetMoveStartTime();
 		if ((int32_t)timeRunning < 0) { break; }			// move has not started yet
 		if (timeRunning < cdda->GetClocksNeeded()) { return cdda; }
-		cdda = cdda->GetNext();
+		cdda = cdda->GetNext();								// move has completed so look at the next one
 	}
 	return nullptr;
 }

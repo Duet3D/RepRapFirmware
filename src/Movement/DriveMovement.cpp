@@ -411,7 +411,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 			{
 				return false;										// the call to NewSegment has already set the state to idle
 			}
-			if (unlikely(currentSegment->GetStartTime() < prevEndTime))
+			if (unlikely((int32_t)(currentSegment->GetStartTime() <-prevEndTime) < -2))
 			{
 #if SEGMENT_DEBUG
 				debugPrintf("step err1, %" PRIu32 ", %" PRIu32 "\n", currentSegment->GetStartTime(), prevEndTime);

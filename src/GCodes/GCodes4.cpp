@@ -1346,7 +1346,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #if SUPPORT_ASYNC_MOVES
 					ms.OwnedAxisCoordinateUpdated(Z_AXIS);
 #endif
-					reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), false);
+					reprap.GetMove().SetNewPosition(ms.coords, ms, false);
 
 					// Find the coordinates of the Z probe to pass to SetZeroHeightError
 					float tempCoords[MaxAxes];
@@ -1409,7 +1409,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				// Setting the Z height with G30
 				ms.coords[Z_AXIS] -= g30zHeightError;
-				reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), false);
+				reprap.GetMove().SetNewPosition(ms.coords, ms, false);
 
 				// Find the coordinates of the Z probe to pass to SetZeroHeightError
 				float tempCoords[MaxAxes];
@@ -1436,7 +1436,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				// G30 with a silly Z value and S=1 is equivalent to G30 with no parameters in that it sets the current Z height
 				// This is useful because it adjusts the XY position to account for the probe offset.
 				ms.coords[Z_AXIS] -= g30zHeightError;
-				reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), false);
+				reprap.GetMove().SetNewPosition(ms.coords, ms, false);
 				ToolOffsetInverseTransform(ms);
 			}
 			else if (g30SValue >= -1)

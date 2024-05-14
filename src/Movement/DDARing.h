@@ -30,7 +30,7 @@ public:
 	bool AddAsyncMove(const AsyncMove& nextMove) noexcept;
 #endif
 
-	uint32_t Spin(SimulationMode simulationMode, bool waitingForSpace, bool shouldStartMove) noexcept SPEED_CRITICAL;	// Try to process moves in the ring
+	uint32_t Spin(SimulationMode simulationMode, bool signalMoveCompletion, bool shouldStartMove) noexcept SPEED_CRITICAL;	// Try to process moves in the ring
 	bool IsIdle() const noexcept;														// Return true if this DDA ring is idle
 	uint32_t GetGracePeriod() const noexcept { return gracePeriod; }					// Return the minimum idle time, before we should start a move. Better to have a few moves in the queue so that we can do lookahead
 
@@ -55,8 +55,7 @@ public:
 	void GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) const noexcept;	// Return the machine coordinates of just some axes
 #endif
 
-	void SetPositions(const float move[MaxAxesPlusExtruders]) noexcept;					// Force the machine coordinates to be these
-	void SetAxisMotorEndPoints(const int32_t *newMotorPositions, AxesBitmap whichDrives) noexcept;
+	void SetPositions(const float positions[MaxAxesPlusExtruders], AxesBitmap axes) noexcept;	// Force the machine coordinates to be these
 
 	bool PauseMoves(MovementState& ms) noexcept;										// Pause the print as soon as we can, returning true if we were able to skip any moves in the queue
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT

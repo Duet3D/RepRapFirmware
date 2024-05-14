@@ -1609,9 +1609,9 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (seen)
 					{
 						// On a delta, if we change the drive steps/mm then we need to recalculate the motor positions
-						for (size_t i = 0; i < NumMovementSystems; ++i)
+						for (const MovementState& ms : moveStates)
 						{
-							reprap.GetMove().SetNewPosition(moveStates[i].coords, i, true);
+							reprap.GetMove().SetNewPosition(ms.coords, ms, true);
 						}
 #if SUPPORT_CAN_EXPANSION
 						result = platform.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply);
@@ -4112,7 +4112,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								ToolOffsetInverseTransform(ms);					// make sure the limits are reflected in the user position
 							}
-							move.SetNewPosition(ms.coords, ms.GetMsNumber(), true);
+							move.SetNewPosition(ms.coords, ms, true);
 						}
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
@@ -4185,7 +4185,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								ToolOffsetInverseTransform(ms);				// make sure the limits are reflected in the user position
 							}
-							move.SetNewPosition(ms.coords, ms.GetMsNumber(), true);
+							move.SetNewPosition(ms.coords, ms, true);
 						}
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();

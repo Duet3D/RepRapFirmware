@@ -364,7 +364,7 @@ void MovementState::SaveOwnAxisCoordinates() noexcept
 		}
 #endif	//END DEBUGB
 		memcpyf(coords, lastKnownMachinePositions, totalAxes);
-		move.SetRawPosition(coords, msNumber);
+		move.SetRawPosition(coords, msNumber, axesAndExtrudersOwned);
 		move.InverseAxisAndBedTransform(coords, currentTool);
 	}
 }

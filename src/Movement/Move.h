@@ -76,19 +76,20 @@ public:
 	uint16_t GetRawMicrostepping(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return microstepping[axisOrExtruder]; }
 
 	void GetCurrentMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
-	void SetRawPosition(const float positions[MaxAxesPlusExtruders], MovementSystemNumber msNumber) noexcept
+	void SetRawPosition(const float positions[MaxAxes], MovementSystemNumber msNumber, AxesBitmap axes) noexcept
 			pre(queueNumber < NumMovementSystems);							// Set the current position to be this without transforming them first
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
-	int32_t GetLiveMotorPosition(size_t axis) const noexcept pre(axis < MaxAxesPlusExtruders);
+	int32_t GetLiveMotorPosition(size_t driver) const noexcept pre(driver < MaxAxesPlusExtruders);
+	void SetMotorPosition(size_t driver, int32_t pos) noexcept pre(driver < MaxAxesPlusExtruders);
+
 	void GetLiveCoordinates(unsigned int msNumber, const Tool *tool, float coordsOut[MaxAxesPlusExtruders]) noexcept;
 																			// Gives the last point at the end of the last complete DDA
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
 	bool WaitingForAllMovesFinished(MovementSystemNumber msNumber) noexcept
 		pre(queueNumber < rings.upb);										// Tell the lookahead ring we are waiting for it to empty and return true if it is
 	void DoLookAhead() noexcept SPEED_CRITICAL;								// Run the look-ahead procedure
-	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], MovementSystemNumber msNumber, bool doBedCompensation) noexcept
-			pre(queueNumber < NumMovementSystems);							// Set the current position to be this
+	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], const MovementState& ms, bool doBedCompensation) noexcept;	// Set the current position to be this
 	void ResetExtruderPositions() noexcept;									// Resets the extrusion amounts of the live coordinates
 	void SetXYBedProbePoint(size_t index, float x, float y) noexcept;		// Record the X and Y coordinates of a probe point
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError) noexcept; // Record the Z coordinate of a probe point
@@ -334,7 +335,6 @@ private:
 	DriveMovement dms[MaxAxesPlusExtruders + NumDirectDrivers];		// One DriveMovement object per logical drive, plus an extra one for each local driver to support bed levelling moves
 
 	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 	// Accumulated motor steps, used by filament monitors
-	int32_t motorPositionsAfterScheduledMoves[MaxAxesPlusExtruders];	// The motor positions that will result after all scheduled movement has completed normally
 	float driveStepsPerMm[MaxAxesPlusExtruders];
 	uint16_t microstepping[MaxAxesPlusExtruders];					// the microstepping used for each axis or extruder, top bit is set if interpolation enabled
 
@@ -435,14 +435,19 @@ inline void Move::GetPartialMachinePosition(float m[MaxAxes], MovementSystemNumb
 #endif
 
 // Set the current position to be this without transforming them first
-inline void Move::SetRawPosition(const float positions[MaxAxesPlusExtruders], MovementSystemNumber msNumber) noexcept
+inline void Move::SetRawPosition(const float positions[MaxAxes], MovementSystemNumber msNumber, AxesBitmap axes) noexcept
 {
-	rings[msNumber].SetPositions(positions);
+	rings[msNumber].SetPositions(positions, axes);
 }
 
-inline int32_t Move::GetLiveMotorPosition(size_t axis) const noexcept
+inline int32_t Move::GetLiveMotorPosition(size_t driver) const noexcept
 {
-	return dms[axis].GetCurrentMotorPosition();
+	return dms[driver].GetCurrentMotorPosition();
+}
+
+inline void Move::SetMotorPosition(size_t driver, int32_t pos) noexcept
+{
+	dms[driver].SetCurrentMotorPosition(pos);
 }
 
 inline ExtruderShaper& Move::GetExtruderShaperForExtruder(size_t extruder) noexcept
