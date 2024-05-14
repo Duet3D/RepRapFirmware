@@ -1028,15 +1028,18 @@ void DDA::MatchSpeeds() noexcept
 }
 
 // This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered
-void DDA::SetPositions(const float position[MaxAxes], AxesBitmap driversMoved) noexcept
+void DDA::SetPositions(const float position[MaxAxes], AxesBitmap axesMoved) noexcept
 {
 	Move& move = reprap.GetMove();
 	(void)move.CartesianToMotorSteps(position, endPoint, true);
-	const size_t numAxes = reprap.GetGCodes().GetVisibleAxes();
-	for (size_t axis = 0; axis < numAxes; ++axis)
-	{
-		endCoordinates[axis] = position[axis];
-	}
+	AxesBitmap driversMoved;
+	const Kinematics& kin = move.GetKinematics();
+	axesMoved.Iterate([this, position, &kin, &driversMoved](unsigned int axis, unsigned int)->void
+						{
+							endCoordinates[axis] = position[axis];
+							driversMoved |= kin.GetControllingDrives(axis);
+						}
+					 );
 	flags.endCoordinatesValid = true;
 	driversMoved.Iterate([&move, this](unsigned int driver, unsigned int)->void { move.SetMotorPosition(driver, this->endPoint[driver]); });
 }

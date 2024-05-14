@@ -568,7 +568,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 				ToolOffsetTransform(tempMs);
 				tempMs.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);	// ask for a good feed rate, we may have paused during a slow move
-				NewSingleSegmentMoveAvailable(tempMs);
+				NewSegmentableMoveAvailable(tempMs);
 			}
 			gb.SetState((zPendingRestore) ? GCodeState::resuming2 : GCodeState::resuming3);
 #else
@@ -785,7 +785,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.coords[Z_AXIS] = axesCoords[Z_AXIS];
 					ms.feedRate = zp->GetTravelSpeed();
 					ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;		// assume that both linear and rotational axes might be moving
-					NewSingleSegmentMoveAvailable(ms);
+					NewSegmentableMoveAvailable(ms);
 
 #if SUPPORT_SCANNING_PROBES
 					if (zp->GetProbeType() == ZProbeType::scanningAnalog)
@@ -1185,7 +1185,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			ms.coords[Z_AXIS] = zp->GetStartingHeight(true);
 			ms.feedRate = zp->GetTravelSpeed();
 			ms.linearAxesMentioned = true;
-			NewSingleSegmentMoveAvailable(ms);
+			NewSegmentableMoveAvailable(ms);
 			gb.AdvanceState();
 		}
 		break;
@@ -1201,7 +1201,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			ms.coords[Z_AXIS] = zp->GetStartingHeight(true);
 			ms.feedRate = zp->GetTravelSpeed();
 			ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;		// assume that both linear and rotational axes might be moving
-			NewSingleSegmentMoveAvailable(ms);
+			NewSegmentableMoveAvailable(ms);
 
 			InitialiseTaps(false);									// don't do fast-then-slow probing
 			gb.AdvanceState();
@@ -1591,7 +1591,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 	// Scanning probe calibration states
 	case GCodeState::probeCalibration1:
-		// We just deployed the Z probe, read to start calibrating. Move t the trigger height plus the scanning range.
+		// We just deployed the Z probe, read to start calibrating. Move to the trigger height plus the scanning range.
 		if (LockCurrentMovementSystemAndWaitForStandstill(gb))
 		{
 			SetMoveBufferDefaults(ms);
@@ -1602,7 +1602,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			}
 			ms.linearAxesMentioned = true;
 			numCalibrationReadingsTaken = 0;
-			NewSingleSegmentMoveAvailable(ms);
+			NewSegmentableMoveAvailable(ms);
 			gb.AdvanceState();
 		}
 		break;

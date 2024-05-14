@@ -558,7 +558,7 @@ private:
 #endif
 
 	void NewSingleSegmentMoveAvailable(MovementState& ms) noexcept;				// Flag that a new move that should be executed in a single segment is available
-	void NewSegmentableMoveAvailable(MovementState& ms, float xyDistance) noexcept;	// Flag that a new move that should be segmented is available
+	void NewSegmentableMoveAvailable(MovementState& ms) noexcept;				// Flag that a new move that should be segmented is available
 	void NewMoveAvailable(MovementState& ms) noexcept;							// Flag that a new move is available
 
 	void SetMoveBufferDefaults(MovementState& ms) noexcept;						// Set up default values in the move buffer
