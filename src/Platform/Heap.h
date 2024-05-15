@@ -43,4 +43,9 @@ namespace Heap
 	extern ReadWriteLock heapLock;
 }
 
+inline void Heap::IncreaseRefCount(IndexSlot *slotPtr) noexcept
+{
+	++slotPtr->refCount;
+}
+
 #endif /* SRC_PLATFORM_HEAP_H_ */

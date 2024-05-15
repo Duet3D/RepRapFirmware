@@ -344,19 +344,18 @@ void Heap::CheckSlotGood(IndexSlot *slotPtr) noexcept
 	RRF_ASSERT(slotPtr->refCount != 0);
 }
 
-void Heap::IncreaseRefCount(IndexSlot *slotPtr) noexcept
-{
-	++slotPtr->refCount;
-}
-
 void Heap::DeleteSlot(IndexSlot *slotPtr) noexcept
 {
+#if CHECK_HANDLES
+	Heap::CheckSlotGood(slotPtr);
+#endif
+
 	RRF_ASSERT(slotPtr->refCount != 0);
 	RRF_ASSERT(slotPtr->storage != nullptr);
 	if (--slotPtr->refCount == 0)
 	{
 		heapToRecycle += slotPtr->storage->length;
-		slotPtr->storage->length |= 1;						// flag the space as unused
+		slotPtr->storage->length |= 1u;						// flag the space as unused
 		slotPtr->storage = nullptr;							// release the handle entry
 		--handlesUsed;
 	}
