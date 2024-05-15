@@ -162,7 +162,7 @@ DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
 
 // Return the number of clocks this DDA still needs to execute.
 uint32_t DDA::GetTimeLeft() const noexcept
-pre(state == executing || state == frozen || state == completed)
+pre(state == provisional || state == committed)
 {
 	switch (state)
 	{

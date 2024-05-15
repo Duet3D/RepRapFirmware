@@ -280,27 +280,30 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool signalMoveCompletion,
 			preparedTime += cdda->GetTimeLeft();
 			++preparedCount;
 			cdda = cdda->GetNext();
-			if (cdda == addPointer)
-			{
-				return (simulationMode == SimulationMode::off)
-						? MoveTiming::StandardMoveWakeupInterval	// all the moves we have are already prepared, so nothing to do until new moves arrive
-							: 0;
-			}
 		}
 
-		uint32_t ret = PrepareMoves(cdda, preparedTime, preparedCount, simulationMode);
-		if (simulationMode >= SimulationMode::normal)
+		uint32_t ret = (cdda->GetState() == DDA::provisional)
+						? PrepareMoves(cdda, preparedTime, preparedCount, simulationMode)
+							: MoveTiming::StandardMoveWakeupInterval;
+
+		if (simulationMode != SimulationMode::off)
 		{
 			return 0;
 		}
 
-		if (signalMoveCompletion || waitingForRingToEmpty || cdda->IsIsolatedMove())
+		if (signalMoveCompletion || waitingForRingToEmpty || currentMove->IsIsolatedMove())
 		{
 			// Wake up the Move task shortly after we expect the current move to finish
-			const uint32_t moveTime = (currentMove->GetMoveFinishTime() - StepTimer::GetMovementTimerTicks())/(StepClockRate/1000) + 2;	// 1ms ticks until the move finishes plus 2ms
+			const int32_t moveTicksLeft = currentMove->GetMoveFinishTime() - StepTimer::GetMovementTimerTicks();
+			if (moveTicksLeft < 0)
+			{
+				return 0;
+			}
+
+			const uint32_t moveTime = moveTicksLeft/(StepClockRate/1000) + 1;	// 1ms ticks until the move finishes plus 1ms
 			if (moveTime < ret)
 			{
-				ret = moveTime;
+				return moveTime;
 			}
 		}
 
@@ -323,11 +326,17 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool signalMoveCompletion,
 
 			if (signalMoveCompletion || waitingForRingToEmpty || cdda->IsIsolatedMove())
 			{
-				// The Move task told us it is waiting for space in the ring, so wake it up soon after we expect the move to finish
-				const uint32_t moveTime = (cdda->GetMoveFinishTime() - StepTimer::GetMovementTimerTicks())/(StepClockRate/1000) + 2;	// 1ms ticks until the move finishes plus 2ms
+				// Wake up the Move task shortly after we expect the current move to finish
+				const int32_t moveTicksLeft = cdda->GetMoveFinishTime() - StepTimer::GetMovementTimerTicks();
+				if (moveTicksLeft < 0)
+				{
+					return 0;
+				}
+
+				const uint32_t moveTime = moveTicksLeft/(StepClockRate/1000) + 1;	// 1ms ticks until the move finishes plus 1ms
 				if (moveTime < ret)
 				{
-					ret = moveTime;
+					return moveTime;
 				}
 			}
 		}
