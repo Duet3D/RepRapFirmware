@@ -485,12 +485,6 @@ void StepTimer::CancelCallback() noexcept
 	RestoreBasePriority(baseprio);
 }
 
-// Function called by FreeRTOS to read the timer
-extern "C" uint32_t StepTimerGetTimerTicks() noexcept
-{
-	return StepTimer::GetTimerTicks();
-}
-
 /*static*/ void StepTimer::Diagnostics(const StringRef& reply) noexcept
 {
 #if SUPPORT_REMOTE_COMMANDS
