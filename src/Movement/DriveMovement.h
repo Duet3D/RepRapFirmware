@@ -49,14 +49,13 @@ public:
 
 	void DebugPrint() const noexcept;
 	int32_t GetCurrentMotorPosition() const noexcept { return currentMotorPosition; }
-	void SetCurrentMotorPosition(int32_t pos) noexcept { currentMotorPosition = pos; }
 	bool StopDriver(int32_t& netStepsTaken) noexcept;					// if the driver is moving, stop it, update the position and pass back the net steps taken
 #if SUPPORT_REMOTE_COMMANDS
 	void StopDriverFromRemote() noexcept;
 #endif
 	int32_t GetNetStepsTaken() const noexcept;							// return the number of steps taken in the current segment
-	void SetMotorPosition(int32_t pos) noexcept { currentMotorPosition = pos; }
-	void AdjustMotorPosition(int32_t adjustment) noexcept { currentMotorPosition += adjustment; }
+	void SetMotorPosition(int32_t pos) noexcept;
+	void AdjustMotorPosition(int32_t adjustment) noexcept;
 	bool MotionPending() const noexcept { return segments != nullptr; }
 	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
 	bool CheckingEndstops() const noexcept;								// returns true when executing a move that checks endstops or Z probe

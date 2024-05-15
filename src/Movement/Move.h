@@ -447,7 +447,7 @@ inline int32_t Move::GetLiveMotorPosition(size_t driver) const noexcept
 
 inline void Move::SetMotorPosition(size_t driver, int32_t pos) noexcept
 {
-	dms[driver].SetCurrentMotorPosition(pos);
+	dms[driver].SetMotorPosition(pos);
 }
 
 inline ExtruderShaper& Move::GetExtruderShaperForExtruder(size_t extruder) noexcept

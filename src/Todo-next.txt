@@ -48,7 +48,8 @@ Bugs:
 - [no fault] Spurious filament monitor errors - this was on a tool board
 - [done] Step error when moving delta printer in X direction
 - [done] Requested speed and top speed always show zero
-- [temporary fix] Pauses after G1 H2 moves, especially if expansion boards are involved
+- [temporary fix done] Pauses after G1 H2 moves, especially if expansion boards are involved
+- G1 H2 moves on delta: moves the wrong number of steps according to M114 (too few) if just 1 tower moving; ok if all 3 moving
 - Avoid zero-length/zero-duration moves
 - Delta printer auto calibration not working
 - Z probing not working

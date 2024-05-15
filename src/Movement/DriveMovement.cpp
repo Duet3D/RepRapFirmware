@@ -55,6 +55,24 @@ void DriveMovement::DebugPrint() const noexcept
 	}
 }
 
+void DriveMovement::SetMotorPosition(int32_t pos) noexcept
+{
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintTransforms))
+	{
+		debugPrintf("Changing drive %u pos from %" PRIi32 " to %" PRIi32 "\n", drive, currentMotorPosition, pos);
+	}
+	currentMotorPosition = pos;
+}
+
+void DriveMovement::AdjustMotorPosition(int32_t adjustment) noexcept
+{
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintTransforms))
+	{
+		debugPrintf("Adjusting drive %u pos from %" PRIi32 " to %" PRIi32 "\n", drive, currentMotorPosition, currentMotorPosition + adjustment);
+	}
+	currentMotorPosition += adjustment;
+}
+
 // Add a segment into the list. If the list is not empty then the new segment may overlap segments already in the list but will never start earlier than the first existing one.
 // The units of the input parameters are steps for distance and step clocks for time.
 void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float distance, float u, float a, MovementFlags moveFlags) noexcept
