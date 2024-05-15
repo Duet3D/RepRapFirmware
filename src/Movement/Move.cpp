@@ -1376,8 +1376,9 @@ float Move::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 	return latestLiveCoordinates[axisOrExtruder];
 }
 
-// Force an update of the live machine coordinates
-void Move::UpdateLiveMachineCoordinates() const noexcept
+// Get the current machine coordinates, independently of the above functions, so not affected by other tasks calling them
+// Return true if motion is pending i.e. they are are in a state of change
+bool Move::GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept
 {
 	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
 	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
@@ -1385,7 +1386,6 @@ void Move::UpdateLiveMachineCoordinates() const noexcept
 	// Get the positions of each motor
 	int32_t currentMotorPositions[MaxAxes];
 	bool motionPending = false;
-	motionAdded = false;
 	{
 		AtomicCriticalSectionLocker lock;											// to make sure we get a consistent set of coordinates
 		for (size_t i = 0; i < numTotalAxes; ++i)
@@ -1398,7 +1398,15 @@ void Move::UpdateLiveMachineCoordinates() const noexcept
 		}
 	}
 
-	MotorStepsToCartesian(currentMotorPositions, numVisibleAxes, numTotalAxes, latestLiveCoordinates);		// this is slow, so do it with interrupts enabled
+	MotorStepsToCartesian(currentMotorPositions, numVisibleAxes, numTotalAxes, coords);
+	return motionPending;
+}
+
+// Force an update of the stored machine coordinates
+void Move::UpdateLiveMachineCoordinates() const noexcept
+{
+	motionAdded = false;
+	bool motionPending = GetLiveMachineCoordinates(latestLiveCoordinates);
 
 	for (size_t i = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); i < MaxAxesPlusExtruders; ++i)
 	{
@@ -2145,6 +2153,7 @@ bool Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
 #else
 	(void)wasMoving;
 #endif
+
 	return wakeAsyncSender;
 }
 

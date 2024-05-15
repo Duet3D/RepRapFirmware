@@ -344,11 +344,11 @@ AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap a
 	return unAvailable;
 }
 
-// Fetch and save the coordinates of axes we own to lastKnownMachinePositions, also copy them to our own coordinates in case we just did a homing move
+// Fetch and save the current coordinates to lastKnownMachinePositions, also copy them to our own coordinates in case we just did a homing move
 void MovementState::SaveOwnAxisCoordinates() noexcept
 {
 	Move& move = reprap.GetMove();
-	move.GetPartialMachinePosition(lastKnownMachinePositions, msNumber, axesAndExtrudersOwned);
+	(void)move.GetLiveMachineCoordinates(lastKnownMachinePositions);
 
 	// Only update our own position if something has changed, to avoid frequent inverse and forward transforms
 	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
@@ -362,9 +362,8 @@ void MovementState::SaveOwnAxisCoordinates() noexcept
 				debugPrintf("Coord %u changed from %.4f to %.4f in ms %u\n", i, (double)coords[i], (double)lastKnownMachinePositions[i], GetMsNumber());
 			}
 		}
-#endif	//END DEBUGB
+#endif	//END DEBUG
 		memcpyf(coords, lastKnownMachinePositions, totalAxes);
-		move.SetRawPosition(coords, msNumber, axesAndExtrudersOwned);
 		move.InverseAxisAndBedTransform(coords, currentTool);
 	}
 }

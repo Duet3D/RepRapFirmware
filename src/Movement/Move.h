@@ -196,8 +196,6 @@ public:
 #endif
 
 #if SUPPORT_ASYNC_MOVES
-	void GetPartialMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, AxesBitmap whichAxes) const noexcept
-			pre(queueNumber < NumMovementSystems);							// Get the current position of some axes from one of the rings
 	AsyncMove *LockAuxMove() noexcept;														// Get and lock the aux move buffer
 	void ReleaseAuxMove(bool hasNewMove) noexcept;											// Release the aux move buffer and optionally signal that it contains a move
 	GCodeResult ConfigureHeightFollowing(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Configure height following
@@ -213,8 +211,10 @@ public:
 	float GetDecelerationMmPerSecSquared() const noexcept { return rings[0].GetDecelerationMmPerSecSquared(); }
 	float GetTotalExtrusionRate() const noexcept { return rings[0].GetTotalExtrusionRate(); }
 
-	float LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept;
-	void ForceLiveCoordinatesUpdate() noexcept { forceLiveCoordinatesUpdate = true; }
+	float LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept;				// Get a single coordinate for reporting e.g.in the OM
+	void ForceLiveCoordinatesUpdate() noexcept { forceLiveCoordinatesUpdate = true; }		// Force the stored coordinates to be updated next time LiveMachineCoordinate is called
+
+	bool GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept;					// Get the current machine coordinates, independently of the above functions, so not affected by other tasks calling them
 
 	void AdjustLeadscrews(const floatc_t corrections[]) noexcept;							// Called by some Kinematics classes to adjust the leadscrews
 
@@ -421,16 +421,6 @@ inline void Move::UpdateExtrusionPendingLimits(float extrusionPending) noexcept
 	if (extrusionPending > maxExtrusionPending) { maxExtrusionPending = extrusionPending; }
 	else if (extrusionPending < minExtrusionPending) { minExtrusionPending = extrusionPending; }
 }
-
-#if SUPPORT_ASYNC_MOVES
-
-// Get the current position of some axes from one of the rings
-inline void Move::GetPartialMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, AxesBitmap whichAxes) const noexcept
-{
-	rings[msNumber].GetPartialMachinePosition(m, whichAxes);
-}
-
-#endif
 
 // Set the current position to be this without transforming them first
 inline void Move::SetRawPosition(const float positions[MaxAxes], MovementSystemNumber msNumber, AxesBitmap axes) noexcept

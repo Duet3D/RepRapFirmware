@@ -600,10 +600,13 @@ bool DriveMovement::StopDriver(int32_t& netStepsTaken) noexcept
 		state = DMState::idle;
 		reprap.GetMove().DeactivateDM(this);
 		netStepsTaken = GetNetStepsTaken();
-		currentMotorPosition += netStepsTaken;
 		MoveSegment *seg = nullptr;
 		std::swap(seg, const_cast<MoveSegment*&>(segments));
 		MoveSegment::ReleaseAll(seg);
+		if (homingDda != nullptr)
+		{
+			homingDda->SetDriveCoordinate(currentMotorPosition, drive);
+		}
 		return true;
 	}
 

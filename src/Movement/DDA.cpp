@@ -1044,6 +1044,14 @@ void DDA::SetPositions(const float position[MaxAxes], AxesBitmap axesMoved) noex
 	driversMoved.Iterate([&move, this](unsigned int driver, unsigned int)->void { move.SetMotorPosition(driver, this->endPoint[driver]); });
 }
 
+// Force an end point. Called when a homing switch is triggered.
+void DDA::SetDriveCoordinate(int32_t a, size_t drive) noexcept
+{
+	endPoint[drive] = a;
+	flags.endCoordinatesValid = false;
+	reprap.GetMove().SetMotorPosition(drive, a);
+}
+
 // Get a Cartesian end coordinate from this move
 float DDA::GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept
 pre(disableDeltaMapping || drive < MaxAxes)
