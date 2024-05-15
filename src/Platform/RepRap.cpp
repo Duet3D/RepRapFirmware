@@ -592,7 +592,6 @@ void RepRap::Init() noexcept
 
 #if HAS_SBC_INTERFACE && !HAS_MASS_STORAGE
 	usingSbcInterface = true;
-	sbcInterface->Init();
 	FileWriteBuffer::UsingSbcMode();
 #endif
 

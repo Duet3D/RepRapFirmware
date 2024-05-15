@@ -296,13 +296,28 @@ void *Tasks::AllocPermanent(size_t sz, std::align_val_t align) noexcept
 	return ret;
 }
 
-// Function called by FreeRTOS and internally to reset the run-time counter and return the number of timer ticks since it was last reset
-extern "C" uint32_t TaskResetRunTimeCounter() noexcept
+// Function called by FreeRTOS to get the total number of timer ticks since last reset
+// We use a 64-bit value because a 32-bit value wraps after about 95 minutes on Duet 3, a little less on Duet 2.
+// This gets called fairly often, so when the 32-bit tick counter wraps round we assume it has only wrapped once.
+extern "C" uint64_t TaskGetRunTimeTicks() noexcept
 {
-	static uint32_t whenLastReset = 0;
-	const uint32_t now = StepTimer::GetTimerTicks();
-	const uint32_t ret = now - whenLastReset;
-	whenLastReset = now;
+	static uint32_t msw = 0;
+	static uint32_t ticksAtLastCall = 0;
+
+	const uint32_t ticks = StepTimer::GetTimerTicks();
+	if (ticks < ticksAtLastCall) { ++msw; }
+	ticksAtLastCall = ticks;
+	return ((uint64_t)msw << 32) | ticks;
+}
+
+// Function called by FreeRTOS and internally to reset the run-time counter and return the number of timer ticks since it was last reset
+extern "C" uint64_t TaskResetRunTimeCounter() noexcept
+{
+	static uint64_t whenRunTimeCounterLastReset = 0;
+
+	const uint64_t now = TaskGetRunTimeTicks();
+	const uint64_t ret = now - whenRunTimeCounterLastReset;
+	whenRunTimeCounterLastReset = now;
 	return ret;
 }
 
@@ -330,7 +345,7 @@ void Tasks::Diagnostics(MessageType mtype) noexcept
 		//ENDDB
 	}	// end memory stats scope
 
-	const uint32_t timeSinceLastCall = TaskResetRunTimeCounter();
+	const uint64_t timeSinceLastCall = TaskResetRunTimeCounter();
 	float totalCpuPercent = 0.0;
 	p.Message(mtype, "Tasks:");
 	for (TaskBase *t = TaskBase::GetTaskList(); t != nullptr; t = t->GetNext())
