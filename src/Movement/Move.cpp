@@ -1379,28 +1379,34 @@ float Move::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 // Force an update of the live machine coordinates
 void Move::UpdateLiveMachineCoordinates() const noexcept
 {
-	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();		// do this before we disable interrupts
-	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();			// do this before we disable interrupts
+	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
+	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
 
 	// Get the positions of each motor
-	int32_t currentMotorPositions[MaxAxesPlusExtruders];
+	int32_t currentMotorPositions[MaxAxes];
 	bool motionPending = false;
 	motionAdded = false;
-	for (size_t i = 0; i < MaxAxesPlusExtruders; ++i)
 	{
-		currentMotorPositions[i] = dms[i].GetCurrentMotorPosition();
-		if (dms[i].MotionPending())
+		AtomicCriticalSectionLocker lock;											// to make sure we get a consistent set of coordinates
+		for (size_t i = 0; i < numTotalAxes; ++i)
 		{
-			motionPending = true;
+			currentMotorPositions[i] = dms[i].GetCurrentMotorPosition();
+			if (dms[i].MotionPending())
+			{
+				motionPending = true;
+			}
 		}
 	}
 
 	MotorStepsToCartesian(currentMotorPositions, numVisibleAxes, numTotalAxes, latestLiveCoordinates);		// this is slow, so do it with interrupts enabled
 
-	// Add extrusion so far in the current move to the accumulated extrusion
 	for (size_t i = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); i < MaxAxesPlusExtruders; ++i)
 	{
-		latestLiveCoordinates[i] = currentMotorPositions[i] / driveStepsPerMm[i];
+		latestLiveCoordinates[i] = dms[i].GetCurrentMotorPosition() / driveStepsPerMm[i];
+		if (dms[i].MotionPending())
+		{
+			motionPending = true;
+		}
 	}
 
 	// Optimisation: if no movement, save the positions for next time
@@ -1601,6 +1607,8 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			}
 		}
 	}
+
+	motionAdded = true;
 
 	// If there were no segments attached to this DM initially, we need to schedule the interrupt for the new segment at the start of the list.
 	// Don't do this until we have added all the segments for this move, because the first segment we added may have been modified and/or split when we added further segments to implement input shaping
