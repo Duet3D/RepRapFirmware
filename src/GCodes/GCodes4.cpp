@@ -605,29 +605,34 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// We no longer restore the paused fan speeds automatically on resuming, because that messes up the print cooling fan speed if a tool change has been done
 			// They can be restored manually in resume.g if required
 #if SUPPORT_ASYNC_MOVES
-			FilePosition earliestFileOffset = 0;				// initialisation needed only to suppress compiler warning
+			FilePosition earliestFileOffset = noFilePosition;
+
 			for (MovementState& tempMs : moveStates)
 			{
 				tempMs.ReleaseNonToolAxesAndExtruders();
 				tempMs.ResumeAfterPause();
-				if (tempMs.GetMsNumber() == 0 || tempMs.GetPauseRestorePoint().filePos < earliestFileOffset)
+
+				GCodeBuffer* fgb = GetFileGCode(tempMs.GetMsNumber());
+				if (fgb->IsExecuting())
 				{
-					earliestFileOffset = tempMs.GetPauseRestorePoint().filePos;
-				}
-				if (tempMs.GetMsNumber() == 0 || !FileGCode()->ExecutingAll())
-				{
-					GCodeBuffer* fgb = GetFileGCode(tempMs.GetMsNumber());
-					fgb->LatestMachineState().feedRate = tempMs.GetPauseRestorePoint().feedRate;
-					if (tempMs.pausedInMacro)
+					if (tempMs.GetMsNumber() == 0 || tempMs.GetPauseRestorePoint().filePos < earliestFileOffset)
 					{
-						fgb->OriginalMachineState().firstCommandAfterRestart = true;
+						earliestFileOffset = tempMs.GetPauseRestorePoint().filePos;
+					}
+					if (tempMs.GetMsNumber() == 0 || !FileGCode()->ExecutingAll())
+					{
+						fgb->LatestMachineState().feedRate = tempMs.GetPauseRestorePoint().feedRate;
+						if (tempMs.pausedInMacro)
+						{
+							fgb->OriginalMachineState().firstCommandAfterRestart = true;
+						}
 					}
 				}
 			}
 
 			// If the file input stream has been forked then we are good to go.
 			// If File is executing both streams then we need to restart it from the earliest offset and using the movement system that was active at that point.
-			if (FileGCode()->ExecutingAll())
+			if (FileGCode()->ExecutingAll() && earliestFileOffset != noFilePosition)
 			{
 				FileGCode()->RestartFrom(earliestFileOffset);
 				const MovementSystemNumber msNumber = (moveStates[0].GetPauseRestorePoint().filePos > earliestFileOffset) ? 1
