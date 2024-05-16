@@ -1220,7 +1220,7 @@ void GCodeBuffer::MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionVa
 MessageType GCodeBuffer::GetResponseMessageType() const noexcept
 {
 #if HAS_SBC_INTERFACE
-	if (machineState->lastCodeFromSbc)
+	if (machineState->lastCodeFromSbc || (GetCommandLetter() == 'M' && GetCommandNumber() == 121))
 	{
 		return (MessageType)((1u << codeChannel.ToBaseType()) | BinaryCodeReplyFlag);
 	}
