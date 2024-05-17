@@ -36,13 +36,16 @@ void Variable::Assign(ExpressionValue& ev) THROWS(GCodeException)
 			const size_t numElements = entry->GetNumElements(ev.omVal, context);
 			if (numElements != 0)
 			{
-				ah.Allocate(numElements);
-				for (size_t i = 0; i < numElements; ++i)
 				{
-					context.AddIndex(i);
-					ExpressionValue elemVal = entry->GetElement(ev.omVal, context);
-					ah.AssignElement(i, elemVal);
-					context.RemoveIndex();
+					WriteLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
+					ah.Allocate(numElements);
+					for (size_t i = 0; i < numElements; ++i)
+					{
+						context.AddIndex(i);
+						ExpressionValue elemVal = entry->GetElement(ev.omVal, context);
+						ah.AssignElement(i, elemVal);
+						context.RemoveIndex();
+					}
 				}
 			}
 			val = ExpressionValue(ah);

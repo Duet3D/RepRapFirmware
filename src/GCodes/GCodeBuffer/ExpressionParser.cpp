@@ -810,10 +810,13 @@ void ExpressionParser::ParseGeneralArray(ExpressionValue& firstElementAndResult,
 
 	// Copy the temporary array to the heap
 	ArrayHandle ah;
-	ah.Allocate(index);
-	for (size_t i = 0; i < index; ++i)
 	{
-		ah.AssignElement(i, elements[i]);
+		WriteLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
+		ah.Allocate(index);
+		for (size_t i = 0; i < index; ++i)
+		{
+			ah.AssignElement(i, elements[i]);
+		}
 	}
 	firstElementAndResult.SetArrayHandle(ah);
 }
@@ -918,10 +921,13 @@ void ExpressionParser::ReadArrayFromFile(ExpressionValue& rslt, unsigned int off
 
 	// Move the array to the heap
 	ArrayHandle ah;
-	ah.Allocate(elemIndex);
-	for (size_t i = 0; i < elemIndex; ++i)
 	{
-		ah.AssignElement(i, elements[i]);
+		WriteLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
+		ah.Allocate(elemIndex);
+		for (size_t i = 0; i < elemIndex; ++i)
+		{
+			ah.AssignElement(i, elements[i]);
+		}
 	}
 	rslt.SetArrayHandle(ah);
 }
@@ -1794,10 +1800,13 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 					{
 						const size_t numElems = (size_t)rslt.iVal;
 						ArrayHandle ah;
-						ah.Allocate(numElems);
-						for (size_t i = 0; i < numElems; ++i)
 						{
-							ah.AssignElement(i, valueOperand);
+							WriteLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
+							ah.Allocate(numElems);
+							for (size_t i = 0; i < numElems; ++i)
+							{
+								ah.AssignElement(i, valueOperand);
+							}
 						}
 						rslt.SetArrayHandle(ah);
 					}
