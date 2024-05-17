@@ -2139,7 +2139,7 @@ void DDA::LatePrepareExtruders() noexcept
 	while (pdm != nullptr)
 	{
 		DriveMovement *const nextDm = pdm->nextDM;
-		if (pdm->isExtruder && pdm->LatePrepareExtruder(*this))
+		if (pdm->state == DMState::extruderPendingPreparation && pdm->LatePrepareExtruder(*this))
 		{
 			InsertDM(pdm);										// it has steps to do
 		}

@@ -24,6 +24,8 @@ enum class DMState : uint8_t
 	stepError2,
 	stepError3,
 
+	extruderPendingPreparation,						// an extruder that couldn't be fully prepared yet
+
 	// All higher values are various states of motion
 	firstMotionState,
 	cartAccel = firstMotionState,					// linear accelerating motion

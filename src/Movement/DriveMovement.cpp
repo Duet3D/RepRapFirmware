@@ -521,6 +521,7 @@ void DriveMovement::PrepareExtruder(const DDA& dda, float signedEffStepsPerMm) n
 	stepInterval = 0;								// to keep the debug output deterministic
 
 	// The remainder of the preparation can't be done until we start the move, because until then we don't know how much extrusion is pending
+	state = DMState::extruderPendingPreparation;
 }
 
 // Finish preparing this DM for execution, returning true if there are any steps to do.
@@ -560,6 +561,7 @@ bool DriveMovement::LatePrepareExtruder(const DDA& dda) noexcept
 		{
 			shaper.SetExtrusionPending(distanceSoFar * mp.cart.effectiveStepsPerMm);
 		}
+		state = DMState::idle;
 		return false;								// quit if no steps to do
 	}
 
