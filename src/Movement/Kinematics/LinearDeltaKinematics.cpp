@@ -255,7 +255,7 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 
 	// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
 	// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
-	if ((axesToLimit & XyzAxes) == XyzAxes)
+	if (axesToLimit.Intersects(XyzAxes))
 	{
 		// Constrain the move to be within the build radius
 		const float diagonalSquared = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);

@@ -256,73 +256,76 @@ LimitPositionResult ScaraKinematics::LimitPosition(float finalCoords[], const fl
 	// First limit all axes according to M208
 	bool limited = applyM208Limits && Kinematics::LimitPositionFromAxis(finalCoords, 0, numVisibleAxes, axesToLimit);
 
-	// Now check whether the arms can reach the final position
-	float theta, psi;
-	bool armMode = currentArmMode;
-	if (!CalculateThetaAndPsi(finalCoords, isCoordinated, theta, psi, armMode))
+	if (axesToLimit.Intersects(XyAxes))
 	{
-		// The requested position was not reachable
-		limited = true;
-		if (std::isnan(theta))
+		// Now check whether the arms can reach the final position
+		float theta, psi;
+		bool armMode = currentArmMode;
+		if (!CalculateThetaAndPsi(finalCoords, isCoordinated, theta, psi, armMode))
 		{
-			// We are radius-limited
-			float x = finalCoords[X_AXIS] + xOffset;
-			float y = finalCoords[Y_AXIS] + yOffset;
-			const float r = fastSqrtf(fsquare(x) + fsquare(y));
-			if (r < minRadius)
+			// The requested position was not reachable
+			limited = true;
+			if (std::isnan(theta))
 			{
-				// Radius is too small. The user may have specified x=0 y=0 so allow for this.
-				if (r < 1.0)
+				// We are radius-limited
+				float x = finalCoords[X_AXIS] + xOffset;
+				float y = finalCoords[Y_AXIS] + yOffset;
+				const float r = fastSqrtf(fsquare(x) + fsquare(y));
+				if (r < minRadius)
 				{
-					x = minRadius;
-					y = 0.0;
+					// Radius is too small. The user may have specified x=0 y=0 so allow for this.
+					if (r < 1.0)
+					{
+						x = minRadius;
+						y = 0.0;
+					}
+					else
+					{
+						x *= minRadius/r;
+						y *= minRadius/r;
+					}
 				}
 				else
 				{
-					x *= minRadius/r;
-					y *= minRadius/r;
+					// Radius must be too large
+					x *= maxRadius/r;
+					y *= maxRadius/r;
 				}
-			}
-			else
-			{
-				// Radius must be too large
-				x *= maxRadius/r;
-				y *= maxRadius/r;
+
+				finalCoords[X_AXIS] = x - xOffset;
+				finalCoords[Y_AXIS] = y - yOffset;
 			}
 
-			finalCoords[X_AXIS] = x - xOffset;
-			finalCoords[Y_AXIS] = y - yOffset;
-		}
-
-		// Recalculate theta and psi, but don't allow arm mode changes this time
-		if (!CalculateThetaAndPsi(finalCoords, true, theta, psi, armMode) && !std::isnan(theta))
-		{
-			// Radius is in range but at least one arm angle isn't
-			cachedTheta = theta = constrain<float>(theta, thetaLimits[0], thetaLimits[1]);
-			cachedPsi = psi = constrain<float>(psi, psiLimits[0], psiLimits[1]);
-			cachedX = finalCoords[X_AXIS] = (cosf(theta * DegreesToRadians) * proximalArmLength + cosf((psi + theta) * DegreesToRadians) * distalArmLength) - xOffset;
-			cachedY = finalCoords[Y_AXIS] = (sinf(theta * DegreesToRadians) * proximalArmLength + sinf((psi + theta) * DegreesToRadians) * distalArmLength) - yOffset;
-			cachedArmMode = currentArmMode;
-		}
-	}
-
-	// The final position is now reachable. Check that we can get there from the initial position.
-	if (isCoordinated && initialCoords != nullptr)
-	{
-		// Calculate how far along the line the closest point of approach to the distal axis is
-		// From maxima, t = -(y0(y1-y0)+x0(x1-x0))/L^2, d^2=((x0y1-x1y0)^2)/L^2
-		// where t is how far from along the line from x0y0 to x1y1 the closest point of approach is (0..1), d is the closest approach distance, and L^2= (x1-x0)^2+(y1-y0)^2
-		const float xdiff = finalCoords[0] - initialCoords[0];
-		const float ydiff = finalCoords[1] - initialCoords[1];
-		const float sumOfSquares = fsquare(xdiff) + fsquare(ydiff);
-		const float p = -(xdiff * (initialCoords[0] + xOffset) + ydiff * (initialCoords[1] + yOffset));
-		if (p > 0.0 && p < sumOfSquares)
-		{
-			// The closest point of approach to the distal axis is between the start and end points, so calculate the distance
-			const float cpa2 = fsquare((finalCoords[0] + xOffset) * (initialCoords[1] + yOffset) - (finalCoords[1] + yOffset) * (initialCoords[0] + xOffset));
-			if (cpa2 < minRadiusSquared * sumOfSquares)
+			// Recalculate theta and psi, but don't allow arm mode changes this time
+			if (!CalculateThetaAndPsi(finalCoords, true, theta, psi, armMode) && !std::isnan(theta))
 			{
-				return (limited) ? LimitPositionResult::adjustedAndIntermediateUnreachable : LimitPositionResult::intermediateUnreachable;
+				// Radius is in range but at least one arm angle isn't
+				cachedTheta = theta = constrain<float>(theta, thetaLimits[0], thetaLimits[1]);
+				cachedPsi = psi = constrain<float>(psi, psiLimits[0], psiLimits[1]);
+				cachedX = finalCoords[X_AXIS] = (cosf(theta * DegreesToRadians) * proximalArmLength + cosf((psi + theta) * DegreesToRadians) * distalArmLength) - xOffset;
+				cachedY = finalCoords[Y_AXIS] = (sinf(theta * DegreesToRadians) * proximalArmLength + sinf((psi + theta) * DegreesToRadians) * distalArmLength) - yOffset;
+				cachedArmMode = currentArmMode;
+			}
+		}
+
+		// The final position is now reachable. Check that we can get there from the initial position.
+		if (isCoordinated && initialCoords != nullptr)
+		{
+			// Calculate how far along the line the closest point of approach to the distal axis is
+			// From maxima, t = -(y0(y1-y0)+x0(x1-x0))/L^2, d^2=((x0y1-x1y0)^2)/L^2
+			// where t is how far from along the line from x0y0 to x1y1 the closest point of approach is (0..1), d is the closest approach distance, and L^2= (x1-x0)^2+(y1-y0)^2
+			const float xdiff = finalCoords[0] - initialCoords[0];
+			const float ydiff = finalCoords[1] - initialCoords[1];
+			const float sumOfSquares = fsquare(xdiff) + fsquare(ydiff);
+			const float p = -(xdiff * (initialCoords[0] + xOffset) + ydiff * (initialCoords[1] + yOffset));
+			if (p > 0.0 && p < sumOfSquares)
+			{
+				// The closest point of approach to the distal axis is between the start and end points, so calculate the distance
+				const float cpa2 = fsquare((finalCoords[0] + xOffset) * (initialCoords[1] + yOffset) - (finalCoords[1] + yOffset) * (initialCoords[0] + xOffset));
+				if (cpa2 < minRadiusSquared * sumOfSquares)
+				{
+					return (limited) ? LimitPositionResult::adjustedAndIntermediateUnreachable : LimitPositionResult::intermediateUnreachable;
+				}
 			}
 		}
 	}

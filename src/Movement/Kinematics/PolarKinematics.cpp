@@ -180,33 +180,33 @@ LimitPositionResult PolarKinematics::LimitPosition(float finalCoords[], const fl
 	const bool m208Limited = (applyM208Limits)
 								? Kinematics::LimitPositionFromAxis(finalCoords, Z_AXIS, numAxes, axesToLimit)	// call base class function to limit Z and higher axes
 								: false;
-	const float r2 = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
-	bool radiusLimited;
-	if (r2 < minRadiusSquared)
+
+	bool radiusLimited = false;
+	if (axesToLimit.Intersects(XyAxes))
 	{
-		radiusLimited = true;
-		const float r = fastSqrtf(r2);
-		if (r < 0.01)
+		const float r2 = fsquare(finalCoords[X_AXIS]) + fsquare(finalCoords[Y_AXIS]);
+		if (r2 < minRadiusSquared)
 		{
-			finalCoords[X_AXIS] = minRadius;
-			finalCoords[Y_AXIS] = 0.0;
+			radiusLimited = true;
+			const float r = fastSqrtf(r2);
+			if (r < 0.01)
+			{
+				finalCoords[X_AXIS] = minRadius;
+				finalCoords[Y_AXIS] = 0.0;
+			}
+			else
+			{
+				finalCoords[X_AXIS] *= minRadius/r;
+				finalCoords[Y_AXIS] *= minRadius/r;
+			}
 		}
-		else
+		else if (r2 > maxRadiusSquared)
 		{
-			finalCoords[X_AXIS] *= minRadius/r;
-			finalCoords[Y_AXIS] *= minRadius/r;
+			radiusLimited = true;
+			const float r = fastSqrtf(r2);
+			finalCoords[X_AXIS] *= maxRadius/r;
+			finalCoords[Y_AXIS] *= maxRadius/r;
 		}
-	}
-	else if (r2 > maxRadiusSquared)
-	{
-		radiusLimited = true;
-		const float r = fastSqrtf(r2);
-		finalCoords[X_AXIS] *= maxRadius/r;
-		finalCoords[Y_AXIS] *= maxRadius/r;
-	}
-	else
-	{
-		radiusLimited = false;
 	}
 
 	return (m208Limited || radiusLimited) ? LimitPositionResult::adjusted : LimitPositionResult::ok;
