@@ -715,10 +715,13 @@ bool DDA::InitFromRemote(const CanMessageMovementLinear& msg) noexcept
 			pdm->direction = (delta >= 0);						// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 			afterPrepare.drivesMoving.SetBit(drive);
 			reprap.GetPlatform().EnableDrivers(drive, false);
-			const bool stepsToDo = ((msg.pressureAdvanceDrives & (1u << drive)) != 0)
-									? pdm->PrepareExtruder(*this, params, (float)delta)
-										: pdm->PrepareCartesianAxis(*this, params);
-			if (stepsToDo)
+			if ((msg.pressureAdvanceDrives & (1u << drive)) != 0)
+			{
+				pdm->PrepareExtruder(*this, (float)delta);
+				pdm->nextDM = completedDMs;						// extruder DMs go in the completed list initially
+				completedDMs = pdm;
+			}
+			else if (pdm->PrepareCartesianAxis(*this))
 			{
 				InsertDM(pdm);
 				const int32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
@@ -823,31 +826,9 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 				pdm->direction = (extrusionRequested >= 0.0);			// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 				afterPrepare.drivesMoving.SetBit(drive);
 				reprap.GetPlatform().EnableDrivers(drive, false);
-				const bool stepsToDo = pdm->PrepareExtruder(*this, params, extrusionRequested);
-				if (stepsToDo)
-				{
-					InsertDM(pdm);
-					const int32_t netSteps = (pdm->reverseStartStep < pdm->totalSteps) ? (2 * pdm->reverseStartStep) - pdm->totalSteps : pdm->totalSteps;
-					if (pdm->direction)
-					{
-						endPoint[drive] += netSteps;
-					}
-					else
-					{
-						endPoint[drive] -= netSteps;
-					}
-
-					// Check for sensible values, print them if they look dubious
-					if (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
-					{
-						DebugPrintAll("rems_err1");
-					}
-				}
-				else
-				{
-					// No steps to do, so release the DM
-					DriveMovement::Release(pdm);
-				}
+				pdm->PrepareExtruder(*this, extrusionRequested);
+				pdm->nextDM = completedDMs;
+				completedDMs = pdm;
 			}
 		}
 		else
@@ -861,7 +842,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 				pdm->direction = (delta >= 0);					// for now this is the direction of net movement, but gets adjusted later if it is a delta movement
 				afterPrepare.drivesMoving.SetBit(drive);
 				reprap.GetPlatform().EnableDrivers(drive, false);
-				const bool stepsToDo = pdm->PrepareCartesianAxis(*this, params);
+				const bool stepsToDo = pdm->PrepareCartesianAxis(*this);
 				if (stepsToDo)
 				{
 					InsertDM(pdm);
@@ -1455,7 +1436,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 							DriveMovement* const pdm = DriveMovement::Allocate(driver.localDriver + MaxAxesPlusExtruders);
 							pdm->direction = (delta >= 0);
 							pdm->totalSteps = labs(delta);
-							if (pdm->PrepareCartesianAxis(*this, params))
+							if (pdm->PrepareCartesianAxis(*this))
 							{
 								// Check for sensible values, print them if they look dubious
 								if (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
@@ -1560,7 +1541,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 						DriveMovement* const pdm = DriveMovement::Allocate(drive);
 						pdm->direction = (delta >= 0);
 						pdm->totalSteps = labs(delta);
-						if (pdm->PrepareCartesianAxis(*this, params))
+						if (pdm->PrepareCartesianAxis(*this))
 						{
 							// Check for sensible values, print them if they look dubious
 							if (pdm->totalSteps > 1000000 && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintBadMoves))
@@ -1617,7 +1598,7 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 							const NonlinearExtrusion& nl = platform.GetExtrusionCoefficients(extruder);
 							float& dv = directionVector[drive];
 							const float averageExtrusionSpeed = (totalDistance * dv * StepClockRate)/clocksNeeded;		// need speed in mm/sec for nonlinear extrusion calculation
-							const float factor = 1.0 + min<float>((averageExtrusionSpeed * nl.A) + (averageExtrusionSpeed * averageExtrusionSpeed * nl.B), nl.limit);
+							const float factor = 1.0 + min<float>((nl.A + (nl.B * averageExtrusionSpeed)) * averageExtrusionSpeed, nl.limit);
 							dv *= factor;
 						}
 #endif
@@ -1636,18 +1617,9 @@ void DDA::Prepare(SimulationMode simMode) noexcept
 							EnsureSegments(params);
 							DriveMovement* const pdm = DriveMovement::Allocate(drive);
 							pdm->direction = (directionVector[drive] >= 0);
-							if (pdm->PrepareExtruder(*this, params, platform.DriveStepsPerUnit(drive) * directionVector[drive]))
-							{
-								// Check for sensible values, debugPrint them if they look dubious
-								//TODO (note: totalSteps is no longer valid for extruders)
-								InsertDM(pdm);
-							}
-							else
-							{
-								pdm->state = DMState::idle;
-								pdm->nextDM = completedDMs;
-								completedDMs = pdm;
-							}
+							pdm->PrepareExtruder(*this, platform.DriveStepsPerUnit(drive) * directionVector[drive]);
+							pdm->nextDM = completedDMs;
+							completedDMs = pdm;
 						}
 					}
 				}
@@ -1945,7 +1917,7 @@ pre(state == frozen)
 {
 	if ((int32_t)(tim - afterPrepare.moveStartTime ) > 25)
 	{
-		afterPrepare.moveStartTime = tim;			// this move is late starting, so record the actual start time
+		afterPrepare.moveStartTime = tim;							// this move is late starting, so record the actual start time
 	}
 	state = executing;
 
@@ -1956,6 +1928,8 @@ pre(state == frozen)
 		probeTriggered = false;
 	}
 #endif
+
+	LatePrepareExtruders();											// finish preparing any extruder drives
 
 	if (activeDMs != nullptr)
 	{
@@ -2154,6 +2128,27 @@ void DDA::StepDrivers(Platform& p, uint32_t now) noexcept
 		{
 			state = completed;
 		}
+	}
+}
+
+// Just before staring a move, we must call LatePrepareExtruder on any local extruders that are moving. These extruders have been put in the completedDMs list.
+void DDA::LatePrepareExtruders() noexcept
+{
+	DriveMovement *pdm = completedDMs;
+	completedDMs = nullptr;
+	while (pdm != nullptr)
+	{
+		DriveMovement *const nextDm = pdm->nextDM;
+		if (pdm->isExtruder && pdm->LatePrepareExtruder(*this))
+		{
+			InsertDM(pdm);										// it has steps to do
+		}
+		else
+		{
+			pdm->nextDM = completedDMs;							// no steps to do, so put it back in the completed list
+			completedDMs = pdm;
+		}
+		pdm = nextDm;
 	}
 }
 

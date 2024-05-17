@@ -1252,7 +1252,7 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 #endif
 
 // Return the current machine axis and extruder coordinates. They are needed only to service status requests from DWC, PanelDue, M114.
-// This is quite expensive, so it should only be called from class MovemebntState, which caches the results.
+// This is quite expensive, so it should only be called from class MovementState, which caches the results.
 void Move::GetLiveCoordinates(unsigned int msNumber, const Tool *tool, float coordsOut[MaxAxesPlusExtruders]) noexcept
 {
 	rings[msNumber].LiveCoordinates(coordsOut);

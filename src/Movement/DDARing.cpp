@@ -274,6 +274,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool waitingForSpace, bool
 		simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
 		if (simulationMode == SimulationMode::debug && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::SimulateSteppingDrivers))
 		{
+			cdda->LatePrepareExtruders();
 			do
 			{
 				cdda->SimulateSteppingDrivers(reprap.GetPlatform());

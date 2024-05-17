@@ -345,7 +345,7 @@ bool DriveMovement::NewExtruderSegment() noexcept
 }
 
 // Prepare this DM for a Cartesian axis move, returning true if there are steps to do
-bool DriveMovement::PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept
+bool DriveMovement::PrepareCartesianAxis(const DDA& dda) noexcept
 {
 	distanceSoFar = 0.0;
 	timeSoFar = 0.0;
@@ -501,17 +501,11 @@ bool DriveMovement::PrepareDeltaAxis(const DDA& dda, const PrepParams& params) n
 // If there are no steps to do, set nextStep = 0 so that DDARing::CurrentMoveCompleted doesn't add any steps to the movement accumulator
 // We have already generated the extruder segments and we know that there are some
 // effStepsPerMm is the number of extruder steps needed per mm of totalDistance before we apply pressure advance
-// A note on accumulating partial extruder steps:
-// We must only accumulate partial steps when the extrusion is forwards. If we try to accumulate partial steps on reverse extrusion too,
-// things go horribly wrong under particular circumstances. We use the pressure advance flag as a proxy for forward extrusion.
-// This means that partial extruder steps don't get accumulated on a reprime move, but that is probably a good thing because it will
-// behave in a similar way to a retraction move.
-bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept
+void DriveMovement::PrepareExtruder(const DDA& dda, float signedEffStepsPerMm) noexcept
 {
 	const float effStepsPerMm = fabsf(signedEffStepsPerMm);
 	mp.cart.effectiveStepsPerMm = effStepsPerMm;
-	const float effMmPerStep = 1.0/effStepsPerMm;
-	mp.cart.effectiveMmPerStep = effMmPerStep;
+	mp.cart.effectiveMmPerStep = 1.0/effStepsPerMm;
 
 	timeSoFar = 0.0;
 	currentSegment = dda.segments;
@@ -521,6 +515,22 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	totalSteps = 0;									// we don't use totalSteps but set it to 0 to avoid random values being printed by DebugPrint
 	directionChanged = directionReversed = false;	// must clear these before we call NewExtruderSegment
 
+	// Prepare for the first step
+	nextStepTime = 0;
+	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
+	stepInterval = 0;								// to keep the debug output deterministic
+
+	// The remainder of the preparation can't be done until we start the move, because until then we don't know how much extrusion is pending
+}
+
+// Finish preparing this DM for execution, returning true if there are any steps to do.
+// A note on accumulating partial extruder steps:
+// We must only accumulate partial steps when the extrusion is forwards. If we try to accumulate partial steps on reverse extrusion too,
+// things go horribly wrong under particular circumstances. We use the pressure advance flag as a proxy for forward extrusion.
+// This means that partial extruder steps don't get accumulated on a reprime move, but that is probably a good thing because it will
+// behave in a similar way to a retraction move.
+bool DriveMovement::LatePrepareExtruder(const DDA& dda) noexcept
+{
 	const size_t logicalDrive =
 #if SUPPORT_REMOTE_COMMANDS
 								(dda.flags.isRemote) ? drive : LogicalDriveToExtruder(drive);
@@ -535,7 +545,7 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 	{
 		const float extrusionPending = shaper.GetExtrusionPending();
 		reprap.GetMove().UpdateExtrusionPendingLimits(extrusionPending);
-		distanceSoFar = extrusionPending * effMmPerStep;
+		distanceSoFar = extrusionPending * mp.cart.effectiveMmPerStep;
 		mp.cart.pressureAdvanceK = shaper.GetKclocks();
 	}
 	else
@@ -544,35 +554,15 @@ bool DriveMovement::PrepareExtruder(const DDA& dda, const PrepParams& params, fl
 		distanceSoFar =	0.0;
 	}
 
-#if 0	//DEBUG
-	const float distanceBroughtForwards = distanceSoFar;	// for debug use only
-#endif
 	if (!NewExtruderSegment())						// if no steps to do
 	{
 		if (dda.flags.usePressureAdvance)
 		{
-			shaper.SetExtrusionPending(distanceSoFar * effStepsPerMm);
-#if 0	// DEBUG
-			if (reprap.Debug(Module::Dda) && (shaper.GetExtrusionPending() > 1.0 || shaper.GetExtrusionPending() < -1.0))
-			{
-				AtomicCriticalSectionLocker lock;
-				debugPrintf("pex xpend=%.2f effsm=%.2f dbf=%.3f\n", (double)shaper.GetExtrusionPending(), (double)effStepsPerMm, (double)distanceBroughtForwards);
-				char ch = '0';
-				for (const MoveSegment *seg = dda.segments; seg != nullptr; seg = seg->GetNext())
-				{
-					seg->DebugPrint(ch);
-					++ch;
-				}
-			}
-#endif
+			shaper.SetExtrusionPending(distanceSoFar * mp.cart.effectiveStepsPerMm);
 		}
 		return false;								// quit if no steps to do
 	}
 
-	// Prepare for the first step
-	nextStepTime = 0;
-	stepsTakenThisSegment = 0;						// no steps taken yet since the start of the segment
-	stepInterval = 0;								// to keep the debug output deterministic
 	return CalcNextStepTimeFull(dda);				// calculate the scheduled time of the first step
 }
 
@@ -614,7 +604,7 @@ pre(nextStep <= totalSteps; stepsTillRecalc == 0)
 #endif
 						ExtruderShaper& shaper = reprap.GetMove().GetExtruderShaper(logicalDrive);
 						const int32_t netStepsDone = nextStep - 1;
-						const float stepsCarriedForward = (distanceSoFar - (float)netStepsDone * mp.cart.effectiveMmPerStep) * mp.cart.effectiveStepsPerMm;
+						const float stepsCarriedForward = (distanceSoFar * mp.cart.effectiveStepsPerMm) - (float)netStepsDone;
 						shaper.SetExtrusionPending(stepsCarriedForward);
 					}
 					return false;
