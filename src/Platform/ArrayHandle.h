@@ -12,7 +12,7 @@
 #include <ObjectModel/TypeCode.h>
 #include "Heap.h"
 
-#define CHECK_HEAP_READ_LOCKED		(1)
+#define CHECK_HEAP_LOCKED		(1)
 
 class ExpressionValue;
 

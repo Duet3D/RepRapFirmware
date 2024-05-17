@@ -21,7 +21,9 @@ struct ArrayStorageSpace
 // Allocate space for an array
 void ArrayHandle::Allocate(size_t numElements) THROWS(GCodeException)
 {
-	WriteLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
+#if CHECK_HEAP_LOCKED
+	Heap::heapLock.CheckHasWriteLock();
+#endif
 	Heap::IndexSlot * const slot = Heap::AllocateHandle();
 	Heap::StorageSpace * const space = Heap::AllocateSpace(sizeof(ArrayStorageSpace) + numElements * sizeof(ExpressionValue));
 	slot->storage = space;
@@ -43,9 +45,11 @@ void ArrayHandle::Allocate(size_t numElements) THROWS(GCodeException)
 // Assign an element without making the array unique first
 void ArrayHandle::AssignElement(size_t index, ExpressionValue &val) THROWS(GCodeException)
 {
+#if CHECK_HEAP_LOCKED
+	Heap::heapLock.CheckHasWriteLock();
+#endif
 	if (slotPtr != nullptr)
 	{
-		WriteLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
 		ArrayStorageSpace * const aSpace = reinterpret_cast<ArrayStorageSpace*>(slotPtr->storage);
 		if (index < aSpace->count)
 		{
@@ -82,6 +86,8 @@ void ArrayHandle::InternalAssignIndexed(const ExpressionValue& ev, size_t numInd
 	}
 	else
 	{
+		// Note that slotPtr->storage and hence aSpace may move when we call InternalAssignIndexed recursively, but the handle won't move
+		//?? the following doesn't allow for that!
 		aSpace->elements[indices[0]].ahVal.InternalAssignIndexed(ev, numIndices - 1, indices + 1);
 	}
 }
@@ -90,7 +96,7 @@ void ArrayHandle::InternalAssignIndexed(const ExpressionValue& ev, size_t numInd
 // Caller must have a read lock or a write lock on heapLock before calling this!
 size_t ArrayHandle::GetNumElements() const noexcept
 {
-#if CHECK_HEAP_READ_LOCKED
+#if CHECK_HEAP_LOCKED
 	Heap::heapLock.CheckHasReadOrWriteLock();
 #endif
 	if (slotPtr == nullptr)
@@ -107,7 +113,7 @@ size_t ArrayHandle::GetNumElements() const noexcept
 // Caller must have a read lock on heapLock before calling this!
 bool ArrayHandle::GetElement(size_t index, ExpressionValue &rslt) const noexcept
 {
-#if CHECK_HEAP_READ_LOCKED
+#if CHECK_HEAP_LOCKED
 	Heap::heapLock.CheckHasReadLock();
 #endif
 	if (slotPtr != nullptr)
@@ -129,7 +135,7 @@ bool ArrayHandle::GetElement(size_t index, ExpressionValue &rslt) const noexcept
 // Caller must have a read lock on heapLock before calling this!
 TypeCode ArrayHandle::GetElementType(size_t index) const noexcept
 {
-#if CHECK_HEAP_READ_LOCKED
+#if CHECK_HEAP_LOCKED
 	Heap::heapLock.CheckHasReadLock();
 #endif
 	if (slotPtr != nullptr)
@@ -175,11 +181,11 @@ const ArrayHandle& ArrayHandle::IncreaseRefCount() const noexcept
 	return *this;
 }
 
-/// Make this handle refer to non-shared array (the individual elements may be shared). Caller must already own a read lock on the heap.
+// Make this handle refer to non-shared array (the individual elements may be shared). Caller must already own a read lock on the heap.
 void ArrayHandle::MakeUnique() THROWS(GCodeException)
 {
-#if CHECK_HEAP_READ_LOCKED
-	Heap::heapLock.CheckHasReadOrWriteLock();
+#if CHECK_HEAP_LOCKED
+	Heap::heapLock.CheckHasWriteLock();
 #endif
 	if (slotPtr != nullptr && slotPtr->refCount > 1)
 	{
@@ -189,7 +195,6 @@ void ArrayHandle::MakeUnique() THROWS(GCodeException)
 		ArrayHandle ah2;
 		ah2.Allocate(count);
 		ArrayStorageSpace * const aSpace2 = reinterpret_cast<ArrayStorageSpace*>(ah2.slotPtr->storage);
-
 		for (size_t i = 0; i < count; ++i)
 		{
 			aSpace2->elements[i] = aSpace->elements[i];
