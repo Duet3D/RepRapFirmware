@@ -474,7 +474,7 @@ bool FiveBarScaraKinematics::isPointInsideDefinedPrintableArea(float x0, float y
 	return x0 >= xmin && x0 <= xmax && y0 >= ymin && y0 <= ymax;
 }
 
-// Check that all consttraints are ok. If the constraints fails the cache is invalidated
+// Check that all constraints are ok. If the constraints fails the cache is invalidated
 bool FiveBarScaraKinematics::constraintsOk(const float coords[]) const noexcept
 {
 	if (!cachedInvalid && coords[0] == cachedX0 && coords[1] == cachedY0)
@@ -734,7 +734,7 @@ LimitPositionResult FiveBarScaraKinematics::LimitPosition(float coords[], const 
 	// First limit all axes according to M208
 	const bool m208Limited = applyM208Limits && Kinematics::LimitPositionFromAxis(coords, 0, numVisibleAxes, axesToLimit);
 
-	if (!constraintsOk(coords))
+	if (axesToLimit.Intersects(XyAxes) && !constraintsOk(coords))
 	{
 		return LimitPositionResult::intermediateUnreachable;	//TODO is this right?
 	}

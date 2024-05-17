@@ -521,7 +521,7 @@ LimitPositionResult HangprinterKinematics::LimitPosition(float finalCoords[], co
 															size_t numVisibleAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept
 {
 	bool limited = false;
-	if ((axesToLimit & XyzAxes) == XyzAxes)
+	if (axesToLimit.Intersects(XyzAxes))
 	{
 		// If axes have been homed on a delta printer and this isn't a homing move, check for movements outside limits.
 		// Skip this check if axes have not been homed, so that extruder-only moves are allowed before homing
