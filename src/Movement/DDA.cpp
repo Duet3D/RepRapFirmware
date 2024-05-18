@@ -1151,9 +1151,10 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 	{
 		// This move reaches its top speed
 		// It sometimes happens that we get a very short acceleration or deceleration segment. Remove any such segments by reducing the top speed to the start or end speed.
+		// Don't do this if the cause is that the top speed is very low because that results in issues 989 and 994
 		if (startSpeed >= endSpeed)
 		{
-			if (startSpeed + acceleration * MinimumAccelOrDecelClocks > requestedSpeed)
+			if (startSpeed + acceleration * MinimumAccelOrDecelClocks > requestedSpeed && startSpeed >= requestedSpeed * 0.9)
 			{
 				topSpeed = startSpeed;
 				beforePrepare.accelDistance = 0.0;
@@ -1165,7 +1166,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 		}
 		else
 		{
-			if (endSpeed + deceleration * MinimumAccelOrDecelClocks > requestedSpeed)
+			if (endSpeed + deceleration * MinimumAccelOrDecelClocks > requestedSpeed && endSpeed >= requestedSpeed * 0.9)
 			{
 				topSpeed = endSpeed;
 				beforePrepare.decelDistance = 0.0;
