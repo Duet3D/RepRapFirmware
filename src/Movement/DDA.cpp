@@ -1230,7 +1230,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 							const NonlinearExtrusion& nl = platform.GetExtrusionCoefficients(extruder);
 							float& dv = directionVector[drive];
 							const float averageExtrusionSpeed = (totalDistance * dv * StepClockRate)/clocksNeeded;		// need speed in mm/sec for nonlinear extrusion calculation
-							const float factor = 1.0 + min<float>((averageExtrusionSpeed * nl.A) + (averageExtrusionSpeed * averageExtrusionSpeed * nl.B), nl.limit);
+							const float factor = 1.0 + min<float>((nl.A + (nl.B * averageExtrusionSpeed)) * averageExtrusionSpeed, nl.limit);
 							dv *= factor;
 						}
 #endif
