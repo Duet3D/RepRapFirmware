@@ -105,7 +105,6 @@ void MovementState::Init(MovementSystemNumber p_msNumber) noexcept
 	maxPrintingAcceleration = ConvertAcceleration(DefaultPrintingAcceleration);
 	maxTravelAcceleration = ConvertAcceleration(DefaultTravelAcceleration);
 
-	currentZHop = 0.0;								// clear this before calling ToolOffsetInverseTransform
 	movementTool = currentTool = nullptr;
 	latestVirtualExtruderPosition = moveStartVirtualExtruderPosition = 0.0;
 	virtualFanSpeed = 0.0;

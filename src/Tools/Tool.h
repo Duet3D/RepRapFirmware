@@ -85,6 +85,7 @@ public:
 	static bool DisplayColdExtrusionWarnings() noexcept;
 	static bool IsHeaterAssignedToTool(int8_t heater) noexcept;
 	static GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
+	static void CheckZHopsValid(AxesBitmap axesHomed) noexcept;
 
 	float GetOffset(size_t axis) const noexcept pre(axis < MaxAxes);
 	void SetOffset(size_t axis, float offs, bool byProbing) noexcept pre(axis < MaxAxes);
@@ -110,7 +111,9 @@ public:
 
 	bool IsRetracted() const noexcept { return isRetracted; }
 	float GetRetractLength() const noexcept { return retractLength; }
-	float GetRetractHop() const noexcept { return retractHop; }
+	float GetConfiguredRetractHop() const noexcept { return configuredRetractHop; }
+	float GetActualZHop() const noexcept { return actualZHop; }
+	void SetActualZHop(float hop) noexcept { actualZHop = hop; }
 	float GetRetractExtra() const noexcept { return retractExtra; }
 	float GetRetractSpeed() const noexcept { return retractSpeed; }
 	float GetUnRetractSpeed() const noexcept { return unRetractSpeed; }
@@ -190,7 +193,8 @@ private:
 	float retractLength, retractExtra;			// retraction length and extra length to un-retract
 	float retractSpeed;							// retract speed in mm per step clock
 	float unRetractSpeed;						// un-retract speed in mm per step clock
-	float retractHop;							// Z hop when retracting
+	float configuredRetractHop;					// Z hop when retracting
+	float actualZHop;							// the amount by which this tool is currently Z-hopped
 
 	FansBitmap fanMapping;
 	uint8_t driveCount;

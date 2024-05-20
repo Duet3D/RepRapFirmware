@@ -4131,88 +4131,91 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 	if (!ms.IsCurrentObjectCancelled())
 	{
 		Tool* const currentTool = ms.currentTool;
-		if (  currentTool != nullptr
-			&& retract != currentTool->IsRetracted()
-			&& (currentTool->GetRetractLength() != 0.0 || currentTool->GetRetractHop() != 0.0 || (!retract && currentTool->GetRetractExtra() != 0.0))
-		   )
+		if (currentTool != nullptr && retract != currentTool->IsRetracted())
 		{
-			if (!LockMovement(gb))
+			// We potentially need to retract/hop or unhop/untrtract
+			const bool needRetraction = currentTool->DriveCount() != 0 && (currentTool->GetRetractLength() != 0.0 || (!retract && currentTool->GetRetractExtra() != 0.0));
+			const bool needZhop = ((retract) ? currentTool->GetConfiguredRetractHop() > 0.0 : currentTool->GetActualZHop() > 0.0)
+								&& currentTool->GetZAxisMap().IterateWhile([this](unsigned int axis, unsigned int)->bool { return IsAxisHomed(axis); } );	// only hop if Z axes have been homed
+			if (needRetraction || needZhop)
 			{
-				return GCodeResult::notFinished;
-			}
+				if (!LockMovement(gb))
+				{
+					return GCodeResult::notFinished;
+				}
 
-			if (ms.segmentsLeft != 0)
-			{
-				return GCodeResult::notFinished;
-			}
+				if (ms.segmentsLeft != 0)
+				{
+					return GCodeResult::notFinished;
+				}
 
-			SetMoveBufferDefaults(ms);
-			ms.movementTool = ms.currentTool;
-			ms.filePos = gb.GetJobFilePosition();
+				SetMoveBufferDefaults(ms);
+				ms.movementTool = ms.currentTool;
+				ms.filePos = gb.GetJobFilePosition();
 
+				// Allocate any axes and extruders that we re going to use
 #if SUPPORT_ASYNC_MOVES
-			// Allocate any axes and extruders that we re going to use
-			const bool needZhop = (retract) ? currentTool->GetRetractHop() > 0.0 : ms.currentZHop > 0.0;
 # if PREALLOCATE_TOOL_AXES
-			if (needZhop /* && !ms.GetOwnedAxisLetters().IsBitSet(ParameterLetterToBitNumber('Z')) */)
-			{
-				AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
-			}
+				if (needZhop /* && !ms.GetOwnedAxisLetters().IsBitSet(ParameterLetterToBitNumber('Z')) */)
+				{
+					AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
+				}
 # else
-			AxesBitmap drivesMoving;
-			for (size_t i = 0; i < currentTool->DriveCount(); ++i)
-			{
-				const size_t logicalDrive = ExtruderToLogicalDrive(currentTool->GetDrive(i));
-				drivesMoving.SetBit(logicalDrive);
-			}
-			if (needZhop)
-			{
-				drivesMoving.SetBit(Z_AXIS);
-				AllocateAxes(gb, ms, drivesMoving, ParameterLetterToBitmap('Z'));
-			}
-			else
-			{
-				AllocateAxes(gb, ms, drivesMoving, ParameterLettersBitmap());
-			}
+				AxesBitmap drivesMoving;
+				for (size_t i = 0; i < currentTool->DriveCount(); ++i)
+				{
+					const size_t logicalDrive = ExtruderToLogicalDrive(currentTool->GetDrive(i));
+					drivesMoving.SetBit(logicalDrive);
+				}
+				if (needZhop)
+				{
+					drivesMoving.SetBit(Z_AXIS);
+					AllocateAxes(gb, ms, drivesMoving, ParameterLetterToBitmap('Z'));
+				}
+				else
+				{
+					AllocateAxes(gb, ms, drivesMoving, ParameterLettersBitmap());
+				}
 # endif
 #endif
-			if (retract)
-			{
-				// If the current tool has any drivers, set up the retract move
-				if (currentTool->DriveCount() != 0)
+				if (retract)
 				{
-					for (size_t i = 0; i < currentTool->DriveCount(); ++i)
+					// If the current tool has any drivers, set up the retract move
+					if (needRetraction)
 					{
-						const size_t logicalDrive = ExtruderToLogicalDrive(currentTool->GetDrive(i));
-						ms.coords[logicalDrive] = -currentTool->GetRetractLength();
+						for (size_t i = 0; i < currentTool->DriveCount(); ++i)
+						{
+							const size_t logicalDrive = ExtruderToLogicalDrive(currentTool->GetDrive(i));
+							ms.coords[logicalDrive] = -currentTool->GetRetractLength();
+						}
+						ms.feedRate = currentTool->GetRetractSpeed() * currentTool->DriveCount();
+						ms.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
+						NewSingleSegmentMoveAvailable(ms);
 					}
-					ms.feedRate = currentTool->GetRetractSpeed() * currentTool->DriveCount();
-					ms.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
-					NewSingleSegmentMoveAvailable(ms);
+					if (needZhop)
+					{
+						gb.SetState(GCodeState::doingFirmwareRetraction);
+					}
 				}
-				if (currentTool->GetRetractHop() > 0.0)
+				else
 				{
-					gb.SetState(GCodeState::doingFirmwareRetraction);
+					if (needZhop)
+					{
+						// Set up the reverse Z hop move
+						ms.feedRate = platform.MaxFeedrate(Z_AXIS);
+						ms.coords[Z_AXIS] -= currentTool->GetActualZHop();
+						currentTool->SetActualZHop(0.0);
+						ms.canPauseAfter = false;			// don't pause in the middle of a command
+						ms.linearAxesMentioned = true;
+						NewSingleSegmentMoveAvailable(ms);
+					}
+					if (needRetraction)
+					{
+						gb.SetState(GCodeState::doingFirmwareUnRetraction);
+					}
 				}
+				currentTool->SetRetracted(retract);
 			}
-			else
-			{
-				if (ms.currentZHop > 0.0)
-				{
-					// Set up the reverse Z hop move
-					ms.feedRate = platform.MaxFeedrate(Z_AXIS);
-					ms.coords[Z_AXIS] -= ms.currentZHop;
-					ms.currentZHop = 0.0;
-					ms.canPauseAfter = false;			// don't pause in the middle of a command
-					ms.linearAxesMentioned = true;
-					NewSingleSegmentMoveAvailable(ms);
-				}
-				if (currentTool->DriveCount() != 0)
-				{
-					gb.SetState(GCodeState::doingFirmwareUnRetraction);
-				}
-			}
-			currentTool->SetRetracted(retract);
 		}
 	}
 	return GCodeResult::ok;
@@ -4352,10 +4355,10 @@ void GCodes::StopPrint(GCodeBuffer *gbp, StopPrintReason reason) noexcept
 		ms.laserPixelData.Clear();
 #endif
 		// Deal with the Z hop from a G10 that has not been undone by G11
-		if (ms.currentTool != nullptr && ms.currentTool->IsRetracted())
+		if (ms.currentTool != nullptr)
 		{
-			ms.currentUserPosition[Z_AXIS] += ms.currentZHop;
-			ms.currentZHop = 0.0;
+			ms.currentUserPosition[Z_AXIS] += ms.currentTool->GetActualZHop();
+			ms.currentTool->SetActualZHop(0.0);
 			ms.currentTool->SetRetracted(false);
 		}
 	}
@@ -4553,7 +4556,11 @@ void GCodes::ToolOffsetTransform(const MovementState& ms, const float coordsIn[M
 				&& (axis != Z_AXIS || zAxes.IsBitSet(Z_AXIS))
 			   )
 			{
-				const float totalOffset = currentBabyStepOffsets[axis] - ms.currentTool->GetOffset(axis);
+				float totalOffset = currentBabyStepOffsets[axis] - ms.currentTool->GetOffset(axis);
+				if (zAxes.IsBitSet(axis))
+				{
+					totalOffset += ms.currentTool->GetActualZHop();
+				}
 				const size_t inputAxis = (explicitAxes.IsBitSet(axis)) ? axis
 										: (xAxes.IsBitSet(axis)) ? X_AXIS
 											: (yAxes.IsBitSet(axis)) ? Y_AXIS
@@ -4563,7 +4570,6 @@ void GCodes::ToolOffsetTransform(const MovementState& ms, const float coordsIn[M
 			}
 		}
 	}
-	coordsOut[Z_AXIS] += ms.currentZHop;
 }
 
 // Convert user coordinates to head reference point coordinates
@@ -4592,7 +4598,11 @@ void GCodes::ToolOffsetInverseTransform(const MovementState& ms, const float coo
 		size_t numXAxes = 0, numYAxes = 0, numZAxes = 0;
 		for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 		{
-			const float totalOffset = currentBabyStepOffsets[axis] - ms.currentTool->GetOffset(axis);
+			float totalOffset = currentBabyStepOffsets[axis] - ms.currentTool->GetOffset(axis);
+			if (zAxes.IsBitSet(axis))
+			{
+				totalOffset += ms.currentTool->GetActualZHop();
+			}
 			const float coord = (coordsIn[axis] - totalOffset)/axisScaleFactors[axis];
 			coordsOut[axis] = coord;
 			if (xAxes.IsBitSet(axis))
@@ -4624,7 +4634,6 @@ void GCodes::ToolOffsetInverseTransform(const MovementState& ms, const float coo
 			coordsOut[Z_AXIS] = zCoord/numZAxes;
 		}
 	}
-	coordsOut[Z_AXIS] -= ms.currentZHop/axisScaleFactors[Z_AXIS];
 }
 
 // Convert head reference point coordinates to user coordinates, allowing for XY axis mapping
@@ -4718,6 +4727,7 @@ void GCodes::SetAxisNotHomed(unsigned int axis) noexcept
 		{
 			zDatumSetByProbing = false;
 		}
+		Tool::CheckZHopsValid(axesHomed);
 		reprap.MoveUpdated();
 	}
 }
@@ -4730,6 +4740,7 @@ void GCodes::SetAllAxesNotHomed() noexcept
 		axesHomed.Clear();
 		axesVirtuallyHomed = axesHomed;
 		zDatumSetByProbing = false;
+		Tool::CheckZHopsValid(axesHomed);
 		reprap.MoveUpdated();
 	}
 }

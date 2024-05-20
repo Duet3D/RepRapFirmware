@@ -145,7 +145,6 @@ public:
 																	// before accounting for tool offset and Z hop
 	float latestVirtualExtruderPosition;							// the virtual extruder position of this movement system after completing pending moves
 	float virtualFanSpeed;											// the last speed given in a M106 command with no fan number
-	float currentZHop;												// the amount of Z hop that is currently applied
 	float initialCoords[MaxAxes];									// the initial positions of the axes
 	float previousX, previousY;										// the initial X and Y coordinates in user space of the previous move
 	float previousXYDistance;										// the XY length of that previous move

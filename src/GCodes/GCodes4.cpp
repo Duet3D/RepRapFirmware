@@ -336,12 +336,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		gb.AdvanceState();
 
 		// If the tool is in the firmware-retracted state, there may be some Z hop applied, which we must remove
-		ms.currentUserPosition[Z_AXIS] += ms.currentZHop;
-		ms.currentZHop = 0.0;
-
-		if ((ms.toolChangeParam & TFreeBit) != 0)
+		if (ms.currentTool != nullptr)
 		{
-			if (ms.currentTool != nullptr)				// 2020-04-29: run tfree file even if not all axes have been homed
+			ms.currentUserPosition[Z_AXIS] += ms.currentTool->GetActualZHop();
+			ms.currentTool->SetActualZHop(0.0);
+			if ((ms.toolChangeParam & TFreeBit) != 0)
 			{
 				String<StringLength20> scratchString;
 				scratchString.printf(TFREE "%d.g", ms.currentTool->Number());
@@ -1666,7 +1665,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just did the retraction part of a firmware retraction, now we need to do the Z hop
 		if (ms.segmentsLeft == 0)
 		{
-			const Tool * const t = ms.currentTool;
+			Tool * const t = ms.currentTool;
 			if (t != nullptr)								// this should always be true
 			{
 #if SUPPORT_ASYNC_MOVES
@@ -1675,11 +1674,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				SetMoveBufferDefaults(ms);
 				ms.movementTool = t;
 				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, t);
-				ms.coords[Z_AXIS] += t->GetRetractHop();
+				ms.coords[Z_AXIS] += t->GetConfiguredRetractHop();
+				t->SetActualZHop(t->GetConfiguredRetractHop());
 				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
 				ms.filePos = gb.GetJobFilePosition();
 				ms.canPauseAfter = false;					// don't pause after a retraction because that could cause too much retraction
-				ms.currentZHop = t->GetRetractHop();
 				ms.linearAxesMentioned = true;
 				NewSingleSegmentMoveAvailable(ms);
 			}
