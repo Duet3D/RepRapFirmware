@@ -1669,16 +1669,33 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			if (t != nullptr)								// this should always be true
 			{
 #if SUPPORT_ASYNC_MOVES
-				// We already allocated the Z axis to this MS when we began the retraction, so no need to do it here
+				// We already allocated the Z axes to this MS when we began the retraction, so no need to do it here
 #endif
 				SetMoveBufferDefaults(ms);
 				ms.movementTool = t;
 				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, t);
-				ms.coords[Z_AXIS] += t->GetConfiguredRetractHop();
-				t->SetActualZHop(t->GetConfiguredRetractHop());
-				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
+				memcpyf(ms.initialCoords, ms.coords, ARRAY_SIZE(ms.initialCoords));
+				const AxesBitmap zAxes = t->GetZAxisMap();
+
+				// See if we can apply the requested Z hop without exceeding machine limits
+				float zHopToUse = t->GetConfiguredRetractHop();
+				zAxes.Iterate([&ms, &zHopToUse](unsigned int axis, unsigned int)->void { ms.coords[axis] += zHopToUse; });
+				if (reprap.GetMove().GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, AxesBitmap::MakeFromBits(Z_AXIS), true, true) != LimitPositionResult::ok)
+				{
+					// We can't apply Z hop to all the Z axes without exceeding machine limits
+					zAxes.Iterate([&ms, &zHopToUse](unsigned int axis, unsigned int)->void { zHopToUse = min<float>(zHopToUse, ms.coords[axis] - ms.initialCoords[axis]); });
+					if (zHopToUse <= 0.0)
+					{
+						gb.SetState(GCodeState::normal);
+						break;
+					}
+					zAxes.Iterate([&ms, zHopToUse](unsigned int axis, unsigned int)->void { ms.coords[axis] = ms.initialCoords[axis] + zHopToUse; });
+				}
+
+				t->SetActualZHop(zHopToUse);
+				ms.feedRate = ConvertSpeedFromMmPerSec(ImpossiblyHighFeedRate);		// we rely on the DDA init code to limit the feed rate to what is achievable on each axis;
 				ms.filePos = gb.GetJobFilePosition();
-				ms.canPauseAfter = false;					// don't pause after a retraction because that could cause too much retraction
+				ms.canPauseAfter = false;											// don't pause after a retraction because that could cause too much retraction
 				ms.linearAxesMentioned = true;
 				NewSingleSegmentMoveAvailable(ms);
 			}

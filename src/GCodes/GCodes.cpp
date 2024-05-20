@@ -4156,9 +4156,9 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 				// Allocate any axes and extruders that we re going to use
 #if SUPPORT_ASYNC_MOVES
 # if PREALLOCATE_TOOL_AXES
-				if (needZhop /* && !ms.GetOwnedAxisLetters().IsBitSet(ParameterLetterToBitNumber('Z')) */)
+				if (needZhop)
 				{
-					AllocateAxes(gb, ms, AxesBitmap::MakeFromBits(Z_AXIS), ParameterLetterToBitmap('Z'));
+					AllocateAxes(gb, ms, currentTool->GetZAxisMap(), ParameterLettersBitmap());
 				}
 # else
 				AxesBitmap drivesMoving;
@@ -4169,8 +4169,8 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 				}
 				if (needZhop)
 				{
-					drivesMoving.SetBit(Z_AXIS);
-					AllocateAxes(gb, ms, drivesMoving, ParameterLetterToBitmap('Z'));
+					drivesMoving |= currentTool->GetZAxisMap();
+					AllocateAxes(gb, ms, drivesMoving, ParameterLettersBitmap());
 				}
 				else
 				{
@@ -4189,7 +4189,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 							ms.coords[logicalDrive] = -currentTool->GetRetractLength();
 						}
 						ms.feedRate = currentTool->GetRetractSpeed() * currentTool->DriveCount();
-						ms.canPauseAfter = false;			// don't pause after a retraction because that could cause too much retraction
+						ms.canPauseAfter = false;											// don't pause after a retraction because that could cause too much retraction
 						NewSingleSegmentMoveAvailable(ms);
 					}
 					if (needZhop)
@@ -4202,10 +4202,15 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 					if (needZhop)
 					{
 						// Set up the reverse Z hop move
-						ms.feedRate = platform.MaxFeedrate(Z_AXIS);
-						ms.coords[Z_AXIS] -= currentTool->GetActualZHop();
+						const float zHopToUse = currentTool->GetActualZHop();
+						currentTool->GetZAxisMap().Iterate([&ms, zHopToUse](unsigned int axis, unsigned int)->void
+															{
+																ms.coords[axis] -= zHopToUse;
+															}
+														  );
+						ms.feedRate = ConvertSpeedFromMmPerSec(ImpossiblyHighFeedRate);		// we rely on the DDA init code to limit the feed rate to what is achievable on each axis
 						currentTool->SetActualZHop(0.0);
-						ms.canPauseAfter = false;			// don't pause in the middle of a command
+						ms.canPauseAfter = false;											// don't pause in the middle of this command
 						ms.linearAxesMentioned = true;
 						NewSingleSegmentMoveAvailable(ms);
 					}
@@ -5225,6 +5230,7 @@ const MovementState& GCodes::GetCurrentMovementState(const ObjectExplorationCont
 
 // Allocate additional axes and/or extruders to a movement state returning true if successful, false if another movement state owns it already
 // This relies on cooperative scheduling between different GCodeBuffer objects
+// The axLetters argument need not be complete, but having it may in future avoid re-allocating axes that are allocated in this call
 void GCodes::AllocateAxes(const GCodeBuffer& gb, MovementState& ms, AxesBitmap axes, ParameterLettersBitmap axLetters) THROWS(GCodeException)
 {
 	//debugPrintf("Allocating axes %04" PRIx32 " letters %08" PRIx32 " command %u\n", axes.GetRaw(), axLetters.GetRaw(), gb.GetCommandNumber());
