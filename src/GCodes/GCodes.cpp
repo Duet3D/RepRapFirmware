@@ -63,7 +63,7 @@ GCodes::GCodes(Platform& p) noexcept :
 	serialChannelForPanelDueFlashing(1),
 #endif
 	platform(p),
-	machineType(MachineType::fff), active(false),
+	machineType(MachineType::fff), active(false), stopped(false),
 #if HAS_VOLTAGE_MONITOR
 	powerFailScript(nullptr),
 #endif
@@ -857,6 +857,25 @@ void GCodes::DoEmergencyStop() noexcept
 	reprap.EmergencyStop();
 	Reset();
 	platform.Message(GenericMessage, "Emergency Stop! Reset the controller to continue.\n");
+}
+
+// reprap.EmergencyStop calls this to shut down this module
+void GCodes::EmergencyStop() noexcept
+{
+	for (GCodeBuffer *gbp : gcodeSources)
+	{
+		if (gbp != nullptr)
+		{
+			AbortPrint(*gbp);
+		}
+	}
+#if SUPPORT_LASER
+	for (MovementState& ms : moveStates)
+	{
+		ms.laserPixelData.Clear();
+	}
+#endif
+	stopped = true;
 }
 
 // Pause the print because of a command in the print file itself
@@ -3110,24 +3129,6 @@ void GCodes::AbortPrint(GCodeBuffer& gb) noexcept
 		StopPrint(nullptr, StopPrintReason::abort);
 		gb.Init();								// invalidate the file channel here as the other one may be still busy (possibly in a macro)
 	}
-}
-
-// Cancel everything
-void GCodes::EmergencyStop() noexcept
-{
-	for (GCodeBuffer *gbp : gcodeSources)
-	{
-		if (gbp != nullptr)
-		{
-			AbortPrint(*gbp);
-		}
-	}
-#if SUPPORT_LASER
-	for (MovementState& ms : moveStates)
-	{
-		ms.laserPixelData.Clear();
-	}
-#endif
 }
 
 // Simplified version of DoFileMacro, see below

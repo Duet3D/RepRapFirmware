@@ -156,8 +156,14 @@ bool GCodes::ActOnCode(GCodeBuffer& gb, const StringRef& reply) noexcept
 // Handle G-command returning true if the command completed, false if this function needs to be called again to complete it
 bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	GCodeResult result = GCodeResult::ok;
 	const int code = gb.GetCommandNumber();
+	if (stopped)
+	{
+		HandleResult(gb, GCodeResult::stopped, reply, nullptr);
+		return true;
+	}
+
+	GCodeResult result = GCodeResult::ok;
 	if (IsSimulating() && code > 4 && code != 10 && code != 11 && code != 20 && code != 21 && (code < 53 || code > 59) && (code < 90 || code > 94))
 	{
 		HandleReply(gb, result, "");
@@ -581,6 +587,11 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const int code = gb.GetCommandNumber();
+	if (stopped && code != 105 && code != 112 && code != 115 && code != 122 && code != 408 && code != 409 && code != 999)
+	{
+		HandleResult(gb, GCodeResult::stopped, reply, nullptr);
+		return true;
+	}
 
 	// In simulation mode we don't execute most M-commands
 	if (   IsSimulating()
@@ -4793,6 +4804,12 @@ GCodeResult GCodes::TryMacroFile(GCodeBuffer& gb) THROWS(GCodeException)
 
 bool GCodes::HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	if (stopped)
+	{
+		HandleResult(gb, GCodeResult::stopped, reply, nullptr);
+		return true;
+	}
+
 	if (gb.LatestMachineState().runningM502)
 	{
 		return true;			// when running M502 we don't execute T commands
@@ -4962,6 +4979,12 @@ bool GCodes::HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& re
 			reply.cat(": ");
 		}
 		reply.cat("Bad or missing parameter");
+		rslt = GCodeResult::error;
+		break;
+
+	case GCodeResult::stopped:
+		gb.PrintCommand(reply);
+		reply.cat(": Machine is halted");
 		rslt = GCodeResult::error;
 		break;
 
