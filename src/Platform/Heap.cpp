@@ -255,7 +255,7 @@ Heap::IndexSlot *Heap::AllocateHandle() noexcept
 		// Search for a free slot in this block
 		for (size_t i = 0; i < IndexBlockSlots; ++i)
 		{
-			if (curBlock->slots[i].storage == nullptr)
+			if (curBlock->slots[i].IsFree())
 			{
 				curBlock->slots[i].refCount = 1;
 				++handlesUsed;
@@ -281,6 +281,7 @@ Heap::IndexSlot *Heap::AllocateHandle() noexcept
 
 	++handlesUsed;
 	newIndexBlock->slots[0].refCount = 1;
+	newIndexBlock->slots[0].storage = nullptr;
 	return &newIndexBlock->slots[0];
 }
 

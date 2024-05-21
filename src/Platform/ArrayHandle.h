@@ -39,8 +39,8 @@ protected:
 	Heap::IndexSlot * null slotPtr;
 
 private:
-	void MakeUnique() THROWS(GCodeException);
-	void InternalAssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndeces != 0);
+	static Heap::IndexSlot *MakeUnique(volatile ArrayHandle *ah) THROWS(GCodeException);
+	static void InternalAssignIndexed(volatile ArrayHandle *ah, const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndeces != 0);
 };
 
 // Version of ArrayHandle that updates the reference counts automatically
