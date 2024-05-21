@@ -18,6 +18,19 @@
 class MqttClient : public NetworkClient
 {
 public:
+
+	struct Subscription
+	{
+		Subscription(size_t sz)
+		{
+			topic = new char[sz];
+		}
+
+		char *topic;
+		uint8_t qos;
+		struct Subscription *next;
+	};
+
 	static MqttClient *Init(NetworkResponder *n, NetworkClient *c) noexcept;
 
 	bool Spin() noexcept override;
@@ -40,17 +53,6 @@ private:
 	static constexpr size_t MessageTimeout = 5000;
 	static constexpr size_t ReconnectCooldown = 1000;
 
-	struct Subscription
-	{
-		Subscription(size_t sz)
-		{
-			topic = new char[sz];
-		}
-
-		char *topic;
-		uint8_t qos;
-		struct Subscription *next;
-	};
 
 	bool Start() noexcept override;
 	void Stop() noexcept override;
@@ -66,16 +68,6 @@ private:
 	uint32_t messageTimer;	// General purpose variable for keeping track of queued messages timeout
 
 	static MqttClient *instance;
-
-	// MQTT configuration, shared by all MqttClient
-	char *username;
-	char *password;
-	char *id;
-	char *willTopic;
-	char *willMessage;
-	Subscription *subs;
-	size_t keepAlive;
-	uint8_t connectFlags;
 	bool inited;
 
 	NetworkInterface *enabledInterface;
