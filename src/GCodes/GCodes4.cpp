@@ -336,12 +336,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		gb.AdvanceState();
 
 		// If the tool is in the firmware-retracted state, there may be some Z hop applied, which we must remove
-		ms.currentUserPosition[Z_AXIS] += ms.currentZHop;
-		ms.currentZHop = 0.0;
-
-		if ((ms.toolChangeParam & TFreeBit) != 0)
+		if (ms.currentTool != nullptr)
 		{
-			if (ms.currentTool != nullptr)				// 2020-04-29: run tfree file even if not all axes have been homed
+			ms.currentUserPosition[Z_AXIS] += ms.currentTool->GetActualZHop();
+			ms.currentTool->SetActualZHop(0.0);
+			if ((ms.toolChangeParam & TFreeBit) != 0)
 			{
 				String<StringLength20> scratchString;
 				scratchString.printf(TFREE "%d.g", ms.currentTool->Number());
@@ -605,29 +604,34 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			// We no longer restore the paused fan speeds automatically on resuming, because that messes up the print cooling fan speed if a tool change has been done
 			// They can be restored manually in resume.g if required
 #if SUPPORT_ASYNC_MOVES
-			FilePosition earliestFileOffset = 0;				// initialisation needed only to suppress compiler warning
+			FilePosition earliestFileOffset = noFilePosition;
+
 			for (MovementState& tempMs : moveStates)
 			{
 				tempMs.ReleaseNonToolAxesAndExtruders();
 				tempMs.ResumeAfterPause();
-				if (tempMs.GetMsNumber() == 0 || tempMs.GetPauseRestorePoint().filePos < earliestFileOffset)
+
+				GCodeBuffer* fgb = GetFileGCode(tempMs.GetMsNumber());
+				if (fgb->IsExecuting())
 				{
-					earliestFileOffset = tempMs.GetPauseRestorePoint().filePos;
-				}
-				if (tempMs.GetMsNumber() == 0 || !FileGCode()->ExecutingAll())
-				{
-					GCodeBuffer* fgb = GetFileGCode(tempMs.GetMsNumber());
-					fgb->LatestMachineState().feedRate = tempMs.GetPauseRestorePoint().feedRate;
-					if (tempMs.pausedInMacro)
+					if (tempMs.GetMsNumber() == 0 || tempMs.GetPauseRestorePoint().filePos < earliestFileOffset)
 					{
-						fgb->OriginalMachineState().firstCommandAfterRestart = true;
+						earliestFileOffset = tempMs.GetPauseRestorePoint().filePos;
+					}
+					if (tempMs.GetMsNumber() == 0 || !FileGCode()->ExecutingAll())
+					{
+						fgb->LatestMachineState().feedRate = tempMs.GetPauseRestorePoint().feedRate;
+						if (tempMs.pausedInMacro)
+						{
+							fgb->OriginalMachineState().firstCommandAfterRestart = true;
+						}
 					}
 				}
 			}
 
 			// If the file input stream has been forked then we are good to go.
 			// If File is executing both streams then we need to restart it from the earliest offset and using the movement system that was active at that point.
-			if (FileGCode()->ExecutingAll())
+			if (FileGCode()->ExecutingAll() && earliestFileOffset != noFilePosition)
 			{
 				FileGCode()->RestartFrom(earliestFileOffset);
 				const MovementSystemNumber msNumber = (moveStates[0].GetPauseRestorePoint().filePos > earliestFileOffset) ? 1
@@ -1666,20 +1670,37 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		// We just did the retraction part of a firmware retraction, now we need to do the Z hop
 		if (ms.segmentsLeft == 0)
 		{
-			const Tool * const t = ms.currentTool;
+			Tool * const t = ms.currentTool;
 			if (t != nullptr)								// this should always be true
 			{
 #if SUPPORT_ASYNC_MOVES
-				// We already allocated the Z axis to this MS when we began the retraction, so no need to do it here
+				// We already allocated the Z axes to this MS when we began the retraction, so no need to do it here
 #endif
 				SetMoveBufferDefaults(ms);
 				ms.movementTool = t;
 				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, t);
-				ms.coords[Z_AXIS] += t->GetRetractHop();
-				ms.feedRate = platform.MaxFeedrate(Z_AXIS);
+				memcpyf(ms.initialCoords, ms.coords, ARRAY_SIZE(ms.initialCoords));
+				const AxesBitmap zAxes = t->GetZAxisMap();
+
+				// See if we can apply the requested Z hop without exceeding machine limits
+				float zHopToUse = t->GetConfiguredRetractHop();
+				zAxes.Iterate([&ms, &zHopToUse](unsigned int axis, unsigned int)->void { ms.coords[axis] += zHopToUse; });
+				if (reprap.GetMove().GetKinematics().LimitPosition(ms.coords, nullptr, numVisibleAxes, AxesBitmap::MakeFromBits(Z_AXIS), true, true) != LimitPositionResult::ok)
+				{
+					// We can't apply Z hop to all the Z axes without exceeding machine limits
+					zAxes.Iterate([&ms, &zHopToUse](unsigned int axis, unsigned int)->void { zHopToUse = min<float>(zHopToUse, ms.coords[axis] - ms.initialCoords[axis]); });
+					if (zHopToUse <= 0.0)
+					{
+						gb.SetState(GCodeState::normal);
+						break;
+					}
+					zAxes.Iterate([&ms, zHopToUse](unsigned int axis, unsigned int)->void { ms.coords[axis] = ms.initialCoords[axis] + zHopToUse; });
+				}
+
+				t->SetActualZHop(zHopToUse);
+				ms.feedRate = ConvertSpeedFromMmPerSec(ImpossiblyHighFeedRate);		// we rely on the DDA init code to limit the feed rate to what is achievable on each axis;
 				ms.filePos = gb.GetJobFilePosition();
-				ms.canPauseAfter = false;					// don't pause after a retraction because that could cause too much retraction
-				ms.currentZHop = t->GetRetractHop();
+				ms.canPauseAfter = false;											// don't pause after a retraction because that could cause too much retraction
 				ms.linearAxesMentioned = true;
 				NewSingleSegmentMoveAvailable(ms);
 			}

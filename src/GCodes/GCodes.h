@@ -648,6 +648,7 @@ private:
 
 	MachineType machineType;					// whether FFF, laser or CNC
 	bool active;								// Live and running?
+	bool stopped;								// set after emergency stop has been executed
 	const char *_ecv_array null deferredPauseCommandPending;
 	PauseState pauseState;						// whether the machine is running normally or is pausing, paused or resuming
 	bool runningConfigFile;						// We are running config.g during the startup process

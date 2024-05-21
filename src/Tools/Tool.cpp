@@ -124,7 +124,7 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "length",				OBJECT_MODEL_FUNC(self->retractLength, 1),									ObjectModelEntryFlags::none },
 	{ "speed" ,				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->retractSpeed), 1),	ObjectModelEntryFlags::none },
 	{ "unretractSpeed",		OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerSec(self->unRetractSpeed), 1),	ObjectModelEntryFlags::none },
-	{ "zHop",				OBJECT_MODEL_FUNC(self->retractHop, 2),										ObjectModelEntryFlags::none },
+	{ "zHop",				OBJECT_MODEL_FUNC(self->configuredRetractHop, 2),							ObjectModelEntryFlags::none },
 };
 
 constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 18, 5 };
@@ -231,7 +231,7 @@ uint16_t Tool::numToolsToReport = 0;
 	t->axisOffsetsProbed.Clear();
 	t->retractLength = DefaultRetractLength;
 	t->retractExtra = 0.0;
-	t->retractHop = 0.0;
+	t->configuredRetractHop = t->actualZHop = 0.0;
 	t->retractSpeed = t->unRetractSpeed = ConvertSpeedFromMmPerMin(DefaultRetractSpeed);
 	t->isRetracted = false;
 	t->spindleNumber = spindleNo;
@@ -435,6 +435,19 @@ uint16_t Tool::numToolsToReport = 0;
 		rslt = tool->SetFirmwareRetraction(gb, reply, outBuf);
 	}
 	return rslt;
+}
+
+/*static*/ void Tool::CheckZHopsValid(AxesBitmap axesHomed) noexcept
+{
+	const AxesBitmap axesNotHomed = ~axesHomed;
+	ReadLocker lock(toolListLock);
+	for (Tool *tool = toolList; tool != nullptr; tool = tool->Next())
+	{
+		if (tool->GetZAxisMap().Intersects(axesNotHomed))
+		{
+			tool->actualZHop = 0.0;
+		}
+	}
 }
 
 void Tool::PrintTool(const StringRef& reply) const noexcept
@@ -905,7 +918,7 @@ GCodeResult Tool::SetFirmwareRetraction(GCodeBuffer &gb, const StringRef &reply,
 	}
 	if (gb.Seen('Z'))
 	{
-		retractHop = max<float>(gb.GetFValue(), 0.0);
+		configuredRetractHop = gb.GetNonNegativeFValue();
 		seen = true;
 	}
 
@@ -921,7 +934,7 @@ GCodeResult Tool::SetFirmwareRetraction(GCodeBuffer &gb, const StringRef &reply,
 			return GCodeResult::notFinished;
 		}
 		outBuf->lcatf("Tool %u retract/reprime: length %.2f/%.2fmm, speed %.1f/%.1fmm/sec, Z hop %.2fmm",
-			myNumber, (double)retractLength, (double)(retractLength + retractExtra), (double)InverseConvertSpeedToMmPerSec(retractSpeed), (double)InverseConvertSpeedToMmPerSec(unRetractSpeed), (double)retractHop);
+			myNumber, (double)retractLength, (double)(retractLength + retractExtra), (double)InverseConvertSpeedToMmPerSec(retractSpeed), (double)InverseConvertSpeedToMmPerSec(unRetractSpeed), (double)configuredRetractHop);
 	}
 	return GCodeResult::ok;
 }

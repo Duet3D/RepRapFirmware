@@ -48,6 +48,8 @@ constexpr float DefaultEInstantDv = 5.0;
 
 constexpr float DefaultMinFeedrate = 0.5;				// the default minimum movement speed in mm/sec (extruding moves will go slower than this if the extrusion rate demands it)
 constexpr float AbsoluteMinFeedrate = 0.01;				// the absolute minimum movement speed in mm/sec
+constexpr float ImpossiblyHighFeedRate = 10000.0;		// a feedrate higher than any that are likely to be achieved
+
 constexpr float MinimumJerk = 0.1;						// the minimum jerk in mm/sec
 constexpr float MinimumAcceleration = 0.1;				// the minimum acceleration in mm/sec^2
 constexpr float DefaultPrintingAcceleration = 50000.0;	// higher than any likely max acceleration defined by M201
