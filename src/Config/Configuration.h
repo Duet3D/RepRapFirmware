@@ -187,6 +187,9 @@ constexpr size_t MaxTrackedObjects = 40;				// How many build plate objects we t
 constexpr size_t MaxTrackedObjects = 20;				// How many build plate objects we track. Each one needs 16 bytes of storage, in addition to the string space.
 #endif
 
+// Expression evaluation in GCode meta commands etc.
+constexpr size_t MaxExpressionArrayIndices = 5;
+
 // How many filaments we can return in the file information. Each one uses 4 bytes of statically-allocated RAM.
 #if SAME70 || SAME5x
 constexpr unsigned int MaxFilaments = 20;

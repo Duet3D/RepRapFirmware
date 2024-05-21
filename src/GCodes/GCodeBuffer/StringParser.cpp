@@ -768,7 +768,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	SkipWhiteSpace();
 
 	// Check for index expressions after the identifier
-	uint32_t indices[MaxArrayIndices];
+	uint32_t indices[MaxExpressionArrayIndices];
 	size_t numIndices = 0;
 	for (numIndices = 0; ; ++numIndices)
 	{
@@ -777,7 +777,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 		{
 			break;
 		}
-		if (numIndices == MaxArrayIndices)
+		if (numIndices == MaxExpressionArrayIndices)
 		{
 			throw ConstructParseException("Too many array indices");
 		}

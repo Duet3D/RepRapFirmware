@@ -238,8 +238,6 @@ public:
 	void CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException);
 
 private:
-	static constexpr size_t MaxIndices = 4;			// max depth of array nesting
-
 	uint64_t startMillis;							// the milliseconds counter when we started exploring the OM. Stored so that upTime and msUpTime are consistent.
 	size_t initialBufOffset;
 	unsigned int maxDepth;
@@ -248,7 +246,7 @@ private:
 	int nextElement;
 	size_t numIndicesProvided;						// the number of indices provided, when we are doing a value lookup
 	size_t numIndicesCounted;						// the number of indices passed in the search string
-	int32_t indices[MaxIndices];
+	int32_t indices[MaxExpressionArrayIndices];
 	int line;
 	int column;
 	const GCodeBuffer *_ecv_null gb;

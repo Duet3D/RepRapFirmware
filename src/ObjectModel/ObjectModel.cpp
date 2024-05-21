@@ -449,7 +449,7 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 
 void ObjectExplorationContext::AddIndex(int32_t index) THROWS(GCodeException)
 {
-	if (numIndicesCounted == MaxIndices)
+	if (numIndicesCounted == MaxExpressionArrayIndices)
 	{
 		throw GCodeException(-1, -1, "Too many indices");
 	}
@@ -477,7 +477,7 @@ void ObjectExplorationContext::RemoveIndex() THROWS(GCodeException)
 
 void ObjectExplorationContext::ProvideIndex(int32_t index) THROWS(GCodeException)
 {
-	if (numIndicesProvided == MaxIndices)
+	if (numIndicesProvided == MaxExpressionArrayIndices)
 	{
 		throw GCodeException(-1, -1, "Too many indices");
 	}
