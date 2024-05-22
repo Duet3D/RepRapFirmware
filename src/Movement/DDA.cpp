@@ -516,7 +516,14 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	// 7. Calculate the provisional accelerate and decelerate distances and the top speed
 	endSpeed = 0.0;							// until the next move asks us to adjust it
 
-	if (prev->state == provisional && (move.GetJerkPolicy() != 0 || (flags.isPrintingMove == prev->flags.isPrintingMove && flags.xyMoving == prev->flags.xyMoving)))
+	if (   prev->state == provisional
+		&& (   move.GetJerkPolicy() != 0
+			|| (   flags.isPrintingMove == prev->flags.isPrintingMove
+				&& flags.xyMoving == prev->flags.xyMoving
+				&& flags.isNonPrintingExtruderMove == prev->flags.isNonPrintingExtruderMove		// this is to prevent extruder-only move being melded with Z-axis moves (issue 990)
+			   )
+		   )
+	   )
 	{
 		// Try to meld this move to the previous move to avoid stop/start
 		// Assuming that this move ends with zero speed, calculate the maximum possible starting speed: u^2 = v^2 - 2as
