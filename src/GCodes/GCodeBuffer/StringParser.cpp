@@ -1262,6 +1262,7 @@ bool StringParser::Seen(char c) noexcept
 				   )
 				{
 					++readPointer;
+					characterSeen = c;
 					return true;
 				}
 				escaped = false;
@@ -1444,7 +1445,7 @@ void StringParser::CheckArrayLength(size_t actualLength, size_t maxLength) THROW
 {
 	if (actualLength >= maxLength)
 	{
-		throw ConstructParseException("array too long, max length = %u", (uint32_t)maxLength);
+		throw ConstructParseException("array too long for parameter '%c'", (uint32_t)characterSeen);
 	}
 }
 
