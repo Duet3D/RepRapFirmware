@@ -186,6 +186,11 @@ constexpr uint32_t T1H = NanosecondsToCycles(700);
 constexpr uint32_t TCY = NanosecondsToCycles(1200);
 
 // Send data to NeoPixel LEDs by bit banging
+#if SAME70
+__attribute__((aligned(32)))			// needed to ensure consistent timing. SAME70 cache lines are 32 bytes each.
+#elif SAME5x || SAM4E
+__attribute__((aligned(16)))			// SAME5 and SAM4E cache lines are 16 bytes long
+#endif
 GCodeResult NeoPixelLedStrip::BitBangData(const LedParams& params) noexcept
 {
 	const unsigned int bytesPerLed = (isRGBW) ? 4 : 3;
@@ -209,6 +214,18 @@ GCodeResult NeoPixelLedStrip::BitBangData(const LedParams& params) noexcept
 		const uint8_t *q = chunkBuffer;
 		uint32_t nextDelay = TCY;
 		const Pin pin = port.GetPin();
+#if SAME70
+		// We need to make sure that the critical parts of the following loop bodies fall within a single cache line, otherwise pulse timings sometimes go wrong
+		asm volatile ("nop");
+		asm volatile ("nop");
+		asm volatile ("nop");
+		asm volatile ("nop");
+		asm volatile ("nop");
+		asm volatile ("nop");
+		asm volatile ("nop");
+		asm volatile ("nop");
+		asm volatile ("nop");
+#endif
 		IrqDisable();
 		uint32_t lastTransitionTime = GetCurrentCycles();
 
@@ -228,6 +245,9 @@ GCodeResult NeoPixelLedStrip::BitBangData(const LedParams& params) noexcept
 					fastDigitalWriteLow(pin);
 					lastTransitionTime = DelayCycles(lastTransitionTime, highTime);
 					fastDigitalWriteHigh(pin);
+#if SAME70
+					__ISB();					// this is to prevent the compiler re-ordering instructions
+#endif
 					nextDelay = TCY - highTime;
 					c <<= 1;
 				}
@@ -249,6 +269,9 @@ GCodeResult NeoPixelLedStrip::BitBangData(const LedParams& params) noexcept
 					fastDigitalWriteHigh(pin);
 					lastTransitionTime = DelayCycles(lastTransitionTime, highTime);
 					fastDigitalWriteLow(pin);
+#if SAME70
+					__ISB();					// this is to prevent the compiler re-ordering instructions
+#endif
 					nextDelay = TCY - highTime;
 					c <<= 1;
 				}
