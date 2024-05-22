@@ -755,7 +755,7 @@ void SbcInterface::ExchangeData() noexcept
 			shortVarName.copy(varName.c_str() + strlen(isGlobal ? "global." : "var."));
 
 			// Check for index expressions after the variable name. DSF will have stripped out any spaces except for those within index expressions.
-			uint32_t indices[MaxArrayIndices];
+			uint32_t indices[MaxExpressionArrayIndices];
 			size_t numIndices = 0;
 			if (!createVariable)
 			{
@@ -766,7 +766,7 @@ void SbcInterface::ExchangeData() noexcept
 					bool hadError = false;
 					do
 					{
-						if (numIndices == MaxArrayIndices)
+						if (numIndices == MaxExpressionArrayIndices)
 						{
 							expression.printf("too many array indices in '%s'", varName.c_str());
 							hadError = true;
