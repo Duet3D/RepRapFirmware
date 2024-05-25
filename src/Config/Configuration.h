@@ -77,6 +77,8 @@ constexpr unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliar
 constexpr uint32_t SERIAL_MAIN_TIMEOUT = 2000;			// timeout in ms for sending data to the main serial/USB port
 constexpr uint32_t AuxTimeout = 2000;					// timeout in ms for PanelDue replies
 
+constexpr uint32_t UnsolicitedStatusReportInterval = 2000;	// Interval between sending unsolicited status reports, in milliseconds
+
 // Message boxes
 constexpr unsigned int MaxMessageBoxes = 8;				// the maximum number of message boxes that can be queued
 

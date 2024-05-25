@@ -1686,6 +1686,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 105: // Get temperatures
 				GenerateTemperatureReport(gb, reply);
+				gb.RespondedToStatusRequest(StatusReportType::m105);
+				gb.ResetReportDueTimer();
 				break;
 
 			case 106: // Set/report fan values
@@ -3102,15 +3104,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 #endif
 					const int seq = gb.Seen('R') ? gb.GetIValue() : -1;
-					if (&gb == AuxGCode() && (type == 0 || type == 2))
-					{
-						lastAuxStatusReportType = type;
-					}
 
 					outBuf = GenerateJsonStatusResponse(type, seq, (&gb == AuxGCode()) ? ResponseSource::AUX : ResponseSource::Generic);
 					if (outBuf == nullptr)
 					{
 						result = GCodeResult::notFinished;			// we ran out of buffers, so try again later
+					}
+					else if (type == 0)
+					{
+						gb.RespondedToStatusRequest(StatusReportType::m408);
+						gb.ResetReportDueTimer();
 					}
 				}
 				break;
@@ -3123,10 +3126,6 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					bool dummy;
 					gb.TryGetQuotedString('K', key.GetRef(), dummy, true);
 					gb.TryGetQuotedString('F', flags.GetRef(), dummy, true);
-					if (&gb == AuxGCode())
-					{
-						lastAuxStatusReportType = ObjectModelAuxStatusReportType;
-					}
 					{
 						MutexLocker lock(reprap.GetObjectModelReportMutex());				// grab the mutex to prevent PanelDue retrieving the OM at the same time, which can result in running out of buffers
 						outBuf = reprap.GetModelResponse(&gb, key.c_str(), flags.c_str());
@@ -3135,10 +3134,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							// We don't delay and retry here, in case the user asked for too much of the object model in one go for the output buffers to contain it
 							reply.copy("{\"err\":-1}\n");
 						}
-					}
-					if (&gb == AuxGCode())
-					{
-						gb.ResetReportDueTimer();
+						else
+						{
+							gb.RespondedToStatusRequest(StatusReportType::m409);
+							gb.ResetReportDueTimer();
+						}
 					}
 				}
 				break;

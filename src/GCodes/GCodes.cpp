@@ -192,8 +192,6 @@ void GCodes::Init() noexcept
 	limitAxes = noMovesBeforeHoming = true;
 	SetAllAxesNotHomed();
 
-	lastAuxStatusReportType = -1;						// no status reports requested yet
-
 	laserMaxPower = DefaultMaxLaserPower;
 	laserPowerSticky = false;
 
@@ -4914,11 +4912,11 @@ void GCodes::GenerateTemperatureReport(const GCodeBuffer& gb, const StringRef& r
 // 'reply' is a convenient buffer that is free for us to use.
 void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexcept
 {
-	if (&gb == UsbGCode())
+	if ((&gb == UsbGCode() || &gb == AuxGCode() || &gb == Aux2GCode()) && gb.IsReportDue())
 	{
-		if (gb.LatestMachineState().compatibility == Compatibility::Marlin && gb.IsReportDue())
+		switch (gb.GetLastStatusReportType())
 		{
-			// In Marlin emulation mode we should return a standard temperature report every second
+		case StatusReportType::m105:
 			GenerateTemperatureReport(gb, reply);
 			if (reply.strlen() > 0)
 			{
@@ -4926,28 +4924,34 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 				platform.Message(UsbMessage, reply.c_str());
 				reply.Clear();
 			}
-		}
-	}
-	else if (&gb == AuxGCode())
-	{
-		if (lastAuxStatusReportType >= 0 && platform.IsAuxEnabled(0) && gb.IsReportDue())
-		{
-			// Send a standard status response for PanelDue
-			OutputBuffer * statusBuf;
+			break;
+
+		case StatusReportType::m408:
 			{
-				MutexLocker lock(reprap.GetObjectModelReportMutex());
-				statusBuf = (lastAuxStatusReportType == ObjectModelAuxStatusReportType)		// PanelDueFirmware v3.2 or later, using M409 to retrieve object model
-								? reprap.GetModelResponse(&gb, "", "d99fi")
-								: GenerateJsonStatusResponse(lastAuxStatusReportType, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
-			}
-			if (statusBuf != nullptr)
-			{
-				platform.AppendAuxReply(0, statusBuf, true);
-				if (reprap.Debug(Module::Gcodes))
+				OutputBuffer * statusBuf =  GenerateJsonStatusResponse(0, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
+				if (statusBuf != nullptr)
 				{
-					debugPrintf("%s: Sent unsolicited status report\n", gb.GetChannel().ToString());
+					platform.AppendAuxReply(0, statusBuf, true);
 				}
 			}
+			break;
+
+		case StatusReportType::m409:
+			{
+				OutputBuffer * statusBuf;
+				{
+					MutexLocker lock(reprap.GetObjectModelReportMutex());
+					statusBuf = reprap.GetModelResponse(&gb, "", "d99fi");
+				}
+				if (statusBuf != nullptr)
+				{
+					platform.AppendAuxReply(0, statusBuf, true);
+				}
+			}
+			break;
+
+		default:
+			break;
 		}
 	}
 }

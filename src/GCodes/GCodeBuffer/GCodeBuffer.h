@@ -38,6 +38,15 @@ enum class GCodeBufferState : uint8_t
 	executing										// we have a complete gcode and have started executing it
 };
 
+// Type of a status report
+enum class StatusReportType : uint8_t
+{
+	none = 0,
+	m105,
+	m408,
+	m409
+};
+
 // Class to hold an individual GCode and provide functions to allow it to be parsed
 class GCodeBuffer INHERIT_OBJECT_MODEL
 {
@@ -176,26 +185,29 @@ public:
 	float InverseConvertSpeed(float speed) const noexcept;
 	const char *GetDistanceUnits() const noexcept;
 	unsigned int GetStackDepth() const noexcept;
-	bool PushState(bool withinSameFile) noexcept;				// Push state returning true if successful (i.e. stack not overflowed)
-	bool PopState(bool withinSameFile) noexcept;				// Pop state returning true if successful (i.e. no stack underrun)
+	bool PushState(bool withinSameFile) noexcept;							// Push state returning true if successful (i.e. stack not overflowed)
+	bool PopState(bool withinSameFile) noexcept;							// Pop state returning true if successful (i.e. no stack underrun)
 
 	void AbortFile(bool abortAll, bool requestAbort = true) noexcept;
-	bool IsDoingFile() const noexcept;							// Return true if this source is executing a file
-	bool IsDoingLocalFile() const noexcept;						// Return true if this source is executing a file from the local SD card
-	bool IsDoingFileMacro() const noexcept;						// Return true if this source is executing a file macro
-	FilePosition GetJobFilePosition() const noexcept;			// Get the file position at the start of the current command
+	bool IsDoingFile() const noexcept;										// Return true if this source is executing a file
+	bool IsDoingLocalFile() const noexcept;									// Return true if this source is executing a file from the local SD card
+	bool IsDoingFileMacro() const noexcept;									// Return true if this source is executing a file macro
+	FilePosition GetJobFilePosition() const noexcept;						// Get the file position at the start of the current command
 	FilePosition GetPrintingFilePosition(bool allowNoFilePos) const noexcept;	// Get the file position in the printing file
 	void SavePrintingFilePosition() noexcept;
 
-	void WaitForAcknowledgement(uint32_t seq) noexcept;			// Flag that we are waiting for acknowledgement
-	void ClosePrintFile() noexcept;								// Close the print file
+	void WaitForAcknowledgement(uint32_t seq) noexcept;						// Flag that we are waiting for acknowledgement
+	void ClosePrintFile() noexcept;											// Close the print file
+
+	StatusReportType GetLastStatusReportType() const noexcept { return lastStatusReportType; }
+	void RespondedToStatusRequest(StatusReportType t) noexcept { lastStatusReportType = t; }	// call this when a response to a status request is sent
 
 #if HAS_SBC_INTERFACE
-	bool IsBinary() const noexcept { return isBinaryBuffer; }	// Return true if the code is in binary format
+	bool IsBinary() const noexcept { return isBinaryBuffer; }				// Return true if the code is in binary format
 
-	bool IsFileFinished() const noexcept;						// Return true if this source has finished execution of a file
-	void SetFileFinished() noexcept;							// Mark the current file as finished
-	void SetPrintFinished() noexcept;							// Mark the current print file as finished
+	bool IsFileFinished() const noexcept;									// Return true if this source has finished execution of a file
+	void SetFileFinished() noexcept;										// Mark the current file as finished
+	void SetPrintFinished() noexcept;										// Mark the current print file as finished
 
 	bool RequestMacroFile(const char *filename, bool fromCode) noexcept;	// Request execution of a file macro
 	volatile bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
@@ -337,7 +349,7 @@ private:
 
 	uint32_t whenTimerStarted;							// When we started waiting
 	uint32_t whenReportDueTimerStarted;					// When the report-due-timer has been started
-	static constexpr uint32_t reportDueInterval = 1000;	// Interval in which we send in ms
+	StatusReportType lastStatusReportType;				// the type of the last status report sent on this channel
 
 	const GCodeChannel codeChannel;						// Channel number of this instance
 	GCodeBufferState bufferState;						// Idle, executing or paused
