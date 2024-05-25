@@ -648,6 +648,8 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		OutputBuffer::ReleaseAll(response);
 		const char *const filterVal = GetKeyValue("key");
 		const char *const flagsVal = GetKeyValue("flags");
+
+		MutexLocker lock(reprap.GetObjectModelReportMutex());				// grab the mutex to prevent PanelDue retrieving the OM at the same time, which can result in running out of buffers
 		response = reprap.GetModelResponse(nullptr, filterVal, flagsVal);
 	}
 #endif

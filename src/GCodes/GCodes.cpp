@@ -4933,10 +4933,13 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 		if (lastAuxStatusReportType >= 0 && platform.IsAuxEnabled(0) && gb.IsReportDue())
 		{
 			// Send a standard status response for PanelDue
-			OutputBuffer * const statusBuf =
-									(lastAuxStatusReportType == ObjectModelAuxStatusReportType)		// PanelDueFirmware v3.2 or later, using M409 to retrieve object model
-										? reprap.GetModelResponse(&gb, "", "d99fi")
-										: GenerateJsonStatusResponse(lastAuxStatusReportType, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
+			OutputBuffer * statusBuf;
+			{
+				MutexLocker lock(reprap.GetObjectModelReportMutex());
+				statusBuf = (lastAuxStatusReportType == ObjectModelAuxStatusReportType)		// PanelDueFirmware v3.2 or later, using M409 to retrieve object model
+								? reprap.GetModelResponse(&gb, "", "d99fi")
+								: GenerateJsonStatusResponse(lastAuxStatusReportType, -1, ResponseSource::AUX);		// older PanelDueFirmware using M408
+			}
 			if (statusBuf != nullptr)
 			{
 				platform.AppendAuxReply(0, statusBuf, true);

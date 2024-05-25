@@ -151,8 +151,6 @@ extern "C" void hsmciIdle(uint32_t stBits, uint32_t dmaBits) noexcept
 
 #endif //end if HAS_HIGH_SPEED_SD && !SAME5x
 
-#if SUPPORT_OBJECT_MODEL
-
 // Object model table and functions
 // Note: if using GCC version 7.3.1 20180622 and lambda functions are used in this table, you must compile this file with option -std=gnu++17.
 // Otherwise the table will be allocate in RAM instead of flash, which wastes too much RAM.
@@ -439,8 +437,6 @@ constexpr uint8_t RepRap::objectModelTableDescriptor[] =
 
 DEFINE_GET_OBJECT_MODEL_TABLE(RepRap)
 
-#endif
-
 // RepRap member functions.
 
 // Do nothing more in the constructor; put what you want in RepRap:Init()
@@ -493,6 +489,8 @@ static void CheckWatchBuffer(unsigned int module) noexcept
 void RepRap::Init() noexcept
 {
 	OutputBuffer::Init();
+	objectModelReportMutex.Create("ModelReport");
+
 	platform = new Platform();
 #if HAS_SBC_INTERFACE
 	sbcInterface = new SbcInterface();				// needs to be allocated early on Duet 2 so as to avoid using any of the last 64K of RAM
@@ -1119,7 +1117,7 @@ bool RepRap::SpinTimeoutImminent() const noexcept
 	return ticksInSpinState >= HighMainTaskTicksInSpinState;
 }
 
-// Get the JSON status response for the web server (or later for the M105 command).
+// Get the JSON status response for the web server or the M408 command.
 // Type 1 is the ordinary JSON status response.
 // Type 2 is the same except that static parameters are also included.
 // Type 3 is the same but instead of static parameters we report print estimation values.
@@ -2297,8 +2295,6 @@ void RepRap::AppendStringArray(OutputBuffer *buf, const char *name, size_t numVa
 	buf->cat(']');
 }
 
-#if SUPPORT_OBJECT_MODEL
-
 // Return a query into the object model, or return nullptr if no buffer available
 // We append a newline to help PanelDue resync after receiving corrupt or incomplete data. DWC ignores it.
 OutputBuffer *RepRap::GetModelResponse(const GCodeBuffer *_ecv_null gb, const char *key, const char *flags) const THROWS(GCodeException)
@@ -2335,8 +2331,6 @@ OutputBuffer *RepRap::GetModelResponse(const GCodeBuffer *_ecv_null gb, const ch
 
 	return outBuf;
 }
-
-#endif
 
 // Send a beep. We send it to both PanelDue and the web interface.
 void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept

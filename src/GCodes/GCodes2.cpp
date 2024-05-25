@@ -3127,12 +3127,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						lastAuxStatusReportType = ObjectModelAuxStatusReportType;
 					}
-					outBuf = reprap.GetModelResponse(&gb, key.c_str(), flags.c_str());
-					if (outBuf == nullptr)
 					{
-						OutputBuffer::ReleaseAll(outBuf);
-						// We don't delay and retry here, in case the user asked for too much of the object model in one go for the output buffers to contain it
-						reply.copy("{\"err\":-1}\n");
+						MutexLocker lock(reprap.GetObjectModelReportMutex());				// grab the mutex to prevent PanelDue retrieving the OM at the same time, which can result in running out of buffers
+						outBuf = reprap.GetModelResponse(&gb, key.c_str(), flags.c_str());
+						if (outBuf == nullptr)
+						{
+							// We don't delay and retry here, in case the user asked for too much of the object model in one go for the output buffers to contain it
+							reply.copy("{\"err\":-1}\n");
+						}
 					}
 					if (&gb == AuxGCode())
 					{
