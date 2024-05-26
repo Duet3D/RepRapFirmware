@@ -173,12 +173,12 @@ constexpr size_t ShortGCodeLength = 64;
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 40;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
-constexpr size_t MinimumBuffersForObjectModel = 18;		// Minimum number of free buffers we want before we start assembling a request for the object model
+constexpr size_t MinimumBuffersForObjectModel = 20;		// Minimum number of free buffers we want before we start assembling a request for the object model
 #elif SAM4E || SAM4S
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 26;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
-constexpr size_t MinimumBuffersForObjectModel = 18;		// Minimum number of free buffers we want before we start assembling a request for the object model
+constexpr size_t MinimumBuffersForObjectModel = 20;		// Minimum number of free buffers we want before we start assembling a request for the object model
 #else
 # error Unsupported processor
 #endif
