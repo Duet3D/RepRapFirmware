@@ -4941,6 +4941,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 				OutputBuffer * statusBuf;
 				{
 					MutexLocker lock(reprap.GetObjectModelReportMutex());
+					if (OutputBuffer::GetFreeBuffers() < MinimumBuffersForObjectModel) { break; }
 					statusBuf = reprap.GetModelResponse(&gb, "", "d99fi");
 				}
 				if (statusBuf != nullptr)

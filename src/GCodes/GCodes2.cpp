@@ -3113,6 +3113,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					gb.TryGetQuotedString('F', flags.GetRef(), dummy, true);
 					{
 						MutexLocker lock(reprap.GetObjectModelReportMutex());				// grab the mutex to prevent PanelDue retrieving the OM at the same time, which can result in running out of buffers
+						if (OutputBuffer::GetFreeBuffers() < MinimumBuffersForObjectModel)
+						{
+							return false;													// try again later
+						}
 						outBuf = reprap.GetModelResponse(&gb, key.c_str(), flags.c_str());
 						if (outBuf == nullptr)
 						{
