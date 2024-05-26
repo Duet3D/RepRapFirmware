@@ -1938,35 +1938,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 115: // Print firmware version or set hardware type
-#ifdef DUET_NG
-				if (gb.Seen('P'))
+#if SUPPORT_CAN_EXPANSION
+				if (gb.Seen('B'))
 				{
-					if (runningConfigFile)
+					const uint32_t board = gb.GetUIValue();
+					if (board != CanInterface::GetCanAddress())
 					{
-						platform.SetBoardType((BoardType)gb.GetIValue());
-					}
-					else
-					{
-						reply.copy("Board type can only be set within config.g");
-						result = GCodeResult::error;
+						result = CanInterface::GetRemoteFirmwareDetails(board, gb, reply);
+						break;
 					}
 				}
-				else
 #endif
-				{
-#if SUPPORT_CAN_EXPANSION
-					if (gb.Seen('B'))
-					{
-						const uint32_t board = gb.GetUIValue();
-						if (board != CanInterface::GetCanAddress())
-						{
-							result = CanInterface::GetRemoteFirmwareDetails(board, gb, reply);
-							break;
-						}
-					}
-#endif
-					reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s", FIRMWARE_NAME, VERSION, platform.GetElectronicsString());
+				reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s", FIRMWARE_NAME, VERSION, platform.GetElectronicsString());
 #if defined(DUET_NG)
+				{
 					const char* const expansionName = DuetExpansion::GetExpansionBoardName();
 					if (expansionName != nullptr)
 					{
@@ -1977,21 +1962,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						reply.catf(" + %s", additionalExpansionName);
 					}
+				}
 #elif defined(DUET3MINI) && !defined(FMDC_V03)
+				{
+					const char *const expansionString = platform.GetExpansionBoardName();
+					if (expansionString != nullptr)
 					{
-						const char *const expansionString = platform.GetExpansionBoardName();
-						if (expansionString != nullptr)
-						{
-							reply.catf(" + %s", expansionString);
-						}
+						reply.catf(" + %s", expansionString);
 					}
+				}
 #endif
 #if defined(DUET3_ATE)
-					reply.lcatf("ATE firmware version %s date %s %s", Duet3Ate::GetFirmwareVersionString(), Duet3Ate::GetFirmwareDateString(), Duet3Ate::GetFirmwareTimeString());
+				reply.lcatf("ATE firmware version %s date %s %s", Duet3Ate::GetFirmwareVersionString(), Duet3Ate::GetFirmwareDateString(), Duet3Ate::GetFirmwareTimeString());
 #else
-					reply.catf(" FIRMWARE_DATE: %s%s", DATE, TIME_SUFFIX);
+				reply.catf(" FIRMWARE_DATE: %s%s", DATE, TIME_SUFFIX);
 #endif
-				}
 				break;
 
 			case 116: // Wait for set temperatures

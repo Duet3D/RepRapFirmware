@@ -522,7 +522,7 @@ void Platform::Init() noexcept
 #endif
 
 	// Sort out which board we are running on (some firmware builds support more than one board variant)
-	SetBoardType(BoardType::Auto);
+	SetBoardType();
 
 #if MCU_HAS_UNIQUE_ID
 	uniqueId.SetFromCurrentBoard();
@@ -3900,81 +3900,74 @@ void Platform::ResetChannel(size_t chan) noexcept
 
 // Set the board type/revision. This must be called quite early, because for some builds it relies on pins not having been programmed for their intended use yet.
 // Also do any specific initialisation that varies with the board revision.
-void Platform::SetBoardType(BoardType bt) noexcept
+void Platform::SetBoardType() noexcept
 {
-	if (bt == BoardType::Auto)
-	{
 #if defined(DUET3MINI_V04)
-		// Test whether this is a WiFi or an Ethernet board by testing for a pulldown resistor on Dir1
-		pinMode(DIRECTION_PINS[1], INPUT_PULLUP);
-		delayMicroseconds(20);									// give the pullup resistor time to work
-		board = (digitalRead(DIRECTION_PINS[1]))				// if SAME54P20A
-					? BoardType::Duet3Mini_WiFi
-						: BoardType::Duet3Mini_Ethernet;
+	// Test whether this is a WiFi or an Ethernet board by testing for a pulldown resistor on Dir1
+	pinMode(DIRECTION_PINS[1], INPUT_PULLUP);
+	delayMicroseconds(20);									// give the pullup resistor time to work
+	board = (digitalRead(DIRECTION_PINS[1]))				// if SAME54P20A
+				? BoardType::Duet3Mini_WiFi
+					: BoardType::Duet3Mini_Ethernet;
 #elif defined(DUET3_MB6HC)
-		board = GetMB6HCBoardType();
-		if (board == BoardType::Duet3_6HC_v102)
-		{
-			powerMonitorVoltageRange = PowerMonitorVoltageRange_v102;
-			DiagPin = DiagPin102;
-			ActLedPin = ActLedPin102;
-			DiagOnPolarity = DiagOnPolarity102;
-		}
-		else
-		{
-			powerMonitorVoltageRange = PowerMonitorVoltageRange_v101;
-			DiagPin = DiagPinPre102;
-			ActLedPin = ActLedPinPre102;
-			DiagOnPolarity = DiagOnPolarityPre102;
-		}
-		driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);
-		driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);
-#elif defined(DUET3_MB6XD)
-		board = GetMB6XDBoardType();
-#elif defined(FMDC_V02) || defined(FMDC_V03)
-		board = BoardType::FMDC;
-#elif defined(DUET_NG)
-		// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
-		pinMode(W5500ModuleSensePin, INPUT_PULLUP);				// set our UART receive pin to be an input pin and enable the pullup
-
-		// Set up the VSSA sense pin. Older Duet WiFis don't have it connected, so we enable the pulldown resistor to keep it inactive.
-		pinMode(VssaSensePin, INPUT_PULLUP);
-		delayMicroseconds(10);
-		const bool vssaHighVal = digitalRead(VssaSensePin);
-		pinMode(VssaSensePin, INPUT_PULLDOWN);
-		delayMicroseconds(10);
-		const bool vssaLowVal = digitalRead(VssaSensePin);
-		const bool vssaSenseWorking = vssaLowVal || !vssaHighVal;
-		if (vssaSenseWorking)
-		{
-			pinMode(VssaSensePin, INPUT);
-		}
-
-# if defined(USE_SBC)
-		board = (vssaSenseWorking) ? BoardType::Duet2SBC_102 : BoardType::Duet2SBC_10;
-# else
-		// Test whether the Ethernet module is present
-		if (digitalRead(W5500ModuleSensePin))					// the Ethernet module has this pin grounded
-		{
-			board = (vssaSenseWorking) ? BoardType::DuetWiFi_102 : BoardType::DuetWiFi_10;
-		}
-		else
-		{
-			board = (vssaSenseWorking) ? BoardType::DuetEthernet_102 : BoardType::DuetEthernet_10;
-		}
-# endif
-#elif defined(DUET_M)
-		board = BoardType::DuetM_10;
-#elif defined(PCCB_10)
-		board = BoardType::PCCB_v10;
-#else
-# error Undefined board type
-#endif
+	board = GetMB6HCBoardType();
+	if (board == BoardType::Duet3_6HC_v102)
+	{
+		powerMonitorVoltageRange = PowerMonitorVoltageRange_v102;
+		DiagPin = DiagPin102;
+		ActLedPin = ActLedPin102;
+		DiagOnPolarity = DiagOnPolarity102;
 	}
 	else
 	{
-		board = bt;
+		powerMonitorVoltageRange = PowerMonitorVoltageRange_v101;
+		DiagPin = DiagPinPre102;
+		ActLedPin = ActLedPinPre102;
+		DiagOnPolarity = DiagOnPolarityPre102;
 	}
+	driverPowerOnAdcReading = PowerVoltageToAdcReading(10.0);
+	driverPowerOffAdcReading = PowerVoltageToAdcReading(9.5);
+#elif defined(DUET3_MB6XD)
+	board = GetMB6XDBoardType();
+#elif defined(FMDC_V02) || defined(FMDC_V03)
+	board = BoardType::FMDC;
+#elif defined(DUET_NG)
+	// Get ready to test whether the Ethernet module is present, so that we avoid additional delays
+	pinMode(W5500ModuleSensePin, INPUT_PULLUP);				// set our UART receive pin to be an input pin and enable the pullup
+
+	// Set up the VSSA sense pin. Older Duet WiFis don't have it connected, so we enable the pulldown resistor to keep it inactive.
+	pinMode(VssaSensePin, INPUT_PULLUP);
+	delayMicroseconds(10);
+	const bool vssaHighVal = digitalRead(VssaSensePin);
+	pinMode(VssaSensePin, INPUT_PULLDOWN);
+	delayMicroseconds(10);
+	const bool vssaLowVal = digitalRead(VssaSensePin);
+	const bool vssaSenseWorking = vssaLowVal || !vssaHighVal;
+	if (vssaSenseWorking)
+	{
+		pinMode(VssaSensePin, INPUT);
+	}
+
+# if defined(USE_SBC)
+	board = (vssaSenseWorking) ? BoardType::Duet2SBC_102 : BoardType::Duet2SBC_10;
+# else
+	// Test whether the Ethernet module is present
+	if (digitalRead(W5500ModuleSensePin))					// the Ethernet module has this pin grounded
+	{
+		board = (vssaSenseWorking) ? BoardType::DuetWiFi_102 : BoardType::DuetWiFi_10;
+	}
+	else
+	{
+		board = (vssaSenseWorking) ? BoardType::DuetEthernet_102 : BoardType::DuetEthernet_10;
+	}
+# endif
+#elif defined(DUET_M)
+	board = BoardType::DuetM_10;
+#elif defined(PCCB_10)
+	board = BoardType::PCCB_v10;
+#else
+# error Undefined board type
+#endif
 }
 
 // Get a string describing the electronics
