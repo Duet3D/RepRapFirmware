@@ -39,8 +39,6 @@ const ObjectModelClassDescriptor *SbcInterface::GetObjectModelClassDescriptor() 
 // In 3.5.2, the stack size is increased again to allow for nested functions to be properly evaluated (up to 7 nested max calls e.g.)
 #if defined(DEBUG)
 constexpr size_t SBCTaskStackWords = 1600;			// debug builds use more stack
-#elif defined(DUET_NG)
-constexpr size_t SBCTaskStackWords = 1200;			// we don't have a lot of free RAM on the Duet 2
 #else
 constexpr size_t SBCTaskStackWords = 1400;
 #endif

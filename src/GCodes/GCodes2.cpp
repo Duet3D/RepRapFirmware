@@ -1386,47 +1386,39 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 			case 37:	// Simulation mode on/off, or simulate a whole file
-#if HAS_SBC_INTERFACE
-				if (reprap.UsingSbcInterface() && !gb.IsBinary())
+			{
+#if SUPPORT_ASYNC_MOVES
+				if (!DoSync(gb))
 				{
-					reply.copy("M37 can be only started from the SBC interface");
-					result = GCodeResult::error;
+					return false;
+				}
+#endif
+				bool seen = false;
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
+				String<MaxFilenameLength> simFileName;
+				gb.TryGetPossiblyQuotedString('P', simFileName.GetRef(), seen);
+				if (seen)
+				{
+					const bool updateFile = !gb.Seen('F') || gb.GetUIValue() == 1;
+					result = SimulateFile(gb, reply, simFileName.GetRef(), updateFile);
 				}
 				else
 #endif
 				{
-#if SUPPORT_ASYNC_MOVES
-					if (!DoSync(gb))
-					{
-						return false;
-					}
-#endif
-					bool seen = false;
-#if HAS_MASS_STORAGE
-					String<MaxFilenameLength> simFileName;
-					gb.TryGetPossiblyQuotedString('P', simFileName.GetRef(), seen);
+					uint32_t newSimulationMode;
+					gb.TryGetLimitedUIValue('S', newSimulationMode, seen, (uint32_t)SimulationMode::highest + 1);
 					if (seen)
 					{
-						const bool updateFile = !gb.Seen('F') || gb.GetUIValue() == 1;
-						result = SimulateFile(gb, reply, simFileName.GetRef(), updateFile);
+						result = ChangeSimulationMode(gb, reply, (SimulationMode)newSimulationMode);
 					}
 					else
-#endif
 					{
-						uint32_t newSimulationMode;
-						gb.TryGetLimitedUIValue('S', newSimulationMode, seen, (uint32_t)SimulationMode::highest + 1);
-						if (seen)
-						{
-							result = ChangeSimulationMode(gb, reply, (SimulationMode)newSimulationMode);
-						}
-						else
-						{
-							reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec",
-									(IsSimulating()) ? "on" : "off", (double)reprap.GetMove().GetSimulationTime(), (double)simulationTime);
-						}
+						reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec",
+								(IsSimulating()) ? "on" : "off", (double)reprap.GetMove().GetSimulationTime(), (double)simulationTime);
 					}
 				}
 				break;
+			}
 
 #if 0		// was (HAS_MASS_STORAGE || HAS_EMBEDDED_FILES), removed this function to save space on Duet 2
 			case 38: // Report SHA1 of file
