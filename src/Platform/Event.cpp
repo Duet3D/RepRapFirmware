@@ -208,11 +208,19 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 #endif
 			return WarningMessage;
 
-		case EventType::overvoltage_warning:
+		case EventType::overvoltage:
 #if SUPPORT_CAN_EXPANSION
-			str.printf("overvoltage warning from board %u: voltage %.1fV", ep->boardAddress, (double)((float)ep->param/10));
+			str.printf("overvoltage on board %u: voltage %.1fV", ep->boardAddress, (double)((float)ep->param/10));
 #else
-			str.printf("overvoltage warning: voltage %.1fV", (double)((float)ep->param/10));
+			str.printf("overvoltage: voltage %.1fV", (double)((float)ep->param/10));
+#endif
+			return WarningMessage;
+
+		case EventType::undervoltage:
+#if SUPPORT_CAN_EXPANSION
+			str.printf("undervoltage on board %u: voltage %.1fV", ep->boardAddress, (double)((float)ep->param/10));
+#else
+			str.printf("undervoltage: voltage %.1fV", (double)((float)ep->param/10));
 #endif
 			return WarningMessage;
 
