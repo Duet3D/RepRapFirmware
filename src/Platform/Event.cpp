@@ -208,6 +208,14 @@ inline Event::Event(Event *_ecv_null p_next, EventType et, uint16_t p_param, Can
 #endif
 			return WarningMessage;
 
+		case EventType::overvoltage_warning:
+#if SUPPORT_CAN_EXPANSION
+			str.printf("overvoltage warning from board %u: voltage %.1fV", ep->boardAddress, (double)((float)ep->param/10));
+#else
+			str.printf("overvoltage warning: voltage %.1fV", (double)((float)ep->param/10));
+#endif
+			return WarningMessage;
+
 		case EventType::expansion_timeout:
 			str.printf("Expansion board %u stopped sending status", ep->boardAddress);
 			return ErrorMessage;
