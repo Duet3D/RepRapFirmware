@@ -13,8 +13,6 @@
 #include <Platform/StringHandle.h>
 #include <Platform/ArrayHandle.h>
 
-#if SUPPORT_OBJECT_MODEL
-
 #include "TypeCode.h"
 #include <General/IPAddress.h>
 #include <General/Bitmap.h>
@@ -109,7 +107,9 @@ struct ExpressionValue
 
 	explicit ExpressionValue(Bitmap<uint16_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap16), param(0), uVal(bm.GetRaw()) { }
 	explicit ExpressionValue(Bitmap<uint32_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap32), param(0), uVal(bm.GetRaw()) { }
+#if SUPPORT_BITMAP64
 	explicit ExpressionValue(Bitmap<uint64_t> bm) noexcept : type((uint32_t)TypeCode::Bitmap64) { Set56BitValue(bm.GetRaw()); }
+#endif
 	explicit ExpressionValue(const MacAddress& mac) noexcept;
 	ExpressionValue(SpecialType s, uint32_t u) noexcept : type((uint32_t)TypeCode::Special), param((uint32_t)s), uVal(u) { }
 
@@ -524,17 +524,5 @@ struct ObjectModelClassDescriptor
 #define OBJECT_MODEL_FUNC_NOSELF(...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept { return ExpressionValue(__VA_ARGS__); }
 #define OBJECT_MODEL_FUNC_IF_NOSELF(_condition,...) [] (const ObjectModel *_ecv_from arg, ObjectExplorationContext& context) noexcept \
 	{ return (_condition) ? ExpressionValue(__VA_ARGS__) : ExpressionValue(nullptr); }
-
-#else
-
-#define INHERIT_OBJECT_MODEL										// nothing
-#define DECLARE_OBJECT_MODEL										// nothing
-#define DECLARE_OBJECT_MODEL_WITH_ARRAYS 							// nothing
-#define DECLARE_OBJECT_MODEL_VIRTUAL								// nothing
-#define DEFINE_GET_OBJECT_MODEL_TABLE(_class)						// nothing
-#define DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(_class)					// nothing
-#define DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(_class, _parent)	// nothing
-
-#endif
 
 #endif /* SRC_OBJECTMODEL_OBJECTMODEL_H_ */
