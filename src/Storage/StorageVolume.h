@@ -4,6 +4,8 @@
 
 #include <General/StringRef.h>
 #include <ObjectModel/ObjectModel.h>
+
+#if HAS_MASS_STORAGE
 #include <Libraries/Fatfs/diskio.h>
 
 class StorageVolume INHERIT_OBJECT_MODEL
@@ -57,3 +59,4 @@ protected:
 	unsigned int InternalUnmount() noexcept;
 	virtual void DeviceUnmount() noexcept = 0;
 };
+#endif

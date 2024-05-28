@@ -3,12 +3,6 @@
 #include <Platform/RepRap.h>
 #include <ObjectModel/ObjectModel.h>
 
-#if HAS_MASS_STORAGE
-
-// Check that the LFN configuration in FatFS is sufficient
-static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
-
-#endif
 
 #if HAS_SBC_INTERFACE
 # include <SBC/SbcInterface.h>
@@ -18,8 +12,13 @@ static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
 # include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #endif
 
+#if HAS_MASS_STORAGE
 #include <Libraries/Fatfs/ff.h> // for type definitions
 #include <Libraries/Fatfs/diskio.h>
+
+// Check that the LFN configuration in FatFS is sufficient
+static_assert(FF_MAX_LFN >= MaxFilenameLength, "FF_MAX_LFN too small");
+#endif
 
 #include "SdCardVolume.h"
 
@@ -39,7 +38,6 @@ static_assert(FF_VOLUMES >= NumSdCards);
 // No function in here should be called when the caller already owns the shared SPI mutex.
 
 #if HAS_MASS_STORAGE
-
 // Private data and methods
 
 # if SAME70
@@ -877,57 +875,51 @@ bool MassStorage::IsVolumeDetected(size_t slot) noexcept
 // This may only be called to mount one volume at a time.
 GCodeResult MassStorage::Mount(size_t slot, const StringRef& reply, bool reportSuccess) noexcept
 {
-	if (slot >= GetNumVolumes())
+	if (slot >= GetNumVolumes()
+#if HAS_MASS_STORAGE
+		|| !storageVolumes[slot]->IsUseable(reply)
+#endif
+	)
 	{
 		reply.copy("Volume slot out of range");
 		return GCodeResult::error;
 	}
 
-	if (!storageVolumes[slot]->IsUseable(reply))
-	{
-		return GCodeResult::error;
-	}
-
-	GCodeResult res = GCodeResult::ok;
-
 # if HAS_MASS_STORAGE
 	MutexLocker lock(fsMutex);
-	res = storageVolumes[slot]->Mount(reply, reportSuccess);
+	return storageVolumes[slot]->Mount(reply, reportSuccess);
+#else
+	return GCodeResult::ok;
 #endif
-
-	return res;
 }
 
 // Unmount the volume on specified slot, returning true if done, false if needs to be called again.
 // If an error occurs, return true with the error message in 'reply'.
 GCodeResult MassStorage::Unmount(size_t slot, const StringRef& reply) noexcept
 {
-	if (slot >= GetNumVolumes())
+	if (slot >= GetNumVolumes()
+#if HAS_MASS_STORAGE
+		|| !storageVolumes[slot]->IsUseable(reply)
+#endif
+	)
 	{
 		reply.copy("Volume slot out of range");
 		return GCodeResult::error;
 	}
 
-	if (!storageVolumes[slot]->IsUseable(reply))
-	{
-		return GCodeResult::error;
-	}
-
-	GCodeResult res = GCodeResult::ok;
-
 # if HAS_MASS_STORAGE
 	MutexLocker lock(fsMutex);
-	res = storageVolumes[slot]->Unmount(reply);
+	return storageVolumes[slot]->Unmount(reply);
+#else
+	return GCodeResult::ok;
 #endif
-
-	return res;
 }
 
 bool MassStorage::IsDriveMounted(size_t slot) noexcept
 {
-	return slot < GetNumVolumes() && storageVolumes[slot]->IsUseable()
+	return slot < GetNumVolumes()
 #if HAS_MASS_STORAGE
-		&& storageVolumes[slot]->IsMounted()
+		&& storageVolumes[slot]->IsUseable() && storageVolumes[slot]->IsMounted()
 #endif
 		;
 }
@@ -1038,7 +1030,7 @@ void MassStorage::RecordSimulationTime(const char *_ecv_array printingFilePath, 
 // Get information about the volume and interface speed on the specified slot
 MassStorage::InfoResult MassStorage::GetVolumeInfo(size_t slot, SdCardReturnedInfo& returnedInfo) noexcept
 {
-	if (slot >= GetNumVolumes() && storageVolumes[slot]->IsUseable())
+	if (slot >= GetNumVolumes() || !storageVolumes[slot]->IsUseable())
 	{
 		return InfoResult::badSlot;
 	}
@@ -1067,7 +1059,6 @@ const ObjectModel *_ecv_from MassStorage::GetVolume(size_t slot) noexcept
 }
 # endif
 
-#endif
 
 // Functions called by FatFS to acquire/release mutual exclusion
 extern "C"
@@ -1124,5 +1115,8 @@ extern "C"
 		return storageVolumes[drv]->DiskIoctl(ctrl, buff);
 	}
 }
+
+#endif
+
 
 // End

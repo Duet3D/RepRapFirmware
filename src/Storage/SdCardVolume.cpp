@@ -250,7 +250,7 @@ GCodeResult SdCardVolume::Mount(const StringRef& reply, bool reportSuccess) noex
 
 bool SdCardVolume::IsUseable(const StringRef& reply) const noexcept
 {
-#if DUET3_MB6HC
+#ifdef DUET3_MB6HC
 	// We have another sd slot if the second one has a valid CS pin
 	if (slot == 1 && (reprap.GetPlatform().GetBoardType() >= BoardType::Duet3_6HC_v102 || sd1Ports[0].IsValid()))
 	{

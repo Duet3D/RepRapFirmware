@@ -57,7 +57,9 @@ namespace MassStorage
 	bool FileExists(const char *_ecv_array filePath) noexcept;
 	void CloseAllFiles() noexcept;
 	void Spin() noexcept;
-
+#if HAS_EMBEDDED_FILES && defined(DUET3_MB6HC)
+	size_t GetNumVolumes() noexcept;
+#else
 	inline size_t GetNumVolumes() noexcept
 	{
 		return NumSdCards
@@ -66,6 +68,7 @@ namespace MassStorage
 #endif
 		;
 	}
+#endif // HAS_EMBEDDED_FILES && defined(DUET3_MB6HC)
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE

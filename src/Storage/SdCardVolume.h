@@ -3,6 +3,8 @@
 #include <ObjectModel/ObjectModel.h>
 #include "StorageVolume.h"
 
+#if HAS_MASS_STORAGE
+
 class SdCardVolume : public StorageVolume
 {
 public:
@@ -75,3 +77,5 @@ private:
 
 	void DeviceUnmount() noexcept override;
 };
+
+#endif

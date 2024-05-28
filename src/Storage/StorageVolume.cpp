@@ -1,8 +1,9 @@
 #include <Platform/RepRap.h>
 
-#include "StorageVolume.h"
 #include "MassStorage.h"
+#include "StorageVolume.h"
 
+#if HAS_MASS_STORAGE
 #if SUPPORT_OBJECT_MODEL
 
 // Object model table and functions
@@ -114,3 +115,5 @@ void StorageVolume::Clear()
 }
 
 /*static*/ const StringRef StorageVolume::noReply = StringRef(nullptr, 0);
+
+#endif // HAS_MASS_STORAGE
