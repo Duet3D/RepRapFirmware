@@ -500,32 +500,32 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		RejectMessage("Not authorized", 401);
 		return false;
 	}
+	// Check for rr_model first because this is the most frequent request we get
+	else if (StringEqualsIgnoreCase(request, "model"))
+	{
+		OutputBuffer::ReleaseAll(response);
+		const char *const filterVal = GetKeyValue("key");
+		const char *const flagsVal = GetKeyValue("flags");
+
+		MutexLocker lock(reprap.GetObjectModelReportMutex());				// grab the mutex to prevent PanelDue retrieving the OM at the same time, which can result in running out of buffers
+		if (OutputBuffer::GetFreeBuffers() >= MinimumBuffersForObjectModel)
+		{
+			response = reprap.GetModelResponse(nullptr, filterVal, flagsVal);
+		}
+		else if (millis() - startedProcessingRequestAt < 500)
+		{
+			// If the buffer shortage was caused by PanelDue using a lot of buffers for an object model response, then it's worth retrying a little later to allow those buffers to be sent and released.
+			// This won't help if the buffers are used by a long response to a network request (e.g. to M122) because DWC won't request that response until either we return the object model
+			// or we return a 501 error. So we must time out retrying and return 501, otherwise M122 from DWC doesn't work on Duet 2.
+			// A 100ms timeout was too short, it caused DWC to keep losing connection to Duet 2 with a large object model because of the 501 responses. 500ms seems OK.
+			return false;
+		}
+		// else fall through to returning true with a null response, which causes a 501 response to be sent
+	}
 	else if (StringEqualsIgnoreCase(request, "disconnect"))
 	{
 		response->printf("{\"err\":%d}", (RemoveAuthentication()) ? 0 : 1);
 		reprap.GetPlatform().MessageF(LogWarn, "HTTP client %s disconnected\n", IP4String(GetRemoteIP()).c_str());
-	}
-	else if (StringEqualsIgnoreCase(request, "status"))
-	{
-		const char *typeString = GetKeyValue("type");
-		if (typeString != nullptr)
-		{
-			// New-style JSON status responses
-			int32_t type = StrToI32(typeString);
-			if (type < 1 || type > 3)
-			{
-				type = 1;
-			}
-
-			OutputBuffer::ReleaseAll(response);
-			response = reprap.GetStatusResponse(type, ResponseSource::HTTP);		// this may return nullptr
-		}
-		else
-		{
-			// Deprecated
-			OutputBuffer::ReleaseAll(response);
-			response = reprap.GetLegacyStatusResponse(1, 0);
-		}
 	}
 	else if (StringEqualsIgnoreCase(request, "gcode"))
 	{
@@ -534,7 +534,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		// If the command is empty, just report the buffer space. This allows rr_gcode to be used to poll the buffer space without using it up.
 		if (command != nullptr && command[0] != 0 && !httpInput->Put(HttpMessage, command))
 		{
-			response->copy("{\"err\":1}");								// the command string wasn't accepted, it's probably too long
+			response->copy("{\"err\":1}");									// the command string wasn't accepted, it's probably too long
 		}
 		else
 		{
@@ -542,18 +542,21 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		}
 	}
 #if HAS_MASS_STORAGE
-	else if (StringEqualsIgnoreCase(request, "upload"))
+	else if (StringEqualsIgnoreCase(request, "fileinfo"))
 	{
-		response->printf("{\"err\":%d}", (uploadError) ? 1 : 0);
-	}
-	else if (StringEqualsIgnoreCase(request, "delete") && (parameter = GetKeyValue("name")) != nullptr)
-	{
-		const char* const recursiveParam = GetKeyValue("recursive");
-		const bool recursive = (recursiveParam != nullptr && StringEqualsIgnoreCase(recursiveParam, "yes"));
-		String<MaxFilenameLength> path;
-		path.copy(parameter);
-		const bool ok = MassStorage::Delete(path.GetRef(), ErrorMessageMode::messageAlways, recursive);
-		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
+		const char* const nameVal = GetKeyValue("name");
+		if (nameVal != nullptr)
+		{
+			// Regular rr_fileinfo?name=xxx call
+			filenameBeingProcessed.copy(nameVal);
+		}
+		else
+		{
+			// Simple rr_fileinfo call to get info about the file being printed
+			filenameBeingProcessed.Clear();
+		}
+		responderState = ResponderState::gettingFileInfo;
+		return false;
 	}
 	else if (StringEqualsIgnoreCase(request, "filelist") && (parameter = GetKeyValue("dir")) != nullptr)
 	{
@@ -575,6 +578,19 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		const char* const flagDirsVal = GetKeyValue("flagDirs");
 		const bool flagDirs = flagDirsVal != nullptr && StrToU32(flagDirsVal) == 1;
 		response = reprap.GetFilesResponse(dir, startAt, flagDirs);				// this may return nullptr
+	}
+	else if (StringEqualsIgnoreCase(request, "upload"))
+	{
+		response->printf("{\"err\":%d}", (uploadError) ? 1 : 0);
+	}
+	else if (StringEqualsIgnoreCase(request, "delete") && (parameter = GetKeyValue("name")) != nullptr)
+	{
+		const char* const recursiveParam = GetKeyValue("recursive");
+		const bool recursive = (recursiveParam != nullptr && StringEqualsIgnoreCase(recursiveParam, "yes"));
+		String<MaxFilenameLength> path;
+		path.copy(parameter);
+		const bool ok = MassStorage::Delete(path.GetRef(), ErrorMessageMode::messageAlways, recursive);
+		response->printf("{\"err\":%d}", (ok) ? 0 : 1);
 	}
 	else if (StringEqualsIgnoreCase(request, "move"))
 	{
@@ -614,7 +630,8 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		}
 	}
 #else
-	else if (	StringEqualsIgnoreCase(request, "upload")
+	else if (	StringEqualsIgnoreCase(request, "fileinfo")
+			 || StringEqualsIgnoreCase(request, "upload")
 			 || StringEqualsIgnoreCase(request, "delete")
 			 || StringEqualsIgnoreCase(request, "filelist")
 			 || StringEqualsIgnoreCase(request, "files")
@@ -626,37 +643,29 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		response->copy("{err:1}");
 	}
 #endif
-	else if (StringEqualsIgnoreCase(request, "fileinfo"))
+	// Check for the legacy requests last
+	else if (StringEqualsIgnoreCase(request, "status"))
 	{
-		const char* const nameVal = GetKeyValue("name");
-		if (nameVal != nullptr)
+		const char *typeString = GetKeyValue("type");
+		if (typeString != nullptr)
 		{
-			// Regular rr_fileinfo?name=xxx call
-			filenameBeingProcessed.copy(nameVal);
+			// New-style JSON status responses
+			int32_t type = StrToI32(typeString);
+			if (type < 1 || type > 3)
+			{
+				type = 1;
+			}
+
+			OutputBuffer::ReleaseAll(response);
+			response = reprap.GetStatusResponse(type, ResponseSource::HTTP);		// this may return nullptr
 		}
 		else
 		{
-			// Simple rr_fileinfo call to get info about the file being printed
-			filenameBeingProcessed.Clear();
+			// Deprecated
+			OutputBuffer::ReleaseAll(response);
+			response = reprap.GetLegacyStatusResponse(1, 0);
 		}
-		responderState = ResponderState::gettingFileInfo;
-		return false;
 	}
-#if SUPPORT_OBJECT_MODEL
-	else if (StringEqualsIgnoreCase(request, "model"))
-	{
-		OutputBuffer::ReleaseAll(response);
-		const char *const filterVal = GetKeyValue("key");
-		const char *const flagsVal = GetKeyValue("flags");
-
-		MutexLocker lock(reprap.GetObjectModelReportMutex());				// grab the mutex to prevent PanelDue retrieving the OM at the same time, which can result in running out of buffers
-		if (OutputBuffer::GetFreeBuffers() < MinimumBuffersForObjectModel)
-		{
-			return false;													// try again later
-		}
-		response = reprap.GetModelResponse(nullptr, filterVal, flagsVal);
-	}
-#endif
 	else if (StringEqualsIgnoreCase(request, "config"))
 	{
 		OutputBuffer::ReleaseAll(response);
