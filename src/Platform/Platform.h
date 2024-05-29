@@ -105,7 +105,7 @@ constexpr uint32_t maxPidSpinDelay = 5000;			// Maximum elapsed time in millisec
 
 enum class BoardType : uint8_t
 {
-	Auto = 0,
+	Auto = 0,						// this value is no longer used
 #if defined(DUET3MINI_V04)			// we use the same values for both v0.2 and v0.4
 	Duet3Mini_Unknown,
 	Duet3Mini_WiFi,
@@ -253,7 +253,7 @@ public:
 	const IoPort& GetAtxPowerPort() const noexcept { return PsOnPort; }
 
 	BoardType GetBoardType() const noexcept { return board; }
-	void SetBoardType(BoardType bt) noexcept;
+	void SetBoardType() noexcept;
 	const char *_ecv_array GetElectronicsString() const noexcept;
 	const char *_ecv_array GetBoardString() const noexcept;
 

@@ -77,6 +77,8 @@ constexpr unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliar
 constexpr uint32_t SERIAL_MAIN_TIMEOUT = 2000;			// timeout in ms for sending data to the main serial/USB port
 constexpr uint32_t AuxTimeout = 2000;					// timeout in ms for PanelDue replies
 
+constexpr uint32_t UnsolicitedStatusReportInterval = 2000;	// Interval between sending unsolicited status reports, in milliseconds
+
 // Message boxes
 constexpr unsigned int MaxMessageBoxes = 8;				// the maximum number of message boxes that can be queued
 
@@ -171,10 +173,12 @@ constexpr size_t ShortGCodeLength = 64;
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 40;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
+constexpr size_t MinimumBuffersForObjectModel = 20;		// Minimum number of free buffers we want before we start assembling a request for the object model
 #elif SAM4E || SAM4S
 constexpr size_t OUTPUT_BUFFER_SIZE = 256;				// How many bytes does each OutputBuffer hold?
 constexpr size_t OUTPUT_BUFFER_COUNT = 26;				// How many OutputBuffer instances do we have?
 constexpr size_t RESERVED_OUTPUT_BUFFERS = 4;			// Number of reserved output buffers after long responses, enough to hold a status response
+constexpr size_t MinimumBuffersForObjectModel = 20;		// Minimum number of free buffers we want before we start assembling a request for the object model
 #else
 # error Unsupported processor
 #endif
@@ -186,6 +190,9 @@ constexpr size_t MaxTrackedObjects = 40;				// How many build plate objects we t
 #else
 constexpr size_t MaxTrackedObjects = 20;				// How many build plate objects we track. Each one needs 16 bytes of storage, in addition to the string space.
 #endif
+
+// Expression evaluation in GCode meta commands etc.
+constexpr size_t MaxExpressionArrayIndices = 5;
 
 // How many filaments we can return in the file information. Each one uses 4 bytes of statically-allocated RAM.
 #if SAME70 || SAME5x

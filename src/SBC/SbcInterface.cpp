@@ -36,10 +36,11 @@ const ObjectModelClassDescriptor *SbcInterface::GetObjectModelClassDescriptor() 
 // The SBC task's stack size needs to be enough to support rr_model and expression evaluation
 // In RRF 3.3beta3, 744 is only just enough for simple expression evaluation in a release build when using globals
 // In 3.3beta3.1 we have saved ~151 bytes (37 words) of stack compared to 3.3beta3
+// In 3.5.2, the stack size is increased again to allow for nested functions to be properly evaluated (up to 7 nested max calls e.g.)
 #if defined(DEBUG)
-constexpr size_t SBCTaskStackWords = 1200;			// debug builds use more stack
+constexpr size_t SBCTaskStackWords = 1600;			// debug builds use more stack
 #else
-constexpr size_t SBCTaskStackWords = 1000;			// increased from 820 so that we can evaluate "abs(move.calibration.initial.deviation - move.calibration.final.deviation) < 0.000"
+constexpr size_t SBCTaskStackWords = 1400;
 #endif
 
 constexpr uint32_t SbcYieldTimeout = 10;
@@ -755,7 +756,7 @@ void SbcInterface::ExchangeData() noexcept
 			shortVarName.copy(varName.c_str() + strlen(isGlobal ? "global." : "var."));
 
 			// Check for index expressions after the variable name. DSF will have stripped out any spaces except for those within index expressions.
-			uint32_t indices[MaxArrayIndices];
+			uint32_t indices[MaxExpressionArrayIndices];
 			size_t numIndices = 0;
 			if (!createVariable)
 			{
@@ -766,7 +767,7 @@ void SbcInterface::ExchangeData() noexcept
 					bool hadError = false;
 					do
 					{
-						if (numIndices == MaxArrayIndices)
+						if (numIndices == MaxExpressionArrayIndices)
 						{
 							expression.printf("too many array indices in '%s'", varName.c_str());
 							hadError = true;

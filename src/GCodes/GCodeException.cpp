@@ -9,12 +9,19 @@
 
 #include <General/StringRef.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Platform/RepRap.h>
+#include <Platform/Tasks.h>
 
 GCodeException::GCodeException(const GCodeBuffer *null gb, int col, const char *_ecv_array msg) noexcept : column(col), message(msg)
 {
 	if (gb != nullptr)
 	{
+#if HAS_SBC_INTERFACE
+		// Don't output the line number in case this exception is thrown from a SBC evaluation request, it's prepended by DSF
+		line = (!reprap.UsingSbcInterface() || RTOSIface::GetCurrentTask() == Tasks::GetMainTask()) ? gb->GetLineNumber() : -1;
+#else
 		line = gb->GetLineNumber();
+#endif
 		if (gb->IsDoingFileMacro())
 		{
 			source = GCodeExceptionSource::macro;

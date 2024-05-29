@@ -768,7 +768,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	SkipWhiteSpace();
 
 	// Check for index expressions after the identifier
-	uint32_t indices[MaxArrayIndices];
+	uint32_t indices[MaxExpressionArrayIndices];
 	size_t numIndices = 0;
 	for (numIndices = 0; ; ++numIndices)
 	{
@@ -777,7 +777,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 		{
 			break;
 		}
-		if (numIndices == MaxArrayIndices)
+		if (numIndices == MaxExpressionArrayIndices)
 		{
 			throw ConstructParseException("Too many array indices");
 		}
@@ -1262,6 +1262,7 @@ bool StringParser::Seen(char c) noexcept
 				   )
 				{
 					++readPointer;
+					characterSeen = c;
 					return true;
 				}
 				escaped = false;
@@ -1444,7 +1445,7 @@ void StringParser::CheckArrayLength(size_t actualLength, size_t maxLength) THROW
 {
 	if (actualLength >= maxLength)
 	{
-		throw ConstructParseException("array too long, max length = %u", (uint32_t)maxLength);
+		throw ConstructParseException("array too long for parameter '%c'", (uint32_t)characterSeen);
 	}
 }
 

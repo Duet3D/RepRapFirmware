@@ -113,7 +113,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 	  binaryParser(*this),
 #endif
 	  stringParser(*this),
-	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()),
+	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()), lastStatusReportType(StatusReportType::none),
 	  codeChannel(channel), lastResult(GCodeResult::ok),
 	  timerRunning(false), motionCommanded(false)
 
@@ -190,13 +190,13 @@ bool GCodeBuffer::DoDwellTime(uint32_t dwellMillis) noexcept
 	return false;
 }
 
-// Delay executing this GCodeBuffer for the specified time. Return true when the timer has expired.
+// Return true if we should send an unsolicited status report
 bool GCodeBuffer::IsReportDue() noexcept
 {
 	const uint32_t now = millis();
 
 	// Are we due?
-	if (now - whenReportDueTimerStarted >= reportDueInterval)
+	if (now - whenReportDueTimerStarted >= UnsolicitedStatusReportInterval)
 	{
 		ResetReportDueTimer();
 		return true;

@@ -129,7 +129,7 @@ MessageType GCodes::GetMessageBoxDevice(GCodeBuffer& gb) const
 	if (mt == GenericMessage)
 	{
 		// Command source was the file being printed, or a trigger. Send the message to PanelDue if there is one, else to the web server.
-		mt = (lastAuxStatusReportType >= 0) ? AuxMessage : HttpMessage;
+		mt = (AuxGCode()->GetLastStatusReportType() != StatusReportType::none) ? AuxMessage : HttpMessage;
 	}
 	return mt;
 }

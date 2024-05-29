@@ -189,7 +189,11 @@ void ExpressionValue::AppendAsString(const StringRef& str) const noexcept
 
 	case TypeCode::Bitmap16:
 	case TypeCode::Bitmap32:
+#if SUPPORT_BITMAP64
 	case TypeCode::Bitmap64:
+#else
+	case TypeCode::Bitmap64_unused:
+#endif
 		str.cat("{Bitmap}");
 		break;
 
@@ -234,7 +238,11 @@ bool ExpressionValue::operator==(const ExpressionValue& other) const noexcept
 			return uVal == other.uVal;
 
 		case TypeCode::Uint64:
+#if SUPPORT_BITMAP64
 		case TypeCode::Bitmap64:
+#else
+		case TypeCode::Bitmap64_unused:
+#endif
 		case TypeCode::DateTime_tc:
 		case TypeCode::MacAddress_tc:
 		case TypeCode::DriverId_tc:
@@ -449,7 +457,7 @@ void ExpressionValue::ExtractRequestedPart(const StringRef& rslt) const noexcept
 
 void ObjectExplorationContext::AddIndex(int32_t index) THROWS(GCodeException)
 {
-	if (numIndicesCounted == MaxIndices)
+	if (numIndicesCounted == MaxExpressionArrayIndices)
 	{
 		throw GCodeException(-1, -1, "Too many indices");
 	}
@@ -477,7 +485,7 @@ void ObjectExplorationContext::RemoveIndex() THROWS(GCodeException)
 
 void ObjectExplorationContext::ProvideIndex(int32_t index) THROWS(GCodeException)
 {
-	if (numIndicesProvided == MaxIndices)
+	if (numIndicesProvided == MaxExpressionArrayIndices)
 	{
 		throw GCodeException(-1, -1, "Too many indices");
 	}
@@ -729,9 +737,11 @@ void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationCo
 		buf->catf("%u", Bitmap<uint32_t>::MakeFromRaw(val.uVal).CountSetBits());
 		break;
 
+#if SUPPORT_BITMAP64
 	case TypeCode::Bitmap64:
 		buf->catf("%u", Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue()).CountSetBits());
 		break;
+#endif
 
 	case TypeCode::CString:
 		buf->catf("%u", strlen(val.sVal));
@@ -880,6 +890,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		ReportBitmap1632Long(buf, val);
 		break;
 
+#if SUPPORT_BITMAP64
 	case TypeCode::Bitmap64:
 		if (*filter == '[')
 		{
@@ -912,6 +923,7 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 		// If we get here then we want a long form report
 		ReportBitmap64Long(buf, val);
 		break;
+#endif
 
 	default:
 		// Only primitive types remain so we should have reached the end of the filter string
@@ -1421,6 +1433,7 @@ decrease(strlen(idString))	// recursion variant
 		}
 		return ExpressionValue((int32_t)val.uVal);
 
+#if SUPPORT_BITMAP64
 	case TypeCode::Bitmap64:
 		{
 			const int numSetBits = Bitmap<uint64_t>::MakeFromRaw(val.Get56BitValue()).CountSetBits();
@@ -1465,6 +1478,7 @@ decrease(strlen(idString))	// recursion variant
 			throw context.ConstructParseException("bitmap too large to convert to integer");
 		}
 		return ExpressionValue((int32_t)val.uVal);
+#endif
 
 	case TypeCode::MacAddress_tc:
 		if (*idString == 0)

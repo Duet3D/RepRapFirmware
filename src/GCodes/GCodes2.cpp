@@ -1391,47 +1391,39 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 			case 37:	// Simulation mode on/off, or simulate a whole file
-#if HAS_SBC_INTERFACE
-				if (reprap.UsingSbcInterface() && !gb.IsBinary())
+			{
+#if SUPPORT_ASYNC_MOVES
+				if (!DoSync(gb))
 				{
-					reply.copy("M37 can be only started from the SBC interface");
-					result = GCodeResult::error;
+					return false;
+				}
+#endif
+				bool seen = false;
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
+				String<MaxFilenameLength> simFileName;
+				gb.TryGetPossiblyQuotedString('P', simFileName.GetRef(), seen);
+				if (seen)
+				{
+					const bool updateFile = !gb.Seen('F') || gb.GetUIValue() == 1;
+					result = SimulateFile(gb, reply, simFileName.GetRef(), updateFile);
 				}
 				else
 #endif
 				{
-#if SUPPORT_ASYNC_MOVES
-					if (!DoSync(gb))
-					{
-						return false;
-					}
-#endif
-					bool seen = false;
-#if HAS_MASS_STORAGE
-					String<MaxFilenameLength> simFileName;
-					gb.TryGetPossiblyQuotedString('P', simFileName.GetRef(), seen);
+					uint32_t newSimulationMode;
+					gb.TryGetLimitedUIValue('S', newSimulationMode, seen, (uint32_t)SimulationMode::highest + 1);
 					if (seen)
 					{
-						const bool updateFile = !gb.Seen('F') || gb.GetUIValue() == 1;
-						result = SimulateFile(gb, reply, simFileName.GetRef(), updateFile);
+						result = ChangeSimulationMode(gb, reply, (SimulationMode)newSimulationMode);
 					}
 					else
-#endif
 					{
-						uint32_t newSimulationMode;
-						gb.TryGetLimitedUIValue('S', newSimulationMode, seen, (uint32_t)SimulationMode::highest + 1);
-						if (seen)
-						{
-							result = ChangeSimulationMode(gb, reply, (SimulationMode)newSimulationMode);
-						}
-						else
-						{
-							reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec",
-									(IsSimulating()) ? "on" : "off", (double)reprap.GetMove().GetSimulationTime(), (double)simulationTime);
-						}
+						reply.printf("Simulation mode: %s, move time: %.1f sec, other time: %.1f sec",
+								(IsSimulating()) ? "on" : "off", (double)reprap.GetMove().GetSimulationTime(), (double)simulationTime);
 					}
 				}
 				break;
+			}
 
 #if 0		// was (HAS_MASS_STORAGE || HAS_EMBEDDED_FILES), removed this function to save space on Duet 2
 			case 38: // Report SHA1 of file
@@ -1692,6 +1684,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 			case 105: // Get temperatures
 				GenerateTemperatureReport(gb, reply);
+				gb.RespondedToStatusRequest(StatusReportType::m105);
+				gb.ResetReportDueTimer();
 				break;
 
 			case 106: // Set/report fan values
@@ -1942,35 +1936,20 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 115: // Print firmware version or set hardware type
-#ifdef DUET_NG
-				if (gb.Seen('P'))
+#if SUPPORT_CAN_EXPANSION
+				if (gb.Seen('B'))
 				{
-					if (runningConfigFile)
+					const uint32_t board = gb.GetUIValue();
+					if (board != CanInterface::GetCanAddress())
 					{
-						platform.SetBoardType((BoardType)gb.GetIValue());
-					}
-					else
-					{
-						reply.copy("Board type can only be set within config.g");
-						result = GCodeResult::error;
+						result = CanInterface::GetRemoteFirmwareDetails(board, gb, reply);
+						break;
 					}
 				}
-				else
 #endif
-				{
-#if SUPPORT_CAN_EXPANSION
-					if (gb.Seen('B'))
-					{
-						const uint32_t board = gb.GetUIValue();
-						if (board != CanInterface::GetCanAddress())
-						{
-							result = CanInterface::GetRemoteFirmwareDetails(board, gb, reply);
-							break;
-						}
-					}
-#endif
-					reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s", FIRMWARE_NAME, VERSION, platform.GetElectronicsString());
+				reply.printf("FIRMWARE_NAME: %s FIRMWARE_VERSION: %s ELECTRONICS: %s", FIRMWARE_NAME, VERSION, platform.GetElectronicsString());
 #if defined(DUET_NG)
+				{
 					const char* const expansionName = DuetExpansion::GetExpansionBoardName();
 					if (expansionName != nullptr)
 					{
@@ -1981,21 +1960,21 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						reply.catf(" + %s", additionalExpansionName);
 					}
+				}
 #elif defined(DUET3MINI) && !defined(FMDC_V03)
+				{
+					const char *const expansionString = platform.GetExpansionBoardName();
+					if (expansionString != nullptr)
 					{
-						const char *const expansionString = platform.GetExpansionBoardName();
-						if (expansionString != nullptr)
-						{
-							reply.catf(" + %s", expansionString);
-						}
+						reply.catf(" + %s", expansionString);
 					}
+				}
 #endif
 #if defined(DUET3_ATE)
-					reply.lcatf("ATE firmware version %s date %s %s", Duet3Ate::GetFirmwareVersionString(), Duet3Ate::GetFirmwareDateString(), Duet3Ate::GetFirmwareTimeString());
+				reply.lcatf("ATE firmware version %s date %s %s", Duet3Ate::GetFirmwareVersionString(), Duet3Ate::GetFirmwareDateString(), Duet3Ate::GetFirmwareTimeString());
 #else
-					reply.catf(" FIRMWARE_DATE: %s%s", DATE, TIME_SUFFIX);
+				reply.catf(" FIRMWARE_DATE: %s%s", DATE, TIME_SUFFIX);
 #endif
-				}
 				break;
 
 			case 116: // Wait for set temperatures
@@ -3109,15 +3088,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 #endif
 					const int seq = gb.Seen('R') ? gb.GetIValue() : -1;
-					if (&gb == AuxGCode() && (type == 0 || type == 2))
-					{
-						lastAuxStatusReportType = type;
-					}
 
 					outBuf = GenerateJsonStatusResponse(type, seq, (&gb == AuxGCode()) ? ResponseSource::AUX : ResponseSource::Generic);
 					if (outBuf == nullptr)
 					{
 						result = GCodeResult::notFinished;			// we ran out of buffers, so try again later
+					}
+					else if (type == 0)
+					{
+						gb.RespondedToStatusRequest(StatusReportType::m408);
+						gb.ResetReportDueTimer();
 					}
 				}
 				break;
@@ -3130,20 +3110,23 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					bool dummy;
 					gb.TryGetQuotedString('K', key.GetRef(), dummy, true);
 					gb.TryGetQuotedString('F', flags.GetRef(), dummy, true);
-					if (&gb == AuxGCode())
 					{
-						lastAuxStatusReportType = ObjectModelAuxStatusReportType;
-					}
-					outBuf = reprap.GetModelResponse(&gb, key.c_str(), flags.c_str());
-					if (outBuf == nullptr)
-					{
-						OutputBuffer::ReleaseAll(outBuf);
-						// We don't delay and retry here, in case the user asked for too much of the object model in one go for the output buffers to contain it
-						reply.copy("{\"err\":-1}\n");
-					}
-					if (&gb == AuxGCode())
-					{
-						gb.ResetReportDueTimer();
+						MutexLocker lock(reprap.GetObjectModelReportMutex());				// grab the mutex to prevent PanelDue retrieving the OM at the same time, which can result in running out of buffers
+						if (OutputBuffer::GetFreeBuffers() < MinimumBuffersForObjectModel)
+						{
+							return false;													// try again later
+						}
+						outBuf = reprap.GetModelResponse(&gb, key.c_str(), flags.c_str());
+						if (outBuf == nullptr)
+						{
+							// We don't delay and retry here, in case the user asked for too much of the object model in one go for the output buffers to contain it
+							reply.copy("{\"err\":-1}\n");
+						}
+						else
+						{
+							gb.RespondedToStatusRequest(StatusReportType::m409);
+							gb.ResetReportDueTimer();
+						}
 					}
 				}
 				break;

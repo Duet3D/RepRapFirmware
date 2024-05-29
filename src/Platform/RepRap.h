@@ -115,10 +115,8 @@ public:
 #endif
 
 	GCodeResult GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept;
-
-#if SUPPORT_OBJECT_MODEL
 	OutputBuffer *GetModelResponse(const GCodeBuffer *_ecv_null gb, const char *key, const char *flags) const THROWS(GCodeException);
-#endif
+	Mutex& GetObjectModelReportMutex() noexcept { return objectModelReportMutex; }
 
 	void Beep(unsigned int freq, unsigned int ms) noexcept;
 	void SetMessage(const char *msg) noexcept;
@@ -191,6 +189,8 @@ private:
 	GCodes* gCodes;
  	PrintMonitor* printMonitor;
  	FansManager* fansManager;
+
+ 	Mutex objectModelReportMutex;									// mutex used to limit concurrent reporting of object model, which may result in output buffer starvation
 
  	// Recording the first error message encountered in config.g
  	AutoStringHandle configErrorFilename;

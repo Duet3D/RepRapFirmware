@@ -17,6 +17,8 @@
 
 namespace Heap
 {
+	// Struct used to represent an area of storage on the heap.
+	// If this is changed, check whether struct ArrayStorageSpace in ArrayHandle.cpp needs to be changed too.
 	struct StorageSpace
 	{
 		uint16_t length;								// length of this object in bytes including this length field, always rounded up to a multiple of 4
@@ -29,6 +31,8 @@ namespace Heap
 		std::atomic<unsigned int> refCount;
 
 		IndexSlot() noexcept : storage(nullptr), refCount(0) { }
+
+		bool IsFree() const noexcept { return refCount == 0 && storage == nullptr; }
 	};
 
 	IndexSlot *AllocateHandle() noexcept;
