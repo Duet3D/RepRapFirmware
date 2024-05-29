@@ -373,6 +373,9 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 			}
 
 			segmentFlags = seg->GetFlags();
+#if SUPPORT_CAN_EXPANSION
+			positionAtSegmentStart = currentMotorPosition;
+#endif
 
 #if 0	//DEBUG
 			debugPrintf("New cart seg: state %u q=%.4e t0=%.4e p=%.4e ns=%" PRIi32 " ssl=%" PRIi32 "\n",
@@ -413,7 +416,7 @@ bool DriveMovement::LogStepError() noexcept
 bool DriveMovement::CalcNextStepTimeFull() noexcept
 pre(stepsTillRecalc == 0; segments != nullptr)
 {
-	MoveSegment *currentSegment = segments;
+	MoveSegment *currentSegment = segments;							// capture volatile variable
 	uint32_t shiftFactor = 0;										// assume single stepping
 	{
 		int32_t stepsToLimit = segmentStepLimit - nextStep;
@@ -567,7 +570,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 		const int32_t interval = (int32_t)(iNextCalcStepTime - nextStepTime);
 		if (interval > 0)
 		{
-			stepInterval = (uint32_t)interval >> shiftFactor;				// calculate the time per step, ready for next time
+			stepInterval = (uint32_t)interval >> shiftFactor;		// calculate the time per step, ready for next time
 		}
 		else
 		{
@@ -588,6 +591,35 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 
 	return true;
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+// This is called when the 'drive' (i.e. axis) concerned has no local drivers and we are not checking endstops or Z probe.
+// Instead of generating an interrupt for each step of the remote drive, generate interrupts only occasionally and at the end of each segment, to keep the axis position fairly up to date.
+void DriveMovement::TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept
+{
+	MoveSegment *const currentSegment = segments;				// capture volatile variable
+	const float timeFromStart = (float)(clocksNow - currentSegment->GetStartTime());
+	if (nextStep == segmentStepLimit || currentSegment->GetDuration() <= timeFromStart + MoveTiming::MaxRemoteDriverPositionUpdateInterval)
+	{
+		currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
+		distanceCarriedForwards += currentSegment->GetLength() - (float)netStepsThisSegment;
+		segments = currentSegment->GetNext();
+		MoveSegment::Release(currentSegment);
+		if (NewSegment() != nullptr)
+		{
+			CalcNextStepTimeFull();								// generate an interrupt at the start of the next segment
+		}
+	}
+	else
+	{
+		const float targetTime = timeFromStart + MoveTiming::NominalRemoteDriverPositionUpdateInterval;
+		currentMotorPosition = positionAtSegmentStart + lrintf((currentSegment->GetU() + (0.5 * currentSegment->GetA() * targetTime)) * targetTime + distanceCarriedForwards);
+		nextStepTime = (uint32_t)targetTime + currentSegment->GetStartTime();
+	}
+}
+
+#endif
 
 // If the driver is moving, stop it, update the position and pass back the net steps taken in the executing segment.
 // Return true if the drive was moving.

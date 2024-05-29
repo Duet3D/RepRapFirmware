@@ -1948,8 +1948,17 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 	// Calculate the next step times. We must do this even if no local drivers are stepping in case endstops or Z probes are active.
 	for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 	{
-		dm2->TakenStep();
-		(void)dm2->CalcNextStepTime();								// calculate next step times
+# if SUPPORT_CAN_EXPANSION
+		if (unlikely(!flags.checkEndstops && p.GetDriversBitmap(dm2->drive) == 0))
+		{
+			dm2->TakeStepsAndCalcStepTimeRarely(now);
+		}
+		else
+# endif
+		{
+			dm2->TakenStep();
+			(void)dm2->CalcNextStepTime();							// calculate next step times
+		}
 	}
 #else
 # if SUPPORT_SLOW_DRIVERS											// if supporting slow drivers
@@ -1968,8 +1977,17 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 		{
-			dm2->TakenStep();
-			(void)dm2->CalcNextStepTime();							// calculate next step times
+# if SUPPORT_CAN_EXPANSION
+			if (unlikely(!flags.checkEndstops && p.GetDriversBitmap(dm2->drive) == 0))
+			{
+				dm2->TakeStepsAndCalcStepTimeRarely(now);
+			}
+			else
+# endif
+			{
+				dm2->TakenStep();
+				(void)dm2->CalcNextStepTime();						// calculate next step times
+			}
 		}
 
 		while (StepTimer::GetTimerTicks() - lastStepPulseTime < p.GetSlowDriverStepHighClocks()) {}
@@ -1985,8 +2003,17 @@ void Move::StepDrivers(Platform& p, uint32_t now) noexcept
 # endif
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 		{
-			dm2->TakenStep();
-			(void)dm2->CalcNextStepTime();							// calculate next step times
+# if SUPPORT_CAN_EXPANSION
+			if (unlikely(!flags.checkEndstops && p.GetDriversBitmap(dm2->drive) == 0))
+			{
+				dm2->TakeStepsAndCalcStepTimeRarely(now);
+			}
+			else
+# endif
+			{
+				dm2->TakenStep();
+				(void)dm2->CalcNextStepTime();						// calculate next step times
+			}
 		}
 
 		StepPins::StepDriversLow(driversStepping);					// step drivers low

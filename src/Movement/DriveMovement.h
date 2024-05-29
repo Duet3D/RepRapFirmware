@@ -76,6 +76,9 @@ public:
 
 private:
 	bool CalcNextStepTimeFull() noexcept SPEED_CRITICAL;
+#if SUPPORT_CAN_EXPANSION
+	void TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept SPEED_CRITICAL;
+#endif
 	MoveSegment *NewSegment() noexcept SPEED_CRITICAL;
 	bool ScheduleFirstSegment() noexcept;
 
@@ -110,7 +113,10 @@ private:
 	float q, t0, p;										// the movement parameters of the current segment
 	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
 	float distanceCarriedForwards;						// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
-	int32_t currentMotorPosition;
+	int32_t currentMotorPosition;						// the current motor position in microsteps
+#if SUPPORT_CAN_EXPANSION
+	int32_t positionAtSegmentStart;						// the value of currentMotorPosition at the start of the current segment
+#endif
 
 	// These values change as the segment is executed
 	int32_t nextStep;									// number of steps already done. For extruders this gets reset to the net steps already done at the start of each segment, so it can go negative.
