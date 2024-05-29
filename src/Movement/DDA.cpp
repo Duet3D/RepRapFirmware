@@ -1149,7 +1149,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						{
 							CanMotion::AddLinearAxisMovement(params, driver, delta);
 						}
-						else
+						else		// we don't generate segments for leadscrew adjustment moves to remote drivers
 #endif
 						{
 							move.AddLinearSegments(*this, driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (float)delta, segFlags);
@@ -1187,15 +1187,8 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						move.SetHomingDda(drive, this);
 					}
 
-					if (platform.GetDriversBitmap(drive) != 0					// if any of the drives is local
-#if SUPPORT_CAN_EXPANSION
-						|| flags.checkEndstops									// if checking endstops or a Z probe, create segments even if there are no local drives involved
-#endif
-					   )
-					{
-						move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, (float)delta, segFlags);
-					}
-
+					// We generate segments even for nonlocal drivers so that the final position is correct and to track the position in near real time
+					move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, (float)delta, segFlags);
 					afterPrepare.drivesMoving.SetBit(drive);
 
 #if SUPPORT_CAN_EXPANSION
@@ -1259,7 +1252,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 							// The MovementLinearShaped message requires the extrusion amount in steps to be passed as a float. The remote board adds the PA and handles fractional steps.
 							CanMotion::AddExtruderMovement(params, driver, delta, flags.usePressureAdvance);
 						}
-						else
+						else		// we don't generate local segments for remote extruders because we don't need to track their positions in real time
 #endif
 						{
 							move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, segFlags);
