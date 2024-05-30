@@ -181,7 +181,7 @@ bool MqttClient::Spin() noexcept
 					// If received ACK for DISCONNECT regardless of result, or the time has expired.
 					if (!disconnecting || millis() - messageTimer >= MqttClient::MessageTimeout)
 					{
-						NetworkClient::Terminate(MqttProtocol, interface);
+						Terminate();
 						if (reprap.Debug(Module::Webserver))
 						{
 							debugPrintf("MQTT disconnected\n");
@@ -202,7 +202,8 @@ bool MqttClient::Spin() noexcept
 
 bool MqttClient::Accept(Socket *s) noexcept
 {
-	if (responderState == ResponderState::free)
+	if (responderState == ResponderState::free &&
+		(interfaceNum >= 0 && s->GetInterface() ==  reprap.GetNetwork().GetInterface(interfaceNum)))
 	{
 		skt = s;
 
@@ -262,10 +263,11 @@ bool MqttClient::HandlesProtocol(NetworkProtocol protocol) noexcept
 	return protocol == MqttProtocol;
 }
 
-bool MqttClient::Start() noexcept
+bool MqttClient::Start(NetworkInterface* interface) noexcept
 {
 	// Implement a simple reconnect cooldown
-	if (millis() - messageTimer < ReconnectCooldown)
+	if ((millis() - messageTimer < ReconnectCooldown) ||
+		!(interfaceNum >= 0 && reprap.GetNetwork().GetInterface(interfaceNum) == interface))
 	{
 		return false;
 	}
@@ -622,5 +624,6 @@ MqttClient *MqttClient::Init(NetworkResponder *n, NetworkClient *c) noexcept
 /* Static members */
 
 MqttClient *MqttClient::instance = nullptr;
+int MqttClient::interfaceNum = -1;
 
 #endif

@@ -3921,20 +3921,52 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 											IPAddress ip;
 
-											if (protocol == MqttProtocol)
+#if SUPPORT_MQTT
+											if (interface < reprap.GetNetwork().GetNumNetworkInterfaces() && protocol == MqttProtocol)
 											{
 												gb.MustSee('H');
 												{
 													gb.GetIPAddress(ip);
 												}
-											}
 
-											result = reprap.GetNetwork().EnableProtocol(interface, protocol, port,
-																						ip.GetV4LittleEndian(), secure, reply);
+												// Check if same interface - might just be changing broker ip address or remote port;
+												// or if not yet associated with an interface.
+												int mqttInterface =  MqttClient::GetInterface();
+												if (mqttInterface == static_cast<int>(interface) || mqttInterface < 0)
+												{
+													result = reprap.GetNetwork().EnableProtocol(interface, protocol, port,
+																								ip.GetV4LittleEndian(), secure, reply);
+
+													if (mqttInterface < 0 && result == GCodeResult::ok)
+													{
+														MqttClient::SetInterface(interface); // associate with interface
+													}
+												}
+												else
+												{
+													reply.printf("MQTT is already enabled on interface '%d'\n", mqttInterface);
+													result = GCodeResult::error;
+												}
+											}
+											else
+#endif
+											{
+												result = reprap.GetNetwork().EnableProtocol(interface, protocol, port,
+																							ip.GetV4LittleEndian(), secure, reply);
+											}
 										}
 										else
 										{
 											result = reprap.GetNetwork().DisableProtocol(interface, protocol, reply);
+#if SUPPORT_MQTT
+											if (protocol == MqttProtocol && result == GCodeResult::ok)
+											{
+												if (MqttClient::GetInterface() == static_cast<int>(interface))
+												{
+													MqttClient::SetInterface(-1); // do not associate with any interface
+												}
+											}
+#endif
 										}
 										seen = true;
 									}

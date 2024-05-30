@@ -39,6 +39,8 @@ public:
 	void Diagnostics(MessageType mtype) const noexcept override;
 	bool HandlesProtocol(NetworkProtocol p) noexcept override;
 
+	static void SetInterface(unsigned int interface) { interfaceNum = interface; }
+	static int GetInterface() { return interfaceNum; }
 	static GCodeResult Configure(GCodeBuffer &gb, const StringRef& reply) THROWS(GCodeException);
 	static void Disable() noexcept;
 	static void Publish(const char *msg, const char *topic, int qos, bool retain, bool dup) noexcept;
@@ -53,8 +55,7 @@ private:
 	static constexpr size_t MessageTimeout = 5000;
 	static constexpr size_t ReconnectCooldown = 1000;
 
-
-	bool Start() noexcept override;
+	bool Start(NetworkInterface *iface) noexcept override;
 	void Stop() noexcept override;
 	void ConnectionLost() noexcept override;
 	static void PublishCallback(void** state, struct mqtt_response_publish *published);
@@ -62,15 +63,14 @@ private:
 	uint8_t sendBuf[SendBufferSize];
 	uint8_t recvBuf[ReceiveBufferSize];
 	mqtt_client client;
+	bool inited;
 
 	Subscription *prevSub, *currSub; // Used for subscribing to topics
 
 	uint32_t messageTimer;	// General purpose variable for keeping track of queued messages timeout
 
 	static MqttClient *instance;
-	bool inited;
-
-	NetworkInterface *enabledInterface;
+	static int interfaceNum;
 };
 
 #endif	// SUPPORT_MQTT

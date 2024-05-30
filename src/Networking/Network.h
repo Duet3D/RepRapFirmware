@@ -78,6 +78,10 @@ public:
 	unsigned int GetNumNetworkInterfaces() const noexcept;
 	bool IsWiFiInterface(unsigned int interface) const noexcept;
 
+#if HAS_NETWORKING
+	const NetworkInterface* GetInterface(unsigned int interface) { return interfaces[interface]; }
+#endif
+
 #if defined(DUET3_MB6HC)
 	void CreateAdditionalInterface() noexcept;
 #endif

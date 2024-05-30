@@ -24,22 +24,19 @@ public:
 	NetworkClient(const NetworkClient&) = delete;
 	NetworkClient(NetworkResponder *n, NetworkClient *c) noexcept;
 
-	bool Start(NetworkProtocol protocol, NetworkInterface *iface) noexcept;
-	void Stop(NetworkProtocol protocol, NetworkInterface *iface) noexcept;
-	bool Accept(Socket *s, NetworkProtocol protocol) noexcept override;
-	void Terminate(NetworkProtocol protocol, NetworkInterface *iface) noexcept override;
+	bool Start(NetworkProtocol protocol, NetworkInterface *interface) noexcept;
+	void Stop(NetworkProtocol protocol, NetworkInterface *interface) noexcept;
+	bool Accept(Socket *socket, NetworkProtocol protocol) noexcept override;
+	void Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept override;
 
-	NetworkInterface *GetInterface() { return interface; }
 	NetworkClient *GetNext() const noexcept { return next; }
 
 	virtual bool HandlesProtocol(NetworkProtocol p) noexcept = 0;
 
 protected:
-	NetworkInterface *interface; 	// interface this client is associated with
-
-	virtual bool Start() noexcept;
+	virtual bool Start(NetworkInterface *interface) noexcept;
 	virtual void Stop() noexcept = 0;
-	virtual bool Accept(Socket *s) noexcept = 0;
+	virtual bool Accept(Socket *socket) noexcept = 0;
 	virtual void Terminate() noexcept = 0;
 
 	virtual void ConnectionLost() noexcept override;
