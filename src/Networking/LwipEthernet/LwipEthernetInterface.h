@@ -88,8 +88,10 @@ private:
 	void StartProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumSelectableProtocols);
 
+#if HAS_CLIENTS
 	void ConnectProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumSelectableProtocols);
+#endif
 
 	void ShutdownProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumSelectableProtocols);

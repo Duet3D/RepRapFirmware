@@ -208,9 +208,9 @@ void LwipEthernetInterface::IfaceShutdownProtocol(NetworkProtocol protocol, bool
 	}
 }
 
+#if HAS_CLIENTS
 void LwipEthernetInterface::ConnectProtocol(NetworkProtocol protocol) noexcept
 {
-#if SUPPORT_MQTT // for now, include the block creating a new tcp PCB, since only MQTT makes use of it
 	tcp_pcb *pcb = tcp_new();
 	if (pcb == nullptr)
 	{
@@ -231,13 +231,14 @@ void LwipEthernetInterface::ConnectProtocol(NetworkProtocol protocol) noexcept
 
 	switch(protocol)
 	{
+#if SUPPORT_MQTT
 	case MqttProtocol:
 		sockets[MqttSocketNumber]->Init(MqttSocketNumber, portNumbers[protocol], protocol, true);
 		break;
-	}
 #endif
+	}
 }
-
+#endif
 
 void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 {
@@ -497,6 +498,7 @@ void LwipEthernetInterface::Spin() noexcept
 			ethernet_task();
 			sys_check_timeouts();
 
+#if HAS_CLIENTS
 			// Maintain client connections
 			for (uint8_t p = 0; p < NumSelectableProtocols; p++)
 			{
@@ -512,6 +514,7 @@ void LwipEthernetInterface::Spin() noexcept
 					reprap.GetNetwork().StopClient(this, p);
 				}
 			}
+#endif
 
 			// Poll the next TCP socket
 			sockets[nextSocketToPoll]->Poll();

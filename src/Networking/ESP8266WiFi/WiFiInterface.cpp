@@ -424,6 +424,7 @@ void WiFiInterface::IfaceShutdownProtocol(NetworkProtocol protocol, bool permane
 	}
 }
 
+#if HAS_CLIENTS
 void WiFiInterface::ConnectProtocol(NetworkProtocol protocol) noexcept
 {
 	MutexLocker lock(interfaceMutex);
@@ -440,6 +441,7 @@ void WiFiInterface::ConnectProtocol(NetworkProtocol protocol) noexcept
 		break;
 	}
 }
+#endif
 
 NetworkProtocol WiFiInterface::GetProtocolByLocalPort(TcpPort port) const noexcept
 {
@@ -779,6 +781,8 @@ void WiFiInterface::Spin() noexcept
 		}
 		else if (currentMode == WiFiState::connected || currentMode == WiFiState::runningAsAccessPoint)
 		{
+
+#if HAS_CLIENTS
 			// Maintain client connections
 			for (uint8_t p = 0; p < NumSelectableProtocols; p++)
 			{
@@ -794,6 +798,7 @@ void WiFiInterface::Spin() noexcept
 					reprap.GetNetwork().StopClient(this, p);
 				}
 			}
+#endif
 
 			// Find the next socket to poll
 			const size_t startingSocket = currentSocket;

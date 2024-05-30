@@ -84,7 +84,10 @@ void MacAddress::SetFromBytes(const uint8_t mb[6]) noexcept
 // Network members
 Network::Network(Platform& p) noexcept : platform(p)
 #if HAS_RESPONDERS
-			, responders(nullptr), clients(nullptr), nextResponderToPoll(nullptr)
+			, responders(nullptr), nextResponderToPoll(nullptr)
+#endif
+#if HAS_CLIENTS
+			, clients(nullptr)
 #endif
 {
 #if HAS_NETWORKING
@@ -247,6 +250,7 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 	{
 		bool client = false;
 
+#if HAS_CLIENTS
 		// Check if a client handles the protocol. If so, termination is handled
 		// by the client itself, after attempting to disconnect gracefully.
 		for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
@@ -257,6 +261,7 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 				break;
 			}
 		}
+#endif
 
 		NetworkInterface * const iface = interfaces[interface];
 		const GCodeResult ret = iface->DisableProtocol(protocol, reply, !client);
@@ -800,9 +805,9 @@ bool Network::FindResponder(Socket *skt, NetworkProtocol protocol) noexcept
 	return false;
 }
 
+#if HAS_CLIENTS
 bool Network::StartClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept
 {
-#if HAS_RESPONDERS
 	for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
 	{
 		if (c->Start(protocol, interface))
@@ -810,19 +815,17 @@ bool Network::StartClient(NetworkInterface *interface, NetworkProtocol protocol)
 			return true;
 		}
 	}
-#endif
 	return false;
 }
 
 void Network::StopClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept
 {
-#if HAS_RESPONDERS
 	for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
 	{
 		c->Stop(protocol, interface);
 	}
-#endif
 }
+#endif
 
 void Network::HandleHttpGCodeReply(const char *msg) noexcept
 {

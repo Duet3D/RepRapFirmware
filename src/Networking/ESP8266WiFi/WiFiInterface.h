@@ -106,10 +106,10 @@ private:
 	void TerminateSockets(TcpPort port, bool local = true) noexcept;
 	void StopListening(TcpPort port) noexcept;
 
-	// Protocol socket operations - listen for incoming connections,
-	// create outgoing connection, kill existing listeners & connections.
+#if HAS_CLIENTS
 	void ConnectProtocol(NetworkProtocol protocol) noexcept
 		pre(protocol < NumSelectableProtocols);
+#endif
 
 	NetworkProtocol GetProtocolByLocalPort(TcpPort port) const noexcept;
 
