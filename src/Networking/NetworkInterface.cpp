@@ -33,7 +33,23 @@ GCodeResult NetworkInterface::EnableProtocol(NetworkProtocol protocol, int port,
 	}
 	else
 	{
-		if (protocol < NumSelectableProtocols)
+		if (false
+#if SUPPORT_HTTP
+			|| protocol == HttpProtocol
+#endif
+#if SUPPORT_FTP
+		    || protocol == FtpProtocol
+#endif
+#if SUPPORT_TELNET
+			|| protocol == TelnetProtocol
+#endif
+#if SUPPORT_MULTICAST_DISCOVERY
+			|| protocol == MulticastDiscoveryProtocol
+#endif
+#if SUPPORT_MQTT
+			|| protocol == MqttProtocol
+#endif
+			)
 		{
 			const TcpPort portToUse = (port < 0) ? DefaultPortNumbers[protocol] : port;
 			MutexLocker lock(interfaceMutex);

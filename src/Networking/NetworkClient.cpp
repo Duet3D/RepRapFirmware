@@ -1,5 +1,5 @@
 /*
- * MqttClient.cpp
+ * NetworkClient.cpp
  *
  *  Created on: 01 Nov 2022
  *      Author: rechrtb

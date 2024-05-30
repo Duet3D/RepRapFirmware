@@ -15,7 +15,9 @@
 #include <Networking/HttpResponder.h>
 #include <Networking/FtpResponder.h>
 #include <Networking/TelnetResponder.h>
+#if SUPPORT_MQTT
 #include <Networking/MQTT/MqttClient.h>
+#endif
 #include "WifiFirmwareUploader.h"
 #include <General/IP4String.h>
 #include "WiFiSocket.h"
@@ -411,9 +413,11 @@ void WiFiInterface::IfaceShutdownProtocol(NetworkProtocol protocol, bool permane
 		TerminateSockets(portNumbers[protocol]);
 		break;
 
+#if SUPPORT_MQTT
 	case MqttProtocol:
 		TerminateSockets(portNumbers[protocol], false);
 		break;
+#endif
 
 	default:
 		break;
@@ -426,9 +430,11 @@ void WiFiInterface::ConnectProtocol(NetworkProtocol protocol) noexcept
 
 	switch(protocol)
 	{
+#if SUPPORT_MQTT
 	case MqttProtocol:
 		SendConnectCommand(portNumbers[protocol], protocol, ipAddresses[protocol]);
 		break;
+#endif
 
 	default:
 		break;

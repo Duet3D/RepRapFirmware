@@ -2119,9 +2119,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							type = Aux2Message;
 							break;
 #endif
+#if SUPPORT_MQTT
 						case 6:		// MQTT
 							type = MqttMessage;
 							break;
+#endif
 						default:
 							reply.printf("Invalid message type: %" PRIi32, param);
 							result = GCodeResult::error;
@@ -3989,17 +3991,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								}
 							}
 							break;
-
-						case MqttProtocol:
 # if SUPPORT_MQTT
+						case MqttProtocol:
 							result = MqttClient::Configure(gb, reply);
-# else
-							reply.copy("MQTT protocol not supported by this firmware");
-							result = GCodeResult::error;
-# endif
 							break;
-
+# endif
 						default:
+							reply.printf("unsupported subcommand M586.%d", gb.GetCommandFraction());
+							result = GCodeResult::error;
 							break;
 					}
 
