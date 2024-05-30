@@ -88,7 +88,8 @@ LwipSocket::LwipSocket(NetworkInterface *iface) noexcept : Socket(iface), connec
 
 bool LwipSocket::AcceptConnection(tcp_pcb *pcb) noexcept
 {
-	if (state == SocketState::listening && pcb->local_port == localPort)
+	if ((state == SocketState::listening && pcb->local_port == localPort) ||
+		 (state == SocketState::connecting && pcb->remote_port == remotePort))
 	{
 		ReInit();
 		state = SocketState::connected;
@@ -96,7 +97,15 @@ bool LwipSocket::AcceptConnection(tcp_pcb *pcb) noexcept
 
 		connectionPcb = pcb;
 		remoteIPAddress.SetV4LittleEndian(pcb->remote_ip.addr);
-		remotePort = pcb->remote_port;
+
+		if (outgoing)
+		{
+			localPort = pcb->local_port;
+		}
+		else
+		{
+			remotePort = pcb->remote_port;
+		}
 
 		tcp_arg(pcb, this);
 		tcp_err(pcb, conn_err);
@@ -159,13 +168,13 @@ void LwipSocket::ConnectionClosedGracefully() noexcept
 		connectionPcb = nullptr;
 	}
 
-	if (state == SocketState::closing)
+	if (state == SocketState::closing && !outgoing)
 	{
 		state = SocketState::listening;
 	}
 	else
 	{
-		state = SocketState::clientDisconnecting;
+		state = SocketState::peerDisconnecting;
 		whenClosed = millis();
 	}
 }
@@ -175,7 +184,7 @@ void LwipSocket::ConnectionError(err_t err) noexcept
 	DiscardReceivedData();
 	connectionPcb = nullptr;
 
-	state = (localPort == 0)
+	state = (localPort == 0 || outgoing)
 				? SocketState::disabled
 				: (responderFound && state != SocketState::closing)
 				  	? SocketState::aborted
@@ -183,13 +192,23 @@ void LwipSocket::ConnectionError(err_t err) noexcept
 }
 
 // Initialise a TCP socket
-void LwipSocket::Init(SocketNumber skt, TcpPort serverPort, NetworkProtocol p) noexcept
+void LwipSocket::Init(SocketNumber skt, TcpPort serverPort, NetworkProtocol p, bool outgoing) noexcept
 {
 	UNUSED(skt);
-	localPort = serverPort;
-	protocol = p;
+	this->outgoing = outgoing;
 
-	state = SocketState::listening;
+	if (this->outgoing)
+	{
+		remotePort = serverPort;
+		whenConnecting = millis();
+		state = SocketState::connecting;
+	}
+	else
+	{
+		localPort = serverPort;
+		state = SocketState::listening;
+	}
+	protocol = p;
 	ReInit();
 }
 
@@ -241,7 +260,7 @@ void LwipSocket::Terminate() noexcept
 
 		DiscardReceivedData();
 		whenClosed = millis();
-		state = (localPort == 0) ? SocketState::disabled : SocketState::listening;
+		state = (localPort == 0 || outgoing) ? SocketState::disabled : SocketState::listening;
 	}
 }
 
@@ -249,7 +268,7 @@ void LwipSocket::Terminate() noexcept
 bool LwipSocket::CanRead() const noexcept
 {
 	return (state == SocketState::connected)
-		|| (state == SocketState::clientDisconnecting && receivedData != nullptr);
+		|| (state == SocketState::peerDisconnecting && receivedData != nullptr);
 }
 
 bool LwipSocket::CanSend() const noexcept
@@ -354,7 +373,7 @@ void LwipSocket::Taken(size_t len) noexcept
 void LwipSocket::Poll() noexcept
 {
 	// Deal with transfers that went so quickly that we haven't got a responder yet
-	bool wasShortTransfer = !responderFound && (state == SocketState::clientDisconnecting);
+	bool wasShortTransfer = !responderFound && (state == SocketState::peerDisconnecting);
 	if (wasShortTransfer)
 	{
 		state = SocketState::connected;
@@ -362,6 +381,14 @@ void LwipSocket::Poll() noexcept
 
 	switch (state)
 	{
+	case SocketState::connecting:
+		// Check for connection attempt timeout
+		if (millis() - whenConnecting >= ConnectTimeout)
+		{
+			Terminate();
+		}
+		break;
+
 	case SocketState::listening:
 		// Socket is listening but no client has connected to it yet
 		break;
@@ -389,7 +416,7 @@ void LwipSocket::Poll() noexcept
 		}
 		break;
 
-	case SocketState::clientDisconnecting:
+	case SocketState::peerDisconnecting:
 	case SocketState::closing:
 	{
 		// The connection is being closed, but we may be waiting for sent data to be ACKed
@@ -416,7 +443,7 @@ void LwipSocket::Poll() noexcept
 			if (receivedData == nullptr || timeoutExceeded)
 			{
 				DiscardReceivedData();
-				state = (localPort == 0) ? SocketState::disabled : SocketState::listening;
+				state = (localPort == 0 || outgoing) ? SocketState::disabled : SocketState::listening;
 			}
 		}
 		break;
@@ -430,7 +457,7 @@ void LwipSocket::Poll() noexcept
 	// Restore previous disconnecting state if necessary
 	if (wasShortTransfer)
 	{
-		state = SocketState::clientDisconnecting;
+		state = SocketState::peerDisconnecting;
 	}
 }
 

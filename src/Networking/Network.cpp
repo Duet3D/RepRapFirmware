@@ -226,6 +226,7 @@ void Network::CreateAdditionalInterface() noexcept
 GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
 {
 #if HAS_NETWORKING
+
 	if (interface < GetNumNetworkInterfaces())
 	{
 		return interfaces[interface]->EnableProtocol(protocol, port, ip, secure, reply);
@@ -345,8 +346,7 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 	if (interface < GetNumNetworkInterfaces())
 	{
 		NetworkInterface * const iface = interfaces[interface];
-		const GCodeResult ret = iface->EnableInterface(mode, ssid, reply);
-		if (ret == GCodeResult::ok && mode < 1)			// if disabling the interface
+		if (mode < 1)			// if disabling the interface
 		{
 #if HAS_RESPONDERS
 			for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
@@ -368,7 +368,7 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 #endif
 #endif // HAS_RESPONDERS
 		}
-		return ret;
+		return iface->EnableInterface(mode, ssid, reply);
 	}
 	reply.printf("Invalid network interface '%d'\n", interface);
 	return GCodeResult::error;
