@@ -515,6 +515,24 @@ void MqttClient::ConnectionLost() noexcept
 		}
 	}
 
+	{
+		bool clean = true;
+		bool seen = false;
+		gb.TryGetBValue('N', clean, seen); // check if using a clean session
+
+		if (seen)
+		{
+			if (clean)
+			{
+				mqttClientConfig->connectFlags |= MQTT_CONNECT_CLEAN_SESSION;
+			}
+			else
+			{
+				mqttClientConfig->connectFlags &= ~MQTT_CONNECT_CLEAN_SESSION;
+			}
+		}
+	}
+
 	return GCodeResult::ok;
 }
 
