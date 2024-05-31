@@ -76,6 +76,10 @@ public:
 	uint16_t GetRawMicrostepping(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return microstepping[axisOrExtruder]; }
 
 	void GetCurrentMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
+#if SUPPORT_ASYNC_MOVES
+	void GetPartialMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, AxesBitmap whichAxes) const noexcept
+			pre(queueNumber < NumMovementSystems);							// Get the current position of some axes from one of the rings
+#endif
 	void SetRawPosition(const float positions[MaxAxes], MovementSystemNumber msNumber, AxesBitmap axes) noexcept
 			pre(queueNumber < NumMovementSystems);							// Set the current position to be this without transforming them first
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept;
@@ -421,6 +425,16 @@ inline void Move::UpdateExtrusionPendingLimits(float extrusionPending) noexcept
 	if (extrusionPending > maxExtrusionPending) { maxExtrusionPending = extrusionPending; }
 	else if (extrusionPending < minExtrusionPending) { minExtrusionPending = extrusionPending; }
 }
+
+#if SUPPORT_ASYNC_MOVES
+
+// Get the current position of some axes from one of the rings
+inline void Move::GetPartialMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, AxesBitmap whichAxes) const noexcept
+{
+	rings[msNumber].GetPartialMachinePosition(m, whichAxes);
+}
+
+#endif
 
 // Set the current position to be this without transforming them first
 inline void Move::SetRawPosition(const float positions[MaxAxes], MovementSystemNumber msNumber, AxesBitmap axes) noexcept

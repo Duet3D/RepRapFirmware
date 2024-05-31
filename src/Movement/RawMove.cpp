@@ -347,7 +347,7 @@ AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap a
 void MovementState::UpdateOwnAxisCoordinates() noexcept
 {
 	Move& move = reprap.GetMove();
-	(void)move.GetLiveMachineCoordinates(lastKnownMachinePositions);
+	move.GetPartialMachinePosition(lastKnownMachinePositions, msNumber, axesAndExtrudersOwned);
 
 	// Only update our own position if something has changed, to avoid frequent inverse and forward transforms
 	const size_t totalAxes = reprap.GetGCodes().GetTotalAxes();

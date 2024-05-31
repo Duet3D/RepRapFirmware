@@ -51,6 +51,9 @@ public:
 	float GetTotalExtrusionRate() const noexcept;
 
 	void GetCurrentMachinePosition(float m[MaxAxes], bool disableMotorMapping) const noexcept; // Get the position at the end of the last queued move in untransformed coords
+#if SUPPORT_ASYNC_MOVES
+	void GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) const noexcept;	// Return the machine coordinates of just some axes
+#endif
 
 	void SetPositions(const float positions[MaxAxesPlusExtruders], AxesBitmap axes) noexcept;	// Force the machine coordinates to be these
 
