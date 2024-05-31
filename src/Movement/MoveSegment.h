@@ -35,7 +35,8 @@ union MovementFlags
 	{
 		uint32_t nonPrintingMove : 1,							// true if the move that generated this segment does not have both forwards extrusion and associated axis movement; used for filament monitoring
 				 checkEndstops : 1,								// true if we need to check endstops or Z probe while executing this segment
-				 noShaping : 1									// true if input shaping should be disabled for this move
+				 noShaping : 1,									// true if input shaping should be disabled for this move
+				 executing : 1									// normally clear, set in a MoveSegment when the move starts to be executed
 #if 0 //SUPPORT_REMOTE_COMMANDS
 			   , isRemote : 1									// set if we are in expansion board mode and this segment came from a move commanded by the main board
 #endif
@@ -115,6 +116,9 @@ public:
 
 	// Normalise this segment by removing very small accelerations that cause problems, update t0, return true if it is linear
 	bool NormaliseAndCheckLinear(float distanceCarriedForwards, float& t0) noexcept;
+
+	// Set the 'executing' bit in the flags
+	void SetExecuting() noexcept { flags.executing = true; }
 
 	// Get the next segment in this list
 	MoveSegment *GetNext() const noexcept;

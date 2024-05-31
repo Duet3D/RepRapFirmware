@@ -23,6 +23,7 @@ enum class DMState : uint8_t
 	stepError1,
 	stepError2,
 	stepError3,
+	stepError4,
 
 	// All higher values are various states of motion
 	firstMotionState,
