@@ -607,9 +607,9 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetMove().EutSetRemotePressureAdvance(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
 				break;
 
-			case CanMessageType::setInputShaping:
-				requestId = buf->msg.setInputShaping.requestId;
-				rslt = reprap.GetMove().EutSetInputShaping(buf->msg.setInputShaping, buf->dataLength, replyRef);
+			case CanMessageType::setInputShapingNew:
+				requestId = buf->msg.setInputShapingNew.requestId;
+				rslt = reprap.GetMove().EutSetInputShaping(buf->msg.setInputShapingNew, buf->dataLength, replyRef);
 				break;
 
 			case CanMessageType::m569:

@@ -4717,7 +4717,7 @@ void Platform::OnProcessingCanMessage() noexcept
 	digitalWrite(ActLedPin, ActOnPolarity);				// turn the ACT LED on
 }
 
-GCodeResult Platform::UpdateRemoteInputShaping(unsigned int numImpulses, const float coefficients[], const float delays[], const StringRef& reply) const noexcept
+GCodeResult Platform::UpdateRemoteInputShaping(unsigned int numImpulses, const float coefficients[], const uint32_t delays[], const StringRef& reply) const noexcept
 {
 	const ExpansionManager& expansion = reprap.GetExpansion();
 	GCodeResult res = GCodeResult::ok;
@@ -4733,7 +4733,7 @@ GCodeResult Platform::UpdateRemoteInputShaping(unsigned int numImpulses, const f
 				{
 					CanMessageBuffer *const buf = CanMessageBuffer::BlockingAllocate();
 					const CanRequestId rid = CanInterface::AllocateRequestId(addr, buf);
-					auto msg = buf->SetupRequestMessage<CanMessageSetInputShaping>(rid, CanInterface::GetCanAddress(), addr);
+					auto msg = buf->SetupRequestMessage<CanMessageSetInputShapingNew>(rid, CanInterface::GetCanAddress(), addr);
 					msg->numImpulses = numImpulses;
 					for (unsigned int i = 0; i < numImpulses; ++i)
 					{

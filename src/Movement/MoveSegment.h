@@ -28,9 +28,10 @@
 
 #define SEGMENT_DEBUG	(0)
 
+// This bit field is used in multiple contexts so that we can copy them efficiently from one context to another Not all flags are used in all contexts.
 union MovementFlags
 {
-	uint32_t all;												// this is to provide a means to clear all the flags n one go
+	uint32_t all;												// this is to provide a means to clear all the flags in one go
 	struct
 	{
 		uint32_t nonPrintingMove : 1,							// true if the move that generated this segment does not have both forwards extrusion and associated axis movement; used for filament monitoring

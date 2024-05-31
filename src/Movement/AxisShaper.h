@@ -38,7 +38,7 @@ class MoveSegment;
 struct AccelOrDecelPlan;
 
 #if SUPPORT_REMOTE_COMMANDS
-struct CanMessageSetInputShaping;
+struct CanMessageSetInputShapingNew;
 #endif
 
 class AxisShaper INHERIT_OBJECT_MODEL
@@ -51,11 +51,11 @@ public:
 
 	size_t GetNumImpulses() const noexcept { return numImpulses; }
 	float GetImpulseSize(size_t n) const noexcept { return coefficients[n]; }
-	float GetImpulseDelay(size_t n) const noexcept { return delays[n]; }
+	uint32_t GetImpulseDelay(size_t n) const noexcept { return delays[n]; }
 
 #if SUPPORT_REMOTE_COMMANDS
 	// Handle a request from the master board to set input shaping parameters
-	GCodeResult EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept;
+	GCodeResult EutSetInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept;
 #endif
 
 	void Diagnostics(MessageType mtype) noexcept;
@@ -76,7 +76,7 @@ private:
 	// Parameters that fully define the shaping
 	unsigned int numImpulses;							// the number of impulses
 	float coefficients[MaxImpulses];					// the coefficients of all the impulses, must add up to 1.0
-	float delays[MaxImpulses];							// the start delay in step clocks of each impulse
+	uint32_t delays[MaxImpulses];							// the start delay in step clocks of each impulse
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */

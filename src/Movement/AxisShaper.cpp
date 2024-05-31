@@ -110,7 +110,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		// Calculate the parameters that define the input shaping, which are the number of segments, their amplitudes and their delays
 		const float sqrtOneMinusZetaSquared = fastSqrtf(1.0 - fsquare(zeta));
 		const float dampedFrequency = frequency * sqrtOneMinusZetaSquared;
-		const float dampedPeriod = StepClockRate/dampedFrequency;
+		const uint32_t dampedPeriod = lrintf(StepClockRate/dampedFrequency);
 		const float k = expf(-zeta * Pi/sqrtOneMinusZetaSquared);
 		delays[0] = 0;								// this never changes
 		coefficients[0] = 1.0;						// set this up in case of an early return
@@ -131,8 +131,9 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				// Get the impulse delays, if provided
 				if (gb.Seen('T'))
 				{
+					float rawDelays[MaxImpulses - 1];
 					size_t numDelays = MaxImpulses - 1;
-					gb.GetFloatArray(delays + 1, numDelays, true);
+					gb.GetFloatArray(rawDelays, numDelays, true);
 
 					// Check we have the same number of both
 					if (numDelays != numAmplitudes)
@@ -141,16 +142,16 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 						type = InputShaperType::none;
 						return GCodeResult::error;
 					}
-					for (unsigned int i = 1; i <= numAmplitudes; ++i)
+					for (unsigned int i = 0; i < numAmplitudes; ++i)
 					{
-						delays[i] *= StepClockRate;			// convert from seconds to step clocks
+						delays[i + 1] = lrintf(rawDelays[i] * StepClockRate);			// convert from seconds to step clocks
 					}
 				}
 				else
 				{
 					for (unsigned int i = 1; i <= numAmplitudes; ++i)
 					{
-						delays[i] = 0.5 * dampedPeriod * i;
+						delays[i] = (dampedPeriod * i)/2;
 					}
 				}
 				numImpulses = numAmplitudes + 1;
@@ -169,7 +170,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 			    coefficients[0] = a3/sum;
 			    coefficients[1] = a2/sum;
 			}
-			delays[1] = 0.375 * dampedPeriod;
+			delays[1] = (3 * dampedPeriod)/8;
 			delays[2] = 2 * delays[1];
 			numImpulses = 3;
 			break;
@@ -180,7 +181,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[0] = 1.0/j;
 				coefficients[1] = 2.0 * k/j;
 			}
-			delays[1] = 0.5 * dampedPeriod;
+			delays[1] = dampedPeriod/2;
 			delays[2] = dampedPeriod;
 			numImpulses = 3;
 			break;
@@ -192,9 +193,9 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[1] = 3.0 * k/j;
 				coefficients[2] = 3.0 * fsquare(k)/j;
 			}
-			delays[1] = 0.5 * dampedPeriod;
+			delays[1] = dampedPeriod/2;
 			delays[2] = dampedPeriod;
-			delays[3] = 1.5 * dampedPeriod;
+			delays[3] = (3 * dampedPeriod)/2;
 			numImpulses = 4;
 			break;
 
@@ -206,9 +207,9 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[2] = 6.0 * fsquare(k)/j;
 				coefficients[3] = 4.0 * fcube(k)/j;
 			}
-			delays[1] = 0.5 * dampedPeriod;
+			delays[1] = dampedPeriod/2;
 			delays[2] = dampedPeriod;
-			delays[3] = 1.5 * dampedPeriod;
+			delays[3] = (3 * dampedPeriod)/2;
 			delays[4] = 2 * dampedPeriod;
 			numImpulses = 5;
 			break;
@@ -220,9 +221,9 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[0] = (0.16054) + ( 0.76699)	* zeta + ( 2.26560)	* zetaSquared + (-1.22750)	* zetaCubed;
 				coefficients[1] = (0.33911) + ( 0.45081)	* zeta + (-2.58080)	* zetaSquared + ( 1.73650)	* zetaCubed;
 				coefficients[2] = (0.34089)	+ (-0.61533)	* zeta + (-0.68765)	* zetaSquared + ( 0.42261)	* zetaCubed;
-				delays[1] = (0.49890 + ( 0.16270) * zeta + (-0.54262) * zetaSquared + (6.16180) * zetaCubed) * dampedPeriod;
-				delays[2] = (0.99748 + ( 0.18382) * zeta + (-1.58270) * zetaSquared + (8.17120) * zetaCubed) * dampedPeriod;
-				delays[3] = (1.49920 + (-0.09297) * zeta + (-0.28338) * zetaSquared + (1.85710) * zetaCubed) * dampedPeriod;
+				delays[1] = lrintf((0.49890 + ( 0.16270) * zeta + (-0.54262) * zetaSquared + (6.16180) * zetaCubed) * (float)dampedPeriod);
+				delays[2] = lrintf((0.99748 + ( 0.18382) * zeta + (-1.58270) * zetaSquared + (8.17120) * zetaCubed) * (float)dampedPeriod);
+				delays[3] = lrintf((1.49920 + (-0.09297) * zeta + (-0.28338) * zetaSquared + (1.85710) * zetaCubed) * (float)dampedPeriod);
 			}
 			numImpulses = 4;
 			break;
@@ -236,10 +237,10 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				coefficients[2] = (0.30008)	+ (-0.19062)	* zeta + (-2.14560)	* zetaSquared + ( 0.13744)	* zetaCubed;
 				coefficients[3] = (0.23775)	+ (-0.73297)	* zeta + ( 0.46885) * zetaSquared + (-2.08650)	* zetaCubed;
 
-				delays[1] = (0.49974 + (0.23834)  * zeta + (0.44559)  * zetaSquared + (12.4720) * zetaCubed) * dampedPeriod;
-				delays[2] = (0.99849 + (0.29808)  * zeta + (-2.36460) * zetaSquared + (23.3990) * zetaCubed) * dampedPeriod;
-				delays[3] = (1.49870 + (0.10306)  * zeta + (-2.01390) * zetaSquared + (17.0320) * zetaCubed) * dampedPeriod;
-				delays[4] = (1.99960 + (-0.28231) * zeta + (0.61536)  * zetaSquared + (5.40450) * zetaCubed) * dampedPeriod;
+				delays[1] = lrintf((0.49974 + (0.23834)  * zeta + (0.44559)  * zetaSquared + (12.4720) * zetaCubed) * (float)dampedPeriod);
+				delays[2] = lrintf((0.99849 + (0.29808)  * zeta + (-2.36460) * zetaSquared + (23.3990) * zetaCubed) * (float)dampedPeriod);
+				delays[3] = lrintf((1.49870 + (0.10306)  * zeta + (-2.01390) * zetaSquared + (17.0320) * zetaCubed) * (float)dampedPeriod);
+				delays[4] = lrintf((1.99960 + (-0.28231) * zeta + (0.61536)  * zetaSquared + (5.40450) * zetaCubed) * (float)dampedPeriod);
 			}
 			numImpulses = 5;
 			break;
@@ -288,7 +289,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 #if SUPPORT_REMOTE_COMMANDS
 
 // Handle a request from the master board to set input shaping parameters
-GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShaping& msg, size_t dataLength, const StringRef& reply) noexcept
+GCodeResult AxisShaper::EutSetInputShaping(const CanMessageSetInputShapingNew& msg, size_t dataLength, const StringRef& reply) noexcept
 {
 	if (msg.numImpulses <= MaxImpulses && dataLength >= msg.GetActualDataLength())
 	{
