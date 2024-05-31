@@ -2085,7 +2085,7 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 			if (dm->nextStep == 1)
 			{
 				dm->DebugPrint();
-				MoveSegment::DebugPrintList('s', dm->segments);
+				MoveSegment::DebugPrintList(dm->segments);
 			}
 #if 1
 			if (badTiming || (dm->nextStep & 255) == 1 || dm->nextStep + 1 == dm->segmentStepLimit)

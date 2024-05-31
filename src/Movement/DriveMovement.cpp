@@ -44,7 +44,6 @@ void DriveMovement::DebugPrint() const noexcept
 		const char *const errText = (state == DMState::stepError1) ? " ERR1:"
 									: (state == DMState::stepError2) ? " ERR2:"
 										: (state == DMState::stepError3) ? " ERR3:"
-											: (state == DMState::stepError4) ? " ERR4:"
 											: ":";
 		debugPrintf("DM%c%s state=%u dir=%c next=%" PRIi32 " rev=%" PRIi32 " interval=%" PRIu32 " ssl=%" PRIi32 " q=%.4e t0=%.4e p=%.4e dcf=%.2f\n",
 						c, errText, (unsigned int)state, (direction) ? 'F' : 'B', nextStep, reverseStartStep, stepInterval, segmentStepLimit,
@@ -110,13 +109,14 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 			 const int32_t timeInHand = offset - (int32_t)seg->GetDuration();
 			 if (timeInHand < 0)
 			 {
-				 state = DMState::stepError4;
+				 state = DMState::stepError3;
 				 LogStepError();
 				 RestoreBasePriority(oldPrio);
 				 if (reprap.Debug(Module::Move))
 				 {
-					 seg->DebugPrint('b');
-					 debugPrintf("was executing, overlap %" PRIi32 " while trying to add st=%" PRIu32 " dur=%" PRIu32 "\n", -timeInHand, startTime, duration);
+					 seg->DebugPrint();
+					 debugPrintf("was executing, overlap %" PRIi32 " while trying to add s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e f=%02" PRIx32 "\n",
+						 	 	 	 -timeInHand, startTime, duration, (double)distance, (double)u, (double)a, moveFlags.all);
 				 }
 				 return;
 			 }
@@ -250,7 +250,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 #endif
 					seg->Merge(distance, u, a, moveFlags);
 #if SEGMENT_DEBUG
-					MoveSegment::DebugPrintList('m', segments);
+					MoveSegment::DebugPrintList(segments);
 #endif
 					RestoreBasePriority(oldPrio);
 					return;
@@ -276,7 +276,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 		prev->SetNext(seg);
 	}
 #if SEGMENT_DEBUG
-	MoveSegment::DebugPrintList('r', segments);
+	MoveSegment::DebugPrintList(segments);
 #endif
 	RestoreBasePriority(oldPrio);
 }
@@ -556,7 +556,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 		debugPrintf("step err3, %.2f\n", (double)nextCalcStepTime);
 		DebugPrint();
 #endif
-		state = DMState::stepError3;
+		state = DMState::stepError2;
 		return LogStepError();
 	}
 

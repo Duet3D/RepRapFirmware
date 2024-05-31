@@ -128,10 +128,10 @@ public:
 	void SetNext(MoveSegment *p_next) noexcept;
 
 	// Print this segment to the debug channel
-	void DebugPrint(char ch) const noexcept;
+	void DebugPrint() const noexcept;
 
 	// Print list of segments
-	static void DebugPrintList(char ch, const MoveSegment *segs) noexcept;
+	static void DebugPrintList(const MoveSegment *segs) noexcept;
 
 	// Allocate a MoveSegment, clearing the flags
 	static MoveSegment *Allocate(MoveSegment *p_next) noexcept;
@@ -265,7 +265,7 @@ inline void MoveSegment::Merge(float p_distance, float p_u, float p_a, MovementF
 {
 #if SEGMENT_DEBUG
 	debugPrintf("merge d=%.2f u=%.4e a=%.4e into ", (double)p_distance, (double)p_u, (double)p_a);
-	DebugPrint('o');
+	DebugPrint();
 #endif
 	distance += p_distance;
 	u += p_u;

@@ -43,22 +43,22 @@ void MoveSegment::ReleaseAll(MoveSegment *item) noexcept
 	}
 }
 
-void MoveSegment::DebugPrint(char ch) const noexcept
+void MoveSegment::DebugPrint() const noexcept
 {
-	debugPrintf("%c s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e f=%02" PRIx32 "\n", ch, startTime, duration, (double)distance, (double)u, (double)a, flags.all);
+	debugPrintf("s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e f=%02" PRIx32 "\n", startTime, duration, (double)distance, (double)u, (double)a, flags.all);
 }
 
-/*static*/ void MoveSegment::DebugPrintList(char ch, const MoveSegment *segs) noexcept
+/*static*/ void MoveSegment::DebugPrintList(const MoveSegment *segs) noexcept
 {
 	if (segs == nullptr)
 	{
-		debugPrintf("%c null\n", ch);
+		debugPrintf("null seg\n");
 	}
 	else
 	{
 		while (segs != nullptr)
 		{
-			segs->DebugPrint(ch);
+			segs->DebugPrint();
 			segs = segs->GetNext();
 		}
 	}
