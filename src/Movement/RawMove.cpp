@@ -304,7 +304,7 @@ void MovementState::ReleaseAllOwnedAxesAndExtruders() noexcept
 // Release some of the axes that we own. We must also clear the cache of owned axis letters.
 void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 {
-	SaveOwnAxisCoordinates();										// save the positions of the axes we own before we release them, otherwise we will get the wrong positions when we allocate them again
+	UpdateOwnAxisCoordinates();										// save the positions of the axes we own before we release them, otherwise we will get the wrong positions when we allocate them again
 	axesAndExtrudersOwned &= ~axesToRelease;						// clear the axes/extruders we have been asked to release
 	axesAndExtrudersMoved.ClearBits(axesToRelease);					// remove them from the own axes/extruders
 	ownedAxisLetters.Clear();										// clear the cache of owned axis letters
@@ -332,7 +332,7 @@ AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap a
 		return axesNeeded;											// return empty bitmap
 	}
 
-	SaveOwnAxisCoordinates();										// we must do this before we allocate new axes to ourselves
+	UpdateOwnAxisCoordinates();										// we must do this before we allocate new axes to ourselves
 	const AxesBitmap unAvailable = axesNeeded & axesAndExtrudersMoved;
 	if (unAvailable.IsEmpty())
 	{
@@ -344,7 +344,7 @@ AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap a
 }
 
 // Fetch and save the current coordinates to lastKnownMachinePositions, also copy them to our own coordinates in case we just did a homing move
-void MovementState::SaveOwnAxisCoordinates() noexcept
+void MovementState::UpdateOwnAxisCoordinates() noexcept
 {
 	Move& move = reprap.GetMove();
 	(void)move.GetLiveMachineCoordinates(lastKnownMachinePositions);
