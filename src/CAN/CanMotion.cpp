@@ -123,10 +123,10 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 		if (buf->next == nullptr)
 		{
 			// This is the first CAN-connected board for this movement
-			move->accelerationClocks = (uint32_t)params.accelClocks;
-			move->steadyClocks = (uint32_t)params.steadyClocks;
-			move->decelClocks = (uint32_t)params.decelClocks;
-			currentMoveClocks = move->accelerationClocks + move->steadyClocks + move->decelClocks;
+			move->accelerationClocks = params.accelClocks;
+			move->steadyClocks = params.steadyClocks;
+			move->decelClocks = params.decelClocks;
+			currentMoveClocks = params.TotalClocks();
 		}
 		else
 		{

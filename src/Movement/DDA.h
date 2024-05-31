@@ -28,14 +28,14 @@ struct PrepParams
 	float totalDistance;
 	float accelDistance;
 	float decelStartDistance;
-	float accelClocks, steadyClocks, decelClocks;
+	uint32_t accelClocks, steadyClocks, decelClocks;
 	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
 	float topSpeed;									// the top speed, may be modified by the input shaper
 	bool modified;									// true if this has been modified since we set it from the DDA
 	bool useInputShaping;
 
 	// Get the total clocks needed
-	float TotalClocks() const noexcept { return accelClocks + steadyClocks + decelClocks; }
+	uint32_t TotalClocks() const noexcept { return accelClocks + steadyClocks + decelClocks; }
 
 	// Set up the parameters from the DDA, excluding steadyClocks because that may be affected by input shaping
 	void SetFromDDA(const DDA& dda) noexcept;

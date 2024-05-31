@@ -85,7 +85,7 @@ public:
 	uint32_t GetStartTime() const noexcept { return startTime; }
 
 	// Get the segment duration in step clocks
-	float GetDuration() const noexcept { return duration; }
+	uint32_t GetDuration() const noexcept { return duration; }
 
 	// Get the initial speed
 	float GetU() const noexcept { return u; }
@@ -97,7 +97,7 @@ public:
 	float GetStartSpeed(float pressureAdvanceK) const noexcept { return u + a * pressureAdvanceK; }
 
 	// Get the actual ending speed when pressure advance is being applied
-	float GetEndSpeed(float pressureAdvanceK) const noexcept { return u + a * (pressureAdvanceK + duration); }
+	float GetEndSpeed(float pressureAdvanceK) const noexcept { return u + a * (pressureAdvanceK + (float)duration); }
 
 	// Get the length
 	float GetLength() const noexcept { return distance; }
@@ -106,7 +106,7 @@ public:
 	float GetDistanceToReverse() const noexcept;
 
 	// Set the parameters of this segment
-	void SetParameters(uint32_t p_startTime, float p_duration, float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept;
+	void SetParameters(uint32_t p_startTime, uint32_t p_duration, float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept;
 
 	// Split this segment in two, returning a pointer to the second part
 	MoveSegment *Split(uint32_t firstDuration) noexcept pre(firstDuration < duration);
@@ -153,7 +153,7 @@ protected:
 	MoveSegment *next;										// pointer to the next segment
 	MovementFlags flags;
 	uint32_t startTime;										// when this segment should start, in movement clock ticks
-	float duration;											// the duration of this segment in movement ticks
+	uint32_t duration;										// the duration of this segment in movement ticks
 	float distance;											// the number of steps moved
 	float u;												// the initial speed in steps per movement tick
 	float a;												// the acceleration during this segment in steps per movement tick squared
@@ -199,7 +199,7 @@ inline bool MoveSegment::NormaliseAndCheckLinear(float distanceCarriedForwards, 
 		}
 
 		// The acceleration/deceleration is small enough to cause calculation problems, so change it to a linear move
-		u += 0.5 * a * duration;				// adjust the initial speed to preserve the total distance
+		u += 0.5 * a * (float)duration;				// adjust the initial speed to preserve the total distance
 		a = 0.0;
 	}
 
@@ -234,7 +234,7 @@ inline float MoveSegment::GetDistanceToReverse() const noexcept
 }
 
 // Set the parameters of this segment
-inline void MoveSegment::SetParameters(uint32_t p_startTime, float p_duration, float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept
+inline void MoveSegment::SetParameters(uint32_t p_startTime, uint32_t p_duration, float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept
 {
 	startTime = p_startTime;
 	duration = p_duration;
@@ -249,7 +249,7 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 {
 	MoveSegment *const secondSeg = Allocate(next);
 	const float firstDistance = (u + 0.5 * a * firstDuration) * firstDuration;
-	secondSeg->SetParameters(startTime + firstDuration, duration - (float)firstDuration, distance - firstDistance, u + a * (float)firstDuration, a, flags);
+	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, u + a * (float)firstDuration, a, flags);
 #if SEGMENT_DEBUG
 	debugPrintf("split at %" PRIu32 ", fd=%.2f, sd=%.2f\n", firstDuration, (double)firstDistance, (double)(distance - firstDistance));
 #endif

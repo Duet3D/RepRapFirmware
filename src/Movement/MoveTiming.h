@@ -40,8 +40,8 @@ namespace MoveTiming
 	constexpr uint32_t MachineCoordinateUpdateInterval = 200;						// milliseconds
 
 #if SUPPORT_CAN_EXPANSION
-	constexpr float NominalRemoteDriverPositionUpdateInterval = (float)(StepClockRate/10);						// how often we aim to generate an interrupt to update the position of remote drivers
-	constexpr float MaxRemoteDriverPositionUpdateInterval = 1.5 * NominalRemoteDriverPositionUpdateInterval;	// the maximum interval between interrup6s to update the position of remote drivers
+	constexpr uint32_t NominalRemoteDriverPositionUpdateInterval = StepClockRate/10;						// how often we aim to generate an interrupt to update the position of remote drivers
+	constexpr uint32_t MaxRemoteDriverPositionUpdateInterval = (3 * NominalRemoteDriverPositionUpdateInterval)/2;	// the maximum interval between interrup6s to update the position of remote drivers
 #endif
 }
 

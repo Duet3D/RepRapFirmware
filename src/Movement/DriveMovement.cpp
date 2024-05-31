@@ -107,8 +107,8 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 		int32_t offset = (int32_t)(startTime - seg->GetStartTime());
 		if (seg->GetFlags().executing)
 		{
-			 const float timeInHand = (float)offset - seg->GetDuration();
-			 if (timeInHand < 0.0)
+			 const int32_t timeInHand = offset - (int32_t)seg->GetDuration();
+			 if (timeInHand < 0)
 			 {
 				 state = DMState::stepError4;
 				 LogStepError();
@@ -116,7 +116,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 				 if (reprap.Debug(Module::Move))
 				 {
 					 seg->DebugPrint('b');
-					 debugPrintf("was executing while trying to add st=%" PRIu32 " dur=%" PRIu32 "\n", startTime, duration);
+					 debugPrintf("was executing, overlap %" PRIi32 " while trying to add st=%" PRIu32 " dur=%" PRIu32 "\n", -timeInHand, startTime, duration);
 				 }
 				 return;
 			 }
@@ -147,7 +147,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 					if (offset + (int32_t)duration > 0 && duration >= 10 * MoveSegment::MinDuration)	// if the new segment does overlap the existing one a little and we can reasonably shorten it
 					{
 						// Shorten the new segment slightly so than it fits before the existing segment
-						const int32_t durationIncrease = -offset - (int32_t)duration;	// get the (negative) increase in segment duration
+						const int32_t durationIncrease = -(offset + (int32_t)duration);	// get the (negative) increase in segment duration
 						const float oldDuration = (float)duration;
 #if SEGMENT_DEBUG
 						debugPrintf("Adjusting(2) t=%" PRIu32 " u=%.4e a=%.4e", duration, (double)u, (double)a);
@@ -166,7 +166,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 					const uint32_t firstDuration = -offset;
 					const float firstDistance = (u + 0.5 * a * (float)firstDuration) * (float)firstDuration;
 					seg = MoveSegment::Allocate(seg);
-					seg->SetParameters(startTime, (float)firstDuration, firstDistance, u, a, moveFlags);
+					seg->SetParameters(startTime, firstDuration, firstDistance, u, a, moveFlags);
 					if (prev == nullptr)
 					{
 						segments = seg;
@@ -209,18 +209,18 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 				}
 
 				// The segment we wish to add now starts at the same time as 'seg' but it may end earlier or later than the one at 'seg' does.
-				const int32_t timeDifference = (int32_t)(duration - (uint32_t)seg->GetDuration());
+				const int32_t timeDifference = (int32_t)(duration - seg->GetDuration());
 				if (timeDifference > MoveSegment::MinDuration)
 				{
 					// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
-					const float firstDistance = (u + 0.5 * a * seg->GetDuration()) * seg->GetDuration();	// distance moved by the first part of the new segment
+					const float firstDistance = (u + 0.5 * a * (float)seg->GetDuration()) * (float)seg->GetDuration();	// distance moved by the first part of the new segment
 #if SEGMENT_DEBUG
 					debugPrintf("merge1: ");
 #endif
 					seg->Merge(firstDistance, u, a, moveFlags);
 					distance -= firstDistance;
-					startTime += (uint32_t)seg->GetDuration();
-					u += a * seg->GetDuration();
+					startTime += seg->GetDuration();
+					u += a * (float)seg->GetDuration();
 					duration = (uint32_t)timeDifference;
 				}
 				else
@@ -232,7 +232,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 #if SEGMENT_DEBUG
 						debugPrintf("Adjusting(4) t=%" PRIu32 " u=%.4e a=%.4e", duration, (double)u, (double)a);
 #endif
-						u = ((u * duration) - (a * (float)timeDifference * (duration + 0.5 * (float)timeDifference)))/seg->GetDuration();
+						u = ((u * (float)duration) - (a * (float)timeDifference * ((float)duration + 0.5 * (float)timeDifference)))/(float)seg->GetDuration();
 						duration = seg->GetDuration();
 #if SEGMENT_DEBUG
 						debugPrintf(" to t=%" PRIu32 " u=%.4e a=%.4e\n", duration, (double)u, (double)a);
@@ -346,7 +346,7 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 				segmentStepLimit = reverseStartStep = stepsInInitialDirection + 1;
 				state = DMState::cartAccel;
 			}
-			else if (t0 < segments->GetDuration())
+			else if (t0 < (float)segments->GetDuration())
 			{
 				// Reversal is in this segment, but it may be the first step, or may be beyond the last step we are going to take
 				float distanceToReverse = (segments->GetDistanceToReverse() + distanceCarriedForwards) * multiplier;
@@ -450,7 +450,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 		{
 			distanceCarriedForwards += currentSegment->GetLength() - (float)netStepsThisSegment;
 			segments = currentSegment->GetNext();
-			const uint32_t prevEndTime = currentSegment->GetStartTime() + lrintf(currentSegment->GetDuration());
+			const uint32_t prevEndTime = currentSegment->GetStartTime() + currentSegment->GetDuration();
 			MoveSegment::Release(currentSegment);
 			currentSegment = NewSegment();
 			if (currentSegment == nullptr)
@@ -464,15 +464,6 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 				DebugPrint();
 #endif
 				state = DMState::stepError1;
-				return LogStepError();
-			}
-			if (unlikely(currentSegment->GetDuration() < 0.0))
-			{
-#if SEGMENT_DEBUG
-				debugPrintf("step err2, %.2f\n", (double)currentSegment->GetDuration());
-				DebugPrint();
-#endif
-				state = DMState::stepError2;
 				return LogStepError();
 			}
 
@@ -624,7 +615,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 void DriveMovement::TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept
 {
 	MoveSegment *const currentSegment = segments;				// capture volatile variable
-	const float timeFromStart = (float)(clocksNow - currentSegment->GetStartTime());
+	const int32_t timeFromStart = (int32_t)(clocksNow - currentSegment->GetStartTime());
 	if (nextStep == segmentStepLimit || currentSegment->GetDuration() <= timeFromStart + MoveTiming::MaxRemoteDriverPositionUpdateInterval)
 	{
 		currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
@@ -638,9 +629,9 @@ void DriveMovement::TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept
 	}
 	else
 	{
-		const float targetTime = timeFromStart + MoveTiming::NominalRemoteDriverPositionUpdateInterval;
-		currentMotorPosition = positionAtSegmentStart + lrintf((currentSegment->GetU() + (0.5 * currentSegment->GetA() * targetTime)) * targetTime + distanceCarriedForwards);
-		nextStepTime = (uint32_t)targetTime + currentSegment->GetStartTime();
+		const uint32_t targetTime = timeFromStart + MoveTiming::NominalRemoteDriverPositionUpdateInterval;
+		currentMotorPosition = positionAtSegmentStart + lrintf((currentSegment->GetU() + (0.5 * currentSegment->GetA() * (float)targetTime)) * (float)targetTime + distanceCarriedForwards);
+		nextStepTime = targetTime + currentSegment->GetStartTime();
 	}
 }
 

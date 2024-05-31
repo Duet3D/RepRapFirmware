@@ -127,17 +127,17 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	// We need to make sure that accelDistance <= decelStartDistance for subsequent calculations to work.
 	accelDistance = min<float>(dda.beforePrepare.accelDistance, decelStartDistance);
 	const float steadyDistance = decelStartDistance - accelDistance;
-	steadyClocks = (steadyDistance <= 0.0) ? 0.0 : steadyDistance/dda.topSpeed;
+	steadyClocks = (steadyDistance <= 0.0) ? 0.0 : lrintf(steadyDistance/dda.topSpeed);
 	acceleration = dda.acceleration;
 	deceleration = dda.deceleration;
-	accelClocks = (dda.topSpeed - dda.startSpeed)/dda.acceleration;
-	decelClocks = (dda.topSpeed - dda.endSpeed)/dda.deceleration;
+	accelClocks = lrintf((dda.topSpeed - dda.startSpeed)/dda.acceleration);
+	decelClocks = lrintf((dda.topSpeed - dda.endSpeed)/dda.deceleration);
 }
 
 void PrepParams::DebugPrint() const noexcept
 {
-	debugPrintf("pp: td=%.3e ad=%.3e dsd=%.3e a=%.3e d=%.3e ac=%.3e sc=%.3e dc=%.3e\n",
-					(double)totalDistance, (double)accelDistance, (double)decelStartDistance, (double)acceleration, (double)deceleration, (double)accelClocks, (double)steadyClocks, (double)decelClocks);
+	debugPrintf("pp: td=%.3e ad=%.3e dsd=%.3e a=%.3e d=%.3e ac=%" PRIu32 " sc=%" PRIu32 " dc=%" PRIu32 "\n",
+					(double)totalDistance, (double)accelDistance, (double)decelStartDistance, (double)acceleration, (double)deceleration, accelClocks, steadyClocks, decelClocks);
 }
 
 DDA::DDA(DDA* n) noexcept : next(n), prev(nullptr), state(empty)
@@ -1099,7 +1099,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 	// Prepare for movement
 	PrepParams params;
 	params.SetFromDDA(*this);
-	clocksNeeded = (uint32_t)params.TotalClocks();
+	clocksNeeded = params.TotalClocks();
 
 	// Copy the unshaped acceleration and deceleration back to the DDA because ManageLaserPower uses them
 	acceleration = params.acceleration;
