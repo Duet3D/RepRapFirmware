@@ -257,7 +257,12 @@ void Move::Init() noexcept
 
 	idleTimeout = DefaultIdleTimeout;
 	moveState = MoveState::idle;
-	whenLastMoveAdded = whenIdleTimerStarted = millis();
+	const uint32_t now = millis();
+	whenIdleTimerStarted = now;
+	for (uint32_t& w : whenLastMoveAdded)
+	{
+		w = now;
+	}
 
 	simulationMode = SimulationMode::off;
 	longestGcodeWaitInterval = 0;
@@ -389,12 +394,12 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 					if (rings[0].AddSpecialMove(reprap.GetPlatform().MaxFeedrate(Z_AXIS), specialMoveCoords))
 					{
 						const uint32_t now = millis();
-						const uint32_t timeWaiting = now - whenLastMoveAdded;
+						const uint32_t timeWaiting = now - whenLastMoveAdded[0];
 						if (timeWaiting > longestGcodeWaitInterval)
 						{
 							longestGcodeWaitInterval = timeWaiting;
 						}
-						whenLastMoveAdded = now;
+						whenLastMoveAdded[0] = now;
 						moveState = MoveState::collecting;
 					}
 				}
@@ -423,12 +428,12 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 						if (rings[0].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
 						{
 							const uint32_t now = millis();
-							const uint32_t timeWaiting = now - whenLastMoveAdded;
+							const uint32_t timeWaiting = now - whenLastMoveAdded[0];
 							if (timeWaiting > longestGcodeWaitInterval)
 							{
 								longestGcodeWaitInterval = timeWaiting;
 							}
-							whenLastMoveAdded = now;
+							whenLastMoveAdded[0] = now;
 							moveState = MoveState::collecting;
 						}
 					}
@@ -436,8 +441,8 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 			}
 		}
 
-		// Let ring 0 process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
-		uint32_t nextPrepareDelay = rings[0].Spin(simulationMode, !canAddRing0Move, millis() - whenLastMoveAdded >= rings[0].GetGracePeriod());
+		// Let ring 0 process moves
+		uint32_t nextPrepareDelay = rings[0].Spin(simulationMode, !canAddRing0Move, millis() - whenLastMoveAdded[0] >= rings[0].GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
 		const bool canAddRing1Move = rings[1].CanAddMove();
@@ -449,12 +454,12 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 				if (rings[1].AddAsyncMove(auxMove))
 				{
 					const uint32_t now = millis();
-					const uint32_t timeWaiting = now - whenLastMoveAdded;
+					const uint32_t timeWaiting = now - whenLastMoveAdded[1];
 					if (timeWaiting > longestGcodeWaitInterval)
 					{
 						longestGcodeWaitInterval = timeWaiting;
 					}
-					whenLastMoveAdded = now;
+					whenLastMoveAdded[1] = now;
 					moveState = MoveState::collecting;
 				}
 				auxMoveAvailable = false;
@@ -476,12 +481,12 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 						if (rings[1].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
 						{
 							const uint32_t now = millis();
-							const uint32_t timeWaiting = now - whenLastMoveAdded;
+							const uint32_t timeWaiting = now - whenLastMoveAdded[1];
 							if (timeWaiting > longestGcodeWaitInterval)
 							{
 								longestGcodeWaitInterval = timeWaiting;
 							}
-							whenLastMoveAdded = now;
+							whenLastMoveAdded[1] = now;
 							moveState = MoveState::collecting;
 						}
 					}
@@ -489,7 +494,7 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 			}
 		}
 
-		const uint32_t auxPrepareDelay = rings[1].Spin(simulationMode, !canAddRing1Move,  millis() - whenLastMoveAdded >= rings[1].GetGracePeriod());
+		const uint32_t auxPrepareDelay = rings[1].Spin(simulationMode, !canAddRing1Move,  millis() - whenLastMoveAdded[1] >= rings[1].GetGracePeriod());
 		if (auxPrepareDelay < nextPrepareDelay)
 		{
 			nextPrepareDelay = auxPrepareDelay;

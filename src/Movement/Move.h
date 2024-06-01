@@ -370,7 +370,7 @@ private:
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
 	unsigned int numHiccups;
 
-	uint32_t whenLastMoveAdded;							// The time when we last added a move to any DDA ring
+	uint32_t whenLastMoveAdded[NumMovementSystems];		// The time when we last added a move to each DDA ring
 	uint32_t whenIdleTimerStarted;						// The approximate time at which the state last changed, except we don't record timing -> idle
 
 	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
