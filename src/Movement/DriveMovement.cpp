@@ -89,7 +89,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
 #endif
 	{
-		debugPrintf("Adding seg: dr=%u st=%" PRIu32 " t=%" PRIu32 " dist=%.2f u=%.3e a=%.3e\n", drive, startTime, duration, (double)distance, (double)u, (double)a);
+		debugPrintf("Add seg: dr=%u st=%" PRIu32 " t=%" PRIu32 " dist=%.2f u=%.3e a=%.3e f=%02" PRIx32 "\n", drive, startTime, duration, (double)distance, (double)u, (double)a, moveFlags.all);
 	}
 
 	MoveSegment *prev = nullptr;
@@ -114,7 +114,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 				 RestoreBasePriority(oldPrio);
 				 if (reprap.Debug(Module::Move))
 				 {
-					 seg->DebugPrint();
+					 MoveSegment::DebugPrintList(seg);
 					 debugPrintf("was executing, overlap %" PRIi32 " while trying to add s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e f=%02" PRIx32 "\n",
 						 	 	 	 -timeInHand, startTime, duration, (double)distance, (double)u, (double)a, moveFlags.all);
 				 }
