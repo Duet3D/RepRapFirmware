@@ -666,18 +666,6 @@ void Platform::Init() noexcept
 
 	// Motors
 
-	// Clear out the axis and extruder driver bitmaps
-	for (size_t i = 0; i < MaxAxesPlusExtruders; ++i)
-	{
-		driveDriverBits[i] = 0;
-	}
-
-	// Set up the bitmaps for direct driver access
-	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
-	{
-		driveDriverBits[driver + MaxAxesPlusExtruders] = StepPins::CalcDriverBitmap(driver);
-	}
-
 	// Set up the local drivers. Do this after we have read any direction pins that specify the board type.
 #if defined(DUET3MINI) && SUPPORT_TMC2240
 	// Check whether we have a TMC2240 prototype expansion board connected, before we set the driver direction pins to outputs
@@ -746,6 +734,12 @@ void Platform::Init() noexcept
 		standstillCurrentPercent[drive] = DefaultStandstillCurrentPercent;
 #endif
 		SetDriverMicrostepping(drive, 16, true);				// x16 with interpolation
+	}
+
+	// Set up the bitmaps for direct driver access
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+	{
+		driveDriverBits[driver + MaxAxesPlusExtruders] = StepPins::CalcDriverBitmap(driver);
 	}
 
 	// Set up default axis mapping
