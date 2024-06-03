@@ -452,11 +452,23 @@ void Move::Init() noexcept
 	SetPinFunction(StepGatePin, StepGatePinFunction);
 #endif
 
+	// Initialise the DMs before we make any changes to them
+	for (size_t drv = 0; drv < MaxAxesPlusExtruders + NumDirectDrivers; ++drv)
+	{
+		dms[drv].Init(drv);
+		if (drv < MaxAxesPlusExtruders)
+		{
+			const float stepsPerMm = (drv >= MaxAxes) ? DefaultEDriveStepsPerUnit
+										: (drv == Z_AXIS) ? DefaultZDriveStepsPerUnit
+											: DefaultAxisDriveStepsPerUnit;
+			SetDriveStepsPerMm(drv, stepsPerMm, 0);
+		}
+	}
+
 	// Set up the axis+extruder arrays
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
 		driverState[drive] = DriverStatus::disabled;
-		driveDriverBits[drive] = 0;
 		motorCurrents[drive] = 0.0;
 		motorCurrentFraction[drive] = 1.0;
 #if HAS_SMART_DRIVERS || SUPPORT_CAN_EXPANSION
@@ -468,7 +480,7 @@ void Move::Init() noexcept
 	// Set up the bitmaps for direct driver access
 	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
 	{
-		driveDriverBits[driver + MaxAxesPlusExtruders] = StepPins::CalcDriverBitmap(driver);
+		dms[driver + MaxAxesPlusExtruders].driversNormallyUsed = StepPins::CalcDriverBitmap(driver);
 	}
 
 	// Set up default axis mapping
@@ -481,7 +493,7 @@ void Move::Init() noexcept
 #endif
 		axisDrivers[axis].numDrivers = 1;
 		axisDrivers[axis].driverNumbers[0].SetLocal(driver);
-		driveDriverBits[axis] = StepPins::CalcDriverBitmap(driver);	// overwrite the default value set up earlier
+		dms[axis].driversNormallyUsed = StepPins::CalcDriverBitmap(driver);	// overwrite the default value set up earlier
 	}
 	linearAxes = AxesBitmap::MakeLowestNBits(3);				// XYZ axes are linear
 
@@ -494,7 +506,7 @@ void Move::Init() noexcept
 	for (size_t extr = 0; extr < MaxExtruders; ++extr)
 	{
 		extruderDrivers[extr].SetLocal(extr + MinAxes);			// set up default extruder drive mapping
-		driveDriverBits[ExtruderToLogicalDrive(extr)] = StepPins::CalcDriverBitmap(extr + MinAxes);
+		dms[ExtruderToLogicalDrive(extr)].driversNormallyUsed = StepPins::CalcDriverBitmap(extr + MinAxes);
 #if SUPPORT_NONLINEAR_EXTRUSION
 		nonlinearExtrusion[extr].A = nonlinearExtrusion[extr].B = 0.0;
 		nonlinearExtrusion[extr].limit = DefaultNonlinearExtrusionLimit;
@@ -577,17 +589,6 @@ void Move::Init() noexcept
 	for (uint16_t& ms : microstepping)
 	{
 		ms = 16 | 0x8000;
-	}
-	for (size_t drv = 0; drv < MaxAxesPlusExtruders + NumDirectDrivers; ++drv)
-	{
-		dms[drv].Init(drv);
-		if (drv < MaxAxesPlusExtruders)
-		{
-			const float stepsPerMm = (drv >= MaxAxes) ? DefaultEDriveStepsPerUnit
-										: (drv == Z_AXIS) ? DefaultZDriveStepsPerUnit
-											: DefaultAxisDriveStepsPerUnit;
-			SetDriveStepsPerMm(drv, stepsPerMm, 0);				//TODO what about steps/mm for the direct driver numbers?
-		}
 	}
 
 	moveTask.Create(MoveStart, "Move", this, TaskPriority::MovePriority);
@@ -1991,11 +1992,6 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	{
 		if (dmp->ScheduleFirstSegment())
 		{
-			if (simulationMode == SimulationMode::off)
-			{
-				SetDirection(dmp->drive, dmp->direction);
-			}
-			dmp->directionChanged = false;
 			InsertDM(dmp);
 			if (activeDMs == dmp && simulationMode == SimulationMode::off)			// if this is now the first DM in the active list
 			{
@@ -2259,7 +2255,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 	DriveMovement* dm = activeDMs;
 	while (dm != nullptr && (int32_t)(now - dm->nextStepTime) >= 0)			// if the next step is due
 	{
-		driversStepping |= driveDriverBits[dm->drive];
+		driversStepping |= dm->driversCurrentlyUsed;
 		flags |= dm->segmentFlags;
 		dm = dm->nextDM;
 	}
@@ -2278,7 +2274,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 		now = StepTimer::GetMovementTimerTicks();
 		while (dm != nullptr && (int32_t)(now - dm->nextStepTime) >= 0)		// if the next step is due
 		{
-			driversStepping |= driveDriverBits[dm->drive];
+			driversStepping |= dm->driversCurrentlyUsed;
 			dm = dm->nextDM;
 		}
 	}
@@ -2307,13 +2303,21 @@ void Move::StepDrivers(uint32_t now) noexcept
 	// Calculate the next step times. We must do this even if no local drivers are stepping in case endstops or Z probes are active.
 	for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 	{
+		if (unlikely(dm2->state == DMState::starting))
+		{
+			if (dm2->NewSegment())
+			{
+				(void)dm2->CalcNextStepTimeFull();					// calculate next step time
+				dm2->directionChanged = true;						// force the direction to be set up
+			}
+		}
 # if SUPPORT_CAN_EXPANSION
-		if (unlikely(!flags.checkEndstops && driveDriverBits[dm2->drive] == 0))
+		else if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
 		{
 			dm2->TakeStepsAndCalcStepTimeRarely(now);
 		}
-		else
 # endif
+		else
 		{
 			dm2->TakenStep();
 			(void)dm2->CalcNextStepTime();							// calculate next step times
@@ -2336,13 +2340,21 @@ void Move::StepDrivers(uint32_t now) noexcept
 
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 		{
+			if (unlikely(dm2->state == DMState::starting))
+			{
+				if (dm2->NewSegment())
+				{
+					(void)dm2->CalcNextStepTimeFull();				// calculate next step time
+					dm2->directionChanged = true;					// force the direction to be set up
+				}
+			}
 # if SUPPORT_CAN_EXPANSION
-			if (unlikely(!flags.checkEndstops && driveDriverBits[dm2->drive] == 0))
+			else if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
 			{
 				dm2->TakeStepsAndCalcStepTimeRarely(now);
 			}
-			else
 # endif
+			else
 			{
 				dm2->TakenStep();
 				(void)dm2->CalcNextStepTime();						// calculate next step times
@@ -2362,16 +2374,24 @@ void Move::StepDrivers(uint32_t now) noexcept
 # endif
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 		{
+			if (unlikely(dm2->state == DMState::starting))
+			{
+				if (dm2->NewSegment())
+				{
+					(void)dm2->CalcNextStepTimeFull();				// calculate next step time
+					dm2->directionChanged = true;					// force the direction to be set up
+				}
+			}
 # if SUPPORT_CAN_EXPANSION
-			if (unlikely(!flags.checkEndstops && driveDriverBits[dm2->drive] == 0))
+			else if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
 			{
 				dm2->TakeStepsAndCalcStepTimeRarely(now);
 			}
-			else
 # endif
+			else
 			{
 				dm2->TakenStep();
-				(void)dm2->CalcNextStepTime();						// calculate next step times
+				(void)dm2->CalcNextStepTime();						// calculate next step time
 			}
 		}
 
@@ -2405,7 +2425,7 @@ void Move::SetDirection(size_t axisOrExtruder, bool direction) noexcept
 #ifdef DUET3_MB6XD
 	while (StepTimer::GetTimerTicks() - lastStepHighTime < GetSlowDriverDirHoldClocksFromLeadingEdge()) { }
 #else
-	const bool isSlowDriver = (driveDriverBits[axisOrExtruder] & slowDriversBitmap) != 0;
+	const bool isSlowDriver = (dms[axisOrExtruder].driversNormallyUsed & slowDriversBitmap) != 0;
 	if (isSlowDriver)
 	{
 		while (StepTimer::GetTimerTicks() - lastStepLowTime < GetSlowDriverDirHoldClocksFromTrailingEdge()) { }
@@ -2460,7 +2480,18 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 		{
-			(void)dm2->CalcNextStepTime();								// calculate next step times
+			if (unlikely(dm2->state == DMState::starting))
+			{
+				if (dm2->NewSegment())
+				{
+					(void)dm2->CalcNextStepTime();						// calculate next step time
+				}
+			}
+			else
+			{
+				dm2->TakenStep();
+				(void)dm2->CalcNextStepTime();							// calculate next step time
+			}
 		}
 
 		// Remove those drives from the list, update the direction pins where necessary, and re-insert them so as to keep the list in step-time order.
@@ -3225,7 +3256,7 @@ void Move::SetAxisDriversConfig(size_t axis, size_t numValues, const DriverId dr
 #endif
 		}
 	}
-	driveDriverBits[axis] = bitmap;
+	dms[axis].driversNormallyUsed = bitmap;
 }
 
 // Set the characteristics of an axis
@@ -3265,11 +3296,11 @@ void Move::SetExtruderDriver(size_t extruder, DriverId driver) noexcept
 #if HAS_SMART_DRIVERS
 		SmartDrivers::SetAxisNumber(driver.localDriver, ExtruderToLogicalDrive(extruder));
 #endif
-		driveDriverBits[ExtruderToLogicalDrive(extruder)] = StepPins::CalcDriverBitmap(driver.localDriver);
+		dms[ExtruderToLogicalDrive(extruder)].driversNormallyUsed = StepPins::CalcDriverBitmap(driver.localDriver);
 	}
 	else
 	{
-		driveDriverBits[ExtruderToLogicalDrive(extruder)] = 0;
+		dms[ExtruderToLogicalDrive(extruder)].driversNormallyUsed = 0;
 	}
 }
 

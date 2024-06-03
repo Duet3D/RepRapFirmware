@@ -34,6 +34,7 @@ void DriveMovement::Init(size_t drv) noexcept
 	isExtruder = false;
 	segmentFlags.Init();
 	homingDda = nullptr;
+	driversNormallyUsed = driversCurrentlyUsed = 0;
 }
 
 void DriveMovement::DebugPrint() const noexcept
@@ -284,9 +285,15 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 // Set up to schedule the first segment, returning true if there is a segment to be processed
 bool DriveMovement::ScheduleFirstSegment() noexcept
 {
-	if (NewSegment() != nullptr)
+	// We don't want to flag the segment as executing or calculate and store its parameters until shortly before the first step is due, so that it can be changed until then.
+	// Instead we flag that no drivers are stepping and generate an interrupt when the move is due to start.
+	const MoveSegment *const seg = segments;		// capture volatile variable
+	if (seg != nullptr)
 	{
-		return CalcNextStepTimeFull();
+		driversCurrentlyUsed = 0;					// don't generate any steps for this driver at the next interrupt
+		state = DMState::starting;
+		nextStepTime = seg->GetStartTime();
+		return true;								// this tells the calling Move task to add this DM to the active list
 	}
 	return false;
 }
@@ -398,6 +405,7 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 			}
 
 			segmentFlags = seg->GetFlags();
+			driversCurrentlyUsed = driversNormallyUsed;
 #if SUPPORT_CAN_EXPANSION
 			positionAtSegmentStart = currentMotorPosition;
 #endif

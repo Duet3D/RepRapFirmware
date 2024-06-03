@@ -647,8 +647,7 @@ private:
 	float normalAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for normal moves
 	float reducedAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for probing and stall detection moves
 	float instantDvs[MaxAxesPlusExtruders];					// max jerk in mm per step clock
-	uint32_t driveDriverBits[MaxAxesPlusExtruders + NumDirectDrivers];
-															// the bitmap of local driver port bits for each axis or extruder, followed by the bitmaps for the individual Z motors
+
 	AxisDriversConfig axisDrivers[MaxAxes];					// the driver numbers assigned to each axis
 	AxesBitmap linearAxes;									// axes that behave like linear axes w.r.t. feedrate handling
 	AxesBitmap rotationalAxes;								// axes that behave like rotational axes w.r.t. feedrate handling

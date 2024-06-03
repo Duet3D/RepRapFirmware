@@ -26,7 +26,8 @@ enum class DMState : uint8_t
 
 	// All higher values are various states of motion
 	firstMotionState,
-	cartAccel = firstMotionState,					// linear accelerating motion
+	starting = firstMotionState,					// interrupt scheduled for when the move should start
+	cartAccel,										// linear accelerating motion
 	cartLinear,										// linear steady speed
 	cartDecelNoReverse,
 	cartDecelForwardsReversing,						// linear decelerating motion, expect reversal
@@ -123,6 +124,8 @@ private:
 	uint32_t nextStepTime;								// when the next step is due
 	uint32_t stepInterval;								// how many clocks between steps
 
+	uint32_t driversNormallyUsed;						// the local drivers that this axis or extruder uses
+	uint32_t driversCurrentlyUsed;						// the bitmap of local drivers for this axis or extruder that we should step when the next step interrupt is due
 	float movementAccumulator = 0.0;					// the accumulated movement since GetAccumulatedMovement was last called. Only used for extruders.
 	uint32_t extruderPrintingSince = 0;					// the millis ticks when this extruder started doing printing moves
 };
