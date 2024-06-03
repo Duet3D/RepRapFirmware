@@ -282,7 +282,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool signalMoveCompletion,
 			cdda = cdda->GetNext();
 		}
 
-		uint32_t ret = (cdda->GetState() == DDA::provisional)
+		const uint32_t ret = (cdda->GetState() == DDA::provisional)
 						? PrepareMoves(cdda, preparedTime, preparedCount, simulationMode)
 							: MoveTiming::StandardMoveWakeupInterval;
 
@@ -357,7 +357,8 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t moveTimeLeft, 
 	while (	  firstUnpreparedMove->GetState() == DDA::provisional
 		   && moveTimeLeft < (int32_t)MoveTiming::UsualMinimumPreparedTime	// prepare moves one tenth of a second ahead of when they will be needed
 		   && alreadyPrepared * 2 < numDdasInRing						// but don't prepare more than half the ring, to handle accelerate/decelerate moves in small segments
-		   && (firstUnpreparedMove->IsGoodToPrepare() || moveTimeLeft < MoveTiming::AbsoluteMinimumPreparedTime)
+// DC try disabling the following
+//		   && (firstUnpreparedMove->IsGoodToPrepare() || moveTimeLeft < MoveTiming::AbsoluteMinimumPreparedTime)
 #if SUPPORT_CAN_EXPANSION
 		   && CanMotion::CanPrepareMove()
 #endif
@@ -378,8 +379,8 @@ uint32_t DDARing::PrepareMoves(DDA *firstUnpreparedMove, uint32_t moveTimeLeft, 
 			return 1;
 		}
 
-		const int32_t clocksTillWakeup = moveTimeLeft - MoveTiming::UsualMinimumPreparedTime;						// calculate how long before we run out of prepared moves, less the usual advance prepare time
-		return (clocksTillWakeup <= 0) ? 2 : min<uint32_t>((uint32_t)clocksTillWakeup/(StepClockRate/1000), 2);		// wake up at that time, but delay for at least 2 ticks
+		const int32_t clocksTillWakeup = (int32_t)(moveTimeLeft - MoveTiming::UsualMinimumPreparedTime);			// calculate how long before we run out of prepared moves, less the usual advance prepare time
+		return (clocksTillWakeup <= 0) ? 2 : max<uint32_t>((uint32_t)clocksTillWakeup/(StepClockRate/1000), 2);		// wake up at that time, but delay for at least 2 ticks
 	}
 
 	// There are no moves waiting to be prepared
