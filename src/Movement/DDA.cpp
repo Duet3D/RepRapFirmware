@@ -246,7 +246,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 
 	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
 	{
-		accelerations[drive] = reprap.GetPlatform().Acceleration(drive, nextMove.reduceAcceleration);
+		accelerations[drive] = reprap.GetMove().Acceleration(drive, nextMove.reduceAcceleration);
 
 		if (drive < numVisibleAxes)
 		{
@@ -257,7 +257,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				directionVector[drive] = positionDelta;
 				if (positionDelta != 0.0)
 				{
-					if (reprap.GetPlatform().IsAxisRotational(drive) && nextMove.rotationalAxesMentioned)
+					if (reprap.GetMove().IsAxisRotational(drive) && nextMove.rotationalAxesMentioned)
 					{
 						rotationalAxesMoving = true;
 					}
@@ -279,7 +279,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 				directionVector[drive] = (float)delta/move.DriveStepsPerMm(drive);
 				if (delta != 0)
 				{
-					if (reprap.GetPlatform().IsAxisRotational(drive))
+					if (reprap.GetMove().IsAxisRotational(drive))
 					{
 						rotationalAxesMoving = true;
 					}
@@ -309,7 +309,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 					if (compensationClocks > 0.0)
 					{
 						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
-						accelerations[drive] = min<float>(accelerations[drive], reprap.GetPlatform().GetInstantDv(drive)/compensationClocks);
+						accelerations[drive] = min<float>(accelerations[drive], reprap.GetMove().GetInstantDv(drive)/compensationClocks);
 					}
 				}
 			}
@@ -379,12 +379,12 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 		// This means that the user gets the feed rate that he asked for. It also makes the delta calculations simpler.
 		// First do the bed tilt compensation for deltas.
 		directionVector[Z_AXIS] += (directionVector[X_AXIS] * k.GetTiltCorrection(X_AXIS)) + (directionVector[Y_AXIS] * k.GetTiltCorrection(Y_AXIS));
-		totalDistance = NormaliseLinearMotion(reprap.GetPlatform().GetLinearAxes());
+		totalDistance = NormaliseLinearMotion(reprap.GetMove().GetLinearAxes());
 	}
 	else if (rotationalAxesMoving)
 	{
 		// Some axes are moving, but not axes that X or Y are mapped to. Normalise the movement to the vector sum of the axes that are moving.
-		totalDistance = Normalise(directionVector, reprap.GetPlatform().GetRotationalAxes());
+		totalDistance = Normalise(directionVector, reprap.GetMove().GetRotationalAxes());
 	}
 	else
 	{
@@ -435,8 +435,8 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 
 	// Don't use the constrain function in the following, because if we have a very small XY movement and a lot of extrusion, we may have to make the
 	// speed lower than the configured minimum movement speed. We must apply the minimum speed first and then limit it if necessary after that.
-	requestedSpeed = min<float>(max<float>(reqSpeed, reprap.GetPlatform().MinMovementSpeed()),
-								VectorBoxIntersection(normalisedDirectionVector, reprap.GetPlatform().MaxFeedrates()));
+	requestedSpeed = min<float>(max<float>(reqSpeed, reprap.GetMove().MinMovementSpeed()),
+								VectorBoxIntersection(normalisedDirectionVector, reprap.GetMove().MaxFeedrates()));
 
 	// On a Cartesian printer, it is OK to limit the X and Y speeds and accelerations independently, and in consequence to allow greater values
 	// for diagonal moves. On other architectures, this is not OK and any movement in the XY plane should be limited on other ways.
@@ -510,7 +510,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	tool = nullptr;
 	filePos = prev->filePos;
 	flags.endCoordinatesValid = prev->flags.endCoordinatesValid;
-	acceleration = deceleration = reprap.GetPlatform().NormalAcceleration(Z_AXIS);
+	acceleration = deceleration = reprap.GetMove().NormalAcceleration(Z_AXIS);
 
 #if SUPPORT_LASER && SUPPORT_IOBITS
 	if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
@@ -656,7 +656,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			{
 				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, extrusionRequested, segFlags);
 				//TODO will Move do the following?
-				reprap.GetPlatform().EnableDrivers(drive, false);
+				reprap.GetMove().EnableDrivers(drive, false);
 			}
 		}
 		else
@@ -668,7 +668,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, delta, segFlags);
 				afterPrepare.drivesMoving.SetBit(drive);
 				//TODO will Move do the following?
-				reprap.GetPlatform().EnableDrivers(drive, false);
+				reprap.GetMove().EnableDrivers(drive, false);
 			}
 		}
 	}
@@ -881,11 +881,11 @@ float DDA::AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcep
 		if (amount != 0.0 && cdda->flags.xyMoving)
 		{
 			// Limit the babystepping Z speed to the lower of 0.1 times the original XYZ speed and 0.5 times the Z jerk
-			Platform& platform = reprap.GetPlatform();
-			const float maxBabySteppingAmount = cdda->totalDistance * min<float>(0.1, 0.5 * platform.GetInstantDv(Z_AXIS)/cdda->topSpeed);
+			Move& move = reprap.GetMove();
+			const float maxBabySteppingAmount = cdda->totalDistance * min<float>(0.1, 0.5 * move.GetInstantDv(Z_AXIS)/cdda->topSpeed);
 			babySteppingToDo = constrain<float>(amount, -maxBabySteppingAmount, maxBabySteppingAmount);
 			cdda->directionVector[Z_AXIS] += babySteppingToDo/cdda->totalDistance;
-			cdda->totalDistance *= cdda->NormaliseLinearMotion(platform.GetLinearAxes());
+			cdda->totalDistance *= cdda->NormaliseLinearMotion(move.GetLinearAxes());
 			cdda->RecalculateMove(ring);
 			babySteppingDone += babySteppingToDo;
 			amount -= babySteppingToDo;
@@ -999,10 +999,10 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 
 	if (flags.canPauseAfter && endSpeed != 0.0)
 	{
-		const Platform& p = reprap.GetPlatform();
+		const Move& m = reprap.GetMove();
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 		{
-			if (endSpeed * fabsf(directionVector[drive]) > p.GetInstantDv(drive))
+			if (endSpeed * fabsf(directionVector[drive]) > m.GetInstantDv(drive))
 			{
 				flags.canPauseAfter = false;
 				break;
@@ -1028,7 +1028,7 @@ void DDA::MatchSpeeds() noexcept
 		{
 			const float totalFraction = fabsf(directionVector[drive] - next->directionVector[drive]);
 			const float jerk = totalFraction * beforePrepare.targetNextSpeed;
-			const float allowedJerk = reprap.GetPlatform().GetInstantDv(drive);
+			const float allowedJerk = reprap.GetMove().GetInstantDv(drive);
 			if (jerk > allowedJerk)
 			{
 				beforePrepare.targetNextSpeed = allowedJerk/totalFraction;
@@ -1116,10 +1116,10 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		CanMotion::StartMovement();
 #endif
 		// Handle all drivers
-		Platform& platform = reprap.GetPlatform();
+		Move& move = reprap.GetMove();
 		if (flags.isLeadscrewAdjustmentMove)
 		{
-			platform.EnableDrivers(Z_AXIS, false);			// ensure all Z motors are enabled
+			move.EnableDrivers(Z_AXIS, false);			// ensure all Z motors are enabled
 		}
 
 		float extrusionFraction = 0.0;
@@ -1130,14 +1130,13 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		segFlags.checkEndstops = flags.checkEndstops;
 		segFlags.noShaping = flags.isolatedMove || !flags.xyMoving || flags.isLeadscrewAdjustmentMove;
 		segFlags.nonPrintingMove = !flags.isPrintingMove;
-		Move& move = reprap.GetMove();
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 		{
 			if (flags.isLeadscrewAdjustmentMove)
 			{
 				afterPrepare.drivesMoving.SetBit(Z_AXIS);
 				// For a leadscrew adjustment move, the first N elements of the direction vector are the adjustments to the N Z motors
-				const AxisDriversConfig& config = platform.GetAxisDriversConfig(Z_AXIS);
+				const AxisDriversConfig& config = move.GetAxisDriversConfig(Z_AXIS);
 				if (drive < config.numDrivers)
 				{
 					const int32_t delta = lrintf(directionVector[drive] * totalDistance * move.DriveStepsPerMm(Z_AXIS));
@@ -1166,7 +1165,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 #if DDA_DEBUG_STEP_COUNT
 					stepsRequested[drive] += delta;
 #endif
-					platform.EnableDrivers(drive, false);
+					move.EnableDrivers(drive, false);
 					if (flags.continuousRotationShortcut && reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
 					{
 						// This is a continuous rotation axis, so we may have adjusted the move to cross the 180 degrees position
@@ -1181,7 +1180,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						}
 					}
 
-					delta = platform.ApplyBacklashCompensation(drive, delta);
+					delta = move.ApplyBacklashCompensation(drive, delta);
 					if (flags.checkEndstops)
 					{
 						move.SetHomingDda(drive, this);
@@ -1192,7 +1191,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 					afterPrepare.drivesMoving.SetBit(drive);
 
 #if SUPPORT_CAN_EXPANSION
-					const AxisDriversConfig& config = platform.GetAxisDriversConfig(drive);
+					const AxisDriversConfig& config = move.GetAxisDriversConfig(drive);
 					for (size_t i = 0; i < config.numDrivers; ++i)
 					{
 						const DriverId driver = config.driverNumbers[i];
@@ -1217,7 +1216,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 					// Don't check if it is a special move (indicated by flags.checkEndstops) because the 'tool' variable isn't valid for those moves
 					if (move.GetSimulationMode() != SimulationMode::off || flags.checkEndstops || Tool::ExtruderMovementAllowed(tool, directionVector[drive] > 0, extruder))
 					{
-						platform.EnableDrivers(drive, false);
+						move.EnableDrivers(drive, false);
 
 						if (directionVector[drive] > 0.0)
 						{
@@ -1229,7 +1228,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						// If we are given a stupidly short move to execute then clocksNeeded can be zero, which leads to NaNs in this code; so we need to guard against that.
 						if (flags.isPrintingMove && clocksNeeded != 0)
 						{
-							const NonlinearExtrusion& nl = platform.GetExtrusionCoefficients(extruder);
+							const NonlinearExtrusion& nl = move.GetExtrusionCoefficients(extruder);
 							float& dv = directionVector[drive];
 							const float averageExtrusionSpeed = (totalDistance * dv * StepClockRate)/clocksNeeded;		// need speed in mm/sec for nonlinear extrusion calculation
 							const float factor = 1.0 + min<float>((nl.A + (nl.B * averageExtrusionSpeed)) * averageExtrusionSpeed, nl.limit);
@@ -1246,7 +1245,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						}
 
 #if SUPPORT_CAN_EXPANSION
-						const DriverId driver = platform.GetExtruderDriver(extruder);
+						const DriverId driver = move.GetExtruderDriver(extruder);
 						if (driver.IsRemote())
 						{
 							// The MovementLinearShaped message requires the extrusion amount in steps to be passed as a float. The remote board adds the PA and handles fractional steps.
@@ -1268,7 +1267,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		{
 			const size_t drive = additionalAxisMotorsToEnable.LowestSetBit();
 			additionalAxisMotorsToEnable.ClearBit(drive);
-			platform.EnableDrivers(drive, false);
+			move.EnableDrivers(drive, false);
 		}
 
 		afterPrepare.averageExtrusionSpeed = (extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded;
@@ -1279,9 +1278,9 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			// Before we send movement commands to remote drives, if any endstop switches we are monitoring are already set, make sure we don't start the motors concerned.
 			// This is especially important when using CAN-connected motors or endstops, because we rely on receiving "endstop changed" messages.
 			// Moves that check endstops are always run as isolated moves, so there can be no move in progress and the endstops must already be primed.
-			platform.EnableAllSteppingDrivers();
+			move.EnableAllSteppingDrivers();
 			const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);				// shut out the step interrupt
-			(void)move.CheckEndstops(platform, false);									// this may modify pending CAN moves
+			(void)move.CheckEndstops(false);									// this may modify pending CAN moves
 			RestoreBasePriority(oldPrio);
 		}
 

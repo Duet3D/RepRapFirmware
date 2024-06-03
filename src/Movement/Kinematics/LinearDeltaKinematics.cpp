@@ -11,7 +11,6 @@
 
 #include <Movement/Move.h>
 #include <Platform/RepRap.h>
-#include <Platform/Platform.h>
 #include <Storage/FileStore.h>
 #include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
@@ -400,9 +399,9 @@ LimitPositionResult LinearDeltaKinematics::LimitPosition(float finalCoords[], co
 			}
 		}
 
-		if (applyM208Limits && finalCoords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
+		if (applyM208Limits && finalCoords[Z_AXIS] < reprap.GetMove().AxisMinimum(Z_AXIS))
 		{
-			finalCoords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
+			finalCoords[Z_AXIS] = reprap.GetMove().AxisMinimum(Z_AXIS);
 			limited = true;
 		}
 	}
@@ -859,11 +858,11 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			{
 				printRadius = gb.GetPositiveFValue();
 				// Set the axis limits so that DWC reports them correctly (they are not otherwise used for deltas, except Z min)
-				Platform& p = reprap.GetPlatform();
-				p.SetAxisMinimum(X_AXIS, -printRadius, false);
-				p.SetAxisMinimum(Y_AXIS, -printRadius, false);
-				p.SetAxisMaximum(X_AXIS, printRadius, false);
-				p.SetAxisMaximum(Y_AXIS, printRadius, false);
+				Move& m = reprap.GetMove();
+				m.SetAxisMinimum(X_AXIS, -printRadius, false);
+				m.SetAxisMinimum(Y_AXIS, -printRadius, false);
+				m.SetAxisMaximum(X_AXIS, printRadius, false);
+				m.SetAxisMaximum(Y_AXIS, printRadius, false);
 				seen = true;
 			}
 			gb.TryGetFValue('X', angleCorrections[DELTA_A_AXIS], seen);
@@ -874,7 +873,7 @@ bool LinearDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			{
 				homedHeight = gb.GetFValue();
 				// Set the Z axis maximum so that DWC reports it correctly (it is not otherwise used for deltas)
-				reprap.GetPlatform().SetAxisMaximum(Z_AXIS, homedHeight, false);
+				reprap.GetMove().SetAxisMaximum(Z_AXIS, homedHeight, false);
 				seen = true;
 			}
 
@@ -1029,7 +1028,7 @@ void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 	else
 	{
 		// Assume that any additional axes are linear
-		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
+		const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
 		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 	}
 }

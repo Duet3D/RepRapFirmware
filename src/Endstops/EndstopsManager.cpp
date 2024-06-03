@@ -203,7 +203,7 @@ bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming, bool& 
 		const unsigned int axis = axes.LowestSetBit();
 		axes.ClearBit(axis);
 		Endstop * const es = axisEndstops[axis];
-		if (es != nullptr && es->Prime(kin, reprap.GetPlatform().GetAxisDriversConfig(axis)))
+		if (es != nullptr && es->Prime(kin, reprap.GetMove().GetAxisDriversConfig(axis)))
 		{
 			AddToActive(*es);
 			if (es->ShouldReduceAcceleration())
@@ -248,7 +248,7 @@ bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept
 		{
 			const unsigned int extruder = extruders.LowestSetBit();
 			extruders.ClearBit(extruder);
-			const DriverId driver = reprap.GetPlatform().GetExtruderDriver(extruder);
+			const DriverId driver = reprap.GetMove().GetExtruderDriver(extruder);
 # if SUPPORT_CAN_EXPANSION
 			if (driver.IsLocal())
 			{

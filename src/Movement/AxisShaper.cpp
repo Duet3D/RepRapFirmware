@@ -11,6 +11,7 @@
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Platform/RepRap.h>
 #include "StepTimer.h"
+#include "Move.h"
 #include "DDA.h"
 #include "MoveSegment.h"
 #include "MoveDebugFlags.h"
@@ -257,7 +258,7 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		reprap.MoveUpdated();
 
 #if SUPPORT_CAN_EXPANSION
-		return reprap.GetPlatform().UpdateRemoteInputShaping(numImpulses, coefficients, delays, reply);
+		return reprap.GetMove().UpdateRemoteInputShaping(numImpulses, coefficients, delays, reply);
 #else
 		// Fall through to return GCodeResult::ok
 #endif

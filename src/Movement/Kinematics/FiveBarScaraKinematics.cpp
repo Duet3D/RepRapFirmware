@@ -12,7 +12,6 @@
 #if SUPPORT_FIVEBARSCARA
 
 #include <Platform/RepRap.h>
-#include <Platform/Platform.h>
 #include <Storage/MassStorage.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/DDA.h>
@@ -907,14 +906,14 @@ void FiveBarScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, 
 
 	case Z_AXIS:	// Z axis homing switch
 		{
-			const float hitPoint = ((highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis));
+			const float hitPoint = ((highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis));
 			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		}
 		break;
 
 	default:		// Additional axis
 		{
-			const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
+			const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
 			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		}
 		break;

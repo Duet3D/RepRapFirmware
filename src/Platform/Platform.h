@@ -58,9 +58,6 @@ Licence: GPL
 # include <RemoteInputHandle.h>
 #endif
 
-constexpr bool FORWARDS = true;
-constexpr bool BACKWARDS = !FORWARDS;
-
 // Define the number of ADC filters and the indices of the extra ones
 // Note, the thermistor code assumes that the first N filters are used by the TEMP0 to TEMP(N-1) thermistor inputs, where N = NumThermistorInputs
 #if HAS_VREF_MONITOR
@@ -136,17 +133,6 @@ enum class BoardType : uint8_t
 #endif
 };
 
-// Type of an axis. The values must correspond to values of the R parameter in the M584 command.
-enum class AxisWrapType : uint8_t
-{
-	noWrap = 0,						// axis does not wrap
-	wrapAt360,						// axis wraps, actual position are modulo 360deg
-#if 0	// shortcut axes not implemented yet
-	wrapWithShortcut,				// axis wraps, G0 moves are allowed to take the shortest direction
-#endif
-	undefined						// this one must be last
-};
-
 /***************************************************************************************************/
 
 // Enumeration to describe various tests we do in response to the M122 command
@@ -199,33 +185,10 @@ enum class ErrorCode : uint32_t
 	HsmciTimeout = 1u << 4
 };
 
-struct AxisDriversConfig
-{
-	AxisDriversConfig() noexcept { numDrivers = 0; }
-	DriversBitmap GetDriversBitmap() const noexcept;
-
-	uint8_t numDrivers;								// Number of drivers assigned to each axis
-	DriverId driverNumbers[MaxDriversPerAxis];		// The driver numbers assigned - only the first numDrivers are meaningful
-};
-
-#if SUPPORT_NONLINEAR_EXTRUSION
-
-struct NonlinearExtrusion
-{
-	float A;
-	float B;
-	float limit;
-};
-
-#endif
-
 // The main class that defines the RepRap machine for the benefit of the other classes
 class Platform INHERIT_OBJECT_MODEL
 {
 public:
-	// Enumeration to describe the status of a drive
-	enum class DriverStatus : uint8_t { disabled, idle, enabled };
-
 	Platform() noexcept;
 	Platform(const Platform&) = delete;
 
@@ -352,106 +315,6 @@ public:
 
 	// Movement
 	void EmergencyStop() noexcept;
-	size_t GetNumActualDirectDrivers() const noexcept;
-	void SetDriverDirection(size_t axisOrExtruder, bool direction) noexcept;
-	void SetDirectionValue(size_t driver, bool dVal) noexcept;
-	bool GetDirectionValue(size_t driver) const noexcept;
-	void SetDriverAbsoluteDirection(size_t driver, bool dVal) noexcept;
-	void SetEnableValue(size_t driver, int8_t eVal) noexcept;
-	int8_t GetEnableValue(size_t driver) const noexcept;
-	void EnableDrivers(size_t axisOrExtruder, bool unconditional) noexcept;
-	void EnableOneLocalDriver(size_t driver, float requiredCurrent) noexcept;
-	void DisableAllDrivers() noexcept;
-	void DisableDrivers(size_t axisOrExtruder) noexcept;
-	void DisableOneLocalDriver(size_t driver) noexcept;
-	void EmergencyDisableDrivers() noexcept;
-	void SetDriversIdle() noexcept;
-	GCodeResult ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
-		pre(driver < GetNumActualDirectDrivers());
-	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
-	int GetMotorCurrent(size_t axisOrExtruder, int code) const noexcept;
-	void SetIdleCurrentFactor(float f) noexcept;
-	float GetIdleCurrentFactor() const noexcept { return idleCurrentFactor; }
-	bool SetDriverMicrostepping(size_t driver, unsigned int microsteps, bool interpolate) noexcept;
-	bool SetDriversMicrostepping(size_t axisOrExtruder, int microsteps, bool interpolate, const StringRef& reply) noexcept;
-	void SetDriverStepTiming(size_t driver, const float microseconds[4]) noexcept;
-	bool GetDriverStepTiming(size_t driver, float microseconds[4]) const noexcept;
-
-#ifdef DUET3_MB6XD
-	void GetActualDriverTimings(float timings[4]) noexcept;
-#endif
-
-	float NormalAcceleration(size_t axisOrExtruder) const noexcept;
-	float Acceleration(size_t axisOrExtruder, bool reduced) const noexcept;
-	void SetAcceleration(size_t axisOrExtruder, float value, bool reduced) noexcept;
-	float MaxFeedrate(size_t axisOrExtruder) const noexcept;
-	const float *_ecv_array MaxFeedrates() const noexcept { return maxFeedrates; }
-	void SetMaxFeedrate(size_t axisOrExtruder, float value) noexcept;
-	float MinMovementSpeed() const noexcept { return minimumMovementSpeed; }
-	void SetMinMovementSpeed(float value) noexcept;
-	float GetInstantDv(size_t axis) const noexcept;
-	void SetInstantDv(size_t axis, float value) noexcept;
-	float AxisMaximum(size_t axis) const noexcept;
-	void SetAxisMaximum(size_t axis, float value, bool byProbing) noexcept;
-	float AxisMinimum(size_t axis) const noexcept;
-	void SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept;
-	float AxisTotalLength(size_t axis) const noexcept;
-
-	GCodeResult ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M425
-	void UpdateBacklashSteps() noexcept;
-	int32_t ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept;
-	uint32_t GetBacklashCorrectionDistanceFactor() const noexcept { return backlashCorrectionDistanceFactor; }
-
-	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
-	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }
-	inline bool IsAxisLinear(size_t axis) const noexcept { return linearAxes.IsBitSet(axis); }
-	inline bool IsAxisRotational(size_t axis) const noexcept { return rotationalAxes.IsBitSet(axis); }
-	inline bool IsAxisContinuous(size_t axis) const noexcept { return continuousAxes.IsBitSet(axis); }
-#if 0	// shortcut axes not implemented yet
-	inline bool IsAxisShortcutAllowed(size_t axis) const noexcept { return shortcutAxes.IsBitSet(axis); }
-#endif
-
-	void SetAxisType(size_t axis, AxisWrapType wrapType, bool isNistRotational) noexcept;
-
-	const AxisDriversConfig& GetAxisDriversConfig(size_t axis) const noexcept
-		pre(axis < MaxAxes)
-		{ return axisDrivers[axis]; }
-	void SetAxisDriversConfig(size_t axis, size_t numValues, const DriverId driverNumbers[]) noexcept
-		pre(axis < MaxAxes);
-	DriverId GetExtruderDriver(size_t extruder) const noexcept
-		pre(extruder < MaxExtruders)
-		{ return extruderDrivers[extruder]; }
-	void SetExtruderDriver(size_t extruder, DriverId driver) noexcept
-		pre(extruder < MaxExtruders);
-	uint32_t GetDriversBitmap(size_t axisOrExtruder) const noexcept	// get the bitmap of driver step bits for this axis or extruder
-		pre(axisOrExtruder < MaxAxesPlusExtruders + NumDirectDrivers)
-		{ return driveDriverBits[axisOrExtruder]; }
-
-#ifdef DUET3_MB6XD		// the first element has a special meaning when we use a TC to generate the steps
-	uint32_t GetSlowDriverStepPeriodClocks() { return stepPulseMinimumPeriodClocks; }
-	uint32_t GetSlowDriverDirHoldClocksFromLeadingEdge() { return directionHoldClocksFromLeadingEdge; }
-	uint32_t GetSlowDriverDirSetupClocks() const noexcept { return directionSetupClocks; }
-#else
-	uint32_t GetSlowDriversBitmap() const noexcept { return slowDriversBitmap; }
-	uint32_t GetSlowDriverStepHighClocks() const noexcept { return slowDriverStepTimingClocks[0]; }
-	uint32_t GetSlowDriverStepLowClocks() const noexcept { return slowDriverStepTimingClocks[1]; }
-	uint32_t GetSlowDriverDirHoldClocksFromTrailingEdge() const noexcept { return slowDriverStepTimingClocks[3]; }
-	uint32_t GetSlowDriverDirSetupClocks() const noexcept { return slowDriverStepTimingClocks[2]; }
-#endif
-
-	uint32_t GetSteppingEnabledDrivers() const noexcept { return steppingEnabledDriversBitmap; }
-	void DisableSteppingDriver(uint8_t driver) noexcept { steppingEnabledDriversBitmap &= ~StepPins::CalcDriverBitmap(driver); }
-	void EnableAllSteppingDrivers() noexcept { steppingEnabledDriversBitmap = 0xFFFFFFFFu; }
-
-#ifdef DUET3_MB6XD
-	bool HasDriverError(size_t driver) const noexcept;
-#endif
-
-#if SUPPORT_NONLINEAR_EXTRUSION
-	const NonlinearExtrusion& GetExtrusionCoefficients(size_t extruder) const noexcept pre(extruder < MaxExtruders) { return nonlinearExtrusion[extruder]; }
-	void SetNonlinearExtrusion(size_t extruder, float a, float b, float limit) noexcept;
-#endif
-
 #if SUPPORT_LED_STRIPS
 	LedStripManager& GetLedStripManager() noexcept { return ledStripManager; }
 #endif
@@ -512,21 +375,16 @@ public:
 	float GetCurrentV12Voltage() const noexcept;
 #endif
 
-#if HAS_SMART_DRIVERS
-	float GetTmcDriversTemperature(unsigned int boardNumber) const noexcept;
-	unsigned int GetNumSmartDrivers() const noexcept { return numSmartDrivers; }
-#endif
-
 #if HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR
 	void ResetVoltageMonitors() noexcept;
-	bool HasVinPower() const noexcept;
+	bool HasDriverPower() const noexcept;
+	float GetVinVoltage() const noexcept;
+# if HAS_SMART_DRIVERS
+	void WarnDriverNotPowered() noexcept { warnDriversNotPowered = true; }
+# endif
 #else
 	void ResetVoltageMonitors() noexcept { }
-	bool HasVinPower() const noexcept { return true; }
-#endif
-
-#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
-	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
+	bool HasDriverPower() const noexcept { return true; }
 #endif
 
 	// Logging support
@@ -567,25 +425,11 @@ public:
 
 #if SUPPORT_CAN_EXPANSION
 	void HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
-	GCodeResult UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtruders, const StringRef& reply) noexcept;
-	GCodeResult UpdateRemoteInputShaping(unsigned int numImpulses, const float coefficients[], const uint32_t delays[], const StringRef& reply) const noexcept;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult EutHandleM950Gpio(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
 	GCodeResult EutHandleGpioWrite(const CanMessageWriteGpio& msg, const StringRef& reply) noexcept;
-	GCodeResult EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
-	GCodeResult EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrivesRequest<StepsPerUnitAndMicrostepping>& msg, size_t dataLength, const StringRef& reply) noexcept;
-	GCodeResult EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, const StringRef& reply) noexcept;
-	GCodeResult EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
-	GCodeResult EutProcessM569Point2(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
-	GCodeResult EutProcessM569Point7(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
-	GCodeResult EutProcessM915(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
-	void SendDriversStatus(CanMessageBuffer& buf) noexcept;
-#endif
-
-#if VARIABLE_NUM_DRIVERS
-	void AdjustNumDrivers(size_t numDriversNotAvailable) noexcept;
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -606,6 +450,7 @@ public:
 #endif
 
 #if defined(DUET3MINI) && SUPPORT_TMC2240 != 0
+	bool HasTmc2240Expansion() const noexcept { return hasTmc2240Expansion; }
 	const char *_ecv_array null GetExpansionBoardName() const noexcept { return (hasTmc2240Expansion) ? "Duet3 Mini 2+ (TMC2240)" : nullptr; }
 #endif
 
@@ -623,20 +468,6 @@ private:
 
 	float GetCpuTemperature() const noexcept;
 
-#if SUPPORT_CAN_EXPANSION
-	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc, function_ref_noexcept<void(DriverId) noexcept> remoteFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId) noexcept {}); }
-	void IterateRemoteDrivers(size_t axisOrExtruder, function_ref_noexcept<void(DriverId) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, [](uint8_t) noexcept {}, func); }
-#else
-	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc) noexcept;
-	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func); }
-#endif
-
-	void InternalDisableDriver(size_t driver) noexcept;
-	void EngageBrake(size_t driver) noexcept;
-	void DisengageBrake(size_t driver) noexcept;
-	StandardDriverStatus GetLocalDriverStatus(size_t driver) const noexcept;
-
 #if HAS_SMART_DRIVERS
 	void ReportDrivers(MessageType mt, DriversBitmap& whichDrivers, const char *_ecv_array text, bool& reported) noexcept;
 #endif
@@ -644,8 +475,6 @@ private:
 #if defined(DUET3_MB6HC)
 	float AdcReadingToPowerVoltage(uint16_t adcVal) const noexcept;
 	uint16_t PowerVoltageToAdcReading(float voltage) const noexcept;
-#elif defined(DUET3_MB6XD)
-	void UpdateDriverTimings() noexcept;
 #endif
 
 #if HAS_MASS_STORAGE
@@ -680,104 +509,15 @@ private:
 
 	void InitialiseInterrupts() noexcept;
 
-	// Drives
-	void UpdateMotorCurrent(size_t driver, float current) noexcept;
-	void SetDriverDirection(uint8_t driver, bool direction) noexcept
-	pre(driver < NumDirectDrivers);
-
-#if VARIABLE_NUM_DRIVERS && SUPPORT_DIRECT_LCD
-	size_t numActualDirectDrivers;
-#endif
-
-	bool directions[NumDirectDrivers];
-	int8_t enableValues[NumDirectDrivers];
-
-#ifdef DUET3_MB6XD
-	bool driverErrPinsActiveLow;
-#endif
-
-	// Stepper motor brake control
-#if SUPPORT_BRAKE_PWM
-	PwmPort brakePorts[NumDirectDrivers];					// the brake ports for each driver
-	float brakeVoltages[NumDirectDrivers];
-	static constexpr float FullyOnBrakeVoltage = 100.0;		// this value means always use full voltage (don't PWM)
-	float currentBrakePwm[NumDirectDrivers];
-#else
-	IoPort brakePorts[NumDirectDrivers];					// the brake ports for each driver
-#endif
-	MillisTimer brakeOffTimers[NumDirectDrivers];
-	MillisTimer motorOffTimers[NumDirectDrivers];
-	uint16_t brakeOffDelays[NumDirectDrivers];				// how many milliseconds we wait between energising the driver and energising the brake
-	uint16_t motorOffDelays[NumDirectDrivers];				// how many milliseconds we wait between de-energising the brake (to turn it on) and de-energising the driver
-
-	float motorCurrents[MaxAxesPlusExtruders];				// the normal motor current for each stepper driver
-	float motorCurrentFraction[MaxAxesPlusExtruders];		// the percentages of normal motor current that each driver is set to
-	float standstillCurrentPercent[MaxAxesPlusExtruders];	// the percentages of normal motor current that each driver uses when in standstill
-
-	volatile DriverStatus driverState[MaxAxesPlusExtruders];
-	float maxFeedrates[MaxAxesPlusExtruders];				// max feed rates in mm per step clock
-	float normalAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for normal moves
-	float reducedAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for probing and stall detection moves
-	float instantDvs[MaxAxesPlusExtruders];					// max jerk in mm per step clock
-	uint32_t driveDriverBits[MaxAxesPlusExtruders + NumDirectDrivers];
-															// the bitmap of local driver port bits for each axis or extruder, followed by the bitmaps for the individual Z motors
-	AxisDriversConfig axisDrivers[MaxAxes];					// the driver numbers assigned to each axis
-	AxesBitmap linearAxes;									// axes that behave like linear axes w.r.t. feedrate handling
-	AxesBitmap rotationalAxes;								// axes that behave like rotational axes w.r.t. feedrate handling
-	AxesBitmap continuousAxes;								// axes that wrap modulo 360
-#if 0	// shortcut axes not implemented yet
-	AxesBitmap shortcutAxes;								// axes that wrap modulo 360 and for which G0 may choose the shortest direction
-#endif
-
-	// Backlash compensation user configuration
-	float backlashMm[MaxAxes];								// amount of backlash in mm for each axis motor
-	uint32_t backlashCorrectionDistanceFactor;				// what multiple of the backlash we apply the correction over
-
-	// Backlash compensation system variables
-	uint32_t backlashSteps[MaxAxes];						// the backlash converted to microsteps
-	int32_t backlashStepsDue[MaxAxes];						// how many backlash compensation microsteps are due for each axis
-	AxesBitmap lastDirections;								// each bit is set if the corresponding axes motor last moved backwards
-
-#if SUPPORT_NONLINEAR_EXTRUSION
-	NonlinearExtrusion nonlinearExtrusion[MaxExtruders];	// nonlinear extrusion coefficients
-#endif
-
-	DriverId extruderDrivers[MaxExtruders];					// the driver number assigned to each extruder
-#ifdef DUET3_MB6XD
-	float driverTimingMicroseconds[NumDirectDrivers][4];	// step high time, step low time, direction setup time to step high, direction hold time from step low (1 set per driver)
-	uint32_t stepPulseMinimumPeriodClocks;					// minimum period between leading edges of step pulses, in step clocks
-	uint32_t directionSetupClocks;							// minimum direction change to step high time, in step clocks
-	uint32_t directionHoldClocksFromLeadingEdge;			// minimum step high to direction low step clocks, calculated from the step low to direction change hold time
-	const Pin *ENABLE_PINS;									// 6XD version 0.1 uses different enable pins from version 1.0 and later
-#else
-	uint32_t slowDriversBitmap;								// bitmap of driver port bits that need extended step pulse timing
-	uint32_t slowDriverStepTimingClocks[4];					// minimum step high, step low, dir setup and dir hold timing for slow drivers
-#endif
-	uint32_t steppingEnabledDriversBitmap;					// mask of driver bits that we haven't disabled temporarily
-	float idleCurrentFactor;
-	float minimumMovementSpeed;								// minimum allowed movement speed in mm per step clock
-
-#if HAS_SMART_DRIVERS
-	size_t numSmartDrivers;											// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
-	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers;
-	MillisTimer openLoadTimers[MaxSmartDrivers];
-#endif
-
-	StandardDriverStatus lastEventStatus[NumDirectDrivers];
 	uint8_t nextDriveToPoll;
-
 	bool driversPowered;
-
-#if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
-	bool warnDriversNotPowered;
-#endif
 
 #if defined(DUET3MINI) && SUPPORT_TMC2240 != 0
 	bool hasTmc2240Expansion;
 #endif
 
-#if HAS_STALL_DETECT
-	DriversBitmap logOnStallDrivers, eventOnStallDrivers;
+#if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
+	bool warnDriversNotPowered;
 #endif
 
 	// Endstops
@@ -802,15 +542,6 @@ private:
 	int32_t tempCalF1, tempCalF2, tempCalF3, tempCalF4;				// temperature calibration factors
 	void TemperatureCalibrationInit() noexcept;
 # endif
-#endif
-
-	// Axes and endstops
-	float axisMaxima[MaxAxes];
-	float axisMinima[MaxAxes];
-	AxesBitmap axisMinimaProbed, axisMaximaProbed;
-
-#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam) noexcept;
 #endif
 
 	// Fans
@@ -937,119 +668,6 @@ inline const char *_ecv_array Platform::GetMacroDir() noexcept
 //*****************************************************************************************************************
 
 // Drive the RepRap machine - Movement
-
-inline float Platform::NormalAcceleration(size_t drive) const noexcept
-{
-	return normalAccelerations[drive];
-}
-
-inline float Platform::Acceleration(size_t drive, bool useReduced) const noexcept
-{
-	return (useReduced) ? min<float>(reducedAccelerations[drive], normalAccelerations[drive]) : normalAccelerations[drive];
-}
-
-inline void Platform::SetAcceleration(size_t drive, float value, bool reduced) noexcept
-{
-	((reduced) ? reducedAccelerations : normalAccelerations)[drive] = max<float>(value, ConvertAcceleration(MinimumAcceleration));	// don't allow zero or negative
-}
-
-inline float Platform::MaxFeedrate(size_t drive) const noexcept
-{
-	return maxFeedrates[drive];
-}
-
-inline void Platform::SetMaxFeedrate(size_t drive, float value) noexcept
-{
-	maxFeedrates[drive] = max<float>(value, minimumMovementSpeed);						// don't allow zero or negative, but do allow small values
-}
-
-inline void Platform::SetInstantDv(size_t drive, float value) noexcept
-{
-	instantDvs[drive] = max<float>(value, ConvertSpeedFromMmPerSec(MinimumJerk));		// don't allow zero or negative values, they causes Move to loop indefinitely
-}
-
-inline void Platform::SetMinMovementSpeed(float value) noexcept
-{
-	minimumMovementSpeed = max<float>(value, ConvertSpeedFromMmPerSec(AbsoluteMinFeedrate));
-}
-
-inline float Platform::GetInstantDv(size_t drive) const noexcept
-{
-	return instantDvs[drive];
-}
-
-inline size_t Platform::GetNumActualDirectDrivers() const noexcept
-{
-#if VARIABLE_NUM_DRIVERS
-	return numActualDirectDrivers;
-#else
-	return NumDirectDrivers;
-#endif
-}
-
-#if VARIABLE_NUM_DRIVERS
-
-inline void Platform::AdjustNumDrivers(size_t numDriversNotAvailable) noexcept
-{
-	numActualDirectDrivers = NumDirectDrivers - numDriversNotAvailable;
-}
-
-#endif
-
-inline void Platform::SetDirectionValue(size_t drive, bool dVal) noexcept
-{
-	directions[drive] = dVal;
-}
-
-inline bool Platform::GetDirectionValue(size_t drive) const noexcept
-{
-	return directions[drive];
-}
-
-inline void Platform::SetDriverDirection(uint8_t driver, bool direction) noexcept
-{
-	if (driver < GetNumActualDirectDrivers())
-	{
-		const bool d = (direction == FORWARDS) ? directions[driver] : !directions[driver];
-#if SAME5x
-		IoPort::WriteDigital(DIRECTION_PINS[driver], d);
-#else
-		digitalWrite(DIRECTION_PINS[driver], d);
-#endif
-	}
-}
-
-inline void Platform::SetDriverAbsoluteDirection(size_t driver, bool direction) noexcept
-{
-	if (driver < GetNumActualDirectDrivers())
-	{
-#if SAME5x
-		IoPort::WriteDigital(DIRECTION_PINS[driver], direction);
-#else
-		digitalWrite(DIRECTION_PINS[driver], direction);
-#endif
-	}
-}
-
-inline int8_t Platform::GetEnableValue(size_t driver) const noexcept
-{
-	return enableValues[driver];
-}
-
-inline float Platform::AxisMaximum(size_t axis) const noexcept
-{
-	return axisMaxima[axis];
-}
-
-inline float Platform::AxisMinimum(size_t axis) const noexcept
-{
-	return axisMinima[axis];
-}
-
-inline float Platform::AxisTotalLength(size_t axis) const noexcept
-{
-	return axisMaxima[axis] - axisMinima[axis];
-}
 
 // For the Duet we use the fan output for this
 // DC 2015-03-21: To allow users to control the cooling fan via gcodes generated by slic3r etc.,

@@ -10,7 +10,6 @@
 #if SUPPORT_POLAR
 
 #include <Platform/RepRap.h>
-#include <Platform/Platform.h>
 #include <Storage/MassStorage.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/DDA.h>
@@ -282,7 +281,7 @@ void PolarKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 		break;
 
 	default:
-		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
+		const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
 		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		break;
 	}

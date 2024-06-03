@@ -9,7 +9,7 @@
 
 #if HAS_STALL_DETECT
 
-#include <Platform/Platform.h>
+#include <Movement/Move.h>
 #include <Movement/Kinematics/Kinematics.h>
 
 // Stall detection endstop

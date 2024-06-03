@@ -22,10 +22,19 @@
 #include "StepTimer.h"
 #include <GCodes/RestorePoint.h>
 #include <Math/Deviation.h>
+#include <Hardware/IoPorts.h>
 
 #if SUPPORT_ASYNC_MOVES
 # include "HeightControl/HeightController.h"
 #endif
+
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageFormats.h>
+class CanMessageBuffer;
+#endif
+
+constexpr bool DirectionForwards = true;
+constexpr bool DirectionBackwards = !DirectionForwards;
 
 // Define the number of DDAs and DMs.
 // A DDA represents a move in the queue.
@@ -54,15 +63,170 @@ const unsigned int NumDms = 20 * 5;												// suitable for e.g. a delta + 2-
 template<class T> class CanMessageMultipleDrivesRequest;
 class CanMessageRevertPosition;
 
+struct AxisDriversConfig
+{
+	AxisDriversConfig() noexcept { numDrivers = 0; }
+	DriversBitmap GetDriversBitmap() const noexcept;
+
+	uint8_t numDrivers;								// Number of drivers assigned to each axis
+	DriverId driverNumbers[MaxDriversPerAxis];		// The driver numbers assigned - only the first numDrivers are meaningful
+};
+
+// Type of an axis. The values must correspond to values of the R parameter in the M584 command.
+enum class AxisWrapType : uint8_t
+{
+	noWrap = 0,						// axis does not wrap
+	wrapAt360,						// axis wraps, actual position are modulo 360deg
+#if 0	// shortcut axes not implemented yet
+	wrapWithShortcut,				// axis wraps, G0 moves are allowed to take the shortest direction
+#endif
+	undefined						// this one must be last
+};
+
+#if SUPPORT_NONLINEAR_EXTRUSION
+
+struct NonlinearExtrusion
+{
+	float A;
+	float B;
+	float limit;
+};
+
+#endif
+
 // This is the master movement class.  It controls all movement in the machine.
 class Move INHERIT_OBJECT_MODEL
 {
 public:
+	// Enumeration to describe the status of a drive
+	enum class DriverStatus : uint8_t { disabled, idle, enabled };
+
 	Move() noexcept;
 	void Init() noexcept;													// Start me up
 	void Exit() noexcept;													// Shut down
 
 	[[noreturn]] void MoveLoop() noexcept;									// Main loop called by the Move task
+
+	// Drivers configuration
+	size_t GetNumActualDirectDrivers() const noexcept;
+	void SetDriverDirection(size_t axisOrExtruder, bool direction) noexcept;
+	void SetDirectionValue(size_t driver, bool dVal) noexcept;
+	bool GetDirectionValue(size_t driver) const noexcept;
+	void SetDriverAbsoluteDirection(size_t driver, bool dVal) noexcept;
+	void SetEnableValue(size_t driver, int8_t eVal) noexcept;
+	int8_t GetEnableValue(size_t driver) const noexcept;
+	void EnableDrivers(size_t axisOrExtruder, bool unconditional) noexcept;
+	void EnableOneLocalDriver(size_t driver, float requiredCurrent) noexcept;
+	void DisableAllDrivers() noexcept;
+	void DisableDrivers(size_t axisOrExtruder) noexcept;
+	void DisableOneLocalDriver(size_t driver) noexcept;
+	void EmergencyDisableDrivers() noexcept;
+	void SetDriversIdle() noexcept;
+	GCodeResult ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
+		pre(driver < GetNumActualDirectDrivers());
+	GCodeResult SetMotorCurrent(size_t axisOrExtruder, float current, int code, const StringRef& reply) noexcept;
+	int GetMotorCurrent(size_t axisOrExtruder, int code) const noexcept;
+	void SetIdleCurrentFactor(float f) noexcept;
+	float GetIdleCurrentFactor() const noexcept { return idleCurrentFactor; }
+	bool SetDriverMicrostepping(size_t driver, unsigned int microsteps, bool interpolate) noexcept;
+	bool SetDriversMicrostepping(size_t axisOrExtruder, int microsteps, bool interpolate, const StringRef& reply) noexcept;
+	void SetDriverStepTiming(size_t driver, const float microseconds[4]) noexcept;
+	bool GetDriverStepTiming(size_t driver, float microseconds[4]) const noexcept;
+
+#if HAS_SMART_DRIVERS
+	void SetNumSmartDrivers(size_t p_numSmartDrivers) noexcept { numSmartDrivers = p_numSmartDrivers; }
+	unsigned int GetNumSmartDrivers() const noexcept { return numSmartDrivers; }
+	static void SpinSmartDrivers(bool driversPowered) noexcept;
+	static StandardDriverStatus GetSmartDriverStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
+	float GetTmcDriversTemperature(unsigned int boardNumber) const noexcept;
+	void DriversJustPoweredUp() noexcept;
+	void TurnSmartDriversOff() noexcept;
+#endif
+
+#ifdef DUET3_MB6XD
+	void GetActualDriverTimings(float timings[4]) noexcept;
+#endif
+
+	float NormalAcceleration(size_t axisOrExtruder) const noexcept;
+	float Acceleration(size_t axisOrExtruder, bool reduced) const noexcept;
+	void SetAcceleration(size_t axisOrExtruder, float value, bool reduced) noexcept;
+	float MaxFeedrate(size_t axisOrExtruder) const noexcept;
+	const float *_ecv_array MaxFeedrates() const noexcept { return maxFeedrates; }
+	void SetMaxFeedrate(size_t axisOrExtruder, float value) noexcept;
+	float MinMovementSpeed() const noexcept { return minimumMovementSpeed; }
+	void SetMinMovementSpeed(float value) noexcept;
+	float GetInstantDv(size_t axis) const noexcept;
+	void SetInstantDv(size_t axis, float value) noexcept;
+	float AxisMaximum(size_t axis) const noexcept;
+	void SetAxisMaximum(size_t axis, float value, bool byProbing) noexcept;
+	float AxisMinimum(size_t axis) const noexcept;
+	void SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept;
+	float AxisTotalLength(size_t axis) const noexcept;
+
+	GCodeResult ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M425
+	void UpdateBacklashSteps() noexcept;
+	int32_t ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept;
+	uint32_t GetBacklashCorrectionDistanceFactor() const noexcept { return backlashCorrectionDistanceFactor; }
+
+	inline AxesBitmap GetLinearAxes() const noexcept { return linearAxes; }
+	inline AxesBitmap GetRotationalAxes() const noexcept { return rotationalAxes; }
+	inline bool IsAxisLinear(size_t axis) const noexcept { return linearAxes.IsBitSet(axis); }
+	inline bool IsAxisRotational(size_t axis) const noexcept { return rotationalAxes.IsBitSet(axis); }
+	inline bool IsAxisContinuous(size_t axis) const noexcept { return continuousAxes.IsBitSet(axis); }
+#if 0	// shortcut axes not implemented yet
+	inline bool IsAxisShortcutAllowed(size_t axis) const noexcept { return shortcutAxes.IsBitSet(axis); }
+#endif
+
+#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
+	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
+#endif
+
+	void SetAxisType(size_t axis, AxisWrapType wrapType, bool isNistRotational) noexcept;
+
+	const AxisDriversConfig& GetAxisDriversConfig(size_t axis) const noexcept
+		pre(axis < MaxAxes)
+		{ return axisDrivers[axis]; }
+	void SetAxisDriversConfig(size_t axis, size_t numValues, const DriverId driverNumbers[]) noexcept
+		pre(axis < MaxAxes);
+	DriverId GetExtruderDriver(size_t extruder) const noexcept
+		pre(extruder < MaxExtruders)
+		{ return extruderDrivers[extruder]; }
+	void SetExtruderDriver(size_t extruder, DriverId driver) noexcept
+		pre(extruder < MaxExtruders);
+	uint32_t GetDriversBitmap(size_t axisOrExtruder) const noexcept	// get the bitmap of driver step bits for this axis or extruder
+		pre(axisOrExtruder < MaxAxesPlusExtruders + NumDirectDrivers)
+		{ return driveDriverBits[axisOrExtruder]; }
+
+#ifdef DUET3_MB6XD		// the first element has a special meaning when we use a TC to generate the steps
+	uint32_t GetSlowDriverStepPeriodClocks() { return stepPulseMinimumPeriodClocks; }
+	uint32_t GetSlowDriverDirHoldClocksFromLeadingEdge() { return directionHoldClocksFromLeadingEdge; }
+	uint32_t GetSlowDriverDirSetupClocks() const noexcept { return directionSetupClocks; }
+#else
+	uint32_t GetSlowDriversBitmap() const noexcept { return slowDriversBitmap; }
+	uint32_t GetSlowDriverStepHighClocks() const noexcept { return slowDriverStepTimingClocks[0]; }
+	uint32_t GetSlowDriverStepLowClocks() const noexcept { return slowDriverStepTimingClocks[1]; }
+	uint32_t GetSlowDriverDirHoldClocksFromTrailingEdge() const noexcept { return slowDriverStepTimingClocks[3]; }
+	uint32_t GetSlowDriverDirSetupClocks() const noexcept { return slowDriverStepTimingClocks[2]; }
+#endif
+
+	uint32_t GetSteppingEnabledDrivers() const noexcept { return steppingEnabledDriversBitmap; }
+	void DisableSteppingDriver(uint8_t driver) noexcept { steppingEnabledDriversBitmap &= ~StepPins::CalcDriverBitmap(driver); }
+	void EnableAllSteppingDrivers() noexcept { steppingEnabledDriversBitmap = 0xFFFFFFFFu; }
+
+	void PollOneDriver(size_t driver) noexcept pre(driver < NumDirectDrivers);
+
+#if VARIABLE_NUM_DRIVERS
+	void AdjustNumDrivers(size_t numDriversNotAvailable) noexcept;
+#endif
+
+#ifdef DUET3_MB6XD
+	bool HasDriverError(size_t driver) const noexcept;
+#endif
+
+#if SUPPORT_NONLINEAR_EXTRUSION
+	const NonlinearExtrusion& GetExtrusionCoefficients(size_t extruder) const noexcept pre(extruder < MaxExtruders) { return nonlinearExtrusion[extruder]; }
+	void SetNonlinearExtrusion(size_t extruder, float a, float b, float limit) noexcept;
+#endif
 
 	float DriveStepsPerMm(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return driveStepsPerMm[axisOrExtruder]; }
 	void SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept pre(axisOrExtruder < MaxAxesPlusExtruders);
@@ -75,6 +239,12 @@ public:
 	bool GetMicrostepInterpolation(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return (microstepping[axisOrExtruder] & 0x8000) != 0; }
 	uint16_t GetRawMicrostepping(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return microstepping[axisOrExtruder]; }
 
+#if SUPPORT_CAN_EXPANSION
+	GCodeResult UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtruders, const StringRef& reply) noexcept;
+	GCodeResult UpdateRemoteInputShaping(unsigned int numImpulses, const float coefficients[], const uint32_t delays[], const StringRef& reply) const noexcept;
+#endif
+
+	// Various functions called from GCodes module
 	void GetCurrentMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, bool disableMotorMapping) const noexcept; // Get the current position in untransformed coords
 #if SUPPORT_ASYNC_MOVES
 	void GetPartialMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, AxesBitmap whichAxes) const noexcept
@@ -127,6 +297,15 @@ public:
 	float GetPressureAdvanceClocksForExtruder(size_t extruder) const noexcept;
 
 #if SUPPORT_REMOTE_COMMANDS
+	GCodeResult EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept;
+	GCodeResult EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrivesRequest<StepsPerUnitAndMicrostepping>& msg, size_t dataLength, const StringRef& reply) noexcept;
+	GCodeResult EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, const StringRef& reply) noexcept;
+	GCodeResult EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+	GCodeResult EutProcessM569Point2(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+	GCodeResult EutProcessM569Point7(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+	GCodeResult EutProcessM915(const CanMessageGeneric& msg, const StringRef& reply) noexcept;
+	void SendDriversStatus(CanMessageBuffer& buf) noexcept;
+
 	bool InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept;
 	void StopDriversFromRemote(uint16_t whichDrives) noexcept;
 	void RevertPosition(const CanMessageRevertPosition& msg) noexcept;
@@ -226,6 +405,7 @@ public:
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept;									// Write settings for resuming the print
+	bool WriteMoveParameters(FileStore *f) const noexcept;
 #endif
 
 	uint32_t ExtruderPrintingSince(size_t logicalDrive) const noexcept;						// When we started doing normal moves after the most recent extruder-only move
@@ -251,9 +431,9 @@ public:
 	void Interrupt() noexcept;
 
 #if SUPPORT_CAN_EXPANSION
-	bool CheckEndstops(Platform& platform, bool executingMove) noexcept;
+	bool CheckEndstops(bool executingMove) noexcept;
 #else
-	void CheckEndstops(Platform& platform, bool executingMove) noexcept;
+	void CheckEndstops(bool executingMove) noexcept;
 #endif
 
 	int32_t MotorMovementToSteps(size_t drive, float coord) const noexcept;					// Convert a single motor position to number of steps
@@ -311,7 +491,7 @@ private:
 	float tanYZ() const noexcept { return tangents[1]; }
 	float tanXZ() const noexcept { return tangents[2]; }
 
-	void StepDrivers(Platform& p, uint32_t now) noexcept SPEED_CRITICAL;			// Take one step of the DDA, called by timer interrupt.
+	void StepDrivers(uint32_t now) noexcept SPEED_CRITICAL;							// Take one step of the DDA, called by timer interrupt.
 	void SimulateSteppingDrivers(Platform& p) noexcept;								// For debugging use
 	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;						// Schedule the next interrupt, returning true if we can't because it is already due
 	bool StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept;		// stop movement of a drive and recalculate the endpoint
@@ -320,7 +500,33 @@ private:
 #endif
 	bool StopAllDrivers(bool executingMove) noexcept;								// cancel the current isolated move
 	void InsertDM(DriveMovement *dm) noexcept;										// insert a DM into the active list, keeping it in step time order
-	void SetDirection(Platform& p, size_t axisOrExtruder, bool direction) noexcept;	// set the direction of a driver, observing timing requirements
+	void SetDirection(size_t axisOrExtruder, bool direction) noexcept;				// set the direction of a driver, observing timing requirements
+
+#if SUPPORT_CAN_EXPANSION
+	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc, function_ref_noexcept<void(DriverId) noexcept> remoteFunc) noexcept;
+	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func, [](DriverId) noexcept {}); }
+	void IterateRemoteDrivers(size_t axisOrExtruder, function_ref_noexcept<void(DriverId) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, [](uint8_t) noexcept {}, func); }
+#else
+	void IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc) noexcept;
+	void IterateLocalDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> func) noexcept { IterateDrivers(axisOrExtruder, func); }
+#endif
+
+	void InternalDisableDriver(size_t driver) noexcept;
+	void EngageBrake(size_t driver) noexcept;
+	void DisengageBrake(size_t driver) noexcept;
+
+	void UpdateMotorCurrent(size_t driver, float current) noexcept;
+	void SetDriverDirection(uint8_t driver, bool direction) noexcept pre(driver < NumDirectDrivers);
+
+	StandardDriverStatus GetLocalDriverStatus(size_t driver) const noexcept;
+
+#if defined(DUET3_MB6XD)
+	void UpdateDriverTimings() noexcept;
+#endif
+
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+	static bool WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam) noexcept;
+#endif
 
 	// Move task stack size
 	// 250 is not enough when Move and DDA debug are enabled
@@ -400,6 +606,96 @@ private:
 
 	volatile StepErrorState stepErrorState;
 
+	// Drives
+#if VARIABLE_NUM_DRIVERS && SUPPORT_DIRECT_LCD
+	size_t numActualDirectDrivers;
+#endif
+
+
+#if HAS_SMART_DRIVERS
+	size_t numSmartDrivers;											// the number of TMC drivers we have, the remaining are simple enable/step/dir drivers
+	DriversBitmap temperatureShutdownDrivers, temperatureWarningDrivers, shortToGroundDrivers;
+# if HAS_STALL_DETECT
+	DriversBitmap logOnStallDrivers, eventOnStallDrivers;
+# endif
+	MillisTimer openLoadTimers[MaxSmartDrivers];
+#endif
+
+	StandardDriverStatus lastEventStatus[NumDirectDrivers];
+	bool directions[NumDirectDrivers];
+	int8_t enableValues[NumDirectDrivers];
+
+#ifdef DUET3_MB6XD
+	bool driverErrPinsActiveLow;
+#endif
+
+	// Stepper motor brake control
+#if SUPPORT_BRAKE_PWM
+	PwmPort brakePorts[NumDirectDrivers];					// the brake ports for each driver
+	float brakeVoltages[NumDirectDrivers];
+	static constexpr float FullyOnBrakeVoltage = 100.0;		// this value means always use full voltage (don't PWM)
+	float currentBrakePwm[NumDirectDrivers];
+#else
+	IoPort brakePorts[NumDirectDrivers];					// the brake ports for each driver
+#endif
+	MillisTimer brakeOffTimers[NumDirectDrivers];
+	MillisTimer motorOffTimers[NumDirectDrivers];
+	uint16_t brakeOffDelays[NumDirectDrivers];				// how many milliseconds we wait between energising the driver and energising the brake
+	uint16_t motorOffDelays[NumDirectDrivers];				// how many milliseconds we wait between de-energising the brake (to turn it on) and de-energising the driver
+
+	float motorCurrents[MaxAxesPlusExtruders];				// the normal motor current for each stepper driver
+	float motorCurrentFraction[MaxAxesPlusExtruders];		// the percentages of normal motor current that each driver is set to
+	float standstillCurrentPercent[MaxAxesPlusExtruders];	// the percentages of normal motor current that each driver uses when in standstill
+
+	volatile DriverStatus driverState[MaxAxesPlusExtruders];
+	float maxFeedrates[MaxAxesPlusExtruders];				// max feed rates in mm per step clock
+	float normalAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for normal moves
+	float reducedAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for probing and stall detection moves
+	float instantDvs[MaxAxesPlusExtruders];					// max jerk in mm per step clock
+	uint32_t driveDriverBits[MaxAxesPlusExtruders + NumDirectDrivers];
+															// the bitmap of local driver port bits for each axis or extruder, followed by the bitmaps for the individual Z motors
+	AxisDriversConfig axisDrivers[MaxAxes];					// the driver numbers assigned to each axis
+	AxesBitmap linearAxes;									// axes that behave like linear axes w.r.t. feedrate handling
+	AxesBitmap rotationalAxes;								// axes that behave like rotational axes w.r.t. feedrate handling
+	AxesBitmap continuousAxes;								// axes that wrap modulo 360
+#if 0	// shortcut axes not implemented yet
+	AxesBitmap shortcutAxes;								// axes that wrap modulo 360 and for which G0 may choose the shortest direction
+#endif
+
+	// Axes and endstops
+	float axisMaxima[MaxAxes];
+	float axisMinima[MaxAxes];
+	AxesBitmap axisMinimaProbed, axisMaximaProbed;
+
+	// Backlash compensation user configuration
+	float backlashMm[MaxAxes];								// amount of backlash in mm for each axis motor
+	uint32_t backlashCorrectionDistanceFactor;				// what multiple of the backlash we apply the correction over
+
+	// Backlash compensation system variables
+	uint32_t backlashSteps[MaxAxes];						// the backlash converted to microsteps
+	int32_t backlashStepsDue[MaxAxes];						// how many backlash compensation microsteps are due for each axis
+	AxesBitmap lastDirections;								// each bit is set if the corresponding axes motor last moved backwards
+
+#if SUPPORT_NONLINEAR_EXTRUSION
+	NonlinearExtrusion nonlinearExtrusion[MaxExtruders];	// nonlinear extrusion coefficients
+#endif
+
+	DriverId extruderDrivers[MaxExtruders];					// the driver number assigned to each extruder
+#ifdef DUET3_MB6XD
+	float driverTimingMicroseconds[NumDirectDrivers][4];	// step high time, step low time, direction setup time to step high, direction hold time from step low (1 set per driver)
+	uint32_t stepPulseMinimumPeriodClocks;					// minimum period between leading edges of step pulses, in step clocks
+	uint32_t directionSetupClocks;							// minimum direction change to step high time, in step clocks
+	uint32_t directionHoldClocksFromLeadingEdge;			// minimum step high to direction low step clocks, calculated from the step low to direction change hold time
+	const Pin *ENABLE_PINS;									// 6XD version 0.1 uses different enable pins from version 1.0 and later
+#else
+	uint32_t slowDriversBitmap;								// bitmap of driver port bits that need extended step pulse timing
+	uint32_t slowDriverStepTimingClocks[4];					// minimum step high, step low, dir setup and dir hold timing for slow drivers
+#endif
+	uint32_t steppingEnabledDriversBitmap;					// mask of driver bits that we haven't disabled temporarily
+
+	float idleCurrentFactor;
+	float minimumMovementSpeed;								// minimum allowed movement speed in mm per step clock
+
 	// Calibration and bed compensation
 	uint8_t numCalibratedFactors;
 	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
@@ -411,6 +707,119 @@ private:
 };
 
 //******************************************************************************************************
+
+inline float Move::NormalAcceleration(size_t drive) const noexcept
+{
+	return normalAccelerations[drive];
+}
+
+inline float Move::Acceleration(size_t drive, bool useReduced) const noexcept
+{
+	return (useReduced) ? min<float>(reducedAccelerations[drive], normalAccelerations[drive]) : normalAccelerations[drive];
+}
+
+inline void Move::SetAcceleration(size_t drive, float value, bool reduced) noexcept
+{
+	((reduced) ? reducedAccelerations : normalAccelerations)[drive] = max<float>(value, ConvertAcceleration(MinimumAcceleration));	// don't allow zero or negative
+}
+
+inline float Move::MaxFeedrate(size_t drive) const noexcept
+{
+	return maxFeedrates[drive];
+}
+
+inline void Move::SetMaxFeedrate(size_t drive, float value) noexcept
+{
+	maxFeedrates[drive] = max<float>(value, minimumMovementSpeed);						// don't allow zero or negative, but do allow small values
+}
+
+inline void Move::SetInstantDv(size_t drive, float value) noexcept
+{
+	instantDvs[drive] = max<float>(value, ConvertSpeedFromMmPerSec(MinimumJerk));		// don't allow zero or negative values, they causes Move to loop indefinitely
+}
+
+inline void Move::SetMinMovementSpeed(float value) noexcept
+{
+	minimumMovementSpeed = max<float>(value, ConvertSpeedFromMmPerSec(AbsoluteMinFeedrate));
+}
+
+inline float Move::GetInstantDv(size_t drive) const noexcept
+{
+	return instantDvs[drive];
+}
+
+inline size_t Move::GetNumActualDirectDrivers() const noexcept
+{
+#if VARIABLE_NUM_DRIVERS
+	return numActualDirectDrivers;
+#else
+	return NumDirectDrivers;
+#endif
+}
+
+#if VARIABLE_NUM_DRIVERS
+
+inline void Move::AdjustNumDrivers(size_t numDriversNotAvailable) noexcept
+{
+	numActualDirectDrivers = NumDirectDrivers - numDriversNotAvailable;
+}
+
+#endif
+
+inline void Move::SetDirectionValue(size_t drive, bool dVal) noexcept
+{
+	directions[drive] = dVal;
+}
+
+inline bool Move::GetDirectionValue(size_t drive) const noexcept
+{
+	return directions[drive];
+}
+
+inline void Move::SetDriverDirection(uint8_t driver, bool direction) noexcept
+{
+	if (driver < GetNumActualDirectDrivers())
+	{
+		const bool d = (direction == DirectionForwards) ? directions[driver] : !directions[driver];
+#if SAME5x
+		IoPort::WriteDigital(DIRECTION_PINS[driver], d);
+#else
+		digitalWrite(DIRECTION_PINS[driver], d);
+#endif
+	}
+}
+
+inline void Move::SetDriverAbsoluteDirection(size_t driver, bool direction) noexcept
+{
+	if (driver < GetNumActualDirectDrivers())
+	{
+#if SAME5x
+		IoPort::WriteDigital(DIRECTION_PINS[driver], direction);
+#else
+		digitalWrite(DIRECTION_PINS[driver], direction);
+#endif
+	}
+}
+
+inline int8_t Move::GetEnableValue(size_t driver) const noexcept
+{
+	return enableValues[driver];
+}
+
+inline float Move::AxisMaximum(size_t axis) const noexcept
+{
+	return axisMaxima[axis];
+}
+
+inline float Move::AxisMinimum(size_t axis) const noexcept
+{
+	return axisMinima[axis];
+}
+
+inline float Move::AxisTotalLength(size_t axis) const noexcept
+{
+	return axisMaxima[axis] - axisMinima[axis];
+}
 
 // Get the current position in untransformed coords
 inline void Move::GetCurrentMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, bool disableMotorMapping) const noexcept

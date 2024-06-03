@@ -584,22 +584,22 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			// Driver commands
 			case CanMessageType::setMotorCurrents:
 				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
-				rslt = reprap.GetPlatform().EutSetMotorCurrents(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+				rslt = reprap.GetMove().EutSetMotorCurrents(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
 				break;
 
 			case CanMessageType::setStepsPerMmAndMicrostepping:
 				requestId = buf->msg.multipleDrivesStepsPerUnitAndMicrostepping.requestId;
-				rslt = reprap.GetPlatform().EutSetStepsPerMmAndMicrostepping(buf->msg.multipleDrivesStepsPerUnitAndMicrostepping, buf->dataLength, replyRef);
+				rslt = reprap.GetMove().EutSetStepsPerMmAndMicrostepping(buf->msg.multipleDrivesStepsPerUnitAndMicrostepping, buf->dataLength, replyRef);
 				break;
 
 			case CanMessageType::setDriverStates:
 				requestId = buf->msg.multipleDrivesRequestUint16.requestId;
-				rslt = reprap.GetPlatform().EutHandleSetDriverStates(buf->msg.multipleDrivesRequestDriverState, replyRef);
+				rslt = reprap.GetMove().EutHandleSetDriverStates(buf->msg.multipleDrivesRequestDriverState, replyRef);
 				break;
 
 			case CanMessageType::m915:
 				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetPlatform().EutProcessM915(buf->msg.generic, replyRef);
+				rslt = reprap.GetMove().EutProcessM915(buf->msg.generic, replyRef);
 				break;
 
 			case CanMessageType::setPressureAdvance:
@@ -614,17 +614,17 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			case CanMessageType::m569:
 				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetPlatform().EutProcessM569(buf->msg.generic, replyRef);
+				rslt = reprap.GetMove().EutProcessM569(buf->msg.generic, replyRef);
 				break;
 
 			case CanMessageType::m569p2:
 				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetPlatform().EutProcessM569Point2(buf->msg.generic, replyRef);
+				rslt = reprap.GetMove().EutProcessM569Point2(buf->msg.generic, replyRef);
 				break;
 
 			case CanMessageType::m569p7:
 				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetPlatform().EutProcessM569Point7(buf->msg.generic, replyRef);
+				rslt = reprap.GetMove().EutProcessM569Point7(buf->msg.generic, replyRef);
 				break;
 
 			case CanMessageType::createInputMonitorNew:

@@ -143,7 +143,7 @@ GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& r
 bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 {
 	return extruderNumber < reprap.GetGCodes().GetNumExtruders()
-		&& reprap.GetPlatform().GetExtruderDriver(extruderNumber) == driverId;
+		&& reprap.GetMove().GetExtruderDriver(extruderNumber) == driverId;
 }
 
 // Static initialisation
@@ -226,7 +226,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 /*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const size_t drv = ExtruderToLogicalDrive(extruder);
-	const DriverId did = reprap.GetPlatform().GetExtruderDriver(extruder);
+	const DriverId did = reprap.GetMove().GetExtruderDriver(extruder);
 	gb.MustSee('C');															// make sure the port name parameter is present
 
 #if SUPPORT_CAN_EXPANSION

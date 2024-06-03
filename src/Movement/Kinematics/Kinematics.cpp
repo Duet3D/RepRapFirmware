@@ -16,7 +16,7 @@
 #include "FiveBarScaraKinematics.h"
 
 #include <Platform/RepRap.h>
-#include <Platform/Platform.h>
+#include <Movement/Move.h>
 #include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
@@ -104,9 +104,9 @@ bool Kinematics::TryConfigureSegmentation(GCodeBuffer& gb) THROWS(GCodeException
 // This default implementation assumes a rectangular reachable area, so it just uses the bed dimensions give in the M208 command.
 bool Kinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept
 {
-	const Platform& platform = reprap.GetPlatform();
-	return axes.IterateWhile([&platform, axesCoords](unsigned int axis, unsigned int count) -> bool {
-		if (axesCoords[axis] >= platform.AxisMinimum(axis) && axesCoords[axis] <= platform.AxisMaximum(axis))
+	const Move& move = reprap.GetMove();
+	return axes.IterateWhile([&move, axesCoords](unsigned int axis, unsigned int count) -> bool {
+		if (axesCoords[axis] >= move.AxisMinimum(axis) && axesCoords[axis] <= move.AxisMaximum(axis))
 		{
 			return true;
 		}
@@ -126,7 +126,7 @@ LimitPositionResult Kinematics::LimitPosition(float finalCoords[], const float *
 // Return true if any coordinates were changed
 bool Kinematics::LimitPositionFromAxis(float coords[], size_t firstAxis, size_t numVisibleAxes, AxesBitmap axesToLimit) const noexcept
 {
-	const Platform& platform = reprap.GetPlatform();
+	const Move& move = reprap.GetMove();
 	bool limited = false;
 	for (size_t axis = firstAxis; axis < numVisibleAxes; axis++)
 	{
@@ -136,14 +136,14 @@ bool Kinematics::LimitPositionFromAxis(float coords[], size_t firstAxis, size_t 
 			// When homing a printer we convert the M208 axis limit to motor positions, then back again to get the user position.
 			// This value may not round-trip exactly due to rounding error and quantisation to the nearest step, especially if the steps/mm is not integral.
 			// So we allow a small error here without considering it to be out of limits.
-			if (f < platform.AxisMinimum(axis) - AxisRoundingError)
+			if (f < move.AxisMinimum(axis) - AxisRoundingError)
 			{
-				f = platform.AxisMinimum(axis);
+				f = move.AxisMinimum(axis);
 				limited = true;
 			}
-			else if (f > platform.AxisMaximum(axis) + AxisRoundingError)
+			else if (f > move.AxisMaximum(axis) + AxisRoundingError)
 			{
-				f = platform.AxisMaximum(axis);
+				f = move.AxisMaximum(axis);
 				limited = true;
 			}
 		}
@@ -227,9 +227,9 @@ void Kinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDire
 	const float xySum = dx + dy;
 	if (xySum > 0.05)
 	{
-		const Platform& platform = reprap.GetPlatform();
-		const float maxSpeedTimesXySum = platform.MaxFeedrate(X_AXIS) * dx + platform.MaxFeedrate(Y_AXIS) * dy;
-		const float maxAccelerationTimesXySum = platform.NormalAcceleration(X_AXIS) * dx + platform.NormalAcceleration(Y_AXIS) * dy;
+		const Move& move = reprap.GetMove();
+		const float maxSpeedTimesXySum = move.MaxFeedrate(X_AXIS) * dx + move.MaxFeedrate(Y_AXIS) * dy;
+		const float maxAccelerationTimesXySum = move.NormalAcceleration(X_AXIS) * dx + move.NormalAcceleration(Y_AXIS) * dy;
 		const float xyFactor = xySum * fastSqrtf(fsquare(dx) + fsquare(dy));
 		dda.LimitSpeedAndAcceleration(maxSpeedTimesXySum/xyFactor, maxAccelerationTimesXySum/xyFactor);
 	}

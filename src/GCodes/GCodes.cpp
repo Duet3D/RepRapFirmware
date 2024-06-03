@@ -2471,8 +2471,8 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	}
 
 	ms.doingArcMove = false;
-	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetLinearAxes());
-	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetRotationalAxes());
+	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetLinearAxes());
+	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetRotationalAxes());
 	FinaliseMove(gb, ms);
 	UnlockAll(gb);			// allow pause
 	return true;
@@ -2880,8 +2880,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	ms.arcAxis1 = axis1;
 	ms.doingArcMove = true;
 	ms.xyPlane = (selectedPlane == 0);
-	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetLinearAxes());
-	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetRotationalAxes());
+	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetLinearAxes());
+	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetRotationalAxes());
 	FinaliseMove(gb, ms);
 	UnlockAll(gb);			// allow pause
 //	debugPrintf("Radius %.2f, initial angle %.1f, increment %.1f, segments %u\n",
@@ -3894,7 +3894,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 // Does what it says.
 void GCodes::DisableDrives() noexcept
 {
-	platform.DisableAllDrivers();
+	reprap.GetMove().DisableAllDrivers();
 	SetAllAxesNotHomed();
 }
 
@@ -4827,6 +4827,10 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 				break;
 			}
 		}
+	}
+	if (ok)
+	{
+		ok = reprap.GetMove().WriteMoveParameters(f);
 	}
 	if (ok)
 	{

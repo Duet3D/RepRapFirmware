@@ -9,6 +9,7 @@
 
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
+#include <Movement/Move.h>
 #include <Movement/Kinematics/Kinematics.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
@@ -200,7 +201,7 @@ EndstopHitDetails SwitchEndstop::CheckTriggered() noexcept
 				{
 					rslt.SetAction(EndstopHitAction::stopDriver);
 					rslt.internalUse = i;			// remember which port it is, for the call to Acknowledge
-					rslt.driver = reprap.GetPlatform().GetAxisDriversConfig(GetAxis()).driverNumbers[i];
+					rslt.driver = reprap.GetMove().GetAxisDriversConfig(GetAxis()).driverNumbers[i];
 				}
 				break;
 			}

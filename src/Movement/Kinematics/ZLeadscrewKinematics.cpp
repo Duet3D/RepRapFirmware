@@ -372,7 +372,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProb
 	}
 	else
 	{
-		const size_t numZDrivers = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS).numDrivers;
+		const size_t numZDrivers = reprap.GetMove().GetAxisDriversConfig(Z_AXIS).numDrivers;
 		if (numZDrivers == numLeadscrews)
 		{
 			if (haveLargeCorrection)

@@ -6,7 +6,7 @@
  */
 
 #include "TmcDriverTemperatureSensor.h"
-#include <Platform/Platform.h>
+#include <Movement/Move.h>
 #include <Platform/RepRap.h>
 
 #if HAS_SMART_DRIVERS
@@ -27,7 +27,7 @@ const char *TmcDriverTemperatureSensor::GetShortSensorType() const noexcept
 
 void TmcDriverTemperatureSensor::Poll() noexcept
 {
-	SetResult(reprap.GetPlatform().GetTmcDriversTemperature(channel), TemperatureError::ok);
+	SetResult(reprap.GetMove().GetTmcDriversTemperature(channel), TemperatureError::ok);
 }
 
 #endif

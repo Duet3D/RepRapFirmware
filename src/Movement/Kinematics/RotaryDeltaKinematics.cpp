@@ -120,11 +120,11 @@ bool RotaryDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			{
 				printRadius = gb.GetPositiveFValue();
 				// Set the axis limits so that DWC reports them correctly (they are not otherwise used for deltas, except Z min)
-				Platform& p = reprap.GetPlatform();
-				p.SetAxisMinimum(X_AXIS, -printRadius, false);
-				p.SetAxisMinimum(Y_AXIS, -printRadius, false);
-				p.SetAxisMaximum(X_AXIS, printRadius, false);
-				p.SetAxisMaximum(Y_AXIS, printRadius, false);
+				Move& m = reprap.GetMove();
+				m.SetAxisMinimum(X_AXIS, -printRadius, false);
+				m.SetAxisMinimum(Y_AXIS, -printRadius, false);
+				m.SetAxisMaximum(X_AXIS, printRadius, false);
+				m.SetAxisMaximum(Y_AXIS, printRadius, false);
 				seen = true;
 			}
 
@@ -598,14 +598,14 @@ LimitPositionResult RotaryDeltaKinematics::LimitPosition(float finalCoords[], co
 			limited = true;
 		}
 
-		if (finalCoords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
+		if (finalCoords[Z_AXIS] < reprap.GetMove().AxisMinimum(Z_AXIS))
 		{
-			finalCoords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
+			finalCoords[Z_AXIS] = reprap.GetMove().AxisMinimum(Z_AXIS);
 			limited = true;
 		}
-		else if (finalCoords[Z_AXIS] > reprap.GetPlatform().AxisMaximum(Z_AXIS))
+		else if (finalCoords[Z_AXIS] > reprap.GetMove().AxisMaximum(Z_AXIS))
 		{
-			finalCoords[Z_AXIS] = reprap.GetPlatform().AxisMaximum(Z_AXIS);
+			finalCoords[Z_AXIS] = reprap.GetMove().AxisMaximum(Z_AXIS);
 			limited = true;
 		}
 	}
@@ -680,7 +680,7 @@ void RotaryDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 	else
 	{
 		// Assume that any additional axes are linear
-		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
+		const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
 		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 	}
 }

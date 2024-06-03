@@ -57,11 +57,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 											const EndStopPosition stopType = platform.GetEndstops().GetEndStopPosition(axis);
 											if (stopType == EndStopPosition::highEndStop)
 											{
-												platform.SetAxisMaximum(axis, ms.coords[axis], true);
+												reprap.GetMove().SetAxisMaximum(axis, ms.coords[axis], true);
 											}
 											else if (stopType == EndStopPosition::lowEndStop)
 											{
-												platform.SetAxisMinimum(axis, ms.coords[axis], true);
+												reprap.GetMove().SetAxisMinimum(axis, ms.coords[axis], true);
 											}
 										}
 									);
@@ -554,11 +554,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 
 						// AllocateAxes updates the user coordinates, so we need to set them up here not earlier
 						tempMs.currentUserPosition[axis] = tempMs.GetPauseRestorePoint().moveCoords[axis];
-						if (platform.IsAxisLinear(axis))
+						if (reprap.GetMove().IsAxisLinear(axis))
 						{
 							tempMs.linearAxesMentioned = true;
 						}
-						else if (platform.IsAxisRotational(axis))
+						else if (reprap.GetMove().IsAxisRotational(axis))
 						{
 							tempMs.rotationalAxesMentioned = true;
 						}
@@ -579,11 +579,11 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				   )
 				{
 					ms.currentUserPosition[axis] = ms.GetPauseRestorePoint().moveCoords[axis];
-					if (platform.IsAxisLinear(axis))
+					if (reprap.GetMove().IsAxisLinear(axis))
 					{
 						ms.linearAxesMentioned = true;
 					}
-					else if (platform.IsAxisRotational(axis))
+					else if (reprap.GetMove().IsAxisRotational(axis))
 					{
 						ms.rotationalAxesMentioned = true;
 					}
@@ -1122,8 +1122,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.coords[axis1Num] = grid.GetCoordinate(1, gridAxis1Index) - zp->GetOffset(axis1Num);
 					ms.coords[Z_AXIS] = zp->GetScanningHeight();
 					ms.feedRate = zp->GetScanningSpeed();
-					ms.linearAxesMentioned = platform.IsAxisLinear(axis0Num);
-					ms.rotationalAxesMentioned = platform.IsAxisRotational(axis0Num);
+					ms.linearAxesMentioned = reprap.GetMove().IsAxisLinear(axis0Num);
+					ms.rotationalAxesMentioned = reprap.GetMove().IsAxisRotational(axis0Num);
 					ms.segmentsLeftToStartAt = ms.totalSegments = (unsigned int)abs((int)lastAxis0Index - (int)gridAxis0Index);
 					ms.firstSegmentFractionToSkip = 0.0;
 					ms.scanningProbeMove = true;
@@ -1281,8 +1281,8 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.checkEndstops = true;
 					ms.reduceAcceleration = true;
 					ms.coords[Z_AXIS] = (IsAxisHomed(Z_AXIS))
-												? platform.AxisMinimum(Z_AXIS) - zp->GetDiveHeight(-1) + zp->GetActualTriggerHeight()	// Z axis has been homed, so no point in going very far
-												: -1.1 * platform.AxisTotalLength(Z_AXIS);	// Z axis not homed yet, so treat this as a homing move
+												? reprap.GetMove().AxisMinimum(Z_AXIS) - zp->GetDiveHeight(-1) + zp->GetActualTriggerHeight()	// Z axis has been homed, so no point in going very far
+												: -1.1 * reprap.GetMove().AxisTotalLength(Z_AXIS);	// Z axis not homed yet, so treat this as a homing move
 					ms.feedRate = zp->GetProbingSpeed(tapsDone);
 					ms.linearAxesMentioned = true;
 					NewSingleSegmentMoveAvailable(ms);

@@ -24,6 +24,7 @@ Licence: GPL
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 #include <Platform/Tasks.h>
+#include <Movement/Move.h>
 #include "Sensors/TemperatureSensor.h"
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Tools/Tool.h>
@@ -353,7 +354,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 			if (newDriverFaultState == 1)
 			{
 				newDriverFaultState = 2;
-				reprap.GetPlatform().SendDriversStatus(buf);
+				reprap.GetMove().SendDriversStatus(buf);
 			}
 
 			// Check whether we have new heater fault status messages to send
@@ -482,7 +483,7 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 
 				if (newDriverFaultState == 0)
 				{
-					reprap.GetPlatform().SendDriversStatus(buf);			// send the status of our drivers
+					reprap.GetMove().SendDriversStatus(buf);	// send the status of our drivers
 				}
 				else
 				{

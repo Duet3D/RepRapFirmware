@@ -10,7 +10,6 @@
 #if SUPPORT_HANGPRINTER
 
 #include <Platform/RepRap.h>
-#include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/Move.h>
 #include <CAN/CanInterface.h>
@@ -145,11 +144,10 @@ void HangprinterKinematics::Recalc() noexcept
 
 	//// Line buildup compensation
 	float stepsPerUnitTimesRTmp[HANGPRINTER_MAX_ANCHORS] = { 0.0 };
-	const Platform& platform = reprap.GetPlatform();
 	Move& move = reprap.GetMove();								 // No const because we want to set drive steps per unit
 	for (size_t i = 0; i < numAnchors; ++i)
 	{
-		const uint8_t driver = platform.GetAxisDriversConfig(i).driverNumbers[0].localDriver; // Only supports single driver
+		const uint8_t driver = move.GetAxisDriversConfig(i).driverNumbers[0].localDriver; // Only supports single driver
 		bool dummy;
 		stepsPerUnitTimesRTmp[i] =
 			(
@@ -537,14 +535,14 @@ LimitPositionResult HangprinterKinematics::LimitPosition(float finalCoords[], co
 
 		if (applyM208Limits)
 		{
-			if (finalCoords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
+			if (finalCoords[Z_AXIS] < reprap.GetMove().AxisMinimum(Z_AXIS))
 			{
-				finalCoords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
+				finalCoords[Z_AXIS] = reprap.GetMove().AxisMinimum(Z_AXIS);
 				limited = true;
 			}
-			else if (finalCoords[Z_AXIS] > reprap.GetPlatform().AxisMaximum(Z_AXIS))
+			else if (finalCoords[Z_AXIS] > reprap.GetMove().AxisMaximum(Z_AXIS))
 			{
-				finalCoords[Z_AXIS] = reprap.GetPlatform().AxisMaximum(Z_AXIS);
+				finalCoords[Z_AXIS] = reprap.GetMove().AxisMaximum(Z_AXIS);
 				limited = true;
 			}
 		}

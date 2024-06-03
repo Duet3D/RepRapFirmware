@@ -11,7 +11,6 @@
 
 #include "TMC2660.h"
 #include <Platform/RepRap.h>
-#include <Platform/Platform.h>
 #include <Movement/Move.h>
 #include <Movement/StepTimer.h>
 #include <Endstops/Endstop.h>
@@ -1077,7 +1076,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 				for (size_t i = 0; i < numTmc2660Drivers; ++i)
 				{
 					// The following line assumes that driver numbers in RRF map directly to smart driver numbers in this module. They do on Duets.
-					if (reprap.GetPlatform().GetEnableValue(i) >= 0)							// if the driver has not been disabled
+					if (reprap.GetMove().GetEnableValue(i) >= 0)							// if the driver has not been disabled
 					{
 						uint32_t count = driverStates[i].ReadMicrostepPosition();
 						if (count != 0)
@@ -1086,7 +1085,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 							if (count < 1024)
 							{
 								const bool backwards = (count > 512);
-								reprap.GetPlatform().SetDriverAbsoluteDirection(i, backwards);	// a high on DIR decreases the microstep counter
+								reprap.GetMove().SetDriverAbsoluteDirection(i, backwards);	// a high on DIR decreases the microstep counter
 								if (backwards)
 								{
 									count = 1024 - count;
