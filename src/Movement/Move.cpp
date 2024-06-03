@@ -2259,7 +2259,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 	DriveMovement* dm = activeDMs;
 	while (dm != nullptr && (int32_t)(now - dm->nextStepTime) >= 0)			// if the next step is due
 	{
-		driversStepping |= GetDriversBitmap(dm->drive);
+		driversStepping |= driveDriverBits[dm->drive];
 		flags |= dm->segmentFlags;
 		dm = dm->nextDM;
 	}
@@ -2278,12 +2278,12 @@ void Move::StepDrivers(uint32_t now) noexcept
 		now = StepTimer::GetMovementTimerTicks();
 		while (dm != nullptr && (int32_t)(now - dm->nextStepTime) >= 0)		// if the next step is due
 		{
-			driversStepping |= GetDriversBitmap(dm->drive);
+			driversStepping |= driveDriverBits[dm->drive];
 			dm = dm->nextDM;
 		}
 	}
 
-	driversStepping &= GetSteppingEnabledDrivers();
+	driversStepping &= steppingEnabledDriversBitmap;
 
 #ifdef DUET3_MB6XD
 	if (driversStepping != 0)
@@ -2308,7 +2308,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 	for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 	{
 # if SUPPORT_CAN_EXPANSION
-		if (unlikely(!flags.checkEndstops && GetDriversBitmap(dm2->drive) == 0))
+		if (unlikely(!flags.checkEndstops && driveDriverBits[dm2->drive] == 0))
 		{
 			dm2->TakeStepsAndCalcStepTimeRarely(now);
 		}
@@ -2321,7 +2321,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 	}
 #else
 # if SUPPORT_SLOW_DRIVERS											// if supporting slow drivers
-	if ((driversStepping & GetSlowDriversBitmap()) != 0)			// if using some slow drivers
+	if ((driversStepping & slowDriversBitmap) != 0)					// if using some slow drivers
 	{
 		// Wait until step low and direction setup time have elapsed
 		uint32_t lastStepPulseTime = lastStepLowTime;
@@ -2337,7 +2337,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 		{
 # if SUPPORT_CAN_EXPANSION
-			if (unlikely(!flags.checkEndstops && GetDriversBitmap(dm2->drive) == 0))
+			if (unlikely(!flags.checkEndstops && driveDriverBits[dm2->drive] == 0))
 			{
 				dm2->TakeStepsAndCalcStepTimeRarely(now);
 			}
@@ -2363,7 +2363,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
 		{
 # if SUPPORT_CAN_EXPANSION
-			if (unlikely(!flags.checkEndstops && GetDriversBitmap(dm2->drive) == 0))
+			if (unlikely(!flags.checkEndstops && driveDriverBits[dm2->drive] == 0))
 			{
 				dm2->TakeStepsAndCalcStepTimeRarely(now);
 			}
@@ -2405,7 +2405,7 @@ void Move::SetDirection(size_t axisOrExtruder, bool direction) noexcept
 #ifdef DUET3_MB6XD
 	while (StepTimer::GetTimerTicks() - lastStepHighTime < GetSlowDriverDirHoldClocksFromLeadingEdge()) { }
 #else
-	const bool isSlowDriver = (GetDriversBitmap(axisOrExtruder) & GetSlowDriversBitmap()) != 0;
+	const bool isSlowDriver = (driveDriverBits[axisOrExtruder] & slowDriversBitmap) != 0;
 	if (isSlowDriver)
 	{
 		while (StepTimer::GetTimerTicks() - lastStepLowTime < GetSlowDriverDirHoldClocksFromTrailingEdge()) { }

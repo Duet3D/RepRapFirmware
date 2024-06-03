@@ -193,23 +193,18 @@ public:
 		{ return extruderDrivers[extruder]; }
 	void SetExtruderDriver(size_t extruder, DriverId driver) noexcept
 		pre(extruder < MaxExtruders);
-	uint32_t GetDriversBitmap(size_t axisOrExtruder) const noexcept	// get the bitmap of driver step bits for this axis or extruder
-		pre(axisOrExtruder < MaxAxesPlusExtruders + NumDirectDrivers)
-		{ return driveDriverBits[axisOrExtruder]; }
 
 #ifdef DUET3_MB6XD		// the first element has a special meaning when we use a TC to generate the steps
 	uint32_t GetSlowDriverStepPeriodClocks() { return stepPulseMinimumPeriodClocks; }
 	uint32_t GetSlowDriverDirHoldClocksFromLeadingEdge() { return directionHoldClocksFromLeadingEdge; }
 	uint32_t GetSlowDriverDirSetupClocks() const noexcept { return directionSetupClocks; }
 #else
-	uint32_t GetSlowDriversBitmap() const noexcept { return slowDriversBitmap; }
 	uint32_t GetSlowDriverStepHighClocks() const noexcept { return slowDriverStepTimingClocks[0]; }
 	uint32_t GetSlowDriverStepLowClocks() const noexcept { return slowDriverStepTimingClocks[1]; }
 	uint32_t GetSlowDriverDirHoldClocksFromTrailingEdge() const noexcept { return slowDriverStepTimingClocks[3]; }
 	uint32_t GetSlowDriverDirSetupClocks() const noexcept { return slowDriverStepTimingClocks[2]; }
 #endif
 
-	uint32_t GetSteppingEnabledDrivers() const noexcept { return steppingEnabledDriversBitmap; }
 	void DisableSteppingDriver(uint8_t driver) noexcept { steppingEnabledDriversBitmap &= ~StepPins::CalcDriverBitmap(driver); }
 	void EnableAllSteppingDrivers() noexcept { steppingEnabledDriversBitmap = 0xFFFFFFFFu; }
 
