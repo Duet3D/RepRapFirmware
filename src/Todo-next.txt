@@ -8,8 +8,9 @@ Next steps for new movement system+IS
 [done] If a move checks endstops and the endstop is already triggered during Prepare, it remains busy for the length of the homing move, even though it doesn't move.
 [done] We get the same delay when an endstop stops movement.
 [done] Take account of raw motor moves when deciding whether to use IS. Maybe move useIS into MovementFlags?
+[done] Extend use of DMState::starting to cover the case of the next segment starting some time after the previous one ends
 
-Can we keep a single machine position, based on current motor positions, not one per MS?
+Sort out ClearExtrusionPending - don't update distanceBrightForwards during motion
 
 Eventually, store end position in segments. End positions specified by user must be exact numbers of motor steps. Segment boundaries may be fractional steps.
 
@@ -21,35 +22,34 @@ Allow for expansion boards introducing hiccups
 
 Set up params.useInputShaping, needed for CAN
 
+Avoid zero-length/zero-duration moves
+
 At the end of Prepare, don't send the move over CAN if it won't happen because endstops are already triggered - previously it checked for state=completed
 Also, check whether/how in CanMotion we handle individual drives not moving because their endstops have triggered - that may be enough to handle the above.
 
-Keep DM.currentMotorPosition up to date, currently DWC displays Machine Position as all zeros
-
 Segment moves to keep them shorter than 2^31 step clocks
 
-Auto-generated moves on delta printers: need to segment them, except for Z probing moves
+[I think I completed this, so re-test] Auto-generated moves on delta printers: need to segment them, except for Z probing moves
 
 Do we still need GetNetStepsTaken? Can we use the step counts instead?
 
 In the DM have a direction variable set to +1 or -1, to reduce conditional jumps
 
-Move 'wasTriggered' into ZProbe, cleat it on SetProbing(true), return it on SetProbing(false)
+Move 'wasTriggered' into ZProbe, clear it on SetProbing(true), return it on SetProbing(false)
 
 Change ZProbe::wasDeployedByUser to a count?
 
 Store segments per step clock not segments per second, avoids a multiplication
 
 Bugs:
-- [done]"Tool was not driven because its temperatures were not high enough" in simulation mode
+- [done] "Tool was not driven because its temperatures were not high enough" in simulation mode
 - [done] In simulation mode at least, stops processing X driver segments, then runs out of memory
 - [done] In M122 report, completed moves shows as 0 at least when simulating
 - [done] Test print doesn't heat bed or extruder but heating works manually from DWC
 - [no fault] Spurious filament monitor errors - this was on a tool board
 - [done] Step error when moving delta printer in X direction
 - [done] Requested speed and top speed always show zero
-- [temporary fix done] Pauses after G1 H2 moves, especially if expansion boards are involved
-- G1 H2 moves on delta: moves the wrong number of steps according to M114 (too few) if just 1 tower moving; ok if all 3 moving
-- Avoid zero-length/zero-duration moves
-- Delta printer auto calibration not working
-- Z probing not working
+- [done] Pauses after G1 H2 moves, especially if expansion boards are involved
+- [done] Z probing not working
+- [re-test] G1 H2 moves on delta: moves the wrong number of steps according to M114 (too few) if just 1 tower moving; ok if all 3 moving
+- [re-test] Delta printer auto calibration not working

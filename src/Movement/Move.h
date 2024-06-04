@@ -487,6 +487,7 @@ private:
 	float tanXZ() const noexcept { return tangents[2]; }
 
 	void StepDrivers(uint32_t now) noexcept SPEED_CRITICAL;							// Take one step of the DDA, called by timer interrupt.
+	void PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint32_t now) noexcept SPEED_CRITICAL;
 	void SimulateSteppingDrivers(Platform& p) noexcept;								// For debugging use
 	bool ScheduleNextStepInterrupt() noexcept SPEED_CRITICAL;						// Schedule the next interrupt, returning true if we can't because it is already due
 	bool StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept;		// stop movement of a drive and recalculate the endpoint

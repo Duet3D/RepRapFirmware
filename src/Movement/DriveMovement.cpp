@@ -111,13 +111,14 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 			 if (timeInHand < 0)
 			 {
 				 state = DMState::stepError3;
+				 const uint32_t now = StepTimer::GetTimerTicks();
 				 LogStepError();
 				 RestoreBasePriority(oldPrio);
 				 if (reprap.Debug(Module::Move))
 				 {
 					 MoveSegment::DebugPrintList(seg);
-					 debugPrintf("was executing, overlap %" PRIi32 " while trying to add s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e f=%02" PRIx32 "\n",
-						 	 	 	 -timeInHand, startTime, duration, (double)distance, (double)u, (double)a, moveFlags.all);
+					 debugPrintf("was executing, overlap %" PRIi32 " while trying to add s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e f=%02" PRIx32 " at time %" PRIu32 "\n",
+						 	 	 	 -timeInHand, startTime, duration, (double)distance, (double)u, (double)a, moveFlags.all, now);
 				 }
 				 return;
 			 }
@@ -298,9 +299,9 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 	return false;
 }
 
-// This is called when 'segments' has just been changed to a new segment.
-// Return the new segment to execute. If there is no segment to execute, set state to idle and return nullptr.
-MoveSegment *DriveMovement::NewSegment() noexcept
+// This is called when we need to examine the segment list and execute the head segment, if there is one.
+// Return the new segment to execute and set the state appropriately. If there is no segment to execute, set state to idle and return nullptr.
+MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 {
 	while (true)
 	{
@@ -310,6 +311,16 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 			segmentFlags.Init();
 			state = DMState::idle;					// if we have been round this loop already then we will have changed the state, so reset it to idle
 			return nullptr;
+		}
+
+		segmentFlags = seg->GetFlags();				// assume we are going to execute this segment, or at least generate an interrupt when it is due to begin
+
+		if ((int32_t)(seg->GetStartTime() - now) > (int32_t)MoveTiming::MaximumMoveStartAdvanceClocks)
+		{
+			state = DMState::starting;				// the segment is not due to start for a while. To allow it to be changed meanwhile, generate an interrupt when it is due to start.
+			driversCurrentlyUsed = 0;				// don't generate a step on that interrupt
+			nextStepTime = seg->GetStartTime();		// this is when we want the interrupt
+			return seg;
 		}
 
 		seg->SetExecuting();
@@ -404,7 +415,6 @@ MoveSegment *DriveMovement::NewSegment() noexcept
 				directionChanged = true;
 			}
 
-			segmentFlags = seg->GetFlags();
 			driversCurrentlyUsed = driversNormallyUsed;
 #if SUPPORT_CAN_EXPANSION
 			positionAtSegmentStart = currentMotorPosition;
@@ -446,7 +456,7 @@ bool DriveMovement::LogStepError() noexcept
 // Return true if all OK and there are more steps to do.
 // If no more segments to execute, return false with state = DMState::idle.
 // If a step error occurs, call LogStepError and return false with state set to the error state.
-bool DriveMovement::CalcNextStepTimeFull() noexcept
+bool DriveMovement::CalcNextStepTimeFull(uint32_t now) noexcept
 pre(stepsTillRecalc == 0; segments != nullptr)
 {
 	MoveSegment *currentSegment = segments;							// capture volatile variable
@@ -460,11 +470,17 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 			segments = currentSegment->GetNext();
 			const uint32_t prevEndTime = currentSegment->GetStartTime() + currentSegment->GetDuration();
 			MoveSegment::Release(currentSegment);
-			currentSegment = NewSegment();
+			currentSegment = NewSegment(now);
 			if (currentSegment == nullptr)
 			{
 				return false;										// the call to NewSegment has already set the state to idle
 			}
+
+			if (state == DMState::starting)
+			{
+				return true;										// the call to NewSegment has already set up the interrupt time
+			}
+
 			if (unlikely((int32_t)(currentSegment->GetStartTime() <-prevEndTime) < -2))
 			{
 #if SEGMENT_DEBUG
@@ -620,27 +636,37 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 
 // This is called when the 'drive' (i.e. axis) concerned has no local drivers and we are not checking endstops or Z probe.
 // Instead of generating an interrupt for each step of the remote drive, generate interrupts only occasionally and at the end of each segment, to keep the axis position fairly up to date.
+// We must not call NewSegment significantly in advance of when the segment is due to start, to allow for segments being modified as new ones are added.
+// To make sure this is the case we schedule an interrupt at the end of each segment, so that a segment cannot be started before the previous one has completed.
 void DriveMovement::TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept
 {
 	MoveSegment *const currentSegment = segments;				// capture volatile variable
-	const int32_t timeFromStart = (int32_t)(clocksNow - currentSegment->GetStartTime());
-	if (nextStep == segmentStepLimit || currentSegment->GetDuration() <= timeFromStart + MoveTiming::MaxRemoteDriverPositionUpdateInterval)
+	if (state == DMState::ending)
 	{
 		currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
 		distanceCarriedForwards += currentSegment->GetLength() - (float)netStepsThisSegment;
 		segments = currentSegment->GetNext();
 		MoveSegment::Release(currentSegment);
-		if (NewSegment() != nullptr)
+		if (NewSegment(clocksNow) == nullptr || state == DMState::starting)
 		{
-			CalcNextStepTimeFull();								// generate an interrupt at the start of the next segment
+			return;
 		}
+	}
+
+	const int32_t timeFromStart = (int32_t)(clocksNow - currentSegment->GetStartTime());
+	currentMotorPosition = positionAtSegmentStart + lrintf((currentSegment->GetU() + (0.5 * currentSegment->GetA() * (float)timeFromStart)) * (float)timeFromStart + distanceCarriedForwards);
+	uint32_t targetTime;
+	if (currentSegment->GetDuration() <= timeFromStart + MoveTiming::MaxRemoteDriverPositionUpdateInterval)
+	{
+		// Generate an interrupt at the end of this segment
+		state = DMState::ending;								// this is just a flag to say we need a new segment next time
+		targetTime = currentSegment->GetDuration();
 	}
 	else
 	{
-		const uint32_t targetTime = timeFromStart + MoveTiming::NominalRemoteDriverPositionUpdateInterval;
-		currentMotorPosition = positionAtSegmentStart + lrintf((currentSegment->GetU() + (0.5 * currentSegment->GetA() * (float)targetTime)) * (float)targetTime + distanceCarriedForwards);
-		nextStepTime = targetTime + currentSegment->GetStartTime();
+		targetTime = timeFromStart + MoveTiming::NominalRemoteDriverPositionUpdateInterval;
 	}
+	nextStepTime = targetTime + currentSegment->GetStartTime();
 }
 
 #endif

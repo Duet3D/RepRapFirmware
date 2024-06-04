@@ -35,6 +35,7 @@ namespace MoveTiming
 
 	constexpr uint32_t UsualMinimumPreparedTime = StepClockRate/10;					// 100ms
 	constexpr uint32_t AbsoluteMinimumPreparedTime = StepClockRate/20;				// 50ms
+	constexpr uint32_t MaximumMoveStartAdvanceClocks = StepClockRate/1000;			// 1ms
 
 	constexpr uint32_t StandardMoveWakeupInterval = 500;							// milliseconds
 	constexpr uint32_t MachineCoordinateUpdateInterval = 200;						// milliseconds

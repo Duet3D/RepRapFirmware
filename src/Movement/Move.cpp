@@ -2301,28 +2301,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 	}
 
 	// Calculate the next step times. We must do this even if no local drivers are stepping in case endstops or Z probes are active.
-	for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
-	{
-		if (unlikely(dm2->state == DMState::starting))
-		{
-			if (dm2->NewSegment())
-			{
-				(void)dm2->CalcNextStepTimeFull();					// calculate next step time
-				dm2->directionChanged = true;						// force the direction to be set up
-			}
-		}
-# if SUPPORT_CAN_EXPANSION
-		else if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
-		{
-			dm2->TakeStepsAndCalcStepTimeRarely(now);
-		}
-# endif
-		else
-		{
-			dm2->TakenStep();
-			(void)dm2->CalcNextStepTime();							// calculate next step times
-		}
-	}
+	PrepareForNextSteps(dm, flags, now);
 #else
 # if SUPPORT_SLOW_DRIVERS											// if supporting slow drivers
 	if ((driversStepping & slowDriversBitmap) != 0)					// if using some slow drivers
@@ -2338,28 +2317,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 		StepPins::StepDriversHigh(driversStepping);					// step drivers high
 		lastStepPulseTime = StepTimer::GetTimerTicks();
 
-		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
-		{
-			if (unlikely(dm2->state == DMState::starting))
-			{
-				if (dm2->NewSegment())
-				{
-					(void)dm2->CalcNextStepTimeFull();				// calculate next step time
-					dm2->directionChanged = true;					// force the direction to be set up
-				}
-			}
-# if SUPPORT_CAN_EXPANSION
-			else if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
-			{
-				dm2->TakeStepsAndCalcStepTimeRarely(now);
-			}
-# endif
-			else
-			{
-				dm2->TakenStep();
-				(void)dm2->CalcNextStepTime();						// calculate next step times
-			}
-		}
+		PrepareForNextSteps(dm, flags, now);
 
 		while (StepTimer::GetTimerTicks() - lastStepPulseTime < GetSlowDriverStepHighClocks()) {}
 		StepPins::StepDriversLow(driversStepping);					// step drivers low
@@ -2372,29 +2330,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 # if SAME70
 		__DSB();													// without this the step pulse can be far too short
 # endif
-		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
-		{
-			if (unlikely(dm2->state == DMState::starting))
-			{
-				if (dm2->NewSegment())
-				{
-					(void)dm2->CalcNextStepTimeFull();				// calculate next step time
-					dm2->directionChanged = true;					// force the direction to be set up
-				}
-			}
-# if SUPPORT_CAN_EXPANSION
-			else if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
-			{
-				dm2->TakeStepsAndCalcStepTimeRarely(now);
-			}
-# endif
-			else
-			{
-				dm2->TakenStep();
-				(void)dm2->CalcNextStepTime();						// calculate next step time
-			}
-		}
-
+		PrepareForNextSteps(dm, flags, now);
 		StepPins::StepDriversLow(driversStepping);					// step drivers low
 	}
 #endif
@@ -2418,6 +2354,43 @@ void Move::StepDrivers(uint32_t now) noexcept
 	}
 
 	liveCoordinatesValid = false;
+}
+
+// Prepare each DM that we generated a step for for the next step
+void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint32_t now) noexcept
+{
+	for (DriveMovement *dm2 = activeDMs; dm2 != stopDm; dm2 = dm2->nextDM)
+	{
+		if (unlikely(dm2->state == DMState::starting))
+		{
+			if (dm2->NewSegment(now) != nullptr && dm2->state != DMState::starting)
+			{
+# if SUPPORT_CAN_EXPANSION
+				flags |= dm2->segmentFlags;
+				if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
+				{
+					dm2->TakeStepsAndCalcStepTimeRarely(now);
+				}
+				else
+# endif
+				{
+					(void)dm2->CalcNextStepTimeFull(now);			// calculate next step time
+					dm2->directionChanged = true;				// force the direction to be set up
+				}
+			}
+		}
+# if SUPPORT_CAN_EXPANSION
+		else if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
+		{
+			dm2->TakeStepsAndCalcStepTimeRarely(now);
+		}
+# endif
+		else
+		{
+			dm2->TakenStep();
+			(void)dm2->CalcNextStepTime(now);						// calculate next step times
+		}
+	}
 }
 
 void Move::SetDirection(size_t axisOrExtruder, bool direction) noexcept
@@ -2482,15 +2455,15 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 		{
 			if (unlikely(dm2->state == DMState::starting))
 			{
-				if (dm2->NewSegment())
+				if (dm2->NewSegment(dueTime) != nullptr && dm2->state != DMState::starting)
 				{
-					(void)dm2->CalcNextStepTime();						// calculate next step time
+					(void)dm2->CalcNextStepTime(dueTime);				// calculate next step time
 				}
 			}
 			else
 			{
 				dm2->TakenStep();
-				(void)dm2->CalcNextStepTime();							// calculate next step time
+				(void)dm2->CalcNextStepTime(dueTime);					// calculate next step time
 			}
 		}
 
