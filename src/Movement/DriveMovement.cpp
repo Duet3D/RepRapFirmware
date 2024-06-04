@@ -283,24 +283,27 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 	RestoreBasePriority(oldPrio);
 }
 
-// Set up to schedule the first segment, returning true if there is a segment to be processed
+// Set up to schedule the first segment, returning true if an interrupt for tihs DM is needed
 bool DriveMovement::ScheduleFirstSegment() noexcept
 {
-	// We don't want to flag the segment as executing or calculate and store its parameters until shortly before the first step is due, so that it can be changed until then.
-	// Instead we flag that no drivers are stepping and generate an interrupt when the move is due to start.
-	const MoveSegment *const seg = segments;		// capture volatile variable
-	if (seg != nullptr)
+	const uint32_t now = StepTimer::GetTimerTicks();
+	if (NewSegment(now) != nullptr)
 	{
-		driversCurrentlyUsed = 0;					// don't generate any steps for this driver at the next interrupt
-		state = DMState::starting;
-		nextStepTime = seg->GetStartTime();
-		return true;								// this tells the calling Move task to add this DM to the active list
+		if (state == DMState::starting)
+		{
+			return true;
+		}
+		return CalcNextStepTimeFull(now);
 	}
 	return false;
 }
 
-// This is called when we need to examine the segment list and execute the head segment, if there is one.
-// Return the new segment to execute and set the state appropriately. If there is no segment to execute, set state to idle and return nullptr.
+// This is called when we need to examine the segment list and prepare the head segment (if there is one) for execution.
+// If there is no segment to execute, set our state to 'idle' and return nullptr.
+// If there is a segment to execute but it isn't due to start for a while, set our state to 'starting', set nextStepTime to when the move is due to start or shortly before,
+// set driversCurrentlyUsed to 0 to suppress the step pulse, and return the segment.
+// If there is a segment ready to execute and it has steps, set up our movement parameters, copy the flags over, set the 'executing' flag in the segment, and return the segment.
+// If there is a segment ready to execute but it involves zero steps, skip and free it and start again.
 MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 {
 	while (true)
