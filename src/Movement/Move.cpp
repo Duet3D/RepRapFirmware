@@ -3555,69 +3555,6 @@ void Move::StopDriveFromRemote(size_t drive) noexcept
 
 #endif
 
-#if 0
-
-// THIS CODE IS NOT USED. It's here because we need to replicate the functionality somewhere else.
-void Move::OnMoveCompleted(DDA *cdda, Platform& p) noexcept
-{
-	bool wakeLaserTask = false;
-	if (cdda->IsScanningProbeMove())
-	{
-		reprap.GetMove().SetProbeReadingNeeded();
-		wakeLaserTask = true;						// wake the laser task to take a reading
-	}
-
-	// The following finish time is wrong if we aborted the move because of endstop or Z probe checks.
-	// However, following a move that checks endstops or the Z probe, we always wait for the move to complete before we schedule another, so this doesn't matter.
-	const uint32_t finishTime = cdda->GetMoveFinishTime();	// calculate when this move should finish
-
-	CurrentMoveCompleted();							// tell the DDA ring that the current move is complete
-
-	// Try to start a new move
-	const DDA::DDAState st = getPointer->GetState();
-	if (st == DDA::frozen)
-	{
-#if SUPPORT_LASER || SUPPORT_IOBITS
-		if (StartNextMove(p, finishTime))
-		{
-			wakeLaserTask = true;
-		}
-#else
-		(void)StartNextMove(p, finishTime);
-#endif
-	}
-	else
-	{
-		if (st == DDA::provisional)
-		{
-			++numPrepareUnderruns;					// there are more moves available, but they are not prepared yet. Signal an underrun.
-		}
-		else if (!waitingForRingToEmpty)
-		{
-			++numNoMoveUnderruns;
-		}
-		p.ExtrudeOff();								// turn off ancillary PWM
-		if (cdda->GetTool() != nullptr)
-		{
-			cdda->GetTool()->StopFeedForward();
-		}
-#if SUPPORT_LASER
-		if (reprap.GetGCodes().GetMachineType() == MachineType::laser)
-		{
-			p.SetLaserPwm(0);						// turn off the laser
-		}
-#endif
-		waitingForRingToEmpty = false;
-	}
-
-	if (wakeLaserTask)
-	{
-		Move::WakeLaserTaskFromISR();
-	}
-}
-
-#endif
-
 // Adjust the motor endpoints without moving the motors. Called after auto-calibrating a linear delta or rotary delta machine.
 // There must be no pending movement when calling this!
 void Move::AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept
