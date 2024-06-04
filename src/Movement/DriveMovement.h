@@ -69,7 +69,7 @@ public:
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
 #endif
 
-	void ClearMovementPending() noexcept { distanceCarriedForwards = 0.0; }
+	void ClearMovementPending() noexcept;
 
 	bool HasError() const noexcept { return state != DMState::idle && state < DMState::firstMotionState; }
 
@@ -207,6 +207,17 @@ inline int32_t DriveMovement::GetAndClearMinStepInterval() noexcept
 	minStepInterval = 0;
 	return ret;
 
+}
+
+// Clear any pending movement. This is called for extruders, mostly as an aid to debugging.
+// Don't clear the extrusion pending if movement is in progress because this may lead to distanceCarriedForwards becoming out of range, resulting in step errors.
+inline void DriveMovement::ClearMovementPending() noexcept
+{
+	AtomicCriticalSectionLocker lock;
+	if (state == DMState::idle)
+	{
+		distanceCarriedForwards = 0.0;
+	}
 }
 
 #if HAS_SMART_DRIVERS
