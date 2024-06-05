@@ -2375,7 +2375,7 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 # endif
 				{
 					(void)dm2->CalcNextStepTimeFull(now);			// calculate next step time
-					dm2->directionChanged = true;				// force the direction to be set up
+					dm2->directionChanged = true;					// force the direction to be set up
 				}
 			}
 		}
@@ -2387,8 +2387,8 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 # endif
 		else
 		{
-			dm2->TakenStep();
-			(void)dm2->CalcNextStepTime(now);						// calculate next step times
+			dm2->TakenStep();										// update the step counter based on the current direction
+			(void)dm2->CalcNextStepTime(now);						// calculate next step time, which may change the required direction
 		}
 	}
 }

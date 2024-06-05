@@ -134,7 +134,7 @@ private:
 // Update the step counter because we have taken a step
 inline void DriveMovement::TakenStep() noexcept
 {
-	const int32_t adjustment = (direction << 1) - 1;	// to avoid a conditional jump, calculate +1 or -1 according to direction
+	const int32_t adjustment = (int32_t)(direction << 1) - 1;	// to avoid a conditional jump, calculate +1 or -1 according to direction
 	currentMotorPosition += adjustment;					// adjust the current position
 }
 
@@ -206,7 +206,6 @@ inline int32_t DriveMovement::GetAndClearMinStepInterval() noexcept
 	const int32_t ret = minStepInterval;
 	minStepInterval = 0;
 	return ret;
-
 }
 
 // Clear any pending movement. This is called for extruders, mostly as an aid to debugging.
