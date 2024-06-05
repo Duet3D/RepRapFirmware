@@ -28,13 +28,13 @@ void DriveMovement::Init(size_t drv) noexcept
 	drive = (uint8_t)drv;
 	state = DMState::idle;
 	distanceCarriedForwards = 0.0;
-	currentMotorPosition = 0;
+	currentMotorPosition = positionAtSegmentStart = 0;
+	driversNormallyUsed = driversCurrentlyUsed = 0;
 	nextDM = nullptr;
 	segments = nullptr;
+	homingDda = nullptr;
 	isExtruder = false;
 	segmentFlags.Init();
-	homingDda = nullptr;
-	driversNormallyUsed = driversCurrentlyUsed = 0;
 }
 
 void DriveMovement::DebugPrint() const noexcept
@@ -306,6 +306,8 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 // If there is a segment ready to execute but it involves zero steps, skip and free it and start again.
 MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 {
+	positionAtSegmentStart = currentMotorPosition;
+
 	while (true)
 	{
 		MoveSegment *seg = segments;				// capture volatile variable
@@ -419,9 +421,6 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 			}
 
 			driversCurrentlyUsed = driversNormallyUsed;
-#if SUPPORT_CAN_EXPANSION
-			positionAtSegmentStart = currentMotorPosition;
-#endif
 
 #if 0	//DEBUG
 			debugPrintf("New cart seg: state %u q=%.4e t0=%.4e p=%.4e ns=%" PRIi32 " ssl=%" PRIi32 "\n",
@@ -554,7 +553,8 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 			break;
 		}
 
-		CheckDirection(true);
+		direction = !direction;
+		directionChanged = true;
 		state = DMState::cartDecelReverse;
 		// no break
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.

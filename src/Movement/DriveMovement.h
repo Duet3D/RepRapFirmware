@@ -84,7 +84,6 @@ private:
 	MoveSegment *NewSegment(uint32_t now) noexcept SPEED_CRITICAL;
 	bool ScheduleFirstSegment() noexcept;
 
-	void CheckDirection(bool reversed) noexcept;
 	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr
 	bool LogStepError() noexcept;						// tell the Move class that we had a step error
 
@@ -103,9 +102,8 @@ private:
 	uint8_t drive;										// the drive that this DM controls
 	uint8_t direction : 1,								// true=forwards, false=backwards
 			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
-			directionReversed : 1,						// true if we have reversed the requested motion direction because of pressure advance
 			isExtruder : 1,								// true if this DM is for an extruder
-					: 2,								// padding to make the next field last
+					: 3,								// padding to make the next field last
 			stepsTakenThisSegment : 2;					// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
@@ -116,9 +114,7 @@ private:
 	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
 	float distanceCarriedForwards;						// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
 	int32_t currentMotorPosition;						// the current motor position in microsteps
-#if SUPPORT_CAN_EXPANSION
 	int32_t positionAtSegmentStart;						// the value of currentMotorPosition at the start of the current segment
-#endif
 
 	// These values change as the segment is executed
 	int32_t nextStep;									// number of steps already done. For extruders this gets reset to the net steps already done at the start of each segment, so it can go negative.
@@ -166,15 +162,7 @@ inline bool DriveMovement::CalcNextStepTime(uint32_t now) noexcept
 // Caller must disable interrupts before calling this
 inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 {
-	if (segments == nullptr)
-	{
-		return 0;
-	}
-
-	const int32_t netStepsTaken = (directionReversed) 								// if started reverse phase
-									? nextStep - (2 * reverseStartStep) + 1			// allowing for direction having changed
-										: nextStep - 1;
-	return (direction) ? netStepsTaken : -netStepsTaken;
+	return currentMotorPosition - positionAtSegmentStart;
 }
 
 // Return true if this is an extruder executing a printing move
@@ -182,16 +170,6 @@ inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 inline bool DriveMovement::IsPrintingExtruderMovement() const noexcept
 {
 	return !segmentFlags.nonPrintingMove;
-}
-
-inline void DriveMovement::CheckDirection(bool reversed) noexcept
-{
-	if (reversed != directionReversed)
-	{
-		directionReversed = !directionReversed;										// this can be done by an xor so hopefully more efficient than assignment
-		direction = !direction;
-		directionChanged = true;
-	}
 }
 
 inline int32_t DriveMovement::GetAndClearMaxStepsLate() noexcept
