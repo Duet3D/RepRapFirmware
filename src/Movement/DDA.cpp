@@ -663,7 +663,7 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 		{
 			const float delta = (float)msg.perDrive[drive].steps;
 			directionVector[drive] = delta;
-			if (delta != 0)
+			if (delta != 0.0)
 			{
 				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, delta, segFlags);
 				afterPrepare.drivesMoving.SetBit(drive);
@@ -1162,9 +1162,6 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 				int32_t delta = endPoint[drive] - prev->endPoint[drive];
 				if (delta != 0)
 				{
-#if DDA_DEBUG_STEP_COUNT
-					stepsRequested[drive] += delta;
-#endif
 					move.EnableDrivers(drive, false);
 					if (flags.continuousRotationShortcut && reprap.GetMove().GetKinematics().IsContinuousRotationAxis(drive))
 					{

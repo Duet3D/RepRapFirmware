@@ -193,9 +193,10 @@ inline bool MoveSegment::NormaliseAndCheckLinear(float distanceCarriedForwards, 
 		// so approximately when (p*N)^4 < 8*q^3, or very roughly when p*N << q
 		// However, using the Maclaurin expansion requires an extra division in each step calculation, which we would prefer to avoid.
 		// 2. We can convert the segment to a constant-speed segment, on the assumption that the speed won't change much during it. This is what we currently do.
-		t0 = -u/a;
-		if (likely(fabsf(t0) <= 4 * 16777216.0))
+		const float provisionalT0 = -u/a;
+		if (likely(fabsf(provisionalT0) <= 4 * 16777216.0))
 		{
+			t0 = provisionalT0;
 			return false;
 		}
 

@@ -936,7 +936,7 @@ void Move::CancelStepping() noexcept
 void Move::Diagnostics(MessageType mtype) noexcept
 {
 	// Get the type of bed compensation in use
-#if 0	// debug only
+#if STEPS_DEBUG
 	String<StringLength256> scratchString;
 #else
 	String<StringLength100> scratchString;
@@ -965,12 +965,12 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	minExtrusionPending = maxExtrusionPending = 0.0;
 #endif
 
-#if DDA_DEBUG_STEP_COUNT
-	scratchString.copy("Steps requested/done:");
-	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+#if STEPS_DEBUG
+	scratchString.copy("Pos req/act/dcf:");
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 	{
-		scratchString.catf(" %" PRIu32 "/%" PRIu32, stepsRequested[driver], stepsDone[driver]);
-		stepsRequested[driver] = stepsDone[driver] = 0;
+		scratchString.catf(" %.2f/%" PRIi32 "/%.2f", (double)dms[drive].positionRequested, dms[drive].currentMotorPosition, (double)dms[drive].distanceCarriedForwards);
+		dms[drive].positionRequested = (float)dms[drive].currentMotorPosition;
 	}
 	scratchString.cat('\n');
 	p.Message(mtype, scratchString.c_str());
@@ -988,14 +988,6 @@ void Move::Diagnostics(MessageType mtype) noexcept
 		ch = ',';
 	}
 	p.Message(mtype, "\n");
-#endif
-
-	// DEBUG
-#if 0
-	extern uint32_t maxDelay;
-	extern uint32_t maxDelayIncrease;
-	p.MessageF(mtype, "Max delay %" PRIu32 ", increase %" PRIu32 "\n", maxDelay, maxDelayIncrease);
-	maxDelay = maxDelayIncrease = 0;
 #endif
 
 	scratchString.Clear();
@@ -1942,6 +1934,10 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	const float steadyDistance = params.decelStartDistance - params.accelDistance;
 	const float decelDistance = dda.totalDistance - params.decelStartDistance;
 
+#if STEPS_DEBUG
+	dmp->positionRequested += steps;
+#endif
+
 	if (moveFlags.noShaping)
 	{
 		if (params.accelClocks != 0)
@@ -1952,12 +1948,12 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 		if (params.steadyClocks != 0)
 		{
 			dmp->AddSegment(steadyStartTime, params.steadyClocks,
-											steadyDistance * stepsPerMm, dda.topSpeed * stepsPerMm, 0.0, moveFlags);
+								steadyDistance * stepsPerMm, dda.topSpeed * stepsPerMm, 0.0, moveFlags);
 		}
 		if (params.decelClocks != 0)
 		{
 			dmp->AddSegment(decelStartTime, params.decelClocks,
-											decelDistance * stepsPerMm, dda.topSpeed * stepsPerMm, -(dda.deceleration * stepsPerMm), moveFlags);
+								decelDistance * stepsPerMm, dda.topSpeed * stepsPerMm, -(dda.deceleration * stepsPerMm), moveFlags);
 		}
 	}
 	else
@@ -1965,20 +1961,21 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 		for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 		{
 			const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
+			const uint32_t delay = axisShaper.GetImpulseDelay(index);
 			if (params.accelClocks != 0)
 			{
-				dmp->AddSegment(startTime + axisShaper.GetImpulseDelay(index), params.accelClocks,
+				dmp->AddSegment(startTime + delay, params.accelClocks,
 									params.accelDistance * factor, dda.startSpeed * factor, dda.acceleration * factor, moveFlags);
 			}
 			if (params.steadyClocks != 0)
 			{
-				dmp->AddSegment(steadyStartTime + axisShaper.GetImpulseDelay(index), params.steadyClocks,
-												steadyDistance * factor, dda.topSpeed * factor, 0.0, moveFlags);
+				dmp->AddSegment(steadyStartTime + delay, params.steadyClocks,
+									steadyDistance * factor, dda.topSpeed * factor, 0.0, moveFlags);
 			}
 			if (params.decelClocks != 0)
 			{
-				dmp->AddSegment(decelStartTime + axisShaper.GetImpulseDelay(index), params.decelClocks,
-												decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), moveFlags);
+				dmp->AddSegment(decelStartTime + delay, params.decelClocks,
+									decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), moveFlags);
 			}
 		}
 	}

@@ -27,8 +27,12 @@ void DriveMovement::Init(size_t drv) noexcept
 {
 	drive = (uint8_t)drv;
 	state = DMState::idle;
+	stepErrorType = 0;
 	distanceCarriedForwards = 0.0;
 	currentMotorPosition = positionAtSegmentStart = 0;
+#if STEPS_DEBUG
+	positionRequested = 0;
+#endif
 	driversNormallyUsed = driversCurrentlyUsed = 0;
 	nextDM = nullptr;
 	segments = nullptr;
@@ -42,12 +46,8 @@ void DriveMovement::DebugPrint() const noexcept
 	const char c = (drive < reprap.GetGCodes().GetTotalAxes()) ? reprap.GetGCodes().GetAxisLetters()[drive] : (char)('0' + LogicalDriveToExtruder(drive));
 	if (state != DMState::idle)
 	{
-		const char *const errText = (state == DMState::stepError1) ? " ERR1:"
-									: (state == DMState::stepError2) ? " ERR2:"
-										: (state == DMState::stepError3) ? " ERR3:"
-											: ":";
-		debugPrintf("DM%c%s state=%u dir=%c next=%" PRIi32 " rev=%" PRIi32 " interval=%" PRIu32 " ssl=%" PRIi32 " q=%.4e t0=%.4e p=%.4e dcf=%.2f\n",
-						c, errText, (unsigned int)state, (direction) ? 'F' : 'B', nextStep, reverseStartStep, stepInterval, segmentStepLimit,
+		debugPrintf("DM%c state=%u err=%u dir=%c next=%" PRIi32 " rev=%" PRIi32 " interval=%" PRIu32 " ssl=%" PRIi32 " q=%.4e t0=%.4e p=%.4e dcf=%.2f\n",
+						c, (unsigned int)state, (unsigned int)stepErrorType, (direction) ? 'F' : 'B', nextStep, reverseStartStep, stepInterval, segmentStepLimit,
 							(double)q, (double)t0, (double)p, (double)distanceCarriedForwards);
 	}
 	else
@@ -63,6 +63,9 @@ void DriveMovement::SetMotorPosition(int32_t pos) noexcept
 		debugPrintf("Changing drive %u pos from %" PRIi32 " to %" PRIi32 "\n", drive, currentMotorPosition, pos);
 	}
 	currentMotorPosition = pos;
+#if STEPS_DEBUG
+	positionRequested = (float)pos;
+#endif
 }
 
 void DriveMovement::AdjustMotorPosition(int32_t adjustment) noexcept
@@ -72,6 +75,9 @@ void DriveMovement::AdjustMotorPosition(int32_t adjustment) noexcept
 		debugPrintf("Adjusting drive %u pos from %" PRIi32 " to %" PRIi32 "\n", drive, currentMotorPosition, currentMotorPosition + adjustment);
 	}
 	currentMotorPosition += adjustment;
+#if STEPS_DEBUG
+	positionRequested = (float)currentMotorPosition;
+#endif
 }
 
 // Add a segment into the list. If the list is not empty then the new segment may overlap segments already in the list but will never start earlier than the first existing one.
@@ -110,9 +116,8 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 			 const int32_t timeInHand = offset - (int32_t)seg->GetDuration();
 			 if (timeInHand < 0)
 			 {
-				 state = DMState::stepError3;
 				 const uint32_t now = StepTimer::GetTimerTicks();
-				 LogStepError();
+				 LogStepError(3);
 				 RestoreBasePriority(oldPrio);
 				 if (reprap.Debug(Module::Move))
 				 {
@@ -335,9 +340,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
 		if (seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0))
 		{
-			// n = distanceCarriedForwards + u * t
-			// Therefore t = -distanceCarriedForwards/u + n/u = t0 + n/u
-			if (seg->GetU() < 0)
+			if (seg->GetU() < 0.0)
 			{
 				newDirection = false;
 				p = -1.0/seg->GetU();
@@ -447,8 +450,10 @@ static inline float fastLimSqrtf(float f) noexcept
 }
 
 // Tell the Move class that we had a step error. This always returns false so that CalcNextStepTimeFull can tail-chain to it.
-bool DriveMovement::LogStepError() noexcept
+bool DriveMovement::LogStepError(uint8_t type) noexcept
 {
+	state = DMState::stepError;
+	stepErrorType = type;
 	reprap.GetMove().LogStepError();
 	return false;
 }
@@ -469,6 +474,14 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 		if (stepsToLimit <= 0)
 		{
 			distanceCarriedForwards += currentSegment->GetLength() - (float)netStepsThisSegment;
+			if (distanceCarriedForwards > 1.0 || distanceCarriedForwards < -1.0)
+			{
+				if (reprap.Debug(Module::Move))
+				{
+					debugPrintf("dcf=%.2f nss=%" PRIi32 " start=%" PRIi32 " end=%" PRIi32 "\n", (double)distanceCarriedForwards, netStepsThisSegment, positionAtSegmentStart, currentMotorPosition);
+				}
+				LogStepError(5);
+			}
 			segments = currentSegment->GetNext();
 			const uint32_t prevEndTime = currentSegment->GetStartTime() + currentSegment->GetDuration();
 			MoveSegment::Release(currentSegment);
@@ -489,8 +502,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 				debugPrintf("step err1, %" PRIu32 ", %" PRIu32 "\n", currentSegment->GetStartTime(), prevEndTime);
 				DebugPrint();
 #endif
-				state = DMState::stepError1;
-				return LogStepError();
+				return LogStepError(1);
 			}
 
 			// Leave shiftFactor set to 0 so that we compute a single step time, because the interval will have changed
@@ -572,7 +584,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 #if SEGMENT_DEBUG
 		debugPrintf("DMstate %u, quitting\n", (unsigned int)state);
 #endif
-		return LogStepError();
+		return LogStepError(4);
 	}
 
 	nextCalcStepTime += t0;
@@ -583,8 +595,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 		debugPrintf("step err3, %.2f\n", (double)nextCalcStepTime);
 		DebugPrint();
 #endif
-		state = DMState::stepError2;
-		return LogStepError();
+		return LogStepError(2);
 	}
 
 	uint32_t iNextCalcStepTime = (uint32_t)nextCalcStepTime;
@@ -692,6 +703,9 @@ bool DriveMovement::StopDriver(int32_t& netStepsTaken) noexcept
 		{
 			homingDda->SetDriveCoordinate(currentMotorPosition, drive);
 		}
+#if STEPS_DEBUG
+		positionRequested = currentMotorPosition;
+#endif
 		return true;
 	}
 

@@ -13,18 +13,16 @@
 #include "MoveSegment.h"
 #include "ExtruderShaper.h"
 
+#define STEPS_DEBUG			(1)
+
 class PrepParams;
 
 enum class DMState : uint8_t
 {
 	idle = 0,
+	stepError,
 
-	// All states from stepError1 to just less than firstMotionState must be error states, see function DDA::HasStepEreor
-	stepError1,
-	stepError2,
-	stepError3,
-
-	// All higher values are various states of motion
+	// All higher values are various states of motion and require interrupts to be generated
 	firstMotionState,
 	starting = firstMotionState,					// interrupt scheduled for when the move should start
 	ending,											// interrupt scheduled for when the move should end
@@ -85,7 +83,7 @@ private:
 	bool ScheduleFirstSegment() noexcept;
 
 	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr
-	bool LogStepError() noexcept;						// tell the Move class that we had a step error
+	bool LogStepError(uint8_t type) noexcept;			// tell the Move class that we had a step error
 
 	static int32_t maxStepsLate;
 	static int32_t minStepInterval;
@@ -103,7 +101,7 @@ private:
 	uint8_t direction : 1,								// true=forwards, false=backwards
 			directionChanged : 1,						// set by CalcNextStepTime if the direction is changed
 			isExtruder : 1,								// true if this DM is for an extruder
-					: 3,								// padding to make the next field last
+			stepErrorType : 3,							// records what type of step error we had
 			stepsTakenThisSegment : 2;					// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
 	uint8_t stepsTillRecalc;							// how soon we need to recalculate
 
@@ -113,8 +111,12 @@ private:
 	float q, t0, p;										// the movement parameters of the current segment
 	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
 	float distanceCarriedForwards;						// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
+
 	int32_t currentMotorPosition;						// the current motor position in microsteps
 	int32_t positionAtSegmentStart;						// the value of currentMotorPosition at the start of the current segment
+#if STEPS_DEBUG
+	float positionRequested;							// accumulated position changes requested by moves executed
+#endif
 
 	// These values change as the segment is executed
 	int32_t nextStep;									// number of steps already done. For extruders this gets reset to the net steps already done at the start of each segment, so it can go negative.
