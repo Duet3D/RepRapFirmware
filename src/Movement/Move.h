@@ -253,7 +253,11 @@ public:
 	void SetMotorPosition(size_t driver, int32_t pos) noexcept pre(driver < MaxAxesPlusExtruders);
 
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
-	bool WaitingForAllMovesFinished(MovementSystemNumber msNumber) noexcept
+	bool WaitingForAllMovesFinished(MovementSystemNumber msNumber
+#if SUPPORT_ASYNC_MOVES
+									, AxesBitmap axesAndExtrudersOwned
+#endif
+								   ) noexcept
 		pre(queueNumber < rings.upb);										// Tell the lookahead ring we are waiting for it to empty and return true if it is
 	void DoLookAhead() noexcept SPEED_CRITICAL;								// Run the look-ahead procedure
 	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], const MovementState& ms, bool doBedCompensation) noexcept;	// Set the current position to be this
