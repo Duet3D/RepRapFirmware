@@ -43,7 +43,6 @@ public:
 	void Init(size_t drv) noexcept;
 
 	bool CalcNextStepTime(uint32_t now) noexcept SPEED_CRITICAL;
-	void TakenStep() noexcept SPEED_CRITICAL;
 	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
 	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept SPEED_CRITICAL;
 
@@ -108,14 +107,14 @@ private:
 	int32_t netStepsThisSegment;						// the (signed) net number of steps in the current segment
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
-	float q, t0, p;										// the movement parameters of the current segment
+	motioncalc_t q, t0, p;								// the movement parameters of the current segment
 	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
-	float distanceCarriedForwards;						// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
+	motioncalc_t distanceCarriedForwards;				// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
 
 	int32_t currentMotorPosition;						// the current motor position in microsteps
 	int32_t positionAtSegmentStart;						// the value of currentMotorPosition at the start of the current segment
 #if STEPS_DEBUG
-	float positionRequested;							// accumulated position changes requested by moves executed
+	motioncalc_t positionRequested;						// accumulated position changes requested by moves executed
 #endif
 
 	// These values change as the segment is executed
@@ -129,24 +128,21 @@ private:
 	uint32_t extruderPrintingSince = 0;					// the millis ticks when this extruder started doing printing moves
 };
 
-// Update the step counter because we have taken a step
-inline void DriveMovement::TakenStep() noexcept
-{
-	const int32_t adjustment = (int32_t)(direction << 1) - 1;	// to avoid a conditional jump, calculate +1 or -1 according to direction
-	currentMotorPosition += adjustment;					// adjust the current position
-}
-
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
 // Return true if there are more steps to do. When finished, leave nextStep == totalSteps + 1 and state == DMState::idle.
 // We inline this part to speed things up when we are doing double/quad/octal stepping.
 inline bool DriveMovement::CalcNextStepTime(uint32_t now) noexcept
 {
+	// We have just taken a step, so update the current motor position
+	const int32_t adjustment = (int32_t)(direction << 1) - 1;	// to avoid a conditional jump, calculate +1 or -1 according to direction
+	currentMotorPosition += adjustment;					// adjust the current position
+
 	++nextStep;
 	if (stepsTillRecalc != 0)
 	{
-		--stepsTillRecalc;					// we are doing double/quad/octal stepping
+		--stepsTillRecalc;								// we are doing double/quad/octal stepping
 		nextStepTime += stepInterval;
-#ifdef DUET3_MB6HC							// we need to increase the minimum step pulse length to be long enough for the TMC5160
+#ifdef DUET3_MB6HC										// we need to increase the minimum step pulse length to be long enough for the TMC5160
 		asm volatile("nop");
 		asm volatile("nop");
 		asm volatile("nop");

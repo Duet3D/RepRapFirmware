@@ -50,7 +50,7 @@ public:
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// process M593
 
 	size_t GetNumImpulses() const noexcept { return numImpulses; }
-	float GetImpulseSize(size_t n) const noexcept { return coefficients[n]; }
+	motioncalc_t GetImpulseSize(size_t n) const noexcept { return coefficients[n]; }
 	uint32_t GetImpulseDelay(size_t n) const noexcept { return delays[n]; }
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -75,8 +75,8 @@ private:
 
 	// Parameters that fully define the shaping
 	unsigned int numImpulses;							// the number of impulses
-	float coefficients[MaxImpulses];					// the coefficients of all the impulses, must add up to 1.0
-	uint32_t delays[MaxImpulses];							// the start delay in step clocks of each impulse
+	motioncalc_t coefficients[MaxImpulses];				// the coefficients of all the impulses, must add up to 1.0
+	uint32_t delays[MaxImpulses];						// the start delay in step clocks of each impulse
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */

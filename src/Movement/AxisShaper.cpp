@@ -127,8 +127,16 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 				// Get the coefficients
 				size_t numAmplitudes = MaxImpulses - 1;
 				gb.MustSee('H');
+#if USE_DOUBLE_MOTIONCALC
+				float fCoefficients[MaxImpulses - 1];
+				gb.GetFloatArray(fCoefficients, numAmplitudes, false);
+				for (unsigned int i = 0; i < numAmplitudes; ++i)
+				{
+					coefficients[i] = (motioncalc_t)fCoefficients[i];
+				}
+#else
 				gb.GetFloatArray(coefficients, numAmplitudes, false);
-
+#endif
 				// Get the impulse delays, if provided
 				if (gb.Seen('T'))
 				{
@@ -248,17 +256,28 @@ GCodeResult AxisShaper::Configure(GCodeBuffer& gb, const StringRef& reply) THROW
 		}
 
 		// The sum of the coefficients must total 1, use this to fill in the last coefficient
-		float sum = 0.0;
+		motioncalc_t sum = 0.0;
 		for (size_t i = 0; i + 1 < numImpulses; ++i)
 		{
 			sum += coefficients[i];
 		}
-		coefficients[numImpulses - 1] = 1.0 - sum;
+		coefficients[numImpulses - 1] = (motioncalc_t)1.0 - sum;
 
 		reprap.MoveUpdated();
 
 #if SUPPORT_CAN_EXPANSION
+# if USE_DOUBLE_MOTIONCALC
+		{
+			float fCoefficients[MaxImpulses];
+			for (size_t i = 0; i < numImpulses; ++i)
+			{
+				fCoefficients[i] = (float)coefficients[i];
+			}
+			return reprap.GetMove().UpdateRemoteInputShaping(numImpulses, fCoefficients, delays, reply);
+		}
+# else
 		return reprap.GetMove().UpdateRemoteInputShaping(numImpulses, coefficients, delays, reply);
+# endif
 #else
 		// Fall through to return GCodeResult::ok
 #endif

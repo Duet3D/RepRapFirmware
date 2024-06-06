@@ -1151,7 +1151,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						else		// we don't generate segments for leadscrew adjustment moves to remote drivers
 #endif
 						{
-							move.AddLinearSegments(*this, driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (float)delta, segFlags);
+							move.AddLinearSegments(*this, driver.localDriver + MaxAxesPlusExtruders, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
 						}
 					}
 				}
@@ -1184,7 +1184,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 					}
 
 					// We generate segments even for nonlocal drivers so that the final position is correct and to track the position in near real time
-					move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, (float)delta, segFlags);
+					move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, (motioncalc_t)delta, segFlags);
 					afterPrepare.drivesMoving.SetBit(drive);
 
 #if SUPPORT_CAN_EXPANSION
@@ -1227,13 +1227,13 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						{
 							const NonlinearExtrusion& nl = move.GetExtrusionCoefficients(extruder);
 							float& dv = directionVector[drive];
-							const float averageExtrusionSpeed = (totalDistance * dv * StepClockRate)/clocksNeeded;		// need speed in mm/sec for nonlinear extrusion calculation
+							const float averageExtrusionSpeed = (totalDistance * dv * StepClockRate)/(float)clocksNeeded;		// need speed in mm/sec for nonlinear extrusion calculation
 							const float factor = 1.0 + min<float>((nl.A + (nl.B * averageExtrusionSpeed)) * averageExtrusionSpeed, nl.limit);
 							dv *= factor;
 						}
 #endif
 
-						const float delta = totalDistance * directionVector[drive] * move.DriveStepsPerMm(drive);
+						const motioncalc_t delta = totalDistance * directionVector[drive] * move.DriveStepsPerMm(drive);
 
 						afterPrepare.drivesMoving.SetBit(drive);
 						if (flags.checkEndstops)

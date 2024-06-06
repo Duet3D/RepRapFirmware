@@ -967,7 +967,7 @@ void Move::Diagnostics(MessageType mtype) noexcept
 
 #if STEPS_DEBUG
 	scratchString.copy("Pos req/act/dcf:");
-	for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
+	for (size_t drive = 0; drive < reprap.GetGCodes().GetTotalAxes(); ++drive)
 	{
 		scratchString.catf(" %.2f/%" PRIi32 "/%.2f", (double)dms[drive].positionRequested, dms[drive].currentMotorPosition, (double)dms[drive].distanceCarriedForwards);
 		dms[drive].positionRequested = (float)dms[drive].currentMotorPosition;
@@ -1914,7 +1914,7 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 
 // Add some linear segments to be executed by a driver, taking account of possible input shaping. This is used by linear axes and by extruders.
 // We never add a segment that starts earlier than any existing segments, but we may add segments when there are none already.
-void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, float steps, MovementFlags moveFlags) noexcept
+void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags) noexcept
 {
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
 	{
@@ -1924,15 +1924,15 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	}
 
 	DriveMovement* const dmp = &dms[logicalDrive];
-	const float stepsPerMm = steps/dda.totalDistance;
-
-	// The algorithm for merging segments into existing segments currently assumes that there are no gaps between the existing segments.
-	// To ensure this, we must add all of the acceleration, steady speed, and deceleration parts of a move for one impulse before proceeding to the next impulse
+	const motioncalc_t stepsPerMm = steps/(motioncalc_t)dda.totalDistance;
 
 	const uint32_t steadyStartTime = startTime + params.accelClocks;
 	const uint32_t decelStartTime = steadyStartTime + params.steadyClocks;
-	const float steadyDistance = params.decelStartDistance - params.accelDistance;
-	const float decelDistance = dda.totalDistance - params.decelStartDistance;
+
+	// Phases with zero duration will not get executed. Avoid introducing distance errors because of this.
+	const motioncalc_t accelDistance = (params.accelClocks == 0) ? (motioncalc_t)0.0 : (motioncalc_t)params.accelDistance;
+	const motioncalc_t decelDistance = (params.decelClocks == 0) ? (motioncalc_t)0.0 : (motioncalc_t)(dda.totalDistance - params.decelStartDistance);
+	const motioncalc_t steadyDistance = (params.steadyClocks == 0) ? (motioncalc_t)0.0 : (motioncalc_t)dda.totalDistance - accelDistance - decelDistance;
 
 #if STEPS_DEBUG
 	dmp->positionRequested += steps;
@@ -1943,39 +1943,39 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 		if (params.accelClocks != 0)
 		{
 			dmp->AddSegment(startTime, params.accelClocks,
-								params.accelDistance * stepsPerMm, dda.startSpeed * stepsPerMm, dda.acceleration * stepsPerMm, moveFlags);
+								accelDistance * stepsPerMm, (motioncalc_t)dda.startSpeed * stepsPerMm, (motioncalc_t)dda.acceleration * stepsPerMm, moveFlags);
 		}
 		if (params.steadyClocks != 0)
 		{
 			dmp->AddSegment(steadyStartTime, params.steadyClocks,
-								steadyDistance * stepsPerMm, dda.topSpeed * stepsPerMm, 0.0, moveFlags);
+								steadyDistance * stepsPerMm, (motioncalc_t)dda.topSpeed * stepsPerMm, (motioncalc_t)0.0, moveFlags);
 		}
 		if (params.decelClocks != 0)
 		{
 			dmp->AddSegment(decelStartTime, params.decelClocks,
-								decelDistance * stepsPerMm, dda.topSpeed * stepsPerMm, -(dda.deceleration * stepsPerMm), moveFlags);
+								decelDistance * stepsPerMm, (motioncalc_t)dda.topSpeed * stepsPerMm, -((motioncalc_t)dda.deceleration * stepsPerMm), moveFlags);
 		}
 	}
 	else
 	{
 		for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
 		{
-			const float factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
+			const motioncalc_t factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
 			const uint32_t delay = axisShaper.GetImpulseDelay(index);
 			if (params.accelClocks != 0)
 			{
 				dmp->AddSegment(startTime + delay, params.accelClocks,
-									params.accelDistance * factor, dda.startSpeed * factor, dda.acceleration * factor, moveFlags);
+									accelDistance * factor, (motioncalc_t)dda.startSpeed * factor, (motioncalc_t)dda.acceleration * factor, moveFlags);
 			}
 			if (params.steadyClocks != 0)
 			{
 				dmp->AddSegment(steadyStartTime + delay, params.steadyClocks,
-									steadyDistance * factor, dda.topSpeed * factor, 0.0, moveFlags);
+									steadyDistance * factor, (motioncalc_t)dda.topSpeed * factor, (motioncalc_t)0.0, moveFlags);
 			}
 			if (params.decelClocks != 0)
 			{
 				dmp->AddSegment(decelStartTime + delay, params.decelClocks,
-									decelDistance * factor, dda.topSpeed * factor, -(dda.deceleration * factor), moveFlags);
+									decelDistance * factor, (motioncalc_t)dda.topSpeed * factor, -((motioncalc_t)dda.deceleration * factor), moveFlags);
 			}
 		}
 	}
@@ -2384,7 +2384,6 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 # endif
 		else
 		{
-			dm2->TakenStep();										// update the step counter based on the current direction
 			(void)dm2->CalcNextStepTime(now);						// calculate next step time, which may change the required direction
 		}
 	}
@@ -2459,7 +2458,6 @@ void Move::SimulateSteppingDrivers(Platform& p) noexcept
 			}
 			else
 			{
-				dm2->TakenStep();
 				(void)dm2->CalcNextStepTime(dueTime);					// calculate next step time
 			}
 		}

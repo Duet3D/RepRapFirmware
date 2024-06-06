@@ -80,7 +80,7 @@ public:
 #endif
 
 	// Given that this is not a constant-speed segment, test whether it is accelerating or decelerating
-	bool IsAccelerating() const noexcept { return a > 0.0; }
+	bool IsAccelerating() const noexcept { return a > (motioncalc_t)0.0; }
 
 	// Get the segment start time in step clocks
 	uint32_t GetStartTime() const noexcept { return startTime; }
@@ -89,34 +89,34 @@ public:
 	uint32_t GetDuration() const noexcept { return duration; }
 
 	// Get the initial speed
-	float GetU() const noexcept { return u; }
+	motioncalc_t GetU() const noexcept { return u; }
 
 	// Get the acceleration
-	float GetA() const noexcept { return a; }
+	motioncalc_t GetA() const noexcept { return a; }
 
 	// Get the actual initial speed when pressure advance is being applied
-	float GetStartSpeed(float pressureAdvanceK) const noexcept { return u + a * pressureAdvanceK; }
+	motioncalc_t GetStartSpeed(float pressureAdvanceK) const noexcept { return u + a * (motioncalc_t)pressureAdvanceK; }
 
 	// Get the actual ending speed when pressure advance is being applied
-	float GetEndSpeed(float pressureAdvanceK) const noexcept { return u + a * (pressureAdvanceK + (float)duration); }
+	motioncalc_t GetEndSpeed(float pressureAdvanceK) const noexcept { return u + a * ((motioncalc_t)pressureAdvanceK + (motioncalc_t)duration); }
 
 	// Get the length
-	float GetLength() const noexcept { return distance; }
+	motioncalc_t GetLength() const noexcept { return distance; }
 
 	// For a decelerating move, calculate the distance before the move reverses
-	float GetDistanceToReverse() const noexcept;
+	motioncalc_t GetDistanceToReverse() const noexcept;
 
 	// Set the parameters of this segment
-	void SetParameters(uint32_t p_startTime, uint32_t p_duration, float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept;
+	void SetParameters(uint32_t p_startTime, uint32_t p_duration, motioncalc_t p_distance, motioncalc_t p_u, motioncalc_t p_a, MovementFlags p_flags) noexcept;
 
 	// Split this segment in two, returning a pointer to the second part
 	MoveSegment *Split(uint32_t firstDuration) noexcept pre(firstDuration < duration);
 
 	// Merge the parameters for another segment with the same start time and duration into this one
-	void Merge(float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept;
+	void Merge(motioncalc_t p_distance, motioncalc_t p_u, motioncalc_t p_a, MovementFlags p_flags) noexcept;
 
 	// Normalise this segment by removing very small accelerations that cause problems, update t0, return true if it is linear
-	bool NormaliseAndCheckLinear(float distanceCarriedForwards, float& t0) noexcept;
+	bool NormaliseAndCheckLinear(motioncalc_t distanceCarriedForwards, motioncalc_t& t0) noexcept;
 
 	// Set the 'executing' bit in the flags
 	void SetExecuting() noexcept { flags.executing = true; }
@@ -155,9 +155,9 @@ protected:
 	MovementFlags flags;
 	uint32_t startTime;										// when this segment should start, in movement clock ticks
 	uint32_t duration;										// the duration of this segment in movement ticks
-	float distance;											// the number of steps moved
-	float u;												// the initial speed in steps per movement tick
-	float a;												// the acceleration during this segment in steps per movement tick squared
+	motioncalc_t distance;									// the number of steps moved
+	motioncalc_t u;											// the initial speed in steps per movement tick
+	motioncalc_t a;											// the acceleration during this segment in steps per movement tick squared
 
 private:
 	MoveSegment(MoveSegment *p_next) noexcept;
@@ -175,9 +175,9 @@ inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
 // Returns:
 //  true if the segment is constant speed, with t0 = time from start of segment at which the distance would be/will be/would have been zero
 //  false if the segment has acceleration or deceleration, with t0 = time from start of segment at which the speed would have been/will be/would be zero
-inline bool MoveSegment::NormaliseAndCheckLinear(float distanceCarriedForwards, float& t0) noexcept
+inline bool MoveSegment::NormaliseAndCheckLinear(motioncalc_t distanceCarriedForwards, motioncalc_t& t0) noexcept
 {
-	if (a != 0.0)
+	if (a != (motioncalc_t)0.0)
 	{
 		// The move has acceleration or deceleration, but it may be small enough to cause problems with the calculations.
 		// The reason is that the step time is calculated as:
@@ -193,16 +193,16 @@ inline bool MoveSegment::NormaliseAndCheckLinear(float distanceCarriedForwards, 
 		// so approximately when (p*N)^4 < 8*q^3, or very roughly when p*N << q
 		// However, using the Maclaurin expansion requires an extra division in each step calculation, which we would prefer to avoid.
 		// 2. We can convert the segment to a constant-speed segment, on the assumption that the speed won't change much during it. This is what we currently do.
-		const float provisionalT0 = -u/a;
-		if (likely(fabsf(provisionalT0) <= 4 * 16777216.0))
+		const motioncalc_t provisionalT0 = -u/a;
+		if (likely(fabsm(provisionalT0) <= 4 * (motioncalc_t)16777216.0))
 		{
 			t0 = provisionalT0;
 			return false;
 		}
 
 		// The acceleration/deceleration is small enough to cause calculation problems, so change it to a linear move
-		u += 0.5 * a * (float)duration;				// adjust the initial speed to preserve the total distance
-		a = 0.0;
+		u += (motioncalc_t)0.5 * a * (motioncalc_t)duration;				// adjust the initial speed to preserve the total distance
+		a = (motioncalc_t)0.0;
 	}
 
 	// The move is constant speed
@@ -230,13 +230,13 @@ inline void MoveSegment::SetNext(MoveSegment *p_next) noexcept
 }
 
 // For a decelerating move with positive start speed, calculate the distance before the move reverses
-inline float MoveSegment::GetDistanceToReverse() const noexcept
+inline motioncalc_t MoveSegment::GetDistanceToReverse() const noexcept
 {
-	return fsquare(u)/-(2 * a);
+	return msquare(u)/-((motioncalc_t)2.0 * a);
 }
 
 // Set the parameters of this segment
-inline void MoveSegment::SetParameters(uint32_t p_startTime, uint32_t p_duration, float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept
+inline void MoveSegment::SetParameters(uint32_t p_startTime, uint32_t p_duration, motioncalc_t p_distance, motioncalc_t p_u, motioncalc_t p_a, MovementFlags p_flags) noexcept
 {
 	startTime = p_startTime;
 	duration = p_duration;
@@ -250,8 +250,8 @@ inline void MoveSegment::SetParameters(uint32_t p_startTime, uint32_t p_duration
 inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 {
 	MoveSegment *const secondSeg = Allocate(next);
-	const float firstDistance = (u + 0.5 * a * firstDuration) * firstDuration;
-	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, u + a * (float)firstDuration, a, flags);
+	const motioncalc_t firstDistance = (u + (motioncalc_t)0.5 * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
+	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, u + a * (motioncalc_t)firstDuration, a, flags);
 #if SEGMENT_DEBUG
 	debugPrintf("split at %" PRIu32 ", fd=%.2f, sd=%.2f\n", firstDuration, (double)firstDistance, (double)(distance - firstDistance));
 #endif
@@ -262,7 +262,7 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 }
 
 // Merge the parameters for another segment with the same start time and duration into this one
-inline void MoveSegment::Merge(float p_distance, float p_u, float p_a, MovementFlags p_flags) noexcept
+inline void MoveSegment::Merge(motioncalc_t p_distance, motioncalc_t p_u, motioncalc_t p_a, MovementFlags p_flags) noexcept
 {
 #if SEGMENT_DEBUG
 	debugPrintf("merge d=%.2f u=%.4e a=%.4e into ", (double)p_distance, (double)p_u, (double)p_a);

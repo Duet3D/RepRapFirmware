@@ -2195,7 +2195,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 122:
 				{
 					const unsigned int type = (gb.Seen('P')) ? gb.GetIValue() : 0;
-					const MessageType mt = (MessageType)(gb.GetResponseMessageType() | PushFlag);	// set the Push flag to combine multiple messages into a single OutputBuffer chain
+					MessageType mt = gb.GetResponseMessageType();
+					if (mt == MessageType::GenericMessage)
+					{
+						// M122 responses are long and if we try to send them to multiple destinations, we run out of buffers
+#if HAS_NETWORKING
+						mt = MessageType::HttpMessage;
+#else
+						mt = MessageType::UsbMessage;
+#endif
+					}
+					mt = (MessageType)(mt | PushFlag);									// set the Push flag to combine multiple messages into a single OutputBuffer chain
+
+					// If
 #if SUPPORT_CAN_EXPANSION
 					const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : CanInterface::GetCanAddress();
 					if (board != CanInterface::GetCanAddress())
@@ -2262,7 +2274,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						const float temperature = gb.GetFValue();
 						if (currentHeater < 0)
 						{
-							if (temperature > 0.0)		// turning off a non-existent bed or chamber heater is not an error
+							if (temperature > 0.0)							// turning off a non-existent bed or chamber heater is not an error
 							{
 								reply.printf("No %s heater has been configured for slot %d", heaterName, index);
 								result = GCodeResult::error;

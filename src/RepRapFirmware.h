@@ -350,6 +350,30 @@ class SbcInterface;
 class ExpansionManager;
 #endif
 
+// Define a floating point type for recording numbers of microsteps including fractional microsteps.
+// This is normally defined as float, but we can use double to check whether rounding error is causing problems.
+#define USE_DOUBLE_MOTIONCALC		(SAME70)
+
+#if USE_DOUBLE_MOTIONCALC
+typedef double motioncalc_t;
+#else
+typedef float motioncalc_t;
+#endif
+
+inline motioncalc_t msquare(motioncalc_t a) noexcept
+{
+	return a * a;
+}
+
+inline motioncalc_t fabsm(motioncalc_t a) noexcept
+{
+#if USE_DOUBLE_MOTIONCALC
+	return fabs(a);
+#else
+	return fabsf(a);
+#endif
+}
+
 // Define floating point type to use for calculations where we would like high precision in matrix calculations
 #if SAME70
 typedef double floatc_t;							// type of matrix element used for calibration

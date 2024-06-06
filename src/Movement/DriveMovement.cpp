@@ -121,7 +121,6 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, float dist
 				 RestoreBasePriority(oldPrio);
 				 if (reprap.Debug(Module::Move))
 				 {
-					 MoveSegment::DebugPrintList(seg);
 					 debugPrintf("was executing, overlap %" PRIi32 " while trying to add s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e f=%02" PRIx32 " at time %" PRIu32 "\n",
 						 	 	 	 -timeInHand, startTime, duration, (double)distance, (double)u, (double)a, moveFlags.all, now);
 				 }
@@ -340,16 +339,16 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
 		if (seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0))
 		{
-			if (seg->GetU() < 0.0)
+			if (seg->GetU() < (motioncalc_t)0.0)
 			{
 				newDirection = false;
-				p = -1.0/seg->GetU();
+				p = (motioncalc_t)-1.0/seg->GetU();
 				segmentStepLimit = 1 - netStepsThisSegment;
 			}
 			else
 			{
 				newDirection = true;
-				p = 1.0/seg->GetU();
+				p = (motioncalc_t)1.0/seg->GetU();
 				segmentStepLimit = netStepsThisSegment + 1;
 			}
 			reverseStartStep = segmentStepLimit;
@@ -362,20 +361,20 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 			// Therefore 0.5 * t^2 + u * t/a + (distanceCarriedForwards - n)/a = 0
 			// Therefore t = -u/a +/- sqrt((u/a)^2 - 2 * (distanceCarriedForwards - n)/a)
 			// Calculate the t0, p and q coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q) and set up the initial direction
-			newDirection = (seg->GetU() == 0.0) ? (seg->GetA() > 0.0) : (seg->GetU() > 0.0);
-			float multiplier = (newDirection) ? 1.0 : -1.0;
+			newDirection = (seg->GetU() == (motioncalc_t)0.0) ? (seg->GetA() > (motioncalc_t)0.0) : (seg->GetU() > (motioncalc_t)0.0);
+			motioncalc_t multiplier = (newDirection) ? (motioncalc_t)1.0 : (motioncalc_t)-1.0;
 			int32_t stepsInInitialDirection = (newDirection) ? netStepsThisSegment : -netStepsThisSegment;
 
-			if (t0 <= 0.0)
+			if (t0 <= (motioncalc_t)0.0)
 			{
 				// The direction reversal is in the past
 				segmentStepLimit = reverseStartStep = stepsInInitialDirection + 1;
 				state = DMState::cartAccel;
 			}
-			else if (t0 < (float)segments->GetDuration())
+			else if (t0 < (motioncalc_t)segments->GetDuration())
 			{
 				// Reversal is in this segment, but it may be the first step, or may be beyond the last step we are going to take
-				float distanceToReverse = (segments->GetDistanceToReverse() + distanceCarriedForwards) * multiplier;
+				const motioncalc_t distanceToReverse = (segments->GetDistanceToReverse() + distanceCarriedForwards) * multiplier;
 				const int32_t netStepsBeforeReverse = (int32_t)distanceToReverse;
 				if (netStepsBeforeReverse == 0)
 				{
@@ -403,9 +402,9 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 				segmentStepLimit = reverseStartStep = stepsInInitialDirection + 1;
 				state = DMState::cartDecelNoReverse;
 			}
-			const float rawP = 2.0/seg->GetA();
+			const motioncalc_t rawP = (motioncalc_t)2.0/seg->GetA();
 			p = rawP * multiplier;
-			q = fsquare(t0) - rawP * distanceCarriedForwards;
+			q = msquare(t0) - rawP * distanceCarriedForwards;
 #if 0
 			if (std::isinf(q))
 			{
@@ -443,10 +442,15 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 	}
 }
 
-// Version of fastSqrtf that allows for slightly negative operands caused by rounding error
-static inline float fastLimSqrtf(float f) noexcept
+// Version of fastSqrt that allows for slightly negative operands caused by rounding error
+
+static inline motioncalc_t fastLimSqrtm(motioncalc_t f) noexcept
 {
+#if USE_DOUBLE_MOTIONCALC
+	return (f >= (motioncalc_t)0.0) ? fastSqrtd(f) : (motioncalc_t)0.0;
+#else
 	return (f > 0.0) ? fastSqrtf(f) : 0.0;
+#endif
 }
 
 // Tell the Move class that we had a step error. This always returns false so that CalcNextStepTimeFull can tail-chain to it.
@@ -454,6 +458,12 @@ bool DriveMovement::LogStepError(uint8_t type) noexcept
 {
 	state = DMState::stepError;
 	stepErrorType = type;
+	if (reprap.Debug(Module::Move))
+	{
+		debugPrintf("Step err %u on ", type);
+		DebugPrint();
+		MoveSegment::DebugPrintList(segments);
+	}
 	reprap.GetMove().LogStepError();
 	return false;
 }
@@ -473,14 +483,14 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 		// If there are no more steps left in this segment, skip to the next segment and use single stepping
 		if (stepsToLimit <= 0)
 		{
-			distanceCarriedForwards += currentSegment->GetLength() - (float)netStepsThisSegment;
-			if (distanceCarriedForwards > 1.0 || distanceCarriedForwards < -1.0)
+			distanceCarriedForwards += currentSegment->GetLength() - (motioncalc_t)netStepsThisSegment;
+			if (distanceCarriedForwards > (motioncalc_t)1.0 || distanceCarriedForwards < (motioncalc_t)-1.0)
 			{
-				if (reprap.Debug(Module::Move))
-				{
-					debugPrintf("dcf=%.2f nss=%" PRIi32 " start=%" PRIi32 " end=%" PRIi32 "\n", (double)distanceCarriedForwards, netStepsThisSegment, positionAtSegmentStart, currentMotorPosition);
-				}
-				LogStepError(5);
+				return LogStepError(5);
+			}
+			if (currentMotorPosition - positionAtSegmentStart != netStepsThisSegment)
+			{
+				return LogStepError(6);
 			}
 			segments = currentSegment->GetNext();
 			const uint32_t prevEndTime = currentSegment->GetStartTime() + currentSegment->GetDuration();
@@ -545,23 +555,23 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 
 	stepsTillRecalc = (1u << shiftFactor) - 1u;					// store number of additional steps to generate
 
-	float nextCalcStepTime;
+	motioncalc_t nextCalcStepTime;
 
 	// Work out the time of the step
 	switch (state)
 	{
 	case DMState::cartLinear:									// linear steady speed
-		nextCalcStepTime = (float)(nextStep + (int32_t)stepsTillRecalc) * p;
+		nextCalcStepTime = (motioncalc_t)(nextStep + (int32_t)stepsTillRecalc) * p;
 		break;
 
 	case DMState::cartAccel:									// Cartesian accelerating
-		nextCalcStepTime = fastLimSqrtf(q + p * (float)(nextStep + (int32_t)stepsTillRecalc));
+		nextCalcStepTime = fastLimSqrtm(q + p * (motioncalc_t)(nextStep + (int32_t)stepsTillRecalc));
 		break;
 
 	case DMState::cartDecelForwardsReversing:
 		if (nextStep + (int32_t)stepsTillRecalc < reverseStartStep)
 		{
-			nextCalcStepTime = -fastLimSqrtf(q + p * (float)(nextStep + (int32_t)stepsTillRecalc));
+			nextCalcStepTime = -fastLimSqrtm(q + p * (motioncalc_t)(nextStep + (int32_t)stepsTillRecalc));
 			break;
 		}
 
@@ -572,12 +582,12 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 	case DMState::cartDecelReverse:								// Cartesian decelerating, reverse motion. Convert the steps to int32_t because the net steps may be negative.
 		{
 			const int32_t netSteps = 2 * reverseStartStep - nextStep - 1;
-			nextCalcStepTime = fastLimSqrtf(q + p * (float)(netSteps - (int32_t)stepsTillRecalc));
+			nextCalcStepTime = fastLimSqrtm(q + p * (motioncalc_t)(netSteps - (int32_t)stepsTillRecalc));
 		}
 		break;
 
 	case DMState::cartDecelNoReverse:							// Cartesian decelerating with no reversal
-		nextCalcStepTime = -fastLimSqrtf(q + p * (float)(nextStep + (int32_t)stepsTillRecalc));
+		nextCalcStepTime = -fastLimSqrtm(q + p * (motioncalc_t)(nextStep + (int32_t)stepsTillRecalc));
 		break;
 
 	default:
@@ -589,12 +599,12 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 
 	nextCalcStepTime += t0;
 
-	if (unlikely(std::isnan(nextCalcStepTime) || nextCalcStepTime < 0.0))
+	if (unlikely(std::isnan(nextCalcStepTime) || nextCalcStepTime < (motioncalc_t)0.0))
 	{
-#if SEGMENT_DEBUG
-		debugPrintf("step err3, %.2f\n", (double)nextCalcStepTime);
-		DebugPrint();
-#endif
+		if (reprap.Debug(Module::Move))
+		{
+			debugPrintf("nextCalcStepTime=%.3e\n", (double)nextCalcStepTime);
+		}
 		return LogStepError(2);
 	}
 
@@ -658,7 +668,7 @@ void DriveMovement::TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept
 	if (state == DMState::ending)
 	{
 		currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
-		distanceCarriedForwards += currentSegment->GetLength() - (float)netStepsThisSegment;
+		distanceCarriedForwards += currentSegment->GetLength() - (motioncalc_t)netStepsThisSegment;
 		segments = currentSegment->GetNext();
 		MoveSegment::Release(currentSegment);
 		if (NewSegment(clocksNow) == nullptr || state == DMState::starting)
@@ -668,7 +678,7 @@ void DriveMovement::TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept
 	}
 
 	const int32_t timeFromStart = (int32_t)(clocksNow - currentSegment->GetStartTime());
-	currentMotorPosition = positionAtSegmentStart + lrintf((currentSegment->GetU() + (0.5 * currentSegment->GetA() * (float)timeFromStart)) * (float)timeFromStart + distanceCarriedForwards);
+	currentMotorPosition = positionAtSegmentStart + lrintf((currentSegment->GetU() + ((motioncalc_t)0.5 * currentSegment->GetA() * (motioncalc_t)timeFromStart)) * (motioncalc_t)timeFromStart + distanceCarriedForwards);
 	uint32_t targetTime;
 	if (currentSegment->GetDuration() <= timeFromStart + MoveTiming::MaxRemoteDriverPositionUpdateInterval)
 	{
