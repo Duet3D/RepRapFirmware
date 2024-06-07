@@ -67,6 +67,7 @@ void DriveMovement::SetMotorPosition(int32_t pos) noexcept
 #if STEPS_DEBUG
 	positionRequested = (float)pos;
 #endif
+	ClearMovementPending();
 }
 
 void DriveMovement::AdjustMotorPosition(int32_t adjustment) noexcept
