@@ -440,6 +440,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 						(unsigned int)state, (double)q, (double)t0, (double)p, nextStep, segmentStepLimit);
 		seg->DebugPrint('k');
 #endif
+		distanceCarriedForwards += seg->GetLength();
 		MoveSegment *oldSeg = seg;
 		segments = seg = seg->GetNext();						// skip this segment
 		MoveSegment::Release(oldSeg);
