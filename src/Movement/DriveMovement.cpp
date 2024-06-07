@@ -339,6 +339,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		// Calculate the movement parameters
 		bool newDirection;
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
+		// If netStepsThisSegment is zero then either this segment plus the distance carried forwards is less than one step, or it's a forwards-then-back move
 		if (seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0))
 		{
 			if (seg->GetU() < (motioncalc_t)0.0)
@@ -376,16 +377,16 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 			else if (t0 < (motioncalc_t)segments->GetDuration())
 			{
 				// Reversal is potentially in this segment, but it may be before the first step, or may be beyond the last step we are going to take
-				// It can happen that the target end speed is zero but due to FP rounding error, distanceToReverse was just below netStepsInInitialDirection and got rounded down
-				// To avoid this and other issues, don't do a reversing movement unless there is more than 1 reverse step.
+				// It can also happen that the target end speed is zero but due to FP rounding error, distanceToReverse was just below netStepsInInitialDirection and got rounded down
 				const motioncalc_t distanceToReverse = (segments->GetDistanceToReverse() + distanceCarriedForwards) * multiplier;
-				const int32_t netStepsBeforeReverse = (int32_t)distanceToReverse;
-				if (netStepsBeforeReverse <= netStepsInInitialDirection + 1)
+				const int32_t stepsBeforeReverse = (int32_t)(distanceToReverse - (motioncalc_t)0.2);			// don't step and immediately step back again
+				// Note, stepsBeforeReverse may be negative at this point
+				if (stepsBeforeReverse <= netStepsInInitialDirection && netStepsInInitialDirection >= 0)
 				{
 					segmentStepLimit = reverseStartStep = netStepsInInitialDirection + 1;
 					state = DMState::cartDecelNoReverse;
 				}
-				else if (netStepsBeforeReverse == 0)
+				else if (stepsBeforeReverse <= 0)
 				{
 					// Reversal happens immediately
 					newDirection = !newDirection;
@@ -395,7 +396,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 				}
 				else
 				{
-					reverseStartStep = netStepsBeforeReverse + 1;
+					reverseStartStep = stepsBeforeReverse + 1;
 					segmentStepLimit = 2 * reverseStartStep - netStepsInInitialDirection - 1;
 					state = DMState::cartDecelForwardsReversing;
 				}
@@ -436,9 +437,17 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		}
 
 #if 0
+		if (netStepsThisSegment != 0)
+		{
+			debugPrintf("Calc error! dcf=%.2f seg: ", (double)distanceCarriedForwards);
+			seg->DebugPrint();
+		}
+#endif
+
+#if 0
 		debugPrintf("skipping seg: state %u q=%.4e t0=%.4e p=%.4e ns=%" PRIi32 " ssl=%" PRIi32 "\n",
 						(unsigned int)state, (double)q, (double)t0, (double)p, nextStep, segmentStepLimit);
-		seg->DebugPrint('k');
+		seg->DebugPrint();
 #endif
 		distanceCarriedForwards += seg->GetLength();
 		MoveSegment *oldSeg = seg;
