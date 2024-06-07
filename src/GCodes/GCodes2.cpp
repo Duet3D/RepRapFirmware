@@ -3099,9 +3099,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 409: // Get object model values in JSON format
 				{
 					String<StringLength100> key;
-					String<StringLength20> flags;
 					bool dummy;
 					gb.TryGetQuotedString('K', key.GetRef(), dummy, true);
+#if HAS_SBC_INTERFACE
+					// In SBC mode some keys are provided by DSF
+					int32_t rVal = 0;
+					gb.TryGetIValue('R', rVal, dummy);
+					if (!gb.IsBinary() && rVal <= 0 &&
+						reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected())
+					{
+						const char *keyStart = (key[0] == '#') ? key.c_str() + 1 : key.c_str();
+						if (!StringStartsWith(keyStart, "network") && !StringStartsWith(keyStart, "volumes"))
+						{
+							gb.SendToSbc();
+							return false;
+						}
+					}
+#endif
+					String<StringLength20> flags;
 					gb.TryGetQuotedString('F', flags.GetRef(), dummy, true);
 					{
 						MutexLocker lock(reprap.GetObjectModelReportMutex());				// grab the mutex to prevent PanelDue retrieving the OM at the same time, which can result in running out of buffers
