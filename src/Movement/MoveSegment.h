@@ -262,6 +262,7 @@ inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 }
 
 // Merge the parameters for another segment with the same start time and duration into this one
+// s = u*t * 0.5*a*t^2 therefore s1+s2 = (u1+u2)*t + 0.5*(a1+a2)*t^2
 inline void MoveSegment::Merge(motioncalc_t p_distance, motioncalc_t p_u, motioncalc_t p_a, MovementFlags p_flags) noexcept
 {
 #if SEGMENT_DEBUG
