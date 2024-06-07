@@ -9,8 +9,10 @@ Next steps for new movement system+IS
 [done] We get the same delay when an endstop stops movement.
 [done] Take account of raw motor moves when deciding whether to use IS. Maybe move useIS into MovementFlags?
 [done] Extend use of DMState::starting to cover the case of the next segment starting some time after the previous one ends
+[done] Sort out ClearExtrusionPending - don't update distanceBroughtForwards during motion
+[done] Do we still need GetNetStepsTaken? Can we use the step counts instead?
 
-Sort out ClearExtrusionPending - don't update distanceBrightForwards during motion
+Sort out use of Kinematics::ControllingDrivers. Need different behaviour depending on whether it is used when homing or to update machine positions.
 
 Eventually, store end position in segments. End positions specified by user must be exact numbers of motor steps. Segment boundaries may be fractional steps.
 
@@ -30,8 +32,6 @@ Also, check whether/how in CanMotion we handle individual drives not moving beca
 Segment moves to keep them shorter than 2^31 step clocks
 
 [I think I completed this, so re-test] Auto-generated moves on delta printers: need to segment them, except for Z probing moves
-
-Do we still need GetNetStepsTaken? Can we use the step counts instead?
 
 In the DM have a direction variable set to +1 or -1, to reduce conditional jumps
 
