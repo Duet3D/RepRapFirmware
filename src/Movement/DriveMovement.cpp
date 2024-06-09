@@ -118,7 +118,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 			 const int32_t timeInHand = offset - (int32_t)seg->GetDuration();
 			 if (timeInHand < 0)
 			 {
-				 const uint32_t now = StepTimer::GetTimerTicks();
+				 const uint32_t now = StepTimer::GetMovementTimerTicks();
 				 LogStepError(3);
 				 RestoreBasePriority(oldPrio);
 				 if (reprap.Debug(Module::Move))
@@ -292,7 +292,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 // Set up to schedule the first segment, returning true if an interrupt for tihs DM is needed
 bool DriveMovement::ScheduleFirstSegment() noexcept
 {
-	const uint32_t now = StepTimer::GetTimerTicks();
+	const uint32_t now = StepTimer::GetMovementTimerTicks();
 	if (NewSegment(now) != nullptr)
 	{
 		if (state == DMState::starting)
