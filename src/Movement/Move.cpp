@@ -980,7 +980,7 @@ void Move::Diagnostics(MessageType mtype) noexcept
 
 	Platform& p = reprap.GetPlatform();
 	p.MessageF(mtype,
-				"=== Move ===\nSegments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f, hiccups %u, hiccup time %.2fms, max steps late %" PRIi32
+				"=== Move ===\nSegments created %u, maxWait %" PRIu32 "ms, bed comp in use: %s, height map offset %.3f, hiccups added %u (%.2fms), max steps late %" PRIi32
 #if 1	//debug
 				", ebfmin %.2f, ebfmax %.2f"
 #endif
