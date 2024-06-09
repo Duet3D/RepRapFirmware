@@ -2107,8 +2107,7 @@ void Move::Interrupt() noexcept
 #endif
 						return;
 					}
-					// We probably had an interrupt that delayed us further. Recalculate the hiccup length, also we increase the hiccup time on each iteration.
-					now = StepTimer::GetMovementTimerTicks();
+					// The hiccup wasn't long enough, so go round the loop again
 				}
 			}
 		}
