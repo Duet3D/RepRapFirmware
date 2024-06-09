@@ -574,7 +574,7 @@ private:
 
 	unsigned int jerkPolicy;							// When we allow jerk
 	unsigned int idleCount;								// The number of times Spin was called and had no new moves to process
-	unsigned int numHiccups;
+	unsigned int numHiccups;							// The number of hiccups inserted
 
 	uint32_t whenLastMoveAdded[NumMovementSystems];		// The time when we last added a move to each DDA ring
 	uint32_t whenIdleTimerStarted;						// The approximate time at which the state last changed, except we don't record timing -> idle
