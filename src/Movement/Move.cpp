@@ -2074,7 +2074,8 @@ void Move::Interrupt() noexcept
 			}
 
 			// The next step is due immediately. Check whether we have been in this ISR for too long already and need to take a break
-			const int32_t clocksTaken = (int32_t)(StepTimer::GetMovementTimerTicks() - isrStartTime);
+			now = StepTimer::GetMovementTimerTicks();
+			const int32_t clocksTaken = (int32_t)(now - isrStartTime);
 			if (clocksTaken >= (int32_t)MoveTiming::MaxStepInterruptTime)
 			{
 				// Force a break by updating the move start time.
@@ -2107,6 +2108,7 @@ void Move::Interrupt() noexcept
 						return;
 					}
 					// We probably had an interrupt that delayed us further. Recalculate the hiccup length, also we increase the hiccup time on each iteration.
+					now = StepTimer::GetMovementTimerTicks();
 				}
 			}
 		}
