@@ -10,6 +10,7 @@
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <GCodes/GCodes.h>
+#include "MoveTiming.h"
 
 #if SUPPORT_REMOTE_COMMANDS
 # include <CanMessageFormats.h>
@@ -188,7 +189,7 @@ void StepTimer::Init() noexcept
 
 #endif
 
-// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
+// Schedule an interrupt at the specified clock count and return false, or return true if that time is imminent or has passed already.
 // On entry, interrupts must be disabled or the base priority must be <= step interrupt priority.
 bool StepTimer::ScheduleTimerInterrupt(uint32_t tim) noexcept
 {
@@ -196,7 +197,7 @@ bool StepTimer::ScheduleTimerInterrupt(uint32_t tim) noexcept
 	AtomicCriticalSectionLocker lock;
 
 	const int32_t diff = (int32_t)(tim - GetTimerTicks());			// see how long we have to go
-	if (diff < (int32_t)MinInterruptInterval)						// if less than about 6us or already passed
+	if (diff < (int32_t)MoveTiming::MinInterruptInterval)			// if less than about 6us or already passed
 	{
 		return true;												// tell the caller to simulate an interrupt instead
 	}

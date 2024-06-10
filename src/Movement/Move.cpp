@@ -2280,7 +2280,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 	MovementFlags flags;
 	flags.Clear();
 	DriveMovement* dm = activeDMs;
-	while (dm != nullptr && (int32_t)(now - dm->nextStepTime) >= 0)			// if the next step is due
+	while (dm != nullptr && (int32_t)(dm->nextStepTime - now) <= (int32_t)MoveTiming::MinInterruptInterval)		// if the next step is due
 	{
 		driversStepping |= dm->driversCurrentlyUsed;
 		flags |= dm->segmentFlags;
@@ -2299,7 +2299,7 @@ void Move::StepDrivers(uint32_t now) noexcept
 		driversStepping = 0;
 		dm = activeDMs;
 		now = StepTimer::GetMovementTimerTicks();
-		while (dm != nullptr && (int32_t)(now - dm->nextStepTime) >= 0)		// if the next step is due
+		while (dm != nullptr && (int32_t)(dm->nextStepTime - now) <= (int32_t)MoveTiming::MinInterruptInterval)	// if the next step is due
 		{
 			driversStepping |= dm->driversCurrentlyUsed;
 			dm = dm->nextDM;

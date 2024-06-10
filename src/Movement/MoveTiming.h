@@ -29,8 +29,8 @@ namespace MoveTiming
 #else
 # error Unsupported processor
 #endif
-	constexpr uint32_t MaxStepInterruptTime = 10 * StepTimer::MinInterruptInterval;	// the maximum time we spend looping in the ISR, in step clocks
-	constexpr uint32_t WakeupTime = (100 * StepClockRate)/1000000;					// stop resting 100us before the move is due to end
+	constexpr uint32_t MinInterruptInterval = (6 * StepClockRate)/1000000;			// Minimum interval between step timer interrupts, in step clocks; about 6us. See StepTimer::ScheduleTimerInterrupt.
+	constexpr uint32_t MaxStepInterruptTime = 10 * MinInterruptInterval;			// the maximum time we spend looping in the ISR, in step clocks
 	constexpr uint32_t HiccupIncrement = HiccupTime/2;								// how much we increase the hiccup time by on each attempt
 
 	constexpr uint32_t UsualMinimumPreparedTime = StepClockRate/10;					// 100ms
@@ -39,6 +39,7 @@ namespace MoveTiming
 
 	constexpr uint32_t StandardMoveWakeupInterval = 500;							// milliseconds
 	constexpr uint32_t MachineCoordinateUpdateInterval = 200;						// milliseconds
+
 
 #if SUPPORT_CAN_EXPANSION
 	constexpr uint32_t NominalRemoteDriverPositionUpdateInterval = StepClockRate/10;						// how often we aim to generate an interrupt to update the position of remote drivers
