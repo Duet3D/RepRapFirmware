@@ -249,7 +249,7 @@ constexpr uint32_t LaserPwmIntervalMillis = 5;			// Interval (ms) between adjust
 // in a boot loop caused by the watchdog timer going off.
 // At 100kHz I2C clock frequency, these issues are rare.
 constexpr uint32_t I2cClockFreq = 100000;				// clock frequency in Hz. 100kHz is 10us per bit, so about 90us per byte if there is no clock stretching
-constexpr size_t MaxI2cBytes = 32;						// max bytes in M260 or M261 command
+constexpr size_t MaxI2cBytes = 34;						// max bytes in M260 or M261 command. Increased to 34 for NeoDriver.
 
 // File handling
 #if defined(DUET3) || defined(DUET3MINI)

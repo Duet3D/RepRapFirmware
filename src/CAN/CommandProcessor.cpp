@@ -616,6 +616,12 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetMove().EutSetInputShaping(buf->msg.setInputShaping, buf->dataLength, replyRef);
 				break;
 
+			case CanMessageType::setInputShapingNew:
+				// This message is sent by main boards running 3.6.0. Ignore it but return OK to prevent them reporting CAN timeouts.
+				requestId = buf->msg.setInputShapingNew.requestId;
+				rslt = GCodeResult::ok;
+				break;
+
 			case CanMessageType::m569:
 				requestId = buf->msg.generic.requestId;
 				rslt = reprap.GetPlatform().EutProcessM569(buf->msg.generic, replyRef);
