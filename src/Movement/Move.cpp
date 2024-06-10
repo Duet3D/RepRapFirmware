@@ -964,6 +964,8 @@ void Move::CancelStepping() noexcept
 
 #endif
 
+extern uint32_t maxCriticalElapsedTime;
+
 void Move::Diagnostics(MessageType mtype) noexcept
 {
 	// Get the type of bed compensation in use
@@ -975,7 +977,7 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	scratchString.copy(GetCompensationTypeString());
 
 	const uint32_t currentMovementDelay = StepTimer::GetMovementDelay();
-	const float delayToReport = (currentMovementDelay - lastReportedMovementDelay) * (1000.0/(float)StepTimer::GetTickRate());
+	const float delayToReport = (float)(currentMovementDelay - lastReportedMovementDelay) * (1000.0/(float)StepTimer::GetTickRate());
 	lastReportedMovementDelay = currentMovementDelay;
 
 	Platform& p = reprap.GetPlatform();
@@ -983,17 +985,20 @@ void Move::Diagnostics(MessageType mtype) noexcept
 				"=== Move ===\nSegments created %u, maxWait %" PRIu32 "ms, bed comp in use: %s, height map offset %.3f, hiccups added %u (%.2fms), max steps late %" PRIi32
 #if 1	//debug
 				", ebfmin %.2f, ebfmax %.2f"
+				", mcet %.3f"
 #endif
 				"\n",
 						MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, numHiccups, (double)delayToReport, DriveMovement::GetAndClearMaxStepsLate()
 #if 1
 						, (double)minExtrusionPending, (double)maxExtrusionPending
+						, (double)((float)maxCriticalElapsedTime * (1000.0/(float)StepTimer::GetTickRate()))
 #endif
 		);
 	longestGcodeWaitInterval = 0;
 	numHiccups = 0;
 #if 1	//debug
 	minExtrusionPending = maxExtrusionPending = 0.0;
+	maxCriticalElapsedTime = 0;
 #endif
 
 #if STEPS_DEBUG

@@ -82,6 +82,8 @@ void DriveMovement::AdjustMotorPosition(int32_t adjustment) noexcept
 #endif
 }
 
+uint32_t maxCriticalElapsedTime = 0;
+
 // Add a segment into the list. If the list is not empty then the new segment may overlap segments already in the list but will never start earlier than the first existing one.
 // The units of the input parameters are steps for distance and step clocks for time.
 void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t u, motioncalc_t a, MovementFlags moveFlags) noexcept
@@ -106,6 +108,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 	// Shut out the step interrupt and task switching while we mess with the segments
 	// TODO probably only need to shut out task switching here, or shut out the step interrupt but leave the UART interrupt enabled
 	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
+	const uint32_t criticalStartTime = StepTimer::GetTimerTicks();
 
 	MoveSegment *seg = segments;
 
@@ -260,7 +263,9 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 #if SEGMENT_DEBUG
 					MoveSegment::DebugPrintList(segments);
 #endif
+					const uint32_t elapsedTime = StepTimer::GetTimerTicks() - criticalStartTime;
 					RestoreBasePriority(oldPrio);
+					if (elapsedTime > maxCriticalElapsedTime) { maxCriticalElapsedTime = elapsedTime; }	//DEBUG
 					return;
 				}
 			}
@@ -286,10 +291,12 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 #if SEGMENT_DEBUG
 	MoveSegment::DebugPrintList(segments);
 #endif
+	const uint32_t elapsedTime2 = StepTimer::GetTimerTicks() - criticalStartTime;
 	RestoreBasePriority(oldPrio);
+	if (elapsedTime2 > maxCriticalElapsedTime) { maxCriticalElapsedTime = elapsedTime2; }	//DEBUG
 }
 
-// Set up to schedule the first segment, returning true if an interrupt for tihs DM is needed
+// Set up to schedule the first segment, returning true if an interrupt for this DM is needed
 bool DriveMovement::ScheduleFirstSegment() noexcept
 {
 	const uint32_t now = StepTimer::GetMovementTimerTicks();
@@ -520,9 +527,9 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 				return true;										// the call to NewSegment has already set up the interrupt time
 			}
 
-			if (unlikely((int32_t)(currentSegment->GetStartTime() <-prevEndTime) < -2))
+			if (unlikely((int32_t)(currentSegment->GetStartTime() - prevEndTime) < -2))
 			{
-#if SEGMENT_DEBUG
+#if 1 // SEGMENT_DEBUG
 				debugPrintf("step err1, %" PRIu32 ", %" PRIu32 "\n", currentSegment->GetStartTime(), prevEndTime);
 				DebugPrint();
 #endif
