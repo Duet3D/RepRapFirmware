@@ -2,7 +2,7 @@ name: Upload stable release assets
 
 on:
   release:
-    types: [released]
+    types: [prereleased]
 
 jobs:
   build:
@@ -23,18 +23,6 @@ jobs:
           cd assets
           rm -f Duet2CombinedFirmware.bin DuetMaestroFirmware.bin Duet*_SD*.bin Duet3_CAN*.bin DuetWiFi*.bin
 
-      # Upload assets to stable feed on pkg.duet3d.com
-      - name: Upload files to stable package feed
-        uses: Creepios/sftp-action@v1.0.3
-        with:
-          host: pkg.duet3d.com
-          port: 22
-          username: ${{ secrets.PKG_SSH_USER }}
-          password: ${{ secrets.PKG_SSH_PASS }}
-          privateKey: ${{ secrets.PKG_SSH_KEY }}
-          localPath: ./assets
-          remotePath: /var/rrf-pkg/stable
-
       # Upload assets to unstable feed on pkg.duet3d.com
       - name: Upload files to unstable package feed
         uses: Creepios/sftp-action@v1.0.3
@@ -46,19 +34,6 @@ jobs:
           privateKey: ${{ secrets.PKG_SSH_KEY }}
           localPath: ./assets
           remotePath: /var/rrf-pkg/unstable
-
-      # Upload assets to stable-3.4 feed on pkg.duet3d.com
-      - if: contains(github.ref, '3.4')
-        name: Upload files to stable 3.4 feed
-        uses: Creepios/sftp-action@v1.0.3
-        with:
-          host: pkg.duet3d.com
-          port: 22
-          username: ${{ secrets.PKG_SSH_USER }}
-          password: ${{ secrets.PKG_SSH_PASS }}
-          privateKey: ${{ secrets.PKG_SSH_KEY }}
-          localPath: ./assets
-          remotePath: /var/rrf-pkg/stable-3.4
 
       # Upload assets to unstable-3.4 feed on pkg.duet3d.com
       - if: contains(github.ref, '3.4')
@@ -73,19 +48,6 @@ jobs:
           localPath: ./assets
           remotePath: /var/rrf-pkg/unstable-3.4
 
-      # Upload assets to stable-3.5 feed on pkg.duet3d.com
-      - if: contains(github.ref, '3.5')
-        name: Upload files to stable 3.5 feed
-        uses: Creepios/sftp-action@v1.0.3
-        with:
-          host: pkg.duet3d.com
-          port: 22
-          username: ${{ secrets.PKG_SSH_USER }}
-          password: ${{ secrets.PKG_SSH_PASS }}
-          privateKey: ${{ secrets.PKG_SSH_KEY }}
-          localPath: ./assets
-          remotePath: /var/rrf-pkg/stable-3.5
-
       # Upload assets to unstable-3.5 feed on pkg.duet3d.com
       - if: contains(github.ref, '3.5')
         name: Upload files to unstable 3.5 feed
@@ -98,19 +60,6 @@ jobs:
           privateKey: ${{ secrets.PKG_SSH_KEY }}
           localPath: ./assets
           remotePath: /var/rrf-pkg/unstable-3.5
-
-      # Upload assets to stable-3.6 feed on pkg.duet3d.com
-      - if: contains(github.ref, '3.5')
-        name: Upload files to stable 3.6 feed
-        uses: Creepios/sftp-action@v1.0.3
-        with:
-          host: pkg.duet3d.com
-          port: 22
-          username: ${{ secrets.PKG_SSH_USER }}
-          password: ${{ secrets.PKG_SSH_PASS }}
-          privateKey: ${{ secrets.PKG_SSH_KEY }}
-          localPath: ./assets
-          remotePath: /var/rrf-pkg/stable-3.6
 
       # Upload assets to unstable-3.6 feed on pkg.duet3d.com
       - if: contains(github.ref, '3.6')
