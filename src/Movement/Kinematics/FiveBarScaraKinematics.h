@@ -41,8 +41,7 @@ public:
 	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept override;
 	bool IsContinuousRotationAxis(size_t axis) const noexcept override;
-	AxesBitmap GetLinearAxes() const noexcept override;
-	AxesBitmap GetControllingDrives(size_t axis) const noexcept override;
+	AxesBitmap GetControllingDrives(size_t axis, bool forHoming) const noexcept override;
 
 protected:
 	DECLARE_OBJECT_MODEL

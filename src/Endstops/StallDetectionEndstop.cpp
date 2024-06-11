@@ -33,7 +33,7 @@ bool StallDetectionEndstop::Stopped() const noexcept
 bool StallDetectionEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept
 {
 	// Find which drivers are relevant, and decide whether we stop just the driver, just the axis, or everything
-	stopAll = kin.GetControllingDrives(GetAxis()).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));
+	stopAll = kin.GetControllingDrives(GetAxis(), true).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));
 	numDriversLeft = axisDrivers.numDrivers;
 	driversMonitored = axisDrivers.GetDriversBitmap();
 

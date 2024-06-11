@@ -442,11 +442,13 @@ bool ScaraKinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 	return (axis < 2 && supportsContinuousRotation[axis]) || Kinematics::IsContinuousRotationAxis(axis);
 }
 
-// Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
-// This is called to determine whether we can babystep the specified axis independently of regular motion.
-AxesBitmap ScaraKinematics::GetLinearAxes() const noexcept
+// Return the drivers that control an axis or tower
+AxesBitmap ScaraKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
 {
-	return (crosstalk[1] == 0.0 && crosstalk[2] == 0.0) ? AxesBitmap::MakeFromBits(Z_AXIS) : AxesBitmap();
+	const unsigned int numCoupledAxes = (crosstalk[1] != 0.0 || crosstalk[2] != 0.0) ? 3 : 2;
+	return (forHoming || axis >= numCoupledAxes)
+			? AxesBitmap::MakeFromBits(axis)
+				: AxesBitmap::MakeLowestNBits(numCoupledAxes);
 }
 
 // Recalculate the derived parameters

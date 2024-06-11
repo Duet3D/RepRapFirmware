@@ -877,7 +877,7 @@ bool Move::WaitingForAllMovesFinished(MovementSystemNumber msNumber
 													if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
 													{
 														//TODO the following is OK for CoreXY but not for deltas, Scara etc.
-														const AxesBitmap driversUsed = kinematics->GetControllingDrives(axisOrExtruder);
+														const AxesBitmap driversUsed = kinematics->GetControllingDrives(axisOrExtruder, false);
 														return driversUsed.IterateWhile([this](unsigned int drive, unsigned int)->bool { return !dms[drive].MotionPending(); });
 													}
 													return !dms[axisOrExtruder].MotionPending();
@@ -2099,8 +2099,13 @@ void Move::Interrupt() noexcept
 					// Reschedule the next step interrupt. This time it should succeed if the hiccup time was long enough.
 					if (!ScheduleNextStepInterrupt())
 					{
-						//TEMP DEBUG
+#if 1	//TEMP DEBUG
+# if SUPPORT_CAN_EXPANSION
 						debugPrintf("Add hiccup %" PRIu32 ", ic=%u, now=%" PRIu32 "\n", hiccupTimeInserted, iterationCount, now);
+# else
+						debugPrintf("Add hiccup, ic=%u, now=%" PRIu32 "\n", iterationCount, now);
+# endif
+#endif
 						activeDMs->DebugPrint();
 						MoveSegment::DebugPrintList(activeDMs->segments);
 						if (activeDMs->nextDM != nullptr)

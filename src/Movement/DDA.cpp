@@ -1047,7 +1047,7 @@ void DDA::SetPositions(const float position[MaxAxes], AxesBitmap axesMoved) noex
 	axesMoved.Iterate([this, position, &kin, &driversMoved](unsigned int axis, unsigned int)->void
 						{
 							endCoordinates[axis] = position[axis];
-							driversMoved |= kin.GetControllingDrives(axis);
+							driversMoved |= kin.GetControllingDrives(axis, false);
 						}
 					 );
 	flags.endCoordinatesValid = true;
@@ -1199,7 +1199,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 					}
 #endif
 					axisMotorsEnabled.SetBit(drive);
-					additionalAxisMotorsToEnable |= reprap.GetMove().GetKinematics().GetControllingDrives(drive);
+					additionalAxisMotorsToEnable |= reprap.GetMove().GetKinematics().GetControllingDrives(drive, flags.checkEndstops);
 				}
 			}
 			else

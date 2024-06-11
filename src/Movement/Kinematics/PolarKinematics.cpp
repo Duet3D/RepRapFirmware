@@ -321,11 +321,12 @@ bool PolarKinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 	return axis == Y_AXIS || Kinematics::IsContinuousRotationAxis(axis);
 }
 
-// Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
-// This is called to determine whether we can babystep the specified axis independently of regular motion.
-AxesBitmap PolarKinematics::GetLinearAxes() const noexcept
+// Return the drivers that control an axis or tower
+AxesBitmap PolarKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
 {
-	return AxesBitmap::MakeFromBits(Z_AXIS);
+	return (forHoming || axis >= Z_AXIS)
+			? AxesBitmap::MakeFromBits(axis)
+				: XyAxes;
 }
 
 // Update the derived parameters after the master parameters have been changed

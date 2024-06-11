@@ -1033,6 +1033,14 @@ void LinearDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 	}
 }
 
+// Return the drivers that control an axis or tower
+AxesBitmap LinearDeltaKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
+{
+	return (forHoming || axis > Z_AXIS)
+			? AxesBitmap::MakeFromBits(axis)
+				: AxesBitmap::MakeLowestNBits(numTowers);
+}
+
 #endif	// SUPPORT_LINEAR_DELTA
 
 // End

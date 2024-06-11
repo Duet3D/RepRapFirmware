@@ -656,7 +656,7 @@ AxesBitmap RotaryDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 AxesBitmap RotaryDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept
 {
 	// If homing X, Y or Z we must home all the towers
-	if (toBeHomed.Intersects(AxesBitmap::MakeLowestNBits(DELTA_AXES)))
+	if (toBeHomed.Intersects(XyzAxes))
 	{
 		filename.copy("homedelta.g");
 		return AxesBitmap();
@@ -683,6 +683,14 @@ void RotaryDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 		const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
 		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 	}
+}
+
+// Return the drivers that control an axis or tower
+AxesBitmap RotaryDeltaKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
+{
+	return (forHoming || axis > Z_AXIS)
+			? AxesBitmap::MakeFromBits(axis)
+				: XyzAxes;
 }
 
 // Calculate the motor position for a single tower from a Cartesian coordinate.

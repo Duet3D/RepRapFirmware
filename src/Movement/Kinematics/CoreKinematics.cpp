@@ -447,16 +447,9 @@ void CoreKinematics::LimitSpeedAndAcceleration(DDA& dda, const float* normalised
 
 // Return a bitmap of the motors that are involved in homing a particular axis or tower. Used for implementing stall detection endstops.
 // Usually it is just the corresponding motor (hence this default implementation), but CoreXY and similar kinematics move multiple motors to home an individual axis.
-AxesBitmap CoreKinematics::GetControllingDrives(size_t axis) const noexcept
+AxesBitmap CoreKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
 {
 	return controllingDrivers[axis];
-}
-
-// Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
-// This is called to determine whether we can babystep the specified axis independently of regular motion.
-AxesBitmap CoreKinematics::GetLinearAxes() const noexcept
-{
-	return AxesBitmap::MakeLowestNBits(reprap.GetGCodes().GetVisibleAxes());	// we can babystep all axes
 }
 
 // End
