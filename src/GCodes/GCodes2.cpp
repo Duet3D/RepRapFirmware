@@ -3107,7 +3107,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					{
 						// In SBC mode. some keys are provided by DSF unless R1 is present
 						const char *keyStart = (key[0] == '#') ? key.c_str() + 1 : key.c_str();
-						if (!StringStartsWith(keyStart, "network") && !StringStartsWith(keyStart, "volumes"))
+						if (StringStartsWith(keyStart, "network") || StringStartsWith(keyStart, "volumes"))
 						{
 							gb.SendToSbc();
 							return false;
