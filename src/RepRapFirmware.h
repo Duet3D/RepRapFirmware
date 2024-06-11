@@ -352,7 +352,7 @@ class ExpansionManager;
 
 // Define a floating point type for recording numbers of microsteps including fractional microsteps.
 // This is normally defined as float, but we can use double to check whether rounding error is causing problems.
-#define USE_DOUBLE_MOTIONCALC		(SAME70)
+#define USE_DOUBLE_MOTIONCALC		(0)	//(SAME70)
 
 #if USE_DOUBLE_MOTIONCALC
 typedef double motioncalc_t;
