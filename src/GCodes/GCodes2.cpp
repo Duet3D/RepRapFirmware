@@ -3099,9 +3099,35 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 409: // Get object model values in JSON format
 				{
 					String<StringLength100> key;
-					String<StringLength20> flags;
 					bool dummy;
 					gb.TryGetQuotedString('K', key.GetRef(), dummy, true);
+#if HAS_SBC_INTERFACE
+					if (!gb.IsBinary() && (!gb.Seen('R') || gb.GetIValue() <= 0) &&
+						reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected())
+					{
+						// In SBC mode. some keys are provided by DSF unless R1 is present
+						const char *keyStart = (key[0] == '#') ? key.c_str() + 1 : key.c_str();
+						if (StringStartsWith(keyStart, "network") || StringStartsWith(keyStart, "volumes"))
+						{
+							gb.SendToSbc();
+							return false;
+						}
+					}
+					else if (gb.IsBinary() && gb.Seen('I') && gb.GetIValue() > 0)
+					{
+						// Allow DSF to increment sequence numbers of its provided OM keys via K"key" I1
+						if (key.Equals(("network")))
+						{
+							reprap.NetworkUpdated();
+						}
+						else if (key.Equals("volumes"))
+						{
+							reprap.VolumesUpdated();
+						}
+						break;
+					}
+#endif
+					String<StringLength20> flags;
 					gb.TryGetQuotedString('F', flags.GetRef(), dummy, true);
 					{
 						MutexLocker lock(reprap.GetObjectModelReportMutex());				// grab the mutex to prevent PanelDue retrieving the OM at the same time, which can result in running out of buffers
