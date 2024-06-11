@@ -2061,7 +2061,8 @@ void Move::Interrupt() noexcept
 	{
 		uint32_t now = StepTimer::GetMovementTimerTicks();
 		const uint32_t isrStartTime = now;
-		for (;;)
+		for (unsigned int iterationCount = 0; ; )
+//		for (;;)
 		{
 			// Generate steps for the current move segments
 			StepDrivers(now);									// check endstops if necessary and step the drivers
@@ -2098,6 +2099,17 @@ void Move::Interrupt() noexcept
 					// Reschedule the next step interrupt. This time it should succeed if the hiccup time was long enough.
 					if (!ScheduleNextStepInterrupt())
 					{
+						//TEMP DEBUG
+						debugPrintf("Add hiccup %" PRIu32 ", ic=%u, now=%" PRIu32 "\n", hiccupTimeInserted, iterationCount, now);
+						activeDMs->DebugPrint();
+						MoveSegment::DebugPrintList(activeDMs->segments);
+						if (activeDMs->nextDM != nullptr)
+						{
+							activeDMs->nextDM ->DebugPrint();
+							MoveSegment::DebugPrintList(activeDMs->nextDM->segments);
+
+						}
+						//END DEBUG
 #if SUPPORT_CAN_EXPANSION
 # if SUPPORT_REMOTE_COMMANDS
 						if (CanInterface::InExpansionMode())
