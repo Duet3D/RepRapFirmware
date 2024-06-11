@@ -11,16 +11,16 @@ Next steps for new movement system+IS
 [done] Extend use of DMState::starting to cover the case of the next segment starting some time after the previous one ends
 [done] Sort out ClearExtrusionPending - don't update distanceBroughtForwards during motion
 [done] Do we still need GetNetStepsTaken? Can we use the step counts instead?
-
-Sort out use of Kinematics::ControllingDrivers. Need different behaviour depending on whether it is used when homing or to update machine positions.
+[done] Sort out use of Kinematics::ControllingDrivers. Need different behaviour depending on whether it is used when homing or to update machine positions.
+[done] Avoid zero-length/zero-duration moves
 
 Remove excess debug e.g. reporting hiccups in debug
 
-Remove CheckSegments excepr when debugging
+Remove CheckSegments except when debugging
 
-If we try to start a print job without homing first, after that we can't home Z without a reset.
+If we try to start a print job without homing first, after that we can't home Z without a reset. [Probably caused by known issue when a tool selection fails due to insufficient axes homed.]
 
-Eventually, store end position in segments. End positions specified by user must be exact numbers of motor steps. Segment boundaries may be fractional steps.
+[not needed unless we get tiny later shifts, also this is not as easy as I first thought] Eventually, store end position in segments. End positions specified by user must be exact numbers of motor steps. Segment boundaries may be fractional steps.
 
 Fix ExtruderPrintingSince, need to update variable extruderPrintingSince when we start a printing extruder move after not doing one - in NewSegmnent?
 
@@ -29,8 +29,6 @@ Use cumulativeHiccupTime and notify hiccups to expansion boards
 Allow for expansion boards introducing hiccups
 
 Set up params.useInputShaping, needed for CAN
-
-Avoid zero-length/zero-duration moves
 
 At the end of Prepare, don't send the move over CAN if it won't happen because endstops are already triggered - previously it checked for state=completed
 Also, check whether/how in CanMotion we handle individual drives not moving because their endstops have triggered - that may be enough to handle the above.
