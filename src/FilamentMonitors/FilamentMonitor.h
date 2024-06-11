@@ -158,7 +158,7 @@ protected:
 	}
 
 #if SUPPORT_CAN_EXPANSION
-	bool IsLocal() const noexcept { return driverId.GetBoardAddress() == CanInterface::GetCanAddress(); }
+	bool IsLocal() const noexcept { return !hasRemote; }
 #endif
 
 private:
