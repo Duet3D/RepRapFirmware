@@ -273,7 +273,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 		gb.ThrowGCodeException("Unknown filament monitor type %u", monitorType);
 	}
 #if SUPPORT_CAN_EXPANSION
-	if (locBoardAddress == did.boardAddress)
+	if (locBoardAddress != CanInterface::GetCanAddress())
 	{
 		// Create the remote filament monitor on the expansion board
 		if (CanInterface::CreateFilamentMonitor(fm->driverId, monitorType, gb, reply) != GCodeResult::ok)
