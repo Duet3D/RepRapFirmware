@@ -88,6 +88,10 @@ uint32_t maxCriticalElapsedTime = 0;
 // The units of the input parameters are steps for distance and step clocks for time.
 void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t u, motioncalc_t a, MovementFlags moveFlags) noexcept
 {
+	if ((int32_t)duration <= 0)
+	{
+		debugPrintf("Adding zero duration segment: d=%3e u=%.3e a=%.3e\n", (double)distance, (double)u, (double)a);
+	}
 	// Adjust the initial speed and distance to account for pressure advance
 	if (isExtruder && !moveFlags.nonPrintingMove)
 	{
@@ -133,15 +137,19 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 			 }
 		}
 
-		// Find the earliest existing segment that the new one will come before (i.e. new one starts before existing one) or will overlap (i.e. the new one starts before the existing segment ends)
+		// Loop until we find the earliest existing segment that the new one will come before (i.e. new one starts before existing one) or will overlap (i.e. the new one starts before the existing segment ends)
 		while (true)
 		{
-			if (offset <= 0)														// if the new segment starts before the existing one starts, or at the same time
+			if (offset < 0)															// if the new segment starts before the existing one starts
 			{
-				if (offset > -MoveSegment::MinDuration && duration >= 10 * MoveSegment::MinDuration)	// if it starts only slightly earlier and we can reasonably shorten it
+				if (offset + (int32_t)duration <= 0)
+				{
+					break;															// new segment fits entirely before the existing one
+				}
+				if (offset >= -MoveSegment::MinDuration && duration >= 10 * MoveSegment::MinDuration)	// if it starts only slightly earlier and we can reasonably shorten it
 				{
 					startTime = seg->GetStartTime();								// then just delay and shorten the new segment slightly, to avoid creating a tiny segment
-					const motioncalc_t durationIncrease = (motioncalc_t)offset;					// get the (negative) increase in segment duration
+					const motioncalc_t durationIncrease = (motioncalc_t)offset;		// get the (negative) increase in segment duration
 					const motioncalc_t oldDuration = (motioncalc_t)duration;
 #if SEGMENT_DEBUG
 					debugPrintf("Adjusting(1) t=%" PRIu32 " u=%.4e a=%.4e", duration, (double)u, (double)a);
@@ -153,25 +161,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 #endif
 					offset = 0;
 				}
-				else if (offset + (int32_t)duration <= MoveSegment::MinDuration)	// if the new segment starts earlier than the existing one and ends before or only slight later than the existing one starts
-				{
-					if (offset + (int32_t)duration > 0 && duration >= 10 * MoveSegment::MinDuration)	// if the new segment does overlap the existing one a little and we can reasonably shorten it
-					{
-						// Shorten the new segment slightly so than it fits before the existing segment
-						const int32_t durationIncrease = -(offset + (int32_t)duration);	// get the (negative) increase in segment duration
-						const motioncalc_t oldDuration = (motioncalc_t)duration;
-#if SEGMENT_DEBUG
-						debugPrintf("Adjusting(2) t=%" PRIu32 " u=%.4e a=%.4e", duration, (double)u, (double)a);
-#endif
-						duration = -offset;
-						u = (u * oldDuration - a * durationIncrease * (oldDuration + (motioncalc_t)0.5 * durationIncrease))/(motioncalc_t)duration;
-#if SEGMENT_DEBUG
-						debugPrintf(" to t=%" PRIu32 " u=%.4e a=%.4e\n", duration, (double)u, (double)a);
-#endif
-					}
-					break;															// now insert the new segment before the existing one
-				}
-				else																// new segment overlaps the existing one significantly
+				else																// new segment starts before the existing one and can't be delayed/shortened so that it doesn't
 				{
 					// Insert part of the new segment before the existing one, then merge the rest
 					const uint32_t firstDuration = -offset;
@@ -186,6 +176,10 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 					{
 						prev->SetNext(seg);
 					}
+#if 1	//debug
+					CheckSegment(__LINE__, prev);
+					CheckSegment(__LINE__, seg);
+#endif
 					duration -= firstDuration;
 					startTime += firstDuration;
 					distance -= firstDistance;
@@ -196,77 +190,107 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 				}
 			}
 
-			// If we get here then the new segment starts later or at the same time as the existing one
-			if (offset + MoveSegment::MinDuration < (int32_t)seg->GetDuration())	// if the segment we are adding starts significantly before the existing one ends
+			// At this point the new segment starts later or at the same time as the existing one
+			if (offset < (int32_t)seg->GetDuration())													// if new segment starts before the existing one ends
 			{
-				if (offset < MoveSegment::MinDuration && duration >= 10 * MoveSegment::MinDuration)	// if it starts only slightly before the existing segment ends and we can reasonably shorten it
+				// If we get here then the new segment starts later or at the same time as the existing one
+				if (offset != 0 && offset + MoveSegment::MinDuration >= (int32_t)seg->GetDuration() && duration >= 10 * MoveSegment::MinDuration)
 				{
-					startTime = seg->GetStartTime();								// postpone and shorten it a little
-					const int32_t durationIncrease = -offset;						// get the (negative) increase in segment duration
+					// New segment starts just before the existing one ends, but we can delay and shorten it to start when the existing segment ends
+					const int32_t durationIncrease = offset - seg->GetDuration();						// get the (negative) increase in segment duration
 					const motioncalc_t oldDuration = (motioncalc_t)duration;
 #if SEGMENT_DEBUG
 					debugPrintf("Adjusting(3) t=%" PRIu32 " u=%.4e a=%.4e", duration, (double)u, (double)a);
 #endif
-					duration -= offset;
-					u = (u * oldDuration - a * durationIncrease * (oldDuration + (motioncalc_t)0.5 * durationIncrease))/(motioncalc_t)duration;
+					startTime = seg->GetStartTime() + seg->GetDuration();								// postpone and shorten it a little
+					duration += durationIncrease;
+					u = (u * oldDuration - a * (motioncalc_t)durationIncrease * (oldDuration + (motioncalc_t)0.5 * (motioncalc_t)durationIncrease))/(motioncalc_t)duration;
 #if SEGMENT_DEBUG
 					debugPrintf(" to t=%" PRIu32 " u=%.4e a=%.4e\n", duration, (double)u, (double)a);
 #endif
-				}
-				else																// else split the existing segment
-				{
-					seg = seg->Split((uint32_t)offset);
-					// 'prev' is now wrong but we're not about to insert anything before 'seg'
-				}
-
-				// The segment we wish to add now starts at the same time as 'seg' but it may end earlier or later than the one at 'seg' does.
-				const int32_t timeDifference = (int32_t)(duration - seg->GetDuration());
-				if (timeDifference > MoveSegment::MinDuration)
-				{
-					// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
-					const motioncalc_t firstDistance = (u + (motioncalc_t)0.5 * a * (motioncalc_t)seg->GetDuration()) * (motioncalc_t)seg->GetDuration();	// distance moved by the first part of the new segment
-#if SEGMENT_DEBUG
-					debugPrintf("merge1: ");
-#endif
-					seg->Merge(firstDistance, u, a, moveFlags);
-					distance -= firstDistance;
-					startTime += seg->GetDuration();
-					u += a * (motioncalc_t)seg->GetDuration();
-					duration = (uint32_t)timeDifference;
+					// Go round the loop again
 				}
 				else
 				{
-					// New segment ends earlier or at the same time as the old one
-					if (timeDifference > -MoveSegment::MinDuration && duration >= 10 * MoveSegment::MinDuration)
+					// The new segment overlaps the existing one and can't be delayed so that it doesn't.
+					// If the new segment starts later than the existing one, split the existing one.
+					if (offset != 0)
 					{
-						// Make the new segment duration fit the existing one by adjusting the initial speed slightly
-#if SEGMENT_DEBUG
-						debugPrintf("Adjusting(4) t=%" PRIu32 " u=%.4e a=%.4e", duration, (double)u, (double)a);
+						prev = seg;
+						seg = seg->Split((uint32_t)offset);
+#if 1	//debug
+						CheckSegment(__LINE__, prev);
+						CheckSegment(__LINE__, seg);
 #endif
-						u = ((u * (motioncalc_t)duration) - (a * (motioncalc_t)timeDifference * ((motioncalc_t)duration + (motioncalc_t)0.5 * (motioncalc_t)timeDifference)))/(motioncalc_t)seg->GetDuration();
-						duration = seg->GetDuration();
+						offset = 0;
+					}
+
+					// The segment we wish to add now starts at the same time as 'seg' but it may end earlier or later than the one at 'seg' does.
+					int32_t timeDifference = (int32_t)(duration - seg->GetDuration());
+					if (timeDifference > 0 && timeDifference <= (int32_t)MoveSegment::MinDuration && duration >= 10 * MoveSegment::MinDuration)
+					{
+						// New segment is slightly longer then the old one but it can be shortened
+						const int32_t durationIncrease = -timeDifference;						// get the (negative) increase in segment duration
+						const motioncalc_t oldDuration = (motioncalc_t)duration;
+#if SEGMENT_DEBUG
+						debugPrintf("Adjusting(3) t=%" PRIu32 " u=%.4e a=%.4e", duration, (double)u, (double)a);
+#endif
+						duration += durationIncrease;
+						u = (u * oldDuration - a * (motioncalc_t)durationIncrease * (oldDuration + (motioncalc_t)0.5 * (motioncalc_t)durationIncrease))/(motioncalc_t)duration;
 #if SEGMENT_DEBUG
 						debugPrintf(" to t=%" PRIu32 " u=%.4e a=%.4e\n", duration, (double)u, (double)a);
 #endif
+						timeDifference = 0;
+					}
+
+					if (timeDifference > 0)
+					{
+						// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
+						const motioncalc_t firstDistance = (u + (motioncalc_t)0.5 * a * (motioncalc_t)seg->GetDuration()) * (motioncalc_t)seg->GetDuration();	// distance moved by the first part of the new segment
+#if SEGMENT_DEBUG
+						debugPrintf("merge1: ");
+#endif
+						seg->Merge(firstDistance, u, a, moveFlags);
+#if 1	//debug
+						CheckSegment(__LINE__, prev);
+						CheckSegment(__LINE__, seg);
+#endif
+						distance -= firstDistance;
+						startTime += seg->GetDuration();
+						u += a * (motioncalc_t)seg->GetDuration();
+						duration = (uint32_t)timeDifference;
+						// Now go round the loop again
 					}
 					else
 					{
-						// Split the existing segment in two
-						seg->Split(duration);
-					}
+						// New segment ends earlier or at the same time as the old one
+						if (timeDifference != 0)
+						{
+							// Split the existing segment in two
+							seg->Split(duration);
+#if 1	//debug
+							CheckSegment(__LINE__, prev);
+							CheckSegment(__LINE__, seg);
+#endif
+						}
 
-					// The new segment and the existing one now have the same start time and duration, so merge them
+						// The new segment and the existing one now have the same start time and duration, so merge them
 #if SEGMENT_DEBUG
-					debugPrintf("merge2: ");
+						debugPrintf("merge2: ");
 #endif
-					seg->Merge(distance, u, a, moveFlags);
+						seg->Merge(distance, u, a, moveFlags);
+#if 1	//debug
+						CheckSegment(__LINE__, prev);
+						CheckSegment(__LINE__, seg);
+#endif
 #if SEGMENT_DEBUG
-					MoveSegment::DebugPrintList(segments);
+						MoveSegment::DebugPrintList(segments);
 #endif
-					const uint32_t elapsedTime = StepTimer::GetTimerTicks() - criticalStartTime;
-					RestoreBasePriority(oldPrio);
-					if (elapsedTime > maxCriticalElapsedTime) { maxCriticalElapsedTime = elapsedTime; }	//DEBUG
-					return;
+						const uint32_t elapsedTime = StepTimer::GetTimerTicks() - criticalStartTime;
+						RestoreBasePriority(oldPrio);
+						if (elapsedTime > maxCriticalElapsedTime) { maxCriticalElapsedTime = elapsedTime; }	//DEBUG
+						return;
+					}
 				}
 			}
 
@@ -288,6 +312,10 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 	{
 		prev->SetNext(seg);
 	}
+#if 1	//debug
+					CheckSegment(__LINE__, prev);
+					CheckSegment(__LINE__, seg);
+#endif
 #if SEGMENT_DEBUG
 	MoveSegment::DebugPrintList(segments);
 #endif
@@ -527,7 +555,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 				return true;										// the call to NewSegment has already set up the interrupt time
 			}
 
-			if (unlikely((int32_t)(currentSegment->GetStartTime() - prevEndTime) < -2))
+			if (unlikely((int32_t)(currentSegment->GetStartTime() - prevEndTime) < -10))
 			{
 #if 1 // SEGMENT_DEBUG
 				debugPrintf("step err1, %" PRIu32 ", %" PRIu32 "\n", currentSegment->GetStartTime(), prevEndTime);
@@ -743,6 +771,24 @@ bool DriveMovement::StopDriver(int32_t& netStepsTaken) noexcept
 	netStepsTaken = 0;
 	return false;
 }
+
+#if 1	//DEBUG
+
+void DriveMovement::CheckSegment(unsigned int line, MoveSegment *seg) noexcept
+{
+	if (seg != nullptr)
+	{
+		if (   (int32_t)seg->GetDuration() <= 0
+			|| (seg->GetNext() != nullptr && (int32_t)(seg->GetNext()->GetStartTime() - (seg->GetStartTime() + seg->GetDuration())) < 0)
+		   )
+		{
+			debugPrintf("bad seg at %u: ", line);
+			MoveSegment::DebugPrintList(seg);
+		}
+	}
+}
+
+#endif
 
 #if SUPPORT_REMOTE_COMMANDS
 

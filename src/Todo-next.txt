@@ -14,6 +14,12 @@ Next steps for new movement system+IS
 
 Sort out use of Kinematics::ControllingDrivers. Need different behaviour depending on whether it is used when homing or to update machine positions.
 
+Remove excess debug e.g. reporting hiccups in debug
+
+Remove CheckSegments excepr when debugging
+
+If we try to start a print job without homing first, after that we can't home Z without a reset.
+
 Eventually, store end position in segments. End positions specified by user must be exact numbers of motor steps. Segment boundaries may be fractional steps.
 
 Fix ExtruderPrintingSince, need to update variable extruderPrintingSince when we start a printing extruder move after not doing one - in NewSegmnent?
