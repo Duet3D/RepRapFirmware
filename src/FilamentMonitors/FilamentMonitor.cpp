@@ -84,7 +84,7 @@ FilamentMonitor::FilamentMonitor(unsigned int drv, unsigned int monitorType, Dri
 FilamentMonitor::~FilamentMonitor() noexcept
 {
 #if SUPPORT_CAN_EXPANSION
-	if (!IsLocal() && hasRemote)
+	if (hasRemote)
 	{
 		String<1> dummy;
 		(void)CanInterface::DeleteFilamentMonitor(driverId, nullptr, dummy.GetRef());
@@ -110,7 +110,7 @@ GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& r
 	}
 
 #if SUPPORT_CAN_EXPANSION
-	if (!IsLocal())
+	if (hasRemote)
 	{
 		seen = true;				// this tells the local filament monitor not to report anything
 		return CanInterface::ConfigureFilamentMonitor(driverId, gb, reply);
@@ -226,16 +226,23 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 {
 	const size_t drv = ExtruderToLogicalDrive(extruder);
 	const DriverId did = reprap.GetPlatform().GetExtruderDriver(extruder);
-	gb.MustSee('C');															// make sure the port name parameter is present
+	gb.MustSee('C');																// make sure the port name parameter is present
 
 #if SUPPORT_CAN_EXPANSION
 	// Find out which board the sensor is connected to
 	String<StringLength50> portName;
 	gb.GetQuotedString(portName.GetRef());
 	const CanAddress locBoardAddress = IoPort::RemoveBoardAddress(portName.GetRef());
-	if (locBoardAddress != did.boardAddress && monitorType > 2)					// unless it is a simple switch, the filament monitor must be connected to the same board as the driver
+	if (locBoardAddress != did.boardAddress	)										// most filament monitor types must be on the same board as the extruder
 	{
-		gb.ThrowGCodeException("Filament monitor port must be connected to same CAN board as extruder driver");
+		if (monitorType > 2)
+		{
+			gb.ThrowGCodeException("Filament monitor must be connected to same CAN board as extruder driver");
+		}
+		else if (locBoardAddress != CanInterface::GetCanAddress())					// a simple switch may be on the main board instead
+		{
+			gb.ThrowGCodeException("Switch-type filament monitor must be connected to same CAN board as extruder driver or to main board");
+		}
 	}
 #endif
 
@@ -265,7 +272,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 		gb.ThrowGCodeException("Unknown filament monitor type %u", monitorType);
 	}
 #if SUPPORT_CAN_EXPANSION
-	if (!fm->IsLocal())
+	if (locBoardAddress == did.boardAddress)
 	{
 		// Create the remote filament monitor on the expansion board
 		if (CanInterface::CreateFilamentMonitor(fm->driverId, monitorType, gb, reply) != GCodeResult::ok)
@@ -317,7 +324,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 				FilamentMonitor& fs = *filamentSensors[drv];
 				GCodes& gCodes = reprap.GetGCodes();
 #if SUPPORT_CAN_EXPANSION
-				if (fs.IsLocal())
+				if (!fs.hasRemote)
 #endif
 				{
 					bool isPrinting;
