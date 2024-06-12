@@ -1,4 +1,4 @@
-name: Upload stable release assets
+name: Upload release assets
 
 on:
   release:
@@ -25,7 +25,7 @@ jobs:
 
       # Upload assets to stable feed on pkg.duet3d.com
       - name: Upload files to stable package feed
-        uses: Creepios/sftp-action@v1.0.3
+        uses: Creepios/sftp-action@v1.0.5
         with:
           host: pkg.duet3d.com
           port: 22
@@ -37,7 +37,7 @@ jobs:
 
       # Upload assets to unstable feed on pkg.duet3d.com
       - name: Upload files to unstable package feed
-        uses: Creepios/sftp-action@v1.0.3
+        uses: Creepios/sftp-action@v1.0.5
         with:
           host: pkg.duet3d.com
           port: 22
@@ -50,7 +50,7 @@ jobs:
       # Upload assets to stable-3.4 feed on pkg.duet3d.com
       - if: contains(github.ref, '3.4')
         name: Upload files to stable 3.4 feed
-        uses: Creepios/sftp-action@v1.0.3
+        uses: Creepios/sftp-action@v1.0.5
         with:
           host: pkg.duet3d.com
           port: 22
@@ -63,7 +63,7 @@ jobs:
       # Upload assets to unstable-3.4 feed on pkg.duet3d.com
       - if: contains(github.ref, '3.4')
         name: Upload files to unstable 3.4 feed
-        uses: Creepios/sftp-action@v1.0.3
+        uses: Creepios/sftp-action@v1.0.5
         with:
           host: pkg.duet3d.com
           port: 22
@@ -76,7 +76,7 @@ jobs:
       # Upload assets to stable-3.5 feed on pkg.duet3d.com
       - if: contains(github.ref, '3.5')
         name: Upload files to stable 3.5 feed
-        uses: Creepios/sftp-action@v1.0.3
+        uses: Creepios/sftp-action@v1.0.5
         with:
           host: pkg.duet3d.com
           port: 22
@@ -89,7 +89,7 @@ jobs:
       # Upload assets to unstable-3.5 feed on pkg.duet3d.com
       - if: contains(github.ref, '3.5')
         name: Upload files to unstable 3.5 feed
-        uses: Creepios/sftp-action@v1.0.3
+        uses: Creepios/sftp-action@v1.0.5
         with:
           host: pkg.duet3d.com
           port: 22
@@ -100,9 +100,9 @@ jobs:
           remotePath: /var/rrf-pkg/unstable-3.5
 
       # Upload assets to stable-3.6 feed on pkg.duet3d.com
-      - if: contains(github.ref, '3.5')
+      - if: contains(github.ref, '3.6')
         name: Upload files to stable 3.6 feed
-        uses: Creepios/sftp-action@v1.0.3
+        uses: Creepios/sftp-action@v1.0.5
         with:
           host: pkg.duet3d.com
           port: 22
@@ -115,7 +115,7 @@ jobs:
       # Upload assets to unstable-3.6 feed on pkg.duet3d.com
       - if: contains(github.ref, '3.6')
         name: Upload files to unstable 3.5 feed
-        uses: Creepios/sftp-action@v1.0.3
+        uses: Creepios/sftp-action@v1.0.5
         with:
           host: pkg.duet3d.com
           port: 22
