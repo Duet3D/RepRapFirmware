@@ -114,7 +114,7 @@ jobs:
 
       # Upload assets to unstable-3.6 feed on pkg.duet3d.com
       - if: contains(github.ref, '3.6')
-        name: Upload files to unstable 3.5 feed
+        name: Upload files to unstable 3.6 feed
         uses: Creepios/sftp-action@v1.0.5
         with:
           host: pkg.duet3d.com
