@@ -1236,10 +1236,6 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						const motioncalc_t delta = totalDistance * directionVector[drive] * move.DriveStepsPerMm(drive);
 
 						afterPrepare.drivesMoving.SetBit(drive);
-						if (flags.checkEndstops)
-						{
-							move.SetHomingDda(drive, this);
-						}
 
 #if SUPPORT_CAN_EXPANSION
 						const DriverId driver = move.GetExtruderDriver(extruder);
