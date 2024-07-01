@@ -534,7 +534,7 @@ static constexpr uint8_t ReadIfcountCRC = SlowReflect(CRCAddByte(InitialSendCRC,
 class TmcDriverState
 {
 public:
-	void Init(uint32_t p_driverNumber
+	void Init(uint8_t p_driverNumber
 #if TMC22xx_HAS_ENABLE_PINS
 							, Pin p_enablePin
 #endif
@@ -548,7 +548,7 @@ public:
 	void SetAxisNumber(size_t p_axisNumber) noexcept;
 	uint32_t GetAxisNumber() const noexcept { return axisNumber; }
 	void WriteAll() noexcept;
-	bool SetMicrostepping(uint32_t shift, bool interpolate) noexcept;
+	bool SetMicrostepping(uint8_t shift, bool interpolate) noexcept;
 	unsigned int GetMicrostepping(bool& interpolation) const noexcept;
 	bool SetDriverMode(unsigned int mode) noexcept;
 	DriverMode GetDriverMode() const noexcept;
@@ -713,16 +713,17 @@ private:
 	volatile uint32_t accumulatedReadRegisters[NumReadRegisters];
 
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state, without the microstepping bits
-	volatile uint32_t registersToUpdate;					// bitmap of register indices whose values need to be sent to the driver chip
-
-	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
-	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	float motorCurrent;										// the configured motor current in mA
 	uint32_t maxOpenLoadStepInterval;						// the maximum step pulse interval for which we consider open load detection to be reliable
+
+	volatile uint16_t registersToUpdate;					// bitmap of register indices whose values need to be sent to the driver chip
 
 #if HAS_STALL_DETECT
 	uint16_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 #endif
+
+	uint8_t axisNumber;										// the axis number of this driver as used to index the DriveMovements in the DDA
+	uint8_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 
 #if TMC22xx_SINGLE_UART
 # if TMC22xx_USES_SERCOM
@@ -1106,7 +1107,7 @@ void TmcDriverState::SetMicrostepping256() noexcept
 #endif
 
 // Initialise the state of the driver and its CS pin
-void TmcDriverState::Init(uint32_t p_driverNumber
+void TmcDriverState::Init(uint8_t p_driverNumber
 #if TMC22xx_HAS_ENABLE_PINS
 							, Pin p_enablePin
 #endif
@@ -1258,7 +1259,7 @@ void TmcDriverState::SetStandstillCurrentPercent(float percent) noexcept
 }
 
 // Set the microstepping and microstep interpolation. The desired microstepping is (1 << shift).
-bool TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate) noexcept
+bool TmcDriverState::SetMicrostepping(uint8_t shift, bool interpolate) noexcept
 {
 	microstepShiftFactor = shift;
 	configuredChopConfReg = (configuredChopConfReg & ~(CHOPCONF_MRES_MASK | CHOPCONF_INTPOL)) | ((8 - shift) << CHOPCONF_MRES_SHIFT);
