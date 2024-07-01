@@ -94,12 +94,6 @@ public:
 	// Get the acceleration
 	motioncalc_t GetA() const noexcept { return a; }
 
-	// Get the actual initial speed when pressure advance is being applied
-	motioncalc_t GetStartSpeed(float pressureAdvanceK) const noexcept { return u + a * (motioncalc_t)pressureAdvanceK; }
-
-	// Get the actual ending speed when pressure advance is being applied
-	motioncalc_t GetEndSpeed(float pressureAdvanceK) const noexcept { return u + a * ((motioncalc_t)pressureAdvanceK + (motioncalc_t)duration); }
-
 	// Get the length
 	motioncalc_t GetLength() const noexcept { return distance; }
 
