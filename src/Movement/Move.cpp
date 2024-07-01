@@ -4066,7 +4066,10 @@ GCodeResult Move::EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest
 				break;
 
 			case DriverStateControl::driverIdle:
-				UpdateMotorCurrent(driver, motorCurrents[driver] * idleCurrentFactor);
+				{
+					const uint16_t idleCurrentPercent = msg.values[count].idlePercentOrDelayAfterBrakeOn >> 4;
+					UpdateMotorCurrent(driver, motorCurrents[driver] * (float)idleCurrentPercent * 0.01);
+				}
 				driverState[driver] = DriverStatus::idle;
 				break;
 
