@@ -17,7 +17,14 @@ namespace Tasks
 	TaskHandle GetMainTask() noexcept;
 	void TerminateMainTask() noexcept;
 	ptrdiff_t GetNeverUsedRam() noexcept;
-	void *AllocPermanent(size_t sz, std::align_val_t align = (std::align_val_t)__STDCPP_DEFAULT_NEW_ALIGNMENT__) noexcept;
+	void *AllocPermanent(size_t sz, std::align_val_t align = (std::align_val_t)
+#if SAME70
+		__STDCPP_DEFAULT_NEW_ALIGNMENT__
+#else
+		// gcc defines __STDCPP_DEFAULT_NEW_ALIGNMENT__ as 8, which is wasteful of memory on ARM Cortex M4 processors
+		sizeof(float)
+#endif
+		) noexcept;
 	const char* GetHeapTop() noexcept;
 	Mutex *GetI2CMutex() noexcept;
 	void *GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept;
