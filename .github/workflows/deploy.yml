@@ -1,17 +1,8 @@
-name: Build and and deploy firmware
+name: Build and and deploy firmware to dev
 
 on:
   workflow_dispatch:
     inputs:
-      target:
-        description: "Deployment target"
-        required: true
-        default: "dev"
-        type: choice
-        options:
-        - dev
-        - unstable-3.5
-        - stable-3.5
       version:
         description: "Version"
         required: true
@@ -49,13 +40,6 @@ jobs:
           ref: "3.5-dev"
           path: "./Duet3Expansion"
 
-      - name: "Check out DuetWiFiSocketServer"
-        uses: actions/checkout@v3
-        with:
-          repository: "Duet3D/DuetWiFiSocketServer"
-          ref: "dev"
-          path: "./DuetWiFiSocketServer"
-
       - name: "Check out FreeRTOS"
         uses: actions/checkout@v3
         with:
@@ -83,6 +67,13 @@ jobs:
           repository: "Duet3D/RRFLibraries"
           ref: "3.5-dev"
           path: "./RRFLibraries"
+
+      - name: "Check out WiFiSocketServerRTOS"
+        uses: actions/checkout@v3
+        with:
+          repository: "Duet3D/WiFiSocketServerRTOS"
+          ref: "main"
+          path: "./WiFiSocketServerRTOS"
 
       - name: "Prepare CrcAppender"
         env:
