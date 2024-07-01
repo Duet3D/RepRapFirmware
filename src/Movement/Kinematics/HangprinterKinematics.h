@@ -48,12 +48,12 @@ public:
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif
 #if DUAL_CAN
-	static GCodeResult ReadODrive3AxisForce(DriverId driver, const StringRef& reply,
+	GCodeResult ReadODrive3AxisForce(DriverId driver, const StringRef& reply,
 																					float setTorqueConstants[] = nullptr, uint32_t setMechanicalAdvantage[] = nullptr,
 																					uint32_t setSpoolGearTeeth[] = nullptr, uint32_t setMotorGearTeeth[] = nullptr,
 																					float setSpoolRadii[] = nullptr) THROWS(GCodeException);
-	static GCodeResult ReadODrive3Encoder(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
-	static GCodeResult SetODrive3TorqueMode(DriverId driver, float force_Newton, const StringRef& reply,
+	GCodeResult ReadODrive3Encoder(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult SetODrive3TorqueMode(DriverId driver, float force_Newton, const StringRef& reply,
 																					uint32_t setMechanicalAdvantage[] = nullptr,
 																					uint32_t setSpoolGearTeeth[] = nullptr, uint32_t setMotorGearTeeth[] = nullptr,
 																					float setSpoolRadii[] = nullptr) noexcept;
@@ -67,8 +67,9 @@ protected:
 
 private:
 	// Basic facts about movement system
-	const char* ANCHOR_CHARS = "ABCDIJKLO";
+	static constexpr const char* ANCHOR_CHARS = "ABCDIJKLO";
 	static constexpr size_t HANGPRINTER_MAX_ANCHORS = 5;
+	static constexpr size_t DefaultNumAnchors = 4;
 
 	void Init() noexcept;
 	void Recalc() noexcept;
@@ -81,7 +82,7 @@ private:
 
 	// The real defaults are in the cpp file
 	HangprinterAnchorMode anchorMode = HangprinterAnchorMode::LastOnTop;
-	static size_t numAnchors;
+	size_t numAnchors = DefaultNumAnchors;
 	float printRadius = 0.0F;
 	float anchors[HANGPRINTER_MAX_ANCHORS][3];
 
@@ -130,9 +131,9 @@ private:
 		float value = 0.0;
 	};
 	static ODriveAnswer GetODrive3MotorCurrent(DriverId driver, const StringRef& reply) THROWS(GCodeException);
-	static ODriveAnswer GetODrive3EncoderEstimate(DriverId driver, bool makeReference, const StringRef& reply, bool subtractReference) THROWS(GCodeException);
+	ODriveAnswer GetODrive3EncoderEstimate(DriverId driver, bool makeReference, const StringRef& reply, bool subtractReference) THROWS(GCodeException);
 	static GCodeResult SetODrive3TorqueModeInner(DriverId driver, float torque_Nm, const StringRef& reply) noexcept;
-	static GCodeResult SetODrive3PosMode(DriverId driver, const StringRef& reply) noexcept;
+	GCodeResult SetODrive3PosMode(DriverId driver, const StringRef& reply) noexcept;
 #endif
 };
 
