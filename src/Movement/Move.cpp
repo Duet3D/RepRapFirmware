@@ -2160,12 +2160,6 @@ void Move::DeactivateDM(DriveMovement *dmToRemove) noexcept
 	}
 }
 
-// Stop all movement because of a step error. May be called from an ISR.
-void Move::LogStepError() noexcept
-{
-	stepErrorState = StepErrorState::haveError;
-}
-
 // Check the endstops, given that we know that this move checks endstops.
 // If executingMove is set then the move is already being executed; otherwise we are preparing to commit the move.
 #if SUPPORT_CAN_EXPANSION

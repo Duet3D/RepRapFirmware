@@ -441,7 +441,8 @@ public:
 	void DeactivateDM(DriveMovement *dmToRemove) noexcept;									// remove a DM from the active list
 
 	// Movement error handling
-	void LogStepError() noexcept;															// stop all movement because of a step error
+	void LogStepError(uint8_t type) noexcept;												// stop all movement because of a step error
+	uint8_t GetStepErrorType() const noexcept { return stepErrorType; }
 	bool HasMovementError() const noexcept;
 	void ResetAfterError() noexcept;
 	void GenerateMovementErrorDebug() noexcept;
@@ -604,6 +605,7 @@ private:
 
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
 
+	volatile uint8_t stepErrorType;
 	volatile StepErrorState stepErrorState;
 
 	// Drives
@@ -900,6 +902,13 @@ inline void Move::InsertDM(DriveMovement *dm) noexcept
 	dm->nextDM = *dmp;
 	*dmp = dm;
 }
+
+inline void Move::LogStepError(uint8_t type) noexcept
+{
+	stepErrorType = type;
+	stepErrorState = StepErrorState::haveError;
+}
+
 
 inline bool Move::HasMovementError() const noexcept
 {

@@ -513,7 +513,7 @@ bool DriveMovement::LogStepError(uint8_t type) noexcept
 		DebugPrint();
 		MoveSegment::DebugPrintList(segments);
 	}
-	reprap.GetMove().LogStepError();
+	reprap.GetMove().LogStepError(type);
 	return false;
 }
 

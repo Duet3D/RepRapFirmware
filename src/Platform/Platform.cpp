@@ -817,7 +817,7 @@ void Platform::Spin() noexcept
 	Move& move = reprap.GetMove();
 	if (move.HasMovementError())
 	{
-		Message(AddError(MessageType::GenericMessage), "Movement halted because a step timing error occurred. Please reset the controller.\n");
+		MessageF(AddError(MessageType::GenericMessage), "Movement halted because a step timing error occurred (code %u). Please reset the controller.\n", move.GetStepErrorType());
 		move.GenerateMovementErrorDebug();
 		move.ResetAfterError();
 	}
