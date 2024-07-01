@@ -10,8 +10,12 @@
 
 #include "RepRapFirmware.h"
 
-#if SAM4E || SAM4S || SAME70 || SAME5x
+#if SAME70
 constexpr size_t NumFileWriteBuffers = 2;					// Number of write buffers
+constexpr size_t FileWriteBufLen = 8192;					// Size of each write buffer
+constexpr size_t SbcFileWriteBufLen = 4192;					// Available size of each write buffer in SBC mode
+#elif SAM4E || SAM4S || SAME5x
+constexpr size_t NumFileWriteBuffers = 1;					// Number of write buffers
 constexpr size_t FileWriteBufLen = 8192;					// Size of each write buffer
 constexpr size_t SbcFileWriteBufLen = 4192;					// Available size of each write buffer in SBC mode
 #else

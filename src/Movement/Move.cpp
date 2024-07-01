@@ -2198,18 +2198,22 @@ void Move::CheckEndstops(bool executingMove) noexcept
 			else
 			{
 				// Get the DDA associated with the axis that has triggered
-				DDA *homingDda = dms[hitDetails.axis].homingDda;
-				if (homingDda != nullptr && homingDda->GetState() == DDA::committed && homingDda->IsCheckingEndstops())
+				const size_t axis = hitDetails.axis;
+				if (axis != NO_AXIS)
 				{
-					if (hitDetails.setAxisLow)
+					DDA *homingDda = dms[axis].homingDda;
+					if (homingDda != nullptr && homingDda->GetState() == DDA::committed && homingDda->IsCheckingEndstops())
 					{
-						kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerMm, *homingDda);
-						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
-					}
-					else if (hitDetails.setAxisHigh)
-					{
-						kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *homingDda);
-						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+						if (hitDetails.setAxisLow)
+						{
+							kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerMm, *homingDda);
+							reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+						}
+						else if (hitDetails.setAxisHigh)
+						{
+							kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *homingDda);
+							reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+						}
 					}
 				}
 			}
@@ -4062,7 +4066,10 @@ GCodeResult Move::EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest
 				break;
 
 			case DriverStateControl::driverIdle:
-				UpdateMotorCurrent(driver, motorCurrents[driver] * idleCurrentFactor);
+				{
+					const uint16_t idleCurrentPercent = msg.values[count].idlePercentOrDelayAfterBrakeOn >> 4;
+					UpdateMotorCurrent(driver, motorCurrents[driver] * (float)idleCurrentPercent * 0.01);
+				}
 				driverState[driver] = DriverStatus::idle;
 				break;
 
