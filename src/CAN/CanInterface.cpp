@@ -1021,9 +1021,12 @@ pre(driver.IsRemote())
 
 #if DUAL_CAN
 	case 3:			// read driver encoder via secondary CAN
-		if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter)
 		{
-			return HangprinterKinematics::ReadODrive3Encoder(driver, gb, reply);
+			Kinematics& kin = reprap.GetMove().GetKinematics();
+			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
+			{
+				return ((HangprinterKinematics&)kin).ReadODrive3Encoder(driver, gb, reply);
+			}
 		}
 		return GCodeResult::errorNotSupported;
 #endif
@@ -1042,11 +1045,14 @@ pre(driver.IsRemote())
 			}
 		}
 #if DUAL_CAN
-		if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter)
 		{
-			gb.MustSee('T');
-			const float torque = gb.GetFValue();
-			return HangprinterKinematics::SetODrive3TorqueMode(driver, torque, reply);
+			Kinematics& kin = reprap.GetMove().GetKinematics();
+			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
+			{
+				gb.MustSee('T');
+				const float torque = gb.GetFValue();
+				return ((HangprinterKinematics&)kin).SetODrive3TorqueMode(driver, torque, reply);
+			}
 		}
 #endif
 		reply.copy("not supported by this driver");
@@ -1100,9 +1106,12 @@ pre(driver.IsRemote())
 		}
 #if DUAL_CAN
 	case 8:			// read axis force via secondary CAN
-		if (reprap.GetMove().GetKinematics().GetKinematicsType() == KinematicsType::hangprinter)
 		{
-			return HangprinterKinematics::ReadODrive3AxisForce(driver, reply);
+			Kinematics& kin = reprap.GetMove().GetKinematics();
+			if (kin.GetKinematicsType() == KinematicsType::hangprinter)
+			{
+				return ((HangprinterKinematics&)kin).ReadODrive3AxisForce(driver, reply);
+			}
 		}
 		return GCodeResult::errorNotSupported;
 #endif

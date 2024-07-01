@@ -17,8 +17,6 @@
 
 #include <General/Portability.h>
 
-constexpr size_t DefaultNumAnchors = 4;
-size_t HangprinterKinematics::numAnchors = DefaultNumAnchors;
 constexpr float DefaultAnchors[5][3] = {{    0.0, -2000.0, -100.0},
                                         { 2000.0,  1000.0, -100.0},
                                         {-2000.0,  1000.0, -100.0},
