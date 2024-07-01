@@ -269,7 +269,7 @@ void FileGCodeInput::Reset(const FileData &file) noexcept
 }
 
 // How many bytes have been cached for the given file?
-size_t FileGCodeInput::BytesCached(const FileData &file) const noexcept
+size_t FileGCodeInput::FileBytesCached(const FileData &file) const noexcept
 {
 	return (lastFileRead == file) ? RegularGCodeInput::BytesCached() : 0;
 }
