@@ -710,7 +710,7 @@ private:
 
 	volatile uint32_t writeRegisters[NumWriteRegisters + 1];	// the values we want the TMC22xx writable registers to have
 	volatile uint32_t readRegisters[NumReadRegisters + 1];		// the last values read from the TMC22xx readable registers
-	volatile uint32_t accumulatedReadRegisters[NumReadRegisters];
+	volatile uint32_t accumulatedDriveStatus;
 
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state, without the microstepping bits
 	float motorCurrent;										// the configured motor current in mA
@@ -1191,8 +1191,9 @@ pre(!driversPowered)
 
 	for (size_t i = 0; i < NumReadRegisters; ++i)
 	{
-		accumulatedReadRegisters[i] = readRegisters[i] = 0;				// clear all read registers so that we don't use dud values, in particular we don't know the driver type yet
+		readRegisters[i] = 0;				// clear all read registers so that we don't use dud values, in particular we don't know the driver type yet
 	}
+	accumulatedDriveStatus = 0;
 
 #if RESET_MICROSTEP_COUNTERS_AT_INIT
 	ClearMicrostepPosition();
@@ -1505,10 +1506,10 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 		{
 			AtomicCriticalSectionLocker lock;
 
-			status = accumulatedReadRegisters[ReadDrvStat];
+			status = accumulatedDriveStatus;
 			if (clearAccumulated)
 			{
-				accumulatedReadRegisters[ReadDrvStat] = readRegisters[ReadDrvStat];
+				accumulatedDriveStatus = readRegisters[ReadDrvStat];
 			}
 		}
 		else
@@ -1740,7 +1741,10 @@ inline void TmcDriverState::TransferDone() noexcept
 			}
 			else
 			{
-				accumulatedReadRegisters[registerToRead] |= regVal;
+				if (registerToRead == ReadDrvStat)
+				{
+					accumulatedDriveStatus |= regVal;
+				}
 				++registerToRead;
 				if (registerToRead == ReadSpecial && specialReadRegisterNumber >= 0x80)
 				{
