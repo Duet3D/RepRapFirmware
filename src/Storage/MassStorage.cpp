@@ -615,7 +615,7 @@ void MassStorage::InvalidateAllFiles() noexcept
 // Delete a file or directory
 static bool InternalDelete(const char* filePath, ErrorMessageMode errorMessageMode) noexcept
 {
-	FRESULT unlinkReturn;
+	FRESULT unlinkReturn = FR_OK;
 	bool isOpen = false;
 
 	// Start new scope to lock the filesystem for the minimum time
