@@ -69,7 +69,7 @@ public:
 	// Allocate a buffer
 	static NetworkBuffer *Allocate() noexcept;
 
-	// Alocate buffers and put them in the freelist
+	// Allocate buffers and put them in the freelist
 	static void AllocateBuffers(unsigned int number) noexcept;
 
 	// Count how many buffers there are in a chain
