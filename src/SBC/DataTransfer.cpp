@@ -35,6 +35,10 @@
 # define USE_DMAC_MANAGER	1		// use SAME5x DmacManager module
 constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 
+# if HAS_LWIP_NETWORKING
+#  include "LwipEthernet/AllocateFromPbufPool.h"
+# endif
+
 #else
 # error Unknown board
 #endif
@@ -430,17 +434,21 @@ void DataTransfer::Init() noexcept
 	pinMode(SbcTfrReadyPin, OUTPUT_LOW);
 
 #if !SAME70
-	if (reprap.UsingSbcInterface())
+	// Allocate buffers in SBC mode
+# if HAS_LWIP_NETWORKING && defined(DUET3MINI_V04)
+	InitAllocationFromPbufPool();				// we are not using a wired Ethernet interface on the Duet so we can use the PBUF pool memory
 	{
-		// Allocate buffers in SBC mode
-		rxBuffer = (char *)new uint32_t[(SbcTransferBufferSize + 3)/4];
-		txBuffer = (char *)new uint32_t[(SbcTransferBufferSize + 3)/4];
+		void *const mem = AllocateFromPbufPool(SbcTransferBufferSize);
+		rxBuffer = (mem != nullptr) ? (char *)mem : (char *)new uint32_t[(SbcTransferBufferSize + 3)/4];
 	}
-	else
 	{
-		// Only send back the TX header + response code in standalone mode indicating we're running in standalone mode
-		txHeader.formatCode = SbcFormatCodeStandalone;
+		void *const mem = AllocateFromPbufPool(SbcTransferBufferSize);
+		txBuffer = (mem != nullptr) ? (char *)mem : (char *)new uint32_t[(SbcTransferBufferSize + 3)/4];
 	}
+# else
+	rxBuffer = (char *)new uint32_t[(SbcTransferBufferSize + 3)/4];
+	txBuffer = (char *)new uint32_t[(SbcTransferBufferSize + 3)/4];
+# endif
 #endif
 
 #if SAME5x
