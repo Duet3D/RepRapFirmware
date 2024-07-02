@@ -76,7 +76,7 @@ private:
 	// Parameters that fully define the shaping
 	unsigned int numImpulses;							// the number of impulses
 	motioncalc_t coefficients[MaxImpulses];				// the coefficients of all the impulses, must add up to 1.0
-	uint32_t delays[MaxImpulses];						// the start delay in step clocks of each impulse
+	uint32_t delays[MaxImpulses];						// the start delay in step clocks of each impulse, first one is normally zero
 };
 
 #endif /* SRC_MOVEMENT_AXISSHAPER_H_ */
