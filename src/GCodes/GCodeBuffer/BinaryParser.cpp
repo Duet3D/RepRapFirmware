@@ -175,11 +175,8 @@ float BinaryParser::GetFValue() THROWS(GCodeException)
 			parser.CheckForExtraCharacters();
 		}
 		break;
-	case DataType::Null:
-		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 	default:
-		value = 0.0;
-		break;
+		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 	}
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
@@ -212,11 +209,8 @@ int32_t BinaryParser::GetIValue() THROWS(GCodeException)
 			parser.CheckForExtraCharacters();
 		}
 		break;
-	case DataType::Null:
-		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 	default:
-		value = 0;
-		break;
+		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 	}
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
@@ -249,11 +243,8 @@ uint32_t BinaryParser::GetUIValue() THROWS(GCodeException)
 			parser.CheckForExtraCharacters();
 		}
 		break;
-	case DataType::Null:
-		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 	default:
-		value = 0;
-		break;
+		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 	}
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
@@ -324,11 +315,8 @@ DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 		}
 		break;
 
-	case DataType::Null:
-		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
-
 	default:
-		break;
+		throw ConstructParseException("expected number after '%c'", seenParameter->letter);
 	}
 	seenParameter = nullptr;
 	seenParameterValue = nullptr;
@@ -475,12 +463,8 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty
 		}
 		break;
 
-	case DataType::Null:
-		throw ConstructParseException("expected a string expression");
-
 	default:
-		str.Clear();
-		break;
+		throw ConstructParseException("expected a string expression");
 	}
 
 	seenParameter = nullptr;
@@ -581,7 +565,6 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 		}
 		break;
 
-	case DataType::Null:
 	default:
 		length = 0;
 		return;
@@ -713,7 +696,6 @@ template<typename T> void BinaryParser::GetArray(T arr[], size_t& length) THROWS
 		lastIndex = seenParameter->intValue - 1;
 		break;
 
-	case DataType::Null:
 	default:
 		length = 0;
 		return;
