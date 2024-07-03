@@ -2164,7 +2164,7 @@ void Move::DeactivateDM(DriveMovement *dmToRemove) noexcept
 // If executingMove is set then the move is already being executed; otherwise we are preparing to commit the move.
 #if SUPPORT_CAN_EXPANSION
 // Returns true if the caller needs to wake the async sender task because CAN-connected drivers need to be stopped
-bool Move::CheckEndstops( bool executingMove) noexcept
+bool Move::CheckEndstops(bool executingMove) noexcept
 #else
 void Move::CheckEndstops(bool executingMove) noexcept
 #endif
