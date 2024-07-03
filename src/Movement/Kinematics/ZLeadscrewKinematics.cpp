@@ -155,7 +155,7 @@ bool ZLeadscrewKinematics::SupportsAutoCalibration() const noexcept
 }
 
 // Perform auto calibration, returning true if failed. Caller already owns the GCode movement lock.
-bool ZLeadscrewKinematics::DoAutoCalibration(MovementSystemNumber msNumber, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
+bool ZLeadscrewKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	if (!SupportsAutoCalibration())			// should be checked by caller, but check it here too
 	{
@@ -372,7 +372,7 @@ bool ZLeadscrewKinematics::DoAutoCalibration(MovementSystemNumber msNumber, size
 	}
 	else
 	{
-		const size_t numZDrivers = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS).numDrivers;
+		const size_t numZDrivers = reprap.GetMove().GetAxisDriversConfig(Z_AXIS).numDrivers;
 		if (numZDrivers == numLeadscrews)
 		{
 			if (haveLargeCorrection)

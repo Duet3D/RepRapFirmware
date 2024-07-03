@@ -305,7 +305,7 @@ constexpr ObjectModelTableEntry RepRap::objectModelTable[] =
 #if SUPPORT_CAN_EXPANSION
 	{ "drivers",				OBJECT_MODEL_FUNC_NOSELF((int32_t)(NumDirectDrivers + MaxCanDrivers)),	ObjectModelEntryFlags::verbose },
 #else
-	{ "drivers",				OBJECT_MODEL_FUNC((int32_t)self->platform->GetNumActualDirectDrivers()), ObjectModelEntryFlags::verbose },
+	{ "drivers",				OBJECT_MODEL_FUNC((int32_t)self->move->GetNumActualDirectDrivers()),	ObjectModelEntryFlags::verbose },
 #endif
 	{ "driversPerAxis",			OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxDriversPerAxis),					ObjectModelEntryFlags::verbose },
 	{ "extruders",				OBJECT_MODEL_FUNC_NOSELF((int32_t)MaxExtruders),						ObjectModelEntryFlags::verbose },
@@ -525,7 +525,7 @@ void RepRap::Init() noexcept
 #if SUPPORT_CAN_EXPANSION
 	CanInterface::Init();
 #endif
-	move->Init();
+	move->Init();						// Must be called later than Platform::Init
 	heat->Init();
 	fansManager->Init();
 	printMonitor->Init();
@@ -965,12 +965,12 @@ void RepRap::EmergencyStop() noexcept
 #if SUPPORT_REMOTE_COMMANDS
 	if (CanInterface::InExpansionMode())
 	{
-		platform->EmergencyDisableDrivers();		// disable all local drivers - need to do this to ensure that any motor brakes are re-engaged
+		move->EmergencyDisableDrivers();			// disable all local drivers - need to do this to ensure that any motor brakes are re-engaged
 	}
 	else
 #endif
 	{
-		platform->DisableAllDrivers();				// disable all local and remote drivers - need to do this to ensure that any motor brakes are re-engaged
+		move->DisableAllDrivers();					// disable all local and remote drivers - need to do this to ensure that any motor brakes are re-engaged
 
 		switch (gCodes->GetMachineType())
 		{
@@ -1074,7 +1074,7 @@ void RepRap::Tick() noexcept
 			{
 				stopped = true;
 				heat->SwitchOffAllLocalFromISR();								// can't call SwitchOffAll because remote heaters can't be turned off from inside a ISR
-				platform->EmergencyDisableDrivers();
+				move->EmergencyDisableDrivers();
 
 				// Save the stack of the stuck task when we get stuck in a spin loop
 				const uint32_t *relevantStackPtr;
@@ -1149,11 +1149,11 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 	// Machine coordinates
 	const MovementState& ms = gCodes->GetPrimaryMovementState();				// we only report the primary in this response
 	response->cat(',');
-	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return ms.LiveCoordinate(axis); }, 3);
+	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return move->LiveMachineCoordinate(axis); }, 3);
 
 	// Actual extruder positions since power up, last G92 or last M23
 	response->cat(',');
-	AppendFloatArray(response, "extr", Tool::GetExtrudersInUse(), [this, &ms](size_t extruder) noexcept { return ms.LiveCoordinate(ExtruderToLogicalDrive(extruder)); }, 1);
+	AppendFloatArray(response, "extr", Tool::GetExtrudersInUse(), [this, &ms](size_t extruder) noexcept { return move->LiveMachineCoordinate(ExtruderToLogicalDrive(extruder)); }, 1);
 
 	// Current speeds
 	response->catf("},\"speeds\":{\"requested\":%.1f,\"top\":%.1f}", (double)move->GetRequestedSpeedMmPerSec(), (double)move->GetTopSpeedMmPerSec());
@@ -1616,19 +1616,19 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 
 	// Axis minima
 	response->copy('{');
-	AppendFloatArray(response, "axisMins", numAxes, [this](size_t axis) noexcept { return platform->AxisMinimum(axis); }, 2);
+	AppendFloatArray(response, "axisMins", numAxes, [this](size_t axis) noexcept { return move->AxisMinimum(axis); }, 2);
 
 	// Axis maxima
 	response->cat(',');
-	AppendFloatArray(response, "axisMaxes", numAxes, [this](size_t axis) noexcept { return platform->AxisMaximum(axis); }, 2);
+	AppendFloatArray(response, "axisMaxes", numAxes, [this](size_t axis) noexcept { return move->AxisMaximum(axis); }, 2);
 
 	// Accelerations
 	response->cat(',');
-	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertAcceleration(platform->NormalAcceleration(drive)); }, 2);
+	AppendFloatArray(response, "accelerations", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertAcceleration(move->NormalAcceleration(drive)); }, 2);
 
 	// Motor currents
 	response->cat(',');
-	AppendIntArray(response, "currents", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return (int)platform->GetMotorCurrent(drive, 906); });
+	AppendIntArray(response, "currents", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return (int)move->GetMotorCurrent(drive, 906); });
 
 	// Firmware details
 	response->catf(",\"firmwareElectronics\":\"%.s", platform->GetElectronicsString());
@@ -1667,15 +1667,15 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 #endif
 
 	// Motor idle parameters
-	response->catf(",\"idleCurrentFactor\":%.1f", (double)(platform->GetIdleCurrentFactor() * 100.0));
+	response->catf(",\"idleCurrentFactor\":%.1f", (double)(move->GetIdleCurrentFactor() * 100.0));
 	response->catf(",\"idleTimeout\":%.1f,", (double)(move->IdleTimeout()));
 
 	// Minimum feedrates
-	AppendFloatArray(response, "minFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertSpeedToMmPerSec(platform->GetInstantDv(drive)); }, 2);
+	AppendFloatArray(response, "minFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertSpeedToMmPerSec(move->GetInstantDv(drive)); }, 2);
 
 	// Maximum feedrates
 	response->cat(',');
-	AppendFloatArray(response, "maxFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertSpeedToMmPerSec(platform->MaxFeedrate(drive)); }, 2);
+	AppendFloatArray(response, "maxFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertSpeedToMmPerSec(move->MaxFeedrate(drive)); }, 2);
 
 	// Config file is no longer included, because we can use rr_configfile or M503 instead
 	response->cat('}');
@@ -1753,7 +1753,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 
 	// Machine coordinates
 	response->cat(',');
-	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return ms.LiveCoordinate(axis); }, 3);
+	AppendFloatArray(response, "machine", numVisibleAxes, [this, &ms](size_t axis) noexcept { return move->LiveMachineCoordinate(axis); }, 3);
 
 	// Send the speed and extruder override factors
 	response->catf(",\"sfactor\":%.1f,", (double)(gCodes->GetPrimarySpeedFactor() * 100.0));
@@ -2391,7 +2391,7 @@ size_t RepRap::GetStatusIndex() const noexcept
 #endif
 			: (IsStopped()) 											? 2		// Halted
 #if HAS_VOLTAGE_MONITOR
-			: (!platform->HasVinPower() && !gCodes->IsSimulating())		? 3		// Off i.e. powered down
+			: (!platform->HasDriverPower() && !gCodes->IsSimulating())	? 3		// Off i.e. powered down
 #endif
 			: (gCodes->GetPauseState() == PauseState::pausing)			? 4		// Pausing
 			: (gCodes->GetPauseState() == PauseState::resuming)			? 5		// Resuming

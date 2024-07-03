@@ -7,7 +7,7 @@
 
 #include "ZProbe.h"
 #include <Platform/RepRap.h>
-#include <Platform/Platform.h>
+#include <Movement/Move.h>
 #include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Storage/FileStore.h>
@@ -252,7 +252,7 @@ int32_t ZProbe::GetReading() const noexcept
 		case ZProbeType::zMotorStall:
 #if HAS_STALL_DETECT
 			{
-				const DriversBitmap zDrivers = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS).GetDriversBitmap();
+				const DriversBitmap zDrivers = reprap.GetMove().GetAxisDriversConfig(Z_AXIS).GetDriversBitmap();
 				zProbeVal = (GetStalledDrivers(zDrivers).IsNonEmpty()) ? 1000 : 0;
 			}
 #else

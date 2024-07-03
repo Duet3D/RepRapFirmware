@@ -72,7 +72,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 				reprap.GetMove().SetZBedProbePoint((size_t)g30ProbePointIndex, z, false, false);
 				if (g30SValue >= -1)
 				{
-					return GetGCodeResultFromError(reprap.GetMove().FinishedBedProbing(ms.GetMsNumber(), g30SValue, reply));
+					return GetGCodeResultFromError(reprap.GetMove().FinishedBedProbing(g30SValue, reply));
 				}
 			}
 			else
@@ -113,7 +113,7 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 ReadLockedPointer<ZProbe> GCodes::SetZProbeNumber(GCodeBuffer& gb, char probeLetter) THROWS(GCodeException)
 {
 	const uint32_t probeNumber = (gb.Seen(probeLetter)) ? gb.GetLimitedUIValue(probeLetter, MaxZProbes) : 0;
-	auto zp = reprap.GetPlatform().GetEndstops().GetZProbe(probeNumber);
+	auto zp = platform.GetEndstops().GetZProbe(probeNumber);
 	if (zp.IsNull())
 	{
 		gb.ThrowGCodeException("Z probe %u not found", probeNumber);
@@ -714,8 +714,8 @@ GCodeResult GCodes::ProbeTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 	// Decide which way and how far to go
 	ToolOffsetTransform(ms);
 	m585Settings.probingLimit = (gb.Seen('R')) ? ms.coords[m585Settings.axisNumber] + gb.GetDistance()
-								: (gb.Seen('S') && gb.GetIValue() > 0) ? platform.AxisMinimum(m585Settings.axisNumber)
-									: platform.AxisMaximum(m585Settings.axisNumber);
+								: (gb.Seen('S') && gb.GetIValue() > 0) ? reprap.GetMove().AxisMinimum(m585Settings.axisNumber)
+									: reprap.GetMove().AxisMaximum(m585Settings.axisNumber);
 	if (m585Settings.useProbe)
 	{
 		gb.SetState(GCodeState::probingToolOffset1);
@@ -764,8 +764,8 @@ bool GCodes::SetupM585ProbingMove(GCodeBuffer& gb) noexcept
 	ms.checkEndstops = true;
 	ms.canPauseAfter = false;
 	zProbeTriggered = false;
-	ms.linearAxesMentioned = reprap.GetPlatform().IsAxisLinear(m585Settings.axisNumber);
-	ms.rotationalAxesMentioned = reprap.GetPlatform().IsAxisRotational(m585Settings.axisNumber);
+	ms.linearAxesMentioned = reprap.GetMove().IsAxisLinear(m585Settings.axisNumber);
+	ms.rotationalAxesMentioned = reprap.GetMove().IsAxisRotational(m585Settings.axisNumber);
 	NewSingleSegmentMoveAvailable(ms);
 	return true;
 }
@@ -822,13 +822,13 @@ bool GCodes::SetupM675ProbingMove(GCodeBuffer& gb, bool towardsMin) noexcept
 	MovementState& ms = GetMovementState(gb);
 	SetMoveBufferDefaults(ms);
 	ToolOffsetTransform(ms);
-	ms.coords[m675Settings.axisNumber] = towardsMin ? platform.AxisMinimum(m675Settings.axisNumber) : platform.AxisMaximum(m675Settings.axisNumber);
+	ms.coords[m675Settings.axisNumber] = towardsMin ? reprap.GetMove().AxisMinimum(m675Settings.axisNumber) : reprap.GetMove().AxisMaximum(m675Settings.axisNumber);
 	ms.feedRate = m675Settings.feedRate;
 	ms.checkEndstops = true;
 	ms.canPauseAfter = false;
 	zProbeTriggered = false;
-	ms.linearAxesMentioned = reprap.GetPlatform().IsAxisLinear(m675Settings.axisNumber);
-	ms.rotationalAxesMentioned = reprap.GetPlatform().IsAxisRotational(m675Settings.axisNumber);
+	ms.linearAxesMentioned = reprap.GetMove().IsAxisLinear(m675Settings.axisNumber);
+	ms.rotationalAxesMentioned = reprap.GetMove().IsAxisRotational(m675Settings.axisNumber);
 	NewSingleSegmentMoveAvailable(ms);						// kick off the move
 	return true;
 }
@@ -841,8 +841,8 @@ void GCodes::SetupM675BackoffMove(GCodeBuffer& gb, float position) noexcept
 	ms.coords[m675Settings.axisNumber] = position;
 	ms.feedRate = m675Settings.feedRate;
 	ms.canPauseAfter = false;
-	ms.linearAxesMentioned = reprap.GetPlatform().IsAxisLinear(m675Settings.axisNumber);
-	ms.rotationalAxesMentioned = reprap.GetPlatform().IsAxisRotational(m675Settings.axisNumber);
+	ms.linearAxesMentioned = reprap.GetMove().IsAxisLinear(m675Settings.axisNumber);
+	ms.rotationalAxesMentioned = reprap.GetMove().IsAxisRotational(m675Settings.axisNumber);
 	NewSingleSegmentMoveAvailable(ms);
 }
 
@@ -889,10 +889,11 @@ GCodeResult GCodes::HandleM558Point1or2(GCodeBuffer& gb, const StringRef &reply,
 			zp->PrepareForUse(false);										// needed to set actual trigger height allowing for temperature compensation
 
 			// Set the scanning range to a whole number of microsteps and calculate the microsteps per point
-			const unsigned int microstepsPerHalfScan = (unsigned int)(requestedScanningRange * platform.DriveStepsPerUnit(Z_AXIS));
+			const float zStepsPerMm = reprap.GetMove().DriveStepsPerMm(Z_AXIS);
+			const unsigned int microstepsPerHalfScan = (unsigned int)(requestedScanningRange * zStepsPerMm);
 			constexpr unsigned int MaxCalibrationPointsPerHalfScan = (MaxScanningProbeCalibrationPoints - 1)/2;
 			const unsigned int microstepsPerPoint = max<unsigned int>((microstepsPerHalfScan + MaxCalibrationPointsPerHalfScan - 1)/MaxCalibrationPointsPerHalfScan, 1);
-			heightChangePerPoint = microstepsPerPoint/platform.DriveStepsPerUnit(Z_AXIS);
+			heightChangePerPoint = microstepsPerPoint/zStepsPerMm;
 			const size_t pointsPerHalfScan = microstepsPerHalfScan/microstepsPerPoint;
 			calibrationStartingHeight = zp->GetActualTriggerHeight() + pointsPerHalfScan * heightChangePerPoint;
 			numPointsToCollect = 2 * pointsPerHalfScan + 1;

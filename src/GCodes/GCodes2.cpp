@@ -595,9 +595,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 	// In simulation mode we don't execute most M-commands
 	if (   IsSimulating()
-		&& (code < 20 || code > 37)
-		&& code != 0 && code != 1 && code != 82 && code != 83 && code != 105 && code != 109 && code != 111 && code != 112 && code != 122
-		&& code != 200 && code != 204 && code != 207 && code != 408 && code != 409 && code != 486 && code != 999)
+		&& (code < 20 || code > 37)													// allow file operations while simulating
+		&& code != 0 && code != 1 && code != 82 && code != 83
+		&& code != 105 && code != 109 && code != 111 && code != 112 && code != 122
+		&& code != 200 && code != 204 && code != 205 && code != 207
+		&& code != 408 && code != 409 && code != 486
+		&& code != 572 && code != 593												// allow changes to PA and IS while simulating
+		&& code != 997 && code != 999												// allow reset and firmware update while simulating
+	   )
 	{
 		HandleReply(gb, GCodeResult::ok, "");
 		return true;			// we don't simulate most M codes
@@ -868,18 +873,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				}
 				{
 					bool seen = false;
+					Move& move = reprap.GetMove();
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
 							if (code == 17)
 							{
-								platform.EnableDrivers(axis, true);
+								move.EnableDrivers(axis, true);
 							}
 							else
 							{
 								SetAxisNotHomed(axis);
-								platform.DisableDrivers(axis);
+								move.DisableDrivers(axis);
 							}
 							seen = true;
 						}
@@ -901,11 +907,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							}
 							if (code == 17)
 							{
-								platform.EnableDrivers(ExtruderToLogicalDrive(eDrive[i]), true);
+								move.EnableDrivers(ExtruderToLogicalDrive(eDrive[i]), true);
 							}
 							else
 							{
-								platform.DisableDrivers(ExtruderToLogicalDrive(eDrive[i]));
+								move.DisableDrivers(ExtruderToLogicalDrive(eDrive[i]));
 							}
 						}
 					}
@@ -913,7 +919,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (gb.Seen('S'))
 					{
 						seen = true;
-						reprap.GetMove().SetIdleTimeout(gb.GetPositiveFValue());
+						move.SetIdleTimeout(gb.GetPositiveFValue());
 					}
 
 					if (!seen)
@@ -922,11 +928,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						{
 							for (size_t axis = 0; axis < numTotalAxes; ++axis)
 							{
-								reprap.GetPlatform().EnableDrivers(axis, true);
+								move.EnableDrivers(axis, true);
 							}
 							for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 							{
-								reprap.GetPlatform().EnableDrivers(ExtruderToLogicalDrive(extruder), true);
+								move.EnableDrivers(ExtruderToLogicalDrive(extruder), true);
 							}
 						}
 						else
@@ -1554,6 +1560,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_CAN_EXPANSION
 					AxesBitmap axesToUpdate;
 #endif
+					Move& move = reprap.GetMove();
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]))
@@ -1562,7 +1569,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								return false;
 							}
-							platform.SetDriveStepsPerUnit(axis, gb.GetPositiveFValue(), ustepMultiplier);
+							move.SetDriveStepsPerMm(axis, gb.GetPositiveFValue(), ustepMultiplier);
 #if SUPPORT_CAN_EXPANSION
 							axesToUpdate.SetBit(axis);
 #endif
@@ -1572,7 +1579,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (seen)
 					{
-						platform.UpdateBacklashSteps();
+						reprap.GetMove().UpdateBacklashSteps();
 					}
 
 					if (gb.Seen(extrudeLetter))
@@ -1593,7 +1600,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #if SUPPORT_CAN_EXPANSION
 							axesToUpdate.SetBit(drive);
 #endif
-							platform.SetDriveStepsPerUnit(drive, eVals[e], ustepMultiplier);
+							move.SetDriveStepsPerMm(drive, eVals[e], ustepMultiplier);
 						}
 					}
 
@@ -1606,12 +1613,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (seen)
 					{
 						// On a delta, if we change the drive steps/mm then we need to recalculate the motor positions
-						for (size_t i = 0; i < NumMovementSystems; ++i)
+						for (const MovementState& ms : moveStates)
 						{
-							reprap.GetMove().SetNewPosition(moveStates[i].coords, i, true);
+							reprap.GetMove().SetNewPosition(ms.coords, ms, true);
 						}
 #if SUPPORT_CAN_EXPANSION
-						result = platform.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply);
+						result = move.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply);
 #endif
 					}
 					else
@@ -1619,13 +1626,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						reply.copy("Steps/mm: ");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.3f, ", axisLetters[axis], (double)platform.DriveStepsPerUnit(axis));
+							reply.catf("%c: %.3f, ", axisLetters[axis], (double)move.DriveStepsPerMm(axis));
 						}
 						reply.catf("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.3f", sep, (double)platform.DriveStepsPerUnit(ExtruderToLogicalDrive(extruder)));
+							reply.catf("%c%.3f", sep, (double)move.DriveStepsPerMm(ExtruderToLogicalDrive(extruder)));
 							sep = ':';
 						}
 					}
@@ -2188,7 +2195,19 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 122:
 				{
 					const unsigned int type = (gb.Seen('P')) ? gb.GetIValue() : 0;
-					const MessageType mt = (MessageType)(gb.GetResponseMessageType() | PushFlag);	// set the Push flag to combine multiple messages into a single OutputBuffer chain
+					MessageType mt = gb.GetResponseMessageType();
+					if (mt == MessageType::GenericMessage)
+					{
+						// M122 responses are long and if we try to send them to multiple destinations, we run out of buffers
+#if HAS_NETWORKING
+						mt = MessageType::HttpMessage;
+#else
+						mt = MessageType::UsbMessage;
+#endif
+					}
+					mt = (MessageType)(mt | PushFlag);									// set the Push flag to combine multiple messages into a single OutputBuffer chain
+
+					// If
 #if SUPPORT_CAN_EXPANSION
 					const uint32_t board = (gb.Seen('B')) ? gb.GetUIValue() : CanInterface::GetCanAddress();
 					if (board != CanInterface::GetCanAddress())
@@ -2255,7 +2274,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						const float temperature = gb.GetFValue();
 						if (currentHeater < 0)
 						{
-							if (temperature > 0.0)		// turning off a non-existent bed or chamber heater is not an error
+							if (temperature > 0.0)							// turning off a non-existent bed or chamber heater is not an error
 							{
 								reply.printf("No %s heater has been configured for slot %d", heaterName, index);
 								result = GCodeResult::error;
@@ -2422,11 +2441,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 
 					bool seen = false;
+					Move& move = reprap.GetMove();
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							platform.SetAcceleration(axis, gb.GetAcceleration(), frac == 1);
+							move.SetAcceleration(axis, gb.GetAcceleration(), frac == 1);
 							seen = true;
 						}
 					}
@@ -2439,7 +2459,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetFloatArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
-							platform.SetAcceleration(ExtruderToLogicalDrive(e), ConvertAcceleration(eVals[e]), frac == 1);
+							move.SetAcceleration(ExtruderToLogicalDrive(e), ConvertAcceleration(eVals[e]), frac == 1);
 						}
 					}
 
@@ -2452,13 +2472,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						reply.copy((frac == 1) ? "Reduced accelerations (mm/sec^2): " : "Accelerations (mm/sec^2): ");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertAcceleration(platform.Acceleration(axis, frac == 1)));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertAcceleration(move.Acceleration(axis, frac == 1)));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(platform.Acceleration(ExtruderToLogicalDrive(extruder), frac == 1)));
+							reply.catf("%c%.1f", sep, (double)InverseConvertAcceleration(move.Acceleration(ExtruderToLogicalDrive(extruder), frac == 1)));
 							sep = ':';
 						}
 					}
@@ -2470,12 +2490,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					// Units are mm/sec if S1 is given, else mm/min
 					const bool usingMmPerSec = (gb.Seen('S') && gb.GetIValue() == 1);
 					bool seen = false;
+					Move& move = reprap.GetMove();
 
 					// Do the minimum first, because we constrain the maximum rates to be no lower than it
 					if (gb.Seen('I'))
 					{
 						seen = true;
-						platform.SetMinMovementSpeed(gb.GetSpeedFromMm(usingMmPerSec));
+						move.SetMinMovementSpeed(gb.GetSpeedFromMm(usingMmPerSec));
 					}
 
 					for (size_t axis = 0; axis < numTotalAxes; ++axis)
@@ -2483,7 +2504,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						if (gb.Seen(axisLetters[axis]))
 						{
 							seen = true;
-							platform.SetMaxFeedrate(axis, gb.GetSpeedFromMm(usingMmPerSec));
+							move.SetMaxFeedrate(axis, gb.GetSpeedFromMm(usingMmPerSec));
 						}
 					}
 
@@ -2495,7 +2516,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetFloatArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
-							platform.SetMaxFeedrate(ExtruderToLogicalDrive(e), ConvertSpeedFromMm(eVals[e], usingMmPerSec));
+							move.SetMaxFeedrate(ExtruderToLogicalDrive(e), ConvertSpeedFromMm(eVals[e], usingMmPerSec));
 						}
 					}
 
@@ -2508,16 +2529,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						reply.printf("Max speeds (%s): ", (usingMmPerSec) ? "mm/sec" : "mm/min");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertSpeedToMm(platform.MaxFeedrate(axis), usingMmPerSec));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertSpeedToMm(move.MaxFeedrate(axis), usingMmPerSec));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)InverseConvertSpeedToMm(platform.MaxFeedrate(ExtruderToLogicalDrive(extruder)), usingMmPerSec));
+							reply.catf("%c%.1f", sep, (double)InverseConvertSpeedToMm(move.MaxFeedrate(ExtruderToLogicalDrive(extruder)), usingMmPerSec));
 							sep = ':';
 						}
-						reply.catf(", min. speed %.2f", (double)InverseConvertSpeedToMm(platform.MinMovementSpeed(), usingMmPerSec));
+						reply.catf(", min. speed %.2f", (double)InverseConvertSpeedToMm(move.MinMovementSpeed(), usingMmPerSec));
 					}
 				}
 				break;
@@ -2557,6 +2578,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					bool setMin = (gb.Seen('S') ? (gb.GetIValue() == 1) : false);
 					bool seen = false;
+					Move& move = reprap.GetMove();
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]))
@@ -2571,24 +2593,24 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								ok = values[1] > values[0];
 								if (ok)
 								{
-									platform.SetAxisMinimum(axis, values[0], gb.LatestMachineState().runningM501);
-									platform.SetAxisMaximum(axis, values[1], gb.LatestMachineState().runningM501);
+									move.SetAxisMinimum(axis, values[0], gb.LatestMachineState().runningM501);
+									move.SetAxisMaximum(axis, values[1], gb.LatestMachineState().runningM501);
 								}
 							}
 							else if (setMin)
 							{
-								ok = platform.AxisMaximum(axis) > values[0];
+								ok = move.AxisMaximum(axis) > values[0];
 								if (ok)
 								{
-									platform.SetAxisMinimum(axis, values[0], gb.LatestMachineState().runningM501);
+									move.SetAxisMinimum(axis, values[0], gb.LatestMachineState().runningM501);
 								}
 							}
 							else
 							{
-								ok = values[0] > platform.AxisMinimum(axis);
+								ok = values[0] > move.AxisMinimum(axis);
 								if (ok)
 								{
-									platform.SetAxisMaximum(axis, values[0], gb.LatestMachineState().runningM501);
+									move.SetAxisMaximum(axis, values[0], gb.LatestMachineState().runningM501);
 								}
 							}
 
@@ -2606,7 +2628,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						char sep = ')';
 						for (size_t axis = 0; axis < numTotalAxes; axis++)
 						{
-							reply.catf("%c %c%.1f:%.1f", sep, axisLetters[axis], (double)platform.AxisMinimum(axis), (double)platform.AxisMaximum(axis));
+							reply.catf("%c %c%.1f:%.1f", sep, axisLetters[axis], (double)move.AxisMinimum(axis), (double)move.AxisMaximum(axis));
 							sep = ',';
 						}
 					}
@@ -2789,8 +2811,8 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							// The pipeline is empty, so execute the babystepping move immediately if it is safe to do
 							SetMoveBufferDefaults(ms);
 							ms.feedRate = ConvertSpeedFromMmPerMin(DefaultFeedRate);
-							ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetLinearAxes());
-							ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetRotationalAxes());
+							ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetLinearAxes());
+							ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetRotationalAxes());
 							NewSingleSegmentMoveAvailable(ms);
 						}
 					}
@@ -2929,9 +2951,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 					}
 
+					Move& move = reprap.GetMove();
 					if (seen)
 					{
-						platform.UpdateBacklashSteps();
+						move.UpdateBacklashSteps();
 					}
 
 					if (gb.Seen(extrudeLetter))
@@ -2966,7 +2989,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (seen)
 					{
 #if SUPPORT_CAN_EXPANSION
-						result = max(result, platform.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply));
+						result = max(result, move.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply));
 #endif
 					}
 					else
@@ -2975,14 +2998,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
 							bool actualInterp;
-							const unsigned int microsteps = platform.GetMicrostepping(axis, actualInterp);
+							const unsigned int microsteps = move.GetMicrostepping(axis, actualInterp);
 							reply.catf("%c:%u%s, ", axisLetters[axis], microsteps, (actualInterp) ? "(on)" : "");
 						}
 						reply.cat("E");
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
 							bool actualInterp;
-							const unsigned int microsteps = platform.GetMicrostepping(ExtruderToLogicalDrive(extruder), actualInterp);
+							const unsigned int microsteps = move.GetMicrostepping(ExtruderToLogicalDrive(extruder), actualInterp);
 							reply.catf(":%u%s", microsteps, (actualInterp) ? "(on)" : "");
 						}
 					}
@@ -3152,7 +3175,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 			case 425: // Backlash compensation
-				result = platform.ConfigureBacklashCompensation(gb, reply);
+				result = reprap.GetMove().ConfigureBacklashCompensation(gb, reply);
 				break;
 
 			case 450: // Report printer mode
@@ -3677,11 +3700,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					const bool useMmPerSec = (code == 205);
 					bool seenAxis = false, seenExtruder = false;
+					Move& move = reprap.GetMove();
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							platform.SetInstantDv(axis, gb.GetSpeedFromMm(useMmPerSec));
+							move.SetInstantDv(axis, gb.GetSpeedFromMm(useMmPerSec));
 							seenAxis = true;
 						}
 					}
@@ -3694,7 +3718,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetFloatArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
-							platform.SetInstantDv(ExtruderToLogicalDrive(e), ConvertSpeedFromMm(eVals[e], useMmPerSec));
+							move.SetInstantDv(ExtruderToLogicalDrive(e), ConvertSpeedFromMm(eVals[e], useMmPerSec));
 						}
 					}
 
@@ -3713,13 +3737,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						reply.printf("Maximum jerk rates (%s): ", (useMmPerSec) ? "mm/sec" : "mm/min");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertSpeedToMm(platform.GetInstantDv(axis), useMmPerSec));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertSpeedToMm(move.GetInstantDv(axis), useMmPerSec));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)InverseConvertSpeedToMm(platform.GetInstantDv(ExtruderToLogicalDrive(extruder)), useMmPerSec));
+							reply.catf("%c%.1f", sep, (double)InverseConvertSpeedToMm(move.GetInstantDv(ExtruderToLogicalDrive(extruder)), useMmPerSec));
 							sep = ':';
 						}
 						if (code == 566)
@@ -4036,11 +4060,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					gb.TryGetFValue('L', limit, seen);
 					if (seen)
 					{
-						platform.SetNonlinearExtrusion(extruder, a, b, limit);
+						reprap.GetMove().SetNonlinearExtrusion(extruder, a, b, limit);
 					}
 					else
 					{
-						const NonlinearExtrusion& nl = platform.GetExtrusionCoefficients(extruder);
+						const NonlinearExtrusion& nl = reprap.GetMove().GetExtrusionCoefficients(extruder);
 						reply.printf("Drive %u nonlinear extrusion coefficients: A=%.3f, B=%.4f, limit=%.2f", extruder, (double)nl.A, (double)nl.B, (double)nl.limit);
 					}
 				}
@@ -4125,7 +4149,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								ToolOffsetInverseTransform(ms);					// make sure the limits are reflected in the user position
 							}
-							move.SetNewPosition(ms.coords, ms.GetMsNumber(), true);
+							move.SetNewPosition(ms.coords, ms, true);
 						}
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
@@ -4198,7 +4222,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								ToolOffsetInverseTransform(ms);				// make sure the limits are reflected in the user position
 							}
-							move.SetNewPosition(ms.coords, ms.GetMsNumber(), true);
+							move.SetNewPosition(ms.coords, ms, true);
 						}
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
@@ -4277,7 +4301,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						SetMoveBufferDefaults(ms);
 						if (axisToUse != 0)
 						{
-							if (!reprap.GetPlatform().IsAxisRotational(axisToUse))
+							if (!reprap.GetMove().IsAxisRotational(axisToUse))
 							{
 								reply.printf("%c axis is not rotary", axisLetters[axisToUse]);
 								result = GCodeResult::error;
@@ -4445,6 +4469,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 				{
 					bool seen = false;
+					Move& move = reprap.GetMove();
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]))
@@ -4461,7 +4486,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								}
 							}
 							seen = true;
-							result = max(result, platform.SetMotorCurrent(axis, gb.GetNonNegativeFValue(), code, reply));	// note, we must allow zero in M913 power fail scripts
+							result = max(result, move.SetMotorCurrent(axis, gb.GetNonNegativeFValue(), code, reply));	// note, we must allow zero in M913 power fail scripts
 						}
 					}
 
@@ -4484,14 +4509,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetFloatArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
-							result = max(result, platform.SetMotorCurrent(ExtruderToLogicalDrive(e), eVals[e], code, reply));
+							result = max(result, move.SetMotorCurrent(ExtruderToLogicalDrive(e), eVals[e], code, reply));
 						}
 					}
 
 					if (code == 906 && gb.Seen('I'))
 					{
 						seen = true;
-						platform.SetIdleCurrentFactor(gb.GetNonNegativeFValue()/100.0);
+						move.SetIdleCurrentFactor(gb.GetNonNegativeFValue()/100.0);
 					}
 
 					if (seen)
@@ -4508,16 +4533,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 								);
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c:%d, ", axisLetters[axis], platform.GetMotorCurrent(axis, code));
+							reply.catf("%c:%d, ", axisLetters[axis], move.GetMotorCurrent(axis, code));
 						}
 						reply.cat("E");
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf(":%d", platform.GetMotorCurrent(ExtruderToLogicalDrive(extruder), code));
+							reply.catf(":%d", move.GetMotorCurrent(ExtruderToLogicalDrive(extruder), code));
 						}
 						if (code == 906)
 						{
-							reply.catf(", idle factor %d%%", (int)(platform.GetIdleCurrentFactor() * 100.0));
+							reply.catf(", idle factor %d%%", (int)(move.GetIdleCurrentFactor() * 100.0));
 						}
 					}
 				}
@@ -4592,7 +4617,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 #if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
 			case 915:
-				result = platform.ConfigureStallDetection(gb, reply, outBuf);
+				result = reprap.GetMove().ConfigureStallDetection(gb, reply, outBuf);
 				break;
 #endif
 
@@ -4628,7 +4653,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 # endif
 				result = reprap.GetDisplay().Configure(gb, reply);
 # ifdef DUET_NG
-				platform.AdjustNumDrivers((reprap.GetDisplay().IsPresent()) ? 2 : 0);
+				reprap.GetMove().AdjustNumDrivers((reprap.GetDisplay().IsPresent()) ? 2 : 0);
 # endif
 				break;
 #endif

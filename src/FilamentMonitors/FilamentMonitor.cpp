@@ -13,6 +13,7 @@
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <Platform/Event.h>
+#include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/Move.h>
 #include <PrintMonitor/PrintMonitor.h>
@@ -142,7 +143,7 @@ GCodeResult FilamentMonitor::CommonConfigure(GCodeBuffer& gb, const StringRef& r
 bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 {
 	return extruderNumber < reprap.GetGCodes().GetNumExtruders()
-		&& reprap.GetPlatform().GetExtruderDriver(extruderNumber) == driverId;
+		&& reprap.GetMove().GetExtruderDriver(extruderNumber) == driverId;
 }
 
 // Static initialisation
@@ -225,8 +226,8 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 /*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const size_t drv = ExtruderToLogicalDrive(extruder);
-	const DriverId did = reprap.GetPlatform().GetExtruderDriver(extruder);
-	gb.MustSee('C');																// make sure the port name parameter is present
+	const DriverId did = reprap.GetMove().GetExtruderDriver(extruder);
+	gb.MustSee('C');															// make sure the port name parameter is present
 
 #if SUPPORT_CAN_EXPANSION
 	// Find out which board the sensor is connected to
@@ -350,7 +351,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 					}
 					if ((fs.enableMode == 2 || gCodes.IsReallyPrinting()) && !gCodes.IsSimulating())
 					{
-						const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetPlatform().DriveStepsPerUnit(fs.driveNumber);
+						const float extrusionCommanded = (float)extruderStepsCommanded/reprap.GetMove().DriveStepsPerMm(fs.driveNumber);
 						fst = fs.Check(isPrinting, fromIsr, locIsrMillis, extrusionCommanded);
 						++checkCalls;
 					}

@@ -12,10 +12,10 @@
 #if SUPPORT_FIVEBARSCARA
 
 #include <Platform/RepRap.h>
-#include <Platform/Platform.h>
 #include <Storage/MassStorage.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/DDA.h>
+#include <Movement/Move.h>
 
 #include <limits>
 
@@ -890,13 +890,6 @@ AxesBitmap FiveBarScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesB
 	return ret;
 }
 
-// This function is called from the step ISR when an endstop switch is triggered during homing.
-// Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
-bool FiveBarScaraKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
-{
-	return false;
-}
-
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
 void FiveBarScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
@@ -913,14 +906,14 @@ void FiveBarScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, 
 
 	case Z_AXIS:	// Z axis homing switch
 		{
-			const float hitPoint = ((highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis));
+			const float hitPoint = ((highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis));
 			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		}
 		break;
 
 	default:		// Additional axis
 		{
-			const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
+			const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
 			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		}
 		break;
@@ -933,16 +926,11 @@ bool FiveBarScaraKinematics::IsContinuousRotationAxis(size_t axis) const noexcep
 	return axis == X_AXIS || axis == Y_AXIS || Kinematics::IsContinuousRotationAxis(axis);
 }
 
-AxesBitmap FiveBarScaraKinematics::GetLinearAxes() const noexcept
+AxesBitmap FiveBarScaraKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
 {
-	return AxesBitmap::MakeFromBits(Z_AXIS);
-}
-
-AxesBitmap FiveBarScaraKinematics::GetConnectedAxes(size_t axis) const noexcept
-{
-	return (axis == X_AXIS || axis == Y_AXIS)
-			? XyAxes
-				: AxesBitmap::MakeFromBits(axis);
+	return (forHoming || axis >= Z_AXIS)
+			? AxesBitmap::MakeFromBits(axis)
+				: XyAxes;
 }
 
 // Recalculate the derived parameters

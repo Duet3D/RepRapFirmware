@@ -39,6 +39,7 @@ Licence: GPL
 #include <FilamentMonitors/FilamentMonitor.h>
 #include "RestorePoint.h"
 #include "StraightProbeSettings.h"
+#include "SimulationMode.h"
 #include <Movement/BedProbing/Grid.h>
 
 const char feedrateLetter = 'F';						// GCode feedrate
@@ -84,14 +85,6 @@ struct M675Settings
 	float feedRate;
 	float backoffDistance;		// back off distance
 	float minDistance;			// the position we reached when probing towards minimum
-};
-
-enum class SimulationMode : uint8_t
-{	off = 0,				// not simulating
-	debug,					// simulating step generation
-	normal,					// not generating steps, just timing
-	partial,				// generating DDAs but doing nothing with them
-	highest = partial
 };
 
 class SbcInterface;
@@ -564,7 +557,8 @@ private:
 	bool SaveMoveStateResumeInfo(const MovementState& ms, FileStore * const f, const char *printingFilename, const StringRef& buf) noexcept;
 #endif
 
-	void NewSingleSegmentMoveAvailable(MovementState& ms) noexcept;				// Flag that a new move is available
+	void NewSingleSegmentMoveAvailable(MovementState& ms) noexcept;				// Flag that a new move that should be executed in a single segment is available
+	void NewSegmentableMoveAvailable(MovementState& ms) noexcept;				// Flag that a new move that should be segmented is available
 	void NewMoveAvailable(MovementState& ms) noexcept;							// Flag that a new move is available
 
 	void SetMoveBufferDefaults(MovementState& ms) noexcept;						// Set up default values in the move buffer

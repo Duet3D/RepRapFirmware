@@ -8,6 +8,10 @@
 #include "NetworkBuffer.h"
 #include "Storage/FileStore.h"
 
+#if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING && defined(DUET3MINI_V04)
+# include "LwipEthernet/AllocateFromPbufPool.h"
+#endif
+
 NetworkBuffer *NetworkBuffer::freelist = nullptr;
 
 NetworkBuffer::NetworkBuffer(NetworkBuffer *n) noexcept : next(n), dataLength(0), readPointer(0)
@@ -123,7 +127,12 @@ void NetworkBuffer::Empty() noexcept
 {
 	while (number != 0)
 	{
+#if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING && defined(DUET3MINI_V04)
+		void *const mem = AllocateFromPbufPool(sizeof(NetworkBuffer));
+		freelist = (mem != nullptr) ? new (mem) NetworkBuffer(freelist) : new NetworkBuffer(freelist);
+#else
 		freelist = new NetworkBuffer(freelist);
+#endif
 		--number;
 	}
 }

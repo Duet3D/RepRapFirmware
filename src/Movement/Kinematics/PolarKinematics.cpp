@@ -10,10 +10,10 @@
 #if SUPPORT_POLAR
 
 #include <Platform/RepRap.h>
-#include <Platform/Platform.h>
 #include <Storage/MassStorage.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/DDA.h>
+#include <Movement/Move.h>
 
 #if SUPPORT_OBJECT_MODEL
 
@@ -266,13 +266,6 @@ AxesBitmap PolarKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap a
 	return ret;
 }
 
-// This function is called from the step ISR when an endstop switch is triggered during homing.
-// Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
-bool PolarKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
-{
-	return false;
-}
-
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate() and return false.
 void PolarKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
@@ -288,7 +281,7 @@ void PolarKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 		break;
 
 	default:
-		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
+		const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
 		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		break;
 	}
@@ -301,7 +294,7 @@ void PolarKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalise
 	int32_t turntableMovement = dda.DriveCoordinates()[1] - dda.GetPrevious()->DriveCoordinates()[1];
 	if (turntableMovement != 0)
 	{
-		const float stepsPerDegree = reprap.GetPlatform().DriveStepsPerUnit(1);
+		const float stepsPerDegree = reprap.GetMove().DriveStepsPerMm(1);
 		if (continuousRotationShortcut)
 		{
 			const int32_t stepsPerRotation = lrintf(360.0 * stepsPerDegree);
@@ -328,11 +321,12 @@ bool PolarKinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 	return axis == Y_AXIS || Kinematics::IsContinuousRotationAxis(axis);
 }
 
-// Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
-// This is called to determine whether we can babystep the specified axis independently of regular motion.
-AxesBitmap PolarKinematics::GetLinearAxes() const noexcept
+// Return the drivers that control an axis or tower
+AxesBitmap PolarKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
 {
-	return AxesBitmap::MakeFromBits(Z_AXIS);
+	return (forHoming || axis >= Z_AXIS)
+			? AxesBitmap::MakeFromBits(axis)
+				: XyAxes;
 }
 
 // Update the derived parameters after the master parameters have been changed

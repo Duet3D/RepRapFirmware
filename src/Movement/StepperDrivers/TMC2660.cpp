@@ -705,7 +705,8 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 		threshold -= 128;
 	}
 	const uint32_t fullstepsPerSecond = StepClockRate/maxStallStepInterval;
-	const float speed = ((fullstepsPerSecond << microstepShiftFactor)/reprap.GetPlatform().DriveStepsPerUnit(axisNumber));
+	const float stepsPerMm = reprap.GetMove().DriveStepsPerMm(axisNumber);
+	const float speed = (float)(fullstepsPerSecond << microstepShiftFactor)/stepsPerMm;
 	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep %" PRIx32,
 				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed, registers[SmartEnable] & 0xFFFF);
 }
@@ -1075,7 +1076,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 				for (size_t i = 0; i < numTmc2660Drivers; ++i)
 				{
 					// The following line assumes that driver numbers in RRF map directly to smart driver numbers in this module. They do on Duets.
-					if (reprap.GetPlatform().GetEnableValue(i) >= 0)							// if the driver has not been disabled
+					if (reprap.GetMove().GetEnableValue(i) >= 0)							// if the driver has not been disabled
 					{
 						uint32_t count = driverStates[i].ReadMicrostepPosition();
 						if (count != 0)
@@ -1084,7 +1085,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 							if (count < 1024)
 							{
 								const bool backwards = (count > 512);
-								reprap.GetPlatform().SetDriverAbsoluteDirection(i, backwards);	// a high on DIR decreases the microstep counter
+								reprap.GetMove().SetDriverAbsoluteDirection(i, backwards);	// a high on DIR decreases the microstep counter
 								if (backwards)
 								{
 									count = 1024 - count;

@@ -12,6 +12,9 @@
 #include <CanMessageBuffer.h>
 #include <CanMessageFormats.h>
 #include "CanInterface.h"
+#include <Platform/Platform.h>
+#include <GCodes/GCodes.h>
+#include <Movement/Move.h>
 #include <General/FreelistManager.h>
 
 namespace CanMotion
@@ -38,7 +41,6 @@ namespace CanMotion
 	static CanMessageBuffer *movementBufferList = nullptr;
 	static DriversStopList *volatile stopList = nullptr;
 	static uint32_t currentMoveClocks;
-	static volatile uint32_t hiccupToInsert = 0;
 	static volatile bool revertAll = false;
 	static volatile bool revertedAll = false;
 	static volatile uint32_t whenRevertedAll;
@@ -46,8 +48,6 @@ namespace CanMotion
 	static uint8_t nextSeq[CanId::MaxCanAddress + 1] = { 0 };
 
 	static CanMessageBuffer *GetBuffer(const PrepParams& params, DriverId canDriver) noexcept;
-	static void InternalStopDriverWhenProvisional(DriverId driver) noexcept;
-	static bool InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noexcept;
 	static void FreeMovementBuffers() noexcept;
 }
 
@@ -123,24 +123,24 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 		if (buf->next == nullptr)
 		{
 			// This is the first CAN-connected board for this movement
-			move->accelerationClocks = (uint32_t)params.accelClocks;
-			move->steadyClocks = (uint32_t)params.steadyClocks;
-			move->decelClocks = (uint32_t)params.decelClocks;
-			currentMoveClocks = move->accelerationClocks + move->steadyClocks + move->decelClocks;
+			move->accelerationClocks = params.accelClocks;
+			move->steadyClocks = params.steadyClocks;
+			move->decelClocks = params.decelClocks;
+			currentMoveClocks = params.TotalClocks();
 		}
 		else
 		{
 			// Save some maths by using the values from the previous buffer
-			move->accelerationClocks = buf->next->msg.moveLinear.accelerationClocks;
-			move->steadyClocks = buf->next->msg.moveLinear.steadyClocks;
-			move->decelClocks = buf->next->msg.moveLinear.decelClocks;
+			move->accelerationClocks = buf->next->msg.moveLinearShaped.accelerationClocks;
+			move->steadyClocks = buf->next->msg.moveLinearShaped.steadyClocks;
+			move->decelClocks = buf->next->msg.moveLinearShaped.decelClocks;
 		}
 		move->acceleration = params.acceleration/params.totalDistance;			// scale the acceleration to correspond to unit distance
 		move->deceleration = params.deceleration/params.totalDistance;			// scale the deceleration to correspond to unit distance
 		move->extruderDrives = 0;
 		move->numDrivers = canDriver.localDriver + 1;
-		move->zero = 0;
-		move->shapingPlan = params.shapingPlan.condensedPlan;
+		move->zero1 = move->zero2 = 0;
+		move->useLateInputShaping = params.useInputShaping;
 
 		// Clear out the per-drive fields. Can't use a range-based FOR loop on a packed struct.
 		for (size_t drive = 0; drive < ARRAY_SIZE(move->perDrive); ++drive)
@@ -148,15 +148,15 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 			move->perDrive[drive].Init();
 		}
 	}
-	else if (canDriver.localDriver >= buf->msg.moveLinear.numDrivers)
+	else if (canDriver.localDriver >= buf->msg.moveLinearShaped.numDrivers)
 	{
-		buf->msg.moveLinear.numDrivers = canDriver.localDriver + 1;
+		buf->msg.moveLinearShaped.numDrivers = canDriver.localDriver + 1;
 	}
 	return buf;
 }
 
 // This is called by DDA::Prepare for each active CAN DM in the move
-void CanMotion::AddAxisMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept
+void CanMotion::AddLinearAxisMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept
 {
 	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
 	if (buf != nullptr)
@@ -180,7 +180,7 @@ void CanMotion::AddExtruderMovement(const PrepParams& params, DriverId canDriver
 uint32_t CanMotion::FinishMovement(const DDA& dda, uint32_t moveStartTime, bool simulating) noexcept
 {
 	uint32_t clocks = 0;
-	if (simulating || dda.GetState() == DDA::completed)
+	if (simulating)
 	{
 		FreeMovementBuffers();											// it turned out that there was nothing to move
 	}
@@ -303,12 +303,13 @@ CanMessageBuffer *CanMotion::GetUrgentMessage() noexcept
 
 void CanMotion::InsertHiccup(uint32_t numClocks) noexcept
 {
-	hiccupToInsert += numClocks;
-	CanInterface::WakeAsyncSender();
+	//TODO sort out how we tell expansion boards about hiccups
+//	hiccupToInsert += numClocks;
+//	CanInterface::WakeAsyncSender();
 }
 
 // Flag a CAN-connected driver as not moving when we haven't sent the movement message yet
-void CanMotion::InternalStopDriverWhenProvisional(DriverId driver) noexcept
+void CanMotion::StopDriverWhenProvisional(DriverId driver) noexcept
 {
 	// Search for the correct movement buffer
 	CanMessageBuffer* buf = movementBufferList;
@@ -317,14 +318,15 @@ void CanMotion::InternalStopDriverWhenProvisional(DriverId driver) noexcept
 		buf = buf->next;
 	}
 
+	// If the move was found, set the steps to zero. We still send the message so that the drivers get enabled.
 	if (buf != nullptr)
 	{
-		buf->msg.moveLinear.perDrive[driver.localDriver].steps = 0;
+		buf->msg.moveLinearShaped.perDrive[driver.localDriver].steps = 0;
 	}
 }
 
 // Tell a CAN-connected driver to stop moving after we have sent the movement message
-bool CanMotion::InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noexcept
+bool CanMotion::StopDriverWhenExecuting(DriverId driver, int32_t netStepsTaken) noexcept
 {
 	DriversStopList *sl = stopList;
 	while (sl != nullptr)
@@ -333,7 +335,7 @@ bool CanMotion::InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noe
 		{
 			if (sl->stopStates[driver.localDriver] == DriverStopState::active)			// if active and stop not yet requested
 			{
-				sl->stopSteps[driver.localDriver] = steps;								// must assign this one first
+				sl->stopSteps[driver.localDriver] = netStepsTaken;						// must assign this one first
 				sl->stopStates[driver.localDriver] = DriverStopState::stopRequested;
 				return true;
 			}
@@ -344,141 +346,15 @@ bool CanMotion::InternalStopDriverWhenMoving(DriverId driver, int32_t steps) noe
 	return false;
 }
 
-// This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
-// Returns true if the caller needs to wake the sync sender task (we don't do that here because it causes problems in some contexts)
-bool CanMotion::StopDriver(const DDA& dda, size_t axis, DriverId driver) noexcept
+// Revert any stopped drivers that we haven't already and return true when there are no drivers to revert
+bool CanMotion::RevertStoppedDrivers() noexcept
 {
-	if (dda.GetState() == DDA::DDAState::provisional)
-	{
-		InternalStopDriverWhenProvisional(driver);
-	}
-	else
-	{
-		const DriveMovement * const dm = dda.FindDM(axis);
-		if (dm != nullptr)
-		{
-			return InternalStopDriverWhenMoving(driver, dm->GetNetStepsTaken());
-		}
-	}
-	return false;
-}
-
-// This is called from the step ISR with DDA state executing, or from the Move task with DDA state provisional
-// Returns true if the caller needs to wake the sync sender task (we don't do that here because it causes problems in some contexts)
-bool CanMotion::StopAxis(const DDA& dda, size_t axis) noexcept
-{
-	const Platform& p = reprap.GetPlatform();
-	if (axis < reprap.GetGCodes().GetTotalAxes())
-	{
-		bool wakeAsyncSender = false;
-		const AxisDriversConfig& cfg = p.GetAxisDriversConfig(axis);
-		if (dda.GetState() == DDA::DDAState::provisional)
-		{
-			for (size_t i = 0; i < cfg.numDrivers; ++i)
-			{
-				const DriverId driver = cfg.driverNumbers[i];
-				if (driver.IsRemote())
-				{
-					InternalStopDriverWhenProvisional(driver);
-				}
-			}
-		}
-		else
-		{
-			const DriveMovement * const dm = dda.FindDM(axis);
-			if (dm != nullptr)
-			{
-				const uint32_t steps = dm->GetNetStepsTaken();
-				for (size_t i = 0; i < cfg.numDrivers; ++i)
-				{
-					const DriverId driver = cfg.driverNumbers[i];
-					if (driver.IsRemote() && InternalStopDriverWhenMoving(driver, steps))
-					{
-						wakeAsyncSender = true;
-					}
-				}
-			}
-		}
-		return wakeAsyncSender;
-	}
-
-	const DriverId exDriver = p.GetExtruderDriver(LogicalDriveToExtruder(axis));
-	return StopDriver(dda, axis, exDriver);
-}
-
-// This is called from the step ISR with DDA state executing, or from the CAN receiver task with state executing, or from the Move task with DDA state provisional
-// Returns true if the caller needs to wake the sync sender task (we don't do that here because it causes problems in some contexts)
-bool CanMotion::StopAll(const DDA& dda) noexcept
-{
-	if (dda.GetState() == DDA::DDAState::provisional)
-	{
-		// We still send the messages so that the drives get enabled, but we set the steps to zero
-		for (CanMessageBuffer *buf = movementBufferList; buf != nullptr; buf = buf->next)
-		{
-			buf->msg.moveLinear.accelerationClocks = buf->msg.moveLinear.decelClocks = buf->msg.moveLinear.steadyClocks = 0;
-			for (size_t drive = 0; drive < ARRAY_SIZE(buf->msg.moveLinear.perDrive); ++drive)
-			{
-				buf->msg.moveLinear.perDrive[drive].steps = 0;
-			}
-		}
-	}
-	else if (stopList != nullptr)
-	{
-		// Loop through the axes that are actually moving
-		const GCodes& gc = reprap.GetGCodes();
-		const size_t totalAxes = gc.GetTotalAxes();
-		const Platform& p = reprap.GetPlatform();
-		for (size_t axis = 0; axis < totalAxes; ++axis)
-		{
-			const DriveMovement* const dm = dda.FindDM(axis);
-			if (dm != nullptr)
-			{
-				const uint32_t steps = dm->GetNetStepsTaken();
-				const AxisDriversConfig& cfg = p.GetAxisDriversConfig(axis);
-				for (size_t i = 0; i < cfg.numDrivers; ++i)
-				{
-					const DriverId driver = cfg.driverNumbers[i];
-					if (driver.IsRemote())
-					{
-						(void)InternalStopDriverWhenMoving(driver, steps);
-					}
-				}
-			}
-		}
-		const size_t numExtruders = gc.GetNumExtruders();
-		for (size_t extruder = 0; extruder < numExtruders; ++extruder)
-		{
-			const DriverId driver = p.GetExtruderDriver(extruder);
-			if (driver.IsRemote())
-			{
-				const DriveMovement* const dm = dda.FindDM(extruder);
-				if (dm != nullptr)
-				{
-					(void)InternalStopDriverWhenMoving(driver, dm->GetNetStepsTaken());
-				}
-			}
-		}
-
-		revertAll = true;
-		return true;
-	}
-	return false;
-}
-
-// This is called by the step ISR when a movement that uses endstops or a probe has completed.
-// We must make sure that all boards have been told to adjust their stepper motor positions to the points at which we wanted them to stop.
-void CanMotion::FinishMoveUsingEndstops() noexcept
-{
-	if (!revertAll)
+	if (!revertAll && !revertedAll)							// if not started reverting yet
 	{
 		revertAll = true;
 		CanInterface::WakeAsyncSender();
+		return false;
 	}
-}
-
-// This is called by the main task when it is waiting for the move to complete, after checking that the DDA ring is empty and there is no current move
-bool CanMotion::FinishedReverting() noexcept
-{
 	return !revertAll || (revertedAll && millis() - whenRevertedAll >= TotalDriverPositionRevertMillis);
 }
 

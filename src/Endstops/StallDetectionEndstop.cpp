@@ -9,7 +9,7 @@
 
 #if HAS_STALL_DETECT
 
-#include <Platform/Platform.h>
+#include <Movement/Move.h>
 #include <Movement/Kinematics/Kinematics.h>
 
 // Stall detection endstop
@@ -33,7 +33,7 @@ bool StallDetectionEndstop::Stopped() const noexcept
 bool StallDetectionEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept
 {
 	// Find which drivers are relevant, and decide whether we stop just the driver, just the axis, or everything
-	stopAll = kin.GetConnectedAxes(GetAxis()).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));
+	stopAll = kin.GetControllingDrives(GetAxis(), true).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));
 	numDriversLeft = axisDrivers.numDrivers;
 	driversMonitored = axisDrivers.GetDriversBitmap();
 

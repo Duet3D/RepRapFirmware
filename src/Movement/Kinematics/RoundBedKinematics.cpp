@@ -27,11 +27,4 @@ bool RoundBedKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes)
 	return Kinematics::IsReachable(axesCoords, axes);
 }
 
-// Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
-// This is called to determine whether we can babystep the specified axis independently of regular motion.
-AxesBitmap RoundBedKinematics::GetLinearAxes() const noexcept
-{
-	return AxesBitmap();
-}
-
 // End

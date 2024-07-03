@@ -10,6 +10,7 @@
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <GCodes/GCodes.h>
+#include "MoveTiming.h"
 
 #if SUPPORT_REMOTE_COMMANDS
 # include <CanMessageFormats.h>
@@ -27,6 +28,7 @@
 #endif
 
 StepTimer * volatile StepTimer::pendingList = nullptr;
+uint32_t StepTimer::movementDelay = 0;											// how many timer ticks the move timer is behind the raw timer
 
 #if STEP_TIMER_DEBUG
 uint32_t StepTimer::maxInterval = 0;
@@ -102,7 +104,7 @@ void StepTimer::Init() noexcept
 	pmc_switch_pck_to_mck(PMC_PCK_6, PMC_PCK_PRES(divisor - 1));
 	pmc_enable_pck(PMC_PCK_6);
 
-	// Chain TC0 and TC2 together. TC0 provides the lower 16 bits, TC2 the upper 16 bits. CLOCK1 is PCLK6 or PCLK7.
+	// Chain TC0 and TC2 together. TC0 provides the lower 16 bits, TC2 the upper 16 bits. CLOCK1 is PCLK6.
 	tc_init(STEP_TC, STEP_TC_CHAN, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK1 | TC_CMR_ACPA_SET | TC_CMR_ACPC_CLEAR | TC_CMR_EEVT_XC0);	// must set TC_CMR_EEVT nonzero to get RB compare interrupts
 	tc_init(STEP_TC, STEP_TC_CHAN_UPPER, TC_CMR_WAVE | TC_CMR_WAVSEL_UP | TC_CMR_TCCLKS_TIMER_CLOCK1 | TC_CMR_BURST_XC2);
 	tc_set_block_mode(STEP_TC, TC_BMR_TC2XC2S_TIOA0);
@@ -187,7 +189,7 @@ void StepTimer::Init() noexcept
 
 #endif
 
-// Schedule an interrupt at the specified clock count, or return true if that time is imminent or has passed already.
+// Schedule an interrupt at the specified clock count and return false, or return true if that time is imminent or has passed already.
 // On entry, interrupts must be disabled or the base priority must be <= step interrupt priority.
 bool StepTimer::ScheduleTimerInterrupt(uint32_t tim) noexcept
 {
@@ -195,7 +197,7 @@ bool StepTimer::ScheduleTimerInterrupt(uint32_t tim) noexcept
 	AtomicCriticalSectionLocker lock;
 
 	const int32_t diff = (int32_t)(tim - GetTimerTicks());			// see how long we have to go
-	if (diff < (int32_t)MinInterruptInterval)						// if less than about 6us or already passed
+	if (diff < (int32_t)MoveTiming::MinInterruptInterval)			// if less than about 6us or already passed
 	{
 		return true;												// tell the caller to simulate an interrupt instead
 	}
@@ -404,6 +406,13 @@ void StepTimer::SetCallback(TimerCallbackFunction cb, CallbackParameter param) n
 bool StepTimer::ScheduleCallbackFromIsr(Ticks when) noexcept
 {
 	whenDue = when;
+	return ScheduleCallbackFromIsr();
+}
+
+// As ScheduleCallback but base priority >= NvicPriorityStep when called. Can be called from within a callback.
+bool StepTimer::ScheduleMovementCallbackFromIsr(Ticks when) noexcept
+{
+	whenDue = when + movementDelay;
 	return ScheduleCallbackFromIsr();
 }
 

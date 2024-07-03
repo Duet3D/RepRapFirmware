@@ -37,6 +37,10 @@
 # include "RTOSPlusTCPEthernet/RTOSPlusTCPEthernetInterface.h"
 #endif
 
+#if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING && defined(DUET3MINI_V04)
+# include "LwipEthernet/AllocateFromPbufPool.h"
+#endif
+
 #include "MQTT/MqttClient.h"
 
 #if SUPPORT_HTTP
@@ -187,6 +191,10 @@ void Network::Init() noexcept
 
 # if defined(DUET3MINI_V04)
 #  if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING
+	if (platform.IsDuetWiFi())
+	{
+		InitAllocationFromPbufPool();				// we have no wired Ethernet interface so we can use thr PBUF pool memory
+	}
 	interfaces[0] = (platform.IsDuetWiFi()) ? static_cast<NetworkInterface*>(new WiFiInterface(platform)) : static_cast<NetworkInterface*>(new LwipEthernetInterface(platform));
 #  elif HAS_WIFI_NETWORKING
 	interfaces[0] = static_cast<NetworkInterface*>(new WiFiInterface(platform));

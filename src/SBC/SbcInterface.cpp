@@ -65,21 +65,13 @@ SbcInterface::SbcInterface() noexcept : isConnected(false), numDisconnects(0), n
 
 void SbcInterface::Init() noexcept
 {
-	if (reprap.UsingSbcInterface())
-	{
-		fileMutex.Create("SBCFile");
-		gcodeReplyMutex.Create("SBCReply");
-		codeBuffer = (char *)new uint32_t[(SpiCodeBufferSize + 3)/4];
-		transfer.Init();
-		sbcTask = new Task<SBCTaskStackWords>();
-		sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SbcPriority);
-		iapRamAvailable = (const char*)&_estack - Tasks::GetHeapTop();
-	}
-	else
-	{
-		// Set up the data transfer to exchange the header + response code. No task is started to save memory
-		transfer.Init();
-	}
+	fileMutex.Create("SBCFile");
+	gcodeReplyMutex.Create("SBCReply");
+	codeBuffer = (char *)new uint32_t[(SpiCodeBufferSize + 3)/4];
+	transfer.Init();
+	sbcTask = new Task<SBCTaskStackWords>();
+	sbcTask->Create(SBCTaskStart, "SBC", nullptr, TaskPriority::SbcPriority);
+	iapRamAvailable = (const char*)&_estack - Tasks::GetHeapTop();
 }
 
 [[noreturn]] void SbcInterface::TaskLoop() noexcept

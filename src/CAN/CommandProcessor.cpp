@@ -16,10 +16,11 @@
 #include <Platform/Event.h>
 #include <Heating/Heat.h>
 #include "ExpansionManager.h"
-# include <ClosedLoop/ClosedLoop.h>
+#include <ClosedLoop/ClosedLoop.h>
+#include <Movement/Move.h>
+#include <FilamentMonitors/FilamentMonitor.h>
 
 #ifndef DUET3_ATE
-# include <Movement/Move.h>
 # include <InputMonitors/InputMonitor.h>
 # include <Version.h>
 
@@ -281,7 +282,7 @@ static void HandleInputStateChanged(const CanMessageInputChangedNew& msg, CanAdd
 
 	if (endstopStatesChanged)
 	{
-		p.GetEndstops().OnEndstopOrZProbeStatesChanged();
+		reprap.GetMove().OnEndstopOrZProbeStatesChanged();
 	}
 }
 
@@ -363,7 +364,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 #if HAS_SMART_DRIVERS
 					","
 #endif
-					, driver, (double)reprap.GetPlatform().DriveStepsPerUnit(driver));
+					, driver, (double)reprap.GetMove().DriveStepsPerMm(driver));
 #if HAS_SMART_DRIVERS
 				SmartDrivers::AppendDriverStatus(driver, reply);
 #endif
@@ -466,18 +467,13 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				reprap.ScheduleReset();
 				return;							// no reply needed
 
-			case CanMessageType::movementLinear:
-				//TODO check seq
-				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinear);
-				return;							// no reply needed
-
 			case CanMessageType::movementLinearShaped:
 				//TODO check seq
 				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinearShaped);
 				return;							// no reply needed
 
 			case CanMessageType::stopMovement:
-				reprap.GetMove().StopDrivers(buf->msg.stopMovement.whichDrives);
+				reprap.GetMove().StopDriversFromRemote(buf->msg.stopMovement.whichDrives);
 				return;							// no reply needed
 
 			case CanMessageType::revertPosition:
@@ -588,22 +584,22 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 			// Driver commands
 			case CanMessageType::setMotorCurrents:
 				requestId = buf->msg.multipleDrivesRequestFloat.requestId;
-				rslt = reprap.GetPlatform().EutSetMotorCurrents(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
+				rslt = reprap.GetMove().EutSetMotorCurrents(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
 				break;
 
 			case CanMessageType::setStepsPerMmAndMicrostepping:
 				requestId = buf->msg.multipleDrivesStepsPerUnitAndMicrostepping.requestId;
-				rslt = reprap.GetPlatform().EutSetStepsPerMmAndMicrostepping(buf->msg.multipleDrivesStepsPerUnitAndMicrostepping, buf->dataLength, replyRef);
+				rslt = reprap.GetMove().EutSetStepsPerMmAndMicrostepping(buf->msg.multipleDrivesStepsPerUnitAndMicrostepping, buf->dataLength, replyRef);
 				break;
 
 			case CanMessageType::setDriverStates:
 				requestId = buf->msg.multipleDrivesRequestUint16.requestId;
-				rslt = reprap.GetPlatform().EutHandleSetDriverStates(buf->msg.multipleDrivesRequestDriverState, replyRef);
+				rslt = reprap.GetMove().EutHandleSetDriverStates(buf->msg.multipleDrivesRequestDriverState, replyRef);
 				break;
 
 			case CanMessageType::m915:
 				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetPlatform().EutProcessM915(buf->msg.generic, replyRef);
+				rslt = reprap.GetMove().EutProcessM915(buf->msg.generic, replyRef);
 				break;
 
 			case CanMessageType::setPressureAdvance:
@@ -611,30 +607,24 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 				rslt = reprap.GetMove().EutSetRemotePressureAdvance(buf->msg.multipleDrivesRequestFloat, buf->dataLength, replyRef);
 				break;
 
-			case CanMessageType::setInputShaping:
-				requestId = buf->msg.setInputShaping.requestId;
-				rslt = reprap.GetMove().EutSetInputShaping(buf->msg.setInputShaping, buf->dataLength, replyRef);
-				break;
-
 			case CanMessageType::setInputShapingNew:
-				// This message is sent by main boards running 3.6.0. Ignore it but return OK to prevent them reporting CAN timeouts.
 				requestId = buf->msg.setInputShapingNew.requestId;
-				rslt = GCodeResult::ok;
+				rslt = reprap.GetMove().EutSetInputShaping(buf->msg.setInputShapingNew, buf->dataLength, replyRef);
 				break;
 
 			case CanMessageType::m569:
 				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetPlatform().EutProcessM569(buf->msg.generic, replyRef);
+				rslt = reprap.GetMove().EutProcessM569(buf->msg.generic, replyRef);
 				break;
 
 			case CanMessageType::m569p2:
 				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetPlatform().EutProcessM569Point2(buf->msg.generic, replyRef);
+				rslt = reprap.GetMove().EutProcessM569Point2(buf->msg.generic, replyRef);
 				break;
 
 			case CanMessageType::m569p7:
 				requestId = buf->msg.generic.requestId;
-				rslt = reprap.GetPlatform().EutProcessM569Point7(buf->msg.generic, replyRef);
+				rslt = reprap.GetMove().EutProcessM569Point7(buf->msg.generic, replyRef);
 				break;
 
 			case CanMessageType::createInputMonitorNew:

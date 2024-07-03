@@ -14,6 +14,7 @@
 #include <Storage/MassStorage.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Movement/DDA.h>
+#include <Movement/Move.h>
 
 #include <limits>
 
@@ -396,15 +397,6 @@ AxesBitmap ScaraKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap a
 	return ret;
 }
 
-// This function is called from the step ISR when an endstop switch is triggered during homing.
-// Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
-bool ScaraKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
-{
-	// If crosstalk causes the axis motor concerned to affect other axes then must terminate the entire move
-	return (axis == X_AXIS && (crosstalk[0] != 0.0 || crosstalk[1] != 0.0))
-		|| (axis == Y_AXIS && crosstalk[2] != 0.0);
-}
-
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
 void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
@@ -428,7 +420,7 @@ void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 
 	case Z_AXIS:	// Z axis homing switch
 		{
-			const float hitPoint = ((highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis))
+			const float hitPoint = ((highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis))
 									- ((dda.DriveCoordinates()[X_AXIS] * crosstalk[1])/stepsPerMm[X_AXIS])
 									- ((dda.DriveCoordinates()[Y_AXIS] * crosstalk[2])/stepsPerMm[Y_AXIS]);
 			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
@@ -437,7 +429,7 @@ void ScaraKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 
 	default:		// Additional axis
 		{
-			const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
+			const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
 			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 		}
 		break;
@@ -450,11 +442,13 @@ bool ScaraKinematics::IsContinuousRotationAxis(size_t axis) const noexcept
 	return (axis < 2 && supportsContinuousRotation[axis]) || Kinematics::IsContinuousRotationAxis(axis);
 }
 
-// Return a bitmap of axes that move linearly in response to the correct combination of linear motor movements.
-// This is called to determine whether we can babystep the specified axis independently of regular motion.
-AxesBitmap ScaraKinematics::GetLinearAxes() const noexcept
+// Return the drivers that control an axis or tower
+AxesBitmap ScaraKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
 {
-	return (crosstalk[1] == 0.0 && crosstalk[2] == 0.0) ? AxesBitmap::MakeFromBits(Z_AXIS) : AxesBitmap();
+	const unsigned int numCoupledAxes = (crosstalk[1] != 0.0 || crosstalk[2] != 0.0) ? 3 : 2;
+	return (forHoming || axis >= numCoupledAxes)
+			? AxesBitmap::MakeFromBits(axis)
+				: AxesBitmap::MakeLowestNBits(numCoupledAxes);
 }
 
 // Recalculate the derived parameters

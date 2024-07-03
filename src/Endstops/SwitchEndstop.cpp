@@ -9,6 +9,7 @@
 
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
+#include <Movement/Move.h>
 #include <Movement/Kinematics/Kinematics.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
@@ -135,7 +136,7 @@ bool SwitchEndstop::Stopped() const noexcept
 bool SwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept
 {
 	// Decide whether we stop just the driver, just the axis, or everything
-	stopAll = kin.GetConnectedAxes(GetAxis()).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));
+	stopAll = kin.GetControllingDrives(GetAxis(), true).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));
 	numPortsLeftToTrigger = (numPortsUsed != axisDrivers.numDrivers) ? 1 : numPortsUsed;
 	portsLeftToTrigger = PortsBitmap::MakeLowestNBits(numPortsUsed);
 
@@ -200,7 +201,7 @@ EndstopHitDetails SwitchEndstop::CheckTriggered() noexcept
 				{
 					rslt.SetAction(EndstopHitAction::stopDriver);
 					rslt.internalUse = i;			// remember which port it is, for the call to Acknowledge
-					rslt.driver = reprap.GetPlatform().GetAxisDriversConfig(GetAxis()).driverNumbers[i];
+					rslt.driver = reprap.GetMove().GetAxisDriversConfig(GetAxis()).driverNumbers[i];
 				}
 				break;
 			}

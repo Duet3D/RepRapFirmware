@@ -4,131 +4,19 @@
  *  Created on: 26 Feb 2021
  *      Author: David
  *
- * This class holds the parameters of a segment of a move. The idea is that when preparing the move, we pre-calculate as much as possible so that the step time calculation in the step ISR is fast.
- * In particular, we wish to avoid division as much as possible when generating steps.
+ * This class holds the parameters of a segment of a move with constant acceleration.
+ * In order to handle input shaping we need to superimpose segments. This means we have to store the basic parameters.
+ * The distance travelled when acceleration is a and initial speed is u is:
  *
- * To save memory, we wish to share move segments between motors as far as possible. We can do this if all axes use the same input shaping, at the expense of an additional multiplication in the step ISR.
- * The move segments for axes refer to the move as a whole e.g. the composite linear axis movement. For each axis, when starting the move segment we scale the C factor by 1.0/(f*m)
- * where f is the move fraction and m s the steps/mm. We can do this using a multiplication if we precalculate 1.0/(f*m) when preparing the move and store it in the DM.
+ *		s = u*t + 0.5*a*t^2
  *
- * To handle extruders with pressure advance, we have a few options:
- * 1. Use separate MoveSegments for the extruders. Each extruder will need its own MoveSegment chain, except that multiple extruders using the same pressure advance constant could share a chain if we
- *    scale by 1.0/(f*m) again. We don't need to apply input shaping to extruders because we assume that extruders don't react quickly enough. to acceleration changes lasting up to ~30ms.
- * 2. Use the axis move segments. When starting a new segment, each extruder will need to calculate and store that modified A B C coefficients to take account of PA. When input shaping is used,
- *    shaping will be applied to extruders (so there will be more MoveSegments to process). This would save memory by using fewer MoveSegments, but require more computation.
- * 3. Use a common MoveSegment chain without input shaping for all extruders (which could be shared with the axes when the move does not use input shaping), and adjust the A B C coefficients to account for PA.
+ * After n steps we want to achieve this distance plus any outstanding movement when the move started. So if q is the mm per step then:
  *
- * To handle delta movement, we convert the step count to distance along the overall linear trajectory (accounting for the possible reversal), then convert that distance to time using the axis MoveSegments.
+ * 		n*q = s0 + u*t + 0.5*a*t^2
  *
- * Let:
- *   s = distance travelled by this axis or extruder since the start of the entire move
- *   s0 = distance travelled by this axis or extruder at the start of this segment
- *   a = acceleration of the move as a whole taking multiple axes into account
- *   d = deceleration of the move as a whole taking multiple axes into account (so d is positive)
- *   u = initial speed of the move segment as a whole
- *   f = the fraction of the move that this axis/extruder uses
- *   m = the steps/mm for this axis or extruder
- *   n = number of steps taken since start of move
- *   t = time since start of move
- *   ts = segment start time
- * The basic motion equation for an acceleration segment is:
- *   s = s0 + u*f*(t - ts) + 0.5*a*f*(t - ts)t^2
- * Solving for t:
- *   t = ts - u/a + sqrt((-u/a)^2 + 2*(s-s0)/af
- * If we take s0 = S0 * f:
- *   t = ts - u/a + sqrt((-u/a)^2 + 2*s/af - 2*S0/a)
- * Substituting s = n/m:
- *   t = ts - u/a + sqrt((-u/a)^2 + 2*n/amf - 2*S0/a)
- * For a deceleration segment, just set a = -d:
- *   t = ts + u/d + sqrt((u/d)^2 - 2*n/dmf + 2*S0/d)
- * For a linear segment:
- *   s = s0 + u*f*(t - ts)
- * from which:
- *   t = ts + (s - s0)/uf
- * If we take s0 = S0 * f:
- *   t = ts - S0/u + s/uf
- * Substituting s = n/m:
- *   t = n/(u*f*m) + ts - S0/u
- *
- * Now add pressure advance with constant k seconds.
- * For the acceleration segment, u is replaced by u+(k*a):
- *   t = ts - u/a - k + sqrt((-u/a - k)^2 + 2*n/amf - 2*S0/a)
- * For the deceleration segment, u is replaced by u-(k*d). Additionally, S0 is replaced by S0 + EAD where EAD stands for
- * extra acceleration distance, EAD = (vaccel-uaccel)*k = a*T*k where T was the acceleration time:
- *   t = ts + u/d - k + sqrt((u/d - k)^2 - 2*n/dmf) + 2*(S0 + EAD)/d)
- * For the linear segment, S0 must include EAD again:
- *   t = ts - (S0 + EAD)/u + n/umf
- *
- * Now assume that there is also an overdue fractional step p brought forward, where -1.0 < p < 1.0. This must be added to s0. Equivalently, add p/mf to S0.
- * Acceleration segment:
- *   t = ts - u/a - k + sqrt((-u/a - k)^2 + 2*n/amf - 2*(S0 + p/mf)/a)
- * Deceleration segment:
- *   t = ts + u/d - k + sqrt((u/d - k)^2 - 2*n/dmf + 2*(S0 + p/mf + EAD)/d)
- * Linear segment:
- *   t = ts - (S0 + p/mf + EAD)/u + n/umf
- *
- * We can summarise like this. For an acceleration or deceleration segment:
- *   t = ts + B + sqrt(A + C*n/mf)
- * where for an acceleration segment:
- *   B = -u/a - k
- *   A = B^2 - 2*(S0 + p/mf)/a = B^2 - C * (S0 + p/mf)
- *   C = 2/a
- * and for a deceleration segment:
- *   B = u/d - k
- *   A = B^2 + 2*(S0 + EAD + p/mf)/d = B^2 - C * (S0 + p/mf)
- *   C = -2/d
- *
- * For a linear segment:
- *   t = ts + B + C*n/mf
- * where:
- *   B = -(S0 + EAD + p/mf)/u
- *   C = 1/u
- *
- * For accelerating moves we can interpret (-A/C) as the (negative) distance at which the move reversed, and B is the time at which it reversed (negative so in the past)
- * For decelerating moves we can interpret (A/C) as the distance at which the move will reverse, B is the time at which it will reverse (positive so in the future)
- *
- * The move segment stores a flag indicating whether the segment is accel/decel or linear, the length of this segment D = (S - S0) + EAD, and the time T for this segment in step clocks.
- * For an accel/decel segment it also stores the coefficients B and C. For a linear segment, just C.
- * From the distance limit we can work out the step limit N = D/(f*m).
- * From the segment times we can accumulate the start time ts of each segment.
- *
- * When starting a new axis segment we calculate actual coefficients A' B' C' as follows (Dprev is the distance limit of the previous segment, i.e. total length of previous segments):
- * For accel/decel segments:
- *   A' = B^2 - C*Dprev
- *   B' = B + ts
- *   C' = C * 1/mf
- * (for axis segments we could instead include ts in B, but we can't do that for common extruder segments, see later)
- * For linear segments:
- *   B' = Dprev*C + ts
- *   C' = C * 1/mf
- *
- * Assuming we share common segments between all extruders and account for PA and fractional steps when starting them, then when starting a segment we need to calculate the coefficients as follows:
- * For accel/decel segments:
- *   A' = (B - k)^2 + C*(Dprev + p/mf)
- *   B' = (B - k) + ts
- *   C' = C * 1/mf
- * For linear segments:
- *   B' = -(Dprev + p/mf)*C + ts
- *   C' = C * 1/mf
- *
- * When preparing a move we need to:
- *   Set up the axis and extruder move segments
- *   For each linear axis and extruder, calculate and store 1/(f*m) and store in the DM
- *   For each delta axis, also calculate and store in the DM additional parameters needed for delta movement
- *   If we use common extruder segments, for each extruder also calculate and store in the DM the following: 2*(p/f)/a, p/f + EAD, 2*(p/f + EAD)/d
- *   If we use common extruder segments, either make sure we have fast access to k, or for each extruder store k
- *
- * When starting a new segment we need to:
- *   Calculate the segment start time ts (by accumulating the durations of previous segments)
- *   Compute A' B' C' for this segment and motor
- *
- * If the MCU supports hardware floating point then it is more efficient to use FP arithmetic because of the speed of FP divide and sqrt operations.
- * If it doesn't then for accel/decel segments we probably need to compute sqrt(A + C*n/(f*m)) using 64-bit maths before we take the sqrt:
- *   A is in step_clocks^2 so it can be stored directly in 64 bits
- *   B is in step_clocks so it can be stored directly in 32 bits
- *   C for accel/decel is in step clocks^2/mm so it can probably be stored directly in 64 bits (check - does this work for very low f ?)
- *   C for linear motion is in step clocks/mm so can be stored directly in 32 bits
- *   1/(f*m) is in mm/step. We will have to store it multiplied by e.g. 2^24 as 32 bits, and after multiplying it by C to get a 64-bit result, shift it right to divide by 2^24.
+ * The segment parameters are therefore s0, u and a. We also store the start time t0 and the segment duration td.
+ * We can superimpose two segments that start at the same times t0 by adding the s0, u and a parameters.
+ * If the segments start and/or end at different times then we must split one or both into two or three segments so that we can superimpose segments with the same times.
  */
 
 #ifndef SRC_MOVEMENT_MOVESEGMENT_H_
@@ -136,6 +24,44 @@
 
 #include <RepRapFirmware.h>
 #include <Platform/Tasks.h>
+#include <new>		// for align_val_t
+
+#define SEGMENT_DEBUG	(0)
+
+// This bit field is used in multiple contexts so that we can copy them efficiently from one context to another Not all flags are used in all contexts.
+union MovementFlags
+{
+	uint32_t all;												// this is to provide a means to clear all the flags in one go
+	struct
+	{
+		uint32_t nonPrintingMove : 1,							// true if the move that generated this segment does not have both forwards extrusion and associated axis movement; used for filament monitoring
+				 checkEndstops : 1,								// true if we need to check endstops or Z probe while executing this segment
+				 noShaping : 1,									// true if input shaping should be disabled for this move
+				 executing : 1									// normally clear, set in a MoveSegment when the move starts to be executed
+#if 0 //SUPPORT_REMOTE_COMMANDS
+			   , isRemote : 1									// set if we are in expansion board mode and this segment came from a move commanded by the main board
+#endif
+				 ;
+	};
+
+	constexpr void Clear() noexcept { all = 0; }
+
+	constexpr void Init() noexcept { all = 0; nonPrintingMove = true; }
+
+	// This operator sets checkingEndstops if either of the segments to be combined checks endstops, and sets nonPrintingMove if either of them is a non printing move
+	MovementFlags operator|(const MovementFlags other) const noexcept
+	{
+		MovementFlags ret;
+		ret.all = all | other.all;
+		return ret;
+	}
+
+	MovementFlags& operator|=(const MovementFlags other) noexcept
+	{
+		all |= other.all;
+		return *this;
+	}
+};
 
 class MoveSegment
 {
@@ -145,197 +71,202 @@ public:
 	void operator delete(void* ptr) noexcept {}
 	void operator delete(void* ptr, std::align_val_t align) noexcept {}
 
-	MoveSegment(MoveSegment *p_next) noexcept;
+	// Read the values of the flag bits
+	bool IsLinear() const noexcept { return a == 0; }		//TODO: should we ignore very small accelerations, to avoid rounding error in the calculation?
+	MovementFlags GetFlags() const noexcept { return flags; }
 
-	bool IsLinear() const noexcept;
-	bool IsAccelerating() const noexcept pre(!IsLinear());
-	bool IsLast() const noexcept;
-
-	// Get the segment length in mm
-	float GetSegmentLength() const noexcept { return segLength; }
-
-	// Get the segment duration in step clocks
-	float GetSegmentTime() const noexcept { return segTime; }
-
-	// Get the segment speed change in mm/step_clock. Only for accelerating or decelerating moves.
-	float GetNonlinearSpeedChange() const noexcept pre(!IsLinear()) { return acceleration * segTime; }
-
-	// Get the start speed for an accelerating or decelerating move
-	float GetNonlinearStartSpeed(float pressureAdvanceK) const noexcept pre(!IsLinear()) { return (pressureAdvanceK - b) * acceleration; }
-
-	// Get the end speed for an accelerating or decelerating move
-	float GetNonlinearEndSpeed(float pressureAdvanceK) const noexcept pre(!IsLinear()) { return (pressureAdvanceK - b + segTime) * acceleration; }
-
-#if 1
-	// Functions used to verify segments
-	// Get the start speed for any move assuming no pressure advance
-	float GetStartSpeed() const noexcept { return (IsLinear()) ? 1.0/c : -b * acceleration; }
-
-	// Get the calculated distance for any move assuming no pressure advance
-	float GetCalculatedDistance() const noexcept { return (GetStartSpeed() + 0.5 * acceleration * segTime) * segTime; }
+#if 0 //SUPPORT_REMOTE_COMMANDS
+	bool IsRemote() const noexcept { return isRemote; }
 #endif
 
-	// Calculate the move A coefficient in step_clocks^2 for an accelerating or decelerating move
-	float CalcNonlinearA(float startDistance) const noexcept pre(!IsLinear());
-	float CalcNonlinearA(float startDistance, float pressureAdvanceK) const noexcept pre(!IsLinear());
+	// Given that this is not a constant-speed segment, test whether it is accelerating or decelerating
+	bool IsAccelerating() const noexcept { return a > (motioncalc_t)0.0; }
 
-	// Calculate the move B coefficient in step_clocks for an accelerating or decelerating move
-	float CalcNonlinearB(float startTime) const noexcept pre(!IsLinear());
-	float CalcNonlinearB(float startTime, float pressureAdvanceK) const noexcept pre(!IsLinear());
+	// Get the segment start time in step clocks
+	uint32_t GetStartTime() const noexcept { return startTime; }
 
-	// Calculate the move B coefficient in step_clocks for a steady speed move
-	float CalcLinearB(float startDistance, float startTime) const noexcept pre(IsLinear());
+	// Get the segment duration in step clocks
+	uint32_t GetDuration() const noexcept { return duration; }
 
-	// Calculate the move C coefficient in step_clocks/step for a linear move, or step_clocks^2/step for an accelerating or decelerating move
-	float CalcCFromMmPerStep(float mmPerStep) const noexcept;
+	// Get the initial speed
+	motioncalc_t GetU() const noexcept { return u; }
 
-	// Calculate the move C coefficient in step_clocks/step for a linear move, or step_clocks^2/step for an accelerating or decelerating move
-	float CalcCFromStepsPerMm(float stepsPerMm) const noexcept;
+	// Get the acceleration
+	motioncalc_t GetA() const noexcept { return a; }
+
+	// Get the length
+	motioncalc_t GetLength() const noexcept { return distance; }
 
 	// For a decelerating move, calculate the distance before the move reverses
-	float GetDistanceToReverse(float startSpeed) const noexcept;
+	motioncalc_t GetDistanceToReverse() const noexcept;
 
-	void SetLinear(float pSegmentLength, float p_segTime, float p_c) noexcept post(IsLinear());
-	void SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c, float p_acceleration) noexcept post(!IsLinear());
+	// Set the parameters of this segment
+	void SetParameters(uint32_t p_startTime, uint32_t p_duration, motioncalc_t p_distance, motioncalc_t p_u, motioncalc_t p_a, MovementFlags p_flags) noexcept;
 
+	// Split this segment in two, returning a pointer to the second part
+	MoveSegment *Split(uint32_t firstDuration) noexcept pre(firstDuration < duration);
+
+	// Merge the parameters for another segment with the same start time and duration into this one
+	void Merge(motioncalc_t p_distance, motioncalc_t p_u, motioncalc_t p_a, MovementFlags p_flags) noexcept;
+
+	// Normalise this segment by removing very small accelerations that cause problems, update t0, return true if it is linear
+	bool NormaliseAndCheckLinear(motioncalc_t distanceCarriedForwards, motioncalc_t& t0) noexcept;
+
+	// Set the 'executing' bit in the flags
+	void SetExecuting() noexcept { flags.executing = true; }
+
+	// Get the next segment in this list
 	MoveSegment *GetNext() const noexcept;
+
+	// Set the next segment in this list
 	void SetNext(MoveSegment *p_next) noexcept;
-	void AddToTail(MoveSegment *tail) noexcept;
-	void DebugPrint(char ch) const noexcept;
-	static void DebugPrintList(char ch, const MoveSegment *segs) noexcept;
-	static bool DebugCheckSegments(const MoveSegment *segs) noexcept;
+
+	// Print this segment to the debug channel
+	void DebugPrint() const noexcept;
+
+	// Print list of segments
+	static void DebugPrintList(const MoveSegment *segs) noexcept;
 
 	// Allocate a MoveSegment, clearing the flags
-	static MoveSegment *Allocate(MoveSegment *next) noexcept;
+	static MoveSegment *Allocate(MoveSegment *p_next) noexcept;
 
 	// Release a MoveSegment
 	static void Release(MoveSegment *item) noexcept;
 
-	static void InitialAllocate(unsigned int num) noexcept;
+	// Release all MoveSegments in a chain
+	static void ReleaseAll(MoveSegment *item) noexcept;
+
+	// Return the number of MoveSegment objects that have been created
 	static unsigned int NumCreated() noexcept { return numCreated; }
 
+	static constexpr int32_t MinDuration = 10;				// the minimum duration in movement clock ticks that we consider sensible
+
+protected:
+	static MoveSegment *freeList;							// list of recycled segment objects
+	static unsigned int numCreated;							// total number of segment objects created
+
+	MoveSegment *next;										// pointer to the next segment
+	MovementFlags flags;
+	uint32_t startTime;										// when this segment should start, in movement clock ticks
+	uint32_t duration;										// the duration of this segment in movement ticks
+	motioncalc_t distance;									// the number of steps moved
+	motioncalc_t u;											// the initial speed in steps per movement tick
+	motioncalc_t a;											// the acceleration during this segment in steps per movement tick squared
+
 private:
-	// We can store up to 2 flag bits in the link field, because the next move segment in the list will be 4-byte aligned
-	static constexpr uint32_t LinearFlag = 0x01;			// set if this segment is linear, clear if it is accelerating or decelerating
-	static constexpr uint32_t SpareFlag = 0x02;				// unused flag bit
-	static constexpr uint32_t AllFlags = 0x03;
-
-	static MoveSegment *freeList;
-	static unsigned int numCreated;
-
-	static_assert(sizeof(MoveSegment*) == sizeof(uint32_t));
-
-	// The 'nextAndFlags' field is a MoveSegment pointer with two flag bits in the bottom two bits
-	uint32_t nextAndFlags;									// pointer to the next segment, plus flag bits
-	float segLength;										// the length of this segment before applying the movement fraction
-	float segTime;											// the time in step clocks at which this move ends
-	float c;												// the c move parameter, units are step_clocks/mm for linear moves, units are steps_clocks^2/mm for accelerating or decelerating moves
-	float b;												// the b move parameter, equal to -(u/a), units are step_clocks, not used by linear move segments
-	float acceleration;										// the acceleration during this segment, not used by linear move segments
+	MoveSegment(MoveSegment *p_next) noexcept;
 };
 
 // Create a new one, leaving the flags clear
 inline MoveSegment::MoveSegment(MoveSegment *p_next) noexcept
-	: nextAndFlags(reinterpret_cast<uint32_t>(p_next))				// this also clears the flags
+	: next(p_next)
 {
 	// remaining fields are not initialised
 }
 
+// Normalise this segment by removing very small accelerations that cause problems, update t0, return true if it is linear
+// Called only from DriveMovement::NewSegment. Speed critical, hence inline and the rather unusual behaviour.
+// Returns:
+//  true if the segment is constant speed, with t0 = time from start of segment at which the distance would be/will be/would have been zero
+//  false if the segment has acceleration or deceleration, with t0 = time from start of segment at which the speed would have been/will be/would be zero
+inline bool MoveSegment::NormaliseAndCheckLinear(motioncalc_t distanceCarriedForwards, motioncalc_t& t0) noexcept
+{
+	if (a != (motioncalc_t)0.0)
+	{
+		// The move has acceleration or deceleration, but it may be small enough to cause problems with the calculations.
+		// The reason is that the step time is calculated as:
+		//   time_from_segment_start = t0 +/- sqrt(q - p*n)
+		// where q equals t0^2 or something very close to it. This gives rise to two issues:
+		// 1. The maximum value that can be represented by a float is a little more than 3.4e38, so t0 values greater than about 1e19 cause trouble when we square them to calculate q.
+		// 2. Rounding error may cause large errors in the step time, when t0 can't represented to within a small number of step clocks
+		// Issue #2 causes problems when abs(t0) exceeds about 2^24 because then the number of step clocks can't be represented exactly.
+		// Here are two possible ways round this:
+		// 1. When t0 gets large we can use the Maclaurin expansion of sqrt(q - p*n) to give:
+		//    time_from_segment_start ~= p*n/(2 * sqrt(q + p*n))
+		// This is accurate to within about 1 clock on the last step N when (p*N)^4 < 8*(q + p*N)^3
+		// so approximately when (p*N)^4 < 8*q^3, or very roughly when p*N << q
+		// However, using the Maclaurin expansion requires an extra division in each step calculation, which we would prefer to avoid.
+		// 2. We can convert the segment to a constant-speed segment, on the assumption that the speed won't change much during it. This is what we currently do.
+		const motioncalc_t provisionalT0 = -u/a;
+		if (likely(fabsm(provisionalT0) <= 4 * (motioncalc_t)16777216.0))
+		{
+			t0 = provisionalT0;
+			return false;
+		}
+
+		// The acceleration/deceleration is small enough to cause calculation problems, so change it to a linear move
+		u += (motioncalc_t)0.5 * a * (motioncalc_t)duration;				// adjust the initial speed to preserve the total distance
+		a = (motioncalc_t)0.0;
+	}
+
+	// The move is constant speed
+	t0 = -distanceCarriedForwards/u;
+	return true;
+}
+
+// Release a MoveSegment.  Not thread-safe.
+inline void MoveSegment::Release(MoveSegment *item) noexcept
+{
+	const irqflags_t iflags = IrqSave();
+	item->next = freeList;
+	freeList = item;
+	IrqRestore(iflags);
+}
+
 inline MoveSegment *MoveSegment::GetNext() const noexcept
 {
-	return reinterpret_cast<MoveSegment*>(nextAndFlags & (~AllFlags));
+	return next;
 }
 
 inline void MoveSegment::SetNext(MoveSegment *p_next) noexcept
 {
-	nextAndFlags = (nextAndFlags & AllFlags) | reinterpret_cast<uint32_t>(p_next);
+	next = p_next;
 }
 
-inline bool MoveSegment::IsLinear() const noexcept
+// For a decelerating move with positive start speed, calculate the distance before the move reverses
+inline motioncalc_t MoveSegment::GetDistanceToReverse() const noexcept
 {
-	return nextAndFlags & LinearFlag;
+	return msquare(u)/-((motioncalc_t)2.0 * a);
 }
 
-inline bool MoveSegment::IsLast() const noexcept
+// Set the parameters of this segment
+inline void MoveSegment::SetParameters(uint32_t p_startTime, uint32_t p_duration, motioncalc_t p_distance, motioncalc_t p_u, motioncalc_t p_a, MovementFlags p_flags) noexcept
 {
-	return GetNext() == nullptr;
+	startTime = p_startTime;
+	duration = p_duration;
+	distance = p_distance;
+	u = p_u;
+	a = p_a;
+	flags = p_flags;
 }
 
-inline float MoveSegment::CalcNonlinearA(float startDistance) const noexcept
+// Split this segment in two, returning a pointer to the new second part
+inline MoveSegment *MoveSegment::Split(uint32_t firstDuration) noexcept
 {
-	return fsquare(b) - startDistance * c;
+	MoveSegment *const secondSeg = Allocate(next);
+	const motioncalc_t firstDistance = (u + (motioncalc_t)0.5 * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
+	secondSeg->SetParameters(startTime + firstDuration, duration - firstDuration, distance - firstDistance, u + a * (motioncalc_t)firstDuration, a, flags);
+#if SEGMENT_DEBUG
+	debugPrintf("split at %" PRIu32 ", fd=%.2f, sd=%.2f\n", firstDuration, (double)firstDistance, (double)(distance - firstDistance));
+#endif
+	duration = firstDuration;
+	distance = firstDistance;
+	next = secondSeg;
+	return secondSeg;
 }
 
-inline float MoveSegment::CalcNonlinearA(float startDistance, float pressureAdvanceK) const noexcept
+// Merge the parameters for another segment with the same start time and duration into this one
+// s = u*t * 0.5*a*t^2 therefore s1+s2 = (u1+u2)*t + 0.5*(a1+a2)*t^2
+inline void MoveSegment::Merge(motioncalc_t p_distance, motioncalc_t p_u, motioncalc_t p_a, MovementFlags p_flags) noexcept
 {
-	return fsquare(b - pressureAdvanceK) - startDistance * c;
-}
-
-inline float MoveSegment::CalcNonlinearB(float startTime) const noexcept
-{
-	return b + startTime;
-}
-
-inline float MoveSegment::CalcNonlinearB(float startTime, float pressureAdvanceK) const noexcept
-{
-	return (b - pressureAdvanceK) + startTime;
-}
-
-inline float MoveSegment::CalcLinearB(float startDistance, float startTime) const noexcept
-{
-	return startTime - (startDistance * c);
-}
-
-inline float MoveSegment::CalcCFromMmPerStep(float mmPerStep) const noexcept
-{
-	return c * mmPerStep;
-}
-
-// Calculate the move C coefficient in step_clocks/step for a linear move, or step_clocks^2/step for an accelerating or decelerating move
-inline float MoveSegment::CalcCFromStepsPerMm(float stepsPerMm) const noexcept
-{
-	return c/stepsPerMm;
-}
-
-// For a decelerating move with positive start speed, calculate the distance from the start of the segment before the move reverses
-// From (v^2-u^2) = 2as, if v=0 then s=-u^2/2a = u^2/2d
-// But c = -2/d, so d = -2/c, so s = u^2/(-4/c) = 0.25 * u^2 * c.
-inline float MoveSegment::GetDistanceToReverse(float startSpeed) const noexcept
-{
-	return fsquare(startSpeed) * c * (-0.25);
-}
-
-inline void MoveSegment::SetLinear(float pSegmentLength, float p_segTime, float p_c) noexcept
-{
-	segLength = pSegmentLength;
-	segTime = p_segTime;
-	b = 0.0;
-	c = p_c;
-	acceleration = 0.0;
-	nextAndFlags |= LinearFlag;
-}
-
-// Set up an accelerating or decelerating move. We assume that the 'linear' flag is already clear.
-inline void MoveSegment::SetNonLinear(float pSegmentLength, float p_segTime, float p_b, float p_c, float p_acceleration) noexcept
-{
-	segLength = pSegmentLength;
-	segTime = p_segTime;
-	b = p_b;
-	c = p_c;
-	acceleration = p_acceleration;
-}
-
-// Given that this is an accelerating or decelerating move, return true if it is accelerating
-inline bool MoveSegment::IsAccelerating() const noexcept
-{
-	return c > 0.0;
-}
-
-// Release a single MoveSegment. Not thread-safe.
-inline void MoveSegment::Release(MoveSegment *item) noexcept
-{
-	item->nextAndFlags = reinterpret_cast<uint32_t>(freeList);
-	freeList = item;
+#if SEGMENT_DEBUG
+	debugPrintf("merge d=%.2f u=%.4e a=%.4e into ", (double)p_distance, (double)p_u, (double)p_a);
+	DebugPrint();
+#endif
+	distance += p_distance;
+	u += p_u;
+	a += p_a;
+	flags |= p_flags;
 }
 
 #endif /* SRC_MOVEMENT_MOVESEGMENT_H_ */

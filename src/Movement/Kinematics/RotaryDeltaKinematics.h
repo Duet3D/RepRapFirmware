@@ -24,7 +24,7 @@ public:
 	bool CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept override;
 	void MotorStepsToCartesian(const int32_t motorPos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept override;
 	bool SupportsAutoCalibration() const noexcept override { return true; }
-	bool DoAutoCalibration(MovementSystemNumber msNumber, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept override;
+	bool DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept override;
 	void SetCalibrationDefaults() noexcept override { Init(); }
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteCalibrationParameters(FileStore *f) const noexcept override;
@@ -36,8 +36,8 @@ public:
 	AxesBitmap AxesAssumedHomed(AxesBitmap g92Axes) const noexcept override;
 	AxesBitmap MustBeHomedAxes(AxesBitmap axesMoving, bool disallowMovesBeforeHoming) const noexcept override;
 	AxesBitmap GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept override;
-	bool QueryTerminateHomingMove(size_t axis) const noexcept override;
 	void OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept override;
+	AxesBitmap GetControllingDrives(size_t axis, bool forHoming) const noexcept override;
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept override;
 #endif

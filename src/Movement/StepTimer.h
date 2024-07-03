@@ -36,6 +36,9 @@ public:
 	// As ScheduleCallback but base priority >= NvicPriorityStep when called. Can be called from within a callback.
 	bool ScheduleCallbackFromIsr(Ticks when) noexcept SPEED_CRITICAL;
 
+	// As ScheduleCallback but add the movement delay, and must have base priority >= NvicPriorityStep when called. Can be called from within a callback.
+	bool ScheduleMovementCallbackFromIsr(Ticks when) noexcept SPEED_CRITICAL;
+
 	// Check whether a callback really is due, schedule it if not. Returns true if it really is due. Can be called from within a callback.
 	bool ScheduleCallbackFromIsr() noexcept SPEED_CRITICAL;
 
@@ -54,19 +57,26 @@ public:
 	// Get the current tick count
 	static Ticks GetTimerTicks() noexcept SPEED_CRITICAL;
 
+	// Get the current tick count, adjusted for the movement delay
+	static Ticks GetMovementTimerTicks() noexcept SPEED_CRITICAL;
+
 	// Get the current tick count when we only need a 16-bit value. Faster than GetTimerTicks() on the SAM4S and SAME70.
 	static uint16_t GetTimerTicks16() noexcept;
 
 	// Get the tick rate (can also access it directly as StepClockRate)
 	static constexpr uint32_t GetTickRate() noexcept { return StepClockRate; }
 
+	// Add more movement delay
+	static void IncreaseMovementDelay(uint32_t increase) noexcept;
+
+	// Return the current movement delay
+	static uint32_t GetMovementDelay() noexcept { return movementDelay; }
+
 	// ISR called from StepTimer
 	static void Interrupt() noexcept;
 
 	// Append diagnostics to reply string
 	static void Diagnostics(const StringRef& reply) noexcept;
-
-	static constexpr uint32_t MinInterruptInterval = 6;							// Minimum interval between step timer interrupts, in step clocks; about 6us
 
 	// Convert a number of step timer ticks to microseconds
 	// Our tick rate is a multiple of 1000 so instead of multiplying n by 1000000 and risking overflow, we multiply by 1000 and divide by StepClockRate/1000
@@ -91,6 +101,8 @@ public:
 
 private:
 	static bool ScheduleTimerInterrupt(uint32_t tim) noexcept;					// Schedule an interrupt at the specified clock count, or return true if it has passed already
+
+	static uint32_t movementDelay;												// how many timer ticks the move timer is behind the raw timer
 
 	StepTimer *next;
 	Ticks whenDue;
@@ -137,6 +149,19 @@ inline __attribute__((always_inline)) uint16_t StepTimer::GetTimerTicks16() noex
 #else
 	return (uint16_t)STEP_TC->TC_CHANNEL[STEP_TC_CHAN].TC_CV;
 #endif
+}
+
+// Add more movement delay
+inline void StepTimer::IncreaseMovementDelay(uint32_t increase) noexcept
+{
+	movementDelay += increase;
+	//TODO consider sending a CAN clock message to update expansion boards
+}
+
+// Get the current tick count
+inline StepTimer::Ticks StepTimer::GetMovementTimerTicks() noexcept
+{
+	return GetTimerTicks() - movementDelay;
 }
 
 #endif /* SRC_MOVEMENT_STEPTIMER_H_ */

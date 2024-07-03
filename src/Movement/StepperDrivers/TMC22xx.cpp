@@ -534,7 +534,7 @@ static constexpr uint8_t ReadIfcountCRC = SlowReflect(CRCAddByte(InitialSendCRC,
 class TmcDriverState
 {
 public:
-	void Init(uint32_t p_driverNumber
+	void Init(uint8_t p_driverNumber
 #if TMC22xx_HAS_ENABLE_PINS
 							, Pin p_enablePin
 #endif
@@ -548,7 +548,7 @@ public:
 	void SetAxisNumber(size_t p_axisNumber) noexcept;
 	uint32_t GetAxisNumber() const noexcept { return axisNumber; }
 	void WriteAll() noexcept;
-	bool SetMicrostepping(uint32_t shift, bool interpolate) noexcept;
+	bool SetMicrostepping(uint8_t shift, bool interpolate) noexcept;
 	unsigned int GetMicrostepping(bool& interpolation) const noexcept;
 	bool SetDriverMode(unsigned int mode) noexcept;
 	DriverMode GetDriverMode() const noexcept;
@@ -710,19 +710,20 @@ private:
 
 	volatile uint32_t writeRegisters[NumWriteRegisters + 1];	// the values we want the TMC22xx writable registers to have
 	volatile uint32_t readRegisters[NumReadRegisters + 1];		// the last values read from the TMC22xx readable registers
-	volatile uint32_t accumulatedReadRegisters[NumReadRegisters];
+	volatile uint32_t accumulatedDriveStatus;
 
 	uint32_t configuredChopConfReg;							// the configured chopper control register, in the Enabled state, without the microstepping bits
-	volatile uint32_t registersToUpdate;					// bitmap of register indices whose values need to be sent to the driver chip
-
-	uint32_t axisNumber;									// the axis number of this driver as used to index the DriveMovements in the DDA
-	uint32_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 	float motorCurrent;										// the configured motor current in mA
 	uint32_t maxOpenLoadStepInterval;						// the maximum step pulse interval for which we consider open load detection to be reliable
+
+	volatile uint16_t registersToUpdate;					// bitmap of register indices whose values need to be sent to the driver chip
 
 #if HAS_STALL_DETECT
 	uint16_t minSgLoadRegister;								// the minimum value of the StallGuard bits we read
 #endif
+
+	uint8_t axisNumber;										// the axis number of this driver as used to index the DriveMovements in the DDA
+	uint8_t microstepShiftFactor;							// how much we need to shift 1 left by to get the current microstepping
 
 #if TMC22xx_SINGLE_UART
 # if TMC22xx_USES_SERCOM
@@ -827,7 +828,7 @@ constexpr size_t SendDataCRCIndex0 = 7;
 constexpr size_t SendDataCRCIndex1 = 11;
 
 // Buffer for the message we receive when reading data, dword-aligned so that we can use 32-bit mode on the SAME5x. The first 4 or 12 bytes bytes are our own transmitted data.
-// Align on a 16-bit boundary to make sure it covers only 2 cache lines not 3
+// Align on a 16-byte boundary to make sure it covers only 2 cache lines not 3
 alignas(16) volatile uint8_t TmcDriverState::receiveData[20];
 
 constexpr uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
@@ -1106,7 +1107,7 @@ void TmcDriverState::SetMicrostepping256() noexcept
 #endif
 
 // Initialise the state of the driver and its CS pin
-void TmcDriverState::Init(uint32_t p_driverNumber
+void TmcDriverState::Init(uint8_t p_driverNumber
 #if TMC22xx_HAS_ENABLE_PINS
 							, Pin p_enablePin
 #endif
@@ -1190,8 +1191,9 @@ pre(!driversPowered)
 
 	for (size_t i = 0; i < NumReadRegisters; ++i)
 	{
-		accumulatedReadRegisters[i] = readRegisters[i] = 0;				// clear all read registers so that we don't use dud values, in particular we don't know the driver type yet
+		readRegisters[i] = 0;				// clear all read registers so that we don't use dud values, in particular we don't know the driver type yet
 	}
+	accumulatedDriveStatus = 0;
 
 #if RESET_MICROSTEP_COUNTERS_AT_INIT
 	ClearMicrostepPosition();
@@ -1258,7 +1260,7 @@ void TmcDriverState::SetStandstillCurrentPercent(float percent) noexcept
 }
 
 // Set the microstepping and microstep interpolation. The desired microstepping is (1 << shift).
-bool TmcDriverState::SetMicrostepping(uint32_t shift, bool interpolate) noexcept
+bool TmcDriverState::SetMicrostepping(uint8_t shift, bool interpolate) noexcept
 {
 	microstepShiftFactor = shift;
 	configuredChopConfReg = (configuredChopConfReg & ~(CHOPCONF_MRES_MASK | CHOPCONF_INTPOL)) | ((8 - shift) << CHOPCONF_MRES_SHIFT);
@@ -1504,10 +1506,10 @@ StandardDriverStatus TmcDriverState::GetStatus(bool accumulated, bool clearAccum
 		{
 			AtomicCriticalSectionLocker lock;
 
-			status = accumulatedReadRegisters[ReadDrvStat];
+			status = accumulatedDriveStatus;
 			if (clearAccumulated)
 			{
-				accumulatedReadRegisters[ReadDrvStat] = readRegisters[ReadDrvStat];
+				accumulatedDriveStatus = readRegisters[ReadDrvStat];
 			}
 		}
 		else
@@ -1739,7 +1741,10 @@ inline void TmcDriverState::TransferDone() noexcept
 			}
 			else
 			{
-				accumulatedReadRegisters[registerToRead] |= regVal;
+				if (registerToRead == ReadDrvStat)
+				{
+					accumulatedDriveStatus |= regVal;
+				}
 				++registerToRead;
 				if (registerToRead == ReadSpecial && specialReadRegisterNumber >= 0x80)
 				{

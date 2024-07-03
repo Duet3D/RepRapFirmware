@@ -19,6 +19,7 @@ namespace MoveDebugFlags
 	constexpr unsigned int CollisionData = 5;
 	constexpr unsigned int AxisAllocation = 6;
 	constexpr unsigned int Lookahead = 7;
+	constexpr unsigned int Segments = 8;
 }
 
 #endif /* SRC_MOVEMENT_MOVEDEBUGFLAGS_H_ */

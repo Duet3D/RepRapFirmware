@@ -12,6 +12,7 @@
 #include <Movement/Move.h>
 #include <Platform/RepRap.h>
 #include <Storage/FileStore.h>
+#include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Math/Deviation.h>
 
@@ -119,11 +120,11 @@ bool RotaryDeltaKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const
 			{
 				printRadius = gb.GetPositiveFValue();
 				// Set the axis limits so that DWC reports them correctly (they are not otherwise used for deltas, except Z min)
-				Platform& p = reprap.GetPlatform();
-				p.SetAxisMinimum(X_AXIS, -printRadius, false);
-				p.SetAxisMinimum(Y_AXIS, -printRadius, false);
-				p.SetAxisMaximum(X_AXIS, printRadius, false);
-				p.SetAxisMaximum(Y_AXIS, printRadius, false);
+				Move& m = reprap.GetMove();
+				m.SetAxisMinimum(X_AXIS, -printRadius, false);
+				m.SetAxisMinimum(Y_AXIS, -printRadius, false);
+				m.SetAxisMaximum(X_AXIS, printRadius, false);
+				m.SetAxisMaximum(Y_AXIS, printRadius, false);
 				seen = true;
 			}
 
@@ -284,7 +285,7 @@ floatc_t RotaryDeltaKinematics::ComputeDerivative(unsigned int deriv, float ha, 
 
 // Perform auto calibration. Caller already owns the movement lock.
 // Return true if an error occurred.
-bool RotaryDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
+bool RotaryDeltaKinematics::DoAutoCalibration(size_t numFactors, const RandomProbePointSet& probePoints, const StringRef& reply) noexcept
 {
 	constexpr size_t NumDeltaFactors = 7;		// maximum number of rotary delta machine factors we can adjust
 
@@ -422,7 +423,7 @@ bool RotaryDeltaKinematics::DoAutoCalibration(MovementSystemNumber msNumber, siz
 			{
 				heightAdjust[drive] = solution[drive];
 			}
-			reprap.GetMove().AdjustMotorPositions(msNumber, heightAdjust, DELTA_AXES);
+			reprap.GetMove().AdjustMotorPositions(heightAdjust, DELTA_AXES);
 		}
 
 		// Calculate the expected probe heights using the new parameters
@@ -597,14 +598,14 @@ LimitPositionResult RotaryDeltaKinematics::LimitPosition(float finalCoords[], co
 			limited = true;
 		}
 
-		if (finalCoords[Z_AXIS] < reprap.GetPlatform().AxisMinimum(Z_AXIS))
+		if (finalCoords[Z_AXIS] < reprap.GetMove().AxisMinimum(Z_AXIS))
 		{
-			finalCoords[Z_AXIS] = reprap.GetPlatform().AxisMinimum(Z_AXIS);
+			finalCoords[Z_AXIS] = reprap.GetMove().AxisMinimum(Z_AXIS);
 			limited = true;
 		}
-		else if (finalCoords[Z_AXIS] > reprap.GetPlatform().AxisMaximum(Z_AXIS))
+		else if (finalCoords[Z_AXIS] > reprap.GetMove().AxisMaximum(Z_AXIS))
 		{
-			finalCoords[Z_AXIS] = reprap.GetPlatform().AxisMaximum(Z_AXIS);
+			finalCoords[Z_AXIS] = reprap.GetMove().AxisMaximum(Z_AXIS);
 			limited = true;
 		}
 	}
@@ -655,20 +656,13 @@ AxesBitmap RotaryDeltaKinematics::MustBeHomedAxes(AxesBitmap axesMoving, bool di
 AxesBitmap RotaryDeltaKinematics::GetHomingFileName(AxesBitmap toBeHomed, AxesBitmap alreadyHomed, size_t numVisibleAxes, const StringRef& filename) const noexcept
 {
 	// If homing X, Y or Z we must home all the towers
-	if (toBeHomed.Intersects(AxesBitmap::MakeLowestNBits(DELTA_AXES)))
+	if (toBeHomed.Intersects(XyzAxes))
 	{
 		filename.copy("homedelta.g");
 		return AxesBitmap();
 	}
 
 	return Kinematics::GetHomingFileName(toBeHomed, alreadyHomed, numVisibleAxes, filename);
-}
-
-// This function is called from the step ISR when an endstop switch is triggered during homing.
-// Return true if the entire homing move should be terminated, false if only the motor associated with the endstop switch should be stopped.
-bool RotaryDeltaKinematics::QueryTerminateHomingMove(size_t axis) const noexcept
-{
-	return false;
 }
 
 // This function is called from the step ISR when an endstop switch is triggered during homing after stopping just one motor or all motors.
@@ -686,9 +680,17 @@ void RotaryDeltaKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, c
 	else
 	{
 		// Assume that any additional axes are linear
-		const float hitPoint = (highEnd) ? reprap.GetPlatform().AxisMaximum(axis) : reprap.GetPlatform().AxisMinimum(axis);
+		const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
 		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
 	}
+}
+
+// Return the drivers that control an axis or tower
+AxesBitmap RotaryDeltaKinematics::GetControllingDrives(size_t axis, bool forHoming) const noexcept
+{
+	return (forHoming || axis > Z_AXIS)
+			? AxesBitmap::MakeFromBits(axis)
+				: XyzAxes;
 }
 
 // Calculate the motor position for a single tower from a Cartesian coordinate.

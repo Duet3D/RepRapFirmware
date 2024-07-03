@@ -26,7 +26,7 @@ struct RawMove
 
 	const Tool *movementTool;										// which tool (if any) is being used by this move
 
-	uint16_t moveType : 3,											// the S parameter from the G0 or G1 command, 0 for a normal move
+	uint16_t moveType : 3,											// the H parameter from the G0 or G1 command, 0 for a normal move
 			applyM220M221 : 1,										// true if this move is affected by M220 and M221 (this could be moved to ExtendedRawMove)
 			usePressureAdvance : 1,									// true if we want to us extruder pressure advance, if there is any extrusion
 			canPauseAfter : 1,										// true if we can pause just after this move and successfully restart
@@ -94,7 +94,7 @@ public:
 	void ReleaseNonToolAxesAndExtruders() noexcept;
 	void ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept;
 	void ReleaseAxisLetter(char letter) noexcept;											// stop claiming that we own an axis letter (if we do) but don't release the associated axis
-	void SaveOwnAxisCoordinates() noexcept;													// fetch and save the coordinates of axes we own to lastKnownMachinePositions
+	void UpdateOwnAxisCoordinates() noexcept;													// fetch and save the coordinates of axes we own to lastKnownMachinePositions
 	void OwnedAxisCoordinatesUpdated(AxesBitmap axesIncluded) noexcept;						// update changed coordinates of some owned axes - called after G92
 	void OwnedAxisCoordinateUpdated(size_t axis) noexcept;									// update the machine coordinate of an axis we own - called after Z probing
 #endif
@@ -130,8 +130,6 @@ public:
 	void DoneMoveSincePrintingResumed() noexcept { printingJustResumed = false; }
 	void StopPrinting(GCodeBuffer& gb) noexcept;
 	void ResumePrinting(GCodeBuffer& gb) noexcept;
-
-	float LiveCoordinate(unsigned int axisOrExtruder) const noexcept;
 
 	void Diagnostics(MessageType mtype) noexcept;
 
@@ -172,9 +170,6 @@ public:
 	float restartInitialUserC0;										// if the print was paused during an arc move, the user X coordinate at the start of that move (from M26)
 	float restartInitialUserC1;										// if the print was paused during an arc move, the user Y coordinate at the start of that move (from M26)
 
-	mutable float latestLiveCoordinates[MaxAxesPlusExtruders];		// the most recent set of live coordinates that we fetched
-	mutable uint32_t latestLiveCoordinatesFetchedAt = 0;			// when we fetched the live coordinates
-
 	RestorePoint restorePoints[NumTotalRestorePoints];
 
 	RestorePoint& GetPauseRestorePoint() noexcept { return restorePoints[PauseRestorePointNumber]; }				// The position and feed rate when we paused the print
@@ -209,7 +204,6 @@ public:
 	bool xyPlane;													// true if the G17/G18/G19 selected plane of the arc move is XY in the original user coordinates
 	SegmentedMoveState segMoveState;
 	bool pausedInMacro;												// if we are paused then this is true if we paused while fileGCode was executing a macro
-	bool forceLiveCoordinatesUpdate = true;							// true if we want to force latestLiveCoordinates to be updated
 
 private:
 	MovementSystemNumber msNumber;

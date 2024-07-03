@@ -293,20 +293,6 @@ void MovementState::InitObjectCancellation() noexcept
 	currentObjectCancelled = printingJustResumed = false;
 }
 
-// Return the current machine axis and extruder coordinates. They are needed only to service status requests from DWC, PanelDue, M114.
-// Transforming the machine motor coordinates to Cartesian coordinates is quite expensive, and a status request or object model request will call this for each axis.
-// So we cache the latest coordinates and only update them if it is some time since we last did, or if we have just waited for movement to stop.
-// Interrupts are assumed enabled on entry
-float MovementState::LiveCoordinate(unsigned int axisOrExtruder) const noexcept
-{
-	if (forceLiveCoordinatesUpdate || millis() - latestLiveCoordinatesFetchedAt > 200)
-	{
-		reprap.GetMove().GetLiveCoordinates(msNumber, currentTool, latestLiveCoordinates);
-		latestLiveCoordinatesFetchedAt = millis();
-	}
-	return latestLiveCoordinates[axisOrExtruder];
-}
-
 #if SUPPORT_ASYNC_MOVES
 
 // Release all owned axes and extruders
@@ -318,7 +304,7 @@ void MovementState::ReleaseAllOwnedAxesAndExtruders() noexcept
 // Release some of the axes that we own. We must also clear the cache of owned axis letters.
 void MovementState::ReleaseAxesAndExtruders(AxesBitmap axesToRelease) noexcept
 {
-	SaveOwnAxisCoordinates();										// save the positions of the axes we own before we release them, otherwise we will get the wrong positions when we allocate them again
+	UpdateOwnAxisCoordinates();										// save the positions of the axes we own before we release them, otherwise we will get the wrong positions when we allocate them again
 	axesAndExtrudersOwned &= ~axesToRelease;						// clear the axes/extruders we have been asked to release
 	axesAndExtrudersMoved.ClearBits(axesToRelease);					// remove them from the own axes/extruders
 	ownedAxisLetters.Clear();										// clear the cache of owned axis letters
@@ -346,7 +332,7 @@ AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap a
 		return axesNeeded;											// return empty bitmap
 	}
 
-	SaveOwnAxisCoordinates();										// we must do this before we allocate new axes to ourselves
+	UpdateOwnAxisCoordinates();										// we must do this before we allocate new axes to ourselves
 	const AxesBitmap unAvailable = axesNeeded & axesAndExtrudersMoved;
 	if (unAvailable.IsEmpty())
 	{
@@ -357,8 +343,8 @@ AxesBitmap MovementState::AllocateAxes(AxesBitmap axes, ParameterLettersBitmap a
 	return unAvailable;
 }
 
-// Fetch and save the coordinates of axes we own to lastKnownMachinePositions, also copy them to our own coordinates in case we just did a homing move
-void MovementState::SaveOwnAxisCoordinates() noexcept
+// Fetch and save the current coordinates to lastKnownMachinePositions, also copy them to our own coordinates in case we just did a homing move
+void MovementState::UpdateOwnAxisCoordinates() noexcept
 {
 	Move& move = reprap.GetMove();
 	move.GetPartialMachinePosition(lastKnownMachinePositions, msNumber, axesAndExtrudersOwned);
@@ -375,9 +361,8 @@ void MovementState::SaveOwnAxisCoordinates() noexcept
 				debugPrintf("Coord %u changed from %.4f to %.4f in ms %u\n", i, (double)coords[i], (double)lastKnownMachinePositions[i], GetMsNumber());
 			}
 		}
-#endif	//END DEBUGB
+#endif	//END DEBUG
 		memcpyf(coords, lastKnownMachinePositions, totalAxes);
-		move.SetRawPosition(coords, msNumber);
 		move.InverseAxisAndBedTransform(coords, currentTool);
 	}
 }

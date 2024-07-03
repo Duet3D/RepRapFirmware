@@ -1,0 +1,64 @@
+Next steps for new movement system+IS
+=====================================
+
+[done a different way] Set Move.checkEndstops when executing movement that checks endstops or a Z probe
+[done] DM must init and maintain (existing) flag isExtruder
+[done] Init DM.segFlags when starting a new segment, clear it when we run out of segments
+[done, testing] Handle retiring commited moves properly
+[done] If a move checks endstops and the endstop is already triggered during Prepare, it remains busy for the length of the homing move, even though it doesn't move.
+[done] We get the same delay when an endstop stops movement.
+[done] Take account of raw motor moves when deciding whether to use IS. Maybe move useIS into MovementFlags?
+[done] Extend use of DMState::starting to cover the case of the next segment starting some time after the previous one ends
+[done] Sort out ClearExtrusionPending - don't update distanceBroughtForwards during motion
+[done] Do we still need GetNetStepsTaken? Can we use the step counts instead?
+[done] Sort out use of Kinematics::ControllingDrivers. Need different behaviour depending on whether it is used when homing or to update machine positions.
+[done] Avoid zero-length/zero-duration moves
+[probably caused by known issue when a tool selection fails due to insufficient axes homed, so ignore] If we try to start a print job without homing first, after that we can't home Z without a reset. 
+[believed completed] Auto-generated moves on delta printers: need to segment them, except for Z probing moves
+[not needed unless we get tiny layer shifts, also this is not as easy as I first thought] Eventually, store end position in segments. End positions specified by user must be exact numbers of motor steps. Segment boundaries may be fractional steps.
+[done] Delta printer auto calibration not working
+
+Remove excess debug e.g. reporting hiccups in debug
+
+Remove CheckSegments except when debugging
+
+Reduce RAM usage on Duet 2 and Duet 3 Mini.
+
+When using segmentation, sync segment duration to multiples/submultiples of IS period - this should reduce the number of segments needed
+
+Fix ExtruderPrintingSince, need to update variable extruderPrintingSince when we start a printing extruder move after not doing one - in NewSegmnent?
+
+Use cumulativeHiccupTime and notify hiccups to expansion boards
+
+Allow for expansion boards introducing hiccups
+
+Set up params.useInputShaping, needed for CAN
+
+At the end of Prepare, don't send the move over CAN if it won't happen because endstops are already triggered - previously it checked for state=completed
+Also, check whether/how in CanMotion we handle individual drives not moving because their endstops have triggered - that may be enough to handle the above.
+
+Segment moves to keep them shorter than 2^31 step clocks
+
+In the DM have a direction variable set to +1 or -1, to reduce conditional jumps
+
+Move 'wasTriggered' into ZProbe, clear it on SetProbing(true), return it on SetProbing(false)
+
+Change ZProbe::wasDeployedByUser to a count?
+
+Store segments per step clock not segments per second, avoids a multiplication
+
+Consider supporting separate X and Y IS parameters on Cartesian/Polar/SCARA machines and separate Z shaping parameters
+
+Bugs:
+- [done] "Tool was not driven because its temperatures were not high enough" in simulation mode
+- [done] In simulation mode at least, stops processing X driver segments, then runs out of memory
+- [done] In M122 report, completed moves shows as 0 at least when simulating
+- [done] Test print doesn't heat bed or extruder but heating works manually from DWC
+- [no fault] Spurious filament monitor errors - this was on a tool board
+- [done] Step error when moving delta printer in X direction
+- [done] Requested speed and top speed always show zero
+- [done] Pauses after G1 H2 moves, especially if expansion boards are involved
+- [done] Z probing not working
+- [re-test] G1 H2 moves on delta: moves the wrong number of steps according to M114 (too few) if just 1 tower moving; ok if all 3 moving
+- Christian reports that G1 H1 E moves (using stall detection) crash
+

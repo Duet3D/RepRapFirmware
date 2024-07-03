@@ -51,6 +51,52 @@ extern "C"
 extern struct netif gs_net_if;
 }
 
+#if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING && defined(DUET3MINI_V04)
+
+// Interface to get access to the PBUF memory pool so that when we are not going to enable Ethernet we can use the memory for something else
+// These functions may used on the Duet 3 Mini when the WiFi interface is enabled or SBC mode is enabled.
+// Not used on Duet 3 6HC because that board can support both interfaces at once.
+// We could use it in SBC mode on the 6HC and 6XD, but note that the PBUF pool memory is allocated in non-cached RAM.
+// The pool descriptors are read-only and set up by static initialisation
+
+#include "AllocateFromPbufPool.h"
+
+static uint8_t *pbufPoolBase = nullptr;
+static size_t pbufPoolBytesLeft = 0;
+
+// Flag that allocation from the PBUF pool is allowed and set up the variables
+void InitAllocationFromPbufPool() noexcept
+{
+	if (pbufPoolBase == nullptr)
+	{
+		// First call so set up our variables
+		const memp_desc *const memp = memp_pools[MEMP_PBUF_POOL];
+		pbufPoolBytesLeft = memp->num * (uint32_t)memp->size;
+		pbufPoolBase = memp->base;				// Lwip guarantees that this is 4-byte aligned
+	}
+}
+
+// Function to allocate memory from the static memory allocated to the Lwip PBUF pool. Use this only when Lwip Ethernet will definitely not be used.
+// Return a pointer to the allocated memory, or nullptr if there was insufficient memory left in the pool.
+void *AllocateFromPbufPool(size_t bytes) noexcept
+{
+	if (pbufPoolBase != nullptr)
+	{
+		bytes = (bytes + 3) & (~3);				// round up to a multiple of 4 bytes to keep the memory 4-byte aligned
+		if (bytes <= pbufPoolBytesLeft)
+		{
+			void *const ret = pbufPoolBase;
+			pbufPoolBase += bytes;
+			pbufPoolBytesLeft -= bytes;
+			return ret;
+		}
+	}
+	return nullptr;
+}
+
+#endif
+
+// MDNS support
 const char * const MdnsServiceStrings[NumSelectableProtocols] =
 {
 	"_http", "_ftp", "_telnet",

@@ -37,6 +37,8 @@
 #include "MoveDebugFlags.h"
 #include "StepTimer.h"
 #include <Platform/Platform.h>
+#include <Platform/Event.h>
+#include <GCodes/GCodes.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Tools/Tool.h>
 #include <Endstops/ZProbe.h>
@@ -51,6 +53,27 @@
 # include <CAN/CanMotion.h>
 # include <CAN/CanInterface.h>
 #endif
+
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+# include <CanMessageGenericTables.h>
+#endif
+
+#if SUPPORT_TMC2660
+# include "Movement/StepperDrivers/TMC2660.h"
+#endif
+#if SUPPORT_TMC22xx
+# include "Movement/StepperDrivers/TMC22xx.h"
+#endif
+#if SUPPORT_TMC51xx
+# include "Movement/StepperDrivers/TMC51xx.h"
+#endif
+
+#ifdef DUET3_MB6XD
+# include <pmc/pmc.h>
+#endif
+
+constexpr float MinStepPulseTiming = 0.2;												// we assume that we always generate step high and low times at least this wide without special action
 
 Task<Move::MoveTaskStackWords> Move::moveTask;
 
@@ -73,13 +96,13 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 					// The array gets too large to send when we want all fields and there are a lot of axes, so restrict the number of axes returned to 9
 					return (context.TruncateLongArrays()) ? min<size_t>(numAxes, 9) : numAxes;
 				},
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&reprap.GetPlatform(), 3); }
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 9); }
 	},
 	// 1. Extruders
 	{
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetNumExtruders(); },
-		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&reprap.GetPlatform(), 4); }
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(self, 10); }
 	},
 	// 2. Motion system queues
 	{
@@ -88,17 +111,39 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(&((const Move*)self)->rings[context.GetLastIndex()]); }
 	},
 
+	// 3. Axis drivers
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return ((const Move*)self)->axisDrivers[context.GetLastIndex()].numDrivers; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return ExpressionValue(((const Move*)self)->axisDrivers[context.GetIndex(1)].driverNumbers[context.GetLastIndex()]); }
+	},
+
+	// 4. Workplace coordinate offsets
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext& context) noexcept -> size_t { return NumCoordinateSystems; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue
+				{ return ExpressionValue(reprap.GetGCodes().GetWorkplaceOffset(context.GetIndex(1), context.GetLastIndex()), 3); }
+	},
+
 #if SUPPORT_COORDINATE_ROTATION
-	// 3. Rotation centre coordinates
+	// 5. Rotation centre coordinates
 	{
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 2; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(reprap.GetGCodes().GetRotationCentre(context.GetLastIndex())); }
 	},
+#elif SUPPORT_KEEPOUT_ZONES
+	{
+		nullptr,
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return 0; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(nullptr); }
+	}
 #endif
 
 #if SUPPORT_KEEPOUT_ZONES
-	// 4. Keepout zone list
+	// 6. Keepout zone list
 	{
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return reprap.GetGCodes().GetNumKeepoutZones(); },
@@ -110,19 +155,25 @@ constexpr ObjectModelArrayTableEntry Move::objectModelArrayTable[] =
 
 DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(Move)
 
+static inline const char *_ecv_array GetFilamentName(size_t extruder) noexcept
+{
+	const Filament *fil = Filament::GetFilamentByExtruder(extruder);
+	return (fil == nullptr) ? "" : fil->GetName();
+}
+
 constexpr ObjectModelTableEntry Move::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Move members
 	{ "axes",					OBJECT_MODEL_FUNC_ARRAY(0), 																	ObjectModelEntryFlags::live },
-	{ "backlashFactor",			OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetPlatform().GetBacklashCorrectionDistanceFactor()),	ObjectModelEntryFlags::none },
+	{ "backlashFactor",			OBJECT_MODEL_FUNC((int32_t)self->GetBacklashCorrectionDistanceFactor()),						ObjectModelEntryFlags::none },
 	{ "calibration",			OBJECT_MODEL_FUNC(self, 3),																		ObjectModelEntryFlags::none },
 	{ "compensation",			OBJECT_MODEL_FUNC(self, 6),																		ObjectModelEntryFlags::none },
 	{ "currentMove",			OBJECT_MODEL_FUNC(self, 2),																		ObjectModelEntryFlags::live },
 	{ "extruders",				OBJECT_MODEL_FUNC_ARRAY(1),																		ObjectModelEntryFlags::live },
 	{ "idle",					OBJECT_MODEL_FUNC(self, 1),																		ObjectModelEntryFlags::none },
 #if SUPPORT_KEEPOUT_ZONES
-	{ "keepout",				OBJECT_MODEL_FUNC_ARRAY(4),																		ObjectModelEntryFlags::none },
+	{ "keepout",				OBJECT_MODEL_FUNC_ARRAY(6),																		ObjectModelEntryFlags::none },
 #endif
 	{ "kinematics",				OBJECT_MODEL_FUNC(self->kinematics),															ObjectModelEntryFlags::none },
 	{ "limitAxes",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().LimitAxes()),										ObjectModelEntryFlags::none },
@@ -130,7 +181,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "printingAcceleration",	OBJECT_MODEL_FUNC_NOSELF(InverseConvertAcceleration(reprap.GetGCodes().GetPrimaryMaxPrintingAcceleration()), 1),	ObjectModelEntryFlags::none },
 	{ "queue",					OBJECT_MODEL_FUNC_ARRAY(2),																		ObjectModelEntryFlags::none },
 #if SUPPORT_COORDINATE_ROTATION
-	{ "rotation",				OBJECT_MODEL_FUNC(self, 9),																		ObjectModelEntryFlags::none },
+	{ "rotation",				OBJECT_MODEL_FUNC(self, 15),																	ObjectModelEntryFlags::none },
 #endif
 	{ "shaping",				OBJECT_MODEL_FUNC(&self->axisShaper, 0),														ObjectModelEntryFlags::none },
 	{ "speedFactor",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetPrimarySpeedFactor(), 2),						ObjectModelEntryFlags::none },
@@ -139,7 +190,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "workplaceNumber",		OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetGCodes().GetPrimaryWorkplaceCoordinateSystemNumber() - 1),				ObjectModelEntryFlags::none },
 
 	// 1. Move.Idle members
-	{ "factor",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetPlatform().GetIdleCurrentFactor(), 1),						ObjectModelEntryFlags::none },
+	{ "factor",					OBJECT_MODEL_FUNC(self->GetIdleCurrentFactor(), 1),												ObjectModelEntryFlags::none },
 	{ "timeout",				OBJECT_MODEL_FUNC(0.001f * (float)self->idleTimeout, 1),										ObjectModelEntryFlags::none },
 
 	// 2. move.currentMove members
@@ -187,16 +238,78 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "tanXZ",					OBJECT_MODEL_FUNC(self->tanXZ(), 4),															ObjectModelEntryFlags::none },
 	{ "tanYZ",					OBJECT_MODEL_FUNC(self->tanYZ(), 4),															ObjectModelEntryFlags::none },
 
+	// 9. move.axes[] members
+	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(context.GetLastIndex())), 1),				ObjectModelEntryFlags::none },
+	{ "babystep",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetTotalBabyStepOffset(context.GetLastIndex()), 3),					ObjectModelEntryFlags::none },
+	{ "backlash",			OBJECT_MODEL_FUNC(self->backlashMm[context.GetLastIndex()], 3),													ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 906))),								ObjectModelEntryFlags::none },
+	{ "drivers",			OBJECT_MODEL_FUNC_ARRAY(3),																						ObjectModelEntryFlags::none },
+	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),								ObjectModelEntryFlags::none },
+	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetInstantDv(context.GetLastIndex())), 1),				ObjectModelEntryFlags::none },
+	{ "letter",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetLastIndex()]),							ObjectModelEntryFlags::none },
+	{ "machinePosition",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().LiveMachineCoordinate(context.GetLastIndex()), 3),					ObjectModelEntryFlags::live },
+	{ "max",				OBJECT_MODEL_FUNC(self->AxisMaximum(context.GetLastIndex()), 2),												ObjectModelEntryFlags::none },
+	{ "maxProbed",			OBJECT_MODEL_FUNC(self->axisMaximaProbed.IsBitSet(context.GetLastIndex())),										ObjectModelEntryFlags::none },
+	{ "microstepping",		OBJECT_MODEL_FUNC(self, 12),																					ObjectModelEntryFlags::none },
+	{ "min",				OBJECT_MODEL_FUNC(self->AxisMinimum(context.GetLastIndex()), 2),												ObjectModelEntryFlags::none },
+	{ "minProbed",			OBJECT_MODEL_FUNC(self->axisMinimaProbed.IsBitSet(context.GetLastIndex())),										ObjectModelEntryFlags::none },
+	{ "percentCurrent",		OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 913))),								ObjectModelEntryFlags::none },
+#ifndef DUET_NG
+	{ "percentStstCurrent",	OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 917))),								ObjectModelEntryFlags::none },
+#endif
+	{ "reducedAcceleration", OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex(), true)), 1),			ObjectModelEntryFlags::none },
+	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
+	{ "stepsPerMm",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().DriveStepsPerMm(context.GetLastIndex()), 2),							ObjectModelEntryFlags::none },
+	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(reprap.GetGCodes().GetCurrentMovementState(context), context.GetLastIndex()), 3), ObjectModelEntryFlags::live },
+	{ "visible",			OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()),				ObjectModelEntryFlags::none },
+	{ "workplaceOffsets",	OBJECT_MODEL_FUNC_ARRAY(4),																						ObjectModelEntryFlags::none },
+
+	// 10. move.extruders[] members
+	{ "acceleration",		OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->NormalAcceleration(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
+	{ "current",			OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(ExtruderToLogicalDrive(context.GetLastIndex()), 906))),								ObjectModelEntryFlags::none },
+	{ "driver",				OBJECT_MODEL_FUNC(self->extruderDrivers[context.GetLastIndex()]),																		ObjectModelEntryFlags::none },
+	{ "factor",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetExtrusionFactor(context.GetLastIndex()), 3),												ObjectModelEntryFlags::none },
+	{ "filament",			OBJECT_MODEL_FUNC_NOSELF(GetFilamentName(context.GetLastIndex())),																		ObjectModelEntryFlags::none },
+	{ "filamentDiameter",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetFilamentDiameter(context.GetLastIndex()), 3),											ObjectModelEntryFlags::none },
+	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetInstantDv(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),				ObjectModelEntryFlags::none },
+	{ "microstepping",		OBJECT_MODEL_FUNC(self, 13),																											ObjectModelEntryFlags::none },
+	{ "nonlinear",			OBJECT_MODEL_FUNC(self, 11),																											ObjectModelEntryFlags::none },
+	{ "percentCurrent",		OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 913))),														ObjectModelEntryFlags::none },
+#ifndef DUET_NG
+	{ "percentStstCurrent",	OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 917))),														ObjectModelEntryFlags::none },
+#endif
+	{ "position",			OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetMove().LiveMachineCoordinate(ExtruderToLogicalDrive(context.GetLastIndex())), 1)),	ObjectModelEntryFlags::live },
+	{ "pressureAdvance",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetPressureAdvanceClocksForExtruder(context.GetLastIndex())/StepClockRate, 3),				ObjectModelEntryFlags::none },
+	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1)), 					ObjectModelEntryFlags::live },
+	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
+	{ "stepsPerMm",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().DriveStepsPerMm(ExtruderToLogicalDrive(context.GetLastIndex())), 2),							ObjectModelEntryFlags::none },
+
+	// 11. move.extruders[].nonlinear members
+	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].A, 3),									ObjectModelEntryFlags::none },
+	{ "b",					OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].B, 3),									ObjectModelEntryFlags::none },
+	{ "upperLimit",			OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].limit, 2),								ObjectModelEntryFlags::none },
+
+	// 12. move.axes[].microstepping members
+	{ "interpolated",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetMicrostepInterpolation(context.GetLastIndex())),				ObjectModelEntryFlags::none },
+	{ "value",				OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetMove().GetMicrostepping(context.GetLastIndex())),				ObjectModelEntryFlags::none },
+
+	// 13. move.extruders[].microstepping members
+	{ "interpolated",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetMicrostepInterpolation(ExtruderToLogicalDrive(context.GetLastIndex()))),	ObjectModelEntryFlags::none },
+	{ "value",				OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetMove().GetMicrostepping(ExtruderToLogicalDrive(context.GetLastIndex()))),	ObjectModelEntryFlags::none },
+
+	// 14. boards[0].drivers[]
+	{ "status",				OBJECT_MODEL_FUNC(self->GetLocalDriverStatus(context.GetLastIndex()).all),									ObjectModelEntryFlags::live },
+
 #if SUPPORT_COORDINATE_ROTATION
-	// 9. move.rotation members
-	{ "angle",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRotationAngle()),								ObjectModelEntryFlags::none },
-	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(3),																		ObjectModelEntryFlags::none },
+	// 15. move.rotation members
+	{ "angle",					OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRotationAngle()),										ObjectModelEntryFlags::none },
+	{ "centre",					OBJECT_MODEL_FUNC_ARRAY(5),																				ObjectModelEntryFlags::none },
 #endif
 };
 
 constexpr uint8_t Move::objectModelTableDescriptor[] =
 {
-	9 + SUPPORT_COORDINATE_ROTATION,
+	15 + SUPPORT_COORDINATE_ROTATION,
 	17 + SUPPORT_COORDINATE_ROTATION + SUPPORT_KEEPOUT_ZONES,
 	2,
 	5 + SUPPORT_LASER,
@@ -206,8 +319,19 @@ constexpr uint8_t Move::objectModelTableDescriptor[] =
 	6 + (HAS_MASS_STORAGE || HAS_SBC_INTERFACE),
 	2,
 	4,
+#ifdef DUET_NG	// Duet WiFi/Ethernet doesn't have settable standstill current
+	21,																		// section 9: move.axes[]
+	15,																		// section 10: move.extruders[]
+#else
+	22,																		// section 9: move.axes[]
+	16,																		// section 10: move.extruders[]
+#endif
+	3,																		// section 11: move.extruders[].nonlinear
+	2,																		// section 12: move.axes[].microstepping
+	2,																		// section 13: move.extruders[].microstepping
+	1,																		// section 5: boards.drivers
 #if SUPPORT_COORDINATE_ROTATION
-	2
+	2,
 #endif
 };
 
@@ -225,23 +349,212 @@ Move::Move() noexcept
 	  heightController(nullptr),
 #endif
 	  jerkPolicy(0),
+	  stepErrorState(StepErrorState::noError),
 	  numCalibratedFactors(0)
 {
+#if VARIABLE_NUM_DRIVERS
+	numActualDirectDrivers = NumDirectDrivers;						// assume they are all available until we know otherwise
+#endif
+
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
 	kinematics = Kinematics::Create(KinematicsType::cartesian);		// default to Cartesian
-	rings[0].Init1(InitialDdaRingLength);
-#if SUPPORT_ASYNC_MOVES
-	rings[1].Init1(AuxDdaRingLength);
-#endif
-	DriveMovement::InitialAllocate(InitialNumDms);
+	for (DDARing& ring : rings)
+	{
+		ring.Init1(InitialDdaRingLength);
+	}
 }
 
 void Move::Init() noexcept
 {
-	rings[0].Init2();
+	// Axes
+	for (size_t axis = 0; axis < MaxAxes; ++axis)
+	{
+		axisMinima[axis] = DefaultAxisMinimum;
+		axisMaxima[axis] = DefaultAxisMaximum;
+
+		maxFeedrates[axis] = ConvertSpeedFromMmPerSec(DefaultAxisMaxFeedrate);
+		reducedAccelerations[axis] = normalAccelerations[axis] = ConvertAcceleration(DefaultAxisAcceleration);
+		instantDvs[axis] = ConvertSpeedFromMmPerSec(DefaultAxisInstantDv);
+
+		backlashMm[axis] = 0.0;
+		backlashSteps[axis] = 0;
+		backlashStepsDue[axis] = 0;
+	}
+
+	backlashCorrectionDistanceFactor = DefaultBacklashCorrectionDistanceFactor;
+
+	// We use different defaults for the Z axis
+	maxFeedrates[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZMaxFeedrate);
+	reducedAccelerations[Z_AXIS] = normalAccelerations[Z_AXIS] = ConvertAcceleration(DefaultZAcceleration);
+	instantDvs[Z_AXIS] = ConvertSpeedFromMmPerSec(DefaultZInstantDv);
+
+	// Extruders
+	for (size_t drive = MaxAxes; drive < MaxAxesPlusExtruders; ++drive)
+	{
+		maxFeedrates[drive] = ConvertSpeedFromMmPerSec(DefaultEMaxFeedrate);
+		normalAccelerations[drive] = reducedAccelerations[drive] = ConvertAcceleration(DefaultEAcceleration);
+		instantDvs[drive] = ConvertSpeedFromMmPerSec(DefaultEInstantDv);
+	}
+
+	minimumMovementSpeed = ConvertSpeedFromMmPerSec(DefaultMinFeedrate);
+	axisMaximaProbed.Clear();
+	axisMinimaProbed.Clear();
+	idleCurrentFactor = DefaultIdleCurrentFactor;
+
+	// Motors
+
+#ifdef DUET3_MB6XD
+	ENABLE_PINS = (reprap.GetPlatform().GetBoardType() == BoardType::Duet3_6XD_v01) ? ENABLE_PINS_v01 : ENABLE_PINS_v100;
+	unsigned int numErrorHighDrivers = 0;
+#endif
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+	{
+		directions[driver] = true;														// drive moves forwards by default
+#ifdef DUET3_MB6XD
+		pinMode(ENABLE_PINS[driver], INPUT);											// temporarily set up the enable pin for reading
+		pinMode(DRIVER_ERR_PINS[driver], INPUT);										// set up the error pin for reading
+		const bool activeHighEnable = !digitalRead(ENABLE_PINS[driver]);				// test whether we have a pullup or pulldown on the Enable pin
+		enableValues[driver] = activeHighEnable;
+		pinMode(ENABLE_PINS[driver], (activeHighEnable) ? OUTPUT_LOW : OUTPUT_HIGH);	// set driver disabled
+		if (digitalRead(DRIVER_ERR_PINS[driver]))
+		{
+			++numErrorHighDrivers;
+		}
+
+		// Set the default driver step timings
+		driverTimingMicroseconds[driver][0] = DefaultStepWidthMicroseconds;
+		driverTimingMicroseconds[driver][1] = DefaultStepIntervalMicroseconds;
+		driverTimingMicroseconds[driver][2] = DefaultSetupTimeMicroseconds;
+		driverTimingMicroseconds[driver][3] = DefaultHoldTimeMicroseconds;
+#else
+		enableValues[driver] = 0;														// assume active low enable signal
+#endif
+		// Set up the control pins
+		pinMode(STEP_PINS[driver], OUTPUT_LOW);
+		pinMode(DIRECTION_PINS[driver], OUTPUT_LOW);
+#if !defined(DUET3) && !defined(DUET3MINI)
+		pinMode(ENABLE_PINS[driver], OUTPUT_HIGH);										// this is OK for the TMC2660 CS pins too
+#endif
+
+		brakeOffDelays[driver] = 0;
+		motorOffDelays[driver] = DefaultDelayAfterBrakeOn;
+
+#if SUPPORT_BRAKE_PWM
+		currentBrakePwm[driver] = 0.0;
+		brakeVoltages[driver] = FullyOnBrakeVoltage;
+#endif
+	}
+
+#ifdef DUET3_MB6XD
+	driverErrPinsActiveLow = (numErrorHighDrivers >= NumDirectDrivers/2);				// determine the error signal polarity by assuming most drivers are not in the error state
+	pmc_enable_periph_clk(STEP_GATE_TC_ID);												// need to do this before we set up the step gate TC
+	UpdateDriverTimings();																// this also initialises the step gate TC
+	SetPinFunction(StepGatePin, StepGatePinFunction);
+#endif
+
+	// Initialise the DMs before we make any changes to them
+	for (size_t drv = 0; drv < MaxAxesPlusExtruders + NumDirectDrivers; ++drv)
+	{
+		dms[drv].Init(drv);
+		if (drv < MaxAxesPlusExtruders)
+		{
+			const float stepsPerMm = (drv >= MaxAxes) ? DefaultEDriveStepsPerUnit
+										: (drv == Z_AXIS) ? DefaultZDriveStepsPerUnit
+											: DefaultAxisDriveStepsPerUnit;
+			SetDriveStepsPerMm(drv, stepsPerMm, 0);
+		}
+	}
+
+	// Set up the axis+extruder arrays
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; drive++)
+	{
+		driverState[drive] = DriverStatus::disabled;
+		motorCurrents[drive] = 0.0;
+		motorCurrentFraction[drive] = 1.0;
+#if HAS_SMART_DRIVERS || SUPPORT_CAN_EXPANSION
+		standstillCurrentPercent[drive] = DefaultStandstillCurrentPercent;
+#endif
+		SetDriverMicrostepping(drive, 16, true);				// x16 with interpolation
+	}
+
+	// Set up the bitmaps for direct driver access
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+	{
+		dms[driver + MaxAxesPlusExtruders].driversNormallyUsed = StepPins::CalcDriverBitmap(driver);
+	}
+
+	// Set up default axis mapping
+	for (size_t axis = 0; axis < MinAxes; ++axis)
+	{
+#ifdef PCCB
+		const size_t driver = (axis + 1) % 3;					// on PCCB we map axes X Y Z to drivers 1 2 0
+#else
+		const size_t driver = axis;								// on most boards we map axes straight through to drives
+#endif
+		axisDrivers[axis].numDrivers = 1;
+		axisDrivers[axis].driverNumbers[0].SetLocal(driver);
+		dms[axis].driversNormallyUsed = StepPins::CalcDriverBitmap(driver);	// overwrite the default value set up earlier
+	}
+	linearAxes = AxesBitmap::MakeLowestNBits(3);				// XYZ axes are linear
+
+	for (size_t axis = MinAxes; axis < MaxAxes; ++axis)
+	{
+		axisDrivers[axis].numDrivers = 0;
+	}
+
+	// Set up default extruders
+	for (size_t extr = 0; extr < MaxExtruders; ++extr)
+	{
+		extruderDrivers[extr].SetLocal(extr + MinAxes);			// set up default extruder drive mapping
+		dms[ExtruderToLogicalDrive(extr)].driversNormallyUsed = StepPins::CalcDriverBitmap(extr + MinAxes);
+#if SUPPORT_NONLINEAR_EXTRUSION
+		nonlinearExtrusion[extr].A = nonlinearExtrusion[extr].B = 0.0;
+		nonlinearExtrusion[extr].limit = DefaultNonlinearExtrusionLimit;
+#endif
+	}
+
+#ifndef DUET3_MB6XD
+	for (uint32_t& entry : slowDriverStepTimingClocks)
+	{
+		entry = 0;												// reset all to zero as we have no known slow drivers yet
+	}
+	slowDriversBitmap = 0;										// assume no drivers need extended step pulse timing
+#endif
+
+	EnableAllSteppingDrivers();									// no drivers disabled
+
+#if HAS_SMART_DRIVERS
+	// Initialise TMC driver module
+# if SUPPORT_TMC51xx
+	SmartDrivers::Init();
+# elif SUPPORT_TMC22xx
+#  if TMC22xx_VARIABLE_NUM_DRIVERS
+	SmartDrivers::Init(numSmartDrivers);
+#  elif SUPPORT_TMC2240 && defined(DUET3MINI)
+	SmartDrivers::Init(reprap.GetPlatform().HasTmc2240Expansion());
+#  else
+	SmartDrivers::Init();
+#  endif
+# else
+	SmartDrivers::Init(ENABLE_PINS, numSmartDrivers);
+# endif
+	temperatureShutdownDrivers.Clear();
+	temperatureWarningDrivers.Clear();
+	shortToGroundDrivers.Clear();
+#endif
+
+#if HAS_STALL_DETECT
+	logOnStallDrivers.Clear();
+	eventOnStallDrivers.Clear();
+#endif
+
+	// DDA rings
+	for (DDARing& ring : rings)
+	{
+		ring.Init2();
+	}
 
 #if SUPPORT_ASYNC_MOVES
-	rings[1].Init2();
 	auxMoveAvailable = false;
 	auxMoveLocked = false;
 #endif
@@ -256,11 +569,27 @@ void Move::Init() noexcept
 
 	idleTimeout = DefaultIdleTimeout;
 	moveState = MoveState::idle;
-	whenLastMoveAdded = whenIdleTimerStarted = millis();
+	const uint32_t now = millis();
+	whenIdleTimerStarted = now;
+	for (uint32_t& w : whenLastMoveAdded)
+	{
+		w = now;
+	}
 
 	simulationMode = SimulationMode::off;
 	longestGcodeWaitInterval = 0;
+	numHiccups = 0;
+	lastReportedMovementDelay = 0;
 	bedLevellingMoveAvailable = false;
+	activeDMs = nullptr;
+	for (volatile int32_t& acc : movementAccumulators)
+	{
+		acc = 0;
+	}
+	for (uint16_t& ms : microstepping)
+	{
+		ms = 16 | 0x8000;
+	}
 
 	moveTask.Create(MoveStart, "Move", this, TaskPriority::MovePriority);
 }
@@ -268,10 +597,14 @@ void Move::Init() noexcept
 void Move::Exit() noexcept
 {
 	StepTimer::DisableTimerInterrupt();
-	rings[0].Exit();
-#if SUPPORT_ASYNC_MOVES
-	rings[1].Exit();
+	timer.CancelCallback();
+#if HAS_SMART_DRIVERS
+	SmartDrivers::Exit();
 #endif
+	for (DDARing& ring : rings)
+	{
+		ring.Exit();
+	}
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	delete laserTask;
 	laserTask = nullptr;
@@ -279,21 +612,76 @@ void Move::Exit() noexcept
 	moveTask.TerminateAndUnlink();
 }
 
+void Move::GenerateMovementErrorDebug() noexcept
+{
+	if (reprap.Debug(Module::Move))
+	{
+		const DDA *cdda = rings[0].GetCurrentDDA();
+		if (cdda == nullptr)
+		{
+			debugPrintf("No current DDA\n");
+		}
+		else
+		{
+			cdda->DebugPrint("Current DDA");
+		}
+
+		debugPrintf("Failing DM:\n");
+		for (const DriveMovement& dm : dms)
+		{
+			if (dm.HasError())
+			{
+				dm.DebugPrint();
+			}
+		}
+	}
+}
+
+// Set the microstepping for local drivers, returning true if successful. All drivers for the same axis must use the same microstepping.
+// Caller must deal with remote drivers.
+bool Move::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool interp, const StringRef& reply) noexcept
+{
+	//TODO check that it is a valid microstep setting
+	microstepping[axisOrExtruder] = (interp) ? microsteps | 0x8000 : microsteps;
+	reprap.MoveUpdated();
+	return SetDriversMicrostepping(axisOrExtruder, microsteps, interp, reply);
+}
+
+// Get the microstepping for an axis or extruder
+unsigned int Move::GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const noexcept
+{
+	interpolation = (microstepping[axisOrExtruder] & 0x8000) != 0;
+	return microstepping[axisOrExtruder] & 0x7FFF;
+}
+
+// Set the drive steps per mm. Called when processing M92.
+void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t requestedMicrostepping) noexcept
+{
+	if (requestedMicrostepping != 0)
+	{
+		const uint32_t currentMicrostepping = microstepping[axisOrExtruder] & 0x7FFF;
+		if (currentMicrostepping != requestedMicrostepping)
+		{
+			value = value * (float)currentMicrostepping / (float)requestedMicrostepping;
+		}
+	}
+
+	value = max<float>(value, 1.0);							// don't allow zero or negative
+	driveStepsPerMm[axisOrExtruder] = value;
+	reprap.MoveUpdated();
+}
+
 [[noreturn]] void Move::MoveLoop() noexcept
 {
+
+	timer.SetCallback(Move::TimerCallback, CallbackParameter(this));
 	for (;;)
 	{
-		if (reprap.IsStopped())
+		if (reprap.IsStopped() || stepErrorState != StepErrorState::noError)
 		{
 			// Emergency stop has been commanded, so terminate this task to prevent new moves being prepared and executed
 			moveTask.TerminateAndUnlink();
 		}
-
-		// Recycle the DDAs for completed moves, checking for DDA errors to print if Move debug is enabled
-		rings[0].RecycleDDAs();
-#if SUPPORT_ASYNC_MOVES
-		rings[1].RecycleDDAs();
-#endif
 
 		bool moveRead = false;
 
@@ -307,15 +695,15 @@ void Move::Exit() noexcept
 				moveRead = true;
 				if (simulationMode < SimulationMode::partial)
 				{
-					if (rings[0].AddSpecialMove(reprap.GetPlatform().MaxFeedrate(Z_AXIS), specialMoveCoords))
+					if (rings[0].AddSpecialMove(MaxFeedrate(Z_AXIS), specialMoveCoords))
 					{
 						const uint32_t now = millis();
-						const uint32_t timeWaiting = now - whenLastMoveAdded;
+						const uint32_t timeWaiting = now - whenLastMoveAdded[0];
 						if (timeWaiting > longestGcodeWaitInterval)
 						{
 							longestGcodeWaitInterval = timeWaiting;
 						}
-						whenLastMoveAdded = now;
+						whenLastMoveAdded[0] = now;
 						moveState = MoveState::collecting;
 					}
 				}
@@ -344,12 +732,12 @@ void Move::Exit() noexcept
 						if (rings[0].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
 						{
 							const uint32_t now = millis();
-							const uint32_t timeWaiting = now - whenLastMoveAdded;
+							const uint32_t timeWaiting = now - whenLastMoveAdded[0];
 							if (timeWaiting > longestGcodeWaitInterval)
 							{
 								longestGcodeWaitInterval = timeWaiting;
 							}
-							whenLastMoveAdded = now;
+							whenLastMoveAdded[0] = now;
 							moveState = MoveState::collecting;
 						}
 					}
@@ -357,8 +745,8 @@ void Move::Exit() noexcept
 			}
 		}
 
-		// Let ring 0 process moves. Better to have a few moves in the queue so that we can do lookahead, hence the test on idleCount and idleTime.
-		uint32_t nextPrepareDelay = rings[0].Spin(simulationMode, !canAddRing0Move, millis() - whenLastMoveAdded >= rings[0].GetGracePeriod());
+		// Let ring 0 process moves
+		uint32_t nextPrepareDelay = rings[0].Spin(simulationMode, !canAddRing0Move, millis() - whenLastMoveAdded[0] >= rings[0].GetGracePeriod());
 
 #if SUPPORT_ASYNC_MOVES
 		const bool canAddRing1Move = rings[1].CanAddMove();
@@ -370,12 +758,12 @@ void Move::Exit() noexcept
 				if (rings[1].AddAsyncMove(auxMove))
 				{
 					const uint32_t now = millis();
-					const uint32_t timeWaiting = now - whenLastMoveAdded;
+					const uint32_t timeWaiting = now - whenLastMoveAdded[1];
 					if (timeWaiting > longestGcodeWaitInterval)
 					{
 						longestGcodeWaitInterval = timeWaiting;
 					}
-					whenLastMoveAdded = now;
+					whenLastMoveAdded[1] = now;
 					moveState = MoveState::collecting;
 				}
 				auxMoveAvailable = false;
@@ -397,12 +785,12 @@ void Move::Exit() noexcept
 						if (rings[1].AddStandardMove(nextMove, !IsRawMotorMove(nextMove.moveType)))
 						{
 							const uint32_t now = millis();
-							const uint32_t timeWaiting = now - whenLastMoveAdded;
+							const uint32_t timeWaiting = now - whenLastMoveAdded[1];
 							if (timeWaiting > longestGcodeWaitInterval)
 							{
 								longestGcodeWaitInterval = timeWaiting;
 							}
-							whenLastMoveAdded = now;
+							whenLastMoveAdded[1] = now;
 							moveState = MoveState::collecting;
 						}
 					}
@@ -410,12 +798,20 @@ void Move::Exit() noexcept
 			}
 		}
 
-		const uint32_t auxPrepareDelay = rings[1].Spin(simulationMode, !canAddRing1Move,  millis() - whenLastMoveAdded >= rings[1].GetGracePeriod());
+		const uint32_t auxPrepareDelay = rings[1].Spin(simulationMode, !canAddRing1Move,  millis() - whenLastMoveAdded[1] >= rings[1].GetGracePeriod());
 		if (auxPrepareDelay < nextPrepareDelay)
 		{
 			nextPrepareDelay = auxPrepareDelay;
 		}
 #endif
+
+		if (simulationMode == SimulationMode::debug && reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::SimulateSteppingDrivers))
+		{
+			while (activeDMs != nullptr)
+			{
+				SimulateSteppingDrivers(reprap.GetPlatform());
+			}
+		}
 
 		// Reduce motor current to standby if the rings have been idle for long enough
 		if (   rings[0].IsIdle()
@@ -433,7 +829,7 @@ void Move::Exit() noexcept
 			}
 			else if (moveState == MoveState::timing && millis() - whenIdleTimerStarted >= idleTimeout)
 			{
-				reprap.GetPlatform().SetDriversIdle();			// put all drives in idle hold
+				SetDriversIdle();								// put all drives in idle hold
 				moveState = MoveState::idle;
 			}
 		}
@@ -445,10 +841,10 @@ void Move::Exit() noexcept
 		// We need to be woken when one of the following is true:
 		// 1. If moves are being executed and there are unprepared moves in the queue, when it is time to prepare more moves.
 		// 2. If the queue was full and all moves in it were prepared, when we have completed one or more moves.
-		// 3. In order to implement idle timeout, we must wake up regularly anyway, say every half second
+		// 3. In order to implement idle timeout, we must wake up regularly anyway, say every half second (MoveTiming::StandardMoveWakeupInterval)
 		if (!moveRead && nextPrepareDelay != 0)
 		{
-			TaskBase::TakeIndexed(NotifyIndices::Move, min<uint32_t>(nextPrepareDelay, 500));
+			TaskBase::TakeIndexed(NotifyIndices::Move, nextPrepareDelay);
 		}
 	}
 }
@@ -463,9 +859,40 @@ void Move::MoveAvailable() noexcept
 }
 
 // Tell the lookahead ring we are waiting for it to empty and return true if it is
-bool Move::WaitingForAllMovesFinished(MovementSystemNumber msNumber) noexcept
+bool Move::WaitingForAllMovesFinished(MovementSystemNumber msNumber
+#if SUPPORT_ASYNC_MOVES
+										, AxesBitmap axesAndExtrudersOwned
+#endif
+									 ) noexcept
 {
-	return rings[msNumber].SetWaitingToEmpty();
+	if (!rings[msNumber].SetWaitingToEmpty())
+	{
+		return false;
+	}
+
+	// If input shaping is enabled then movement may continue for a little while longer
+#if SUPPORT_ASYNC_MOVES
+	return axesAndExtrudersOwned.IterateWhile([this](unsigned int axisOrExtruder, unsigned int)->bool
+												{
+													if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
+													{
+														//TODO the following is OK for CoreXY but not for deltas, Scara etc.
+														const AxesBitmap driversUsed = kinematics->GetControllingDrives(axisOrExtruder, false);
+														return driversUsed.IterateWhile([this](unsigned int drive, unsigned int)->bool { return !dms[drive].MotionPending(); });
+													}
+													return !dms[axisOrExtruder].MotionPending();
+												}
+											 );
+#else
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
+	{
+		if (dms[drive].MotionPending())
+		{
+			return false;
+		}
+	}
+#endif
+	return true;
 }
 
 // Return the number of actually probed probe points
@@ -529,47 +956,57 @@ bool Move::LowPowerOrStallPause(unsigned int queueNumber, RestorePoint& rp) noex
 	return rings[queueNumber].LowPowerOrStallPause(rp);
 }
 
+// Stop generating steps
+void Move::CancelStepping() noexcept
+{
+	StepTimer::DisableTimerInterrupt();
+}
+
 #endif
+
+extern uint32_t maxCriticalElapsedTime;
 
 void Move::Diagnostics(MessageType mtype) noexcept
 {
 	// Get the type of bed compensation in use
-#if 0	// debug only
+#if STEPS_DEBUG
 	String<StringLength256> scratchString;
 #else
 	String<StringLength100> scratchString;
 #endif
 	scratchString.copy(GetCompensationTypeString());
 
+	const uint32_t currentMovementDelay = StepTimer::GetMovementDelay();
+	const float delayToReport = (float)(currentMovementDelay - lastReportedMovementDelay) * (1000.0/(float)StepTimer::GetTickRate());
+	lastReportedMovementDelay = currentMovementDelay;
+
 	Platform& p = reprap.GetPlatform();
 	p.MessageF(mtype,
-				"=== Move ===\nDMs created %u, segments created %u, maxWait %" PRIu32 "ms, bed compensation in use: %s, height map offset %.3f"
-#if 1	//debug
-				", max steps late %" PRIi32 ", min interval %" PRIi32 ", bad calcs %u"
-#endif
+				"=== Move ===\nSegments created %u, maxWait %" PRIu32 "ms, bed comp in use: %s, height map offset %.3f, hiccups added %u (%.2fms), max steps late %" PRIi32
 #if 1	//debug
 				", ebfmin %.2f, ebfmax %.2f"
+				", mcet %.3f"
 #endif
 				"\n",
-						DriveMovement::NumCreated(), MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift,
-#if 1	//debug
-						DriveMovement::GetAndClearMaxStepsLate(), DriveMovement::GetAndClearMinStepInterval(), DriveMovement::GetAndClearBadSegmentCalcs()
-#endif
+						MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, numHiccups, (double)delayToReport, DriveMovement::GetAndClearMaxStepsLate()
 #if 1
 						, (double)minExtrusionPending, (double)maxExtrusionPending
+						, (double)((float)maxCriticalElapsedTime * (1000.0/(float)StepTimer::GetTickRate()))
 #endif
 		);
 	longestGcodeWaitInterval = 0;
+	numHiccups = 0;
 #if 1	//debug
 	minExtrusionPending = maxExtrusionPending = 0.0;
+	maxCriticalElapsedTime = 0;
 #endif
 
-#if DDA_DEBUG_STEP_COUNT
-	scratchString.copy("Steps requested/done:");
-	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+#if STEPS_DEBUG
+	scratchString.copy("Pos req/act/dcf:");
+	for (size_t drive = 0; drive < reprap.GetGCodes().GetTotalAxes(); ++drive)
 	{
-		scratchString.catf(" %" PRIi32 "/%" PRIi32, DDA::stepsRequested[driver], DDA::stepsDone[driver]);
-		DDA::stepsRequested[driver] = DDA::stepsDone[driver] = 0;
+		scratchString.catf(" %.2f/%" PRIi32 "/%.2f", (double)dms[drive].positionRequested, dms[drive].currentMotorPosition, (double)dms[drive].distanceCarriedForwards);
+		dms[drive].positionRequested = (float)dms[drive].currentMotorPosition;
 	}
 	scratchString.cat('\n');
 	p.Message(mtype, scratchString.c_str());
@@ -579,22 +1016,14 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	// Temporary code to print Z probe trigger positions
 	p.Message(mtype, "Probe change coordinates:");
 	char ch = ' ';
-	for (size_t i = 0; i < DDA::numLoggedProbePositions; ++i)
+	for (size_t i = 0; i < numLoggedProbePositions; ++i)
 	{
 		float xyzPos[XYZ_AXES];
-		MotorStepsToCartesian(DDA::loggedProbePositions + (XYZ_AXES * i), XYZ_AXES, XYZ_AXES, xyzPos);
+		MotorStepsToCartesian(loggedProbePositions + (XYZ_AXES * i), XYZ_AXES, XYZ_AXES, xyzPos);
 		p.MessageF(mtype, "%c%.2f,%.2f", ch, xyzPos[X_AXIS], xyzPos[Y_AXIS]);
 		ch = ',';
 	}
 	p.Message(mtype, "\n");
-#endif
-
-	// DEBUG
-#if 0
-	extern uint32_t maxDelay;
-	extern uint32_t maxDelayIncrease;
-	p.MessageF(mtype, "Max delay %" PRIu32 ", increase %" PRIu32 "\n", maxDelay, maxDelayIncrease);
-	maxDelay = maxDelayIncrease = 0;
 #endif
 
 	scratchString.Clear();
@@ -606,28 +1035,68 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	{
 		rings[i].Diagnostics(mtype, i);
 	}
+
+	// Show the motor position and stall status
+	for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
+	{
+		String<StringLength256> driverStatus;
+		driverStatus.printf("Driver %u: ", drive);
+#ifdef DUET3_MB6XD
+		driverStatus.cat((HasDriverError(drive)) ? "error" : "ok");
+#elif HAS_SMART_DRIVERS
+		if (drive < numSmartDrivers)
+		{
+			const StandardDriverStatus status = SmartDrivers::GetStatus(drive, false, false);
+			status.AppendText(driverStatus.GetRef(), 0);
+			if (!status.notPresent)
+			{
+				SmartDrivers::AppendDriverStatus(drive, driverStatus.GetRef());
+			}
+		}
+#endif
+		driverStatus.cat('\n');
+		p.Message(mtype, driverStatus.c_str());
+	}
+}
+
+// Clear the movement pending value for an extruder
+void Move::ClearExtruderMovementPending(size_t extruder) noexcept
+{
+	dms[ExtruderToLogicalDrive(extruder)].ClearMovementPending();
+}
+
+// Return when we started doing normal moves after the most recent extruder-only move, in millisecond ticks
+uint32_t Move::ExtruderPrintingSince(size_t logicalDrive) const noexcept
+{
+	return dms[logicalDrive].extruderPrintingSince;
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], MovementSystemNumber msNumber, bool doBedCompensation) noexcept
+void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], const MovementState& ms, bool doBedCompensation) noexcept
 {
 	float newPos[MaxAxesPlusExtruders];
 	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
-	AxisAndBedTransform(newPos, reprap.GetGCodes().GetMovementState(msNumber).currentTool, doBedCompensation);
-	SetRawPosition(newPos, msNumber);
+	AxisAndBedTransform(newPos, ms.currentTool, doBedCompensation);
+	SetRawPosition(newPos, ms.GetMsNumber(),
+#if SUPPORT_ASYNC_MOVES
+					ms.GetAxesAndExtrudersOwned()
+#else
+					AxesBitmap::MakeLowestNBits(reprap.GetGCodes().GetVisibleAxes())
+#endif
+				  );
 }
 
 // Convert distance to steps for a particular drive
-int32_t Move::MotorMovementToSteps(size_t drive, float coord) noexcept
+int32_t Move::MotorMovementToSteps(size_t drive, float coord) const noexcept
 {
-	return lrintf(coord * reprap.GetPlatform().DriveStepsPerUnit(drive));
+	return lrintf(coord * driveStepsPerMm[drive]);
 }
 
 // Convert motor coordinates to machine coordinates. Used after homing and after individual motor moves.
 // This is computationally expensive on a delta or SCARA machine, so only call it when necessary, and never from the step ISR.
 void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept
 {
-	kinematics->MotorStepsToCartesian(motorPos, reprap.GetPlatform().GetDriveStepsPerUnit(), numVisibleAxes, numTotalAxes, machinePos);
+	kinematics->MotorStepsToCartesian(motorPos, driveStepsPerMm, numVisibleAxes, numTotalAxes, machinePos);
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintTransforms))
 	{
 		debugPrintf("Forward transformed %" PRIi32 " %" PRIi32 " %" PRIi32 " to %.2f %.2f %.2f\n",
@@ -638,9 +1107,10 @@ void Move::MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes
 // Convert Cartesian coordinates to motor steps, axes only, returning true if successful.
 // Used to perform movement and G92 commands.
 // This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered, DDA::SetPositions and Move::EndPointToMachine
+// If isCoordinated is false then multi-mode kinematics such as SCARA are allowed to switch mode if necessary to make the specified machine position reachable
 bool Move::CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const noexcept
 {
-	const bool b = kinematics->CartesianToMotorSteps(machinePos, reprap.GetPlatform().GetDriveStepsPerUnit(),
+	const bool b = kinematics->CartesianToMotorSteps(machinePos, driveStepsPerMm,
 														reprap.GetGCodes().GetVisibleAxes(), reprap.GetGCodes().GetTotalAxes(), motorPos, isCoordinated);
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintTransforms))
 	{
@@ -926,7 +1396,7 @@ void Move::SetXYCompensation(bool xyCompensation)
 // Calibrate or set the bed equation after probing, returning true if an error occurred
 // sParam is the value of the S parameter in the G30 command that provoked this call.
 // Caller already owns the GCode movement lock.
-bool Move::FinishedBedProbing(MovementSystemNumber msNumber, int sParam, const StringRef& reply) noexcept
+bool Move::FinishedBedProbing(int sParam, const StringRef& reply) noexcept
 {
 	bool error = false;
 	const size_t numPoints = probePoints.NumberOfProbePoints();
@@ -960,7 +1430,7 @@ bool Move::FinishedBedProbing(MovementSystemNumber msNumber, int sParam, const S
 		}
 		else if (kinematics->SupportsAutoCalibration())
 		{
-			error = kinematics->DoAutoCalibration(msNumber, sParam, probePoints, reply);
+			error = kinematics->DoAutoCalibration(sParam, probePoints, reply);
 		}
 		else
 		{
@@ -975,9 +1445,9 @@ bool Move::FinishedBedProbing(MovementSystemNumber msNumber, int sParam, const S
 	return error;
 }
 
-/*static*/ float Move::MotorStepsToMovement(size_t drive, int32_t endpoint) noexcept
+float Move::MotorStepsToMovement(size_t drive, int32_t endpoint) const noexcept
 {
-	return ((float)(endpoint))/reprap.GetPlatform().DriveStepsPerUnit(drive);
+	return ((float)(endpoint))/driveStepsPerMm[drive];
 }
 
 // Return the transformed machine coordinates
@@ -1047,7 +1517,7 @@ void Move::Simulate(SimulationMode simMode) noexcept
 // This is only ever called after bed probing, so we can assume that no such move is already pending.
 void Move::AdjustLeadscrews(const floatc_t corrections[]) noexcept
 {
-	const size_t numZdrivers = reprap.GetPlatform().GetAxisDriversConfig(Z_AXIS).numDrivers;
+	const size_t numZdrivers = GetAxisDriversConfig(Z_AXIS).numDrivers;
 	for (size_t i = 0; i < MaxDriversPerAxis; ++i)
 	{
 		specialMoveCoords[i] = (i < numZdrivers) ? (float)corrections[i] : 0.0;
@@ -1077,6 +1547,39 @@ void Move::SetIdleTimeout(float timeout) noexcept
 bool Move::WriteResumeSettings(FileStore *f) const noexcept
 {
 	return kinematics->WriteResumeSettings(f) && (!usingMesh || f->Write("G29 S1\n"));
+}
+
+bool Move::WriteMoveParameters(FileStore *f) const noexcept
+{
+	if (axisMinimaProbed.IsNonEmpty() || axisMaximaProbed.IsNonEmpty())
+	{
+		bool ok = f->Write("; Probed axis limits\n");
+		if (ok)
+		{
+			ok = WriteAxisLimits(f, axisMinimaProbed, axisMinima, 1);
+		}
+		if (ok)
+		{
+			ok = WriteAxisLimits(f, axisMaximaProbed, axisMaxima, 0);
+		}
+		return ok;
+	}
+
+	return true;
+}
+
+bool Move::WriteAxisLimits(FileStore *f, AxesBitmap axesProbed, const float limits[MaxAxes], int sParam) noexcept
+{
+	if (axesProbed.IsEmpty())
+	{
+		return true;
+	}
+
+	String<StringLength100> scratchString;
+	scratchString.printf("M208 S%d", sParam);
+	axesProbed.Iterate([&scratchString, limits](unsigned int axis, unsigned int) noexcept { scratchString.catf(" %c%.2f", reprap.GetGCodes().GetAxisLetters()[axis], (double)limits[axis]); });
+	scratchString.cat('\n');
+	return f->Write(scratchString.c_str());
 }
 
 #endif
@@ -1109,9 +1612,6 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 			uint32_t eDrive[MaxExtruders];
 			size_t eCount = MaxExtruders;
 			gb.GetUnsignedArray(eDrive, eCount, false);
-#if SUPPORT_CAN_EXPANSION
-			Platform& platform = reprap.GetPlatform();
-#endif
 			for (size_t i = 0; i < eCount; i++)
 			{
 				const uint32_t extruder = eDrive[i];
@@ -1121,9 +1621,9 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 					rslt = GCodeResult::error;
 					break;
 				}
-				extruderShapers[extruder].SetKseconds(advance);
+				GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
 #if SUPPORT_CAN_EXPANSION
-				const DriverId did = platform.GetExtruderDriver(extruder);
+				const DriverId did = GetExtruderDriver(extruder);
 				if (did.IsRemote())
 				{
 					canDriversToUpdate.AddEntry(did, advance);
@@ -1144,8 +1644,8 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 #if SUPPORT_CAN_EXPANSION
 				ct->IterateExtruders([this, advance, &canDriversToUpdate](unsigned int extruder)
 										{
-											extruderShapers[extruder].SetKseconds(advance);
-											const DriverId did = reprap.GetPlatform().GetExtruderDriver(extruder);
+											GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
+											const DriverId did = GetExtruderDriver(extruder);
 											if (did.IsRemote())
 											{
 												canDriversToUpdate.AddEntry(did, advance);
@@ -1155,7 +1655,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 #else
 				ct->IterateExtruders([this, advance](unsigned int extruder)
 										{
-											extruderShapers[extruder].SetKseconds(advance);
+											GetExtruderShaperForExtruder(extruder).SetKseconds(advance);
 										}
 									);
 #endif
@@ -1175,7 +1675,7 @@ GCodeResult Move::ConfigurePressureAdvance(GCodeBuffer& gb, const StringRef& rep
 	char c = ':';
 	for (size_t i = 0; i < reprap.GetGCodes().GetNumExtruders(); ++i)
 	{
-		reply.catf("%c %.3f", c, (double)extruderShapers[i].GetKseconds());
+		reply.catf("%c %.3f", c, (double)GetExtruderShaperForExtruder(i).GetKseconds());
 		c = ',';
 	}
 	return GCodeResult::ok;
@@ -1202,7 +1702,7 @@ GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequ
 							}
 							else
 							{
-								extruderShapers[driver].SetKseconds(msg.values[count]);
+								dms[driver].extruderShaper.SetKseconds(msg.values[count]);
 							}
 						}
 				   );
@@ -1211,17 +1711,20 @@ GCodeResult Move::EutSetRemotePressureAdvance(const CanMessageMultipleDrivesRequ
 
 void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 {
-	// Construct a MovementLinear message to revert the position. The move must be shorter than clocksAllowed.
+	// Construct a MovementLinearShaped message to revert the position. The move must be shorter than clocksAllowed.
 	// When writing this, clocksAllowed was equivalent to 40ms.
 	// We allow 10ms delay time to allow the motor to stop and reverse direction, 10ms acceleration time, 5ms steady time and 10ms deceleration time.
-	CanMessageMovementLinear msg2;
+	CanMessageMovementLinearShaped msg2;
 	msg2.accelerationClocks = msg2.decelClocks = msg.clocksAllowed/4;
 	msg2.steadyClocks = msg.clocksAllowed/8;
 	msg2.whenToExecute = StepTimer::GetMasterTime() + msg.clocksAllowed/4;
 	msg2.numDrivers = NumDirectDrivers;
-	msg2.pressureAdvanceDrives = 0;
+	msg2.extruderDrives = 0;
 	msg2.seq = 0;
-	msg2.initialSpeedFraction = msg2.finalSpeedFraction = 0.0;
+
+	// We start and finish at zero speed, so we move (3/8)*clocksAllowed*topSpeed distance. Since we normalise moves to unit distance, this is equal to one.
+	// So topSpeed is 8/(3 * clocksAllowed) and acceleration is (8/(3 * clocksAllowed))/(clocksAllowed/4) = 32/(3 * clocksAllowed^2).
+	msg2.acceleration = msg2.deceleration = 32.0/(3.0 * msg.clocksAllowed * msg.clocksAllowed);
 
 	size_t index = 0;
 	bool needSteps = false;
@@ -1252,11 +1755,71 @@ void Move::RevertPosition(const CanMessageRevertPosition& msg) noexcept
 #endif
 
 // Return the current machine axis and extruder coordinates. They are needed only to service status requests from DWC, PanelDue, M114.
-// This is quite expensive, so it should only be called from class MovementState, which caches the results.
-void Move::GetLiveCoordinates(unsigned int msNumber, const Tool *tool, float coordsOut[MaxAxesPlusExtruders]) noexcept
+// Return the current machine axis and extruder coordinates. They are needed only to service status requests from DWC, PanelDue, M114.
+// Transforming the machine motor coordinates to Cartesian coordinates is quite expensive, and a status request or object model request will call this for each axis.
+// So we cache the latest coordinates and only update them if it is some time since we last did, or if we have just waited for movement to stop.
+// Interrupts are assumed enabled on entry
+// Note, this no longer applies inverse mesh bed compensation or axis skew compensation to the returned machine coordinates, so they are the compensated coordinates!
+float Move::LiveMachineCoordinate(unsigned int axisOrExtruder) const noexcept
 {
-	rings[msNumber].LiveCoordinates(coordsOut);
-	InverseAxisAndBedTransform(coordsOut, tool);
+	if (forceLiveCoordinatesUpdate || (millis() - latestLiveCoordinatesFetchedAt > MoveTiming::MachineCoordinateUpdateInterval && !liveCoordinatesValid))
+	{
+		UpdateLiveMachineCoordinates();
+		forceLiveCoordinatesUpdate = false;
+		latestLiveCoordinatesFetchedAt = millis();
+	}
+	return latestLiveCoordinates[axisOrExtruder];
+}
+
+// Get the current machine coordinates, independently of the above functions, so not affected by other tasks calling them
+// Return true if motion is pending i.e. they are are in a state of change
+bool Move::GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept
+{
+	const size_t numVisibleAxes = reprap.GetGCodes().GetVisibleAxes();
+	const size_t numTotalAxes = reprap.GetGCodes().GetTotalAxes();
+
+	// Get the positions of each motor
+	int32_t currentMotorPositions[MaxAxes];
+	bool motionPending = false;
+	{
+		AtomicCriticalSectionLocker lock;											// to make sure we get a consistent set of coordinates
+		for (size_t i = 0; i < numTotalAxes; ++i)
+		{
+			currentMotorPositions[i] = dms[i].GetCurrentMotorPosition();
+			if (dms[i].MotionPending())
+			{
+				motionPending = true;
+			}
+		}
+	}
+
+	MotorStepsToCartesian(currentMotorPositions, numVisibleAxes, numTotalAxes, coords);
+	return motionPending;
+}
+
+// Force an update of the stored machine coordinates
+void Move::UpdateLiveMachineCoordinates() const noexcept
+{
+	motionAdded = false;
+	bool motionPending = GetLiveMachineCoordinates(latestLiveCoordinates);
+
+	for (size_t i = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); i < MaxAxesPlusExtruders; ++i)
+	{
+		latestLiveCoordinates[i] = dms[i].GetCurrentMotorPosition() / driveStepsPerMm[i];
+		if (dms[i].MotionPending())
+		{
+			motionPending = true;
+		}
+	}
+
+	// Optimisation: if no movement, save the positions for next time
+	{
+		AtomicCriticalSectionLocker lock;
+		if (!motionPending && !motionAdded)
+		{
+			liveCoordinatesValid = true;
+		}
+	}
 }
 
 void Move::SetLatestCalibrationDeviation(const Deviation& d, uint8_t numFactors) noexcept
@@ -1363,7 +1926,7 @@ void Move::LaserTaskRun() noexcept
 # if SUPPORT_IOBITS
 			// Manage the IOBits
 			uint32_t ticks;
-			while ((ticks = reprap.GetPortControl().UpdatePorts()) != 0)
+			while ((ticks = rings[0].ManageIOBits()) != 0)
 			{
 				(void)TaskBase::TakeIndexed(NotifyIndices::Laser, ticks);
 			}
@@ -1372,30 +1935,2577 @@ void Move::LaserTaskRun() noexcept
 	}
 }
 
-#if SUPPORT_ASYNC_MOVES
-
 // Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
 // Returns the number of motor steps moved since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
 // This is called from the filament monitor ISR and from FilamentMonitor::Spin
 int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noexcept
 {
-	for (size_t ringNumber = 0; ringNumber < NumMovementSystems; ++ringNumber)
+	AtomicCriticalSectionLocker lock;							// we don't want a move to complete and the ISR update the movement accumulators while we are doing this
+	const int32_t ret = movementAccumulators[logicalDrive];
+	const int32_t adjustment = dms[logicalDrive].GetNetStepsTaken();
+	movementAccumulators[logicalDrive] = -adjustment;
+	isPrinting = dms[logicalDrive].IsPrintingExtruderMovement();
+	return ret + adjustment;
+}
+
+// Add some linear segments to be executed by a driver, taking account of possible input shaping. This is used by linear axes and by extruders.
+// We never add a segment that starts earlier than any existing segments, but we may add segments when there are none already.
+void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags) noexcept
+{
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
 	{
-		if (
-#if SUPPORT_REMOTE_COMMANDS
-			CanInterface::InExpansionMode() ||
+		debugPrintf("AddLin: st=%" PRIu32 " steps=%.1f\n", startTime, (double)steps);
+		dda.DebugPrint("addlin");
+		params.DebugPrint();
+	}
+
+	DriveMovement* const dmp = &dms[logicalDrive];
+	const motioncalc_t stepsPerMm = steps/(motioncalc_t)dda.totalDistance;
+
+	const uint32_t steadyStartTime = startTime + params.accelClocks;
+	const uint32_t decelStartTime = steadyStartTime + params.steadyClocks;
+
+	// Phases with zero duration will not get executed. Avoid introducing distance errors because of this.
+	const motioncalc_t accelDistance = (params.accelClocks == 0) ? (motioncalc_t)0.0 : (motioncalc_t)params.accelDistance;
+	const motioncalc_t decelDistance = (params.decelClocks == 0) ? (motioncalc_t)0.0 : (motioncalc_t)(dda.totalDistance - params.decelStartDistance);
+	const motioncalc_t steadyDistance = (params.steadyClocks == 0) ? (motioncalc_t)0.0 : (motioncalc_t)dda.totalDistance - accelDistance - decelDistance;
+
+#if STEPS_DEBUG
+	dmp->positionRequested += steps;
 #endif
-			reprap.GetGCodes().GetMovementState(ringNumber).GetAxesAndExtrudersOwned().IsBitSet(logicalDrive)
-		   )
+
+	if (moveFlags.noShaping)
+	{
+		if (params.accelClocks != 0)
 		{
-			return rings[ringNumber].GetAccumulatedMovement(logicalDrive, isPrinting);
+			dmp->AddSegment(startTime, params.accelClocks,
+								accelDistance * stepsPerMm, (motioncalc_t)dda.startSpeed * stepsPerMm, (motioncalc_t)dda.acceleration * stepsPerMm, moveFlags);
+		}
+		if (params.steadyClocks != 0)
+		{
+			dmp->AddSegment(steadyStartTime, params.steadyClocks,
+								steadyDistance * stepsPerMm, (motioncalc_t)dda.topSpeed * stepsPerMm, (motioncalc_t)0.0, moveFlags);
+		}
+		if (params.decelClocks != 0)
+		{
+			dmp->AddSegment(decelStartTime, params.decelClocks,
+								decelDistance * stepsPerMm, (motioncalc_t)dda.topSpeed * stepsPerMm, -((motioncalc_t)dda.deceleration * stepsPerMm), moveFlags);
+		}
+	}
+	else
+	{
+		for (size_t index = 0; index < axisShaper.GetNumImpulses(); ++index)
+		{
+			const motioncalc_t factor = axisShaper.GetImpulseSize(index) * stepsPerMm;
+			const uint32_t delay = axisShaper.GetImpulseDelay(index);
+			if (params.accelClocks != 0)
+			{
+				dmp->AddSegment(startTime + delay, params.accelClocks,
+									accelDistance * factor, (motioncalc_t)dda.startSpeed * factor, (motioncalc_t)dda.acceleration * factor, moveFlags);
+			}
+			if (params.steadyClocks != 0)
+			{
+				dmp->AddSegment(steadyStartTime + delay, params.steadyClocks,
+									steadyDistance * factor, (motioncalc_t)dda.topSpeed * factor, (motioncalc_t)0.0, moveFlags);
+			}
+			if (params.decelClocks != 0)
+			{
+				dmp->AddSegment(decelStartTime + delay, params.decelClocks,
+									decelDistance * factor, (motioncalc_t)dda.topSpeed * factor, -((motioncalc_t)dda.deceleration * factor), moveFlags);
+			}
 		}
 	}
 
-	// We didn't find a movement system that owns the extruder
-	isPrinting = false;
-	return 0;
+	motionAdded = true;
+
+	// If there were no segments attached to this DM initially, we need to schedule the interrupt for the new segment at the start of the list.
+	// Don't do this until we have added all the segments for this move, because the first segment we added may have been modified and/or split when we added further segments to implement input shaping
+	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);					// shut out the step interrupt
+	if (dmp->state == DMState::idle)
+	{
+		if (dmp->ScheduleFirstSegment())
+		{
+			InsertDM(dmp);
+			if (activeDMs == dmp && simulationMode == SimulationMode::off)			// if this is now the first DM in the active list
+			{
+				if (ScheduleNextStepInterrupt())
+				{
+					Interrupt();
+				}
+			}
+		}
+	}
+	RestoreBasePriority(oldPrio);
 }
+
+// Store the DDA that is executing a homing move involving this drive. Called from DDA::Prepare.
+void Move::SetHomingDda(size_t drive, DDA *dda) noexcept
+{
+	dms[drive].homingDda = dda;
+}
+
+// Return true if none of the drives passed has any movement pending
+bool Move::AreDrivesStopped(AxesBitmap drives) const noexcept
+{
+	return drives.IterateWhile([this](unsigned int drive, unsigned int index)->bool
+								{
+									return dms[drive].segments == nullptr;
+								}
+							  );
+}
+
+// ISR for the step interrupt
+void Move::Interrupt() noexcept
+{
+	if (activeDMs != nullptr)
+	{
+		uint32_t now = StepTimer::GetMovementTimerTicks();
+		const uint32_t isrStartTime = now;
+		for (unsigned int iterationCount = 0; ; )
+//		for (;;)
+		{
+			// Generate steps for the current move segments
+			StepDrivers(now);									// check endstops if necessary and step the drivers
+
+			if (activeDMs == nullptr || stepErrorState != StepErrorState::noError )
+			{
+				WakeMoveTaskFromISR();							// we may have just completed a special move, so wake up the Move task so that it can notice that
+				break;
+			}
+
+			// Schedule a callback at the time when the next step is due, and quit unless it is due immediately
+			if (!ScheduleNextStepInterrupt())
+			{
+				break;
+			}
+
+			// The next step is due immediately. Check whether we have been in this ISR for too long already and need to take a break
+			now = StepTimer::GetMovementTimerTicks();
+			const int32_t clocksTaken = (int32_t)(now - isrStartTime);
+			if (clocksTaken >= (int32_t)MoveTiming::MaxStepInterruptTime)
+			{
+				// Force a break by updating the move start time.
+				++numHiccups;
+#if SUPPORT_CAN_EXPANSION
+				uint32_t hiccupTimeInserted = 0;
+#endif
+				for (uint32_t hiccupTime = MoveTiming::HiccupTime; ; hiccupTime += MoveTiming::HiccupIncrement)
+				{
+#if SUPPORT_CAN_EXPANSION
+					hiccupTimeInserted += hiccupTime;
+#endif
+					StepTimer::IncreaseMovementDelay(hiccupTime);
+
+					// Reschedule the next step interrupt. This time it should succeed if the hiccup time was long enough.
+					if (!ScheduleNextStepInterrupt())
+					{
+#if 1	//TEMP DEBUG
+# if SUPPORT_CAN_EXPANSION
+						debugPrintf("Add hiccup %" PRIu32 ", ic=%u, now=%" PRIu32 "\n", hiccupTimeInserted, iterationCount, now);
+# else
+						debugPrintf("Add hiccup, ic=%u, now=%" PRIu32 "\n", iterationCount, now);
+# endif
+#endif
+						activeDMs->DebugPrint();
+						MoveSegment::DebugPrintList(activeDMs->segments);
+						if (activeDMs->nextDM != nullptr)
+						{
+							activeDMs->nextDM ->DebugPrint();
+							MoveSegment::DebugPrintList(activeDMs->nextDM->segments);
+
+						}
+						//END DEBUG
+#if SUPPORT_CAN_EXPANSION
+# if SUPPORT_REMOTE_COMMANDS
+						if (CanInterface::InExpansionMode())
+						{
+							//TODO tell the main board we are behind schedule
+						}
+						else
+# endif
+						{
+							CanMotion::InsertHiccup(hiccupTimeInserted);		// notify expansion boards of the increased delay
+						}
+#endif
+						return;
+					}
+					// The hiccup wasn't long enough, so go round the loop again
+				}
+			}
+		}
+	}
+}
+
+// Move timer callback function
+/*static*/ void Move::TimerCallback(CallbackParameter p) noexcept
+{
+	static_cast<Move*>(p.vp)->Interrupt();
+}
+
+// Remove this drive from the list of drives with steps due and put it in the completed list
+// Called from the step ISR only.
+void Move::DeactivateDM(DriveMovement *dmToRemove) noexcept
+{
+	DriveMovement **dmp = &activeDMs;
+	while (*dmp != nullptr)
+	{
+		DriveMovement * const dm = *dmp;
+		if (dm == dmToRemove)
+		{
+			(*dmp) = dm->nextDM;
+			dm->state = DMState::idle;
+			break;
+		}
+		dmp = &(dm->nextDM);
+	}
+}
+
+// Check the endstops, given that we know that this move checks endstops.
+// If executingMove is set then the move is already being executed; otherwise we are preparing to commit the move.
+#if SUPPORT_CAN_EXPANSION
+// Returns true if the caller needs to wake the async sender task because CAN-connected drivers need to be stopped
+bool Move::CheckEndstops( bool executingMove) noexcept
+#else
+void Move::CheckEndstops(bool executingMove) noexcept
+#endif
+{
+#if SUPPORT_CAN_EXPANSION
+	bool wakeAsyncSender = false;
+#endif
+	while (true)
+	{
+		const EndstopHitDetails hitDetails = reprap.GetPlatform().GetEndstops().CheckEndstops();
+
+		switch (hitDetails.GetAction())
+		{
+		case EndstopHitAction::stopAll:
+#if SUPPORT_CAN_EXPANSION
+			if (StopAllDrivers(executingMove)) { wakeAsyncSender = true; }
+#else
+			StopAllDrivers(executingMove);
+#endif
+			if (hitDetails.isZProbe)
+			{
+				reprap.GetGCodes().MoveStoppedByZProbe();
+//				debugPrintf("Notified stopped by probe\n");
+			}
+			else
+			{
+				// Get the DDA associated with the axis that has triggered
+				const size_t axis = hitDetails.axis;
+				if (axis != NO_AXIS)
+				{
+					DDA *homingDda = dms[axis].homingDda;
+					if (homingDda != nullptr && homingDda->GetState() == DDA::committed && homingDda->IsCheckingEndstops())
+					{
+						if (hitDetails.setAxisLow)
+						{
+							kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerMm, *homingDda);
+							reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+						}
+						else if (hitDetails.setAxisHigh)
+						{
+							kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *homingDda);
+							reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+						}
+					}
+				}
+			}
+#if SUPPORT_CAN_EXPANSION
+			return wakeAsyncSender;
+#else
+			return;
+#endif
+
+		case EndstopHitAction::stopAxis:
+			// We must stop the drive before we mess with its coordinates
+#if SUPPORT_CAN_EXPANSION
+			if (StopAxisOrExtruder(executingMove, hitDetails.axis)) { wakeAsyncSender = true; }
+#else
+			StopAxisOrExtruder(executingMove, hitDetails.axis);
+#endif
+			{
+				// Get the DDA associated with the axis that has triggered
+				DDA *homingDda = dms[hitDetails.axis].homingDda;
+				if (homingDda != nullptr && homingDda->GetState() == DDA::committed && homingDda->IsCheckingEndstops())
+				{
+					if (hitDetails.setAxisLow)
+					{
+						kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerMm, *homingDda);
+						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+					}
+					else if (hitDetails.setAxisHigh)
+					{
+						reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *homingDda);
+						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+					}
+				}
+			}
+			break;
+
+		case EndstopHitAction::stopDriver:
+#if SUPPORT_CAN_EXPANSION
+			if (hitDetails.driver.IsRemote())
+			{
+				if (executingMove)
+				{
+					int32_t netStepsTaken;
+					const bool wasMoving = dms[hitDetails.axis].StopDriver(netStepsTaken);
+					if (wasMoving && CanMotion::StopDriverWhenExecuting(hitDetails.driver, netStepsTaken)) { wakeAsyncSender = true; }
+				}
+				else
+				{
+					CanMotion::StopDriverWhenProvisional(hitDetails.driver);
+				}
+			}
+			else
+#endif
+			{
+				DisableSteppingDriver(hitDetails.driver.localDriver);
+			}
+
+			{
+				// Get the DDA associated with the axis that has triggered
+				DDA *homingDda = dms[hitDetails.axis].homingDda;
+				if (homingDda != nullptr && homingDda->GetState() == DDA::committed && homingDda->IsCheckingEndstops())
+				{
+					if (hitDetails.setAxisLow)
+					{
+						kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerMm, *homingDda);
+						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+					}
+					else if (hitDetails.setAxisHigh)
+					{
+						kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *homingDda);
+						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
+					}
+				}
+			}
+			break;
+
+		default:
+#if SUPPORT_CAN_EXPANSION
+			return wakeAsyncSender;
+#else
+			return;
+#endif
+		}
+	}
+}
+
+// Generate the step pulses of internal drivers used by this DDA
+void Move::StepDrivers(uint32_t now) noexcept
+{
+	uint32_t driversStepping = 0;
+	MovementFlags flags;
+	flags.Clear();
+	DriveMovement* dm = activeDMs;
+	while (dm != nullptr && (int32_t)(dm->nextStepTime - now) <= (int32_t)MoveTiming::MinInterruptInterval)		// if the next step is due
+	{
+		driversStepping |= dm->driversCurrentlyUsed;
+		flags |= dm->segmentFlags;
+		dm = dm->nextDM;
+	}
+
+	if (flags.checkEndstops)
+	{
+#if SUPPORT_CAN_EXPANSION
+		if (CheckEndstops(true)) { CanInterface::WakeAsyncSender(); }
+#else
+		CheckEndstops(true);												// call out to a separate function because this may help cache locality in the more common and time-critical case where we don't call it
+#endif
+
+		// Calling CheckEndstops may have removed DMs from the active list, also it takes time; so re-check which drives need steps
+		driversStepping = 0;
+		dm = activeDMs;
+		now = StepTimer::GetMovementTimerTicks();
+		while (dm != nullptr && (int32_t)(dm->nextStepTime - now) <= (int32_t)MoveTiming::MinInterruptInterval)	// if the next step is due
+		{
+			driversStepping |= dm->driversCurrentlyUsed;
+			dm = dm->nextDM;
+		}
+	}
+
+	driversStepping &= steppingEnabledDriversBitmap;
+
+#ifdef DUET3_MB6XD
+	if (driversStepping != 0)
+	{
+		// Wait until step low and direction setup time have elapsed
+		const uint32_t locLastStepPulseTime = lastStepHighTime;
+		const uint32_t locLastDirChangeTime = lastDirChangeTime;
+		while (now - locLastStepPulseTime < GetSlowDriverStepPeriodClocks() || now - locLastDirChangeTime < GetSlowDriverDirSetupClocks())
+		{
+			now = StepTimer::GetTimerTicks();
+		}
+
+		StepPins::StepDriversLow(StepPins::AllDriversBitmap & (~driversStepping));		// disable the step pins of the drivers we don't want to step
+		StepPins::StepDriversHigh(driversStepping);										// set up the drivers that we do want to step
+
+		// Trigger the TC so that it generates a step pulse
+		STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_SWTRG;
+		lastStepHighTime = StepTimer::GetTimerTicks();
+	}
+
+	// Calculate the next step times. We must do this even if no local drivers are stepping in case endstops or Z probes are active.
+	PrepareForNextSteps(dm, flags, now);
+#else
+# if SUPPORT_SLOW_DRIVERS											// if supporting slow drivers
+	if ((driversStepping & slowDriversBitmap) != 0)					// if using some slow drivers
+	{
+		// Wait until step low and direction setup time have elapsed
+		uint32_t lastStepPulseTime = lastStepLowTime;
+		uint32_t rawNow;
+		do
+		{
+			rawNow = StepTimer::GetTimerTicks();
+		} while (rawNow - lastStepPulseTime < GetSlowDriverStepLowClocks() || rawNow - lastDirChangeTime < GetSlowDriverDirSetupClocks());
+
+		StepPins::StepDriversHigh(driversStepping);					// step drivers high
+		lastStepPulseTime = StepTimer::GetTimerTicks();
+
+		PrepareForNextSteps(dm, flags, now);
+
+		while (StepTimer::GetTimerTicks() - lastStepPulseTime < GetSlowDriverStepHighClocks()) {}
+		StepPins::StepDriversLow(driversStepping);					// step drivers low
+		lastStepLowTime = StepTimer::GetTimerTicks();
+	}
+	else
+# endif
+	{
+		StepPins::StepDriversHigh(driversStepping);					// step drivers high
+# if SAME70
+		__DSB();													// without this the step pulse can be far too short
+# endif
+		PrepareForNextSteps(dm, flags, now);
+		StepPins::StepDriversLow(driversStepping);					// step drivers low
+	}
+#endif
+
+	// Remove those drives from the list, update the direction pins where necessary, and re-insert them so as to keep the list in step-time order.
+	DriveMovement *dmToInsert = activeDMs;							// head of the chain we need to re-insert
+	activeDMs = dm;													// remove the chain from the list
+	while (dmToInsert != dm)										// note that both of these may be nullptr
+	{
+		DriveMovement * const nextToInsert = dmToInsert->nextDM;
+		if (dmToInsert->state >= DMState::firstMotionState)
+		{
+			if (dmToInsert->directionChanged)
+			{
+				dmToInsert->directionChanged = false;
+				SetDirection(dmToInsert->drive, dmToInsert->direction);
+			}
+			InsertDM(dmToInsert);
+		}
+		dmToInsert = nextToInsert;
+	}
+
+	liveCoordinatesValid = false;
+}
+
+// Prepare each DM that we generated a step for for the next step
+void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint32_t now) noexcept
+{
+	for (DriveMovement *dm2 = activeDMs; dm2 != stopDm; dm2 = dm2->nextDM)
+	{
+		if (unlikely(dm2->state == DMState::starting))
+		{
+			if (dm2->NewSegment(now) != nullptr && dm2->state != DMState::starting)
+			{
+# if SUPPORT_CAN_EXPANSION
+				flags |= dm2->segmentFlags;
+				if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
+				{
+					dm2->TakeStepsAndCalcStepTimeRarely(now);
+				}
+				else
+# endif
+				{
+					(void)dm2->CalcNextStepTimeFull(now);			// calculate next step time
+					dm2->directionChanged = true;					// force the direction to be set up
+				}
+			}
+		}
+# if SUPPORT_CAN_EXPANSION
+		else if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
+		{
+			dm2->TakeStepsAndCalcStepTimeRarely(now);
+		}
+# endif
+		else
+		{
+			(void)dm2->CalcNextStepTime(now);						// calculate next step time, which may change the required direction
+		}
+	}
+}
+
+void Move::SetDirection(size_t axisOrExtruder, bool direction) noexcept
+{
+#ifdef DUET3_MB6XD
+	while (StepTimer::GetTimerTicks() - lastStepHighTime < GetSlowDriverDirHoldClocksFromLeadingEdge()) { }
+#else
+	const bool isSlowDriver = (dms[axisOrExtruder].driversNormallyUsed & slowDriversBitmap) != 0;
+	if (isSlowDriver)
+	{
+		while (StepTimer::GetTimerTicks() - lastStepLowTime < GetSlowDriverDirHoldClocksFromTrailingEdge()) { }
+	}
+#endif
+
+	SetDriverDirection(axisOrExtruder, direction);
+
+#ifndef DUET3_MB6XD
+	if (isSlowDriver)
+#endif
+	{
+		lastDirChangeTime = StepTimer::GetTimerTicks();
+	}
+}
+// Simulate stepping the drivers, for debugging.
+// This is basically a copy of StepDrivers except that instead of being called from the timer ISR and generating steps,
+// it is called from the Move task and outputs info on the step timings. It ignores endstops.
+void Move::SimulateSteppingDrivers(Platform& p) noexcept
+{
+	static uint32_t lastStepTime;
+	static bool checkTiming = false;
+	static uint8_t lastDrive = 0;
+
+	DriveMovement* dm = activeDMs;
+	if (dm != nullptr)
+	{
+		// Generating and sending the debug output can take a lot of time, so to avoid shutting out high priority tasks, reduce our priority
+		const unsigned int oldPriority = TaskBase::GetCurrentTaskPriority();
+		TaskBase::SetCurrentTaskPriority(TaskPriority::SpinPriority);
+		const uint32_t dueTime = dm->nextStepTime;
+		while (dm != nullptr && (int32_t)(dueTime >= dm->nextStepTime) >= 0)			// if the next step is due
+		{
+			uint32_t timeDiff;
+			const bool badTiming = checkTiming && dm->drive == lastDrive && ((timeDiff = dm->nextStepTime - lastStepTime) < 10 || timeDiff > 100000000);
+			if (dm->nextStep == 1)
+			{
+				dm->DebugPrint();
+				MoveSegment::DebugPrintList(dm->segments);
+			}
+#if 1
+			if (badTiming || (dm->nextStep & 255) == 1 || dm->nextStep + 1 == dm->segmentStepLimit)
+#endif
+			{
+				debugPrintf("%10" PRIu32 " D%u %c ns=%" PRIi32 "%s", dm->nextStepTime, dm->drive, (dm->direction) ? 'F' : 'B', dm->nextStep, (badTiming) ? " *\n" : "\n");
+			}
+			lastDrive = dm->drive;
+			dm = dm->nextDM;
+		}
+		lastStepTime = dueTime;
+		checkTiming = true;
+
+		for (DriveMovement *dm2 = activeDMs; dm2 != dm; dm2 = dm2->nextDM)
+		{
+			if (unlikely(dm2->state == DMState::starting))
+			{
+				if (dm2->NewSegment(dueTime) != nullptr && dm2->state != DMState::starting)
+				{
+					(void)dm2->CalcNextStepTime(dueTime);				// calculate next step time
+				}
+			}
+			else
+			{
+				(void)dm2->CalcNextStepTime(dueTime);					// calculate next step time
+			}
+		}
+
+		// Remove those drives from the list, update the direction pins where necessary, and re-insert them so as to keep the list in step-time order.
+		DriveMovement *dmToInsert = activeDMs;							// head of the chain we need to re-insert
+		activeDMs = dm;													// remove the chain from the list
+		while (dmToInsert != dm)										// note that both of these may be nullptr
+		{
+			DriveMovement * const nextToInsert = dmToInsert->nextDM;
+			if (dmToInsert->state >= DMState::firstMotionState)
+			{
+				dmToInsert->directionChanged = false;
+				InsertDM(dmToInsert);
+			}
+			dmToInsert = nextToInsert;
+		}
+		TaskBase::SetCurrentTaskPriority(oldPriority);
+	}
+
+	if (activeDMs == nullptr)
+	{
+		checkTiming = false;		// don't check the timing of the first step in the next move
+	}
+}
+
+// This is called when we abort a move because we have hit an endstop.
+// It stops all drives and adjusts the end points of the current move to account for how far through the move we got.
+bool Move::StopAllDrivers(bool executingMove) noexcept
+{
+	bool wakeAsyncSender = false;
+	for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
+	{
+		if (StopAxisOrExtruder(executingMove, drive)) { wakeAsyncSender = true; }
+	}
+	return wakeAsyncSender;
+}
+
+// Stop a drive and re-calculate the end position. Return true if any remote drivers were scheduled to be stopped.
+bool Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
+{
+	int32_t netStepsTaken;
+	const bool wasMoving = dms[logicalDrive].StopDriver(netStepsTaken);
+	bool wakeAsyncSender = false;
+#if SUPPORT_CAN_EXPANSION
+	if (logicalDrive < reprap.GetGCodes().GetTotalAxes())
+	{
+		const AxisDriversConfig& cfg = GetAxisDriversConfig(logicalDrive);
+		for (size_t i = 0; i < cfg.numDrivers; ++i)
+		{
+			const DriverId driver = cfg.driverNumbers[i];
+			if (driver.IsRemote())
+			{
+				if (executingMove)
+				{
+					if (wasMoving)
+					{
+						if (CanMotion::StopDriverWhenExecuting(driver, netStepsTaken)) { wakeAsyncSender = true; }
+					}
+				}
+				else
+				{
+					CanMotion::StopDriverWhenProvisional(driver);
+				}
+			}
+		}
+	}
+	else
+	{
+		const DriverId driver = GetExtruderDriver(LogicalDriveToExtruder(logicalDrive));
+		if (executingMove)
+		{
+			if (wasMoving)
+			{
+				if (CanMotion::StopDriverWhenExecuting(driver, netStepsTaken)) { wakeAsyncSender = true; }
+			}
+		}
+		else
+		{
+			CanMotion::StopDriverWhenProvisional(driver);
+		}
+	}
+#else
+	(void)wasMoving;
+#endif
+
+	return wakeAsyncSender;
+}
+
+// Axis limits
+void Move::SetAxisMaximum(size_t axis, float value, bool byProbing) noexcept
+{
+	axisMaxima[axis] = value;
+	if (byProbing)
+	{
+		axisMaximaProbed.SetBit(axis);
+	}
+	reprap.MoveUpdated();
+}
+
+void Move::SetAxisMinimum(size_t axis, float value, bool byProbing) noexcept
+{
+	axisMinima[axis] = value;
+	if (byProbing)
+	{
+		axisMinimaProbed.SetBit(axis);
+	}
+	reprap.MoveUpdated();
+}
+
+#if SUPPORT_CAN_EXPANSION
+
+// Function to identify and iterate through all drivers attached to an axis or extruder
+void Move::IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc, function_ref_noexcept<void(DriverId) noexcept> remoteFunc) noexcept
+{
+	if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
+	{
+		for (size_t i = 0; i < axisDrivers[axisOrExtruder].numDrivers; ++i)
+		{
+			const DriverId id = axisDrivers[axisOrExtruder].driverNumbers[i];
+			if (id.IsLocal())
+			{
+				localFunc(id.localDriver);
+			}
+			else
+			{
+				remoteFunc(id);
+			}
+		}
+	}
+	else if (axisOrExtruder < MaxAxesPlusExtruders && LogicalDriveToExtruder(axisOrExtruder) < reprap.GetGCodes().GetNumExtruders())
+	{
+		const DriverId id = extruderDrivers[LogicalDriveToExtruder(axisOrExtruder)];
+		if (id.IsLocal())
+		{
+			localFunc(id.localDriver);
+		}
+		else
+		{
+			remoteFunc(id);
+		}
+	}
+}
+
+#else
+
+// Function to identify and iterate through all drivers attached to an axis or extruder
+void Move::IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint8_t) noexcept> localFunc) noexcept
+{
+	if (axisOrExtruder < reprap.GetGCodes().GetTotalAxes())
+	{
+		for (size_t i = 0; i < axisDrivers[axisOrExtruder].numDrivers; ++i)
+		{
+			const DriverId id = axisDrivers[axisOrExtruder].driverNumbers[i];
+			localFunc(id.localDriver);
+		}
+	}
+	else if (axisOrExtruder < MaxAxesPlusExtruders && LogicalDriveToExtruder(axisOrExtruder) < reprap.GetGCodes().GetNumExtruders())
+	{
+		const DriverId id = extruderDrivers[LogicalDriveToExtruder(axisOrExtruder)];
+		localFunc(id.localDriver);
+	}
+}
+
+#endif
+
+// This is called from the step ISR as well as other places, so keep it fast
+// If drive >= DRIVES then we are setting an individual motor direction
+// It is the responsibility of the caller to ensure that minimum timings between step pulses and direction changes are observed.
+void Move::SetDriverDirection(size_t axisOrExtruder, bool direction) noexcept
+{
+	if (axisOrExtruder < MaxAxesPlusExtruders)
+	{
+		IterateLocalDrivers(axisOrExtruder, [this, direction](uint8_t driver) { this->SetDriverDirection(driver, direction); });
+	}
+	else if (axisOrExtruder < MaxAxesPlusExtruders + NumDirectDrivers)
+	{
+		SetDriverDirection(axisOrExtruder - MaxAxesPlusExtruders, direction);
+	}
+}
+
+// Enable a driver. Must not be called from an ISR, or with interrupts disabled.
+void Move::EnableOneLocalDriver(size_t driver, float requiredCurrent) noexcept
+{
+	if (driver < GetNumActualDirectDrivers())
+	{
+		motorOffTimers[driver].Stop();
+
+#if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
+		if (driver < numSmartDrivers && !reprap.GetPlatform().HasDriverPower())
+		{
+			reprap.GetPlatform().WarnDriverNotPowered();
+		}
+		else
+		{
+#endif
+			UpdateMotorCurrent(driver, requiredCurrent);
+
+#if defined(DUET3) && HAS_SMART_DRIVERS
+			SmartDrivers::EnableDrive(driver, true);	// all drivers driven directly by the main board are smart
+#elif HAS_SMART_DRIVERS
+			if (driver < numSmartDrivers)
+			{
+				SmartDrivers::EnableDrive(driver, true);
+			}
+# if !defined(DUET3MINI)								// no enable pins on 5LC
+			else
+			{
+				digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+			}
+# endif
+#else
+			digitalWrite(ENABLE_PINS[driver], enableValues[driver] > 0);
+#endif
+#if HAS_SMART_DRIVERS && (HAS_VOLTAGE_MONITOR || HAS_12V_MONITOR)
+		}
+#endif
+		if (brakePorts[driver].IsValid() && !brakePorts[driver].ReadDigital())
+		{
+			if (brakeOffDelays[driver] != 0)
+			{
+				brakeOffTimers[driver].Start();
+			}
+			else
+			{
+				DisengageBrake(driver);
+			}
+		}
+	}
+}
+
+// Disable a driver
+void Move::DisableOneLocalDriver(size_t driver) noexcept
+{
+	if (driver < GetNumActualDirectDrivers())
+	{
+		brakeOffTimers[driver].Stop();
+		EngageBrake(driver);
+		if (motorOffDelays[driver] != 0 && brakePorts[driver].IsValid() && brakePorts[driver].ReadDigital())
+		{
+			motorOffTimers[driver].Start();
+		}
+		else
+		{
+			InternalDisableDriver(driver);
+		}
+	}
+}
+
+void Move::InternalDisableDriver(size_t driver) noexcept
+{
+#if defined(DUET3) && HAS_SMART_DRIVERS
+	SmartDrivers::EnableDrive(driver, false);		// all drivers driven directly by the main board are smart
+#elif HAS_SMART_DRIVERS
+	if (driver < numSmartDrivers)
+	{
+		SmartDrivers::EnableDrive(driver, false);
+	}
+# if !defined(DUET3MINI)		// Duet 5LC has no enable pins
+	else
+	{
+		digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
+	}
+# endif
+#else
+	digitalWrite(ENABLE_PINS[driver], enableValues[driver] <= 0);
+#endif
+}
+
+// Enable the local drivers for a drive. Must not be called from an ISR, or with interrupts disabled.
+void Move::EnableDrivers(size_t axisOrExtruder, bool unconditional) noexcept
+{
+	if (unconditional || driverState[axisOrExtruder] != DriverStatus::enabled)
+	{
+		driverState[axisOrExtruder] = DriverStatus::enabled;
+		const float requiredCurrent = motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder];
+#if SUPPORT_CAN_EXPANSION
+		CanDriversList canDriversToEnable;
+		IterateDrivers(axisOrExtruder,
+						[this, requiredCurrent](uint8_t driver) { EnableOneLocalDriver(driver, requiredCurrent); },
+						[&canDriversToEnable](DriverId driver) { canDriversToEnable.AddEntry(driver); }
+					  );
+		CanInterface::EnableRemoteDrivers(canDriversToEnable);
+#else
+		IterateDrivers(axisOrExtruder,
+						[this, requiredCurrent](uint8_t driver) { EnableOneLocalDriver(driver, requiredCurrent); }
+					  );
+#endif
+	}
+}
+
+// Disable the drivers for a drive
+void Move::DisableDrivers(size_t axisOrExtruder) noexcept
+{
+#if SUPPORT_CAN_EXPANSION
+	CanDriversList canDriversToDisable;
+
+	IterateDrivers(axisOrExtruder,
+					[this](uint8_t driver) { DisableOneLocalDriver(driver); },
+					[&canDriversToDisable](DriverId driver) { canDriversToDisable.AddEntry(driver); }
+				  );
+	CanInterface::DisableRemoteDrivers(canDriversToDisable);
+#else
+	IterateDrivers(axisOrExtruder,
+					[this](uint8_t driver) { DisableOneLocalDriver(driver); }
+				  );
+#endif
+	driverState[axisOrExtruder] = DriverStatus::disabled;
+}
+
+// Disable all drives in an emergency. Called from emergency stop and the tick ISR.
+// This is only called in an emergency, so we don't update the driver status
+void Move::EmergencyDisableDrivers() noexcept
+{
+	for (size_t drive = 0; drive < GetNumActualDirectDrivers(); drive++)
+	{
+		if (!inInterrupt())		// on the Duet 06/085 we need interrupts running to send the I2C commands to set motor currents
+		{
+			UpdateMotorCurrent(drive, 0.0);
+		}
+		DisableOneLocalDriver(drive);
+	}
+}
+
+void Move::DisableAllDrivers() noexcept
+{
+	for (size_t axisOrExtruder = 0; axisOrExtruder < MaxAxesPlusExtruders; axisOrExtruder++)
+	{
+		DisableDrivers(axisOrExtruder);
+	}
+}
+
+void Move::EngageBrake(size_t driver) noexcept
+{
+#if SUPPORT_BRAKE_PWM
+	currentBrakePwm[driver] = 0.0;
+#endif
+	brakePorts[driver].WriteDigital(false);			// turn the brake solenoid off to engage the brake
+}
+
+void Move::DisengageBrake(size_t driver) noexcept
+{
+#if SUPPORT_BRAKE_PWM
+	// Set the PWM to deliver the requested voltage regardless of the VIN voltage
+	currentBrakePwm[driver] = min<float>(brakeVoltages[driver]/max<float>(reprap.GetPlatform().GetVinVoltage(), 1.0), 1.0);
+	brakePorts[driver].WriteAnalog(currentBrakePwm[driver]);
+#else
+	brakePorts[driver].WriteDigital(true);			// turn the brake solenoid on to disengage the brake
+#endif
+}
+
+StandardDriverStatus Move::GetLocalDriverStatus(size_t driver) const noexcept
+{
+#if defined(DUET3_MB6XD)
+	return StandardDriverStatus((HasDriverError(driver)) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0);
+#else
+	return SmartDrivers::GetStatus(driver, false, false);		// it's safe to call this even when driver >= MaxSmartDrivers
+#endif
+}
+
+// Set drives to idle hold if they are enabled. If a drive is disabled, leave it alone.
+// Must not be called from an ISR, or with interrupts disabled.
+void Move::SetDriversIdle() noexcept
+{
+	if (idleCurrentFactor == 0)
+	{
+		DisableAllDrivers();
+		reprap.GetGCodes().SetAllAxesNotHomed();
+	}
+	else
+	{
+#if SUPPORT_CAN_EXPANSION
+		CanDriversList canDriversToSetIdle;
+#endif
+		for (size_t axisOrExtruder = 0; axisOrExtruder < MaxAxesPlusExtruders; ++axisOrExtruder)
+		{
+			if (driverState[axisOrExtruder] == DriverStatus::enabled)
+			{
+				driverState[axisOrExtruder] = DriverStatus::idle;
+				const float current = motorCurrents[axisOrExtruder] * idleCurrentFactor;
+				IterateDrivers(axisOrExtruder,
+								[this, current](uint8_t driver) { UpdateMotorCurrent(driver, current); }
+#if SUPPORT_CAN_EXPANSION
+								, [&canDriversToSetIdle](DriverId driver) { canDriversToSetIdle.AddEntry(driver); }
+#endif
+							  );
+			}
+		}
+#if SUPPORT_CAN_EXPANSION
+		CanInterface::SetRemoteDriversIdle(canDriversToSetIdle, idleCurrentFactor);
+#endif
+	}
+}
+
+// Configure the brake port for a driver
+GCodeResult Move::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& reply, size_t driver) noexcept
+{
+# if !SUPPORT_BRAKE_PWM
+	if (gb.Seen('V'))
+	{
+		// Don't allow a brake port to be configured if the user specified a voltage and we don't support PWM
+		reply.copy("Brake PWM not supported by this board");
+		return GCodeResult::error;
+	}
+# endif
+
+	bool seen = false;
+	if (gb.Seen('C'))
+	{
+		seen = true;
+		if (!brakePorts[driver].AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::write0))
+		{
+			return GCodeResult::error;
+		}
+# if SUPPORT_BRAKE_PWM
+		brakePorts[driver].SetFrequency(BrakePwmFrequency);
+# endif
+		motorOffDelays[driver] = DefaultDelayAfterBrakeOn;
+	}
+
+	uint32_t val;
+	if (gb.TryGetLimitedUIValue('S', val, seen, 1000))
+	{
+		seen = true;
+		motorOffDelays[driver] = val;
+	}
+
+# if SUPPORT_BRAKE_PWM
+	gb.TryGetNonNegativeFValue('V', brakeVoltages[driver], seen);
+# endif
+
+	if (!seen)
+	{
+		reply.printf("Driver %u uses brake port ", driver);
+		brakePorts[driver].AppendPinName(reply);
+# if SUPPORT_BRAKE_PWM
+		if (brakeVoltages[driver] < FullyOnBrakeVoltage)
+		{
+			reply.catf(" with voltage limited to %.1f by PWM", (double)brakeVoltages[driver]);
+		}
+# endif
+# if 0	// don't print this bit until we have implemented it!
+		reply.catf(" and %ums delay after turning the brake on", delayAfterBrakeOn[driver]);
+# endif
+	}
+	return GCodeResult::ok;
+}
+
+// Set the current for all drivers on an axis or extruder. Current is in mA.
+GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent, int code, const StringRef& reply) noexcept
+{
+	switch (code)
+	{
+	case 906:
+		motorCurrents[axisOrExtruder] = currentOrPercent;
+		break;
+
+	case 913:
+		motorCurrentFraction[axisOrExtruder] = constrain<float>(0.01 * currentOrPercent, 0.0, 1.0);
+		break;
+
+#if HAS_SMART_DRIVERS || SUPPORT_CAN_EXPANSION
+	case 917:
+		standstillCurrentPercent[axisOrExtruder] = constrain<float>(currentOrPercent, 0.0, 100.0);
+		break;
+#endif
+
+	default:
+		return GCodeResult::error;
+	}
+
+#if SUPPORT_CAN_EXPANSION
+	CanDriversData<float> canDriversToUpdate;
+
+	IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder, code](uint8_t driver)
+							{
+								if (code == 917)
+								{
+# if HAS_SMART_DRIVERS
+									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
+# endif
+								}
+								else
+								{
+									UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
+								}
+							},
+							[this, axisOrExtruder, code, &canDriversToUpdate](DriverId driver)
+							{
+								if (code == 917)
+								{
+									canDriversToUpdate.AddEntry(driver, standstillCurrentPercent[axisOrExtruder]);
+								}
+								else
+								{
+									canDriversToUpdate.AddEntry(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
+								}
+							}
+						);
+	if (code == 917)
+	{
+		return CanInterface::SetRemoteStandstillCurrentPercent(canDriversToUpdate, reply);
+	}
+	else
+	{
+		return CanInterface::SetRemoteDriverCurrents(canDriversToUpdate, reply);
+	}
+#else
+	IterateDrivers(axisOrExtruder,
+							[this, axisOrExtruder, code](uint8_t driver)
+							{
+								if (code == 917)
+								{
+# if HAS_SMART_DRIVERS
+									SmartDrivers::SetStandstillCurrentPercent(driver, standstillCurrentPercent[axisOrExtruder]);
+# endif
+								}
+								else
+								{
+									UpdateMotorCurrent(driver, motorCurrents[axisOrExtruder] * motorCurrentFraction[axisOrExtruder]);
+								}
+							}
+	);
+	return GCodeResult::ok;
+#endif
+}
+
+#ifdef DUET3_MB6XD
+
+// Fetch the worst (longest) timings of any driver, set up the step pulse width timer, and convert the other timings from microseconds to step clocks
+void Move::UpdateDriverTimings() noexcept
+{
+	float worstTimings[4] = { 0.1, 0.1, 0.0, 0.0 };					// minimum 100ns step high/step low time, zero direction setup/hold time
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+	{
+		for (size_t i = 0; i < 4; ++i)
+		{
+			if (driverTimingMicroseconds[driver][i] > worstTimings[i])
+			{
+				worstTimings[i] = driverTimingMicroseconds[driver][i];
+			}
+		}
+	}
+
+	// Convert the step pulse width to clocks of the step pulse gate timer. First define some constants.
+	constexpr uint32_t StepGateTcBaseClockFrequency = (SystemCoreClockFreq/2)/8;										// the step gate T clock frequency when we use a prescaler of 8
+	constexpr float StepGateBaseClocksPerMicrosecond = (float)StepGateTcBaseClockFrequency * 1.0e-6;
+	const float fclocks = min<float>(ceilf(worstTimings[0] * StepGateBaseClocksPerMicrosecond), (float)(4 * 65535));	// the TC is only 16 bits wide, but we increase the prescaler to 32 if necessary
+
+	uint32_t iclocks = (uint32_t)fclocks;
+	uint32_t clockPrescaler = TC_CMR_TCCLKS_TIMER_CLOCK2;								// divide MCLK (150MHz) by 8 = 18.75MHz
+	if (iclocks > 65535)
+	{
+		clockPrescaler = TC_CMR_TCCLKS_TIMER_CLOCK3;									// divide MCLK (150MHz) by 32 = 4.6875MHz
+		iclocks >>= 2;
+	}
+
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_CLKDIS;
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CMR =  TC_CMR_BSWTRG_SET				// software trigger sets TIOB
+														| TC_CMR_BCPC_CLEAR				// RC compare clears TIOB
+														| TC_CMR_WAVE					// waveform mode
+														| TC_CMR_WAVSEL_UP				// count up
+														| TC_CMR_CPCSTOP				// counter clock is stopped when counter reaches RC
+														| TC_CMR_EEVT_XC0   			// set external events from XC0 (this allows TIOB to be an output)
+														| clockPrescaler;				// divide MCLK (150MHz) by 8 or 32
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC = iclocks;
+	STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CCR = TC_CCR_CLKEN;
+
+	// Convert the quantised step pulse width back to microseconds
+	const float actualStepPulseMicroseconds = fclocks/StepGateBaseClocksPerMicrosecond;
+
+	// Now convert the other values from microseconds to step clocks
+	stepPulseMinimumPeriodClocks = MicrosecondsToStepClocks(worstTimings[1] + actualStepPulseMicroseconds);
+	directionSetupClocks = MicrosecondsToStepClocks(worstTimings[2]);
+	directionHoldClocksFromLeadingEdge = MicrosecondsToStepClocks(worstTimings[3] + actualStepPulseMicroseconds);
+//DEBUG
+//	debugPrintf("Clocks: %" PRIu32 " %" PRIu32 " %" PRIu32 "\n", stepPulseMinimumPeriodClocks, directionSetupClocks, directionHoldClocksFromLeadingEdge);
+}
+
+void Move::GetActualDriverTimings(float timings[4]) noexcept
+{
+	uint32_t StepGateTcClockFrequency = (SystemCoreClockFreq/2)/8;
+	if ((STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_CMR & TC_CMR_TCCLKS_Msk) == TC_CMR_TCCLKS_TIMER_CLOCK3)
+	{
+		StepGateTcClockFrequency >>= 2;;
+	}
+	const float MicrosecondsPerStepGateClock = 1.0e6/(float)StepGateTcClockFrequency;
+	constexpr float StepClocksToMicroseconds = 1.0e6/(float)StepClockRate;
+	timings[0] = (float)STEP_GATE_TC->TC_CHANNEL[STEP_GATE_TC_CHAN].TC_RC * MicrosecondsPerStepGateClock;
+	timings[1] = stepPulseMinimumPeriodClocks * StepClocksToMicroseconds - timings[0];
+	timings[2] = directionSetupClocks * StepClocksToMicroseconds;
+	timings[3] = directionHoldClocksFromLeadingEdge * StepClocksToMicroseconds - timings[0];
+}
+
+#endif
+
+// This must not be called from an ISR, or with interrupts disabled.
+void Move::UpdateMotorCurrent(size_t driver, float current) noexcept
+{
+	if (driver < GetNumActualDirectDrivers())
+	{
+#if HAS_SMART_DRIVERS
+		if (driver < numSmartDrivers)
+		{
+			SmartDrivers::SetCurrent(driver, current);
+		}
+#else
+		// otherwise we can't set the motor current
+#endif
+	}
+}
+
+// Get the configured motor current for an axis or extruder
+int Move::GetMotorCurrent(size_t drive, int code) const noexcept
+{
+	float rslt;
+	switch (code)
+	{
+	case 906:
+		rslt = motorCurrents[drive];
+		break;
+
+	case 913:
+		rslt = motorCurrentFraction[drive] * 100.0;
+		break;
+
+#if HAS_SMART_DRIVERS || SUPPORT_CAN_EXPANSION
+	case 917:
+		rslt = standstillCurrentPercent[drive];
+		break;
+#endif
+	default:
+		rslt = 0.0;
+		break;
+	}
+
+	return lrintf(rslt);
+}
+
+// Set the motor idle current factor
+void Move::SetIdleCurrentFactor(float f) noexcept
+{
+	idleCurrentFactor = constrain<float>(f, 0.0, 1.0);
+	reprap.MoveUpdated();
+
+#if SUPPORT_CAN_EXPANSION
+	CanDriversData<float> canDriversToUpdate;
+#endif
+	for (size_t axisOrExtruder = 0; axisOrExtruder < MaxAxesPlusExtruders; ++axisOrExtruder)
+	{
+		if (driverState[axisOrExtruder] == DriverStatus::idle)
+		{
+			const float requiredCurrent = motorCurrents[axisOrExtruder] * idleCurrentFactor;
+			IterateDrivers(axisOrExtruder,
+							[this, requiredCurrent](uint8_t driver){ UpdateMotorCurrent(driver, requiredCurrent); }
+#if SUPPORT_CAN_EXPANSION
+								, [this, requiredCurrent, &canDriversToUpdate](DriverId driver) { canDriversToUpdate.AddEntry(driver, (uint16_t)requiredCurrent); }
+#endif
+						  );
+		}
+	}
+#if SUPPORT_CAN_EXPANSION
+	String<1> dummy;
+	(void)CanInterface::SetRemoteDriverCurrents(canDriversToUpdate, dummy.GetRef());
+#endif
+}
+
+bool Move::SetDriversMicrostepping(size_t axisOrExtruder, int microsteps, bool interp, const StringRef& reply) noexcept
+{
+	bool ok = true;
+	IterateLocalDrivers(axisOrExtruder,
+					[this, microsteps, interp, &ok, reply](uint8_t driver) noexcept
+					{
+						if (!SetDriverMicrostepping(driver, microsteps, interp))
+						{
+							reply.lcatf("Driver %u does not support x%u microstepping", driver, microsteps);
+							if (interp)
+							{
+								reply.cat(" with interpolation");
+							}
+							ok = false;
+						}
+					}
+				  );
+	return ok;
+}
+
+// Set the microstepping for a driver, returning true if successful
+bool Move::SetDriverMicrostepping(size_t driver, unsigned int microsteps, bool interpolate) noexcept
+{
+	if (driver < GetNumActualDirectDrivers())
+	{
+#if HAS_SMART_DRIVERS
+		if (driver < numSmartDrivers)
+		{
+			return SmartDrivers::SetMicrostepping(driver, microsteps, interpolate);
+		}
+		else
+		{
+			// Other drivers only support x16 microstepping.
+			// We ignore the interpolation on/off parameter so that e.g. M350 I1 E16:128 won't give an error if E1 supports interpolation but E0 doesn't.
+			return microsteps == 16;
+		}
+#else
+		// Assume only x16 microstepping supported
+		return microsteps == 16;
+#endif
+	}
+	return false;
+}
+
+void Move::SetEnableValue(size_t driver, int8_t eVal) noexcept
+{
+	if (driver < GetNumActualDirectDrivers())
+	{
+		enableValues[driver] = eVal;
+		DisableOneLocalDriver(driver);				// disable the drive, because the enable polarity may have been wrong before
+#if HAS_SMART_DRIVERS
+		if (eVal == -1)
+		{
+			// User has asked to disable status monitoring for this driver, so clear its error bits
+			const DriversBitmap mask = ~DriversBitmap::MakeFromBits(driver);
+			temperatureShutdownDrivers &= mask;
+			temperatureWarningDrivers &= mask;
+			shortToGroundDrivers &= mask;
+			if (driver < MaxSmartDrivers)
+			{
+				openLoadTimers[driver].Stop();
+			}
+		}
+#endif
+	}
+}
+
+#ifdef DUET3_MB6XD
+
+bool Move::HasDriverError(size_t driver) const noexcept
+{
+	if (driver < NumDirectDrivers)
+	{
+		const bool b = digitalRead(DRIVER_ERR_PINS[driver]);
+		return (driverErrPinsActiveLow) ? !b : b;
+	}
+	return false;
+}
+
+#endif
+
+void Move::SetAxisDriversConfig(size_t axis, size_t numValues, const DriverId driverNumbers[]) noexcept
+{
+	AxisDriversConfig& cfg = axisDrivers[axis];
+	cfg.numDrivers = numValues;
+	uint32_t bitmap = 0;
+	for (size_t i = 0; i < numValues; ++i)
+	{
+		const DriverId id = driverNumbers[i];
+		cfg.driverNumbers[i] = id;
+		if (id.IsLocal())
+		{
+			bitmap |= StepPins::CalcDriverBitmap(id.localDriver);
+#if HAS_SMART_DRIVERS
+			SmartDrivers::SetAxisNumber(id.localDriver, axis);
+#endif
+		}
+	}
+	dms[axis].driversNormallyUsed = bitmap;
+}
+
+// Set the characteristics of an axis
+void Move::SetAxisType(size_t axis, AxisWrapType wrapType, bool isNistRotational) noexcept
+{
+	if (isNistRotational)
+	{
+		rotationalAxes.SetBit(axis);
+	}
+	else
+	{
+		linearAxes.SetBit(axis);
+	}
+
+	switch (wrapType)
+	{
+#if 0	// shortcut axes not implemented yet
+	case AxisWrapType::wrapWithShortcut:
+		shortcutAxes.SetBit(axis);
+		// no break
+#endif
+	case AxisWrapType::wrapAt360:
+		continuousAxes.SetBit(axis);
+		break;
+
+	default:
+		break;
+	}
+}
+
+// Map an extruder to a driver
+void Move::SetExtruderDriver(size_t extruder, DriverId driver) noexcept
+{
+	extruderDrivers[extruder] = driver;
+	if (driver.IsLocal())
+	{
+#if HAS_SMART_DRIVERS
+		SmartDrivers::SetAxisNumber(driver.localDriver, ExtruderToLogicalDrive(extruder));
+#endif
+		dms[ExtruderToLogicalDrive(extruder)].driversNormallyUsed = StepPins::CalcDriverBitmap(driver.localDriver);
+	}
+	else
+	{
+		dms[ExtruderToLogicalDrive(extruder)].driversNormallyUsed = 0;
+	}
+}
+
+void Move::SetDriverStepTiming(size_t driver, const float microseconds[4]) noexcept
+{
+#ifdef DUET3_MB6XD
+	memcpyf(driverTimingMicroseconds[driver], microseconds, 4);
+	UpdateDriverTimings();
+#else
+	const uint32_t bitmap = StepPins::CalcDriverBitmap(driver);
+	slowDriversBitmap &= ~bitmap;								// start by assuming this drive does not need extended timing
+	if (slowDriversBitmap == 0)
+	{
+		for (uint32_t& entry : slowDriverStepTimingClocks)
+		{
+			entry = 0;											// reset all to zero if we have no known slow drivers
+		}
+	}
+
+	for (size_t i = 0; i < ARRAY_SIZE(slowDriverStepTimingClocks); ++i)
+	{
+		if (microseconds[i] > MinStepPulseTiming)
+		{
+			slowDriversBitmap |= StepPins::CalcDriverBitmap(driver);			// this drive does need extended timing
+			const uint32_t clocks = MicrosecondsToStepClocks(microseconds[i]);	// convert microseconds to step clocks, rounding up
+			if (clocks > slowDriverStepTimingClocks[i])
+			{
+				slowDriverStepTimingClocks[i] = clocks;
+			}
+		}
+	}
+#endif
+}
+
+// Get the driver step timing, returning true if we are using slower timing than standard
+bool Move::GetDriverStepTiming(size_t driver, float microseconds[4]) const noexcept
+{
+#ifdef DUET3_MB6XD
+	memcpyf(microseconds, driverTimingMicroseconds[driver], 4);
+	return true;
+#else
+	const bool isSlowDriver = ((slowDriversBitmap & StepPins::CalcDriverBitmap(driver)) != 0);
+	for (size_t i = 0; i < 4; ++i)
+	{
+		microseconds[i] = (isSlowDriver)
+							? (float)slowDriverStepTimingClocks[i] * 1000000.0/(float)StepClockRate
+								: 0.0;
+	}
+	return isSlowDriver;
+#endif
+}
+
+#if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
+
+// Configure the motor stall detection, returning true if an error was encountered
+GCodeResult Move::ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException)
+{
+	// Build a bitmap of all the drivers referenced
+	// First looks for explicit driver numbers
+	DriversBitmap drivers;
+# if SUPPORT_CAN_EXPANSION
+	CanDriversList canDrivers;
+# endif
+	if (gb.Seen('P'))
+	{
+		DriverId drives[NumDirectDrivers];
+		size_t dCount = NumDirectDrivers;
+		gb.GetDriverIdArray(drives, dCount);
+		for (size_t i = 0; i < dCount; i++)
+		{
+			if (drives[i].IsLocal())
+			{
+# if HAS_SMART_DRIVERS
+				if (drives[i].localDriver >= numSmartDrivers)
+				{
+					reply.printf("Invalid local drive number '%u'", drives[i].localDriver);
+					return GCodeResult::error;
+				}
+# endif
+				drivers.SetBit(drives[i].localDriver);
+			}
+# if SUPPORT_CAN_EXPANSION
+			else
+			{
+				canDrivers.AddEntry(drives[i]);
+			}
+# endif
+		}
+	}
+
+	// Now look for axes
+	for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
+	{
+		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[axis]))
+		{
+			IterateDrivers(axis,
+							[&drivers](uint8_t localDriver){ drivers.SetBit(localDriver); }
+# if SUPPORT_CAN_EXPANSION
+						  , [&canDrivers](DriverId driver){ canDrivers.AddEntry(driver); }
+# endif
+						  );
+		}
+	}
+
+	// Look for extruders
+	if (gb.Seen('E'))
+	{
+		uint32_t extruderNumbers[MaxExtruders];
+		size_t numSeen = MaxExtruders;
+		gb.GetUnsignedArray(extruderNumbers, numSeen, false);
+		for (size_t i = 0; i < numSeen; ++i)
+		{
+			if (extruderNumbers[i] < MaxExtruders)
+			{
+				const DriverId driver = GetExtruderDriver(extruderNumbers[i]);
+				if (driver.IsLocal())
+				{
+					drivers.SetBit(driver.localDriver);
+				}
+# if SUPPORT_CAN_EXPANSION
+				else
+				{
+					canDrivers.AddEntry(driver);
+				}
+# endif
+			}
+		}
+	}
+
+# if HAS_STALL_DETECT
+	// Now check for values to change
+	bool seen = false;
+	if (gb.Seen('S'))
+	{
+		seen = true;
+		const int sgThreshold = gb.GetIValue();
+		drivers.Iterate([sgThreshold](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallThreshold(drive, sgThreshold); });
+	}
+	if (gb.Seen('F'))
+	{
+		seen = true;
+		const bool sgFilter = (gb.GetIValue() == 1);
+		drivers.Iterate([sgFilter](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallFilter(drive, sgFilter); });
+	}
+	if (gb.Seen('H'))
+	{
+		seen = true;
+		const unsigned int stepsPerSecond = gb.GetUIValue();
+		drivers.Iterate([stepsPerSecond](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallMinimumStepsPerSecond(drive, stepsPerSecond); });
+	}
+	if (gb.Seen('T'))
+	{
+		seen = true;
+		const uint32_t coolStepConfig = gb.GetUIValue();
+		drivers.Iterate([coolStepConfig](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetRegister(drive, SmartDriverRegister::coolStep, coolStepConfig); } );
+	}
+	if (gb.Seen('R'))
+	{
+		seen = true;
+		const int action = gb.GetIValue();
+		switch (action)
+		{
+		case 0:
+		default:
+			logOnStallDrivers &= ~drivers;
+			eventOnStallDrivers &= ~drivers;
+			break;
+
+		case 1:
+			eventOnStallDrivers &= ~drivers;
+			logOnStallDrivers |= drivers;
+			break;
+
+		case 2:
+		case 3:
+			logOnStallDrivers &= ~drivers;
+			eventOnStallDrivers |= drivers;
+			break;
+		}
+	}
+#else
+	// Board does not have any local drivers with stall detection but may have CAN-connected drivers
+	const bool seen = gb.SeenAny("SFHTR");
+#endif
+
+	if (seen)
+	{
+# if SUPPORT_CAN_EXPANSION
+		const GCodeResult rslt = CanInterface::GetSetRemoteDriverStallParameters(canDrivers, gb, reply, buf);
+#  if !HAS_SMART_DRIVERS
+		if (drivers.IsNonEmpty())
+		{
+			reply.lcatf("Stall detection not available for external drivers");
+			return max(rslt, GCodeResult::warning);
+		}
+#  endif
+		return rslt;
+# else
+		return GCodeResult::ok;
+# endif
+	}
+
+	// Print the stall status
+# if HAS_SMART_DRIVERS
+	if (drivers.IsEmpty()
+#  if SUPPORT_CAN_EXPANSION
+		&& canDrivers.IsEmpty()
+#  endif
+	   )
+	{
+		drivers = DriversBitmap::MakeLowestNBits(numSmartDrivers);
+	}
+
+	if (!OutputBuffer::Allocate(buf))
+	{
+		return GCodeResult::notFinished;
+	}
+
+	drivers.Iterate
+		([buf, this, &reply](unsigned int drive, unsigned int) noexcept
+			{
+#  if SUPPORT_CAN_EXPANSION
+				buf->lcatf("Driver 0.%u: ", drive);
+#  else
+				buf->lcatf("Driver %u: ", drive);
+#  endif
+				reply.Clear();										// we use 'reply' as a temporary buffer
+				SmartDrivers::AppendStallConfig(drive, reply);
+				buf->cat(reply.c_str());
+				buf->catf(", action on stall: %s",
+							(eventOnStallDrivers.IsBitSet(drive)) ? "raise event"
+								: (logOnStallDrivers.IsBitSet(drive)) ? "log"
+									: "none"
+						  );
+			}
+		);
+# else
+	if (canDrivers.IsEmpty())
+	{
+		reply.copy("No local drivers have stall detection");
+		return GCodeResult::ok;
+	}
+
+	if (!OutputBuffer::Allocate(buf))
+	{
+		return GCodeResult::notFinished;
+	}
+# endif
+# if SUPPORT_CAN_EXPANSION
+	return CanInterface::GetSetRemoteDriverStallParameters(canDrivers, gb, reply, buf);
+# else
+	return GCodeResult::ok;
+# endif
+}
+
+#endif
+
+#if SUPPORT_NONLINEAR_EXTRUSION
+
+void Move::SetNonlinearExtrusion(size_t extruder, float a, float b, float limit) noexcept
+{
+	if (extruder < MaxExtruders && limit > 0.0)
+	{
+		nonlinearExtrusion[extruder].limit = limit;
+		nonlinearExtrusion[extruder].A = a;
+		nonlinearExtrusion[extruder].B = b;
+	}
+}
+
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+
+// Stop a drive and re-calculate the end position
+void Move::StopDriveFromRemote(size_t drive) noexcept
+{
+	dms[drive].StopDriverFromRemote();
+}
+
+#endif
+
+// Adjust the motor endpoints without moving the motors. Called after auto-calibrating a linear delta or rotary delta machine.
+// There must be no pending movement when calling this!
+void Move::AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept
+{
+	for (size_t drive = 0; drive < numMotors; ++drive)
+	{
+		dms[drive].AdjustMotorPosition(lrintf(adjustment[drive] * driveStepsPerMm[drive]));
+	}
+
+	liveCoordinatesValid = false;		// force the live XYZ position to be recalculated
+}
+
+// Reset all extruder positions to zero. Called when we start a print.
+void Move::ResetExtruderPositions() noexcept
+{
+	for (size_t drive = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); drive < MaxAxesPlusExtruders; ++drive)
+	{
+		dms[drive].SetMotorPosition(0);
+	}
+}
+
+// Process M425
+GCodeResult Move::ConfigureBacklashCompensation(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	bool seen = false;
+	size_t totalAxes = reprap.GetGCodes().GetTotalAxes();
+	for (size_t i = 0; i < totalAxes; ++i)
+	{
+		if (gb.Seen(reprap.GetGCodes().GetAxisLetters()[i]))
+		{
+			seen = true;
+			backlashMm[i] = gb.GetNonNegativeFValue();
+		}
+	}
+
+	if (gb.Seen('S'))
+	{
+		seen = true;
+		backlashCorrectionDistanceFactor = gb.GetLimitedUIValue('S', 1, 101);
+	}
+
+	if (seen)
+	{
+		UpdateBacklashSteps();
+		reprap.MoveUpdated();
+	}
+	else
+	{
+		reply.copy("Backlash correction (mm)");
+		for (size_t i = 0; i < totalAxes; ++i)
+		{
+			reply.catf(" %c: %.3f", reprap.GetGCodes().GetAxisLetters()[i], (double)backlashMm[i]);
+		}
+		reply.catf(", correction distance multiplier %" PRIu32, backlashCorrectionDistanceFactor);
+	}
+	return GCodeResult::ok;
+}
+
+// Update the backlash correction in steps. Called when the configured backlash distance or steps/mm is changed.
+void Move::UpdateBacklashSteps() noexcept
+{
+	for (size_t i = 0; i < reprap.GetGCodes().GetTotalAxes(); ++i)
+	{
+		backlashSteps[i] = backlashMm[i] * reprap.GetMove().DriveStepsPerMm(i);
+	}
+}
+
+// Given the number of microsteps that an axis has been asked to move, return the number that it should actually move
+int32_t Move::ApplyBacklashCompensation(size_t drive, int32_t delta) noexcept
+{
+	// If this drive has changed direction, update the backlash correction steps due
+	const bool backwards = (delta < 0);
+	int32_t& stepsDue = backlashStepsDue[drive];
+	if (backwards != lastDirections.IsBitSet(drive))
+	{
+		lastDirections.InvertBit(drive);		// Direction has reversed
+		int32_t temp = (int32_t)backlashSteps[drive];
+		if (backwards)
+		{
+			temp = -temp;
+		}
+		stepsDue += temp;
+	}
+
+	// Apply some or all of the compensation steps due
+	if (stepsDue != 0)
+	{
+		if (labs(stepsDue) * backlashCorrectionDistanceFactor <= labs(delta))		// avoid a division if we can
+		{
+			delta += stepsDue;
+			stepsDue = 0;
+		}
+		else
+		{
+			const int32_t maxAllowedSteps = (int32_t)max<uint32_t>((uint32_t)labs(delta)/backlashCorrectionDistanceFactor, 1u);
+			const int32_t stepsToDo = (stepsDue < 0) ? max<int32_t>(stepsDue, -maxAllowedSteps) : min<int32_t>(stepsDue, maxAllowedSteps);
+			stepsDue -= stepsToDo;
+			delta += stepsToDo;
+		}
+	}
+	return delta;
+}
+
+void Move::PollOneDriver(size_t driver) noexcept
+{
+	if (enableValues[driver] >= 0)	// don't poll driver if it is flagged "no poll"
+	{
+
+#if defined(DUET3_MB6XD)
+		// Don't raise driver error events while we are being tested by ATE
+		const bool reportError = !CanInterface::InTestMode() && HasDriverError(driver);
+		StandardDriverStatus stat((reportError) ? ((uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos) : 0);
+#else
+		StandardDriverStatus stat = SmartDrivers::GetStatus(driver, true, true);
+#endif
+#if HAS_SMART_DRIVERS
+		const DriversBitmap mask = DriversBitmap::MakeFromBits(driver);
+		if (stat.ot)
+		{
+			temperatureShutdownDrivers |= mask;
+		}
+		else
+		{
+			temperatureShutdownDrivers &= ~mask;
+			if (stat.otpw)
+			{
+				temperatureWarningDrivers |= mask;
+			}
+			else
+			{
+				temperatureWarningDrivers &= ~mask;
+			}
+		}
+
+		if (stat.s2ga || stat.s2gb || stat.s2vsa || stat.s2vsb)
+		{
+			shortToGroundDrivers |= mask;
+		}
+		else
+		{
+			shortToGroundDrivers &= ~mask;
+		}
+
+		// Deal with the open load bits
+		// The driver often produces a transient open-load error, especially in stealthchop mode, so we require the condition to persist before we report it.
+		// So clear them unless they have been active for the minimum time.
+		MillisTimer& timer = openLoadTimers[driver];
+		if (stat.IsAnyOpenLoadBitSet())
+		{
+			if (timer.IsRunning())
+			{
+				if (!timer.CheckNoStop(OpenLoadTimeout))
+				{
+					stat.ClearOpenLoadBits();
+				}
+			}
+			else
+			{
+				timer.Start();
+				stat.ClearOpenLoadBits();
+			}
+		}
+		else
+		{
+			timer.Stop();
+		}
+#endif	// HAS_SMART_DRIVERS
+
+#ifdef DUET3_MB6XD
+		// Suppress spurious GCC 12.2 warning
+# pragma GCC diagnostic push
+# pragma GCC diagnostic ignored "-Warray-bounds"
+#endif
+		const StandardDriverStatus oldStatus = lastEventStatus[driver];
+		lastEventStatus[driver] = stat;
+#ifdef DUET3_MB6XD
+# pragma GCC diagnostic pop
+#endif
+		if (stat.HasNewErrorSince(oldStatus))
+		{
+			// It's a new error
+# if SUPPORT_REMOTE_COMMANDS
+			if (CanInterface::InExpansionMode())
+			{
+				CanInterface::RaiseEvent(EventType::driver_error, stat.AsU16(), driver, "", va_list());
+			}
+			else
+#endif
+			{
+				Event::AddEvent(EventType::driver_error, stat.AsU16(), CanInterface::GetCanAddress(), driver, "");
+			}
+		}
+		else if (stat.HasNewWarningSince(oldStatus))
+		{
+			// It's a new warning
+# if SUPPORT_REMOTE_COMMANDS
+			if (CanInterface::InExpansionMode())
+			{
+				CanInterface::RaiseEvent(EventType::driver_warning, stat.AsU16(), driver, "", va_list());
+			}
+			else
+#endif
+			{
+				Event::AddEvent(EventType::driver_warning, stat.AsU16(), CanInterface::GetCanAddress(), driver, "");
+			}
+		}
+
+# if HAS_STALL_DETECT
+		if (stat.HasNewStallSince(oldStatus))
+		{
+			// This stall is new so check whether we need to perform some action in response to the stall
+#  if SUPPORT_REMOTE_COMMANDS
+			if (CanInterface::InExpansionMode())
+			{
+				if (eventOnStallDrivers.Intersects(mask))
+				{
+					CanInterface::RaiseEvent(EventType::driver_stall, 0, driver, "", va_list());
+				}
+			}
+			else
+#  endif
+			{
+				if (eventOnStallDrivers.Intersects(mask))
+				{
+					Event::AddEvent(EventType::driver_stall, 0, CanInterface::GetCanAddress(), driver, "");
+				}
+				else if (logOnStallDrivers.Intersects(mask))
+				{
+					reprap.GetPlatform().MessageF(WarningMessage, "Driver %u stalled at Z height %.2f\n", driver, (double)reprap.GetMove().LiveMachineCoordinate(Z_AXIS));
+				}
+			}
+		}
+# endif
+	}
+
+	// Brake control
+	if (brakeOffTimers[driver].CheckAndStop(brakeOffDelays[driver]))
+	{
+		DisengageBrake(driver);
+	}
+	if (motorOffTimers[driver].CheckAndStop(motorOffDelays[driver]))
+	{
+		InternalDisableDriver(driver);
+	}
+
+# if SUPPORT_BRAKE_PWM
+	// If the brake solenoid is activated, adjust the PWM if necessary
+	if (currentBrakePwm[driver] != 0.0 && reprap.GetPlatform().GetVinVoltage() > 10.0)
+	{
+		const float newBrakePwm = min<float>(brakeVoltages[driver]/reprap.GetPlatform().GetVinVoltage(), 1.0);
+		if (fabsf(newBrakePwm - currentBrakePwm[driver] >= 0.05))
+		{
+			brakePorts[driver].WriteAnalog(newBrakePwm);
+			currentBrakePwm[driver] = newBrakePwm;
+		}
+	}
+# endif
+}
+
+#if HAS_SMART_DRIVERS
+
+// TMC driver temperatures
+float Move::GetTmcDriversTemperature(unsigned int boardNumber) const noexcept
+{
+#if defined(DUET3MINI)
+	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(7);						// report the 2-driver addon along with the main board
+#elif defined(DUET3)
+	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(6);						// there are 6 drivers, only one board
+#elif defined(DUET_NG)
+	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(5).ShiftUp(5 * boardNumber);	// there are 5 drivers on each board
+#elif defined(DUET_M)
+	const DriversBitmap mask = DriversBitmap::MakeLowestNBits(7);						// report the 2-driver addon along with the main board
+#elif defined(PCCB_10)
+	const DriversBitmap mask = (boardNumber == 0)
+							? DriversBitmap::MakeLowestNBits(2)							// drivers 0,1 are on-board
+								: DriversBitmap::MakeLowestNBits(5).ShiftUp(2);			// drivers 2-7 are on the DueX5
+#else
+# error Undefined board
+#endif
+	return (temperatureShutdownDrivers.Intersects(mask)) ? 150.0
+			: (temperatureWarningDrivers.Intersects(mask)) ? 100.0
+				: 0.0;
+}
+
+/*static*/ void Move::SpinSmartDrivers(bool driversPowered) noexcept
+{
+	SmartDrivers::Spin(driversPowered);
+}
+
+/*static*/ StandardDriverStatus Move::GetSmartDriverStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept
+{
+	return SmartDrivers::GetStatus(driver, accumulated, clearAccumulated);
+}
+
+void Move::DriversJustPoweredUp() noexcept
+{
+	for (size_t i= 0; i < MaxSmartDrivers; ++i)
+	{
+		openLoadTimers[i].Stop();
+	}
+	temperatureShutdownDrivers.Clear();
+	temperatureWarningDrivers.Clear();
+	shortToGroundDrivers.Clear();
+}
+
+void Move::TurnSmartDriversOff() noexcept
+{
+	SmartDrivers::TurnDriversOff();
+}
+
+#endif
+
+#if SUPPORT_CAN_EXPANSION
+
+// This is called when we update endstop states because of a message from a remote board.
+// In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to DDA::CheckEndstops().
+void Move::OnEndstopOrZProbeStatesChanged() noexcept
+{
+	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
+	const bool wakeAsyncSender = CheckEndstops(true);
+	RestoreBasePriority(oldPrio);										// allow step interrupts again
+	if (wakeAsyncSender) { CanInterface::WakeAsyncSender(); }
+}
+
+GCodeResult Move::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtruders, const StringRef& reply) noexcept
+{
+	CanDriversData<StepsPerUnitAndMicrostepping> data;
+	axesAndExtruders.Iterate([this, &data](unsigned int axisOrExtruder, unsigned int count) noexcept
+								{
+									const Move& move = reprap.GetMove();
+									const StepsPerUnitAndMicrostepping driverData(move.DriveStepsPerMm(axisOrExtruder), move.GetRawMicrostepping(axisOrExtruder));
+									this->IterateRemoteDrivers(axisOrExtruder,
+																[&data, &driverData](DriverId driver) noexcept
+																{
+																	data.AddEntry(driver, driverData);
+																}
+															  );
+								}
+							);
+	return CanInterface::SetRemoteDriverStepsPerMmAndMicrostepping(data, reply);
+}
+
+GCodeResult Move::UpdateRemoteInputShaping(unsigned int numImpulses, const float coefficients[], const uint32_t delays[], const StringRef& reply) const noexcept
+{
+	const ExpansionManager& expansion = reprap.GetExpansion();
+	GCodeResult res = GCodeResult::ok;
+	if (expansion.GetNumExpansionBoards() != 0)
+	{
+		// Build a CAN message to update the remote drivers
+		for (uint8_t addr = 0; addr < CanId::MaxCanAddress; ++addr)
+		{
+			if (addr != CanInterface::GetCanAddress())
+			{
+				const ExpansionBoardData *boardData = expansion.GetBoardDetails(addr);
+				if (boardData != nullptr && boardData->numDrivers != 0)
+				{
+					CanMessageBuffer *const buf = CanMessageBuffer::BlockingAllocate();
+					const CanRequestId rid = CanInterface::AllocateRequestId(addr, buf);
+					auto msg = buf->SetupRequestMessage<CanMessageSetInputShapingNew>(rid, CanInterface::GetCanAddress(), addr);
+					msg->numImpulses = numImpulses;
+					for (unsigned int i = 0; i < numImpulses; ++i)
+					{
+						msg->impulses[i].coefficient = coefficients[i];
+						msg->impulses[i].delay = delays[i];
+					}
+					buf->dataLength = msg->GetActualDataLength();
+					msg->SetRequestId(rid);
+					const GCodeResult rslt = CanInterface::SendRequestAndGetStandardReply(buf, rid, reply, 0);
+					if (rslt > res)
+					{
+						res = rslt;
+					}
+				}
+			}
+		}
+	}
+	return res;
+}
+
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+
+GCodeResult Move::EutSetMotorCurrents(const CanMessageMultipleDrivesRequest<float>& msg, size_t dataLength, const StringRef& reply) noexcept
+{
+# if HAS_SMART_DRIVERS
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
+						{
+							if (driver >= NumDirectDrivers)
+							{
+								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+								rslt = GCodeResult::error;
+							}
+							else
+							{
+								SetMotorCurrent(driver, msg.values[count], 906, reply);
+							}
+						}
+				   );
+	return rslt;
+# else
+	reply.copy("Setting not available for external drivers");
+	return GCodeResult::error;
+# endif
+}
+
+GCodeResult Move::EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrivesRequest<StepsPerUnitAndMicrostepping>& msg, size_t dataLength, const StringRef& reply) noexcept
+{
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	if (dataLength < msg.GetActualDataLength(drivers.CountSetBits()))
+	{
+		reply.copy("bad data length");
+		return GCodeResult::error;
+	}
+
+	GCodeResult rslt = GCodeResult::ok;
+	drivers.Iterate([this, &msg, &reply, &rslt](unsigned int driver, unsigned int count) -> void
+						{
+							if (driver >= NumDirectDrivers)
+							{
+								reply.lcatf("No such driver %u.%u", CanInterface::GetCanAddress(), driver);
+								rslt = GCodeResult::error;
+							}
+							else
+							{
+								reprap.GetMove().SetDriveStepsPerMm(driver, msg.values[count].GetStepsPerUnit(), 0);
+#if HAS_SMART_DRIVERS
+								const uint16_t rawMicrostepping = msg.values[count].GetMicrostepping();
+								const uint16_t microsteppingOnly = rawMicrostepping & 0x03FF;
+								const bool interpolate = (rawMicrostepping & 0x8000) != 0;
+								reprap.GetMove().SetMicrostepping(driver, microsteppingOnly, interpolate, reply);
+#endif
+							}
+						}
+					);
+	return rslt;
+}
+
+GCodeResult Move::EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest<DriverStateControl>& msg, const StringRef& reply) noexcept
+{
+	//TODO check message is long enough for the number of drivers specified
+	const auto drivers = Bitmap<uint16_t>::MakeFromRaw(msg.driversToUpdate);
+	drivers.Iterate([this, &msg](unsigned int driver, unsigned int count) -> void
+		{
+			switch (msg.values[count].mode)
+			{
+			case DriverStateControl::driverActive:
+				EnableOneLocalDriver(driver, motorCurrents[driver]);
+				driverState[driver] = DriverStatus::enabled;
+				break;
+
+			case DriverStateControl::driverIdle:
+				{
+					const uint16_t idleCurrentPercent = msg.values[count].idlePercentOrDelayAfterBrakeOn >> 4;
+					UpdateMotorCurrent(driver, motorCurrents[driver] * (float)idleCurrentPercent * 0.01);
+				}
+				driverState[driver] = DriverStatus::idle;
+				break;
+
+			case DriverStateControl::driverDisabled:
+			default:
+				DisableOneLocalDriver(driver);
+				driverState[driver] = DriverStatus::disabled;
+				break;
+			}
+		});
+	return GCodeResult::ok;
+}
+
+GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+	CanMessageGenericParser parser(msg, M569Params);
+	uint8_t drive;
+	if (!parser.GetUintParam('P', drive))
+	{
+		reply.copy("Missing P parameter in CAN message");
+		return GCodeResult::error;
+	}
+
+	if (drive >= NumDirectDrivers)
+	{
+		reply.printf("Driver number %u.%u out of range", CanInterface::GetCanAddress(), drive);
+		return GCodeResult::error;
+	}
+
+	bool seen = false;
+	uint8_t direction;
+	if (parser.GetUintParam('S', direction))
+	{
+		seen = true;
+		SetDirectionValue(drive, direction != 0);
+	}
+	int8_t rValue;
+	if (parser.GetIntParam('R', rValue))
+	{
+		seen = true;
+		SetEnableValue(drive, rValue);
+	}
+
+	float timings[4];
+	size_t numTimings = 4;
+	if (parser.GetFloatArrayParam('T', numTimings, timings))
+	{
+		seen = true;
+		if (numTimings == 1)
+		{
+			timings[1] = timings[2] = timings[3] = timings[0];
+		}
+		else if (numTimings != 4)
+		{
+			reply.copy("bad timing parameter, expected 1 or 4 values");
+			return GCodeResult::error;
+		}
+		SetDriverStepTiming(drive, timings);
+	}
+
+#if HAS_SMART_DRIVERS
+	{
+		uint32_t val;
+		if (parser.GetUintParam('D', val))	// set driver mode
+		{
+			seen = true;
+			if (!SmartDrivers::SetDriverMode(drive, val))
+			{
+				reply.printf("Driver %u.%u does not support mode '%s'", CanInterface::GetCanAddress(), drive, TranslateDriverMode(val));
+				return GCodeResult::error;
+			}
+		}
+
+		if (parser.GetUintParam('F', val))		// set off time
+		{
+			seen = true;
+			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::toff, val))
+			{
+				reply.printf("Bad off time for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+
+		if (parser.GetUintParam('B', val))		// set blanking time
+		{
+			seen = true;
+			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tblank, val))
+			{
+				reply.printf("Bad blanking time for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+
+		if (parser.GetUintParam('V', val))		// set microstep interval for changing from stealthChop to spreadCycle
+		{
+			seen = true;
+			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::tpwmthrs, val))
+			{
+				reply.printf("Bad mode change microstep interval for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+
+#if SUPPORT_TMC51xx
+		if (parser.GetUintParam('H', val))		// set coolStep threshold
+		{
+			seen = true;
+			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::thigh, val))
+			{
+				reply.printf("Bad high speed microstep interval for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+#endif
+	}
+
+	size_t numHvalues = 3;
+	const uint8_t *hvalues;
+	if (parser.GetArrayParam('Y', ParamDescriptor::ParamType::uint8_array, numHvalues, hvalues))		// set spread cycle hysteresis
+	{
+		seen = true;
+		if (numHvalues == 2 || numHvalues == 3)
+		{
+			// There is a constraint on the sum of HSTRT and HEND, so set HSTART then HEND then HSTART again because one may go up and the other down
+			(void)SmartDrivers::SetRegister(drive, SmartDriverRegister::hstart, hvalues[0]);
+			bool ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hend, hvalues[1]);
+			if (ok)
+			{
+				ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hstart, hvalues[0]);
+			}
+			if (ok && numHvalues == 3)
+			{
+				ok = SmartDrivers::SetRegister(drive, SmartDriverRegister::hdec, hvalues[2]);
+			}
+			if (!ok)
+			{
+				reply.printf("Bad hysteresis setting for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
+		else
+		{
+			reply.copy("Expected 2 or 3 Y values");
+			return GCodeResult::error;
+		}
+	}
+#endif
+	if (!seen)
+	{
+		reply.printf("Driver %u.%u runs %s, active %s enable",
+						CanInterface::GetCanAddress(),
+						drive,
+						(GetDirectionValue(drive)) ? "forwards" : "in reverse",
+						(GetEnableValue(drive)) ? "high" : "low");
+
+		float timings[4];
+		const bool isSlowDriver = GetDriverStepTiming(drive, timings);
+		if (isSlowDriver)
+		{
+			reply.catf(", step timing %.1f:%.1f:%.1f:%.1fus", (double)timings[0], (double)timings[1], (double)timings[2], (double)timings[3]);
+		}
+		else
+		{
+			reply.cat(", step timing fast");
+		}
+
+#if HAS_SMART_DRIVERS
+		// It's a smart driver, so print the parameters common to all modes, except for the position
+		reply.catf(", mode %s, ccr 0x%05" PRIx32 ", toff %" PRIu32 ", tblank %" PRIu32,
+				TranslateDriverMode(SmartDrivers::GetDriverMode(drive)),
+				SmartDrivers::GetRegister(drive, SmartDriverRegister::chopperControl),
+				SmartDrivers::GetRegister(drive, SmartDriverRegister::toff),
+				SmartDrivers::GetRegister(drive, SmartDriverRegister::tblank)
+			);
+
+# if SUPPORT_TMC51xx
+		{
+			const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
+			bool bdummy;
+			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * reprap.GetMove().DriveStepsPerMm(drive));
+			reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
+		}
+# endif
+
+		// Print the additional parameters that are relevant in the current mode
+		if (SmartDrivers::GetDriverMode(drive) == DriverMode::spreadCycle)
+		{
+			reply.catf(", hstart/hend/hdec %" PRIu32 "/%" PRIu32 "/%" PRIu32,
+						SmartDrivers::GetRegister(drive, SmartDriverRegister::hstart),
+						SmartDrivers::GetRegister(drive, SmartDriverRegister::hend),
+						SmartDrivers::GetRegister(drive, SmartDriverRegister::hdec)
+					  );
+		}
+
+# if SUPPORT_TMC22xx || SUPPORT_TMC51xx
+		if (SmartDrivers::GetDriverMode(drive) == DriverMode::stealthChop)
+		{
+			const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
+			bool bdummy;
+			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * reprap.GetMove().DriveStepsPerMm(drive));
+			const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
+			const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
+			const unsigned int pwmScaleSum = pwmScale & 0xFF;
+			const int pwmScaleAuto = (int)((((pwmScale >> 16) & 0x01FF) ^ 0x0100) - 0x0100);
+			const unsigned int pwmOfsAuto = pwmAuto & 0xFF;
+			const unsigned int pwmGradAuto = (pwmAuto >> 16) & 0xFF;
+			reply.catf(", tpwmthrs %" PRIu32 " (%.1f mm/sec), pwmScaleSum %u, pwmScaleAuto %d, pwmOfsAuto %u, pwmGradAuto %u",
+						tpwmthrs, (double)mmPerSec, pwmScaleSum, pwmScaleAuto, pwmOfsAuto, pwmGradAuto);
+		}
+# endif
+		// Finally, print the microstep position
+		{
+			const uint32_t mstepPos = SmartDrivers::GetRegister(drive, SmartDriverRegister::mstepPos);
+			if (mstepPos < 1024)
+			{
+				reply.catf(", pos %" PRIu32, mstepPos);
+			}
+			else
+			{
+				reply.cat(", pos unknown");
+			}
+		}
+#endif
+
+	}
+	return GCodeResult::ok;
+}
+
+GCodeResult Move::EutProcessM569Point2(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+#if SUPPORT_TMC22xx || SUPPORT_TMC51xx
+	CanMessageGenericParser parser(msg, M569Point2Params);
+	uint8_t drive;
+	uint8_t regNum;
+	if (!parser.GetUintParam('P', drive) || !parser.GetUintParam('R', regNum))
+	{
+		reply.copy("Missing P or R parameter in CAN message");
+		return GCodeResult::error;
+	}
+
+	if (drive >= NumDirectDrivers)
+	{
+		reply.printf("Driver number %u.%u out of range", CanInterface::GetCanAddress(), drive);
+		return GCodeResult::error;
+	}
+
+	uint32_t regVal;
+	if (parser.GetUintParam('V', regVal))
+	{
+		return SmartDrivers::SetAnyRegister(drive, reply, regNum, regVal);
+	}
+
+	const uint32_t startTime = millis();
+	GCodeResult rslt;
+	while ((rslt = SmartDrivers::GetAnyRegister(drive, reply, regNum)) == GCodeResult::notFinished)
+	{
+		if (millis() - startTime >= 50)
+		{
+			reply.copy("Failed to read register");
+			return GCodeResult::error;
+		}
+	}
+
+	return rslt;
+#else
+	return GCodeResult::errorNotSupported;
+#endif
+}
+
+GCodeResult Move::EutProcessM569Point7(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+	CanMessageGenericParser parser(msg, M569Point7Params);
+	uint8_t drive;
+	if (!parser.GetUintParam('P', drive))
+	{
+		reply.copy("Missing P parameter in CAN message");
+		return GCodeResult::error;
+	}
+
+	if (drive >= NumDirectDrivers)
+	{
+		reply.printf("Driver number %u.%u out of range", CanInterface::GetCanAddress(), drive);
+		return GCodeResult::error;
+	}
+
+# if !SUPPORT_BRAKE_PWM
+	if (parser.HasParameter('V'))
+	{
+		// Don't allow a brake port to be configured if the user specified a voltage and we don't support PWM
+		reply.copy("Brake PWM not supported by this board");
+		return GCodeResult::error;
+	}
+# endif
+
+	bool seen = false;
+	if (parser.HasParameter('C'))
+	{
+		seen = true;
+		String<StringLength20> portName;
+		parser.GetStringParam('C', portName.GetRef());
+		//TODO use the following instead when we track the enable state of each driver individually
+		//if (!brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, (driverDisabled[drive]) ? PinAccess::write0 : PinAccess::write1)) ...
+		if (brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, PinAccess::write0))
+		{
+			return GCodeResult::error;
+		}
+# if SUPPORT_BRAKE_PWM
+		brakePorts[drive].SetFrequency(BrakePwmFrequency);
+# endif
+	}
+
+# if SUPPORT_BRAKE_PWM
+	if (parser.GetFloatParam('V', brakeVoltages[drive]))
+	{
+		seen = true;
+	}
+# endif
+
+	if (!seen)
+	{
+		reply.printf("Driver %u.%u uses brake port ", CanInterface::GetCanAddress(), drive);
+		brakePorts[drive].AppendPinName(reply);
+# if SUPPORT_BRAKE_PWM
+		if (brakeVoltages[drive] < FullyOnBrakeVoltage)
+		{
+			reply.catf(" with voltage limited to %.1f by PWM", (double)brakeVoltages[drive]);
+		}
+# endif
+	}
+	return GCodeResult::ok;
+}
+
+GCodeResult Move::EutProcessM915(const CanMessageGeneric& msg, const StringRef& reply) noexcept
+{
+#if HAS_SMART_DRIVERS
+	CanMessageGenericParser parser(msg, M915Params);
+	uint16_t driverBits;
+	if (!parser.GetUintParam('d', driverBits))
+	{
+		reply.copy("missing parameter in M915 message");
+		return GCodeResult::error;
+	}
+
+	const auto drivers = DriversBitmap::MakeFromRaw(driverBits);
+
+	bool seen = false;
+	{
+		int8_t sgThreshold;
+		if (parser.GetIntParam('S', sgThreshold))
+		{
+			seen = true;
+			drivers.Iterate([sgThreshold](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallThreshold(drive, sgThreshold); });
+		}
+	}
+
+	{
+		uint16_t stepsPerSecond;
+		if (parser.GetUintParam('H', stepsPerSecond))
+		{
+			seen = true;
+			drivers.Iterate([stepsPerSecond](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetStallMinimumStepsPerSecond(drive, stepsPerSecond); });
+		}
+	}
+
+	{
+		uint16_t coolStepConfig;
+		if (parser.GetUintParam('T', coolStepConfig))
+		{
+			seen = true;
+			drivers.Iterate([coolStepConfig](unsigned int drive, unsigned int) noexcept { SmartDrivers::SetRegister(drive, SmartDriverRegister::coolStep, coolStepConfig); } );
+		}
+	}
+
+	{
+		uint8_t rParam;
+		if (parser.GetUintParam('R', rParam))
+		{
+			seen = true;
+			if (rParam != 0)
+			{
+				eventOnStallDrivers |= drivers;
+			}
+			else
+			{
+				eventOnStallDrivers &= ~drivers;
+			}
+		}
+	}
+
+	if (!seen)
+	{
+		drivers.Iterate([&reply, this](unsigned int drive, unsigned int) noexcept
+									{
+										reply.lcatf("Driver %u.%u: ", CanInterface::GetCanAddress(), drive);
+										SmartDrivers::AppendStallConfig(drive, reply);
+										reply.cat(", event on stall: ");
+										reply.cat((eventOnStallDrivers.IsBitSet(drive)) ? "yes" : "no");
+									}
+					   );
+	}
+
+	return GCodeResult::ok;
+#else
+	reply.copy("stall detection not supported by this board");
+	return GCodeResult::error;
+#endif
+}
+
+void Move::SendDriversStatus(CanMessageBuffer& buf) noexcept
+{
+	CanMessageDriversStatus * const msg = buf.SetupStatusMessage<CanMessageDriversStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+# if HAS_SMART_DRIVERS
+	msg->SetStandardFields(MaxSmartDrivers, false);
+	for (size_t driver = 0; driver < MaxSmartDrivers; ++driver)
+	{
+		msg->openLoopData[driver].status = SmartDrivers::GetStatus(driver, false, false).AsU32();
+	}
+# else
+	msg->SetStandardFields(NumDirectDrivers, false);
+	for (size_t driver = 0; driver < NumDirectDrivers; ++driver)
+	{
+		msg->openLoopData[driver].status = HasDriverError(driver) ? (uint32_t)1u << StandardDriverStatus::ExternDriverErrorBitPos : 0u;
+	}
+# endif
+	buf.dataLength = msg->GetActualDataLength();
+	CanInterface::SendMessageNoReplyNoFree(&buf);
+}
+
+// Stop some drivers and update the corresponding motor positions
+void Move::StopDriversFromRemote(uint16_t whichDrives) noexcept
+{
+	DriversBitmap dr(whichDrives);
+	dr.Iterate([this](size_t drive, unsigned int)
+				{
+					StopDriveFromRemote(drive);
+				}
+			  );
+}
+
+#endif	// SUPPORT_REMOTE_COMMANDS
+
+#if SUPPORT_ASYNC_MOVES
 
 // Get and lock the aux move buffer. If successful, return a pointer to the buffer.
 // The caller must not attempt to lock the aux buffer more than once, and must call ReleaseAuxMove to release the buffer.

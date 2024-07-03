@@ -799,7 +799,7 @@ void GCodes::EndSimulation(GCodeBuffer *null gb) noexcept
 	RestorePosition(ms.GetSimulationRestorePoint(), gb);
 	ms.SelectTool(ms.GetSimulationRestorePoint().toolNumber, true);
 	ToolOffsetTransform(ms);
-	reprap.GetMove().SetNewPosition(ms.coords, msNumber, true);
+	reprap.GetMove().SetNewPosition(ms.coords, ms, true);
 	axesVirtuallyHomed = axesHomed;
 	reprap.MoveUpdated();
 }
@@ -1718,7 +1718,12 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSys
 		break;
 
 	default:
-		if (!reprap.GetMove().WaitingForAllMovesFinished(msNumber))
+		if (!reprap.GetMove().WaitingForAllMovesFinished(msNumber
+#if SUPPORT_ASYNC_MOVES
+															, ms.GetAxesAndExtrudersOwned()
+#endif
+														)
+		   )
 		{
 			return false;
 		}
@@ -1741,9 +1746,10 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSys
 	if (RTOSIface::GetCurrentTask() == Tasks::GetMainTask())
 	{
 		// Get the current positions. These may not be the same as the ones we remembered from last time if we just did a special move.
+		//TODO only do this is we did a special move
 #if SUPPORT_ASYNC_MOVES
 		// Get the position of all axes by combining positions from the queues
-		ms.SaveOwnAxisCoordinates();
+		ms.UpdateOwnAxisCoordinates();
 		UpdateUserPositionFromMachinePosition(gb, ms);
 		collisionChecker.ResetPositions(ms.coords, ms.GetAxesAndExtrudersOwned());
 
@@ -1773,7 +1779,7 @@ bool GCodes::LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSys
 		//TODO when SbcInterface stops calling this from its own task, get rid of this, it isn't correct any more anyway
 		ms.updateUserPositionGb = &gb;
 	}
-	ms.forceLiveCoordinatesUpdate = true;				// make sure that immediately after e.g. M400 the machine position is fetched correctly (issue 921)
+	reprap.GetMove().ForceLiveCoordinatesUpdate();				// make sure that immediately after e.g. M400 the machine position is fetched correctly (issue 921)
 	return true;
 }
 
@@ -2273,19 +2279,21 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 			break;
 
 		case 2:
+			break;
+
 		default:
 			break;
 		}
 	}
 
-	LoadExtrusionAndFeedrateFromGCode(gb, ms, axesMentioned.IsNonEmpty());		// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
+	LoadExtrusionAndFeedrateFromGCode(gb, ms, axesMentioned.IsNonEmpty());	// for type 1 moves, this must be called after calling EnableAxisEndstops, because EnableExtruderEndstop assumes that
 
 	const bool isPrintingMove = ms.hasPositiveExtrusion && axesMentioned.IsNonEmpty();
-	if (ms.IsFirstMoveSincePrintingResumed())									// if this is the first move after skipping an object
+	if (ms.IsFirstMoveSincePrintingResumed())								// if this is the first move after skipping an object
 	{
 		if (isPrintingMove)
 		{
-			if (TravelToStartPoint(gb))											// don't start a printing move from the wrong place
+			if (TravelToStartPoint(gb))										// don't start a printing move from the wrong place
 			{
 				ms.DoneMoveSincePrintingResumed();
 			}
@@ -2469,8 +2477,8 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	}
 
 	ms.doingArcMove = false;
-	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetLinearAxes());
-	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetRotationalAxes());
+	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetLinearAxes());
+	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetRotationalAxes());
 	FinaliseMove(gb, ms);
 	UnlockAll(gb);			// allow pause
 	return true;
@@ -2878,8 +2886,8 @@ bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
 	ms.arcAxis1 = axis1;
 	ms.doingArcMove = true;
 	ms.xyPlane = (selectedPlane == 0);
-	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetLinearAxes());
-	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetPlatform().GetRotationalAxes());
+	ms.linearAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetLinearAxes());
+	ms.rotationalAxesMentioned = axesMentioned.Intersects(reprap.GetMove().GetRotationalAxes());
 	FinaliseMove(gb, ms);
 	UnlockAll(gb);			// allow pause
 //	debugPrintf("Radius %.2f, initial angle %.1f, increment %.1f, segments %u\n",
@@ -2955,7 +2963,7 @@ bool GCodes::TravelToStartPoint(GCodeBuffer& gb) noexcept
 	ms.feedRate = rp.feedRate;
 	ms.movementTool = ms.currentTool;
 	ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;			// assume that both linear and rotational axes might be moving
-	NewSingleSegmentMoveAvailable(ms);
+	NewSegmentableMoveAvailable(ms);
 	return true;
 }
 
@@ -3090,7 +3098,7 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 	}
 }
 
-// Flag that a new move is available for consumption by the Move subsystem
+// Flag that a new single-segment move is available for consumption by the Move subsystem
 // Code that sets up a new move should ensure that segmentsLeft is zero, then set up all the move parameters,
 // then call this function to update SegmentsLeft safely in a multi-threaded environment
 void GCodes::NewSingleSegmentMoveAvailable(MovementState& ms) noexcept
@@ -3098,6 +3106,38 @@ void GCodes::NewSingleSegmentMoveAvailable(MovementState& ms) noexcept
 	ms.totalSegments = 1;
 	__DMB();									// make sure that all the move details have been written first
 	ms.segmentsLeft = 1;						// set the number of segments to indicate that a move is available to be taken
+	reprap.GetMove().MoveAvailable();			// notify the Move task that we have a move
+}
+
+// Flag that a new move that should be segmented is available for consumption by the Move subsystem
+// Code that sets up a new move should ensure that segmentsLeft is zero, then set up all the move parameters,
+// then call this function to update SegmentsLeft safely in a multi-threaded environment
+void GCodes::NewSegmentableMoveAvailable(MovementState& ms) noexcept
+{
+	const Kinematics& kin = reprap.GetMove().GetKinematics();
+	const SegmentationType st = kin.GetSegmentationType();
+	if (st.useSegmentation)
+	{
+		// This kinematics approximates linear motion by means of segmentation
+		// To establish the effective XY movement distance, pick one X and one Y axis
+		const size_t effectiveXAxis = ms.GetCurrentXAxes().LowestSetBit();
+		const size_t effectiveYAxis = ms.GetCurrentYAxes().LowestSetBit();
+		float moveLengthSquared = fsquare(ms.coords[effectiveXAxis] - ms.initialCoords[effectiveXAxis]) + fsquare(ms.coords[effectiveYAxis] - ms.initialCoords[effectiveYAxis]);
+		if (st.useZSegmentation)
+		{
+			const size_t effectiveZAxis = ms.GetCurrentZAxes().LowestSetBit();
+			moveLengthSquared += fsquare(ms.coords[effectiveZAxis] - ms.initialCoords[effectiveZAxis]);
+		}
+		const float moveLength = fastSqrtf(moveLengthSquared);
+		const float moveTime = moveLength/(ms.feedRate * StepClockRate);		// this is a best-case time, often the move will take longer
+		ms.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(moveLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
+	}
+	else
+	{
+		ms.totalSegments = 1;
+	}
+	__DMB();									// make sure that all the move details have been written first
+	ms.segmentsLeft = ms.totalSegments;			// set the number of segments to indicate that a move is available to be taken
 	reprap.GetMove().MoveAvailable();			// notify the Move task that we have a move
 }
 
@@ -3348,17 +3388,15 @@ void GCodes::HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept
 	// Now the extruder coordinates
 	for (size_t i = 0; i < numExtruders; i++)
 	{
-		s.catf("E%u:%.1f ", i, (double)ms.LiveCoordinate(ExtruderToLogicalDrive(i)));
+		s.catf("E%u:%.1f ", i, (double)reprap.GetMove().LiveMachineCoordinate(ExtruderToLogicalDrive(i)));
 	}
 
 	// Print the axis stepper motor positions as Marlin does, as an aid to debugging.
 	// Don't bother with the extruder endpoints, they are zero after any non-extruding move.
 	s.cat("Count");
-	int32_t positions[MaxAxesPlusExtruders];
-	reprap.GetMove().GetLivePositions(positions, gb.GetActiveQueueNumber());
 	for (size_t i = 0; i < numVisibleAxes; ++i)
 	{
-		s.catf(" %" PRIi32, positions[i]);
+		s.catf(" %" PRIi32, reprap.GetMove().GetLiveMotorPosition(i));
 	}
 
 	// Add the machine coordinates because they may be different from the user coordinates under some conditions
@@ -3862,19 +3900,19 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 // Does what it says.
 void GCodes::DisableDrives() noexcept
 {
-	platform.DisableAllDrivers();
+	reprap.GetMove().DisableAllDrivers();
 	SetAllAxesNotHomed();
 }
 
 bool GCodes::ChangeMicrostepping(size_t axisOrExtruder, unsigned int microsteps, bool interp, const StringRef& reply) const noexcept
 {
-	bool dummy;
-	const unsigned int oldSteps = platform.GetMicrostepping(axisOrExtruder, dummy);
-	const bool success = platform.SetMicrostepping(axisOrExtruder, microsteps, interp, reply);
+	Move& move = reprap.GetMove();
+	const unsigned int oldSteps = move.GetMicrostepping(axisOrExtruder);
+	const bool success = move.SetMicrostepping(axisOrExtruder, microsteps, interp, reply);
 	if (success)
 	{
 		// We changed the microstepping, so adjust the steps/mm to compensate
-		platform.SetDriveStepsPerUnit(axisOrExtruder, platform.DriveStepsPerUnit(axisOrExtruder), oldSteps);
+		move.SetDriveStepsPerMm(axisOrExtruder, move.DriveStepsPerMm(axisOrExtruder), oldSteps);
 	}
 	return success;
 }
@@ -4798,6 +4836,10 @@ GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& re
 	}
 	if (ok)
 	{
+		ok = reprap.GetMove().WriteMoveParameters(f);
+	}
+	if (ok)
+	{
 		ok = platform.WritePlatformParameters(f, p31);
 	}
 
@@ -5442,7 +5484,7 @@ void GCodes::UpdateAllCoordinates(const GCodeBuffer& gb) noexcept
 	memcpyf(ms.coords, MovementState::GetLastKnownMachinePositions(), MaxAxes);
 	reprap.GetMove().InverseAxisAndBedTransform(ms.coords, ms.currentTool);
 	UpdateUserPositionFromMachinePosition(gb, ms);
-	reprap.GetMove().SetNewPosition(ms.coords, ms.GetMsNumber(), true);
+	reprap.GetMove().SetNewPosition(ms.coords, ms, true);
 }
 
 #endif

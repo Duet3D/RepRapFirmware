@@ -203,7 +203,7 @@ bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming, bool& 
 		const unsigned int axis = axes.LowestSetBit();
 		axes.ClearBit(axis);
 		Endstop * const es = axisEndstops[axis];
-		if (es != nullptr && es->Prime(kin, reprap.GetPlatform().GetAxisDriversConfig(axis)))
+		if (es != nullptr && es->Prime(kin, reprap.GetMove().GetAxisDriversConfig(axis)))
 		{
 			AddToActive(*es);
 			if (es->ShouldReduceAcceleration())
@@ -248,7 +248,7 @@ bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept
 		{
 			const unsigned int extruder = extruders.LowestSetBit();
 			extruders.ClearBit(extruder);
-			const DriverId driver = reprap.GetPlatform().GetExtruderDriver(extruder);
+			const DriverId driver = reprap.GetMove().GetExtruderDriver(extruder);
 # if SUPPORT_CAN_EXPANSION
 			if (driver.IsLocal())
 			{
@@ -806,32 +806,6 @@ void EndstopsManager::HandleRemoteAnalogZProbeValueChange(CanAddress src, uint8_
 			zp->UpdateRemoteReading(src, handleMinor, reading);
 		}
 	}
-}
-
-// This is called when we update endstop states because of a message from a remote board.
-// In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to DDA::CheckEndstops().
-void EndstopsManager::OnEndstopOrZProbeStatesChanged() noexcept
-{
-	DDARing& mainRing = reprap.GetMove().GetMainDDARing();
-	bool wakeAsyncSender = false;
-
-	// To prevent another task completing the move, we must disable task scheduling here.
-	TaskCriticalSectionLocker lock;
-	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt
-
-	DDA * const currentDda = mainRing.GetCurrentDDA();
-	if (currentDda != nullptr && currentDda->IsCheckingEndstops())
-	{
-		Platform& p = reprap.GetPlatform();
-		wakeAsyncSender = currentDda->CheckEndstops(p);
-		if (currentDda->GetState() == DDA::completed)
-		{
-			mainRing.OnMoveCompleted(currentDda, p);
-		}
-	}
-	RestoreBasePriority(oldPrio);										// allow step interrupts again
-
-	if (wakeAsyncSender) { CanInterface::WakeAsyncSender(); }
 }
 
 #endif

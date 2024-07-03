@@ -22,6 +22,10 @@
 #include <Cache.h>
 #include <AppNotifyIndices.h>
 
+#if HAS_LWIP_NETWORKING && defined(DUET3MINI_V04)
+# include "LwipEthernet/AllocateFromPbufPool.h"
+#endif
+
 static_assert(SsidLength == SsidBufferLength, "SSID lengths in NetworkDefs.h and MessageFormats.h don't match");
 
 // Define exactly one of the following as 1, the other as zero
@@ -460,6 +464,15 @@ void WiFiInterface::Activate() noexcept
 #if SAME70
 		bufferOut = &messageBufferOut;
 		bufferIn = &messageBufferIn;
+#elif HAS_LWIP_NETWORKING && defined(DUET3MINI_V04)
+		{
+			void *const mem = AllocateFromPbufPool(sizeof(MessageBufferOut));
+			bufferOut = (mem != nullptr) ? new (mem) MessageBufferOut : new MessageBufferOut;
+		}
+		{
+			void *const mem = AllocateFromPbufPool(sizeof(MessageBufferIn));
+			bufferIn = (mem != nullptr) ? new (mem) MessageBufferIn : new MessageBufferIn;
+		}
 #else
 		bufferOut = new MessageBufferOut;
 		bufferIn = new MessageBufferIn;
