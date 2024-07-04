@@ -27,9 +27,6 @@
 
 extern char _estack;		// defined by the linker
 
-volatile OutputStack SbcInterface::gcodeReply;
-Mutex SbcInterface::gcodeReplyMutex;
-
 // This function is not used in this class
 const ObjectModelClassDescriptor *SbcInterface::GetObjectModelClassDescriptor() const noexcept { return nullptr; }
 
@@ -56,7 +53,8 @@ SbcInterface::SbcInterface() noexcept : isConnected(false), numDisconnects(0), n
 	maxDelayBetweenTransfers(SpiTransferDelay), maxFileOpenDelay(SpiFileOpenDelay), numMaxEvents(SpiEventsRequired),
 	delaying(false), numEvents(0), reportPause(false), reportPauseWritten(false), printAborted(false),
 	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true), waitingForFileChunk(false),
-	fileMutex(), numOpenFiles(0), fileSemaphore(), fileOperation(FileOperation::none), fileOperationPending(false)
+	fileMutex(), numOpenFiles(0), fileSemaphore(), fileOperation(FileOperation::none), fileOperationPending(false),
+	gcodeReply(), gcodeReplyMutex()
 #ifdef TRACK_FILE_CODES
 	, fileCodesRead(0), fileCodesHandled(0), fileMacrosRunning(0), fileMacrosClosing(0)
 #endif
