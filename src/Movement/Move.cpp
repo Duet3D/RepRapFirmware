@@ -2838,8 +2838,10 @@ void Move::EngageBrake(size_t driver) noexcept
 {
 #if SUPPORT_BRAKE_PWM
 	currentBrakePwm[driver] = 0.0;
-#endif
+	brakePorts[driver].WriteAnalog(0.0);
+#else
 	brakePorts[driver].WriteDigital(false);			// turn the brake solenoid off to engage the brake
+#endif
 }
 
 void Move::DisengageBrake(size_t driver) noexcept
