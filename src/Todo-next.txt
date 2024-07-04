@@ -22,7 +22,14 @@ Remove excess debug e.g. reporting hiccups in debug
 
 Remove CheckSegments except when debugging
 
-Reduce RAM usage on Duet 2 and Duet 3 Mini.
+Reduce RAM usage on Duet 2 and especially Duet 3 Mini:
+- [done, needs more testing] Make MoveSegment smaller by not storing u
+- Make MoveSegment smaller by not storing startTime? Would need to introduce dummy segments representing gaps between segments.
+- [done] Make TMC22xx driver struct smaller
+- [asked chrishamm] Eliminate static SBC buffers/structs
+- [done] Change default AllocPermanent alignment from 8 to 4 bytes
+- [done] When using WiFi interface, allocate buffers etc. from Lwip PBUF pool
+- When using SBC mode allocsate transfer buffers etc. from Lwip PBUF pool
 
 When using segmentation, sync segment duration to multiples/submultiples of IS period - this should reduce the number of segments needed
 
@@ -60,5 +67,5 @@ Bugs:
 - [done] Pauses after G1 H2 moves, especially if expansion boards are involved
 - [done] Z probing not working
 - [re-test] G1 H2 moves on delta: moves the wrong number of steps according to M114 (too few) if just 1 tower moving; ok if all 3 moving
-- Christian reports that G1 H1 E moves (using stall detection) crash
+- [done] Christian reports that G1 H1 E moves (using stall detection) crash
 

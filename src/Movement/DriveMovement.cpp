@@ -82,21 +82,26 @@ void DriveMovement::AdjustMotorPosition(int32_t adjustment) noexcept
 #endif
 }
 
+// Calculate the initial speed given the duration, distance and acceleration
+static inline motioncalc_t CalcInitialSpeed(uint32_t duration, motioncalc_t distance, motioncalc_t a) noexcept
+{
+	return distance/(motioncalc_t)duration - (motioncalc_t)0.5 * a * (motioncalc_t)duration;
+}
+
 uint32_t maxCriticalElapsedTime = 0;
 
 // Add a segment into the list. If the list is not empty then the new segment may overlap segments already in the list but will never start earlier than the first existing one.
 // The units of the input parameters are steps for distance and step clocks for time.
-void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t u, motioncalc_t a, MovementFlags moveFlags) noexcept
+void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a, MovementFlags moveFlags) noexcept
 {
 	if ((int32_t)duration <= 0)
 	{
-		debugPrintf("Adding zero duration segment: d=%3e u=%.3e a=%.3e\n", (double)distance, (double)u, (double)a);
+		debugPrintf("Adding zero duration segment: d=%3e a=%.3e\n", (double)distance, (double)a);
 	}
-	// Adjust the initial speed and distance to account for pressure advance
+	// Adjust the distance (and implicitly the initial speed) to account for pressure advance
 	if (isExtruder && !moveFlags.nonPrintingMove)
 	{
 		const motioncalc_t extraSpeed = a * (motioncalc_t)extruderShaper.GetKclocks();
-		u += extraSpeed;
 		distance += extraSpeed * (motioncalc_t)duration;
 	}
 
@@ -104,7 +109,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
 #endif
 	{
-		debugPrintf("Add seg: dr=%u st=%" PRIu32 " t=%" PRIu32 " dist=%.2f u=%.3e a=%.3e f=%02" PRIx32 "\n", drive, startTime, duration, (double)distance, (double)u, (double)a, moveFlags.all);
+		debugPrintf("Add seg: dr=%u st=%" PRIu32 " t=%" PRIu32 " dist=%.2f u=%.3e a=%.3e f=%02" PRIx32 "\n", drive, startTime, duration, (double)distance, (double)CalcInitialSpeed(duration, distance, a), (double)a, moveFlags.all);
 	}
 
 	MoveSegment *prev = nullptr;
@@ -130,8 +135,8 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 				 RestoreBasePriority(oldPrio);
 				 if (reprap.Debug(Module::Move))
 				 {
-					 debugPrintf("was executing, overlap %" PRIi32 " while trying to add s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e f=%02" PRIx32 " at time %" PRIu32 "\n",
-						 	 	 	 -timeInHand, startTime, duration, (double)distance, (double)u, (double)a, moveFlags.all, now);
+					 debugPrintf("was executing, overlap %" PRIi32 " while trying to add s=%" PRIu32 " t=%" PRIu32 " d=%.2f a=%.4e f=%02" PRIx32 " at time %" PRIu32 "\n",
+						 	 	 	 -timeInHand, startTime, duration, (double)distance, (double)a, moveFlags.all, now);
 				 }
 				 return;
 			 }
@@ -149,25 +154,21 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 				if (offset >= -MoveSegment::MinDuration && duration >= 10 * MoveSegment::MinDuration)	// if it starts only slightly earlier and we can reasonably shorten it
 				{
 					startTime = seg->GetStartTime();								// then just delay and shorten the new segment slightly, to avoid creating a tiny segment
-					const motioncalc_t durationIncrease = (motioncalc_t)offset;		// get the (negative) increase in segment duration
-					const motioncalc_t oldDuration = (motioncalc_t)duration;
 #if SEGMENT_DEBUG
-					debugPrintf("Adjusting(1) t=%" PRIu32 " u=%.4e a=%.4e", duration, (double)u, (double)a);
+					debugPrintf("Adjusting(1) t=%" PRIu32 " a=%.4e", duration, (double)a);
 #endif
 					duration += offset;
-					u = (u * oldDuration - a * durationIncrease * (oldDuration + (motioncalc_t)0.5 * durationIncrease))/(motioncalc_t)duration;
 #if SEGMENT_DEBUG
-					debugPrintf(" to t=%" PRIu32 " u=%.4e a=%.4e\n", duration, (double)u, (double)a);
+					debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
 #endif
-					offset = 0;
 				}
 				else																// new segment starts before the existing one and can't be delayed/shortened so that it doesn't
 				{
 					// Insert part of the new segment before the existing one, then merge the rest
 					const uint32_t firstDuration = -offset;
-					const motioncalc_t firstDistance = (u + (motioncalc_t)0.5 * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
+					const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + (motioncalc_t)0.5 * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
 					seg = MoveSegment::Allocate(seg);
-					seg->SetParameters(startTime, firstDuration, firstDistance, u, a, moveFlags);
+					seg->SetParameters(startTime, firstDuration, firstDistance, a, moveFlags);
 					if (prev == nullptr)
 					{
 						segments = seg;
@@ -183,37 +184,34 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 					duration -= firstDuration;
 					startTime += firstDuration;
 					distance -= firstDistance;
-					u += a * (motioncalc_t)firstDuration;
 					prev = seg;
 					seg = seg->GetNext();
-					offset = 0;
 				}
+				offset = 0;
 			}
 
-			// At this point the new segment starts later or at the same time as the existing one
+			// At this point the new segment starts later or at the same time as the existing one (i.e. offset is non-negative)
 			if (offset < (int32_t)seg->GetDuration())													// if new segment starts before the existing one ends
 			{
 				// If we get here then the new segment starts later or at the same time as the existing one
 				if (offset != 0 && offset + MoveSegment::MinDuration >= (int32_t)seg->GetDuration() && duration >= 10 * MoveSegment::MinDuration)
 				{
 					// New segment starts just before the existing one ends, but we can delay and shorten it to start when the existing segment ends
-					const int32_t durationIncrease = offset - seg->GetDuration();						// get the (negative) increase in segment duration
-					const motioncalc_t oldDuration = (motioncalc_t)duration;
 #if SEGMENT_DEBUG
-					debugPrintf("Adjusting(3) t=%" PRIu32 " u=%.4e a=%.4e", duration, (double)u, (double)a);
+					debugPrintf("Adjusting(3) t=%" PRIu32 " a=%.4e", duration, (double)a);
 #endif
-					startTime = seg->GetStartTime() + seg->GetDuration();								// postpone and shorten it a little
-					duration += durationIncrease;
-					u = (u * oldDuration - a * (motioncalc_t)durationIncrease * (oldDuration + (motioncalc_t)0.5 * (motioncalc_t)durationIncrease))/(motioncalc_t)duration;
+					const uint32_t delay = seg->GetDuration() - (uint32_t)offset;
+					startTime += delay;																	// postpone and shorten it a little
+					duration -= delay;
 #if SEGMENT_DEBUG
-					debugPrintf(" to t=%" PRIu32 " u=%.4e a=%.4e\n", duration, (double)u, (double)a);
+					debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
 #endif
 					// Go round the loop again
 				}
 				else
 				{
 					// The new segment overlaps the existing one and can't be delayed so that it doesn't.
-					// If the new segment starts later than the existing one, split the existing one.
+					// If the new segment starts later than the existing one does, split the existing one.
 					if (offset != 0)
 					{
 						prev = seg;
@@ -230,15 +228,12 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 					if (timeDifference > 0 && timeDifference <= (int32_t)MoveSegment::MinDuration && duration >= 10 * MoveSegment::MinDuration)
 					{
 						// New segment is slightly longer then the old one but it can be shortened
-						const int32_t durationIncrease = -timeDifference;						// get the (negative) increase in segment duration
-						const motioncalc_t oldDuration = (motioncalc_t)duration;
 #if SEGMENT_DEBUG
-						debugPrintf("Adjusting(3) t=%" PRIu32 " u=%.4e a=%.4e", duration, (double)u, (double)a);
+						debugPrintf("Adjusting(3) t=%" PRIu32 " a=%.4e", duration, (double)a);
 #endif
-						duration += durationIncrease;
-						u = (u * oldDuration - a * (motioncalc_t)durationIncrease * (oldDuration + (motioncalc_t)0.5 * (motioncalc_t)durationIncrease))/(motioncalc_t)duration;
+						duration -= (uint32_t)timeDifference;
 #if SEGMENT_DEBUG
-						debugPrintf(" to t=%" PRIu32 " u=%.4e a=%.4e\n", duration, (double)u, (double)a);
+						debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
 #endif
 						timeDifference = 0;
 					}
@@ -246,18 +241,17 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 					if (timeDifference > 0)
 					{
 						// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
-						const motioncalc_t firstDistance = (u + (motioncalc_t)0.5 * a * (motioncalc_t)seg->GetDuration()) * (motioncalc_t)seg->GetDuration();	// distance moved by the first part of the new segment
+						const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + (motioncalc_t)0.5 * a * (motioncalc_t)seg->GetDuration()) * (motioncalc_t)seg->GetDuration();	// distance moved by the first part of the new segment
 #if SEGMENT_DEBUG
 						debugPrintf("merge1: ");
 #endif
-						seg->Merge(firstDistance, u, a, moveFlags);
+						seg->Merge(firstDistance, a, moveFlags);
 #if 1	//debug
 						CheckSegment(__LINE__, prev);
 						CheckSegment(__LINE__, seg);
 #endif
 						distance -= firstDistance;
 						startTime += seg->GetDuration();
-						u += a * (motioncalc_t)seg->GetDuration();
 						duration = (uint32_t)timeDifference;
 						// Now go round the loop again
 					}
@@ -278,18 +272,8 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 #if SEGMENT_DEBUG
 						debugPrintf("merge2: ");
 #endif
-						seg->Merge(distance, u, a, moveFlags);
-#if 1	//debug
-						CheckSegment(__LINE__, prev);
-						CheckSegment(__LINE__, seg);
-#endif
-#if SEGMENT_DEBUG
-						MoveSegment::DebugPrintList(segments);
-#endif
-						const uint32_t elapsedTime = StepTimer::GetTimerTicks() - criticalStartTime;
-						RestoreBasePriority(oldPrio);
-						if (elapsedTime > maxCriticalElapsedTime) { maxCriticalElapsedTime = elapsedTime; }	//DEBUG
-						return;
+						seg->Merge(distance, a, moveFlags);
+						goto finished;								// ugly but saves some code
 					}
 				}
 			}
@@ -301,9 +285,9 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 		}
 	}
 
-	// The new segment (or what's left of it) needs to be added before 'seg' which may be null
+	// If we get here then the new segment (or what's left of it) needs to be added before 'seg' which may be null
 	seg = MoveSegment::Allocate(seg);
-	seg->SetParameters(startTime, duration, distance, u, a, moveFlags);
+	seg->SetParameters(startTime, duration, distance, a, moveFlags);
 	if (prev == nullptr)
 	{
 		segments = seg;
@@ -312,6 +296,8 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 	{
 		prev->SetNext(seg);
 	}
+
+finished:
 #if 1	//debug
 					CheckSegment(__LINE__, prev);
 					CheckSegment(__LINE__, seg);
@@ -319,9 +305,9 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 #if SEGMENT_DEBUG
 	MoveSegment::DebugPrintList(segments);
 #endif
-	const uint32_t elapsedTime2 = StepTimer::GetTimerTicks() - criticalStartTime;
+	const uint32_t elapsedTime = StepTimer::GetTimerTicks() - criticalStartTime;
 	RestoreBasePriority(oldPrio);
-	if (elapsedTime2 > maxCriticalElapsedTime) { maxCriticalElapsedTime = elapsedTime2; }	//DEBUG
+	if (elapsedTime > maxCriticalElapsedTime) { maxCriticalElapsedTime = elapsedTime; }	//DEBUG
 }
 
 // Set up to schedule the first segment, returning true if an interrupt for this DM is needed
@@ -374,73 +360,81 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		// Calculate the movement parameters
 		bool newDirection;
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
+
 		// If netStepsThisSegment is zero then either this segment plus the distance carried forwards is less than one step, or it's a forwards-then-back move
 		if (seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0))
 		{
-			if (seg->GetU() < (motioncalc_t)0.0)
+			// Segment is linear
+			newDirection = !std::signbit(seg->GetLength());
+			if (newDirection)
 			{
-				newDirection = false;
-				p = (motioncalc_t)-1.0/seg->GetU();
-				segmentStepLimit = 1 - netStepsThisSegment;
+				p = seg->CalcLinearRecipU();
+				segmentStepLimit = netStepsThisSegment + 1;
 			}
 			else
 			{
-				newDirection = true;
-				p = (motioncalc_t)1.0/seg->GetU();
-				segmentStepLimit = netStepsThisSegment + 1;
+				p = -(seg->CalcLinearRecipU());
+				segmentStepLimit = 1 - netStepsThisSegment;
 			}
 			reverseStartStep = segmentStepLimit;
-			q = 0.0;								// to make the debug output consistent
+			q = 0.0;											// to make the debug output consistent
 			state = DMState::cartLinear;
 		}
 		else
 		{
+			// Segment has acceleration or deceleration
 			// n = distanceCarriedForwards + u * t + 0.5 * a * t^2
 			// Therefore 0.5 * t^2 + u * t/a + (distanceCarriedForwards - n)/a = 0
 			// Therefore t = -u/a +/- sqrt((u/a)^2 - 2 * (distanceCarriedForwards - n)/a)
 			// Calculate the t0, p and q coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q) and set up the initial direction
-			newDirection = (seg->GetU() == (motioncalc_t)0.0) ? (seg->GetA() > (motioncalc_t)0.0) : (seg->GetU() > (motioncalc_t)0.0);
-			motioncalc_t multiplier = (newDirection) ? (motioncalc_t)1.0 : (motioncalc_t)-1.0;
-			const int32_t netStepsInInitialDirection = (newDirection) ? netStepsThisSegment : -netStepsThisSegment;
-
+			motioncalc_t multiplier = std::copysign((motioncalc_t)1.0, seg->GetA());
+			newDirection = !std::signbit(seg->GetA());			// assume accelerating motion
 			if (t0 <= (motioncalc_t)0.0)
 			{
-				// The direction reversal is in the past
-				segmentStepLimit = reverseStartStep = netStepsInInitialDirection + 1;
+				// The direction reversal is in the past so the initial direction is the direction of the acceleration
+				segmentStepLimit = reverseStartStep = (newDirection) ? 1 + netStepsThisSegment : 1 - netStepsThisSegment;
 				state = DMState::cartAccel;
-			}
-			else if (t0 < (motioncalc_t)segments->GetDuration())
-			{
-				// Reversal is potentially in this segment, but it may be before the first step, or may be beyond the last step we are going to take
-				// It can also happen that the target end speed is zero but due to FP rounding error, distanceToReverse was just below netStepsInInitialDirection and got rounded down
-				const motioncalc_t distanceToReverse = (segments->GetDistanceToReverse() + distanceCarriedForwards) * multiplier;
-				const int32_t stepsBeforeReverse = (int32_t)(distanceToReverse - (motioncalc_t)0.2);			// don't step and immediately step back again
-				// Note, stepsBeforeReverse may be negative at this point
-				if (stepsBeforeReverse <= netStepsInInitialDirection && netStepsInInitialDirection >= 0)
-				{
-					segmentStepLimit = reverseStartStep = netStepsInInitialDirection + 1;
-					state = DMState::cartDecelNoReverse;
-				}
-				else if (stepsBeforeReverse <= 0)
-				{
-					// Reversal happens immediately
-					newDirection = !newDirection;
-					multiplier = -multiplier;
-					segmentStepLimit = reverseStartStep = 1 - netStepsInInitialDirection;
-					state = DMState::cartAccel;
-				}
-				else
-				{
-					reverseStartStep = stepsBeforeReverse + 1;
-					segmentStepLimit = 2 * reverseStartStep - netStepsInInitialDirection - 1;
-					state = DMState::cartDecelForwardsReversing;
-				}
 			}
 			else
 			{
-				// Reversal doesn't occur until after the end of this segment
-				segmentStepLimit = reverseStartStep = netStepsInInitialDirection + 1;
-				state = DMState::cartDecelNoReverse;
+				// The initial direction is opposite to the acceleration
+				multiplier = -multiplier;
+				newDirection = !newDirection;
+				const int32_t netStepsInInitialDirection = (newDirection) ? netStepsThisSegment : -netStepsThisSegment;
+
+				if (t0 < (motioncalc_t)seg->GetDuration())
+				{
+					// Reversal is potentially in this segment, but it may be before the first step, or may be beyond the last step we are going to take
+					// It can also happen that the target end speed is zero but due to FP rounding error, distanceToReverse was just below netStepsInInitialDirection and got rounded down
+					const motioncalc_t distanceToReverse = ((motioncalc_t)-0.5 * seg->GetA() * msquare(t0) + distanceCarriedForwards) * multiplier;
+					const int32_t stepsBeforeReverse = (int32_t)(distanceToReverse - (motioncalc_t)0.2);			// don't step and immediately step back again
+					// Note, stepsBeforeReverse may be negative at this point
+					if (stepsBeforeReverse <= netStepsInInitialDirection && netStepsInInitialDirection >= 0)
+					{
+						segmentStepLimit = reverseStartStep = netStepsInInitialDirection + 1;
+						state = DMState::cartDecelNoReverse;
+					}
+					else if (stepsBeforeReverse <= 0)
+					{
+						// Reversal happens immediately
+						newDirection = !newDirection;
+						multiplier = -multiplier;
+						segmentStepLimit = reverseStartStep = 1 - netStepsInInitialDirection;
+						state = DMState::cartAccel;
+					}
+					else
+					{
+						reverseStartStep = stepsBeforeReverse + 1;
+						segmentStepLimit = 2 * reverseStartStep - netStepsInInitialDirection - 1;
+						state = DMState::cartDecelForwardsReversing;
+					}
+				}
+				else
+				{
+					// Reversal doesn't occur until after the end of this segment
+					segmentStepLimit = reverseStartStep = netStepsInInitialDirection + 1;
+					state = DMState::cartDecelNoReverse;
+				}
 			}
 			const motioncalc_t rawP = (motioncalc_t)2.0/seg->GetA();
 			p = rawP * multiplier;
@@ -484,7 +478,17 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 						(unsigned int)state, (double)q, (double)t0, (double)p, nextStep, segmentStepLimit);
 		seg->DebugPrint();
 #endif
-		distanceCarriedForwards += seg->GetLength();
+		motioncalc_t newDcf = distanceCarriedForwards + seg->GetLength();
+		if (newDcf > 1.0 || newDcf < -1.0)
+		{
+			if (reprap.Debug(Module::Move))
+			{
+				debugPrintf("newDcf=%.3e\n", (double)newDcf);
+			}
+			LogStepError(7);
+			newDcf = (motioncalc_t)0.0;							// to prevent the next segment erroring out
+		}
+		distanceCarriedForwards = newDcf;
 		MoveSegment *oldSeg = seg;
 		segments = seg = seg->GetNext();						// skip this segment
 		MoveSegment::Release(oldSeg);
@@ -557,10 +561,6 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 
 			if (unlikely((int32_t)(currentSegment->GetStartTime() - prevEndTime) < -10))
 			{
-#if 1 // SEGMENT_DEBUG
-				debugPrintf("step err1, %" PRIu32 ", %" PRIu32 "\n", currentSegment->GetStartTime(), prevEndTime);
-				DebugPrint();
-#endif
 				return LogStepError(1);
 			}
 
@@ -659,20 +659,20 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 
 	uint32_t iNextCalcStepTime = (uint32_t)nextCalcStepTime;
 
-	if (iNextCalcStepTime > segments->GetDuration())
+	if (iNextCalcStepTime > currentSegment->GetDuration())
 	{
 		// The calculation makes this step late.
 		// When the end speed is very low, calculating the time of the last step is very sensitive to rounding error.
 		// So if this is the last step and it is late, bring it forward to the expected finish time.
 		// 2023-12-06: we now allow any step to be late but we record the maximum number.
 		// 2024-040-5: we now allow steps to be late on any segment, not just the last one, because a segment may be 0 or 1 step long and on deltas the last 2 steps may be calculated late.
-		iNextCalcStepTime = segments->GetDuration();
+		iNextCalcStepTime = currentSegment->GetDuration();
 		const int32_t nextCalcStep = nextStep + (int32_t)stepsTillRecalc;
 		const int32_t stepsLate = segmentStepLimit - nextCalcStep;
 		if (stepsLate > maxStepsLate) { maxStepsLate = stepsLate; }
 	}
 
-	iNextCalcStepTime += segments->GetStartTime();
+	iNextCalcStepTime += currentSegment->GetStartTime();
 	if (nextStep == 1)
 	{
 		nextStepTime = iNextCalcStepTime;
@@ -727,7 +727,7 @@ void DriveMovement::TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept
 	}
 
 	const int32_t timeFromStart = (int32_t)(clocksNow - currentSegment->GetStartTime());
-	currentMotorPosition = positionAtSegmentStart + lrintf((currentSegment->GetU() + ((motioncalc_t)0.5 * currentSegment->GetA() * (motioncalc_t)timeFromStart)) * (motioncalc_t)timeFromStart + distanceCarriedForwards);
+	currentMotorPosition = positionAtSegmentStart + lrintf((currentSegment->CalcU() + ((motioncalc_t)0.5 * currentSegment->GetA() * (motioncalc_t)timeFromStart)) * (motioncalc_t)timeFromStart + distanceCarriedForwards);
 	uint32_t targetTime;
 	if (currentSegment->GetDuration() <= timeFromStart + MoveTiming::MaxRemoteDriverPositionUpdateInterval)
 	{

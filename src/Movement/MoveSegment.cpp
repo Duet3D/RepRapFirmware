@@ -45,7 +45,7 @@ void MoveSegment::ReleaseAll(MoveSegment *item) noexcept
 
 void MoveSegment::DebugPrint() const noexcept
 {
-	debugPrintf("s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e f=%02" PRIx32 "\n", startTime, duration, (double)distance, (double)u, (double)a, flags.all);
+	debugPrintf("s=%" PRIu32 " t=%" PRIu32 " d=%.2f u=%.4e a=%.4e f=%02" PRIx32 "\n", startTime, duration, (double)distance, (double)CalcU(), (double)a, flags.all);
 }
 
 /*static*/ void MoveSegment::DebugPrintList(const MoveSegment *segs) noexcept
