@@ -99,7 +99,7 @@ void DDARing::Init2() noexcept
 		{
 			pos[i] = 0.0;
 		}
-		SetPositions(pos, AxesBitmap::MakeLowestNBits(MaxAxesPlusExtruders));
+		SetPositions(reprap.GetMove(), pos, AxesBitmap::MakeLowestNBits(MaxAxesPlusExtruders));
 	}
 
 	extrudersPrinting = false;
@@ -443,10 +443,17 @@ void DDARing::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) 
 
 // Set the initial machine coordinates for the next move to be added to the specified values, by setting the final coordinates of the last move in the queue
 // The last move in the queue must have already been set up by the Move process before this is called.
-void DDARing::SetPositions(const float positions[MaxAxesPlusExtruders], AxesBitmap axes) noexcept
+void DDARing::SetPositions(Move& move, const float positions[MaxAxesPlusExtruders], AxesBitmap axes) noexcept
 {
 	AtomicCriticalSectionLocker lock;
-	addPointer->GetPrevious()->SetPositions(positions, axes);
+	addPointer->GetPrevious()->SetPositions(move, positions, axes);
+}
+
+// Adjust the motor endpoints without moving the motors
+void DDARing::AdjustMotorPositions(Move& move, const float adjustment[], size_t numMotors) noexcept
+{
+	AtomicCriticalSectionLocker lock;
+	addPointer->GetPrevious()->AdjustMotorPositions(move, adjustment, numMotors);
 }
 
 // Get the DDA that should currently be executing, or nullptr if no move from this ring should be executing

@@ -247,6 +247,7 @@ public:
 #endif
 	void SetRawPosition(const float positions[MaxAxes], MovementSystemNumber msNumber, AxesBitmap axes) noexcept
 			pre(queueNumber < NumMovementSystems);							// Set the current position to be this without transforming them first
+	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;		// Perform motor endpoint adjustment after auto calibration
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetLiveMotorPosition(size_t driver) const noexcept pre(driver < MaxAxesPlusExtruders);
@@ -339,7 +340,6 @@ public:
 																							// Convert Cartesian coordinates to delta motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept;
 																							// Convert motor coordinates to machine coordinates
-	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;			// Perform motor endpoint adjustment after auto calibration
 	const char* GetGeometryString() const noexcept { return kinematics->GetName(true); }
 	bool IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
 
@@ -849,7 +849,16 @@ inline void Move::GetPartialMachinePosition(float m[MaxAxes], MovementSystemNumb
 // Set the current position to be this without transforming them first
 inline void Move::SetRawPosition(const float positions[MaxAxes], MovementSystemNumber msNumber, AxesBitmap axes) noexcept
 {
-	rings[msNumber].SetPositions(positions, axes);
+	rings[msNumber].SetPositions(*this, positions, axes);
+	liveCoordinatesValid = false;											// force the live XYZ position to be recalculated
+}
+
+// Adjust the motor endpoints without moving the motors. Called after auto-calibrating a linear delta or rotary delta machine.
+// There must be no pending movement when calling this!
+inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept
+{
+	rings[0].AdjustMotorPositions(*this, adjustment, numMotors);
+	liveCoordinatesValid = false;											// force the live XYZ position to be recalculated
 }
 
 inline int32_t Move::GetLiveMotorPosition(size_t driver) const noexcept

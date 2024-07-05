@@ -54,7 +54,6 @@ public:
 #endif
 	int32_t GetNetStepsTaken() const noexcept;							// return the number of steps taken in the current segment
 	void SetMotorPosition(int32_t pos) noexcept;
-	void AdjustMotorPosition(int32_t adjustment) noexcept;
 	bool MotionPending() const noexcept { return segments != nullptr; }
 	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
 	bool CheckingEndstops() const noexcept;								// returns true when executing a move that checks endstops or Z probe

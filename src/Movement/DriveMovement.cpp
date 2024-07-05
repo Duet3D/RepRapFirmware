@@ -70,18 +70,6 @@ void DriveMovement::SetMotorPosition(int32_t pos) noexcept
 	ClearMovementPending();
 }
 
-void DriveMovement::AdjustMotorPosition(int32_t adjustment) noexcept
-{
-	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintTransforms))
-	{
-		debugPrintf("Adjusting drive %u pos from %" PRIi32 " to %" PRIi32 "\n", drive, currentMotorPosition, currentMotorPosition + adjustment);
-	}
-	currentMotorPosition += adjustment;
-#if STEPS_DEBUG
-	positionRequested = (float)currentMotorPosition;
-#endif
-}
-
 // Calculate the initial speed given the duration, distance and acceleration
 static inline motioncalc_t CalcInitialSpeed(uint32_t duration, motioncalc_t distance, motioncalc_t a) noexcept
 {

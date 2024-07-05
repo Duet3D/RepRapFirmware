@@ -3596,18 +3596,6 @@ void Move::StopDriveFromRemote(size_t drive) noexcept
 
 #endif
 
-// Adjust the motor endpoints without moving the motors. Called after auto-calibrating a linear delta or rotary delta machine.
-// There must be no pending movement when calling this!
-void Move::AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept
-{
-	for (size_t drive = 0; drive < numMotors; ++drive)
-	{
-		dms[drive].AdjustMotorPosition(lrintf(adjustment[drive] * driveStepsPerMm[drive]));
-	}
-
-	liveCoordinatesValid = false;		// force the live XYZ position to be recalculated
-}
-
 // Reset all extruder positions to zero. Called when we start a print.
 void Move::ResetExtruderPositions() noexcept
 {
