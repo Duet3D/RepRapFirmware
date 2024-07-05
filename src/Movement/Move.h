@@ -350,7 +350,6 @@ public:
 
 	void Simulate(SimulationMode simMode) noexcept;											// Enter or leave simulation mode
 	float GetSimulationTime() const noexcept { return rings[0].GetSimulationTime(); }		// Get the accumulated simulation time
-	SimulationMode GetSimulationMode() const noexcept { return simulationMode; }
 
 	bool PausePrint(MovementState& ms) noexcept;											// Pause the print as soon as we can, returning true if we were able to
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
