@@ -370,11 +370,11 @@ void Display::ErrorBeep() noexcept
 // Caution: this may be called from within an ISR
 void Display::StopBeep() noexcept
 {
-			beepTicksToGo = 0;						// do this first to avoid race condition with tick ISR
+	beepTicksToGo = 0;						// do this first to avoid race condition with tick ISR
 #if SUPPORT_12864_LCD
-			IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);
+	IoPort::WriteAnalog(LcdBeepPin, 0.0, 0);
 #elif SUPPORT_ILI9488_LCD
-			AnalogOut::Beep(BeeperPins[0], BeeperPins[1], 0);
+	AnalogOut::Beep(BeeperPins[0], BeeperPins[1], 0);
 #endif
 }
 
@@ -389,7 +389,10 @@ void Display::Tick() noexcept
 		{
 			StopBeep();
 		}
-		beepTicksToGo = locTicks;
+		else
+		{
+			beepTicksToGo = locTicks;
+		}
 	}
 }
 

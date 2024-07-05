@@ -340,6 +340,7 @@ Platform::Platform() noexcept :
 #endif
 	board(DEFAULT_BOARD_TYPE), active(false), errorCodeBits(0),
 	nextDriveToPoll(0),
+	beepTicksToGo(0),
 	lastFanCheckTime(0),
 #if SUPPORT_PANELDUE_FLASH
 	panelDueUpdater(nullptr),
@@ -2447,6 +2448,33 @@ void Platform::StopLogging() noexcept
 #endif
 }
 
+GCodeResult Platform::SetBuzzerPort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	StopBeep();		// Stop beeping before touching the buzzer port assignment
+	return buzzerPort.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::pwm) ? GCodeResult::ok : GCodeResult::error;
+}
+
+bool Platform::Beep(unsigned int freq, unsigned int ms) noexcept
+{
+	if (!buzzerPort.IsValid())
+	{
+		// Cannot beep if no buzzer port is configured
+		return false;
+	}
+
+	buzzerPort.SetFrequency(freq);
+	buzzerPort.WriteAnalog(0.5);
+	beepTicksToGo = ms;
+	return true;
+}
+
+// Caution: This may be called from an ISR as well!
+void Platform::StopBeep() noexcept
+{
+	beepTicksToGo = 0;
+	buzzerPort.WriteAnalog(0.0);
+}
+
 bool Platform::GetAtxPowerState() const noexcept
 {
 	const bool val = PsOnPort.ReadDigital();
@@ -3319,6 +3347,21 @@ void Platform::Tick() noexcept
 # endif
 	}
 #endif
+
+	// Turn off the buzzer when needed
+	uint32_t locTicks = beepTicksToGo;				// capture volatile variable to reduce code size
+	if (locTicks != 0)
+	{
+		--locTicks;
+		if (locTicks == 0)
+		{
+			StopBeep();
+		}
+		else
+		{
+			beepTicksToGo = locTicks;
+		}
+	}
 
 #if SAME70
 	// The SAME70 ADC is noisy, so read a thermistor on every tick so that we can average a greater number of readings

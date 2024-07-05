@@ -313,6 +313,10 @@ public:
 	bool FlushMessages() noexcept;								// Flush messages to USB and aux, returning true if there is more to send
 	void StopLogging() noexcept;
 
+	// Buzzer via configured PWM port
+	GCodeResult SetBuzzerPort(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	bool Beep(unsigned int freq, unsigned int ms) noexcept;
+
 	// Movement
 	void EmergencyStop() noexcept;
 #if SUPPORT_LED_STRIPS
@@ -530,6 +534,11 @@ private:
 	// GPIO pins
 	GpOutputPort gpoutPorts[MaxGpOutPorts];
 	GpInputPort gpinPorts[MaxGpInPorts];
+
+	// Buzzer
+	PwmPort buzzerPort;
+	volatile unsigned int beepTicksToGo;
+	void StopBeep() noexcept;
 
 	// Thermistors and temperature monitoring
 	volatile ThermistorAveragingFilter adcFilters[NumAdcFilters];	// ADC reading averaging filters

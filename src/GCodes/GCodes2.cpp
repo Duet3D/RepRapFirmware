@@ -2836,6 +2836,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 300:	// Beep
+				if (gb.Seen('C'))
+				{
+					result = platform.SetBuzzerPort(gb, reply);
+				}
+				else
 				{
 					const unsigned int ms = (gb.Seen('P')) ? gb.GetUIValue() : 1000;			// time in milliseconds
 					const unsigned int freq = (gb.Seen('S')) ? gb.GetUIValue() : 4600;			// 4600Hz produces the loudest sound on a PanelDue

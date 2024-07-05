@@ -4,6 +4,7 @@
 #include "GCodeBuffer/GCodeBuffer.h"
 #include <Platform/RepRap.h>
 #include <Platform/Event.h>
+#include <PrintMonitor/PrintMonitor.h>
 #include <Movement/Move.h>
 #include <Tools/Tool.h>
 #include <Heating/Heat.h>
@@ -751,6 +752,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 		break;
 
 	case GCodeState::stopped:
+		reprap.GetPrintMonitor().StoppedPrint();
 		gb.SetState(GCodeState::normal);
 		break;
 

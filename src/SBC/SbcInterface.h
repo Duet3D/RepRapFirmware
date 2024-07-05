@@ -134,8 +134,8 @@ private:
 	FilePosition fileOffset;
 	// End of file operation variables
 
-	static volatile OutputStack gcodeReply;
-	static Mutex gcodeReplyMutex;											// static so that the SbcInterface is safe to delete even is the mutex is linked into the mutex chain or is in use
+	volatile OutputStack gcodeReply;
+	Mutex gcodeReplyMutex;
 
 #ifdef TRACK_FILE_CODES
 	volatile size_t fileCodesRead, fileCodesHandled, fileMacrosRunning, fileMacrosClosing;

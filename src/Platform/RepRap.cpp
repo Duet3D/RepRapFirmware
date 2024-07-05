@@ -2339,8 +2339,11 @@ void RepRap::Beep(unsigned int freq, unsigned int ms) noexcept
 	freq = constrain<unsigned int>(freq, 50, 10000);
 	ms = constrain<unsigned int>(ms, 10, 60000);
 
+
+	// Try to beep via the configured buzzer port
+	bool bleeped = platform->Beep(freq, ms);
+
 	// If there is an LCD device present, make it beep
-	bool bleeped = false;
 #if SUPPORT_DIRECT_LCD
 	if (display->IsPresent())
 	{
