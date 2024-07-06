@@ -1319,6 +1319,10 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		savedMovePointer = (savedMovePointer + 1) % NumSavedMoves;
 #endif
 	}
+	else
+	{
+		state = committed;
+	}
 }
 
 // Check whether a committed move has finished
