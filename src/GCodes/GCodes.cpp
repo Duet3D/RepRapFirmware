@@ -4422,7 +4422,7 @@ void GCodes::StopPrint(GCodeBuffer *gbp, StopPrintReason reason) noexcept
 
 		exitSimulationWhenFileComplete = false;
 		updateFileWhenSimulationComplete = false;
-		simulationMode = SimulationMode::off;				// do this after we append the simulation info to the file so that DWC doesn't try to reload the file info too soon
+		simulationMode = SimulationMode::off;					// do this after we append the simulation info to the file so that DWC doesn't try to reload the file info too soon
 		reprap.GetMove().Simulate(simulationMode);
 		EndSimulation(nullptr);
 
@@ -4439,12 +4439,13 @@ void GCodes::StopPrint(GCodeBuffer *gbp, StopPrintReason reason) noexcept
 			platform.MessageF(LoggedGenericMessage, "Cancelled simulating file %s after %" PRIu32 "h %" PRIu32 "m simulated time\n",
 									printingFilename, simMinutes/60u, simMinutes % 60u);
 		}
+		reprap.GetPrintMonitor().StoppedPrint();				// must do this after printing the simulation details not before, because it clears the filename and pause time
 	}
 	else if (reprap.GetPrintMonitor().IsPrinting())
 	{
 		if (reason == StopPrintReason::abort)
 		{
-			reprap.GetHeat().SwitchOffAll(true);	// turn all heaters off
+			reprap.GetHeat().SwitchOffAll(true);				// turn all heaters off
 			switch (machineType)
 			{
 			case MachineType::cnc:
