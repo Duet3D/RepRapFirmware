@@ -444,7 +444,11 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 				directionChanged = true;
 			}
 
-			driversCurrentlyUsed = driversNormallyUsed;
+			// Unless it's the deceleration movement at the end of a homing move, re-enable all drivers for this axis
+			if (!segmentFlags.checkEndstops || seg->GetA() >= 0.0)
+			{
+				driversCurrentlyUsed = driversNormallyUsed;
+			}
 
 #if 0	//DEBUG
 			debugPrintf("New cart seg: state %u q=%.4e t0=%.4e p=%.4e ns=%" PRIi32 " ssl=%" PRIi32 "\n",

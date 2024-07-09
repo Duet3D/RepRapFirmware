@@ -521,8 +521,6 @@ void Move::Init() noexcept
 	slowDriversBitmap = 0;										// assume no drivers need extended step pulse timing
 #endif
 
-	EnableAllSteppingDrivers();									// no drivers disabled
-
 #if HAS_SMART_DRIVERS
 	// Initialise TMC driver module
 # if SUPPORT_TMC51xx
@@ -1934,7 +1932,7 @@ void Move::LaserTaskRun() noexcept
 	}
 }
 
-// Get the accumulated extruder motor steps taken by an extruder since the last call. Used by the filament monitoring code.
+// Get the accumulated extruder motor steps taken by an extruder since the last call to this function. Used by the filament monitoring code.
 // Returns the number of motor steps moved since the last call, and sets isPrinting true unless we are currently executing an extruding but non-printing move
 // This is called from the filament monitor ISR and from FilamentMonitor::Spin
 int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noexcept
@@ -2254,7 +2252,8 @@ void Move::CheckEndstops(bool executingMove) noexcept
 			else
 #endif
 			{
-				DisableSteppingDriver(hitDetails.driver.localDriver);
+				const size_t localDriver = hitDetails.driver.localDriver;
+				dms[localDriver].driversCurrentlyUsed &= ~StepPins::CalcDriverBitmap(localDriver);
 			}
 
 			{
@@ -2318,8 +2317,6 @@ void Move::StepDrivers(uint32_t now) noexcept
 			dm = dm->nextDM;
 		}
 	}
-
-	driversStepping &= steppingEnabledDriversBitmap;
 
 #ifdef DUET3_MB6XD
 	if (driversStepping != 0)

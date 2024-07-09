@@ -1286,7 +1286,6 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			// Before we send movement commands to remote drives, if any endstop switches we are monitoring are already set, make sure we don't start the motors concerned.
 			// This is especially important when using CAN-connected motors or endstops, because we rely on receiving "endstop changed" messages.
 			// Moves that check endstops are always run as isolated moves, so there can be no move in progress and the endstops must already be primed.
-			move.EnableAllSteppingDrivers();
 			const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);				// shut out the step interrupt
 			(void)move.CheckEndstops(false);									// this may modify pending CAN moves
 			RestoreBasePriority(oldPrio);

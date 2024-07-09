@@ -205,9 +205,6 @@ public:
 	uint32_t GetSlowDriverDirSetupClocks() const noexcept { return slowDriverStepTimingClocks[2]; }
 #endif
 
-	void DisableSteppingDriver(uint8_t driver) noexcept { steppingEnabledDriversBitmap &= ~StepPins::CalcDriverBitmap(driver); }
-	void EnableAllSteppingDrivers() noexcept { steppingEnabledDriversBitmap = 0xFFFFFFFFu; }
-
 	void PollOneDriver(size_t driver) noexcept pre(driver < NumDirectDrivers);
 
 #if VARIABLE_NUM_DRIVERS
@@ -693,7 +690,6 @@ private:
 	uint32_t slowDriversBitmap;								// bitmap of driver port bits that need extended step pulse timing
 	uint32_t slowDriverStepTimingClocks[4];					// minimum step high, step low, dir setup and dir hold timing for slow drivers
 #endif
-	uint32_t steppingEnabledDriversBitmap;					// mask of driver bits that we haven't disabled temporarily
 
 	float idleCurrentFactor;
 	float minimumMovementSpeed;								// minimum allowed movement speed in mm per step clock
