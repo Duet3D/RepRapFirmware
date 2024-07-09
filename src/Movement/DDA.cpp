@@ -1047,6 +1047,9 @@ void DDA::SetPositions(Move& move, const float position[MaxAxes], AxesBitmap axe
 						{
 							endCoordinates[axis] = position[axis];
 							driversMoved |= kin.GetControllingDrives(axis, false);
+#if SUPPORT_ASYNC_MOVES
+							MovementState::SetLastKnownMachinePosition(axis, position[axis]);
+#endif
 						}
 					 );
 	flags.endCoordinatesValid = true;

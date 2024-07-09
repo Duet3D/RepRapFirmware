@@ -794,12 +794,27 @@ bool GCodes::DoFilePrint(GCodeBuffer& gb, const StringRef& reply) noexcept
 void GCodes::EndSimulation(GCodeBuffer *null gb) noexcept
 {
 	// Ending a simulation, so restore the position
-	const MovementSystemNumber msNumber = (gb == nullptr) ? 0 : gb->GetActiveQueueNumber();	//TODO handle null gb properly
-	MovementState& ms = moveStates[msNumber];
-	RestorePosition(ms.GetSimulationRestorePoint(), gb);
-	ms.SelectTool(ms.GetSimulationRestorePoint().toolNumber, true);
-	ToolOffsetTransform(ms);
-	reprap.GetMove().SetNewPosition(ms.coords, ms, true);
+	for (MovementState& ms : moveStates)
+	{
+		const RestorePoint& rp = ms.GetSimulationRestorePoint();
+		RestorePosition(ms, rp);
+		if (gb != nullptr && ms.GetMsNumber() != 0)
+		{
+			gb->LatestMachineState().feedRate = rp.feedRate;
+		}
+		ms.SelectTool(rp.toolNumber, true);
+		ToolOffsetTransform(ms);
+		// We need to reset the machine positions of all axes but it's likely that most axes are unowned.
+		// So we set the positions as if MS0 owns all the axes, then set the positions of any that MS1 owns.
+		if (ms.GetMsNumber() == 0)
+		{
+			reprap.GetMove().SetNewPositionOfAllAxes(ms, true);
+		}
+		else
+		{
+			reprap.GetMove().SetNewPositionOfOwnedAxes(ms, true);
+		}
+	}
 	axesVirtuallyHomed = axesHomed;
 	reprap.MoveUpdated();
 }
@@ -4425,6 +4440,7 @@ void GCodes::StopPrint(GCodeBuffer *gbp, StopPrintReason reason) noexcept
 		simulationMode = SimulationMode::off;					// do this after we append the simulation info to the file so that DWC doesn't try to reload the file info too soon
 		reprap.GetMove().Simulate(simulationMode);
 		EndSimulation(nullptr);
+		reprap.GetPrintMonitor().StoppedPrint();				// must do this after printing the simulation details not before, because it clears the filename and pause time
 
 		const uint32_t simMinutes = lrintf(simSeconds/60.0);
 		if (reason == StopPrintReason::normalCompletion)
@@ -4439,7 +4455,6 @@ void GCodes::StopPrint(GCodeBuffer *gbp, StopPrintReason reason) noexcept
 			platform.MessageF(LoggedGenericMessage, "Cancelled simulating file %s after %" PRIu32 "h %" PRIu32 "m simulated time\n",
 									printingFilename, simMinutes/60u, simMinutes % 60u);
 		}
-		reprap.GetPrintMonitor().StoppedPrint();				// must do this after printing the simulation details not before, because it clears the filename and pause time
 	}
 	else if (reprap.GetPrintMonitor().IsPrinting())
 	{
@@ -4553,17 +4568,12 @@ void GCodes::SavePosition(const GCodeBuffer& gb, unsigned int restorePointNumber
 }
 
 // Restore user position from a restore point. Also restore the laser power, but not the spindle speed (the user must do that explicitly).
-void GCodes::RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept
+// Currently this is only called to restore position after simulation.
+void GCodes::RestorePosition(MovementState& ms, const RestorePoint& rp) noexcept
 {
-	MovementState& ms = (gb == nullptr) ? moveStates[0] : GetMovementState(*gb);	//TODO handle null gb properly!
 	for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 	{
 		ms.currentUserPosition[axis] = rp.moveCoords[axis];
-	}
-
-	if (gb != nullptr)
-	{
-		gb->LatestMachineState().feedRate = rp.feedRate;
 	}
 
 	ms.initialUserC0 = rp.initialUserC0;
@@ -5488,7 +5498,7 @@ void GCodes::UpdateAllCoordinates(const GCodeBuffer& gb) noexcept
 	memcpyf(ms.coords, MovementState::GetLastKnownMachinePositions(), MaxAxes);
 	reprap.GetMove().InverseAxisAndBedTransform(ms.coords, ms.currentTool);
 	UpdateUserPositionFromMachinePosition(gb, ms);
-	reprap.GetMove().SetNewPosition(ms.coords, ms, true);
+	reprap.GetMove().SetNewPositionOfAllAxes(ms, true);
 }
 
 #endif

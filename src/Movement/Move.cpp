@@ -1072,18 +1072,17 @@ uint32_t Move::ExtruderPrintingSince(size_t logicalDrive) const noexcept
 }
 
 // Set the current position to be this
-void Move::SetNewPosition(const float positionNow[MaxAxesPlusExtruders], const MovementState& ms, bool doBedCompensation) noexcept
+void Move::SetNewPositionOfAllAxes(const MovementState& ms, bool doBedCompensation) noexcept
+{
+	SetNewPositionOfSomeAxes(ms, doBedCompensation, AxesBitmap::MakeLowestNBits(reprap.GetGCodes().GetVisibleAxes()));
+}
+
+void Move::SetNewPositionOfSomeAxes(const MovementState& ms, bool doBedCompensation, AxesBitmap axes) noexcept
 {
 	float newPos[MaxAxesPlusExtruders];
-	memcpyf(newPos, positionNow, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
+	memcpyf(newPos, ms.coords, ARRAY_SIZE(newPos));			// copy to local storage because Transform modifies it
 	AxisAndBedTransform(newPos, ms.currentTool, doBedCompensation);
-	SetRawPosition(newPos, ms.GetMsNumber(),
-#if SUPPORT_ASYNC_MOVES
-					ms.GetAxesAndExtrudersOwned()
-#else
-					AxesBitmap::MakeLowestNBits(reprap.GetGCodes().GetVisibleAxes())
-#endif
-				  );
+	SetRawPosition(newPos, ms.GetMsNumber(), axes);
 }
 
 // Convert distance to steps for a particular drive
