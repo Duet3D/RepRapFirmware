@@ -92,15 +92,6 @@ private:
 
 	uint32_t iapRamAvailable;											// must be at least 32Kb otherwise the SPI IAP can't work
 
-	// Data needed when a CAN expansion board requests a firmware file chunk
-	volatile bool waitingForFileChunk;
-	bool fileChunkRequestSent;
-	String<MaxFilenameLength> requestedFileName;
-	uint32_t requestedFileOffset, requestedFileLength;
-	BinarySemaphore requestedFileSemaphore;
-	char *requestedFileBuffer;
-	int32_t requestedFileDataLength;
-
 	// File I/O
 	Mutex fileMutex;													// locked while a file operation is performed
 	unsigned int numOpenFiles;

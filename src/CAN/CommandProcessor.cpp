@@ -39,13 +39,6 @@
 # include <Accelerometers/Accelerometers.h>
 #endif
 
-#if HAS_SBC_INTERFACE
-# include "SBC/SbcInterface.h"
-
-constexpr size_t MaxFileChunkSize = 448;	// Maximum size of file chunks for reading files from the SBC. Should be a multiple of sizeof(CanMessageFirmwareUpdateResponse::data) for best CAN performance
-char sbcFirmwareChunk[MaxFileChunkSize];
-#endif
-
 // Handle a firmware update request
 static void HandleFirmwareBlockRequest(CanMessageBuffer *buf) noexcept
 pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
@@ -64,158 +57,69 @@ pre(buf->id.MsgType() == CanMessageType::firmwareBlockRequest)
 		uint32_t fileOffset = msg.fileOffset, fileLength = 0;
 		uint32_t lreq = msg.lengthRequested;
 
-#if HAS_SBC_INTERFACE
-		if (reprap.UsingSbcInterface())
+#if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
+		// Fetch the firmware file from the local SD card or SBC
+		FileStore * const f = reprap.GetPlatform().OpenFile(FIRMWARE_DIRECTORY, fname.c_str(), OpenMode::read);
+		if (f != nullptr)
 		{
-			// Fetch the firmware file from the SBC
-			uint32_t bytesRead = min<uint32_t>(lreq, MaxFileChunkSize);
-			if (reprap.GetSbcInterface().GetFileChunk(fname.c_str(), fileOffset, sbcFirmwareChunk, bytesRead, fileLength))
-			{
-				if (fileOffset >= fileLength)
-				{
-					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
-					msgp->dataLength = 0;
-					msgp->err = CanMessageFirmwareUpdateResponse::ErrBadOffset;
-					msgp->fileLength = fileLength;
-					msgp->fileOffset = 0;
-					buf->dataLength = msgp->GetActualDataLength();
-					CanInterface::SendResponseNoFree(buf);
-
-					reprap.GetPlatform().MessageF(ErrorMessage, "Received firmware update request with bad file offset, actual %" PRIu32 " max %" PRIu32 "\n", fileOffset, fileLength);
-				}
-				else
-				{
-					if (fileLength - fileOffset < lreq)
-					{
-						lreq = fileLength - fileOffset;
-					}
-
-//debugPrintf("Sending %" PRIu32 " bytes at offset %" PRIu32 "\n", lreq, fileOffset);
-
-					size_t bytesSent = 0;
-					for (;;)
-					{
-						CanMessageFirmwareUpdateResponse * msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
-						const size_t lengthToSend = min<size_t>(bytesRead - bytesSent, sizeof(msgp->data));
-						memcpy(msgp->data, sbcFirmwareChunk + bytesSent, lengthToSend);
-						msgp->dataLength = lengthToSend;
-						msgp->err = CanMessageFirmwareUpdateResponse::ErrNone;
-						msgp->fileLength = fileLength;
-						msgp->fileOffset = fileOffset;
-						buf->dataLength = msgp->GetActualDataLength();
-						CanInterface::SendResponseNoFree(buf);
-
-						bytesSent += lengthToSend;
-						fileOffset += lengthToSend;
-						lreq -= lengthToSend;
-						if (lreq == 0)
-						{
-							break;
-						}
-
-						if (bytesSent == (size_t)bytesRead)
-						{
-							bytesRead = min<uint32_t>(lreq, MaxFileChunkSize);
-							if (!reprap.GetSbcInterface().GetFileChunk(fname.c_str(), fileOffset, sbcFirmwareChunk, bytesRead, fileLength))
-							{
-								msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
-								msgp->dataLength = 0;
-								msgp->err = CanMessageFirmwareUpdateResponse::ErrOther;
-								msgp->fileLength = fileLength;
-								msgp->fileOffset = 0;
-								buf->dataLength = msgp->GetActualDataLength();
-								CanInterface::SendResponseNoFree(buf);
-
-								reprap.GetPlatform().MessageF(ErrorMessage, "Error reading firmware update file '%s'\n", fname.c_str());
-								reprap.GetExpansion().UpdateFailed(src);
-								return;
-							}
-							bytesSent = 0;
-						}
-					}
-				}
-			}
-			else
+			fileLength = f->Length();
+			if (fileOffset >= fileLength)
 			{
 				CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
 				msgp->dataLength = 0;
-				msgp->err = CanMessageFirmwareUpdateResponse::ErrNoFile;
+				msgp->err = CanMessageFirmwareUpdateResponse::ErrBadOffset;
 				msgp->fileLength = fileLength;
 				msgp->fileOffset = 0;
 				buf->dataLength = msgp->GetActualDataLength();
 				CanInterface::SendResponseNoFree(buf);
-				reprap.GetPlatform().MessageF(ErrorMessage, "Firmware file %s not found", fname.c_str());
-				reprap.GetExpansion().UpdateFailed(src);
-				return;
-			}
-		}
-		else
-#endif
-		{
-#if HAS_MASS_STORAGE
-			// Fetch the firmware file from the local SD card
-			FileStore * const f = reprap.GetPlatform().OpenFile(FIRMWARE_DIRECTORY, fname.c_str(), OpenMode::read);
-			if (f != nullptr)
-			{
-				fileLength = f->Length();
-				if (fileOffset >= fileLength)
-				{
-					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
-					msgp->dataLength = 0;
-					msgp->err = CanMessageFirmwareUpdateResponse::ErrBadOffset;
-					msgp->fileLength = fileLength;
-					msgp->fileOffset = 0;
-					buf->dataLength = msgp->GetActualDataLength();
-					CanInterface::SendResponseNoFree(buf);
 
-					reprap.GetPlatform().MessageF(ErrorMessage, "Received firmware update request with bad file offset, actual %" PRIu32 " max %" PRIu32 "\n", fileOffset, fileLength);
-				}
-				else
+				reprap.GetPlatform().MessageF(ErrorMessage, "Received firmware update request with bad file offset, actual %" PRIu32 " max %" PRIu32 "\n", fileOffset, fileLength);
+			}
+			else
+			{
+				f->Seek(fileOffset);
+				if (fileLength - fileOffset < lreq)
 				{
-					f->Seek(fileOffset);
-					if (fileLength - fileOffset < lreq)
-					{
-						lreq = fileLength - fileOffset;
-					}
+					lreq = fileLength - fileOffset;
+				}
 
 //debugPrintf("Sending %" PRIu32 " bytes at offset %" PRIu32 "\n", lreq, fileOffset);
 
-					for (;;)
+				for (;;)
+				{
+					CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
+					const size_t lengthToSend = min<size_t>(lreq, sizeof(msgp->data));
+					if (f->Read(msgp->data, lengthToSend) != (int)lengthToSend)
 					{
-						CanMessageFirmwareUpdateResponse * const msgp = buf->SetupResponseMessage<CanMessageFirmwareUpdateResponse>(0, CanInterface::GetCurrentMasterAddress(), src);
-						const size_t lengthToSend = min<size_t>(lreq, sizeof(msgp->data));
-						if (f->Read(msgp->data, lengthToSend) != (int)lengthToSend)
-						{
-							msgp->dataLength = 0;
-							msgp->err = CanMessageFirmwareUpdateResponse::ErrOther;
-							msgp->fileLength = fileLength;
-							msgp->fileOffset = 0;
-							buf->dataLength = msgp->GetActualDataLength();
-							CanInterface::SendResponseNoFree(buf);
-
-							reprap.GetPlatform().MessageF(ErrorMessage, "Error reading firmware update file '%s'\n", fname.c_str());
-							reprap.GetExpansion().UpdateFailed(src);
-							return;
-						}
-
-						msgp->dataLength = lengthToSend;
-						msgp->err = CanMessageFirmwareUpdateResponse::ErrNone;
+						msgp->dataLength = 0;
+						msgp->err = CanMessageFirmwareUpdateResponse::ErrOther;
 						msgp->fileLength = fileLength;
-						msgp->fileOffset = fileOffset;
+						msgp->fileOffset = 0;
 						buf->dataLength = msgp->GetActualDataLength();
 						CanInterface::SendResponseNoFree(buf);
-						fileOffset += lengthToSend;
-						lreq -= lengthToSend;
-						if (lreq == 0)
-						{
-							break;
-						}
+
+						reprap.GetPlatform().MessageF(ErrorMessage, "Error reading firmware update file '%s'\n", fname.c_str());
+						reprap.GetExpansion().UpdateFailed(src);
+						return;
+					}
+
+					msgp->dataLength = lengthToSend;
+					msgp->err = CanMessageFirmwareUpdateResponse::ErrNone;
+					msgp->fileLength = fileLength;
+					msgp->fileOffset = fileOffset;
+					buf->dataLength = msgp->GetActualDataLength();
+					CanInterface::SendResponseNoFree(buf);
+					fileOffset += lengthToSend;
+					lreq -= lengthToSend;
+					if (lreq == 0)
+					{
+						break;
 					}
 				}
-				f->Close();
 			}
-#endif
+			f->Close();
 		}
+#endif
 
 		if (lreq != 0)			// if we didn't complete the request
 		{

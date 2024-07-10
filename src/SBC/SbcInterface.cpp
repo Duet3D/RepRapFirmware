@@ -52,7 +52,7 @@ extern "C" [[noreturn]] void SBCTaskStart(void * pvParameters) noexcept
 SbcInterface::SbcInterface() noexcept : isConnected(false), numDisconnects(0), numTimeouts(0), numSbcTimeouts(0), lastTransferTime(0),
 	maxDelayBetweenTransfers(SpiTransferDelay), maxFileOpenDelay(SpiFileOpenDelay), numMaxEvents(SpiEventsRequired),
 	delaying(false), numEvents(0), reportPause(false), reportPauseWritten(false), printAborted(false),
-	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true), waitingForFileChunk(false),
+	codeBuffer(nullptr), rxPointer(0), txPointer(0), txEnd(0), sendBufferUpdate(true),
 	fileMutex(), numOpenFiles(0), fileSemaphore(), fileOperation(FileOperation::none), fileOperationPending(false),
 	gcodeReply(), gcodeReplyMutex()
 #ifdef TRACK_FILE_CODES
@@ -517,14 +517,10 @@ void SbcInterface::ExchangeData() noexcept
 		}
 
 		// Assign filament (deprecated)
+		// Return a file chunk (deprecated)
 		case SbcRequest::AssignFilament_deprecated:
+		case SbcRequest::FileChunk_deprecated:
 			(void)transfer.ReadData(packet->length);		// skip the packet content
-			break;
-
-		// Return a file chunk
-		case SbcRequest::FileChunk:
-			transfer.ReadFileChunk(requestedFileBuffer, requestedFileDataLength, requestedFileLength);
-			requestedFileSemaphore.Give();
 			break;
 
 		// Evaluate an expression
@@ -1003,7 +999,7 @@ void SbcInterface::ExchangeData() noexcept
 	}
 
 	// Check if we can wait a short moment to reduce CPU load on the SBC
-	if (!skipNextDelay && numEvents < numMaxEvents && !waitingForFileChunk &&
+	if (!skipNextDelay && numEvents < numMaxEvents &&
 		!fileOperationPending && fileOperation == FileOperation::none)
 	{
 		delaying = true;
@@ -1040,13 +1036,6 @@ void SbcInterface::ExchangeData() noexcept
 			const uint16_t bufferSpace = (txEnd == 0) ? max<uint16_t>(rxPointer, SpiCodeBufferSize - txPointer) : rxPointer - txPointer;
 			sendBufferUpdate = !transfer.WriteCodeBufferUpdate(bufferSpace);
 		}
-	}
-
-	// Get another chunk of the file being requested
-	if (waitingForFileChunk &&
-		!fileChunkRequestSent && transfer.WriteFileChunkRequest(requestedFileName.c_str(), requestedFileOffset, requestedFileLength))
-	{
-		fileChunkRequestSent = true;
 	}
 
 	// Perform the next file operation if requested
@@ -1298,12 +1287,6 @@ void SbcInterface::InvalidateResources() noexcept
 {
 	rxPointer = txPointer = txEnd = 0;
 	sendBufferUpdate = true;
-
-	if (!requestedFileName.IsEmpty())
-	{
-		requestedFileDataLength = -1;
-		requestedFileSemaphore.Give();
-	}
 
 	if (fileOperation != FileOperation::none)
 	{
@@ -1792,50 +1775,6 @@ void SbcInterface::HandleGCodeReply(MessageType mt, OutputBuffer *buffer) noexce
 	MutexLocker lock(gcodeReplyMutex);
 	gcodeReply.Push(buffer, mt);
 	EventOccurred();
-}
-
-// Read a file chunk from the SBC. When a response has been received, the current task is woken up again.
-// It changes bufferLength to the number of received bytes
-// This method returns true on success and false if an error occurred (e.g. file not found)
-bool SbcInterface::GetFileChunk(const char *filename, uint32_t offset, char *buffer, uint32_t& bufferLength, uint32_t& fileLength) noexcept
-{
-	// Don't do anything if the SBC is not connected
-	if (!IsConnected())
-	{
-		return false;
-	}
-
-	if (waitingForFileChunk)
-	{
-		reprap.GetPlatform().Message(ErrorMessage, "Trying to request a file chunk from two independent tasks\n");
-		bufferLength = fileLength = 0;
-		return false;
-	}
-
-	fileChunkRequestSent = false;
-	requestedFileName.copy(filename);
-	requestedFileLength = bufferLength;
-	requestedFileOffset = offset;
-	requestedFileBuffer = buffer;
-
-	waitingForFileChunk = true;
-	if (!requestedFileSemaphore.Take(SpiMaxRequestTime))
-	{
-		reprap.GetPlatform().Message(ErrorMessage, "Timeout while waiting for file chunk\n");
-		bufferLength = fileLength = 0;
-		waitingForFileChunk = false;
-		return false;
-	}
-
-	waitingForFileChunk = false;
-	if (requestedFileDataLength < 0)
-	{
-		bufferLength = fileLength = 0;
-		return false;
-	}
-	bufferLength = requestedFileDataLength;
-	fileLength = requestedFileLength;
-	return true;
 }
 
 void SbcInterface::EventOccurred(bool timeCritical) noexcept

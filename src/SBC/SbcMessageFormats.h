@@ -211,7 +211,7 @@ enum class FirmwareRequest : uint16_t
 	PrintPaused = 7,						// Print has been paused
 	HeightMap_Obsolete = 8,					// Response to a heightmap request (no longer used)
 	Locked = 9,								// Movement has been locked and machine is in standstill
-	FileChunk = 10,            				// Request another chunk of a file (only used by CAN expansion board updates)
+	FileChunk_deprecated = 10,            	// Request another chunk of a file (only used by CAN expansion board updates)
 	EvaluationResult = 11,					// Response to an expression evaluation request
 	DoCode = 12,							// Perform a G/M/T-code from a code input
 	WaitForMessageAcknowledgment = 13,		// Wait for a message to be acknowledged
@@ -255,7 +255,7 @@ enum class SbcRequest : uint16_t
 	WriteIap = 12,								// Write another chunk of the IAP binary
 	StartIap = 13,								// Launch the IAP binary
 	AssignFilament_deprecated = 14,				// Assign filament to an extruder (no longer used)
-	FileChunk = 15,								// Response to a file chunk request from a CAN-connected board
+	FileChunk_deprecated = 15,					// Response to a file chunk request from a CAN-connected board
 	EvaluateExpression = 16,					// Evaluate an arbitrary expression
 	Message = 17,								// Send an arbitrary message
 	MacroStarted = 18,							// Macro file has been started
