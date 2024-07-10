@@ -56,7 +56,6 @@ public:
 	PrintStoppedReason ReadPrintStoppedInfo() noexcept;										// Read info about why the print has been stopped
 	GCodeChannel ReadMacroCompleteInfo(bool &error) noexcept;								// Read info about a completed macro file
 	GCodeChannel ReadCodeChannel() noexcept;												// Read a code channel
-	void ReadFileChunk(char *buffer, int32_t& dataLength, uint32_t& fileLength) noexcept;	// Read another chunk of a file
 	GCodeChannel ReadEvaluateExpression(size_t packetLength, const StringRef& expression) noexcept;	// Read an expression request
 	bool ReadMessage(MessageType& type, OutputBuffer *buf) noexcept;						// Read a request to output a message
 	GCodeChannel ReadSetVariable(bool& createVariable, const StringRef& varName, const StringRef& expression) noexcept;	// Read a variable set request
@@ -73,7 +72,6 @@ public:
 	bool WriteMacroFileClosed(GCodeChannel channel) noexcept;
 	bool WritePrintPaused(FilePosition position, PrintPausedReason reason) noexcept;
 	bool WriteLocked(GCodeChannel channel) noexcept;
-	bool WriteFileChunkRequest(const char *filename, uint32_t offset, uint32_t maxLength) noexcept;
 	bool WriteEvaluationResult(const char *expression, const ExpressionValue& value) noexcept;
 	bool WriteEvaluationResult(const char *expression, OutputBuffer *json) noexcept;
 	bool WriteEvaluationError(const char *expression, const char *errorMessage) noexcept;

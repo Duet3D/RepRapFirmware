@@ -615,20 +615,6 @@ GCodeChannel DataTransfer::ReadCodeChannel() noexcept
 	return GCodeChannel(header->channel);
 }
 
-void DataTransfer::ReadFileChunk(char *buffer, int32_t& dataLength, uint32_t& fileLength) noexcept
-{
-	// Read header
-	const FileChunk *header = ReadDataHeader<FileChunk>();
-	dataLength = header->dataLength;
-	fileLength = header->fileLength;
-
-	// Read file chunk
-	if (header->dataLength > 0)
-	{
-		memcpy(buffer, ReadData(header->dataLength), header->dataLength);
-	}
-}
-
 GCodeChannel DataTransfer::ReadEvaluateExpression(size_t packetLength, const StringRef& expression) noexcept
 {
 	// Read header
@@ -1198,27 +1184,6 @@ bool DataTransfer::WriteLocked(GCodeChannel channel) noexcept
 	header->channel = channel.ToBaseType();
 	header->paddingA = 0;
 	header->paddingB = 0;
-	return true;
-}
-
-bool DataTransfer::WriteFileChunkRequest(const char *filename, uint32_t offset, uint32_t maxLength) noexcept
-{
-	const size_t filenameLength = strlen(filename);
-	if (!CanWritePacket(sizeof(FileChunkHeader) + filenameLength))
-	{
-		return false;
-	}
-	// Write packet header
-	(void)WritePacketHeader(FirmwareRequest::FileChunk, sizeof(FileChunkHeader) + filenameLength);
-
-	// Write header
-	FileChunkHeader *header = WriteDataHeader<FileChunkHeader>();
-	header->offset = offset;
-	header->maxLength = maxLength;
-	header->filenameLength = filenameLength;
-
-	// Write data
-	WriteData(filename, filenameLength);
 	return true;
 }
 
