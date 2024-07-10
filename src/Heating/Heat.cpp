@@ -969,7 +969,7 @@ GCodeResult Heat::TuneHeater(GCodeBuffer& gb, const StringRef& reply) THROWS(GCo
 {
 	// To tune a heater, a heater number and/or a tool number musty be given
 	FansBitmap fans;
-	int heaterNumber;
+	int heaterNumber = 0;											// initialised only to suppress gcc warning
 	const bool seenHeater = gb.Seen('H');
 	if (seenHeater)
 	{
