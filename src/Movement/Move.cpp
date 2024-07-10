@@ -2239,9 +2239,14 @@ void Move::CheckEndstops(bool executingMove) noexcept
 			{
 				if (executingMove)
 				{
-					int32_t netStepsTaken;
-					const bool wasMoving = dms[hitDetails.axis].StopDriver(netStepsTaken);
-					if (wasMoving && CanMotion::StopDriverWhenExecuting(hitDetails.driver, netStepsTaken)) { wakeAsyncSender = true; }
+					DriveMovement& dm = dms[hitDetails.axis];
+					if (dm.state >= DMState::firstMotionState)
+					{
+						if (CanMotion::StopDriverWhenExecuting(hitDetails.driver, dm.GetNetStepsTaken()))
+						{
+							wakeAsyncSender = true;
+						}
+					}
 				}
 				else
 				{
@@ -2253,24 +2258,6 @@ void Move::CheckEndstops(bool executingMove) noexcept
 			{
 				const size_t localDriver = hitDetails.driver.localDriver;
 				dms[localDriver].driversCurrentlyUsed &= ~StepPins::CalcDriverBitmap(localDriver);
-			}
-
-			{
-				// Get the DDA associated with the axis that has triggered
-				DDA *homingDda = dms[hitDetails.axis].homingDda;
-				if (homingDda != nullptr && homingDda->GetState() == DDA::committed && homingDda->IsCheckingEndstops())
-				{
-					if (hitDetails.setAxisLow)
-					{
-						kinematics->OnHomingSwitchTriggered(hitDetails.axis, false, driveStepsPerMm, *homingDda);
-						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
-					}
-					else if (hitDetails.setAxisHigh)
-					{
-						kinematics->OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *homingDda);
-						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
-					}
-				}
 			}
 			break;
 
@@ -2401,6 +2388,7 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 		{
 			if (dm2->NewSegment(now) != nullptr && dm2->state != DMState::starting)
 			{
+				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed;	// we set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
 # if SUPPORT_CAN_EXPANSION
 				flags |= dm2->segmentFlags;
 				if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
@@ -3894,7 +3882,7 @@ void Move::TurnSmartDriversOff() noexcept
 #if SUPPORT_CAN_EXPANSION
 
 // This is called when we update endstop states because of a message from a remote board.
-// In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to DDA::CheckEndstops().
+// In time we may use it to help implement interrupt-driven local endstops too, but for now those are checked in the step ISR by a direct call to CheckEndstops().
 void Move::OnEndstopOrZProbeStatesChanged() noexcept
 {
 	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);		// shut out the step interrupt

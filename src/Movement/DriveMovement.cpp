@@ -446,8 +446,8 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 				directionChanged = true;
 			}
 
-			// Unless it's the deceleration movement at the end of a homing move, re-enable all drivers for this axis
-			if (!segmentFlags.checkEndstops || seg->GetA() >= 0.0)
+			// Unless we're possibly in the middle of a homing move, re-enable all drivers for this axis
+			if (!segmentFlags.checkEndstops)
 			{
 				driversCurrentlyUsed = driversNormallyUsed;
 			}
