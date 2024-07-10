@@ -35,12 +35,12 @@
 # define USE_DMAC_MANAGER	1		// use SAME5x DmacManager module
 constexpr IRQn SBC_SPI_IRQn = SbcSpiSercomIRQn;
 
-# if HAS_LWIP_NETWORKING
-#  include "LwipEthernet/AllocateFromPbufPool.h"
-# endif
-
 #else
 # error Unknown board
+#endif
+
+#if HAS_LWIP_NETWORKING
+# include "LwipEthernet/AllocateFromPbufPool.h"
 #endif
 
 #if USE_DMAC
@@ -405,8 +405,6 @@ __nocache TransferHeader DataTransfer::rxHeader;
 __nocache TransferHeader DataTransfer::txHeader;
 __nocache uint32_t DataTransfer::rxResponse;
 __nocache uint32_t DataTransfer::txResponse;
-alignas(4) __nocache char DataTransfer::rxBuffer[SbcTransferBufferSize];
-alignas(4) __nocache char DataTransfer::txBuffer[SbcTransferBufferSize];
 #endif
 
 DataTransfer::DataTransfer() noexcept : state(InternalTransferState::ExchangingData), lastTransferNumber(0), failedTransfers(0), checksumErrors(0),
@@ -433,22 +431,32 @@ void DataTransfer::Init() noexcept
 	// Initialise transfer ready pin
 	pinMode(SbcTfrReadyPin, OUTPUT_LOW);
 
-#if !SAME70
 	// Allocate buffers in SBC mode
-# if HAS_LWIP_NETWORKING && defined(DUET3MINI_V04)
+#if HAS_LWIP_NETWORKING
+	// We are going try allocating the transfer buffer memory from the PBUF pool.
+	// In SAME70 builds we are relying on the PBUF pool size being large enough to accommodate both transfer buffers, because they must be in non-cached RAM.
 	InitAllocationFromPbufPool();				// we are not using a wired Ethernet interface on the Duet so we can use the PBUF pool memory
 	{
 		void *const mem = AllocateFromPbufPool(SbcTransferBufferSize);
+# if SAME70
+		rxBuffer = (char *)mem;					// we MUST allocate from the PBUF pool because we need the memory to be non-cached
+# else
 		rxBuffer = (mem != nullptr) ? (char *)mem : (char *)new uint32_t[(SbcTransferBufferSize + 3)/4];
+# endif
 	}
 	{
 		void *const mem = AllocateFromPbufPool(SbcTransferBufferSize);
-		txBuffer = (mem != nullptr) ? (char *)mem : (char *)new uint32_t[(SbcTransferBufferSize + 3)/4];
-	}
+# if SAME70
+		txBuffer = (char *)mem;
 # else
+		txBuffer = (mem != nullptr) ? (char *)mem : (char *)new uint32_t[(SbcTransferBufferSize + 3)/4];
+# endif
+	}
+#elif SAME70
+# error Must allocate buffers from non-cached RAM
+#else
 	rxBuffer = (char *)new uint32_t[(SbcTransferBufferSize + 3)/4];
 	txBuffer = (char *)new uint32_t[(SbcTransferBufferSize + 3)/4];
-# endif
 #endif
 
 #if SAME5x

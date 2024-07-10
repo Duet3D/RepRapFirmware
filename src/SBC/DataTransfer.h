@@ -116,8 +116,6 @@ private:
 	static __nocache TransferHeader txHeader;
 	static __nocache uint32_t rxResponse;
 	static __nocache uint32_t txResponse;
-	alignas(4) static __nocache char rxBuffer[SbcTransferBufferSize];
-	alignas(4) static __nocache char txBuffer[SbcTransferBufferSize];
 #else
 	// The other processors we support have write-through cache
 	// Allocate the buffers in the object so that we can delete the object and recycle the memory if the SBC interface is not being used
@@ -126,9 +124,9 @@ private:
 	alignas(16) TransferHeader txHeader;
 	uint32_t rxResponse;
 	uint32_t txResponse;
+#endif
 	char *rxBuffer;				// not allocated until we know we need it
 	char *txBuffer;				// not allocated until we know we need it
-#endif
 	size_t rxPointer, txPointer;
 
 	// Packet properties

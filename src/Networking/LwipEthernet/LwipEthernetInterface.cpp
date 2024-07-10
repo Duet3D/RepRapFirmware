@@ -51,12 +51,9 @@ extern "C"
 extern struct netif gs_net_if;
 }
 
-#if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING && defined(DUET3MINI_V04)
-
 // Interface to get access to the PBUF memory pool so that when we are not going to enable Ethernet we can use the memory for something else
 // These functions may used on the Duet 3 Mini when the WiFi interface is enabled or SBC mode is enabled.
-// Not used on Duet 3 6HC because that board can support both interfaces at once.
-// We could use it in SBC mode on the 6HC and 6XD, but note that the PBUF pool memory is allocated in non-cached RAM.
+// They may also be used Duet 3 6HC/6XD to allocate the SBC buffer.
 // The pool descriptors are read-only and set up by static initialisation
 
 #include "AllocateFromPbufPool.h"
@@ -93,8 +90,6 @@ void *AllocateFromPbufPool(size_t bytes) noexcept
 	}
 	return nullptr;
 }
-
-#endif
 
 // MDNS support
 const char * const MdnsServiceStrings[NumSelectableProtocols] =
