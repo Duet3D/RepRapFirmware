@@ -1038,9 +1038,8 @@ void DDA::MatchSpeeds() noexcept
 }
 
 // This may be called from an ISR, e.g. via Kinematics::OnHomingSwitchTriggered
-void DDA::SetPositions(const float position[MaxAxes], AxesBitmap axesMoved) noexcept
+void DDA::SetPositions(Move& move, const float position[MaxAxes], AxesBitmap axesMoved) noexcept
 {
-	Move& move = reprap.GetMove();
 	(void)move.CartesianToMotorSteps(position, endPoint, true);
 	AxesBitmap driversMoved;
 	const Kinematics& kin = move.GetKinematics();
@@ -1048,10 +1047,26 @@ void DDA::SetPositions(const float position[MaxAxes], AxesBitmap axesMoved) noex
 						{
 							endCoordinates[axis] = position[axis];
 							driversMoved |= kin.GetControllingDrives(axis, false);
+#if SUPPORT_ASYNC_MOVES
+							MovementState::SetLastKnownMachinePosition(axis, position[axis]);
+#endif
 						}
 					 );
 	flags.endCoordinatesValid = true;
 	driversMoved.Iterate([&move, this](unsigned int driver, unsigned int)->void { move.SetMotorPosition(driver, this->endPoint[driver]); });
+}
+
+// Adjust the motor endpoints without moving the motors. Called after auto-calibrating a linear delta or rotary delta machine.
+// There must be no pending movement when calling this!
+void DDA::AdjustMotorPositions(Move& move, const float adjustment[], size_t numMotors) noexcept
+{
+	for (size_t drive = 0; drive < numMotors; ++drive)
+	{
+		const int32_t adjustAmount = lrintf(adjustment[drive] * move.DriveStepsPerMm(drive));
+		endPoint[drive] += adjustAmount;
+		move.SetMotorPosition(drive, endPoint[drive]);
+	}
+	flags.endCoordinatesValid = false;
 }
 
 // Force an end point. Called when a homing switch is triggered.
@@ -1211,7 +1226,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 
 					// Check for cold extrusion/retraction. Do this now because we can't read temperatures from within the step ISR, also this works for CAN-connected extruders.
 					// Don't check if it is a special move (indicated by flags.checkEndstops) because the 'tool' variable isn't valid for those moves
-					if (move.GetSimulationMode() != SimulationMode::off || flags.checkEndstops || Tool::ExtruderMovementAllowed(tool, directionVector[drive] > 0, extruder))
+					if (simMode != SimulationMode::off || flags.checkEndstops || Tool::ExtruderMovementAllowed(tool, directionVector[drive] > 0, extruder))
 					{
 						move.EnableDrivers(drive, false);
 
@@ -1271,7 +1286,6 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			// Before we send movement commands to remote drives, if any endstop switches we are monitoring are already set, make sure we don't start the motors concerned.
 			// This is especially important when using CAN-connected motors or endstops, because we rely on receiving "endstop changed" messages.
 			// Moves that check endstops are always run as isolated moves, so there can be no move in progress and the endstops must already be primed.
-			move.EnableAllSteppingDrivers();
 			const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);				// shut out the step interrupt
 			(void)move.CheckEndstops(false);									// this may modify pending CAN moves
 			RestoreBasePriority(oldPrio);
@@ -1306,6 +1320,10 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		m.flags = flags;
 		savedMovePointer = (savedMovePointer + 1) % NumSavedMoves;
 #endif
+	}
+	else
+	{
+		state = committed;
 	}
 }
 

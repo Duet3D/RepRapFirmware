@@ -387,7 +387,8 @@ void CoreKinematics::MotorStepsToCartesian(const int32_t motorPos[], const float
 // Take the action needed to define the current position, normally by calling dda.SetDriveCoordinate().
 void CoreKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const float stepsPerMm[], DDA& dda) const noexcept
 {
-	const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
+	Move& move = reprap.GetMove();
+	const float hitPoint = (highEnd) ? move.AxisMaximum(axis) : move.AxisMinimum(axis);
 	if (HasSharedMotor(axis))
 	{
 		float tempCoordinates[MaxAxes];
@@ -397,7 +398,7 @@ void CoreKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const fl
 			tempCoordinates[axis] = dda.GetEndCoordinate(axis, false);
 		}
 		tempCoordinates[axis] = hitPoint;
-		dda.SetPositions(tempCoordinates, controllingDrivers[axis]);
+		dda.SetPositions(move, tempCoordinates, controllingDrivers[axis]);
 	}
 	else
 	{

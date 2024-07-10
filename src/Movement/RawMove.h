@@ -86,6 +86,7 @@ public:
 	static void GlobalInit(size_t numVisibleAxes) noexcept;
 	static const float *GetLastKnownMachinePositions() noexcept { return lastKnownMachinePositions; }
 	static AxesBitmap GetAxesAndExtrudersMoved() noexcept { return axesAndExtrudersMoved; }
+	static void SetLastKnownMachinePosition(size_t axis, float pos) noexcept { lastKnownMachinePositions[axis] = pos; }
 
 	AxesBitmap GetAxesAndExtrudersOwned() const noexcept { return axesAndExtrudersOwned; }	// Get the axes and extruders that this movement system owns
 	ParameterLettersBitmap GetOwnedAxisLetters() const noexcept { return ownedAxisLetters; } // Get the letters denoting axes that this movement system owns
@@ -99,7 +100,7 @@ public:
 	void OwnedAxisCoordinateUpdated(size_t axis) noexcept;									// update the machine coordinate of an axis we own - called after Z probing
 #endif
 
-	MovementSystemNumber GetMsNumber() const noexcept { return msNumber; }
+	MovementSystemNumber GetNumber() const noexcept { return msNumber; }
 	float GetProportionDone() const noexcept;												// get the proportion of this whole move that has been completed, based on segmentsLeft and totalSegments
 	void Init(MovementSystemNumber p_msNumber) noexcept;
 	void ResetLaser() noexcept;																// reset the laser parameters

@@ -102,7 +102,9 @@ public:
 	void SetFeedRate(float rate) noexcept { requestedSpeed = rate; }
 	float GetEndCoordinate(size_t drive, bool disableMotorMapping) noexcept;
 	float GetRawEndCoordinate(size_t drive) const noexcept { return endCoordinates[drive]; }
-	void SetPositions(const float position[MaxAxes], AxesBitmap axesMoved) noexcept;	// Force the endpoints to be these
+	void SetPositions(Move& move, const float position[MaxAxes], AxesBitmap axesMoved) noexcept;	// Force the endpoints to be these
+	void AdjustMotorPositions(Move& move, const float adjustment[], size_t numMotors) noexcept;		// Adjust the motor endpoints without moving the motors
+
 	FilePosition GetFilePosition() const noexcept { return filePos; }
 	float GetRequestedSpeedMmPerClock() const noexcept { return requestedSpeed; }
 	float GetRequestedSpeedMmPerSec() const noexcept { return InverseConvertSpeedToMmPerSec(requestedSpeed); }

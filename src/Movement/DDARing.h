@@ -55,7 +55,8 @@ public:
 	void GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) const noexcept;	// Return the machine coordinates of just some axes
 #endif
 
-	void SetPositions(const float positions[MaxAxesPlusExtruders], AxesBitmap axes) noexcept;	// Force the machine coordinates to be these
+	void SetPositions(Move& move, const float positions[MaxAxesPlusExtruders], AxesBitmap axes) noexcept;	// Force the machine coordinates to be these
+	void AdjustMotorPositions(Move& move, const float adjustment[], size_t numMotors) noexcept;		// Adjust the motor endpoints without moving the motors
 
 	bool PauseMoves(MovementState& ms) noexcept;										// Pause the print as soon as we can, returning true if we were able to skip any moves in the queue
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT

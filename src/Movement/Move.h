@@ -205,9 +205,6 @@ public:
 	uint32_t GetSlowDriverDirSetupClocks() const noexcept { return slowDriverStepTimingClocks[2]; }
 #endif
 
-	void DisableSteppingDriver(uint8_t driver) noexcept { steppingEnabledDriversBitmap &= ~StepPins::CalcDriverBitmap(driver); }
-	void EnableAllSteppingDrivers() noexcept { steppingEnabledDriversBitmap = 0xFFFFFFFFu; }
-
 	void PollOneDriver(size_t driver) noexcept pre(driver < NumDirectDrivers);
 
 #if VARIABLE_NUM_DRIVERS
@@ -247,6 +244,7 @@ public:
 #endif
 	void SetRawPosition(const float positions[MaxAxes], MovementSystemNumber msNumber, AxesBitmap axes) noexcept
 			pre(queueNumber < NumMovementSystems);							// Set the current position to be this without transforming them first
+	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;		// Perform motor endpoint adjustment after auto calibration
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetLiveMotorPosition(size_t driver) const noexcept pre(driver < MaxAxesPlusExtruders);
@@ -260,7 +258,8 @@ public:
 								   ) noexcept
 		pre(queueNumber < rings.upb);										// Tell the lookahead ring we are waiting for it to empty and return true if it is
 	void DoLookAhead() noexcept SPEED_CRITICAL;								// Run the look-ahead procedure
-	void SetNewPosition(const float positionNow[MaxAxesPlusExtruders], const MovementState& ms, bool doBedCompensation) noexcept;	// Set the current position to be this
+	void SetNewPositionOfOwnedAxes(const MovementState& ms, bool doBedCompensation) noexcept;	// Set the current position to be this
+	void SetNewPositionOfAllAxes(const MovementState& ms, bool doBedCompensation) noexcept;		// Set the current position to be this
 	void ResetExtruderPositions() noexcept;									// Resets the extrusion amounts of the live coordinates
 	void SetXYBedProbePoint(size_t index, float x, float y) noexcept;		// Record the X and Y coordinates of a probe point
 	void SetZBedProbePoint(size_t index, float z, bool wasXyCorrected, bool wasError) noexcept; // Record the Z coordinate of a probe point
@@ -339,7 +338,6 @@ public:
 																							// Convert Cartesian coordinates to delta motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept;
 																							// Convert motor coordinates to machine coordinates
-	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;			// Perform motor endpoint adjustment after auto calibration
 	const char* GetGeometryString() const noexcept { return kinematics->GetName(true); }
 	bool IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
 
@@ -350,7 +348,6 @@ public:
 
 	void Simulate(SimulationMode simMode) noexcept;											// Enter or leave simulation mode
 	float GetSimulationTime() const noexcept { return rings[0].GetSimulationTime(); }		// Get the accumulated simulation time
-	SimulationMode GetSimulationMode() const noexcept { return simulationMode; }
 
 	bool PausePrint(MovementState& ms) noexcept;											// Pause the print as soon as we can, returning true if we were able to
 #if HAS_VOLTAGE_MONITOR || HAS_STALL_DETECT
@@ -400,14 +397,14 @@ public:
 
 	void AdjustLeadscrews(const floatc_t corrections[]) noexcept;							// Called by some Kinematics classes to adjust the leadscrews
 
+	// Filament monitor support
 	int32_t GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noexcept;		// Return and reset the accumulated commanded extrusion amount
+	uint32_t ExtruderPrintingSince(size_t logicalDrive) const noexcept;						// When we started doing normal moves after the most recent extruder-only move
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept;									// Write settings for resuming the print
 	bool WriteMoveParameters(FileStore *f) const noexcept;
 #endif
-
-	uint32_t ExtruderPrintingSince(size_t logicalDrive) const noexcept;						// When we started doing normal moves after the most recent extruder-only move
 
 	unsigned int GetJerkPolicy() const noexcept { return jerkPolicy; }
 	void SetJerkPolicy(unsigned int jp) noexcept { jerkPolicy = jp; }
@@ -484,6 +481,7 @@ private:
 	void InverseAxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;		// Go from an axis transformed point back to user coordinates
 	float ComputeHeightCorrection(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;	// Compute the height correction needed at a point, ignoring taper
 	void UpdateLiveMachineCoordinates() const noexcept;											// force an update of the live machine coordinates
+	void SetNewPositionOfSomeAxes(const MovementState& ms, bool doBedCompensation, AxesBitmap axes) noexcept;	// Set the current position to be this
 
 	const char *GetCompensationTypeString() const noexcept;
 
@@ -543,7 +541,6 @@ private:
 
 	DriveMovement dms[MaxAxesPlusExtruders + NumDirectDrivers];		// One DriveMovement object per logical drive, plus an extra one for each local driver to support bed levelling moves
 
-	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 	// Accumulated motor steps, used by filament monitors
 	float driveStepsPerMm[MaxAxesPlusExtruders];
 	uint16_t microstepping[MaxAxesPlusExtruders];					// the microstepping used for each axis or extruder, top bit is set if interpolation enabled
 
@@ -692,7 +689,6 @@ private:
 	uint32_t slowDriversBitmap;								// bitmap of driver port bits that need extended step pulse timing
 	uint32_t slowDriverStepTimingClocks[4];					// minimum step high, step low, dir setup and dir hold timing for slow drivers
 #endif
-	uint32_t steppingEnabledDriversBitmap;					// mask of driver bits that we haven't disabled temporarily
 
 	float idleCurrentFactor;
 	float minimumMovementSpeed;								// minimum allowed movement speed in mm per step clock
@@ -849,7 +845,16 @@ inline void Move::GetPartialMachinePosition(float m[MaxAxes], MovementSystemNumb
 // Set the current position to be this without transforming them first
 inline void Move::SetRawPosition(const float positions[MaxAxes], MovementSystemNumber msNumber, AxesBitmap axes) noexcept
 {
-	rings[msNumber].SetPositions(positions, axes);
+	rings[msNumber].SetPositions(*this, positions, axes);
+	liveCoordinatesValid = false;											// force the live XYZ position to be recalculated
+}
+
+// Adjust the motor endpoints without moving the motors. Called after auto-calibrating a linear delta or rotary delta machine.
+// There must be no pending movement when calling this!
+inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept
+{
+	rings[0].AdjustMotorPositions(*this, adjustment, numMotors);
+	liveCoordinatesValid = false;											// force the live XYZ position to be recalculated
 }
 
 inline int32_t Move::GetLiveMotorPosition(size_t driver) const noexcept
@@ -921,6 +926,15 @@ inline void Move::ResetAfterError() noexcept
 	{
 		stepErrorState = StepErrorState::resetting;
 	}
+}
+
+inline void Move::SetNewPositionOfOwnedAxes(const MovementState& ms, bool doBedCompensation) noexcept
+{
+#if SUPPORT_ASYNC_MOVES
+	SetNewPositionOfSomeAxes(ms, doBedCompensation, ms.GetAxesAndExtrudersOwned());
+#else
+	SetNewPositionOfAllAxes(ms, doBedCompensation);
+#endif
 }
 
 #if HAS_SMART_DRIVERS

@@ -457,7 +457,7 @@ private:
 	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
 	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexcept;			// Check whether we need to report temperatures or status
 
-	void RestorePosition(const RestorePoint& rp, GCodeBuffer *gb) noexcept;					// Restore user position from a restore point
+	void RestorePosition(MovementState& ms, const RestorePoint& rp) noexcept;				// Restore user position from a restore point
 
 	void UpdateCurrentUserPosition(const GCodeBuffer& gb) noexcept;							// Get the machine position from the Move class and transform it to the user position
 	void UpdateUserPositionFromMachinePosition(const GCodeBuffer& gb, MovementState& ms) noexcept;	// Update the user position from the machine position

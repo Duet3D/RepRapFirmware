@@ -99,7 +99,7 @@ void DDARing::Init2() noexcept
 		{
 			pos[i] = 0.0;
 		}
-		SetPositions(pos, AxesBitmap::MakeLowestNBits(MaxAxesPlusExtruders));
+		SetPositions(reprap.GetMove(), pos, AxesBitmap::MakeLowestNBits(MaxAxesPlusExtruders));
 	}
 
 	extrudersPrinting = false;
@@ -236,11 +236,10 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool signalMoveCompletion,
 {
 	DDA *cdda = getPointer;											// capture volatile variable
 
-	// If we are simulating, simulate completion of the current move.
-	// Do this here rather than at the end, so that when simulating, currentDda is non-null for most of the time and IsExtruding() returns the correct value
-	if (simulationMode != SimulationMode::off)
+	// If we are simulating, simulate completion of the current move
+	if (simulationMode >= SimulationMode::normal)
 	{
-		// Simulate one move
+		// Simulate completion of one move
 		if (cdda->GetState() == DDA::committed)
 		{
 			simulationTime += (float)cdda->GetClocksNeeded() * (1.0/StepClockRate);
@@ -268,7 +267,7 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool signalMoveCompletion,
 	}
 
 	// If we are already moving, see whether we need to prepare any more moves
-	if (cdda->GetState() == DDA::committed)
+	if (cdda->GetState() == DDA::committed)							// if we have started executing moves
 	{
 		const DDA* const currentMove = cdda;						// save for later
 
@@ -310,13 +309,13 @@ uint32_t DDARing::Spin(SimulationMode simulationMode, bool signalMoveCompletion,
 		return ret;
 	}
 
-	// No DDA is executing, so start executing a new one if possible
+	// No DDA is committed, so commit a new one if possible
 	if (   shouldStartMove											// if the Move code told us that we should start a move in any case...
 		|| waitingForRingToEmpty									// ...or GCodes is waiting for all moves to finish...
 		|| cdda->IsIsolatedMove()									// ...or checking endstops or another isolated move, so we can't schedule the following move
 	   )
 	{
-		uint32_t ret = PrepareMoves(cdda, 0, 0, simulationMode);
+		const uint32_t ret = PrepareMoves(cdda, 0, 0, simulationMode);
 		if (cdda->GetState() == DDA::committed)
 		{
 			if (simulationMode != SimulationMode::off)
@@ -443,10 +442,17 @@ void DDARing::GetPartialMachinePosition(float m[MaxAxes], AxesBitmap whichAxes) 
 
 // Set the initial machine coordinates for the next move to be added to the specified values, by setting the final coordinates of the last move in the queue
 // The last move in the queue must have already been set up by the Move process before this is called.
-void DDARing::SetPositions(const float positions[MaxAxesPlusExtruders], AxesBitmap axes) noexcept
+void DDARing::SetPositions(Move& move, const float positions[MaxAxesPlusExtruders], AxesBitmap axes) noexcept
 {
 	AtomicCriticalSectionLocker lock;
-	addPointer->GetPrevious()->SetPositions(positions, axes);
+	addPointer->GetPrevious()->SetPositions(move, positions, axes);
+}
+
+// Adjust the motor endpoints without moving the motors
+void DDARing::AdjustMotorPositions(Move& move, const float adjustment[], size_t numMotors) noexcept
+{
+	AtomicCriticalSectionLocker lock;
+	addPointer->GetPrevious()->AdjustMotorPositions(move, adjustment, numMotors);
 }
 
 // Get the DDA that should currently be executing, or nullptr if no move from this ring should be executing
