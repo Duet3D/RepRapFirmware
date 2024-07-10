@@ -105,7 +105,7 @@ private:
 			isExtruder : 1,								// true if this DM is for an extruder
 			stepErrorType : 3,							// records what type of step error we had
 			stepsTakenThisSegment : 2;					// how many steps we have taken this phase, counts from 0 to 2. Last field in the byte so that we can increment it efficiently.
-	uint8_t stepsTillRecalc;							// how soon we need to recalculate
+	uint8_t stepsTillRecalc;							// how soon we need to recalculate. Use the top 2 bits of the byte so that we can increment it efficiently.
 
 	int32_t netStepsThisSegment;						// the (signed) net number of steps in the current segment
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
@@ -127,8 +127,11 @@ private:
 
 	uint32_t driversNormallyUsed;						// the local drivers that this axis or extruder uses
 	uint32_t driversCurrentlyUsed;						// the bitmap of local drivers for this axis or extruder that we should step when the next step interrupt is due
-	float movementAccumulator = 0.0;					// the accumulated movement since GetAccumulatedMovement was last called. Only used for extruders.
-	uint32_t extruderPrintingSince = 0;					// the millis ticks when this extruder started doing printing moves
+
+	std::atomic<int32_t> movementAccumulator;			// the accumulated movement in microsteps since GetAccumulatedMovement was last called. Only used for extruders.
+	uint32_t extruderPrintingSince;						// the millis ticks when this extruder started doing printing moves
+
+	bool extruderPrinting;								// true if this is an extruder and the most recent segment started was a printing move
 };
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.

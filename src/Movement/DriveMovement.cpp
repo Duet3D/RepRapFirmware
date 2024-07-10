@@ -30,6 +30,8 @@ void DriveMovement::Init(size_t drv) noexcept
 	stepErrorType = 0;
 	distanceCarriedForwards = 0.0;
 	currentMotorPosition = positionAtSegmentStart = 0;
+	movementAccumulator = 0;
+	extruderPrinting = false;
 #if STEPS_DEBUG
 	positionRequested = 0;
 #endif
@@ -450,6 +452,19 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 				driversCurrentlyUsed = driversNormallyUsed;
 			}
 
+			if (isExtruder)
+			{
+				if (segmentFlags.nonPrintingMove)
+				{
+					extruderPrinting = false;
+				}
+				else if (!extruderPrinting)
+				{
+					extruderPrintingSince = millis();
+					extruderPrinting = true;
+				}
+			}
+
 #if 0	//DEBUG
 			debugPrintf("New cart seg: state %u q=%.4e t0=%.4e p=%.4e ns=%" PRIi32 " ssl=%" PRIi32 "\n",
 							(unsigned int)state, (double)q, (double)t0, (double)p, nextStep, segmentStepLimit);
@@ -536,6 +551,10 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 			if (currentMotorPosition - positionAtSegmentStart != netStepsThisSegment)
 			{
 				return LogStepError(6);
+			}
+			if (isExtruder)
+			{
+				movementAccumulator += netStepsThisSegment;			// update the amount of extrusion
 			}
 			segments = currentSegment->GetNext();
 			const uint32_t prevEndTime = currentSegment->GetStartTime() + currentSegment->GetDuration();

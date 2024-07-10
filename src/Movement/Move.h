@@ -397,14 +397,14 @@ public:
 
 	void AdjustLeadscrews(const floatc_t corrections[]) noexcept;							// Called by some Kinematics classes to adjust the leadscrews
 
+	// Filament monitor support
 	int32_t GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noexcept;		// Return and reset the accumulated commanded extrusion amount
+	uint32_t ExtruderPrintingSince(size_t logicalDrive) const noexcept;						// When we started doing normal moves after the most recent extruder-only move
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteResumeSettings(FileStore *f) const noexcept;									// Write settings for resuming the print
 	bool WriteMoveParameters(FileStore *f) const noexcept;
 #endif
-
-	uint32_t ExtruderPrintingSince(size_t logicalDrive) const noexcept;						// When we started doing normal moves after the most recent extruder-only move
 
 	unsigned int GetJerkPolicy() const noexcept { return jerkPolicy; }
 	void SetJerkPolicy(unsigned int jp) noexcept { jerkPolicy = jp; }
@@ -541,7 +541,6 @@ private:
 
 	DriveMovement dms[MaxAxesPlusExtruders + NumDirectDrivers];		// One DriveMovement object per logical drive, plus an extra one for each local driver to support bed levelling moves
 
-	volatile int32_t movementAccumulators[MaxAxesPlusExtruders]; 	// Accumulated motor steps, used by filament monitors
 	float driveStepsPerMm[MaxAxesPlusExtruders];
 	uint16_t microstepping[MaxAxesPlusExtruders];					// the microstepping used for each axis or extruder, top bit is set if interpolation enabled
 

@@ -530,7 +530,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				for (size_t axis = 0; axis < numVisibleAxes; ++axis)
 				{
 					// We may restore this axis if either this motion system owns it or this is motion system 0 and the axis is free
-					if (   (tempMs.GetAxesAndExtrudersOwned().IsBitSet(axis) || (tempMs.GetMsNumber() == 0 && IsAxisFree(axis)))
+					if (   (tempMs.GetAxesAndExtrudersOwned().IsBitSet(axis) || (tempMs.GetNumber() == 0 && IsAxisFree(axis)))
 						&& tempMs.currentUserPosition[axis] != tempMs.GetPauseRestorePoint().moveCoords[axis]
 					   )
 					{
@@ -612,14 +612,14 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				tempMs.ReleaseNonToolAxesAndExtruders();
 				tempMs.ResumeAfterPause();
 
-				GCodeBuffer* fgb = GetFileGCode(tempMs.GetMsNumber());
+				GCodeBuffer* fgb = GetFileGCode(tempMs.GetNumber());
 				if (fgb->IsExecuting())
 				{
-					if (tempMs.GetMsNumber() == 0 || tempMs.GetPauseRestorePoint().filePos < earliestFileOffset)
+					if (tempMs.GetNumber() == 0 || tempMs.GetPauseRestorePoint().filePos < earliestFileOffset)
 					{
 						earliestFileOffset = tempMs.GetPauseRestorePoint().filePos;
 					}
-					if (tempMs.GetMsNumber() == 0 || !FileGCode()->ExecutingAll())
+					if (tempMs.GetNumber() == 0 || !FileGCode()->ExecutingAll())
 					{
 						fgb->LatestMachineState().feedRate = tempMs.GetPauseRestorePoint().feedRate;
 						if (tempMs.pausedInMacro)
@@ -1323,7 +1323,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 				{
 					// Successful probing
 					float m[MaxAxes];
-					reprap.GetMove().GetCurrentMachinePosition(m, ms.GetMsNumber(), false);		// get height without bed compensation
+					reprap.GetMove().GetCurrentMachinePosition(m, ms.GetNumber(), false);		// get height without bed compensation
 					const float g30zStoppedHeight = m[Z_AXIS] - g30HValue;		// save for later
 					zp->SetLastStoppedHeight(g30zStoppedHeight);
 					if (tapsDone > 0)											// don't accumulate the result if we are doing fast-then-slow probing and this was the fast probe
@@ -1680,7 +1680,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #endif
 				SetMoveBufferDefaults(ms);
 				ms.movementTool = t;
-				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, t);
+				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetNumber(), 0, t);
 				memcpyf(ms.initialCoords, ms.coords, ARRAY_SIZE(ms.initialCoords));
 				const AxesBitmap zAxes = t->GetZAxisMap();
 
@@ -1719,7 +1719,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 			{
 				SetMoveBufferDefaults(ms);
 				ms.movementTool = t;
-				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetMsNumber(), 0, ms.currentTool);
+				reprap.GetMove().GetCurrentUserPosition(ms.coords, ms.GetNumber(), 0, ms.currentTool);
 				for (size_t i = 0; i < t->DriveCount(); ++i)
 				{
 					ms.coords[ExtruderToLogicalDrive(t->GetDrive(i))] = t->GetRetractLength() + t->GetRetractExtra();

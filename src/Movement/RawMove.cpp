@@ -155,13 +155,13 @@ void MovementState::Diagnostics(MessageType mtype) noexcept
 											", axes/extruders owned 0x%07x"
 #endif
 											"\n",
-													GetMsNumber(),
+													GetNumber(),
 													segmentsLeft
 #if SUPPORT_ASYNC_MOVES
 													, (unsigned int)axesAndExtrudersOwned.GetRaw()
 #endif
 									);
-	codeQueue->Diagnostics(mtype, GetMsNumber());
+	codeQueue->Diagnostics(mtype, GetNumber());
 }
 
 void MovementState::SavePosition(unsigned int restorePointNumber, size_t numAxes, float p_feedRate, FilePosition p_filePos) noexcept
@@ -358,7 +358,7 @@ void MovementState::UpdateOwnAxisCoordinates() noexcept
 		{
 			if (coords[i] != lastKnownMachinePositions[i])
 			{
-				debugPrintf("Coord %u changed from %.4f to %.4f in ms %u\n", i, (double)coords[i], (double)lastKnownMachinePositions[i], GetMsNumber());
+				debugPrintf("Coord %u changed from %.4f to %.4f in ms %u\n", i, (double)coords[i], (double)lastKnownMachinePositions[i], GetNumber());
 			}
 		}
 #endif	//END DEBUG

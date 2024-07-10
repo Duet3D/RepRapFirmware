@@ -1615,7 +1615,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						// On a delta, if we change the drive steps/mm then we need to recalculate the motor positions
 						for (const MovementState& ms : moveStates)
 						{
-							reprap.GetMove().SetNewPositionOfAllAxes(ms, true);
+							if (ms.GetNumber() == 0)
+							{
+								reprap.GetMove().SetNewPositionOfAllAxes(ms, true);
+							}
+							else
+							{
+								reprap.GetMove().SetNewPositionOfOwnedAxes(ms, true);
+							}
 						}
 #if SUPPORT_CAN_EXPANSION
 						result = move.UpdateRemoteStepsPerMmAndMicrostepping(axesToUpdate, reply);
@@ -4154,7 +4161,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								ToolOffsetInverseTransform(ms);					// make sure the limits are reflected in the user position
 							}
-							move.SetNewPositionOfAllAxes(ms, true);
+							if (ms.GetNumber() == 0)
+							{
+								reprap.GetMove().SetNewPositionOfAllAxes(ms, true);
+							}
+							else
+							{
+								reprap.GetMove().SetNewPositionOfOwnedAxes(ms, true);
+							}
 						}
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();
@@ -4227,7 +4241,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							{
 								ToolOffsetInverseTransform(ms);				// make sure the limits are reflected in the user position
 							}
-							move.SetNewPositionOfAllAxes(ms, true);
+							if (ms.GetNumber() == 0)
+							{
+								reprap.GetMove().SetNewPositionOfAllAxes(ms, true);
+							}
+							else
+							{
+								reprap.GetMove().SetNewPositionOfOwnedAxes(ms, true);
+							}
 						}
 						SetAllAxesNotHomed();
 						reprap.MoveUpdated();

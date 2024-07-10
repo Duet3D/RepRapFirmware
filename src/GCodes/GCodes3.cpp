@@ -570,7 +570,14 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 			for (MovementState& ms : moveStates)
 			{
 				ToolOffsetTransform(ms);										// ensure that the position of any new axes are updated in moveBuffer
-				reprap.GetMove().SetNewPositionOfAllAxes(ms, true);				// tell the Move system where the axes are
+				if (ms.GetNumber() == 0)
+				{
+					reprap.GetMove().SetNewPositionOfAllAxes(ms, true);			// tell the Move system where the axes are
+				}
+				else
+				{
+					reprap.GetMove().SetNewPositionOfOwnedAxes(ms, true);		// tell the Move system where the axes are
+				}
 			}
 		}
 #if SUPPORT_CAN_EXPANSION
