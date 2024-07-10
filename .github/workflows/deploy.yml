@@ -16,14 +16,14 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: "Duet3D/CANlib"
-          ref: "3.5-dev"
+          ref: "3.6-dev"
           path: "./CANlib"
 
       - name: "Check out CoreN2G"
         uses: actions/checkout@v3
         with:
           repository: "Duet3D/CoreN2G"
-          ref: "3.5-dev"
+          ref: "3.6-dev"
           path: "./CoreN2G"
 
       - name: "Check out Duet3Bootloader"
@@ -37,7 +37,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: "Duet3D/Duet3Expansion"
-          ref: "3.5-dev"
+          ref: "3.6-dev"
           path: "./Duet3Expansion"
 
       - name: "Check out FreeRTOS"
@@ -58,7 +58,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: "Duet3D/RepRapFirmware"
-          ref: "3.5-dev"
+          ref: "3.6-dev"
           path: "./RepRapFirmware"
 
       - name: "Check out RRFLibraries"
@@ -97,8 +97,8 @@ jobs:
 
       - name: "Set up ARM GCC"
         run: |
-          curl -L -o ./arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz "https://developer.arm.com/-/media/Files/downloads/gnu/12.2.rel1/binrel/arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz?rev=7bd049b7a3034e64885fa1a71c12f91d&hash=732D909FA8F68C0E1D0D17D08E057619"
-          bsdtar -x -f ./arm-gnu-toolchain-12.2.rel1-x86_64-arm-none-eabi.tar.xz
+          curl -L -o ./arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz "https://developer.arm.com/-/media/Files/downloads/gnu/13.2.rel1/binrel/arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz?rev=e434b9ea4afc4ed7998329566b764309&hash=CA590209F5774EE1C96E6450E14A3E26"
+          bsdtar -x -f ./arm-gnu-toolchain-13.2.rel1-x86_64-arm-none-eabi.tar.xz
 
       - name: "Set up Eclipse workspace"
         run: |
