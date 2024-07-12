@@ -2037,22 +2037,119 @@ void Platform::AppendUsbReply(OutputBuffer *buffer) noexcept
 
 // Aux port functions
 
+GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	// Get the channel specified by the command and the corresponding GCode buffer
+	const size_t chan = gb.GetLimitedUIValue('P', NumSerialChannels);
+	GCodeBuffer * const gbp = reprap.GetGCodes().GetSerialGCodeBuffer(chan);
+
+	// If a baud rate has been provided, just store it for later use
+	const bool seenBaud = gb.Seen('B');
+	if (seenBaud)
+	{
+		baudRates[chan] = gb.GetUIValue();
+	}
+
+	// If a mode is provided
+	if (gb.Seen('S'))
+	{
+		// Translation of M575 S parameter to AuxMode
+		static constexpr AuxDevice::AuxMode modes[] =
+		{
+			AuxDevice::AuxMode::panelDue,			// basic PanelDue mode,
+			AuxDevice::AuxMode::panelDue,			// PanelDue mode with CRC or checksum required (default)
+			AuxDevice::AuxMode::raw,				// basic raw mode
+			AuxDevice::AuxMode::raw,				// raw mode with CRC or checksum required
+			AuxDevice::AuxMode::panelDue,			// PanelDue mode with CRC required
+			AuxDevice::AuxMode::disabled,			// was unused, now treated as disabled
+			AuxDevice::AuxMode::raw,				// raw mode with CRC required
+#if SUPPORT_MODBUS_RTU
+			AuxDevice::AuxMode::modbus_rtu,			// Modbus mode
+#endif
+		};
+
+		const uint32_t val = gb.GetLimitedUIValue('S', ARRAY_SIZE(modes));
+		AuxDevice::AuxMode newMode = modes[val];
+		if (gbp != nullptr)
+		{
+			gbp->Disable();							// disable I/O for this buffer
+		}
+
+#if HAS_AUX_DEVICES
+		if (chan != 0)
+		{
+			auxDevices[chan - 1].SetMode(newMode, baudRates[chan]);
+		}
+#endif
+
+		if (   gbp != nullptr
+			&& newMode != AuxDevice::AuxMode::disabled
+#if SUPPORT_MODBUS_RTU
+			&& newMode != AuxDevice::AuxMode::modbus_rtu
+#endif
+		   )
+		{
+			gbp->Enable(val);						// enable I/O and set the CRC and checksum requirements, also sets Marlin or PanelDue compatibility
+		}
+
+#if 0
+		SetCommsProperties(chan, val);
+		if (gbp != nullptr)
+		{
+			gbp->SetCommsProperties(val);
+#if HAS_AUX_DEVICES
+			if (chan != 0)
+			{
+				AuxDevice::AuxMode newMode = modes[val];
+				auxDevices[chan - 1].SetMode(newMode, baudRates[chan]);
+				const bool rawMode = (val & 2u) != 0;
+				if (rawMode && !IsAuxEnabled(chan - 1))			// if enabling aux for the first time and in raw mode, set Marlin compatibility
+				{
+					gbp->LatestMachineState().compatibility = Compatibility::Marlin;
+				}
+			}
+#endif
+#endif
+	}
+	else if (seenBaud)
+	{
+#if HAS_AUX_DEVICES
+		ResetChannel(chan);
+	}
+	else if (chan != 0 && !IsAuxEnabled(chan - 1))
+	{
+		reply.printf("Channel %u is disabled", chan);
+#endif
+	}
+	else
+	{
+		const uint32_t cp = GetCommsProperties(chan);
+		reply.printf("Channel %d: baud rate %" PRIu32 ", %s%s", chan, GetBaudRate(chan),
+						(chan != 0 && IsAuxRaw(chan - 1)) ? "raw mode, " : "",
+						(cp & 4) ? "requires CRC"
+							: (cp & 1) ? "requires checksum or CRC"
+								: "does not require checksum or CRC"
+					);
+		if (chan == 0 && SERIAL_MAIN_DEVICE.IsConnected())
+		{
+			reply.cat(", connected");
+		}
+#if HAS_AUX_DEVICES
+		else if (chan != 0 && IsAuxRaw(chan - 1))
+		{
+			reply.cat(", raw mode");
+		}
+#endif
+	}
+	return GCodeResult::ok;
+}
+
 bool Platform::IsAuxEnabled(size_t auxNumber) const noexcept
 {
 #if HAS_AUX_DEVICES
-	return auxNumber < ARRAY_SIZE(auxDevices) && auxDevices[auxNumber].IsEnabled();
+	return auxNumber < ARRAY_SIZE(auxDevices) && auxDevices[auxNumber].IsEnabledForGCodeIo();
 #else
 	return false;
-#endif
-}
-
-void Platform::EnableAux(size_t auxNumber) noexcept
-{
-#if HAS_AUX_DEVICES
-	if (auxNumber < ARRAY_SIZE(auxDevices) && !auxDevices[auxNumber].IsEnabled())
-	{
-		auxDevices[auxNumber].Enable(baudRates[auxNumber + 1]);
-	}
 #endif
 }
 
@@ -2062,16 +2159,6 @@ bool Platform::IsAuxRaw(size_t auxNumber) const noexcept
 	return auxNumber >= ARRAY_SIZE(auxDevices) || auxDevices[auxNumber].IsRaw();
 #else
 	return true;
-#endif
-}
-
-void Platform::SetAuxRaw(size_t auxNumber, bool raw) noexcept
-{
-#if HAS_AUX_DEVICES
-	if (auxNumber < ARRAY_SIZE(auxDevices))
-	{
-		auxDevices[auxNumber].SetRaw(raw);
-	}
 #endif
 }
 
@@ -2596,8 +2683,10 @@ void Platform::ResetChannel(size_t chan) noexcept
 #if HAS_AUX_DEVICES
 	else if (chan < NumSerialChannels)
 	{
-		auxDevices[chan - 1].Disable();
-		auxDevices[chan - 1].Enable(baudRates[chan]);
+		AuxDevice& device = auxDevices[chan - 1];
+		AuxDevice::AuxMode mode = device.GetMode();
+		device.Disable();
+		device.SetMode(mode, baudRates[chan]);
 	}
 #endif
 }

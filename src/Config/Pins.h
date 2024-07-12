@@ -305,4 +305,8 @@
 # define SUPPORT_SCANNING_PROBES		(SUPPORT_CAN_EXPANSION)
 #endif
 
+#ifndef SUPPORT_MODBUS_RTU
+# define SUPPORT_MODBUS_RTU				0
+#endif
+
 #endif // PINS_H__

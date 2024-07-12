@@ -3825,76 +3825,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 
 			case 575: // Set communications parameters
-				{
-					const size_t chan = gb.GetLimitedUIValue('P', NumSerialChannels);
-					GCodeBuffer * const gbp = (chan == 0) ? UsbGCode() : (chan == 1) ? AuxGCode() : Aux2GCode();
-					bool seen = false;
-					if (gb.Seen('B'))
-					{
-						platform.SetBaudRate(chan, gb.GetUIValue());
-						seen = true;
-					}
-
-					if (gb.Seen('S'))
-					{
-						const uint32_t val = gb.GetUIValue();
-						platform.SetCommsProperties(chan, val);
-						if (gbp != nullptr)
-						{
-							gbp->SetCommsProperties(val);
-#if HAS_AUX_DEVICES
-							if (chan != 0)
-							{
-								const bool rawMode = (val & 2u) != 0;
-								platform.SetAuxRaw(chan - 1, rawMode);
-								if (rawMode && !platform.IsAuxEnabled(chan - 1))			// if enabling aux for the first time and in raw mode, set Marlin compatibility
-								{
-									gbp->LatestMachineState().compatibility = Compatibility::Marlin;
-								}
-							}
-#endif
-						}
-						seen = true;
-					}
-
-					if (seen)
-					{
-#if HAS_AUX_DEVICES
-						if (chan != 0 && !platform.IsAuxEnabled(chan - 1))
-						{
-							platform.EnableAux(chan - 1);
-						}
-						else
-						{
-							platform.ResetChannel(chan);
-						}
-					}
-					else if (chan != 0 && !platform.IsAuxEnabled(chan - 1))
-					{
-						reply.printf("Channel %u is disabled", chan);
-#endif
-					}
-					else
-					{
-						const uint32_t cp = platform.GetCommsProperties(chan);
-						reply.printf("Channel %d: baud rate %" PRIu32 ", %s%s", chan, platform.GetBaudRate(chan),
-										(chan != 0 && platform.IsAuxRaw(chan - 1)) ? "raw mode, " : "",
-										(cp & 4) ? "requires CRC"
-											: (cp & 1) ? "requires checksum or CRC"
-												: "does not require checksum or CRC"
-									);
-						if (chan == 0 && SERIAL_MAIN_DEVICE.IsConnected())
-						{
-							reply.cat(", connected");
-						}
-#if HAS_AUX_DEVICES
-						else if (chan != 0 && platform.IsAuxRaw(chan - 1))
-						{
-							reply.cat(", raw mode");
-						}
-#endif
-					}
-				}
+				result = platform.HandleM575(gb, reply);
 				break;
 
 #if HAS_SBC_INTERFACE

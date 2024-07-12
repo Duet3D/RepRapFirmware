@@ -215,7 +215,7 @@ void GCodes::Reset() noexcept
 
 	if (AuxGCode() != nullptr)
 	{
-		AuxGCode()->SetCommsProperties(1);				// by default, we require a checksum on the aux port
+		AuxGCode()->Enable(1);									// by default, we require a checksum or CRC on the first aux port
 	}
 
 	nextGcodeSource = 0;
@@ -241,7 +241,7 @@ void GCodes::Reset() noexcept
 	}
 
 #if SUPPORT_COORDINATE_ROTATION
-	g68Angle = g68Centre[0] = g68Centre[1] = 0.0;		// no coordinate rotation
+	g68Angle = g68Centre[0] = g68Centre[1] = 0.0;				// no coordinate rotation
 #endif
 
 #if SUPPORT_ASYNC_MOVES
@@ -299,6 +299,18 @@ void GCodes::Reset() noexcept
 	for (const GCodeBuffer*& gbp : resourceOwners)
 	{
 		gbp = nullptr;
+	}
+}
+
+// Set the GCodeBuffer (if any) associated with a serial channel
+GCodeBuffer *GCodes::GetSerialGCodeBuffer(size_t serialPortNumber) const noexcept
+{
+	switch (serialPortNumber)
+	{
+	case 0:		return UsbGCode();
+	case 1:		return AuxGCode();
+	case 2:		return Aux2GCode();
+	default:	return nullptr;
 	}
 }
 

@@ -53,6 +53,7 @@ constexpr uint32_t IAP_IMAGE_START = 0x20458000;		// last 32kb of RAM
 #define SUPPORT_PROBE_POINTS_FILE	1
 #define SUPPORT_BRAKE_PWM		1
 #define SUPPORT_KEEPOUT_ZONES	1
+#define SUPPORT_MODBUS_RTU		1
 
 #define USE_MPU					1					// Needed if USE_CACHE is set, so that we can have non-cacheable memory regions
 #define USE_CACHE				1
@@ -314,7 +315,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io5.out,!io5.out.iso"	},	// PD21 IO5_OUT (not PWM capable on TIOA11 because TIOB11 is used to generate step pulses)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PD22 step gate
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out4.tach"				},	// PD23 OUT4_TACH
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"ate.rs422.txen"		},	// PD24 was SWD_EXT_RST, now RS422 TX/~RX in board revision 1.02 and later
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"ate.rs485.txen,ate.rs422.txen"	},	// PD24 was SWD_EXT_RST, now RS485 TX/~RX in board revision 1.02 and later
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io0.in,serial0.rx"		},	// PD25 IO0_IN  Serial0 RX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io0.out,serial0.tx"	},	// PD26 IO0_OUT Serial0 TX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io2.out,i2c0.dat"		},	// PD27 IO2_OUT

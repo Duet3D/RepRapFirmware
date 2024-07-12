@@ -210,6 +210,7 @@ public:
 	bool GetAtxPowerState() const noexcept;
 	GCodeResult HandleM80(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void AtxPowerOff() noexcept;
 	bool IsAtxPowerControlled() const noexcept { return PsOnPort.IsValid(); }
 	bool IsDeferredPowerDown() const noexcept { return powerDownWhenFansStop || delayedPowerDown; }
@@ -261,9 +262,7 @@ public:
 
 	void ResetChannel(size_t chan) noexcept;						// Re-initialise a serial channel
     bool IsAuxEnabled(size_t auxNumber) const noexcept;				// Any device on the AUX line?
-    void EnableAux(size_t auxNumber) noexcept;
     bool IsAuxRaw(size_t auxNumber) const noexcept;
-	void SetAuxRaw(size_t auxNumber, bool raw) noexcept;
 #if SUPPORT_PANELDUE_FLASH
 	PanelDueUpdater* GetPanelDueUpdater() noexcept { return panelDueUpdater; }
 	void InitPanelDueUpdater() noexcept;

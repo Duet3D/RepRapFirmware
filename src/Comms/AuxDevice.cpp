@@ -11,7 +11,7 @@
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 
-AuxDevice::AuxDevice() noexcept : uart(nullptr), seq(0), enabled(false), raw(true)
+AuxDevice::AuxDevice() noexcept : uart(nullptr), seq(0), mode(AuxMode::disabled)
 {
 }
 
@@ -26,28 +26,35 @@ void AuxDevice::Init(AsyncSerial *p_uart) noexcept
 	mutex.Create("Aux");
 }
 
-void AuxDevice::Enable(uint32_t baudRate) noexcept
+void AuxDevice::SetMode(AuxMode p_mode, uint32_t baudRate) noexcept
 {
+	mode = p_mode;
 	if (uart != nullptr)
 	{
-		uart->begin(baudRate);
-		enabled = true;
+		if (mode == AuxMode::disabled)
+		{
+			Disable();
+		}
+		else
+		{
+			uart->begin(baudRate);
+		}
 	}
 }
 
 void AuxDevice::Disable() noexcept
 {
-	if (enabled)
+	if (mode != AuxMode::disabled)
 	{
 		uart->end();
 		outStack.ReleaseAll();
-		enabled = false;
+		mode = AuxMode::disabled;
 	}
 }
 
 void AuxDevice::SendPanelDueMessage(const char* msg) noexcept
 {
-	if (enabled)
+	if (mode == AuxMode::panelDue)
 	{
 		OutputBuffer *buf;
 		if (OutputBuffer::Allocate(buf))
@@ -62,13 +69,13 @@ void AuxDevice::SendPanelDueMessage(const char* msg) noexcept
 void AuxDevice::AppendAuxReply(const char *msg, bool rawMessage) noexcept
 {
 	// Discard this response if either no aux device is attached or if the response is empty
-	if (msg[0] != 0 && enabled)
+	if (msg[0] != 0 && IsEnabledForGCodeIo())
 	{
 		MutexLocker lock(mutex);
 		OutputBuffer *buf;
 		if (OutputBuffer::Allocate(buf))
 		{
-			if (rawMessage || raw)
+			if (rawMessage || mode == AuxMode::raw)
 			{
 				buf->copy(msg);
 			}
@@ -85,14 +92,14 @@ void AuxDevice::AppendAuxReply(const char *msg, bool rawMessage) noexcept
 void AuxDevice::AppendAuxReply(OutputBuffer *reply, bool rawMessage) noexcept
 {
 	// Discard this response if either no aux device is attached or if the response is empty
-	if (reply == nullptr || reply->Length() == 0 || !enabled)
+	if (reply == nullptr || reply->Length() == 0 || !IsEnabledForGCodeIo())
 	{
 		OutputBuffer::ReleaseAll(reply);
 	}
 	else
 	{
 		MutexLocker lock(mutex);
-		if (rawMessage || raw)
+		if (rawMessage || mode == AuxMode::raw)
 		{
 			outStack.Push(reply);
 		}
@@ -126,7 +133,7 @@ bool AuxDevice::Flush() noexcept
 		{
 			(void)outStack.Pop();
 		}
-		else if (!enabled)
+		else if (!IsEnabledForGCodeIo())
 		{
 			OutputBuffer::ReleaseAll(auxOutputBuffer);
 			(void)outStack.Pop();
@@ -151,12 +158,37 @@ bool AuxDevice::Flush() noexcept
 
 void AuxDevice::Diagnostics(MessageType mt, unsigned int index) noexcept
 {
-	if (enabled)
+	if (mode != AuxMode::disabled)
 	{
 		const AsyncSerial::Errors errs = uart->GetAndClearErrors();
 		reprap.GetPlatform().MessageF(mt, "Aux%u errors %u,%u,%u\n", index, (unsigned int)errs.uartOverrun, (unsigned int)errs.bufferOverrun, (unsigned int)errs.framing);
 	}
 }
+
+#if SUPPORT_MODBUS_RTU
+
+// Send some Modbus registers. May return GCodeResult notFinished if the buffer had insufficient room  but may have enough later, or the port was busy.
+GCodeResult AuxDevice::SendModbusRegisters(uint8_t slaveAddress, uint16_t startRegister, uint16_t numRegisters, const uint16_t *data) noexcept
+{
+	//TODO
+	return GCodeResult::errorNotSupported;
+}
+
+// Read some Modbus registers. May return GCodeResult notFinished if the buffer had insufficient room  but may have enough later, or the port was busy.
+GCodeResult AuxDevice::ReadModbusRegisters(uint8_t slaveAddress, uint16_t startRegister, uint16_t numRegisters, uint16_t *data) noexcept
+{
+	//TODO
+	return GCodeResult::errorNotSupported;
+}
+
+// Check whether the Modbus operation completed.
+GCodeResult AuxDevice::CheckModbusResult(bool& success) noexcept
+{
+	//TODO
+	return GCodeResult::errorNotSupported;
+}
+
+#endif
 
 #endif
 
