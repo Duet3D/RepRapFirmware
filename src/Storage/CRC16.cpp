@@ -88,12 +88,12 @@ const uint16_t CRC16::crc16_modbus_table[] =
 
 #endif
 
-void CRC16::Update(char c, const uint16_t *table) noexcept
+void CRC16::Update(uint8_t c, const uint16_t *table) noexcept
 {
 	crc = (uint16_t)((crc << 8) ^ table[((crc >> 8) ^ c) & 0x00ff]);
 }
 
-void CRC16::Update(const char *c, size_t len, const uint16_t *table) noexcept
+void CRC16::Update(const uint8_t *c, size_t len, const uint16_t *table) noexcept
 {
 	uint16_t locCrc = crc;			// copy into a local variable to make it faster and smaller
 	while (len != 0)

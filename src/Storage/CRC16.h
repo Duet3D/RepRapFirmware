@@ -20,17 +20,17 @@ public:
 	void Reset(uint16_t initialValue) noexcept;
 	uint16_t Get() const noexcept;
 
-	void Update(char c) noexcept { Update(c, crc16_xmodem_table); }
-	void Update(const char *c, size_t len) noexcept { Update(c, len, crc16_xmodem_table); }
+	void Update(uint8_t c) noexcept { Update(c, crc16_xmodem_table); }
+	void Update(const uint8_t *c, size_t len) noexcept { Update(c, len, crc16_xmodem_table); }
 
 #if SUPPORT_MODBUS_RTU
-	void UpdateModbus(char c) noexcept { Update(c, crc16_modbus_table); }
-	void UpdateModbus(const char *c, size_t len) noexcept { Update(c, len, crc16_modbus_table); }
+	void UpdateModbus(uint8_t c) noexcept { Update(c, crc16_modbus_table); }
+	void UpdateModbus(const uint8_t *c, size_t len) noexcept { Update(c, len, crc16_modbus_table); }
 #endif
 
 private:
-	void Update(char c, const uint16_t *table) noexcept;
-	void Update(const char *c, size_t len, const uint16_t *table) noexcept;
+	void Update(uint8_t c, const uint16_t *table) noexcept;
+	void Update(const uint8_t *c, size_t len, const uint16_t *table) noexcept;
 
 	static const uint16_t crc16_xmodem_table[];
 
