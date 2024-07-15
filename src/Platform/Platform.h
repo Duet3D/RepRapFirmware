@@ -350,11 +350,6 @@ public:
 	float GetFilamentWidth() const noexcept;
 	void SetFilamentWidth(float width) noexcept;
 
-	// Fire the inkjet (if any) in the given pattern
-	// If there is no inkjet false is returned; if there is one this returns true
-	// So you can test for inkjet presence with if(platform->Inkjet(0))
-	bool Inkjet(int bitPattern) noexcept;
-
 	// MCU temperature
 #if HAS_CPU_TEMP_SENSOR
 	MinCurMax GetMcuTemperatures() const noexcept;
