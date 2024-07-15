@@ -168,24 +168,167 @@ void AuxDevice::Diagnostics(MessageType mt, unsigned int index) noexcept
 #if SUPPORT_MODBUS_RTU
 
 // Send some Modbus registers. May return GCodeResult notFinished if the buffer had insufficient room  but may have enough later, or the port was busy.
-GCodeResult AuxDevice::SendModbusRegisters(uint8_t slaveAddress, uint16_t startRegister, uint16_t numRegisters, const uint16_t *data) noexcept
+GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, const uint16_t *data) noexcept
 {
-	//TODO
-	return GCodeResult::errorNotSupported;
+	if (numRegisters == 0 || numRegisters > MaxModbusRegisters)
+	{
+		return GCodeResult::badOrMissingParameter;
+	}
+
+	if (!mutex.Take(ModbusBusAvailableTimeout))
+	{
+		return GCodeResult::error;
+	}
+
+	uart->FlushTransmitBuffer();
+	uart->DisableTransmit();
+	crc.Reset(ModbusCrcInit);
+	bytesTransmitted = 0;
+
+	slaveAddress = p_slaveAddress;
+	ModbusWriteByte(slaveAddress);
+	function = ModbusFunction::writeMultipleRegisters;
+	ModbusWriteByte((uint8_t)function);
+	startRegister = p_startRegister;
+	ModbusWriteWord(startRegister);
+	numRegisters = p_numRegisters;
+	ModbusWriteWord(numRegisters);
+	ModbusWriteByte((uint8_t)(2 * numRegisters));
+	for (size_t i = 0; i < numRegisters; ++i)
+	{
+		ModbusWriteWord(data[i]);
+	}
+
+	uart->write((uint8_t)crc.Get());						// CRC is sent low byte first
+	uart->write((uint8_t)(crc.Get() >> 8));
+
+	uart->EnableTransmit();
+	whenStartedTransmitting = millis();
+	bytesExpected = 8;
+	return GCodeResult::ok;
 }
 
 // Read some Modbus registers. May return GCodeResult notFinished if the buffer had insufficient room  but may have enough later, or the port was busy.
-GCodeResult AuxDevice::ReadModbusRegisters(uint8_t slaveAddress, uint16_t startRegister, uint16_t numRegisters, uint16_t *data) noexcept
+GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, uint16_t *data) noexcept
 {
-	//TODO
-	return GCodeResult::errorNotSupported;
+	if (numRegisters == 0 || numRegisters > MaxModbusRegisters)
+	{
+		return GCodeResult::badOrMissingParameter;
+	}
+
+	if (!mutex.Take(ModbusBusAvailableTimeout))
+	{
+		return GCodeResult::error;
+	}
+
+	uart->FlushTransmitBuffer();
+	uart->DisableTransmit();
+	uart->FlushReceiveBuffer();
+	crc.Reset(ModbusCrcInit);
+	bytesTransmitted = 0;
+
+	slaveAddress = p_slaveAddress;
+	ModbusWriteByte(slaveAddress);
+	function = ModbusFunction::readInputRegisters;
+	ModbusWriteByte((uint8_t)function);
+	startRegister = p_startRegister;
+	ModbusWriteWord(startRegister);
+	numRegisters = p_numRegisters;
+	ModbusWriteWord(numRegisters);
+	uart->write((uint8_t)crc.Get());						// CRC is sent low byte first
+	uart->write((uint8_t)(crc.Get() >> 8));
+
+	uart->EnableTransmit();
+	whenStartedTransmitting = millis();
+	bytesExpected = 5 + 2 * numRegisters;
+	receivedRegisters = data;
+	return GCodeResult::ok;
 }
 
 // Check whether the Modbus operation completed.
-GCodeResult AuxDevice::CheckModbusResult(bool& success) noexcept
+GCodeResult AuxDevice::CheckModbusResult() noexcept
 {
-	//TODO
-	return GCodeResult::errorNotSupported;
+	if (mutex.GetHolder() != TaskBase::GetCallerTaskHandle())
+	{
+		return GCodeResult::error;
+	}
+
+	if (uart->available() < bytesExpected)
+	{
+		// Check whether we should time out
+		const uint32_t expectedCommsTime = ((bytesTransmitted + bytesExpected) * 10000)/baudRate + 1;
+		if (millis() - whenStartedTransmitting < expectedCommsTime + ModbusResponseTimeout)
+		{
+			return GCodeResult::notFinished;
+		}
+
+		mutex.Release();
+		return GCodeResult::error;					// timed out
+	}
+
+	// If we get here then we received sufficient bytes for a valid reply
+	crc.Reset(ModbusCrcInit);
+	if (ModbusReadByte() == slaveAddress && ModbusReadByte() == (uint8_t)function)
+	{
+		switch(function)
+		{
+		case ModbusFunction::writeMultipleRegisters:
+			if (ModbusReadWord() == startRegister && ModbusReadWord() == numRegisters)
+			{
+				const uint16_t crcLo = (uint16_t)uart->read();
+				const uint16_t recdCrc = ((uint16_t)uart->read() << 8) | crcLo;
+				mutex.Release();
+				return (recdCrc == crc.Get()) ? GCodeResult::ok : GCodeResult::error;
+			}
+			break;
+
+		case ModbusFunction::readInputRegisters:
+			if (ModbusReadWord() == startRegister && ModbusReadWord() == numRegisters && ModbusReadByte() == 2 * numRegisters)
+			{
+				while (numRegisters != 0)
+				{
+					*receivedRegisters++ = ModbusReadWord();
+					--numRegisters;
+				}
+				const uint16_t crcLo = (uint16_t)uart->read();
+				const uint16_t recdCrc = ((uint16_t)uart->read() << 8) | crcLo;
+				mutex.Release();
+				return (recdCrc == crc.Get()) ? GCodeResult::ok : GCodeResult::error;
+			}
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	mutex.Release();
+	return GCodeResult::error;
+}
+
+void AuxDevice::ModbusWriteByte(uint8_t b) noexcept
+{
+	crc.UpdateModbus(b);
+	uart->write(b);
+}
+
+void AuxDevice::ModbusWriteWord(uint16_t w) noexcept
+{
+	ModbusWriteByte((uint8_t)(w >> 8));
+	ModbusWriteByte((uint8_t)w);
+}
+
+uint8_t AuxDevice::ModbusReadByte() noexcept
+{
+	const uint8_t b = uart->read();
+	crc.UpdateModbus(b);
+	return b;
+}
+
+uint16_t AuxDevice::ModbusReadWord() noexcept
+{
+	const uint16_t hi = (uint16_t)ModbusReadByte() << 8;
+	return hi | (uint16_t)ModbusReadByte();
 }
 
 #endif
