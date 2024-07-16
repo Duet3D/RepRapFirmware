@@ -71,10 +71,9 @@ constexpr float DefaultMessageTimeout = 10.0;			// How long a message is display
 constexpr uint16_t MinimumGpinReportInterval = 30;		// Minimum interval in milliseconds between input change reports sent over CAN bus
 
 // Comms defaults
-constexpr unsigned int MAIN_BAUD_RATE = 115200;			// Default communication speed of the USB if needed
-constexpr unsigned int AUX_BAUD_RATE = 57600;			// Ditto - for auxiliary UART device
-constexpr unsigned int AUX2_BAUD_RATE = 115200;			// Ditto - for second auxiliary UART device
-constexpr uint32_t SERIAL_MAIN_TIMEOUT = 2000;			// timeout in ms for sending data to the main serial/USB port
+constexpr uint32_t AUX_BAUD_RATE = 57600;				// Baud rate for auxiliary UART device
+constexpr uint32_t AUX2_BAUD_RATE = 115200;				// Ditto - for second auxiliary UART device
+constexpr uint32_t UsbTimeout = 2000;					// timeout in ms for sending data to the main serial/USB port
 constexpr uint32_t AuxTimeout = 2000;					// timeout in ms for PanelDue replies
 
 constexpr uint32_t UnsolicitedStatusReportInterval = 2000;	// Interval between sending unsolicited status reports, in milliseconds

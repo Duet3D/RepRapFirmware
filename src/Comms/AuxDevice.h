@@ -17,6 +17,7 @@
 
 #if SUPPORT_MODBUS_RTU
 # include <Storage/CRC16.h>
+# include <Hardware/IoPorts.h>
 #endif
 
 class AuxDevice
@@ -32,12 +33,15 @@ public:
 
 	AuxDevice() noexcept;
 
-	void Init(AsyncSerial *p_uart) noexcept;
+	void Init(AsyncSerial *p_uart, uint32_t p_baudRate) noexcept;
 	bool IsEnabledForGCodeIo() const noexcept { return mode == AuxMode::raw || mode == AuxMode::panelDue; }
-	void SetMode(AuxMode p_mode, uint32_t baudRate) noexcept;
+	void SetMode(AuxMode p_mode) noexcept;
+	void SetBaudRate(uint32_t p_baudRate) noexcept { baudRate = p_baudRate; }			// must call SetMode after calling this to actually change the baud rate
 	void Disable() noexcept;
+	bool ConfigureDirectionPort(const char *pinName, GCodeBuffer& gb, const StringRef& reply) noexcept;
 
 	AuxMode GetMode() const noexcept { return mode; }
+	uint32_t GetBaudRate() const noexcept { return baudRate; }
 	bool IsRaw() const noexcept { return mode == AuxMode::raw; }
 
 	void SendPanelDueMessage(const char* msg) noexcept;
@@ -60,10 +64,11 @@ private:
 	void ModbusWriteWord(uint16_t w) noexcept;
 	uint8_t ModbusReadByte() noexcept;
 	uint16_t ModbusReadWord() noexcept;
+	uint32_t CalcTransmissionTime(unsigned int numChars) const noexcept;	// calculate the time in milliseconds to send or received the specified number of characters
 
-	static constexpr uint32_t ModbusBusAvailableTimeout = 50;			// how many milliseconds we wait for the device to become available
-	static constexpr uint32_t ModbusResponseTimeout = 20;				// how many milliseconds we give the device time to respond, excluding transmission time
-	static constexpr uint16_t MaxModbusRegisters = 100;					// the maximum number of registers we send or receive
+	static constexpr uint32_t ModbusBusAvailableTimeout = 50;				// how many milliseconds we wait for the device to become available
+	static constexpr uint32_t ModbusResponseTimeout = 20;					// how many milliseconds we give the device time to respond, excluding transmission time
+	static constexpr uint16_t MaxModbusRegisters = 100;						// the maximum number of registers we send or receive
 	static constexpr uint16_t ModbusCrcInit = 0xFFFF;
 
 	enum class ModbusFunction : uint8_t
@@ -86,9 +91,11 @@ private:
 	Mutex mutex;
 	volatile OutputStack outStack;			// output stack for use in raw or PanelDue mode
 	uint32_t seq;							// sequence number for output in PanelDue mode
-	AuxMode mode;							// whether disabled, raw, PanelDue mode or Modbus RTU mode
+	uint32_t baudRate;
+	AuxMode mode = AuxMode::disabled;		// whether disabled, raw, PanelDue mode or Modbus RTU mode
 
 #if SUPPORT_MODBUS_RTU
+	IoPort txNotRx;							// port used to switch the RS485 port between transmit and receive
 	uint16_t *receivedRegisters;
 	uint32_t whenStartedTransmitting;
 	CRC16 crc;

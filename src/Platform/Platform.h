@@ -551,7 +551,6 @@ private:
 	uint32_t lastFanCheckTime;
 
   	// Serial/USB
-	uint32_t baudRates[NumSerialChannels];
 	uint8_t commsParams[NumSerialChannels];
 
 	volatile OutputStack usbOutput;

@@ -447,7 +447,6 @@ void Platform::Init() noexcept
 	realTime = 0;
 
 	// Comms
-	baudRates[0] = MAIN_BAUD_RATE;
 	commsParams[0] = 0;
 	usbMutex.Create("USB");
 #if SAME5x && !CORE_USES_TINYUSB
@@ -457,14 +456,12 @@ void Platform::Init() noexcept
 #endif
 
 #if HAS_AUX_DEVICES
-    auxDevices[0].Init(&SERIAL_AUX_DEVICE);
-	baudRates[1] = AUX_BAUD_RATE;
+    auxDevices[0].Init(&SERIAL_AUX_DEVICE, AUX_BAUD_RATE);
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
 #endif
 
 #if defined(SERIAL_AUX2_DEVICE) && !defined(DUET3_ATE)
-    auxDevices[1].Init(&SERIAL_AUX2_DEVICE);
-	baudRates[2] = AUX2_BAUD_RATE;
+    auxDevices[1].Init(&SERIAL_AUX2_DEVICE, AUX2_BAUD_RATE);
 	commsParams[2] = 0;
 #endif
 
@@ -772,7 +769,7 @@ bool Platform::FlushMessages() noexcept
 			}
 			else
 			{
-				usbOutput.ApplyTimeout(SERIAL_MAIN_TIMEOUT);
+				usbOutput.ApplyTimeout(UsbTimeout);
 			}
 		}
 		usbHasMore = !usbOutput.IsEmpty();
@@ -2044,11 +2041,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 	GCodeBuffer * const gbp = reprap.GetGCodes().GetSerialGCodeBuffer(chan);
 
 	// If a baud rate has been provided, just store it for later use
-	const bool seenBaud = gb.Seen('B');
-	if (seenBaud)
-	{
-		baudRates[chan] = gb.GetUIValue();
-	}
+	const uint32_t baudRate = (gb.Seen('B')) ? gb.GetUIValue() : 0;
 
 	// If a mode is provided
 	if (gb.Seen('S'))
@@ -2078,7 +2071,11 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 #if HAS_AUX_DEVICES
 		if (chan != 0)
 		{
-			auxDevices[chan - 1].SetMode(newMode, baudRates[chan]);
+			if (baudRate != 0)
+			{
+				auxDevices[chan - 1].SetBaudRate(baudRate);
+			}
+			auxDevices[chan - 1].SetMode(newMode);
 		}
 #endif
 
@@ -2111,10 +2108,14 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 #endif
 #endif
 	}
-	else if (seenBaud)
+	else if (baudRate != 0)
 	{
 #if HAS_AUX_DEVICES
-		ResetChannel(chan);
+		if (chan != 0)
+		{
+			auxDevices[chan - 1].SetBaudRate(baudRate);
+			ResetChannel(chan);
+		}
 	}
 	else if (chan != 0 && !IsAuxEnabled(chan - 1))
 	{
@@ -2644,15 +2645,15 @@ void Platform::AtxPowerOff() noexcept
 
 void Platform::SetBaudRate(size_t chan, uint32_t br) noexcept
 {
-	if (chan < NumSerialChannels)
+	if (chan != 0 && chan < NumSerialChannels)
 	{
-		baudRates[chan] = br;
+		auxDevices[chan - 1].SetBaudRate(br);
 	}
 }
 
 uint32_t Platform::GetBaudRate(size_t chan) const noexcept
 {
-	return (chan < NumSerialChannels) ? baudRates[chan] : 0;
+	return (chan != 0 && chan < NumSerialChannels) ? auxDevices[chan - 1].GetBaudRate() : 0;
 }
 
 void Platform::SetCommsProperties(size_t chan, uint32_t cp) noexcept
@@ -2686,7 +2687,7 @@ void Platform::ResetChannel(size_t chan) noexcept
 		AuxDevice& device = auxDevices[chan - 1];
 		AuxDevice::AuxMode mode = device.GetMode();
 		device.Disable();
-		device.SetMode(mode, baudRates[chan]);
+		device.SetMode(mode);
 	}
 #endif
 }

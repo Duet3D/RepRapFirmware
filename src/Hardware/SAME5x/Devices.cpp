@@ -41,13 +41,18 @@ void Serial0PortDeinit(AsyncSerial *) noexcept
 
 AsyncSerial serialUart0(Serial0SercomNumber, Sercom0RxPad, 512, 512, Serial0PortInit, Serial0PortDeinit);
 
-# if !defined(SERIAL0_ISR0) || !defined(SERIAL0_ISR2) || !defined(SERIAL0_ISR3)
+# if !defined(SERIAL0_ISR0) || !defined(SERIAL0_ISR1) || !defined(SERIAL0_ISR2) || !defined(SERIAL0_ISR3)
 #  error SERIAL0_ISRn not defined
 # endif
 
 void SERIAL0_ISR0() noexcept
 {
 	serialUart0.Interrupt0();
+}
+
+void SERIAL0_ISR1() noexcept
+{
+	serialUart0.Interrupt1();
 }
 
 void SERIAL0_ISR2() noexcept
@@ -78,13 +83,18 @@ void Serial1PortDeinit(AsyncSerial *) noexcept
 
 AsyncSerial serialUart1(Serial1SercomNumber, Sercom1RxPad, 512, 512, Serial1PortInit, Serial1PortDeinit);
 
-# if !defined(SERIAL1_ISR0) || !defined(SERIAL1_ISR2) || !defined(SERIAL1_ISR3)
+# if !defined(SERIAL1_ISR0) || !defined(SERIAL1_ISR1) || !defined(SERIAL1_ISR2) || !defined(SERIAL1_ISR3)
 #  error SERIAL1_ISRn not defined
 # endif
 
 void SERIAL1_ISR0() noexcept
 {
 	serialUart1.Interrupt0();
+}
+
+void SERIAL1_ISR1() noexcept
+{
+	serialUart1.Interrupt1();
 }
 
 void SERIAL1_ISR2() noexcept
