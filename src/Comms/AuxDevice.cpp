@@ -37,6 +37,9 @@ void AuxDevice::SetMode(AuxMode p_mode) noexcept
 		}
 		else
 		{
+#if SUPPORT_MODBUS_RTU
+			uart->SetOnTxEndedCallback((mode == AuxMode::modbus_rtu) ? GlobalTxEndedCallback : nullptr, CallbackParameter(this));
+#endif
 			uart->begin(baudRate);
 			mode = p_mode;
 		}
@@ -349,6 +352,19 @@ uint16_t AuxDevice::ModbusReadWord() noexcept
 uint32_t AuxDevice::CalcTransmissionTime(unsigned int numChars) const noexcept
 {
 	return (numChars * 11000)/baudRate + 1;						// Modbus specifies 2 stop bits if parity not used, therefore 11 bits/character
+}
+
+// Callback for transmission ended
+/*static*/ void AuxDevice::GlobalTxEndedCallback(CallbackParameter cp) noexcept
+{
+	((AuxDevice*)cp.vp)->TxEndedCallback();
+}
+
+// Callback for transmission ended
+void AuxDevice::TxEndedCallback() noexcept
+{
+	uart->DisableTransmit();
+	txNotRx.WriteDigital(false);
 }
 
 #endif

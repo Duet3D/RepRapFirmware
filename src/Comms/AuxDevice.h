@@ -55,6 +55,8 @@ public:
 	GCodeResult SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, const uint16_t *data) noexcept;
 	GCodeResult ReadModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, uint16_t *data) noexcept;
 	GCodeResult CheckModbusResult() noexcept;
+
+	void TxEndedCallback() noexcept;
 #endif
 
 private:
@@ -65,6 +67,8 @@ private:
 	uint8_t ModbusReadByte() noexcept;
 	uint16_t ModbusReadWord() noexcept;
 	uint32_t CalcTransmissionTime(unsigned int numChars) const noexcept;	// calculate the time in milliseconds to send or received the specified number of characters
+
+	static void GlobalTxEndedCallback(CallbackParameter cp) noexcept;
 
 	static constexpr uint32_t ModbusBusAvailableTimeout = 50;				// how many milliseconds we wait for the device to become available
 	static constexpr uint32_t ModbusResponseTimeout = 20;					// how many milliseconds we give the device time to respond, excluding transmission time
