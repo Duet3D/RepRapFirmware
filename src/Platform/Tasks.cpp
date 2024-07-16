@@ -141,7 +141,7 @@ void *Tasks::GetNVMBuffer(const uint32_t *_ecv_array null stk) noexcept
 #endif
 #if defined(DUET3_MB6XD)
 	const BoardType bt = Platform::GetMB6XDBoardType();
-	if (bt == BoardType::Duet3_6XD_v101)
+	if (bt >= BoardType::Duet3_6XD_v101)
 	{
 		pinMode(UsbPowerSwitchPin, OUTPUT_LOW);								// turn USB power off
 		pinMode(UsbModePin, OUTPUT_LOW);									// USB mode = device/UFP

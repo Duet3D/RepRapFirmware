@@ -3891,11 +3891,14 @@ void Platform::ResetChannel(size_t chan) noexcept
 	// Driver 0 direction has a pulldown resistor on v1.0  boards only
 	// Driver 5 direction has a pulldown resistor on 1.01 boards only
 	pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
+	pinMode(DIRECTION_PINS[1], INPUT_PULLUP);
 	pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
 	delayMicroseconds(20);									// give the pullup resistor time to work
-	return (!digitalRead(DIRECTION_PINS[5])) ? BoardType::Duet3_6XD_v101
-				: (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6XD_v01
-					: BoardType::Duet3_6XD_v100;
+	if (digitalRead(DIRECTION_PINS[5]))
+	{
+		return (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6XD_v01 : BoardType::Duet3_6XD_v100;
+	}
+	return (digitalRead(DIRECTION_PINS[1])) ? BoardType::Duet3_6XD_v101 : BoardType::Duet3_6XD_v102;
 }
 
 #endif
@@ -3988,7 +3991,8 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "Duet 3 " BOARD_SHORT_NAME " v0.1";
 	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0";
-	case BoardType::Duet3_6XD_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
+	case BoardType::Duet3_6XD_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
+	case BoardType::Duet3_6XD_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or later";
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "Duet 3 " BOARD_SHORT_NAME;
 #elif defined(DUET_NG)
@@ -4027,6 +4031,7 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3_6XD_v01:			return "duet3mb6xd001";
 	case BoardType::Duet3_6XD_v100:			return "duet3mb6xd100";
 	case BoardType::Duet3_6XD_v101:			return "duet3mb6xd101";
+	case BoardType::Duet3_6XD_v102:			return "duet3mb6xd102";
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "fmdc";
 #elif defined(DUET_NG)
