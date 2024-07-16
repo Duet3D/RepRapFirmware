@@ -2073,14 +2073,26 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 		{
 			AuxDevice& dev = auxDevices[chan - 1];
 # if SUPPORT_MODBUS_RTU
-			if (newMode == AuxDevice::AuxMode::modbus_rtu && gb.Seen('C'))
+			if (newMode == AuxDevice::AuxMode::modbus_rtu)
 			{
-				String<StringLength50> portName;
-				gb.GetQuotedString(portName.GetRef(), false);
-				if (!dev.ConfigureDirectionPort(portName.c_str(), gb, reply))
+				if (gb.Seen('C'))
 				{
-					return GCodeResult::error;
+					String<StringLength50> portName;
+					gb.GetQuotedString(portName.GetRef(), false);
+					if (!dev.ConfigureDirectionPort(portName.c_str(), gb, reply))
+					{
+						return GCodeResult::error;
+					}
 				}
+#  if defined(DUET3_MB6XD)
+				else if (chan == 1 && board >= BoardType::Duet3_6XD_v102)
+				{
+					if (!dev.ConfigureDirectionPort("rs485.txen", gb, reply))	// port name must match the one in the pin table
+					{
+						return GCodeResult::error;
+					}
+				}
+#  endif
 			}
 # endif
 			if (baudRate != 0)
