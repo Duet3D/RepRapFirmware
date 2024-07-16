@@ -187,7 +187,7 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_st
 		return GCodeResult::error;
 	}
 
-	uart->FlushTransmitBuffer();
+	uart->ClearTransmitBuffer();
 	uart->DisableTransmit();
 	crc.Reset(ModbusCrcInit);
 	bytesTransmitted = 0;
@@ -211,7 +211,7 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_st
 
 	txNotRx.WriteDigital(true);								// set RS485 direction to transmit
 	delay(CalcTransmissionTime(4));							// Modbus specifies a 3.5 character interval
-	uart->FlushReceiveBuffer();
+	uart->ClearReceiveBuffer();
 	uart->EnableTransmit();
 	whenStartedTransmitting = millis();
 
@@ -232,7 +232,7 @@ GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint16_t p_st
 		return GCodeResult::error;
 	}
 
-	uart->FlushTransmitBuffer();
+	uart->ClearTransmitBuffer();
 	uart->DisableTransmit();
 	crc.Reset(ModbusCrcInit);
 	bytesTransmitted = 0;
@@ -250,7 +250,7 @@ GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint16_t p_st
 
 	txNotRx.WriteDigital(true);								// set port to transmit
 	delay(CalcTransmissionTime(4));							// Modbus specifies a 3.5 character interval
-	uart->FlushReceiveBuffer();
+	uart->ClearReceiveBuffer();
 	uart->EnableTransmit();
 	whenStartedTransmitting = millis();
 
