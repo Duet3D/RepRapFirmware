@@ -2043,7 +2043,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 	// If a baud rate has been provided, just store it for later use
 	const uint32_t baudRate = (gb.Seen('B')) ? gb.GetUIValue() : 0;
 
-	// If a mode is provided
+	// See if a mode is provided
 	if (gb.Seen('S'))
 	{
 		// Translation of M575 S parameter to AuxMode
@@ -2071,11 +2071,23 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 #if HAS_AUX_DEVICES
 		if (chan != 0)
 		{
+			AuxDevice& dev = auxDevices[chan - 1];
+# if SUPPORT_MODBUS_RTU
+			if (newMode == AuxDevice::AuxMode::modbus_rtu && gb.Seen('C'))
+			{
+				String<StringLength50> portName;
+				gb.GetQuotedString(portName.GetRef(), false);
+				if (!dev.ConfigureDirectionPort(portName.c_str(), gb, reply))
+				{
+					return GCodeResult::error;
+				}
+			}
+# endif
 			if (baudRate != 0)
 			{
-				auxDevices[chan - 1].SetBaudRate(baudRate);
+				dev.SetBaudRate(baudRate);
 			}
-			auxDevices[chan - 1].SetMode(newMode);
+			dev.SetMode(newMode);
 		}
 #endif
 
@@ -2088,25 +2100,6 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 		{
 			gbp->Enable(val);						// enable I/O and set the CRC and checksum requirements, also sets Marlin or PanelDue compatibility
 		}
-
-#if 0
-		SetCommsProperties(chan, val);
-		if (gbp != nullptr)
-		{
-			gbp->SetCommsProperties(val);
-#if HAS_AUX_DEVICES
-			if (chan != 0)
-			{
-				AuxDevice::AuxMode newMode = modes[val];
-				auxDevices[chan - 1].SetMode(newMode, baudRates[chan]);
-				const bool rawMode = (val & 2u) != 0;
-				if (rawMode && !IsAuxEnabled(chan - 1))			// if enabling aux for the first time and in raw mode, set Marlin compatibility
-				{
-					gbp->LatestMachineState().compatibility = Compatibility::Marlin;
-				}
-			}
-#endif
-#endif
 	}
 	else if (baudRate != 0)
 	{
