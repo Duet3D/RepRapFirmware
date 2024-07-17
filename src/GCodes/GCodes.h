@@ -508,8 +508,6 @@ private:
 
 	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M581
 	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M582
-	GCodeResult SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M260
-	GCodeResult ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M261
 	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M577
 	GCodeResult RaiseEvent(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M957
 

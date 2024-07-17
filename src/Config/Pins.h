@@ -309,4 +309,8 @@
 # define SUPPORT_MODBUS_RTU				0
 #endif
 
+#if SUPPORT_MODBUS_RTU && !HAS_AUX_DEVICES
+# error Cannot support Modbus RTU without aux devices
+#endif
+
 #endif // PINS_H__

@@ -2717,11 +2717,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				// For case 226, see case 25
 
 			case 260:	// I2C send, also M261.1 Modbus write registers
-				result = SendI2cOrModbus(gb, reply);
+				result = platform.SendI2cOrModbus(gb, reply);
 				break;
 
 			case 261:	// I2C receive, also M261.1 Modbus read registers
-				result = ReceiveI2cOrModbus(gb, reply);
+				result = platform.ReceiveI2cOrModbus(gb, reply);
 				break;
 
 			case 280:	// Servos

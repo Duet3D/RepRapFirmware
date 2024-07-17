@@ -213,6 +213,9 @@ public:
 	GCodeResult HandleM80(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M260
+	GCodeResult ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M261
+
 	void AtxPowerOff() noexcept;
 	bool IsAtxPowerControlled() const noexcept { return PsOnPort.IsValid(); }
 	bool IsDeferredPowerDown() const noexcept { return powerDownWhenFansStop || delayedPowerDown; }

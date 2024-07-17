@@ -2168,6 +2168,149 @@ bool Platform::IsAuxRaw(size_t auxNumber) const noexcept
 #endif
 }
 
+// Handle M260 and M260.1 - send and possibly receive via I2C, or send via Modbus
+GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
+{
+#if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
+	// Get the slave address and bytes or words to send
+	gb.MustSee('A');
+	const uint32_t address = gb.GetUIValue();
+
+	int32_t values[MaxI2cOrModbusValues];
+	size_t numToSend;
+	gb.MustSee('B');
+	numToSend = MaxI2cOrModbusValues;
+	gb.GetIntArray(values, numToSend, false);
+
+	switch (gb.GetCommandFraction())
+	{
+# if defined(I2C_IFACE)
+	case 0:		// I2C
+		{
+			uint32_t numToReceive = 0;
+			bool seenR;
+			gb.TryGetUIValue('R', numToReceive, seenR);
+
+			if (numToSend + numToReceive > MaxI2cOrModbusValues)
+			{
+				numToReceive = MaxI2cOrModbusValues - numToSend;
+			}
+			uint8_t bValues[MaxI2cOrModbusValues];
+			for (size_t i = 0; i < numToSend; ++i)
+			{
+				bValues[i] = (uint8_t)values[i];
+			}
+
+			I2C::Init();
+			const size_t bytesTransferred = I2C::Transfer(address, bValues, numToSend, numToReceive);
+
+			if (bytesTransferred < numToSend)
+			{
+				reply.copy("I2C transmission error");
+				return GCodeResult::error;
+			}
+			else if (numToReceive != 0)
+			{
+				reply.copy("Received");
+				if (bytesTransferred == numToSend)
+				{
+					reply.cat(" nothing");
+				}
+				else
+				{
+					for (size_t i = numToSend; i < bytesTransferred; ++i)
+					{
+						reply.catf(" %02x", bValues[i]);
+					}
+				}
+			}
+			return (bytesTransferred == numToSend + numToReceive) ? GCodeResult::ok : GCodeResult::error;
+		}
+# endif
+
+# if SUPPORT_MODBUS_RTU
+	case 1:		// Modbus
+		{
+			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels);
+			const uint16_t firstRegister = gb.GetLimitedUIValue(0, 1u << 16);
+			uint16_t registersToSend[MaxI2cOrModbusValues];
+			for (size_t i = 0; i < numToSend; ++i)
+			{
+				registersToSend[i] = (uint16_t)values[i];
+			}
+			return auxDevices[auxChannel - 1].SendModbusRegisters(address, firstRegister, numToSend, registersToSend);
+		}
+# endif
+
+	default:
+		return GCodeResult::errorNotSupported;
+	}
+#else
+	return GCodeResult::errorNotSupported;
+#endif
+}
+
+// Handle M261
+GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
+{
+#if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
+	gb.MustSee('A');
+	const uint32_t address = gb.GetUIValue();
+	const uint32_t numValues = gb.GetLimitedUIValue('B', 1, MaxI2cOrModbusValues + 1);
+
+	switch (gb.GetCommandFraction())
+	{
+# if defined(I2C_IFACE)
+	case 0:		// I2C
+		{
+			I2C::Init();
+			uint8_t bValues[MaxI2cOrModbusValues];
+			const size_t bytesRead = I2C::Transfer(address, bValues, 0, numValues);
+
+			reply.copy("Received");
+			if (bytesRead == 0)
+			{
+				reply.cat(" nothing");
+			}
+			else
+			{
+				for (size_t i = 0; i < bytesRead; ++i)
+				{
+					reply.catf(" %02x", bValues[i]);
+				}
+			}
+
+			return (bytesRead == numValues) ? GCodeResult::ok : GCodeResult::error;
+		}
+# endif
+
+# if SUPPORT_MODBUS_RTU
+	case 1:		// Modbus
+		{
+			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels);
+			const uint16_t firstRegister = gb.GetLimitedUIValue(0, 1u << 16);
+			uint16_t registersToReceive[MaxI2cOrModbusValues];
+			const GCodeResult rslt = auxDevices[auxChannel - 1].ReadModbusRegisters(address, firstRegister, numValues, registersToReceive);
+			if (rslt == GCodeResult::ok)
+			{
+				for (size_t i = 0; i < numValues; ++i)
+				{
+					reply.catf(" %03x", registersToReceive[i]);
+				}
+
+			}
+			return rslt;
+		}
+# endif
+
+	default:
+		return GCodeResult::errorNotSupported;
+	}
+#else
+	return GCodeResult::errorNotSupported;
+#endif
+}
+
 #if defined(DUET_NG) && HAS_SBC_INTERFACE
 
 // Enable the PanelDue port so that the ATE can test the board
