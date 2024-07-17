@@ -2231,14 +2231,20 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 # if SUPPORT_MODBUS_RTU
 	case 1:		// Modbus
 		{
-			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels);
+			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
+			if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::modbus_rtu)
+			{
+				reply.copy("Port has not been set to Modbus mode");
+				return GCodeResult::error;
+			}
+
 			const uint16_t firstRegister = gb.GetLimitedUIValue(0, 1u << 16);
 			uint16_t registersToSend[MaxI2cOrModbusValues];
 			for (size_t i = 0; i < numToSend; ++i)
 			{
 				registersToSend[i] = (uint16_t)values[i];
 			}
-			return auxDevices[auxChannel - 1].SendModbusRegisters(address, firstRegister, numToSend, registersToSend);
+			return auxDevices[auxChannel].SendModbusRegisters(address, firstRegister, numToSend, registersToSend);
 		}
 # endif
 
@@ -2287,10 +2293,16 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 # if SUPPORT_MODBUS_RTU
 	case 1:		// Modbus
 		{
-			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels);
+			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
+			if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::modbus_rtu)
+			{
+				reply.copy("Port has not been set to Modbus mode");
+				return GCodeResult::error;
+			}
+
 			const uint16_t firstRegister = gb.GetLimitedUIValue(0, 1u << 16);
 			uint16_t registersToReceive[MaxI2cOrModbusValues];
-			const GCodeResult rslt = auxDevices[auxChannel - 1].ReadModbusRegisters(address, firstRegister, numValues, registersToReceive);
+			const GCodeResult rslt = auxDevices[auxChannel].ReadModbusRegisters(address, firstRegister, numValues, registersToReceive);
 			if (rslt == GCodeResult::ok)
 			{
 				for (size_t i = 0; i < numValues; ++i)
