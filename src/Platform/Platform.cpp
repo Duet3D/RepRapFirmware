@@ -3877,7 +3877,7 @@ void Platform::ResetChannel(size_t chan) noexcept
 	}
 	else
 	{
-		return BoardType::Duet3_6HC_v102;
+		return (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v102 : BoardType::Duet3_6HC_v102b;
 	}
 }
 
@@ -3916,7 +3916,7 @@ void Platform::SetBoardType() noexcept
 					: BoardType::Duet3Mini_Ethernet;
 #elif defined(DUET3_MB6HC)
 	board = GetMB6HCBoardType();
-	if (board == BoardType::Duet3_6HC_v102)
+	if (board >= BoardType::Duet3_6HC_v102)
 	{
 		powerMonitorVoltageRange = PowerMonitorVoltageRange_v102;
 		DiagPin = DiagPin102;
@@ -3987,7 +3987,8 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 #elif defined(DUET3_MB6HC)
 	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v1.0 or earlier";
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
-	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or later";
+	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or 1.02a";
+	case BoardType::Duet3_6HC_v102b:		return "Duet 3 " BOARD_SHORT_NAME " v1.02b or later";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "Duet 3 " BOARD_SHORT_NAME " v0.1";
 	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0";
@@ -4027,6 +4028,7 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3_6HC_v06_100:		return "duet3mb6hc100";
 	case BoardType::Duet3_6HC_v101:			return "duet3mb6hc101";
 	case BoardType::Duet3_6HC_v102:			return "duet3mb6hc102";
+	case BoardType::Duet3_6HC_v102b:		return "duet3mb6hc102b";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "duet3mb6xd001";
 	case BoardType::Duet3_6XD_v100:			return "duet3mb6xd100";
