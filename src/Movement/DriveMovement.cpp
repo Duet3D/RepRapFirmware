@@ -168,7 +168,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 					{
 						prev->SetNext(seg);
 					}
-#if 1	//debug
+#if CHECK_SEGMENTS
 					CheckSegment(__LINE__, prev);
 					CheckSegment(__LINE__, seg);
 #endif
@@ -207,7 +207,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 					{
 						prev = seg;
 						seg = seg->Split((uint32_t)offset);
-#if 1	//debug
+#if CHECK_SEGMENTS
 						CheckSegment(__LINE__, prev);
 						CheckSegment(__LINE__, seg);
 #endif
@@ -237,7 +237,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 						debugPrintf("merge1: ");
 #endif
 						seg->Merge(firstDistance, a, moveFlags);
-#if 1	//debug
+#if CHECK_SEGMENTS
 						CheckSegment(__LINE__, prev);
 						CheckSegment(__LINE__, seg);
 #endif
@@ -253,7 +253,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 						{
 							// Split the existing segment in two
 							seg->Split(duration);
-#if 1	//debug
+#if CHECK_SEGMENTS
 							CheckSegment(__LINE__, prev);
 							CheckSegment(__LINE__, seg);
 #endif
@@ -289,9 +289,9 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 	}
 
 finished:
-#if 1	//debug
-					CheckSegment(__LINE__, prev);
-					CheckSegment(__LINE__, seg);
+#if CHECK_SEGMENTS
+	CheckSegment(__LINE__, prev);
+	CheckSegment(__LINE__, seg);
 #endif
 #if SEGMENT_DEBUG
 	MoveSegment::DebugPrintList(segments);
@@ -784,7 +784,7 @@ bool DriveMovement::StopDriver(int32_t& netStepsTaken) noexcept
 	return false;
 }
 
-#if 1	//DEBUG
+#if CHECK_SEGMENTS
 
 void DriveMovement::CheckSegment(unsigned int line, MoveSegment *seg) noexcept
 {

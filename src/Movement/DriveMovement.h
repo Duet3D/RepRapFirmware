@@ -83,7 +83,7 @@ private:
 	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr
 	bool LogStepError(uint8_t type) noexcept;			// tell the Move class that we had a step error
 
-#if 1	//DEBUG
+#if CHECK_SEGMENTS
 	void CheckSegment(unsigned int line, MoveSegment *seg) noexcept;
 #endif
 

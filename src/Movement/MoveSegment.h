@@ -27,6 +27,7 @@
 #include <new>		// for align_val_t
 
 #define SEGMENT_DEBUG	(0)
+#define CHECK_SEGMENTS	(0)
 
 // This bit field is used in multiple contexts so that we can copy them efficiently from one context to another Not all flags are used in all contexts.
 union MovementFlags
