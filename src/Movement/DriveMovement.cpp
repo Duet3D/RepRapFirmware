@@ -125,8 +125,9 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 				 RestoreBasePriority(oldPrio);
 				 if (reprap.Debug(Module::Move))
 				 {
-					 debugPrintf("was executing, overlap %" PRIi32 " while trying to add s=%" PRIu32 " t=%" PRIu32 " d=%.2f a=%.4e f=%02" PRIx32 " at time %" PRIu32 "\n",
+					 debugPrintf("overlaps executing seg %" PRIi32 " while trying to add s=%" PRIu32 " t=%" PRIu32 " d=%.2f a=%.4e f=%02" PRIx32 " at time %" PRIu32 "\n",
 						 	 	 	 -timeInHand, startTime, duration, (double)distance, (double)a, moveFlags.all, now);
+					 MoveSegment::DebugPrintList(seg);
 				 }
 				 return;
 			 }
