@@ -287,11 +287,6 @@ public:
 # endif
 #endif
 
-#if !HAS_MASS_STORAGE && !HAS_EMBEDDED_FILES && defined(DUET_NG)
-	// Function called by RepRap.cpp to enable PanelDue by default in the Duet 2 SBC build
-	void SetAux0CommsProperties(uint32_t mode) const noexcept;
-#endif
-
 #if SUPPORT_REMOTE_COMMANDS
 	void SwitchToExpansionMode() noexcept;
 	void SetRemotePrinting(bool isPrinting) noexcept { isRemotePrinting = isPrinting; }
@@ -513,8 +508,8 @@ private:
 
 	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M581
 	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M582
-	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M260
-	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M261
+	GCodeResult SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M260
+	GCodeResult ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M261
 	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M577
 	GCodeResult RaiseEvent(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M957
 

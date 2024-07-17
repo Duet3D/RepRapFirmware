@@ -702,10 +702,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 		GCodeResult result;
 		if (gb.GetCommandFraction() > 0
 			&& code != 36 && code != 201
+			&& code != 260 && code != 261
 #if SUPPORT_SCANNING_PROBES
 			&& code != 558
 #endif
-			&& code != 569 && code != 586 && code != 587 // these are the only M-codes we implement that can have fractional parts
+			&& code != 569 && code != 586 && code != 587	// these are the only M-codes we implement that can have fractional parts
 		   )
 		{
 			result = TryMacroFile(gb);
@@ -2715,12 +2716,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 				// For case 226, see case 25
 
-			case 260:	// I2C send
-				result = SendI2c(gb, reply);
+			case 260:	// I2C send, also M261.1 Modbus write registers
+				result = SendI2cOrModbus(gb, reply);
 				break;
 
-			case 261:	// I2C send
-				result = ReceiveI2c(gb, reply);
+			case 261:	// I2C receive, also M261.1 Modbus read registers
+				result = ReceiveI2cOrModbus(gb, reply);
 				break;
 
 			case 280:	// Servos

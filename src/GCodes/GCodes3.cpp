@@ -827,34 +827,33 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 #endif
 
 // Handle M260 - send and possibly receive via I2C
-GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
+GCodeResult GCodes::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
-#if defined(I2C_IFACE)
-	if (gb.Seen('A'))
-	{
-		const uint32_t address = gb.GetUIValue();
-		uint32_t numToReceive = 0;
-		bool seenR;
-		gb.TryGetUIValue('R', numToReceive, seenR);
-		int32_t values[MaxI2cBytes];
-		size_t numToSend;
-		if (gb.Seen('B'))
-		{
-			numToSend = MaxI2cBytes;
-			gb.GetIntArray(values, numToSend, false);		//TODO allow hex values
-		}
-		else
-		{
-			numToSend = 0;
-		}
+#if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
+	// Get the slave address and bytes or words to send
+	gb.MustSee('A');
+	const uint32_t address = gb.GetUIValue();
 
-		if (numToSend + numToReceive != 0)
+	int32_t values[MaxI2cOrModbusValues];
+	size_t numToSend;
+	gb.MustSee('B');
+	numToSend = MaxI2cOrModbusValues;
+	gb.GetIntArray(values, numToSend, false);
+
+	switch (gb.GetCommandFraction())
+	{
+# if defined(I2C_IFACE)
+	case 0:		// I2C
 		{
-			if (numToSend + numToReceive > MaxI2cBytes)
+			uint32_t numToReceive = 0;
+			bool seenR;
+			gb.TryGetUIValue('R', numToReceive, seenR);
+
+			if (numToSend + numToReceive > MaxI2cOrModbusValues)
 			{
-				numToReceive = MaxI2cBytes - numToSend;
+				numToReceive = MaxI2cOrModbusValues - numToSend;
 			}
-			uint8_t bValues[MaxI2cBytes];
+			uint8_t bValues[MaxI2cOrModbusValues];
 			for (size_t i = 0; i < numToSend; ++i)
 			{
 				bValues[i] = (uint8_t)values[i];
@@ -885,54 +884,75 @@ GCodeResult GCodes::SendI2c(GCodeBuffer& gb, const StringRef &reply)
 			}
 			return (bytesTransferred == numToSend + numToReceive) ? GCodeResult::ok : GCodeResult::error;
 		}
-	}
+# endif
 
-	return GCodeResult::badOrMissingParameter;
+# if SUPPORT_MODBUS_RTU
+	case 1:		// Modbus
+		{
+			(void)address;
+			(void)values;
+			//TODO
+			return GCodeResult::errorNotSupported;
+		}
+# endif
+
+	default:
+		return GCodeResult::errorNotSupported;
+	}
 #else
-	reply.copy("I2C not available");
-	return GCodeResult::error;
+	return GCodeResult::errorNotSupported;
 #endif
 }
 
 // Handle M261
-GCodeResult GCodes::ReceiveI2c(GCodeBuffer& gb, const StringRef &reply)
+GCodeResult GCodes::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
-#if defined(I2C_IFACE)
-	if (gb.Seen('A'))
+#if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
+	gb.MustSee('A');
+	const uint32_t address = gb.GetUIValue();
+	const uint32_t numBytes = gb.GetLimitedUIValue('B', 1, MaxI2cOrModbusValues + 1);
+
+	switch (gb.GetCommandFraction())
 	{
-		const uint32_t address = gb.GetUIValue();
-		if (gb.Seen('B'))
+# if defined(I2C_IFACE)
+	case 0:		// I2C
 		{
-			const uint32_t numBytes = gb.GetUIValue();
-			if (numBytes > 0 && numBytes <= MaxI2cBytes)
+			I2C::Init();
+			uint8_t bValues[MaxI2cOrModbusValues];
+			const size_t bytesRead = I2C::Transfer(address, bValues, 0, numBytes);
+
+			reply.copy("Received");
+			if (bytesRead == 0)
 			{
-				I2C::Init();
-
-				uint8_t bValues[MaxI2cBytes];
-				const size_t bytesRead = I2C::Transfer(address, bValues, 0, numBytes);
-
-				reply.copy("Received");
-				if (bytesRead == 0)
-				{
-					reply.cat(" nothing");
-				}
-				else
-				{
-					for (size_t i = 0; i < bytesRead; ++i)
-					{
-						reply.catf(" %02x", bValues[i]);
-					}
-				}
-
-				return (bytesRead == numBytes) ? GCodeResult::ok : GCodeResult::error;
+				reply.cat(" nothing");
 			}
-		}
-	}
+			else
+			{
+				for (size_t i = 0; i < bytesRead; ++i)
+				{
+					reply.catf(" %02x", bValues[i]);
+				}
+			}
 
-	return GCodeResult::badOrMissingParameter;
+			return (bytesRead == numBytes) ? GCodeResult::ok : GCodeResult::error;
+		}
+# endif
+
+# if SUPPORT_MODBUS_RTU
+	case 1:		// Modbus
+		{
+			(void)address;
+			(void)numBytes;
+			//TODO
+			return GCodeResult::errorNotSupported;
+		}
+# endif
+
+	default:
+		return GCodeResult::errorNotSupported;
+	}
 #else
-	reply.copy("I2C not available");
-	return GCodeResult::error;
+	return GCodeResult::errorNotSupported;
 #endif
 }
 
@@ -1571,15 +1591,5 @@ void GCodes::ProcessEvent(GCodeBuffer& gb) noexcept
 		}
 	}
 }
-
-#if !HAS_MASS_STORAGE && !HAS_EMBEDDED_FILES && defined(DUET_NG)
-
-// Function called by RepRap.cpp to enable PanelDue by default in the Duet 2 SBC build so that we can test it in the ATE
-void GCodes::SetAux0CommsProperties(uint32_t mode) const noexcept
-{
-	AuxGCode()->SetCommsProperties(mode);
-}
-
-#endif
 
 // End
