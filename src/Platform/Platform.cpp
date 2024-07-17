@@ -2130,8 +2130,8 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 	else
 	{
 		const uint32_t cp = GetCommsProperties(chan);
-		reply.printf("Channel %d: baud rate %" PRIu32 ", %s%s", chan, GetBaudRate(chan),
-						(chan != 0 && IsAuxRaw(chan - 1)) ? "raw mode, " : "",
+		reply.printf("Channel %d: baud rate %" PRIu32 ", %s mode, %s", chan, GetBaudRate(chan),
+						(chan != 0 && IsAuxRaw(chan - 1)) ? "raw" : "PanelDue",
 						(cp & 4) ? "requires CRC"
 							: (cp & 1) ? "requires checksum or CRC"
 								: "does not require checksum or CRC"

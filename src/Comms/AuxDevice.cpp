@@ -31,7 +31,7 @@ void AuxDevice::SetMode(AuxMode p_mode) noexcept
 {
 	if (uart != nullptr)
 	{
-		if (mode == AuxMode::disabled)
+		if (p_mode == AuxMode::disabled)
 		{
 			Disable();
 		}
