@@ -16,6 +16,8 @@ static_assert(CORE_USES_TINYUSB && CFG_TUH_ENABLED, "USB drive support needs tin
 
 #include "UsbVolume.h"
 
+constexpr uint32_t ReadWriteTimeout = 3000;
+
 static bool disk_io_complete(uint8_t address, tuh_msc_complete_data_t const *cb_data)
 {
 	(void) address;
@@ -134,15 +136,13 @@ DRESULT UsbVolume::DiskStatus() noexcept
 DRESULT UsbVolume::DiskRead(BYTE *buff, LBA_t sector, UINT count) noexcept
 {
 	tuh_msc_read10(address, lun, buff, sector, (uint16_t)count, disk_io_complete, reinterpret_cast<uintptr_t>(&ioDone));
-	ioDone.Take();
-	return RES_OK;
+	return ioDone.Take(ReadWriteTimeout) ? RES_OK : RES_ERROR;
 }
 
 DRESULT UsbVolume::DiskWrite(BYTE const *buff, LBA_t sector, UINT count) noexcept
 {
 	tuh_msc_write10(address, lun, buff, sector, (uint16_t)count, disk_io_complete, reinterpret_cast<uintptr_t>(&ioDone));
-	ioDone.Take();
-	return RES_OK;
+	return ioDone.Take(ReadWriteTimeout) ? RES_OK : RES_ERROR;
 }
 
 DRESULT UsbVolume::DiskIoctl(BYTE cmd, void *buff) noexcept
