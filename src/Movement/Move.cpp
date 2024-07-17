@@ -1025,11 +1025,6 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	p.MessageF(mtype, "%s\n", scratchString.c_str());
 	axisShaper.Diagnostics(mtype);
 
-	for (size_t i = 0; i < ARRAY_SIZE(rings); ++i)
-	{
-		rings[i].Diagnostics(mtype, i);
-	}
-
 	// Show the motor position and stall status
 	for (size_t drive = 0; drive < NumDirectDrivers; ++drive)
 	{
@@ -1050,6 +1045,12 @@ void Move::Diagnostics(MessageType mtype) noexcept
 #endif
 		driverStatus.cat('\n');
 		p.Message(mtype, driverStatus.c_str());
+	}
+
+	// Show the status of each DDA ring
+	for (size_t i = 0; i < ARRAY_SIZE(rings); ++i)
+	{
+		rings[i].Diagnostics(mtype, i);
 	}
 }
 
