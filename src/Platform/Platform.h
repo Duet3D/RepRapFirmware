@@ -423,6 +423,10 @@ public:
 	uint32_t Random() noexcept;
 #endif
 
+#if defined(DUET_NG) && HAS_SBC_INTERFACE
+	void EnablePanelDuePort() noexcept;							// enable the PanelDue port so that the ATE can test the board
+#endif
+
 #if SUPPORT_CAN_EXPANSION
 	void HandleRemoteGpInChange(CanAddress src, uint8_t handleMajor, uint8_t handleMinor, bool state) noexcept;
 #endif

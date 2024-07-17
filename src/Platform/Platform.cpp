@@ -2168,6 +2168,19 @@ bool Platform::IsAuxRaw(size_t auxNumber) const noexcept
 #endif
 }
 
+#if defined(DUET_NG) && HAS_SBC_INTERFACE
+
+// Enable the PanelDue port so that the ATE can test the board
+void Platform::EnablePanelDuePort() noexcept
+{
+	auxDevices[0].SetBaudRate(57600);
+	auxDevices[0].SetMode(AuxDevice::AuxMode::panelDue);
+	SetCommsProperties(1, 1);
+	reprap.GetGCodes().GetSerialGCodeBuffer(1)->Enable(1);
+}
+
+#endif
+
 #if SUPPORT_PANELDUE_FLASH
 void Platform::InitPanelDueUpdater() noexcept
 {
