@@ -95,7 +95,7 @@ void EthernetInit() noexcept
 
 #if CORE_USES_TINYUSB
 
-constexpr size_t UsbDeviceTaskStackWords = 200;
+constexpr size_t UsbDeviceTaskStackWords = 400;
 static Task<UsbDeviceTaskStackWords> usbDeviceTask;
 
 #endif
