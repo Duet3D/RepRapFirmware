@@ -263,6 +263,7 @@ public:
 	size_t GetNumInputs() const noexcept { return NumGCodeChannels; }
 	const GCodeBuffer* GetInput(size_t n) const noexcept { return gcodeSources[n]; }
 	const GCodeBuffer* GetInput(GCodeChannel n) const noexcept { return gcodeSources[n.RawValue()]; }
+	GCodeBuffer *GetSerialGCodeBuffer(size_t serialPortNumber) const noexcept;
 
 	const ObjectTracker *GetBuildObjects() const noexcept { return &buildObjects; }
 
@@ -284,11 +285,6 @@ public:
 		return (float)moveStates[0].laserPwmOrIoBits.laserPwm * (1.0/65535);
 	}
 # endif
-#endif
-
-#if !HAS_MASS_STORAGE && !HAS_EMBEDDED_FILES && defined(DUET_NG)
-	// Function called by RepRap.cpp to enable PanelDue by default in the Duet 2 SBC build
-	void SetAux0CommsProperties(uint32_t mode) const noexcept;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -512,8 +508,6 @@ private:
 
 	GCodeResult ConfigureTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Handle M581
 	GCodeResult CheckTrigger(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// Handle M582
-	GCodeResult SendI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M260
-	GCodeResult ReceiveI2c(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M261
 	GCodeResult WaitForPin(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M577
 	GCodeResult RaiseEvent(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M957
 

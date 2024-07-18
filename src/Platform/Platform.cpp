@@ -447,7 +447,6 @@ void Platform::Init() noexcept
 	realTime = 0;
 
 	// Comms
-	baudRates[0] = MAIN_BAUD_RATE;
 	commsParams[0] = 0;
 	usbMutex.Create("USB");
 #if SAME5x && !CORE_USES_TINYUSB
@@ -457,14 +456,12 @@ void Platform::Init() noexcept
 #endif
 
 #if HAS_AUX_DEVICES
-    auxDevices[0].Init(&SERIAL_AUX_DEVICE);
-	baudRates[1] = AUX_BAUD_RATE;
+    auxDevices[0].Init(&SERIAL_AUX_DEVICE, AUX_BAUD_RATE);
 	commsParams[1] = 1;							// by default we require a checksum on data from the aux port, to guard against overrun errors
 #endif
 
 #if defined(SERIAL_AUX2_DEVICE) && !defined(DUET3_ATE)
-    auxDevices[1].Init(&SERIAL_AUX2_DEVICE);
-	baudRates[2] = AUX2_BAUD_RATE;
+    auxDevices[1].Init(&SERIAL_AUX2_DEVICE, AUX2_BAUD_RATE);
 	commsParams[2] = 0;
 #endif
 
@@ -772,7 +769,7 @@ bool Platform::FlushMessages() noexcept
 			}
 			else
 			{
-				usbOutput.ApplyTimeout(SERIAL_MAIN_TIMEOUT);
+				usbOutput.ApplyTimeout(UsbTimeout);
 			}
 		}
 		usbHasMore = !usbOutput.IsEmpty();
@@ -2037,22 +2034,128 @@ void Platform::AppendUsbReply(OutputBuffer *buffer) noexcept
 
 // Aux port functions
 
+GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	// Get the channel specified by the command and the corresponding GCode buffer
+	const size_t chan = gb.GetLimitedUIValue('P', NumSerialChannels);
+	GCodeBuffer * const gbp = reprap.GetGCodes().GetSerialGCodeBuffer(chan);
+
+	// If a baud rate has been provided, just store it for later use
+	const uint32_t baudRate = (gb.Seen('B')) ? gb.GetUIValue() : 0;
+
+	// See if a mode is provided
+	if (gb.Seen('S'))
+	{
+		// Translation of M575 S parameter to AuxMode
+		static constexpr AuxDevice::AuxMode modes[] =
+		{
+			AuxDevice::AuxMode::panelDue,			// basic PanelDue mode,
+			AuxDevice::AuxMode::panelDue,			// PanelDue mode with CRC or checksum required (default)
+			AuxDevice::AuxMode::raw,				// basic raw mode
+			AuxDevice::AuxMode::raw,				// raw mode with CRC or checksum required
+			AuxDevice::AuxMode::panelDue,			// PanelDue mode with CRC required
+			AuxDevice::AuxMode::disabled,			// was unused, now treated as disabled
+			AuxDevice::AuxMode::raw,				// raw mode with CRC required
+#if SUPPORT_MODBUS_RTU
+			AuxDevice::AuxMode::modbus_rtu,			// Modbus mode
+#endif
+		};
+
+		const uint32_t val = gb.GetLimitedUIValue('S', ARRAY_SIZE(modes));
+		AuxDevice::AuxMode newMode = modes[val];
+		if (gbp != nullptr)
+		{
+			gbp->Disable();							// disable I/O for this buffer
+		}
+
+#if HAS_AUX_DEVICES
+		if (chan != 0)
+		{
+			AuxDevice& dev = auxDevices[chan - 1];
+# if SUPPORT_MODBUS_RTU
+			if (newMode == AuxDevice::AuxMode::modbus_rtu)
+			{
+				if (gb.Seen('C'))
+				{
+					String<StringLength50> portName;
+					gb.GetQuotedString(portName.GetRef(), false);
+					if (!dev.ConfigureDirectionPort(portName.c_str(), gb, reply))
+					{
+						return GCodeResult::error;
+					}
+				}
+#  if defined(DUET3_MB6XD)
+				else if (chan == 1 && board >= BoardType::Duet3_6XD_v102)
+				{
+					if (!dev.ConfigureDirectionPort("rs485.txen", gb, reply))	// port name must match the one in the pin table
+					{
+						return GCodeResult::error;
+					}
+				}
+#  endif
+			}
+# endif
+			if (baudRate != 0)
+			{
+				dev.SetBaudRate(baudRate);
+			}
+			dev.SetMode(newMode);
+		}
+#endif
+
+		if (   gbp != nullptr
+			&& newMode != AuxDevice::AuxMode::disabled
+#if SUPPORT_MODBUS_RTU
+			&& newMode != AuxDevice::AuxMode::modbus_rtu
+#endif
+		   )
+		{
+			gbp->Enable(val);						// enable I/O and set the CRC and checksum requirements, also sets Marlin or PanelDue compatibility
+		}
+	}
+	else if (baudRate != 0)
+	{
+#if HAS_AUX_DEVICES
+		if (chan != 0)
+		{
+			auxDevices[chan - 1].SetBaudRate(baudRate);
+			ResetChannel(chan);
+		}
+	}
+	else if (chan != 0 && !IsAuxEnabled(chan - 1))
+	{
+		reply.printf("Channel %u is disabled", chan);
+#endif
+	}
+	else
+	{
+		const uint32_t cp = GetCommsProperties(chan);
+		reply.printf("Channel %d: baud rate %" PRIu32 ", %s mode, %s", chan, GetBaudRate(chan),
+						(chan != 0 && IsAuxRaw(chan - 1)) ? "raw" : "PanelDue",
+						(cp & 4) ? "requires CRC"
+							: (cp & 1) ? "requires checksum or CRC"
+								: "does not require checksum or CRC"
+					);
+		if (chan == 0 && SERIAL_MAIN_DEVICE.IsConnected())
+		{
+			reply.cat(", connected");
+		}
+#if HAS_AUX_DEVICES
+		else if (chan != 0 && IsAuxRaw(chan - 1))
+		{
+			reply.cat(", raw mode");
+		}
+#endif
+	}
+	return GCodeResult::ok;
+}
+
 bool Platform::IsAuxEnabled(size_t auxNumber) const noexcept
 {
 #if HAS_AUX_DEVICES
-	return auxNumber < ARRAY_SIZE(auxDevices) && auxDevices[auxNumber].IsEnabled();
+	return auxNumber < ARRAY_SIZE(auxDevices) && auxDevices[auxNumber].IsEnabledForGCodeIo();
 #else
 	return false;
-#endif
-}
-
-void Platform::EnableAux(size_t auxNumber) noexcept
-{
-#if HAS_AUX_DEVICES
-	if (auxNumber < ARRAY_SIZE(auxDevices) && !auxDevices[auxNumber].IsEnabled())
-	{
-		auxDevices[auxNumber].Enable(baudRates[auxNumber + 1]);
-	}
 #endif
 }
 
@@ -2065,15 +2168,173 @@ bool Platform::IsAuxRaw(size_t auxNumber) const noexcept
 #endif
 }
 
-void Platform::SetAuxRaw(size_t auxNumber, bool raw) noexcept
+// Handle M260 and M260.1 - send and possibly receive via I2C, or send via Modbus
+GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
-#if HAS_AUX_DEVICES
-	if (auxNumber < ARRAY_SIZE(auxDevices))
+#if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
+	// Get the slave address and bytes or words to send
+	gb.MustSee('A');
+	const uint32_t address = gb.GetUIValue();
+
+	int32_t values[MaxI2cOrModbusValues];
+	size_t numToSend;
+	gb.MustSee('B');
+	numToSend = MaxI2cOrModbusValues;
+	gb.GetIntArray(values, numToSend, false);
+
+	switch (gb.GetCommandFraction())
 	{
-		auxDevices[auxNumber].SetRaw(raw);
+# if defined(I2C_IFACE)
+	case 0:		// I2C
+		{
+			uint32_t numToReceive = 0;
+			bool seenR;
+			gb.TryGetUIValue('R', numToReceive, seenR);
+
+			if (numToSend + numToReceive > MaxI2cOrModbusValues)
+			{
+				numToReceive = MaxI2cOrModbusValues - numToSend;
+			}
+			uint8_t bValues[MaxI2cOrModbusValues];
+			for (size_t i = 0; i < numToSend; ++i)
+			{
+				bValues[i] = (uint8_t)values[i];
+			}
+
+			I2C::Init();
+			const size_t bytesTransferred = I2C::Transfer(address, bValues, numToSend, numToReceive);
+
+			if (bytesTransferred < numToSend)
+			{
+				reply.copy("I2C transmission error");
+				return GCodeResult::error;
+			}
+			else if (numToReceive != 0)
+			{
+				reply.copy("Received");
+				if (bytesTransferred == numToSend)
+				{
+					reply.cat(" nothing");
+				}
+				else
+				{
+					for (size_t i = numToSend; i < bytesTransferred; ++i)
+					{
+						reply.catf(" %02x", bValues[i]);
+					}
+				}
+			}
+			return (bytesTransferred == numToSend + numToReceive) ? GCodeResult::ok : GCodeResult::error;
+		}
+# endif
+
+# if SUPPORT_MODBUS_RTU
+	case 1:		// Modbus
+		{
+			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
+			if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::modbus_rtu)
+			{
+				reply.copy("Port has not been set to Modbus mode");
+				return GCodeResult::error;
+			}
+
+			const uint16_t firstRegister = gb.GetLimitedUIValue(0, 1u << 16);
+			uint16_t registersToSend[MaxI2cOrModbusValues];
+			for (size_t i = 0; i < numToSend; ++i)
+			{
+				registersToSend[i] = (uint16_t)values[i];
+			}
+			return auxDevices[auxChannel].SendModbusRegisters(address, firstRegister, numToSend, registersToSend);
+		}
+# endif
+
+	default:
+		return GCodeResult::errorNotSupported;
 	}
+#else
+	return GCodeResult::errorNotSupported;
 #endif
 }
+
+// Handle M261
+GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
+{
+#if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
+	gb.MustSee('A');
+	const uint32_t address = gb.GetUIValue();
+	const uint32_t numValues = gb.GetLimitedUIValue('B', 1, MaxI2cOrModbusValues + 1);
+
+	switch (gb.GetCommandFraction())
+	{
+# if defined(I2C_IFACE)
+	case 0:		// I2C
+		{
+			I2C::Init();
+			uint8_t bValues[MaxI2cOrModbusValues];
+			const size_t bytesRead = I2C::Transfer(address, bValues, 0, numValues);
+
+			reply.copy("Received");
+			if (bytesRead == 0)
+			{
+				reply.cat(" nothing");
+			}
+			else
+			{
+				for (size_t i = 0; i < bytesRead; ++i)
+				{
+					reply.catf(" %02x", bValues[i]);
+				}
+			}
+
+			return (bytesRead == numValues) ? GCodeResult::ok : GCodeResult::error;
+		}
+# endif
+
+# if SUPPORT_MODBUS_RTU
+	case 1:		// Modbus
+		{
+			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
+			if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::modbus_rtu)
+			{
+				reply.copy("Port has not been set to Modbus mode");
+				return GCodeResult::error;
+			}
+
+			const uint16_t firstRegister = gb.GetLimitedUIValue(0, 1u << 16);
+			uint16_t registersToReceive[MaxI2cOrModbusValues];
+			const GCodeResult rslt = auxDevices[auxChannel].ReadModbusRegisters(address, firstRegister, numValues, registersToReceive);
+			if (rslt == GCodeResult::ok)
+			{
+				for (size_t i = 0; i < numValues; ++i)
+				{
+					reply.catf(" %03x", registersToReceive[i]);
+				}
+
+			}
+			return rslt;
+		}
+# endif
+
+	default:
+		return GCodeResult::errorNotSupported;
+	}
+#else
+	return GCodeResult::errorNotSupported;
+#endif
+}
+
+#if defined(DUET_NG) && HAS_SBC_INTERFACE
+
+// Enable the PanelDue port so that the ATE can test the board
+void Platform::EnablePanelDuePort() noexcept
+{
+	auxDevices[0].SetBaudRate(57600);
+	auxDevices[0].SetMode(AuxDevice::AuxMode::panelDue);
+	SetCommsProperties(1, 1);
+	reprap.GetGCodes().GetSerialGCodeBuffer(1)->Enable(1);
+}
+
+#endif
 
 #if SUPPORT_PANELDUE_FLASH
 void Platform::InitPanelDueUpdater() noexcept
@@ -2557,15 +2818,15 @@ void Platform::AtxPowerOff() noexcept
 
 void Platform::SetBaudRate(size_t chan, uint32_t br) noexcept
 {
-	if (chan < NumSerialChannels)
+	if (chan != 0 && chan < NumSerialChannels)
 	{
-		baudRates[chan] = br;
+		auxDevices[chan - 1].SetBaudRate(br);
 	}
 }
 
 uint32_t Platform::GetBaudRate(size_t chan) const noexcept
 {
-	return (chan < NumSerialChannels) ? baudRates[chan] : 0;
+	return (chan != 0 && chan < NumSerialChannels) ? auxDevices[chan - 1].GetBaudRate() : 0;
 }
 
 void Platform::SetCommsProperties(size_t chan, uint32_t cp) noexcept
@@ -2596,8 +2857,10 @@ void Platform::ResetChannel(size_t chan) noexcept
 #if HAS_AUX_DEVICES
 	else if (chan < NumSerialChannels)
 	{
-		auxDevices[chan - 1].Disable();
-		auxDevices[chan - 1].Enable(baudRates[chan]);
+		AuxDevice& device = auxDevices[chan - 1];
+		AuxDevice::AuxMode mode = device.GetMode();
+		device.Disable();
+		device.SetMode(mode);
 	}
 #endif
 }
@@ -2619,7 +2882,7 @@ void Platform::ResetChannel(size_t chan) noexcept
 	}
 	else
 	{
-		return BoardType::Duet3_6HC_v102;
+		return (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6HC_v102 : BoardType::Duet3_6HC_v102b;
 	}
 }
 
@@ -2633,11 +2896,14 @@ void Platform::ResetChannel(size_t chan) noexcept
 	// Driver 0 direction has a pulldown resistor on v1.0  boards only
 	// Driver 5 direction has a pulldown resistor on 1.01 boards only
 	pinMode(DIRECTION_PINS[0], INPUT_PULLUP);
+	pinMode(DIRECTION_PINS[1], INPUT_PULLUP);
 	pinMode(DIRECTION_PINS[5], INPUT_PULLUP);
 	delayMicroseconds(20);									// give the pullup resistor time to work
-	return (!digitalRead(DIRECTION_PINS[5])) ? BoardType::Duet3_6XD_v101
-				: (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6XD_v01
-					: BoardType::Duet3_6XD_v100;
+	if (digitalRead(DIRECTION_PINS[5]))
+	{
+		return (digitalRead(DIRECTION_PINS[0])) ? BoardType::Duet3_6XD_v01 : BoardType::Duet3_6XD_v100;
+	}
+	return (digitalRead(DIRECTION_PINS[1])) ? BoardType::Duet3_6XD_v101 : BoardType::Duet3_6XD_v102;
 }
 
 #endif
@@ -2655,7 +2921,7 @@ void Platform::SetBoardType() noexcept
 					: BoardType::Duet3Mini_Ethernet;
 #elif defined(DUET3_MB6HC)
 	board = GetMB6HCBoardType();
-	if (board == BoardType::Duet3_6HC_v102)
+	if (board >= BoardType::Duet3_6HC_v102)
 	{
 		powerMonitorVoltageRange = PowerMonitorVoltageRange_v102;
 		DiagPin = DiagPin102;
@@ -2726,11 +2992,13 @@ const char *_ecv_array Platform::GetElectronicsString() const noexcept
 #elif defined(DUET3_MB6HC)
 	case BoardType::Duet3_6HC_v06_100:		return "Duet 3 " BOARD_SHORT_NAME " v1.0 or earlier";
 	case BoardType::Duet3_6HC_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
-	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or later";
+	case BoardType::Duet3_6HC_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or 1.02a";
+	case BoardType::Duet3_6HC_v102b:		return "Duet 3 " BOARD_SHORT_NAME " v1.02b or later";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "Duet 3 " BOARD_SHORT_NAME " v0.1";
 	case BoardType::Duet3_6XD_v100:			return "Duet 3 " BOARD_SHORT_NAME " v1.0";
-	case BoardType::Duet3_6XD_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01 or later";
+	case BoardType::Duet3_6XD_v101:			return "Duet 3 " BOARD_SHORT_NAME " v1.01";
+	case BoardType::Duet3_6XD_v102:			return "Duet 3 " BOARD_SHORT_NAME " v1.02 or later";
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "Duet 3 " BOARD_SHORT_NAME;
 #elif defined(DUET_NG)
@@ -2765,10 +3033,12 @@ const char *_ecv_array Platform::GetBoardString() const noexcept
 	case BoardType::Duet3_6HC_v06_100:		return "duet3mb6hc100";
 	case BoardType::Duet3_6HC_v101:			return "duet3mb6hc101";
 	case BoardType::Duet3_6HC_v102:			return "duet3mb6hc102";
+	case BoardType::Duet3_6HC_v102b:		return "duet3mb6hc102b";
 #elif defined(DUET3_MB6XD)
 	case BoardType::Duet3_6XD_v01:			return "duet3mb6xd001";
 	case BoardType::Duet3_6XD_v100:			return "duet3mb6xd100";
 	case BoardType::Duet3_6XD_v101:			return "duet3mb6xd101";
+	case BoardType::Duet3_6XD_v102:			return "duet3mb6xd102";
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	case BoardType::FMDC:					return "fmdc";
 #elif defined(DUET_NG)

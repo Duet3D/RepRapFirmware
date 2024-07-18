@@ -115,7 +115,7 @@ GCodeBuffer::GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *normalIn, Fi
 	  stringParser(*this),
 	  machineState(new GCodeMachineState()), whenReportDueTimerStarted(millis()), lastStatusReportType(StatusReportType::none),
 	  codeChannel(channel), lastResult(GCodeResult::ok),
-	  timerRunning(false), motionCommanded(false)
+	  disabled(false), timerRunning(false), motionCommanded(false)
 
 #if HAS_SBC_INTERFACE
 	  , isWaitingForMacro(false), isBinaryBuffer(false), invalidated(false)
@@ -904,9 +904,15 @@ void GCodeBuffer::SetFinished(bool f) noexcept
 	}
 }
 
-void GCodeBuffer::SetCommsProperties(uint32_t arg) noexcept
+void GCodeBuffer::Disable() noexcept
+{
+	disabled = true;
+}
+
+void GCodeBuffer::Enable(uint32_t arg) noexcept
 {
 	IF_NOT_BINARY(stringParser.SetCommsProperties(arg));
+	disabled = false;
 }
 
 // Get the original machine state before we pushed anything

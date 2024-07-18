@@ -1,0 +1,72 @@
+Modbus RTU support
+
+New 6XD: Tx/~Rx pin is PD24, otherwise need to configure an optional Tx/~Rx pin (with possible inversion?)
+
+Fron https://www.modbustools.com/modbus.html:
+
+May need to configure parity (even/odd/none)
+1 stop bit if parity used, 2 stop bits if not
+
+Protocol:
+Silent time, 3.5 character times
+8-bit address. Slave addresses are n range 1 to 247.
+8-bit function
+Data, N * 8 bits
+16-bit CRC, high byte first
+Silent tme, 3.5 character times
+
+Function codes:
+01 Read coils
+02 Read discrete inputs
+03 Read holding registers
+04 Read input registers
+05 Write single coil
+06 Write single register
+0x0F Write multiple coils
+0x10 Write multiple registers
+0x2B or 0x0E Read device identification
+
+Read coils: request on/off status of individual coils
+send: slave address, function, start addr hi, start addr lo, num to read hi, num to read lo, CRC
+receive: slave address, function, byte count, data* (8 coils per byte), CRC
+
+Read discrete inputs: as read coils
+
+Read holding registers:
+send: slave addr, function, start addr hi, start addr lo, num regs lo, num regs hi, CRC
+rcv: slave addr, function, byte count, (data hi, data lo)*, crc
+
+Read input registers: as read holding registers
+
+Write coil:
+send: slave addr, function, coil addr hi, coil addr lo, write data hi, write data lo, CRC. Write data hi:lo must be 00:00 or 00:FF. Other values are illegal and do not write the coil.
+receive: same, returning state of the coil after it has been written.
+
+Write single register:
+send: slave addr, function, reg address hi, reg address lo, write data hi, write data lo, CRC.
+recv: same as sent, after register has been written.
+
+Write multiple coils:
+
+Write multiple registers:
+send: slave addr, function, start addr hi, start addr lo, num regs hi, num regs lo, byte count, (data hi, data lo)*, CRC
+recv: slave addr, function, start addr hi, start addr lo, num regs hi, num regs lo, CRC
+
+Initially:
+- Read/write multiple registers only, use M260/M261
+- Also support read device ID?
+- Need to specify which serial channel
+- Need to stop serial channel being used for anything else including stopping input
+- General operation:
+-- set tx mode
+-- 3.5 char pause
+-- clear input buffer
+-- send request
+-- set rx mode
+-- 3.5 char pause for turnaround
+-- read expected number of bytes with timeout
+-- check response
+-- set success/failure and if reading, store response into variable
+
+Can we turnaround immediately after sending the last character and getting a Tx complete interrupt? Otherwise it may be difficult to time.
+- or use a step clock timer?

@@ -111,10 +111,12 @@ enum class BoardType : uint8_t
 	Duet3_6HC_v06_100 = 1,
 	Duet3_6HC_v101 = 2,
 	Duet3_6HC_v102 = 3,
+	Duet3_6HC_v102b = 4,
 #elif defined(DUET3_MB6XD)
 	Duet3_6XD_v01 = 1,
 	Duet3_6XD_v100 = 2,
 	Duet3_6XD_v101 = 3,
+	Duet3_6XD_v102 = 4,
 #elif defined(FMDC_V02) || defined(FMDC_V03)
 	FMDC,
 #elif defined(DUET_NG)
@@ -210,6 +212,10 @@ public:
 	bool GetAtxPowerState() const noexcept;
 	GCodeResult HandleM80(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult HandleM81(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	GCodeResult SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M260
+	GCodeResult ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M261
+
 	void AtxPowerOff() noexcept;
 	bool IsAtxPowerControlled() const noexcept { return PsOnPort.IsValid(); }
 	bool IsDeferredPowerDown() const noexcept { return powerDownWhenFansStop || delayedPowerDown; }
@@ -261,9 +267,7 @@ public:
 
 	void ResetChannel(size_t chan) noexcept;						// Re-initialise a serial channel
     bool IsAuxEnabled(size_t auxNumber) const noexcept;				// Any device on the AUX line?
-    void EnableAux(size_t auxNumber) noexcept;
     bool IsAuxRaw(size_t auxNumber) const noexcept;
-	void SetAuxRaw(size_t auxNumber, bool raw) noexcept;
 #if SUPPORT_PANELDUE_FLASH
 	PanelDueUpdater* GetPanelDueUpdater() noexcept { return panelDueUpdater; }
 	void InitPanelDueUpdater() noexcept;
@@ -351,11 +355,6 @@ public:
 	float GetFilamentWidth() const noexcept;
 	void SetFilamentWidth(float width) noexcept;
 
-	// Fire the inkjet (if any) in the given pattern
-	// If there is no inkjet false is returned; if there is one this returns true
-	// So you can test for inkjet presence with if(platform->Inkjet(0))
-	bool Inkjet(int bitPattern) noexcept;
-
 	// MCU temperature
 #if HAS_CPU_TEMP_SENSOR
 	MinCurMax GetMcuTemperatures() const noexcept;
@@ -425,6 +424,10 @@ public:
 #if MCU_HAS_UNIQUE_ID
 	const UniqueId& GetUniqueId() const noexcept { return uniqueId; }
 	uint32_t Random() noexcept;
+#endif
+
+#if defined(DUET_NG) && HAS_SBC_INTERFACE
+	void EnablePanelDuePort() noexcept;							// enable the PanelDue port so that the ATE can test the board
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -557,7 +560,6 @@ private:
 	uint32_t lastFanCheckTime;
 
   	// Serial/USB
-	uint32_t baudRates[NumSerialChannels];
 	uint8_t commsParams[NumSerialChannels];
 
 	volatile OutputStack usbOutput;

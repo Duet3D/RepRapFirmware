@@ -164,7 +164,7 @@ Samba::readXmodem(uint8_t* buffer, int size) THROWS(GCodeException)
 
             bytes = _port->read(blk, sizeof(blk));
             crc16.Reset(0);
-            crc16.Update((char*) &blk[3], BLK_SIZE);
+            crc16.Update(&blk[3], BLK_SIZE);
             uint16_t receivedCRC16 = blk[BLK_SIZE + 3] << 8 | blk[BLK_SIZE + 4];
             if (bytes == sizeof(blk) &&
                 blk[0] == SOH &&
@@ -226,7 +226,7 @@ Samba::writeXmodem(const uint8_t* buffer, int size) THROWS(GCodeException)
             memset(&blk[3] + size, 0, BLK_SIZE - size);
 
         crc16.Reset(0);
-    	crc16.Update((char*) &blk[3], BLK_SIZE);
+    	crc16.Update(&blk[3], BLK_SIZE);
         auto checksum = crc16.Get();
         blk[BLK_SIZE + 3] = (checksum >> 8) & 0xff;
         blk[BLK_SIZE + 4] = checksum & 0xff;

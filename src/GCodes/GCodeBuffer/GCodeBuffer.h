@@ -59,6 +59,8 @@ public:
 	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
 	void Reset() noexcept;														// Reset it to its state after start-up
 	void Init() noexcept;														// Set it up to parse another G-code
+	void Disable() noexcept;													// Disable input from the associated port
+	void Enable(uint32_t commsProperties) noexcept;								// Enable input and set the CRC or checksum requirements
 	void Diagnostics(MessageType mtype) noexcept;								// Write some debug info
 
 	bool Put(char c) noexcept SPEED_CRITICAL;									// Add a character to the end
@@ -167,8 +169,6 @@ public:
 	size_t GetQueueNumberToLock() const noexcept { return machineState->GetQueueNumberToLock(); }
 	void ForkFrom(const GCodeBuffer& other) noexcept;
 #endif
-
-	void SetCommsProperties(uint32_t arg) noexcept;
 
 	GCodeMachineState& LatestMachineState() const noexcept { return *machineState; }
 	GCodeMachineState& CurrentFileMachineState() const noexcept;
@@ -293,7 +293,7 @@ public:
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileGCodeInput *GetFileInput() const noexcept { return fileInput; }
 #endif
-	GCodeInput *GetNormalInput() const noexcept { return normalInput; }
+	GCodeInput *GetNormalInput() const noexcept { return (disabled) ? nullptr : normalInput; }
 
 	void MotionCommanded() noexcept { motionCommanded = true; }
 	void MotionStopped() noexcept { motionCommanded = false; }
@@ -355,6 +355,7 @@ private:
 	GCodeBufferState bufferState;						// Idle, executing or paused
 	GCodeResult lastResult;
 
+	bool disabled;
 	bool timerRunning;									// true if we are waiting
 	bool motionCommanded;								// true if this GCode stream has commanded motion since it last waited for motion to stop
 	bool cancelWait;									// true to stop waiting for temperatures to be reached

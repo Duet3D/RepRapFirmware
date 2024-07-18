@@ -305,4 +305,12 @@
 # define SUPPORT_SCANNING_PROBES		(SUPPORT_CAN_EXPANSION)
 #endif
 
+#ifndef SUPPORT_MODBUS_RTU
+# define SUPPORT_MODBUS_RTU				0
+#endif
+
+#if SUPPORT_MODBUS_RTU && !HAS_AUX_DEVICES
+# error Cannot support Modbus RTU without aux devices
+#endif
+
 #endif // PINS_H__
