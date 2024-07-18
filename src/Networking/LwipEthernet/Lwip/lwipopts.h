@@ -115,7 +115,11 @@
  * MEM_SIZE: the size of the heap memory. If the application will send
  * a lot of data that needs to be copied, this should be set high.
  */
-#define MEM_SIZE                		12288		// 8192 works too but then lwip reports mem errors. sadly "max" isn't working
+#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
+#define MEM_SIZE                		16384
+#else
+#define MEM_SIZE                		14848
+#endif
 
 /**
  * MEMP_NUM_UDP_PCB: the number of UDP protocol control blocks. One
@@ -148,11 +152,7 @@
  * MEMP_NUM_TCP_SEG: the number of simultaneously queued TCP segments.
  * (requires the LWIP_TCP option)
  */
-#if defined(__SAME70Q20B__) || defined(__SAME70Q21B__) || defined(__SAMV71Q20B__) || defined(__SAMV71Q21B__)
 # define MEMP_NUM_TCP_SEG				10
-#else
-# define MEMP_NUM_TCP_SEG				8
-#endif
 
 /**
  * MEMP_NUM_REASSDATA: the number of IP packets simultaneously queued for
@@ -196,9 +196,9 @@
 // This means that the PBUF pool must be large enough to accommodate those buffers, which currently need 16384 bytes.
 // The non-cached RAM size is set in file Cache.cpp in project CoreN2G. Currently it is set to 80kb.
 // We may as well use the remainder of the non-cached RAM block for additional pbufs, so we allocate a few more here.
-# define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 15)
+# define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 8)
 #else
-# define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 12)
+# define PBUF_POOL_SIZE                  (GMAC_RX_BUFFERS + GMAC_TX_BUFFERS + 4)
 #endif
 
 /**
