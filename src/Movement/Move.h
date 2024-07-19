@@ -914,7 +914,6 @@ inline void Move::LogStepError(uint8_t type) noexcept
 	stepErrorState = StepErrorState::haveError;
 }
 
-
 inline bool Move::HasMovementError() const noexcept
 {
 	return stepErrorState == StepErrorState::haveError;

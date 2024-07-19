@@ -345,6 +345,12 @@ DEFINE_GET_OBJECT_MODEL_TABLE(Move)
 
 Move::Move() noexcept
 	:
+#ifdef DUET3_MB6XD
+	  lastStepHighTime(0),
+#else
+	  lastStepLowTime(0),
+#endif
+	  lastDirChangeTime(0),
 #if SUPPORT_ASYNC_MOVES
 	  heightController(nullptr),
 #endif
