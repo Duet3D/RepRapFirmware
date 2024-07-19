@@ -31,7 +31,6 @@ struct PrepParams
 	uint32_t accelClocks, steadyClocks, decelClocks;
 	float acceleration, deceleration;				// the acceleration and deceleration to use, both positive
 	float topSpeed;									// the top speed, may be modified by the input shaper
-	bool modified;									// true if this has been modified since we set it from the DDA
 	bool useInputShaping;
 
 	// Get the total clocks needed
