@@ -305,7 +305,7 @@ public:
 	DriverMode GetDriverMode() const noexcept;
 	void SetCurrent(float current) noexcept;
 	void Enable(bool en) noexcept;
-	bool UpdatePending() const noexcept { return (registersToUpdate | newRegistersToUpdate.load()) != 0; }
+	bool UpdatePending() const noexcept { return (registersToUpdate.load() | newRegistersToUpdate.load()) != 0; }
 	void SetStallDetectThreshold(int sgThreshold) noexcept;
 	void SetStallDetectFilter(bool sgFilter) noexcept;
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
