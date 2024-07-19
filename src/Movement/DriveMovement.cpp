@@ -504,7 +504,6 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 }
 
 // Version of fastSqrt that allows for slightly negative operands caused by rounding error
-
 static inline motioncalc_t fastLimSqrtm(motioncalc_t f) noexcept
 {
 #if USE_DOUBLE_MOTIONCALC

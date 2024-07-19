@@ -43,8 +43,6 @@ public:
 	void Init(size_t drv) noexcept;
 
 	bool CalcNextStepTime(uint32_t now) noexcept SPEED_CRITICAL;
-	bool PrepareCartesianAxis(const DDA& dda, const PrepParams& params) noexcept SPEED_CRITICAL;
-	bool PrepareExtruder(const DDA& dda, const PrepParams& params, float signedEffStepsPerMm) noexcept SPEED_CRITICAL;
 
 	void DebugPrint() const noexcept;
 	int32_t GetCurrentMotorPosition() const noexcept { return currentMotorPosition; }
