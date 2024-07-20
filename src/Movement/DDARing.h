@@ -109,13 +109,11 @@ private:
 #if SUPPORT_REMOTE_COMMANDS
 	volatile int32_t lastMoveStepsTaken[NumDirectDrivers];						// how many steps were taken in the last move we did
 #endif
-	volatile uint32_t extrudersPrintingSince;									// The milliseconds clock time when extrudersPrinting was set to true
 
-	volatile bool extrudersPrinting;											// Set whenever an extruder starts a printing move, cleared by a non-printing extruder move
 	volatile bool waitingForRingToEmpty;										// True if Move has signalled that we are waiting for this ring to empty
 };
 
-#if 0	//TODO save this code for now to remind us how to start the laser, remove it when e have srted that out
+#if 0	//TODO save this code for now to remind us how to start the laser, remove it when we have sorted that out
 // Start the next move. Return true if laser or IO bits need to be active
 // Must be called with base priority greater than or equal to the step interrupt, to avoid a race with the step ISR.
 inline bool DDARing::StartNextMove(Platform& p, uint32_t startTime) noexcept

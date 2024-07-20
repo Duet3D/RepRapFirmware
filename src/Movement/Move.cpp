@@ -673,7 +673,6 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 
 [[noreturn]] void Move::MoveLoop() noexcept
 {
-
 	timer.SetCallback(Move::TimerCallback, CallbackParameter(this));
 	for (;;)
 	{
@@ -2398,7 +2397,7 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 		{
 			if (dm2->NewSegment(now) != nullptr && dm2->state != DMState::starting)
 			{
-				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed;	// we set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
+				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
 # if SUPPORT_CAN_EXPANSION
 				flags |= dm2->segmentFlags;
 				if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))

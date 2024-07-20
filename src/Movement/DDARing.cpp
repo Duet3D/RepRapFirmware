@@ -102,7 +102,6 @@ void DDARing::Init2() noexcept
 		SetPositions(reprap.GetMove(), pos, AxesBitmap::MakeLowestNBits(MaxAxesPlusExtruders));
 	}
 
-	extrudersPrinting = false;
 	simulationTime = 0.0;
 }
 
