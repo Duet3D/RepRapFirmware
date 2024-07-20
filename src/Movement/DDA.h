@@ -257,9 +257,7 @@ private:
 			// These are calculated from the above and used in the ISR, so they are set up by Prepare()
 			uint32_t moveStartTime;					// clock count at which the move is due to start (before execution) or was started (during execution)
 			float averageExtrusionSpeed;			// the average extrusion speed in mm/sec, for applying heater feedforward
-#if SUPPORT_CAN_EXPANSION
 			AxesBitmap drivesMoving;				// bitmap of logical drives moving - needed to keep track of whether remote drives are moving and to determine when a move that checks endstops has terminated
-#endif
 		} afterPrepare;
 	};
 
