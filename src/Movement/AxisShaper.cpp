@@ -12,8 +12,6 @@
 #include <Platform/RepRap.h>
 #include "StepTimer.h"
 #include "Move.h"
-#include "DDA.h"
-#include "MoveSegment.h"
 #include "MoveDebugFlags.h"
 
 // Object model table and functions

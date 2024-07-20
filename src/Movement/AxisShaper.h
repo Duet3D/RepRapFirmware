@@ -32,11 +32,6 @@ namespace InputShapingDebugFlags
 	constexpr unsigned int All = 2;
 }
 
-class DDA;
-class PrepParams;
-class MoveSegment;
-struct AccelOrDecelPlan;
-
 #if SUPPORT_REMOTE_COMMANDS
 struct CanMessageSetInputShapingNew;
 #endif
