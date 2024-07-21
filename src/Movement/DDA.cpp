@@ -132,6 +132,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	deceleration = dda.deceleration;
 	accelClocks = lrintf((dda.topSpeed - dda.startSpeed)/dda.acceleration);
 	decelClocks = lrintf((dda.topSpeed - dda.endSpeed)/dda.deceleration);
+	useInputShaping = dda.flags.xyMoving && !dda.flags.isolatedMove && !dda.flags.isLeadscrewAdjustmentMove;
 }
 
 void PrepParams::DebugPrint() const noexcept
@@ -1143,7 +1144,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		MovementFlags segFlags;
 		segFlags.Clear();
 		segFlags.checkEndstops = flags.checkEndstops;
-		segFlags.noShaping = flags.isolatedMove || !flags.xyMoving || flags.isLeadscrewAdjustmentMove;
+		segFlags.noShaping = !params.useInputShaping;
 		segFlags.nonPrintingMove = !flags.isPrintingMove;
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 		{

@@ -17,31 +17,28 @@ Next steps for new movement system+IS
 [believed completed] Auto-generated moves on delta printers: need to segment them, except for Z probing moves
 [not needed unless we get tiny layer shifts, also this is not as easy as I first thought] Eventually, store end position in segments. End positions specified by user must be exact numbers of motor steps. Segment boundaries may be fractional steps.
 [done] Delta printer auto calibration not working
-
-Remove excess debug e.g. reporting hiccups in debug
-
-Remove CheckSegments except when debugging
+[done] Fix ExtruderPrintingSince, need to update variable extruderPrintingSince when we start a printing extruder move after not doing one - in NewSegmnent?
+[done] Remove excess debug e.g. reporting hiccups in debug
+[done] Remove CheckSegments except when debugging
+[done] Set up params.useInputShaping, needed for CAN
 
 Reduce RAM usage on Duet 2 and especially Duet 3 Mini:
 - [done] Make MoveSegment smaller by not storing u
-- Make MoveSegment smaller by not storing startTime? Would need to introduce dummy segments representing gaps between segments.
-- Make MoveSegment smaller by storing flag bits in spare bits of 'next' field e.g. lowest 2 bits and top bit
 - [done] Make TMC22xx driver struct smaller
-- [asked chrishamm] Eliminate static SBC buffers/structs
+- [done by chrishamm] Eliminate static SBC buffers/structs
 - [done] Change default AllocPermanent alignment from 8 to 4 bytes
 - [done] When using WiFi interface, allocate buffers etc. from Lwip PBUF pool
 - [done] When using SBC mode allocate transfer buffers etc. from Lwip PBUF pool
-- On 6HC/6XD store SBC transfer buffers in same memory as Lwip pool
+- [done] On 6HC/6XD store SBC transfer buffers in same memory as Lwip pool
+- [done by chrishamm] Use smaller LWIP pool
+- Make MoveSegment smaller by not storing startTime? Would need to introduce dummy segments representing gaps between segments. Will probably only happen for extruders during travel moves, and axes during retract/reprime mobves.
+- Make MoveSegment smaller by storing flag bits in spare bits of 'next' field e.g. lowest 2 bits and top bit
 
 When using segmentation, sync segment duration to multiples/submultiples of IS period - this should reduce the number of segments needed
-
---> Fix ExtruderPrintingSince, need to update variable extruderPrintingSince when we start a printing extruder move after not doing one - in NewSegmnent?
 
 Use cumulativeHiccupTime and notify hiccups to expansion boards
 
 Allow for expansion boards introducing hiccups
-
-Set up params.useInputShaping, needed for CAN
 
 At the end of Prepare, don't send the move over CAN if it won't happen because endstops are already triggered - previously it checked for state=completed
 Also, check whether/how in CanMotion we handle individual drives not moving because their endstops have triggered - that may be enough to handle the above.
@@ -73,3 +70,5 @@ Bugs:
 - [done] After delta printer auto calibration Z position is wrong until machine is homed again
 - [done] Simulating a job doesn't work
 - [done] Christian reports that multiple drivers with independent endstops for an axis don't work, the drivers that finish early remain disabled
+- When starting a new print after finishing one we get a filament error
+
