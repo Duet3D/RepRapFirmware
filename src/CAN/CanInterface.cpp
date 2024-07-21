@@ -926,7 +926,7 @@ extern "C" [[noreturn]] void CanReceiverLoop(void *) noexcept
 // This one is used by ATE
 GCodeResult CanInterface::EnableRemoteDrivers(const CanDriversList& drivers, const StringRef& reply) noexcept
 {
-	return SetRemoteDriverStates(drivers, reply, DriverStateControl(DriverStateControl::driverActive, reprap.GetGCodes().GetMotorBrakeOffDelay()));
+	return SetRemoteDriverStates(drivers, reply, DriverStateControl(DriverStateControl::driverActive));
 }
 
 // This one is used by Prepare and by M17
@@ -939,7 +939,7 @@ void CanInterface::EnableRemoteDrivers(const CanDriversList& drivers) noexcept
 // This one is used by ATE
 GCodeResult CanInterface::DisableRemoteDrivers(const CanDriversList& drivers, const StringRef& reply) noexcept
 {
-	return SetRemoteDriverStates(drivers, reply, DriverStateControl(DriverStateControl::driverDisabled, reprap.GetGCodes().GetMotorBrakeOnDelay()));
+	return SetRemoteDriverStates(drivers, reply, DriverStateControl(DriverStateControl::driverDisabled));
 }
 
 // This one is used by Prepare
@@ -952,7 +952,7 @@ void CanInterface::DisableRemoteDrivers(const CanDriversList& drivers) noexcept
 void CanInterface::SetRemoteDriversIdle(const CanDriversList& drivers, float idleCurrentFactor) noexcept
 {
 	String<1> dummy;
-	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), DriverStateControl(DriverStateControl::driverIdle, (uint16_t)lrintf(idleCurrentFactor * 100) << 4));
+	(void)SetRemoteDriverStates(drivers, dummy.GetRef(), DriverStateControl(DriverStateControl::driverIdle, (uint16_t)lrintf(idleCurrentFactor * 100)));
 }
 
 GCodeResult CanInterface::SetRemoteStandstillCurrentPercent(const CanDriversData<float>& data, const StringRef& reply) noexcept

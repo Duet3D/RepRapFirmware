@@ -160,7 +160,6 @@ inline bool DriveMovement::CalcNextStepTime(uint32_t now) noexcept
 }
 
 // Return the number of net steps already taken for the current segment in the forwards direction.
-// We have already taken nextSteps - 1 steps
 // Caller must disable interrupts before calling this
 inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 {

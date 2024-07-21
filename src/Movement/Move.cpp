@@ -2913,14 +2913,14 @@ GCodeResult Move::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& rep
 # if SUPPORT_BRAKE_PWM
 		brakePorts[driver].SetFrequency(BrakePwmFrequency);
 # endif
-		motorOffDelays[driver] = DefaultDelayAfterBrakeOn;
+		motorOffDelays[driver] = brakeOffDelays[driver] = DefaultDelayAfterBrakeOn;
 	}
 
 	uint32_t val;
 	if (gb.TryGetLimitedUIValue('S', val, seen, 1000))
 	{
 		seen = true;
-		motorOffDelays[driver] = val;
+		motorOffDelays[driver] = brakeOffDelays[driver] = (uint16_t)val;
 	}
 
 # if SUPPORT_BRAKE_PWM
@@ -2937,9 +2937,7 @@ GCodeResult Move::ConfigureDriverBrakePort(GCodeBuffer& gb, const StringRef& rep
 			reply.catf(" with voltage limited to %.1f by PWM", (double)brakeVoltages[driver]);
 		}
 # endif
-# if 0	// don't print this bit until we have implemented it!
-		reply.catf(" and %ums delay after turning the brake on", delayAfterBrakeOn[driver]);
-# endif
+		reply.catf(", brake delay %ums", motorOffDelays[driver]);
 	}
 	return GCodeResult::ok;
 }
@@ -4036,10 +4034,7 @@ GCodeResult Move::EutHandleSetDriverStates(const CanMessageMultipleDrivesRequest
 				break;
 
 			case DriverStateControl::driverIdle:
-				{
-					const uint16_t idleCurrentPercent = msg.values[count].idlePercentOrDelayAfterBrakeOn >> 4;
-					UpdateMotorCurrent(driver, motorCurrents[driver] * (float)idleCurrentPercent * 0.01);
-				}
+				UpdateMotorCurrent(driver, motorCurrents[driver] * (float)msg.values[count].idlePercent * 0.01);
 				driverState[driver] = DriverStatus::idle;
 				break;
 
