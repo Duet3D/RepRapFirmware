@@ -1128,7 +1128,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					if (pauseState == PauseState::paused)
 					{
 #if HAS_VOLTAGE_MONITOR
-						if (!platform.IsPowerOk())
+						if (!IsSimulating() && !platform.IsPowerOk())
 						{
 							reply.copy("Cannot resume while power voltage is low");
 							result = GCodeResult::error;
