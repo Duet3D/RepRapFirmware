@@ -179,6 +179,7 @@ inline volatile uint32_t *GetStackOffset(uint32_t dwordOffset) noexcept
 }
 
 #endif
+
 // Functions to set and clear data watchpoints
 inline void SetWatchpoint(unsigned int number, const void* addr, unsigned int addrBits = 2) noexcept
 {

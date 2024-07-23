@@ -633,6 +633,14 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 		clocksNeeded = params.steadyClocks = 1;
 	}
 
+	const float accelDistanceExTopSpeed = -0.5 * params.acceleration * fsquare((float)params.accelClocks);
+	const float decelDistanceExTopSpeed = -0.5 * params.deceleration * fsquare((float)params.decelClocks);
+	topSpeed = (params.totalDistance - accelDistanceExTopSpeed - decelDistanceExTopSpeed)/clocksNeeded;
+
+	params.accelDistance =      accelDistanceExTopSpeed + topSpeed * params.accelClocks;
+	const float decelDistance = decelDistanceExTopSpeed + topSpeed * params.decelClocks;
+	params.decelStartDistance =  1.0 - decelDistance;
+
 	MovementFlags segFlags;
 	segFlags.Clear();
 	segFlags.nonPrintingMove = !msg.usePressureAdvance;
