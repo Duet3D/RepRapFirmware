@@ -45,7 +45,7 @@ enum class SoftwareResetReason : uint16_t
 	userFromSbc = user | fromSbc
 };
 
-// Return true if a software reset with this reason has an exception stack frame. Used to sip the FP registers when saving the stack frame.
+// Return true if a software reset with this reason has an exception stack frame. Used to skip the FP registers when saving the stack frame.
 inline bool ResetReasonHasExceptionFrame(uint16_t reason) noexcept
 {
 	switch ((SoftwareResetReason)(reason & (uint16_t)SoftwareResetReason::mainReasonMask))
