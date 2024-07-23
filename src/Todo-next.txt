@@ -40,6 +40,8 @@ Use cumulativeHiccupTime and notify hiccups to expansion boards
 
 Allow for expansion boards introducing hiccups
 
+We can still get step error 3 under some conditions e.g. very high microstepping. Do we need more data in this case? Can we have the ISR introduce hiccups to prevent this?
+
 At the end of Prepare, don't send the move over CAN if it won't happen because endstops are already triggered - previously it checked for state=completed
 Also, check whether/how in CanMotion we handle individual drives not moving because their endstops have triggered - that may be enough to handle the above.
 

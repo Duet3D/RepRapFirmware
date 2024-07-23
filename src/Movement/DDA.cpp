@@ -655,9 +655,8 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = extrusionRequested;
 			if (extrusionRequested != 0.0)
 			{
+				move.EnableDrivers(drive, false);
 				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, extrusionRequested, segFlags);
-				//TODO will Move do the following?
-				reprap.GetMove().EnableDrivers(drive, false);
 			}
 		}
 		else
@@ -666,10 +665,9 @@ bool DDA::InitFromRemote(const CanMessageMovementLinearShaped& msg) noexcept
 			directionVector[drive] = delta;
 			if (delta != 0.0)
 			{
+				move.EnableDrivers(drive, false);
 				move.AddLinearSegments(*this, drive, msg.whenToExecute, params, delta, segFlags);
 				afterPrepare.drivesMoving.SetBit(drive);
-				//TODO will Move do the following?
-				reprap.GetMove().EnableDrivers(drive, false);
 			}
 		}
 	}
