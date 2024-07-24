@@ -249,7 +249,7 @@ GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint16_t p_st
 
 	slaveAddress = p_slaveAddress;
 	ModbusWriteByte(slaveAddress);
-	function = ModbusFunction::readHoldingRegisters;
+	function = ModbusFunction::readInputRegisters;
 	ModbusWriteByte((uint8_t)function);
 	startRegister = p_startRegister;
 	ModbusWriteWord(startRegister);
@@ -306,6 +306,7 @@ GCodeResult AuxDevice::CheckModbusResult() noexcept
 			}
 			break;
 
+		case ModbusFunction::readInputRegisters:
 		case ModbusFunction::readHoldingRegisters:
 			if (ModbusReadByte() == 2 * numRegisters)
 			{
@@ -346,7 +347,9 @@ uint8_t AuxDevice::ModbusReadByte() noexcept
 {
 	const uint8_t b = uart->read();
 	crc.UpdateModbus(b);
+#if 0
 	debugPrintf("Modbus Rx %02x\n", b);
+#endif
 	return b;
 }
 
