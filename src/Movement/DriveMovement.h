@@ -13,6 +13,10 @@
 #include "MoveSegment.h"
 #include "ExtruderShaper.h"
 
+#if USE_PHASE_STEPPING
+#include <Movement/PhaseStep.h>
+#endif
+
 #define STEPS_DEBUG			(1)
 
 class PrepParams;
@@ -62,6 +66,13 @@ public:
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
 #endif
+
+#if USE_PHASE_STEPPING
+	// Get the current position relative to the start of this move, speed and acceleration. Units are microsteps and step clocks.
+	// Return true if this drive is moving. Segments are advanced as necessary.
+	bool GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept;
+#endif
+
 
 	void ClearMovementPending() noexcept;
 
@@ -130,6 +141,10 @@ private:
 	uint32_t extruderPrintingSince;						// the millis ticks when this extruder started doing printing moves
 
 	bool extruderPrinting;								// true if this is an extruder and the most recent segment started was a printing move
+
+#if USE_PHASE_STEPPING
+	PhaseStep phaseStepControl;
+#endif
 };
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
@@ -205,6 +220,48 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 {
 	return (segments == nullptr || (nextStep >> microstepShift) == 0) ? 0
 			: stepInterval << microstepShift;									// return the interval between steps converted to full steps
+}
+
+#endif
+
+#if USE_PHASE_STEPPING
+
+// Get the current position relative to the start of this segment, speed and acceleration. Units are microsteps and step clocks.
+// Return true if this drive is moving. Segments are advanced as necessary if we are in closed loop mode.
+// Inlined because it is only called from one place
+inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept
+{
+	AtomicCriticalSectionLocker lock;			// we don't want 'segments' changing while we do this
+	MoveSegment *seg = segments;
+	while (seg != nullptr)
+	{
+		int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
+		if (timeSinceStart < 0) break;
+		if ((uint32_t)timeSinceStart >= seg->GetDuration())
+		{
+			if (phaseStepControl.IsClosedLoopEnabled())
+			{
+				MoveSegment *oldSeg = seg;
+				segments = seg = oldSeg->GetNext();
+				MoveSegment::Release(oldSeg);
+				continue;
+			}
+			else
+			{
+				timeSinceStart = seg->GetDuration();
+			}
+		}
+
+		const float u = seg->CalcU();
+		mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart;
+		mParams.speed = u + seg->GetA() * timeSinceStart;
+		mParams.acceleration = seg->GetA();
+		return true;
+	}
+
+	// If we get here then no movement is taking place
+	mParams.position = mParams.speed = mParams.acceleration = 0.0;
+	return false;
 }
 
 #endif

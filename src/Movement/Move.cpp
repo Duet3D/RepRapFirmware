@@ -489,6 +489,10 @@ void Move::Init() noexcept
 		dms[driver + MaxAxesPlusExtruders].driversNormallyUsed = StepPins::CalcDriverBitmap(driver);
 	}
 
+#if USE_PHASE_STEPPING
+	currentStepMode = StepMode::stepDir;
+#endif
+
 	// Set up default axis mapping
 	for (size_t axis = 0; axis < MinAxes; ++axis)
 	{
@@ -2049,6 +2053,17 @@ bool Move::AreDrivesStopped(AxesBitmap drives) const noexcept
 								}
 							  );
 }
+
+
+#if USE_PHASE_STEPPING
+void Move::PhaseStepControlLoop()
+{
+	for (DriveMovement& dm : dms)
+	{
+		dm
+	}
+}
+#endif
 
 // ISR for the step interrupt
 void Move::Interrupt() noexcept

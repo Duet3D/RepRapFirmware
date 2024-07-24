@@ -24,6 +24,10 @@
 #include <Math/Deviation.h>
 #include <Hardware/IoPorts.h>
 
+#if USE_PHASE_STEPPING
+#include <Movement/PhaseStep.h>
+#endif
+
 #if SUPPORT_ASYNC_MOVES
 # include "HeightControl/HeightController.h"
 #endif
@@ -420,6 +424,18 @@ public:
 	uint32_t GetStepInterval(size_t drive, uint32_t microstepShift) const noexcept;			// Get the current step interval for this axis or extruder
 #endif
 
+#if USE_PHASE_STEPPING
+	bool IsClosedLoopEnabled(size_t driver) const noexcept { return dms[driver].closedLoopControl.IsClosedLoopEnabled(); }
+	bool EnableIfIdle(size_t driver) noexcept;										// if the driver is idle, enable it; return true if driver enabled on return
+	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
+	void SetCurrentMotorSteps(size_t driver, float fullSteps) noexcept;
+	void InvertCurrentMotorSteps(size_t driver) noexcept;
+	void SetStepMode(StepMode mode) noexcept { currentStepMode = mode; }
+	const StepMode GetStepMode() const noexcept { return currentStepMode; }
+
+	void PhaseStepControlLoop() noexcept;
+#endif
+
 #if SUPPORT_CAN_EXPANSION
 	void OnEndstopOrZProbeStatesChanged() noexcept;
 #endif
@@ -626,6 +642,10 @@ private:
 
 #ifdef DUET3_MB6XD
 	bool driverErrPinsActiveLow;
+#endif
+
+#if USE_PHASE_STEPPING
+	StepMode currentStepMode;
 #endif
 
 	// Stepper motor brake control
@@ -886,6 +906,13 @@ inline float Move::GetPressureAdvanceClocksForExtruder(size_t extruder) const no
 // Base priority must be >= NvicPriorityStep when calling this
 inline __attribute__((always_inline)) bool Move::ScheduleNextStepInterrupt() noexcept
 {
+#if USE_PHASE_STEPPING
+	if (currentStepMode != StepMode::stepDir)
+	{
+		return false;
+	}
+#endif
+
 	if (activeDMs != nullptr)
 	{
 		return timer.ScheduleMovementCallbackFromIsr(activeDMs->nextStepTime);
