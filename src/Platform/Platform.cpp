@@ -2275,7 +2275,24 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 			{
 				registersToSend[i] = (uint16_t)values[i];
 			}
-			return auxDevices[auxChannel].SendModbusRegisters(address, firstRegister, numToSend, registersToSend);
+			GCodeResult rslt = auxDevices[auxChannel].SendModbusRegisters(address, firstRegister, numToSend, registersToSend);
+			if (rslt == GCodeResult::ok)
+			{
+				do
+				{
+					delay(2);
+					rslt = auxDevices[auxChannel].CheckModbusResult();
+				} while (rslt == GCodeResult::notFinished);
+				if (rslt != GCodeResult::ok)
+				{
+					reply.copy("no or bad response from Modbus device");
+				}
+			}
+			else
+			{
+				reply.copy("couldn't initiate Modbus transaction");
+			}
+			return rslt;
 		}
 # endif
 
@@ -2333,14 +2350,29 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 
 			const uint16_t firstRegister = gb.GetLimitedUIValue('R', 1u << 16);
 			uint16_t registersToReceive[MaxI2cOrModbusValues];
-			const GCodeResult rslt = auxDevices[auxChannel].ReadModbusRegisters(address, firstRegister, numValues, registersToReceive);
+			GCodeResult rslt = auxDevices[auxChannel].ReadModbusRegisters(address, firstRegister, numValues, registersToReceive);
 			if (rslt == GCodeResult::ok)
 			{
-				for (size_t i = 0; i < numValues; ++i)
+				do
 				{
-					reply.catf(" %03x", registersToReceive[i]);
+					delay(2);
+					rslt = auxDevices[auxChannel].CheckModbusResult();
+				} while (rslt == GCodeResult::notFinished);
+				if (rslt == GCodeResult::ok)
+				{
+					for (size_t i = 0; i < numValues; ++i)
+					{
+						reply.catf(" %03x", registersToReceive[i]);
+					}
 				}
-
+				else
+				{
+					reply.copy("no or bad response from Modbus device");
+				}
+			}
+			else
+			{
+				reply.copy("couldn't initiate Modbus transaction");
 			}
 			return rslt;
 		}
