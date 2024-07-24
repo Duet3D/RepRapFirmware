@@ -2151,7 +2151,9 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			}
 			else
 			{
+# if SUPPORT_MODBUS_RTU
 				const AuxDevice& dev = auxDevices[chan - 1];
+# endif
 				const char *modeString =
 # if SUPPORT_MODBUS_RTU
 										(dev.GetMode() == AuxDevice::AuxMode::modbus_rtu) ? "modbus RTU" :
