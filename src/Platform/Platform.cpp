@@ -465,6 +465,10 @@ void Platform::Init() noexcept
 	commsParams[2] = 0;
 #endif
 
+#ifdef DUET3_MB6XD
+	pinMode(ModbusTxPin, OUTPUT_LOW);			// turn off the RS485 transmitter
+#endif
+
 	// Initialise the IO port subsystem
 	IoPort::Init();
 
@@ -2091,7 +2095,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 #  if defined(DUET3_MB6XD)
 				else if (chan == 2 && board >= BoardType::Duet3_6XD_v102)
 				{
-					if (!dev.ConfigureDirectionPort("rs485.txen", reply))	// this port name must match the one in the pin table
+					if (!dev.ConfigureDirectionPort(ModbusTxPinName, reply))
 					{
 						return GCodeResult::error;
 					}

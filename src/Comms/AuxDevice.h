@@ -72,7 +72,7 @@ private:
 	static void GlobalTxEndedCallback(CallbackParameter cp) noexcept;
 
 	static constexpr uint32_t ModbusBusAvailableTimeout = 50;				// how many milliseconds we wait for the device to become available
-	static constexpr uint32_t ModbusResponseTimeout = 20;					// how many milliseconds we give the device time to respond, excluding transmission time
+	static constexpr uint32_t ModbusResponseTimeout = 140;					// how many milliseconds we give the device time to respond, excluding transmission time
 	static constexpr uint16_t MaxModbusRegisters = 100;						// the maximum number of registers we send or receive
 	static constexpr uint16_t ModbusCrcInit = 0xFFFF;
 

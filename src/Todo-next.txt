@@ -73,4 +73,4 @@ Bugs:
 - [done] Simulating a job doesn't work
 - [done] Christian reports that multiple drivers with independent endstops for an axis don't work, the drivers that finish early remain disabled
 - When starting a new print after finishing one we get a filament error
-
+- Andy S reports that in 3.6, extruder positions for extruders on tool boards remain stuck on zero

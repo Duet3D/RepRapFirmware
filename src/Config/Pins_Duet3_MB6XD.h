@@ -179,6 +179,10 @@ constexpr auto EthernetPhyOtherPinsFunction = GpioPinFunction::A;
 #define USART_SSPI		USART0
 #define ID_SSPI			ID_USART0
 
+// Modbus (board version 1.02 and later)
+constexpr Pin ModbusTxPin = PortDPin(24);
+constexpr const char *ModbusTxPinName = "rs485.tx";
+
 // List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
 // The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
 // Aliases are separate by the , character.
@@ -315,7 +319,7 @@ constexpr PinDescription PinTable[] =
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io5.out,!io5.out.iso"	},	// PD21 IO5_OUT (not PWM capable on TIOA11 because TIOB11 is used to generate step pulses)
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::none,	nullptr					},	// PD22 step gate
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"out4.tach"				},	// PD23 OUT4_TACH
-	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	"rs485.txen,ate.rs422.txen"	},	// PD24 was SWD_EXT_RST, now RS485 TX/~RX in board revision 1.02 and later
+	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::write,	ModbusTxPinName			},	// PD24 was SWD_EXT_RST, now RS485 TX/~RX in board revision 1.02 and later
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::read,	"io0.in,serial0.rx"		},	// PD25 IO0_IN  Serial0 RX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io0.out,serial0.tx"	},	// PD26 IO0_OUT Serial0 TX
 	{ TcOutput::none,	PwmOutput::none,	AdcInput::none,		PinCapability::rw,		"io2.out,i2c0.dat"		},	// PD27 IO2_OUT
