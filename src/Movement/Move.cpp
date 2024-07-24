@@ -2624,17 +2624,24 @@ void Move::IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint
 			}
 		}
 	}
-	else if (axisOrExtruder < MaxAxesPlusExtruders && LogicalDriveToExtruder(axisOrExtruder) < reprap.GetGCodes().GetNumExtruders())
+	else if (axisOrExtruder < MaxAxesPlusExtruders)
 	{
-		const DriverId id = extruderDrivers[LogicalDriveToExtruder(axisOrExtruder)];
-		if (id.IsLocal())
+		if (LogicalDriveToExtruder(axisOrExtruder) < reprap.GetGCodes().GetNumExtruders())
 		{
-			localFunc(id.localDriver);
+			const DriverId id = extruderDrivers[LogicalDriveToExtruder(axisOrExtruder)];
+			if (id.IsLocal())
+			{
+				localFunc(id.localDriver);
+			}
+			else
+			{
+				remoteFunc(id);
+			}
 		}
-		else
-		{
-			remoteFunc(id);
-		}
+	}
+	else if (axisOrExtruder < MaxAxesPlusExtruders + NumDirectDrivers)
+	{
+		localFunc(axisOrExtruder - MaxAxesPlusExtruders);
 	}
 }
 
