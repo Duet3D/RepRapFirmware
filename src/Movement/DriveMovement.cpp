@@ -91,8 +91,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 	// Adjust the distance (and implicitly the initial speed) to account for pressure advance
 	if (isExtruder && !moveFlags.nonPrintingMove)
 	{
-		const motioncalc_t extraSpeed = a * (motioncalc_t)extruderShaper.GetKclocks();
-		distance += extraSpeed * (motioncalc_t)duration;
+		distance += a * (motioncalc_t)extruderShaper.GetKclocks() * (motioncalc_t)duration;
 	}
 
 #if !SEGMENT_DEBUG
