@@ -182,10 +182,11 @@ void AuxDevice::AppendDirectionPortName(const StringRef& reply) const noexcept
 	txNotRx.AppendPinName(reply);
 }
 
-// Send some Modbus registers. May return GCodeResult notFinished if the buffer had insufficient room  but may have enough later, or the port was busy.
+// Send some Modbus registers. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the command.
+// After receiving the GCodeResult::ok response the caller must call CheckModbusResult until it doesn't return GCodeResult::notFinished.
 GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, const uint16_t *data) noexcept
 {
-	if (numRegisters == 0 || numRegisters > MaxModbusRegisters)
+	if (p_numRegisters == 0 || p_numRegisters > MaxModbusRegisters)
 	{
 		return GCodeResult::badOrMissingParameter;
 	}
@@ -227,10 +228,11 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_st
 	return GCodeResult::ok;
 }
 
-// Read some Modbus registers. May return GCodeResult notFinished if the buffer had insufficient room  but may have enough later, or the port was busy.
+// Read some Modbus registers. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the command.
+// After receiving the GCodeResult::ok response the caller must call CheckModbusResult until it doesn't return GCodeResult::notFinished.
 GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, uint16_t *data) noexcept
 {
-	if (numRegisters == 0 || numRegisters > MaxModbusRegisters)
+	if (p_numRegisters == 0 || p_numRegisters > MaxModbusRegisters)
 	{
 		return GCodeResult::badOrMissingParameter;
 	}
