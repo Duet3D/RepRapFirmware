@@ -38,8 +38,6 @@ public:
 	void SetMode(AuxMode p_mode) noexcept;
 	void SetBaudRate(uint32_t p_baudRate) noexcept { baudRate = p_baudRate; }			// must call SetMode after calling this to actually change the baud rate
 	void Disable() noexcept;
-	bool ConfigureDirectionPort(const char *pinName, GCodeBuffer& gb, const StringRef& reply) noexcept;
-
 	AuxMode GetMode() const noexcept { return mode; }
 	uint32_t GetBaudRate() const noexcept { return baudRate; }
 	bool IsRaw() const noexcept { return mode == AuxMode::raw; }
@@ -52,6 +50,9 @@ public:
 	void Diagnostics(MessageType mt, unsigned int index) noexcept;
 
 #if SUPPORT_MODBUS_RTU
+	bool ConfigureDirectionPort(const char *pinName, const StringRef& reply) THROWS(GCodeException);
+	void AppendDirectionPortName(const StringRef& reply) const noexcept;
+
 	GCodeResult SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, const uint16_t *data) noexcept;
 	GCodeResult ReadModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, uint16_t *data) noexcept;
 	GCodeResult CheckModbusResult() noexcept;

@@ -2040,8 +2040,10 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 	const size_t chan = gb.GetLimitedUIValue('P', NumSerialChannels);
 	GCodeBuffer * const gbp = reprap.GetGCodes().GetSerialGCodeBuffer(chan);
 
+#if HAS_AUX_DEVICES
 	// If a baud rate has been provided, just store it for later use
 	const uint32_t baudRate = (gb.Seen('B')) ? gb.GetUIValue() : 0;
+#endif
 
 	// See if a mode is provided
 	if (gb.Seen('S'))
@@ -2068,6 +2070,8 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			gbp->Disable();							// disable I/O for this buffer
 		}
 
+		SetCommsProperties(chan, val);
+
 #if HAS_AUX_DEVICES
 		if (chan != 0)
 		{
@@ -2079,15 +2083,15 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 				{
 					String<StringLength50> portName;
 					gb.GetQuotedString(portName.GetRef(), false);
-					if (!dev.ConfigureDirectionPort(portName.c_str(), gb, reply))
+					if (!dev.ConfigureDirectionPort(portName.c_str(), reply))
 					{
 						return GCodeResult::error;
 					}
 				}
 #  if defined(DUET3_MB6XD)
-				else if (chan == 1 && board >= BoardType::Duet3_6XD_v102)
+				else if (chan == 2 && board >= BoardType::Duet3_6XD_v102)
 				{
-					if (!dev.ConfigureDirectionPort("rs485.txen", gb, reply))	// port name must match the one in the pin table
+					if (!dev.ConfigureDirectionPort("rs485.txen", reply))	// this port name must match the one in the pin table
 					{
 						return GCodeResult::error;
 					}
@@ -2113,39 +2117,66 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			gbp->Enable(val);						// enable I/O and set the CRC and checksum requirements, also sets Marlin or PanelDue compatibility
 		}
 	}
+#if HAS_AUX_DEVICES
 	else if (baudRate != 0)
 	{
-#if HAS_AUX_DEVICES
 		if (chan != 0)
 		{
 			auxDevices[chan - 1].SetBaudRate(baudRate);
 			ResetChannel(chan);
 		}
 	}
-	else if (chan != 0 && !IsAuxEnabled(chan - 1))
-	{
-		reply.printf("Channel %u is disabled", chan);
 #endif
-	}
 	else
 	{
+		// Just print the existing configuration
 		const uint32_t cp = GetCommsProperties(chan);
-		reply.printf("Channel %d: baud rate %" PRIu32 ", %s mode, %s", chan, GetBaudRate(chan),
-						(chan != 0 && IsAuxRaw(chan - 1)) ? "raw" : "PanelDue",
-						(cp & 4) ? "requires CRC"
-							: (cp & 1) ? "requires checksum or CRC"
-								: "does not require checksum or CRC"
-					);
-		if (chan == 0 && SERIAL_MAIN_DEVICE.IsConnected())
-		{
-			reply.cat(", connected");
-		}
+		const char *crcMode = (cp & 4) ? "requires CRC"
+								: (cp & 1) ? "requires checksum or CRC"
+									: "does not require checksum or CRC";
 #if HAS_AUX_DEVICES
-		else if (chan != 0 && IsAuxRaw(chan - 1))
+		if (chan != 0)
 		{
-			reply.cat(", raw mode");
+			if (!IsAuxEnabled(chan - 1)
+# if SUPPORT_MODBUS_RTU
+				&& (chan >= NumSerialChannels || auxDevices[chan - 1].GetMode() != AuxDevice::AuxMode::modbus_rtu)
+# endif
+			   )
+			{
+				reply.printf("Channel %u is disabled", chan);
+			}
+			else
+			{
+				const AuxDevice& dev = auxDevices[chan - 1];
+				const char *modeString =
+# if SUPPORT_MODBUS_RTU
+										(dev.GetMode() == AuxDevice::AuxMode::modbus_rtu) ? "modbus RTU" :
+# endif
+											(IsAuxRaw(chan - 1)) ? "raw"
+												: "PanelDue";
+				reply.printf("Channel %d: baud rate %" PRIu32 ", %s mode, ", chan, GetBaudRate(chan), modeString);
+# if SUPPORT_MODBUS_RTU
+				if (dev.GetMode() == AuxDevice::AuxMode::modbus_rtu)
+				{
+					reply.cat("Tx/!Rx port ");
+					dev.AppendDirectionPortName(reply);
+				}
+				else
+# endif
+				{
+					reply.cat(crcMode);
+				}
+			}
 		}
+		else
 #endif
+		{
+			reply.printf("Channel 0 (USB): %s", crcMode);
+			if (SERIAL_MAIN_DEVICE.IsConnected())
+			{
+				reply.cat(", connected");
+			}
+		}
 	}
 	return GCodeResult::ok;
 }

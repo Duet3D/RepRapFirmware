@@ -172,9 +172,14 @@ void AuxDevice::Diagnostics(MessageType mt, unsigned int index) noexcept
 #if SUPPORT_MODBUS_RTU
 
 // Configure the Tx/!Rx port returning true if success
-bool AuxDevice::ConfigureDirectionPort(const char *pinName, GCodeBuffer& gb, const StringRef& reply) noexcept
+bool AuxDevice::ConfigureDirectionPort(const char *pinName, const StringRef& reply) THROWS(GCodeException)
 {
-	return txNotRx.AssignPort(gb, reply, PinUsedBy::gpout, PinAccess::write0);
+	return txNotRx.AssignPort(pinName, reply, PinUsedBy::gpout, PinAccess::write0);
+}
+
+void AuxDevice::AppendDirectionPortName(const StringRef& reply) const noexcept
+{
+	txNotRx.AppendPinName(reply);
 }
 
 // Send some Modbus registers. May return GCodeResult notFinished if the buffer had insufficient room  but may have enough later, or the port was busy.
