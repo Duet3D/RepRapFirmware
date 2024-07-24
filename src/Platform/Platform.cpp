@@ -2269,7 +2269,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 				return GCodeResult::error;
 			}
 
-			const uint16_t firstRegister = gb.GetLimitedUIValue(0, 1u << 16);
+			const uint16_t firstRegister = gb.GetLimitedUIValue('R', 1u << 16);
 			uint16_t registersToSend[MaxI2cOrModbusValues];
 			for (size_t i = 0; i < numToSend; ++i)
 			{
@@ -2287,7 +2287,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 #endif
 }
 
-// Handle M261
+// Handle M261 and M261.1
 GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
 #if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
@@ -2331,7 +2331,7 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 				return GCodeResult::error;
 			}
 
-			const uint16_t firstRegister = gb.GetLimitedUIValue(0, 1u << 16);
+			const uint16_t firstRegister = gb.GetLimitedUIValue('R', 1u << 16);
 			uint16_t registersToReceive[MaxI2cOrModbusValues];
 			const GCodeResult rslt = auxDevices[auxChannel].ReadModbusRegisters(address, firstRegister, numValues, registersToReceive);
 			if (rslt == GCodeResult::ok)
