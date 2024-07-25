@@ -38,7 +38,7 @@ void AuxDevice::SetMode(AuxMode p_mode) noexcept
 		else
 		{
 #if SUPPORT_MODBUS_RTU
-			uart->SetOnTxEndedCallback((mode == AuxMode::modbus_rtu) ? GlobalTxEndedCallback : nullptr, CallbackParameter(this));
+			uart->SetOnTxEndedCallback((p_mode == AuxMode::modbus_rtu) ? GlobalTxEndedCallback : nullptr, CallbackParameter(this));
 #endif
 			uart->begin(baudRate);
 			mode = p_mode;
@@ -215,7 +215,7 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_st
 		ModbusWriteWord(data[i]);
 	}
 
-	uart->write((uint8_t)crc.Get());						// CRC is sent low byte first
+	uart->write((uint8_t)crc.Get());
 	uart->write((uint8_t)(crc.Get() >> 8));
 
 	txNotRx.WriteDigital(true);								// set RS485 direction to transmit
@@ -255,7 +255,7 @@ GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint16_t p_st
 	ModbusWriteWord(startRegister);
 	numRegisters = p_numRegisters;
 	ModbusWriteWord(numRegisters);
-	uart->write((uint8_t)crc.Get());						// CRC is sent low byte first
+	uart->write((uint8_t)crc.Get());
 	uart->write((uint8_t)(crc.Get() >> 8));
 
 	txNotRx.WriteDigital(true);								// set port to transmit
@@ -307,7 +307,8 @@ GCodeResult AuxDevice::CheckModbusResult() noexcept
 			break;
 
 		case ModbusFunction::readInputRegisters:
-			if (ModbusReadWord() == startRegister && ModbusReadWord() == numRegisters && ModbusReadByte() == 2 * numRegisters)
+		case ModbusFunction::readHoldingRegisters:
+			if (ModbusReadByte() == 2 * numRegisters)
 			{
 				while (numRegisters != 0)
 				{
@@ -346,6 +347,9 @@ uint8_t AuxDevice::ModbusReadByte() noexcept
 {
 	const uint8_t b = uart->read();
 	crc.UpdateModbus(b);
+#if 0
+	debugPrintf("Modbus Rx %02x\n", b);
+#endif
 	return b;
 }
 
