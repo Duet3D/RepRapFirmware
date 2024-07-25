@@ -12,6 +12,7 @@
 
 #if USE_PHASE_STEPPING
 
+# include <Platform/RepRap.h>
 # include <General/NamedEnum.h>
 # include <Movement/StepTimer.h>
 # include <Movement/Trigonometry.h>
@@ -42,11 +43,9 @@ public:
 	// Phase step public methods
 	void UpdateStandstillCurrent() noexcept;
 
-	const char *_ecv_array GetModeText() const noexcept;
-
 	// Methods called by the motion system
-	void InstanceControlLoop() noexcept;
-	bool IsClosedLoopEnabled() const noexcept;
+	void InstanceControlLoop(size_t driver) noexcept;
+	bool IsEnabled() const noexcept;
 	bool SetClosedLoopEnabled(StepMode mode, const StringRef &reply) noexcept;
 	void DriverSwitchedToClosedLoop() noexcept;
 
@@ -55,10 +54,7 @@ private:
 	static constexpr float DefaultHoldCurrentFraction = 0.25;		// the minimum fraction of the requested current that we apply when holding position
 
 	// Methods used only by closed loop and by the tuning module
-	void SetMotorPhase(uint16_t phase, float magnitude) noexcept;
-
-	// Control variables, set by the user to determine how the closed loop controller works
-	StepMode currentMode = StepMode::stepDir;			// which mode the drivers are in
+	void SetMotorPhase(size_t driver, uint16_t phase, float magnitude) noexcept;
 
 	// Holding current, and variables derived from it
 	float 	holdCurrentFraction = DefaultHoldCurrentFraction;	// The minimum holding current when stationary
@@ -76,9 +72,7 @@ private:
 	float	PIDATerm;									// Acceleration feedforward term
 	float	PIDControlSignal;							// The overall signal from the PID controller
 
-	// TODO expand this to work with multiple drivers (struct array?)
 	uint16_t desiredStepPhase = 0;						// The desired position of the motor
-	uint16_t phaseOffset = 0;							// The amount by which the phase should be offset when in semi-open-loop mode
 	int16_t coilA;										// The current to run through coil A
 	int16_t coilB;										// The current to run through coil A
 
@@ -95,14 +89,9 @@ private:
 	StepTimer::Ticks maxControlLoopCallInterval;		// The maximum interval between the control loop being called
 
 	// Functions private to this module
-	float ControlMotorCurrents(StepTimer::Ticks ticksSinceLastCall) noexcept;
+	float CalculateMotorCurrents(size_t driver) noexcept;
 	void ResetMonitoringVariables() noexcept;
 };
-
-inline bool PhaseStep::IsClosedLoopEnabled() const noexcept
-{
-	return currentMode == StepMode::phase;
-}
 
 # endif
 

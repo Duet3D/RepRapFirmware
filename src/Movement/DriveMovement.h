@@ -239,7 +239,7 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 		if (timeSinceStart < 0) break;
 		if ((uint32_t)timeSinceStart >= seg->GetDuration())
 		{
-			if (phaseStepControl.IsClosedLoopEnabled())
+			if (phaseStepControl.IsEnabled())
 			{
 				MoveSegment *oldSeg = seg;
 				segments = seg = oldSeg->GetNext();

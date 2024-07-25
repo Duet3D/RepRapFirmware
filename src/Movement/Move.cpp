@@ -362,6 +362,13 @@ Move::Move() noexcept
 	numActualDirectDrivers = NumDirectDrivers;						// assume they are all available until we know otherwise
 #endif
 
+#if USE_PHASE_STEPPING
+	for (size_t i = 0; i < NumDirectDrivers; i++)
+	{
+		netMicrostepsTaken[i] = 0.0;
+	}
+#endif
+
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
 	kinematics = Kinematics::Create(KinematicsType::cartesian);		// default to Cartesian
 	for (DDARing& ring : rings)
@@ -2056,13 +2063,79 @@ bool Move::AreDrivesStopped(AxesBitmap drives) const noexcept
 
 
 #if USE_PHASE_STEPPING
-void Move::PhaseStepControlLoop()
+
+// if the driver is idle, enable it; return true if driver enabled on return
+bool Move::EnableIfIdle(size_t driver) noexcept
 {
-	for (DriveMovement& dm : dms)
+#if 0
+	if (driverStates[driver] == DriverStateControl::driverIdle)
 	{
-		dm
+		driverStates[driver] = DriverStateControl::driverActive;
+# if HAS_SMART_DRIVERS
+		driverAtIdleCurrent[driver] = false;
+		UpdateMotorCurrent(driver);
+# endif
+	}
+
+	return driverStates[driver] == DriverStateControl::driverActive;
+#else
+	return false;
+#endif
+}
+
+// Get the motor position in the current move so far, also speed and acceleration. Units are full steps and step clocks.
+// Inlined because it is only called from one place
+inline bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
+{
+	const float multiplier = ldexpf((GetDirectionValue(driver)) ? -1.0 : 1.0, -(int)SmartDrivers::GetMicrostepShift(driver));
+	if (dms[driver].GetCurrentMotion(when, mParams))
+	{
+		// Convert microsteps to full steps
+		mParams.position = (mParams.position + netMicrostepsTaken[driver]) * multiplier;
+		mParams.speed *= multiplier;
+		mParams.acceleration *= multiplier;
+		return true;
+	}
+
+	// Here when there is no current move
+	mParams.position = netMicrostepsTaken[driver] * multiplier;
+	mParams.speed = mParams.acceleration = 0.0;
+	return false;
+}
+
+inline void Move::SetCurrentMotorSteps(size_t driver, float fullSteps) noexcept
+{
+	const float multiplier = ldexpf((GetDirectionValue(driver)) ? -1.0 : 1.0, (int)SmartDrivers::GetMicrostepShift(driver));
+	netMicrostepsTaken[driver] = fullSteps * multiplier;
+}
+
+// Invert the current number of microsteps taken. Called when the driver direction control is changed.
+void Move::InvertCurrentMotorSteps(size_t driver) noexcept
+{
+	netMicrostepsTaken[driver] = -netMicrostepsTaken[driver];
+}
+
+bool Move::SetStepMode(StepMode mode) noexcept
+{
+	currentStepMode = mode;
+	return SmartDrivers::EnablePhaseStepping(mode == StepMode::phase);
+}
+
+void Move::PhaseStepControlLoop() noexcept
+{
+	DriveMovement **dmp = &activeDMs;
+	while (*dmp != nullptr)
+	{
+		DriveMovement * const dm = *dmp;
+
+		IterateLocalDrivers(dm->drive, [dm](uint8_t driver){
+			dm->phaseStepControl.InstanceControlLoop(driver);
+		});
+
+		dmp = &(dm->nextDM);
 	}
 }
+
 #endif
 
 // ISR for the step interrupt
@@ -2298,6 +2371,13 @@ void Move::CheckEndstops(bool executingMove) noexcept
 // Generate the step pulses of internal drivers used by this DDA
 void Move::StepDrivers(uint32_t now) noexcept
 {
+#if USE_PHASE_STEPPING
+	if (IsPhaseSteppingEnabled())
+	{
+		return;
+	}
+#endif
+
 	uint32_t driversStepping = 0;
 	MovementFlags flags;
 	flags.Clear();

@@ -316,6 +316,7 @@ public:
 	uint16_t GetMicrostepPosition() const noexcept { return readRegisters[ReadMsCnt] & 1023; }
 	void SetXdirect(uint32_t regVal) noexcept;
 	float GetCurrent() noexcept { return (float)motorCurrent; }
+	bool EnablePhaseStepping(bool enable);
 #endif
 	bool SetDriverMode(unsigned int mode) noexcept;
 	DriverMode GetDriverMode() const noexcept;
@@ -421,6 +422,8 @@ private:
 	volatile uint8_t specialReadRegisterNumber;
 	volatile uint8_t specialWriteRegisterNumber;
 	bool enabled;											// true if driver is enabled
+
+	DriverMode currentMode;										// Stepper driver mode if not using phase stepping
 };
 
 const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
@@ -711,7 +714,7 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 		configuredChopConfReg &= ~CHOPCONF_CHM;
 #endif
 		UpdateChopConfRegister();
-		return true;
+		break;
 
 	case (unsigned int)DriverMode::stealthChop:
 		UpdateRegister(WriteGConf, (writeRegisters[WriteGConf] & ~GCONF_DIRECT_MODE) | GCONF_STEALTHCHOP);
@@ -721,7 +724,7 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 		configuredChopConfReg &= ~CHOPCONF_CHM;
 #endif
 		UpdateChopConfRegister();
-		return true;
+		break;
 
 	case (unsigned int)DriverMode::constantOffTime:
 		UpdateRegister(WriteGConf, writeRegisters[WriteGConf] & ~(GCONF_DIRECT_MODE | GCONF_STEALTHCHOP));
@@ -731,26 +734,22 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 		configuredChopConfReg |= CHOPCONF_CHM;
 #endif
 		UpdateChopConfRegister();
-		return true;
+		break;
 
 #if TMC_TYPE == 5130
 	case (unsigned int)DriverMode::randomOffTime:
 		UpdateRegister(WriteGConf, writeRegisters[WriteGConf] & ~GCONF_STEALTHCHOP);
 		configuredChopConfReg |= CHOPCONF_CHM | CHOPCONF_5130_RNDTOFF;
 		UpdateChopConfRegister();
-		return true;
-#endif
-
-#if USE_PHASE_STEPPING
-	case (unsigned int)DriverMode::direct:
-			UpdateRegister(WriteGConf, (writeRegisters[WriteGConf] & ~GCONF_STEALTHCHOP) | GCONF_DIRECT_MODE);
-			UpdateCurrent();		// when entering direct mode we need to update the standstill current
-			return true;
+		break;
 #endif
 
 	default:
 		return false;
 	}
+
+	currentMode = (DriverMode)mode;
+	return true;
 }
 
 // Get the driver mode
@@ -763,6 +762,21 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 #endif
 				: DriverMode::constantOffTime;
 }
+
+#if USE_PHASE_STEPPING
+
+bool TmcDriverState::EnablePhaseStepping(bool enable)
+{
+	if (enable)
+	{
+		UpdateRegister(WriteGConf, (writeRegisters[WriteGConf] & ~GCONF_STEALTHCHOP) | GCONF_DIRECT_MODE);
+		UpdateCurrent();		// when entering direct mode we need to update the standstill current
+		return true;
+	}
+	return SetDriverMode((unsigned int)currentMode);
+}
+
+#endif
 
 // Set the motor current
 void TmcDriverState::SetCurrent(float current) noexcept
@@ -1379,8 +1393,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 
 #if USE_PHASE_STEPPING
 		// Set the motor phase currents before we write them
-		// TODO
-		reprap.GetMove()
+		reprap.GetMove().PhaseStepControlLoop();
 #endif
 
 		// Set up data to write. Driver 0 is the first in the SPI chain so we must write them in reverse order.
@@ -1629,6 +1642,19 @@ unsigned int SmartDrivers::GetMicrostepping(size_t driver, bool& interpolation) 
 }
 
 #if USE_PHASE_STEPPING
+
+bool SmartDrivers::EnablePhaseStepping(bool enable) noexcept
+{
+	bool allSet = true;
+	for (size_t driver = 0; driver < MaxSmartDrivers; driver++)
+	{
+		if (!driverStates[driver].EnablePhaseStepping(enable))
+		{
+			allSet = false;
+		}
+	}
+	return allSet;
+}
 
 // Get the configured motor current in mA
 float SmartDrivers::GetCurrent(size_t driver) noexcept

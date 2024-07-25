@@ -425,13 +425,13 @@ public:
 #endif
 
 #if USE_PHASE_STEPPING
-	bool IsClosedLoopEnabled(size_t driver) const noexcept { return dms[driver].closedLoopControl.IsClosedLoopEnabled(); }
+	bool IsPhaseSteppingEnabled() const noexcept { return currentStepMode == StepMode::phase; }
 	bool EnableIfIdle(size_t driver) noexcept;										// if the driver is idle, enable it; return true if driver enabled on return
 	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
 	void SetCurrentMotorSteps(size_t driver, float fullSteps) noexcept;
 	void InvertCurrentMotorSteps(size_t driver) noexcept;
-	void SetStepMode(StepMode mode) noexcept { currentStepMode = mode; }
-	const StepMode GetStepMode() const noexcept { return currentStepMode; }
+	bool SetStepMode(StepMode mode) noexcept;
+	StepMode GetStepMode() const noexcept { return currentStepMode; }
 
 	void PhaseStepControlLoop() noexcept;
 #endif
@@ -645,6 +645,7 @@ private:
 #endif
 
 #if USE_PHASE_STEPPING
+	float netMicrostepsTaken[NumDirectDrivers];
 	StepMode currentStepMode;
 #endif
 
@@ -785,7 +786,17 @@ inline void Move::AdjustNumDrivers(size_t numDriversNotAvailable) noexcept
 
 inline void Move::SetDirectionValue(size_t drive, bool dVal) noexcept
 {
+#if USE_PHASE_STEPPING
+		// We must prevent the tmc task loop fetching the current position while we are changing the direction
+	if (directions[drive] != dVal)
+	{
+		TaskCriticalSectionLocker lock;
+		directions[drive] = dVal;
+		InvertCurrentMotorSteps(drive);
+	}
+#else
 	directions[drive] = dVal;
+#endif
 }
 
 inline bool Move::GetDirectionValue(size_t drive) const noexcept
@@ -907,7 +918,7 @@ inline float Move::GetPressureAdvanceClocksForExtruder(size_t extruder) const no
 inline __attribute__((always_inline)) bool Move::ScheduleNextStepInterrupt() noexcept
 {
 #if USE_PHASE_STEPPING
-	if (currentStepMode != StepMode::stepDir)
+	if (IsPhaseSteppingEnabled())
 	{
 		return false;
 	}
