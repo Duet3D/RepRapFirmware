@@ -2117,8 +2117,12 @@ void Move::InvertCurrentMotorSteps(size_t driver) noexcept
 
 bool Move::SetStepMode(StepMode mode) noexcept
 {
+	if (!SmartDrivers::EnablePhaseStepping(mode == StepMode::phase))
+	{
+		return false;
+	}
 	currentStepMode = mode;
-	return SmartDrivers::EnablePhaseStepping(mode == StepMode::phase);
+	return true;
 }
 
 void Move::PhaseStepControlLoop() noexcept

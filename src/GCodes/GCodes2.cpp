@@ -4667,6 +4667,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = RaiseEvent(gb, reply);
 				break;
 
+#if USE_PHASE_STEPPING
+			case 970:	// configure step mode (phase stepping)
+				result = ConfigureStepMode(gb, reply);
+				break;
+#endif
+
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 			case 997:	// Perform firmware update
 				result = UpdateFirmware(gb, reply);

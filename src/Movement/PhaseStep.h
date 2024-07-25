@@ -34,7 +34,8 @@ struct MotionParameters
 enum class StepMode
 {
 	stepDir = 0,
-	phase
+	phase,
+	unknown
 };
 
 class PhaseStep
