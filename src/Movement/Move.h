@@ -428,8 +428,6 @@ public:
 	bool IsPhaseSteppingEnabled() const noexcept { return currentStepMode == StepMode::phase; }
 	bool EnableIfIdle(size_t driver) noexcept;										// if the driver is idle, enable it; return true if driver enabled on return
 	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
-	void SetCurrentMotorSteps(size_t driver, float fullSteps) noexcept;
-	void InvertCurrentMotorSteps(size_t driver) noexcept;
 	bool SetStepMode(StepMode mode) noexcept;
 	StepMode GetStepMode() const noexcept { return currentStepMode; }
 
@@ -792,7 +790,6 @@ inline void Move::SetDirectionValue(size_t drive, bool dVal) noexcept
 	{
 		TaskCriticalSectionLocker lock;
 		directions[drive] = dVal;
-		InvertCurrentMotorSteps(drive);
 	}
 #else
 	directions[drive] = dVal;

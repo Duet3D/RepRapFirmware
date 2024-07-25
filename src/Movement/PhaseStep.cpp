@@ -103,6 +103,7 @@ void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 	minControlLoopCallInterval = min<StepTimer::Ticks>(minControlLoopCallInterval, timeElapsed);
 	maxControlLoopCallInterval = max<StepTimer::Ticks>(maxControlLoopCallInterval, timeElapsed);
 
+	reprap.GetMove().GetCurrentMotion(driver, loopCallTime - StepTimer::GetMovementDelay(), mParams);
 	float currentFraction = CalculateMotorCurrents(driver);
 
 	// Update the statistics
@@ -120,9 +121,9 @@ void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 }
 
 
-inline bool PhaseStep::IsEnabled() const noexcept
+bool PhaseStep::IsEnabled() const noexcept
 {
-	return reprap.GetMove().GetStepMode() == StepMode::phase;
+	return reprap.GetMove().IsPhaseSteppingEnabled();
 }
 
 // Control the motor phase currents, returning the fraction of maximum current that we commanded
@@ -132,7 +133,7 @@ inline float PhaseStep::CalculateMotorCurrents(size_t driver) noexcept
 	float currentFraction;
 
 	// Driver is in assisted open loop mode
-	// In this mode the I term is not used and the A and V terms are independent of the loop time.
+	// In this mode the PID terms are not used and the A and V terms are independent of the loop time.
 	constexpr float scalingFactor = 100.0;
 	PIDVTerm = mParams.speed * Kv * scalingFactor;
 	PIDATerm = mParams.acceleration * Ka * fsquare(scalingFactor);

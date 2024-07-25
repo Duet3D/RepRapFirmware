@@ -2084,35 +2084,21 @@ bool Move::EnableIfIdle(size_t driver) noexcept
 }
 
 // Get the motor position in the current move so far, also speed and acceleration. Units are full steps and step clocks.
-// Inlined because it is only called from one place
-inline bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
+bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
 {
 	const float multiplier = ldexpf((GetDirectionValue(driver)) ? -1.0 : 1.0, -(int)SmartDrivers::GetMicrostepShift(driver));
 	if (dms[driver].GetCurrentMotion(when, mParams))
 	{
 		// Convert microsteps to full steps
-		mParams.position = (mParams.position + netMicrostepsTaken[driver]) * multiplier;
+		mParams.position = (mParams.position) * multiplier;
 		mParams.speed *= multiplier;
 		mParams.acceleration *= multiplier;
 		return true;
 	}
 
 	// Here when there is no current move
-	mParams.position = netMicrostepsTaken[driver] * multiplier;
-	mParams.speed = mParams.acceleration = 0.0;
+	mParams.position = mParams.speed = mParams.acceleration = 0.0;
 	return false;
-}
-
-inline void Move::SetCurrentMotorSteps(size_t driver, float fullSteps) noexcept
-{
-	const float multiplier = ldexpf((GetDirectionValue(driver)) ? -1.0 : 1.0, (int)SmartDrivers::GetMicrostepShift(driver));
-	netMicrostepsTaken[driver] = fullSteps * multiplier;
-}
-
-// Invert the current number of microsteps taken. Called when the driver direction control is changed.
-void Move::InvertCurrentMotorSteps(size_t driver) noexcept
-{
-	netMicrostepsTaken[driver] = -netMicrostepsTaken[driver];
 }
 
 bool Move::SetStepMode(StepMode mode) noexcept
