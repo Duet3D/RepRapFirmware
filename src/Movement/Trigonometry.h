@@ -14,7 +14,8 @@
 
 namespace Trigonometry
 {
-	constexpr unsigned int Resolution = 1024;
+	constexpr unsigned int ResolutionBits = 10u;
+	constexpr unsigned int Resolution = 1u << ResolutionBits;
 
 	// Immediately Invoked Function Expression (IIFE) to calculate the lookup table
 	// (Note the '()' at the end of the definition)
@@ -45,7 +46,7 @@ inline void Trigonometry::FastSinCos(uint16_t phase, float& sine, float& cosine)
 post(fabsf(sin) <= 248.0; fabsf(cosine) <= 248.0)
 {
 	unsigned int index = phase % Resolution;
-	const unsigned int quadrant = phase / Resolution;			// the bottom 3 bits are the quadrant number
+	const unsigned int quadrant = phase >> ResolutionBits;			// the bottom 3 bits are the quadrant number
 	if ((quadrant & 1u) != 0)
 	{
 		index = Resolution - index;								// swap sine and cosine if in quadrant 1 or 3
