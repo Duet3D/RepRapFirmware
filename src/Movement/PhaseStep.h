@@ -47,8 +47,6 @@ public:
 	// Methods called by the motion system
 	void InstanceControlLoop(size_t driver) noexcept;
 	bool IsEnabled() const noexcept;
-	bool SetClosedLoopEnabled(StepMode mode, const StringRef &reply) noexcept;
-	void DriverSwitchedToClosedLoop() noexcept;
 
 private:
 	// Constants private to this module

@@ -147,46 +147,6 @@ inline float PhaseStep::CalculateMotorCurrents(size_t driver) noexcept
 	return currentFraction;
 }
 
-// This is called before the driver mode is changed. Return true if success. Always succeeds if we are disabling closed loop.
-bool PhaseStep::SetClosedLoopEnabled(StepMode mode, const StringRef &reply) noexcept
-{
-	// Trying to enable closed loop
-	if (mode == StepMode::phase)
-	{
-		if (reprap.GetMove().GetStepMode() == StepMode::stepDir)
-		{
-			// Switching from open to closed loop mode, so set the motor phase to match the current microstep position
-			delay(10);													// delay long enough for the TMC driver to have read the microstep counter since the end of the last movement
-			// TODO make this work for multiple drivers
-			const uint16_t initialStepPhase = SmartDrivers::GetMicrostepPosition(0) * 4;	// get the current coil A microstep position as 0..4095
-
-			desiredStepPhase = initialStepPhase;						// set this to be picked up later in DriverSwitchedToClosedLoop
-		}
-
-		ResetMonitoringVariables();										// to avoid getting stupid values
-		prevControlLoopCallTime = StepTimer::GetTimerTicks();			// for statistics
-	}
-
-	// TODO If we are disabling closed loop mode, we should ideally send steps to get the microstep counter to match the current phase here
-	return true;
-}
-
-// This is called just after the driver has switched into closed loop mode (it may have been in closed loop mode already)
-void PhaseStep::DriverSwitchedToClosedLoop() noexcept
-{
-#if 0
-	delay(3);														// allow time for the switch to complete and a few control loop iterations to be done
-	if (currentMode == StepMode::assistedOpen)
-	{
-		const uint16_t stepPhase = (uint16_t)llrintf(mParams.position * 1024.0);
-		phaseOffset = (currentPhasePosition - stepPhase) & 4095;
-	}
-	desiredStepPhase = currentPhasePosition;
-	SetMotorPhase(currentPhasePosition, SmartDrivers::GetStandstillCurrentPercent(0) * 0.01);	// set the motor currents to match the initial position using the open loop standstill current
-	ResetMonitoringVariables();										// the first loop iteration will have recorded a higher than normal loop call interval, so start again
-#endif
-}
-
 #endif
 
 // End
