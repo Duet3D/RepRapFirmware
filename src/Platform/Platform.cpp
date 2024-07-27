@@ -2355,8 +2355,9 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 			}
 
 			const uint16_t firstRegister = gb.GetLimitedUIValue('R', 1u << 16);
+			const uint8_t function = (gb.Seen('F')) ? gb.GetLimitedUIValue('F', 3, 5) : 4;			// default to Modbus function Read Input Registers but also allow Read Holding Registers
 			uint16_t registersToReceive[MaxI2cOrModbusValues];
-			GCodeResult rslt = auxDevices[auxChannel].ReadModbusRegisters(address, firstRegister, numValues, registersToReceive);
+			GCodeResult rslt = auxDevices[auxChannel].ReadModbusRegisters(address, function, firstRegister, numValues, registersToReceive);
 			if (rslt == GCodeResult::ok)
 			{
 				do
