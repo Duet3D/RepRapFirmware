@@ -224,7 +224,8 @@ bool MqttClient::Accept(Socket *s) noexcept
 		if (err == MQTT_OK)
 		{
 			err = mqtt_connect(&client, mqttClientConfig->id, mqttClientConfig->willTopic, mqttClientConfig->willMessage,
-								strlen(mqttClientConfig->willMessage), mqttClientConfig->username, mqttClientConfig->password,
+								mqttClientConfig->willMessage ? strlen(mqttClientConfig->willMessage) : 0,
+								mqttClientConfig->username, mqttClientConfig->password,
 								mqttClientConfig->connectFlags , mqttClientConfig->keepAlive);
 			if (err == MQTT_OK)
 			{
