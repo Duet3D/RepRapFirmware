@@ -1963,13 +1963,17 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 				if (*pos == 0)
 				{
 					// End of the expression
-					if (context.WantExists())
+					if (wantExists)
 					{
 						rslt.SetBool(true);
 					}
 					else
 					{
 						rslt = elem;
+						if (applyLengthOperator)
+						{
+							ApplyLengthOperator(rslt);
+						}
 					}
 					return;
 				}
