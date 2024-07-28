@@ -46,8 +46,8 @@ public:
 
 	void AssignFrom(VariableSet& other) noexcept;
 
-	Variable *Lookup(const char *_ecv_array str) noexcept;
-	const Variable *Lookup(const char *_ecv_array str, size_t length) const noexcept pre(length <= strlen(str));
+	Variable *Lookup(const char *_ecv_array str, bool wantParameter) noexcept;
+	const Variable *Lookup(const char *_ecv_array str, size_t length, bool wantParameter) const noexcept pre(length <= strlen(str));
 	void InsertNew(const char *str, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException);
 	void InsertNewParameter(const char *str, ExpressionValue pVal) THROWS(GCodeException) { InsertNew(str, pVal, -1); }
 	void EndScope(uint8_t blockNesting) noexcept;

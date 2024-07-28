@@ -40,7 +40,7 @@ void GlobalVariables::ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& 
 	{
 		// Report a specific global variable, or part of one
 		const char *pos = GetNextElement(filter);				// find the end of the variable name
-		const Variable *const var = vars.Lookup(filter, pos - filter);
+		const Variable *const var = vars.Lookup(filter, pos - filter, false);
 		if (var == nullptr)
 		{
 			buf->cat("null");

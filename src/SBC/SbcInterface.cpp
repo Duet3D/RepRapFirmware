@@ -808,7 +808,7 @@ void SbcInterface::ExchangeData() noexcept
 			}
 
 			// Check if the variable is valid
-			Variable * const v = vset->Lookup(shortVarName.c_str());
+			Variable * const v = vset->Lookup(shortVarName.c_str(), false);
 			if (createVariable && v != nullptr)
 			{
 				// For now we don't allow an existing variable to be reassigned using a 'var' or 'global' statement. We may need to allow it for 'global' statements.
