@@ -4454,11 +4454,14 @@ void GCodes::StopPrint(GCodeBuffer *gbp, StopPrintReason reason) noexcept
 				FileGCode()->SetState(newState);					// set fileGCode (which should be the one calling this) to run stop.g
 			}
 		}
+		else
 #endif
+		{
+			reprap.GetPrintMonitor().StoppedPrint();				// must do this after printing the simulation details not before, because it clears the filename and pause time
+		}
 	}
 
 	CancelWaitForTemperatures(true);
-	reprap.GetPrintMonitor().StoppedPrint();				// must do this after printing the simulation details not before, because it clears the filename and pause time
 	buildObjects.Init();
 	FileGCode()->OriginalMachineState().ClearBlocks();		// delete any local variables that the job file created
 #if SUPPORT_ASYNC_MOVES
