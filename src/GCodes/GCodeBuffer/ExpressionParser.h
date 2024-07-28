@@ -93,7 +93,7 @@ private:
 	void __attribute__((noinline)) ConvertToString(ExpressionValue& val, bool evaluate) const noexcept;
 
 	void ConvertToDriverId(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
-	void ApplyLengthOperator(ExpressionValue& val) const THROWS(GCodeException);
+	void ApplyLengthOperator(ExpressionValue& val, bool evaluate) const THROWS(GCodeException);
 
 	void CheckStack(uint32_t calledFunctionStackUsage) const THROWS(GCodeException);
 
