@@ -156,7 +156,7 @@ CanMessageBuffer *CanMotion::GetBuffer(const PrepParams& params, DriverId canDri
 }
 
 // This is called by DDA::Prepare for each active CAN DM in the move
-void CanMotion::AddLinearAxisMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept
+void CanMotion::AddAxisMovement(const PrepParams& params, DriverId canDriver, int32_t steps) noexcept
 {
 	CanMessageBuffer * const buf = GetBuffer(params, canDriver);
 	if (buf != nullptr)

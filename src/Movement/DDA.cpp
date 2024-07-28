@@ -1168,7 +1168,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 #if SUPPORT_CAN_EXPANSION
 						if (driver.IsRemote())
 						{
-							CanMotion::AddLinearAxisMovement(params, driver, delta);
+							CanMotion::AddAxisMovement(params, driver, delta);
 						}
 						else		// we don't generate segments for leadscrew adjustment moves to remote drivers
 #endif
@@ -1216,7 +1216,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 						const DriverId driver = config.driverNumbers[i];
 						if (driver.IsRemote())
 						{
-							CanMotion::AddLinearAxisMovement(params, driver, delta);
+							CanMotion::AddAxisMovement(params, driver, delta);
 						}
 					}
 #endif
