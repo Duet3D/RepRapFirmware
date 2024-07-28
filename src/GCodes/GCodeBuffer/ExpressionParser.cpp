@@ -266,7 +266,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 		{
 			CheckStack(StackUsage::ParseInternal);
 			ParseInternal(val, evaluate, UnaryPriority);
-			ApplyLengthOperator(val);
+			ApplyLengthOperator(val, evaluate);
 		}
 		break;
 
@@ -1283,7 +1283,7 @@ void ExpressionParser::ConvertToDriverId(ExpressionValue& val, bool evaluate) co
 	}
 }
 
-void ExpressionParser::ApplyLengthOperator(ExpressionValue& val) const THROWS(GCodeException)
+void ExpressionParser::ApplyLengthOperator(ExpressionValue& val, bool evaluate) const THROWS(GCodeException)
 {
 	switch (val.GetType())
 	{
@@ -1318,7 +1318,12 @@ void ExpressionParser::ApplyLengthOperator(ExpressionValue& val) const THROWS(GC
 		break;
 
 	default:
-		ThrowParseException("expected object model value or string after '#");
+		if (evaluate)
+		{
+			ThrowParseException("expected object model value or string after '#");
+		}
+		val.SetInt(0);
+		break;
 	}
 }
 
@@ -1930,7 +1935,7 @@ time_t ExpressionParser::ParseDateTime(const char *s) const THROWS(GCodeExceptio
 	return mktime(&timeInfo);
 }
 
-// Get the value of a variable or part of a variable
+// Get the value of a variable or part of a variable. We have already checked that 'evaluate' is true before calling this.
 void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, ObjectExplorationContext& context, bool isParameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException)
 {
 	const char *pos = strchr(name, '^');
@@ -1972,7 +1977,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 						rslt = elem;
 						if (applyLengthOperator)
 						{
-							ApplyLengthOperator(rslt);
+							ApplyLengthOperator(rslt, true);
 						}
 					}
 					return;
@@ -2012,7 +2017,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 			rslt = var->GetValue();
 			if (applyLengthOperator)
 			{
-				ApplyLengthOperator(rslt);
+				ApplyLengthOperator(rslt, true);
 			}
 			return;
 		}
