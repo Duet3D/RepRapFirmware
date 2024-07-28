@@ -1942,7 +1942,7 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 	if (pos != nullptr)
 	{
 		// Indexing into a variable
-		const Variable *const var = vars->Lookup(name, pos - name);
+		const Variable *const var = vars->Lookup(name, pos - name, isParameter);
 		if (var != nullptr)
 		{
 			ExpressionValue val = var->GetValue();
@@ -2005,14 +2005,14 @@ void ExpressionParser::GetVariableValue(ExpressionValue& rslt, const VariableSet
 	}
 	else
 	{
-		const Variable *const var = vars->Lookup(name, strlen(name));
+		const Variable *const var = vars->Lookup(name, strlen(name), isParameter);
 		if (wantExists)
 		{
 			rslt.SetBool(var != nullptr);
 			return;
 		}
 
-		if (var != nullptr && (!isParameter || var->GetScope() < 0))
+		if (var != nullptr)
 		{
 			rslt = var->GetValue();
 			if (applyLengthOperator)

@@ -710,7 +710,7 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 	WriteLockedPointer<VariableSet> vset = (isGlobal)
 											? reprap.GetGlobalVariablesForWriting()
 												: WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables());
-	Variable * const v = vset->Lookup(varName.c_str());
+	Variable * const v = vset->Lookup(varName.c_str(), false);
 	if (v != nullptr)
 	{
 		// For now we don't allow an existing variable to be reassigned using a 'var' or 'global' statement. We may need to allow it for 'global' statements.
@@ -759,7 +759,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	} while (isalpha(c) || isdigit(c) || c == '_' );
 
 	// Look up the identifier
-	Variable * const var = vset->Lookup(varName.c_str());
+	Variable * const var = vset->Lookup(varName.c_str(), false);
 	if (var == nullptr)
 	{
 		throw ConstructParseException("unknown variable '%s'", varName.c_str());
