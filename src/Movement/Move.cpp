@@ -2118,7 +2118,13 @@ void Move::PhaseStepControlLoop() noexcept
 	{
 		DriveMovement * const dm = *dmp;
 
-		IterateLocalDrivers(dm->drive, [dm](uint8_t driver){
+		IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
+			if (dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver) == 0)
+			{
+				// Driver has been stopped (probably by Move::CheckEndstops() so we don't need to update it)
+				// TODO save the current motor position to set phaseOffset later
+				return;
+			}
 			dm->phaseStepControl.InstanceControlLoop(driver);
 		});
 
