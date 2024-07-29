@@ -247,7 +247,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "homed",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().IsAxisHomed(context.GetLastIndex())),								ObjectModelEntryFlags::none },
 	{ "jerk",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->GetInstantDv(context.GetLastIndex())), 1),				ObjectModelEntryFlags::none },
 	{ "letter",				OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetAxisLetters()[context.GetLastIndex()]),							ObjectModelEntryFlags::none },
-	{ "machinePosition",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().LiveMachineCoordinate(context.GetLastIndex()), 3),					ObjectModelEntryFlags::live },
+	{ "machinePosition",	OBJECT_MODEL_FUNC(self->LiveMachineCoordinate(context.GetLastIndex()), 3),										ObjectModelEntryFlags::live },
 	{ "max",				OBJECT_MODEL_FUNC(self->AxisMaximum(context.GetLastIndex()), 2),												ObjectModelEntryFlags::none },
 	{ "maxProbed",			OBJECT_MODEL_FUNC(self->axisMaximaProbed.IsBitSet(context.GetLastIndex())),										ObjectModelEntryFlags::none },
 	{ "microstepping",		OBJECT_MODEL_FUNC(self, 12),																					ObjectModelEntryFlags::none },
@@ -259,7 +259,7 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 #endif
 	{ "reducedAcceleration", OBJECT_MODEL_FUNC(InverseConvertAcceleration(self->Acceleration(context.GetLastIndex(), true)), 1),			ObjectModelEntryFlags::none },
 	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(context.GetLastIndex())), 1),					ObjectModelEntryFlags::none },
-	{ "stepsPerMm",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().DriveStepsPerMm(context.GetLastIndex()), 2),							ObjectModelEntryFlags::none },
+	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->DriveStepsPerMm(context.GetLastIndex()), 2),											ObjectModelEntryFlags::none },
 	{ "userPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetUserCoordinate(reprap.GetGCodes().GetCurrentMovementState(context), context.GetLastIndex()), 3), ObjectModelEntryFlags::live },
 	{ "visible",			OBJECT_MODEL_FUNC_NOSELF(context.GetLastIndex() < (int32_t)reprap.GetGCodes().GetVisibleAxes()),				ObjectModelEntryFlags::none },
 	{ "workplaceOffsets",	OBJECT_MODEL_FUNC_ARRAY(4),																						ObjectModelEntryFlags::none },
@@ -278,11 +278,11 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 #ifndef DUET_NG
 	{ "percentStstCurrent",	OBJECT_MODEL_FUNC((int32_t)(self->GetMotorCurrent(context.GetLastIndex(), 917))),														ObjectModelEntryFlags::none },
 #endif
-	{ "position",			OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetMove().LiveMachineCoordinate(ExtruderToLogicalDrive(context.GetLastIndex())), 1)),	ObjectModelEntryFlags::live },
-	{ "pressureAdvance",	OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetPressureAdvanceClocksForExtruder(context.GetLastIndex())/StepClockRate, 3),				ObjectModelEntryFlags::none },
-	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(ExpressionValue(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1)), 					ObjectModelEntryFlags::live },
-	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),					ObjectModelEntryFlags::none },
-	{ "stepsPerMm",			OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().DriveStepsPerMm(ExtruderToLogicalDrive(context.GetLastIndex())), 2),							ObjectModelEntryFlags::none },
+	{ "position",			OBJECT_MODEL_FUNC(self->LiveMachineCoordinate(ExtruderToLogicalDrive(context.GetLastIndex())), 1),						ObjectModelEntryFlags::live },
+	{ "pressureAdvance",	OBJECT_MODEL_FUNC(self->GetPressureAdvanceClocksForExtruder(context.GetLastIndex())/StepClockRate, 3),					ObjectModelEntryFlags::none },
+	{ "rawPosition",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetGCodes().GetRawExtruderTotalByDrive(context.GetLastIndex()), 1), 					ObjectModelEntryFlags::live },
+	{ "speed",				OBJECT_MODEL_FUNC(InverseConvertSpeedToMmPerMin(self->MaxFeedrate(ExtruderToLogicalDrive(context.GetLastIndex()))), 1),	ObjectModelEntryFlags::none },
+	{ "stepsPerMm",			OBJECT_MODEL_FUNC(self->DriveStepsPerMm(ExtruderToLogicalDrive(context.GetLastIndex())), 2),							ObjectModelEntryFlags::none },
 
 	// 11. move.extruders[].nonlinear members
 	{ "a",					OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].A, 3),									ObjectModelEntryFlags::none },
@@ -290,12 +290,12 @@ constexpr ObjectModelTableEntry Move::objectModelTable[] =
 	{ "upperLimit",			OBJECT_MODEL_FUNC(self->nonlinearExtrusion[context.GetLastIndex()].limit, 2),								ObjectModelEntryFlags::none },
 
 	// 12. move.axes[].microstepping members
-	{ "interpolated",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetMicrostepInterpolation(context.GetLastIndex())),				ObjectModelEntryFlags::none },
-	{ "value",				OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetMove().GetMicrostepping(context.GetLastIndex())),				ObjectModelEntryFlags::none },
+	{ "interpolated",		OBJECT_MODEL_FUNC(self->GetMicrostepInterpolation(context.GetLastIndex())),									ObjectModelEntryFlags::none },
+	{ "value",				OBJECT_MODEL_FUNC((int32_t)self->GetMicrostepping(context.GetLastIndex())),									ObjectModelEntryFlags::none },
 
 	// 13. move.extruders[].microstepping members
-	{ "interpolated",		OBJECT_MODEL_FUNC_NOSELF(reprap.GetMove().GetMicrostepInterpolation(ExtruderToLogicalDrive(context.GetLastIndex()))),	ObjectModelEntryFlags::none },
-	{ "value",				OBJECT_MODEL_FUNC_NOSELF((int32_t)reprap.GetMove().GetMicrostepping(ExtruderToLogicalDrive(context.GetLastIndex()))),	ObjectModelEntryFlags::none },
+	{ "interpolated",		OBJECT_MODEL_FUNC(self->GetMicrostepInterpolation(ExtruderToLogicalDrive(context.GetLastIndex()))),			ObjectModelEntryFlags::none },
+	{ "value",				OBJECT_MODEL_FUNC((int32_t)self->GetMicrostepping(ExtruderToLogicalDrive(context.GetLastIndex()))),			ObjectModelEntryFlags::none },
 
 	// 14. boards[0].drivers[]
 	{ "status",				OBJECT_MODEL_FUNC(self->GetLocalDriverStatus(context.GetLastIndex()).all),									ObjectModelEntryFlags::live },
@@ -1772,7 +1772,7 @@ bool Move::GetLiveMachineCoordinates(float coords[MaxAxes]) const noexcept
 		AtomicCriticalSectionLocker lock;											// to make sure we get a consistent set of coordinates
 		for (size_t i = 0; i < numTotalAxes; ++i)
 		{
-			currentMotorPositions[i] = dms[i].GetCurrentMotorPosition();
+			currentMotorPositions[i] = dms[i].currentMotorPosition;
 			if (dms[i].MotionPending())
 			{
 				motionPending = true;
@@ -1792,7 +1792,7 @@ void Move::UpdateLiveMachineCoordinates() const noexcept
 
 	for (size_t i = MaxAxesPlusExtruders - reprap.GetGCodes().GetNumExtruders(); i < MaxAxesPlusExtruders; ++i)
 	{
-		latestLiveCoordinates[i] = dms[i].GetCurrentMotorPosition() / driveStepsPerMm[i];
+		latestLiveCoordinates[i] = dms[i].currentMotorPosition / driveStepsPerMm[i];
 		if (dms[i].MotionPending())
 		{
 			motionPending = true;
@@ -2235,7 +2235,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 					}
 					else if (hitDetails.setAxisHigh)
 					{
-						reprap.GetMove().GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *homingDda);
+						GetKinematics().OnHomingSwitchTriggered(hitDetails.axis, true, driveStepsPerMm, *homingDda);
 						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
 					}
 				}
@@ -3644,7 +3644,7 @@ void Move::UpdateBacklashSteps() noexcept
 {
 	for (size_t i = 0; i < reprap.GetGCodes().GetTotalAxes(); ++i)
 	{
-		backlashSteps[i] = backlashMm[i] * reprap.GetMove().DriveStepsPerMm(i);
+		backlashSteps[i] = backlashMm[i] * DriveStepsPerMm(i);
 	}
 }
 
@@ -3809,7 +3809,7 @@ void Move::PollOneDriver(size_t driver) noexcept
 				}
 				else if (logOnStallDrivers.Intersects(mask))
 				{
-					reprap.GetPlatform().MessageF(WarningMessage, "Driver %u stalled at Z height %.2f\n", driver, (double)reprap.GetMove().LiveMachineCoordinate(Z_AXIS));
+					reprap.GetPlatform().MessageF(WarningMessage, "Driver %u stalled at Z height %.2f\n", driver, (double)LiveMachineCoordinate(Z_AXIS));
 				}
 			}
 		}
@@ -3910,8 +3910,7 @@ GCodeResult Move::UpdateRemoteStepsPerMmAndMicrostepping(AxesBitmap axesAndExtru
 	CanDriversData<StepsPerUnitAndMicrostepping> data;
 	axesAndExtruders.Iterate([this, &data](unsigned int axisOrExtruder, unsigned int count) noexcept
 								{
-									const Move& move = reprap.GetMove();
-									const StepsPerUnitAndMicrostepping driverData(move.DriveStepsPerMm(axisOrExtruder), move.GetRawMicrostepping(axisOrExtruder));
+									const StepsPerUnitAndMicrostepping driverData(DriveStepsPerMm(axisOrExtruder), GetRawMicrostepping(axisOrExtruder));
 									this->IterateRemoteDrivers(axisOrExtruder,
 																[&data, &driverData](DriverId driver) noexcept
 																{
@@ -4014,12 +4013,12 @@ GCodeResult Move::EutSetStepsPerMmAndMicrostepping(const CanMessageMultipleDrive
 							}
 							else
 							{
-								reprap.GetMove().SetDriveStepsPerMm(driver, msg.values[count].GetStepsPerUnit(), 0);
+								SetDriveStepsPerMm(driver, msg.values[count].GetStepsPerUnit(), 0);
 #if HAS_SMART_DRIVERS
 								const uint16_t rawMicrostepping = msg.values[count].GetMicrostepping();
 								const uint16_t microsteppingOnly = rawMicrostepping & 0x03FF;
 								const bool interpolate = (rawMicrostepping & 0x8000) != 0;
-								reprap.GetMove().SetMicrostepping(driver, microsteppingOnly, interpolate, reply);
+								SetMicrostepping(driver, microsteppingOnly, interpolate, reply);
 #endif
 							}
 						}
@@ -4221,7 +4220,7 @@ GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& 
 		{
 			const uint32_t thigh = SmartDrivers::GetRegister(drive, SmartDriverRegister::thigh);
 			bool bdummy;
-			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * reprap.GetMove().DriveStepsPerMm(drive));
+			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * DriveStepsPerMm(drive));
 			reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
 		}
 # endif
@@ -4241,7 +4240,7 @@ GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& 
 		{
 			const uint32_t tpwmthrs = SmartDrivers::GetRegister(drive, SmartDriverRegister::tpwmthrs);
 			bool bdummy;
-			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * reprap.GetMove().DriveStepsPerMm(drive));
+			const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * tpwmthrs * DriveStepsPerMm(drive));
 			const uint32_t pwmScale = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmScale);
 			const uint32_t pwmAuto = SmartDrivers::GetRegister(drive, SmartDriverRegister::pwmAuto);
 			const unsigned int pwmScaleSum = pwmScale & 0xFF;

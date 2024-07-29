@@ -717,7 +717,7 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 
 #if SUPPORT_CAN_EXPANSION
 
-// This is called when the 'drive' (i.e. axis) concerned has no local drivers and we are not checking endstops or Z probe.
+// This is called when the 'drive' (i.e. axis or extruder) concerned has no local drivers and we are not checking endstops or Z probe.
 // Instead of generating an interrupt for each step of the remote drive, generate interrupts only occasionally and at the end of each segment, to keep the axis position fairly up to date.
 // We must not call NewSegment significantly in advance of when the segment is due to start, to allow for segments being modified as new ones are added.
 // To make sure this is the case we schedule an interrupt at the end of each segment, so that a segment cannot be started before the previous one has completed.

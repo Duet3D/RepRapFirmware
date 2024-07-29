@@ -859,7 +859,7 @@ inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotor
 
 inline int32_t Move::GetLiveMotorPosition(size_t driver) const noexcept
 {
-	return dms[driver].GetCurrentMotorPosition();
+	return dms[driver].currentMotorPosition;
 }
 
 inline void Move::SetMotorPosition(size_t driver, int32_t pos) noexcept

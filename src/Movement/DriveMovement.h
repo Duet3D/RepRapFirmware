@@ -45,7 +45,6 @@ public:
 	bool CalcNextStepTime(uint32_t now) noexcept SPEED_CRITICAL;
 
 	void DebugPrint() const noexcept;
-	int32_t GetCurrentMotorPosition() const noexcept { return currentMotorPosition; }
 	bool StopDriver(int32_t& netStepsTaken) noexcept;					// if the driver is moving, stop it, update the position and pass back the net steps taken
 #if SUPPORT_REMOTE_COMMANDS
 	void StopDriverFromRemote() noexcept;
