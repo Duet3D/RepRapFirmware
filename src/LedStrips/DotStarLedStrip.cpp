@@ -21,10 +21,10 @@ GCodeResult DotStarLedStrip::Configure(GCodeBuffer& gb, const StringRef& reply, 
 	bool seen = false;
 	GCodeResult rslt = CommonConfigure(gb, reply, pinName, seen);
 
-	if (gb.Seen('V'))
+	if (gb.Seen('K'))
 	{
 		uint32_t order;
-		gb.TryGetLimitedUIValue('V', order, seen, (uint32_t)ColorOrder::count);
+		gb.TryGetLimitedUIValue('K', order, seen, (uint32_t)ColorOrder::count);
 		colorOrder = (ColorOrder)order;
 	}
 
