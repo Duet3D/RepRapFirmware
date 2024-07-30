@@ -1257,7 +1257,8 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 
 						const motioncalc_t delta = totalDistance * directionVector[drive] * move.DriveStepsPerMm(drive);
 
-						afterPrepare.drivesMoving.SetBit(drive);
+						// We generate segments even for nonlocal extruders in order to track extruder position
+						move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, segFlags);
 
 #if SUPPORT_CAN_EXPANSION
 						const DriverId driver = move.GetExtruderDriver(extruder);
@@ -1266,11 +1267,8 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 							// The MovementLinearShaped message requires the extrusion amount in steps to be passed as a float. The remote board adds the PA and handles fractional steps.
 							CanMotion::AddExtruderMovement(params, driver, delta, flags.usePressureAdvance);
 						}
-						else		// we don't generate local segments for remote extruders because we don't need to track their positions in real time
 #endif
-						{
-							move.AddLinearSegments(*this, drive, afterPrepare.moveStartTime, params, delta, segFlags);
-						}
+						afterPrepare.drivesMoving.SetBit(drive);
 					}
 				}
 			}
@@ -1294,7 +1292,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 			// This is especially important when using CAN-connected motors or endstops, because we rely on receiving "endstop changed" messages.
 			// Moves that check endstops are always run as isolated moves, so there can be no move in progress and the endstops must already be primed.
 			const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);				// shut out the step interrupt
-			(void)move.CheckEndstops(false);									// this may modify pending CAN moves
+			(void)move.CheckEndstops(false);											// this may modify pending CAN moves
 			RestoreBasePriority(oldPrio);
 		}
 
