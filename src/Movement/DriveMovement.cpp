@@ -723,20 +723,22 @@ pre(stepsTillRecalc == 0; segments != nullptr)
 // To make sure this is the case we schedule an interrupt at the end of each segment, so that a segment cannot be started before the previous one has completed.
 void DriveMovement::TakeStepsAndCalcStepTimeRarely(uint32_t clocksNow) noexcept
 {
-	MoveSegment *const currentSegment = segments;				// capture volatile variable
+	MoveSegment *currentSegment = segments;				// capture volatile variable
 	if (state == DMState::ending)
 	{
 		currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
 		distanceCarriedForwards += currentSegment->GetLength() - (motioncalc_t)netStepsThisSegment;
 		segments = currentSegment->GetNext();
 		MoveSegment::Release(currentSegment);
-		if (NewSegment(clocksNow) == nullptr || state == DMState::starting)
+		currentSegment = NewSegment(clocksNow);
+		if (currentSegment == nullptr || state == DMState::starting)
 		{
 			return;
 		}
 	}
 
-	const int32_t timeFromStart = (int32_t)(clocksNow - currentSegment->GetStartTime());
+	// We may be invoked slightly before the move started, so allow for that
+	const uint32_t timeFromStart = (uint32_t)max<int32_t>((int32_t)(clocksNow - currentSegment->GetStartTime()), 0);
 	currentMotorPosition = positionAtSegmentStart + lrintf((currentSegment->CalcU() + ((motioncalc_t)0.5 * currentSegment->GetA() * (motioncalc_t)timeFromStart)) * (motioncalc_t)timeFromStart + distanceCarriedForwards);
 	uint32_t targetTime;
 	if (currentSegment->GetDuration() <= timeFromStart + MoveTiming::MaxRemoteDriverPositionUpdateInterval)
