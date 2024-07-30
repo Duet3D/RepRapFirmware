@@ -47,6 +47,7 @@ public:
 	// Methods called by the motion system
 	void InstanceControlLoop(size_t driver) noexcept;
 	bool IsEnabled() const noexcept;
+	void UpdatePhaseOffset(size_t driver) noexcept;
 
 private:
 	// Constants private to this module
@@ -88,7 +89,8 @@ private:
 	StepTimer::Ticks maxControlLoopCallInterval;		// The maximum interval between the control loop being called
 
 	// Functions private to this module
-	float CalculateMotorCurrents(size_t driver) noexcept;
+	uint16_t CalculateStepPhase(size_t driver, uint32_t when) noexcept;
+	float CalculateMotorCurrents(size_t driver, uint32_t when) noexcept;
 	void ResetMonitoringVariables() noexcept;
 };
 

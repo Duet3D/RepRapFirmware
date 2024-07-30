@@ -362,12 +362,6 @@ Move::Move() noexcept
 	numActualDirectDrivers = NumDirectDrivers;						// assume they are all available until we know otherwise
 #endif
 
-#if USE_PHASE_STEPPING
-	for (size_t i = 0; i < NumDirectDrivers; i++)
-	{
-		netMicrostepsTaken[i] = 0.0;
-	}
-#endif
 
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
 	kinematics = Kinematics::Create(KinematicsType::cartesian);		// default to Cartesian
@@ -2086,19 +2080,14 @@ bool Move::EnableIfIdle(size_t driver) noexcept
 // Get the motor position in the current move so far, also speed and acceleration. Units are full steps and step clocks.
 bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
 {
+	const bool ret = dms[driver].GetCurrentMotion(when, mParams);
 	const float multiplier = ldexpf((GetDirectionValue(driver)) ? -1.0 : 1.0, -(int)SmartDrivers::GetMicrostepShift(driver));
-	if (dms[driver].GetCurrentMotion(when, mParams))
-	{
-		// Convert microsteps to full steps
-		mParams.position = (mParams.position) * multiplier;
-		mParams.speed *= multiplier;
-		mParams.acceleration *= multiplier;
-		return true;
-	}
 
-	// Here when there is no current move
-	mParams.position = mParams.speed = mParams.acceleration = 0.0;
-	return false;
+	// Convert microsteps to full steps
+	mParams.position *= multiplier;
+	mParams.speed *= multiplier;
+	mParams.acceleration *= multiplier;
+	return ret;
 }
 
 bool Move::SetStepMode(StepMode mode) noexcept
@@ -2118,11 +2107,12 @@ void Move::PhaseStepControlLoop() noexcept
 	{
 		DriveMovement * const dm = *dmp;
 
+		// CHECK: possibly we can move `reprap.GetMove().GetCurrentMotion(driver, when, mParams)` from once per driver to once per dm?
 		IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
-			if (dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver) == 0)
+			if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
 			{
 				// Driver has been stopped (probably by Move::CheckEndstops() so we don't need to update it)
-				// TODO save the current motor position to set phaseOffset later
+				dm->phaseStepControl.UpdatePhaseOffset(driver);
 				return;
 			}
 			dm->phaseStepControl.InstanceControlLoop(driver);

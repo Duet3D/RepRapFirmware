@@ -119,7 +119,7 @@ private:
 	int32_t netStepsThisSegment;						// the (signed) net number of steps in the current segment
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
-	motioncalc_t q, t0, p;								// the movement parameters of the current segment
+	motioncalc_t q, t0, p, u;							// the movement parameters of the current segment
 	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
 	motioncalc_t distanceCarriedForwards;				// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
 
@@ -178,6 +178,28 @@ inline bool DriveMovement::CalcNextStepTime(uint32_t now) noexcept
 // Caller must disable interrupts before calling this
 inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 {
+#if USE_PHASE_STEPPING
+	if (phaseStepControl.IsEnabled())
+	{
+		const MoveSegment *const seg = segments;
+		if (seg == nullptr)
+		{
+			return 0;
+		}
+		int32_t timeSinceStart = (int32_t)(StepTimer::GetMovementTimerTicks() - seg->GetStartTime());
+		if (timeSinceStart < 0)
+		{
+			return 0;
+		}
+
+		if ((uint32_t)timeSinceStart >= seg->GetDuration())
+		{
+			timeSinceStart = seg->GetDuration();
+		}
+
+		return lrintf((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart);
+	}
+#endif
 	return currentMotorPosition - positionAtSegmentStart;
 }
 
@@ -236,31 +258,33 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 	while (seg != nullptr)
 	{
 		int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
-		if (timeSinceStart < 0) break;
+		if (timeSinceStart < 0)
+		{
+			break;
+		}
 		if ((uint32_t)timeSinceStart >= seg->GetDuration())
 		{
 			if (phaseStepControl.IsEnabled())
 			{
+				currentMotorPosition += netStepsThisSegment;
 				MoveSegment *oldSeg = seg;
 				segments = seg = oldSeg->GetNext();
 				MoveSegment::Release(oldSeg);
+				seg = NewSegment(when);
 				continue;
 			}
-			else
-			{
-				timeSinceStart = seg->GetDuration();
-			}
+			timeSinceStart = seg->GetDuration();
 		}
 
-		const float u = seg->CalcU();
-		mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart;
+		mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)currentMotorPosition;
 		mParams.speed = u + seg->GetA() * timeSinceStart;
 		mParams.acceleration = seg->GetA();
 		return true;
 	}
 
 	// If we get here then no movement is taking place
-	mParams.position = mParams.speed = mParams.acceleration = 0.0;
+	mParams.position = (float)currentMotorPosition;
+	mParams.speed = mParams.acceleration = 0.0;
 	return false;
 }
 

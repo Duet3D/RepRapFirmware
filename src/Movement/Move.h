@@ -430,6 +430,7 @@ public:
 	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
 	bool SetStepMode(StepMode mode) noexcept;
 	StepMode GetStepMode() const noexcept { return currentStepMode; }
+	void InvertCurrentMotorSteps(size_t driver) noexcept;
 
 	void PhaseStepControlLoop() noexcept;
 #endif
@@ -643,7 +644,6 @@ private:
 #endif
 
 #if USE_PHASE_STEPPING
-	float netMicrostepsTaken[NumDirectDrivers];
 	StepMode currentStepMode;
 #endif
 
@@ -790,6 +790,7 @@ inline void Move::SetDirectionValue(size_t drive, bool dVal) noexcept
 	{
 		TaskCriticalSectionLocker lock;
 		directions[drive] = dVal;
+		InvertCurrentMotorSteps(drive);
 	}
 #else
 	directions[drive] = dVal;
@@ -983,6 +984,16 @@ inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t driv
 		return dms[drive].GetStepInterval(microstepShift);
 	}
 	return 0;
+}
+
+#endif
+
+#if USE_PHASE_STEPPING
+
+// Invert the current number of microsteps taken. Called when the driver direction control is changed.
+inline void Move::InvertCurrentMotorSteps(size_t driver) noexcept
+{
+	dms[driver].currentMotorPosition = -dms[driver].currentMotorPosition;
 }
 
 #endif

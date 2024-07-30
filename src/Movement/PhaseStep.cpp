@@ -103,8 +103,7 @@ void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 	minControlLoopCallInterval = min<StepTimer::Ticks>(minControlLoopCallInterval, timeElapsed);
 	maxControlLoopCallInterval = max<StepTimer::Ticks>(maxControlLoopCallInterval, timeElapsed);
 
-	reprap.GetMove().GetCurrentMotion(driver, loopCallTime - StepTimer::GetMovementDelay(), mParams);
-	float currentFraction = CalculateMotorCurrents(driver);
+	float currentFraction = CalculateMotorCurrents(driver, loopCallTime - StepTimer::GetMovementDelay());
 
 	// Update the statistics
 	if (currentFraction > periodMaxCurrentFraction)
@@ -126,8 +125,23 @@ bool PhaseStep::IsEnabled() const noexcept
 	return reprap.GetMove().IsPhaseSteppingEnabled();
 }
 
+void PhaseStep::UpdatePhaseOffset(size_t driver) noexcept
+{
+	AtomicCriticalSectionLocker lock;
+	const StepTimer::Ticks loopCallTime = StepTimer::GetTimerTicks();
+	uint16_t calculatedStepPhase = CalculateStepPhase(driver, loopCallTime - StepTimer::GetMovementDelay());
+	phaseOffset[driver] = (desiredStepPhase - (calculatedStepPhase - phaseOffset[driver])) % 4096u;
+}
+
+inline uint16_t PhaseStep::CalculateStepPhase(size_t driver, uint32_t when) noexcept
+{
+	reprap.GetMove().GetCurrentMotion(driver, when, mParams);
+	const uint16_t stepPhase = (uint16_t)llrintf(mParams.position * 1024.0);		// we use llrintf so that we can guarantee to convert the float operand to integer. We only care about the lowest 12 bits.
+	return (stepPhase + phaseOffset[driver]) % 4096u;
+}
+
 // Control the motor phase currents, returning the fraction of maximum current that we commanded
-inline float PhaseStep::CalculateMotorCurrents(size_t driver) noexcept
+inline float PhaseStep::CalculateMotorCurrents(size_t driver, uint32_t when) noexcept
 {
 	uint16_t commandedStepPhase;
 	float currentFraction;
@@ -139,8 +153,7 @@ inline float PhaseStep::CalculateMotorCurrents(size_t driver) noexcept
 	PIDATerm = mParams.acceleration * Ka * fsquare(scalingFactor);
 	PIDControlSignal = min<float>(fabsf(PIDVTerm) + fabsf(PIDATerm), 256.0);
 
-	const uint16_t stepPhase = (uint16_t)llrintf(mParams.position * 1024.0);		// we use llrintf so that we can guarantee to convert the float operand to integer. We only care about the lowest 12 bits.
-	commandedStepPhase = (stepPhase + phaseOffset[driver]) % 4096u;
+	commandedStepPhase = CalculateStepPhase(driver, when);
 	currentFraction = holdCurrentFraction + (1.0 - holdCurrentFraction) * min<float>(PIDControlSignal * (1.0/256.0), 1.0);
 
 	SetMotorPhase(driver, commandedStepPhase, currentFraction);

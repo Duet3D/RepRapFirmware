@@ -367,7 +367,8 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 				segmentStepLimit = 1 - netStepsThisSegment;
 			}
 			reverseStartStep = segmentStepLimit;
-			q = 0.0;											// to make the debug output consistent
+			u = seg->CalcU();
+			q = (motioncalc_t)0.0;											// to make the debug output consistent
 			state = DMState::cartLinear;
 		}
 		else
@@ -377,6 +378,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 			// Therefore 0.5 * t^2 + u * t/a + (distanceCarriedForwards - n)/a = 0
 			// Therefore t = -u/a +/- sqrt((u/a)^2 - 2 * (distanceCarriedForwards - n)/a)
 			// Calculate the t0, p and q coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q) and set up the initial direction
+			u = seg->CalcU();												// save for GetCurrentMotion()
 			motioncalc_t multiplier = std::copysign((motioncalc_t)1.0, seg->GetA());
 			newDirection = !std::signbit(seg->GetA());			// assume accelerating motion
 			if (t0 <= (motioncalc_t)0.0)
