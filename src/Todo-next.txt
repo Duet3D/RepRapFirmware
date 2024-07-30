@@ -57,6 +57,8 @@ Store segments per step clock not segments per second, avoids a multiplication
 
 Consider supporting separate X and Y IS parameters on Cartesian/Polar/SCARA machines and separate Z shaping parameters
 
+In closed loop code use a simple cast instead of lrintf when rounding required nmotor current, to save CPU time
+
 Bugs:
 - [done] "Tool was not driven because its temperatures were not high enough" in simulation mode
 - [done] In simulation mode at least, stops processing X driver segments, then runs out of memory
@@ -72,6 +74,6 @@ Bugs:
 - [done] After delta printer auto calibration Z position is wrong until machine is homed again
 - [done] Simulating a job doesn't work
 - [done] Christian reports that multiple drivers with independent endstops for an axis don't work, the drivers that finish early remain disabled
-- When starting a new print after finishing one we get a filament error
-- Andy S reports that in 3.6, extruder positions for extruders on tool boards remain stuck on zero
-- Report of unwatnted motion after 3-motor Z bed tramming, see https://forum.duet3d.com/topic/36187/z-axis-tramming-issues-with-3-6-0-alpha2-3
+- [done] When starting a new print after finishing one we get a filament error
+- [done] Andy S reports that in 3.6, extruder positions for extruders on tool boards remain stuck on zero
+- Report of unwanted motion after 3-motor Z bed tramming, see https://forum.duet3d.com/topic/36187/z-axis-tramming-issues-with-3-6-0-alpha2-3

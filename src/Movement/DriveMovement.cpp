@@ -59,17 +59,20 @@ void DriveMovement::DebugPrint() const noexcept
 	}
 }
 
+// Set the position of a motor. Only call this when the motor is not moving.
 void DriveMovement::SetMotorPosition(int32_t pos) noexcept
 {
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PrintTransforms))
 	{
 		debugPrintf("Changing drive %u pos from %" PRIi32 " to %" PRIi32 "\n", drive, currentMotorPosition, pos);
 	}
-	currentMotorPosition = pos;
+	currentMotorPosition = positionAtSegmentStart = pos;
 #if STEPS_DEBUG
 	positionRequested = (float)pos;
 #endif
 	ClearMovementPending();
+	movementAccumulator.store(0);
+	extruderPrinting = false;
 }
 
 // Calculate the initial speed given the duration, distance and acceleration
