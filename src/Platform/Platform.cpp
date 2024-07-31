@@ -792,7 +792,7 @@ void Platform::Spin() noexcept
 #if SUPPORT_REMOTE_COMMANDS
 	if (CanInterface::InExpansionMode())
 	{
-		if (StepTimer::IsSynced())
+		if (StepTimer::CheckSynced())
 		{
 			digitalWrite(DiagPin, XNor(DiagOnPolarity, StepTimer::GetMasterTime() & (1u << 19)) != 0);
 		}
