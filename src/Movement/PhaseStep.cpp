@@ -53,6 +53,19 @@ using std::numeric_limits;
 
 static uint16_t phaseOffset[MaxSmartDrivers] = { 0 };			// The amount by which the phase should be offset for each driver
 
+const char* TranslateStepMode(const StepMode mode)
+{
+	switch (mode)
+	{
+	case StepMode::stepDir:
+		return "step and direction";
+	case StepMode::phase:
+		return "phase stepping";
+	default:
+		return "unknown";
+	}
+}
+
 // Helper function to reset the 'monitoring variables' as defined above
 void PhaseStep::ResetMonitoringVariables() noexcept
 {

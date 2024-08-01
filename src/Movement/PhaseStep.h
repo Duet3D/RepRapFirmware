@@ -38,6 +38,8 @@ enum class StepMode
 	unknown
 };
 
+const char* TranslateStepMode(const StepMode mode);
+
 class PhaseStep
 {
 public:

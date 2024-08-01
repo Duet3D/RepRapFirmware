@@ -831,19 +831,18 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 // Deal with M970
 GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	StepMode mode = StepMode::phase;
-
-	if (gb.Seen('S'))
+	if (!gb.Seen('S'))
 	{
-		const uint32_t val = gb.GetUIValue();
-		if (val >= (uint32_t)StepMode::unknown)
-		{
-			reply.copy("Unknown step mode S=");
-			reply.catf("%lu", val);
-			return GCodeResult::error;
-		}
-		mode = (StepMode)val;
+		reply.printf("Current step mode = %s", TranslateStepMode(reprap.GetMove().GetStepMode()));
+		return GCodeResult::ok;
 	}
+	const uint32_t val = gb.GetLimitedUIValue('S', (uint32_t)StepMode::unknown);
+	if (val >= (uint32_t)StepMode::unknown)
+	{
+		reply.printf("Unknown step mode S=%lu", val);
+		return GCodeResult::error;
+	}
+	StepMode mode = (StepMode)val;
 	if (!reprap.GetMove().SetStepMode(mode))
 	{
 		reply.copy("Setting step mode failed");
