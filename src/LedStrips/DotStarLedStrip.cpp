@@ -8,6 +8,10 @@
 #include <LedStrips/DotStarLedStrip.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
+#if SUPPORT_REMOTE_COMMANDS
+# include <CanMessageGenericParser.h>
+#endif
+
 #if SUPPORT_LED_STRIPS && SUPPORT_DMA_DOTSTAR
 
 DotStarLedStrip::DotStarLedStrip() noexcept
@@ -48,6 +52,19 @@ GCodeResult DotStarLedStrip::Configure(CanMessageGenericParser& parser, const St
 {
 	bool seen = false;
 	GCodeResult rslt = CommonConfigure(parser, reply, seen, extra);
+
+	uint32_t order;
+	if (parser.GetUintParam('K', order))
+	{
+		if (order >= (uint32_t)ColorOrder::count)
+		{
+			reply.printf("Invalid color order K=%lu", order);
+			return GCodeResult::warning;
+		}
+		colorOrder = (ColorOrder)order;
+		seen = true;
+	}
+
 	if (seen)
 	{
 		if (!UsesDma())
@@ -82,11 +99,55 @@ GCodeResult DotStarLedStrip::HandleM150(CanMessageGenericParser& parser, const S
 		params.numLeds = numRemaining;
 	}
 
+	uint32_t data;
 # if USE_16BIT_SPI
 	// Swap bytes for 16-bit SPI
-	const uint32_t data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.blue & 255)) | ((params.green & 255) << 24) | ((params.red & 255) << 16);
+	switch (colorOrder)
+	{
+	case ColorOrder::BRG:
+		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.blue & 255)) | ((params.red & 255) << 24) | ((params.green & 255) << 16);
+		break;
+	case ColorOrder::RGB:
+		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.red & 255)) | ((params.green & 255) << 24) | ((params.blue & 255) << 16);
+		break;
+	case ColorOrder::GRB:	// no idea why but RBG and GRB behave the wrong way round in testing with 2 different LED strips so have just swapped them so it works in practice.
+		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.red & 255)) | ((params.blue & 255) << 24) | ((params.green & 255) << 16);
+		break;
+	case ColorOrder::GBR:
+		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.green & 255)) | ((params.blue & 255) << 24) | ((params.red & 255) << 16);
+		break;
+	case ColorOrder::RBG:	// see above note about GRB
+		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.green & 255)) | ((params.red & 255) << 24) | ((params.blue & 255) << 16);
+		break;
+	case ColorOrder::BGR:
+	default:
+		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.blue & 255)) | ((params.green & 255) << 24) | ((params.red & 255) << 16);
+		break;
+	}
 # else
-	const uint32_t data = (params.brightness >> 3) | 0xE0 | ((params.blue & 255) << 8) | ((params.green & 255) << 16) | ((params.red & 255) << 24);
+	// Untested, might suffer from same RBG/GRB issue as above
+	switch (colorOrder)
+	{
+	case ColorOrder::BRG:
+		data = (params.brightness >> 3) | 0xE0 | ((params.blue & 255) << 8) | ((params.red & 255) << 16) | ((params.green & 255) << 24);
+		break;
+	case ColorOrder::RGB:
+		data = (params.brightness >> 3) | 0xE0 | ((params.red & 255) << 8) | ((params.green & 255) << 16) | ((params.blue & 255) << 24);
+		break;
+	case ColorOrder::RBG:
+		data = (params.brightness >> 3) | 0xE0 | ((params.red & 255) << 8) | ((params.blue & 255) << 16) | ((params.green & 255) << 24);
+		break;
+	case ColorOrder::GBR:
+		data = (params.brightness >> 3) | 0xE0 | ((params.green & 255) << 8) | ((params.blue & 255) << 16) | ((params.red & 255) << 24);
+		break;
+	case ColorOrder::GRB:
+		data = (params.brightness >> 3) | 0xE0 | ((params.green & 255) << 8) | ((params.red & 255) << 16) | ((params.blue & 255) << 24);
+		break;
+	case ColorOrder::BGR:
+	default:
+		data = (params.brightness >> 3) | 0xE0 | ((params.blue & 255) << 8) | ((params.green & 255) << 16) | ((params.red & 255) << 24);
+		break;
+	}
 # endif
 	return SendDotStarData(data, params.numLeds, params.following);
 }
@@ -125,13 +186,13 @@ GCodeResult DotStarLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply)
 	case ColorOrder::RGB:
 		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.red & 255)) | ((params.green & 255) << 24) | ((params.blue & 255) << 16);
 		break;
-	case ColorOrder::RBG:
+	case ColorOrder::GRB:	// no idea why but RBG and GRB behave the wrong way round in testing with 2 different LED strips so have just swapped them so it works in practice.
 		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.red & 255)) | ((params.blue & 255) << 24) | ((params.green & 255) << 16);
 		break;
 	case ColorOrder::GBR:
 		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.green & 255)) | ((params.blue & 255) << 24) | ((params.red & 255) << 16);
 		break;
-	case ColorOrder::GRB:
+	case ColorOrder::RBG:	// see above note about GRB
 		data = ((params.brightness & 0xF8) << 5) | (0xE0 << 8) | ((params.green & 255)) | ((params.red & 255) << 24) | ((params.blue & 255) << 16);
 		break;
 	case ColorOrder::BGR:
@@ -140,6 +201,7 @@ GCodeResult DotStarLedStrip::HandleM150(GCodeBuffer &gb, const StringRef &reply)
 		break;
 	}
 # else
+	// Untested, might suffer from same RBG/GRB issue as above
 	switch (colorOrder)
 	{
 	case ColorOrder::BRG:
