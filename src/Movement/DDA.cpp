@@ -1123,10 +1123,6 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 	params.SetFromDDA(*this);
 	clocksNeeded = params.TotalClocks();
 
-	// Copy the unshaped acceleration and deceleration back to the DDA because ManageLaserPower uses them
-	acceleration = params.acceleration;
-	deceleration = params.deceleration;
-
 	const uint32_t now = StepTimer::GetMovementTimerTicks();
 	afterPrepare.moveStartTime =  (prev->state == committed && (int32_t)(prev->afterPrepare.moveStartTime + prev->clocksNeeded - now) >= 0)
 									? prev->afterPrepare.moveStartTime + prev->clocksNeeded		// this move follows directly after the previous one
