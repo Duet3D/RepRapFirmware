@@ -57,7 +57,11 @@ constexpr bool DefaultStallDetectFiltered = false;
 constexpr unsigned int DefaultMinimumStepsPerSecond = 200;	// for stall detection: 1 rev per second assuming 1.8deg/step, as per the TMC5160 datasheet
 constexpr uint32_t DefaultTcoolthrs = 2000;					// max interval between 1/256 microsteps for stall detection to be enabled
 constexpr uint32_t DefaultThigh = 200;
+#if USE_PHASE_STEPPING
+constexpr size_t TmcTaskStackWords = 430;					// we need extra stack to handle phase stepping (amount not calculated yet, just taken from 1HCL)
+#else
 constexpr size_t TmcTaskStackWords = 140;					// with 100 stack words, deckingman's M122 on the main board after a major axis shift showed just 10 words left
+#endif
 constexpr uint32_t TmcClockSpeed = 12000000;				// the rate at which the TMC driver is clocked, internally or externally
 
 #if TMC_TYPE == 5130
@@ -768,13 +772,18 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 
 bool TmcDriverState::EnablePhaseStepping(bool enable)
 {
+	bool ret = false;
 	if (enable)
 	{
 		UpdateRegister(WriteGConf, (writeRegisters[WriteGConf] & ~GCONF_STEALTHCHOP) | GCONF_DIRECT_MODE);
-		UpdateCurrent();		// when entering direct mode we need to update the standstill current
-		return true;
+		ret = true;;
 	}
-	return SetDriverMode((unsigned int)currentMode);
+	else
+	{
+		ret = SetDriverMode((unsigned int)currentMode);
+	}
+	UpdateCurrent();		// when entering direct mode we need to update the standstill current
+	return ret;
 }
 
 #endif
@@ -813,14 +822,22 @@ void TmcDriverState::UpdateCurrent() noexcept
 	}
 
 	// At high motor currents, limit the standstill current fraction to avoid overheating particular pairs of mosfets. Avoid dividing by zero if motorCurrent is zero.
+	uint32_t iHold;
 #if USE_PHASE_STEPPING
-	const uint32_t iHold = iRun;
-#else
+	if (reprap.GetMove().IsPhaseSteppingEnabled())
+	{
+		iHold = iRun;
+	}
+	else
+	{
+#endif
 	constexpr uint32_t MaxStandstillCurrentTimes256 = 256 * (uint32_t)MaximumStandstillCurrent;
 	const uint16_t limitedStandstillCurrentFraction = (motorCurrent * standstillCurrentFraction <= MaxStandstillCurrentTimes256)
 														? standstillCurrentFraction
 															: (uint16_t)(MaxStandstillCurrentTimes256/motorCurrent);
-	const uint32_t iHold = (iRun * limitedStandstillCurrentFraction)/256;
+	 iHold = (iRun * limitedStandstillCurrentFraction)/256;
+#if USE_PHASE_STEPPING
+	}
 #endif
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHold << IHOLDIRUN_IHOLD_SHIFT));

@@ -2102,6 +2102,10 @@ bool Move::SetStepMode(StepMode mode) noexcept
 
 void Move::PhaseStepControlLoop() noexcept
 {
+	if (!IsPhaseSteppingEnabled())
+	{
+		return;
+	}
 	DriveMovement **dmp = &activeDMs;
 	while (*dmp != nullptr)
 	{
@@ -2111,8 +2115,11 @@ void Move::PhaseStepControlLoop() noexcept
 		IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
 			if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
 			{
-				// Driver has been stopped (probably by Move::CheckEndstops() so we don't need to update it)
-				dm->phaseStepControl.UpdatePhaseOffset(driver);
+				if (likely(dm->state > DMState::starting))
+				{
+					// Driver has been stopped (probably by Move::CheckEndstops() so we don't need to update it)
+					dm->phaseStepControl.UpdatePhaseOffset(driver);
+				}
 				return;
 			}
 			dm->phaseStepControl.InstanceControlLoop(driver);
