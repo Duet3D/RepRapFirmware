@@ -10,7 +10,7 @@
 
 #include <RepRapFirmware.h>
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 
 # include <Platform/RepRap.h>
 # include <General/NamedEnum.h>

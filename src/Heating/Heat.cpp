@@ -41,7 +41,8 @@ Licence: GPL
 # include <CanId.h>
 # include <CanMessageFormats.h>
 # include <CanMessageBuffer.h>
-# include "CAN/CanInterface.h"
+# include <CAN/CanInterface.h>
+# include <CAN/ExpansionManager.h>
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -416,7 +417,14 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 					}
 				}
 #if SUPPORT_CAN_EXPANSION
-				if (sensorsFound != 0)							// don't send an empty report
+				if (sensorsFound != 0												// don't send an empty report
+					&& (
+# if SUPPORT_REMOTE_COMMANDS
+						CanInterface::InExpansionMode() ||
+# endif
+						reprap.GetExpansion().GetNumExpansionBoards() != 0			// don't try to broadcast main board sensors if there are no expansion boards
+					   )
+				   )
 				{
 					buf.dataLength = msg->GetActualDataLength(sensorsFound);
 					CanInterface::SendBroadcastNoFree(&buf);

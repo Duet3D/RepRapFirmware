@@ -826,7 +826,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 
 #endif
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 
 // Deal with M970
 GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)

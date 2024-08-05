@@ -54,7 +54,8 @@ public:
 	void AppendDirectionPortName(const StringRef& reply) const noexcept;
 
 	GCodeResult SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, const uint16_t *data) noexcept;
-	GCodeResult ReadModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, uint16_t *data) noexcept;
+	GCodeResult ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, uint16_t *data) noexcept
+		pre(function == 3 || function == 4);
 	GCodeResult CheckModbusResult() noexcept;
 
 	void TxEndedCallback() noexcept;

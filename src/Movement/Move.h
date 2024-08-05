@@ -24,7 +24,7 @@
 #include <Math/Deviation.h>
 #include <Hardware/IoPorts.h>
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 #include <Movement/PhaseStep.h>
 #endif
 
@@ -424,7 +424,7 @@ public:
 	uint32_t GetStepInterval(size_t drive, uint32_t microstepShift) const noexcept;			// Get the current step interval for this axis or extruder
 #endif
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 	bool IsPhaseSteppingEnabled() const noexcept { return currentStepMode == StepMode::phase; }
 	bool EnableIfIdle(size_t driver) noexcept;										// if the driver is idle, enable it; return true if driver enabled on return
 	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
@@ -643,7 +643,7 @@ private:
 	bool driverErrPinsActiveLow;
 #endif
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 	StepMode currentStepMode;
 #endif
 
@@ -784,8 +784,8 @@ inline void Move::AdjustNumDrivers(size_t numDriversNotAvailable) noexcept
 
 inline void Move::SetDirectionValue(size_t drive, bool dVal) noexcept
 {
-#if USE_PHASE_STEPPING
-		// We must prevent the tmc task loop fetching the current position while we are changing the direction
+#if SUPPORT_PHASE_STEPPING
+	// We must prevent the tmc task loop fetching the current position while we are changing the direction
 	if (directions[drive] != dVal)
 	{
 		TaskCriticalSectionLocker lock;
@@ -888,7 +888,7 @@ inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotor
 
 inline int32_t Move::GetLiveMotorPosition(size_t driver) const noexcept
 {
-	return dms[driver].GetCurrentMotorPosition();
+	return dms[driver].currentMotorPosition;
 }
 
 inline void Move::SetMotorPosition(size_t driver, int32_t pos) noexcept
@@ -915,7 +915,7 @@ inline float Move::GetPressureAdvanceClocksForExtruder(size_t extruder) const no
 // Base priority must be >= NvicPriorityStep when calling this
 inline __attribute__((always_inline)) bool Move::ScheduleNextStepInterrupt() noexcept
 {
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 	if (IsPhaseSteppingEnabled())
 	{
 		return false;
@@ -988,7 +988,7 @@ inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t driv
 
 #endif
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 
 // Invert the current number of microsteps taken. Called when the driver direction control is changed.
 inline void Move::InvertCurrentMotorSteps(size_t driver) noexcept

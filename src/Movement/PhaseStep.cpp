@@ -31,7 +31,7 @@
 
 #include "PhaseStep.h"
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 
 using std::atomic;
 using std::numeric_limits;

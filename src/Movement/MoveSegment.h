@@ -91,6 +91,9 @@ public:
 	// Get the initial speed
 	motioncalc_t CalcU() const noexcept { return distance/(motioncalc_t)duration - 0.5 * a * (motioncalc_t)duration; }
 
+	// Get the initial speed assuming this move has no acceleration
+	motioncalc_t CalcLinearU() const noexcept { return distance/(motioncalc_t)duration; }
+
 	// Get the reciprocal of the initial speed assuming this move has no acceleration
 	motioncalc_t CalcLinearRecipU() const noexcept pre(a == 0.0) { return (motioncalc_t)duration/distance; }
 

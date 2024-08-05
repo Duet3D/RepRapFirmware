@@ -57,7 +57,7 @@ constexpr bool DefaultStallDetectFiltered = false;
 constexpr unsigned int DefaultMinimumStepsPerSecond = 200;	// for stall detection: 1 rev per second assuming 1.8deg/step, as per the TMC5160 datasheet
 constexpr uint32_t DefaultTcoolthrs = 2000;					// max interval between 1/256 microsteps for stall detection to be enabled
 constexpr uint32_t DefaultThigh = 200;
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 constexpr size_t TmcTaskStackWords = 430;					// we need extra stack to handle phase stepping (amount not calculated yet, just taken from 1HCL)
 #else
 constexpr size_t TmcTaskStackWords = 140;					// with 100 stack words, deckingman's M122 on the main board after a major axis shift showed just 10 words left
@@ -76,7 +76,7 @@ constexpr float RecipFullScaleCurrent = Tmc5160SenseResistor/325.0;		// 1.0 divi
 // - too high and polling the driver chips takes too much of the CPU time
 // - too low and we won't detect stalls quickly enough
 // TODO use the DIAG outputs to detect stalls instead
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 constexpr uint32_t DriversSpiClockFrequency = 4000000;		// 4MHz SPI clock, this is the maximum rate the TMC5160/2160 support
 constexpr uint32_t DriversDirectSleepMicroseconds = 125;	// how long the phase stepping task sleeps for in each cycle. Max SPI message frequency is ~16.7 kHz
 															// there is 1 write + 1 read per motor current setting.
@@ -315,7 +315,7 @@ public:
 	void WriteAll() noexcept;
 	bool SetMicrostepping(uint32_t shift, bool interpolate) noexcept;
 	unsigned int GetMicrostepping(bool& interpolation) const noexcept;
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 	unsigned int GetMicrostepShift() const noexcept { return microstepShiftFactor; }
 	uint16_t GetMicrostepPosition() const noexcept { return readRegisters[ReadMsCnt] & 1023; }
 	void SetXdirect(uint32_t regVal) noexcept;
@@ -374,7 +374,7 @@ private:
 	static constexpr unsigned int Write5160DrvConf = 9;		// driver timing
 	static constexpr unsigned int Write5160GlobalScaler = 10; // motor current scaling
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 	static constexpr unsigned int Write5160XDirect = 11;
 	static constexpr unsigned int NumWriteRegisters = 12;	// the number of registers that we write to
 #else
@@ -444,7 +444,7 @@ const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 	REGNUM_5160_SHORTCONF,
 	REGNUM_5160_DRVCONF,
 	REGNUM_5160_GLOBAL_SCALER,
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 	REGNUM_2160_X_DIRECT
 #endif
 #endif
@@ -603,7 +603,7 @@ bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal) noexc
 	}
 }
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 
 inline void TmcDriverState::SetXdirect(uint32_t regVal) noexcept
 {
@@ -768,7 +768,7 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 				: DriverMode::constantOffTime;
 }
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 
 bool TmcDriverState::EnablePhaseStepping(bool enable)
 {
@@ -823,7 +823,7 @@ void TmcDriverState::UpdateCurrent() noexcept
 
 	// At high motor currents, limit the standstill current fraction to avoid overheating particular pairs of mosfets. Avoid dividing by zero if motorCurrent is zero.
 	uint32_t iHold;
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 	if (reprap.GetMove().IsPhaseSteppingEnabled())
 	{
 		iHold = iRun;
@@ -836,7 +836,7 @@ void TmcDriverState::UpdateCurrent() noexcept
 														? standstillCurrentFraction
 															: (uint16_t)(MaxStandstillCurrentTimes256/motorCurrent);
 	 iHold = (iRun * limitedStandstillCurrentFraction)/256;
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 	}
 #endif
 	UpdateRegister(WriteIholdIrun,
@@ -1092,7 +1092,7 @@ static __nocache volatile uint8_t sendData[5 * MaxSmartDrivers];
 static __nocache volatile uint8_t rcvData[5 * MaxSmartDrivers];
 
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 static volatile uint8_t altRcvData[5 * MaxSmartDrivers];
 static uint32_t lastWakeupTime = 0;
 static StepTimer tmcTimer;
@@ -1100,7 +1100,7 @@ static StepTimer tmcTimer;
 
 static volatile DmaCallbackReason dmaFinishedReason;
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 // Set up the PDC or DMAC to send a register and receive the status, but don't enable it yet
 // if useAltRcvData is true, the response will be saved to altRcvData, otherwise rcvData will be used.
 static void SetupDMA(bool useAltRcvData) noexcept
@@ -1168,7 +1168,7 @@ static void SetupDMA() noexcept
 						| XDMAC_CC_PERID(TMC51xx_DmaRxPerid);
 		p_cfg.mbr_ubc = ARRAY_SIZE(rcvData);
 		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(USART_TMC51xx->US_RHR));
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 		p_cfg.mbr_da = reinterpret_cast<uint32_t>((useAltRcvData) ? altRcvData : rcvData);
 #else
 		p_cfg.mbr_da = reinterpret_cast<uint32_t>(rcvData);
@@ -1297,7 +1297,7 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 #endif
 	dmaFinishedReason = reason;
 	fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 	// When in direct node we send the motor currents every time.
 	// In order to keep the read registers up to data, send a read request after the write request.
 	// We don't care about the response from setting the motor currents so that is written to altRcvData so as to not overwrite rcvData
@@ -1348,7 +1348,7 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 #endif
 }
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 static void TmcTimerCallback(CallbackParameter) noexcept
 {
 	tmcTask.GiveFromISR(NotifyIndices::Tmc);
@@ -1357,7 +1357,7 @@ static void TmcTimerCallback(CallbackParameter) noexcept
 
 extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 {
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 	tmcTimer.SetCallback(TmcTimerCallback, (CallbackParameter)0);
 #endif
 	bool timedOut = true;
@@ -1366,7 +1366,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		if (driversState == DriversState::noPower)
 		{
 			TaskBase::TakeIndexed(NotifyIndices::Tmc);
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 			lastWakeupTime = StepTimer::GetTimerTicks();
 #endif
 		}
@@ -1409,7 +1409,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			}
 		}
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 		// Set the motor phase currents before we write them
 		reprap.GetMove().PhaseStepControlLoop();
 #endif
@@ -1429,7 +1429,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 		{
 			TaskCriticalSectionLocker lock;
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 			SetupDMA(false);
 #else
 			SetupDMA();											// set up the PDC or DMAC
@@ -1463,7 +1463,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			{
 				driverStates[drive].TransferFailed();
 			}
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 			lastWakeupTime = StepTimer::GetTimerTicks();
 #endif
 		}
@@ -1659,7 +1659,7 @@ unsigned int SmartDrivers::GetMicrostepping(size_t driver, bool& interpolation) 
 	return 1;
 }
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 
 bool SmartDrivers::EnablePhaseStepping(bool enable) noexcept
 {

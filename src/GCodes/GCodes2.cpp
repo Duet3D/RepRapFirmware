@@ -4667,7 +4667,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				result = RaiseEvent(gb, reply);
 				break;
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 			case 970:	// configure step mode (phase stepping)
 				result = ConfigureStepMode(gb, reply);
 				break;

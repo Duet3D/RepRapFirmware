@@ -228,7 +228,8 @@ void StepTimer::DisableTimerInterrupt() noexcept
 
 #if SUPPORT_REMOTE_COMMANDS
 
-/*static*/ bool StepTimer::IsSynced() noexcept
+// Check whether we have synced and received a clock sync message recently
+/*static*/ bool StepTimer::CheckSynced() noexcept
 {
 	if (syncCount == MaxSyncCount)
 	{
@@ -240,6 +241,12 @@ void StepTimer::DisableTimerInterrupt() noexcept
 			++numTimeoutResyncs;
 		}
 	}
+	return syncCount == MaxSyncCount;
+}
+
+// Check whether we have synced
+/*static*/ bool StepTimer::IsSynced() noexcept
+{
 	return syncCount == MaxSyncCount;
 }
 

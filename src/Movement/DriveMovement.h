@@ -13,11 +13,11 @@
 #include "MoveSegment.h"
 #include "ExtruderShaper.h"
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 #include <Movement/PhaseStep.h>
 #endif
 
-#define STEPS_DEBUG			(1)
+#define STEPS_DEBUG					(1)
 
 class PrepParams;
 
@@ -37,6 +37,21 @@ enum class DMState : uint8_t
 	cartDecelReverse,								// linear decelerating motion, reversed
 };
 
+#if SUPPORT_PHASE_STEPPING
+
+// Temporarily(?) define these here so that we can check that compilation succeeds
+// Struct to pass data back to the phase stepping code
+struct MotionParameters
+{
+	float position = 0.0;
+	float speed = 0.0;
+	float acceleration = 0.0;
+};
+
+extern bool IsPhaseSteppingEnabled() noexcept;		//TODO remove this
+
+#endif
+
 // This class describes a single movement of one drive
 class DriveMovement
 {
@@ -49,7 +64,6 @@ public:
 	bool CalcNextStepTime(uint32_t now) noexcept SPEED_CRITICAL;
 
 	void DebugPrint() const noexcept;
-	int32_t GetCurrentMotorPosition() const noexcept { return currentMotorPosition; }
 	bool StopDriver(int32_t& netStepsTaken) noexcept;					// if the driver is moving, stop it, update the position and pass back the net steps taken
 #if SUPPORT_REMOTE_COMMANDS
 	void StopDriverFromRemote() noexcept;
@@ -67,12 +81,11 @@ public:
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
 #endif
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 	// Get the current position relative to the start of this move, speed and acceleration. Units are microsteps and step clocks.
 	// Return true if this drive is moving. Segments are advanced as necessary.
 	bool GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept;
 #endif
-
 
 	void ClearMovementPending() noexcept;
 
@@ -119,7 +132,10 @@ private:
 	int32_t netStepsThisSegment;						// the (signed) net number of steps in the current segment
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
-	motioncalc_t q, t0, p, u;							// the movement parameters of the current segment
+	motioncalc_t q, t0, p;								// the movement parameters of the current segment
+#if SUPPORT_PHASE_STEPPING
+	motioncalc_t u;										// the initial speed of this segment
+#endif
 	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
 	motioncalc_t distanceCarriedForwards;				// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
 
@@ -142,7 +158,7 @@ private:
 
 	bool extruderPrinting;								// true if this is an extruder and the most recent segment started was a printing move
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 	PhaseStep phaseStepControl;
 #endif
 };
@@ -178,7 +194,7 @@ inline bool DriveMovement::CalcNextStepTime(uint32_t now) noexcept
 // Caller must disable interrupts before calling this
 inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 {
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 	if (phaseStepControl.IsEnabled())
 	{
 		const MoveSegment *const seg = segments;
@@ -246,29 +262,29 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 
 #endif
 
-#if USE_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING
 
 // Get the current position relative to the start of this segment, speed and acceleration. Units are microsteps and step clocks.
 // Return true if this drive is moving. Segments are advanced as necessary if we are in closed loop mode.
 // Inlined because it is only called from one place
 inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept
 {
-	AtomicCriticalSectionLocker lock;			// we don't want 'segments' changing while we do this
+	AtomicCriticalSectionLocker lock;								// we don't want 'segments' changing while we do this
 	MoveSegment *seg = segments;
 	while (seg != nullptr)
 	{
 		int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
 		if (timeSinceStart < 0)
 		{
-			break;
+			break;													// segment isn't due to start yet
 		}
-		if ((uint32_t)timeSinceStart >= seg->GetDuration())
+		if ((uint32_t)timeSinceStart >= seg->GetDuration())			// if segment should have finished by now
 		{
-			if (phaseStepControl.IsEnabled())
+			if (IsPhaseSteppingEnabled())							//TODO implement this
 			{
 				currentMotorPosition += netStepsThisSegment;
 				MoveSegment *oldSeg = seg;
-				segments = seg = oldSeg->GetNext();
+				segments = oldSeg->GetNext();
 				MoveSegment::Release(oldSeg);
 				seg = NewSegment(when);
 				continue;
@@ -288,6 +304,6 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 	return false;
 }
 
-#endif
+#endif	// SUPPORT_CLOSED_LOOP
 
 #endif /* DRIVEMOVEMENT_H_ */

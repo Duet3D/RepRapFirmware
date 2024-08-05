@@ -373,7 +373,14 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 
 			case CanMessageType::movementLinearShaped:
 				//TODO check seq
-				reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinearShaped);
+				if (StepTimer::IsSynced())
+				{
+					reprap.GetMove().AddMoveFromRemote(buf->msg.moveLinearShaped);
+				}
+				else
+				{
+					CanInterface::LogIgnoredMovementMessage();
+				}
 				return;							// no reply needed
 
 			case CanMessageType::stopMovement:

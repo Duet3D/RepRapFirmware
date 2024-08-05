@@ -230,9 +230,12 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_st
 
 // Read some Modbus registers. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the command.
 // After receiving the GCodeResult::ok response the caller must call CheckModbusResult until it doesn't return GCodeResult::notFinished.
-GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, uint16_t *data) noexcept
+GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, uint16_t *data) noexcept
 {
-	if (p_numRegisters == 0 || p_numRegisters > MaxModbusRegisters)
+	if (   p_numRegisters == 0
+		|| p_numRegisters > MaxModbusRegisters
+		|| (p_function != (uint8_t)ModbusFunction::readHoldingRegisters && p_function != (uint8_t)ModbusFunction::readInputRegisters)
+	   )
 	{
 		return GCodeResult::badOrMissingParameter;
 	}
@@ -249,7 +252,7 @@ GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint16_t p_st
 
 	slaveAddress = p_slaveAddress;
 	ModbusWriteByte(slaveAddress);
-	function = ModbusFunction::readInputRegisters;
+	function = (ModbusFunction)p_function;
 	ModbusWriteByte((uint8_t)function);
 	startRegister = p_startRegister;
 	ModbusWriteWord(startRegister);

@@ -77,10 +77,14 @@ static uint16_t longestWaitMessageType = 0;
 
 static uint32_t peakTimeSyncTxDelay = 0;
 
+#if SUPPORT_REMOTE_COMMANDS
+static unsigned int messagesIgnored = 0;
+#endif
+
 // Debug
 static unsigned int goodTimeStamps = 0;
 static unsigned int badTimeStamps = 0;
-static unsigned int timeSyncMessagesSent = -0;
+static unsigned int timeSyncMessagesSent = 0;
 // End debug
 
 static volatile uint16_t timeSyncTxTimeStamp;
@@ -363,6 +367,11 @@ bool CanInterface::InExpansionMode() noexcept
 bool CanInterface::InTestMode() noexcept
 {
 	return inTestMode;
+}
+
+void CanInterface::LogIgnoredMovementMessage() noexcept
+{
+	++messagesIgnored;
 }
 
 static void ReInit() noexcept
@@ -1406,8 +1415,21 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 	{
 		CanDevice::CanStats stats;
 		can0dev->GetAndClearStats(stats);
-		p.MessageF(mtype, "Messages queued %u, received %u, lost %u, errs %u, boc %u\n", stats.messagesQueuedForSending, stats.messagesReceived, stats.messagesLost, stats.protocolErrors, stats.busOffCount);
+		p.MessageF(mtype, "Messages queued %u, received %u, lost %u, "
+#if SUPPORT_REMOTE_COMMANDS
+							"ignored %u, "
+#endif
+							"errs %u, boc %u\n",
+							stats.messagesQueuedForSending, stats.messagesReceived, stats.messagesLost,
+#if SUPPORT_REMOTE_COMMANDS
+							messagesIgnored,
+#endif
+							stats.protocolErrors, stats.busOffCount);
 	}
+
+#if SUPPORT_REMOTE_COMMANDS
+	messagesIgnored = 0;
+#endif
 
 	p.MessageF(mtype,
 				"Longest wait %" PRIu32 "ms for reply type %u, peak Tx sync delay %" PRIu32
@@ -1422,6 +1444,7 @@ void CanInterface::Diagnostics(MessageType mtype) noexcept
 					, timeSyncMessagesSent, goodTimeStamps, badTimeStamps
 	//end debug
 				);
+
 	String<StringLength100> str;
 	char c = ' ';
 	for (unsigned int& txt : txTimeouts)
