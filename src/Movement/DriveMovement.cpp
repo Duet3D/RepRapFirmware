@@ -306,6 +306,7 @@ finished:
 // Set up to schedule the first segment, returning true if an interrupt for this DM is needed
 bool DriveMovement::ScheduleFirstSegment() noexcept
 {
+	directionChanged = true;						// force the direction to be set
 	const uint32_t now = StepTimer::GetMovementTimerTicks();
 	if (NewSegment(now) != nullptr)
 	{
@@ -445,9 +446,9 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		{
 			if (newDirection != direction)
 			{
-				direction = newDirection;
 				directionChanged = true;
 			}
+			direction = newDirection;					// we must ALWAYS store this even if the direction doesn't appear to have changed in case directionChanged has been set externally
 
 			// Unless we're possibly in the middle of a homing move, re-enable all drivers for this axis
 			if (!segmentFlags.checkEndstops)

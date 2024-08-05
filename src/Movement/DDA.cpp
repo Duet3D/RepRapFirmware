@@ -507,6 +507,7 @@ bool DDA::InitLeadscrewMove(DDARing& ring, float feedrate, const float adjustmen
 	// 3. Store some values
 	flags.all = 0;
 	flags.isLeadscrewAdjustmentMove = true;
+	flags.isolatedMove = true;
 	virtualExtruderPosition = prev->virtualExtruderPosition;
 	tool = nullptr;
 	filePos = prev->filePos;
