@@ -37,20 +37,6 @@ enum class DMState : uint8_t
 	cartDecelReverse,								// linear decelerating motion, reversed
 };
 
-#if SUPPORT_PHASE_STEPPING
-
-// Temporarily(?) define these here so that we can check that compilation succeeds
-// Struct to pass data back to the phase stepping code
-struct MotionParameters
-{
-	float position = 0.0;
-	float speed = 0.0;
-	float acceleration = 0.0;
-};
-
-extern bool IsPhaseSteppingEnabled() noexcept;		//TODO remove this
-
-#endif
 
 // This class describes a single movement of one drive
 class DriveMovement
@@ -280,7 +266,7 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 		}
 		if ((uint32_t)timeSinceStart >= seg->GetDuration())			// if segment should have finished by now
 		{
-			if (IsPhaseSteppingEnabled())							//TODO implement this
+			if (phaseStepControl.IsEnabled())
 			{
 				currentMotorPosition += netStepsThisSegment;
 				MoveSegment *oldSeg = seg;
