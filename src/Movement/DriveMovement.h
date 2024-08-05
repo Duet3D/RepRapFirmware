@@ -13,7 +13,8 @@
 #include "MoveSegment.h"
 #include "ExtruderShaper.h"
 
-#define STEPS_DEBUG			(1)
+#define STEPS_DEBUG					(1)
+#define SUPPORT_PHASE_STEPPING		(0)				// temporarily define this here
 
 class PrepParams;
 
@@ -32,6 +33,21 @@ enum class DMState : uint8_t
 	cartDecelForwardsReversing,						// linear decelerating motion, expect reversal
 	cartDecelReverse,								// linear decelerating motion, reversed
 };
+
+#if SUPPORT_PHASE_STEPPING
+
+// Temporarily(?) define these here so that we can check that compilation succeeds
+// Struct to pass data back to the phase stepping code
+struct MotionParameters
+{
+	float position = 0.0;
+	float speed = 0.0;
+	float acceleration = 0.0;
+};
+
+extern bool IsPhaseSteppingEnabled() noexcept;		//TODO remove this
+
+#endif
 
 // This class describes a single movement of one drive
 class DriveMovement
@@ -60,6 +76,12 @@ public:
 
 #if HAS_SMART_DRIVERS
 	uint32_t GetStepInterval(uint32_t microstepShift) const noexcept;	// Get the current full step interval for this axis or extruder
+#endif
+
+#if SUPPORT_PHASE_STEPPING
+	// Get the current position relative to the start of this move, speed and acceleration. Units are microsteps and step clocks.
+	// Return true if this drive is moving. Segments are advanced as necessary.
+	bool GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept;
 #endif
 
 	void ClearMovementPending() noexcept;
@@ -108,6 +130,9 @@ private:
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
 	motioncalc_t q, t0, p;								// the movement parameters of the current segment
+#if SUPPORT_PHASE_STEPPING
+	motioncalc_t u;										// the initial speed of this segment
+#endif
 	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
 	motioncalc_t distanceCarriedForwards;				// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
 
@@ -207,5 +232,49 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 }
 
 #endif
+
+#if SUPPORT_PHASE_STEPPING
+
+// Get the current position relative to the start of this segment, speed and acceleration. Units are microsteps and step clocks.
+// Return true if this drive is moving. Segments are advanced as necessary if we are in closed loop mode.
+// Inlined because it is only called from one place
+inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept
+{
+	AtomicCriticalSectionLocker lock;								// we don't want 'segments' changing while we do this
+	MoveSegment *seg = segments;
+	while (seg != nullptr)
+	{
+		int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
+		if (timeSinceStart < 0)
+		{
+			break;													// segment isn't due to start yet
+		}
+		if ((uint32_t)timeSinceStart >= seg->GetDuration())			// if segment should have finished by now
+		{
+			if (IsPhaseSteppingEnabled())							//TODO implement this
+			{
+				currentMotorPosition += netStepsThisSegment;
+				MoveSegment *oldSeg = seg;
+				segments = oldSeg->GetNext();
+				MoveSegment::Release(oldSeg);
+				seg = NewSegment(when);
+				continue;
+			}
+			timeSinceStart = seg->GetDuration();
+		}
+
+		mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)currentMotorPosition;
+		mParams.speed = u + seg->GetA() * timeSinceStart;
+		mParams.acceleration = seg->GetA();
+		return true;
+	}
+
+	// If we get here then no movement is taking place
+	mParams.position = (float)currentMotorPosition;
+	mParams.speed = mParams.acceleration = 0.0;
+	return false;
+}
+
+#endif	// SUPPORT_CLOSED_LOOP
 
 #endif /* DRIVEMOVEMENT_H_ */
