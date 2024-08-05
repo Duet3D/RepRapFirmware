@@ -630,6 +630,40 @@ void WiFiInterface::Stop() noexcept
 	}
 }
 
+bool WiFiInterface::GetFirmwareVersion(int &major, int &minor, int &patch)
+{
+	// Simple parser for WiFi module firmware version string.
+	// Parse the format (x=major, y=minor, and z=patch):
+	// 	- x.y.z (from 2.1.0)
+	//  - x.y (prior to 2.1.0), returns -1 for z
+	// Should be able to handle appended string after the version string.
+	major = minor = patch = -1;
+	auto numbers = {&major, &minor, &patch};
+
+	const char *curr = wiFiServerVersion.c_str();
+	const char *end = nullptr;
+
+	for (auto num : numbers)
+	{
+		int temp = StrToI32(curr, &end);
+
+		if (curr == end)
+		{
+			if (num != &patch)
+			{
+				return false;
+			}
+			break;
+		}
+
+		*num = temp;
+		curr = end + 1;
+		end = nullptr;
+	}
+
+	return true;
+}
+
 void WiFiInterface::Spin() noexcept
 {
 	// Main state machine.
@@ -693,9 +727,10 @@ void WiFiInterface::Spin() noexcept
 							reprap.GetPlatform().MessageF(NetworkErrorMessage, "failed to set WiFi hostname: %s\n", TranslateWiFiResponse(rc));
 						}
 #if SAME5x
+						int majorVer = 0, dummy = -1;
 						// If running the RTOS-based WiFi module code, tell the module to increase SPI clock speed to 40MHz.
 						// This is safe on SAME5x processors but not on SAM4 processors.
-						if (isdigit(wiFiServerVersion[0]) && wiFiServerVersion[0] >= '2')
+						if (GetFirmwareVersion(majorVer, dummy, dummy) && (majorVer >= 2))
 						{
 							rc = SendCommand(NetworkCommand::networkSetClockControl, 0, 0, 0x2001, nullptr, 0, nullptr, 0);
 							if (rc != ResponseEmpty)

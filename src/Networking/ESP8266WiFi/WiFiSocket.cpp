@@ -201,7 +201,8 @@ void WiFiSocket::Poll() noexcept
 			if (state != SocketState::waitingForResponder)
 			{
 				WiFiInterface *iface = static_cast<WiFiInterface *>(interface);
-				if (isdigit(iface->wiFiServerVersion[0]) && iface->wiFiServerVersion[0] >= '2')
+				int majorVer = 0, dummy = -1;
+				if (iface->GetFirmwareVersion(majorVer, dummy, dummy) && majorVer >= 2)
 				{
 					// On version 2 onwards, this is a valid field ConnStatusResponse.
 					protocol = resp.Value().protocol;

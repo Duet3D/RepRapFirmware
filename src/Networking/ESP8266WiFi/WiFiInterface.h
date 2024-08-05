@@ -91,6 +91,8 @@ public:
 	void EspRequestsTransfer() noexcept;
 	void UpdateSocketStatus(uint16_t connectedSockets, uint16_t otherEndClosedSockets) noexcept;
 
+	bool GetFirmwareVersion(int &major, int &minor, int &patch);
+
 protected:
 	DECLARE_OBJECT_MODEL
 
