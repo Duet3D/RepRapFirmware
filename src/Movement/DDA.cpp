@@ -132,7 +132,7 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	deceleration = dda.deceleration;
 	accelClocks = lrintf((dda.topSpeed - dda.startSpeed)/dda.acceleration);
 	decelClocks = lrintf((dda.topSpeed - dda.endSpeed)/dda.deceleration);
-	useInputShaping = dda.flags.xyMoving && !dda.flags.isolatedMove && !dda.flags.isLeadscrewAdjustmentMove;
+	useInputShaping = dda.flags.xyMoving && !(dda.flags.isolatedMove || dda.flags.isLeadscrewAdjustmentMove || dda.flags.scanningProbeMove) ;
 }
 
 void PrepParams::DebugPrint() const noexcept
