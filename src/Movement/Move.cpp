@@ -2114,12 +2114,14 @@ void Move::PhaseStepControlLoop() noexcept
 		IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
 			if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
 			{
+#if 0	// TODO temporarily disabled
 				if (likely(dm->state > DMState::starting))
 				{
 					// Driver has been stopped (probably by Move::CheckEndstops() so we don't need to update it)
 					dm->phaseStepControl.UpdatePhaseOffset(driver);
 				}
 				return;
+#endif
 			}
 			dm->phaseStepControl.InstanceControlLoop(driver);
 		});
