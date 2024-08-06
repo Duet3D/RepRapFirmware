@@ -30,9 +30,14 @@ void Variable::Assign(ExpressionValue& ev) THROWS(GCodeException)
 		{
 			// Copy the object model array value to the heap
 			ArrayHandle ah;
-			const ObjectModelArrayTableEntry *const entry = ev.omVal->FindObjectModelArrayEntry(ev.param);
+			const ObjectModelArrayTableEntry *const entry = ev.omVal->FindObjectModelArrayEntry(ev.param & 0xFF);
+			if (entry == nullptr)
+			{
+				throw GCodeException("Failed to lookup object model array");
+			}
 			ReadLocker lock(entry->lockPointer);
 			ObjectExplorationContext context;
+			context.AddIndex(ev.param >> 8);								// in case it is a 2D array
 			const size_t numElements = entry->GetNumElements(ev.omVal, context);
 			if (numElements != 0)
 			{
