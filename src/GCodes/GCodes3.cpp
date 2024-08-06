@@ -836,13 +836,7 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 		reply.printf("Current step mode = %s", TranslateStepMode(reprap.GetMove().GetStepMode()));
 		return GCodeResult::ok;
 	}
-	const uint32_t val = gb.GetLimitedUIValue('S', (uint32_t)StepMode::unknown);
-	if (val >= (uint32_t)StepMode::unknown)
-	{
-		reply.printf("Unknown step mode S=%lu", val);
-		return GCodeResult::error;
-	}
-	StepMode mode = (StepMode)val;
+	const StepMode mode = (StepMode)gb.GetLimitedUIValue('S', (uint32_t)StepMode::unknown);
 	if (!reprap.GetMove().SetStepMode(mode))
 	{
 		reply.copy("Setting step mode failed");
