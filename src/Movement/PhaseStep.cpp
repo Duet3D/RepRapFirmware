@@ -86,10 +86,7 @@ void PhaseStep::SetMotorPhase(size_t driver, uint16_t phase, float magnitude) no
 	Trigonometry::FastSinCos(phase, sine, cosine);
 	coilA = (int16_t)lrintf(cosine * magnitude);
 	coilB = (int16_t)lrintf(sine * magnitude);
-
-# if SUPPORT_TMC51xx
 	SmartDrivers::SetMotorCurrents(driver, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF);
-# endif
 }
 
 // Update the standstill current fraction for this drive.
@@ -116,7 +113,7 @@ void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 	minControlLoopCallInterval = min<StepTimer::Ticks>(minControlLoopCallInterval, timeElapsed);
 	maxControlLoopCallInterval = max<StepTimer::Ticks>(maxControlLoopCallInterval, timeElapsed);
 
-	float currentFraction = CalculateMotorCurrents(driver, loopCallTime - StepTimer::GetMovementDelay());
+	const float currentFraction = CalculateMotorCurrents(driver, loopCallTime - StepTimer::GetMovementDelay());
 
 	// Update the statistics
 	if (currentFraction > periodMaxCurrentFraction)
@@ -131,7 +128,6 @@ void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 	minControlLoopRuntime = min<StepTimer::Ticks>(minControlLoopRuntime, loopRuntime);
 	maxControlLoopRuntime = max<StepTimer::Ticks>(maxControlLoopRuntime, loopRuntime);
 }
-
 
 bool PhaseStep::IsEnabled() const noexcept
 {
@@ -156,19 +152,15 @@ inline uint16_t PhaseStep::CalculateStepPhase(size_t driver, uint32_t when) noex
 // Control the motor phase currents, returning the fraction of maximum current that we commanded
 inline float PhaseStep::CalculateMotorCurrents(size_t driver, uint32_t when) noexcept
 {
-	uint16_t commandedStepPhase;
-	float currentFraction;
-
 	// Driver is in assisted open loop mode
 	// In this mode the PID terms are not used and the A and V terms are independent of the loop time.
+	const uint16_t commandedStepPhase = CalculateStepPhase(driver, when);			// do this first because it sets up mparams
 	constexpr float scalingFactor = 100.0;
 	PIDVTerm = mParams.speed * Kv * scalingFactor;
 	PIDATerm = mParams.acceleration * Ka * fsquare(scalingFactor);
 	PIDControlSignal = min<float>(fabsf(PIDVTerm) + fabsf(PIDATerm), 256.0);
 
-	commandedStepPhase = CalculateStepPhase(driver, when);
-	currentFraction = holdCurrentFraction + (1.0 - holdCurrentFraction) * min<float>(PIDControlSignal * (1.0/256.0), 1.0);
-
+	const float currentFraction = holdCurrentFraction + (1.0 - holdCurrentFraction) * min<float>(PIDControlSignal * (1.0/256.0), 1.0);
 	SetMotorPhase(driver, commandedStepPhase, currentFraction);
 	return currentFraction;
 }

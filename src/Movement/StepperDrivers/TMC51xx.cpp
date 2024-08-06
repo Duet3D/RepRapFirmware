@@ -444,9 +444,9 @@ const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 	REGNUM_5160_SHORTCONF,
 	REGNUM_5160_DRVCONF,
 	REGNUM_5160_GLOBAL_SCALER,
-#if SUPPORT_PHASE_STEPPING
+# if SUPPORT_PHASE_STEPPING
 	REGNUM_2160_X_DIRECT
-#endif
+# endif
 #endif
 };
 
@@ -1292,16 +1292,15 @@ static inline void EnableEndOfTransferInterrupt() noexcept
 // DMA complete callback
 void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) noexcept
 {
+	fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
 #if SAME70
 	xdmac_channel_disable_interrupt(XDMAC, DmacChanTmcRx, 0xFFFFFFFF);
 #endif
 	dmaFinishedReason = reason;
-	fastDigitalWriteHigh(GlobalTmc51xxCSPin);			// set CS high
 #if SUPPORT_PHASE_STEPPING
-	// When in direct node we send the motor currents every time.
-	// In order to keep the read registers up to data, send a read request after the write request.
+	// When in direct mode we send the motor currents every time.
+	// In order to keep the read registers up to date, send a read request after the write request.
 	// We don't care about the response from setting the motor currents so that is written to altRcvData so as to not overwrite rcvData
-
 	bool writtenMotorCurrents = false;
 	for (size_t i = 0; i < numTmc51xxDrivers; ++i)
 	{
@@ -1314,6 +1313,7 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 
 	if (writtenMotorCurrents)
 	{
+		const uint32_t start = GetCurrentCycles();		// get the time now so we can time the CS high signal
 		volatile uint8_t *writeBufPtr = sendData + 5 * numTmc51xxDrivers;
 		for (size_t i = 0; i < numTmc51xxDrivers; ++i)
 		{
@@ -1321,7 +1321,6 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 			driverStates[i].GetSpiReadCommand(const_cast<uint8_t*>(writeBufPtr));
 		}
 
-		const uint32_t start = GetCurrentCycles();		// get the time now so we can time the CS high signal
 		SetupDMA(true);									// set up the PDC or DMAC
 		dmaFinishedReason = DmaCallbackReason::none;
 		EnableEndOfTransferInterrupt();
