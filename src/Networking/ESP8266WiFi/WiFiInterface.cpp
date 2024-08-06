@@ -998,12 +998,14 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 	{
 		Receiver<NetworkStatusResponse> status;
 		status.Value().clockReg = 0xFFFFFFFF;				// older WiFi firmware doesn't return this value, so preset it
-		if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) >= (int32_t)MinimumStatusResponseLength)
+
+		int rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
+		if (rc >= (int32_t)MinimumStatusResponseLength)
 		{
 			NetworkStatusResponse& r = status.Value();
 			r.versionText[ARRAY_UPB(r.versionText)] = 0;
 			platform.MessageF(mtype, "Firmware version %s\n", r.versionText);
-			platform.MessageF(mtype, "MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			platform.MessageF(mtype, "Module MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
 								r.macAddress[0], r.macAddress[1], r.macAddress[2], r.macAddress[3], r.macAddress[4], r.macAddress[5]);
 			platform.MessageF(mtype, "Module reset reason: %s, Vcc %.2f, flash size %" PRIu32 ", free heap %" PRIu32 "\n",
 								TranslateEspResetReason(r.resetReason), (double)((float)r.vcc/1024), r.flashSize, r.freeHeap);
@@ -1015,6 +1017,15 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 
 			if (currentMode == WiFiState::connected)
 			{
+				int majorVer, minorVer, patchVer;
+				if (GetFirmwareVersion(majorVer, minorVer, patchVer) && // if parse failed, don't display
+					((majorVer >= 2 && minorVer >= 2 && patchVer >= 0) || // > 2.2.z
+					(majorVer >= 3) /* >= 3.y.z*/))
+				{
+					platform.MessageF(mtype, "AP MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
+										r.apMac[0], r.apMac[1], r.apMac[2], r.apMac[3], r.apMac[4], r.apMac[5]);
+				}
+
 				constexpr const char* ConnectionModes[4] =  { "none", "802.11b", "802.11g", "802.11n" };
 				platform.MessageF(mtype, "Signal strength %ddBm, channel %u, mode %s, reconnections %u\n",
 											(int)r.rssi, r.channel, ConnectionModes[r.phyMode], reconnectCount);
