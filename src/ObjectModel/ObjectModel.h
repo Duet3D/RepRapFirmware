@@ -490,7 +490,7 @@ struct ObjectModelClassDescriptor
 		{ \
 			return &_class::objectModelArrayTable[index]; \
 		} \
-		return ObjectModel::GetObjectModelArrayEntry(index);; \
+		return ObjectModel::GetObjectModelArrayEntry(index); \
 	}
 
 #define DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(_class,_parent,_offset) \
