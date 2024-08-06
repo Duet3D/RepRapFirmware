@@ -77,3 +77,4 @@ Bugs:
 - [done] When starting a new print after finishing one we get a filament error
 - [done] Andy S reports that in 3.6, extruder positions for extruders on tool boards remain stuck on zero
 - Report of unwanted motion after 3-motor Z bed tramming, see https://forum.duet3d.com/topic/36187/z-axis-tramming-issues-with-3-6-0-alpha2-3
+- Scanning Z probe not working, does the scxan but the height map shows only points at the ends of each scan line
