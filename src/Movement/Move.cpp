@@ -2105,13 +2105,21 @@ void Move::PhaseStepControlLoop() noexcept
 	{
 		return;
 	}
+
+	uint32_t now = StepTimer::GetTimerTicks() - StepTimer::GetMovementDelay();
+
 	DriveMovement **dmp = &activeDMs;
 	while (*dmp != nullptr)
 	{
 		DriveMovement * const dm = *dmp;
 
-		// CHECK: possibly we can move `reprap.GetMove().GetCurrentMotion(driver, when, mParams)` from once per driver to once per dm?
+		GetCurrentMotion(dm->drive, now, dm->phaseStepControl.mParams);
+
+		//		debugPrintf("Move::PhaseStepControlLoop(). drive=%u @ %lu\n", dm->drive, StepTimer::GetTimerTicks());
 		IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
+			//			debugPrintf("Driver = %u, driversCurrentlyUsed = %lu, driversNormallyUsed = %lu\n", driver,
+			//dm->driversCurrentlyUsed, dm->driversNormallyUsed);
+
 			if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
 			{
 #if 0	// TODO temporarily disabled
@@ -2127,6 +2135,7 @@ void Move::PhaseStepControlLoop() noexcept
 		});
 
 		dmp = &(dm->nextDM);
+		// debugPrintf("%lu\n", StepTimer::GetTimerTicks());
 	}
 }
 

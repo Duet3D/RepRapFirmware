@@ -78,12 +78,14 @@ constexpr float RecipFullScaleCurrent = Tmc5160SenseResistor/325.0;		// 1.0 divi
 // TODO use the DIAG outputs to detect stalls instead
 #if SUPPORT_PHASE_STEPPING
 constexpr uint32_t DriversSpiClockFrequency = 4000000;		// 4MHz SPI clock, this is the maximum rate the TMC5160/2160 support
-constexpr uint32_t DriversDirectSleepMicroseconds = 125;	// how long the phase stepping task sleeps for in each cycle. Max SPI message frequency is ~16.7 kHz
+// TODO set this back to appropriate value
+constexpr uint32_t DriversDirectSleepMicroseconds = 5000;	// how long the phase stepping task sleeps for in each cycle. Max SPI message frequency is ~16.7 kHz
 															// there is 1 write + 1 read per motor current setting.
 #else
 constexpr uint32_t DriversSpiClockFrequency = 2000000;		// 2MHz SPI clock, this is the maximum rate the TMC5160/2160 support
 #endif
-constexpr uint32_t TransferTimeout = 2;						// any transfer should complete within 2 ticks @ 1ms/tick
+// TODO set this back to appropriate value
+constexpr uint32_t TransferTimeout = 10;						// any transfer should complete within 2 ticks @ 1ms/tick
 
 // GCONF register (0x00, RW)
 constexpr uint8_t REGNUM_GCONF = 0x00;
@@ -839,6 +841,7 @@ void TmcDriverState::UpdateCurrent() noexcept
 #if SUPPORT_PHASE_STEPPING
 	}
 #endif
+	debugPrintf("iHold %lu, iRun %lu\n", iHold, iRun);
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHold << IHOLDIRUN_IHOLD_SHIFT));
 	UpdateRegister(Write5160GlobalScaler, gs);
@@ -1306,11 +1309,13 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 	{
 		if (sendData[5 * i] == (REGNUM_2160_X_DIRECT | 0x80))	// if we just wrote the coil currents
 		{
+//			debugPrintf("Written driver %u current at %lu\n", (numTmc51xxDrivers - 1) - i, lastWakeupTime);
 			writtenMotorCurrents = true;
 			break;
 		}
 	}
 
+#if 0	// TODO temporarily disabled
 	if (writtenMotorCurrents)
 	{
 		const uint32_t start = GetCurrentCycles();		// get the time now so we can time the CS high signal
@@ -1331,6 +1336,7 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 		EnableSpi();
 	}
 	else
+#endif
 	{
 		// We run the SPI bus at high speeds so that motor currents get updated as quickly as possible.
 		// If we wake up as soon as the transfer has completed then we will use too much of the available CPU time.
@@ -1374,6 +1380,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			for (size_t drive = 0; drive < numTmc51xxDrivers; ++drive)
 			{
 				driverStates[drive].WriteAll();
+				debugPrintf("Initialising driver %u", drive);
 			}
 			driversState = DriversState::initialising;
 		}
@@ -1395,6 +1402,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 				{
 					if (driverStates[i].UpdatePending())
 					{
+						debugPrintf("driver %u not initialised", i);
 						allInitialised = false;
 						break;
 					}
@@ -1402,6 +1410,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 
 				if (allInitialised)
 				{
+					debugPrintf("Drivers ready");
 					fastDigitalWriteLow(GlobalTmc51xxEnablePin);
 					driversState = DriversState::ready;
 				}
@@ -1452,6 +1461,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 
 		if (timedOut || dmaFinishedReason != DmaCallbackReason::complete)
 		{
+			debugPrintf("Timed out");
 			TmcDriverState::TransferTimedOut();
 			// If the transfer was interrupted then we will have written dud data to the drivers. So we should re-initialise them all.
 			// Unfortunately registers that we don't normally write to may have changed too.

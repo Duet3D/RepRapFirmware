@@ -43,6 +43,8 @@ const char* TranslateStepMode(const StepMode mode);
 class PhaseStep
 {
 public:
+	friend class Move;
+
 	// Phase step public methods
 	void UpdateStandstillCurrent() noexcept;
 
@@ -91,8 +93,8 @@ private:
 	StepTimer::Ticks maxControlLoopCallInterval;		// The maximum interval between the control loop being called
 
 	// Functions private to this module
-	uint16_t CalculateStepPhase(size_t driver, uint32_t when) noexcept;
-	float CalculateMotorCurrents(size_t driver, uint32_t when) noexcept;
+	uint16_t CalculateStepPhase(size_t driver) noexcept;
+	float CalculateMotorCurrents(size_t driver) noexcept;
 	void ResetMonitoringVariables() noexcept;
 };
 

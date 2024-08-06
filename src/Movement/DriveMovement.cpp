@@ -327,6 +327,7 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 // If there is a segment ready to execute but it involves zero steps, skip and free it and start again.
 MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 {
+	debugPrintf("New segment @ %" PRIu32 ", currentMotorPosition = %" PRId32 "\n", now, currentMotorPosition);
 	positionAtSegmentStart = currentMotorPosition;
 
 	while (true)
@@ -334,6 +335,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		MoveSegment *seg = segments;				// capture volatile variable
 		if (seg == nullptr)
 		{
+			debugPrintf("No segments");
 			segmentFlags.Init();
 			state = DMState::idle;					// if we have been round this loop already then we will have changed the state, so reset it to idle
 			return nullptr;
@@ -353,6 +355,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 
 		// Calculate the movement parameters
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
+		debugPrintf("seg length = %f, distanceCarriedForwards = %f, netStepsThisSegment = %ld\n", seg->GetLength(), distanceCarriedForwards, netStepsThisSegment);
 		bool newDirection;
 		int32_t multiplier;
 		motioncalc_t rawP;

@@ -113,7 +113,7 @@ void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 	minControlLoopCallInterval = min<StepTimer::Ticks>(minControlLoopCallInterval, timeElapsed);
 	maxControlLoopCallInterval = max<StepTimer::Ticks>(maxControlLoopCallInterval, timeElapsed);
 
-	const float currentFraction = CalculateMotorCurrents(driver, loopCallTime - StepTimer::GetMovementDelay());
+	const float currentFraction = CalculateMotorCurrents(driver);
 
 	// Update the statistics
 	if (currentFraction > periodMaxCurrentFraction)
@@ -137,30 +137,31 @@ bool PhaseStep::IsEnabled() const noexcept
 void PhaseStep::UpdatePhaseOffset(size_t driver) noexcept
 {
 	AtomicCriticalSectionLocker lock;
-	const StepTimer::Ticks loopCallTime = StepTimer::GetTimerTicks();
-	uint16_t calculatedStepPhase = CalculateStepPhase(driver, loopCallTime - StepTimer::GetMovementDelay());
+	uint16_t calculatedStepPhase = CalculateStepPhase(driver);
 	phaseOffset[driver] = (desiredStepPhase - (calculatedStepPhase - phaseOffset[driver])) % 4096u;
+	debugPrintf("Updated phaseOffset[%u] = %u @ %lu\n", driver, phaseOffset[driver]);
 }
 
-inline uint16_t PhaseStep::CalculateStepPhase(size_t driver, uint32_t when) noexcept
+inline uint16_t PhaseStep::CalculateStepPhase(size_t driver) noexcept
 {
-	reprap.GetMove().GetCurrentMotion(driver, when, mParams);
 	const uint16_t stepPhase = (uint16_t)llrintf(mParams.position * 1024.0);		// we use llrintf so that we can guarantee to convert the float operand to integer. We only care about the lowest 12 bits.
 	return (stepPhase + phaseOffset[driver]) % 4096u;
 }
 
 // Control the motor phase currents, returning the fraction of maximum current that we commanded
-inline float PhaseStep::CalculateMotorCurrents(size_t driver, uint32_t when) noexcept
+inline float PhaseStep::CalculateMotorCurrents(size_t driver) noexcept
 {
 	// Driver is in assisted open loop mode
 	// In this mode the PID terms are not used and the A and V terms are independent of the loop time.
-	const uint16_t commandedStepPhase = CalculateStepPhase(driver, when);			// do this first because it sets up mparams
+	const uint16_t commandedStepPhase = CalculateStepPhase(driver);			// do this first because it sets up mparams
 	constexpr float scalingFactor = 100.0;
 	PIDVTerm = mParams.speed * Kv * scalingFactor;
 	PIDATerm = mParams.acceleration * Ka * fsquare(scalingFactor);
 	PIDControlSignal = min<float>(fabsf(PIDVTerm) + fabsf(PIDATerm), 256.0);
 
 	const float currentFraction = holdCurrentFraction + (1.0 - holdCurrentFraction) * min<float>(PIDControlSignal * (1.0/256.0), 1.0);
+
+	// debugPrintf("Calculated driver %u phase = %u (mParams pos=%f, vel=%f, accel=%f), currentFraction = %f @ %lu\n", driver, commandedStepPhase, mParams.position, mParams.speed, mParams.acceleration, currentFraction, when);
 	SetMotorPhase(driver, commandedStepPhase, currentFraction);
 	return currentFraction;
 }
