@@ -1707,10 +1707,17 @@ uint16_t SmartDrivers::GetMicrostepPosition(size_t driver) noexcept
 	return (driver < numTmc51xxDrivers) ? driverStates[driver].GetMicrostepPosition() : 0;
 }
 
-void SmartDrivers::SetMotorCurrents(size_t driver, uint32_t regVal) noexcept
+// Schedules a request to update the motor phases using XDIRECT register.
+// Returns true if request is scheduled. Will not schedule a request if it is equal to the current value.
+bool SmartDrivers::SetMotorCurrents(size_t driver, uint32_t regVal) noexcept
 {
+	if (regVal == driverStates[driver].GetPhaseToSet())
+	{
+		return false;
+	}
 	driverPhaseToUpdate.fetch_or(1u << driver);
 	driverStates[driver].SetXdirect(regVal);
+	return true;
 }
 
 #endif

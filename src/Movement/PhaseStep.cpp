@@ -86,7 +86,10 @@ void PhaseStep::SetMotorPhase(size_t driver, uint16_t phase, float magnitude) no
 	Trigonometry::FastSinCos(phase, sine, cosine);
 	coilA = (int16_t)lrintf(cosine * magnitude);
 	coilB = (int16_t)lrintf(sine * magnitude);
-	SmartDrivers::SetMotorCurrents(driver, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF);
+	if (SmartDrivers::SetMotorCurrents(driver, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF))
+	{
+		debugPrintf("Set driver %" PRIu16 " phase to %" PRIu16 "\n", driver, phase);
+	}
 }
 
 // Update the standstill current fraction for this drive.
@@ -139,7 +142,7 @@ void PhaseStep::UpdatePhaseOffset(size_t driver) noexcept
 	AtomicCriticalSectionLocker lock;
 	uint16_t calculatedStepPhase = CalculateStepPhase(driver);
 	phaseOffset[driver] = (desiredStepPhase - (calculatedStepPhase - phaseOffset[driver])) % 4096u;
-	debugPrintf("Updated phaseOffset[%u] = %u @ %lu\n", driver, phaseOffset[driver]);
+	debugPrintf("Updated phaseOffset[%u] = %u\n", driver, phaseOffset[driver]);
 }
 
 inline uint16_t PhaseStep::CalculateStepPhase(size_t driver) noexcept

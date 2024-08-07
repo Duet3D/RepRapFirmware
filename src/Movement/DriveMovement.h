@@ -269,8 +269,8 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 		{
 			if (phaseStepControl.IsEnabled())
 			{
+				debugPrintf("Segment ended, currentMotorPosition: before=%" PRId32 " after=%" PRId32 ", netStepsThisSegment = %" PRId32 "\n", currentMotorPosition, currentMotorPosition + netStepsThisSegment, netStepsThisSegment);
 				currentMotorPosition += netStepsThisSegment;
-				debugPrintf("Segment ended, currentMotorPosition = %" PRId32 ", netStepsThisSegment = %" PRId32 "\n", currentMotorPosition, netStepsThisSegment);
 				MoveSegment *oldSeg = seg;
 				segments = oldSeg->GetNext();
 				MoveSegment::Release(oldSeg);
