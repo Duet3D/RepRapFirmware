@@ -282,6 +282,7 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 		}
 
 		mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)currentMotorPosition;
+		currentMotorPosition = (int32_t)mParams.position;			// store the approximate position for OM updates
 		mParams.speed = u + seg->GetA() * timeSinceStart;
 		mParams.acceleration = seg->GetA();
 		return true;
