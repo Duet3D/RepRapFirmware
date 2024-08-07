@@ -323,6 +323,7 @@ public:
 	void SetXdirect(uint32_t regVal) noexcept;
 	float GetCurrent() noexcept { return (float)motorCurrent; }
 	bool EnablePhaseStepping(bool enable);
+	uint32_t GetPhaseToSet() { return phaseToSet; }
 #endif
 	bool SetDriverMode(unsigned int mode) noexcept;
 	DriverMode GetDriverMode() const noexcept;
@@ -376,12 +377,7 @@ private:
 	static constexpr unsigned int Write5160DrvConf = 9;		// driver timing
 	static constexpr unsigned int Write5160GlobalScaler = 10; // motor current scaling
 
-#if SUPPORT_PHASE_STEPPING
-	static constexpr unsigned int Write5160XDirect = 11;
-	static constexpr unsigned int NumWriteRegisters = 12;	// the number of registers that we write to
-#else
-	static constexpr unsigned int NumWriteRegisters = 11;	// the number of registers that we write to
-#endif
+	static constexpr unsigned int NumWriteRegisters = 11; // the number of registers that we write to
 #else
 	static constexpr unsigned int NumWriteRegisters = 8;	// the number of registers that we write to
 #endif
@@ -429,11 +425,13 @@ private:
 	volatile uint8_t specialWriteRegisterNumber;
 	bool enabled;											// true if driver is enabled
 
-	DriverMode currentMode;										// Stepper driver mode if not using phase stepping
+#if SUPPORT_PHASE_STEPPING
+	volatile uint32_t phaseToSet; // phase value to be written to the XDIRECT register
+	DriverMode currentMode;		  // Stepper driver mode if not using phase stepping
+#endif
 };
 
-const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
-{
+const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] = {
 	REGNUM_GCONF,
 	REGNUM_IHOLDIRUN,
 	REGNUM_TPWMTHRS,
@@ -446,9 +444,6 @@ const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 	REGNUM_5160_SHORTCONF,
 	REGNUM_5160_DRVCONF,
 	REGNUM_5160_GLOBAL_SCALER,
-# if SUPPORT_PHASE_STEPPING
-	REGNUM_2160_X_DIRECT
-# endif
 #endif
 };
 
@@ -609,7 +604,7 @@ bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal) noexc
 
 inline void TmcDriverState::SetXdirect(uint32_t regVal) noexcept
 {
-	UpdateRegister(Write5160XDirect, regVal);
+	phaseToSet = regVal;
 }
 
 #endif
@@ -1091,7 +1086,11 @@ static TmcDriverState driverStates[MaxSmartDrivers];
 static Task<TmcTaskStackWords> tmcTask;
 
 // Declare the DMA buffers with the __nocache attribute for the SAME70. Access to these must be aligned.
-static __nocache volatile uint8_t sendData[5 * MaxSmartDrivers];
+#if SUPPORT_PHASE_STEPPING
+static __nocache volatile uint8_t* sendDataPtr; // pointer to the sendData/sendPhaseData that we are actually sending
+static __nocache volatile uint8_t phaseSendData[5 * MaxSmartDrivers]; // used to send specific phase data
+#endif
+static __nocache volatile uint8_t sendData[5 * MaxSmartDrivers]; // used to prepare regular read/write requests via SPI
 static __nocache volatile uint8_t rcvData[5 * MaxSmartDrivers];
 
 
@@ -1099,6 +1098,7 @@ static __nocache volatile uint8_t rcvData[5 * MaxSmartDrivers];
 static volatile uint8_t altRcvData[5 * MaxSmartDrivers];
 static uint32_t lastWakeupTime = 0;
 static StepTimer tmcTimer;
+static std::atomic<uint32_t> driverPhaseToUpdate; // bitmap of drivers that are waiting for their phase to be set
 #endif
 
 static volatile DmaCallbackReason dmaFinishedReason;
@@ -1194,7 +1194,11 @@ static void SetupDMA() noexcept
 						| XDMAC_CC_DAM_FIXED_AM
 						| XDMAC_CC_PERID(TMC51xx_DmaTxPerid);
 		p_cfg.mbr_ubc = ARRAY_SIZE(sendData);
+#if SUPPORT_PHASE_STEPPING
+		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(sendDataPtr);
+#else
 		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(sendData);
+#endif
 		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(USART_TMC51xx->US_THR));
 		xdmac_configure_transfer(XDMAC, DmacChanTmcTx, &p_cfg);
 	}
@@ -1304,27 +1308,12 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 	// When in direct mode we send the motor currents every time.
 	// In order to keep the read registers up to date, send a read request after the write request.
 	// We don't care about the response from setting the motor currents so that is written to altRcvData so as to not overwrite rcvData
-	bool writtenMotorCurrents = false;
-	for (size_t i = 0; i < numTmc51xxDrivers; ++i)
-	{
-		if (sendData[5 * i] == (REGNUM_2160_X_DIRECT | 0x80))	// if we just wrote the coil currents
-		{
-//			debugPrintf("Written driver %u current at %lu\n", (numTmc51xxDrivers - 1) - i, lastWakeupTime);
-			writtenMotorCurrents = true;
-			break;
-		}
-	}
+	const bool writtenMotorPhases = driverPhaseToUpdate.exchange(0) != 0;
 
-#if 0	// TODO temporarily disabled
-	if (writtenMotorCurrents)
+	if (writtenMotorPhases)
 	{
 		const uint32_t start = GetCurrentCycles();		// get the time now so we can time the CS high signal
-		volatile uint8_t *writeBufPtr = sendData + 5 * numTmc51xxDrivers;
-		for (size_t i = 0; i < numTmc51xxDrivers; ++i)
-		{
-			writeBufPtr -= 5;
-			driverStates[i].GetSpiReadCommand(const_cast<uint8_t*>(writeBufPtr));
-		}
+		sendDataPtr = sendData;
 
 		SetupDMA(true);									// set up the PDC or DMAC
 		dmaFinishedReason = DmaCallbackReason::none;
@@ -1336,7 +1325,6 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 		EnableSpi();
 	}
 	else
-#endif
 	{
 		// We run the SPI bus at high speeds so that motor currents get updated as quickly as possible.
 		// If we wake up as soon as the transfer has completed then we will use too much of the available CPU time.
@@ -1429,6 +1417,24 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			writeBufPtr -= 5;
 			driverStates[i].GetSpiCommand(const_cast<uint8_t*>(writeBufPtr));
 		}
+
+#if SUPPORT_PHASE_STEPPING
+		if (driverPhaseToUpdate.load() != 0)
+		{
+			writeBufPtr = sendData + 5 * numTmc51xxDrivers;
+			for (size_t i = 0; i < numTmc51xxDrivers; ++i)
+			{
+				writeBufPtr -= 5;
+				writeBufPtr[0] = REGNUM_2160_X_DIRECT | 0x80;
+				StoreBEU32(const_cast<uint8_t*>(writeBufPtr + 1), driverStates[i].GetPhaseToSet());
+			}
+			sendDataPtr = phaseSendData;
+		}
+		else
+		{
+			sendDataPtr = sendData;
+		}
+#endif
 
 		// Kick off a transfer.
 		// On the SAME5x the only way I have found to get reliable transfers and no timeouts is to disable SPI, enable DMA, and then enable SPI.
@@ -1703,6 +1709,7 @@ uint16_t SmartDrivers::GetMicrostepPosition(size_t driver) noexcept
 
 void SmartDrivers::SetMotorCurrents(size_t driver, uint32_t regVal) noexcept
 {
+	driverPhaseToUpdate.fetch_or(1u << driver);
 	driverStates[driver].SetXdirect(regVal);
 }
 
