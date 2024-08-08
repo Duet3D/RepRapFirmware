@@ -363,7 +363,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 
 		// Calculate the movement parameters
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
-		debugPrintf("seg length = %f, distanceCarriedForwards = %f, netStepsThisSegment = %ld\n", seg->GetLength(), distanceCarriedForwards, netStepsThisSegment);
+		debugPrintf("seg length = %f, distanceCarriedForwards = %f, netStepsThisSegment = %ld\n", (double)seg->GetLength(), (double)distanceCarriedForwards, netStepsThisSegment);
 		bool newDirection;
 		int32_t multiplier;
 		motioncalc_t rawP;
