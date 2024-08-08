@@ -517,6 +517,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 #if SUPPORT_CAN_EXPANSION
 				axesToUpdate.SetBit(drive);
 #endif
+#if SUPPORT_PHASE_STEPPING
+				move.SetStepMode(drive, StepMode::stepDir);
+#endif
 			}
 		}
 		++lettersToTry;
@@ -536,6 +539,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 			move.SetAsExtruder(drive, true);
 #if SUPPORT_CAN_EXPANSION
 			axesToUpdate.SetBit(drive);
+#endif
+#if SUPPORT_PHASE_STEPPING
+			move.SetStepMode(drive, StepMode::stepDir);
 #endif
 		}
 		if (FilamentMonitor::CheckDriveAssignments(reply) && rslt == GCodeResult::ok)
