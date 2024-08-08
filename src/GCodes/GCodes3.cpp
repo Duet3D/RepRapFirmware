@@ -831,16 +831,58 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 // Deal with M970
 GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	if (!gb.Seen('S'))
+	bool seen = false;
+	Move& move = reprap.GetMove();
+	for (size_t axis = 0; axis < numTotalAxes; axis++)
 	{
-		reply.printf("Current step mode = %s", TranslateStepMode(reprap.GetMove().GetStepMode()));
-		return GCodeResult::ok;
+		if (gb.Seen(axisLetters[axis]))
+		{
+			seen = true;
+			const StepMode mode = (StepMode)gb.GetLimitedUIValue(axisLetters[axis], (uint32_t) StepMode::unknown);
+			const bool ret = move.SetStepMode(axis, mode);	// TODO check if this gets the correct DM. Don't think it does
+			if (!ret)
+			{
+				reply.printf("Could not set step mode for axis %c to mode %u", axisLetters[axis], (uint16_t)mode);
+				return GCodeResult::error;
+			}
+		}
 	}
-	const StepMode mode = (StepMode)gb.GetLimitedUIValue('S', (uint32_t)StepMode::unknown);
-	if (!reprap.GetMove().SetStepMode(mode))
+
+	if (gb.Seen(extrudeLetter))
 	{
-		reply.copy("Setting step mode failed");
-		return GCodeResult::error;
+		seen = true;
+		uint32_t eVals[MaxExtruders];
+		size_t eCount = numExtruders;
+		gb.GetUnsignedArray(eVals, eCount, true);
+
+		for (size_t e = 0; e < eCount; e++)
+		{
+			if (eVals[e] >= (uint32_t)StepMode::unknown)
+			{
+				reply.printf("Unknown mode %lu", eVals[e]);
+				return GCodeResult::error;
+			}
+			const bool ret = move.SetStepMode(ExtruderToLogicalDrive(e), (StepMode)eVals[e]);
+			if (!ret)
+			{
+				reply.printf("Could not set step mode for extruder %u to mode %lu", e, eVals[e]);
+				return GCodeResult::error;
+			}
+		}
+	}
+
+	if (!seen)
+	{
+		reply.copy("Axis step mode - ");
+		for (size_t axis = 0; axis < numTotalAxes; ++axis)
+		{
+			reply.catf("%c:%lu, ", axisLetters[axis], (uint32_t)move.GetStepMode(axis));
+		}
+		reply.cat("E");
+		for (size_t extruder = 0; extruder < numExtruders; extruder++)
+		{
+			reply.catf(":%lu", (uint32_t)move.GetStepMode(ExtruderToLogicalDrive(extruder)));
+		}
 	}
 	return GCodeResult::ok;
 }

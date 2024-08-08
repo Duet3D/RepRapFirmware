@@ -425,11 +425,10 @@ public:
 #endif
 
 #if SUPPORT_PHASE_STEPPING
-	bool IsPhaseSteppingEnabled() const noexcept { return currentStepMode == StepMode::phase; }
 	bool EnableIfIdle(size_t driver) noexcept;										// if the driver is idle, enable it; return true if driver enabled on return
 	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
-	bool SetStepMode(StepMode mode) noexcept;
-	StepMode GetStepMode() const noexcept { return currentStepMode; }
+	bool SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept;
+	StepMode GetStepMode(size_t axisOrExtruder) noexcept;
 	void InvertCurrentMotorSteps(size_t driver) noexcept;
 
 	void PhaseStepControlLoop() noexcept;
@@ -574,6 +573,9 @@ private:
 
 	StepTimer timer;												// Timer object to control getting step interrupts
 	DriveMovement *activeDMs;
+#if SUPPORT_PHASE_STEPPING
+	DriveMovement *phaseStepDMs;
+#endif
 
 #if SUPPORT_ASYNC_MOVES
 	AsyncMove auxMove;
@@ -641,10 +643,6 @@ private:
 
 #ifdef DUET3_MB6XD
 	bool driverErrPinsActiveLow;
-#endif
-
-#if SUPPORT_PHASE_STEPPING
-	StepMode currentStepMode;
 #endif
 
 	// Stepper motor brake control
@@ -915,13 +913,6 @@ inline float Move::GetPressureAdvanceClocksForExtruder(size_t extruder) const no
 // Base priority must be >= NvicPriorityStep when calling this
 inline __attribute__((always_inline)) bool Move::ScheduleNextStepInterrupt() noexcept
 {
-#if SUPPORT_PHASE_STEPPING
-	if (IsPhaseSteppingEnabled())
-	{
-		return false;
-	}
-#endif
-
 	if (activeDMs != nullptr)
 	{
 		return timer.ScheduleMovementCallbackFromIsr(activeDMs->nextStepTime);

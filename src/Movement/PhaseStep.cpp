@@ -104,7 +104,7 @@ void PhaseStep::UpdateStandstillCurrent() noexcept
 
 void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 {
-	if (!reprap.GetMove().IsPhaseSteppingEnabled())
+	if (!enabled)
 	{
 		return;
 	}
@@ -130,11 +130,6 @@ void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 	const StepTimer::Ticks loopRuntime = StepTimer::GetTimerTicks() - loopCallTime;
 	minControlLoopRuntime = min<StepTimer::Ticks>(minControlLoopRuntime, loopRuntime);
 	maxControlLoopRuntime = max<StepTimer::Ticks>(maxControlLoopRuntime, loopRuntime);
-}
-
-bool PhaseStep::IsEnabled() const noexcept
-{
-	return reprap.GetMove().IsPhaseSteppingEnabled();
 }
 
 void PhaseStep::UpdatePhaseOffset(size_t driver) noexcept

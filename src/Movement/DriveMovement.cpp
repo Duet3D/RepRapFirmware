@@ -16,6 +16,10 @@
 #include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
 
+#if SUPPORT_TMC51xx
+# include "Movement/StepperDrivers/TMC51xx.h"
+#endif
+
 // Static members
 
 int32_t DriveMovement::maxStepsLate = 0;
@@ -41,6 +45,10 @@ void DriveMovement::Init(size_t drv) noexcept
 	homingDda = nullptr;
 	isExtruder = false;
 	segmentFlags.Init();
+
+#if SUPPORT_PHASE_STEPPING
+	stepMode = StepMode::stepDir;
+#endif
 }
 
 void DriveMovement::DebugPrint() const noexcept
@@ -818,6 +826,27 @@ void DriveMovement::StopDriverFromRemote() noexcept
 {
 	int32_t dummy;
 	(void)StopDriver(dummy);
+}
+
+#endif
+
+#if SUPPORT_PHASE_STEPPING
+
+bool DriveMovement::SetStepMode(StepMode mode) noexcept
+{
+	switch (mode)
+	{
+	case StepMode::stepDir:
+		phaseStepControl.SetEnabled(false);
+		break;
+	case StepMode::phase:
+		phaseStepControl.SetEnabled(true);
+		break;
+	default:
+		return false;
+	}
+	stepMode = mode;
+	return true;
 }
 
 #endif

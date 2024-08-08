@@ -50,7 +50,8 @@ public:
 
 	// Methods called by the motion system
 	void InstanceControlLoop(size_t driver) noexcept;
-	bool IsEnabled() const noexcept;
+	void SetEnabled(bool enable) { enabled = enable; }
+	bool IsEnabled() const noexcept { return enabled; }
 	void UpdatePhaseOffset(size_t driver) noexcept;
 
 private:
@@ -59,6 +60,8 @@ private:
 
 	// Methods used only by closed loop and by the tuning module
 	void SetMotorPhase(size_t driver, uint16_t phase, float magnitude) noexcept;
+
+	bool enabled = false;
 
 	// Holding current, and variables derived from it
 	float 	holdCurrentFraction = DefaultHoldCurrentFraction;	// The minimum holding current when stationary

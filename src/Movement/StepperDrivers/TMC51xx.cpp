@@ -426,6 +426,7 @@ private:
 	bool enabled;											// true if driver is enabled
 
 #if SUPPORT_PHASE_STEPPING
+	bool phaseStepEnabled = false;
 	volatile uint32_t phaseToSet; // phase value to be written to the XDIRECT register
 	DriverMode currentMode;		  // Stepper driver mode if not using phase stepping
 #endif
@@ -770,6 +771,7 @@ DriverMode TmcDriverState::GetDriverMode() const noexcept
 bool TmcDriverState::EnablePhaseStepping(bool enable)
 {
 	bool ret = false;
+	phaseStepEnabled = enable;
 	if (enable)
 	{
 		UpdateRegister(WriteGConf, (writeRegisters[WriteGConf] & ~GCONF_STEALTHCHOP) | GCONF_DIRECT_MODE);
@@ -821,7 +823,7 @@ void TmcDriverState::UpdateCurrent() noexcept
 	// At high motor currents, limit the standstill current fraction to avoid overheating particular pairs of mosfets. Avoid dividing by zero if motorCurrent is zero.
 	uint32_t iHold;
 #if SUPPORT_PHASE_STEPPING
-	if (reprap.GetMove().IsPhaseSteppingEnabled())
+	if (phaseStepEnabled)
 	{
 		iHold = iRun;
 	}
@@ -1676,17 +1678,14 @@ unsigned int SmartDrivers::GetMicrostepping(size_t driver, bool& interpolation) 
 
 #if SUPPORT_PHASE_STEPPING
 
-bool SmartDrivers::EnablePhaseStepping(bool enable) noexcept
+bool SmartDrivers::EnablePhaseStepping(size_t driver, bool enable) noexcept
 {
-	bool allSet = true;
-	for (size_t driver = 0; driver < MaxSmartDrivers; driver++)
+	if (driver >= MaxSmartDrivers)
 	{
-		if (!driverStates[driver].EnablePhaseStepping(enable))
-		{
-			allSet = false;
-		}
+		return false;
 	}
-	return allSet;
+
+	return driverStates[driver].EnablePhaseStepping(enable);
 }
 
 // Get the configured motor current in mA

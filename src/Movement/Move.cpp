@@ -490,10 +490,6 @@ void Move::Init() noexcept
 		dms[driver + MaxAxesPlusExtruders].driversNormallyUsed = StepPins::CalcDriverBitmap(driver);
 	}
 
-#if SUPPORT_PHASE_STEPPING
-	currentStepMode = StepMode::stepDir;
-#endif
-
 	// Set up default axis mapping
 	for (size_t axis = 0; axis < MinAxes; ++axis)
 	{
@@ -2089,23 +2085,41 @@ bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mPar
 	return ret;
 }
 
-bool Move::SetStepMode(StepMode mode) noexcept
+bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
 {
-	if (!SmartDrivers::EnablePhaseStepping(mode == StepMode::phase))
+	bool hasRemoteDrivers = false;
+	IterateRemoteDrivers(axisOrExtruder, [&hasRemoteDrivers](DriverId driver){
+		hasRemoteDrivers = true;
+	});
+
+	if (hasRemoteDrivers)
 	{
 		return false;
 	}
-	currentStepMode = mode;
-	return true;
+
+	bool ret = true;
+	IterateLocalDrivers(axisOrExtruder, [&ret, &mode](uint8_t driver){
+		if (!SmartDrivers::EnablePhaseStepping(driver, mode == StepMode::phase))
+		{
+			ret = false;
+		}
+	});
+
+	dms[axisOrExtruder].SetStepMode(mode);
+	return ret;
+}
+
+StepMode Move::GetStepMode(size_t axisOrExtruder) noexcept
+{
+	if (axisOrExtruder >= MaxAxesPlusExtruders)
+	{
+		return StepMode::unknown;
+	}
+	return dms[axisOrExtruder].GetStepMode();
 }
 
 void Move::PhaseStepControlLoop() noexcept
 {
-	if (!IsPhaseSteppingEnabled())
-	{
-		return;
-	}
-
 	uint32_t now = StepTimer::GetTimerTicks() - StepTimer::GetMovementDelay();
 
 	DriveMovement **dmp = &activeDMs;
@@ -2374,13 +2388,6 @@ void Move::CheckEndstops(bool executingMove) noexcept
 // Generate the step pulses of internal drivers used by this DDA
 void Move::StepDrivers(uint32_t now) noexcept
 {
-#if SUPPORT_PHASE_STEPPING
-	if (IsPhaseSteppingEnabled())
-	{
-		return;
-	}
-#endif
-
 	uint32_t driversStepping = 0;
 	MovementFlags flags;
 	flags.Clear();
