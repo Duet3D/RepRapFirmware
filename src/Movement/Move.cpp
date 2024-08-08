@@ -2127,6 +2127,11 @@ void Move::PhaseStepControlLoop() noexcept
 	{
 		DriveMovement * const dm = *dmp;
 
+		if (!dm->IsPhaseStepEnabled())
+		{
+			continue;
+		}
+
 		GetCurrentMotion(dm->drive, now, dm->phaseStepControl.mParams);
 
 		//		debugPrintf("Move::PhaseStepControlLoop(). drive=%u @ %lu\n", dm->drive, StepTimer::GetTimerTicks());

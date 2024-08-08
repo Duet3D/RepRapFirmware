@@ -70,6 +70,7 @@ public:
 #if SUPPORT_PHASE_STEPPING
 	bool SetStepMode(StepMode mode) noexcept;
 	StepMode GetStepMode() const noexcept { return stepMode; }
+	bool IsPhaseStepEnabled() const noexcept { return stepMode == StepMode::phase; }
 	// Get the current position relative to the start of this move, speed and acceleration. Units are microsteps and step clocks.
 	// Return true if this drive is moving. Segments are advanced as necessary.
 	bool GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept;
