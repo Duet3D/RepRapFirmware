@@ -2129,6 +2129,7 @@ void Move::PhaseStepControlLoop() noexcept
 
 		if (!dm->IsPhaseStepEnabled())
 		{
+			dmp = &(dm->nextDM);
 			continue;
 		}
 
