@@ -132,7 +132,12 @@ void PrepParams::SetFromDDA(const DDA& dda) noexcept
 	deceleration = dda.deceleration;
 	accelClocks = lrintf((dda.topSpeed - dda.startSpeed)/dda.acceleration);
 	decelClocks = lrintf((dda.topSpeed - dda.endSpeed)/dda.deceleration);
-	useInputShaping = dda.flags.xyMoving && !(dda.flags.isolatedMove || dda.flags.isLeadscrewAdjustmentMove || dda.flags.scanningProbeMove) ;
+	useInputShaping = dda.flags.xyMoving
+					&& !(dda.flags.isolatedMove || dda.flags.isLeadscrewAdjustmentMove
+#if SUPPORT_SCANNING_PROBES
+						 || dda.flags.scanningProbeMove
+#endif
+						) ;
 }
 
 void PrepParams::DebugPrint() const noexcept
@@ -1283,6 +1288,13 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		afterPrepare.averageExtrusionSpeed = (extrusionFraction * totalDistance * (float)StepClockRate)/(float)clocksNeeded;
 
 		state = committed;																// must do this before we call CheckEndstops
+#if SUPPORT_SCANNING_PROBES
+		if (flags.scanningProbeMove)
+		{
+			move.PrepareScanningProbeDataCollection(*this, params);
+		}
+		else
+#endif
 		if (flags.checkEndstops)
 		{
 			// Before we send movement commands to remote drives, if any endstop switches we are monitoring are already set, make sure we don't start the motors concerned.
