@@ -253,7 +253,7 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 		{
 			if (IsPhaseSteppingEnabled())							//TODO implement this
 			{
-				currentMotorPosition += netStepsThisSegment;
+				currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
 				MoveSegment *oldSeg = seg;
 				segments = oldSeg->GetNext();
 				MoveSegment::Release(oldSeg);
@@ -263,7 +263,8 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 			timeSinceStart = seg->GetDuration();
 		}
 
-		mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)currentMotorPosition;
+		mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart;
+		currentMotorPosition = (int32_t)mParams.position;			// store the approximate position for OM updates
 		mParams.speed = u + seg->GetA() * timeSinceStart;
 		mParams.acceleration = seg->GetA();
 		return true;
@@ -275,6 +276,6 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 	return false;
 }
 
-#endif	// SUPPORT_CLOSED_LOOP
+#endif	// SUPPORT_PHASE_STEPPING
 
 #endif /* DRIVEMOVEMENT_H_ */
