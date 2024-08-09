@@ -35,6 +35,7 @@ enum class DMState : uint8_t
 	cartDecelNoReverse,
 	cartDecelForwardsReversing,						// linear decelerating motion, expect reversal
 	cartDecelReverse,								// linear decelerating motion, reversed
+	phaseStepping,
 };
 
 
@@ -121,9 +122,9 @@ private:
 	int32_t netStepsThisSegment;						// the (signed) net number of steps in the current segment
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
-	motioncalc_t q, t0, p;								// the movement parameters of the current segment
+	motioncalc_t q, t0, p;								// the movement parameters of the current segment. Only set when not phase stepping
 #if SUPPORT_PHASE_STEPPING
-	motioncalc_t u;										// the initial speed of this segment
+	motioncalc_t u;										// the initial speed of this segment. Only set when in phase stepping
 #endif
 	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
 	motioncalc_t distanceCarriedForwards;				// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
@@ -260,36 +261,40 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept
 {
 	AtomicCriticalSectionLocker lock;								// we don't want 'segments' changing while we do this
-	MoveSegment *seg = segments;
-	while (seg != nullptr)
-	{
-		int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
-		if (timeSinceStart < 0)
-		{
-			debugPrintf("Segment not due to start for %" PRId32 "(@ %" PRIu32 ")\n", -timeSinceStart, seg->GetStartTime());
-			break;													// segment isn't due to start yet
-		}
-		if ((uint32_t)timeSinceStart >= seg->GetDuration())			// if segment should have finished by now
-		{
-			if (phaseStepControl.IsEnabled())
-			{
-				debugPrintf("Segment ended, currentMotorPosition: before=%" PRId32 " after=%" PRId32 ", netStepsThisSegment = %" PRId32 "\n", currentMotorPosition, positionAtSegmentStart + netStepsThisSegment, netStepsThisSegment);
-				currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
-				MoveSegment *oldSeg = seg;
-				segments = oldSeg->GetNext();
-				MoveSegment::Release(oldSeg);
-				seg = NewSegment(when);
-				debugPrintf("dm->state = %" PRIu32 "\n", (uint32_t)state);
-				continue;
-			}
-			timeSinceStart = seg->GetDuration();
-		}
 
-		mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart;
-		currentMotorPosition = (int32_t)mParams.position;			// store the approximate position for OM updates
-		mParams.speed = u + seg->GetA() * timeSinceStart;
-		mParams.acceleration = seg->GetA();
-		return true;
+	if (state == DMState::phaseStepping)
+	{
+		MoveSegment *seg = segments;
+		while (seg != nullptr)
+		{
+			int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
+			if (timeSinceStart < 0)
+			{
+				debugPrintf("Segment not due to start for %" PRId32 "(@ %" PRIu32 ")\n", -timeSinceStart, seg->GetStartTime());
+				break;													// segment isn't due to start yet
+			}
+			if ((uint32_t)timeSinceStart >= seg->GetDuration())			// if segment should have finished by now
+			{
+				if (phaseStepControl.IsEnabled())
+				{
+					debugPrintf("Segment ended, currentMotorPosition: before=%" PRId32 " after=%" PRId32 ", netStepsThisSegment = %" PRId32 "\n", currentMotorPosition, positionAtSegmentStart + netStepsThisSegment, netStepsThisSegment);
+					currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
+					MoveSegment *oldSeg = seg;
+					segments = oldSeg->GetNext();
+					MoveSegment::Release(oldSeg);
+					seg = NewSegment(when);
+					debugPrintf("dm->state = %" PRIu32 "\n", (uint32_t)state);
+					continue;
+				}
+				timeSinceStart = seg->GetDuration();
+			}
+
+			mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart;
+			currentMotorPosition = (int32_t)mParams.position;			// store the approximate position for OM updates
+			mParams.speed = u + seg->GetA() * timeSinceStart;
+			mParams.acceleration = seg->GetA();
+			return true;
+		}
 	}
 
 	// If we get here then no movement is taking place

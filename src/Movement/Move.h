@@ -926,7 +926,11 @@ inline __attribute__((always_inline)) bool Move::ScheduleNextStepInterrupt() noe
 // Base priority must be >= NvicPriorityStep when calling this, unless we are simulating.
 inline void Move::InsertDM(DriveMovement *dm) noexcept
 {
+#if SUPPORT_PHASE_STEPPING
+	DriveMovement **dmp = dm->state == DMState::phaseStepping ? &phaseStepDMs : &activeDMs;
+#else
 	DriveMovement **dmp = &activeDMs;
+#endif
 	while (*dmp != nullptr && (int32_t)((*dmp)->nextStepTime - dm->nextStepTime) < 0)
 	{
 		dmp = &((*dmp)->nextDM);

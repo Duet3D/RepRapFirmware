@@ -587,6 +587,9 @@ void Move::Init() noexcept
 	lastReportedMovementDelay = 0;
 	bedLevellingMoveAvailable = false;
 	activeDMs = nullptr;
+#if SUPPORT_PHASE_STEPPING
+	phaseStepDMs = nullptr;
+#endif
 	for (uint16_t& ms : microstepping)
 	{
 		ms = 16 | 0x8000;
@@ -2018,7 +2021,7 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	// If there were no segments attached to this DM initially, we need to schedule the interrupt for the new segment at the start of the list.
 	// Don't do this until we have added all the segments for this move, because the first segment we added may have been modified and/or split when we added further segments to implement input shaping
 	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);					// shut out the step interrupt
-	if (dmp->state == DMState::idle)
+	if (dmp->state == DMState::idle)		// only if a DM had no segments before any that have been added
 	{
 		if (dmp->ScheduleFirstSegment())
 		{
@@ -2122,39 +2125,49 @@ void Move::PhaseStepControlLoop() noexcept
 {
 	uint32_t now = StepTimer::GetTimerTicks() - StepTimer::GetMovementDelay();
 
-	DriveMovement **dmp = &activeDMs;
+	DriveMovement **dmp = &phaseStepDMs;
 	while (*dmp != nullptr)
 	{
 		DriveMovement * const dm = *dmp;
 
-		if (!dm->IsPhaseStepEnabled())
-		{
-			dmp = &(dm->nextDM);
-			continue;
-		}
+		debugPrintf("dms[%u]->state: %u\n", (size_t)dm->drive, (size_t)dm->state);
+
+		// TODO CheckEndstops()
 
 		GetCurrentMotion(dm->drive, now, dm->phaseStepControl.mParams);
 
-		//		debugPrintf("Move::PhaseStepControlLoop(). drive=%u @ %lu\n", dm->drive, StepTimer::GetTimerTicks());
-		IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
-			//			debugPrintf("Driver = %u, driversCurrentlyUsed = %lu, driversNormallyUsed = %lu\n", driver,
-			//dm->driversCurrentlyUsed, dm->driversNormallyUsed);
 
-			if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
+		if (dm->state != DMState::phaseStepping)
+		{
+			*dmp = dm->nextDM;
+			if (dm->state >= DMState::firstMotionState)
 			{
-#if 0	// TODO temporarily disabled
-				if (likely(dm->state > DMState::starting))
-				{
-					// Driver has been stopped (probably by Move::CheckEndstops() so we don't need to update it)
-					dm->phaseStepControl.UpdatePhaseOffset(driver);
-				}
-				return;
-#endif
+				InsertDM(dm);
 			}
-			dm->phaseStepControl.InstanceControlLoop(driver);
-		});
+		}
+		else
+		{
+			//		debugPrintf("Move::PhaseStepControlLoop(). drive=%u @ %lu\n", dm->drive, StepTimer::GetTimerTicks());
+			IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
+				//			debugPrintf("Driver = %u, driversCurrentlyUsed = %lu, driversNormallyUsed = %lu\n", driver,
+				//dm->driversCurrentlyUsed, dm->driversNormallyUsed);
 
-		dmp = &(dm->nextDM);
+				if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
+				{
+	#if 0	// TODO temporarily disabled
+					if (likely(dm->state > DMState::starting))
+					{
+						// Driver has been stopped (probably by Move::CheckEndstops() so we don't need to update it)
+						dm->phaseStepControl.UpdatePhaseOffset(driver);
+					}
+					return;
+	#endif
+				}
+				dm->phaseStepControl.InstanceControlLoop(driver);
+			});
+
+			dmp = &(dm->nextDM);
+		}
 		// debugPrintf("%lu\n", StepTimer::GetTimerTicks());
 	}
 }
@@ -2256,7 +2269,11 @@ void Move::Interrupt() noexcept
 // Called from the step ISR only.
 void Move::DeactivateDM(DriveMovement *dmToRemove) noexcept
 {
-	DriveMovement **dmp = &activeDMs;
+#if SUPPORT_PHASE_STEPPING
+	DriveMovement** dmp = dmToRemove->state == DMState::phaseStepping ? &phaseStepDMs : &activeDMs;
+#else
+	DriveMovement** dmp = &activeDMs;
+#endif
 	while (*dmp != nullptr)
 	{
 		DriveMovement * const dm = *dmp;
@@ -2509,6 +2526,10 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 			if (dm2->NewSegment(now) != nullptr && dm2->state != DMState::starting)
 			{
 				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
+				if (dm2->state == DMState::phaseStepping)
+				{
+					return;
+				}
 # if SUPPORT_CAN_EXPANSION
 				flags |= dm2->segmentFlags;
 				if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
@@ -2518,7 +2539,7 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 				else
 # endif
 				{
-					(void)dm2->CalcNextStepTimeFull(now);			// calculate next step time
+					(void)dm2->CalcNextStepTimeFull(now); // calculate next step time
 					dm2->directionChanged = true;					// force the direction to be set up
 				}
 			}

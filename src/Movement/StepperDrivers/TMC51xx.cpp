@@ -79,13 +79,13 @@ constexpr float RecipFullScaleCurrent = Tmc5160SenseResistor/325.0;		// 1.0 divi
 #if SUPPORT_PHASE_STEPPING
 constexpr uint32_t DriversSpiClockFrequency = 4000000;		// 4MHz SPI clock, this is the maximum rate the TMC5160/2160 support
 // TODO set this back to appropriate value
-constexpr uint32_t DriversDirectSleepMicroseconds = 5000;	// how long the phase stepping task sleeps for in each cycle. Max SPI message frequency is ~16.7 kHz
+constexpr uint32_t DriversDirectSleepMicroseconds = 125;	// how long the phase stepping task sleeps for in each cycle. Max SPI message frequency is ~16.7 kHz
 															// there is 1 write + 1 read per motor current setting.
 #else
 constexpr uint32_t DriversSpiClockFrequency = 2000000;		// 2MHz SPI clock, this is the maximum rate the TMC5160/2160 support
 #endif
 // TODO set this back to appropriate value
-constexpr uint32_t TransferTimeout = 10;						// any transfer should complete within 2 ticks @ 1ms/tick
+constexpr uint32_t TransferTimeout = 2;						// any transfer should complete within 2 ticks @ 1ms/tick
 
 // GCONF register (0x00, RW)
 constexpr uint8_t REGNUM_GCONF = 0x00;

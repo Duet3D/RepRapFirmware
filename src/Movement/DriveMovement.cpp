@@ -322,6 +322,12 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 		{
 			return true;
 		}
+#if SUPPORT_PHASE_STEPPING
+		if (state == DMState::phaseStepping)
+		{
+			return false;
+		}
+#endif
 		return CalcNextStepTimeFull(now);
 	}
 	return false;
@@ -343,7 +349,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		MoveSegment *seg = segments;				// capture volatile variable
 		if (seg == nullptr)
 		{
-			debugPrintf("No segments");
+			debugPrintf("No segments\n");
 			segmentFlags.Init();
 			state = DMState::idle;					// if we have been round this loop already then we will have changed the state, so reset it to idle
 			return nullptr;
@@ -353,6 +359,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 
 		if ((int32_t)(seg->GetStartTime() - now) > (int32_t)MoveTiming::MaximumMoveStartAdvanceClocks)
 		{
+			debugPrintf("Time till start = %ld\n", (int32_t)seg->GetStartTime() - now);
 			state = DMState::starting;				// the segment is not due to start for a while. To allow it to be changed meanwhile, generate an interrupt when it is due to start.
 			driversCurrentlyUsed = 0;				// don't generate a step on that interrupt
 			nextStepTime = seg->GetStartTime();		// this is when we want the interrupt
@@ -368,13 +375,21 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		int32_t multiplier;
 		motioncalc_t rawP;
 
+		const bool isLinear = seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0);
+
+#if SUPPORT_PHASE_STEPPING
+		if (IsPhaseStepEnabled())
+		{
+			u = isLinear ? seg->CalcLinearU() : -seg->GetA() * t0;
+			state = DMState::phaseStepping;
+			return seg;
+		}
+#endif
+
 		// If netStepsThisSegment is zero then either this segment plus the distance carried forwards is less than one step, or it's a forwards-then-back move
-		if (seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0))
+		if (isLinear)
 		{
 			// Segment is linear
-#if SUPPORT_PHASE_STEPPING
-			u = seg->CalcLinearU();								// needed by GetCurrentMotion so pre-calculate it
-#endif
 			rawP = seg->CalcLinearRecipU();
 			newDirection = !std::signbit(seg->GetLength());
 			multiplier = 2 * (int32_t)newDirection - 1;			// +1 or -1
@@ -389,9 +404,6 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 			// Therefore 0.5 * t^2 + u * t/a + (distanceCarriedForwards - n)/a = 0
 			// Therefore t = -u/a +/- sqrt((u/a)^2 - 2 * (distanceCarriedForwards - n)/a)
 			// Calculate the t0, p and q coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q) and set up the initial direction
-#if SUPPORT_PHASE_STEPPING
-			u = -seg->GetA() * t0;								// needed by GetCurrentMotion so pre-calculate it
-#endif
 			newDirection = !std::signbit(seg->GetA());			// assume accelerating motion
 			multiplier = 2 * (int32_t)newDirection - 1;			// +1 or -1
 			if (t0 <= (motioncalc_t)0.0)
