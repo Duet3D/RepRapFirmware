@@ -549,7 +549,7 @@ GCodeResult ZProbe::ReportScanningCoefficients(const StringRef& reply) noexcept
 {
 	if (isCalibrated)
 	{
-		reply.printf("Scanning probe coefficients: offset %.3fmm, A=%.3e B=%.3e C=%.3e", (double)scanCoefficients[0], (double)scanCoefficients[1], (double)scanCoefficients[2], (double)scanCoefficients[3]);
+		reply.printf("Scanning probe offset: %.3fmm, A: %.3e, B: %.3e, C: %.3e", (double)scanCoefficients[0], (double)scanCoefficients[1], (double)scanCoefficients[2], (double)scanCoefficients[3]);
 		return GCodeResult::ok;
 	}
 
