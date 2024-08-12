@@ -109,10 +109,10 @@ public:
 
 	// Drivers configuration
 	size_t GetNumActualDirectDrivers() const noexcept;
-	void SetDriverDirection(size_t axisOrExtruder, bool direction) noexcept;
+	void SetDriversDirection(size_t axisOrExtruder, bool direction) noexcept;
 	void SetDirectionValue(size_t driver, bool dVal) noexcept;
 	bool GetDirectionValue(size_t driver) const noexcept;
-	void SetDriverAbsoluteDirection(size_t driver, bool dVal) noexcept;
+	void SetOneDriverAbsoluteDirection(size_t driver, bool dVal) noexcept;
 	void SetEnableValue(size_t driver, int8_t eVal) noexcept;
 	int8_t GetEnableValue(size_t driver) const noexcept;
 	void EnableDrivers(size_t axisOrExtruder, bool unconditional) noexcept;
@@ -532,7 +532,7 @@ private:
 	void DisengageBrake(size_t driver) noexcept;
 
 	void UpdateMotorCurrent(size_t driver, float current) noexcept;
-	void SetDriverDirection(uint8_t driver, bool direction) noexcept pre(driver < NumDirectDrivers);
+	void SetOneDriverDirection(uint8_t driver, bool direction) noexcept pre(driver < NumDirectDrivers);
 
 	StandardDriverStatus GetLocalDriverStatus(size_t driver) const noexcept;
 
@@ -795,7 +795,7 @@ inline bool Move::GetDirectionValue(size_t drive) const noexcept
 	return directions[drive];
 }
 
-inline void Move::SetDriverDirection(uint8_t driver, bool direction) noexcept
+inline void Move::SetOneDriverDirection(uint8_t driver, bool direction) noexcept
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
@@ -808,7 +808,7 @@ inline void Move::SetDriverDirection(uint8_t driver, bool direction) noexcept
 	}
 }
 
-inline void Move::SetDriverAbsoluteDirection(size_t driver, bool direction) noexcept
+inline void Move::SetOneDriverAbsoluteDirection(size_t driver, bool direction) noexcept
 {
 	if (driver < GetNumActualDirectDrivers())
 	{

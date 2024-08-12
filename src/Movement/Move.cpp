@@ -2093,6 +2093,9 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	{
 		if (dmp->ScheduleFirstSegment())
 		{
+			// Always set the direction when starting the first move
+			dmp->directionChanged = false;
+			SetDirection(dmp->drive, dmp->direction);
 			InsertDM(dmp);
 			if (activeDMs == dmp && simulationMode == SimulationMode::off)			// if this is now the first DM in the active list
 			{
@@ -2509,7 +2512,7 @@ void Move::SetDirection(size_t axisOrExtruder, bool direction) noexcept
 	}
 #endif
 
-	SetDriverDirection(axisOrExtruder, direction);
+	SetDriversDirection(axisOrExtruder, direction);
 
 #ifndef DUET3_MB6XD
 	if (isSlowDriver)
@@ -2730,28 +2733,28 @@ void Move::IterateDrivers(size_t axisOrExtruder, function_ref_noexcept<void(uint
 			localFunc(id.localDriver);
 		}
 	}
-	else if (axisOrExtruder < MaxAxesPlusExtruders && LogicalDriveToExtruder(axisOrExtruder) < reprap.GetGCodes().GetNumExtruders())
+	else if (axisOrExtruder < MaxAxesPlusExtruders)
 	{
-		const DriverId id = extruderDrivers[LogicalDriveToExtruder(axisOrExtruder)];
-		localFunc(id.localDriver);
+		if (LogicalDriveToExtruder(axisOrExtruder) < reprap.GetGCodes().GetNumExtruders())
+		{
+			const DriverId id = extruderDrivers[LogicalDriveToExtruder(axisOrExtruder)];
+			localFunc(id.localDriver);
+		}
+	}
+	else if (axisOrExtruder < MaxAxesPlusExtruders + NumDirectDrivers)
+	{
+		localFunc(axisOrExtruder - MaxAxesPlusExtruders);
 	}
 }
 
 #endif
 
 // This is called from the step ISR as well as other places, so keep it fast
-// If drive >= DRIVES then we are setting an individual motor direction
+// If drive >= MaxAxesPlusExtruders then we are setting an individual motor direction
 // It is the responsibility of the caller to ensure that minimum timings between step pulses and direction changes are observed.
-void Move::SetDriverDirection(size_t axisOrExtruder, bool direction) noexcept
+void Move::SetDriversDirection(size_t axisOrExtruder, bool direction) noexcept
 {
-	if (axisOrExtruder < MaxAxesPlusExtruders)
-	{
-		IterateLocalDrivers(axisOrExtruder, [this, direction](uint8_t driver) { this->SetDriverDirection(driver, direction); });
-	}
-	else if (axisOrExtruder < MaxAxesPlusExtruders + NumDirectDrivers)
-	{
-		SetDriverDirection(axisOrExtruder - MaxAxesPlusExtruders, direction);
-	}
+	IterateLocalDrivers(axisOrExtruder, [this, direction](uint8_t driver) { this->SetOneDriverDirection(driver, direction); });
 }
 
 // Enable a driver. Must not be called from an ISR, or with interrupts disabled.

@@ -450,8 +450,8 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 			if (newDirection != direction)
 			{
 				directionChanged = true;
+				direction = newDirection;
 			}
-			direction = newDirection;					// we must ALWAYS store this even if the direction doesn't appear to have changed in case directionChanged has been set externally
 
 			// Unless we're possibly in the middle of a homing move, re-enable all drivers for this axis
 			if (!segmentFlags.checkEndstops)
