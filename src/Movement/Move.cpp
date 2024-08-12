@@ -969,6 +969,12 @@ void Move::CancelStepping() noexcept
 
 extern uint32_t maxCriticalElapsedTime;
 
+// Helper function to convert a time period (expressed in StepTimer::Ticks) to a frequency in Hz
+static inline uint32_t TickPeriodToFreq(StepTimer::Ticks tickPeriod) noexcept
+{
+	return StepTimer::GetTickRate()/tickPeriod;
+}
+
 void Move::Diagnostics(MessageType mtype) noexcept
 {
 	// Get the type of bed compensation in use
@@ -1055,6 +1061,10 @@ void Move::Diagnostics(MessageType mtype) noexcept
 		driverStatus.cat('\n');
 		p.Message(mtype, driverStatus.c_str());
 	}
+
+	p.MessageF(mtype, "Phase step loop runtime (us): min=%" PRIu32 ", max=%" PRIu32 ", frequency (Hz): min=%" PRIu32 ", max=%" PRIu32 "\n",
+			StepTimer::TicksToIntegerMicroseconds(minPSControlLoopRuntime), StepTimer::TicksToIntegerMicroseconds(maxPSControlLoopRuntime),
+			TickPeriodToFreq(maxPSControlLoopCallInterval), TickPeriodToFreq(minPSControlLoopCallInterval));
 
 	// Show the status of each DDA ring
 	for (size_t i = 0; i < ARRAY_SIZE(rings); ++i)
@@ -2203,6 +2213,8 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
 	});
 
 	dms[axisOrExtruder].SetStepMode(mode);
+
+	ResetPhaseStepMonitoringVariables();
 	return ret;
 }
 
@@ -2217,6 +2229,14 @@ StepMode Move::GetStepMode(size_t axisOrExtruder) noexcept
 
 void Move::PhaseStepControlLoop() noexcept
 {
+
+	// Record the control loop call interval
+	const StepTimer::Ticks loopCallTime = StepTimer::GetTimerTicks();
+	const StepTimer::Ticks timeElapsed = loopCallTime - prevPSControlLoopCallTime;
+	prevPSControlLoopCallTime = loopCallTime;
+	minPSControlLoopCallInterval = min<StepTimer::Ticks>(minPSControlLoopCallInterval, timeElapsed);
+	maxPSControlLoopCallInterval = max<StepTimer::Ticks>(maxPSControlLoopCallInterval, timeElapsed);
+
 	uint32_t now = StepTimer::GetTimerTicks() - StepTimer::GetMovementDelay();
 
 	DriveMovement **dmp = &phaseStepDMs;
@@ -2262,6 +2282,22 @@ void Move::PhaseStepControlLoop() noexcept
 		}
 		// debugPrintf("%lu\n", StepTimer::GetTimerTicks());
 	}
+
+
+	// Record how long this has taken to run
+	const StepTimer::Ticks loopRuntime = StepTimer::GetTimerTicks() - loopCallTime;
+	minPSControlLoopRuntime = min<StepTimer::Ticks>(minPSControlLoopRuntime, loopRuntime);
+	maxPSControlLoopRuntime = max<StepTimer::Ticks>(maxPSControlLoopRuntime, loopRuntime);
+}
+
+
+// Helper function to reset the 'monitoring variables' as defined above
+void Move::ResetPhaseStepMonitoringVariables() noexcept
+{
+	minPSControlLoopRuntime = std::numeric_limits<StepTimer::Ticks>::max();
+	maxPSControlLoopRuntime = 1;
+	minPSControlLoopCallInterval = std::numeric_limits<StepTimer::Ticks>::max();
+	maxPSControlLoopCallInterval = 1;
 }
 
 #endif

@@ -102,18 +102,6 @@ public:
 	int16_t coilA;										// The current to run through coil A
 	int16_t coilB;										// The current to run through coil A
 
-	bool	hasMovementCommand = false;					// true if a regular movement command is being executed
-
-	StepTimer::Ticks whenLastTuningStepTaken;			// when the control loop last called the tuning code
-
-	// Monitoring variables
-	// These variables monitor how fast the PID loop is running etc.
-	StepTimer::Ticks prevControlLoopCallTime;			// The last time the control loop was called
-	StepTimer::Ticks minControlLoopRuntime;				// The minimum time the control loop has taken to run
-	StepTimer::Ticks maxControlLoopRuntime;				// The maximum time the control loop has taken to run
-	StepTimer::Ticks minControlLoopCallInterval;		// The minimum interval between the control loop being called
-	StepTimer::Ticks maxControlLoopCallInterval;		// The maximum interval between the control loop being called
-
 	// Functions private to this module
 	uint16_t CalculateStepPhase(size_t driver) noexcept;
 	float CalculateMotorCurrents(size_t driver) noexcept;

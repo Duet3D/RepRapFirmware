@@ -432,6 +432,7 @@ public:
 	bool SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept;
 	StepMode GetStepMode(size_t axisOrExtruder) noexcept;
 	void InvertCurrentMotorSteps(size_t driver) noexcept;
+	void ResetPhaseStepMonitoringVariables() noexcept;
 
 	void PhaseStepControlLoop() noexcept;
 #endif
@@ -598,6 +599,13 @@ private:
 	DriveMovement *activeDMs;
 #if SUPPORT_PHASE_STEPPING
 	DriveMovement *phaseStepDMs;
+
+	// These variables monitor how fast the phase stepping control loop is running etc.
+	StepTimer::Ticks prevPSControlLoopCallTime;			// The last time the control loop was called
+	StepTimer::Ticks minPSControlLoopRuntime;				// The minimum time the control loop has taken to run
+	StepTimer::Ticks maxPSControlLoopRuntime;				// The maximum time the control loop has taken to run
+	StepTimer::Ticks minPSControlLoopCallInterval;		// The minimum interval between the control loop being called
+	StepTimer::Ticks maxPSControlLoopCallInterval;		// The maximum interval between the control loop being called
 #endif
 
 #if SUPPORT_ASYNC_MOVES

@@ -66,15 +66,6 @@ const char* TranslateStepMode(const StepMode mode)
 	}
 }
 
-// Helper function to reset the 'monitoring variables' as defined above
-void PhaseStep::ResetMonitoringVariables() noexcept
-{
-	PhaseStep::minControlLoopRuntime = numeric_limits<StepTimer::Ticks>::max();
-	PhaseStep::maxControlLoopRuntime = 1;
-	PhaseStep::minControlLoopCallInterval = numeric_limits<StepTimer::Ticks>::max();
-	PhaseStep::maxControlLoopCallInterval = 1;
-}
-
 // Set the motor currents and update desiredStepPhase
 // The phase is normally in the range 0 to 4095 but when tuning it can be 0 to somewhat over 8192.
 // We must take it modulo 4096 when computing the currents. Function Trigonometry::FastSinCos does that.
@@ -104,32 +95,12 @@ void PhaseStep::UpdateStandstillCurrent() noexcept
 
 void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 {
-	if (!enabled)
+	if (unlikely(!enabled))
 	{
 		return;
 	}
 
-	// Record the control loop call interval
-	const StepTimer::Ticks loopCallTime = StepTimer::GetTimerTicks();
-	const StepTimer::Ticks timeElapsed = loopCallTime - prevControlLoopCallTime;
-	prevControlLoopCallTime = loopCallTime;
-	minControlLoopCallInterval = min<StepTimer::Ticks>(minControlLoopCallInterval, timeElapsed);
-	maxControlLoopCallInterval = max<StepTimer::Ticks>(maxControlLoopCallInterval, timeElapsed);
-
-	const float currentFraction = CalculateMotorCurrents(driver);
-
-	// Update the statistics
-	if (currentFraction > periodMaxCurrentFraction)
-	{
-		periodMaxCurrentFraction = currentFraction;
-	}
-	periodSumOfCurrentFractions += currentFraction;
-	++periodNumSamples;
-
-	// Record how long this has taken to run
-	const StepTimer::Ticks loopRuntime = StepTimer::GetTimerTicks() - loopCallTime;
-	minControlLoopRuntime = min<StepTimer::Ticks>(minControlLoopRuntime, loopRuntime);
-	maxControlLoopRuntime = max<StepTimer::Ticks>(maxControlLoopRuntime, loopRuntime);
+	CalculateMotorCurrents(driver);
 }
 
 void PhaseStep::UpdatePhaseOffset(size_t driver) noexcept
