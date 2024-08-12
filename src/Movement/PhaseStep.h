@@ -38,6 +38,18 @@ enum class StepMode
 	unknown
 };
 
+enum class PhaseStepConfig
+{
+	kv = 0,
+	ka,
+};
+
+struct PhaseStepParams
+{
+	float Kv;
+	float Ka;
+};
+
 const char* TranslateStepMode(const StepMode mode);
 
 class PhaseStep
@@ -54,9 +66,16 @@ public:
 	bool IsEnabled() const noexcept { return enabled; }
 	void UpdatePhaseOffset(size_t driver) noexcept;
 
-private:
+	// Configuration methods
+	void SetKv(float newKv) noexcept { Kv = newKv; }
+	void SetKa(float newKa) noexcept { Ka = newKa; }
+	float GetKv() const noexcept { return Kv; }
+	float GetKa() const noexcept { return Ka; }
+
+  private:
 	// Constants private to this module
-	static constexpr float DefaultHoldCurrentFraction = 0.25;		// the minimum fraction of the requested current that we apply when holding position
+	static constexpr float DefaultHoldCurrentFraction =
+		0.25; // the minimum fraction of the requested current that we apply when holding position
 
 	// Methods used only by closed loop and by the tuning module
 	void SetMotorPhase(size_t driver, uint16_t phase, float magnitude) noexcept;
@@ -64,9 +83,9 @@ private:
 	bool enabled = false;
 
 	// Holding current, and variables derived from it
-	float 	holdCurrentFraction = DefaultHoldCurrentFraction;	// The minimum holding current when stationary
-	float	Kv = 1000.0;										// The velocity feedforward constant
-	float	Ka = 0.0;											// The acceleration feedforward constant
+	float holdCurrentFraction = DefaultHoldCurrentFraction; // The minimum holding current when stationary
+	float Kv = 1000.0;										// The velocity feedforward constant
+	float Ka = 50000.0;										// The acceleration feedforward constant
 
 	// Working variables
 	// These variables are all used to calculate the required motor currents. They are declared here so they can be reported on by the data collection task

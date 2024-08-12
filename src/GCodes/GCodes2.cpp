@@ -700,14 +700,16 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 #endif
 
 		GCodeResult result;
-		if (gb.GetCommandFraction() > 0
-			&& code != 36 && code != 201
-			&& code != 260 && code != 261
+		if (gb.GetCommandFraction() > 0 && code != 36 && code != 201 && code != 260 && code != 261
 #if SUPPORT_SCANNING_PROBES
 			&& code != 558
 #endif
-			&& code != 569 && code != 586 && code != 587	// these are the only M-codes we implement that can have fractional parts
-		   )
+			&& code != 569 && code != 586 &&
+			code != 587 // these are the only M-codes we implement that can have fractional parts
+#if SUPPORT_PHASE_STEPPING
+			&& code != 970
+#endif
+		)
 		{
 			result = TryMacroFile(gb);
 		}

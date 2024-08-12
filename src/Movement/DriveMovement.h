@@ -283,7 +283,6 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 					segments = oldSeg->GetNext();
 					MoveSegment::Release(oldSeg);
 					seg = NewSegment(when);
-					debugPrintf("dm->state = %" PRIu32 "\n", (uint32_t)state);
 					continue;
 				}
 				timeSinceStart = seg->GetDuration();

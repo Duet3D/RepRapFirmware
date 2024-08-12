@@ -2056,6 +2056,28 @@ bool Move::AreDrivesStopped(AxesBitmap drives) const noexcept
 
 #if SUPPORT_PHASE_STEPPING
 
+void Move::ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config)
+{
+	switch (config)
+	{
+		break;
+	case PhaseStepConfig::kv:
+		dms[axisOrExtruder].phaseStepControl.SetKv(value);
+		break;
+	case PhaseStepConfig::ka:
+		dms[axisOrExtruder].phaseStepControl.SetKa(value);
+		break;
+	}
+}
+
+PhaseStepParams Move::GetPhaseStepParams(size_t axisOrExtruder)
+{
+	PhaseStepParams params;
+	params.Kv = dms[axisOrExtruder].phaseStepControl.GetKv();
+	params.Ka = dms[axisOrExtruder].phaseStepControl.GetKa();
+	return params;
+}
+
 // if the driver is idle, enable it; return true if driver enabled on return
 bool Move::EnableIfIdle(size_t driver) noexcept
 {
@@ -2129,8 +2151,6 @@ void Move::PhaseStepControlLoop() noexcept
 	while (*dmp != nullptr)
 	{
 		DriveMovement * const dm = *dmp;
-
-		debugPrintf("dms[%u]->state: %u\n", (size_t)dm->drive, (size_t)dm->state);
 
 		// TODO CheckEndstops()
 

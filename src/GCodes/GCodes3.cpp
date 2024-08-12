@@ -837,19 +837,37 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 // Deal with M970
 GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
+	constexpr int8_t kvSubCommand = 1;
+	constexpr int8_t kaSubCommand = 2;
+
 	bool seen = false;
 	Move& move = reprap.GetMove();
+	int8_t commandFraction = gb.GetCommandFraction();
 	for (size_t axis = 0; axis < numTotalAxes; axis++)
 	{
 		if (gb.Seen(axisLetters[axis]))
 		{
 			seen = true;
-			const StepMode mode = (StepMode)gb.GetLimitedUIValue(axisLetters[axis], (uint32_t) StepMode::unknown);
-			const bool ret = move.SetStepMode(axis, mode);	// TODO check if this gets the correct DM. Don't think it does
-			if (!ret)
+			switch (commandFraction)
 			{
-				reply.printf("Could not set step mode for axis %c to mode %u", axisLetters[axis], (uint16_t)mode);
-				return GCodeResult::error;
+			case -1:
+			{
+				const StepMode mode = (StepMode)gb.GetLimitedUIValue(axisLetters[axis], (uint32_t) StepMode::unknown);
+				const bool ret = move.SetStepMode(axis, mode);	// TODO check if this gets the correct DM. Don't think it does
+				if (!ret)
+				{
+					reply.printf("Could not set step mode for axis %c to mode %u", axisLetters[axis], (uint16_t)mode);
+					return GCodeResult::error;
+				}
+				break;
+			}
+			case kvSubCommand:
+			case kaSubCommand:
+			{
+				const float value = gb.GetLimitedFValue(axisLetters[axis], 0, FLT_MAX);
+				move.ConfigurePhaseStepping(axis, value, commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
+				break;
+			}
 			}
 		}
 	}
@@ -857,37 +875,88 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 	if (gb.Seen(extrudeLetter))
 	{
 		seen = true;
-		uint32_t eVals[MaxExtruders];
-		size_t eCount = numExtruders;
-		gb.GetUnsignedArray(eVals, eCount, true);
-
-		for (size_t e = 0; e < eCount; e++)
+		switch (commandFraction)
 		{
-			if (eVals[e] >= (uint32_t)StepMode::unknown)
+		case -1:
+		{
+			uint32_t eVals[MaxExtruders];
+			size_t eCount = numExtruders;
+			gb.GetUnsignedArray(eVals, eCount, true);
+
+			for (size_t e = 0; e < eCount; e++)
 			{
-				reply.printf("Unknown mode %lu", eVals[e]);
-				return GCodeResult::error;
+				if (eVals[e] >= (uint32_t)StepMode::unknown)
+				{
+					reply.printf("Unknown mode %lu", eVals[e]);
+					return GCodeResult::error;
+				}
+				const bool ret = move.SetStepMode(ExtruderToLogicalDrive(e), (StepMode)eVals[e]);
+				if (!ret)
+				{
+					reply.printf("Could not set step mode for extruder %u to mode %lu", e, eVals[e]);
+					return GCodeResult::error;
+				}
 			}
-			const bool ret = move.SetStepMode(ExtruderToLogicalDrive(e), (StepMode)eVals[e]);
-			if (!ret)
+			break;
+		}
+		case kvSubCommand:
+		case kaSubCommand:
+		{
+			float eVals[MaxExtruders];
+			size_t eCount = numExtruders;
+			gb.GetFloatArray(eVals, eCount, true);
+
+			for (size_t e = 0; e < eCount; e++)
 			{
-				reply.printf("Could not set step mode for extruder %u to mode %lu", e, eVals[e]);
-				return GCodeResult::error;
+				if (eVals[e] >= FLT_MAX || eVals[e] < 0)
+				{
+					reply.printf("Invalid K%c %f", commandFraction == kvSubCommand ? 'v' : 'a', (double)eVals[e]);
+					return GCodeResult::error;
+				}
+				move.ConfigurePhaseStepping(ExtruderToLogicalDrive(e), eVals[e], commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
 			}
+			break;
+		}
 		}
 	}
 
 	if (!seen)
 	{
-		reply.copy("Axis step mode - ");
-		for (size_t axis = 0; axis < numTotalAxes; ++axis)
+		switch (commandFraction)
 		{
-			reply.catf("%c:%lu, ", axisLetters[axis], (uint32_t)move.GetStepMode(axis));
-		}
-		reply.cat("E");
-		for (size_t extruder = 0; extruder < numExtruders; extruder++)
-		{
-			reply.catf(":%lu", (uint32_t)move.GetStepMode(ExtruderToLogicalDrive(extruder)));
+		case -1:
+			reply.copy("Axis step mode - ");
+			for (size_t axis = 0; axis < numTotalAxes; ++axis)
+			{
+				reply.catf("%c:%lu, ", axisLetters[axis], (uint32_t)move.GetStepMode(axis));
+			}
+			reply.cat("E");
+			for (size_t extruder = 0; extruder < numExtruders; extruder++)
+			{
+				reply.catf(":%lu", (uint32_t)move.GetStepMode(ExtruderToLogicalDrive(extruder)));
+			}
+			break;
+		case kvSubCommand:
+		case kaSubCommand:
+			reply.printf("Axis phase step K%c - ", commandFraction == kvSubCommand ? 'v' : 'a');
+			for (size_t axis = 0; axis < numTotalAxes; ++axis)
+			{
+				reply.catf("%c:%f, ", axisLetters[axis],
+						commandFraction == kvSubCommand ?
+								(double)move.GetPhaseStepParams(axis).Kv :
+								(double)move.GetPhaseStepParams(axis).Ka
+				);
+			}
+			reply.cat("E");
+			for (size_t extruder = 0; extruder < numExtruders; extruder++)
+			{
+				reply.catf(":%f",
+						commandFraction == kvSubCommand ?
+							(double)move.GetPhaseStepParams(ExtruderToLogicalDrive(extruder)).Kv :
+							(double)move.GetPhaseStepParams(ExtruderToLogicalDrive(extruder)).Ka
+				);
+			}
+			break;
 		}
 	}
 	return GCodeResult::ok;

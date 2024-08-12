@@ -1334,6 +1334,7 @@ void RxDmaCompleteCallback(CallbackParameter param, DmaCallbackReason reason) no
 		lastWakeupTime += (StepClockRate * DriversDirectSleepMicroseconds)/1000000;
 		if (tmcTimer.ScheduleCallbackFromIsr(lastWakeupTime))
 		{
+			debugPrintf("tmc task due now\n");
 			lastWakeupTime = StepTimer::GetTimerTicks();
 			tmcTask.GiveFromISR(NotifyIndices::Tmc);
 		}

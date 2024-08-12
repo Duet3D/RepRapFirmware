@@ -88,7 +88,7 @@ void PhaseStep::SetMotorPhase(size_t driver, uint16_t phase, float magnitude) no
 	coilB = (int16_t)lrintf(sine * magnitude);
 	if (SmartDrivers::SetMotorCurrents(driver, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF))
 	{
-		debugPrintf("Set driver %" PRIu16 " phase to %" PRIu16 "\n", driver, phase);
+		debugPrintf("Set driver %" PRIu16 " phase to %" PRIu16 " %.2f%%, v=%.5f, a=%.5f %lu\n", driver, phase, (double)magnitude * 100, (double)mParams.speed, (double)mParams.acceleration, StepTimer::GetTimerTicks());
 	}
 }
 
