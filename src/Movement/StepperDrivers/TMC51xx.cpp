@@ -80,9 +80,9 @@ constexpr float RecipFullScaleCurrent = Tmc5160SenseResistor/325.0;		// 1.0 divi
 constexpr uint32_t DriversSpiClockFrequency = 4000000;		// 4MHz SPI clock, this is the maximum rate the TMC5160/2160 support
 // TODO set this back to appropriate value
 constexpr uint32_t DriversDirectSleepMicroseconds = 125;	// how long the phase stepping task sleeps for in each cycle. Max SPI message frequency is ~16.7 kHz
-															// there is 1 write + 1 read per motor current setting.
+															// there is 1 write + 1 read/write per motor current setting.
 #else
-constexpr uint32_t DriversSpiClockFrequency = 2000000;		// 2MHz SPI clock, this is the maximum rate the TMC5160/2160 support
+constexpr uint32_t DriversSpiClockFrequency = 2000000;		// 2MHz SPI clock
 #endif
 // TODO set this back to appropriate value
 constexpr uint32_t TransferTimeout = 2;						// any transfer should complete within 2 ticks @ 1ms/tick
@@ -323,6 +323,7 @@ public:
 	void SetXdirect(uint32_t regVal) noexcept;
 	float GetCurrent() noexcept { return (float)motorCurrent; }
 	bool EnablePhaseStepping(bool enable);
+	bool IsPhaseSteppingEnabled() const noexcept { return phaseStepEnabled; }
 	uint32_t GetPhaseToSet() { return phaseToSet; }
 #endif
 	bool SetDriverMode(unsigned int mode) noexcept;
@@ -1719,11 +1720,24 @@ bool SmartDrivers::SetMotorCurrents(size_t driver, uint32_t regVal) noexcept
 	return true;
 }
 
+bool SmartDrivers::IsPhaseSteppingEnabled(size_t driver) noexcept
+{
+	return driver < numTmc51xxDrivers && driverStates[driver].IsPhaseSteppingEnabled();
+}
+
 #endif
 
 bool SmartDrivers::SetDriverMode(size_t driver, unsigned int mode) noexcept
 {
-	return driver < numTmc51xxDrivers && driverStates[driver].SetDriverMode(mode);
+	if (driver >= numTmc51xxDrivers)
+	{
+		return false;
+	}
+	if (driverStates[driver].IsPhaseSteppingEnabled())
+	{
+		return false;
+	}
+	return driverStates[driver].SetDriverMode(mode);
 }
 
 DriverMode SmartDrivers::GetDriverMode(size_t driver) noexcept

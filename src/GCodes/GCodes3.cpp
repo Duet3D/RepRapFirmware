@@ -957,6 +957,8 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 				);
 			}
 			break;
+		default:
+			return GCodeResult::warningNotSupported;
 		}
 	}
 	return GCodeResult::ok;
@@ -1093,6 +1095,11 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 		uint32_t val;
 		if (gb.TryGetUIValue('D', val, seen))	// set driver mode
 		{
+			if (SmartDrivers::IsPhaseSteppingEnabled(drive))
+			{
+				reply.printf("Can not set driver %u mode while phase stepping is enabled", drive);
+				return GCodeResult::error;
+			}
 			if (!SmartDrivers::SetDriverMode(drive, val))
 			{
 				reply.printf("Driver %u does not support mode '%s'", drive, TranslateDriverMode(val));

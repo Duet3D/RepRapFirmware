@@ -29,6 +29,7 @@ namespace SmartDrivers
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation) noexcept;
 #if SUPPORT_PHASE_STEPPING
 	bool EnablePhaseStepping(size_t driver, bool enable) noexcept;
+	bool IsPhaseSteppingEnabled(size_t driver) noexcept;
 	float GetCurrent(size_t driver) noexcept;
 	unsigned int GetMicrostepShift(size_t driver) noexcept;
 	uint16_t GetMicrostepPosition(size_t driver) noexcept;
