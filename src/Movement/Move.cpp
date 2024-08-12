@@ -2213,6 +2213,11 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
 	});
 
 	dms[axisOrExtruder].SetStepMode(mode);
+	if (axisOrExtruder < MaxAxes)
+	{
+		reprap.GetGCodes().SetAxisNotHomed(axisOrExtruder);
+	}
+	DisableDrivers(axisOrExtruder);
 
 	ResetPhaseStepMonitoringVariables();
 	return ret;
