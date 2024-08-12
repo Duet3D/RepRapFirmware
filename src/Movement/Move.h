@@ -820,7 +820,6 @@ inline void Move::SetDirectionValue(size_t drive, bool dVal) noexcept
 	{
 		TaskCriticalSectionLocker lock;
 		directions[drive] = dVal;
-		InvertCurrentMotorSteps(drive);
 	}
 #else
 	directions[drive] = dVal;

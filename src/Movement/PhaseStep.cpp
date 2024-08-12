@@ -95,7 +95,6 @@ void PhaseStep::UpdateStandstillCurrent() noexcept
 
 void PhaseStep::Calculate() noexcept
 {
-	CalculateStepPhase();
 	CalculateCurrentFraction();
 }
 
@@ -106,26 +105,23 @@ void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 		return;
 	}
 
-	const uint16_t commandedStepPhase = GetOffsetStepPhase(driver);			// do this first because it sets up mparams
+	const uint16_t commandedStepPhase = CalculateStepPhase(driver);
 	SetMotorPhase(driver, commandedStepPhase, currentFraction);
 }
 
 void PhaseStep::UpdatePhaseOffset(size_t driver) noexcept
 {
 	AtomicCriticalSectionLocker lock;
-	CalculateStepPhase();
-	phaseOffset[driver] = (desiredStepPhase - calculatedStepPhase) % 4096u;
+	const uint16_t calculatedStepPhase = CalculateStepPhase(driver);
+	phaseOffset[driver] = (desiredStepPhase - (calculatedStepPhase - phaseOffset[driver])) % 4096u;
 	debugPrintf("Updated phaseOffset[%u] = %u\n", driver, phaseOffset[driver]);
 }
 
-inline uint16_t PhaseStep::CalculateStepPhase() noexcept
+inline uint16_t PhaseStep::CalculateStepPhase(size_t driver) noexcept
 {
-	calculatedStepPhase = (uint16_t)llrintf(mParams.position * 1024.0);		// we use llrintf so that we can guarantee to convert the float operand to integer. We only care about the lowest 12 bits.
-	return calculatedStepPhase;
-}
-
-inline uint16_t PhaseStep::GetOffsetStepPhase(size_t driver) noexcept
-{
+	const float multiplier = reprap.GetMove().GetDirectionValue(driver) ? 1.0 : -1.0;
+	debugPrintf("driver %u, dir=%d\n", driver, (int)multiplier);
+	const uint16_t calculatedStepPhase = (uint16_t)llrintf(mParams.position * multiplier * 1024.0);		// we use llrintf so that we can guarantee to convert the float operand to integer. We only care about the lowest 12 bits.
 	return (calculatedStepPhase + phaseOffset[driver]) % 4096u;
 }
 

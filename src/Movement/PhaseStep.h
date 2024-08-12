@@ -96,15 +96,13 @@ public:
 	float	PIDATerm;									// Acceleration feedforward term
 	float	PIDControlSignal;							// The overall signal from the PID controller
 
-	uint16_t calculatedStepPhase = 0; // The calculated phase before the driver offset has been applied
 	uint16_t desiredStepPhase = 0;						// The desired position of the motor
 	float currentFraction;
 	int16_t coilA;										// The current to run through coil A
 	int16_t coilB;										// The current to run through coil A
 
 	// Functions private to this module
-	uint16_t CalculateStepPhase() noexcept;
-	uint16_t GetOffsetStepPhase(size_t driver) noexcept;
+	uint16_t CalculateStepPhase(size_t driver) noexcept;
 	float CalculateCurrentFraction() noexcept;
 	void ResetMonitoringVariables() noexcept;
 };

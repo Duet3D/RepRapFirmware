@@ -2183,7 +2183,7 @@ bool Move::EnableIfIdle(size_t driver) noexcept
 bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
 {
 	const bool ret = dms[driver].GetCurrentMotion(when, mParams);
-	const float multiplier = ldexpf((GetDirectionValue(driver)) ? -1.0 : 1.0, -(int)SmartDrivers::GetMicrostepShift(driver));
+	const float multiplier = ldexpf(-1.0, -(int)SmartDrivers::GetMicrostepShift(driver));
 
 	// Convert microsteps to full steps
 	mParams.position *= multiplier;
