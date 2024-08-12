@@ -61,6 +61,7 @@ public:
 	void UpdateStandstillCurrent() noexcept;
 
 	// Methods called by the motion system
+	void Calculate() noexcept; // Calculate the phase and current before the per driver offset is applied
 	void InstanceControlLoop(size_t driver) noexcept;
 	void SetEnabled(bool enable) { enabled = enable; }
 	bool IsEnabled() const noexcept { return enabled; }
@@ -89,22 +90,22 @@ public:
 
 	// Working variables
 	// These variables are all used to calculate the required motor currents. They are declared here so they can be reported on by the data collection task
-	MotionParameters mParams;							// the target position, speed and acceleration
-	float periodMaxCurrentFraction = 0.0;				// the maximum current fraction over this period
-	float periodSumOfCurrentFractions = 0.0;			// used to calculate the average current fraction
-	unsigned int periodNumSamples = 0;					// how many samples are in sumOfPositionErrorSquares
+	MotionParameters mParams; // the target position, speed and acceleration
 
 	float	PIDVTerm;									// Velocity feedforward term
 	float	PIDATerm;									// Acceleration feedforward term
 	float	PIDControlSignal;							// The overall signal from the PID controller
 
+	uint16_t calculatedStepPhase = 0; // The calculated phase before the driver offset has been applied
 	uint16_t desiredStepPhase = 0;						// The desired position of the motor
+	float currentFraction;
 	int16_t coilA;										// The current to run through coil A
 	int16_t coilB;										// The current to run through coil A
 
 	// Functions private to this module
-	uint16_t CalculateStepPhase(size_t driver) noexcept;
-	float CalculateMotorCurrents(size_t driver) noexcept;
+	uint16_t CalculateStepPhase() noexcept;
+	uint16_t GetOffsetStepPhase(size_t driver) noexcept;
+	float CalculateCurrentFraction() noexcept;
 	void ResetMonitoringVariables() noexcept;
 };
 

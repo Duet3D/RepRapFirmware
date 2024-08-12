@@ -2259,6 +2259,8 @@ void Move::PhaseStepControlLoop() noexcept
 		}
 		else
 		{
+			dm->phaseStepControl.Calculate();
+
 			//		debugPrintf("Move::PhaseStepControlLoop(). drive=%u @ %lu\n", dm->drive, StepTimer::GetTimerTicks());
 			IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
 				//			debugPrintf("Driver = %u, driversCurrentlyUsed = %lu, driversNormallyUsed = %lu\n", driver,

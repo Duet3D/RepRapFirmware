@@ -93,6 +93,12 @@ void PhaseStep::UpdateStandstillCurrent() noexcept
 #endif
 }
 
+void PhaseStep::Calculate() noexcept
+{
+	CalculateStepPhase();
+	CalculateCurrentFraction();
+}
+
 void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 {
 	if (unlikely(!enabled))
@@ -100,38 +106,43 @@ void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 		return;
 	}
 
-	CalculateMotorCurrents(driver);
+	const uint16_t commandedStepPhase = GetOffsetStepPhase(driver);			// do this first because it sets up mparams
+	SetMotorPhase(driver, commandedStepPhase, currentFraction);
 }
 
 void PhaseStep::UpdatePhaseOffset(size_t driver) noexcept
 {
 	AtomicCriticalSectionLocker lock;
-	uint16_t calculatedStepPhase = CalculateStepPhase(driver);
-	phaseOffset[driver] = (desiredStepPhase - (calculatedStepPhase - phaseOffset[driver])) % 4096u;
+	CalculateStepPhase();
+	phaseOffset[driver] = (desiredStepPhase - calculatedStepPhase) % 4096u;
 	debugPrintf("Updated phaseOffset[%u] = %u\n", driver, phaseOffset[driver]);
 }
 
-inline uint16_t PhaseStep::CalculateStepPhase(size_t driver) noexcept
+inline uint16_t PhaseStep::CalculateStepPhase() noexcept
 {
-	const uint16_t stepPhase = (uint16_t)llrintf(mParams.position * 1024.0);		// we use llrintf so that we can guarantee to convert the float operand to integer. We only care about the lowest 12 bits.
-	return (stepPhase + phaseOffset[driver]) % 4096u;
+	calculatedStepPhase = (uint16_t)llrintf(mParams.position * 1024.0);		// we use llrintf so that we can guarantee to convert the float operand to integer. We only care about the lowest 12 bits.
+	return calculatedStepPhase;
+}
+
+inline uint16_t PhaseStep::GetOffsetStepPhase(size_t driver) noexcept
+{
+	return (calculatedStepPhase + phaseOffset[driver]) % 4096u;
 }
 
 // Control the motor phase currents, returning the fraction of maximum current that we commanded
-inline float PhaseStep::CalculateMotorCurrents(size_t driver) noexcept
+inline float PhaseStep::CalculateCurrentFraction() noexcept
 {
 	// Driver is in assisted open loop mode
 	// In this mode the PID terms are not used and the A and V terms are independent of the loop time.
-	const uint16_t commandedStepPhase = CalculateStepPhase(driver);			// do this first because it sets up mparams
 	constexpr float scalingFactor = 100.0;
 	PIDVTerm = mParams.speed * Kv * scalingFactor;
 	PIDATerm = mParams.acceleration * Ka * fsquare(scalingFactor);
 	PIDControlSignal = min<float>(fabsf(PIDVTerm) + fabsf(PIDATerm), 256.0);
 
-	const float currentFraction = holdCurrentFraction + (1.0 - holdCurrentFraction) * min<float>(PIDControlSignal * (1.0/256.0), 1.0);
+	currentFraction = holdCurrentFraction + (1.0 - holdCurrentFraction) * min<float>(PIDControlSignal * (1.0/256.0), 1.0);
 
 	// debugPrintf("Calculated driver %u phase = %u (mParams pos=%f, vel=%f, accel=%f), currentFraction = %f @ %lu\n", driver, commandedStepPhase, mParams.position, mParams.speed, mParams.acceleration, currentFraction, when);
-	SetMotorPhase(driver, commandedStepPhase, currentFraction);
+
 	return currentFraction;
 }
 
