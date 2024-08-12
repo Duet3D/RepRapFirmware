@@ -1883,6 +1883,77 @@ void Move::WakeLaserTaskFromISR() noexcept
 	}
 }
 
+#if SUPPORT_SCANNING_PROBES
+
+static void ScanningProbeGlobalTimerCallback(CallbackParameter cp) noexcept
+{
+	((Move *)cp.vp)->ScanningProbeTimerCallback();
+}
+
+void Move::ScanningProbeTimerCallback() noexcept
+{
+	probeControl.readingNeeded = true;
+	if (inInterrupt())
+	{
+		laserTask->GiveFromISR(NotifyIndices::Laser);
+	}
+	else
+	{
+		laserTask->Give(NotifyIndices::Laser);
+	}
+}
+
+// This is called by DDA::Prepare when committing a scanning probe reading
+void Move::PrepareScanningProbeDataCollection(const DDA& dda, const PrepParams& params) noexcept
+{
+	probeControl.numReadingsNeeded = reprap.GetGCodes().GetNumScanningProbeReadingsToTake();
+	probeControl.nextReadingNeeded = 1;
+	if (probeControl.numReadingsNeeded != 0)
+	{
+		probeControl.acceleration = dda.acceleration;
+		probeControl.deceleration = dda.deceleration;
+		probeControl.initialSpeed = dda.startSpeed;
+		probeControl.topSpeed = dda.topSpeed;
+		probeControl.accelClocks = params.accelClocks;
+		probeControl.steadyClocks = params.steadyClocks;
+		probeControl.distancePerReading = dda.totalDistance/(float)probeControl.numReadingsNeeded;
+		probeControl.accelDistance = params.accelDistance;
+		probeControl.decelStartDistance = params.decelStartDistance;
+		probeControl.startTime = dda.afterPrepare.moveStartTime;
+		probeControl.timer.SetCallback(ScanningProbeGlobalTimerCallback, CallbackParameter(this));
+		SetupNextScanningProbeReading();
+	}
+}
+
+// Set up a laser task wakeup for the next reading we need to take
+void Move::SetupNextScanningProbeReading() noexcept
+{
+	if (probeControl.nextReadingNeeded <= probeControl.numReadingsNeeded)
+	{
+		const float distance = probeControl.distancePerReading * probeControl.nextReadingNeeded;
+		uint32_t wakeupTime;
+		if (distance < probeControl.accelDistance)
+		{
+			wakeupTime = (fastSqrtf(fsquare(probeControl.initialSpeed) - 2 * probeControl.acceleration * distance) - probeControl.initialSpeed)/probeControl.acceleration;
+		}
+		else if (distance <= probeControl.decelStartDistance)
+		{
+			wakeupTime = (distance - probeControl.accelDistance)/probeControl.topSpeed + probeControl.accelClocks;
+		}
+		else
+		{
+			wakeupTime = (probeControl.topSpeed - fastSqrtf(fsquare(probeControl.topSpeed) - 2 * probeControl.deceleration * (distance - probeControl.decelStartDistance)))/probeControl.deceleration + probeControl.accelClocks + probeControl.steadyClocks;
+		}
+		++probeControl.nextReadingNeeded;
+		if (probeControl.timer.ScheduleMovementCallbackFromIsr(wakeupTime + probeControl.startTime))
+		{
+			ScanningProbeTimerCallback();
+		}
+	}
+}
+
+#endif
+
 void Move::LaserTaskRun() noexcept
 {
 	for (;;)
@@ -1893,10 +1964,11 @@ void Move::LaserTaskRun() noexcept
 		GCodes& gcodes = reprap.GetGCodes();
 #endif
 #if SUPPORT_SCANNING_PROBES
-		if (probeReadingNeeded)
+		if (probeControl.readingNeeded)
 		{
-			probeReadingNeeded = false;
+			probeControl.readingNeeded = false;
 			gcodes.TakeScanningProbeReading();
+			SetupNextScanningProbeReading();
 		}
 		else
 #endif

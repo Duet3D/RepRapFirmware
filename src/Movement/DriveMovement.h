@@ -302,6 +302,6 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 	return false;
 }
 
-#endif	// SUPPORT_CLOSED_LOOP
+#endif	// SUPPORT_PHASE_STEPPING
 
 #endif /* DRIVEMOVEMENT_H_ */

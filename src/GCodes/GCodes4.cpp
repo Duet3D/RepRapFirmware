@@ -1126,8 +1126,6 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 					ms.feedRate = zp->GetScanningSpeed();
 					ms.linearAxesMentioned = reprap.GetMove().IsAxisLinear(axis0Num);
 					ms.rotationalAxesMentioned = reprap.GetMove().IsAxisRotational(axis0Num);
-					ms.segmentsLeftToStartAt = ms.totalSegments = (unsigned int)abs((int)lastAxis0Index - (int)gridAxis0Index);
-					ms.firstSegmentFractionToSkip = 0.0;
 					ms.scanningProbeMove = true;
 
 					// Adjust the axis 0 index so that the laser task will store the reading at the correct location in the grid
@@ -1140,7 +1138,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						++gridAxis0Index;
 					}
 
-					NewMoveAvailable(ms);
+					NewSingleSegmentMoveAvailable(ms);
 				}
 			}
 		}

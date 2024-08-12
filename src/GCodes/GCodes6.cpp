@@ -193,6 +193,12 @@ void GCodes::TakeScanningProbeReading() noexcept
 	}
 }
 
+// Return the number of scanning probe readings that we need to take while scanning a line
+size_t GCodes::GetNumScanningProbeReadingsToTake() const noexcept
+{
+	return abs((int)gridAxis0Index - (int)lastAxis0Index) + 1;
+}
+
 #endif
 
 // Define the probing grid, called when we see an M557 command

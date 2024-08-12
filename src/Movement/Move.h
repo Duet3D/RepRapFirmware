@@ -414,8 +414,8 @@ public:
 	void SetJerkPolicy(unsigned int jp) noexcept { jerkPolicy = jp; }
 
 #if SUPPORT_SCANNING_PROBES
-	// Scanning Z probes
-	void SetProbeReadingNeeded() noexcept { probeReadingNeeded = true; }
+	void PrepareScanningProbeDataCollection(const DDA& dda, const PrepParams& params) noexcept;
+	void ScanningProbeTimerCallback() noexcept;
 #endif
 
 	int32_t GetStepsTaken(size_t logicalDrive) const noexcept;
@@ -436,13 +436,10 @@ public:
 	void PhaseStepControlLoop() noexcept;
 #endif
 
-#if SUPPORT_CAN_EXPANSION
-	void OnEndstopOrZProbeStatesChanged() noexcept;
-#endif
-
 	void Interrupt() noexcept;
 
 #if SUPPORT_CAN_EXPANSION
+	void OnEndstopOrZProbeStatesChanged() noexcept;
 	bool CheckEndstops(bool executingMove) noexcept;
 #else
 	void CheckEndstops(bool executingMove) noexcept;
@@ -491,6 +488,26 @@ private:
 		resetting		// had an error, ready to reset it
 	};
 
+#if SUPPORT_SCANNING_PROBES
+	struct ScanningProbeControl
+	{
+		StepTimer timer;
+		size_t numReadingsNeeded = 0;
+		size_t nextReadingNeeded = 1;
+		uint32_t startTime;
+		float distancePerReading;
+		float accelDistance;
+		float decelStartDistance;
+		float acceleration;
+		float deceleration;
+		float initialSpeed;
+		float topSpeed;
+		uint32_t accelClocks;
+		uint32_t steadyClocks;
+		bool readingNeeded = false;
+	};
+#endif
+
 	void BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;				// Take a position and apply the bed compensations
 	void InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;			// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;				// Take a position and apply the axis-angle compensations
@@ -537,6 +554,10 @@ private:
 
 #if defined(DUET3_MB6XD)
 	void UpdateDriverTimings() noexcept;
+#endif
+
+#if SUPPORT_SCANNING_PROBES
+	void SetupNextScanningProbeReading() noexcept;
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
@@ -712,14 +733,15 @@ private:
 	float idleCurrentFactor;
 	float minimumMovementSpeed;								// minimum allowed movement speed in mm per step clock
 
+#if SUPPORT_SCANNING_PROBES
+	ScanningProbeControl probeControl;
+#endif
+
 	// Calibration and bed compensation
 	uint8_t numCalibratedFactors;
 	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
 	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
 	bool useTaper;										// True to taper off the compensation
-#if SUPPORT_SCANNING_PROBES
-	bool probeReadingNeeded = false;					// true if the laser task needs to take a scanning Z probe reading
-#endif
 };
 
 //******************************************************************************************************

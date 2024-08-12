@@ -213,6 +213,7 @@ public:
 	size_t GetCurrentZProbeNumber() const noexcept { return currentZProbeNumber; }
 
 #if SUPPORT_SCANNING_PROBES
+	size_t GetNumScanningProbeReadingsToTake() const noexcept;
 	void TakeScanningProbeReading() noexcept;										// Take and store a reading from a scanning Z probe
 	GCodeResult HandleM558Point1or2(GCodeBuffer& gb, const StringRef &reply, unsigned int probeNumber) THROWS(GCodeException);	// Calibrate a scanning Z probe
 #endif
