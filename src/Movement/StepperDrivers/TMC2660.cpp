@@ -1085,7 +1085,7 @@ void SmartDrivers::Spin(bool powered) noexcept
 							if (count < 1024)
 							{
 								const bool backwards = (count > 512);
-								reprap.GetMove().SetDriverAbsoluteDirection(i, backwards);	// a high on DIR decreases the microstep counter
+								reprap.GetMove().SetOneDriverAbsoluteDirection(i, backwards);	// a high on DIR decreases the microstep counter
 								if (backwards)
 								{
 									count = 1024 - count;

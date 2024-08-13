@@ -39,7 +39,7 @@ void DriveMovement::Init(size_t drv) noexcept
 #if STEPS_DEBUG
 	positionRequested = 0;
 #endif
-	driversNormallyUsed = driversCurrentlyUsed = 0;
+	driversNormallyUsed = driversCurrentlyUsed = driverEndstopsTriggeredAtStart = 0;
 	nextDM = nullptr;
 	segments = nullptr;
 	homingDda = nullptr;
@@ -362,6 +362,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 			debugPrintf("Time till start = %ld\n", (int32_t)seg->GetStartTime() - now);
 			state = DMState::starting;				// the segment is not due to start for a while. To allow it to be changed meanwhile, generate an interrupt when it is due to start.
 			driversCurrentlyUsed = 0;				// don't generate a step on that interrupt
+			driverEndstopsTriggeredAtStart = 0;		// reset since we will be setting this in DDA::Prepare()
 			nextStepTime = seg->GetStartTime();		// this is when we want the interrupt
 			return seg;
 		}
@@ -473,8 +474,8 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 			if (newDirection != direction)
 			{
 				directionChanged = true;
+				direction = newDirection;
 			}
-			direction = newDirection;					// we must ALWAYS store this even if the direction doesn't appear to have changed in case directionChanged has been set externally
 
 			// Unless we're possibly in the middle of a homing move, re-enable all drivers for this axis
 			if (!segmentFlags.checkEndstops)
