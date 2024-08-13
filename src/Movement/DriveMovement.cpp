@@ -35,7 +35,7 @@ void DriveMovement::Init(size_t drv) noexcept
 #if STEPS_DEBUG
 	positionRequested = 0;
 #endif
-	driversNormallyUsed = driversCurrentlyUsed = 0;
+	driversNormallyUsed = driversCurrentlyUsed = driverEndstopsTriggeredAtStart = 0;
 	nextDM = nullptr;
 	segments = nullptr;
 	homingDda = nullptr;
@@ -345,6 +345,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		{
 			state = DMState::starting;				// the segment is not due to start for a while. To allow it to be changed meanwhile, generate an interrupt when it is due to start.
 			driversCurrentlyUsed = 0;				// don't generate a step on that interrupt
+			driverEndstopsTriggeredAtStart = 0;		// reset since we will be setting this in DDA::Prepare()
 			nextStepTime = seg->GetStartTime();		// this is when we want the interrupt
 			return seg;
 		}

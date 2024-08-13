@@ -2342,6 +2342,10 @@ void Move::CheckEndstops(bool executingMove) noexcept
 			{
 				const size_t localDriver = hitDetails.driver.localDriver;
 				dms[hitDetails.axis].driversCurrentlyUsed &= ~StepPins::CalcDriverBitmap(localDriver);
+				if (!executingMove)
+				{
+					dms[hitDetails.axis].driverEndstopsTriggeredAtStart |= StepPins::CalcDriverBitmap(localDriver);
+				}
 			}
 			break;
 
@@ -2472,7 +2476,7 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 		{
 			if (dm2->NewSegment(now) != nullptr && dm2->state != DMState::starting)
 			{
-				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
+				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed & ~dm2->driverEndstopsTriggeredAtStart;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
 # if SUPPORT_CAN_EXPANSION
 				flags |= dm2->segmentFlags;
 				if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
