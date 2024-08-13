@@ -2341,7 +2341,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 #endif
 			{
 				const size_t localDriver = hitDetails.driver.localDriver;
-				dms[localDriver].driversCurrentlyUsed &= ~StepPins::CalcDriverBitmap(localDriver);
+				dms[hitDetails.axis].driversCurrentlyUsed &= ~StepPins::CalcDriverBitmap(localDriver);
 			}
 			break;
 
