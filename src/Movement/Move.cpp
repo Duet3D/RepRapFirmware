@@ -2246,16 +2246,32 @@ void Move::PhaseStepControlLoop() noexcept
 	maxPSControlLoopCallInterval = max<StepTimer::Ticks>(maxPSControlLoopCallInterval, timeElapsed);
 
 	uint32_t now = StepTimer::GetTimerTicks() - StepTimer::GetMovementDelay();
+	MovementFlags flags;
+	flags.Clear();
+
+	{
+		DriveMovement *dm = phaseStepDMs;
+		while (dm != nullptr)
+		{
+			if (dm->state > DMState::starting)
+			{
+				flags |= dm->segmentFlags;
+			}
+			dm = dm->nextDM;
+		}
+	}
+
+	if (flags.checkEndstops)
+	{
+		CheckEndstops(true);												// call out to a separate function because this may help cache locality in the more common and time-critical case where we don't call it
+	}
 
 	DriveMovement **dmp = &phaseStepDMs;
 	while (*dmp != nullptr)
 	{
 		DriveMovement * const dm = *dmp;
 
-		// TODO CheckEndstops()
-
 		GetCurrentMotion(dm->drive, now, dm->phaseStepControl.mParams);
-
 
 		if (dm->state != DMState::phaseStepping)
 		{
@@ -2666,7 +2682,6 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 			if (dm2->NewSegment(now) != nullptr && dm2->state != DMState::starting)
 			{
 				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed & ~dm2->driverEndstopsTriggeredAtStart;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
-				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
 				if (dm2->state == DMState::phaseStepping)
 				{
 					return;

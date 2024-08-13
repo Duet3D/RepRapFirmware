@@ -79,7 +79,7 @@ void PhaseStep::SetMotorPhase(size_t driver, uint16_t phase, float magnitude) no
 	coilB = (int16_t)lrintf(sine * magnitude);
 	if (SmartDrivers::SetMotorCurrents(driver, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF))
 	{
-		debugPrintf("Set driver %" PRIu16 " phase to %" PRIu16 " %.2f%%, v=%.5f, a=%.5f %lu\n", driver, phase, (double)magnitude * 100, (double)mParams.speed, (double)mParams.acceleration, StepTimer::GetTimerTicks());
+//		debugPrintf("Set driver %" PRIu16 " phase to %" PRIu16 " %.2f%%, v=%.5f, a=%.5f %lu\n", driver, phase, (double)magnitude * 100, (double)mParams.speed, (double)mParams.acceleration, StepTimer::GetTimerTicks());
 	}
 }
 
@@ -114,13 +114,12 @@ void PhaseStep::UpdatePhaseOffset(size_t driver) noexcept
 	AtomicCriticalSectionLocker lock;
 	const uint16_t calculatedStepPhase = CalculateStepPhase(driver);
 	phaseOffset[driver] = (desiredStepPhase - (calculatedStepPhase - phaseOffset[driver])) % 4096u;
-	debugPrintf("Updated phaseOffset[%u] = %u\n", driver, phaseOffset[driver]);
+	debugPrintf("Updated phaseOffset[%u]=%u, calculatedPhase=%u\n", driver, phaseOffset[driver], calculatedStepPhase);
 }
 
 inline uint16_t PhaseStep::CalculateStepPhase(size_t driver) noexcept
 {
 	const float multiplier = reprap.GetMove().GetDirectionValue(driver) ? 1.0 : -1.0;
-	debugPrintf("driver %u, dir=%d\n", driver, (int)multiplier);
 	const uint16_t calculatedStepPhase = (uint16_t)llrintf(mParams.position * multiplier * 1024.0);		// we use llrintf so that we can guarantee to convert the float operand to integer. We only care about the lowest 12 bits.
 	return (calculatedStepPhase + phaseOffset[driver]) % 4096u;
 }
