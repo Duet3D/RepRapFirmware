@@ -184,7 +184,8 @@ void AuxDevice::AppendDirectionPortName(const StringRef& reply) const noexcept
 
 // Send some Modbus registers. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the command.
 // After receiving the GCodeResult::ok response the caller must call CheckModbusResult until it doesn't return GCodeResult::notFinished.
-GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, const uint16_t *data) noexcept
+// If the function code requires sending 16-bit data then 'data' must be 16-bit aligned
+GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, const uint8_t *data) noexcept
 {
 	if (p_numRegisters == 0 || p_numRegisters > MaxModbusRegisters)
 	{
@@ -203,16 +204,41 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_st
 
 	slaveAddress = p_slaveAddress;
 	ModbusWriteByte(slaveAddress);
-	function = ModbusFunction::writeMultipleRegisters;
+	function = (ModbusFunction)p_function;
 	ModbusWriteByte((uint8_t)function);
 	startRegister = p_startRegister;
 	ModbusWriteWord(startRegister);
-	numRegisters = p_numRegisters;
-	ModbusWriteWord(numRegisters);
-	ModbusWriteByte((uint8_t)(2 * numRegisters));
-	for (size_t i = 0; i < numRegisters; ++i)
+	switch (function)
 	{
-		ModbusWriteWord(data[i]);
+	case ModbusFunction::writeSingleCoil:
+	case ModbusFunction::writeSingleRegister:
+		numRegisters = 1;
+		ModbusWriteWord(((const uint16_t*)data)[0]);
+		bytesExpected = 8;
+		break;
+
+	case ModbusFunction::writeMultipleCoils:
+		numRegisters = p_numRegisters;
+		ModbusWriteWord(numRegisters);
+		ModbusWriteByte((uint8_t)((numRegisters + 7u)/8u));
+		for (size_t i = 0; i < (numRegisters + 7u)/8u; ++i)
+		{
+			ModbusWriteByte(data[i]);
+		}
+		bytesExpected = 8;
+		break;
+
+	case ModbusFunction::writeMultipleRegisters:
+	default:
+		numRegisters = p_numRegisters;
+		ModbusWriteWord(numRegisters);
+		ModbusWriteByte((uint8_t)(2 * numRegisters));
+		for (size_t i = 0; i < numRegisters; ++i)
+		{
+			ModbusWriteWord(((const uint16_t*)data)[i]);
+		}
+		bytesExpected = 8;
+		break;
 	}
 
 	uart->write((uint8_t)crc.Get());
@@ -224,17 +250,21 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_st
 	uart->EnableTransmit();
 	whenStartedTransmitting = millis();
 
-	bytesExpected = 8;
 	return GCodeResult::ok;
 }
 
 // Read some Modbus registers. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the command.
 // After receiving the GCodeResult::ok response the caller must call CheckModbusResult until it doesn't return GCodeResult::notFinished.
-GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, uint16_t *data) noexcept
+// If the function code calls for receiving word data then 'data' must be aligned on a 16-bit boundary
+GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, uint8_t *data) noexcept
 {
 	if (   p_numRegisters == 0
 		|| p_numRegisters > MaxModbusRegisters
-		|| (p_function != (uint8_t)ModbusFunction::readHoldingRegisters && p_function != (uint8_t)ModbusFunction::readInputRegisters)
+		|| (   p_function != (uint8_t)ModbusFunction::readHoldingRegisters
+			&& p_function != (uint8_t)ModbusFunction::readInputRegisters
+			&& p_function != (uint8_t)ModbusFunction::readCoils
+			&& p_function != (uint8_t)ModbusFunction::readDiscreteInputs
+		   )
 	   )
 	{
 		return GCodeResult::badOrMissingParameter;
@@ -267,8 +297,20 @@ GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 	uart->EnableTransmit();
 	whenStartedTransmitting = millis();
 
-	bytesExpected = 5 + 2 * numRegisters;
-	receivedRegisters = data;
+	switch (function)
+	{
+	case ModbusFunction::readCoils:
+	case ModbusFunction::readDiscreteInputs:
+		bytesExpected = 5 + (numRegisters + 7)/8;
+		break;
+
+	case ModbusFunction::readHoldingRegisters:
+	case ModbusFunction::readInputRegisters:
+	default:
+		bytesExpected = 5 + 2 * numRegisters;
+		break;
+	}
+	receivedData = data;
 	return GCodeResult::ok;
 }
 
@@ -302,10 +344,19 @@ GCodeResult AuxDevice::CheckModbusResult() noexcept
 		case ModbusFunction::writeMultipleRegisters:
 			if (ModbusReadWord() == startRegister && ModbusReadWord() == numRegisters)
 			{
-				const uint16_t crcLo = (uint16_t)uart->read();
-				const uint16_t recdCrc = ((uint16_t)uart->read() << 8) | crcLo;
-				mutex.Release();
-				return (recdCrc == crc.Get()) ? GCodeResult::ok : GCodeResult::error;
+				return ReleaseMutexAndCheckCrc();
+			}
+			break;
+
+		case ModbusFunction::readCoils:
+		case ModbusFunction::readDiscreteInputs:
+			if (ModbusReadByte() == (numRegisters + 7u)/8u)
+			{
+				for (size_t i = 0; i < (numRegisters + 7u)/8u; ++i)
+				{
+					*receivedData++ = ModbusReadByte();
+				}
+				return ReleaseMutexAndCheckCrc();
 			}
 			break;
 
@@ -315,13 +366,11 @@ GCodeResult AuxDevice::CheckModbusResult() noexcept
 			{
 				while (numRegisters != 0)
 				{
-					*receivedRegisters++ = ModbusReadWord();
+					*(uint16_t*)receivedData = ModbusReadWord();
+					receivedData += sizeof(uint16_t);
 					--numRegisters;
 				}
-				const uint16_t crcLo = (uint16_t)uart->read();
-				const uint16_t recdCrc = ((uint16_t)uart->read() << 8) | crcLo;
-				mutex.Release();
-				return (recdCrc == crc.Get()) ? GCodeResult::ok : GCodeResult::error;
+				return ReleaseMutexAndCheckCrc();
 			}
 			break;
 
@@ -360,6 +409,14 @@ uint16_t AuxDevice::ModbusReadWord() noexcept
 {
 	const uint16_t hi = (uint16_t)ModbusReadByte() << 8;
 	return hi | (uint16_t)ModbusReadByte();
+}
+
+GCodeResult AuxDevice::ReleaseMutexAndCheckCrc() noexcept
+{
+	const uint16_t crcLo = (uint16_t)uart->read();
+	const uint16_t recdCrc = ((uint16_t)uart->read() << 8) | crcLo;
+	mutex.Release();
+	return (recdCrc == crc.Get()) ? GCodeResult::ok : GCodeResult::error;
 }
 
 // Calculate the time in milliseconds to send or received the specified number of characters

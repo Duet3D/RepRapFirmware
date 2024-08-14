@@ -2276,12 +2276,52 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 			}
 
 			const uint16_t firstRegister = gb.GetLimitedUIValue('R', 1u << 16);
+			const uint8_t function = (gb.Seen('F')) ? gb.GetLimitedUIValue('F', 5, 17) : 16;	// default to Modbus function Write Multiple Registers but also allow Write Coils, Write Single Coil
 			uint16_t registersToSend[MaxI2cOrModbusValues];
-			for (size_t i = 0; i < numToSend; ++i)
+			switch (function)
 			{
-				registersToSend[i] = (uint16_t)values[i];
+			case (uint8_t)ModbusFunction::writeSingleCoil:
+				if (numToSend != 1)
+				{
+					reply.copy("Invalid Modbus data");
+					return GCodeResult::error;
+				}
+				registersToSend[0] = (values[0] == 0) ? 0 : 0x00FF;
+				break;
+
+			case (uint8_t)ModbusFunction::writeSingleRegister:
+				if (numToSend != 1)
+				{
+					reply.copy("Invalid Modbus data");
+					return GCodeResult::error;
+				}
+				registersToSend[0] = (uint16_t)values[0];
+				break;
+
+			case (uint8_t)ModbusFunction::writeMultipleCoils:
+				memset(registersToSend, 0, sizeof(registersToSend));
+				for (size_t i = 0; i < numToSend; ++i)
+				{
+					if (values[i] != 0)
+					{
+						registersToSend[i/16] |= 1u << (i % 16);
+					}
+				}
+				break;
+
+			case (uint8_t)ModbusFunction::writeMultipleRegisters:
+				for (size_t i = 0; i < numToSend; ++i)
+				{
+					registersToSend[i] = (uint16_t)values[i];
+				}
+				break;
+
+			default:
+				reply.copy("Invalid Modbus function number");
+				return GCodeResult::error;
 			}
-			GCodeResult rslt = auxDevices[auxChannel].SendModbusRegisters(address, firstRegister, numToSend, registersToSend);
+
+			GCodeResult rslt = auxDevices[auxChannel].SendModbusRegisters(address, function, firstRegister, numToSend, (const uint8_t*)registersToSend);
 			if (rslt == GCodeResult::ok)
 			{
 				do
@@ -2355,9 +2395,9 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 			}
 
 			const uint16_t firstRegister = gb.GetLimitedUIValue('R', 1u << 16);
-			const uint8_t function = (gb.Seen('F')) ? gb.GetLimitedUIValue('F', 3, 5) : 4;			// default to Modbus function Read Input Registers but also allow Read Holding Registers
+			const uint8_t function = (gb.Seen('F')) ? gb.GetLimitedUIValue('F', 1, 5) : 4;			// default to Modbus function Read Input Registers but also allow Read Holding Registers, Read Coils, Read Inputs
 			uint16_t registersToReceive[MaxI2cOrModbusValues];
-			GCodeResult rslt = auxDevices[auxChannel].ReadModbusRegisters(address, function, firstRegister, numValues, registersToReceive);
+			GCodeResult rslt = auxDevices[auxChannel].ReadModbusRegisters(address, function, firstRegister, numValues, (uint8_t*)registersToReceive);
 			if (rslt == GCodeResult::ok)
 			{
 				do
@@ -2367,9 +2407,24 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 				} while (rslt == GCodeResult::notFinished);
 				if (rslt == GCodeResult::ok)
 				{
-					for (size_t i = 0; i < numValues; ++i)
+					switch (function)
 					{
-						reply.catf(" %03x", registersToReceive[i]);
+					case (uint8_t)ModbusFunction::readCoils:
+					case (uint8_t)ModbusFunction::readDiscreteInputs:
+						for (size_t i = 0; i < numValues; ++i)
+						{
+							reply.cat((registersToReceive[i / 16] & (1u << (i % 16))) ? " 1" : " 0");
+						}
+						break;
+
+					case (uint8_t)ModbusFunction::readHoldingRegisters:
+					case (uint8_t)ModbusFunction::readInputRegisters:
+					default:
+						for (size_t i = 0; i < numValues; ++i)
+						{
+							reply.catf(" %04x", registersToReceive[i]);
+						}
+						break;
 					}
 				}
 				else
