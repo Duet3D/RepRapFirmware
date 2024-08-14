@@ -25,6 +25,9 @@ namespace TaskPriority
 #ifdef DUET_NG
 	constexpr unsigned int DueXPriority = 5;
 #endif
+#if SUPPORT_PHASE_STEPPING
+	constexpr unsigned int TmcPhaseStepPriority = 5;
+#endif
 	constexpr unsigned int LaserPriority = 5;
 	constexpr unsigned int CanSenderPriority = 5;
 	constexpr unsigned int EthernetPriority = 5;

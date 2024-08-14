@@ -135,9 +135,6 @@ inline float PhaseStep::CalculateCurrentFraction() noexcept
 	PIDControlSignal = min<float>(fabsf(PIDVTerm) + fabsf(PIDATerm), 256.0);
 
 	currentFraction = holdCurrentFraction + (1.0 - holdCurrentFraction) * min<float>(PIDControlSignal * (1.0/256.0), 1.0);
-
-	// debugPrintf("Calculated driver %u phase = %u (mParams pos=%f, vel=%f, accel=%f), currentFraction = %f @ %lu\n", driver, commandedStepPhase, mParams.position, mParams.speed, mParams.acceleration, currentFraction, when);
-
 	return currentFraction;
 }
 

@@ -1424,7 +1424,7 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 #if SUPPORT_PHASE_STEPPING
 		if (driverPhaseToUpdate.load() != 0)
 		{
-			writeBufPtr = sendData + 5 * numTmc51xxDrivers;
+			writeBufPtr = phaseSendData + 5 * numTmc51xxDrivers;
 			for (size_t i = 0; i < numTmc51xxDrivers; ++i)
 			{
 				writeBufPtr -= 5;
@@ -1685,6 +1685,24 @@ bool SmartDrivers::EnablePhaseStepping(size_t driver, bool enable) noexcept
 	{
 		return false;
 	}
+
+	bool anyDriveUsingPhaseStepping = false;
+	if (enable)
+	{
+		anyDriveUsingPhaseStepping = true;
+	}
+	else
+	{
+		for (size_t i = 0; i < MaxSmartDrivers; i++)
+		{
+			if (driverStates[driver].IsPhaseSteppingEnabled())
+			{
+				anyDriveUsingPhaseStepping = true;
+			}
+		}
+	}
+
+	tmcTask.SetPriority(anyDriveUsingPhaseStepping ? TaskPriority::TmcPhaseStepPriority : TaskPriority::TmcPriority);
 
 	return driverStates[driver].EnablePhaseStepping(enable);
 }
