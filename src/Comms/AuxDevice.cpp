@@ -212,16 +212,16 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 	{
 	case ModbusFunction::writeSingleCoil:
 	case ModbusFunction::writeSingleRegister:
-		numRegisters = 1;
-		ModbusWriteWord(((const uint16_t*)data)[0]);
+		numRegistersOrDataWord = ((const uint16_t*)data)[0];
+		ModbusWriteWord(numRegistersOrDataWord);
 		bytesExpected = 8;
 		break;
 
 	case ModbusFunction::writeMultipleCoils:
-		numRegisters = p_numRegisters;
-		ModbusWriteWord(numRegisters);
-		ModbusWriteByte((uint8_t)((numRegisters + 7u)/8u));
-		for (size_t i = 0; i < (numRegisters + 7u)/8u; ++i)
+		numRegistersOrDataWord = p_numRegisters;
+		ModbusWriteWord(numRegistersOrDataWord);
+		ModbusWriteByte((uint8_t)((numRegistersOrDataWord + 7u)/8u));
+		for (size_t i = 0; i < (numRegistersOrDataWord + 7u)/8u; ++i)
 		{
 			ModbusWriteByte(data[i]);
 		}
@@ -230,10 +230,10 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 
 	case ModbusFunction::writeMultipleRegisters:
 	default:
-		numRegisters = p_numRegisters;
-		ModbusWriteWord(numRegisters);
-		ModbusWriteByte((uint8_t)(2 * numRegisters));
-		for (size_t i = 0; i < numRegisters; ++i)
+		numRegistersOrDataWord = p_numRegisters;
+		ModbusWriteWord(numRegistersOrDataWord);
+		ModbusWriteByte((uint8_t)(2 * numRegistersOrDataWord));
+		for (size_t i = 0; i < numRegistersOrDataWord; ++i)
 		{
 			ModbusWriteWord(((const uint16_t*)data)[i]);
 		}
@@ -286,8 +286,8 @@ GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 	ModbusWriteByte((uint8_t)function);
 	startRegister = p_startRegister;
 	ModbusWriteWord(startRegister);
-	numRegisters = p_numRegisters;
-	ModbusWriteWord(numRegisters);
+	numRegistersOrDataWord = p_numRegisters;
+	ModbusWriteWord(numRegistersOrDataWord);
 	uart->write((uint8_t)crc.Get());
 	uart->write((uint8_t)(crc.Get() >> 8));
 
@@ -301,13 +301,13 @@ GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 	{
 	case ModbusFunction::readCoils:
 	case ModbusFunction::readDiscreteInputs:
-		bytesExpected = 5 + (numRegisters + 7)/8;
+		bytesExpected = 5 + (numRegistersOrDataWord + 7)/8;
 		break;
 
 	case ModbusFunction::readHoldingRegisters:
 	case ModbusFunction::readInputRegisters:
 	default:
-		bytesExpected = 5 + 2 * numRegisters;
+		bytesExpected = 5 + 2 * numRegistersOrDataWord;
 		break;
 	}
 	receivedData = data;
@@ -341,8 +341,11 @@ GCodeResult AuxDevice::CheckModbusResult() noexcept
 	{
 		switch(function)
 		{
+		case ModbusFunction::writeSingleCoil:
+		case ModbusFunction::writeSingleRegister:
+		case ModbusFunction::writeMultipleCoils:
 		case ModbusFunction::writeMultipleRegisters:
-			if (ModbusReadWord() == startRegister && ModbusReadWord() == numRegisters)
+			if (ModbusReadWord() == startRegister && ModbusReadWord() == numRegistersOrDataWord)
 			{
 				return ReleaseMutexAndCheckCrc();
 			}
@@ -350,9 +353,9 @@ GCodeResult AuxDevice::CheckModbusResult() noexcept
 
 		case ModbusFunction::readCoils:
 		case ModbusFunction::readDiscreteInputs:
-			if (ModbusReadByte() == (numRegisters + 7u)/8u)
+			if (ModbusReadByte() == (numRegistersOrDataWord + 7u)/8u)
 			{
-				for (size_t i = 0; i < (numRegisters + 7u)/8u; ++i)
+				for (size_t i = 0; i < (numRegistersOrDataWord + 7u)/8u; ++i)
 				{
 					*receivedData++ = ModbusReadByte();
 				}
@@ -362,13 +365,13 @@ GCodeResult AuxDevice::CheckModbusResult() noexcept
 
 		case ModbusFunction::readInputRegisters:
 		case ModbusFunction::readHoldingRegisters:
-			if (ModbusReadByte() == 2 * numRegisters)
+			if (ModbusReadByte() == 2 * numRegistersOrDataWord)
 			{
-				while (numRegisters != 0)
+				while (numRegistersOrDataWord != 0)
 				{
 					*(uint16_t*)receivedData = ModbusReadWord();
 					receivedData += sizeof(uint16_t);
-					--numRegisters;
+					--numRegistersOrDataWord;
 				}
 				return ReleaseMutexAndCheckCrc();
 			}

@@ -95,7 +95,7 @@ private:
 	uint16_t bytesTransmitted;
 	uint16_t bytesExpected;
 	uint16_t startRegister;
-	uint16_t numRegisters;
+	uint16_t numRegistersOrDataWord;
 	uint8_t slaveAddress;
 	ModbusFunction function;
 #endif
