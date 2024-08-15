@@ -1461,6 +1461,39 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumbe
 	}
 }
 
+void Move::SetMotorPosition(size_t drive, int32_t pos) noexcept
+{
+#if SUPPORT_PHASE_STEPPING
+	uint32_t now = StepTimer::GetTimerTicks();
+	uint16_t currentPhases[MaxSmartDrivers] = {0};
+	DriveMovement *dm = &dms[drive];
+
+	if (dm->IsPhaseStepEnabled())
+	{
+		GetCurrentMotion(drive, now, dm->phaseStepControl.mParams);
+		IterateLocalDrivers(drive, [dm, &currentPhases](uint8_t driver){
+			currentPhases[driver] = dm->phaseStepControl.CalculateStepPhase((size_t)driver);
+			dm->phaseStepControl.SetPhaseOffset(driver, 0);
+		});
+	}
+#endif
+
+	dms[drive].SetMotorPosition(pos);
+
+
+#if SUPPORT_PHASE_STEPPING
+	if (dm->IsPhaseStepEnabled())
+	{
+		GetCurrentMotion(drive, now, dm->phaseStepControl.mParams);
+		IterateLocalDrivers(drive, [dm, &currentPhases](uint8_t driver){
+			uint16_t newPhase = dm->phaseStepControl.CalculateStepPhase((size_t)driver);
+
+			dm->phaseStepControl.SetPhaseOffset(driver, currentPhases[driver] - newPhase);
+		});
+	}
+#endif
+}
+
 void Move::SetXYBedProbePoint(size_t index, float x, float y) noexcept
 {
 	if (index >= MaxProbePoints)

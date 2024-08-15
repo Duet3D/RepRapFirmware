@@ -252,7 +252,7 @@ public:
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetLiveMotorPosition(size_t driver) const noexcept pre(driver < MaxAxesPlusExtruders);
-	void SetMotorPosition(size_t driver, int32_t pos) noexcept pre(driver < MaxAxesPlusExtruders);
+	void SetMotorPosition(size_t drive, int32_t pos) noexcept pre(driver < MaxAxesPlusExtruders);
 
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
 	bool WaitingForAllMovesFinished(MovementSystemNumber msNumber
@@ -918,11 +918,6 @@ inline void Move::AdjustMotorPositions(const float adjustment[], size_t numMotor
 inline int32_t Move::GetLiveMotorPosition(size_t driver) const noexcept
 {
 	return dms[driver].currentMotorPosition;
-}
-
-inline void Move::SetMotorPosition(size_t driver, int32_t pos) noexcept
-{
-	dms[driver].SetMotorPosition(pos);
 }
 
 inline ExtruderShaper& Move::GetExtruderShaperForExtruder(size_t extruder) noexcept
