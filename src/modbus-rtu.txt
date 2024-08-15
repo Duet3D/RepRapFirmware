@@ -39,7 +39,7 @@ rcv: slave addr, function, byte count, (data hi, data lo)*, crc
 Read input registers: as read holding registers
 
 Write coil:
-send: slave addr, function, coil addr hi, coil addr lo, write data hi, write data lo, CRC. Write data hi:lo must be 00:00 or 00:FF. Other values are illegal and do not write the coil.
+send: slave addr, function, coil addr hi, coil addr lo, write data hi, write data lo, CRC. Write data hi:lo must be 00:00 or FF:00. Other values are illegal and do not write the coil.
 receive: same, returning state of the coil after it has been written.
 
 Write single register:

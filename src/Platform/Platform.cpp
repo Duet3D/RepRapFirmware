@@ -2286,7 +2286,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 					reply.copy("Invalid Modbus data");
 					return GCodeResult::error;
 				}
-				registersToSend[0] = (values[0] == 0) ? 0 : 0x00FF;
+				registersToSend[0] = (values[0] == 0) ? 0 : 0xFF00;
 				break;
 
 			case (uint8_t)ModbusFunction::writeSingleRegister:
