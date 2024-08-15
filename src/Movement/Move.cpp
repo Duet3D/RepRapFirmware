@@ -1062,9 +1062,11 @@ void Move::Diagnostics(MessageType mtype) noexcept
 		p.Message(mtype, driverStatus.c_str());
 	}
 
+#if SUPPORT_PHASE_STEPPING
 	p.MessageF(mtype, "Phase step loop runtime (us): min=%" PRIu32 ", max=%" PRIu32 ", frequency (Hz): min=%" PRIu32 ", max=%" PRIu32 "\n",
 			StepTimer::TicksToIntegerMicroseconds(minPSControlLoopRuntime), StepTimer::TicksToIntegerMicroseconds(maxPSControlLoopRuntime),
 			TickPeriodToFreq(maxPSControlLoopCallInterval), TickPeriodToFreq(minPSControlLoopCallInterval));
+#endif
 
 	// Show the status of each DDA ring
 	for (size_t i = 0; i < ARRAY_SIZE(rings); ++i)
