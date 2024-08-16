@@ -597,7 +597,7 @@ private:
 
 	StepTimer timer;												// Timer object to control getting step interrupts
 	DriveMovement *activeDMs;
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	DriveMovement *phaseStepDMs;
 
 	// These variables monitor how fast the phase stepping control loop is running etc.
@@ -952,7 +952,7 @@ inline __attribute__((always_inline)) bool Move::ScheduleNextStepInterrupt() noe
 // Base priority must be >= NvicPriorityStep when calling this, unless we are simulating.
 inline void Move::InsertDM(DriveMovement *dm) noexcept
 {
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	DriveMovement **dmp = dm->state == DMState::phaseStepping ? &phaseStepDMs : &activeDMs;
 #else
 	DriveMovement **dmp = &activeDMs;

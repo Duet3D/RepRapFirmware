@@ -263,6 +263,7 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 // Inlined because it is only called from one place
 inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept
 {
+	bool hasMotion = false;
 	AtomicCriticalSectionLocker lock;								// we don't want 'segments' changing while we do this
 
 	if (state == DMState::phaseStepping)
@@ -286,6 +287,7 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 					segments = oldSeg->GetNext();
 					MoveSegment::Release(oldSeg);
 					seg = NewSegment(when);
+					hasMotion = true;
 					continue;
 				}
 				timeSinceStart = seg->GetDuration();
@@ -302,7 +304,7 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 	// If we get here then no movement is taking place
 	mParams.position = (float)currentMotorPosition;
 	mParams.speed = mParams.acceleration = 0.0;
-	return false;
+	return hasMotion;
 }
 
 #endif	// SUPPORT_PHASE_STEPPING
