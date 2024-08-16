@@ -2223,6 +2223,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 	{
 # if defined(I2C_IFACE)
 	case 0:		// I2C
+	case -1:
 		{
 			uint32_t numToReceive = 0;
 			bool seenR;
@@ -2362,6 +2363,7 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 	{
 # if defined(I2C_IFACE)
 	case 0:		// I2C
+	case -1:
 		{
 			I2C::Init();
 			uint8_t bValues[MaxI2cOrModbusValues];
