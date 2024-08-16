@@ -2277,15 +2277,15 @@ void Move::PhaseStepControlLoop() noexcept
 	const StepTimer::Ticks loopCallTime = StepTimer::GetTimerTicks();
 	const StepTimer::Ticks timeElapsed = loopCallTime - prevPSControlLoopCallTime;
 	prevPSControlLoopCallTime = loopCallTime;
-	minPSControlLoopCallInterval = min<StepTimer::Ticks>(minPSControlLoopCallInterval, timeElapsed);
-	maxPSControlLoopCallInterval = max<StepTimer::Ticks>(maxPSControlLoopCallInterval, timeElapsed);
+	if (timeElapsed < minPSControlLoopCallInterval) { minPSControlLoopCallInterval = timeElapsed; }
+	if (timeElapsed > maxPSControlLoopCallInterval) { maxPSControlLoopCallInterval = timeElapsed; }
 
-	uint32_t now = StepTimer::GetTimerTicks() - StepTimer::GetMovementDelay();
+	const uint32_t now = StepTimer::ConvertLocalToMovementTime(loopCallTime);
 	MovementFlags flags;
 	flags.Clear();
 
 	{
-		DriveMovement *dm = phaseStepDMs;
+		const DriveMovement *dm = phaseStepDMs;
 		while (dm != nullptr)
 		{
 			if (dm->state > DMState::starting)
