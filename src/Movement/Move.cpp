@@ -591,6 +591,11 @@ void Move::Init() noexcept
 		ms = 16 | 0x8000;
 	}
 
+#if SUPPORT_PHASE_STEPPING
+	phaseStepDMs = nullptr;
+	ResetPhaseStepMonitoringVariables();
+#endif
+
 	moveTask.Create(MoveStart, "Move", this, TaskPriority::MovePriority);
 }
 
@@ -965,6 +970,12 @@ void Move::CancelStepping() noexcept
 
 extern uint32_t maxCriticalElapsedTime;
 
+// Helper function to convert a time period (expressed in StepTimer::Ticks) to a frequency in Hz
+static inline uint32_t TickPeriodToFreq(StepTimer::Ticks tickPeriod) noexcept
+{
+	return StepTimer::GetTickRate()/tickPeriod;
+}
+
 void Move::Diagnostics(MessageType mtype) noexcept
 {
 	// Get the type of bed compensation in use
@@ -1051,6 +1062,13 @@ void Move::Diagnostics(MessageType mtype) noexcept
 		driverStatus.cat('\n');
 		p.Message(mtype, driverStatus.c_str());
 	}
+
+#if SUPPORT_PHASE_STEPPING
+	p.MessageF(mtype, "Phase step loop runtime (us): min=%" PRIu32 ", max=%" PRIu32 ", frequency (Hz): min=%" PRIu32 ", max=%" PRIu32 "\n",
+			StepTimer::TicksToIntegerMicroseconds(minPSControlLoopRuntime), StepTimer::TicksToIntegerMicroseconds(maxPSControlLoopRuntime),
+			TickPeriodToFreq(maxPSControlLoopCallInterval), TickPeriodToFreq(minPSControlLoopCallInterval));
+	ResetPhaseStepMonitoringVariables();
+#endif
 
 	// Show the status of each DDA ring
 	for (size_t i = 0; i < ARRAY_SIZE(rings); ++i)
@@ -1445,6 +1463,39 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumbe
 	{
 		InverseAxisAndBedTransform(m, tool);
 	}
+}
+
+void Move::SetMotorPosition(size_t drive, int32_t pos) noexcept
+{
+#if SUPPORT_PHASE_STEPPING
+	uint32_t now = StepTimer::GetTimerTicks();
+	uint16_t currentPhases[MaxSmartDrivers] = {0};
+	DriveMovement *dm = &dms[drive];
+
+	if (dm->IsPhaseStepEnabled())
+	{
+		GetCurrentMotion(drive, now, dm->phaseStepControl.mParams);
+		IterateLocalDrivers(drive, [dm, &currentPhases](uint8_t driver){
+			currentPhases[driver] = dm->phaseStepControl.CalculateStepPhase((size_t)driver);
+			dm->phaseStepControl.SetPhaseOffset(driver, 0);
+		});
+	}
+#endif
+
+	dms[drive].SetMotorPosition(pos);
+
+
+#if SUPPORT_PHASE_STEPPING
+	if (dm->IsPhaseStepEnabled())
+	{
+		GetCurrentMotion(drive, now, dm->phaseStepControl.mParams);
+		IterateLocalDrivers(drive, [dm, &currentPhases](uint8_t driver){
+			uint16_t newPhase = dm->phaseStepControl.CalculateStepPhase((size_t)driver);
+
+			dm->phaseStepControl.SetPhaseOffset(driver, currentPhases[driver] - newPhase);
+		});
+	}
+#endif
 }
 
 void Move::SetXYBedProbePoint(size_t index, float x, float y) noexcept
@@ -2089,7 +2140,7 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	// If there were no segments attached to this DM initially, we need to schedule the interrupt for the new segment at the start of the list.
 	// Don't do this until we have added all the segments for this move, because the first segment we added may have been modified and/or split when we added further segments to implement input shaping
 	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);					// shut out the step interrupt
-	if (dmp->state == DMState::idle)
+	if (dmp->state == DMState::idle)		// only if a DM had no segments before any that have been added
 	{
 		if (dmp->ScheduleFirstSegment())
 		{
@@ -2124,6 +2175,203 @@ bool Move::AreDrivesStopped(AxesBitmap drives) const noexcept
 								}
 							  );
 }
+
+#if SUPPORT_CLOSED_LOOP
+
+// if the driver is idle, enable it; return true if driver enabled on return
+bool Move::EnableIfIdle(size_t driver) noexcept
+{
+#if 0
+	if (driverStates[driver] == DriverStateControl::driverIdle)
+	{
+		driverStates[driver] = DriverStateControl::driverActive;
+#if HAS_SMART_DRIVERS
+		driverAtIdleCurrent[driver] = false;
+		UpdateMotorCurrent(driver);
+#endif
+	}
+
+	return driverStates[driver] == DriverStateControl::driverActive;
+#else
+	return false;
+#endif
+}
+
+#endif
+
+#if SUPPORT_PHASE_STEPPING
+
+void Move::ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config)
+{
+	switch (config)
+	{
+		break;
+	case PhaseStepConfig::kv:
+		dms[axisOrExtruder].phaseStepControl.SetKv(value);
+		break;
+	case PhaseStepConfig::ka:
+		dms[axisOrExtruder].phaseStepControl.SetKa(value);
+		break;
+	}
+}
+
+PhaseStepParams Move::GetPhaseStepParams(size_t axisOrExtruder)
+{
+	PhaseStepParams params;
+	params.Kv = dms[axisOrExtruder].phaseStepControl.GetKv();
+	params.Ka = dms[axisOrExtruder].phaseStepControl.GetKa();
+	return params;
+}
+
+// Get the motor position in the current move so far, also speed and acceleration. Units are full steps and step clocks.
+bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
+{
+	const bool ret = dms[driver].GetCurrentMotion(when, mParams);
+	const float multiplier = ldexpf(-1.0, -(int)SmartDrivers::GetMicrostepShift(driver));
+
+	// Convert microsteps to full steps
+	mParams.position *= multiplier;
+	mParams.speed *= multiplier;
+	mParams.acceleration *= multiplier;
+	return ret;
+}
+
+bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
+{
+	bool hasRemoteDrivers = false;
+	IterateRemoteDrivers(axisOrExtruder, [&hasRemoteDrivers](DriverId driver) { hasRemoteDrivers = true; });
+
+	// Phase stepping does not support remote drivers
+	if (hasRemoteDrivers && mode == StepMode::phase)
+	{
+		return false;
+	}
+
+	bool ret = true;
+	IterateLocalDrivers(axisOrExtruder, [this, &ret, &mode, axisOrExtruder](uint8_t driver) {
+		// This is attempting to prevent the motor from jumping position when enabling phase stepping.
+		// I don't think it works properly so as a safeguard just set the axis to not be homed.
+		if (!SmartDrivers::IsPhaseSteppingEnabled(driver) && mode == StepMode::phase)
+		{
+			const uint32_t now = StepTimer::GetTimerTicks();
+			DriveMovement* dm = &dms[axisOrExtruder];
+			GetCurrentMotion(driver, now, dm->phaseStepControl.mParams);
+			const uint16_t initialPhase = SmartDrivers::GetMicrostepPosition(0) * 4;
+			const uint16_t calculatedPhase = dm->phaseStepControl.CalculateStepPhase(driver);
+
+			dm->phaseStepControl.SetPhaseOffset(driver, (initialPhase - calculatedPhase) % 4096u);
+		}
+		if (!SmartDrivers::EnablePhaseStepping(driver, mode == StepMode::phase))
+		{
+			ret = false;
+		}
+	});
+
+	dms[axisOrExtruder].SetStepMode(mode);
+	if (axisOrExtruder < MaxAxes)
+	{
+		reprap.GetGCodes().SetAxisNotHomed(axisOrExtruder);
+	}
+	DisableDrivers(axisOrExtruder);
+
+	ResetPhaseStepMonitoringVariables();
+	return ret;
+}
+
+StepMode Move::GetStepMode(size_t axisOrExtruder) noexcept
+{
+	if (axisOrExtruder >= MaxAxesPlusExtruders)
+	{
+		return StepMode::unknown;
+	}
+	return dms[axisOrExtruder].GetStepMode();
+}
+
+void Move::PhaseStepControlLoop() noexcept
+{
+
+	// Record the control loop call interval
+	const StepTimer::Ticks loopCallTime = StepTimer::GetTimerTicks();
+	const StepTimer::Ticks timeElapsed = loopCallTime - prevPSControlLoopCallTime;
+	prevPSControlLoopCallTime = loopCallTime;
+	if (timeElapsed < minPSControlLoopCallInterval) { minPSControlLoopCallInterval = timeElapsed; }
+	if (timeElapsed > maxPSControlLoopCallInterval) { maxPSControlLoopCallInterval = timeElapsed; }
+
+	const uint32_t now = StepTimer::ConvertLocalToMovementTime(loopCallTime);
+	MovementFlags flags;
+	flags.Clear();
+
+	{
+		const DriveMovement *dm = phaseStepDMs;
+		while (dm != nullptr)
+		{
+			if (dm->state > DMState::starting)
+			{
+				flags |= dm->segmentFlags;
+			}
+			dm = dm->nextDM;
+		}
+	}
+
+	if (flags.checkEndstops)
+	{
+		CheckEndstops(true);												// call out to a separate function because this may help cache locality in the more common and time-critical case where we don't call it
+	}
+
+	DriveMovement **dmp = &phaseStepDMs;
+	while (*dmp != nullptr)
+	{
+		DriveMovement * const dm = *dmp;
+
+		GetCurrentMotion(dm->drive, now, dm->phaseStepControl.mParams);
+
+		if (dm->state != DMState::phaseStepping)
+		{
+			*dmp = dm->nextDM;
+			if (dm->state >= DMState::firstMotionState)
+			{
+				InsertDM(dm);
+			}
+		}
+		else
+		{
+			dm->phaseStepControl.Calculate();
+
+			IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
+				if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
+				{
+					if (likely(dm->state > DMState::starting))
+					{
+						// Driver has been stopped (probably by Move::CheckEndstops() so we don't need to update it)
+						dm->phaseStepControl.UpdatePhaseOffset(driver);
+					}
+					return;
+				}
+				dm->phaseStepControl.InstanceControlLoop(driver);
+			});
+
+			dmp = &(dm->nextDM);
+		}
+	}
+
+
+	// Record how long this has taken to run
+	const StepTimer::Ticks loopRuntime = StepTimer::GetTimerTicks() - loopCallTime;
+	if (loopRuntime < minPSControlLoopRuntime) { minPSControlLoopRuntime = loopRuntime; }
+	if (loopRuntime > maxPSControlLoopRuntime) { maxPSControlLoopRuntime = loopRuntime; }
+}
+
+
+// Helper function to reset the 'monitoring variables' as defined above
+void Move::ResetPhaseStepMonitoringVariables() noexcept
+{
+	minPSControlLoopRuntime = std::numeric_limits<StepTimer::Ticks>::max();
+	maxPSControlLoopRuntime = 1;
+	minPSControlLoopCallInterval = std::numeric_limits<StepTimer::Ticks>::max();
+	maxPSControlLoopCallInterval = 1;
+}
+
+#endif
 
 // ISR for the step interrupt
 void Move::Interrupt() noexcept
@@ -2220,7 +2468,11 @@ void Move::Interrupt() noexcept
 // Called from the step ISR only.
 void Move::DeactivateDM(DriveMovement *dmToRemove) noexcept
 {
-	DriveMovement **dmp = &activeDMs;
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	DriveMovement** dmp = dmToRemove->state == DMState::phaseStepping ? &phaseStepDMs : &activeDMs;
+#else
+	DriveMovement** dmp = &activeDMs;
+#endif
 	while (*dmp != nullptr)
 	{
 		DriveMovement * const dm = *dmp;
@@ -2477,6 +2729,12 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 			if (dm2->NewSegment(now) != nullptr && dm2->state != DMState::starting)
 			{
 				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed & ~dm2->driverEndstopsTriggeredAtStart;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+				if (dm2->state == DMState::phaseStepping)
+				{
+					return;
+				}
+#endif
 # if SUPPORT_CAN_EXPANSION
 				flags |= dm2->segmentFlags;
 				if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
@@ -2486,7 +2744,7 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 				else
 # endif
 				{
-					(void)dm2->CalcNextStepTimeFull(now);			// calculate next step time
+					(void)dm2->CalcNextStepTimeFull(now); // calculate next step time
 					dm2->directionChanged = true;					// force the direction to be set up
 				}
 			}
@@ -3082,6 +3340,9 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 						);
 	if (code == 917)
 	{
+# if SUPPORT_PHASE_STEPPING
+		dms[axisOrExtruder].phaseStepControl.SetStandstillCurrent(standstillCurrentPercent[axisOrExtruder]);
+# endif
 		return CanInterface::SetRemoteStandstillCurrentPercent(canDriversToUpdate, reply);
 	}
 	else

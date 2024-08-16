@@ -60,6 +60,9 @@ public:
 	// Get the current tick count, adjusted for the movement delay
 	static Ticks GetMovementTimerTicks() noexcept SPEED_CRITICAL;
 
+	// Convert local time to movement time
+	static Ticks ConvertLocalToMovementTime(Ticks localTime) noexcept;
+
 	// Get the current tick count when we only need a 16-bit value. Faster than GetTimerTicks() on the SAM4S and SAME70.
 	static uint16_t GetTimerTicks16() noexcept;
 
@@ -164,6 +167,12 @@ inline void StepTimer::IncreaseMovementDelay(uint32_t increase) noexcept
 inline StepTimer::Ticks StepTimer::GetMovementTimerTicks() noexcept
 {
 	return GetTimerTicks() - movementDelay;
+}
+
+// Convert local time to movement time
+inline StepTimer::Ticks StepTimer::ConvertLocalToMovementTime(Ticks localTime) noexcept
+{
+	return localTime - movementDelay;
 }
 
 #endif /* SRC_MOVEMENT_STEPTIMER_H_ */

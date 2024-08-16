@@ -13,8 +13,11 @@
 #include "MoveSegment.h"
 #include "ExtruderShaper.h"
 
+#if SUPPORT_PHASE_STEPPING
+#include <Movement/PhaseStep.h>
+#endif
+
 #define STEPS_DEBUG					(1)
-#define SUPPORT_PHASE_STEPPING		(0)				// temporarily define this here
 
 class PrepParams;
 
@@ -32,22 +35,11 @@ enum class DMState : uint8_t
 	cartDecelNoReverse,
 	cartDecelForwardsReversing,						// linear decelerating motion, expect reversal
 	cartDecelReverse,								// linear decelerating motion, reversed
-};
-
-#if SUPPORT_PHASE_STEPPING
-
-// Temporarily(?) define these here so that we can check that compilation succeeds
-// Struct to pass data back to the phase stepping code
-struct MotionParameters
-{
-	float position = 0.0;
-	float speed = 0.0;
-	float acceleration = 0.0;
-};
-
-extern bool IsPhaseSteppingEnabled() noexcept;		//TODO remove this
-
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	phaseStepping,
 #endif
+};
+
 
 // This class describes a single movement of one drive
 class DriveMovement
@@ -79,6 +71,9 @@ public:
 #endif
 
 #if SUPPORT_PHASE_STEPPING
+	bool SetStepMode(StepMode mode) noexcept;
+	StepMode GetStepMode() const noexcept { return stepMode; }
+	bool IsPhaseStepEnabled() const noexcept { return stepMode == StepMode::phase; }
 	// Get the current position relative to the start of this move, speed and acceleration. Units are microsteps and step clocks.
 	// Return true if this drive is moving. Segments are advanced as necessary.
 	bool GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept;
@@ -129,9 +124,9 @@ private:
 	int32_t netStepsThisSegment;						// the (signed) net number of steps in the current segment
 	int32_t segmentStepLimit;							// the first step number of the next phase, or the reverse start step if smaller
 	int32_t reverseStartStep;							// the step number for which we need to reverse direction due to pressure advance or delta movement
-	motioncalc_t q, t0, p;								// the movement parameters of the current segment
+	motioncalc_t q, t0, p;								// the movement parameters of the current segment. Only set when not phase stepping
 #if SUPPORT_PHASE_STEPPING
-	motioncalc_t u;										// the initial speed of this segment
+	motioncalc_t u;										// the initial speed of this segment. Only set when in phase stepping
 #endif
 	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
 	motioncalc_t distanceCarriedForwards;				// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
@@ -155,6 +150,11 @@ private:
 	uint32_t extruderPrintingSince;						// the millis ticks when this extruder started doing printing moves
 
 	bool extruderPrinting;								// true if this is an extruder and the most recent segment started was a printing move
+
+#if SUPPORT_PHASE_STEPPING
+	PhaseStep phaseStepControl;
+	StepMode stepMode;
+#endif
 };
 
 // Calculate and store the time since the start of the move when the next step for the specified DriveMovement is due.
@@ -188,6 +188,28 @@ inline bool DriveMovement::CalcNextStepTime(uint32_t now) noexcept
 // Caller must disable interrupts before calling this
 inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
 {
+#if SUPPORT_PHASE_STEPPING
+	if (phaseStepControl.IsEnabled())
+	{
+		const MoveSegment *const seg = segments;
+		if (seg == nullptr)
+		{
+			return 0;
+		}
+		int32_t timeSinceStart = (int32_t)(StepTimer::GetMovementTimerTicks() - seg->GetStartTime());
+		if (timeSinceStart < 0)
+		{
+			return 0;
+		}
+
+		if ((uint32_t)timeSinceStart >= seg->GetDuration())
+		{
+			timeSinceStart = seg->GetDuration();
+		}
+
+		return lrintf((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart);
+	}
+#endif
 	return currentMotorPosition - positionAtSegmentStart;
 }
 
@@ -241,40 +263,46 @@ inline uint32_t DriveMovement::GetStepInterval(uint32_t microstepShift) const no
 // Inlined because it is only called from one place
 inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mParams) noexcept
 {
+	bool hasMotion = false;
 	AtomicCriticalSectionLocker lock;								// we don't want 'segments' changing while we do this
-	MoveSegment *seg = segments;
-	while (seg != nullptr)
-	{
-		int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
-		if (timeSinceStart < 0)
-		{
-			break;													// segment isn't due to start yet
-		}
-		if ((uint32_t)timeSinceStart >= seg->GetDuration())			// if segment should have finished by now
-		{
-			if (IsPhaseSteppingEnabled())							//TODO implement this
-			{
-				currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
-				MoveSegment *oldSeg = seg;
-				segments = oldSeg->GetNext();
-				MoveSegment::Release(oldSeg);
-				seg = NewSegment(when);
-				continue;
-			}
-			timeSinceStart = seg->GetDuration();
-		}
 
-		mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart;
-		currentMotorPosition = (int32_t)mParams.position;			// store the approximate position for OM updates
-		mParams.speed = u + seg->GetA() * timeSinceStart;
-		mParams.acceleration = seg->GetA();
-		return true;
+	if (state == DMState::phaseStepping)
+	{
+		MoveSegment *seg = segments;
+		while (seg != nullptr)
+		{
+			int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
+			if (timeSinceStart < 0)
+			{
+				break;													// segment isn't due to start yet
+			}
+			if ((uint32_t)timeSinceStart >= seg->GetDuration())			// if segment should have finished by now
+			{
+				if (phaseStepControl.IsEnabled())
+				{
+					currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
+					MoveSegment *oldSeg = seg;
+					segments = oldSeg->GetNext();
+					MoveSegment::Release(oldSeg);
+					seg = NewSegment(when);
+					hasMotion = true;
+					continue;
+				}
+				timeSinceStart = seg->GetDuration();
+			}
+
+			mParams.position = (u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart;
+			currentMotorPosition = (int32_t)mParams.position;			// store the approximate position for OM updates
+			mParams.speed = u + seg->GetA() * timeSinceStart;
+			mParams.acceleration = seg->GetA();
+			return true;
+		}
 	}
 
 	// If we get here then no movement is taking place
 	mParams.position = (float)currentMotorPosition;
 	mParams.speed = mParams.acceleration = 0.0;
-	return false;
+	return hasMotion;
 }
 
 #endif	// SUPPORT_PHASE_STEPPING

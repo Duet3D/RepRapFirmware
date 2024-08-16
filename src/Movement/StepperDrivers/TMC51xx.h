@@ -27,6 +27,15 @@ namespace SmartDrivers
 	void EnableDrive(size_t driver, bool en) noexcept;
 	bool SetMicrostepping(size_t drive, unsigned int microsteps, bool interpolation) noexcept;
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation) noexcept;
+#if SUPPORT_PHASE_STEPPING
+	bool EnablePhaseStepping(size_t driver, bool enable) noexcept;
+	bool IsPhaseSteppingEnabled(size_t driver) noexcept;
+	float GetCurrent(size_t driver) noexcept;
+	unsigned int GetMicrostepShift(size_t driver) noexcept;
+	uint16_t GetMicrostepPosition(size_t driver) noexcept;
+	void SetTmcExternalClock(uint32_t frequency) noexcept;
+	bool SetMotorPhases(size_t driver, uint32_t regVal) noexcept;
+#endif
 	bool SetDriverMode(size_t driver, unsigned int mode) noexcept;
 	DriverMode GetDriverMode(size_t driver) noexcept;
 	void SetStallThreshold(size_t driver, int sgThreshold) noexcept;

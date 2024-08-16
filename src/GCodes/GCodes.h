@@ -407,6 +407,9 @@ private:
 	GCodeResult FindCenterOfCavity(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with a M675
 	GCodeResult SetDateTime(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);								// Deal with a M905
 	GCodeResult SavePosition(GCodeBuffer& gb,const StringRef& reply) THROWS(GCodeException);							// Deal with G60
+#if SUPPORT_PHASE_STEPPING
+	GCodeResult ConfigureStepMode(GCodeBuffer& gb, const StringRef& ref) THROWS(GCodeException);						// Deal with M970
+#endif
 	GCodeResult ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M569
 	GCodeResult ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
 		pre(drive < platform.GetNumActualDirectDrivers());																// Deal with M569 for one local driver

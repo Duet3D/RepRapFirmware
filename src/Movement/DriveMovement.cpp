@@ -16,6 +16,10 @@
 #include <Platform/RepRap.h>
 #include <GCodes/GCodes.h>
 
+#if SUPPORT_TMC51xx
+# include "Movement/StepperDrivers/TMC51xx.h"
+#endif
+
 // Static members
 
 int32_t DriveMovement::maxStepsLate = 0;
@@ -41,6 +45,10 @@ void DriveMovement::Init(size_t drv) noexcept
 	homingDda = nullptr;
 	isExtruder = false;
 	segmentFlags.Init();
+
+#if SUPPORT_PHASE_STEPPING
+	stepMode = StepMode::stepDir;
+#endif
 }
 
 void DriveMovement::DebugPrint() const noexcept
@@ -314,6 +322,12 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 		{
 			return true;
 		}
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		if (state == DMState::phaseStepping)
+		{
+			return false;
+		}
+#endif
 		return CalcNextStepTimeFull(now);
 	}
 	return false;
@@ -354,17 +368,24 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 
 		// Calculate the movement parameters
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
+		const bool isLinear = seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0);
+
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		if (IsPhaseStepEnabled())
+		{
+			u = isLinear ? seg->CalcLinearU() : -seg->GetA() * t0;
+			state = DMState::phaseStepping;
+			return seg;
+		}
+#endif
+
 		bool newDirection;
 		int32_t multiplier;
 		motioncalc_t rawP;
 
-		// If netStepsThisSegment is zero then either this segment plus the distance carried forwards is less than one step, or it's a forwards-then-back move
-		if (seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0))
+		if (isLinear)
 		{
 			// Segment is linear
-#if SUPPORT_PHASE_STEPPING
-			u = seg->CalcLinearU();								// needed by GetCurrentMotion so pre-calculate it
-#endif
 			rawP = seg->CalcLinearRecipU();
 			newDirection = !std::signbit(seg->GetLength());
 			multiplier = 2 * (int32_t)newDirection - 1;			// +1 or -1
@@ -379,9 +400,6 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 			// Therefore 0.5 * t^2 + u * t/a + (distanceCarriedForwards - n)/a = 0
 			// Therefore t = -u/a +/- sqrt((u/a)^2 - 2 * (distanceCarriedForwards - n)/a)
 			// Calculate the t0, p and q coefficients for an accelerating or decelerating move such that t = t0 + sqrt(p*n + q) and set up the initial direction
-#if SUPPORT_PHASE_STEPPING
-			u = -seg->GetA() * t0;								// needed by GetCurrentMotion so pre-calculate it
-#endif
 			newDirection = !std::signbit(seg->GetA());			// assume accelerating motion
 			multiplier = 2 * (int32_t)newDirection - 1;			// +1 or -1
 			if (t0 <= (motioncalc_t)0.0)
@@ -816,6 +834,27 @@ void DriveMovement::StopDriverFromRemote() noexcept
 {
 	int32_t dummy;
 	(void)StopDriver(dummy);
+}
+
+#endif
+
+#if SUPPORT_PHASE_STEPPING
+
+bool DriveMovement::SetStepMode(StepMode mode) noexcept
+{
+	switch (mode)
+	{
+	case StepMode::stepDir:
+		phaseStepControl.SetEnabled(false);
+		break;
+	case StepMode::phase:
+		phaseStepControl.SetEnabled(true);
+		break;
+	default:
+		return false;
+	}
+	stepMode = mode;
+	return true;
 }
 
 #endif
