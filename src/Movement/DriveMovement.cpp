@@ -341,7 +341,6 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 // If there is a segment ready to execute but it involves zero steps, skip and free it and start again.
 MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 {
-	debugPrintf("New segment @ %" PRIu32 ", currentMotorPosition = %" PRId32 "\n", now, currentMotorPosition);
 	positionAtSegmentStart = currentMotorPosition;
 
 	while (true)
@@ -349,7 +348,6 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		MoveSegment *seg = segments;				// capture volatile variable
 		if (seg == nullptr)
 		{
-			debugPrintf("No segments\n");
 			segmentFlags.Init();
 			state = DMState::idle;					// if we have been round this loop already then we will have changed the state, so reset it to idle
 			return nullptr;
@@ -359,7 +357,6 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 
 		if ((int32_t)(seg->GetStartTime() - now) > (int32_t)MoveTiming::MaximumMoveStartAdvanceClocks)
 		{
-			debugPrintf("Time till start = %ld\n", (int32_t)seg->GetStartTime() - now);
 			state = DMState::starting;				// the segment is not due to start for a while. To allow it to be changed meanwhile, generate an interrupt when it is due to start.
 			driversCurrentlyUsed = 0;				// don't generate a step on that interrupt
 			driverEndstopsTriggeredAtStart = 0;		// reset since we will be setting this in DDA::Prepare()
@@ -371,7 +368,6 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 
 		// Calculate the movement parameters
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
-		debugPrintf("seg length = %f, distanceCarriedForwards = %f, netStepsThisSegment = %ld\n", (double)seg->GetLength(), (double)distanceCarriedForwards, netStepsThisSegment);
 		const bool isLinear = seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0);
 
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP

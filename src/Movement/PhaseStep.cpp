@@ -78,18 +78,14 @@ void PhaseStep::SetMotorPhase(size_t driver, uint16_t phase, float magnitude) no
 	Trigonometry::FastSinCos(phase, sine, cosine);
 	coilA = (int16_t)lrintf(cosine * magnitude);
 	coilB = (int16_t)lrintf(sine * magnitude);
-	SmartDrivers::SetMotorCurrents(driver, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF);
+	SmartDrivers::SetMotorPhases(driver, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF);
 //	debugPrintf("Set driver %" PRIu16 " phase to %" PRIu16 " %.2f%%, v=%.5f, a=%.5f %lu\n", driver, phase, (double)magnitude * 100, (double)mParams.speed, (double)mParams.acceleration, StepTimer::GetTimerTicks());
 }
 
-// Update the standstill current fraction for this drive.
-void PhaseStep::UpdateStandstillCurrent() noexcept
+// Set the standstill current fraction for this drive.
+void PhaseStep::SetStandstillCurrent(float percent) noexcept
 {
-	// TODO
-#if 0
-# error Multi driver code not implemented
-	holdCurrentFraction = SmartDrivers::GetStandstillCurrentPercent(0) * 0.01;
-#endif
+	holdCurrentFraction = percent * 0.01;
 }
 
 void PhaseStep::Calculate() noexcept

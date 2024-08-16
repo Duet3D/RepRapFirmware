@@ -362,7 +362,6 @@ Move::Move() noexcept
 	numActualDirectDrivers = NumDirectDrivers;						// assume they are all available until we know otherwise
 #endif
 
-
 	// Kinematics must be set up here because GCodes::Init asks the kinematics for the assumed initial position
 	kinematics = Kinematics::Create(KinematicsType::cartesian);		// default to Cartesian
 	for (DDARing& ring : rings)
@@ -2177,6 +2176,29 @@ bool Move::AreDrivesStopped(AxesBitmap drives) const noexcept
 							  );
 }
 
+#if SUPPORT_CLOSED_LOOP
+
+// if the driver is idle, enable it; return true if driver enabled on return
+bool Move::EnableIfIdle(size_t driver) noexcept
+{
+#if 0
+	if (driverStates[driver] == DriverStateControl::driverIdle)
+	{
+		driverStates[driver] = DriverStateControl::driverActive;
+#if HAS_SMART_DRIVERS
+		driverAtIdleCurrent[driver] = false;
+		UpdateMotorCurrent(driver);
+#endif
+	}
+
+	return driverStates[driver] == DriverStateControl::driverActive;
+#else
+	return false;
+#endif
+}
+
+#endif
+
 #if SUPPORT_PHASE_STEPPING
 
 void Move::ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config)
@@ -2201,25 +2223,6 @@ PhaseStepParams Move::GetPhaseStepParams(size_t axisOrExtruder)
 	return params;
 }
 
-// if the driver is idle, enable it; return true if driver enabled on return
-bool Move::EnableIfIdle(size_t driver) noexcept
-{
-#if 0
-	if (driverStates[driver] == DriverStateControl::driverIdle)
-	{
-		driverStates[driver] = DriverStateControl::driverActive;
-# if HAS_SMART_DRIVERS
-		driverAtIdleCurrent[driver] = false;
-		UpdateMotorCurrent(driver);
-# endif
-	}
-
-	return driverStates[driver] == DriverStateControl::driverActive;
-#else
-	return false;
-#endif
-}
-
 // Get the motor position in the current move so far, also speed and acceleration. Units are full steps and step clocks.
 bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept
 {
@@ -2236,9 +2239,7 @@ bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mPar
 bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
 {
 	bool hasRemoteDrivers = false;
-	IterateRemoteDrivers(axisOrExtruder, [&hasRemoteDrivers](DriverId driver){
-		hasRemoteDrivers = true;
-	});
+	IterateRemoteDrivers(axisOrExtruder, [&hasRemoteDrivers](DriverId driver) { hasRemoteDrivers = true; });
 
 	// Phase stepping does not support remote drivers
 	if (hasRemoteDrivers && mode == StepMode::phase)
@@ -2247,7 +2248,19 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
 	}
 
 	bool ret = true;
-	IterateLocalDrivers(axisOrExtruder, [&ret, &mode](uint8_t driver){
+	IterateLocalDrivers(axisOrExtruder, [this, &ret, &mode, axisOrExtruder](uint8_t driver) {
+		// This is attempting to prevent the motor from jumping position when enabling phase stepping.
+		// I don't think it works properly so as a safeguard just set the axis to not be homed.
+		if (!SmartDrivers::IsPhaseSteppingEnabled(driver) && mode == StepMode::phase)
+		{
+			const uint32_t now = StepTimer::GetTimerTicks();
+			DriveMovement* dm = &dms[axisOrExtruder];
+			GetCurrentMotion(driver, now, dm->phaseStepControl.mParams);
+			const uint16_t initialPhase = SmartDrivers::GetMicrostepPosition(0) * 4;
+			const uint16_t calculatedPhase = dm->phaseStepControl.CalculateStepPhase(driver);
+
+			dm->phaseStepControl.SetPhaseOffset(driver, (initialPhase - calculatedPhase) % 4096u);
+		}
 		if (!SmartDrivers::EnablePhaseStepping(driver, mode == StepMode::phase))
 		{
 			ret = false;
@@ -2324,11 +2337,7 @@ void Move::PhaseStepControlLoop() noexcept
 		{
 			dm->phaseStepControl.Calculate();
 
-			//		debugPrintf("Move::PhaseStepControlLoop(). drive=%u @ %lu\n", dm->drive, StepTimer::GetTimerTicks());
 			IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
-				//			debugPrintf("Driver = %u, driversCurrentlyUsed = %lu, driversNormallyUsed = %lu\n", driver,
-				//dm->driversCurrentlyUsed, dm->driversNormallyUsed);
-
 				if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
 				{
 					if (likely(dm->state > DMState::starting))
@@ -2343,7 +2352,6 @@ void Move::PhaseStepControlLoop() noexcept
 
 			dmp = &(dm->nextDM);
 		}
-		// debugPrintf("%lu\n", StepTimer::GetTimerTicks());
 	}
 
 
@@ -3332,6 +3340,9 @@ GCodeResult Move::SetMotorCurrent(size_t axisOrExtruder, float currentOrPercent,
 						);
 	if (code == 917)
 	{
+# if SUPPORT_PHASE_STEPPING
+		dms[axisOrExtruder].phaseStepControl.SetStandstillCurrent(standstillCurrentPercent[axisOrExtruder]);
+# endif
 		return CanInterface::SetRemoteStandstillCurrentPercent(canDriversToUpdate, reply);
 	}
 	else

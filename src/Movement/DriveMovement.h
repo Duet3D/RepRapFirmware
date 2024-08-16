@@ -274,14 +274,12 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 			int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
 			if (timeSinceStart < 0)
 			{
-				debugPrintf("Segment not due to start for %" PRId32 "(@ %" PRIu32 ")\n", -timeSinceStart, seg->GetStartTime());
 				break;													// segment isn't due to start yet
 			}
 			if ((uint32_t)timeSinceStart >= seg->GetDuration())			// if segment should have finished by now
 			{
 				if (phaseStepControl.IsEnabled())
 				{
-					debugPrintf("Segment ended, currentMotorPosition: before=%" PRId32 " after=%" PRId32 ", netStepsThisSegment = %" PRId32 "\n", currentMotorPosition, positionAtSegmentStart + netStepsThisSegment, netStepsThisSegment);
 					currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
 					MoveSegment *oldSeg = seg;
 					segments = oldSeg->GetNext();

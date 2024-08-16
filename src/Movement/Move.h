@@ -424,14 +424,17 @@ public:
 	uint32_t GetStepInterval(size_t drive, uint32_t microstepShift) const noexcept;			// Get the current step interval for this axis or extruder
 #endif
 
+#if SUPPORT_CLOSED_LOOP
+	bool EnableIfIdle(size_t driver) noexcept;										// if the driver is idle, enable it; return true if driver enabled on return
+	void InvertCurrentMotorSteps(size_t driver) noexcept;
+#endif
+
 #if SUPPORT_PHASE_STEPPING
 	void ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config);							// configure Ka & Kv parameters for phase stepping
 	PhaseStepParams GetPhaseStepParams(size_t axisOrExtruder);
-	bool EnableIfIdle(size_t driver) noexcept;										// if the driver is idle, enable it; return true if driver enabled on return
 	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
 	bool SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept;
 	StepMode GetStepMode(size_t axisOrExtruder) noexcept;
-	void InvertCurrentMotorSteps(size_t driver) noexcept;
 	void ResetPhaseStepMonitoringVariables() noexcept;
 
 	void PhaseStepControlLoop() noexcept;
@@ -1009,7 +1012,7 @@ inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t driv
 
 #endif
 
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_CLOSED_LOOP
 
 // Invert the current number of microsteps taken. Called when the driver direction control is changed.
 inline void Move::InvertCurrentMotorSteps(size_t driver) noexcept

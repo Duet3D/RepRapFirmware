@@ -59,7 +59,7 @@ public:
 	friend class DriveMovement;
 
 	// Phase step public methods
-	void UpdateStandstillCurrent() noexcept;
+	void SetStandstillCurrent(float percent) noexcept;
 
 	// Methods called by the motion system
 	void Calculate() noexcept; // Calculate the phase and current before the per driver offset is applied
@@ -78,7 +78,7 @@ public:
   private:
 	// Constants private to this module
 	static constexpr float DefaultHoldCurrentFraction =
-		0.25; // the minimum fraction of the requested current that we apply when holding position
+		0.71; // the minimum fraction of the requested current that we apply when holding position
 
 	// Methods used only by closed loop and by the tuning module
 	void SetMotorPhase(size_t driver, uint16_t phase, float magnitude) noexcept;

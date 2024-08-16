@@ -514,7 +514,10 @@ pre(!driversPowered)
 	specialReadRegisterNumber = specialWriteRegisterNumber = 0xFF;
 	motorCurrent = 0;
 	standstillCurrentFraction = (uint16_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 256);
+
+#if SUPPORT_PHASE_STEPPING
 	currentMode = DriverMode::spreadCycle;
+#endif
 
 	// Set default values for all registers and flag them to be updated
 	UpdateRegister(WriteGConf, DefaultGConfReg);
@@ -785,7 +788,10 @@ bool TmcDriverState::SetDriverMode(unsigned int mode) noexcept
 		return false;
 	}
 
+#if SUPPORT_PHASE_STEPPING
 	currentMode = (DriverMode)mode;
+#endif
+
 	return true;
 }
 
@@ -870,7 +876,6 @@ void TmcDriverState::UpdateCurrent() noexcept
 																: (uint16_t)(MaxStandstillCurrentTimes256/motorCurrent);
 		 iHold = (iRun * limitedStandstillCurrentFraction)/256;
 	}
-	debugPrintf("iHold %lu, iRun %lu\n", iHold, iRun);
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHold << IHOLDIRUN_IHOLD_SHIFT));
 	UpdateRegister(Write5160GlobalScaler, gs);
@@ -1433,7 +1438,6 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			for (size_t drive = 0; drive < numTmc51xxDrivers; ++drive)
 			{
 				driverStates[drive].WriteAll();
-				debugPrintf("Initialising driver %u", drive);
 			}
 			driversState = DriversState::initialising;
 		}
@@ -1455,7 +1459,6 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 				{
 					if (driverStates[i].UpdatePending())
 					{
-						debugPrintf("driver %u not initialised", i);
 						allInitialised = false;
 						break;
 					}
@@ -1463,7 +1466,6 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 
 				if (allInitialised)
 				{
-					debugPrintf("Drivers ready");
 					fastDigitalWriteLow(GlobalTmc51xxEnablePin);
 					driversState = DriversState::ready;
 				}
@@ -1529,7 +1531,6 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 
 		if (timedOut || dmaFinishedReason != DmaCallbackReason::complete)
 		{
-			debugPrintf("Timed out");
 			TmcDriverState::TransferTimedOut();
 			// If the transfer was interrupted then we will have written dud data to the drivers. So we should re-initialise them all.
 			// Unfortunately registers that we don't normally write to may have changed too.
@@ -1803,7 +1804,7 @@ uint16_t SmartDrivers::GetMicrostepPosition(size_t driver) noexcept
 
 // Schedules a request to update the motor phases using XDIRECT register.
 // Returns true if request is scheduled. Will not schedule a request if it is equal to the current value.
-bool SmartDrivers::SetMotorCurrents(size_t driver, uint32_t regVal) noexcept
+bool SmartDrivers::SetMotorPhases(size_t driver, uint32_t regVal) noexcept
 {
 	return driverStates[driver].SetXdirect(regVal);
 }

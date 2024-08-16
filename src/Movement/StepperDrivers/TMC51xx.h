@@ -34,7 +34,7 @@ namespace SmartDrivers
 	unsigned int GetMicrostepShift(size_t driver) noexcept;
 	uint16_t GetMicrostepPosition(size_t driver) noexcept;
 	void SetTmcExternalClock(uint32_t frequency) noexcept;
-	bool SetMotorCurrents(size_t driver, uint32_t regVal) noexcept;
+	bool SetMotorPhases(size_t driver, uint32_t regVal) noexcept;
 #endif
 	bool SetDriverMode(size_t driver, unsigned int mode) noexcept;
 	DriverMode GetDriverMode(size_t driver) noexcept;
