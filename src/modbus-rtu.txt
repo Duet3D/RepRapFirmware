@@ -33,13 +33,13 @@ receive: slave address, function, byte count, data* (8 coils per byte), CRC
 Read discrete inputs: as read coils
 
 Read holding registers:
-send: slave addr, function, start addr hi, start addr lo, num regs lo, num regs hi, CRC
+send: slave addr, function, start addr hi, start addr lo, num regs hi, num regs lo, CRC
 rcv: slave addr, function, byte count, (data hi, data lo)*, crc
 
 Read input registers: as read holding registers
 
 Write coil:
-send: slave addr, function, coil addr hi, coil addr lo, write data hi, write data lo, CRC. Write data hi:lo must be 00:00 or 00:FF. Other values are illegal and do not write the coil.
+send: slave addr, function, coil addr hi, coil addr lo, write data hi, write data lo, CRC. Write data hi:lo must be 00:00 or FF:00. Other values are illegal and do not write the coil.
 receive: same, returning state of the coil after it has been written.
 
 Write single register:
@@ -47,6 +47,8 @@ send: slave addr, function, reg address hi, reg address lo, write data hi, write
 recv: same as sent, after register has been written.
 
 Write multiple coils:
+send: slave addr, function, start addr hi, start addr lo, num coils hi, num coils lo, byte count, (data)*, CRC. Data is 1 byte per 8 coils, LSB = lowest coil number.
+recv: slave addr, function, start addr hi, start addr lo, num coils hi, num coils lo, CRC
 
 Write multiple registers:
 send: slave addr, function, start addr hi, start addr lo, num regs hi, num regs lo, byte count, (data hi, data lo)*, CRC
