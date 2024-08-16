@@ -2345,8 +2345,8 @@ void Move::PhaseStepControlLoop() noexcept
 
 	// Record how long this has taken to run
 	const StepTimer::Ticks loopRuntime = StepTimer::GetTimerTicks() - loopCallTime;
-	minPSControlLoopRuntime = min<StepTimer::Ticks>(minPSControlLoopRuntime, loopRuntime);
-	maxPSControlLoopRuntime = max<StepTimer::Ticks>(maxPSControlLoopRuntime, loopRuntime);
+	if (loopRuntime < minPSControlLoopRuntime) { minPSControlLoopRuntime = loopRuntime; }
+	if (loopRuntime > maxPSControlLoopRuntime) { maxPSControlLoopRuntime = loopRuntime; }
 }
 
 
