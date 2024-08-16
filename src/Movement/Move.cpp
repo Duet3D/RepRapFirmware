@@ -587,13 +587,15 @@ void Move::Init() noexcept
 	lastReportedMovementDelay = 0;
 	bedLevellingMoveAvailable = false;
 	activeDMs = nullptr;
-#if SUPPORT_PHASE_STEPPING
-	phaseStepDMs = nullptr;
-#endif
 	for (uint16_t& ms : microstepping)
 	{
 		ms = 16 | 0x8000;
 	}
+
+#if SUPPORT_PHASE_STEPPING
+	phaseStepDMs = nullptr;
+	ResetPhaseStepMonitoringVariables();
+#endif
 
 	moveTask.Create(MoveStart, "Move", this, TaskPriority::MovePriority);
 }
@@ -1066,6 +1068,7 @@ void Move::Diagnostics(MessageType mtype) noexcept
 	p.MessageF(mtype, "Phase step loop runtime (us): min=%" PRIu32 ", max=%" PRIu32 ", frequency (Hz): min=%" PRIu32 ", max=%" PRIu32 "\n",
 			StepTimer::TicksToIntegerMicroseconds(minPSControlLoopRuntime), StepTimer::TicksToIntegerMicroseconds(maxPSControlLoopRuntime),
 			TickPeriodToFreq(maxPSControlLoopCallInterval), TickPeriodToFreq(minPSControlLoopCallInterval));
+	ResetPhaseStepMonitoringVariables();
 #endif
 
 	// Show the status of each DDA ring
