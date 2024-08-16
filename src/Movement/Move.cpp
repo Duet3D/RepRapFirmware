@@ -2459,7 +2459,7 @@ void Move::Interrupt() noexcept
 // Called from the step ISR only.
 void Move::DeactivateDM(DriveMovement *dmToRemove) noexcept
 {
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	DriveMovement** dmp = dmToRemove->state == DMState::phaseStepping ? &phaseStepDMs : &activeDMs;
 #else
 	DriveMovement** dmp = &activeDMs;

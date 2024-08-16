@@ -322,7 +322,7 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 		{
 			return true;
 		}
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		if (state == DMState::phaseStepping)
 		{
 			return false;
@@ -372,13 +372,9 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		// Calculate the movement parameters
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
 		debugPrintf("seg length = %f, distanceCarriedForwards = %f, netStepsThisSegment = %ld\n", (double)seg->GetLength(), (double)distanceCarriedForwards, netStepsThisSegment);
-		bool newDirection;
-		int32_t multiplier;
-		motioncalc_t rawP;
-
 		const bool isLinear = seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0);
 
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		if (IsPhaseStepEnabled())
 		{
 			u = isLinear ? seg->CalcLinearU() : -seg->GetA() * t0;
@@ -387,7 +383,10 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		}
 #endif
 
-		// If netStepsThisSegment is zero then either this segment plus the distance carried forwards is less than one step, or it's a forwards-then-back move
+		bool newDirection;
+		int32_t multiplier;
+		motioncalc_t rawP;
+
 		if (isLinear)
 		{
 			// Segment is linear
