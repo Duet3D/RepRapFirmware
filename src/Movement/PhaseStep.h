@@ -56,6 +56,7 @@ class PhaseStep
 {
 public:
 	friend class Move;
+	friend class DriveMovement;
 
 	// Phase step public methods
 	void UpdateStandstillCurrent() noexcept;
@@ -66,6 +67,7 @@ public:
 	void SetEnabled(bool enable) { enabled = enable; }
 	bool IsEnabled() const noexcept { return enabled; }
 	void UpdatePhaseOffset(size_t driver) noexcept;
+	void SetPhaseOffset(size_t driver, uint16_t offset) noexcept;
 
 	// Configuration methods
 	void SetKv(float newKv) noexcept { Kv = newKv; }
@@ -96,7 +98,6 @@ public:
 	float	PIDATerm;									// Acceleration feedforward term
 	float	PIDControlSignal;							// The overall signal from the PID controller
 
-	uint16_t desiredStepPhase = 0;						// The desired position of the motor
 	float currentFraction;
 	int16_t coilA;										// The current to run through coil A
 	int16_t coilB;										// The current to run through coil A

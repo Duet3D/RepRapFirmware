@@ -51,6 +51,7 @@ using std::numeric_limits;
 
 #define BASIC_TUNING_DEBUG	0
 
+static uint16_t currentPhase[MaxSmartDrivers] = { 0 };
 static uint16_t phaseOffset[MaxSmartDrivers] = { 0 };			// The amount by which the phase should be offset for each driver
 
 const char* TranslateStepMode(const StepMode mode)
@@ -72,15 +73,13 @@ const char* TranslateStepMode(const StepMode mode)
 // 'magnitude' must be in range 0.0..1.0
 void PhaseStep::SetMotorPhase(size_t driver, uint16_t phase, float magnitude) noexcept
 {
-	desiredStepPhase = phase;
+	currentPhase[driver] = phase;
 	float sine, cosine;
 	Trigonometry::FastSinCos(phase, sine, cosine);
 	coilA = (int16_t)lrintf(cosine * magnitude);
 	coilB = (int16_t)lrintf(sine * magnitude);
-	if (SmartDrivers::SetMotorCurrents(driver, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF))
-	{
-//		debugPrintf("Set driver %" PRIu16 " phase to %" PRIu16 " %.2f%%, v=%.5f, a=%.5f %lu\n", driver, phase, (double)magnitude * 100, (double)mParams.speed, (double)mParams.acceleration, StepTimer::GetTimerTicks());
-	}
+	SmartDrivers::SetMotorCurrents(driver, (((uint32_t)(uint16_t)coilB << 16) | (uint32_t)(uint16_t)coilA) & 0x01FF01FF);
+//	debugPrintf("Set driver %" PRIu16 " phase to %" PRIu16 " %.2f%%, v=%.5f, a=%.5f %lu\n", driver, phase, (double)magnitude * 100, (double)mParams.speed, (double)mParams.acceleration, StepTimer::GetTimerTicks());
 }
 
 // Update the standstill current fraction for this drive.
@@ -113,11 +112,19 @@ void PhaseStep::UpdatePhaseOffset(size_t driver) noexcept
 {
 	AtomicCriticalSectionLocker lock;
 	const uint16_t calculatedStepPhase = CalculateStepPhase(driver);
-	phaseOffset[driver] = (desiredStepPhase - (calculatedStepPhase - phaseOffset[driver])) % 4096u;
-	debugPrintf("Updated phaseOffset[%u]=%u, calculatedPhase=%u\n", driver, phaseOffset[driver], calculatedStepPhase);
+	const uint16_t oldOffset = phaseOffset[driver];
+	phaseOffset[driver] = (currentPhase[driver] - (calculatedStepPhase - phaseOffset[driver])) % 4096u;
+//	debugPrintf("Updated phaseOffset[%u]=%u, desired=%u, calculated=%u, oldOffset=%u\n", driver, phaseOffset[driver], currentPhase[driver], calculatedStepPhase, oldOffset);
 }
 
-inline uint16_t PhaseStep::CalculateStepPhase(size_t driver) noexcept
+void PhaseStep::SetPhaseOffset(size_t driver, uint16_t offset) noexcept
+{
+	AtomicCriticalSectionLocker lock;
+	phaseOffset[driver] = (offset) % 4096u;
+//	debugPrintf("Set phaseOffset[%u]=%u\n", driver, phaseOffset[driver]);
+}
+
+uint16_t PhaseStep::CalculateStepPhase(size_t driver) noexcept
 {
 	const float multiplier = reprap.GetMove().GetDirectionValue(driver) ? 1.0 : -1.0;
 	const uint16_t calculatedStepPhase = (uint16_t)llrintf(mParams.position * multiplier * 1024.0);		// we use llrintf so that we can guarantee to convert the float operand to integer. We only care about the lowest 12 bits.
@@ -135,9 +142,6 @@ inline float PhaseStep::CalculateCurrentFraction() noexcept
 	PIDControlSignal = min<float>(fabsf(PIDVTerm) + fabsf(PIDATerm), 256.0);
 
 	currentFraction = holdCurrentFraction + (1.0 - holdCurrentFraction) * min<float>(PIDControlSignal * (1.0/256.0), 1.0);
-
-	// debugPrintf("Calculated driver %u phase = %u (mParams pos=%f, vel=%f, accel=%f), currentFraction = %f @ %lu\n", driver, commandedStepPhase, mParams.position, mParams.speed, mParams.acceleration, currentFraction, when);
-
 	return currentFraction;
 }
 

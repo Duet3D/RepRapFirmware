@@ -1062,9 +1062,11 @@ void Move::Diagnostics(MessageType mtype) noexcept
 		p.Message(mtype, driverStatus.c_str());
 	}
 
+#if SUPPORT_PHASE_STEPPING
 	p.MessageF(mtype, "Phase step loop runtime (us): min=%" PRIu32 ", max=%" PRIu32 ", frequency (Hz): min=%" PRIu32 ", max=%" PRIu32 "\n",
 			StepTimer::TicksToIntegerMicroseconds(minPSControlLoopRuntime), StepTimer::TicksToIntegerMicroseconds(maxPSControlLoopRuntime),
 			TickPeriodToFreq(maxPSControlLoopCallInterval), TickPeriodToFreq(minPSControlLoopCallInterval));
+#endif
 
 	// Show the status of each DDA ring
 	for (size_t i = 0; i < ARRAY_SIZE(rings); ++i)
@@ -1459,6 +1461,39 @@ void Move::GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumbe
 	{
 		InverseAxisAndBedTransform(m, tool);
 	}
+}
+
+void Move::SetMotorPosition(size_t drive, int32_t pos) noexcept
+{
+#if SUPPORT_PHASE_STEPPING
+	uint32_t now = StepTimer::GetTimerTicks();
+	uint16_t currentPhases[MaxSmartDrivers] = {0};
+	DriveMovement *dm = &dms[drive];
+
+	if (dm->IsPhaseStepEnabled())
+	{
+		GetCurrentMotion(drive, now, dm->phaseStepControl.mParams);
+		IterateLocalDrivers(drive, [dm, &currentPhases](uint8_t driver){
+			currentPhases[driver] = dm->phaseStepControl.CalculateStepPhase((size_t)driver);
+			dm->phaseStepControl.SetPhaseOffset(driver, 0);
+		});
+	}
+#endif
+
+	dms[drive].SetMotorPosition(pos);
+
+
+#if SUPPORT_PHASE_STEPPING
+	if (dm->IsPhaseStepEnabled())
+	{
+		GetCurrentMotion(drive, now, dm->phaseStepControl.mParams);
+		IterateLocalDrivers(drive, [dm, &currentPhases](uint8_t driver){
+			uint16_t newPhase = dm->phaseStepControl.CalculateStepPhase((size_t)driver);
+
+			dm->phaseStepControl.SetPhaseOffset(driver, currentPhases[driver] - newPhase);
+		});
+	}
+#endif
 }
 
 void Move::SetXYBedProbePoint(size_t index, float x, float y) noexcept

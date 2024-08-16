@@ -1753,6 +1753,24 @@ bool SmartDrivers::EnablePhaseStepping(size_t driver, bool enable) noexcept
 		return false;
 	}
 
+	bool anyDriveUsingPhaseStepping = false;
+	if (enable)
+	{
+		anyDriveUsingPhaseStepping = true;
+	}
+	else
+	{
+		for (size_t i = 0; i < MaxSmartDrivers; i++)
+		{
+			if (driverStates[driver].IsPhaseSteppingEnabled())
+			{
+				anyDriveUsingPhaseStepping = true;
+			}
+		}
+	}
+
+	tmcTask.SetPriority(anyDriveUsingPhaseStepping ? TaskPriority::TmcPhaseStepPriority : TaskPriority::TmcPriority);
+
 	return driverStates[driver].EnablePhaseStepping(enable);
 }
 
