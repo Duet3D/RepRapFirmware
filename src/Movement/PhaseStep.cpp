@@ -112,7 +112,7 @@ void PhaseStep::UpdatePhaseOffset(size_t driver) noexcept
 {
 	AtomicCriticalSectionLocker lock;
 	const uint16_t calculatedStepPhase = CalculateStepPhase(driver);
-	const uint16_t oldOffset = phaseOffset[driver];
+//	const uint16_t oldOffset = phaseOffset[driver];
 	phaseOffset[driver] = (currentPhase[driver] - (calculatedStepPhase - phaseOffset[driver])) % 4096u;
 //	debugPrintf("Updated phaseOffset[%u]=%u, desired=%u, calculated=%u, oldOffset=%u\n", driver, phaseOffset[driver], currentPhase[driver], calculatedStepPhase, oldOffset);
 }

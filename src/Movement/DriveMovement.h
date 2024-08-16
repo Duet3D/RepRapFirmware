@@ -35,7 +35,9 @@ enum class DMState : uint8_t
 	cartDecelNoReverse,
 	cartDecelForwardsReversing,						// linear decelerating motion, expect reversal
 	cartDecelReverse,								// linear decelerating motion, reversed
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	phaseStepping,
+#endif
 };
 
 

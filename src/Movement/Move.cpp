@@ -2720,10 +2720,12 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 			if (dm2->NewSegment(now) != nullptr && dm2->state != DMState::starting)
 			{
 				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed & ~dm2->driverEndstopsTriggeredAtStart;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 				if (dm2->state == DMState::phaseStepping)
 				{
 					return;
 				}
+#endif
 # if SUPPORT_CAN_EXPANSION
 				flags |= dm2->segmentFlags;
 				if (unlikely(!flags.checkEndstops && dm2->driversNormallyUsed == 0))
