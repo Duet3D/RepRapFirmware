@@ -2240,7 +2240,8 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
 		hasRemoteDrivers = true;
 	});
 
-	if (hasRemoteDrivers)
+	// Phase stepping does not support remote drivers
+	if (hasRemoteDrivers && mode == StepMode::phase)
 	{
 		return false;
 	}
