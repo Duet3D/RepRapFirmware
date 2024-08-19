@@ -37,6 +37,9 @@
 # include "RTOSPlusTCPEthernet/RTOSPlusTCPEthernetInterface.h"
 #endif
 
+#if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING && defined(DUET3MINI_V04)
+# include "LwipEthernet/AllocateFromPbufPool.h"
+#endif
 #if SUPPORT_HTTP
 # include "HttpResponder.h"
 #endif
