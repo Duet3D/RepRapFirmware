@@ -51,7 +51,6 @@ private:
 	static constexpr int SendBufferSize = 1024;
 	static constexpr int ReceiveBufferSize = 1024;
 
-	static constexpr size_t DefaultKeepAlive = 400;
 	static constexpr size_t MessageTimeout = 5000;
 	static constexpr size_t ReconnectCooldown = 1000;
 
