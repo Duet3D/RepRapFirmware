@@ -90,8 +90,9 @@ constexpr float RecipFullScaleCurrent = Tmc5160SenseResistor/325.0;		// 1.0 divi
 // TODO use the DIAG outputs to detect stalls instead
 #if SUPPORT_PHASE_STEPPING
 constexpr uint32_t DriversSpiClockFrequency = 4000000;		// 4MHz SPI clock, this is the maximum rate the TMC5160/2160 support
-// TODO set this back to appropriate value
-constexpr uint32_t DriversDirectSleepMicroseconds = 125;	// how long the phase stepping task sleeps for in each cycle. Max SPI message frequency is ~16.7 kHz
+constexpr uint32_t DefaultSpiSleepMicroseconds = 500;		// Sleep time used for tmcTask when not phase stepping
+constexpr uint32_t PhaseStepSpiSleepMicroseconds = 125;		// Sleep time used for tmcTask when phase stepping
+static uint32_t DriversDirectSleepMicroseconds = DefaultSpiSleepMicroseconds;	// how long the phase stepping task sleeps for in each cycle. Max SPI message frequency is ~16.7 kHz
 															// there is 1 write + 1 read/write per motor current setting.
 #else
 constexpr uint32_t DriversSpiClockFrequency = 2000000;		// 2MHz SPI clock
@@ -1754,10 +1755,10 @@ bool SmartDrivers::EnablePhaseStepping(size_t driver, bool enable) noexcept
 		return false;
 	}
 
-	bool anyDriveUsingPhaseStepping = false;
+	bool anyDriversUsingPhaseStepping = false;
 	if (enable)
 	{
-		anyDriveUsingPhaseStepping = true;
+		anyDriversUsingPhaseStepping = true;
 	}
 	else
 	{
@@ -1765,12 +1766,14 @@ bool SmartDrivers::EnablePhaseStepping(size_t driver, bool enable) noexcept
 		{
 			if (driverStates[driver].IsPhaseSteppingEnabled())
 			{
-				anyDriveUsingPhaseStepping = true;
+				anyDriversUsingPhaseStepping = true;
 			}
 		}
 	}
 
-	tmcTask.SetPriority(anyDriveUsingPhaseStepping ? TaskPriority::TmcPhaseStepPriority : TaskPriority::TmcPriority);
+	DriversDirectSleepMicroseconds = anyDriversUsingPhaseStepping ? PhaseStepSpiSleepMicroseconds : DefaultSpiSleepMicroseconds;
+
+	tmcTask.SetPriority(anyDriversUsingPhaseStepping ? TaskPriority::TmcPhaseStepPriority : TaskPriority::TmcPriority);
 
 	return driverStates[driver].EnablePhaseStepping(enable);
 }
