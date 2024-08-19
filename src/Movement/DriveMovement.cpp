@@ -93,7 +93,7 @@ uint32_t maxCriticalElapsedTime = 0;
 
 // Add a segment into the list. If the list is not empty then the new segment may overlap segments already in the list but will never start earlier than the first existing one.
 // The units of the input parameters are steps for distance and step clocks for time.
-void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a, MovementFlags moveFlags) noexcept
+void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a J_FORMAL_PARAMETER(j), MovementFlags moveFlags) noexcept
 {
 	if ((int32_t)duration <= 0)
 	{
@@ -169,7 +169,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 					const uint32_t firstDuration = -offset;
 					const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + (motioncalc_t)0.5 * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
 					seg = MoveSegment::Allocate(seg);
-					seg->SetParameters(startTime, firstDuration, firstDistance, a, moveFlags);
+					seg->SetParameters(startTime, firstDuration, firstDistance, a J_ACTUAL_PARAMETER(j), moveFlags);
 					if (prev == nullptr)
 					{
 						segments = seg;
@@ -246,7 +246,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 #if SEGMENT_DEBUG
 						debugPrintf("merge1: ");
 #endif
-						seg->Merge(firstDistance, a, moveFlags);
+						seg->Merge(firstDistance, a J_ACTUAL_PARAMETER(j), moveFlags);
 #if CHECK_SEGMENTS
 						CheckSegment(__LINE__, prev);
 						CheckSegment(__LINE__, seg);
@@ -273,7 +273,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 #if SEGMENT_DEBUG
 						debugPrintf("merge2: ");
 #endif
-						seg->Merge(distance, a, moveFlags);
+						seg->Merge(distance, a J_ACTUAL_PARAMETER(j), moveFlags);
 						goto finished;								// ugly but saves some code
 					}
 				}
@@ -288,7 +288,7 @@ void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc
 
 	// If we get here then the new segment (or what's left of it) needs to be added before 'seg' which may be null
 	seg = MoveSegment::Allocate(seg);
-	seg->SetParameters(startTime, duration, distance, a, moveFlags);
+	seg->SetParameters(startTime, duration, distance, a J_ACTUAL_PARAMETER(j), moveFlags);
 	if (prev == nullptr)
 	{
 		segments = seg;
@@ -368,12 +368,11 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 
 		// Calculate the movement parameters
 		netStepsThisSegment = (int32_t)(seg->GetLength() + distanceCarriedForwards);
-		const bool isLinear = seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0);
 
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		if (IsPhaseStepEnabled())
 		{
-			u = isLinear ? seg->CalcLinearU() : -seg->GetA() * t0;
+			u = seg->CalcU();
 			state = DMState::phaseStepping;
 			return seg;
 		}
@@ -383,7 +382,7 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 		int32_t multiplier;
 		motioncalc_t rawP;
 
-		if (isLinear)
+		if (seg->NormaliseAndCheckLinear(distanceCarriedForwards, t0))
 		{
 			// Segment is linear
 			rawP = seg->CalcLinearRecipU();
