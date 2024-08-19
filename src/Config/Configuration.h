@@ -185,9 +185,9 @@ constexpr size_t MinimumBuffersForObjectModel = 20;		// Minimum number of free b
 constexpr size_t maxQueuedCodes = 16;					// How many codes can be queued?
 
 #if SAME70 || SAME5x
-constexpr size_t MaxTrackedObjects = 40;				// How many build plate objects we track. Each one needs 16 bytes of storage, in addition to the string space.
+constexpr size_t MaxTrackedObjects = 64;				// How many build plate objects we track. Each one needs 12 bytes of storage, in addition to the string space on the heap.
 #else
-constexpr size_t MaxTrackedObjects = 20;				// How many build plate objects we track. Each one needs 16 bytes of storage, in addition to the string space.
+constexpr size_t MaxTrackedObjects = 32;				// How many build plate objects we track. Each one needs 12 bytes of storage, in addition to the string space on the heap.
 #endif
 
 // Expression evaluation in GCode meta commands etc.
