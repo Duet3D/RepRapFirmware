@@ -2358,6 +2358,21 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 	gb.MustSee('A');
 	const uint32_t address = gb.GetUIValue();
 	const uint32_t numValues = gb.GetLimitedUIValue('B', 1, MaxI2cOrModbusValues + 1);
+	String<MaxVariableNameLength> varName;
+	bool seenV = false;
+	gb.TryGetQuotedString('V', varName.GetRef(), seenV, false);
+	Variable *_ecv_null resultVar = nullptr;
+	if (seenV)
+	{
+		auto vset = WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables());
+		Variable *_ecv_null const v = vset->Lookup(varName.c_str(), false);
+		if (v != nullptr)
+		{
+			reply.printf("variable '%s' already exists", varName.c_str());
+			return GCodeResult::error;
+		}
+		resultVar = vset->InsertNew(varName.c_str(), ExpressionValue(), gb.CurrentFileMachineState().GetBlockNesting());
+	}
 
 	switch (gb.GetCommandFraction())
 	{
@@ -2369,16 +2384,30 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 			uint8_t bValues[MaxI2cOrModbusValues];
 			const size_t bytesRead = I2C::Transfer(address, bValues, 0, numValues);
 
-			reply.copy("Received");
-			if (bytesRead == 0)
+			if (resultVar != nullptr)
 			{
-				reply.cat(" nothing");
+				if (bytesRead != 0)
+				{
+					resultVar->AssignArray(bytesRead, [bValues](size_t index)->ExpressionValue
+											{
+												return ExpressionValue((int32_t)bValues[index]);
+											}
+										  );
+				}
 			}
 			else
 			{
-				for (size_t i = 0; i < bytesRead; ++i)
+				reply.copy("Received");
+				if (bytesRead == 0)
 				{
-					reply.catf(" %02x", bValues[i]);
+					reply.cat(" nothing");
+				}
+				else
+				{
+					for (size_t i = 0; i < bytesRead; ++i)
+					{
+						reply.catf(" %02x", bValues[i]);
+					}
 				}
 			}
 
@@ -2413,18 +2442,43 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 					{
 					case (uint8_t)ModbusFunction::readCoils:
 					case (uint8_t)ModbusFunction::readDiscreteInputs:
-						for (size_t i = 0; i < numValues; ++i)
+						if (resultVar != nullptr)
 						{
-							reply.cat((registersToReceive[i / 16] & (1u << (i % 16))) ? " 1" : " 0");
+							resultVar->AssignArray(numValues, [registersToReceive](size_t index)->ExpressionValue
+													{
+														const bool elem = registersToReceive[index / 16] & (1u << (index % 16));
+														return ExpressionValue(elem);
+													}
+												  );
+						}
+						else
+						{
+							reply.copy("Received");
+							for (size_t i = 0; i < numValues; ++i)
+							{
+								reply.cat((registersToReceive[i / 16] & (1u << (i % 16))) ? " 1" : " 0");
+							}
 						}
 						break;
 
 					case (uint8_t)ModbusFunction::readHoldingRegisters:
 					case (uint8_t)ModbusFunction::readInputRegisters:
 					default:
-						for (size_t i = 0; i < numValues; ++i)
+						if (resultVar != nullptr)
 						{
-							reply.catf(" %04x", registersToReceive[i]);
+							resultVar->AssignArray(numValues, [registersToReceive](size_t index)->ExpressionValue
+													{
+														return ExpressionValue((int32_t)registersToReceive[index]);
+													}
+												  );
+						}
+						else
+						{
+							reply.copy("Received");
+							for (size_t i = 0; i < numValues; ++i)
+							{
+								reply.catf(" %04x", registersToReceive[i]);
+							}
 						}
 						break;
 					}

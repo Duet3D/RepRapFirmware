@@ -27,6 +27,7 @@ public:
 	int8_t GetScope() const noexcept { return scope; }
 	void Assign(ExpressionValue& ev) THROWS(GCodeException);
 	void AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndeces != 0);
+	void AssignArray(size_t numElements, function_ref<ExpressionValue(size_t)>) noexcept;
 
 private:
 	StringHandle name;
@@ -46,9 +47,9 @@ public:
 
 	void AssignFrom(VariableSet& other) noexcept;
 
-	Variable *Lookup(const char *_ecv_array str, bool wantParameter) noexcept;
-	const Variable *Lookup(const char *_ecv_array str, size_t length, bool wantParameter) const noexcept pre(length <= strlen(str));
-	void InsertNew(const char *str, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException);
+	Variable *_ecv_null Lookup(const char *_ecv_array str, bool wantParameter) noexcept;
+	const Variable *_ecv_null Lookup(const char *_ecv_array str, size_t length, bool wantParameter) const noexcept pre(length <= strlen(str));
+	Variable *InsertNew(const char *str, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException);
 	void InsertNewParameter(const char *str, ExpressionValue pVal) THROWS(GCodeException) { InsertNew(str, pVal, -1); }
 	void EndScope(uint8_t blockNesting) noexcept;
 	void Delete(const char *str) noexcept;
