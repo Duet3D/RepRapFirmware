@@ -75,6 +75,11 @@ public:
 	// Return the current movement delay
 	static uint32_t GetMovementDelay() noexcept { return movementDelay; }
 
+#if SUPPORT_CAN_EXPANSION
+	// Check whether the movement delay has increased since we last called this. If yes, return the movement delay; else return zero.
+	static uint32_t CheckMovementDelayIncreased() noexcept;
+#endif
+
 	// ISR called from StepTimer
 	static void Interrupt() noexcept;
 
@@ -108,6 +113,9 @@ private:
 	static bool ScheduleTimerInterrupt(uint32_t tim) noexcept;					// Schedule an interrupt at the specified clock count, or return true if it has passed already
 
 	static uint32_t movementDelay;												// how many timer ticks the move timer is behind the raw timer
+#if SUPPORT_CAN_EXPANSION
+	static bool movementDelayIncreased;											// true if movement delay has increased and we haven't yet broadcast that
+#endif
 
 	StepTimer *next;
 	Ticks whenDue;
@@ -160,7 +168,9 @@ inline __attribute__((always_inline)) uint16_t StepTimer::GetTimerTicks16() noex
 inline void StepTimer::IncreaseMovementDelay(uint32_t increase) noexcept
 {
 	movementDelay += increase;
-	//TODO consider sending a CAN clock message to update expansion boards
+#if SUPPORT_CAN_EXPANSION
+	movementDelayIncreased = true;
+#endif
 }
 
 // Get the current tick count
@@ -174,5 +184,21 @@ inline StepTimer::Ticks StepTimer::ConvertLocalToMovementTime(Ticks localTime) n
 {
 	return localTime - movementDelay;
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+// Check whether the movement delay has increased since we last called this. If yes, return the movement delay; else return zero.
+inline StepTimer::Ticks StepTimer::CheckMovementDelayIncreased() noexcept
+{
+	AtomicCriticalSectionLocker lock;
+	if (movementDelayIncreased)
+	{
+		movementDelayIncreased = false;
+		return movementDelay;
+	}
+	return 0;
+}
+
+#endif
 
 #endif /* SRC_MOVEMENT_STEPTIMER_H_ */

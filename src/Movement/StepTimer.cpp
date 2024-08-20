@@ -30,6 +30,10 @@
 StepTimer * volatile StepTimer::pendingList = nullptr;
 uint32_t StepTimer::movementDelay = 0;											// how many timer ticks the move timer is behind the raw timer
 
+#if SUPPORT_CAN_EXPANSION
+bool StepTimer::movementDelayIncreased = false;
+#endif
+
 #if STEP_TIMER_DEBUG
 uint32_t StepTimer::maxInterval = 0;
 uint32_t StepTimer::lastTimerResult = 0;

@@ -604,12 +604,20 @@ extern "C" [[noreturn]] void CanClockLoop(void *) noexcept
 		msg->isPrinting = reprap.GetGCodes().IsReallyPrinting();
 		msg->zero = 0;
 
-		// Send the real time just once a second
+		// Send the real time just once a second unless we also need to send the movement delay
 		const uint32_t realTime = (uint32_t)reprap.GetPlatform().GetDateTime();
-		if (realTime != lastRealTimeSent)
+		const StepTimer::Ticks newMovementDelay = StepTimer::CheckMovementDelayIncreased();
+		if (newMovementDelay != 0)
 		{
 			msg->realTime = realTime;
 			lastRealTimeSent = realTime;
+			msg->movementDelay = newMovementDelay;
+		}
+		else if (realTime != lastRealTimeSent)
+		{
+			msg->realTime = realTime;
+			lastRealTimeSent = realTime;
+			buf.dataLength = CanMessageTimeSync::SizeWithRealTime;
 		}
 		else
 		{
