@@ -98,6 +98,11 @@ public:
 	void ResetWiFiForUpload(bool external) noexcept;
 	const char* GetWiFiServerVersion() const noexcept;
 
+#if HAS_NETWORKING
+	// Network Protocol
+	GCodeResult ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& reply);
+#endif
+
 	// Global settings
 	GCodeResult GetNetworkState(unsigned int interface, const StringRef& reply) noexcept;
 	int EnableState(unsigned int interface) const noexcept;
