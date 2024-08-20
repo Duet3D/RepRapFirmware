@@ -76,6 +76,9 @@ public:
 	static Ticks GetMovementDelay() noexcept { return movementDelay; }
 
 #if SUPPORT_CAN_EXPANSION
+	// Handle a request for movement delay received from an expansion board
+	static void ProcessMovementDelayRequest(uint32_t delayRequested) noexcept;
+
 	// Check whether the movement delay has increased since we last called this. If yes, return the movement delay; else return zero.
 	static Ticks CheckMovementDelayIncreased() noexcept;
 #endif

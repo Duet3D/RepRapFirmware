@@ -544,4 +544,20 @@ void StepTimer::CancelCallback() noexcept
 	}
 }
 
+#if SUPPORT_CAN_EXPANSION
+
+// Handle a request for movement delay received from an expansion board
+void StepTimer::ProcessMovementDelayRequest(uint32_t delayRequested) noexcept
+{
+	AtomicCriticalSectionLocker lock;
+
+	if (delayRequested > movementDelay)
+	{
+		movementDelay = delayRequested;
+	}
+	movementDelayIncreased = true;						// always set this to ensure that we acknowledge the request
+}
+
+#endif
+
 // End

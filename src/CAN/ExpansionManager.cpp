@@ -14,6 +14,7 @@
 #include <Platform/Platform.h>
 #include <Platform/Event.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Movement/StepTimer.h>
 
 ReadWriteLock ExpansionManager::boardsLock;
 
@@ -246,7 +247,14 @@ void ExpansionManager::ProcessBoardStatusReport(const CanMessageBuffer *buf) noe
 	}
 
 	const CanMessageBoardStatus& msg = buf->msg.boardStatus;
-	board.neverUsedRam = msg.neverUsedRam;
+	if (msg.hasMovementDelay)
+	{
+		StepTimer::ProcessMovementDelayRequest(msg.movementDelay);
+	}
+	else
+	{
+		board.neverUsedRam = msg.neverUsedRam;
+	}
 
 	// We must process the data in the correct order, to ensure that we pick up the right values
 	size_t index = 0;
