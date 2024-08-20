@@ -42,6 +42,11 @@ bool Variable::IsValidVariableName(const char *str) noexcept
 			return false;
 		}
 	}
+
+	if (strcmp(str, "result") == 0)
+	{
+		return false;
+	}
 	return true;
 }
 
