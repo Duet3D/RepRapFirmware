@@ -38,7 +38,7 @@ void AuxDevice::SetMode(AuxMode p_mode) noexcept
 		else
 		{
 #if SUPPORT_MODBUS_RTU
-			uart->SetOnTxEndedCallback((p_mode == AuxMode::modbus_rtu) ? GlobalTxEndedCallback : nullptr, CallbackParameter(this));
+			uart->SetOnTxEndedCallback((p_mode == AuxMode::device) ? GlobalTxEndedCallback : nullptr, CallbackParameter(this));
 #endif
 			uart->begin(baudRate);
 			mode = p_mode;
@@ -192,7 +192,7 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 		return GCodeResult::badOrMissingParameter;
 	}
 
-	if (!mutex.Take(ModbusBusAvailableTimeout))
+	if (!mutex.Take(BusAvailableTimeout))
 	{
 		return GCodeResult::error;
 	}
@@ -253,6 +253,31 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 	return GCodeResult::ok;
 }
 
+// Send some data to the Uart. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the data.
+GCodeResult AuxDevice::SendUartData(const uint8_t *data, size_t len) noexcept
+{
+	if (!mutex.Take(BusAvailableTimeout))
+	{
+		return GCodeResult::error;
+	}
+
+	uart->ClearTransmitBuffer();
+	uart->DisableTransmit();
+
+	for (size_t i = 0; i < len; i++)
+	{
+		uart->write((const uint8_t)data[i]);
+	}
+
+	txNotRx.WriteDigital(true);								// set RS485 direction to transmit
+	delay(CalcTransmissionTime(4));							// Modbus specifies a 3.5 character interval
+	uart->ClearReceiveBuffer();
+	uart->EnableTransmit();
+	whenStartedTransmitting = millis();
+
+	return GCodeResult::ok;
+}
+
 // Read some Modbus registers. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the command.
 // After receiving the GCodeResult::ok response the caller must call CheckModbusResult until it doesn't return GCodeResult::notFinished.
 // If the function code calls for receiving word data then 'data' must be aligned on a 16-bit boundary
@@ -270,7 +295,7 @@ GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 		return GCodeResult::badOrMissingParameter;
 	}
 
-	if (!mutex.Take(ModbusBusAvailableTimeout))
+	if (!mutex.Take(BusAvailableTimeout))
 	{
 		return GCodeResult::error;
 	}
