@@ -2095,6 +2095,10 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	const motioncalc_t decelDistance = (params.decelClocks == 0) ? (motioncalc_t)0.0 : (motioncalc_t)(dda.totalDistance - params.decelStartDistance);
 	const motioncalc_t steadyDistance = (params.steadyClocks == 0) ? (motioncalc_t)0.0 : (motioncalc_t)dda.totalDistance - accelDistance - decelDistance;
 
+#if SUPPORT_S_CURVE
+	const motioncalc_t j = 0.0;			//***Temporary!***
+#endif
+
 #if STEPS_DEBUG
 	dmp->positionRequested += steps;
 #endif
@@ -2103,15 +2107,15 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	{
 		if (params.accelClocks != 0)
 		{
-			dmp->AddSegment(startTime, params.accelClocks, accelDistance * stepsPerMm, (motioncalc_t)dda.acceleration * stepsPerMm, moveFlags);
+			dmp->AddSegment(startTime, params.accelClocks, accelDistance * stepsPerMm, (motioncalc_t)dda.acceleration * stepsPerMm J_ACTUAL_PARAMETER(j * stepsPerMm), moveFlags);
 		}
 		if (params.steadyClocks != 0)
 		{
-			dmp->AddSegment(steadyStartTime, params.steadyClocks, steadyDistance * stepsPerMm, (motioncalc_t)0.0, moveFlags);
+			dmp->AddSegment(steadyStartTime, params.steadyClocks, steadyDistance * stepsPerMm, (motioncalc_t)0.0 J_ACTUAL_PARAMETER((motioncalc_t)0.0), moveFlags);
 		}
 		if (params.decelClocks != 0)
 		{
-			dmp->AddSegment(decelStartTime, params.decelClocks, decelDistance * stepsPerMm, -((motioncalc_t)dda.deceleration * stepsPerMm), moveFlags);
+			dmp->AddSegment(decelStartTime, params.decelClocks, decelDistance * stepsPerMm, -((motioncalc_t)dda.deceleration * stepsPerMm) J_ACTUAL_PARAMETER(j * stepsPerMm), moveFlags);
 		}
 	}
 	else
@@ -2122,15 +2126,15 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			const uint32_t delay = axisShaper.GetImpulseDelay(index);
 			if (params.accelClocks != 0)
 			{
-				dmp->AddSegment(startTime + delay, params.accelClocks, accelDistance * factor, (motioncalc_t)dda.acceleration * factor, moveFlags);
+				dmp->AddSegment(startTime + delay, params.accelClocks, accelDistance * factor, (motioncalc_t)dda.acceleration * factor J_ACTUAL_PARAMETER(j * factor), moveFlags);
 			}
 			if (params.steadyClocks != 0)
 			{
-				dmp->AddSegment(steadyStartTime + delay, params.steadyClocks, steadyDistance * factor, (motioncalc_t)0.0, moveFlags);
+				dmp->AddSegment(steadyStartTime + delay, params.steadyClocks, steadyDistance * factor, (motioncalc_t)0.0 J_ACTUAL_PARAMETER((motioncalc_t)0.0), moveFlags);
 			}
 			if (params.decelClocks != 0)
 			{
-				dmp->AddSegment(decelStartTime + delay, params.decelClocks, decelDistance * factor, -((motioncalc_t)dda.deceleration * factor), moveFlags);
+				dmp->AddSegment(decelStartTime + delay, params.decelClocks, decelDistance * factor, -((motioncalc_t)dda.deceleration * factor) J_ACTUAL_PARAMETER(j * factor), moveFlags);
 			}
 		}
 	}

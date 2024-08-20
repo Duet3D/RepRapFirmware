@@ -63,7 +63,7 @@ public:
 	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
 	bool CheckingEndstops() const noexcept;								// returns true when executing a move that checks endstops or Z probe
 
-	void AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a, MovementFlags moveFlags) noexcept;
+	void AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a J_FORMAL_PARAMETER(j), MovementFlags moveFlags) noexcept;
 	void SetAsExtruder(bool p_isExtruder) noexcept { isExtruder = p_isExtruder; }
 
 #if HAS_SMART_DRIVERS
@@ -296,7 +296,11 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 				timeSinceStart = seg->GetDuration();
 			}
 
+#if SUPPORT_S_CURVE
+			mParams.position = (float)((u + (0.5 * seg->GetA() + OneSixth * seg->GetJ() * timeSinceStart) * timeSinceStart) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
+#else
 			mParams.position = (float)((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
+#endif
 			currentMotorPosition = (int32_t)mParams.position;			// store the approximate position for OM updates
 			mParams.speed = (float)(u + seg->GetA() * timeSinceStart);
 			mParams.acceleration = (float)seg->GetA();

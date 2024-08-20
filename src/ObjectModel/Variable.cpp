@@ -86,6 +86,7 @@ void Variable::AssignArray(size_t numElements, function_ref<ExpressionValue(size
 		ExpressionValue elem = func(i);
 		ah.AssignElement(i, elem);
 	}
+	val.SetArrayHandle(ah);
 }
 
 // Members of class VariableSet
