@@ -549,8 +549,6 @@ GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& 
 {
 	GCodeResult result = GCodeResult::ok;
 
-	const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
-
 	switch (gb.GetCommandFraction())
 	{
 		case -1:
@@ -565,6 +563,7 @@ GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& 
 					seen = true;
 				}
 # endif
+				const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
 
 				if (gb.Seen('P'))
 				{
@@ -577,11 +576,10 @@ GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& 
 							const int port = (gb.Seen('R')) ? gb.GetIValue() : -1;
 							const int secure = (gb.Seen('T')) ? gb.GetIValue() : -1;
 
-							IPAddress ip;
-
 #if SUPPORT_MQTT
 							if (interface < reprap.GetNetwork().GetNumNetworkInterfaces() && protocol == MqttProtocol)
 							{
+								IPAddress ip;
 								gb.MustSee('H');
 								{
 									gb.GetIPAddress(ip);
@@ -609,8 +607,7 @@ GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& 
 							else
 #endif
 							{
-								result = reprap.GetNetwork().EnableProtocol(interface, protocol, port,
-																			ip.GetV4LittleEndian(), secure, reply);
+								result = reprap.GetNetwork().EnableProtocol(interface, protocol, port, AcceptAnyIp, secure, reply);
 							}
 						}
 						else

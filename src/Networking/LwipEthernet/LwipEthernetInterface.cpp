@@ -745,6 +745,7 @@ void LwipEthernetInterface::RebuildMdnsServices() noexcept
 	for (size_t protocol = 0; protocol < NumSelectableProtocols; protocol++)
 	{
 		if (protocolEnabled[protocol]
+			// Exclude clients since these are not services
 #if SUPPORT_MQTT
 			&& protocol != MqttProtocol
 #endif
