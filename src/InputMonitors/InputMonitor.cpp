@@ -335,6 +335,33 @@ void InputMonitor::AnalogInterrupt(uint32_t reading) noexcept
 	buf->dataLength = reply->GetActualDataLength();
 }
 
+#if SUPPORT_REMOTE_COMMANDS
+
+// Append analog handle data to the supplied buffer
+/*static*/ unsigned int InputMonitor::AddAnalogHandleData(uint8_t *buffer, size_t spaceLeft) noexcept
+{
+	unsigned int count = 0;
+	ReadLocker lock(listLock);
+	InputMonitor *h = monitorsList;
+	while (h != nullptr && spaceLeft >= sizeof(AnalogHandleData))
+	{
+		if (!h->IsDigital())
+		{
+			AnalogHandleData data;
+			data.reading = h->GetAnalogValue();
+			data.handle.u.all = h->handle;
+			memcpy(buffer, &data, sizeof(AnalogHandleData));
+			buffer += sizeof(AnalogHandleData);
+			spaceLeft -= sizeof(AnalogHandleData);
+			++count;
+		}
+		h = h->next;
+	}
+	return count;
+}
+
+#endif
+
 #endif	// SUPPORT_CAN_EXPANSION
 
 // End

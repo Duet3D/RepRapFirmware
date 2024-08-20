@@ -73,11 +73,17 @@ public:
 	static void IncreaseMovementDelay(uint32_t increase) noexcept;
 
 	// Return the current movement delay
-	static uint32_t GetMovementDelay() noexcept { return movementDelay; }
+	static Ticks GetMovementDelay() noexcept { return movementDelay; }
 
 #if SUPPORT_CAN_EXPANSION
 	// Check whether the movement delay has increased since we last called this. If yes, return the movement delay; else return zero.
-	static uint32_t CheckMovementDelayIncreased() noexcept;
+	static Ticks CheckMovementDelayIncreased() noexcept;
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+	// Check whether the movement delay has increased since we last called this. If yes, return the movement delay; else return zero.
+	// We leave the movementDelayIncreased flag set until the main board acknowledges the increased movement delay.
+	static Ticks CheckMovementDelayIncreasedNoClear() noexcept;
 #endif
 
 	// ISR called from StepTimer
@@ -197,6 +203,17 @@ inline StepTimer::Ticks StepTimer::CheckMovementDelayIncreased() noexcept
 		return movementDelay;
 	}
 	return 0;
+}
+
+#endif
+
+#if SUPPORT_REMOTE_COMMANDS
+
+// Check whether the movement delay has increased since we last called this. If yes, return the movement delay; else return zero.
+// We leave the movementDelayIncreased flag set until the main board acknowledges the increased movement delay.
+inline StepTimer::Ticks StepTimer::CheckMovementDelayIncreasedNoClear() noexcept
+{
+	return (movementDelayIncreased) ? movementDelay : 0;
 }
 
 #endif

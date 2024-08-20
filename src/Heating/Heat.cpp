@@ -31,6 +31,7 @@ Licence: GPL
 #include <Platform/TaskPriorities.h>
 #include <General/Portability.h>
 #include <AppNotifyIndices.h>
+#include <InputMonitors/InputMonitor.h>
 
 #if SUPPORT_DHT_SENSOR
 # include "Sensors/DhtSensor.h"
@@ -502,7 +503,17 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 				{
 					CanMessageBoardStatus * const boardStatusMsg = buf.SetupStatusMessage<CanMessageBoardStatus>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 					boardStatusMsg->Clear();
-					boardStatusMsg->neverUsedRam = Tasks::GetNeverUsedRam();
+
+					const StepTimer::Ticks movementDelayNeeded = StepTimer::CheckMovementDelayIncreasedNoClear();
+					if (movementDelayNeeded != 0)
+					{
+						boardStatusMsg->movementDelay = movementDelayNeeded;
+						boardStatusMsg->hasMovementDelay = true;
+					}
+					else
+					{
+						boardStatusMsg->neverUsedRam = Tasks::GetNeverUsedRam();
+					}
 
 					// We must add fields in the following order: VIN, V12, MCU temperature
 					size_t index = 0;
@@ -518,6 +529,8 @@ void Heat::SendHeatersStatus(CanMessageBuffer& buf) noexcept
 					boardStatusMsg->values[index++] = reprap.GetPlatform().GetMcuTemperatures();
 					boardStatusMsg->hasMcuTemp = true;
 #endif
+					// Add the analog handle data
+					boardStatusMsg->numAnalogHandles = InputMonitor::AddAnalogHandleData((uint8_t*)boardStatusMsg + boardStatusMsg->GetAnalogHandlesOffset(), boardStatusMsg->GetMaxAnalogHandleSpace());
 					buf.dataLength = boardStatusMsg->GetActualDataLength();
 					CanInterface::SendMessageNoReplyNoFree(&buf);
 				}
