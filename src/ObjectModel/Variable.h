@@ -22,6 +22,8 @@ public:
 	Variable(const char *_ecv_array str, ExpressionValue& pVal, int16_t pScope) THROWS(GCodeException);
 	~Variable();
 
+	static bool IsValidVariableName(const char *_ecv_array str) noexcept;
+
 	ReadLockedPointer<const char> GetName() const noexcept { return name.Get(); }
 	ExpressionValue GetValue() const noexcept { return val; }
 	int8_t GetScope() const noexcept { return scope; }

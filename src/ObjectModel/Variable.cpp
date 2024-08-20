@@ -22,6 +22,29 @@ Variable::~Variable()
 	val.Release();
 }
 
+bool Variable::IsValidVariableName(const char *str) noexcept
+{
+	size_t len = strlen(str);
+	if (len == 0)
+	{
+		return false;
+	}
+
+	if (!isalpha(str[0]))
+	{
+		return false;
+	}
+
+	for (size_t i = 1; i < len; i++)
+	{
+		if (!isalnum(str[i]) && str[i] != '_')
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 // Assign a new value to this variable
 void Variable::Assign(ExpressionValue& ev) THROWS(GCodeException)
 {
