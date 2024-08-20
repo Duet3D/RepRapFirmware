@@ -2372,10 +2372,8 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 // Handle M261 and M261.1
 GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
-#if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
-	gb.MustSee('A');
-	const uint32_t address = gb.GetUIValue();
-	const uint32_t numValues = gb.GetLimitedUIValue('B', 1, MaxI2cOrModbusValues + 1);
+	const uint32_t address = GetAddress(gb);
+	const uint32_t numValues = gb.GetLimitedUIValue('B', 0, MaxI2cOrModbusValues + 1);
 	String<MaxVariableNameLength> varName;
 	bool seenV = false;
 	gb.TryGetQuotedString('V', varName.GetRef(), seenV, false);
@@ -2394,7 +2392,7 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 
 	switch (gb.GetCommandFraction())
 	{
-# if defined(I2C_IFACE)
+#if defined(I2C_IFACE)
 	case 0:		// I2C
 	case -1:
 		{
@@ -2431,9 +2429,9 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 
 			return (bytesRead == numValues) ? GCodeResult::ok : GCodeResult::error;
 		}
-# endif
+#endif
 
-# if SUPPORT_MODBUS_RTU
+#if SUPPORT_MODBUS_RTU
 	case 1:		// Modbus
 		{
 			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
@@ -2512,14 +2510,47 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 			}
 			return rslt;
 		}
-# endif
+#endif
+	case 2:		// Uart
+		{
+			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
+			if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::device)
+			{
+				reply.copy("Port has not been set to device mode");
+				return GCodeResult::error;
+			}
 
+			uint8_t dataReceived[MaxI2cOrModbusValues];
+			GCodeResult rslt = auxDevices[auxChannel].ReadUartData(dataReceived, numValues);
+			if (rslt == GCodeResult::ok)
+			{
+				if (resultVar != nullptr)
+				{
+					resultVar->AssignArray(numValues, [dataReceived](size_t index)->ExpressionValue
+											{
+												const uint32_t elem = (uint32_t)dataReceived[index];
+												return ExpressionValue(elem);
+											}
+										  );
+				}
+				else
+				{
+					reply.copy("Received (hex)");
+					for (size_t i = 0; i < numValues; ++i)
+					{
+						reply.catf(" %02x", dataReceived[i]);
+					}
+				}
+			}
+			else
+			{
+				reply.copy("couldn't initiate Uart read");
+			}
+			return rslt;
+		}
 	default:
 		return GCodeResult::errorNotSupported;
 	}
-#else
-	return GCodeResult::errorNotSupported;
-#endif
 }
 
 #if defined(DUET_NG) && HAS_SBC_INTERFACE

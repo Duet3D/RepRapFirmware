@@ -275,6 +275,46 @@ GCodeResult AuxDevice::SendUartData(const uint8_t *data, size_t len) noexcept
 	uart->EnableTransmit();
 	whenStartedTransmitting = millis();
 
+	mutex.Release();
+
+	return GCodeResult::ok;
+}
+
+GCodeResult AuxDevice::ReadUartData(uint8_t *data, size_t bytesToRead) noexcept
+{
+	if (!mutex.Take(BusAvailableTimeout))
+	{
+		return GCodeResult::error;
+	}
+
+	if (bytesToRead == 0)
+	{
+		uart->ClearReceiveBuffer();
+		return GCodeResult::ok;
+	}
+
+
+	const uint32_t start = millis();
+	const uint32_t expectedCommsTime = CalcTransmissionTime(bytesToRead);
+	while (uart->available() < (int)bytesToRead)
+	{
+		// Check whether we should time out
+		if (millis() - start < expectedCommsTime + UartResponseTimeout)
+		{
+			delay(2);
+			continue;
+		}
+		mutex.Release();
+		return GCodeResult::error;					// timed out
+	}
+
+	// If we get here then we received sufficient bytes for a valid reply
+	for (size_t i = 0; i < bytesToRead; i++)
+	{
+		data[i] = (uint8_t)uart->read();
+	}
+
+	mutex.Release();
 	return GCodeResult::ok;
 }
 

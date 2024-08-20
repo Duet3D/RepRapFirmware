@@ -60,6 +60,7 @@ public:
 #endif
 
 	GCodeResult SendUartData(const uint8_t *data, size_t len) noexcept;
+	GCodeResult ReadUartData(uint8_t *data, size_t bytesToRead) noexcept;
 
 private:
 
@@ -78,6 +79,7 @@ private:
 	static constexpr uint16_t ModbusCrcInit = 0xFFFF;
 #endif
 	static constexpr uint32_t BusAvailableTimeout = 50;				// how many milliseconds we wait for the device to become available
+	static constexpr uint32_t UartResponseTimeout = 200;			// how many milliseconds we wait for the device to respond, excluding transmission time
 
 	AsyncSerial *uart;						// the underlying serial device
 	Mutex mutex;
