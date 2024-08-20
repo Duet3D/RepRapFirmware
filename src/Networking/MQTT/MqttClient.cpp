@@ -305,14 +305,13 @@ void MqttClient::ConnectionLost() noexcept
 
 /* static */ GCodeResult MqttClient::Configure(GCodeBuffer &gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// Client configuration can only occur when responder is free or during
-	// config.g, at which point instance is not yet reated.
-	if (instance && instance->responderState != ResponderState::free)
+	// Client configuration can only occur when client is not associated
+	// with an interface
+	if (interfaceNum >= 0)
 	{
-		reply.copy("Unable to configure MQTT when active on an interface");
+		reply.copy("Unable to configure MQTT when enabled on an interface");
 		return GCodeResult::error;
 	}
-
 
 	String<MaxGCodeLength> param;
 
