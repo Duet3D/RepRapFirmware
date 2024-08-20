@@ -422,10 +422,11 @@ GCodeResult AuxDevice::ReleaseMutexAndCheckCrc() noexcept
 	return (recdCrc == crc.Get()) ? GCodeResult::ok : GCodeResult::error;
 }
 
-// Calculate the time in milliseconds to send or received the specified number of characters
+// Calculate the time in milliseconds to delay to allow time to send or received the specified number of characters
 uint32_t AuxDevice::CalcTransmissionTime(unsigned int numChars) const noexcept
 {
-	return (numChars * 11000)/baudRate + 1;						// Modbus specifies 2 stop bits if parity not used, therefore 11 bits/character
+	// In the following we need to do +1 to round up the a whole number of milliseconds, and another +1 because a call to delay() may delay up to 1 tick less than we requested
+	return (numChars * 11000)/baudRate + 2;						// Modbus specifies 2 stop bits if parity not used, therefore 11 bits/character
 }
 
 // Callback for transmission ended
