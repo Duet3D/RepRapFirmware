@@ -1768,7 +1768,7 @@ bool SmartDrivers::EnablePhaseStepping(size_t driver, bool enable) noexcept
 	{
 		for (size_t i = 0; i < MaxSmartDrivers; i++)
 		{
-			if (driverStates[driver].IsPhaseSteppingEnabled())
+			if (driverStates[i].IsPhaseSteppingEnabled())
 			{
 				anyDriversUsingPhaseStepping = true;
 			}
