@@ -69,10 +69,12 @@ Ideas (mostly alternatives) to reduce hiccups on 1LC/1XD especially if we want t
 - Convert p, q and store as integer in NewSegment, then change CalcNextStepTimeFull to use integer maths. May need to do 62-bit integer square root again.
 - Do all the segment maths in integer. Store distance as fixed point with e.g. 15 bits of whole steps and 16 bits of fractional part.
 - Change DriveMovement::AddSegment to not disable interrupts for so long. Maybe have a flag bit "is being worked on" that we can set on a segment that we don't want the ISR to start executing. If the ISR sees this, it hiccups.
-- In DriveMovement::AddSegment, before re-enabling interrupts call the step ISR in order to execute steps that shold have been done while interrupts were disabled. Only insert hiccups when step ISR really called in an interrupt.
+  Or Andy's suggestion: after finding where we want to insert or change segments, break the list at that point and re-enable interrupts.
+- In DriveMovement::AddSegment, before re-enabling interrupts call the step ISR in order to execute steps that should have been done while interrupts were disabled. Only insert hiccups when the step ISR was really called in an interrupt.
 - Change the way we add segments when doing IS. Currently we add the (up to 3) segments with no delay, then repeat for each of the delays and amplitudes. This means we create segments and to lots of splits and merges.
   Suppose we generate a segment chain for the move including the IS, and then merge that chain into the existing segments? We might find a better algorithm for generating the chain than generating segments and merging them. 
   Interrupts can be enabled while we generate the segment chain, and we can look at ways of allowing interrupts to be enabled at intervals while doing the merge.
+- When steps become overdue, enable the multi-step code even if the interval is large enough that we wouldn't normally
 
 Bugs:
 - [done] "Tool was not driven because its temperatures were not high enough" in simulation mode
