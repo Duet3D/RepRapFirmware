@@ -559,7 +559,7 @@ GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& 
 				{
 					String<StringLength20> corsSite;
 					gb.GetQuotedString(corsSite.GetRef(), true);
-					reprap.GetNetwork().SetCorsSite(corsSite.c_str());
+					SetCorsSite(corsSite.c_str());
 					seen = true;
 				}
 # endif
@@ -577,7 +577,7 @@ GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& 
 							const int secure = (gb.Seen('T')) ? gb.GetIValue() : -1;
 
 #if SUPPORT_MQTT
-							if (interface < reprap.GetNetwork().GetNumNetworkInterfaces() && protocol == MqttProtocol)
+							if (interface < GetNumNetworkInterfaces() && protocol == MqttProtocol)
 							{
 								IPAddress ip;
 								gb.MustSee('H');
@@ -590,7 +590,7 @@ GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& 
 								int mqttInterface =  MqttClient::GetInterface();
 								if (mqttInterface == static_cast<int>(interface) || mqttInterface < 0)
 								{
-									result = reprap.GetNetwork().EnableProtocol(interface, protocol, port,
+									result = EnableProtocol(interface, protocol, port,
 																				ip.GetV4LittleEndian(), secure, reply);
 
 									if (mqttInterface < 0 && result == GCodeResult::ok)
@@ -607,12 +607,12 @@ GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& 
 							else
 #endif
 							{
-								result = reprap.GetNetwork().EnableProtocol(interface, protocol, port, AcceptAnyIp, secure, reply);
+								result = EnableProtocol(interface, protocol, port, AcceptAnyIp, secure, reply);
 							}
 						}
 						else
 						{
-							result = reprap.GetNetwork().DisableProtocol(interface, protocol, reply);
+							result = DisableProtocol(interface, protocol, reply);
 #if SUPPORT_MQTT
 							if (protocol == MqttProtocol && result == GCodeResult::ok)
 							{
@@ -630,9 +630,9 @@ GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& 
 				if (!seen)
 				{
 # if SUPPORT_HTTP
-					if (reprap.GetNetwork().GetCorsSite() != nullptr)
+					if (GetCorsSite() != nullptr)
 					{
-						reply.printf("CORS enabled for site '%s'", reprap.GetNetwork().GetCorsSite());
+						reply.printf("CORS enabled for site '%s'", GetCorsSite());
 					}
 					else
 					{
@@ -640,7 +640,7 @@ GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& 
 					}
 # endif
 					// Default to reporting current protocols if P or S parameter missing
-					result = reprap.GetNetwork().ReportProtocols(interface, reply);
+					result = ReportProtocols(interface, reply);
 				}
 			}
 			break;
