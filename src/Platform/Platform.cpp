@@ -2199,10 +2199,69 @@ static inline uint32_t GetAddress(GCodeBuffer& gb)
 	return address;
 }
 
+/**
+ * Converts a single byte of hex value to its ASCII hex representation.
+ *
+ * @param hex The hex value to convert.
+ * @param asciiHex The buffer to store the ASCII hex representation. The buffer must be at least 2 bytes long.
+ *
+ * @throws None
+ */
+static inline void ConvertHexToAsciiHex(uint8_t hex, uint8_t asciiHex[2])
+{
+	uint8_t hexSplit[2] = {0};
+	hexSplit[0] = hex >> 4;	  // Get the upper 4 bits
+	hexSplit[1] = hex & 0x0F; // Get the lower 4 bits
+
+	for (size_t i = 0; i < 2; i++)
+	{
+		uint8_t h = hexSplit[i];
+
+		// If the value is between 0x00 and 0x09, it is a number, otherwise it is a letter
+		if (h >= 0 && h <= 9)
+		{
+			asciiHex[i] = h + 0x30; // ASCII '0' is 0x30
+		}
+		else if (h >= 0x0A && h <= 0x0F)
+		{
+			asciiHex[i] = h + 0x41 - 0x0A; // ASCII 'A' is 0x41, subtracting 0x0A shifts the value to 'A'
+		}
+	}
+}
+
+static inline void ConvertAsciiHexToHex(uint8_t asciiHex[2], uint8_t &hex)
+{
+	uint8_t hexSplit[2] = {0};
+	for (size_t i = 0; i < 2; i++)
+	{
+		uint8_t ah = asciiHex[i];
+		if (ah >= 0x30 && ah <= 0x39)
+		{
+			hexSplit[i] = ah - 0x30;
+		}
+		else if (ah >= 0x41 && ah <= 0x46)
+		{
+			hexSplit[i] = ah - 0x41 + 0x0A;
+		}
+
+		hex = hexSplit[0] << 4 | (hexSplit[1] & 0x0F);
+	}
+}
+
+static inline void CalculateNordsonUltimusVCheckSum(uint8_t* data, size_t len, uint8_t checksum[2])
+{
+	uint16_t sum = 0;
+	for (size_t i = 0; i < len; i++)
+	{
+		sum -= data[i];
+	}
+
+	ConvertHexToAsciiHex(sum & 0xFF, checksum); // take last byte of sum and convert to ascii hex
+}
+
 // Handle M260 and M260.1 - send and possibly receive via I2C, or send via Modbus
 GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
-#if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
 	// Get the slave address and bytes or words to send
 
 	const uint32_t address = GetAddress(gb);
@@ -2359,12 +2418,112 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 		}
 		return rslt;
 	}
+	case 3: // Nordson Ultimus V https://www.manualslib.com/manual/2917329/Nordson-Ultimus-V.html?page=46#manual
+	{
+		const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
+		if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::device)
+		{
+			reply.copy("Port has not been set to device mode");
+			return GCodeResult::error;
+		}
+
+		AuxDevice& dev = auxDevices[auxChannel];
+
+		// Send `ENQ`
+		uint8_t handshake = 0x05;
+		GCodeResult rslt = dev.SendUartData(&handshake, 1);
+		if (rslt != GCodeResult::ok)
+		{
+			reply.copy("failed to send ENQ");
+			return rslt;
+		}
+
+		// Receive ACK
+		rslt = dev.ReadUartData(&handshake, 1);
+		if (rslt != GCodeResult::ok)
+		{
+			reply.copy("failed to receive data when expecting ACK");
+			return rslt;
+		}
+
+		if (handshake != 0x06) // should received `ACK`
+		{
+			reply.copy("Ultimus V did not send ACK");
+			return rslt;
+		}
+
+		uint8_t data[MaxI2cOrModbusValues] = {0};
+		uint8_t numBytesAsciiHex[2] = {0};
+		ConvertHexToAsciiHex(numToSend, numBytesAsciiHex);
+
+		data[0] = 0x02;				   // `STX`
+		data[1] = numBytesAsciiHex[0]; // Num bytes
+		data[2] = numBytesAsciiHex[1]; // Num bytes
+
+		for (size_t i = 0; i < numToSend; i++)
+		{
+			data[i + 3] = (uint8_t)values[i];
+		}
+
+		uint8_t checksum[2] = {0};
+		CalculateNordsonUltimusVCheckSum(&data[1], numToSend + 2, checksum);
+
+		data[numToSend + 3] = checksum[0];
+		data[numToSend + 4] = checksum[1];
+		data[numToSend + 5] = 0x03; // `ETX`
+
+		rslt = dev.SendUartData(data, numToSend + 6);
+		if (rslt != GCodeResult::ok)
+		{
+			reply.copy("Handshake complete but failed to send message");
+			return rslt;
+		}
+
+		// Receive success/failure
+		for (size_t i = 0; i < MaxI2cOrModbusValues; i++)
+		{
+			data[i] = 0;
+		}
+
+		rslt = dev.ReadUartData(data, 8);
+		if (rslt != GCodeResult::ok)
+		{
+			reply.copy("Sent message but failed to receive success/failure");
+			return rslt;
+		}
+
+		static constexpr uint8_t success[] = {0x02, 0x30, 0x32, 0x41, 0x30, 0x32, 0x44, 0x03};
+		static constexpr uint8_t failure[] = {0x02, 0x30, 0x32, 0x41, 0x32, 0x32, 0x42, 0x03};
+
+		bool isSuccess = true;
+		bool isFailure = true;
+		for (size_t i = 0; i < 8; i++)
+		{
+			if (data[i] != success[i])
+			{
+				isSuccess = false;
+			}
+			if (data[i] != failure[i])
+			{
+				isFailure = false;
+			}
+		}
+
+		if (isFailure || !isSuccess)
+		{
+			reply.copy("Nordson Ultimus V failed to process message");
+			rslt = GCodeResult::error;
+		}
+
+		// End of Transmission
+		uint8_t eot = 0x04;
+		dev.SendUartData(&eot, 1);	// It is probably of little importance that this is sent since the datasheet says receiving a STX will start a new command. But better safe than sorry.
+
+		return rslt;
+	}
 	default:
 		return GCodeResult::errorNotSupported;
 	}
-#else
-	return GCodeResult::errorNotSupported;
-#endif
 }
 
 // Handle M261 and M261.1
