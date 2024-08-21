@@ -249,6 +249,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 			const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
 			reply.lcatf("Last reset %02d:%02d:%02d ago, cause: %s", (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60), Platform::GetResetReasonText());
 		}
+		reprap.GetMove().AppendDiagnostics(reply);
 		break;
 
 	case CanMessageReturnInfo::typeDiagnosticsPart0 + 1:

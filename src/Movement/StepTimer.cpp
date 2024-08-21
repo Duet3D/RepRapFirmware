@@ -31,12 +31,8 @@ StepTimer * volatile StepTimer::pendingList = nullptr;
 uint32_t StepTimer::movementDelay = 0;											// how many timer ticks the move timer is behind the raw timer
 
 #if SUPPORT_CAN_EXPANSION
+uint32_t StepTimer::ownMovementDelay = 0;
 bool StepTimer::movementDelayIncreased = false;
-#endif
-
-#if STEP_TIMER_DEBUG
-uint32_t StepTimer::maxInterval = 0;
-uint32_t StepTimer::lastTimerResult = 0;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -179,14 +175,6 @@ void StepTimer::Init() noexcept
 	} while (true);
 # endif
 
-# if STEP_TIMER_DEBUG		//DEBUG
-	const uint32_t interval = rslt - lastTimerResult;
-	lastTimerResult = rslt;
-	if (interval > maxInterval)
-	{
-		maxInterval = interval;
-	}
-# endif
 	IrqRestore(flags);
 	return rslt;
 }

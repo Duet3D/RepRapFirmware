@@ -323,6 +323,8 @@ public:
 	{
 		return axisShaper.EutSetInputShaping(msg, dataLength, reply);
 	}
+
+	void AppendDiagnostics(const StringRef& reply) noexcept;
 #endif
 
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
@@ -630,7 +632,6 @@ private:
 
 	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
-	uint32_t lastReportedMovementDelay;					// The movement delay when we last reported it in the diagnostics
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
 	bool compensateXY;									// If true then we compensate for XY skew by adjusting the Y coordinate; else we adjust the X coordinate

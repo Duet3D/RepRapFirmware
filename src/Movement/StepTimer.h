@@ -10,8 +10,6 @@
 
 #include "RepRapFirmware.h"
 
-#define STEP_TIMER_DEBUG	0
-
 class CanMessageTimeSync;
 
 // Class to implement a software timer with a few microseconds resolution
@@ -81,6 +79,9 @@ public:
 
 	// Check whether the movement delay has increased since we last called this. If yes, return the movement delay; else return zero.
 	static Ticks CheckMovementDelayIncreased() noexcept;
+
+	// Report the amount of movement delay that this board is responsible for
+	static uint32_t GetOwnMovementDelay() noexcept { return ownMovementDelay; }
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -114,15 +115,13 @@ public:
 																				// increased from 1000 because of workaround we added for bad Tx time stamps on SAME70
 #endif
 
-#if STEP_TIMER_DEBUG
-	static uint32_t maxInterval;
-#endif
-
 private:
 	static bool ScheduleTimerInterrupt(uint32_t tim) noexcept;					// Schedule an interrupt at the specified clock count, or return true if it has passed already
 
 	static uint32_t movementDelay;												// how many timer ticks the move timer is behind the raw timer
+
 #if SUPPORT_CAN_EXPANSION
+	static uint32_t ownMovementDelay;											// the amount of movement delay requested by this board
 	static bool movementDelayIncreased;											// true if movement delay has increased and we haven't yet broadcast that
 #endif
 
@@ -133,10 +132,6 @@ private:
 	volatile bool active;
 
 	static StepTimer * volatile pendingList;									// list of pending callbacks, soonest first
-
-#if STEP_TIMER_DEBUG
-	static uint32_t lastTimerResult;
-#endif
 
 #if SUPPORT_REMOTE_COMMANDS
 	static volatile uint32_t localTimeOffset;									// local time minus master time
@@ -178,6 +173,7 @@ inline void StepTimer::IncreaseMovementDelay(uint32_t increase) noexcept
 {
 	movementDelay += increase;
 #if SUPPORT_CAN_EXPANSION
+	ownMovementDelay += increase;
 	movementDelayIncreased = true;
 #endif
 }

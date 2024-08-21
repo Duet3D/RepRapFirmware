@@ -1375,12 +1375,6 @@ void Platform::Diagnostics(MessageType mtype) noexcept
 
 #endif
 
-#if STEP_TIMER_DEBUG
-	// Report the step timer max interval
-	MessageF(mtype, "Step timer max interval %" PRIu32 "\n", StepTimer::maxInterval);
-	StepTimer::maxInterval = 0;
-#endif
-
 #if HAS_CPU_TEMP_SENSOR
 	// Show the MCU temperatures
 	const float currentMcuTemperature = GetCpuTemperature();
@@ -2080,6 +2074,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			AuxDevice& dev = auxDevices[chan - 1];
 			if (newMode == AuxDevice::AuxMode::device)
 			{
+# if SUPPORT_MODBUS_RTU
 				if (gb.Seen('C'))
 				{
 					String<StringLength50> portName;
@@ -2098,6 +2093,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 					}
 				}
 #  endif
+# endif
 			}
 			if (baudRate != 0)
 			{
@@ -2150,8 +2146,10 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 				reply.printf("Channel %d: baud rate %" PRIu32 ", %s mode, ", chan, GetBaudRate(chan), modeString);
 				if (dev.GetMode() == AuxDevice::AuxMode::device)
 				{
+# if SUPPORT_MODBUS_RTU
 					reply.cat("Modbus Tx/!Rx port ");
 					dev.AppendDirectionPortName(reply);
+# endif
 				}
 				else
 				{
