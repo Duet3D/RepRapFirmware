@@ -253,71 +253,6 @@ GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 	return GCodeResult::ok;
 }
 
-// Send some data to the Uart. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the data.
-GCodeResult AuxDevice::SendUartData(const uint8_t *data, size_t len) noexcept
-{
-	if (!mutex.Take(BusAvailableTimeout))
-	{
-		return GCodeResult::error;
-	}
-
-	uart->ClearTransmitBuffer();
-	uart->DisableTransmit();
-
-	for (size_t i = 0; i < len; i++)
-	{
-		uart->write((const uint8_t)data[i]);
-	}
-
-	txNotRx.WriteDigital(true);								// set RS485 direction to transmit
-	delay(CalcTransmissionTime(4));							// Modbus specifies a 3.5 character interval
-	uart->ClearReceiveBuffer();
-	uart->EnableTransmit();
-	whenStartedTransmitting = millis();
-
-	mutex.Release();
-
-	return GCodeResult::ok;
-}
-
-GCodeResult AuxDevice::ReadUartData(uint8_t *data, size_t bytesToRead) noexcept
-{
-	if (!mutex.Take(BusAvailableTimeout))
-	{
-		return GCodeResult::error;
-	}
-
-	if (bytesToRead == 0)
-	{
-		uart->ClearReceiveBuffer();
-		return GCodeResult::ok;
-	}
-
-
-	const uint32_t start = millis();
-	const uint32_t expectedCommsTime = CalcTransmissionTime(bytesToRead);
-	while (uart->available() < (int)bytesToRead)
-	{
-		// Check whether we should time out
-		if (millis() - start < expectedCommsTime + UartResponseTimeout)
-		{
-			delay(2);
-			continue;
-		}
-		mutex.Release();
-		return GCodeResult::error;					// timed out
-	}
-
-	// If we get here then we received sufficient bytes for a valid reply
-	for (size_t i = 0; i < bytesToRead; i++)
-	{
-		data[i] = (uint8_t)uart->read();
-	}
-
-	mutex.Release();
-	return GCodeResult::ok;
-}
-
 // Read some Modbus registers. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the command.
 // After receiving the GCodeResult::ok response the caller must call CheckModbusResult until it doesn't return GCodeResult::notFinished.
 // If the function code calls for receiving word data then 'data' must be aligned on a 16-bit boundary
@@ -487,13 +422,6 @@ GCodeResult AuxDevice::ReleaseMutexAndCheckCrc() noexcept
 	return (recdCrc == crc.Get()) ? GCodeResult::ok : GCodeResult::error;
 }
 
-// Calculate the time in milliseconds to delay to allow time to send or received the specified number of characters
-uint32_t AuxDevice::CalcTransmissionTime(unsigned int numChars) const noexcept
-{
-	// In the following we need to do +1 to round up the a whole number of milliseconds, and another +1 because a call to delay() may delay up to 1 tick less than we requested
-	return (numChars * 11000)/baudRate + 2;						// Modbus specifies 2 stop bits if parity not used, therefore 11 bits/character
-}
-
 // Callback for transmission ended
 /*static*/ void AuxDevice::GlobalTxEndedCallback(CallbackParameter cp) noexcept
 {
@@ -508,6 +436,79 @@ void AuxDevice::TxEndedCallback() noexcept
 }
 
 #endif
+
+// Calculate the time in milliseconds to delay to allow time to send or received the specified number of characters
+uint32_t AuxDevice::CalcTransmissionTime(unsigned int numChars) const noexcept
+{
+	// In the following we need to do +1 to round up the a whole number of milliseconds, and another +1 because a call to delay() may delay up to 1 tick less than we requested
+	return (numChars * 11000)/baudRate + 2;						// Modbus specifies 2 stop bits if parity not used, therefore 11 bits/character
+}
+
+// Send some data to the Uart. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the data.
+GCodeResult AuxDevice::SendUartData(const uint8_t *data, size_t len) noexcept
+{
+	if (!mutex.Take(BusAvailableTimeout))
+	{
+		return GCodeResult::error;
+	}
+
+	uart->ClearTransmitBuffer();
+	uart->DisableTransmit();
+
+	for (size_t i = 0; i < len; i++)
+	{
+		uart->write((const uint8_t)data[i]);
+	}
+
+#if SUPPORT_MODBUS_RTU
+	txNotRx.WriteDigital(true);								// set RS485 direction to transmit
+	delay(CalcTransmissionTime(4));							// Modbus specifies a 3.5 character interval
+#endif
+	uart->ClearReceiveBuffer();
+	uart->EnableTransmit();
+
+	mutex.Release();
+
+	return GCodeResult::ok;
+}
+
+GCodeResult AuxDevice::ReadUartData(uint8_t *data, size_t bytesToRead) noexcept
+{
+	if (!mutex.Take(BusAvailableTimeout))
+	{
+		return GCodeResult::error;
+	}
+
+	if (bytesToRead == 0)
+	{
+		uart->ClearReceiveBuffer();
+		return GCodeResult::ok;
+	}
+
+
+	const uint32_t start = millis();
+	const uint32_t expectedCommsTime = CalcTransmissionTime(bytesToRead);
+	while (uart->available() < (int)bytesToRead)
+	{
+		// Check whether we should time out
+		if (millis() - start < expectedCommsTime + UartResponseTimeout)
+		{
+			delay(2);
+			continue;
+		}
+		mutex.Release();
+		return GCodeResult::error;					// timed out
+	}
+
+	// If we get here then we received sufficient bytes for a valid reply
+	for (size_t i = 0; i < bytesToRead; i++)
+	{
+		data[i] = (uint8_t)uart->read();
+	}
+
+	mutex.Release();
+	return GCodeResult::ok;
+}
 
 #endif
 

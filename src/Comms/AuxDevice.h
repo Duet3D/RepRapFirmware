@@ -63,6 +63,7 @@ public:
 	GCodeResult ReadUartData(uint8_t *data, size_t bytesToRead) noexcept;
 
 private:
+	uint32_t CalcTransmissionTime(unsigned int numChars) const noexcept;	// calculate the time in milliseconds to send or received the specified number of characters
 
 #if SUPPORT_MODBUS_RTU
 	void ModbusWriteByte(uint8_t b) noexcept;
@@ -70,7 +71,6 @@ private:
 	uint8_t ModbusReadByte() noexcept;
 	uint16_t ModbusReadWord() noexcept;
 	GCodeResult ReleaseMutexAndCheckCrc() noexcept;
-	uint32_t CalcTransmissionTime(unsigned int numChars) const noexcept;	// calculate the time in milliseconds to send or received the specified number of characters
 
 	static void GlobalTxEndedCallback(CallbackParameter cp) noexcept;
 
