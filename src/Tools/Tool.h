@@ -188,6 +188,7 @@ private:
 	float activeTemperatures[MaxHeatersPerTool];
 	float standbyTemperatures[MaxHeatersPerTool];
 	float heaterFeedForward[MaxHeatersPerTool];
+	float temperatureFeedForward[MaxHeatersPerTool];
 
 	// Firmware retraction settings
 	float retractLength, retractExtra;			// retraction length and extra length to un-retract

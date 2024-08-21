@@ -39,7 +39,7 @@ public:
 	float GetAccumulator() const noexcept override;							// Return the integral accumulator
 	void Suspend(bool sus) noexcept override;								// Suspend the heater to conserve power or while doing Z probing
 	void FeedForwardAdjustment(float fanPwmChange, float extrusionChange) noexcept override;
-	void SetExtrusionFeedForward(float pwm) noexcept override;				// Set extrusion feedforward
+	void SetExtrusionFeedForward(float pwm, float degree) noexcept override;	// Set extrusion feedforward
 #if SUPPORT_CAN_EXPANSION
 	bool IsLocal() const noexcept override { return true; }
 	void UpdateRemoteStatus(CanAddress src, const CanHeaterReport& report) noexcept override { }
@@ -76,6 +76,8 @@ private:
 	float lastPwm;											// The last PWM value set for this heater
 	float averagePWM;										// The running average of the PWM, after scaling.
 	volatile float extrusionBoost;							// The amount of extrusion feedforward to apply
+	volatile float extrusionTemperatureBoost;				// The amount of extrusion feedforward to apply
+	float lastExtrusionTemperatureBoost;					// The amount of extrusion feedforward to apply
 	float lastTemperatureValue;								// the last temperature we recorded while heating up
 	uint32_t lastTemperatureMillis;							// when we recorded the last temperature
 	uint32_t timeSetHeating;								// When we turned on the heater
