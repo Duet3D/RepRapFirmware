@@ -2278,7 +2278,6 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 	{
 		String<MaxI2cOrModbusValues> str;
 		gb.GetQuotedString(str.GetRef(), false);
-		reply.printf("Str = %s", str.c_str());
 
 		numToSend = str.strlen();
 		if (numToSend >= MaxI2cOrModbusValues)
@@ -2292,7 +2291,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 			values[i] = (int32_t)str[i];
 		}
 	}
-	else
+	else if (gb.GetCommandFraction() > 0)
 	{
 		reply.copy("missing parameter 'B' or 'S'");
 		return GCodeResult::error;
@@ -2312,7 +2311,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 			{
 				numToReceive = MaxI2cOrModbusValues - numToSend;
 			}
-			uint8_t bValues[MaxI2cOrModbusValues];
+			uint8_t bValues[MaxI2cOrModbusValues] = {0};
 			for (size_t i = 0; i < numToSend; ++i)
 			{
 				bValues[i] = (uint8_t)values[i];
