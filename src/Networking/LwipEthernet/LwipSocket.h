@@ -35,7 +35,7 @@ public:
 	void ConnectionError(err_t err) noexcept;
 
 	// Inherited members of the Socket class
-	void Init(SocketNumber s, TcpPort serverPort, NetworkProtocol p) noexcept;
+	void Init(SocketNumber s, TcpPort serverPort, NetworkProtocol p, bool outgoing = false) noexcept;
 	void TerminateAndDisable() noexcept override;
 	void Poll() noexcept override;
 	void Close() noexcept override;
@@ -55,8 +55,9 @@ private:
 		disabled,
 		inactive,
 		listening,
+		connecting,
 		connected,
-		clientDisconnecting,
+		peerDisconnecting,
 		closing,
 		aborted
 	};
@@ -65,6 +66,7 @@ private:
 	void DiscardReceivedData() noexcept;
 	pbuf *GetNextReceivedPbuf() noexcept;
 
+	uint32_t whenConnecting;
 	uint32_t whenConnected;
 	uint32_t whenWritten;
 	uint32_t whenClosed;
@@ -73,6 +75,7 @@ private:
 	tcp_pcb *connectionPcb;
 	pbuf *volatile receivedData;
 	size_t readIndex;
+	bool outgoing;
 
 	SocketState state;
 	size_t unAcked;
