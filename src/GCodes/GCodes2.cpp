@@ -2121,9 +2121,11 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							type = Aux2Message;
 							break;
 #endif
+#if SUPPORT_MQTT
 						case 6:		// MQTT
 							type = MqttMessage;
 							break;
+#endif
 						default:
 							reply.printf("Invalid message type: %" PRIi32, param);
 							result = GCodeResult::error;
@@ -3894,85 +3896,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 586: // Configure network protocols
 				if (CheckNetworkCommandAllowed(gb, reply, result))
 				{
-					const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
-					switch (gb.GetCommandFraction())
-					{
-						case -1:
-							{
-								bool seen = false;
-# if SUPPORT_HTTP
-								if (gb.Seen('C'))
-								{
-									String<StringLength20> corsSite;
-									gb.GetQuotedString(corsSite.GetRef(), true);
-									reprap.GetNetwork().SetCorsSite(corsSite.c_str());
-									seen = true;
-								}
-# endif
-
-								if (gb.Seen('P'))
-								{
-									const unsigned int protocol = gb.GetUIValue();
-									if (gb.Seen('S'))
-									{
-										const bool enable = (gb.GetIValue() == 1);
-										if (enable)
-										{
-											const int port = (gb.Seen('R')) ? gb.GetIValue() : -1;
-											const int secure = (gb.Seen('T')) ? gb.GetIValue() : -1;
-
-											IPAddress ip;
-
-											if (protocol == MqttProtocol)
-											{
-												gb.MustSee('H');
-												{
-													gb.GetIPAddress(ip);
-												}
-											}
-
-											result = reprap.GetNetwork().EnableProtocol(interface, protocol, port,
-																						ip.GetV4LittleEndian(), secure, reply);
-										}
-										else
-										{
-											result = reprap.GetNetwork().DisableProtocol(interface, protocol, reply);
-										}
-										seen = true;
-									}
-								}
-
-								if (!seen)
-								{
-# if SUPPORT_HTTP
-									if (reprap.GetNetwork().GetCorsSite() != nullptr)
-									{
-										reply.printf("CORS enabled for site '%s'", reprap.GetNetwork().GetCorsSite());
-									}
-									else
-									{
-										reply.copy("CORS disabled");
-									}
-# endif
-									// Default to reporting current protocols if P or S parameter missing
-									result = reprap.GetNetwork().ReportProtocols(interface, reply);
-								}
-							}
-							break;
-
-						case MqttProtocol:
-# if SUPPORT_MQTT
-							result = MqttClient::Configure(gb, reply);
-# else
-							reply.copy("MQTT protocol not supported by this firmware");
-							result = GCodeResult::error;
-# endif
-							break;
-
-						default:
-							break;
-					}
-
+					result = reprap.GetNetwork().ConfigureNetworkProtocol(gb, reply);
 				}
 				break;
 #endif

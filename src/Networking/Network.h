@@ -38,7 +38,8 @@ const size_t NumTelnetResponders = 1;	// the number of concurrent Telnet session
 
 const size_t NumFtpResponders = 1;		// the number of concurrent FTP sessions we support
 
-#define HAS_RESPONDERS	(SUPPORT_HTTP || SUPPORT_FTP || SUPPORT_TELNET)
+#define HAS_CLIENTS		(SUPPORT_MQTT)
+#define HAS_RESPONDERS	(SUPPORT_HTTP || SUPPORT_FTP || SUPPORT_TELNET || HAS_CLIENTS)
 
 // Forward declarations
 class NetworkResponder;
@@ -78,6 +79,10 @@ public:
 	unsigned int GetNumNetworkInterfaces() const noexcept;
 	bool IsWiFiInterface(unsigned int interface) const noexcept;
 
+#if HAS_NETWORKING
+	const NetworkInterface* GetInterface(unsigned int interface) { return interfaces[interface]; }
+#endif
+
 #if defined(DUET3_MB6HC)
 	void CreateAdditionalInterface() noexcept;
 #endif
@@ -92,6 +97,11 @@ public:
 	WifiFirmwareUploader *GetWifiUploader() const noexcept;
 	void ResetWiFiForUpload(bool external) noexcept;
 	const char* GetWiFiServerVersion() const noexcept;
+
+#if HAS_NETWORKING
+	// Network Protocol
+	GCodeResult ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& reply);
+#endif
 
 	// Global settings
 	GCodeResult GetNetworkState(unsigned int interface, const StringRef& reply) noexcept;
@@ -113,8 +123,11 @@ public:
 #endif
 
 	bool FindResponder(Socket *skt, NetworkProtocol protocol) noexcept;
+
+#if HAS_CLIENTS
 	bool StartClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept;
 	void StopClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept;
+#endif
 
 	void HandleHttpGCodeReply(const char *msg) noexcept;
 	void HandleTelnetGCodeReply(const char *msg) noexcept;
@@ -141,8 +154,11 @@ private:
 
 #if HAS_RESPONDERS
 	NetworkResponder *responders;
-	NetworkClient *clients;
 	NetworkResponder *nextResponderToPoll;
+#endif
+
+#if HAS_CLIENTS
+	NetworkClient *clients;
 #endif
 
 #if SUPPORT_HTTP
