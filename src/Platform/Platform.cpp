@@ -2266,11 +2266,37 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 
 	const uint32_t address = GetAddress(gb);
 
-	int32_t values[MaxI2cOrModbusValues];
-	size_t numToSend;
-	gb.MustSee('B');
-	numToSend = MaxI2cOrModbusValues;
-	gb.GetIntArray(values, numToSend, false);
+	int32_t values[MaxI2cOrModbusValues] = {0};
+	size_t numToSend = 0;
+
+	if (gb.Seen('B'))
+	{
+		numToSend = MaxI2cOrModbusValues;
+		gb.GetIntArray(values, numToSend, false);
+	}
+	else if (gb.Seen('S'))
+	{
+		String<MaxI2cOrModbusValues> str;
+		gb.GetQuotedString(str.GetRef(), false);
+		reply.printf("Str = %s", str.c_str());
+
+		numToSend = str.strlen();
+		if (numToSend >= MaxI2cOrModbusValues)
+		{
+			reply.copy("input string too long");
+			return GCodeResult::error;
+		}
+
+		for (size_t i = 0; i < numToSend; i++)
+		{
+			values[i] = (int32_t)str[i];
+		}
+	}
+	else
+	{
+		reply.copy("missing parameter 'B' or 'S'");
+		return GCodeResult::error;
+	}
 
 	switch (gb.GetCommandFraction())
 	{
