@@ -965,7 +965,7 @@ GCodeResult Tool::GetSetFeedForward(GCodeBuffer& gb, const StringRef& reply) THR
 		{
 			reply.catf(" %.3f", (double)heaterFeedForward[i]);
 		}
-		reply.catf("; temperature feedforward:", myNumber);
+		reply.catf("; temperature feedforward:");
 		for (size_t i = 0; i < heaterCount; ++i)
 		{
 			reply.catf(" %.3f", (double)temperatureFeedForward[i]);
