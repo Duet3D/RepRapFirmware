@@ -2367,11 +2367,11 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	}
 
 	// Now it's safe to insert/merge new segments into 'tail'
-	const motioncalc_t stepsPerMm = steps/(motioncalc_t)dda.totalDistance;
 
 	const uint32_t steadyStartTime = startTime + params.accelClocks;
 	const uint32_t decelStartTime = steadyStartTime + params.steadyClocks;
 	const motioncalc_t totalDistance = (motioncalc_t)dda.totalDistance;
+	const motioncalc_t stepsPerMm = (motioncalc_t)steps/totalDistance;
 
 	// Phases with zero duration will not get executed and may lead to infinities in the calculations. Avoid introducing them. Keep the total distance correct.
 	// When using input shaping we can save some FP multiplications by multiplying the acceleration or deceleration time by the pressure advance just once instead of once per impulse
@@ -2399,7 +2399,7 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 		decelPressureAdvance = (dm.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)(params.decelClocks * dm.extruderShaper.GetKclocks()) : (motioncalc_t)0.0;
 	}
 
-	const motioncalc_t steadyDistance = (params.steadyClocks == 0) ? (motioncalc_t)0.0 : (motioncalc_t)dda.totalDistance - accelDistance - decelDistance;
+	const motioncalc_t steadyDistance = (params.steadyClocks == 0) ? (motioncalc_t)0.0 : totalDistance - accelDistance - decelDistance;
 
 #if SUPPORT_S_CURVE
 	const motioncalc_t j = 0.0;			//***Temporary!***
@@ -2469,7 +2469,7 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			}
 		}
 
-		if (dm.state == DMState::idle)		// only if a DM had no segments before any that have been added
+		if (dm.state == DMState::idle)													// if the DM has no segments
 		{
 			if (dm.ScheduleFirstSegment())
 			{
