@@ -967,8 +967,6 @@ void Move::CancelStepping() noexcept
 
 #endif
 
-extern uint32_t maxCriticalElapsedTime;
-
 // Helper function to convert a time period (expressed in StepTimer::Ticks) to a frequency in Hz
 static inline uint32_t TickPeriodToFreq(StepTimer::Ticks tickPeriod) noexcept
 {
@@ -1002,7 +1000,6 @@ void Move::Diagnostics(MessageType mtype) noexcept
 				", max steps late %" PRIi32
 #if 1	//debug
 				", ebfmin %.2f, ebfmax %.2f"
-				", mcet %.3f"
 #endif
 				"\n",
 						MoveSegment::NumCreated(), longestGcodeWaitInterval, scratchString.c_str(), (double)zShift, numHiccups,
@@ -1014,14 +1011,12 @@ void Move::Diagnostics(MessageType mtype) noexcept
 						DriveMovement::GetAndClearMaxStepsLate()
 #if 1
 						, (double)minExtrusionPending, (double)maxExtrusionPending
-						, (double)((float)maxCriticalElapsedTime * (1000.0/(float)StepTimer::GetTickRate()))
 #endif
 		);
 	longestGcodeWaitInterval = 0;
 	numHiccups = 0;
 #if 1	//debug
 	minExtrusionPending = maxExtrusionPending = 0.0;
-	maxCriticalElapsedTime = 0;
 #endif
 
 #if STEPS_DEBUG
@@ -2099,6 +2094,205 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 	return ret + adjustment;
 }
 
+// Calculate the initial speed given the duration, distance and acceleration
+static inline motioncalc_t CalcInitialSpeed(uint32_t duration, motioncalc_t distance, motioncalc_t a) noexcept
+{
+	return distance/(motioncalc_t)duration - (motioncalc_t)0.5 * a * (motioncalc_t)duration;
+}
+
+// Add a segment into the list. If the list is not empty then the new segment may overlap segments already in the list but will never start earlier than the first existing one.
+// The units of the input parameters are steps for distance and step clocks for time.
+MoveSegment *Move::AddSegment(MoveSegment *list, uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a J_FORMAL_PARAMETER(j), MovementFlags moveFlags, motioncalc_t pressureAdvance) noexcept
+{
+	if ((int32_t)duration <= 0)
+	{
+		debugPrintf("Adding zero duration segment: d=%3e a=%.3e\n", (double)distance, (double)a);
+	}
+
+	// Adjust the distance (and implicitly the initial speed) to account for pressure advance
+	distance += pressureAdvance * (motioncalc_t)duration;
+
+#if !SEGMENT_DEBUG
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
+#endif
+	{
+		debugPrintf("Add seg: st=%" PRIu32 " t=%" PRIu32 " dist=%.2f u=%.3e a=%.3e f=%02" PRIx32 "\n", startTime, duration, (double)distance, (double)CalcInitialSpeed(duration, distance, a), (double)a, moveFlags.all);
+	}
+
+	MoveSegment *prev = nullptr;
+	MoveSegment *seg = list;
+
+	if (seg != nullptr)
+	{
+		// Check that the segment we are adding does not start before the currently-executing segment ends, because we can't modify an executing segment
+		int32_t offset = (int32_t)(startTime - seg->GetStartTime());
+
+		// Loop until we find the earliest existing segment that the new one will come before (i.e. new one starts before existing one) or will overlap (i.e. the new one starts before the existing segment ends)
+		while (true)
+		{
+			if (offset < 0)															// if the new segment starts before the existing one starts
+			{
+				if (offset + (int32_t)duration <= 0)
+				{
+					break;															// new segment fits entirely before the existing one
+				}
+				if (offset >= -MoveSegment::MinDuration && duration >= 10 * MoveSegment::MinDuration)	// if it starts only slightly earlier and we can reasonably shorten it
+				{
+					startTime = seg->GetStartTime();								// then just delay and shorten the new segment slightly, to avoid creating a tiny segment
+#if SEGMENT_DEBUG
+					debugPrintf("Adjusting(1) t=%" PRIu32 " a=%.4e", duration, (double)a);
+#endif
+					duration += offset;
+#if SEGMENT_DEBUG
+					debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
+#endif
+				}
+				else																// new segment starts before the existing one and can't be delayed/shortened so that it doesn't
+				{
+					// Insert part of the new segment before the existing one, then merge the rest
+					const uint32_t firstDuration = -offset;
+					const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + (motioncalc_t)0.5 * a * (motioncalc_t)firstDuration) * (motioncalc_t)firstDuration;
+					seg = MoveSegment::Allocate(seg);
+					seg->SetParameters(startTime, firstDuration, firstDistance, a J_ACTUAL_PARAMETER(j), moveFlags);
+					if (prev == nullptr)
+					{
+						list = seg;
+					}
+					else
+					{
+						prev->SetNext(seg);
+					}
+#if CHECK_SEGMENTS
+					CheckSegment(__LINE__, prev);
+					CheckSegment(__LINE__, seg);
+#endif
+					duration -= firstDuration;
+					startTime += firstDuration;
+					distance -= firstDistance;
+					prev = seg;
+					seg = seg->GetNext();
+				}
+				offset = 0;
+			}
+
+			// At this point the new segment starts later or at the same time as the existing one (i.e. offset is non-negative)
+			if (offset < (int32_t)seg->GetDuration())													// if new segment starts before the existing one ends
+			{
+				// If we get here then the new segment starts later or at the same time as the existing one
+				if (offset != 0 && offset + MoveSegment::MinDuration >= (int32_t)seg->GetDuration() && duration >= 10 * MoveSegment::MinDuration)
+				{
+					// New segment starts just before the existing one ends, but we can delay and shorten it to start when the existing segment ends
+#if SEGMENT_DEBUG
+					debugPrintf("Adjusting(3) t=%" PRIu32 " a=%.4e", duration, (double)a);
+#endif
+					const uint32_t delay = seg->GetDuration() - (uint32_t)offset;
+					startTime += delay;																	// postpone and shorten it a little
+					duration -= delay;
+#if SEGMENT_DEBUG
+					debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
+#endif
+					// Go round the loop again
+				}
+				else
+				{
+					// The new segment overlaps the existing one and can't be delayed so that it doesn't.
+					// If the new segment starts later than the existing one does, split the existing one.
+					if (offset != 0)
+					{
+						prev = seg;
+						seg = seg->Split((uint32_t)offset);
+#if CHECK_SEGMENTS
+						CheckSegment(__LINE__, prev);
+						CheckSegment(__LINE__, seg);
+#endif
+						offset = 0;
+					}
+
+					// The segment we wish to add now starts at the same time as 'seg' but it may end earlier or later than the one at 'seg' does.
+					int32_t timeDifference = (int32_t)(duration - seg->GetDuration());
+					if (timeDifference > 0 && timeDifference <= (int32_t)MoveSegment::MinDuration && duration >= 10 * MoveSegment::MinDuration)
+					{
+						// New segment is slightly longer then the old one but it can be shortened
+#if SEGMENT_DEBUG
+						debugPrintf("Adjusting(3) t=%" PRIu32 " a=%.4e", duration, (double)a);
+#endif
+						duration -= (uint32_t)timeDifference;
+#if SEGMENT_DEBUG
+						debugPrintf(" to t=%" PRIu32 " a=%.4e\n", duration, (double)a);
+#endif
+						timeDifference = 0;
+					}
+
+					if (timeDifference > 0)
+					{
+						// The existing segment is shorter in time than the new one, so add the new segment in two or more parts
+						const motioncalc_t firstDistance = (CalcInitialSpeed(duration, distance, a) + (motioncalc_t)0.5 * a * (motioncalc_t)seg->GetDuration()) * (motioncalc_t)seg->GetDuration();	// distance moved by the first part of the new segment
+#if SEGMENT_DEBUG
+						debugPrintf("merge1: ");
+#endif
+						seg->Merge(firstDistance, a J_ACTUAL_PARAMETER(j), moveFlags);
+#if CHECK_SEGMENTS
+						CheckSegment(__LINE__, prev);
+						CheckSegment(__LINE__, seg);
+#endif
+						distance -= firstDistance;
+						startTime += seg->GetDuration();
+						duration = (uint32_t)timeDifference;
+						// Now go round the loop again
+					}
+					else
+					{
+						// New segment ends earlier or at the same time as the old one
+						if (timeDifference != 0)
+						{
+							// Split the existing segment in two
+							seg->Split(duration);
+#if CHECK_SEGMENTS
+							CheckSegment(__LINE__, prev);
+							CheckSegment(__LINE__, seg);
+#endif
+						}
+
+						// The new segment and the existing one now have the same start time and duration, so merge them
+#if SEGMENT_DEBUG
+						debugPrintf("merge2: ");
+#endif
+						seg->Merge(distance, a J_ACTUAL_PARAMETER(j), moveFlags);
+						goto finished;								// ugly but saves some code
+					}
+				}
+			}
+
+			prev = seg;
+			seg = seg->GetNext();
+			if (seg == nullptr) break;
+			offset = (int32_t)(startTime - seg->GetStartTime());
+		}
+	}
+
+	// If we get here then the new segment (or what's left of it) needs to be added before 'seg' which may be null
+	seg = MoveSegment::Allocate(seg);
+	seg->SetParameters(startTime, duration, distance, a J_ACTUAL_PARAMETER(j), moveFlags);
+	if (prev == nullptr)
+	{
+		list = seg;
+	}
+	else
+	{
+		prev->SetNext(seg);
+	}
+
+finished:
+#if CHECK_SEGMENTS
+	CheckSegment(__LINE__, prev);
+	CheckSegment(__LINE__, seg);
+#endif
+#if SEGMENT_DEBUG
+	MoveSegment::DebugPrintList(segments);
+#endif
+	return list;
+}
+
 // Add some linear segments to be executed by a driver, taking account of possible input shaping. This is used by linear axes and by extruders.
 // We never add a segment that starts earlier than any existing segments, but we may add segments when there are none already.
 void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t startTime, const PrepParams& params, motioncalc_t steps, MovementFlags moveFlags) noexcept
@@ -2111,10 +2305,73 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	}
 
 	DriveMovement& dm = dms[logicalDrive];
+	MoveSegment *tail;
+
+	// We need to ensure that while we are amending the segment list, the step ISR doesn't start executing a segment that we are amending.
+	// We don't want to disable interrupts during the entire process of adding a segment, because that risks provoking hiccups when we re-enable interrupts and the ISR catches up with the overdue steps.
+	// Instead we break off the tail of the segment chain containing the segments we need to change, re-enable interrupts, then modify that tail as needed. At the end we put the tail back.
+	{
+		MoveSegment *prev = nullptr;
+
+		const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);					// shut out the step interrupt
+
+		tail = dm.segments;
+		while (tail != nullptr)
+		{
+			const uint32_t segStartTime = tail->GetStartTime();
+			const uint32_t endTime = segStartTime + tail->GetDuration();
+			if ((int32_t)startTime < (int32_t)endTime)
+			{
+				if (tail->GetFlags().executing)
+				{
+					const uint32_t now = StepTimer::GetMovementTimerTicks();
+					const int32_t overlap = endTime - startTime;
+					LogStepError(3);
+					RestoreBasePriority(oldPrio);
+					if (reprap.Debug(Module::Move))
+					{
+						debugPrintf("overlaps executing seg by %" PRIi32 " while trying to add segment(s) starting at %" PRIu32 ", time now %" PRIu32 "\n",
+										overlap, startTime, now);
+						MoveSegment::DebugPrintList(tail);
+					}
+					return;
+				}
+
+				if (startTime > segStartTime)
+				{
+					// Split the existing segment
+					prev = tail;
+					tail = tail->Split(startTime - segStartTime);
+					prev->SetNext(nullptr);
+				}
+				else
+				{
+					// Split just before this segment
+					if (prev == nullptr)
+					{
+						dm.segments = nullptr;
+					}
+					else
+					{
+						prev->SetNext(nullptr);
+					}
+				}
+				break;
+			}
+
+			prev = tail;
+			tail = tail->GetNext();
+		}
+
+		RestoreBasePriority(oldPrio);
+	}
+
+	// Now it's safe to insert/merge new segments into 'tail'
 	const motioncalc_t stepsPerMm = steps/(motioncalc_t)dda.totalDistance;
 
 	const uint32_t steadyStartTime = startTime + params.accelClocks;
 	const uint32_t decelStartTime = steadyStartTime + params.steadyClocks;
+	const motioncalc_t totalDistance = (motioncalc_t)dda.totalDistance;
 
 	// Phases with zero duration will not get executed and may lead to infinities in the calculations. Avoid introducing them. Keep the total distance correct.
 	// When using input shaping we can save some FP multiplications by multiplying the acceleration or deceleration time by the pressure advance just once instead of once per impulse
@@ -2126,7 +2383,7 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	}
 	else
 	{
-		accelDistance = (motioncalc_t)params.accelDistance;
+		accelDistance = (params.decelClocks + params.steadyClocks == 0) ? totalDistance : (motioncalc_t)params.accelDistance;
 		accelPressureAdvance = (dm.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)(params.accelClocks * dm.extruderShaper.GetKclocks()) : (motioncalc_t)0.0;
 	}
 
@@ -2138,9 +2395,10 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	}
 	else
 	{
-		decelDistance = (motioncalc_t)(1.0 - params.decelStartDistance);
+		decelDistance = totalDistance - ((params.steadyClocks == 0) ? accelDistance : (motioncalc_t)params.decelStartDistance);
 		decelPressureAdvance = (dm.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)(params.decelClocks * dm.extruderShaper.GetKclocks()) : (motioncalc_t)0.0;
 	}
+
 	const motioncalc_t steadyDistance = (params.steadyClocks == 0) ? (motioncalc_t)0.0 : (motioncalc_t)dda.totalDistance - accelDistance - decelDistance;
 
 #if SUPPORT_S_CURVE
@@ -2155,15 +2413,15 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	{
 		if (params.accelClocks != 0)
 		{
-			dm.AddSegment(startTime, params.accelClocks, accelDistance * stepsPerMm, (motioncalc_t)dda.acceleration * stepsPerMm J_ACTUAL_PARAMETER(j * stepsPerMm), moveFlags, accelPressureAdvance);
+			tail = AddSegment(tail, startTime, params.accelClocks, accelDistance * stepsPerMm, (motioncalc_t)dda.acceleration * stepsPerMm J_ACTUAL_PARAMETER(j * stepsPerMm), moveFlags, accelPressureAdvance);
 		}
 		if (params.steadyClocks != 0)
 		{
-			dm.AddSegment(steadyStartTime, params.steadyClocks, steadyDistance * stepsPerMm, (motioncalc_t)0.0 J_ACTUAL_PARAMETER((motioncalc_t)0.0), moveFlags, (motioncalc_t)0.0);
+			tail = AddSegment(tail, steadyStartTime, params.steadyClocks, steadyDistance * stepsPerMm, (motioncalc_t)0.0 J_ACTUAL_PARAMETER((motioncalc_t)0.0), moveFlags, (motioncalc_t)0.0);
 		}
 		if (params.decelClocks != 0)
 		{
-			dm.AddSegment(decelStartTime, params.decelClocks, decelDistance * stepsPerMm, -((motioncalc_t)dda.deceleration * stepsPerMm) J_ACTUAL_PARAMETER(j * stepsPerMm), moveFlags, decelPressureAdvance);
+			tail = AddSegment(tail, decelStartTime, params.decelClocks, decelDistance * stepsPerMm, -((motioncalc_t)dda.deceleration * stepsPerMm) J_ACTUAL_PARAMETER(j * stepsPerMm), moveFlags, decelPressureAdvance);
 		}
 	}
 	else
@@ -2174,15 +2432,15 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			const uint32_t delay = axisShaper.GetImpulseDelay(index);
 			if (params.accelClocks != 0)
 			{
-				dm.AddSegment(startTime + delay, params.accelClocks, accelDistance * factor, (motioncalc_t)dda.acceleration * factor J_ACTUAL_PARAMETER(j * factor), moveFlags, accelPressureAdvance);
+				tail = AddSegment(tail, startTime + delay, params.accelClocks, accelDistance * factor, (motioncalc_t)dda.acceleration * factor J_ACTUAL_PARAMETER(j * factor), moveFlags, accelPressureAdvance);
 			}
 			if (params.steadyClocks != 0)
 			{
-				dm.AddSegment(steadyStartTime + delay, params.steadyClocks, steadyDistance * factor, (motioncalc_t)0.0 J_ACTUAL_PARAMETER((motioncalc_t)0.0), moveFlags, (motioncalc_t)0.0);
+				tail = AddSegment(tail, steadyStartTime + delay, params.steadyClocks, steadyDistance * factor, (motioncalc_t)0.0 J_ACTUAL_PARAMETER((motioncalc_t)0.0), moveFlags, (motioncalc_t)0.0);
 			}
 			if (params.decelClocks != 0)
 			{
-				dm.AddSegment(decelStartTime + delay, params.decelClocks, decelDistance * factor, -((motioncalc_t)dda.deceleration * factor) J_ACTUAL_PARAMETER(j * factor), moveFlags, decelPressureAdvance);
+				tail = AddSegment(tail, decelStartTime + delay, params.decelClocks, decelDistance * factor, -((motioncalc_t)dda.deceleration * factor) J_ACTUAL_PARAMETER(j * factor), moveFlags, decelPressureAdvance);
 			}
 		}
 	}
@@ -2191,25 +2449,45 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 
 	// If there were no segments attached to this DM initially, we need to schedule the interrupt for the new segment at the start of the list.
 	// Don't do this until we have added all the segments for this move, because the first segment we added may have been modified and/or split when we added further segments to implement input shaping
-	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);					// shut out the step interrupt
-	if (dm.state == DMState::idle)		// only if a DM had no segments before any that have been added
 	{
-		if (dm.ScheduleFirstSegment())
+		const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);					// shut out the step interrupt
+
+		// Join the tail back to the end of the segment list
 		{
-			// Always set the direction when starting the first move
-			dm.directionChanged = false;
-			SetDirection(dm.drive, dm.direction);
-			InsertDM(&dm);
-			if (activeDMs == &dm && simulationMode == SimulationMode::off)			// if this is now the first DM in the active list
+			MoveSegment *ms = dm.segments;
+			if (ms == nullptr)
 			{
-				if (ScheduleNextStepInterrupt())
+				dm.segments = tail;
+			}
+			else
+			{
+				while (ms->GetNext() != nullptr)
 				{
-					Interrupt();
+					ms = ms->GetNext();
+				}
+				ms->SetNext(tail);
+			}
+		}
+
+		if (dm.state == DMState::idle)		// only if a DM had no segments before any that have been added
+		{
+			if (dm.ScheduleFirstSegment())
+			{
+				// Always set the direction when starting the first move
+				dm.directionChanged = false;
+				SetDirection(dm.drive, dm.direction);
+				InsertDM(&dm);
+				if (activeDMs == &dm && simulationMode == SimulationMode::off)			// if this is now the first DM in the active list
+				{
+					if (ScheduleNextStepInterrupt())
+					{
+						Interrupt();
+					}
 				}
 			}
 		}
+		RestoreBasePriority(oldPrio);
 	}
-	RestoreBasePriority(oldPrio);
 }
 
 // Store the DDA that is executing a homing move involving this drive. Called from DDA::Prepare.
