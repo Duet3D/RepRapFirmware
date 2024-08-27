@@ -93,17 +93,15 @@ uint32_t maxCriticalElapsedTime = 0;
 
 // Add a segment into the list. If the list is not empty then the new segment may overlap segments already in the list but will never start earlier than the first existing one.
 // The units of the input parameters are steps for distance and step clocks for time.
-void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a J_FORMAL_PARAMETER(j), MovementFlags moveFlags) noexcept
+void DriveMovement::AddSegment(uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a J_FORMAL_PARAMETER(j), MovementFlags moveFlags, motioncalc_t pressureAdvance) noexcept
 {
 	if ((int32_t)duration <= 0)
 	{
 		debugPrintf("Adding zero duration segment: d=%3e a=%.3e\n", (double)distance, (double)a);
 	}
+
 	// Adjust the distance (and implicitly the initial speed) to account for pressure advance
-	if (isExtruder && !moveFlags.nonPrintingMove)
-	{
-		distance += a * (motioncalc_t)extruderShaper.GetKclocks() * (motioncalc_t)duration;
-	}
+	distance += pressureAdvance * (motioncalc_t)duration;
 
 #if !SEGMENT_DEBUG
 	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))

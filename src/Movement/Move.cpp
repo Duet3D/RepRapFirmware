@@ -2110,15 +2110,37 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 		params.DebugPrint();
 	}
 
-	DriveMovement* const dmp = &dms[logicalDrive];
+	DriveMovement& dm = dms[logicalDrive];
 	const motioncalc_t stepsPerMm = steps/(motioncalc_t)dda.totalDistance;
 
 	const uint32_t steadyStartTime = startTime + params.accelClocks;
 	const uint32_t decelStartTime = steadyStartTime + params.steadyClocks;
 
 	// Phases with zero duration will not get executed and may lead to infinities in the calculations. Avoid introducing them. Keep the total distance correct.
-	const motioncalc_t accelDistance = (params.accelClocks == 0) ? (motioncalc_t)0.0 : (motioncalc_t)params.accelDistance;
-	const motioncalc_t decelDistance = (params.decelClocks == 0) ? (motioncalc_t)0.0 : (motioncalc_t)(dda.totalDistance - params.decelStartDistance);
+	// When using input shaping we can save some FP multiplications by multiplying the acceleration or deceleration time by the pressure advance just once instead of once per impulse
+	motioncalc_t accelDistance, accelPressureAdvance;
+	if (params.accelClocks == 0)
+	{
+		accelDistance = (motioncalc_t)0.0;
+		accelPressureAdvance = (motioncalc_t)0.0;
+	}
+	else
+	{
+		accelDistance = (motioncalc_t)params.accelDistance;
+		accelPressureAdvance = (dm.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)(params.accelClocks * dm.extruderShaper.GetKclocks()) : (motioncalc_t)0.0;
+	}
+
+	motioncalc_t decelDistance, decelPressureAdvance;
+	if (params.decelClocks == 0)
+	{
+		decelDistance = (motioncalc_t)0.0;
+		decelPressureAdvance= (motioncalc_t)0.0;
+	}
+	else
+	{
+		decelDistance = (motioncalc_t)(1.0 - params.decelStartDistance);
+		decelPressureAdvance = (dm.isExtruder && !moveFlags.nonPrintingMove) ? (motioncalc_t)(params.decelClocks * dm.extruderShaper.GetKclocks()) : (motioncalc_t)0.0;
+	}
 	const motioncalc_t steadyDistance = (params.steadyClocks == 0) ? (motioncalc_t)0.0 : (motioncalc_t)dda.totalDistance - accelDistance - decelDistance;
 
 #if SUPPORT_S_CURVE
@@ -2126,22 +2148,22 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 #endif
 
 #if STEPS_DEBUG
-	dmp->positionRequested += steps;
+	dm.positionRequested += steps;
 #endif
 
 	if (moveFlags.noShaping)
 	{
 		if (params.accelClocks != 0)
 		{
-			dmp->AddSegment(startTime, params.accelClocks, accelDistance * stepsPerMm, (motioncalc_t)dda.acceleration * stepsPerMm J_ACTUAL_PARAMETER(j * stepsPerMm), moveFlags);
+			dm.AddSegment(startTime, params.accelClocks, accelDistance * stepsPerMm, (motioncalc_t)dda.acceleration * stepsPerMm J_ACTUAL_PARAMETER(j * stepsPerMm), moveFlags, accelPressureAdvance);
 		}
 		if (params.steadyClocks != 0)
 		{
-			dmp->AddSegment(steadyStartTime, params.steadyClocks, steadyDistance * stepsPerMm, (motioncalc_t)0.0 J_ACTUAL_PARAMETER((motioncalc_t)0.0), moveFlags);
+			dm.AddSegment(steadyStartTime, params.steadyClocks, steadyDistance * stepsPerMm, (motioncalc_t)0.0 J_ACTUAL_PARAMETER((motioncalc_t)0.0), moveFlags, (motioncalc_t)0.0);
 		}
 		if (params.decelClocks != 0)
 		{
-			dmp->AddSegment(decelStartTime, params.decelClocks, decelDistance * stepsPerMm, -((motioncalc_t)dda.deceleration * stepsPerMm) J_ACTUAL_PARAMETER(j * stepsPerMm), moveFlags);
+			dm.AddSegment(decelStartTime, params.decelClocks, decelDistance * stepsPerMm, -((motioncalc_t)dda.deceleration * stepsPerMm) J_ACTUAL_PARAMETER(j * stepsPerMm), moveFlags, decelPressureAdvance);
 		}
 	}
 	else
@@ -2152,15 +2174,15 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			const uint32_t delay = axisShaper.GetImpulseDelay(index);
 			if (params.accelClocks != 0)
 			{
-				dmp->AddSegment(startTime + delay, params.accelClocks, accelDistance * factor, (motioncalc_t)dda.acceleration * factor J_ACTUAL_PARAMETER(j * factor), moveFlags);
+				dm.AddSegment(startTime + delay, params.accelClocks, accelDistance * factor, (motioncalc_t)dda.acceleration * factor J_ACTUAL_PARAMETER(j * factor), moveFlags, accelPressureAdvance);
 			}
 			if (params.steadyClocks != 0)
 			{
-				dmp->AddSegment(steadyStartTime + delay, params.steadyClocks, steadyDistance * factor, (motioncalc_t)0.0 J_ACTUAL_PARAMETER((motioncalc_t)0.0), moveFlags);
+				dm.AddSegment(steadyStartTime + delay, params.steadyClocks, steadyDistance * factor, (motioncalc_t)0.0 J_ACTUAL_PARAMETER((motioncalc_t)0.0), moveFlags, (motioncalc_t)0.0);
 			}
 			if (params.decelClocks != 0)
 			{
-				dmp->AddSegment(decelStartTime + delay, params.decelClocks, decelDistance * factor, -((motioncalc_t)dda.deceleration * factor) J_ACTUAL_PARAMETER(j * factor), moveFlags);
+				dm.AddSegment(decelStartTime + delay, params.decelClocks, decelDistance * factor, -((motioncalc_t)dda.deceleration * factor) J_ACTUAL_PARAMETER(j * factor), moveFlags, decelPressureAdvance);
 			}
 		}
 	}
@@ -2170,15 +2192,15 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 	// If there were no segments attached to this DM initially, we need to schedule the interrupt for the new segment at the start of the list.
 	// Don't do this until we have added all the segments for this move, because the first segment we added may have been modified and/or split when we added further segments to implement input shaping
 	const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep);					// shut out the step interrupt
-	if (dmp->state == DMState::idle)		// only if a DM had no segments before any that have been added
+	if (dm.state == DMState::idle)		// only if a DM had no segments before any that have been added
 	{
-		if (dmp->ScheduleFirstSegment())
+		if (dm.ScheduleFirstSegment())
 		{
 			// Always set the direction when starting the first move
-			dmp->directionChanged = false;
-			SetDirection(dmp->drive, dmp->direction);
-			InsertDM(dmp);
-			if (activeDMs == dmp && simulationMode == SimulationMode::off)			// if this is now the first DM in the active list
+			dm.directionChanged = false;
+			SetDirection(dm.drive, dm.direction);
+			InsertDM(&dm);
+			if (activeDMs == &dm && simulationMode == SimulationMode::off)			// if this is now the first DM in the active list
 			{
 				if (ScheduleNextStepInterrupt())
 				{
