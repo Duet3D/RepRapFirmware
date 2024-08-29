@@ -19,6 +19,10 @@
 #include <General/Portability.h>
 #include <AppNotifyIndices.h>
 
+#if SUPPORT_DATA_COLLECTION
+# include <Comms/DataCollection.h>
+#endif
+
 #if defined(DUET3_MB6HC)
 
 #include <Platform/RepRap.h>
@@ -1528,6 +1532,13 @@ extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 			EnableDma();
 			EnableSpi();
 		}
+
+#if SUPPORT_DATA_COLLECTION
+		if (millis() - DataCollection::GetLastTransmissionTime() >= DataCollection::SendInterval)
+		{
+			DataCollection::CollectAndSendData();
+		}
+#endif
 
 		// Wait for the end-of-transfer interrupt
 		timedOut = !TaskBase::TakeIndexed(NotifyIndices::Tmc, TransferTimeout);

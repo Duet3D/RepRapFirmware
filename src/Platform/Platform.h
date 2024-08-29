@@ -216,6 +216,8 @@ public:
 	GCodeResult SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M260
 	GCodeResult ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M261
 
+	bool SendUartData(size_t auxChannel, const uint8_t *data, size_t len) noexcept;
+
 	void AtxPowerOff() noexcept;
 	bool IsAtxPowerControlled() const noexcept { return PsOnPort.IsValid(); }
 	bool IsDeferredPowerDown() const noexcept { return powerDownWhenFansStop || delayedPowerDown; }
