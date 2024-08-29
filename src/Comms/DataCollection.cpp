@@ -14,6 +14,7 @@
 #include <Movement/Move.h>
 #include <Heating/Heat.h>
 #include <Heating/Sensors/LinearAnalogSensor.h>
+#include <RepRapFirmware.h>
 
 namespace DataCollection
 {
@@ -57,11 +58,10 @@ namespace DataCollection
 		if (unlikely(abs(input) > 999.99))
 		{
 			input = input < 0 ? -999.99 : 999.99;
-			return false;
 		}
 
 		char charBuf[8];		// sign, decimal, 5 digits, end character
-		SafeSnprintf(charBuf, 8, "%.2f", (double)input);
+		SafeSnprintf(charBuf, min((size_t)8, len+1), "%.2f", (double)input);
 		len = strlen(charBuf);
 
 		for (size_t i = 0; i < len; i++)
@@ -116,13 +116,9 @@ namespace DataCollection
 		Move& move = reprap.GetMove();
 
 		int32_t currentMicrosteps = move.GetLiveMotorPosition(axisOrExtruder);
-		if (currentMicrosteps < 0)
-		{
-			AddDataToBuffer((uint8_t)'-');
-		}
 		float pos = currentMicrosteps / move.DriveStepsPerMm(axisOrExtruder);
-		uint8_t asciiPos[5] = {0};
-		size_t len = 5;
+		uint8_t asciiPos[8] = {0};
+		size_t len = 7;
 		SerialiseFloat(pos, asciiPos, len);
 		AddDataToBuffer(asciiPos, len);
 	}
