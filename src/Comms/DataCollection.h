@@ -15,7 +15,7 @@
 namespace DataCollection
 {
 	constexpr size_t MaxBufferLen = 46;		// max number of bytes supported in a single message
-	constexpr uint32_t SendInterval = 200;	// interval in ms between sending data
+	constexpr uint32_t SendInterval = 2;	// interval in ms between sending data
 	constexpr size_t DefaultAuxChannel = 0;
 	constexpr size_t AnalogSensorNum = 2;		// analog sensor number to log
 

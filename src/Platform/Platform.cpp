@@ -2695,13 +2695,6 @@ bool Platform::SendUartData(size_t auxChannel, const uint8_t *data, size_t len) 
 		return false;
 	}
 
-	debugPrintf("Sending ");
-	for (size_t i = 0; i < len; i++)
-	{
-		debugPrintf("%c", (char)data[i]);
-	}
-	debugPrintf("\n");
-
 	GCodeResult rslt = dev.SendUartData(data, len);
 	if (rslt != GCodeResult::ok)
 	{

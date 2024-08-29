@@ -32,14 +32,14 @@ namespace DataCollection
 		void Clear()
 		{
 			memset(buffer, 0, MaxBufferLen);
-			len = 3;
+			len = 0;
 
 
 		}
 
 		bool AddData(uint8_t data)
 		{
-			if (len >= MaxBufferLen - 3)
+			if (len >= MaxBufferLen)
 			{
 				return false;
 			}
@@ -48,46 +48,23 @@ namespace DataCollection
 			len++;
 			return true;
 		}
-
-		void Finalise()
-		{
-			buffer[0] = 0x02;	// STX
-
-			char numBytesBuf[3];
-			SafeSnprintf(numBytesBuf, 3, "%.2u", len - 3);
-			buffer[1] = static_cast<uint8_t>(numBytesBuf[0]);
-			buffer[2] = static_cast<uint8_t>(numBytesBuf[1]);
-
-			uint8_t checksum[2];
-			CalculateUartCheckSum(buffer + 1, len - 1, checksum);
-			buffer[len++] = checksum[0];
-			buffer[len++] = checksum[1];
-
-			buffer[len++] = '\n';
-			buffer[len++] = 0x03;
-		}
 	} buffer;
 
 	// Convert a float to an ASCII array of length 5, implied decimal place before last 2 characters
-	static bool SerialiseFloat(float input, uint8_t* output)
+	static bool SerialiseFloat(float input, uint8_t* output, size_t &len)
 	{
-		uint32_t rounded = (uint32_t)(100 * abs(input) + 0.5);	// remove decimal place and sign
-
 		// Do not support number that take more than 5 digits (including 2 decimal)
-		if (rounded > 99999)
+		if (unlikely(abs(input) > 999.99))
 		{
-			output[0] = '9';
-			output[1] = '9';
-			output[2] = '9';
-			output[3] = '9';
-			output[4] = '9';
+			input = input < 0 ? -999.99 : 999.99;
 			return false;
 		}
 
-		char charBuf[6];
-		SafeSnprintf(charBuf, 6, "%.5lu", rounded);
+		char charBuf[8];		// sign, decimal, 5 digits, end character
+		SafeSnprintf(charBuf, 8, "%.2f", (double)input);
+		len = strlen(charBuf);
 
-		for (size_t i = 0; i < 5; i++)
+		for (size_t i = 0; i < len; i++)
 		{
 			output[i] = static_cast<uint8_t>(charBuf[i]);
 		}
@@ -97,8 +74,6 @@ namespace DataCollection
 	bool SendDataToUart()
 	{
 		Platform& platform = reprap.GetPlatform();
-
-		buffer.Finalise();
 
 		platform.SendUartData(DefaultAuxChannel, buffer.buffer, buffer.len);
 		return true;
@@ -113,8 +88,8 @@ namespace DataCollection
 	{
 		bool failed = false;
 		char buf[11];
-		SafeSnprintf(buf, 11, "%.10lu", val);
-		for (size_t i = 0; i < 10; i++)
+		SafeSnprintf(buf, 11, "%lu", val);
+		for (size_t i = 0; i < strlen(buf); i++)
 		{
 			failed |= AddDataToBuffer((uint8_t)buf[i]);
 		}
@@ -145,15 +120,11 @@ namespace DataCollection
 		{
 			AddDataToBuffer((uint8_t)'-');
 		}
-		else
-		{
-			AddDataToBuffer((uint8_t)'+');
-		}
 		float pos = currentMicrosteps / move.DriveStepsPerMm(axisOrExtruder);
-		debugPrintf("Pos: %f (%ld) ", (double)pos, currentMicrosteps);
 		uint8_t asciiPos[5] = {0};
-		SerialiseFloat(pos, asciiPos);
-		AddDataToBuffer(asciiPos, 5);
+		size_t len = 5;
+		SerialiseFloat(pos, asciiPos, len);
+		AddDataToBuffer(asciiPos, len);
 	}
 
 	void CollectAndSendData()
@@ -163,17 +134,21 @@ namespace DataCollection
 		// Add timestamp
 		lastTransmissionTime = millis();
 		AddDataToBuffer(lastTransmissionTime);
+		AddDataToBuffer((uint8_t)',');
 
 		// Add X,Y,Z position to buffer
 		for (size_t axis = 0; axis <= 2; axis++)
 		{
 			AddAxisPosition(axis);
+			AddDataToBuffer((uint8_t)',');
 		}
 
 		// Add E0 position to buffer
 		AddAxisPosition(ExtruderToLogicalDrive(0));
+		AddDataToBuffer((uint8_t)',');
 
-		// Add analog sensor TODO
+		// Add analog sensor
+		// TODO will need to poll this faster
 		const auto sensor = reprap.GetHeat().FindSensor(AnalogSensorNum);
 		uint16_t reading = 0;
 		if (sensor.IsNotNull())
@@ -183,10 +158,8 @@ namespace DataCollection
 			reading = static_cast<uint16_t>(fReading);
 		}
 
-		uint8_t asciiReading[4];
-		ConvertHexToAsciiHex(reading >> 8, asciiReading);
-		ConvertHexToAsciiHex(reading & 0xFF, asciiReading + 2);
-		AddDataToBuffer(asciiReading, 4);
+		AddDataToBuffer((uint32_t)reading);
+		AddDataToBuffer((uint8_t)'\n');
 
 		SendDataToUart();
 	}
