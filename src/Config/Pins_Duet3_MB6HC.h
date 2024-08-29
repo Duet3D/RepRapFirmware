@@ -147,6 +147,11 @@ constexpr IRQn TMC51xx_SPI_IRQn = USART1_IRQn;
 #define TMC51xx_DmaTxPerid	((uint32_t)DmaTrigSource::usart1tx)
 #define TMC51xx_DmaRxPerid	((uint32_t)DmaTrigSource::usart1rx)
 
+#if SUPPORT_DATA_COLLECTION
+Uart * const UART_DataCollection = UART2;
+#define UART2_DmaTxPerid	((uint32_t)DmaTrigSource::uart2tx)
+#endif
+
 constexpr Pin TMC51xxMosiPin = PortBPin(4);
 constexpr GpioPinFunction TMC51xxMosiPinPeriphMode = GpioPinFunction::D;
 constexpr Pin TMC51xxMisoPin = PortAPin(21);
@@ -477,7 +482,17 @@ constexpr DmaChannel DmacChanSbcTx = 5;
 constexpr DmaChannel DmacChanSbcRx = 6;
 constexpr DmaChannel DmacChanLedTx = 7;
 
+#if SUPPORT_DATA_COLLECTION
+
+constexpr DmaChannel DmacChanDataCollectionTx = 8;
+
+constexpr size_t NumDmaChannelsUsed = 9;
+
+#else
+
 constexpr size_t NumDmaChannelsUsed = 8;
+
+#endif
 
 namespace StepPins
 {

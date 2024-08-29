@@ -9,47 +9,116 @@
 
 #if SUPPORT_DATA_COLLECTION
 
-#include <Platform/RepRap.h>
-#include <Platform/Platform.h>
-#include <Movement/Move.h>
+#include <DmacManager.h>
 #include <Heating/Heat.h>
 #include <Heating/Sensors/LinearAnalogSensor.h>
+#include <Movement/Move.h>
+#include <Platform/Platform.h>
+#include <Platform/RepRap.h>
 #include <RepRapFirmware.h>
+
+#if SAME70
+
+#include <pmc/pmc.h>
+#include <xdmac/xdmac.h>
+
+#endif
 
 namespace DataCollection
 {
 	static uint32_t lastTransmissionTime = 0;
 
-	static struct Buffer
+	static __nocache volatile uint8_t buffer[MaxBufferLen];
+	static __nocache volatile size_t bufferLen = 0;
+
+	void ClearBuffer()
 	{
-		uint8_t buffer[MaxBufferLen];
-		size_t len;
-
-		Buffer()
+		for (size_t i = 0; i < MaxBufferLen; i++)
 		{
-			Clear();
+			buffer[i] = 0;
+		}
+		bufferLen = 0;
+	}
+
+	bool AddDataToBuffer(uint8_t val)
+	{
+		if (bufferLen >= MaxBufferLen)
+		{
+			return false;
 		}
 
-		void Clear()
+		buffer[bufferLen] = val;
+		bufferLen++;
+		return true;
+	}
+
+	// Set up the PDC or DMAC to send a register and receive the status, but don't enable it yet
+	static void SetupDMA() noexcept
+	{
+#if SAME70
+		/* From the data sheet:
+		 * Single Block Transfer With Single Microblock
+			1. Read the XDMAC Global Channel Status Register (XDMAC_GS) to select a free channel. [we use fixed channel
+		 numbers instead.]
+			2. Clear the pending Interrupt Status bit(s) by reading the selected XDMAC Channel x Interrupt Status
+			Register (XDMAC_CISx).
+			3. Write the XDMAC Channel x Source Address Register (XDMAC_CSAx) for channel x.
+			4. Write the XDMAC Channel x Destination Address Register (XDMAC_CDAx) for channel x.
+			5. Program field UBLEN in the XDMAC Channel x Microblock Control Register (XDMAC_CUBCx) with
+			the number of data.
+			6. Program the XDMAC Channel x Configuration Register (XDMAC_CCx):
+			6.1. Clear XDMAC_CCx.TYPE for a memory-to-memory transfer, otherwise set this bit.
+			6.2. Configure XDMAC_CCx.MBSIZE to the memory burst size used.
+			6.3. Configure XDMAC_CCx.SAM and DAM to Memory Addressing mode.
+			6.4. Configure XDMAC_CCx.DSYNC to select the peripheral transfer direction.
+			6.5. Configure XDMAC_CCx.CSIZE to configure the channel chunk size (only relevant for
+			peripheral synchronized transfer).
+			6.6. Configure XDMAC_CCx.DWIDTH to configure the transfer data width.
+			6.7. Configure XDMAC_CCx.SIF, XDMAC_CCx.DIF to configure the master interface used to
+			read data and write data, respectively.
+			6.8. Configure XDMAC_CCx.PERID to select the active hardware request line (only relevant for
+			a peripheral synchronized transfer).
+			6.9. Set XDMAC_CCx.SWREQ to use a software request (only relevant for a peripheral
+			synchronized transfer).
+			7. Clear the following five registers:
+			– XDMAC Channel x Next Descriptor Control Register (XDMAC_CNDCx)
+			– XDMAC Channel x Block Control Register (XDMAC_CBCx)
+			– XDMAC Channel x Data Stride Memory Set Pattern Register (XDMAC_CDS_MSPx)
+			– XDMAC Channel x Source Microblock Stride Register (XDMAC_CSUSx)
+			– XDMAC Channel x Destination Microblock Stride Register (XDMAC_CDUSx)
+			This indicates that the linked list is disabled, there is only one block and striding is disabled.
+			8. Enable the Microblock interrupt by writing a ‘1’ to bit BIE in the XDMAC Channel x Interrupt Enable
+			Register (XDMAC_CIEx). Enable the Channel x Interrupt Enable bit by writing a ‘1’ to bit IEx in the
+			XDMAC Global Interrupt Enable Register (XDMAC_GIE).
+			9. Enable channel x by writing a ‘1’ to bit ENx in the XDMAC Global Channel Enable Register
+			(XDMAC_GE). XDMAC_GS.STx (XDMAC Channel x Status bit) is set by hardware.
+			10. Once completed, the DMA channel sets XDMAC_CISx.BIS (End of Block Interrupt Status bit) and
+			generates an interrupt. XDMAC_GS.STx is cleared by hardware. The software can either wait for
+			an interrupt or poll the channel status bit.
+
+			The following code is adapted from the code in the HSMCI driver instead.
+		*/
+		// Transmit
 		{
-			memset(buffer, 0, MaxBufferLen);
-			len = 0;
-
-
+			xdmac_channel_disable(XDMAC, DmacChanDataCollectionTx);
+			xdmac_channel_config_t p_cfg = {0, 0, 0, 0, 0, 0, 0, 0};
+			p_cfg.mbr_cfg = XDMAC_CC_TYPE_PER_TRAN | XDMAC_CC_MBSIZE_SINGLE | XDMAC_CC_DSYNC_MEM2PER |
+							XDMAC_CC_CSIZE_CHK_1 | XDMAC_CC_DWIDTH_BYTE | XDMAC_CC_SIF_AHB_IF0 | XDMAC_CC_DIF_AHB_IF1 |
+							XDMAC_CC_SAM_INCREMENTED_AM | XDMAC_CC_DAM_FIXED_AM | XDMAC_CC_PERID(UART2_DmaTxPerid);
+			p_cfg.mbr_ubc = bufferLen;
+			p_cfg.mbr_sa = reinterpret_cast<uint32_t>(buffer);
+			p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(UART_DataCollection->UART_THR));
+			xdmac_configure_transfer(XDMAC, DmacChanDataCollectionTx, &p_cfg);
 		}
+#endif
+	}
 
-		bool AddData(uint8_t data)
-		{
-			if (len >= MaxBufferLen)
-			{
-				return false;
-			}
-
-			buffer[len] = data;		// first 3 bytes are STX & num bytes
-			len++;
-			return true;
-		}
-	} buffer;
+	static inline void EnableDma() noexcept
+	{
+#if SAME70
+		xdmac_channel_enable(XDMAC, DmacChanDataCollectionTx);
+#endif
+	}
 
 	// Convert a float to an ASCII array of length 5, implied decimal place before last 2 characters
 	static bool SerialiseFloat(float input, uint8_t* output, size_t &len)
@@ -73,15 +142,9 @@ namespace DataCollection
 
 	bool SendDataToUart()
 	{
-		Platform& platform = reprap.GetPlatform();
-
-		platform.SendUartData(DefaultAuxChannel, buffer.buffer, buffer.len);
+		SetupDMA();
+		EnableDma();
 		return true;
-	}
-
-	void ClearBuffer()
-	{
-		buffer.Clear();
 	}
 
 	inline bool AddDataToBuffer(uint32_t val)
@@ -94,11 +157,6 @@ namespace DataCollection
 			failed |= AddDataToBuffer((uint8_t)buf[i]);
 		}
 		return !failed;
-	}
-
-	inline bool AddDataToBuffer(uint8_t val)
-	{
-		return buffer.AddData(val);
 	}
 
 	bool AddDataToBuffer(uint8_t *data, size_t len)
