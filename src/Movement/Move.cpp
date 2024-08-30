@@ -2825,9 +2825,10 @@ void Move::CheckEndstops(bool executingMove) noexcept
 #if SUPPORT_CAN_EXPANSION
 	bool wakeAsyncSender = false;
 #endif
+	EndstopsManager& emgr = reprap.GetPlatform().GetEndstops();
 	while (true)
 	{
-		const EndstopHitDetails hitDetails = reprap.GetPlatform().GetEndstops().CheckEndstops();
+		const EndstopHitDetails hitDetails = emgr.CheckEndstops();
 
 		switch (hitDetails.GetAction())
 		{
@@ -2864,6 +2865,11 @@ void Move::CheckEndstops(bool executingMove) noexcept
 					}
 				}
 			}
+
+			if (executingMove)
+			{
+				WakeMoveTaskFromISR();					// wake move task so that it sets the move as finished promptly
+			}
 #if SUPPORT_CAN_EXPANSION
 			return wakeAsyncSender;
 #else
@@ -2893,6 +2899,10 @@ void Move::CheckEndstops(bool executingMove) noexcept
 						reprap.GetGCodes().SetAxisIsHomed(hitDetails.axis);
 					}
 				}
+			}
+			if (executingMove && !emgr.AnyEndstopsActive())
+			{
+				WakeMoveTaskFromISR();					// wake move task so that it sets the move as finished promptly
 			}
 			break;
 
