@@ -3209,27 +3209,28 @@ bool Move::StopAllDrivers(bool executingMove) noexcept
 // Stop a drive and re-calculate the end position. Return true if any remote drivers were scheduled to be stopped.
 bool Move::StopAxisOrExtruder(bool executingMove, size_t logicalDrive) noexcept
 {
+	DriveMovement& dm = dms[logicalDrive];
 	int32_t netStepsTaken;
-	const bool wasMoving = dms[logicalDrive].StopDriver(netStepsTaken);
+	const bool wasMoving = dm.StopDriver(netStepsTaken);
 	bool wakeAsyncSender = false;
 #if SUPPORT_CAN_EXPANSION
-	IterateDrivers(logicalDrive,
-					[](uint8_t)->void { },						// no action if the driver is local
-					[executingMove, wasMoving, netStepsTaken, &wakeAsyncSender](DriverId did)->void
-						{
-							if (executingMove)
+	if (wasMoving)
+	{
+		IterateDrivers(logicalDrive,
+						[](uint8_t)->void { },						// no action if the driver is local
+						[executingMove, wasMoving, netStepsTaken, &wakeAsyncSender](DriverId did)->void
 							{
-								if (wasMoving)
+								if (executingMove)
 								{
 									if (CanMotion::StopDriverWhenExecuting(did, netStepsTaken)) { wakeAsyncSender = true; }
 								}
+								else
+								{
+									CanMotion::StopDriverWhenProvisional(did);
+								}
 							}
-							else
-							{
-								CanMotion::StopDriverWhenProvisional(did);
-							}
-						}
-				  );
+					  );
+	}
 #else
 	(void)wasMoving;
 #endif
