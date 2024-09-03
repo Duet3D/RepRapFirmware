@@ -2582,11 +2582,18 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
 		{
 			const uint32_t now = StepTimer::GetTimerTicks();
 			DriveMovement* dm = &dms[axisOrExtruder];
+			dm->phaseStepControl.SetPhaseOffset(driver, 0);
 			GetCurrentMotion(driver, now, dm->phaseStepControl.mParams);
-			const uint16_t initialPhase = SmartDrivers::GetMicrostepPosition(0) * 4;
+			const uint16_t initialPhase = SmartDrivers::GetMicrostepPosition(driver) * 4;
 			const uint16_t calculatedPhase = dm->phaseStepControl.CalculateStepPhase(driver);
 
 			dm->phaseStepControl.SetPhaseOffset(driver, (initialPhase - calculatedPhase) % 4096u);
+			debugPrintf("driver=%u: initialPhase=%u, calculatedPhase=%u, newOffset=%u, newCalculatedPhase=%u\n",
+						(uint16_t)driver,
+						initialPhase,
+						calculatedPhase,
+						dm->phaseStepControl.GetPhaseOffset(driver), dm->phaseStepControl.CalculateStepPhase(driver));
+			dm->phaseStepControl.SetMotorPhase(driver, initialPhase, 1.0);
 		}
 		if (!SmartDrivers::EnablePhaseStepping(driver, mode == StepMode::phase))
 		{
@@ -2595,11 +2602,6 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
 	});
 
 	dms[axisOrExtruder].SetStepMode(mode);
-	if (axisOrExtruder < MaxAxes)
-	{
-		reprap.GetGCodes().SetAxisNotHomed(axisOrExtruder);
-	}
-	DisableDrivers(axisOrExtruder);
 
 	ResetPhaseStepMonitoringVariables();
 	return ret;

@@ -120,6 +120,11 @@ void PhaseStep::SetPhaseOffset(size_t driver, uint16_t offset) noexcept
 //	debugPrintf("Set phaseOffset[%u]=%u\n", driver, phaseOffset[driver]);
 }
 
+uint16_t PhaseStep::GetPhaseOffset(size_t driver)
+{
+	return phaseOffset[driver];
+}
+
 uint16_t PhaseStep::CalculateStepPhase(size_t driver) noexcept
 {
 	const float multiplier = reprap.GetMove().GetDirectionValue(driver) ? 1.0 : -1.0;

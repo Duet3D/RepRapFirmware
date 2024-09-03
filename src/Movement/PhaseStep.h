@@ -68,6 +68,7 @@ public:
 	bool IsEnabled() const noexcept { return enabled; }
 	void UpdatePhaseOffset(size_t driver) noexcept;
 	void SetPhaseOffset(size_t driver, uint16_t offset) noexcept;
+	uint16_t GetPhaseOffset(size_t driver);
 
 	// Configuration methods
 	void SetKv(float newKv) noexcept { Kv = newKv; }
