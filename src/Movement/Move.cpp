@@ -2575,26 +2575,55 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
 	}
 
 	bool ret = true;
-	IterateLocalDrivers(axisOrExtruder, [this, &ret, &mode, axisOrExtruder](uint8_t driver) {
-		// This is attempting to prevent the motor from jumping position when enabling phase stepping.
-		// I don't think it works properly so as a safeguard just set the axis to not be homed.
+	DriveMovement* dm = &dms[axisOrExtruder];
+	const uint32_t now = StepTimer::GetTimerTicks();
+	GetCurrentMotion(axisOrExtruder, now, dm->phaseStepControl.mParams);								// Update position variable
+
+
+
+	IterateLocalDrivers(axisOrExtruder, [this, dm, &ret, &mode, axisOrExtruder](uint8_t driver) {
+		bool interpolation;
+		unsigned int microstep = SmartDrivers::GetMicrostepping(driver, interpolation);
+		SmartDrivers::SetMicrostepping(driver, 255, false);
+
+		// If we are going from step dir to phase step, we need to update the phase offset so the calculated phase matches MSCNT
 		if (!SmartDrivers::IsPhaseSteppingEnabled(driver) && mode == StepMode::phase)
 		{
-			const uint32_t now = StepTimer::GetTimerTicks();
-			DriveMovement* dm = &dms[axisOrExtruder];
-			dm->phaseStepControl.SetPhaseOffset(driver, 0);
-			GetCurrentMotion(driver, now, dm->phaseStepControl.mParams);
-			const uint16_t initialPhase = SmartDrivers::GetMicrostepPosition(driver) * 4;
-			const uint16_t calculatedPhase = dm->phaseStepControl.CalculateStepPhase(driver);
+			dm->phaseStepControl.SetPhaseOffset(driver, 0);												// Reset offset
+			const uint16_t initialPhase = SmartDrivers::GetMicrostepPosition(driver) * 4;				// Get MSCNT
+			const uint16_t calculatedPhase = dm->phaseStepControl.CalculateStepPhase(driver);			// Get the phase based on current machine position
 
-			dm->phaseStepControl.SetPhaseOffset(driver, (initialPhase - calculatedPhase) % 4096u);
+			dm->phaseStepControl.SetPhaseOffset(driver, (initialPhase - calculatedPhase) % 4096u);		// Update the offset so calculated phase equals MSCNT
 			debugPrintf("driver=%u: initialPhase=%u, calculatedPhase=%u, newOffset=%u, newCalculatedPhase=%u\n",
 						(uint16_t)driver,
 						initialPhase,
 						calculatedPhase,
 						dm->phaseStepControl.GetPhaseOffset(driver), dm->phaseStepControl.CalculateStepPhase(driver));
-			dm->phaseStepControl.SetMotorPhase(driver, initialPhase, 1.0);
+			dm->phaseStepControl.SetMotorPhase(driver, initialPhase, 1.0);								// Update XDIRECT register with new phase values
 		}
+		// If we are going from phase step to step dir, we need to send some fake steps to the driver to update MSCNT to avoid a jitter when disabling direct_mode
+		// This is suboptimal but it is a configuration command that is unlikely to be run so a few ms delay is unlikely to cause much harm.
+		// If the delay is an issue then all the drivers for the axis could be stepped together and each loop check if each drivers MSCNT has reached the target.
+		else if(SmartDrivers::IsPhaseSteppingEnabled(driver) && mode == StepMode::stepDir)
+		{
+			const uint16_t targetPhase = dm->phaseStepControl.CalculateStepPhase(driver);
+			uint16_t mscnt = SmartDrivers::GetMicrostepPosition(driver) * 4;
+
+			while (mscnt != targetPhase)
+			{
+				StepPins::StepDriversHigh(StepPins::CalcDriverBitmap(driver));					// step drivers high
+# if SAME70
+				__DSB();													// without this the step pulse can be far too short
+# endif
+				StepPins::StepDriversLow(StepPins::CalcDriverBitmap(driver));					// step drivers low
+				delay(1);														// let the MSCNT register be read by tmcLoop()
+				mscnt = SmartDrivers::GetMicrostepPosition(driver) * 4;
+			}
+
+		}
+
+		SmartDrivers::SetMicrostepping(driver, microstep, interpolation);
+
 		if (!SmartDrivers::EnablePhaseStepping(driver, mode == StepMode::phase))
 		{
 			ret = false;
