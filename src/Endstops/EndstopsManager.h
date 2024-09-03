@@ -52,6 +52,9 @@ public:
 
 	bool Stopped(size_t axis) const noexcept;
 
+	// Return true if we have any endstops active that have not been triggered yet
+	bool AnyEndstopsActive() const noexcept { return activeEndstops != nullptr; }
+
 	void GetM119report(const StringRef& reply) noexcept;
 
 	// Z probe

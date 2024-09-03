@@ -292,11 +292,11 @@ void GridDefinition::PrintError(float originalAxis0range, float originalAxis1ran
 	{
 		r.cat("Spacing too small");
 	}
-	else if (nums[0] == 0)
+	else if (originalAxis0range < MinRange)
 	{
 		r.catf("%c range too small", letters[0]);
 	}
-	else if (nums[1] == 0)
+	else if (originalAxis1range < MinRange)
 	{
 		r.catf("%c range too small", letters[1]);
 	}
