@@ -45,6 +45,11 @@ namespace SmartDrivers
 	void AppendDriverStatus(size_t driver, const StringRef& reply) noexcept;
 	float GetStandstillCurrentPercent(size_t driver) noexcept;
 	void SetStandstillCurrentPercent(size_t driver, float percent) noexcept;
+	bool SetCurrentScaler(size_t driver, int8_t cs) noexcept;
+	uint8_t GetIRun(size_t driver) noexcept;
+	uint8_t GetIHold(size_t driver) noexcept;
+	uint32_t GetGlobalScaler(size_t driver) noexcept;
+	float GetCalculatedCurrent(size_t driver) noexcept;
 	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(size_t driver, SmartDriverRegister reg) noexcept;
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;

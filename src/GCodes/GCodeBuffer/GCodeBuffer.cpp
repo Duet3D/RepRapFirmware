@@ -724,7 +724,7 @@ bool GCodeBuffer::TryGetLimitedIValue(char c, int32_t& val, bool& seen, int32_t 
 {
 	if (Seen(c))
 	{
-		val = GetLimitedUIValue(c, minValue, maxValue);
+		val = GetLimitedIValue(c, minValue, maxValue);
 		seen = true;
 		return true;
 	}

@@ -385,6 +385,13 @@ public:
 	float GetStandstillCurrentPercent() const noexcept;
 	void SetStandstillCurrentPercent(float percent) noexcept;
 
+	int8_t GetCurrentScaler() const noexcept { return currentScaler; }
+	bool SetCurrentScaler(int8_t cs) noexcept;
+	uint8_t GetIRun() const noexcept { return iRun; }
+	uint8_t GetIHold() const noexcept { return iHold; }
+	uint32_t GetGlobalScaler() const noexcept { return globalScaler; }
+	float CalculateCurrent() const noexcept;				// calculate what current the driver is actually using based on register values
+
 	static void TransferTimedOut() noexcept { ++numTimeouts; }
 
 	void GetSpiCommand(uint8_t *sendDataBlock) noexcept;
@@ -460,6 +467,10 @@ private:
 	uint16_t numReads, numWrites;							// how many successful reads and writes we had
 	static uint16_t numTimeouts;							// how many times a transfer timed out
 
+	int8_t currentScaler;									// CS if manually specified, otherwise -1 to indicate auto calculate
+	uint8_t iRun = 0;
+	uint8_t iHold = 0;
+	uint32_t globalScaler = 0;
 	uint16_t standstillCurrentFraction;						// divide this by 256 to get the motor current standstill fraction
 	uint8_t regIndexBeingUpdated;							// which register we are sending
 	uint8_t regIndexRequested;								// the register we asked to read in the previous transaction, or 0xFF
@@ -515,6 +526,7 @@ pre(!driversPowered)
 	specialReadRegisterNumber = specialWriteRegisterNumber = 0xFF;
 	motorCurrent = 0;
 	standstillCurrentFraction = (uint16_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 256);
+	currentScaler = -1;
 
 #if SUPPORT_PHASE_STEPPING
 	currentMode = DriverMode::spreadCycle;
@@ -589,6 +601,24 @@ void TmcDriverState::SetStandstillCurrentPercent(float percent) noexcept
 {
 	standstillCurrentFraction = (uint16_t)constrain<long>(lrintf((percent * 256)/100.0), 0, 256);
 	UpdateCurrent();
+}
+
+bool TmcDriverState::SetCurrentScaler(int8_t cs) noexcept
+{
+	if (cs > 31)
+	{
+		return false;
+	}
+
+	if (cs < 0)
+	{
+		cs = -1;
+	}
+
+	currentScaler = cs;
+	UpdateCurrent();
+
+	return true;
 }
 
 // Set the microstepping and microstep interpolation. The desired microstepping is (1 << shift) where shift is in 0..8.
@@ -839,6 +869,12 @@ void TmcDriverState::SetCurrent(float current) noexcept
 	UpdateCurrent();
 }
 
+float TmcDriverState::CalculateCurrent() const noexcept
+{
+	uint32_t gs = globalScaler == 0 ? 256 : globalScaler;
+	return (float)(gs * (iRun + 1)) / (256 * 32 * RecipFullScaleCurrent);
+}
+
 void TmcDriverState::UpdateCurrent() noexcept
 {
 #if TMC_TYPE == 5130
@@ -851,22 +887,23 @@ void TmcDriverState::UpdateCurrent() noexcept
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRunCsBits << IHOLDIRUN_IRUN_SHIFT) | (iHoldCsBits << IHOLDIRUN_IHOLD_SHIFT));
 #elif TMC_TYPE == 5160
-	// See if we can set IRUN to 31 and do the current adjustment in the global scaler
-	uint32_t gs = lrintf(motorCurrent * 256 * RecipFullScaleCurrent);
-	uint32_t iRun = 31;
-	if (gs >= 256)
+	// See if we can set IRUN to 31 (or user defined value) and do the current adjustment in the global scaler
+	iRun = currentScaler < 0 ? 31 : currentScaler;
+
+	float csRecip = iRun == 31 ? 1.0f : 32 / (iRun + 1);
+	globalScaler = lrintf(motorCurrent * 256 * RecipFullScaleCurrent * csRecip);
+	if (globalScaler >= 256)
 	{
-		gs = 0;
+		globalScaler = 0;
 	}
-	else if (gs < 32)
+	else if (globalScaler < 32)
 	{
 		// We can't regulate the current just through the global scaler because it has a minimum value of 32
-		iRun = (gs == 0) ? gs : gs - 1;
-		gs = 32;
+		iRun = (globalScaler == 0) ? globalScaler : globalScaler - 1;
+		globalScaler = 32;
 	}
 
 	// At high motor currents, limit the standstill current fraction to avoid overheating particular pairs of mosfets. Avoid dividing by zero if motorCurrent is zero.
-	uint32_t iHold;
 #if SUPPORT_PHASE_STEPPING
 	if (phaseStepEnabled)
 	{
@@ -883,7 +920,7 @@ void TmcDriverState::UpdateCurrent() noexcept
 	}
 	UpdateRegister(WriteIholdIrun,
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRun << IHOLDIRUN_IRUN_SHIFT) | (iHold << IHOLDIRUN_IHOLD_SHIFT));
-	UpdateRegister(Write5160GlobalScaler, gs);
+	UpdateRegister(Write5160GlobalScaler, globalScaler);
 #else
 # error unknown device
 #endif
@@ -1917,6 +1954,52 @@ void SmartDrivers::SetStandstillCurrentPercent(size_t driver, float percent) noe
 	{
 		driverStates[driver].SetStandstillCurrentPercent(percent);
 	}
+}
+
+bool SmartDrivers::SetCurrentScaler(size_t driver, int8_t cs) noexcept
+{
+	if (driver < numTmc51xxDrivers)
+	{
+		return driverStates[driver].SetCurrentScaler(cs);
+	}
+	return false;
+}
+
+
+uint8_t SmartDrivers::GetIRun(size_t driver) noexcept
+{
+	if (driver < numTmc51xxDrivers)
+	{
+		return driverStates[driver].GetIRun();
+	}
+	return 0;
+}
+
+uint8_t SmartDrivers::GetIHold(size_t driver) noexcept
+{
+	if (driver < numTmc51xxDrivers)
+	{
+		return driverStates[driver].GetIHold();
+	}
+	return 0;
+}
+
+uint32_t SmartDrivers::GetGlobalScaler(size_t driver) noexcept
+{
+	if (driver < numTmc51xxDrivers)
+	{
+		return driverStates[driver].GetGlobalScaler();
+	}
+	return 0;
+}
+
+float SmartDrivers::GetCalculatedCurrent(size_t driver) noexcept
+{
+	if (driver < numTmc51xxDrivers)
+	{
+		return driverStates[driver].CalculateCurrent();
+	}
+	return 0.0f;
 }
 
 bool SmartDrivers::SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal) noexcept
