@@ -467,7 +467,7 @@ private:
 	uint16_t numReads, numWrites;							// how many successful reads and writes we had
 	static uint16_t numTimeouts;							// how many times a transfer timed out
 
-	int8_t currentScaler;									// CS if manually specified, otherwise -1 to indicate auto calculate
+	int8_t currentScaler = -1;									// CS if manually specified, otherwise -1 to indicate auto calculate
 	uint8_t iRun = 0;
 	uint8_t iHold = 0;
 	uint32_t globalScaler = 0;
@@ -526,7 +526,6 @@ pre(!driversPowered)
 	specialReadRegisterNumber = specialWriteRegisterNumber = 0xFF;
 	motorCurrent = 0;
 	standstillCurrentFraction = (uint16_t)min<uint32_t>((DefaultStandstillCurrentPercent * 256)/100, 256);
-	currentScaler = -1;
 
 #if SUPPORT_PHASE_STEPPING
 	currentMode = DriverMode::spreadCycle;
@@ -890,7 +889,7 @@ void TmcDriverState::UpdateCurrent() noexcept
 	// See if we can set IRUN to 31 (or user defined value) and do the current adjustment in the global scaler
 	iRun = currentScaler < 0 ? 31 : currentScaler;
 
-	float csRecip = iRun == 31 ? 1.0f : 32 / (iRun + 1);
+	float csRecip = iRun == 31 ? 1.0f : 32.0f / (float)(iRun + 1);
 	globalScaler = lrintf(motorCurrent * 256 * RecipFullScaleCurrent * csRecip);
 	if (globalScaler >= 256)
 	{
