@@ -2594,11 +2594,6 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
 			const uint16_t calculatedPhase = dm->phaseStepControl.CalculateStepPhase(driver);			// Get the phase based on current machine position
 
 			dm->phaseStepControl.SetPhaseOffset(driver, (initialPhase - calculatedPhase) % 4096u);		// Update the offset so calculated phase equals MSCNT
-			debugPrintf("driver=%u: initialPhase=%u, calculatedPhase=%u, newOffset=%u, newCalculatedPhase=%u\n",
-						(uint16_t)driver,
-						initialPhase,
-						calculatedPhase,
-						dm->phaseStepControl.GetPhaseOffset(driver), dm->phaseStepControl.CalculateStepPhase(driver));
 			dm->phaseStepControl.SetMotorPhase(driver, initialPhase, 1.0);								// Update XDIRECT register with new phase values
 		}
 		// If we are going from phase step to step dir, we need to send some fake steps to the driver to update MSCNT to avoid a jitter when disabling direct_mode
@@ -2693,7 +2688,7 @@ void Move::PhaseStepControlLoop() noexcept
 		}
 		else
 		{
-			dm->phaseStepControl.Calculate();
+			dm->phaseStepControl.CalculateCurrentFraction();
 
 			IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
 				if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
@@ -2707,7 +2702,6 @@ void Move::PhaseStepControlLoop() noexcept
 				}
 				dm->phaseStepControl.InstanceControlLoop(driver);
 			});
-
 			dmp = &(dm->nextDM);
 		}
 	}

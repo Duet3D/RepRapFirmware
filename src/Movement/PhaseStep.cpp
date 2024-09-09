@@ -39,6 +39,7 @@ using std::numeric_limits;
 # include <math.h>
 # include <Platform/Platform.h>
 # include <Movement/Move.h>
+# include <Movement/MoveDebugFlags.h>
 # include <General/Bitmap.h>
 # include <Platform/TaskPriorities.h>
 # include <AppNotifyIndices.h>
@@ -88,11 +89,6 @@ void PhaseStep::SetStandstillCurrent(float percent) noexcept
 	holdCurrentFraction = percent * 0.01;
 }
 
-void PhaseStep::Calculate() noexcept
-{
-	CalculateCurrentFraction();
-}
-
 void PhaseStep::InstanceControlLoop(size_t driver) noexcept
 {
 	if (unlikely(!enabled))
@@ -133,16 +129,21 @@ uint16_t PhaseStep::CalculateStepPhase(size_t driver) noexcept
 }
 
 // Control the motor phase currents, returning the fraction of maximum current that we commanded
-inline float PhaseStep::CalculateCurrentFraction() noexcept
+float PhaseStep::CalculateCurrentFraction() noexcept
 {
 	// Driver is in assisted open loop mode
 	// In this mode the PID terms are not used and the A and V terms are independent of the loop time.
 	constexpr float scalingFactor = 100.0;
+	constexpr float scalingFactorSqr = scalingFactor * scalingFactor;
 	PIDVTerm = mParams.speed * Kv * scalingFactor;
-	PIDATerm = mParams.acceleration * Ka * fsquare(scalingFactor);
+	PIDATerm = mParams.acceleration * Ka * scalingFactorSqr;
 	PIDControlSignal = min<float>(fabsf(PIDVTerm) + fabsf(PIDATerm), 256.0);
 
 	currentFraction = holdCurrentFraction + (1.0 - holdCurrentFraction) * min<float>(PIDControlSignal * (1.0/256.0), 1.0);
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PhaseStep))
+	{
+		debugPrintf("v=%f, a=%f, cf=%f\n", (double)(mParams.speed * scalingFactor), (double)(mParams.acceleration * scalingFactorSqr), (double)currentFraction);
+	}
 	return currentFraction;
 }
 

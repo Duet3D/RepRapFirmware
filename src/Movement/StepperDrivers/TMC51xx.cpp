@@ -1205,12 +1205,7 @@ inline bool TmcDriverState::SetXdirect(uint32_t regVal) noexcept
 
 #endif
 
-// Set up the PDC or DMAC to send a register and receive the status, but don't enable it yet
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-static void SetupDMA(const volatile uint8_t *txData, const volatile uint8_t *rxData) noexcept
-#else
-static void SetupDMA() noexcept
-#endif
+static void InitialiseDMA()
 {
 #if SAME70
 	/* From the data sheet:
@@ -1271,11 +1266,6 @@ static void SetupDMA() noexcept
 						| XDMAC_CC_PERID(TMC51xx_DmaRxPerid);
 		p_cfg.mbr_ubc = ARRAY_SIZE(rcvData);
 		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(&(USART_TMC51xx->US_RHR));
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-		p_cfg.mbr_da = reinterpret_cast<uint32_t>(rxData);
-#else
-		p_cfg.mbr_da = reinterpret_cast<uint32_t>(rcvData);
-#endif
 		xdmac_configure_transfer(XDMAC, DmacChanTmcRx, &p_cfg);
 	}
 
@@ -1294,13 +1284,42 @@ static void SetupDMA() noexcept
 						| XDMAC_CC_DAM_FIXED_AM
 						| XDMAC_CC_PERID(TMC51xx_DmaTxPerid);
 		p_cfg.mbr_ubc = ARRAY_SIZE(sendData);
-#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(txData);
-#else
-		p_cfg.mbr_sa = reinterpret_cast<uint32_t>(sendData);
-#endif
 		p_cfg.mbr_da = reinterpret_cast<uint32_t>(&(USART_TMC51xx->US_THR));
 		xdmac_configure_transfer(XDMAC, DmacChanTmcTx, &p_cfg);
+	}
+#endif
+}
+
+// Set up the PDC or DMAC to send a register and receive the status, but don't enable it yet
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+static void SetupDMA(const volatile uint8_t *txData, const volatile uint8_t *rxData) noexcept
+#else
+static void SetupDMA() noexcept
+#endif
+{
+#if SAME70
+	// Receive
+	{
+		xdmac_channel_disable(XDMAC, DmacChanTmcRx);
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		uint32_t mbr_da = reinterpret_cast<uint32_t>(rxData);
+#else
+		uint32_t mbr_da = reinterpret_cast<uint32_t>(rcvData);
+#endif
+		xdmac_channel_get_interrupt_status(XDMAC, DmacChanTmcRx);
+		xdmac_channel_set_destination_addr(XDMAC, DmacChanTmcRx, mbr_da);
+	}
+
+	// Transmit
+	{
+		xdmac_channel_disable(XDMAC, DmacChanTmcTx);
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+		uint32_t mbr_sa = reinterpret_cast<uint32_t>(txData);
+#else
+		uint32_t mbr_sa = reinterpret_cast<uint32_t>(sendData);
+#endif
+		xdmac_channel_get_interrupt_status(XDMAC, DmacChanTmcRx);
+		xdmac_channel_set_source_addr(XDMAC, DmacChanTmcTx, mbr_sa);
 	}
 
 #elif SAME5x || SAMC21
@@ -1461,6 +1480,7 @@ static void TmcTimerCallback(CallbackParameter) noexcept
 
 extern "C" [[noreturn]] void TmcLoop(void *) noexcept
 {
+	InitialiseDMA();
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	tmcTimer.SetCallback(TmcTimerCallback, (CallbackParameter)0);
 #endif
