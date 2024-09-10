@@ -442,6 +442,11 @@ public:
 	void PhaseStepControlLoop() noexcept;
 #endif
 
+#if SUPPORT_S_CURVE
+	void UseSCurve(bool enable) noexcept { usingSCurve = enable; }
+	bool IsUsingSCurve() noexcept { return usingSCurve; }
+#endif
+
 	void Interrupt() noexcept;
 
 #if SUPPORT_CAN_EXPANSION
@@ -613,6 +618,10 @@ private:
 	StepTimer::Ticks maxPSControlLoopRuntime;				// The maximum time the control loop has taken to run
 	StepTimer::Ticks minPSControlLoopCallInterval;		// The minimum interval between the control loop being called
 	StepTimer::Ticks maxPSControlLoopCallInterval;		// The maximum interval between the control loop being called
+#endif
+
+#if SUPPORT_S_CURVE
+	bool usingSCurve = false;
 #endif
 
 #if SUPPORT_ASYNC_MOVES

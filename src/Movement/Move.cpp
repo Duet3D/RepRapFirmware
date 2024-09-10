@@ -2571,12 +2571,23 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
 	// Phase stepping does not support remote drivers
 	if (hasRemoteDrivers && mode == StepMode::phase)
 	{
+#if SUPPORT_S_CURVE
+		UseSCurve(false);
+#endif
 		return false;
 	}
 
 	bool ret = true;
 	DriveMovement* dm = &dms[axisOrExtruder];
 	const uint32_t now = StepTimer::GetTimerTicks();
+
+#if SUPPORT_S_CURVE
+	if (mode != StepMode::phase)
+	{
+		UseSCurve(false);
+	}
+#endif
+
 	GetCurrentMotion(axisOrExtruder, now, dm->phaseStepControl.mParams);								// Update position variable
 
 

@@ -966,6 +966,53 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 
 #endif
 
+#if SUPPORT_S_CURVE
+GCodeResult GCodes::ConfigureSCurve(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	bool seen = false;
+	Move& move = reprap.GetMove();
+	bool enable;
+
+	if (gb.TryGetBValue('S', enable, seen))
+	{
+		bool phaseSetEnabled = true;
+		for (size_t axis = 0; axis < numTotalAxes; axis++)
+		{
+			if (move.GetStepMode(axis) != StepMode::phase)
+			{
+				phaseSetEnabled = false;
+				break;
+			}
+		}
+
+		for (size_t extruder = 0; extruder < numExtruders; extruder++)
+		{
+			if (move.GetStepMode(ExtruderToLogicalDrive(extruder)) != StepMode::phase)
+			{
+				phaseSetEnabled = false;
+				break;
+			}
+		}
+
+		if (enable && !phaseSetEnabled)
+		{
+			reply.copy("All axes and extruders must be using phase stepping to enable S-curve acceleration.");
+			return GCodeResult::error;
+		}
+
+		move.UseSCurve(enable);
+	}
+
+	if (!seen)
+	{
+		reply.printf(move.IsUsingSCurve() ? "Using S Curve acceleration" : "Not using S Curve acceleration");
+	}
+
+	return GCodeResult::ok;
+}
+#endif
+
+
 // Deal with M569
 GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {

@@ -4599,6 +4599,12 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				break;
 #endif
 
+#if SUPPORT_S_CURVE
+			case 971:	// configure s curve acceleration
+				result = ConfigureSCurve(gb, reply);
+				break;
+#endif
+
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 			case 997:	// Perform firmware update
 				result = UpdateFirmware(gb, reply);
