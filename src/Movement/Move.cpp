@@ -645,10 +645,13 @@ void Move::GenerateMovementErrorDebug() noexcept
 // Caller must deal with remote drivers.
 bool Move::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool interp, const StringRef& reply) noexcept
 {
-	//TODO check that it is a valid microstep setting
-	microstepping[axisOrExtruder] = (interp) ? microsteps | 0x8000 : microsteps;
-	reprap.MoveUpdated();
-	return SetDriversMicrostepping(axisOrExtruder, microsteps, interp, reply);
+	bool ret = SetDriversMicrostepping(axisOrExtruder, microsteps, interp, reply);
+	if (ret)
+	{
+		microstepping[axisOrExtruder] = (interp) ? microsteps | 0x8000 : microsteps;
+		reprap.MoveUpdated();
+	}
+	return ret;
 }
 
 // Get the microstepping for an axis or extruder
