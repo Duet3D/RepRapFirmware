@@ -2591,13 +2591,11 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& re
 	}
 #endif
 
+	bool interpolation;
+	unsigned int microsteps = GetMicrostepping(axisOrExtruder, interpolation);
 	GetCurrentMotion(axisOrExtruder, now, dm->phaseStepControl.mParams);								// Update position variable
 
-	bool interpolation;
-	unsigned int microstep = GetMicrostepping(axisOrExtruder, interpolation);
-	SetMicrostepping(axisOrExtruder, 256, false, reply);
-
-	IterateLocalDrivers(axisOrExtruder, [this, dm, &ret, &mode, axisOrExtruder](uint8_t driver) {
+	IterateLocalDrivers(axisOrExtruder, [this, dm, &ret, &mode, axisOrExtruder, microsteps](uint8_t driver) {
 		// If we are going from step dir to phase step, we need to update the phase offset so the calculated phase matches MSCNT
 		if (!SmartDrivers::IsPhaseSteppingEnabled(driver) && mode == StepMode::phase)
 		{
@@ -2613,25 +2611,45 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& re
 		// If the delay is an issue then all the drivers for the axis could be stepped together and each loop check if each drivers MSCNT has reached the target.
 		else if(SmartDrivers::IsPhaseSteppingEnabled(driver) && mode == StepMode::stepDir)
 		{
-			const uint16_t targetPhase = dm->phaseStepControl.CalculateStepPhase(driver);
-			uint16_t mscnt = SmartDrivers::GetMicrostepPosition(driver) * 4;
-			uint16_t steps = ((mscnt - targetPhase) % 4096u) / 4;
+			const uint16_t targetPhase = dm->phaseStepControl.CalculateStepPhase(driver) / 4;
+			uint16_t mscnt = SmartDrivers::GetMicrostepPosition(driver);
+			int16_t steps = ((int16_t)mscnt - (int16_t)targetPhase) / (256 / microsteps);
 			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PhaseStep))
 			{
-				debugPrintf("dms[%u]: mscnt=%u, targetPhase=%u, steps=%u\n", axisOrExtruder, mscnt, targetPhase, steps);
+				debugPrintf("dms[%u]: mscnt=%u, targetPhase=%u, steps=%d", axisOrExtruder, mscnt, targetPhase, steps);
 			}
+
+			bool d = digitalRead(DIRECTION_PINS[driver]);
+			if (steps < 0)
+			{
+				digitalWrite(DIRECTION_PINS[driver], false);
+			}
+			else
+			{
+				digitalWrite(DIRECTION_PINS[driver], true);
+			}
+
+			steps = abs(steps);
 
 			while (steps > 0)
 			{
-				StepPins::StepDriversHigh(StepPins::CalcDriverBitmap(driver));					// step drivers high
+				StepPins::StepDriversHigh(StepPins::CalcDriverBitmap(driver));	// step drivers high
+				delayMicroseconds(20);
 # if SAME70
-				__DSB();													// without this the step pulse can be far too short
+				__DSB();														// without this the step pulse can be far too short
 # endif
-				StepPins::StepDriversLow(StepPins::CalcDriverBitmap(driver));					// step drivers low
+				StepPins::StepDriversLow(StepPins::CalcDriverBitmap(driver));	// step drivers low
 				delayMicroseconds(20);
 				steps--;
 			}
 
+			digitalWrite(DIRECTION_PINS[driver], d);
+
+			delay(10);															// Give enough time for MSCNT to be read
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PhaseStep))
+			{
+				debugPrintf(", new mscnt=%u\n", SmartDrivers::GetMicrostepPosition(driver));
+			}
 		}
 
 		if (!SmartDrivers::EnablePhaseStepping(driver, mode == StepMode::phase))
@@ -2639,8 +2657,6 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& re
 			ret = false;
 		}
 	});
-
-	SetMicrostepping(axisOrExtruder, microstep, interpolation, reply);
 	dms[axisOrExtruder].SetStepMode(mode);
 
 	ResetPhaseStepMonitoringVariables();
