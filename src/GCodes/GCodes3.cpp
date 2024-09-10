@@ -518,7 +518,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 				axesToUpdate.SetBit(drive);
 #endif
 #if SUPPORT_PHASE_STEPPING
-				move.SetStepMode(drive, StepMode::stepDir);
+				move.SetStepMode(drive, StepMode::stepDir, reply);
 #endif
 			}
 		}
@@ -541,7 +541,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 			axesToUpdate.SetBit(drive);
 #endif
 #if SUPPORT_PHASE_STEPPING
-			move.SetStepMode(drive, StepMode::stepDir);
+			move.SetStepMode(drive, StepMode::stepDir, reply);
 #endif
 		}
 		if (FilamentMonitor::CheckDriveAssignments(reply) && rslt == GCodeResult::ok)
@@ -853,7 +853,7 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 			case -1:
 			{
 				const StepMode mode = (StepMode)gb.GetLimitedUIValue(axisLetters[axis], (uint32_t) StepMode::unknown);
-				const bool ret = move.SetStepMode(axis, mode);	// TODO check if this gets the correct DM. Don't think it does
+				const bool ret = move.SetStepMode(axis, mode, reply);
 				if (!ret)
 				{
 					reply.printf("Could not set step mode for axis %c to mode %u", axisLetters[axis], (uint16_t)mode);
@@ -890,7 +890,7 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 					reply.printf("Unknown mode %lu", eVals[e]);
 					return GCodeResult::error;
 				}
-				const bool ret = move.SetStepMode(ExtruderToLogicalDrive(e), (StepMode)eVals[e]);
+				const bool ret = move.SetStepMode(ExtruderToLogicalDrive(e), (StepMode)eVals[e], reply);
 				if (!ret)
 				{
 					reply.printf("Could not set step mode for extruder %u to mode %lu", e, eVals[e]);

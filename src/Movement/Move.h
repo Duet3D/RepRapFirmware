@@ -435,7 +435,7 @@ public:
 	void ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config);							// configure Ka & Kv parameters for phase stepping
 	PhaseStepParams GetPhaseStepParams(size_t axisOrExtruder);
 	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
-	bool SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept;
+	bool SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept;
 	StepMode GetStepMode(size_t axisOrExtruder) noexcept;
 	void ResetPhaseStepMonitoringVariables() noexcept;
 
