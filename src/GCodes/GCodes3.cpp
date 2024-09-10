@@ -517,6 +517,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 #if SUPPORT_CAN_EXPANSION
 				axesToUpdate.SetBit(drive);
 #endif
+#if SUPPORT_PHASE_STEPPING
+				move.SetStepMode(drive, StepMode::stepDir);
+#endif
 			}
 		}
 		++lettersToTry;
@@ -536,6 +539,9 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 			move.SetAsExtruder(drive, true);
 #if SUPPORT_CAN_EXPANSION
 			axesToUpdate.SetBit(drive);
+#endif
+#if SUPPORT_PHASE_STEPPING
+			move.SetStepMode(drive, StepMode::stepDir);
 #endif
 		}
 		if (FilamentMonitor::CheckDriveAssignments(reply) && rslt == GCodeResult::ok)
@@ -826,6 +832,140 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 
 #endif
 
+#if SUPPORT_PHASE_STEPPING
+
+// Deal with M970
+GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+{
+	constexpr int8_t kvSubCommand = 1;
+	constexpr int8_t kaSubCommand = 2;
+
+	bool seen = false;
+	Move& move = reprap.GetMove();
+	int8_t commandFraction = gb.GetCommandFraction();
+	for (size_t axis = 0; axis < numTotalAxes; axis++)
+	{
+		if (gb.Seen(axisLetters[axis]))
+		{
+			seen = true;
+			switch (commandFraction)
+			{
+			case -1:
+			{
+				const StepMode mode = (StepMode)gb.GetLimitedUIValue(axisLetters[axis], (uint32_t) StepMode::unknown);
+				const bool ret = move.SetStepMode(axis, mode);	// TODO check if this gets the correct DM. Don't think it does
+				if (!ret)
+				{
+					reply.printf("Could not set step mode for axis %c to mode %u", axisLetters[axis], (uint16_t)mode);
+					return GCodeResult::error;
+				}
+				break;
+			}
+			case kvSubCommand:
+			case kaSubCommand:
+			{
+				const float value = gb.GetLimitedFValue(axisLetters[axis], 0, FLT_MAX);
+				move.ConfigurePhaseStepping(axis, value, commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
+				break;
+			}
+			}
+		}
+	}
+
+	if (gb.Seen(extrudeLetter))
+	{
+		seen = true;
+		switch (commandFraction)
+		{
+		case -1:
+		{
+			uint32_t eVals[MaxExtruders];
+			size_t eCount = numExtruders;
+			gb.GetUnsignedArray(eVals, eCount, true);
+
+			for (size_t e = 0; e < eCount; e++)
+			{
+				if (eVals[e] >= (uint32_t)StepMode::unknown)
+				{
+					reply.printf("Unknown mode %lu", eVals[e]);
+					return GCodeResult::error;
+				}
+				const bool ret = move.SetStepMode(ExtruderToLogicalDrive(e), (StepMode)eVals[e]);
+				if (!ret)
+				{
+					reply.printf("Could not set step mode for extruder %u to mode %lu", e, eVals[e]);
+					return GCodeResult::error;
+				}
+			}
+			break;
+		}
+		case kvSubCommand:
+		case kaSubCommand:
+		{
+			float eVals[MaxExtruders];
+			size_t eCount = numExtruders;
+			gb.GetFloatArray(eVals, eCount, true);
+
+			for (size_t e = 0; e < eCount; e++)
+			{
+				if (eVals[e] >= FLT_MAX || eVals[e] < 0)
+				{
+					reply.printf("Invalid K%c %f", commandFraction == kvSubCommand ? 'v' : 'a', (double)eVals[e]);
+					return GCodeResult::error;
+				}
+				move.ConfigurePhaseStepping(ExtruderToLogicalDrive(e), eVals[e], commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
+			}
+			break;
+		}
+		}
+	}
+
+	if (!seen)
+	{
+		switch (commandFraction)
+		{
+		case -1:
+			reply.copy("Axis step mode - ");
+			for (size_t axis = 0; axis < numTotalAxes; ++axis)
+			{
+				reply.catf("%c:%lu, ", axisLetters[axis], (uint32_t)move.GetStepMode(axis));
+			}
+			reply.cat("E");
+			for (size_t extruder = 0; extruder < numExtruders; extruder++)
+			{
+				reply.catf(":%lu", (uint32_t)move.GetStepMode(ExtruderToLogicalDrive(extruder)));
+			}
+			break;
+		case kvSubCommand:
+		case kaSubCommand:
+			reply.printf("Axis phase step K%c - ", commandFraction == kvSubCommand ? 'v' : 'a');
+			for (size_t axis = 0; axis < numTotalAxes; ++axis)
+			{
+				reply.catf("%c:%f, ", axisLetters[axis],
+						commandFraction == kvSubCommand ?
+								(double)move.GetPhaseStepParams(axis).Kv :
+								(double)move.GetPhaseStepParams(axis).Ka
+				);
+			}
+			reply.cat("E");
+			for (size_t extruder = 0; extruder < numExtruders; extruder++)
+			{
+				reply.catf(":%f",
+						commandFraction == kvSubCommand ?
+							(double)move.GetPhaseStepParams(ExtruderToLogicalDrive(extruder)).Kv :
+							(double)move.GetPhaseStepParams(ExtruderToLogicalDrive(extruder)).Ka
+				);
+			}
+			break;
+		default:
+			return GCodeResult::warningNotSupported;
+		}
+	}
+	return GCodeResult::ok;
+}
+
+#endif
+
 // Deal with M569
 GCodeResult GCodes::ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
@@ -925,6 +1065,7 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 	}
 
 	bool seen = false;
+	bool warn = false;
 	Move& move = reprap.GetMove();
 	if (gb.Seen('S'))
 	{
@@ -953,8 +1094,16 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 #if HAS_SMART_DRIVERS
 	{
 		uint32_t val;
+		int32_t ival;
 		if (gb.TryGetUIValue('D', val, seen))	// set driver mode
 		{
+# if SUPPORT_PHASE_STEPPING
+			if (SmartDrivers::IsPhaseSteppingEnabled(drive))
+			{
+				reply.printf("Can not set driver %u mode while phase stepping is enabled", drive);
+				return GCodeResult::error;
+			}
+# endif
 			if (!SmartDrivers::SetDriverMode(drive, val))
 			{
 				reply.printf("Driver %u does not support mode '%s'", drive, TranslateDriverMode(val));
@@ -998,7 +1147,7 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 			}
 		}
 
-#if SUPPORT_TMC51xx
+# if SUPPORT_TMC51xx
 		if (gb.TryGetUIValue('H', val, seen))		// set coolStep threshold
 		{
 			if (!SmartDrivers::SetRegister(drive, SmartDriverRegister::thigh, val))
@@ -1007,7 +1156,21 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 				return GCodeResult::error;
 			}
 		}
-#endif
+
+		if (gb.TryGetLimitedIValue('U', ival, seen, -1, 32))
+		{
+			if (!SmartDrivers::SetCurrentScaler(drive, ival))
+			{
+				reply.printf("Bad current scaler for driver %u", drive);
+				return GCodeResult::error;
+			}
+			if (ival >= 0 && ival < 16)
+			{
+				reply.printf("Current scaler = %ld for driver %u might result in poor microstep performance. Recommended minimum is 16.", ival, drive);
+				warn = true;
+			}
+		}
+# endif
 	}
 
 	if (gb.Seen('Y'))								// set spread cycle hysteresis
@@ -1042,6 +1205,12 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 		}
 	}
 #endif
+
+	if (warn)
+	{
+		return GCodeResult::warning;
+	}
+
 	if (!seen)
 	{
 		// Print the basic parameters common to all types of driver
@@ -1083,7 +1252,11 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 				const uint32_t axis = SmartDrivers::GetAxisNumber(drive);
 				bool bdummy;
 				const float mmPerSec = (12000000.0 * SmartDrivers::GetMicrostepping(drive, bdummy))/(256 * thigh * reprap.GetMove().DriveStepsPerMm(axis));
-				reply.catf(", thigh %" PRIu32 " (%.1f mm/sec)", thigh, (double)mmPerSec);
+				const uint8_t iRun = SmartDrivers::GetIRun(drive);
+				const uint8_t iHold = SmartDrivers::GetIHold(drive);
+				const uint32_t gs = SmartDrivers::GetGlobalScaler(drive);
+				const float current = SmartDrivers::GetCalculatedCurrent(drive);
+				reply.catf(", thigh %" PRIu32 " (%.1f mm/sec), gs=%lu, iRun=%u, iHold=%u, current=%.3f", thigh, (double)mmPerSec, gs, iRun, iHold, (double)current);
 			}
 # endif
 

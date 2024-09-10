@@ -1345,6 +1345,10 @@ void ExpressionParser::ParseNumber(ExpressionValue& rslt) noexcept
 	{
 		rslt.SetInt(conv.GetInt32());
 	}
+	else if (conv.FitsInUint32())
+	{
+		rslt.SetUnsigned(conv.GetUint32());
+	}
 	else
 	{
 		rslt.SetFloat(conv.GetFloat(), constrain<unsigned int>(conv.GetDigitsAfterPoint(), 1, MaxFloatDigitsDisplayedAfterPoint));

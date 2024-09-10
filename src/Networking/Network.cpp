@@ -20,6 +20,7 @@
 #include "NetworkClient.h"
 #include "NetworkBuffer.h"
 #include "NetworkInterface.h"
+#include "GCodes/GCodeBuffer/GCodeBuffer.h"
 
 #if HAS_LWIP_NETWORKING
 # include "LwipEthernet/LwipEthernetInterface.h"
@@ -40,9 +41,6 @@
 #if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING && defined(DUET3MINI_V04)
 # include "LwipEthernet/AllocateFromPbufPool.h"
 #endif
-
-#include "MQTT/MqttClient.h"
-
 #if SUPPORT_HTTP
 # include "HttpResponder.h"
 #endif
@@ -90,7 +88,10 @@ void MacAddress::SetFromBytes(const uint8_t mb[6]) noexcept
 // Network members
 Network::Network(Platform& p) noexcept : platform(p)
 #if HAS_RESPONDERS
-			, responders(nullptr), clients(nullptr), nextResponderToPoll(nullptr)
+			, responders(nullptr), nextResponderToPoll(nullptr)
+#endif
+#if HAS_CLIENTS
+			, clients(nullptr)
 #endif
 {
 #if HAS_NETWORKING
@@ -232,32 +233,9 @@ void Network::CreateAdditionalInterface() noexcept
 GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
 {
 #if HAS_NETWORKING
+
 	if (interface < GetNumNetworkInterfaces())
 	{
-		bool hasFree = false;
-		bool client = false;
-		// Check if there are enough clients to accomodate enabling the protocol. Check if
-		// a client is not yet associated with an interface, or there is already one on the same
-		// interface.
-		for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
-		{
-			if (c->HandlesProtocol(protocol))
-			{
-				hasFree |= c->GetInterface() == nullptr || c->GetInterface() == interfaces[interface];
-				client |= true;
-				if (hasFree)
-				{
-					break;
-				}
-			}
-		}
-
-		if (client && !hasFree)
-		{
-			reply.printf("No more instances for client protocol.\n");
-			return GCodeResult::error;
-		}
-
 		return interfaces[interface]->EnableProtocol(protocol, port, ip, secure, reply);
 	}
 
@@ -276,6 +254,7 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 	{
 		bool client = false;
 
+#if HAS_CLIENTS
 		// Check if a client handles the protocol. If so, termination is handled
 		// by the client itself, after attempting to disconnect gracefully.
 		for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
@@ -286,6 +265,7 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 				break;
 			}
 		}
+#endif
 
 		NetworkInterface * const iface = interfaces[interface];
 		const GCodeResult ret = iface->DisableProtocol(protocol, reply, !client);
@@ -375,8 +355,7 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 	if (interface < GetNumNetworkInterfaces())
 	{
 		NetworkInterface * const iface = interfaces[interface];
-		const GCodeResult ret = iface->EnableInterface(mode, ssid, reply);
-		if (ret == GCodeResult::ok && mode < 1)			// if disabling the interface
+		if (mode < 1)			// if disabling the interface
 		{
 #if HAS_RESPONDERS
 			for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
@@ -398,7 +377,7 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 #endif
 #endif // HAS_RESPONDERS
 		}
-		return ret;
+		return iface->EnableInterface(mode, ssid, reply);
 	}
 	reply.printf("Invalid network interface '%d'\n", interface);
 	return GCodeResult::error;
@@ -564,6 +543,121 @@ void Network::Exit() noexcept
 	}
 #endif // HAS_NETWORKING
 }
+
+#if HAS_NETWORKING
+GCodeResult Network::ConfigureNetworkProtocol(GCodeBuffer& gb, const StringRef& reply)
+{
+	GCodeResult result = GCodeResult::ok;
+
+	switch (gb.GetCommandFraction())
+	{
+		case -1:
+			{
+				bool seen = false;
+# if SUPPORT_HTTP
+				if (gb.Seen('C'))
+				{
+					String<StringLength20> corsSite;
+					gb.GetQuotedString(corsSite.GetRef(), true);
+					SetCorsSite(corsSite.c_str());
+					seen = true;
+				}
+# endif
+				const unsigned int interface = (gb.Seen('I') ? gb.GetUIValue() : 0);
+
+				if (gb.Seen('P'))
+				{
+					const unsigned int protocol = gb.GetUIValue();
+					if (gb.Seen('S'))
+					{
+						const bool enable = (gb.GetIValue() == 1);
+						if (enable)
+						{
+							const int port = (gb.Seen('R')) ? gb.GetIValue() : -1;
+							const int secure = (gb.Seen('T')) ? gb.GetIValue() : -1;
+
+#if SUPPORT_MQTT
+							if (interface < GetNumNetworkInterfaces() && protocol == MqttProtocol)
+							{
+								IPAddress ip;
+								gb.MustSee('H');
+								{
+									gb.GetIPAddress(ip);
+								}
+
+								// Check if same interface - might just be changing broker ip address or remote port;
+								// or if not yet associated with an interface.
+								int mqttInterface =  MqttClient::GetInterface();
+								if (mqttInterface == static_cast<int>(interface) || mqttInterface < 0)
+								{
+									result = EnableProtocol(interface, protocol, port,
+																				ip.GetV4LittleEndian(), secure, reply);
+
+									if (mqttInterface < 0 && result == GCodeResult::ok)
+									{
+										MqttClient::SetInterface(interface); // associate with interface
+									}
+								}
+								else
+								{
+									reply.printf("MQTT is already enabled on interface '%d'\n", mqttInterface);
+									result = GCodeResult::error;
+								}
+							}
+							else
+#endif
+							{
+								result = EnableProtocol(interface, protocol, port, AcceptAnyIp, secure, reply);
+							}
+						}
+						else
+						{
+							result = DisableProtocol(interface, protocol, reply);
+#if SUPPORT_MQTT
+							if (protocol == MqttProtocol && result == GCodeResult::ok)
+							{
+								if (MqttClient::GetInterface() == static_cast<int>(interface))
+								{
+									MqttClient::SetInterface(-1); // do not associate with any interface
+								}
+							}
+#endif
+						}
+						seen = true;
+					}
+				}
+
+				if (!seen)
+				{
+# if SUPPORT_HTTP
+					if (GetCorsSite() != nullptr)
+					{
+						reply.printf("CORS enabled for site '%s'", GetCorsSite());
+					}
+					else
+					{
+						reply.copy("CORS disabled");
+					}
+# endif
+					// Default to reporting current protocols if P or S parameter missing
+					result = ReportProtocols(interface, reply);
+				}
+			}
+			break;
+# if SUPPORT_MQTT
+		case MqttProtocol:
+			result = MqttClient::Configure(gb, reply);
+			break;
+# endif
+		default:
+			reply.printf("unsupported subcommand M586.%d", gb.GetCommandFraction());
+			result = GCodeResult::error;
+			break;
+	}
+
+	return result;
+}
+#endif
 
 // Get the network state into the reply buffer, returning true if there is some sort of error
 GCodeResult Network::GetNetworkState(unsigned int interface, const StringRef& reply) noexcept
@@ -830,9 +924,9 @@ bool Network::FindResponder(Socket *skt, NetworkProtocol protocol) noexcept
 	return false;
 }
 
+#if HAS_CLIENTS
 bool Network::StartClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept
 {
-#if HAS_RESPONDERS
 	for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
 	{
 		if (c->Start(protocol, interface))
@@ -840,19 +934,17 @@ bool Network::StartClient(NetworkInterface *interface, NetworkProtocol protocol)
 			return true;
 		}
 	}
-#endif
 	return false;
 }
 
 void Network::StopClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept
 {
-#if HAS_RESPONDERS
 	for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
 	{
 		c->Stop(protocol, interface);
 	}
-#endif
 }
+#endif
 
 void Network::HandleHttpGCodeReply(const char *msg) noexcept
 {

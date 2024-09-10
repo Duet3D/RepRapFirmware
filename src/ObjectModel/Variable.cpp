@@ -9,6 +9,7 @@
 #include <Platform/OutputMemory.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 
+// Members of class Variable
 Variable::Variable(const char *str, ExpressionValue& pVal, int16_t pScope) THROWS(GCodeException)
 	: name(str), val(), scope(pScope)
 {
@@ -19,6 +20,34 @@ Variable::~Variable()
 {
 	name.Delete();
 	val.Release();
+}
+
+bool Variable::IsValidVariableName(const char *str) noexcept
+{
+	size_t len = strlen(str);
+	if (len == 0)
+	{
+		return false;
+	}
+
+	if (!isalpha(str[0]))
+	{
+		return false;
+	}
+
+	for (size_t i = 1; i < len; i++)
+	{
+		if (!isalnum(str[i]) && str[i] != '_')
+		{
+			return false;
+		}
+	}
+
+	if (strcmp(str, "result") == 0)
+	{
+		return false;
+	}
+	return true;
 }
 
 // Assign a new value to this variable
@@ -41,16 +70,14 @@ void Variable::Assign(ExpressionValue& ev) THROWS(GCodeException)
 			const size_t numElements = entry->GetNumElements(ev.omVal, context);
 			if (numElements != 0)
 			{
+				WriteLocker locker(Heap::heapLock);							// prevent other tasks modifying the heap
+				ah.Allocate(numElements);
+				for (size_t i = 0; i < numElements; ++i)
 				{
-					WriteLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
-					ah.Allocate(numElements);
-					for (size_t i = 0; i < numElements; ++i)
-					{
-						context.AddIndex(i);
-						ExpressionValue elemVal = entry->GetElement(ev.omVal, context);
-						ah.AssignElement(i, elemVal);
-						context.RemoveIndex();
-					}
+					context.AddIndex(i);
+					ExpressionValue elemVal = entry->GetElement(ev.omVal, context);
+					ah.AssignElement(i, elemVal);
+					context.RemoveIndex();
 				}
 			}
 			val = ExpressionValue(ah);
@@ -76,7 +103,22 @@ void Variable::AssignIndexed(const ExpressionValue& ev, size_t numIndices, const
 	val.ahVal.AssignIndexed(ev, numIndices, indices);
 }
 
-Variable* VariableSet::Lookup(const char *str, bool wantParameter) noexcept
+// Create a new array and assign it to this variable
+void Variable::AssignArray(size_t numElements, function_ref<ExpressionValue(size_t)> func) noexcept
+{
+	ArrayHandle ah;
+	WriteLocker locker(Heap::heapLock);						// prevent other tasks modifying the heap
+	ah.Allocate(numElements);
+	for (size_t i = 0; i < numElements; ++i)
+	{
+		ExpressionValue elem = func(i);
+		ah.AssignElement(i, elem);
+	}
+	val.SetArrayHandle(ah);
+}
+
+// Members of class VariableSet
+Variable *_ecv_null VariableSet::Lookup(const char *str, bool wantParameter) noexcept
 {
 	LinkedVariable *lv;
 	for (lv = root; lv != nullptr; lv = lv->next)
@@ -90,7 +132,7 @@ Variable* VariableSet::Lookup(const char *str, bool wantParameter) noexcept
 	return nullptr;
 }
 
-const Variable* VariableSet::Lookup(const char *str, size_t length, bool wantParameter) const noexcept
+const Variable *_ecv_null VariableSet::Lookup(const char *str, size_t length, bool wantParameter) const noexcept
 {
 	const LinkedVariable *lv;
 	for (lv = root; lv != nullptr; lv = lv->next)
@@ -104,10 +146,11 @@ const Variable* VariableSet::Lookup(const char *str, size_t length, bool wantPar
 	return nullptr;
 }
 
-void VariableSet::InsertNew(const char *str, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException)
+Variable *VariableSet::InsertNew(const char *str, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException)
 {
 	LinkedVariable * const toInsert = new LinkedVariable(str, pVal, pScope, root);
 	root = toInsert;
+	return &(toInsert->v);
 }
 
 // Remove all variables with a scope greater than the parameter

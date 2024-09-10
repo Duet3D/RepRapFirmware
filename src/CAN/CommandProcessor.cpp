@@ -249,6 +249,7 @@ static GCodeResult EutGetInfo(const CanMessageReturnInfo& msg, const StringRef& 
 			const uint32_t now = (uint32_t)(millis64()/1000u);		// get up time in seconds
 			reply.lcatf("Last reset %02d:%02d:%02d ago, cause: %s", (unsigned int)(now/3600), (unsigned int)((now % 3600)/60), (unsigned int)(now % 60), Platform::GetResetReasonText());
 		}
+		reprap.GetMove().AppendDiagnostics(reply);
 		break;
 
 	case CanMessageReturnInfo::typeDiagnosticsPart0 + 1:
@@ -341,10 +342,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 	if (buf->id.Src() != CanInterface::GetCanAddress())								// I don't think we should receive our own broadcasts, but in case we do...
 	{
 		if (   buf->id.Dst() != CanId::BroadcastAddress
-			&& buf->id.MsgType() != CanMessageType::fanTachoReport					// don't flash whenever we receive a regular status message
+			&& buf->id.MsgType() != CanMessageType::fansReport						// don't flash whenever we receive a regular status message
 			&& buf->id.MsgType() != CanMessageType::heatersStatusReport
 			&& buf->id.MsgType() != CanMessageType::boardStatusReport
 			&& buf->id.MsgType() != CanMessageType::driversStatusReport
+			&& buf->id.MsgType() != CanMessageType::filamentMonitorsStatusReportNew
 		   )
 		{
 			reprap.GetPlatform().OnProcessingCanMessage();

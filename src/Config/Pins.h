@@ -249,6 +249,22 @@
 # define SUPPORT_ACCELEROMETERS	0
 #endif
 
+#ifndef SUPPORT_CLOSED_LOOP
+#define SUPPORT_CLOSED_LOOP		0
+#endif
+
+#ifndef SUPPORT_PHASE_STEPPING
+#define SUPPORT_PHASE_STEPPING	0
+#endif
+
+#ifdef SUPPORT_S_CURVE
+# if SUPPORT_S_CURVE && !SUPPORT_PHASE_STEPPING
+#  error Cannot support S Curve acceleration without phase stepping
+# endif
+#else
+# define SUPPORT_S_CURVE		0
+#endif
+
 #ifndef SUPPORT_PROBE_POINTS_FILE
 # define SUPPORT_PROBE_POINTS_FILE	0
 #endif

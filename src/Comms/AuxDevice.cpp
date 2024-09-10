@@ -38,7 +38,7 @@ void AuxDevice::SetMode(AuxMode p_mode) noexcept
 		else
 		{
 #if SUPPORT_MODBUS_RTU
-			uart->SetOnTxEndedCallback((p_mode == AuxMode::modbus_rtu) ? GlobalTxEndedCallback : nullptr, CallbackParameter(this));
+			uart->SetOnTxEndedCallback((p_mode == AuxMode::device) ? GlobalTxEndedCallback : nullptr, CallbackParameter(this));
 #endif
 			uart->begin(baudRate);
 			mode = p_mode;
@@ -184,63 +184,15 @@ void AuxDevice::AppendDirectionPortName(const StringRef& reply) const noexcept
 
 // Send some Modbus registers. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the command.
 // After receiving the GCodeResult::ok response the caller must call CheckModbusResult until it doesn't return GCodeResult::notFinished.
-GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, const uint16_t *data) noexcept
+// If the function code requires sending 16-bit data then 'data' must be 16-bit aligned
+GCodeResult AuxDevice::SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, const uint8_t *data) noexcept
 {
 	if (p_numRegisters == 0 || p_numRegisters > MaxModbusRegisters)
 	{
 		return GCodeResult::badOrMissingParameter;
 	}
 
-	if (!mutex.Take(ModbusBusAvailableTimeout))
-	{
-		return GCodeResult::error;
-	}
-
-	uart->ClearTransmitBuffer();
-	uart->DisableTransmit();
-	crc.Reset(ModbusCrcInit);
-	bytesTransmitted = 0;
-
-	slaveAddress = p_slaveAddress;
-	ModbusWriteByte(slaveAddress);
-	function = ModbusFunction::writeMultipleRegisters;
-	ModbusWriteByte((uint8_t)function);
-	startRegister = p_startRegister;
-	ModbusWriteWord(startRegister);
-	numRegisters = p_numRegisters;
-	ModbusWriteWord(numRegisters);
-	ModbusWriteByte((uint8_t)(2 * numRegisters));
-	for (size_t i = 0; i < numRegisters; ++i)
-	{
-		ModbusWriteWord(data[i]);
-	}
-
-	uart->write((uint8_t)crc.Get());
-	uart->write((uint8_t)(crc.Get() >> 8));
-
-	txNotRx.WriteDigital(true);								// set RS485 direction to transmit
-	delay(CalcTransmissionTime(4));							// Modbus specifies a 3.5 character interval
-	uart->ClearReceiveBuffer();
-	uart->EnableTransmit();
-	whenStartedTransmitting = millis();
-
-	bytesExpected = 8;
-	return GCodeResult::ok;
-}
-
-// Read some Modbus registers. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the command.
-// After receiving the GCodeResult::ok response the caller must call CheckModbusResult until it doesn't return GCodeResult::notFinished.
-GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, uint16_t *data) noexcept
-{
-	if (   p_numRegisters == 0
-		|| p_numRegisters > MaxModbusRegisters
-		|| (p_function != (uint8_t)ModbusFunction::readHoldingRegisters && p_function != (uint8_t)ModbusFunction::readInputRegisters)
-	   )
-	{
-		return GCodeResult::badOrMissingParameter;
-	}
-
-	if (!mutex.Take(ModbusBusAvailableTimeout))
+	if (!mutex.Take(BusAvailableTimeout))
 	{
 		return GCodeResult::error;
 	}
@@ -256,8 +208,86 @@ GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 	ModbusWriteByte((uint8_t)function);
 	startRegister = p_startRegister;
 	ModbusWriteWord(startRegister);
-	numRegisters = p_numRegisters;
-	ModbusWriteWord(numRegisters);
+	switch (function)
+	{
+	case ModbusFunction::writeSingleCoil:
+	case ModbusFunction::writeSingleRegister:
+		numRegistersOrDataWord = ((const uint16_t*)data)[0];
+		ModbusWriteWord(numRegistersOrDataWord);
+		bytesExpected = 8;
+		break;
+
+	case ModbusFunction::writeMultipleCoils:
+		numRegistersOrDataWord = p_numRegisters;
+		ModbusWriteWord(numRegistersOrDataWord);
+		ModbusWriteByte((uint8_t)((numRegistersOrDataWord + 7u)/8u));
+		for (size_t i = 0; i < (numRegistersOrDataWord + 7u)/8u; ++i)
+		{
+			ModbusWriteByte(data[i]);
+		}
+		bytesExpected = 8;
+		break;
+
+	case ModbusFunction::writeMultipleRegisters:
+	default:
+		numRegistersOrDataWord = p_numRegisters;
+		ModbusWriteWord(numRegistersOrDataWord);
+		ModbusWriteByte((uint8_t)(2 * numRegistersOrDataWord));
+		for (size_t i = 0; i < numRegistersOrDataWord; ++i)
+		{
+			ModbusWriteWord(((const uint16_t*)data)[i]);
+		}
+		bytesExpected = 8;
+		break;
+	}
+
+	uart->write((uint8_t)crc.Get());
+	uart->write((uint8_t)(crc.Get() >> 8));
+
+	txNotRx.WriteDigital(true);								// set RS485 direction to transmit
+	delay(CalcTransmissionTime(4));							// Modbus specifies a 3.5 character interval
+	uart->ClearReceiveBuffer();
+	uart->EnableTransmit();
+	whenStartedTransmitting = millis();
+
+	return GCodeResult::ok;
+}
+
+// Read some Modbus registers. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the command.
+// After receiving the GCodeResult::ok response the caller must call CheckModbusResult until it doesn't return GCodeResult::notFinished.
+// If the function code calls for receiving word data then 'data' must be aligned on a 16-bit boundary
+GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, uint8_t *data) noexcept
+{
+	if (   p_numRegisters == 0
+		|| p_numRegisters > MaxModbusRegisters
+		|| (   p_function != (uint8_t)ModbusFunction::readHoldingRegisters
+			&& p_function != (uint8_t)ModbusFunction::readInputRegisters
+			&& p_function != (uint8_t)ModbusFunction::readCoils
+			&& p_function != (uint8_t)ModbusFunction::readDiscreteInputs
+		   )
+	   )
+	{
+		return GCodeResult::badOrMissingParameter;
+	}
+
+	if (!mutex.Take(BusAvailableTimeout))
+	{
+		return GCodeResult::error;
+	}
+
+	uart->ClearTransmitBuffer();
+	uart->DisableTransmit();
+	crc.Reset(ModbusCrcInit);
+	bytesTransmitted = 0;
+
+	slaveAddress = p_slaveAddress;
+	ModbusWriteByte(slaveAddress);
+	function = (ModbusFunction)p_function;
+	ModbusWriteByte((uint8_t)function);
+	startRegister = p_startRegister;
+	ModbusWriteWord(startRegister);
+	numRegistersOrDataWord = p_numRegisters;
+	ModbusWriteWord(numRegistersOrDataWord);
 	uart->write((uint8_t)crc.Get());
 	uart->write((uint8_t)(crc.Get() >> 8));
 
@@ -267,8 +297,20 @@ GCodeResult AuxDevice::ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_fun
 	uart->EnableTransmit();
 	whenStartedTransmitting = millis();
 
-	bytesExpected = 5 + 2 * numRegisters;
-	receivedRegisters = data;
+	switch (function)
+	{
+	case ModbusFunction::readCoils:
+	case ModbusFunction::readDiscreteInputs:
+		bytesExpected = 5 + (numRegistersOrDataWord + 7)/8;
+		break;
+
+	case ModbusFunction::readHoldingRegisters:
+	case ModbusFunction::readInputRegisters:
+	default:
+		bytesExpected = 5 + 2 * numRegistersOrDataWord;
+		break;
+	}
+	receivedData = data;
 	return GCodeResult::ok;
 }
 
@@ -299,29 +341,39 @@ GCodeResult AuxDevice::CheckModbusResult() noexcept
 	{
 		switch(function)
 		{
+		case ModbusFunction::writeSingleCoil:
+		case ModbusFunction::writeSingleRegister:
+		case ModbusFunction::writeMultipleCoils:
 		case ModbusFunction::writeMultipleRegisters:
-			if (ModbusReadWord() == startRegister && ModbusReadWord() == numRegisters)
+			if (ModbusReadWord() == startRegister && ModbusReadWord() == numRegistersOrDataWord)
 			{
-				const uint16_t crcLo = (uint16_t)uart->read();
-				const uint16_t recdCrc = ((uint16_t)uart->read() << 8) | crcLo;
-				mutex.Release();
-				return (recdCrc == crc.Get()) ? GCodeResult::ok : GCodeResult::error;
+				return ReleaseMutexAndCheckCrc();
+			}
+			break;
+
+		case ModbusFunction::readCoils:
+		case ModbusFunction::readDiscreteInputs:
+			if (ModbusReadByte() == (numRegistersOrDataWord + 7u)/8u)
+			{
+				for (size_t i = 0; i < (numRegistersOrDataWord + 7u)/8u; ++i)
+				{
+					*receivedData++ = ModbusReadByte();
+				}
+				return ReleaseMutexAndCheckCrc();
 			}
 			break;
 
 		case ModbusFunction::readInputRegisters:
 		case ModbusFunction::readHoldingRegisters:
-			if (ModbusReadByte() == 2 * numRegisters)
+			if (ModbusReadByte() == 2 * numRegistersOrDataWord)
 			{
-				while (numRegisters != 0)
+				while (numRegistersOrDataWord != 0)
 				{
-					*receivedRegisters++ = ModbusReadWord();
-					--numRegisters;
+					*(uint16_t*)receivedData = ModbusReadWord();
+					receivedData += sizeof(uint16_t);
+					--numRegistersOrDataWord;
 				}
-				const uint16_t crcLo = (uint16_t)uart->read();
-				const uint16_t recdCrc = ((uint16_t)uart->read() << 8) | crcLo;
-				mutex.Release();
-				return (recdCrc == crc.Get()) ? GCodeResult::ok : GCodeResult::error;
+				return ReleaseMutexAndCheckCrc();
 			}
 			break;
 
@@ -362,10 +414,12 @@ uint16_t AuxDevice::ModbusReadWord() noexcept
 	return hi | (uint16_t)ModbusReadByte();
 }
 
-// Calculate the time in milliseconds to send or received the specified number of characters
-uint32_t AuxDevice::CalcTransmissionTime(unsigned int numChars) const noexcept
+GCodeResult AuxDevice::ReleaseMutexAndCheckCrc() noexcept
 {
-	return (numChars * 11000)/baudRate + 1;						// Modbus specifies 2 stop bits if parity not used, therefore 11 bits/character
+	const uint16_t crcLo = (uint16_t)uart->read();
+	const uint16_t recdCrc = ((uint16_t)uart->read() << 8) | crcLo;
+	mutex.Release();
+	return (recdCrc == crc.Get()) ? GCodeResult::ok : GCodeResult::error;
 }
 
 // Callback for transmission ended
@@ -382,6 +436,79 @@ void AuxDevice::TxEndedCallback() noexcept
 }
 
 #endif
+
+// Calculate the time in milliseconds to delay to allow time to send or received the specified number of characters
+uint32_t AuxDevice::CalcTransmissionTime(unsigned int numChars) const noexcept
+{
+	// In the following we need to do +1 to round up the a whole number of milliseconds, and another +1 because a call to delay() may delay up to 1 tick less than we requested
+	return (numChars * 11000)/baudRate + 2;						// Modbus specifies 2 stop bits if parity not used, therefore 11 bits/character
+}
+
+// Send some data to the Uart. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the data.
+GCodeResult AuxDevice::SendUartData(const uint8_t *data, size_t len) noexcept
+{
+	if (!mutex.Take(BusAvailableTimeout))
+	{
+		return GCodeResult::error;
+	}
+
+	uart->ClearTransmitBuffer();
+	uart->DisableTransmit();
+
+	for (size_t i = 0; i < len; i++)
+	{
+		uart->write((const uint8_t)data[i]);
+	}
+
+#if SUPPORT_MODBUS_RTU
+	txNotRx.WriteDigital(true);								// set RS485 direction to transmit
+	delay(CalcTransmissionTime(4));							// Modbus specifies a 3.5 character interval
+#endif
+	uart->ClearReceiveBuffer();
+	uart->EnableTransmit();
+
+	mutex.Release();
+
+	return GCodeResult::ok;
+}
+
+GCodeResult AuxDevice::ReadUartData(uint8_t *data, size_t bytesToRead) noexcept
+{
+	if (!mutex.Take(BusAvailableTimeout))
+	{
+		return GCodeResult::error;
+	}
+
+	if (bytesToRead == 0)
+	{
+		uart->ClearReceiveBuffer();
+		return GCodeResult::ok;
+	}
+
+
+	const uint32_t start = millis();
+	const uint32_t expectedCommsTime = CalcTransmissionTime(bytesToRead);
+	while (uart->available() < (int)bytesToRead)
+	{
+		// Check whether we should time out
+		if (millis() - start < expectedCommsTime + UartResponseTimeout)
+		{
+			delay(2);
+			continue;
+		}
+		mutex.Release();
+		return GCodeResult::error;					// timed out
+	}
+
+	// If we get here then we received sufficient bytes for a valid reply
+	for (size_t i = 0; i < bytesToRead; i++)
+	{
+		data[i] = (uint8_t)uart->read();
+	}
+
+	mutex.Release();
+	return GCodeResult::ok;
+}
 
 #endif
 

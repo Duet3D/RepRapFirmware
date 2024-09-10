@@ -27,6 +27,15 @@ namespace SmartDrivers
 	void EnableDrive(size_t driver, bool en) noexcept;
 	bool SetMicrostepping(size_t drive, unsigned int microsteps, bool interpolation) noexcept;
 	unsigned int GetMicrostepping(size_t drive, bool& interpolation) noexcept;
+#if SUPPORT_PHASE_STEPPING
+	bool EnablePhaseStepping(size_t driver, bool enable) noexcept;
+	bool IsPhaseSteppingEnabled(size_t driver) noexcept;
+	float GetCurrent(size_t driver) noexcept;
+	unsigned int GetMicrostepShift(size_t driver) noexcept;
+	uint16_t GetMicrostepPosition(size_t driver) noexcept;
+	void SetTmcExternalClock(uint32_t frequency) noexcept;
+	bool SetMotorPhases(size_t driver, uint32_t regVal) noexcept;
+#endif
 	bool SetDriverMode(size_t driver, unsigned int mode) noexcept;
 	DriverMode GetDriverMode(size_t driver) noexcept;
 	void SetStallThreshold(size_t driver, int sgThreshold) noexcept;
@@ -36,6 +45,11 @@ namespace SmartDrivers
 	void AppendDriverStatus(size_t driver, const StringRef& reply) noexcept;
 	float GetStandstillCurrentPercent(size_t driver) noexcept;
 	void SetStandstillCurrentPercent(size_t driver, float percent) noexcept;
+	bool SetCurrentScaler(size_t driver, int8_t cs) noexcept;
+	uint8_t GetIRun(size_t driver) noexcept;
+	uint8_t GetIHold(size_t driver) noexcept;
+	uint32_t GetGlobalScaler(size_t driver) noexcept;
+	float GetCalculatedCurrent(size_t driver) noexcept;
 	bool SetRegister(size_t driver, SmartDriverRegister reg, uint32_t regVal) noexcept;
 	uint32_t GetRegister(size_t driver, SmartDriverRegister reg) noexcept;
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;

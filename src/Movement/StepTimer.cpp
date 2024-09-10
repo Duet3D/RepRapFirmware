@@ -30,9 +30,9 @@
 StepTimer * volatile StepTimer::pendingList = nullptr;
 uint32_t StepTimer::movementDelay = 0;											// how many timer ticks the move timer is behind the raw timer
 
-#if STEP_TIMER_DEBUG
-uint32_t StepTimer::maxInterval = 0;
-uint32_t StepTimer::lastTimerResult = 0;
+#if SUPPORT_CAN_EXPANSION
+uint32_t StepTimer::ownMovementDelay = 0;
+bool StepTimer::movementDelayIncreased = false;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -175,14 +175,6 @@ void StepTimer::Init() noexcept
 	} while (true);
 # endif
 
-# if STEP_TIMER_DEBUG		//DEBUG
-	const uint32_t interval = rslt - lastTimerResult;
-	lastTimerResult = rslt;
-	if (interval > maxInterval)
-	{
-		maxInterval = interval;
-	}
-# endif
 	IrqRestore(flags);
 	return rslt;
 }
@@ -539,5 +531,21 @@ void StepTimer::CancelCallback() noexcept
 		}
 	}
 }
+
+#if SUPPORT_CAN_EXPANSION
+
+// Handle a request for movement delay received from an expansion board
+void StepTimer::ProcessMovementDelayRequest(uint32_t delayRequested) noexcept
+{
+	AtomicCriticalSectionLocker lock;
+
+	if (delayRequested > movementDelay)
+	{
+		movementDelay = delayRequested;
+	}
+	movementDelayIncreased = true;						// always set this to ensure that we acknowledge the request
+}
+
+#endif
 
 // End

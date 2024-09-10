@@ -18,6 +18,7 @@
 #if SUPPORT_MODBUS_RTU
 # include <Storage/CRC16.h>
 # include <Hardware/IoPorts.h>
+# include "Modbus.h"
 #endif
 
 class AuxDevice
@@ -25,10 +26,7 @@ class AuxDevice
 public:
 	enum class AuxMode : uint8_t
 	{
-		disabled, raw, panelDue,
-#if SUPPORT_MODBUS_RTU
-		modbus_rtu,
-#endif
+		disabled, raw, panelDue, device,
 	};
 
 	AuxDevice() noexcept;
@@ -53,45 +51,35 @@ public:
 	bool ConfigureDirectionPort(const char *pinName, const StringRef& reply) THROWS(GCodeException);
 	void AppendDirectionPortName(const StringRef& reply) const noexcept;
 
-	GCodeResult SendModbusRegisters(uint8_t p_slaveAddress, uint16_t p_startRegister, uint16_t p_numRegisters, const uint16_t *data) noexcept;
-	GCodeResult ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, uint16_t *data) noexcept
+	GCodeResult SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, const uint8_t *data) noexcept;
+	GCodeResult ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, uint8_t *data) noexcept
 		pre(function == 3 || function == 4);
 	GCodeResult CheckModbusResult() noexcept;
 
 	void TxEndedCallback() noexcept;
 #endif
 
+	GCodeResult SendUartData(const uint8_t *data, size_t len) noexcept;
+	GCodeResult ReadUartData(uint8_t *data, size_t bytesToRead) noexcept;
+
 private:
+	uint32_t CalcTransmissionTime(unsigned int numChars) const noexcept;	// calculate the time in milliseconds to send or received the specified number of characters
 
 #if SUPPORT_MODBUS_RTU
 	void ModbusWriteByte(uint8_t b) noexcept;
 	void ModbusWriteWord(uint16_t w) noexcept;
 	uint8_t ModbusReadByte() noexcept;
 	uint16_t ModbusReadWord() noexcept;
-	uint32_t CalcTransmissionTime(unsigned int numChars) const noexcept;	// calculate the time in milliseconds to send or received the specified number of characters
+	GCodeResult ReleaseMutexAndCheckCrc() noexcept;
 
 	static void GlobalTxEndedCallback(CallbackParameter cp) noexcept;
 
-	static constexpr uint32_t ModbusBusAvailableTimeout = 50;				// how many milliseconds we wait for the device to become available
 	static constexpr uint32_t ModbusResponseTimeout = 140;					// how many milliseconds we give the device time to respond, excluding transmission time
 	static constexpr uint16_t MaxModbusRegisters = 100;						// the maximum number of registers we send or receive
 	static constexpr uint16_t ModbusCrcInit = 0xFFFF;
-
-	enum class ModbusFunction : uint8_t
-	{
-		readCoils = 0x01,
-		readDiscreteInputs = 0x02,
-		readHoldingRegisters = 0x03,
-		readInputRegisters = 0x04,
-		writeSingleCoil = 0x05,
-		writeSingleRegister = 0x06,
-		writeMultipleCoils = 0x0F,
-		writeMultipleRegisters = 0x10,
-		readDeviceId1 = 0x0E,
-		readDeviceId2 = 0x2B
-	};
-
 #endif
+	static constexpr uint32_t BusAvailableTimeout = 50;				// how many milliseconds we wait for the device to become available
+	static constexpr uint32_t UartResponseTimeout = 200;			// how many milliseconds we wait for the device to respond, excluding transmission time
 
 	AsyncSerial *uart;						// the underlying serial device
 	Mutex mutex;
@@ -102,13 +90,13 @@ private:
 
 #if SUPPORT_MODBUS_RTU
 	IoPort txNotRx;							// port used to switch the RS485 port between transmit and receive
-	uint16_t *receivedRegisters;
+	uint8_t *receivedData;
 	uint32_t whenStartedTransmitting;
 	CRC16 crc;
 	uint16_t bytesTransmitted;
 	uint16_t bytesExpected;
 	uint16_t startRegister;
-	uint16_t numRegisters;
+	uint16_t numRegistersOrDataWord;
 	uint8_t slaveAddress;
 	ModbusFunction function;
 #endif

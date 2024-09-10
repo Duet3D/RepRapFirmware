@@ -21,6 +21,8 @@ Next steps for new movement system+IS
 [done] Remove excess debug e.g. reporting hiccups in debug
 [done] Remove CheckSegments except when debugging
 [done] Set up params.useInputShaping, needed for CAN
+[done] Use cumulativeHiccupTime and notify hiccups to expansion boards
+[done] Allow for expansion boards introducing hiccups
 
 Reduce RAM usage on Duet 2 and especially Duet 3 Mini:
 - [done] Make MoveSegment smaller by not storing u
@@ -31,23 +33,23 @@ Reduce RAM usage on Duet 2 and especially Duet 3 Mini:
 - [done] When using SBC mode allocate transfer buffers etc. from Lwip PBUF pool
 - [done] On 6HC/6XD store SBC transfer buffers in same memory as Lwip pool
 - [done by chrishamm] Use smaller LWIP pool
+
+S-curve option:
+- Add M201.x command to configure rate of change of acceleration. Should we make it "time to reach full acceleration" instead, so that it can default to 0?
+- Do we need to store extra data in the DDA, or can we just change the calc of acceleration time and acceleration distance?
+- Take account of acceleration limits in DoLookahead
+
 - Make MoveSegment smaller by not storing startTime? Would need to introduce dummy segments representing gaps between segments. Will probably only happen for extruders during travel moves, and axes during retract/reprime mobves.
 - Make MoveSegment smaller by storing flag bits in spare bits of 'next' field e.g. lowest 2 bits and top bit
 
 When using segmentation, sync segment duration to multiples/submultiples of IS period - this should reduce the number of segments needed
-
-Use cumulativeHiccupTime and notify hiccups to expansion boards
-
-Allow for expansion boards introducing hiccups
-
-We can still get step error 3 under some conditions e.g. very high microstepping. Do we need more data in this case? Can we have the ISR introduce hiccups to prevent this?
 
 At the end of Prepare, don't send the move over CAN if it won't happen because endstops are already triggered - previously it checked for state=completed
 Also, check whether/how in CanMotion we handle individual drives not moving because their endstops have triggered - that may be enough to handle the above.
 
 Segment moves to keep them shorter than 2^31 step clocks
 
-In the DM have a direction variable set to +1 or -1, to reduce conditional jumps
+In the DM have a direction variable set to +1 or -1, to reduce conditional jumps [partially done already in NewSegment but can we do more?]
 
 Move 'wasTriggered' into ZProbe, clear it on SetProbing(true), return it on SetProbing(false)
 
@@ -57,7 +59,22 @@ Store segments per step clock not segments per second, avoids a multiplication
 
 Consider supporting separate X and Y IS parameters on Cartesian/Polar/SCARA machines and separate Z shaping parameters
 
-In closed loop code use a simple cast instead of lrintf when rounding required nmotor current, to save CPU time
+In closed loop code use a simple cast instead of lrintf when rounding required motor current, to save CPU time
+
+Can we speed up NewSegment, especially on 1LC?
+
+Ideas (mostly alternatives) to reduce hiccups on 1LC/1XD especially if we want to support IS on these boards:
+- Move DriveMovement::AddSegment into RAM
+- Convert t0 and store as integer in NewSegment, then we can do an integer addition instead of FP addition in CalcNextStepTimeFull. Probably saves time assuming 2 or more steps per segment.
+- Convert p, q and store as integer in NewSegment, then change CalcNextStepTimeFull to use integer maths. May need to do 62-bit integer square root again.
+- Do all the segment maths in integer. Store distance as fixed point with e.g. 15 bits of whole steps and 16 bits of fractional part.
+- Change DriveMovement::AddSegment to not disable interrupts for so long. Maybe have a flag bit "is being worked on" that we can set on a segment that we don't want the ISR to start executing. If the ISR sees this, it hiccups.
+  Or Andy's suggestion: after finding where we want to insert or change segments, break the list at that point and re-enable interrupts.
+- In DriveMovement::AddSegment, before re-enabling interrupts call the step ISR in order to execute steps that should have been done while interrupts were disabled. Only insert hiccups when the step ISR was really called in an interrupt.
+- Change the way we add segments when doing IS. Currently we add the (up to 3) segments with no delay, then repeat for each of the delays and amplitudes. This means we create segments and to lots of splits and merges.
+  Suppose we generate a segment chain for the move including the IS, and then merge that chain into the existing segments? We might find a better algorithm for generating the chain than generating segments and merging them. 
+  Interrupts can be enabled while we generate the segment chain, and we can look at ways of allowing interrupts to be enabled at intervals while doing the merge.
+- When steps become overdue, enable the multi-step code even if the interval is large enough that we wouldn't normally
 
 Bugs:
 - [done] "Tool was not driven because its temperatures were not high enough" in simulation mode
@@ -76,5 +93,9 @@ Bugs:
 - [done] Christian reports that multiple drivers with independent endstops for an axis don't work, the drivers that finish early remain disabled
 - [done] When starting a new print after finishing one we get a filament error
 - [done] Andy S reports that in 3.6, extruder positions for extruders on tool boards remain stuck on zero
-- Report of unwanted motion after 3-motor Z bed tramming, see https://forum.duet3d.com/topic/36187/z-axis-tramming-issues-with-3-6-0-alpha2-3
-- Scanning Z probe not working, does the scxan but the height map shows only points at the ends of each scan line
+- [done] Scanning Z probe not working, does the scxan but the height map shows only points at the ends of each scan line
+- [done] Unwanted motion after 3-motor Z bed tramming, see https://forum.duet3d.com/topic/36187/z-axis-tramming-issues-with-3-6-0-alpha2-3
+- We can still get step error 3 under some conditions e.g. very high microstepping. See https://forum.duet3d.com/post/343417. Can we have the ISR introduce hiccups to prevent this?
+- Andy E reports issues with homing a CoreXY axis driven by 1HCLs. Endstop switch is on a 1LC.
+- Andy E reports PA may not be getting used on 1LC
+- My TC has DWC disconnections quite often. Similar issue reported by some users.

@@ -20,7 +20,14 @@ const size_t NumHttpSockets = 5;				// sockets 0-4 are for HTTP
 const SocketNumber FtpSocketNumber = 5;
 const SocketNumber FtpDataSocketNumber = 6;
 const SocketNumber TelnetSocketNumber = 7;
+
+#if SUPPORT_MQTT
+const SocketNumber MqttSocketNumber = 8;
+const size_t NumEthernetSockets = 9;
+#else
 const size_t NumEthernetSockets = 8;
+#endif
+
 
 // Forward declarations
 class LwipSocket;
@@ -80,6 +87,11 @@ private:
 
 	void StartProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumSelectableProtocols);
+
+#if HAS_CLIENTS
+	void ConnectProtocol(NetworkProtocol protocol) noexcept
+	pre(protocol < NumSelectableProtocols);
+#endif
 
 	void ShutdownProtocol(NetworkProtocol protocol) noexcept
 	pre(protocol < NumSelectableProtocols);

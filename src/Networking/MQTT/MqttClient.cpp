@@ -27,10 +27,22 @@ struct MqttClientConfig
 	uint8_t connectFlags;
 };
 
+static constexpr size_t DefaultKeepAlive = 400;
+
 // Configuration for current single MQTT client currently. In the future on boards
 // supporting multiple interfaces, this might need to be an array with size of
 // MaxNetworkInterfaces.
-static MqttClientConfig *mqttClientConfig = nullptr;
+static MqttClientConfig mqttClientConfig =
+{
+	.username = nullptr,
+	.password = nullptr,
+	.id = nullptr,
+	.willTopic = nullptr,
+	.willMessage = nullptr,
+	.subs = nullptr,
+	.keepAlive = DefaultKeepAlive,
+	.connectFlags = MQTT_CONNECT_CLEAN_SESSION,
+};
 
 MqttClient::MqttClient(NetworkResponder *n, NetworkClient *c) noexcept
 	: NetworkClient(n, c), prevSub(nullptr), currSub(nullptr), messageTimer(0)
@@ -86,7 +98,7 @@ bool MqttClient::Spin() noexcept
 					}
 					else
 					{
-						currSub = mqttClientConfig->subs;
+						currSub = mqttClientConfig.subs;
 						prevSub = nullptr;
 						responderState = ResponderState::subscribing;
 						if (reprap.Debug(Module::Webserver))
@@ -181,7 +193,7 @@ bool MqttClient::Spin() noexcept
 					// If received ACK for DISCONNECT regardless of result, or the time has expired.
 					if (!disconnecting || millis() - messageTimer >= MqttClient::MessageTimeout)
 					{
-						NetworkClient::Terminate(MqttProtocol, interface);
+						Terminate();
 						if (reprap.Debug(Module::Webserver))
 						{
 							debugPrintf("MQTT disconnected\n");
@@ -202,7 +214,8 @@ bool MqttClient::Spin() noexcept
 
 bool MqttClient::Accept(Socket *s) noexcept
 {
-	if (responderState == ResponderState::free)
+	if (responderState == ResponderState::free &&
+		(interfaceNum >= 0 && s->GetInterface() ==  reprap.GetNetwork().GetInterface(interfaceNum)))
 	{
 		skt = s;
 
@@ -223,10 +236,11 @@ bool MqttClient::Accept(Socket *s) noexcept
 
 		if (err == MQTT_OK)
 		{
-			err = mqtt_connect(&client, mqttClientConfig->id, mqttClientConfig->willTopic, mqttClientConfig->willMessage,
-								mqttClientConfig->willMessage ? strlen(mqttClientConfig->willMessage) : 0,
-								mqttClientConfig->username, mqttClientConfig->password,
-								mqttClientConfig->connectFlags , mqttClientConfig->keepAlive);
+
+			err = mqtt_connect(&client, mqttClientConfig.id, mqttClientConfig.willTopic, mqttClientConfig.willMessage,
+								mqttClientConfig.willMessage ? strlen(mqttClientConfig.willMessage) : 0,
+								mqttClientConfig.username, mqttClientConfig.password,
+								mqttClientConfig.connectFlags , mqttClientConfig.keepAlive);
 			if (err == MQTT_OK)
 			{
 				responderState = ResponderState::connecting;
@@ -262,10 +276,11 @@ bool MqttClient::HandlesProtocol(NetworkProtocol protocol) noexcept
 	return protocol == MqttProtocol;
 }
 
-bool MqttClient::Start() noexcept
+bool MqttClient::Start(NetworkInterface* interface) noexcept
 {
 	// Implement a simple reconnect cooldown
-	if (millis() - messageTimer < ReconnectCooldown)
+	if ((millis() - messageTimer < ReconnectCooldown) ||
+		!(interfaceNum >= 0 && reprap.GetNetwork().GetInterface(interfaceNum) == interface))
 	{
 		return false;
 	}
@@ -290,26 +305,12 @@ void MqttClient::ConnectionLost() noexcept
 
 /* static */ GCodeResult MqttClient::Configure(GCodeBuffer &gb, const StringRef& reply) THROWS(GCodeException)
 {
-	// Client configuration can only occur when responder is free or during
-	// config.g, at which point instance is not yet reated.
-	if (instance && instance->responderState != ResponderState::free)
+	// Client configuration can only occur when client is not associated
+	// with an interface
+	if (interfaceNum >= 0)
 	{
-		reply.copy("Unable to configure MQTT when active on an interface");
+		reply.copy("Unable to configure MQTT when enabled on an interface");
 		return GCodeResult::error;
-	}
-
-	// Create the client config struct if not yet done.
-	if (!mqttClientConfig)
-	{
-		mqttClientConfig = new MqttClientConfig();
-		mqttClientConfig->username = nullptr;
-		mqttClientConfig->password = nullptr;
-		mqttClientConfig->id = nullptr;
-		mqttClientConfig->willTopic = nullptr;
-		mqttClientConfig->willMessage = nullptr;
-		mqttClientConfig->keepAlive = MqttClient::DefaultKeepAlive;
-		mqttClientConfig->connectFlags = MQTT_CONNECT_CLEAN_SESSION;
-		mqttClientConfig->subs = nullptr;
 	}
 
 	String<MaxGCodeLength> param;
@@ -342,7 +343,7 @@ void MqttClient::ConnectionLost() noexcept
 		// Set username
 		gb.GetQuotedString(param.GetRef());
 
-		if (!setMemb(mqttClientConfig->username))
+		if (!setMemb(mqttClientConfig.username))
 		{
 			return GCodeResult::error;
 		}
@@ -352,23 +353,23 @@ void MqttClient::ConnectionLost() noexcept
 		if (gb.Seen('K'))
 		{
 			gb.GetQuotedString(param.GetRef());
-			if (!setMemb(mqttClientConfig->password))
+			if (!setMemb(mqttClientConfig.password))
 			{
-				clearMemb(mqttClientConfig->username);
+				clearMemb(mqttClientConfig.username);
 				return GCodeResult::error;
 			}
 		}
 		else
 		{
-			clearMemb(mqttClientConfig->password);
+			clearMemb(mqttClientConfig.password);
 		}
 
 		if (reprap.Debug(Module::Webserver))
 		{
-			debugPrintf("Username set to '%s'", mqttClientConfig->username);
-			if (mqttClientConfig->password)
+			debugPrintf("Username set to '%s'", mqttClientConfig.username);
+			if (mqttClientConfig.password)
 			{
-				debugPrintf("with password '%s'", mqttClientConfig->password);
+				debugPrintf("with password '%s'", mqttClientConfig.password);
 			}
 			debugPrintf("\n");
 		}
@@ -378,14 +379,14 @@ void MqttClient::ConnectionLost() noexcept
 	{
 		gb.GetQuotedString(param.GetRef());
 
-		if (!setMemb(mqttClientConfig->id))
+		if (!setMemb(mqttClientConfig.id))
 		{
 			return GCodeResult::error;
 		}
 
 		if (reprap.Debug(Module::Webserver))
 		{
-			debugPrintf("Client ID set to '%s'\n", mqttClientConfig->id);
+			debugPrintf("Client ID set to '%s'\n", mqttClientConfig.id);
 		}
 	}
 
@@ -406,7 +407,7 @@ void MqttClient::ConnectionLost() noexcept
 		gb.TryGetBValue('R', retain, seen);
 
 
-		if (!setMemb(mqttClientConfig->willMessage))
+		if (!setMemb(mqttClientConfig.willMessage))
 		{
 			return GCodeResult::error;
 		}
@@ -416,9 +417,9 @@ void MqttClient::ConnectionLost() noexcept
 		gb.MustSee('T');
 		{
 			gb.GetQuotedString(param.GetRef());
-			if (!setMemb(mqttClientConfig->willTopic))
+			if (!setMemb(mqttClientConfig.willTopic))
 			{
-				clearMemb(mqttClientConfig->willMessage);
+				clearMemb(mqttClientConfig.willMessage);
 				return GCodeResult::error;
 			}
 		}
@@ -448,12 +449,12 @@ void MqttClient::ConnectionLost() noexcept
 
 		// Create mask from relevant flags
 		static constexpr uint8_t mask = MQTT_CONNECT_WILL_QOS_0 | MQTT_CONNECT_WILL_QOS_1 | MQTT_CONNECT_WILL_QOS_2 | MQTT_CONNECT_WILL_RETAIN;
-		mqttClientConfig->connectFlags = (mqttClientConfig->connectFlags & ~mask) | (flags & mask);
+		mqttClientConfig.connectFlags = (mqttClientConfig.connectFlags & ~mask) | (flags & mask);
 
 		if (reprap.Debug(Module::Webserver))
 		{
 			debugPrintf("Set will message '%s' with topic '%s', QOS=%lu, retain = %s\n",
-						mqttClientConfig->willMessage, mqttClientConfig->willTopic, qos, retain ? "true": "false");
+						mqttClientConfig.willMessage, mqttClientConfig.willTopic, qos, retain ? "true": "false");
 		}
 	}
 
@@ -469,7 +470,7 @@ void MqttClient::ConnectionLost() noexcept
 
 		// Then check if the topic is already in the subscriptions,
 		Subscription *sub;
-		for (sub = mqttClientConfig->subs; sub != nullptr; sub = sub->next)
+		for (sub = mqttClientConfig.subs; sub != nullptr; sub = sub->next)
 		{
 			if (strcmp(sub->topic, param.c_str()) == 0)
 			{
@@ -503,12 +504,30 @@ void MqttClient::ConnectionLost() noexcept
 			sub->qos = qos;
 
 			// Append to list of subscriptions
-			sub->next = mqttClientConfig->subs;
-			mqttClientConfig->subs = sub;
+			sub->next = mqttClientConfig.subs;
+			mqttClientConfig.subs = sub;
 
 			if (reprap.Debug(Module::Webserver))
 			{
 				debugPrintf("Topic '%s' added with max QOS=%" PRIu32 " to subscriptions\n", param.c_str(), qos);
+			}
+		}
+	}
+
+	{
+		bool clean = true;
+		bool seen = false;
+		gb.TryGetBValue('N', clean, seen); // check if using a clean session
+
+		if (seen)
+		{
+			if (clean)
+			{
+				mqttClientConfig.connectFlags |= MQTT_CONNECT_CLEAN_SESSION;
+			}
+			else
+			{
+				mqttClientConfig.connectFlags &= ~MQTT_CONNECT_CLEAN_SESSION;
 			}
 		}
 	}
@@ -622,5 +641,6 @@ MqttClient *MqttClient::Init(NetworkResponder *n, NetworkClient *c) noexcept
 /* Static members */
 
 MqttClient *MqttClient::instance = nullptr;
+int MqttClient::interfaceNum = -1;
 
 #endif

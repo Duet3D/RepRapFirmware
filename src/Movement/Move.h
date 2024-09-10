@@ -24,6 +24,10 @@
 #include <Math/Deviation.h>
 #include <Hardware/IoPorts.h>
 
+#if SUPPORT_PHASE_STEPPING
+#include <Movement/PhaseStep.h>
+#endif
+
 #if SUPPORT_ASYNC_MOVES
 # include "HeightControl/HeightController.h"
 #endif
@@ -109,10 +113,10 @@ public:
 
 	// Drivers configuration
 	size_t GetNumActualDirectDrivers() const noexcept;
-	void SetDriverDirection(size_t axisOrExtruder, bool direction) noexcept;
+	void SetDriversDirection(size_t axisOrExtruder, bool direction) noexcept;
 	void SetDirectionValue(size_t driver, bool dVal) noexcept;
 	bool GetDirectionValue(size_t driver) const noexcept;
-	void SetDriverAbsoluteDirection(size_t driver, bool dVal) noexcept;
+	void SetOneDriverAbsoluteDirection(size_t driver, bool dVal) noexcept;
 	void SetEnableValue(size_t driver, int8_t eVal) noexcept;
 	int8_t GetEnableValue(size_t driver) const noexcept;
 	void EnableDrivers(size_t axisOrExtruder, bool unconditional) noexcept;
@@ -248,7 +252,7 @@ public:
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetLiveMotorPosition(size_t driver) const noexcept pre(driver < MaxAxesPlusExtruders);
-	void SetMotorPosition(size_t driver, int32_t pos) noexcept pre(driver < MaxAxesPlusExtruders);
+	void SetMotorPosition(size_t drive, int32_t pos) noexcept pre(driver < MaxAxesPlusExtruders);
 
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
 	bool WaitingForAllMovesFinished(MovementSystemNumber msNumber
@@ -319,6 +323,8 @@ public:
 	{
 		return axisShaper.EutSetInputShaping(msg, dataLength, reply);
 	}
+
+	void AppendDiagnostics(const StringRef& reply) noexcept;
 #endif
 
 	AxisShaper& GetAxisShaper() noexcept { return axisShaper; }
@@ -420,6 +426,22 @@ public:
 	uint32_t GetStepInterval(size_t drive, uint32_t microstepShift) const noexcept;			// Get the current step interval for this axis or extruder
 #endif
 
+#if SUPPORT_CLOSED_LOOP
+	bool EnableIfIdle(size_t driver) noexcept;										// if the driver is idle, enable it; return true if driver enabled on return
+	void InvertCurrentMotorSteps(size_t driver) noexcept;
+#endif
+
+#if SUPPORT_PHASE_STEPPING
+	void ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config);							// configure Ka & Kv parameters for phase stepping
+	PhaseStepParams GetPhaseStepParams(size_t axisOrExtruder);
+	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
+	bool SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept;
+	StepMode GetStepMode(size_t axisOrExtruder) noexcept;
+	void ResetPhaseStepMonitoringVariables() noexcept;
+
+	void PhaseStepControlLoop() noexcept;
+#endif
+
 	void Interrupt() noexcept;
 
 #if SUPPORT_CAN_EXPANSION
@@ -492,6 +514,8 @@ private:
 	};
 #endif
 
+	MoveSegment *AddSegment(MoveSegment *list, uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a J_FORMAL_PARAMETER(j), MovementFlags moveFlags, motioncalc_t pressureAdvance) noexcept;
+
 	void BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;				// Take a position and apply the bed compensations
 	void InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;			// Go from a bed-transformed point back to user coordinates
 	void AxisTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;				// Take a position and apply the axis-angle compensations
@@ -532,7 +556,7 @@ private:
 	void DisengageBrake(size_t driver) noexcept;
 
 	void UpdateMotorCurrent(size_t driver, float current) noexcept;
-	void SetDriverDirection(uint8_t driver, bool direction) noexcept pre(driver < NumDirectDrivers);
+	void SetOneDriverDirection(uint8_t driver, bool direction) noexcept pre(driver < NumDirectDrivers);
 
 	StandardDriverStatus GetLocalDriverStatus(size_t driver) const noexcept;
 
@@ -580,6 +604,16 @@ private:
 
 	StepTimer timer;												// Timer object to control getting step interrupts
 	DriveMovement *activeDMs;
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	DriveMovement *phaseStepDMs;
+
+	// These variables monitor how fast the phase stepping control loop is running etc.
+	StepTimer::Ticks prevPSControlLoopCallTime;			// The last time the control loop was called
+	StepTimer::Ticks minPSControlLoopRuntime;				// The minimum time the control loop has taken to run
+	StepTimer::Ticks maxPSControlLoopRuntime;				// The maximum time the control loop has taken to run
+	StepTimer::Ticks minPSControlLoopCallInterval;		// The minimum interval between the control loop being called
+	StepTimer::Ticks maxPSControlLoopCallInterval;		// The maximum interval between the control loop being called
+#endif
 
 #if SUPPORT_ASYNC_MOVES
 	AsyncMove auxMove;
@@ -600,7 +634,6 @@ private:
 
 	uint32_t idleTimeout;								// How long we wait with no activity before we reduce motor currents to idle, in milliseconds
 	uint32_t longestGcodeWaitInterval;					// the longest we had to wait for a new GCode
-	uint32_t lastReportedMovementDelay;					// The movement delay when we last reported it in the diagnostics
 
 	float tangents[3]; 									// Axis compensation - 90 degrees + angle gives angle between axes
 	bool compensateXY;									// If true then we compensate for XY skew by adjusting the Y coordinate; else we adjust the X coordinate
@@ -787,7 +820,16 @@ inline void Move::AdjustNumDrivers(size_t numDriversNotAvailable) noexcept
 
 inline void Move::SetDirectionValue(size_t drive, bool dVal) noexcept
 {
+#if SUPPORT_PHASE_STEPPING
+	// We must prevent the tmc task loop fetching the current position while we are changing the direction
+	if (directions[drive] != dVal)
+	{
+		TaskCriticalSectionLocker lock;
+		directions[drive] = dVal;
+	}
+#else
 	directions[drive] = dVal;
+#endif
 }
 
 inline bool Move::GetDirectionValue(size_t drive) const noexcept
@@ -795,7 +837,7 @@ inline bool Move::GetDirectionValue(size_t drive) const noexcept
 	return directions[drive];
 }
 
-inline void Move::SetDriverDirection(uint8_t driver, bool direction) noexcept
+inline void Move::SetOneDriverDirection(uint8_t driver, bool direction) noexcept
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
@@ -808,7 +850,7 @@ inline void Move::SetDriverDirection(uint8_t driver, bool direction) noexcept
 	}
 }
 
-inline void Move::SetDriverAbsoluteDirection(size_t driver, bool direction) noexcept
+inline void Move::SetOneDriverAbsoluteDirection(size_t driver, bool direction) noexcept
 {
 	if (driver < GetNumActualDirectDrivers())
 	{
@@ -884,11 +926,6 @@ inline int32_t Move::GetLiveMotorPosition(size_t driver) const noexcept
 	return dms[driver].currentMotorPosition;
 }
 
-inline void Move::SetMotorPosition(size_t driver, int32_t pos) noexcept
-{
-	dms[driver].SetMotorPosition(pos);
-}
-
 inline ExtruderShaper& Move::GetExtruderShaperForExtruder(size_t extruder) noexcept
 {
 	return dms[ExtruderToLogicalDrive(extruder)].extruderShaper;
@@ -921,7 +958,11 @@ inline __attribute__((always_inline)) bool Move::ScheduleNextStepInterrupt() noe
 // Base priority must be >= NvicPriorityStep when calling this, unless we are simulating.
 inline void Move::InsertDM(DriveMovement *dm) noexcept
 {
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
+	DriveMovement **dmp = dm->state == DMState::phaseStepping ? &phaseStepDMs : &activeDMs;
+#else
 	DriveMovement **dmp = &activeDMs;
+#endif
 	while (*dmp != nullptr && (int32_t)((*dmp)->nextStepTime - dm->nextStepTime) < 0)
 	{
 		dmp = &((*dmp)->nextDM);
@@ -970,6 +1011,16 @@ inline __attribute__((always_inline)) uint32_t Move::GetStepInterval(size_t driv
 		return dms[drive].GetStepInterval(microstepShift);
 	}
 	return 0;
+}
+
+#endif
+
+#if SUPPORT_CLOSED_LOOP
+
+// Invert the current number of microsteps taken. Called when the driver direction control is changed.
+inline void Move::InvertCurrentMotorSteps(size_t driver) noexcept
+{
+	dms[driver].currentMotorPosition = -dms[driver].currentMotorPosition;
 }
 
 #endif
