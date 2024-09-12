@@ -20,6 +20,9 @@
 #include <Networking/HttpResponder.h>
 #include <Networking/FtpResponder.h>
 #include <Networking/TelnetResponder.h>
+#if SUPPORT_MQTT
+#include <Networking/MQTT/MqttClient.h>
+#endif
 #if SUPPORT_MULTICAST_DISCOVERY
 # include <Networking/MulticastDiscovery/MulticastResponder.h>
 #endif
@@ -205,11 +208,46 @@ void LwipEthernetInterface::IfaceShutdownProtocol(NetworkProtocol protocol, bool
 	}
 }
 
+#if HAS_CLIENTS
+void LwipEthernetInterface::ConnectProtocol(NetworkProtocol protocol) noexcept
+{
+	tcp_pcb *pcb = tcp_new();
+	if (pcb == nullptr)
+	{
+		platform.Message(ErrorMessage, "unable to allocate a pcb\n");
+	}
+	else
+	{
+		ip_addr_t remote;
+		memset(&remote, 0, sizeof(remote));
+		remote.addr = ipAddresses[protocol];
+		err_t res = tcp_connect(pcb, &remote, portNumbers[protocol], conn_accept);
+
+		if (res != ERR_OK)
+		{
+			platform.Message(ErrorMessage, "tcp_connect call failed\n");
+		}
+	}
+
+	switch(protocol)
+	{
+#if SUPPORT_MQTT
+	case MqttProtocol:
+		sockets[MqttSocketNumber]->Init(MqttSocketNumber, portNumbers[protocol], protocol, true);
+		break;
+#endif
+	}
+}
+#endif
+
 void LwipEthernetInterface::StartProtocol(NetworkProtocol protocol) noexcept
 {
 	if (   listeningPcbs[protocol] == nullptr
 #if SUPPORT_MULTICAST_DISCOVERY
 		&& protocol != MulticastDiscoveryProtocol
+#endif
+#if SUPPORT_MQTT
+		&& protocol != MqttProtocol
 #endif
 	   )
 	{
@@ -288,6 +326,11 @@ void LwipEthernetInterface::ShutdownProtocol(NetworkProtocol protocol) noexcept
 		break;
 #endif
 
+#if SUPPORT_MQTT
+	case MqttProtocol:
+		sockets[MqttSocketNumber]->TerminateAndDisable();
+		break;
+#endif
 	default:
 		break;
 	}
@@ -454,6 +497,24 @@ void LwipEthernetInterface::Spin() noexcept
 			// Check for incoming packets and pending timers
 			ethernet_task();
 			sys_check_timeouts();
+
+#if HAS_CLIENTS
+			// Maintain client connections
+			for (uint8_t p = 0; p < NumSelectableProtocols; p++)
+			{
+				if (protocolEnabled[p])
+				{
+					if (reprap.GetNetwork().StartClient(this, p))
+					{
+						ConnectProtocol(p);
+					}
+				}
+				else
+				{
+					reprap.GetNetwork().StopClient(this, p);
+				}
+			}
+#endif
 
 			// Poll the next TCP socket
 			sockets[nextSocketToPoll]->Poll();
@@ -683,7 +744,12 @@ void LwipEthernetInterface::RebuildMdnsServices() noexcept
 
 	for (size_t protocol = 0; protocol < NumSelectableProtocols; protocol++)
 	{
-		if (protocolEnabled[protocol])
+		if (protocolEnabled[protocol]
+			// Exclude clients since these are not services
+#if SUPPORT_MQTT
+			&& protocol != MqttProtocol
+#endif
+		)
 		{
 			service_get_txt_fn_t txtFunc = (protocol == HttpProtocol) ? GetServiceTxtEntries : nullptr;
 			mdns_resp_add_service(&gs_net_if, ProtocolNames[protocol], MdnsServiceStrings[protocol], DNSSD_PROTO_TCP, portNumbers[protocol], MdnsTtl, txtFunc, nullptr);

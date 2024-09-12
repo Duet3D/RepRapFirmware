@@ -15,6 +15,17 @@
 class DotStarLedStrip : public LocalLedStrip
 {
 public:
+	enum class ColorOrder : uint8_t
+	{
+		BGR = 0,
+		BRG,
+		RGB,
+		RBG,
+		GBR,
+		GRB,
+		count
+	};
+
 	DotStarLedStrip() noexcept;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException) override;
@@ -36,6 +47,7 @@ private:
 	unsigned int numRemaining = 0;											// how much of the current request remains after the current transfer
 	unsigned int totalSent = 0;												// total amount of data sent since the start frame
 	bool needStartFrame = true;
+	ColorOrder colorOrder;
 };
 
 #endif

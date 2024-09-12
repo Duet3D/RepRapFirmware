@@ -410,6 +410,9 @@ private:
 #if SUPPORT_PHASE_STEPPING
 	GCodeResult ConfigureStepMode(GCodeBuffer& gb, const StringRef& ref) THROWS(GCodeException);						// Deal with M970
 #endif
+#if SUPPORT_S_CURVE
+	GCodeResult ConfigureSCurve(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M971
+#endif
 	GCodeResult ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M569
 	GCodeResult ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
 		pre(drive < platform.GetNumActualDirectDrivers());																// Deal with M569 for one local driver

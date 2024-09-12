@@ -342,10 +342,11 @@ void CommandProcessor::ProcessReceivedMessage(CanMessageBuffer *buf) noexcept
 	if (buf->id.Src() != CanInterface::GetCanAddress())								// I don't think we should receive our own broadcasts, but in case we do...
 	{
 		if (   buf->id.Dst() != CanId::BroadcastAddress
-			&& buf->id.MsgType() != CanMessageType::fanTachoReport					// don't flash whenever we receive a regular status message
+			&& buf->id.MsgType() != CanMessageType::fansReport						// don't flash whenever we receive a regular status message
 			&& buf->id.MsgType() != CanMessageType::heatersStatusReport
 			&& buf->id.MsgType() != CanMessageType::boardStatusReport
 			&& buf->id.MsgType() != CanMessageType::driversStatusReport
+			&& buf->id.MsgType() != CanMessageType::filamentMonitorsStatusReportNew
 		   )
 		{
 			reprap.GetPlatform().OnProcessingCanMessage();

@@ -3130,10 +3130,8 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 // then call this function to update SegmentsLeft safely in a multi-threaded environment
 void GCodes::NewSingleSegmentMoveAvailable(MovementState& ms) noexcept
 {
-	ms.totalSegments = 1;
-	__DMB();									// make sure that all the move details have been written first
-	ms.segmentsLeft = 1;						// set the number of segments to indicate that a move is available to be taken
-	reprap.GetMove().MoveAvailable();			// notify the Move task that we have a move
+	ms.segmentsLeftToStartAt = ms.totalSegments = 1;
+	NewMoveAvailable(ms);
 }
 
 // Flag that a new move that should be segmented is available for consumption by the Move subsystem
@@ -3156,16 +3154,15 @@ void GCodes::NewSegmentableMoveAvailable(MovementState& ms) noexcept
 			moveLengthSquared += fsquare(ms.coords[effectiveZAxis] - ms.initialCoords[effectiveZAxis]);
 		}
 		const float moveLength = fastSqrtf(moveLengthSquared);
-		const float moveTime = moveLength/(ms.feedRate * StepClockRate);		// this is a best-case time, often the move will take longer
+		const float moveTime = moveLength/(ms.feedRate * StepClockRate);	// this is a best-case time, often the move will take longer
 		ms.totalSegments = (unsigned int)max<long>(1, lrintf(min<float>(moveLength * kin.GetReciprocalMinSegmentLength(), moveTime * kin.GetSegmentsPerSecond())));
 	}
 	else
 	{
 		ms.totalSegments = 1;
 	}
-	__DMB();									// make sure that all the move details have been written first
-	ms.segmentsLeft = ms.totalSegments;			// set the number of segments to indicate that a move is available to be taken
-	reprap.GetMove().MoveAvailable();			// notify the Move task that we have a move
+	ms.segmentsLeftToStartAt = ms.totalSegments;
+	NewMoveAvailable(ms);
 }
 
 // Flag that a new move is available for consumption by the Move subsystem

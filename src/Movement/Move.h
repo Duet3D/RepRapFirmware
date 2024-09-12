@@ -435,11 +435,16 @@ public:
 	void ConfigurePhaseStepping(size_t axisOrExtruder, float value, PhaseStepConfig config);							// configure Ka & Kv parameters for phase stepping
 	PhaseStepParams GetPhaseStepParams(size_t axisOrExtruder);
 	bool GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mParams) noexcept;	// get the net full steps taken, including in the current move so far, also speed and acceleration; return true if moving
-	bool SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept;
+	bool SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept;
 	StepMode GetStepMode(size_t axisOrExtruder) noexcept;
 	void ResetPhaseStepMonitoringVariables() noexcept;
 
 	void PhaseStepControlLoop() noexcept;
+#endif
+
+#if SUPPORT_S_CURVE
+	void UseSCurve(bool enable) noexcept { usingSCurve = enable; }
+	bool IsUsingSCurve() noexcept { return usingSCurve; }
 #endif
 
 	void Interrupt() noexcept;
@@ -513,6 +518,8 @@ private:
 		bool readingNeeded = false;
 	};
 #endif
+
+	MoveSegment *AddSegment(MoveSegment *list, uint32_t startTime, uint32_t duration, motioncalc_t distance, motioncalc_t a J_FORMAL_PARAMETER(j), MovementFlags moveFlags, motioncalc_t pressureAdvance) noexcept;
 
 	void BedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;				// Take a position and apply the bed compensations
 	void InverseBedTransform(float xyzPoint[MaxAxes], const Tool *tool) const noexcept;			// Go from a bed-transformed point back to user coordinates
@@ -611,6 +618,10 @@ private:
 	StepTimer::Ticks maxPSControlLoopRuntime;				// The maximum time the control loop has taken to run
 	StepTimer::Ticks minPSControlLoopCallInterval;		// The minimum interval between the control loop being called
 	StepTimer::Ticks maxPSControlLoopCallInterval;		// The maximum interval between the control loop being called
+#endif
+
+#if SUPPORT_S_CURVE
+	bool usingSCurve = false;
 #endif
 
 #if SUPPORT_ASYNC_MOVES

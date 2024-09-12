@@ -96,7 +96,7 @@ constexpr float Tmc5160SenseResistor = 0.050;
 constexpr size_t MaxPortsPerHeater = 3;
 
 constexpr size_t MaxBedHeaters = 12;
-constexpr size_t MaxChamberHeaters = 4;
+constexpr size_t MaxChamberHeaters = 8;
 constexpr int8_t DefaultE0Heater = 1;				// Index of the default first extruder heater, used only for the legacy status response
 
 constexpr size_t NumThermistorInputs = 4;
