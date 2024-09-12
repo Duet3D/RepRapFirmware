@@ -1815,6 +1815,11 @@ bool SmartDrivers::EnablePhaseStepping(size_t driver, bool enable) noexcept
 		return false;
 	}
 
+	if (!driverStates[driver].EnablePhaseStepping(enable))
+	{
+		return false;
+	}
+
 	bool anyDriversUsingPhaseStepping = false;
 	if (enable)
 	{
@@ -1834,8 +1839,7 @@ bool SmartDrivers::EnablePhaseStepping(size_t driver, bool enable) noexcept
 	DriversDirectSleepMicroseconds = anyDriversUsingPhaseStepping ? PhaseStepSpiSleepMicroseconds : DefaultSpiSleepMicroseconds;
 
 	tmcTask.SetPriority(anyDriversUsingPhaseStepping ? TaskPriority::TmcPhaseStepPriority : TaskPriority::TmcPriority);
-
-	return driverStates[driver].EnablePhaseStepping(enable);
+	return true;
 }
 
 bool SmartDrivers::IsPhaseSteppingEnabled(size_t driver) noexcept

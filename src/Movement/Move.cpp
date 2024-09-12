@@ -645,10 +645,13 @@ void Move::GenerateMovementErrorDebug() noexcept
 // Caller must deal with remote drivers.
 bool Move::SetMicrostepping(size_t axisOrExtruder, int microsteps, bool interp, const StringRef& reply) noexcept
 {
-	//TODO check that it is a valid microstep setting
-	microstepping[axisOrExtruder] = (interp) ? microsteps | 0x8000 : microsteps;
-	reprap.MoveUpdated();
-	return SetDriversMicrostepping(axisOrExtruder, microsteps, interp, reply);
+	bool ret = SetDriversMicrostepping(axisOrExtruder, microsteps, interp, reply);
+	if (ret)
+	{
+		microstepping[axisOrExtruder] = (interp) ? microsteps | 0x8000 : microsteps;
+		reprap.MoveUpdated();
+	}
+	return ret;
 }
 
 // Get the microstepping for an axis or extruder
@@ -2563,7 +2566,7 @@ bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mPar
 	return ret;
 }
 
-bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
+bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept
 {
 	bool hasRemoteDrivers = false;
 	IterateRemoteDrivers(axisOrExtruder, [&hasRemoteDrivers](DriverId driver) { hasRemoteDrivers = true; });
@@ -2571,21 +2574,28 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
 	// Phase stepping does not support remote drivers
 	if (hasRemoteDrivers && mode == StepMode::phase)
 	{
+#if SUPPORT_S_CURVE
+		UseSCurve(false);
+#endif
 		return false;
 	}
 
 	bool ret = true;
 	DriveMovement* dm = &dms[axisOrExtruder];
 	const uint32_t now = StepTimer::GetTimerTicks();
+
+#if SUPPORT_S_CURVE
+	if (mode != StepMode::phase)
+	{
+		UseSCurve(false);
+	}
+#endif
+
+	bool interpolation;
+	unsigned int microsteps = GetMicrostepping(axisOrExtruder, interpolation);
 	GetCurrentMotion(axisOrExtruder, now, dm->phaseStepControl.mParams);								// Update position variable
 
-
-
-	IterateLocalDrivers(axisOrExtruder, [this, dm, &ret, &mode, axisOrExtruder](uint8_t driver) {
-		bool interpolation;
-		unsigned int microstep = SmartDrivers::GetMicrostepping(driver, interpolation);
-		SmartDrivers::SetMicrostepping(driver, 255, false);
-
+	IterateLocalDrivers(axisOrExtruder, [this, dm, &ret, &mode, axisOrExtruder, microsteps](uint8_t driver) {
 		// If we are going from step dir to phase step, we need to update the phase offset so the calculated phase matches MSCNT
 		if (!SmartDrivers::IsPhaseSteppingEnabled(driver) && mode == StepMode::phase)
 		{
@@ -2601,30 +2611,52 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode) noexcept
 		// If the delay is an issue then all the drivers for the axis could be stepped together and each loop check if each drivers MSCNT has reached the target.
 		else if(SmartDrivers::IsPhaseSteppingEnabled(driver) && mode == StepMode::stepDir)
 		{
-			const uint16_t targetPhase = dm->phaseStepControl.CalculateStepPhase(driver);
-			uint16_t mscnt = SmartDrivers::GetMicrostepPosition(driver) * 4;
-
-			while (mscnt != targetPhase)
+			const uint16_t targetPhase = dm->phaseStepControl.CalculateStepPhase(driver) / 4;
+			uint16_t mscnt = SmartDrivers::GetMicrostepPosition(driver);
+			int16_t steps = ((int16_t)mscnt - (int16_t)targetPhase) / (256 / microsteps);
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PhaseStep))
 			{
-				StepPins::StepDriversHigh(StepPins::CalcDriverBitmap(driver));					// step drivers high
-# if SAME70
-				__DSB();													// without this the step pulse can be far too short
-# endif
-				StepPins::StepDriversLow(StepPins::CalcDriverBitmap(driver));					// step drivers low
-				delay(1);														// let the MSCNT register be read by tmcLoop()
-				mscnt = SmartDrivers::GetMicrostepPosition(driver) * 4;
+				debugPrintf("dms[%u]: mscnt=%u, targetPhase=%u, steps=%d", axisOrExtruder, mscnt, targetPhase, steps);
 			}
 
-		}
+			bool d = digitalRead(DIRECTION_PINS[driver]);
+			if (steps < 0)
+			{
+				digitalWrite(DIRECTION_PINS[driver], false);
+			}
+			else
+			{
+				digitalWrite(DIRECTION_PINS[driver], true);
+			}
 
-		SmartDrivers::SetMicrostepping(driver, microstep, interpolation);
+			steps = abs(steps);
+
+			while (steps > 0)
+			{
+				StepPins::StepDriversHigh(StepPins::CalcDriverBitmap(driver));	// step drivers high
+				delayMicroseconds(20);
+# if SAME70
+				__DSB();														// without this the step pulse can be far too short
+# endif
+				StepPins::StepDriversLow(StepPins::CalcDriverBitmap(driver));	// step drivers low
+				delayMicroseconds(20);
+				steps--;
+			}
+
+			digitalWrite(DIRECTION_PINS[driver], d);
+
+			delay(10);															// Give enough time for MSCNT to be read
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::PhaseStep))
+			{
+				debugPrintf(", new mscnt=%u\n", SmartDrivers::GetMicrostepPosition(driver));
+			}
+		}
 
 		if (!SmartDrivers::EnablePhaseStepping(driver, mode == StepMode::phase))
 		{
 			ret = false;
 		}
 	});
-
 	dms[axisOrExtruder].SetStepMode(mode);
 
 	ResetPhaseStepMonitoringVariables();
@@ -5053,7 +5085,7 @@ GCodeResult Move::EutProcessM569Point7(const CanMessageGeneric& msg, const Strin
 		parser.GetStringParam('C', portName.GetRef());
 		//TODO use the following instead when we track the enable state of each driver individually
 		//if (!brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, (driverDisabled[drive]) ? PinAccess::write0 : PinAccess::write1)) ...
-		if (brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, PinAccess::write0))
+		if (!brakePorts[drive].AssignPort(portName.c_str(), reply, PinUsedBy::gpout, PinAccess::write0))
 		{
 			return GCodeResult::error;
 		}
