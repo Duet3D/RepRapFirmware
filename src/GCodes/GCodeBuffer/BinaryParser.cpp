@@ -597,7 +597,7 @@ void BinaryParser::SetFinished() noexcept
 
 FilePosition BinaryParser::GetFilePosition() const noexcept
 {
-	return ((header->flags & CodeFlags::HasFilePosition) != 0) ? header->filePosition : noFilePosition;
+	return ((header->flags & CodeFlags::HasFilePosition) != 0 && !gb.IsMacroFileClosed() && !gb.macroJustFinished) ? header->filePosition : noFilePosition;
 }
 
 const char* BinaryParser::DataStart() const noexcept
