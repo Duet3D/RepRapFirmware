@@ -164,7 +164,13 @@ bool GCodes::HandleGcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	}
 
 	GCodeResult result = GCodeResult::ok;
-	if (IsSimulating() && code > 4 && code != 10 && code != 11 && code != 20 && code != 21 && (code < 53 || code > 59) && (code < 90 || code > 94))
+	if (IsSimulating() && code > 4				  // move & dwell
+		&& code != 10 && code != 11				  // (un)retract
+		&& code != 17 && code != 18 && code != 19 // selected plane for arc moves
+		&& code != 68 && code != 69				  // coordinate rotation
+		&& code != 20 && code != 21				  // change units
+		&& (code < 53 || code > 59)				  // coordinate system
+		&& (code < 90 || code > 94))			  // positioning & feedrate modes
 	{
 		HandleReply(gb, result, "");
 		return true;														// we only simulate some gcodes
