@@ -91,6 +91,12 @@ constexpr ObjectModelArrayTableEntry Tool::objectModelArrayTable[] =
 		nullptr,					// no lock needed
 		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
 		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->standbyTemperatures[context.GetLastIndex()], 1); }
+	},
+	// 8. Temperature Feedforward
+	{
+		nullptr,					// no lock needed
+		[] (const ObjectModel *self, const ObjectExplorationContext&) noexcept -> size_t { return ((const Tool*)self)->heaterCount; },
+		[] (const ObjectModel *self, ObjectExplorationContext& context) noexcept -> ExpressionValue { return ExpressionValue(((const Tool*)self)->temperatureFeedForward[context.GetLastIndex()], 3); }
 	}
 };
 
@@ -100,24 +106,25 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 {
 	// Within each group, these entries must be in alphabetical order
 	// 0. Tool members
-	{ "active",				OBJECT_MODEL_FUNC_ARRAY(0), 												ObjectModelEntryFlags::live },
-	{ "axes",				OBJECT_MODEL_FUNC_ARRAY(1), 												ObjectModelEntryFlags::none },
-	{ "extruders",			OBJECT_MODEL_FUNC_ARRAY(2), 												ObjectModelEntryFlags::none },
-	{ "fans",				OBJECT_MODEL_FUNC(self->fanMapping), 										ObjectModelEntryFlags::none },
-	{ "feedForward",		OBJECT_MODEL_FUNC_ARRAY(3), 												ObjectModelEntryFlags::none },
-	{ "filamentExtruder",	OBJECT_MODEL_FUNC((int32_t)self->filamentExtruder),							ObjectModelEntryFlags::none },
-	{ "heaters",			OBJECT_MODEL_FUNC_ARRAY(4), 												ObjectModelEntryFlags::none },
-	{ "isRetracted",		OBJECT_MODEL_FUNC(self->IsRetracted()), 									ObjectModelEntryFlags::live },
-	{ "mix",				OBJECT_MODEL_FUNC_ARRAY(5), 												ObjectModelEntryFlags::none },
-	{ "name",				OBJECT_MODEL_FUNC(self->name),						 						ObjectModelEntryFlags::none },
-	{ "number",				OBJECT_MODEL_FUNC((int32_t)self->myNumber),									ObjectModelEntryFlags::none },
-	{ "offsets",			OBJECT_MODEL_FUNC_ARRAY(6), 												ObjectModelEntryFlags::none },
-	{ "offsetsProbed",		OBJECT_MODEL_FUNC((int32_t)self->axisOffsetsProbed.GetRaw()),				ObjectModelEntryFlags::none },
-	{ "retraction",			OBJECT_MODEL_FUNC(self, 1),													ObjectModelEntryFlags::none },
-	{ "spindle",			OBJECT_MODEL_FUNC((int32_t)self->spindleNumber),							ObjectModelEntryFlags::none },
-	{ "spindleRpm",			OBJECT_MODEL_FUNC((int32_t)self->spindleRpm),								ObjectModelEntryFlags::none },
-	{ "standby",			OBJECT_MODEL_FUNC_ARRAY(7), 												ObjectModelEntryFlags::live },
-	{ "state",				OBJECT_MODEL_FUNC(self->state.ToString()), 									ObjectModelEntryFlags::live },
+	{ "active",						OBJECT_MODEL_FUNC_ARRAY(0), 										ObjectModelEntryFlags::live },
+	{ "axes",						OBJECT_MODEL_FUNC_ARRAY(1), 										ObjectModelEntryFlags::none },
+	{ "extruders",					OBJECT_MODEL_FUNC_ARRAY(2), 										ObjectModelEntryFlags::none },
+	{ "fans",						OBJECT_MODEL_FUNC(self->fanMapping), 								ObjectModelEntryFlags::none },
+	{ "feedForward",				OBJECT_MODEL_FUNC_ARRAY(3), 										ObjectModelEntryFlags::none },
+	{ "filamentExtruder",			OBJECT_MODEL_FUNC((int32_t)self->filamentExtruder),					ObjectModelEntryFlags::none },
+	{ "heaters",					OBJECT_MODEL_FUNC_ARRAY(4), 										ObjectModelEntryFlags::none },
+	{ "isRetracted",				OBJECT_MODEL_FUNC(self->IsRetracted()), 							ObjectModelEntryFlags::live },
+	{ "mix",						OBJECT_MODEL_FUNC_ARRAY(5), 										ObjectModelEntryFlags::none },
+	{ "name",						OBJECT_MODEL_FUNC(self->name),						 				ObjectModelEntryFlags::none },
+	{ "number",						OBJECT_MODEL_FUNC((int32_t)self->myNumber),							ObjectModelEntryFlags::none },
+	{ "offsets",					OBJECT_MODEL_FUNC_ARRAY(6), 										ObjectModelEntryFlags::none },
+	{ "offsetsProbed",				OBJECT_MODEL_FUNC((int32_t)self->axisOffsetsProbed.GetRaw()),		ObjectModelEntryFlags::none },
+	{ "retraction",					OBJECT_MODEL_FUNC(self, 1),											ObjectModelEntryFlags::none },
+	{ "spindle",					OBJECT_MODEL_FUNC((int32_t)self->spindleNumber),					ObjectModelEntryFlags::none },
+	{ "spindleRpm",					OBJECT_MODEL_FUNC((int32_t)self->spindleRpm),						ObjectModelEntryFlags::none },
+	{ "standby",					OBJECT_MODEL_FUNC_ARRAY(7), 										ObjectModelEntryFlags::live },
+	{ "state",						OBJECT_MODEL_FUNC(self->state.ToString()), 							ObjectModelEntryFlags::live },
+	{ "temperatureFeedForward",		OBJECT_MODEL_FUNC_ARRAY(8), 										ObjectModelEntryFlags::none },
 
 	// 1. Tool.retraction members
 	{ "extraRestart",		OBJECT_MODEL_FUNC(self->retractExtra, 1),									ObjectModelEntryFlags::none },
@@ -127,7 +134,7 @@ constexpr ObjectModelTableEntry Tool::objectModelTable[] =
 	{ "zHop",				OBJECT_MODEL_FUNC(self->configuredRetractHop, 2),							ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 18, 5 };
+constexpr uint8_t Tool::objectModelTableDescriptor[] = { 2, 19, 5 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(Tool)
 
@@ -256,6 +263,7 @@ uint16_t Tool::numToolsToReport = 0;
 		t->activeTemperatures[heater] = ABS_ZERO;
 		t->standbyTemperatures[heater] = ABS_ZERO;
 		t->heaterFeedForward[heater] = 0.0;
+		t->temperatureFeedForward[heater] = 0.0;
 	}
 
 	if (t->filament != nullptr)
