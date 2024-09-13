@@ -505,7 +505,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 					const AxisWrapType wrapType = (newAxesType != AxisWrapType::undefined) ? newAxesType
 													: (c >= 'A' && c <= 'D') ? AxisWrapType::wrapAt360			// default A thru D to rotational but not continuous
 														: AxisWrapType::noWrap;									// default other axes to linear
-					const bool isNistRotational = (seenS) ? newAxesAreNistRotational : (c >= 'A' && c <= 'D');
+					const bool isNistRotational = (seenS) ? newAxesAreNistRotational : wrapType != AxisWrapType::noWrap;
 					platform.SetAxisType(drive, wrapType, isNistRotational);
 					++numTotalAxes;
 					if (numTotalAxes + numExtruders > MaxAxesPlusExtruders)
