@@ -18,7 +18,7 @@
 
 BinaryParser::BinaryParser(GCodeBuffer& gcodeBuffer) noexcept : gb(gcodeBuffer)
 {
-	header = reinterpret_cast<const CodeHeader *>(gcodeBuffer.buffer);
+	header = reinterpret_cast<CodeHeader *>(gcodeBuffer.buffer);
 }
 
 void BinaryParser::Init() noexcept
@@ -597,7 +597,20 @@ void BinaryParser::SetFinished() noexcept
 
 FilePosition BinaryParser::GetFilePosition() const noexcept
 {
-	return ((header->flags & CodeFlags::HasFilePosition) != 0 && !gb.IsMacroFileClosed() && !gb.macroJustFinished) ? header->filePosition : noFilePosition;
+	return ((header->flags & CodeFlags::HasFilePosition) != 0) ? header->filePosition : noFilePosition;
+}
+
+void BinaryParser::SetFilePosition(FilePosition fpos) noexcept
+{
+	if (fpos == noFilePosition)
+	{
+		header->flags = (CodeFlags)(header->flags & ~CodeFlags::HasFilePosition);
+	}
+	else
+	{
+		header->filePosition = fpos;
+		header->flags = (CodeFlags)(header->flags | CodeFlags::HasFilePosition);
+	}
 }
 
 const char* BinaryParser::DataStart() const noexcept

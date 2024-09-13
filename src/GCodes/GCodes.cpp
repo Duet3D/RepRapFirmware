@@ -1014,7 +1014,7 @@ bool GCodes::DoAsynchronousPause(GCodeBuffer& gb, PrintPausedReason reason, GCod
 			// TODO: when using RTOS there is a possible race condition in the following,
 			// because we might try to pause when a waiting move has just been added but before the gcode buffer has been re-initialised ready for the next command
 			ms.GetPauseRestorePoint().filePos = fgb.GetPrintingFilePosition(true);
-			while (fgb.IsDoingFileMacro())																	// must call this after GetFilePosition because this changes IsDoingFileMacro
+			while (fgb.LatestMachineState().doingFileMacro)													// must call this after GetFilePosition because this changes IsDoingFileMacro
 			{
 				ms.pausedInMacro = true;
 				fgb.PopState(false);
