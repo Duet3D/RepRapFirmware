@@ -1141,7 +1141,9 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 #if HAS_SMART_DRIVERS
 	{
 		uint32_t val;
+# if SUPPORT_TMC51xx
 		int32_t ival;
+# endif
 		if (gb.TryGetUIValue('D', val, seen))	// set driver mode
 		{
 # if SUPPORT_PHASE_STEPPING

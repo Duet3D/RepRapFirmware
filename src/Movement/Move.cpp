@@ -4820,7 +4820,9 @@ GCodeResult Move::EutProcessM569(const CanMessageGeneric& msg, const StringRef& 
 #if HAS_SMART_DRIVERS
 	{
 		uint32_t val;
+# if SUPPORT_TMC51xx
 		int32_t ival;
+# endif
 		if (parser.GetUintParam('D', val))	// set driver mode
 		{
 			seen = true;
