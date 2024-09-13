@@ -142,7 +142,7 @@ void GCodeBuffer::Reset() noexcept
 	isBinaryBuffer = false;
 	requestedMacroFile.Clear();
 	isWaitingForMacro = macroFileClosed = false;
-	macroJustStarted = macroJustFinished = macroFileError = macroFileEmpty = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
+	macroJustStarted = macroFileError = macroFileEmpty = abortFile = abortAllFiles = sendToSbc = messagePromptPending = messageAcknowledged = false;
 	machineState->lastCodeFromSbc = machineState->macroStartedByCode = false;
 #endif
 	cancelWait = false;
@@ -298,7 +298,7 @@ void GCodeBuffer::PutBinary(const uint32_t *data, size_t len) noexcept
 {
 	machineState->lastCodeFromSbc = true;
 	isBinaryBuffer = true;
-	macroJustStarted = macroJustFinished = false;
+	macroJustStarted = false;
 	binaryParser.Put(data, len);
 }
 
@@ -1187,8 +1187,15 @@ void GCodeBuffer::MacroFileClosed() noexcept
 {
 	machineState->CloseFile();
 	macroJustStarted = false;
-	macroJustFinished = macroFileClosed = true;
+	macroFileClosed = true;
+#if HAS_SBC_INTERFACE
+	if (IsBinary())
+	{
+		// File position of the last code is no longer valid when we get here, reset it
+		binaryParser.SetFilePosition(IsFileChannel() && OriginalMachineState().DoingFile() ? printFilePositionAtMacroStart : noFilePosition);
+	}
 	reprap.GetSbcInterface().EventOccurred();
+#endif
 }
 
 #endif
@@ -1251,12 +1258,9 @@ FilePosition GCodeBuffer::GetPrintingFilePosition(bool allowNoFilePos) const noe
 	}
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES || HAS_SBC_INTERFACE
-	const FilePosition pos = (IsDoingFileMacro()
-# if HAS_SBC_INTERFACE
-				|| IsMacroFileClosed() || macroJustFinished		// wait for the next code from the SBC to update the job file position
-# endif
-			) ? printFilePositionAtMacroStart					// the position before we started executing the macro
-				: GetJobFilePosition();							// the actual position, allowing for bytes cached but not yet processed
+	const FilePosition pos = IsDoingFileMacro()
+			  ? printFilePositionAtMacroStart					// the position before we started executing the macro
+				: GetJobFilePosition();							// the actual position
 	return (pos != noFilePosition || allowNoFilePos) ? pos : 0;
 #else
 	return allowNoFilePos ? noFilePosition : 0;
