@@ -57,7 +57,8 @@ public:
 #if SUPPORT_REMOTE_COMMANDS
 	void StopDriverFromRemote() noexcept;
 #endif
-	int32_t GetNetStepsTaken() const noexcept;							// return the number of steps taken in the current segment
+	int32_t GetNetStepsTakenThisSegment() const noexcept;				// return the number of steps taken in the current segment
+	int32_t GetNetStepsTakenThisMove() const noexcept;					// return the number of steps taken in the current move, only valid for isolated moves
 	void SetMotorPosition(int32_t pos) noexcept;
 	bool MotionPending() const noexcept { return segments != nullptr; }
 	bool IsPrintingExtruderMovement() const noexcept;					// returns true if this is an extruder executing a printing move
@@ -96,6 +97,10 @@ private:
 	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr
 	bool LogStepError(uint8_t type) noexcept;			// tell the Move class that we had a step error
 
+#if SUPPORT_PHASE_STEPPING
+	motioncalc_t GetPhaseStepsTakenThisSegment() const noexcept;
+#endif
+
 #if CHECK_SEGMENTS
 	void CheckSegment(unsigned int line, MoveSegment *seg) noexcept;
 #endif
@@ -126,12 +131,14 @@ private:
 	motioncalc_t q, t0, p;								// the movement parameters of the current segment. Only set when not phase stepping
 #if SUPPORT_PHASE_STEPPING
 	motioncalc_t u;										// the initial speed of this segment. Only set when in phase stepping
+	motioncalc_t phaseStepsTakenSinceMoveStart;			// how many steps we took in previous segments of the current isolated move
 #endif
 	MovementFlags segmentFlags;							// whether this segment checks endstops etc.
 	motioncalc_t distanceCarriedForwards;				// the residual distance in microsteps (less than one) that was pending at the end of the previous segment
 
 	int32_t currentMotorPosition;						// the current motor position in microsteps
 	int32_t positionAtSegmentStart;						// the value of currentMotorPosition at the start of the current segment
+	int32_t positionAtMoveStart;						// the position at the start of the current move, if it is an isolated move
 #if STEPS_DEBUG
 	motioncalc_t positionRequested;						// accumulated position changes requested by moves executed
 #endif
@@ -183,33 +190,30 @@ inline bool DriveMovement::CalcNextStepTime(uint32_t now) noexcept
 	return CalcNextStepTimeFull(now);
 }
 
-// Return the number of net steps already taken for the current segment in the forwards direction.
+// Return the number of net steps already taken for the current segment in the forwards direction. Used for filament monitoring.
 // Caller must disable interrupts before calling this
-inline int32_t DriveMovement::GetNetStepsTaken() const noexcept
+inline int32_t DriveMovement::GetNetStepsTakenThisSegment() const noexcept
 {
 #if SUPPORT_PHASE_STEPPING
 	if (phaseStepControl.IsEnabled())
 	{
-		const MoveSegment *const seg = segments;
-		if (seg == nullptr)
-		{
-			return 0;
-		}
-		int32_t timeSinceStart = (int32_t)(StepTimer::GetMovementTimerTicks() - seg->GetStartTime());
-		if (timeSinceStart < 0)
-		{
-			return 0;
-		}
-
-		if ((uint32_t)timeSinceStart >= seg->GetDuration())
-		{
-			timeSinceStart = seg->GetDuration();
-		}
-
-		return lrintf((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart);
+		return lrintf(GetPhaseStepsTakenThisSegment());
 	}
 #endif
 	return currentMotorPosition - positionAtSegmentStart;
+}
+
+// Return the number of net steps already taken for the current move in the forwards direction. Used for moves that are stopped by endstops or a Z probe.
+// Only valid for isolated moves. Caller must disable interrupts before calling this.
+inline int32_t DriveMovement::GetNetStepsTakenThisMove() const noexcept
+{
+#if SUPPORT_PHASE_STEPPING
+	if (phaseStepControl.IsEnabled())
+	{
+		return (int32_t)(GetPhaseStepsTakenThisSegment() + phaseStepsTakenSinceMoveStart);
+	}
+#endif
+	return currentMotorPosition - positionAtMoveStart;
 }
 
 // Return true if this is an extruder executing a printing move
@@ -281,6 +285,7 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 				{
 					currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
 					distanceCarriedForwards += seg->GetLength() - (motioncalc_t)netStepsThisSegment;
+					phaseStepsTakenSinceMoveStart += seg->GetLength();
 					if (isExtruder)
 					{
 						movementAccumulator += netStepsThisSegment;		// update the amount of extrusion

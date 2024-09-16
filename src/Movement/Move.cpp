@@ -2091,7 +2091,7 @@ int32_t Move::GetAccumulatedExtrusion(size_t logicalDrive, bool& isPrinting) noe
 	DriveMovement& dm = dms[logicalDrive];
 	AtomicCriticalSectionLocker lock;							// we don't want a move to complete and the ISR update the movement accumulators while we are doing this
 	const int32_t ret = dm.movementAccumulator;
-	const int32_t adjustment = dm.GetNetStepsTaken();
+	const int32_t adjustment = dm.GetNetStepsTakenThisSegment();
 	dm.movementAccumulator = -adjustment;
 	isPrinting = dms[logicalDrive].extruderPrinting;
 	return ret + adjustment;
@@ -2458,6 +2458,10 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			if (ms == nullptr)
 			{
 				dm.segments = tail;
+				dm.positionAtMoveStart = dm.currentMotorPosition;						// record the start-of-motion position in case we are checking endstops
+#if SUPPORT_PHASE_STEPPING
+				dm.phaseStepsTakenSinceMoveStart = (motioncalc_t)0.0;
+#endif
 			}
 			else
 			{
@@ -2972,7 +2976,7 @@ void Move::CheckEndstops(bool executingMove) noexcept
 					DriveMovement& dm = dms[hitDetails.axis];
 					if (dm.state >= DMState::firstMotionState)
 					{
-						if (CanMotion::StopDriverWhenExecuting(hitDetails.driver, dm.GetNetStepsTaken()))
+						if (CanMotion::StopDriverWhenExecuting(hitDetails.driver, dm.GetNetStepsTakenThisMove()))
 						{
 							wakeAsyncSender = true;
 						}
