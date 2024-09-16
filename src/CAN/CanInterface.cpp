@@ -1534,7 +1534,7 @@ GCodeResult CanInterface::ChangeAddressAndNormalTiming(GCodeBuffer& gb, const St
 		changeTiming = true;
 	}
 
-	if (oldAddress == 0)
+	if (oldAddress == GetCanAddress())
 	{
 		if (changeTiming)
 		{
