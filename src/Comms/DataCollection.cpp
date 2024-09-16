@@ -121,16 +121,23 @@ namespace DataCollection
 	}
 
 	// Convert a float to an ASCII array of length 5, implied decimal place before last 2 characters
-	static bool SerialiseFloat(float input, uint8_t* output, size_t &len)
+	static bool SerialiseFloat(float input, uint8_t* output, size_t &len, size_t decimals)
 	{
-		// Do not support number that take more than 5 digits (including 2 decimal)
-		if (unlikely(abs(input) > 999.99))
+		int limit = 1;
+		const size_t decimalAndSignChars = decimals > 0 ? decimals + 2 : 1;
+		for (size_t i = decimalAndSignChars; i < len; i++)
 		{
-			input = input < 0 ? -999.99 : 999.99;
+			limit *= 10;
 		}
 
-		char charBuf[8];		// sign, decimal, 5 digits, end character
-		SafeSnprintf(charBuf, min((size_t)8, len+1), "%.2f", (double)input);
+		if (unlikely(abs(input) >= limit))
+		{
+			float decimalResolution = decimals > 0 ? pow(0.1, decimals) : 0;
+			input = input < 0 ? -(limit - decimalResolution) : (limit - decimalResolution);
+		}
+
+		char charBuf[20];
+		SafeSnprintf(charBuf, min(ARRAY_SIZE(charBuf), len+1), "%.*f", decimals, (double)input);
 		len = strlen(charBuf);
 
 		for (size_t i = 0; i < len; i++)
@@ -175,9 +182,9 @@ namespace DataCollection
 
 		int32_t currentMicrosteps = move.GetLiveMotorPosition(axisOrExtruder);
 		float pos = currentMicrosteps / move.DriveStepsPerMm(axisOrExtruder);
-		uint8_t asciiPos[8] = {0};
 		size_t len = 7;
-		SerialiseFloat(pos, asciiPos, len);
+		uint8_t asciiPos[len+1] = {0};
+		SerialiseFloat(pos, asciiPos, len, 2);
 		AddDataToBuffer(asciiPos, len);
 	}
 
@@ -199,20 +206,25 @@ namespace DataCollection
 
 		// Add E0 position to buffer
 		AddAxisPosition(ExtruderToLogicalDrive(0));
-		AddDataToBuffer((uint8_t)',');
 
 		// Add analog sensor
 		// TODO will need to poll this faster
-		const auto sensor = reprap.GetHeat().FindSensor(AnalogSensorNum);
-		uint16_t reading = 0;
-		if (sensor.IsNotNull())
+		for (size_t i = 0; i < ARRAY_SIZE(AnalogSensors); i++)
 		{
-			float fReading;
-			sensor->GetLatestTemperature(fReading);
-			reading = static_cast<uint16_t>(fReading);
+			AddDataToBuffer((uint8_t)',');
+			const AnalogSensorInfo sensorInfo = AnalogSensors[i];
+			const auto sensor = reprap.GetHeat().FindSensor(sensorInfo.number);
+			if (sensor.IsNotNull())
+			{
+				float fReading;
+				size_t len = 7;				// max linearAnalog reading is 5 digits, temperature to 1 d.p. can be 6 digits.
+				uint8_t asciiReading[len+1] = {0};
+				sensor->GetLatestTemperature(fReading);
+				SerialiseFloat(fReading, asciiReading, len, sensorInfo.decimals);
+				AddDataToBuffer(asciiReading, len);
+			}
 		}
 
-		AddDataToBuffer((uint32_t)reading);
 		AddDataToBuffer((uint8_t)'\n');
 
 		SendDataToUart();

@@ -14,10 +14,19 @@
 
 namespace DataCollection
 {
+	struct AnalogSensorInfo
+	{
+		size_t number;
+		size_t decimals;
+	};
+
 	constexpr size_t MaxBufferLen = 46;		// max number of bytes supported in a single message
 	constexpr uint32_t SendInterval = 2;	// interval in ms between sending data
 	constexpr size_t DefaultAuxChannel = 0;
-	constexpr size_t AnalogSensorNum = 2;		// analog sensor number to log
+	constexpr AnalogSensorInfo AnalogSensors[] = {
+			{.number=2, .decimals=0},
+			{.number=1, .decimals=1}
+	};		// analog sensor numbers to log
 
 	bool SendDataToUart();
 	void ClearBuffer();
