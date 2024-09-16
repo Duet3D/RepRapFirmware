@@ -62,12 +62,13 @@ public:
 	void SetStandstillCurrent(float percent) noexcept;
 
 	// Methods called by the motion system
-	void Calculate() noexcept; // Calculate the phase and current before the per driver offset is applied
 	void InstanceControlLoop(size_t driver) noexcept;
 	void SetEnabled(bool enable) { enabled = enable; }
 	bool IsEnabled() const noexcept { return enabled; }
 	void UpdatePhaseOffset(size_t driver) noexcept;
 	void SetPhaseOffset(size_t driver, uint16_t offset) noexcept;
+	uint16_t GetPhaseOffset(size_t driver);
+	float CalculateCurrentFraction() noexcept;
 
 	// Configuration methods
 	void SetKv(float newKv) noexcept { Kv = newKv; }
@@ -104,7 +105,6 @@ public:
 
 	// Functions private to this module
 	uint16_t CalculateStepPhase(size_t driver) noexcept;
-	float CalculateCurrentFraction() noexcept;
 	void ResetMonitoringVariables() noexcept;
 };
 

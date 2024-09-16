@@ -838,7 +838,10 @@ void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationConte
 				{
 					buf->cat('[');
 				}
+
+				context.AddIndex(index);
 				ReportItemAsJson(buf, context, classDescriptor, element, endptr + 1);
+				context.RemoveIndex();
 
 				if (*filter == 0)
 				{
@@ -1130,7 +1133,10 @@ void ObjectModel::ReportHeapArrayAsJson(OutputBuffer *buf, ObjectExplorationCont
 		}
 		ExpressionValue element;
 		ah.GetElement(i, element);
+
+		context.AddIndex(i);
 		ReportItemAsJson(buf, context, classDescriptor, element, filter);
+		context.RemoveIndex();
 	}
 	if (isRootArray && context.GetNextElement() < 0)
 	{

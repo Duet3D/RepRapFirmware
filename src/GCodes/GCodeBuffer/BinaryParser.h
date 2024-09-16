@@ -55,6 +55,7 @@ public:
 	void SetFinished() noexcept;									// Set the G Code finished
 
 	FilePosition GetFilePosition() const noexcept;					// Get the file position at the start of the current command
+	void SetFilePosition(FilePosition fpos) noexcept;				// Overwrite the file position, e.g. when a macro finishes
 
 	const char* DataStart() const noexcept;							// Get the start of the current command
 	size_t DataLength() const noexcept;								// Get the length of the current command
@@ -78,7 +79,7 @@ private:
 	void WriteParameters(const StringRef& s, bool quoteStrings) const noexcept;
 
 	size_t bufferLength;
-	const CodeHeader *header;
+	CodeHeader *header;
 
 	int reducedBytesRead;
 	ParameterLettersBitmap parametersPresent;

@@ -20,6 +20,7 @@ namespace MoveDebugFlags
 	constexpr unsigned int AxisAllocation = 6;
 	constexpr unsigned int Lookahead = 7;
 	constexpr unsigned int Segments = 8;
+	constexpr unsigned int PhaseStep = 9;
 }
 
 #endif /* SRC_MOVEMENT_MOVEDEBUGFLAGS_H_ */
