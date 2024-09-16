@@ -898,14 +898,14 @@ void Heat::FeedForwardAdjustment(unsigned int heater, float fanPwmChange, float 
 }
 
 // This one is called from an ISR so we must not get a lock
-void Heat::SetExtrusionFeedForward(unsigned int heater, float pwm) const noexcept
+void Heat::SetExtrusionFeedForward(unsigned int heater, float pwm, float degree) const noexcept
 {
 	if (heater < MaxHeaters)
 	{
 		Heater * const h = heaters[heater];
 		if (h != nullptr)
 		{
-			h->SetExtrusionFeedForward(pwm);
+			h->SetExtrusionFeedForward(pwm, degree);
 		}
 	}
 }

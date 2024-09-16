@@ -86,7 +86,7 @@ void LocalHeater::ResetHeater() noexcept
 	mode = HeaterMode::off;
 	previousTemperaturesGood = 0;
 	previousTemperatureIndex = 0;
-	iAccumulator = extrusionBoost = 0.0;
+	iAccumulator = extrusionBoost = extrusionTemperatureBoost = lastExtrusionTemperatureBoost = 0.0;
 	badTemperatureCount = 0;
 	averagePWM = lastPwm = 0.0;
 	heatingFaultCount = 0;
@@ -189,7 +189,7 @@ GCodeResult LocalHeater::SwitchOn(const StringRef& reply) noexcept
 		return GCodeResult::error;
 	}
 
-	const float target = GetTargetTemperature();
+	const float target = min<float>(GetTargetTemperature() + extrusionTemperatureBoost, GetHighestTemperatureLimit());
 	const HeaterMode newMode = (temperature + TemperatureCloseEnough < target) ? HeaterMode::heating
 								: (temperature > target + TemperatureCloseEnough) ? HeaterMode::cooling
 									: HeaterMode::stable;
@@ -282,8 +282,16 @@ void LocalHeater::Spin() noexcept
 		if (GetModel().IsEnabled())
 		{
 			// Get the target temperature and the error
-			const float targetTemperature = GetTargetTemperature();
+			const float targetTemperature = min<float>(GetTargetTemperature() + extrusionTemperatureBoost, GetHighestTemperatureLimit());
 			const float error = targetTemperature - temperature;
+
+			if (extrusionTemperatureBoost != 0.0 || lastExtrusionTemperatureBoost != extrusionTemperatureBoost)
+			{
+				// calculate new heater mode to prevent heater fault due to exceededAllowedExcursion
+				String<1> dummy;
+				(void)SwitchOn(dummy.GetRef());
+			}
+			lastExtrusionTemperatureBoost = extrusionTemperatureBoost;
 
 			// Do the heating checks
 			switch(mode)
@@ -570,9 +578,10 @@ void LocalHeater::FeedForwardAdjustment(float fanPwmChange, float extrusionChang
 }
 
 // Set extrusion feedforward. This is called from an ISR.
-void LocalHeater::SetExtrusionFeedForward(float pwm) noexcept
+void LocalHeater::SetExtrusionFeedForward(float pwm, float degree) noexcept
 {
 	extrusionBoost = pwm;
+	extrusionTemperatureBoost = degree;
 }
 
 /* Notes on the auto tune algorithm
