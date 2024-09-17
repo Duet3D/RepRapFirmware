@@ -230,6 +230,15 @@ void Network::CreateAdditionalInterface() noexcept
 
 #endif
 
+// Terminate all responders that handle a specified protocol (unless AnyProtocol is passed) on a specified interface
+void Network::TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol) noexcept
+{
+	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+	{
+		r->Terminate(protocol, iface);
+	}
+}
+
 GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
 {
 #if HAS_NETWORKING
@@ -275,41 +284,40 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 #if HAS_RESPONDERS
 			if (!client)
 			{
-				for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
-				{
-					r->Terminate(protocol, iface);
-				}
+				TerminateResponders(iface, protocol);
 			}
 
-			// The following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
-			// However, the only supported hardware with more than one network interface is the early Duet 3 prototype, so we'll leave this be.
 			switch (protocol)
 			{
 #if SUPPORT_HTTP
 			case HttpProtocol:
-				HttpResponder::Disable();			// free up output buffers etc.
+				HttpResponder::DisableInterface(iface);			// free up output buffers etc.
 				break;
 #endif
 
 #if SUPPORT_FTP
 			case FtpProtocol:
+				// TODO the following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
 				FtpResponder::Disable();
 				break;
 #endif
 
 #if SUPPORT_TELNET
 			case TelnetProtocol:
+				// TODO the following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
 				TelnetResponder::Disable();
 				break;
 #endif
 
 #if SUPPORT_MULTICAST_DISCOVERY
+				// TODO the following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
 			case MulticastDiscoveryProtocol:
 				break;
 #endif
 
 #if SUPPORT_MQTT
 			case MqttProtocol:
+				// TODO the following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
 				MqttClient::Disable();
 				break;
 #endif
@@ -358,23 +366,20 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 		if (mode < 1)			// if disabling the interface
 		{
 #if HAS_RESPONDERS
-			for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
-			{
-				r->Terminate(AnyProtocol, iface);
-			}
+			TerminateResponders(iface, AnyProtocol);
 
-#if SUPPORT_HTTP
+# if SUPPORT_HTTP
 			HttpResponder::DisableInterface(iface);		// remove sessions that use this interface
-#endif
-#if SUPPORT_FTP
-			FtpResponder::Disable();
-#endif
-#if SUPPORT_TELNET
-			TelnetResponder::Disable();					// ideally here we would leave any Telnet session using a different interface alone
-#endif
-#if SUPPORT_MQTT
+# endif
+# if SUPPORT_FTP
+			FtpResponder::Disable();					// TODO leave any Telnet session using a different interface alone
+# endif
+# if SUPPORT_TELNET
+			TelnetResponder::Disable();					// TODO leave any Telnet session using a different interface alone
+# endif
+# if SUPPORT_MQTT
 			MqttClient::Disable();
-#endif
+# endif
 #endif // HAS_RESPONDERS
 		}
 		return iface->EnableInterface(mode, ssid, reply);

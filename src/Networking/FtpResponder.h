@@ -17,7 +17,7 @@ public:
 
 	bool Spin() noexcept override;								// do some work, returning true if we did anything significant
 	bool Accept(Socket *s, NetworkProtocol protocol) noexcept override;	// ask the responder to accept this connection, returns true if it did
-	void Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept override;	// terminate the responder if it is serving the specified protocol on the specified interface
+	void Terminate(NetworkProtocol protocol, const NetworkInterface *interface) noexcept override;	// terminate the responder if it is serving the specified protocol on the specified interface
 
 	void Diagnostics(MessageType mtype) const noexcept override;
 

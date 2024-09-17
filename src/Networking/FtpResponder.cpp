@@ -55,7 +55,7 @@ bool FtpResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
 }
 
 // This is called to force termination if we implement the specified protocol
-void FtpResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept
+void FtpResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *interface) noexcept
 {
 	if (responderState != ResponderState::free && (protocol == FtpProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{

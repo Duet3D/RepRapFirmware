@@ -129,6 +129,8 @@ public:
 	void StopClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept;
 #endif
 
+	void TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol) noexcept;
+
 	void HandleHttpGCodeReply(const char *msg) noexcept;
 	void HandleTelnetGCodeReply(const char *msg) noexcept;
 	void HandleHttpGCodeReply(OutputBuffer *buf) noexcept;
