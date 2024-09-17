@@ -230,6 +230,8 @@ void Network::CreateAdditionalInterface() noexcept
 
 #endif
 
+#if HAS_NETWORKING
+
 // Terminate all responders that handle a specified protocol (unless AnyProtocol is passed) on a specified interface
 void Network::TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol) noexcept
 {
@@ -238,6 +240,8 @@ void Network::TerminateResponders(const NetworkInterface *iface, NetworkProtocol
 		r->Terminate(protocol, iface);
 	}
 }
+
+#endif
 
 GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol protocol, int port, uint32_t ip, int secure, const StringRef& reply) noexcept
 {
@@ -692,7 +696,7 @@ bool Network::IsWiFiInterface(unsigned int interface) const noexcept
 
 #if HAS_NETWORKING
 
-// Main spin loop
+// Main spin loop, called by the Network task
 void Network::Spin() noexcept
 {
 	for (;;)
@@ -751,6 +755,7 @@ void Network::Spin() noexcept
 }
 #endif
 
+// Get network diagnostics
 void Network::Diagnostics(MessageType mtype) noexcept
 {
 #if HAS_NETWORKING
@@ -787,30 +792,6 @@ void Network::Diagnostics(MessageType mtype) noexcept
 #endif
 }
 
-int Network::EnableState(unsigned int interface) const noexcept
-{
-#if HAS_NETWORKING
-	if (interface < GetNumNetworkInterfaces())
-	{
-		return interfaces[interface]->EnableState();
-	}
-#endif
-	return -1;
-}
-
-void Network::SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept
-{
-#if HAS_NETWORKING
-	for (NetworkInterface *iface : interfaces)
-	{
-		if (iface != nullptr && !iface->IsWiFiInterface())
-		{
-			iface->SetIPAddress(p_ipAddress, p_netmask, p_gateway);
-		}
-	}
-#endif
-}
-
 IPAddress Network::GetIPAddress(unsigned int interface) const noexcept
 {
 	return
@@ -820,32 +801,48 @@ IPAddress Network::GetIPAddress(unsigned int interface) const noexcept
 					IPAddress();
 }
 
+#if HAS_NETWORKING
+
+int Network::EnableState(unsigned int interface) const noexcept
+{
+	if (interface < GetNumNetworkInterfaces())
+	{
+		return interfaces[interface]->EnableState();
+	}
+	return -1;
+}
+
+void Network::SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept
+{
+	for (NetworkInterface *iface : interfaces)
+	{
+		if (iface != nullptr && !iface->IsWiFiInterface())
+		{
+			iface->SetIPAddress(p_ipAddress, p_netmask, p_gateway);
+		}
+	}
+}
+
 IPAddress Network::GetNetmask(unsigned int interface) const noexcept
 {
 	return
-#if HAS_NETWORKING
 			(interface < GetNumNetworkInterfaces()) ? interfaces[interface]->GetNetmask() :
-#endif
 					IPAddress();
 }
 
 IPAddress Network::GetGateway(unsigned int interface) const noexcept
 {
 	return
-#if HAS_NETWORKING
 			(interface < GetNumNetworkInterfaces()) ? interfaces[interface]->GetGateway() :
-#endif
 					IPAddress();
 }
 
 bool Network::UsingDhcp(unsigned int interface) const noexcept
 {
-#if HAS_NETWORKING
 	return interface < GetNumNetworkInterfaces() && interfaces[interface]->UsingDhcp();
-#else
-	return false;
-#endif
 }
+
+#endif
 
 void Network::SetHostname(const char *name) noexcept
 {
@@ -884,35 +881,29 @@ void Network::SetHostname(const char *name) noexcept
 #endif
 }
 
+#if HAS_NETWORKING
+
 // Net the MAC address. Pass -1 as the interface number to set the default MAC address for interfaces that don't have one.
 GCodeResult Network::SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept
 {
-#if HAS_NETWORKING
 	if (interface < GetNumNetworkInterfaces())
 	{
 		return interfaces[interface]->SetMacAddress(mac, reply);
 	}
 	reply.copy("unknown interface ");
 	return GCodeResult::error;
-#else
-	reply.copy(notSupportedText);
-	return GCodeResult::error;
-#endif
 }
 
 const MacAddress& Network::GetMacAddress(unsigned int interface) const noexcept
 {
-#if HAS_NETWORKING
 	if (interface >= GetNumNetworkInterfaces())
 	{
 		interface = 0;
 	}
 	return interfaces[interface]->GetMacAddress();
-#else
-	// TODO: Is this initialized?
-	return platform.GetDefaultMacAddress();
-#endif
 }
+
+#endif
 
 // Find a responder to process a new connection
 bool Network::FindResponder(Socket *skt, NetworkProtocol protocol) noexcept

@@ -710,6 +710,8 @@ void Platform::Exit() noexcept
 #endif
 }
 
+#if HAS_NETWORKING
+
 void Platform::SetIPAddress(IPAddress ip) noexcept
 {
 	ipAddress = ip;
@@ -727,6 +729,8 @@ void Platform::SetNetMask(IPAddress nm) noexcept
 	netMask = nm;
 	reprap.GetNetwork().SetEthernetIPAddress(ipAddress, netMask, gateWay);
 }
+
+#endif
 
 // Flush messages to USB and aux, returning true if there is more to send
 bool Platform::FlushMessages() noexcept
