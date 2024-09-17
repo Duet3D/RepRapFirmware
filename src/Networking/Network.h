@@ -97,15 +97,21 @@ public:
 	GCodeResult GetNetworkState(unsigned int interface, const StringRef& reply) noexcept;
 	int EnableState(unsigned int interface) const noexcept;
 
-	void SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept;
 	IPAddress GetIPAddress(unsigned int interface) const noexcept;
+
+#if HAS_NETWORKING
+	void SetEthernetIPAddress(IPAddress p_ipAddress, IPAddress p_netmask, IPAddress p_gateway) noexcept;
 	IPAddress GetNetmask(unsigned int interface) const noexcept;
 	IPAddress GetGateway(unsigned int interface) const noexcept;
 	bool UsingDhcp(unsigned int interface) const noexcept;
-	const char *GetHostname() const noexcept { return hostname; }
-	void SetHostname(const char *name) noexcept;
 	GCodeResult SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept;
 	const MacAddress& GetMacAddress(unsigned int interface) const noexcept;
+
+	void TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol) noexcept;
+#endif
+
+	const char *GetHostname() const noexcept { return hostname; }
+	void SetHostname(const char *name) noexcept;
 
 #if SUPPORT_HTTP
 	const char *GetCorsSite() const noexcept { return corsSite.IsEmpty() ? nullptr : corsSite.c_str(); }
@@ -115,7 +121,6 @@ public:
 	bool FindResponder(Socket *skt, NetworkProtocol protocol) noexcept;
 	bool StartClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept;
 	void StopClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept;
-	void TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol) noexcept;
 
 	void HandleHttpGCodeReply(const char *msg) noexcept;
 	void HandleTelnetGCodeReply(const char *msg) noexcept;
