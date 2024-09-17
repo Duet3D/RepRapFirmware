@@ -2,10 +2,12 @@ name: Upload prerelease assets
 
 on:
   release:
-    types: [prereleased]
+    types:
+      - published
 
 jobs:
   build:
+    if: "github.event.release.prerelease"
     runs-on: ubuntu-22.04
     steps:
       # Download release assets

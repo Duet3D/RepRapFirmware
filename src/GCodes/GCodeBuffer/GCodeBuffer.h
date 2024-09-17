@@ -372,9 +372,8 @@ private:
 	// Accessed only when the GB mutex is acquired
 	String<MaxFilenameLength> requestedMacroFile;
 	bool isBinaryBuffer;
-	uint16_t
+	uint8_t
 		macroJustStarted : 1,		// Whether the GB has just started a macro file
-		macroJustFinished : 1,		// Whether the GB has just finished a macro file
 		macroFileError : 1,			// Whether the macro file could be opened or if an error occurred
 		macroFileEmpty : 1,			// Whether the macro file is actually empty
 		abortFile : 1,				// Whether to abort the last file on the stack
@@ -391,7 +390,7 @@ private:
 inline bool GCodeBuffer::IsDoingFileMacro() const noexcept
 {
 #if HAS_SBC_INTERFACE
-	return machineState->doingFileMacro || IsMacroRequestPending();
+	return machineState->doingFileMacro || IsMacroRequestPending() || macroFileClosed;
 #else
 	return machineState->doingFileMacro;
 #endif
