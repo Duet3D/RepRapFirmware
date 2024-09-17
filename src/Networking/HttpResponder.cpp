@@ -1417,7 +1417,7 @@ void HttpResponder::DoUpload() noexcept
 #endif
 
 // This is called to force termination if we implement the specified protocol
-void HttpResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept
+void HttpResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *interface) noexcept
 {
 	if (responderState != ResponderState::free && (protocol == HttpProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{

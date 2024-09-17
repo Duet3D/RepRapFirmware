@@ -42,7 +42,7 @@ bool TelnetResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
 }
 
 // This is called to force termination if we implement the specified protocol
-void TelnetResponder::Terminate(NetworkProtocol protocol, NetworkInterface *interface) noexcept
+void TelnetResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *interface) noexcept
 {
 	if (responderState != ResponderState::free && (protocol == TelnetProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{

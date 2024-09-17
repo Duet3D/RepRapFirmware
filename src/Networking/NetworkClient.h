@@ -27,7 +27,7 @@ public:
 	bool Start(NetworkProtocol protocol, NetworkInterface *iface) noexcept;
 	void Stop(NetworkProtocol protocol, NetworkInterface *iface) noexcept;
 	bool Accept(Socket *s, NetworkProtocol protocol) noexcept override;
-	void Terminate(NetworkProtocol protocol, NetworkInterface *iface) noexcept override;
+	void Terminate(NetworkProtocol protocol, const NetworkInterface *iface) noexcept override;
 
 	NetworkInterface *GetInterface() { return interface; }
 	NetworkClient *GetNext() const noexcept { return next; }

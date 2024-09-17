@@ -115,6 +115,7 @@ public:
 	bool FindResponder(Socket *skt, NetworkProtocol protocol) noexcept;
 	bool StartClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept;
 	void StopClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept;
+	void TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol) noexcept;
 
 	void HandleHttpGCodeReply(const char *msg) noexcept;
 	void HandleTelnetGCodeReply(const char *msg) noexcept;
