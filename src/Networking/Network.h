@@ -38,9 +38,6 @@ const size_t NumTelnetResponders = 1;	// the number of concurrent Telnet session
 
 const size_t NumFtpResponders = 1;		// the number of concurrent FTP sessions we support
 
-#define HAS_CLIENTS		(SUPPORT_MQTT)
-#define HAS_RESPONDERS	(SUPPORT_HTTP || SUPPORT_FTP || SUPPORT_TELNET || HAS_CLIENTS)
-
 // Forward declarations
 class NetworkResponder;
 class NetworkClient;

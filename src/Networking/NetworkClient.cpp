@@ -6,6 +6,9 @@
  */
 
 #include "NetworkClient.h"
+
+#if HAS_CLIENTS
+
 #include "Socket.h"
 #include <Platform/Platform.h>
 
@@ -83,3 +86,7 @@ void NetworkClient::ConnectionLost() noexcept
 }
 
 NetworkClient *NetworkClient::clients = nullptr;
+
+#endif
+
+// End

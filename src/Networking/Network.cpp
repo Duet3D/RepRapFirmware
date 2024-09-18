@@ -249,6 +249,31 @@ GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol prot
 
 	if (interface < GetNumNetworkInterfaces())
 	{
+# if HAS_CLIENTS
+		bool hasFree = false;
+		bool client = false;
+		// Check if there are enough clients to accomodate enabling the protocol. Check if
+		// a client is not yet associated with an interface, or there is already one on the same
+		// interface.
+		for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
+		{
+			if (c->HandlesProtocol(protocol))
+			{
+				hasFree |= c->GetInterface() == nullptr || c->GetInterface() == interfaces[interface];
+				client |= true;
+				if (hasFree)
+				{
+					break;
+				}
+			}
+		}
+
+		if (client && !hasFree)
+		{
+			reply.printf("No more instances for client protocol.\n");
+			return GCodeResult::error;
+		}
+# endif
 		return interfaces[interface]->EnableProtocol(protocol, port, ip, secure, reply);
 	}
 
@@ -267,7 +292,7 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 	{
 		bool client = false;
 
-#if HAS_CLIENTS
+# if HAS_CLIENTS
 		// Check if a client handles the protocol. If so, termination is handled
 		// by the client itself, after attempting to disconnect gracefully.
 		for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
@@ -278,14 +303,14 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 				break;
 			}
 		}
-#endif
+# endif
 
 		NetworkInterface * const iface = interfaces[interface];
 		const GCodeResult ret = iface->DisableProtocol(protocol, reply, !client);
 
 		if (ret == GCodeResult::ok)
 		{
-#if HAS_RESPONDERS
+# if HAS_RESPONDERS
 			if (!client)
 			{
 				TerminateResponders(iface, protocol);
@@ -293,43 +318,43 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 
 			switch (protocol)
 			{
-#if SUPPORT_HTTP
+#  if SUPPORT_HTTP
 			case HttpProtocol:
 				HttpResponder::DisableInterface(iface);			// free up output buffers etc.
 				break;
-#endif
+#  endif
 
-#if SUPPORT_FTP
+#  if SUPPORT_FTP
 			case FtpProtocol:
 				// TODO the following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
 				FtpResponder::Disable();
 				break;
-#endif
+#  endif
 
-#if SUPPORT_TELNET
+#  if SUPPORT_TELNET
 			case TelnetProtocol:
 				// TODO the following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
 				TelnetResponder::Disable();
 				break;
-#endif
+#  endif
 
-#if SUPPORT_MULTICAST_DISCOVERY
+#  if SUPPORT_MULTICAST_DISCOVERY
 				// TODO the following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
 			case MulticastDiscoveryProtocol:
 				break;
-#endif
+#  endif
 
-#if SUPPORT_MQTT
+#  if SUPPORT_MQTT
 			case MqttProtocol:
 				// TODO the following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
 				MqttClient::Disable();
 				break;
-#endif
+#  endif
 
 			default:
 				break;
 			}
-#endif // HAS_RESPONDERS
+# endif // HAS_RESPONDERS
 		}
 		return ret;
 	}
@@ -842,11 +867,8 @@ bool Network::UsingDhcp(unsigned int interface) const noexcept
 	return interface < GetNumNetworkInterfaces() && interfaces[interface]->UsingDhcp();
 }
 
-#endif
-
 void Network::SetHostname(const char *name) noexcept
 {
-#if HAS_NETWORKING
 	size_t i = 0;
 	while (*name && i < ARRAY_UPB(hostname))
 	{
@@ -878,10 +900,7 @@ void Network::SetHostname(const char *name) noexcept
 			iface->UpdateHostname(hostname);
 		}
 	}
-#endif
 }
-
-#if HAS_NETWORKING
 
 // Net the MAC address. Pass -1 as the interface number to set the default MAC address for interfaces that don't have one.
 GCodeResult Network::SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept
