@@ -109,7 +109,7 @@ public:
 	const char *GetHostname() const noexcept { return hostname; }
 	void SetHostname(const char *name) noexcept;
 
-	void TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol, bool client) noexcept;
+	void TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol) noexcept;
 #endif
 
 #if SUPPORT_HTTP
