@@ -249,31 +249,6 @@ GCodeResult Network::EnableProtocol(unsigned int interface, NetworkProtocol prot
 
 	if (interface < GetNumNetworkInterfaces())
 	{
-# if HAS_CLIENTS
-		bool hasFree = false;
-		bool client = false;
-		// Check if there are enough clients to accomodate enabling the protocol. Check if
-		// a client is not yet associated with an interface, or there is already one on the same
-		// interface.
-		for (NetworkClient *c = clients; c != nullptr; c = c->GetNext())
-		{
-			if (c->HandlesProtocol(protocol))
-			{
-				hasFree |= c->GetInterface() == nullptr || c->GetInterface() == interfaces[interface];
-				client |= true;
-				if (hasFree)
-				{
-					break;
-				}
-			}
-		}
-
-		if (client && !hasFree)
-		{
-			reply.printf("No more instances for client protocol.\n");
-			return GCodeResult::error;
-		}
-# endif
 		return interfaces[interface]->EnableProtocol(protocol, port, ip, secure, reply);
 	}
 

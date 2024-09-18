@@ -2268,7 +2268,9 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 {
 	// Get the slave address and bytes or words to send
 
+# if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
 	const uint32_t address = GetAddress(gb);
+#endif
 
 	int32_t values[MaxI2cOrModbusValues] = {0};
 	size_t numToSend = 0;
@@ -2558,7 +2560,10 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 // Handle M261 and M261.1
 GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
+# if defined(I2C_IFACE) || SUPPORT_MODBUS_RTU
 	const uint32_t address = GetAddress(gb);
+#endif
+
 	const uint32_t numValues = gb.GetLimitedUIValue('B', 0, MaxI2cOrModbusValues + 1);
 	String<MaxVariableNameLength> varName;
 	bool seenV = false;
