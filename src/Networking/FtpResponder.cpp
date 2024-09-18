@@ -59,13 +59,20 @@ void FtpResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *i
 {
 	if (responderState != ResponderState::free && (protocol == FtpProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{
-		ConnectionLost();
+		// Don't call ConnectionLost here because that releases outbuf, which may be in use by the Network task, and this is called from the Main task
+		terminateResponder = true;					// tell the responder to terminate
 	}
 }
 
 // Do some work, returning true if we did anything significant
 bool FtpResponder::Spin() noexcept
 {
+	if (terminateResponder)
+	{
+		ConnectionLost();
+		terminateResponder = false;
+	}
+
 	switch (responderState)
 	{
 	case ResponderState::free:
@@ -165,7 +172,7 @@ void FtpResponder::ConnectionLost() noexcept
 void FtpResponder::SendData() noexcept
 {
 	// Send our output buffer and output stack
-	for(;;)
+	while (!terminateResponder)
 	{
 		if (outBuf == nullptr)
 		{
