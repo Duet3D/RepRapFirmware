@@ -233,12 +233,44 @@ void Network::CreateAdditionalInterface() noexcept
 #if HAS_NETWORKING
 
 // Terminate all responders that handle a specified protocol (unless AnyProtocol is passed) on a specified interface
-void Network::TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol) noexcept
+void Network::TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol, bool client) noexcept
 {
-	for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+# if HAS_RESPONDERS
+	if (!client)
 	{
-		r->Terminate(protocol, iface);
+		for (NetworkResponder *r = responders; r != nullptr; r = r->GetNext())
+		{
+			r->Terminate(protocol, iface);
+		}
 	}
+
+#  if SUPPORT_HTTP
+	if (protocol == HttpProtocol || protocol == AnyProtocol)
+	{
+		HttpResponder::DisableInterface(iface);		// remove HTTP sessions that use this interface
+	}
+#  endif
+#  if SUPPORT_FTP
+	if (protocol == FtpProtocol || protocol == AnyProtocol)
+	{
+		FtpResponder::Disable();					// TODO leave any FTP session using a different interface alone
+	}
+#  endif
+#  if SUPPORT_TELNET
+	if (protocol == TelnetProtocol || protocol == AnyProtocol)
+	{
+		TelnetResponder::Disable();					// TODO leave any Telnet session using a different interface alone
+	}
+#   endif
+#  if SUPPORT_MQTT
+	if (protocol == MqttProtocol || protocol == AnyProtocol)
+	{
+		MqttClient::Disable();						// TODO leave any Mqtt clients using a different interface alone
+	}
+#  endif
+
+	// Nothing needed here for Multicast Discovery protocol
+# endif
 }
 
 #endif
@@ -282,54 +314,9 @@ GCodeResult Network::DisableProtocol(unsigned int interface, NetworkProtocol pro
 
 		NetworkInterface * const iface = interfaces[interface];
 		const GCodeResult ret = iface->DisableProtocol(protocol, reply, !client);
-
 		if (ret == GCodeResult::ok)
 		{
-#if HAS_RESPONDERS
-			if (!client)
-			{
-				TerminateResponders(iface, protocol);
-			}
-
-			switch (protocol)
-			{
-#if SUPPORT_HTTP
-			case HttpProtocol:
-				HttpResponder::DisableInterface(iface);			// free up output buffers etc.
-				break;
-#endif
-
-#if SUPPORT_FTP
-			case FtpProtocol:
-				// TODO the following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
-				FtpResponder::Disable();
-				break;
-#endif
-
-#if SUPPORT_TELNET
-			case TelnetProtocol:
-				// TODO the following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
-				TelnetResponder::Disable();
-				break;
-#endif
-
-#if SUPPORT_MULTICAST_DISCOVERY
-				// TODO the following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
-			case MulticastDiscoveryProtocol:
-				break;
-#endif
-
-#if SUPPORT_MQTT
-			case MqttProtocol:
-				// TODO the following isn't quite right, because we shouldn't free up output buffers if another network interface is still serving this protocol.
-				MqttClient::Disable();
-				break;
-#endif
-
-			default:
-				break;
-			}
-#endif // HAS_RESPONDERS
+			TerminateResponders(iface, protocol, client);
 		}
 		return ret;
 	}
@@ -369,22 +356,7 @@ GCodeResult Network::EnableInterface(unsigned int interface, int mode, const Str
 		NetworkInterface * const iface = interfaces[interface];
 		if (mode < 1)			// if disabling the interface
 		{
-#if HAS_RESPONDERS
-			TerminateResponders(iface, AnyProtocol);
-
-# if SUPPORT_HTTP
-			HttpResponder::DisableInterface(iface);		// remove sessions that use this interface
-# endif
-# if SUPPORT_FTP
-			FtpResponder::Disable();					// TODO leave any Telnet session using a different interface alone
-# endif
-# if SUPPORT_TELNET
-			TelnetResponder::Disable();					// TODO leave any Telnet session using a different interface alone
-# endif
-# if SUPPORT_MQTT
-			MqttClient::Disable();
-# endif
-#endif // HAS_RESPONDERS
+			TerminateResponders(iface, AnyProtocol, false);
 		}
 		return iface->EnableInterface(mode, ssid, reply);
 	}
@@ -842,11 +814,8 @@ bool Network::UsingDhcp(unsigned int interface) const noexcept
 	return interface < GetNumNetworkInterfaces() && interfaces[interface]->UsingDhcp();
 }
 
-#endif
-
 void Network::SetHostname(const char *name) noexcept
 {
-#if HAS_NETWORKING
 	size_t i = 0;
 	while (*name && i < ARRAY_UPB(hostname))
 	{
@@ -878,10 +847,7 @@ void Network::SetHostname(const char *name) noexcept
 			iface->UpdateHostname(hostname);
 		}
 	}
-#endif
 }
-
-#if HAS_NETWORKING
 
 // Net the MAC address. Pass -1 as the interface number to set the default MAC address for interfaces that don't have one.
 GCodeResult Network::SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept
