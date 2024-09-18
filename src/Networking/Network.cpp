@@ -233,6 +233,7 @@ void Network::CreateAdditionalInterface() noexcept
 #if HAS_NETWORKING
 
 // Terminate all responders that handle a specified protocol (unless AnyProtocol is passed) on a specified interface
+// CAUTION: this must only be called by the Network task (not the Main task) because in terminating the responders it releases output buffers that the Network task uses to send data.
 void Network::TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol, bool client) noexcept
 {
 # if HAS_RESPONDERS

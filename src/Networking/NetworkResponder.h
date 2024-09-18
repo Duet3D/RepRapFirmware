@@ -88,6 +88,7 @@ protected:
 	FileStore *fileBeingSent;
 #endif
 	NetworkBuffer *fileBuffer;
+	bool terminateResponder;
 };
 
 #endif /* SRC_NETWORKING_NETWORKRESPONDER_H_ */

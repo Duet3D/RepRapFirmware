@@ -71,6 +71,12 @@ bool HttpResponder::Accept(Socket *s, NetworkProtocol protocol) noexcept
 // Do some work, returning true if we did anything significant
 bool HttpResponder::Spin() noexcept
 {
+	if (terminateResponder)
+	{
+		ConnectionLost();
+		terminateResponder = false;
+	}
+
 	switch (responderState)
 	{
 	case ResponderState::free:
@@ -1421,7 +1427,8 @@ void HttpResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *
 {
 	if (responderState != ResponderState::free && (protocol == HttpProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{
-		ConnectionLost();
+		// Don't call ConnectionLost here because that releases outbuf, which may be in use by the Network task, and this is called from the Main task
+		terminateResponder = true;					// tell the responder to terminate
 	}
 }
 

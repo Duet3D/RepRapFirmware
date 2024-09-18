@@ -17,7 +17,7 @@ NetworkResponder::NetworkResponder(NetworkResponder *n) noexcept
 #if HAS_MASS_STORAGE
 	  fileBeingSent(nullptr),
 #endif
-	  fileBuffer(nullptr)
+	  fileBuffer(nullptr), terminateResponder(false)
 {
 }
 
@@ -41,7 +41,7 @@ void NetworkResponder::Commit(ResponderState nextState, bool report) noexcept
 void NetworkResponder::SendData() noexcept
 {
 	// Send our output buffer and output stack
-	for(;;)
+	while (!terminateResponder)
 	{
 		if (outBuf == nullptr)
 		{
@@ -97,7 +97,7 @@ void NetworkResponder::SendData() noexcept
 	}
 
 	// If we have a file buffer here, we must be in the process of sending a file
-	while (fileBuffer != nullptr)
+	while (fileBuffer != nullptr && !terminateResponder)
 	{
 		if (fileBuffer->IsEmpty() && fileBeingSent != nullptr)
 		{
@@ -147,7 +147,7 @@ void NetworkResponder::SendData() noexcept
 #endif
 
 	// If we get here then there is nothing left to send
-	skt->Send();						// tell the socket there is no more data
+	skt->Send();								// tell the socket there is no more data
 
 	// If we are going to free up this responder after sending, then we must close the connection
 	if (stateAfterSending == ResponderState::free)
