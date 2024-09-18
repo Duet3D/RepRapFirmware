@@ -10,6 +10,9 @@
 
 #include <General/IPAddress.h>
 
+#define HAS_RESPONDERS	(SUPPORT_HTTP || SUPPORT_FTP || SUPPORT_TELNET)
+#define HAS_CLIENTS		(SUPPORT_MQTT)
+
 class NetworkBuffer;
 
 typedef uint8_t SocketNumber;

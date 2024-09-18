@@ -11,6 +11,8 @@
 #include <RepRapFirmware.h>
 #include "NetworkResponder.h"
 
+#if HAS_CLIENTS
+
 // Forward declarations
 class NetworkClient;
 class NetworkInterface;
@@ -50,5 +52,7 @@ private:
 
 	static NetworkClient *clients;	// Head of the list of all network clients
 };
+
+#endif
 
 #endif /* SRC_NETWORKING_NETWORKCLIENT_H_ */

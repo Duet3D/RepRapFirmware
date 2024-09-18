@@ -38,8 +38,6 @@ const size_t NumTelnetResponders = 1;	// the number of concurrent Telnet session
 
 const size_t NumFtpResponders = 1;		// the number of concurrent FTP sessions we support
 
-#define HAS_RESPONDERS	(SUPPORT_HTTP || SUPPORT_FTP || SUPPORT_TELNET)
-
 // Forward declarations
 class NetworkResponder;
 class NetworkClient;
@@ -146,8 +144,11 @@ private:
 
 #if HAS_RESPONDERS
 	NetworkResponder *responders;
-	NetworkClient *clients;
 	NetworkResponder *nextResponderToPoll;
+#endif
+
+#if HAS_CLIENTS
+	NetworkClient *clients;
 #endif
 
 #if SUPPORT_HTTP
