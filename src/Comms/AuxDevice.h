@@ -10,6 +10,11 @@
 
 #include <RepRapFirmware.h>
 
+enum class AuxMode : uint8_t
+{
+	disabled, raw, panelDue, device,
+};
+
 #if HAS_AUX_DEVICES
 
 #include <Platform/OutputMemory.h>
@@ -24,11 +29,6 @@
 class AuxDevice
 {
 public:
-	enum class AuxMode : uint8_t
-	{
-		disabled, raw, panelDue, device,
-	};
-
 	AuxDevice() noexcept;
 
 	void Init(AsyncSerial *p_uart, uint32_t p_baudRate) noexcept;

@@ -2051,20 +2051,20 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 	if (gb.Seen('S'))
 	{
 		// Translation of M575 S parameter to AuxMode
-		static constexpr AuxDevice::AuxMode modes[] =
+		static constexpr AuxMode modes[] =
 		{
-			AuxDevice::AuxMode::panelDue,			// basic PanelDue mode,
-			AuxDevice::AuxMode::panelDue,			// PanelDue mode with CRC or checksum required (default)
-			AuxDevice::AuxMode::raw,				// basic raw mode
-			AuxDevice::AuxMode::raw,				// raw mode with CRC or checksum required
-			AuxDevice::AuxMode::panelDue,			// PanelDue mode with CRC required
-			AuxDevice::AuxMode::disabled,			// was unused, now treated as disabled
-			AuxDevice::AuxMode::raw,				// raw mode with CRC required
-			AuxDevice::AuxMode::device,				// Modbus/Uart mode
+			AuxMode::panelDue,			// basic PanelDue mode,
+			AuxMode::panelDue,			// PanelDue mode with CRC or checksum required (default)
+			AuxMode::raw,				// basic raw mode
+			AuxMode::raw,				// raw mode with CRC or checksum required
+			AuxMode::panelDue,			// PanelDue mode with CRC required
+			AuxMode::disabled,			// was unused, now treated as disabled
+			AuxMode::raw,				// raw mode with CRC required
+			AuxMode::device,			// Modbus/Uart mode
 		};
 
 		const uint32_t val = gb.GetLimitedUIValue('S', ARRAY_SIZE(modes));
-		AuxDevice::AuxMode newMode = modes[val];
+		AuxMode newMode = modes[val];
 		if (gbp != nullptr)
 		{
 			gbp->Disable();							// disable I/O for this buffer
@@ -2076,7 +2076,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 		if (chan != 0)
 		{
 			AuxDevice& dev = auxDevices[chan - 1];
-			if (newMode == AuxDevice::AuxMode::device)
+			if (newMode == AuxMode::device)
 			{
 # if SUPPORT_MODBUS_RTU
 				if (gb.Seen('C'))
@@ -2108,8 +2108,8 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 #endif
 
 		if (   gbp != nullptr
-			&& newMode != AuxDevice::AuxMode::disabled
-			&& newMode != AuxDevice::AuxMode::device
+			&& newMode != AuxMode::disabled
+			&& newMode != AuxMode::device
 		   )
 		{
 			gbp->Enable(val);						// enable I/O and set the CRC and checksum requirements, also sets Marlin or PanelDue compatibility
@@ -2136,7 +2136,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 		if (chan != 0)
 		{
 			if (!IsAuxEnabled(chan - 1)
-				&& (chan >= NumSerialChannels || auxDevices[chan - 1].GetMode() != AuxDevice::AuxMode::device)
+				&& (chan >= NumSerialChannels || auxDevices[chan - 1].GetMode() != AuxMode::device)
 			   )
 			{
 				reply.printf("Channel %u is disabled", chan);
@@ -2144,11 +2144,11 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			else
 			{
 				const AuxDevice& dev = auxDevices[chan - 1];
-				const char *modeString = (dev.GetMode() == AuxDevice::AuxMode::device) ? "Device / modbus RTU" :
+				const char *modeString = (dev.GetMode() == AuxMode::device) ? "Device / modbus RTU" :
 											(IsAuxRaw(chan - 1)) ? "raw"
 												: "PanelDue";
 				reply.printf("Channel %d: baud rate %" PRIu32 ", %s mode, ", chan, GetBaudRate(chan), modeString);
-				if (dev.GetMode() == AuxDevice::AuxMode::device)
+				if (dev.GetMode() == AuxMode::device)
 				{
 # if SUPPORT_MODBUS_RTU
 					reply.cat("Modbus Tx/!Rx port ");
@@ -2354,7 +2354,7 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 	case 1:		// Modbus
 		{
 			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-			if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::device)
+			if (auxDevices[auxChannel].GetMode() != AuxMode::device)
 			{
 				reply.copy("Port has not been set to device mode");
 				return GCodeResult::error;
@@ -2426,10 +2426,12 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 			return rslt;
 		}
 # endif
+
+# if HAS_AUX_DEVICES
 	case 2:
 	{
 		const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-		if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::device)
+		if (auxDevices[auxChannel].GetMode() != AuxMode::device)
 		{
 			reply.copy("Port has not been set to device mode");
 			return GCodeResult::error;
@@ -2449,10 +2451,11 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 		}
 		return rslt;
 	}
+
 	case 3: // Nordson Ultimus V https://www.manualslib.com/manual/2917329/Nordson-Ultimus-V.html?page=46#manual
 	{
 		const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-		if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::device)
+		if (auxDevices[auxChannel].GetMode() != AuxMode::device)
 		{
 			reply.copy("Port has not been set to device mode");
 			return GCodeResult::error;
@@ -2552,6 +2555,8 @@ GCodeResult Platform::SendI2cOrModbus(GCodeBuffer& gb, const StringRef &reply) T
 
 		return rslt;
 	}
+#endif
+
 	default:
 		return GCodeResult::errorNotSupported;
 	}
@@ -2631,7 +2636,7 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 	case 1:		// Modbus
 		{
 			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-			if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::device)
+			if (auxDevices[auxChannel].GetMode() != AuxMode::device)
 			{
 				reply.copy("Port has not been set to device mode");
 				return GCodeResult::error;
@@ -2707,10 +2712,12 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 			return rslt;
 		}
 #endif
+
+#if HAS_AUX_DEVICES
 	case 2:		// Uart
 		{
 			const size_t auxChannel = gb.GetLimitedUIValue('P', 1, NumSerialChannels) - 1;
-			if (auxDevices[auxChannel].GetMode() != AuxDevice::AuxMode::device)
+			if (auxDevices[auxChannel].GetMode() != AuxMode::device)
 			{
 				reply.copy("Port has not been set to device mode");
 				return GCodeResult::error;
@@ -2744,6 +2751,8 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 			}
 			return rslt;
 		}
+#endif
+
 	default:
 		return GCodeResult::errorNotSupported;
 	}
@@ -2755,7 +2764,7 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 void Platform::EnablePanelDuePort() noexcept
 {
 	auxDevices[0].SetBaudRate(57600);
-	auxDevices[0].SetMode(AuxDevice::AuxMode::panelDue);
+	auxDevices[0].SetMode(AuxMode::panelDue);
 	SetCommsProperties(1, 1);
 	reprap.GetGCodes().GetSerialGCodeBuffer(1)->Enable(1);
 }
@@ -3244,15 +3253,21 @@ void Platform::AtxPowerOff() noexcept
 
 void Platform::SetBaudRate(size_t chan, uint32_t br) noexcept
 {
+#if HAS_AUX_DEVICES
 	if (chan != 0 && chan < NumSerialChannels)
 	{
 		auxDevices[chan - 1].SetBaudRate(br);
 	}
+#endif
 }
 
 uint32_t Platform::GetBaudRate(size_t chan) const noexcept
 {
-	return (chan != 0 && chan < NumSerialChannels) ? auxDevices[chan - 1].GetBaudRate() : 0;
+	return
+#if HAS_AUX_DEVICES
+		(chan != 0 && chan < NumSerialChannels) ? auxDevices[chan - 1].GetBaudRate() :
+#endif
+		0;
 }
 
 void Platform::SetCommsProperties(size_t chan, uint32_t cp) noexcept
@@ -3284,7 +3299,7 @@ void Platform::ResetChannel(size_t chan) noexcept
 	else if (chan < NumSerialChannels)
 	{
 		AuxDevice& device = auxDevices[chan - 1];
-		AuxDevice::AuxMode mode = device.GetMode();
+		AuxMode mode = device.GetMode();
 		device.Disable();
 		device.SetMode(mode);
 	}
