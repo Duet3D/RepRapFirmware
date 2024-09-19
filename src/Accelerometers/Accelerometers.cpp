@@ -91,7 +91,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 	uint8_t rslt = 0;
 	for (unsigned int i = 0; i < 3; ++i)
 	{
-		if (axes & (1u << i))
+		if ((axes & (1u << i)) != 0)
 		{
 			rslt |= 1u << axisLookup[i];
 		}
@@ -121,7 +121,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 				uint16_t dataRate = 0;
 				do
 				{
-					const uint16_t *data;
+					const uint16_t *_ecv_array data;
 					bool overflowed;
 					unsigned int samplesRead = accelerometer->CollectData(&data, dataRate, overflowed);
 					if (samplesRead == 0)
@@ -159,7 +159,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 
 							for (unsigned int axis = 0; axis < 3; ++axis)
 							{
-								if (axesRequested & (1u << axis))
+								if ((axesRequested & (1u << axis)) != 0)
 								{
 									uint16_t dataVal = data[axisLookup[axis]];
 									if (axisInverted[axis])
@@ -169,7 +169,7 @@ static uint8_t TranslateAxes(uint8_t axes) noexcept
 									dataVal >>= (16u - resolution);					// data from LIS3DH is left justified
 
 									// Sign-extend it
-									if (dataVal & (1u << (resolution - 1)))
+									if ((dataVal & (1u << (resolution - 1))) != 0)
 									{
 										dataVal |= ~mask;
 									}
@@ -247,7 +247,7 @@ static bool TranslateOrientation(uint32_t input) noexcept
 	const uint8_t yOrientation = 3u - xOrientation - zOrientation;
 
 	// The total number of inversions must be even if the cyclic order of the axes is 012, odd if it is 210 (can we prove this?)
-	if ((xOrientation + 1) % 3 != yOrientation)
+	if ((uint8_t)((xOrientation + 1u) % 3u) != yOrientation)
 	{
 		yInverted ^= 0x04;									// we need an odd number of axis inversions
 	}
@@ -444,9 +444,9 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	}
 	else
 	{
-		const time_t time = reprap.GetPlatform().GetDateTime();
+		const time_t currentTime = reprap.GetPlatform().GetDateTime();
 		tm timeInfo;
-		gmtime_r(&time, &timeInfo);
+		gmtime_r(&currentTime, &timeInfo);
 		accelerometerFileName.printf("0:/sys/accelerometer/%u_%04u-%02u-%02u_%02u.%02u.%02u.csv",
 # if SUPPORT_CAN_EXPANSION
 										(unsigned int)device.boardAddress,
@@ -476,9 +476,9 @@ GCodeResult Accelerometers::StartAccelerometer(GCodeBuffer& gb, const StringRef&
 	{
 		String<StringLength50> temp;
 		temp.printf("Sample");
-		if (axes & 1u) { temp.cat(",X"); }
-		if (axes & 2u) { temp.cat(",Y"); }
-		if (axes & 4u) { temp.cat(",Z"); }
+		if ((axes & 1u) != 0) { temp.cat(",X"); }
+		if ((axes & 2u) != 0) { temp.cat(",Y"); }
+		if ((axes & 4u) != 0) { temp.cat(",Z"); }
 		temp.cat('\n');
 		f->Write(temp.c_str());
 	}

@@ -20,7 +20,7 @@
 class SpiDevice
 {
 public:
-	SpiDevice(uint8_t sercomNum) noexcept;
+	explicit SpiDevice(uint8_t sercomNum) noexcept;
 
 	void Disable() const noexcept;
 	void Enable() const noexcept;

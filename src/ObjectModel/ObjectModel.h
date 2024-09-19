@@ -435,8 +435,8 @@ public:
 
 struct ObjectModelClassDescriptor
 {
-	const ObjectModelTableEntry *omt;
-	const uint8_t *omd;
+	const ObjectModelTableEntry *_ecv_array omt;
+	const uint8_t *_ecv_array omd;
 	const ObjectModelClassDescriptor *_ecv_null parent;
 };
 
