@@ -142,7 +142,7 @@ static FileInfoParser infoParser;
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-static FileWriteBuffer *freeWriteBuffers;
+static FileWriteBuffer *_ecv_null freeWriteBuffers;
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
@@ -151,10 +151,10 @@ static FileStore files[MAX_FILES];
 #endif
 
 // Construct a full path name from a path and a filename. Returns false if error i.e. filename too long
-/*static*/ bool MassStorage::CombineName(const StringRef& outbuf, const char* directory, const char* fileName) noexcept
+/*static*/ bool MassStorage::CombineName(const StringRef& outbuf, const char *_ecv_array _ecv_null directory, const char *_ecv_array fileName) noexcept
 {
 	bool hadError = false;
-	if (directory != nullptr && directory[0] != 0 && fileName[0] != '/' && (strlen(fileName) < 2 || !isdigit(fileName[0]) || fileName[1] != ':'))
+	if (directory != nullptr && directory[0] != 0 && fileName[0] != '/' && (strlen(fileName) < 2 || !(bool)isdigit(fileName[0]) || fileName[1] != ':'))
 	{
 		hadError = outbuf.copy(directory);
 		if (!hadError)
@@ -239,7 +239,7 @@ uint16_t MassStorage::GetVolumeSeq(unsigned int volume) noexcept
 
 // If 'path' is not the name of a temporary file, update the sequence number of its volume
 // Return true if we did update the sequence number
-static bool VolumeUpdated(const char *path) noexcept
+static bool VolumeUpdated(const char *_ecv_array path) noexcept
 {
 	if (!StringEndsWithIgnoreCase(path, ".part")
 #if HAS_SBC_INTERFACE
@@ -247,7 +247,7 @@ static bool VolumeUpdated(const char *path) noexcept
 #endif
 	   )
 	{
-		const unsigned int volume = (isdigit(path[0]) && path[1] == ':') ? path[0] - '0' : 0;
+		const unsigned int volume = ((bool)isdigit(path[0]) && path[1] == ':') ? path[0] - '0' : 0;
 		if (volume < ARRAY_SIZE(info))
 		{
 			++info[volume].seq;
@@ -279,7 +279,7 @@ static time_t ConvertTimeStamp(uint16_t fdate, uint16_t ftime) noexcept
 	memset(&timeInfo, 0, sizeof(timeInfo));
 	timeInfo.tm_year = (fdate >> 9) + 80;
 	const uint16_t month = (fdate >> 5) & 0x0F;
-	timeInfo.tm_mon = (month == 0) ? month : month - 1;		// month is 1..12 in FAT but 0..11 in struct tm
+	timeInfo.tm_mon = (month == 0) ? (int)month : month - 1;		// month is 1..12 in FAT but 0..11 in struct tm
 	timeInfo.tm_mday = max<int>(fdate & 0x1F, 1);
 	timeInfo.tm_hour = (ftime >> 11) & 0x1F;
 	timeInfo.tm_min = (ftime >> 5) & 0x3F;
@@ -288,7 +288,7 @@ static time_t ConvertTimeStamp(uint16_t fdate, uint16_t ftime) noexcept
 	return mktime(&timeInfo);
 }
 
-static const char* TranslateCardType(card_type_t ct) noexcept
+static const char *_ecv_array TranslateCardType(card_type_t ct) noexcept
 {
 	switch (ct)
 	{
@@ -310,7 +310,7 @@ static const char* TranslateCardType(card_type_t ct) noexcept
 	}
 }
 
-static const char* TranslateCardError(sd_mmc_err_t err) noexcept
+static const char *_ecv_array TranslateCardError(sd_mmc_err_t err) noexcept
 {
 	switch (err)
 	{
@@ -453,7 +453,7 @@ void MassStorage::Spin() noexcept
 	}
 }
 
-FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept
+FileStore *null MassStorage::OpenFile(const char *_ecv_array filePath, OpenMode mode, uint32_t preAllocSize) noexcept
 {
 	{
 		MutexLocker lock(fsMutex);
@@ -479,7 +479,7 @@ FileStore* MassStorage::OpenFile(const char* filePath, OpenMode mode, uint32_t p
 # if (HAS_MASS_STORAGE || HAS_EMBEDDED_FILES) && SUPPORT_ASYNC_MOVES
 
 // Duplicate a file handle, with the duplicate having its own position in the file. Use only with files opened in read-only mode.
-FileStore *MassStorage::DuplicateOpenHandle(const FileStore *f) noexcept
+FileStore *_ecv_null MassStorage::DuplicateOpenHandle(const FileStore *f) noexcept
 {
 	if (f == nullptr || !f->IsOpen())
 	{
@@ -519,7 +519,7 @@ void MassStorage::CloseAllFiles() noexcept
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
 // Check if the specified directory exists
-bool MassStorage::DirectoryExists(const char *path) noexcept
+bool MassStorage::DirectoryExists(const char *_ecv_array path) noexcept
 {
 	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
 	String<MaxFilenameLength> loc;
@@ -558,11 +558,11 @@ bool MassStorage::DirectoryExists(const StringRef& path) noexcept
 // Static helper functions
 size_t FileWriteBuffer::fileWriteBufLen = FileWriteBufLen;
 
-FileWriteBuffer *MassStorage::AllocateWriteBuffer() noexcept
+FileWriteBuffer *_ecv_null MassStorage::AllocateWriteBuffer() noexcept
 {
 	MutexLocker lock(fsMutex);
 
-	FileWriteBuffer * const buffer = freeWriteBuffers;
+	FileWriteBuffer *_ecv_null const buffer = freeWriteBuffers;
 	if (buffer != nullptr)
 	{
 		freeWriteBuffers = buffer->Next();
@@ -613,7 +613,7 @@ void MassStorage::InvalidateAllFiles() noexcept
 # if HAS_MASS_STORAGE
 
 // Delete a file or directory
-static bool InternalDelete(const char* filePath, ErrorMessageMode errorMessageMode) noexcept
+static bool InternalDelete(const char *_ecv_array filePath, ErrorMessageMode errorMessageMode) noexcept
 {
 	FRESULT unlinkReturn;
 	bool isOpen = false;
@@ -697,9 +697,9 @@ static bool DeleteContents(DIR& dir, const StringRef& filePath, ErrorMessageMode
 				DIR dir2;
 				if (f_opendir(&dir2, filePath.c_str()) == FR_OK)
 				{
-					const bool ok = DeleteContents(dir, filePath, errorMessageMode);
+					const bool ok2 = DeleteContents(dir, filePath, errorMessageMode);
 					f_closedir(&dir2);
-					if (!ok)
+					if (!ok2)
 					{
 						return false;
 					}
@@ -750,7 +750,7 @@ bool MassStorage::Delete(const StringRef& filePath, ErrorMessageMode errorMessag
 	if (recursive)
 	{
 		// Check for trying to delete root
-		const char *fp = filePath.c_str();
+		const char *_ecv_array fp = filePath.c_str();
 		if (isDigit(*fp) && fp[1] == ':')
 		{
 			fp += 2;
@@ -772,9 +772,9 @@ bool MassStorage::Delete(const StringRef& filePath, ErrorMessageMode errorMessag
 		DIR dir;
 		if (f_opendir(&dir, filePath.c_str()) == FR_OK)
 		{
-			const bool ok = DeleteContents(dir, filePath, errorMessageMode);
+			const bool ok1 = DeleteContents(dir, filePath, errorMessageMode);
 			f_closedir(&dir);
-			if (!ok)
+			if (!ok1)
 			{
 				(void)VolumeUpdated(filePath.c_str());			// in case we deleted any contained files
 				return false;
@@ -782,12 +782,12 @@ bool MassStorage::Delete(const StringRef& filePath, ErrorMessageMode errorMessag
 		}
 	}
 
-	const bool ok = InternalDelete(filePath.c_str(), errorMessageMode);
-	if (ok)
+	const bool ok2 = InternalDelete(filePath.c_str(), errorMessageMode);
+	if (ok2)
 	{
 		(void)VolumeUpdated(filePath.c_str());
 	}
-	return ok;
+	return ok2;
 # else
 	return false;
 # endif
@@ -800,7 +800,7 @@ bool MassStorage::Delete(const StringRef& filePath, ErrorMessageMode errorMessag
 // Open a directory to read a file list. Returns true if it contains any files, false otherwise.
 // If this returns true then the file system mutex is owned. The caller must subsequently release the mutex either
 // by calling FindNext until it returns false, or by calling AbandonFindNext.
-bool MassStorage::FindFirst(const char *directory, FileInfo &file_info) noexcept
+bool MassStorage::FindFirst(const char *_ecv_array directory, FileInfo &file_info) noexcept
 {
 	// Remove any trailing '/' from the directory name, it sometimes (but not always) confuses f_opendir
 	String<MaxFilenameLength> loc;
@@ -894,16 +894,16 @@ void MassStorage::AbandonFindNext() noexcept
 #if HAS_MASS_STORAGE
 
 // Month names. The first entry is used for invalid month numbers.
-static const char *monthNames[13] = { "???", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+static const char *_ecv_array monthNames[13] = { "???", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
-// Returns the name of the specified month or '???' if the specified value is invalid.
-const char* MassStorage::GetMonthName(const uint8_t month) noexcept
+// Returns the name of the specified month or "???" if the specified value is invalid.
+const char *_ecv_array MassStorage::GetMonthName(const uint8_t month) noexcept
 {
 	return (month <= 12) ? monthNames[month] : monthNames[0];
 }
 
 // Ensure that the path up to the last '/' (excluding trailing '/' characters) in filePath exists, returning true if successful
-bool MassStorage::EnsurePath(const char* filePath, bool messageIfFailed) noexcept
+bool MassStorage::EnsurePath(const char *_ecv_array filePath, bool messageIfFailed) noexcept
 {
 #if HAS_SBC_INTERFACE
 	if (reprap.UsingSbcInterface())
@@ -949,7 +949,7 @@ bool MassStorage::EnsurePath(const char* filePath, bool messageIfFailed) noexcep
 }
 
 // Create a new directory
-bool MassStorage::MakeDirectory(const char *directory, bool messageIfFailed) noexcept
+bool MassStorage::MakeDirectory(const char *_ecv_array directory, bool messageIfFailed) noexcept
 {
 	if (!EnsurePath(directory, messageIfFailed))
 	{
@@ -968,7 +968,7 @@ bool MassStorage::MakeDirectory(const char *directory, bool messageIfFailed) noe
 }
 
 // Rename a file or directory, optionally deleting the existing one if it exists
-bool MassStorage::Rename(const char *oldFilename, const char *newFilename, bool deleteExisting, bool messageIfFailed) noexcept
+bool MassStorage::Rename(const char *_ecv_array oldFilename, const char *_ecv_array newFilename, bool deleteExisting, bool messageIfFailed) noexcept
 {
 	// Check the the old file exists before we possibly delete any existing file with the new name
 	if (!FileExists(oldFilename) && !DirectoryExists(oldFilename))
@@ -1017,7 +1017,7 @@ bool MassStorage::Rename(const char *oldFilename, const char *newFilename, bool 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Check if the specified file exists
-bool MassStorage::FileExists(const char *filePath) noexcept
+bool MassStorage::FileExists(const char *_ecv_array filePath) noexcept
 {
 #if HAS_SBC_INTERFACE
 	if (reprap.UsingSbcInterface())
@@ -1039,7 +1039,7 @@ bool MassStorage::FileExists(const char *filePath) noexcept
 #if HAS_MASS_STORAGE
 
 // Return the last modified time of a file, or zero if failure
-time_t MassStorage::GetLastModifiedTime(const char *filePath) noexcept
+time_t MassStorage::GetLastModifiedTime(const char *_ecv_array filePath) noexcept
 {
 	FILINFO fil;
 	if (f_stat(filePath, &fil) == FR_OK)
@@ -1049,13 +1049,13 @@ time_t MassStorage::GetLastModifiedTime(const char *filePath) noexcept
 	return 0;
 }
 
-bool MassStorage::SetLastModifiedTime(const char *filePath, time_t time) noexcept
+bool MassStorage::SetLastModifiedTime(const char *_ecv_array filePath, time_t p_time) noexcept
 {
 	tm timeInfo;
-	gmtime_r(&time, &timeInfo);
+	gmtime_r(&p_time, &timeInfo);
 	FILINFO fno;
-    fno.fdate = (WORD)(((timeInfo.tm_year - 80) * 512U) | (timeInfo.tm_mon + 1) * 32U | timeInfo.tm_mday);
-    fno.ftime = (WORD)(timeInfo.tm_hour * 2048U | timeInfo.tm_min * 32U | timeInfo.tm_sec / 2U);
+    fno.fdate = (WORD)(((unsigned int)(timeInfo.tm_year - 80) * 512U) | (unsigned int)(timeInfo.tm_mon + 1) * 32U | (unsigned int)timeInfo.tm_mday);
+    fno.ftime = (WORD)((unsigned int)timeInfo.tm_hour * 2048U | (unsigned int)timeInfo.tm_min * 32U | (unsigned int)timeInfo.tm_sec / 2U);
     const bool ok = (f_utime(filePath, &fno) == FR_OK);
     if (!ok)
 	{
@@ -1066,7 +1066,7 @@ bool MassStorage::SetLastModifiedTime(const char *filePath, time_t time) noexcep
 
 // Check if the drive referenced in the specified path is mounted. Return true if it is.
 // Ideally we would try to mount it if it is not, however mounting a drive can take a long time, and the functions that call this are expected to execute quickly.
-bool MassStorage::CheckDriveMounted(const char* path) noexcept
+bool MassStorage::CheckDriveMounted(const char *_ecv_array path) noexcept
 {
 	const size_t card = (strlen(path) >= 2 && path[1] == ':' && isDigit(path[0]))
 						? path[0] - '0'
@@ -1189,11 +1189,11 @@ GCodeResult MassStorage::Mount(size_t card, const StringRef& reply, bool reportS
 	reprap.VolumesUpdated();
 	if (reportSuccess)
 	{
-		float capacity = ((float)sd_mmc_get_capacity(card) * 1024) / 1000000;		// get capacity and convert from Kib to Mbytes
-		const char* capUnits;
+		float capacity = ((float)sd_mmc_get_capacity(card) * 1024) / 1000000.0;		// get capacity and convert from Kib to Mbytes
+		const char *_ecv_array capUnits;
 		if (capacity >= 1000.0)
 		{
-			capacity /= 1000;
+			capacity /= 1000.0;
 			capUnits = "Gb";
 		}
 		else
@@ -1259,9 +1259,9 @@ unsigned int MassStorage::GetNumFreeFiles() noexcept
 	return numFreeFiles;
 }
 
-GCodeResult MassStorage::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
+GCodeResult MassStorage::GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& p_info, bool quitEarly) noexcept
 {
-	return infoParser.GetFileInfo(filePath, info, quitEarly);
+	return infoParser.GetFileInfo(filePath, p_info, quitEarly);
 }
 
 void MassStorage::Diagnostics(MessageType mtype) noexcept
@@ -1291,9 +1291,9 @@ void MassStorage::Diagnostics(MessageType mtype) noexcept
 #if HAS_MASS_STORAGE
 
 // Append the simulated printing time to the end of the file
-void MassStorage::RecordSimulationTime(const char *printingFilePath, uint32_t simSeconds) noexcept
+void MassStorage::RecordSimulationTime(const char *_ecv_array printingFilePath, uint32_t simSeconds) noexcept
 {
-	FileStore * const file = OpenFile(printingFilePath, OpenMode::append, 0);
+	FileStore *_ecv_null const file = OpenFile(printingFilePath, OpenMode::append, 0);
 	bool ok = (file != nullptr);
 	if (ok)
 	{
@@ -1311,10 +1311,10 @@ void MassStorage::RecordSimulationTime(const char *printingFilePath, uint32_t si
 			{
 				lastModtime = GetLastModifiedTime(printingFilePath);			// save the last modified time to that we can restore it later
 				buffer[bytesToRead] = 0;										// this is OK because String<N> has N+1 bytes of storage
-				const char* const pos = strstr(buffer.c_str(), FileInfoParser::SimulatedTimeString);
+				const char *_ecv_array _ecv_null const pos = strstr(buffer.c_str(), FileInfoParser::SimulatedTimeString);
 				if (pos != nullptr)
 				{
-					ok = file->Seek(seekPos + (pos - buffer.c_str()));			// overwrite previous simulation time
+					ok = file->Seek(seekPos + (size_t)(pos - buffer.c_str()));			// overwrite previous simulation time
 				}
 				if (ok)
 				{
@@ -1385,7 +1385,7 @@ Mutex& MassStorage::GetVolumeMutex(size_t vol) noexcept
 
 # if SUPPORT_OBJECT_MODEL
 
-const ObjectModel * MassStorage::GetVolume(size_t vol) noexcept
+const ObjectModel *_ecv_from MassStorage::GetVolume(size_t vol) noexcept
 {
 	return &info[vol];
 }

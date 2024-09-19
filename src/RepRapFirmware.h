@@ -183,7 +183,7 @@ inline volatile uint32_t *GetStackOffset(uint32_t dwordOffset) noexcept
 inline void SetWatchpoint(unsigned int number, const void* addr, unsigned int addrBits = 2) noexcept
 {
 	CoreDebug->DEMCR = CoreDebug_DEMCR_TRCENA_Msk | CoreDebug_DEMCR_MON_EN_Msk;		// enable tracing and debug interrupt
-	volatile uint32_t *const watchpointRegs = &(DWT->COMP0);						// 4 groups of (COMP, MASK, FUNCTION, reserved)
+	volatile uint32_t *const _ecv_array watchpointRegs = &(DWT->COMP0);						// 4 groups of (COMP, MASK, FUNCTION, reserved)
 	watchpointRegs[4 * number] = reinterpret_cast<uint32_t>(addr);					// set COMP register
 	watchpointRegs[4 * number + 1] = addrBits;										// ignore the least significant N bits of the address
 	watchpointRegs[4 * number + 2] = 0x06;
@@ -191,7 +191,7 @@ inline void SetWatchpoint(unsigned int number, const void* addr, unsigned int ad
 
 inline void ClearWatchpoint(unsigned int number) noexcept
 {
-	volatile uint32_t *const watchpointRegs = &(DWT->COMP0);						// 4 groups of (COMP, MASK, FUNCTION, reserved)
+	volatile uint32_t *const _ecv_array watchpointRegs = &(DWT->COMP0);						// 4 groups of (COMP, MASK, FUNCTION, reserved)
 	watchpointRegs[4 * number + 2] = 0;
 }
 

@@ -27,12 +27,12 @@ namespace Heap
 
 	struct IndexSlot
 	{
-		StorageSpace *null storage;
+		StorageSpace *_ecv_null storage;
 		std::atomic<unsigned int> refCount;
 
 		IndexSlot() noexcept : storage(nullptr), refCount(0) { }
 
-		bool IsFree() const noexcept { return refCount == 0 && storage == nullptr; }
+		bool IsFree() const noexcept { return refCount.load() == 0 && storage == nullptr; }
 	};
 
 	IndexSlot *AllocateHandle() noexcept;

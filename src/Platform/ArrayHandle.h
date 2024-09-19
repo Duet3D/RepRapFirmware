@@ -26,7 +26,7 @@ public:
 
 	void Allocate(size_t numElements) THROWS(GCodeException);
 	void AssignElement(size_t index, ExpressionValue& val) THROWS(GCodeException);
-	void AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndeces != 0);
+	void AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndices != 0);
 
 	size_t GetNumElements() const noexcept;												// get the number of elements
 	bool GetElement(size_t index, ExpressionValue& rslt) const noexcept;				// return true and get the specified element if the index is in range
@@ -40,7 +40,7 @@ protected:
 
 private:
 	static Heap::IndexSlot *MakeUnique(volatile ArrayHandle *ah) THROWS(GCodeException);
-	static void InternalAssignIndexed(volatile ArrayHandle *ah, const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndeces != 0);
+	static void InternalAssignIndexed(volatile ArrayHandle *ah, const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndices != 0);
 };
 
 // Version of ArrayHandle that updates the reference counts automatically

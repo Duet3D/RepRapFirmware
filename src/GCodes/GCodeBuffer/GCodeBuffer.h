@@ -102,17 +102,17 @@ public:
 	float GetAcceleration() THROWS(GCodeException);									// Get an acceleration in mm/sec^2 or inches/sec^2 and convert it to mm/step_clock^2
 	int32_t GetIValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get an integer after a key letter
 	int32_t GetLimitedIValue(char c, int32_t minValue, int32_t maxValue) THROWS(GCodeException)
-		pre(minvalue <= maxValue)
-		post(minValue <= result; result <= maxValue);								// Get an integer after a key letter
+		pre(minValue <= maxValue)
+		post(minValue <= _ecv_result; _ecv_result <= maxValue);								// Get an integer after a key letter
 	uint32_t GetUIValue() THROWS(GCodeException);									// Get an unsigned integer value
 	uint32_t GetLimitedUIValue(char c, uint32_t minValue, uint32_t maxValuePlusOne) THROWS(GCodeException)		// Get an unsigned integer value, throw if outside limits
 		pre(maxValuePlusOne > minValue)												// Get an unsigned integer value, throw if outside limits
-		post(result >= minValue; result < maxValuePlusOne);
+		post(_ecv_result >= minValue; _ecv_result < maxValuePlusOne);
 	uint32_t GetLimitedUIValue(char c, uint32_t maxValuePlusOne) THROWS(GCodeException)
-		post(result < maxValuePlusOne) { return GetLimitedUIValue(c, 0, maxValuePlusOne); }
+		post(_ecv_result < maxValuePlusOne) { return GetLimitedUIValue(c, 0, maxValuePlusOne); }
 	float GetLimitedFValue(char c, float minValue, float maxValue) THROWS(GCodeException)
-		pre(minvalue <= maxValue)
-		post(minValue <= result; result <= maxValue);								// Get a float after a key letter
+		pre(minValue <= maxValue)
+		post(minValue <= _ecv_result; _ecv_result <= maxValue);								// Get a float after a key letter
 	void GetIPAddress(IPAddress& returnedIp) THROWS(GCodeException);				// Get an IP address quad after a key letter
 	void GetMacAddress(MacAddress& mac) THROWS(GCodeException);						// Get a MAC address sextet after a key letter
 	PwmFrequency GetPwmFrequency() THROWS(GCodeException);							// Get a PWM frequency
@@ -135,7 +135,7 @@ public:
 	bool TryGetLimitedUIValue(char c, uint32_t& val, bool& seen, uint32_t maxValuePlusOne) THROWS(GCodeException);
 	bool TryGetNonNegativeFValue(char c, float& val, bool& seen) THROWS(GCodeException);
 	bool TryGetLimitedFValue(char c, float& val, bool& seen, float minValue, float maxValue) THROWS(GCodeException)
-		pre(minvalue <= maxValue);
+		pre(minValue <= maxValue);
 	bool TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeException);
 	void TryGetFloatArray(char c, size_t numVals, float vals[], bool& seen, bool doPad = false) THROWS(GCodeException);
 	void TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& seen, bool doPad = false) THROWS(GCodeException);
@@ -293,7 +293,7 @@ public:
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileGCodeInput *GetFileInput() const noexcept { return fileInput; }
 #endif
-	GCodeInput *GetNormalInput() const noexcept { return normalInput; }
+	GCodeInput *_ecv_from GetNormalInput() const noexcept { return normalInput; }
 
 	void MotionCommanded() noexcept { motionCommanded = true; }
 	void MotionStopped() noexcept { motionCommanded = false; }
@@ -330,7 +330,7 @@ private:
 #endif
 
 	FilePosition printFilePositionAtMacroStart;			// the saved file position when we started executing a macro
-	GCodeInput *normalInput;							// Our normal input stream, or nullptr if there isn't one
+	GCodeInput *_ecv_from normalInput;					// Our normal input stream, or nullptr if there isn't one
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	FileGCodeInput *fileInput;							// Our file input stream for when we are reading from a print file or a macro file, may be shared with other GCodeBuffers

@@ -13,7 +13,7 @@
 class SharedSpiDevice : public SpiDevice
 {
 public:
-	SharedSpiDevice(uint8_t sercomNum) noexcept;
+	explicit SharedSpiDevice(uint8_t sercomNum) noexcept;
 
 	// Get ownership of this SPI, return true if successful
 	bool Take(uint32_t timeout) noexcept { return mutex.Take(timeout); }

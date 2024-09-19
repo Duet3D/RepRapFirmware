@@ -45,7 +45,7 @@ public:
 	FileInfoParser() noexcept;
 
 	// The following method needs to be called repeatedly until it doesn't return GCodeResult::notFinished - this may take a few runs
-	GCodeResult GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
+	GCodeResult GetFileInfo(const char *filePath, GCodeFileInfo& p_info, bool quitEarly) noexcept;
 
 	static constexpr const char *_ecv_array SimulatedTimeString = "\n; Simulated print time";	// used by FileInfoParser and MassStorage
 
