@@ -894,9 +894,8 @@ void TmcDriverState::UpdateCurrent() noexcept
 	if (globalScaler >= 256)
 	{
 		const uint32_t prod = globalScaler * (iRun + 1);
-		globalScaler = 256;
-		iRun = (uint8_t)constrain<float>(rintf(float(prod) / globalScaler) - 1, 0, 31);
 		globalScaler = 0;
+		iRun = (uint8_t)constrain<float>(rintf(float(prod) / 256u) - 1, 0, 31);		// globalscaler = 0 means 256
 	}
 	else if (globalScaler < 32)
 	{
