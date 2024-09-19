@@ -673,7 +673,7 @@ void Move::SetDriveStepsPerMm(size_t axisOrExtruder, float value, uint32_t reque
 		}
 	}
 
-	value = max<float>(value, 1.0);							// don't allow zero or negative
+	value = max<float>(value, MinimumStepsPerMm);					// don't allow zero or negative
 	driveStepsPerMm[axisOrExtruder] = value;
 	reprap.MoveUpdated();
 }

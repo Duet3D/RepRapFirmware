@@ -887,9 +887,9 @@ void TmcDriverState::UpdateCurrent() noexcept
 					(writeRegisters[WriteIholdIrun] & ~(IHOLDIRUN_IRUN_MASK | IHOLDIRUN_IHOLD_MASK)) | (iRunCsBits << IHOLDIRUN_IRUN_SHIFT) | (iHoldCsBits << IHOLDIRUN_IHOLD_SHIFT));
 #elif TMC_TYPE == 5160
 	// See if we can set IRUN to 31 (or user defined value) and do the current adjustment in the global scaler
-	iRun = currentScaler < 0 ? 31 : currentScaler;
+	iRun = (currentScaler < 0) ? 31 : (uint8_t)currentScaler;
 
-	const float csRecip = iRun == 31 ? 1.0f : 32.0f / (float)(iRun + 1);
+	const float csRecip = (iRun == 31) ? 1.0f : 32.0f / (float)(iRun + 1);
 	globalScaler = lrintf(motorCurrent * 256 * RecipFullScaleCurrent * csRecip);
 	if (globalScaler >= 256)
 	{
