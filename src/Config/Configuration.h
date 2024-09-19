@@ -42,6 +42,8 @@ constexpr float DefaultAxisDriveStepsPerUnit = 80.0;	// steps/mm
 constexpr float DefaultZDriveStepsPerUnit = 800.0;
 constexpr float DefaultEDriveStepsPerUnit = 420.0;
 
+constexpr float MinimumStepsPerMm = 0.01;				// must be positive. Used to be 1.0 but an OEM wants to use 0.1.
+
 constexpr float DefaultAxisInstantDv = 15.0;			// mm/sec
 constexpr float DefaultZInstantDv = 10.0;
 constexpr float DefaultEInstantDv = 5.0;
