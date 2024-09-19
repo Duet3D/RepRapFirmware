@@ -137,7 +137,7 @@ private:
 	ParameterLettersBitmap parametersPresent;			// which parameters are present in this command
 	int readPointer;									// Where in the buffer to read next, or -1
 
-	FileStore *fileBeingWritten;						// If we are copying GCodes to a file, which file it is
+	FileStore *_ecv_null fileBeingWritten;				// If we are copying GCodes to a file, which file it is
 	FilePosition writingFileSize;						// Size of the file being written, or zero if not known
 
 	unsigned int receivedLineNumber;

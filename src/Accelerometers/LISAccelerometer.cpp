@@ -272,7 +272,7 @@ bool LISAccelerometer:: StartCollecting(uint8_t axes) noexcept
 }
 
 // Collect some data from the FIFO, suspending until the data is available
-unsigned int LISAccelerometer::CollectData(const uint16_t **collectedData, uint16_t &dataRate, bool &overflowed) noexcept
+unsigned int LISAccelerometer::CollectData(const uint16_t *_ecv_array *collectedData, uint16_t &dataRate, bool &overflowed) noexcept
 {
 	// Wait until we have some data
 	taskWaiting = TaskBase::GetCallerTaskHandle();
@@ -320,7 +320,7 @@ unsigned int LISAccelerometer::CollectData(const uint16_t **collectedData, uint1
 			return 0;
 		}
 
-		*collectedData = reinterpret_cast<const uint16_t*>(dataBuffer);
+		*collectedData = reinterpret_cast<const uint16_t* _ecv_array>(dataBuffer);
 		overflowed = (fifoStatus & 0x40) != 0;
 		const uint32_t interval = lastInterruptTime - firstInterruptTime;
 		dataRate = (totalNumRead == 0 || interval == 0)
