@@ -367,7 +367,7 @@ inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationCo
 			{
 				++filter;
 			}
-			val.omVal->ReportAsJson(buf, context, (val.omVal == this) ? classDescriptor : nullptr, val.param, filter);
+			not_null(val.omVal)->ReportAsJson(buf, context, (val.omVal == this) ? classDescriptor : nullptr, val.param, filter);
 		}
 	}
 	else
@@ -484,7 +484,7 @@ struct ObjectModelClassDescriptor
 
 #define DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE(_class) \
 	constexpr unsigned int ArrayIndexOffset = 0; \
-	const ObjectModelArrayTableEntry *_class::GetObjectModelArrayEntry(unsigned int index) const noexcept \
+	const ObjectModelArrayTableEntry *_ecv_null _class::GetObjectModelArrayEntry(unsigned int index) const noexcept \
 	{ \
 		if (index < ARRAY_SIZE(_class::objectModelArrayTable)) \
 		{ \
@@ -495,7 +495,7 @@ struct ObjectModelClassDescriptor
 
 #define DEFINE_GET_OBJECT_MODEL_ARRAY_TABLE_WITH_PARENT(_class,_parent,_offset) \
 	constexpr unsigned int ArrayIndexOffset = _offset; \
-	const ObjectModelArrayTableEntry *_class::GetObjectModelArrayEntry(unsigned int index) const noexcept \
+	const ObjectModelArrayTableEntry *_ecv_null _class::GetObjectModelArrayEntry(unsigned int index) const noexcept \
 	{ \
 		if (index >= _offset && index < _offset + ARRAY_SIZE(_class::objectModelArrayTable)) \
 		{ \

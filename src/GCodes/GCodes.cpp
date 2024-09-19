@@ -77,7 +77,6 @@ GCodes::GCodes(Platform& p) noexcept :
 #endif
 {
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	fileBeingHashed = nullptr;
 	FileGCodeInput * const fileInput = new FileGCodeInput();
 #else
 	FileGCodeInput * const fileInput = nullptr;
@@ -4653,57 +4652,6 @@ float GCodes::GetUserCoordinate(const MovementState& ms, size_t axis) const noex
 {
 	return (axis < numTotalAxes) ? ms.currentUserPosition[axis] - GetWorkplaceOffset(axis, ms.currentCoordinateSystem) : 0.0;
 }
-
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-
-// M38 (SHA1 hash of a file) implementation:
-bool GCodes::StartHash(const char* filename) noexcept
-{
-	// Get a FileStore object
-	fileBeingHashed = platform.OpenFile(FS_PREFIX, filename, OpenMode::read);
-	if (fileBeingHashed == nullptr)
-	{
-		return false;
-	}
-
-	// Start hashing
-	SHA1Reset(&hash);
-	return true;
-}
-
-GCodeResult GCodes::AdvanceHash(const StringRef &reply) noexcept
-{
-	// Read and process some more data from the file
-	alignas(4) char buffer[FILE_BUFFER_SIZE];
-	const int bytesRead = fileBeingHashed->Read(buffer, FILE_BUFFER_SIZE);
-	if (bytesRead != -1)
-	{
-		SHA1Input(&hash, reinterpret_cast<const uint8_t *>(buffer), bytesRead);
-
-		if (bytesRead != FILE_BUFFER_SIZE)
-		{
-			// Calculate and report the final result
-			SHA1Result(&hash);
-			for (size_t i = 0; i < 5; i++)
-			{
-				reply.catf("%08" PRIx32, hash.Message_Digest[i]);
-			}
-
-			// Clean up again
-			fileBeingHashed->Close();
-			fileBeingHashed = nullptr;
-			return GCodeResult::ok;
-		}
-		return GCodeResult::notFinished;
-	}
-
-	// Something went wrong, we cannot read any more from the file
-	fileBeingHashed->Close();
-	fileBeingHashed = nullptr;
-	return GCodeResult::ok;
-}
-
-#endif
 
 bool GCodes::AllAxesAreHomed() const noexcept
 {

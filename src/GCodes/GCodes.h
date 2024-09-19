@@ -26,7 +26,6 @@ Licence: GPL
 #include <Platform/RepRap.h>			// for type ResponseSource
 #include "ObjectTracker.h"
 #include <Movement/RawMove.h>
-#include <Libraries/sha1/sha1.h>
 #include <Platform/Platform.h>		// for type EndStopHit
 #include <Platform/PrintPausedReason.h>
 #include "GCodeChannel.h"
@@ -748,14 +747,6 @@ private:
 	bool isFlashing;							// Is a new firmware binary going to be flashed?
 #if SUPPORT_PANELDUE_FLASH
 	bool isFlashingPanelDue;					// Are we in the process of flashing PanelDue?
-#endif
-
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	// SHA1 hashing
-	FileStore *fileBeingHashed;
-	SHA1Context hash;
-	bool StartHash(const char* filename) noexcept;
-	GCodeResult AdvanceHash(const StringRef &reply) noexcept;
 #endif
 
 	// Laser

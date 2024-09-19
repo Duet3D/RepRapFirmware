@@ -51,10 +51,8 @@ enum class StatusReportType : uint8_t
 class GCodeBuffer INHERIT_OBJECT_MODEL
 {
 public:
-#ifndef __ECV__		//temporary!
 	friend class BinaryParser;
 	friend class StringParser;
-#endif
 
 	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
 	void Reset() noexcept;														// Reset it to its state after start-up
@@ -90,7 +88,7 @@ public:
 	ParameterLettersBitmap AllParameters() const noexcept;							// Return a bitmap of all parameters in the command
 	bool SeenAny(ParameterLettersBitmap bm) const noexcept							// Return true if any of the parameter letters in the bitmap were seen
 		{ return AllParameters().Intersects(bm); }
-	bool SeenAny(const char *s) const noexcept										// Return true if any of the parameter letters in the string were seen
+	bool SeenAny(const char *_ecv_array s) const noexcept							// Return true if any of the parameter letters in the string were seen
 		{ return SeenAny(ParameterLettersToBitmap(s)); }
 
 	float GetFValue() THROWS(GCodeException) SPEED_CRITICAL;						// Get a float after a key letter

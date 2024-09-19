@@ -35,7 +35,7 @@ extern "C" {
  *  This structure will hold context information for the hashing
  *  operation
  */
-typedef struct SHA1Context
+typedef struct _SHA1Context
 {
     uint32_t Message_Digest[5]; /* Message Digest (output)          */
 
