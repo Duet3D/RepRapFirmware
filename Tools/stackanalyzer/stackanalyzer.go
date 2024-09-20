@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -13,13 +12,18 @@ import (
 )
 
 const (
-	assertionHeader = iota
-	assertionLineNo
+	lastSoftwareResetHeader = "Last software reset"
+	stackHeader             = "Stack:"
+)
+
+const (
+	assertionLineNo = iota
 	assertionFunction
+
+	assertionMarker = "reason: Assertion"
 )
 const (
-	header = iota
-	register0
+	register0 = iota
 	register1
 	register2
 	register3
@@ -62,11 +66,12 @@ func main() {
 		if line == "" {
 			continue
 		}
-		if strings.HasPrefix(line, "Last software reset") {
-			isAssertion = strings.Contains(line, "reason: Assertion")
+		if strings.HasPrefix(line, lastSoftwareResetHeader) {
+			isAssertion = strings.Contains(line, assertionMarker)
 			continue
 		}
-		if strings.HasPrefix(line, "Stack:") {
+		if strings.HasPrefix(line, stackHeader) {
+			line = strings.TrimSpace(strings.TrimPrefix(line, stackHeader))
 			stackElems := strings.Fields(line)
 			var faultElem string
 			if isAssertion {
@@ -150,7 +155,7 @@ func getFailingBlock(mapFile string, faultedAddress uint64) ([]string, uint64, e
 
 		addressOfLine, err = strconv.ParseUint(addressField, 16, 64)
 		if err != nil {
-			return nil, 0, errors.New(fmt.Sprintf("Could not parse line: %s", mapLine))
+			return nil, 0, fmt.Errorf("Could not parse line: %s", mapLine)
 		}
 
 		if addressOfLine <= faultedAddress {
@@ -158,7 +163,7 @@ func getFailingBlock(mapFile string, faultedAddress uint64) ([]string, uint64, e
 			// Reset the slice of lines if we see a new address
 			if addressOfLine != lastAddress {
 				lastAddress = addressOfLine
-				faultLocation = make([]string, 0, 0)
+				faultLocation = make([]string, 0)
 				faultLocation = append(faultLocation, prevFaultFunction)
 			}
 			faultLocation = append(faultLocation, mapLine)
