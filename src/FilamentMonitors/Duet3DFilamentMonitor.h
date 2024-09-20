@@ -22,10 +22,10 @@ protected:
 	bool Interrupt() noexcept override;
 
 #if SUPPORT_CAN_EXPANSION
-	void UpdateLiveData(const FilamentMonitorDataNew& data) noexcept override;
+	void UpdateLiveData(const FilamentMonitorDataNew2& data) noexcept override;
 #endif
 #if SUPPORT_REMOTE_COMMANDS
-	void GetLiveData(FilamentMonitorDataNew& data) const noexcept override;
+	void GetLiveData(FilamentMonitorDataNew2& data) const noexcept override;
 #endif
 
 	void InitReceiveBuffer() noexcept;
@@ -45,6 +45,7 @@ protected:
 
 	// Live data reported in the object model
 	float totalExtrusionCommanded = 0.0;
+	uint16_t lastKnownPosition = 0;
 	int16_t avgPercentage;
 	int16_t minPercentage;
 	int16_t maxPercentage;

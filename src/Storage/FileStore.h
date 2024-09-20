@@ -41,7 +41,7 @@ class FileStore
 public:
 	FileStore() noexcept;
 
-    bool Open(const char* filePath, OpenMode mode, uint32_t preAllocSize) noexcept;
+    bool Open(const char *_ecv_array filePath, OpenMode mode, uint32_t preAllocSize) noexcept;
 	bool Read(char& b) noexcept
 		{ return Read((char *_ecv_array)&b, sizeof(char)); }					// Read 1 character
 	bool Read(uint8_t& b) noexcept
@@ -49,7 +49,7 @@ public:
 	int Read(char *_ecv_array buf, size_t nBytes) noexcept;						// Read a block of nBytes length
 	int Read(uint8_t *_ecv_array buf, size_t nBytes) noexcept
 		{ return Read(reinterpret_cast<char *_ecv_array>(buf), nBytes); }		// Read a block of nBytes length
-	int ReadLine(char* buf, size_t nBytes) noexcept;			// As Read but stop after '\n' or '\r\n' and null-terminate
+	int ReadLine(char *_ecv_array buf, size_t nBytes) noexcept;	// As Read but stop after '\n' or '\r\n' and null-terminate
 	bool Close() noexcept;										// Shut the file and tidy up
 	bool ForceClose() noexcept;
 	bool Seek(FilePosition pos) noexcept;						// Jump to pos in the file

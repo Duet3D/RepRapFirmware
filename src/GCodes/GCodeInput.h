@@ -90,13 +90,13 @@ protected:
 class BufferedStreamGCodeInput : public RegularGCodeInput
 {
 public:
-	explicit BufferedStreamGCodeInput(Stream &dev) noexcept : RegularGCodeInput(), device(dev) { }
+	explicit BufferedStreamGCodeInput(Stream &_ecv_from dev) noexcept : RegularGCodeInput(), device(dev) { }
 
 	void Reset() noexcept override;
 	bool FillBuffer(GCodeBuffer *gb) noexcept override;			// Fill a GCodeBuffer with the last available G-code
 
 private:
-	Stream &device;
+	Stream &_ecv_from device;
 };
 
 enum class GCodeInputReadResult : uint8_t { haveData, noData, error };

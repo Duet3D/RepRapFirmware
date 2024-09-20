@@ -177,7 +177,7 @@ public:
 	public:
 		DECLARE_FREELIST_NEW_DELETE(GCodeMachineState::BlockState)
 
-		BlockState(BlockState *prev) noexcept : prev(prev) { }
+		explicit BlockState(BlockState *p_prev) noexcept : prev(p_prev) { }
 		BlockType GetType() const noexcept { return blockType; }
 		BlockState *GetPrevious() const noexcept { return prev; }
 		void SetPrevious(BlockState *p) noexcept { prev = p; }

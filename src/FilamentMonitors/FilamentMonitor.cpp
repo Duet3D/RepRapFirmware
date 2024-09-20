@@ -307,7 +307,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 {
 #if SUPPORT_REMOTE_COMMANDS
 	CanMessageBuffer buf;
-	auto msg = buf.SetupStatusMessage<CanMessageFilamentMonitorsStatusNew>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
+	auto msg = buf.SetupStatusMessage<CanMessageFilamentMonitorsStatusNew2>(CanInterface::GetCanAddress(), CanInterface::GetCurrentMasterAddress());
 	size_t slotIndex = 0;
 	size_t firstDriveNotSent = NumDirectDrivers;
 	Bitmap<uint32_t> driversReported;
@@ -442,7 +442,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 
 #if SUPPORT_CAN_EXPANSION
 
-/*static*/ void FilamentMonitor::UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatusNew& msg) noexcept
+/*static*/ void FilamentMonitor::UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatusNew2& msg) noexcept
 {
 	Bitmap<uint32_t> drivers(msg.driversReported);
 	size_t slotIndex = 0;

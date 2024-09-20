@@ -15,8 +15,8 @@
 #include <RRF3Common.h>
 
 #if SUPPORT_CAN_EXPANSION
-struct CanMessageFilamentMonitorsStatusNew;
-struct FilamentMonitorDataNew;
+struct CanMessageFilamentMonitorsStatusNew2;
+struct FilamentMonitorDataNew2;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -63,7 +63,7 @@ public:
 #endif
 
 #if SUPPORT_CAN_EXPANSION
-	static void UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatusNew& msg) noexcept;
+	static void UpdateRemoteFilamentStatus(CanAddress src, CanMessageFilamentMonitorsStatusNew2& msg) noexcept;
 #endif
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -133,7 +133,7 @@ protected:
 	virtual GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept = 0;
 
 	// Store collected data in a CAN message slot returning true if there was data worth sending
-	virtual void GetLiveData(FilamentMonitorDataNew& data) const noexcept = 0;
+	virtual void GetLiveData(FilamentMonitorDataNew2& data) const noexcept = 0;
 
 	// Print diagnostic info for this sensor
 	virtual void Diagnostics(const StringRef& reply) noexcept = 0;
@@ -141,7 +141,7 @@ protected:
 
 #if SUPPORT_CAN_EXPANSION
 	// Update live filament monitor data received from a remote filament monitor
-	virtual void UpdateLiveData(const FilamentMonitorDataNew& data) noexcept = 0;
+	virtual void UpdateLiveData(const FilamentMonitorDataNew2& data) noexcept = 0;
 #endif
 
 	GCodeResult CommonConfigure(GCodeBuffer& gb, const StringRef& reply, InterruptMode interruptMode, bool& seen) THROWS(GCodeException);

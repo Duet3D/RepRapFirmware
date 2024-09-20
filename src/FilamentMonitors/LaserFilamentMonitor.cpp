@@ -229,7 +229,7 @@ GCodeResult LaserFilamentMonitor::Configure(GCodeBuffer& gb, const StringRef& re
 float LaserFilamentMonitor::GetCurrentPosition() const noexcept
 {
 	const uint16_t positionRange = (sensorValue & TypeLaserLargeDataRangeBitMask) ? TypeLaserLargeRange : TypeLaserDefaultRange;
-	int32_t pos = (int32_t)(sensorValue & (positionRange - 1));
+	int32_t pos = (int32_t)lastKnownPosition;
 	if (pos > positionRange/2)
 	{
 		pos -= positionRange;
@@ -313,6 +313,7 @@ void LaserFilamentMonitor::HandleIncomingData() noexcept
 			const int32_t movement = (positionChange <= positionRange/2) ? (int32_t)positionChange : (int32_t)positionChange - positionRange;
 			movementMeasuredSinceLastSync += (float)movement * ((val & TypeLaserLargeDataRangeBitMask) ? 0.01 : 0.02);
 			sensorValue = val;
+			lastKnownPosition = val & positionRange;
 			lastMeasurementTime = millis();
 
 			if (haveStartBitData)	// if we have a synchronised  value for the amount of extrusion commanded

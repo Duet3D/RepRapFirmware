@@ -22,8 +22,8 @@ class CanMessageGenericParser;
 class LedStripBase INHERIT_OBJECT_MODEL
 {
 public:
-	LedStripBase(LedStripType p_type) noexcept : type(p_type) { }
-	virtual ~LedStripBase() { }
+	explicit LedStripBase(LedStripType p_type) noexcept : type(p_type) { }
+	virtual ~LedStripBase() override { }
 
 	// Configure or report on this LED strip. If pinName is not null then we are doing the initial configuration; else we are doing minor configuration or reporting.
 	virtual GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, const char *_ecv_array pinName) THROWS(GCodeException) = 0;

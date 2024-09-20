@@ -32,7 +32,7 @@ public:
 	bool StartCollecting(uint8_t axes) noexcept;
 
 	// Collect some data from the FIFO, suspending until the data is available
-	unsigned int CollectData(const uint16_t **collectedData, uint16_t &dataRate, bool &overflowed) noexcept;
+	unsigned int CollectData(const uint16_t *_ecv_array *collectedData, uint16_t &dataRate, bool &overflowed) noexcept;
 
 	// Stop collecting data
 	void StopCollecting() noexcept;
@@ -74,7 +74,7 @@ private:
 	uint8_t ctrlReg_0x20;
 	Pin int1Pin;
 	alignas(2) uint8_t transferBuffer[2 + (6 * 32)];			// 1 dummy byte for alignment, one register address byte, 192 data bytes to read entire FIFO
-	uint8_t* const dataBuffer = transferBuffer + 2;
+	uint8_t *_ecv_array const dataBuffer = transferBuffer + 2;
 };
 
 #endif
