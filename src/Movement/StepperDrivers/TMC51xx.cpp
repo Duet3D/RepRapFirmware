@@ -365,6 +365,8 @@ public:
 	bool EnablePhaseStepping(bool enable) noexcept;
 	bool IsPhaseSteppingEnabled() const noexcept { return phaseStepEnabled; }
 #endif
+	bool SetSineTableModulation(float modulation);
+
 	bool SetDriverMode(unsigned int mode) noexcept;
 	DriverMode GetDriverMode() const noexcept;
 	void SetCurrent(float current) noexcept;
@@ -860,6 +862,130 @@ bool TmcDriverState::EnablePhaseStepping(bool enable) noexcept
 }
 
 #endif
+
+static float LutModulationFunction(uint8_t pos, float modulation)
+{
+	constexpr float twoPi = 2.0f * Pi;
+	constexpr float recip = 1.0f / 1024;
+
+	return (sinf(twoPi * pos * recip)) + (modulation * sinf(3 * twoPi * pos * recip)) +
+		   (modulation * sinf(5 * twoPi * pos * recip));
+}
+
+bool TmcDriverState::SetSineTableModulation(float modulation)
+{
+	debugPrintf("Modulation = %f\n", (double)modulation);
+	uint8_t W[] = {0, 0, 0, 0};
+	uint8_t X[] = {0, 0, 0, 0};
+
+	constexpr uint16_t resolution = 256;
+
+	int16_t values[resolution] = {0};
+
+	for (size_t i = 0; i < resolution; i++)
+	{
+		values[i] = (int16_t)(248 * LutModulationFunction(i, modulation) + 0.5);
+	}
+	const uint32_t mslutstart = values[0] | (values[resolution - 1] << 16);
+
+	int8_t differences[resolution] = {0};
+	for (size_t i = 0; i < resolution - 1; i++)
+	{
+		differences[i] = values[i + 1] - values[i];
+	}
+
+	uint32_t mslutArr[8] = {0};
+	size_t segSize = 0;
+	int8_t segDifferences[resolution] = {0};
+	int8_t segMinDiff = differences[0];
+	bool canDecreaseMinDiff = true;
+
+	uint8_t wIndex = 0;
+	uint8_t xIndex = 0;
+
+	for (size_t i = 0; i < resolution; i++)
+	{
+		int8_t diff = differences[i];
+		debugPrintf("diff[%u] = %d\n", i, diff);
+
+		if (diff < -1 || diff > 3)
+		{
+			// Can't represent this in the sine table
+			return false;
+		}
+
+		bool segEnd = false;
+		if (diff != segMinDiff)
+		{
+			if (canDecreaseMinDiff && (diff == segMinDiff - 1))
+			{
+				segMinDiff = diff;
+				canDecreaseMinDiff = false;
+			}
+			else if (diff == segMinDiff + 1)
+			{
+				canDecreaseMinDiff = false;
+			}
+			else
+			{
+				segEnd = true;
+			}
+		}
+
+		if (!segEnd && (i < resolution - 1))
+		{
+			segDifferences[segSize] = diff;
+			segSize++;
+			continue;
+		}
+
+		if (xIndex > 2 || wIndex > 3)
+		{
+			// Can not fit function (too curvy)
+			return false;
+		}
+
+		W[wIndex] = (uint8_t)(segMinDiff + 1);
+		debugPrintf("Segment end at pos %u, W=%u\n", i, W[wIndex]);
+
+		for (size_t j = 0; j < segSize; j++)
+		{
+			size_t bit = j + X[(xIndex > 0 ? xIndex - 1 : 0)];
+			uint8_t offs_bit = segDifferences[j] == segMinDiff ? 0 : 1;
+			mslutArr[bit / 32] |= (offs_bit << (bit % 32));
+			debugPrintf("mslut[%u] = 0x%08x, [%u]=%u\n", bit / 32, mslutArr[bit / 32], bit % 32, offs_bit);
+		}
+
+		X[xIndex] = (uint8_t)i;
+		xIndex++;
+		wIndex++;
+
+		segMinDiff = diff;
+		canDecreaseMinDiff = true;
+		for (size_t j = 0; j < resolution; j++)
+		{
+			segDifferences[j] = 0;
+		}
+		segDifferences[0] = diff;
+		segSize = 1;
+	}
+
+	while (xIndex < 4)
+	{
+		X[xIndex] = 255;
+		xIndex++;
+	}
+	const uint32_t mslutsel = W[0] | W[1] << 2 | W[2] << 4 | W[3] << 6 | X[0] << 8 | X[1] << 16 | X[2] << 24;
+
+	for (size_t i = 0; i < 8; i++)
+	{
+		debugPrintf("MSLUT[%u] = 0x%08x\n", i, mslutArr[i]);
+	}
+	debugPrintf("MSLUTSEL = 0x%08x\n", mslutsel);
+	debugPrintf("MSLUTSTART = 0x%08x\n", mslutstart);
+
+	return true;
+}
 
 // Set the motor current
 void TmcDriverState::SetCurrent(float current) noexcept

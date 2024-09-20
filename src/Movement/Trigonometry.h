@@ -19,7 +19,7 @@ namespace Trigonometry
 
 	// Immediately Invoked Function Expression (IIFE) to calculate the lookup table
 	// (Note the '()' at the end of the definition)
-	static constexpr std::array<float, Resolution + 1> lookupTable = [] () noexcept
+	constexpr std::array<float, Resolution + 1> lookupTable = [] () noexcept
 	{
 		std::array<float, Resolution + 1> LUT = {};
 
