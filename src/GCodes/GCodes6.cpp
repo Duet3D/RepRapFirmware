@@ -85,7 +85,12 @@ GCodeResult GCodes::ExecuteG30(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 	else
 	{
 		// G30 without P parameter. This probes the current location starting from the current position.
-		// If S=-1 it just reports the stopped height, else it resets the Z origin.
+		// If S=-1 it just reports the stopped height.
+		// If S=-2 it probes and adjusts the tool Z offset to make the actual stop height match the configured value.
+		// If S=-3 it probes and adjusts the probe trigger height to match the actual stop height.
+		// If S is not given or S <=-4 then it resets the Z origin.
+		// Non-negative values of S don't really make sense, however the documentation says that S=0 is allowed, so handle it here.
+		if (g30SValue >= 0) { g30SValue = -4; }
 		newState = GCodeState::probingAtPoint2a;
 	}
 
