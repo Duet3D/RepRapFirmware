@@ -40,6 +40,7 @@ constexpr ObjectModelTableEntry PulsedFilamentMonitor::objectModelTable[] =
 #endif
 												self->DataReceived() && self->HaveCalibrationData(), self, 1), 					ObjectModelEntryFlags::live },
 	{ "configured", 	OBJECT_MODEL_FUNC(self, 2), 																			ObjectModelEntryFlags::none },
+	{ "position",		OBJECT_MODEL_FUNC((int32_t)(self->sensorValue & 0x0FFF)), 												ObjectModelEntryFlags::live },
 
 	// 1. PulsedFilamentMonitor.calibrated members
 	{ "mmPerPulse",		OBJECT_MODEL_FUNC(self->MeasuredSensitivity(), 3), 														ObjectModelEntryFlags::live },
@@ -54,7 +55,7 @@ constexpr ObjectModelTableEntry PulsedFilamentMonitor::objectModelTable[] =
 	{ "sampleDistance", OBJECT_MODEL_FUNC(self->minimumExtrusionCheckLength, 1), 												ObjectModelEntryFlags::none },
 };
 
-constexpr uint8_t PulsedFilamentMonitor::objectModelTableDescriptor[] = { 3, 2, 4, 4 };
+constexpr uint8_t PulsedFilamentMonitor::objectModelTableDescriptor[] = { 3, 3, 4, 4 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(PulsedFilamentMonitor, FilamentMonitor)
 
@@ -396,8 +397,10 @@ GCodeResult PulsedFilamentMonitor::Configure(const CanMessageGenericParser& pars
 }
 
 // Store collected data in a CAN message slot
-void PulsedFilamentMonitor::GetLiveData(FilamentMonitorDataNew& data) const noexcept
+void PulsedFilamentMonitor::GetLiveData(FilamentMonitorDataNew2& data) const noexcept
 {
+	data.ClearReservedFields();
+	data.position = sensorValue & 0x0FFF;
 	data.hasLiveData = false;
 }
 
@@ -413,9 +416,9 @@ void PulsedFilamentMonitor::Diagnostics(const StringRef& reply) noexcept
 
 #if SUPPORT_CAN_EXPANSION
 
-void PulsedFilamentMonitor::UpdateLiveData(const FilamentMonitorDataNew& data) noexcept
+void PulsedFilamentMonitor::UpdateLiveData(const FilamentMonitorDataNew2& data) noexcept
 {
-	// nothing needed here
+	sensorValue = data.position;
 }
 
 #endif

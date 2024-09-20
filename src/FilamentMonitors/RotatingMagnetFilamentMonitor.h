@@ -86,7 +86,6 @@ private:
 	float movementMeasuredSinceLastSync;
 
 	uint16_t sensorValue;									// latest word received from sensor
-	uint16_t lastKnownPosition;								// last known filament position (10 bits)
 	uint32_t lastMeasurementTime;							// the last time we received a value
 	uint16_t switchOpenMask;								// mask to isolate the switch open bit(s) from the sensor value
 	uint8_t version;										// sensor/firmware version
