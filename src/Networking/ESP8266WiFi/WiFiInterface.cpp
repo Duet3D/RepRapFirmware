@@ -630,6 +630,40 @@ void WiFiInterface::Stop() noexcept
 	}
 }
 
+bool WiFiInterface::GetFirmwareVersion(int &major, int &minor, int &patch)
+{
+	// Simple parser for WiFi module firmware version string.
+	// Parse the format (x=major, y=minor, and z=patch):
+	// 	- x.y.z (from 2.1.0)
+	//  - x.y (prior to 2.1.0), returns -1 for z
+	// Should be able to handle appended string after the version string.
+	major = minor = patch = -1;
+	auto numbers = {&major, &minor, &patch};
+
+	const char *curr = wiFiServerVersion.c_str();
+	const char *end = nullptr;
+
+	for (auto num : numbers)
+	{
+		int temp = StrToI32(curr, &end);
+
+		if (curr == end)
+		{
+			if (num != &patch)
+			{
+				return false;
+			}
+			break;
+		}
+
+		*num = temp;
+		curr = end + 1;
+		end = nullptr;
+	}
+
+	return true;
+}
+
 void WiFiInterface::Spin() noexcept
 {
 	// Main state machine.
@@ -693,9 +727,10 @@ void WiFiInterface::Spin() noexcept
 							reprap.GetPlatform().MessageF(NetworkErrorMessage, "failed to set WiFi hostname: %s\n", TranslateWiFiResponse(rc));
 						}
 #if SAME5x
+						int majorVer = 0, dummy = -1;
 						// If running the RTOS-based WiFi module code, tell the module to increase SPI clock speed to 40MHz.
 						// This is safe on SAME5x processors but not on SAM4 processors.
-						if (isdigit(wiFiServerVersion[0]) && wiFiServerVersion[0] >= '2')
+						if (GetFirmwareVersion(majorVer, dummy, dummy) && (majorVer >= 2))
 						{
 							rc = SendCommand(NetworkCommand::networkSetClockControl, 0, 0, 0x2001, nullptr, 0, nullptr, 0);
 							if (rc != ResponseEmpty)
@@ -963,12 +998,14 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 	{
 		Receiver<NetworkStatusResponse> status;
 		status.Value().clockReg = 0xFFFFFFFF;				// older WiFi firmware doesn't return this value, so preset it
-		if (SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status) >= (int32_t)MinimumStatusResponseLength)
+
+		int rc = SendCommand(NetworkCommand::networkGetStatus, 0, 0, nullptr, 0, status);
+		if (rc >= (int32_t)MinimumStatusResponseLength)
 		{
 			NetworkStatusResponse& r = status.Value();
 			r.versionText[ARRAY_UPB(r.versionText)] = 0;
 			platform.MessageF(mtype, "Firmware version %s\n", r.versionText);
-			platform.MessageF(mtype, "MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
+			platform.MessageF(mtype, "Module MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
 								r.macAddress[0], r.macAddress[1], r.macAddress[2], r.macAddress[3], r.macAddress[4], r.macAddress[5]);
 			platform.MessageF(mtype, "Module reset reason: %s, Vcc %.2f, flash size %" PRIu32 ", free heap %" PRIu32 "\n",
 								TranslateEspResetReason(r.resetReason), (double)((float)r.vcc/1024), r.flashSize, r.freeHeap);
@@ -980,6 +1017,15 @@ void WiFiInterface::Diagnostics(MessageType mtype) noexcept
 
 			if (currentMode == WiFiState::connected)
 			{
+				int majorVer, minorVer, patchVer;
+				if (GetFirmwareVersion(majorVer, minorVer, patchVer) && // if parse failed, don't display
+					((majorVer >= 2 && minorVer >= 2 && patchVer >= 0) || // > 2.2.z
+					(majorVer >= 3) /* >= 3.y.z*/))
+				{
+					platform.MessageF(mtype, "AP MAC address %02x:%02x:%02x:%02x:%02x:%02x\n",
+										r.apMac[0], r.apMac[1], r.apMac[2], r.apMac[3], r.apMac[4], r.apMac[5]);
+				}
+
 				constexpr const char* ConnectionModes[4] =  { "none", "802.11b", "802.11g", "802.11n" };
 				platform.MessageF(mtype, "Signal strength %ddBm, channel %u, mode %s, reconnections %u\n",
 											(int)r.rssi, r.channel, ConnectionModes[r.phyMode], reconnectCount);
