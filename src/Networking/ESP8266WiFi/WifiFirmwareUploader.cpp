@@ -11,6 +11,7 @@
 
 #include "WiFiInterface.h"
 
+#include <Devices.h>
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 #include <Storage/FileStore.h>

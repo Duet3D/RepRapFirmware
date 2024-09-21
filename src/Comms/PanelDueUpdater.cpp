@@ -9,6 +9,7 @@
 
 #if SUPPORT_PANELDUE_FLASH
 
+#include <Devices.h>
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 

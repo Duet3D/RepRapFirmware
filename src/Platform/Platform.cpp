@@ -21,6 +21,7 @@
 
 #include "Platform.h"
 
+#include <Devices.h>
 #include <Heating/Heat.h>
 #include <Movement/DDA.h>
 #include <Movement/Move.h>

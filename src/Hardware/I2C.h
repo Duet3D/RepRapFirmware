@@ -12,6 +12,7 @@
 #include <Platform/Tasks.h>
 
 #ifdef I2C_IFACE
+# include <Devices.h>
 # include "Wire.h"
 #endif
 

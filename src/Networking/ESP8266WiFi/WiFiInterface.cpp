@@ -9,6 +9,7 @@
 
 #if HAS_WIFI_NETWORKING
 
+#include <Devices.h>
 #include <Platform/Platform.h>
 #include <Platform/RepRap.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>

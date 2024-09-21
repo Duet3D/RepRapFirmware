@@ -9,6 +9,7 @@
 #define SRC_HARDWARE_SPI_SHAREDSPIDEVICE_H_
 
 #include "SpiDevice.h"
+#include <RTOSIface/RTOSIface.h>
 
 class SharedSpiDevice : public SpiDevice
 {

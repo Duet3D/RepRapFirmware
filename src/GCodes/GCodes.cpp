@@ -28,6 +28,7 @@
 #include "GCodeBuffer/GCodeBuffer.h"
 #include "GCodeBuffer/ExpressionParser.h"
 #include "GCodeQueue.h"
+#include <Devices.h>
 #include <Heating/Heat.h>
 #include <Platform/Platform.h>
 #include <Movement/Move.h>

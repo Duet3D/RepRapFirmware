@@ -6,6 +6,7 @@
  */
 
 #include "ExceptionHandlers.h"
+#include <Devices.h>
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <Platform/Tasks.h>

@@ -8,8 +8,10 @@
 #include "AuxDevice.h"
 
 #if HAS_AUX_DEVICES
+
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
+#include <AsyncSerial.h>
 
 AuxDevice::AuxDevice() noexcept : uart(nullptr), seq(0), mode(AuxMode::disabled)
 {

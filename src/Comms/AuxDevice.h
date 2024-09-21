@@ -26,6 +26,8 @@ enum class AuxMode : uint8_t
 # include "Modbus.h"
 #endif
 
+class AsyncSerial;
+
 class AuxDevice
 {
 public:
