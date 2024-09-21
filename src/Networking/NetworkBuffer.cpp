@@ -7,6 +7,7 @@
 
 #include "NetworkBuffer.h"
 #include "Storage/FileStore.h"
+#include <new>
 
 #if HAS_WIFI_NETWORKING && HAS_LWIP_NETWORKING && defined(DUET3MINI_V04)
 # include "LwipEthernet/AllocateFromPbufPool.h"
