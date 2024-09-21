@@ -26,7 +26,7 @@ public:
 	const char *GetTypeName() const noexcept;
 
 	// Configure the accelerometer to collect at or near the requested sampling rate and the requested resolution in bits.
-	bool Configure(uint16_t& samplingRate, uint8_t& resolution) noexcept;
+	bool Configure(uint16_t& p_samplingRate, uint8_t& p_resolution) noexcept;
 
 	// Start collecting data
 	bool StartCollecting(uint8_t axes) noexcept;
