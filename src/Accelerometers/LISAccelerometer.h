@@ -23,7 +23,7 @@ public:
 	bool CheckPresent() noexcept;
 
 	// Return the type name of the accelerometer. Only valid after checkPresent returns true.
-	const char *GetTypeName() const noexcept;
+	const char *_ecv_array GetTypeName() const noexcept;
 
 	// Configure the accelerometer to collect at or near the requested sampling rate and the requested resolution in bits.
 	bool Configure(uint16_t& p_samplingRate, uint8_t& p_resolution) noexcept;
@@ -64,7 +64,7 @@ private:
 	bool ReadRegister(LisRegister reg, uint8_t& val) noexcept;
 	bool WriteRegister(LisRegister reg, uint8_t val) noexcept;
 
-	volatile TaskHandle taskWaiting;
+	volatile TaskHandle _ecv_null taskWaiting;
 	uint32_t firstInterruptTime;
 	uint32_t lastInterruptTime;
 	uint32_t totalNumRead;
