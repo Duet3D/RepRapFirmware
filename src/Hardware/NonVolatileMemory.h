@@ -21,7 +21,7 @@ public:
 	NonVolatileMemory() noexcept;
 
 	void EnsureWritten() noexcept;
-	SoftwareResetData *GetLastWrittenResetData(unsigned int &slot) noexcept;
+	SoftwareResetData *_ecv_null GetLastWrittenResetData(unsigned int &slot) noexcept;
 	SoftwareResetData *AllocateResetDataSlot() noexcept;
 	int8_t GetThermistorLowCalibration(unsigned int inputNumber) noexcept;
 	int8_t GetThermistorHighCalibration(unsigned int inputNumber) noexcept;
@@ -33,8 +33,8 @@ public:
 
 private:
 	void EnsureRead() noexcept;
-	int8_t GetThermistorCalibration(unsigned int inputNumber, uint8_t *calibArray) noexcept;
-	void SetThermistorCalibration(unsigned int inputNumber, int8_t val, uint8_t *calibArray) noexcept;
+	int8_t GetThermistorCalibration(unsigned int inputNumber, uint8_t *_ecv_array calibArray) noexcept;
+	void SetThermistorCalibration(unsigned int inputNumber, int8_t val, uint8_t *_ecv_array calibArray) noexcept;
 
 	struct NVM
 	{

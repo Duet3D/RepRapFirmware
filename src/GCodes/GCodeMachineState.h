@@ -219,7 +219,7 @@ public:
 	void SetState(GCodeState newState) noexcept;
 	inline void AdvanceState() noexcept { state = static_cast<GCodeState>(static_cast<uint8_t>(state) + 1); }
 
-	GCodeMachineState *GetPrevious() const noexcept { return previous; }
+	GCodeMachineState *_ecv_null GetPrevious() const noexcept { return previous; }
 
 	GCodeMachineState *Pop() const noexcept;
 	uint16_t GetBlockNesting() const noexcept { return blockNesting; }
@@ -296,7 +296,7 @@ public:
 	bool UsingMachineCoordinates() const noexcept { return g53Active || runningSystemMacro; }
 
 	// Set the error message and associated state
-	void SetError(const char *msg) noexcept;
+	void SetError(const char *_ecv_array msg) noexcept;
 	void SetError(const GCodeException& exc) noexcept;
 	void SetWarning(const char *msg) noexcept;
 	void RetrieveStateMachineResult(const GCodeBuffer& gb, const StringRef& reply, GCodeResult& rslt) const noexcept;
@@ -314,7 +314,7 @@ public:
 	void ClearBlocks() noexcept;
 
 private:
-	GCodeMachineState *previous;
+	GCodeMachineState *_ecv_null previous;
 	BlockState *currentBlockState;
 	GCodeException errorMessage;				// we use a GCodeException to store a possible message and a parameter
 	uint16_t blockNesting;

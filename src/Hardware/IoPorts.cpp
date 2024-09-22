@@ -34,7 +34,7 @@ constexpr unsigned int AdcBits = LegacyAnalogIn::AdcBits;
 
 // Read a port name parameter and assign some ports. Caller must call gb.Seen() with the appropriate letter and get 'true' returned before calling this.
 // Return the number of ports allocated, or 0 if there was an error with the error message in 'reply'.
-/*static*/ size_t IoPort::AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[]) THROWS(GCodeException)
+/*static*/ size_t IoPort::AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort *_ecv_from const ports[], const PinAccess access[]) THROWS(GCodeException)
 {
 	// Get the full port names string
 	String<StringLength100> portNames;				// 50 characters wasn't always enough when passing 4 duex endstop input names in a M574 command
@@ -46,12 +46,12 @@ constexpr unsigned int AdcBits = LegacyAnalogIn::AdcBits;
 // If successful, return true; else return false with the error message in 'reply'.
 bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, PinAccess access) THROWS(GCodeException)
 {
-	IoPort* const p = this;
+	IoPort *_ecv_from const p = this;
 	return AssignPorts(gb, reply, neededFor, 1, &p, &access) == 1;
 }
 
 // Try to assign ports, returning the number of ports successfully assigned
-/*static*/ size_t IoPort::AssignPorts(const char* pinNames, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort* const ports[], const PinAccess access[]) noexcept
+/*static*/ size_t IoPort::AssignPorts(const char *_ecv_array pinNames, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort *_ecv_from const ports[], const PinAccess access[]) noexcept
 {
 	// Release any existing assignments
 	for (size_t i = 0; i < numPorts; ++i)
@@ -108,13 +108,13 @@ bool IoPort::AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neede
 	return numPorts;
 }
 
-bool IoPort::AssignPort(const char* pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept
+bool IoPort::AssignPort(const char *_ecv_array pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept
 {
-	IoPort* const p = this;
+	IoPort *_ecv_from const p = this;
 	return AssignPorts(pinName, reply, neededFor, 1, &p, &access) == 1;
 }
 
-/*static*/ const char* IoPort::TranslatePinAccess(PinAccess access) noexcept
+/*static*/ const char *_ecv_array IoPort::TranslatePinAccess(PinAccess access) noexcept
 {
 	switch (access)
 	{
@@ -194,7 +194,7 @@ void IoPort::ClearAnalogCallback() noexcept
 #endif
 
 // Allocate the specified logical pin, returning true if successful
-bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept
+bool IoPort::Allocate(const char *_ecv_array pn, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept
 {
 	Release();
 
@@ -223,7 +223,7 @@ bool IoPort::Allocate(const char *pn, const StringRef& reply, PinUsedBy neededFo
 		++pn;
 	}
 
-	const char *const fullPinName = pn;			// the full pin name less the inversion and pullup flags
+	const char *_ecv_array const fullPinName = pn;			// the full pin name less the inversion and pullup flags
 
 #if SUPPORT_CAN_EXPANSION
 	if (isdigit(*pn))
@@ -348,7 +348,7 @@ bool IoPort::SetMode(PinAccess access) noexcept
 
 bool IoPort::GetInvert() const noexcept
 {
-	return (hardwareInvert) ? !totalInvert : totalInvert;
+	return (hardwareInvert) ? !totalInvert : (bool)totalInvert;
 }
 
 void IoPort::SetInvert(bool pInvert) noexcept
@@ -401,7 +401,7 @@ void IoPort::AppendPinName(const StringRef& str) const noexcept
 			str.cat('!');
 		}
 		const size_t insertPoint = str.strlen();
-		const char *pn = PinTable[logicalPin].GetNames();
+		const char *_ecv_array pn = PinTable[logicalPin].GetNames();
 		unsigned int numPrinted = 0;
 		do
 		{
@@ -525,9 +525,9 @@ uint16_t IoPort::ReadAnalog() const noexcept
 
 	size_t numToSkip = prefix;
 	unsigned int boardAddress = 0;
-	while (isdigit(portName[numToSkip]))
+	while ((bool)isdigit(portName[numToSkip]))
 	{
-		boardAddress = (boardAddress * 10) + (portName[numToSkip] - '0');
+		boardAddress = (boardAddress * 10) + (unsigned int)(portName[numToSkip] - '0');
 		++numToSkip;
 	}
 #if SUPPORT_CAN_EXPANSION

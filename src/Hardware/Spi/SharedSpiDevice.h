@@ -28,7 +28,7 @@ public:
 private:
 	Mutex mutex;
 
-	static SharedSpiDevice *mainSharedSpiDevice;
+	static SharedSpiDevice *_ecv_null mainSharedSpiDevice;
 };
 
 #endif /* SRC_HARDWARE_SPI_SHAREDSPIDEVICE_H_ */

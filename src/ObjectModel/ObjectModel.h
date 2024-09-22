@@ -290,11 +290,11 @@ public:
 	ExpressionValue GetObjectValueUsingTableNumber(ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, const char *_ecv_array idString, uint8_t tableNumber) const THROWS(GCodeException);
 
 	// Function to report a value or object as JSON. This does not need to handle 'var' or 'global' because those are checked for before this is called.
-	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+	void ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor,
 							const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException);
 
 	// Skip the current element in the ID or filter string
-	static const char* GetNextElement(const char *id) noexcept;
+	static const char *_ecv_array GetNextElement(const char *_ecv_array id) noexcept;
 
 protected:
 	// Construct a JSON representation of those parts of the object model requested by the user
@@ -313,7 +313,7 @@ protected:
 	// Get the object model table entry for the current level object in the query
 	const ObjectModelTableEntry *FindObjectModelTableEntry(const ObjectModelClassDescriptor *classDescriptor, uint8_t tableNumber, const char *_ecv_array idString) const noexcept;
 
-	virtual const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept = 0;
+	virtual const ObjectModelClassDescriptor *_ecv_null GetObjectModelClassDescriptor() const noexcept = 0;
 
 	// Get the requested entry in the array table
 	virtual const ObjectModelArrayTableEntry *_ecv_null GetObjectModelArrayEntry(unsigned int index) const noexcept { return nullptr; }
@@ -346,7 +346,7 @@ private:
 // This function is recursive, so keep its stack usage low.
 // Most recursive calls are for non-array object values, so handle object values inline to reduce stack usage.
 // This saves about 240 bytes of stack space but costs 272 bytes of flash memory.
-inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor,
+inline void ObjectModel::ReportItemAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor,
 											const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException)
 {
 	if (context.WantArrayLength() && *filter == 0)
@@ -406,7 +406,7 @@ public:
 	bool IsObsolete() const noexcept { return ((uint8_t)flags & (uint8_t)ObjectModelEntryFlags::obsolete) != 0; }
 
 	// See whether we should add the value of this element to the buffer, returning true if it matched the filter and we did add it
-	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *_ecv_from self, const char *_ecv_array filter, bool first) const THROWS(GCodeException);
+	bool ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor, const ObjectModel *_ecv_from self, const char *_ecv_array filter, bool first) const THROWS(GCodeException);
 
 	// Return the name of this field
 	const char *_ecv_array  GetName() const noexcept { return name; }
@@ -445,7 +445,7 @@ struct ObjectModelClassDescriptor
 
 // Use this macro in the 'protected' section of every class declaration that derived from ObjectModel
 #define DECLARE_OBJECT_MODEL \
-	const ObjectModelClassDescriptor *GetObjectModelClassDescriptor() const noexcept override; \
+	const ObjectModelClassDescriptor *_ecv_null GetObjectModelClassDescriptor() const noexcept override; \
 	static const ObjectModelTableEntry objectModelTable[]; \
 	static const uint8_t objectModelTableDescriptor[]; \
 	static const ObjectModelClassDescriptor objectModelClassDescriptor;

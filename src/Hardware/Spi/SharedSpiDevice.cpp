@@ -17,7 +17,7 @@ SharedSpiDevice::SharedSpiDevice(uint8_t sercomNum) noexcept
 
 // Static members
 
-SharedSpiDevice *SharedSpiDevice::mainSharedSpiDevice = nullptr;
+SharedSpiDevice *_ecv_null SharedSpiDevice::mainSharedSpiDevice = nullptr;
 
 void SharedSpiDevice::Init() noexcept
 {

@@ -24,11 +24,11 @@ public:
 	void Release() noexcept;
 	void AppendBasicDetails(const StringRef& str) const noexcept;
 
-	static size_t AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort * const ports[], const PinAccess access[]) THROWS(GCodeException);
+	static size_t AssignPorts(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort *_ecv_from const ports[], const PinAccess access[]) THROWS(GCodeException);
 	bool AssignPort(GCodeBuffer& gb, const StringRef& reply, PinUsedBy neededFor, PinAccess access) THROWS(GCodeException);
 
-	static size_t AssignPorts(const char *pinNames, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort * const ports[], const PinAccess access[]) noexcept;
-	bool AssignPort(const char *pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept;
+	static size_t AssignPorts(const char *_ecv_array pinNames, const StringRef& reply, PinUsedBy neededFor, size_t numPorts, IoPort *_ecv_from const ports[], const PinAccess access[]) noexcept;
+	bool AssignPort(const char *_ecv_array pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept;
 
 	void AppendPinName(const StringRef& str) const noexcept;
 	bool IsValid() const noexcept { return logicalPin < NumNamedPins; }
@@ -82,7 +82,7 @@ public:
 	static void WriteAnalog(Pin p, float pwm, uint16_t frequency) noexcept;
 
 protected:
-	bool Allocate(const char *pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept;
+	bool Allocate(const char *_ecv_array pinName, const StringRef& reply, PinUsedBy neededFor, PinAccess access) noexcept;
 
 	// Get the physical pin without checking the validity of the logical pin
 	Pin GetPinNoCheck() const noexcept
@@ -91,7 +91,7 @@ protected:
 		return logicalPin;
 	}
 
-	static const char* TranslatePinAccess(PinAccess access) noexcept;
+	static const char*_ecv_array TranslatePinAccess(PinAccess access) noexcept;
 
 	LogicalPin logicalPin;									// the logical pin number
 	uint8_t hardwareInvert : 1,								// true if the hardware includes inversion

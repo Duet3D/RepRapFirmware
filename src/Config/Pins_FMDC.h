@@ -315,9 +315,6 @@ constexpr Pin EspDataReadyPin = PortAPin(18);
 constexpr Pin SamTfrReadyPin = PortAPin(19);
 constexpr Pin SamCsPin = PortAPin(14);
 
-// Function to look up a pin name and pass back the corresponding index into the pin table
-bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
-
 // List of assignable pins and their mapping from names to MPU ports. This is indexed by logical pin number.
 // The names must match user input that has been concerted to lowercase and had _ and - characters stripped out.
 // Aliases are separate by the , character.

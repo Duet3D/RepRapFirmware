@@ -57,7 +57,7 @@ struct RawMove
 	// GCC normally calls memcpy to assign objects of this class. We can do better because we know they must be 32-bit aligned.
 	RawMove& operator=(const RawMove& arg) noexcept
 	{
-		memcpyu32(reinterpret_cast<uint32_t*>(this), reinterpret_cast<const uint32_t*>(&arg), sizeof(*this)/4);
+		memcpyu32(reinterpret_cast<uint32_t *_ecv_array>(this), reinterpret_cast<const uint32_t *_ecv_array>(&arg), sizeof(*this)/4);
 		return *this;
 	}
 };

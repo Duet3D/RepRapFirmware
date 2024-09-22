@@ -27,10 +27,10 @@ public:
 	explicit StringParser(GCodeBuffer& gcodeBuffer) noexcept;
 	void Init() noexcept; 													// Set it up to parse another G-code
 	bool Put(char c) noexcept SPEED_CRITICAL;								// Add a character to the end
-	void PutCommand(const char *str) noexcept;								// Put a complete command but don't decode it
+	void PutCommand(const char *_ecv_array str) noexcept;					// Put a complete command but don't decode it
 	void DecodeCommand() noexcept;											// Decode the next command in the line
-	void PutAndDecode(const char *str, size_t len) noexcept;				// Add an entire string, overwriting any existing content
-	void PutAndDecode(const char *str) noexcept;							// Add a null-terminated string, overwriting any existing content
+	void PutAndDecode(const char *_ecv_array str, size_t len) noexcept;		// Add an entire string, overwriting any existing content
+	void PutAndDecode(const char *_ecv_array str) noexcept;					// Add a null-terminated string, overwriting any existing content
 	void StartNewFile() noexcept;											// Called when we start a new file
 	bool FileEnded() noexcept;												// Called when we reach the end of the file we are reading from
 	bool CheckMetaCommand(const StringRef& reply) THROWS(GCodeException);	// Check whether the current command is a meta command, or we are skipping block
@@ -67,7 +67,7 @@ public:
 	void SetCommsProperties(uint32_t arg) noexcept { checksumRequired = (arg & 1); crcRequired = (arg & 4); }
 
 #if HAS_MASS_STORAGE
-	bool OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept;
+	bool OpenFileToWrite(const char *_ecv_array directory, const char *_ecv_array fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept;
 																			// Open a file to write to
 	bool IsWritingFile() const noexcept { return fileBeingWritten != nullptr; }	// Returns true if writing a file
 	void WriteToFile() noexcept;											// Write the current GCode to file
@@ -86,9 +86,9 @@ public:
 	void AppendFullCommand(const StringRef &s) const noexcept;
 	void AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeException);
 
-	GCodeException ConstructParseException(const char *str) const noexcept;
-	GCodeException ConstructParseException(const char *str, const char *param) const noexcept;
-	GCodeException ConstructParseException(const char *str, uint32_t param) const noexcept;
+	GCodeException ConstructParseException(const char *_ecv_array str) const noexcept;
+	GCodeException ConstructParseException(const char *_ecv_array str, const char *_ecv_array param) const noexcept;
+	GCodeException ConstructParseException(const char *_ecv_array str, uint32_t param) const noexcept;
 
 	int GetColumn() const noexcept;											// Get the current column if we can, else return -1
 

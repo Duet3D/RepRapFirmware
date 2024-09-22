@@ -13,6 +13,7 @@
 #if SUPPORT_LINEAR_DELTA
 
 #include "RoundBedKinematics.h"
+#include <Math/Matrix.h>
 
 // Class to hold the parameter for a delta machine.
 class LinearDeltaKinematics : public RoundBedKinematics

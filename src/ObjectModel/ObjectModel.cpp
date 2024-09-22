@@ -761,7 +761,7 @@ void ObjectModel::ReportArrayLengthAsJson(OutputBuffer *buf, ObjectExplorationCo
 // This function is recursive, so keep its stack usage low.
 // The type of 'val' may not be ObjectModel_tc. That type is handled in function ReportItemAsJson, which is declared 'inline' to reduce stack usage.
 void ObjectModel::ReportItemAsJsonFull(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *null classDescriptor,
-										const ExpressionValue& val, const char *filter) const THROWS(GCodeException)
+										const ExpressionValue& val, const char *_ecv_array filter) const THROWS(GCodeException)
 {
 	switch (val.GetType())
 	{
@@ -1186,7 +1186,7 @@ const ObjectModelTableEntry* ObjectModel::FindObjectModelTableEntry(const Object
 	return nullptr;
 }
 
-/*static*/ const char* ObjectModel::GetNextElement(const char *id) noexcept
+/*static*/ const char *_ecv_array ObjectModel::GetNextElement(const char *_ecv_array id) noexcept
 {
 	while (*id != 0 && *id != '.' && *id != '[' && *id != '^')
 	{
@@ -1201,7 +1201,7 @@ bool ObjectModelTableEntry::Matches(const char* filterString, const ObjectExplor
 }
 
 // Add the value of this element to the buffer, returning true if it matched and we did
-bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *classDescriptor, const ObjectModel *self, const char* filter, bool first) const THROWS(GCodeException)
+bool ObjectModelTableEntry::ReportAsJson(OutputBuffer* buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor *_ecv_null classDescriptor, const ObjectModel *_ecv_from self, const char *_ecv_array filter, bool first) const THROWS(GCodeException)
 {
 	const char * nextElement = ObjectModel::GetNextElement(filter);
 	const ExpressionValue val = func(self, context);

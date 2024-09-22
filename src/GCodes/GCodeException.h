@@ -72,8 +72,8 @@ private:
 	String<StringLength50> stringParam;
 };
 
-// Functions tro create and throw an exception. Using these avoids allocating the GCodeException object on the local stack when it is not going to be used.
-[[noreturn]] void __attribute__((noinline)) ThrowGCodeException(const char *errMsg) THROWS(GCodeException);
-[[noreturn]] void __attribute__((noinline)) ThrowGCodeException(const char *errMsg, uint32_t param) THROWS(GCodeException);
+// Functions to create and throw an exception. Using these avoids allocating the GCodeException object on the local stack when it is not going to be used.
+[[noreturn]] void __attribute__((noinline)) ThrowGCodeException(const char *_ecv_array errMsg) THROWS(GCodeException);
+[[noreturn]] void __attribute__((noinline)) ThrowGCodeException(const char *_ecv_array errMsg, uint32_t param) THROWS(GCodeException);
 
 #endif /* SRC_GCODES_GCODEEXCEPTION_H_ */

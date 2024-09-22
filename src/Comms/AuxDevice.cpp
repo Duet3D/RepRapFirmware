@@ -58,7 +58,7 @@ void AuxDevice::Disable() noexcept
 	}
 }
 
-void AuxDevice::SendPanelDueMessage(const char* msg) noexcept
+void AuxDevice::SendPanelDueMessage(const char *_ecv_array msg) noexcept
 {
 	if (mode == AuxMode::panelDue)
 	{
@@ -72,7 +72,7 @@ void AuxDevice::SendPanelDueMessage(const char* msg) noexcept
 	}
 }
 
-void AuxDevice::AppendAuxReply(const char *msg, bool rawMessage) noexcept
+void AuxDevice::AppendAuxReply(const char *_ecv_array msg, bool rawMessage) noexcept
 {
 	// Discard this response if either no aux device is attached or if the response is empty
 	if (msg[0] != 0 && IsEnabledForGCodeIo())
@@ -95,7 +95,7 @@ void AuxDevice::AppendAuxReply(const char *msg, bool rawMessage) noexcept
 	}
 }
 
-void AuxDevice::AppendAuxReply(OutputBuffer *reply, bool rawMessage) noexcept
+void AuxDevice::AppendAuxReply(OutputBuffer *_ecv_array reply, bool rawMessage) noexcept
 {
 	// Discard this response if either no aux device is attached or if the response is empty
 	if (reply == nullptr || reply->Length() == 0 || !IsEnabledForGCodeIo())
@@ -134,7 +134,7 @@ bool AuxDevice::Flush() noexcept
 	if (hasMore)
 	{
 		MutexLocker lock(mutex);
-		OutputBuffer *auxOutputBuffer = outStack.GetFirstItem();
+		OutputBuffer *_ecv_null auxOutputBuffer = outStack.GetFirstItem();
 		if (auxOutputBuffer == nullptr)
 		{
 			(void)outStack.Pop();
@@ -447,7 +447,7 @@ uint32_t AuxDevice::CalcTransmissionTime(unsigned int numChars) const noexcept
 }
 
 // Send some data to the Uart. Returns GCodeResult::error if we failed to acquire the mutex, GCodeResult::ok if we sent the data.
-GCodeResult AuxDevice::SendUartData(const uint8_t *data, size_t len) noexcept
+GCodeResult AuxDevice::SendUartData(const uint8_t *_ecv_array data, size_t len) noexcept
 {
 	if (!mutex.Take(BusAvailableTimeout))
 	{
@@ -474,7 +474,7 @@ GCodeResult AuxDevice::SendUartData(const uint8_t *data, size_t len) noexcept
 	return GCodeResult::ok;
 }
 
-GCodeResult AuxDevice::ReadUartData(uint8_t *data, size_t bytesToRead) noexcept
+GCodeResult AuxDevice::ReadUartData(uint8_t *_ecv_array data, size_t bytesToRead) noexcept
 {
 	if (!mutex.Take(BusAvailableTimeout))
 	{

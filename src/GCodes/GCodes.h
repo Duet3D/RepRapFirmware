@@ -93,7 +93,7 @@ class SbcInterface;
 class GCodes
 {
 public:
-	GCodes(Platform& p) noexcept;
+	explicit GCodes(Platform& p) noexcept;
 	void Spin() noexcept;														// Called in a tight loop to make this class work
 	void Init() noexcept;														// Set it up
 	void Exit() noexcept;														// Shut it down
@@ -128,7 +128,7 @@ public:
 	float GetRawExtruderTotalByDrive(size_t extruder) const noexcept;			// Get the total extrusion since start of print, for one drive
 	float GetTotalRawExtrusion() const noexcept { return rawExtruderTotal; }	// Get the total extrusion since start of print, all drives
 	float GetTotalBabyStepOffset(size_t axis) const noexcept
-		pre(axis < maxAxes);
+		pre(axis < MaxAxes);
 	float GetUserCoordinate(const MovementState& ms, size_t axis) const noexcept;	// Get the current user coordinate in the current workspace coordinate system
 
 	bool CheckNetworkCommandAllowed(GCodeBuffer& gb, const StringRef& reply, GCodeResult& result) noexcept;
@@ -179,7 +179,7 @@ public:
 	bool LowVoltageResume() noexcept;
 #endif
 
-	const char *GetAxisLetters() const noexcept { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
+	const char *_ecv_array GetAxisLetters() const noexcept { return axisLetters; }			// Return a null-terminated string of axis letters indexed by drive
 	size_t GetAxisNumberForLetter(const char axisLetter) const noexcept;
 	MachineType GetMachineType() const noexcept { return machineType; }
 	bool LockMovementSystemAndWaitForStandstill(GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept;	// Lock a movement system and wait for pending moves to finish
@@ -203,7 +203,7 @@ public:
 #endif
 
 	void SetMappedFanSpeed(const GCodeBuffer *null gb, float f) noexcept;				// Set the speeds of fans mapped for the current tool
-	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *reply) noexcept;	// Handle G-Code replies
+	void HandleReply(GCodeBuffer& gb, GCodeResult rslt, const char *_ecv_array reply) noexcept;	// Handle G-Code replies
 	void EmergencyStop() noexcept;													// Cancel everything
 
 	const GridDefinition& GetDefaultGrid() const { return defaultGrid; };			// Get the default grid definition
@@ -282,7 +282,7 @@ public:
 	// Return laser PWM in 0..1. Only the primary movement queue is permitted to control the laser.
 	float GetLaserPwm() const noexcept
 	{
-		return (float)moveStates[0].laserPwmOrIoBits.laserPwm * (1.0/65535);
+		return (float)moveStates[0].laserPwmOrIoBits.laserPwm * (1.0/65535.0);
 	}
 # endif
 #endif
@@ -292,7 +292,7 @@ public:
 	void SetRemotePrinting(bool isPrinting) noexcept { isRemotePrinting = isPrinting; }
 #endif
 
-	static constexpr const char *AllowedAxisLetters =
+	static constexpr const char *_ecv_array AllowedAxisLetters =
 #if defined(DUET3)
 						"XYZUVWABCDabcdefghijklmnopqrstuvwxyz";
 #else
@@ -307,25 +307,25 @@ public:
 #define TPOST			"tpost"
 #define TFREE			"tfree"
 
-	static constexpr const char* CONFIG_FILE = "config.g";
-	static constexpr const char* CONFIG_BACKUP_FILE = "config.g.bak";
-	static constexpr const char* BED_EQUATION_G = "bed.g";
-	static constexpr const char* MESH_G = "mesh.g";
-	static constexpr const char* PAUSE_G = "pause.g";
-	static constexpr const char* RESUME_G = "resume.g";
-	static constexpr const char* CANCEL_G = "cancel.g";
-	static constexpr const char* START_G = "start.g";
-	static constexpr const char* STOP_G = "stop.g";
-	static constexpr const char* CONFIG_OVERRIDE_G = "config-override.g";
-	static constexpr const char* DefaultHeightMapFile = "heightmap.csv";
-	static constexpr const char* LOAD_FILAMENT_G = "load.g";
-	static constexpr const char* CONFIG_FILAMENT_G = "config.g";
-	static constexpr const char* UNLOAD_FILAMENT_G = "unload.g";
-	static constexpr const char* RESUME_AFTER_POWER_FAIL_G = "resurrect.g";
-	static constexpr const char* RESUME_PROLOGUE_G = "resurrect-prologue.g";
-	static constexpr const char* FILAMENT_CHANGE_G = "filament-change.g";
-	static constexpr const char* DAEMON_G = "daemon.g";
-	static constexpr const char* RUNONCE_G = "runonce.g";
+	static constexpr const char *_ecv_array CONFIG_FILE = "config.g";
+	static constexpr const char *_ecv_array CONFIG_BACKUP_FILE = "config.g.bak";
+	static constexpr const char *_ecv_array BED_EQUATION_G = "bed.g";
+	static constexpr const char *_ecv_array MESH_G = "mesh.g";
+	static constexpr const char *_ecv_array PAUSE_G = "pause.g";
+	static constexpr const char *_ecv_array RESUME_G = "resume.g";
+	static constexpr const char *_ecv_array CANCEL_G = "cancel.g";
+	static constexpr const char *_ecv_array START_G = "start.g";
+	static constexpr const char *_ecv_array STOP_G = "stop.g";
+	static constexpr const char *_ecv_array CONFIG_OVERRIDE_G = "config-override.g";
+	static constexpr const char *_ecv_array DefaultHeightMapFile = "heightmap.csv";
+	static constexpr const char *_ecv_array LOAD_FILAMENT_G = "load.g";
+	static constexpr const char *_ecv_array CONFIG_FILAMENT_G = "config.g";
+	static constexpr const char *_ecv_array UNLOAD_FILAMENT_G = "unload.g";
+	static constexpr const char *_ecv_array RESUME_AFTER_POWER_FAIL_G = "resurrect.g";
+	static constexpr const char *_ecv_array RESUME_PROLOGUE_G = "resurrect-prologue.g";
+	static constexpr const char *_ecv_array FILAMENT_CHANGE_G = "filament-change.g";
+	static constexpr const char *_ecv_array DAEMON_G = "daemon.g";
+	static constexpr const char *_ecv_array RUNONCE_G = "runonce.g";
 #if SUPPORT_PROBE_POINTS_FILE
 	static constexpr const char* DefaultProbeProbePointsFile = "probePoints.csv";
 #endif
@@ -381,7 +381,7 @@ private:
 	bool HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do an M code
 	bool HandleTcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do a T code
 	bool HandleQcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Do an internal code
-	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply, OutputBuffer *outBuf) noexcept
+	bool HandleResult(GCodeBuffer& gb, GCodeResult rslt, const StringRef& reply, OutputBuffer *_ecv_null outBuf) noexcept
 		pre(outBuf == nullptr || rslt == GCodeResult::ok);
 
 	void HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept;
@@ -390,8 +390,7 @@ private:
 	GCodeResult TryMacroFile(GCodeBuffer& gb) THROWS(GCodeException);								// Try to find a macro file that implements a G or M command
 
 	bool DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeException) SPEED_CRITICAL;	// Execute a straight move
-	bool DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)							// Execute an arc move
-		pre(segmentsLeft == 0; resourceOwners[MoveResource] == &gb);
+	bool DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException);							// Execute an arc move
 	void FinaliseMove(GCodeBuffer& gb, MovementState& ms) noexcept;									// Adjust the move parameters to account for segmentation and/or part of the move having been done already
 	bool CheckEnoughAxesHomed(AxesBitmap axesToMove) noexcept;										// Check that enough axes have been homed
 	bool TravelToStartPoint(GCodeBuffer& gb) noexcept;												// Set up a move to travel to the resume point
@@ -413,10 +412,9 @@ private:
 	GCodeResult ConfigureSCurve(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M971
 #endif
 	GCodeResult ConfigureDriver(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);						// Deal with M569
-	GCodeResult ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
-		pre(drive < platform.GetNumActualDirectDrivers());																// Deal with M569 for one local driver
+	GCodeResult ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException);	// Deal with M569 for one local driver
 	GCodeResult ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
-		pre(drive < platform.GetNumActualDirectDrivers());																// Deal with M569.0 for one local driver
+		pre(drive < reprap.GetMove().GetNumActualDirectDrivers());														// Deal with M569.0 for one local driver
 	GCodeResult ConfigureAccelerations(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);					// process M204
 	GCodeResult DoMessageBox(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);							// process M291
 	GCodeResult AcknowledgeMessage(GCodeBuffer&gb, const StringRef& reply) THROWS(GCodeException);						// process M292
@@ -765,7 +763,7 @@ private:
 
 #if HAS_MASS_STORAGE
 	static constexpr uint32_t SdTimingByteIncrement = 8 * 1024;	// how many timing bytes we write at a time
-	static constexpr const char *TimingFileName = "test.tst";	// the name of the file we write
+	static constexpr const char *_ecv_array TimingFileName = "test.tst";	// the name of the file we write
 	FileStore *sdTimingFile;					// file handle being used for SD card write timing
 	uint32_t timingBytesRequested;				// how many bytes we were asked to write
 	uint32_t timingBytesWritten;				// how many timing bytes we have written so far
@@ -801,7 +799,7 @@ inline bool GCodes::LockMovement(const GCodeBuffer& gb, MovementSystemNumber msN
 // Unlock a particular movement system, if we own it
 inline void GCodes::UnlockMovement(const GCodeBuffer& gb, MovementSystemNumber msNumber) noexcept
 {
-	return UnlockResource(gb, MoveResourceBase + msNumber);
+	UnlockResource(gb, MoveResourceBase + msNumber);
 }
 
 #if !SUPPORT_ASYNC_MOVES
@@ -847,7 +845,7 @@ inline bool GCodes::LockAllMovement(const GCodeBuffer& gb) noexcept
 // Unlock the movement system we are using, if we own it
 inline void GCodes::UnlockMovement(const GCodeBuffer& gb) noexcept
 {
-	return UnlockResource(gb, MoveResourceBase);
+	UnlockResource(gb, MoveResourceBase);
 }
 
 // Grab all movement locks even if they are already owned

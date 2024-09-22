@@ -28,7 +28,7 @@ public:
 	ExpressionValue GetValue() const noexcept { return val; }
 	int8_t GetScope() const noexcept { return scope; }
 	void Assign(ExpressionValue& ev) THROWS(GCodeException);
-	void AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *indices) THROWS(GCodeException) pre(numIndices != 0);
+	void AssignIndexed(const ExpressionValue& ev, size_t numIndices, const uint32_t *_ecv_array indices) THROWS(GCodeException) pre(numIndices != 0; indices.lim >= numIndices);
 	void AssignArray(size_t numElements, function_ref<ExpressionValue(size_t)>) noexcept;
 
 private:
@@ -51,10 +51,10 @@ public:
 
 	Variable *_ecv_null Lookup(const char *_ecv_array str, bool wantParameter) noexcept;
 	const Variable *_ecv_null Lookup(const char *_ecv_array str, size_t length, bool wantParameter) const noexcept pre(length <= strlen(str));
-	Variable *InsertNew(const char *str, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException);
-	void InsertNewParameter(const char *str, ExpressionValue pVal) THROWS(GCodeException) { InsertNew(str, pVal, -1); }
+	Variable *InsertNew(const char *_ecv_array str, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException);
+	void InsertNewParameter(const char *_ecv_array str, ExpressionValue pVal) THROWS(GCodeException) { InsertNew(str, pVal, -1); }
 	void EndScope(uint8_t blockNesting) noexcept;
-	void Delete(const char *str) noexcept;
+	void Delete(const char *_ecv_array str) noexcept;
 	void Clear() noexcept;
 
 	void IterateWhile(function_ref_noexcept<bool(unsigned int index, const Variable& v) noexcept> func) const noexcept;

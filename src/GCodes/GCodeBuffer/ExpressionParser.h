@@ -45,7 +45,7 @@ private:
 class ExpressionParser
 {
 public:
-	ExpressionParser(const GCodeBuffer& p_gb, const char *text, const char *textLimit, int p_column = -1) noexcept;
+	ExpressionParser(const GCodeBuffer& p_gb, const char *_ecv_array text, const char *_ecv_array textLimit, int p_column = -1) noexcept;
 
 	ExpressionValue Parse(bool evaluate = true) THROWS(GCodeException);
 	bool ParseBoolean() THROWS(GCodeException);
@@ -64,23 +64,23 @@ public:
 	const char *GetEndptr() const noexcept { return currentp; }
 
 private:
-	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *str) const THROWS(GCodeException);
-	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *str, const char *param) const THROWS(GCodeException);
-	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *str, uint32_t param) const THROWS(GCodeException);
+	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *_ecv_array str) const THROWS(GCodeException);
+	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *_ecv_array str, const char *param) const THROWS(GCodeException);
+	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *_ecv_array str, uint32_t param) const THROWS(GCodeException);
 
 	void __attribute__((noinline)) ParseInternal(ExpressionValue& val, bool evaluate, uint8_t priority) THROWS(GCodeException);
 	void __attribute__((noinline)) ParseExpectKet(ExpressionValue& rslt, bool evaluate, char expectedKet) THROWS(GCodeException);
 	void __attribute__((noinline)) ParseNumber(ExpressionValue& rslt) noexcept
-		pre(readPointer >= 0; isdigit(gb.buffer[readPointer]));
+		pre((bool)isdigit(*currentp));
 	void __attribute__((noinline)) ParseIdentifierExpression(ExpressionValue& rslt, bool evaluate, bool applyLengthOperator, bool applyExists) THROWS(GCodeException)
-		pre(readPointer >= 0; isalpha(gb.buffer[readPointer]));
+		pre((bool)isalpha(*currentp));
 	void __attribute__((noinline)) ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeException);
 
 	void ParseCharacter(ExpressionValue& rslt) THROWS(GCodeException);
 	void ParseGeneralArray(ExpressionValue& firstElementAndResult, bool evaluate) THROWS(GCodeException);
 	void ParseArray(size_t& length, function_ref<void(ExpressionValue& ev, size_t index) THROWS(GCodeException)> processElement) THROWS(GCodeException);
 
-	time_t __attribute__((noinline)) ParseDateTime(const char *s) const THROWS(GCodeException);
+	time_t __attribute__((noinline)) ParseDateTime(const char *_ecv_array s) const THROWS(GCodeException);
 
 	void __attribute__((noinline)) GetVariableValue(ExpressionValue& rslt, const VariableSet *vars, const char *name, ObjectExplorationContext& context, bool isParameter, bool applyLengthOperator, bool wantExists) THROWS(GCodeException);
 
@@ -115,9 +115,9 @@ private:
 	void AdvancePointer() noexcept;
 	char SkipWhiteSpace() noexcept;
 
-	const char *currentp;
-	const char * const startp;
-	const char * const endp;
+	const char *_ecv_array currentp;
+	const char *_ecv_array const startp;
+	const char *_ecv_array const endp;
 	const GCodeBuffer& gb;
 	int column;
 	String<MaxVariableNameLength> obsoleteField;

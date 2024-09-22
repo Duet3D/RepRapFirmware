@@ -15,6 +15,7 @@
 #include <Platform/Platform.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
 #include <Math/Deviation.h>
+#include <Math/Matrix.h>
 
 const float RotaryDeltaKinematics::NormalTowerAngles[DELTA_AXES] = { -150.0, -30.0, 90.0 };
 

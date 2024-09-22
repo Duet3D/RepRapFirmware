@@ -9,8 +9,9 @@
 #define SRC_MOVEMENT_KINEMATICS_H_
 
 #include <RepRapFirmware.h>
-#include <Math/Matrix.h>
 #include <ObjectModel/ObjectModel.h>
+
+template<class T> class MathMatrix;
 
 inline floatc_t fcsquare(floatc_t a)
 {
