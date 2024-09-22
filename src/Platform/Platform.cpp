@@ -2574,14 +2574,14 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 	String<MaxVariableNameLength> varName;
 	bool seenV = false;
 	gb.TryGetQuotedString('V', varName.GetRef(), seenV, false);
-	if (!Variable::IsValidVariableName(varName.c_str()))
-	{
-		reply.printf("variable '%s' is not a valid name", varName.c_str());
-		return GCodeResult::error;
-	}
 	Variable *_ecv_null resultVar = nullptr;
 	if (seenV)
 	{
+		if (!Variable::IsValidVariableName(varName.c_str()))
+		{
+			reply.printf("variable '%s' is not a valid name", varName.c_str());
+			return GCodeResult::error;
+		}
 		auto vset = WriteLockedPointer<VariableSet>(nullptr, &gb.GetVariables());
 		Variable *_ecv_null const v = vset->Lookup(varName.c_str(), false);
 		if (v != nullptr)
