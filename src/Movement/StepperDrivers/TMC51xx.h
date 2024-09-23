@@ -36,6 +36,7 @@ namespace SmartDrivers
 	void SetTmcExternalClock(uint32_t frequency) noexcept;
 	bool SetMotorPhases(size_t driver, uint32_t regVal) noexcept;
 #endif
+	bool SetSineTableModulation(size_t driver, float modulation) noexcept;
 	bool SetDriverMode(size_t driver, unsigned int mode) noexcept;
 	DriverMode GetDriverMode(size_t driver) noexcept;
 	void SetStallThreshold(size_t driver, int sgThreshold) noexcept;

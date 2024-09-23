@@ -234,6 +234,22 @@ const uint32_t DefaultThighReg = DefaultThigh;
 
 constexpr uint8_t REGNUM_VACTUAL = 0x22;
 
+// Microstepping control registers
+
+constexpr uint8_t REGNUM_MSLUT0 = 0x60;
+constexpr uint8_t REGNUM_MSLUT1 = 0x61;
+constexpr uint8_t REGNUM_MSLUT2 = 0x62;
+constexpr uint8_t REGNUM_MSLUT3 = 0x63;
+constexpr uint8_t REGNUM_MSLUT4 = 0x64;
+constexpr uint8_t REGNUM_MSLUT5 = 0x65;
+constexpr uint8_t REGNUM_MSLUT6 = 0x66;
+constexpr uint8_t REGNUM_MSLUT7 = 0x67;
+constexpr uint8_t REGNUM_MSLUTSEL = 0x68;
+constexpr uint8_t REGNUM_MSLUTSTART = 0x69;
+
+constexpr uint32_t MSLUTSTART_START_SIN_SHIFT = 0;
+constexpr uint32_t MSLUTSTART_START_SIN90_SHIFT = 16;
+
 // Sequencer registers (read only)
 constexpr uint8_t REGNUM_MSCNT = 0x6A;
 constexpr uint8_t REGNUM_MSCURACT = 0x6B;
@@ -421,14 +437,24 @@ private:
 	static constexpr unsigned int WriteChopConf = 5;		// chopper control
 	static constexpr unsigned int WriteCoolConf = 6;		// coolstep control
 	static constexpr unsigned int WritePwmConf = 7;			// stealthchop and freewheel control
+	static constexpr unsigned int WriteMslut0 = 8;			// Microstep lookup table MSLUT[0]
+	static constexpr unsigned int WriteMslut1 = 9;			// MSLUT[1]
+	static constexpr unsigned int WriteMslut2 = 10;			// MSLUT[2]
+	static constexpr unsigned int WriteMslut3 = 11;			// MSLUT[3]
+	static constexpr unsigned int WriteMslut4 = 12;			// MSLUT[4]
+	static constexpr unsigned int WriteMslut5 = 13;			// MSLUT[5]
+	static constexpr unsigned int WriteMslut6 = 14;			// MSLUT[6]
+	static constexpr unsigned int WriteMslut7 = 15;			// MSLUT[7]
+	static constexpr unsigned int WriteMslutSel = 16;		// MSLUTSEL
+	static constexpr unsigned int WriteMslutStart = 17;		// MSLUTSTART
 #if TMC_TYPE == 5160
-	static constexpr unsigned int Write5160ShortConf = 8;	// short circuit detection configuration
-	static constexpr unsigned int Write5160DrvConf = 9;		// driver timing
-	static constexpr unsigned int Write5160GlobalScaler = 10; // motor current scaling
+	static constexpr unsigned int Write5160ShortConf = 18;	// short circuit detection configuration
+	static constexpr unsigned int Write5160DrvConf = 19;		// driver timing
+	static constexpr unsigned int Write5160GlobalScaler = 20; // motor current scaling
 
-	static constexpr unsigned int NumWriteRegisters = 11; // the number of registers that we write to
+	static constexpr unsigned int NumWriteRegisters = 21; // the number of registers that we write to
 #else
-	static constexpr unsigned int NumWriteRegisters = 8;	// the number of registers that we write to
+	static constexpr unsigned int NumWriteRegisters = 18;	// the number of registers that we write to
 #endif
 	static constexpr unsigned int WriteSpecial = NumWriteRegisters;
 
@@ -498,6 +524,16 @@ const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
 	REGNUM_CHOPCONF,
 	REGNUM_COOLCONF,
 	REGNUM_PWMCONF,
+	REGNUM_MSLUT0,
+	REGNUM_MSLUT1,
+	REGNUM_MSLUT2,
+	REGNUM_MSLUT3,
+	REGNUM_MSLUT4,
+	REGNUM_MSLUT5,
+	REGNUM_MSLUT6,
+	REGNUM_MSLUT7,
+	REGNUM_MSLUTSEL,
+	REGNUM_MSLUTSTART,
 #if TMC_TYPE == 5160
 	REGNUM_5160_SHORTCONF,
 	REGNUM_5160_DRVCONF,
@@ -886,7 +922,7 @@ bool TmcDriverState::SetSineTableModulation(float modulation)
 	{
 		values[i] = (int16_t)(248 * LutModulationFunction(i, modulation) + 0.5);
 	}
-	const uint32_t mslutstart = values[0] | (values[resolution - 1] << 16);
+	const uint32_t mslutstart = (values[0] << MSLUTSTART_START_SIN_SHIFT) | (values[resolution - 1] << MSLUTSTART_START_SIN90_SHIFT);
 
 	int8_t differences[resolution] = {0};
 	for (size_t i = 0; i < resolution - 1; i++)
@@ -983,6 +1019,17 @@ bool TmcDriverState::SetSineTableModulation(float modulation)
 	}
 	debugPrintf("MSLUTSEL = 0x%08x\n", mslutsel);
 	debugPrintf("MSLUTSTART = 0x%08x\n", mslutstart);
+
+	UpdateRegister(WriteMslut0, mslutArr[0]);
+	UpdateRegister(WriteMslut1, mslutArr[1]);
+	UpdateRegister(WriteMslut2, mslutArr[2]);
+	UpdateRegister(WriteMslut3, mslutArr[3]);
+	UpdateRegister(WriteMslut4, mslutArr[4]);
+	UpdateRegister(WriteMslut5, mslutArr[5]);
+	UpdateRegister(WriteMslut6, mslutArr[6]);
+	UpdateRegister(WriteMslut7, mslutArr[7]);
+	UpdateRegister(WriteMslutSel, mslutsel);
+	UpdateRegister(WriteMslutStart, mslutstart);
 
 	return true;
 }
@@ -2006,6 +2053,15 @@ bool SmartDrivers::SetMotorPhases(size_t driver, uint32_t regVal) noexcept
 }
 
 #endif
+
+bool SmartDrivers::SetSineTableModulation(size_t driver, float modulation) noexcept
+{
+	if (driver >= numTmc51xxDrivers)
+	{
+		return false;
+	}
+	return driverStates[driver].SetSineTableModulation(modulation);
+}
 
 bool SmartDrivers::SetDriverMode(size_t driver, unsigned int mode) noexcept
 {

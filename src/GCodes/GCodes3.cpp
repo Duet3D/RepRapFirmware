@@ -1219,6 +1219,16 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 				warn = true;
 			}
 		}
+
+		float fVal = 0;
+		if (gb.TryGetLimitedFValue('J', fVal, seen, -0.2, 0.2))
+		{
+			if (!SmartDrivers::SetSineTableModulation(drive, fVal))
+			{
+				reply.printf("Bad sine wave modulation for driver %u", drive);
+				return GCodeResult::error;
+			}
+		}
 # endif
 	}
 
