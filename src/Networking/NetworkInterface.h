@@ -49,12 +49,14 @@ public:
 
 protected:
 	// Disable a network protocol that is enabled. If 'permanent' is true we will leave this protocol disables, otherwise we are about to re-enable it with different parameters.
-	virtual void IfaceShutdownProtocol(NetworkProtocol protocol, bool permanent) noexcept = 0
-		pre(protocol < NumSelectableProtocols; GetState() == NetworkState::active);
+	virtual void IfaceShutdownProtocol(NetworkProtocol protocol, bool permanent) noexcept
+		pre(protocol < NumSelectableProtocols; GetState() == NetworkState::active)
+		 = 0;
 
 	// Enable a network protocol that is currently disabled
-	virtual void IfaceStartProtocol(NetworkProtocol protocol) noexcept = 0
-		pre(protocol < NumSelectableProtocols; GetState() == NetworkState::active);
+	virtual void IfaceStartProtocol(NetworkProtocol protocol) noexcept
+		pre(protocol < NumSelectableProtocols; GetState() == NetworkState::active)
+		 = 0;
 
 	NetworkState::RawType GetState() const noexcept { return state.RawValue(); }
 	void SetState(NetworkState::RawType newState) noexcept;

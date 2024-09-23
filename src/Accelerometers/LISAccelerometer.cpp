@@ -53,7 +53,7 @@ bool LISAccelerometer::CheckPresent() noexcept
 }
 
 // Return the type name of the accelerometer. Only valid after checkPresent returns true.
-const char *LISAccelerometer::GetTypeName() const noexcept
+const char *_ecv_array LISAccelerometer::GetTypeName() const noexcept
 {
 	return accelerometerType.ToString();
 }
@@ -61,7 +61,7 @@ const char *LISAccelerometer::GetTypeName() const noexcept
 uint8_t LISAccelerometer::ReadStatus() noexcept
 {
 	uint8_t val;
-	return (ReadRegister(LisRegister::Status, val)) ? val : 0xFF;
+	return (ReadRegister(LisRegister::Status, val)) ? val : 0xFFu;
 }
 
 // Configure the accelerometer to collect for the requested axis at or near the requested sampling rate and the requested resolution in bits.
@@ -348,7 +348,7 @@ bool LISAccelerometer::ReadRegisters(LisRegister reg, size_t numToRead) noexcept
 	// On the LIS3DH, bit 6 must be set to 1 to auto-increment the address when doing reading multiple registers
 	// On the LIS3DSH and LIS2DW, bit 6 is an extra register address bit, so we must not set it.
 	// So that we can read the WHO_AM_I register of both chips before we know which chip we have, only set bit 6 if we have a LIS3DH and we are reading multiple registers.
-	transferBuffer[1] = (uint8_t)reg | ((numToRead < 2 || accelerometerType != AccelerometerType::LIS3DH) ? 0x80 : 0xC0);
+	transferBuffer[1] = (uint8_t)reg | ((numToRead < 2 || accelerometerType != AccelerometerType::LIS3DH) ? 0x80u : 0xC0u);
 	const bool ret = TransceivePacket(transferBuffer + 1, transferBuffer + 1, 1 + numToRead);
 	Deselect();
 	return ret;
@@ -365,7 +365,7 @@ bool LISAccelerometer::WriteRegisters(LisRegister reg, size_t numToWrite) noexce
 	{
 		return false;
 	}
-	transferBuffer[1] = (numToWrite < 2 || accelerometerType != AccelerometerType::LIS3DH) ? (uint8_t)reg : (uint8_t)reg | 0x40;		// set auto increment bit if LIS3DH
+	transferBuffer[1] = (numToWrite < 2 || accelerometerType != AccelerometerType::LIS3DH) ? (uint8_t)reg : (uint8_t)reg | 0x40u;		// set auto increment bit if LIS3DH
 	const bool ret = TransceivePacket(transferBuffer + 1, transferBuffer + 1, 1 + numToWrite);
 	Deselect();
 	return ret;

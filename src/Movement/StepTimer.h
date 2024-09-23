@@ -99,7 +99,7 @@ public:
 	// Convert a number of step timer ticks to microseconds
 	// Our tick rate is a multiple of 1000 so instead of multiplying n by 1000000 and risking overflow, we multiply by 1000 and divide by StepClockRate/1000
 	static uint32_t TicksToIntegerMicroseconds(uint32_t n) noexcept { return (n * 1000)/(StepClockRate/1000); }
-	static float TicksToFloatMicroseconds(uint32_t n) noexcept { return (float)n * (1000000.0f/StepClockRate); }
+	static float TicksToFloatMicroseconds(uint32_t n) noexcept { return (float)n * (1000000.0f/(float)StepClockRate); }
 
 #if SUPPORT_REMOTE_COMMANDS
 	static uint32_t GetLocalTimeOffset() noexcept { return localTimeOffset; }

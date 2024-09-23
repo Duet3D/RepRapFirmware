@@ -340,9 +340,6 @@ constexpr PinDescription PinTable[] =
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 static_assert(NumNamedPins == 32+32+32+32+6);
 
-// Function to look up a pin name pass back the corresponding index into the pin table
-bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
-
 // Serial Interfaces
 constexpr Pin APIN_Serial0_RXD = PortDPin(25);
 constexpr Pin APIN_Serial0_TXD = PortDPin(26);

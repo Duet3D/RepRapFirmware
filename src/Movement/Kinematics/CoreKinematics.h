@@ -9,7 +9,7 @@
 #define SRC_MOVEMENT_KINEMATICS_COREKINEMATICS_H_
 
 #include "ZLeadscrewKinematics.h"
-#include "Math/Matrix.h"
+#include <Math/Matrix.h>
 
 class CoreKinematics : public ZLeadscrewKinematics
 {

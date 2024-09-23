@@ -1,5 +1,6 @@
 #include "RepRap.h"
 
+#include <Devices.h>
 #include <Movement/Move.h>
 #include <Movement/StepTimer.h>
 #include <FilamentMonitors/FilamentMonitor.h>

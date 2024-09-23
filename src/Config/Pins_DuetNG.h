@@ -437,9 +437,6 @@ constexpr PinDescription PinTable[] =
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 static_assert(NumNamedPins == 32+32+32+32+6+16+16);
 
-// Function to look up a pin name pass back the corresponding index into the pin table
-bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
-
 // USARTs used for SPI
 constexpr Pin APIN_USART_SSPI_MOSI = PortBPin(1);
 constexpr GpioPinFunction USARTSPIMosiPeriphMode = GpioPinFunction::C;

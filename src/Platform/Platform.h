@@ -286,7 +286,7 @@ public:
 
 	// File functions
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
-	FileStore* OpenFile(const char *_ecv_array folder, const char *_ecv_array fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
+	FileStore *_ecv_null OpenFile(const char *_ecv_array folder, const char *_ecv_array fileName, OpenMode mode, uint32_t preAllocSize = 0) const noexcept;
 	bool FileExists(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool Delete(const char *_ecv_array folder, const char *_ecv_array filename) const noexcept;
@@ -299,7 +299,7 @@ public:
 	// Functions to work with the system files folder
 	GCodeResult SetSysDir(const char *_ecv_array dir, const StringRef& reply) noexcept;				// Set the system files path
 	bool SysFileExists(const char *_ecv_array filename) const noexcept;
-	FileStore* OpenSysFile(const char *_ecv_array filename, OpenMode mode) const noexcept;
+	FileStore *_ecv_null OpenSysFile(const char *_ecv_array filename, OpenMode mode) const noexcept;
 # if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool DeleteSysFile(const char *_ecv_array filename) const noexcept;
 # endif

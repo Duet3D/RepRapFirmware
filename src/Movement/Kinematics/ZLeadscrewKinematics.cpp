@@ -11,6 +11,7 @@
 #include <Platform/Platform.h>
 #include <Movement/Move.h>
 #include <GCodes/GCodeBuffer/GCodeBuffer.h>
+#include <Math/Matrix.h>
 
 const float M3ScrewPitch = 0.5;
 

@@ -51,7 +51,6 @@ const char *_ecv_array SafeStrptime(const char *_ecv_array buf, const char *_ecv
 #endif
 
 #include <CoreIO.h>
-#include <Devices.h>
 #include <General/NamedEnum.h>
 
 // The following are needed by many other files, so include them here
@@ -183,17 +182,21 @@ inline volatile uint32_t *GetStackOffset(uint32_t dwordOffset) noexcept
 // Functions to set and clear data watchpoints
 inline void SetWatchpoint(unsigned int number, const void* addr, unsigned int addrBits = 2) noexcept
 {
+#ifndef __ECV__		// this uses messy pointer arithmetic on a non-array, so eCv understandable doesn't like it
 	CoreDebug->DEMCR = CoreDebug_DEMCR_TRCENA_Msk | CoreDebug_DEMCR_MON_EN_Msk;		// enable tracing and debug interrupt
-	volatile uint32_t *const _ecv_array watchpointRegs = &(DWT->COMP0);						// 4 groups of (COMP, MASK, FUNCTION, reserved)
+	volatile uint32_t *const _ecv_array watchpointRegs = &(DWT->COMP0);				// 4 groups of (COMP, MASK, FUNCTION, reserved)
 	watchpointRegs[4 * number] = reinterpret_cast<uint32_t>(addr);					// set COMP register
 	watchpointRegs[4 * number + 1] = addrBits;										// ignore the least significant N bits of the address
 	watchpointRegs[4 * number + 2] = 0x06;
+#endif
 }
 
 inline void ClearWatchpoint(unsigned int number) noexcept
 {
+#ifndef __ECV__		// this uses messy pointer arithmetic on a non-array, so eCv understandable doesn't like it
 	volatile uint32_t *const _ecv_array watchpointRegs = &(DWT->COMP0);						// 4 groups of (COMP, MASK, FUNCTION, reserved)
 	watchpointRegs[4 * number + 2] = 0;
+#endif
 }
 
 // Type of a driver identifier
@@ -477,9 +480,9 @@ inline constexpr unsigned int ParameterLetterToBitNumber(char c) noexcept
 }
 
 // Find the parameter letter corresponding to a  bit number
-inline constexpr unsigned int BitNumberToParameterLetter(unsigned int n) noexcept
+inline constexpr char BitNumberToParameterLetter(unsigned int n) noexcept
 {
-	return (n < 26) ? 'A' + n : 'a' + (n - 26);
+	return (n < 26) ? (char)('A' + n) : (char)('a' + (n - 26));
 }
 
 // Make a ParameterLettersBitmap representing a single letter

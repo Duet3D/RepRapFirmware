@@ -310,9 +310,6 @@ constexpr PinDescription PinTable[] =
 constexpr unsigned int NumNamedPins = ARRAY_SIZE(PinTable);
 static_assert(NumNamedPins == 3*32);
 
-// Function to look up a pin name and pass back the corresponding index into the pin table
-bool LookupPinName(const char *pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
-
 // Wire Interfaces
 #define WIRE_INTERFACES_COUNT (1)		// SAM4S supports two I2C interfaces but we only have the first one available
 

@@ -21,10 +21,10 @@ const size_t OUTPUT_STACK_DEPTH = 4;	// Number of OutputBuffer chains that can b
 class OutputBuffer
 {
 public:
-	explicit OutputBuffer(OutputBuffer *null n) noexcept : next(n) { }
+	explicit OutputBuffer(OutputBuffer *_ecv_null n) noexcept : next(n) { }
 	OutputBuffer(const OutputBuffer&) = delete;
 
-	void Append(OutputBuffer *other) noexcept;
+	void Append(OutputBuffer *_ecv_null other) noexcept;
 	OutputBuffer *null Next() const noexcept { return next; }
 	bool IsReferenced() const noexcept { return isReferenced; }
 	bool HadOverflow() const noexcept { return hadOverflow; }
@@ -61,7 +61,7 @@ public:
 	size_t cat(StringRef &str) noexcept;
 
 	size_t EncodeChar(char c) noexcept;
-	size_t EncodeReply(OutputBuffer *src) noexcept;
+	size_t EncodeReply(OutputBuffer *_ecv_null src) noexcept;
 
 	uint32_t GetAge() const noexcept;
 
@@ -73,20 +73,20 @@ public:
 	static void Init() noexcept;
 
 	// Allocate an unused OutputBuffer instance. Returns true on success or false if no instance could be allocated.
-	static bool Allocate(OutputBuffer *&buf) noexcept;
+	static bool Allocate(OutputBuffer *_ecv_null &buf) noexcept;
 
 	// Get the number of bytes left for allocation. If writingBuffer is not NULL, this returns the number of free bytes for
 	// continuous writes, i.e. for writes that need to allocate an extra OutputBuffer instance to finish the message.
 	static size_t GetBytesLeft(const OutputBuffer *writingBuffer) noexcept;
 
 	// Truncate an OutputBuffer instance to free up more memory. Returns the number of released bytes.
-	static size_t Truncate(OutputBuffer *buffer, size_t bytesNeeded) noexcept;
+	static size_t Truncate(OutputBuffer *_ecv_null buffer, size_t bytesNeeded) noexcept;
 
 	// Release one OutputBuffer instance. Returns the next item from the chain or nullptr if this was the last instance.
 	__attribute__((warn_unused_result)) static OutputBuffer *Release(OutputBuffer *buf) noexcept;
 
 	// Release all OutputBuffer objects in a chain
-	static void ReleaseAll(OutputBuffer * volatile &buf) noexcept;
+	static void ReleaseAll(OutputBuffer *_ecv_null volatile &buf) noexcept;
 
 	static void Diagnostics(MessageType mtype) noexcept;
 
@@ -95,7 +95,7 @@ public:
 private:
 	void Clear() noexcept;
 
-	OutputBuffer *null next;
+	OutputBuffer *_ecv_null next;
 	OutputBuffer *last;
 
 	uint32_t whenQueued;									// milliseconds timer when this buffer was filled in
@@ -107,7 +107,7 @@ private:
 	bool hadOverflow;
 	volatile size_t references;
 
-	static OutputBuffer * volatile freeOutputBuffers;		// Messages may be sent by multiple tasks
+	static OutputBuffer *_ecv_null volatile freeOutputBuffers;		// Messages may be sent by multiple tasks
 	static volatile size_t usedOutputBuffers;				// so make these volatile.
 	static volatile size_t maxUsedOutputBuffers;
 };
@@ -132,7 +132,7 @@ public:
 	void Clear() volatile noexcept { count = 0; }
 
 	// Push an OutputBuffer chain. Return true if successful, else release the buffer and return false.
-	bool Push(OutputBuffer *buffer, MessageType type = NoDestinationMessage) volatile noexcept;
+	bool Push(OutputBuffer *_ecv_null buffer, MessageType type = NoDestinationMessage) volatile noexcept;
 
 	// Pop an OutputBuffer chain or return NULL if none is available
 	OutputBuffer *Pop() volatile noexcept;
@@ -154,7 +154,7 @@ public:
 	bool ApplyTimeout(uint32_t ticks) volatile noexcept;
 
 	// Returns the last item from the stack or NULL if none is available
-	OutputBuffer *GetLastItem() const volatile noexcept;
+	OutputBuffer *_ecv_null GetLastItem() const volatile noexcept;
 
 	// Returns the type of the last item from the stack or NoDestinationMessage if none is available
 	MessageType GetLastItemType() const volatile noexcept;
@@ -174,7 +174,7 @@ public:
 
 private:
 	size_t count;
-	OutputBuffer * items[OUTPUT_STACK_DEPTH];
+	OutputBuffer *_ecv_null items[OUTPUT_STACK_DEPTH];
 	MessageType types[OUTPUT_STACK_DEPTH];
 };
 

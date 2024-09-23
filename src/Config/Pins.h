@@ -329,4 +329,7 @@
 # error Cannot support Modbus RTU without aux devices
 #endif
 
+// Function to look up a pin name pass back the corresponding index into the pin table
+bool LookupPinName(const char *_ecv_array pn, LogicalPin& lpin, bool& hardwareInverted) noexcept;
+
 #endif // PINS_H__

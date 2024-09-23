@@ -12,14 +12,13 @@
 
 const size_t FilamentNameLength = 32;
 
-
 class Filament
 {
 public:
-	Filament(int extr) noexcept;
+	explicit Filament(int extr) noexcept;
 
 	int GetExtruder() const noexcept { return extruder; }				// Returns the assigned extruder drive
-	const char *GetName() const noexcept { return name.c_str(); }		// Returns the name of the currently loaded filament
+	const char *_ecv_array GetName() const noexcept { return name.c_str(); }	// Returns the name of the currently loaded filament
 
 	// TODO: Add support for filament counters, tool restrictions etc.
 	// These should be stored in a dedicate file per filament directory like /filaments/<material>/filament.json

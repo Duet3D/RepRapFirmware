@@ -30,10 +30,10 @@ class FilamentMonitor INHERIT_OBJECT_MODEL
 {
 public:
 	// Override the virtual destructor if your derived class allocates any dynamic memory
-	virtual ~FilamentMonitor() noexcept;
+	virtual ~FilamentMonitor() noexcept override;
 
 	// We don't want to copy filament monitors
-	FilamentMonitor(const FilamentMonitor&) = delete;
+	FilamentMonitor(const FilamentMonitor &_ecv_from) = delete;
 
 	// Static initialisation
 	static void InitStatic() noexcept;
@@ -59,7 +59,7 @@ public:
 	static size_t GetNumMonitorsToReport() noexcept;
 
 	// Get access to a filament monitor when we already have a read lock
-	static FilamentMonitor *GetMonitorAlreadyLocked(size_t extruder) noexcept { return filamentSensors[extruder]; }
+	static FilamentMonitor *_ecv_from GetMonitorAlreadyLocked(size_t extruder) noexcept { return filamentSensors[extruder]; }
 #endif
 
 #if SUPPORT_CAN_EXPANSION
@@ -119,7 +119,7 @@ protected:
 	uint8_t GetDriver() const noexcept { return driveNumber; }
 
 	// Get the status of the filament monitor as a string
-	const char *GetStatusText() const noexcept { return lastStatus.ToString(); }
+	const char *_ecv_array GetStatusText() const noexcept { return lastStatus.ToString(); }
 
 	// Call the following at intervals to check the status. This is only called when extrusion is in progress or imminent.
 	// 'filamentConsumed' is the net amount of extrusion since the last call to this function.
@@ -163,7 +163,7 @@ protected:
 
 private:
 	// Create a filament sensor returning null if not a valid sensor type
-	static FilamentMonitor *Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
+	static FilamentMonitor *_ecv_from Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	static void InterruptEntry(CallbackParameter param) noexcept;
 
 	static constexpr size_t NumFilamentMonitors =
@@ -174,7 +174,7 @@ private:
 								MaxExtruders;
 #endif
 
-	static FilamentMonitor *filamentSensors[NumFilamentMonitors];
+	static FilamentMonitor *_ecv_from filamentSensors[NumFilamentMonitors];
 
 #if SUPPORT_REMOTE_COMMANDS
 	static constexpr uint32_t StatusUpdateInterval = 2000;				// how often we send status reports when there isn't a change

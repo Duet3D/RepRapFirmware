@@ -99,13 +99,13 @@ private:
 	static ReadWriteLock endstopsLock;
 	static ReadWriteLock zProbesLock;
 
-	EndstopOrZProbe * volatile activeEndstops;			// linked list of endstops and Z probes that are active for the current move
+	EndstopOrZProbe *_ecv_null volatile activeEndstops;	// linked list of endstops and Z probes that are active for the current move
 
-	Endstop *axisEndstops[MaxAxes];						// the endstops assigned to each axis (each one may have several switches), each may be null
+	Endstop *_ecv_null axisEndstops[MaxAxes];			// the endstops assigned to each axis (each one may have several switches), each may be null
 #if HAS_STALL_DETECT
 	StallDetectionEndstop *extrudersEndstop;			// the endstop used for extruder stall detection, one will do for all extruders
 #endif
-	ZProbe *zProbes[MaxZProbes];						// the Z probes used. The first one is always non-null.
+	ZProbe *_ecv_null zProbes[MaxZProbes];				// the Z probes used. The first one is always non-null.
 	ZProbe *defaultZProbe;
 
 	bool isHomingMove;									// true if calls to CheckEndstops are for the purpose of homing

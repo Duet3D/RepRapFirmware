@@ -6,6 +6,7 @@
  */
 
 #include "ExceptionHandlers.h"
+#include <Devices.h>
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <Platform/Tasks.h>
@@ -206,14 +207,14 @@ extern "C" [[noreturn]] __attribute__((externally_visible)) void stackOverflowDi
 	SoftwareReset(SoftwareResetReason::stackOverflow, pulFaultStackAddress);
 }
 
-extern "C" void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexcept __attribute((naked, noreturn));
+extern "C" void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexcept __attribute__((naked, noreturn));
 void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName) noexcept
 {
 	// r0 = pxTask, r1 = pxTaskName
 	__asm volatile
 	(
-		" push {r0, r1, lr}											\n"		/* save parameters and call address on the stack */
-		" mov r0, sp												\n"
+		" push {r0, r1, lr}                                         \n"		/* save parameters and call address on the stack */
+		" mov r0, sp                                                \n"
 		" ldr r2, handler_sovf_address_const                        \n"
 		" bx r2                                                     \n"
 		" .align 2                                                  \n"		/* make the 2 LSBs zero at the next instruction */
@@ -226,17 +227,17 @@ extern "C" [[noreturn]] __attribute__((externally_visible)) void assertCalledDis
 	SoftwareReset(SoftwareResetReason::assertCalled, pulFaultStackAddress);
 }
 
-extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute((naked));
+extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute__((naked));
 void vAssertCalled(uint32_t line, const char *file) noexcept
 {
-#if false
+#if 0
 	debugPrintf("ASSERTION FAILED IN %s on LINE %d\n", file, line);
 	SERIAL_MAIN_DEVICE.flush();
 #endif
 	__asm volatile
 	(
-		" push {r0, r1, lr}											\n"		/* save parameters and call address */
-		" mov r0, sp												\n"
+		" push {r0, r1, lr}                                         \n"		/* save parameters and call address */
+		" mov r0, sp                                                \n"
 		" ldr r2, handler_asrt_address_const                        \n"
 		" bx r2                                                     \n"
 		" .align 2                                                  \n"		/* make the 2 LSBs zero at the next instruction */

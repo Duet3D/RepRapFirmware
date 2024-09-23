@@ -13,6 +13,7 @@
 #if HAS_WIFI_NETWORKING
 
 class WiFiInterface;
+class AsyncSerial;
 
 class WifiFirmwareUploader
 {

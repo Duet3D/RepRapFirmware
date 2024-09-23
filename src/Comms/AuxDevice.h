@@ -26,6 +26,8 @@ enum class AuxMode : uint8_t
 # include "Modbus.h"
 #endif
 
+class AsyncSerial;
+
 class AuxDevice
 {
 public:
@@ -40,27 +42,27 @@ public:
 	uint32_t GetBaudRate() const noexcept { return baudRate; }
 	bool IsRaw() const noexcept { return mode == AuxMode::raw; }
 
-	void SendPanelDueMessage(const char* msg) noexcept;
-	void AppendAuxReply(const char *msg, bool rawMessage) noexcept;
-	void AppendAuxReply(OutputBuffer *reply, bool rawMessage) noexcept;
+	void SendPanelDueMessage(const char *_ecv_array msg) noexcept;
+	void AppendAuxReply(const char *_ecv_array msg, bool rawMessage) noexcept;
+	void AppendAuxReply(OutputBuffer *_ecv_array reply, bool rawMessage) noexcept;
 	bool Flush() noexcept;
 
 	void Diagnostics(MessageType mt, unsigned int index) noexcept;
 
 #if SUPPORT_MODBUS_RTU
-	bool ConfigureDirectionPort(const char *pinName, const StringRef& reply) THROWS(GCodeException);
+	bool ConfigureDirectionPort(const char *_ecv_array pinName, const StringRef& reply) THROWS(GCodeException);
 	void AppendDirectionPortName(const StringRef& reply) const noexcept;
 
-	GCodeResult SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, const uint8_t *data) noexcept;
-	GCodeResult ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, uint8_t *data) noexcept
+	GCodeResult SendModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, const uint8_t *_ecv_array data) noexcept;
+	GCodeResult ReadModbusRegisters(uint8_t p_slaveAddress, uint8_t p_function, uint16_t p_startRegister, uint16_t p_numRegisters, uint8_t *_ecv_array data) noexcept
 		pre(function == 3 || function == 4);
 	GCodeResult CheckModbusResult() noexcept;
 
 	void TxEndedCallback() noexcept;
 #endif
 
-	GCodeResult SendUartData(const uint8_t *data, size_t len) noexcept;
-	GCodeResult ReadUartData(uint8_t *data, size_t bytesToRead) noexcept;
+	GCodeResult SendUartData(const uint8_t *_ecv_array data, size_t len) noexcept;
+	GCodeResult ReadUartData(uint8_t *_ecv_array data, size_t bytesToRead) noexcept;
 
 private:
 	uint32_t CalcTransmissionTime(unsigned int numChars) const noexcept;	// calculate the time in milliseconds to send or received the specified number of characters
@@ -81,7 +83,7 @@ private:
 	static constexpr uint32_t BusAvailableTimeout = 50;				// how many milliseconds we wait for the device to become available
 	static constexpr uint32_t UartResponseTimeout = 200;			// how many milliseconds we wait for the device to respond, excluding transmission time
 
-	AsyncSerial *uart;						// the underlying serial device
+	AsyncSerial *_ecv_null uart;			// the underlying serial device
 	Mutex mutex;
 	volatile OutputStack outStack;			// output stack for use in raw or PanelDue mode
 	uint32_t seq;							// sequence number for output in PanelDue mode
@@ -90,7 +92,7 @@ private:
 
 #if SUPPORT_MODBUS_RTU
 	IoPort txNotRx;							// port used to switch the RS485 port between transmit and receive
-	uint8_t *receivedData;
+	uint8_t *_ecv_array receivedData;
 	uint32_t whenStartedTransmitting;
 	CRC16 crc;
 	uint16_t bytesTransmitted;
