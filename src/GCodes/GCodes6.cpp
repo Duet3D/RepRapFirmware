@@ -659,6 +659,12 @@ GCodeResult GCodes::StraightProbe(GCodeBuffer& gb, const StringRef& reply) THROW
 	}
 	straightProbeSettings.SetZProbeToUse(probeToUse);
 
+	// Check if feed rate has been specified
+	if (gb.Seen('F'))
+	{
+		straightProbeSettings.SetFeedRateOverride(gb.GetSpeedFromMm(false));
+	}
+
 	gb.SetState(GCodeState::straightProbe0);
 	return GCodeResult::ok;
 }
