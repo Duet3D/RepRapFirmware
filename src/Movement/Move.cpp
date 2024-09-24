@@ -355,7 +355,6 @@ Move::Move() noexcept
 	  heightController(nullptr),
 #endif
 	  jerkPolicy(0),
-	  stepErrorState(StepErrorState::noError),
 	  numCalibratedFactors(0)
 {
 #if VARIABLE_NUM_DRIVERS
@@ -2324,12 +2323,18 @@ void Move::AddLinearSegments(const DDA& dda, size_t logicalDrive, uint32_t start
 			{
 				if (tail->GetFlags().executing)
 				{
-					const uint32_t now = StepTimer::GetMovementTimerTicks();
-					const int32_t overlap = endTime - startTime;
+#if 1	// temp for debugging
+					stepErrorDetails.executingStartTime = segStartTime;
+					stepErrorDetails.executingDuration = tail->GetDuration();
+					stepErrorDetails.newSegmentStartTime = startTime;
+					stepErrorDetails.timeNow = StepTimer::GetMovementTimerTicks();
+#endif
 					LogStepError(3);
 					RestoreBasePriority(oldPrio);
 					if (reprap.Debug(Module::Move))
 					{
+						const uint32_t now = StepTimer::GetMovementTimerTicks();
+						const int32_t overlap = endTime - startTime;
 						debugPrintf("overlaps executing seg by %" PRIi32 " while trying to add segment(s) starting at %" PRIu32 ", time now %" PRIu32 "\n",
 										overlap, startTime, now);
 						MoveSegment::DebugPrintList(tail);

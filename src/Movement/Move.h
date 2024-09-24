@@ -98,6 +98,16 @@ struct NonlinearExtrusion
 
 #endif
 
+// Collection of data reported to help debug step errors
+struct StepErrorDetails
+{
+	uint32_t executingStartTime;
+	uint32_t executingDuration;
+	uint32_t newSegmentStartTime;
+	uint32_t timeNow;
+	uint8_t stepErrorType;
+};
+
 // This is the master movement class.  It controls all movement in the machine.
 class Move INHERIT_OBJECT_MODEL
 {
@@ -463,7 +473,7 @@ public:
 
 	// Movement error handling
 	void LogStepError(uint8_t type) noexcept;												// stop all movement because of a step error
-	uint8_t GetStepErrorType() const noexcept { return stepErrorType; }
+	StepErrorDetails GetStepErrorDetails() const noexcept { return stepErrorDetails; }
 	bool HasMovementError() const noexcept;
 	void ResetAfterError() noexcept;
 	void GenerateMovementErrorDebug() noexcept;
@@ -492,12 +502,12 @@ private:
 		timing			// no moves being executed or in queue, motors are at full current
 	};
 
-	enum class StepErrorState : uint8_t
-	{
-		noError = 0,	// no error
-		haveError,		// had an error, movement is stopped
-		resetting		// had an error, ready to reset it
-	};
+enum class StepErrorState : uint8_t
+{
+	noError = 0,	// no error
+	haveError,		// had an error, movement is stopped
+	resetting		// had an error, ready to reset it
+};
 
 #if SUPPORT_SCANNING_PROBES
 	struct ScanningProbeControl
@@ -665,9 +675,6 @@ private:
 
 	float specialMoveCoords[MaxDriversPerAxis];			// Amounts by which to move individual Z motors (leadscrew adjustment move)
 
-	volatile uint8_t stepErrorType;
-	volatile StepErrorState stepErrorState;
-
 	// Drives
 #if VARIABLE_NUM_DRIVERS && SUPPORT_DIRECT_LCD
 	size_t numActualDirectDrivers;
@@ -765,6 +772,10 @@ private:
 	bool bedLevellingMoveAvailable;						// True if a leadscrew adjustment move is pending
 	bool usingMesh;										// True if we are using the height map, false if we are using the random probe point set
 	bool useTaper;										// True to taper off the compensation
+
+	// Reporting of step errors
+	volatile StepErrorState stepErrorState = StepErrorState::noError;
+	StepErrorDetails stepErrorDetails;
 };
 
 //******************************************************************************************************
@@ -982,7 +993,7 @@ inline void Move::InsertDM(DriveMovement *dm) noexcept
 
 inline void Move::LogStepError(uint8_t type) noexcept
 {
-	stepErrorType = type;
+	stepErrorDetails.stepErrorType = type;
 	stepErrorState = StepErrorState::haveError;
 }
 
