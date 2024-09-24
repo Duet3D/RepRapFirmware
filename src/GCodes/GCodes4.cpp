@@ -1559,14 +1559,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 						ms.checkEndstops = true;
 						ms.reduceAcceleration = true;
 						straightProbeSettings.SetCoordsToTarget(ms.coords);
-						if(straightProbeSettings.GetFeedRateOverride() > 0)
-						{
-							ms.feedRate = straightProbeSettings.GetFeedRateOverride();
-						}
-						else
-						{
-							ms.feedRate = zp->GetProbingSpeed(0);
-						}
+						ms.feedRate = (straightProbeSettings.GetFeedRateOverride() > 0.0) ? straightProbeSettings.GetFeedRateOverride() : zp->GetProbingSpeed(0);
 						ms.linearAxesMentioned = ms.rotationalAxesMentioned = true;
 						NewSingleSegmentMoveAvailable(ms);
 						gb.AdvanceState();
