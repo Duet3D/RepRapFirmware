@@ -961,7 +961,7 @@ void StringParser::DecodeCommand() noexcept
 	if (cl == '\'')									// check for a lowercase axis letter in Fanuc mode
 	{
 		++commandStart;
-		cl = tolower(gb.buffer[commandStart]);
+		cl = (char)tolower(gb.buffer[commandStart]);
 	}
 	else
 	{
@@ -1202,7 +1202,7 @@ FilePosition StringParser::GetFilePosition() const noexcept
 	return noFilePosition;
 }
 
-const char* StringParser::DataStart() const noexcept
+const char *_ecv_array StringParser::DataStart() const noexcept
 {
 	return gb.buffer + commandStart;
 }
@@ -1259,7 +1259,7 @@ bool StringParser::Seen(char c) noexcept
 				if (   inBrackets == 0
 					&& (char)toupper(b) == c
 					&& escaped == wantLowerCase
-					&& (c != 'E' || (unsigned int)readPointer == parameterStart || !isdigit(gb.buffer[readPointer - 1]))
+					&& (c != 'E' || (unsigned int)readPointer == parameterStart || !(bool)isdigit(gb.buffer[readPointer - 1]))
 				   )
 				{
 					++readPointer;
@@ -1506,10 +1506,10 @@ void StringParser::InternalGetQuotedString(const StringRef& str) THROWS(GCodeExc
 		}
 		else if (c == '\'')
 		{
-			if (isalpha(gb.buffer[readPointer]))
+			if ((bool)isalpha(gb.buffer[readPointer]))
 			{
 				// Single quote before an alphabetic character forces that character to lower case
-				c = tolower(gb.buffer[readPointer++]);
+				c = (char)tolower(gb.buffer[readPointer++]);
 			}
 			else if (gb.buffer[readPointer] == c)
 			{
@@ -1921,7 +1921,7 @@ bool StringParser::FileEnded() noexcept
 }
 
 // Check that a number was found. If it was, advance readPointer past it. Otherwise throw an exception.
-void StringParser::CheckNumberFound(const char *endptr) THROWS(GCodeException)
+void StringParser::CheckNumberFound(const char *_ecv_array endptr) THROWS(GCodeException)
 {
 	if (endptr == gb.buffer + readPointer)
 	{
@@ -1941,7 +1941,7 @@ float StringParser::ReadFloatValue() THROWS(GCodeException)
 		return val;
 	}
 
-	const char *endptr;
+	const char *_ecv_array endptr;
 	const float rslt = SafeStrtof(gb.buffer + readPointer, &endptr);
 	CheckNumberFound(endptr);
 	return rslt;
@@ -1958,7 +1958,7 @@ uint32_t StringParser::ReadUIValue() THROWS(GCodeException)
 	}
 
 	// Allow "0xNNNN" or "xNNNN" where NNNN are hex digits. We could stop supporting this because we already support {0xNNNN}.
-	const char *endptr;
+	const char *_ecv_array endptr;
 	const uint32_t rslt = StrToU32(gb.buffer + readPointer, &endptr);
 	CheckNumberFound(endptr);
 	return rslt;
@@ -1974,7 +1974,7 @@ int32_t StringParser::ReadIValue() THROWS(GCodeException)
 		return val;
 	}
 
-	const char *endptr;
+	const char *_ecv_array endptr;
 	const int32_t rslt = StrToI32(gb.buffer + readPointer, &endptr);
 	CheckNumberFound(endptr);
 	return rslt;
@@ -2064,7 +2064,7 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeE
 										{
 											throw ConstructParseException("invalid value for parameter '%c'", (uint32_t)c);
 										}
-										ExpressionParser parser(gb, &gb.buffer[readPointer], &gb.buffer[commandEnd]);
+										ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + commandEnd);
 										ExpressionValue ev = parser.Parse();
 										char paramName[2] = { letter, 0 };
 										vs.InsertNewParameter(paramName, ev);

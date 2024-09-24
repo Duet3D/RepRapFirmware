@@ -824,7 +824,15 @@ void Platform::Spin() noexcept
 	Move& move = reprap.GetMove();
 	if (move.HasMovementError())
 	{
-		MessageF(AddError(MessageType::GenericMessage), "Movement halted because a step timing error occurred (code %u). Please reset the controller.\n", move.GetStepErrorType());
+		const StepErrorDetails details = move.GetStepErrorDetails();
+		MessageF(AddError(MessageType::GenericMessage), "Movement halted because a step timing error occurred (code %u). Please reset the controller.\n", details.stepErrorType);
+		if (details.stepErrorType == 3)
+		{
+			MessageF(AddError(MessageType::GenericMessage), "Existing: start=%" PRIu32 " length=%" PRIu32 ", new: start=%" PRIu32 ", overlap=%" PRIu32 " time now=%" PRIu32 "\n",
+						details.executingStartTime, details.executingDuration, details.newSegmentStartTime,
+						details.executingStartTime + details.executingDuration - details.newSegmentStartTime,
+						details.timeNow);
+		}
 		move.GenerateMovementErrorDebug();
 		move.ResetAfterError();
 	}

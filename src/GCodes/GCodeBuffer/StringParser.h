@@ -79,7 +79,7 @@ public:
 
 	FilePosition GetFilePosition() const noexcept;							// Get the file position at the start of the current command
 
-	const char* DataStart() const noexcept;									// Get the start of the current command
+	const char *_ecv_array DataStart() const noexcept;						// Get the start of the current command
 	size_t DataLength() const noexcept;										// Get the length of the current command
 
 	void PrintCommand(const StringRef& s) const noexcept;
@@ -107,7 +107,7 @@ private:
 	int32_t ReadIValue() THROWS(GCodeException);
 	DriverId ReadDriverIdValue() THROWS(GCodeException);
 	void CheckArrayLength(size_t actualLength, size_t maxLength) THROWS(GCodeException);
-	void CheckNumberFound(const char *endptr) THROWS(GCodeException);
+	void CheckNumberFound(const char *_ecv_array endptr) THROWS(GCodeException);
 
 	void CheckForMixedSpacesAndTabs() noexcept;
 	bool ProcessConditionalGCode(const StringRef& reply, BlockType skippedBlockType, bool doingFile) THROWS(GCodeException);

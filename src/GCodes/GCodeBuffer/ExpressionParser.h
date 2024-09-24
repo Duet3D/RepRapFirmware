@@ -61,7 +61,7 @@ public:
 	void ParseDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException);
 
 	void CheckForExtraCharacters() THROWS(GCodeException);
-	const char *GetEndptr() const noexcept { return currentp; }
+	const char *_ecv_array GetEndptr() const noexcept { return currentp; }
 
 private:
 	[[noreturn]] void __attribute__((noinline)) ThrowParseException(const char *_ecv_array str) const THROWS(GCodeException);

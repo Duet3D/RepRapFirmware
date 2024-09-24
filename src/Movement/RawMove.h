@@ -55,7 +55,7 @@ struct RawMove
 	// If adding any more fields, keep the total size a multiple of 4 bytes so that we can use our optimised assignment operator
 
 	// GCC normally calls memcpy to assign objects of this class. We can do better because we know they must be 32-bit aligned.
-	RawMove& operator=(const RawMove& arg) noexcept
+	RawMove &_ecv_from operator=(const RawMove& arg) noexcept
 	{
 		memcpyu32(reinterpret_cast<uint32_t *_ecv_array>(this), reinterpret_cast<const uint32_t *_ecv_array>(&arg), sizeof(*this)/4);
 		return *this;
