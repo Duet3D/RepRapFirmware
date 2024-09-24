@@ -586,6 +586,7 @@ pre(!driversPowered)
 	SetStallDetectThreshold(DefaultStallDetectThreshold);				// this also updates the CoolConf register
 	SetStallMinimumStepsPerSecond(DefaultMinimumStepsPerSecond);
 	UpdateRegister(WritePwmConf, DefaultPwmConfReg);
+	SetSineTableModulation(0);
 
 	for (size_t i = 0; i < NumReadRegisters; ++i)
 	{
@@ -904,7 +905,7 @@ static float LutModulationFunction(uint8_t pos, float modulation)
 	constexpr float twoPi = 2.0f * Pi;
 	constexpr float recip = 1.0f / 1024;
 
-	return (sinf(twoPi * pos * recip)) + (modulation * sinf(3 * twoPi * pos * recip)) +
+	return (sinf(twoPi * pos * recip + Pi / 1024)) + (modulation * sinf(3 * twoPi * pos * recip)) +
 		   (modulation * sinf(5 * twoPi * pos * recip));
 }
 
@@ -920,7 +921,7 @@ bool TmcDriverState::SetSineTableModulation(float modulation)
 
 	for (size_t i = 0; i < resolution; i++)
 	{
-		values[i] = (int16_t)(248 * LutModulationFunction(i, modulation) + 0.5);
+		values[i] = (int16_t)(248 * LutModulationFunction(i, modulation) - 0.5);
 	}
 	const uint32_t mslutstart = (values[0] << MSLUTSTART_START_SIN_SHIFT) | (values[resolution - 1] << MSLUTSTART_START_SIN90_SHIFT);
 
