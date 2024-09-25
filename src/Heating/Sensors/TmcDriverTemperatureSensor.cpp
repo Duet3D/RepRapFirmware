@@ -16,7 +16,7 @@ TmcDriverTemperatureSensor::TmcDriverTemperatureSensor(unsigned int sensorNum, u
 {
 }
 
-const char *TmcDriverTemperatureSensor::GetShortSensorType() const noexcept
+const char *_ecv_array TmcDriverTemperatureSensor::GetShortSensorType() const noexcept
 {
 #ifdef DUET_NG
 	return (channel == 1) ? DuexTypeShortName : PrimaryTypeName;

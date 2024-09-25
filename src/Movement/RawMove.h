@@ -135,7 +135,7 @@ public:
 	void Diagnostics(MessageType mtype) noexcept;
 
 	// These variables are currently all public, but we ought to make most of them private
-	Tool *currentTool;												// the current tool of this movement system
+	Tool *_ecv_null currentTool;									// the current tool of this movement system
 
 	// The current user position now holds the requested user position after applying workplace coordinate offsets.
 	// So we must subtract the workplace coordinate offsets when we want to display them.

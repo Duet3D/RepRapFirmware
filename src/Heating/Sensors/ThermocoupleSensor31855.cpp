@@ -144,17 +144,17 @@ void ThermocoupleSensor31855::Poll() noexcept
 			{
 				// At this point we are assured that bit 16 (fault indicator) is set and that at least one of the fault reason bits (0:2) are set.
 				// We now need to ensure that only one fault reason bit is set.
-				if (rawVal & 0x01)
+				if ((rawVal & 0x01) != 0)
 				{
 					// Open Circuit
 					SetResult(TemperatureError::openCircuit);
 				}
-				else if (rawVal & 0x02)
+				else if ((rawVal & 0x02) != 0)
 				{
 					// Short to ground;
 					SetResult(TemperatureError::shortToGround);
 				}
-				else if (rawVal && 0x04)
+				else if ((rawVal & 0x04) != 0)
 				{
 					// Short to Vcc
 					SetResult(TemperatureError::shortToVcc);

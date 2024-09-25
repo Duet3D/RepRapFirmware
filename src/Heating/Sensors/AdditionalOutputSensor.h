@@ -14,7 +14,7 @@ class AdditionalOutputSensor : public TemperatureSensor
 {
 public:
 	AdditionalOutputSensor(unsigned int sensorNum, const char *type, bool pEnforcePollOrder) noexcept;
-	virtual ~AdditionalOutputSensor() noexcept;
+	virtual ~AdditionalOutputSensor() noexcept override;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
 #if SUPPORT_REMOTE_COMMANDS

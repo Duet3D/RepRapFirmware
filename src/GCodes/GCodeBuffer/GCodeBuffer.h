@@ -54,7 +54,7 @@ public:
 	friend class BinaryParser;
 	friend class StringParser;
 
-	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
+	GCodeBuffer(GCodeChannel::RawType channel, GCodeInput *_ecv_from normalIn, FileGCodeInput *_ecv_null fileIn, MessageType mt, Compatibility::RawType c = Compatibility::RepRapFirmware) noexcept;
 	void Reset() noexcept;														// Reset it to its state after start-up
 	void Init() noexcept;														// Set it up to parse another G-code
 	void Disable() noexcept;													// Disable input from the associated port
@@ -65,8 +65,8 @@ public:
 #if HAS_SBC_INTERFACE
 	void PutBinary(const uint32_t *data, size_t len) noexcept;					// Add an entire binary G-Code, overwriting any existing content
 #endif
-	void PutAndDecode(const char *data, size_t len) noexcept;					// Add an entire G-Code, overwriting any existing content
-	void PutAndDecode(const char *str) noexcept;								// Add a null-terminated string, overwriting any existing content
+	void PutAndDecode(const char *_ecv_array data, size_t len) noexcept;					// Add an entire G-Code, overwriting any existing content
+	void PutAndDecode(const char *_ecv_array str) noexcept;								// Add a null-terminated string, overwriting any existing content
 	void StartNewFile() noexcept;												// Called when we start a new file
 	bool FileEnded() noexcept;													// Called when we reach the end of the file we are reading from
 	void DecodeCommand() noexcept;												// Decode the command in the buffer when it is complete
@@ -181,7 +181,7 @@ public:
 	float InverseConvertDistance(float distance) const noexcept;
 	float ConvertSpeed(float speed) const noexcept;
 	float InverseConvertSpeed(float speed) const noexcept;
-	const char *GetDistanceUnits() const noexcept;
+	const char *_ecv_array GetDistanceUnits() const noexcept;
 	unsigned int GetStackDepth() const noexcept;
 	bool PushState(bool withinSameFile) noexcept;							// Push state returning true if successful (i.e. stack not overflowed)
 	bool PopState(bool withinSameFile) noexcept;							// Pop state returning true if successful (i.e. no stack underrun)
@@ -207,11 +207,11 @@ public:
 	void SetFileFinished() noexcept;										// Mark the current file as finished
 	void SetPrintFinished() noexcept;										// Mark the current print file as finished
 
-	bool RequestMacroFile(const char *filename, bool fromCode) noexcept;	// Request execution of a file macro
+	bool RequestMacroFile(const char *_ecv_array filename, bool fromCode) noexcept;	// Request execution of a file macro
 	volatile bool IsWaitingForMacro() const noexcept { return isWaitingForMacro; }	// Indicates if the GB is waiting for a macro to be opened
 	bool HasJustStartedMacro() const noexcept { return macroJustStarted; }	// Has this GB just started a new macro file?
 	bool IsMacroRequestPending() const noexcept { return !requestedMacroFile.IsEmpty(); }		// Indicates if a macro file is being requested
-	const char *GetRequestedMacroFile() const noexcept { return requestedMacroFile.c_str(); }	// Return requested macro file or nullptr if none
+	const char *_ecv_array GetRequestedMacroFile() const noexcept { return requestedMacroFile.c_str(); }	// Return requested macro file or nullptr if none
 	bool IsMacroStartedByCode() const noexcept;								// Indicates if the last macro was requested from a code
 	void MacroRequestSent() noexcept { requestedMacroFile.Clear(); }		// Called when a macro file request has been sent
 	void ResolveMacroRequest(bool hadError, bool isEmpty) noexcept;			// Resolve the call waiting for a macro to be executed
@@ -257,7 +257,7 @@ public:
 	MessageType GetResponseMessageType() const noexcept;
 
 #if HAS_MASS_STORAGE
-	bool OpenFileToWrite(const char* directory, const char* fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept;
+	bool OpenFileToWrite(const char *_ecv_array directory, const char *_ecv_array fileName, const FilePosition size, const bool binaryWrite, const uint32_t fileCRC32) noexcept;
 																// open a file to write to
 	bool IsWritingFile() const noexcept;						// Returns true if writing a file
 	void WriteToFile() noexcept;								// Write the current GCode to file
@@ -267,7 +267,7 @@ public:
 	void FinishWritingBinary() noexcept;
 #endif
 
-	const char* DataStart() const noexcept;						// Get the start of the current command
+	const char *_ecv_array DataStart() const noexcept;						// Get the start of the current command
 	size_t DataLength() const noexcept;							// Get the length of the current command
 
 	void PrintCommand(const StringRef& s) const noexcept;
@@ -300,8 +300,8 @@ public:
 	void AddParameters(VariableSet& vars, int codeRunning) THROWS(GCodeException);
 	VariableSet& GetVariables() const noexcept;
 
-	[[noreturn]] void ThrowGCodeException(const char *msg) const THROWS(GCodeException);
-	[[noreturn]] void ThrowGCodeException(const char *msg, uint32_t param) const THROWS(GCodeException);
+	[[noreturn]] void ThrowGCodeException(const char *_ecv_array msg) const THROWS(GCodeException);
+	[[noreturn]] void ThrowGCodeException(const char *_ecv_array msg, uint32_t param) const THROWS(GCodeException);
 
 #if SUPPORT_COORDINATE_ROTATION
 	bool DoingCoordinateRotation() const noexcept;
@@ -324,14 +324,14 @@ protected:
 private:
 
 #if SUPPORT_OBJECT_MODEL
-	const char *GetStateText() const noexcept;
+	const char *_ecv_array GetStateText() const noexcept;
 #endif
 
 	FilePosition printFilePositionAtMacroStart;			// the saved file position when we started executing a macro
 	GCodeInput *_ecv_from normalInput;					// Our normal input stream, or nullptr if there isn't one
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	FileGCodeInput *fileInput;							// Our file input stream for when we are reading from a print file or a macro file, may be shared with other GCodeBuffers
+	FileGCodeInput *_ecv_null fileInput;				// Our file input stream for when we are reading from a print file or a macro file, may be shared with other GCodeBuffers
 #endif
 
 	const MessageType responseMessageType;				// The message type we use for responses to string codes coming from this channel

@@ -109,7 +109,7 @@ struct StepErrorDetails
 };
 
 // This is the master movement class.  It controls all movement in the machine.
-class Move INHERIT_OBJECT_MODEL
+class Move final INHERIT_OBJECT_MODEL
 {
 public:
 	// Enumeration to describe the status of a drive
@@ -239,7 +239,7 @@ public:
 
 	void SetAsExtruder(size_t drive, bool isExtruder) noexcept pre(drive < MaxAxesPlusExtruders) { dms[drive].SetAsExtruder(isExtruder); }
 
-	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode, const StringRef& reply) noexcept pre(axisOrExtruder < MaxAxesdPlusExtruders);
+	bool SetMicrostepping(size_t axisOrExtruder, int microsteps, bool mode, const StringRef& reply) noexcept pre(axisOrExtruder < MaxAxesPlusExtruders);
 	unsigned int GetMicrostepping(size_t axisOrExtruder, bool& interpolation) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders);
 	unsigned int GetMicrostepping(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return microstepping[axisOrExtruder] & 0x7FFF; }
 	bool GetMicrostepInterpolation(size_t axisOrExtruder) const noexcept pre(axisOrExtruder < MaxAxesPlusExtruders) { return (microstepping[axisOrExtruder] & 0x8000) != 0; }
@@ -257,12 +257,12 @@ public:
 			pre(queueNumber < NumMovementSystems);							// Get the current position of some axes from one of the rings
 #endif
 	void SetRawPosition(const float positions[MaxAxes], MovementSystemNumber msNumber, AxesBitmap axes) noexcept
-			pre(queueNumber < NumMovementSystems);							// Set the current position to be this without transforming them first
+			pre(msNumber < NumMovementSystems);							// Set the current position to be this without transforming them first
 	void AdjustMotorPositions(const float adjustment[], size_t numMotors) noexcept;		// Perform motor endpoint adjustment after auto calibration
 	void GetCurrentUserPosition(float m[MaxAxes], MovementSystemNumber msNumber, uint8_t moveType, const Tool *tool) const noexcept;
 																			// Return the position (after all queued moves have been executed) in transformed coords
 	int32_t GetLiveMotorPosition(size_t driver) const noexcept pre(driver < MaxAxesPlusExtruders);
-	void SetMotorPosition(size_t drive, int32_t pos) noexcept pre(driver < MaxAxesPlusExtruders);
+	void SetMotorPosition(size_t drive, int32_t pos) noexcept pre(drive < MaxAxesPlusExtruders);
 
 	void MoveAvailable() noexcept;											// Called from GCodes to tell the Move task that a move is available
 	bool WaitingForAllMovesFinished(MovementSystemNumber msNumber
@@ -270,7 +270,7 @@ public:
 									, AxesBitmap axesAndExtrudersOwned
 #endif
 								   ) noexcept
-		pre(queueNumber < rings.upb);										// Tell the lookahead ring we are waiting for it to empty and return true if it is
+		pre(msNumber < rings.upb);										// Tell the lookahead ring we are waiting for it to empty and return true if it is
 	void DoLookAhead() noexcept SPEED_CRITICAL;								// Run the look-ahead procedure
 	void SetNewPositionOfOwnedAxes(const MovementState& ms, bool doBedCompensation) noexcept;	// Set the current position to be this
 	void SetNewPositionOfAllAxes(const MovementState& ms, bool doBedCompensation) noexcept;		// Set the current position to be this
@@ -348,7 +348,7 @@ public:
 	void Diagnostics(MessageType mtype) noexcept;											// Report useful stuff
 
 	// Kinematics and related functions
-	Kinematics& GetKinematics() const noexcept { return *kinematics; }
+	Kinematics &_ecv_from GetKinematics() const noexcept { return *kinematics; }
 	bool SetKinematics(KinematicsType k) noexcept;											// Set kinematics, return true if successful
 	bool CartesianToMotorSteps(const float machinePos[MaxAxes], int32_t motorPos[MaxAxes], bool isCoordinated) const noexcept;
 																							// Convert Cartesian coordinates to delta motor coordinates, return true if successful
@@ -486,7 +486,7 @@ public:
 	static void WakeLaserTaskFromISR() noexcept;											// wake up the laser task, called at the start of a new move
 
 	static void WakeMoveTaskFromISR() noexcept;
-	static const TaskBase *GetMoveTaskHandle() noexcept { return &moveTask; }
+	static const TaskBase *_ecv_from GetMoveTaskHandle() noexcept { return &moveTask; }
 
 	static void TimerCallback(CallbackParameter p) noexcept;
 
@@ -618,9 +618,9 @@ enum class StepErrorState : uint8_t
 	volatile uint32_t lastDirChangeTime;							// when we last changed the DIR signal to a slow driver
 
 	StepTimer timer;												// Timer object to control getting step interrupts
-	DriveMovement *activeDMs;
+	DriveMovement *_ecv_null activeDMs;
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-	DriveMovement *phaseStepDMs;
+	DriveMovement *_ecv_null phaseStepDMs;
 
 	// These variables monitor how fast the phase stepping control loop is running etc.
 	StepTimer::Ticks prevPSControlLoopCallTime;			// The last time the control loop was called
@@ -667,7 +667,7 @@ enum class StepErrorState : uint8_t
 	Deviation initialCalibrationDeviation;
 	Deviation latestMeshDeviation;
 
-	Kinematics *kinematics;								// What kinematics we are using
+	Kinematics *_ecv_from kinematics;					// What kinematics we are using
 
 	float minExtrusionPending = 0.0, maxExtrusionPending = 0.0;
 
@@ -905,7 +905,7 @@ inline float Move::AxisTotalLength(size_t axis) const noexcept
 // Get the current position in untransformed coords
 inline void Move::GetCurrentMachinePosition(float m[MaxAxes], MovementSystemNumber msNumber, bool disableMotorMapping) const noexcept
 {
-	return rings[msNumber].GetCurrentMachinePosition(m, disableMotorMapping);
+	rings[msNumber].GetCurrentMachinePosition(m, disableMotorMapping);
 }
 
 // Update the min and max extrusion pending values. These are reported by M122 to assist with debugging print quality issues.
@@ -979,9 +979,9 @@ inline __attribute__((always_inline)) bool Move::ScheduleNextStepInterrupt() noe
 inline void Move::InsertDM(DriveMovement *dm) noexcept
 {
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-	DriveMovement **dmp = dm->state == DMState::phaseStepping ? &phaseStepDMs : &activeDMs;
+	DriveMovement *_ecv_null *dmp = dm->state == DMState::phaseStepping ? &phaseStepDMs : &activeDMs;
 #else
-	DriveMovement **dmp = &activeDMs;
+	DriveMovement *_ecv_null *dmp = &activeDMs;
 #endif
 	while (*dmp != nullptr && (int32_t)((*dmp)->nextStepTime - dm->nextStepTime) < 0)
 	{

@@ -57,7 +57,7 @@ public:
 	float GetWarmUpDuration() const noexcept;
 	float GetPauseDuration() const noexcept;
 
-	const char *GetPrintingFilename() const noexcept { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
+	const char *_ecv_array _ecv_null GetPrintingFilename() const noexcept { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
 	bool GetPrintingFileInfo(GCodeFileInfo& info) noexcept;
 	void SetPrintingFileInfo(const char *filename, GCodeFileInfo& info) noexcept;
 

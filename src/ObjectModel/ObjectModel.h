@@ -464,7 +464,7 @@ struct ObjectModelClassDescriptor
 
 #define DEFINE_GET_OBJECT_MODEL_TABLE(_class) \
 	const ObjectModelClassDescriptor _class::objectModelClassDescriptor = { _class::objectModelTable, _class::objectModelTableDescriptor, nullptr }; \
-	const ObjectModelClassDescriptor *_class::GetObjectModelClassDescriptor() const noexcept \
+	const ObjectModelClassDescriptor *_ecv_null _class::GetObjectModelClassDescriptor() const noexcept \
 	{ \
 		static_assert(DESCRIPTOR_OK(_class), "Bad descriptor length"); \
 		static_assert(!DESCRIPTOR_OK(_class) || OMT_SIZE_OK(_class), "Mismatched object model table and descriptor"); \
@@ -474,7 +474,7 @@ struct ObjectModelClassDescriptor
 
 #define DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(_class, _parent) \
 	const ObjectModelClassDescriptor _class::objectModelClassDescriptor = { _class::objectModelTable, _class::objectModelTableDescriptor, &_parent::objectModelClassDescriptor }; \
-	const ObjectModelClassDescriptor *_class::GetObjectModelClassDescriptor() const noexcept \
+	const ObjectModelClassDescriptor *_ecv_null _class::GetObjectModelClassDescriptor() const noexcept \
 	{ \
 		static_assert(DESCRIPTOR_OK(_class), "Bad descriptor length"); \
 		static_assert(!DESCRIPTOR_OK(_class) || OMT_SIZE_OK(_class), "Mismatched object model table and descriptor"); \

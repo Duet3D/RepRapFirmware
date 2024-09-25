@@ -45,7 +45,7 @@ public:
     virtual ~FlasherObserver() {}
 
     virtual void onStatus(const char *message, ...) noexcept = 0;
-    virtual void onProgress(int num, int div) noexcept = 0;
+    virtual void onProgress(int num, int pdiv) noexcept = 0;
     virtual void Reset() noexcept = 0;
 };
 

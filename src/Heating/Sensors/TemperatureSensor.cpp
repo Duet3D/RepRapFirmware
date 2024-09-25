@@ -215,12 +215,12 @@ void TemperatureSensor::UpdateRemoteTemperature(CanAddress src, const CanSensorR
 
 // Factory method
 #if SUPPORT_CAN_EXPANSION
-TemperatureSensor *_ecv_from TemperatureSensor::Create(unsigned int sensorNum, CanAddress boardAddress, const char *_ecv_array typeName, const StringRef& reply) noexcept
+TemperatureSensor *_ecv_from _ecv_null TemperatureSensor::Create(unsigned int sensorNum, CanAddress boardAddress, const char *_ecv_array typeName, const StringRef& reply) noexcept
 #else
-TemperatureSensor *_ecv_from TemperatureSensor::Create(unsigned int sensorNum, const char *_ecv_array typeName, const StringRef& reply) noexcept
+TemperatureSensor *_ecv_from _ecv_null TemperatureSensor::Create(unsigned int sensorNum, const char *_ecv_array typeName, const StringRef& reply) noexcept
 #endif
 {
-	TemperatureSensor *_ecv_from ts;
+	TemperatureSensor *_ecv_from _ecv_null ts;
 #if SUPPORT_CAN_EXPANSION
 	if (boardAddress != CanInterface::GetCanAddress())
 	{

@@ -57,15 +57,15 @@ public:
 	void SetRetractionMinTemp(float t) noexcept;						// Set minimum retraction temperature
 
 	int GetBedHeater(size_t index) const noexcept						// Get a hot bed heater number
-	pre(index < NumBedHeaters);
+	pre(index < MaxBedHeaters);
 	void SetBedHeater(size_t index, int heater)	 noexcept				// Set a hot bed heater number
-	pre(index < NumBedHeaters; -1 <= heater; heater < MaxHeaters);
+	pre(index < MaxBedHeaters; -1 <= heater; heater < MaxHeaters);
 	bool IsBedHeater(int heater) const noexcept;						// Check if this heater is a bed heater
 
 	int GetChamberHeater(size_t index) const noexcept					// Get a chamber heater number
-	pre(index < NumChamberHeaters);
+	pre(index < MaxChamberHeaters);
 	void SetChamberHeater(size_t index, int heater)	 noexcept			// Set a chamber heater number
-	pre(index < NumChamberHeaters; -1 <= heater; heater < MaxHeaters);
+	pre(index < MaxChamberHeaters; -1 <= heater; heater < MaxHeaters);
 	bool IsChamberHeater(int heater) const noexcept;					// Check if this heater is a chamber heater
 
 	void SetAsToolHeater(int8_t heater) const noexcept;					// called when a tool is created that uses this heater
@@ -96,7 +96,7 @@ public:
 	void Diagnostics(MessageType mtype) noexcept;						// Output useful information
 
 	// Methods that relate to a particular heater
-	const char *GetHeaterSensorName(size_t heater) const noexcept;		// Get the name of the sensor associated with heater, or nullptr if it hasn't been named
+	const char *_ecv_array GetHeaterSensorName(size_t heater) const noexcept;		// Get the name of the sensor associated with heater, or nullptr if it hasn't been named
 	float GetAveragePWM(size_t heater) const noexcept					// Return the running average PWM to the heater as a fraction in [0, 1].
 	pre(heater < MaxHeaters);
 
@@ -125,7 +125,7 @@ public:
 	void SetStandbyTemperature(int heater, float t) THROWS(GCodeException) { SetTemperature(heater, t, false); }
 	void SetTemperature(int heater, float t, bool activeNotStandby) THROWS(GCodeException);
 
-	GCodeResult SetActiveOrStandby(int heater, const Tool *tool, bool active, const StringRef& reply) noexcept;	// Turn a heater on
+	GCodeResult SetActiveOrStandby(int heater, const Tool *_ecv_null tool, bool active, const StringRef& reply) noexcept;	// Turn a heater on
 	void SwitchOff(int heater) noexcept;								// Turn off a specific heater
 	void FeedForwardAdjustment(unsigned int heater, float fanPwmChange, float extrusionChange) const noexcept;
 	void SetExtrusionFeedForward(unsigned int heater, float pwm) const noexcept;
@@ -171,10 +171,10 @@ private:
 	static ReadWriteLock heatersLock;
 
 	uint8_t volatile sensorCount;
-	TemperatureSensor * volatile sensorsRoot;					// The sensor list
+	TemperatureSensor *_ecv_from _ecv_null volatile sensorsRoot;	// The sensor list
 
-	Heater* heaters[MaxHeaters];								// A local or remote heater
-	const Tool* lastStandbyTools[MaxHeaters];					// The last tool that caused the corresponding heater to be set to standby
+	Heater *_ecv_from heaters[MaxHeaters];						// Each element is a local or remote heater
+	const Tool *_ecv_null lastStandbyTools[MaxHeaters];			// The last tool that caused the corresponding heater to be set to standby
 
 	float extrusionMinTemp;										// Minimum temperature to allow regular extrusion
 	float retractionMinTemp;									// Minimum temperature to allow regular retraction
