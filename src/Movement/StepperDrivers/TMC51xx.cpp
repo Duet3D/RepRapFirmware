@@ -905,7 +905,7 @@ static float LutModulationFunction(uint8_t pos, float modulation)
 	constexpr float twoPi = 2.0f * Pi;
 	constexpr float recip = 1.0f / 1024;
 
-	return (sinf(twoPi * pos * recip + Pi / 1024)) + (modulation * sinf(3 * twoPi * pos * recip)) +
+	return (sinf((twoPi * pos + Pi) * recip)) + (modulation * sinf(3 * twoPi * pos * recip)) +
 		   (modulation * sinf(5 * twoPi * pos * recip));
 }
 
@@ -913,7 +913,7 @@ bool TmcDriverState::SetSineTableModulation(float modulation)
 {
 	debugPrintf("Modulation = %f\n", (double)modulation);
 	uint8_t W[] = {0, 0, 0, 0};
-	uint8_t X[] = {0, 0, 0, 0};
+	uint8_t X[] = {0, 0, 0};
 
 	constexpr uint16_t resolution = 256;
 
@@ -975,6 +975,11 @@ bool TmcDriverState::SetSineTableModulation(float modulation)
 			segSize++;
 			continue;
 		}
+		if (i == resolution - 1)
+		{
+			segDifferences[segSize] = diff;
+			segSize++;
+		}
 
 		if (xIndex > 2 || wIndex > 3)
 		{
@@ -1007,12 +1012,20 @@ bool TmcDriverState::SetSineTableModulation(float modulation)
 		segSize = 1;
 	}
 
-	while (xIndex < 4)
+	while (xIndex < 3)
 	{
 		X[xIndex] = 255;
 		xIndex++;
 	}
-	const uint32_t mslutsel = W[0] | W[1] << 2 | W[2] << 4 | W[3] << 6 | X[0] << 8 | X[1] << 16 | X[2] << 24;
+
+	const uint8_t lastW = differences[resolution - 1] - ((mslutArr[7] & 0x80) >> 8) + 1;
+	while (wIndex < 4)
+	{
+		W[wIndex] = lastW;
+		wIndex++;
+	}
+
+	const uint32_t mslutsel = (W[0] & 0x3) | (W[1] & 0x3) << 2 | (W[2] & 0x3) << 4 | (W[3] & 0x3) << 6 | X[0] << 8 | X[1] << 16 | X[2] << 24;
 
 	for (size_t i = 0; i < 8; i++)
 	{
