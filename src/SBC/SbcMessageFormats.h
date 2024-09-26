@@ -387,7 +387,7 @@ struct PrintStoppedHeader
 	uint16_t paddingB;
 };
 
-#if false
+#if 0
 struct SetObjectModelHeader		// unused
 {
 	DataType type;

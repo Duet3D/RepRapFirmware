@@ -22,8 +22,6 @@
 
 #if SUPPORT_CAN_EXPANSION
 
-class CanExpansionBoardDetails;
-
 enum class ExpansionDetail : uint32_t
 {
 	shortName, firmwareVersion, firmwareFileNameBin, firmwareFileNameUf2, firmwareDate, longName
@@ -123,7 +121,7 @@ struct ExpressionValue
 	explicit ExpressionValue(const IoPort& p) noexcept : type((uint32_t)TypeCode::Port), param(0), iopVal(&p) { }
 	explicit ExpressionValue(const UniqueId& id) noexcept : type((uint32_t)TypeCode::UniqueId_tc), param(0), uniqueIdVal(&id) { }
 #if SUPPORT_CAN_EXPANSION
-	ExpressionValue(const char*s, ExpansionDetail p) noexcept : type((uint32_t)TypeCode::CanExpansionBoardDetails), param((uint32_t)p), sVal(s) { }
+	ExpressionValue(const char *_ecv_array s, ExpansionDetail p) noexcept : type((uint32_t)TypeCode::CanExpansionBoardDetails), param((uint32_t)p), sVal(s) { }
 #endif
 
 	bool operator==(const ExpressionValue& other) const noexcept;

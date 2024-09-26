@@ -24,7 +24,7 @@ void DhtDataTransition(CallbackParameter cp) noexcept
 	static_cast<DhtTemperatureSensor*>(cp.vp)->Interrupt();
 }
 
-static const char *GetLongSensorTypeName(DhtSensorType t) noexcept
+static const char *_ecv_array GetLongSensorTypeName(DhtSensorType t) noexcept
 {
 	switch (t)
 	{
@@ -44,7 +44,7 @@ DhtTemperatureSensor::~DhtTemperatureSensor() noexcept
 {
 }
 
-const char *DhtTemperatureSensor::GetShortSensorType() const noexcept
+const char *_ecv_array DhtTemperatureSensor::GetShortSensorType() const noexcept
 {
 	switch (type)
 	{
@@ -246,7 +246,7 @@ TemperatureError DhtTemperatureSensor::ProcessReadings(float& t, float& h) noexc
 
 //	debugPrintf("Data: %02x %02x %02x %02x %02x\n", data[0], data[1], data[2], data[3], data[4]);
 	// Verify checksum
-	if (((data[0] + data[1] + data[2] + data[3]) & 0xFF) != data[4])
+	if (((data[0] + data[1] + data[2] + data[3]) & 0xFFu) != data[4])
 	{
 //		debugPrintf("Cks err\n");
 		return TemperatureError::ioError;
@@ -259,7 +259,7 @@ TemperatureError DhtTemperatureSensor::ProcessReadings(float& t, float& h) noexc
 	case DhtSensorType::Dht22:
 		h = ((data[0] * 256) + data[1]) * 0.1;
 		t = (((data[2] & 0x7F) * 256) + data[3]) * 0.1;
-		if (data[2] & 0x80)
+		if ((data[2] & 0x80) != 0)
 		{
 			t *= -1.0;
 		}

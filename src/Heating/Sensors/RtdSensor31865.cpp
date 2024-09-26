@@ -182,7 +182,7 @@ GCodeResult RtdSensor31865::FinishConfiguring(bool changed, const StringRef& rep
 	else
 	{
 		CopyBasicDetails(reply);
-		reply.catf(", %s wires, reject %dHz, reference resistor %.2f ohms", (cr0 & 0x10) ? "3" : "2/4", (cr0 & 0x01) ? 50 : 60, (double)((float)rrefTimes100 * 0.01));
+		reply.catf(", %s wires, reject %dHz, reference resistor %.2f ohms", ((cr0 & 0x10u) != 0) ? "3" : "2/4", ((cr0 & 0x01u) != 0) ? 50 : 60, (double)((float)rrefTimes100 * 0.01));
 	}
 	return GCodeResult::ok;
 }
@@ -202,7 +202,7 @@ TemperatureError RtdSensor31865::TryInitRtd() const noexcept
 	}
 
 	//debugPrintf("Status %d data %04x\n", (int)sts, (uint16_t)rawVal);
-	if (sts == TemperatureError::ok && (rawVal & Cr0ReadMask) != (cr0 & Cr0ReadMask))
+	if (sts == TemperatureError::ok && (rawVal & Cr0ReadMask) != ((uint32_t)cr0 & Cr0ReadMask))
 	{
 		sts = TemperatureError::badResponse;
 	}
@@ -222,15 +222,15 @@ void RtdSensor31865::Poll() noexcept
 	}
 	else
 	{
-		if (   (((rawVal >> 16) & Cr0ReadMask) != (cr0 & Cr0ReadMask))	// if control register not as expected
+		if (   (((rawVal >> 16) & Cr0ReadMask) != ((uint32_t)cr0 & Cr0ReadMask))	// if control register not as expected
 			|| (rawVal & 1) != 0										// or fault bit set
 		   )
 		{
 			static const uint8_t faultDataOut[2] = {0x07, 0x55};
 			if (DoSpiTransaction(faultDataOut, ARRAY_SIZE(faultDataOut), rawVal) == TemperatureError::ok)	// read the fault register
 			{
-				sts = (rawVal & 0x04) ? TemperatureError::overOrUnderVoltage
-							: (rawVal & 0x18) ? TemperatureError::openCircuit
+				sts = ((rawVal & 0x04) != 0) ? TemperatureError::overOrUnderVoltage
+							: ((rawVal & 0x18) != 0) ? TemperatureError::openCircuit
 								: TemperatureError::hardwareError;
 			}
 			else
