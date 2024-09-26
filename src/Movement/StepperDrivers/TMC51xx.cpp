@@ -382,7 +382,7 @@ public:
 	bool EnablePhaseStepping(bool enable) noexcept;
 	bool IsPhaseSteppingEnabled() const noexcept { return phaseStepEnabled; }
 #endif
-	bool SetSineTableModulation(float modulation);
+	bool SetSineTableModulation(float modulation, const StringRef& reply);
 
 	bool SetDriverMode(unsigned int mode) noexcept;
 	DriverMode GetDriverMode() const noexcept;
@@ -587,7 +587,8 @@ pre(!driversPowered)
 	SetStallDetectThreshold(DefaultStallDetectThreshold);				// this also updates the CoolConf register
 	SetStallMinimumStepsPerSecond(DefaultMinimumStepsPerSecond);
 	UpdateRegister(WritePwmConf, DefaultPwmConfReg);
-	SetSineTableModulation(0);
+	String<GCodeReplyLength> reply;
+	SetSineTableModulation(0, reply.GetRef());
 
 	for (size_t i = 0; i < NumReadRegisters; ++i)
 	{
@@ -910,7 +911,7 @@ static float LutModulationFunction(uint8_t pos, float modulation)
 		   (modulation * sinf(5 * twoPi * pos * recip));
 }
 
-bool TmcDriverState::SetSineTableModulation(float modulation)
+bool TmcDriverState::SetSineTableModulation(float modulation, const StringRef& reply)
 {
 	debugPrintf("Modulation = %f\n", (double)modulation);
 	uint8_t W[] = {0, 0, 0, 0};
@@ -919,11 +920,28 @@ bool TmcDriverState::SetSineTableModulation(float modulation)
 	constexpr uint16_t resolution = 256;
 
 	int16_t values[resolution] = {0};
+	int16_t minVal = std::numeric_limits<int16_t>::max();
+	int16_t maxVal = std::numeric_limits<int16_t>::min();
 
 	for (size_t i = 0; i < resolution; i++)
 	{
 		values[i] = (int16_t)(248 * LutModulationFunction(i, modulation) - 0.5);
+		if (values[i] < minVal)
+		{
+			minVal = values[i];
+		}
+		if (values[i] > maxVal)
+		{
+			maxVal = values[i];
+		}
 	}
+
+	if (minVal < -248 || maxVal > 248)
+	{
+		reply.printf("Modulated waveform exceeds min or max limits. min=%d, max=%d\n", minVal, maxVal);
+		return false;
+	}
+
 	const uint32_t mslutstart = (values[0] << MSLUTSTART_START_SIN_SHIFT) | (values[resolution - 1] << MSLUTSTART_START_SIN90_SHIFT);
 
 	int8_t differences[resolution] = {0};
@@ -952,6 +970,7 @@ bool TmcDriverState::SetSineTableModulation(float modulation)
 		if (diff < -1 || diff > 3)
 		{
 			// Can't represent this in the sine table
+			reply.copy("Can not represent waveform in MSLUT, difference too large\n");
 			return false;
 		}
 
@@ -988,6 +1007,7 @@ bool TmcDriverState::SetSineTableModulation(float modulation)
 		if ((xIndex > 2 || wIndex > 3) && i < resolution - 1)
 		{
 			// Can not fit function (too curvy)
+			reply.copy("Can not represent waveform in MSLUT, too curvy\n");
 			return false;
 		}
 
@@ -2081,13 +2101,13 @@ bool SmartDrivers::SetMotorPhases(size_t driver, uint32_t regVal) noexcept
 
 #endif
 
-bool SmartDrivers::SetSineTableModulation(size_t driver, float modulation) noexcept
+bool SmartDrivers::SetSineTableModulation(size_t driver, float modulation, const StringRef& reply) noexcept
 {
 	if (driver >= numTmc51xxDrivers)
 	{
 		return false;
 	}
-	return driverStates[driver].SetSineTableModulation(modulation);
+	return driverStates[driver].SetSineTableModulation(modulation, reply);
 }
 
 bool SmartDrivers::SetDriverMode(size_t driver, unsigned int mode) noexcept
