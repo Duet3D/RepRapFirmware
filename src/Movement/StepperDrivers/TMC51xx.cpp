@@ -14,6 +14,7 @@
 #include <RTOSIface/RTOSIface.h>
 #include <Platform/Platform.h>
 #include <Movement/Move.h>
+# include <Movement/MoveDebugFlags.h>
 #include <DmacManager.h>
 #include <Platform/TaskPriorities.h>
 #include <General/Portability.h>
@@ -943,7 +944,10 @@ bool TmcDriverState::SetSineTableModulation(float modulation)
 	for (size_t i = 0; i < resolution; i++)
 	{
 		int8_t diff = differences[i];
-		debugPrintf("diff[%u] = %d\n", i, diff);
+		if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Tmc))
+		{
+			debugPrintf("diff[%u] = %d\n", i, diff);
+		}
 
 		if (diff < -1 || diff > 3)
 		{
@@ -981,24 +985,33 @@ bool TmcDriverState::SetSineTableModulation(float modulation)
 			segSize++;
 		}
 
-		if (xIndex > 2 || wIndex > 3)
+		if ((xIndex > 2 || wIndex > 3) && i < resolution - 1)
 		{
 			// Can not fit function (too curvy)
 			return false;
 		}
 
-		W[wIndex] = (uint8_t)(segMinDiff + 1);
-		debugPrintf("Segment end at pos %u, W=%u\n", i, W[wIndex]);
+		if (wIndex <= 3)
+		{
+			W[wIndex] = (uint8_t)(segMinDiff + 1);
+			debugPrintf("Segment end at pos %u, W=%u\n", i, W[wIndex]);
+		}
 
 		for (size_t j = 0; j < segSize; j++)
 		{
 			size_t bit = j + X[(xIndex > 0 ? xIndex - 1 : 0)];
 			uint8_t offs_bit = segDifferences[j] == segMinDiff ? 0 : 1;
 			mslutArr[bit / 32] |= (offs_bit << (bit % 32));
-			debugPrintf("mslut[%u] = 0x%08x, [%u]=%u\n", bit / 32, mslutArr[bit / 32], bit % 32, offs_bit);
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Tmc))
+			{
+				debugPrintf("mslut[%u] = 0x%08x, [%u]=%u, diff=%d\n", bit / 32, mslutArr[bit / 32], bit % 32, offs_bit, segDifferences[j]);
+			}
 		}
 
-		X[xIndex] = (uint8_t)i;
+		if (xIndex <= 2)
+		{
+			X[xIndex] = (uint8_t)i;
+		}
 		xIndex++;
 		wIndex++;
 

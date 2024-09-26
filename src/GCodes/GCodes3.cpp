@@ -1103,7 +1103,7 @@ GCodeResult GCodes::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply
 
 GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
 {
-	if (gb.SeenAny("RS"))
+	if (gb.SeenAny("RSJ"))
 	{
 		if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 		{

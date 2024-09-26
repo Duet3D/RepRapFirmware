@@ -21,6 +21,7 @@ namespace MoveDebugFlags
 	constexpr unsigned int Lookahead = 7;
 	constexpr unsigned int Segments = 8;
 	constexpr unsigned int PhaseStep = 9;
+	constexpr unsigned int Tmc = 10;
 }
 
 #endif /* SRC_MOVEMENT_MOVEDEBUGFLAGS_H_ */
