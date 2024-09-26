@@ -382,7 +382,10 @@ public:
 	bool EnablePhaseStepping(bool enable) noexcept;
 	bool IsPhaseSteppingEnabled() const noexcept { return phaseStepEnabled; }
 #endif
-	bool SetSineTableModulation(float modulation, const StringRef& reply);
+
+
+	bool SetSineTableModulation(ModulationConfig config, const StringRef& reply) noexcept;
+	ModulationConfig GetModulationConfig() const noexcept { return modulationConfig; }
 
 	bool SetDriverMode(unsigned int mode) noexcept;
 	DriverMode GetDriverMode() const noexcept;
@@ -513,6 +516,8 @@ private:
 	bool phaseStepEnabled = false;
 	DriverMode currentMode;									// stepper driver mode if not using phase stepping
 #endif
+
+	ModulationConfig modulationConfig;
 };
 
 const uint8_t TmcDriverState::WriteRegNumbers[NumWriteRegisters] =
@@ -588,7 +593,7 @@ pre(!driversPowered)
 	SetStallMinimumStepsPerSecond(DefaultMinimumStepsPerSecond);
 	UpdateRegister(WritePwmConf, DefaultPwmConfReg);
 	String<GCodeReplyLength> reply;
-	SetSineTableModulation(0, reply.GetRef());
+	SetSineTableModulation(modulationConfig, reply.GetRef());
 
 	for (size_t i = 0; i < NumReadRegisters; ++i)
 	{
@@ -911,9 +916,9 @@ static float LutModulationFunction(uint8_t pos, float modulation)
 		   (modulation * sinf(5 * twoPi * pos * recip));
 }
 
-bool TmcDriverState::SetSineTableModulation(float modulation, const StringRef& reply)
+bool TmcDriverState::SetSineTableModulation(ModulationConfig config, const StringRef& reply) noexcept
 {
-	debugPrintf("Modulation = %f\n", (double)modulation);
+	debugPrintf("Modulation config: amplitude=%u, offset=%d, modulation=%f\n", config.amplitude, config.offset, (double)config.modulation);
 	uint8_t W[] = {0, 0, 0, 0};
 	uint8_t X[] = {0, 0, 0};
 
@@ -925,7 +930,7 @@ bool TmcDriverState::SetSineTableModulation(float modulation, const StringRef& r
 
 	for (size_t i = 0; i < resolution; i++)
 	{
-		values[i] = (int16_t)(248 * LutModulationFunction(i, modulation) - 0.5);
+		values[i] = (int16_t)(config.amplitude * LutModulationFunction(i, config.modulation) + config.offset + 0.5);
 		if (values[i] < minVal)
 		{
 			minVal = values[i];
@@ -1077,6 +1082,8 @@ bool TmcDriverState::SetSineTableModulation(float modulation, const StringRef& r
 	UpdateRegister(WriteMslut7, mslutArr[7]);
 	UpdateRegister(WriteMslutSel, mslutsel);
 	UpdateRegister(WriteMslutStart, mslutstart);
+
+	modulationConfig = config;
 
 	return true;
 }
@@ -2101,13 +2108,22 @@ bool SmartDrivers::SetMotorPhases(size_t driver, uint32_t regVal) noexcept
 
 #endif
 
-bool SmartDrivers::SetSineTableModulation(size_t driver, float modulation, const StringRef& reply) noexcept
+bool SmartDrivers::SetSineTableModulation(size_t driver, ModulationConfig config, const StringRef& reply) noexcept
 {
 	if (driver >= numTmc51xxDrivers)
 	{
 		return false;
 	}
-	return driverStates[driver].SetSineTableModulation(modulation, reply);
+	return driverStates[driver].SetSineTableModulation(config, reply);
+}
+
+ModulationConfig SmartDrivers::GetModulationConfig(size_t driver) noexcept
+{
+	if (driver >= numTmc51xxDrivers)
+	{
+		return ModulationConfig();
+	}
+	return driverStates[driver].GetModulationConfig();
 }
 
 bool SmartDrivers::SetDriverMode(size_t driver, unsigned int mode) noexcept

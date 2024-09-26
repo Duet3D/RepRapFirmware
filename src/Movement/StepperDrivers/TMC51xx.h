@@ -14,8 +14,16 @@
 
 #include "DriverMode.h"
 
+struct ModulationConfig
+{
+	uint8_t amplitude = 248;
+	int16_t offset = 0;
+	float modulation = 0;
+};
+
 namespace SmartDrivers
 {
+
 	void Init() noexcept;
 	void Exit() noexcept;
 	void Spin(bool powered) noexcept;
@@ -36,7 +44,8 @@ namespace SmartDrivers
 	void SetTmcExternalClock(uint32_t frequency) noexcept;
 	bool SetMotorPhases(size_t driver, uint32_t regVal) noexcept;
 #endif
-	bool SetSineTableModulation(size_t driver, float modulation, const StringRef& reply) noexcept;
+	bool SetSineTableModulation(size_t driver, ModulationConfig config, const StringRef& reply) noexcept;
+	ModulationConfig GetModulationConfig(size_t driver) noexcept;
 	bool SetDriverMode(size_t driver, unsigned int mode) noexcept;
 	DriverMode GetDriverMode(size_t driver) noexcept;
 	void SetStallThreshold(size_t driver, int sgThreshold) noexcept;

@@ -1096,6 +1096,8 @@ GCodeResult GCodes::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply
 	case 7:			// configure brake
 		return reprap.GetMove().ConfigureDriverBrakePort(gb, reply, drive);
 
+	case 9:
+		return ConfigureLocalDriverModulation(gb, reply, drive);
 	default:
 		return GCodeResult::warningNotSupported;
 	}
@@ -1217,15 +1219,6 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 			{
 				reply.printf("Current scaler = %ld for driver %u might result in poor microstep performance. Recommended minimum is 16.", ival, drive);
 				warn = true;
-			}
-		}
-
-		float fVal = 0;
-		if (gb.TryGetLimitedFValue('J', fVal, seen, -0.2, 0.2))
-		{
-			if (!SmartDrivers::SetSineTableModulation(drive, fVal, reply))
-			{
-				return GCodeResult::error;
 			}
 		}
 # endif
@@ -1360,6 +1353,59 @@ GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const S
 		}
 #endif
 	}
+	return GCodeResult::ok;
+}
+
+GCodeResult GCodes::ConfigureLocalDriverModulation(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
+{
+	if (gb.SeenAny("ACJ"))
+	{
+		if (!LockAllMovementSystemsAndWaitForStandstill(gb))
+		{
+			return GCodeResult::notFinished;
+		}
+	}
+
+	bool seen = false;
+
+
+#if HAS_SMART_DRIVERS
+# if SUPPORT_TMC51xx
+	uint32_t val;
+	int32_t iVal;
+	float fVal = 0;
+
+	ModulationConfig config = SmartDrivers::GetModulationConfig(drive);
+
+	if (gb.TryGetLimitedUIValue('A', val, seen, 248))
+	{
+		config.amplitude = val;
+	}
+
+	if (gb.TryGetLimitedIValue('C', iVal, seen, -248, 248))
+	{
+		config.offset = iVal;
+	}
+
+	if (gb.TryGetLimitedFValue('J', fVal, seen, -0.2, 0.2))
+	{
+		config.modulation = fVal;
+	}
+
+	if (seen)
+	{
+		if (!SmartDrivers::SetSineTableModulation(drive, config, reply))
+		{
+			return GCodeResult::error;
+		}
+	}
+	else
+	{
+		reply.printf("Driver[%u] modulation: amplitude=%u, offset=%d, modulation=%f", drive, config.amplitude, config.offset, (double)config.modulation);
+	}
+# endif
+#endif
+
 	return GCodeResult::ok;
 }
 
