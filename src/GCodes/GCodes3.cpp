@@ -1105,7 +1105,7 @@ GCodeResult GCodes::ConfigureLocalDriver(GCodeBuffer& gb, const StringRef& reply
 
 GCodeResult GCodes::ConfigureLocalDriverBasicParameters(GCodeBuffer& gb, const StringRef& reply, uint8_t drive) THROWS(GCodeException)
 {
-	if (gb.SeenAny("RSJ"))
+	if (gb.SeenAny("RS"))
 	{
 		if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 		{
@@ -1373,7 +1373,6 @@ GCodeResult GCodes::ConfigureLocalDriverModulation(GCodeBuffer& gb, const String
 # if SUPPORT_TMC51xx
 	uint32_t val;
 	int32_t iVal;
-	float fVal = 0;
 
 	ModulationConfig config = SmartDrivers::GetModulationConfig(drive);
 
@@ -1387,9 +1386,14 @@ GCodeResult GCodes::ConfigureLocalDriverModulation(GCodeBuffer& gb, const String
 		config.offset = iVal;
 	}
 
-	if (gb.TryGetLimitedFValue('J', fVal, seen, -0.2, 0.2))
+	bool seenJ = false;
+	float fVals[2];
+	gb.TryGetFloatArray('J', 2, fVals, seenJ, true);
+	if (seenJ)
 	{
-		config.modulation = fVal;
+		seen = true;
+		config.modulation[0] = fVals[0];
+		config.modulation[1] = fVals[1];
 	}
 
 	if (seen)
@@ -1401,7 +1405,8 @@ GCodeResult GCodes::ConfigureLocalDriverModulation(GCodeBuffer& gb, const String
 	}
 	else
 	{
-		reply.printf("Driver[%u] modulation: amplitude=%u, offset=%d, modulation=%f", drive, config.amplitude, config.offset, (double)config.modulation);
+		reply.printf("Driver[%u] modulation: amplitude=%u, offset=%d, modulation=%f:%f",
+				drive, config.amplitude, config.offset, (double)config.modulation[0], (double)config.modulation[1]);
 	}
 # endif
 #endif

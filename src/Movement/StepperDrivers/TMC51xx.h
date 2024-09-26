@@ -18,7 +18,7 @@ struct ModulationConfig
 {
 	uint8_t amplitude = 248;
 	int16_t offset = 0;
-	float modulation = 0;
+	float modulation[2] = {0};
 };
 
 namespace SmartDrivers

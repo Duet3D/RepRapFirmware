@@ -907,18 +907,18 @@ bool TmcDriverState::EnablePhaseStepping(bool enable) noexcept
 
 #endif
 
-static float LutModulationFunction(uint8_t pos, float modulation)
+static float LutModulationFunction(uint8_t pos, float modulationArr[2])
 {
 	constexpr float twoPi = 2.0f * Pi;
 	constexpr float recip = 1.0f / 1024;
 
-	return (sinf((twoPi * pos + Pi) * recip)) + (modulation * sinf(3 * twoPi * pos * recip)) +
-		   (modulation * sinf(5 * twoPi * pos * recip));
+	return (sinf((twoPi * pos + Pi) * recip)) + (modulationArr[0] * sinf(3 * twoPi * pos * recip)) +
+		   (modulationArr[1] * sinf(5 * twoPi * pos * recip));
 }
 
 bool TmcDriverState::SetSineTableModulation(ModulationConfig config, const StringRef& reply) noexcept
 {
-	debugPrintf("Modulation config: amplitude=%u, offset=%d, modulation=%f\n", config.amplitude, config.offset, (double)config.modulation);
+	debugPrintf("Modulation config: amplitude=%u, offset=%d, modulation=%f:%f\n", config.amplitude, config.offset, (double)config.modulation[0], (double)config.modulation[1]);
 	uint8_t W[] = {0, 0, 0, 0};
 	uint8_t X[] = {0, 0, 0};
 
