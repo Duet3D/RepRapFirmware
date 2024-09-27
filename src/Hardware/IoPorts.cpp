@@ -226,7 +226,7 @@ bool IoPort::Allocate(const char *_ecv_array pn, const StringRef& reply, PinUsed
 	const char *_ecv_array const fullPinName = pn;			// the full pin name less the inversion and pullup flags
 
 #if SUPPORT_CAN_EXPANSION
-	if (isdigit(*pn))
+	if (isDigit(*pn))
 	{
 		const uint32_t expansionNumber = StrToU32(pn, &pn);
 		if (*pn != '.')
@@ -525,7 +525,7 @@ uint16_t IoPort::ReadAnalog() const noexcept
 
 	size_t numToSkip = prefix;
 	unsigned int boardAddress = 0;
-	while ((bool)isdigit(portName[numToSkip]))
+	while (isDigit(portName[numToSkip]))
 	{
 		boardAddress = (boardAddress * 10) + (unsigned int)(portName[numToSkip] - '0');
 		++numToSkip;

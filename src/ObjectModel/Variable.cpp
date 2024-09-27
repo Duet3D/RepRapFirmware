@@ -30,14 +30,14 @@ bool Variable::IsValidVariableName(const char *_ecv_array str) noexcept
 		return false;
 	}
 
-	if (!isalpha(str[0]))
+	if (!isAlpha(str[0]))
 	{
 		return false;
 	}
 
 	for (size_t i = 1; i < len; i++)
 	{
-		if (!isalnum(str[i]) && str[i] != '_')
+		if (!isAlnum(str[i]) && str[i] != '_')
 		{
 			return false;
 		}

@@ -687,7 +687,7 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 
 	// Get the identifier
 	char c = gb.buffer[readPointer];
-	if (!(bool)isalpha(c))
+	if (!isAlpha(c))
 	{
 		throw ConstructParseException("expected a new variable name");
 	}
@@ -697,7 +697,7 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 		varName.cat(c);
 		++readPointer;
 		c = gb.buffer[readPointer];
-	} while ((bool)isalpha(c) || (bool)isdigit(c) || c == '_' );
+	} while (isAlnum(c) || c == '_' );
 
 	// Expect '='
 	SkipWhiteSpace();
@@ -746,7 +746,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 
 	// Get the identifier
 	char c = gb.buffer[readPointer];
-	if (!(bool)isalpha(c))
+	if (!isAlpha(c))
 	{
 		throw ConstructParseException("expected a new variable name");
 	}
@@ -757,7 +757,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 		varName.cat(c);
 		++readPointer;
 		c = gb.buffer[readPointer];
-	} while ((bool)isalpha(c) || (bool)isdigit(c) || c == '_' );
+	} while (isAlnum(c) || c == '_' );
 
 	// Look up the identifier
 	Variable *_ecv_null const var = vset->Lookup(varName.c_str(), false);
@@ -986,7 +986,7 @@ void StringParser::DecodeCommand() noexcept
 			{
 				++parameterStart;
 			}
-			if (isdigit(gb.buffer[parameterStart]))
+			if (isDigit(gb.buffer[parameterStart]))
 			{
 				hasCommandNumber = true;
 				// Read the number after the command letter
@@ -996,7 +996,7 @@ void StringParser::DecodeCommand() noexcept
 					commandNumber = (10 * commandNumber) + (gb.buffer[parameterStart] - '0');
 					++parameterStart;
 				}
-				while (isdigit(gb.buffer[parameterStart]));
+				while (isDigit(gb.buffer[parameterStart]));
 				if (negative)
 				{
 					commandNumber = -commandNumber;
@@ -1006,7 +1006,7 @@ void StringParser::DecodeCommand() noexcept
 				if (gb.buffer[parameterStart] == '.')
 				{
 					++parameterStart;
-					if (isdigit(gb.buffer[parameterStart]))
+					if (isDigit(gb.buffer[parameterStart]))
 					{
 						commandFraction = gb.buffer[parameterStart] - '0';
 						++parameterStart;
@@ -1040,7 +1040,7 @@ void StringParser::DecodeCommand() noexcept
 			 && (   reprap.GetGCodes().GetMachineType() == MachineType::cnc			// Fanuc style CNC
 				 || reprap.GetGCodes().GetMachineType() == MachineType::laser		// LaserWeb style
 				)
-			 && !isalpha(gb.buffer[commandStart + 1])								// make sure it isn't an if-command or other meta command
+			 && !isAlpha(gb.buffer[commandStart + 1])								// make sure it isn't an if-command or other meta command
 			)
 	{
 		// Fanuc or LaserWeb-style GCode, repeat the existing G0/G1/G2/G3 command with the new parameters
@@ -1100,7 +1100,7 @@ void StringParser::FindParameters() noexcept
 					const char c2 = (char)toupper(c);
 					if (escaped)
 					{
-						if (c2 >= 'A' && c2 <= (char)toupper(HighestAxisLetter) && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
+						if (c2 >= 'A' && c2 <= (char)toupper(HighestAxisLetter) && (c2 != 'E' || commandEnd == parameterStart || !isDigit(gb.buffer[commandEnd - 1])))
 						{
 							parametersPresent.SetBit(c2 - ('A' - 26));
 						}
@@ -1109,7 +1109,7 @@ void StringParser::FindParameters() noexcept
 					{
 						break;
 					}
-					else if (c2 >= 'A' && c2 <= 'Z' && (c2 != 'E' || commandEnd == parameterStart || !isdigit(gb.buffer[commandEnd - 1])))
+					else if (c2 >= 'A' && c2 <= 'Z' && (c2 != 'E' || commandEnd == parameterStart || !isDigit(gb.buffer[commandEnd - 1])))
 					{
 						parametersPresent.SetBit(c2 - 'A');
 					}
@@ -1259,7 +1259,7 @@ bool StringParser::Seen(char c) noexcept
 				if (   inBrackets == 0
 					&& (char)toupper(b) == c
 					&& escaped == wantLowerCase
-					&& (c != 'E' || (unsigned int)readPointer == parameterStart || !(bool)isdigit(gb.buffer[readPointer - 1]))
+					&& (c != 'E' || (unsigned int)readPointer == parameterStart || !isDigit(gb.buffer[readPointer - 1]))
 				   )
 				{
 					++readPointer;
@@ -1506,7 +1506,7 @@ void StringParser::InternalGetQuotedString(const StringRef& str) THROWS(GCodeExc
 		}
 		else if (c == '\'')
 		{
-			if ((bool)isalpha(gb.buffer[readPointer]))
+			if (isAlpha(gb.buffer[readPointer]))
 			{
 				// Single quote before an alphabetic character forces that character to lower case
 				c = (char)tolower(gb.buffer[readPointer++]);
@@ -2060,7 +2060,7 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeE
 									if ((letter != 'P' || codeRunning != 98) && Seen(letter))
 									{
 										const char c = gb.buffer[readPointer];
-										if (!(bool)isdigit(c) && c != '"' && c != '{' && c != '.' && c != '-' && c != '+')
+										if (!isDigit(c) && c != '"' && c != '{' && c != '.' && c != '-' && c != '+')
 										{
 											throw ConstructParseException("invalid value for parameter '%c'", (uint32_t)c);
 										}

@@ -256,7 +256,7 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 
 	case '#':
 		AdvancePointer();
-		if (isalpha(SkipWhiteSpace()))
+		if (isAlpha(SkipWhiteSpace()))
 		{
 			// Probably applying # to an object model array, so optimise by asking the OM for just the length
 			CheckStack(StackUsage::ParseIdentifierExpression);
@@ -289,11 +289,11 @@ void ExpressionParser::ParseInternal(ExpressionValue& val, bool evaluate, uint8_
 		break;
 
 	default:
-		if (isdigit(c))						// looks like a number
+		if (isDigit(c))						// looks like a number
 		{
 			ParseNumber(val);
 		}
-		else if (isalpha(c))				// looks like a variable name
+		else if (isAlpha(c))				// looks like a variable name
 		{
 			CheckStack(StackUsage::ParseIdentifierExpression);
 			ParseIdentifierExpression(val, evaluate, false, false);
@@ -1005,7 +1005,7 @@ void ExpressionParser::ReadArrayElementFromFile(ExpressionValue& rslt, LineReade
 				rslt.SetStringHandle(StringHandle(element.c_str()));
 			}
 		}
-		else if (reader.CurrentCharacter() == '+' || reader.CurrentCharacter() == '-' || isdigit(reader.CurrentCharacter()))
+		else if (reader.CurrentCharacter() == '+' || reader.CurrentCharacter() == '-' || isDigit(reader.CurrentCharacter()))
 		{
 			NumericConverter conv;
 			err = !conv.Accumulate(reader.CurrentCharacter(), NumericConverter::AcceptSignedFloat | NumericConverter::AcceptHex,
@@ -1362,7 +1362,7 @@ void ExpressionParser::ParseNumber(ExpressionValue& rslt) noexcept
 void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool evaluate, bool applyLengthOperator, bool applyExists) THROWS(GCodeException)
 {
 	char c = CurrentCharacter();
-	if (!isalpha(c))
+	if (!isAlpha(c))
 	{
 		ThrowParseException("expected an identifier");
 	}
@@ -1415,7 +1415,7 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 			hadIdentifierSpace = isIdentifierCharacter;
 			AdvancePointer();
 		}
-		isIdentifierCharacter = (isalpha(c) || isdigit(c) || c == '_');
+		isIdentifierCharacter = (isAlnum(c) || c == '_');
 		if (isIdentifierCharacter && hadIdentifierSpace)
 		{
 			break;													// don't allow spaces inside identifiers
@@ -2057,7 +2057,7 @@ void ExpressionParser::ParseQuotedString(ExpressionValue& rslt) THROWS(GCodeExce
 		}
 		else if (c == '\'')
 		{
-			if (isalpha(CurrentCharacter()))
+			if (isAlpha(CurrentCharacter()))
 			{
 				// Single quote before an alphabetic character forces that character to lower case
 				c = tolower(CurrentCharacter());

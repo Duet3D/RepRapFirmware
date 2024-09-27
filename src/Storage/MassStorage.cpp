@@ -154,7 +154,7 @@ static FileStore files[MAX_FILES];
 /*static*/ bool MassStorage::CombineName(const StringRef& outbuf, const char *_ecv_array _ecv_null directory, const char *_ecv_array fileName) noexcept
 {
 	bool hadError = false;
-	if (directory != nullptr && directory[0] != 0 && fileName[0] != '/' && (strlen(fileName) < 2 || !(bool)isdigit(fileName[0]) || fileName[1] != ':'))
+	if (directory != nullptr && directory[0] != 0 && fileName[0] != '/' && (strlen(fileName) < 2 || !isDigit(fileName[0]) || fileName[1] != ':'))
 	{
 		hadError = outbuf.copy(directory);
 		if (!hadError)
@@ -247,7 +247,7 @@ static bool VolumeUpdated(const char *_ecv_array path) noexcept
 #endif
 	   )
 	{
-		const unsigned int volume = ((bool)isdigit(path[0]) && path[1] == ':') ? path[0] - '0' : 0;
+		const unsigned int volume = (isDigit(path[0]) && path[1] == ':') ? path[0] - '0' : 0;
 		if (volume < ARRAY_SIZE(info))
 		{
 			++info[volume].seq;
@@ -917,7 +917,7 @@ bool MassStorage::EnsurePath(const char *_ecv_array filePath, bool messageIfFail
 	String<MaxFilenameLength> filePathCopy;
 	filePathCopy.copy(filePath);
 
-	size_t i = (isdigit(filePathCopy[0]) && filePathCopy[1] == ':') ? 2 : 0;
+	size_t i = (isDigit(filePathCopy[0]) && filePathCopy[1] == ':') ? 2 : 0;
 	if (filePathCopy[i] == '/')
 	{
 		++i;
