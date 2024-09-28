@@ -63,6 +63,7 @@ private:
 	// Parse table entry methods
 	void ProcessGeneratedBy(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
 	void ProcessLayerHeight(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
+	void ProcessObjectHeight(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
 	void ProcessNumLayers(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
 	void ProcessJobTime(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
 	void ProcessSimulatedTime(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
