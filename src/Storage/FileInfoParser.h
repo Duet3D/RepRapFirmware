@@ -62,8 +62,6 @@ private:
 		pre(pStart.base == pEnd.base; pStart < pEnd; atLineStart)
 		post(result.base == pStart.base; result <= pEnd);
 
-	bool FindHeight(const char *_ecv_array bufp, size_t len) noexcept;
-
 	// Parse table entry methods
 	void ProcessGeneratedBy(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
 	void ProcessLayerHeight(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
@@ -99,6 +97,7 @@ private:
 	FilePosition bufferStartFilePosition;
 	unsigned int numThumbnailsStored;
 	bool atLineStart;
+	bool foundHeightComment;
 
 	// Stats for performance monitoring
 	uint32_t accumulatedParseTime, accumulatedReadTime, accumulatedSeekTime, prepTime;

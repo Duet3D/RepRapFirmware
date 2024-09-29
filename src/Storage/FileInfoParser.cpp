@@ -175,6 +175,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFi
 		numThumbnailsStored = 0;
 		parsedFileInfo.numFilaments = 0;
 		atLineStart = true;
+		foundHeightComment = false;
 
 		headerBytesProcessed = trailerBytesProcessed = 0;
 		prepTime = millis() - now;
@@ -367,56 +368,42 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 {
 	while (pStart < pEnd)
 	{
-		bool skipRestOfLine = true;									// set default
+		const char *_ecv_array lineStart = pStart;
+		const char *_ecv_array lineEnd = lineStart + 1;
+
+		// Find the end of the line
+		while (lineEnd < pEnd && *lineEnd != '\r' && *lineEnd != '\n')
+		{
+			++lineEnd;
+		}
+
+		if (lineEnd == pEnd)
+		{
+			if (lineStart >= buf + GCodeReadSize)
+			{
+				// This line starts within the last GCODE_OVERLAP_SIZE of the buffer, so we can safely leave processing it until the next bufferfull
+				return lineStart;
+			}
+
+			// This line is longer than GCODE_OVERLAP_SIZE. Ignore it and return, flagging that we are not at a line start.
+			atLineStart = false;
+			return pEnd;
+		}
+
 		char c = *pStart++;
 		switch (c)
 		{
 		case ';':
 			// Found a whole-line comment
 			{
-				const char *_ecv_array commentStart = pStart - 1;
 				while (pStart < pEnd && ((c = *pStart) == ' ' || c == '-'))
 				{
 					++pStart;										// skip spaces and dashes after the leading semicolon
 				}
 
-				if (pStart == pEnd)
-				{
-					if (commentStart >= buf + GCodeReadSize)
-					{
-						// This comment starts within the last GCODE_OVERLAP_SIZE of the buffer, so we can safely leave processing it until the next bufferfull
-						return commentStart;
-					}
-
-					// This comment line is longer than GCODE_OVERLAP_SIZE. Ignore it and return, flagging that we are not at a line start.
-					atLineStart = false;
-					return pEnd;
-				}
-
 				if (isAlpha(c))										// all keywords we are interested in start with a letter
 				{
-					// Find the length of the rest of the line and check that it ends within the buffer
 					const char *_ecv_array kStart = pStart;			// save keyword start for later
-					while (pStart < pEnd && *pStart != '\r' && *pStart != '\n') { ++pStart; }
-
-					if (pStart == pEnd)
-					{
-						// We didn't find a line terminator
-						if (commentStart >= buf + GCodeReadSize)
-						{
-							// This comment starts within the last GCODE_OVERLAP_SIZE of the buffer, so we can safely leave processing it until the next bufferfull
-							return commentStart;
-						}
-
-						// This comment line is longer than GCODE_OVERLAP_SIZE. Ignore it and return, flagging that we are not at a line start.
-						atLineStart = false;
-						return pEnd;
-					}
-
-					skipRestOfLine = false;							// we've already found the end of this line
-
-					// Skip the line ending
-					while (pStart < pEnd && (*pStart == '\r' || *pStart == '\n')) { ++pStart; }
 
 					// If we are not parsing the header and we can see that there is a G- or M-command after this comment, save time by not parsing the comment.
 					// This saves time by not processing most comments in the GCode file when we haven't yet reached the footer.
@@ -454,36 +441,48 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 			}
 			break;
 
-		case '\r':
-		case '\n':
-			skipRestOfLine = false;
-			break;							// skip the blank line or 2nd line terminator
-
-		case 'N':
 		case 'G':
+			if (!parsingHeader && !foundHeightComment)
+			{
+				// If it's a G0 or G1 Z command with Z then record the height (note that Cura uses e.g. "G0 X121.297 Y73.506 Z17.7" when changing layers)
+				if ((*pStart == '1' || *pStart == '0') && !isDigit(pStart[1]))
+				{
+					++pStart;
+					while (*pStart != 'Z' && *pStart != '\r' && *pStart != '\n' && *pStart != ';') { ++pStart; }
+					if (*pStart == 'Z')
+					{
+						const char *_ecv_array q;
+						const float height = SafeStrtof(pStart + 3, &q);
+						if (!std::isnan(height) && !std::isinf(height) && height > parsedFileInfo.objectHeight)
+						{
+							// If the Z movement command ends in ";E or "; E" then ignore it
+							while (*q != ';' && *q != '\r' && *q != '\n' ) { ++q; }
+							if (*q != ';' || (q[1] != 'E' && (q[1] != ' ' || q[2] != 'E')))
+							{
+								parsedFileInfo.objectHeight = height;
+							}
+						}
+					}
+				}
+				break;
+			}
+			// no break
 		case 'M':
 		case 'T':
 			if (parsingHeader)
 			{
 				stopped = true;
-				return pStart;
+				return lineStart;
 			}
+			break;
+
+		default:
 			break;
 		}
 
-		if (skipRestOfLine)
-		{
-			while (pStart < pEnd)
-			{
-				c = *pStart++;
-				if (c == '\n' || c == '\r') { break; }
-			}
-			if (pStart == pEnd)
-			{
-				atLineStart = false;
-				return pEnd;
-			}
-		}
+		// Skip the line ending
+		pStart = lineEnd;
+		while (pStart < pEnd && (*pStart == '\r' || *pStart == '\n')) { ++pStart; }
 	}
 	return pEnd;
 }
@@ -559,6 +558,7 @@ void FileInfoParser::ProcessObjectHeight(const char *_ecv_array k, const char *_
 	if (tailPtr != p && !std::isnan(val) && !std::isinf(val))	// if we found and converted a number
 	{
 		parsedFileInfo.objectHeight = val;
+		foundHeightComment = true;
 	}
 }
 
@@ -854,119 +854,6 @@ void FileInfoParser::ProcessFilamentUsed(const char *_ecv_array k, const char *_
 void FileInfoParser::ProcessCustomInfo(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept
 {
 	//TODO
-}
-
-// Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.
-// This parsing algorithm needs to be fast. The old one sometimes took 5 seconds or more to parse about 120K of data.
-// To speed up parsing, we now parse forwards from the start of the buffer. This means we can't stop when we have found a G1 Z command,
-// we have to look for a later G1 Z command in the buffer. But it is faster in the (common) case that we don't find a match in the buffer at all.
-bool FileInfoParser::FindHeight(const char* bufp, size_t len) noexcept
-{
-	bool foundHeight = false;
-	bool inRelativeMode = false;
-	for(;;)
-	{
-		// Skip to next newline
-		char c;
-		while (len >= 6 && (c = *bufp) != '\r' && c != '\n')
-		{
-			++bufp;
-			--len;
-		}
-
-		// Skip the newline and any leading spaces
-		do
-		{
-			++bufp;			// skip the newline
-			--len;
-			c = *bufp;
-		} while (len >= 5 && (c == ' ' || c == '\t' || c == '\r' || c == '\n'));
-
-		if (len < 5)
-		{
-			break;			// not enough characters left for a G1 Zx.x command
-		}
-
-		++bufp;				// move to 1 character beyond c
-		--len;
-
-		// In theory we should skip N and a line number here if they are present, but no slicers seem to generate line numbers
-		if (c == 'G')
-		{
-			if (inRelativeMode)
-			{
-				// We have seen a G91 in this buffer already, so we are only interested in G90 commands that switch back to absolute mode
-				if (bufp[0] == '9' && bufp[1] == '0' && (bufp[2] < '0' || bufp[2] > '9'))
-				{
-					// It's a G90 command so go back to absolute mode
-					inRelativeMode = false;
-				}
-			}
-			else if (*bufp == '1' || *bufp == '0')
-			{
-				// It could be a G0 or G1 command
-				++bufp;
-				--len;
-				if (*bufp < '0' || *bufp > '9')
-				{
-					// It is a G0 or G1 command. See if it has a Z parameter.
-					while (len >= 4)
-					{
-						c = *bufp;
-						if (c == 'Z')
-						{
-							const char* zpos = bufp + 1;
-							// Check special case of this code ending with ";E" or "; E" - ignore such codes
-							while (len > 2 && *bufp != '\n' && *bufp != '\r' && *bufp != ';')
-							{
-								++bufp;
-								--len;
-							}
-							if ((len >= 2 && StringStartsWith(bufp, ";E")) || (len >= 3 && StringStartsWith(bufp, "; E")))
-							{
-								// Ignore this G1 Z command
-							}
-							else
-							{
-								float objectHeight = SafeStrtof(zpos, nullptr);
-								if (!std::isnan(objectHeight) && !std::isinf(objectHeight))
-								{
-									parsedFileInfo.objectHeight = objectHeight;
-									foundHeight = true;
-								}
-							}
-							break;		// carry on looking for a later G1 Z command
-						}
-						if (c == ';' || c == '\n' || c == '\r')
-						{
-							break;		// no Z parameter
-						}
-						++bufp;
-						--len;
-					}
-				}
-			}
-			else if (bufp[0] == '9' && bufp[1] == '1' && (bufp[2] < '0' || bufp[2] > '9'))
-			{
-				// It's a G91 command
-				inRelativeMode = true;
-			}
-		}
-		else if (c == ';')
-		{
-			static const char kisslicerHeightString[] = " END_LAYER_OBJECT z=";
-			if (len > 31 && StringStartsWithIgnoreCase(bufp, kisslicerHeightString))
-			{
-				float objectHeight = SafeStrtof(bufp + sizeof(kisslicerHeightString)/sizeof(char) - 1, nullptr);
-				if (!std::isnan(objectHeight) && !std::isinf(objectHeight))
-				{
-					parsedFileInfo.objectHeight = objectHeight;
-					return true;
-				}
-			}
-		}
-	}
-	return foundHeight;
 }
 
 #endif
