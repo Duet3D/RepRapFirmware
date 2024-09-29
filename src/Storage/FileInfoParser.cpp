@@ -41,6 +41,7 @@ const FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
 	{ 	"num_layers",								&FileInfoParser::ProcessNumLayers,			0 },
 	{ 	"NUM_LAYERS",								&FileInfoParser::ProcessNumLayers,			0 },
 	{ 	"total layer number",						&FileInfoParser::ProcessNumLayers,			0 },		// OrcaSlicer						"; total layer number: 100"
+	{	"Layer count",								&FileInfoParser::ProcessNumLayers,			0 },		// Fusion 3							";Layer count: 125"
 
 	// Estimated job time keywords
 	{ 	"estimated printing time (normal mode)",	&FileInfoParser::ProcessJobTime,			0 },		// PrusaSlicer later versions		"; estimated printing time (normal mode) = 2d 1h 5m 24s"
@@ -54,7 +55,7 @@ const FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
 	{ 	"Calculated-during-export Build Time",		&FileInfoParser::ProcessJobTime,			0 },		// KISSSlicer 2 alpha				"; Calculated-during-export Build Time: 130.62 minutes"
 	{ 	"Print Time",								&FileInfoParser::ProcessJobTime,			0 },		// Ideamaker
 	{ 	"PRINT.TIME",								&FileInfoParser::ProcessJobTime,			0 },		// Patio
-	{ 	"Print time",								&FileInfoParser::ProcessJobTime,			0 },		// Fusion 360
+	{ 	"Print time",								&FileInfoParser::ProcessJobTime,			0 },		// Fusion 360						";Print time: 40m:36s"
 	{ 	"total print time (s)",						&FileInfoParser::ProcessJobTime,			0 },		// Matter Control
 
 	// Simulated job time keyword
@@ -71,13 +72,14 @@ const FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
 	{	"Filament used",							&FileInfoParser::ProcessFilamentUsed,		0 },		// Cura								";Filament used: 0m"
 	{	"Filament length",							&FileInfoParser::ProcessFilamentUsed,		1 },		// S3D v4							";   Filament length: 13572.2 mm (13.57 m)"
 	{	"Material Length",							&FileInfoParser::ProcessFilamentUsed,		1 },		// S3D v5 ??? CHECK CASE OF FIRST LETTER
+	{	"Extruder",									&FileInfoParser::ProcessFilamentUsed,		5 },		// Fusion 360 						";Extruder 1 material used: 1811mm"
 	{	"Ext",										&FileInfoParser::ProcessFilamentUsed,		2 },		// Kisslicer newer versions
 	{	"Estimated Build Volume",					&FileInfoParser::ProcessFilamentUsed,		3 },		// Kisslicer older versions
 	{	"Material#",								&FileInfoParser::ProcessFilamentUsed,		4 },		// Ideamaker						";Material#1 Used: 868.0"
-	{	"Extruder",									&FileInfoParser::ProcessFilamentUsed,		5 },		// Fusion 360 						";Extruder 1 material used: 1811mm"
 
 	// Object height keywords
 	{	"max_z_height",								&FileInfoParser::ProcessObjectHeight,		0 },		// OrcaSlicer						"; max_z_height: 20.00"
+	{	"Height",									&FileInfoParser::ProcessObjectHeight,		0 },		// Fusion 3							";Height: 250mm"
 };
 
 
@@ -91,7 +93,7 @@ FileInfoParser::FileInfoParser() noexcept
 // This following method needs to be called repeatedly until it returns true - this may take a few runs
 GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
 {
-	MutexLocker lock(parserMutex, MAX_FILEINFO_PROCESS_TIME);
+	MutexLocker lock(parserMutex, MaxFileinfoProcessTime);
 	if (!lock.IsAcquired())
 	{
 		return GCodeResult::notFinished;
@@ -139,13 +141,6 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 #endif
 		parsedFileInfo.isValid = true;
 
-		// Record some debug values here
-		if (reprap.Debug(Module::PrintMonitor))
-		{
-			accumulatedReadTime = accumulatedParseTime = 0;
-			reprap.GetPlatform().MessageF(UsbMessage, "-- Parsing file %s --\n", filePath);
-		}
-
 		// If the file is empty or not a G-Code file, we don't need to parse anything
 		constexpr const char *GcodeFileExtensions[] = { ".gcode", ".g", ".gco", ".gc", ".nc" };
 		bool isGcodeFile = false;
@@ -165,21 +160,26 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 			info = parsedFileInfo;
 			return GCodeResult::ok;
 		}
+
 		parseState = parsingHeader;
-		scanStartOffset = GCODE_OVERLAP_SIZE;
+		scanStartOffset = GCodeOverlapSize;
 		numThumbnailsStored = 0;
-		numFilamentsFound = 0;
+		parsedFileInfo.numFilaments = 0;
 		atLineStart = true;
+
+		accumulatedReadTime = accumulatedParseTime = accumulatedSeekTime = 0;
+		headerBytesProcessed = trailerBytesProcessed = 0;
+
+		if (reprap.Debug(Module::PrintMonitor))
+		{
+			reprap.GetPlatform().MessageF(UsbMessage, "Parsing file %s\n", filePath);
+		}
 	}
 
 	// Getting file information take a few runs. Speed it up when we are not printing by calling it several times.
 	const uint32_t loopStartTime = millis();
 	do
 	{
-#if 0
-		size_t sizeToRead, sizeToScan;										// number of bytes we want to read and scan in this go
-#endif
-
 		switch (parseState)
 		{
 		case parsingHeader:
@@ -194,98 +194,20 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 					return GCodeResult::warning;
 				}
 
-				if (reachedEnd) { parseState = seeking; }
-			}
-
-#if 0
-			{
-				bool headerInfoComplete = true;
-
-				// Read a chunk from the header. On the first run only process GCODE_READ_SIZE bytes, but use overlap next times.
-				sizeToRead = (size_t)min<FilePosition>(fileBeingParsed->Length() - fileBeingParsed->Position(), GCODE_READ_SIZE);
-				if (fileOverlapLength > 0)
+				if (reachedEnd)
 				{
-					sizeToScan = sizeToRead + fileOverlapLength;
-				}
-				else
-				{
-					sizeToScan = sizeToRead;
-				}
-
-				const FilePosition bufferStartFileOffset = fileBeingParsed->Position() - fileOverlapLength;
-				const int nbytes = fileBeingParsed->Read(&buf[fileOverlapLength], sizeToRead);
-				if (nbytes != (int)sizeToRead)
-				{
-					reprap.GetPlatform().MessageF(WarningMessage, "Failed to read header of G-Code file \"%s\"\n", filePath);
-					parseState = notParsing;
-					fileBeingParsed->Close();
-					info = parsedFileInfo;
-					return GCodeResult::warning;
-				}
-				buf[sizeToScan] = 0;
-
-				// Record performance data
-				uint32_t now = millis();
-				accumulatedReadTime += now - startTime;
-				startTime = now;
-
-				// Search for filament usage (Cura puts it at the beginning of a G-code file)
-				if (parsedFileInfo.numFilaments == 0)
-				{
-					parsedFileInfo.numFilaments = FindFilamentUsed(buf);
-					headerInfoComplete &= (parsedFileInfo.numFilaments != 0);
-				}
-
-				// Look for layer height
-				if (parsedFileInfo.layerHeight == 0.0)
-				{
-					headerInfoComplete &= FindLayerHeight(buf);
-				}
-
-				// Look for slicer program
-				if (parsedFileInfo.generatedBy.IsEmpty())
-				{
-					headerInfoComplete &= FindSlicerInfo(buf);
-				}
-
-				// Look for print time
-				if (parsedFileInfo.printTime == 0)
-				{
-					headerInfoComplete &= FindPrintTime(buf);
-				}
-
-				// Look for thumbnail images
-				headerInfoComplete &= FindThumbnails(buf, bufferStartFileOffset);
-
-				// Keep track of the time stats
-				accumulatedParseTime += millis() - startTime;
-
-				// Can we proceed to the footer? Don't scan more than the first 4KB of the file
-				FilePosition pos = fileBeingParsed->Position();
-				if (headerInfoComplete || pos >= GCODE_HEADER_SIZE || pos == fileBeingParsed->Length())
-				{
-					// Yes - see if we need to output some debug info
-					if (reprap.Debug(Module::PrintMonitor))
+					if (parsedFileInfo.objectHeight == 0.0 && parsedFileInfo.layerHeight != 0.0 && parsedFileInfo.numLayers != 0)
 					{
-						reprap.GetPlatform().MessageF(UsbMessage, "Header complete, processed %lu bytes, read time %.3fs, parse time %.3fs\n",
-											fileBeingParsed->Position(), (double)((float)accumulatedReadTime/1000.0), (double)((float)accumulatedParseTime/1000.0));
+						parsedFileInfo.objectHeight = parsedFileInfo.layerHeight * parsedFileInfo.numLayers;
 					}
-
-					// Go to the last chunk and proceed from there on
-					const FilePosition seekFromEnd = ((fileBeingParsed->Length() - 1) % GCODE_READ_SIZE) + 1;
-					nextSeekPos = fileBeingParsed->Length() - seekFromEnd;
-					accumulatedSeekTime = accumulatedReadTime = accumulatedParseTime = 0;
-					fileOverlapLength = 0;
+					else if (parsedFileInfo.objectHeight > 0.0 && parsedFileInfo.layerHeight == 0.0 && parsedFileInfo.numLayers != 0)		// Fusion 3 gives us height and number of layers in the header but not layer height
+					{
+						parsedFileInfo.layerHeight = parsedFileInfo.objectHeight/parsedFileInfo.numLayers;
+					}
 					parseState = seeking;
 				}
-				else
-				{
-					// No - copy the last chunk of the buffer for overlapping search
-					fileOverlapLength = min<size_t>(sizeToRead, GCODE_OVERLAP_SIZE);
-					memcpy(buf, &buf[sizeToRead - fileOverlapLength], fileOverlapLength);
-				}
 			}
-#endif
+
 			break;
 
 		case seeking:
@@ -301,41 +223,6 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 				info = parsedFileInfo;
 				return GCodeResult::warning;
 			}
-#if 0
-			// Seeking into a large file can take a long time using the FAT file system, so do it in stages
-			{
-#if HAS_MASS_STORAGE
-				FilePosition currentPos = fileBeingParsed->Position();
-				const uint32_t clsize = fileBeingParsed->ClusterSize();
-				if (currentPos/clsize > nextSeekPos/clsize)
-				{
-					// Seeking backwards over a cluster boundary, so in practice the seek will start from the start of the file
-					currentPos = 0;
-				}
-				// Seek at most 512 clusters at a time
-				const FilePosition maxSeekDistance = 512 * (FilePosition)clsize;
-				const bool doFullSeek = (nextSeekPos <= currentPos + maxSeekDistance);
-				const FilePosition thisSeekPos = (doFullSeek) ? nextSeekPos : currentPos + maxSeekDistance;
-#elif HAS_EMBEDDED_FILES
-				const bool doFullSeek = true;
-				const FilePosition thisSeekPos = nextSeekPos;
-#endif
-				const uint32_t startTime = millis();
-				if (!fileBeingParsed->Seek(thisSeekPos))
-				{
-					reprap.GetPlatform().MessageF(WarningMessage, "Could not seek from end of file \"%s\"\n", filePath);
-					parseState = notParsing;
-					fileBeingParsed->Close();
-					info = parsedFileInfo;
-					return GCodeResult::warning;
-				}
-				accumulatedSeekTime += millis() - startTime;
-				if (doFullSeek)
-				{
-					parseState = parsingFooter;
-				}
-			}
-#endif
 			break;
 
 		case parsingFooter:
@@ -352,108 +239,10 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 
 				if (reachedEnd)
 				{
-					parsedFileInfo.incomplete = false;
-					info = parsedFileInfo;
-					return GCodeResult::ok;
-				}
-			}
-#if 0
-			{
-				// Processing the footer. See how many bytes we need to read and if we can reuse the overlap
-				sizeToRead = (size_t)min<FilePosition>(fileBeingParsed->Length() - nextSeekPos, GCODE_READ_SIZE);
-				if (fileOverlapLength > 0)
-				{
-					memcpy(&buf[sizeToRead], buf, fileOverlapLength);
-					sizeToScan = sizeToRead + fileOverlapLength;
-				}
-				else
-				{
-					sizeToScan = sizeToRead;
-				}
-
-				// Read another chunk from the footer
-				uint32_t startTime = millis();
-				int nbytes = fileBeingParsed->Read(buf, sizeToRead);
-				if (nbytes != (int)sizeToRead)
-				{
-					reprap.GetPlatform().MessageF(WarningMessage, "Failed to read footer from G-Code file \"%s\"\n", filePath);
-					parseState = notParsing;
-					fileBeingParsed->Close();
-					info = parsedFileInfo;
-					return GCodeResult::warning;
-				}
-				buf[sizeToScan] = 0;
-
-				// Record performance data
-				uint32_t now = millis();
-				accumulatedReadTime += now - startTime;
-				startTime = now;
-
-				bool footerInfoComplete = true;
-
-				// Search for filament used
-				if (parsedFileInfo.numFilaments == 0)
-				{
-					parsedFileInfo.numFilaments = FindFilamentUsed(buf);
-					if (parsedFileInfo.numFilaments == 0)
-					{
-						footerInfoComplete = false;
-					}
-				}
-
-				// Search for layer height
-				if (parsedFileInfo.layerHeight == 0.0)
-				{
-					if (!FindLayerHeight(buf))
-					{
-						footerInfoComplete = false;
-					}
-				}
-
-				// Search for object height
-				if (parsedFileInfo.objectHeight == 0.0)
-				{
-					if (!FindHeight(buf, sizeToScan))
-					{
-						footerInfoComplete = false;
-					}
-				}
-
-				// Search for number of layers
-				if (parsedFileInfo.numLayers == 0)
-				{
-					// Number of layers should come before the object height
-					(void)FindNumLayers(buf, sizeToScan);
-				}
-
-				// Look for print time
-				if (parsedFileInfo.printTime == 0)
-				{
-					if (!FindPrintTime(buf) && fileBeingParsed->Length() - nextSeekPos <= GcodeFooterPrintTimeSearchSize)
-					{
-						footerInfoComplete = false;
-					}
-				}
-
-				// Look for simulated print time. It will always be right at the end of the file, so don't look too far back
-				if (parsedFileInfo.simulatedTime == 0)
-				{
-					if (!FindSimulatedTime(buf) && fileBeingParsed->Length() - nextSeekPos <= GcodeFooterPrintTimeSearchSize)
-					{
-						footerInfoComplete = false;
-					}
-				}
-
-				// Keep track of the time stats
-				accumulatedParseTime += millis() - startTime;
-
-				// If we've collected all details, scanned the last 192K of the file or if we cannot go any further, stop here.
-				if (footerInfoComplete || nextSeekPos == 0 || fileBeingParsed->Length() - nextSeekPos >= GCODE_FOOTER_SIZE)
-				{
 					if (reprap.Debug(Module::PrintMonitor))
 					{
-						reprap.GetPlatform().MessageF(UsbMessage, "Footer complete, processed %lu bytes, read time %.3fs, parse time %.3fs, seek time %.3fs\n",
-											fileBeingParsed->Length() - fileBeingParsed->Position() + GCODE_READ_SIZE,
+						reprap.GetPlatform().MessageF(UsbMessage, "Parsing complete, processed %lu header bytes and %lu trailer bytes, read time %.3fs, parse time %.3fs, seek time %.3fs\n",
+											headerBytesProcessed, trailerBytesProcessed,
 											(double)((float)accumulatedReadTime/1000.0), (double)((float)accumulatedParseTime/1000.0), (double)((float)accumulatedSeekTime/1000.0));
 					}
 					parseState = notParsing;
@@ -466,13 +255,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 					info = parsedFileInfo;
 					return GCodeResult::ok;
 				}
-
-				// Else go back further
-				fileOverlapLength = (size_t)min<FilePosition>(sizeToScan, GCODE_OVERLAP_SIZE);
-				nextSeekPos = (nextSeekPos <= GCODE_READ_SIZE) ? 0 : nextSeekPos - GCODE_READ_SIZE;
-				parseState = seeking;
 			}
-#endif
 			break;
 
 		default:	// should not get here
@@ -483,7 +266,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 			return GCodeResult::ok;
 		}
 		lastFileParseTime = millis();
-	} while (!reprap.GetPrintMonitor().IsPrinting() && lastFileParseTime - loopStartTime < MAX_FILEINFO_PROCESS_TIME);
+	} while (!reprap.GetPrintMonitor().IsPrinting() && lastFileParseTime - loopStartTime < MaxFileinfoProcessTime);
 
 	if (quitEarly)
 	{
@@ -504,18 +287,31 @@ bool FileInfoParser::ReadAndProcessFileChunk(bool parsingHeader, bool& reachedEn
 {
 	// Read a chunk of the file into the buffer after the data we have already.
 	// For efficiency, read complete 512byte sectors on 512byte sector boundaries, and read them into 32-bit aligned memory - that allows the SD card driver to DMA directly into the buffer.
-	bufferStartFilePosition = fileBeingParsed->Position() - GCODE_OVERLAP_SIZE;					// we need to keep this up to date so that we can record the file offsets of thumbnails
+	bufferStartFilePosition = fileBeingParsed->Position() - GCodeOverlapSize;					// we need to keep this up to date so that we can record the file offsets of thumbnails
 	const FilePosition sizeLeft = fileBeingParsed->Length() - fileBeingParsed->Position();
-	const size_t sizeToRead = (size_t)min<FilePosition>(sizeLeft, GCODE_READ_SIZE);
-	const int nbytes = fileBeingParsed->Read(buf + GCODE_OVERLAP_SIZE, sizeToRead);
+	const size_t sizeToRead = (size_t)min<FilePosition>(sizeLeft, GCodeReadSize);
+
+	const uint32_t now1 = millis();
+	const int nbytes = fileBeingParsed->Read(buf + GCodeOverlapSize, sizeToRead);
+	accumulatedReadTime += millis() - now1;
+
 	if (nbytes != (int)sizeToRead)
 	{
 		return false;
 	}
 
+	if (parsingHeader)
+	{
+		headerBytesProcessed += (unsigned int)nbytes;
+	}
+	else
+	{
+		trailerBytesProcessed += (unsigned int)nbytes;
+	}
+
 	const char *_ecv_array bufp = buf + scanStartOffset;
-	char *_ecv_array bufLim = buf + GCODE_OVERLAP_SIZE + (unsigned int)nbytes;
-	reachedEnd = (sizeLeft <= GCODE_READ_SIZE);
+	char *_ecv_array bufLim = buf + GCodeOverlapSize + (unsigned int)nbytes;
+	reachedEnd = (sizeLeft <= GCodeReadSize);
 	if (reachedEnd)
 	{
 		// This is the last read of the file, so append a '\n' terminator so that ScanBuffer can process the last line
@@ -536,21 +332,25 @@ bool FileInfoParser::ReadAndProcessFileChunk(bool parsingHeader, bool& reachedEn
 			}
 		}
 	}
+
+	const uint32_t now2 = millis();
 	const char *_ecv_array const pEnd = (bufp == bufLim) ? bufp : ScanBuffer(bufp, bufLim, parsingHeader, reachedEnd);
+	accumulatedParseTime += millis() - now2;
 
 	if (!reachedEnd && pEnd < bufLim)
 	{
-		scanStartOffset = GCODE_READ_SIZE - (bufLim - pEnd);
+		scanStartOffset = GCodeOverlapSize - (bufLim - pEnd);
 		memcpy(buf + scanStartOffset, pEnd, bufLim - pEnd);
 	}
 	else
 	{
-		scanStartOffset = GCODE_OVERLAP_SIZE;
+		scanStartOffset = GCodeOverlapSize;
 	}
 	if (reachedEnd && parsingHeader)
 	{
 		parsedFileInfo.headerSize = bufferStartFilePosition + (pEnd - buf);
 	}
+
 	return true;
 }
 
@@ -562,6 +362,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 {
 	while (pStart < pEnd)
 	{
+		bool skipRestOfLine = true;									// set default
 		char c = *pStart++;
 		switch (c)
 		{
@@ -571,33 +372,47 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 				const char *_ecv_array commentStart = pStart - 1;
 				while (pStart < pEnd && ((c = *pStart) == ' ' || c == '-'))
 				{
-					++pStart;					// skip spaces after the leading semicolon
+					++pStart;										// skip spaces and dashes after the leading semicolon
 				}
+
 				if (pStart == pEnd)
 				{
-					return commentStart;
+					if (commentStart >= buf + GCodeReadSize)
+					{
+						// This comment starts within the last GCODE_OVERLAP_SIZE of the buffer, so we can safely leave processing it until the next bufferfull
+						return commentStart;
+					}
+
+					// This comment line is longer than GCODE_OVERLAP_SIZE. Ignore it and return, flagging that we are not at a line start.
+					atLineStart = false;
+					return pEnd;
 				}
-				if (isAlpha(c))					// all keywords we are interested in start with a letter
+
+				if (isAlpha(c))										// all keywords we are interested in start with a letter
 				{
 					// Find the length of the rest of the line and check that it ends within the buffer
-					const char *_ecv_array kStart = pStart;
+					const char *_ecv_array kStart = pStart;			// save keyword start for later
 					while (pStart < pEnd && *pStart != '\r' && *pStart != '\n') { ++pStart; }
+
 					if (pStart == pEnd)
 					{
 						// We didn't find a line terminator
-						if (commentStart >= buf + GCODE_READ_SIZE)
+						if (commentStart >= buf + GCodeReadSize)
 						{
-							// This comment starts within the last GCODE_OVERLAP_SIZE of the buffer, so we can safely leave processing it until the next buffer full
+							// This comment starts within the last GCODE_OVERLAP_SIZE of the buffer, so we can safely leave processing it until the next bufferfull
 							return commentStart;
 						}
 
-						// This comment line is very long. Ignore it and return, flagging that we are not at a line start.
+						// This comment line is longer than GCODE_OVERLAP_SIZE. Ignore it and return, flagging that we are not at a line start.
 						atLineStart = false;
 						return pEnd;
 					}
 
+					skipRestOfLine = false;							// we've already found the end of this line
+
 					// pStart now points to the line terminator and kStart to the possible start of a key phrase.
-					// There is definitely a line terminator, and as line terminators do not occur in key phrases, it is safe to call strcmp
+					// There is definitely a line terminator, and as line terminators do not occur in key phrases, it is safe to call StringStartsWith
+					// This next bit is very inefficient because it compares each key phrase in turn with the text at 'p'.
 					for (const ParseTableEntry& pte : parseTable)
 					{
 						if (StringStartsWith(kStart, pte.key))
@@ -622,13 +437,14 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 							break;
 						}
 					}
+					++pStart;				// skip the line end
 				}
-				++pStart;					// skip the line end
 			}
 			break;
 
 		case '\r':
 		case '\n':
+			skipRestOfLine = false;
 			break;							// skip the blank line or 2nd line terminator
 
 		case 'N':
@@ -640,20 +456,21 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 				stopped = true;
 				return pStart;
 			}
-			// no break
-		default:
-			// Skip the rest of the line
-			while (pStart < pEnd && ((c = *pStart) != '\n' && c != '\r'))
+			break;
+		}
+
+		if (skipRestOfLine)
+		{
+			while (pStart < pEnd)
 			{
-				++pStart;
+				c = *pStart++;
+				if (c == '\n' || c == '\r') { break; }
 			}
 			if (pStart == pEnd)
 			{
 				atLineStart = false;
 				return pEnd;
 			}
-			++pStart;						// skip the line terminator
-			break;
 		}
 	}
 	return pEnd;
@@ -664,23 +481,25 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 bool FileInfoParser::FindEndComments() noexcept
 {
 	// Temporary code until we find something better
-	const FilePosition roundedDownLength = fileBeingParsed->Length() & ~(GCODE_READ_SIZE - 1);		// round down to a multiple of the read size
+	const FilePosition roundedDownLength = fileBeingParsed->Length() & ~(GCodeReadSize - 1);		// round file length down to a multiple of the read size
 	FilePosition pos;
-	if (roundedDownLength > parsedFileInfo.headerSize + GCODE_FOOTER_SIZE)
+	if (roundedDownLength > parsedFileInfo.headerSize + GCodeFooterSize)
 	{
 		// Usual case when the file is long
-		pos = roundedDownLength - GCODE_FOOTER_SIZE;
-		scanStartOffset = GCODE_OVERLAP_SIZE;
+		pos = roundedDownLength - GCodeFooterSize;
+		scanStartOffset = GCodeOverlapSize;
 	}
 	else
 	{
 		// Start scanning from just after the header
-		pos = parsedFileInfo.headerSize & ~(GCODE_READ_SIZE - 1);
-		scanStartOffset = (parsedFileInfo.headerSize & (GCODE_READ_SIZE - 1)) + GCODE_OVERLAP_SIZE;
+		pos = parsedFileInfo.headerSize & ~(GCodeReadSize - 1);
+		scanStartOffset = (parsedFileInfo.headerSize & (GCodeReadSize - 1)) + GCodeOverlapSize;
 	}
-	bufferStartFilePosition = pos - GCODE_OVERLAP_SIZE;
 	atLineStart = false;
-	return fileBeingParsed->Seek(pos);
+	const uint32_t now = millis();
+	const bool ret = fileBeingParsed->Seek(pos);
+	accumulatedSeekTime += millis() - now;
+	return ret;
 }
 
 // Parse table entry methods
@@ -746,7 +565,7 @@ void FileInfoParser::ProcessJobTime(const char *_ecv_array k, const char *_ecv_a
 {
 	const char *_ecv_array const q = p;
 	float days = 0.0, hours = 0.0, minutes = 0.0;
-	float secs = SafeStrtof(p, &p);
+	float secs = SafeStrtof(q, &p);
 	if (q != p)
 	{
 		while (*p == ' ')
@@ -770,7 +589,7 @@ void FileInfoParser::ProcessJobTime(const char *_ecv_array k, const char *_ecv_a
 			if (*p == 'd')
 			{
 				days = secs;
-				if (StringStartsWithIgnoreCase(p, "day"))			// not sure if any slicer needs this, but include it j.i.c.
+				if (StringStartsWithIgnoreCase(p, "day"))		// not sure if any slicer needs this, but include it j.i.c.
 				{
 					p += 3;
 					if (*p == 's')
@@ -782,11 +601,11 @@ void FileInfoParser::ProcessJobTime(const char *_ecv_array k, const char *_ecv_a
 				{
 					++p;
 				}
-				secs = SafeStrtof(p, &p);
-				while (*p == ' ' || *p == ':')
+				while (*p == ' ' || *p == ':')					// Fusion 360 gives e.g. ";Print time: 40m:36s"
 				{
 					++p;
 				}
+				secs = SafeStrtof(p, &p);
 			}
 			if (*p == 'h')
 			{
@@ -803,13 +622,13 @@ void FileInfoParser::ProcessJobTime(const char *_ecv_array k, const char *_ecv_a
 				{
 					++p;
 				}
-				secs = SafeStrtof(p, &p);
 				while (*p == ' ' || *p == ':')					// Fusion 360 gives e.g. ";Print time: 40m:36s"
 				{
 					++p;
 				}
+				secs = SafeStrtof(p, &p);
 			}
-			if (*p== 'm')
+			if (*p == 'm')
 			{
 				minutes = secs;
 				if (StringStartsWithIgnoreCase(p, "minute"))
@@ -828,11 +647,15 @@ void FileInfoParser::ProcessJobTime(const char *_ecv_array k, const char *_ecv_a
 				{
 					++p;
 				}
+				while (*p == ' ' || *p == ':')					// Fusion 360 gives e.g. ";Print time: 40m:36s"
+				{
+					++p;
+				}
 				secs = SafeStrtof(p, &p);
 			}
 		}
 	}
-	parsedFileInfo.printTime = lrintf(((days * 24.0 + hours) * 60.0 + minutes) * 60.0 + secs);
+	parsedFileInfo.printTime = max<uint32_t>(lrintf(((days * 24.0 + hours) * 60.0 + minutes) * 60.0 + secs), 1);		// if print time is zero, call it 1 second to prevent it being shown as "n/a"
 }
 
 // Process the simulated time
@@ -899,22 +722,21 @@ void FileInfoParser::ProcessThumbnail(const char *_ecv_array k, const char *_ecv
 // Scan the buffer for a 2-part filament used string. Return the number of filament found.
 void FileInfoParser::ProcessFilamentUsedEmbedded(const char *_ecv_array p, const char *_ecv_array s2) noexcept
 {
-	const char *_ecv_array q1;
-	uint32_t num = StrToU32(p, &q1);
-	if (q1 != p && num < MaxFilaments && StringStartsWith(q1, s2))
+	const char *_ecv_array q;
+	const uint32_t num = StrToU32(p, &q);
+	if (q != p && num < MaxFilaments && StringStartsWith(q, s2))
 	{
-		p = q1 + strlen(s2);
+		p = q + strlen(s2);
 		while (strchr(" :\t", *p) != nullptr)
 		{
 			++p;	// this allows for " Used: "
 		}
 		if (isDigit(*p))
 		{
-			float filamentLength = SafeStrtof(p, nullptr);
+			const float filamentLength = SafeStrtof(p, nullptr);
 			if (!std::isnan(filamentLength) && !std::isinf(filamentLength))
 			{
-				parsedFileInfo.filamentNeeded[numFilamentsFound] = filamentLength;
-				++numFilamentsFound;
+				parsedFileInfo.filamentNeeded[parsedFileInfo.numFilaments++] = filamentLength;
 			}
 		}
 	}
@@ -923,19 +745,19 @@ void FileInfoParser::ProcessFilamentUsedEmbedded(const char *_ecv_array p, const
 // Process filament usage comment
 void FileInfoParser::ProcessFilamentUsed(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept
 {
-	if (numFilamentsFound < MaxFilaments)
+	if (parsedFileInfo.numFilaments < MaxFilaments)
 	{
 		switch (param)
 		{
 		case 0:
-			while (isDigit(*p) && numFilamentsFound < MaxFilaments)
+			while (isDigit(*p) && parsedFileInfo.numFilaments < MaxFilaments)
 			{
-				const char* q;
-				const float filamentLength = SafeStrtof(p, &q);
-				p = q;
+				const char *_ecv_array q = p;
+				const float filamentLength = SafeStrtof(q, &p);
 				if (!std::isnan(filamentLength) && !std::isinf(filamentLength))
 				{
-					parsedFileInfo.filamentNeeded[numFilamentsFound] = filamentLength;
+					parsedFileInfo.filamentNeeded[parsedFileInfo.numFilaments] = filamentLength;
+					while (*p == ' ') { ++p; }
 					if (*p == 'm')
 					{
 						++p;
@@ -945,10 +767,10 @@ void FileInfoParser::ProcessFilamentUsed(const char *_ecv_array k, const char *_
 						}
 						else
 						{
-							parsedFileInfo.filamentNeeded[numFilamentsFound] *= 1000.0;		// Cura outputs filament used in metres not mm
+							parsedFileInfo.filamentNeeded[parsedFileInfo.numFilaments] *= 1000.0;		// Cura outputs filament used in metres not mm
 						}
 					}
-					++numFilamentsFound;
+					++parsedFileInfo.numFilaments;
 				}
 				while (strchr(", \t", *p) != nullptr)
 				{
@@ -957,14 +779,14 @@ void FileInfoParser::ProcessFilamentUsed(const char *_ecv_array k, const char *_
 			}
 			break;
 
-		case 1:			// S3D
+		case 1:			// S3D, units are always mm
 			if (isDigit(*p))
 			{
 				const float filamentLength = SafeStrtof(p, nullptr);
 				if (!std::isnan(filamentLength) && !std::isinf(filamentLength))
 				{
-					parsedFileInfo.filamentNeeded[numFilamentsFound] = filamentLength;
-					++numFilamentsFound;
+					parsedFileInfo.filamentNeeded[parsedFileInfo.numFilaments] = filamentLength;
+					++parsedFileInfo.numFilaments;
 				}
 			}
 			break;
@@ -974,11 +796,11 @@ void FileInfoParser::ProcessFilamentUsed(const char *_ecv_array k, const char *_
 			{
 				++p;				// later KISSlicer versions add a # here
 			}
-			while(isDigit(*p))
+			while (isDigit(*p))
 			{
 				++p;
 			}
-			while(strchr(" :=\t", *p) != nullptr)
+			while (strchr(" :=\t", *p) != nullptr)
 			{
 				++p;
 			}
@@ -988,8 +810,8 @@ void FileInfoParser::ProcessFilamentUsed(const char *_ecv_array k, const char *_
 				const float filamentLength = SafeStrtof(p, nullptr);
 				if (!std::isnan(filamentLength) && !std::isinf(filamentLength))
 				{
-					parsedFileInfo.filamentNeeded[numFilamentsFound] = filamentLength;
-					++numFilamentsFound;
+					parsedFileInfo.filamentNeeded[parsedFileInfo.numFilaments] = filamentLength;
+					++parsedFileInfo.numFilaments;
 				}
 			}
 			break;
@@ -1001,7 +823,7 @@ void FileInfoParser::ProcessFilamentUsed(const char *_ecv_array k, const char *_
 				const float filamentCMM = SafeStrtof(p, nullptr) * 1000.0;
 				if (!std::isnan(filamentCMM) && !std::isinf(filamentCMM))
 				{
-					parsedFileInfo.filamentNeeded[numFilamentsFound++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() * 0.5));
+					parsedFileInfo.filamentNeeded[parsedFileInfo.numFilaments++] = filamentCMM / (Pi * fsquare(reprap.GetPlatform().GetFilamentWidth() * 0.5));
 				}
 			}
 			break;
