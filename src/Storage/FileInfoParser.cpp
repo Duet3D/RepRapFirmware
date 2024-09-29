@@ -58,8 +58,9 @@ const FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
 	{ 	"Print time",								&FileInfoParser::ProcessJobTime,			0 },		// Fusion 360						";Print time: 40m:36s"
 	{ 	"total print time (s)",						&FileInfoParser::ProcessJobTime,			0 },		// Matter Control
 
-	// Simulated job time keyword
+	// RRF special keywords
 	{	"Simulated print time",						&FileInfoParser::ProcessSimulatedTime,		0 },		// appended to the file by RRF
+	{	"customInfo",								&FileInfoParser::ProcessCustomInfo,			0 },		// OEMs can include this in their GCode files
 
 	// Thumbnail keywords
 	{	"thumbnail_JPG begin",						&FileInfoParser::ProcessThumbnail,			2 },		// thumbnail in JPEG format
@@ -91,7 +92,7 @@ FileInfoParser::FileInfoParser() noexcept
 }
 
 // This following method needs to be called repeatedly until it returns true - this may take a few runs
-GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& info, bool quitEarly) noexcept
+GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& info, bool quitEarly) noexcept
 {
 	MutexLocker lock(parserMutex, MaxFileinfoProcessTime);
 	if (!lock.IsAcquired())
@@ -114,8 +115,13 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 
 	if (parseState == notParsing)
 	{
+		if (reprap.Debug(Module::PrintMonitor))
+		{
+			reprap.GetPlatform().MessageF(UsbMessage, "Processing file %s\n", filePath);
+		}
 		// See if we can access the file
 		// Webserver may call rr_fileinfo for a directory, check this case here
+		const uint32_t now = millis();
 		if (MassStorage::DirectoryExists(filePath))
 		{
 			info.isValid = false;
@@ -139,12 +145,13 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 #if HAS_MASS_STORAGE
 		parsedFileInfo.lastModifiedTime = MassStorage::GetLastModifiedTime(filePath);
 #endif
+
 		parsedFileInfo.isValid = true;
 
 		// If the file is empty or not a G-Code file, we don't need to parse anything
-		constexpr const char *GcodeFileExtensions[] = { ".gcode", ".g", ".gco", ".gc", ".nc" };
+		constexpr const char *_ecv_array GcodeFileExtensions[] = { ".gcode", ".g", ".gco", ".gc", ".nc" };
 		bool isGcodeFile = false;
-		for (const char *ext : GcodeFileExtensions)
+		for (const char *_ecv_array ext : GcodeFileExtensions)
 		{
 			if (StringEndsWithIgnoreCase(filePath, ext))
 			{
@@ -153,7 +160,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 			}
 		}
 
-		if (fileBeingParsed->Length() == 0 || !isGcodeFile)
+		if (!isGcodeFile || fileBeingParsed->Length() == 0)
 		{
 			fileBeingParsed->Close();
 			parsedFileInfo.incomplete = false;
@@ -167,13 +174,9 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 		parsedFileInfo.numFilaments = 0;
 		atLineStart = true;
 
-		accumulatedReadTime = accumulatedParseTime = accumulatedSeekTime = 0;
 		headerBytesProcessed = trailerBytesProcessed = 0;
-
-		if (reprap.Debug(Module::PrintMonitor))
-		{
-			reprap.GetPlatform().MessageF(UsbMessage, "Parsing file %s\n", filePath);
-		}
+		prepTime = millis() - now;
+		accumulatedReadTime = accumulatedParseTime = accumulatedSeekTime = 0;
 	}
 
 	// Getting file information take a few runs. Speed it up when we are not printing by calling it several times.
@@ -241,9 +244,9 @@ GCodeResult FileInfoParser::GetFileInfo(const char *filePath, GCodeFileInfo& inf
 				{
 					if (reprap.Debug(Module::PrintMonitor))
 					{
-						reprap.GetPlatform().MessageF(UsbMessage, "Parsing complete, processed %lu header bytes and %lu trailer bytes, read time %.3fs, parse time %.3fs, seek time %.3fs\n",
+						reprap.GetPlatform().MessageF(UsbMessage, "Parsing complete, processed %lu header bytes and %lu trailer bytes, prep time %.3fs, read time %.3fs, parse time %.3fs, seek time %.3fs\n",
 											headerBytesProcessed, trailerBytesProcessed,
-											(double)((float)accumulatedReadTime/1000.0), (double)((float)accumulatedParseTime/1000.0), (double)((float)accumulatedSeekTime/1000.0));
+											(double)((float)prepTime/1000.0), (double)((float)accumulatedReadTime/1000.0), (double)((float)accumulatedParseTime/1000.0), (double)((float)accumulatedSeekTime/1000.0));
 					}
 					parseState = notParsing;
 					fileBeingParsed->Close();
@@ -358,7 +361,7 @@ bool FileInfoParser::ReadAndProcessFileChunk(bool parsingHeader, bool& reachedEn
 // On entry, pStart is at the start of a line of the file.
 // Return a pointer to the incomplete comment line at the end, if there is one, or pEnd if there isn't.
 // If stopOnGCode is set then if we reach a line of GCode, set 'stopped'; otherwise leave 'stopped' alone.
-const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart, const char *_ecv_array pEnd, bool stopOnGCode, bool& stopped) noexcept
+const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart, const char *_ecv_array pEnd, bool parsingHeader, bool& stopped) noexcept
 {
 	while (pStart < pEnd)
 	{
@@ -410,34 +413,41 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 
 					skipRestOfLine = false;							// we've already found the end of this line
 
-					// pStart now points to the line terminator and kStart to the possible start of a key phrase.
-					// There is definitely a line terminator, and as line terminators do not occur in key phrases, it is safe to call StringStartsWith
-					// This next bit is very inefficient because it compares each key phrase in turn with the text at 'p'.
-					for (const ParseTableEntry& pte : parseTable)
-					{
-						if (StringStartsWith(kStart, pte.key))
-						{
-							// Found the key phrase. Check for a separator after it unless the key phrase ends with '#'.
-							const char *_ecv_array argStart = kStart + strlen(pte.key);
-							if (*(argStart - 1) != '#')
-							{
-								char c2 = *argStart;
-								if (c2 != ' ' && c2 != '\t' && c2 != ':' && c2 != '=' && c2 != ',')
-								{
-									break;
-								}
+					// Skip the line ending
+					while (pStart < pEnd && (*pStart == '\r' || *pStart == '\n')) { ++pStart; }
 
-								// Skip further separators
-								do
+					// If we are not parsing the header and we can see that there is a G- or M-command after this comment, save time by not parsing the comment.
+					// This saves time by not processing most comments in the GCode file when we haven't yet reached the footer.
+					if (parsingHeader || pStart == pEnd || (*pStart != 'G' && *pStart != 'M'))
+					{
+						// pStart now points to the line terminator and kStart to the possible start of a key phrase.
+						// There is definitely a line terminator, and as line terminators do not occur in key phrases, it is safe to call StringStartsWith
+						// This next bit is very inefficient because it compares each key phrase in turn with the text at 'p'.
+						for (const ParseTableEntry& pte : parseTable)
+						{
+							if (StringStartsWith(kStart, pte.key))
+							{
+								// Found the key phrase. Check for a separator after it unless the key phrase ends with '#'.
+								const char *_ecv_array argStart = kStart + strlen(pte.key);
+								if (*(argStart - 1) != '#')
 								{
-									++argStart;
-								} while ((c2 = *argStart) == ' ' || c2 == '\t' || c2 == ':' || c2 == '=');
+									char c2 = *argStart;
+									if (c2 != ' ' && c2 != '\t' && c2 != ':' && c2 != '=' && c2 != ',')
+									{
+										break;
+									}
+
+									// Skip further separators
+									do
+									{
+										++argStart;
+									} while ((c2 = *argStart) == ' ' || c2 == '\t' || c2 == ':' || c2 == '=');
+								}
+								(this->*pte.FileInfoParser::ParseTableEntry::func)(kStart, argStart, pte.param);
+								break;
 							}
-							(this->*pte.FileInfoParser::ParseTableEntry::func)(kStart, argStart, pte.param);
-							break;
 						}
 					}
-					++pStart;				// skip the line end
 				}
 			}
 			break;
@@ -451,7 +461,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 		case 'G':
 		case 'M':
 		case 'T':
-			if (stopOnGCode)
+			if (parsingHeader)
 			{
 				stopped = true;
 				return pStart;
@@ -837,6 +847,11 @@ void FileInfoParser::ProcessFilamentUsed(const char *_ecv_array k, const char *_
 			break;
 		}
 	}
+}
+
+void FileInfoParser::ProcessCustomInfo(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept
+{
+	//TODO
 }
 
 // Scan the buffer for a G1 Zxxx command. The buffer is null-terminated.

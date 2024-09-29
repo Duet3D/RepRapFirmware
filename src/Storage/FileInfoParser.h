@@ -46,7 +46,7 @@ public:
 	FileInfoParser() noexcept;
 
 	// The following method needs to be called repeatedly until it doesn't return GCodeResult::notFinished - this may take a few runs
-	GCodeResult GetFileInfo(const char *filePath, GCodeFileInfo& p_info, bool quitEarly) noexcept;
+	GCodeResult GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& p_info, bool quitEarly) noexcept;
 
 	static constexpr const char *_ecv_array SimulatedTimeString = "\n; Simulated print time";	// used by FileInfoParser and MassStorage
 
@@ -56,7 +56,7 @@ private:
 		pre(fileBeingParsed != nullptr; fileOverlapLength < sizeof(buf));
 	bool FindEndComments() noexcept
 		pre(fileBeingParsed != nullptr);
-	const char *_ecv_array ScanBuffer(const char *_ecv_array pStart, const char *_ecv_array pEnd, bool stopOnGCode, bool& stopped) noexcept
+	const char *_ecv_array ScanBuffer(const char *_ecv_array pStart, const char *_ecv_array pEnd, bool parsingHeader, bool& stopped) noexcept
 		pre(pStart.base == pEnd.base; pStart < pEnd; atLineStart)
 		post(result.base == pStart.base; result <= pEnd);
 
@@ -71,6 +71,7 @@ private:
 	void ProcessSimulatedTime(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
 	void ProcessThumbnail(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
 	void ProcessFilamentUsed(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
+	void ProcessCustomInfo(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
 
 	void ProcessFilamentUsedEmbedded(const char *_ecv_array p, const char *_ecv_array s2) noexcept
 		pre(numFilamentsFound < MaxFilaments);
@@ -89,7 +90,7 @@ private:
 
 	FileParseState parseState;
 	String<MaxFilenameLength> filenameBeingParsed;
-	FileStore *fileBeingParsed;
+	FileStore *_ecv_null fileBeingParsed;
 	GCodeFileInfo parsedFileInfo;
 	uint32_t lastFileParseTime;
 	size_t scanStartOffset;
@@ -98,7 +99,7 @@ private:
 	bool atLineStart;
 
 	// Stats for performance monitoring
-	uint32_t accumulatedParseTime, accumulatedReadTime, accumulatedSeekTime;
+	uint32_t accumulatedParseTime, accumulatedReadTime, accumulatedSeekTime, prepTime;
 	FilePosition headerBytesProcessed, trailerBytesProcessed;
 
 
