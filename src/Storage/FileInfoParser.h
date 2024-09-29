@@ -9,10 +9,10 @@
 #define SRC_STORAGE_FILEINFOPARSER_H_
 
 #include <RepRapFirmware.h>
-#include <GCodes/GCodeFileInfo.h>
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 
+#include <GCodes/GCodeFileInfo.h>
 #include <RTOSIface/RTOSIface.h>
 
 #if SAME70 || SAME5x
@@ -40,13 +40,15 @@ enum FileParseState
 	parsingFooter
 };
 
+class VariableSet;
+
 class FileInfoParser
 {
 public:
 	FileInfoParser() noexcept;
 
 	// The following method needs to be called repeatedly until it doesn't return GCodeResult::notFinished - this may take a few runs
-	GCodeResult GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& p_info, bool quitEarly) noexcept;
+	GCodeResult GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& p_info, bool quitEarly, VariableSet *_ecv_null customVariables) noexcept;
 
 	static constexpr const char *_ecv_array SimulatedTimeString = "\n; Simulated print time";	// used by FileInfoParser and MassStorage
 

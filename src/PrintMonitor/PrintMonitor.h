@@ -23,6 +23,7 @@ Licence: GPL
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeFileInfo.h>
 #include <ObjectModel/ObjectModel.h>
+#include <ObjectModel/Variable.h>
 
 enum PrintEstimationMethod
 {
@@ -84,6 +85,7 @@ private:
 	Platform& platform;
 	GCodes& gCodes;
 
+	VariableSet customVars;
 	uint64_t printStartTime;
 	uint64_t heatingStartedTime;
 	uint64_t warmUpDuration, printDuration;

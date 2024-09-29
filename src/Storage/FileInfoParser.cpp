@@ -6,13 +6,15 @@
  */
 
 #include "FileInfoParser.h"
+
+#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+
 #include <Platform/OutputMemory.h>
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
 #include <PrintMonitor/PrintMonitor.h>
 #include <GCodes/GCodes.h>
-
-#if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
+#include <ObjectModel/Variable.h>
 
 const FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
 {
@@ -92,7 +94,7 @@ FileInfoParser::FileInfoParser() noexcept
 }
 
 // This following method needs to be called repeatedly until it returns true - this may take a few runs
-GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& info, bool quitEarly) noexcept
+GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& info, bool quitEarly, VariableSet *_ecv_null customVariables) noexcept
 {
 	MutexLocker lock(parserMutex, MaxFileinfoProcessTime);
 	if (!lock.IsAcquired())
