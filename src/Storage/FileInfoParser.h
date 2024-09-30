@@ -32,7 +32,7 @@ static_assert(GCodeOverlapSize % 4 == 0);
 const uint32_t MaxFileinfoProcessTime = 200;				// Maximum time (ms) to spend polling for file info in each call
 const uint32_t MaxFileParseInterval = 4000;					// Maximum interval (ms) between repeat requests to parse a file before we assume the request has been abandoned
 
-enum FileParseState
+enum class FileParseState : uint8_t
 {
 	notParsing,
 	parsingHeader,
@@ -54,13 +54,13 @@ public:
 
 private:
 	// G-Code parser methods
-	bool ReadAndProcessFileChunk(bool parsingHeader, bool& reachedEnd) noexcept
-		pre(fileBeingParsed != nullptr; fileOverlapLength < sizeof(buf));
+	bool ReadAndProcessFileChunk(bool isParsingHeader, bool& reachedEnd) noexcept
+		pre(fileBeingParsed != nullptr);
 	bool FindEndComments() noexcept
 		pre(fileBeingParsed != nullptr);
-	const char *_ecv_array ScanBuffer(const char *_ecv_array pStart, const char *_ecv_array pEnd, bool parsingHeader, bool& stopped) noexcept
+	const char *_ecv_array ScanBuffer(const char *_ecv_array pStart, const char *_ecv_array pEnd, bool isParsingHeader, bool& stopped) noexcept
 		pre(pStart.base == pEnd.base; pStart < pEnd; atLineStart)
-		post(result.base == pStart.base; result <= pEnd);
+		post(_ecv_result.base == pStart.base; _ecv_result <= pEnd);
 
 	// Parse table entry methods
 	void ProcessGeneratedBy(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
@@ -74,7 +74,7 @@ private:
 	void ProcessCustomInfo(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
 
 	void ProcessFilamentUsedEmbedded(const char *_ecv_array p, const char *_ecv_array s2) noexcept
-		pre(numFilamentsFound < MaxFilaments);
+		pre(parsedFileInfo.numFilaments < MaxFilaments);
 
 	struct ParseTableEntry
 	{

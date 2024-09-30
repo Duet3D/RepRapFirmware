@@ -88,7 +88,7 @@ const FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
 
 
 FileInfoParser::FileInfoParser() noexcept
-	:  fileBeingParsed(nullptr), parseState(notParsing), accumulatedParseTime(0), accumulatedReadTime(0), accumulatedSeekTime(0)
+	:  fileBeingParsed(nullptr), parseState(FileParseState::notParsing), accumulatedParseTime(0), accumulatedReadTime(0), accumulatedSeekTime(0)
 {
 	parsedFileInfo.Init();
 	parserMutex.Create("FileInfoParser");
@@ -103,7 +103,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFi
 		return GCodeResult::notFinished;
 	}
 
-	if (parseState != notParsing && !StringEqualsIgnoreCase(filePath, filenameBeingParsed.c_str()))
+	if (parseState != FileParseState::notParsing && !StringEqualsIgnoreCase(filePath, filenameBeingParsed.c_str()))
 	{
 		// We are already parsing a different file
 		if (millis() - lastFileParseTime < MaxFileParseInterval)
@@ -113,10 +113,10 @@ GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFi
 
 		// Time this client out because it has probably disconnected
 		fileBeingParsed->Close();
-		parseState = notParsing;
+		parseState = FileParseState::notParsing;
 	}
 
-	if (parseState == notParsing)
+	if (parseState == FileParseState::notParsing)
 	{
 		if (reprap.Debug(Module::PrintMonitor))
 		{
@@ -171,7 +171,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFi
 			return GCodeResult::ok;
 		}
 
-		parseState = parsingHeader;
+		parseState = FileParseState::parsingHeader;
 		scanStartOffset = GCodeOverlapSize;
 		numThumbnailsStored = 0;
 		parsedFileInfo.numFilaments = 0;
@@ -190,13 +190,13 @@ GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFi
 	{
 		switch (parseState)
 		{
-		case parsingHeader:
+		case FileParseState::parsingHeader:
 			{
 				bool reachedEnd;
 				if (!ReadAndProcessFileChunk(true, reachedEnd))
 				{
 					reprap.GetPlatform().MessageF(WarningMessage, "Failed to read header of G-Code file \"%s\"\n", filePath);
-					parseState = notParsing;
+					parseState = FileParseState::notParsing;
 					fileBeingParsed->Close();
 					info = parsedFileInfo;
 					return GCodeResult::warning;
@@ -212,34 +212,34 @@ GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFi
 					{
 						parsedFileInfo.layerHeight = parsedFileInfo.objectHeight/parsedFileInfo.numLayers;
 					}
-					parseState = seeking;
+					parseState = FileParseState::seeking;
 				}
 			}
 
 			break;
 
-		case seeking:
+		case FileParseState::seeking:
 			if (FindEndComments())
 			{
-				parseState = parsingFooter;
+				parseState = FileParseState::parsingFooter;
 			}
 			else
 			{
 				reprap.GetPlatform().MessageF(WarningMessage, "Could not find footer comments in file \"%s\"\n", filePath);
-				parseState = notParsing;
+				parseState = FileParseState::notParsing;
 				fileBeingParsed->Close();
 				info = parsedFileInfo;
 				return GCodeResult::warning;
 			}
 			break;
 
-		case parsingFooter:
+		case FileParseState::parsingFooter:
 			{
 				bool reachedEnd;
 				if (!ReadAndProcessFileChunk(false, reachedEnd))
 				{
 					reprap.GetPlatform().MessageF(WarningMessage, "Failed to read footer from G-Code file \"%s\"\n", filePath);
-					parseState = notParsing;
+					parseState = FileParseState::notParsing;
 					fileBeingParsed->Close();
 					info = parsedFileInfo;
 					return GCodeResult::warning;
@@ -253,7 +253,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFi
 											parsedFileInfo.headerSize, trailerBytesProcessed,
 											(double)((float)prepTime/1000.0), (double)((float)accumulatedReadTime/1000.0), (double)((float)accumulatedParseTime/1000.0), (double)((float)accumulatedSeekTime/1000.0));
 					}
-					parseState = notParsing;
+					parseState = FileParseState::notParsing;
 					fileBeingParsed->Close();
 					if (parsedFileInfo.numLayers == 0 && parsedFileInfo.layerHeight > 0.0 && parsedFileInfo.objectHeight > 0.0)
 					{
@@ -270,7 +270,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFi
 			parsedFileInfo.incomplete = false;
 			fileBeingParsed->Close();
 			info = parsedFileInfo;
-			parseState = notParsing;
+			parseState = FileParseState::notParsing;
 			return GCodeResult::ok;
 		}
 		lastFileParseTime = millis();
@@ -280,7 +280,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFi
 	{
 		info = parsedFileInfo;				// note that the 'incomplete' flag is still set
 		fileBeingParsed->Close();
-		parseState = notParsing;
+		parseState = FileParseState::notParsing;
 		return GCodeResult::ok;
 	}
 	return GCodeResult::notFinished;
@@ -291,7 +291,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFi
 // The file position is correct for reading the next chunk of the file.
 // If successful set reachedEnd true if we ran out of data in the file; otherwise set reachedEnd false and leave the buffer, fileOverlaplength and the file seek position ready for the next call to this function.
 // Return true if success, false if there was a file read error.
-bool FileInfoParser::ReadAndProcessFileChunk(bool parsingHeader, bool& reachedEnd) noexcept
+bool FileInfoParser::ReadAndProcessFileChunk(bool isParsingHeader, bool& reachedEnd) noexcept
 {
 	// Read a chunk of the file into the buffer after the data we have already.
 	// For efficiency, read complete 512byte sectors on 512byte sector boundaries, and read them into 32-bit aligned memory - that allows the SD card driver to DMA directly into the buffer.
@@ -308,7 +308,7 @@ bool FileInfoParser::ReadAndProcessFileChunk(bool parsingHeader, bool& reachedEn
 		return false;
 	}
 
-	if (!parsingHeader)
+	if (!isParsingHeader)
 	{
 		trailerBytesProcessed += (unsigned int)nbytes;
 	}
@@ -338,7 +338,7 @@ bool FileInfoParser::ReadAndProcessFileChunk(bool parsingHeader, bool& reachedEn
 	}
 
 	const uint32_t now2 = millis();
-	const char *_ecv_array const pEnd = (bufp == bufLim) ? bufp : ScanBuffer(bufp, bufLim, parsingHeader, reachedEnd);
+	const char *_ecv_array const pEnd = (bufp == bufLim) ? bufp : ScanBuffer(bufp, bufLim, isParsingHeader, reachedEnd);
 	accumulatedParseTime += millis() - now2;
 
 	if (!reachedEnd && pEnd < bufLim)
@@ -350,7 +350,7 @@ bool FileInfoParser::ReadAndProcessFileChunk(bool parsingHeader, bool& reachedEn
 	{
 		scanStartOffset = GCodeOverlapSize;
 	}
-	if (reachedEnd && parsingHeader)
+	if (reachedEnd && isParsingHeader)
 	{
 		parsedFileInfo.headerSize = bufferStartFilePosition + (pEnd - buf);
 	}
@@ -362,7 +362,7 @@ bool FileInfoParser::ReadAndProcessFileChunk(bool parsingHeader, bool& reachedEn
 // On entry, pStart is at the start of a line of the file.
 // Return a pointer to the incomplete comment line at the end, if there is one, or pEnd if there isn't.
 // If stopOnGCode is set then if we reach a line of GCode, set 'stopped'; otherwise leave 'stopped' alone.
-const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart, const char *_ecv_array pEnd, bool parsingHeader, bool& stopped) noexcept
+const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart, const char *_ecv_array pEnd, bool isParsingHeader, bool& stopped) noexcept
 {
 	while (true)
 	{
@@ -409,7 +409,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 
 					// If we are not parsing the header and we can see that there is a G- or M-command after this comment, save time by not parsing the comment.
 					// This saves time by not processing most comments in the GCode file when we haven't yet reached the footer.
-					if (parsingHeader || pStart == pEnd || (*pStart != 'G' && *pStart != 'M'))
+					if (isParsingHeader || pStart == pEnd || (*pStart != 'G' && *pStart != 'M'))
 					{
 						// pStart now points to the line terminator and kStart to the possible start of a key phrase.
 						// There is definitely a line terminator, and as line terminators do not occur in key phrases, it is safe to call StringStartsWith
@@ -444,7 +444,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 			break;
 
 		case 'G':
-			if (!parsingHeader && !foundHeightComment)
+			if (!isParsingHeader && !foundHeightComment)
 			{
 				// If it's a G0 or G1 Z command with Z then record the height (note that Cura uses e.g. "G0 X121.297 Y73.506 Z17.7" when changing layers)
 				if ((*pStart == '1' || *pStart == '0') && !isDigit(pStart[1]))
@@ -471,7 +471,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 			// no break
 		case 'M':
 		case 'T':
-			if (parsingHeader)
+			if (isParsingHeader)
 			{
 				stopped = true;
 				return lineStart;
