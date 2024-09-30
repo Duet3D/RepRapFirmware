@@ -131,6 +131,28 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 	}
 }
 
+// Print basic details for debugging. Currently called only from FileInfoParser, so don't bother printing line and column.
+void GCodeException::DebugPrint() const noexcept
+{
+	if (message == nullptr)
+	{
+		debugPrintf("<null error message>");					// should not happen
+	}
+	else if (strstr(message, "%s"))
+	{
+		debugPrintf(message, stringParam.c_str());
+	}
+	else if (strstr(message, "%u") || strstr(message, "%c"))
+	{
+		debugPrintf(message, param.u);
+	}
+	else
+	{
+		debugPrintf(message, param.i);
+	}
+	debugPrintf("\n");
+}
+
 [[noreturn]] void ThrowGCodeException(const char *_ecv_array errMsg) THROWS(GCodeException)
 {
 	throw GCodeException(-1, -1, errMsg);

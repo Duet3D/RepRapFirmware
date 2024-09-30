@@ -14,7 +14,7 @@
 #include <Platform/Platform.h>
 #include <PrintMonitor/PrintMonitor.h>
 #include <GCodes/GCodes.h>
-#include <ObjectModel/Variable.h>
+#include <ObjectModel/GlobalVariables.h>
 #include <GCodes/GCodeBuffer/ExpressionParser.h>
 
 const FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
@@ -95,7 +95,7 @@ FileInfoParser::FileInfoParser() noexcept
 }
 
 // This following method needs to be called repeatedly until it returns true - this may take a few runs
-GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& info, bool quitEarly, VariableSet *_ecv_null customVariables) noexcept
+GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& info, bool quitEarly, GlobalVariables *_ecv_null customVariables) noexcept
 {
 	MutexLocker lock(parserMutex, MaxFileinfoProcessTime);
 	if (!lock.IsAcquired())
@@ -178,7 +178,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFi
 		atLineStart = true;
 		foundHeightComment = false;
 
-		headerBytesProcessed = trailerBytesProcessed = 0;
+		trailerBytesProcessed = 0;
 		prepTime = millis() - now;
 		accumulatedReadTime = accumulatedParseTime = accumulatedSeekTime = 0;
 	}
@@ -250,7 +250,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFi
 					if (reprap.Debug(Module::PrintMonitor))
 					{
 						reprap.GetPlatform().MessageF(UsbMessage, "Parsing complete, processed %lu header bytes and %lu trailer bytes, prep time %.3fs, read time %.3fs, parse time %.3fs, seek time %.3fs\n",
-											headerBytesProcessed, trailerBytesProcessed,
+											parsedFileInfo.headerSize, trailerBytesProcessed,
 											(double)((float)prepTime/1000.0), (double)((float)accumulatedReadTime/1000.0), (double)((float)accumulatedParseTime/1000.0), (double)((float)accumulatedSeekTime/1000.0));
 					}
 					parseState = notParsing;
@@ -308,16 +308,12 @@ bool FileInfoParser::ReadAndProcessFileChunk(bool parsingHeader, bool& reachedEn
 		return false;
 	}
 
-	if (parsingHeader)
-	{
-		headerBytesProcessed += (unsigned int)nbytes;
-	}
-	else
+	if (!parsingHeader)
 	{
 		trailerBytesProcessed += (unsigned int)nbytes;
 	}
 
-	char *_ecv_array bufp = buf + scanStartOffset;
+	const char *_ecv_array bufp = buf + scanStartOffset;
 	char *_ecv_array bufLim = buf + GCodeOverlapSize + (unsigned int)nbytes;
 	reachedEnd = (sizeLeft <= GCodeReadSize);
 	if (reachedEnd)
@@ -366,7 +362,7 @@ bool FileInfoParser::ReadAndProcessFileChunk(bool parsingHeader, bool& reachedEn
 // On entry, pStart is at the start of a line of the file.
 // Return a pointer to the incomplete comment line at the end, if there is one, or pEnd if there isn't.
 // If stopOnGCode is set then if we reach a line of GCode, set 'stopped'; otherwise leave 'stopped' alone.
-const char *_ecv_array FileInfoParser::ScanBuffer(char *_ecv_array pStart, const char *_ecv_array pEnd, bool parsingHeader, bool& stopped) noexcept
+const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart, const char *_ecv_array pEnd, bool parsingHeader, bool& stopped) noexcept
 {
 	while (true)
 	{
@@ -374,7 +370,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(char *_ecv_array pStart, const
 		while (pStart < pEnd && (*pStart == '\r' || *pStart == '\n')) { ++pStart; }
 
 		const char *_ecv_array lineStart = pStart;
-		char *_ecv_array lineEnd = pStart;
+		const char *_ecv_array lineEnd = pStart;
 
 		// Find the end of the line
 		while (lineEnd < pEnd && *lineEnd != '\r' && *lineEnd != '\n')
@@ -396,7 +392,6 @@ const char *_ecv_array FileInfoParser::ScanBuffer(char *_ecv_array pStart, const
 			return pEnd;
 		}
 
-		*lineEnd = 0;												// make the line ending easier to recognise
 		char c = *pStart++;
 		switch (c)
 		{
@@ -455,7 +450,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(char *_ecv_array pStart, const
 				if ((*pStart == '1' || *pStart == '0') && !isDigit(pStart[1]))
 				{
 					++pStart;
-					while (*pStart != 'Z' && *pStart != 0 && *pStart != ';') { ++pStart; }
+					while (pStart != lineEnd && *pStart != 'Z' && *pStart != ';') { ++pStart; }
 					if (*pStart == 'Z')
 					{
 						const char *_ecv_array q;
@@ -463,7 +458,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(char *_ecv_array pStart, const
 						if (!std::isnan(height) && !std::isinf(height) && height > parsedFileInfo.objectHeight)
 						{
 							// If the Z movement command ends in ";E or "; E" then ignore it
-							while (*q != ';' && *q != 0) { ++q; }
+							while (q < lineEnd && *q != ';') { ++q; }
 							if (*q != ';' || (q[1] != 'E' && (q[1] != ' ' || q[2] != 'E')))
 							{
 								parsedFileInfo.objectHeight = height;
@@ -858,27 +853,33 @@ void FileInfoParser::ProcessCustomInfo(const char *_ecv_array k, const char *_ec
 			++p;
 		} while (isAlnum(*p) || *p == '_');
 		const size_t nameLength = p - kStart;
-		if (vars->Lookup(kStart, nameLength, false) == nullptr)
+
+		while (*p == ' ' || *p == '\t') { ++p; }
+		if (*p == '=')
 		{
-			while (*p == ' ' || *p == '\t') { ++p; }
-			if (*p == '=')
+			++p;
+			ExpressionParser parser(nullptr, p, lineEnd);
+			ExpressionValue ev;
+			try
 			{
-				++p;
-				ExpressionParser parser(nullptr, p, lineEnd);
-				ExpressionValue ev;
-				try
+				ev = parser.Parse(true);
+			}
+			catch (GCodeException& exc)
+			{
+				ev.SetNull(nullptr);
+				if (reprap.Debug(Module::PrintMonitor))
 				{
-					ev = parser.Parse(true);
+					exc.DebugPrint();
 				}
-				catch (GCodeException&)
-				{
-					ev.SetNull(nullptr);
-				}
-				vars->InsertNew(k, nameLength, ev, 0);
+			}
+
+			auto vset = vars->GetForWriting();
+			if (vset->Lookup(kStart, nameLength, false) == nullptr)
+			{
+				vset->InsertNew(kStart, nameLength, ev, 0);
 			}
 		}
 	}
-	//TODO
 }
 
 #endif

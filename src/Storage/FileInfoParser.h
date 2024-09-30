@@ -40,7 +40,7 @@ enum FileParseState
 	parsingFooter
 };
 
-class VariableSet;
+class GlobalVariables;
 
 class FileInfoParser
 {
@@ -48,7 +48,7 @@ public:
 	FileInfoParser() noexcept;
 
 	// The following method needs to be called repeatedly until it doesn't return GCodeResult::notFinished - this may take a few runs
-	GCodeResult GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& p_info, bool quitEarly, VariableSet *_ecv_null customVariables) noexcept;
+	GCodeResult GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& p_info, bool quitEarly, GlobalVariables *_ecv_null customVariables) noexcept;
 
 	static constexpr const char *_ecv_array SimulatedTimeString = "\n; Simulated print time";	// used by FileInfoParser and MassStorage
 
@@ -58,7 +58,7 @@ private:
 		pre(fileBeingParsed != nullptr; fileOverlapLength < sizeof(buf));
 	bool FindEndComments() noexcept
 		pre(fileBeingParsed != nullptr);
-	const char *_ecv_array ScanBuffer(char *_ecv_array pStart, const char *_ecv_array pEnd, bool parsingHeader, bool& stopped) noexcept
+	const char *_ecv_array ScanBuffer(const char *_ecv_array pStart, const char *_ecv_array pEnd, bool parsingHeader, bool& stopped) noexcept
 		pre(pStart.base == pEnd.base; pStart < pEnd; atLineStart)
 		post(result.base == pStart.base; result <= pEnd);
 
@@ -88,7 +88,7 @@ private:
 	// We parse G-Code files in multiple stages. These variables hold the required information
 	Mutex parserMutex;
 
-	VariableSet *vars;
+	GlobalVariables *_ecv_null vars;
 	String<MaxFilenameLength> filenameBeingParsed;
 	FileStore *_ecv_null fileBeingParsed;
 	GCodeFileInfo parsedFileInfo;
@@ -102,7 +102,7 @@ private:
 
 	// Stats for performance monitoring
 	uint32_t accumulatedParseTime, accumulatedReadTime, accumulatedSeekTime, prepTime;
-	FilePosition headerBytesProcessed, trailerBytesProcessed;
+	FilePosition trailerBytesProcessed;
 
 
 	// We used to allocate the following buffer on the stack; but now that this is called by more than one task

@@ -4520,7 +4520,7 @@ void GCodes::StopPrint(GCodeBuffer *_ecv_null gbp, StopPrintReason reason) noexc
 		else
 #endif
 		{
-			reprap.GetPrintMonitor().StoppedPrint();				// must do this after printing the simulation details not before, because it clears the filename and pause time
+			reprap.GetPrintMonitor().StoppedPrint();
 		}
 	}
 

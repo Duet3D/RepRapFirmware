@@ -1259,7 +1259,7 @@ unsigned int MassStorage::GetNumFreeFiles() noexcept
 	return numFreeFiles;
 }
 
-GCodeResult MassStorage::GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& p_info, bool quitEarly, VariableSet *_ecv_null customVars) noexcept
+GCodeResult MassStorage::GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& p_info, bool quitEarly, GlobalVariables *_ecv_null customVars) noexcept
 {
 	return infoParser.GetFileInfo(filePath, p_info, quitEarly, customVars);
 }

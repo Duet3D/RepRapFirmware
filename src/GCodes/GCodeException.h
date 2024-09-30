@@ -57,6 +57,8 @@ public:
 
 	void GetMessage(const StringRef& reply, const GCodeBuffer *null gb) const noexcept;
 
+	void DebugPrint() const noexcept;
+
 	bool IsNull() const noexcept { return message == nullptr; }
 
 private:
