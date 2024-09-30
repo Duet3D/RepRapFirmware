@@ -15,6 +15,7 @@
 #include <PrintMonitor/PrintMonitor.h>
 #include <GCodes/GCodes.h>
 #include <ObjectModel/Variable.h>
+#include <GCodes/GCodeBuffer/ExpressionParser.h>
 
 const FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
 {
@@ -87,7 +88,7 @@ const FileInfoParser::ParseTableEntry FileInfoParser::parseTable[] =
 
 
 FileInfoParser::FileInfoParser() noexcept
-	: parseState(notParsing), fileBeingParsed(nullptr), accumulatedParseTime(0), accumulatedReadTime(0), accumulatedSeekTime(0)
+	:  fileBeingParsed(nullptr), parseState(notParsing), accumulatedParseTime(0), accumulatedReadTime(0), accumulatedSeekTime(0)
 {
 	parsedFileInfo.Init();
 	parserMutex.Create("FileInfoParser");
@@ -183,6 +184,7 @@ GCodeResult FileInfoParser::GetFileInfo(const char *_ecv_array filePath, GCodeFi
 	}
 
 	// Getting file information take a few runs. Speed it up when we are not printing by calling it several times.
+	vars = customVariables;
 	const uint32_t loopStartTime = millis();
 	do
 	{
@@ -315,7 +317,7 @@ bool FileInfoParser::ReadAndProcessFileChunk(bool parsingHeader, bool& reachedEn
 		trailerBytesProcessed += (unsigned int)nbytes;
 	}
 
-	const char *_ecv_array bufp = buf + scanStartOffset;
+	char *_ecv_array bufp = buf + scanStartOffset;
 	char *_ecv_array bufLim = buf + GCodeOverlapSize + (unsigned int)nbytes;
 	reachedEnd = (sizeLeft <= GCodeReadSize);
 	if (reachedEnd)
@@ -364,12 +366,15 @@ bool FileInfoParser::ReadAndProcessFileChunk(bool parsingHeader, bool& reachedEn
 // On entry, pStart is at the start of a line of the file.
 // Return a pointer to the incomplete comment line at the end, if there is one, or pEnd if there isn't.
 // If stopOnGCode is set then if we reach a line of GCode, set 'stopped'; otherwise leave 'stopped' alone.
-const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart, const char *_ecv_array pEnd, bool parsingHeader, bool& stopped) noexcept
+const char *_ecv_array FileInfoParser::ScanBuffer(char *_ecv_array pStart, const char *_ecv_array pEnd, bool parsingHeader, bool& stopped) noexcept
 {
-	while (pStart < pEnd)
+	while (true)
 	{
+		// Skip any blank lines or additional line end characters
+		while (pStart < pEnd && (*pStart == '\r' || *pStart == '\n')) { ++pStart; }
+
 		const char *_ecv_array lineStart = pStart;
-		const char *_ecv_array lineEnd = lineStart + 1;
+		char *_ecv_array lineEnd = pStart;
 
 		// Find the end of the line
 		while (lineEnd < pEnd && *lineEnd != '\r' && *lineEnd != '\n')
@@ -379,6 +384,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 
 		if (lineEnd == pEnd)
 		{
+			// The line ending is not within the buffer
 			if (lineStart >= buf + GCodeReadSize)
 			{
 				// This line starts within the last GCODE_OVERLAP_SIZE of the buffer, so we can safely leave processing it until the next bufferfull
@@ -390,6 +396,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 			return pEnd;
 		}
 
+		*lineEnd = 0;												// make the line ending easier to recognise
 		char c = *pStart++;
 		switch (c)
 		{
@@ -432,7 +439,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 										++argStart;
 									} while ((c2 = *argStart) == ' ' || c2 == '\t' || c2 == ':' || c2 == '=');
 								}
-								(this->*pte.FileInfoParser::ParseTableEntry::func)(kStart, argStart, pte.param);
+								(this->*pte.FileInfoParser::ParseTableEntry::func)(kStart, argStart, lineEnd, pte.param);
 								break;
 							}
 						}
@@ -448,7 +455,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 				if ((*pStart == '1' || *pStart == '0') && !isDigit(pStart[1]))
 				{
 					++pStart;
-					while (*pStart != 'Z' && *pStart != '\r' && *pStart != '\n' && *pStart != ';') { ++pStart; }
+					while (*pStart != 'Z' && *pStart != 0 && *pStart != ';') { ++pStart; }
 					if (*pStart == 'Z')
 					{
 						const char *_ecv_array q;
@@ -456,7 +463,7 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 						if (!std::isnan(height) && !std::isinf(height) && height > parsedFileInfo.objectHeight)
 						{
 							// If the Z movement command ends in ";E or "; E" then ignore it
-							while (*q != ';' && *q != '\r' && *q != '\n' ) { ++q; }
+							while (*q != ';' && *q != 0) { ++q; }
 							if (*q != ';' || (q[1] != 'E' && (q[1] != ' ' || q[2] != 'E')))
 							{
 								parsedFileInfo.objectHeight = height;
@@ -481,10 +488,8 @@ const char *_ecv_array FileInfoParser::ScanBuffer(const char *_ecv_array pStart,
 		}
 
 		// Skip the line ending
-		pStart = lineEnd;
-		while (pStart < pEnd && (*pStart == '\r' || *pStart == '\n')) { ++pStart; }
+		pStart = lineEnd + 1;
 	}
-	return pEnd;
 }
 
 // Find the starting position of the file end comments, get the object height, set up the buffer ready to parse them.
@@ -516,7 +521,7 @@ bool FileInfoParser::FindEndComments() noexcept
 // Parse table entry methods
 
 // Process the slicer name and (if present) version
-void FileInfoParser::ProcessGeneratedBy(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept
+void FileInfoParser::ProcessGeneratedBy(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept
 {
 	const char *_ecv_array introString = "";
 	switch (param)
@@ -541,7 +546,7 @@ void FileInfoParser::ProcessGeneratedBy(const char *_ecv_array k, const char *_e
 }
 
 // Process the layer height
-void FileInfoParser::ProcessLayerHeight(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept
+void FileInfoParser::ProcessLayerHeight(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept
 {
 	const char *tailPtr;
 	const float val = SafeStrtof(p, &tailPtr);
@@ -551,7 +556,7 @@ void FileInfoParser::ProcessLayerHeight(const char *_ecv_array k, const char *_e
 	}
 }
 
-void FileInfoParser::ProcessObjectHeight(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept
+void FileInfoParser::ProcessObjectHeight(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept
 {
 	const char *tailPtr;
 	const float val = SafeStrtof(p, &tailPtr);
@@ -563,7 +568,7 @@ void FileInfoParser::ProcessObjectHeight(const char *_ecv_array k, const char *_
 }
 
 // Process the number of layers
-void FileInfoParser::ProcessNumLayers(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept
+void FileInfoParser::ProcessNumLayers(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept
 {
 	const unsigned int val = StrToU32(p);
 	if (val > 0)
@@ -573,7 +578,7 @@ void FileInfoParser::ProcessNumLayers(const char *_ecv_array k, const char *_ecv
 }
 
 // Process the estimated job time
-void FileInfoParser::ProcessJobTime(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept
+void FileInfoParser::ProcessJobTime(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept
 {
 	const char *_ecv_array const q = p;
 	float days = 0.0, hours = 0.0, minutes = 0.0;
@@ -671,7 +676,7 @@ void FileInfoParser::ProcessJobTime(const char *_ecv_array k, const char *_ecv_a
 }
 
 // Process the simulated time
-void FileInfoParser::ProcessSimulatedTime(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept
+void FileInfoParser::ProcessSimulatedTime(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept
 {
 	const char *_ecv_array const q = p;
 	const uint32_t secs = StrToU32(p, &p);
@@ -688,7 +693,7 @@ void FileInfoParser::ProcessSimulatedTime(const char *_ecv_array k, const char *
 // or
 //	; thumbnail begin 32x32 2140
 
-void FileInfoParser::ProcessThumbnail(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept
+void FileInfoParser::ProcessThumbnail(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept
 {
 	if (numThumbnailsStored == MaxThumbnails)
 	{
@@ -711,21 +716,13 @@ void FileInfoParser::ProcessThumbnail(const char *_ecv_array k, const char *_ecv
 			const uint32_t size = StrToU32(p, &npos);
 			if (size >= 10)
 			{
-				p = npos;
-				while (*p == ' ' || *p == '\r' || *p == '\n')
-				{
-					++p;
-				}
-				if (*p == ';')
-				{
-					const FilePosition offset = bufferStartFilePosition + (p - buf);
-					GCodeFileInfo::ThumbnailInfo& th = parsedFileInfo.thumbnails[numThumbnailsStored++];
-					th.width = w;
-					th.height = h;
-					th.size = size;
-					th.format = fmt;
-					th.offset = offset;
-				}
+				const FilePosition offset = bufferStartFilePosition + (lineEnd + 1 - buf);
+				GCodeFileInfo::ThumbnailInfo& th = parsedFileInfo.thumbnails[numThumbnailsStored++];
+				th.width = w;
+				th.height = h;
+				th.size = size;
+				th.format = fmt;
+				th.offset = offset;
 			}
 		}
 	}
@@ -755,7 +752,7 @@ void FileInfoParser::ProcessFilamentUsedEmbedded(const char *_ecv_array p, const
 }
 
 // Process filament usage comment
-void FileInfoParser::ProcessFilamentUsed(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept
+void FileInfoParser::ProcessFilamentUsed(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept
 {
 	if (parsedFileInfo.numFilaments < MaxFilaments)
 	{
@@ -851,8 +848,36 @@ void FileInfoParser::ProcessFilamentUsed(const char *_ecv_array k, const char *_
 	}
 }
 
-void FileInfoParser::ProcessCustomInfo(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept
+void FileInfoParser::ProcessCustomInfo(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept
 {
+	if (vars != nullptr && isAlpha(*p))
+	{
+		const char *_ecv_array kStart = p;
+		do
+		{
+			++p;
+		} while (isAlnum(*p) || *p == '_');
+		const size_t nameLength = p - kStart;
+		if (vars->Lookup(kStart, nameLength, false) == nullptr)
+		{
+			while (*p == ' ' || *p == '\t') { ++p; }
+			if (*p == '=')
+			{
+				++p;
+				ExpressionParser parser(nullptr, p, lineEnd);
+				ExpressionValue ev;
+				try
+				{
+					ev = parser.Parse(true);
+				}
+				catch (GCodeException&)
+				{
+					ev.SetNull(nullptr);
+				}
+				vars->InsertNew(k, nameLength, ev, 0);
+			}
+		}
+	}
 	//TODO
 }
 

@@ -58,20 +58,20 @@ private:
 		pre(fileBeingParsed != nullptr; fileOverlapLength < sizeof(buf));
 	bool FindEndComments() noexcept
 		pre(fileBeingParsed != nullptr);
-	const char *_ecv_array ScanBuffer(const char *_ecv_array pStart, const char *_ecv_array pEnd, bool parsingHeader, bool& stopped) noexcept
+	const char *_ecv_array ScanBuffer(char *_ecv_array pStart, const char *_ecv_array pEnd, bool parsingHeader, bool& stopped) noexcept
 		pre(pStart.base == pEnd.base; pStart < pEnd; atLineStart)
 		post(result.base == pStart.base; result <= pEnd);
 
 	// Parse table entry methods
-	void ProcessGeneratedBy(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
-	void ProcessLayerHeight(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
-	void ProcessObjectHeight(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
-	void ProcessNumLayers(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
-	void ProcessJobTime(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
-	void ProcessSimulatedTime(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
-	void ProcessThumbnail(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
-	void ProcessFilamentUsed(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
-	void ProcessCustomInfo(const char *_ecv_array k, const char *_ecv_array p, int param) noexcept;
+	void ProcessGeneratedBy(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
+	void ProcessLayerHeight(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
+	void ProcessObjectHeight(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
+	void ProcessNumLayers(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
+	void ProcessJobTime(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
+	void ProcessSimulatedTime(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
+	void ProcessThumbnail(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
+	void ProcessFilamentUsed(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
+	void ProcessCustomInfo(const char *_ecv_array k, const char *_ecv_array p, const char *_ecv_array lineEnd, int param) noexcept;
 
 	void ProcessFilamentUsedEmbedded(const char *_ecv_array p, const char *_ecv_array s2) noexcept
 		pre(numFilamentsFound < MaxFilaments);
@@ -79,7 +79,7 @@ private:
 	struct ParseTableEntry
 	{
 		const char *_ecv_array key;												// the keyword at the start of the comment that we look for
-		void (FileInfoParser::*func)(const char *_ecv_array, const char *_ecv_array, int) noexcept;		// the function used to process the rest of the comment that follows the keyword
+		void (FileInfoParser::*func)(const char *_ecv_array, const char *_ecv_array, const char *_ecv_array, int) noexcept;		// the function used to process the rest of the comment that follows the keyword
 		int param;																// a parameter we pass to that function
 	};
 
@@ -88,7 +88,7 @@ private:
 	// We parse G-Code files in multiple stages. These variables hold the required information
 	Mutex parserMutex;
 
-	FileParseState parseState;
+	VariableSet *vars;
 	String<MaxFilenameLength> filenameBeingParsed;
 	FileStore *_ecv_null fileBeingParsed;
 	GCodeFileInfo parsedFileInfo;
@@ -96,6 +96,7 @@ private:
 	size_t scanStartOffset;
 	FilePosition bufferStartFilePosition;
 	unsigned int numThumbnailsStored;
+	FileParseState parseState;
 	bool atLineStart;
 	bool foundHeightComment;
 
