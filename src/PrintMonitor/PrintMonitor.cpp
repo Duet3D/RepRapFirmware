@@ -86,7 +86,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetWarmUpDuration())),										ObjectModelEntryFlags::live },
 
 	// 1. 'file' members
-	{ "customInfo",			OBJECT_MODEL_FUNC(&self->customVars, 0),						 													ObjectModelEntryFlags::none },
+	{ "customInfo",			OBJECT_MODEL_FUNC(&self->customInfo, 0),						 													ObjectModelEntryFlags::none },
 	{ "filament",			OBJECT_MODEL_FUNC_ARRAY(0),							 																ObjectModelEntryFlags::none },
 	{ "fileName",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->filenameBeingPrinted.c_str()),										ObjectModelEntryFlags::none },
 	{ "generatedBy",		OBJECT_MODEL_FUNC_IF(!self->printingFileInfo.generatedBy.IsEmpty(), self->printingFileInfo.generatedBy.c_str()),	ObjectModelEntryFlags::none },
@@ -220,7 +220,7 @@ void PrintMonitor::Spin() noexcept
 		if (!filenameBeingPrinted.IsEmpty() && !printingFileParsed)
 		{
 			WriteLocker locker(printMonitorLock);
-			printingFileParsed = (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false, &customVars) != GCodeResult::notFinished);
+			printingFileParsed = (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false, &customInfo) != GCodeResult::notFinished);
 			if (!printingFileParsed)
 			{
 				return;
@@ -317,9 +317,9 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 	if (!reprap.UsingSbcInterface())
 # endif
 	{
-		customVars.GetForWriting()->Clear();
+		customInfo.GetForWriting()->Clear();
 		printingFileParsed = false;
-		if (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false, &customVars) != GCodeResult::notFinished)
+		if (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false, &customInfo) != GCodeResult::notFinished)
 		{
 			PrintingFileInfoUpdated();
 		}
@@ -345,7 +345,7 @@ void PrintMonitor::StoppedPrint() noexcept
 {
 	lastWarmUpDuration = (uint32_t)GetWarmUpDuration();
 	isPrinting = printingFileParsed = false;
-	customVars.GetForWriting()->Clear();
+	customInfo.GetForWriting()->Clear();
 	Reset();
 }
 

@@ -13,6 +13,7 @@
 #include <General/NamedEnum.h>
 #include <General/NumericConverter.h>
 #include <Hardware/ExceptionHandlers.h>
+#include <PrintMonitor/PrintMonitor.h>
 
 #include <climits>
 
@@ -1933,6 +1934,13 @@ void ExpressionParser::ParseIdentifierExpression(ExpressionValue& rslt, bool eva
 			{
 				GetVariableValue(rslt, &gb->GetVariables(), id.c_str() + strlen("var."), context, false, applyLengthOperator, applyExists);
 			}
+			return;
+		}
+
+		if (StringStartsWith(id.c_str(), "job.file.customInfo."))
+		{
+			auto vars = reprap.GetPrintMonitor().GetCustomInfoForReading();
+			GetVariableValue(rslt, vars.Ptr(), id.c_str() + strlen("job.file.customInfo."), context, false, applyLengthOperator, applyExists);
 			return;
 		}
 

@@ -65,6 +65,8 @@ public:
 	GCodeResult ProcessM73(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void SetSlicerTimeLeft(float seconds) noexcept;
 
+	ReadLockedPointer<const VariableSet> GetCustomInfoForReading() noexcept { return customInfo.GetForReading(); }
+
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
@@ -85,7 +87,7 @@ private:
 	Platform& platform;
 	GCodes& gCodes;
 
-	GlobalVariables customVars;
+	GlobalVariables customInfo;
 	uint64_t printStartTime;
 	uint64_t heatingStartedTime;
 	uint64_t warmUpDuration, printDuration;
