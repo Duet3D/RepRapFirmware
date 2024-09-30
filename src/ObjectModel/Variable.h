@@ -19,7 +19,7 @@
 class Variable
 {
 public:
-	Variable(const char *_ecv_array str, ExpressionValue& pVal, int16_t pScope) THROWS(GCodeException);
+	Variable(const char *_ecv_array str, size_t strLen, ExpressionValue& pVal, int16_t pScope) THROWS(GCodeException);
 	~Variable();
 
 	static bool IsValidVariableName(const char *_ecv_array str) noexcept;
@@ -52,6 +52,7 @@ public:
 	Variable *_ecv_null Lookup(const char *_ecv_array str, bool wantParameter) noexcept;
 	const Variable *_ecv_null Lookup(const char *_ecv_array str, size_t length, bool wantParameter) const noexcept pre(length <= strlen(str));
 	Variable *InsertNew(const char *_ecv_array str, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException);
+	Variable *InsertNew(const char *_ecv_array str, size_t strLen, ExpressionValue pVal, int16_t pScope) THROWS(GCodeException);
 	void InsertNewParameter(const char *_ecv_array str, ExpressionValue pVal) THROWS(GCodeException) { InsertNew(str, pVal, -1); }
 	void EndScope(uint8_t blockNesting) noexcept;
 	void Delete(const char *_ecv_array str) noexcept;
@@ -64,8 +65,8 @@ private:
 	{
 		DECLARE_FREELIST_NEW_DELETE(LinkedVariable)
 
-		LinkedVariable(const char *_ecv_array str, ExpressionValue pVal, int16_t pScope, LinkedVariable *p_next) THROWS(GCodeException)
-			: next(p_next), v(str, pVal, pScope) {}
+		LinkedVariable(const char *_ecv_array str, size_t strLen, ExpressionValue pVal, int16_t pScope, LinkedVariable *p_next) THROWS(GCodeException)
+			: next(p_next), v(str, strLen, pVal, pScope) {}
 
 		LinkedVariable * null next;
 		Variable v;
