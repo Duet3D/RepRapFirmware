@@ -170,7 +170,7 @@ float BinaryParser::GetFValue() THROWS(GCodeException)
 		break;
 	case DataType::Expression:
 		{
-			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 			value = parser.ParseFloat();
 			parser.CheckForExtraCharacters();
 		}
@@ -204,7 +204,7 @@ int32_t BinaryParser::GetIValue() THROWS(GCodeException)
 		break;
 	case DataType::Expression:
 		{
-			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 			value = parser.ParseInteger();
 			parser.CheckForExtraCharacters();
 		}
@@ -238,7 +238,7 @@ uint32_t BinaryParser::GetUIValue() THROWS(GCodeException)
 		break;
 	case DataType::Expression:
 		{
-			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 			value = parser.ParseUnsigned();
 			parser.CheckForExtraCharacters();
 		}
@@ -308,7 +308,7 @@ DriverId BinaryParser::GetDriverId() THROWS(GCodeException)
 
 	case DataType::Expression:
 		{
-			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 			const float fval = parser.ParseFloat();
 			parser.CheckForExtraCharacters();
 			SetDriverIdFromFloat(value, fval);
@@ -456,7 +456,7 @@ void BinaryParser::GetPossiblyQuotedString(const StringRef& str, bool allowEmpty
 
 	case DataType::Expression:
 		{
-			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 			const ExpressionValue val = parser.Parse();
 			parser.CheckForExtraCharacters();
 			val.AppendAsString(str);
@@ -484,7 +484,7 @@ void BinaryParser::GetFloatArray(float arr[], size_t& length) THROWS(GCodeExcept
 
 	if (seenParameter->type == DataType::Expression)
 	{
-		ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+		ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 		parser.ParseFloatArray(arr, length);
 	}
 	else
@@ -502,7 +502,7 @@ void BinaryParser::GetIntArray(int32_t arr[], size_t& length) THROWS(GCodeExcept
 
 	if (seenParameter->type == DataType::Expression)
 	{
-		ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+		ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 		parser.ParseIntArray(arr, length);
 	}
 	else
@@ -520,7 +520,7 @@ void BinaryParser::GetUnsignedArray(uint32_t arr[], size_t& length) THROWS(GCode
 
 	if (seenParameter->type == DataType::Expression)
 	{
-		ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+		ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 		parser.ParseUnsignedArray(arr, length);
 	}
 	else
@@ -559,7 +559,7 @@ void BinaryParser::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCode
 
 	case DataType::Expression:
 		{
-			ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+			ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 			parser.ParseDriverIdArray(arr, length);
 			parser.CheckForExtraCharacters();
 		}
@@ -581,7 +581,7 @@ ExpressionValue BinaryParser::GetExpression() THROWS(GCodeException)
 
 	if (seenParameter->type == DataType::Expression)
 	{
-		ExpressionParser parser(gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
+		ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + seenParameter->intValue, -1);
 		const ExpressionValue val = parser.Parse();
 		parser.CheckForExtraCharacters();
 		return val;
@@ -882,7 +882,7 @@ void BinaryParser::AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeE
 
 				case DataType::Expression:
 					{
-						ExpressionParser parser(gb, seenParameterValue, seenParameterValue + param->intValue, -1);
+						ExpressionParser parser(&gb, seenParameterValue, seenParameterValue + param->intValue, -1);
 						ev = parser.Parse();
 					}
 					break;

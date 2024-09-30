@@ -719,7 +719,7 @@ void StringParser::ProcessVarOrGlobalCommand(bool isGlobal) THROWS(GCodeExceptio
 	}
 
 	SkipWhiteSpace();
-	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+	ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 	ExpressionValue ev = parser.Parse();
 	vset->InsertNew(varName.c_str(), ev, (isGlobal) ? 0 : (int)gb.CurrentFileMachineState().GetBlockNesting());
 	if (isGlobal)
@@ -784,7 +784,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 		}
 
 		++readPointer;
-		ExpressionParser indexParser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser indexParser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const uint32_t indexExpr = indexParser.ParseUnsigned();
 		readPointer = indexParser.GetEndptr() - gb.buffer;
 		if (gb.buffer[readPointer] != ']')
@@ -802,7 +802,7 @@ void StringParser::ProcessSetCommand() THROWS(GCodeException)
 	}
 	++readPointer;
 
-	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+	ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 	ExpressionValue ev = parser.Parse();
 
 	if (numIndices == 0)
@@ -832,7 +832,7 @@ void StringParser::ProcessAbortCommand(const StringRef& reply) noexcept
 		// If we fail to parse the expression, we want to abort anyway
 		try
 		{
-			ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+			ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 			const ExpressionValue val = parser.Parse();
 			readPointer = parser.GetEndptr() - gb.buffer;
 			val.AppendAsString(reply);
@@ -904,7 +904,7 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 		{
 			break;
 		}
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const ExpressionValue val = parser.Parse();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		if (!reply.IsEmpty())
@@ -944,7 +944,7 @@ void StringParser::ProcessEchoCommand(const StringRef& reply) THROWS(GCodeExcept
 // Evaluate the condition that should follow 'if' or 'while'
 bool StringParser::EvaluateCondition() THROWS(GCodeException)
 {
-	ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+	ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 	const bool b = parser.ParseBoolean();
 	parser.CheckForExtraCharacters();
 	return b;
@@ -1306,7 +1306,7 @@ void StringParser::GetFloatArray(float arr[], size_t& returnedLength) THROWS(GCo
 
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		parser.ParseFloatArray(arr, returnedLength);
 	}
 	else
@@ -1339,7 +1339,7 @@ void StringParser::GetIntArray(int32_t arr[], size_t& returnedLength) THROWS(GCo
 
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		parser.ParseIntArray(arr, returnedLength);
 	}
 	else
@@ -1373,7 +1373,7 @@ void StringParser::GetUnsignedArray(uint32_t arr[], size_t& returnedLength) THRO
 
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		parser.ParseUnsignedArray(arr, returnedLength);
 	}
 	else
@@ -1407,7 +1407,7 @@ void StringParser::GetDriverIdArray(DriverId arr[], size_t& returnedLength) THRO
 
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		parser.ParseDriverIdArray(arr, returnedLength);
 	}
 	else
@@ -1436,7 +1436,7 @@ ExpressionValue StringParser::GetExpression() THROWS(GCodeException)
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		return parser.Parse();
 	}
 	throw ConstructParseException("expected an expression inside { }");
@@ -1467,7 +1467,7 @@ void StringParser::GetQuotedString(const StringRef& str, bool allowEmpty) THROWS
 
 	case '{':
 		{
-			ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+			ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 			const ExpressionValue val = parser.Parse();
 			readPointer = parser.GetEndptr() - gb.buffer;
 			val.AppendAsString(str);
@@ -1549,7 +1549,7 @@ void StringParser::InternalGetPossiblyQuotedString(const StringRef& str) THROWS(
 	}
 	else if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const ExpressionValue val = parser.Parse();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		val.AppendAsString(str);
@@ -1935,7 +1935,7 @@ float StringParser::ReadFloatValue() THROWS(GCodeException)
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const float val = parser.ParseFloat();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		return val;
@@ -1951,7 +1951,7 @@ uint32_t StringParser::ReadUIValue() THROWS(GCodeException)
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const uint32_t val = parser.ParseUnsigned();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		return val;
@@ -1968,7 +1968,7 @@ int32_t StringParser::ReadIValue() THROWS(GCodeException)
 {
 	if (gb.buffer[readPointer] == '{')
 	{
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const int32_t val = parser.ParseInteger();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		return val;
@@ -1987,7 +1987,7 @@ DriverId StringParser::ReadDriverIdValue() THROWS(GCodeException)
 	{
 		// Allow a floating point expression to be converted to a driver ID
 		// We assume that a driver ID only ever has a single fractional digit. This means that e.g. 3.10 will be treated the same as 3.1.
-		ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
+		ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + ARRAY_SIZE(gb.buffer), (int)commandIndent + readPointer);
 		const float val = 10.0 * parser.ParseFloat();
 		readPointer = parser.GetEndptr() - gb.buffer;
 		const int32_t ival = lrintf(val);
@@ -2064,7 +2064,7 @@ void StringParser::AddParameters(VariableSet& vs, int codeRunning) THROWS(GCodeE
 										{
 											throw ConstructParseException("invalid value for parameter '%c'", (uint32_t)c);
 										}
-										ExpressionParser parser(gb, gb.buffer + readPointer, gb.buffer + commandEnd);
+										ExpressionParser parser(&gb, gb.buffer + readPointer, gb.buffer + commandEnd);
 										ExpressionValue ev = parser.Parse();
 										char paramName[2] = { letter, 0 };
 										vs.InsertNewParameter(paramName, ev);

@@ -45,7 +45,7 @@ private:
 class ExpressionParser
 {
 public:
-	ExpressionParser(const GCodeBuffer& p_gb, const char *_ecv_array text, const char *_ecv_array textLimit, int p_column = -1) noexcept;
+	ExpressionParser(const GCodeBuffer *_ecv_null p_gb, const char *_ecv_array text, const char *_ecv_array textLimit, int p_column = -1) noexcept;
 
 	ExpressionValue Parse(bool evaluate = true) THROWS(GCodeException);
 	bool ParseBoolean() THROWS(GCodeException);
@@ -118,7 +118,7 @@ private:
 	const char *_ecv_array currentp;
 	const char *_ecv_array const startp;
 	const char *_ecv_array const endp;
-	const GCodeBuffer& gb;
+	const GCodeBuffer *_ecv_null gb;
 	int column;
 	String<MaxVariableNameLength> obsoleteField;
 };
