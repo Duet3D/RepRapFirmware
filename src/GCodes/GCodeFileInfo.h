@@ -30,6 +30,7 @@ struct GCodeFileInfo
 	void Init() noexcept;
 
 	FilePosition fileSize;
+	FilePosition headerSize;
 	time_t lastModifiedTime;
 	float layerHeight;
 	unsigned int numLayers;

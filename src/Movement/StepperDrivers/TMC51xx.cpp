@@ -407,6 +407,8 @@ public:
 	float GetStandstillCurrentPercent() const noexcept;
 	void SetStandstillCurrentPercent(float percent) noexcept;
 
+	EndstopValidationResult CheckStallDetectionEnabled(float speed) noexcept;
+
 	int8_t GetCurrentScaler() const noexcept { return currentScaler; }
 	bool SetCurrentScaler(int8_t cs) noexcept;
 	uint8_t GetIRun() const noexcept { return iRun; }
@@ -684,6 +686,20 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcep
 {
 	interpolation = (configuredChopConfReg & CHOPCONF_INTPOL) != 0;
 	return 1u << microstepShiftFactor;
+}
+
+// Check that stall detection can occur at the specified speed
+EndstopValidationResult TmcDriverState::CheckStallDetectionEnabled(float speed) noexcept
+{
+	if (GetDriverMode() > DriverMode::spreadCycle)			// if in stealthChop or direct mode
+	{
+		return EndstopValidationResult::wrongDriverMode;
+	}
+	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor) * 1.2)
+	{
+		return EndstopValidationResult::tooSlow;
+	}
+	return EndstopValidationResult::ok;
 }
 
 bool TmcDriverState::SetRegister(SmartDriverRegister reg, uint32_t regVal) noexcept
@@ -1254,7 +1270,7 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 	const uint32_t tcoolthrs = writeRegisters[WriteTcoolthrs] & ((1ul << 20) - 1u);
 	bool bdummy;
 	const float speed2 = ((float)GetTmcClockSpeed() * GetMicrostepping(bdummy))/(256 * tcoolthrs * stepsPerMm);
-	reply.catf("stall threshold %d, filter %s, steps/sec %" PRIu32 " (%.1f mm/sec), coolstep threshold %" PRIu32 " (%.1f mm/sec)",
+	reply.catf("stall threshold %d, filter %s, full steps/sec %" PRIu32 " (%.1f mm/sec), coolstep threshold %" PRIu32 " (%.1f mm/sec)",
 				threshold, ((filtered) ? "on" : "off"), fullstepsPerSecond, (double)speed1, tcoolthrs, (double)speed2);
 }
 
@@ -2312,6 +2328,11 @@ StandardDriverStatus SmartDrivers::GetStatus(size_t driver, bool accumulated, bo
 		return driverStates[driver].GetStatus(accumulated, clearAccumulated);
 	}
 	return StandardDriverStatus();
+}
+
+EndstopValidationResult SmartDrivers::CheckStallDetectionEnabled(size_t driver, float speed) noexcept
+{
+	return (driver < numTmc51xxDrivers) ? driverStates[driver].CheckStallDetectionEnabled(speed) : EndstopValidationResult::stallDetectionNotSupported;
 }
 
 #endif

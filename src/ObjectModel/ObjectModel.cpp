@@ -535,7 +535,7 @@ ObjectExplorationContext::ObjectExplorationContext(const GCodeBuffer *_ecv_null 
 			break;
 		case 'd':
 			maxDepth = 0;
-			while (isdigit(*reportFlags))
+			while (isDigit(*reportFlags))
 			{
 				maxDepth = (10 * maxDepth) + (*reportFlags - '0');
 				++reportFlags;
@@ -544,7 +544,7 @@ ObjectExplorationContext::ObjectExplorationContext(const GCodeBuffer *_ecv_null 
 		case 'a':
 			startElement = 0;
 			truncateLongArrays = false;
-			while (isdigit(*reportFlags))
+			while (isDigit(*reportFlags))
 			{
 				startElement = (10 * startElement) + (*reportFlags - '0');
 				++reportFlags;

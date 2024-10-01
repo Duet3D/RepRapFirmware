@@ -27,7 +27,7 @@ class DhtTemperatureSensor : public SensorWithPort
 {
 public:
 	DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType t) noexcept;
-	~DhtTemperatureSensor() noexcept;
+	~DhtTemperatureSensor() noexcept override;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
 #if 0 //SUPPORT_REMOTE_COMMANDS
@@ -76,7 +76,7 @@ class DhtHumiditySensor : public AdditionalOutputSensor
 {
 public:
 	explicit DhtHumiditySensor(unsigned int sensorNum) noexcept;
-	~DhtHumiditySensor() noexcept;
+	~DhtHumiditySensor() noexcept override;
 
 	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 

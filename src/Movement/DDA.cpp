@@ -476,6 +476,16 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 	}
 
 	RecalculateMove(ring);
+
+	// 8. If we are checking endstops, validate any stall endstops.
+	if (flags.checkEndstops)
+	{
+		if (!reprap.GetPlatform().GetEndstops().ValidateEndstops(*this))
+		{
+			return false;
+		}
+	}
+
 	state = provisional;
 	return true;
 }
@@ -1520,6 +1530,12 @@ float DDA::GetTotalExtrusionRate() const noexcept
 		fraction += directionVector[i];
 	}
 	return fraction * InverseConvertSpeedToMmPerSec(topSpeed);
+}
+
+// Return the top speed in microsteps/step clock for the specified motor
+float DDA::GetMotorTopSpeed(uint8_t axis) const noexcept
+{
+	return topSpeed * directionVector[axis];
 }
 
 #if SUPPORT_LASER

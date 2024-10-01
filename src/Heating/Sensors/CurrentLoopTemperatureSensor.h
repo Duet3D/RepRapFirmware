@@ -34,7 +34,8 @@ private:
 
 	// Configurable parameters
 	float tempAt4mA, tempAt20mA;
-	uint32_t chipChannel, isDifferential;
+	uint32_t chipChannel;
+	bool isDifferential;
 
 	// Derived parameters
 	float minLinearAdcTemp, linearAdcDegCPerCount;

@@ -2143,7 +2143,7 @@ GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&res
 		{
 			info.isValid = false;
 		}
-		else if (MassStorage::GetFileInfo(filePath.c_str(), info, quitEarly) == GCodeResult::notFinished)
+		else if (MassStorage::GetFileInfo(filePath.c_str(), info, quitEarly, nullptr) == GCodeResult::notFinished)
 		{
 			// This may take a few runs...
 			return GCodeResult::notFinished;

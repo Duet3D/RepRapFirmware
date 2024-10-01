@@ -188,19 +188,19 @@ public:
 	virtual AxesBitmap GetControllingDrives(size_t axis, bool forHoming) const noexcept;
 
 	// Override this virtual destructor if your constructor allocates any dynamic memory
-	virtual ~Kinematics() { }
+	virtual ~Kinematics() override { }
 
 	// Factory function to create a particular kinematics object and return a pointer to it.
 	// When adding new kinematics, you will need to extend this function to handle your new kinematics type.
-	static Kinematics *Create(KinematicsType k) noexcept;
+	static Kinematics *_ecv_from Create(KinematicsType k) noexcept;
 
 	// Functions that return information held in this base class
 	KinematicsType GetKinematicsType() const noexcept { return type; }
 
 	SegmentationType GetSegmentationType() const noexcept { return segmentationType; }
-	float GetSegmentsPerSecond() const noexcept pre(UseSegmentation()) { return segmentsPerSecond; }
-	float GetMinSegmentLength() const noexcept pre(UseSegmentation()) { return minSegmentLength; }
-	float GetReciprocalMinSegmentLength() const noexcept pre(UseSegmentation()) { return reciprocalMinSegmentLength; }
+	float GetSegmentsPerSecond() const noexcept pre(GetSegmentationType().useSegmentation) { return segmentsPerSecond; }
+	float GetMinSegmentLength() const noexcept pre(GetSegmentationType().useSegmentation) { return minSegmentLength; }
+	float GetReciprocalMinSegmentLength() const noexcept pre(GetSegmentationType().useSegmentation) { return reciprocalMinSegmentLength; }
 
 protected:
 	DECLARE_OBJECT_MODEL

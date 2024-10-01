@@ -52,7 +52,7 @@ const motioncalc_t OneSixth = (motioncalc_t)1.0/(motioncalc_t)6.0;
 #endif
 
 // This bit field is used in multiple contexts so that we can copy them efficiently from one context to another Not all flags are used in all contexts.
-union MovementFlags
+union MovementFlags final
 {
 	uint32_t all;												// this is to provide a means to clear all the flags in one go
 	struct
@@ -85,7 +85,7 @@ union MovementFlags
 // This class stores the characteristics of a segment of a move with constant acceleration.
 // The characteristics stored are the start time in step clocks, the duration in step clocks, the distance moved in steps, the acceleration, and some flags.
 // We no longer store the initial speed because it can be calculated from the duration, distance and acceleration.
-class MoveSegment
+class MoveSegment final
 {
 public:
 	void* operator new(size_t count) noexcept { return Tasks::AllocPermanent(count); }
@@ -94,7 +94,7 @@ public:
 	void operator delete(void* ptr, std::align_val_t align) noexcept {}
 
 	// Read the values of the flag bits
-	bool IsLinear() const noexcept { return a == 0; }
+	bool IsLinear() const noexcept { return a == 0.0; }
 	MovementFlags GetFlags() const noexcept { return flags; }
 
 #if 0 //SUPPORT_REMOTE_COMMANDS
@@ -187,7 +187,7 @@ protected:
 #endif
 
 private:
-	MoveSegment(MoveSegment *p_next) noexcept;
+	explicit MoveSegment(MoveSegment *p_next) noexcept;
 };
 
 // Create a new one, leaving the flags clear

@@ -43,7 +43,7 @@ GCodeResult CurrentLoopTemperatureSensor::Configure(GCodeBuffer& gb, const Strin
 	gb.TryGetFValue('L', tempAt4mA, changed);
 	gb.TryGetFValue('H', tempAt20mA, changed);
 	gb.TryGetUIValue('C', chipChannel, changed);
-	gb.TryGetUIValue('D', isDifferential, changed);
+	gb.TryGetBValue('D', isDifferential, changed);
 	ConfigureCommonParameters(gb, changed);
 	return FinishConfiguring(changed, reply);
 }
@@ -139,7 +139,7 @@ TemperatureError CurrentLoopTemperatureSensor::TryGetLinearAdcTemperature(float&
 	 * These values represent clocks 1 to 5.
 	 */
 
-	const uint8_t channelByte = ((isDifferential) ? 0x80 : 0xC0) | (chipChannel * 0x08);
+	const uint8_t channelByte = ((isDifferential) ? 0x80u : 0xC0u) | (chipChannel * 0x08u);
 	const uint8_t adcData[] = { channelByte, 0x00, 0x00 };
 	uint32_t rawVal;
 	TemperatureError rslt = DoSpiTransaction(adcData, 3, rawVal);
@@ -147,9 +147,9 @@ TemperatureError CurrentLoopTemperatureSensor::TryGetLinearAdcTemperature(float&
 
 	if (rslt == TemperatureError::ok)
 	{
-		const uint32_t adcVal1 = (rawVal >> 5) & ((1 << 13) - 1);
+		const uint32_t adcVal1 = (rawVal >> 5) & ((1u << 13) - 1u);
 		const uint32_t adcVal2 = ((rawVal & 1) << 5) | ((rawVal & 2) << 3) | ((rawVal & 4) << 1) | ((rawVal & 8) >> 1) | ((rawVal & 16) >> 3) | ((rawVal & 32) >> 5);
-		if (adcVal1 >= 4096 || adcVal2 != (adcVal1 & ((1 << 6) - 1)))
+		if (adcVal1 >= 4096 || adcVal2 != (adcVal1 & ((1u << 6) - 1u)))
 		{
 			rslt = TemperatureError::badResponse;
 		}

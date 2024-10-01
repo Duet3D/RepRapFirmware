@@ -9,6 +9,7 @@
 
 #if HAS_STALL_DETECT
 
+#include <Platform/RepRap.h>
 #include <Movement/Move.h>
 #include <Movement/Kinematics/Kinematics.h>
 
@@ -123,6 +124,12 @@ void StallDetectionEndstop::SetDrivers(DriversBitmap extruderDrivers) noexcept
 {
 	driversMonitored = extruderDrivers;
 	stopAll = true;
+}
+
+EndstopValidationResult StallDetectionEndstop::Validate(const DDA& dda, uint8_t& failingDriver) const noexcept
+{
+	const float speed = dda.GetMotorTopSpeed(GetAxis());
+	return reprap.GetMove().CheckStallDetectionEnabled(GetAxis(), speed, failingDriver);
 }
 
 #endif

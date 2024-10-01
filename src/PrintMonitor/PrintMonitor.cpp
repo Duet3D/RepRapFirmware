@@ -85,7 +85,8 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "timesLeft",			OBJECT_MODEL_FUNC(self, 3),							 																ObjectModelEntryFlags::live },
 	{ "warmUpDuration",		OBJECT_MODEL_FUNC_IF(self->IsPrinting(), lrintf(self->GetWarmUpDuration())),										ObjectModelEntryFlags::live },
 
-	// 1. ParsedFileInfo members
+	// 1. 'file' members
+	{ "customInfo",			OBJECT_MODEL_FUNC(&self->customInfo, 0),						 													ObjectModelEntryFlags::none },
 	{ "filament",			OBJECT_MODEL_FUNC_ARRAY(0),							 																ObjectModelEntryFlags::none },
 	{ "fileName",			OBJECT_MODEL_FUNC_IF(self->IsPrinting(), self->filenameBeingPrinted.c_str()),										ObjectModelEntryFlags::none },
 	{ "generatedBy",		OBJECT_MODEL_FUNC_IF(!self->printingFileInfo.generatedBy.IsEmpty(), self->printingFileInfo.generatedBy.c_str()),	ObjectModelEntryFlags::none },
@@ -98,7 +99,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "size",				OBJECT_MODEL_FUNC(self->printingFileInfo.fileSize),																	ObjectModelEntryFlags::none },
 	{ "thumbnails",			OBJECT_MODEL_FUNC_ARRAY(1),																							ObjectModelEntryFlags::none },
 
-	// 2. ParsedFileInfo.thumbnails[] members
+	// 2. 'file' thumbnails[] members
 	{ "format",				OBJECT_MODEL_FUNC(self->printingFileInfo.thumbnails[context.GetLastIndex()].format.ToString()),						ObjectModelEntryFlags::none },
 	{ "height",				OBJECT_MODEL_FUNC((int32_t)self->printingFileInfo.thumbnails[context.GetLastIndex()].height),						ObjectModelEntryFlags::none },
 	{ "offset",				OBJECT_MODEL_FUNC(self->printingFileInfo.thumbnails[context.GetLastIndex()].offset),								ObjectModelEntryFlags::none },
@@ -111,7 +112,7 @@ constexpr ObjectModelTableEntry PrintMonitor::objectModelTable[] =
 	{ "slicer",				OBJECT_MODEL_FUNC(self->EstimateTimeLeftAsExpression(slicerBased)),													ObjectModelEntryFlags::live },
 };
 
-constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 13, 11, 5, 3 };
+constexpr uint8_t PrintMonitor::objectModelTableDescriptor[] = { 4, 13, 12, 5, 3 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE(PrintMonitor)
 
@@ -219,7 +220,7 @@ void PrintMonitor::Spin() noexcept
 		if (!filenameBeingPrinted.IsEmpty() && !printingFileParsed)
 		{
 			WriteLocker locker(printMonitorLock);
-			printingFileParsed = (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false) != GCodeResult::notFinished);
+			printingFileParsed = (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false, &customInfo) != GCodeResult::notFinished);
 			if (!printingFileParsed)
 			{
 				return;
@@ -316,8 +317,9 @@ void PrintMonitor::StartingPrint(const char* filename) noexcept
 	if (!reprap.UsingSbcInterface())
 # endif
 	{
+		customInfo.GetForWriting()->Clear();
 		printingFileParsed = false;
-		if (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false) != GCodeResult::notFinished)
+		if (MassStorage::GetFileInfo(filenameBeingPrinted.c_str(), printingFileInfo, false, &customInfo) != GCodeResult::notFinished)
 		{
 			PrintingFileInfoUpdated();
 		}
@@ -341,10 +343,10 @@ void PrintMonitor::StartedPrint() noexcept
 
 void PrintMonitor::StoppedPrint() noexcept
 {
-	lastWarmUpDuration = lrintf(GetWarmUpDuration());
+	lastWarmUpDuration = (uint32_t)GetWarmUpDuration();
 	isPrinting = printingFileParsed = false;
+	customInfo.GetForWriting()->Clear();
 	Reset();
-
 }
 
 // Set the current layer number as given in a comment

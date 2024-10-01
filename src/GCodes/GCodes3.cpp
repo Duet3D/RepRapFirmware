@@ -1563,7 +1563,7 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 		if (StringStartsWith(fullText, StartStrings[i]))
 		{
 			const char *text = fullText + strlen(StartStrings[i]);
-			if (!isalpha(*text) && *text != '_')			// need this test to avoid recognising "processName" as "process"
+			if (!isAlpha(*text) && *text != '_')			// need this test to avoid recognising "processName" as "process"
 			{
 				while (*text == ' ' || *text == ':')
 				{

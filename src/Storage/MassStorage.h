@@ -35,6 +35,7 @@ namespace EmbeddedFiles
 #endif
 
 class ObjectModel;
+class GlobalVariables;
 
 // Enum used to report whether we want a message of a file delete fails
 enum class ErrorMessageMode : uint8_t
@@ -83,7 +84,7 @@ namespace MassStorage
 	bool FindFirst(const char *_ecv_array directory, FileInfo &file_info) noexcept;
 	bool FindNext(FileInfo &file_info) noexcept;
 	void AbandonFindNext() noexcept;
-	GCodeResult GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& info, bool quitEarly) noexcept;
+	GCodeResult GetFileInfo(const char *_ecv_array filePath, GCodeFileInfo& info, bool quitEarly, GlobalVariables *_ecv_null customVars) noexcept;
 	GCodeResult Mount(size_t card, const StringRef& reply, bool reportSuccess) noexcept;
 	GCodeResult Unmount(size_t card, const StringRef& reply) noexcept;
 	void Diagnostics(MessageType mtype) noexcept;

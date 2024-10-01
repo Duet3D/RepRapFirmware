@@ -23,6 +23,7 @@ Licence: GPL
 #include <RepRapFirmware.h>
 #include <GCodes/GCodeFileInfo.h>
 #include <ObjectModel/ObjectModel.h>
+#include <ObjectModel/GlobalVariables.h>
 
 enum PrintEstimationMethod
 {
@@ -57,12 +58,14 @@ public:
 	float GetWarmUpDuration() const noexcept;
 	float GetPauseDuration() const noexcept;
 
-	const char *GetPrintingFilename() const noexcept { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
+	const char *_ecv_array _ecv_null GetPrintingFilename() const noexcept { return (isPrinting) ? filenameBeingPrinted.c_str() : nullptr; }
 	bool GetPrintingFileInfo(GCodeFileInfo& info) noexcept;
 	void SetPrintingFileInfo(const char *filename, GCodeFileInfo& info) noexcept;
 
 	GCodeResult ProcessM73(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	void SetSlicerTimeLeft(float seconds) noexcept;
+
+	ReadLockedPointer<const VariableSet> GetCustomInfoForReading() noexcept { return customInfo.GetForReading(); }
 
 protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
@@ -84,6 +87,7 @@ private:
 	Platform& platform;
 	GCodes& gCodes;
 
+	GlobalVariables customInfo;
 	uint64_t printStartTime;
 	uint64_t heatingStartedTime;
 	uint64_t warmUpDuration, printDuration;

@@ -28,6 +28,7 @@ public:
 	bool Acknowledge(EndstopHitDetails what) noexcept override;
 	void AppendDetails(const StringRef& str) noexcept override;
 	bool ShouldReduceAcceleration() const noexcept override { return true; }
+	EndstopValidationResult Validate(const DDA& dda, uint8_t& failingDriver) const noexcept override;
 
 	void SetDrivers(DriversBitmap extruderDrivers) noexcept;	// for setting which local extruder drives are active extruder endstops
 

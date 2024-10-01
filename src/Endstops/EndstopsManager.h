@@ -57,6 +57,9 @@ public:
 
 	void GetM119report(const StringRef& reply) noexcept;
 
+	// Validate any enabled stall endstops, returning true if all OK, else store the error details and return false
+	bool ValidateEndstops(const DDA& dda) noexcept;
+
 	// Z probe
 	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// M558
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// G31
@@ -108,6 +111,8 @@ private:
 	ZProbe *_ecv_null zProbes[MaxZProbes];				// the Z probes used. The first one is always non-null.
 	ZProbe *defaultZProbe;
 
+	EndstopValidationResult validationResult;			// the error coder we got from validating endstops
+	uint8_t failingDriverNumber;						// the number of the local driver that failed validation
 	bool isHomingMove;									// true if calls to CheckEndstops are for the purpose of homing
 };
 

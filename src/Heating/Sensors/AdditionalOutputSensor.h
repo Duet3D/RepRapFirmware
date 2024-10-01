@@ -13,8 +13,8 @@
 class AdditionalOutputSensor : public TemperatureSensor
 {
 public:
-	AdditionalOutputSensor(unsigned int sensorNum, const char *type, bool pEnforcePollOrder) noexcept;
-	virtual ~AdditionalOutputSensor() noexcept;
+	AdditionalOutputSensor(unsigned int sensorNum, const char *_ecv_array type, bool pEnforcePollOrder) noexcept;
+	virtual ~AdditionalOutputSensor() noexcept override;
 
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
 #if SUPPORT_REMOTE_COMMANDS
@@ -31,7 +31,7 @@ protected:
 	uint8_t outputNumber;
 
 private:
-	GCodeResult ConfigurePort(const char* portName, const StringRef& reply) noexcept;
+	GCodeResult ConfigurePort(const char *_ecv_array portName, const StringRef& reply) noexcept;
 
 	bool enforcePollOrder;
 };
