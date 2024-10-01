@@ -60,6 +60,9 @@ public:
 	// Validate any enabled stall endstops, returning true if all OK, else store the error details and return false
 	bool ValidateEndstops(const DDA& dda) noexcept;
 
+	// Get and clear the validation result
+	EndstopValidationResult GetEndstopValidationResult(uint8_t& driver) noexcept;
+
 	// Z probe
 	GCodeResult HandleM558(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);		// M558
 	GCodeResult HandleG31(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);		// G31
@@ -115,5 +118,14 @@ private:
 	uint8_t failingDriverNumber;						// the number of the local driver that failed validation
 	bool isHomingMove;									// true if calls to CheckEndstops are for the purpose of homing
 };
+
+// Get and clear the validation result
+inline EndstopValidationResult EndstopsManager::GetEndstopValidationResult(uint8_t& driver) noexcept
+{
+	driver = failingDriverNumber;
+	const EndstopValidationResult ret = validationResult;
+	validationResult = EndstopValidationResult::ok;
+	return ret;
+}
 
 #endif /* SRC_ENDSTOPS_ENDSTOPMANAGER_H_ */
