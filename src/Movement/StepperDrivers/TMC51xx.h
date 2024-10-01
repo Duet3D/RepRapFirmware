@@ -13,6 +13,7 @@
 #if SUPPORT_TMC51xx
 
 #include "DriverMode.h"
+#include <Endstops/EndstopDefs.h>
 
 namespace SmartDrivers
 {
@@ -55,6 +56,7 @@ namespace SmartDrivers
 	GCodeResult GetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum) noexcept;
 	GCodeResult SetAnyRegister(size_t driver, const StringRef& reply, uint8_t regNum, uint32_t regVal) noexcept;
 	StandardDriverStatus GetStatus(size_t driver, bool accumulated, bool clearAccumulated) noexcept;
+	EndstopValidationResult CheckStallDetectionEnabled(size_t driver, float speed) noexcept;
 };
 
 #endif

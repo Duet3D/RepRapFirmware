@@ -130,6 +130,8 @@ public:
 	uint32_t GetMoveStartTime() const noexcept { return afterPrepare.moveStartTime; }
 	uint32_t GetMoveFinishTime() const noexcept { return afterPrepare.moveStartTime + clocksNeeded; }
 
+	float GetMotorTopSpeed(uint8_t axis) const noexcept;							// Return the top speed in microsteps/sec for the specified motor
+
 #if SUPPORT_LASER || SUPPORT_IOBITS
 	LaserPwmOrIoBits GetLaserPwmOrIoBits() const noexcept { return laserPwmOrIoBits; }
 	bool ControlLaser() const noexcept { return flags.controlLaser; }

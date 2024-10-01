@@ -23,6 +23,7 @@
 #include <GCodes/RestorePoint.h>
 #include <Math/Deviation.h>
 #include <Hardware/IoPorts.h>
+#include <Endstops/EndstopDefs.h>
 
 #if SUPPORT_PHASE_STEPPING
 #include <Movement/PhaseStep.h>
@@ -470,6 +471,10 @@ public:
 	float MotorStepsToMovement(size_t drive, int32_t endpoint) const noexcept;				// Convert number of motor steps to motor position
 
 	void DeactivateDM(DriveMovement *dmToRemove) noexcept;									// remove a DM from the active list
+
+#if HAS_STALL_DETECT
+	EndstopValidationResult CheckStallDetectionEnabled(uint8_t axisOrExtruder, float speed, uint8_t& failingDriver) noexcept;	// check that stall detection will work at this speed
+#endif
 
 	// Movement error handling
 	void LogStepError(uint8_t type) noexcept;												// stop all movement because of a step error

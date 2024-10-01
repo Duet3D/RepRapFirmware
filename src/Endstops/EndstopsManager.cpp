@@ -121,6 +121,7 @@ EndstopsManager::EndstopsManager() noexcept
 void EndstopsManager::Init() noexcept
 {
 	activeEndstops = nullptr;
+	validationResult = EndstopValidationResult::ok;
 
 #if ALLOCATE_DEFAULT_PORTS
 	// Configure default endstops
@@ -753,7 +754,19 @@ GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply) 
 	return zp->HandleG31(gb, reply);
 }
 
-#if SUPPORT_OBJECT_MODEL
+// Validate any enabled stall endstops, returning true if all OK, else store the error details and return false
+bool EndstopsManager::ValidateEndstops(const DDA& dda) noexcept
+{
+	for (const EndstopOrZProbe *_ecv_null es = activeEndstops; es != nullptr; es = es->GetNext())
+	{
+		validationResult = es->Validate(dda, failingDriverNumber);
+		if (validationResult != EndstopValidationResult::ok)
+		{
+			return false;
+		}
+	}
+	return true;
+}
 
 size_t EndstopsManager::GetNumProbesToReport() const noexcept
 {
@@ -764,9 +777,6 @@ size_t EndstopsManager::GetNumProbesToReport() const noexcept
 	}
 	return ret;
 }
-
-#endif
-
 
 #if SUPPORT_CAN_EXPANSION
 

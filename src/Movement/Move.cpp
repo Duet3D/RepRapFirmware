@@ -2515,6 +2515,26 @@ bool Move::AreDrivesStopped(AxesBitmap drives) const noexcept
 							  );
 }
 
+#if HAS_STALL_DETECT
+
+EndstopValidationResult Move::CheckStallDetectionEnabled(uint8_t axisOrExtruder, float speed, uint8_t& failingDriver) noexcept
+{
+	EndstopValidationResult rslt = EndstopValidationResult::ok;
+	IterateLocalDrivers(axisOrExtruder,
+							[speed, &rslt, &failingDriver](uint8_t driver)
+							{
+								rslt = SmartDrivers::CheckStallDetectionEnabled(driver, speed);
+								if (rslt != EndstopValidationResult::ok)
+								{
+									failingDriver = driver;
+								}
+							}
+						);
+	return rslt;
+}
+
+#endif
+
 #if SUPPORT_CLOSED_LOOP
 
 // if the driver is idle, enable it; return true if driver enabled on return
