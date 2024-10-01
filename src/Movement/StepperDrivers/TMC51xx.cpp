@@ -645,6 +645,10 @@ unsigned int TmcDriverState::GetMicrostepping(bool& interpolation) const noexcep
 // Check that stall detection can occur at the specified speed
 EndstopValidationResult TmcDriverState::CheckStallDetectionEnabled(float speed) noexcept
 {
+	if (GetDriverMode() > DriverMode::spreadCycle)			// if in stealthChop or direct mode
+	{
+		return EndstopValidationResult::wrongDriverMode;
+	}
 	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor) * 1.2)
 	{
 		return EndstopValidationResult::tooSlow;

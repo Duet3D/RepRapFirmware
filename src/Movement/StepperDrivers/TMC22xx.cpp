@@ -1235,13 +1235,16 @@ void TmcDriverState::AppendStallConfig(const StringRef& reply) const noexcept
 	// Map stall sensitivity value 0..255 to 128..-128
 	const int threshold = 127 - (int)writeRegisters[WriteSgthrs];
 	const uint32_t fullstepsPerSecond = (12500000/256) / writeRegisters[WriteTcoolthrs];
-	reply.catf("stall threshold %d, full steps/sec %" PRIu32 ", coolstep %" PRIx32,
-				threshold, fullstepsPerSecond, writeRegisters[WriteCoolconf] & 0xFFFF);
+	reply.catf("stall threshold %d, full steps/sec %" PRIu32 ", coolstep %" PRIx32, threshold, fullstepsPerSecond, writeRegisters[WriteCoolconf] & 0xFFFF);
 }
 
 // Check that stall detection can occur at the specified speed
 EndstopValidationResult TmcDriverState::CheckStallDetectionEnabled(float speed) noexcept
 {
+	if (!IsStealthChop())
+	{
+		return EndstopValidationResult::wrongDriverMode;
+	}
 	if (speed * (float)StepClockRate < ((12500000/256) << microstepShiftFactor) / writeRegisters[WriteTcoolthrs])
 	{
 		return EndstopValidationResult::tooSlow;
