@@ -1376,12 +1376,12 @@ GCodeResult GCodes::ConfigureLocalDriverModulation(GCodeBuffer& gb, const String
 
 	ModulationConfig config = SmartDrivers::GetModulationConfig(drive);
 
-	if (gb.TryGetLimitedUIValue('A', val, seen, 248))
+	if (gb.TryGetLimitedUIValue('A', val, seen, 249))
 	{
 		config.amplitude = val;
 	}
 
-	if (gb.TryGetLimitedIValue('C', iVal, seen, -248, 248))
+	if (gb.TryGetLimitedIValue('C', iVal, seen, -1, 248))
 	{
 		config.offset = iVal;
 	}

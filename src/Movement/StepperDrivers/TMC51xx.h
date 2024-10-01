@@ -17,7 +17,7 @@
 struct ModulationConfig
 {
 	uint8_t amplitude = 248;
-	int16_t offset = 0;
+	int16_t offset = -1;
 	float modulation[2] = {0};
 };
 
