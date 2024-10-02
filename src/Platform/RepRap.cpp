@@ -1075,8 +1075,13 @@ void RepRap::Tick() noexcept
 				const TaskHandle relevantTask = (heatTaskStuck) ? Heat::GetHeatTask() : Tasks::GetMainTask();
 				if (relevantTask == RTOSIface::GetCurrentTask())
 				{
+#ifdef __ECV__
+					// eCv doesn't understand the gcc "register const... asm" line
+					const uint32_t *_ecv_array stackPtr = _ecv_undefined(const uint32_t *_ecv_array);
+#else
 					__asm volatile("mrs r2, psp");
 					register const uint32_t * stackPtr asm ("r2");				// we want the PSP not the MSP
+#endif
 					relevantStackPtr = stackPtr + 5;							// discard uninteresting registers, keep LR PC PSR
 				}
 				else
