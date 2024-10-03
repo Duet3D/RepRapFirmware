@@ -851,7 +851,12 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 			switch (commandFraction)
 			{
 			case -1:
+			case 0:
 			{
+				if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
+				{
+					return GCodeResult::notFinished;
+				}
 				const StepMode mode = (StepMode)gb.GetLimitedUIValue(axisLetters[axis], (uint32_t) StepMode::unknown);
 				const bool ret = move.SetStepMode(axis, mode, reply);
 				if (!ret)
@@ -868,6 +873,8 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 				move.ConfigurePhaseStepping(axis, value, commandFraction == kvSubCommand ? PhaseStepConfig::kv : PhaseStepConfig::ka);
 				break;
 			}
+			default:
+				return GCodeResult::warningNotSupported;
 			}
 		}
 	}
@@ -878,7 +885,12 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 		switch (commandFraction)
 		{
 		case -1:
+		case 0:
 		{
+			if (!reprap.GetGCodes().LockAllMovementSystemsAndWaitForStandstill(gb))
+			{
+				return GCodeResult::notFinished;
+			}
 			uint32_t eVals[MaxExtruders];
 			size_t eCount = numExtruders;
 			gb.GetUnsignedArray(eVals, eCount, true);
@@ -917,6 +929,8 @@ GCodeResult GCodes::ConfigureStepMode(GCodeBuffer& gb, const StringRef& reply) T
 			}
 			break;
 		}
+		default:
+			return GCodeResult::warningNotSupported;
 		}
 	}
 

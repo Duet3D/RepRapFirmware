@@ -993,6 +993,25 @@ GCodeResult CanInterface::SetRemotePressureAdvance(const CanDriversData<float>& 
 	return SetRemoteDriverValues(data, reply, CanMessageType::setPressureAdvance);
 }
 
+// Handle M970 for a remote driver
+GCodeResult CanInterface::SetRemoteStepMode(const CanDriversData<uint8_t>& data, const StringRef& reply) noexcept
+{
+	return SetRemoteDriverValues(data, reply, CanMessageType::setStepMode);
+}
+
+// Handle M970.1 for a remote driver
+GCodeResult CanInterface::SetRemotePhaseStepKv(const CanDriversData<float>& data, const StringRef& reply) noexcept
+{
+	return SetRemoteDriverValues(data, reply, CanMessageType::setPhaseStepKv);
+}
+
+// Handle M970.2 for a remote driver
+GCodeResult CanInterface::SetRemotePhaseStepKa(const CanDriversData<float>& data, const StringRef& reply) noexcept
+{
+	return SetRemoteDriverValues(data, reply, CanMessageType::setPhaseStepKa);
+}
+
+
 // Handle M569 for a remote driver
 GCodeResult CanInterface::ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 pre(driver.IsRemote())

@@ -97,7 +97,7 @@ private:
 	void ReleaseSegments() noexcept;					// release the list of segments and set it to nullptr
 	bool LogStepError(uint8_t type) noexcept;			// tell the Move class that we had a step error
 
-#if SUPPORT_PHASE_STEPPING
+#if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 	motioncalc_t GetPhaseStepsTakenThisSegment() const noexcept;
 #endif
 

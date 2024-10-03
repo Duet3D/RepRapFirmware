@@ -2597,19 +2597,20 @@ bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mPar
 
 bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept
 {
-	bool hasRemoteDrivers = false;
-	IterateRemoteDrivers(axisOrExtruder, [&hasRemoteDrivers](DriverId driver) { hasRemoteDrivers = true; });
-
-	// Phase stepping does not support remote drivers
-	if (hasRemoteDrivers && mode == StepMode::phase)
+#if SUPPORT_CAN_EXPANSION
+	CanDriversData<uint8_t> canDriversToUpdate;
+	IterateRemoteDrivers(axisOrExtruder, [&canDriversToUpdate, this, mode](DriverId driver)
 	{
-#if SUPPORT_S_CURVE
-		UseSCurve(false);
-#endif
+		canDriversToUpdate.AddEntry(driver, (uint8_t)mode);
+	});
+
+	if (CanInterface::SetRemoteStepMode(canDriversToUpdate, reply) != GCodeResult::ok)
+	{
+		// This could leave drivers in a undefined state if one fails after another has succeeded
 		return false;
 	}
+#endif
 
-	bool ret = true;
 	DriveMovement* dm = &dms[axisOrExtruder];
 	const uint32_t now = StepTimer::GetTimerTicks();
 
@@ -2624,6 +2625,7 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& re
 	unsigned int microsteps = GetMicrostepping(axisOrExtruder, interpolation);
 	GetCurrentMotion(axisOrExtruder, now, dm->phaseStepControl.mParams);								// Update position variable
 
+	bool ret = true;
 	IterateLocalDrivers(axisOrExtruder, [this, dm, &ret, &mode, axisOrExtruder, microsteps](uint8_t driver) {
 		// If we are going from step dir to phase step, we need to update the phase offset so the calculated phase matches MSCNT
 		if (!SmartDrivers::IsPhaseSteppingEnabled(driver) && mode == StepMode::phase)
@@ -2692,6 +2694,12 @@ bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& re
 	return ret;
 }
 
+bool Move::SetRemoteStepMode(DriverId driver, StepMode mode, const StringRef& reply) noexcept
+{
+
+	return true;
+}
+
 StepMode Move::GetStepMode(size_t axisOrExtruder) noexcept
 {
 	if (axisOrExtruder >= MaxAxesPlusExtruders)
@@ -2739,32 +2747,32 @@ void Move::PhaseStepControlLoop() noexcept
 
 		GetCurrentMotion(dm->drive, now, dm->phaseStepControl.mParams);
 
-		if (dm->state != DMState::phaseStepping)
+		if (unlikely(dm->state != DMState::phaseStepping))
 		{
+			// dm is idle, so remove it from the phaseStepDMs list
 			*dmp = dm->nextDM;
 			if (dm->state >= DMState::firstMotionState)
 			{
+				// I think it is impossible for this code to run. Maybe it is possible when disabling phase stepping during a move?
 				InsertDM(dm);
 			}
+			continue;
 		}
-		else
-		{
-			dm->phaseStepControl.CalculateCurrentFraction();
+		dm->phaseStepControl.CalculateCurrentFraction();
 
-			IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
-				if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
+		IterateLocalDrivers(dm->drive, [dm](uint8_t driver) {
+			if ((dm->driversCurrentlyUsed & StepPins::CalcDriverBitmap(driver)) == 0)
+			{
+				if (likely(dm->state > DMState::starting))	// check not idle or starting
 				{
-					if (likely(dm->state > DMState::starting))
-					{
-						// Driver has been stopped (probably by Move::CheckEndstops() so we don't need to update it)
-						dm->phaseStepControl.UpdatePhaseOffset(driver);
-					}
-					return;
+					// Driver has been stopped (probably by Move::CheckEndstops() so we don't need to update it)
+					dm->phaseStepControl.UpdatePhaseOffset(driver);
 				}
-				dm->phaseStepControl.InstanceControlLoop(driver);
-			});
-			dmp = &(dm->nextDM);
-		}
+				return;
+			}
+			dm->phaseStepControl.InstanceControlLoop(driver);
+		});
+		dmp = &(dm->nextDM);
 	}
 
 

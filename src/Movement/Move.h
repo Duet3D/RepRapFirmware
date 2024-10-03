@@ -451,6 +451,9 @@ public:
 	void ResetPhaseStepMonitoringVariables() noexcept;
 
 	void PhaseStepControlLoop() noexcept;
+# if SUPPORT_CAN_EXPANSION
+	bool SetRemoteStepMode(DriverId driver, StepMode mode, const StringRef& reply) noexcept;
+# endif
 #endif
 
 #if SUPPORT_S_CURVE

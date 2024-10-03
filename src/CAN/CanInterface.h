@@ -80,6 +80,11 @@ namespace CanInterface
 	GCodeResult SetRemoteDriverCurrents(const CanDriversData<float>& data, const StringRef& reply) noexcept;
 	GCodeResult SetRemotePressureAdvance(const CanDriversData<float>& data, const StringRef& reply) noexcept;
 	GCodeResult SetRemoteDriverStepsPerMmAndMicrostepping(const CanDriversData<StepsPerUnitAndMicrostepping>& data, const StringRef& reply) noexcept;
+#if SUPPORT_PHASE_STEPPING
+	GCodeResult SetRemoteStepMode(const CanDriversData<uint8_t>& data, const StringRef& reply) noexcept;
+	GCodeResult SetRemotePhaseStepKv(const CanDriversData<float>& data, const StringRef& reply) noexcept;
+	GCodeResult SetRemotePhaseStepKa(const CanDriversData<float>& data, const StringRef& reply) noexcept;
+#endif
 	GCodeResult ConfigureRemoteDriver(DriverId driver, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);
 	GCodeResult GetSetRemoteDriverStallParameters(const CanDriversList& drivers, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
 #if 0	// not currently used
