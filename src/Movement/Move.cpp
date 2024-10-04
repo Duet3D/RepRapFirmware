@@ -2523,9 +2523,9 @@ EndstopValidationResult Move::CheckStallDetectionEnabled(uint8_t axisOrExtruder,
 	IterateLocalDrivers(axisOrExtruder,
 							[speed, &rslt, &failingDriver](uint8_t driver)
 							{
-								rslt = SmartDrivers::CheckStallDetectionEnabled(driver, speed);
-								if (rslt != EndstopValidationResult::ok)
+								if (rslt == EndstopValidationResult::ok)
 								{
+									rslt = SmartDrivers::CheckStallDetectionEnabled(driver, speed);
 									failingDriver = driver;
 								}
 							}

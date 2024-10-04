@@ -128,7 +128,7 @@ void StallDetectionEndstop::SetDrivers(DriversBitmap extruderDrivers) noexcept
 
 EndstopValidationResult StallDetectionEndstop::Validate(const DDA& dda, uint8_t& failingDriver) const noexcept
 {
-	const float speed = dda.GetMotorTopSpeed(GetAxis());
+	const float speed = fabsf(dda.GetMotorTopSpeed(GetAxis()));
 	return reprap.GetMove().CheckStallDetectionEnabled(GetAxis(), speed, failingDriver);
 }
 

@@ -693,11 +693,11 @@ EndstopValidationResult TmcDriverState::CheckStallDetectionEnabled(float speed) 
 {
 	if (GetDriverMode() > DriverMode::spreadCycle)			// if in stealthChop or direct mode
 	{
-		return EndstopValidationResult::wrongDriverMode;
+		return EndstopValidationResult::driverNotInSpreadCycleMode;
 	}
 	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor) * 1.2)
 	{
-		return EndstopValidationResult::tooSlow;
+		return EndstopValidationResult::moveTooSlow;
 	}
 	return EndstopValidationResult::ok;
 }

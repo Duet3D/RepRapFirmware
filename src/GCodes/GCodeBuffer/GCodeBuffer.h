@@ -186,7 +186,7 @@ public:
 	bool PushState(bool withinSameFile) noexcept;							// Push state returning true if successful (i.e. stack not overflowed)
 	bool PopState(bool withinSameFile) noexcept;							// Pop state returning true if successful (i.e. no stack underrun)
 
-	void AbortFile(bool abortAll, bool requestAbort = true) noexcept;
+	void AbortFile(bool abortAll, bool sbcRequestAbort = true) noexcept;
 	bool IsDoingFile() const noexcept;										// Return true if this source is executing a file
 	bool IsDoingLocalFile() const noexcept;									// Return true if this source is executing a file from the local SD card
 	bool IsDoingFileMacro() const noexcept;									// Return true if this source is executing a file macro

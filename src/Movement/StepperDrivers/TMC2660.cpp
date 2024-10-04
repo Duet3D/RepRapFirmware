@@ -236,12 +236,12 @@ public:
 	void SetCurrent(float current) noexcept;
 	void Enable(bool en) noexcept;
 	void UpdateChopConfRegister() noexcept;
-	
+
 	void SetStallDetectThreshold(int sgThreshold) noexcept;
 	void SetStallDetectFilter(bool sgFilter) noexcept;
 	void SetStallMinimumStepsPerSecond(unsigned int stepsPerSecond) noexcept;
 	EndstopValidationResult CheckStallDetectionEnabled(float speed) noexcept;
-	
+
 	void AppendStallConfig(const StringRef& reply) const noexcept;
 	void AppendDriverStatus(const StringRef& reply) noexcept;
 	StandardDriverStatus GetStatus(bool accumulated, bool clearAccumulated) noexcept;
@@ -740,7 +740,7 @@ EndstopValidationResult TmcDriverState::CheckStallDetectionEnabled(float speed) 
 {
 	if (speed * (float)maxStallStepInterval < (float)(1u << microstepShiftFactor) * 1.2)
 	{
-		return EndstopValidationResult::tooSlow;
+		return EndstopValidationResult::moveTooSlow;
 	}
 	return EndstopValidationResult::ok;
 }

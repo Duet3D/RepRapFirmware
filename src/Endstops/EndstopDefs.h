@@ -29,9 +29,10 @@ enum class EndstopValidationResult
 {
 	ok = 0,
 	stallDetectionNotSupported,
-	stallDetectionNotEnabled,
-	wrongDriverMode,
-	tooSlow
+	//stallDetectionNotEnabled,		// this one is currently unused
+	driverNotInStealthChopMode,
+	driverNotInSpreadCycleMode,
+	moveTooSlow
 };
 
 // Struct to return info about what endstop has been triggered and what to do about it

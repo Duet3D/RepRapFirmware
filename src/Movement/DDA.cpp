@@ -1535,7 +1535,7 @@ float DDA::GetTotalExtrusionRate() const noexcept
 // Return the top speed in microsteps/step clock for the specified motor
 float DDA::GetMotorTopSpeed(uint8_t axis) const noexcept
 {
-	return topSpeed * directionVector[axis];
+	return topSpeed * directionVector[axis] * reprap.GetMove().DriveStepsPerMm(axis);
 }
 
 #if SUPPORT_LASER

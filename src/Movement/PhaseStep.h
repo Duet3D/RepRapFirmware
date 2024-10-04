@@ -12,11 +12,6 @@
 
 #if SUPPORT_PHASE_STEPPING
 
-# include <Platform/RepRap.h>
-# include <General/NamedEnum.h>
-# include <Movement/StepTimer.h>
-# include <Movement/Trigonometry.h>
-
 // Struct to pass data back to the ClosedLoop module
 struct MotionParameters
 {

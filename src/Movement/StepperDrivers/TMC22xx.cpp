@@ -1243,11 +1243,11 @@ EndstopValidationResult TmcDriverState::CheckStallDetectionEnabled(float speed) 
 {
 	if (!IsStealthChop())
 	{
-		return EndstopValidationResult::wrongDriverMode;
+		return EndstopValidationResult::driverNotInStealthChopMode;
 	}
 	if (speed * (float)StepClockRate < ((12500000/256) << microstepShiftFactor) / writeRegisters[WriteTcoolthrs])
 	{
-		return EndstopValidationResult::tooSlow;
+		return EndstopValidationResult::moveTooSlow;
 	}
 	return EndstopValidationResult::ok;
 }

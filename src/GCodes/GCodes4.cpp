@@ -52,20 +52,54 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 #endif
 		   )
 		{
-			// Check whether we made any G1 S3 moves and need to set the axis limits
-			axesToSenseLength.Iterate([this, &ms](unsigned int axis, unsigned int)
-										{
-											const EndStopPosition stopType = platform.GetEndstops().GetEndStopPosition(axis);
-											if (stopType == EndStopPosition::highEndStop)
+			// Check for move aborted due to incorrectly configured stall detection
+			uint8_t driver;
+			const EndstopValidationResult res = platform.GetEndstops().GetEndstopValidationResult(driver);
+			if (res != EndstopValidationResult::ok)
+			{
+				reply.printf("Homing move abandoned because stall detection on driver %u is inoperative: ", driver);
+				switch (res)
+				{
+				//case EndstopValidationResult::stallDetectionNotEnabled:	reply.cat("driver does not have stall detection enabled"); break;		// this one is currently unused
+				case EndstopValidationResult::stallDetectionNotSupported:	reply.cat("driver does not support stall detection"); break;
+				case EndstopValidationResult::moveTooSlow:					reply.cat("move is below minimum speed for stall detection"); break;
+				case EndstopValidationResult::driverNotInStealthChopMode:	reply.cat("driver is not in stealthChop mode"); break;
+				case EndstopValidationResult::driverNotInSpreadCycleMode:	reply.cat("driver is not in spreadCycle mode"); break;
+				case EndstopValidationResult::ok:							break;
+				}
+#if 0
+				debugPrintf("Homing move abandoned because stall detection on driver %u is inoperative: ", driver);
+				switch (res)
+				{
+				//case EndstopValidationResult::stallDetectionNotEnabled:	reply.cat("driver does not have stall detection enabled"); break;		// this one is currently unused
+				case EndstopValidationResult::stallDetectionNotSupported:	debugPrintf("driver does not support stall detection\n"); break;
+				case EndstopValidationResult::moveTooSlow:					debugPrintf("move is below minimum speed for stall detection\n"); break;
+				case EndstopValidationResult::driverNotInStealthChopMode:	debugPrintf("driver is not in stealthChop mode\n"); break;
+				case EndstopValidationResult::driverNotInSpreadCycleMode:	debugPrintf("driver is not in spreadCycle mode\n"); break;
+				case EndstopValidationResult::ok:							break;
+				}
+#endif
+				gb.SetState(GCodeState::normal);
+				AbortPrint(gb);
+				break;
+			}
+			else
+			{
+				// Check whether we made any G1 S3 moves and need to set the axis limits
+				axesToSenseLength.Iterate([this, &ms](unsigned int axis, unsigned int)
 											{
-												reprap.GetMove().SetAxisMaximum(axis, ms.coords[axis], true);
+												const EndStopPosition stopType = platform.GetEndstops().GetEndStopPosition(axis);
+												if (stopType == EndStopPosition::highEndStop)
+												{
+													reprap.GetMove().SetAxisMaximum(axis, ms.coords[axis], true);
+												}
+												else if (stopType == EndStopPosition::lowEndStop)
+												{
+													reprap.GetMove().SetAxisMinimum(axis, ms.coords[axis], true);
+												}
 											}
-											else if (stopType == EndStopPosition::lowEndStop)
-											{
-												reprap.GetMove().SetAxisMinimum(axis, ms.coords[axis], true);
-											}
-										}
-									);
+										);
+			}
 
 			if (gb.LatestMachineState().compatibility == Compatibility::NanoDLP && !DoingFileMacro())
 			{
