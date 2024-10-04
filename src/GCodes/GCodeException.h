@@ -30,7 +30,7 @@ class GCodeException
 {
 public:
 	GCodeException() noexcept : line(-1), column(-1), message(nullptr), source(GCodeExceptionSource::other) { }
-	explicit GCodeException(const char *_ecv_array msg) noexcept: line(-1), column(-1), message(msg), source(GCodeExceptionSource::other) { }
+	explicit GCodeException(const char *_ecv_array msg, int32_t iparam = 0) noexcept: line(-1), column(-1), message(msg), source(GCodeExceptionSource::other) { param.i = iparam; }
 
 	GCodeException(int lin, int col, const char *_ecv_array msg) noexcept : line(lin), column(col), message(msg), source(GCodeExceptionSource::other)  { }
 

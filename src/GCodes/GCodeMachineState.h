@@ -296,7 +296,7 @@ public:
 	bool UsingMachineCoordinates() const noexcept { return g53Active || runningSystemMacro; }
 
 	// Set the error message and associated state
-	void SetError(const char *_ecv_array msg) noexcept;
+	void SetError(const char *_ecv_array msg, int parameter = 0) noexcept;
 	void SetError(const GCodeException& exc) noexcept;
 	void SetWarning(const char *msg) noexcept;
 	void RetrieveStateMachineResult(const GCodeBuffer& gb, const StringRef& reply, GCodeResult& rslt) const noexcept;
