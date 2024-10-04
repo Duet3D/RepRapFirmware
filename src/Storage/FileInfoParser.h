@@ -52,6 +52,8 @@ public:
 
 	static constexpr const char *_ecv_array SimulatedTimeString = "\n; Simulated print time";	// used by FileInfoParser and MassStorage
 
+	static constexpr bool TableIsCorrectlyOrdered() noexcept;
+
 private:
 	// G-Code parser methods
 	bool ReadAndProcessFileChunk(bool isParsingHeader, bool& reachedEnd) noexcept
