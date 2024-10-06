@@ -285,7 +285,7 @@ void GCodeBuffer::DecodeCommand() noexcept
 }
 
 // Check whether the current command is a meta command, or we are skipping a block. Return true if we are and the current line no longer needs to be processed.
-bool GCodeBuffer::CheckMetaCommand(const StringRef& reply)
+bool GCodeBuffer::CheckMetaCommand(const StringRef& reply) THROWS(GCodeException)
 {
 	return NOT_BINARY_AND(stringParser.CheckMetaCommand(reply));
 }

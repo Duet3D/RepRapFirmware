@@ -38,12 +38,12 @@ class Applet
 public:
     Applet(Samba& samba,
            uint32_t p_addr,
-           const uint8_t* code,
+           const uint8_t *_ecv_array code,
            uint32_t p_size,
            uint32_t start,
            uint32_t stack,
            uint32_t reset) THROWS(GCodeException);
-    virtual ~Applet() {}
+    virtual ~Applet() noexcept {}
 
     virtual uint32_t size() noexcept { return _size; }
     virtual uint32_t addr() noexcept { return _addr; }
