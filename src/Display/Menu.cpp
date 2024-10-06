@@ -88,7 +88,7 @@
 const uint32_t InactivityTimeout = 20000;		// inactivity timeout
 const uint32_t ErrorTimeout = 6000;				// how long we display an error message for
 
-Menu::Menu(Lcd& refLcd) noexcept
+Menu::Menu(Lcd &_ecv_from refLcd) noexcept
 	: lcd(refLcd),
 	  timeoutValue(0), lastActionTime(0),
 	  selectableItems(nullptr), unSelectableItems(nullptr), highlightedItem(nullptr), numNestedMenus(0),
@@ -102,7 +102,7 @@ Menu::~Menu()
 	ResetCache();				// this releases the memory used by the menu items
 }
 
-void Menu::Load(const char* filename) noexcept
+void Menu::Load(const char *_ecv_array filename) noexcept
 {
 	if (numNestedMenus < MaxMenuNesting)
 	{
@@ -204,7 +204,7 @@ void Menu::Pop() noexcept
 	Reload();
 }
 
-void Menu::LoadError(const char *msg, unsigned int line) noexcept
+void Menu::LoadError(const char *_ecv_array msg, unsigned int line) noexcept
 {
 	// Remove selectable items that may obscure view of the error message
 	ResetCache();
@@ -229,7 +229,7 @@ void Menu::LoadError(const char *msg, unsigned int line) noexcept
 
 // Parse a line in a menu layout file returning any error message, or nullptr if there was no error.
 // Leading whitespace has already been skipped.
-const char *Menu::ParseMenuLine(char * const commandWord) noexcept
+const char *_ecv_array _ecv_null Menu::ParseMenuLine(char *_ecv_array const commandWord) noexcept
 {
 	errorColumn = 0;
 
@@ -265,15 +265,15 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 	const char *_ecv_array _ecv_null strNparam = nullptr;
 	unsigned int width = 0;
 	unsigned int alignment = 0;
-	const char *text = "*";
-	const char *fname = "main";
-	const char *dirpath = "";
-	const char *action = nullptr;
+	const char *_ecv_array text = "*";
+	const char *_ecv_array fname = "main";
+	const char *_ecv_array dirpath = "";
+	const char *_ecv_array _ecv_null action = nullptr;
 
 	while (*args != 0 && *args != ';')
 	{
 		char ch;
-		switch (ch = toupper(*args++))
+		switch (ch = (char)toupper(*args++))
 		{
 		case ' ':
 		case '\t':
@@ -367,7 +367,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 
 			// Parse and terminate the string argument, replacing pairs of double quote characters by single double quote characters
 			{
-				char *args2 = args;
+				char *_ecv_array args2 = args;
 				char ch2;
 				while ((ch2 = *args) != 0)
 				{
@@ -392,7 +392,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 		}
 	}
 
-	MenuItem *_ecv_null newItem = nullptr;
+	MenuItem *_ecv_from _ecv_null newItem = nullptr;
 
 	// Create an object resident in memory corresponding to the menu layout file's description
 	if (StringEqualsIgnoreCase(commandWord, "text"))
@@ -402,13 +402,13 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 		AddItem(newItem, false);
 		column += newItem->GetWidth();
 	}
-	else if (StringEqualsIgnoreCase(commandWord, "image") && fname != nullptr)
+	else if (StringEqualsIgnoreCase(commandWord, "image"))		//TODO make sure that fname has been set, it defaults to "main"
 	{
 		newItem = new ImageMenuItem(row, column, fname);
 		AddItem(newItem, false);
 		column += newItem->GetWidth();
 	}
-	else if (StringEqualsIgnoreCase(commandWord, "button"))
+	else if (StringEqualsIgnoreCase(commandWord, "button"))		//TODO make sure that fname has been set, it defaults to "main"
 	{
 		const char *_ecv_array const textString = AppendString(text);
 		const char *_ecv_array const actionString = AppendString(action);
@@ -430,7 +430,7 @@ const char *Menu::ParseMenuLine(char * const commandWord) noexcept
 		column += newItem->GetWidth();
 	}
 #if HAS_MASS_STORAGE
-	else if (StringEqualsIgnoreCase(commandWord, "files"))
+	else if (StringEqualsIgnoreCase(commandWord, "files"))		//TODO make sure that fname has been set, it defaults to "main"
 	{
 		const char *_ecv_array const actionString = AppendString(action);
 		const char *_ecv_array const dir = AppendString(dirpath);
@@ -466,13 +466,13 @@ void Menu::ResetCache() noexcept
 	// Delete the existing items
 	while (selectableItems != nullptr)
 	{
-		MenuItem * const current = selectableItems;
+		MenuItem *_ecv_from _ecv_null const current = selectableItems;
 		selectableItems = selectableItems->GetNext();
 		delete current;
 	}
 	while (unSelectableItems != nullptr)
 	{
-		MenuItem * const current = unSelectableItems;
+		MenuItem *_ecv_from _ecv_null const current = unSelectableItems;
 		unSelectableItems = unSelectableItems->GetNext();
 		delete current;
 	}
@@ -531,8 +531,8 @@ void Menu::Reload() noexcept
 			{
 				break;
 			}
-			char * const pcMenuLine = SkipWhitespace(buffer);
-			const char * const errMsg = ParseMenuLine(pcMenuLine);
+			char *_ecv_array const pcMenuLine = SkipWhitespace(buffer);
+			const char *_ecv_array _ecv_null const errMsg = ParseMenuLine(pcMenuLine);
 			if (errMsg != nullptr)
 			{
 				LoadError(errMsg, line);
@@ -551,14 +551,14 @@ void Menu::Reload() noexcept
 	}
 }
 
-void Menu::AddItem(MenuItem *item, bool isSelectable) noexcept
+void Menu::AddItem(MenuItem *_ecv_from item, bool isSelectable) noexcept
 {
 	item->UpdateWidthAndHeight(lcd);
 	MenuItem::AppendToList((isSelectable) ? &selectableItems : &unSelectableItems, item);
 }
 
 // Append a string to the string buffer and return its index
-const char *Menu::AppendString(const char *s) noexcept
+const char *_ecv_array Menu::AppendString(const char *_ecv_array s) noexcept
 {
 	// TODO: hold a fixed reference to '\0' -- if any strings passed in are empty, return this reference
 	const size_t oldIndex = commandBufferIndex;
@@ -571,7 +571,7 @@ const char *Menu::AppendString(const char *s) noexcept
 }
 
 // TODO: there is no error handling if a command within a sequence cannot be accepted...
-void Menu::EncoderAction_ExecuteHelper(const char *const cmd) noexcept
+void Menu::EncoderAction_ExecuteHelper(const char *_ecv_array const cmd) noexcept
 {
 	if (StringEqualsIgnoreCase(cmd, "return"))
 	{
@@ -581,7 +581,7 @@ void Menu::EncoderAction_ExecuteHelper(const char *const cmd) noexcept
 	{
 		Load(cmd + 5);
 	}
-	else if (toupper(cmd[0]) == 'G' || toupper(cmd[0]) == 'M' || toupper(cmd[0]) == 'T')
+	else if ((char)toupper(cmd[0]) == 'G' || (char)toupper(cmd[0]) == 'M' || (char)toupper(cmd[0]) == 'T')
 	{
 		const bool success = reprap.GetGCodes().ProcessCommandFromLcd(cmd);
 		if (!success)
@@ -598,8 +598,8 @@ void Menu::EncoderActionEnterItemHelper() noexcept
 		String<MaxFilenameLength> command;
 		if (highlightedItem->Select(command.GetRef()))
 		{
-			char *pcCurrentCommand = command.GetRef().Pointer();
-			char *pcNextCommand;
+			char *_ecv_array pcCurrentCommand = command.GetRef().Pointer();
+			char *_ecv_array _ecv_null pcNextCommand;
 			while ((pcNextCommand = strchr(pcCurrentCommand, '|')) != nullptr)
 			{
 				*pcNextCommand = '\0';
@@ -644,11 +644,11 @@ void Menu::EncoderActionScrollItemHelper(int action) noexcept
 			{
 				// We have scrolled the whole menu, so redraw it
 				lcd.ClearAll();
-				for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
+				for (MenuItem *_ecv_from _ecv_null item = selectableItems; item != nullptr; item = item->GetNext())
 				{
 					item->SetChanged();
 				}
-				for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())
+				for (MenuItem *_ecv_from _ecv_null item = unSelectableItems; item != nullptr; item = item->GetNext())
 				{
 					item->SetChanged();
 				}
@@ -704,7 +704,7 @@ void Menu::EncoderAction(int action) noexcept
 	}
 }
 
-/*static*/ const char *Menu::SkipWhitespace(const char *s) noexcept
+/*static*/ const char *_ecv_array Menu::SkipWhitespace(const char *_ecv_array s) noexcept
 {
 	while (*s == ' ' || *s == '\t')
 	{
@@ -713,7 +713,7 @@ void Menu::EncoderAction(int action) noexcept
 	return s;
 }
 
-/*static*/ char *Menu::SkipWhitespace(char *s) noexcept
+/*static*/ char *_ecv_array Menu::SkipWhitespace(char *_ecv_array s) noexcept
 {
 	while (*s == ' ' || *s == '\t')
 	{
@@ -755,24 +755,24 @@ void Menu::Refresh() noexcept
 void Menu::DrawAll() noexcept
 {
 	// First erase any displayed items that should now be invisible
-	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
+	for (MenuItem *_ecv_from _ecv_null item = selectableItems; item != nullptr; item = item->GetNext())
 	{
 		item->EraseIfInvisible(lcd);
 	}
 
-	for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())
+	for (MenuItem *_ecv_from _ecv_null item = unSelectableItems; item != nullptr; item = item->GetNext())
 	{
 		item->EraseIfInvisible(lcd);
 	}
 
 	// Now draw items
 	const PixelNumber rightMargin = lcd.GetNumCols() - currentMargin;
-	for (MenuItem *item = selectableItems; item != nullptr; item = item->GetNext())
+	for (MenuItem *_ecv_from _ecv_null item = selectableItems; item != nullptr; item = item->GetNext())
 	{
 		item->Draw(lcd, rightMargin, (item == highlightedItem));
 	}
 
-	for (MenuItem *item = unSelectableItems; item != nullptr; item = item->GetNext())
+	for (MenuItem *_ecv_from _ecv_null item = unSelectableItems; item != nullptr; item = item->GetNext())
 	{
 		item->Draw(lcd, rightMargin, false);
 	}
@@ -798,7 +798,7 @@ void Menu::AdvanceHighlightedItem(int n) noexcept
 	{
 		for (;;)
 		{
-			MenuItem * const p = FindNextSelectableItem(highlightedItem);
+			MenuItem *_ecv_from _ecv_null const p = FindNextSelectableItem(highlightedItem);
 			if (n == 0 || p == nullptr || p == highlightedItem)
 			{
 				highlightedItem = p;
@@ -811,7 +811,7 @@ void Menu::AdvanceHighlightedItem(int n) noexcept
 	{
 		for (;;)
 		{
-			MenuItem * const p = FindPrevSelectableItem(highlightedItem);
+			MenuItem *_ecv_from _ecv_null const p = FindPrevSelectableItem(highlightedItem);
 			if (n == 0 || p == nullptr || p == highlightedItem)
 			{
 				highlightedItem = p;
@@ -824,15 +824,15 @@ void Menu::AdvanceHighlightedItem(int n) noexcept
 
 // Find the next selectable item, or the first one if nullptr is passed in
 // Note, there may be no selectable items, or there may be just one
-MenuItem *Menu::FindNextSelectableItem(MenuItem *p) const noexcept
+MenuItem *_ecv_from _ecv_null Menu::FindNextSelectableItem(MenuItem *_ecv_from _ecv_null p) const noexcept
 {
 	if (selectableItems == nullptr)
 	{
 		return nullptr;
 	}
 
-	MenuItem * initial = (p == nullptr || p->GetNext() == nullptr) ? selectableItems : p->GetNext();
-	MenuItem * current = initial;							// set search start point
+	MenuItem *_ecv_from _ecv_null initial = (p == nullptr || p->GetNext() == nullptr) ? selectableItems : p->GetNext();
+	MenuItem *_ecv_from _ecv_null current = initial;							// set search start point
 	do
 	{
 		if (current->IsVisible())
@@ -850,16 +850,16 @@ MenuItem *Menu::FindNextSelectableItem(MenuItem *p) const noexcept
 
 // Find the previous selectable item, or the last one if nullptr is passed in
 // Note, there may be no selectable items, and the one we pass in may not be selectable
-MenuItem *Menu::FindPrevSelectableItem(MenuItem *p) const noexcept
+MenuItem *_ecv_from _ecv_null Menu::FindPrevSelectableItem(MenuItem *_ecv_from _ecv_null p) const noexcept
 {
 	if (selectableItems == nullptr)
 	{
 		return nullptr;
 	}
 
-	MenuItem * const initial = (p == nullptr) ? selectableItems : p;	// set search start point
-	MenuItem * current = initial;
-	MenuItem * best = nullptr;
+	MenuItem *_ecv_from _ecv_null const initial = (p == nullptr) ? selectableItems : p;	// set search start point
+	MenuItem *_ecv_from _ecv_null current = initial;
+	MenuItem *_ecv_from _ecv_null best = nullptr;
 	do
 	{
 		if (current->IsVisible())

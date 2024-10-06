@@ -28,7 +28,7 @@ public:
 
 	void Reset() noexcept;
 
-	void SetCoordsToTarget(float[MaxAxes]) const noexcept;
+	void SetCoordsToTarget(float coords[MaxAxes]) const noexcept;
 	float *_ecv_array GetTarget() noexcept { return target; };
 
 	const StraightProbeType GetType() const noexcept { return type; }

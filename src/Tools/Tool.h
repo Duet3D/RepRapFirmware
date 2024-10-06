@@ -84,7 +84,7 @@ public:
 	static bool ExtruderMovementAllowed(const Tool *_ecv_null tool, bool extruding, unsigned int extruder) noexcept;
 	static bool DisplayColdExtrusionWarnings() noexcept;
 	static bool IsHeaterAssignedToTool(int8_t heater) noexcept;
-	static GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException);
+	static GCodeResult SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & outBuf) THROWS(GCodeException);
 	static void CheckZHopsValid(AxesBitmap axesHomed) noexcept;
 
 	float GetOffset(size_t axis) const noexcept pre(axis < MaxAxes);

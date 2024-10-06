@@ -117,11 +117,11 @@ void GCodeException::GetMessage(const StringRef &reply, const GCodeBuffer *null 
 	{
 		reply.cat("<null error message>");					// should not happen
 	}
-	else if (strstr(message, "%s"))
+	else if (strstr(message, "%s") != nullptr)
 	{
 		reply.catf(message, stringParam.c_str());
 	}
-	else if (strstr(message, "%u") || strstr(message, "%c"))
+	else if (strstr(message, "%u") != nullptr || strstr(message, "%c") != nullptr)
 	{
 		reply.catf(message, param.u);
 	}
@@ -138,11 +138,11 @@ void GCodeException::DebugPrint() const noexcept
 	{
 		debugPrintf("<null error message>");					// should not happen
 	}
-	else if (strstr(message, "%s"))
+	else if (strstr(message, "%s") != nullptr)
 	{
 		debugPrintf(message, stringParam.c_str());
 	}
-	else if (strstr(message, "%u") || strstr(message, "%c"))
+	else if (strstr(message, "%u") != nullptr || strstr(message, "%c") != nullptr)
 	{
 		debugPrintf(message, param.u);
 	}

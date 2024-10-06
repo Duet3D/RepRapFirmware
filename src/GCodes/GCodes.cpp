@@ -2516,7 +2516,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 // Currently, we do not process new babystepping when executing an arc move
 // Return true if finished, false if needs to be called again
 // If an error occurs, return true with 'err' assigned
-bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise)
+bool GCodes::DoArcMove(GCodeBuffer& gb, bool clockwise) THROWS(GCodeException)
 {
 	MovementState& ms = GetMovementState(gb);
 

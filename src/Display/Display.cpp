@@ -187,7 +187,7 @@ void Display::Exit() noexcept
 	}
 }
 
-void Display::InitDisplay(GCodeBuffer& gb, Lcd *newLcd, Pin csPin, Pin a0Pin, bool defaultCsPolarity) THROWS(GCodeException)
+void Display::InitDisplay(GCodeBuffer& gb, Lcd *_ecv_from newLcd, Pin csPin, Pin a0Pin, bool defaultCsPolarity) THROWS(GCodeException)
 {
 	// ST7567-based displays need a resistor ratio setting and a contrast setting
 	// For now we always pass these as parameters toLcd::Init(). If we get any more, consider passing the GCodeBuffer and letting the display pick the parameters instead.

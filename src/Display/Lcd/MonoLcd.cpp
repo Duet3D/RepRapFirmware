@@ -61,8 +61,8 @@ void MonoLcd::ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, 
 		}
 		for (PixelNumber r = top; r < bottom; ++r)
 		{
-			uint8_t * p = image + ((r * (numCols/8)) + (left/8));
-			uint8_t * const endp = image + ((r * (numCols/8)) + (right/8));
+			uint8_t *_ecv_array p = image + ((r * (numCols/8)) + (left/8));
+			uint8_t *_ecv_array const endp = image + ((r * (numCols/8)) + (right/8));
 			if (foreground)
 			{
 				*p |= ~sMask;
@@ -99,10 +99,10 @@ void MonoLcd::ClearBlock(PixelNumber top, PixelNumber left, PixelNumber bottom, 
 // bottom, right must be no greater than numRows, numCols
 void MonoLcd::SetRectDirty(PixelNumber top, PixelNumber left, PixelNumber bottom, PixelNumber right) noexcept
 {
-	if (top < startRow) startRow = top;
-	if (bottom > endRow) endRow = bottom;
-	if (left < startCol) startCol = left;
-	if (right > endCol) endCol = right;
+	if (top < startRow) { startRow = top; }
+	if (bottom > endRow) { endRow = bottom; }
+	if (left < startCol) { startCol = left; }
+	if (right > endCol) { endCol = right; }
 }
 
 // Flag a pixel as dirty. The r and c parameters must be no greater than NumRows-1 and NumCols-1 respectively.
@@ -125,7 +125,7 @@ void MonoLcd::WriteColumnData(PixelNumber ySize, uint32_t columnData) noexcept
 {
 	const uint8_t mask1 = 0x80 >> (column & 7);
 	const uint8_t mask2 = ~mask1;
-	uint8_t *p = image + ((row * (numCols/8)) + (column/8));
+	uint8_t *_ecv_array p = image + ((row * (numCols/8)) + (column/8));
 	const uint16_t setPixelVal = (textInverted) ? 0 : 1;
 	for (PixelNumber r = row; r < row + ySize; ++r)
 	{
@@ -151,7 +151,7 @@ void MonoLcd::SetPixel(PixelNumber y, PixelNumber x, bool mode) noexcept
 {
 	if (y < numRows && x < rightMargin)
 	{
-		uint8_t * const p = image + ((y * (numCols/8)) + (x/8));
+		uint8_t *const p = &image[((y * (numCols/8)) + (x/8))];
 		const uint8_t mask = 0x80u >> (x%8);
 		const uint8_t oldVal = *p;
 		uint8_t newVal;
@@ -177,7 +177,7 @@ void MonoLcd::BitmapImage(PixelNumber x0, PixelNumber y0, PixelNumber width, Pix
 {
 	for (PixelNumber r = 0; r < height && r + y0 < numRows; ++r)
 	{
-		uint8_t *p = image + (((r + y0) * (numCols/8)) + (x0/8));
+		uint8_t *_ecv_array p = image + (((r + y0) * (numCols/8)) + (x0/8));
 		uint16_t bitMapOffset = r * (width/8);
 		for (PixelNumber c = 0; c < (width/8) && c + (x0/8) < numCols/8; ++c)
 		{
@@ -202,7 +202,7 @@ void MonoLcd::BitmapRow(PixelNumber top, PixelNumber left, PixelNumber width, co
 		uint8_t firstColIndex = left/8;									// column index of the first byte to write
 		const uint8_t lastColIndex = (left + width - 1)/8;				// column index of the last byte to write
 		const unsigned int firstDataShift = left % 8;					// number of bits in the first byte that we leave alone
-		uint8_t *p = image + (top * numCols/8) + firstColIndex;
+		uint8_t *_ecv_array p = image + (top * numCols/8) + firstColIndex;
 
 		// Do all bytes except the last one
 		uint8_t accumulator = *p & (0xFF << (8 - firstDataShift));		// prime the accumulator

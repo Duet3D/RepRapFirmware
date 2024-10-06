@@ -18,11 +18,11 @@ public:
 	DECLARE_FREELIST_NEW_DELETE(FilesMenuItem)
 
 	FilesMenuItem(PixelNumber r, PixelNumber c, PixelNumber w, FontNumber fn, const char *_ecv_array cmd, const char *_ecv_array dir, const char *_ecv_array acFile, unsigned int nf) noexcept;
-	void Draw(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept override;
+	void Draw(Lcd &_ecv_from lcd, PixelNumber rightMargin, bool highlight) noexcept override;
 	void Enter(bool bForwardDirection) noexcept override;
 	int Advance(int nCounts) noexcept override;
 	bool Select(const StringRef& cmd) noexcept override;
-	void UpdateWidthAndHeight(Lcd& lcd) noexcept override;
+	void UpdateWidthAndHeight(Lcd &_ecv_from lcd) noexcept override;
 
 	PixelNumber GetVisibilityRowOffset(PixelNumber tCurrentOffset, PixelNumber fontHeight) const noexcept override;
 
@@ -32,7 +32,7 @@ protected:
 	void vResetViewState() noexcept;
 
 private:
-	void ListFiles(Lcd& lcd, PixelNumber rightMargin, bool highlight) noexcept;
+	void ListFiles(Lcd &_ecv_from lcd, PixelNumber rightMargin, bool highlight) noexcept;
 	uint8_t GetDirectoryNesting() const noexcept;
 
 	const unsigned int numDisplayLines;

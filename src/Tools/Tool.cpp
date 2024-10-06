@@ -426,7 +426,7 @@ uint16_t Tool::numToolsToReport = 0;
 	return false;
 }
 
-/*static*/ GCodeResult Tool::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outBuf) THROWS(GCodeException)
+/*static*/ GCodeResult Tool::SetAllToolsFirmwareRetraction(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & outBuf) THROWS(GCodeException)
 {
 	GCodeResult rslt = GCodeResult::ok;
 	ReadLocker lock(toolListLock);

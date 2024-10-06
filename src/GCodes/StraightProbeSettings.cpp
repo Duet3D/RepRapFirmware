@@ -20,7 +20,7 @@ void StraightProbeSettings::Reset() noexcept
 	type = StraightProbeType::unset;
 	for (size_t axis = 0; axis < MaxAxes; ++axis)
 	{
-		target[axis] = 0;
+		target[axis] = 0.0;
 	}
 }
 

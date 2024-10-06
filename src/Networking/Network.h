@@ -113,7 +113,7 @@ public:
 	bool UsingDhcp(unsigned int interface) const noexcept;
 	GCodeResult SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept;
 	const MacAddress& GetMacAddress(unsigned int interface) const noexcept;
-	const char *GetHostname() const noexcept { return hostname; }
+	const char *_ecv_array GetHostname() const noexcept { return hostname; }
 	void SetHostname(const char *name) noexcept;
 
 	void TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol) noexcept;
@@ -121,7 +121,7 @@ public:
 
 #if SUPPORT_HTTP
 	const char *GetCorsSite() const noexcept { return corsSite.IsEmpty() ? nullptr : corsSite.c_str(); }
-	void SetCorsSite(const char *site) noexcept { corsSite.copy(site); }
+	void SetCorsSite(const char *_ecv_array site) noexcept { corsSite.copy(site); }
 #endif
 
 	bool FindResponder(Socket *skt, NetworkProtocol protocol) noexcept;

@@ -13,7 +13,7 @@
 // Struct for describing a font table, always held in PROGMEM
 struct LcdFont
 {
-	const uint8_t *ptr;			// pointer to font table
+	const uint8_t *_ecv_array ptr; // pointer to font table
 	uint16_t startCharacter;	// Unicode code point of the first character in the font
 	uint16_t endCharacter;		// Unicode code point of the last character in the font
 	uint8_t height;				// row height in pixels - only this number of pixels will be fetched and drawn - maximum 16 in this version of the software
