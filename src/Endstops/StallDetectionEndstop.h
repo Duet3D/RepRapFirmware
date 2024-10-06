@@ -23,7 +23,7 @@ public:
 
 	EndStopType GetEndstopType() const noexcept override { return (individualMotors) ? EndStopType::motorStallIndividual : EndStopType::motorStallAny; }
 	bool Stopped() const noexcept override;
-	bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept override;
+	bool Prime(const Kinematics &_ecv_from kin, const AxisDriversConfig& axisDrivers) noexcept override;
 	EndstopHitDetails CheckTriggered() noexcept override;
 	bool Acknowledge(EndstopHitDetails what) noexcept override;
 	void AppendDetails(const StringRef& str) noexcept override;

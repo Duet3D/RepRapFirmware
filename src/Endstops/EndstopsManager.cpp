@@ -108,11 +108,11 @@ EndstopsManager::EndstopsManager() noexcept
 #endif
 		  isHomingMove(false)
 {
-	for (Endstop *& es : axisEndstops)
+	for (Endstop *_ecv_from _ecv_null & es : axisEndstops)
 	{
 		es = nullptr;
 	}
-	for (ZProbe *& zp : zProbes)
+	for (ZProbe *_ecv_from _ecv_null & zp : zProbes)
 	{
 		zp = nullptr;
 	}
@@ -148,7 +148,7 @@ void EndstopsManager::Init() noexcept
 
 // Return a pointer to an endstop. Caller must already own a read lock on endstopsLock.
 // We don't lock endstopsLock because if we already own a read lock and someone else is requesting a write lock, when using 3.4.x version of ReadWriteLock we will deadlock (fixed in 3.5).
-const Endstop *EndstopsManager::FindEndstopWhenLockOwned(size_t axis) const noexcept
+const Endstop *_ecv_from _ecv_null EndstopsManager::FindEndstopWhenLockOwned(size_t axis) const noexcept
 {
 	return (axis < MaxAxes) ? axisEndstops[axis] : nullptr;
 }
@@ -167,12 +167,12 @@ ReadLockedPointer<ZProbe> EndstopsManager::GetZProbeOrDefault(size_t index) cons
 										: defaultZProbe);
 }
 
-ZProbe *_ecv_null EndstopsManager::GetZProbeFromISR(size_t index) const noexcept
+ZProbe *_ecv_from _ecv_null EndstopsManager::GetZProbeFromISR(size_t index) const noexcept
 {
 	return (index < ARRAY_SIZE(zProbes)) ? zProbes[index] : nullptr;
 }
 
-ZProbe& EndstopsManager::GetDefaultZProbeFromISR() const noexcept
+ZProbe &_ecv_from EndstopsManager::GetDefaultZProbeFromISR() const noexcept
 {
 	return (zProbes[0] != nullptr)
 			? *zProbes[0]
@@ -180,7 +180,7 @@ ZProbe& EndstopsManager::GetDefaultZProbeFromISR() const noexcept
 }
 
 // Add an endstop to the active list
-void EndstopsManager::AddToActive(EndstopOrZProbe& e) noexcept
+void EndstopsManager::AddToActive(EndstopOrZProbe &_ecv_from e) noexcept
 {
 	e.SetNext(activeEndstops);
 	activeEndstops = &e;
@@ -198,12 +198,12 @@ bool EndstopsManager::EnableAxisEndstops(AxesBitmap axes, bool forHoming, bool& 
 	activeEndstops = nullptr;
 	reduceAcceleration = false;
 	isHomingMove = forHoming && axes.IsNonEmpty();
-	const Kinematics& kin = reprap.GetMove().GetKinematics();
+	const Kinematics &_ecv_from kin = reprap.GetMove().GetKinematics();
 	while (axes.IsNonEmpty())
 	{
 		const unsigned int axis = axes.LowestSetBit();
 		axes.ClearBit(axis);
-		Endstop * const es = axisEndstops[axis];
+		Endstop *_ecv_from _ecv_null const es = axisEndstops[axis];
 		if (es != nullptr && es->Prime(kin, reprap.GetMove().GetAxisDriversConfig(axis)))
 		{
 			AddToActive(*es);
@@ -279,8 +279,8 @@ bool EndstopsManager::EnableExtruderEndstops(ExtrudersBitmap extruders) noexcept
 EndstopHitDetails EndstopsManager::CheckEndstops() noexcept
 {
 	EndstopHitDetails ret;									// the default constructor will clear all fields
-	EndstopOrZProbe *actioned = nullptr;
-	for (EndstopOrZProbe *esp = activeEndstops; esp != nullptr; esp = esp->GetNext())
+	EndstopOrZProbe *_ecv_from _ecv_null actioned = nullptr;
+	for (EndstopOrZProbe *_ecv_from _ecv_null esp = activeEndstops; esp != nullptr; esp = esp->GetNext())
 	{
 		EndstopHitDetails hd = esp->CheckTriggered();
 		if (hd.GetAction() == EndstopHitAction::stopAll)
@@ -305,8 +305,8 @@ EndstopHitDetails EndstopsManager::CheckEndstops() noexcept
 		if (actioned->Acknowledge(ret))
 		{
 			// The actioned endstop has completed so remove it from the active list
-			EndstopOrZProbe *prev = nullptr;
-			for (EndstopOrZProbe *es = activeEndstops; es != nullptr; )
+			EndstopOrZProbe *_ecv_from _ecv_null prev = nullptr;
+			for (EndstopOrZProbe *_ecv_from _ecv_null es = activeEndstops; es != nullptr; )
 			{
 				if (es == actioned)
 				{
@@ -335,7 +335,7 @@ EndstopHitDetails EndstopsManager::CheckEndstops() noexcept
 
 // Configure the endstops in response to M574.
 // Caller has not locked movement. If we make any changes, we must lock movement first in case a move using endstops is executing or about to be queued.
-GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& outbuf) THROWS(GCodeException)
+GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & outbuf) THROWS(GCodeException)
 {
 	// First count how many axes we are configuring, and lock movement if necessary
 	unsigned int axesSeen = 0;
@@ -469,7 +469,7 @@ GCodeResult EndstopsManager::HandleM574(GCodeBuffer& gb, const StringRef& reply,
 				case EndStopType::zProbeAsEndstop:
 				{
 					// Asking for a ZProbe or stall detection endstop, so we can delete any existing endstop(s) and create new ones
-					uint32_t zProbeNumber = gb.Seen('K') ? gb.GetUIValue() : 0;
+					const uint32_t zProbeNumber = gb.Seen('K') ? gb.GetUIValue() : 0;
 					ReplaceObject(axisEndstops[axis], new ZProbeEndstop(axis, pos, zProbeNumber));
 					break;
 				}
@@ -522,7 +522,7 @@ void EndstopsManager::GetM119report(const StringRef& reply) noexcept
 	reply.copy("Endstops - ");
 	for (size_t axis = 0; axis < reprap.GetGCodes().GetTotalAxes(); ++axis)
 	{
-		const char * const status = (axisEndstops[axis] == nullptr)
+		const char *_ecv_array const status = (axisEndstops[axis] == nullptr)
 										? "no endstop"
 											: TranslateEndStopResult(axisEndstops[axis]->Stopped(), axisEndstops[axis]->GetAtHighEnd());
 		reply.catf("%c: %s, ", reprap.GetGCodes().GetAxisLetters()[axis], status);
@@ -530,7 +530,7 @@ void EndstopsManager::GetM119report(const StringRef& reply) noexcept
 	reply.catf("Z probe: %s", TranslateEndStopResult(GetZProbeOrDefault(0)->Stopped(), false));
 }
 
-const char *EndstopsManager::TranslateEndStopResult(bool hit, bool atHighEnd) noexcept
+const char *_ecv_array EndstopsManager::TranslateEndStopResult(bool hit, bool atHighEnd) noexcept
 {
 	if (hit)
 	{
@@ -554,7 +554,7 @@ GCodeResult EndstopsManager::ProgramZProbe(GCodeBuffer& gb, const StringRef& rep
 {
 	const unsigned int probeNumber = (gb.Seen('K')) ? gb.GetLimitedUIValue('K', MaxZProbes) : 0;
 	ReadLocker lock(zProbesLock);
-	ZProbe * const zProbe = zProbes[probeNumber];
+	ZProbe *_ecv_from _ecv_null const zProbe = zProbes[probeNumber];
 	if (zProbe == nullptr)
 	{
 		reply.copy("Invalid Z probe index");
@@ -591,7 +591,7 @@ bool EndstopsManager::WriteZProbeParameters(FileStore *f, bool includingG31) con
 	bool written = false;
 	for (size_t i = 0; i < MaxZProbes; ++i)
 	{
-		ZProbe * const zp = zProbes[i];
+		ZProbe *_ecv_from _ecv_null const zp = zProbes[i];
 		if (zp != nullptr)
 		{
 			if (includingG31)
@@ -650,7 +650,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 
 	WriteLocker lock(zProbesLock);
 
-	ZProbe * const existingProbe = zProbes[probeNumber];
+	ZProbe *_ecv_from _ecv_null const existingProbe = zProbes[probeNumber];
 	if (existingProbe == nullptr && !seenType)
 	{
 		reply.printf("Z probe %u not found", probeNumber);
@@ -670,7 +670,7 @@ GCodeResult EndstopsManager::HandleM558(GCodeBuffer& gb, const StringRef &reply)
 
 		DeleteObject(zProbes[probeNumber]);		// delete the old probe first, the new one might use the same ports
 
-		ZProbe *newProbe;
+		ZProbe *_ecv_from newProbe;
 		switch ((ZProbeType)probeType)
 		{
 		case ZProbeType::none:
@@ -757,7 +757,7 @@ GCodeResult EndstopsManager::HandleG31(GCodeBuffer& gb, const StringRef& reply) 
 // Validate any enabled stall endstops, returning true if all OK, else store the error details and return false
 bool EndstopsManager::ValidateEndstops(const DDA& dda) noexcept
 {
-	for (const EndstopOrZProbe *_ecv_null es = activeEndstops; es != nullptr; es = es->GetNext())
+	for (const EndstopOrZProbe *_ecv_from _ecv_null es = activeEndstops; es != nullptr; es = es->GetNext())
 	{
 		validationResult = es->Validate(dda, failingDriverNumber);
 		if (validationResult != EndstopValidationResult::ok)

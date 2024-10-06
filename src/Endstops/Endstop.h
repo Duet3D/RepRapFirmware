@@ -26,16 +26,16 @@ class EndstopOrZProbe INHERIT_OBJECT_MODEL
 {
 public:
 	EndstopOrZProbe(uint8_t p_axis) noexcept : next(nullptr), axis(p_axis) {}
-	EndstopOrZProbe(const EndstopOrZProbe&) = delete;
-	virtual ~EndstopOrZProbe() noexcept {}
+	EndstopOrZProbe(const EndstopOrZProbe &_ecv_from) = delete;
+	virtual ~EndstopOrZProbe() noexcept override {}
 
 	virtual bool Stopped() const noexcept = 0;
 	virtual EndstopHitDetails CheckTriggered() noexcept = 0;
 	virtual bool Acknowledge(EndstopHitDetails what) noexcept = 0;
 	virtual EndstopValidationResult Validate(const DDA& dda, uint8_t& failingDriver) const noexcept { return EndstopValidationResult::ok; }		// overridden for stall endstops
 
-	EndstopOrZProbe *GetNext() const noexcept { return next; }
-	void SetNext(EndstopOrZProbe *e) noexcept { next = e; }
+	EndstopOrZProbe *_ecv_from _ecv_null GetNext() const noexcept { return next; }
+	void SetNext(EndstopOrZProbe *_ecv_from _ecv_null e) noexcept { next = e; }
 
 	unsigned int GetAxis() const noexcept { return axis; }
 
@@ -51,7 +51,7 @@ protected:
 #endif
 
 private:
-	EndstopOrZProbe *next;								// next endstop in linked list
+	EndstopOrZProbe *_ecv_from _ecv_null next;			// next endstop in linked list
 	uint8_t axis;										// which axis this endstop is on
 
 #if HAS_STALL_DETECT && (SUPPORT_TMC2660 || SUPPORT_TMC51xx)
@@ -98,7 +98,7 @@ public:
 	virtual EndStopType GetEndstopType() const noexcept = 0;
 	virtual bool IsZProbe() const noexcept { return false; }
 	virtual int GetZProbeNumber() const noexcept { return -1; }
-	virtual bool Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept = 0;
+	virtual bool Prime(const Kinematics &_ecv_from kin, const AxisDriversConfig& axisDrivers) noexcept = 0;
 	virtual void AppendDetails(const StringRef& str) noexcept = 0;
 	virtual bool ShouldReduceAcceleration() const noexcept { return false; }
 

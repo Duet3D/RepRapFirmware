@@ -31,7 +31,7 @@ bool StallDetectionEndstop::Stopped() const noexcept
 }
 
 // This is called to prime axis endstops
-bool StallDetectionEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept
+bool StallDetectionEndstop::Prime(const Kinematics &_ecv_from kin, const AxisDriversConfig& axisDrivers) noexcept
 {
 	// Find which drivers are relevant, and decide whether we stop just the driver, just the axis, or everything
 	stopAll = kin.GetControllingDrives(GetAxis(), true).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));

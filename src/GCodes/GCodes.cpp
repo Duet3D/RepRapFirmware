@@ -205,7 +205,7 @@ void GCodes::Reset() noexcept
 {
 	// Here we could reset the input sources as well, but this would mess up M122\nM999
 	// because both codes are sent at once from the web interface. Hence we don't do this here.
-	for (GCodeBuffer *gb : gcodeSources)
+	for (GCodeBuffer *_ecv_null gb : gcodeSources)
 	{
 		if (gb != nullptr)
 		{
@@ -296,14 +296,14 @@ void GCodes::Reset() noexcept
 
 	displayNoToolWarning = false;
 
-	for (const GCodeBuffer*& gbp : resourceOwners)
+	for (const GCodeBuffer *_ecv_null & gbp : resourceOwners)
 	{
 		gbp = nullptr;
 	}
 }
 
 // Set the GCodeBuffer (if any) associated with a serial channel
-GCodeBuffer *GCodes::GetSerialGCodeBuffer(size_t serialPortNumber) const noexcept
+GCodeBuffer *_ecv_null GCodes::GetSerialGCodeBuffer(size_t serialPortNumber) const noexcept
 {
 	switch (serialPortNumber)
 	{
@@ -317,7 +317,7 @@ GCodeBuffer *GCodes::GetSerialGCodeBuffer(size_t serialPortNumber) const noexcep
 // Return true if any channel other than the daemon is executing a file macro
 bool GCodes::DoingFileMacro() const noexcept
 {
-	for (const GCodeBuffer *gbp : gcodeSources)
+	for (const GCodeBuffer *_ecv_null gbp : gcodeSources)
 	{
 		if (gbp != nullptr && gbp != DaemonGCode() && gbp->IsDoingFileMacro())
 		{
@@ -330,7 +330,7 @@ bool GCodes::DoingFileMacro() const noexcept
 // Return true if any channel is waiting for a message acknowledgement
 bool GCodes::WaitingForAcknowledgement() const noexcept
 {
-	for (const GCodeBuffer *gbp : gcodeSources)
+	for (const GCodeBuffer *_ecv_null gbp : gcodeSources)
 	{
 		if (gbp != nullptr && gbp->LatestMachineState().waitingForAcknowledgement)
 		{
@@ -374,7 +374,7 @@ void GCodes::CheckFinishedRunningConfigFile(GCodeBuffer& gb) noexcept
 		gb.LatestMachineState().GetPrevious()->CopyStateFrom(gb.LatestMachineState());	// so that M83 etc. in nested files don't get forgotten
 		if (gb.LatestMachineState().GetPrevious()->GetPrevious() == nullptr)			// if we've finished running config.g rather than a macro it called
 		{
-			for (GCodeBuffer *gb2 : gcodeSources)
+			for (GCodeBuffer *_ecv_null gb2 : gcodeSources)
 			{
 				if (gb2 != nullptr && gb2 != &gb)
 				{
@@ -424,7 +424,7 @@ void GCodes::Spin() noexcept
 	const size_t originalNextGCodeSource = nextGcodeSource;
 	do
 	{
-		GCodeBuffer * const gbp = gcodeSources[nextGcodeSource];
+		GCodeBuffer *_ecv_null const gbp = gcodeSources[nextGcodeSource];
 		++nextGcodeSource;													// move on to the next gcode source ready for next time
 		if (nextGcodeSource == GCodeChannel::Autopause)
 		{
@@ -887,7 +887,7 @@ void GCodes::DoEmergencyStop() noexcept
 // reprap.EmergencyStop calls this to shut down this module
 void GCodes::EmergencyStop() noexcept
 {
-	for (GCodeBuffer *gbp : gcodeSources)
+	for (GCodeBuffer *_ecv_null gbp : gcodeSources)
 	{
 		if (gbp != nullptr)
 		{
@@ -1160,7 +1160,7 @@ bool GCodes::IsHeatingUp() const noexcept
 // Stop waiting for temperatures to be reached, optionally just in the file(s) being printed
 void GCodes::CancelWaitForTemperatures(bool onlyInPrintFiles) noexcept
 {
-	for (GCodeBuffer *gb : gcodeSources)
+	for (GCodeBuffer *_ecv_null gb : gcodeSources)
 	{
 		if (gb != nullptr && gb->IsWaitingForTemperatures() && (!onlyInPrintFiles || (gb->IsFileChannel() && (!gb->IsDoingFileMacro() || gb->LatestMachineState().CanRestartMacro()))))
 		{
@@ -1331,10 +1331,10 @@ bool GCodes::LowVoltageResume() noexcept
 // Write the resurrect.g file
 void GCodes::SaveResumeInfo(bool wasPowerFailure) noexcept
 {
-	const char* const printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
+	const char *_ecv_array _ecv_null const printingFilename = reprap.GetPrintMonitor().GetPrintingFilename();
 	if (printingFilename != nullptr)
 	{
-		FileStore * const f = platform.OpenSysFile(RESUME_AFTER_POWER_FAIL_G, OpenMode::write);
+		FileStore *_ecv_null const f = platform.OpenSysFile(RESUME_AFTER_POWER_FAIL_G, OpenMode::write);
 		if (f == nullptr)
 		{
 			platform.MessageF(ErrorMessage, "Failed to create file %s\n", RESUME_AFTER_POWER_FAIL_G);
@@ -1664,7 +1664,7 @@ void GCodes::Diagnostics(MessageType mtype) noexcept
 	String<StringLength50> text;
 	for (unsigned int i = 0; i < NumMovementSystems; ++i)
 	{
-		const GCodeBuffer * const movementOwner = resourceOwners[MoveResourceBase + i];
+		const GCodeBuffer *_ecv_null const movementOwner = resourceOwners[MoveResourceBase + i];
 		if (i != 0)
 		{
 			text.cat(", ");
@@ -1673,7 +1673,7 @@ void GCodes::Diagnostics(MessageType mtype) noexcept
 	}
 	platform.MessageF(mtype, "Movement locks held by %s\n", text.c_str());
 
-	for (GCodeBuffer *gb : gcodeSources)
+	for (GCodeBuffer *_ecv_null gb : gcodeSources)
 	{
 		if (gb != nullptr)
 		{
@@ -1888,7 +1888,7 @@ void GCodes::LoadExtrusionAndFeedrateFromGCode(GCodeBuffer& gb, MovementState& m
 	if (gb.Seen(extrudeLetter))												// DC 2018-08-07: at E3D's request, extrusion is now recognised even on uncoordinated moves
 	{
 		// Check that we have a tool to extrude with
-		const Tool* const tool = ms.currentTool;
+		const Tool *_ecv_null const tool = ms.currentTool;
 		if (tool == nullptr)
 		{
 			displayNoToolWarning = true;
@@ -2120,7 +2120,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 	}
 
 	// Check for 'R' parameter to move relative to a restore point
-	const RestorePoint * rp = nullptr;
+	const RestorePoint *_ecv_null rp = nullptr;
 	if (ms.moveType == 0 && gb.Seen('R'))
 	{
 		const uint32_t rParam = gb.GetUIValue();
@@ -3014,7 +3014,7 @@ bool GCodes::ReadMove(MovementSystemNumber queueNumber, RawMove& m) noexcept
 											? ms.laserPixelData.pixelPwm[ms.laserPixelData.numPixels - ms.segmentsLeft]
 												: (ms.isCoordinated && ms.laserPixelData.numPixels == 1)
 												  ? ms.laserPixelData.pixelPwm[0]
-													: 0;
+													: 0u;
 		}
 #endif
 		m = ms;
@@ -3257,7 +3257,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char *_ecv_array fileName, bool 
 #endif
 	{
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-		FileStore * const f = platform.OpenSysFile(fileName, OpenMode::read);
+		FileStore *_ecv_null const f = platform.OpenSysFile(fileName, OpenMode::read);
 		if (f == nullptr)
 		{
 			if (reportMissing)
@@ -3443,7 +3443,7 @@ void GCodes::HandleM114(GCodeBuffer& gb, const StringRef& s) const noexcept
 // If successful return true, else write an error message to reply and return false
 bool GCodes::QueueFileToPrint(const char *_ecv_array fileName, const StringRef& reply) noexcept
 {
-	FileStore * const f = platform.OpenFile(Platform::GetGCodeDir(), fileName, OpenMode::read);
+	FileStore *_ecv_null const f = platform.OpenFile(Platform::GetGCodeDir(), fileName, OpenMode::read);
 	if (f != nullptr)
 	{
 		fileToPrint.Set(f);
@@ -3897,7 +3897,7 @@ GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
 		}
 		else
 		{
-			Tool* const tool = Tool::Create(toolNumber, name.c_str(), drives, dCount, heaters, hCount, xMap, yMap, zMap, fanMap, filamentDrive, sCount, spindleNumber, reply);
+			Tool *_ecv_null const tool = Tool::Create(toolNumber, name.c_str(), drives, dCount, heaters, hCount, xMap, yMap, zMap, fanMap, filamentDrive, sCount, spindleNumber, reply);
 			if (tool == nullptr)
 			{
 				return GCodeResult::error;
@@ -4048,7 +4048,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 		if (gb.IsLastCommand() && !gb.IsDoingFileMacro())
 		{
 			// Put "ok" at the end
-			const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
+			const char *_ecv_array const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
 			// We don't need to handle M20 here because we always allocate an output buffer for that one
 			if (gb.GetCommandLetter() == 'M' && (gb.GetCommandNumber() == 105 || gb.GetCommandNumber() == 998))
 			{
@@ -4083,7 +4083,7 @@ void GCodes::HandleReplyPreserveResult(GCodeBuffer& gb, GCodeResult rslt, const 
 }
 
 // Handle a successful response when the response is in an OutputBuffer
-void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
+void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *_ecv_null reply) noexcept
 {
 	gb.SetLastResult(GCodeResult::ok);
 
@@ -4103,7 +4103,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 #endif
 
 	const MessageType type = gb.GetResponseMessageType();
-	const char* const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
+	const char *_ecv_array const response = (gb.GetCommandLetter() == 'M' && gb.GetCommandNumber() == 998) ? "rs " : "ok";
 
 	switch (gb.LatestMachineState().compatibility.RawValue())
 	{
@@ -4170,7 +4170,7 @@ void GCodes::HandleReply(GCodeBuffer& gb, OutputBuffer *reply) noexcept
 }
 
 // Set all a tool's heaters active and standby temperatures, for M104/M109
-void GCodes::SetToolHeaters(const GCodeBuffer& gb, Tool *tool, float temperature) THROWS(GCodeException)
+void GCodes::SetToolHeaters(const GCodeBuffer& gb, Tool *_ecv_null tool, float temperature) THROWS(GCodeException)
 {
 	if (tool == nullptr)
 	{
@@ -4190,7 +4190,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 	MovementState& ms = GetMovementState(gb);
 	if (!ms.IsCurrentObjectCancelled())
 	{
-		Tool* const currentTool = ms.currentTool;
+		Tool *_ecv_null const currentTool = ms.currentTool;
 		if (currentTool != nullptr && retract != currentTool->IsRetracted())
 		{
 			// We potentially need to retract/hop or unhop/untrtract
@@ -4289,7 +4289,7 @@ GCodeResult GCodes::RetractFilament(GCodeBuffer& gb, bool retract) THROWS(GCodeE
 // Load the specified filament into a tool
 GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	Tool * const tool = GetMovementState(gb).currentTool;
+	Tool *_ecv_null const tool = GetMovementState(gb).currentTool;
 	if (tool == nullptr)
 	{
 		reply.copy("No tool selected");
@@ -4346,7 +4346,7 @@ GCodeResult GCodes::LoadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS
 // Unload the current filament from a tool
 GCodeResult GCodes::UnloadFilament(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	Tool * const tool = GetMovementState(gb).currentTool;
+	Tool *_ecv_null const tool = GetMovementState(gb).currentTool;
 	if (tool == nullptr)
 	{
 		reply.copy("No tool selected");
@@ -5605,7 +5605,7 @@ bool GCodes::EvaluateConditionForDisplay(const char *_ecv_array str) const noexc
 		ExpressionParser parser(LcdGCode(), str, str + strlen(str));
 		return parser.ParseBoolean();
 	}
-	catch (GCodeException&)
+	catch (const GCodeException&)
 	{
 		return false;
 	}
@@ -5620,7 +5620,7 @@ bool GCodes::EvaluateValueForDisplay(const char *_ecv_array str, ExpressionValue
 		expr = parser.Parse();
 		return false;
 	}
-	catch (GCodeException&)
+	catch (const GCodeException&)
 	{
 		expr.SetNull(nullptr);
 		return true;

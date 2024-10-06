@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include <Endstops/SwitchEndstop.h>
+#include "SwitchEndstop.h"
 
 #include <Platform/RepRap.h>
 #include <Platform/Platform.h>
@@ -63,7 +63,7 @@ GCodeResult SwitchEndstop::Configure(GCodeBuffer& gb, const StringRef& reply) TH
 	return Configure(portNames.c_str(), reply);
 }
 
-GCodeResult SwitchEndstop::Configure(const char *pinNames, const StringRef& reply) noexcept
+GCodeResult SwitchEndstop::Configure(const char *_ecv_array pinNames, const StringRef& reply) noexcept
 {
 	ReleasePorts();
 
@@ -133,7 +133,7 @@ bool SwitchEndstop::Stopped() const noexcept
 }
 
 // This is called to prime axis endstops
-bool SwitchEndstop::Prime(const Kinematics& kin, const AxisDriversConfig& axisDrivers) noexcept
+bool SwitchEndstop::Prime(const Kinematics &_ecv_from kin, const AxisDriversConfig& axisDrivers) noexcept
 {
 	// Decide whether we stop just the driver, just the axis, or everything
 	stopAll = kin.GetControllingDrives(GetAxis(), true).Intersects(~AxesBitmap::MakeFromBits(GetAxis()));
