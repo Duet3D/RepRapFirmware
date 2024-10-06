@@ -215,7 +215,7 @@ constexpr float MaxArcDeviation = 0.005;				// maximum deviation from ideal arc 
 constexpr float MinArcSegmentLength = 0.02;				// G2 and G3 arc movement commands get split into segments at least this long
 constexpr float MaxArcSegmentLength = 1.0;				// G2 and G3 arc movement commands get split into segments at most this long
 constexpr float MaxArcSegmentsPerSec = 200.0;
-constexpr float SegmentsPerFulArcCalculation = 8.0;		// we do the full sine/cosine calculation every this number of segments
+constexpr unsigned int SegmentsPerFulArcCalculation = 8; // we do the full sine/cosine calculation every this number of segments
 
 constexpr uint32_t DefaultIdleTimeout = 30000;			// Milliseconds
 constexpr float DefaultIdleCurrentFactor = 0.3;			// Proportion of normal motor current that we use for idle hold
