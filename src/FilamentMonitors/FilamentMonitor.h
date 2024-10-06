@@ -13,6 +13,7 @@
 #include <ObjectModel/ObjectModel.h>
 #include <RTOSIface/RTOSIface.h>
 #include <RRF3Common.h>
+#include <GCodes/GCodes.h>
 
 #if SUPPORT_CAN_EXPANSION
 struct CanMessageFilamentMonitorsStatusNew2;
@@ -174,7 +175,7 @@ private:
 								MaxExtruders;
 #endif
 
-	static FilamentMonitor *_ecv_from filamentSensors[NumFilamentMonitors];
+	static FilamentMonitor *_ecv_from _ecv_null filamentSensors[NumFilamentMonitors];
 
 #if SUPPORT_REMOTE_COMMANDS
 	static constexpr uint32_t StatusUpdateInterval = 2000;				// how often we send status reports when there isn't a change

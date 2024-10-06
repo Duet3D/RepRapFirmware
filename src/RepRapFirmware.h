@@ -157,7 +157,7 @@ namespace CanInterface
 #define REPORT_INTERNAL_ERROR do { reprap.ReportInternalError((__FILE__), (__func__), (__LINE__)); } while(0)
 
 // Assertion mechanism
-extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *file) noexcept __attribute__((naked));
+extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *_ecv_array file) noexcept __attribute__((naked));
 #define RRF_ASSERT(_expr) do { if (!(_expr)) { vAssertCalled(__LINE__, __FILE__); } } while (false)
 
 #ifdef __ECV__			// eCv doesn't understand the gcc asm syntax in these functions
@@ -341,6 +341,7 @@ class FilamentMonitor;
 class RandomProbePointSet;
 class Logger;
 class FansManager;
+class GCodeException;
 
 #if SUPPORT_IOBITS
 class PortControl;
@@ -509,7 +510,7 @@ inline constexpr ParameterLettersBitmap ParameterLettersToBitmap(const char *_ec
 }
 
 // Debugging support
-extern "C" void debugPrintf(const char* fmt, ...) noexcept __attribute__ ((format (printf, 1, 2)));
+extern "C" void debugPrintf(const char *_ecv_array fmt, ...) noexcept __attribute__ ((format (printf, 1, 2)));
 #define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
 
 // Functions and globals not part of any class

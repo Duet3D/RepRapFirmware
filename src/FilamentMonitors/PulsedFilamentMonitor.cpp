@@ -323,7 +323,7 @@ FilamentSensorStatus PulsedFilamentMonitor::Clear() noexcept
 void PulsedFilamentMonitor::Diagnostics(MessageType mtype, unsigned int extruder) noexcept
 {
 	Poll();
-	const char* const statusText = (samplesReceived < 2) ? "no data received" : "ok";
+	const char *_ecv_array const statusText = (samplesReceived < 2) ? "no data received" : "ok";
 	reprap.GetPlatform().MessageF(mtype, "Extruder %u sensor: %s\n", extruder, statusText);
 }
 

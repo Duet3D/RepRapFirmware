@@ -30,7 +30,7 @@
 
 // Static data
 ReadWriteLock FilamentMonitor::filamentMonitorsLock;
-FilamentMonitor *FilamentMonitor::filamentSensors[NumFilamentMonitors] = { 0 };
+FilamentMonitor *_ecv_from _ecv_null FilamentMonitor::filamentSensors[NumFilamentMonitors] = { 0 };
 
 #if SUPPORT_REMOTE_COMMANDS
 uint32_t FilamentMonitor::whenStatusLastSent = 0;
@@ -166,7 +166,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 	gb.TryGetUIValue('P', newSensorType, seen);
 
 	WriteLocker lock(filamentMonitorsLock);
-	FilamentMonitor* sensor = filamentSensors[extruder];
+	FilamentMonitor *_ecv_from _ecv_null sensor = filamentSensors[extruder];
 
 	if (seen)
 	{
@@ -187,8 +187,8 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 
 		try
 		{
-			const GCodeResult rslt = sensor->Configure(gb, reply, seen);		// configure the sensor (may throw)
-			if (Succeeded(rslt))
+			const GCodeResult rslt2 = sensor->Configure(gb, reply, seen);		// configure the sensor (may throw)
+			if (Succeeded(rslt2))
 			{
 				filamentSensors[extruder] = sensor;
 				reprap.SensorsUpdated();
@@ -197,7 +197,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 			{
 				delete sensor;
 			}
-			return rslt;
+			return rslt2;
 		}
 		catch (...)
 		{
@@ -223,7 +223,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 
 // Factory function to create a filament monitor.
 // If successful, return the filament monitor object; else throw a GCodeException.
-/*static*/ FilamentMonitor *FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
+/*static*/ FilamentMonitor *_ecv_from FilamentMonitor::Create(unsigned int extruder, unsigned int monitorType, GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const size_t drv = ExtruderToLogicalDrive(extruder);
 	const DriverId did = reprap.GetMove().GetExtruderDriver(extruder);
@@ -247,7 +247,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 	}
 #endif
 
-	FilamentMonitor *fm;
+	FilamentMonitor *_ecv_from fm;
 	switch (monitorType)
 	{
 	case 1:		// active high switch
@@ -290,7 +290,7 @@ bool FilamentMonitor::IsValid(size_t extruderNumber) const noexcept
 // ISR
 /*static*/ void FilamentMonitor::InterruptEntry(CallbackParameter param) noexcept
 {
-	FilamentMonitor * const fm = static_cast<FilamentMonitor*>(param.vp);
+	FilamentMonitor *_ecv_from const fm = static_cast<FilamentMonitor *_ecv_from>(param.vp);
 	if (fm->Interrupt())
 	{
 		fm->isrExtruderStepsCommanded = reprap.GetMove().GetAccumulatedExtrusion(fm->driveNumber, fm->isrWasPrinting);
@@ -322,7 +322,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 			FilamentSensorStatus fst(FilamentSensorStatus::noMonitor);
 			if (filamentSensors[drv] != nullptr)
 			{
-				FilamentMonitor& fs = *filamentSensors[drv];
+				FilamentMonitor &_ecv_from fs = *filamentSensors[drv];
 				GCodes& gCodes = reprap.GetGCodes();
 #if SUPPORT_CAN_EXPANSION
 				if (!fs.hasRemote)
@@ -482,7 +482,7 @@ static uint32_t checkCalls = 0, clearCalls = 0;		//TEMP DEBUG
 {
 	WriteLocker lock(filamentMonitorsLock);
 
-	for (FilamentMonitor *&f : filamentSensors)
+	for (FilamentMonitor *_ecv_from _ecv_null &f : filamentSensors)
 	{
 		DeleteObject(f);
 	}
