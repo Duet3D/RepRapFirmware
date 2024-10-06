@@ -29,7 +29,7 @@ public:
 	DhtTemperatureSensor(unsigned int sensorNum, DhtSensorType t) noexcept;
 	~DhtTemperatureSensor() noexcept override;
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException) override;
 #if 0 //SUPPORT_REMOTE_COMMANDS
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
 #endif

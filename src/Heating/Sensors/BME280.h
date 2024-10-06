@@ -20,7 +20,7 @@ class BME280TemperatureSensor : public SpiTemperatureSensor
 public:
 	BME280TemperatureSensor(unsigned int sensorNum) noexcept;
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException) override;
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
 #endif

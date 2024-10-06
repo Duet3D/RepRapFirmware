@@ -144,7 +144,11 @@ namespace CanInterface
 #include <General/SafeVsnprintf.h>
 #include <RRF3Common.h>
 
-#define THROWS(...)				// expands to nothing, for providing exception specifications
+#ifdef __ECV__
+#define THROWS(...)		_ecv_throws(__VA_ARGS__)
+#else
+#define THROWS(...)		noexcept(false)			// best we can do is say that it throws something
+#endif
 
 // Error reporting for functions that are allowed to throw
 #define THROW_INTERNAL_ERROR	ThrowGCodeException("internal error at file " __FILE__ "(%d)", (int32_t)__LINE__)

@@ -16,7 +16,7 @@ public:
 	AdditionalOutputSensor(unsigned int sensorNum, const char *_ecv_array type, bool pEnforcePollOrder) noexcept;
 	virtual ~AdditionalOutputSensor() noexcept override;
 
-	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) override THROWS(GCodeException);
+	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException) override;
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;
 #endif

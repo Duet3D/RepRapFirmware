@@ -267,7 +267,7 @@ public:
 	void FinishWritingBinary() noexcept;
 #endif
 
-	const char *_ecv_array DataStart() const noexcept;						// Get the start of the current command
+	const char *_ecv_array DataStart() const noexcept;			// Get the start of the current command
 	size_t DataLength() const noexcept;							// Get the length of the current command
 
 	void PrintCommand(const StringRef& s) const noexcept;
@@ -289,9 +289,9 @@ public:
 	void RestartFrom(FilePosition pos) noexcept;
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
-	FileGCodeInput *GetFileInput() const noexcept { return fileInput; }
+	FileGCodeInput *_ecv_null GetFileInput() const noexcept { return fileInput; }
 #endif
-	GCodeInput *_ecv_from GetNormalInput() const noexcept { return (disabled) ? nullptr : normalInput; }
+	GCodeInput *_ecv_from _ecv_null GetNormalInput() const noexcept { return (disabled) ? nullptr : normalInput; }
 
 	void MotionCommanded() noexcept { motionCommanded = true; }
 	void MotionStopped() noexcept { motionCommanded = false; }

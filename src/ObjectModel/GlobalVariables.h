@@ -27,8 +27,8 @@ protected:
 
 	// Construct a JSON representation of those parts of the object model requested by the user
 	// This overrides the standard definition because the variable names are not fixed
-	void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, uint8_t tableNumber, const char *_ecv_array filter) const override
-			THROWS(GCodeException);
+	void ReportAsJson(OutputBuffer *buf, ObjectExplorationContext& context, const ObjectModelClassDescriptor * null classDescriptor, uint8_t tableNumber, const char *_ecv_array filter) const
+			THROWS(GCodeException) override;
 
 private:
 	VariableSet vars;
