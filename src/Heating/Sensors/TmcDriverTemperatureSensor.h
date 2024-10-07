@@ -28,6 +28,11 @@ public:
 #endif
 
 private:
+	static SensorTypeDescriptor primaryTmcDriverSensorDescriptor;
+#if defined(DUET_NG) || defined(PCCB_10)
+	static SensorTypeDescriptor duexTmcDriverSensorDescriptor;
+#endif
+
 	unsigned int channel;
 };
 

@@ -60,6 +60,9 @@ const uint8_t Cr1ReadMask = 0b01111111;			// ignore the reserved bits
 //  Openfault=0	assert fault on open circuit condition
 const uint8_t DefaultFaultMask = 0b00111100;
 
+// Sensor type descriptors
+TemperatureSensor::SensorTypeDescriptor ThermocoupleSensor31856::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new ThermocoupleSensor31856(sensorNum); } );
+
 ThermocoupleSensor31856::ThermocoupleSensor31856(unsigned int sensorNum) noexcept
 	: SpiTemperatureSensor(sensorNum, "Thermocouple (MAX31856)", MAX31856_SpiMode, MAX31856_Frequency),
 	  cr0(DefaultCr0), thermocoupleType(TypeK)

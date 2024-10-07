@@ -53,6 +53,9 @@ protected:
 #endif
 
 private:
+	static SensorTypeDescriptor dht21Descriptor;
+	static SensorTypeDescriptor dht22Descriptor;
+
 	static constexpr uint32_t MinimumReadInterval = 2100;			// ms - datasheet https://www.sparkfun.com/datasheets/Sensors/Temperature/DHT22.pdf says "Collecting period should be : >2 second"
 
 #if SAME5x

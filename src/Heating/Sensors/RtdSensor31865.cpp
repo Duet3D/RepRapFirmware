@@ -55,6 +55,9 @@ constexpr uint8_t RtdSensor31865::objectModelTableDescriptor[] = { 1, 1 };
 
 DEFINE_GET_OBJECT_MODEL_TABLE_WITH_PARENT(RtdSensor31865, SensorWithPort)
 
+// Sensor type descriptors
+TemperatureSensor::SensorTypeDescriptor RtdSensor31865::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new RtdSensor31865(sensorNum); } );
+
 RtdSensor31865::RtdSensor31865(unsigned int sensorNum) noexcept
 	: SpiTemperatureSensor(sensorNum, "PT100 (MAX31865)", MAX31865_SpiMode, MAX31865_Frequency),
 	  rrefTimes100(DefaultRef * 100), cr0(DefaultCr0)

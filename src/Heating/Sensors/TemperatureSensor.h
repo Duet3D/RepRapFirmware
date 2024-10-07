@@ -13,6 +13,29 @@ struct CanSensorReport;
 class TemperatureSensor INHERIT_OBJECT_MODEL
 {
 public:
+	// Machinery for automatically linking new sensors into the sensor types list
+	struct SensorTypeDescriptor
+	{
+	public:
+		typedef TemperatureSensor *_ecv_from (*CreationFunction)(unsigned int sensorNum) noexcept;
+
+		SensorTypeDescriptor(const char *_ecv_array p_typeName, CreationFunction p_creationFunction) noexcept;
+
+		const char *_ecv_array GetName() const noexcept { return sensorTypeName; }
+		const SensorTypeDescriptor *_ecv_null GetNext() const noexcept { return next; }
+		TemperatureSensor *Create(unsigned int sensorNum) const noexcept { return createFunction(sensorNum); }
+
+		static const SensorTypeDescriptor *_ecv_null GetRoot() noexcept { return sensorTypeListRoot; }
+
+	private:
+		// Root of the sensor types list
+		static SensorTypeDescriptor *_ecv_null sensorTypeListRoot;
+
+		SensorTypeDescriptor *_ecv_null next;
+		const char *_ecv_array sensorTypeName;
+		CreationFunction createFunction;
+	};
+
 	TemperatureSensor(unsigned int sensorNum, const char *_ecv_array type) noexcept;
 	TemperatureSensor(const TemperatureSensor &_ecv_from) = delete;
 

@@ -32,6 +32,8 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+	static SensorTypeDescriptor typeDescriptor;
+
 	TemperatureError TryInitRtd() const noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
 

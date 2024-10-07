@@ -39,6 +39,8 @@ protected:
 	DECLARE_OBJECT_MODEL
 
 private:
+	static SensorTypeDescriptor thermistorDescriptor, pt100descriptor;
+
 	void CalcDerivedParameters() noexcept;											// calculate shA and shB
 	int32_t GetRawReading(bool& valid) const noexcept;								// get the ADC reading
 	bool ConfigureHParam(int hVal, const StringRef& reply) noexcept;				// configure the H parameter returning true if successful, false if error

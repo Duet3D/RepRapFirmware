@@ -47,6 +47,11 @@ constexpr uint32_t BME280_Frequency = 4000000;			// maximum for BME280 is 10MHz
 constexpr SpiMode BME280_SpiMode = SPI_MODE_0;			// BME280 does mode 0 or mode 3 depending on value of CLK at falling edge of CS
 constexpr size_t MaxRegistersToRead = 26;
 
+// Sensor type descriptors
+TemperatureSensor::SensorTypeDescriptor BME280TemperatureSensor::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new BME280TemperatureSensor(sensorNum); } );
+TemperatureSensor::SensorTypeDescriptor BME280PressureSensor::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new BME280PressureSensor(sensorNum); } );
+TemperatureSensor::SensorTypeDescriptor BME280HumiditySensor::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new BME280HumiditySensor(sensorNum); } );
+
 // BME280 support functions, derived from code at https://github.com/BoschSensortec/BME280_driver
 
 /**\name Internal macros */

@@ -25,6 +25,9 @@ const SpiMode MCP3204_SpiMode = SPI_MODE_0;
 // Define the minimum interval between readings
 const uint32_t MinimumReadInterval = 100;		// minimum interval between reads, in milliseconds
 
+// Sensor type descriptors
+TemperatureSensor::SensorTypeDescriptor CurrentLoopTemperatureSensor::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new CurrentLoopTemperatureSensor(sensorNum); } );
+
 CurrentLoopTemperatureSensor::CurrentLoopTemperatureSensor(unsigned int sensorNum) noexcept
 	: SpiTemperatureSensor(sensorNum, "Current Loop", MCP3204_SpiMode, MCP3204_Frequency),
 	  tempAt4mA(DefaultTempAt4mA), tempAt20mA(DefaultTempAt20mA), chipChannel(DefaultChipChannel), isDifferential(false)

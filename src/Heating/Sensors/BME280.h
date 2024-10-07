@@ -33,6 +33,8 @@ public:
 	static constexpr const char *_ecv_array TypeName = "bme280";
 
 private:
+	static SensorTypeDescriptor typeDescriptor;
+
 	TemperatureError bme280_init() noexcept;
 	TemperatureError bme280_get_regs(uint8_t reg_addr, uint8_t *_ecv_array reg_data, uint16_t len) const noexcept
 		pre(len <= MaxRegistersToRead; reg_data.lim >= len);
@@ -76,9 +78,12 @@ public:
 	BME280PressureSensor(unsigned int sensorNum) noexcept;
 	~BME280PressureSensor() noexcept;
 
-	const char *GetShortSensorType() const noexcept override { return TypeName; }
+	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 
 	static constexpr const char *TypeName = "bmepressure";
+
+private:
+	static SensorTypeDescriptor typeDescriptor;
 };
 
 // This class represents a DHT humidity sensor
@@ -88,9 +93,12 @@ public:
 	BME280HumiditySensor(unsigned int sensorNum) noexcept;
 	~BME280HumiditySensor() noexcept;
 
-	const char *GetShortSensorType() const noexcept override { return TypeName; }
+	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName; }
 
 	static constexpr const char *TypeName = "bmehumidity";
+
+private:
+	static SensorTypeDescriptor typeDescriptor;
 };
 
 #endif	// SUPPORT_BME280

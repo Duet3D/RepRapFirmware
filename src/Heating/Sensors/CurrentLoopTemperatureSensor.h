@@ -43,6 +43,8 @@ private:
 	static constexpr float DefaultTempAt4mA = 385.0;
 	static constexpr float DefaultTempAt20mA = 1600.0;
 	static constexpr uint32_t DefaultChipChannel = 0;
+
+	static SensorTypeDescriptor typeDescriptor;
 };
 
 #endif // SUPPORT_SPI_SENSORS
