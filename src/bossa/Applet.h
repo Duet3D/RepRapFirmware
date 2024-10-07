@@ -45,8 +45,8 @@ public:
            uint32_t reset) THROWS(GCodeException);
     virtual ~Applet() noexcept {}
 
-    virtual uint32_t size() noexcept { return _size; }
-    virtual uint32_t addr() noexcept { return _addr; }
+    virtual uint32_t GetSize() noexcept { return _size; }
+    virtual uint32_t GetAddr() noexcept { return _addr; }
 
     virtual void setStack(uint32_t stack) THROWS(GCodeException);
 

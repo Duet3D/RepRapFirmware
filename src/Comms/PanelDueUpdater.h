@@ -53,16 +53,16 @@ private:
 
 	uint8_t serialChannel;
 	size_t currentBaudRate;
-	Samba* samba;
-	SerialPort *_ecv_from serialPort;
-	Device* device;
-	FlasherObserver *_ecv_from flasherObserver;
-	Flasher* flasher;
-	AsyncSerial::InterruptCallbackFn currentInterruptCallbackFn;
+	Samba *_ecv_null samba;
+	SerialPort *_ecv_from _ecv_null serialPort;
+	Device *_ecv_null device;
+	FlasherObserver *_ecv_from _ecv_null flasherObserver;
+	Flasher *_ecv_null flasher;
+	AsyncSerial::InterruptCallbackFn _ecv_null currentInterruptCallbackFn;
 	uint32_t offset;
 	uint32_t erasedAndResetAt;
 	FlashState state;
-	FileStore *firmwareFile;
+	FileStore *_ecv_null firmwareFile;
 
 	AsyncSerial* GetAuxPort() noexcept;
 };

@@ -16,67 +16,69 @@
 class AuxSerialPort : public SerialPort
 {
 public:
-	AuxSerialPort(AsyncSerial& uartClass) noexcept : uart(uartClass), _timeout(0) {}
-	~AuxSerialPort() {}
+	explicit AuxSerialPort(AsyncSerial& uartClass) noexcept : uart(uartClass), _timeout(0) {}
+	~AuxSerialPort() override {}
 
-	bool open(int baud = 115200,
-			  int data = 8,
+	bool open(unsigned int baud = 115200,
+			  unsigned int data = 8,
 			  SerialPort::Parity parity = SerialPort::ParityNone,
 			  SerialPort::StopBit stop = SerialPort::StopBitOne) noexcept override { return true; }
 	void close() noexcept override {}
 
-	int read(uint8_t* data, int size) noexcept override;
-	int write(const uint8_t* data, int size) noexcept override { return this->uart.write(data, size); }
+	int read(uint8_t *_ecv_array data, size_t size) noexcept override;
+	int write(const uint8_t *_ecv_array data, size_t size) noexcept override { return this->uart.write(data, size); }
 	int get() noexcept override;
 	int put(int c) noexcept override { return this->uart.write(c); }
 
-	bool timeout(int millisecs) noexcept override { _timeout = millisecs; return true; }
+	bool timeout(uint32_t millisecs) noexcept override { _timeout = millisecs; return true; }
 	void flush() noexcept override { this->uart.flush(); }
 
 private:
 	AsyncSerial& uart;
-	int _timeout;
+	uint32_t _timeout;
 };
 
 int	AuxSerialPort::get() noexcept
 {
 	uint8_t byte;
 
-	if (read(&byte, 1) != 1)
+	if (read(static_cast<uint8_t *_ecv_array>(&byte), 1) != 1)
+	{
 		return -1;
+	}
 
-	return byte;
+	return (int)byte;
 }
 
-int AuxSerialPort::read(uint8_t* data, int size) noexcept
+int AuxSerialPort::read(uint8_t *_ecv_array data, size_t size) noexcept
 {
 	const uint32_t start = millis();
-	int read = 0;
+	size_t numRead = 0;
 	do
 	{
-		const int readNow = (int) this->uart.readBytes((uint8_t*)data+read, size-read);
+		const int readNow = (int) this->uart.readBytes(data + numRead, size - numRead);
 		if (readNow >= 0)
 		{
-			read += readNow;
+			numRead += (unsigned int)readNow;
 		}
-	} while (read < size && (int) (millis() - start) < _timeout);
-	return read;
+	} while (numRead < size && (millis() - start) < _timeout);
+	return numRead;
 }
 
 class DebugObserver : public FlasherObserver
 {
 public:
 	DebugObserver() noexcept : lastPercentage(0) {}
-	virtual ~DebugObserver() {}
+	virtual ~DebugObserver() override {}
 
-	void onStatus(const char *message, ...) noexcept override;
+	void onStatus(const char *_ecv_array message, ...) noexcept override;
 	void onProgress(int num, int div) noexcept override;
     void Reset() noexcept override { lastPercentage = 0; };
 private:
 	uint8_t lastPercentage;
 };
 
-void DebugObserver::onStatus(const char *message, ...) noexcept
+void DebugObserver::onStatus(const char *_ecv_array message, ...) noexcept
 {
 	va_list ap;
 
@@ -88,7 +90,8 @@ void DebugObserver::onStatus(const char *message, ...) noexcept
 void DebugObserver::onProgress(int num, int div) noexcept
 {
 	uint8_t percentage = (uint8_t)(num * 100 / div);
-	if (percentage == lastPercentage + 20) {
+	if (percentage == lastPercentage + 20u)
+	{
 		lastPercentage = percentage;
 		reprap.GetPlatform().MessageF(GenericMessage, "Progress: %d%%\n", percentage);
 	}
@@ -124,14 +127,14 @@ void PanelDueUpdater::Start(const StringRef& filenameRef, const uint32_t serialC
 	if (state == FlashState::idle)
 	{
 		serialChannel = serialChan;
-		const char * const filename = filenameRef.IsEmpty() ? PANEL_DUE_FIRMWARE_FILE : filenameRef.c_str();
+		const char *_ecv_array const filename = filenameRef.IsEmpty() ? PANEL_DUE_FIRMWARE_FILE : filenameRef.c_str();
 		firmwareFile = reprap.GetPlatform().OpenFile(FIRMWARE_DIRECTORY, filename, OpenMode::read);
 		if (firmwareFile == nullptr)
 		{
 			reprap.GetPlatform().MessageF(ErrorMessage, "Can't open file %s\n", filename);
 			state = FlashState::done;
 		}
-		else if (firmwareFile->Length() > 256 * 1024)
+		else if (firmwareFile->Length() > 256u * 1024u)
 		{
 			reprap.GetPlatform().MessageF(ErrorMessage, "Firmware file %s is too large\n", filename);
 			state = FlashState::done;
@@ -217,7 +220,7 @@ void PanelDueUpdater::Spin() noexcept
 
 		case FlashState::bossaWrite:
 			{
-				bool done = flasher->write(firmwareFile, offset);
+				const bool done = flasher->write(firmwareFile, offset);
 				if (done)
 				{
 					offset = 0;						// Reset it for verification
@@ -232,7 +235,7 @@ void PanelDueUpdater::Spin() noexcept
 			{
 				uint32_t pageErrors;
 				uint32_t totalErrors;
-				bool done = flasher->verify(firmwareFile, pageErrors, totalErrors, offset);
+				const bool done = flasher->verify(firmwareFile, pageErrors, totalErrors, offset);
 				if (done && pageErrors == 0)
 				{
 					state = FlashState::bossaWriteOptions;
@@ -248,7 +251,7 @@ void PanelDueUpdater::Spin() noexcept
 		case FlashState::bossaWriteOptions:
 			{
 				reprap.GetPlatform().Message(GenericMessage, "Writing PanelDue flash options\n");
-				BossaFlash* flash = device->getFlash();
+				BossaFlash *_ecv_from flash = device->getFlash();
 				flash->setBootFlash(true);
 				flash->writeOptions();
 				state = FlashState::bossaReset;
@@ -333,9 +336,9 @@ void PanelDueUpdater::Spin() noexcept
 AsyncSerial* PanelDueUpdater::GetAuxPort() noexcept
 {
 	return
-			serialChannel == 0 || serialChannel > NumSerialChannels ? nullptr :
+			(serialChannel == 0 || serialChannel > NumSerialChannels) ? nullptr :
 #ifdef SERIAL_AUX2_DEVICE
-			serialChannel == 2 ? &SERIAL_AUX2_DEVICE :
+			(serialChannel == 2) ? &SERIAL_AUX2_DEVICE :
 #endif
 			&SERIAL_AUX_DEVICE;	// Channel 1
 }

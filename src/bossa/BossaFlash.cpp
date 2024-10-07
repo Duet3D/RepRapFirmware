@@ -47,7 +47,7 @@ BossaFlash::BossaFlash(Samba& samba,
     _onBufferA = true;
 
     // page buffers will have the size of a physical page and will be situated right after the applet
-    _pageBufferA = ((_user + _wordCopy.size() + 3) / 4) * 4; // we need to avoid non 32bits aligned access on Cortex-M0+
+    _pageBufferA = ((_user + _wordCopy.GetSize() + 3) / 4) * 4; // we need to avoid non 32bits aligned access on Cortex-M0+
     _pageBufferB = _pageBufferA + size;
 }
 
