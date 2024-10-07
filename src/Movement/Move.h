@@ -355,7 +355,7 @@ public:
 																							// Convert Cartesian coordinates to delta motor coordinates, return true if successful
 	void MotorStepsToCartesian(const int32_t motorPos[], size_t numVisibleAxes, size_t numTotalAxes, float machinePos[]) const noexcept;
 																							// Convert motor coordinates to machine coordinates
-	const char* GetGeometryString() const noexcept { return kinematics->GetName(true); }
+	const char *_ecv_array GetGeometryString() const noexcept { return kinematics->GetName(true); }
 	bool IsAccessibleProbePoint(float axesCoords[MaxAxes], AxesBitmap axes) const noexcept;
 
 	bool IsRawMotorMove(uint8_t moveType) const noexcept;									// Return true if this is a raw motor move
@@ -383,10 +383,10 @@ public:
 	const GridDefinition& GetGrid() const noexcept { return heightMap.GetGrid(); }			// Get the grid definition
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	bool LoadHeightMapFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept;	// Load the height map from a file returning true if an error occurred
-	bool SaveHeightMapToFile(FileStore *f, const char *fname) noexcept;						// Save the height map to a file returning true if an error occurred
+	bool LoadHeightMapFromFile(FileStore *f, const char *_ecv_array fname, const StringRef& r) noexcept;	// Load the height map from a file returning true if an error occurred
+	bool SaveHeightMapToFile(FileStore *f, const char *_ecv_array fname) noexcept;						// Save the height map to a file returning true if an error occurred
 # if SUPPORT_PROBE_POINTS_FILE
-	bool LoadProbePointsFromFile(FileStore *f, const char *fname, const StringRef& r) noexcept;	// Load the probe points map from a file returning true if an error occurred
+	bool LoadProbePointsFromFile(FileStore *f, const char *_ecv_array fname, const StringRef& r) noexcept;	// Load the probe points map from a file returning true if an error occurred
 	void ClearProbePointsInvalid() noexcept;
 # endif
 #endif
@@ -544,7 +544,7 @@ enum class StepErrorState : uint8_t
 	void UpdateLiveMachineCoordinates() const noexcept;											// force an update of the live machine coordinates
 	void SetNewPositionOfSomeAxes(const MovementState& ms, bool doBedCompensation, AxesBitmap axes) noexcept;	// Set the current position to be this
 
-	const char *GetCompensationTypeString() const noexcept;
+	const char *_ecv_array GetCompensationTypeString() const noexcept;
 
 	float tanXY() const noexcept { return tangents[0]; }
 	float tanYZ() const noexcept { return tangents[1]; }

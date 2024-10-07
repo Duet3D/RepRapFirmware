@@ -139,7 +139,7 @@ MessageType GCodes::GetMessageBoxDevice(GCodeBuffer& gb) const
 	return mt;
 }
 
-void GCodes::DoManualProbe(GCodeBuffer& gb, const char *message, const char *title, const AxesBitmap axes)
+void GCodes::DoManualProbe(GCodeBuffer& gb, const char *_ecv_array message, const char *_ecv_array title, const AxesBitmap axes)
 {
 	if (Push(gb, true))													// stack the machine state including the file position and set the state to GCodeState::normal
 	{
@@ -287,11 +287,11 @@ GCodeResult GCodes::DefineGrid(GCodeBuffer& gb, const StringRef &reply) THROWS(G
 		{
 			// In the following, we multiply the spacing by 0.9999 to ensure that when we divide the axis range by the spacing, we get the correct number of points
 			// Otherwise, for some values we occasionally get one less point
-			if (spacings[0] >= 2 && axis0Values[1] > axis0Values[0])
+			if (spacings[0] >= 2.0 && axis0Values[1] > axis0Values[0])
 			{
 				spacings[0] = (axis0Values[1] - axis0Values[0])/(numPoints[0] - 1) * 0.9999;
 			}
-			if (spacings[1] >= 2 && axis1Values[1] > axis1Values[0])
+			if (spacings[1] >= 2.0 && axis1Values[1] > axis1Values[0])
 			{
 				spacings[1] = (axis1Values[1] - axis1Values[0])/(numPoints[1] - 1) * 0.9999;
 			}
@@ -417,7 +417,7 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 
 	String<MaxFilenameLength> fullName;
 	platform.MakeSysFileName(fullName.GetRef(), heightMapFileName.c_str());
-	FileStore * const f = MassStorage::OpenFile(fullName.c_str(), OpenMode::read, 0);
+	FileStore *_ecv_null const f = MassStorage::OpenFile(fullName.c_str(), OpenMode::read, 0);
 	if (f == nullptr)
 	{
 		reply.printf("Height map file %s not found", fullName.c_str());
@@ -445,11 +445,11 @@ GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Save the height map and append the success or error message to 'reply', returning true if an error occurred
-bool GCodes::TrySaveHeightMap(const char *filename, const StringRef& reply) const noexcept
+bool GCodes::TrySaveHeightMap(const char *_ecv_array filename, const StringRef& reply) const noexcept
 {
 	String<MaxFilenameLength> fullName;
 	platform.MakeSysFileName(fullName.GetRef(), filename);
-	FileStore * const f = MassStorage::OpenFile(fullName.c_str(), OpenMode::write, 0);
+	FileStore *_ecv_null const f = MassStorage::OpenFile(fullName.c_str(), OpenMode::write, 0);
 	bool err;
 	if (f == nullptr)
 	{

@@ -417,8 +417,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 	GCodeResult rslt = GCodeResult::ok;
 
 	const size_t originalVisibleAxes = numVisibleAxes;
-	const char *lettersToTry = AllowedAxisLetters;
-	char c;
+	const char *_ecv_array lettersToTry = AllowedAxisLetters;
 
 #if SUPPORT_CAN_EXPANSION
 	AxesBitmap axesToUpdate;
@@ -428,6 +427,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 	const bool seenS = gb.Seen('S');
 	const bool newAxesAreNistRotational = seenS && gb.GetLimitedUIValue('S', 2) == 1;
 	Move& move = reprap.GetMove();
+	char c;
 	while ((c = *lettersToTry) != 0)
 	{
 		if (gb.Seen(c))
@@ -613,24 +613,24 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 		}
 #endif
 
-		char c = axisLetters[axis];
+		char c1 = axisLetters[axis];
 		for (size_t i = 0; i < axisConfig.numDrivers; ++i)
 		{
 			printed = true;
 			const DriverId id = axisConfig.driverNumbers[i];
-			reply.catf("%c" PRIdriverId, c, DRIVER_ID_PRINT_ARGS(id));
-			c = ':';
+			reply.catf("%c" PRIdriverId, c1, DRIVER_ID_PRINT_ARGS(id));
+			c1 = ':';
 		}
 	}
 	if (numExtruders != 0)
 	{
 		reply.cat(' ');
-		char c = extrudeLetter;
+		char c1 = extrudeLetter;
 		for (size_t extruder = 0; extruder < numExtruders; ++extruder)
 		{
 			const DriverId id = move.GetExtruderDriver(extruder);
-			reply.catf("%c" PRIdriverId, c, DRIVER_ID_PRINT_ARGS(id));
-			c = ':';
+			reply.catf("%c" PRIdriverId, c1, DRIVER_ID_PRINT_ARGS(id));
+			c1 = ':';
 		}
 	}
 	if (!printed)
@@ -763,10 +763,10 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 			gb.GetUnsignedArray(modulesToUpdate, numUpdateModules, false);
 			for (size_t i = 0; i < numUpdateModules; ++i)
 			{
-				uint32_t t = modulesToUpdate[i];
-				if (t >= FirmwareUpdater::NumUpdateModules)
+				const unsigned int t = modulesToUpdate[i];
+				if (t >= (unsigned int)FirmwareUpdater::NumUpdateModules)
 				{
-					reply.printf("Invalid module number '%" PRIu32 "'\n", t);
+					reply.printf("Invalid module number '%u'", t);
 					firmwareUpdateModuleMap.Clear();
 					return GCodeResult::error;
 					break;
@@ -789,7 +789,7 @@ GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
 		{
 			if (firmwareUpdateModuleMap.CountSetBits() > 1)
 			{
-				reply.copy("Filename can only be provided when updating exactly one module\n");
+				reply.copy("Filename can only be provided when updating exactly one module");
 				firmwareUpdateModuleMap.Clear();
 				return GCodeResult::error;
 			}
@@ -1474,7 +1474,7 @@ void GCodes::RetractZProbe(GCodeBuffer& gb) noexcept
 // Process a whole-line comment returning true if completed
 bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
-	static const char * const StartStrings[] =
+	static const char *_ecv_array const StartStrings[] =
 	{
 		"printing object",			// slic3r
 		"MESH",						// Cura
@@ -1492,7 +1492,7 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 
 	String<StringLength100> comment;
 	gb.GetCompleteParameters(comment.GetRef());
-	const char *fullText = comment.c_str();
+	const char *_ecv_array fullText = comment.c_str();
 	while (*fullText == ' ')
 	{
 		++fullText;
@@ -1502,7 +1502,7 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 	{
 		if (StringStartsWith(fullText, StartStrings[i]))
 		{
-			const char *text = fullText + strlen(StartStrings[i]);
+			const char *_ecv_array text = fullText + strlen(StartStrings[i]);
 			if (!isAlpha(*text) && *text != '_')			// need this test to avoid recognising "processName" as "process"
 			{
 				while (*text == ' ' || *text == ':')
@@ -1547,7 +1547,7 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 				case 5:		// layer (counting from 0)
 				case 6:		// layer (counting from 0)
 					{
-						const char *endptr;
+						const char *_ecv_array endptr;
 						const int32_t layer = StrToI32(text, &endptr);		// IdeaMaker uses negative layer numbers for the raft, so read a signed number here
 						if (endptr != text && layer >= 0)
 						{
@@ -1565,7 +1565,7 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 				case 7:		// new layer, but we are given the Z height, not the layer number
 				case 8:
 					{
-						const char *endptr;
+						const char *_ecv_array endptr;
 						const float layerZ = SafeStrtof(text, &endptr);
 						if (endptr != text)
 						{
@@ -1576,11 +1576,11 @@ bool GCodes::ProcessWholeLineComment(GCodeBuffer& gb, const StringRef& reply) TH
 
 				case 10:	// REMAINING_TIME (Ideamaker), followed by time in seconds as an integer
 					{
-						const char *endptr;
+						const char *_ecv_array endptr;
 						const uint32_t secondsRemaining = StrToU32(text, &endptr);
 						if (endptr != text)
 						{
-							reprap.GetPrintMonitor().SetSlicerTimeLeft(secondsRemaining);
+							reprap.GetPrintMonitor().SetSlicerTimeLeft((float)secondsRemaining);
 						}
 					}
 					break;

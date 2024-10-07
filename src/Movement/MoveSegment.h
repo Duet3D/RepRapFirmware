@@ -149,22 +149,22 @@ public:
 	MoveSegment *GetNext() const noexcept;
 
 	// Set the next segment in this list
-	void SetNext(MoveSegment *p_next) noexcept;
+	void SetNext(MoveSegment *_ecv_null p_next) noexcept;
 
 	// Print this segment to the debug channel
 	void DebugPrint() const noexcept;
 
 	// Print list of segments
-	static void DebugPrintList(const MoveSegment *segs) noexcept;
+	static void DebugPrintList(const MoveSegment *_ecv_null segs) noexcept;
 
 	// Allocate a MoveSegment, clearing the flags
-	static MoveSegment *Allocate(MoveSegment *p_next) noexcept;
+	static MoveSegment *Allocate(MoveSegment *_ecv_null p_next) noexcept;
 
 	// Release a MoveSegment
 	static void Release(MoveSegment *item) noexcept;
 
 	// Release all MoveSegments in a chain
-	static void ReleaseAll(MoveSegment *item) noexcept;
+	static void ReleaseAll(MoveSegment *_ecv_null item) noexcept;
 
 	// Return the number of MoveSegment objects that have been created
 	static unsigned int NumCreated() noexcept { return numCreated; }
@@ -172,10 +172,10 @@ public:
 	static constexpr int32_t MinDuration = 10;				// the minimum duration in movement clock ticks that we consider sensible
 
 protected:
-	static MoveSegment *freeList;							// list of recycled segment objects
+	static MoveSegment *_ecv_null freeList;					// list of recycled segment objects
 	static unsigned int numCreated;							// total number of segment objects created
 
-	MoveSegment *next;										// pointer to the next segment
+	MoveSegment *_ecv_null next;							// pointer to the next segment
 	MovementFlags flags;
 	uint32_t startTime;										// when this segment should start, in movement clock ticks
 	uint32_t duration;										// the duration of this segment in movement ticks
@@ -263,7 +263,7 @@ inline MoveSegment *MoveSegment::GetNext() const noexcept
 	return next;
 }
 
-inline void MoveSegment::SetNext(MoveSegment *p_next) noexcept
+inline void MoveSegment::SetNext(MoveSegment *_ecv_null p_next) noexcept
 {
 	next = p_next;
 }

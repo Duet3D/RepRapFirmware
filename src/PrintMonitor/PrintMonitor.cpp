@@ -156,7 +156,7 @@ void PrintMonitor::PrintingFileInfoUpdated() noexcept
 	{
 		totalFilamentNeeded += printingFileInfo.filamentNeeded[extruder];
 	}
-	slicerTimeLeft = printingFileInfo.printTime;
+	slicerTimeLeft = (float)printingFileInfo.printTime;
 	printingFileParsed = true;
 	reprap.JobUpdated();
 }
@@ -178,7 +178,7 @@ bool PrintMonitor::GetPrintingFileInfo(GCodeFileInfo& info) noexcept
 	return true;
 }
 
-void PrintMonitor::SetPrintingFileInfo(const char *filename, GCodeFileInfo &info) noexcept
+void PrintMonitor::SetPrintingFileInfo(const char *_ecv_array filename, GCodeFileInfo &info) noexcept
 {
 	WriteLocker locker(printMonitorLock);
 	filenameBeingPrinted.copy(filename);
@@ -308,7 +308,7 @@ float PrintMonitor::GetPauseDuration() const noexcept
 }
 
 // Notifies this class that a file has been set for printing
-void PrintMonitor::StartingPrint(const char* filename) noexcept
+void PrintMonitor::StartingPrint(const char *_ecv_array filename) noexcept
 {
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	WriteLocker locker(printMonitorLock);
@@ -357,7 +357,7 @@ void PrintMonitor::SetLayerNumber(uint32_t layerNumber) noexcept
 	{
 		currentLayer = layerNumber;
 		lastLayerChangeTime = millis64();
-		lastLayerChangeNonPrintingTime = GetWarmUpDuration() + GetPauseDuration();
+		lastLayerChangeNonPrintingTime = (uint64_t)(GetWarmUpDuration() + GetPauseDuration());
 	}
 }
 
@@ -373,7 +373,7 @@ void PrintMonitor::LayerChange() noexcept
 {
 	++currentLayer;
 	lastLayerChangeTime = millis64();
-	lastLayerChangeNonPrintingTime = GetWarmUpDuration() + GetPauseDuration();
+	lastLayerChangeNonPrintingTime = (uint64_t)(GetWarmUpDuration() + GetPauseDuration());
 }
 
 float PrintMonitor::FractionOfFilePrinted() const noexcept
@@ -431,7 +431,7 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 		case slicerBased:
 			if (slicerTimeLeft > 0.0 && !gCodes.IsSimulating())				// don't report slicer time if we are simulating
 			{
-				const int64_t now = millis64();
+				const uint64_t now = millis64();
 				int64_t adjustment = (int64_t)(now - whenSlicerTimeLeftSet);			// add the time since we stored the slicer time left
 				if (heatingUp)
 				{
@@ -454,8 +454,8 @@ float PrintMonitor::EstimateTimeLeft(PrintEstimationMethod method) const noexcep
 // Return the estimated time remaining if we have it, else null
 ExpressionValue PrintMonitor::EstimateTimeLeftAsExpression(PrintEstimationMethod method) const noexcept
 {
-	const float time = EstimateTimeLeft(method);
-	return (time > 0.0) ? ExpressionValue(lrintf(time)) : ExpressionValue(nullptr);
+	const float timeLeft = EstimateTimeLeft(method);
+	return (timeLeft > 0.0) ? ExpressionValue(lrintf(timeLeft)) : ExpressionValue(nullptr);
 }
 
 #endif

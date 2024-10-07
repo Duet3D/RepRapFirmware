@@ -54,7 +54,7 @@ GCodeResult Spindle::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 	if (gb.Seen('C'))
 	{
 		seen = true;
-		IoPort * const ports[] = { &pwmPort, &onOffPort, &reverseNotForwardPort };
+		IoPort *_ecv_from const ports[] = { &pwmPort, &onOffPort, &reverseNotForwardPort };
 		const PinAccess access[] = { PinAccess::pwm, PinAccess::write0, PinAccess::write0 };
 		if (IoPort::AssignPorts(gb, reply, PinUsedBy::spindle, 3, ports, access) == 0)
 		{
@@ -114,7 +114,7 @@ GCodeResult Spindle::Configure(GCodeBuffer& gb, const StringRef& reply) THROWS(G
 	return GCodeResult::ok;
 }
 
-void Spindle::SetConfiguredRpm(const uint32_t rpm, bool updateCurrentRpm) noexcept
+void Spindle::SetConfiguredRpm(uint32_t rpm, bool updateCurrentRpm) noexcept
 {
 	configuredRpm = rpm;
 	if (updateCurrentRpm)
@@ -134,7 +134,7 @@ void Spindle::SetRpm(uint32_t rpm) noexcept
 	}
 	else if (state == SpindleState::forward)
 	{
-		rpm = constrain<int>(rpm, minRpm, maxRpm);
+		rpm = constrain<uint32_t>(rpm, minRpm, maxRpm);
 		reverseNotForwardPort.WriteDigital(false);
 		pwmPort.WriteAnalog(((float)(rpm - minRpm) / (float)(maxRpm - minRpm)) * (maxPwm - minPwm) + minPwm);
 		onOffPort.WriteDigital(true);
@@ -142,15 +142,15 @@ void Spindle::SetRpm(uint32_t rpm) noexcept
 	}
 	else if (state == SpindleState::reverse)
 	{
-		rpm = constrain<int>(-rpm, -maxRpm, -minRpm);
+		rpm = constrain<uint32_t>(rpm, minRpm, maxRpm);
 		reverseNotForwardPort.WriteDigital(true);
-		pwmPort.WriteAnalog(((float)(-rpm - minRpm) / (float)(maxRpm - minRpm)) * (maxPwm - minPwm) + minPwm);
+		pwmPort.WriteAnalog(((float)(rpm - minRpm) / (float)(maxRpm - minRpm)) * (maxPwm - minPwm) + minPwm);
 		onOffPort.WriteDigital(true);
-		currentRpm = -rpm;					// current rpm is flagged live, so no need to change seqs.spindles
+		currentRpm = rpm;					// current rpm is flagged live, so no need to change seqs.spindles
 	}
 }
 
-void Spindle::SetState(const SpindleState newState) noexcept
+void Spindle::SetState(SpindleState newState) noexcept
 {
 	state = newState;
 	SetRpm(configuredRpm);					// depending on the configured SpindleState this might actually stop the spindle

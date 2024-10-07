@@ -18,7 +18,7 @@ NamedEnum(SpindleState, uint8_t, unconfigured, stopped, forward, reverse);
 class Spindle INHERIT_OBJECT_MODEL
 {
 private:
-	void SetRpm(const uint32_t rpm) noexcept;
+	void SetRpm(uint32_t rpm) noexcept;
 
 	PwmPort pwmPort, onOffPort, reverseNotForwardPort;
 	float minPwm, maxPwm, idlePwm;
@@ -38,10 +38,10 @@ public:
 	uint32_t GetMinRpm() const noexcept { return minRpm; }
 	uint32_t GetMaxRpm() const noexcept { return maxRpm; }
 	uint32_t GetRpm() const noexcept { return configuredRpm; }
-	bool IsValidRpm(const uint32_t rpm) const noexcept { return rpm >= minRpm && rpm <= maxRpm; }
-	void SetConfiguredRpm(const uint32_t rpm, const bool updateCurrentRpm) noexcept;
+	bool IsValidRpm(uint32_t rpm) const noexcept { return rpm >= minRpm && rpm <= maxRpm; }
+	void SetConfiguredRpm(uint32_t rpm, bool updateCurrentRpm) noexcept;
 	SpindleState GetState() const noexcept { return state; }
-	void SetState(const SpindleState newState) noexcept;
+	void SetState(SpindleState newState) noexcept;
 };
 
 #endif

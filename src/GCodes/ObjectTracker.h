@@ -18,9 +18,9 @@ struct ObjectDirectoryEntry
 	AutoStringHandle name;					// pointer to the object name within the string buffer
 	int16_t x[2], y[2];						// lowest and highest extrusion coordinates
 
-	void Init(const char *label) noexcept;
+	void Init(const char *_ecv_array label) noexcept;
 	bool UpdateObjectCoordinates(const float coords[], AxesBitmap axes) noexcept;
-	void SetName(const char *label) noexcept;
+	void SetName(const char *_ecv_array label) noexcept;
 };
 
 class ObjectTracker
@@ -41,7 +41,7 @@ public:
 	bool ResumeObject(unsigned int objectNumber) noexcept;						// resume an object, returning true if it was not already enabled
 	void ListObjects(OutputBuffer *buf) noexcept;								// list the objects on the build plate
 
-	size_t GetObjectNumber(const char *label) noexcept;
+	size_t GetObjectNumber(const char *_ecv_array label) noexcept;
 	void UpdateObjectCoordinates(int objectNumber, const float coords[], AxesBitmap axes) noexcept;
 	bool IsCancelled(size_t objectNumber) const noexcept { return objectsCancelled.IsBitSet(objectNumber); }
 	bool IsUsingM486Naming() const noexcept { return usingM486Naming; }
@@ -62,7 +62,7 @@ private:
 #endif
 	static_assert(MaxTrackedObjects <= ObjectCancellationBitmap::MaxBits());
 
-	void CreateObject(unsigned int number, const char *label) noexcept;
+	void CreateObject(unsigned int number, const char *_ecv_array label) noexcept;
 	ExpressionValue GetXCoordinate(const ObjectExplorationContext& context) const noexcept;
 	ExpressionValue GetYCoordinate(const ObjectExplorationContext& context) const noexcept;
 

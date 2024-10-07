@@ -42,7 +42,6 @@
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
-#include <strings.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -54,11 +53,11 @@
 static constexpr int16_t _DAYS_BEFORE_MONTH[12] =
 {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
-#define SET_MDAY 1
-#define SET_MON  2
-#define SET_YEAR 4
-#define SET_WDAY 8
-#define SET_YDAY 16
+#define SET_MDAY 1u
+#define SET_MON  2u
+#define SET_YEAR 4u
+#define SET_WDAY 8u
+#define SET_YDAY 16u
 #define SET_YMD  (SET_YEAR | SET_MON | SET_MDAY)
 
 /*
@@ -67,12 +66,12 @@ static constexpr int16_t _DAYS_BEFORE_MONTH[12] =
 constexpr int tm_year_base = 1900;
 
 /*
- * Return TRUE iff `year' was a leap year.
+ * Return 1 iff `year' was a leap year.
  * Needed for strptime.
  */
 static int is_leap_year (int year) noexcept
 {
-    return (year % 4) == 0 && ((year % 100) != 0 || (year % 400) == 0);
+    return (int)((year % 4) == 0 && ((year % 100) != 0 || (year % 400) == 0));
 }
 
 /* Needed for strptime. */
@@ -87,21 +86,25 @@ static int first_day (int year) noexcept
     return ret;
 }
 
-#undef 	isspace_l
+#ifdef isspace_l
+# undef isspace_l
+#endif
 #define isspace_l(_c, _l)			isspace(_c)
 #define strtol_l(_b, _s, _n, _l)	StrToI32(_b, _s)
 
-const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept
+const char *_ecv_array _ecv_null SafeStrptime(const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept
 {
     char c;
     uint8_t ymd = 0;
 
     for (; (c = *format) != '\0'; ++format)
     {
-		if (isspace_l ((unsigned char) c, locale))
+		if ((bool)isspace_l ((unsigned char) c, locale))
 		{
-			while (isspace_l ((unsigned char) *buf, locale))
-			++buf;
+			while ((bool)isspace_l ((unsigned char) *buf, locale))
+			{
+				++buf;
+			}
 		}
 		else if (c == '%' && format[1] != '\0')
 		{
@@ -116,7 +119,7 @@ const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array form
 			case 'd' :
 			case 'e' :
 				{
-					const char *s;
+					const char *_ecv_array s;
 					const int ret = strtol_l (buf, &s, 10, locale);
 					if (s == buf) { return nullptr; }
 					timeptr->tm_mday = ret;
@@ -127,7 +130,7 @@ const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array form
 
 			case 'H' :
 				{
-					const char *s;
+					const char *_ecv_array s;
 					const int ret = strtol_l (buf, &s, 10, locale);
 					if (s == buf) { return nullptr; }
 					timeptr->tm_hour = ret;
@@ -137,7 +140,7 @@ const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array form
 
 			case 'm' :
 				{
-					const char *s;
+					const char *_ecv_array s;
 					const int ret = strtol_l (buf, &s, 10, locale);
 					if (s == buf) { return nullptr; }
 					timeptr->tm_mon = ret - 1;
@@ -148,7 +151,7 @@ const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array form
 
 			case 'M' :
 				{
-					const char *s;
+					const char *_ecv_array s;
 					const int ret = strtol_l (buf, &s, 10, locale);
 					if (s == buf) { return nullptr; }
 					timeptr->tm_min = ret;
@@ -169,7 +172,7 @@ const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array form
 
 			case 'S' :
 				{
-					const char *s;
+					const char *_ecv_array s;
 					const int ret = strtol_l (buf, &s, 10, locale);
 					if (s == buf) { return nullptr; }
 					timeptr->tm_sec = ret;
@@ -179,7 +182,7 @@ const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array form
 
 			case 'Y' :
 				{
-					const char *s;
+					const char *_ecv_array s;
 					const int ret = strtol_l (buf, &s, 10, locale);
 					if (s == buf) { return nullptr; }
 					timeptr->tm_year = ret - tm_year_base;
@@ -231,11 +234,11 @@ const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array form
     if ((ymd & SET_YMD) == SET_YMD)
     {
 		/* all of tm_year, tm_mon and tm_mday, but... */
-		if (!(ymd & SET_YDAY))
+		if ((ymd & SET_YDAY) == 0)
 		{
 			/* ...not tm_yday, so fill it in */
 			timeptr->tm_yday = _DAYS_BEFORE_MONTH[timeptr->tm_mon] + timeptr->tm_mday;
-			if (!is_leap_year(timeptr->tm_year + tm_year_base) || timeptr->tm_mon < 2)
+			if (!(bool)is_leap_year(timeptr->tm_year + tm_year_base) || timeptr->tm_mon < 2)
 			{
 				timeptr->tm_yday--;
 			}
@@ -245,7 +248,7 @@ const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array form
     else if ((ymd & (SET_YEAR | SET_YDAY)) == (SET_YEAR | SET_YDAY))
     {
     	/* both of tm_year and tm_yday, but... */
-		if (!(ymd & SET_MON))
+		if ((ymd & SET_MON) == 0)
 		{
 			/* ...not tm_mon, so fill it in, and/or... */
 			if (timeptr->tm_yday < _DAYS_BEFORE_MONTH[1])
@@ -267,11 +270,11 @@ const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array form
 			}
 		}
 
-		if (!(ymd & SET_MDAY))
+		if ((ymd & SET_MDAY) == 0)
 		{
 			/* ...not tm_mday, so fill it in */
 			timeptr->tm_mday = timeptr->tm_yday - _DAYS_BEFORE_MONTH[timeptr->tm_mon];
-			if (!is_leap_year (timeptr->tm_year + tm_year_base) || timeptr->tm_mon < 2)
+			if (!(bool)is_leap_year (timeptr->tm_year + tm_year_base) || timeptr->tm_mon < 2)
 			{
 				timeptr->tm_mday++;
 			}
@@ -288,9 +291,9 @@ const char *SafeStrptime(const char *_ecv_array buf, const char *_ecv_array form
     return buf;
 }
 
-extern "C" char * strptime (const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept
+extern "C" char *_ecv_array _ecv_null strptime (const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept
 {
-	return const_cast<char *>(SafeStrptime (buf, format, timeptr));
+	return const_cast<char *_ecv_array _ecv_null>(SafeStrptime (buf, format, timeptr));
 }
 
 // End

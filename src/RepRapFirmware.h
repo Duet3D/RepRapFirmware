@@ -32,7 +32,7 @@ Licence: GPL
 #include <ctime>
 [[deprecated("use gmtime_r instead for thread-safety")]] tm *_ecv_null gmtime(const time_t* t);
 [[deprecated("use SafeStrptime instead")]] char *_ecv_array strptime (const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr);
-const char *_ecv_array SafeStrptime(const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept;
+const char *_ecv_array _ecv_null SafeStrptime(const char *_ecv_array buf, const char *_ecv_array format, struct tm *timeptr) noexcept;
 
 #include <Core.h>
 

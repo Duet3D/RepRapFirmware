@@ -170,7 +170,7 @@ public:
 	size_t GetVisibleAxes() const noexcept { return numVisibleAxes; }
 	size_t GetNumExtruders() const noexcept { return numExtruders; }
 
-	const char *_ecv_array GetMachineModeString() const noexcept;							// Get the name of the current machine mode
+	const char *_ecv_array GetMachineModeString() const noexcept;				// Get the name of the current machine mode
 
 	void HandleHeaterFault() noexcept;											// Respond to a heater fault
 
@@ -469,7 +469,7 @@ private:
 	void ToolOffsetInverseTransform(const MovementState& ms, const float coordsIn[MaxAxes], float coordsOut[MaxAxes]) const noexcept;
 																							// Convert head reference point coordinates to user coordinates
 	// Tool management
-	void ReportToolTemperatures(const StringRef& reply, const Tool *tool, bool includeNumber) const noexcept;
+	void ReportToolTemperatures(const StringRef& reply, const Tool *_ecv_null tool, bool includeNumber) const noexcept;
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 	bool WriteToolSettings(FileStore *f, const StringRef& buf) const noexcept;				// save some information for the resume file
@@ -516,7 +516,7 @@ private:
 	GCodeResult RaiseEvent(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException);			// Handle M957
 
 	// Object cancellation support
-	GCodeResult HandleM486(GCodeBuffer& gb, const StringRef &reply, OutputBuffer*& buf) THROWS(GCodeException);
+	GCodeResult HandleM486(GCodeBuffer& gb, const StringRef &reply, OutputBuffer *_ecv_null & buf) THROWS(GCodeException);
 	void StartObject(GCodeBuffer& gb, const char *_ecv_array label) noexcept;
 	void StopObject(GCodeBuffer& gb) noexcept;
 	void ChangeToObject(GCodeBuffer& gb, int i) noexcept;

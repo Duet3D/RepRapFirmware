@@ -135,7 +135,7 @@ class MotorStallZProbe final : public ZProbe
 public:
 	DECLARE_FREELIST_NEW_DELETE(MotorStallZProbe)
 
-	MotorStallZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::zMotorStall) { }
+	explicit MotorStallZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::zMotorStall) { }
 	~MotorStallZProbe() override { }
 
 	void SetIREmitter(bool on) const noexcept override { }
@@ -152,7 +152,7 @@ class DummyZProbe final : public ZProbe
 public:
 	DECLARE_FREELIST_NEW_DELETE(DummyZProbe)
 
-	DummyZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::none) { }
+	explicit DummyZProbe(unsigned int num) noexcept : ZProbe(num, ZProbeType::none) { }
 	~DummyZProbe() noexcept override { }
 
 	void SetIREmitter(bool on) const noexcept override { }

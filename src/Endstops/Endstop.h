@@ -25,7 +25,7 @@ class CanMessageBuffer;
 class EndstopOrZProbe INHERIT_OBJECT_MODEL
 {
 public:
-	EndstopOrZProbe(uint8_t p_axis) noexcept : next(nullptr), axis(p_axis) {}
+	explicit EndstopOrZProbe(uint8_t p_axis) noexcept : next(nullptr), axis(p_axis) {}
 	EndstopOrZProbe(const EndstopOrZProbe &_ecv_from) = delete;
 	virtual ~EndstopOrZProbe() noexcept override {}
 
