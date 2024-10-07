@@ -29,7 +29,7 @@
 #include "BossaFlash.h"
 
 BossaFlash::BossaFlash(Samba& samba,
-			const char* name,
+			 const char *_ecv_array name,
              uint32_t addr,
              uint32_t pages,
              uint32_t size,
@@ -65,26 +65,24 @@ void BossaFlash::setSecurity() noexcept
 
 void BossaFlash::setBor(bool enable) noexcept
 {
-    if (canBor())
-        _bor.set(enable);
+    if (canBor()) { _bor.set(enable); }
 }
 
 void BossaFlash::setBod(bool enable) noexcept
 {
-    if (canBod())
-        _bod.set(enable);
+    if (canBod()) { _bod.set(enable); }
 }
 
 #endif
 
 void BossaFlash::setBootFlash(bool enable) noexcept
 {
-    if (canBootFlash())
-        _bootFlash.set(enable);
+    if (canBootFlash()) { _bootFlash.set(enable); }
 }
 
-void BossaFlash::loadBuffer(const uint8_t* data, uint16_t bufferSize) THROWS(GCodeException)
+void BossaFlash::loadBuffer(const uint8_t *_ecv_array data, uint16_t bufferSize) THROWS(GCodeException)
 {
     _samba.write(_onBufferA ? _pageBufferA : _pageBufferB, data, bufferSize);
 }
 
+// End

@@ -74,7 +74,7 @@ public:
           uint32_t stack) THROWS(GCodeException);               // Address in SRAM where the applet stack will be placed
     virtual ~BossaFlash() {}
 
-    const char *_ecv_array name() const noexcept { return _name; }
+    const char *_ecv_array GetName() const noexcept { return _name; }
 
     uint32_t address() const noexcept { return _addr; }
     uint32_t pageSize() const noexcept { return _size; }
@@ -107,9 +107,9 @@ public:
     virtual void writeOptions() THROWS(GCodeException) = 0;
 
     virtual void writePage(uint32_t page) THROWS(GCodeException) = 0;
-    virtual void readPage(uint32_t page, uint8_t* data) THROWS(GCodeException) = 0;
+    virtual void readPage(uint32_t page, uint8_t *_ecv_array data) THROWS(GCodeException) = 0;
 
-    void loadBuffer(const uint8_t* data, uint16_t size) THROWS(GCodeException);
+    void loadBuffer(const uint8_t *_ecv_array data, uint16_t size) THROWS(GCodeException);
 
 protected:
     Samba& _samba;

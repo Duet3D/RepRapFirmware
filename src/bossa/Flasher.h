@@ -44,7 +44,7 @@ public:
     FlasherObserver() noexcept {}
     virtual ~FlasherObserver() {}
 
-    virtual void onStatus(const char *message, ...) noexcept = 0;
+    virtual void onStatus(const char *_ecv_array message, ...) noexcept = 0;
     virtual void onProgress(int num, int pdiv) noexcept = 0;
     virtual void Reset() noexcept = 0;
 };
