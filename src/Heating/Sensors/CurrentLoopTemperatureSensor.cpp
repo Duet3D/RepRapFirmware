@@ -55,7 +55,11 @@ GCodeResult CurrentLoopTemperatureSensor::Configure(GCodeBuffer& gb, const Strin
 
 GCodeResult CurrentLoopTemperatureSensor::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
 {
-	bool seen = false;
+	bool seen = parser.GetFloatParam('L', tempAt4mA);
+	seen = parser.GetFloatParam('H', tempAt20mA) || seen;
+	seen = parser.GetUintParam('C', chipChannel) || seen;
+	seen = parser.GetBoolParam('D', isDifferential) || seen;
+
 	if (!ConfigurePort(parser, reply, seen))
 	{
 		return GCodeResult::error;

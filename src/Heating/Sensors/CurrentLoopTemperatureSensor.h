@@ -28,6 +28,8 @@ public:
 	static constexpr const char *_ecv_array TypeName = "currentloop";
 
 private:
+	static SensorTypeDescriptor typeDescriptor;
+
 	TemperatureError TryGetLinearAdcTemperature(float& t) noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
 	void CalcDerivedParameters() noexcept;
@@ -43,8 +45,6 @@ private:
 	static constexpr float DefaultTempAt4mA = 385.0;
 	static constexpr float DefaultTempAt20mA = 1600.0;
 	static constexpr uint32_t DefaultChipChannel = 0;
-
-	static SensorTypeDescriptor typeDescriptor;
 };
 
 #endif // SUPPORT_SPI_SENSORS
