@@ -518,7 +518,7 @@ GCodeResult GCodes::DoDriveMapping(GCodeBuffer& gb, const StringRef& reply) THRO
 				axesToUpdate.SetBit(drive);
 #endif
 #if SUPPORT_PHASE_STEPPING
-				move.SetStepMode(drive, StepMode::stepDir, reply);
+				move.SetStepMode(drive, move.GetStepMode(drive), reply);
 #endif
 			}
 		}

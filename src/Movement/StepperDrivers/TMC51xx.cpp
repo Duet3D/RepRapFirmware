@@ -377,8 +377,6 @@ public:
 	bool SetXdirect(uint32_t regVal) noexcept;
 	uint32_t GetPhaseToSet() const noexcept { return phaseToSet; }
 	float GetCurrent() const noexcept { return (float)motorCurrent; }
-#endif
-#if SUPPORT_PHASE_STEPPING
 	bool EnablePhaseStepping(bool enable) noexcept;
 	bool IsPhaseSteppingEnabled() const noexcept { return phaseStepEnabled; }
 #endif

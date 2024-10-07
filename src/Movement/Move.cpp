@@ -2598,15 +2598,17 @@ bool Move::GetCurrentMotion(size_t driver, uint32_t when, MotionParameters& mPar
 bool Move::SetStepMode(size_t axisOrExtruder, StepMode mode, const StringRef& reply) noexcept
 {
 #if SUPPORT_CAN_EXPANSION
-	CanDriversData<uint8_t> canDriversToUpdate;
+	CanDriversData<uint16_t> canDriversToUpdate;
 	IterateRemoteDrivers(axisOrExtruder, [&canDriversToUpdate, this, mode](DriverId driver)
 	{
-		canDriversToUpdate.AddEntry(driver, (uint8_t)mode);
+#warning "check if remote board support phase step"
+		canDriversToUpdate.AddEntry(driver, (uint16_t)mode);
 	});
 
 	if (CanInterface::SetRemoteStepMode(canDriversToUpdate, reply) != GCodeResult::ok)
 	{
 		// This could leave drivers in a undefined state if one fails after another has succeeded
+		debugPrintf("Move::SetStepMode() failed to set remote driver\n");
 		return false;
 	}
 #endif

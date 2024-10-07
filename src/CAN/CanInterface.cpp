@@ -994,7 +994,7 @@ GCodeResult CanInterface::SetRemotePressureAdvance(const CanDriversData<float>& 
 }
 
 // Handle M970 for a remote driver
-GCodeResult CanInterface::SetRemoteStepMode(const CanDriversData<uint8_t>& data, const StringRef& reply) noexcept
+GCodeResult CanInterface::SetRemoteStepMode(const CanDriversData<uint16_t>& data, const StringRef& reply) noexcept
 {
 	return SetRemoteDriverValues(data, reply, CanMessageType::setStepMode);
 }

@@ -613,17 +613,12 @@ void DriveMovement::StopDriverFromRemote() noexcept
 
 bool DriveMovement::SetStepMode(StepMode mode) noexcept
 {
-	switch (mode)
+	if (mode >= StepMode::unknown)
 	{
-	case StepMode::stepDir:
-		phaseStepControl.SetEnabled(false);
-		break;
-	case StepMode::phase:
-		phaseStepControl.SetEnabled(true);
-		break;
-	default:
 		return false;
 	}
+
+	phaseStepControl.SetEnabled(mode == StepMode::phase);
 	stepMode = mode;
 	return true;
 }
