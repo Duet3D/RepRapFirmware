@@ -2755,8 +2755,19 @@ void Move::PhaseStepControlLoop() noexcept
 			*dmp = dm->nextDM;
 			if (dm->state >= DMState::firstMotionState)
 			{
-				// I think it is impossible for this code to run. Maybe it is possible when disabling phase stepping during a move?
+				// State must be "starting"
+				const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep); // shut out the step interrupt
+
 				InsertDM(dm);
+				if (activeDMs == dm) // if this is now the first DM in the active list
+				{
+					if (ScheduleNextStepInterrupt())
+					{
+						Interrupt();
+					}
+				}
+
+				RestoreBasePriority(oldPrio);
 			}
 			continue;
 		}
