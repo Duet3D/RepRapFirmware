@@ -1168,7 +1168,7 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 		{
 			if (flags.isLeadscrewAdjustmentMove)
 			{
-				afterPrepare.drivesMoving.SetBit(Z_AXIS);
+				// We don't set any bits in drivesMoving because setting the Z bit would be misleading, and setting individual driver bits isn't useful because it doesn't take account of CAN-connected drivers.
 				// For a leadscrew adjustment move, the first N elements of the direction vector are the adjustments to the N Z motors
 				const AxisDriversConfig& config = move.GetAxisDriversConfig(Z_AXIS);
 				if (drive < config.numDrivers)
@@ -1354,7 +1354,8 @@ void DDA::Prepare(DDARing& ring, SimulationMode simMode) noexcept
 // Check whether a committed move has finished
 bool DDA::HasExpired() const noexcept
 {
-	return (flags.isolatedMove)
+	// Note, for Z leadscrew adjustment moves (and any other individual motor moves that we may support in future), we must not use drivesMoving, because it doesn't describe the drivers that are moving.
+	return (flags.checkEndstops)
 			? reprap.GetMove().AreDrivesStopped(afterPrepare.drivesMoving)
 				: (int32_t)(StepTimer::GetMovementTimerTicks() - GetMoveFinishTime()) >= 0;
 }
