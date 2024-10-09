@@ -217,7 +217,7 @@ void HeightController::CalcDerivedValues() noexcept
 
 	// Calculate the maximum Z adjustment per sample interval.
 	// We always start and end at half the Z jerk speed so that back-to-back Z movements are always possible.
-	startSpeed = reprap.GetMove().GetInstantDv(Z_AXIS) * 0.5;
+	startSpeed = reprap.GetMove().GetMaxInstantDv(Z_AXIS) * 0.5;
 	maxSpeed = reprap.GetMove().MaxFeedrate(Z_AXIS);
 	acceleration = reprap.GetMove().NormalAcceleration(Z_AXIS);
 	const float interval = sampleInterval * MillisToSeconds;

@@ -315,7 +315,7 @@ bool DDA::InitStandardMove(DDARing& ring, const RawMove &nextMove, bool doMotorM
 					if (compensationClocks > 0.0)
 					{
 						// Compensation causes instant velocity changes equal to acceleration * k, so we may need to limit the acceleration
-						accelerations[drive] = min<float>(accelerations[drive], reprap.GetMove().GetInstantDv(drive)/compensationClocks);
+						accelerations[drive] = min<float>(accelerations[drive], reprap.GetMove().GetMaxInstantDv(drive)/compensationClocks);
 					}
 				}
 			}
@@ -905,7 +905,7 @@ float DDA::AdvanceBabyStepping(DDARing& ring, size_t axis, float amount) noexcep
 		{
 			// Limit the babystepping Z speed to the lower of 0.1 times the original XYZ speed and 0.5 times the Z jerk
 			Move& move = reprap.GetMove();
-			const float maxBabySteppingAmount = cdda->totalDistance * min<float>(0.1, 0.5 * move.GetInstantDv(Z_AXIS)/cdda->topSpeed);
+			const float maxBabySteppingAmount = cdda->totalDistance * min<float>(0.1, 0.5 * move.GetMaxInstantDv(Z_AXIS)/cdda->topSpeed);
 			babySteppingToDo = constrain<float>(amount, -maxBabySteppingAmount, maxBabySteppingAmount);
 			cdda->directionVector[Z_AXIS] += babySteppingToDo/cdda->totalDistance;
 			cdda->totalDistance *= cdda->NormaliseLinearMotion(move.GetLinearAxes());
@@ -1025,7 +1025,7 @@ void DDA::RecalculateMove(DDARing& ring) noexcept
 		const Move& m = reprap.GetMove();
 		for (size_t drive = 0; drive < MaxAxesPlusExtruders; ++drive)
 		{
-			if (endSpeed * fabsf(directionVector[drive]) > m.GetInstantDv(drive))
+			if (endSpeed * fabsf(directionVector[drive]) > m.GetMaxInstantDv(drive))
 			{
 				flags.canPauseAfter = false;
 				break;
@@ -1051,7 +1051,7 @@ void DDA::MatchSpeeds() noexcept
 		{
 			const float totalFraction = fabsf(directionVector[drive] - next->directionVector[drive]);
 			const float jerk = totalFraction * beforePrepare.targetNextSpeed;
-			const float allowedJerk = reprap.GetMove().GetInstantDv(drive);
+			const float allowedJerk = reprap.GetMove().GetPrintingInstantDv(drive);
 			if (jerk > allowedJerk)
 			{
 				beforePrepare.targetNextSpeed = allowedJerk/totalFraction;

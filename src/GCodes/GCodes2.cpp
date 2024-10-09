@@ -3725,13 +3725,14 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 			case 566: // Set/print maximum jerk speeds in mm/min
 				{
 					const bool useMmPerSec = (code == 205);
+					const bool setMax = (code == 566);
 					bool seenAxis = false, seenExtruder = false;
 					Move& move = reprap.GetMove();
 					for (size_t axis = 0; axis < numTotalAxes; axis++)
 					{
 						if (gb.Seen(axisLetters[axis]))
 						{
-							move.SetInstantDv(axis, gb.GetSpeedFromMm(useMmPerSec));
+							move.SetInstantDv(axis, gb.GetSpeedFromMm(useMmPerSec), setMax);
 							seenAxis = true;
 						}
 					}
@@ -3744,7 +3745,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						gb.GetFloatArray(eVals, eCount, true);
 						for (size_t e = 0; e < eCount; e++)
 						{
-							move.SetInstantDv(ExtruderToLogicalDrive(e), ConvertSpeedFromMm(eVals[e], useMmPerSec));
+							move.SetInstantDv(ExtruderToLogicalDrive(e), ConvertSpeedFromMm(eVals[e], useMmPerSec), setMax);
 						}
 					}
 
@@ -3760,16 +3761,17 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else if (!seenExtruder)
 					{
-						reply.printf("Maximum jerk rates (%s): ", (useMmPerSec) ? "mm/sec" : "mm/min");
+						reply.printf("%s jerk rates (%s): ", (setMax) ? "Maximum" : "Current", (useMmPerSec) ? "mm/sec" : "mm/min");
 						for (size_t axis = 0; axis < numTotalAxes; ++axis)
 						{
-							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertSpeedToMm(move.GetInstantDv(axis), useMmPerSec));
+							reply.catf("%c: %.1f, ", axisLetters[axis], (double)InverseConvertSpeedToMm((setMax) ? move.GetMaxInstantDv(axis) : move.GetPrintingInstantDv(axis), useMmPerSec));
 						}
 						reply.cat("E:");
 						char sep = ' ';
 						for (size_t extruder = 0; extruder < numExtruders; extruder++)
 						{
-							reply.catf("%c%.1f", sep, (double)InverseConvertSpeedToMm(move.GetInstantDv(ExtruderToLogicalDrive(extruder)), useMmPerSec));
+							const size_t drive = ExtruderToLogicalDrive(extruder);
+							reply.catf("%c%.1f", sep, (double)InverseConvertSpeedToMm((setMax) ? move.GetMaxInstantDv(drive) : move.GetPrintingInstantDv(drive), useMmPerSec));
 							sep = ':';
 						}
 						if (code == 566)

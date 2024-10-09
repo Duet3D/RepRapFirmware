@@ -170,8 +170,9 @@ public:
 	void SetMaxFeedrate(size_t axisOrExtruder, float value) noexcept;
 	float MinMovementSpeed() const noexcept { return minimumMovementSpeed; }
 	void SetMinMovementSpeed(float value) noexcept;
-	float GetInstantDv(size_t axis) const noexcept;
-	void SetInstantDv(size_t axis, float value) noexcept;
+	float GetPrintingInstantDv(size_t axis) const noexcept;
+	float GetMaxInstantDv(size_t axis) const noexcept;
+	void SetInstantDv(size_t axis, float value, bool includingMax) noexcept;
 	float AxisMaximum(size_t axis) const noexcept;
 	void SetAxisMaximum(size_t axis, float value, bool byProbing) noexcept;
 	float AxisMinimum(size_t axis) const noexcept;
@@ -725,7 +726,8 @@ enum class StepErrorState : uint8_t
 	float maxFeedrates[MaxAxesPlusExtruders];				// max feed rates in mm per step clock
 	float normalAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for normal moves
 	float reducedAccelerations[MaxAxesPlusExtruders];		// max accelerations in mm per step clock squared for probing and stall detection moves
-	float instantDvs[MaxAxesPlusExtruders];					// max jerk in mm per step clock
+	float printingInstantDvs[MaxAxesPlusExtruders];			// current max jerk in mm per step clock (changed by M205 and M206)
+	float maxInstantDvs[MaxAxesPlusExtruders];				// max jerk in mm per step clock (changed by M206 only)
 
 	AxisDriversConfig axisDrivers[MaxAxes];					// the driver numbers assigned to each axis
 	AxesBitmap linearAxes;									// axes that behave like linear axes w.r.t. feedrate handling
@@ -810,19 +812,19 @@ inline void Move::SetMaxFeedrate(size_t drive, float value) noexcept
 	maxFeedrates[drive] = max<float>(value, minimumMovementSpeed);						// don't allow zero or negative, but do allow small values
 }
 
-inline void Move::SetInstantDv(size_t drive, float value) noexcept
-{
-	instantDvs[drive] = max<float>(value, ConvertSpeedFromMmPerSec(MinimumJerk));		// don't allow zero or negative values, they causes Move to loop indefinitely
-}
-
 inline void Move::SetMinMovementSpeed(float value) noexcept
 {
 	minimumMovementSpeed = max<float>(value, ConvertSpeedFromMmPerSec(AbsoluteMinFeedrate));
 }
 
-inline float Move::GetInstantDv(size_t drive) const noexcept
+inline float Move::GetPrintingInstantDv(size_t drive) const noexcept
 {
-	return instantDvs[drive];
+	return printingInstantDvs[drive];
+}
+
+inline float Move::GetMaxInstantDv(size_t drive) const noexcept
+{
+	return maxInstantDvs[drive];
 }
 
 inline size_t Move::GetNumActualDirectDrivers() const noexcept

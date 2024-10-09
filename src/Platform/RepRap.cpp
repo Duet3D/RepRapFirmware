@@ -1669,8 +1669,8 @@ OutputBuffer *RepRap::GetConfigResponse() noexcept
 	response->catf(",\"idleCurrentFactor\":%.1f", (double)(move->GetIdleCurrentFactor() * 100.0));
 	response->catf(",\"idleTimeout\":%.1f,", (double)(move->IdleTimeout()));
 
-	// Minimum feedrates
-	AppendFloatArray(response, "minFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertSpeedToMmPerSec(move->GetInstantDv(drive)); }, 2);
+	// Maximum jerk
+	AppendFloatArray(response, "minFeedrates", MaxAxesPlusExtruders, [this](size_t drive) noexcept { return InverseConvertSpeedToMmPerSec(move->GetMaxInstantDv(drive)); }, 2);
 
 	// Maximum feedrates
 	response->cat(',');
