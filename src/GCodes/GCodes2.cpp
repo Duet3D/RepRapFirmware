@@ -1477,7 +1477,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					int32_t format = 0;
 					gb.TryGetIValue('S', format, dummy);
 					MassStorage::SdCardReturnedInfo returnedInfo;
-					const MassStorage::InfoResult res = MassStorage::GetCardInfo(slot, returnedInfo);
+					const MassStorage::InfoResult res = MassStorage::GetVolumeInfo(slot, returnedInfo);
 					if (format == 2)
 					{
 						reply.printf("{\"SDinfo\":{\"slot\":%" PRIu32 ",\"present\":", slot);

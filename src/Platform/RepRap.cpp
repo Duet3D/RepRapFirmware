@@ -618,7 +618,7 @@ void RepRap::Init() noexcept
 			}
 		}
 # if HAS_SBC_INTERFACE
-		else if (!MassStorage::IsCardDetected(0))		// if we failed to mount the SD card because there was no card in the slot
+		else if (!MassStorage::IsVolumeDetected(0))		// if we failed to mount the SD card because there was no card in the slot
 		{
 			usingSbcInterface = true;
 			FileWriteBuffer::UsingSbcMode();
@@ -1448,15 +1448,15 @@ OutputBuffer *RepRap::GetStatusResponse(uint8_t type, ResponseSource source) con
 
 #if HAS_MASS_STORAGE
 		// Total and mounted volumes
-		size_t mountedCards = 0;
+		size_t mountedVolumes = 0;
 		for (size_t i = 0; i < MassStorage::GetNumVolumes(); i++)
 		{
 			if (MassStorage::IsDriveMounted(i))
 			{
-				mountedCards |= (1u << i);
+				mountedVolumes |= (1u << i);
 			}
 		}
-		response->catf(",\"volumes\":%u,\"mountedVolumes\":%u", MassStorage::GetNumVolumes(), mountedCards);
+		response->catf(",\"volumes\":%u,\"mountedVolumes\":%u", MassStorage::GetNumVolumes(), mountedVolumes);
 #endif
 
 		// Machine mode and name

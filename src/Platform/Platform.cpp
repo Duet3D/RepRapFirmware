@@ -45,7 +45,12 @@
 #include <Hardware/I2C.h>
 #include <Hardware/NonVolatileMemory.h>
 #include <Storage/CRC32.h>
+#include <Storage/SdCardVolume.h>
 #include <Accelerometers/Accelerometers.h>
+
+#if SUPPORT_USB_DRIVE
+#include <TinyUsbInterface.h>
+#endif
 
 #if SAM4E || SAM4S || SAME70
 # include <AnalogIn.h>
@@ -60,8 +65,6 @@ static_assert(NumDmaChannelsUsed <= NumDmaChannelsSupported, "Need more DMA chan
 # include <DmacManager.h>
 using AnalogIn::AdcBits;			// for compatibility with CoreNG, which doesn't have the AnalogIn namespace
 #endif
-
-#include <Libraries/sd_mmc/sd_mmc.h>
 
 #if HAS_WIFI_NETWORKING
 # include <Comms/FirmwareUpdater.h>
@@ -1494,16 +1497,20 @@ GCodeResult Platform::DiagnosticTest(GCodeBuffer& gb, const StringRef& reply, Ou
 			}
 
 #if HAS_MASS_STORAGE
+			MassStorage::SdCardReturnedInfo sdInfo;
+			MassStorage::InfoResult res = MassStorage::GetVolumeInfo(0, sdInfo);
+
 			// Check the SD card detect and speed
-			if (!MassStorage::IsCardDetected(0))
+			if (res == MassStorage::InfoResult::noCard)
 			{
 				buf->copy("SD card 0 not detected");
 				testFailed = true;
 			}
 # if HAS_HIGH_SPEED_SD
-			else if (sd_mmc_get_interface_speed(0) != ExpectedSdCardSpeed)
+			else if (sdInfo.speed != ExpectedSdCardSpeed)
 			{
-				buf->printf("SD card speed %.2fMbytes/sec is unexpected", (double)((float)sd_mmc_get_interface_speed(0) * 0.000001));
+
+				buf->printf("SD card speed %.2fMbytes/sec is unexpected", (double)((float)sdInfo.speed * 0.000001));
 				testFailed = true;
 			}
 # endif
@@ -2049,6 +2056,48 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 {
 	// Get the channel specified by the command and the corresponding GCode buffer
 	const size_t chan = gb.GetLimitedUIValue('P', NumSerialChannels);
+
+	bool modeChangeSeen = false;
+	bool hostMode = false;
+	gb.TryGetBValue('H', hostMode, modeChangeSeen);
+
+#if SUPPORT_USB_DRIVE
+	if (chan == 0)
+	{
+		bool result = SetUsbHostMode(hostMode, reply);
+
+		// If setting to host mode then return result immediately. However, if setting to device,
+		// check that succeeded first so that the rest of the M575 code can be executed.
+		if (hostMode)
+		{
+			return result ? GCodeResult::ok : GCodeResult::error;
+		}
+		else
+		{
+			if (!result)
+			{
+				return GCodeResult::error;
+			}
+		}
+	}
+	else
+	{
+		// H=1 is only valid on channel 0, otherwise ignored.
+		if (hostMode)
+		{
+			reply.printf("USB host mode not supported on channel other than 0");
+			return GCodeResult::error;
+		}
+	}
+#else
+	// H=0 is ignored when USB host not supported.
+	if (modeChangeSeen && hostMode)
+	{
+		reply.printf("USB host mode not supported");
+		return GCodeResult::error;
+	}
+#endif
+
 	GCodeBuffer * const gbp = reprap.GetGCodes().GetSerialGCodeBuffer(chan);
 
 #if HAS_AUX_DEVICES
@@ -2180,6 +2229,7 @@ GCodeResult Platform::HandleM575(GCodeBuffer& gb, const StringRef& reply) THROWS
 			}
 		}
 	}
+
 	return GCodeResult::ok;
 }
 
@@ -3270,6 +3320,18 @@ void Platform::SetBaudRate(size_t chan, uint32_t br) noexcept
 #endif
 }
 
+#if SUPPORT_USB_DRIVE
+bool Platform::SetUsbHostMode(bool hostMode, const StringRef& reply) noexcept
+{
+#if CORE_USES_TINYUSB && CFG_TUH_ENABLED
+	return CoreUsbSetHostMode(hostMode, reply);
+#else
+	reply.copy("Host mode not supported by USB stack");
+	return false; // unimplemented if not using tinyUSB
+#endif
+}
+#endif
+
 uint32_t Platform::GetBaudRate(size_t chan) const noexcept
 {
 	return
@@ -3828,7 +3890,7 @@ GCodeResult Platform::ConfigurePort(GCodeBuffer& gb, const StringRef& reply) THR
 			return GCodeResult::error;
 		}
 # endif
-		return MassStorage::ConfigureSdCard(gb, reply);
+		return SdCardVolume::Configure(gb, reply);
 #endif
 
 	default:

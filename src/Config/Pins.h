@@ -217,6 +217,10 @@
 # define HAS_SBC_INTERFACE		0
 #endif
 
+#ifndef SUPPORT_USB_DRIVE
+# define SUPPORT_USB_DRIVE		0
+#endif
+
 #ifndef HAS_MASS_STORAGE
 # define HAS_MASS_STORAGE		1
 #endif

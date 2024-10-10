@@ -95,7 +95,7 @@ void EthernetInit() noexcept
 
 #if CORE_USES_TINYUSB
 
-constexpr size_t UsbDeviceTaskStackWords = 200;
+constexpr size_t UsbDeviceTaskStackWords = 400;
 static Task<UsbDeviceTaskStackWords> usbDeviceTask;
 
 #endif
@@ -122,8 +122,12 @@ void DeviceInit() noexcept
 #endif
 
 #if CORE_USES_TINYUSB
+#if SUPPORT_USB_DRIVE && CFG_TUH_ENABLED
+	CoreUsbInit(NvicPriorityUSB, UsbVBusPin, UsbPowerSwitchPin, UsbModePin, UsbDetectPin);
+#else
 	CoreUsbInit(NvicPriorityUSB);
-	usbDeviceTask.Create(CoreUsbDeviceTask, "USBD", nullptr, TaskPriority::UsbPriority);
+#endif
+	usbDeviceTask.Create(CoreUsbDeviceTask, "USBHD", nullptr, TaskPriority::UsbPriority);
 #endif
 }
 
@@ -134,6 +138,7 @@ void StopAnalogTask() noexcept
 void StopUsbTask() noexcept
 {
 #if CORE_USES_TINYUSB
+	CoreUsbStop();
 	usbDeviceTask.TerminateAndUnlink();
 #endif
 }
