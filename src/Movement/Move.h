@@ -9,6 +9,7 @@
 #define MOVE_H_
 
 #include <RepRapFirmware.h>
+#include <Platform/RepRap.h>
 #include "MoveTiming.h"
 #include "AxisShaper.h"
 #include "ExtruderShaper.h"
@@ -24,6 +25,7 @@
 #include <Math/Deviation.h>
 #include <Hardware/IoPorts.h>
 #include <Endstops/EndstopDefs.h>
+#include <Movement/MoveDebugFlags.h>
 
 #if SUPPORT_PHASE_STEPPING
 #include <Movement/PhaseStep.h>
@@ -987,7 +989,18 @@ inline __attribute__((always_inline)) bool Move::ScheduleNextStepInterrupt() noe
 inline void Move::InsertDM(DriveMovement *dm) noexcept
 {
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
-	DriveMovement *_ecv_null *dmp = dm->state == DMState::phaseStepping ? &phaseStepDMs : &activeDMs;
+	DriveMovement *_ecv_null *dmp = dm->IsPhaseStepEnabled() ? &phaseStepDMs : &activeDMs;
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
+	{
+		if (dm->IsPhaseStepEnabled())
+		{
+			debugPrintf("Inserted DM into phaseStepDMs\n");
+		}
+		else
+		{
+			debugPrintf("Inserted DM into activeDMs\n");
+		}
+	}
 #else
 	DriveMovement *_ecv_null *dmp = &activeDMs;
 #endif

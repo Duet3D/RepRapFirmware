@@ -2749,26 +2749,12 @@ void Move::PhaseStepControlLoop() noexcept
 
 		GetCurrentMotion(dm->drive, now, dm->phaseStepControl.mParams);
 
-		if (unlikely(dm->state != DMState::phaseStepping))
+		if (dm->state < DMState::firstMotionState)
 		{
 			// dm is idle, so remove it from the phaseStepDMs list
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
+				debugPrintf("Removing dm from phaseStepDMs\n");
 			*dmp = dm->nextDM;
-			if (dm->state >= DMState::firstMotionState)
-			{
-				// State must be "starting"
-				const uint32_t oldPrio = ChangeBasePriority(NvicPriorityStep); // shut out the step interrupt
-
-				InsertDM(dm);
-				if (activeDMs == dm) // if this is now the first DM in the active list
-				{
-					if (ScheduleNextStepInterrupt())
-					{
-						Interrupt();
-					}
-				}
-
-				RestoreBasePriority(oldPrio);
-			}
 			continue;
 		}
 		dm->phaseStepControl.CalculateCurrentFraction();
@@ -3170,6 +3156,8 @@ void Move::PrepareForNextSteps(DriveMovement *stopDm, MovementFlags flags, uint3
 	{
 		if (unlikely(dm2->state == DMState::starting))
 		{
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
+				debugPrintf("PrepareForNextSteps(%lu)\n", now);
 			if (dm2->NewSegment(now) != nullptr && dm2->state != DMState::starting)
 			{
 				dm2->driversCurrentlyUsed = dm2->driversNormallyUsed & ~dm2->driverEndstopsTriggeredAtStart;	// we previously set driversCurrentlyUsed to 0 to avoid generating a step, so restore it now

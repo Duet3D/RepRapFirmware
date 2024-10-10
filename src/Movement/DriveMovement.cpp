@@ -88,6 +88,10 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 {
 	directionChanged = true;						// force the direction to be set
 	const uint32_t now = StepTimer::GetMovementTimerTicks();
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
+	{
+		debugPrintf("ScheduleFirstSegment() at %lu\n", now);
+	}
 	if (NewSegment(now) != nullptr)
 	{
 		if (state == DMState::starting)
@@ -114,12 +118,16 @@ bool DriveMovement::ScheduleFirstSegment() noexcept
 MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 {
 	positionAtSegmentStart = currentMotorPosition;
+	if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
+		debugPrintf("NewSegment(%lu) ", now);
 
 	while (true)
 	{
 		MoveSegment *seg = segments;				// capture volatile variable
 		if (seg == nullptr)
 		{
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
+				debugPrintf("  idle\n");
 			segmentFlags.Init();
 			state = DMState::idle;					// if we have been round this loop already then we will have changed the state, so reset it to idle
 			return nullptr;
@@ -129,6 +137,8 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 
 		if ((int32_t)(seg->GetStartTime() - now) > (int32_t)MoveTiming::MaximumMoveStartAdvanceClocks)
 		{
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
+				debugPrintf("  starting\n");
 			state = DMState::starting;				// the segment is not due to start for a while. To allow it to be changed meanwhile, generate an interrupt when it is due to start.
 			driversCurrentlyUsed = 0;				// don't generate a step on that interrupt
 			driverEndstopsTriggeredAtStart = 0;		// reset since we will be setting this in DDA::Prepare()
@@ -144,7 +154,10 @@ MoveSegment *DriveMovement::NewSegment(uint32_t now) noexcept
 #if SUPPORT_PHASE_STEPPING || SUPPORT_CLOSED_LOOP
 		if (IsPhaseStepEnabled())
 		{
+			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Segments))
+				debugPrintf("  phaseStepping\n");
 			u = seg->CalcU();
+			driversCurrentlyUsed = driversNormallyUsed & ~driverEndstopsTriggeredAtStart;
 			state = DMState::phaseStepping;
 			return seg;
 		}

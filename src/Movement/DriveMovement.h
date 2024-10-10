@@ -269,47 +269,55 @@ inline bool DriveMovement::GetCurrentMotion(uint32_t when, MotionParameters& mPa
 	bool hasMotion = false;
 	AtomicCriticalSectionLocker lock;									// we don't want 'segments' changing while we do this
 
-	if (state == DMState::phaseStepping)
+	MoveSegment *seg = segments;
+	while (seg != nullptr)
 	{
-		MoveSegment *seg = segments;
-		while (seg != nullptr)
+		int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
+		if (timeSinceStart < 0)
 		{
-			int32_t timeSinceStart = (int32_t)(when - seg->GetStartTime());
-			if (timeSinceStart < 0)
+			break;													// segment isn't due to start yet
+		}
+
+		if (state == DMState::starting && phaseStepControl.IsEnabled())
+		{
+			seg = NewSegment(when);
+		}
+
+		if (state != DMState::phaseStepping)
+		{
+			break;
+		}
+
+		if ((uint32_t)timeSinceStart >= seg->GetDuration())			// if segment should have finished by now
+		{
+			if (phaseStepControl.IsEnabled())
 			{
-				break;													// segment isn't due to start yet
-			}
-			if ((uint32_t)timeSinceStart >= seg->GetDuration())			// if segment should have finished by now
-			{
-				if (phaseStepControl.IsEnabled())
+				currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
+				distanceCarriedForwards += seg->GetLength() - (motioncalc_t)netStepsThisSegment;
+				phaseStepsTakenSinceMoveStart += seg->GetLength();
+				if (isExtruder)
 				{
-					currentMotorPosition = positionAtSegmentStart + netStepsThisSegment;
-					distanceCarriedForwards += seg->GetLength() - (motioncalc_t)netStepsThisSegment;
-					phaseStepsTakenSinceMoveStart += seg->GetLength();
-					if (isExtruder)
-					{
-						movementAccumulator += netStepsThisSegment;		// update the amount of extrusion
-					}
-					MoveSegment *oldSeg = seg;
-					segments = oldSeg->GetNext();
-					MoveSegment::Release(oldSeg);
-					seg = NewSegment(when);
-					hasMotion = true;
-					continue;
+					movementAccumulator += netStepsThisSegment;		// update the amount of extrusion
 				}
-				timeSinceStart = seg->GetDuration();
+				MoveSegment *oldSeg = seg;
+				segments = oldSeg->GetNext();
+				MoveSegment::Release(oldSeg);
+				seg = NewSegment(when);
+				hasMotion = true;
+				continue;
 			}
+			timeSinceStart = seg->GetDuration();
+		}
 
 #if SUPPORT_S_CURVE
-			mParams.position = (float)((u + (0.5 * seg->GetA() + OneSixth * seg->GetJ() * timeSinceStart) * timeSinceStart) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
+		mParams.position = (float)((u + (0.5 * seg->GetA() + OneSixth * seg->GetJ() * timeSinceStart) * timeSinceStart) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 #else
-			mParams.position = (float)((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
+		mParams.position = (float)((u + seg->GetA() * timeSinceStart * 0.5) * timeSinceStart + (motioncalc_t)positionAtSegmentStart + distanceCarriedForwards);
 #endif
-			currentMotorPosition = (int32_t)mParams.position;			// store the approximate position for OM updates
-			mParams.speed = (float)(u + seg->GetA() * timeSinceStart);
-			mParams.acceleration = (float)seg->GetA();
-			return true;
-		}
+		currentMotorPosition = (int32_t)mParams.position;			// store the approximate position for OM updates
+		mParams.speed = (float)(u + seg->GetA() * timeSinceStart);
+		mParams.acceleration = (float)seg->GetA();
+		return true;
 	}
 
 	// If we get here then no movement is taking place

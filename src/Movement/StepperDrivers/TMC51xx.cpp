@@ -1043,7 +1043,7 @@ bool TmcDriverState::SetSineTableModulation(ModulationConfig config, const Strin
 			mslutArr[bit / 32] |= (offs_bit << (bit % 32));
 			if (reprap.GetDebugFlags(Module::Move).IsBitSet(MoveDebugFlags::Tmc))
 			{
-				debugPrintf("mslut[%u] = 0x%08x, [%u]=%u, diff=%d\n", bit / 32, mslutArr[bit / 32], bit % 32, offs_bit, segDifferences[j]);
+				debugPrintf("mslut[%u] = 0x%08lx, [%u]=%u, diff=%d\n", bit / 32, mslutArr[bit / 32], bit % 32, offs_bit, segDifferences[j]);
 			}
 		}
 
@@ -1081,10 +1081,10 @@ bool TmcDriverState::SetSineTableModulation(ModulationConfig config, const Strin
 
 	for (size_t i = 0; i < 8; i++)
 	{
-		debugPrintf("MSLUT[%u] = 0x%08x\n", i, mslutArr[i]);
+		debugPrintf("MSLUT[%u] = 0x%08lx\n", i, mslutArr[i]);
 	}
-	debugPrintf("MSLUTSEL = 0x%08x\n", mslutsel);
-	debugPrintf("MSLUTSTART = 0x%08x\n", mslutstart);
+	debugPrintf("MSLUTSEL = 0x%08lx\n", mslutsel);
+	debugPrintf("MSLUTSTART = 0x%08lx\n", mslutstart);
 
 	UpdateRegister(WriteMslut0, mslutArr[0]);
 	UpdateRegister(WriteMslut1, mslutArr[1]);
