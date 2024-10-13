@@ -155,7 +155,7 @@ struct ExpressionValue
 	void SetDuration(uint32_t u) noexcept { Release(); type = (uint32_t)TypeCode::Duration; uVal = u; }
 
 	// Store a 56-bit value
-	void Set56BitValue(uint64_t v) { param = (uint32_t)(v >> 32) & 0x00FFFFFFu; uVal = (uint32_t)v; }
+	void Set56BitValue(uint64_t v) noexcept { param = (uint32_t)(v >> 32) & 0x00FFFFFFu; uVal = (uint32_t)v; }
 
 	// Extract a 56-bit value that we have stored. Used to retrieve date/times and large bitmaps.
 	uint64_t Get56BitValue() const noexcept { return ((uint64_t)param << 32) | uVal; }
