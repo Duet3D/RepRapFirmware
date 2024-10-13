@@ -80,7 +80,7 @@ public:
 	// If 'forStatusReport' is true then the string must be the one for that kinematics expected by DuetWebControl and PanelDue.
 	// Otherwise it should be in a format suitable for printing.
 	// For any new kinematics, the same string can be returned regardless of the parameter.
-	virtual const char *GetName(bool forStatusReport = false) const noexcept = 0;
+	virtual const char *_ecv_array GetName(bool forStatusReport = false) const noexcept = 0;
 
 	// Set or report the parameters from a M665, M666 or M669 command
 	// If 'mCode' is an M-code used to set parameters for the current kinematics (which should only ever be 665, 666, 667 or 669)
@@ -137,7 +137,7 @@ public:
 	// The default implementation just applies the rectangular limits set up by M208 to those axes that have been homed.
 	// applyM208Limits determines whether the m208 limits are applied, otherwise just the geometric limitations of the architecture are applied.
 	// If initialCoords is null, just limit the final coordinates; else limit all points on a straight line between the two.
-	virtual LimitPositionResult LimitPosition(float finalCoords[], const float * null initialCoords,
+	virtual LimitPositionResult LimitPosition(float finalCoords[], const float *_ecv_array _ecv_null initialCoords,
 												size_t numVisibleAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept;
 
 	// Return the set of axes that must have been homed before bed probing is allowed
@@ -177,7 +177,7 @@ public:
 	// The speeds along individual Cartesian axes have already been limited before this is called.
 	// The default implementation in this class just limits the combined XY speed to the lower of the individual X and Y limits. This is appropriate for
 	// many types of kinematics, but not for Cartesian.
-	virtual void LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept;
+	virtual void LimitSpeedAndAcceleration(DDA& dda, const float *_ecv_array normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept;
 
 	// Return true if the specified axis is a continuous rotational axis and G0 commands may choose which direction to move it in
 	virtual bool IsContinuousRotationAxis(size_t axis) const noexcept;
@@ -215,10 +215,10 @@ protected:
 	bool TryConfigureSegmentation(GCodeBuffer& gb) THROWS(GCodeException);
 
 	// Debugging functions
-	static void PrintMatrix(const char* s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0) noexcept;
-	static void PrintMatrix(const char* s, const MathMatrix<double>& m, size_t numRows = 0, size_t maxCols = 0) noexcept;
-	static void PrintVector(const char *s, const float *v, size_t numElems) noexcept;
-	static void PrintVector(const char *s, const double *v, size_t numElems) noexcept;
+	static void PrintMatrix(const char *_ecv_array s, const MathMatrix<float>& m, size_t numRows = 0, size_t maxCols = 0) noexcept;
+	static void PrintMatrix(const char *_ecv_array s, const MathMatrix<double>& m, size_t numRows = 0, size_t maxCols = 0) noexcept;
+	static void PrintVector(const char *_ecv_array s, const float *_ecv_array v, size_t numElems) noexcept;
+	static void PrintVector(const char *_ecv_array s, const double *_ecv_array v, size_t numElems) noexcept;
 
 	static const char * const HomeAllFileName;
 

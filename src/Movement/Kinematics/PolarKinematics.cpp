@@ -50,7 +50,7 @@ PolarKinematics::PolarKinematics() noexcept
 // If 'forStatusReport' is true then the string must be the one for that kinematics expected by DuetWebControl and PanelDue.
 // Otherwise it should be in a format suitable for printing.
 // For any new kinematics, the same string can be returned regardless of the parameter.
-const char *PolarKinematics::GetName(bool forStatusReport) const noexcept
+const char *_ecv_array PolarKinematics::GetName(bool forStatusReport) const noexcept
 {
 	return "Polar";
 }
@@ -128,7 +128,7 @@ bool PolarKinematics::Configure(unsigned int mCode, GCodeBuffer& gb, const Strin
 bool PolarKinematics::CartesianToMotorSteps(const float machinePos[], const float stepsPerMm[], size_t numVisibleAxes, size_t numTotalAxes, int32_t motorPos[], bool isCoordinated) const noexcept
 {
 	motorPos[0] = lrintf(fastSqrtf(fsquare(machinePos[0]) + fsquare(machinePos[1])) * stepsPerMm[0]);
-	motorPos[1] = (motorPos[0] == 0.0) ? 0 : lrintf(atan2f(machinePos[1], machinePos[0]) * RadiansToDegrees * stepsPerMm[1]);
+	motorPos[1] = (motorPos[0] == 0) ? 0 : lrintf(atan2f(machinePos[1], machinePos[0]) * RadiansToDegrees * stepsPerMm[1]);
 
 	// Transform remaining axes linearly
 	for (size_t axis = Z_AXIS; axis < numVisibleAxes; ++axis)
@@ -174,7 +174,7 @@ bool PolarKinematics::IsReachable(float axesCoords[MaxAxes], AxesBitmap axes) co
 }
 
 // Limit the Cartesian position that the user wants to move to, returning true if any coordinates were changed
-LimitPositionResult PolarKinematics::LimitPosition(float finalCoords[], const float * null initialCoords,
+LimitPositionResult PolarKinematics::LimitPosition(float finalCoords[], const float *_ecv_array _ecv_null initialCoords,
 													size_t numAxes, AxesBitmap axesToLimit, bool isCoordinated, bool applyM208Limits) const noexcept
 {
 	const bool m208Limited = (applyM208Limits)
@@ -281,15 +281,17 @@ void PolarKinematics::OnHomingSwitchTriggered(size_t axis, bool highEnd, const f
 		break;
 
 	default:
-		const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
-		dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		{
+			const float hitPoint = (highEnd) ? reprap.GetMove().AxisMaximum(axis) : reprap.GetMove().AxisMinimum(axis);
+			dda.SetDriveCoordinate(lrintf(hitPoint * stepsPerMm[axis]), axis);
+		}
 		break;
 	}
 }
 
 // Limit the speed and acceleration of a move to values that the mechanics can handle.
 // The speeds in Cartesian space have already been limited.
-void PolarKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
+void PolarKinematics::LimitSpeedAndAcceleration(DDA& dda, const float *_ecv_array normalisedDirectionVector, size_t numVisibleAxes, bool continuousRotationShortcut) const noexcept
 {
 	int32_t turntableMovement = dda.DriveCoordinates()[1] - dda.GetPrevious()->DriveCoordinates()[1];
 	if (turntableMovement != 0)
