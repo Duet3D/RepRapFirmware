@@ -21,6 +21,7 @@ constexpr uint32_t MinimumOneBitStepClocks = (StepClockRate * MinimumOneBitLengt
 // Sensor type descriptors
 TemperatureSensor::SensorTypeDescriptor DhtTemperatureSensor::dht21Descriptor(TypeNameDht21, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new DhtTemperatureSensor(sensorNum, DhtSensorType::Dht21); } );
 TemperatureSensor::SensorTypeDescriptor DhtTemperatureSensor::dht22Descriptor(TypeNameDht22, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new DhtTemperatureSensor(sensorNum, DhtSensorType::Dht22); } );
+TemperatureSensor::SensorTypeDescriptor DhtHumiditySensor::dhtHumidityDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new DhtHumiditySensor(sensorNum); } );
 
 // Pulse ISR
 void DhtDataTransition(CallbackParameter cp) noexcept
