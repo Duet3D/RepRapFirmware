@@ -4761,7 +4761,7 @@ void GCodes::SetAllAxesNotHomed() noexcept
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Write the config-override file returning true if an error occurred
-GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const noexcept
+GCodeResult GCodes::WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const THROWS(GCodeException)
 {
 	const char *_ecv_array const fileName = CONFIG_OVERRIDE_G;
 	FileStore *_ecv_null const f = platform.OpenSysFile(fileName, OpenMode::write);
@@ -4951,17 +4951,22 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 			break;
 
 		case StatusReportType::m409:
+			try
 			{
 				OutputBuffer *_ecv_null statusBuf;
 				{
 					MutexLocker lock(reprap.GetObjectModelReportMutex());
 					if (OutputBuffer::GetFreeBuffers() < MinimumBuffersForObjectModel) { break; }
-					statusBuf = reprap.GetModelResponse(&gb, "", "d99fi");
+					statusBuf = reprap.GetModelResponse(&gb, "", "d99fi");				// may throw
 				}
 				if (statusBuf != nullptr)
 				{
 					platform.AppendAuxReply(0, statusBuf, true);
 				}
+			}
+			catch (const GCodeException&)
+			{
+				// If GetModelResponse threw then don't bother sending a status report
 			}
 			break;
 
@@ -5464,7 +5469,7 @@ void GCodes::UpdateAllCoordinates(const GCodeBuffer& gb) noexcept
 #if HAS_MASS_STORAGE
 
 // Start timing SD card file writing
-GCodeResult GCodes::StartSDTiming(GCodeBuffer& gb, const StringRef& reply) noexcept
+GCodeResult GCodes::StartSDTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	const float bytesReq = (gb.Seen('S')) ? gb.GetFValue() : 10.0;
 	const bool useCrc = (gb.Seen('C') && gb.GetUIValue() != 0);
@@ -5557,44 +5562,52 @@ float GCodes::GetItemStandbyTemperature(unsigned int itemNumber) const noexcept
 
 void GCodes::SetItemActiveTemperature(unsigned int itemNumber, float temp) noexcept
 {
-	if (itemNumber < 80)
+	try
 	{
-		ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? GetPrimaryMovementState().GetLockedCurrentTool() : Tool::GetLockedTool(itemNumber);
-		if (tool.IsNotNull())
+		if (itemNumber < 80)
 		{
-			tool->SetToolHeaterActiveTemperature(0, temp);
-			if (tool->Number() == GetPrimaryMovementState().GetCurrentToolNumber() && temp > NEARLY_ABS_ZERO)
+			ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? GetPrimaryMovementState().GetLockedCurrentTool() : Tool::GetLockedTool(itemNumber);
+			if (tool.IsNotNull())
 			{
-				tool->HeatersToActiveOrStandby(true);				// if it's the current tool then make sure it is active
+				tool->SetToolHeaterActiveTemperature(0, temp);
+				if (tool->Number() == GetPrimaryMovementState().GetCurrentToolNumber() && temp > NEARLY_ABS_ZERO)
+				{
+					tool->HeatersToActiveOrStandby(true);				// if it's the current tool then make sure it is active
+				}
+			}
+		}
+		else
+		{
+			const int heaterNumber = GetHeaterNumber(itemNumber);
+			reprap.GetHeat().SetActiveTemperature(heaterNumber, temp);
+			if (temp > NEARLY_ABS_ZERO)
+			{
+				String<1> dummy;
+				reprap.GetHeat().SetActiveOrStandby(heaterNumber, nullptr, true, dummy.GetRef());
 			}
 		}
 	}
-	else
-	{
-		const int heaterNumber = GetHeaterNumber(itemNumber);
-		reprap.GetHeat().SetActiveTemperature(heaterNumber, temp);
-		if (temp > NEARLY_ABS_ZERO)
-		{
-			String<1> dummy;
-			reprap.GetHeat().SetActiveOrStandby(heaterNumber, nullptr, true, dummy.GetRef());
-		}
-	}
+	catch (const GCodeException&) { }
 }
 
 void GCodes::SetItemStandbyTemperature(unsigned int itemNumber, float temp) noexcept
 {
-	if (itemNumber < 80)
+	try
 	{
-		ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? GetPrimaryMovementState().GetLockedCurrentTool() : Tool::GetLockedTool(itemNumber);
-		if (tool.IsNotNull())
+		if (itemNumber < 80)
 		{
-			tool->SetToolHeaterStandbyTemperature(0, temp);
+			ReadLockedPointer<Tool> const tool = (itemNumber == 79) ? GetPrimaryMovementState().GetLockedCurrentTool() : Tool::GetLockedTool(itemNumber);
+			if (tool.IsNotNull())
+			{
+				tool->SetToolHeaterStandbyTemperature(0, temp);
+			}
+		}
+		else
+		{
+			reprap.GetHeat().SetStandbyTemperature(GetHeaterNumber(itemNumber), temp);
 		}
 	}
-	else
-	{
-		reprap.GetHeat().SetStandbyTemperature(GetHeaterNumber(itemNumber), temp);
-	}
+	catch (const GCodeException&) { }
 }
 
 // Evaluate a visibility expression string and return it

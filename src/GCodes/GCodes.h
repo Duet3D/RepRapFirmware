@@ -222,7 +222,7 @@ public:
 	GCodeBuffer *GetGCodeBuffer(GCodeChannel channel) const noexcept { return gcodeSources[channel.ToBaseType()]; }
 
 #if HAS_MASS_STORAGE
-	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply) noexcept;	// Start timing SD card file writing
+	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Start timing SD card file writing
 #endif
 
 	void SavePosition(const GCodeBuffer& gb, unsigned int restorePointNumber) noexcept
@@ -531,7 +531,7 @@ private:
 #endif
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
-	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const noexcept; // Write the config-override file
+	GCodeResult WriteConfigOverrideFile(GCodeBuffer& gb, const StringRef& reply) const  THROWS(GCodeException); // Write the config-override file
 	bool WriteConfigOverrideHeader(FileStore *f) const noexcept;				// Write the config-override header
 #endif
 
