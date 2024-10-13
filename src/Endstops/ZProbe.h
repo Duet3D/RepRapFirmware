@@ -62,7 +62,7 @@ public:
 	bool GetTurnHeatersOff() const noexcept { return misc.parts.turnHeatersOff; }
 	bool GetSaveToConfigOverride() const noexcept { return misc.parts.saveToConfigOverride; }
 	int32_t GetTargetAdcValue() const noexcept { return targetAdcValue; }
-	unsigned int GetMaxTaps() const { return misc.parts.maxTaps; }
+	unsigned int GetMaxTaps() const noexcept { return misc.parts.maxTaps; }
 	int32_t GetReading() const noexcept;
 	int32_t GetSecondaryValues(int32_t& v1) const noexcept;
 	bool IsDeployedByUser() const noexcept { return isDeployedByUser; }

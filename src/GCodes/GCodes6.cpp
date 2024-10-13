@@ -128,7 +128,7 @@ ReadLockedPointer<ZProbe> GCodes::SetZProbeNumber(GCodeBuffer& gb, char probeLet
 }
 
 // Decide which device to display a message box on
-MessageType GCodes::GetMessageBoxDevice(GCodeBuffer& gb) const
+MessageType GCodes::GetMessageBoxDevice(GCodeBuffer& gb) const noexcept
 {
 	MessageType mt = gb.GetResponseMessageType();
 	if (mt == GenericMessage)
@@ -139,7 +139,7 @@ MessageType GCodes::GetMessageBoxDevice(GCodeBuffer& gb) const
 	return mt;
 }
 
-void GCodes::DoManualProbe(GCodeBuffer& gb, const char *_ecv_array message, const char *_ecv_array title, const AxesBitmap axes)
+void GCodes::DoManualProbe(GCodeBuffer& gb, const char *_ecv_array message, const char *_ecv_array title, const AxesBitmap axes) noexcept
 {
 	if (Push(gb, true))													// stack the machine state including the file position and set the state to GCodeState::normal
 	{
@@ -150,7 +150,7 @@ void GCodes::DoManualProbe(GCodeBuffer& gb, const char *_ecv_array message, cons
 }
 
 // Do a manual bed probe. On entry the state variable is the state we want to return to when the user has finished adjusting the height.
-void GCodes::DoManualBedProbe(GCodeBuffer& gb)
+void GCodes::DoManualBedProbe(GCodeBuffer& gb) noexcept
 {
 	DoManualProbe(gb, "Adjust height until the nozzle just touches the bed, then press OK", "Manual bed probing", AxesBitmap::MakeFromBits(Z_AXIS));
 }

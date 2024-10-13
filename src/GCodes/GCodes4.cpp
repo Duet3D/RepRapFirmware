@@ -1929,7 +1929,7 @@ void GCodes::RunStateMachine(GCodeBuffer& gb, const StringRef& reply) noexcept
 }
 
 // Do a manual probe. This is in its own function to reduce the amount of stack space needed by RunStateMachine(). See the comment at the top of that function.
-void GCodes::DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps)
+void GCodes::DoStraightManualProbe(GCodeBuffer& gb, const StraightProbeSettings& sps) noexcept
 {
 	String<StringLength256> message;
 	message.printf("Adjust position until the reference point just %s the target, then press OK", sps.ProbingAway() ? "loses contact with" : "touches");
