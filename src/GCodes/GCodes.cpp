@@ -3751,7 +3751,7 @@ GCodeResult GCodes::SetOrReportOffsets(GCodeBuffer &gb, const StringRef& reply, 
 }
 
 // Create a new tool definition
-GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::ManageTool(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	// Check tool number
 	const unsigned int toolNumber = gb.GetLimitedUIValue('P', MaxTools);
