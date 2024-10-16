@@ -863,10 +863,13 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 						}
 						else
 						{
-							// Turn off every spindle if no 'P' parameter is present and the current tool does not have a spindle
+							// Turn off every configured spindle if no 'P' parameter is present and the current tool does not have a spindle
 							for (size_t i = 0; i < MaxSpindles; i++)
 							{
-								platform.AccessSpindle(i).SetState(SpindleState::stopped);
+								if (platform.AccessSpindle(i).GetState() != SpindleState::unconfigured)
+								{
+									platform.AccessSpindle(i).SetState(SpindleState::stopped);
+								}
 							}
 							break;
 						}
