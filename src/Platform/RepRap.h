@@ -114,7 +114,7 @@ public:
 	OutputBuffer *GetThumbnailResponse(const char *_ecv_array filename, FilePosition offset, bool forM31point1) noexcept;
 #endif
 
-	GCodeResult GetFileInfoResponse(const char *_ecv_array filename, OutputBuffer *&response, bool quitEarly) noexcept;
+	GCodeResult GetFileInfoResponse(const char *_ecv_array filename, OutputBuffer *_ecv_null &response, bool quitEarly) noexcept;
 	OutputBuffer *GetModelResponse(const GCodeBuffer *_ecv_null gb, const char *_ecv_array key, const char *_ecv_array flags) const THROWS(GCodeException);
 	Mutex& GetObjectModelReportMutex() noexcept { return objectModelReportMutex; }
 

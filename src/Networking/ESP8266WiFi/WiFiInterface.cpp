@@ -1191,7 +1191,7 @@ int32_t WiFiInterface::SendFileCredential(GCodeBuffer &gb, size_t credIndex)
 	return rslt;
 }
 
-GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer*& longReply) THROWS(GCodeException)
+GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const StringRef& reply, OutputBuffer *_ecv_null & longReply) THROWS(GCodeException)
 {
 	// If we are trying and failing to connect in a loop here, we are likely to get an SPI timeout.
 	if (requestedMode == WiFiState::connected && currentMode != WiFiState::connected)
@@ -1509,7 +1509,7 @@ GCodeResult WiFiInterface::HandleWiFiCode(int mcode, GCodeBuffer &gb, const Stri
 							}
 							const WiFiScanData& rec = data[i];
 							longReply->catf((jsonFormat)
-											? "{\"ssid\":\"%s\",\"chan\":%u,\"rssi\":\%d,\"phymode\":\"%s\",\"auth\":\"%s\",\"mac\":\"%02x:%02x:%02x:%02x:%02x:%02x\"}"
+											? "{\"ssid\":\"%s\",\"chan\":%u,\"rssi\":%d,\"phymode\":\"%s\",\"auth\":\"%s\",\"mac\":\"%02x:%02x:%02x:%02x:%02x:%02x\"}"
 											: "\nssid=%s chan=%u rssi=%d phymode=%s auth=%s mac=%02x:%02x:%02x:%02x:%02x:%02x",
 												rec.ssid,
 												rec.primaryChannel,

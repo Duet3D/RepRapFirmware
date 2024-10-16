@@ -23,10 +23,10 @@ class NetworkInterface;
 class Socket
 {
 public:
-	Socket(NetworkInterface *iface) noexcept : interface(iface), localPort(0), remotePort(0), remoteIPAddress(), state(SocketState::disabled) { }
-	Socket(const Socket&) = delete;
+	explicit Socket(NetworkInterface *iface) noexcept : interface(iface), localPort(0), remotePort(0), remoteIPAddress(), state(SocketState::disabled) { }
+	Socket(const Socket &_ecv_from) = delete;
 
-	NetworkInterface *GetInterface() const noexcept { return interface; }
+	NetworkInterface *_ecv_from GetInterface() const noexcept { return interface; }
 
 	TcpPort GetLocalPort() const noexcept { return localPort; }
 	IPAddress GetRemoteIP() const noexcept { return remoteIPAddress; }
@@ -40,11 +40,11 @@ public:
 	virtual void Terminate() noexcept = 0;
 	virtual void TerminateAndDisable() noexcept = 0;
 	virtual bool ReadChar(char& c) noexcept = 0;
-	virtual bool ReadBuffer(const uint8_t *&buffer, size_t &len) noexcept = 0;
+	virtual bool ReadBuffer(const uint8_t *_ecv_array &buffer, size_t &len) noexcept = 0;
 	virtual void Taken(size_t len) noexcept = 0;
 	virtual bool CanRead() const noexcept = 0;
 	virtual bool CanSend() const noexcept = 0;
-	virtual size_t Send(const uint8_t *data, size_t length) noexcept = 0;
+	virtual size_t Send(const uint8_t *_ecv_array data, size_t length) noexcept = 0;
 	virtual void Send() noexcept = 0;
 
 protected:
@@ -59,7 +59,7 @@ protected:
 		aborted
 	};
 
-	NetworkInterface * const interface;
+	NetworkInterface *_ecv_from const interface;
 	TcpPort localPort, remotePort;						// The local and remote ports
 	NetworkProtocol protocol;							// What protocol this socket is for
 	IPAddress remoteIPAddress;							// The remote IP address

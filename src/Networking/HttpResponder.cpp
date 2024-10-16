@@ -17,8 +17,8 @@
 #define KO_START "rr_"
 const size_t KoFirst = 3;
 
-const char* const overflowResponse = "overflow";
-const char* const badEscapeResponse = "bad escape";
+const char *_ecv_array const overflowResponse = "overflow";
+const char *_ecv_array const badEscapeResponse = "bad escape";
 const char serviceUnavailableResponse[] = "HTTP/1.1 503 Service Unavailable\r\n\r\n";
 static_assert(ARRAY_SIZE(serviceUnavailableResponse) <= OUTPUT_BUFFER_SIZE, "OUTPUT_BUFFER_SIZE too small");
 
@@ -27,18 +27,18 @@ const uint32_t HttpReceiveTimeout = 2000;
 const HttpSessionKey NoSessionKey = 0;
 
 // Text for a human-readable 404 page
-const char* const ErrorPagePart1 =
+const char *_ecv_array const ErrorPagePart1 =
 	"<html>\n"
 	"<head>\n"
 	"</head>\n"
 	"<body>\n"
 	"<p style=\"font-size: 16pt; text-align: center; margin-top:50px\">Your Duet rejected the HTTP request: ";
 
-const char* const ErrorPagePart2 =
+const char *_ecv_array const ErrorPagePart2 =
 	"</p>\n"
 	"</body>\n";
 
-HttpResponder::HttpResponder(NetworkResponder *n) noexcept : UploadingNetworkResponder(n)
+HttpResponder::HttpResponder(NetworkResponder *_ecv_from _ecv_null n) noexcept : UploadingNetworkResponder(n)
 {
 }
 
@@ -322,12 +322,12 @@ bool HttpResponder::CharFromClient(char c) noexcept
 	case HttpParseState::doingQualifierValueEsc1:
 		if (c >= '0' && c <= '9')
 		{
-			decodeChar = (c - '0') << 4;
+			decodeChar = (char)((unsigned char)(c - '0') << 4);
 			parseState = (HttpParseState)((int)parseState + 1);
 		}
 		else if (c >= 'A' && c <= 'F')
 		{
-			decodeChar = (c - ('A' - 10)) << 4;
+			decodeChar = (char)((unsigned char)(c - ('A' - 10)) << 4);
 			parseState = (HttpParseState)((int)parseState + 1);
 		}
 		else
@@ -341,12 +341,12 @@ bool HttpResponder::CharFromClient(char c) noexcept
 	case HttpParseState::doingQualifierValueEsc2:
 		if (c >= '0' && c <= '9')
 		{
-			clientMessage[clientPointer++] = decodeChar | (c - '0');
+			clientMessage[clientPointer++] = (char)((unsigned char)decodeChar | (unsigned char)(c - '0'));
 			parseState = (HttpParseState)((int)parseState - 2);
 		}
 		else if (c >= 'A' && c <= 'F')
 		{
-			clientMessage[clientPointer++] = decodeChar | (c - ('A' - 10));
+			clientMessage[clientPointer++] = (char)((unsigned char)decodeChar | (unsigned char)(c - ('A' - 10)));
 			parseState = (HttpParseState)((int)parseState - 2);
 		}
 		else
@@ -459,11 +459,11 @@ bool HttpResponder::CharFromClient(char c) noexcept
 // 'value' is null-terminated, but we also pass its length in case it contains embedded nulls, which matters when uploading files.
 // Return true if we generated a json response to send, false if we didn't and changed the state instead.
 // This may also return true with response == nullptr if we tried to generate a response but ran out of buffers.
-bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer *&response, bool& keepOpen) noexcept
+bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer *_ecv_null &response, bool& keepOpen) noexcept
 {
 	keepOpen = false;	// assume we don't want to persist the connection
 
-	const char *parameter;
+	const char *_ecv_array _ecv_null parameter;
 	if (StringEqualsIgnoreCase(request, "connect") && (parameter = GetKeyValue("password")) != nullptr)
 	{
 		if (!reprap.NoPasswordSet() && !reprap.CheckPassword(parameter))
@@ -474,7 +474,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 			return true;
 		}
 
-		const char *sessionKeyParameter = GetKeyValue("sessionKey");
+		const char *_ecv_array _ecv_null sessionKeyParameter = GetKeyValue("sessionKey");
 		HttpSessionKey sessionKey = NoSessionKey;
 		if (!Authenticate((sessionKeyParameter != nullptr) && StringEqualsIgnoreCase(sessionKeyParameter, "yes"), sessionKey))
 		{
@@ -490,7 +490,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		reprap.GetPlatform().MessageF(LogWarn, "HTTP client %s login succeeded (session key %u)\n", IP4String(GetRemoteIP()).c_str(), sessionKey);
 
 		// See if we can update the current RTC date and time
-		const char* const timeString = GetKeyValue("time");
+		const char *_ecv_array _ecv_null const timeString = GetKeyValue("time");
 		if (timeString != nullptr && !GetPlatform().IsDateTimeSet())
 		{
 			struct tm timeInfo;
@@ -510,13 +510,20 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 	else if (StringEqualsIgnoreCase(request, "model"))
 	{
 		OutputBuffer::ReleaseAll(response);
-		const char *const filterVal = GetKeyValue("key");
-		const char *const flagsVal = GetKeyValue("flags");
+		const char *_ecv_array _ecv_null const filterVal = GetKeyValue("key");
+		const char *_ecv_array _ecv_null const flagsVal = GetKeyValue("flags");
 
 		MutexLocker lock(reprap.GetObjectModelReportMutex());				// grab the mutex to prevent PanelDue retrieving the OM at the same time, which can result in running out of buffers
 		if (OutputBuffer::GetFreeBuffers() >= MinimumBuffersForObjectModel)
 		{
-			response = reprap.GetModelResponse(nullptr, filterVal, flagsVal);
+			try
+			{
+				response = reprap.GetModelResponse(nullptr, filterVal, flagsVal);		// may throw, if it does then it returns nullptr
+			}
+			catch (const GCodeException&)
+			{
+				// nothing needed here, fall through to returning a 501 response
+			}
 		}
 		else if (millis() - startedProcessingRequestAt < 500)
 		{
@@ -535,7 +542,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 	}
 	else if (StringEqualsIgnoreCase(request, "gcode"))
 	{
-		const char *command = GetKeyValue("gcode");
+		const char *_ecv_array _ecv_null command = GetKeyValue("gcode");
 		NetworkGCodeInput * const httpInput = reprap.GetGCodes().GetHTTPInput();
 		// If the command is empty, just report the buffer space. This allows rr_gcode to be used to poll the buffer space without using it up.
 		if (command != nullptr && command[0] != 0 && !httpInput->Put(HttpMessage, command))
@@ -550,7 +557,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 #if HAS_MASS_STORAGE
 	else if (StringEqualsIgnoreCase(request, "fileinfo"))
 	{
-		const char* const nameVal = GetKeyValue("name");
+		const char *_ecv_array _ecv_null const nameVal = GetKeyValue("name");
 		if (nameVal != nullptr)
 		{
 			// Regular rr_fileinfo?name=xxx call
@@ -567,21 +574,21 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 	else if (StringEqualsIgnoreCase(request, "filelist") && (parameter = GetKeyValue("dir")) != nullptr)
 	{
 		OutputBuffer::ReleaseAll(response);
-		const char* const firstVal = GetKeyValue("first");
+		const char *_ecv_array _ecv_null const firstVal = GetKeyValue("first");
 		const unsigned int startAt = (firstVal == nullptr) ? 0 : StrToU32(firstVal);
 		response = reprap.GetFilelistResponse(parameter, startAt);		// this may return nullptr
 	}
 	else if (StringEqualsIgnoreCase(request, "files"))
 	{
 		OutputBuffer::ReleaseAll(response);
-		const char* dir = GetKeyValue("dir");
+		const char *_ecv_array _ecv_null dir = GetKeyValue("dir");
 		if (dir == nullptr)
 		{
 			dir = Platform::GetGCodeDir();
 		}
-		const char* const firstVal = GetKeyValue("first");
+		const char *_ecv_array _ecv_null const firstVal = GetKeyValue("first");
 		const unsigned int startAt = (firstVal == nullptr) ? 0 : StrToU32(firstVal);
-		const char* const flagDirsVal = GetKeyValue("flagDirs");
+		const char *_ecv_array _ecv_null const flagDirsVal = GetKeyValue("flagDirs");
 		const bool flagDirs = flagDirsVal != nullptr && StrToU32(flagDirsVal) == 1;
 		response = reprap.GetFilesResponse(dir, startAt, flagDirs);				// this may return nullptr
 	}
@@ -591,7 +598,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 	}
 	else if (StringEqualsIgnoreCase(request, "delete") && (parameter = GetKeyValue("name")) != nullptr)
 	{
-		const char* const recursiveParam = GetKeyValue("recursive");
+		const char *_ecv_array _ecv_null const recursiveParam = GetKeyValue("recursive");
 		const bool recursive = (recursiveParam != nullptr && StringEqualsIgnoreCase(recursiveParam, "yes"));
 		String<MaxFilenameLength> path;
 		path.copy(parameter);
@@ -600,8 +607,8 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 	}
 	else if (StringEqualsIgnoreCase(request, "move"))
 	{
-		const char* const oldVal = GetKeyValue("old");
-		const char* const newVal = GetKeyValue("new");
+		const char *_ecv_array _ecv_null const oldVal = GetKeyValue("old");
+		const char *_ecv_array _ecv_null const newVal = GetKeyValue("new");
 		bool success = false;
 		if (oldVal != nullptr && newVal != nullptr)
 		{
@@ -612,7 +619,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 	}
 	else if (StringEqualsIgnoreCase(request, "mkdir"))
 	{
-		const char* const dirVal = GetKeyValue("dir");
+		const char *_ecv_array _ecv_null const dirVal = GetKeyValue("dir");
 		bool success = false;
 		if (dirVal != nullptr)
 		{
@@ -622,8 +629,8 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 	}
 	else if (StringEqualsIgnoreCase(request, "thumbnail"))
 	{
-		const char* const nameVal = GetKeyValue("name");
-		const char* const offsetVal = GetKeyValue("offset");
+		const char *_ecv_array _ecv_null const nameVal = GetKeyValue("name");
+		const char *_ecv_array _ecv_null const offsetVal = GetKeyValue("offset");
 		FilePosition offset;
 		if (nameVal != nullptr && offsetVal != nullptr && (offset = StrToU32(offsetVal)) != 0)
 		{
@@ -652,7 +659,7 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 	// Check for the legacy requests last
 	else if (StringEqualsIgnoreCase(request, "status"))
 	{
-		const char *typeString = GetKeyValue("type");
+		const char *_ecv_array _ecv_null typeString = GetKeyValue("type");
 		if (typeString != nullptr)
 		{
 			// New-style JSON status responses
@@ -720,7 +727,7 @@ HttpSessionKey HttpResponder::GetSessionKey() const noexcept
 // Return true if complete
 bool HttpResponder::SendFileInfo(bool quitEarly) noexcept
 {
-	OutputBuffer *jsonResponse = nullptr;
+	OutputBuffer *_ecv_null jsonResponse = nullptr;
 	bool gotFileInfo = (reprap.GetFileInfoResponse(filenameBeingProcessed.c_str(), jsonResponse, quitEarly) != GCodeResult::notFinished);
 	if (gotFileInfo)
 	{
@@ -844,7 +851,7 @@ bool HttpResponder::RemoveAuthentication() noexcept
 void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWebFile) noexcept
 {
 #if HAS_MASS_STORAGE
-	FileStore *fileToSend = nullptr;
+	FileStore *_ecv_null fileToSend = nullptr;
 	bool zip = false;
 
 	if (isWebFile)
@@ -893,7 +900,7 @@ void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWeb
 				{
 					nameOfFileToSend = OLD_INDEX_PAGE_FILE;			// the index file wasn't found, so try the old one
 				}
-				else if (!strchr(nameOfFileToSend, '.'))			// if we were asked to return a file without a '.' in the name, return the index page
+				else if (strchr(nameOfFileToSend, '.') == nullptr)	// if we were asked to return a file without a '.' in the name, return the index page
 				{
 					nameOfFileToSend = INDEX_PAGE_FILE;
 				}
@@ -940,7 +947,7 @@ void HttpResponder::SendFile(const char *_ecv_array nameOfFileToSend, bool isWeb
 		AddCorsHeader();
 	}
 
-	const char* contentType;
+	const char *_ecv_array contentType;
 	if (StringEndsWithIgnoreCase(nameOfFileToSend, ".png"))
 	{
 		contentType = "image/png";
@@ -1062,7 +1069,7 @@ void HttpResponder::SendJsonResponse(const char *_ecv_array command) noexcept
 #if HAS_MASS_STORAGE
 		if (StringEqualsIgnoreCase(command, "download"))
 		{
-			const char* const filename = GetKeyValue("name");
+			const char *_ecv_array _ecv_null const filename = GetKeyValue("name");
 			if (filename != nullptr)
 			{
 				SendFile(filename, false);
@@ -1073,7 +1080,7 @@ void HttpResponder::SendJsonResponse(const char *_ecv_array command) noexcept
 	}
 
 	// Try to process a request for JSON responses
-	OutputBuffer *jsonResponse;
+	OutputBuffer *_ecv_null jsonResponse;
 	bool mayKeepOpen;
 	if (OutputBuffer::Allocate(jsonResponse))
 	{
@@ -1185,7 +1192,7 @@ void HttpResponder::ProcessRequest() noexcept
 	// Check the case of absolute URIs in case the request came through a proxy
 	if (StringStartsWith(commandWords[1], "http://"))
 	{
-		const char *relativePath = strchr(commandWords[1] + 7, '/');
+		const char *_ecv_array _ecv_null relativePath = strchr(commandWords[1] + 7, '/');
 		if (relativePath == nullptr)
 		{
 			RejectMessage("invalid absolute URI");
@@ -1248,7 +1255,7 @@ void HttpResponder::ProcessRequest() noexcept
 									  || (commandWords[1][0] == '/' && StringEqualsIgnoreCase(commandWords[1] + 1, KO_START "upload"));
 			if (isUploadRequest)
 			{
-				const char* const filename = GetKeyValue("name");
+				const char *_ecv_array _ecv_null const filename = GetKeyValue("name");
 				if (filename != nullptr)
 				{
 					// See how many bytes we expect to read
@@ -1267,7 +1274,7 @@ void HttpResponder::ProcessRequest() noexcept
 					}
 
 					// Try to get the expected CRC
-					const char* const expectedCrc = GetKeyValue("crc32");
+					const char *_ecv_array _ecv_null const expectedCrc = GetKeyValue("crc32");
 					postFileGotCrc = (expectedCrc != nullptr);
 					if (postFileGotCrc)
 					{
@@ -1282,7 +1289,7 @@ void HttpResponder::ProcessRequest() noexcept
 					}
 
 					// Try to get the last modified file date and time
-					const char* const lastModifiedString = GetKeyValue("time");
+					const char *_ecv_array _ecv_null const lastModifiedString = GetKeyValue("time");
 					if (lastModifiedString != nullptr)
 					{
 						struct tm timeInfo;
@@ -1369,7 +1376,7 @@ void HttpResponder::RejectMessage(const char *_ecv_array response, unsigned int 
 // It tries to process a chunk of uploaded data and changes the state if finished.
 void HttpResponder::DoUpload() noexcept
 {
-	const uint8_t *buffer;
+	const uint8_t *_ecv_array buffer;
 	size_t len;
 	if (skt->ReadBuffer(buffer, len))
 	{
@@ -1423,7 +1430,7 @@ void HttpResponder::DoUpload() noexcept
 #endif
 
 // This is called to force termination if we implement the specified protocol
-void HttpResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *interface) noexcept
+void HttpResponder::Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept
 {
 	if (responderState != ResponderState::free && (protocol == HttpProtocol || protocol == AnyProtocol) && skt != nullptr && skt->GetInterface() == interface)
 	{
@@ -1482,7 +1489,7 @@ void HttpResponder::Diagnostics(MessageType mt) const noexcept
 }
 
 // Remove all HTTP sessions that use the specified interface
-/*static*/ void HttpResponder::DisableInterface(const NetworkInterface *iface) noexcept
+/*static*/ void HttpResponder::DisableInterface(const NetworkInterface *_ecv_from iface) noexcept
 {
 	for (size_t i = numSessions; i != 0; )
 	{
@@ -1506,7 +1513,7 @@ void HttpResponder::Diagnostics(MessageType mt) const noexcept
 	{
 		MutexLocker lock(gcodeReplyMutex);
 
-		OutputBuffer *buffer = gcodeReply.GetLastItem();
+		OutputBuffer *_ecv_null buffer = gcodeReply.GetLastItem();
 		if (buffer == nullptr || buffer->IsReferenced())
 		{
 			if (!OutputBuffer::Allocate(buffer))
@@ -1527,7 +1534,7 @@ void HttpResponder::Diagnostics(MessageType mt) const noexcept
 	}
 }
 
-/*static*/ void HttpResponder::HandleGCodeReply(OutputBuffer *reply) noexcept
+/*static*/ void HttpResponder::HandleGCodeReply(OutputBuffer *_ecv_null reply) noexcept
 {
 	if (reply != nullptr)
 	{

@@ -15,17 +15,17 @@ typedef unsigned int HttpSessionKey;
 class HttpResponder : public UploadingNetworkResponder
 {
 public:
-	HttpResponder(NetworkResponder *n) noexcept;
+	explicit HttpResponder(NetworkResponder *_ecv_from _ecv_null n) noexcept;
 	bool Spin() noexcept override;								// do some work, returning true if we did anything significant
 	bool Accept(Socket *s, NetworkProtocol protocol) noexcept override;	// ask the responder to accept this connection, returns true if it did
-	void Terminate(NetworkProtocol protocol, const NetworkInterface *interface) noexcept override;	// terminate the responder if it is serving the specified protocol on the specified interface
+	void Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept override;	// terminate the responder if it is serving the specified protocol on the specified interface
 	void Diagnostics(MessageType mtype) const noexcept override;
 
 	static void InitStatic() noexcept;
 	static void Disable() noexcept;
-	static void DisableInterface(const NetworkInterface *iface) noexcept;
+	static void DisableInterface(const NetworkInterface *_ecv_from iface) noexcept;
 	static void HandleGCodeReply(const char *_ecv_array reply) noexcept;
-	static void HandleGCodeReply(OutputBuffer *reply) noexcept;
+	static void HandleGCodeReply(OutputBuffer *_ecv_null reply) noexcept;
 	static uint16_t GetReplySeq() noexcept { return seq; }
 	static void CheckSessions() noexcept;
 	static void CommonDiagnostics(MessageType mtype) noexcept;
@@ -62,8 +62,8 @@ private:
 
 	struct KeyValueIndices
 	{
-		const char* key;
-		const char* value;
+		const char *_ecv_array key;
+		const char *_ecv_array value;
 	};
 
 	// HTTP sessions
@@ -71,7 +71,7 @@ private:
 	{
 		HttpSessionKey key;
 		IPAddress ip;
-		const NetworkInterface *iface;
+		const NetworkInterface *_ecv_from iface;
 		uint32_t lastQueryTime;
 		uint16_t postPort;
 		bool isPostUploading;
@@ -85,7 +85,7 @@ private:
 	void SendFile(const char *_ecv_array nameOfFileToSend, bool isWebFile) noexcept;
 	void SendGCodeReply() noexcept;
 	void SendJsonResponse(const char *_ecv_array command) noexcept;
-	bool GetJsonResponse(const char *_ecv_array request, OutputBuffer *&response, bool& keepOpen) noexcept;
+	bool GetJsonResponse(const char *_ecv_array request, OutputBuffer *_ecv_null &response, bool& keepOpen) noexcept;
 	void ProcessMessage() noexcept;
 	void ProcessRequest() noexcept;
 	void RejectMessage(const char *_ecv_array s, unsigned int code = 500) noexcept;
@@ -110,7 +110,7 @@ private:
 	char decodeChar;								// the character we are decoding in a URL-encoded argument
 
 	// Parser state
-	const char* commandWords[MaxCommandWords];
+	const char *_ecv_array _ecv_null commandWords[MaxCommandWords];
 	KeyValueIndices qualifiers[MaxQualKeys + 1];	// offsets into clientQualifier of the key/value pairs, the +1 is needed so that values can contain nulls
 	KeyValueIndices headers[MaxHeaders];			// offsets into clientHeader of the key/value pairs
 	size_t numCommandWords;

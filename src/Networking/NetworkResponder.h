@@ -24,12 +24,12 @@ class Socket;
 class NetworkResponder
 {
 public:
-	NetworkResponder(const NetworkResponder&) = delete;
+	NetworkResponder(const NetworkResponder &_ecv_from) = delete;
 
-	NetworkResponder *GetNext() const noexcept { return next; }
+	NetworkResponder *_ecv_from _ecv_null GetNext() const noexcept { return next; }
 	virtual bool Spin() noexcept = 0;															// do some work, returning true if we did anything significant
 	virtual bool Accept(Socket *s, NetworkProtocol protocol) noexcept = 0;						// ask the responder to accept this connection, returns true if it did
-	virtual void Terminate(NetworkProtocol protocol, const NetworkInterface *interface) noexcept = 0;	// terminate the responder if it is serving the specified protocol on the specified interface
+	virtual void Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept = 0;	// terminate the responder if it is serving the specified protocol on the specified interface
 	virtual void Diagnostics(MessageType mtype) const noexcept = 0;
 
 protected:
@@ -62,32 +62,32 @@ protected:
 		disconnecting,
 	};
 
-	NetworkResponder(NetworkResponder *n) noexcept;
+	explicit NetworkResponder(NetworkResponder *_ecv_from _ecv_null n) noexcept;
 
 	void Commit(ResponderState nextState = ResponderState::free, bool report = true) noexcept;
 	virtual void SendData() noexcept;
 	virtual void ConnectionLost() noexcept;
 
 	IPAddress GetRemoteIP() const noexcept;
-	void ReportOutputBufferExhaustion(const char *sourceFile, int line) noexcept;
+	void ReportOutputBufferExhaustion(const char *_ecv_array sourceFile, int line) noexcept;
 
 	static Platform& GetPlatform() noexcept { return reprap.GetPlatform(); }
 	static Network& GetNetwork() noexcept { return reprap.GetNetwork(); }
 
 	// General state
-	NetworkResponder *next;								// next responder in the list
+	NetworkResponder *_ecv_from _ecv_null next;			// next responder in the list
 	ResponderState responderState;						// the current state
 	ResponderState stateAfterSending;					// if we are sending, the state to enter when sending is complete
-	Socket *skt;
+	Socket *_ecv_null skt;								// the network socket this responder is using
 	uint32_t timer;										// a general purpose millisecond timer
 
 	// Buffers for sending responses
-	OutputBuffer *outBuf;
+	OutputBuffer *_ecv_null outBuf;
 	OutputStack outStack;								// not volatile because only one task accesses it
 #if HAS_MASS_STORAGE
-	FileStore *fileBeingSent;
+	FileStore *_ecv_null fileBeingSent;
 #endif
-	NetworkBuffer *fileBuffer;
+	NetworkBuffer *_ecv_null fileBuffer;
 	bool terminateResponder;
 };
 

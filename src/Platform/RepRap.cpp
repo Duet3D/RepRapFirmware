@@ -2135,7 +2135,7 @@ OutputBuffer *RepRap::GetThumbnailResponse(const char *filename, FilePosition of
 
 // Get information for the specified file, or the currently printing file (if 'filename' is null or empty), in JSON format
 // Return GCodeResult::Warning if the file doesn't exist, else GCodeResult::ok or GCodeResult::notFinished
-GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *&response, bool quitEarly) noexcept
+GCodeResult RepRap::GetFileInfoResponse(const char *filename, OutputBuffer *_ecv_null &response, bool quitEarly) noexcept
 {
 	const bool specificFile = (filename != nullptr && filename[0] != 0);
 	GCodeFileInfo info;

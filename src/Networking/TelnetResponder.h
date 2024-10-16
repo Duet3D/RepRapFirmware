@@ -13,21 +13,23 @@
 class TelnetResponder : public NetworkResponder
 {
 public:
-	TelnetResponder(NetworkResponder *n) noexcept;
+	explicit TelnetResponder(NetworkResponder *_ecv_from n) noexcept;
 	bool Spin() noexcept override;								// do some work, returning true if we did anything significant
 	bool Accept(Socket *s, NetworkProtocol protocol) noexcept override;	// ask the responder to accept this connection, returns true if it did
-	void Terminate(NetworkProtocol protocol, const NetworkInterface *interface) noexcept override;	// terminate the responder if it is serving the specified protocol on the specified interface
+	void Terminate(NetworkProtocol protocol, const NetworkInterface *_ecv_from interface) noexcept override;	// terminate the responder if it is serving the specified protocol on the specified interface
 
 	static void InitStatic() noexcept;
 	static void Disable() noexcept;
-	static void HandleGCodeReply(const char *reply) noexcept;
-	static void HandleGCodeReply(OutputBuffer *reply) noexcept;
+	static void HandleGCodeReply(const char *_ecv_array _ecv_null reply) noexcept;
+	static void HandleGCodeReply(OutputBuffer *_ecv_null reply) noexcept;
 	void Diagnostics(MessageType mtype) const noexcept override;
+
+protected:
+	void ConnectionLost() noexcept override;
 
 private:
 	void CharFromClient(char c) noexcept;
 	void ProcessLine() noexcept;
-	void ConnectionLost() noexcept override;
 
 	bool SendGCodeReply() noexcept;
 
@@ -38,7 +40,7 @@ private:
 
 	static unsigned int numSessions;
 	static unsigned int clientsServed;
-	static OutputBuffer *gcodeReply;
+	static OutputBuffer *_ecv_null gcodeReply;
 	static Mutex gcodeReplyMutex;
 
 	static const uint32_t TelnetSetupDuration = 4000;	// ignore the first Telnet request within this duration (in ms)

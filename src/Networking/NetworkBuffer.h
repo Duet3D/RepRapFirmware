@@ -16,7 +16,7 @@ class W5500Socket;
 class RTOSPlusTCPEthernetSocket;
 
 // Network buffer class. These buffers are 2K long so that they can accept as much data as the W5500 can provide in one go.
-class NetworkBuffer
+class NetworkBuffer final
 {
 public:
 	friend class WiFiSocket;
@@ -24,12 +24,12 @@ public:
 	friend class RTOSPlusTCPEthernetSocket;
 
 	// Release this buffer and return the next one in the chain
-	NetworkBuffer *Release() noexcept;
+	NetworkBuffer *_ecv_null Release() noexcept;
 
 	// Read 1 character, returning true of successful, false if no data left
 	bool ReadChar(char& b) noexcept;
 
-	const uint8_t* UnreadData() const noexcept { return Data() + readPointer; }
+	const uint8_t *_ecv_array UnreadData() const noexcept { return data + readPointer; }
 
 	// Return the amount of data available, not including continuation buffers
 	size_t Remaining() const noexcept { return dataLength - readPointer; }
@@ -47,10 +47,10 @@ public:
 	size_t SpaceLeft() const noexcept { return bufferSize - dataLength; }
 
 	// Return a pointer to the space available for writing
-	uint8_t* UnwrittenData() noexcept { return Data() + dataLength; }
+	uint8_t *_ecv_array UnwrittenData() noexcept { return data + dataLength; }
 
 	// Append some data, returning the amount appended
-	size_t AppendData(const uint8_t *source, size_t length) noexcept;
+	size_t AppendData(const uint8_t *_ecv_array source, size_t length) noexcept;
 
 #if HAS_MASS_STORAGE
 	// Read into the buffer from a file
@@ -61,10 +61,10 @@ public:
 	void Empty() noexcept;
 
 	// Append a buffer to a list
-	static void AppendToList(NetworkBuffer **list, NetworkBuffer *b) noexcept;
+	static void AppendToList(NetworkBuffer *_ecv_null &r_list, NetworkBuffer *b) noexcept;
 
 	// Find the last buffer in a list
-	static NetworkBuffer *FindLast(NetworkBuffer *list) noexcept;
+	static NetworkBuffer *_ecv_null FindLast(NetworkBuffer *_ecv_null list) noexcept;
 
 	// Allocate a buffer
 	static NetworkBuffer *Allocate() noexcept;
@@ -73,21 +73,23 @@ public:
 	static void AllocateBuffers(unsigned int number) noexcept;
 
 	// Count how many buffers there are in a chain
-	static unsigned int Count(NetworkBuffer*& ptr) noexcept;
+	static unsigned int Count(NetworkBuffer *_ecv_null & ptr) noexcept;
 
 	static const size_t bufferSize = 2 * 1024;
 
 private:
-	NetworkBuffer(NetworkBuffer *n) noexcept;
-	uint8_t *Data() noexcept { return reinterpret_cast<uint8_t*>(data32); }
-	const uint8_t *Data() const noexcept { return reinterpret_cast<const uint8_t*>(data32); }
+	explicit NetworkBuffer(NetworkBuffer *_ecv_null n) noexcept;
 
-	NetworkBuffer *next;
+	// Direct access to data for friend classes
+	uint8_t *_ecv_array Data() noexcept { return data; }
+	const uint8_t *_ecv_array Data() const noexcept { return data; }
+
+	NetworkBuffer *_ecv_null next;
 	size_t dataLength;
 	size_t readPointer;
-	// When doing unaligned transfers on the WiFi interface, up to 3 extra bytes may be returned, hence the +1 in the following
-	uint32_t data32[bufferSize/sizeof(uint32_t) + 1];		// 32-bit aligned buffer so we can do direct DMA
-	static NetworkBuffer *freelist;
+	// When doing unaligned transfers on the WiFi interface, up to 3 extra bytes may be returned, hence the +4 in the following
+	alignas(4) uint8_t data[bufferSize + 4];		// 32-bit aligned buffer so we can do direct DMA
+	static NetworkBuffer *_ecv_null freelist;
 };
 
 #endif /* SRC_NETWORKING_NETWORKBUFFER_H_ */

@@ -63,7 +63,7 @@ NamedEnum(NetworkState, uint8_t,
 class Network INHERIT_OBJECT_MODEL
 {
 public:
-	Network(Platform& p) noexcept;
+	explicit Network(Platform& p) noexcept;
 	Network(const Network&) = delete;
 
 	void Init() noexcept;
@@ -77,7 +77,7 @@ public:
 	bool IsWiFiInterface(unsigned int interface) const noexcept;
 
 #if HAS_NETWORKING
-	const NetworkInterface* GetInterface(unsigned int interface) { return interfaces[interface]; }
+	const NetworkInterface *_ecv_null GetInterface(unsigned int interface) { return interfaces[interface]; }
 #endif
 
 #if defined(DUET3_MB6HC)
@@ -90,10 +90,10 @@ public:
 	GCodeResult ReportProtocols(unsigned int interface, const StringRef& reply) const noexcept;
 
 	// WiFi interfaces
-	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer& gb, const StringRef& reply, OutputBuffer*& longReply);
-	WifiFirmwareUploader *GetWifiUploader() const noexcept;
+	GCodeResult HandleWiFiCode(int mcode, GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & longReply);
+	WifiFirmwareUploader *_ecv_null GetWifiUploader() const noexcept;
 	void ResetWiFiForUpload(bool external) noexcept;
-	const char* GetWiFiServerVersion() const noexcept;
+	const char *_ecv_array GetWiFiServerVersion() const noexcept;
 
 #if HAS_NETWORKING
 	// Network Protocol
@@ -114,13 +114,13 @@ public:
 	GCodeResult SetMacAddress(unsigned int interface, const MacAddress& mac, const StringRef& reply) noexcept;
 	const MacAddress& GetMacAddress(unsigned int interface) const noexcept;
 	const char *_ecv_array GetHostname() const noexcept { return hostname; }
-	void SetHostname(const char *name) noexcept;
+	void SetHostname(const char *_ecv_array name) noexcept;
 
 	void TerminateResponders(const NetworkInterface *iface, NetworkProtocol protocol) noexcept;
 #endif
 
 #if SUPPORT_HTTP
-	const char *GetCorsSite() const noexcept { return corsSite.IsEmpty() ? nullptr : corsSite.c_str(); }
+	const char *_ecv_array _ecv_null GetCorsSite() const noexcept { return corsSite.IsEmpty() ? nullptr : corsSite.c_str(); }
 	void SetCorsSite(const char *_ecv_array site) noexcept { corsSite.copy(site); }
 #endif
 
@@ -131,13 +131,13 @@ public:
 	void StopClient(NetworkInterface *interface, NetworkProtocol protocol) noexcept;
 #endif
 
-	void HandleHttpGCodeReply(const char *msg) noexcept;
-	void HandleTelnetGCodeReply(const char *msg) noexcept;
+	void HandleHttpGCodeReply(const char *_ecv_array msg) noexcept;
+	void HandleTelnetGCodeReply(const char *_ecv_array msg) noexcept;
 	void HandleHttpGCodeReply(OutputBuffer *buf) noexcept;
 	void HandleTelnetGCodeReply(OutputBuffer *buf) noexcept;
 
 #if SUPPORT_MQTT
-	void MqttPublish(const char *msg, const char *topic, int qos, bool retain, bool dup) noexcept;
+	void MqttPublish(const char *_ecv_array msg, const char *_ecv_array topic, int qos, bool retain, bool dup) noexcept;
 #endif
 
 	uint32_t GetHttpReplySeq() noexcept;
@@ -146,21 +146,21 @@ protected:
 	DECLARE_OBJECT_MODEL_WITH_ARRAYS
 
 private:
-	WiFiInterface *FindWiFiInterface() const noexcept;
+	WiFiInterface *_ecv_null FindWiFiInterface() const noexcept;
 
 	Platform& platform;
 
 #if HAS_NETWORKING
-	NetworkInterface *interfaces[MaxNetworkInterfaces];
+	NetworkInterface *_ecv_null interfaces[MaxNetworkInterfaces];
 #endif
 
 #if HAS_RESPONDERS
-	NetworkResponder *responders;
-	NetworkResponder *nextResponderToPoll;
+	NetworkResponder *_ecv_from _ecv_null responders;
+	NetworkResponder *_ecv_from _ecv_null nextResponderToPoll;
 #endif
 
 #if HAS_CLIENTS
-	NetworkClient *clients;
+	NetworkClient *_ecv_null clients;
 #endif
 
 #if SUPPORT_HTTP
