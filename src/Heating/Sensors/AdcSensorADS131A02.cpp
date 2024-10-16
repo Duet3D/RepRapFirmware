@@ -48,7 +48,8 @@ TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02::typeDescriptor_16bit
 TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02::typeDescriptor_24bit(TypeName_24bit, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new AdcSensorADS131A02(sensorNum, true); } );
 
 AdcSensorADS131A02::AdcSensorADS131A02(unsigned int sensorNum, bool p_24bit) noexcept
-	: SpiTemperatureSensor(sensorNum, (p_24bit) ? TypeName_24bit : TypeName_16bit, ADS131_SpiMode, ADS131_Frequency), use24bitFrames(p_24bit)
+	: SpiTemperatureSensor(sensorNum, (p_24bit) ? TypeName_24bit : TypeName_16bit, ADS131_SpiMode, ADS131_Frequency),
+	  use24bitFrames(p_24bit)
 {
 }
 
@@ -92,6 +93,7 @@ GCodeResult AdcSensorADS131A02::FinishConfiguring(bool changed, const StringRef&
 
 		// Initialise the sensor
 		InitSpi();
+		TryInitAdc();
 
 		TemperatureError rslt(TemperatureError::unknownError);
 		float t;
@@ -129,6 +131,14 @@ void AdcSensorADS131A02::Poll() noexcept
 void AdcSensorADS131A02::CalcDerivedParameters() noexcept
 {
 //TODO	linearAdcDegCPerCount = (tempAt20mA - minLinearAdcTemp) / 4096.0;
+}
+
+TemperatureError AdcSensorADS131A02::TryInitAdc() const noexcept
+{
+	//TODO wait for it to become ready first!
+	uint16_t status;
+	uint32_t readings[2];
+	return DoTransaction(ADS131Command::reset, 0, 0, status, readings);
 }
 
 // Try to get a temperature reading from the linear ADC by doing an SPI transaction
@@ -182,6 +192,41 @@ TemperatureError AdcSensorADS131A02::TryGetLinearAdcTemperature(float& t) noexce
 	}
 	return rslt;
 #endif
+}
+
+// Send a command and receive the response
+TemperatureError AdcSensorADS131A02::DoTransaction(ADS131Command command, uint8_t regNum, uint8_t data, uint16_t &status, uint32_t readings[2]) const noexcept
+{
+	const uint16_t fullCommand = command | ((uint16_t)regNum << 8) | (uint16_t)data;
+	TemperatureError rslt(TemperatureError::ok);
+	if (use24bitFrames)
+	{
+		uint8_t sendBuffer[9];
+		sendBuffer[0] = (fullCommand >> 8) & 0xFF;
+		sendBuffer[1] = fullCommand & 0xFF;
+		memset(sendBuffer + 2, 0, sizeof(sendBuffer) - 2);
+
+		uint8_t receiveBuffer[9];
+		rslt = DoSpiTransaction(sendBuffer, receiveBuffer, sizeof(sendBuffer));
+
+		status = ((uint16_t)receiveBuffer[0] << 8) | receiveBuffer[1];
+		readings[0] = ((uint32_t)receiveBuffer[3] << 16) | ((uint32_t)receiveBuffer[4] << 8) | receiveBuffer[5];
+		readings[1] = ((uint32_t)receiveBuffer[6] << 16) | ((uint32_t)receiveBuffer[7] << 8) | receiveBuffer[8];
+	}
+	else
+	{
+		uint16_t sendBuffer[3];
+		sendBuffer[0] = __builtin_bswap16(fullCommand);
+		sendBuffer[1] = sendBuffer[2] = 0;
+
+		uint16_t receiveBuffer[3];
+		rslt = DoSpiTransaction(reinterpret_cast<const uint8_t *_ecv_array>(sendBuffer), reinterpret_cast<uint8_t *_ecv_array>(receiveBuffer), sizeof(sendBuffer));
+
+		status = __builtin_bswap16(receiveBuffer[0]);
+		readings[0] = (uint32_t)__builtin_bswap16(receiveBuffer[1]);
+		readings[1] = (uint32_t)__builtin_bswap16(receiveBuffer[2]);
+	}
+	return rslt;
 }
 
 #endif

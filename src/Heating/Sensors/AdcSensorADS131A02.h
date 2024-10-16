@@ -35,6 +35,25 @@ private:
 	TemperatureError TryGetLinearAdcTemperature(float& t) noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
 	void CalcDerivedParameters() noexcept;
+	TemperatureError TryInitAdc() const noexcept;
+
+	// Commands that can be sent to the ADC
+	enum ADS131Command : uint16_t
+	{
+		nullcmd = 0,
+		reset = 0x0011,
+		standby = 0x0022,
+		wakeup = 0x0033,
+		lock = 0x0555,
+		unlock = 0x0655,
+		rreg = 0x2000,				// put register number in bits 8-12
+		rregs = rreg,				// put start register number in bits 8-12 and (numRegisters-1) in bits 0-7
+		wreg = 0x4000,				// put register number in bits 8-12 and data in bits 0-7
+		//wregs = 0x6000			// put start register number in bits 8-12 and (numRegisters-1) in bits 0-7. Data follows in subsequent bytes, see table 13 in the datasheet. Not used by this driver.
+	};
+
+	// Send a command and receive the response
+	TemperatureError DoTransaction(ADS131Command command, uint8_t regNum, uint8_t data, uint16_t &status, uint32_t readings[2]) const noexcept;
 
 	// Configurable parameters
 	float readingAtMin = DefaultReadingAtMin;
