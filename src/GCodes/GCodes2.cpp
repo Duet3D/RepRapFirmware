@@ -874,7 +874,10 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 							break;
 						}
 
-						platform.AccessSpindle(slot).SetState(SpindleState::stopped);
+						if (platform.AccessSpindle(slot).GetState() != SpindleState::unconfigured)
+						{
+							platform.AccessSpindle(slot).SetState(SpindleState::stopped);
+						}
 					}
 				}
 				break;
