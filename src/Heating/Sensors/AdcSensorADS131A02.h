@@ -52,8 +52,31 @@ private:
 		//wregs = 0x6000			// put start register number in bits 8-12 and (numRegisters-1) in bits 0-7. Data follows in subsequent bytes, see table 13 in the datasheet. Not used by this driver.
 	};
 
+	enum ADS131Register : int8_t
+	{
+		none =0,
+		STAT_1 = 0x02,
+		STAT_P = 0x03,
+		STAT_N = 0x04,
+		STAT_S = 0x05,
+		ERROR_CNT = 0x06,
+		STAT_M2 = 0x07,
+
+		A_SYS_CFG = 0x0B,
+		D_SYS_CFG = 0x0C,
+		CLK1 = 0x0D,
+		CLK2 = 0x0E,
+		ADC_ENA = 0x0F,
+
+		ADC1 = 0x11,
+		ADC2 = 0x12
+	};
+
 	// Send a command and receive the response
-	TemperatureError DoTransaction(ADS131Command command, uint8_t regNum, uint8_t data, uint16_t &status, uint32_t readings[2]) const noexcept;
+	TemperatureError DoTransaction(ADS131Command command, ADS131Register regNum, uint8_t data, uint16_t &status, uint32_t readings[2]) const noexcept;
+
+	// Wait for the device to become ready after a reset returning TemperatureError::ok if successful
+	TemperatureError WaitReady() const noexcept;
 
 	// Configurable parameters
 	float readingAtMin = DefaultReadingAtMin;
@@ -64,6 +87,13 @@ private:
 	static constexpr float DefaultReadingAtMin = 0.0;
 	static constexpr float DefaultReadingAtmax = 100.0;
 
+	struct InitTableEntry
+	{
+		ADS131Register regNum;
+		uint8_t val;
+	};
+
+	static const InitTableEntry initTable[];
 };
 
 #endif
