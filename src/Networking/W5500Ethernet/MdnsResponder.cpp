@@ -41,7 +41,7 @@ void MdnsResponder::Spin() noexcept
 	}
 
 	// Have we got a new query?
-	const uint8_t *packetData;
+	const uint8_t *_ecv_array packetData;
 	size_t bytesRead;
 	if (socket->CanRead() && socket->ReadBuffer(packetData, bytesRead))
 	{
@@ -54,7 +54,7 @@ void MdnsResponder::Spin() noexcept
 	}
 }
 
-void MdnsResponder::ProcessPacket(const uint8_t *packet, size_t length) const noexcept
+void MdnsResponder::ProcessPacket(const uint8_t *_ecv_array packet, size_t length) const noexcept
 {
 	size_t bytesProcessed = 0;
 
@@ -79,7 +79,8 @@ void MdnsResponder::ProcessPacket(const uint8_t *packet, size_t length) const no
 				if (offset < length)
 				{
 					// Check if the compressed name matches
-					nameMatches = CheckHostname(packet + offset, length - offset, nullptr);
+					size_t dummy;
+					nameMatches = CheckHostname(packet + offset, length - offset, dummy);
 				}
 				else
 				{
@@ -93,7 +94,7 @@ void MdnsResponder::ProcessPacket(const uint8_t *packet, size_t length) const no
 				if (bytesProcessed < length)
 				{
 					// Check if the regular name matches
-					nameMatches = CheckHostname(packet + bytesProcessed, length - bytesProcessed, &bytesProcessed);
+					nameMatches = CheckHostname(packet + bytesProcessed, length - bytesProcessed, bytesProcessed);
 				}
 				else
 				{
@@ -127,10 +128,10 @@ void MdnsResponder::ProcessPacket(const uint8_t *packet, size_t length) const no
 	}
 }
 
-bool MdnsResponder::CheckHostname(const uint8_t *ptr, size_t maxLength, size_t *bytesProcessed) const noexcept
+bool MdnsResponder::CheckHostname(const uint8_t *_ecv_array ptr, size_t maxLength, size_t& bytesProcessed) const noexcept
 {
-	const uint8_t *originalPtr = ptr;
-	const char *hostname = reprap.GetNetwork().GetHostname();
+	const uint8_t *_ecv_array originalPtr = ptr;
+	const char *_ecv_array hostname = reprap.GetNetwork().GetHostname();
 	bool nameMatches = true;
 
 	// Check the hostname
@@ -156,10 +157,7 @@ bool MdnsResponder::CheckHostname(const uint8_t *ptr, size_t maxLength, size_t *
 	else
 	{
 		//debugPrintf("mDNS name overflow\n");
-		if (bytesProcessed != nullptr)
-		{
-			bytesProcessed += maxLength;
-		}
+		bytesProcessed += maxLength;
 		return false;
 	}
 
@@ -169,7 +167,7 @@ bool MdnsResponder::CheckHostname(const uint8_t *ptr, size_t maxLength, size_t *
 	{
 		if (nameMatches && domainLength == 5)
 		{
-			const char *domainName = reinterpret_cast<const char *>(ptr);
+			const char *_ecv_array domainName = reinterpret_cast<const char *_ecv_array>(ptr);
 			nameMatches = strncmp(domainName, "local", 5) == 0;
 		}
 		else
@@ -181,10 +179,7 @@ bool MdnsResponder::CheckHostname(const uint8_t *ptr, size_t maxLength, size_t *
 	else
 	{
 		//debugPrintf("mDNS query domain overflow\n");
-		if (bytesProcessed != nullptr)
-		{
-			bytesProcessed += maxLength;
-		}
+		bytesProcessed += maxLength;
 		return false;
 	}
 
@@ -194,28 +189,19 @@ bool MdnsResponder::CheckHostname(const uint8_t *ptr, size_t maxLength, size_t *
 		if (*ptr++ != 0)
 		{
 			//debugPrintf("mDNS FQDN not terminated\n");
-			if (bytesProcessed != nullptr)
-			{
-				bytesProcessed += maxLength;
-			}
+			bytesProcessed += maxLength;
 			return false;
 		}
 	}
 	else
 	{
 		//debugPrintf("mDNS FQDN overflow\n");
-		if (bytesProcessed != nullptr)
-		{
-			bytesProcessed += maxLength;
-		}
+		bytesProcessed += maxLength;
 		return false;
 	}
 
 	// End
-	if (bytesProcessed != nullptr)
-	{
-		*bytesProcessed += ptr - originalPtr;
-	}
+	bytesProcessed += (size_t)(ptr - originalPtr);
 	return nameMatches;
 }
 
@@ -241,15 +227,15 @@ void MdnsResponder::SendARecord(uint16_t transaction) const noexcept
 	bytesWritten += sizeof(uint16_t);
 
 	// Write A record and start with the hostname
-	const char * const hostname = reprap.GetNetwork().GetHostname();
+	const char *_ecv_array const hostname = reprap.GetNetwork().GetHostname();
 	const size_t hostnameLength = strlen(hostname);
 	buffer[bytesWritten++] = hostnameLength;
-	SafeStrncpy(reinterpret_cast<char *>(buffer + bytesWritten), hostname, ARRAY_SIZE(buffer) - bytesWritten);
+	SafeStrncpy(reinterpret_cast<char *_ecv_array>(buffer + bytesWritten), hostname, ARRAY_SIZE(buffer) - bytesWritten);
 	bytesWritten += hostnameLength;
 
 	// Write domain
 	buffer[bytesWritten++] = 5;
-	SafeStrncpy(reinterpret_cast<char *>(buffer + bytesWritten), "local", ARRAY_SIZE(buffer) - bytesWritten);
+	SafeStrncpy(reinterpret_cast<char *_ecv_array>(buffer + bytesWritten), "local", ARRAY_SIZE(buffer) - bytesWritten);
 	bytesWritten += 5;
 
 	// Write terminating zero

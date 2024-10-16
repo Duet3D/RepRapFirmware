@@ -21,7 +21,7 @@ class W5500Socket;
 
 class MdnsResponder {
 public:
-	MdnsResponder(W5500Socket *sock) noexcept;
+	explicit MdnsResponder(W5500Socket *sock) noexcept;
 
 	void UpdateServiceRecords() noexcept;
 	void Spin() noexcept;
@@ -31,8 +31,8 @@ private:
 	W5500Socket *socket;
 	uint32_t lastAnnouncement;
 
-	void ProcessPacket(const uint8_t *data, size_t length) const noexcept;
-	bool CheckHostname(const uint8_t *ptr, size_t maxLength, size_t *bytesProcessed) const noexcept;
+	void ProcessPacket(const uint8_t *_ecv_array data, size_t length) const noexcept;
+	bool CheckHostname(const uint8_t *_ecv_array ptr, size_t maxLength, size_t& bytesProcessed) const noexcept;
 	void SendARecord(uint16_t transaction) const noexcept;
 };
 

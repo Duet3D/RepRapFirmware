@@ -23,7 +23,7 @@ class NetworkInterface;
 class Socket
 {
 public:
-	explicit Socket(NetworkInterface *iface) noexcept : interface(iface), localPort(0), remotePort(0), remoteIPAddress(), state(SocketState::disabled) { }
+	explicit Socket(NetworkInterface *_ecv_from iface) noexcept : interface(iface), localPort(0), remotePort(0), remoteIPAddress(), state(SocketState::disabled) { }
 	Socket(const Socket &_ecv_from) = delete;
 
 	NetworkInterface *_ecv_from GetInterface() const noexcept { return interface; }
