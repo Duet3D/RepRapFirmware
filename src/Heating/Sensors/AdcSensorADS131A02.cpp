@@ -5,7 +5,7 @@
  *      Author: David
  */
 
-#include "ADS131A02.h"
+#include "AdcSensorADS131A02.h"
 
 #if SUPPORT_SPI_SENSORS && SUPPORT_ADS131A02
 
@@ -17,25 +17,43 @@
 # include <CanMessageGenericParser.h>
 #endif
 
+/*
+ * The ADS131A02 is a 2-channel 24-bit signal-delta ADC.
+ * The SPI interface can be configured in the following modes depending on the connections of the M1 and M2 pins (see Table 10 in the datasheet)
+ * 1. 16-bit data words. In this a case only the most significant 16 bits of data are returned for each channel.
+ * 2. 24-bit data words. We can choose to have all 24 bits of data, or 16 bits of data and a 8-bit Hamming code.
+ * 3. 32-bit data words. All 24 bits of data are returned and optionally a 8-bit Hamming code.
+ * The device operates in fixed frame or dynamic frame mode.
+ * The first word returned is always the status word, with the status is the most significant 16 bits of the word.
+ * After that the data for each channel is returned. In dynamic frame mode, data for disabled channels is omitted.
+ * Finally, if CRC is enabled in the control register then a CRC word is returned containing the CRC in the most significant 16 bits.
+ *
+ * This driver doesn't use the CRC or Hamming codes, and uses fixed frame mode.
+ * To use 16-bit data words, leave pin M1 floating and connect pin M2 to ground.
+ * To use 24-bit data words, connect pin M1 to ground and M2 to ground.
+ *
+ * We use the SPI interface of the device in Synchronous Slave Mode.
+ */
+
 const uint32_t ADS131_Frequency = 15000000;		// maximum for ADS131A02 is 25MHz for a single device, using 1:1 mark-space ratio
 
-// The ADS131 samples input data on the falling edge and changes the output data on the rising edge.
+// The ADS131 samples input data on the falling edge and changes the output data on the rising edge. The clock is low when inactive.
 const SpiMode ADS131_SpiMode = SPI_MODE_1;
 
 // Define the minimum interval between readings
 const uint32_t MinimumReadInterval = 3;			// minimum interval between reads, in milliseconds
 
 // Sensor type descriptors
-TemperatureSensor::SensorTypeDescriptor ADS131A02::typeDescriptor(TypeName, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new ADS131A02(sensorNum); } );
+TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02::typeDescriptor_16bit(TypeName_16bit, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new AdcSensorADS131A02(sensorNum, false); } );
+TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02::typeDescriptor_24bit(TypeName_24bit, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new AdcSensorADS131A02(sensorNum, true); } );
 
-ADS131A02::ADS131A02(unsigned int sensorNum) noexcept
-	: SpiTemperatureSensor(sensorNum, TypeName, ADS131_SpiMode, ADS131_Frequency)
+AdcSensorADS131A02::AdcSensorADS131A02(unsigned int sensorNum, bool p_24bit) noexcept
+	: SpiTemperatureSensor(sensorNum, (p_24bit) ? TypeName_24bit : TypeName_16bit, ADS131_SpiMode, ADS131_Frequency), use24bitFrames(p_24bit)
 {
-	// TODO Auto-generated constructor stub
 }
 
 // Configure this temperature sensor
-GCodeResult ADS131A02::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
+GCodeResult AdcSensorADS131A02::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
 	gb.TryGetFValue('L', readingAtMin, changed);
 	gb.TryGetFValue('H', readingAtMax, changed);
@@ -51,7 +69,7 @@ GCodeResult ADS131A02::Configure(GCodeBuffer& gb, const StringRef& reply, bool& 
 
 #if SUPPORT_REMOTE_COMMANDS
 
-GCodeResult ADS131A02::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
+GCodeResult AdcSensorADS131A02::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
 {
 	bool seen = parser.GetFloatParam('L', readingAtMin);
 	seen = parser.GetFloatParam('H', readingAtMax) || seen;
@@ -66,7 +84,7 @@ GCodeResult ADS131A02::Configure(const CanMessageGenericParser& parser, const St
 
 #endif
 
-GCodeResult ADS131A02::FinishConfiguring(bool changed, const StringRef& reply) noexcept
+GCodeResult AdcSensorADS131A02::FinishConfiguring(bool changed, const StringRef& reply) noexcept
 {
 	if (changed)
 	{
@@ -101,20 +119,20 @@ GCodeResult ADS131A02::FinishConfiguring(bool changed, const StringRef& reply) n
 	return GCodeResult::ok;
 }
 
-void ADS131A02::Poll() noexcept
+void AdcSensorADS131A02::Poll() noexcept
 {
 	float t;
 	const TemperatureError rslt = TryGetLinearAdcTemperature(t);
 	SetResult(t, rslt);
 }
 
-void ADS131A02::CalcDerivedParameters() noexcept
+void AdcSensorADS131A02::CalcDerivedParameters() noexcept
 {
 //TODO	linearAdcDegCPerCount = (tempAt20mA - minLinearAdcTemp) / 4096.0;
 }
 
 // Try to get a temperature reading from the linear ADC by doing an SPI transaction
-TemperatureError ADS131A02::TryGetLinearAdcTemperature(float& t) noexcept
+TemperatureError AdcSensorADS131A02::TryGetLinearAdcTemperature(float& t) noexcept
 {
 #if 1
 	t = BadErrorTemperature;
