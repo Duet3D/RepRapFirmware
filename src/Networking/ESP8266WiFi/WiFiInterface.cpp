@@ -2096,6 +2096,24 @@ void WiFiInterface::SetupSpi() noexcept
 	NVIC_EnableIRQ(ESP_SPI_IRQn);
 }
 
+#if WIFI_SPI_DEBUG
+
+// Compare two blocks of memory and report if they are different
+void CheckMemory(const uint32_t *memToCheck, const uint32_t *reference, size_t numWords) noexcept
+{
+	for (size_t i = 0; i < numWords; ++i)
+	{
+		if (memToCheck[i] != reference[i])
+		{
+			debugPrintf("*** Memory difference at offset %u: was %08" PRIx32 " now %08" PRIx32 "\n", i * 4, reference[i], memToCheck[i]);
+//			debugPrintf("Start addr %08" PRIx32 ", msg length %04x\n", reinterpret_cast<uint32_t>(memToCheck), dataLength);
+			delay(25);
+		}
+	}
+}
+
+#endif
+
 // Send a command to the ESP and get the result
 int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, uint8_t flags, uint32_t param32, const void *dataOut, size_t dataOutLength, void* dataIn, size_t dataInLength) noexcept
 {
@@ -2203,12 +2221,26 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 
 #if SAME5x
 	{
+#if WIFI_SPI_DEBUG
+		volatile uint32_t stackCopy[12];
+		memcpyu32(const_cast<uint32_t*>(stackCopy), const_cast<const uint32_t*>(stackCopy + ARRAY_SIZE(stackCopy)), ARRAY_SIZE(stackCopy));
+		SetWatchpoint(0, (const void*)(stackCopy + ARRAY_SIZE(stackCopy) + 2), 3);
+		SetWatchpoint(1, (const void*)(stackCopy + ARRAY_SIZE(stackCopy) + 4), 3);
+		SetWatchpoint(1, (const void*)(stackCopy + ARRAY_SIZE(stackCopy) + 6), 3);
+#endif
 		if (WiFiSpiSercom->SPI.STATUS.bit.BUFOVF)
 		{
 			++spiRxOverruns;
 		}
 		DisableSpi();
 		spi_dma_disable();
+
+#if WIFI_SPI_DEBUG
+		CheckMemory(const_cast<const uint32_t*>(stackCopy + ARRAY_SIZE(stackCopy)), const_cast<const uint32_t*>(stackCopy), ARRAY_SIZE(stackCopy));
+		ClearWatchpoint(0);
+		ClearWatchpoint(1);
+		ClearWatchpoint(2);
+#endif
 	}
 #else
 	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
