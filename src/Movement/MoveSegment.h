@@ -146,7 +146,7 @@ public:
 	void SetExecuting() noexcept { flags.executing = true; }
 
 	// Get the next segment in this list
-	MoveSegment *GetNext() const noexcept;
+	MoveSegment *_ecv_null GetNext() const noexcept;
 
 	// Set the next segment in this list
 	void SetNext(MoveSegment *_ecv_null p_next) noexcept;
@@ -258,7 +258,7 @@ inline void MoveSegment::Release(MoveSegment *item) noexcept
 	IrqRestore(iflags);
 }
 
-inline MoveSegment *MoveSegment::GetNext() const noexcept
+inline MoveSegment *_ecv_null MoveSegment::GetNext() const noexcept
 {
 	return next;
 }

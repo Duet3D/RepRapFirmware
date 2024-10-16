@@ -279,7 +279,7 @@ public:
 	virtual ~ObjectModel() { }
 
 	// Forwarding function so that we can make GetObjectModelArrayEntry() protected
-	const ObjectModelArrayTableEntry *FindObjectModelArrayEntry(unsigned int index) const noexcept { return GetObjectModelArrayEntry(index); }
+	const ObjectModelArrayTableEntry *_ecv_null FindObjectModelArrayEntry(unsigned int index) const noexcept { return GetObjectModelArrayEntry(index); }
 
 	// Construct a JSON representation of those parts of the object model requested by the user. This version is called only on the root of the tree.
 	void ReportAsJson(const GCodeBuffer *_ecv_null gb, OutputBuffer *buf, const char *_ecv_array filter, const char *_ecv_array reportFlags, bool wantArrayLength) const THROWS(GCodeException);

@@ -34,8 +34,8 @@ public:
 	static bool ShouldQueueMCode(GCodeBuffer &gb) THROWS(GCodeException);	// Return true if this code should be queued
 
 private:
-	QueuedCode *freeItems;
-	QueuedCode *queuedItems;
+	QueuedCode *_ecv_null freeItems;
+	QueuedCode *_ecv_null queuedItems;
 };
 
 class QueuedCode
@@ -43,11 +43,11 @@ class QueuedCode
 public:
 	friend class GCodeQueue;
 
-	QueuedCode(QueuedCode *n) noexcept : next(n), dataLength(0) { }
-	QueuedCode *Next() const noexcept { return next; }
+	explicit QueuedCode(QueuedCode *_ecv_null n) noexcept : next(n), dataLength(0) { }
+	QueuedCode *_ecv_null Next() const noexcept { return next; }
 
 private:
-	QueuedCode *next;
+	QueuedCode *_ecv_null next;
 
 #if HAS_SBC_INTERFACE
 	bool isBinary;

@@ -106,7 +106,7 @@ bool TriggerItem::Check() noexcept
 }
 
 // Handle M581 for this trigger
-GCodeResult TriggerItem::Configure(unsigned int number, GCodeBuffer &gb, const StringRef &reply)
+GCodeResult TriggerItem::Configure(unsigned int number, GCodeBuffer &gb, const StringRef &reply) THROWS(GCodeException)
 {
 	bool seen = false;
 	if (gb.Seen('R'))

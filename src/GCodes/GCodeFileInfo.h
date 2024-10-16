@@ -21,9 +21,9 @@ struct GCodeFileInfo
 		uint16_t width, height;
 		ImageFormat format;
 
-		ThumbnailInfo() : width(0), format(ImageFormat::png) { }
-		bool IsValid() const { return width != 0; }
-		void Invalidate() { width = 0; }
+		ThumbnailInfo() noexcept : width(0), format(ImageFormat::png) { }
+		bool IsValid() const noexcept { return width != 0; }
+		void Invalidate() noexcept { width = 0; }
 	};
 
 	GCodeFileInfo() noexcept { Init(); }

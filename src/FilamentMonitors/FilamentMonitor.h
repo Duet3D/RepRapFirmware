@@ -60,7 +60,7 @@ public:
 	static size_t GetNumMonitorsToReport() noexcept;
 
 	// Get access to a filament monitor when we already have a read lock
-	static FilamentMonitor *_ecv_from GetMonitorAlreadyLocked(size_t extruder) noexcept { return filamentSensors[extruder]; }
+	static FilamentMonitor *_ecv_from _ecv_null GetMonitorAlreadyLocked(size_t extruder) noexcept { return filamentSensors[extruder]; }
 #endif
 
 #if SUPPORT_CAN_EXPANSION

@@ -145,7 +145,7 @@ GCodeResult GCodes::SetPositions(GCodeBuffer& gb, const StringRef& reply) THROWS
 // Offset the axes by the X, Y, and Z amounts in the M226 code in gb. The actual movement occurs on the next move command.
 // It's not clear from the description in the reprap.org wiki whether offsets are cumulative or not. We now assume they are not.
 // Note that M206 offsets are actually negative offsets.
-GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	bool seen = false;
 	for (size_t axis = 0; axis < numVisibleAxes; axis++)
@@ -184,7 +184,7 @@ GCodeResult GCodes::OffsetAxes(GCodeBuffer& gb, const StringRef& reply)
 }
 
 // Set workspace coordinates
-GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute)
+GCodeResult GCodes::GetSetWorkplaceCoordinates(GCodeBuffer& gb, const StringRef& reply, bool compute) THROWS(GCodeException)
 {
 	// No P parameter or P0 (LinuxCNC extension) means use current coordinate system
 	uint32_t cs = 0;
@@ -271,7 +271,7 @@ bool GCodes::WriteWorkplaceCoordinates(FileStore *f) const noexcept
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE || HAS_EMBEDDED_FILES
 
 // Handle M37 to simulate a whole file
-GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile)
+GCodeResult GCodes::SimulateFile(GCodeBuffer& gb, const StringRef &reply, const StringRef& file, bool updateFile) THROWS(GCodeException)
 {
 	if (reprap.GetPrintMonitor().IsPrinting())
 	{
@@ -721,7 +721,7 @@ GCodeResult GCodes::SetDateTime(GCodeBuffer& gb, const StringRef& reply) THROWS(
 #if HAS_WIFI_NETWORKING || HAS_AUX_DEVICES || HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
 // Handle M997
-GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply)
+GCodeResult GCodes::UpdateFirmware(GCodeBuffer& gb, const StringRef &reply) THROWS(GCodeException)
 {
 	if (!LockAllMovementSystemsAndWaitForStandstill(gb))
 	{

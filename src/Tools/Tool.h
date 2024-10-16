@@ -78,7 +78,7 @@ public:
 	static uint16_t GetExtrudersInUse() noexcept { return activeExtruders; }
 	static uint16_t GetToolHeatersInUse() noexcept { return activeToolHeaters; }
 	static uint16_t GetNumToolsToReport() noexcept { return numToolsToReport; }
-	static Tool *GetToolList() noexcept { return toolList; }
+	static Tool *_ecv_null GetToolList() noexcept { return toolList; }
 	static ReadLockedPointer<Tool> GetLockedTool(int toolNumber) noexcept;
 	static unsigned int GetNumberOfContiguousTools() noexcept;
 	static bool ExtruderMovementAllowed(const Tool *_ecv_null tool, bool extruding, unsigned int extruder) noexcept;
@@ -231,7 +231,7 @@ inline int Tool::GetHeater(size_t heaterNumber) const noexcept
 
 inline const char *_ecv_array Tool::GetName() const noexcept
 {
-	return (name == nullptr) ? "" : name;
+	return (name == nullptr) ? "" : _ecv_not_null(name);
 }
 
 inline int Tool::Number() const noexcept

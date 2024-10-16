@@ -403,7 +403,7 @@ GCodeResult GCodes::ProbeGrid(GCodeBuffer& gb, const StringRef& reply) THROWS(GC
 
 #if HAS_MASS_STORAGE || HAS_SBC_INTERFACE
 
-GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply)
+GCodeResult GCodes::LoadHeightMap(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException)
 {
 	ClearBedMapping();
 

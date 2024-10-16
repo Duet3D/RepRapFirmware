@@ -245,10 +245,11 @@ void GCodeBuffer::Diagnostics(MessageType mtype) noexcept
 
 	default:
 		scratchString.cat("is assembling a command");
+		break;
 	}
 
 	scratchString.cat(" in state(s)");
-	const GCodeMachineState *ms = machineState;
+	const GCodeMachineState *_ecv_null ms = machineState;
 	do
 	{
 		scratchString.catf(" %d", (int)ms->GetState());
@@ -625,14 +626,14 @@ void GCodeBuffer::GetReducedString(const StringRef& str) THROWS(GCodeException)
 {
 	// In order to handle string expressions here we first get a quoted string, then we reduce it
 	PARSER_OPERATION(GetQuotedString(str, false));
-	char *q = str.Pointer();
-	const char *p = q;
+	char *_ecv_array q = str.Pointer();
+	const char *_ecv_array p = q;
 	while (*p != 0)
 	{
 		const char c = *p++;
 		if (c != '-' && c != '_' && c != ' ')
 		{
-			*q++ = tolower(c);
+			*q++ = (char)tolower(c);
 		}
 	}
 	*q = 0;
@@ -690,7 +691,7 @@ ExpressionValue GCodeBuffer::GetExpression() THROWS(GCodeException)
 }
 
 // Get a :-separated list of drivers after a key letter
-void GCodeBuffer::GetDriverIdArray(DriverId arr[], size_t& length)
+void GCodeBuffer::GetDriverIdArray(DriverId arr[], size_t& length) THROWS(GCodeException)
 {
 	PARSER_OPERATION(GetDriverIdArray(arr, length));
 }
@@ -921,7 +922,7 @@ GCodeMachineState& GCodeBuffer::OriginalMachineState() const noexcept
 	GCodeMachineState *ms = machineState;
 	while (ms->GetPrevious() != nullptr)
 	{
-		ms = ms->GetPrevious();
+		ms = _ecv_not_null(ms->GetPrevious());
 	}
 	return *ms;
 }
@@ -931,7 +932,7 @@ GCodeMachineState& GCodeBuffer::CurrentFileMachineState() const noexcept
 	GCodeMachineState *ms = machineState;
 	while (ms->localPush && ms->GetPrevious() != nullptr)
 	{
-		ms = ms->GetPrevious();
+		ms = _ecv_not_null(ms->GetPrevious());
 	}
 	return *ms;
 }
@@ -939,7 +940,7 @@ GCodeMachineState& GCodeBuffer::CurrentFileMachineState() const noexcept
 // Return true if all GCodes machine states on the stack are 'normal'
 bool GCodeBuffer::AllStatesNormal() const noexcept
 {
-	for (const GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+	for (const GCodeMachineState *_ecv_null ms = machineState; ms != nullptr; ms = ms->GetPrevious())
 	{
 		if (ms->GetState() != GCodeState::normal)
 		{
@@ -982,7 +983,7 @@ const char *_ecv_array GCodeBuffer::GetDistanceUnits() const noexcept
 unsigned int GCodeBuffer::GetStackDepth() const noexcept
 {
 	unsigned int depth = 0;
-	for (const GCodeMachineState *m1 = machineState; m1->GetPrevious() != nullptr; m1 = m1->GetPrevious())
+	for (const GCodeMachineState *_ecv_null m1 = machineState; m1->GetPrevious() != nullptr; m1 = m1->GetPrevious())
 	{
 		++depth;
 	}
@@ -1210,7 +1211,7 @@ void GCodeBuffer::MacroFileClosed() noexcept
 // Allow for the possibility that the source may have started running a macro since it started waiting
 void GCodeBuffer::MessageAcknowledged(bool cancelled, uint32_t seq, ExpressionValue rslt) noexcept
 {
-	for (GCodeMachineState *ms = machineState; ms != nullptr; ms = ms->GetPrevious())
+	for (GCodeMachineState *_ecv_null ms = machineState; ms != nullptr; ms = ms->GetPrevious())
 	{
 		if (ms->waitingForAcknowledgement && (seq == ms->msgBoxSeq || seq == 0 || ms->msgBoxSeq == 0))
 		{
@@ -1367,7 +1368,7 @@ VariableSet& GCodeBuffer::GetVariables() const noexcept
 	GCodeMachineState *mc = machineState;
 	while (mc->localPush && mc->GetPrevious() != nullptr)
 	{
-		mc = mc->GetPrevious();
+		mc = _ecv_not_null(mc->GetPrevious());
 	}
 	return mc->variables;
 }

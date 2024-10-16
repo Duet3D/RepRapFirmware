@@ -2462,7 +2462,7 @@ bool GCodes::DoStraightMove(GCodeBuffer& gb, bool isCoordinated) THROWS(GCodeExc
 		else
 #endif
 		{
-			const Kinematics& kin = reprap.GetMove().GetKinematics();
+			const Kinematics &_ecv_from kin = reprap.GetMove().GetKinematics();
 			const SegmentationType st = kin.GetSegmentationType();
 			// To speed up simulation on SCARA printers, we don't apply kinematics segmentation when simulating.
 			if (st.useSegmentation && simulationMode != SimulationMode::normal && (ms.hasPositiveExtrusion || ms.isCoordinated || st.useG0Segmentation))
@@ -3139,7 +3139,7 @@ void GCodes::NewSingleSegmentMoveAvailable(MovementState& ms) noexcept
 // then call this function to update SegmentsLeft safely in a multi-threaded environment
 void GCodes::NewSegmentableMoveAvailable(MovementState& ms) noexcept
 {
-	const Kinematics& kin = reprap.GetMove().GetKinematics();
+	const Kinematics &_ecv_from kin = reprap.GetMove().GetKinematics();
 	const SegmentationType st = kin.GetSegmentationType();
 	if (st.useSegmentation)
 	{
@@ -4978,7 +4978,7 @@ void GCodes::CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexc
 
 // Generate a M408 response
 // Return the output buffer containing the response, or nullptr if we failed
-OutputBuffer *GCodes::GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept
+OutputBuffer *_ecv_null GCodes::GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept
 {
 	OutputBuffer *_ecv_null statusResponse = nullptr;
 	switch (type)

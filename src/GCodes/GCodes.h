@@ -219,7 +219,7 @@ public:
 
 	// These next two are public because they are used by class SbcInterface
 	void UnlockAll(const GCodeBuffer& gb) noexcept;									// Release all locks
-	GCodeBuffer *GetGCodeBuffer(GCodeChannel channel) const noexcept { return gcodeSources[channel.ToBaseType()]; }
+	GCodeBuffer *_ecv_null GetGCodeBuffer(GCodeChannel channel) const noexcept { return gcodeSources[channel.ToBaseType()]; }
 
 #if HAS_MASS_STORAGE
 	GCodeResult StartSDTiming(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeException);	// Start timing SD card file writing
@@ -454,7 +454,7 @@ private:
 	bool ToolHeatersAtSetTemperatures(const Tool *_ecv_null tool, bool waitWhenCooling, float tolerance, bool waitOnFault) const noexcept;
 																							// Wait for the heaters associated with the specified tool to reach their set temperatures
 	void GenerateTemperatureReport(const GCodeBuffer& gb, const StringRef& reply) const noexcept;	// Store a standard-format temperature report in reply
-	OutputBuffer *GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
+	OutputBuffer *_ecv_null GenerateJsonStatusResponse(int type, int seq, ResponseSource source) const noexcept;	// Generate a M408 response
 	void CheckReportDue(GCodeBuffer& gb, const StringRef& reply) const noexcept;			// Check whether we need to report temperatures or status
 
 	void RestorePosition(MovementState& ms, const RestorePoint& rp) noexcept;				// Restore user position from a restore point
@@ -630,7 +630,7 @@ private:
 	GCodeBuffer *_ecv_null  Queue2GCode() const noexcept { return gcodeSources[GCodeChannel::ToBaseType(GCodeChannel::Queue2)]; }
 	GCodeBuffer *_ecv_null  GetFileGCode(unsigned int msNumber) const noexcept;
 #else
-	GCodeBuffer* GetFileGCode(unsigned int msNumber) const noexcept { return FileGCode(); }
+	GCodeBuffer *_ecv_null GetFileGCode(unsigned int msNumber) const noexcept { return FileGCode(); }
 #endif
 
 	size_t nextGcodeSource;												// The one to check next, using round-robin scheduling

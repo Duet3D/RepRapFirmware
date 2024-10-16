@@ -1186,7 +1186,7 @@ FilePosition StringParser::GetFilePosition() const noexcept
 	const GCodeMachineState *ms = gb.machineState;
 	while (ms->waitingForAcknowledgement && ms->GetPrevious() != nullptr)
 	{
-		ms = ms->GetPrevious();
+		ms = _ecv_not_null(ms->GetPrevious());
 	}
 
 	if (ms->DoingFile()

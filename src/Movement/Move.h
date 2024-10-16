@@ -194,7 +194,7 @@ public:
 #endif
 
 #if HAS_STALL_DETECT || SUPPORT_CAN_EXPANSION
-	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *& buf) THROWS(GCodeException);
+	GCodeResult ConfigureStallDetection(GCodeBuffer& gb, const StringRef& reply, OutputBuffer *_ecv_null & buf) THROWS(GCodeException);
 #endif
 
 	void SetAxisType(size_t axis, AxisWrapType wrapType, bool isNistRotational) noexcept;

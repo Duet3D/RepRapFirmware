@@ -166,7 +166,7 @@ constexpr FileId NoFileId = 0;
 #endif
 
 // Class to hold the state of gcode execution for some input source
-class GCodeMachineState
+class GCodeMachineState final
 {
 public:
 	typedef Bitmap<uint32_t> ResourceBitmap;
@@ -298,7 +298,7 @@ public:
 	// Set the error message and associated state
 	void SetError(const char *_ecv_array msg, int parameter = 0) noexcept;
 	void SetError(const GCodeException& exc) noexcept;
-	void SetWarning(const char *msg) noexcept;
+	void SetWarning(const char *_ecv_array msg) noexcept;
 	void RetrieveStateMachineResult(const GCodeBuffer& gb, const StringRef& reply, GCodeResult& rslt) const noexcept;
 
 	// Copy values that may have been altered into this state record

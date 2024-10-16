@@ -100,7 +100,7 @@ public:
 	float GetAveragePWM(size_t heater) const noexcept					// Return the running average PWM to the heater as a fraction in [0, 1].
 	pre(heater < MaxHeaters);
 
-	const Tool* GetLastStandbyTool(int heater) const noexcept
+	const Tool *_ecv_null GetLastStandbyTool(int heater) const noexcept
 	pre(heater >= 0; heater < MaxHeaters)
 	{
 		return lastStandbyTools[heater];

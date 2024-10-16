@@ -48,7 +48,7 @@ enum class StatusReportType : uint8_t
 };
 
 // Class to hold an individual GCode and provide functions to allow it to be parsed
-class GCodeBuffer INHERIT_OBJECT_MODEL
+class GCodeBuffer final INHERIT_OBJECT_MODEL
 {
 public:
 	friend class BinaryParser;

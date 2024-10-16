@@ -64,7 +64,7 @@ public:
 
 private:
     Samba& _samba;
-    BossaFlash *_ecv_from _flash;
+    BossaFlash *_ecv_from _ecv_null _flash;
     FlasherObserver &_ecv_from _observer;
 
     uint32_t pageNum;
