@@ -36,6 +36,12 @@ GCodeQueue::GCodeQueue() noexcept : freeItems(nullptr), queuedItems(nullptr)
 	// Don't queue anything if no moves are being performed
 	if (reprap.GetMove().GetScheduledMoves() != reprap.GetMove().GetCompletedMoves())
 	{
+		// None of the M codes we queue has a fractional command number
+		if (gb.GetCommandFraction() > 0)
+		{
+			return false;
+		}
+
 		bool shouldQueue;
 		switch (gb.GetCommandNumber())
 		{
