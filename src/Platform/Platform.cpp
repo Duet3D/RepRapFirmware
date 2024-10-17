@@ -2709,12 +2709,12 @@ GCodeResult Platform::ReceiveI2cOrModbus(GCodeBuffer& gb, const StringRef &reply
 						break;
 					}
 				}
-				else
+				else if (resultVar == nullptr) // Only report comm error if not storing result in variable
 				{
 					reply.copy("no or bad response from Modbus device");
 				}
 			}
-			else
+			else if (resultVar == nullptr)
 			{
 				reply.copy("couldn't initiate Modbus transaction");
 			}
