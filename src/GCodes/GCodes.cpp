@@ -3243,7 +3243,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char* fileName, bool reportMissi
 
 		if (!Push(gb, false))
 		{
-			gb.AbortFile(false, true);
+			gb.AbortFile(false);
 			return true;
 		}
 		gb.GetVariables().AssignFrom(initialVariables);

@@ -1029,7 +1029,7 @@ bool GCodeBuffer::PopState(bool withinSameFile) noexcept
 
 // Abort execution of any files or macros being executed
 // We now avoid popping the state if we were not executing from a file, so that if DWC or PanelDue is used to jog the axes before they are homed, we don't report stack underflow.
-void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
+void GCodeBuffer::AbortFile(bool abortAll) noexcept
 {
 	if (machineState->DoingFile())
 	{
@@ -1050,12 +1050,12 @@ void GCodeBuffer::AbortFile(bool abortAll, bool requestAbort) noexcept
 		} while (PopState(false) && abortAll);
 
 #if HAS_SBC_INTERFACE
-		abortFile = requestAbort;
-		abortAllFiles = requestAbort && abortAll;
-	}
-	else if (!requestAbort)
-	{
-		abortFile = abortAllFiles = false;
+		// Notify the SBC about the file(s) being closed
+		if (reprap.UsingSbcInterface())
+		{
+			abortFile = true;
+			abortAllFiles = abortAll;
+		}
 #endif
 	}
 }
