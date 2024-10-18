@@ -698,7 +698,8 @@ void SbcInterface::ExchangeData() noexcept
 				if (locker.IsAcquired())
 				{
 					// Note that we do not call StopPrint here or set any other variables; DSF already does that
-					gb->AbortFile(true, false);
+					gb->AbortFile(true);
+					gb->FileAbortSent();	// don't notify the SBC
 					InvalidateBufferedCodes(channel);
 				}
 				else
@@ -1193,6 +1194,16 @@ void SbcInterface::ExchangeData() noexcept
 						}
 					}
 #endif
+					// Send back a final code reply for codes that started the last macros, else the corresponding code will never finish
+					if (!gb->IsAbortAllRequested() && gb->GetState() == GCodeState::normal && (!gb->LatestMachineState().lastCodeFromSbc || gb->LatestMachineState().macroStartedByCode))
+					{
+						OutputBuffer *dummy = nullptr;
+						if (!transfer.WriteCodeReply(gb->GetResponseMessageType(), dummy))
+						{
+							// Cannot send an empty code reply now, do it later
+							HandleGCodeReply(gb->GetResponseMessageType(), dummy);
+						}
+					}
 					gb->FileAbortSent();
 					gb->Invalidate();
 				}
@@ -1350,7 +1361,8 @@ void SbcInterface::InvalidateResources() noexcept
 		{
 			gb->MacroRequestSent();
 		}
-		gb->AbortFile(true, false);
+		gb->AbortFile(true);
+		gb->FileAbortSent();	// don't notify the SBC
 		gb->MessageAcknowledged(true, 0, ExpressionValue());
 	}
 
