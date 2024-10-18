@@ -2099,16 +2099,26 @@ void WiFiInterface::SetupSpi() noexcept
 #if WIFI_SPI_DEBUG
 
 // Compare two blocks of memory and report if they are different
-void CheckMemory(const uint32_t *memToCheck, const uint32_t *reference, size_t numWords) noexcept
+static void __attribute__ ((noinline)) CheckMemory(uint32_t *memToCheck, const uint32_t *reference, size_t numWords, int line) noexcept
 {
+	__DMB();
+	int badIndex = -1;
 	for (size_t i = 0; i < numWords; ++i)
 	{
 		if (memToCheck[i] != reference[i])
 		{
-			debugPrintf("*** Memory difference at offset %u: was %08" PRIx32 " now %08" PRIx32 "\n", i * 4, reference[i], memToCheck[i]);
+			badIndex = i;
+			debugPrintf("*** Memory difference at line %d offset %u: was %08" PRIx32 " now %08" PRIx32 "\n", line, i * 4, reference[i], memToCheck[i]);
 //			debugPrintf("Start addr %08" PRIx32 ", msg length %04x\n", reinterpret_cast<uint32_t>(memToCheck), dataLength);
 			delay(25);
 		}
+	}
+
+	// Test that the debug watchpoint works
+	if (badIndex >= 0)
+	{
+		volatile uint32_t *p = &memToCheck[badIndex];
+		*p = *p;
 	}
 }
 
@@ -2154,6 +2164,31 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 			}
 		}
 	}
+
+#if SAME5x && WIFI_SPI_DEBUG
+	volatile uint32_t stackCopy[12];
+	memcpyu32(const_cast<uint32_t*>(stackCopy), const_cast<const uint32_t*>(stackCopy + ARRAY_SIZE(stackCopy)), ARRAY_SIZE(stackCopy));
+	// Set debug watchpoints to trigger on writes to both the copy array and the original memory.
+	// We want to trigger on any of 96 bytes of memory but it doesn't matter if we go a little beyond that. The base is likely to be 8-byte aligned.
+	// Watchpoints can ignore a number of lower address bits. Depending on the initial alignment we can set up the watchpoints to cover the following numbers of bytes:
+	// 8, 16, 32, 32 (covers only 88 bytes)
+	// 8, 32, 32, 32 (covers 104 bytes)
+	// 16, 32, 32, 16
+	// 16, 16, 32, 32
+	const uint32_t watchpointAddress0 = reinterpret_cast<uint32_t>(stackCopy);
+	const unsigned int watchpointBits0 = (watchpointAddress0 & 0x08) ? 3 : 4;					// first watchpoint protects 8 or 16 bytes, ends on a 16-byte boundary
+	const uint32_t watchpointAddress1 = watchpointAddress0 + (1u << watchpointBits0);
+	const unsigned int watchpointBits1 = (watchpointAddress1 & 0x10) ? 4 : 5;					// second watchpoint protects 16 or 32 bytes, ends on a 32-byte boundary
+	const uint32_t watchpointAddress2 = watchpointAddress1 + (1u << watchpointBits1);
+	const unsigned int watchpointBits2 = 5;														// third watchpoint protects 32 bytes
+	const uint32_t watchpointAddress3 = watchpointAddress2 + (1u << watchpointBits2);
+	const uint32_t watchpointBits3 = (watchpointBits0 == 4 && watchpointBits1 == 5) ? 4 : 5;	// fourth watchpoint protects 16 or 32 bytes
+
+	AutoClearingWatchpoint(0, reinterpret_cast<const void*>(watchpointAddress0), watchpointBits0);			// protect the first 8, 16 or 32 bytes
+	AutoClearingWatchpoint(1, reinterpret_cast<const void*>(watchpointAddress1), watchpointBits1);			// protect the next 16 or 32 bytes
+	AutoClearingWatchpoint(2, reinterpret_cast<const void*>(watchpointAddress2), watchpointBits2);			// protect the next 32 bytes
+	AutoClearingWatchpoint(3, reinterpret_cast<const void*>(watchpointAddress3), watchpointBits3);			// protect the first 8, 16 bytes
+#endif
 
 	bufferOut->hdr.formatVersion = MyFormatVersion;
 	bufferOut->hdr.command = cmd;
@@ -2221,25 +2256,26 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 
 #if SAME5x
 	{
-#if WIFI_SPI_DEBUG
-		volatile uint32_t stackCopy[12];
-		memcpyu32(const_cast<uint32_t*>(stackCopy), const_cast<const uint32_t*>(stackCopy + ARRAY_SIZE(stackCopy)), ARRAY_SIZE(stackCopy));
-		SetWatchpoint(0, (const void*)(stackCopy + ARRAY_SIZE(stackCopy) + 2), 3);
-		SetWatchpoint(1, (const void*)(stackCopy + ARRAY_SIZE(stackCopy) + 4), 3);
-		SetWatchpoint(1, (const void*)(stackCopy + ARRAY_SIZE(stackCopy) + 6), 3);
-#endif
+
 		if (WiFiSpiSercom->SPI.STATUS.bit.BUFOVF)
 		{
 			++spiRxOverruns;
 		}
-		DisableSpi();
-		spi_dma_disable();
+#if WIFI_SPI_DEBUG
+		CheckMemory(const_cast<uint32_t*>(stackCopy + ARRAY_SIZE(stackCopy)), const_cast<const uint32_t*>(stackCopy), ARRAY_SIZE(stackCopy), __LINE__);
+#endif
+		{
+			AtomicCriticalSectionLocker lock;			// try disabling interrupts for this in case this prevents the DMA memory corruption that we observe
+			spi_dma_disable();
+			DisableSpi();
+		}
 
 #if WIFI_SPI_DEBUG
-		CheckMemory(const_cast<const uint32_t*>(stackCopy + ARRAY_SIZE(stackCopy)), const_cast<const uint32_t*>(stackCopy), ARRAY_SIZE(stackCopy));
-		ClearWatchpoint(0);
-		ClearWatchpoint(1);
-		ClearWatchpoint(2);
+		CheckMemory(const_cast<uint32_t*>(stackCopy + ARRAY_SIZE(stackCopy)), const_cast<const uint32_t*>(stackCopy), ARRAY_SIZE(stackCopy), __LINE__);
+#endif
+
+#if WIFI_SPI_DEBUG
+		CheckMemory(const_cast<uint32_t*>(stackCopy + ARRAY_SIZE(stackCopy)), const_cast<const uint32_t*>(stackCopy), ARRAY_SIZE(stackCopy), __LINE__);
 #endif
 	}
 #else
