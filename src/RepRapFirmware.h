@@ -218,18 +218,31 @@ private:
 template <size_t NumWords> class MemoryWatcher
 {
 public:
-	MemoryWatcher(uint32_t p_address) noexcept;
+	__attribute__((noinline)) MemoryWatcher(uint32_t *p_address) noexcept;
+	__attribute__((noinline)) MemoryWatcher() noexcept;
 	~MemoryWatcher() noexcept;
-	bool Check(int line) noexcept;
+	__attribute__((noinline)) bool Check(int line) noexcept;
 
 private:
-	const volatile uint32_t* checkedData;
+	void Init() noexcept;
+	volatile uint32_t* checkedData;
 	uint32_t checkSum;
 	volatile uint32_t dataCopy[NumWords];
 };
 
-template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher(uint32_t p_address) noexcept
-	: checkedData(reinterpret_cast<const uint32_t *_ecv_array>(p_address))
+template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher(uint32_t *p_address) noexcept
+	: checkedData(p_address)
+{
+	Init();
+}
+
+template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher() noexcept
+{
+	checkedData = reinterpret_cast<uint32_t*>(this) + (sizeof(*this) / sizeof(uint32_t));
+	Init();
+}
+
+template <size_t NumWords> void MemoryWatcher<NumWords>::Init() noexcept
 {
 	// Copy the checked data across to our own storage and compute its checksum
 	uint32_t csum = 0;
@@ -265,9 +278,15 @@ template <size_t NumWords> bool MemoryWatcher<NumWords>::Check(int line) noexcep
 			foundDiff = true;
 		}
 	}
-	if (foundDiff || csumProtected != checkSum || csumProtected != checkSum)
+	if (foundDiff || csumProtected != checkSum || csumCopy != checkSum)
 	{
-		debugPrintf(", original %s, copy %s\n", (csumProtected == checkSum) ? "ok" : "changed", (csumCopy == checkSum) ? "ok" : "changed");
+		const bool fix = (csumProtected != checkSum && csumCopy == checkSum);
+		debugPrintf(", original %s, copy %s, fix=%s\n", (csumProtected == checkSum) ? "ok" : "changed", (csumCopy == checkSum) ? "ok" : "changed", (fix) ? "yes" : "no");
+		if (fix)
+		{
+			// Try to mend the memory corruption
+			memcpyu32(const_cast<uint32_t *_ecv_array>(checkedData), const_cast<const uint32_t *_ecv_array>(dataCopy), NumWords);
+		}
 		return true;
 	}
 	return false;
