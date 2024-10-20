@@ -16,6 +16,7 @@
 #include <PrintMonitor/PrintMonitor.h>
 
 #include <climits>
+#include <limits>
 
 #ifdef exists
 # undef exists

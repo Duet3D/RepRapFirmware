@@ -678,7 +678,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 	if (   reprap.UsingSbcInterface() && reprap.GetSbcInterface().IsConnected() && !gb.IsBinary()
 		&& (   (code >=  0 && code <= 2)
 			|| (code >= 20 && code <= 24) || (code >= 26 && code <= 30)
-			||  code == 32 || code == 36 || code == 37 || code == 38 || code == 39
+			||  code == 32 || (code >= 36 && code <= 39)
 			|| (code == 98 && gb.Seen('R'))
 			||  code == 112
 			||  code == 121
