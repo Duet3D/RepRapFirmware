@@ -3243,7 +3243,7 @@ bool GCodes::DoFileMacro(GCodeBuffer& gb, const char *_ecv_array fileName, bool 
 
 		if (!Push(gb, false))
 		{
-			gb.AbortFile(false, true);
+			gb.AbortFile(false);
 			return true;
 		}
 		gb.GetVariables().AssignFrom(initialVariables);
