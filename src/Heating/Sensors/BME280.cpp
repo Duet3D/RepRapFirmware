@@ -733,7 +733,8 @@ GCodeResult BME280TemperatureSensor::FinishConfiguring(bool changed, const Strin
 
 TemperatureError BME280TemperatureSensor::GetAdditionalOutput(float &t, uint8_t outputNumber) noexcept
 {
-	const auto result = TemperatureSensor::GetLatestTemperature(t);
+	float dummy;
+	const auto result = TemperatureSensor::GetLatestTemperature(dummy);
 	switch (outputNumber)
 	{
 	case 1:
