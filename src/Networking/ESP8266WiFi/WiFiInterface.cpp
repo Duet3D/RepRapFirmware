@@ -2168,15 +2168,13 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	// - When the SS line goes high to terminate the transaction, we need to disable the DMA channel even though the DMA count hasn't expired
 	// - This doesn't work unless we also disable the SPI device
 	// - So we disable the SPI device too. Unfortunately, when we do this, occasionally a word of data gets written to an incorrect memory address.
-	// - The memory address overwritten appears to be related to the stack address when the SPI is disabled, although it's possible that this just happens to be the case.
+	// - The memory address overwritten appears to be related to value of the stack pointer when the SPI is disabled, although it's possible that this is a coincidence.
 	// - The memory word written is either a word of zeros or it is the last word of the received SPI data.
-	// - We tried setting debug watchpoints on this memory area in case a firmware bug causes the corruption, but they were never triggered, except when we triggered them deliberately
+	// - We tried setting debug watchpoints on this memory area in case a firmware bug causes the corruption, but they were never triggered except when we triggered them deliberately in order to test them
 	// - We disable interrupts while disabling SPI and DMA in case an interrupt during the process contributes to the problem, however the problem still occurs.
-	// So now we take a copy of the area of stack that holds the registers (including LR holding the return address) when the function was called,
-	// because that is the area that has been getting corrupted and causing resets.
+	// So now we take a copy of the area of stack that holds the registers (including LR holding the return address) when the function was called, because that is the area that has been getting corrupted and causing resets.
 	// This copy is allocated on the stack just below the area in which we have observed memory corruption.
-	// Sometimes the copy gets corrupted instead of the area we are trying to protect. So as well as taking a copy, we checksum the memory so that we can determine
-	// whether the original memory or the copy got corrupted.
+	// Sometimes the copy gets corrupted instead of the area we are trying to protect. So as well as taking a copy, we checksum the memory so that we can determine whether the original memory or the copy got corrupted.
 	// All of this is handled by class MemoryWatcher.
 	MemoryWatcher<16> watcher;						// protect the 16 words of memory on the stack immediately after the MemoryWatcher object
 #endif
@@ -2200,12 +2198,12 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 
 #if SAME5x
     spi_slave_dma_setup(dataOutLength, dataInLength);
-	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;		// clear any pending interrupts
-	WiFiSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_TXC;	// enable the end of transmit interrupt
+	WiFiSpiSercom->SPI.INTFLAG.reg = 0xFF;						// clear any pending interrupts
+	WiFiSpiSercom->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_TXC;	// enable the end of transmit interrupt. From the datasheet: "In Slave mode, this flag is set when the _SS pin is pulled high."
 	EnableSpi();
 #else
     // DMA may have transferred an extra word to the SPI transmit data register. We need to clear this.
-	// The only way I can find to do this is to issue a software reset to the SPI system.
+	// On the SAM4E the only way I can find to do this is to issue a software reset to the SPI system.
 	// Fortunately, this leaves the SPI system in slave mode.
     ResetSpi();
 	spi_set_bits_per_transfer(ESP_SPI, 0, SPI_CSR_BITS_8_BIT);
@@ -2215,8 +2213,8 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	EnableSpi();
 
 	// Enable the end-of transfer interrupt
-	(void)ESP_SPI->SPI_SR;						// clear any pending interrupt
-	ESP_SPI->SPI_IER = SPI_IER_NSSR;			// enable the NSS rising interrupt
+	(void)ESP_SPI->SPI_SR;										// clear any pending interrupt
+	ESP_SPI->SPI_IER = SPI_IER_NSSR;							// enable the NSS rising interrupt
 #endif
 
 	// Tell the ESP that we are ready to accept data
