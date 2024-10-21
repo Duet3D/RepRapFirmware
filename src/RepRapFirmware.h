@@ -160,6 +160,10 @@ namespace CanInterface
 extern "C" [[noreturn]] void vAssertCalled(uint32_t line, const char *_ecv_array file) noexcept __attribute__((naked));
 #define RRF_ASSERT(_expr) do { if (!(_expr)) { vAssertCalled(__LINE__, __FILE__); } } while (false)
 
+// Debugging support
+extern "C" void debugPrintf(const char* fmt, ...) noexcept __attribute__ ((format (printf, 1, 2)));
+#define DEBUG_HERE do { debugPrintf("At " __FILE__ " line %d\n", __LINE__); delay(50); } while (false)
+
 #ifdef __ECV__			// eCv doesn't understand the gcc asm syntax in these functions
 
 # define CheckStackValue(dwordOffset, val) do { } while (false)
@@ -184,23 +188,115 @@ inline volatile uint32_t *GetStackOffset(uint32_t dwordOffset) noexcept
 #endif
 
 // Functions to set and clear data watchpoints
-inline void SetWatchpoint(unsigned int number, const void* addr, unsigned int addrBits = 2) noexcept
+inline void SetWatchpoint(uint8_t number, const void* addr, unsigned int addrBits = 2) noexcept
 {
 #ifndef __ECV__		// this uses messy pointer arithmetic on a non-array, so eCv understandable doesn't like it
 	CoreDebug->DEMCR = CoreDebug_DEMCR_TRCENA_Msk | CoreDebug_DEMCR_MON_EN_Msk;		// enable tracing and debug interrupt
 	volatile uint32_t *const _ecv_array watchpointRegs = &(DWT->COMP0);				// 4 groups of (COMP, MASK, FUNCTION, reserved)
 	watchpointRegs[4 * number] = reinterpret_cast<uint32_t>(addr);					// set COMP register
-	watchpointRegs[4 * number + 1] = addrBits;										// ignore the least significant N bits of the address
-	watchpointRegs[4 * number + 2] = 0x06;
+	watchpointRegs[4 * number + 1] = addrBits;										// set MASK register to ignore the least significant N bits of the address
+	watchpointRegs[4 * number + 2] = 0x06;											// set FUNCTION register
 #endif
 }
 
-inline void ClearWatchpoint(unsigned int number) noexcept
+inline void ClearWatchpoint(uint8_t number) noexcept
 {
 #ifndef __ECV__		// this uses messy pointer arithmetic on a non-array, so eCv understandable doesn't like it
 	volatile uint32_t *const _ecv_array watchpointRegs = &(DWT->COMP0);						// 4 groups of (COMP, MASK, FUNCTION, reserved)
 	watchpointRegs[4 * number + 2] = 0;
 #endif
+}
+
+// Class to set a watchpoint and clear it when it goes out of scope
+class AutoClearingWatchpoint
+{
+public:
+	AutoClearingWatchpoint(uint8_t p_number, const void* addr, unsigned int addrBits = 2) noexcept
+		: number(p_number)
+	{ SetWatchpoint(p_number, addr, addrBits); }
+
+	~AutoClearingWatchpoint() noexcept { ClearWatchpoint(number); }
+
+private:
+	uint8_t number;
+};
+
+// Class to watch an area of memory to detect corruption and (if possible) correct it
+template <size_t NumWords> class MemoryWatcher
+{
+public:
+	__attribute__((noinline)) MemoryWatcher(uint32_t *p_address) noexcept;
+	__attribute__((noinline)) MemoryWatcher() noexcept;
+	~MemoryWatcher() noexcept;
+	__attribute__((noinline)) bool Check(int line) noexcept;
+
+private:
+	void Init() noexcept;
+	volatile uint32_t* checkedData;
+	uint32_t checkSum;
+	volatile uint32_t dataCopy[NumWords];
+};
+
+template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher(uint32_t *p_address) noexcept
+	: checkedData(p_address)
+{
+	Init();
+}
+
+template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher() noexcept
+{
+	checkedData = reinterpret_cast<uint32_t*>(this) + (sizeof(*this) / sizeof(uint32_t));
+	Init();
+}
+
+template <size_t NumWords> void MemoryWatcher<NumWords>::Init() noexcept
+{
+	// Copy the checked data across to our own storage and compute its checksum
+	uint32_t csum = 0;
+	for (size_t i = 0; i < NumWords; ++i)
+	{
+		const uint32_t val = checkedData[i];
+		dataCopy[i] = val;
+		csum ^= val;
+	}
+	checkSum = csum;
+}
+
+template <size_t NumWords> MemoryWatcher<NumWords>::~MemoryWatcher() noexcept
+{
+	// Nothing to do here unless we set debug breakpoints on the checked memory
+}
+
+// Check whether the memory concerned still equals the reference copy, print a debug message and return true if it has changed, else return false
+template <size_t NumWords> bool MemoryWatcher<NumWords>::Check(int line) noexcept
+{
+	uint32_t csumProtected = 0;
+	uint32_t csumCopy = 0;
+	bool foundDiff = false;
+	for (size_t i = 0; i < NumWords; ++i)
+	{
+		const uint32_t valProtected = checkedData[i];
+		const uint32_t valCopy = dataCopy[i];
+		csumProtected ^= valProtected;
+		csumCopy ^= valCopy;
+		if (valProtected != valCopy)
+		{
+			debugPrintf("*** Memory difference at line %d offset %u: original %08" PRIx32 " copy %08" PRIx32, line, i * 4, valProtected, valCopy);
+			foundDiff = true;
+		}
+	}
+	if (foundDiff || csumProtected != checkSum || csumCopy != checkSum)
+	{
+		const bool fix = (csumProtected != checkSum && csumCopy == checkSum);
+		debugPrintf(", original %s, copy %s, fix=%s\n", (csumProtected == checkSum) ? "ok" : "changed", (csumCopy == checkSum) ? "ok" : "changed", (fix) ? "yes" : "no");
+		if (fix)
+		{
+			// Try to mend the memory corruption
+			memcpyu32(const_cast<uint32_t *_ecv_array>(checkedData), const_cast<const uint32_t *_ecv_array>(dataCopy), NumWords);
+		}
+		return true;
+	}
+	return false;
 }
 
 // Type of a driver identifier

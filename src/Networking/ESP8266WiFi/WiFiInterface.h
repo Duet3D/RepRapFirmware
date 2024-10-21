@@ -16,6 +16,10 @@
 #include <Networking/NetworkInterface.h>
 #include <MessageFormats.h>
 
+#if SAME5x
+# define WIFI_SPI_DEBUG		1
+#endif
+
 // Forward declarations
 class WiFiSocket;
 class WifiFirmwareUploader;
