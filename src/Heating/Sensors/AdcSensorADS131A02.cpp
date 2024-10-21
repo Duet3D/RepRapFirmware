@@ -70,30 +70,35 @@ constexpr uint8_t CLK2_val =	   (4u << 5)			// fmod = fclk/8 (default)
 constexpr uint8_t  ADC_ENA_val =   (0u << 4)			// reserved bits 4..7, write 0
 								 | (3u << 0);			// enable channels 0 and 1
 
-const AdcSensorADS131A02::InitTableEntry AdcSensorADS131A02::initTable[] =
+// Table of initialisation data written to ADS131 registers
+const AdcSensorADS131A02Chan0::InitTableEntry AdcSensorADS131A02Chan0::initTable[] =
 {
-	{ ADS131Register::A_SYS_CFG,	A_SYS_CFG_val},
-	{ ADS131Register::D_SYS_CFG,	D_SYS_CFG_val},
-	{ ADS131Register::CLK1,			CLK1_val},
-	{ ADS131Register::CLK2,			CLK2_val},
-	{ ADS131Register::ADC_ENA,		ADC_ENA_val}
+	{ ADS131Register::A_SYS_CFG,	A_SYS_CFG_val	},
+	{ ADS131Register::D_SYS_CFG,	D_SYS_CFG_val	},
+	{ ADS131Register::CLK1,			CLK1_val		},
+	{ ADS131Register::CLK2,			CLK2_val		},
+	{ ADS131Register::ADC_ENA,		ADC_ENA_val		}
 };
 
 // Sensor type descriptors
-TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02::typeDescriptor_16bit(TypeName_16bit, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new AdcSensorADS131A02(sensorNum, false); } );
-TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02::typeDescriptor_24bit(TypeName_24bit, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new AdcSensorADS131A02(sensorNum, true); } );
+TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02Chan0::typeDescriptor_chan0_16bit(TypeName_chan0_16bit, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new AdcSensorADS131A02Chan0(sensorNum, false); } );
+TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02Chan0::typeDescriptor_chan0_24bit(TypeName_chan0_24bit, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new AdcSensorADS131A02Chan0(sensorNum, true); } );
+TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02Chan1::typeDescriptor_chan1(TypeName_chan1, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new AdcSensorADS131A02Chan1(sensorNum); } );
 
-AdcSensorADS131A02::AdcSensorADS131A02(unsigned int sensorNum, bool p_24bit) noexcept
-	: SpiTemperatureSensor(sensorNum, (p_24bit) ? TypeName_24bit : TypeName_16bit, ADS131_SpiMode, ADS131_Frequency),
+AdcSensorADS131A02Chan0::AdcSensorADS131A02Chan0(unsigned int sensorNum, bool p_24bit) noexcept
+	: SpiTemperatureSensor(sensorNum, (p_24bit) ? TypeName_chan0_24bit : TypeName_chan0_16bit, ADS131_SpiMode, ADS131_Frequency),
 	  use24bitFrames(p_24bit)
 {
+	for (float& f : readingAtMin) { f = DefaultReadingAtMin; }
+	for (float& f : readingAtMax) { f = DefaultReadingAtMax; }
 }
 
 // Configure this temperature sensor
-GCodeResult AdcSensorADS131A02::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
+GCodeResult AdcSensorADS131A02Chan0::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
 {
-	gb.TryGetFValue('L', readingAtMin, changed);
-	gb.TryGetFValue('H', readingAtMax, changed);
+	size_t numValues = NumChannels;
+	gb.TryGetFloatArray('L', numValues, readingAtMin, changed, true);
+	gb.TryGetFloatArray('H', numValues, readingAtMax, changed, true);
 
 	if (!ConfigurePort(gb, reply, changed))
 	{
@@ -106,10 +111,20 @@ GCodeResult AdcSensorADS131A02::Configure(GCodeBuffer& gb, const StringRef& repl
 
 #if SUPPORT_REMOTE_COMMANDS
 
-GCodeResult AdcSensorADS131A02::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
+GCodeResult AdcSensorADS131A02Chan0::Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept
 {
-	bool seen = parser.GetFloatParam('L', readingAtMin);
-	seen = parser.GetFloatParam('H', readingAtMax) || seen;
+	bool seen = false;
+	size_t numValues = NumChannels;
+	if (parser.GetFloatArrayParam('L', numValues, readingAtMin))
+	{
+		seen = true;
+	}
+
+	numValues = NumChannels;
+	if (parser.GetFloatArrayParam('H', numValues, readingAtMax))
+	{
+		seen = true;
+	}
 
 	if (!ConfigurePort(parser, reply, seen))
 	{
@@ -121,7 +136,7 @@ GCodeResult AdcSensorADS131A02::Configure(const CanMessageGenericParser& parser,
 
 #endif
 
-GCodeResult AdcSensorADS131A02::FinishConfiguring(bool changed, const StringRef& reply) noexcept
+GCodeResult AdcSensorADS131A02Chan0::FinishConfiguring(bool changed, const StringRef& reply) noexcept
 {
 	if (changed)
 	{
@@ -152,25 +167,42 @@ GCodeResult AdcSensorADS131A02::FinishConfiguring(bool changed, const StringRef&
 	else
 	{
 		CopyBasicDetails(reply);
-		reply.catf(", reading range %.1f to %.1fC", (double)readingAtMin, (double)readingAtMax);
+		for (unsigned int chan = 0; chan < NumChannels; ++chan)
+		{
+			reply.catf(", channel %u reading range %.1f to %.1fC", chan, (double)readingAtMin[chan], (double)readingAtMax[chan]);
+		}
 	}
 	return GCodeResult::ok;
 }
 
-void AdcSensorADS131A02::Poll() noexcept
+TemperatureError AdcSensorADS131A02Chan0::GetAdditionalOutput(float &t, uint8_t outputNumber) noexcept
+{
+	float dummy;
+	const auto result = TemperatureSensor::GetLatestTemperature(dummy);
+	if (outputNumber > 0 && outputNumber < NumChannels)
+	{
+		t = readings[outputNumber];
+		return result;
+	}
+
+	t = BadErrorTemperature;
+	return TemperatureError::invalidOutputNumber;
+}
+
+void AdcSensorADS131A02Chan0::Poll() noexcept
 {
 	float t;
 	const TemperatureError rslt = TryGetLinearAdcTemperature(t);
 	SetResult(t, rslt);
 }
 
-void AdcSensorADS131A02::CalcDerivedParameters() noexcept
+void AdcSensorADS131A02Chan0::CalcDerivedParameters() noexcept
 {
 //TODO	linearAdcDegCPerCount = (tempAt20mA - minLinearAdcTemp) / 4096.0;
 }
 
 // Wait for the device to become ready after a reset returning true if successful
-TemperatureError AdcSensorADS131A02::WaitReady() const noexcept
+TemperatureError AdcSensorADS131A02Chan0::WaitReady() const noexcept
 {
 	/* From the datasheet:
 	 * When powering up the device or coming out of a power-on reset (POR) state, the ADC does not accept any commands.
@@ -196,7 +228,7 @@ TemperatureError AdcSensorADS131A02::WaitReady() const noexcept
 	return ret;
 }
 
-TemperatureError AdcSensorADS131A02::TryInitAdc() const noexcept
+TemperatureError AdcSensorADS131A02Chan0::TryInitAdc() const noexcept
 {
 	TemperatureError ret = WaitReady();
 	if (ret == TemperatureError::ok)
@@ -224,7 +256,7 @@ TemperatureError AdcSensorADS131A02::TryInitAdc() const noexcept
 }
 
 // Try to get a temperature reading from the linear ADC by doing an SPI transaction
-TemperatureError AdcSensorADS131A02::TryGetLinearAdcTemperature(float& t) noexcept
+TemperatureError AdcSensorADS131A02Chan0::TryGetLinearAdcTemperature(float& t) noexcept
 {
 #if 1
 	t = BadErrorTemperature;
@@ -277,7 +309,7 @@ TemperatureError AdcSensorADS131A02::TryGetLinearAdcTemperature(float& t) noexce
 }
 
 // Send a command and receive the response
-TemperatureError AdcSensorADS131A02::DoTransaction(ADS131Command command, ADS131Register regNum, uint8_t data, uint16_t &status, uint32_t readings[2]) const noexcept
+TemperatureError AdcSensorADS131A02Chan0::DoTransaction(ADS131Command command, ADS131Register regNum, uint8_t data, uint16_t &status, uint32_t readings[2]) const noexcept
 {
 	const uint16_t fullCommand = command | ((uint16_t)regNum << 8) | (uint16_t)data;
 	TemperatureError rslt(TemperatureError::ok);
@@ -309,6 +341,12 @@ TemperatureError AdcSensorADS131A02::DoTransaction(ADS131Command command, ADS131
 		readings[1] = (uint32_t)__builtin_bswap16(receiveBuffer[2]);
 	}
 	return rslt;
+}
+
+// Methods of second channel sensor object
+AdcSensorADS131A02Chan1::AdcSensorADS131A02Chan1(unsigned int sensorNum) noexcept
+	: AdditionalOutputSensor(sensorNum, TypeName_chan1, false)
+{
 }
 
 #endif

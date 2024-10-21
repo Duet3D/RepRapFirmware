@@ -12,25 +12,31 @@
 
 #if SUPPORT_SPI_SENSORS && SUPPORT_ADS131A02
 
-class AdcSensorADS131A02 : public SpiTemperatureSensor
+#include "AdditionalOutputSensor.h"
+
+class AdcSensorADS131A02Chan0 : public SpiTemperatureSensor
 {
 public:
-	explicit AdcSensorADS131A02(unsigned int sensorNum, bool p_24bit) noexcept;
+	explicit AdcSensorADS131A02Chan0(unsigned int sensorNum, bool p_24bit) noexcept;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException) override;
 
 #if SUPPORT_REMOTE_COMMANDS
 	GCodeResult Configure(const CanMessageGenericParser& parser, const StringRef& reply) noexcept override;		// configure the sensor from M308 parameters
 #endif
 
+	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 1; }
+	TemperatureError GetAdditionalOutput(float& t, uint8_t outputNumber) noexcept override;
 	void Poll() noexcept override;
-	const char *_ecv_array GetShortSensorType() const noexcept override { return (use24bitFrames) ? TypeName_24bit : TypeName_16bit; }
+	const char *_ecv_array GetShortSensorType() const noexcept override { return (use24bitFrames) ? TypeName_chan0_24bit : TypeName_chan0_16bit; }
 
-	static constexpr const char *_ecv_array TypeName_16bit = "ads131.16b";
-	static constexpr const char *_ecv_array TypeName_24bit = "ads131.24b";
+	static constexpr const char *_ecv_array TypeName_chan0_16bit = "ads131.chan0.16b";
+	static constexpr const char *_ecv_array TypeName_chan0_24bit = "ads131.chan1.24b";
 
 private:
-	static SensorTypeDescriptor typeDescriptor_16bit;
-	static SensorTypeDescriptor typeDescriptor_24bit;
+	static SensorTypeDescriptor typeDescriptor_chan0_16bit;
+	static SensorTypeDescriptor typeDescriptor_chan0_24bit;
+
+	static constexpr unsigned int NumChannels = 2;
 
 	TemperatureError TryGetLinearAdcTemperature(float& t) noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
@@ -72,6 +78,9 @@ private:
 		ADC2 = 0x12
 	};
 
+	static constexpr float DefaultReadingAtMin = 0.0;
+	static constexpr float DefaultReadingAtMax = 100.0;
+
 	// Send a command and receive the response
 	TemperatureError DoTransaction(ADS131Command command, ADS131Register regNum, uint8_t data, uint16_t &status, uint32_t readings[2]) const noexcept;
 
@@ -79,13 +88,12 @@ private:
 	TemperatureError WaitReady() const noexcept;
 
 	// Configurable parameters
-	float readingAtMin = DefaultReadingAtMin;
-	float readingAtMax = DefaultReadingAtmax;
+	float readingAtMin[NumChannels];
+	float readingAtMax [NumChannels];
+
+	uint32_t readings[NumChannels];
 
 	bool use24bitFrames;
-
-	static constexpr float DefaultReadingAtMin = 0.0;
-	static constexpr float DefaultReadingAtmax = 100.0;
 
 	struct InitTableEntry
 	{
@@ -94,6 +102,19 @@ private:
 	};
 
 	static const InitTableEntry initTable[];
+};
+
+class AdcSensorADS131A02Chan1 : public AdditionalOutputSensor
+{
+public:
+	explicit AdcSensorADS131A02Chan1(unsigned int sensorNum) noexcept;
+
+	const char *_ecv_array GetShortSensorType() const noexcept override { return TypeName_chan1; }
+
+	static constexpr const char *_ecv_array TypeName_chan1 = "ads131.chan1";
+
+private:
+	static SensorTypeDescriptor typeDescriptor_chan1;
 };
 
 #endif

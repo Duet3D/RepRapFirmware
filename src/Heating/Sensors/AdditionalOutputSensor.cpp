@@ -24,7 +24,7 @@ AdditionalOutputSensor::~AdditionalOutputSensor() noexcept
 {
 }
 
-GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed)
+GCodeResult AdditionalOutputSensor::Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException)
 {
 	GCodeResult rslt = GCodeResult::ok;
 	if (gb.Seen('P'))

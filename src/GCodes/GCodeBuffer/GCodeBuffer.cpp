@@ -793,7 +793,7 @@ bool GCodeBuffer::TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeExcept
 // Try to get an int array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
-void GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& seen, bool doPad) THROWS(GCodeException)
+bool GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& seen, bool doPad) THROWS(GCodeException)
 {
 	if (Seen(c))
 	{
@@ -802,18 +802,18 @@ void GCodeBuffer::TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& s
 		if (count == numVals)
 		{
 			seen = true;
+			return true;
 		}
-		else
-		{
-			ThrowGCodeException("Wrong number of values in array, expected %u", (uint32_t)numVals);
-		}
+
+		ThrowGCodeException("Wrong number of values in array, expected %u", (uint32_t)numVals);
 	}
+	return false;
 }
 
 // Try to get a float array exactly 'numVals' long after parameter letter 'c'.
 // If the wrong number of values is provided, generate an error message and return true.
 // Else set 'seen' if we saw the letter and value, and return false.
-void GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], bool& seen, bool doPad) THROWS(GCodeException)
+bool GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], bool& seen, bool doPad) THROWS(GCodeException)
 {
 	if (Seen(c))
 	{
@@ -822,12 +822,11 @@ void GCodeBuffer::TryGetFloatArray(char c, size_t numVals, float vals[], bool& s
 		if (count == numVals)
 		{
 			seen = true;
+			return true;
 		}
-		else
-		{
-			ThrowGCodeException("Wrong number of values in array, expected %u", (uint32_t)numVals);
-		}
+		ThrowGCodeException("Wrong number of values in array, expected %u", (uint32_t)numVals);
 	}
+	return false;
 }
 
 // Try to get a quoted string after parameter letter.

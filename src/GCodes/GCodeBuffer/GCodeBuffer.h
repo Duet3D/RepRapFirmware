@@ -137,8 +137,8 @@ public:
 	bool TryGetLimitedFValue(char c, float& val, bool& seen, float minValue, float maxValue) THROWS(GCodeException)
 		pre(minValue <= maxValue);
 	bool TryGetBValue(char c, bool& val, bool& seen) THROWS(GCodeException);
-	void TryGetFloatArray(char c, size_t numVals, float vals[], bool& seen, bool doPad = false) THROWS(GCodeException);
-	void TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& seen, bool doPad = false) THROWS(GCodeException);
+	bool TryGetFloatArray(char c, size_t numVals, float vals[], bool& seen, bool doPad = false) THROWS(GCodeException);
+	bool TryGetUIArray(char c, size_t numVals, uint32_t vals[], bool& seen, bool doPad = false) THROWS(GCodeException);
 	bool TryGetQuotedString(char c, const StringRef& str, bool& seen, bool allowEmpty = false) THROWS(GCodeException);
 	bool TryGetPossiblyQuotedString(char c, const StringRef& str, bool& seen) THROWS(GCodeException);
 
