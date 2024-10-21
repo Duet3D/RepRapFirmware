@@ -914,6 +914,7 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	Tasks::Diagnostics(mtype);
 	platform->Diagnostics(mtype);				// this includes a call to our Timing() function and the software reset data
 
+#ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
 	// Print and clear any disgnostic messages we have accumulated
 	for (DebugLogRecord& r : debugRecords)
 	{
@@ -923,6 +924,7 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 			r.msg = nullptr;
 		}
 	}
+#endif
 
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	MassStorage::Diagnostics(mtype);
@@ -2805,6 +2807,8 @@ void RepRap::SaveConfigError(const char *filename, unsigned int lineNumber, cons
 	}
 }
 
+#ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
+
 void RepRap::LogDebugMessage(const char *_ecv_array msg, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3) noexcept
 {
 	// Log the debug event if we have space
@@ -2828,6 +2832,8 @@ void RepRap::LogDebugMessage(const char *_ecv_array msg, uint32_t data0, uint32_
 		delay(50);									// make sure the message has a chance to get printed, assuming this isn't called from the task that does the printing
 	}
 }
+
+#endif
 
 #if SUPPORT_DIRECT_LCD
 

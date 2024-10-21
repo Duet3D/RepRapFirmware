@@ -170,6 +170,8 @@ protected:
 	ReadWriteLock *_ecv_null GetObjectLock(unsigned int tableNumber) const noexcept override;
 
 private:
+
+#ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
 	struct DebugLogRecord
 	{
 		const char *_ecv_array _ecv_null msg;
@@ -177,6 +179,7 @@ private:
 
 		DebugLogRecord() noexcept : msg(nullptr) { }
 	};
+#endif
 
 	static constexpr size_t NumDebugRecords = 4;
 
@@ -236,15 +239,17 @@ private:
 	uint16_t heatTaskIdleTicks;
 	uint32_t fastLoop, slowLoop;
 
+	DebugFlags debugMaps[NumRealModules];
+
+#ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
 	DebugLogRecord debugRecords[NumDebugRecords];
+#endif
 
 #if SUPPORT_REMOTE_COMMANDS
 	enum class DeferredCommand : uint8_t { none, reboot, updateFirmware };
 	volatile uint32_t whenDeferredCommandScheduled;
 	volatile DeferredCommand deferredCommand;
 #endif
-
-	DebugFlags debugMaps[NumRealModules];
 
 	String<RepRapPasswordLength> password;
 	String<MachineNameLength> myName;
@@ -275,6 +280,8 @@ extern RepRap reprap;
 
 inline Module RepRap::GetSpinningModule() const noexcept { return spinningModule; }
 inline bool RepRap::IsStopped() const noexcept { return stopped; }
+
+#ifndef DUET_NG			// Duet 2 doesn't currently need this feature, so omit it to save memory
 
 // Class to watch an area of memory to detect corruption and (if possible) correct it
 // Used in class WiFiInterface on the SAME5x
@@ -361,6 +368,8 @@ template <size_t NumWords> bool MemoryWatcher<NumWords>::Check(unsigned int tag)
 	}
 	return false;
 }
+
+#endif
 
 #endif
 
