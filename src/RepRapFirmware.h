@@ -221,84 +221,6 @@ private:
 	uint8_t number;
 };
 
-// Class to watch an area of memory to detect corruption and (if possible) correct it
-template <size_t NumWords> class MemoryWatcher
-{
-public:
-	__attribute__((noinline)) MemoryWatcher(uint32_t *p_address) noexcept;
-	__attribute__((noinline)) MemoryWatcher() noexcept;
-	~MemoryWatcher() noexcept;
-	__attribute__((noinline)) bool Check(int line) noexcept;
-
-private:
-	void Init() noexcept;
-	volatile uint32_t* checkedData;
-	uint32_t checkSum;
-	volatile uint32_t dataCopy[NumWords];
-};
-
-template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher(uint32_t *p_address) noexcept
-	: checkedData(p_address)
-{
-	Init();
-}
-
-template <size_t NumWords> MemoryWatcher<NumWords>::MemoryWatcher() noexcept
-{
-	checkedData = reinterpret_cast<uint32_t*>(this) + (sizeof(*this) / sizeof(uint32_t));
-	Init();
-}
-
-template <size_t NumWords> void MemoryWatcher<NumWords>::Init() noexcept
-{
-	// Copy the checked data across to our own storage and compute its checksum
-	uint32_t csum = 0;
-	for (size_t i = 0; i < NumWords; ++i)
-	{
-		const uint32_t val = checkedData[i];
-		dataCopy[i] = val;
-		csum ^= val;
-	}
-	checkSum = csum;
-}
-
-template <size_t NumWords> MemoryWatcher<NumWords>::~MemoryWatcher() noexcept
-{
-	// Nothing to do here unless we set debug breakpoints on the checked memory
-}
-
-// Check whether the memory concerned still equals the reference copy, print a debug message and return true if it has changed, else return false
-template <size_t NumWords> bool MemoryWatcher<NumWords>::Check(int line) noexcept
-{
-	uint32_t csumProtected = 0;
-	uint32_t csumCopy = 0;
-	bool foundDiff = false;
-	for (size_t i = 0; i < NumWords; ++i)
-	{
-		const uint32_t valProtected = checkedData[i];
-		const uint32_t valCopy = dataCopy[i];
-		csumProtected ^= valProtected;
-		csumCopy ^= valCopy;
-		if (valProtected != valCopy)
-		{
-			debugPrintf("*** Memory difference at line %d offset %u: original %08" PRIx32 " copy %08" PRIx32, line, i * 4, valProtected, valCopy);
-			foundDiff = true;
-		}
-	}
-	if (foundDiff || csumProtected != checkSum || csumCopy != checkSum)
-	{
-		const bool fix = (csumProtected != checkSum && csumCopy == checkSum);
-		debugPrintf(", original %s, copy %s, fix=%s\n", (csumProtected == checkSum) ? "ok" : "changed", (csumCopy == checkSum) ? "ok" : "changed", (fix) ? "yes" : "no");
-		if (fix)
-		{
-			// Try to mend the memory corruption
-			memcpyu32(const_cast<uint32_t *_ecv_array>(checkedData), const_cast<const uint32_t *_ecv_array>(dataCopy), NumWords);
-		}
-		return true;
-	}
-	return false;
-}
-
 // Type of a driver identifier
 struct DriverId
 {
@@ -403,16 +325,17 @@ struct DriverId
 #endif
 
 // Module numbers and names, used for diagnostics and debug
-// All of these including noModule must be <= 31 because we 'or' the module number into the software reset code
+// All of these including 'none' must be <= 31 because we 'or' the module number into the software reset code
 NamedEnum(Module, uint8_t,
-			Platform, Network, Webserver, Gcodes, Move, Heat, Kinematics /* was DDA */, InputShaping /* was Roland */,
-			unused /* was Scanner*/, PrintMonitor, Storage, PortControl, DuetExpansion, FilamentSensors, WiFi, Display,
+			Platform, Network, Webserver, Gcodes, Move, Heat, Kinematics, InputShaping,
+			Debug, PrintMonitor, Storage, PortControl, DuetExpansion, FilamentSensors, WiFi, Display,
 			SbcInterface,
 			CAN,					// uppercase to avoid eCv clash with type Can in Microchip driver file
 			Expansion,
 			none					// make this one last so that it is the number of real modules, one greater than the last real module number
 		 );
 
+static_assert(Module::NumValues < 32);
 constexpr size_t NumRealModules = Module::NumValues - 1;
 
 // Warn of what's to come, so we can use pointers and references to classes without including the entire header files
@@ -491,6 +414,7 @@ typedef float floatc_t;								// type of matrix element used for calibration
 typedef Bitmap<uint32_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
 typedef Bitmap<uint64_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
 #else
+static_assert(MaxAxesPlusExtruders <= 16);			// Make sure we can use a 16-bit bitmap to represent a set of axes/extruders
 typedef Bitmap<uint16_t> AxesBitmap;				// Type of a bitmap representing a set of axes, and sometimes extruders too
 typedef Bitmap<uint32_t> InputPortsBitmap;			// Type of a bitmap representing a set of input ports
 #endif

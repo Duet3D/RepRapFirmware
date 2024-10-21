@@ -891,10 +891,6 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 #endif
 	);
 
-	// DEBUG print the module addresses
-	//	platform->MessageF(mtype, "platform %" PRIx32 ", network %" PRIx32 ", move %" PRIx32 ", heat %" PRIx32 ", gcodes %" PRIx32 ", scanner %"  PRIx32 ", pm %" PRIx32 ", portc %" PRIx32 "\n",
-	//						(uint32_t)platform, (uint32_t)network, (uint32_t)move, (uint32_t)heat, (uint32_t)gCodes, (uint32_t)scanner, (uint32_t)printMonitor, (uint32_t)portControl);
-
 #if MCU_HAS_UNIQUE_ID
 	{
 		String<StringLength50> idChars;
@@ -916,7 +912,18 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 
 	// Now print diagnostics for other modules
 	Tasks::Diagnostics(mtype);
-	platform->Diagnostics(mtype);				// this includes a call to our Timing() function
+	platform->Diagnostics(mtype);				// this includes a call to our Timing() function and the software reset data
+
+	// Print and clear any disgnostic messages we have accumulated
+	for (DebugLogRecord& r : debugRecords)
+	{
+		if (r.msg != nullptr)
+		{
+			platform->MessageF(mtype, r.msg, r.data[0], r.data[1], r.data[2], r.data[3]);
+			r.msg = nullptr;
+		}
+	}
+
 #if HAS_MASS_STORAGE || HAS_EMBEDDED_FILES
 	MassStorage::Diagnostics(mtype);
 #endif
@@ -2795,6 +2802,30 @@ void RepRap::SaveConfigError(const char *filename, unsigned int lineNumber, cons
 		configErrorFilename.Assign(filename);
 		configErrorMessage.Assign(errorMessage);
 		StateUpdated();
+	}
+}
+
+void RepRap::LogDebugMessage(const char *_ecv_array msg, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3) noexcept
+{
+	// Log the debug event if we have space
+	for (DebugLogRecord& r : debugRecords)
+	{
+		if (r.msg == nullptr)
+		{
+			r.data[0] = data0;
+			r.data[1] = data1;
+			r.data[2] = data2;
+			r.data[3] = data3;
+			r.msg = msg;
+			break;
+		}
+	}
+
+	// Print it to debug if enabled
+	if (Debug(Module::Debug))
+	{
+		debugPrintf(msg, data0, data1, data2, data3);
+		delay(50);									// make sure the message has a chance to get printed, assuming this isn't called from the task that does the printing
 	}
 }
 

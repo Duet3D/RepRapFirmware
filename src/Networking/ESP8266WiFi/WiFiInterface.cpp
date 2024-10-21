@@ -2162,8 +2162,23 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		}
 	}
 
-#if SAME5x && WIFI_SPI_DEBUG
-	MemoryWatcher<16> watcher;
+#if SAME5x
+	// There appears to be a DMA/SPI bug in the SAME5x:
+	// - The SPI packet length used by the WiFi module is variable and we don't know it in advance, so we set the receive DMAC channel to the maximum transfer length
+	// - When the SS line goes high to terminate the transaction, we need to disable the DMA channel even though the DMA count hasn't expired
+	// - This doesn't work unless we also disable the SPI device
+	// - So we disable the SPI device too. Unfortunately, when we do this, occasionally a word of data gets written to an incorrect memory address.
+	// - The memory address overwritten appears to be related to the stack address when the SPI is disabled, although it's possible that this just happens to be the case.
+	// - The memory word written is either a word of zeros or it is the last word of the received SPI data.
+	// - We tried setting debug watchpoints on this memory area in case a firmware bug causes the corruption, but they were never triggered, except when we triggered them deliberately
+	// - We disable interrupts while disabling SPI and DMA in case an interrupt during the process contributes to the problem, however the problem still occurs.
+	// So now we take a copy of the area of stack that holds the registers (including LR holding the return address) when the function was called,
+	// because that is the area that has been getting corrupted and causing resets.
+	// This copy is allocated on the stack just below the area in which we have observed memory corruption.
+	// Sometimes the copy gets corrupted instead of the area we are trying to protect. So as well as taking a copy, we checksum the memory so that we can determine
+	// whether the original memory or the copy got corrupted.
+	// All of this is handled by class MemoryWatcher.
+	MemoryWatcher<16> watcher;						// protect the 16 words of memory on the stack immediately after the MemoryWatcher object
 #endif
 
 	bufferOut->hdr.formatVersion = MyFormatVersion;
@@ -2231,30 +2246,25 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 	espWaitingTask = nullptr;
 
 #if SAME5x
+	if (WiFiSpiSercom->SPI.STATUS.bit.BUFOVF)
 	{
+		++spiRxOverruns;
+	}
 
-		if (WiFiSpiSercom->SPI.STATUS.bit.BUFOVF)
-		{
-			++spiRxOverruns;
-		}
-# if WIFI_SPI_DEBUG
-		if (watcher.Check(__LINE__))
-		{
-			delay(50);
-		}
-# endif
-		{
-			AtomicCriticalSectionLocker lock;			// try disabling interrupts for this in case this prevents the DMA memory corruption that we observe
-			spi_dma_disable();
-			DisableSpi();
-		}
+	if (watcher.Check(1))					// check whether the watched memory has been corrupted. We never observe corruption at this point.
+	{
+		delay(50);
+	}
+	{
+		AtomicCriticalSectionLocker lock;	// disable interrupts for this section in case it helps prevent the DMA memory corruption
+		spi_dma_disable();
+		DisableSpi();
+		__DMB();							// just in case this might help
+	}
 
-# if WIFI_SPI_DEBUG
-		if (watcher.Check(__LINE__))
-		{
-			delay(50);
-		}
-# endif
+	if (watcher.Check(2))					// check whether the watched memory has been corrupted. This is where we observe corruption.
+	{
+		delay(50);
 	}
 #else
 	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
