@@ -2137,6 +2137,10 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		}
 	}
 
+#if SAME5x && WIFI_SPI_DEBUG
+	MemoryWatcher<16> watcher;
+#endif
+
 	bufferOut->hdr.formatVersion = MyFormatVersion;
 	bufferOut->hdr.command = cmd;
 	bufferOut->hdr.socketNumber = socketNum;
@@ -2203,12 +2207,29 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 
 #if SAME5x
 	{
+
 		if (WiFiSpiSercom->SPI.STATUS.bit.BUFOVF)
 		{
 			++spiRxOverruns;
 		}
-		DisableSpi();
-		spi_dma_disable();
+# if WIFI_SPI_DEBUG
+		if (watcher.Check(__LINE__))
+		{
+			delay(50);
+		}
+# endif
+		{
+			AtomicCriticalSectionLocker lock;			// try disabling interrupts for this in case this prevents the DMA memory corruption that we observe
+			spi_dma_disable();
+			DisableSpi();
+		}
+
+# if WIFI_SPI_DEBUG
+		if (watcher.Check(__LINE__))
+		{
+			delay(50);
+		}
+# endif
 	}
 #else
 	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
