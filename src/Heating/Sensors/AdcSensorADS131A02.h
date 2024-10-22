@@ -41,7 +41,7 @@ private:
 	TemperatureError TryGetLinearAdcTemperature(float& t) noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
 	void CalcDerivedParameters() noexcept;
-	TemperatureError TryInitAdc() const noexcept;
+	TemperatureError TryInitAdc() noexcept;
 
 	// Commands that can be sent to the ADC
 	enum ADS131Command : uint16_t
@@ -92,6 +92,7 @@ private:
 	float readingAtMax [NumChannels];
 
 	uint32_t readings[NumChannels];
+	TemperatureError lastResult = TemperatureError::notInitialised;
 
 	bool use24bitFrames;
 

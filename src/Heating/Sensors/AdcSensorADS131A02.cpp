@@ -177,12 +177,10 @@ GCodeResult AdcSensorADS131A02Chan0::FinishConfiguring(bool changed, const Strin
 
 TemperatureError AdcSensorADS131A02Chan0::GetAdditionalOutput(float &t, uint8_t outputNumber) noexcept
 {
-	float dummy;
-	const auto result = TemperatureSensor::GetLatestTemperature(dummy);
 	if (outputNumber > 0 && outputNumber < NumChannels)
 	{
-		t = readings[outputNumber];
-		return result;
+		t = (lastResult == TemperatureError::ok) ? readings[outputNumber] : BadErrorTemperature;
+		return lastResult;
 	}
 
 	t = BadErrorTemperature;
@@ -228,7 +226,7 @@ TemperatureError AdcSensorADS131A02Chan0::WaitReady() const noexcept
 	return ret;
 }
 
-TemperatureError AdcSensorADS131A02Chan0::TryInitAdc() const noexcept
+TemperatureError AdcSensorADS131A02Chan0::TryInitAdc() noexcept
 {
 	TemperatureError ret = WaitReady();
 	if (ret == TemperatureError::ok)
@@ -246,12 +244,13 @@ TemperatureError AdcSensorADS131A02Chan0::TryInitAdc() const noexcept
 					ret = DoTransaction(ADS131Command::wreg, x.regNum, x.val, status, readings);
 					if (ret != TemperatureError::ok)
 					{
-						return ret;
+						break;
 					}
 				}
 			}
 		}
 	}
+	lastResult = ret;
 	return ret;
 }
 
@@ -260,7 +259,8 @@ TemperatureError AdcSensorADS131A02Chan0::TryGetLinearAdcTemperature(float& t) n
 {
 #if 1
 	t = BadErrorTemperature;
-	return TemperatureError::unknownError;
+	lastResult = TemperatureError::unknownError;
+	return lastResult;
 #else
 	/*
 	 * The MCP3204 waits for a high input input bit before it does anything. Call this clock 1.
