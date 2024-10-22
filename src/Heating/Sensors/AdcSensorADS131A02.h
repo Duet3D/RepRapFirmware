@@ -38,7 +38,7 @@ private:
 
 	static constexpr unsigned int NumChannels = 2;
 
-	TemperatureError TryGetLinearAdcTemperature(float& t) noexcept;
+	TemperatureError TakeReading() noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
 	void CalcDerivedParameters() noexcept;
 	TemperatureError TryInitAdc() noexcept;
@@ -82,7 +82,7 @@ private:
 	static constexpr float DefaultReadingAtMax = 100.0;
 
 	// Send a command and receive the response
-	TemperatureError DoTransaction(ADS131Command command, ADS131Register regNum, uint8_t data, uint16_t &status, uint32_t readings[2]) const noexcept;
+	TemperatureError DoTransaction(ADS131Command command, ADS131Register regNum, uint8_t data, uint16_t &status, uint32_t readings[NumChannels]) const noexcept;
 
 	// Wait for the device to become ready after a reset returning TemperatureError::ok if successful
 	TemperatureError WaitReady() const noexcept;
@@ -91,7 +91,7 @@ private:
 	float readingAtMin[NumChannels];
 	float readingAtMax [NumChannels];
 
-	uint32_t readings[NumChannels];
+	uint32_t lastReadings[NumChannels];
 	TemperatureError lastResult = TemperatureError::notInitialised;
 
 	bool use24bitFrames;

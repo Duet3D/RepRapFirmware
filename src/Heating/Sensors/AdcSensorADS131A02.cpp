@@ -145,12 +145,11 @@ GCodeResult AdcSensorADS131A02Chan0::FinishConfiguring(bool changed, const Strin
 		// Initialise the sensor
 		InitSpi();
 		TemperatureError rslt = TryInitAdc();
-		float t = BadErrorTemperature;
 		if (rslt == TemperatureError::ok)
 		{
 			for (unsigned int i = 0; i < 3; ++i)		// try 3 times
 			{
-				rslt = TryGetLinearAdcTemperature(t);
+				rslt = TakeReading();
 				if (rslt == TemperatureError::ok)
 				{
 					break;
@@ -158,7 +157,7 @@ GCodeResult AdcSensorADS131A02Chan0::FinishConfiguring(bool changed, const Strin
 				delay(MinimumReadInterval);
 			}
 		}
-		SetResult(t, rslt);
+		SetResult(lastReadings[0], rslt);
 
 		if (rslt != TemperatureError::ok)
 		{
@@ -180,7 +179,7 @@ TemperatureError AdcSensorADS131A02Chan0::GetAdditionalOutput(float &t, uint8_t 
 {
 	if (outputNumber > 0 && outputNumber < NumChannels)
 	{
-		t = (lastResult == TemperatureError::ok) ? readings[outputNumber] : BadErrorTemperature;
+		t = (lastResult == TemperatureError::ok) ? lastReadings[outputNumber] : BadErrorTemperature;
 		return lastResult;
 	}
 
@@ -190,9 +189,8 @@ TemperatureError AdcSensorADS131A02Chan0::GetAdditionalOutput(float &t, uint8_t 
 
 void AdcSensorADS131A02Chan0::Poll() noexcept
 {
-	float t;
-	const TemperatureError rslt = TryGetLinearAdcTemperature(t);
-	SetResult(t, rslt);
+	const TemperatureError rslt = TakeReading();
+	SetResult(lastReadings[0], rslt);
 }
 
 void AdcSensorADS131A02Chan0::CalcDerivedParameters() noexcept
@@ -211,13 +209,14 @@ TemperatureError AdcSensorADS131A02Chan0::WaitReady() const noexcept
 	 * The command status response associated with the UNLOCK command is 0655h.
 	 */
 	uint16_t status;
-	uint32_t readings[2];
+	uint32_t readings[NumChannels];
+	delay(10);
 	TemperatureError ret = DoTransaction(ADS131Command::nullcmd, ADS131Register::none, 0, status, readings);
 	if (ret == TemperatureError::ok)
 	{
-		delay(10);
 		for (unsigned int retry = 0; retry < 5; ++retry)
 		{
+			delay(10);
 			ret = DoTransaction(ADS131Command::nullcmd, ADS131Register::none, 0, status, readings);
 			if (ret != TemperatureError::ok)
 			{
@@ -229,7 +228,7 @@ TemperatureError AdcSensorADS131A02Chan0::WaitReady() const noexcept
 			// It turns out that the ID is just the number of channels, so 02 for the ADS131A02 and 04 for the ADS131A04.
 			if (status == 0xFF02)
 			{
-				return TemperatureError::ok;
+				return ret;
 			}
 		}
 		ret = TemperatureError::notReady;
@@ -266,81 +265,46 @@ TemperatureError AdcSensorADS131A02Chan0::TryInitAdc() noexcept
 }
 
 // Try to get a temperature reading from the linear ADC by doing an SPI transaction
-TemperatureError AdcSensorADS131A02Chan0::TryGetLinearAdcTemperature(float& t) noexcept
+TemperatureError AdcSensorADS131A02Chan0::TakeReading() noexcept
 {
-#if 1
-	t = BadErrorTemperature;
-	lastResult = TemperatureError::unknownError;
-	return lastResult;
-#else
-	/*
-	 * The MCP3204 waits for a high input input bit before it does anything. Call this clock 1.
-	 * The next input bit it high for single-ended operation, low for differential. This is clock 2.
-	 * The next 3 input bits are the channel selection bits. These are clocks 3..5.
-	 * Clock 6 produces a null bit on its trailing edge, which is read by the processor on clock 7.
-	 * Clocks 7..18 produce data bits B11..B0 on their trailing edges, which are read by the MCU on the leading edges of clocks 8-19.
-	 * If we supply further clocks, then clocks 18..29 are the same data but LSB first, omitting bit 0.
-	 * Clocks 30 onwards will be zeros.
-	 * So we need to use at least 19 clocks. We round this up to 24 clocks, and we check that the extra 5 bits we receive are the 5 least significant data bits in reverse order.
-	 *
-	 * MCP3204 & MCP3208
-	 * Single CH0 "C0" - Differential CH0-CH1 "80"
-	 * Single CH1 "C8" - Differential CH1-CH0 "88"
-	 * Single CH2 "D0" - Differential CH2-CH3 "90"
-	 * Single CH3 "D8" - Differential CH3-CH2 "98"
-	 * MCP3208 Only
-	 * Single CH4 "E0" - Differential CH4-CH5 "A0"
-	 * Single CH5 "E8" - Differential CH5-CH4 "A8"
-	 * Single CH6 "F0" - Differential CH6-CH7 "B0"
-	 * Single CH7 "F8" - Differential CH7-CH6 "B8"
-	 *
-	 * These values represent clocks 1 to 5.
-	 */
-
-	const uint8_t adcData[] = { channelByte, 0x00, 0x00 };
-	uint32_t rawVal;
-	TemperatureError rslt = DoSpiTransaction(adcData, 3, rawVal);
-	//debugPrintf("ADC data %u\n", rawVal);
-
-	if (rslt == TemperatureError::ok)
+	uint16_t status;
+	uint32_t readings[NumChannels];
+	TemperatureError ret = DoTransaction(ADS131Command::nullcmd, ADS131Register::none, 0, status, readings);
+	if (ret == TemperatureError::ok)
 	{
-		const uint32_t adcVal1 = (rawVal >> 5) & ((1u << 13) - 1u);
-		const uint32_t adcVal2 = ((rawVal & 1) << 5) | ((rawVal & 2) << 3) | ((rawVal & 4) << 1) | ((rawVal & 8) >> 1) | ((rawVal & 16) >> 3) | ((rawVal & 32) >> 5);
-		if (adcVal1 >= 4096 || adcVal2 != (adcVal1 & ((1u << 6) - 1u)))
+		for (size_t i = 0; i < NumChannels; ++i)
 		{
-			rslt = TemperatureError::badResponse;
-		}
-		else
-		{
-			t = minLinearAdcTemp + (linearAdcDegCPerCount * (float)adcVal1);
+			lastReadings[i] = readingAtMin[i] + scalbnf((float)(int32_t)readings[i], -32) * (readingAtMax[i] - readingAtMin[i]);
 		}
 	}
-	return rslt;
-#endif
+	return ret;
 }
 
 // Send a command and receive the response
-TemperatureError AdcSensorADS131A02Chan0::DoTransaction(ADS131Command command, ADS131Register regNum, uint8_t data, uint16_t &status, uint32_t readings[2]) const noexcept
+TemperatureError AdcSensorADS131A02Chan0::DoTransaction(ADS131Command command, ADS131Register regNum, uint8_t data, uint16_t &status, uint32_t readings[NumChannels]) const noexcept
 {
 	const uint16_t fullCommand = command | ((uint16_t)regNum << 8) | (uint16_t)data;
 	TemperatureError rslt(TemperatureError::ok);
 	if (use24bitFrames)
 	{
-		uint8_t sendBuffer[9];
+		uint8_t sendBuffer[3 + NumChannels * 3];
 		sendBuffer[0] = (fullCommand >> 8) & 0xFF;
 		sendBuffer[1] = fullCommand & 0xFF;
 		memset(sendBuffer + 2, 0, sizeof(sendBuffer) - 2);
 
-		uint8_t receiveBuffer[9];
+		uint8_t receiveBuffer[3 + NumChannels * 3];
 		rslt = DoSpiTransaction(sendBuffer, receiveBuffer, sizeof(sendBuffer));
 
 		status = ((uint16_t)receiveBuffer[0] << 8) | receiveBuffer[1];
-		readings[0] = ((uint32_t)receiveBuffer[3] << 16) | ((uint32_t)receiveBuffer[4] << 8) | receiveBuffer[5];
-		readings[1] = ((uint32_t)receiveBuffer[6] << 16) | ((uint32_t)receiveBuffer[7] << 8) | receiveBuffer[8];
+		for (size_t i = 0; i < NumChannels; ++i)
+		{
+			const size_t offset = i * 3;
+			readings[i] =  ((uint32_t)receiveBuffer[3 + offset] << 24) | ((uint32_t)receiveBuffer[4 + offset] << 16) | ((uint32_t)receiveBuffer[5 + offset] << 8);
+		}
 	}
 	else
 	{
-		uint16_t sendBuffer[3];
+		uint16_t sendBuffer[1 + NumChannels];
 		sendBuffer[0] = __builtin_bswap16(fullCommand);
 		sendBuffer[1] = sendBuffer[2] = 0;
 
@@ -348,8 +312,10 @@ TemperatureError AdcSensorADS131A02Chan0::DoTransaction(ADS131Command command, A
 		rslt = DoSpiTransaction(reinterpret_cast<const uint8_t *_ecv_array>(sendBuffer), reinterpret_cast<uint8_t *_ecv_array>(receiveBuffer), sizeof(sendBuffer));
 
 		status = __builtin_bswap16(receiveBuffer[0]);
-		readings[0] = (uint32_t)__builtin_bswap16(receiveBuffer[1]);
-		readings[1] = (uint32_t)__builtin_bswap16(receiveBuffer[2]);
+		for (size_t i = 0; i < NumChannels; ++i)
+		{
+			readings[i] = (uint32_t)__builtin_bswap16(receiveBuffer[1 + i]) << 16;
+		}
 	}
 	return rslt;
 }
