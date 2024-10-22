@@ -961,6 +961,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 				{
 					const int sparam = (gb.Seen('S')) ? gb.GetIValue() : 0;
 					const unsigned int rparam = (gb.Seen('R')) ? gb.GetUIValue() : 0;
+					const int cparam = (gb.Seen('C') ? gb.GetIValue() : -1);
 					String<MaxFilenameLength> dir;
 					if (gb.Seen('P'))
 					{
@@ -973,7 +974,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 
 					if (sparam == 2)
 					{
-						outBuf = reprap.GetFilesResponse(dir.c_str(), rparam, true);	// send the file list in JSON format
+						outBuf = reprap.GetFilesResponse(dir.c_str(), rparam, cparam, true);	// send the file list in JSON format
 						if (outBuf == nullptr)
 						{
 							reply.copy("{\"err\":-1}");
@@ -981,7 +982,7 @@ bool GCodes::HandleMcode(GCodeBuffer& gb, const StringRef& reply) THROWS(GCodeEx
 					}
 					else if (sparam == 3)
 					{
-						outBuf = reprap.GetFilelistResponse(dir.c_str(), rparam);
+						outBuf = reprap.GetFilelistResponse(dir.c_str(), rparam, cparam);
 						if (outBuf == nullptr)
 						{
 							reply.copy("{\"err\":-1}");

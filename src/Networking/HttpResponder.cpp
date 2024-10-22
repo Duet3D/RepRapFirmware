@@ -569,7 +569,9 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		OutputBuffer::ReleaseAll(response);
 		const char* const firstVal = GetKeyValue("first");
 		const unsigned int startAt = (firstVal == nullptr) ? 0 : StrToU32(firstVal);
-		response = reprap.GetFilelistResponse(parameter, startAt);		// this may return nullptr
+		const char* const maxVal = GetKeyValue("max");
+		const int max = (maxVal == nullptr) ? -1 : StrToI32(maxVal, nullptr);
+		response = reprap.GetFilelistResponse(parameter, startAt, max);		// this may return nullptr
 	}
 	else if (StringEqualsIgnoreCase(request, "files"))
 	{
@@ -583,7 +585,9 @@ bool HttpResponder::GetJsonResponse(const char *_ecv_array request, OutputBuffer
 		const unsigned int startAt = (firstVal == nullptr) ? 0 : StrToU32(firstVal);
 		const char* const flagDirsVal = GetKeyValue("flagDirs");
 		const bool flagDirs = flagDirsVal != nullptr && StrToU32(flagDirsVal) == 1;
-		response = reprap.GetFilesResponse(dir, startAt, flagDirs);				// this may return nullptr
+		const char* const maxVal = GetKeyValue("max");
+		const int max = (maxVal == nullptr) ? -1 : StrToI32(maxVal, nullptr);
+		response = reprap.GetFilesResponse(dir, startAt, max, flagDirs);				// this may return nullptr
 	}
 	else if (StringEqualsIgnoreCase(request, "upload"))
 	{

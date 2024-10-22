@@ -1846,7 +1846,7 @@ OutputBuffer *RepRap::GetLegacyStatusResponse(uint8_t type, int seq) const noexc
 
 // Get the list of files in the specified directory in JSON format. PanelDue uses this one, so include a newline at the end.
 // If flagDirs is true then we prefix each directory with a * character.
-OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bool flagsDirs) noexcept
+OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, int maxItems, bool flagsDirs) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -1886,9 +1886,9 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 				if (filesFound >= startAt)
 				{
 					// Make sure we can end this response properly
-					if (bytesLeft < fileInfo.fileName.strlen() * 2 + 20)
+					if (bytesLeft < fileInfo.fileName.strlen() * 2 + 20 || (maxItems > 0 && filesFound >= startAt + maxItems))
 					{
-						// No more space available - stop here
+						// No more space available or about to exceed the number of requested items - stop here
 						MassStorage::AbandonFindNext();
 						nextFile = filesFound;
 						break;
@@ -1925,7 +1925,7 @@ OutputBuffer *RepRap::GetFilesResponse(const char *dir, unsigned int startAt, bo
 }
 
 // Get a JSON-style filelist including file types and sizes
-OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt) noexcept
+OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt, int maxItems) noexcept
 {
 	// Need something to write to...
 	OutputBuffer *response;
@@ -1964,9 +1964,9 @@ OutputBuffer *RepRap::GetFilelistResponse(const char *dir, unsigned int startAt)
 				if (filesFound >= startAt)
 				{
 					// Make sure we can end this response properly
-					if (bytesLeft < fileInfo.fileName.strlen() * 2 + 50)
+					if (bytesLeft < fileInfo.fileName.strlen() * 2 + 50 || (maxItems > 0 && filesFound >= startAt + maxItems))
 					{
-						// No more space available - stop here
+						// No more space available or about to exceed the number of requested items - stop here
 						MassStorage::AbandonFindNext();
 						nextFile = filesFound;
 						break;
