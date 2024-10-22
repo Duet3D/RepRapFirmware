@@ -74,8 +74,8 @@ private:
 		CLK2 = 0x0E,
 		ADC_ENA = 0x0F,
 
-		ADC1 = 0x11,
-		ADC2 = 0x12
+		R_ADC1 = 0x11,
+		R_ADC2 = 0x12
 	};
 
 	static constexpr float DefaultReadingAtMin = 0.0;

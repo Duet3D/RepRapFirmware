@@ -144,18 +144,19 @@ GCodeResult AdcSensorADS131A02Chan0::FinishConfiguring(bool changed, const Strin
 
 		// Initialise the sensor
 		InitSpi();
-		TryInitAdc();
-
-		TemperatureError rslt(TemperatureError::unknownError);
-		float t;
-		for (unsigned int i = 0; i < 3; ++i)		// try 3 times
+		TemperatureError rslt = TryInitAdc();
+		float t = BadErrorTemperature;
+		if (rslt == TemperatureError::ok)
 		{
-			rslt = TryGetLinearAdcTemperature(t);
-			if (rslt == TemperatureError::ok)
+			for (unsigned int i = 0; i < 3; ++i)		// try 3 times
 			{
-				break;
+				rslt = TryGetLinearAdcTemperature(t);
+				if (rslt == TemperatureError::ok)
+				{
+					break;
+				}
+				delay(MinimumReadInterval);
 			}
-			delay(MinimumReadInterval);
 		}
 		SetResult(t, rslt);
 
@@ -218,10 +219,20 @@ TemperatureError AdcSensorADS131A02Chan0::WaitReady() const noexcept
 		for (unsigned int retry = 0; retry < 5; ++retry)
 		{
 			ret = DoTransaction(ADS131Command::nullcmd, ADS131Register::none, 0, status, readings);
-			if (ret != TemperatureError::ok) { break; }
-			if ((status & 0xFF00) == 0xFF00) { return TemperatureError::ok; }
+			if (ret != TemperatureError::ok)
+			{
+				break;
+			}
+
+			// The documentation says that the status word returned after a null command is 0xFFdd where dd is the hardware device ID.
+			// Unfortunately it doesn't specify what the hardware device ID is, and 0xFFFF is what we are likely to get back if the device is not present.
+			// It turns out that the ID is just the number of channels, so 02 for the ADS131A02 and 04 for the ADS131A04.
+			if (status == 0xFF02)
+			{
+				return TemperatureError::ok;
+			}
 		}
-			ret = TemperatureError::notReady;
+		ret = TemperatureError::notReady;
 	}
 	return ret;
 }
