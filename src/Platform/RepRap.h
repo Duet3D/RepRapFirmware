@@ -355,7 +355,7 @@ template <size_t NumWords> bool MemoryWatcher<NumWords>::Check(unsigned int tag)
 	if (badOffset >= 0 || csumProtected != checkSum || csumCopy != checkSum)
 	{
 		const bool fix = (csumProtected != checkSum && csumCopy == checkSum);
-		constexpr const char *_ecv_array msg = "Mem diff: offset %u, original %08" PRIx32 ", copy %08" PRIx32 ", flags %08x" PRIx32 "\n";
+		constexpr const char *_ecv_array msg = "Mem diff: offset %u, original %08" PRIx32 ", copy %08" PRIx32 ", flags %08" PRIx32 "\n";
 		const uint32_t flags = ((csumProtected == checkSum) ? 0 : 1) | ((csumCopy == checkSum) ? 0 : 0x10) | ((fix) ? 0x0100 : 0) | (tag << 16);
 		reprap.LogDebugMessage(msg, (unsigned int)badOffset * 4, checkedData[badOffset], dataCopy[badOffset], flags);
 
