@@ -88,6 +88,18 @@ private:
 #endif
 	};
 
+	// STAT_1 status register bits
+	enum ADS131Status : uint8_t
+	{
+		f_check = 1u << 0,			// uncorrectable Hamming or CRC error on data in
+		f_drdy = 1u << 1,			// data ready fault
+		f_resync = 1u << 2,			// resync fault, only applies to sync slave mode
+		f_wdt = 1u << 3,			// watchdog timed out
+		f_adcin = 1u << 4,			// ADC range fault, read STAT_P and STAT_N to identify and clear it
+		f_spi = 1u << 5,			// SPI fault, read STAT_S to identify and clear it
+		f_opc = 1u << 6,			// invalid command, or command sent before unlocked
+	};
+
 	static constexpr float DefaultReadingAtMin = 0.0;
 	static constexpr float DefaultReadingAtMax = 100.0;
 
@@ -102,7 +114,7 @@ private:
 	float readingAtMax [NumChannels];
 
 	float lastReadings[NumChannels];
-	uint16_t expectedResponse;
+	uint16_t lastCommand;
 	TemperatureError lastResult = TemperatureError::notInitialised;
 
 	bool use24bitFrames;

@@ -237,8 +237,7 @@ TemperatureError AdcSensorADS131A02Chan0::WaitReady() noexcept
 
 			// The documentation says that the status word returned after a null command is 0xFFdd where dd is the hardware device ID.
 			// It turns out that the ID is just the number of channels, so 02 for the ADS131A02 and 04 for the ADS131A04.
-			expectedResponse = 0xFF00 | NumChannels;				// set up the expected response for the next SPI transaction
-			if (status == expectedResponse)
+			if (status == (0xFF00 | NumChannels))
 			{
 				return ret;
 			}
@@ -260,7 +259,7 @@ TemperatureError AdcSensorADS131A02Chan0::TryInitAdc() noexcept
 		ret == WaitReady();
 		if (ret == TemperatureError::ok)
 		{
-			ret = DoTransaction(ADS131Command::unlock, ADS131Register::none, 0, status, readings, true);
+			ret = DoTransaction(ADS131Command::unlock, ADS131Register::none, 0, status, readings, false);
 		}
 		if (ret == TemperatureError::ok)
 		{
@@ -300,14 +299,38 @@ TemperatureError AdcSensorADS131A02Chan0::TakeReading() noexcept
 		{
 			lastReadings[i] = readingAtMin[i] + ldexpf((float)(int32_t)readings[i], -32) * (readingAtMax[i] - readingAtMin[i]);
 		}
-		if ((status & 0x01101111b) != 0) { debugPrintf("Reading response %04x\n", status); }
 
-		return ((status & 0x01101111b) == 0) ? ret : TemperatureError::badResponse;		// return badResponse if an error other than ADC input over-range has occurred
+		if ((status & (0xFF00 | ADS131Status::f_check | ADS131Status::f_drdy | ADS131Status::f_resync | ADS131Status::f_wdt | ADS131Status::f_opc)) != 0x2200)
+		{
+			debugPrintf("STAT1=%04x\n", status);
+			ret = TemperatureError::badResponse;					// wrong register returned, or one of the other status bits set
+		}
+		else
+		{
+			uint16_t statN = 0, statP = 0, statS = 0;
+			if ((status & ADS131Status::f_adcin) != 0)
+			{
+				// ADC input over- or under-range error
+				DoTransaction(ADS131Command::rreg, ADS131Register::STAT_N, 0, status, readings, false);
+				DoTransaction(ADS131Command::rreg, ADS131Register::STAT_P, 0, statN, readings, true);
+				DoTransaction(ADS131Command::nullcmd, ADS131Register::none, 0, statP, readings, true);
+			}
+			if ((status & ADS131Status::f_spi) != 0)
+			{
+				DoTransaction(ADS131Command::rreg, ADS131Register::STAT_S, 0, status, readings, false);
+				DoTransaction(ADS131Command::nullcmd, ADS131Register::none, 0, statS, readings, true);
+			}
+			if (statN != 0 || statP != 0 || statS != 0)
+			{
+				debugPrintf("STATN=%04x STATP=%04x STATS=%04x\n", statN, statP, statS);
+			}
+		}
 	}
 	return ret;
 }
 
-// Send a command and receive the response
+// Send a command and receive the response.
+// In fixed frame length mode we always exchange four 16- or 24-bit words with the device. The last word is the unused CRC word.
 TemperatureError AdcSensorADS131A02Chan0::DoTransaction(ADS131Command command, ADS131Register regNum, uint8_t data, uint16_t &status, uint32_t readings[NumChannels], bool checkResponse) noexcept
 {
 	const uint16_t fullCommand = command | ((uint16_t)regNum << 8) | (uint16_t)data;
@@ -346,15 +369,21 @@ TemperatureError AdcSensorADS131A02Chan0::DoTransaction(ADS131Command command, A
 	}
 
 	// If requested, check that the received response matches the previous command
-	if (rslt == TemperatureError::ok && checkResponse && status != expectedResponse)
+	if (rslt == TemperatureError::ok && checkResponse)
 	{
-		rslt = TemperatureError::badResponse;
-		debugPrintf("Expected response %04x got %04x, current command %04x\n", expectedResponse, status, fullCommand);
+		const uint16_t expectedResponse = (lastCommand == ADS131Command::nullcmd) ? ADS131Command::rreg | ADS131Register::STAT_1						// a null command returns a status response provided that the device has been unlocked
+										: ((lastCommand & 0xE000) == ADS131Command::wreg) ? lastCommand ^ (ADS131Command::wreg ^ ADS131Command::rreg)	// a write register command returns a read register response
+											: lastCommand;
+		const uint16_t mask = ((lastCommand & 0xE000) == ADS131Command::rreg) ? 0xFF00 : 0xFFFF;
+		if ((status & mask) != expectedResponse)
+		{
+			rslt = TemperatureError::badResponse;
+			debugPrintf("Expected response %04x got %04x, last command %04x\n", expectedResponse, status, lastCommand);
+		}
 	}
 
-	// Set up the expected response for the next command
-	expectedResponse = (command == ADS131Command::wreg) ? fullCommand ^ (ADS131Command::wreg ^ ADS131Command::rreg)
-						: command;
+	// Record the command so that we can check the next response
+	lastCommand = fullCommand;
 	return rslt;
 }
 
