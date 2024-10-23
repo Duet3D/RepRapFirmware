@@ -93,13 +93,13 @@ const AdcSensorADS131A02Chan0::InitTableEntry AdcSensorADS131A02Chan0::initTable
 };
 
 // Sensor type descriptors
-TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02Chan0::typeDescriptor_chan0_16bit(TypeName_chan0_16bit, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new AdcSensorADS131A02Chan0(sensorNum, false); } );
-TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02Chan0::typeDescriptor_chan0_24bit(TypeName_chan0_24bit, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new AdcSensorADS131A02Chan0(sensorNum, true); } );
+TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02Chan0::typeDescriptor_chan0_unipolar(TypeName_chan0_unipolar, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new AdcSensorADS131A02Chan0(sensorNum, false); } );
+TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02Chan0::typeDescriptor_chan0_bipolar(TypeName_chan0_bipolar, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new AdcSensorADS131A02Chan0(sensorNum, true); } );
 TemperatureSensor::SensorTypeDescriptor AdcSensorADS131A02Chan1::typeDescriptor_chan1(TypeName_chan1, [](unsigned int sensorNum) noexcept -> TemperatureSensor *_ecv_from { return new AdcSensorADS131A02Chan1(sensorNum); } );
 
-AdcSensorADS131A02Chan0::AdcSensorADS131A02Chan0(unsigned int sensorNum, bool p_24bit) noexcept
-	: SpiTemperatureSensor(sensorNum, (p_24bit) ? TypeName_chan0_24bit : TypeName_chan0_16bit, ADS131_SpiMode, ADS131_Frequency),
-	  use24bitFrames(p_24bit)
+AdcSensorADS131A02Chan0::AdcSensorADS131A02Chan0(unsigned int sensorNum, bool p_bipolar) noexcept
+	: SpiTemperatureSensor(sensorNum, (p_bipolar) ? TypeName_chan0_bipolar : TypeName_chan0_unipolar, ADS131_SpiMode, ADS131_Frequency),
+	  bipolar(p_bipolar)
 {
 	for (float& f : readingAtMin) { f = DefaultReadingAtMin; }
 	for (float& f : readingAtMax) { f = DefaultReadingAtMax; }
@@ -297,7 +297,9 @@ TemperatureError AdcSensorADS131A02Chan0::TakeReading() noexcept
 	{
 		for (size_t i = 0; i < NumChannels; ++i)
 		{
-			lastReadings[i] = readingAtMin[i] + ldexpf((float)(int32_t)readings[i], -32) * (readingAtMax[i] - readingAtMin[i]);
+			lastReadings[i] = (bipolar) ? (readingAtMin[i] + readingAtMax[i]) * 0.5 + ldexpf((float)(int32_t)readings[i], -32) * (readingAtMax[i] - readingAtMin[i])
+								: (readings[i] <= 0) ? readingAtMin[i]
+									: readingAtMin[i] + ldexpf((float)(int32_t)readings[i], -31) * (readingAtMax[i] - readingAtMin[i]);
 		}
 
 		if ((status & (0xFF00 | ADS131Status::f_check | ADS131Status::f_drdy | ADS131Status::f_resync | ADS131Status::f_wdt | ADS131Status::f_opc)) != 0x2200)
@@ -335,37 +337,19 @@ TemperatureError AdcSensorADS131A02Chan0::DoTransaction(ADS131Command command, A
 {
 	const uint16_t fullCommand = command | ((uint16_t)regNum << 8) | (uint16_t)data;
 	TemperatureError rslt(TemperatureError::ok);
-	if (use24bitFrames)
+	uint8_t sendBuffer[6 + NumChannels * 3];
+	sendBuffer[0] = (fullCommand >> 8) & 0xFF;
+	sendBuffer[1] = fullCommand & 0xFF;
+	memset(sendBuffer + 2, 0, sizeof(sendBuffer) - 2);
+
+	uint8_t receiveBuffer[6 + NumChannels * 3];
+	rslt = DoSpiTransaction(sendBuffer, receiveBuffer, sizeof(sendBuffer));
+
+	status = ((uint16_t)receiveBuffer[0] << 8) | receiveBuffer[1];
+	for (size_t i = 0; i < NumChannels; ++i)
 	{
-		uint8_t sendBuffer[6 + NumChannels * 3];
-		sendBuffer[0] = (fullCommand >> 8) & 0xFF;
-		sendBuffer[1] = fullCommand & 0xFF;
-		memset(sendBuffer + 2, 0, sizeof(sendBuffer) - 2);
-
-		uint8_t receiveBuffer[6 + NumChannels * 3];
-		rslt = DoSpiTransaction(sendBuffer, receiveBuffer, sizeof(sendBuffer));
-
-		status = ((uint16_t)receiveBuffer[0] << 8) | receiveBuffer[1];
-		for (size_t i = 0; i < NumChannels; ++i)
-		{
-			const size_t offset = i * 3;
-			readings[i] =  ((uint32_t)receiveBuffer[3 + offset] << 24) | ((uint32_t)receiveBuffer[4 + offset] << 16) | ((uint32_t)receiveBuffer[5 + offset] << 8);
-		}
-	}
-	else
-	{
-		uint16_t sendBuffer[2 + NumChannels];
-		sendBuffer[0] = __builtin_bswap16(fullCommand);
-		sendBuffer[1] = sendBuffer[2] = 0;
-
-		uint16_t receiveBuffer[2 + NumChannels];
-		rslt = DoSpiTransaction(reinterpret_cast<const uint8_t *_ecv_array>(sendBuffer), reinterpret_cast<uint8_t *_ecv_array>(receiveBuffer), sizeof(sendBuffer));
-
-		status = __builtin_bswap16(receiveBuffer[0]);
-		for (size_t i = 0; i < NumChannels; ++i)
-		{
-			readings[i] = (uint32_t)__builtin_bswap16(receiveBuffer[1 + i]) << 16;
-		}
+		const size_t offset = i * 3;
+		readings[i] =  ((uint32_t)receiveBuffer[3 + offset] << 24) | ((uint32_t)receiveBuffer[4 + offset] << 16) | ((uint32_t)receiveBuffer[5 + offset] << 8);
 	}
 
 	// If requested, check that the received response matches the previous command

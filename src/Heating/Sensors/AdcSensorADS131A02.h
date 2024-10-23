@@ -19,7 +19,7 @@
 class AdcSensorADS131A02Chan0 : public SpiTemperatureSensor
 {
 public:
-	explicit AdcSensorADS131A02Chan0(unsigned int sensorNum, bool p_24bit) noexcept;
+	explicit AdcSensorADS131A02Chan0(unsigned int sensorNum, bool p_bipolar) noexcept;
 	GCodeResult Configure(GCodeBuffer& gb, const StringRef& reply, bool& changed) THROWS(GCodeException) override;
 
 #if SUPPORT_REMOTE_COMMANDS
@@ -29,14 +29,14 @@ public:
 	const uint8_t GetNumAdditionalOutputs() const noexcept override { return 1; }
 	TemperatureError GetAdditionalOutput(float& t, uint8_t outputNumber) noexcept override;
 	void Poll() noexcept override;
-	const char *_ecv_array GetShortSensorType() const noexcept override { return (use24bitFrames) ? TypeName_chan0_24bit : TypeName_chan0_16bit; }
+	const char *_ecv_array GetShortSensorType() const noexcept override { return (bipolar) ? TypeName_chan0_bipolar : TypeName_chan0_unipolar; }
 
-	static constexpr const char *_ecv_array TypeName_chan0_16bit = "ads131.chan0.16b";
-	static constexpr const char *_ecv_array TypeName_chan0_24bit = "ads131.chan0.24b";
+	static constexpr const char *_ecv_array TypeName_chan0_unipolar = "ads131.chan0.u";
+	static constexpr const char *_ecv_array TypeName_chan0_bipolar = "ads131.chan0.b";
 
 private:
-	static SensorTypeDescriptor typeDescriptor_chan0_16bit;
-	static SensorTypeDescriptor typeDescriptor_chan0_24bit;
+	static SensorTypeDescriptor typeDescriptor_chan0_unipolar;
+	static SensorTypeDescriptor typeDescriptor_chan0_bipolar;
 
 #if FOUR_CHANNELS
 	static constexpr unsigned int NumChannels = 4;
@@ -117,7 +117,7 @@ private:
 	uint16_t lastCommand;
 	TemperatureError lastResult = TemperatureError::notInitialised;
 
-	bool use24bitFrames;
+	bool bipolar;
 
 	struct InitTableEntry
 	{
