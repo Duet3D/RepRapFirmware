@@ -41,7 +41,7 @@ struct MessageBufferOut
 struct alignas(16) MessageBufferIn
 {
 	MessageHeaderEspToSam hdr;
-	uint8_t data[MaxDataLength];	// data to send
+	uint8_t data[MaxDataLength];	// data to receive
 };
 
 // The main network class that drives the network.

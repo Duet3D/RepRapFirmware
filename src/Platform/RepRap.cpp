@@ -925,7 +925,7 @@ void RepRap::Diagnostics(MessageType mtype) noexcept
 	{
 		if (r.msg != nullptr)
 		{
-			platform->MessageF(mtype, r.msg, r.data[0], r.data[1], r.data[2], r.data[3]);
+			platform->MessageF(mtype, r.msg, r.data[0], r.data[1], r.data[2], r.data[3], r.data[4], r.data[5]);
 			r.msg = nullptr;
 		}
 	}
@@ -2803,7 +2803,7 @@ void RepRap::SaveConfigError(const char *filename, unsigned int lineNumber, cons
 	}
 }
 
-void RepRap::LogDebugMessage(const char *_ecv_array msg, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3) noexcept
+void RepRap::LogDebugMessage(const char *_ecv_array msg, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3, uint32_t data4, uint32_t data5) noexcept
 {
 	// Log the debug event if we have space
 	for (DebugLogRecord& r : debugRecords)
@@ -2814,6 +2814,9 @@ void RepRap::LogDebugMessage(const char *_ecv_array msg, uint32_t data0, uint32_
 			r.data[1] = data1;
 			r.data[2] = data2;
 			r.data[3] = data3;
+			r.data[4] = data4;
+			r.data[5] = data5;
+
 			r.msg = msg;
 			break;
 		}

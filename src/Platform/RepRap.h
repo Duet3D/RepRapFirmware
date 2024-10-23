@@ -80,7 +80,7 @@ public:
 	uint32_t SendAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title, int sParam, float tParam, AxesBitmap controls, MessageBoxLimits *_ecv_null limits = nullptr) noexcept;
 	void SendSimpleAlert(MessageType mt, const char *_ecv_array p_message, const char *_ecv_array title) noexcept;
 
-	void LogDebugMessage(const char *_ecv_array msg, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3) noexcept;
+	void LogDebugMessage(const char *_ecv_array msg, uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3, uint32_t data4, uint32_t data5) noexcept;
 
 #if SUPPORT_IOBITS
  	PortControl& GetPortControl() const noexcept { return *portControl; }
@@ -173,7 +173,7 @@ private:
 	struct DebugLogRecord
 	{
 		const char *_ecv_array _ecv_null msg;
-		uint32_t data[4];
+		uint32_t data[6];
 
 		DebugLogRecord() noexcept : msg(nullptr) { }
 	};
@@ -284,7 +284,7 @@ public:
 	__attribute__((noinline)) MemoryWatcher(uint32_t *p_address) noexcept;
 	__attribute__((noinline)) MemoryWatcher() noexcept;
 	~MemoryWatcher() noexcept;
-	__attribute__((noinline)) bool Check(unsigned int tag) noexcept;
+	__attribute__((noinline)) bool Check(uint32_t tag) noexcept;
 
 private:
 	void Init() noexcept;
@@ -327,7 +327,7 @@ template <size_t NumWords> MemoryWatcher<NumWords>::~MemoryWatcher() noexcept
 }
 
 // Check whether the memory concerned still equals the reference copy, print a debug message and return true if it has changed, else return false
-template <size_t NumWords> bool MemoryWatcher<NumWords>::Check(unsigned int tag) noexcept
+template <size_t NumWords> bool MemoryWatcher<NumWords>::Check(uint32_t tag) noexcept
 {
 	uint32_t csumProtected = 0;
 	uint32_t csumCopy = 0;
@@ -348,9 +348,10 @@ template <size_t NumWords> bool MemoryWatcher<NumWords>::Check(unsigned int tag)
 	if (badOffset >= 0 || csumProtected != checkSum || csumCopy != checkSum)
 	{
 		const bool fix = (csumProtected != checkSum && csumCopy == checkSum);
-		constexpr const char *_ecv_array msg = "Mem diff: offset %u, original %08" PRIx32 ", copy %08" PRIx32 ", flags %08x" PRIx32 "\n";
-		const uint32_t flags = ((csumProtected == checkSum) ? 0 : 1) | ((csumCopy == checkSum) ? 0 : 0x10) | ((fix) ? 0x0100 : 0) | (tag << 16);
-		reprap.LogDebugMessage(msg, (unsigned int)badOffset * 4, checkedData[badOffset], dataCopy[badOffset], flags);
+		const uint32_t badAddr = reinterpret_cast<uint32_t>((csumProtected != checkSum) ? &checkedData[badOffset] : &dataCopy[badOffset]);
+		constexpr const char *_ecv_array msg = "Mem diff: offset %u, original %08" PRIx32 ", copy %08" PRIx32 ", flags %08" PRIx32 ", addr %08" PRIx32 ", tag %08" PRIx32 "\n";
+		const uint32_t flags = ((csumProtected == checkSum) ? 0 : 1) | ((csumCopy == checkSum) ? 0 : 0x10) | ((fix) ? 0x0100 : 0);
+		reprap.LogDebugMessage(msg, (unsigned int)badOffset * 4, checkedData[badOffset], dataCopy[badOffset], flags, badAddr, tag);
 
 		if (fix)
 		{

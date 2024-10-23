@@ -2226,10 +2226,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		++spiRxOverruns;
 	}
 
-	if (watcher.Check(1))					// check whether the watched memory has been corrupted. We never observe corruption at this point.
-	{
-		delay(50);
-	}
+	watcher.Check(0);					// check whether the watched memory has been corrupted. We never observe corruption at this point.
 	{
 		AtomicCriticalSectionLocker lock;	// disable interrupts for this section in case it helps prevent the DMA memory corruption
 		spi_dma_disable();
@@ -2237,10 +2234,7 @@ int32_t WiFiInterface::SendCommand(NetworkCommand cmd, SocketNumber socketNum, u
 		__DMB();							// just in case this might help
 	}
 
-	if (watcher.Check(2))					// check whether the watched memory has been corrupted. This is where we observe corruption.
-	{
-		delay(50);
-	}
+	watcher.Check(reinterpret_cast<uint32_t>(&bufferIn->data[bufferIn->hdr.response]));		// check whether the watched memory has been corrupted. This is where we observe corruption.
 #else
 	while (!spi_dma_check_rx_complete()) { }	// Wait for DMA to complete
 #endif
