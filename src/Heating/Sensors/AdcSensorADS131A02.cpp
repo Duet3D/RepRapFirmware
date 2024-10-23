@@ -68,7 +68,13 @@ constexpr uint8_t CLK2_val =	   (4u << 5)			// fmod = fclk/8 (default)
 								 | (6u << 0);			// oversampling ratio, fdata = fmod/400 (default)
 
 constexpr uint8_t  ADC_ENA_val =   (0u << 4)			// reserved bits 4..7, write 0
+#if FOUR_CHANNELS
+								 | (0x0fu << 0);		// enable channels 0-3
+#else
 								 | (3u << 0);			// enable channels 0 and 1
+#endif
+
+constexpr uint8_t ADC_GAIN_VAL = 0u;					// gain is 2^ADC_GAIN_VAL, max 2^4
 
 // Table of initialisation data written to ADS131 registers
 const AdcSensorADS131A02Chan0::InitTableEntry AdcSensorADS131A02Chan0::initTable[] =
@@ -77,7 +83,13 @@ const AdcSensorADS131A02Chan0::InitTableEntry AdcSensorADS131A02Chan0::initTable
 	{ ADS131Register::D_SYS_CFG,	D_SYS_CFG_val	},
 	{ ADS131Register::CLK1,			CLK1_val		},
 	{ ADS131Register::CLK2,			CLK2_val		},
-	{ ADS131Register::ADC_ENA,		ADC_ENA_val		}
+	{ ADS131Register::ADC_ENA,		ADC_ENA_val		},
+	{ ADS131Register::ADC1_GAIN,	ADC_GAIN_VAL	},
+	{ ADS131Register::ADC2_GAIN,	ADC_GAIN_VAL	},
+#if FOUR_CHANNELS
+	{ ADS131Register::ADC3_GAIN,	ADC_GAIN_VAL	},
+	{ ADS131Register::ADC4_GAIN,	ADC_GAIN_VAL	},
+#endif
 };
 
 // Sensor type descriptors
@@ -199,7 +211,7 @@ void AdcSensorADS131A02Chan0::CalcDerivedParameters() noexcept
 }
 
 // Wait for the device to become ready after a reset returning true if successful
-TemperatureError AdcSensorADS131A02Chan0::WaitReady() const noexcept
+TemperatureError AdcSensorADS131A02Chan0::WaitReady() noexcept
 {
 	/* From the datasheet:
 	 * When powering up the device or coming out of a power-on reset (POR) state, the ADC does not accept any commands.
@@ -211,22 +223,22 @@ TemperatureError AdcSensorADS131A02Chan0::WaitReady() const noexcept
 	uint16_t status;
 	uint32_t readings[NumChannels];
 	delay(10);
-	TemperatureError ret = DoTransaction(ADS131Command::nullcmd, ADS131Register::none, 0, status, readings);
+	TemperatureError ret = DoTransaction(ADS131Command::nullcmd, ADS131Register::none, 0, status, readings, false);
 	if (ret == TemperatureError::ok)
 	{
 		for (unsigned int retry = 0; retry < 5; ++retry)
 		{
 			delay(10);
-			ret = DoTransaction(ADS131Command::nullcmd, ADS131Register::none, 0, status, readings);
+			ret = DoTransaction(ADS131Command::nullcmd, ADS131Register::none, 0, status, readings, false);
 			if (ret != TemperatureError::ok)
 			{
 				break;
 			}
 
 			// The documentation says that the status word returned after a null command is 0xFFdd where dd is the hardware device ID.
-			// Unfortunately it doesn't specify what the hardware device ID is, and 0xFFFF is what we are likely to get back if the device is not present.
 			// It turns out that the ID is just the number of channels, so 02 for the ADS131A02 and 04 for the ADS131A04.
-			if (status == 0xFF02)
+			expectedResponse = 0xFF00 | NumChannels;				// set up the expected response for the next SPI transaction
+			if (status == expectedResponse)
 			{
 				return ret;
 			}
@@ -238,26 +250,38 @@ TemperatureError AdcSensorADS131A02Chan0::WaitReady() const noexcept
 
 TemperatureError AdcSensorADS131A02Chan0::TryInitAdc() noexcept
 {
-	TemperatureError ret = WaitReady();
+	// If the device has already been initialised then WaitReady won't work.
+	// So send a Reset command first. This will fail if the device hasn't previously been initialised, but that doesn't matter.
+	uint16_t status;
+	uint32_t readings[2];
+	TemperatureError ret = DoTransaction(ADS131Command::reset, ADS131Register::none, 0, status, readings, false);
 	if (ret == TemperatureError::ok)
 	{
-		uint16_t status;
-		uint32_t readings[2];
-		ret = DoTransaction(ADS131Command::reset, ADS131Register::none, 0, status, readings);
+		ret == WaitReady();
 		if (ret == TemperatureError::ok)
 		{
-			ret == WaitReady();
-			if (ret == TemperatureError::ok)
+			ret = DoTransaction(ADS131Command::unlock, ADS131Register::none, 0, status, readings, true);
+		}
+		if (ret == TemperatureError::ok)
+		{
+			for (const InitTableEntry& x : initTable)
 			{
-				for (const InitTableEntry& x : initTable)
+				ret = DoTransaction(ADS131Command::wreg, x.regNum, x.val, status, readings, true);
+				if (ret != TemperatureError::ok)
 				{
-					ret = DoTransaction(ADS131Command::wreg, x.regNum, x.val, status, readings);
-					if (ret != TemperatureError::ok)
-					{
-						break;
-					}
+					break;
 				}
 			}
+		}
+		if (ret == TemperatureError::ok)
+		{
+			ret = DoTransaction(ADS131Command::wakeup, ADS131Register::none, 0, status, readings, true);
+		}
+
+		// Send a null command so that the next register returned is the status register
+		if (ret == TemperatureError::ok)
+		{
+			ret = DoTransaction(ADS131Command::nullcmd, ADS131Register::none, 0, status, readings, true);
 		}
 	}
 	lastResult = ret;
@@ -269,30 +293,33 @@ TemperatureError AdcSensorADS131A02Chan0::TakeReading() noexcept
 {
 	uint16_t status;
 	uint32_t readings[NumChannels];
-	TemperatureError ret = DoTransaction(ADS131Command::nullcmd, ADS131Register::none, 0, status, readings);
+	TemperatureError ret = DoTransaction(ADS131Command::nullcmd, ADS131Register::none, 0, status, readings, false);
 	if (ret == TemperatureError::ok)
 	{
 		for (size_t i = 0; i < NumChannels; ++i)
 		{
-			lastReadings[i] = readingAtMin[i] + scalbnf((float)(int32_t)readings[i], -32) * (readingAtMax[i] - readingAtMin[i]);
+			lastReadings[i] = readingAtMin[i] + ldexpf((float)(int32_t)readings[i], -32) * (readingAtMax[i] - readingAtMin[i]);
 		}
+		if ((status & 0x01101111b) != 0) { debugPrintf("Reading response %04x\n", status); }
+
+		return ((status & 0x01101111b) == 0) ? ret : TemperatureError::badResponse;		// return badResponse if an error other than ADC input over-range has occurred
 	}
 	return ret;
 }
 
 // Send a command and receive the response
-TemperatureError AdcSensorADS131A02Chan0::DoTransaction(ADS131Command command, ADS131Register regNum, uint8_t data, uint16_t &status, uint32_t readings[NumChannels]) const noexcept
+TemperatureError AdcSensorADS131A02Chan0::DoTransaction(ADS131Command command, ADS131Register regNum, uint8_t data, uint16_t &status, uint32_t readings[NumChannels], bool checkResponse) noexcept
 {
 	const uint16_t fullCommand = command | ((uint16_t)regNum << 8) | (uint16_t)data;
 	TemperatureError rslt(TemperatureError::ok);
 	if (use24bitFrames)
 	{
-		uint8_t sendBuffer[3 + NumChannels * 3];
+		uint8_t sendBuffer[6 + NumChannels * 3];
 		sendBuffer[0] = (fullCommand >> 8) & 0xFF;
 		sendBuffer[1] = fullCommand & 0xFF;
 		memset(sendBuffer + 2, 0, sizeof(sendBuffer) - 2);
 
-		uint8_t receiveBuffer[3 + NumChannels * 3];
+		uint8_t receiveBuffer[6 + NumChannels * 3];
 		rslt = DoSpiTransaction(sendBuffer, receiveBuffer, sizeof(sendBuffer));
 
 		status = ((uint16_t)receiveBuffer[0] << 8) | receiveBuffer[1];
@@ -304,11 +331,11 @@ TemperatureError AdcSensorADS131A02Chan0::DoTransaction(ADS131Command command, A
 	}
 	else
 	{
-		uint16_t sendBuffer[1 + NumChannels];
+		uint16_t sendBuffer[2 + NumChannels];
 		sendBuffer[0] = __builtin_bswap16(fullCommand);
 		sendBuffer[1] = sendBuffer[2] = 0;
 
-		uint16_t receiveBuffer[3];
+		uint16_t receiveBuffer[2 + NumChannels];
 		rslt = DoSpiTransaction(reinterpret_cast<const uint8_t *_ecv_array>(sendBuffer), reinterpret_cast<uint8_t *_ecv_array>(receiveBuffer), sizeof(sendBuffer));
 
 		status = __builtin_bswap16(receiveBuffer[0]);
@@ -317,6 +344,17 @@ TemperatureError AdcSensorADS131A02Chan0::DoTransaction(ADS131Command command, A
 			readings[i] = (uint32_t)__builtin_bswap16(receiveBuffer[1 + i]) << 16;
 		}
 	}
+
+	// If requested, check that the received response matches the previous command
+	if (rslt == TemperatureError::ok && checkResponse && status != expectedResponse)
+	{
+		rslt = TemperatureError::badResponse;
+		debugPrintf("Expected response %04x got %04x, current command %04x\n", expectedResponse, status, fullCommand);
+	}
+
+	// Set up the expected response for the next command
+	expectedResponse = (command == ADS131Command::wreg) ? fullCommand ^ (ADS131Command::wreg ^ ADS131Command::rreg)
+						: command;
 	return rslt;
 }
 

@@ -14,6 +14,8 @@
 
 #include "AdditionalOutputSensor.h"
 
+#define FOUR_CHANNELS	(0)			// set to 1 if we use the ADS131A04, 0 for the ADS131A02
+
 class AdcSensorADS131A02Chan0 : public SpiTemperatureSensor
 {
 public:
@@ -30,13 +32,17 @@ public:
 	const char *_ecv_array GetShortSensorType() const noexcept override { return (use24bitFrames) ? TypeName_chan0_24bit : TypeName_chan0_16bit; }
 
 	static constexpr const char *_ecv_array TypeName_chan0_16bit = "ads131.chan0.16b";
-	static constexpr const char *_ecv_array TypeName_chan0_24bit = "ads131.chan1.24b";
+	static constexpr const char *_ecv_array TypeName_chan0_24bit = "ads131.chan0.24b";
 
 private:
 	static SensorTypeDescriptor typeDescriptor_chan0_16bit;
 	static SensorTypeDescriptor typeDescriptor_chan0_24bit;
 
+#if FOUR_CHANNELS
+	static constexpr unsigned int NumChannels = 4;
+#else
 	static constexpr unsigned int NumChannels = 2;
+#endif
 
 	TemperatureError TakeReading() noexcept;
 	GCodeResult FinishConfiguring(bool changed, const StringRef& reply) noexcept;
@@ -74,24 +80,29 @@ private:
 		CLK2 = 0x0E,
 		ADC_ENA = 0x0F,
 
-		R_ADC1 = 0x11,
-		R_ADC2 = 0x12
+		ADC1_GAIN = 0x11,
+		ADC2_GAIN = 0x12,
+#if FOUR_CHANNELS
+		ADC3_GAIN = 0x13,
+		ADC4_GAIN = 0x14,
+#endif
 	};
 
 	static constexpr float DefaultReadingAtMin = 0.0;
 	static constexpr float DefaultReadingAtMax = 100.0;
 
 	// Send a command and receive the response
-	TemperatureError DoTransaction(ADS131Command command, ADS131Register regNum, uint8_t data, uint16_t &status, uint32_t readings[NumChannels]) const noexcept;
+	TemperatureError DoTransaction(ADS131Command command, ADS131Register regNum, uint8_t data, uint16_t &status, uint32_t readings[NumChannels], bool checkResponse) noexcept;
 
 	// Wait for the device to become ready after a reset returning TemperatureError::ok if successful
-	TemperatureError WaitReady() const noexcept;
+	TemperatureError WaitReady() noexcept;
 
 	// Configurable parameters
 	float readingAtMin[NumChannels];
 	float readingAtMax [NumChannels];
 
-	uint32_t lastReadings[NumChannels];
+	float lastReadings[NumChannels];
+	uint16_t expectedResponse;
 	TemperatureError lastResult = TemperatureError::notInitialised;
 
 	bool use24bitFrames;
